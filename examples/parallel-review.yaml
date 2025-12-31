@@ -1,0 +1,43 @@
+# 병렬 코드 리뷰 워크플로우 예시
+name: parallel-code-review
+description: 여러 AI가 동시에 코드를 리뷰하고 결과를 종합
+
+mode: parallel
+
+steps:
+  # 병렬 실행 - 의존성 없음
+  - name: claude-review
+    executor: claude
+    prompt: |
+      다음 코드를 리뷰해주세요:
+      {{input}}
+    system: |
+      당신은 코드 리뷰 전문가입니다.
+      보안, 성능, 가독성 관점에서 리뷰해주세요.
+
+  - name: gemini-review
+    executor: gemini
+    prompt: |
+      다음 코드를 리뷰해주세요:
+      {{input}}
+    system: |
+      당신은 코드 리뷰 전문가입니다.
+      아키텍처, 패턴, 유지보수성 관점에서 리뷰해주세요.
+
+  # 종합 - claude-review와 gemini-review 완료 후 실행
+  - name: merge-reviews
+    executor: claude
+    depends_on:
+      - claude-review
+      - gemini-review
+    prompt: |
+      두 리뷰 결과를 종합해주세요:
+
+      Claude 리뷰:
+      {{steps.claude-review.output}}
+
+      Gemini 리뷰:
+      {{steps.gemini-review.output}}
+
+      중복되는 의견과 서로 다른 의견을 정리하고,
+      최종 권장사항을 제시해주세요.

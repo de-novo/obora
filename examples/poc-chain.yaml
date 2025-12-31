@@ -1,0 +1,21 @@
+name: poc-chain
+description: POC - 두 AI 스텝 연결 테스트
+
+steps:
+  - name: generate
+    executor: claude
+    system: |
+      너는 숫자 생성기다.
+      오직 숫자만 출력한다.
+      설명 없이 숫자만.
+    prompt: "1부터 10 사이의 숫자 3개를 쉼표로 구분해서 출력해줘."
+
+  - name: calculate
+    executor: claude
+    system: |
+      너는 계산기다.
+      오직 계산 결과만 출력한다.
+      설명 없이 숫자만.
+    prompt: |
+      다음 숫자들의 합을 계산해줘.
+      숫자: {{steps.generate.output}}

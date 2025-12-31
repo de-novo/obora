@@ -1,0 +1,27 @@
+# 아키텍처 토론 예시
+# 사용법: obora debate "마이크로서비스 vs 모놀리식" --participants claude,gemini --rounds 3
+
+name: architecture-debate
+description: AI들이 아키텍처 결정에 대해 토론
+
+mode: debate
+
+debate:
+  topic: "마이크로서비스 vs 모놀리식 아키텍처"
+  context: |
+    우리 팀은 새로운 e-commerce 플랫폼을 구축하려고 합니다.
+    - 예상 사용자: 초기 1만명, 2년 내 100만명 목표
+    - 팀 규모: 5명에서 시작, 20명까지 확장 예정
+    - 기술 스택: TypeScript, PostgreSQL
+
+    어떤 아키텍처가 적합할까요?
+
+  participants:
+    - claude
+    - gemini
+
+  rounds: 3
+
+  moderator: claude
+
+  consensus_threshold: 0.7  # 70% 이상 합의 시 종료
