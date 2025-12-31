@@ -1,0 +1,13 @@
+# .dev 멀티 AI 도구 설정
+
+orchestrator:
+  ai: claude  # Orchestrator로 사용할 AI (claude, gemini, codex)
+
+participants:  # 토론 참여 AI 목록
+  - claude
+  - gemini
+  - codex
+
+settings:
+  max_rounds: 10     # 최대 라운드
+  timeout: 300       # 타임아웃 (초)
