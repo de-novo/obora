@@ -75,7 +75,10 @@ export class BenchmarkRunner {
       }
     } else if (mode === 'parallel') {
       // Parallel: Claude와 OpenAI가 동시에 응답 (토론 없음)
-      const [claudeResponse, openaiResponse] = await Promise.all([claude.run(testCase.topic), openai.run(testCase.topic)])
+      const [claudeResponse, openaiResponse] = await Promise.all([
+        claude.run(testCase.topic),
+        openai.run(testCase.topic),
+      ])
       result = {
         rounds: [
           { phase: 'parallel', speaker: 'claude', content: claudeResponse.content, timestamp: Date.now() },
