@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Question
+    url: https://github.com/de-novo/obora/discussions/new?category=q-a
+    about: Ask questions in GitHub Discussions
+  - name: Idea
+    url: https://github.com/de-novo/obora/discussions/new?category=ideas
+    about: Share ideas in GitHub Discussions

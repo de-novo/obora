@@ -9,7 +9,7 @@ export interface GeminiProviderConfig extends ProviderConfig {
    * Available tools: google_web_search
    * @example enabledTools: ['google_web_search']
    */
-  enabledTools?: ('google_web_search')[]
+  enabledTools?: 'google_web_search'[]
 }
 
 /**
