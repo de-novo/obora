@@ -10,6 +10,8 @@
   ],
   "scripts": {
     "obora": "bun packages/cli/src/index.ts",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
     "typecheck": "tsc --noEmit",
     "lint": "biome check",
     "lint:fix": "biome check --write",
