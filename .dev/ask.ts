@@ -3,7 +3,7 @@ import { parseArgs } from "util";
 import type { AIName, AIResponse, Config, Message, DebateState, OrchestratorAction } from "./lib/types";
 import { runAI, runAllParallel, runOrchestrator, loadConfig, getDefaultConfig } from "./lib/runner";
 
-// CLI 파싱
+// CLI parsing
 const { values, positionals } = parseArgs({
   args: Bun.argv.slice(2),
   options: {
@@ -23,53 +23,53 @@ const { values, positionals } = parseArgs({
 
 if (values.help) {
   console.log(`
-Usage: bun .dev/ask.ts [options] "질문"
+Usage: bun .dev/ask.ts [options] "question"
 
 Options:
-  -d, --debate          토론 모드 (Orchestrator)
-  -f, --file <path>     질문 파일
-  -c, --config <path>   설정 파일 (기본: .dev/config.yaml)
+  -d, --debate          Debate mode (Orchestrator)
+  -f, --file <path>     Question file
+  -c, --config <path>   Config file (default: .dev/config.yaml)
   -o, --orchestrator    Orchestrator AI (claude, gemini, codex)
-  -p, --participants    참여 AI (쉼표 구분)
-  -s, --summary         Parallel 모드 결과 요약
-  --json                JSON 출력
-  --output <path>       결과 저장 파일
-  -q, --quiet           조용한 모드
-  -h, --help            도움말
+  -p, --participants    Participating AIs (comma separated)
+  -s, --summary         Summarize Parallel mode results
+  --json                JSON output
+  --output <path>       Save results to file
+  -q, --quiet           Quiet mode
+  -h, --help            Help
 `);
   process.exit(0);
 }
 
-// 질문 가져오기
+// Get question
 async function getQuestion(): Promise<string> {
-  // 파일에서
+  // From file
   if (values.file) {
     const file = Bun.file(values.file);
     return await file.text();
   }
 
-  // positional에서
+  // From positional args
   if (positionals.length > 0) {
     return positionals.join(" ");
   }
 
-  // stdin에서
+  // From stdin
   const stdin = await Bun.stdin.text();
   if (stdin.trim()) {
     return stdin.trim();
   }
 
-  throw new Error("질문을 입력해주세요");
+  throw new Error("Please provide a question");
 }
 
-// 설정 로드
+// Load config
 async function getConfig(): Promise<Config> {
   const configPath = values.config || ".dev/config.yaml";
 
   try {
     const config = await loadConfig(configPath);
 
-    // CLI 옵션으로 오버라이드
+    // Override with CLI options
     if (values.orchestrator) {
       config.orchestrator.ai = values.orchestrator as AIName;
     }
@@ -83,7 +83,7 @@ async function getConfig(): Promise<Config> {
   }
 }
 
-// 출력 함수
+// Output function
 function log(message: string) {
   if (!values.quiet) {
     console.log(message);
@@ -91,11 +91,11 @@ function log(message: string) {
 }
 
 // ============================================
-// Parallel 모드
+// Parallel Mode
 // ============================================
 async function runParallel(question: string, config: Config) {
   log(`\n[You] ${question}\n`);
-  log(`--- Parallel 모드: ${config.participants.join(", ")} ---\n`);
+  log(`--- Parallel Mode: ${config.participants.join(", ")} ---\n`);
 
   const responses = await runAllParallel(config.participants, question);
 
@@ -107,9 +107,9 @@ async function runParallel(question: string, config: Config) {
 
   if (values.summary) {
     log(`--- Orchestrator (${config.orchestrator.ai}) Summary ---\n`);
-    const summaryPrompt = `다음은 동일한 질문 "${question}"에 대한 여러 AI들의 답변입니다.\n\n` +
+    const summaryPrompt = `The following are responses from multiple AIs to the question "${question}".\n\n` +
       responses.map(res => `[${res.ai}]\n${res.content}`).join("\n\n") +
-      "\n\n위 답변들을 종합하여 공통점, 차이점, 그리고 최적의 결론을 요약해주세요.";
+      "\n\nPlease summarize the commonalities, differences, and optimal conclusion from these responses.";
 
     const summaryRes = await runAI(config.orchestrator.ai, summaryPrompt);
     log(summaryRes.content);
@@ -121,14 +121,14 @@ async function runParallel(question: string, config: Config) {
 }
 
 // ============================================
-// Debate 모드 (Orchestrator) - 하이브리드 턴 관리
+// Debate Mode (Orchestrator) - Hybrid Turn Management
 // ============================================
 async function runDebate(question: string, config: Config) {
   const orchestratorAI = config.orchestrator.ai;
   const participants = config.participants;
 
   log(`\n[You] ${question}\n`);
-  log(`--- Debate 모드 | Orchestrator: ${orchestratorAI} | 참여: ${participants.join(", ")} ---\n`);
+  log(`--- Debate Mode | Orchestrator: ${orchestratorAI} | Participants: ${participants.join(", ")} ---\n`);
 
   const state: DebateState = {
     topic: question,
@@ -137,8 +137,8 @@ async function runDebate(question: string, config: Config) {
     speakCounts: Object.fromEntries(participants.map(p => [p, 0])) as Record<AIName, number>,
   };
 
-  // ========== Phase 1: 초기 라운드 - 모든 AI 1회씩 순차 발언 ==========
-  log(`=== Phase 1: 초기 발언 (${participants.length}명) ===\n`);
+  // ========== Phase 1: Initial Round - All AIs speak once sequentially ==========
+  log(`=== Phase 1: Initial Statements (${participants.length} participants) ===\n`);
 
   for (const ai of participants) {
     state.round++;
@@ -155,37 +155,37 @@ async function runDebate(question: string, config: Config) {
     state.speakCounts[ai]++;
   }
 
-  // ========== Phase 2: 반박 라운드 - Orchestrator가 배분 ==========
+  // ========== Phase 2: Rebuttal Round - Orchestrator assigns turns ==========
   const maxRebuttalRounds = config.settings.max_rounds - participants.length;
 
   if (maxRebuttalRounds > 0) {
-    log(`=== Phase 2: 반박 라운드 (최대 ${maxRebuttalRounds}회) ===\n`);
+    log(`=== Phase 2: Rebuttal Rounds (max ${maxRebuttalRounds}) ===\n`);
   }
 
   while (state.round < config.settings.max_rounds) {
     state.round++;
-    log(`--- Round ${state.round} (반박) ---\n`);
+    log(`--- Round ${state.round} (Rebuttal) ---\n`);
 
-    // Orchestrator가 반박자 선택 또는 종료 결정
+    // Orchestrator selects rebutter or decides to end
     const orchestratorPrompt = buildOrchestratorPrompt(state, participants);
-    log(`[O] 판단 중...`);
+    log(`[O] Deciding...`);
 
     let action: OrchestratorAction;
     try {
       action = await runOrchestrator(orchestratorPrompt);
     } catch (e) {
-      // fallback: 발언 적은 AI 선택
+      // fallback: select AI with fewer statements
       const sorted = [...participants].sort((a, b) =>
         (state.speakCounts[a] || 0) - (state.speakCounts[b] || 0)
       );
       action = { action: "select", target: sorted[0], reason: "fallback" };
     }
 
-    // 종료 판단
+    // End decision
     if (action.action === "end") {
-      log(`\n[O] 토론 종료`);
-      log(`📋 결론: ${action.conclusion || "합의 도달"}`);
-      if (action.reason) log(`   이유: ${action.reason}`);
+      log(`\n[O] Debate Ended`);
+      log(`📋 Conclusion: ${action.conclusion || "Consensus reached"}`);
+      if (action.reason) log(`   Reason: ${action.reason}`);
       log("");
       state.history.push({ role: "orchestrator", content: `END: ${action.conclusion}` });
       break;
@@ -193,23 +193,23 @@ async function runDebate(question: string, config: Config) {
 
     let selectedAI = action.target as AIName;
     if (!selectedAI || !participants.includes(selectedAI)) {
-      // 유효하지 않은 선택 → fallback
+      // Invalid selection → fallback
       const sorted = [...participants].sort((a, b) =>
         (state.speakCounts[a] || 0) - (state.speakCounts[b] || 0)
       );
       selectedAI = sorted[0];
-      log(`    → ${selectedAI} 선택 (fallback)\n`);
+      log(`    → ${selectedAI} selected (fallback)\n`);
     } else {
-      log(`    → ${selectedAI} 선택`);
+      log(`    → ${selectedAI} selected`);
       if (action.reason) log(`       (${action.reason})`);
       log("")
     }
 
-    // 선택된 AI 반박
+    // Selected AI rebuts
     const rebuttalPrompt = buildRebuttalPrompt(state);
     const speakRes = await runAI(selectedAI, rebuttalPrompt);
 
-    log(`[${selectedAI}] 🔄 반박`);
+    log(`[${selectedAI}] 🔄 Rebuttal`);
     log(speakRes.content);
     log("");
 
@@ -220,77 +220,77 @@ async function runDebate(question: string, config: Config) {
   return state;
 }
 
-// Orchestrator 프롬프트 (반박 라운드용)
+// Orchestrator prompt (for rebuttal rounds)
 function buildOrchestratorPrompt(state: DebateState, participants: AIName[]): string {
   const historyStr = state.history
     .map(m => `[${m.role}] ${m.content}`)
     .join("\n\n");
 
   const countsStr = Object.entries(state.speakCounts)
-    .map(([ai, count]) => `${ai}: ${count}회`)
+    .map(([ai, count]) => `${ai}: ${count} times`)
     .join(", ");
 
   const lastSpeaker = state.history.length > 1
     ? state.history[state.history.length - 1].role
-    : "없음";
+    : "none";
 
-  return `AI 토론 진행자 (반박 라운드). 다음 중 하나를 결정하세요:
-1. 반박/보충이 필요한 AI 선택 (action: "select")
-2. 충분한 논의가 되었으면 종료 (action: "end")
+  return `AI Debate Moderator (Rebuttal Round). Decide one of the following:
+1. Select an AI that needs to rebut/supplement (action: "select")
+2. End if sufficient discussion (action: "end")
 
-주제: ${state.topic}
-현재 라운드: ${state.round} (모든 AI가 최소 1회씩 발언 완료)
-발언 횟수: ${countsStr}
-직전 발언자: ${lastSpeaker}
-참여자: ${participants.join(", ")}
+Topic: ${state.topic}
+Current Round: ${state.round} (all AIs have spoken at least once)
+Statement counts: ${countsStr}
+Last speaker: ${lastSpeaker}
+Participants: ${participants.join(", ")}
 
-대화 기록:
+Conversation history:
 ${historyStr}
 
-판단 기준:
-- 의견 대립이 있으면 반박 기회 제공
-- 합의가 형성되었거나 논의가 충분하면 종료
-- 발언 적은 AI 우선 고려
-- 직전 발언자는 제외`;
+Decision criteria:
+- Provide rebuttal opportunity if there's disagreement
+- End if consensus formed or discussion is sufficient
+- Prioritize AIs with fewer statements
+- Exclude the last speaker`;
 }
 
-// 초기 발언 프롬프트
+// Initial statement prompt
 function buildSpeakPrompt(state: DebateState): string {
   const historyStr = state.history
     .map(m => `[${m.role}] ${m.content}`)
     .join("\n\n");
 
-  return `현재 토론:
-주제: ${state.topic}
+  return `Current debate:
+Topic: ${state.topic}
 
-지금까지 대화:
+Conversation so far:
 ${historyStr}
 
-발언권이 주어졌습니다. 주제에 대한 의견을 말씀해주세요.
-다른 AI 의견이 있다면 참고하되, 자신만의 관점을 제시해주세요.
-충분히 논거를 펼쳐주세요.`;
+You have been given the floor. Please share your opinion on the topic.
+You may reference other AI opinions if available, but present your own perspective.
+Please elaborate your arguments fully.`;
 }
 
-// 반박 프롬프트
+// Rebuttal prompt
 function buildRebuttalPrompt(state: DebateState): string {
   const historyStr = state.history
     .map(m => `[${m.role}] ${m.content}`)
     .join("\n\n");
 
-  return `현재 토론:
-주제: ${state.topic}
+  return `Current debate:
+Topic: ${state.topic}
 
-지금까지 대화:
+Conversation so far:
 ${historyStr}
 
-반박 또는 보충 발언 기회입니다.
-- 다른 AI 의견에 동의/반박/보충할 수 있습니다
-- 새로운 관점을 제시할 수도 있습니다
-- 합의점이 보이면 그것을 언급해주세요`;
+This is your opportunity to rebut or supplement.
+- You may agree/disagree/supplement other AI opinions
+- You may present new perspectives
+- If you see points of consensus, please mention them`;
 }
 
 // ============================================
-// 메인
+// Main
 // ============================================
 async function main() {
   try {
@@ -305,15 +305,15 @@ async function main() {
       result = await runParallel(question, config);
     }
 
-    // JSON 출력
+    // JSON output
     if (values.json) {
       console.log(JSON.stringify(result, null, 2));
     }
 
-    // 파일 저장
+    // Save to file
     if (values.output) {
       await Bun.write(values.output, JSON.stringify(result, null, 2));
-      log(`결과 저장: ${values.output}`);
+      log(`Results saved: ${values.output}`);
     }
   } catch (error) {
     console.error("Error:", error instanceof Error ? error.message : error);

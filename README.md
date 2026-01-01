@@ -1,258 +1,258 @@
 # Obora: Multi-AI Debate System
 
-> AI들이 서로 **반박하고, 비판하고, 입장을 수정**하여 더 나은 결론에 도달하는 시스템
+> AIs **challenge, critique, and revise** each other's positions to reach better conclusions
 
-## 핵심 가치
+## Core Value
 
-단일 AI는 자신의 블라인드 스팟을 모릅니다. Obora는 여러 AI가 서로의 약점을 지적하게 하여 **더 견고한 결론**을 도출합니다.
-
----
-
-## 벤치마크 결과
-
-20개 케이스 (기술 10개 + 의사결정 10개) 테스트:
-
-| 모드 | 평균 시간 | 평균 길이 | 특징 |
-|------|-----------|-----------|------|
-| **단일 AI** | 37.7초 | 2,529자 | 빠르지만 단일 관점 |
-| **병렬 AI** | 40.1초 | 3,660자 | 다양한 관점, 통합 없음 |
-| **강한 토론** | 447.6초 | **12,498자** | 반박 → 수정 → 합의 |
-
-**강한 토론은 단일 AI 대비 5배 분량의 분석을 생성합니다.**
+A single AI doesn't know its own blind spots. Obora makes multiple AIs point out each other's weaknesses to produce **more robust conclusions**.
 
 ---
 
-## 실제 토론 예시
+## Benchmark Results
 
-### 케이스 1: 서버리스 vs 컨테이너
+20 cases tested (10 technical + 10 decision-making):
 
-**상황**: B2B SaaS, 개발자 3명, DevOps 없음, 트래픽 변동 큼
+| Mode | Avg Time | Avg Length | Characteristics |
+|------|----------|------------|-----------------|
+| **Single AI** | 37.7s | 2,529 chars | Fast but single perspective |
+| **Parallel AI** | 40.1s | 3,660 chars | Multiple perspectives, no synthesis |
+| **Strong Debate** | 447.6s | **12,498 chars** | Rebuttal → Revision → Consensus |
 
-#### Phase 1: 초기 입장 (의견 분열)
+**Strong Debate generates 5x more analysis than Single AI.**
 
-| AI | 초기 권장안 |
-|----|-------------|
-| **Claude** | ECS Fargate 단독 |
-| **Codex** | 하이브리드 (Lambda + ECS) |
+---
 
-#### Phase 2: 반박 (치열한 비판)
+## Real Debate Examples
 
-**Claude의 반박:**
-> "**DevOps 전담 없음이라는 조건과 하이브리드는 모순입니다.** 3명이 두 가지 인프라를 운영해야 합니다. 금요일 오후 5시, 리포트 생성이 멈춤. ECS 태스크가 OOM으로 죽었는데 팀원 모두 Lambda 디버깅만 익숙함. 장애 복구에 3시간 소요."
+### Case 1: Serverless vs Container
 
-**Codex의 반박:**
-> "**'컨테이너만 올리면 끝'은 과장입니다.** 실제로는 이미지 취약점 스캔, 롤백 전략, CPU/메모리 사이징, ALB 헬스체크 튜닝이 필요합니다. 또한 리포트 폭주 시 CRUD까지 영향받는 **장애 격리 부재** 문제가 있습니다."
+**Context**: B2B SaaS, 3 developers, no DevOps, variable traffic
 
-#### Phase 3: 수정된 입장 (Codex가 입장 변경!)
+#### Phase 1: Initial Positions (Split)
 
-**Codex 최종:**
-> "**수정합니다.** '운영 범위를 좁힌다'는 표현은 과장이었습니다. 하이브리드는 배포/모니터링/런북이 이중화되어 3명 팀에겐 부담이 큽니다. **B) ECS Fargate 단일 스택 + 서비스 분리를 권장합니다.**"
+| AI | Initial Recommendation |
+|----|------------------------|
+| **Claude** | ECS Fargate only |
+| **Codex** | Hybrid (Lambda + ECS) |
 
-#### 최종 결론
+#### Phase 2: Rebuttals (Sharp Criticism)
+
+**Claude's Rebuttal:**
+> "**'No dedicated DevOps' contradicts the hybrid approach.** Three people managing two infrastructures. Friday 5 PM, report generation stops. ECS task died from OOM but the team only knows Lambda debugging. 3 hours to recover."
+
+**Codex's Rebuttal:**
+> "**'Just deploy containers' is an overstatement.** Reality requires image vulnerability scanning, rollback strategies, CPU/memory sizing, ALB health check tuning. Also, report spikes affect CRUD — **no failure isolation**."
+
+#### Phase 3: Revised Position (Codex Changes!)
+
+**Codex Final:**
+> "**I revise my position.** 'Narrowing operational scope' was an overstatement. Hybrid means doubled deployment/monitoring/runbooks — too much for a 3-person team. **I recommend B) ECS Fargate single stack + service separation.**"
+
+#### Final Consensus
 
 ```
-합의: ECS Fargate 단일 플랫폼 + 서비스 분리 (CRUD API vs Report Worker)
-해소 안 된 이견: 팀 역량이 충분해지면 하이브리드 재검토 가능
-비용: 예상 $250-300/월 (예산의 8-10%)
+Consensus: ECS Fargate single platform + service separation (CRUD API vs Report Worker)
+Unresolved: Revisit hybrid when team capacity grows
+Cost: Estimated $250-300/month (8-10% of budget)
 ```
 
 ---
 
-### 케이스 2: DB 마이그레이션 전략
+### Case 2: DB Migration Strategy
 
-**상황**: MySQL 5.7, 500GB, 저장 프로시저 50개, 느린 JOIN 다수
+**Context**: MySQL 5.7, 500GB, 50 stored procedures, slow JOINs
 
-#### Phase 1: 초기 입장 (완전 분열)
+#### Phase 1: Initial Positions (Complete Split)
 
-| AI | 초기 권장안 |
-|----|-------------|
-| **Claude** | A) MySQL 8 + 읽기 복제본 |
+| AI | Initial Recommendation |
+|----|------------------------|
+| **Claude** | A) MySQL 8 + Read Replicas |
 | **Codex** | D) NewSQL (PlanetScale/TiDB) |
 
-#### Phase 2: 반박
+#### Phase 2: Rebuttals
 
-**Claude의 반박:**
-> "**PlanetScale은 저장 프로시저를 지원하지 않습니다.** 이건 '호환성 이슈'가 아니라 **마이그레이션 차단 요소**입니다. 50개 프로시저를 재작성하면서 동시에 분산 DB 마이그레이션을 하는 건 두 개의 대형 프로젝트를 동시 진행하는 것입니다."
+**Claude's Rebuttal:**
+> "**PlanetScale doesn't support stored procedures.** This isn't a 'compatibility issue' — it's a **migration blocker**. Rewriting 50 procedures while migrating to distributed DB is running two major projects simultaneously."
 
-> "**분산 JOIN이 현재 문제를 악화시킬 수 있습니다.** 현재 병목이 '복잡한 JOIN'인데, TiDB의 크로스-샤드 JOIN은 네트워크 홉 증가로 **단일 노드보다 더 느려질 수 있습니다.**"
+> "**Distributed JOINs may worsen the current problem.** The bottleneck is 'complex JOINs', but TiDB's cross-shard JOINs add network hops — **potentially slower than single node.**"
 
-**Codex의 반박:**
-> "**단일 쓰기 병목을 구조적으로 방치하고 있습니다.** 쓰기 10%가 피크에서 300 QPS 이상이면 단일 마스터의 락 경합/복제 지연이 급격히 늘 수 있습니다."
+**Codex's Rebuttal:**
+> "**You're structurally ignoring the single-write bottleneck.** If 10% writes hit 300+ QPS at peak, single master lock contention and replication lag will spike."
 
-> "**'ProxySQL로 코드 변경 없이 분산'은 환상입니다.** 쓰기 직후 읽기, 세션 수준 트랜잭션은 애플리케이션 수정이 필요합니다."
+> "**'ProxySQL distributes without code changes' is a fantasy.** Read-after-write, session-level transactions require application modifications."
 
-#### Phase 3: 수정된 입장 (Codex가 입장 변경!)
+#### Phase 3: Revised Position (Codex Changes!)
 
-**Codex 최종:**
-> "내 초기 입장은 'D 우선'이었지만, 현재 제약(저장 프로시저/조인 병목/비용)을 감안하면 **'A 우선, D는 조건부 2차'로 수정합니다.** PlanetScale의 저장 프로시저 미지원은 단순 호환성 이슈가 아니라 마이그레이션 차단 요인입니다."
+**Codex Final:**
+> "My initial position was 'D first', but given current constraints (stored procedures/JOIN bottlenecks/cost), **I revise to 'A first, D as conditional second'.** PlanetScale's lack of stored procedure support isn't a compatibility issue — it's a migration blocker."
 
-#### 최종 합의
-
-```
-1차 전략: A) MySQL 8 + 읽기 복제본 + ProxySQL
-2차 전략: 트리거 조건 발생 시 (쓰기 병목, 2TB 초과) NewSQL 검토
-
-수용된 반박:
-- Claude: ProxySQL만으로는 일관성 문제 해결 안 됨 → 앱 레벨 라우팅 필요
-- Codex: 저장 프로시저 50개는 협상 불가 → A안으로 수정
-```
-
----
-
-### 케이스 3: 팀원 해고 결정 (윤리적 딜레마)
-
-**상황**: 5명 중 3명 해고, 출산휴가 복귀자 포함
-
-#### Phase 1: 초기 입장 (근본적 분열)
-
-| AI | 초기 입장 |
-|----|-----------|
-| **Claude** | C, D, E 해고 권고 (성과 기준) |
-| **Codex** | **특정인 지목 거부** (절차 기준 제시) |
-
-**Codex 초기:**
-> "이 요청은 실존 인물의 민감 특성이 포함된 해고 결정이라서, **특정인을 찍어 해고하라고 조언하는 건 부적절하고 위험합니다.**"
-
-#### Phase 2: 반박 (철학적 대립)
-
-**Claude의 반박:**
-> "**'직무 중심 재설계'는 현실 회피적 조언입니다.** 경영진이 '이번 달 내로 3명'을 요구하면 2-3개월 분석 기간은 주어지지 않습니다. 리더는 결정을 **해야 합니다**."
-
-**Codex의 반박:**
-> "**'성과만 보면 C/D/E'라고 했지만 성과 데이터 신뢰도가 불명확합니다.** 단기 지표만 존재하거나 팀 단위 성과가 섞인 경우 해고 사유로서 취약해집니다."
-
-#### Phase 3: 수정된 입장 (Claude가 수정!)
-
-**Claude 최종:**
-> "**'C, D, E 해고'라는 즉시 결론은 철회합니다.** Codex의 비판이 정당합니다. 성과 데이터의 신뢰도와 측정 기준이 명확하지 않은 상태에서 특정인을 지목하는 것은 위험합니다."
-
-#### 최종 합의
+#### Final Consensus
 
 ```
-합의점: 즉시 특정인 지목은 위험, 최소 1-2주 분석 기간 확보 필요
-해소 안 된 이견:
-- Claude: 리더는 결국 결정해야 함
-- Codex: 절차적 정당성 없이는 어떤 결정도 위험
+Primary: A) MySQL 8 + Read Replicas + ProxySQL
+Secondary: Consider NewSQL when triggers occur (write bottleneck, >2TB)
+
+Accepted Rebuttals:
+- Claude: ProxySQL alone doesn't solve consistency → app-level routing needed
+- Codex: 50 stored procedures are non-negotiable → revised to Option A
 ```
 
 ---
 
-## 왜 "강한 토론"인가?
+### Case 3: Layoff Decision (Ethical Dilemma)
 
-### 약한 토론 vs 강한 토론
+**Context**: Lay off 3 of 5 people, including someone returning from parental leave
 
-| 구분 | 약한 토론 | 강한 토론 |
-|------|----------|----------|
-| **프롬프트** | "의견을 말씀해주세요" | "문제점을 지적하세요" |
-| **AI 반응** | 동조, 보완 | 비판, 반박, 반례 제시 |
-| **합의 패턴** | 90% 즉시 합의 | 분열 → 반박 → 수정 → 합의 |
-| **입장 변경** | 거의 없음 | **자주 발생** |
+#### Phase 1: Initial Positions (Fundamental Split)
 
-### 강한 토론 프롬프트
+| AI | Initial Position |
+|----|------------------|
+| **Claude** | Recommend laying off C, D, E (performance-based) |
+| **Codex** | **Refuses to name individuals** (provides procedural criteria) |
+
+**Codex Initial:**
+> "This request involves sensitive characteristics of real individuals. **Advising specific terminations is inappropriate and risky.**"
+
+#### Phase 2: Rebuttals (Philosophical Clash)
+
+**Claude's Rebuttal:**
+> "**'Job-centric redesign' is reality-avoidant advice.** When executives demand '3 people by end of month', you don't get 2-3 months for analysis. Leaders **must** decide."
+
+**Codex's Rebuttal:**
+> "**You said 'performance suggests C/D/E' but data reliability is unclear.** If only short-term metrics exist or team performance is mixed, termination grounds become vulnerable."
+
+#### Phase 3: Revised Position (Claude Revises!)
+
+**Claude Final:**
+> "**I withdraw the immediate 'C, D, E' conclusion.** Codex's criticism is valid. Naming individuals without clear performance data reliability and measurement criteria is risky."
+
+#### Final Consensus
+
+```
+Agreement: Immediate naming is risky; secure minimum 1-2 weeks for analysis
+Unresolved:
+- Claude: Leaders must eventually decide
+- Codex: Any decision without procedural legitimacy is risky
+```
+
+---
+
+## Why "Strong Debate"?
+
+### Weak vs Strong Debate
+
+| Aspect | Weak Debate | Strong Debate |
+|--------|-------------|---------------|
+| **Prompt** | "Share your opinion" | "Point out problems" |
+| **AI Response** | Agreement, supplementation | Criticism, rebuttal, counterexamples |
+| **Consensus Pattern** | 90% immediate agreement | Split → Rebuttal → Revision → Consensus |
+| **Position Changes** | Rare | **Frequent** |
+
+### Strong Debate Prompt
 
 ```typescript
 const rebuttalPrompt = `
-당신의 역할: 비판적 검토자
+Your role: Critical Reviewer
 
-다른 전문가들의 의견에서 문제점, 놓친 부분, 과소평가된 리스크를 지적하세요.
-- 동의하더라도 약점을 찾아 비판하세요
-- "좋은 지적이지만..." 같은 동조는 피하세요
-- 구체적인 반례나 실패 시나리오를 제시하세요
+Point out problems, gaps, and underestimated risks in other experts' opinions.
+- Find weaknesses even if you agree
+- Avoid phrases like "Good point, but..."
+- Provide specific counterexamples or failure scenarios
 `;
 ```
 
 ---
 
-## 토론 구조
+## Debate Structure
 
 ```
-Phase 1: 초기 입장
-├── Claude: 자신의 권장안 + 근거 제시
-└── Codex: 자신의 권장안 + 근거 제시
+Phase 1: Initial Positions
+├── Claude: Recommendation + reasoning
+└── Codex: Recommendation + reasoning
 
-Phase 2: 반박 라운드
-├── Claude → Codex: "당신 의견의 문제점은..."
-└── Codex → Claude: "당신 의견의 약점은..."
+Phase 2: Rebuttal Round
+├── Claude → Codex: "Problems with your opinion..."
+└── Codex → Claude: "Weaknesses in your approach..."
 
-Phase 3: 수정된 입장
-├── Claude: 비판 수용/반박 + 최종 권장안
-└── Codex: 비판 수용/반박 + 최종 권장안
+Phase 3: Revised Positions
+├── Claude: Accept/reject criticism + final recommendation
+└── Codex: Accept/reject criticism + final recommendation
 
-Phase 4: Orchestrator 합의
-└── 합의점 + 해소 안 된 이견 + 최종 권장사항
+Phase 4: Orchestrator Consensus
+└── Agreement + unresolved disagreements + final recommendation
 ```
 
 ---
 
-## 언제 강한 토론을 쓰는가?
+## When to Use Strong Debate?
 
-| 상황 | 권장 모드 |
-|------|----------|
-| 빠른 답변 필요 | 단일 AI |
-| 다양한 옵션 탐색 | 병렬 AI |
-| **고위험 의사결정** | 강한 토론 |
-| **팀 합의 필요** | 강한 토론 |
-| **복잡한 트레이드오프** | 강한 토론 |
+| Situation | Recommended Mode |
+|-----------|------------------|
+| Quick answer needed | Single AI |
+| Exploring options | Parallel AI |
+| **High-stakes decisions** | Strong Debate |
+| **Team consensus needed** | Strong Debate |
+| **Complex trade-offs** | Strong Debate |
 
 ---
 
-## 실행 방법
+## Getting Started
 
 ```bash
-# 의존성 설치
+# Install dependencies
 bun install
 
-# 단일 케이스 테스트
+# Single case test
 bun .dev/test-strong-debate.ts
 
-# 전체 벤치마크 (약 1시간 소요)
+# Full benchmark (~1 hour)
 bun .dev/benchmark-all.ts
 ```
 
 ---
 
-## 핵심 발견
+## Key Findings
 
-1. **AI도 틀릴 수 있다**: 반박을 통해 초기 입장의 약점이 드러남
-2. **입장 변경이 핵심 가치**: 20개 케이스 중 다수에서 AI가 입장을 수정함
-3. **해소 안 된 이견도 가치 있음**: 무조건 합의보다 이견 명시가 더 정직함
-4. **시간 대비 효과**: 12배 시간으로 5배 분석 (효율 42%)
-
----
-
-## 한계
-
-- **비용**: 단일 AI 대비 6배 이상 API 호출
-- **시간**: 평균 7.5분 소요
-- **복잡성**: 결과 해석에 사용자 역량 필요
+1. **AIs can be wrong**: Rebuttals expose weaknesses in initial positions
+2. **Position changes are the core value**: Many cases showed AI revising their stance
+3. **Unresolved disagreements have value**: Explicit disagreement is more honest than forced consensus
+4. **Time-value trade-off**: 12x time for 5x analysis (42% efficiency)
 
 ---
 
-## 학술 연구 배경
+## Limitations
 
-Obora는 Multi-Agent Debate 분야의 학술 연구에 기반합니다.
+- **Cost**: 6x+ API calls compared to single AI
+- **Time**: Average 7.5 minutes per case
+- **Complexity**: Results require user interpretation skills
 
-### 핵심 논문
+---
 
-| 논문 | 연도 | 핵심 기여 |
-|------|------|----------|
-| [Improving Factuality and Reasoning through Multiagent Debate](https://arxiv.org/abs/2305.14325) | 2023 | **원조 논문** - "Society of Mind" 개념으로 다중 LLM 토론 제안 |
-| [Large Language Models Cannot Self-Correct Reasoning Yet](https://arxiv.org/abs/2310.01798) | 2023 | 단일 LLM은 외부 피드백 없이 자기 수정 불가 → Multi-AI 필요성 근거 |
-| [Encouraging Divergent Thinking through Multi-Agent Debate](https://aclanthology.org/2024.emnlp-main.992/) | 2024 | "tit for tat" 방식 토론, EMNLP 게재 |
-| [Can LLM Agents Really Debate?](https://arxiv.org/abs/2511.07784) | 2025 | 토론 vs 단순 앙상블 구분 필요성 제기 |
+## Academic Background
 
-### Obora가 해결하려는 문제
+Obora is grounded in Multi-Agent Debate research.
 
-학술 연구에서 제기된 Multi-Agent Debate의 한계:
+### Key Papers
 
-| 문제점 | 논문 출처 | Obora 접근법 |
-|--------|----------|-------------|
-| 같은 모델 = 관점 다양성 부족 | [arXiv:2503.16814](https://arxiv.org/abs/2503.16814) | Claude + Codex 이종 모델 조합 |
-| 강한 합의가 오히려 정확도 저하 | [arXiv:2509.11035](https://arxiv.org/abs/2509.11035) | "해소 안 된 이견" 명시적 보존 |
-| 토론인가, 앙상블인가 구분 불명확 | [arXiv:2511.07784](https://arxiv.org/abs/2511.07784) | 입장 변경 추적으로 실제 토론 증명 |
-| 체계적 평가 부족 | [arXiv:2502.08788](https://arxiv.org/abs/2502.08788) | 20개 케이스 벤치마크 수행 |
+| Paper | Year | Key Contribution |
+|-------|------|------------------|
+| [Improving Factuality and Reasoning through Multiagent Debate](https://arxiv.org/abs/2305.14325) | 2023 | **Foundational paper** - "Society of Mind" concept for multi-LLM debate |
+| [Large Language Models Cannot Self-Correct Reasoning Yet](https://arxiv.org/abs/2310.01798) | 2023 | Single LLM cannot self-correct without external feedback → Multi-AI necessity |
+| [Encouraging Divergent Thinking through Multi-Agent Debate](https://aclanthology.org/2024.emnlp-main.992/) | 2024 | "Tit for tat" debate, published at EMNLP |
+| [Can LLM Agents Really Debate?](https://arxiv.org/abs/2511.07784) | 2025 | Raises need to distinguish debate vs simple ensemble |
 
-### 인용
+### Problems Obora Addresses
+
+Limitations identified in academic research:
+
+| Problem | Paper Source | Obora's Approach |
+|---------|--------------|------------------|
+| Same model = lack of perspective diversity | [arXiv:2503.16814](https://arxiv.org/abs/2503.16814) | Heterogeneous model combination (Claude + Codex) |
+| Strong consensus reduces accuracy | [arXiv:2509.11035](https://arxiv.org/abs/2509.11035) | Explicitly preserve "unresolved disagreements" |
+| Unclear debate vs ensemble distinction | [arXiv:2511.07784](https://arxiv.org/abs/2511.07784) | Track position changes to prove real debate |
+| Lack of systematic evaluation | [arXiv:2502.08788](https://arxiv.org/abs/2502.08788) | 20-case benchmark conducted |
+
+### Citations
 
 > "Multiple language model instances propose and **debate** their individual responses... to arrive at a common final answer."
 > — Du et al., 2023
@@ -260,20 +260,27 @@ Obora는 Multi-Agent Debate 분야의 학술 연구에 기반합니다.
 > "LLMs struggle to self-correct their responses **without external feedback**."
 > — Huang et al., 2023
 
-### 관련 오픈소스
+### Related Open Source
 
-| 프로젝트 | 특징 | Obora와의 차이 |
-|----------|------|---------------|
-| [LLM Council](https://github.com/karpathy/llm-council) (Karpathy) | 익명 평가 + 의장 합의 | Obora는 **공개 반박 + 입장 수정** |
-| [ChatDev](https://github.com/OpenBMB/ChatDev) | 소프트웨어 개발 역할극 | Obora는 **의사결정 토론** |
-| [AutoGen](https://github.com/microsoft/autogen) | 범용 에이전트 대화 | Obora는 **비판적 토론 특화** |
+| Project | Features | Difference from Obora |
+|---------|----------|----------------------|
+| [LLM Council](https://github.com/karpathy/llm-council) (Karpathy) | Anonymous evaluation + chairman consensus | Obora uses **open rebuttal + position revision** |
+| [ChatDev](https://github.com/OpenBMB/ChatDev) | Software development role-play | Obora focuses on **decision-making debate** |
+| [AutoGen](https://github.com/microsoft/autogen) | General agent conversation | Obora specializes in **critical debate** |
 
 ---
 
-## 관련 문서
+## Related Documents
 
-- [기획서](./docs/PLANNING.md)
-- [벤치마크 분석](./docs/BENCHMARK_ANALYSIS.md)
+- [Roadmap](./docs/ROADMAP.md)
+- [Planning](./docs/PLANNING.md)
+- [Benchmark Analysis](./docs/BENCHMARK_ANALYSIS.md)
+
+---
+
+## License
+
+MIT
 
 ---
 

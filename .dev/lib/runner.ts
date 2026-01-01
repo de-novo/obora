@@ -18,7 +18,7 @@ export async function runAI(ai: AIName, prompt: string): Promise<AIResponse> {
   return runner(prompt);
 }
 
-// Orchestrator 전용 (Claude만 지원, 구조화된 응답)
+// Orchestrator only (Claude only, structured response)
 export async function runOrchestrator(prompt: string): Promise<OrchestratorAction> {
   return runClaudeOrchestrator(prompt);
 }
