@@ -23,8 +23,16 @@ export class BenchmarkRunner {
     this.runId = Date.now().toString()
   }
 
+  private sanitizeFilename(name: string): string {
+    return name
+      .toLowerCase()
+      .replace(/[^a-z0-9가-힣]+/g, '-') // 특수문자를 하이픈으로
+      .replace(/^-+|-+$/g, '') // 앞뒤 하이픈 제거
+  }
+
   private async saveResult(result: BenchmarkResult): Promise<void> {
-    const outputPath = `${this.config.outputDir}/${this.runId}/${result.caseId}.json`
+    const filename = this.sanitizeFilename(result.caseName)
+    const outputPath = `${this.config.outputDir}/${this.runId}/${filename}.json`
     await Bun.write(outputPath, JSON.stringify(result, null, 2))
   }
 
