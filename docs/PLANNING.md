@@ -244,10 +244,16 @@ obora compare "마이크로서비스 vs 모놀리스" --output report.md
 
 ## 로드맵
 
-### v0.0 - 가설 검증 (Phase 0) ⭐ 현재
-- [x] `.dev/ask.ts` 프로토타입으로 토론 시뮬레이션
+### v0.0 - 가설 검증 (Phase 0) ✅ 완료
+- [x] 프로토타입으로 토론 시뮬레이션
+- [x] 20개 케이스 벤치마크 완료
+- [x] Strong Debate 모드 구현
+
+### v0.1 - Core Library ⭐ 현재
+- [x] `packages/core` 구조화
+- [x] Vercel AI SDK 통합
+- [x] CLI 백엔드 격리 (MCP/Skills 독립)
 - [ ] 개발자 인터뷰 5명 진행
-- [ ] 수동 시뮬레이션으로 가치 확인
 - [ ] Go/No-Go 결정
 
 ### v0.1 - Proof of Value (Report)

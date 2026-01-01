@@ -202,11 +202,11 @@ Phase 4: Orchestrator Consensus
 # Install dependencies
 bun install
 
-# Single case test
-bun .dev/test-strong-debate.ts
+# Run example debate
+bun packages/core/examples/debate.ts
 
-# Full benchmark (~1 hour)
-bun .dev/benchmark-all.ts
+# Run with API keys (for streaming)
+ANTHROPIC_API_KEY=... OPENAI_API_KEY=... bun packages/core/examples/test-ai-sdk.ts
 ```
 
 ---

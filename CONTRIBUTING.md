@@ -16,20 +16,21 @@ cd obora
 # Install dependencies
 bun install
 
-# Set up API keys
-cp .env.example .env
-# Edit .env with your API keys
+# Set up API keys (optional - CLI mode works without them)
+export ANTHROPIC_API_KEY=your_key
+export OPENAI_API_KEY=your_key
+export GOOGLE_API_KEY=your_key
 
-# Run a single debate
-bun .dev/test-strong-debate.ts
+# Run example debate
+bun packages/core/examples/debate.ts
 
-# Run full benchmark
-bun .dev/benchmark-all.ts
+# Run benchmark
+bun benchmark/run.ts
 ```
 
 #### Adding New Benchmark Cases
 
-1. Add cases to `.dev/benchmark-cases.ts` (technical) or `.dev/benchmark-cases-decision.ts` (decision-making)
+1. Add cases to `benchmark/cases/`
 2. Run the benchmark
 3. Analyze and document results
 4. Submit PR with findings
@@ -49,7 +50,7 @@ Share your findings via GitHub Issues or Discussions.
 
 ### 3. Improve Debate Prompts
 
-The quality of debate depends heavily on prompts. Current prompts are in `.dev/benchmark-all.ts`.
+The quality of debate depends heavily on prompts. Current prompts are in `packages/core/src/engine/`.
 
 Propose improvements by:
 1. Creating a new prompt variant
@@ -59,12 +60,12 @@ Propose improvements by:
 
 ### 4. Add AI Providers
 
-Currently supported: Claude, Codex (OpenAI), Gemini (unstable)
+Currently supported: Claude, OpenAI (Codex), Gemini
 
 To add a new provider:
-1. Add provider config to `.dev/config.yaml`
-2. Implement API call in `.dev/lib/`
-3. Test with benchmark cases
+1. Create provider in `packages/core/src/providers/`
+2. Implement the `ProviderBackend` interface
+3. Test with example debates
 4. Document any quirks or limitations
 
 ### 5. Build Integrations
@@ -81,38 +82,48 @@ Future integrations we'd love help with:
 
 ### Prerequisites
 
-- [Bun](https://bun.sh/) >= 1.0
-- API keys for AI providers (Claude, OpenAI, etc.)
+- [Bun](https://bun.sh/) >= 1.3
+- API keys for AI providers (Claude, OpenAI, etc.) or CLI tools installed
 
 ### Project Structure
 
 ```
 obora/
-├── .dev/                    # Development tools
-│   ├── benchmark-all.ts     # Main benchmark runner
-│   ├── benchmark-cases.ts   # Technical cases
-│   ├── benchmark-cases-decision.ts  # Decision cases
-│   ├── test-strong-debate.ts        # Single case tester
-│   ├── lib/                 # Core libraries
-│   │   ├── claude.ts        # Claude API
-│   │   ├── runner.ts        # Debate runner
-│   │   └── types.ts         # Type definitions
-│   └── benchmark/           # Benchmark results
-├── docs/                    # Documentation
-│   ├── ROADMAP.md
-│   ├── PLANNING.md
-│   └── BENCHMARK_ANALYSIS.md
+├── packages/
+│   └── core/                  # Core library
+│       ├── src/
+│       │   ├── providers/     # AI provider implementations
+│       │   │   ├── ai-sdk/    # Vercel AI SDK backend
+│       │   │   ├── claude/    # Claude provider
+│       │   │   ├── openai/    # OpenAI provider
+│       │   │   └── gemini/    # Gemini provider
+│       │   ├── engine/        # Debate engine
+│       │   └── auth/          # Authentication
+│       └── examples/          # Example scripts
+├── benchmark/                 # Benchmark tools
+│   ├── cases/                 # Test cases
+│   ├── results/               # Output (gitignored)
+│   ├── run.ts                 # Runner script
+│   └── runner.ts              # Benchmark runner
+├── docs/                      # Documentation
+├── biome.json                 # Linting & formatting
 └── README.md
 ```
 
 ### Running Tests
 
 ```bash
-# Single debate test
-bun .dev/test-strong-debate.ts
+# Lint check
+bun run lint
 
-# Full benchmark (takes ~1 hour)
-bun .dev/benchmark-all.ts
+# Auto-fix lint issues
+bun run lint:fix
+
+# Type check
+bun run typecheck
+
+# Full check (lint + typecheck)
+bun run check
 ```
 
 ---
@@ -127,7 +138,7 @@ Use conventional commits:
 feat: add Gemini support
 fix: handle API timeout gracefully
 docs: update benchmark results
-experiment: test 3-round debate
+chore: update dependencies
 ```
 
 ### Pull Request Process
@@ -135,7 +146,7 @@ experiment: test 3-round debate
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feat/my-feature`)
 3. Make changes
-4. Run tests if applicable
+4. Run `bun run check` to ensure lint and types pass
 5. Commit with descriptive message
 6. Push and create PR
 
@@ -158,7 +169,7 @@ Motivation for this change.
 
 ## Checklist
 
-- [ ] Code follows project style
+- [ ] `bun run check` passes
 - [ ] Documentation updated
 - [ ] Tests pass (if applicable)
 ```
@@ -168,6 +179,7 @@ Motivation for this change.
 ## Code Style
 
 - Use TypeScript
+- Biome for linting and formatting (auto-fixed on commit)
 - Follow existing patterns in the codebase
 - Comments in English
 - Use Bun APIs where applicable (see `CLAUDE.md`)
