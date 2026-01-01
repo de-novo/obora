@@ -85,6 +85,80 @@ class OpenAICLIBackend implements ProviderBackend {
     }
   }
 
+  /**
+   * Stream response from Codex CLI
+   * Parses JSONL output for streaming chunks
+   */
+  async *stream(prompt: string, config: OpenAIProviderConfig): AsyncGenerator<{ chunk: string; done: boolean }> {
+    const args = [
+      'codex',
+      'exec',
+      '-c',
+      'mcp.enabled=false',
+      '--skip-git-repo-check',
+      '--json', // JSONL output for parsing
+    ]
+
+    if (config.enableWebSearch) {
+      args.push('--search')
+    }
+
+    args.push(prompt)
+
+    if (config.model) {
+      args.push('--model', config.model)
+    }
+
+    const proc = Bun.spawn(args, {
+      stdout: 'pipe',
+      stderr: 'pipe',
+    })
+
+    const reader = proc.stdout.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+
+        // Process complete JSONL lines
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || '' // Keep incomplete line in buffer
+
+        for (const line of lines) {
+          if (!line.trim()) continue
+          try {
+            const json = JSON.parse(line)
+            // Codex outputs complete items, not streaming deltas
+            // Extract text from agent_message items
+            if (json.type === 'item.completed' && json.item?.type === 'agent_message') {
+              const text = json.item.text || ''
+              if (text) {
+                yield { chunk: text, done: false }
+              }
+            }
+          } catch {
+            // Non-JSON line, skip (could be stderr mixed in)
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock()
+    }
+
+    const exitCode = await proc.exited
+    if (exitCode !== 0) {
+      const stderr = await new Response(proc.stderr).text()
+      throw new Error(`Codex CLI streaming failed: ${stderr}`)
+    }
+
+    yield { chunk: '', done: true }
+  }
+
   async isAvailable(): Promise<boolean> {
     try {
       const proc = Bun.spawn(['which', 'codex'], {
@@ -119,24 +193,31 @@ export class OpenAIProvider extends BaseProvider {
   readonly name = 'openai'
   protected declare config: OpenAIProviderConfig
   private aiSdkBackend: AISDKBackend
+  private cliBackend: OpenAICLIBackend
 
   constructor(config: OpenAIProviderConfig = {}) {
     super(config)
     this.config = config
 
-    // Create AI SDK backend
+    // Create backends
+    this.cliBackend = new OpenAICLIBackend()
     this.aiSdkBackend = new AISDKBackend('openai', config)
 
     // Register backends (CLI first for fallback, then API)
-    this.registerBackend(new OpenAICLIBackend())
+    this.registerBackend(this.cliBackend)
     this.registerBackend(this.aiSdkBackend)
   }
 
   /**
    * Stream response chunks
+   * Uses API backend if apiKey provided, otherwise CLI backend
    */
   async *stream(prompt: string): AsyncGenerator<{ chunk: string; done: boolean }> {
-    yield* this.aiSdkBackend.stream(prompt, this.config)
+    if (this.config.apiKey && !this.config.forceCLI) {
+      yield* this.aiSdkBackend.stream(prompt, this.config)
+    } else {
+      yield* this.cliBackend.stream(prompt, this.config)
+    }
   }
 
   /**

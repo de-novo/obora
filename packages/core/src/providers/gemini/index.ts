@@ -78,6 +78,59 @@ class GeminiCLIBackend implements ProviderBackend {
     }
   }
 
+  /**
+   * Stream response from Gemini CLI
+   */
+  async *stream(prompt: string, config: GeminiProviderConfig): AsyncGenerator<{ chunk: string; done: boolean }> {
+    const args = [
+      'gemini',
+      '--allowed-mcp-server-names',
+      '',
+      '--extensions',
+      '',
+    ]
+
+    if (config.enabledTools?.length) {
+      args.push('--tools', config.enabledTools.join(','))
+    }
+
+    args.push(prompt)
+
+    if (config.model) {
+      args.push('--model', config.model)
+    }
+
+    const proc = Bun.spawn(args, {
+      stdout: 'pipe',
+      stderr: 'pipe',
+    })
+
+    const reader = proc.stdout.getReader()
+    const decoder = new TextDecoder()
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const chunk = decoder.decode(value, { stream: true })
+        if (chunk) {
+          yield { chunk, done: false }
+        }
+      }
+    } finally {
+      reader.releaseLock()
+    }
+
+    const exitCode = await proc.exited
+    if (exitCode !== 0) {
+      const stderr = await new Response(proc.stderr).text()
+      throw new Error(`Gemini CLI streaming failed: ${stderr}`)
+    }
+
+    yield { chunk: '', done: true }
+  }
+
   async isAvailable(): Promise<boolean> {
     try {
       const proc = Bun.spawn(['which', 'gemini'], {
@@ -112,24 +165,31 @@ export class GeminiProvider extends BaseProvider {
   readonly name = 'gemini'
   protected declare config: GeminiProviderConfig
   private aiSdkBackend: AISDKBackend
+  private cliBackend: GeminiCLIBackend
 
   constructor(config: GeminiProviderConfig = {}) {
     super(config)
     this.config = config
 
-    // Create AI SDK backend
+    // Create backends
+    this.cliBackend = new GeminiCLIBackend()
     this.aiSdkBackend = new AISDKBackend('google', config)
 
     // Register backends (CLI first for fallback, then API)
-    this.registerBackend(new GeminiCLIBackend())
+    this.registerBackend(this.cliBackend)
     this.registerBackend(this.aiSdkBackend)
   }
 
   /**
    * Stream response chunks
+   * Uses API backend if apiKey provided, otherwise CLI backend
    */
   async *stream(prompt: string): AsyncGenerator<{ chunk: string; done: boolean }> {
-    yield* this.aiSdkBackend.stream(prompt, this.config)
+    if (this.config.apiKey && !this.config.forceCLI) {
+      yield* this.aiSdkBackend.stream(prompt, this.config)
+    } else {
+      yield* this.cliBackend.stream(prompt, this.config)
+    }
   }
 
   /**
