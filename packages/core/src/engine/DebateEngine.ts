@@ -5,8 +5,9 @@
  * Supports both 'strong' (with rebuttals) and 'weak' (simple rounds) modes.
  */
 
+import type { Tool } from 'ai'
 import type { Provider } from '../providers/types'
-import type { DebateEngineConfig, DebatePhase, DebateResult, DebateRound, PositionChange } from './types'
+import type { DebateEngineConfig, DebatePhase, DebateResult, DebateRound, PositionChange, ToolCall } from './types'
 
 export interface DebateParticipant {
   name: string
@@ -49,6 +50,7 @@ const DEFAULT_CONFIG: DebateEngineConfig = {
   mode: 'strong',
   maxRounds: 10,
   timeout: 300000, // 5 minutes
+  toolPhases: ['rebuttal'], // Enable tools during rebuttal by default
 }
 
 /**
@@ -62,7 +64,7 @@ You must present a clear position as an expert on this topic.
 - Clearly explain the reasoning behind your choice
 - Also mention potential risks`,
 
-  rebuttal: (topic: string, othersOpinions: string) => `Topic: ${topic}
+  rebuttal: (topic: string, othersOpinions: string, hasTools: boolean) => `Topic: ${topic}
 
 Other experts' opinions:
 ${othersOpinions}
@@ -72,7 +74,19 @@ Point out problems, gaps, and underestimated risks in the above opinions.
 - Find weaknesses even if you agree
 - Avoid phrases like "Good point, but..."
 - Provide specific counterexamples or failure scenarios
-- Specify conditions under which the approach could fail`,
+- Specify conditions under which the approach could fail${
+    hasTools
+      ? `
+
+IMPORTANT: Before making factual claims, use the webSearch tool to verify:
+- Service certifications (SOC2, HIPAA, etc.)
+- Current pricing or feature availability
+- Recent announcements or changes
+- Technical specifications
+
+Example: If you claim "Service X lacks SOC2", search to confirm this is current.`
+      : ''
+  }`,
 
   revised: (topic: string, allHistory: string) => `Topic: ${topic}
 
@@ -119,8 +133,9 @@ export class DebateEngine {
       // Phase 1: Initial positions
       await this.runPhase('initial', topic, participants, rounds, history)
 
-      // Phase 2: Rebuttal round
-      await this.runRebuttalPhase(topic, participants, rounds, history)
+      // Phase 2: Rebuttal round (with tools if configured)
+      const rebuttalTools = config.toolPhases?.includes('rebuttal') ? config.tools : undefined
+      await this.runRebuttalPhase(topic, participants, rounds, history, rebuttalTools)
 
       // Phase 3: Revised positions (detect position changes)
       const initialPositions = this.extractPositions(rounds, 'initial')
@@ -204,14 +219,20 @@ export class DebateEngine {
     participants: DebateParticipant[],
     rounds: DebateRound[],
     history: { role: string; content: string }[],
+    tools?: Record<string, Tool>,
   ): Promise<void> {
+    const hasTools = tools && Object.keys(tools).length > 0
+
     for (const participant of participants) {
       const othersOpinions = history
         .filter((h) => h.role !== 'user' && h.role !== participant.name)
         .map((h) => `[${h.role}] ${h.content}`)
         .join('\n\n---\n\n')
 
-      const prompt = PROMPTS.rebuttal(topic, othersOpinions)
+      const prompt = PROMPTS.rebuttal(topic, othersOpinions, !!hasTools)
+
+      // TODO: Implement actual tool calling with AI SDK generateText
+      // For now, just use regular provider with enhanced prompt
       const response = await participant.provider.run(prompt)
 
       rounds.push({
@@ -219,6 +240,7 @@ export class DebateEngine {
         speaker: participant.name,
         content: response.content,
         timestamp: Date.now(),
+        // toolCalls will be populated when tool integration is complete
       })
       history.push({
         role: `${participant.name}(rebuttal)`,
@@ -397,7 +419,8 @@ export class DebateEngine {
           .map((h) => `[${h.role}] ${h.content}`)
           .join('\n\n---\n\n')
 
-        const prompt = PROMPTS.rebuttal(topic, othersOpinions)
+        // Streaming mode doesn't support tools yet
+        const prompt = PROMPTS.rebuttal(topic, othersOpinions, false)
         let content = ''
 
         for await (const { chunk, done } of participant.provider.stream(prompt)) {

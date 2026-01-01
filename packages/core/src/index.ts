@@ -48,7 +48,10 @@ export {
   type PositionChange,
   type StreamingDebateOptions,
   type StreamingParticipant,
+  type ToolCall,
 } from './engine'
+// Tools - Fact-checking tools for AI debates
+export { createDebateTools, type DebateToolsConfig, webSearchTool, type WebSearchResult } from './tools'
 // Providers - AI provider implementations (powered by Vercel AI SDK)
 export {
   // AI SDK Backend
