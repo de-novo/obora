@@ -1,14 +1,18 @@
 /**
- * Web Search Tool
+ * Custom Web Search Tool
  *
- * Allows AI to search the web during debate to verify factual claims.
+ * For custom search providers (Tavily, Serper, Exa).
+ * Use this when you need more control over search or want to use a specific provider.
  *
- * Supported providers:
- * - Tavily: Set TAVILY_API_KEY environment variable
- * - Serper: Set SERPER_API_KEY environment variable
- * - Exa: Set EXA_API_KEY environment variable
+ * NOTE: For basic fact-checking, prefer using Provider's built-in tools:
+ * - ClaudeProvider: enabledTools: ['WebSearch']
+ * - OpenAIProvider: enableWebSearch: true
+ * - GeminiProvider: enabledTools: ['google_web_search']
  *
- * The provider is auto-detected based on available API keys.
+ * Custom providers require API keys:
+ * - Tavily: TAVILY_API_KEY (recommended for AI)
+ * - Serper: SERPER_API_KEY (Google search)
+ * - Exa: EXA_API_KEY (semantic search)
  */
 
 import { tool } from 'ai'
@@ -21,36 +25,16 @@ export interface WebSearchResult {
 }
 
 export interface WebSearchConfig {
-  provider?: 'tavily' | 'exa' | 'serper' | 'mock'
-  apiKey?: string
+  provider: 'tavily' | 'exa' | 'serper'
+  apiKey: string
   maxResults?: number
-}
-
-/**
- * Auto-detect provider based on available environment variables
- */
-function detectProvider(): { provider: WebSearchConfig['provider']; apiKey: string | undefined } {
-  if (process.env.TAVILY_API_KEY) {
-    return { provider: 'tavily', apiKey: process.env.TAVILY_API_KEY }
-  }
-  if (process.env.SERPER_API_KEY) {
-    return { provider: 'serper', apiKey: process.env.SERPER_API_KEY }
-  }
-  if (process.env.EXA_API_KEY) {
-    return { provider: 'exa', apiKey: process.env.EXA_API_KEY }
-  }
-  return { provider: 'mock', apiKey: undefined }
 }
 
 /**
  * Search the web using configured provider
  */
-async function searchWeb(query: string, config: WebSearchConfig = {}): Promise<WebSearchResult[]> {
-  // Auto-detect provider if not specified
-  const detected = detectProvider()
-  const provider = config.provider ?? detected.provider
-  const apiKey = config.apiKey ?? detected.apiKey
-  const maxResults = config.maxResults ?? 5
+async function searchWeb(query: string, config: WebSearchConfig): Promise<WebSearchResult[]> {
+  const { provider, apiKey, maxResults = 5 } = config
 
   switch (provider) {
     case 'tavily': {
@@ -123,16 +107,8 @@ async function searchWeb(query: string, config: WebSearchConfig = {}): Promise<W
       }))
     }
 
-    case 'mock':
     default:
-      // Mock response for testing
-      return [
-        {
-          title: `Search results for: ${query}`,
-          url: 'https://example.com',
-          snippet: `Mock search result for "${query}". In production, configure a real search provider.`,
-        },
-      ]
+      throw new Error(`Unknown provider: ${provider}`)
   }
 }
 
@@ -142,9 +118,17 @@ const webSearchInputSchema = z.object({
 })
 
 /**
- * Create a web search tool with configuration
+ * Create a custom web search tool
+ *
+ * @example
+ * ```typescript
+ * const tavilySearch = createWebSearchTool({
+ *   provider: 'tavily',
+ *   apiKey: process.env.TAVILY_API_KEY!,
+ * })
+ * ```
  */
-export function createWebSearchTool(config: WebSearchConfig = {}) {
+export function createWebSearchTool(config: WebSearchConfig) {
   return tool({
     description: `Search the web to verify factual claims. Use this when you need to:
 - Verify if a service has specific certifications (e.g., SOC2, HIPAA)
@@ -165,36 +149,16 @@ export function createWebSearchTool(config: WebSearchConfig = {}) {
 }
 
 /**
- * Default web search tool (auto-detects provider from environment)
- */
-export const webSearchTool = createWebSearchTool()
-
-/**
- * Get current provider info for debugging
- */
-export function getWebSearchProviderInfo(): {
-  provider: string
-  configured: boolean
-  envVar?: string
-} {
-  const detected = detectProvider()
-  const envVarMap = {
-    tavily: 'TAVILY_API_KEY',
-    serper: 'SERPER_API_KEY',
-    exa: 'EXA_API_KEY',
-    mock: undefined,
-  }
-
-  return {
-    provider: detected.provider ?? 'mock',
-    configured: detected.provider !== 'mock',
-    envVar: envVarMap[detected.provider ?? 'mock'],
-  }
-}
-
-/**
  * Standalone search function for direct use
+ *
+ * @example
+ * ```typescript
+ * const results = await webSearch('Railway SOC2 certification', {
+ *   provider: 'tavily',
+ *   apiKey: process.env.TAVILY_API_KEY!,
+ * })
+ * ```
  */
-export async function webSearch(query: string, config?: WebSearchConfig): Promise<WebSearchResult[]> {
+export async function webSearch(query: string, config: WebSearchConfig): Promise<WebSearchResult[]> {
   return searchWeb(query, config)
 }

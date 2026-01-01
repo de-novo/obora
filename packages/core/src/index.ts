@@ -75,14 +75,16 @@ export {
   providerFactory,
   type StructuredProvider,
 } from './providers'
-// Tools - Fact-checking tools for AI debates
+// Tools - Custom tools for advanced use cases (optional)
+// For basic fact-checking, use Provider's built-in tools:
+//   ClaudeProvider: enabledTools: ['WebSearch']
+//   OpenAIProvider: enableWebSearch: true
+//   GeminiProvider: enabledTools: ['google_web_search']
 export {
   createDebateTools,
   createWebSearchTool,
   type DebateToolsConfig,
-  getWebSearchProviderInfo,
   webSearch,
   type WebSearchConfig,
   type WebSearchResult,
-  webSearchTool,
 } from './tools'

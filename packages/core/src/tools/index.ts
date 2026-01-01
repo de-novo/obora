@@ -1,15 +1,13 @@
 /**
  * Tools for AI-enhanced debate
  *
- * Tools allow AIs to verify facts during debate phases.
+ * For basic fact-checking, use Provider's built-in tools:
+ * - ClaudeProvider: enabledTools: ['WebSearch']
+ * - OpenAIProvider: enableWebSearch: true
+ * - GeminiProvider: enabledTools: ['google_web_search']
+ *
+ * For custom search (Tavily, Serper, Exa), use createWebSearchTool().
  */
 
 export { createDebateTools, type DebateToolsConfig } from './debateTools'
-export {
-  createWebSearchTool,
-  getWebSearchProviderInfo,
-  webSearch,
-  type WebSearchConfig,
-  type WebSearchResult,
-  webSearchTool,
-} from './webSearch'
+export { createWebSearchTool, webSearch, type WebSearchConfig, type WebSearchResult } from './webSearch'
