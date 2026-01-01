@@ -4,6 +4,7 @@
  * Run a multi-AI debate on a given topic.
  */
 
+import { parseArgs } from 'node:util'
 import {
   ClaudeProvider,
   DebateEngine,
@@ -13,7 +14,6 @@ import {
   type StreamableProvider,
   type StreamingParticipant,
 } from '@obora/core'
-import { parseArgs } from 'node:util'
 
 const HELP = `
 Usage: obora debate <topic> [options]

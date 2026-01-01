@@ -251,15 +251,62 @@ Phase 4: Orchestrator Consensus
 
 ## Getting Started
 
+### CLI (Recommended)
+
 ```bash
-# Install dependencies
+# Install
 bun install
 
-# Run example debate
-bun packages/core/examples/debate.ts
+# Run a debate
+bun run obora debate "Should we use microservices?"
 
-# Run with API keys (for streaming)
-ANTHROPIC_API_KEY=... OPENAI_API_KEY=... bun packages/core/examples/test-ai-sdk.ts
+# With options
+bun run obora debate "Topic" --mode strong --providers claude,openai,gemini
+
+# Streaming output (real-time)
+bun run obora debate "Topic" --streaming
+
+# Save results
+bun run obora debate "Topic" --output result.json
+```
+
+### CLI Options
+
+| Option | Description |
+|--------|-------------|
+| `-m, --mode` | `strong` (default) or `weak` |
+| `-p, --providers` | `claude,openai,gemini` (default: claude,openai) |
+| `-s, --streaming` | Real-time streaming output |
+| `-o, --output` | Save results to JSON file |
+| `-f, --file` | Read topic from file |
+
+### Programmatic Usage
+
+```typescript
+import { DebateEngine, ClaudeProvider, OpenAIProvider } from '@obora/core'
+
+const engine = new DebateEngine({ mode: 'strong' })
+
+const result = await engine.run({
+  topic: 'Should we migrate to microservices?',
+  participants: [
+    { name: 'claude', provider: new ClaudeProvider() },
+    { name: 'openai', provider: new OpenAIProvider() },
+  ],
+  orchestrator: new ClaudeProvider(),
+})
+
+console.log(result.consensus)
+```
+
+### Streaming (Programmatic)
+
+```typescript
+for await (const event of engine.runStreaming(options)) {
+  if (event.type === 'chunk') {
+    process.stdout.write(event.chunk)
+  }
+}
 ```
 
 ---
