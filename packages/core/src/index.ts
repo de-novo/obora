@@ -76,4 +76,13 @@ export {
   type StructuredProvider,
 } from './providers'
 // Tools - Fact-checking tools for AI debates
-export { createDebateTools, type DebateToolsConfig, type WebSearchResult, webSearchTool } from './tools'
+export {
+  createDebateTools,
+  createWebSearchTool,
+  type DebateToolsConfig,
+  getWebSearchProviderInfo,
+  webSearch,
+  type WebSearchConfig,
+  type WebSearchResult,
+  webSearchTool,
+} from './tools'

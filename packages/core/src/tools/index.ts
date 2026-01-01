@@ -5,4 +5,11 @@
  */
 
 export { createDebateTools, type DebateToolsConfig } from './debateTools'
-export { type WebSearchResult, webSearchTool } from './webSearch'
+export {
+  createWebSearchTool,
+  getWebSearchProviderInfo,
+  webSearch,
+  type WebSearchConfig,
+  type WebSearchResult,
+  webSearchTool,
+} from './webSearch'

@@ -2,6 +2,13 @@
  * Web Search Tool
  *
  * Allows AI to search the web during debate to verify factual claims.
+ *
+ * Supported providers:
+ * - Tavily: Set TAVILY_API_KEY environment variable
+ * - Serper: Set SERPER_API_KEY environment variable
+ * - Exa: Set EXA_API_KEY environment variable
+ *
+ * The provider is auto-detected based on available API keys.
  */
 
 import { tool } from 'ai'
@@ -20,14 +27,34 @@ export interface WebSearchConfig {
 }
 
 /**
+ * Auto-detect provider based on available environment variables
+ */
+function detectProvider(): { provider: WebSearchConfig['provider']; apiKey: string | undefined } {
+  if (process.env.TAVILY_API_KEY) {
+    return { provider: 'tavily', apiKey: process.env.TAVILY_API_KEY }
+  }
+  if (process.env.SERPER_API_KEY) {
+    return { provider: 'serper', apiKey: process.env.SERPER_API_KEY }
+  }
+  if (process.env.EXA_API_KEY) {
+    return { provider: 'exa', apiKey: process.env.EXA_API_KEY }
+  }
+  return { provider: 'mock', apiKey: undefined }
+}
+
+/**
  * Search the web using configured provider
  */
 async function searchWeb(query: string, config: WebSearchConfig = {}): Promise<WebSearchResult[]> {
-  const { provider = 'mock', apiKey, maxResults = 5 } = config
+  // Auto-detect provider if not specified
+  const detected = detectProvider()
+  const provider = config.provider ?? detected.provider
+  const apiKey = config.apiKey ?? detected.apiKey
+  const maxResults = config.maxResults ?? 5
 
   switch (provider) {
     case 'tavily': {
-      if (!apiKey) throw new Error('Tavily API key required')
+      if (!apiKey) throw new Error('Tavily API key required. Set TAVILY_API_KEY environment variable.')
       const response = await fetch('https://api.tavily.com/search', {
         method: 'POST',
         headers: {
@@ -39,6 +66,9 @@ async function searchWeb(query: string, config: WebSearchConfig = {}): Promise<W
           max_results: maxResults,
         }),
       })
+      if (!response.ok) {
+        throw new Error(`Tavily API error: ${response.status} ${response.statusText}`)
+      }
       const data = (await response.json()) as { results: Array<{ title: string; url: string; content: string }> }
       return data.results.map((r) => ({
         title: r.title,
@@ -48,7 +78,7 @@ async function searchWeb(query: string, config: WebSearchConfig = {}): Promise<W
     }
 
     case 'serper': {
-      if (!apiKey) throw new Error('Serper API key required')
+      if (!apiKey) throw new Error('Serper API key required. Set SERPER_API_KEY environment variable.')
       const response = await fetch('https://google.serper.dev/search', {
         method: 'POST',
         headers: {
@@ -57,6 +87,9 @@ async function searchWeb(query: string, config: WebSearchConfig = {}): Promise<W
         },
         body: JSON.stringify({ q: query, num: maxResults }),
       })
+      if (!response.ok) {
+        throw new Error(`Serper API error: ${response.status} ${response.statusText}`)
+      }
       const data = (await response.json()) as { organic: Array<{ title: string; link: string; snippet: string }> }
       return data.organic.map((r) => ({
         title: r.title,
@@ -66,7 +99,7 @@ async function searchWeb(query: string, config: WebSearchConfig = {}): Promise<W
     }
 
     case 'exa': {
-      if (!apiKey) throw new Error('Exa API key required')
+      if (!apiKey) throw new Error('Exa API key required. Set EXA_API_KEY environment variable.')
       const response = await fetch('https://api.exa.ai/search', {
         method: 'POST',
         headers: {
@@ -79,6 +112,9 @@ async function searchWeb(query: string, config: WebSearchConfig = {}): Promise<W
           contents: { text: { maxCharacters: 500 } },
         }),
       })
+      if (!response.ok) {
+        throw new Error(`Exa API error: ${response.status} ${response.statusText}`)
+      }
       const data = (await response.json()) as { results: Array<{ title: string; url: string; text: string }> }
       return data.results.map((r) => ({
         title: r.title,
@@ -129,6 +165,36 @@ export function createWebSearchTool(config: WebSearchConfig = {}) {
 }
 
 /**
- * Default web search tool (uses mock provider)
+ * Default web search tool (auto-detects provider from environment)
  */
 export const webSearchTool = createWebSearchTool()
+
+/**
+ * Get current provider info for debugging
+ */
+export function getWebSearchProviderInfo(): {
+  provider: string
+  configured: boolean
+  envVar?: string
+} {
+  const detected = detectProvider()
+  const envVarMap = {
+    tavily: 'TAVILY_API_KEY',
+    serper: 'SERPER_API_KEY',
+    exa: 'EXA_API_KEY',
+    mock: undefined,
+  }
+
+  return {
+    provider: detected.provider ?? 'mock',
+    configured: detected.provider !== 'mock',
+    envVar: envVarMap[detected.provider ?? 'mock'],
+  }
+}
+
+/**
+ * Standalone search function for direct use
+ */
+export async function webSearch(query: string, config?: WebSearchConfig): Promise<WebSearchResult[]> {
+  return searchWeb(query, config)
+}
