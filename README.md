@@ -372,9 +372,16 @@ Limitations identified in academic research:
 
 ## Related Documents
 
+- [API Reference](./docs/API.md)
 - [Roadmap](./docs/ROADMAP.md)
 - [Planning](./docs/PLANNING.md)
 - [Benchmark Analysis](./docs/BENCHMARK_ANALYSIS.md)
+
+### Generate API Docs
+
+```bash
+bun run docs  # Generates HTML docs in docs/api/
+```
 
 ---
 

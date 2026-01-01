@@ -3,44 +3,119 @@
  *
  * Orchestrates multi-AI debates with structured phases.
  * Supports both 'strong' (with rebuttals) and 'weak' (simple rounds) modes.
+ *
+ * @packageDocumentation
+ * @module engine/DebateEngine
  */
 
 import type { Tool } from 'ai'
 import type { Provider, StreamableProvider } from '../providers/types'
-import type { DebateEngineConfig, DebatePhase, DebateResult, DebateRound, PositionChange, ToolCall } from './types'
+import type { DebateEngineConfig, DebatePhase, DebateResult, DebateRound, PositionChange } from './types'
 
+/**
+ * A participant in the debate with their AI provider.
+ *
+ * @example
+ * ```typescript
+ * const participant: DebateParticipant = {
+ *   name: 'claude',
+ *   provider: new ClaudeProvider()
+ * }
+ * ```
+ */
 export interface DebateParticipant {
+  /** Display name for this participant */
   name: string
+  /** AI provider that will generate responses */
   provider: Provider
 }
 
 /**
- * Streaming participant with stream() method
+ * Participant with streaming capability for real-time output.
+ *
+ * @example
+ * ```typescript
+ * const participant: StreamingParticipant = {
+ *   name: 'openai',
+ *   provider: new OpenAIProvider() // Must implement stream()
+ * }
+ * ```
  */
 export interface StreamingParticipant extends DebateParticipant {
+  /** Provider must support streaming */
   provider: StreamableProvider
 }
 
 /**
- * Streaming event emitted during debate
+ * Events emitted during streaming debate.
+ *
+ * Event flow:
+ * 1. `phase_start` - New phase begins
+ * 2. `round_start` - AI begins speaking
+ * 3. `chunk` - Partial response text (many events)
+ * 4. `round_end` - AI finishes, includes full content
+ * 5. `phase_end` - Phase completes
+ *
+ * @example
+ * ```typescript
+ * for await (const event of engine.runStreaming(options)) {
+ *   switch (event.type) {
+ *     case 'phase_start':
+ *       console.log(`\n=== ${event.phase} ===`)
+ *       break
+ *     case 'chunk':
+ *       process.stdout.write(event.chunk)
+ *       break
+ *   }
+ * }
+ * ```
  */
 export interface DebateStreamEvent {
+  /** Event type */
   type: 'chunk' | 'round_start' | 'round_end' | 'phase_start' | 'phase_end'
+  /** Current debate phase */
   phase?: DebatePhase
+  /** Name of the speaking participant */
   participant?: string
+  /** Partial response chunk (for 'chunk' events) */
   chunk?: string
+  /** Complete response (for 'round_end' events) */
   content?: string
+  /** Unix timestamp */
   timestamp: number
 }
 
+/**
+ * Options for running a debate.
+ *
+ * @example
+ * ```typescript
+ * const options: DebateOptions = {
+ *   topic: 'Should we use microservices?',
+ *   participants: [
+ *     { name: 'claude', provider: new ClaudeProvider() },
+ *     { name: 'openai', provider: new OpenAIProvider() }
+ *   ],
+ *   orchestrator: new ClaudeProvider()
+ * }
+ * ```
+ */
 export interface DebateOptions {
+  /** The topic or question to debate */
   topic: string
+  /** AI participants (minimum 2 required) */
   participants: DebateParticipant[]
+  /** Optional orchestrator for generating consensus */
   orchestrator?: Provider
+  /** Override engine configuration for this debate */
   config?: Partial<DebateEngineConfig>
 }
 
+/**
+ * Options for streaming debate with real-time output.
+ */
 export interface StreamingDebateOptions extends DebateOptions {
+  /** Participants must support streaming */
   participants: StreamingParticipant[]
 }
 
@@ -108,15 +183,100 @@ Please summarize:
 4. Cautions (risks raised in rebuttals that must be considered)`,
 }
 
+/**
+ * Multi-AI Debate Engine
+ *
+ * Orchestrates structured debates between multiple AI models.
+ * Supports two modes:
+ *
+ * - **Strong Mode**: Full 4-phase debate with rebuttals and position revision
+ *   - Initial: Each AI presents their position
+ *   - Rebuttal: AIs critique each other's positions
+ *   - Revised: AIs update positions based on critiques
+ *   - Consensus: Orchestrator summarizes agreements/disagreements
+ *
+ * - **Weak Mode**: Simple 2-phase debate
+ *   - Initial: Each AI presents their position
+ *   - Consensus: Orchestrator summarizes
+ *
+ * @example Basic usage
+ * ```typescript
+ * import { DebateEngine, ClaudeProvider, OpenAIProvider } from '@obora/core'
+ *
+ * const engine = new DebateEngine({ mode: 'strong' })
+ *
+ * const result = await engine.run({
+ *   topic: 'Should we migrate to microservices?',
+ *   participants: [
+ *     { name: 'claude', provider: new ClaudeProvider() },
+ *     { name: 'openai', provider: new OpenAIProvider() }
+ *   ],
+ *   orchestrator: new ClaudeProvider()
+ * })
+ *
+ * console.log(result.consensus)
+ * ```
+ *
+ * @example Streaming output
+ * ```typescript
+ * for await (const event of engine.runStreaming(options)) {
+ *   if (event.type === 'chunk') {
+ *     process.stdout.write(event.chunk)
+ *   }
+ * }
+ * ```
+ */
 export class DebateEngine {
   private config: DebateEngineConfig
 
+  /**
+   * Create a new DebateEngine instance.
+   *
+   * @param config - Configuration options (mode, timeout, tools, etc.)
+   *
+   * @example
+   * ```typescript
+   * // Strong mode (default)
+   * const engine = new DebateEngine({ mode: 'strong' })
+   *
+   * // Weak mode for quick discussions
+   * const weakEngine = new DebateEngine({ mode: 'weak' })
+   *
+   * // With custom timeout
+   * const customEngine = new DebateEngine({
+   *   mode: 'strong',
+   *   timeout: 600000 // 10 minutes
+   * })
+   * ```
+   */
   constructor(config: Partial<DebateEngineConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config }
   }
 
   /**
-   * Run a debate on the given topic
+   * Run a complete debate session.
+   *
+   * Executes all phases of the debate and returns comprehensive results
+   * including the consensus, position changes, and full transcript.
+   *
+   * @param options - Debate options including topic, participants, and orchestrator
+   * @returns Complete debate result with consensus and analysis
+   *
+   * @example
+   * ```typescript
+   * const result = await engine.run({
+   *   topic: 'AWS vs managed platforms for a startup?',
+   *   participants: [
+   *     { name: 'claude', provider: new ClaudeProvider() },
+   *     { name: 'openai', provider: new OpenAIProvider() }
+   *   ],
+   *   orchestrator: new ClaudeProvider()
+   * })
+   *
+   * console.log('Consensus:', result.consensus)
+   * console.log('Position changes:', result.positionChanges.length)
+   * console.log('Duration:', result.metadata.totalDurationMs, 'ms')
+   * ```
    */
   async run(options: DebateOptions): Promise<DebateResult> {
     const { topic, participants, orchestrator } = options

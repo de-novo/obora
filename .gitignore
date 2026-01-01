@@ -48,3 +48,6 @@ result.json
 
 # benchmark results
 benchmark/results/
+
+# auto-generated docs
+docs/api/

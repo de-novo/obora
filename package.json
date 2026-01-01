@@ -15,12 +15,14 @@
     "lint:fix": "biome check --write",
     "format": "biome format --write",
     "check": "biome check --write && tsc --noEmit",
+    "docs": "typedoc",
     "prepare": "husky"
   },
   "devDependencies": {
     "@biomejs/biome": "2.3.10",
     "@types/bun": "latest",
     "husky": "9.1.7",
+    "typedoc": "0.28.15",
     "typescript": "^5"
   },
   "dependencies": {
