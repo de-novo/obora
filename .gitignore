@@ -43,4 +43,5 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .dev/
 .temp/
 .claude/
+.cursor/
 result.json
