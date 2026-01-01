@@ -1,15 +1,65 @@
 {
   "name": "@obora/core",
   "version": "0.1.0",
+  "description": "Multi-AI Debate Engine - Core Library",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./engine": "./src/engine/index.ts",
+    "./providers": "./src/providers/index.ts",
+    "./config": "./src/config/index.ts",
+    "./auth": "./src/auth/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "build": "bun build ./src/index.ts --outdir ./dist --target bun"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "3.0.2",
+    "@ai-sdk/google": "3.0.2",
+    "@ai-sdk/openai": "3.0.2",
+    "ai": "6.0.5",
+    "yaml": "^2.3.4"
+  },
+  "optionalDependencies": {
+    "@anthropic-ai/sdk": "^0.36.0",
+    "@google/generative-ai": "^0.24.0",
+    "openai": "^4.73.0"
   },
   "devDependencies": {
     "@types/bun": "latest",
     "typescript": "^5"
-  }
+  },
+  "peerDependencies": {
+    "@anthropic-ai/sdk": ">=0.30.0",
+    "@google/generative-ai": ">=0.1.0",
+    "openai": ">=4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@anthropic-ai/sdk": {
+      "optional": true
+    },
+    "@google/generative-ai": {
+      "optional": true
+    },
+    "openai": {
+      "optional": true
+    }
+  },
+  "keywords": [
+    "ai",
+    "llm",
+    "debate",
+    "multi-agent",
+    "claude",
+    "openai",
+    "gemini",
+    "orchestration"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/denovo/obora"
+  },
+  "license": "MIT"
 }
