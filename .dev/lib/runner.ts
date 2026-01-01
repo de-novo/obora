@@ -1,6 +1,6 @@
 import { parse } from "yaml";
-import type { AIName, AIResponse, Config } from "./types";
-import { runClaude } from "./claude";
+import type { AIName, AIResponse, Config, OrchestratorAction } from "./types";
+import { runClaude, runClaudeOrchestrator } from "./claude";
 import { runGemini } from "./gemini";
 import { runCodex } from "./codex";
 
@@ -16,6 +16,11 @@ export async function runAI(ai: AIName, prompt: string): Promise<AIResponse> {
     throw new Error(`Unknown AI: ${ai}`);
   }
   return runner(prompt);
+}
+
+// Orchestrator 전용 (Claude만 지원, 구조화된 응답)
+export async function runOrchestrator(prompt: string): Promise<OrchestratorAction> {
+  return runClaudeOrchestrator(prompt);
 }
 
 export async function runAllParallel(
