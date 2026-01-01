@@ -5,19 +5,12 @@
  * Supports both 'strong' (with rebuttals) and 'weak' (simple rounds) modes.
  */
 
-import type { Provider, ProviderResponse } from '../providers/types';
-import type {
-  DebateEngineConfig,
-  DebateMode,
-  DebatePhase,
-  DebateResult,
-  DebateRound,
-  PositionChange,
-} from './types';
+import type { Provider } from '../providers/types'
+import type { DebateEngineConfig, DebatePhase, DebateResult, DebateRound, PositionChange } from './types'
 
 export interface DebateParticipant {
-  name: string;
-  provider: Provider;
+  name: string
+  provider: Provider
 }
 
 /**
@@ -25,38 +18,38 @@ export interface DebateParticipant {
  */
 export interface StreamingParticipant extends DebateParticipant {
   provider: Provider & {
-    stream(prompt: string): AsyncGenerator<{ chunk: string; done: boolean }>;
-  };
+    stream(prompt: string): AsyncGenerator<{ chunk: string; done: boolean }>
+  }
 }
 
 /**
  * Streaming event emitted during debate
  */
 export interface DebateStreamEvent {
-  type: 'chunk' | 'round_start' | 'round_end' | 'phase_start' | 'phase_end';
-  phase?: DebatePhase;
-  participant?: string;
-  chunk?: string;
-  content?: string;
-  timestamp: number;
+  type: 'chunk' | 'round_start' | 'round_end' | 'phase_start' | 'phase_end'
+  phase?: DebatePhase
+  participant?: string
+  chunk?: string
+  content?: string
+  timestamp: number
 }
 
 export interface DebateOptions {
-  topic: string;
-  participants: DebateParticipant[];
-  orchestrator?: Provider;
-  config?: Partial<DebateEngineConfig>;
+  topic: string
+  participants: DebateParticipant[]
+  orchestrator?: Provider
+  config?: Partial<DebateEngineConfig>
 }
 
 export interface StreamingDebateOptions extends DebateOptions {
-  participants: StreamingParticipant[];
+  participants: StreamingParticipant[]
 }
 
 const DEFAULT_CONFIG: DebateEngineConfig = {
   mode: 'strong',
   maxRounds: 10,
   timeout: 300000, // 5 minutes
-};
+}
 
 /**
  * Prompt templates for each debate phase
@@ -101,45 +94,43 @@ Please summarize:
 2. Unresolved disagreements (where opinions still differ and each position)
 3. Final recommendation (practical approach considering disagreements)
 4. Cautions (risks raised in rebuttals that must be considered)`,
-};
+}
 
 export class DebateEngine {
-  private config: DebateEngineConfig;
+  private config: DebateEngineConfig
 
   constructor(config: Partial<DebateEngineConfig> = {}) {
-    this.config = { ...DEFAULT_CONFIG, ...config };
+    this.config = { ...DEFAULT_CONFIG, ...config }
   }
 
   /**
    * Run a debate on the given topic
    */
   async run(options: DebateOptions): Promise<DebateResult> {
-    const { topic, participants, orchestrator } = options;
-    const config = { ...this.config, ...options.config };
+    const { topic, participants, orchestrator } = options
+    const config = { ...this.config, ...options.config }
 
-    const startTime = Date.now();
-    const rounds: DebateRound[] = [];
-    const history: { role: string; content: string }[] = [
-      { role: 'user', content: topic },
-    ];
-    const positionChanges: PositionChange[] = [];
+    const startTime = Date.now()
+    const rounds: DebateRound[] = []
+    const history: { role: string; content: string }[] = [{ role: 'user', content: topic }]
+    const positionChanges: PositionChange[] = []
 
     if (config.mode === 'strong') {
       // Phase 1: Initial positions
-      await this.runPhase('initial', topic, participants, rounds, history);
+      await this.runPhase('initial', topic, participants, rounds, history)
 
       // Phase 2: Rebuttal round
-      await this.runRebuttalPhase(topic, participants, rounds, history);
+      await this.runRebuttalPhase(topic, participants, rounds, history)
 
       // Phase 3: Revised positions (detect position changes)
-      const initialPositions = this.extractPositions(rounds, 'initial');
-      await this.runRevisedPhase(topic, participants, rounds, history);
-      const revisedPositions = this.extractPositions(rounds, 'revised');
+      const initialPositions = this.extractPositions(rounds, 'initial')
+      await this.runRevisedPhase(topic, participants, rounds, history)
+      const revisedPositions = this.extractPositions(rounds, 'revised')
 
       // Detect position changes
       for (const participant of participants) {
-        const initial = initialPositions.get(participant.name);
-        const revised = revisedPositions.get(participant.name);
+        const initial = initialPositions.get(participant.name)
+        const revised = revisedPositions.get(participant.name)
         if (initial && revised && this.hasPositionChanged(initial, revised)) {
           positionChanges.push({
             participant: participant.name,
@@ -147,31 +138,29 @@ export class DebateEngine {
             to: revised,
             reason: 'Revised after rebuttal phase',
             phase: 'revised',
-          });
+          })
         }
       }
     } else {
       // Weak mode: Simple rounds without rebuttals
-      await this.runPhase('initial', topic, participants, rounds, history);
+      await this.runPhase('initial', topic, participants, rounds, history)
     }
 
     // Phase 4: Consensus (if orchestrator provided)
-    let consensus = '';
+    let consensus = ''
     if (orchestrator) {
-      const historyStr = history
-        .map((m) => `[${m.role}] ${m.content}`)
-        .join('\n\n---\n\n');
-      const response = await orchestrator.run(PROMPTS.consensus(historyStr));
-      consensus = response.content;
+      const historyStr = history.map((m) => `[${m.role}] ${m.content}`).join('\n\n---\n\n')
+      const response = await orchestrator.run(PROMPTS.consensus(historyStr))
+      consensus = response.content
       rounds.push({
         phase: 'consensus',
         speaker: 'orchestrator',
         content: consensus,
         timestamp: Date.now(),
-      });
+      })
     }
 
-    const endTime = Date.now();
+    const endTime = Date.now()
 
     return {
       topic,
@@ -186,7 +175,7 @@ export class DebateEngine {
         totalDurationMs: endTime - startTime,
         participantCount: participants.length,
       },
-    };
+    }
   }
 
   private async runPhase(
@@ -194,19 +183,19 @@ export class DebateEngine {
     topic: string,
     participants: DebateParticipant[],
     rounds: DebateRound[],
-    history: { role: string; content: string }[]
+    history: { role: string; content: string }[],
   ): Promise<void> {
     for (const participant of participants) {
-      const prompt = PROMPTS.initial(topic);
-      const response = await participant.provider.run(prompt);
+      const prompt = PROMPTS.initial(topic)
+      const response = await participant.provider.run(prompt)
 
       rounds.push({
         phase,
         speaker: participant.name,
         content: response.content,
         timestamp: Date.now(),
-      });
-      history.push({ role: participant.name, content: response.content });
+      })
+      history.push({ role: participant.name, content: response.content })
     }
   }
 
@@ -214,27 +203,27 @@ export class DebateEngine {
     topic: string,
     participants: DebateParticipant[],
     rounds: DebateRound[],
-    history: { role: string; content: string }[]
+    history: { role: string; content: string }[],
   ): Promise<void> {
     for (const participant of participants) {
       const othersOpinions = history
         .filter((h) => h.role !== 'user' && h.role !== participant.name)
         .map((h) => `[${h.role}] ${h.content}`)
-        .join('\n\n---\n\n');
+        .join('\n\n---\n\n')
 
-      const prompt = PROMPTS.rebuttal(topic, othersOpinions);
-      const response = await participant.provider.run(prompt);
+      const prompt = PROMPTS.rebuttal(topic, othersOpinions)
+      const response = await participant.provider.run(prompt)
 
       rounds.push({
         phase: 'rebuttal',
         speaker: participant.name,
         content: response.content,
         timestamp: Date.now(),
-      });
+      })
       history.push({
         role: `${participant.name}(rebuttal)`,
         content: response.content,
-      });
+      })
     }
   }
 
@@ -242,48 +231,45 @@ export class DebateEngine {
     topic: string,
     participants: DebateParticipant[],
     rounds: DebateRound[],
-    history: { role: string; content: string }[]
+    history: { role: string; content: string }[],
   ): Promise<void> {
     for (const participant of participants) {
       const allHistory = history
         .filter((h) => h.role !== 'user')
         .map((h) => `[${h.role}] ${h.content}`)
-        .join('\n\n---\n\n');
+        .join('\n\n---\n\n')
 
-      const prompt = PROMPTS.revised(topic, allHistory);
-      const response = await participant.provider.run(prompt);
+      const prompt = PROMPTS.revised(topic, allHistory)
+      const response = await participant.provider.run(prompt)
 
       rounds.push({
         phase: 'revised',
         speaker: participant.name,
         content: response.content,
         timestamp: Date.now(),
-      });
+      })
       history.push({
         role: `${participant.name}(final)`,
         content: response.content,
-      });
+      })
     }
   }
 
-  private extractPositions(
-    rounds: DebateRound[],
-    phase: DebatePhase
-  ): Map<string, string> {
-    const positions = new Map<string, string>();
+  private extractPositions(rounds: DebateRound[], phase: DebatePhase): Map<string, string> {
+    const positions = new Map<string, string>()
     for (const round of rounds) {
       if (round.phase === phase) {
-        positions.set(round.speaker, round.content);
+        positions.set(round.speaker, round.content)
       }
     }
-    return positions;
+    return positions
   }
 
   private hasPositionChanged(initial: string, revised: string): boolean {
     // Simple heuristic: check if the revised position differs significantly
     // In practice, this could use semantic similarity
-    const normalizedInitial = initial.toLowerCase().trim();
-    const normalizedRevised = revised.toLowerCase().trim();
+    const _normalizedInitial = initial.toLowerCase().trim()
+    const normalizedRevised = revised.toLowerCase().trim()
 
     // Check for explicit change indicators
     const changeIndicators = [
@@ -294,55 +280,47 @@ export class DebateEngine {
       'after reviewing',
       'i must acknowledge',
       'my position has evolved',
-    ];
+    ]
 
-    return changeIndicators.some((indicator) =>
-      normalizedRevised.includes(indicator)
-    );
+    return changeIndicators.some((indicator) => normalizedRevised.includes(indicator))
   }
 
   private extractDisagreements(consensus: string): string[] {
     // Extract disagreements from consensus text
     // Look for section about unresolved disagreements
-    const lines = consensus.split('\n');
-    const disagreements: string[] = [];
-    let inDisagreementSection = false;
+    const lines = consensus.split('\n')
+    const disagreements: string[] = []
+    let inDisagreementSection = false
 
     for (const line of lines) {
-      const lowerLine = line.toLowerCase();
-      if (
-        lowerLine.includes('unresolved') ||
-        lowerLine.includes('disagreement')
-      ) {
-        inDisagreementSection = true;
-        continue;
+      const lowerLine = line.toLowerCase()
+      if (lowerLine.includes('unresolved') || lowerLine.includes('disagreement')) {
+        inDisagreementSection = true
+        continue
       }
-      if (
-        inDisagreementSection &&
-        (lowerLine.includes('recommendation') || lowerLine.includes('caution'))
-      ) {
-        break;
+      if (inDisagreementSection && (lowerLine.includes('recommendation') || lowerLine.includes('caution'))) {
+        break
       }
       if (inDisagreementSection && line.trim().startsWith('-')) {
-        disagreements.push(line.trim().substring(1).trim());
+        disagreements.push(line.trim().substring(1).trim())
       }
     }
 
-    return disagreements;
+    return disagreements
   }
 
   /**
    * Get the current configuration
    */
   getConfig(): DebateEngineConfig {
-    return { ...this.config };
+    return { ...this.config }
   }
 
   /**
    * Update configuration
    */
   setConfig(config: Partial<DebateEngineConfig>): void {
-    this.config = { ...this.config, ...config };
+    this.config = { ...this.config, ...config }
   }
 
   /**
@@ -357,17 +335,13 @@ export class DebateEngine {
    * }
    * ```
    */
-  async *runStreaming(
-    options: StreamingDebateOptions
-  ): AsyncGenerator<DebateStreamEvent> {
-    const { topic, participants, orchestrator } = options;
-    const config = { ...this.config, ...options.config };
-    const history: { role: string; content: string }[] = [
-      { role: 'user', content: topic },
-    ];
+  async *runStreaming(options: StreamingDebateOptions): AsyncGenerator<DebateStreamEvent> {
+    const { topic, participants, orchestrator } = options
+    const config = { ...this.config, ...options.config }
+    const history: { role: string; content: string }[] = [{ role: 'user', content: topic }]
 
     // Phase 1: Initial positions with streaming
-    yield { type: 'phase_start', phase: 'initial', timestamp: Date.now() };
+    yield { type: 'phase_start', phase: 'initial', timestamp: Date.now() }
 
     for (const participant of participants) {
       yield {
@@ -375,25 +349,25 @@ export class DebateEngine {
         phase: 'initial',
         participant: participant.name,
         timestamp: Date.now(),
-      };
+      }
 
-      const prompt = PROMPTS.initial(topic);
-      let content = '';
+      const prompt = PROMPTS.initial(topic)
+      let content = ''
 
       for await (const { chunk, done } of participant.provider.stream(prompt)) {
         if (!done && chunk) {
-          content += chunk;
+          content += chunk
           yield {
             type: 'chunk',
             phase: 'initial',
             participant: participant.name,
             chunk,
             timestamp: Date.now(),
-          };
+          }
         }
       }
 
-      history.push({ role: participant.name, content });
+      history.push({ role: participant.name, content })
 
       yield {
         type: 'round_end',
@@ -401,14 +375,14 @@ export class DebateEngine {
         participant: participant.name,
         content,
         timestamp: Date.now(),
-      };
+      }
     }
 
-    yield { type: 'phase_end', phase: 'initial', timestamp: Date.now() };
+    yield { type: 'phase_end', phase: 'initial', timestamp: Date.now() }
 
     if (config.mode === 'strong') {
       // Phase 2: Rebuttal with streaming
-      yield { type: 'phase_start', phase: 'rebuttal', timestamp: Date.now() };
+      yield { type: 'phase_start', phase: 'rebuttal', timestamp: Date.now() }
 
       for (const participant of participants) {
         yield {
@@ -416,30 +390,30 @@ export class DebateEngine {
           phase: 'rebuttal',
           participant: participant.name,
           timestamp: Date.now(),
-        };
+        }
 
         const othersOpinions = history
           .filter((h) => h.role !== 'user' && h.role !== participant.name)
           .map((h) => `[${h.role}] ${h.content}`)
-          .join('\n\n---\n\n');
+          .join('\n\n---\n\n')
 
-        const prompt = PROMPTS.rebuttal(topic, othersOpinions);
-        let content = '';
+        const prompt = PROMPTS.rebuttal(topic, othersOpinions)
+        let content = ''
 
         for await (const { chunk, done } of participant.provider.stream(prompt)) {
           if (!done && chunk) {
-            content += chunk;
+            content += chunk
             yield {
               type: 'chunk',
               phase: 'rebuttal',
               participant: participant.name,
               chunk,
               timestamp: Date.now(),
-            };
+            }
           }
         }
 
-        history.push({ role: `${participant.name}(rebuttal)`, content });
+        history.push({ role: `${participant.name}(rebuttal)`, content })
 
         yield {
           type: 'round_end',
@@ -447,13 +421,13 @@ export class DebateEngine {
           participant: participant.name,
           content,
           timestamp: Date.now(),
-        };
+        }
       }
 
-      yield { type: 'phase_end', phase: 'rebuttal', timestamp: Date.now() };
+      yield { type: 'phase_end', phase: 'rebuttal', timestamp: Date.now() }
 
       // Phase 3: Revised positions with streaming
-      yield { type: 'phase_start', phase: 'revised', timestamp: Date.now() };
+      yield { type: 'phase_start', phase: 'revised', timestamp: Date.now() }
 
       for (const participant of participants) {
         yield {
@@ -461,30 +435,30 @@ export class DebateEngine {
           phase: 'revised',
           participant: participant.name,
           timestamp: Date.now(),
-        };
+        }
 
         const allHistory = history
           .filter((h) => h.role !== 'user')
           .map((h) => `[${h.role}] ${h.content}`)
-          .join('\n\n---\n\n');
+          .join('\n\n---\n\n')
 
-        const prompt = PROMPTS.revised(topic, allHistory);
-        let content = '';
+        const prompt = PROMPTS.revised(topic, allHistory)
+        let content = ''
 
         for await (const { chunk, done } of participant.provider.stream(prompt)) {
           if (!done && chunk) {
-            content += chunk;
+            content += chunk
             yield {
               type: 'chunk',
               phase: 'revised',
               participant: participant.name,
               chunk,
               timestamp: Date.now(),
-            };
+            }
           }
         }
 
-        history.push({ role: `${participant.name}(final)`, content });
+        history.push({ role: `${participant.name}(final)`, content })
 
         yield {
           type: 'round_end',
@@ -492,21 +466,19 @@ export class DebateEngine {
           participant: participant.name,
           content,
           timestamp: Date.now(),
-        };
+        }
       }
 
-      yield { type: 'phase_end', phase: 'revised', timestamp: Date.now() };
+      yield { type: 'phase_end', phase: 'revised', timestamp: Date.now() }
     }
 
     // Phase 4: Consensus (non-streaming for orchestrator)
     if (orchestrator) {
-      yield { type: 'phase_start', phase: 'consensus', timestamp: Date.now() };
+      yield { type: 'phase_start', phase: 'consensus', timestamp: Date.now() }
 
-      const historyStr = history
-        .map((m) => `[${m.role}] ${m.content}`)
-        .join('\n\n---\n\n');
+      const historyStr = history.map((m) => `[${m.role}] ${m.content}`).join('\n\n---\n\n')
 
-      const response = await orchestrator.run(PROMPTS.consensus(historyStr));
+      const response = await orchestrator.run(PROMPTS.consensus(historyStr))
 
       yield {
         type: 'round_end',
@@ -514,9 +486,9 @@ export class DebateEngine {
         participant: 'orchestrator',
         content: response.content,
         timestamp: Date.now(),
-      };
+      }
 
-      yield { type: 'phase_end', phase: 'consensus', timestamp: Date.now() };
+      yield { type: 'phase_end', phase: 'consensus', timestamp: Date.now() }
     }
   }
 }

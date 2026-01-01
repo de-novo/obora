@@ -12,7 +12,7 @@ export {
   type DebateStreamEvent,
   type StreamingDebateOptions,
   type StreamingParticipant,
-} from './DebateEngine';
+} from './DebateEngine'
 
 export type {
   DebateEngineConfig,
@@ -21,4 +21,4 @@ export type {
   DebateResult,
   DebateRound,
   PositionChange,
-} from './types';
+} from './types'

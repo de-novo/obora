@@ -11,34 +11,30 @@
  * - Claude Code 시스템 프롬프트 헤더 자동 주입
  */
 
-import { createAnthropic } from "@ai-sdk/anthropic";
-import {
-  loadProviderTokens,
-  saveProviderTokens,
-  isTokenExpired,
-} from "./storage.ts";
-import type { OAuthTokens, TokenResponse } from "./types.ts";
-import { ANTHROPIC_OAUTH_CONFIG } from "./types.ts";
+import { createAnthropic } from '@ai-sdk/anthropic'
+import { isTokenExpired, loadProviderTokens, saveProviderTokens } from './storage.ts'
+import type { OAuthTokens, TokenResponse } from './types.ts'
+import { ANTHROPIC_OAUTH_CONFIG } from './types.ts'
 
 // ============================================================================
 // OpenCode와 동일한 상수
 // ============================================================================
 
 // OpenCode 버전 정보 (opencode-anthropic-auth와 동일)
-export const VERSION = "1.0.0";
-export const CHANNEL = "latest";
-export const CLIENT = "cli";
+export const VERSION = '1.0.0'
+export const CHANNEL = 'latest'
+export const CLIENT = 'cli'
 
 // OpenCode와 동일한 User-Agent 포맷
-export const USER_AGENT = `opencode/${CHANNEL}/${VERSION}/${CLIENT}`;
+export const USER_AGENT = `opencode/${CHANNEL}/${VERSION}/${CLIENT}`
 
 // OpenCode에서 사용하는 필수 beta 헤더
 const REQUIRED_BETAS = [
-  "oauth-2025-04-20",
-  "claude-code-20250219",
-  "interleaved-thinking-2025-05-14",
-  "fine-grained-tool-streaming-2025-05-14",
-];
+  'oauth-2025-04-20',
+  'claude-code-20250219',
+  'interleaved-thinking-2025-05-14',
+  'fine-grained-tool-streaming-2025-05-14',
+]
 
 // ============================================================================
 // Claude Code 시스템 프롬프트 헤더 (핵심!)
@@ -50,8 +46,7 @@ const REQUIRED_BETAS = [
  * 이 문구가 시스템 프롬프트의 첫 부분에 포함되어야 OAuth 토큰이 작동합니다.
  * OpenCode의 anthropic_spoof.txt와 동일합니다.
  */
-export const CLAUDE_CODE_HEADER =
-  "You are Claude Code, Anthropic's official CLI for Claude.";
+export const CLAUDE_CODE_HEADER = "You are Claude Code, Anthropic's official CLI for Claude."
 
 // ============================================================================
 // 토큰 갱신 (OpenCode와 동일)
@@ -59,23 +54,23 @@ export const CLAUDE_CODE_HEADER =
 
 async function refreshToken(refreshToken: string): Promise<OAuthTokens> {
   const response = await fetch(ANTHROPIC_OAUTH_CONFIG.tokenUrl, {
-    method: "POST",
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      grant_type: "refresh_token",
+      grant_type: 'refresh_token',
       refresh_token: refreshToken,
       client_id: ANTHROPIC_OAUTH_CONFIG.clientId,
     }),
-  });
+  })
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Token refresh failed: ${errorText}`);
+    const errorText = await response.text()
+    throw new Error(`Token refresh failed: ${errorText}`)
   }
 
-  const data = (await response.json()) as TokenResponse;
+  const data = (await response.json()) as TokenResponse
 
   const tokens: OAuthTokens = {
     accessToken: data.access_token,
@@ -83,10 +78,10 @@ async function refreshToken(refreshToken: string): Promise<OAuthTokens> {
     expiresAt: Date.now() + data.expires_in * 1000,
     tokenType: data.token_type,
     scope: data.scope,
-  };
+  }
 
-  await saveProviderTokens("anthropic", tokens);
-  return tokens;
+  await saveProviderTokens('anthropic', tokens)
+  return tokens
 }
 
 // ============================================================================
@@ -106,56 +101,52 @@ async function refreshToken(refreshToken: string): Promise<OAuthTokens> {
  * @param options.injectClaudeCodeHeader - 시스템 프롬프트에 Claude Code 헤더 자동 추가 (기본값: true)
  */
 export function createAuthenticatedFetch(options?: {
-  injectClaudeCodeHeader?: boolean;
+  injectClaudeCodeHeader?: boolean
 }): (input: string | URL | Request, init?: RequestInit) => Promise<Response> {
-  const { injectClaudeCodeHeader = true } = options || {};
+  const { injectClaudeCodeHeader = true } = options || {}
 
   return async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     // 토큰 로드
-    let tokens = await loadProviderTokens("anthropic");
+    let tokens = await loadProviderTokens('anthropic')
 
     if (!tokens) {
-      throw new Error("Not authenticated. Run login first.");
+      throw new Error('Not authenticated. Run login first.')
     }
 
     // 토큰 만료 체크 및 갱신 (OpenCode와 동일: 5분 버퍼)
     if (isTokenExpired(tokens)) {
-      tokens = await refreshToken(tokens.refreshToken);
+      tokens = await refreshToken(tokens.refreshToken)
     }
 
     // 기존 헤더 처리
-    const existingHeaders = init?.headers || {};
-    const headersObj: Record<string, string> = {};
+    const existingHeaders = init?.headers || {}
+    const headersObj: Record<string, string> = {}
 
     if (existingHeaders instanceof Headers) {
       existingHeaders.forEach((value, key) => {
-        headersObj[key.toLowerCase()] = value;
-      });
+        headersObj[key.toLowerCase()] = value
+      })
     } else if (Array.isArray(existingHeaders)) {
       for (const entry of existingHeaders) {
-        const key = entry[0];
-        const value = entry[1];
-        if (key && typeof value === "string") {
-          headersObj[key.toLowerCase()] = value;
+        const key = entry[0]
+        const value = entry[1]
+        if (key && typeof value === 'string') {
+          headersObj[key.toLowerCase()] = value
         }
       }
     } else {
       for (const [key, value] of Object.entries(existingHeaders)) {
-        if (typeof value === "string") {
-          headersObj[key.toLowerCase()] = value;
+        if (typeof value === 'string') {
+          headersObj[key.toLowerCase()] = value
         }
       }
     }
 
     // Beta 헤더 병합 (OpenCode와 동일한 로직)
-    const incomingBetas = headersObj["anthropic-beta"] || "";
-    const incomingBetasList = incomingBetas
-      ? incomingBetas.split(",").map((b: string) => b.trim())
-      : [];
+    const incomingBetas = headersObj['anthropic-beta'] || ''
+    const incomingBetasList = incomingBetas ? incomingBetas.split(',').map((b: string) => b.trim()) : []
 
-    const mergedBetas = [
-      ...new Set([...REQUIRED_BETAS, ...incomingBetasList]),
-    ].join(",");
+    const mergedBetas = [...new Set([...REQUIRED_BETAS, ...incomingBetasList])].join(',')
 
     // 최종 헤더 구성 (OpenCode와 동일)
     const finalHeaders: Record<string, string> = {
@@ -163,59 +154,52 @@ export function createAuthenticatedFetch(options?: {
       // Bearer 토큰 인증
       authorization: `Bearer ${tokens.accessToken}`,
       // 병합된 beta 헤더
-      "anthropic-beta": mergedBetas,
+      'anthropic-beta': mergedBetas,
       // OpenCode와 동일한 User-Agent
-      "user-agent": USER_AGENT,
-    };
+      'user-agent': USER_AGENT,
+    }
 
     // x-api-key 제거 (OAuth는 Bearer 토큰만 사용)
-    delete finalHeaders["x-api-key"];
+    delete finalHeaders['x-api-key']
 
     // Claude Code 시스템 프롬프트 헤더 주입
     // 핵심: 배열 형식의 첫 번째 요소로 정확한 헤더가 있어야 함
-    let finalBody = init?.body;
+    let finalBody = init?.body
     if (injectClaudeCodeHeader && init?.body) {
       try {
         const bodyStr =
-          typeof init.body === "string"
+          typeof init.body === 'string'
             ? init.body
             : init.body instanceof Uint8Array
               ? new TextDecoder().decode(init.body)
-              : null;
+              : null
 
         if (bodyStr) {
-          const bodyObj = JSON.parse(bodyStr);
+          const bodyObj = JSON.parse(bodyStr)
 
           // 시스템 프롬프트를 배열 형식으로 변환하고 헤더를 첫 번째로 추가
           if (bodyObj.system === undefined) {
             // 시스템 프롬프트가 없으면 배열로 생성
-            bodyObj.system = [
-              { type: "text", text: CLAUDE_CODE_HEADER },
-            ];
-          } else if (typeof bodyObj.system === "string") {
+            bodyObj.system = [{ type: 'text', text: CLAUDE_CODE_HEADER }]
+          } else if (typeof bodyObj.system === 'string') {
             // 문자열이면 배열로 변환
-            const existingText = bodyObj.system;
+            const existingText = bodyObj.system
             bodyObj.system = [
-              { type: "text", text: CLAUDE_CODE_HEADER },
-              { type: "text", text: existingText },
-            ];
+              { type: 'text', text: CLAUDE_CODE_HEADER },
+              { type: 'text', text: existingText },
+            ]
           } else if (Array.isArray(bodyObj.system)) {
             // 배열이면 첫 번째 요소가 정확한 헤더인지 확인
-            const firstItem = bodyObj.system[0];
-            const isExactHeader =
-              firstItem?.type === "text" &&
-              firstItem?.text === CLAUDE_CODE_HEADER;
+            const firstItem = bodyObj.system[0]
+            const isExactHeader = firstItem?.type === 'text' && firstItem?.text === CLAUDE_CODE_HEADER
 
             if (!isExactHeader) {
               // 첫 번째 요소로 헤더 추가
-              bodyObj.system = [
-                { type: "text", text: CLAUDE_CODE_HEADER },
-                ...bodyObj.system,
-              ];
+              bodyObj.system = [{ type: 'text', text: CLAUDE_CODE_HEADER }, ...bodyObj.system]
             }
           }
 
-          finalBody = JSON.stringify(bodyObj);
+          finalBody = JSON.stringify(bodyObj)
         }
       } catch {
         // JSON 파싱 실패 시 원본 body 유지
@@ -226,8 +210,8 @@ export function createAuthenticatedFetch(options?: {
       ...init,
       body: finalBody,
       headers: finalHeaders,
-    });
-  };
+    })
+  }
 }
 
 // ============================================================================
@@ -251,14 +235,14 @@ export function createAuthenticatedFetch(options?: {
  * ```
  */
 export async function createOAuthAnthropicProvider() {
-  const customFetch = createAuthenticatedFetch();
+  const customFetch = createAuthenticatedFetch()
 
   return createAnthropic({
     // apiKey는 빈 문자열 (custom fetch에서 Bearer 토큰 사용)
-    apiKey: "",
+    apiKey: '',
     // OpenCode와 동일한 custom fetch
     fetch: customFetch as typeof fetch,
-  });
+  })
 }
 
 /**
@@ -272,7 +256,7 @@ export function getProviderInfo() {
     client: CLIENT,
     requiredBetas: REQUIRED_BETAS,
     claudeCodeHeader: CLAUDE_CODE_HEADER,
-  };
+  }
 }
 
 /**
@@ -286,10 +270,10 @@ export function getProviderInfo() {
  */
 export function withClaudeCodeHeader(systemPrompt?: string): string {
   if (!systemPrompt) {
-    return CLAUDE_CODE_HEADER;
+    return CLAUDE_CODE_HEADER
   }
   if (systemPrompt.includes(CLAUDE_CODE_HEADER)) {
-    return systemPrompt;
+    return systemPrompt
   }
-  return `${CLAUDE_CODE_HEADER}\n\n${systemPrompt}`;
+  return `${CLAUDE_CODE_HEADER}\n\n${systemPrompt}`
 }

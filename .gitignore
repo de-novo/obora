@@ -38,3 +38,9 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # obora local data
 .obora/
+
+# development files (gitignored)
+.dev/
+.temp/
+.claude/
+result.json

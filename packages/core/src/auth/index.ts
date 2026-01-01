@@ -4,81 +4,75 @@
  * Claude Pro/Max 구독을 API로 직접 사용할 수 있도록 합니다.
  */
 
-// Types
-export type {
-  OAuthTokens,
-  AuthCredentials,
-  OAuthProviderConfig,
-  PKCEChallenge,
-  TokenResponse,
-  OAuthError,
-  AuthStatus,
-  ProviderAuthStatus,
-} from "./types.ts";
-
-export { ANTHROPIC_OAUTH_CONFIG, ANTHROPIC_REDIRECT_URI } from "./types.ts";
-
-// PKCE
-export {
-  generateCodeVerifier,
-  generateCodeChallenge,
-  generatePKCEChallenge,
-  generateState,
-} from "./pkce.ts";
-
-// Storage
-export {
-  loadCredentials,
-  saveCredentials,
-  loadProviderTokens,
-  saveProviderTokens,
-  deleteProviderTokens,
-  isTokenExpired,
-  getAuthPath,
-} from "./storage.ts";
-
 // Anthropic OAuth
 export {
+  type AnthropicRequestOptions,
+  type AuthMode,
+  type AuthorizationResult,
+  createAnthropicHeaders,
   createAuthorizationUrl,
   exchangeCodeForTokens,
-  refreshAccessToken,
+  getAnthropicApiUrl,
+  getDefaultModel,
   getValidAccessToken,
   isAuthenticated,
   logout,
-  createAnthropicHeaders,
-  getAnthropicApiUrl,
-  getDefaultModel,
-  type AuthorizationResult,
-  type AnthropicRequestOptions,
-  type AuthMode,
-} from "./anthropic.ts";
-
+  refreshAccessToken,
+} from './anthropic.ts'
 // OAuth Server
 export {
-  startCallbackServer,
-  findAvailablePort,
   type CallbackResult,
-} from "./oauth-server.ts";
+  findAvailablePort,
+  startCallbackServer,
+} from './oauth-server.ts'
 
+// PKCE
+export {
+  generateCodeChallenge,
+  generateCodeVerifier,
+  generatePKCEChallenge,
+  generateState,
+} from './pkce.ts'
 // OpenCode-Compatible Provider
 export {
+  CHANNEL,
+  CLAUDE_CODE_HEADER,
+  CLIENT,
   createAuthenticatedFetch,
   createOAuthAnthropicProvider,
   getProviderInfo,
-  withClaudeCodeHeader,
   USER_AGENT,
   VERSION,
-  CHANNEL,
-  CLIENT,
-  CLAUDE_CODE_HEADER,
-} from "./provider.ts";
+  withClaudeCodeHeader,
+} from './provider.ts'
+// Storage
+export {
+  deleteProviderTokens,
+  getAuthPath,
+  isTokenExpired,
+  loadCredentials,
+  loadProviderTokens,
+  saveCredentials,
+  saveProviderTokens,
+} from './storage.ts'
+// Types
+export type {
+  AuthCredentials,
+  AuthStatus,
+  OAuthError,
+  OAuthProviderConfig,
+  OAuthTokens,
+  PKCEChallenge,
+  ProviderAuthStatus,
+  TokenResponse,
+} from './types.ts'
+export { ANTHROPIC_OAUTH_CONFIG, ANTHROPIC_REDIRECT_URI } from './types.ts'
 
 // ============================================================================
 // 편의 함수: 전체 로그인 플로우
 // ============================================================================
 
-import { createAuthorizationUrl, exchangeCodeForTokens, type AuthMode } from "./anthropic.ts";
-import { ANTHROPIC_REDIRECT_URI } from "./types.ts";
+import { type AuthMode, createAuthorizationUrl, exchangeCodeForTokens } from './anthropic.ts'
 
 /**
  * 대화형 OAuth 로그인 수행 (코드 복사/붙여넣기 방식)
@@ -90,61 +84,54 @@ import { ANTHROPIC_REDIRECT_URI } from "./types.ts";
  *
  * @param mode - "max" (claude.ai, Claude Pro/Max) 또는 "console" (API 키 생성)
  */
-export async function performInteractiveLogin(mode: AuthMode = "max"): Promise<void> {
+export async function performInteractiveLogin(mode: AuthMode = 'max'): Promise<void> {
   // 1. 인증 URL 생성
-  const { authorizationUrl, pkce } = await createAuthorizationUrl(mode);
+  const { authorizationUrl, pkce } = await createAuthorizationUrl(mode)
 
   // 2. 브라우저 열기
-  const modeDesc = mode === "console"
-    ? "Anthropic Console (API Key generation)"
-    : "Claude.ai (Pro/Max subscription)";
-  console.log(`\n🔐 Opening browser for ${modeDesc} authentication...\n`);
-  console.log("After authorizing, you'll see a code on the page.");
-  console.log("Copy that code and paste it below.\n");
-  console.log(`If browser doesn't open, visit:\n${authorizationUrl}\n`);
+  const modeDesc = mode === 'console' ? 'Anthropic Console (API Key generation)' : 'Claude.ai (Pro/Max subscription)'
+  console.log(`\n🔐 Opening browser for ${modeDesc} authentication...\n`)
+  console.log("After authorizing, you'll see a code on the page.")
+  console.log('Copy that code and paste it below.\n')
+  console.log(`If browser doesn't open, visit:\n${authorizationUrl}\n`)
 
   // 플랫폼별 브라우저 열기
-  const openCommand =
-    process.platform === "darwin"
-      ? "open"
-      : process.platform === "win32"
-        ? "start"
-        : "xdg-open";
+  const openCommand = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open'
 
   try {
-    Bun.spawn([openCommand, authorizationUrl]);
+    Bun.spawn([openCommand, authorizationUrl])
   } catch {
     // 브라우저 열기 실패해도 URL은 출력됨
   }
 
   // 3. 코드 입력 받기
-  process.stdout.write("Enter the authorization code: ");
+  process.stdout.write('Enter the authorization code: ')
 
   const code = await new Promise<string>((resolve) => {
-    let input = "";
-    process.stdin.setRawMode?.(false);
-    process.stdin.resume();
-    process.stdin.setEncoding("utf8");
+    let input = ''
+    process.stdin.setRawMode?.(false)
+    process.stdin.resume()
+    process.stdin.setEncoding('utf8')
 
     const onData = (chunk: string) => {
-      input += chunk;
-      if (input.includes("\n")) {
-        process.stdin.removeListener("data", onData);
-        process.stdin.pause();
-        resolve(input.trim());
+      input += chunk
+      if (input.includes('\n')) {
+        process.stdin.removeListener('data', onData)
+        process.stdin.pause()
+        resolve(input.trim())
       }
-    };
+    }
 
-    process.stdin.on("data", onData);
-  });
+    process.stdin.on('data', onData)
+  })
 
   if (!code) {
-    throw new Error("No authorization code provided");
+    throw new Error('No authorization code provided')
   }
 
   // 4. 토큰 교환 (OpenCode 방식: 전체 코드 전달, 내부에서 #state 파싱)
-  console.log("\nExchanging authorization code for tokens...\n");
-  await exchangeCodeForTokens(code.trim(), pkce.codeVerifier);
+  console.log('\nExchanging authorization code for tokens...\n')
+  await exchangeCodeForTokens(code.trim(), pkce.codeVerifier)
 
-  console.log(`✅ Successfully authenticated with ${modeDesc}!\n`);
+  console.log(`✅ Successfully authenticated with ${modeDesc}!\n`)
 }

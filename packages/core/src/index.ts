@@ -20,6 +20,20 @@
  * ```
  */
 
+// Auth - OAuth for Claude Pro/Max (optional)
+export * from './auth'
+// Config - Configuration management
+export {
+  type AIName,
+  type ConfigLoaderOptions,
+  DEFAULT_CONFIG,
+  getDefaultConfig,
+  loadConfig,
+  loadConfigFromEnv,
+  loadConfigFromFile,
+  type OboraConfig,
+  type ProviderSettings,
+} from './config'
 // Engine - Core debate logic (with streaming support)
 export {
   DebateEngine,
@@ -34,46 +48,29 @@ export {
   type PositionChange,
   type StreamingDebateOptions,
   type StreamingParticipant,
-} from './engine';
-
+} from './engine'
 // Providers - AI provider implementations (powered by Vercel AI SDK)
 export {
   // AI SDK Backend
   AISDKBackend,
-  createAISDKBackend,
   type AISDKConfig,
   type AISDKProviderType,
   // Base class
   BaseProvider,
   // Provider implementations
   ClaudeProvider,
-  GeminiProvider,
-  OpenAIProvider,
-  providerFactory,
   // Types
   type ClaudeProviderConfig,
+  createAISDKBackend,
+  GeminiProvider,
   type GeminiProviderConfig,
+  OpenAIProvider,
   type OpenAIProviderConfig,
   type Provider,
   type ProviderBackend,
   type ProviderConfig,
   type ProviderFactory,
   type ProviderResponse,
+  providerFactory,
   type StructuredProvider,
-} from './providers';
-
-// Config - Configuration management
-export {
-  DEFAULT_CONFIG,
-  getDefaultConfig,
-  loadConfig,
-  loadConfigFromEnv,
-  loadConfigFromFile,
-  type AIName,
-  type ConfigLoaderOptions,
-  type OboraConfig,
-  type ProviderSettings,
-} from './config';
-
-// Auth - OAuth for Claude Pro/Max (optional)
-export * from './auth';
+} from './providers'

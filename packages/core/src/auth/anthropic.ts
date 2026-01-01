@@ -5,43 +5,33 @@
  * OpenCode의 구현을 참고하여 작성되었습니다.
  */
 
-import type {
-  OAuthTokens,
-  TokenResponse,
-  OAuthError,
-  PKCEChallenge,
-  OAuthProviderConfig,
-} from "./types.ts";
-import { ANTHROPIC_OAUTH_CONFIG, ANTHROPIC_CONSOLE_OAUTH_CONFIG, ANTHROPIC_REDIRECT_URI } from "./types.ts";
-import { generatePKCEChallenge, generateState } from "./pkce.ts";
-import {
-  loadProviderTokens,
-  saveProviderTokens,
-  deleteProviderTokens,
-  isTokenExpired,
-} from "./storage.ts";
+import { generatePKCEChallenge } from './pkce.ts'
+import { deleteProviderTokens, isTokenExpired, loadProviderTokens, saveProviderTokens } from './storage.ts'
+import type { OAuthError, OAuthTokens, PKCEChallenge, TokenResponse } from './types.ts'
+import { ANTHROPIC_CONSOLE_OAUTH_CONFIG, ANTHROPIC_OAUTH_CONFIG, ANTHROPIC_REDIRECT_URI } from './types.ts'
 
 // ============================================================================
 // 상수
 // ============================================================================
 
-const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
-const ANTHROPIC_API_VERSION = "2023-06-01";
+const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages'
+const ANTHROPIC_API_VERSION = '2023-06-01'
 // OpenCode에서 사용하는 beta 헤더 (전체 목록)
-const ANTHROPIC_BETA_HEADER = "oauth-2025-04-20,claude-code-20250219,interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14";
+const ANTHROPIC_BETA_HEADER =
+  'oauth-2025-04-20,claude-code-20250219,interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14'
 
 // ============================================================================
 // OAuth 플로우
 // ============================================================================
 
-export type AuthMode = "max" | "console";
+export type AuthMode = 'max' | 'console'
 
 export interface AuthorizationResult {
-  authorizationUrl: string;
-  state: string;
-  pkce: PKCEChallenge;
-  redirectUri: string;
-  mode: AuthMode;
+  authorizationUrl: string
+  state: string
+  pkce: PKCEChallenge
+  redirectUri: string
+  mode: AuthMode
 }
 
 /**
@@ -52,22 +42,22 @@ export interface AuthorizationResult {
  *
  * @param mode - "max" (claude.ai, Claude Pro/Max) 또는 "console" (API 키 생성)
  */
-export async function createAuthorizationUrl(mode: AuthMode = "max"): Promise<AuthorizationResult> {
-  const config = mode === "console" ? ANTHROPIC_CONSOLE_OAUTH_CONFIG : ANTHROPIC_OAUTH_CONFIG;
-  const pkce = await generatePKCEChallenge();
+export async function createAuthorizationUrl(mode: AuthMode = 'max'): Promise<AuthorizationResult> {
+  const config = mode === 'console' ? ANTHROPIC_CONSOLE_OAUTH_CONFIG : ANTHROPIC_OAUTH_CONFIG
+  const pkce = await generatePKCEChallenge()
   // OpenCode 방식: state = pkce.codeVerifier (동일한 값 사용)
-  const state = pkce.codeVerifier;
+  const state = pkce.codeVerifier
 
-  const url = new URL(config.authorizationUrl);
+  const url = new URL(config.authorizationUrl)
   // OpenCode 방식: code=true 파라미터 추가
-  url.searchParams.set("code", "true");
-  url.searchParams.set("client_id", config.clientId);
-  url.searchParams.set("response_type", "code");
-  url.searchParams.set("redirect_uri", ANTHROPIC_REDIRECT_URI);
-  url.searchParams.set("scope", config.scopes.join(" "));
-  url.searchParams.set("code_challenge", pkce.codeChallenge);
-  url.searchParams.set("code_challenge_method", pkce.codeChallengeMethod);
-  url.searchParams.set("state", state);
+  url.searchParams.set('code', 'true')
+  url.searchParams.set('client_id', config.clientId)
+  url.searchParams.set('response_type', 'code')
+  url.searchParams.set('redirect_uri', ANTHROPIC_REDIRECT_URI)
+  url.searchParams.set('scope', config.scopes.join(' '))
+  url.searchParams.set('code_challenge', pkce.codeChallenge)
+  url.searchParams.set('code_challenge_method', pkce.codeChallengeMethod)
+  url.searchParams.set('state', state)
 
   return {
     authorizationUrl: url.toString(),
@@ -75,7 +65,7 @@ export async function createAuthorizationUrl(mode: AuthMode = "max"): Promise<Au
     pkce,
     redirectUri: ANTHROPIC_REDIRECT_URI,
     mode,
-  };
+  }
 }
 
 /**
@@ -86,59 +76,54 @@ export async function createAuthorizationUrl(mode: AuthMode = "max"): Promise<Au
  * @param fullCode - 전체 코드 (code#state 형식) 또는 코드만
  * @param codeVerifier - PKCE 코드 검증자
  */
-export async function exchangeCodeForTokens(
-  fullCode: string,
-  codeVerifier: string
-): Promise<OAuthTokens> {
-  const config = ANTHROPIC_OAUTH_CONFIG;
+export async function exchangeCodeForTokens(fullCode: string, codeVerifier: string): Promise<OAuthTokens> {
+  const config = ANTHROPIC_OAUTH_CONFIG
 
   // OpenCode 플러그인과 동일하게 code#state 파싱
-  const splits = fullCode.split("#");
-  const code = splits[0];
-  const state = splits[1] || codeVerifier; // state가 없으면 verifier 사용
+  const splits = fullCode.split('#')
+  const code = splits[0]
+  const state = splits[1] || codeVerifier // state가 없으면 verifier 사용
 
   // OpenCode와 동일한 필드 순서
   const response = await fetch(config.tokenUrl, {
-    method: "POST",
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
     },
     body: JSON.stringify({
       code,
       state,
-      grant_type: "authorization_code",
+      grant_type: 'authorization_code',
       client_id: config.clientId,
       redirect_uri: ANTHROPIC_REDIRECT_URI,
       code_verifier: codeVerifier,
     }),
-  });
+  })
 
-  const responseText = await response.text();
+  const responseText = await response.text()
 
   if (!response.ok) {
-    let errorMessage = `Token exchange failed (${response.status})`;
+    let errorMessage = `Token exchange failed (${response.status})`
     try {
-      const errorData = JSON.parse(responseText);
+      const errorData = JSON.parse(responseText)
       if (errorData.error) {
-        const errType = typeof errorData.error === 'string'
-          ? errorData.error
-          : JSON.stringify(errorData.error);
-        const errDesc = errorData.error_description || '';
-        errorMessage = `Token exchange failed: ${errType} - ${errDesc}`;
+        const errType = typeof errorData.error === 'string' ? errorData.error : JSON.stringify(errorData.error)
+        const errDesc = errorData.error_description || ''
+        errorMessage = `Token exchange failed: ${errType} - ${errDesc}`
       } else {
-        errorMessage += `: ${responseText.slice(0, 500)}`;
+        errorMessage += `: ${responseText.slice(0, 500)}`
       }
     } catch {
-      errorMessage += `: ${responseText.slice(0, 500)}`;
+      errorMessage += `: ${responseText.slice(0, 500)}`
     }
-    throw new Error(errorMessage);
+    throw new Error(errorMessage)
   }
 
-  let data: TokenResponse;
+  let data: TokenResponse
   try {
-    data = JSON.parse(responseText) as TokenResponse;
+    data = JSON.parse(responseText) as TokenResponse
   } catch {
-    throw new Error(`Invalid token response: ${responseText.slice(0, 500)}`);
+    throw new Error(`Invalid token response: ${responseText.slice(0, 500)}`)
   }
 
   const tokens: OAuthTokens = {
@@ -147,58 +132,52 @@ export async function exchangeCodeForTokens(
     expiresAt: Date.now() + data.expires_in * 1000,
     tokenType: data.token_type,
     scope: data.scope,
-  };
+  }
 
   // 토큰 저장
-  await saveProviderTokens("anthropic", tokens);
+  await saveProviderTokens('anthropic', tokens)
 
-  return tokens;
+  return tokens
 }
 
 /**
  * 리프레시 토큰으로 액세스 토큰 갱신
  */
-export async function refreshAccessToken(
-  refreshToken: string
-): Promise<OAuthTokens> {
-  const config = ANTHROPIC_OAUTH_CONFIG;
+export async function refreshAccessToken(refreshToken: string): Promise<OAuthTokens> {
+  const config = ANTHROPIC_OAUTH_CONFIG
 
   const response = await fetch(config.tokenUrl, {
-    method: "POST",
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json",
-      "Accept": "application/json",
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
     },
     body: JSON.stringify({
-      grant_type: "refresh_token",
+      grant_type: 'refresh_token',
       refresh_token: refreshToken,
       client_id: config.clientId,
     }),
-  });
+  })
 
-  const responseText = await response.text();
+  const responseText = await response.text()
 
   if (!response.ok) {
     try {
-      const error = JSON.parse(responseText) as OAuthError;
-      throw new Error(
-        `Token refresh failed: ${error.error} - ${error.error_description}`
-      );
+      const error = JSON.parse(responseText) as OAuthError
+      throw new Error(`Token refresh failed: ${error.error} - ${error.error_description}`)
     } catch (e) {
-      if (e instanceof Error && e.message.startsWith("Token refresh failed:")) {
-        throw e;
+      if (e instanceof Error && e.message.startsWith('Token refresh failed:')) {
+        throw e
       }
-      throw new Error(
-        `Token refresh failed (${response.status}): ${responseText.slice(0, 500)}`
-      );
+      throw new Error(`Token refresh failed (${response.status}): ${responseText.slice(0, 500)}`)
     }
   }
 
-  let data: TokenResponse;
+  let data: TokenResponse
   try {
-    data = JSON.parse(responseText) as TokenResponse;
+    data = JSON.parse(responseText) as TokenResponse
   } catch {
-    throw new Error(`Invalid token response: ${responseText.slice(0, 500)}`);
+    throw new Error(`Invalid token response: ${responseText.slice(0, 500)}`)
   }
 
   const tokens: OAuthTokens = {
@@ -207,12 +186,12 @@ export async function refreshAccessToken(
     expiresAt: Date.now() + data.expires_in * 1000,
     tokenType: data.token_type,
     scope: data.scope,
-  };
+  }
 
   // 새 토큰 저장
-  await saveProviderTokens("anthropic", tokens);
+  await saveProviderTokens('anthropic', tokens)
 
-  return tokens;
+  return tokens
 }
 
 // ============================================================================
@@ -225,29 +204,25 @@ export async function refreshAccessToken(
  * 필요시 자동으로 갱신합니다.
  */
 export async function getValidAccessToken(): Promise<string> {
-  const tokens = await loadProviderTokens("anthropic");
+  const tokens = await loadProviderTokens('anthropic')
 
   if (!tokens) {
-    throw new Error(
-      "Not authenticated with Anthropic. Run 'obora auth login' first."
-    );
+    throw new Error("Not authenticated with Anthropic. Run 'obora auth login' first.")
   }
 
   // 토큰이 만료되었거나 곧 만료될 예정이면 갱신
   if (isTokenExpired(tokens)) {
     try {
-      const newTokens = await refreshAccessToken(tokens.refreshToken);
-      return newTokens.accessToken;
-    } catch (error) {
+      const newTokens = await refreshAccessToken(tokens.refreshToken)
+      return newTokens.accessToken
+    } catch (_error) {
       // 갱신 실패 시 재인증 필요
-      await deleteProviderTokens("anthropic");
-      throw new Error(
-        "Token refresh failed. Please run 'obora auth login' again."
-      );
+      await deleteProviderTokens('anthropic')
+      throw new Error("Token refresh failed. Please run 'obora auth login' again.")
     }
   }
 
-  return tokens.accessToken;
+  return tokens.accessToken
 }
 
 /**
@@ -255,10 +230,10 @@ export async function getValidAccessToken(): Promise<string> {
  */
 export async function isAuthenticated(): Promise<boolean> {
   try {
-    await getValidAccessToken();
-    return true;
+    await getValidAccessToken()
+    return true
   } catch {
-    return false;
+    return false
   }
 }
 
@@ -266,7 +241,7 @@ export async function isAuthenticated(): Promise<boolean> {
  * 로그아웃 (토큰 삭제)
  */
 export async function logout(): Promise<void> {
-  await deleteProviderTokens("anthropic");
+  await deleteProviderTokens('anthropic')
 }
 
 // ============================================================================
@@ -274,11 +249,11 @@ export async function logout(): Promise<void> {
 // ============================================================================
 
 export interface AnthropicRequestOptions {
-  model?: string;
-  maxTokens?: number;
-  systemPrompt?: string;
-  temperature?: number;
-  stream?: boolean;
+  model?: string
+  maxTokens?: number
+  systemPrompt?: string
+  temperature?: number
+  stream?: boolean
 }
 
 /**
@@ -289,32 +264,32 @@ export interface AnthropicRequestOptions {
  * - x-api-key 없음 (Bearer 토큰만 사용)
  */
 export async function createAnthropicHeaders(): Promise<Headers> {
-  const accessToken = await getValidAccessToken();
+  const accessToken = await getValidAccessToken()
 
   const headers = new Headers({
-    "Content-Type": "application/json",
+    'Content-Type': 'application/json',
     Authorization: `Bearer ${accessToken}`,
-    "anthropic-version": ANTHROPIC_API_VERSION,
-    "anthropic-beta": ANTHROPIC_BETA_HEADER,
+    'anthropic-version': ANTHROPIC_API_VERSION,
+    'anthropic-beta': ANTHROPIC_BETA_HEADER,
     // AI SDK와 동일한 User-Agent 서픽스
-    "User-Agent": "ai-sdk/anthropic/2.0.56",
-  });
+    'User-Agent': 'ai-sdk/anthropic/2.0.56',
+  })
 
   // x-api-key는 절대 포함하지 않음! OAuth는 Bearer 토큰만 사용
 
-  return headers;
+  return headers
 }
 
 /**
  * Anthropic API URL
  */
 export function getAnthropicApiUrl(): string {
-  return ANTHROPIC_API_URL;
+  return ANTHROPIC_API_URL
 }
 
 /**
  * 기본 모델
  */
 export function getDefaultModel(): string {
-  return "claude-sonnet-4-20250514";
+  return 'claude-sonnet-4-20250514'
 }

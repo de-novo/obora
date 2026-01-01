@@ -1,9 +1,9 @@
-import { BaseProvider } from '../BaseProvider';
-import type { ProviderBackend, ProviderConfig, ProviderResponse } from '../types';
-import { AISDKBackend } from '../ai-sdk';
+import { AISDKBackend } from '../ai-sdk'
+import { BaseProvider } from '../BaseProvider'
+import type { ProviderBackend, ProviderConfig, ProviderResponse } from '../types'
 
 export interface OpenAIProviderConfig extends ProviderConfig {
-  model?: 'gpt-4o' | 'gpt-4o-mini' | 'o1' | 'o1-mini' | string;
+  model?: 'gpt-4o' | 'gpt-4o-mini' | 'o1' | 'o1-mini' | string
 }
 
 /**
@@ -15,46 +15,48 @@ export interface OpenAIProviderConfig extends ProviderConfig {
  * - Skip git repo check for standalone use
  */
 class OpenAICLIBackend implements ProviderBackend {
-  readonly type = 'cli' as const;
+  readonly type = 'cli' as const
 
   async execute(prompt: string, config: OpenAIProviderConfig): Promise<ProviderResponse> {
-    const startTime = Date.now();
+    const startTime = Date.now()
 
     const args = [
-      'codex', 'exec',
+      'codex',
+      'exec',
       // Isolation flags - disable MCP and external integrations
-      '-c', 'mcp.enabled=false',
+      '-c',
+      'mcp.enabled=false',
       '--skip-git-repo-check',
       '--json',
       prompt,
-    ];
+    ]
 
     if (config.model) {
-      args.push('--model', config.model);
+      args.push('--model', config.model)
     }
 
     const proc = Bun.spawn(args, {
       stdout: 'pipe',
       stderr: 'pipe',
-    });
+    })
 
-    const output = await new Response(proc.stdout).text();
-    const exitCode = await proc.exited;
+    const output = await new Response(proc.stdout).text()
+    const exitCode = await proc.exited
 
     if (exitCode !== 0) {
-      const stderr = await new Response(proc.stderr).text();
-      throw new Error(`Codex CLI failed: ${stderr}`);
+      const stderr = await new Response(proc.stderr).text()
+      throw new Error(`Codex CLI failed: ${stderr}`)
     }
 
     // Codex outputs JSONL, find agent_message
-    const lines = output.trim().split('\n');
-    let content = '';
+    const lines = output.trim().split('\n')
+    let content = ''
 
     for (const line of lines) {
       try {
-        const json = JSON.parse(line);
+        const json = JSON.parse(line)
         if (json.type === 'item.completed' && json.item?.type === 'agent_message') {
-          content = json.item.text || '';
+          content = json.item.text || ''
         }
       } catch {
         // skip non-JSON lines
@@ -69,7 +71,7 @@ class OpenAICLIBackend implements ProviderBackend {
         latencyMs: Date.now() - startTime,
         backend: 'cli',
       },
-    };
+    }
   }
 
   async isAvailable(): Promise<boolean> {
@@ -77,10 +79,10 @@ class OpenAICLIBackend implements ProviderBackend {
       const proc = Bun.spawn(['which', 'codex'], {
         stdout: 'pipe',
         stderr: 'pipe',
-      });
-      return (await proc.exited) === 0;
+      })
+      return (await proc.exited) === 0
     } catch {
-      return false;
+      return false
     }
   }
 }
@@ -103,33 +105,33 @@ class OpenAICLIBackend implements ProviderBackend {
  * });
  */
 export class OpenAIProvider extends BaseProvider {
-  readonly name = 'openai';
-  protected declare config: OpenAIProviderConfig;
-  private aiSdkBackend: AISDKBackend;
+  readonly name = 'openai'
+  protected declare config: OpenAIProviderConfig
+  private aiSdkBackend: AISDKBackend
 
   constructor(config: OpenAIProviderConfig = {}) {
-    super(config);
-    this.config = config;
+    super(config)
+    this.config = config
 
     // Create AI SDK backend
-    this.aiSdkBackend = new AISDKBackend('openai', config);
+    this.aiSdkBackend = new AISDKBackend('openai', config)
 
     // Register backends (CLI first for fallback, then API)
-    this.registerBackend(new OpenAICLIBackend());
-    this.registerBackend(this.aiSdkBackend);
+    this.registerBackend(new OpenAICLIBackend())
+    this.registerBackend(this.aiSdkBackend)
   }
 
   /**
    * Stream response chunks
    */
   async *stream(prompt: string): AsyncGenerator<{ chunk: string; done: boolean }> {
-    yield* this.aiSdkBackend.stream(prompt, this.config);
+    yield* this.aiSdkBackend.stream(prompt, this.config)
   }
 
   /**
    * Get the underlying AI SDK model for advanced usage
    */
   getModel() {
-    return this.aiSdkBackend.getModel(this.config.model);
+    return this.aiSdkBackend.getModel(this.config.model)
   }
 }
