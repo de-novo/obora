@@ -9,6 +9,7 @@ export interface BenchmarkCase {
 
 export interface BenchmarkResult {
   caseId: string
+  caseName: string
   mode: 'single' | 'parallel' | 'strong'
   duration: number
   rounds: number
@@ -16,9 +17,11 @@ export interface BenchmarkResult {
   positionChanges: number
   contentLength: number
   timestamp: number
+  fullResult?: unknown
 }
 
 export interface BenchmarkSummary {
+  runId: string
   totalCases: number
   completedCases: number
   failedCases: number

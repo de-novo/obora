@@ -5,18 +5,44 @@ export interface BenchmarkRunnerConfig {
   modes: Array<'single' | 'parallel' | 'strong'>
   providers: Array<'claude' | 'openai' | 'gemini'>
   outputDir: string
+  concurrency: number // 병렬 실행 수
 }
 
 export class BenchmarkRunner {
   private config: BenchmarkRunnerConfig
   private results: BenchmarkResult[] = []
+  private runId: string
 
   constructor(config: Partial<BenchmarkRunnerConfig> = {}) {
     this.config = {
       modes: config.modes || ['strong'],
       providers: config.providers || ['claude', 'openai'],
       outputDir: config.outputDir || './benchmark/results',
+      concurrency: config.concurrency || 3, // 기본 3개 병렬
     }
+    this.runId = Date.now().toString()
+  }
+
+  private async saveResult(result: BenchmarkResult): Promise<void> {
+    const outputPath = `${this.config.outputDir}/${this.runId}/${result.caseId}.json`
+    await Bun.write(outputPath, JSON.stringify(result, null, 2))
+  }
+
+  private async saveMeta(): Promise<void> {
+    const metaPath = `${this.config.outputDir}/${this.runId}/_meta.json`
+    await Bun.write(
+      metaPath,
+      JSON.stringify(
+        {
+          runId: this.runId,
+          startedAt: this.runId,
+          completedCases: this.results.length,
+          summary: this.getSummary(),
+        },
+        null,
+        2,
+      ),
+    )
   }
 
   async runCase(testCase: BenchmarkCase): Promise<BenchmarkResult> {
@@ -42,6 +68,7 @@ export class BenchmarkRunner {
 
     const benchmarkResult: BenchmarkResult = {
       caseId: testCase.id,
+      caseName: testCase.name,
       mode: 'strong',
       duration: Date.now() - startTime,
       rounds: result.rounds.length,
@@ -49,24 +76,61 @@ export class BenchmarkRunner {
       positionChanges: result.positionChanges.length,
       contentLength: JSON.stringify(result).length,
       timestamp: Date.now(),
+      fullResult: result,
     }
 
+    // 즉시 저장
+    await this.saveResult(benchmarkResult)
     this.results.push(benchmarkResult)
+    await this.saveMeta()
+
     return benchmarkResult
   }
 
   async runAll(cases: BenchmarkCase[]): Promise<BenchmarkSummary> {
-    console.log(`Running ${cases.length} benchmark cases...`)
+    console.log(`Running ${cases.length} benchmark cases (concurrency: ${this.config.concurrency})...`)
+    console.log(`Results will be saved to: ${this.config.outputDir}/${this.runId}/\n`)
 
-    for (const testCase of cases) {
-      console.log(`\n[${testCase.id}] ${testCase.name}`)
-      try {
-        const result = await this.runCase(testCase)
-        console.log(`  ✅ Completed in ${(result.duration / 1000).toFixed(1)}s`)
-      } catch (error) {
-        console.log(`  ❌ Failed: ${error}`)
+    // 결과 폴더 생성
+    await Bun.write(`${this.config.outputDir}/${this.runId}/.gitkeep`, '')
+
+    // 병렬 실행 with concurrency limit
+    const runWithLimit = async () => {
+      const running: Promise<void>[] = []
+      const queue = [...cases]
+
+      while (queue.length > 0 || running.length > 0) {
+        // 슬롯이 있고 큐에 케이스가 있으면 시작
+        while (running.length < this.config.concurrency && queue.length > 0) {
+          const testCase = queue.shift()!
+          const promise = (async () => {
+            console.log(`[${testCase.id}] ${testCase.name} - Starting...`)
+            try {
+              const result = await this.runCase(testCase)
+              console.log(`[${testCase.id}] ✅ Completed in ${(result.duration / 1000).toFixed(1)}s`)
+            } catch (error) {
+              console.log(`[${testCase.id}] ❌ Failed: ${error}`)
+            }
+          })()
+
+          running.push(promise)
+          promise.finally(() => {
+            const idx = running.indexOf(promise)
+            if (idx > -1) running.splice(idx, 1)
+          })
+        }
+
+        // 하나라도 완료될 때까지 대기
+        if (running.length > 0) {
+          await Promise.race(running)
+        }
       }
     }
+
+    await runWithLimit()
+
+    // 최종 메타 저장
+    await this.saveMeta()
 
     return this.getSummary()
   }
@@ -94,6 +158,7 @@ export class BenchmarkRunner {
     }
 
     return {
+      runId: this.runId,
       totalCases: completed,
       completedCases: completed,
       failedCases: 0,
@@ -103,19 +168,7 @@ export class BenchmarkRunner {
     }
   }
 
-  async saveResults(filename?: string): Promise<string> {
-    const outputPath = `${this.config.outputDir}/${filename || `benchmark-${Date.now()}.json`}`
-    await Bun.write(
-      outputPath,
-      JSON.stringify(
-        {
-          summary: this.getSummary(),
-          results: this.results,
-        },
-        null,
-        2,
-      ),
-    )
-    return outputPath
+  getRunId(): string {
+    return this.runId
   }
 }
