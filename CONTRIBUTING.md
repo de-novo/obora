@@ -130,15 +130,71 @@ bun run check
 
 ## Submitting Changes
 
-### Commit Messages
+### Commit Convention
 
-Use conventional commits:
+모든 커밋은 관련 이슈와 연결되어야 합니다.
+
+#### Format
 
 ```
-feat: add Gemini support
-fix: handle API timeout gracefully
-docs: update benchmark results
-chore: update dependencies
+<type>(<scope>): <subject> (#<issue>)
+
+<body>
+```
+
+#### Types
+
+| Type | Description |
+|------|-------------|
+| `feat` | 새로운 기능 |
+| `fix` | 버그 수정 |
+| `docs` | 문서 변경 |
+| `refactor` | 리팩토링 (기능 변경 없음) |
+| `test` | 테스트 추가/수정 |
+| `chore` | 빌드, 설정 등 기타 변경 |
+
+#### Scopes
+
+| Scope | Description |
+|-------|-------------|
+| `engine` | 토론 엔진 (DebateEngine) |
+| `providers` | AI Provider (Claude, OpenAI, Gemini) |
+| `tools` | 도구 (WebSearch 등) |
+| `cli` | CLI 도구 |
+| `auth` | 인증 |
+| `config` | 설정 |
+
+#### Examples
+
+```bash
+# 기능 추가 (Issue #2)
+feat(engine): add streaming support (#2)
+
+# 버그 수정 (Issue #15)
+fix(providers): fix Claude CLI timeout (#15)
+
+# 리팩토링 (Issue #1)
+refactor(tools): make custom tools optional (#1)
+
+# 이슈 없는 경우 (문서, 린터 등)
+docs: update README with benchmark results
+chore: apply linter formatting
+```
+
+#### Issue Linking
+
+- `#N` - 이슈 참조 (자동 링크)
+- `Closes #N` - 커밋 머지 시 이슈 자동 종료
+- `Fixes #N` - 버그 수정 시 이슈 자동 종료
+- `Refs #N` - 관련 이슈 참조 (종료하지 않음)
+
+#### Branch Naming (Optional)
+
+```
+<type>/<issue>-<short-description>
+
+feat/2-streaming-support
+fix/15-claude-timeout
 ```
 
 ### Pull Request Process

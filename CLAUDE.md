@@ -109,3 +109,28 @@ bun --hot ./index.ts
 ```
 
 For more information, read the Bun API docs in `node_modules/bun-types/docs/**.mdx`.
+
+## Commit Convention
+
+커밋 시 반드시 이슈 번호를 포함해야 합니다.
+
+```
+<type>(<scope>): <subject> (#<issue>)
+```
+
+- **Types**: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`
+- **Scopes**: `engine`, `providers`, `tools`, `cli`, `auth`, `config`
+- **Issue**: 관련 이슈 번호 (예: `#2`)
+
+예시:
+```bash
+feat(engine): add streaming support (#2)
+fix(providers): fix timeout issue (#15)
+refactor(tools): make custom tools optional (#1)
+```
+
+이슈 없는 작업 (문서, 린터):
+```bash
+docs: update README
+chore: apply linter formatting
+```
