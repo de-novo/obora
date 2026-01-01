@@ -10,15 +10,53 @@ A single AI doesn't know its own blind spots. Obora makes multiple AIs point out
 
 ## Benchmark Results
 
-20 cases tested (10 technical + 10 decision-making):
+24 architecture cases tested (6 topics × 4 modes):
 
-| Mode | Avg Time | Avg Length | Characteristics |
-|------|----------|------------|-----------------|
-| **Single AI** | 37.7s | 2,529 chars | Fast but single perspective |
-| **Parallel AI** | 40.1s | 3,660 chars | Multiple perspectives, no synthesis |
-| **Strong Debate** | 447.6s | **12,498 chars** | Rebuttal → Revision → Consensus |
+| Mode | Avg Time | Avg Content | Characteristics |
+|------|----------|-------------|-----------------|
+| **Single** | 20.5s | 4,857 chars | Fast, single perspective |
+| **Parallel** | 24s | 4,674 chars | Two perspectives, no interaction |
+| **Weak Debate** | 58.4s | 10,334 chars | Initial positions + consensus |
+| **Strong Debate** | 194.8s | **31,793 chars** | Rebuttal → Revision → Consensus |
 
-**Strong Debate generates 5x more analysis than Single AI.**
+**Strong Debate generates 6.5x more analysis and catches critical errors.**
+
+---
+
+## Why Strong Debate Matters: A Real Example
+
+### Case: AWS vs Managed Platforms (Startup Infrastructure)
+
+**Context**: 5-person B2B SaaS, pre-seed, SOC2 needed by month 12
+
+#### Single/Parallel Mode Recommendation:
+```
+✅ Use Vercel + Railway + Neon (Managed Platforms)
+   "Railway has SOC2 compliance" ← WRONG
+```
+
+#### Strong Debate Discovery:
+
+| Phase | What Happened |
+|-------|---------------|
+| Initial | Both AIs recommend managed platforms |
+| **Rebuttal** | "Railway lacks SOC2 Type II attestation" |
+| **Revised** | Claude **changes position** to AWS managed services |
+
+#### The Critical Error Caught:
+
+```diff
+- Single/Parallel: "Railway has SOC2" (assumed, not verified)
++ Strong Debate: "Railway has Type I only, Type II pending" (fact-checked)
+```
+
+**If you followed Single/Parallel advice:**
+1. Month 1: Choose Railway
+2. Month 10: SOC2 auditor rejects Railway (no Type II)
+3. Emergency migration during audit prep
+4. **SOC2 deadline at risk**
+
+**Strong Debate prevented this by forcing fact verification through rebuttals.**
 
 ---
 
@@ -184,15 +222,25 @@ Phase 4: Orchestrator Consensus
 
 ---
 
-## When to Use Strong Debate?
+## When to Use Each Mode?
 
-| Situation | Recommended Mode |
-|-----------|------------------|
-| Quick answer needed | Single AI |
-| Exploring options | Parallel AI |
-| **High-stakes decisions** | Strong Debate |
-| **Team consensus needed** | Strong Debate |
-| **Complex trade-offs** | Strong Debate |
+| Situation | Recommended Mode | Why |
+|-----------|------------------|-----|
+| Quick answer needed | Single | 20s, good enough for simple questions |
+| Exploring options | Parallel | Multiple perspectives in 24s |
+| Simple consensus | Weak Debate | Agreement without deep critique |
+| **High-stakes decisions** | **Strong Debate** | Catches errors through rebuttals |
+| **Unverified assumptions** | **Strong Debate** | Forces fact-checking |
+| **Complex trade-offs** | **Strong Debate** | Reveals hidden risks |
+
+### Strong Debate ROI
+
+| Investment | Return |
+|------------|--------|
+| 10x more time (195s vs 20s) | 6.5x more content |
+| | **Position changes when wrong** |
+| | **Critical errors caught** |
+| | **Actionable metrics discovered** |
 
 ---
 
@@ -284,4 +332,4 @@ MIT
 
 ---
 
-*Benchmark ID: 1767263626447 | 2025-01-01*
+*Benchmark ID: 1767280885169 | 2026-01-02*
