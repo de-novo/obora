@@ -41,6 +41,13 @@ export interface Provider {
 }
 
 /**
+ * Provider that supports streaming responses
+ */
+export interface StreamableProvider extends Provider {
+  stream(prompt: string): AsyncGenerator<{ chunk: string; done: boolean }>
+}
+
+/**
  * Provider that supports structured JSON output
  */
 export interface StructuredProvider extends Provider {

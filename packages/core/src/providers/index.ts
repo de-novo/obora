@@ -26,6 +26,7 @@ export type {
   ProviderConfig,
   ProviderFactory,
   ProviderResponse,
+  StreamableProvider,
   StructuredProvider,
 } from './types'
 

@@ -6,7 +6,7 @@
  */
 
 import type { Tool } from 'ai'
-import type { Provider } from '../providers/types'
+import type { Provider, StreamableProvider } from '../providers/types'
 import type { DebateEngineConfig, DebatePhase, DebateResult, DebateRound, PositionChange, ToolCall } from './types'
 
 export interface DebateParticipant {
@@ -18,9 +18,7 @@ export interface DebateParticipant {
  * Streaming participant with stream() method
  */
 export interface StreamingParticipant extends DebateParticipant {
-  provider: Provider & {
-    stream(prompt: string): AsyncGenerator<{ chunk: string; done: boolean }>
-  }
+  provider: StreamableProvider
 }
 
 /**

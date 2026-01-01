@@ -73,6 +73,7 @@ export {
   type ProviderFactory,
   type ProviderResponse,
   providerFactory,
+  type StreamableProvider,
   type StructuredProvider,
 } from './providers'
 // Tools - Custom tools for advanced use cases (optional)
@@ -84,7 +85,7 @@ export {
   createDebateTools,
   createWebSearchTool,
   type DebateToolsConfig,
-  webSearch,
   type WebSearchConfig,
   type WebSearchResult,
+  webSearch,
 } from './tools'
