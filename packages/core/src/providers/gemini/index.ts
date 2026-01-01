@@ -4,6 +4,12 @@ import type { ProviderBackend, ProviderConfig, ProviderResponse } from '../types
 
 export interface GeminiProviderConfig extends ProviderConfig {
   model?: 'gemini-2.0-flash' | 'gemini-1.5-pro' | 'gemini-1.5-flash' | string
+  /**
+   * Enable specific built-in tools for fact-checking during debates
+   * Available tools: google_web_search
+   * @example enabledTools: ['google_web_search']
+   */
+  enabledTools?: ('google_web_search')[]
 }
 
 /**
@@ -27,8 +33,14 @@ class GeminiCLIBackend implements ProviderBackend {
       '',
       '--extensions',
       '',
-      prompt,
     ]
+
+    // Enable specific tools if configured
+    if (config.enabledTools?.length) {
+      args.push('--tools', config.enabledTools.join(','))
+    }
+
+    args.push(prompt)
 
     if (config.model) {
       args.push('--model', config.model)

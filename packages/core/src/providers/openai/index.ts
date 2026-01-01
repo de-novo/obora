@@ -4,6 +4,11 @@ import type { ProviderBackend, ProviderConfig, ProviderResponse } from '../types
 
 export interface OpenAIProviderConfig extends ProviderConfig {
   model?: 'gpt-4o' | 'gpt-4o-mini' | 'o1' | 'o1-mini' | string
+  /**
+   * Enable web search for fact-checking during debates
+   * Uses Codex's --search flag
+   */
+  enableWebSearch?: boolean
 }
 
 /**
@@ -28,8 +33,14 @@ class OpenAICLIBackend implements ProviderBackend {
       'mcp.enabled=false',
       '--skip-git-repo-check',
       '--json',
-      prompt,
     ]
+
+    // Enable web search if configured
+    if (config.enableWebSearch) {
+      args.push('--search')
+    }
+
+    args.push(prompt)
 
     if (config.model) {
       args.push('--model', config.model)

@@ -4,6 +4,12 @@ import type { ProviderBackend, ProviderConfig, ProviderResponse, StructuredProvi
 
 export interface ClaudeProviderConfig extends ProviderConfig {
   model?: 'claude-sonnet-4-20250514' | 'claude-opus-4-20250514' | 'claude-haiku-3-20250514' | string
+  /**
+   * Enable specific built-in tools for fact-checking during debates
+   * Available tools: WebSearch, WebFetch
+   * @example enabledTools: ['WebSearch', 'WebFetch']
+   */
+  enabledTools?: ('WebSearch' | 'WebFetch')[]
 }
 
 /**
@@ -22,6 +28,9 @@ class ClaudeCLIBackend implements ProviderBackend {
   async execute(prompt: string, config: ClaudeProviderConfig): Promise<ProviderResponse> {
     const startTime = Date.now()
 
+    // Build tools flag - empty string disables all, or list specific tools
+    const toolsValue = config.enabledTools?.length ? config.enabledTools.join(',') : ''
+
     const args = [
       'claude',
       '-p',
@@ -30,7 +39,7 @@ class ClaudeCLIBackend implements ProviderBackend {
       'json',
       // Isolation flags - run vanilla without MCP, skills, rules
       '--tools',
-      '',
+      toolsValue,
       '--strict-mcp-config',
       '--disable-slash-commands',
       '--setting-sources',
@@ -68,6 +77,9 @@ class ClaudeCLIBackend implements ProviderBackend {
   }
 
   async executeStructured<T>(prompt: string, schema: object, config: ClaudeProviderConfig): Promise<T> {
+    // Build tools flag - empty string disables all, or list specific tools
+    const toolsValue = config.enabledTools?.length ? config.enabledTools.join(',') : ''
+
     const args = [
       'claude',
       '-p',
@@ -78,7 +90,7 @@ class ClaudeCLIBackend implements ProviderBackend {
       JSON.stringify(schema),
       // Isolation flags - run vanilla without MCP, skills, rules
       '--tools',
-      '',
+      toolsValue,
       '--strict-mcp-config',
       '--disable-slash-commands',
       '--setting-sources',

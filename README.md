@@ -10,16 +10,16 @@ A single AI doesn't know its own blind spots. Obora makes multiple AIs point out
 
 ## Benchmark Results
 
-24 architecture cases tested (6 topics × 4 modes):
+Architecture case tested (AWS vs Managed Infra × 4 modes):
 
-| Mode | Avg Time | Avg Content | Characteristics |
-|------|----------|-------------|-----------------|
-| **Single** | 20.5s | 4,857 chars | Fast, single perspective |
-| **Parallel** | 24s | 4,674 chars | Two perspectives, no interaction |
-| **Weak Debate** | 58.4s | 10,334 chars | Initial positions + consensus |
-| **Strong Debate** | 194.8s | **31,793 chars** | Rebuttal → Revision → Consensus |
+| Mode | Time | Consensus Length | Key Features |
+|------|------|------------------|--------------|
+| **Single** | 18.9s | 2.2K chars | Fast, single perspective |
+| **Parallel** | 26.3s | N/A | Two perspectives, no interaction |
+| **Weak Debate** | 55.8s | 2.7K chars | Initial + Consensus, 5 cautions |
+| **Strong Debate** | 255.7s | **5.2K chars** | Rebuttal → Revision → Consensus, **8 cautions** |
 
-**Strong Debate generates 6.5x more analysis and catches critical errors.**
+**Strong Debate generates 2x more detailed analysis with concrete failure scenarios.**
 
 ---
 
@@ -29,34 +29,39 @@ A single AI doesn't know its own blind spots. Obora makes multiple AIs point out
 
 **Context**: 5-person B2B SaaS, pre-seed, SOC2 needed by month 12
 
-#### Single/Parallel Mode Recommendation:
+#### Single/Parallel Mode:
 ```
 ✅ Use Vercel + Railway + Neon (Managed Platforms)
-   "Railway has SOC2 compliance" ← WRONG
+   Basic reasoning: "CTO time is scarce, managed is easier"
+   Cautions: 1-2 general warnings
 ```
 
 #### Strong Debate Discovery:
 
 | Phase | What Happened |
 |-------|---------------|
-| Initial | Both AIs recommend managed platforms |
-| **Rebuttal** | "Railway lacks SOC2 Type II attestation" |
-| **Revised** | Claude **changes position** to AWS managed services |
+| **Initial** | Both AIs recommend managed platforms |
+| **Rebuttal** | Claude: 7 critical gaps identified, OpenAI: 9 failure conditions |
+| **Revised** | Both refine to "Option B **with explicit guardrails**" |
+| **Consensus** | 8 specific cautions + month-by-month execution plan |
 
-#### The Critical Error Caught:
+#### What Strong Debate Added:
 
 ```diff
-- Single/Parallel: "Railway has SOC2" (assumed, not verified)
-+ Strong Debate: "Railway has Type I only, Type II pending" (fact-checked)
+  Single Mode:
+- "Use managed platforms" (simple recommendation)
+- 1 caveat about migration
+
+  Strong Debate:
++ SOC2 Timeline: Controls must be live by month 5-6 for Type II observation
++ Cost Triggers: $2,500/month → model AWS, $5,000/month → migrate within 90 days
++ Lock-in Prevention: Prohibited patterns (Vercel edge middleware, ISR hooks)
++ Team Building: "Infrastructure buddy" program by month 4
++ Vendor Gates: Only SOC2 Type II verified vendors in production
++ 8 specific failure scenarios with month-by-month triggers
 ```
 
-**If you followed Single/Parallel advice:**
-1. Month 1: Choose Railway
-2. Month 10: SOC2 auditor rejects Railway (no Type II)
-3. Emergency migration during audit prep
-4. **SOC2 deadline at risk**
-
-**Strong Debate prevented this by forcing fact verification through rebuttals.**
+**Strong Debate transforms "use managed platforms" into an executable decision framework.**
 
 ---
 
@@ -237,10 +242,10 @@ Phase 4: Orchestrator Consensus
 
 | Investment | Return |
 |------------|--------|
-| 10x more time (195s vs 20s) | 6.5x more content |
-| | **Position changes when wrong** |
-| | **Critical errors caught** |
-| | **Actionable metrics discovered** |
+| 13x more time (256s vs 19s) | 2x more detailed consensus |
+| | **7-9 failure scenarios per AI** |
+| | **Concrete decision triggers** |
+| | **Month-by-month execution plan** |
 
 ---
 
@@ -261,17 +266,17 @@ ANTHROPIC_API_KEY=... OPENAI_API_KEY=... bun packages/core/examples/test-ai-sdk.
 
 ## Key Findings
 
-1. **AIs can be wrong**: Rebuttals expose weaknesses in initial positions
-2. **Position changes are the core value**: Many cases showed AI revising their stance
-3. **Unresolved disagreements have value**: Explicit disagreement is more honest than forced consensus
-4. **Time-value trade-off**: 12x time for 5x analysis (42% efficiency)
+1. **Rebuttals add depth**: 7-9 failure scenarios identified per AI during rebuttal phase
+2. **Guardrails emerge from debate**: Simple recommendations become executable frameworks
+3. **Unresolved disagreements have value**: Explicit disagreement (e.g., IaC on managed platforms) is more honest than forced consensus
+4. **Time-value trade-off**: 13x time for 2x consensus + concrete decision triggers
 
 ---
 
 ## Limitations
 
 - **Cost**: 6x+ API calls compared to single AI
-- **Time**: Average 7.5 minutes per case
+- **Time**: ~4 minutes per case (Strong Debate)
 - **Complexity**: Results require user interpretation skills
 
 ---
@@ -332,4 +337,4 @@ MIT
 
 ---
 
-*Benchmark ID: 1767280885169 | 2026-01-02*
+*Benchmark ID: 1767287160490 | 2026-01-02*
