@@ -1,8 +1,8 @@
 import { ClaudeProvider, DebateEngine, OpenAIProvider } from '../packages/core/src'
-import type { BenchmarkCase, BenchmarkResult, BenchmarkSummary } from './types'
+import type { BenchmarkCase, BenchmarkMode, BenchmarkResult, BenchmarkSummary } from './types'
 
 export interface BenchmarkRunnerConfig {
-  modes: Array<'single' | 'parallel' | 'strong'>
+  modes: BenchmarkMode[]
   providers: Array<'claude' | 'openai' | 'gemini'>
   outputDir: string
   concurrency: number // 병렬 실행 수
@@ -15,7 +15,7 @@ export class BenchmarkRunner {
 
   constructor(config: Partial<BenchmarkRunnerConfig> = {}) {
     this.config = {
-      modes: config.modes || ['strong'],
+      modes: config.modes || ['single', 'parallel', 'weak', 'strong'], // 기본: 모든 모드
       providers: config.providers || ['claude', 'openai'],
       outputDir: config.outputDir || './benchmark/results',
       concurrency: config.concurrency || 3, // 기본 3개 병렬
@@ -32,7 +32,7 @@ export class BenchmarkRunner {
 
   private async saveResult(result: BenchmarkResult): Promise<void> {
     const filename = this.sanitizeFilename(result.caseName)
-    const outputPath = `${this.config.outputDir}/${this.runId}/${filename}.json`
+    const outputPath = `${this.config.outputDir}/${this.runId}/${result.mode}/${filename}.json`
     await Bun.write(outputPath, JSON.stringify(result, null, 2))
   }
 
@@ -53,31 +53,58 @@ export class BenchmarkRunner {
     )
   }
 
-  async runCase(testCase: BenchmarkCase): Promise<BenchmarkResult> {
+  async runCase(testCase: BenchmarkCase, mode: BenchmarkMode): Promise<BenchmarkResult> {
     const startTime = Date.now()
 
     const claude = new ClaudeProvider()
     const openai = new OpenAIProvider()
 
-    const engine = new DebateEngine({
-      mode: 'strong',
-      maxRounds: 10,
-      timeout: 300000,
-    })
+    let result: {
+      rounds: Array<{ phase: string; speaker: string; content: string; timestamp: number }>
+      consensus?: string
+      positionChanges: unknown[]
+    }
 
-    const result = await engine.run({
-      topic: testCase.topic,
-      participants: [
-        { name: 'claude', provider: claude },
-        { name: 'openai', provider: openai },
-      ],
-      orchestrator: claude,
-    })
+    if (mode === 'single') {
+      // Single: Claude만 응답
+      const response = await claude.run(testCase.topic)
+      result = {
+        rounds: [{ phase: 'single', speaker: 'claude', content: response.content, timestamp: Date.now() }],
+        consensus: response.content,
+        positionChanges: [],
+      }
+    } else if (mode === 'parallel') {
+      // Parallel: Claude와 OpenAI가 동시에 응답 (토론 없음)
+      const [claudeResponse, openaiResponse] = await Promise.all([claude.run(testCase.topic), openai.run(testCase.topic)])
+      result = {
+        rounds: [
+          { phase: 'parallel', speaker: 'claude', content: claudeResponse.content, timestamp: Date.now() },
+          { phase: 'parallel', speaker: 'openai', content: openaiResponse.content, timestamp: Date.now() },
+        ],
+        positionChanges: [],
+      }
+    } else {
+      // weak 또는 strong: DebateEngine 사용
+      const engine = new DebateEngine({
+        mode: mode === 'weak' ? 'weak' : 'strong',
+        maxRounds: 10,
+        timeout: 300000,
+      })
+
+      result = await engine.run({
+        topic: testCase.topic,
+        participants: [
+          { name: 'claude', provider: claude },
+          { name: 'openai', provider: openai },
+        ],
+        orchestrator: claude,
+      })
+    }
 
     const benchmarkResult: BenchmarkResult = {
       caseId: testCase.id,
       caseName: testCase.name,
-      mode: 'strong',
+      mode,
       duration: Date.now() - startTime,
       rounds: result.rounds.length,
       consensus: result.consensus,
@@ -96,28 +123,40 @@ export class BenchmarkRunner {
   }
 
   async runAll(cases: BenchmarkCase[]): Promise<BenchmarkSummary> {
-    console.log(`Running ${cases.length} benchmark cases (concurrency: ${this.config.concurrency})...`)
-    console.log(`Results will be saved to: ${this.config.outputDir}/${this.runId}/\n`)
+    const totalRuns = cases.length * this.config.modes.length
+    console.log(`Running ${cases.length} cases × ${this.config.modes.length} modes = ${totalRuns} total runs`)
+    console.log(`Modes: ${this.config.modes.join(', ')}`)
+    console.log(`Concurrency: ${this.config.concurrency}`)
+    console.log(`Results: ${this.config.outputDir}/${this.runId}/\n`)
 
-    // 결과 폴더 생성
-    await Bun.write(`${this.config.outputDir}/${this.runId}/.gitkeep`, '')
+    // 모드별 폴더 생성
+    for (const mode of this.config.modes) {
+      await Bun.write(`${this.config.outputDir}/${this.runId}/${mode}/.gitkeep`, '')
+    }
+
+    // 케이스 × 모드 조합 생성
+    const queue: Array<{ testCase: BenchmarkCase; mode: BenchmarkMode }> = []
+    for (const testCase of cases) {
+      for (const mode of this.config.modes) {
+        queue.push({ testCase, mode })
+      }
+    }
 
     // 병렬 실행 with concurrency limit
     const runWithLimit = async () => {
       const running: Promise<void>[] = []
-      const queue = [...cases]
 
       while (queue.length > 0 || running.length > 0) {
         // 슬롯이 있고 큐에 케이스가 있으면 시작
         while (running.length < this.config.concurrency && queue.length > 0) {
-          const testCase = queue.shift()!
+          const { testCase, mode } = queue.shift()!
           const promise = (async () => {
-            console.log(`[${testCase.id}] ${testCase.name} - Starting...`)
+            console.log(`[${testCase.id}][${mode}] ${testCase.name} - Starting...`)
             try {
-              const result = await this.runCase(testCase)
-              console.log(`[${testCase.id}] ✅ Completed in ${(result.duration / 1000).toFixed(1)}s`)
+              const result = await this.runCase(testCase, mode)
+              console.log(`[${testCase.id}][${mode}] ✅ Completed in ${(result.duration / 1000).toFixed(1)}s`)
             } catch (error) {
-              console.log(`[${testCase.id}] ❌ Failed: ${error}`)
+              console.log(`[${testCase.id}][${mode}] ❌ Failed: ${error}`)
             }
           })()
 

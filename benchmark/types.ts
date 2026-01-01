@@ -7,10 +7,12 @@ export interface BenchmarkCase {
   expectedOutcome?: string
 }
 
+export type BenchmarkMode = 'single' | 'parallel' | 'weak' | 'strong'
+
 export interface BenchmarkResult {
   caseId: string
   caseName: string
-  mode: 'single' | 'parallel' | 'strong'
+  mode: BenchmarkMode
   duration: number
   rounds: number
   consensus?: string

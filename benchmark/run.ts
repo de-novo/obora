@@ -32,7 +32,7 @@ async function main() {
   console.log(`\n📋 Running ${selected.cases.length} cases...\n`)
 
   const runner = new BenchmarkRunner({
-    modes: ['strong'],
+    // modes: 기본값 ['single', 'parallel', 'weak', 'strong']
     providers: ['claude', 'openai'],
     outputDir: './benchmark/results',
   })
