@@ -16,6 +16,20 @@
         "typescript": "^5",
       },
     },
+    "packages/cli": {
+      "name": "@obora/cli",
+      "version": "0.1.0",
+      "bin": {
+        "obora": "./src/index.ts",
+      },
+      "dependencies": {
+        "@obora/core": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "typescript": "^5",
+      },
+    },
     "packages/core": {
       "name": "@obora/core",
       "version": "0.1.0",
@@ -84,6 +98,8 @@
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@2.3.10", "", { "os": "win32", "cpu": "x64" }, "sha512-pHEFgq7dUEsKnqG9mx9bXihxGI49X+ar+UBrEIj3Wqj3UCZp1rNgV+OoyjFgcXsjCWpuEAF4VJdkZr3TrWdCbQ=="],
 
     "@google/generative-ai": ["@google/generative-ai@0.24.1", "", {}, "sha512-MqO+MLfM6kjxcKoy0p1wRzG3b4ZZXtPI+z2IE26UogS2Cm/XHO+7gGRBh6gcJsOiIVoH93UwKvW4HdgiOZCy9Q=="],
+
+    "@obora/cli": ["@obora/cli@workspace:packages/cli"],
 
     "@obora/core": ["@obora/core@workspace:packages/core"],
 

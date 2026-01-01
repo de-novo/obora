@@ -9,6 +9,7 @@
     "packages/*"
   ],
   "scripts": {
+    "obora": "bun packages/cli/src/index.ts",
     "typecheck": "tsc --noEmit",
     "lint": "biome check",
     "lint:fix": "biome check --write",

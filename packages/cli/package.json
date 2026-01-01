@@ -1,0 +1,20 @@
+{
+  "name": "@obora/cli",
+  "version": "0.1.0",
+  "description": "CLI tool for running multi-AI debates",
+  "type": "module",
+  "bin": {
+    "obora": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@obora/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5"
+  }
+}
