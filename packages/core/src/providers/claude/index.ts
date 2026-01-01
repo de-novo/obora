@@ -9,6 +9,12 @@ export interface ClaudeProviderConfig extends ProviderConfig {
 /**
  * CLI Backend for Claude
  * Uses claude CLI tool (headless mode)
+ *
+ * Runs in isolated mode:
+ * - No MCP servers (--strict-mcp-config with no config)
+ * - No skills/slash commands (--disable-slash-commands)
+ * - No tools (--tools "")
+ * - No user/project settings (--setting-sources "")
  */
 class ClaudeCLIBackend implements ProviderBackend {
   readonly type = 'cli' as const;
@@ -20,7 +26,10 @@ class ClaudeCLIBackend implements ProviderBackend {
       'claude',
       '-p', prompt,
       '--output-format', 'json',
+      // Isolation flags - run vanilla without MCP, skills, rules
+      '--tools', '',
       '--strict-mcp-config',
+      '--disable-slash-commands',
       '--setting-sources', '',
     ];
 
@@ -60,7 +69,10 @@ class ClaudeCLIBackend implements ProviderBackend {
       '-p', prompt,
       '--output-format', 'json',
       '--json-schema', JSON.stringify(schema),
+      // Isolation flags - run vanilla without MCP, skills, rules
+      '--tools', '',
       '--strict-mcp-config',
+      '--disable-slash-commands',
       '--setting-sources', '',
     ];
 

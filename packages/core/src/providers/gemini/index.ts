@@ -9,6 +9,10 @@ export interface GeminiProviderConfig extends ProviderConfig {
 /**
  * CLI Backend for Gemini
  * Uses gemini CLI tool (if available)
+ *
+ * Runs in isolated mode:
+ * - No MCP servers (--allowed-mcp-server-names with empty)
+ * - No extensions (--extensions with empty)
  */
 class GeminiCLIBackend implements ProviderBackend {
   readonly type = 'cli' as const;
@@ -16,7 +20,13 @@ class GeminiCLIBackend implements ProviderBackend {
   async execute(prompt: string, config: GeminiProviderConfig): Promise<ProviderResponse> {
     const startTime = Date.now();
 
-    const args = ['gemini', 'generate', '--prompt', prompt, '--format', 'json'];
+    const args = [
+      'gemini',
+      // Isolation flags - run vanilla without MCP, extensions
+      '--allowed-mcp-server-names', '',
+      '--extensions', '',
+      prompt,
+    ];
 
     if (config.model) {
       args.push('--model', config.model);

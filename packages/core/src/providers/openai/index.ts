@@ -9,6 +9,10 @@ export interface OpenAIProviderConfig extends ProviderConfig {
 /**
  * CLI Backend for OpenAI (Codex)
  * Uses codex CLI tool (headless mode)
+ *
+ * Runs in isolated mode:
+ * - Disable MCP via config (-c mcp.enabled=false)
+ * - Skip git repo check for standalone use
  */
 class OpenAICLIBackend implements ProviderBackend {
   readonly type = 'cli' as const;
@@ -16,7 +20,20 @@ class OpenAICLIBackend implements ProviderBackend {
   async execute(prompt: string, config: OpenAIProviderConfig): Promise<ProviderResponse> {
     const startTime = Date.now();
 
-    const proc = Bun.spawn(['codex', 'exec', prompt, '--json'], {
+    const args = [
+      'codex', 'exec',
+      // Isolation flags - disable MCP and external integrations
+      '-c', 'mcp.enabled=false',
+      '--skip-git-repo-check',
+      '--json',
+      prompt,
+    ];
+
+    if (config.model) {
+      args.push('--model', config.model);
+    }
+
+    const proc = Bun.spawn(args, {
       stdout: 'pipe',
       stderr: 'pipe',
     });
