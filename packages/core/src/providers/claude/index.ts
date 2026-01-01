@@ -118,6 +118,63 @@ class ClaudeCLIBackend implements ProviderBackend {
     return json.structured_output as T
   }
 
+  /**
+   * Stream response from CLI
+   * Uses claude -p without --output-format json for streaming
+   */
+  async *stream(prompt: string, config: ClaudeProviderConfig): AsyncGenerator<{ chunk: string; done: boolean }> {
+    // Build tools flag
+    const toolsValue = config.enabledTools?.length ? config.enabledTools.join(',') : ''
+
+    const args = [
+      'claude',
+      '-p',
+      prompt,
+      // No --output-format json for streaming plain text
+      '--tools',
+      toolsValue,
+      '--strict-mcp-config',
+      '--disable-slash-commands',
+      '--setting-sources',
+      '',
+    ]
+
+    if (config.model) {
+      args.push('--model', config.model)
+    }
+
+    const proc = Bun.spawn(args, {
+      stdout: 'pipe',
+      stderr: 'pipe',
+    })
+
+    const reader = proc.stdout.getReader()
+    const decoder = new TextDecoder()
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const chunk = decoder.decode(value, { stream: true })
+        if (chunk) {
+          yield { chunk, done: false }
+        }
+      }
+    } finally {
+      reader.releaseLock()
+    }
+
+    // Check for errors
+    const exitCode = await proc.exited
+    if (exitCode !== 0) {
+      const stderr = await new Response(proc.stderr).text()
+      throw new Error(`Claude CLI streaming failed: ${stderr}`)
+    }
+
+    yield { chunk: '', done: true }
+  }
+
   async isAvailable(): Promise<boolean> {
     try {
       const proc = Bun.spawn(['which', 'claude'], {
@@ -152,16 +209,18 @@ export class ClaudeProvider extends BaseProvider implements StructuredProvider {
   readonly name = 'claude'
   protected declare config: ClaudeProviderConfig
   private aiSdkBackend: AISDKBackend
+  private cliBackend: ClaudeCLIBackend
 
   constructor(config: ClaudeProviderConfig = {}) {
     super(config)
     this.config = config
 
-    // Create AI SDK backend
+    // Create backends
+    this.cliBackend = new ClaudeCLIBackend()
     this.aiSdkBackend = new AISDKBackend('anthropic', config)
 
     // Register backends (CLI first for fallback, then API)
-    this.registerBackend(new ClaudeCLIBackend())
+    this.registerBackend(this.cliBackend)
     this.registerBackend(this.aiSdkBackend)
   }
 
@@ -177,9 +236,16 @@ export class ClaudeProvider extends BaseProvider implements StructuredProvider {
 
   /**
    * Stream response chunks
+   * Uses API backend if apiKey provided, otherwise CLI backend
    */
   async *stream(prompt: string): AsyncGenerator<{ chunk: string; done: boolean }> {
-    yield* this.aiSdkBackend.stream(prompt, this.config)
+    // Use API if apiKey provided and not forcing CLI
+    if (this.config.apiKey && !this.config.forceCLI) {
+      yield* this.aiSdkBackend.stream(prompt, this.config)
+    } else {
+      // Use CLI streaming
+      yield* this.cliBackend.stream(prompt, this.config)
+    }
   }
 
   /**
