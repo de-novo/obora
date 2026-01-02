@@ -76,16 +76,8 @@ export {
   type StreamableProvider,
   type StructuredProvider,
 } from './providers'
-// Tools - Custom tools for advanced use cases (optional)
-// For basic fact-checking, use Provider's built-in tools:
+// Tools - For custom tool development (optional)
+// Built-in tools are available via Provider config:
 //   ClaudeProvider: enabledTools: ['WebSearch']
 //   OpenAIProvider: enableWebSearch: true
-//   GeminiProvider: enabledTools: ['google_web_search']
-export {
-  createDebateTools,
-  createWebSearchTool,
-  type DebateToolsConfig,
-  type WebSearchConfig,
-  type WebSearchResult,
-  webSearch,
-} from './tools'
+export { createDebateTools, type DebateToolsConfig } from './tools'

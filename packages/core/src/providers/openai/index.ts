@@ -1,13 +1,26 @@
+import type { Tool } from 'ai'
+import { generateText, stepCountIs } from 'ai'
 import { AISDKBackend } from '../ai-sdk'
 import { BaseProvider } from '../BaseProvider'
-import { OAuthBackend, isOAuthAvailable } from '../oauth-backend'
-import type { ProviderBackend, ProviderConfig, ProviderResponse } from '../types'
+import { isOAuthAvailable, OAuthBackend } from '../oauth-backend'
+import type {
+  ProviderBackend,
+  ProviderConfig,
+  ProviderResponse,
+  ToolEnabledProvider,
+  ToolEnabledResponse,
+} from '../types'
 
 export interface OpenAIProviderConfig extends ProviderConfig {
-  model?: 'gpt-4o' | 'gpt-4o-mini' | 'o1' | 'o1-mini' | string
+  model?: 'gpt-5.2' | 'gpt-5.2-codex' | 'gpt-4o' | 'o1' | string
   /**
-   * Enable web search for fact-checking during debates
-   * Uses Codex's --search flag
+   * Enable specific built-in tools for fact-checking during debates
+   * Available tools: WebSearch
+   * @example enabledTools: ['WebSearch']
+   */
+  enabledTools?: 'WebSearch'[]
+  /**
+   * @deprecated Use enabledTools: ['WebSearch'] instead
    */
   enableWebSearch?: boolean
 }
@@ -26,18 +39,9 @@ class OpenAICLIBackend implements ProviderBackend {
   async execute(prompt: string, config: OpenAIProviderConfig): Promise<ProviderResponse> {
     const startTime = Date.now()
 
-    const args = [
-      'codex',
-      'exec',
-      // Isolation flags - disable MCP and external integrations
-      '-c',
-      'mcp.enabled=false',
-      '--skip-git-repo-check',
-      '--json',
-    ]
+    const args = ['codex', 'exec', '-c', 'mcp.enabled=false', '--skip-git-repo-check', '--json']
 
-    // Enable web search if configured
-    if (config.enableWebSearch) {
+    if (config.enabledTools?.includes('WebSearch') || config.enableWebSearch) {
       args.push('--search')
     }
 
@@ -100,7 +104,7 @@ class OpenAICLIBackend implements ProviderBackend {
       '--json', // JSONL output for parsing
     ]
 
-    if (config.enableWebSearch) {
+    if (config.enabledTools?.includes('WebSearch') || config.enableWebSearch) {
       args.push('--search')
     }
 
@@ -126,25 +130,20 @@ class OpenAICLIBackend implements ProviderBackend {
 
         buffer += decoder.decode(value, { stream: true })
 
-        // Process complete JSONL lines
         const lines = buffer.split('\n')
-        buffer = lines.pop() || '' // Keep incomplete line in buffer
+        buffer = lines.pop() || ''
 
         for (const line of lines) {
           if (!line.trim()) continue
           try {
             const json = JSON.parse(line)
-            // Codex outputs complete items, not streaming deltas
-            // Extract text from agent_message items
             if (json.type === 'item.completed' && json.item?.type === 'agent_message') {
               const text = json.item.text || ''
               if (text) {
                 yield { chunk: text, done: false }
               }
             }
-          } catch {
-            // Non-JSON line, skip (could be stderr mixed in)
-          }
+          } catch {}
         }
       }
     } finally {
@@ -190,7 +189,7 @@ class OpenAICLIBackend implements ProviderBackend {
  *   model: 'gpt-4o',
  * });
  */
-export class OpenAIProvider extends BaseProvider {
+export class OpenAIProvider extends BaseProvider implements ToolEnabledProvider {
   readonly name = 'openai'
   protected declare config: OpenAIProviderConfig
   private aiSdkBackend: AISDKBackend
@@ -210,8 +209,28 @@ export class OpenAIProvider extends BaseProvider {
     this.registerBackend(this.oauthBackend)
   }
 
+  override async run(prompt: string): Promise<ProviderResponse> {
+    const hasWebSearch = this.config.enabledTools?.includes('WebSearch') || this.config.enableWebSearch
+
+    if (hasWebSearch) {
+      if (await this.cliBackend.isAvailable()) {
+        return this.cliBackend.execute(prompt, this.config)
+      }
+      throw new Error('OpenAI WebSearch requires Codex CLI (codex --search). OAuth WebSearch is not supported.')
+    }
+
+    return super.run(prompt)
+  }
+
   protected override async getBackend(): Promise<ProviderBackend> {
-    if (this.config.apiKey && !this.config.forceCLI) {
+    if (this.config.forceCLI) {
+      const cliBackend = this.backends.get('cli')
+      if (cliBackend && (await cliBackend.isAvailable())) {
+        return cliBackend
+      }
+    }
+
+    if (this.config.apiKey) {
       const apiBackend = this.backends.get('api')
       if (apiBackend && (await apiBackend.isAvailable())) {
         return apiBackend
@@ -240,10 +259,38 @@ export class OpenAIProvider extends BaseProvider {
     }
   }
 
-  /**
-   * Get the underlying AI SDK model for advanced usage
-   */
   getModel() {
     return this.aiSdkBackend.getModel(this.config.model)
+  }
+
+  async runWithTools(prompt: string, tools: Record<string, Tool>): Promise<ToolEnabledResponse> {
+    if (await isOAuthAvailable('openai')) {
+      return this.oauthBackend.runWithTools(prompt, tools, this.config)
+    }
+
+    const startTime = Date.now()
+    const model = this.getModel()
+
+    const { text, toolResults, usage } = await generateText({
+      model,
+      messages: [{ role: 'user', content: prompt }],
+      tools,
+      stopWhen: stepCountIs(5),
+    })
+
+    return {
+      content: text,
+      toolCalls: toolResults?.map((tr) => ({
+        toolName: tr.toolName,
+        args: tr.input as Record<string, unknown>,
+        result: tr.output,
+      })),
+      metadata: {
+        model: this.config.model || 'gpt-5.2',
+        tokensUsed: usage?.totalTokens,
+        latencyMs: Date.now() - startTime,
+        backend: 'api',
+      },
+    }
   }
 }

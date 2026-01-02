@@ -25,11 +25,7 @@ export abstract class BaseProvider implements Provider {
     this.backends.set(backend.type, backend)
   }
 
-  /**
-   * Get the appropriate backend based on config
-   */
   protected async getBackend(): Promise<ProviderBackend> {
-    // If API key provided and not forcing CLI, try API first
     if (this.config.apiKey && !this.config.forceCLI) {
       const apiBackend = this.backends.get('api')
       if (apiBackend && (await apiBackend.isAvailable())) {
@@ -37,7 +33,11 @@ export abstract class BaseProvider implements Provider {
       }
     }
 
-    // Fallback to CLI
+    const oauthBackend = this.backends.get('oauth')
+    if (oauthBackend && (await oauthBackend.isAvailable())) {
+      return oauthBackend
+    }
+
     const cliBackend = this.backends.get('cli')
     if (cliBackend && (await cliBackend.isAvailable())) {
       return cliBackend

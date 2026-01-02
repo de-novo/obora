@@ -165,7 +165,7 @@ export function startGoogleCallbackServer(
         fetch(req) {
           const url = new URL(req.url)
 
-          if (url.pathname === '/auth/callback') {
+          if (url.pathname === '/oauth-callback') {
             const code = url.searchParams.get('code')
             const state = url.searchParams.get('state')
             const error = url.searchParams.get('error')

@@ -13,24 +13,11 @@ export {
   logout,
   refreshAccessToken,
 } from './anthropic.ts'
-
-// OpenAI OAuth
-export {
-  type OpenAIAuthorizationResult,
-  createOpenAIAuthorizationUrl,
-  exchangeOpenAICodeForTokens,
-  getValidOpenAIAccessToken,
-  isOpenAIAuthenticated,
-  logoutOpenAI,
-  performOpenAILogin,
-  refreshOpenAIAccessToken,
-} from './openai.ts'
-
 // Google OAuth
 export {
-  type GoogleAuthorizationResult,
   createGoogleAuthorizationUrl,
   exchangeGoogleCodeForTokens,
+  type GoogleAuthorizationResult,
   getValidGoogleAccessToken,
   isGoogleAuthenticated,
   logoutGoogle,
@@ -43,6 +30,17 @@ export {
   findAvailablePort,
   startCallbackServer,
 } from './oauth-server.ts'
+// OpenAI OAuth
+export {
+  createOpenAIAuthorizationUrl,
+  exchangeOpenAICodeForTokens,
+  getValidOpenAIAccessToken,
+  isOpenAIAuthenticated,
+  logoutOpenAI,
+  type OpenAIAuthorizationResult,
+  performOpenAILogin,
+  refreshOpenAIAccessToken,
+} from './openai.ts'
 
 // PKCE
 export {
@@ -87,11 +85,11 @@ export type {
 export {
   ANTHROPIC_OAUTH_CONFIG,
   ANTHROPIC_REDIRECT_URI,
+  GOOGLE_CLIENT_SECRET,
+  GOOGLE_OAUTH_CONFIG,
+  GOOGLE_REDIRECT_URI,
   OPENAI_OAUTH_CONFIG,
   OPENAI_REDIRECT_URI,
-  GOOGLE_OAUTH_CONFIG,
-  GOOGLE_CLIENT_SECRET,
-  GOOGLE_REDIRECT_URI,
 } from './types.ts'
 
 // ============================================================================

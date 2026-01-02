@@ -9,8 +9,12 @@
  */
 
 import type { Tool } from 'ai'
-import type { Provider, StreamableProvider } from '../providers/types'
-import type { DebateEngineConfig, DebatePhase, DebateResult, DebateRound, PositionChange } from './types'
+import type { Provider, StreamableProvider, ToolEnabledProvider } from '../providers/types'
+import type { DebateEngineConfig, DebatePhase, DebateResult, DebateRound, PositionChange, ToolCall } from './types'
+
+function isToolEnabledProvider(provider: Provider): provider is ToolEnabledProvider {
+  return 'runWithTools' in provider && typeof (provider as ToolEnabledProvider).runWithTools === 'function'
+}
 
 /**
  * A participant in the debate with their AI provider.
@@ -389,20 +393,28 @@ export class DebateEngine {
 
       const prompt = PROMPTS.rebuttal(topic, othersOpinions, !!hasTools)
 
-      // TODO: Implement actual tool calling with AI SDK generateText
-      // For now, just use regular provider with enhanced prompt
-      const response = await participant.provider.run(prompt)
+      let content: string
+      let toolCalls: ToolCall[] | undefined
+
+      if (hasTools && isToolEnabledProvider(participant.provider)) {
+        const response = await participant.provider.runWithTools(prompt, tools)
+        content = response.content
+        toolCalls = response.toolCalls
+      } else {
+        const response = await participant.provider.run(prompt)
+        content = response.content
+      }
 
       rounds.push({
         phase: 'rebuttal',
         speaker: participant.name,
-        content: response.content,
+        content,
         timestamp: Date.now(),
-        // toolCalls will be populated when tool integration is complete
+        toolCalls,
       })
       history.push({
         role: `${participant.name}(rebuttal)`,
-        content: response.content,
+        content,
       })
     }
   }

@@ -174,6 +174,60 @@ export interface StructuredProvider extends Provider {
 }
 
 /**
+ * Result from a tool-enabled run.
+ */
+export interface ToolCallResult {
+  /** Name of the tool that was called */
+  toolName: string
+  /** Arguments passed to the tool */
+  args: Record<string, unknown>
+  /** Result returned by the tool */
+  result: unknown
+}
+
+/**
+ * Response from a tool-enabled provider run.
+ */
+export interface ToolEnabledResponse extends ProviderResponse {
+  /** Tools called during generation */
+  toolCalls?: ToolCallResult[]
+}
+
+/**
+ * Provider that supports tool calling during generation.
+ *
+ * Enables AI to call external tools (e.g., web search) during response generation.
+ * Uses AI SDK's generateText with tools support.
+ *
+ * @example
+ * ```typescript
+ * import { tool } from 'ai'
+ * import { z } from 'zod'
+ *
+ * const webSearch = tool({
+ *   description: 'Search the web',
+ *   parameters: z.object({ query: z.string() }),
+ *   execute: async ({ query }) => searchWeb(query)
+ * })
+ *
+ * const response = await provider.runWithTools(
+ *   'What is the current price of X?',
+ *   { webSearch }
+ * )
+ * console.log(response.toolCalls) // [{ toolName: 'webSearch', args: {...}, result: {...} }]
+ * ```
+ */
+export interface ToolEnabledProvider extends Provider {
+  /**
+   * Generate a response with access to tools.
+   * @param prompt - The input prompt
+   * @param tools - Tools available for the AI to call
+   * @returns Response with content and tool call history
+   */
+  runWithTools(prompt: string, tools: Record<string, import('ai').Tool>): Promise<ToolEnabledResponse>
+}
+
+/**
  * Backend implementation for executing prompts.
  *
  * Backends handle the low-level communication with AI services.

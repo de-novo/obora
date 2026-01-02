@@ -1,9 +1,10 @@
 import { AISDKBackend } from '../ai-sdk'
+import { AntigravityBackend } from '../antigravity-backend'
 import { BaseProvider } from '../BaseProvider'
 import type { ProviderBackend, ProviderConfig, ProviderResponse } from '../types'
 
 export interface GeminiProviderConfig extends ProviderConfig {
-  model?: 'gemini-2.0-flash' | 'gemini-1.5-pro' | 'gemini-1.5-flash' | string
+  model?: 'gemini-3-flash-preview' | 'gemini-3-pro-preview' | 'gemini-2.5-flash' | string
   /**
    * Enable specific built-in tools for fact-checking during debates
    * Available tools: google_web_search
@@ -138,57 +139,36 @@ class GeminiCLIBackend implements ProviderBackend {
   }
 }
 
-/**
- * Gemini AI Provider
- *
- * Supports both CLI and API backends:
- * - CLI: Uses 'gemini' command (if available)
- * - API: Uses Vercel AI SDK (@ai-sdk/google)
- *
- * @example
- * // CLI mode (default)
- * const gemini = new GeminiProvider();
- *
- * // API mode
- * const gemini = new GeminiProvider({
- *   apiKey: process.env.GOOGLE_API_KEY,
- *   model: 'gemini-2.0-flash',
- * });
- */
 export class GeminiProvider extends BaseProvider {
   readonly name = 'gemini'
   protected declare config: GeminiProviderConfig
   private aiSdkBackend: AISDKBackend
   private cliBackend: GeminiCLIBackend
+  private antigravityBackend: AntigravityBackend
 
   constructor(config: GeminiProviderConfig = {}) {
     super(config)
     this.config = config
 
-    // Create backends
     this.cliBackend = new GeminiCLIBackend()
     this.aiSdkBackend = new AISDKBackend('google', config)
+    this.antigravityBackend = new AntigravityBackend()
 
-    // Register backends (CLI first for fallback, then API)
+    this.registerBackend(this.antigravityBackend)
     this.registerBackend(this.cliBackend)
     this.registerBackend(this.aiSdkBackend)
   }
 
-  /**
-   * Stream response chunks
-   * Uses API backend if apiKey provided, otherwise CLI backend
-   */
   async *stream(prompt: string): AsyncGenerator<{ chunk: string; done: boolean }> {
     if (this.config.apiKey && !this.config.forceCLI) {
       yield* this.aiSdkBackend.stream(prompt, this.config)
+    } else if (await this.antigravityBackend.isAvailable()) {
+      yield* this.antigravityBackend.stream(prompt, this.config)
     } else {
       yield* this.cliBackend.stream(prompt, this.config)
     }
   }
 
-  /**
-   * Get the underlying AI SDK model for advanced usage
-   */
   getModel() {
     return this.aiSdkBackend.getModel(this.config.model)
   }

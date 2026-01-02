@@ -37,8 +37,8 @@ const PROVIDER_FACTORIES: Record<AISDKProviderType, ProviderFactory> = {
  * @see https://models.dev for latest model info
  */
 const DEFAULT_MODELS: Record<AISDKProviderType, string> = {
-  anthropic: 'claude-sonnet-4-5-20250929', // Claude Sonnet 4.5 - $3/$15 per 1M tokens
-  openai: 'gpt-5.2', // GPT-5.2 Thinking - $1.75/$14 per 1M tokens
+  anthropic: 'claude-opus-4-5-20251101', // Claude Opus 4.5 - $5/$25 per 1M tokens (flagship)
+  openai: 'gpt-5.2', // GPT-5.2 - Dec 2025, best for professional work
   google: 'gemini-3-flash', // Gemini 3 Flash - $0.50/$3 per 1M tokens (best value!)
 }
 

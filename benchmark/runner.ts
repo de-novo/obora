@@ -5,7 +5,8 @@ export interface BenchmarkRunnerConfig {
   modes: BenchmarkMode[]
   providers: Array<'claude' | 'openai' | 'gemini'>
   outputDir: string
-  concurrency: number // 병렬 실행 수
+  concurrency: number
+  enableWebSearch: boolean
 }
 
 export class BenchmarkRunner {
@@ -15,10 +16,11 @@ export class BenchmarkRunner {
 
   constructor(config: Partial<BenchmarkRunnerConfig> = {}) {
     this.config = {
-      modes: config.modes || ['single', 'parallel', 'weak', 'strong'], // 기본: 모든 모드
+      modes: config.modes || ['single', 'parallel', 'weak', 'strong'],
       providers: config.providers || ['claude', 'openai'],
       outputDir: config.outputDir || './benchmark/results',
-      concurrency: config.concurrency || 3, // 기본 3개 병렬
+      concurrency: config.concurrency || 3,
+      enableWebSearch: config.enableWebSearch ?? true,
     }
     this.runId = Date.now().toString()
   }
@@ -56,8 +58,14 @@ export class BenchmarkRunner {
   async runCase(testCase: BenchmarkCase, mode: BenchmarkMode): Promise<BenchmarkResult> {
     const startTime = Date.now()
 
-    const claude = new ClaudeProvider()
-    const openai = new OpenAIProvider()
+    const claude = new ClaudeProvider({
+      enabledTools: this.config.enableWebSearch ? ['WebSearch'] : [],
+      forceCLI: this.config.enableWebSearch,
+    })
+    const openai = new OpenAIProvider({
+      enableWebSearch: this.config.enableWebSearch,
+      forceCLI: this.config.enableWebSearch,
+    })
 
     let result: {
       rounds: Array<{ phase: string; speaker: string; content: string; timestamp: number }>
@@ -87,7 +95,6 @@ export class BenchmarkRunner {
         positionChanges: [],
       }
     } else {
-      // weak 또는 strong: DebateEngine 사용
       const engine = new DebateEngine({
         mode: mode === 'weak' ? 'weak' : 'strong',
         maxRounds: 10,

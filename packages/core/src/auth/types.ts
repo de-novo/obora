@@ -108,12 +108,14 @@ export const GOOGLE_OAUTH_CONFIG: OAuthProviderConfig = {
     'https://www.googleapis.com/auth/cloud-platform',
     'https://www.googleapis.com/auth/userinfo.email',
     'https://www.googleapis.com/auth/userinfo.profile',
+    'https://www.googleapis.com/auth/cclog',
+    'https://www.googleapis.com/auth/experimentsandconfigs',
   ],
-  redirectPortRange: [51121, 51121],
+  redirectPortRange: [36742, 36742],
 }
 
 export const GOOGLE_CLIENT_SECRET = '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'
-export const GOOGLE_REDIRECT_URI = 'http://localhost:51121/auth/callback'
+export const GOOGLE_REDIRECT_URI = 'http://localhost:36742/oauth-callback'
 
 // ============================================================================
 // PKCE

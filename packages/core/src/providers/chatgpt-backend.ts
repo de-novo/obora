@@ -1,15 +1,37 @@
+import type { Tool } from 'ai'
 import { getValidOpenAIAccessToken, loadProviderTokens } from '../auth'
-import type { ProviderBackend, ProviderConfig, ProviderResponse } from './types'
+import type { ProviderBackend, ProviderConfig, ProviderResponse, ToolCallResult, ToolEnabledResponse } from './types'
 
 const CHATGPT_BASE_URL = 'https://chatgpt.com/backend-api'
 const CODEX_RESPONSES_PATH = '/codex/responses'
 
 const DEFAULT_MODEL = 'gpt-5.2-codex'
+const MAX_TOOL_ITERATIONS = 5
 
 interface ChatGPTInputItem {
-  type: 'message'
-  role: 'user' | 'assistant' | 'developer'
-  content: { type: 'input_text'; text: string }[]
+  type: 'message' | 'function_call' | 'function_call_output'
+  role?: 'user' | 'assistant' | 'developer'
+  content?: { type: 'input_text'; text: string }[]
+  call_id?: string
+  name?: string
+  arguments?: string
+  output?: string
+}
+
+interface ChatGPTToolDefinition {
+  type: 'function'
+  name: string
+  description: string
+  strict: boolean
+  parameters: {
+    type: 'object'
+    properties: Record<string, unknown>
+    required?: string[]
+  }
+}
+
+interface ChatGPTWebSearchTool {
+  type: 'web_search_preview'
 }
 
 interface ChatGPTRequest {
@@ -18,8 +40,22 @@ interface ChatGPTRequest {
   instructions: string
   store: boolean
   stream: boolean
+  tools?: (ChatGPTToolDefinition | ChatGPTWebSearchTool)[]
+  tool_choice?: 'auto' | 'none' | 'required'
   reasoning?: { effort: string; summary: string }
   include?: string[]
+}
+
+interface FunctionCallEvent {
+  call_id: string
+  name: string
+  arguments: string
+}
+
+interface ParsedSSEResult {
+  text: string
+  functionCalls: FunctionCallEvent[]
+  done: boolean
 }
 
 function extractAccountIdFromToken(accessToken: string): string {
@@ -61,7 +97,7 @@ function getModelFamily(normalizedModel: string): ModelFamily {
   return 'gpt-5.1'
 }
 
-let cachedInstructions: Record<string, string> = {}
+const cachedInstructions: Record<string, string> = {}
 let cachedReleaseTag: string | null = null
 
 async function getLatestReleaseTag(): Promise<string> {
@@ -105,10 +141,28 @@ Be concise and accurate. Provide clear answers.`
   return fallback
 }
 
-async function transformToChatGPTFormat(prompt: string, model: string): Promise<ChatGPTRequest> {
+function convertToolsToCodexFormat(tools: Record<string, Tool>): ChatGPTToolDefinition[] {
+  return Object.entries(tools).map(([name, tool]) => {
+    const schema = tool.inputSchema as { toJSONSchema?: () => unknown }
+    const jsonSchema = schema.toJSONSchema?.() || { type: 'object', properties: {} }
+    return {
+      type: 'function' as const,
+      name,
+      description: tool.description || '',
+      strict: true,
+      parameters: jsonSchema as ChatGPTToolDefinition['parameters'],
+    }
+  })
+}
+
+async function transformToChatGPTFormat(
+  prompt: string,
+  model: string,
+  tools?: ChatGPTToolDefinition[],
+): Promise<ChatGPTRequest> {
   const instructions = await getCodexInstructions(model)
 
-  return {
+  const request: ChatGPTRequest = {
     model,
     input: [
       {
@@ -123,15 +177,23 @@ async function transformToChatGPTFormat(prompt: string, model: string): Promise<
     reasoning: { effort: 'medium', summary: 'auto' },
     include: ['reasoning.encrypted_content'],
   }
+
+  if (tools && tools.length > 0) {
+    request.tools = tools
+    request.tool_choice = 'auto'
+  }
+
+  return request
 }
 
-async function parseSSEResponse(response: Response): Promise<string> {
+async function parseSSEResponse(response: Response): Promise<ParsedSSEResult> {
   const reader = response.body?.getReader()
   if (!reader) throw new Error('No response body')
 
   const decoder = new TextDecoder()
   let buffer = ''
-  let result = ''
+  let text = ''
+  const functionCalls: FunctionCallEvent[] = []
 
   while (true) {
     const { done, value } = await reader.read()
@@ -150,11 +212,19 @@ async function parseSSEResponse(response: Response): Promise<string> {
         const parsed = JSON.parse(data)
 
         if (parsed.type === 'response.output_text.delta') {
-          result += parsed.delta || ''
+          text += parsed.delta || ''
         }
 
         if (parsed.type === 'response.output_item.done' && parsed.item?.content?.[0]?.text) {
-          result = parsed.item.content[0].text
+          text = parsed.item.content[0].text
+        }
+
+        if (parsed.type === 'response.output_item.done' && parsed.item?.type === 'function_call') {
+          functionCalls.push({
+            call_id: parsed.item.call_id,
+            name: parsed.item.name,
+            arguments: parsed.item.arguments,
+          })
         }
 
         if (parsed.type === 'response.done' && parsed.response?.output) {
@@ -162,9 +232,16 @@ async function parseSSEResponse(response: Response): Promise<string> {
             if (item.type === 'message' && item.content) {
               for (const content of item.content) {
                 if (content.type === 'output_text' && content.text) {
-                  result = content.text
+                  text = content.text
                 }
               }
+            }
+            if (item.type === 'function_call') {
+              functionCalls.push({
+                call_id: item.call_id,
+                name: item.name,
+                arguments: item.arguments,
+              })
             }
           }
         }
@@ -172,7 +249,7 @@ async function parseSSEResponse(response: Response): Promise<string> {
     }
   }
 
-  return result
+  return { text, functionCalls, done: functionCalls.length === 0 }
 }
 
 export class ChatGPTBackend implements ProviderBackend {
@@ -205,10 +282,10 @@ export class ChatGPTBackend implements ProviderBackend {
       throw new Error(`ChatGPT API error (${response.status}): ${errorText}`)
     }
 
-    const content = await parseSSEResponse(response)
+    const result = await parseSSEResponse(response)
 
     return {
-      content,
+      content: result.text,
       metadata: {
         model: modelId,
         latencyMs: Date.now() - startTime,
@@ -280,6 +357,173 @@ export class ChatGPTBackend implements ProviderBackend {
       return !!tokens
     } catch {
       return false
+    }
+  }
+
+  async runWithWebSearch(prompt: string, config: ProviderConfig): Promise<ToolEnabledResponse> {
+    const startTime = Date.now()
+    const modelId = config.model || 'gpt-4o'
+    const accessToken = await getValidOpenAIAccessToken()
+
+    const body = {
+      model: modelId,
+      input: prompt,
+      tools: [{ type: 'web_search_preview' }],
+    }
+
+    const response = await fetch('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(body),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`OpenAI Responses API error (${response.status}): ${errorText}`)
+    }
+
+    const data = (await response.json()) as { output?: { type: string; content?: { type: string; text?: string }[] }[] }
+    let text = ''
+
+    if (data.output) {
+      for (const item of data.output) {
+        if (item.type === 'message' && item.content) {
+          for (const content of item.content) {
+            if (content.type === 'output_text' && content.text) {
+              text += content.text
+            }
+          }
+        }
+      }
+    }
+
+    return {
+      content: text,
+      toolCalls: [],
+      metadata: {
+        model: modelId,
+        latencyMs: Date.now() - startTime,
+        backend: 'oauth',
+      },
+    }
+  }
+
+  async runWithTools(
+    prompt: string,
+    tools: Record<string, Tool>,
+    config: ProviderConfig,
+  ): Promise<ToolEnabledResponse> {
+    const startTime = Date.now()
+    const modelId = config.model || DEFAULT_MODEL
+    const accessToken = await getValidOpenAIAccessToken()
+    const accountId = extractAccountIdFromToken(accessToken)
+
+    const codexTools = convertToolsToCodexFormat(tools)
+    const instructions = await getCodexInstructions(modelId)
+
+    const input: ChatGPTInputItem[] = [
+      {
+        type: 'message',
+        role: 'user',
+        content: [{ type: 'input_text', text: prompt }],
+      },
+    ]
+
+    const allToolCalls: ToolCallResult[] = []
+    let finalText = ''
+    let iterations = 0
+
+    while (iterations < MAX_TOOL_ITERATIONS) {
+      iterations++
+
+      const body: ChatGPTRequest = {
+        model: modelId,
+        input,
+        instructions,
+        store: false,
+        stream: true,
+        tools: codexTools,
+        tool_choice: 'auto',
+        reasoning: { effort: 'medium', summary: 'auto' },
+        include: ['reasoning.encrypted_content'],
+      }
+
+      const response = await fetch(`${CHATGPT_BASE_URL}${CODEX_RESPONSES_PATH}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+          'chatgpt-account-id': accountId,
+          'OpenAI-Beta': 'responses=experimental',
+          originator: 'codex_cli_rs',
+          accept: 'text/event-stream',
+        },
+        body: JSON.stringify(body),
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(`ChatGPT API error (${response.status}): ${errorText}`)
+      }
+
+      const result = await parseSSEResponse(response)
+      finalText = result.text
+
+      if (result.done || result.functionCalls.length === 0) {
+        break
+      }
+
+      for (const fc of result.functionCalls) {
+        input.push({
+          type: 'function_call',
+          call_id: fc.call_id,
+          name: fc.name,
+          arguments: fc.arguments,
+        })
+
+        const tool = tools[fc.name]
+        if (tool?.execute) {
+          try {
+            const args = JSON.parse(fc.arguments)
+            const toolResult = await tool.execute(args, {
+              abortSignal: undefined as unknown as AbortSignal,
+              toolCallId: fc.call_id,
+              messages: [],
+            })
+
+            allToolCalls.push({
+              toolName: fc.name,
+              args,
+              result: toolResult,
+            })
+
+            input.push({
+              type: 'function_call_output',
+              call_id: fc.call_id,
+              output: typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult),
+            })
+          } catch (err) {
+            input.push({
+              type: 'function_call_output',
+              call_id: fc.call_id,
+              output: `Error: ${err instanceof Error ? err.message : String(err)}`,
+            })
+          }
+        }
+      }
+    }
+
+    return {
+      content: finalText,
+      toolCalls: allToolCalls,
+      metadata: {
+        model: modelId,
+        latencyMs: Date.now() - startTime,
+        backend: 'oauth',
+      },
     }
   }
 }

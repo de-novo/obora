@@ -1,7 +1,16 @@
+import type { Tool } from 'ai'
+import { generateText, stepCountIs } from 'ai'
 import { AISDKBackend } from '../ai-sdk'
 import { BaseProvider } from '../BaseProvider'
-import { OAuthBackend, isOAuthAvailable } from '../oauth-backend'
-import type { ProviderBackend, ProviderConfig, ProviderResponse, StructuredProvider } from '../types'
+import { isOAuthAvailable, OAuthBackend } from '../oauth-backend'
+import type {
+  ProviderBackend,
+  ProviderConfig,
+  ProviderResponse,
+  StructuredProvider,
+  ToolEnabledProvider,
+  ToolEnabledResponse,
+} from '../types'
 
 export interface ClaudeProviderConfig extends ProviderConfig {
   model?: 'claude-sonnet-4-20250514' | 'claude-opus-4-20250514' | 'claude-haiku-3-20250514' | string
@@ -206,7 +215,7 @@ class ClaudeCLIBackend implements ProviderBackend {
  *   model: 'claude-sonnet-4-20250514',
  * });
  */
-export class ClaudeProvider extends BaseProvider implements StructuredProvider {
+export class ClaudeProvider extends BaseProvider implements StructuredProvider, ToolEnabledProvider {
   readonly name = 'claude'
   protected declare config: ClaudeProviderConfig
   private aiSdkBackend: AISDKBackend
@@ -227,7 +236,14 @@ export class ClaudeProvider extends BaseProvider implements StructuredProvider {
   }
 
   protected override async getBackend(): Promise<ProviderBackend> {
-    if (this.config.apiKey && !this.config.forceCLI) {
+    if (this.config.forceCLI) {
+      const cliBackend = this.backends.get('cli')
+      if (cliBackend && (await cliBackend.isAvailable())) {
+        return cliBackend
+      }
+    }
+
+    if (this.config.apiKey) {
       const apiBackend = this.backends.get('api')
       if (apiBackend && (await apiBackend.isAvailable())) {
         return apiBackend
@@ -244,6 +260,21 @@ export class ClaudeProvider extends BaseProvider implements StructuredProvider {
     }
 
     throw new Error(`No available backend for provider: ${this.name}`)
+  }
+
+  override async run(prompt: string): Promise<ProviderResponse> {
+    const hasWebSearch = this.config.enabledTools?.includes('WebSearch')
+
+    if (hasWebSearch && (await isOAuthAvailable('anthropic'))) {
+      const result = await this.oauthBackend.runWithWebSearch(prompt, this.config)
+      return {
+        content: result.content,
+        raw: result,
+        metadata: result.metadata,
+      }
+    }
+
+    return super.run(prompt)
   }
 
   async runStructured<T>(prompt: string, schema: object): Promise<T> {
@@ -266,10 +297,38 @@ export class ClaudeProvider extends BaseProvider implements StructuredProvider {
     }
   }
 
-  /**
-   * Get the underlying AI SDK model for advanced usage
-   */
   getModel() {
     return this.aiSdkBackend.getModel(this.config.model)
+  }
+
+  async runWithTools(prompt: string, tools: Record<string, Tool>): Promise<ToolEnabledResponse> {
+    if (await isOAuthAvailable('anthropic')) {
+      return this.oauthBackend.runWithTools(prompt, tools, this.config)
+    }
+
+    const startTime = Date.now()
+    const model = this.getModel()
+
+    const { text, toolResults, usage } = await generateText({
+      model,
+      messages: [{ role: 'user', content: prompt }],
+      tools,
+      stopWhen: stepCountIs(5),
+    })
+
+    return {
+      content: text,
+      toolCalls: toolResults?.map((tr) => ({
+        toolName: tr.toolName,
+        args: tr.input as Record<string, unknown>,
+        result: tr.output,
+      })),
+      metadata: {
+        model: this.config.model || 'claude-opus-4-5-20251101',
+        tokensUsed: usage?.totalTokens,
+        latencyMs: Date.now() - startTime,
+        backend: 'api',
+      },
+    }
   }
 }

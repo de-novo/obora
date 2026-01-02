@@ -1,16 +1,16 @@
-import { ClaudeProvider } from '../src/providers/claude'
+import { OpenAIProvider } from '../src/providers/openai'
 
 async function main() {
-  console.log('Testing WebSearch integration...\n')
+  console.log('Testing OpenAI WebSearch integration...\n')
 
-  const claude = new ClaudeProvider({
+  const openai = new OpenAIProvider({
     enabledTools: ['WebSearch'],
   })
 
   console.log('Running query: "What is the current price of Bitcoin?"')
   console.log('---')
 
-  const result = await claude.run('What is the current price of Bitcoin? Search the web for the latest information.')
+  const result = await openai.run('What is the current price of Bitcoin? Search the web for the latest information.')
 
   console.log('\nResult:')
   console.log(result.content)
