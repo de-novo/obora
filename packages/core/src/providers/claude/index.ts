@@ -1,5 +1,6 @@
 import { AISDKBackend } from '../ai-sdk'
 import { BaseProvider } from '../BaseProvider'
+import { OAuthBackend, isOAuthAvailable } from '../oauth-backend'
 import type { ProviderBackend, ProviderConfig, ProviderResponse, StructuredProvider } from '../types'
 
 export interface ClaudeProviderConfig extends ProviderConfig {
@@ -210,18 +211,39 @@ export class ClaudeProvider extends BaseProvider implements StructuredProvider {
   protected declare config: ClaudeProviderConfig
   private aiSdkBackend: AISDKBackend
   private cliBackend: ClaudeCLIBackend
+  private oauthBackend: OAuthBackend
 
   constructor(config: ClaudeProviderConfig = {}) {
     super(config)
     this.config = config
 
-    // Create backends
     this.cliBackend = new ClaudeCLIBackend()
     this.aiSdkBackend = new AISDKBackend('anthropic', config)
+    this.oauthBackend = new OAuthBackend('anthropic')
 
-    // Register backends (CLI first for fallback, then API)
     this.registerBackend(this.cliBackend)
     this.registerBackend(this.aiSdkBackend)
+    this.registerBackend(this.oauthBackend)
+  }
+
+  protected override async getBackend(): Promise<ProviderBackend> {
+    if (this.config.apiKey && !this.config.forceCLI) {
+      const apiBackend = this.backends.get('api')
+      if (apiBackend && (await apiBackend.isAvailable())) {
+        return apiBackend
+      }
+    }
+
+    if (await isOAuthAvailable('anthropic')) {
+      return this.oauthBackend
+    }
+
+    const cliBackend = this.backends.get('cli')
+    if (cliBackend && (await cliBackend.isAvailable())) {
+      return cliBackend
+    }
+
+    throw new Error(`No available backend for provider: ${this.name}`)
   }
 
   async runStructured<T>(prompt: string, schema: object): Promise<T> {
@@ -234,16 +256,12 @@ export class ClaudeProvider extends BaseProvider implements StructuredProvider {
     throw new Error('Structured output not supported by current backend')
   }
 
-  /**
-   * Stream response chunks
-   * Uses API backend if apiKey provided, otherwise CLI backend
-   */
   async *stream(prompt: string): AsyncGenerator<{ chunk: string; done: boolean }> {
-    // Use API if apiKey provided and not forcing CLI
     if (this.config.apiKey && !this.config.forceCLI) {
       yield* this.aiSdkBackend.stream(prompt, this.config)
+    } else if (await isOAuthAvailable('anthropic')) {
+      yield* this.oauthBackend.stream(prompt, this.config)
     } else {
-      // Use CLI streaming
       yield* this.cliBackend.stream(prompt, this.config)
     }
   }

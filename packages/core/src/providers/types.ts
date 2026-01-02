@@ -42,7 +42,7 @@ export interface ProviderResponse {
     /** Response latency in milliseconds */
     latencyMs?: number
     /** Which backend was used */
-    backend?: 'cli' | 'api'
+    backend?: 'cli' | 'api' | 'oauth'
   }
 }
 
@@ -197,7 +197,7 @@ export interface StructuredProvider extends Provider {
  */
 export interface ProviderBackend {
   /** Backend type identifier */
-  readonly type: 'cli' | 'api'
+  readonly type: 'cli' | 'api' | 'oauth'
   /**
    * Execute a prompt and return the response.
    * @param prompt - The input prompt

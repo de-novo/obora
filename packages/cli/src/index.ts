@@ -10,6 +10,7 @@
  *   obora debate --file questions.txt --output results/
  */
 
+import { auth } from './commands/auth'
 import { debate } from './commands/debate'
 
 const HELP = `
@@ -19,6 +20,7 @@ Usage:
   obora <command> [options]
 
 Commands:
+  auth              Manage OAuth authentication
   debate <topic>    Run a debate on the given topic
 
 Options:
@@ -26,9 +28,10 @@ Options:
   -v, --version     Show version
 
 Examples:
+  obora auth login              # Login with Claude Pro/Max
+  obora auth login openai       # Login with ChatGPT Plus
+  obora auth status             # Check auth status
   obora debate "Should we migrate to microservices?"
-  obora debate "Topic" --mode strong --providers claude,openai
-  obora debate "Topic" --streaming
 `
 
 async function main() {
@@ -47,6 +50,9 @@ async function main() {
   const command = args[0]
 
   switch (command) {
+    case 'auth':
+      await auth(args.slice(1))
+      break
     case 'debate':
       await debate(args.slice(1))
       break

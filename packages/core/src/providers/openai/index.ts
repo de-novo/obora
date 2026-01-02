@@ -1,5 +1,6 @@
 import { AISDKBackend } from '../ai-sdk'
 import { BaseProvider } from '../BaseProvider'
+import { OAuthBackend, isOAuthAvailable } from '../oauth-backend'
 import type { ProviderBackend, ProviderConfig, ProviderResponse } from '../types'
 
 export interface OpenAIProviderConfig extends ProviderConfig {
@@ -194,27 +195,46 @@ export class OpenAIProvider extends BaseProvider {
   protected declare config: OpenAIProviderConfig
   private aiSdkBackend: AISDKBackend
   private cliBackend: OpenAICLIBackend
+  private oauthBackend: OAuthBackend
 
   constructor(config: OpenAIProviderConfig = {}) {
     super(config)
     this.config = config
 
-    // Create backends
     this.cliBackend = new OpenAICLIBackend()
     this.aiSdkBackend = new AISDKBackend('openai', config)
+    this.oauthBackend = new OAuthBackend('openai')
 
-    // Register backends (CLI first for fallback, then API)
     this.registerBackend(this.cliBackend)
     this.registerBackend(this.aiSdkBackend)
+    this.registerBackend(this.oauthBackend)
   }
 
-  /**
-   * Stream response chunks
-   * Uses API backend if apiKey provided, otherwise CLI backend
-   */
+  protected override async getBackend(): Promise<ProviderBackend> {
+    if (this.config.apiKey && !this.config.forceCLI) {
+      const apiBackend = this.backends.get('api')
+      if (apiBackend && (await apiBackend.isAvailable())) {
+        return apiBackend
+      }
+    }
+
+    if (await isOAuthAvailable('openai')) {
+      return this.oauthBackend
+    }
+
+    const cliBackend = this.backends.get('cli')
+    if (cliBackend && (await cliBackend.isAvailable())) {
+      return cliBackend
+    }
+
+    throw new Error(`No available backend for provider: ${this.name}`)
+  }
+
   async *stream(prompt: string): AsyncGenerator<{ chunk: string; done: boolean }> {
     if (this.config.apiKey && !this.config.forceCLI) {
       yield* this.aiSdkBackend.stream(prompt, this.config)
+    } else if (await isOAuthAvailable('openai')) {
+      yield* this.oauthBackend.stream(prompt, this.config)
     } else {
       yield* this.cliBackend.stream(prompt, this.config)
     }

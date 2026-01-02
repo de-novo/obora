@@ -86,11 +86,34 @@ export const ANTHROPIC_CONSOLE_OAUTH_CONFIG: OAuthProviderConfig = {
   redirectPortRange: [49152, 65535],
 }
 
-/**
- * Anthropic OAuth 리다이렉트 URI
- * console.anthropic.com의 콜백 페이지를 사용하여 코드를 표시
- */
 export const ANTHROPIC_REDIRECT_URI = 'https://console.anthropic.com/oauth/code/callback'
+
+export const OPENAI_OAUTH_CONFIG: OAuthProviderConfig = {
+  name: 'openai',
+  clientId: 'app_EMoamEEZ73f0CkXaXp7hrann',
+  authorizationUrl: 'https://auth.openai.com/oauth/authorize',
+  tokenUrl: 'https://auth.openai.com/oauth/token',
+  scopes: ['openid', 'profile', 'email', 'offline_access'],
+  redirectPortRange: [1455, 1455],
+}
+
+export const OPENAI_REDIRECT_URI = 'http://localhost:1455/auth/callback'
+
+export const GOOGLE_OAUTH_CONFIG: OAuthProviderConfig = {
+  name: 'google',
+  clientId: '1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com',
+  authorizationUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+  tokenUrl: 'https://oauth2.googleapis.com/token',
+  scopes: [
+    'https://www.googleapis.com/auth/cloud-platform',
+    'https://www.googleapis.com/auth/userinfo.email',
+    'https://www.googleapis.com/auth/userinfo.profile',
+  ],
+  redirectPortRange: [51121, 51121],
+}
+
+export const GOOGLE_CLIENT_SECRET = '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'
+export const GOOGLE_REDIRECT_URI = 'http://localhost:51121/auth/callback'
 
 // ============================================================================
 // PKCE

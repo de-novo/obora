@@ -1,9 +1,3 @@
-/**
- * OAuth 인증 모듈
- *
- * Claude Pro/Max 구독을 API로 직접 사용할 수 있도록 합니다.
- */
-
 // Anthropic OAuth
 export {
   type AnthropicRequestOptions,
@@ -19,6 +13,30 @@ export {
   logout,
   refreshAccessToken,
 } from './anthropic.ts'
+
+// OpenAI OAuth
+export {
+  type OpenAIAuthorizationResult,
+  createOpenAIAuthorizationUrl,
+  exchangeOpenAICodeForTokens,
+  getValidOpenAIAccessToken,
+  isOpenAIAuthenticated,
+  logoutOpenAI,
+  performOpenAILogin,
+  refreshOpenAIAccessToken,
+} from './openai.ts'
+
+// Google OAuth
+export {
+  type GoogleAuthorizationResult,
+  createGoogleAuthorizationUrl,
+  exchangeGoogleCodeForTokens,
+  getValidGoogleAccessToken,
+  isGoogleAuthenticated,
+  logoutGoogle,
+  performGoogleLogin,
+  refreshGoogleAccessToken,
+} from './google.ts'
 // OAuth Server
 export {
   type CallbackResult,
@@ -66,7 +84,15 @@ export type {
   ProviderAuthStatus,
   TokenResponse,
 } from './types.ts'
-export { ANTHROPIC_OAUTH_CONFIG, ANTHROPIC_REDIRECT_URI } from './types.ts'
+export {
+  ANTHROPIC_OAUTH_CONFIG,
+  ANTHROPIC_REDIRECT_URI,
+  OPENAI_OAUTH_CONFIG,
+  OPENAI_REDIRECT_URI,
+  GOOGLE_OAUTH_CONFIG,
+  GOOGLE_CLIENT_SECRET,
+  GOOGLE_REDIRECT_URI,
+} from './types.ts'
 
 // ============================================================================
 // 편의 함수: 전체 로그인 플로우

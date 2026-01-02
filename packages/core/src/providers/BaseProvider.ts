@@ -63,7 +63,7 @@ export abstract class BaseProvider implements Provider {
   /**
    * Get current backend type being used
    */
-  async getCurrentBackendType(): Promise<'cli' | 'api' | null> {
+  async getCurrentBackendType(): Promise<'cli' | 'api' | 'oauth' | null> {
     try {
       const backend = await this.getBackend()
       return backend.type

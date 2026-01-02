@@ -13,6 +13,9 @@ export {
   createAISDKBackend,
 } from './ai-sdk'
 
+// OAuth Backend
+export { OAuthBackend, isOAuthAvailable } from './oauth-backend'
+
 // Base class
 export { BaseProvider } from './BaseProvider'
 // Provider implementations
