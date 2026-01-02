@@ -157,6 +157,18 @@ export interface DebateResult {
  *   toolPhases: ['rebuttal']
  * }
  * ```
+ *
+ * @example Using native WebSearch
+ * ```typescript
+ * // Configure providers with enabledTools
+ * const claude = new ClaudeProvider({ enabledTools: ['WebSearch'] })
+ * const openai = new OpenAIProvider({ enabledTools: ['WebSearch'] })
+ *
+ * const engine = new DebateEngine({
+ *   mode: 'strong',
+ *   useNativeWebSearch: true // Uses provider's built-in WebSearch
+ * })
+ * ```
  */
 export interface DebateEngineConfig {
   /** Debate mode: 'strong' (with rebuttals) or 'weak' (simple) */
@@ -165,8 +177,20 @@ export interface DebateEngineConfig {
   maxRounds?: number
   /** Timeout in milliseconds (default: 300000 = 5 minutes) */
   timeout?: number
-  /** Tools to enable for fact-checking during debate */
+  /** Tools to enable for fact-checking during debate (AI SDK tools) */
   tools?: Record<string, Tool>
   /** Which phases should have tools enabled (default: ['rebuttal']) */
   toolPhases?: DebatePhase[]
+  /**
+   * Use provider's native WebSearch capability instead of custom AI SDK tools.
+   *
+   * When enabled, providers should be configured with `enabledTools: ['WebSearch']`.
+   * This uses each provider's built-in WebSearch implementation:
+   * - Claude: Anthropic's server-side `web_search_20250305`
+   * - OpenAI: Codex CLI with `--search` flag
+   * - Gemini: Google Search grounding via Antigravity backend
+   *
+   * @default false
+   */
+  useNativeWebSearch?: boolean
 }

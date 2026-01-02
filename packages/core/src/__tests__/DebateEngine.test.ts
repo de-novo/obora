@@ -355,4 +355,78 @@ describe('DebateEngine', () => {
       expect(result.unresolvedDisagreements.length).toBeGreaterThanOrEqual(0)
     })
   })
+
+  describe('useNativeWebSearch', () => {
+    test('config accepts useNativeWebSearch option', () => {
+      const engine = new DebateEngine({
+        mode: 'strong',
+        useNativeWebSearch: true,
+      })
+      const config = engine.getConfig()
+
+      expect(config.useNativeWebSearch).toBe(true)
+    })
+
+    test('defaults to no native websearch', () => {
+      const engine = new DebateEngine({ mode: 'strong' })
+      const config = engine.getConfig()
+
+      expect(config.useNativeWebSearch).toBeUndefined()
+    })
+
+    test('runs rebuttal phase with native websearch prompt', async () => {
+      const engine = new DebateEngine({
+        mode: 'strong',
+        useNativeWebSearch: true,
+        toolPhases: ['rebuttal'],
+      })
+
+      const promptsReceived: string[] = []
+      const mockProvider = new MockProvider('alice', ['Initial', 'Rebuttal', 'Revised'])
+      const originalRun = mockProvider.run.bind(mockProvider)
+      mockProvider.run = async (prompt: string) => {
+        promptsReceived.push(prompt)
+        return originalRun(prompt)
+      }
+
+      await engine.run({
+        topic: 'Test topic',
+        participants: [
+          { name: 'alice', provider: mockProvider },
+          { name: 'bob', provider: new MockProvider('bob', ['Initial', 'Rebuttal', 'Revised']) },
+        ],
+      })
+
+      const rebuttalPrompt = promptsReceived.find((p) => p.includes('Critical Reviewer'))
+      expect(rebuttalPrompt).toBeDefined()
+      expect(rebuttalPrompt).toContain('webSearch')
+    })
+
+    test('without native websearch, rebuttal prompt has no webSearch mention', async () => {
+      const engine = new DebateEngine({
+        mode: 'strong',
+        useNativeWebSearch: false,
+      })
+
+      const promptsReceived: string[] = []
+      const mockProvider = new MockProvider('alice', ['Initial', 'Rebuttal', 'Revised'])
+      const originalRun = mockProvider.run.bind(mockProvider)
+      mockProvider.run = async (prompt: string) => {
+        promptsReceived.push(prompt)
+        return originalRun(prompt)
+      }
+
+      await engine.run({
+        topic: 'Test topic',
+        participants: [
+          { name: 'alice', provider: mockProvider },
+          { name: 'bob', provider: new MockProvider('bob', ['Initial', 'Rebuttal', 'Revised']) },
+        ],
+      })
+
+      const rebuttalPrompt = promptsReceived.find((p) => p.includes('Critical Reviewer'))
+      expect(rebuttalPrompt).toBeDefined()
+      expect(rebuttalPrompt).not.toContain('webSearch')
+    })
+  })
 })

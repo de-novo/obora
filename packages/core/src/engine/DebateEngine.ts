@@ -297,7 +297,8 @@ export class DebateEngine {
 
       // Phase 2: Rebuttal round (with tools if configured)
       const rebuttalTools = config.toolPhases?.includes('rebuttal') ? config.tools : undefined
-      await this.runRebuttalPhase(topic, participants, rounds, history, rebuttalTools)
+      const useNativeWebSearch = config.toolPhases?.includes('rebuttal') && config.useNativeWebSearch
+      await this.runRebuttalPhase(topic, participants, rounds, history, rebuttalTools, useNativeWebSearch)
 
       // Phase 3: Revised positions (detect position changes)
       const initialPositions = this.extractPositions(rounds, 'initial')
@@ -382,8 +383,10 @@ export class DebateEngine {
     rounds: DebateRound[],
     history: { role: string; content: string }[],
     tools?: Record<string, Tool>,
+    useNativeWebSearch?: boolean,
   ): Promise<void> {
-    const hasTools = tools && Object.keys(tools).length > 0
+    const hasCustomTools = tools && Object.keys(tools).length > 0
+    const hasWebSearch = hasCustomTools || useNativeWebSearch
 
     for (const participant of participants) {
       const othersOpinions = history
@@ -391,12 +394,15 @@ export class DebateEngine {
         .map((h) => `[${h.role}] ${h.content}`)
         .join('\n\n---\n\n')
 
-      const prompt = PROMPTS.rebuttal(topic, othersOpinions, !!hasTools)
+      const prompt = PROMPTS.rebuttal(topic, othersOpinions, !!hasWebSearch)
 
       let content: string
       let toolCalls: ToolCall[] | undefined
 
-      if (hasTools && isToolEnabledProvider(participant.provider)) {
+      if (useNativeWebSearch) {
+        const response = await participant.provider.run(prompt)
+        content = response.content
+      } else if (hasCustomTools && isToolEnabledProvider(participant.provider)) {
         const response = await participant.provider.runWithTools(prompt, tools)
         content = response.content
         toolCalls = response.toolCalls
@@ -589,8 +595,8 @@ export class DebateEngine {
           .map((h) => `[${h.role}] ${h.content}`)
           .join('\n\n---\n\n')
 
-        // Streaming mode doesn't support tools yet
-        const prompt = PROMPTS.rebuttal(topic, othersOpinions, false)
+        const useNativeWebSearch = config.toolPhases?.includes('rebuttal') && config.useNativeWebSearch
+        const prompt = PROMPTS.rebuttal(topic, othersOpinions, !!useNativeWebSearch)
         let content = ''
 
         for await (const { chunk, done } of participant.provider.stream(prompt)) {
