@@ -311,6 +311,72 @@ for await (const event of engine.runStreaming(options)) {
 }
 ```
 
+### WebSearch for Fact-Checking
+
+Enable real-time web search during rebuttals for fact-checking claims:
+
+```typescript
+const claude = new ClaudeProvider({ enabledTools: ['WebSearch'] })
+const openai = new OpenAIProvider({ enabledTools: ['WebSearch'] })
+
+const engine = new DebateEngine({
+  mode: 'strong',
+  useNativeWebSearch: true,
+  toolPhases: ['rebuttal'],
+})
+
+const result = await engine.run({
+  topic: 'Should we use Railway for SOC2 compliance?',
+  participants: [
+    { name: 'claude', provider: claude },
+    { name: 'openai', provider: openai },
+  ],
+  orchestrator: claude,
+})
+```
+
+Each provider uses its native WebSearch:
+- **Claude**: Anthropic's `web_search_20250305` tool
+- **OpenAI**: Codex CLI with `--search` flag  
+- **Gemini**: Google Search grounding
+
+---
+
+## Development
+
+### Running Tests
+
+```bash
+bun install
+
+bun test                    # Unit tests (55 tests)
+bun test --watch           # Watch mode
+
+# E2E tests (requires API keys, incurs costs)
+ANTHROPIC_API_KEY=xxx OPENAI_API_KEY=xxx bun test e2e
+```
+
+### Type Check & Lint
+
+```bash
+cd packages/core && bunx tsc --noEmit   # Type check
+bun run lint                             # Biome lint
+bun run format                           # Biome format
+```
+
+### Project Structure
+
+```
+packages/
+├── core/           # @obora/core - DebateEngine, Providers
+│   ├── src/
+│   │   ├── engine/     # DebateEngine
+│   │   ├── providers/  # Claude, OpenAI, Gemini
+│   │   └── auth/       # OAuth support
+│   └── examples/
+└── cli/            # @obora/cli - Command line interface
+```
+
 ---
 
 ## Key Findings
