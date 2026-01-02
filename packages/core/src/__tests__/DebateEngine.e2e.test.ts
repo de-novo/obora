@@ -8,11 +8,11 @@
  */
 
 import { describe, expect, test } from 'bun:test'
-import { DebateEngine } from '../engine/DebateEngine'
 import type { DebateStreamEvent } from '../engine'
+import { DebateEngine } from '../engine/DebateEngine'
+import type { DebateResult } from '../engine/types'
 import { ClaudeProvider } from '../providers/claude'
 import { OpenAIProvider } from '../providers/openai'
-import type { DebateResult } from '../engine/types'
 
 const E2E_TIMEOUT = 600000
 const SIMPLE_TOPIC = 'Should a small startup use TypeScript or JavaScript for a new project?'
