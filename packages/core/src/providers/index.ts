@@ -12,13 +12,13 @@ export {
   type AISDKProviderType,
   createAISDKBackend,
 } from './ai-sdk'
+export { AntigravityBackend } from './antigravity-backend'
 // Base class
 export { BaseProvider } from './BaseProvider'
 // Provider implementations
 export { ClaudeProvider, type ClaudeProviderConfig } from './claude'
 export { GeminiProvider, type GeminiProviderConfig } from './gemini'
 export { isOAuthAvailable, OAuthBackend } from './oauth-backend'
-export { AntigravityBackend } from './antigravity-backend'
 export { OpenAIProvider, type OpenAIProviderConfig } from './openai'
 // Types
 export type {

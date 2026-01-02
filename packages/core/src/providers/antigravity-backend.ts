@@ -105,9 +105,7 @@ async function onboardFreeUser(accessToken: string): Promise<string | undefined>
           return data.response.cloudaicompanionProject.id
         }
         if (data.done) break
-      } catch {
-        continue
-      }
+      } catch {}
     }
     await sleep(3000)
   }
@@ -152,9 +150,7 @@ async function discoverProjectId(accessToken: string): Promise<string> {
           return cachedProjectId
         }
       }
-    } catch {
-      continue
-    }
+    } catch {}
   }
 
   throw new Error('Failed to discover or create Antigravity project. Ensure your Google account has access.')
@@ -215,7 +211,6 @@ async function generateContent(
       return (await response.json()) as AntigravityResponse
     } catch (e) {
       if (e instanceof Error && e.message.includes('Antigravity API error')) throw e
-      continue
     }
   }
 
@@ -276,9 +271,7 @@ export class AntigravityBackend implements ProviderBackend {
         })
 
         if (response.ok) break
-      } catch {
-        continue
-      }
+      } catch {}
     }
 
     if (!response?.ok) {
