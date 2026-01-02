@@ -81,3 +81,20 @@ export {
 //   ClaudeProvider: enabledTools: ['WebSearch']
 //   OpenAIProvider: enableWebSearch: true
 export { createDebateTools, type DebateToolsConfig } from './tools'
+// Skills - AgentSkills support for debate participants
+export {
+  isValidSkillFrontmatter,
+  SKILL_CONSTRAINTS,
+  SKILL_PATHS,
+  type Skill,
+  type SkillDiscoveryResult,
+  type SkillFrontmatter,
+  type SkillLoaderConfig,
+  type SkillMetadata,
+  type SkillMetadataFields,
+  type SkillResources,
+  type SkillSource,
+  type SkillValidationError,
+  type SkillWarning,
+  validateSkillFrontmatter,
+} from './skills'
