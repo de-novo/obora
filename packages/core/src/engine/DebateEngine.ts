@@ -10,6 +10,8 @@
 
 import type { Tool } from 'ai'
 import type { Provider, StreamableProvider, ToolEnabledProvider } from '../providers/types'
+import { SkillLoader } from '../skills/loader'
+import type { Skill } from '../skills/types'
 import type { DebateEngineConfig, DebatePhase, DebateResult, DebateRound, PositionChange, ToolCall } from './types'
 
 function isToolEnabledProvider(provider: Provider): provider is ToolEnabledProvider {
@@ -32,6 +34,8 @@ export interface DebateParticipant {
   name: string
   /** AI provider that will generate responses */
   provider: Provider
+  /** Skills assigned to this participant (overrides global skills) */
+  skills?: string[]
 }
 
 /**
@@ -134,25 +138,18 @@ const DEFAULT_CONFIG: DebateEngineConfig = {
  * Prompt templates for each debate phase
  */
 const PROMPTS = {
-  initial: (topic: string) => `Topic: ${topic}
+  initial: (topic: string, skillInstructions?: string) => {
+    const skillSection = skillInstructions ? `\n\n${skillInstructions}` : ''
+    return `Topic: ${topic}
 
 You must present a clear position as an expert on this topic.
 - Provide a specific recommendation
 - Clearly explain the reasoning behind your choice
-- Also mention potential risks`,
+- Also mention potential risks${skillSection}`
+  },
 
-  rebuttal: (topic: string, othersOpinions: string, hasTools: boolean) => `Topic: ${topic}
-
-Other experts' opinions:
-${othersOpinions}
-
-Your role: Critical Reviewer
-Point out problems, gaps, and underestimated risks in the above opinions.
-- Find weaknesses even if you agree
-- Avoid phrases like "Good point, but..."
-- Provide specific counterexamples or failure scenarios
-- Specify conditions under which the approach could fail${
-    hasTools
+  rebuttal: (topic: string, othersOpinions: string, hasTools: boolean, skillInstructions?: string) => {
+    const toolSection = hasTools
       ? `
 
 IMPORTANT: Before making factual claims, use the webSearch tool to verify:
@@ -163,9 +160,24 @@ IMPORTANT: Before making factual claims, use the webSearch tool to verify:
 
 Example: If you claim "Service X lacks SOC2", search to confirm this is current.`
       : ''
-  }`,
+    const skillSection = skillInstructions ? `\n\n${skillInstructions}` : ''
 
-  revised: (topic: string, allHistory: string) => `Topic: ${topic}
+    return `Topic: ${topic}
+
+Other experts' opinions:
+${othersOpinions}
+
+Your role: Critical Reviewer
+Point out problems, gaps, and underestimated risks in the above opinions.
+- Find weaknesses even if you agree
+- Avoid phrases like "Good point, but..."
+- Provide specific counterexamples or failure scenarios
+- Specify conditions under which the approach could fail${toolSection}${skillSection}`
+  },
+
+  revised: (topic: string, allHistory: string, skillInstructions?: string) => {
+    const skillSection = skillInstructions ? `\n\n${skillInstructions}` : ''
+    return `Topic: ${topic}
 
 Discussion so far:
 ${allHistory}
@@ -173,7 +185,8 @@ ${allHistory}
 Considering other experts' rebuttals:
 1. Revise your initial position if needed
 2. Defend with stronger evidence if you maintain your position
-3. Present your final recommendation`,
+3. Present your final recommendation${skillSection}`
+  },
 
   consensus: (historyStr: string) => `You are the debate moderator. An intense debate has concluded.
 
@@ -232,6 +245,8 @@ Please summarize:
  */
 export class DebateEngine {
   private config: DebateEngineConfig
+  private skillLoader: SkillLoader
+  private skillCache: Map<string, Skill> = new Map()
 
   /**
    * Create a new DebateEngine instance.
@@ -255,6 +270,9 @@ export class DebateEngine {
    */
   constructor(config: Partial<DebateEngineConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config }
+    this.skillLoader = new SkillLoader({
+      customSkillsPath: config.skillsPath,
+    })
   }
 
   /**
@@ -364,7 +382,9 @@ export class DebateEngine {
     history: { role: string; content: string }[],
   ): Promise<void> {
     for (const participant of participants) {
-      const prompt = PROMPTS.initial(topic)
+      const skills = await this.loadSkillsForParticipant(participant.name, participant.skills)
+      const skillInstructions = this.buildSkillPrompt(skills, phase)
+      const prompt = PROMPTS.initial(topic, skillInstructions || undefined)
       const response = await participant.provider.run(prompt)
 
       rounds.push({
@@ -394,7 +414,9 @@ export class DebateEngine {
         .map((h) => `[${h.role}] ${h.content}`)
         .join('\n\n---\n\n')
 
-      const prompt = PROMPTS.rebuttal(topic, othersOpinions, !!hasWebSearch)
+      const skills = await this.loadSkillsForParticipant(participant.name, participant.skills)
+      const skillInstructions = this.buildSkillPrompt(skills, 'rebuttal')
+      const prompt = PROMPTS.rebuttal(topic, othersOpinions, !!hasWebSearch, skillInstructions || undefined)
 
       let content: string
       let toolCalls: ToolCall[] | undefined
@@ -437,7 +459,9 @@ export class DebateEngine {
         .map((h) => `[${h.role}] ${h.content}`)
         .join('\n\n---\n\n')
 
-      const prompt = PROMPTS.revised(topic, allHistory)
+      const skills = await this.loadSkillsForParticipant(participant.name, participant.skills)
+      const skillInstructions = this.buildSkillPrompt(skills, 'revised')
+      const prompt = PROMPTS.revised(topic, allHistory, skillInstructions || undefined)
       const response = await participant.provider.run(prompt)
 
       rounds.push({
@@ -484,8 +508,6 @@ export class DebateEngine {
   }
 
   private extractDisagreements(consensus: string): string[] {
-    // Extract disagreements from consensus text
-    // Look for section about unresolved disagreements
     const lines = consensus.split('\n')
     const disagreements: string[] = []
     let inDisagreementSection = false
@@ -505,6 +527,103 @@ export class DebateEngine {
     }
 
     return disagreements
+  }
+
+  private getSkillsForParticipant(participantName: string, participantSkills?: string[]): string[] {
+    if (participantSkills && participantSkills.length > 0) {
+      return participantSkills
+    }
+    const perParticipant = this.config.skills?.participants?.[participantName]
+    if (perParticipant && perParticipant.length > 0) {
+      return perParticipant
+    }
+    return this.config.skills?.global ?? []
+  }
+
+  private async loadSkillsForParticipant(participantName: string, participantSkills?: string[]): Promise<Skill[]> {
+    const skillNames = this.getSkillsForParticipant(participantName, participantSkills)
+    if (skillNames.length === 0) return []
+
+    const skills: Skill[] = []
+    for (const name of skillNames) {
+      if (this.skillCache.has(name)) {
+        skills.push(this.skillCache.get(name)!)
+      } else {
+        try {
+          const skill = await this.skillLoader.load(name)
+          this.skillCache.set(name, skill)
+          skills.push(skill)
+        } catch {}
+      }
+    }
+    return skills
+  }
+
+  private buildSkillPrompt(skills: Skill[], phase: DebatePhase): string {
+    if (skills.length === 0) return ''
+
+    const phaseContext = {
+      initial: 'presenting your initial position',
+      rebuttal: 'critiquing other positions',
+      revised: 'revising your position',
+      consensus: 'summarizing the debate',
+    }
+
+    const escapeXml = (str: string) => str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+    const discoveryBlocks = skills
+      .map(
+        (skill) => `<skill>
+<name>
+${escapeXml(skill.name)}
+</name>
+<description>
+${escapeXml(skill.description)}
+</description>
+<location>
+${skill.location}
+</location>
+</skill>`,
+      )
+      .join('\n')
+
+    const activatedContents = skills
+      .map((skill) => {
+        const frontmatterLines = [
+          '---',
+          `name: ${skill.frontmatter.name}`,
+          `description: ${skill.frontmatter.description}`,
+        ]
+        if (skill.frontmatter.license) {
+          frontmatterLines.push(`license: ${skill.frontmatter.license}`)
+        }
+        if (skill.frontmatter.compatibility) {
+          frontmatterLines.push(`compatibility: ${skill.frontmatter.compatibility}`)
+        }
+        if (skill.frontmatter['allowed-tools']) {
+          frontmatterLines.push(`allowed-tools: ${skill.frontmatter['allowed-tools']}`)
+        }
+        frontmatterLines.push('---')
+
+        return `[${skill.name}]
+${frontmatterLines.join('\n')}
+
+${skill.instructions}`
+      })
+      .join('\n\n---\n\n')
+
+    return `<skills_context>
+<activation-phase>${phase}</activation-phase>
+<purpose>Apply these skills while ${phaseContext[phase]}</purpose>
+</skills_context>
+
+<available_skills>
+${discoveryBlocks}
+</available_skills>
+
+<activated_skill_contents>
+${activatedContents}
+</activated_skill_contents>`
   }
 
   /**
@@ -549,7 +668,9 @@ export class DebateEngine {
         timestamp: Date.now(),
       }
 
-      const prompt = PROMPTS.initial(topic)
+      const skills = await this.loadSkillsForParticipant(participant.name, participant.skills)
+      const skillInstructions = this.buildSkillPrompt(skills, 'initial')
+      const prompt = PROMPTS.initial(topic, skillInstructions || undefined)
       let content = ''
 
       for await (const { chunk, done } of participant.provider.stream(prompt)) {
@@ -596,7 +717,9 @@ export class DebateEngine {
           .join('\n\n---\n\n')
 
         const useNativeWebSearch = config.toolPhases?.includes('rebuttal') && config.useNativeWebSearch
-        const prompt = PROMPTS.rebuttal(topic, othersOpinions, !!useNativeWebSearch)
+        const skills = await this.loadSkillsForParticipant(participant.name, participant.skills)
+        const skillInstructions = this.buildSkillPrompt(skills, 'rebuttal')
+        const prompt = PROMPTS.rebuttal(topic, othersOpinions, !!useNativeWebSearch, skillInstructions || undefined)
         let content = ''
 
         for await (const { chunk, done } of participant.provider.stream(prompt)) {
@@ -641,7 +764,9 @@ export class DebateEngine {
           .map((h) => `[${h.role}] ${h.content}`)
           .join('\n\n---\n\n')
 
-        const prompt = PROMPTS.revised(topic, allHistory)
+        const skills = await this.loadSkillsForParticipant(participant.name, participant.skills)
+        const skillInstructions = this.buildSkillPrompt(skills, 'revised')
+        const prompt = PROMPTS.revised(topic, allHistory, skillInstructions || undefined)
         let content = ''
 
         for await (const { chunk, done } of participant.provider.stream(prompt)) {

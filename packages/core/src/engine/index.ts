@@ -21,5 +21,6 @@ export type {
   DebateResult,
   DebateRound,
   PositionChange,
+  SkillsConfig,
   ToolCall,
 } from './types'

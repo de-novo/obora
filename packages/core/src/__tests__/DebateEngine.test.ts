@@ -429,4 +429,225 @@ describe('DebateEngine', () => {
       expect(rebuttalPrompt).not.toContain('webSearch')
     })
   })
+
+  describe('skills integration', () => {
+    test('config accepts skills option', () => {
+      const engine = new DebateEngine({
+        mode: 'strong',
+        skills: {
+          global: ['fact-checker'],
+          participants: {
+            alice: ['devil-advocate'],
+          },
+        },
+      })
+      const config = engine.getConfig()
+
+      expect(config.skills?.global).toEqual(['fact-checker'])
+      expect(config.skills?.participants?.alice).toEqual(['devil-advocate'])
+    })
+
+    test('config accepts skillsPath option', () => {
+      const engine = new DebateEngine({
+        mode: 'strong',
+        skillsPath: '.custom/skills',
+      })
+      const config = engine.getConfig()
+
+      expect(config.skillsPath).toBe('.custom/skills')
+    })
+
+    test('injects global skills into prompts', async () => {
+      const engine = new DebateEngine({
+        mode: 'strong',
+        skills: {
+          global: ['fact-checker'],
+        },
+      })
+
+      const promptsReceived: string[] = []
+      const mockProvider = new MockProvider('alice', ['Initial', 'Rebuttal', 'Revised'])
+      const originalRun = mockProvider.run.bind(mockProvider)
+      mockProvider.run = async (prompt: string) => {
+        promptsReceived.push(prompt)
+        return originalRun(prompt)
+      }
+
+      await engine.run({
+        topic: 'Test topic',
+        participants: [
+          { name: 'alice', provider: mockProvider },
+          { name: 'bob', provider: new MockProvider('bob', ['Initial', 'Rebuttal', 'Revised']) },
+        ],
+      })
+
+      const initialPrompt = promptsReceived[0]
+      expect(initialPrompt).toContain('<available_skills>')
+      expect(initialPrompt).toContain('<activated_skill_contents>')
+      expect(initialPrompt).toContain('fact-checker')
+    })
+
+    test('injects per-participant skills into prompts', async () => {
+      const engine = new DebateEngine({
+        mode: 'strong',
+        skills: {
+          participants: {
+            alice: ['devil-advocate'],
+            bob: ['fact-checker'],
+          },
+        },
+      })
+
+      const alicePrompts: string[] = []
+      const bobPrompts: string[] = []
+
+      const aliceProvider = new MockProvider('alice', ['Initial', 'Rebuttal', 'Revised'])
+      const originalAliceRun = aliceProvider.run.bind(aliceProvider)
+      aliceProvider.run = async (prompt: string) => {
+        alicePrompts.push(prompt)
+        return originalAliceRun(prompt)
+      }
+
+      const bobProvider = new MockProvider('bob', ['Initial', 'Rebuttal', 'Revised'])
+      const originalBobRun = bobProvider.run.bind(bobProvider)
+      bobProvider.run = async (prompt: string) => {
+        bobPrompts.push(prompt)
+        return originalBobRun(prompt)
+      }
+
+      await engine.run({
+        topic: 'Test topic',
+        participants: [
+          { name: 'alice', provider: aliceProvider },
+          { name: 'bob', provider: bobProvider },
+        ],
+      })
+
+      expect(alicePrompts[0]).toContain('devil-advocate')
+      expect(bobPrompts[0]).toContain('fact-checker')
+    })
+
+    test('participant-level skills override global skills', async () => {
+      const engine = new DebateEngine({
+        mode: 'strong',
+        skills: {
+          global: ['fact-checker'],
+          participants: {
+            alice: ['devil-advocate'],
+          },
+        },
+      })
+
+      const alicePrompts: string[] = []
+
+      const aliceProvider = new MockProvider('alice', ['Initial', 'Rebuttal', 'Revised'])
+      const originalAliceRun = aliceProvider.run.bind(aliceProvider)
+      aliceProvider.run = async (prompt: string) => {
+        alicePrompts.push(prompt)
+        return originalAliceRun(prompt)
+      }
+
+      await engine.run({
+        topic: 'Test topic',
+        participants: [
+          { name: 'alice', provider: aliceProvider },
+          { name: 'bob', provider: new MockProvider('bob', ['Initial', 'Rebuttal', 'Revised']) },
+        ],
+      })
+
+      expect(alicePrompts[0]).toContain('devil-advocate')
+      expect(alicePrompts[0]).not.toContain('fact-checker')
+    })
+
+    test('participant.skills property overrides config skills', async () => {
+      const engine = new DebateEngine({
+        mode: 'strong',
+        skills: {
+          global: ['fact-checker'],
+          participants: {
+            alice: ['devil-advocate'],
+          },
+        },
+      })
+
+      const alicePrompts: string[] = []
+
+      const aliceProvider = new MockProvider('alice', ['Initial', 'Rebuttal', 'Revised'])
+      const originalAliceRun = aliceProvider.run.bind(aliceProvider)
+      aliceProvider.run = async (prompt: string) => {
+        alicePrompts.push(prompt)
+        return originalAliceRun(prompt)
+      }
+
+      await engine.run({
+        topic: 'Test topic',
+        participants: [
+          { name: 'alice', provider: aliceProvider, skills: ['synthesizer'] },
+          { name: 'bob', provider: new MockProvider('bob', ['Initial', 'Rebuttal', 'Revised']) },
+        ],
+      })
+
+      expect(alicePrompts[0]).toContain('synthesizer')
+      expect(alicePrompts[0]).not.toContain('devil-advocate')
+      expect(alicePrompts[0]).not.toContain('fact-checker')
+    })
+
+    test('skill prompts include phase context', async () => {
+      const engine = new DebateEngine({
+        mode: 'strong',
+        skills: {
+          global: ['fact-checker'],
+        },
+      })
+
+      const promptsReceived: string[] = []
+      const mockProvider = new MockProvider('alice', ['Initial', 'Rebuttal', 'Revised'])
+      const originalRun = mockProvider.run.bind(mockProvider)
+      mockProvider.run = async (prompt: string) => {
+        promptsReceived.push(prompt)
+        return originalRun(prompt)
+      }
+
+      await engine.run({
+        topic: 'Test topic',
+        participants: [
+          { name: 'alice', provider: mockProvider },
+          { name: 'bob', provider: new MockProvider('bob', ['Initial', 'Rebuttal', 'Revised']) },
+        ],
+      })
+
+      const initialPrompt = promptsReceived[0]
+      const rebuttalPrompt = promptsReceived[1]
+      const revisedPrompt = promptsReceived[2]
+
+      expect(initialPrompt).toContain('<activation-phase>initial</activation-phase>')
+      expect(rebuttalPrompt).toContain('<activation-phase>rebuttal</activation-phase>')
+      expect(revisedPrompt).toContain('<activation-phase>revised</activation-phase>')
+    })
+
+    test('no skills injection when skills config is empty', async () => {
+      const engine = new DebateEngine({
+        mode: 'weak',
+      })
+
+      const promptsReceived: string[] = []
+      const mockProvider = new MockProvider('alice', ['Initial'])
+      const originalRun = mockProvider.run.bind(mockProvider)
+      mockProvider.run = async (prompt: string) => {
+        promptsReceived.push(prompt)
+        return originalRun(prompt)
+      }
+
+      await engine.run({
+        topic: 'Test topic',
+        participants: [
+          { name: 'alice', provider: mockProvider },
+          { name: 'bob', provider: new MockProvider('bob', ['Initial']) },
+        ],
+      })
+
+      expect(promptsReceived[0]).not.toContain('<available_skills>')
+      expect(promptsReceived[0]).not.toContain('<skills_context>')
+    })
+  })
 })

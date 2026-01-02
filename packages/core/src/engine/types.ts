@@ -170,6 +170,27 @@ export interface DebateResult {
  * })
  * ```
  */
+/**
+ * Skills configuration for debate participants.
+ *
+ * @example
+ * ```typescript
+ * const skillsConfig: SkillsConfig = {
+ *   global: ['fact-checker', 'source-validator'],
+ *   participants: {
+ *     pro: ['persuasion'],
+ *     con: ['devil-advocate']
+ *   }
+ * }
+ * ```
+ */
+export interface SkillsConfig {
+  /** Skills available to all participants */
+  global?: string[]
+  /** Per-participant skill assignments (participant name → skill names) */
+  participants?: Record<string, string[]>
+}
+
 export interface DebateEngineConfig {
   /** Debate mode: 'strong' (with rebuttals) or 'weak' (simple) */
   mode: DebateMode
@@ -193,4 +214,8 @@ export interface DebateEngineConfig {
    * @default false
    */
   useNativeWebSearch?: boolean
+  /** Skills configuration for debate participants */
+  skills?: SkillsConfig
+  /** Custom path for user-defined skills (default: '.ai/skills') */
+  skillsPath?: string
 }

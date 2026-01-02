@@ -4,6 +4,8 @@
  * Provides types and utilities for AgentSkills integration
  */
 
+// Loader
+export { SkillLoader, SkillNotFoundError } from './loader'
 export {
   // Validation
   isValidSkillFrontmatter,
@@ -24,6 +26,3 @@ export {
   type SkillWarning,
   validateSkillFrontmatter,
 } from './types'
-
-// Loader
-export { SkillLoader, SkillNotFoundError } from './loader'
