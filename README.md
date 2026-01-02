@@ -253,6 +253,24 @@ Phase 4: Orchestrator Consensus
 
 ## Getting Started
 
+### Authentication
+
+Use your existing AI subscriptions - no API keys required:
+
+```bash
+# Login with OAuth (opens browser)
+obora auth login anthropic   # Claude Pro/Max subscription
+obora auth login openai      # ChatGPT Plus subscription
+obora auth login google      # Gemini subscription
+
+# Check status
+obora auth status
+
+# Logout
+obora auth logout            # All providers
+obora auth logout anthropic  # Specific provider
+```
+
 ### CLI (Recommended)
 
 ```bash
@@ -287,15 +305,23 @@ bun run obora debate "Topic" --output result.json
 ```typescript
 import { DebateEngine, ClaudeProvider, OpenAIProvider } from '@obora/core'
 
+// Option 1: Use OAuth (requires `obora auth login` first)
+const claude = new ClaudeProvider()  // Uses stored OAuth tokens
+const openai = new OpenAIProvider()
+
+// Option 2: Use API keys
+const claudeWithKey = new ClaudeProvider({ apiKey: process.env.ANTHROPIC_API_KEY })
+const openaiWithKey = new OpenAIProvider({ apiKey: process.env.OPENAI_API_KEY })
+
 const engine = new DebateEngine({ mode: 'strong' })
 
 const result = await engine.run({
   topic: 'Should we migrate to microservices?',
   participants: [
-    { name: 'claude', provider: new ClaudeProvider() },
-    { name: 'openai', provider: new OpenAIProvider() },
+    { name: 'claude', provider: claude },
+    { name: 'openai', provider: openai },
   ],
-  orchestrator: new ClaudeProvider(),
+  orchestrator: claude,
 })
 
 console.log(result.consensus)
