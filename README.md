@@ -1,5 +1,7 @@
 # Obora: Multi-AI Debate System
 
+[![CI](https://github.com/de-novo/obora/actions/workflows/ci.yml/badge.svg)](https://github.com/de-novo/obora/actions/workflows/ci.yml)
+
 > AIs **challenge, critique, and revise** each other's positions to reach better conclusions
 
 ## Core Value

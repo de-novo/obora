@@ -1,1 +1,9 @@
-bunx biome check --write --staged
+# Run biome on staged files. Exit 0 if no files to check.
+bunx biome check --write --staged 2>&1 | tee /tmp/biome-output.txt
+result=${PIPESTATUS[0]}
+if [ $result -ne 0 ]; then
+  if grep -q "No files were processed" /tmp/biome-output.txt; then
+    exit 0
+  fi
+  exit $result
+fi
