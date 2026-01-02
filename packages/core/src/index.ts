@@ -76,11 +76,6 @@ export {
   type StreamableProvider,
   type StructuredProvider,
 } from './providers'
-// Tools - For custom tool development (optional)
-// Built-in tools are available via Provider config:
-//   ClaudeProvider: enabledTools: ['WebSearch']
-//   OpenAIProvider: enableWebSearch: true
-export { createDebateTools, type DebateToolsConfig } from './tools'
 // Skills - AgentSkills support for debate participants
 export {
   isValidSkillFrontmatter,
@@ -89,12 +84,19 @@ export {
   type Skill,
   type SkillDiscoveryResult,
   type SkillFrontmatter,
+  SkillLoader,
   type SkillLoaderConfig,
   type SkillMetadata,
   type SkillMetadataFields,
+  SkillNotFoundError,
   type SkillResources,
   type SkillSource,
   type SkillValidationError,
   type SkillWarning,
   validateSkillFrontmatter,
 } from './skills'
+// Tools - For custom tool development (optional)
+// Built-in tools are available via Provider config:
+//   ClaudeProvider: enabledTools: ['WebSearch']
+//   OpenAIProvider: enableWebSearch: true
+export { createDebateTools, type DebateToolsConfig } from './tools'
