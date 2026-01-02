@@ -467,6 +467,7 @@ Limitations identified in academic research:
 ## Related Documents
 
 - [API Reference](./docs/API.md)
+- [Skills Authoring Guide](./docs/skills/README.md)
 - [Roadmap](./docs/ROADMAP.md)
 - [Planning](./docs/PLANNING.md)
 - [Benchmark Analysis](./docs/BENCHMARK_ANALYSIS.md)
