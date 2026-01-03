@@ -15,25 +15,9 @@ import type { Provider } from '../providers/types'
 // ============================================================================
 
 export const AGENT_PATHS = {
-  /**
-   * Default custom agents path (relative to project root)
-   */
   custom: '.ai/agents',
-
-  /**
-   * Built-in agents path (relative to @obora/core package)
-   */
   builtin: 'agents',
-
-  /**
-   * AGENT.md filename
-   */
-  agentFile: 'AGENT.md',
-
-  /**
-   * Glob pattern for discovering agents
-   */
-  globPattern: '**/AGENT.md',
+  globPattern: '**/*.md',
 } as const
 
 // ============================================================================
@@ -198,11 +182,7 @@ export interface AgentFrontmatter {
     deny?: string[]
   }
 
-  // Skills dependency
-  skills?: {
-    required?: string[]
-    optional?: string[]
-  }
+  skills?: string[]
 
   // Trigger conditions
   triggers?: TriggerCondition[]

@@ -5,10 +5,8 @@
  */
 
 export { AgentLoader } from './loader'
-
+export { AgentRunner, type AgentRunnerConfig } from './runner'
 import { AgentRunner } from './runner'
-
-export { AgentRunner } from './runner'
 export * from './types'
 
 // Pre-built debate agents

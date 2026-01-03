@@ -40,11 +40,11 @@ function parseFrontmatter(content: string): { frontmatter: unknown; body: string
 
 function extractAgentName(filePath: string): string {
   const parts = filePath.split('/')
-  const agentName = parts[parts.length - 2]
-  if (!agentName) {
+  const fileName = parts[parts.length - 1]
+  if (!fileName) {
     throw new Error(`Invalid agent path: ${filePath}`)
   }
-  return agentName
+  return fileName.replace(/\.md$/, '')
 }
 
 function extractCategory(filePath: string, basePath: string): string | null {
@@ -53,7 +53,7 @@ function extractCategory(filePath: string, basePath: string): string | null {
   const relativePath = normalizedFile.replace(normalizedBase, '').replace(/^\//, '')
   const parts = relativePath.split('/')
 
-  if (parts.length >= 3 && parts[0]) {
+  if (parts.length >= 2 && parts[0]) {
     return parts[0]
   }
   return null
@@ -254,7 +254,7 @@ export class AgentLoader {
     const { frontmatter, body } = parseFrontmatter(content)
     const fm = frontmatter as AgentFrontmatter
 
-    const agentDir = filePath.replace(`/${AGENT_PATHS.agentFile}`, '')
+    const agentDir = filePath.replace(/\.md$/, '')
     const basePath = filePath.includes(this.builtInPath) ? this.builtInPath : this.customPath
 
     const agent: Agent = {
@@ -281,7 +281,7 @@ export class AgentLoader {
    */
   private async findInPath(agentName: string, basePath: string, isBuiltIn: boolean): Promise<Agent | null> {
     try {
-      const glob = new Bun.Glob(`**/${agentName}/${AGENT_PATHS.agentFile}`)
+      const glob = new Bun.Glob(`**/${agentName}.md`)
       const files = glob.scanSync({ cwd: basePath, absolute: true })
 
       for (const filePath of files) {

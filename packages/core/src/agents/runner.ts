@@ -7,6 +7,7 @@
  * - parallel: Independent concurrent execution
  */
 
+import { SkillLoader, type Skill } from '../skills'
 import { AgentLoader, parseFrontmatter } from './loader'
 import {
   type Agent,
@@ -32,14 +33,43 @@ import {
 // AgentRunner Class
 // ============================================================================
 
+export interface AgentRunnerConfig {
+  customAgentsPath?: string
+  customSkillsPath?: string
+}
+
 export class AgentRunner {
   private loader: AgentLoader
+  private skillLoader: SkillLoader
   private sessionCounter = 0
   private activeSessions = new Map<string, AgentContext>()
   private handoffQueue = new Map<string, HandoffRequest>()
 
-  constructor() {
-    this.loader = new AgentLoader()
+  constructor(config: AgentRunnerConfig = {}) {
+    this.loader = new AgentLoader({ customAgentsPath: config.customAgentsPath })
+    this.skillLoader = new SkillLoader({ customSkillsPath: config.customSkillsPath })
+  }
+
+  private async loadSkillsForAgent(agent: Agent): Promise<Skill[]> {
+    const skillNames = agent.frontmatter.skills
+    if (!skillNames?.length) return []
+
+    const loaded = new Map<string, Skill>()
+
+    for (const skillName of skillNames) {
+      if (loaded.has(skillName)) continue
+      try {
+        loaded.set(skillName, await this.skillLoader.load(skillName))
+      } catch {}
+    }
+
+    return Array.from(loaded.values())
+  }
+
+  private buildPrompt(agent: Agent, context: AgentContext, skills: Skill[]): string {
+    const skillPrompt = skills.length > 0 ? this.skillLoader.toPrompt(skills) : ''
+    const agentPrompt = this.loader.toPrompt(agent, context)
+    return skillPrompt ? `${skillPrompt}\n\n${agentPrompt}` : agentPrompt
   }
 
   // ============================================================================
@@ -67,7 +97,6 @@ export class AgentRunner {
       const agent = await this.loader.load(agentName)
       const fm = agent.frontmatter
 
-      // Build context
       const context: AgentContext = {
         agent,
         task,
@@ -77,13 +106,11 @@ export class AgentRunner {
         activeFiles: options.activeFiles || [],
       }
 
-      // Store context
       this.activeSessions.set(sessionId, context)
 
-      // Generate prompt
-      const prompt = this.loader.toPrompt(agent, context)
+      const skills = await this.loadSkillsForAgent(agent)
+      const prompt = this.buildPrompt(agent, context, skills)
 
-      // Execute based on output format
       const timeout = options.timeout || fm.invocation.timeout || 60000
       const output = await this.executeAgent(agent, prompt, fm.output, timeout)
 
@@ -128,10 +155,10 @@ export class AgentRunner {
         activeFiles: options.activeFiles || [],
       }
 
-      const prompt = this.loader.toPrompt(agent, context)
+      const skills = await this.loadSkillsForAgent(agent)
+      const prompt = this.buildPrompt(agent, context, skills)
       const timeout = options.timeout || fm.invocation.timeout || 60000
 
-      // Stream execution
       yield* this.streamExecution(agent, prompt, fm.output, sessionId, timeout)
     } catch (err) {
       yield {
@@ -207,7 +234,6 @@ export class AgentRunner {
         console.warn(`Agent '${agentName}' is not configured for handoff mode`)
       }
 
-      // Build extended context for handoff
       const context: AgentContext = {
         agent,
         task,
@@ -224,7 +250,8 @@ export class AgentRunner {
 
       this.activeSessions.set(sessionId, context)
 
-      const prompt = this.loader.toPrompt(agent, context)
+      const skills = await this.loadSkillsForAgent(agent)
+      const prompt = this.buildPrompt(agent, context, skills)
       const output = await this.executeAgent(agent, prompt, fm.output, fm.invocation.timeout || 120000)
 
       return this.createSuccessResult(output, sessionId, Date.now() - startTime, [])
@@ -468,7 +495,6 @@ export class AgentRunner {
     try {
       const aggregator = await this.loader.load(aggregatorName)
 
-      // Build summary of all results
       const summary = results.map((r, i) => ({
         index: i + 1,
         success: r.success,
@@ -493,11 +519,14 @@ ${
 Please synthesize these results into a comprehensive summary.
       `.trim()
 
-      const prompt = this.loader.toPrompt(aggregator, {
+      const context: AgentContext = {
         agent: aggregator,
         task: aggregateTask,
         sessionId,
-      })
+      }
+
+      const skills = await this.loadSkillsForAgent(aggregator)
+      const prompt = this.buildPrompt(aggregator, context, skills)
 
       const output = await this.executeAgent(aggregator, prompt, aggregator.frontmatter.output, 60000)
 

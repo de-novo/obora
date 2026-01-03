@@ -158,7 +158,7 @@ bun run check
 
 ### Commit Convention
 
-모든 커밋은 관련 이슈와 연결되어야 합니다.
+All commits should be linked to a relevant issue.
 
 #### Format
 
@@ -172,47 +172,47 @@ bun run check
 
 | Type | Description |
 |------|-------------|
-| `feat` | 새로운 기능 |
-| `fix` | 버그 수정 |
-| `docs` | 문서 변경 |
-| `refactor` | 리팩토링 (기능 변경 없음) |
-| `test` | 테스트 추가/수정 |
-| `chore` | 빌드, 설정 등 기타 변경 |
+| `feat` | New feature |
+| `fix` | Bug fix |
+| `docs` | Documentation changes |
+| `refactor` | Refactoring (no functional changes) |
+| `test` | Adding/modifying tests |
+| `chore` | Build, config, and other changes |
 
 #### Scopes
 
 | Scope | Description |
 |-------|-------------|
-| `engine` | 토론 엔진 (DebateEngine) |
+| `engine` | Debate engine (DebateEngine) |
 | `providers` | AI Provider (Claude, OpenAI, Gemini) |
-| `tools` | 도구 (WebSearch 등) |
-| `cli` | CLI 도구 |
-| `auth` | 인증 |
-| `config` | 설정 |
+| `tools` | Tools (WebSearch, etc.) |
+| `cli` | CLI tool |
+| `auth` | Authentication |
+| `config` | Configuration |
 
 #### Examples
 
 ```bash
-# 기능 추가 (Issue #2)
+# Adding a feature (Issue #2)
 feat(engine): add streaming support (#2)
 
-# 버그 수정 (Issue #15)
+# Bug fix (Issue #15)
 fix(providers): fix Claude CLI timeout (#15)
 
-# 리팩토링 (Issue #1)
+# Refactoring (Issue #1)
 refactor(tools): make custom tools optional (#1)
 
-# 이슈 없는 경우 (문서, 린터 등)
+# Without issue (docs, linter, etc.)
 docs: update README with benchmark results
 chore: apply linter formatting
 ```
 
 #### Issue Linking
 
-- `#N` - 이슈 참조 (자동 링크)
-- `Closes #N` - 커밋 머지 시 이슈 자동 종료
-- `Fixes #N` - 버그 수정 시 이슈 자동 종료
-- `Refs #N` - 관련 이슈 참조 (종료하지 않음)
+- `#N` - Reference issue (auto-link)
+- `Closes #N` - Auto-close issue when commit is merged
+- `Fixes #N` - Auto-close issue when bug fix is merged
+- `Refs #N` - Reference related issue (does not close)
 
 #### Branch Naming (Optional)
 

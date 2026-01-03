@@ -1,15 +1,23 @@
-# Obora: Multi-AI Debate System
+# Obora: Combination of AIs
 
 [![CI](https://github.com/de-novo/obora/actions/workflows/ci.yml/badge.svg)](https://github.com/de-novo/obora/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/@obora/core.svg)](https://www.npmjs.com/package/@obora/core)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue.svg)](https://www.typescriptlang.org/)
 
-> AIs **challenge, critique, and revise** each other's positions to reach better conclusions
+> Combine multiple AIs to produce better results
 
-## Core Value
+## Core Vision
 
-A single AI doesn't know its own blind spots. Obora makes multiple AIs point out each other's weaknesses to produce **more robust conclusions**.
+**Obora** combines multiple AIs through three pillars:
+
+| Pillar | Description | Status |
+|--------|-------------|--------|
+| **Agent + Model** | Assign optimal AI model to each agent (Gemini for search, Codex for code, Claude for analysis) | Planned |
+| **Multi-AI Perspective** | Debate, cross-check, ensemble for robust conclusions | **Available** |
+| **Workflow** | Define and enforce agent combinations | Planned |
+
+**Current Focus: Multi-AI Debate** - AIs challenge, critique, and revise each other's positions. See [Vision](./docs/VISION.md) for the full roadmap.
 
 ---
 
@@ -469,10 +477,9 @@ Limitations identified in academic research:
 
 ## Related Documents
 
+- [Vision](./docs/VISION.md)
 - [API Reference](./docs/API.md)
 - [Skills Authoring Guide](./docs/skills/README.md)
-- [Roadmap](./docs/ROADMAP.md)
-- [Planning](./docs/PLANNING.md)
 - [Benchmark Analysis](./docs/BENCHMARK_ANALYSIS.md)
 
 ### Generate API Docs
