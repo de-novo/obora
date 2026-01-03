@@ -20,7 +20,7 @@ DebateEngine (단독)      →      Unified Runtime + Multiple Patterns
 
 > 새 런타임 기반 구축. 기존 DebateEngine 유지.
 
-### 1.1 LLM Layer
+### 1.1 LLM Layer ✅
 
 ```
 packages/core/src/llm/
@@ -32,15 +32,16 @@ packages/core/src/llm/
 ```
 
 **Tasks:**
-- [ ] `RunEvent` 타입 정의 (token, message, tool_call, usage, error, done)
-- [ ] `ChatModel` 인터페이스 정의
-- [ ] `ChatRequest` / `ChatResponse` 타입
-- [ ] Anthropic adapter (기존 ClaudeProvider 래핑)
-- [ ] OpenAI adapter
-- [ ] Google adapter
-- [ ] Adapter 단위 테스트
+- [x] `RunEvent` 타입 정의 (token, message, tool_call, usage, error, done)
+- [x] `ChatModel` 인터페이스 정의
+- [x] `ChatModelCapabilities` 인터페이스 추가 (#27)
+- [x] `ChatRequest` / `ChatResponse` 타입
+- [x] Anthropic adapter (기존 ClaudeProvider 래핑)
+- [x] OpenAI adapter
+- [x] Google adapter
+- [x] Adapter 단위 테스트
 
-**Deliverable:** 기존 Provider를 통해 ChatModel로 LLM 호출 가능
+**Deliverable:** ✅ 기존 Provider를 통해 ChatModel로 LLM 호출 가능
 
 ---
 
@@ -65,15 +66,15 @@ packages/core/src/runtime/
 
 ---
 
-## Phase 2: First Pattern (Week 3-4)
+## Phase 2: First Pattern (Week 3-4) ✅
 
 > CrossCheck 패턴으로 병렬 실행 검증
 
-### 2.1 Pattern Infrastructure
+### 2.1 Pattern Infrastructure ✅
 
 ```
 packages/core/src/patterns/
-├── types.ts          # Pattern<I,O>, PatternConfig
+├── types.ts          # Pattern<I,O>, PatternConfig, StreamingProtocol
 └── cross-check.ts    # CrossCheckPattern
 ```
 
@@ -85,15 +86,17 @@ Input ──┬──▶ Agent A ──┐
 ```
 
 **Tasks:**
-- [ ] `Pattern<I,O>` 인터페이스
-- [ ] `CrossCheckPattern` 구현
-  - [ ] 병렬 실행 (Promise.all)
-  - [ ] Judge agent 호출
-  - [ ] 결과 병합
-- [ ] 스트리밍 이벤트 전파
-- [ ] E2E 테스트 (실제 LLM 호출)
+- [x] `Pattern<I,O>` 인터페이스
+- [x] `CrossCheckPattern` 구현
+  - [x] 병렬 실행 (Promise.all)
+  - [x] Judge agent 호출
+  - [x] 결과 병합
+- [x] 스트리밍 이벤트 전파
+- [x] `StreamingProtocol` 타입 정의 (#26)
+- [x] `ErrorAttribution` 타입 정의 (#26)
+- [x] E2E 테스트 (실제 LLM 호출)
 
-**Deliverable:** CrossCheck 패턴 작동. 새 런타임 검증 완료.
+**Deliverable:** ✅ CrossCheck 패턴 작동. 새 런타임 검증 완료.
 
 ---
 
@@ -164,11 +167,11 @@ packages/core/src/patterns/
 
 ---
 
-## Phase 4: Additional Patterns (Week 7-8)
+## Phase 4: Additional Patterns (Week 7-8) ✅
 
 > 패턴 확장으로 "Combination of AIs" 비전 실현
 
-### 4.1 Ensemble Pattern
+### 4.1 Ensemble Pattern ✅
 
 ```
 Input ──┬──▶ Agent A ──┐
@@ -177,22 +180,22 @@ Input ──┬──▶ Agent A ──┐
 ```
 
 **Tasks:**
-- [ ] `EnsemblePattern` 구현
-- [ ] Voting / weighted average 지원
-- [ ] Confidence score 처리
+- [x] `EnsemblePattern` 구현
+- [x] Voting / weighted average 지원
+- [x] Confidence score 처리
 
-### 4.2 Sequential Pattern
+### 4.2 Sequential Pattern ✅
 
 ```
 Input ──▶ Agent A ──▶ Agent B ──▶ Agent C ──▶ Output
 ```
 
 **Tasks:**
-- [ ] `SequentialPattern` 구현
-- [ ] 중간 결과 전달
-- [ ] 실패 시 중단/재시도 옵션
+- [x] `SequentialPattern` 구현
+- [x] 중간 결과 전달
+- [x] 실패 시 중단/재시도 옵션
 
-### 4.3 Parallel Pattern
+### 4.3 Parallel Pattern ✅
 
 ```
 Input ──┬──▶ Agent A ──▶ Output A
@@ -201,8 +204,9 @@ Input ──┬──▶ Agent A ──▶ Output A
 ```
 
 **Tasks:**
-- [ ] `ParallelPattern` 구현
-- [ ] 독립 실행 + 결과 수집
+- [x] `ParallelPattern` 구현
+- [x] 독립 실행 + 결과 수집
+- [x] `ErrorAttribution` 에러 출처 추적 (#26)
 
 ---
 
@@ -337,4 +341,5 @@ type CheckpointEvent =
 ---
 
 *Created: 2026-01-04*
-*Status: Active*
+*Updated: 2026-01-04*
+*Status: Active - Phase 1-2, 4 Complete*
