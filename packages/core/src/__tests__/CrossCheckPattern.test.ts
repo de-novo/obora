@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { ChatModel, ChatRequest, ChatResponse, RunEvent } from '../llm/types'
-import { createCrossCheckPattern, type CrossCheckConfig, type PatternEvent } from '../patterns'
+import { type CrossCheckConfig, createCrossCheckPattern, type PatternEvent } from '../patterns'
 import { createNoopContext } from '../runtime'
 
 function createMockChatModel(name: string, response: string): ChatModel {

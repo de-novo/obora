@@ -161,16 +161,34 @@ export class CrossCheckPattern implements Pattern<CrossCheckInput, CrossCheckRes
     onEvent({ type: 'phase_start', phase: 'parallel-execution' })
 
     const agentPromises = this.config.agents.map((agent) =>
-      runAgent(agent, structuredPrompt, ctx, onEvent).then((result) => ({
-        agentId: agent.id,
-        ...result,
-      })),
+      runAgent(agent, structuredPrompt, ctx, onEvent)
+        .then((result) => ({
+          agentId: agent.id,
+          ...result,
+          success: true as const,
+        }))
+        .catch((error) => {
+          onEvent({ type: 'error', error })
+          return {
+            agentId: agent.id,
+            response: {
+              message: { role: 'assistant' as const, content: `[Error: ${String(error)}]` },
+            },
+            durationMs: 0,
+            success: false as const,
+          }
+        }),
     )
 
-    const agentResults = await Promise.all(agentPromises)
+    const allResults = await Promise.all(agentPromises)
+    const agentResults = allResults.filter((r) => r.success)
 
     const parallelDurationMs = Date.now() - startTime
     onEvent({ type: 'phase_end', phase: 'parallel-execution', durationMs: parallelDurationMs })
+
+    if (agentResults.length === 0) {
+      throw new Error('All agents failed to respond')
+    }
 
     onEvent({ type: 'phase_start', phase: 'judge-evaluation' })
 
