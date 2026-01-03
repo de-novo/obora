@@ -85,11 +85,17 @@ export type {
 export {
   ANTHROPIC_OAUTH_CONFIG,
   ANTHROPIC_REDIRECT_URI,
+  calculateRetryDelay,
   GOOGLE_CLIENT_SECRET,
   GOOGLE_OAUTH_CONFIG,
   GOOGLE_REDIRECT_URI,
+  INITIAL_RETRY_DELAY_MS,
+  MAX_REFRESH_RETRIES,
   OPENAI_OAUTH_CONFIG,
   OPENAI_REDIRECT_URI,
+  parseOAuthErrorPayload,
+  TOKEN_REFRESH_BUFFER_MS,
+  TokenRefreshError,
 } from './types.ts'
 
 // ============================================================================

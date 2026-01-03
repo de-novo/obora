@@ -8,7 +8,15 @@
 import { generatePKCEChallenge } from './pkce.ts'
 import { deleteProviderTokens, isTokenExpired, loadProviderTokens, saveProviderTokens } from './storage.ts'
 import type { OAuthError, OAuthTokens, PKCEChallenge, TokenResponse } from './types.ts'
-import { ANTHROPIC_CONSOLE_OAUTH_CONFIG, ANTHROPIC_OAUTH_CONFIG, ANTHROPIC_REDIRECT_URI } from './types.ts'
+import {
+  ANTHROPIC_CONSOLE_OAUTH_CONFIG,
+  ANTHROPIC_OAUTH_CONFIG,
+  ANTHROPIC_REDIRECT_URI,
+  calculateRetryDelay,
+  MAX_REFRESH_RETRIES,
+  parseOAuthErrorPayload,
+  TokenRefreshError,
+} from './types.ts'
 
 // ============================================================================
 // 상수
@@ -140,69 +148,94 @@ export async function exchangeCodeForTokens(fullCode: string, codeVerifier: stri
   return tokens
 }
 
-/**
- * 리프레시 토큰으로 액세스 토큰 갱신
- */
 export async function refreshAccessToken(refreshToken: string): Promise<OAuthTokens> {
   const config = ANTHROPIC_OAUTH_CONFIG
+  let lastError: TokenRefreshError | undefined
 
-  const response = await fetch(config.tokenUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
-    body: JSON.stringify({
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-      client_id: config.clientId,
-    }),
-  })
-
-  const responseText = await response.text()
-
-  if (!response.ok) {
+  for (let attempt = 0; attempt <= MAX_REFRESH_RETRIES; attempt++) {
     try {
-      const error = JSON.parse(responseText) as OAuthError
-      throw new Error(`Token refresh failed: ${error.error} - ${error.error_description}`)
-    } catch (e) {
-      if (e instanceof Error && e.message.startsWith('Token refresh failed:')) {
-        throw e
+      const response = await fetch(config.tokenUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          grant_type: 'refresh_token',
+          refresh_token: refreshToken,
+          client_id: config.clientId,
+        }),
+      })
+
+      if (response.ok) {
+        const data = (await response.json()) as TokenResponse
+
+        const tokens: OAuthTokens = {
+          accessToken: data.access_token,
+          refreshToken: data.refresh_token,
+          expiresAt: Date.now() + data.expires_in * 1000,
+          tokenType: data.token_type,
+          scope: data.scope,
+        }
+
+        await saveProviderTokens('anthropic', tokens)
+        return tokens
       }
-      throw new Error(`Token refresh failed (${response.status}): ${responseText.slice(0, 500)}`)
+
+      const responseBody = await response.text().catch(() => undefined)
+      const parsed = parseOAuthErrorPayload(responseBody)
+
+      lastError = new TokenRefreshError({
+        message: parsed.description || `Token refresh failed: ${response.status} ${response.statusText}`,
+        code: parsed.code,
+        description: parsed.description,
+        status: response.status,
+        statusText: response.statusText,
+        responseBody,
+      })
+
+      if (lastError.isInvalidGrant) {
+        throw lastError
+      }
+
+      if (!lastError.isRetryable) {
+        throw lastError
+      }
+
+      if (attempt < MAX_REFRESH_RETRIES) {
+        await new Promise((resolve) => setTimeout(resolve, calculateRetryDelay(attempt)))
+      }
+    } catch (error) {
+      if (error instanceof TokenRefreshError) {
+        throw error
+      }
+
+      lastError = new TokenRefreshError({
+        message: error instanceof Error ? error.message : 'Network error during token refresh',
+        status: 0,
+        statusText: 'Network Error',
+      })
+
+      if (attempt < MAX_REFRESH_RETRIES) {
+        await new Promise((resolve) => setTimeout(resolve, calculateRetryDelay(attempt)))
+      }
     }
   }
 
-  let data: TokenResponse
-  try {
-    data = JSON.parse(responseText) as TokenResponse
-  } catch {
-    throw new Error(`Invalid token response: ${responseText.slice(0, 500)}`)
-  }
-
-  const tokens: OAuthTokens = {
-    accessToken: data.access_token,
-    refreshToken: data.refresh_token,
-    expiresAt: Date.now() + data.expires_in * 1000,
-    tokenType: data.token_type,
-    scope: data.scope,
-  }
-
-  // 새 토큰 저장
-  await saveProviderTokens('anthropic', tokens)
-
-  return tokens
+  throw (
+    lastError ||
+    new TokenRefreshError({
+      message: 'Token refresh failed after all retries',
+      status: 0,
+      statusText: 'Max Retries Exceeded',
+    })
+  )
 }
 
 // ============================================================================
 // 토큰 관리
 // ============================================================================
 
-/**
- * 유효한 액세스 토큰 가져오기
- *
- * 필요시 자동으로 갱신합니다.
- */
 export async function getValidAccessToken(): Promise<string> {
   const tokens = await loadProviderTokens('anthropic')
 
@@ -210,15 +243,16 @@ export async function getValidAccessToken(): Promise<string> {
     throw new Error("Not authenticated with Anthropic. Run 'obora auth login' first.")
   }
 
-  // 토큰이 만료되었거나 곧 만료될 예정이면 갱신
   if (isTokenExpired(tokens)) {
     try {
       const newTokens = await refreshAccessToken(tokens.refreshToken)
       return newTokens.accessToken
-    } catch (_error) {
-      // 갱신 실패 시 재인증 필요
-      await deleteProviderTokens('anthropic')
-      throw new Error("Token refresh failed. Please run 'obora auth login' again.")
+    } catch (error) {
+      if (error instanceof TokenRefreshError && error.isInvalidGrant) {
+        await deleteProviderTokens('anthropic')
+        throw new Error("Token has been revoked. Please run 'obora auth login' again.")
+      }
+      throw error
     }
   }
 

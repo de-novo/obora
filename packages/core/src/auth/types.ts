@@ -152,8 +152,111 @@ export interface TokenResponse {
  * OAuth 에러 응답
  */
 export interface OAuthError {
-  error: string
+  error: string | { status?: string; code?: string }
   error_description?: string
+}
+
+// ============================================================================
+// 토큰 리프레시 상수 및 에러
+// ============================================================================
+
+/** 토큰 만료 버퍼 (만료 60초 전에 리프레시) */
+export const TOKEN_REFRESH_BUFFER_MS = 60_000
+
+/** 최대 리프레시 재시도 횟수 */
+export const MAX_REFRESH_RETRIES = 3
+
+/** 초기 재시도 지연 시간 (ms) */
+export const INITIAL_RETRY_DELAY_MS = 1000
+
+/**
+ * 토큰 리프레시 에러
+ *
+ * oh-my-opencode의 AntigravityTokenRefreshError와 동일한 패턴
+ */
+export class TokenRefreshError extends Error {
+  /** OAuth 에러 코드 (e.g., "invalid_grant") */
+  code?: string
+  /** 에러 설명 */
+  description?: string
+  /** HTTP 상태 코드 */
+  status: number
+  /** HTTP 상태 텍스트 */
+  statusText: string
+  /** 응답 본문 */
+  responseBody?: string
+
+  constructor(options: {
+    message: string
+    code?: string
+    description?: string
+    status: number
+    statusText: string
+    responseBody?: string
+  }) {
+    super(options.message)
+    this.name = 'TokenRefreshError'
+    this.code = options.code
+    this.description = options.description
+    this.status = options.status
+    this.statusText = options.statusText
+    this.responseBody = options.responseBody
+  }
+
+  /** 토큰이 폐기되었는지 (재인증 필요) */
+  get isInvalidGrant(): boolean {
+    return this.code === 'invalid_grant'
+  }
+
+  /** 네트워크 에러인지 */
+  get isNetworkError(): boolean {
+    return this.status === 0
+  }
+
+  /** 재시도 가능한 에러인지 (네트워크 에러, 429, 5xx) */
+  get isRetryable(): boolean {
+    if (this.status === 0) return true
+    if (this.status === 429) return true
+    if (this.status >= 500 && this.status < 600) return true
+    return false
+  }
+}
+
+/**
+ * 재시도 지연 시간 계산 (exponential backoff)
+ */
+export function calculateRetryDelay(attempt: number): number {
+  return Math.min(INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt), 10000)
+}
+
+/**
+ * OAuth 에러 응답 파싱
+ */
+export function parseOAuthErrorPayload(text: string | undefined): {
+  code?: string
+  description?: string
+} {
+  if (!text) {
+    return {}
+  }
+
+  try {
+    const payload = JSON.parse(text) as OAuthError
+    let code: string | undefined
+
+    if (typeof payload.error === 'string') {
+      code = payload.error
+    } else if (payload.error && typeof payload.error === 'object') {
+      code = payload.error.status ?? payload.error.code
+    }
+
+    return {
+      code,
+      description: payload.error_description,
+    }
+  } catch {
+    return { description: text }
+  }
 }
 
 // ============================================================================

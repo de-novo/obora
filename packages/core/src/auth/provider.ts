@@ -14,7 +14,13 @@
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { isTokenExpired, loadProviderTokens, saveProviderTokens } from './storage.ts'
 import type { OAuthTokens, TokenResponse } from './types.ts'
-import { ANTHROPIC_OAUTH_CONFIG } from './types.ts'
+import {
+  ANTHROPIC_OAUTH_CONFIG,
+  calculateRetryDelay,
+  MAX_REFRESH_RETRIES,
+  parseOAuthErrorPayload,
+  TokenRefreshError,
+} from './types.ts'
 
 // ============================================================================
 // OpenCode와 동일한 상수
@@ -53,36 +59,76 @@ export const CLAUDE_CODE_HEADER = "You are Claude Code, Anthropic's official CLI
 // 토큰 갱신 (OpenCode와 동일)
 // ============================================================================
 
-async function refreshToken(refreshToken: string): Promise<OAuthTokens> {
-  const response = await fetch(ANTHROPIC_OAUTH_CONFIG.tokenUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-      client_id: ANTHROPIC_OAUTH_CONFIG.clientId,
-    }),
-  })
+async function refreshToken(currentRefreshToken: string): Promise<OAuthTokens> {
+  let lastError: TokenRefreshError | undefined
 
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`Token refresh failed: ${errorText}`)
+  for (let attempt = 0; attempt <= MAX_REFRESH_RETRIES; attempt++) {
+    try {
+      const response = await fetch(ANTHROPIC_OAUTH_CONFIG.tokenUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          grant_type: 'refresh_token',
+          refresh_token: currentRefreshToken,
+          client_id: ANTHROPIC_OAUTH_CONFIG.clientId,
+        }),
+      })
+
+      if (response.ok) {
+        const data = (await response.json()) as TokenResponse
+        const tokens: OAuthTokens = {
+          accessToken: data.access_token,
+          refreshToken: data.refresh_token,
+          expiresAt: Date.now() + data.expires_in * 1000,
+          tokenType: data.token_type,
+          scope: data.scope,
+        }
+        await saveProviderTokens('anthropic', tokens)
+        return tokens
+      }
+
+      const responseBody = await response.text().catch(() => undefined)
+      const parsed = parseOAuthErrorPayload(responseBody)
+
+      lastError = new TokenRefreshError({
+        message: parsed.description || `Token refresh failed: ${response.status}`,
+        code: parsed.code,
+        description: parsed.description,
+        status: response.status,
+        statusText: response.statusText,
+        responseBody,
+      })
+
+      if (lastError.isInvalidGrant || !lastError.isRetryable) {
+        throw lastError
+      }
+
+      if (attempt < MAX_REFRESH_RETRIES) {
+        await new Promise((resolve) => setTimeout(resolve, calculateRetryDelay(attempt)))
+      }
+    } catch (error) {
+      if (error instanceof TokenRefreshError) throw error
+
+      lastError = new TokenRefreshError({
+        message: error instanceof Error ? error.message : 'Network error',
+        status: 0,
+        statusText: 'Network Error',
+      })
+
+      if (attempt < MAX_REFRESH_RETRIES) {
+        await new Promise((resolve) => setTimeout(resolve, calculateRetryDelay(attempt)))
+      }
+    }
   }
 
-  const data = (await response.json()) as TokenResponse
-
-  const tokens: OAuthTokens = {
-    accessToken: data.access_token,
-    refreshToken: data.refresh_token,
-    expiresAt: Date.now() + data.expires_in * 1000,
-    tokenType: data.token_type,
-    scope: data.scope,
-  }
-
-  await saveProviderTokens('anthropic', tokens)
-  return tokens
+  throw (
+    lastError ||
+    new TokenRefreshError({
+      message: 'Token refresh failed after all retries',
+      status: 0,
+      statusText: 'Max Retries Exceeded',
+    })
+  )
 }
 
 // ============================================================================
@@ -105,113 +151,121 @@ export function createAuthenticatedFetch(options?: {
   injectClaudeCodeHeader?: boolean
 }): (input: string | URL | Request, init?: RequestInit) => Promise<Response> {
   const { injectClaudeCodeHeader = true } = options || {}
+  let hasRefreshedFor401 = false
 
   return async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
-    // 토큰 로드
     let tokens = await loadProviderTokens('anthropic')
 
     if (!tokens) {
       throw new Error('Not authenticated. Run login first.')
     }
 
-    // 토큰 만료 체크 및 갱신 (OpenCode와 동일: 5분 버퍼)
     if (isTokenExpired(tokens)) {
       tokens = await refreshToken(tokens.refreshToken)
+      hasRefreshedFor401 = false
     }
 
-    // 기존 헤더 처리
-    const existingHeaders = init?.headers || {}
-    const headersObj: Record<string, string> = {}
+    const executeRequest = async (currentTokens: OAuthTokens): Promise<Response> => {
+      const existingHeaders = init?.headers || {}
+      const headersObj: Record<string, string> = {}
 
-    if (existingHeaders instanceof Headers) {
-      existingHeaders.forEach((value, key) => {
-        headersObj[key.toLowerCase()] = value
-      })
-    } else if (Array.isArray(existingHeaders)) {
-      for (const entry of existingHeaders) {
-        const key = entry[0]
-        const value = entry[1]
-        if (key && typeof value === 'string') {
+      if (existingHeaders instanceof Headers) {
+        existingHeaders.forEach((value, key) => {
           headersObj[key.toLowerCase()] = value
-        }
-      }
-    } else {
-      for (const [key, value] of Object.entries(existingHeaders)) {
-        if (typeof value === 'string') {
-          headersObj[key.toLowerCase()] = value
-        }
-      }
-    }
-
-    // Beta 헤더 병합 (OpenCode와 동일한 로직)
-    const incomingBetas = headersObj['anthropic-beta'] || ''
-    const incomingBetasList = incomingBetas ? incomingBetas.split(',').map((b: string) => b.trim()) : []
-
-    const mergedBetas = [...new Set([...REQUIRED_BETAS, ...incomingBetasList])].join(',')
-
-    // 최종 헤더 구성 (OpenCode와 동일)
-    const finalHeaders: Record<string, string> = {
-      ...headersObj,
-      // Bearer 토큰 인증
-      authorization: `Bearer ${tokens.accessToken}`,
-      // 병합된 beta 헤더
-      'anthropic-beta': mergedBetas,
-      // OpenCode와 동일한 User-Agent
-      'user-agent': USER_AGENT,
-    }
-
-    // x-api-key 제거 (OAuth는 Bearer 토큰만 사용)
-    delete finalHeaders['x-api-key']
-
-    // Claude Code 시스템 프롬프트 헤더 주입
-    // 핵심: 배열 형식의 첫 번째 요소로 정확한 헤더가 있어야 함
-    let finalBody = init?.body
-    if (injectClaudeCodeHeader && init?.body) {
-      try {
-        const bodyStr =
-          typeof init.body === 'string'
-            ? init.body
-            : init.body instanceof Uint8Array
-              ? new TextDecoder().decode(init.body)
-              : null
-
-        if (bodyStr) {
-          const bodyObj = JSON.parse(bodyStr)
-
-          // 시스템 프롬프트를 배열 형식으로 변환하고 헤더를 첫 번째로 추가
-          if (bodyObj.system === undefined) {
-            // 시스템 프롬프트가 없으면 배열로 생성
-            bodyObj.system = [{ type: 'text', text: CLAUDE_CODE_HEADER }]
-          } else if (typeof bodyObj.system === 'string') {
-            // 문자열이면 배열로 변환
-            const existingText = bodyObj.system
-            bodyObj.system = [
-              { type: 'text', text: CLAUDE_CODE_HEADER },
-              { type: 'text', text: existingText },
-            ]
-          } else if (Array.isArray(bodyObj.system)) {
-            // 배열이면 첫 번째 요소가 정확한 헤더인지 확인
-            const firstItem = bodyObj.system[0]
-            const isExactHeader = firstItem?.type === 'text' && firstItem?.text === CLAUDE_CODE_HEADER
-
-            if (!isExactHeader) {
-              // 첫 번째 요소로 헤더 추가
-              bodyObj.system = [{ type: 'text', text: CLAUDE_CODE_HEADER }, ...bodyObj.system]
-            }
+        })
+      } else if (Array.isArray(existingHeaders)) {
+        for (const entry of existingHeaders) {
+          const key = entry[0]
+          const value = entry[1]
+          if (key && typeof value === 'string') {
+            headersObj[key.toLowerCase()] = value
           }
-
-          finalBody = JSON.stringify(bodyObj)
         }
-      } catch {
-        // JSON 파싱 실패 시 원본 body 유지
+      } else {
+        for (const [key, value] of Object.entries(existingHeaders)) {
+          if (typeof value === 'string') {
+            headersObj[key.toLowerCase()] = value
+          }
+        }
+      }
+
+      const incomingBetas = headersObj['anthropic-beta'] || ''
+      const incomingBetasList = incomingBetas ? incomingBetas.split(',').map((b: string) => b.trim()) : []
+      const mergedBetas = [...new Set([...REQUIRED_BETAS, ...incomingBetasList])].join(',')
+
+      const finalHeaders: Record<string, string> = {
+        ...headersObj,
+        authorization: `Bearer ${currentTokens.accessToken}`,
+        'anthropic-beta': mergedBetas,
+        'user-agent': USER_AGENT,
+      }
+
+      delete finalHeaders['x-api-key']
+
+      let finalBody = init?.body
+      if (injectClaudeCodeHeader && init?.body) {
+        try {
+          const bodyStr =
+            typeof init.body === 'string'
+              ? init.body
+              : init.body instanceof Uint8Array
+                ? new TextDecoder().decode(init.body)
+                : null
+
+          if (bodyStr) {
+            const bodyObj = JSON.parse(bodyStr)
+
+            if (bodyObj.system === undefined) {
+              bodyObj.system = [{ type: 'text', text: CLAUDE_CODE_HEADER }]
+            } else if (typeof bodyObj.system === 'string') {
+              const existingText = bodyObj.system
+              bodyObj.system = [
+                { type: 'text', text: CLAUDE_CODE_HEADER },
+                { type: 'text', text: existingText },
+              ]
+            } else if (Array.isArray(bodyObj.system)) {
+              const firstItem = bodyObj.system[0]
+              const isExactHeader = firstItem?.type === 'text' && firstItem?.text === CLAUDE_CODE_HEADER
+              if (!isExactHeader) {
+                bodyObj.system = [{ type: 'text', text: CLAUDE_CODE_HEADER }, ...bodyObj.system]
+              }
+            }
+
+            finalBody = JSON.stringify(bodyObj)
+          }
+        } catch {
+          // JSON 파싱 실패 시 원본 body 유지
+        }
+      }
+
+      return fetch(input, {
+        ...init,
+        body: finalBody,
+        headers: finalHeaders,
+      })
+    }
+
+    const response = await executeRequest(tokens)
+
+    if (response.status === 401 && !hasRefreshedFor401) {
+      hasRefreshedFor401 = true
+      try {
+        tokens = await refreshToken(tokens.refreshToken)
+        return executeRequest(tokens)
+      } catch (error) {
+        if (error instanceof TokenRefreshError && error.isInvalidGrant) {
+          return new Response(
+            JSON.stringify({
+              error: { message: 'Token has been revoked', type: 'token_revoked', code: 'invalid_grant' },
+            }),
+            { status: 401, statusText: 'Unauthorized', headers: { 'Content-Type': 'application/json' } },
+          )
+        }
+        throw error
       }
     }
 
-    return fetch(input, {
-      ...init,
-      body: finalBody,
-      headers: finalHeaders,
-    })
+    return response
   }
 }
 

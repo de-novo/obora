@@ -1,7 +1,15 @@
 import { generatePKCEChallenge } from './pkce.ts'
 import { deleteProviderTokens, isTokenExpired, loadProviderTokens, saveProviderTokens } from './storage.ts'
 import type { OAuthTokens, PKCEChallenge, TokenResponse } from './types.ts'
-import { GOOGLE_CLIENT_SECRET, GOOGLE_OAUTH_CONFIG, GOOGLE_REDIRECT_URI } from './types.ts'
+import {
+  calculateRetryDelay,
+  GOOGLE_CLIENT_SECRET,
+  GOOGLE_OAUTH_CONFIG,
+  GOOGLE_REDIRECT_URI,
+  MAX_REFRESH_RETRIES,
+  parseOAuthErrorPayload,
+  TokenRefreshError,
+} from './types.ts'
 
 export interface GoogleAuthorizationResult {
   authorizationUrl: string
@@ -71,39 +79,78 @@ export async function exchangeGoogleCodeForTokens(code: string, codeVerifier: st
   return tokens
 }
 
-export async function refreshGoogleAccessToken(refreshToken: string): Promise<OAuthTokens> {
+export async function refreshGoogleAccessToken(currentRefreshToken: string): Promise<OAuthTokens> {
   const config = GOOGLE_OAUTH_CONFIG
+  let lastError: TokenRefreshError | undefined
 
-  const response = await fetch(config.tokenUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-      client_id: config.clientId,
-      client_secret: GOOGLE_CLIENT_SECRET,
-    }),
-  })
+  for (let attempt = 0; attempt <= MAX_REFRESH_RETRIES; attempt++) {
+    try {
+      const response = await fetch(config.tokenUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          refresh_token: currentRefreshToken,
+          client_id: config.clientId,
+          client_secret: GOOGLE_CLIENT_SECRET,
+        }),
+      })
 
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`Google token refresh failed: ${errorText}`)
+      if (response.ok) {
+        const data = (await response.json()) as TokenResponse
+        const tokens: OAuthTokens = {
+          accessToken: data.access_token,
+          refreshToken: data.refresh_token || currentRefreshToken,
+          expiresAt: Date.now() + data.expires_in * 1000,
+          tokenType: data.token_type,
+          scope: data.scope,
+        }
+        await saveProviderTokens('google', tokens)
+        return tokens
+      }
+
+      const responseBody = await response.text().catch(() => undefined)
+      const parsed = parseOAuthErrorPayload(responseBody)
+
+      lastError = new TokenRefreshError({
+        message: parsed.description || `Google token refresh failed: ${response.status}`,
+        code: parsed.code,
+        description: parsed.description,
+        status: response.status,
+        statusText: response.statusText,
+        responseBody,
+      })
+
+      if (lastError.isInvalidGrant || !lastError.isRetryable) {
+        throw lastError
+      }
+
+      if (attempt < MAX_REFRESH_RETRIES) {
+        await new Promise((resolve) => setTimeout(resolve, calculateRetryDelay(attempt)))
+      }
+    } catch (error) {
+      if (error instanceof TokenRefreshError) throw error
+
+      lastError = new TokenRefreshError({
+        message: error instanceof Error ? error.message : 'Network error',
+        status: 0,
+        statusText: 'Network Error',
+      })
+
+      if (attempt < MAX_REFRESH_RETRIES) {
+        await new Promise((resolve) => setTimeout(resolve, calculateRetryDelay(attempt)))
+      }
+    }
   }
 
-  const data = (await response.json()) as TokenResponse
-
-  const tokens: OAuthTokens = {
-    accessToken: data.access_token,
-    refreshToken: data.refresh_token || refreshToken,
-    expiresAt: Date.now() + data.expires_in * 1000,
-    tokenType: data.token_type,
-    scope: data.scope,
-  }
-
-  await saveProviderTokens('google', tokens)
-  return tokens
+  throw (
+    lastError ||
+    new TokenRefreshError({
+      message: 'Google token refresh failed after all retries',
+      status: 0,
+      statusText: 'Max Retries Exceeded',
+    })
+  )
 }
 
 export async function getValidGoogleAccessToken(): Promise<string> {
@@ -117,9 +164,12 @@ export async function getValidGoogleAccessToken(): Promise<string> {
     try {
       const newTokens = await refreshGoogleAccessToken(tokens.refreshToken)
       return newTokens.accessToken
-    } catch {
-      await deleteProviderTokens('google')
-      throw new Error("Google token refresh failed. Please run 'obora auth login google' again.")
+    } catch (error) {
+      if (error instanceof TokenRefreshError && error.isInvalidGrant) {
+        await deleteProviderTokens('google')
+        throw new Error("Google token has been revoked. Please run 'obora auth login google' again.")
+      }
+      throw error
     }
   }
 
