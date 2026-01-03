@@ -1,8 +1,10 @@
+import { AccountManager } from './account-manager.ts'
 import { generatePKCEChallenge } from './pkce.ts'
 import { deleteProviderTokens, isTokenExpired, loadProviderTokens, saveProviderTokens } from './storage.ts'
-import type { OAuthTokens, PKCEChallenge, TokenResponse } from './types.ts'
+import type { ManagedAccount, OAuthTokens, PKCEChallenge, TokenResponse } from './types.ts'
 import {
   calculateRetryDelay,
+  DEFAULT_RATE_LIMIT_MS,
   GOOGLE_CLIENT_SECRET,
   GOOGLE_OAUTH_CONFIG,
   GOOGLE_REDIRECT_URI,
@@ -282,4 +284,93 @@ export async function performGoogleLogin(): Promise<void> {
   await exchangeGoogleCodeForTokens(code, pkce.codeVerifier)
 
   console.log('Successfully authenticated with Google!\n')
+}
+
+let accountManagerInstance: AccountManager | null = null
+
+export async function getGoogleAccountManager(): Promise<AccountManager> {
+  if (!accountManagerInstance) {
+    accountManagerInstance = await AccountManager.loadFromDisk()
+  }
+  return accountManagerInstance
+}
+
+export async function addGoogleAccount(
+  refreshToken: string,
+  email?: string,
+  projectId?: string,
+): Promise<ManagedAccount | null> {
+  const manager = await getGoogleAccountManager()
+  const account = manager.addAccount(refreshToken, email, projectId)
+  if (account) {
+    await manager.saveToDisk()
+  }
+  return account
+}
+
+export async function removeGoogleAccount(index: number): Promise<boolean> {
+  const manager = await getGoogleAccountManager()
+  const accounts = manager.getAccounts()
+  const account = accounts.find((a) => a.index === index)
+  if (!account) return false
+
+  const removed = manager.removeAccount(account)
+  if (removed) {
+    await manager.saveToDisk()
+  }
+  return removed
+}
+
+export async function listGoogleAccounts(): Promise<ManagedAccount[]> {
+  const manager = await getGoogleAccountManager()
+  return manager.getAccounts()
+}
+
+export async function refreshAccountToken(account: ManagedAccount): Promise<OAuthTokens> {
+  const tokens = await refreshGoogleAccessToken(account.refreshToken)
+  const manager = await getGoogleAccountManager()
+  manager.updateTokens(account, tokens.accessToken, tokens.expiresAt)
+  await manager.saveToDisk()
+  return tokens
+}
+
+export async function getNextAvailableAccount(): Promise<ManagedAccount | null> {
+  const manager = await getGoogleAccountManager()
+  return manager.getCurrentOrNextForFamily('gemini')
+}
+
+export async function markAccountRateLimited(
+  account: ManagedAccount,
+  retryAfterMs: number = DEFAULT_RATE_LIMIT_MS,
+): Promise<void> {
+  const manager = await getGoogleAccountManager()
+  manager.markRateLimited(account, retryAfterMs, 'gemini', 'antigravity')
+  await manager.saveToDisk()
+}
+
+export async function performGoogleLoginWithMultiAccount(): Promise<ManagedAccount | null> {
+  const { authorizationUrl, pkce, state } = await createGoogleAuthorizationUrl()
+
+  console.log('\nOpening browser for Google (Gemini) authentication...\n')
+  console.log(`If browser doesn't open, visit:\n${authorizationUrl}\n`)
+
+  const serverPromise = startGoogleCallbackServer(state)
+
+  const openCommand = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open'
+  try {
+    Bun.spawn([openCommand, authorizationUrl])
+  } catch {}
+
+  const { code } = await serverPromise
+  const tokens = await exchangeGoogleCodeForTokens(code, pkce.codeVerifier)
+
+  const account = await addGoogleAccount(tokens.refreshToken)
+  if (account) {
+    const manager = await getGoogleAccountManager()
+    manager.updateTokens(account, tokens.accessToken, tokens.expiresAt)
+    await manager.saveToDisk()
+    console.log(`Successfully added Google account (${manager.getAccountCount()} total)\n`)
+  }
+
+  return account
 }

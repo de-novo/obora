@@ -226,7 +226,7 @@ export class TokenRefreshError extends Error {
  * 재시도 지연 시간 계산 (exponential backoff)
  */
 export function calculateRetryDelay(attempt: number): number {
-  return Math.min(INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt), 10000)
+  return Math.min(INITIAL_RETRY_DELAY_MS * 2 ** attempt, 10000)
 }
 
 /**
@@ -277,3 +277,43 @@ export interface ProviderAuthStatus {
   expiresAt?: number
   email?: string
 }
+
+// ============================================================================
+// Multi-Account Management
+// ============================================================================
+
+export type QuotaKey = 'claude' | 'gemini-antigravity' | 'gemini-cli'
+export type ModelFamily = 'claude' | 'gemini'
+export type HeaderStyle = 'antigravity' | 'gemini-cli'
+export type SwitchReason = 'rate-limit' | 'initial' | 'rotation'
+
+export interface ManagedAccount {
+  index: number
+  email?: string
+  addedAt: number
+  lastUsed: number
+  refreshToken: string
+  projectId?: string
+  accessToken?: string
+  expiresAt?: number
+  rateLimitResetTimes: Partial<Record<QuotaKey, number>>
+  lastSwitchReason?: SwitchReason
+}
+
+export interface AccountStorageData {
+  version: number
+  accounts: Array<{
+    email?: string
+    refreshToken: string
+    projectId?: string
+    addedAt: number
+    lastUsed: number
+    rateLimitResetTimes?: Partial<Record<QuotaKey, number>>
+    lastSwitchReason?: SwitchReason
+  }>
+  activeIndex: number
+  activeIndexByFamily: Record<ModelFamily, number>
+}
+
+export const MAX_ACCOUNTS = 10
+export const DEFAULT_RATE_LIMIT_MS = 60_000

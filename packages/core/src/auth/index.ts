@@ -15,15 +15,26 @@ export {
 } from './anthropic.ts'
 // Google OAuth
 export {
+  addGoogleAccount,
   createGoogleAuthorizationUrl,
   exchangeGoogleCodeForTokens,
-  type GoogleAuthorizationResult,
+  getGoogleAccountManager,
+  getNextAvailableAccount,
   getValidGoogleAccessToken,
+  type GoogleAuthorizationResult,
   isGoogleAuthenticated,
+  listGoogleAccounts,
   logoutGoogle,
+  markAccountRateLimited,
   performGoogleLogin,
+  performGoogleLoginWithMultiAccount,
+  refreshAccountToken,
   refreshGoogleAccessToken,
+  removeGoogleAccount,
 } from './google.ts'
+// Account Manager
+export { AccountManager } from './account-manager.ts'
+export { clearAccounts, getAccountsPath, loadAccounts, saveAccounts } from './account-storage.ts'
 // OAuth Server
 export {
   type CallbackResult,
@@ -73,23 +84,31 @@ export {
 } from './storage.ts'
 // Types
 export type {
+  AccountStorageData,
   AuthCredentials,
   AuthStatus,
+  HeaderStyle,
+  ManagedAccount,
+  ModelFamily,
   OAuthError,
   OAuthProviderConfig,
   OAuthTokens,
   PKCEChallenge,
   ProviderAuthStatus,
+  QuotaKey,
+  SwitchReason,
   TokenResponse,
 } from './types.ts'
 export {
   ANTHROPIC_OAUTH_CONFIG,
   ANTHROPIC_REDIRECT_URI,
   calculateRetryDelay,
+  DEFAULT_RATE_LIMIT_MS,
   GOOGLE_CLIENT_SECRET,
   GOOGLE_OAUTH_CONFIG,
   GOOGLE_REDIRECT_URI,
   INITIAL_RETRY_DELAY_MS,
+  MAX_ACCOUNTS,
   MAX_REFRESH_RETRIES,
   OPENAI_OAUTH_CONFIG,
   OPENAI_REDIRECT_URI,
