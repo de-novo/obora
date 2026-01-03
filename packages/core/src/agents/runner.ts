@@ -7,7 +7,7 @@
  * - parallel: Independent concurrent execution
  */
 
-import { SkillLoader, type Skill } from '../skills'
+import { type Skill, SkillLoader } from '../skills'
 import { AgentLoader, parseFrontmatter } from './loader'
 import {
   type Agent,
