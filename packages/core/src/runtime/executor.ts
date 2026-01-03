@@ -80,8 +80,8 @@ export class AgentExecutor implements Runnable<ChatRequest, ExecutorResult<ChatR
 
           if (response.usage && ctx.session) {
             ctx.session.recordUsage({
-              provider: self.model.provider,
-              model: self.model.model,
+              provider: this.model.provider,
+              model: this.model.model,
               inputTokens: response.usage.inputTokens,
               outputTokens: response.usage.outputTokens,
               totalTokens: response.usage.totalTokens,
@@ -95,8 +95,8 @@ export class AgentExecutor implements Runnable<ChatRequest, ExecutorResult<ChatR
             metadata: {
               durationMs,
               usage: response.usage,
-              provider: self.model.provider,
-              model: self.model.model,
+              provider: this.model.provider,
+              model: this.model.model,
               retryCount,
             },
           }
@@ -104,14 +104,14 @@ export class AgentExecutor implements Runnable<ChatRequest, ExecutorResult<ChatR
           lastError = error
           retryCount++
 
-          if (retryCount <= (self.config.maxRetries ?? 0) && self.config.enableRetry) {
+          if (retryCount <= (this.config.maxRetries ?? 0) && this.config.enableRetry) {
             ctx.trace?.log(
               createTraceEvent('error', spanId, undefined, {
                 error: String(error),
                 retryCount,
               }),
             )
-            await new Promise((resolve) => setTimeout(resolve, self.config.retryDelayMs))
+            await new Promise((resolve) => setTimeout(resolve, this.config.retryDelayMs))
           }
         }
       }
@@ -119,8 +119,6 @@ export class AgentExecutor implements Runnable<ChatRequest, ExecutorResult<ChatR
       ctx.trace?.log(createTraceEvent('error', spanId, undefined, { error: String(lastError) }))
       throw lastError
     }
-
-    const self = this
 
     return {
       events: () => wrappedEvents,

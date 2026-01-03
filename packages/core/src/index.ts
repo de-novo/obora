@@ -76,6 +76,27 @@ export {
   type StreamableProvider,
   type StructuredProvider,
 } from './providers'
+// Runtime - Unified execution layer
+export {
+  AgentExecutor,
+  type Budget,
+  type BudgetTracker,
+  type BudgetUsage,
+  createAgentExecutor,
+  createNoopContext,
+  createRunContext,
+  type ExecutorConfig,
+  type ExecutorResult,
+  type ExecutorResultMetadata,
+  type RunContext,
+  type RunContextOptions,
+  type RunHandle,
+  type Runnable,
+  type RuntimeSession,
+  type TraceEvent,
+  type TraceEventType,
+  type TraceSink,
+} from './runtime'
 // Session - Session-based logging and cost tracking
 export {
   createNoopLogger,
@@ -124,26 +145,5 @@ export {
 //   ClaudeProvider: enabledTools: ['WebSearch']
 //   OpenAIProvider: enableWebSearch: true
 export { createDebateTools, type DebateToolsConfig } from './tools'
-// Runtime - Unified execution layer
-export {
-  AgentExecutor,
-  type Budget,
-  type BudgetTracker,
-  type BudgetUsage,
-  createAgentExecutor,
-  createNoopContext,
-  createRunContext,
-  type ExecutorConfig,
-  type ExecutorResult,
-  type ExecutorResultMetadata,
-  type RunContext,
-  type RunContextOptions,
-  type RunHandle,
-  type Runnable,
-  type RuntimeSession,
-  type TraceEvent,
-  type TraceEventType,
-  type TraceSink,
-} from './runtime'
 // Utils - Logger and utilities
 export { createLogger, Logger, logger } from './utils/logger'

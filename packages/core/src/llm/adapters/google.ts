@@ -1,6 +1,6 @@
 import { GeminiProvider, type GeminiProviderConfig } from '../../providers/gemini'
 import type { StreamChunk } from '../../providers/types'
-import type { ChatModel, ChatRequest, ChatResponse, ChatMessage, RunEvent, RunHandle, Usage } from '../types'
+import type { ChatMessage, ChatModel, ChatRequest, ChatResponse, RunEvent, RunHandle, Usage } from '../types'
 
 export class GoogleAdapter implements ChatModel {
   readonly provider = 'google' as const
@@ -8,7 +8,7 @@ export class GoogleAdapter implements ChatModel {
   private gemini: GeminiProvider
 
   constructor(config: GeminiProviderConfig = {}) {
-    this.model = config.model || 'gemini-2.5-flash'
+    this.model = config.model || 'gemini-2.5-pro'
     this.gemini = new GeminiProvider({ ...config, model: this.model })
   }
 
@@ -23,7 +23,7 @@ export class GoogleAdapter implements ChatModel {
     })
 
     const eventQueue: RunEvent[] = []
-    let eventResolvers: Array<(value: IteratorResult<RunEvent>) => void> = []
+    const eventResolvers: Array<(value: IteratorResult<RunEvent>) => void> = []
     let done = false
 
     const pushEvent = (event: RunEvent) => {

@@ -1,6 +1,6 @@
 import { ClaudeProvider, type ClaudeProviderConfig } from '../../providers/claude'
 import type { StreamChunk } from '../../providers/types'
-import type { ChatModel, ChatRequest, ChatResponse, ChatMessage, RunEvent, RunHandle, Usage } from '../types'
+import type { ChatMessage, ChatModel, ChatRequest, ChatResponse, RunEvent, RunHandle, Usage } from '../types'
 
 export class AnthropicAdapter implements ChatModel {
   readonly provider = 'anthropic' as const
@@ -8,7 +8,7 @@ export class AnthropicAdapter implements ChatModel {
   private claude: ClaudeProvider
 
   constructor(config: ClaudeProviderConfig = {}) {
-    this.model = config.model || 'claude-sonnet-4-20250514'
+    this.model = config.model || 'claude-sonnet-4-5-20250929'
     this.claude = new ClaudeProvider({ ...config, model: this.model })
   }
 
@@ -23,7 +23,7 @@ export class AnthropicAdapter implements ChatModel {
     })
 
     const eventQueue: RunEvent[] = []
-    let eventResolvers: Array<(value: IteratorResult<RunEvent>) => void> = []
+    const eventResolvers: Array<(value: IteratorResult<RunEvent>) => void> = []
     let done = false
 
     const pushEvent = (event: RunEvent) => {

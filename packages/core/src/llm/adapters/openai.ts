@@ -1,6 +1,6 @@
 import { OpenAIProvider, type OpenAIProviderConfig } from '../../providers/openai'
 import type { StreamChunk } from '../../providers/types'
-import type { ChatModel, ChatRequest, ChatResponse, ChatMessage, RunEvent, RunHandle, Usage } from '../types'
+import type { ChatMessage, ChatModel, ChatRequest, ChatResponse, RunEvent, RunHandle, Usage } from '../types'
 
 export class OpenAIAdapter implements ChatModel {
   readonly provider = 'openai' as const
@@ -8,7 +8,7 @@ export class OpenAIAdapter implements ChatModel {
   private openai: OpenAIProvider
 
   constructor(config: OpenAIProviderConfig = {}) {
-    this.model = config.model || 'gpt-4o'
+    this.model = config.model || 'gpt-4.1'
     this.openai = new OpenAIProvider({ ...config, model: this.model })
   }
 
@@ -23,7 +23,7 @@ export class OpenAIAdapter implements ChatModel {
     })
 
     const eventQueue: RunEvent[] = []
-    let eventResolvers: Array<(value: IteratorResult<RunEvent>) => void> = []
+    const eventResolvers: Array<(value: IteratorResult<RunEvent>) => void> = []
     let done = false
 
     const pushEvent = (event: RunEvent) => {
