@@ -100,13 +100,22 @@ export class OAuthBackend implements ProviderBackend {
       metadata: {
         model: modelId,
         tokensUsed: usage?.totalTokens,
+        inputTokens: usage?.inputTokens,
+        outputTokens: usage?.outputTokens,
         latencyMs: Date.now() - startTime,
         backend: 'oauth',
       },
     }
   }
 
-  async *stream(prompt: string, config: ProviderConfig): AsyncGenerator<{ chunk: string; done: boolean }> {
+  async *stream(
+    prompt: string,
+    config: ProviderConfig,
+  ): AsyncGenerator<{
+    chunk: string
+    done: boolean
+    usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number; model?: string }
+  }> {
     if (this.providerType === 'openai' && this.chatgptBackend) {
       yield* this.chatgptBackend.stream(prompt, config)
       return
@@ -124,7 +133,19 @@ export class OAuthBackend implements ProviderBackend {
       yield { chunk, done: false }
     }
 
-    yield { chunk: '', done: true }
+    const usage = await result.usage
+    yield {
+      chunk: '',
+      done: true,
+      usage: usage
+        ? {
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            totalTokens: (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0),
+            model: modelId,
+          }
+        : undefined,
+    }
   }
 
   async isAvailable(): Promise<boolean> {

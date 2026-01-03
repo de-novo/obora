@@ -39,6 +39,10 @@ export interface ProviderResponse {
     model?: string
     /** Total tokens consumed */
     tokensUsed?: number
+    /** Input/prompt tokens */
+    inputTokens?: number
+    /** Output/completion tokens */
+    outputTokens?: number
     /** Response latency in milliseconds */
     latencyMs?: number
     /** Which backend was used */
@@ -119,6 +123,32 @@ export interface Provider {
 }
 
 /**
+ * Usage metrics from a stream response.
+ */
+export interface StreamUsage {
+  /** Input/prompt tokens */
+  inputTokens?: number
+  /** Output/completion tokens */
+  outputTokens?: number
+  /** Total tokens (input + output) */
+  totalTokens?: number
+  /** Model used for generation */
+  model?: string
+}
+
+/**
+ * Chunk yielded during streaming.
+ */
+export interface StreamChunk {
+  /** Partial response text */
+  chunk: string
+  /** Whether streaming is complete */
+  done: boolean
+  /** Usage metrics (only present when done=true) */
+  usage?: StreamUsage
+}
+
+/**
  * Provider that supports streaming responses.
  *
  * Enables real-time output as the AI generates text.
@@ -128,9 +158,11 @@ export interface Provider {
  * ```typescript
  * const provider: StreamableProvider = new ClaudeProvider()
  *
- * for await (const { chunk, done } of provider.stream('Hello')) {
+ * for await (const { chunk, done, usage } of provider.stream('Hello')) {
  *   if (!done) {
  *     process.stdout.write(chunk)
+ *   } else if (usage) {
+ *     console.log(`Tokens used: ${usage.totalTokens}`)
  *   }
  * }
  * ```
@@ -139,9 +171,9 @@ export interface StreamableProvider extends Provider {
   /**
    * Stream a response to the given prompt.
    * @param prompt - The input prompt
-   * @yields Chunks of text as they are generated
+   * @yields Chunks of text as they are generated, with usage on final chunk
    */
-  stream(prompt: string): AsyncGenerator<{ chunk: string; done: boolean }>
+  stream(prompt: string): AsyncGenerator<StreamChunk>
 }
 
 /**

@@ -79,10 +79,14 @@ class GeminiCLIBackend implements ProviderBackend {
     }
   }
 
-  /**
-   * Stream response from Gemini CLI
-   */
-  async *stream(prompt: string, config: GeminiProviderConfig): AsyncGenerator<{ chunk: string; done: boolean }> {
+  async *stream(
+    prompt: string,
+    config: GeminiProviderConfig,
+  ): AsyncGenerator<{
+    chunk: string
+    done: boolean
+    usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number; model?: string }
+  }> {
     const args = ['gemini', '--allowed-mcp-server-names', '', '--extensions', '']
 
     if (config.enabledTools?.length) {

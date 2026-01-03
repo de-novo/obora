@@ -79,18 +79,18 @@ export interface StreamingParticipant extends DebateParticipant {
  * ```
  */
 export interface DebateStreamEvent {
-  /** Event type */
   type: 'chunk' | 'round_start' | 'round_end' | 'phase_start' | 'phase_end'
-  /** Current debate phase */
   phase?: DebatePhase
-  /** Name of the speaking participant */
   participant?: string
-  /** Partial response chunk (for 'chunk' events) */
   chunk?: string
-  /** Complete response (for 'round_end' events) */
   content?: string
-  /** Unix timestamp */
   timestamp: number
+  usage?: {
+    inputTokens?: number
+    outputTokens?: number
+    totalTokens?: number
+    model?: string
+  }
 }
 
 /**
@@ -672,8 +672,9 @@ ${activatedContents}
       const skillInstructions = this.buildSkillPrompt(skills, 'initial')
       const prompt = PROMPTS.initial(topic, skillInstructions || undefined)
       let content = ''
+      let roundUsage: { inputTokens?: number; outputTokens?: number; totalTokens?: number } | undefined
 
-      for await (const { chunk, done } of participant.provider.stream(prompt)) {
+      for await (const { chunk, done, usage } of participant.provider.stream(prompt)) {
         if (!done && chunk) {
           content += chunk
           yield {
@@ -683,6 +684,9 @@ ${activatedContents}
             chunk,
             timestamp: Date.now(),
           }
+        }
+        if (done && usage) {
+          roundUsage = usage
         }
       }
 
@@ -694,6 +698,7 @@ ${activatedContents}
         participant: participant.name,
         content,
         timestamp: Date.now(),
+        usage: roundUsage,
       }
     }
 
@@ -721,8 +726,9 @@ ${activatedContents}
         const skillInstructions = this.buildSkillPrompt(skills, 'rebuttal')
         const prompt = PROMPTS.rebuttal(topic, othersOpinions, !!useNativeWebSearch, skillInstructions || undefined)
         let content = ''
+        let roundUsage: { inputTokens?: number; outputTokens?: number; totalTokens?: number } | undefined
 
-        for await (const { chunk, done } of participant.provider.stream(prompt)) {
+        for await (const { chunk, done, usage } of participant.provider.stream(prompt)) {
           if (!done && chunk) {
             content += chunk
             yield {
@@ -732,6 +738,9 @@ ${activatedContents}
               chunk,
               timestamp: Date.now(),
             }
+          }
+          if (done && usage) {
+            roundUsage = usage
           }
         }
 
@@ -743,6 +752,7 @@ ${activatedContents}
           participant: participant.name,
           content,
           timestamp: Date.now(),
+          usage: roundUsage,
         }
       }
 
@@ -768,8 +778,9 @@ ${activatedContents}
         const skillInstructions = this.buildSkillPrompt(skills, 'revised')
         const prompt = PROMPTS.revised(topic, allHistory, skillInstructions || undefined)
         let content = ''
+        let roundUsage: { inputTokens?: number; outputTokens?: number; totalTokens?: number } | undefined
 
-        for await (const { chunk, done } of participant.provider.stream(prompt)) {
+        for await (const { chunk, done, usage } of participant.provider.stream(prompt)) {
           if (!done && chunk) {
             content += chunk
             yield {
@@ -779,6 +790,9 @@ ${activatedContents}
               chunk,
               timestamp: Date.now(),
             }
+          }
+          if (done && usage) {
+            roundUsage = usage
           }
         }
 
@@ -790,6 +804,7 @@ ${activatedContents}
           participant: participant.name,
           content,
           timestamp: Date.now(),
+          usage: roundUsage,
         }
       }
 
@@ -804,12 +819,25 @@ ${activatedContents}
 
       const response = await orchestrator.run(PROMPTS.consensus(historyStr))
 
+      const orchestratorParticipant = participants.find((p) => p.provider === orchestrator)
+      const orchestratorName = orchestratorParticipant?.name || 'orchestrator'
+
+      const consensusUsage = response.metadata
+        ? {
+            inputTokens: response.metadata.inputTokens,
+            outputTokens: response.metadata.outputTokens,
+            totalTokens: response.metadata.tokensUsed,
+            model: response.metadata.model,
+          }
+        : undefined
+
       yield {
         type: 'round_end',
         phase: 'consensus',
-        participant: 'orchestrator',
+        participant: orchestratorName,
         content: response.content,
         timestamp: Date.now(),
+        usage: consensusUsage,
       }
 
       yield { type: 'phase_end', phase: 'consensus', timestamp: Date.now() }

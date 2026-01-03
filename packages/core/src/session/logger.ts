@@ -1,5 +1,6 @@
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
+import { estimateCost } from './pricing'
 import type {
   BaseEvent,
   EventType,
@@ -12,6 +13,12 @@ import type {
   SessionUsageSummary,
 } from './types'
 import { ulid } from './ulid'
+
+const PROVIDER_NAME_MAP: Record<string, string> = {
+  claude: 'anthropic',
+  openai: 'openai',
+  gemini: 'google',
+}
 
 const DEFAULT_SESSIONS_DIR = join(process.env.HOME || '~', '.config', 'obora', 'sessions')
 
@@ -123,7 +130,7 @@ export class SessionLogger {
       this.metadata.features.push(options.feature)
     }
 
-    const line = JSON.stringify(event) + '\n'
+    const line = `${JSON.stringify(event)}\n`
     this.eventsFile.write(line)
   }
 
@@ -139,6 +146,12 @@ export class SessionLogger {
     }
     if (usage.costUsd) {
       this.usageSummary.costUsd = (this.usageSummary.costUsd || 0) + usage.costUsd
+    } else if (usage.model && usage.provider && usage.inputTokens && usage.outputTokens) {
+      const pricingProvider = PROVIDER_NAME_MAP[usage.provider] || usage.provider
+      const cost = estimateCost(pricingProvider, usage.model, usage.inputTokens, usage.outputTokens)
+      if (cost !== null) {
+        this.usageSummary.costUsd = (this.usageSummary.costUsd || 0) + cost
+      }
     }
     if (usage.provider) {
       if (!this.usageSummary.providers) {

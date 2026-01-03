@@ -10,7 +10,6 @@ import {
   createNoopLogger,
   DebateEngine,
   type DebateParticipant,
-  type DebateResult,
   GeminiProvider,
   OpenAIProvider,
   SessionLogger,
@@ -295,7 +294,18 @@ async function runStreamingDebate(
         await logger.log(
           'debate.round.ended',
           { phase: currentPhase, speaker, roundIndex, response: currentResponse },
-          { feature: 'debate' },
+          {
+            feature: 'debate',
+            usage: event.usage
+              ? {
+                  inputTokens: event.usage.inputTokens,
+                  outputTokens: event.usage.outputTokens,
+                  totalTokens: event.usage.totalTokens,
+                  provider: speaker,
+                  model: event.usage.model,
+                }
+              : undefined,
+          },
         )
         roundIndex++
         currentResponse = ''

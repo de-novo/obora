@@ -56,6 +56,11 @@ interface ParsedSSEResult {
   text: string
   functionCalls: FunctionCallEvent[]
   done: boolean
+  usage?: {
+    inputTokens?: number
+    outputTokens?: number
+    totalTokens?: number
+  }
 }
 
 function extractAccountIdFromToken(accessToken: string): string {
@@ -194,6 +199,7 @@ async function parseSSEResponse(response: Response): Promise<ParsedSSEResult> {
   let buffer = ''
   let text = ''
   const functionCalls: FunctionCallEvent[] = []
+  let usage: ParsedSSEResult['usage']
 
   while (true) {
     const { done, value } = await reader.read()
@@ -227,21 +233,30 @@ async function parseSSEResponse(response: Response): Promise<ParsedSSEResult> {
           })
         }
 
-        if (parsed.type === 'response.done' && parsed.response?.output) {
-          for (const item of parsed.response.output) {
-            if (item.type === 'message' && item.content) {
-              for (const content of item.content) {
-                if (content.type === 'output_text' && content.text) {
-                  text = content.text
+        if (parsed.type === 'response.done' || parsed.type === 'response.completed') {
+          if (parsed.response?.output) {
+            for (const item of parsed.response.output) {
+              if (item.type === 'message' && item.content) {
+                for (const content of item.content) {
+                  if (content.type === 'output_text' && content.text) {
+                    text = content.text
+                  }
                 }
               }
+              if (item.type === 'function_call') {
+                functionCalls.push({
+                  call_id: item.call_id,
+                  name: item.name,
+                  arguments: item.arguments,
+                })
+              }
             }
-            if (item.type === 'function_call') {
-              functionCalls.push({
-                call_id: item.call_id,
-                name: item.name,
-                arguments: item.arguments,
-              })
+          }
+          if (parsed.response?.usage) {
+            usage = {
+              inputTokens: parsed.response.usage.input_tokens,
+              outputTokens: parsed.response.usage.output_tokens,
+              totalTokens: (parsed.response.usage.input_tokens ?? 0) + (parsed.response.usage.output_tokens ?? 0),
             }
           }
         }
@@ -249,7 +264,7 @@ async function parseSSEResponse(response: Response): Promise<ParsedSSEResult> {
     }
   }
 
-  return { text, functionCalls, done: functionCalls.length === 0 }
+  return { text, functionCalls, done: functionCalls.length === 0, usage }
 }
 
 export class ChatGPTBackend implements ProviderBackend {
@@ -288,13 +303,23 @@ export class ChatGPTBackend implements ProviderBackend {
       content: result.text,
       metadata: {
         model: modelId,
+        tokensUsed: result.usage?.totalTokens,
+        inputTokens: result.usage?.inputTokens,
+        outputTokens: result.usage?.outputTokens,
         latencyMs: Date.now() - startTime,
         backend: 'oauth',
       },
     }
   }
 
-  async *stream(prompt: string, config: ProviderConfig): AsyncGenerator<{ chunk: string; done: boolean }> {
+  async *stream(
+    prompt: string,
+    config: ProviderConfig,
+  ): AsyncGenerator<{
+    chunk: string
+    done: boolean
+    usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number; model?: string }
+  }> {
     const modelId = config.model || DEFAULT_MODEL
 
     const accessToken = await getValidOpenAIAccessToken()
@@ -325,6 +350,7 @@ export class ChatGPTBackend implements ProviderBackend {
 
     const decoder = new TextDecoder()
     let buffer = ''
+    let usage: { inputTokens?: number; outputTokens?: number; totalTokens?: number } | undefined
 
     while (true) {
       const { done, value } = await reader.read()
@@ -344,11 +370,25 @@ export class ChatGPTBackend implements ProviderBackend {
           if (parsed.type === 'response.output_text.delta' && parsed.delta) {
             yield { chunk: parsed.delta, done: false }
           }
+          if ((parsed.type === 'response.done' || parsed.type === 'response.completed') && parsed.response?.usage) {
+            usage = {
+              inputTokens: parsed.response.usage.input_tokens,
+              outputTokens: parsed.response.usage.output_tokens,
+              totalTokens: (parsed.response.usage.input_tokens ?? 0) + (parsed.response.usage.output_tokens ?? 0),
+            }
+          }
+          if (parsed.type === 'response.done' && parsed.response?.usage) {
+            usage = {
+              inputTokens: parsed.response.usage.input_tokens,
+              outputTokens: parsed.response.usage.output_tokens,
+              totalTokens: (parsed.response.usage.input_tokens ?? 0) + (parsed.response.usage.output_tokens ?? 0),
+            }
+          }
         } catch {}
       }
     }
 
-    yield { chunk: '', done: true }
+    yield { chunk: '', done: true, usage: usage ? { ...usage, model: modelId } : undefined }
   }
 
   async isAvailable(): Promise<boolean> {

@@ -469,11 +469,20 @@ export class AntigravityBackend implements ProviderBackend {
         latencyMs: Date.now() - startTime,
         backend: 'oauth',
         tokensUsed: data.response?.usageMetadata?.totalTokenCount,
+        inputTokens: data.response?.usageMetadata?.promptTokenCount,
+        outputTokens: data.response?.usageMetadata?.candidatesTokenCount,
       },
     }
   }
 
-  async *stream(prompt: string, config: ProviderConfig): AsyncGenerator<{ chunk: string; done: boolean }> {
+  async *stream(
+    prompt: string,
+    config: ProviderConfig,
+  ): AsyncGenerator<{
+    chunk: string
+    done: boolean
+    usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number; model?: string }
+  }> {
     const modelId = config.model || DEFAULT_MODEL
 
     const { token: accessToken, account } = await getAccessTokenWithRotation()
@@ -533,6 +542,7 @@ export class AntigravityBackend implements ProviderBackend {
 
     const decoder = new TextDecoder()
     let buffer = ''
+    let usage: { inputTokens?: number; outputTokens?: number; totalTokens?: number } | undefined
 
     while (true) {
       const { done, value } = await reader.read()
@@ -553,11 +563,18 @@ export class AntigravityBackend implements ProviderBackend {
           if (text) {
             yield { chunk: text, done: false }
           }
+          if (parsed.response?.usageMetadata) {
+            usage = {
+              inputTokens: parsed.response.usageMetadata.promptTokenCount,
+              outputTokens: parsed.response.usageMetadata.candidatesTokenCount,
+              totalTokens: parsed.response.usageMetadata.totalTokenCount,
+            }
+          }
         } catch {}
       }
     }
 
-    yield { chunk: '', done: true }
+    yield { chunk: '', done: true, usage: usage ? { ...usage, model: modelId } : undefined }
   }
 
   async isAvailable(): Promise<boolean> {
