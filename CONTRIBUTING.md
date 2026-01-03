@@ -85,6 +85,32 @@ Future integrations we'd love help with:
 - [Bun](https://bun.sh/) >= 1.3
 - API keys for AI providers (Claude, OpenAI, etc.) or CLI tools installed
 
+### Environment Configuration
+
+Copy `.env.example` to `.env` and configure as needed:
+
+```bash
+cp .env.example .env
+```
+
+#### Debug Mode
+
+Enable debug logging to see internal operations (OAuth, Antigravity backend, etc.):
+
+```bash
+# In .env file
+OBORA_DEBUG=true
+
+# Or use DEBUG variable (compatible with other tools)
+DEBUG=obora
+```
+
+Debug output includes:
+- OAuth token refresh attempts
+- Antigravity endpoint discovery
+- Rate limiting and account rotation
+- Project ID resolution
+
 ### Project Structure
 
 ```
