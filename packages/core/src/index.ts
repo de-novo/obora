@@ -76,6 +76,30 @@ export {
   type StreamableProvider,
   type StructuredProvider,
 } from './providers'
+// Session - Session-based logging and cost tracking
+export {
+  createNoopLogger,
+  DEFAULT_PRICING,
+  DEFAULT_SESSION_CONFIG,
+  decodeTime,
+  estimateCost,
+  findModelPricing,
+  isValidUlid,
+  NoopSessionLogger,
+  type SessionConfig,
+  type SessionDetails,
+  type SessionEvent,
+  type SessionIndexEntry,
+  type SessionListOptions,
+  SessionLogger,
+  type SessionLoggerInstance,
+  type SessionLoggerOptions,
+  SessionManager,
+  type SessionMetadata,
+  type SessionUsageSummary,
+  sessionManager,
+  ulid,
+} from './session'
 // Skills - AgentSkills support for debate participants
 export {
   isValidSkillFrontmatter,

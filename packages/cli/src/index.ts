@@ -12,6 +12,7 @@
 
 import { auth } from './commands/auth'
 import { debate } from './commands/debate'
+import { session } from './commands/session'
 
 const HELP = `
 Obora - Multi-AI Debate CLI
@@ -22,6 +23,7 @@ Usage:
 Commands:
   auth              Manage OAuth authentication
   debate <topic>    Run a debate on the given topic
+  session           Manage session logs and cost tracking
 
 Options:
   -h, --help        Show this help message
@@ -32,6 +34,8 @@ Examples:
   obora auth login openai       # Login with ChatGPT Plus
   obora auth status             # Check auth status
   obora debate "Should we migrate to microservices?"
+  obora session list            # List all logged sessions
+  obora session cost            # Show total cost across sessions
 `
 
 async function main() {
@@ -55,6 +59,9 @@ async function main() {
       break
     case 'debate':
       await debate(args.slice(1))
+      break
+    case 'session':
+      await session(args.slice(1))
       break
     default:
       console.error(`Unknown command: ${command}`)
