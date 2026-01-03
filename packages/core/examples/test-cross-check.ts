@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
 
 import { ClaudeProvider, GeminiProvider, OpenAIProvider } from '../src'
-import { createCrossCheckPattern, type AgentConfig, type PatternEvent } from '../src/patterns'
-import { createRunContext } from '../src/runtime'
 import type { ChatModel, ChatRequest, ChatResponse, RunEvent, RunHandle } from '../src/llm/types'
+import { type AgentConfig, createCrossCheckPattern, type PatternEvent } from '../src/patterns'
+import { createRunContext } from '../src/runtime'
 
 const QUESTION = `
 TypeScript에서 다음 중 어떤 방식이 더 좋은가요?

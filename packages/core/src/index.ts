@@ -53,15 +53,31 @@ export {
 // Patterns - Multi-agent orchestration patterns
 export {
   type AgentConfig,
+  type AggregationStrategy,
+  createCrossCheckPattern,
+  createEnsemblePattern,
+  createParallelPattern,
+  createSequentialPattern,
   type CrossCheckConfig,
   type CrossCheckInput,
   CrossCheckPattern,
   type CrossCheckResult,
-  createCrossCheckPattern,
+  type EnsembleConfig,
+  type EnsembleInput,
+  EnsemblePattern,
+  type EnsembleResult,
+  type ParallelConfig,
+  type ParallelInput,
+  ParallelPattern,
+  type ParallelResult,
   type Pattern,
   type PatternConfig,
   type PatternEvent,
   type PatternRunHandle,
+  type SequentialConfig,
+  type SequentialInput,
+  SequentialPattern,
+  type SequentialResult,
 } from './patterns'
 // Providers - AI provider implementations (powered by Vercel AI SDK)
 export {

@@ -1,2 +1,5 @@
-export { CrossCheckPattern, createCrossCheckPattern } from './cross-check'
 export * from './types'
+export { CrossCheckPattern, createCrossCheckPattern } from './cross-check'
+export { EnsemblePattern, createEnsemblePattern } from './ensemble'
+export { SequentialPattern, createSequentialPattern } from './sequential'
+export { ParallelPattern, createParallelPattern } from './parallel'

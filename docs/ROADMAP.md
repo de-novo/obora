@@ -240,6 +240,54 @@ steps:
 
 ---
 
+## Phase 6: Execution Modes (Week 11-12)
+
+> Human-in-the-loop 지원을 위한 실행 모드 레이어
+
+### 6.1 Mode Layer
+
+```
+packages/core/src/modes/
+├── types.ts              # ExecutionMode, CheckpointEvent, InteractionController
+├── withMode.ts           # Higher-order wrapper: withMode(pattern, config)
+├── plan.ts               # Plan Mode: 계획 → 승인 → 실행
+├── edit.ts               # Edit Mode: 변경 제안 → 승인
+└── interactive.ts        # Interactive Mode: 대화형 체크포인트
+```
+
+**Key Interfaces:**
+```typescript
+// RunContext 확장
+interface RunContext {
+  interaction?: InteractionController
+}
+
+interface InteractionController {
+  requestApproval(checkpoint: CheckpointRequest): Promise<CheckpointResponse>
+}
+
+// PatternEvent 확장
+type CheckpointEvent =
+  | { type: 'checkpoint_request'; checkpointId: string; kind: 'plan'|'edit'|'tool'; payload: unknown }
+  | { type: 'checkpoint_resolved'; checkpointId: string; outcome: 'approved'|'rejected' }
+```
+
+**Tasks:**
+- [ ] `InteractionController` 인터페이스 정의
+- [ ] `CheckpointEvent` 타입 추가
+- [ ] `withMode(pattern, config)` wrapper 구현
+- [ ] Plan Mode 구현 (계획 → 승인 → 실행)
+- [ ] Edit Mode 구현 (변경 제안 → 승인)
+- [ ] Interactive Mode 구현 (대화형 체크포인트)
+- [ ] CLI/Web 어댑터 (InteractionController 구현체)
+
+**Design Principles:**
+- 모드는 패턴과 직교 (orthogonal)
+- `withMode(pattern)` wrapper로 패턴 순수성 유지
+- `ctx.interaction`으로 human-in-the-loop 대기
+
+---
+
 ## Milestones
 
 | Milestone | Target | Key Deliverable |
@@ -248,7 +296,8 @@ steps:
 | **M2** | Week 4 | CrossCheck 패턴 출시 |
 | **M3** | Week 6 | DebatePattern 마이그레이션 완료 |
 | **M4** | Week 8 | Ensemble, Sequential, Parallel 패턴 |
-| **M5** | Week 10 | Workflow 지원, v1.0 출시 |
+| **M5** | Week 10 | Workflow 지원 |
+| **M6** | Week 12 | Execution Modes, v1.0 출시 |
 
 ---
 

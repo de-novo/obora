@@ -53,3 +53,68 @@ export interface CrossCheckResult {
   agreement: number
   totalDurationMs: number
 }
+
+export type AggregationStrategy = 'first' | 'longest' | 'shortest' | 'concat' | 'custom'
+
+export interface EnsembleConfig extends PatternConfig {
+  agents: AgentConfig[]
+  aggregation?: AggregationStrategy
+  customAggregator?: (responses: ChatResponse[]) => string
+}
+
+export interface EnsembleInput {
+  prompt: string
+  context?: string
+}
+
+export interface EnsembleResult {
+  finalAnswer: string
+  agentResponses: Array<{
+    agentId: string
+    response: ChatResponse
+    durationMs: number
+  }>
+  aggregationStrategy: AggregationStrategy
+  totalDurationMs: number
+}
+
+export interface SequentialConfig extends PatternConfig {
+  agents: AgentConfig[]
+  passContext?: boolean
+}
+
+export interface SequentialInput {
+  prompt: string
+  context?: string
+}
+
+export interface SequentialResult {
+  finalAnswer: string
+  steps: Array<{
+    agentId: string
+    input: string
+    response: ChatResponse
+    durationMs: number
+  }>
+  totalDurationMs: number
+}
+
+export interface ParallelConfig extends PatternConfig {
+  agents: AgentConfig[]
+}
+
+export interface ParallelInput {
+  prompt: string
+  context?: string
+}
+
+export interface ParallelResult {
+  responses: Array<{
+    agentId: string
+    response: ChatResponse
+    durationMs: number
+    success: boolean
+    error?: string
+  }>
+  totalDurationMs: number
+}
