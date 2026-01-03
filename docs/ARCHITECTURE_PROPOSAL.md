@@ -2,6 +2,195 @@
 
 > Unified Runtime for "Combination of AIs"
 
+## Visual Overview
+
+### Current Architecture (Before)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              @obora/core                                     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌─────────────────────────────┐    ┌─────────────────────────────┐        │
+│  │      DebateEngine           │    │      AgentRunner            │        │
+│  │  ━━━━━━━━━━━━━━━━━━━━━━━━   │    │  ━━━━━━━━━━━━━━━━━━━━━━━━   │        │
+│  │  • 847 lines                │    │  • 655 lines                │        │
+│  │  • Hardcoded phases         │    │  • TODO placeholders        │        │
+│  │  • Own participant mgmt     │    │  • No LLM integration       │        │
+│  │  • Own streaming logic      │    │  • Own session mgmt         │        │
+│  └──────────────┬──────────────┘    └──────────────┬──────────────┘        │
+│                 │                                   │                       │
+│                 │  ┌────────────────────────────────┘                       │
+│                 │  │                                                        │
+│                 ▼  ▼                                                        │
+│  ┌─────────────────────────────────────────────────────────────┐           │
+│  │                      providers/                              │           │
+│  │  ┌───────────┐  ┌───────────┐  ┌───────────┐                │           │
+│  │  │  Claude   │  │  OpenAI   │  │  Gemini   │                │           │
+│  │  │ Provider  │  │ Provider  │  │ Provider  │                │           │
+│  │  └───────────┘  └───────────┘  └───────────┘                │           │
+│  │        │              │              │                       │           │
+│  │        └──────────────┴──────────────┘                       │           │
+│  │                       │                                      │           │
+│  │              ┌────────┴────────┐                             │           │
+│  │              │  Provider I/F   │  run(), stream()            │           │
+│  │              └─────────────────┘                             │           │
+│  └─────────────────────────────────────────────────────────────┘           │
+│                                                                             │
+│  ┌──────────────────┐    ┌──────────────────┐                              │
+│  │     skills/      │    │     agents/      │                              │
+│  │  ━━━━━━━━━━━━━   │    │  ━━━━━━━━━━━━━   │                              │
+│  │  SkillLoader     │    │  AgentLoader     │  ← Not used                  │
+│  │  Skill types     │    │  Agent types     │    (Disconnected from Debate)│
+│  └──────────────────┘    └──────────────────┘                              │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Problems:
+  ❌ DebateEngine and AgentRunner are separate systems
+  ❌ Adding new patterns (ensemble, cross-check) requires another Engine
+  ❌ Agent definitions not used in Debate (participant ≠ agent)
+  ❌ Duplicated execution/streaming logic
+```
+
+### Proposed Architecture (After)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              @obora/core                                     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────┐           │
+│  │                        patterns/                             │           │
+│  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌────────┐ │           │
+│  │  │   Debate    │ │ CrossCheck  │ │  Ensemble   │ │  ...   │ │           │
+│  │  │   Pattern   │ │   Pattern   │ │   Pattern   │ │        │ │           │
+│  │  └──────┬──────┘ └──────┬──────┘ └──────┬──────┘ └────────┘ │           │
+│  │         │               │               │                    │           │
+│  │         └───────────────┴───────────────┘                    │           │
+│  │                         │                                    │           │
+│  │                implements Pattern<I,O>                       │           │
+│  └─────────────────────────┬───────────────────────────────────┘           │
+│                            │                                                │
+│                            ▼                                                │
+│  ┌─────────────────────────────────────────────────────────────┐           │
+│  │                       runtime/                               │           │
+│  │  ┌─────────────────────────────────────────────────────────┐│           │
+│  │  │                   AgentExecutor                         ││           │
+│  │  │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  ││           │
+│  │  │  • Single execution path                                ││           │
+│  │  │  • Unified streaming                                    ││           │
+│  │  │  • Session/cost tracking                                ││           │
+│  │  └─────────────────────────────────────────────────────────┘│           │
+│  │                                                              │           │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │           │
+│  │  │  Runnable    │  │  RunHandle   │  │  RunContext  │       │           │
+│  │  │  <I, O>      │  │  <O>         │  │              │       │           │
+│  │  └──────────────┘  └──────────────┘  └──────────────┘       │           │
+│  └─────────────────────────┬───────────────────────────────────┘           │
+│                            │                                                │
+│                            ▼                                                │
+│  ┌─────────────────────────────────────────────────────────────┐           │
+│  │                         llm/                                 │           │
+│  │  ┌─────────────────────────────────────────────────────────┐│           │
+│  │  │                    ChatModel                            ││           │
+│  │  │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  ││           │
+│  │  │  • Provider-agnostic interface                          ││           │
+│  │  │  • Normalized RunEvent stream                           ││           │
+│  │  └─────────────────────────────────────────────────────────┘│           │
+│  │                            │                                 │           │
+│  │              ┌─────────────┼─────────────┐                   │           │
+│  │              ▼             ▼             ▼                   │           │
+│  │  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐         │           │
+│  │  │   Anthropic  │ │    OpenAI    │ │    Google    │         │           │
+│  │  │   Adapter    │ │    Adapter   │ │    Adapter   │         │           │
+│  │  └──────┬───────┘ └──────┬───────┘ └──────┬───────┘         │           │
+│  └─────────┼────────────────┼────────────────┼─────────────────┘           │
+│            │                │                │                              │
+│            ▼                ▼                ▼                              │
+│  ┌─────────────────────────────────────────────────────────────┐           │
+│  │                      providers/ (existing)                   │           │
+│  │     ClaudeProvider    OpenAIProvider    GeminiProvider      │           │
+│  └─────────────────────────────────────────────────────────────┘           │
+│                                                                             │
+│  ┌──────────────────┐    ┌──────────────────┐                              │
+│  │     agents/      │    │     skills/      │                              │
+│  │  ━━━━━━━━━━━━━   │    │  ━━━━━━━━━━━━━   │                              │
+│  │  AgentSpec       │───▶│  PromptComposer  │                              │
+│  │  • id, name      │    │  • system prompt │                              │
+│  │  • ModelRef ─────┼───▶│  • + persona     │                              │
+│  │  • skills[]      │    │  • + skills      │                              │
+│  └──────────────────┘    └──────────────────┘                              │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Data Flow Comparison
+
+**Before: Separate Execution Paths**
+
+```
+User Request
+     │
+     ├──────────────────────────┬──────────────────────────┐
+     ▼                          ▼                          ▼
+┌─────────┐              ┌─────────────┐           ┌──────────────┐
+│ Debate  │              │ AgentRunner │           │ Future ???   │
+│ Engine  │              │ (broken)    │           │              │
+└────┬────┘              └──────┬──────┘           └──────────────┘
+     │                          │
+     │  Different ways to       │  TODO state
+     │  call Providers          │
+     ▼                          ▼
+┌─────────────────────────────────────┐
+│           Providers                 │
+└─────────────────────────────────────┘
+```
+
+**After: Single Execution Path**
+
+```
+User Request
+     │
+     ▼
+┌─────────────────────────────────────────────────────────┐
+│                      Pattern Layer                       │
+│  ┌────────┐  ┌────────────┐  ┌──────────┐  ┌─────────┐ │
+│  │ Debate │  │ CrossCheck │  │ Ensemble │  │ Custom  │ │
+│  └────┬───┘  └─────┬──────┘  └────┬─────┘  └────┬────┘ │
+│       └────────────┴──────────────┴─────────────┘      │
+└────────────────────────────┬────────────────────────────┘
+                             │
+                             ▼  All patterns use same path
+┌─────────────────────────────────────────────────────────┐
+│                    AgentExecutor                         │
+│         (streaming, retry, timeout, cost tracking)       │
+└────────────────────────────┬────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────┐
+│                       ChatModel                          │
+│              (provider-agnostic interface)               │
+└────────────────────────────┬────────────────────────────┘
+                             │
+              ┌──────────────┼──────────────┐
+              ▼              ▼              ▼
+         Anthropic       OpenAI        Google
+          Adapter        Adapter       Adapter
+```
+
+### Key Differences
+
+| Aspect | Before | After |
+|--------|--------|-------|
+| Execution paths | 2 (separate) | 1 (unified) |
+| Adding new pattern | New Engine required | Just implement Pattern |
+| Agent ↔ Model | Not connected | AgentSpec.ModelRef |
+| Streaming | Each implements own | Unified via RunHandle |
+| Cost tracking | DebateEngine only | All paths automatic |
+
+---
+
 ## Executive Summary
 
 Replace the disconnected "DebateEngine vs AgentRunner" with a **unified runtime + runnable graph**. Everything becomes a `Runnable` that produces a streaming event stream. Debate becomes one `Pattern` implementation that runs on the same `AgentExecutor` used by all other patterns.
