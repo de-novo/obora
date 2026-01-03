@@ -8,7 +8,7 @@ export class OpenAIAdapter implements ChatModel {
   private openai: OpenAIProvider
 
   constructor(config: OpenAIProviderConfig = {}) {
-    this.model = config.model || 'gpt-4.1'
+    this.model = config.model || 'gpt-5.2'
     this.openai = new OpenAIProvider({ ...config, model: this.model })
   }
 

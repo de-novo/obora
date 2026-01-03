@@ -8,7 +8,7 @@ export class GoogleAdapter implements ChatModel {
   private gemini: GeminiProvider
 
   constructor(config: GeminiProviderConfig = {}) {
-    this.model = config.model || 'gemini-2.5-pro'
+    this.model = config.model || 'gemini-3.0-flash'
     this.gemini = new GeminiProvider({ ...config, model: this.model })
   }
 
