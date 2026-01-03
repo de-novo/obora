@@ -1,2 +1,2 @@
+export { clearCache, fetchModels } from './fetcher'
 export * from './types'
-export { fetchModels, clearCache } from './fetcher'

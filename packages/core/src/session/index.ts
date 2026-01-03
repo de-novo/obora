@@ -6,7 +6,7 @@ export {
   type SessionLoggerOptions,
 } from './logger'
 export { type SessionDetails, type SessionListOptions, SessionManager, sessionManager } from './manager'
-export { DEFAULT_PRICING, estimateCost, findModelPricing } from './pricing'
+export { estimateCost, estimateCostAsync, preloadPricing } from './pricing'
 export type {
   ActivityEndedEvent,
   ActivityStartedEvent,

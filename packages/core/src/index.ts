@@ -100,13 +100,13 @@ export {
 // Session - Session-based logging and cost tracking
 export {
   createNoopLogger,
-  DEFAULT_PRICING,
   DEFAULT_SESSION_CONFIG,
   decodeTime,
   estimateCost,
-  findModelPricing,
+  estimateCostAsync,
   isValidUlid,
   NoopSessionLogger,
+  preloadPricing,
   type SessionConfig,
   type SessionDetails,
   type SessionEvent,
