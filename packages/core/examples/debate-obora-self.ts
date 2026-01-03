@@ -6,7 +6,7 @@
  * Run with: bun packages/core/examples/debate-obora-self.ts
  */
 
-import { DebateEngine, ClaudeProvider, OpenAIProvider } from '../src'
+import { ClaudeProvider, DebateEngine, OpenAIProvider } from '../src'
 
 const PROJECT_CONTEXT = `
 ## Project: Obora - Multi-AI Debate System
