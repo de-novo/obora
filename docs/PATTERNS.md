@@ -203,3 +203,60 @@ const result = await pattern.run(ctx, { prompt: '이 소스 코드를 분석해�
 
 4. **"여러 모델 중 가장 뛰어난 답변 하나를 고르고 싶나요?"**
    - 👉 **EnsemblePattern**을 선택하세요. `longest` 전략 등을 통해 가장 품질이 좋은 응답을 취할 수 있습니다.
+
+---
+
+## 스트리밍 프로토콜 (Streaming Protocol)
+
+각 패턴의 스트리밍 동작에 대한 명세입니다.
+
+### 이벤트 순서 (Event Ordering)
+
+| 패턴 | 순서 보장 | 설명 |
+|------|----------|------|
+| Sequential | `causal` | 인과관계 보장. 이벤트는 에이전트 순서대로 도착 |
+| Parallel | `arrival` | 도착 순서. 어떤 에이전트의 이벤트가 먼저 올지 보장 없음 |
+| Debate | `causal` | 인과관계 보장. 페이즈 순서대로 이벤트 도착 |
+| Ensemble | `arrival` | 도착 순서. 병렬 실행으로 순서 보장 없음 |
+| CrossCheck | `arrival` | 도착 순서. 에이전트 병렬 실행 후 판사 이벤트 |
+
+### 취소 전파 (Cancellation Propagation)
+
+| 패턴 | 전파 방식 | 설명 |
+|------|----------|------|
+| Sequential | `immediate` | 즉시 전파. 현재 에이전트 중단, 후속 에이전트 시작 안 함 |
+| Parallel | `best-effort` | 최선 노력. 모든 에이전트에 취소 신호 전파, 즉각 중단 보장 없음 |
+| Debate | `graceful` | 우아한 종료. 현재 페이즈 완료 후 취소 |
+| Ensemble | `best-effort` | 최선 노력. 병렬 실행 중인 모든 에이전트에 전파 |
+| CrossCheck | `graceful` | 우아한 종료. 판사 평가 전 취소 시 에이전트 결과까지 반환 |
+
+### 에러 귀속 (Error Attribution)
+
+에러 이벤트에는 다음 귀속 정보가 포함됩니다:
+
+```typescript
+interface ErrorAttribution {
+  agentId?: string      // 에러 발생 에이전트 ID
+  modelId?: string      // 사용된 모델 ID
+  provider?: ProviderId // 프로바이더 (anthropic/openai/google)
+  roundIndex?: number   // 라운드 인덱스 (해당시)
+  phase?: string        // 현재 페이즈
+}
+```
+
+### 사용 예시
+
+```typescript
+const handle = pattern.run(ctx, { prompt: 'Test' })
+
+for await (const event of handle.events()) {
+  if (event.type === 'error') {
+    const { error, attribution } = event
+    console.error(`Error in ${attribution?.agentId}: ${error}`)
+  }
+}
+```
+
+### 리플레이 지원 (Replay Support)
+
+현재 모든 패턴은 `supportsReplay: false`입니다. 이벤트 리플레이는 향후 버전에서 지원될 예정입니다.

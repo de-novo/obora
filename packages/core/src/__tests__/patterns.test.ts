@@ -14,11 +14,13 @@ import {
   type SequentialConfig,
 } from '../patterns'
 import { createNoopContext, createRunContext, createTraceContext } from '../runtime'
+import { DEFAULT_MOCK_CAPABILITIES } from './mocks'
 
 function createMockModel(response: string): ChatModel {
   return {
     provider: 'openai',
     model: 'mock',
+    capabilities: DEFAULT_MOCK_CAPABILITIES,
     run(_request: ChatRequest) {
       return {
         events: async function* () {
@@ -36,6 +38,7 @@ function createDelayedMockModel(response: string, delayMs: number): ChatModel {
   return {
     provider: 'openai',
     model: 'mock',
+    capabilities: DEFAULT_MOCK_CAPABILITIES,
     run(_request: ChatRequest) {
       return {
         events: async function* () {
@@ -143,6 +146,7 @@ describe('SequentialPattern', () => {
     const step2Model: ChatModel = {
       provider: 'openai',
       model: 'mock',
+      capabilities: DEFAULT_MOCK_CAPABILITIES,
       run(request: ChatRequest) {
         step2Input = request.messages[request.messages.length - 1]?.content ?? ''
         return {
@@ -213,6 +217,7 @@ describe('ParallelPattern', () => {
     const failingModel: ChatModel = {
       provider: 'openai',
       model: 'mock',
+      capabilities: DEFAULT_MOCK_CAPABILITIES,
       run() {
         return {
           events: async function* () {
@@ -272,6 +277,7 @@ function createSequentialMockModel(responses: string[]): ChatModel {
   return {
     provider: 'openai',
     model: 'mock',
+    capabilities: DEFAULT_MOCK_CAPABILITIES,
     run(_request: ChatRequest) {
       const response = responses[callCount] ?? responses[responses.length - 1] ?? 'Mock response'
       callCount++

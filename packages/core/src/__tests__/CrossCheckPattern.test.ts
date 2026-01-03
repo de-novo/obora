@@ -2,11 +2,13 @@ import { describe, expect, test } from 'bun:test'
 import type { ChatModel, ChatRequest, ChatResponse, RunEvent } from '../llm/types'
 import { type CrossCheckConfig, createCrossCheckPattern, type PatternEvent } from '../patterns'
 import { createNoopContext } from '../runtime'
+import { DEFAULT_MOCK_CAPABILITIES } from './mocks'
 
 function createMockChatModel(name: string, response: string): ChatModel {
   return {
     provider: 'openai',
     model: 'mock-model',
+    capabilities: DEFAULT_MOCK_CAPABILITIES,
     run(_request: ChatRequest, _signal?: AbortSignal) {
       const events: RunEvent[] = [
         { type: 'token', text: response },
@@ -98,6 +100,7 @@ describe('CrossCheckPattern', () => {
     const mockJudgeModel: ChatModel = {
       provider: 'anthropic',
       model: 'mock-judge',
+      capabilities: DEFAULT_MOCK_CAPABILITIES,
       run(request: ChatRequest) {
         judgeReceivedPrompt = request.messages[request.messages.length - 1]?.content ?? ''
         return {
@@ -150,6 +153,7 @@ describe('CrossCheckPattern', () => {
     const mockModel: ChatModel = {
       provider: 'openai',
       model: 'mock',
+      capabilities: DEFAULT_MOCK_CAPABILITIES,
       run(request: ChatRequest) {
         receivedPrompt = request.messages[request.messages.length - 1]?.content ?? ''
         return {

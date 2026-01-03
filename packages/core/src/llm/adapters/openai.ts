@@ -1,10 +1,31 @@
 import { OpenAIProvider, type OpenAIProviderConfig } from '../../providers/openai'
 import type { StreamChunk } from '../../providers/types'
-import type { ChatMessage, ChatModel, ChatRequest, ChatResponse, RunEvent, RunHandle, Usage } from '../types'
+import type {
+  ChatMessage,
+  ChatModel,
+  ChatModelCapabilities,
+  ChatRequest,
+  ChatResponse,
+  RunEvent,
+  RunHandle,
+  Usage,
+} from '../types'
+
+const OPENAI_CAPABILITIES: ChatModelCapabilities = {
+  structuredOutput: true,
+  toolCalling: true,
+  streaming: 'token',
+  maxContextWindow: 128000,
+  supportsSystemMessages: true,
+  promptCaching: false,
+  webSearch: true,
+  vision: true,
+}
 
 export class OpenAIAdapter implements ChatModel {
   readonly provider = 'openai' as const
   readonly model: string
+  readonly capabilities: ChatModelCapabilities = OPENAI_CAPABILITIES
   private openai: OpenAIProvider
 
   constructor(config: OpenAIProviderConfig = {}) {

@@ -1,5 +1,56 @@
-import type { ChatModel, ChatResponse, RunEvent } from '../llm/types'
+import type { ChatModel, ChatResponse, ProviderId, RunEvent } from '../llm/types'
 import type { RunContext, TraceContext } from '../runtime/types'
+
+export type EventOrdering = 'causal' | 'arrival' | 'undefined'
+export type CancellationPropagation = 'immediate' | 'graceful' | 'best-effort'
+
+export interface ErrorAttribution {
+  agentId?: string
+  modelId?: string
+  provider?: ProviderId
+  roundIndex?: number
+  phase?: string
+}
+
+export interface StreamingProtocol {
+  eventOrdering: EventOrdering
+  cancellationPropagation: CancellationPropagation
+  supportsReplay: boolean
+}
+
+export const DEFAULT_STREAMING_PROTOCOL: StreamingProtocol = {
+  eventOrdering: 'arrival',
+  cancellationPropagation: 'best-effort',
+  supportsReplay: false,
+}
+
+export const PATTERN_STREAMING_PROTOCOLS: Record<string, StreamingProtocol> = {
+  sequential: {
+    eventOrdering: 'causal',
+    cancellationPropagation: 'immediate',
+    supportsReplay: false,
+  },
+  parallel: {
+    eventOrdering: 'arrival',
+    cancellationPropagation: 'best-effort',
+    supportsReplay: false,
+  },
+  debate: {
+    eventOrdering: 'causal',
+    cancellationPropagation: 'graceful',
+    supportsReplay: false,
+  },
+  ensemble: {
+    eventOrdering: 'arrival',
+    cancellationPropagation: 'best-effort',
+    supportsReplay: false,
+  },
+  crosscheck: {
+    eventOrdering: 'arrival',
+    cancellationPropagation: 'graceful',
+    supportsReplay: false,
+  },
+}
 
 export interface PatternConfig {
   name?: string
@@ -15,7 +66,8 @@ export interface EventTrace {
 }
 
 export type BasePatternEvent =
-  | RunEvent
+  | Exclude<RunEvent, { type: 'error' }>
+  | { type: 'error'; error: unknown; attribution?: ErrorAttribution }
   | { type: 'agent_start'; agentId: string; agentName?: string }
   | { type: 'agent_end'; agentId: string; durationMs: number }
   | { type: 'phase_start'; phase: string }

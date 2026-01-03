@@ -1,26 +1,26 @@
-/**
- * Skills module for Obora
- *
- * Provides types and utilities for AgentSkills integration
- */
-
 // Loader
 export { SkillLoader, SkillNotFoundError } from './loader'
 export {
-  // Validation
+  checkToolPermission,
+  createAuditLogger,
+  DEFAULT_SECURITY_CONFIG,
+  DEFAULT_SKILL_PERMISSIONS,
+  getSkillPermissions,
   isValidSkillFrontmatter,
   SKILL_CONSTRAINTS,
   SKILL_PATHS,
-  // Core types
   type Skill,
-  // Discovery types
+  type SkillAuditEvent,
+  type SkillAuditSink,
   type SkillDiscoveryResult,
   type SkillFrontmatter,
-  // Loader types
+  type SkillIsolation,
   type SkillLoaderConfig,
   type SkillMetadata,
   type SkillMetadataFields,
+  type SkillPermissions,
   type SkillResources,
+  type SkillSecurityConfig,
   type SkillSource,
   type SkillValidationError,
   type SkillWarning,

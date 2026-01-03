@@ -1,9 +1,17 @@
 #!/usr/bin/env bun
 
 import { ClaudeProvider, GeminiProvider, OpenAIProvider } from '../src'
-import type { ChatModel, ChatRequest, ChatResponse, RunEvent, RunHandle } from '../src/llm/types'
+import type { ChatModel, ChatModelCapabilities, ChatRequest, ChatResponse, RunEvent, RunHandle } from '../src/llm/types'
 import { type AgentConfig, createCrossCheckPattern, type PatternEvent } from '../src/patterns'
 import { createRunContext } from '../src/runtime'
+
+const DEFAULT_CAPABILITIES: ChatModelCapabilities = {
+  structuredOutput: true,
+  toolCalling: true,
+  streaming: 'token',
+  maxContextWindow: 128000,
+  supportsSystemMessages: true,
+}
 
 const QUESTION = `
 TypeScript에서 다음 중 어떤 방식이 더 좋은가요?
@@ -24,6 +32,7 @@ function wrapProvider(
   return {
     provider: providerId,
     model: provider.name,
+    capabilities: DEFAULT_CAPABILITIES,
     run(request: ChatRequest, signal?: AbortSignal): RunHandle<ChatResponse> {
       const prompt = request.messages
         .map((m) => {

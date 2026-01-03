@@ -76,6 +76,87 @@ const result = await engine.run({
 })
 ```
 
+## Security
+
+### Permission Model
+
+Skills can declare which tools they're allowed to use via the `allowed-tools` frontmatter field:
+
+```yaml
+---
+name: fact-checker
+description: Verifies claims using web search
+allowed-tools: WebSearch
+---
+```
+
+When `allowed-tools` is specified, only those tools can be invoked during skill execution.
+
+### Checking Permissions
+
+```typescript
+import { checkToolPermission, getSkillPermissions } from '@obora/core'
+
+const skill = await loader.load('fact-checker')
+const permissions = getSkillPermissions(skill)
+// { allowedTools: ['WebSearch'], networkAccess: true, ... }
+
+const canUseWebSearch = checkToolPermission(skill, 'WebSearch')
+// true
+
+const canUseFileSystem = checkToolPermission(skill, 'FileSystem')
+// false (not in allowed-tools)
+```
+
+### Audit Logging
+
+Enable audit logging to track skill operations:
+
+```typescript
+import { createAuditLogger, type SkillAuditEvent } from '@obora/core'
+
+const events: SkillAuditEvent[] = []
+const logger = createAuditLogger((event) => events.push(event))
+
+// Log when skills are loaded
+logger.logLoad(skill)
+
+// Log when skills are activated
+logger.logActivate(skill, 'rebuttal')
+
+// Log tool invocations
+logger.logToolInvoke(skill, 'WebSearch', true)
+```
+
+### Security Best Practices
+
+| Practice | Description |
+|----------|-------------|
+| **Least Privilege** | Only declare tools the skill actually needs in `allowed-tools` |
+| **Source Verification** | Only load skills from trusted sources (built-in or verified custom paths) |
+| **Input Validation** | Skills should not process untrusted user input directly in instructions |
+| **No Secrets** | Never include API keys, credentials, or sensitive data in SKILL.md files |
+| **Review Third-Party** | Carefully review any external skills before adding to your project |
+
+### Security Configuration
+
+```typescript
+import { SkillLoader, DEFAULT_SECURITY_CONFIG } from '@obora/core'
+
+const securityConfig = {
+  ...DEFAULT_SECURITY_CONFIG,
+  auditLogging: true,
+  defaultPermissions: {
+    allowedTools: [], // No tools by default
+    networkAccess: false,
+    fileSystemAccess: 'none',
+  },
+}
+
+// Use with permission checks
+const allowed = checkToolPermission(skill, 'WebSearch', securityConfig, auditSink)
+```
+
 ## Documentation Reference
 
 - [SPECIFICATION.md](./SPECIFICATION.md): Full schema reference for SKILL.md format.

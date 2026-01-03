@@ -253,6 +253,123 @@ export interface SkillWarning {
   paths: string[]
 }
 
+export type SkillIsolation = 'none' | 'sandbox' | 'container'
+
+export interface SkillPermissions {
+  allowedTools: string[]
+  maxTokenBudget?: number
+  networkAccess: boolean
+  fileSystemAccess: 'none' | 'read' | 'write'
+}
+
+export interface SkillSecurityConfig {
+  requireSigning?: boolean
+  trustedSources?: string[]
+  defaultPermissions?: Partial<SkillPermissions>
+  isolation?: SkillIsolation
+  auditLogging?: boolean
+}
+
+export interface SkillAuditEvent {
+  timestamp: number
+  eventType: 'load' | 'activate' | 'tool_invoke' | 'permission_denied'
+  skillName: string
+  skillLocation: string
+  details?: Record<string, unknown>
+}
+
+export type SkillAuditSink = (event: SkillAuditEvent) => void
+
+export const DEFAULT_SKILL_PERMISSIONS: SkillPermissions = {
+  allowedTools: [],
+  maxTokenBudget: undefined,
+  networkAccess: false,
+  fileSystemAccess: 'none',
+}
+
+export const DEFAULT_SECURITY_CONFIG: SkillSecurityConfig = {
+  requireSigning: false,
+  trustedSources: [],
+  defaultPermissions: DEFAULT_SKILL_PERMISSIONS,
+  isolation: 'none',
+  auditLogging: false,
+}
+
+export function getSkillPermissions(skill: Skill, config?: SkillSecurityConfig): SkillPermissions {
+  const defaults = config?.defaultPermissions ?? DEFAULT_SKILL_PERMISSIONS
+  const allowedToolsStr = skill.frontmatter['allowed-tools']
+  const allowedTools = allowedToolsStr ? allowedToolsStr.split(/\s+/).filter(Boolean) : (defaults.allowedTools ?? [])
+
+  return {
+    allowedTools,
+    maxTokenBudget: defaults.maxTokenBudget,
+    networkAccess: allowedTools.includes('WebSearch') || allowedTools.includes('web_search'),
+    fileSystemAccess: defaults.fileSystemAccess ?? 'none',
+  }
+}
+
+export function checkToolPermission(
+  skill: Skill,
+  toolName: string,
+  config?: SkillSecurityConfig,
+  auditSink?: SkillAuditSink,
+): boolean {
+  const permissions = getSkillPermissions(skill, config)
+
+  if (permissions.allowedTools.length === 0) {
+    return true
+  }
+
+  const allowed = permissions.allowedTools.includes(toolName) || permissions.allowedTools.includes('*')
+
+  if (!allowed && auditSink) {
+    auditSink({
+      timestamp: Date.now(),
+      eventType: 'permission_denied',
+      skillName: skill.name,
+      skillLocation: skill.location,
+      details: { toolName, allowedTools: permissions.allowedTools },
+    })
+  }
+
+  return allowed
+}
+
+export function createAuditLogger(sink: SkillAuditSink): {
+  logLoad: (skill: Skill) => void
+  logActivate: (skill: Skill, phase?: string) => void
+  logToolInvoke: (skill: Skill, toolName: string, allowed: boolean) => void
+} {
+  return {
+    logLoad: (skill: Skill) => {
+      sink({
+        timestamp: Date.now(),
+        eventType: 'load',
+        skillName: skill.name,
+        skillLocation: skill.location,
+      })
+    },
+    logActivate: (skill: Skill, phase?: string) => {
+      sink({
+        timestamp: Date.now(),
+        eventType: 'activate',
+        skillName: skill.name,
+        skillLocation: skill.location,
+        details: phase ? { phase } : undefined,
+      })
+    },
+    logToolInvoke: (skill: Skill, toolName: string, allowed: boolean) => {
+      sink({
+        timestamp: Date.now(),
+        eventType: allowed ? 'tool_invoke' : 'permission_denied',
+        skillName: skill.name,
+        skillLocation: skill.location,
+        details: { toolName, allowed },
+      })
+    },
+  }
+}
+
 /**
  * Validation constraints based on AgentSkills spec
  */

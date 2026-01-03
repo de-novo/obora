@@ -1,10 +1,31 @@
 import { GeminiProvider, type GeminiProviderConfig } from '../../providers/gemini'
 import type { StreamChunk } from '../../providers/types'
-import type { ChatMessage, ChatModel, ChatRequest, ChatResponse, RunEvent, RunHandle, Usage } from '../types'
+import type {
+  ChatMessage,
+  ChatModel,
+  ChatModelCapabilities,
+  ChatRequest,
+  ChatResponse,
+  RunEvent,
+  RunHandle,
+  Usage,
+} from '../types'
+
+const GOOGLE_CAPABILITIES: ChatModelCapabilities = {
+  structuredOutput: true,
+  toolCalling: true,
+  streaming: 'token',
+  maxContextWindow: 1000000,
+  supportsSystemMessages: true,
+  promptCaching: true,
+  webSearch: true,
+  vision: true,
+}
 
 export class GoogleAdapter implements ChatModel {
   readonly provider = 'google' as const
   readonly model: string
+  readonly capabilities: ChatModelCapabilities = GOOGLE_CAPABILITIES
   private gemini: GeminiProvider
 
   constructor(config: GeminiProviderConfig = {}) {

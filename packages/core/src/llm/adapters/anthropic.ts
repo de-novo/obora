@@ -1,10 +1,31 @@
 import { ClaudeProvider, type ClaudeProviderConfig } from '../../providers/claude'
 import type { StreamChunk } from '../../providers/types'
-import type { ChatMessage, ChatModel, ChatRequest, ChatResponse, RunEvent, RunHandle, Usage } from '../types'
+import type {
+  ChatMessage,
+  ChatModel,
+  ChatModelCapabilities,
+  ChatRequest,
+  ChatResponse,
+  RunEvent,
+  RunHandle,
+  Usage,
+} from '../types'
+
+const ANTHROPIC_CAPABILITIES: ChatModelCapabilities = {
+  structuredOutput: true,
+  toolCalling: true,
+  streaming: 'token',
+  maxContextWindow: 200000,
+  supportsSystemMessages: true,
+  promptCaching: true,
+  webSearch: true,
+  vision: true,
+}
 
 export class AnthropicAdapter implements ChatModel {
   readonly provider = 'anthropic' as const
   readonly model: string
+  readonly capabilities: ChatModelCapabilities = ANTHROPIC_CAPABILITIES
   private claude: ClaudeProvider
 
   constructor(config: ClaudeProviderConfig = {}) {

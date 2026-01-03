@@ -2,6 +2,7 @@ import type { ChatMessage, ChatResponse } from '../llm/types'
 import type { RunContext } from '../runtime/types'
 import type {
   AgentConfig,
+  ErrorAttribution,
   ParallelConfig,
   ParallelInput,
   ParallelResult,
@@ -102,7 +103,13 @@ export class ParallelPattern implements Pattern<ParallelInput, ParallelResult> {
           success: true as const,
         }))
         .catch((error) => {
-          onEvent({ type: 'error', error })
+          const attribution: ErrorAttribution = {
+            agentId: agent.id,
+            modelId: agent.model.model,
+            provider: agent.model.provider,
+            phase: 'parallel-execution',
+          }
+          onEvent({ type: 'error', error, attribution })
           return {
             agentId: agent.id,
             response: { message: { role: 'assistant' as const, content: '' } } as ChatResponse,

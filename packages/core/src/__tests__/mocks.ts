@@ -1,8 +1,16 @@
-/**
- * Mock implementations for testing
- */
-
+import type { ChatModelCapabilities } from '../llm/types'
 import type { ProviderResponse, StreamableProvider } from '../providers/types'
+
+export const DEFAULT_MOCK_CAPABILITIES: ChatModelCapabilities = {
+  structuredOutput: true,
+  toolCalling: true,
+  streaming: 'token',
+  maxContextWindow: 128000,
+  supportsSystemMessages: true,
+  promptCaching: false,
+  webSearch: false,
+  vision: false,
+}
 
 /**
  * Mock provider that returns predefined responses
