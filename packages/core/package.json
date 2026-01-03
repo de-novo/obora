@@ -3,17 +3,49 @@
   "version": "0.1.0",
   "description": "Multi-AI Debate Engine - Core Library",
   "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./engine": "./src/engine/index.ts",
-    "./providers": "./src/providers/index.ts",
-    "./config": "./src/config/index.ts",
-    "./auth": "./src/auth/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./engine": {
+      "types": "./dist/engine/index.d.ts",
+      "import": "./dist/engine/index.js",
+      "default": "./dist/engine/index.js"
+    },
+    "./providers": {
+      "types": "./dist/providers/index.d.ts",
+      "import": "./dist/providers/index.js",
+      "default": "./dist/providers/index.js"
+    },
+    "./config": {
+      "types": "./dist/config/index.d.ts",
+      "import": "./dist/config/index.js",
+      "default": "./dist/config/index.js"
+    },
+    "./auth": {
+      "types": "./dist/auth/index.d.ts",
+      "import": "./dist/auth/index.js",
+      "default": "./dist/auth/index.js"
+    }
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "build": "bun build ./src/index.ts --outdir ./dist --target bun"
+    "build": "bun run build:js && bun run build:types",
+    "build:js": "bun build ./src/index.ts ./src/engine/index.ts ./src/providers/index.ts ./src/config/index.ts ./src/auth/index.ts --outdir ./dist --target node --format esm --splitting",
+    "build:types": "tsc -p tsconfig.build.json",
+    "prepublishOnly": "bun run build",
+    "clean": "rm -rf dist"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "3.0.2",
@@ -58,9 +90,18 @@
     "gemini",
     "orchestration"
   ],
+  "author": {
+    "name": "de-novo",
+    "url": "https://github.com/de-novo"
+  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/denovo/obora"
+    "url": "git+https://github.com/de-novo/obora.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/de-novo/obora#readme",
+  "bugs": {
+    "url": "https://github.com/de-novo/obora/issues"
   },
   "license": "MIT"
 }

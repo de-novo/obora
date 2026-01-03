@@ -1,6 +1,9 @@
 # Obora: Multi-AI Debate System
 
 [![CI](https://github.com/de-novo/obora/actions/workflows/ci.yml/badge.svg)](https://github.com/de-novo/obora/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/@obora/core.svg)](https://www.npmjs.com/package/@obora/core)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue.svg)](https://www.typescriptlang.org/)
 
 > AIs **challenge, critique, and revise** each other's positions to reach better conclusions
 
