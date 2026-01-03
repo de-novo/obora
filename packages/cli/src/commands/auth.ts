@@ -11,6 +11,7 @@ import {
   performGoogleLoginWithMultiAccount,
   performInteractiveLogin,
   performOpenAILogin,
+  removeGoogleAccount,
 } from '@obora/core'
 
 type Provider = 'anthropic' | 'openai' | 'google'
@@ -198,7 +199,7 @@ async function loginGoogle(): Promise<void> {
   const accounts = await listGoogleAccounts()
 
   if (accounts.length === 0) {
-    await performGoogleLoginWithMultiAccount()
+    await addGoogleAccountWithRetry()
     return
   }
 
@@ -214,6 +215,7 @@ async function loginGoogle(): Promise<void> {
     message: 'What would you like to do?',
     options: [
       { value: 'add', label: 'Add another account', hint: 'Up to 10 accounts for rotation' },
+      { value: 'remove', label: 'Remove account', hint: 'Select account to remove' },
       { value: 'replace', label: 'Replace all accounts', hint: 'Clear and re-authenticate' },
       { value: 'keep', label: 'Keep current accounts', hint: 'No changes' },
     ],
@@ -229,12 +231,83 @@ async function loginGoogle(): Promise<void> {
     return
   }
 
+  if (action === 'remove') {
+    await removeGoogleAccountInteractive(accounts)
+    return
+  }
+
   if (action === 'replace') {
     await logoutGoogle()
     p.log.info('Cleared all Google accounts')
   }
 
-  await performGoogleLoginWithMultiAccount()
+  await addGoogleAccountWithRetry()
+}
+
+async function removeGoogleAccountInteractive(accounts: Awaited<ReturnType<typeof listGoogleAccounts>>): Promise<void> {
+  const options = accounts.map((acc) => ({
+    value: acc.index,
+    label: acc.email || `Account ${acc.index + 1}`,
+    hint: Object.keys(acc.rateLimitResetTimes).length > 0 ? 'rate limited' : undefined,
+  }))
+
+  const selected = await p.select({
+    message: 'Select account to remove:',
+    options,
+  })
+
+  if (p.isCancel(selected)) {
+    p.cancel('Cancelled')
+    return
+  }
+
+  const removed = await removeGoogleAccount(selected as number)
+  if (removed) {
+    const remaining = await listGoogleAccounts()
+    p.log.success(`Removed account. ${remaining.length} account(s) remaining.`)
+  } else {
+    p.log.error('Failed to remove account')
+  }
+}
+
+async function addGoogleAccountWithRetry(): Promise<void> {
+  if (process.stdin.isTTY) {
+    process.stdin.setRawMode(false)
+  }
+  process.stdin.resume()
+
+  try {
+    const result = await performGoogleLoginWithMultiAccount()
+    if (result) {
+      const email = result.account.email || `Account ${result.account.index + 1}`
+      if (result.isNew) {
+        p.log.success(`Added Google account: ${email}`)
+      } else {
+        p.log.info(`Account already exists: ${email} (refreshed tokens)`)
+      }
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    p.log.error(`Authentication failed: ${message}`)
+    process.exit(1)
+  }
+
+  const accounts = await listGoogleAccounts()
+  if (accounts.length >= 10) {
+    p.log.info('Maximum of 10 accounts reached')
+    return
+  }
+
+  const addMore = await p.confirm({
+    message: 'Add another account?',
+    initialValue: false,
+  })
+
+  if (p.isCancel(addMore) || !addMore) {
+    return
+  }
+
+  await addGoogleAccountWithRetry()
 }
 
 async function logout(provider?: Provider): Promise<void> {
@@ -248,10 +321,82 @@ async function logout(provider?: Provider): Promise<void> {
     return
   }
 
+  if (provider === 'google') {
+    await logoutGoogleInteractive()
+    return
+  }
+
   const s = p.spinner()
   s.start(`Logging out from ${getProviderName(provider)}...`)
   await logoutProvider(provider)
   s.stop(`Logged out from ${getProviderName(provider)}`)
+}
+
+async function logoutGoogleInteractive(): Promise<void> {
+  const accounts = await listGoogleAccounts()
+
+  if (accounts.length === 0) {
+    p.log.info('No Google accounts to logout')
+    return
+  }
+
+  if (accounts.length === 1) {
+    await logoutGoogle()
+    p.log.success('Logged out from Google')
+    return
+  }
+
+  p.log.info(`You have ${accounts.length} Google account(s):`)
+  for (const acc of accounts) {
+    const email = acc.email || `Account ${acc.index + 1}`
+    p.log.message(`  ${acc.index + 1}. ${email}`)
+  }
+
+  const action = await p.select({
+    message: 'What would you like to do?',
+    options: [
+      { value: 'select', label: 'Remove specific account' },
+      { value: 'all', label: 'Remove all accounts' },
+      { value: 'cancel', label: 'Cancel' },
+    ],
+  })
+
+  if (p.isCancel(action) || action === 'cancel') {
+    p.log.info('Cancelled')
+    return
+  }
+
+  if (action === 'all') {
+    await logoutGoogle()
+    p.log.success('Logged out from all Google accounts')
+    return
+  }
+
+  const options = accounts.map((acc) => ({
+    value: acc.index,
+    label: acc.email || `Account ${acc.index + 1}`,
+  }))
+
+  const selected = await p.select({
+    message: 'Select account to remove:',
+    options,
+  })
+
+  if (p.isCancel(selected)) {
+    p.log.info('Cancelled')
+    return
+  }
+
+  const removed = await removeGoogleAccount(selected as number)
+  if (removed) {
+    const remaining = await listGoogleAccounts()
+    if (remaining.length === 0) {
+      await logoutGoogle()
+    }
+    p.log.success(`Removed account. ${remaining.length} account(s) remaining.`)
+  } else {
+    p.log.error('Failed to remove account')
+  }
 }
 
 async function status(): Promise<void> {

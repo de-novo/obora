@@ -80,16 +80,29 @@ export class AccountManager {
     return [...this.accounts]
   }
 
-  addAccount(refreshToken: string, email?: string, projectId?: string): ManagedAccount | null {
+  addAccount(
+    refreshToken: string,
+    email?: string,
+    projectId?: string,
+  ): { account: ManagedAccount; isNew: boolean } | null {
     if (this.accounts.length >= MAX_ACCOUNTS) {
       return null
     }
 
-    const existing = this.accounts.find((a) => a.refreshToken === refreshToken)
-    if (existing) {
-      existing.email = email ?? existing.email
-      existing.projectId = projectId ?? existing.projectId
-      return existing
+    const existingByToken = this.accounts.find((a) => a.refreshToken === refreshToken)
+    if (existingByToken) {
+      existingByToken.email = email ?? existingByToken.email
+      existingByToken.projectId = projectId ?? existingByToken.projectId
+      return { account: existingByToken, isNew: false }
+    }
+
+    if (email) {
+      const existingByEmail = this.accounts.find((a) => a.email === email)
+      if (existingByEmail) {
+        existingByEmail.refreshToken = refreshToken
+        existingByEmail.projectId = projectId ?? existingByEmail.projectId
+        return { account: existingByEmail, isNew: false }
+      }
     }
 
     const now = nowMs()
@@ -110,7 +123,7 @@ export class AccountManager {
       this.currentIndexByFamily.gemini = 0
     }
 
-    return account
+    return { account, isNew: true }
   }
 
   removeAccount(account: ManagedAccount): boolean {

@@ -189,6 +189,9 @@ export async function isGoogleAuthenticated(): Promise<boolean> {
 
 export async function logoutGoogle(): Promise<void> {
   await deleteProviderTokens('google')
+  const { clearAccounts } = await import('./account-storage.ts')
+  await clearAccounts()
+  accountManagerInstance = null
 }
 
 export function startGoogleCallbackServer(
@@ -295,17 +298,30 @@ export async function getGoogleAccountManager(): Promise<AccountManager> {
   return accountManagerInstance
 }
 
+async function fetchGoogleUserEmail(accessToken: string): Promise<string | undefined> {
+  try {
+    const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+    if (response.ok) {
+      const data = (await response.json()) as { email?: string }
+      return data.email
+    }
+  } catch {}
+  return undefined
+}
+
 export async function addGoogleAccount(
   refreshToken: string,
   email?: string,
   projectId?: string,
-): Promise<ManagedAccount | null> {
+): Promise<{ account: ManagedAccount; isNew: boolean } | null> {
   const manager = await getGoogleAccountManager()
-  const account = manager.addAccount(refreshToken, email, projectId)
-  if (account) {
+  const result = manager.addAccount(refreshToken, email, projectId)
+  if (result) {
     await manager.saveToDisk()
   }
-  return account
+  return result
 }
 
 export async function removeGoogleAccount(index: number): Promise<boolean> {
@@ -348,7 +364,10 @@ export async function markAccountRateLimited(
   await manager.saveToDisk()
 }
 
-export async function performGoogleLoginWithMultiAccount(): Promise<ManagedAccount | null> {
+export async function performGoogleLoginWithMultiAccount(): Promise<{
+  account: ManagedAccount
+  isNew: boolean
+} | null> {
   const { authorizationUrl, pkce, state } = await createGoogleAuthorizationUrl()
 
   console.log('\nOpening browser for Google (Gemini) authentication...\n')
@@ -364,13 +383,14 @@ export async function performGoogleLoginWithMultiAccount(): Promise<ManagedAccou
   const { code } = await serverPromise
   const tokens = await exchangeGoogleCodeForTokens(code, pkce.codeVerifier)
 
-  const account = await addGoogleAccount(tokens.refreshToken)
-  if (account) {
+  const email = await fetchGoogleUserEmail(tokens.accessToken)
+  const result = await addGoogleAccount(tokens.refreshToken, email)
+
+  if (result) {
     const manager = await getGoogleAccountManager()
-    manager.updateTokens(account, tokens.accessToken, tokens.expiresAt)
+    manager.updateTokens(result.account, tokens.accessToken, tokens.expiresAt)
     await manager.saveToDisk()
-    console.log(`Successfully added Google account (${manager.getAccountCount()} total)\n`)
   }
 
-  return account
+  return result
 }

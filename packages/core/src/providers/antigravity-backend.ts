@@ -1,4 +1,12 @@
-import { getValidGoogleAccessToken, loadProviderTokens } from '../auth'
+import {
+  getGoogleAccountManager,
+  getNextAvailableAccount,
+  getValidGoogleAccessToken,
+  loadProviderTokens,
+  type ManagedAccount,
+  markAccountRateLimited,
+  refreshAccountToken,
+} from '../auth'
 import type { ProviderBackend, ProviderConfig, ProviderResponse } from './types'
 
 const CODE_ASSIST_ENDPOINTS = [
@@ -121,6 +129,51 @@ function injectThoughtSignatureIntoFunctionCalls(
 
 let cachedProjectId: string | null = null
 let sessionId: string | null = null
+
+async function getAccessTokenWithRotation(): Promise<{ token: string; account: ManagedAccount | null }> {
+  const manager = await getGoogleAccountManager()
+  const accounts = manager.getAccounts()
+
+  if (accounts.length === 0) {
+    const token = await getValidGoogleAccessToken()
+    return { token, account: null }
+  }
+
+  const account = await getNextAvailableAccount()
+  if (!account) {
+    const waitTime = manager.getMinWaitTimeForFamily('gemini')
+    if (waitTime > 0) {
+      throw new Error(`All Google accounts are rate limited. Try again in ${Math.ceil(waitTime / 1000)}s`)
+    }
+    const token = await getValidGoogleAccessToken()
+    return { token, account: null }
+  }
+
+  if (!account.accessToken || (account.expiresAt && account.expiresAt < Date.now())) {
+    const tokens = await refreshAccountToken(account)
+    return { token: tokens.accessToken, account }
+  }
+
+  return { token: account.accessToken, account }
+}
+
+async function handleRateLimitAndRetry<T>(
+  account: ManagedAccount | null,
+  retryAfterMs: number,
+  operation: () => Promise<T>,
+): Promise<T> {
+  if (account) {
+    await markAccountRateLimited(account, retryAfterMs)
+    console.log(`[Antigravity] Account ${account.index + 1} rate limited, switching...`)
+  }
+
+  const { account: newAccount } = await getAccessTokenWithRotation()
+  if (!newAccount && !account) {
+    throw new Error('Rate limited and no alternative accounts available')
+  }
+
+  return operation()
+}
 
 function generateRequestId(): string {
   return `req-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
@@ -306,9 +359,9 @@ async function generateContent(
   model: string,
   prompt: string,
   enableWebSearch = false,
+  account: ManagedAccount | null = null,
 ): Promise<AntigravityResponse> {
   const request = createAntigravityRequest(projectId, model, prompt, enableWebSearch)
-  // Inject thoughtSignature to satisfy Antigravity API validation
   const requestWithSignature = injectThoughtSignatureIntoFunctionCalls(request as unknown as Record<string, unknown>)
   console.log(`[Antigravity] Calling generateContent with project: ${projectId}`)
 
@@ -330,6 +383,13 @@ async function generateContent(
         if (response.status === 403 && errorText.includes('SUBSCRIPTION_REQUIRED')) {
           throw new Error('SUBSCRIPTION_REQUIRED')
         }
+        if (response.status === 429) {
+          const retryAfter = Number.parseInt(response.headers.get('Retry-After') || '60', 10) * 1000
+          return handleRateLimitAndRetry(account, retryAfter, async () => {
+            const { token, account: newAccount } = await getAccessTokenWithRotation()
+            return generateContent(token, projectId, model, prompt, enableWebSearch, newAccount)
+          })
+        }
         throw new Error(`Antigravity API error (${response.status}): ${errorText}`)
       }
 
@@ -337,6 +397,7 @@ async function generateContent(
     } catch (e) {
       if (e instanceof Error && e.message.includes('Antigravity API error')) throw e
       if (e instanceof Error && e.message === 'SUBSCRIPTION_REQUIRED') throw e
+      if (e instanceof Error && e.message.includes('rate limited')) throw e
     }
   }
 
@@ -349,16 +410,24 @@ async function generateContentWithFallback(
   model: string,
   prompt: string,
   enableWebSearch = false,
+  account: ManagedAccount | null = null,
 ): Promise<AntigravityResponse> {
   try {
-    return await generateContent(accessToken, projectId, model, prompt, enableWebSearch)
+    return await generateContent(accessToken, projectId, model, prompt, enableWebSearch, account)
   } catch (e) {
     if (e instanceof Error && e.message === 'SUBSCRIPTION_REQUIRED') {
       if (projectId !== ANTIGRAVITY_DEFAULT_PROJECT_ID) {
         console.log(`[Antigravity] Project ${projectId} requires subscription, trying default project...`)
         cachedProjectId = ANTIGRAVITY_DEFAULT_PROJECT_ID
         try {
-          return await generateContent(accessToken, ANTIGRAVITY_DEFAULT_PROJECT_ID, model, prompt, enableWebSearch)
+          return await generateContent(
+            accessToken,
+            ANTIGRAVITY_DEFAULT_PROJECT_ID,
+            model,
+            prompt,
+            enableWebSearch,
+            account,
+          )
         } catch (fallbackError) {
           if (fallbackError instanceof Error && fallbackError.message === 'SUBSCRIPTION_REQUIRED') {
             throw new Error(
@@ -389,10 +458,10 @@ export class AntigravityBackend implements ProviderBackend {
 
     const enableWebSearch = (config as { enabledTools?: string[] }).enabledTools?.includes('google_web_search') ?? false
 
-    const accessToken = await getValidGoogleAccessToken()
+    const { token: accessToken, account } = await getAccessTokenWithRotation()
     const projectId = await discoverProjectId(accessToken)
 
-    const data = await generateContentWithFallback(accessToken, projectId, modelId, prompt, enableWebSearch)
+    const data = await generateContentWithFallback(accessToken, projectId, modelId, prompt, enableWebSearch, account)
 
     if (data.error) {
       throw new Error(`Antigravity error: ${data.error.message}`)
@@ -414,12 +483,11 @@ export class AntigravityBackend implements ProviderBackend {
   async *stream(prompt: string, config: ProviderConfig): AsyncGenerator<{ chunk: string; done: boolean }> {
     const modelId = config.model || DEFAULT_MODEL
 
-    const accessToken = await getValidGoogleAccessToken()
+    const { token: accessToken, account } = await getAccessTokenWithRotation()
     let projectId = await discoverProjectId(accessToken)
 
-    const tryStream = async (project: string): Promise<Response | null> => {
+    const tryStream = async (token: string, project: string): Promise<Response | null> => {
       const request = createAntigravityRequest(project, modelId, prompt)
-      // Inject thoughtSignature to satisfy Antigravity API validation
       const requestWithSignature = injectThoughtSignatureIntoFunctionCalls(
         request as unknown as Record<string, unknown>,
       )
@@ -429,13 +497,20 @@ export class AntigravityBackend implements ProviderBackend {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              Authorization: `Bearer ${accessToken}`,
+              Authorization: `Bearer ${token}`,
               ...CODE_ASSIST_HEADERS,
             },
             body: JSON.stringify(requestWithSignature),
           })
 
           if (response.ok) return response
+          if (response.status === 429 && account) {
+            const retryAfter = Number.parseInt(response.headers.get('Retry-After') || '60', 10) * 1000
+            await markAccountRateLimited(account, retryAfter)
+            console.log(`[Antigravity] Account ${account.index + 1} rate limited during streaming, switching...`)
+            const { token: newToken } = await getAccessTokenWithRotation()
+            return tryStream(newToken, project)
+          }
           if (response.status === 403) {
             const text = await response.text()
             if (text.includes('SUBSCRIPTION_REQUIRED')) {
@@ -447,7 +522,7 @@ export class AntigravityBackend implements ProviderBackend {
       return null
     }
 
-    let response = await tryStream(projectId)
+    let response = await tryStream(accessToken, projectId)
 
     if (!response && projectId !== ANTIGRAVITY_DEFAULT_PROJECT_ID) {
       console.log(
@@ -455,7 +530,7 @@ export class AntigravityBackend implements ProviderBackend {
       )
       cachedProjectId = ANTIGRAVITY_DEFAULT_PROJECT_ID
       projectId = ANTIGRAVITY_DEFAULT_PROJECT_ID
-      response = await tryStream(projectId)
+      response = await tryStream(accessToken, projectId)
     }
 
     if (!response) {

@@ -1,4 +1,8 @@
 // Anthropic OAuth
+
+// Account Manager
+export { AccountManager } from './account-manager.ts'
+export { clearAccounts, getAccountsPath, loadAccounts, saveAccounts } from './account-storage.ts'
 export {
   type AnthropicRequestOptions,
   type AuthMode,
@@ -18,10 +22,10 @@ export {
   addGoogleAccount,
   createGoogleAuthorizationUrl,
   exchangeGoogleCodeForTokens,
+  type GoogleAuthorizationResult,
   getGoogleAccountManager,
   getNextAvailableAccount,
   getValidGoogleAccessToken,
-  type GoogleAuthorizationResult,
   isGoogleAuthenticated,
   listGoogleAccounts,
   logoutGoogle,
@@ -32,9 +36,6 @@ export {
   refreshGoogleAccessToken,
   removeGoogleAccount,
 } from './google.ts'
-// Account Manager
-export { AccountManager } from './account-manager.ts'
-export { clearAccounts, getAccountsPath, loadAccounts, saveAccounts } from './account-storage.ts'
 // OAuth Server
 export {
   type CallbackResult,
