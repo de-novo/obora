@@ -1,14 +1,8 @@
 import { generatePKCEChallenge } from './pkce.ts'
+import { refreshWithRetry } from './refresh.ts'
 import { deleteProviderTokens, isTokenExpired, loadProviderTokens, saveProviderTokens } from './storage.ts'
 import type { OAuthTokens, PKCEChallenge, TokenResponse } from './types.ts'
-import {
-  calculateRetryDelay,
-  MAX_REFRESH_RETRIES,
-  OPENAI_OAUTH_CONFIG,
-  OPENAI_REDIRECT_URI,
-  parseOAuthErrorPayload,
-  TokenRefreshError,
-} from './types.ts'
+import { OPENAI_OAUTH_CONFIG, OPENAI_REDIRECT_URI, TokenRefreshError } from './types.ts'
 
 export interface OpenAIAuthorizationResult {
   authorizationUrl: string
@@ -80,75 +74,18 @@ export async function exchangeOpenAICodeForTokens(code: string, codeVerifier: st
 
 export async function refreshOpenAIAccessToken(currentRefreshToken: string): Promise<OAuthTokens> {
   const config = OPENAI_OAUTH_CONFIG
-  let lastError: TokenRefreshError | undefined
-
-  for (let attempt = 0; attempt <= MAX_REFRESH_RETRIES; attempt++) {
-    try {
-      const response = await fetch(config.tokenUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          grant_type: 'refresh_token',
-          refresh_token: currentRefreshToken,
-          client_id: config.clientId,
-        }),
-      })
-
-      if (response.ok) {
-        const data = (await response.json()) as TokenResponse
-        const tokens: OAuthTokens = {
-          accessToken: data.access_token,
-          refreshToken: data.refresh_token,
-          expiresAt: Date.now() + data.expires_in * 1000,
-          tokenType: data.token_type,
-          scope: data.scope,
-        }
-        await saveProviderTokens('openai', tokens)
-        return tokens
-      }
-
-      const responseBody = await response.text().catch(() => undefined)
-      const parsed = parseOAuthErrorPayload(responseBody)
-
-      lastError = new TokenRefreshError({
-        message: parsed.description || `OpenAI token refresh failed: ${response.status}`,
-        code: parsed.code,
-        description: parsed.description,
-        status: response.status,
-        statusText: response.statusText,
-        responseBody,
-      })
-
-      if (lastError.isInvalidGrant || !lastError.isRetryable) {
-        throw lastError
-      }
-
-      if (attempt < MAX_REFRESH_RETRIES) {
-        await new Promise((resolve) => setTimeout(resolve, calculateRetryDelay(attempt)))
-      }
-    } catch (error) {
-      if (error instanceof TokenRefreshError) throw error
-
-      lastError = new TokenRefreshError({
-        message: error instanceof Error ? error.message : 'Network error',
-        status: 0,
-        statusText: 'Network Error',
-      })
-
-      if (attempt < MAX_REFRESH_RETRIES) {
-        await new Promise((resolve) => setTimeout(resolve, calculateRetryDelay(attempt)))
-      }
-    }
-  }
-
-  throw (
-    lastError ||
-    new TokenRefreshError({
-      message: 'OpenAI token refresh failed after all retries',
-      status: 0,
-      statusText: 'Max Retries Exceeded',
-    })
-  )
+  const tokens = await refreshWithRetry({
+    tokenUrl: config.tokenUrl,
+    contentType: 'urlencoded',
+    body: {
+      grant_type: 'refresh_token',
+      refresh_token: currentRefreshToken,
+      client_id: config.clientId,
+    },
+    providerName: 'OpenAI',
+  })
+  await saveProviderTokens('openai', tokens)
+  return tokens
 }
 
 export async function getValidOpenAIAccessToken(): Promise<string> {

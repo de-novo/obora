@@ -100,3 +100,5 @@ export {
 //   ClaudeProvider: enabledTools: ['WebSearch']
 //   OpenAIProvider: enableWebSearch: true
 export { createDebateTools, type DebateToolsConfig } from './tools'
+// Utils - Logger and utilities
+export { createLogger, Logger, logger } from './utils/logger'

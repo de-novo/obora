@@ -6,15 +6,13 @@
  */
 
 import { generatePKCEChallenge } from './pkce.ts'
+import { refreshWithRetry } from './refresh.ts'
 import { deleteProviderTokens, isTokenExpired, loadProviderTokens, saveProviderTokens } from './storage.ts'
-import type { OAuthError, OAuthTokens, PKCEChallenge, TokenResponse } from './types.ts'
+import type { OAuthTokens, PKCEChallenge, TokenResponse } from './types.ts'
 import {
   ANTHROPIC_CONSOLE_OAUTH_CONFIG,
   ANTHROPIC_OAUTH_CONFIG,
   ANTHROPIC_REDIRECT_URI,
-  calculateRetryDelay,
-  MAX_REFRESH_RETRIES,
-  parseOAuthErrorPayload,
   TokenRefreshError,
 } from './types.ts'
 
@@ -150,86 +148,18 @@ export async function exchangeCodeForTokens(fullCode: string, codeVerifier: stri
 
 export async function refreshAccessToken(refreshToken: string): Promise<OAuthTokens> {
   const config = ANTHROPIC_OAUTH_CONFIG
-  let lastError: TokenRefreshError | undefined
-
-  for (let attempt = 0; attempt <= MAX_REFRESH_RETRIES; attempt++) {
-    try {
-      const response = await fetch(config.tokenUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify({
-          grant_type: 'refresh_token',
-          refresh_token: refreshToken,
-          client_id: config.clientId,
-        }),
-      })
-
-      if (response.ok) {
-        const data = (await response.json()) as TokenResponse
-
-        const tokens: OAuthTokens = {
-          accessToken: data.access_token,
-          refreshToken: data.refresh_token,
-          expiresAt: Date.now() + data.expires_in * 1000,
-          tokenType: data.token_type,
-          scope: data.scope,
-        }
-
-        await saveProviderTokens('anthropic', tokens)
-        return tokens
-      }
-
-      const responseBody = await response.text().catch(() => undefined)
-      const parsed = parseOAuthErrorPayload(responseBody)
-
-      lastError = new TokenRefreshError({
-        message: parsed.description || `Token refresh failed: ${response.status} ${response.statusText}`,
-        code: parsed.code,
-        description: parsed.description,
-        status: response.status,
-        statusText: response.statusText,
-        responseBody,
-      })
-
-      if (lastError.isInvalidGrant) {
-        throw lastError
-      }
-
-      if (!lastError.isRetryable) {
-        throw lastError
-      }
-
-      if (attempt < MAX_REFRESH_RETRIES) {
-        await new Promise((resolve) => setTimeout(resolve, calculateRetryDelay(attempt)))
-      }
-    } catch (error) {
-      if (error instanceof TokenRefreshError) {
-        throw error
-      }
-
-      lastError = new TokenRefreshError({
-        message: error instanceof Error ? error.message : 'Network error during token refresh',
-        status: 0,
-        statusText: 'Network Error',
-      })
-
-      if (attempt < MAX_REFRESH_RETRIES) {
-        await new Promise((resolve) => setTimeout(resolve, calculateRetryDelay(attempt)))
-      }
-    }
-  }
-
-  throw (
-    lastError ||
-    new TokenRefreshError({
-      message: 'Token refresh failed after all retries',
-      status: 0,
-      statusText: 'Max Retries Exceeded',
-    })
-  )
+  const tokens = await refreshWithRetry({
+    tokenUrl: config.tokenUrl,
+    contentType: 'json',
+    body: {
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      client_id: config.clientId,
+    },
+    providerName: 'Anthropic',
+  })
+  await saveProviderTokens('anthropic', tokens)
+  return tokens
 }
 
 // ============================================================================

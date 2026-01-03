@@ -7,7 +7,10 @@ import {
   markAccountRateLimited,
   refreshAccountToken,
 } from '../auth'
+import { createLogger } from '../utils/logger'
 import type { ProviderBackend, ProviderConfig, ProviderResponse } from './types'
+
+const log = createLogger('Antigravity')
 
 const CODE_ASSIST_ENDPOINTS = [
   'https://daily-cloudcode-pa.sandbox.googleapis.com',
@@ -164,7 +167,7 @@ async function handleRateLimitAndRetry<T>(
 ): Promise<T> {
   if (account) {
     await markAccountRateLimited(account, retryAfterMs)
-    console.log(`[Antigravity] Account ${account.index + 1} rate limited, switching...`)
+    log.debug(`Account ${account.index + 1} rate limited, switching...`)
   }
 
   const { account: newAccount } = await getAccessTokenWithRotation()
@@ -208,7 +211,7 @@ async function onboardFreeUser(accessToken: string): Promise<string | undefined>
   }
 
   for (let attempt = 0; attempt < ONBOARD_MAX_ATTEMPTS; attempt++) {
-    console.log(`[Antigravity] Onboard attempt ${attempt + 1}/${ONBOARD_MAX_ATTEMPTS}`)
+    log.debug(`Onboard attempt ${attempt + 1}/${ONBOARD_MAX_ATTEMPTS}`)
     for (const endpoint of CODE_ASSIST_ENDPOINTS) {
       try {
         const response = await fetch(`${endpoint}/v1internal:onboardUser`, {
@@ -222,24 +225,22 @@ async function onboardFreeUser(accessToken: string): Promise<string | undefined>
         })
 
         if (!response.ok) {
-          const errorBody = await response.text()
-          console.log(`[Antigravity] Onboard ${endpoint} returned ${response.status}: ${errorBody}`)
+          log.debug(`Onboard error: ${response.status}`)
           continue
         }
 
         const data = (await response.json()) as OnboardUserResponse
-        console.log(`[Antigravity] Onboard response:`, JSON.stringify(data, null, 2))
 
         if (data.done && data.response?.cloudaicompanionProject?.id) {
           return data.response.cloudaicompanionProject.id
         }
         if (data.done) {
-          console.log('[Antigravity] Onboard done but no project ID')
+          log.debug('Onboard done but no project ID')
           break
         }
       } catch (e) {
         const errorMsg = e instanceof Error ? e.message : String(e)
-        console.log(`[Antigravity] Onboard ${endpoint} error: ${errorMsg}`)
+        log.debug(`Onboard error: ${errorMsg}`)
       }
     }
     await sleep(ONBOARD_DELAY_MS)
@@ -254,7 +255,7 @@ async function discoverProjectId(accessToken: string): Promise<string> {
 
   for (const endpoint of CODE_ASSIST_ENDPOINTS) {
     try {
-      console.log(`[Antigravity] Trying endpoint: ${endpoint}`)
+      log.debug(`Trying endpoint: ${endpoint}`)
       const response = await fetch(`${endpoint}/v1internal:loadCodeAssist`, {
         method: 'POST',
         headers: {
@@ -272,58 +273,50 @@ async function discoverProjectId(accessToken: string): Promise<string> {
       })
 
       if (await isSubscriptionRequiredError(response)) {
-        console.log(`[Antigravity] ${endpoint} returned SUBSCRIPTION_REQUIRED, trying next endpoint`)
+        log.debug('SUBSCRIPTION_REQUIRED, trying next endpoint')
         errors.push(`${endpoint}: SUBSCRIPTION_REQUIRED`)
         continue
       }
 
       if (!response.ok) {
-        const errorBody = await response.text()
-        console.log(`[Antigravity] ${endpoint} returned ${response.status}: ${errorBody}`)
-        errors.push(`${endpoint}: HTTP ${response.status} - ${errorBody}`)
+        log.debug(`Endpoint error: ${response.status}`)
+        errors.push(`${endpoint}: HTTP ${response.status}`)
         continue
       }
 
       const data = (await response.json()) as LoadCodeAssistResponse
-      console.log(`[Antigravity] ${endpoint} response:`, JSON.stringify(data, null, 2))
-
       const currentTierId = data.currentTier?.id
       const isFreeTier = !currentTierId || currentTierId === 'FREE' || currentTierId === 'free-tier'
-      console.log(
-        `[Antigravity] Current tier: ${currentTierId}, isFreeTier: ${isFreeTier}, gcpManaged: ${data.gcpManaged}`,
-      )
+      log.debug(`Tier: ${currentTierId || 'unknown'}, isFreeTier: ${isFreeTier}`)
 
       if (isFreeTier) {
-        console.log('[Antigravity] Free tier detected, attempting onboard...')
+        log.debug('Free tier detected, attempting onboard...')
         const managedProjectId = await onboardFreeUser(accessToken)
         if (managedProjectId) {
           cachedProjectId = managedProjectId
-          console.log(`[Antigravity] Onboarded with project: ${cachedProjectId}`)
+          log.debug('Onboarded successfully')
           return cachedProjectId
         }
-        console.log('[Antigravity] Onboarding returned no project')
+        log.debug('Onboarding returned no project')
 
         if (data.cloudaicompanionProject) {
           cachedProjectId = data.cloudaicompanionProject
-          console.log(`[Antigravity] Falling back to existing project: ${cachedProjectId}`)
+          log.debug('Using existing project')
           return cachedProjectId
         }
       } else if (data.cloudaicompanionProject) {
         cachedProjectId = data.cloudaicompanionProject
-        console.log(`[Antigravity] Found project: ${cachedProjectId}`)
+        log.debug('Found project')
         return cachedProjectId
       }
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : String(e)
-      console.log(`[Antigravity] ${endpoint} error: ${errorMsg}`)
+      log.debug(`Endpoint error: ${errorMsg}`)
       errors.push(`${endpoint}: ${errorMsg}`)
     }
   }
 
-  console.log(
-    `[Antigravity] All endpoints failed, using default project ID: ${ANTIGRAVITY_DEFAULT_PROJECT_ID}\n` +
-      `Errors:\n${errors.map((e) => `  - ${e}`).join('\n')}`,
-  )
+  log.debug(`All endpoints failed, using default project`)
   cachedProjectId = ANTIGRAVITY_DEFAULT_PROJECT_ID
   return cachedProjectId
 }
@@ -363,7 +356,7 @@ async function generateContent(
 ): Promise<AntigravityResponse> {
   const request = createAntigravityRequest(projectId, model, prompt, enableWebSearch)
   const requestWithSignature = injectThoughtSignatureIntoFunctionCalls(request as unknown as Record<string, unknown>)
-  console.log(`[Antigravity] Calling generateContent with project: ${projectId}`)
+  log.debug('Calling generateContent')
 
   for (const endpoint of CODE_ASSIST_ENDPOINTS) {
     try {
@@ -417,7 +410,7 @@ async function generateContentWithFallback(
   } catch (e) {
     if (e instanceof Error && e.message === 'SUBSCRIPTION_REQUIRED') {
       if (projectId !== ANTIGRAVITY_DEFAULT_PROJECT_ID) {
-        console.log(`[Antigravity] Project ${projectId} requires subscription, trying default project...`)
+        log.debug('Subscription required, trying default project')
         cachedProjectId = ANTIGRAVITY_DEFAULT_PROJECT_ID
         try {
           return await generateContent(
@@ -507,7 +500,7 @@ export class AntigravityBackend implements ProviderBackend {
           if (response.status === 429 && account) {
             const retryAfter = Number.parseInt(response.headers.get('Retry-After') || '60', 10) * 1000
             await markAccountRateLimited(account, retryAfter)
-            console.log(`[Antigravity] Account ${account.index + 1} rate limited during streaming, switching...`)
+            log.debug(`Account ${account.index + 1} rate limited, switching`)
             const { token: newToken } = await getAccessTokenWithRotation()
             return tryStream(newToken, project)
           }
@@ -525,9 +518,7 @@ export class AntigravityBackend implements ProviderBackend {
     let response = await tryStream(accessToken, projectId)
 
     if (!response && projectId !== ANTIGRAVITY_DEFAULT_PROJECT_ID) {
-      console.log(
-        `[Antigravity] Project ${projectId} requires subscription, falling back to default project for streaming`,
-      )
+      log.debug('Subscription required, falling back to default project for streaming')
       cachedProjectId = ANTIGRAVITY_DEFAULT_PROJECT_ID
       projectId = ANTIGRAVITY_DEFAULT_PROJECT_ID
       response = await tryStream(accessToken, projectId)
