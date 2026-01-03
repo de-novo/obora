@@ -76,6 +76,19 @@ export {
   type StreamableProvider,
   type StructuredProvider,
 } from './providers'
+// Patterns - Multi-agent orchestration patterns
+export {
+  type AgentConfig,
+  createCrossCheckPattern,
+  type CrossCheckConfig,
+  type CrossCheckInput,
+  CrossCheckPattern,
+  type CrossCheckResult,
+  type Pattern,
+  type PatternConfig,
+  type PatternEvent,
+  type PatternRunHandle,
+} from './patterns'
 // Runtime - Unified execution layer
 export {
   AgentExecutor,
