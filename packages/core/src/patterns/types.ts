@@ -1,17 +1,40 @@
 import type { ChatModel, ChatResponse, RunEvent } from '../llm/types'
-import type { RunContext } from '../runtime/types'
+import type { RunContext, TraceContext } from '../runtime/types'
 
 export interface PatternConfig {
   name?: string
   description?: string
 }
 
-export type PatternEvent =
+export interface EventTrace {
+  traceId: string
+  spanId: string
+  parentSpanId?: string
+  path: string[]
+  timestamp: number
+}
+
+export type BasePatternEvent =
   | RunEvent
   | { type: 'agent_start'; agentId: string; agentName?: string }
   | { type: 'agent_end'; agentId: string; durationMs: number }
   | { type: 'phase_start'; phase: string }
   | { type: 'phase_end'; phase: string; durationMs: number }
+
+export type PatternEvent = BasePatternEvent & { trace?: EventTrace }
+
+export function withTrace<T extends object>(event: T, traceCtx: TraceContext): T & { trace: EventTrace } {
+  return {
+    ...event,
+    trace: {
+      traceId: traceCtx.traceId,
+      spanId: traceCtx.spanId,
+      parentSpanId: traceCtx.parentSpanId,
+      path: traceCtx.path,
+      timestamp: Date.now(),
+    },
+  }
+}
 
 export interface PatternRunHandle<O> {
   events(): AsyncIterable<PatternEvent>

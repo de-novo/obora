@@ -44,6 +44,40 @@ export interface TraceSink {
   flush?(): Promise<void>
 }
 
+/**
+ * Trace context for correlating events across nested patterns
+ *
+ * This enables distributed tracing by maintaining:
+ * - traceId: Unique identifier for the entire execution tree
+ * - spanId: Unique identifier for the current execution unit
+ * - parentSpanId: Link to parent span for building trace trees
+ * - path: Hierarchical path for debugging (e.g., ['debate', 'rebuttal', 'claude'])
+ */
+export interface TraceContext {
+  /** Unique identifier for the entire execution (W3C trace-id format) */
+  readonly traceId: string
+  /** Unique identifier for this span (W3C span-id format) */
+  readonly spanId: string
+  /** Parent span ID if this is a child span */
+  readonly parentSpanId?: string
+  /** Hierarchical path for debugging (pattern names) */
+  readonly path: string[]
+
+  /**
+   * Create a child trace context for nested operations
+   * @param name - Name to append to the path
+   * @returns New TraceContext with new spanId and this span as parent
+   */
+  createChild(name: string): TraceContext
+
+  /**
+   * Create a sibling trace context (same parent, new span)
+   * @param name - Optional name to replace last path segment
+   * @returns New TraceContext with new spanId but same parentSpanId
+   */
+  createSibling(name?: string): TraceContext
+}
+
 // =============================================================================
 // Budget Types
 // =============================================================================
@@ -111,6 +145,9 @@ export interface RunContext {
   /** Optional trace sink for observability */
   readonly trace?: TraceSink
 
+  /** Trace context for event correlation */
+  readonly traceContext?: TraceContext
+
   /** Optional budget constraints */
   readonly budget?: BudgetTracker
 
@@ -125,6 +162,10 @@ export interface RunContextOptions {
   session?: RuntimeSession
   /** Trace sink for observability */
   trace?: TraceSink
+  /** Parent trace context for nested patterns */
+  parentTraceContext?: TraceContext
+  /** Name for the root span (default: 'root') */
+  rootSpanName?: string
   /** Budget constraints */
   budget?: Budget
   /** Metadata to pass through execution */

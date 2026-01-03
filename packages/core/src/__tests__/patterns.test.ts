@@ -6,12 +6,14 @@ import {
   createParallelPattern,
   createSequentialPattern,
   type DebateConfig,
+  type DebateEvent,
   type EnsembleConfig,
+  type EventTrace,
   type ParallelConfig,
   type PatternEvent,
   type SequentialConfig,
 } from '../patterns'
-import { createNoopContext } from '../runtime'
+import { createNoopContext, createRunContext, createTraceContext } from '../runtime'
 
 function createMockModel(response: string): ChatModel {
   return {
@@ -449,5 +451,132 @@ Proceed carefully.`
     const result = await pattern.run(createNoopContext(), { topic: 'Test' }).result()
 
     expect(result.rounds).toHaveLength(2)
+  })
+})
+
+describe('TraceContext', () => {
+  test('createTraceContext generates valid trace with W3C format IDs', () => {
+    const trace = createTraceContext('test-root')
+
+    expect(trace.traceId).toHaveLength(32)
+    expect(trace.spanId).toHaveLength(16)
+    expect(trace.parentSpanId).toBeUndefined()
+    expect(trace.path).toEqual(['test-root'])
+  })
+
+  test('createChild creates child context with correct parent', () => {
+    const parent = createTraceContext('parent')
+    const child = parent.createChild('child')
+
+    expect(child.traceId).toBe(parent.traceId)
+    expect(child.spanId).not.toBe(parent.spanId)
+    expect(child.parentSpanId).toBe(parent.spanId)
+    expect(child.path).toEqual(['parent', 'child'])
+  })
+
+  test('createSibling creates sibling context with same parent', () => {
+    const parent = createTraceContext('parent')
+    const child1 = parent.createChild('child1')
+    const child2 = child1.createSibling('child2')
+
+    expect(child2.traceId).toBe(parent.traceId)
+    expect(child2.spanId).not.toBe(child1.spanId)
+    expect(child2.parentSpanId).toBe(child1.parentSpanId)
+    expect(child2.path).toEqual(['parent', 'child2'])
+  })
+
+  test('createRunContext generates traceContext automatically', () => {
+    const ctx = createRunContext({ rootSpanName: 'my-operation' })
+
+    expect(ctx.traceContext).toBeDefined()
+    expect(ctx.traceContext?.path).toEqual(['my-operation'])
+  })
+
+  test('createRunContext with parentTraceContext creates child', () => {
+    const parentTrace = createTraceContext('parent-op')
+    const ctx = createRunContext({
+      parentTraceContext: parentTrace,
+      rootSpanName: 'child-op',
+    })
+
+    expect(ctx.traceContext?.traceId).toBe(parentTrace.traceId)
+    expect(ctx.traceContext?.parentSpanId).toBe(parentTrace.spanId)
+    expect(ctx.traceContext?.path).toEqual(['parent-op', 'child-op'])
+  })
+})
+
+describe('DebatePattern with Tracing', () => {
+  test('emits events with trace info when context has traceContext', async () => {
+    const config: DebateConfig = {
+      participants: [
+        { id: 'claude', name: 'Claude', model: createMockModel('Claude response') },
+        { id: 'openai', name: 'OpenAI', model: createMockModel('OpenAI response') },
+      ],
+      mode: 'weak',
+    }
+
+    const ctx = createRunContext({ rootSpanName: 'debate-test' })
+    const pattern = createDebatePattern(config)
+    const handle = pattern.run(ctx, { topic: 'Test' })
+
+    const events: DebateEvent[] = []
+    for await (const event of handle.events()) {
+      events.push(event as DebateEvent)
+    }
+
+    const tracedEvents = events.filter((e) => 'trace' in e && e.trace)
+    expect(tracedEvents.length).toBeGreaterThan(0)
+
+    const firstTracedEvent = tracedEvents[0] as { trace: EventTrace }
+    expect(firstTracedEvent.trace.traceId).toHaveLength(32)
+    expect(firstTracedEvent.trace.spanId).toHaveLength(16)
+    expect(firstTracedEvent.trace.path.length).toBeGreaterThan(0)
+  })
+
+  test('trace path reflects debate structure (phase > participant)', async () => {
+    const config: DebateConfig = {
+      participants: [{ id: 'claude', name: 'Claude', model: createMockModel('Claude response') }],
+      mode: 'weak',
+    }
+
+    const ctx = createRunContext({ rootSpanName: 'debate' })
+    const pattern = createDebatePattern(config)
+    const handle = pattern.run(ctx, { topic: 'Test' })
+
+    const events: Array<DebateEvent & { trace?: EventTrace }> = []
+    for await (const event of handle.events()) {
+      events.push(event as DebateEvent & { trace?: EventTrace })
+    }
+
+    const agentStartEvents = events.filter((e) => e.type === 'agent_start' && e.trace)
+
+    expect(agentStartEvents.length).toBeGreaterThan(0)
+    const agentEvent = agentStartEvents[0]
+    expect(agentEvent?.trace?.path).toContain('initial')
+    expect(agentEvent?.trace?.path).toContain('claude')
+  })
+
+  test('all events in same debate share traceId', async () => {
+    const config: DebateConfig = {
+      participants: [
+        { id: 'a', name: 'A', model: createMockModel('A') },
+        { id: 'b', name: 'B', model: createMockModel('B') },
+      ],
+      mode: 'weak',
+    }
+
+    const ctx = createRunContext({ rootSpanName: 'debate' })
+    const pattern = createDebatePattern(config)
+    const handle = pattern.run(ctx, { topic: 'Test' })
+
+    const events: DebateEvent[] = []
+    for await (const event of handle.events()) {
+      events.push(event as DebateEvent)
+    }
+
+    const tracedEvents = events.filter((e): e is DebateEvent & { trace: EventTrace } => 'trace' in e && !!e.trace)
+    const traceIds = new Set(tracedEvents.map((e) => e.trace.traceId))
+
+    expect(traceIds.size).toBe(1)
   })
 })

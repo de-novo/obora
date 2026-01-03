@@ -90,7 +90,7 @@ async function main() {
   console.log(`📝 Rounds: ${result.rounds.length}`)
   console.log(`🔄 Position Changes: ${result.positionChanges.length}`)
   console.log(`❓ Unresolved: ${result.unresolvedDisagreements.length}`)
-  
+
   if (result.positionChanges.length > 0) {
     console.log('\n🔄 Position Changes:')
     for (const change of result.positionChanges) {

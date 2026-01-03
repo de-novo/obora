@@ -1,8 +1,20 @@
 import type { ChatMessage, ChatModel, ChatResponse } from '../llm/types'
-import type { RunContext } from '../runtime/types'
+import type { RunContext, TraceContext } from '../runtime/types'
 import { SkillLoader } from '../skills/loader'
 import type { Skill } from '../skills/types'
 import type { Pattern, PatternConfig, PatternEvent, PatternRunHandle } from './types'
+import { withTrace } from './types'
+
+function createNoopTrace(): TraceContext {
+  const noopTrace: TraceContext = {
+    traceId: '',
+    spanId: '',
+    path: [],
+    createChild: (name: string) => ({ ...noopTrace, path: [...noopTrace.path, name] }),
+    createSibling: () => noopTrace,
+  }
+  return noopTrace
+}
 
 export type DebatePhase = 'initial' | 'rebuttal' | 'revised' | 'consensus'
 export type DebateMode = 'strong' | 'weak'
@@ -143,11 +155,13 @@ async function runAgent(
   agent: DebateAgentConfig,
   prompt: string,
   ctx: RunContext,
+  traceCtx: TraceContext,
   onEvent: (event: DebateEvent) => void,
 ): Promise<{ response: ChatResponse; durationMs: number }> {
   const startTime = Date.now()
+  const agentTrace = traceCtx.createChild(agent.id)
 
-  onEvent({ type: 'agent_start', agentId: agent.id, agentName: agent.name })
+  onEvent(withTrace({ type: 'agent_start', agentId: agent.id, agentName: agent.name }, agentTrace) as DebateEvent)
 
   const messages: ChatMessage[] = []
   if (agent.systemPrompt) {
@@ -158,13 +172,13 @@ async function runAgent(
   const handle = agent.model.run({ messages }, ctx.abort)
 
   for await (const event of handle.events()) {
-    onEvent({ ...event, agentId: agent.id } as DebateEvent)
+    onEvent(withTrace({ ...event, agentId: agent.id }, agentTrace) as DebateEvent)
   }
 
   const response = await handle.result()
   const durationMs = Date.now() - startTime
 
-  onEvent({ type: 'agent_end', agentId: agent.id, durationMs })
+  onEvent(withTrace({ type: 'agent_end', agentId: agent.id, durationMs }, agentTrace) as DebateEvent)
 
   return { response, durationMs }
 }
@@ -179,7 +193,7 @@ function extractPositions(rounds: DebateRound[], phase: DebatePhase): Map<string
   return positions
 }
 
-function hasPositionChanged(initial: string, revised: string): boolean {
+function hasPositionChanged(_initial: string, revised: string): boolean {
   const normalizedRevised = revised.toLowerCase().trim()
 
   const changeIndicators = [
@@ -382,12 +396,14 @@ export class DebatePattern implements Pattern<DebateInput, DebateResult> {
     const history: { role: string; content: string }[] = [{ role: 'user', content: topic }]
     const positionChanges: PositionChange[] = []
 
+    const rootTrace: TraceContext = ctx.traceContext ?? createNoopTrace()
+
     if (config.mode === 'strong') {
-      await this.runPhase('initial', topic, rounds, history, ctx, onEvent)
-      await this.runRebuttalPhase(topic, rounds, history, ctx, onEvent)
+      await this.runPhase('initial', topic, rounds, history, ctx, rootTrace.createChild('initial'), onEvent)
+      await this.runRebuttalPhase(topic, rounds, history, ctx, rootTrace.createChild('rebuttal'), onEvent)
 
       const initialPositions = extractPositions(rounds, 'initial')
-      await this.runRevisedPhase(topic, rounds, history, ctx, onEvent)
+      await this.runRevisedPhase(topic, rounds, history, ctx, rootTrace.createChild('revised'), onEvent)
       const revisedPositions = extractPositions(rounds, 'revised')
 
       for (const participant of config.participants) {
@@ -402,22 +418,28 @@ export class DebatePattern implements Pattern<DebateInput, DebateResult> {
             phase: 'revised',
           }
           positionChanges.push(change)
-          onEvent({ type: 'position_change', change })
+          onEvent(withTrace({ type: 'position_change', change }, rootTrace) as DebateEvent)
         }
       }
     } else {
-      await this.runPhase('initial', topic, rounds, history, ctx, onEvent)
+      await this.runPhase('initial', topic, rounds, history, ctx, rootTrace.createChild('initial'), onEvent)
     }
 
     let consensus = ''
     if (config.orchestrator) {
-      onEvent({ type: 'debate_phase_start', phase: 'consensus', timestamp: Date.now() })
-      onEvent({ type: 'phase_start', phase: 'consensus' })
+      const consensusTrace = rootTrace.createChild('consensus')
+      onEvent(
+        withTrace(
+          { type: 'debate_phase_start', phase: 'consensus', timestamp: Date.now() },
+          consensusTrace,
+        ) as DebateEvent,
+      )
+      onEvent(withTrace({ type: 'phase_start', phase: 'consensus' }, consensusTrace) as DebateEvent)
 
       const historyStr = history.map((m) => `[${m.role}] ${m.content}`).join('\n\n---\n\n')
       const prompt = PROMPTS.consensus(historyStr)
 
-      const { response } = await runAgent(config.orchestrator, prompt, ctx, onEvent)
+      const { response } = await runAgent(config.orchestrator, prompt, ctx, consensusTrace, onEvent)
       consensus = response.message.content
 
       rounds.push({
@@ -428,12 +450,22 @@ export class DebatePattern implements Pattern<DebateInput, DebateResult> {
       })
 
       const phaseDurationMs = Date.now() - startTime
-      onEvent({ type: 'phase_end', phase: 'consensus', durationMs: phaseDurationMs })
-      onEvent({ type: 'debate_phase_end', phase: 'consensus', timestamp: Date.now() })
+      onEvent(
+        withTrace(
+          { type: 'phase_end', phase: 'consensus', durationMs: phaseDurationMs },
+          consensusTrace,
+        ) as DebateEvent,
+      )
+      onEvent(
+        withTrace(
+          { type: 'debate_phase_end', phase: 'consensus', timestamp: Date.now() },
+          consensusTrace,
+        ) as DebateEvent,
+      )
     }
 
     const endTime = Date.now()
-    onEvent({ type: 'done' })
+    onEvent(withTrace({ type: 'done' }, rootTrace) as DebateEvent)
 
     return {
       topic,
@@ -457,24 +489,26 @@ export class DebatePattern implements Pattern<DebateInput, DebateResult> {
     rounds: DebateRound[],
     history: { role: string; content: string }[],
     ctx: RunContext,
+    traceCtx: TraceContext,
     onEvent: (event: DebateEvent) => void,
   ): Promise<void> {
     const phaseStartTime = Date.now()
-    onEvent({ type: 'debate_phase_start', phase, timestamp: phaseStartTime })
-    onEvent({ type: 'phase_start', phase })
+    onEvent(withTrace({ type: 'debate_phase_start', phase, timestamp: phaseStartTime }, traceCtx) as DebateEvent)
+    onEvent(withTrace({ type: 'phase_start', phase }, traceCtx) as DebateEvent)
 
     for (const participant of this.config.participants) {
-      onEvent({
-        type: 'debate_round_start',
-        phase,
-        participant: participant.name,
-        timestamp: Date.now(),
-      })
+      const participantTrace = traceCtx.createChild(participant.id)
+      onEvent(
+        withTrace(
+          { type: 'debate_round_start', phase, participant: participant.name, timestamp: Date.now() },
+          participantTrace,
+        ) as DebateEvent,
+      )
 
       const skills = await this.loadSkillsForParticipant(participant.name, participant.skills)
       const skillInstructions = buildSkillPrompt(skills, phase) || undefined
       const prompt = PROMPTS.initial(topic, skillInstructions)
-      const { response } = await runAgent(participant, prompt, ctx, onEvent)
+      const { response } = await runAgent(participant, prompt, ctx, participantTrace, onEvent)
       const content = response.message.content
 
       rounds.push({
@@ -485,18 +519,17 @@ export class DebatePattern implements Pattern<DebateInput, DebateResult> {
       })
       history.push({ role: participant.name, content })
 
-      onEvent({
-        type: 'debate_round_end',
-        phase,
-        participant: participant.name,
-        content,
-        timestamp: Date.now(),
-      })
+      onEvent(
+        withTrace(
+          { type: 'debate_round_end', phase, participant: participant.name, content, timestamp: Date.now() },
+          participantTrace,
+        ) as DebateEvent,
+      )
     }
 
     const phaseDurationMs = Date.now() - phaseStartTime
-    onEvent({ type: 'phase_end', phase, durationMs: phaseDurationMs })
-    onEvent({ type: 'debate_phase_end', phase, timestamp: Date.now() })
+    onEvent(withTrace({ type: 'phase_end', phase, durationMs: phaseDurationMs }, traceCtx) as DebateEvent)
+    onEvent(withTrace({ type: 'debate_phase_end', phase, timestamp: Date.now() }, traceCtx) as DebateEvent)
   }
 
   private async runRebuttalPhase(
@@ -504,22 +537,24 @@ export class DebatePattern implements Pattern<DebateInput, DebateResult> {
     rounds: DebateRound[],
     history: { role: string; content: string }[],
     ctx: RunContext,
+    traceCtx: TraceContext,
     onEvent: (event: DebateEvent) => void,
   ): Promise<void> {
     const phase: DebatePhase = 'rebuttal'
     const phaseStartTime = Date.now()
-    onEvent({ type: 'debate_phase_start', phase, timestamp: phaseStartTime })
-    onEvent({ type: 'phase_start', phase })
+    onEvent(withTrace({ type: 'debate_phase_start', phase, timestamp: phaseStartTime }, traceCtx) as DebateEvent)
+    onEvent(withTrace({ type: 'phase_start', phase }, traceCtx) as DebateEvent)
 
     const hasWebSearch = this.config.toolPhases?.includes('rebuttal') && this.config.useNativeWebSearch
 
     for (const participant of this.config.participants) {
-      onEvent({
-        type: 'debate_round_start',
-        phase,
-        participant: participant.name,
-        timestamp: Date.now(),
-      })
+      const participantTrace = traceCtx.createChild(participant.id)
+      onEvent(
+        withTrace(
+          { type: 'debate_round_start', phase, participant: participant.name, timestamp: Date.now() },
+          participantTrace,
+        ) as DebateEvent,
+      )
 
       const othersOpinions = history
         .filter((h) => h.role !== 'user' && h.role !== participant.name)
@@ -529,7 +564,7 @@ export class DebatePattern implements Pattern<DebateInput, DebateResult> {
       const skills = await this.loadSkillsForParticipant(participant.name, participant.skills)
       const skillInstructions = buildSkillPrompt(skills, phase) || undefined
       const prompt = PROMPTS.rebuttal(topic, othersOpinions, !!hasWebSearch, skillInstructions)
-      const { response } = await runAgent(participant, prompt, ctx, onEvent)
+      const { response } = await runAgent(participant, prompt, ctx, participantTrace, onEvent)
       const content = response.message.content
 
       rounds.push({
@@ -543,18 +578,17 @@ export class DebatePattern implements Pattern<DebateInput, DebateResult> {
         content,
       })
 
-      onEvent({
-        type: 'debate_round_end',
-        phase,
-        participant: participant.name,
-        content,
-        timestamp: Date.now(),
-      })
+      onEvent(
+        withTrace(
+          { type: 'debate_round_end', phase, participant: participant.name, content, timestamp: Date.now() },
+          participantTrace,
+        ) as DebateEvent,
+      )
     }
 
     const phaseDurationMs = Date.now() - phaseStartTime
-    onEvent({ type: 'phase_end', phase, durationMs: phaseDurationMs })
-    onEvent({ type: 'debate_phase_end', phase, timestamp: Date.now() })
+    onEvent(withTrace({ type: 'phase_end', phase, durationMs: phaseDurationMs }, traceCtx) as DebateEvent)
+    onEvent(withTrace({ type: 'debate_phase_end', phase, timestamp: Date.now() }, traceCtx) as DebateEvent)
   }
 
   private async runRevisedPhase(
@@ -562,20 +596,22 @@ export class DebatePattern implements Pattern<DebateInput, DebateResult> {
     rounds: DebateRound[],
     history: { role: string; content: string }[],
     ctx: RunContext,
+    traceCtx: TraceContext,
     onEvent: (event: DebateEvent) => void,
   ): Promise<void> {
     const phase: DebatePhase = 'revised'
     const phaseStartTime = Date.now()
-    onEvent({ type: 'debate_phase_start', phase, timestamp: phaseStartTime })
-    onEvent({ type: 'phase_start', phase })
+    onEvent(withTrace({ type: 'debate_phase_start', phase, timestamp: phaseStartTime }, traceCtx) as DebateEvent)
+    onEvent(withTrace({ type: 'phase_start', phase }, traceCtx) as DebateEvent)
 
     for (const participant of this.config.participants) {
-      onEvent({
-        type: 'debate_round_start',
-        phase,
-        participant: participant.name,
-        timestamp: Date.now(),
-      })
+      const participantTrace = traceCtx.createChild(participant.id)
+      onEvent(
+        withTrace(
+          { type: 'debate_round_start', phase, participant: participant.name, timestamp: Date.now() },
+          participantTrace,
+        ) as DebateEvent,
+      )
 
       const allHistory = history
         .filter((h) => h.role !== 'user')
@@ -585,7 +621,7 @@ export class DebatePattern implements Pattern<DebateInput, DebateResult> {
       const skills = await this.loadSkillsForParticipant(participant.name, participant.skills)
       const skillInstructions = buildSkillPrompt(skills, phase) || undefined
       const prompt = PROMPTS.revised(topic, allHistory, skillInstructions)
-      const { response } = await runAgent(participant, prompt, ctx, onEvent)
+      const { response } = await runAgent(participant, prompt, ctx, participantTrace, onEvent)
       const content = response.message.content
 
       rounds.push({
@@ -599,18 +635,17 @@ export class DebatePattern implements Pattern<DebateInput, DebateResult> {
         content,
       })
 
-      onEvent({
-        type: 'debate_round_end',
-        phase,
-        participant: participant.name,
-        content,
-        timestamp: Date.now(),
-      })
+      onEvent(
+        withTrace(
+          { type: 'debate_round_end', phase, participant: participant.name, content, timestamp: Date.now() },
+          participantTrace,
+        ) as DebateEvent,
+      )
     }
 
     const phaseDurationMs = Date.now() - phaseStartTime
-    onEvent({ type: 'phase_end', phase, durationMs: phaseDurationMs })
-    onEvent({ type: 'debate_phase_end', phase, timestamp: Date.now() })
+    onEvent(withTrace({ type: 'phase_end', phase, durationMs: phaseDurationMs }, traceCtx) as DebateEvent)
+    onEvent(withTrace({ type: 'debate_phase_end', phase, timestamp: Date.now() }, traceCtx) as DebateEvent)
   }
 }
 
