@@ -1,9 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import type { ChatModel, ChatRequest, ChatResponse, RunEvent } from '../llm/types'
 import {
+  createDebatePattern,
   createEnsemblePattern,
   createParallelPattern,
   createSequentialPattern,
+  type DebateConfig,
   type EnsembleConfig,
   type ParallelConfig,
   type PatternEvent,
@@ -260,5 +262,192 @@ describe('ParallelPattern', () => {
       expect(response.agentId).toBeTruthy()
       expect(response.response.message?.content).toBeTruthy()
     }
+  })
+})
+
+function createSequentialMockModel(responses: string[]): ChatModel {
+  let callCount = 0
+  return {
+    provider: 'openai',
+    model: 'mock',
+    run(_request: ChatRequest) {
+      const response = responses[callCount] ?? responses[responses.length - 1] ?? 'Mock response'
+      callCount++
+      return {
+        events: async function* () {
+          yield { type: 'done' as const }
+        },
+        result: async (): Promise<ChatResponse> => ({
+          message: { role: 'assistant', content: response },
+        }),
+      }
+    },
+  }
+}
+
+describe('DebatePattern', () => {
+  test('runs weak mode debate (initial + consensus only)', async () => {
+    const config: DebateConfig = {
+      participants: [
+        { id: 'claude', name: 'Claude', model: createMockModel('I recommend Option A.') },
+        { id: 'openai', name: 'OpenAI', model: createMockModel('I recommend Option B.') },
+      ],
+      orchestrator: { id: 'judge', name: 'Judge', model: createMockModel('Consensus: Both options have merit.') },
+      mode: 'weak',
+    }
+
+    const pattern = createDebatePattern(config)
+    const result = await pattern.run(createNoopContext(), { topic: 'Which option is best?' }).result()
+
+    expect(result.mode).toBe('weak')
+    expect(result.rounds).toHaveLength(3)
+    expect(result.rounds[0]?.phase).toBe('initial')
+    expect(result.rounds[1]?.phase).toBe('initial')
+    expect(result.rounds[2]?.phase).toBe('consensus')
+    expect(result.consensus).toContain('Consensus')
+  })
+
+  test('runs strong mode debate (initial + rebuttal + revised + consensus)', async () => {
+    const claudeResponses = [
+      'I recommend Option A for scalability.',
+      'The other position overlooks cost concerns.',
+      'I maintain my position on Option A.',
+    ]
+    const openaiResponses = [
+      'I recommend Option B for simplicity.',
+      'Option A has operational complexity issues.',
+      'After reviewing, I have revised my position to Option A with guardrails.',
+    ]
+
+    const config: DebateConfig = {
+      participants: [
+        { id: 'claude', name: 'Claude', model: createSequentialMockModel(claudeResponses) },
+        { id: 'openai', name: 'OpenAI', model: createSequentialMockModel(openaiResponses) },
+      ],
+      orchestrator: { id: 'judge', name: 'Judge', model: createMockModel('Consensus reached.') },
+      mode: 'strong',
+    }
+
+    const pattern = createDebatePattern(config)
+    const result = await pattern.run(createNoopContext(), { topic: 'Which option?' }).result()
+
+    expect(result.mode).toBe('strong')
+    expect(result.rounds.filter((r) => r.phase === 'initial')).toHaveLength(2)
+    expect(result.rounds.filter((r) => r.phase === 'rebuttal')).toHaveLength(2)
+    expect(result.rounds.filter((r) => r.phase === 'revised')).toHaveLength(2)
+    expect(result.rounds.filter((r) => r.phase === 'consensus')).toHaveLength(1)
+  })
+
+  test('detects position changes', async () => {
+    const claudeResponses = ['I recommend Option A.', 'Rebuttal content.', 'I maintain my position.']
+    const openaiResponses = [
+      'I recommend Option B.',
+      'Rebuttal content.',
+      'After reviewing, I have revised my position to agree with Option A.',
+    ]
+
+    const config: DebateConfig = {
+      participants: [
+        { id: 'claude', name: 'Claude', model: createSequentialMockModel(claudeResponses) },
+        { id: 'openai', name: 'OpenAI', model: createSequentialMockModel(openaiResponses) },
+      ],
+      mode: 'strong',
+    }
+
+    const pattern = createDebatePattern(config)
+    const result = await pattern.run(createNoopContext(), { topic: 'Test topic' }).result()
+
+    expect(result.positionChanges).toHaveLength(1)
+    expect(result.positionChanges[0]?.participant).toBe('OpenAI')
+  })
+
+  test('emits debate events', async () => {
+    const config: DebateConfig = {
+      participants: [
+        { id: 'claude', name: 'Claude', model: createMockModel('Claude response') },
+        { id: 'openai', name: 'OpenAI', model: createMockModel('OpenAI response') },
+      ],
+      mode: 'weak',
+    }
+
+    const pattern = createDebatePattern(config)
+    const handle = pattern.run(createNoopContext(), { topic: 'Test' })
+
+    const events: PatternEvent[] = []
+    for await (const event of handle.events()) {
+      events.push(event)
+    }
+
+    const phaseStarts = events.filter((e) => e.type === 'phase_start')
+    const agentStarts = events.filter((e) => e.type === 'agent_start')
+
+    expect(phaseStarts.length).toBeGreaterThanOrEqual(1)
+    expect(agentStarts.length).toBeGreaterThanOrEqual(2)
+  })
+
+  test('extracts unresolved disagreements from consensus', async () => {
+    const consensusWithDisagreements = `## Summary
+### Points of Agreement
+- Both agree on X
+
+### Unresolved Disagreements
+- Timing of migration
+- Resource allocation
+
+### Final Recommendation
+Proceed carefully.`
+
+    const config: DebateConfig = {
+      participants: [
+        { id: 'a', name: 'A', model: createMockModel('Position A') },
+        { id: 'b', name: 'B', model: createMockModel('Position B') },
+      ],
+      orchestrator: { id: 'judge', name: 'Judge', model: createMockModel(consensusWithDisagreements) },
+      mode: 'weak',
+    }
+
+    const pattern = createDebatePattern(config)
+    const result = await pattern.run(createNoopContext(), { topic: 'Test' }).result()
+
+    expect(result.unresolvedDisagreements).toHaveLength(2)
+    expect(result.unresolvedDisagreements[0]).toContain('Timing')
+  })
+
+  test('includes metadata in result', async () => {
+    const config: DebateConfig = {
+      participants: [
+        { id: 'a', name: 'A', model: createMockModel('Response') },
+        { id: 'b', name: 'B', model: createMockModel('Response') },
+      ],
+      mode: 'weak',
+    }
+
+    const pattern = createDebatePattern(config)
+    const result = await pattern.run(createNoopContext(), { topic: 'Test' }).result()
+
+    expect(result.metadata.participantCount).toBe(2)
+    expect(result.metadata.totalDurationMs).toBeGreaterThanOrEqual(0)
+    expect(result.metadata.startTime).toBeLessThanOrEqual(result.metadata.endTime)
+  })
+
+  test('supports skills configuration', async () => {
+    const config: DebateConfig = {
+      participants: [
+        { id: 'claude', name: 'Claude', model: createMockModel('Response with skills'), skills: ['fact-checker'] },
+        { id: 'openai', name: 'OpenAI', model: createMockModel('Response') },
+      ],
+      skills: {
+        global: ['devil-advocate'],
+        participants: {
+          OpenAI: ['synthesizer'],
+        },
+      },
+      mode: 'weak',
+    }
+
+    const pattern = createDebatePattern(config)
+    const result = await pattern.run(createNoopContext(), { topic: 'Test' }).result()
+
+    expect(result.rounds).toHaveLength(2)
   })
 })
