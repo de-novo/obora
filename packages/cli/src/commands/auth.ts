@@ -3,11 +3,12 @@ import {
   isAuthenticated,
   isGoogleAuthenticated,
   isOpenAIAuthenticated,
+  listGoogleAccounts,
   loadProviderTokens,
   logout as logoutAnthropic,
   logoutGoogle,
   logoutOpenAI,
-  performGoogleLogin,
+  performGoogleLoginWithMultiAccount,
   performInteractiveLogin,
   performOpenAILogin,
 } from '@obora/core'
@@ -148,6 +149,12 @@ async function login(provider?: Provider): Promise<void> {
   }
 
   const providerName = getProviderName(provider)
+
+  if (provider === 'google') {
+    await loginGoogle()
+    return
+  }
+
   const isAuth = await isProviderAuthenticated(provider)
 
   if (isAuth) {
@@ -177,9 +184,6 @@ async function login(provider?: Provider): Promise<void> {
       case 'openai':
         await performOpenAILogin()
         break
-      case 'google':
-        await performGoogleLogin()
-        break
     }
 
     p.log.success(`Authenticated with ${providerName}!`)
@@ -188,6 +192,49 @@ async function login(provider?: Provider): Promise<void> {
     p.log.error(`Authentication failed: ${message}`)
     process.exit(1)
   }
+}
+
+async function loginGoogle(): Promise<void> {
+  const accounts = await listGoogleAccounts()
+
+  if (accounts.length === 0) {
+    await performGoogleLoginWithMultiAccount()
+    return
+  }
+
+  p.log.info(`You have ${accounts.length} Google account(s):`)
+  for (const acc of accounts) {
+    const email = acc.email || `Account ${acc.index + 1}`
+    const rateLimited = Object.keys(acc.rateLimitResetTimes).length > 0
+    const status = rateLimited ? ' (rate limited)' : ''
+    p.log.message(`  ${acc.index + 1}. ${email}${status}`)
+  }
+
+  const action = await p.select({
+    message: 'What would you like to do?',
+    options: [
+      { value: 'add', label: 'Add another account', hint: 'Up to 10 accounts for rotation' },
+      { value: 'replace', label: 'Replace all accounts', hint: 'Clear and re-authenticate' },
+      { value: 'keep', label: 'Keep current accounts', hint: 'No changes' },
+    ],
+  })
+
+  if (p.isCancel(action)) {
+    p.cancel('Cancelled')
+    process.exit(0)
+  }
+
+  if (action === 'keep') {
+    p.log.info('Keeping existing accounts')
+    return
+  }
+
+  if (action === 'replace') {
+    await logoutGoogle()
+    p.log.info('Cleared all Google accounts')
+  }
+
+  await performGoogleLoginWithMultiAccount()
 }
 
 async function logout(provider?: Provider): Promise<void> {
@@ -227,6 +274,20 @@ async function status(): Promise<void> {
     }
 
     p.log.message(`${prov.label.padEnd(12)} ${statusText}`)
+
+    if (prov.value === 'google') {
+      const accounts = await listGoogleAccounts()
+      if (accounts.length > 0) {
+        p.log.message(`             └─ ${accounts.length} account(s) for rotation:`)
+        for (const acc of accounts) {
+          const email = acc.email || `Account ${acc.index + 1}`
+          const rateLimitKeys = Object.keys(acc.rateLimitResetTimes)
+          const rateLimited = rateLimitKeys.length > 0
+          const status = rateLimited ? ' ⚠ rate limited' : ' ✓'
+          p.log.message(`                ${acc.index + 1}. ${email}${status}`)
+        }
+      }
+    }
   }
 }
 
