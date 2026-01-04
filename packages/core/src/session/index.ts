@@ -2,6 +2,8 @@ export {
   createNoopLogger,
   NoopSessionLogger,
   SessionLogger,
+  type RuntimeSession,
+  type RuntimeSessionUsage,
   type SessionLoggerInstance,
   type SessionLoggerOptions,
 } from './logger'

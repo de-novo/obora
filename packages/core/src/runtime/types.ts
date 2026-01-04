@@ -6,6 +6,9 @@
  */
 
 import type { ProviderId, RunEvent, Usage } from '../llm/types'
+import type { RuntimeSession, RuntimeSessionUsage } from '../session/logger'
+
+export type { RuntimeSession, RuntimeSessionUsage }
 
 // =============================================================================
 // Trace Types
@@ -111,25 +114,6 @@ export interface BudgetUsage {
 // =============================================================================
 // Session Integration Types
 // =============================================================================
-
-/**
- * Minimal session interface for runtime integration
- * This allows the runtime to be used with or without the full session system
- */
-export interface RuntimeSession {
-  readonly id: string
-  /**
-   * Record LLM usage for cost tracking
-   */
-  recordUsage(usage: {
-    provider: string
-    model: string
-    inputTokens: number
-    outputTokens: number
-    totalTokens: number
-    costUsd?: number
-  }): void
-}
 
 // =============================================================================
 // Run Context

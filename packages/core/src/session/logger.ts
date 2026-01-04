@@ -28,6 +28,20 @@ export interface SessionLoggerOptions {
   feature?: FeatureType
 }
 
+export interface RuntimeSessionUsage {
+  provider: string
+  model: string
+  inputTokens: number
+  outputTokens: number
+  totalTokens: number
+  costUsd?: number
+}
+
+export interface RuntimeSession {
+  readonly id: string
+  recordUsage(usage: RuntimeSessionUsage): void
+}
+
 export class SessionLogger {
   private sessionId: string
   private sessionDir: string
@@ -215,6 +229,27 @@ export class SessionLogger {
     }
     await this.saveArtifact('cost.summary.json', summary)
   }
+
+  toRuntimeSession(): RuntimeSession {
+    const self = this
+    return {
+      get id() {
+        return self.sessionId
+      },
+      recordUsage(usage: RuntimeSessionUsage) {
+        void self.log('llm.response', undefined, {
+          usage: {
+            provider: usage.provider,
+            model: usage.model,
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            totalTokens: usage.totalTokens,
+            costUsd: usage.costUsd,
+          },
+        })
+      },
+    }
+  }
 }
 
 export class NoopSessionLogger {
@@ -229,6 +264,12 @@ export class NoopSessionLogger {
     return ''
   }
   async close(): Promise<void> {}
+  toRuntimeSession(): RuntimeSession {
+    return {
+      id: 'noop',
+      recordUsage: () => {},
+    }
+  }
 }
 
 export type SessionLoggerInstance = SessionLogger | NoopSessionLogger
