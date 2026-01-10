@@ -1,0 +1,46 @@
+{
+  "$schema": "../../preset.schema.json",
+  "name": "uploadthing",
+  "category": "storage",
+  "description": "UploadThing - Type-safe file uploads for Next.js & NestJS",
+  "operations": {
+    "replace": [],
+    "merge": [],
+    "add": ["src/modules/storage"],
+    "remove": [],
+    "inject": [
+      {
+        "file": "src/app.module.ts",
+        "marker": "@obora:imports",
+        "content": "import { StorageModule } from \"./modules/storage/storage.module.js\";"
+      },
+      {
+        "file": "src/app.module.ts",
+        "marker": "@obora:modules",
+        "content": "StorageModule,"
+      }
+    ]
+  },
+  "conflicts": ["cloudflare-r2"],
+  "requires": [],
+  "env": [
+    {
+      "key": "UPLOADTHING_SECRET",
+      "description": "UploadThing secret key",
+      "required": true,
+      "secret": true,
+      "example": "sk_live_xxx"
+    },
+    {
+      "key": "UPLOADTHING_APP_ID",
+      "description": "UploadThing app ID",
+      "required": true,
+      "secret": false,
+      "example": "xxx"
+    }
+  ],
+  "postInstall": [
+    "Get credentials from https://uploadthing.com",
+    "Set environment variables"
+  ]
+}

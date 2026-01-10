@@ -1,0 +1,57 @@
+{
+  "$schema": "../../preset.schema.json",
+  "name": "cloudflare-r2",
+  "category": "storage",
+  "description": "Cloudflare R2 - S3-compatible object storage with zero egress fees",
+  "operations": {
+    "replace": [],
+    "merge": ["package.json"],
+    "add": ["src/lib/storage"],
+    "remove": [],
+    "inject": []
+  },
+  "conflicts": ["uploadthing"],
+  "requires": [],
+  "env": [
+    {
+      "key": "R2_ACCOUNT_ID",
+      "description": "Cloudflare account ID",
+      "required": true,
+      "secret": false,
+      "example": "your-account-id"
+    },
+    {
+      "key": "R2_ACCESS_KEY_ID",
+      "description": "R2 API access key ID",
+      "required": true,
+      "secret": true,
+      "example": "your-access-key"
+    },
+    {
+      "key": "R2_SECRET_ACCESS_KEY",
+      "description": "R2 API secret access key",
+      "required": true,
+      "secret": true,
+      "example": "your-secret-key"
+    },
+    {
+      "key": "R2_BUCKET_NAME",
+      "description": "R2 bucket name",
+      "required": true,
+      "secret": false,
+      "example": "your-bucket-name"
+    },
+    {
+      "key": "R2_PUBLIC_URL",
+      "description": "Public URL for the bucket (if public access enabled)",
+      "required": false,
+      "secret": false,
+      "example": "https://pub-xxx.r2.dev"
+    }
+  ],
+  "postInstall": [
+    "Create R2 bucket in Cloudflare dashboard",
+    "Generate API tokens with R2 permissions",
+    "Configure CORS if needed for browser uploads"
+  ]
+}

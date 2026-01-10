@@ -1,0 +1,35 @@
+{
+  "$schema": "../../preset.schema.json",
+  "name": "posthog",
+  "category": "analytics",
+  "description": "PostHog - Open source product analytics",
+  "operations": {
+    "replace": [],
+    "merge": ["package.json"],
+    "add": ["src/lib/posthog"],
+    "remove": [],
+    "inject": []
+  },
+  "conflicts": [],
+  "requires": [],
+  "env": [
+    {
+      "key": "NEXT_PUBLIC_POSTHOG_KEY",
+      "description": "PostHog project API key",
+      "required": true,
+      "secret": false,
+      "example": "phc_xxx"
+    },
+    {
+      "key": "NEXT_PUBLIC_POSTHOG_HOST",
+      "description": "PostHog host URL",
+      "required": true,
+      "secret": false,
+      "example": "https://us.i.posthog.com"
+    }
+  ],
+  "postInstall": [
+    "Set up PostHog account: https://posthog.com",
+    "Get project API key from settings"
+  ]
+}

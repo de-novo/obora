@@ -1,0 +1,39 @@
+{
+  "$schema": "../../preset.schema.json",
+  "name": "vercel-ai",
+  "category": "ai",
+  "description": "Vercel AI SDK - Build AI-powered applications",
+  "operations": {
+    "replace": [],
+    "merge": ["package.json"],
+    "add": ["src/modules/ai"],
+    "remove": [],
+    "inject": [
+      {
+        "file": "src/app.module.ts",
+        "marker": "@obora:imports",
+        "content": "import { AiModule } from \"./modules/ai/ai.module.js\";"
+      },
+      {
+        "file": "src/app.module.ts",
+        "marker": "@obora:modules",
+        "content": "AiModule,"
+      }
+    ]
+  },
+  "conflicts": [],
+  "requires": [],
+  "env": [
+    {
+      "key": "OPENAI_API_KEY",
+      "description": "OpenAI API key",
+      "required": true,
+      "secret": true,
+      "example": "sk-xxx"
+    }
+  ],
+  "postInstall": [
+    "Get API key from https://platform.openai.com",
+    "Set OPENAI_API_KEY environment variable"
+  ]
+}

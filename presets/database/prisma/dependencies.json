@@ -1,0 +1,16 @@
+{
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.0.0",
+    "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "prisma": "^7.0.0",
+    "@types/pg": "^8.11.0"
+  },
+  "scripts": {
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio"
+  }
+}

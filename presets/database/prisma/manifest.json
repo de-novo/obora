@@ -1,0 +1,49 @@
+{
+  "$schema": "../../preset.schema.json",
+  "name": "prisma",
+  "category": "database",
+  "description": "Prisma ORM - Type-safe database client",
+  "operations": {
+    "replace": [],
+    "merge": ["package.json"],
+    "add": [
+      "prisma",
+      "prisma.config.ts",
+      "src/db"
+    ],
+    "remove": [],
+    "inject": [
+      {
+        "file": "src/app.module.ts",
+        "marker": "@obora:imports",
+        "content": "import { PrismaModule } from \"./db/prisma.module.js\";"
+      },
+      {
+        "file": "src/app.module.ts",
+        "marker": "@obora:modules",
+        "content": "PrismaModule,"
+      }
+    ]
+  },
+  "conflicts": ["drizzle"],
+  "requires": [],
+  "env": [
+    {
+      "key": "DATABASE_URL",
+      "description": "PostgreSQL connection string",
+      "required": true,
+      "secret": true,
+      "example": "postgresql://postgres:postgres@localhost:5432/mydb"
+    }
+  ],
+  "postInstall": [
+    "Generate client: pnpm prisma generate",
+    "Run migrations: pnpm prisma migrate dev"
+  ],
+  "scripts": {
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:push": "prisma db push",
+    "prisma:studio": "prisma studio"
+  }
+}

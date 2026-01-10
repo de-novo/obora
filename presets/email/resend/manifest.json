@@ -1,0 +1,47 @@
+{
+  "$schema": "../../preset.schema.json",
+  "name": "resend",
+  "category": "email",
+  "description": "Resend - Developer-friendly email API",
+  "operations": {
+    "replace": [],
+    "merge": [],
+    "add": ["src/modules/email"],
+    "remove": [],
+    "inject": [
+      {
+        "file": "src/app.module.ts",
+        "marker": "@obora:imports",
+        "content": "import { EmailModule } from \"./modules/email/email.module.js\";"
+      },
+      {
+        "file": "src/app.module.ts",
+        "marker": "@obora:modules",
+        "content": "EmailModule,"
+      }
+    ]
+  },
+  "conflicts": [],
+  "requires": [],
+  "env": [
+    {
+      "key": "RESEND_API_KEY",
+      "description": "Resend API key",
+      "required": true,
+      "secret": true,
+      "example": "re_xxx"
+    },
+    {
+      "key": "RESEND_FROM_EMAIL",
+      "description": "Default from email address",
+      "required": true,
+      "secret": false,
+      "example": "noreply@yourdomain.com"
+    }
+  ],
+  "postInstall": [
+    "Get API key from https://resend.com",
+    "Verify your domain",
+    "Set environment variables"
+  ]
+}

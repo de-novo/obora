@@ -1,0 +1,17 @@
+{
+  "$schema": "../../preset.schema.json",
+  "name": "effect-schema",
+  "category": "validation",
+  "description": "Effect Schema - Type-safe, bidirectional transformation with runtime validation",
+  "operations": {
+    "replace": [],
+    "merge": ["package.json"],
+    "add": ["src/lib/validation"],
+    "remove": [],
+    "inject": []
+  },
+  "conflicts": ["zod"],
+  "requires": [],
+  "env": [],
+  "postInstall": []
+}

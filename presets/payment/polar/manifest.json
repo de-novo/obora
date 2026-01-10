@@ -1,0 +1,47 @@
+{
+  "$schema": "../../preset.schema.json",
+  "name": "polar",
+  "category": "payment",
+  "description": "Polar - Merchant of Record for developers (4% + $0.40)",
+  "operations": {
+    "replace": [],
+    "merge": [],
+    "add": ["src/modules/payment"],
+    "remove": [],
+    "inject": [
+      {
+        "file": "src/app.module.ts",
+        "marker": "@obora:imports",
+        "content": "import { PaymentModule } from \"./modules/payment/payment.module.js\";"
+      },
+      {
+        "file": "src/app.module.ts",
+        "marker": "@obora:modules",
+        "content": "PaymentModule,"
+      }
+    ]
+  },
+  "conflicts": ["paddle"],
+  "requires": [],
+  "env": [
+    {
+      "key": "POLAR_ACCESS_TOKEN",
+      "description": "Polar Access Token from polar.sh",
+      "required": true,
+      "secret": true,
+      "example": "polar_at_xxx"
+    },
+    {
+      "key": "POLAR_WEBHOOK_SECRET",
+      "description": "Polar Webhook Secret",
+      "required": true,
+      "secret": true,
+      "example": "whsec_xxx"
+    }
+  ],
+  "postInstall": [
+    "Get access token from https://polar.sh",
+    "Configure webhook endpoint",
+    "Set environment variables"
+  ]
+}

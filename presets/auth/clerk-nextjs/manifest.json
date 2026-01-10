@@ -1,0 +1,38 @@
+{
+  "$schema": "../../preset.schema.json",
+  "name": "clerk-nextjs",
+  "category": "auth",
+  "description": "Clerk - Next.js authentication with middleware",
+  "operations": {
+    "replace": [],
+    "merge": ["package.json"],
+    "add": [
+      "middleware.ts",
+      "src/lib/auth.ts"
+    ],
+    "remove": [],
+    "inject": []
+  },
+  "conflicts": ["clerk", "better-auth"],
+  "requires": [],
+  "targetApps": ["nextjs-web"],
+  "env": [
+    {
+      "key": "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",
+      "description": "Clerk publishable key (from Clerk Dashboard)",
+      "required": true,
+      "secret": false,
+      "example": "pk_test_..."
+    },
+    {
+      "key": "CLERK_SECRET_KEY",
+      "description": "Clerk secret key (from Clerk Dashboard)",
+      "required": true,
+      "secret": true,
+      "example": "sk_test_..."
+    }
+  ],
+  "postInstall": [
+    "Configure Clerk: https://clerk.com/docs/quickstarts/nextjs"
+  ]
+}

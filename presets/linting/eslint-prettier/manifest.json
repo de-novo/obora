@@ -1,0 +1,26 @@
+{
+  "$schema": "../../preset.schema.json",
+  "name": "eslint-prettier",
+  "category": "linting",
+  "description": "ESLint + Prettier - Traditional linting with full plugin ecosystem",
+  "operations": {
+    "replace": [],
+    "merge": ["package.json"],
+    "add": [
+      "eslint.config.js",
+      ".prettierrc",
+      ".prettierignore"
+    ],
+    "remove": ["biome.json"],
+    "inject": []
+  },
+  "conflicts": ["biome"],
+  "requires": [],
+  "env": [],
+  "postInstall": [],
+  "scripts": {
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write ."
+  }
+}

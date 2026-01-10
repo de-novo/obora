@@ -1,0 +1,17 @@
+{
+  "$schema": "../../preset.schema.json",
+  "name": "zod",
+  "category": "validation",
+  "description": "Zod - TypeScript-first schema validation with static type inference",
+  "operations": {
+    "replace": [],
+    "merge": ["package.json"],
+    "add": ["src/lib/validation"],
+    "remove": [],
+    "inject": []
+  },
+  "conflicts": ["effect-schema"],
+  "requires": [],
+  "env": [],
+  "postInstall": []
+}

@@ -1,0 +1,48 @@
+{
+  "$schema": "../../preset.schema.json",
+  "name": "drizzle",
+  "category": "database",
+  "description": "Drizzle ORM - Lightweight, SQL-first, serverless optimized",
+  "operations": {
+    "replace": [],
+    "merge": ["package.json"],
+    "add": [
+      "drizzle.config.ts",
+      "src/db"
+    ],
+    "remove": [],
+    "inject": [
+      {
+        "file": "src/app.module.ts",
+        "marker": "@obora:imports",
+        "content": "import { DatabaseModule } from \"./db/database.module.js\";"
+      },
+      {
+        "file": "src/app.module.ts",
+        "marker": "@obora:modules",
+        "content": "DatabaseModule,"
+      }
+    ]
+  },
+  "conflicts": ["prisma"],
+  "requires": [],
+  "env": [
+    {
+      "key": "DATABASE_URL",
+      "description": "PostgreSQL connection string (Neon, Supabase, etc.)",
+      "required": true,
+      "secret": true,
+      "example": "postgres://user:pass@host:5432/dbname"
+    }
+  ],
+  "postInstall": [
+    "Generate migrations: pnpm db:generate",
+    "Run migrations: pnpm db:migrate"
+  ],
+  "scripts": {
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio"
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "$schema": "../../preset.schema.json",
+  "name": "better-auth",
+  "category": "auth",
+  "description": "Better Auth - Self-hosted authentication library",
+  "operations": {
+    "replace": [],
+    "merge": ["package.json"],
+    "add": ["src/common", "src/modules/auth"],
+    "remove": [],
+    "inject": [
+      {
+        "file": "src/app.module.ts",
+        "marker": "@obora:imports",
+        "content": "import { AuthModule } from \"./modules/auth/auth.module.js\";"
+      },
+      {
+        "file": "src/app.module.ts",
+        "marker": "@obora:modules",
+        "content": "AuthModule,"
+      }
+    ]
+  },
+  "conflicts": ["clerk", "clerk-nextjs"],
+  "requires": ["database:drizzle"],
+  "targetApps": ["nestjs-api"],
+  "env": [
+    {
+      "key": "BETTER_AUTH_SECRET",
+      "description": "Secret key for signing tokens (min 32 chars)",
+      "required": true,
+      "secret": true,
+      "example": "your-super-secret-key-at-least-32-characters"
+    },
+    {
+      "key": "BETTER_AUTH_URL",
+      "description": "Base URL of the auth server",
+      "required": true,
+      "secret": false,
+      "example": "http://localhost:3001"
+    }
+  ],
+  "postInstall": [
+    "Generate secret: openssl rand -base64 32",
+    "Configure social providers in auth config"
+  ]
+}

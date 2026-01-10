@@ -1,0 +1,8 @@
+{
+  "name": "nestjs-api",
+  "description": "NestJS 11 API server with Fastify",
+  "type": "app",
+  "targetDir": "apps/api",
+  "features": ["NestJS 11", "Fastify", "Swagger", "Effect Schema"],
+  "slots": ["linting", "database", "auth", "payment", "email", "storage"]
+}

@@ -1,0 +1,36 @@
+{
+  "$schema": "../../preset.schema.json",
+  "name": "umami",
+  "category": "analytics",
+  "description": "Umami - Privacy-focused, lightweight, self-hostable web analytics",
+  "operations": {
+    "replace": [],
+    "merge": [],
+    "add": ["src/lib/analytics"],
+    "remove": [],
+    "inject": []
+  },
+  "conflicts": [],
+  "requires": [],
+  "env": [
+    {
+      "key": "NEXT_PUBLIC_UMAMI_WEBSITE_ID",
+      "description": "Umami Website ID",
+      "required": true,
+      "secret": false,
+      "example": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    },
+    {
+      "key": "NEXT_PUBLIC_UMAMI_URL",
+      "description": "Umami Script URL (default: cloud.umami.is)",
+      "required": false,
+      "secret": false,
+      "example": "https://cloud.umami.is/script.js"
+    }
+  ],
+  "postInstall": [
+    "Get Website ID from https://umami.is or your self-hosted instance",
+    "Add <UmamiScript /> to your root layout",
+    "Use trackEvent() for custom events"
+  ]
+}

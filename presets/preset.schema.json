@@ -1,0 +1,133 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Obora Preset Manifest",
+  "description": "Schema for obora preset manifest files",
+  "type": "object",
+  "required": ["name", "category", "description", "operations"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Reference to this schema file"
+    },
+    "name": {
+      "type": "string",
+      "description": "Unique identifier for the preset"
+    },
+    "category": {
+      "type": "string",
+      "enum": ["linting", "database", "auth", "payment", "analytics", "email", "ai", "storage", "validation"],
+      "description": "Category this preset belongs to"
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description of the preset"
+    },
+    "operations": {
+      "type": "object",
+      "description": "File operations to perform when applying preset",
+      "required": ["replace", "merge", "add", "remove", "inject"],
+      "properties": {
+        "replace": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Files/directories to replace entirely"
+        },
+        "merge": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Files to merge (e.g., package.json)"
+        },
+        "add": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Files/directories to add"
+        },
+        "remove": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Files/directories to remove"
+        },
+        "inject": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["file", "marker", "content"],
+            "properties": {
+              "file": {
+                "type": "string",
+                "description": "Target file path"
+              },
+              "marker": {
+                "type": "string",
+                "description": "Marker comment to inject after (e.g., @obora:imports)"
+              },
+              "content": {
+                "type": "string",
+                "description": "Content to inject"
+              }
+            }
+          },
+          "description": "Code injections at marker locations"
+        }
+      }
+    },
+    "conflicts": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Other preset names that conflict with this one"
+    },
+    "requires": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Required presets in category:name format (e.g., database:prisma)"
+    },
+    "targetApps": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["nestjs-api", "nextjs-web", "shared-database", "shared-ui"]
+      },
+      "description": "App modules this preset can be applied to. If not specified, applies to all compatible apps."
+    },
+    "env": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["key", "description", "required", "secret"],
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Environment variable name"
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of the variable"
+          },
+          "required": {
+            "type": "boolean",
+            "description": "Whether the variable is required"
+          },
+          "secret": {
+            "type": "boolean",
+            "description": "Whether the variable contains sensitive data"
+          },
+          "example": {
+            "type": "string",
+            "description": "Example value"
+          }
+        }
+      },
+      "description": "Environment variables required by this preset"
+    },
+    "scripts": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "description": "NPM scripts to add to package.json"
+    },
+    "postInstall": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Post-install instructions to display"
+    }
+  }
+}

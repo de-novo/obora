@@ -1,0 +1,54 @@
+{
+  "$schema": "../../preset.schema.json",
+  "name": "paddle",
+  "category": "payment",
+  "description": "Paddle - Merchant of Record for global SaaS",
+  "operations": {
+    "replace": [],
+    "merge": ["package.json"],
+    "add": ["src/modules/payment"],
+    "remove": [],
+    "inject": [
+      {
+        "file": "src/app.module.ts",
+        "marker": "@obora:imports",
+        "content": "import { PaymentModule } from \"./modules/payment/payment.module.js\";"
+      },
+      {
+        "file": "src/app.module.ts",
+        "marker": "@obora:modules",
+        "content": "PaymentModule,"
+      }
+    ]
+  },
+  "conflicts": ["polar"],
+  "requires": [],
+  "env": [
+    {
+      "key": "PADDLE_API_KEY",
+      "description": "Paddle API key from dashboard",
+      "required": true,
+      "secret": true,
+      "example": "your-paddle-api-key"
+    },
+    {
+      "key": "PADDLE_WEBHOOK_SECRET",
+      "description": "Paddle webhook signing secret",
+      "required": true,
+      "secret": true,
+      "example": "pdl_ntfset_xxx"
+    },
+    {
+      "key": "PADDLE_ENVIRONMENT",
+      "description": "Paddle environment (sandbox or production)",
+      "required": true,
+      "secret": false,
+      "example": "sandbox"
+    }
+  ],
+  "postInstall": [
+    "Set up Paddle dashboard: https://paddle.com",
+    "Configure webhook endpoint",
+    "Set environment variables"
+  ]
+}

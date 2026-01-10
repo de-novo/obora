@@ -1,0 +1,54 @@
+{
+  "$schema": "../../preset.schema.json",
+  "name": "clerk",
+  "category": "auth",
+  "description": "Clerk - Managed authentication with great DX",
+  "operations": {
+    "replace": [],
+    "merge": ["package.json"],
+    "add": ["src/common", "src/modules/auth"],
+    "remove": [],
+    "inject": [
+      {
+        "file": "src/app.module.ts",
+        "marker": "@obora:imports",
+        "content": "import { AuthModule } from \"./modules/auth/auth.module.js\";"
+      },
+      {
+        "file": "src/app.module.ts",
+        "marker": "@obora:modules",
+        "content": "AuthModule,"
+      }
+    ]
+  },
+  "conflicts": ["better-auth", "clerk-nextjs"],
+  "requires": [],
+  "targetApps": ["nestjs-api"],
+  "env": [
+    {
+      "key": "CLERK_SECRET_KEY",
+      "description": "Clerk secret key (from dashboard)",
+      "required": true,
+      "secret": true,
+      "example": "sk_test_xxx"
+    },
+    {
+      "key": "CLERK_PUBLISHABLE_KEY",
+      "description": "Clerk publishable key",
+      "required": true,
+      "secret": false,
+      "example": "pk_test_xxx"
+    },
+    {
+      "key": "CLERK_WEBHOOK_SECRET",
+      "description": "Clerk webhook signing secret",
+      "required": false,
+      "secret": true,
+      "example": "whsec_xxx"
+    }
+  ],
+  "postInstall": [
+    "Set up Clerk dashboard: https://clerk.com",
+    "Configure environment variables"
+  ]
+}

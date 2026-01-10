@@ -1,0 +1,10 @@
+{
+  "dependencies": {
+    "drizzle-orm": "^0.45.0",
+    "@neondatabase/serverless": "^0.10.0",
+    "@paralleldrive/cuid2": "^2.2.0"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.0"
+  }
+}
