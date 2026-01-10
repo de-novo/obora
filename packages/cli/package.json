@@ -1,7 +1,7 @@
 {
-  "name": "obora",
+  "name": "@obora/kit",
   "version": "0.1.0",
-  "description": "CLI for obora-labs project scaffolding",
+  "description": "CLI for scaffolding TypeScript SaaS projects with modular presets",
   "type": "module",
   "bin": {
     "obora": "./dist/obora.mjs"
@@ -13,9 +13,7 @@
     }
   },
   "files": [
-    "bin",
-    "dist",
-    "templates"
+    "dist"
   ],
   "scripts": {
     "build": "unbuild",

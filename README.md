@@ -4,10 +4,29 @@
 
 ## 설치
 
+### 내부 사용 (GitHub에서 직접)
+
 ```bash
-npm install -g @obora-labs/cli
+# 방법 1: npx로 직접 실행
+npx github:obora-labs/obora-kit create my-project
+
+# 방법 2: 글로벌 링크 (개발용)
+git clone https://github.com/obora-labs/obora-kit.git
+cd obora-kit/packages/cli
+pnpm install && pnpm build
+pnpm link --global
+obora create my-project
+
+# 방법 3: 프로젝트 의존성으로 추가
+pnpm add github:obora-labs/obora-kit#main --save-dev
+```
+
+### npm (추후 공개 시)
+
+```bash
+npm install -g @obora/kit
 # 또는
-npx @obora-labs/cli
+npx @obora/kit create my-project
 ```
 
 ## 빠른 시작
