@@ -95,6 +95,11 @@ export const createCommand = defineCommand({
       description: "Skip confirmation prompts (uses defaults)",
       default: false,
     },
+    "dry-run": {
+      type: "boolean",
+      description: "Show what would be created without actually creating",
+      default: false,
+    },
   },
   async run({ args }) {
     consola.start("Creating new project...\n");
@@ -193,14 +198,34 @@ export const createCommand = defineCommand({
       .map(([k, v]) => `${k}: ${v?.preset}`)
       .join(", ");
 
+    const isDryRun = args["dry-run"] as boolean;
+
     consola.box(
-      `Project: ${projectName}\n` +
+      `${isDryRun ? "[DRY RUN] " : ""}Project: ${projectName}\n` +
         `Base: ${base}\n` +
         `Apps: ${appModules.join(", ")}\n` +
         `Presets: ${selectedPresets || "none"}\n` +
         `Directory: ${targetDir}\n` +
         `Package Manager: ${pm}`
     );
+
+    // Dry run - show what would be created
+    if (isDryRun) {
+      consola.info("\nDry run mode - no files will be created.\n");
+      consola.info("Would create:");
+      consola.info(`  Base template: ${base}`);
+      for (const app of appModules) {
+        consola.info(`  App module: ${app}`);
+      }
+      for (const [category, selection] of Object.entries(slotSelections)) {
+        if (selection) {
+          consola.info(`  Preset: ${category}/${selection.preset}`);
+        }
+      }
+      consola.info(`  Config: .obora/config.json`);
+      consola.info(`  Env: .env.example`);
+      return;
+    }
 
     if (!args.yes) {
       const confirmed = await promptConfirm("Proceed with project creation?");
@@ -212,6 +237,7 @@ export const createCommand = defineCommand({
 
     // 10. Assemble project
     try {
+      consola.start("Copying base template...");
       await assembleProject({
         base,
         projectName,
@@ -220,14 +246,15 @@ export const createCommand = defineCommand({
         presets: slotSelections,
         packageManager: pm,
       });
+      consola.success("Project files created");
 
       // 11. Generate .obora/config.json
+      consola.start("Generating config...");
       const oboraConfig = createInitialConfig(base, pm, appsConfig, slotSelections);
       await writeOboraConfig(targetDir, oboraConfig);
       await addHistoryEntry(targetDir, {
         action: "create",
       });
-
       consola.success("Generated .obora/config.json");
 
       // 12. Next steps
@@ -255,7 +282,18 @@ export const createCommand = defineCommand({
           nextSteps.map((step) => `  ${step}`).join("\n")
       );
     } catch (error) {
-      consola.error("Failed to create project:", error);
+      if (error instanceof Error) {
+        consola.error(`Failed to create project: ${error.message}`);
+        if (error.message.includes("ENOENT")) {
+          consola.info("Hint: Check if template or preset files exist");
+        } else if (error.message.includes("EACCES")) {
+          consola.info("Hint: Check write permissions for target directory");
+        } else if (error.message.includes("EEXIST")) {
+          consola.info("Hint: Target directory already exists. Use --yes to overwrite");
+        }
+      } else {
+        consola.error("Failed to create project:", error);
+      }
       process.exit(1);
     }
   },

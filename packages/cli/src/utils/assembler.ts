@@ -54,7 +54,8 @@ export async function assembleProject(options: AssemblyOptions): Promise<void> {
 
   const isSingleBase = base === "single";
 
-  consola.start(`Assembling project: ${projectName}`);
+  consola.info(`Assembling project: ${projectName}`);
+  consola.info(`  Target: ${targetDir}`);
 
   // 1. Copy base template
   const baseDir = join(TEMPLATES_DIR, "base", base, "files");

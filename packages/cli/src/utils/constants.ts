@@ -1,5 +1,6 @@
 import { join, dirname } from "pathe";
 import { fileURLToPath } from "node:url";
+import { existsSync } from "node:fs";
 
 // ============================================================================
 // Directory Paths
@@ -8,11 +9,27 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// In development: src/utils -> ../../templates (2 levels up from src/utils to cli, then to obora-kit)
-// In production: dist -> ../../../templates (3 levels up from dist to cli, then to obora-kit)
-// Using 3 levels since we build to dist/
-export const TEMPLATES_DIR = join(__dirname, "../../../templates");
-export const PRESETS_DIR = join(__dirname, "../../../presets");
+// Detect environment based on path structure
+// - In production (dist): __dirname = .../cli/dist, need 3 levels up
+// - In development (src/utils): __dirname = .../cli/src/utils, need 4 levels up
+function getBasePath(): string {
+  // Try production path first (from dist/)
+  const prodPath = join(__dirname, "../../..");
+  if (existsSync(join(prodPath, "templates"))) {
+    return prodPath;
+  }
+  // Try development path (from src/utils/)
+  const devPath = join(__dirname, "../../../..");
+  if (existsSync(join(devPath, "templates"))) {
+    return devPath;
+  }
+  // Fallback to production assumption
+  return prodPath;
+}
+
+const BASE_PATH = getBasePath();
+export const TEMPLATES_DIR = join(BASE_PATH, "templates");
+export const PRESETS_DIR = join(BASE_PATH, "presets");
 
 // ============================================================================
 // Base Types

@@ -2,105 +2,130 @@ import {
   Controller,
   Post,
   Body,
+  Headers,
   Get,
   Param,
-  Headers,
+  Query,
   RawBodyRequest,
   Req,
-  HttpException,
-  HttpStatus,
-  Logger,
 } from "@nestjs/common";
-import { Request } from "express";
+import { ApiTags, ApiOperation, ApiParam, ApiQuery } from "@nestjs/swagger";
 import { PaymentService } from "./payment.service.js";
+import { FastifyRequest } from "fastify";
 
+@ApiTags("Payment")
 @Controller("payment")
 export class PaymentController {
-  private readonly logger = new Logger(PaymentController.name);
-
   constructor(private readonly paymentService: PaymentService) {}
 
-  /**
-   * Get checkout info for a price
-   */
-  @Post("checkout")
-  async createCheckout(
-    @Body() body: { priceId: string; customerId?: string }
+  @Post("transactions")
+  @ApiOperation({ summary: "Create a transaction for checkout" })
+  async createTransaction(
+    @Body()
+    body: {
+      priceId: string;
+      customerId?: string;
+      customerEmail?: string;
+    }
   ) {
-    return this.paymentService.createCheckout(body.priceId, body.customerId);
+    return this.paymentService.createTransaction(
+      body.priceId,
+      body.customerId,
+      body.customerEmail
+    );
   }
 
-  /**
-   * Get customer subscriptions
-   */
-  @Get("subscriptions/:customerId")
-  async getSubscriptions(@Param("customerId") customerId: string) {
-    return this.paymentService.getSubscriptions(customerId);
+  @Get("transactions/:id")
+  @ApiOperation({ summary: "Get transaction by ID" })
+  @ApiParam({ name: "id", description: "Transaction ID" })
+  async getTransaction(@Param("id") id: string) {
+    return this.paymentService.getTransaction(id);
   }
 
-  /**
-   * Cancel subscription
-   */
-  @Post("subscriptions/:subscriptionId/cancel")
+  @Get("products")
+  @ApiOperation({ summary: "List all products" })
+  async listProducts() {
+    return this.paymentService.listProducts();
+  }
+
+  @Get("prices")
+  @ApiOperation({ summary: "List prices" })
+  @ApiQuery({ name: "productId", required: false })
+  async listPrices(@Query("productId") productId?: string) {
+    return this.paymentService.listPrices(productId);
+  }
+
+  @Post("customers")
+  @ApiOperation({ summary: "Create a customer" })
+  async createCustomer(@Body() body: { email: string; name?: string }) {
+    return this.paymentService.createCustomer(body.email, body.name);
+  }
+
+  @Get("customers/:id")
+  @ApiOperation({ summary: "Get customer by ID" })
+  @ApiParam({ name: "id", description: "Customer ID" })
+  async getCustomer(@Param("id") id: string) {
+    return this.paymentService.getCustomer(id);
+  }
+
+  @Get("subscriptions")
+  @ApiOperation({ summary: "List subscriptions" })
+  @ApiQuery({ name: "customerId", required: false })
+  async listSubscriptions(@Query("customerId") customerId?: string) {
+    return this.paymentService.listSubscriptions(customerId);
+  }
+
+  @Post("subscriptions/:id/cancel")
+  @ApiOperation({ summary: "Cancel a subscription" })
+  @ApiParam({ name: "id", description: "Subscription ID" })
   async cancelSubscription(
-    @Param("subscriptionId") subscriptionId: string
+    @Param("id") id: string,
+    @Body() body: { effectiveFrom?: "immediately" | "next_billing_period" }
   ) {
-    return this.paymentService.cancelSubscription(subscriptionId);
+    return this.paymentService.cancelSubscription(id, body.effectiveFrom);
   }
 
-  /**
-   * Paddle webhook handler
-   */
   @Post("webhook")
+  @ApiOperation({ summary: "Handle Paddle webhook" })
   async handleWebhook(
-    @Req() req: RawBodyRequest<Request>,
+    @Req() req: RawBodyRequest<FastifyRequest>,
     @Headers("paddle-signature") signature: string
   ) {
-    const rawBody = req.rawBody;
-    if (!rawBody) {
-      throw new HttpException("Missing raw body", HttpStatus.BAD_REQUEST);
+    const rawBody =
+      typeof req.rawBody === "string"
+        ? req.rawBody
+        : req.rawBody?.toString() || "";
+
+    const isValid = this.paymentService.verifyWebhookSignature(
+      rawBody,
+      signature
+    );
+
+    if (!isValid) {
+      return { error: "Invalid signature" };
     }
 
-    // Verify webhook signature
-    // Note: Implement proper signature verification in production
-    const webhookSecret = process.env.PADDLE_WEBHOOK_SECRET!;
+    const event = req.body as any;
 
-    try {
-      const event = JSON.parse(rawBody.toString());
-      this.logger.log(`Received Paddle webhook: ${event.event_type}`);
-
-      switch (event.event_type) {
-        case "subscription.created":
-          // Handle new subscription
-          this.logger.log(`New subscription: ${event.data.id}`);
-          break;
-
-        case "subscription.updated":
-          // Handle subscription update
-          this.logger.log(`Subscription updated: ${event.data.id}`);
-          break;
-
-        case "subscription.canceled":
-          // Handle cancellation
-          this.logger.log(`Subscription canceled: ${event.data.id}`);
-          break;
-
-        case "transaction.completed":
-          // Handle completed payment
-          this.logger.log(`Transaction completed: ${event.data.id}`);
-          break;
-
-        default:
-          this.logger.log(`Unhandled event type: ${event.event_type}`);
-      }
-
-      return { received: true };
-    } catch (error) {
-      this.logger.error("Webhook processing error:", error);
-      throw new HttpException(
-        "Webhook processing failed",
-        HttpStatus.BAD_REQUEST
-      );
+    // Handle different event types
+    switch (event.event_type) {
+      case "transaction.completed":
+        // Handle successful payment
+        break;
+      case "subscription.created":
+        // Handle new subscription
+        break;
+      case "subscription.updated":
+        // Handle subscription update
+        break;
+      case "subscription.canceled":
+        // Handle subscription cancellation
+        break;
+      default:
+        // Log unknown event type
+        break;
     }
+
+    return { received: true };
   }
 }
