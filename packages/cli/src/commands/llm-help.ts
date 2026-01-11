@@ -32,10 +32,12 @@ const COMPACT_REFERENCE = `# obora-kit - LLM Quick Reference
 obora create <name>              # Create project (interactive)
 obora create <name> --dry-run    # Preview without creating
 obora create <name> -y           # Use defaults
+obora init                       # Initialize in existing project
 obora list                       # List templates/presets
 obora status                     # Show project config
 obora add <preset>               # Add preset
 obora remove <preset>            # Remove preset
+obora llm-help                   # Show this reference
 \`\`\`
 
 ## Create Options
@@ -54,7 +56,7 @@ obora remove <preset>            # Remove preset
 |------------|------------------------------|----------------|
 | linting    | biome, eslint-prettier       | root           |
 | database   | drizzle, prisma              | nestjs-api     |
-| auth       | clerk, clerk-nextjs, better-auth | see below  |
+| auth       | clerk, clerk-nextjs, better-auth, better-auth-nextjs | see below  |
 | payment    | polar, paddle                | nestjs-api     |
 | email      | resend                       | nestjs-api     |
 | storage    | uploadthing, cloudflare-r2   | nestjs-api     |
@@ -62,7 +64,7 @@ obora remove <preset>            # Remove preset
 | ai         | vercel-ai                    | nestjs-api     |
 | validation | zod, effect-schema           | nestjs-api     |
 
-Auth targets: clerk→nestjs-api, clerk-nextjs→nextjs-web, better-auth→nestjs-api
+Auth targets: clerk→nestjs-api, clerk-nextjs→nextjs-web, better-auth→nestjs-api, better-auth-nextjs→nextjs-web
 
 ## Common Patterns
 

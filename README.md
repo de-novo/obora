@@ -102,8 +102,11 @@ obora-kit/
 | `clerk` | nestjs-api | Clerk - NestJS Guard 기반 인증 |
 | `clerk-nextjs` | nextjs-web | Clerk - Next.js Middleware 기반 인증 |
 | `better-auth` | nestjs-api | Better Auth - Drizzle 기반 자체 호스팅 |
+| `better-auth-nextjs` | nextjs-web | Better Auth - Next.js 클라이언트 |
 
-> **참고**: Monorepo에서 Clerk 사용 시 `clerk`(API)와 `clerk-nextjs`(Web) 둘 다 선택해야 합니다.
+> **참고**: Monorepo에서 인증 사용 시 API와 Web 프리셋을 함께 선택하세요:
+> - Clerk: `clerk`(API) + `clerk-nextjs`(Web)
+> - Better Auth: `better-auth`(API) + `better-auth-nextjs`(Web)
 
 ### 데이터베이스 (Database)
 
@@ -163,10 +166,12 @@ obora-kit/
 
 ```bash
 obora create <name>           # 새 프로젝트 생성
+obora init                    # 기존 프로젝트에 obora 초기화
 obora add <preset>            # 프리셋 추가
 obora remove <preset>         # 프리셋 제거
 obora status                  # 현재 설정 상태 확인
 obora list                    # 사용 가능한 템플릿/프리셋 목록
+obora llm-help                # LLM 친화적 문서 출력
 ```
 
 ### 프로젝트 생성 예시

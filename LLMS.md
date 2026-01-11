@@ -19,6 +19,12 @@ obora list
 
 # Check project status
 obora status
+
+# Initialize obora in existing project
+obora init
+
+# LLM-friendly documentation
+obora llm-help
 ```
 
 ## Architecture
@@ -66,7 +72,10 @@ Base (monorepo | single)
 |--------|--------|-------------|
 | `clerk` | nestjs-api | Clerk Guard-based auth |
 | `clerk-nextjs` | nextjs-web | Clerk Middleware auth |
-| `better-auth` | nestjs-api | Self-hosted with Drizzle |
+| `better-auth` | nestjs-api | Self-hosted with Drizzle (requires database:drizzle) |
+| `better-auth-nextjs` | nextjs-web | Better Auth client for Next.js |
+
+> For monorepos, pair API + Web presets: clerk + clerk-nextjs, or better-auth + better-auth-nextjs
 
 ### payment (exclusive, nestjs-api)
 | Preset | Description |
@@ -208,11 +217,26 @@ Flags:
 - `--history`: Include change history
 - `--json`: Output as JSON
 
+### obora init
+Initialize obora in an existing project. Detects presets from package.json.
+
+Flags:
+- `--dir, -d`: Project directory (default: current)
+- `--force, -f`: Overwrite existing config
+- `--yes, -y`: Skip confirmation
+
 ### obora add <preset>
 Add a preset to an existing project.
 
 ### obora remove <preset>
 Remove a preset from an existing project.
+
+### obora llm-help
+Output LLM-friendly documentation.
+
+Flags:
+- `--full`: Output full LLMS.md
+- `--raw`: Output without formatting
 
 ## Preset Manifest Format
 
