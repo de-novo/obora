@@ -29,6 +29,15 @@
             "command": "./.claude/scripts/logging/log-tool-use.sh"
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./.claude/scripts/enforce-workflow.sh"
+          }
+        ]
       }
     ]
   },
