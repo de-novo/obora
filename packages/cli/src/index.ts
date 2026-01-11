@@ -7,6 +7,10 @@ import { removeCommand } from "./commands/remove";
 import { statusCommand } from "./commands/status";
 import { listCommand } from "./commands/list";
 import { llmHelpCommand } from "./commands/llm-help";
+import { initCommand } from "./commands/init";
+import { upgradeCommand } from "./commands/upgrade";
+import { doctorCommand } from "./commands/doctor";
+import { ejectCommand } from "./commands/eject";
 
 const main = defineCommand({
   meta: {
@@ -16,8 +20,12 @@ const main = defineCommand({
   },
   subCommands: {
     create: createCommand,
+    init: initCommand,
     add: addCommand,
     remove: removeCommand,
+    upgrade: upgradeCommand,
+    eject: ejectCommand,
+    doctor: doctorCommand,
     status: statusCommand,
     list: listCommand,
     "llm-help": llmHelpCommand,
@@ -31,4 +39,4 @@ export function runMain() {
   _runMain(main);
 }
 
-export { createCommand, addCommand, removeCommand, statusCommand, listCommand, llmHelpCommand };
+export { createCommand, initCommand, addCommand, removeCommand, upgradeCommand, ejectCommand, doctorCommand, statusCommand, listCommand, llmHelpCommand };
