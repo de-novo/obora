@@ -16,6 +16,9 @@ export interface SlotConfig {
   preset: string;
   version: string;
   installedAt: string;
+  ejected?: boolean;
+  ejectedAt?: string;
+  ejectedFiles?: string[];
 }
 
 export interface OboraConfig {
@@ -30,7 +33,7 @@ export interface OboraConfig {
 }
 
 export interface HistoryEntry {
-  action: "create" | "add" | "remove" | "upgrade" | "add-app" | "remove-app";
+  action: "create" | "add" | "remove" | "upgrade" | "add-app" | "remove-app" | "eject";
   target?: string; // app name or slot name
   module?: string; // for app actions
   preset?: string; // for slot actions

@@ -15,6 +15,8 @@ import {
   type AppModuleName,
   type Category,
   dirExists,
+  validateAndResolvePresets,
+  displayValidationResults,
 } from "../utils";
 import { assembleProject } from "../utils/assembler";
 import {
@@ -150,6 +152,24 @@ export const createCommand = defineCommand({
       }
     } else {
       slotSelections = await promptPresetsForModules(appModules, args.yes);
+    }
+
+    // 4.5. Validate and resolve preset dependencies
+    const { resolved, added, conflicts } = await validateAndResolvePresets(slotSelections);
+    slotSelections = resolved;
+
+    // Display validation results (auto-added presets, conflicts)
+    displayValidationResults(added, conflicts);
+
+    // If there are conflicts, ask user to confirm
+    if (conflicts.length > 0 && !args.yes) {
+      const continueWithConflicts = await promptConfirm(
+        "There are preset conflicts. Continue anyway?"
+      );
+      if (!continueWithConflicts) {
+        consola.info("Cancelled");
+        return;
+      }
     }
 
     // 5. Determine output directory
