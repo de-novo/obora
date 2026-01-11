@@ -27,6 +27,7 @@
   },
   "conflicts": ["drizzle"],
   "requires": [],
+  "targetApps": ["nestjs-api"],
   "env": [
     {
       "key": "DATABASE_URL",

@@ -269,6 +269,12 @@ export const PRESETS: Record<string, PresetInfo> = {
     description: "Better Auth - Self-hosted authentication",
     version: "1.4.0",
   },
+  "better-auth-nextjs": {
+    name: "better-auth-nextjs",
+    category: "auth",
+    description: "Better Auth - Next.js client",
+    version: "1.1.0",
+  },
   // Payment
   polar: {
     name: "polar",

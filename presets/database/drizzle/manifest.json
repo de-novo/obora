@@ -26,6 +26,7 @@
   },
   "conflicts": ["prisma"],
   "requires": [],
+  "targetApps": ["nestjs-api"],
   "env": [
     {
       "key": "DATABASE_URL",

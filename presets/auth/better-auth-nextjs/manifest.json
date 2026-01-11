@@ -1,0 +1,32 @@
+{
+  "$schema": "../../preset.schema.json",
+  "name": "better-auth-nextjs",
+  "category": "auth",
+  "description": "Better Auth - Next.js client with middleware",
+  "operations": {
+    "replace": [],
+    "merge": ["package.json"],
+    "add": [
+      "middleware.ts",
+      "src/lib/auth-client.ts"
+    ],
+    "remove": [],
+    "inject": []
+  },
+  "conflicts": ["clerk", "clerk-nextjs"],
+  "requires": [],
+  "targetApps": ["nextjs-web"],
+  "env": [
+    {
+      "key": "NEXT_PUBLIC_BETTER_AUTH_URL",
+      "description": "Better Auth server URL (API backend)",
+      "required": true,
+      "secret": false,
+      "example": "http://localhost:3001"
+    }
+  ],
+  "postInstall": [
+    "Ensure your NestJS API has better-auth preset installed",
+    "Configure CORS on the API to allow your frontend origin"
+  ]
+}
