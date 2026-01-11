@@ -1,7 +1,7 @@
 ---
 name: debugger
 description: 버그 분석 및 수정. 에러, 예외, 비정상 동작 해결 시 사용. 코드 수정 권한 있음.
-tools: Read, Edit, Bash, Grep, Glob
+tools: Read, Write, Edit, Bash, Grep, Glob
 model: sonnet
 ---
 

@@ -1,53 +1,55 @@
 ---
-description: 코드 리뷰 요청
+description: 코드 리뷰 (동적 워크플로우)
 allowed-tools: Task, Read, Glob, Grep
 ---
 
-# Code Review Workflow
+# Code Review - Dynamic Workflow
 
-**코드 리뷰를 요청합니다.**
+**planner가 동적으로 워크플로우를 설계합니다.**
 
 ## 실행 절차
 
-1. **에이전트 디스커버리**
-   ```
-   Glob ".claude/agents/**/*.md"
-   ```
-
-2. **Orchestrator 호출**
-   ```
-   Task(subagent_type="orchestrator", prompt="
-   작업: 코드 리뷰
-
-   대상: $ARGUMENTS
-
-   워크플로우:
-   1. reviewer로 코드 품질 검토
-   2. 보안, 성능, 가독성 분석
-   3. 개선 제안 제공
-   ")
-   ```
-
-## 워크플로우
+### 1. 에이전트 디스커버리
 
 ```
-orchestrator
-    ↓
-에이전트 디스커버리
-    ↓
-reviewer (코드 리뷰)
-    ↓
-결과 보고
+Glob ".claude/agents/**/*.md"
 ```
 
-## 리뷰 항목
+각 에이전트의 name, description 수집
 
-- 코드 품질 (가독성, 유지보수성)
-- 보안 취약점
-- 성능 이슈
-- 베스트 프랙티스 준수
+### 2. planner 호출 (동적 워크플로우 설계)
+
+```
+Task(subagent_type="planner", prompt="
+작업: 코드 리뷰
+
+대상: $ARGUMENTS
+
+사용 가능한 에이전트:
+[디스커버리 결과 전달]
+
+분석 후 워크플로우를 JSON으로 반환:
+{
+  \"analysis\": \"리뷰 범위 및 접근 방법\",
+  \"workflow\": [
+    {\"agent\": \"에이전트명\", \"task\": \"구체적 작업 내용\"},
+    ...
+  ]
+}
+
+고려사항:
+- 리뷰 범위에 따라 에이전트 선택
+- 보안 리뷰 필요시 security-auditor 포함
+- 탐색 필요시 explorer 포함
+")
+```
+
+### 3. 워크플로우 실행
+
+planner가 반환한 workflow를 순차적으로 실행
 
 ## 중요
 
-- 리뷰만 수행, 코드 수정 없음
-- 수정 필요 시 /fix 또는 /implement 사용
+- planner가 리뷰 범위에 맞게 에이전트 선택
+- 단순 리뷰: reviewer만
+- 종합 리뷰: explorer + reviewer + security-auditor 등

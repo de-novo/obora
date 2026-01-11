@@ -1,5 +1,26 @@
 # Agent Workflow 강제 규칙
 
+## 핵심: 동적 워크플로우
+
+```yaml
+원칙:
+  - 모든 워크플로우는 동적으로 결정
+  - 하드코딩된 워크플로우 금지
+  - planner가 매번 상황에 맞게 설계
+```
+
+## Claude Code 제한사항
+
+```yaml
+제한:
+  - 서브에이전트는 다른 서브에이전트를 호출할 수 없음
+  - Task tool은 Main Claude만 사용 가능
+
+해결:
+  - Main Claude가 직접 각 에이전트 호출
+  - planner가 워크플로우 설계 후 Main Claude가 실행
+```
+
 ## 절대 금지 사항
 
 ```yaml
@@ -8,74 +29,90 @@
   - Git commit 직접 수행
   - 워크플로우 없이 대규모 변경
 
-Agent_통해_수행:
-  - 모든 코드 변경 → 개발 에이전트 (description 기반 동적 선택)
-  - 모든 Git 커밋 → 커밋 담당 에이전트
-  - 모든 리뷰 → 리뷰 담당 에이전트
+반드시_에이전트_통해_수행:
+  - 모든 코드 변경 → 적절한 에이전트 (동적 선택)
+  - 모든 Git 커밋 → commit-helper
+  - 모든 리뷰 → reviewer
 ```
 
 ---
 
-## 에이전트 선택 (Dynamic Discovery)
+## 동적 워크플로우 실행 모델
 
-**하드코딩된 에이전트 목록 사용 금지**
+### 1. 에이전트 디스커버리
 
-```yaml
-선택_방식:
-  1. Glob ".claude/agents/**/*.md"로 모든 에이전트 탐색
-  2. 각 에이전트의 frontmatter.description 분석
-  3. 작업 내용에 맞는 에이전트 선택
+```bash
+Glob: .claude/agents/**/*.md
+```
 
-에이전트_정의_위치: ".claude/agents/**/*.md"
+모든 에이전트의 name, description, tools 수집
+
+### 2. planner 호출
+
+```
+Task(subagent_type="planner", prompt="
+작업: [사용자 요청]
+
+사용 가능한 에이전트:
+- name1: description1
+- name2: description2
+...
+
+워크플로우를 JSON으로 반환:
+{
+  \"analysis\": \"작업 분석\",
+  \"workflow\": [
+    {\"agent\": \"에이전트명\", \"task\": \"구체적 작업\"},
+    ...
+  ]
+}
+")
+```
+
+### 3. 워크플로우 실행
+
+```
+for step in planner.workflow:
+    result = Task(subagent_type=step.agent, prompt=step.task)
+    다음 단계에 result 전달
+```
+
+### 4. 피드백 루프
+
+```
+if reviewer 이슈 발견:
+    해당 에이전트 재호출
+    다시 reviewer 호출
+    최대 3회 반복
 ```
 
 ---
 
-## 워크플로우 실행 모델
-
-### Planner 중앙 제어
+## Commands
 
 ```yaml
-실행_흐름:
-  1. 메인 Claude가 Task(planner)로 계획 요청
-  2. Planner가 에이전트 동적 탐색 후 워크플로우 설계
-  3. 메인 Claude가 워크플로우에 따라 에이전트 순차/병렬 실행
-  4. 각 에이전트는 자신의 결과 반환
-  5. 모든 단계 완료 시 워크플로우 종료
+/implement: 새 기능 구현 (동적)
+/fix: 버그 수정 (동적)
+/commit: 커밋 (동적)
+/review: 코드 리뷰 (동적)
 ```
 
-### 워크플로우 유형
-
-```yaml
-implement: "planner → 개발자 → reviewer → committer"
-fix: "개발자 → reviewer → committer"
-commit: "committer"
-review: "reviewer"
-explore: "explorer (커밋 불필요)"
-```
+모든 커맨드는 planner를 통해 동적 워크플로우 생성
 
 ---
 
-## Commands (워크플로우 트리거)
+## 에이전트 선택 기준
+
+planner가 다음을 고려하여 에이전트 선택:
 
 ```yaml
-/implement: 새 기능 구현 워크플로우 시작
-/fix: 버그 수정 워크플로우 시작
-/commit: 커밋 워크플로우 시작
-/review: 코드 리뷰 요청
+고려사항:
+  - 작업 복잡도
+  - 필요한 도구 (tools)
+  - 에이전트 description 매칭
+  - 병렬 실행 가능 여부
+  - 피드백 루프 필요 여부
 ```
-
----
-
-## 체크리스트
-
-작업 완료 전 확인:
-
-- [ ] 에이전트를 동적으로 탐색했는가?
-- [ ] 워크플로우를 따랐는가?
-- [ ] 에이전트를 통해 코드를 수정했는가?
-- [ ] 에이전트를 통해 커밋했는가?
-- [ ] 빌드/타입체크를 확인했는가?
 
 ---
 
