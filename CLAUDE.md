@@ -15,18 +15,19 @@
   - 하드코딩된 워크플로우 없음
 ```
 
-## 절대 금지 사항
+## 필수 규칙
 
 ```yaml
-직접_수행_금지:
-  - Write/Edit 도구로 코드 파일(.ts, .tsx, .js, .jsx) 직접 수정
-  - Git commit 직접 수행
-  - 워크플로우 없이 대규모 변경
-
 반드시_에이전트_통해_수행:
-  - 모든 코드 변경 → 적절한 에이전트 (동적 선택)
-  - 모든 Git 커밋 → commit-helper
-  - 모든 리뷰 → reviewer
+  - 모든 코드 변경 → 적절한 에이전트
+  - 모든 Git 커밋 → 커밋 담당 에이전트
+  - 모든 리뷰 → 리뷰 담당 에이전트
+  - 대규모 변경 → planner로 워크플로우 설계
+
+예외_허용:
+  - 설정 파일 (.json, .yaml, .yml) 직접 수정 가능
+  - 문서 파일 (.md, .txt) 직접 수정 가능
+  - .claude/ 내부 파일 직접 수정 가능
 ```
 
 ## 동적 워크플로우 실행
@@ -111,10 +112,10 @@ for each step in workflow:
 - `tools`: 사용 가능한 도구
 - `model`: 사용 모델
 
-## 강제 메커니즘
+## 참조
 
 ```yaml
-Hook: ".claude/settings.json" (PreToolUse → Write|Edit)
-Script: ".claude/scripts/enforce-workflow.sh"
 Rules: ".claude/rules/workflow/agent-workflow.md"
+Agents: ".claude/agents/**/*.md"
+Commands: ".claude/commands/*.md"
 ```

@@ -17,32 +17,45 @@
   ],
   "scripts": {
     "build": "unbuild",
-    "dev": "unbuild --stub",
+    "build:dashboard": "cd src/dashboard/client && pnpm build",
+    "dev": "unbuild --stub && node --watch-path=src dist/obora.mjs dashboard --no-open",
+    "dev:stub": "unbuild --stub",
+    "dev:dashboard": "concurrently -n \"server,client\" -c \"blue,green\" \"pnpm dev:dashboard:server\" \"pnpm dev:dashboard:client\"",
+    "dev:dashboard:server": "unbuild --stub && node dist/obora.mjs dashboard",
+    "dev:dashboard:client": "cd src/dashboard/client && pnpm dev",
     "start": "node bin/obora.mjs",
     "lint": "eslint src/",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "prepublishOnly": "pnpm build"
+    "prepublishOnly": "pnpm build && pnpm build:dashboard"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.5",
+    "@fastify/cors": "^10.1.0",
+    "@fastify/static": "^8.0.2",
+    "better-sqlite3": "^11.10.0",
     "citty": "^0.1.6",
     "consola": "^3.2.3",
     "defu": "^6.1.4",
+    "fastify": "^5.6.2",
     "giget": "^1.2.3",
     "jiti": "^2.4.0",
     "pathe": "^1.1.2",
     "pkg-types": "^1.2.1",
-    "prompts": "^2.4.2"
+    "prompts": "^2.4.2",
+    "zod": "^4.3.5"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^20.0.0",
     "@types/prompts": "^2.4.9",
+    "@vitest/coverage-v8": "^2.1.0",
+    "concurrently": "^9.2.1",
     "typescript": "^5.3.0",
     "unbuild": "^2.0.0",
-    "vitest": "^2.1.0",
-    "@vitest/coverage-v8": "^2.1.0"
+    "vitest": "^2.1.0"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -60,5 +73,10 @@
     "url": "https://github.com/obora-labs/obora-kit.git",
     "directory": "packages/cli"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3"
+    ]
+  }
 }

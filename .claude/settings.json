@@ -29,13 +29,15 @@
             "command": "./.claude/scripts/logging/log-tool-use.sh"
           }
         ]
-      },
+      }
+    ],
+    "PostToolUse": [
       {
-        "matcher": "Write|Edit",
+        "matcher": "Task",
         "hooks": [
           {
             "type": "command",
-            "command": "./.claude/scripts/enforce-workflow.sh"
+            "command": "./.claude/scripts/logging/log-tool-use.sh"
           }
         ]
       }

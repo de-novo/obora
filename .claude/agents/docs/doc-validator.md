@@ -1,6 +1,6 @@
 ---
 name: doc-validator
-description: 문서 일관성 검증. 내용 중복, 문서 간 모순, 단일 원천 위반 탐지 및 수정.
+description: 문서 내용 검증. 내용 레벨 중복(같은 정보 여러 곳), 문서 간 모순, SSOT 위반 탐지 및 수정. 내용 품질 관리 시 사용.
 tools: Read, Glob, Grep, Edit
 model: sonnet
 ---

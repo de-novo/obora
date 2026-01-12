@@ -3,10 +3,12 @@
 # Hook: SubagentStop
 # Input (stdin): JSON with agent result
 
-set -e
+# set -e 제거 - 중간 실패해도 계속 진행
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DB_PATH="$("${SCRIPT_DIR}/init-db.sh" 2>/dev/null | tail -1)"
+
+# DB 경로 직접 설정
+DB_PATH="${SCRIPT_DIR}/../../logs/agents.db"
 
 # stdin에서 JSON 읽기
 INPUT=$(cat)

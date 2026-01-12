@@ -1,3 +1,9 @@
+---
+description: Git 사용 규칙. 커밋 메시지, 브랜치 네이밍, PR 규칙.
+globs:
+  - "**/*"
+---
+
 # Git Conventions
 
 일관된 Git 사용 규칙을 따릅니다.

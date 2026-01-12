@@ -11,6 +11,10 @@ import { initCommand } from "./commands/init";
 import { upgradeCommand } from "./commands/upgrade";
 import { doctorCommand } from "./commands/doctor";
 import { ejectCommand } from "./commands/eject";
+import { dashboardCommand } from "./commands/dashboard";
+import { chatCommand } from "./commands/chat";
+import { runCommand } from "./commands/run";
+import { startServer, stopServer } from "./dashboard/server";
 
 const main = defineCommand({
   meta: {
@@ -29,6 +33,9 @@ const main = defineCommand({
     status: statusCommand,
     list: listCommand,
     "llm-help": llmHelpCommand,
+    dashboard: dashboardCommand,
+    chat: chatCommand,
+    run: runCommand,
   },
   setup() {
     consola.box(`obora v${version}`);
@@ -39,4 +46,6 @@ export function runMain() {
   _runMain(main);
 }
 
-export { createCommand, initCommand, addCommand, removeCommand, upgradeCommand, ejectCommand, doctorCommand, statusCommand, listCommand, llmHelpCommand };
+export { createCommand, initCommand, addCommand, removeCommand, upgradeCommand, ejectCommand, doctorCommand, statusCommand, listCommand, llmHelpCommand, dashboardCommand, chatCommand, runCommand };
+export { startServer, stopServer };
+export * from "./orchestrator";

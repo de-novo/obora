@@ -1,6 +1,6 @@
 ---
 name: doc-gc
-description: 문서 정리(GC). 중복/미사용 문서 탐지 및 정리. 문서 통합, 삭제 시 사용.
+description: 문서 파일 정리(GC). 중복 파일, 미사용 파일, 고아 파일 탐지 및 정리. 파일 레벨 구조 관리 시 사용.
 tools: Read, Glob, Grep, Bash, Edit
 model: haiku
 ---
