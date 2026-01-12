@@ -1,7 +1,9 @@
 /**
  * Agent Loader
  *
- * .claude/agents/*.md 파일에서 에이전트 정의를 동적으로 로드
+ * .claude/agents/obora/*.md 파일에서 에이전트 정의를 동적으로 로드
+ * obora 전용 에이전트는 .claude/agents/obora/ 에 위치
+ * claude 직접 사용 시에도 발견 가능 (agents 하위이므로)
  */
 
 import { readFileSync, readdirSync, statSync, existsSync, realpathSync } from "node:fs";
@@ -13,7 +15,7 @@ const MAX_PARENT_SEARCH_DEPTH = 10;
 
 /**
  * 프로젝트 루트 자동 감지
- * .claude/agents 디렉토리가 있는 상위 디렉토리를 찾음
+ * .claude/agents/obora 디렉토리가 있는 상위 디렉토리를 찾음
  */
 export function findProjectRoot(startDir: string): string {
   let currentDir = resolve(startDir);
@@ -21,9 +23,9 @@ export function findProjectRoot(startDir: string): string {
   let gitRoot: string | null = null;
 
   while (depth < MAX_PARENT_SEARCH_DEPTH) {
-    // .claude/agents 디렉토리가 있으면 프로젝트 루트 (최우선)
-    const agentsDir = join(currentDir, ".claude", "agents");
-    if (existsSync(agentsDir) && statSync(agentsDir).isDirectory()) {
+    // .claude/agents/obora 디렉토리가 있으면 프로젝트 루트 (최우선)
+    const oboraAgentsDir = join(currentDir, ".claude", "agents", "obora");
+    if (existsSync(oboraAgentsDir) && statSync(oboraAgentsDir).isDirectory()) {
       return currentDir;
     }
 
@@ -44,7 +46,7 @@ export function findProjectRoot(startDir: string): string {
     depth++;
   }
 
-  // .claude/agents를 찾지 못했으면 git root 사용, 그것도 없으면 시작 디렉토리
+  // .claude/agents/obora를 찾지 못했으면 git root 사용, 그것도 없으면 시작 디렉토리
   return gitRoot ?? startDir;
 }
 
@@ -170,12 +172,13 @@ function findMarkdownFiles(dir: string, depth: number = 0): string[] {
 }
 
 /**
- * .claude/agents/ 디렉토리에서 모든 에이전트 로드
+ * .claude/agents/obora/ 디렉토리에서 모든 에이전트 로드
  * cwd에서 프로젝트 루트를 자동 감지하여 에이전트를 로드함
+ * obora 전용 에이전트만 로드 (사용자의 커스텀 에이전트는 무시)
  */
 export function loadAgents(cwd: string): Map<string, AgentDefinition> {
   const projectRoot = findProjectRoot(cwd);
-  const agentsDir = resolve(projectRoot, ".claude", "agents");
+  const agentsDir = resolve(projectRoot, ".claude", "agents", "obora");
   const agents = new Map<string, AgentDefinition>();
 
   const files = findMarkdownFiles(agentsDir);

@@ -64,7 +64,7 @@ const WorkflowStepSchema = z.object({
 
 const FeedbackLoopSchema = z.object({
   enabled: z.boolean(),
-  maxIterations: z.number().int().positive().max(10).default(3),
+  maxIterations: z.number().int().min(0).max(10).default(3),
 });
 
 const WorkflowPlanSchema = z.object({
@@ -124,6 +124,7 @@ export async function runAgent(
         cwd: projectRoot,
         allowedTools: agent.allowedTools,
         maxTurns: 10,
+        settingSources: ["project"], // 프로젝트의 .claude/rules/ 로드
       },
     })) {
       if (onMessage) {
@@ -352,6 +353,7 @@ export async function simpleQuery(
       cwd,
       allowedTools,
       maxTurns: 5,
+      settingSources: ["project"], // 프로젝트의 .claude/rules/ 로드
     },
   })) {
     if (onMessage) {

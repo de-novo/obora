@@ -42,8 +42,8 @@ export const runCommand = defineCommand({
     // 에이전트 로드 확인
     const agents = loadAgents(cwd);
     if (agents.size === 0) {
-      consola.error("No agents found in .claude/agents/");
-      consola.info("Make sure you are in a project with .claude/agents/ directory");
+      consola.error("No agents found in .claude/agents/obora/");
+      consola.info("Run 'obora init' to set up the project");
       process.exit(1);
     }
 
