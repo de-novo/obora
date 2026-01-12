@@ -60,12 +60,20 @@ Task(subagent_type="planner", prompt="
 
 워크플로우를 JSON으로 반환:
 {
-  \"analysis\": \"작업 분석\",
+  \"analysis\": \"작업 분석 내용\",
   \"workflow\": [
     {\"agent\": \"에이전트명\", \"task\": \"구체적 작업\"},
     ...
-  ]
+  ],
+  \"feedback_loop\": {
+    \"enabled\": true,
+    \"reviewer\": \"reviewer\",
+    \"max_iterations\": 3
+  }
 }
+
+필수 필드: analysis, workflow
+선택 필드: feedback_loop (코드 수정 작업 시만)
 ")
 ```
 
@@ -77,13 +85,21 @@ for step in planner.workflow:
     다음 단계에 result 전달
 ```
 
-### 4. 피드백 루프
+### 4. 피드백 루프 (Main Claude 실행)
 
-```
-if reviewer 이슈 발견:
-    해당 에이전트 재호출
-    다시 reviewer 호출
-    최대 3회 반복
+```yaml
+피드백_루프_실행:
+  조건: planner가 feedback_loop.enabled=true로 설정 시
+  절차:
+    1. 워크플로우 실행 완료 후 reviewer 자동 호출
+    2. reviewer 이슈 발견 시:
+       - 해당 에이전트 재호출 (이슈 수정)
+       - 다시 reviewer 호출 (재검증)
+    3. max_iterations(기본값: 3)까지 반복
+    4. 이슈 없음 또는 max_iterations 도달 시 종료
+
+  실행_주체: Main Claude
+  설정_주체: planner (feedback_loop 필드)
 ```
 
 ---

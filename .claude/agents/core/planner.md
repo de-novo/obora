@@ -109,5 +109,10 @@ Glob: .claude/agents/**/*.md
 - 불필요한 에이전트 추가 금지
 
 ### 피드백 루프
-- 코드 수정 작업에는 reviewer 포함
-- max_iterations로 무한 루프 방지
+- 코드 수정 작업 시 feedback_loop.enabled=true 설정
+- Main Claude가 워크플로우 완료 후 reviewer 자동 호출
+- reviewer 이슈 발견 시:
+  - 해당 에이전트 재호출 (이슈 수정)
+  - 다시 reviewer 호출 (재검증)
+- max_iterations(기본값: 3)로 무한 루프 방지
+- 실행 주체: Main Claude, 설정 주체: planner

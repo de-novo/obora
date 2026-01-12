@@ -46,7 +46,7 @@ if [[ "$FILE_PATH" == *.ts ]] || [[ "$FILE_PATH" == *.tsx ]] || \
   echo "  /implement <작업 설명>  - 새 기능 구현" >&2
   echo "  /fix <버그 설명>        - 버그 수정" >&2
   echo "" >&2
-  echo "또는 Task tool로 orchestrator 에이전트를 호출하세요." >&2
+  echo "또는 동적 워크플로우를 사용하세요 (/implement, /fix 등)." >&2
   exit 2
 fi
 
