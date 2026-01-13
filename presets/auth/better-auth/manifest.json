@@ -1,45 +1,69 @@
 {
-  "$schema": "../../preset.schema.json",
+  "$schema": "../../preset-v2.schema.json",
   "name": "better-auth",
   "category": "auth",
   "description": "Better Auth - Self-hosted authentication library",
-  "operations": {
-    "replace": [],
-    "merge": ["package.json"],
-    "add": ["src/common", "src/modules/auth", "src/types"],
-    "remove": [],
-    "inject": [
-      {
-        "file": "src/app.module.ts",
-        "marker": "@obora:imports",
-        "content": "import { AuthModule } from \"./modules/auth/auth.module.js\";"
-      },
-      {
-        "file": "src/app.module.ts",
-        "marker": "@obora:modules",
-        "content": "AuthModule,"
-      }
-    ]
-  },
-  "conflicts": ["clerk", "clerk-nextjs"],
-  "requires": ["database:drizzle"],
-  "targetApps": ["nestjs-api"],
-  "env": [
-    {
-      "key": "BETTER_AUTH_SECRET",
-      "description": "Secret key for signing tokens (min 32 chars)",
-      "required": true,
-      "secret": true,
-      "example": "your-super-secret-key-at-least-32-characters"
-    },
-    {
-      "key": "BETTER_AUTH_URL",
-      "description": "Base URL of the auth server",
-      "required": true,
-      "secret": false,
-      "example": "http://localhost:3001"
+  "version": "1.4.0",
+
+  "common": {
+    "dependencies": {
+      "better-auth": "^1.4.0"
     }
-  ],
+  },
+
+  "targets": {
+    "server": {
+      "description": "Better Auth server for NestJS API",
+      "dependencies": {
+        "fastify": "^5.0.0"
+      },
+      "files": ["server"],
+      "inject": [
+        {
+          "file": "src/app.module.ts",
+          "marker": "@obora:imports",
+          "content": "import { AuthModule } from \"./modules/auth/auth.module.js\";"
+        },
+        {
+          "file": "src/app.module.ts",
+          "marker": "@obora:modules",
+          "content": "AuthModule,"
+        }
+      ],
+      "env": [
+        {
+          "key": "BETTER_AUTH_SECRET",
+          "description": "Secret key for signing tokens (min 32 chars)",
+          "required": true,
+          "secret": true,
+          "example": "your-super-secret-key-at-least-32-characters"
+        },
+        {
+          "key": "BETTER_AUTH_URL",
+          "description": "Base URL of the auth server",
+          "required": true,
+          "secret": false,
+          "example": "http://localhost:3001"
+        }
+      ]
+    },
+
+    "nextjs": {
+      "description": "Better Auth client for Next.js with middleware",
+      "files": ["nextjs"],
+      "env": [
+        {
+          "key": "NEXT_PUBLIC_BETTER_AUTH_URL",
+          "description": "Better Auth server URL (API backend)",
+          "required": true,
+          "secret": false,
+          "example": "http://localhost:3001"
+        }
+      ]
+    }
+  },
+
+  "conflicts": ["clerk"],
   "postInstall": [
     "Generate secret: openssl rand -base64 32",
     "Configure social providers in auth config"

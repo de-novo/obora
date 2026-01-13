@@ -1,52 +1,80 @@
 {
-  "$schema": "../../preset.schema.json",
+  "$schema": "../../preset-v2.schema.json",
   "name": "clerk",
   "category": "auth",
   "description": "Clerk - Managed authentication with great DX",
-  "operations": {
-    "replace": [],
-    "merge": ["package.json"],
-    "add": ["src/common", "src/modules/auth"],
-    "remove": [],
-    "inject": [
-      {
-        "file": "src/app.module.ts",
-        "marker": "@obora:imports",
-        "content": "import { AuthModule } from \"./modules/auth/auth.module.js\";"
+  "version": "1.25.0",
+
+  "targets": {
+    "nestjs": {
+      "description": "Clerk backend for NestJS API",
+      "dependencies": {
+        "@clerk/backend": "^1.25.0"
       },
-      {
-        "file": "src/app.module.ts",
-        "marker": "@obora:modules",
-        "content": "AuthModule,"
-      }
-    ]
-  },
-  "conflicts": ["better-auth", "clerk-nextjs"],
-  "requires": [],
-  "targetApps": ["nestjs-api"],
-  "env": [
-    {
-      "key": "CLERK_SECRET_KEY",
-      "description": "Clerk secret key (from dashboard)",
-      "required": true,
-      "secret": true,
-      "example": "sk_test_xxx"
+      "files": ["nestjs"],
+      "inject": [
+        {
+          "file": "src/app.module.ts",
+          "marker": "@obora:imports",
+          "content": "import { AuthModule } from \"./modules/auth/auth.module.js\";"
+        },
+        {
+          "file": "src/app.module.ts",
+          "marker": "@obora:modules",
+          "content": "AuthModule,"
+        }
+      ],
+      "env": [
+        {
+          "key": "CLERK_SECRET_KEY",
+          "description": "Clerk secret key (from dashboard)",
+          "required": true,
+          "secret": true,
+          "example": "sk_test_xxx"
+        },
+        {
+          "key": "CLERK_PUBLISHABLE_KEY",
+          "description": "Clerk publishable key",
+          "required": true,
+          "secret": false,
+          "example": "pk_test_xxx"
+        },
+        {
+          "key": "CLERK_WEBHOOK_SECRET",
+          "description": "Clerk webhook signing secret",
+          "required": false,
+          "secret": true,
+          "example": "whsec_xxx"
+        }
+      ]
     },
-    {
-      "key": "CLERK_PUBLISHABLE_KEY",
-      "description": "Clerk publishable key",
-      "required": true,
-      "secret": false,
-      "example": "pk_test_xxx"
-    },
-    {
-      "key": "CLERK_WEBHOOK_SECRET",
-      "description": "Clerk webhook signing secret",
-      "required": false,
-      "secret": true,
-      "example": "whsec_xxx"
+
+    "nextjs": {
+      "description": "Clerk client for Next.js with middleware",
+      "dependencies": {
+        "@clerk/nextjs": "^6.0.0"
+      },
+      "files": ["nextjs"],
+      "env": [
+        {
+          "key": "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",
+          "description": "Clerk publishable key (from Clerk Dashboard)",
+          "required": true,
+          "secret": false,
+          "example": "pk_test_..."
+        },
+        {
+          "key": "CLERK_SECRET_KEY",
+          "description": "Clerk secret key (from Clerk Dashboard)",
+          "required": true,
+          "secret": true,
+          "example": "sk_test_..."
+        }
+      ]
     }
-  ],
+  },
+
+  "conflicts": ["better-auth"],
   "postInstall": [
     "Set up Clerk dashboard: https://clerk.com",
     "Configure environment variables"

@@ -254,26 +254,14 @@ export const PRESETS: Record<string, PresetInfo> = {
   clerk: {
     name: "clerk",
     category: "auth",
-    description: "Clerk - NestJS authentication",
+    description: "Clerk - Managed authentication (NestJS/Next.js)",
     version: "1.25.0",
-  },
-  "clerk-nextjs": {
-    name: "clerk-nextjs",
-    category: "auth",
-    description: "Clerk - Next.js authentication",
-    version: "6.0.0",
   },
   "better-auth": {
     name: "better-auth",
     category: "auth",
-    description: "Better Auth - Self-hosted authentication",
+    description: "Better Auth - Self-hosted authentication (Server/Next.js)",
     version: "1.4.0",
-  },
-  "better-auth-nextjs": {
-    name: "better-auth-nextjs",
-    category: "auth",
-    description: "Better Auth - Next.js client",
-    version: "1.1.0",
   },
   // Payment
   polar: {
