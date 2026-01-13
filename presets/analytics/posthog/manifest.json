@@ -12,6 +12,7 @@
   },
   "conflicts": [],
   "requires": [],
+  "targetApps": ["nextjs-web"],
   "env": [
     {
       "key": "NEXT_PUBLIC_POSTHOG_KEY",

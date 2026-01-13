@@ -29,8 +29,10 @@ export class AuthController {
     const webRequest = new Request(url.toString(), {
       method: request.method,
       headers,
-      body: request.method !== "GET" && request.method !== "HEAD"
-        ? JSON.stringify(request.body)
+      body: request.method !== "GET" && request.method !== "HEAD" && request.body
+        ? typeof request.body === "string"
+          ? request.body
+          : JSON.stringify(request.body)
         : undefined,
     });
 
@@ -40,7 +42,7 @@ export class AuthController {
     // Convert Web Response to Fastify response
     reply.status(response.status);
 
-    response.headers.forEach((value, key) => {
+    response.headers.forEach((value: string, key: string) => {
       reply.header(key, value);
     });
 

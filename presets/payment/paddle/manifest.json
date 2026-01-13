@@ -23,6 +23,7 @@
   },
   "conflicts": ["polar"],
   "requires": [],
+  "targetApps": ["nestjs-api"],
   "env": [
     {
       "key": "PADDLE_API_KEY",

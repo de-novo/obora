@@ -6,7 +6,7 @@
   "operations": {
     "replace": [],
     "merge": ["package.json"],
-    "add": ["src/common", "src/modules/auth"],
+    "add": ["src/common", "src/modules/auth", "src/types"],
     "remove": [],
     "inject": [
       {
