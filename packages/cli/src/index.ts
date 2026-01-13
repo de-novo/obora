@@ -15,6 +15,7 @@ import { dashboardCommand } from "./commands/dashboard";
 import { chatCommand } from "./commands/chat";
 import { runCommand } from "./commands/run";
 import { startServer, stopServer } from "./dashboard/server";
+import { initializeGlobalConfig } from "./utils";
 
 const main = defineCommand({
   meta: {
@@ -38,6 +39,8 @@ const main = defineCommand({
     run: runCommand,
   },
   setup() {
+    // Initialize global ~/.obora/ directory and dashboard.db
+    initializeGlobalConfig();
     consola.box(`obora v${version}`);
   },
 });
