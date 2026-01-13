@@ -15,6 +15,7 @@ export type Session = {
   ended_at: string | null;
   status: "active" | "completed" | "error";
   metadata: string | null;
+  initial_prompt: string | null;
 };
 
 export type Workflow = {
@@ -142,6 +143,78 @@ export type AgentRelationship = {
   depth: number;
 };
 
+export type ParallelGroup = {
+  id: number;
+  workflow_id: string;
+  group_order: number;
+  status: "pending" | "running" | "completed" | "failed";
+  started_at: string | null;
+  ended_at: string | null;
+};
+
+export type FeedbackLoop = {
+  id: number;
+  workflow_id: string;
+  trigger_step_id: number | null;
+  trigger_agent: string;
+  reviewer_agent: string;
+  iteration: number;
+  status: "pending" | "reviewing" | "fixing" | "passed" | "failed" | "max_reached";
+  trigger_output: string | null;
+  review_result: string | null;
+  fix_result: string | null;
+  started_at: string;
+  ended_at: string | null;
+};
+
+export type FeedbackIteration = {
+  id: number;
+  loop_id: number;
+  iteration: number;
+  phase: "review" | "fix" | "verify";
+  agent_name: string;
+  input_summary: string | null;
+  output_summary: string | null;
+  issues_found: string | null;
+  issues_resolved: string | null;
+  started_at: string;
+  ended_at: string | null;
+};
+
+export type WorkflowStepWithRun = WorkflowStep & {
+  agent_run: AgentRunBranch | null;
+};
+
+export type ParallelGroupWithSteps = ParallelGroup & {
+  steps: WorkflowStepWithRun[];
+};
+
+export type FeedbackLoopWithIterations = FeedbackLoop & {
+  iterations: FeedbackIteration[];
+};
+
+export type AgentRunBranch = {
+  id: string;
+  agent_name: string;
+  status: string;
+  started_at: string;
+  ended_at: string | null;
+  duration_ms: number | null;
+  children: AgentRunBranch[];
+};
+
+export type WorkflowProgressExtended = {
+  workflow_id: string;
+  task_description: string | null;
+  status: string;
+  total_steps: number;
+  completed_steps: number;
+  running_steps: number;
+  failed_steps: number;
+  parallel_groups: ParallelGroupWithSteps[];
+  current_feedback_loop: FeedbackLoopWithIterations | null;
+};
+
 // ============================================================================
 // Query Functions
 // ============================================================================
@@ -159,7 +232,8 @@ export function getSessions(): Session[] {
       started_at,
       ended_at,
       status,
-      metadata
+      metadata,
+      initial_prompt
     FROM sessions
     ORDER BY started_at DESC
   `;
@@ -447,7 +521,7 @@ export function getAgentRelationships(sessionId?: string): AgentRelationship[] {
   const db = getAgentDb().getConnection();
   if (!db) return [];
 
-  const sessionFilter = sessionId ? `AND ar.session_id = '${sessionId}'` : "";
+  const hasSessionFilter = Boolean(sessionId);
 
   // Join agent_runs with the closest matching tool_call
   const query = `
@@ -491,12 +565,13 @@ export function getAgentRelationships(sessionId?: string): AgentRelationship[] {
       (SELECT COUNT(*) FROM agent_runs WHERE parent_run_id = ar.id) as children_count,
       0 as depth
     FROM agent_runs ar
-    WHERE 1=1 ${sessionFilter}
+    WHERE 1=1 ${hasSessionFilter ? "AND ar.session_id = ?" : ""}
     ORDER BY ar.started_at DESC
     LIMIT 100
   `;
 
-  return db.prepare(query).all() as AgentRelationship[];
+  const params = hasSessionFilter ? [sessionId] : [];
+  return db.prepare(query).all(...params) as AgentRelationship[];
 }
 
 // ============================================================================
@@ -517,6 +592,7 @@ export type WorkflowFlowNode = {
 export type WorkflowFlow = {
   sessionId: string;
   nodes: WorkflowFlowNode[];
+  feedbackLoops: FeedbackLoop[];
   mermaid: string;
 };
 
@@ -586,20 +662,33 @@ export function getWorkflowFlow(sessionId: string): WorkflowFlow | null {
     return null;
   }
 
-  // Generate Mermaid flowchart
-  const mermaid = generateMermaidFlowchart(nodes);
+  // Get all feedback loops for workflows in this session
+  const workflowsQuery = `
+    SELECT id FROM workflows WHERE session_id = ?
+  `;
+  const workflows = db.prepare(workflowsQuery).all(sessionId) as Array<{ id: string }>;
+
+  const feedbackLoops: FeedbackLoop[] = [];
+  for (const workflow of workflows) {
+    const loops = getFeedbackLoops(workflow.id);
+    feedbackLoops.push(...loops);
+  }
+
+  // Generate Mermaid flowchart with feedback loops
+  const mermaid = generateMermaidFlowchart(nodes, feedbackLoops);
 
   return {
     sessionId,
     nodes,
+    feedbackLoops,
     mermaid,
   };
 }
 
 /**
- * Generate Mermaid flowchart syntax from workflow nodes
+ * Generate Mermaid flowchart syntax from workflow nodes with feedback loops
  */
-function generateMermaidFlowchart(nodes: WorkflowFlowNode[]): string {
+function generateMermaidFlowchart(nodes: WorkflowFlowNode[], feedbackLoops: FeedbackLoop[] = []): string {
   const lines: string[] = ["flowchart TB"];
 
   // Define status colors
@@ -614,8 +703,11 @@ function generateMermaidFlowchart(nodes: WorkflowFlowNode[]): string {
   lines.push("  %% Nodes");
   for (const node of nodes) {
     const shortId = node.id.substring(0, 7);
-    const label = node.description
-      ? `${node.agent_name}\\n${truncate(node.description, 30)}`
+    const description = node.description
+      ? sanitizeMermaidLabel(truncate(node.description, 30))
+      : "";
+    const label = description
+      ? `${node.agent_name}\\n${description}`
       : node.agent_name;
     const duration = node.duration_ms ? `\\n${formatDuration(node.duration_ms)}` : "";
 
@@ -674,6 +766,50 @@ function generateMermaidFlowchart(nodes: WorkflowFlowNode[]): string {
   }
   lines.push("");
 
+  // Add feedback loop connections
+  if (feedbackLoops.length > 0) {
+    lines.push("  %% Feedback loops");
+
+    for (const loop of feedbackLoops) {
+      // Find nodes by agent name
+      const triggerNode = nodes.find(n => n.agent_name === loop.trigger_agent);
+      const reviewerNode = nodes.find(n => n.agent_name === loop.reviewer_agent);
+
+      if (!triggerNode || !reviewerNode) {
+        continue;
+      }
+
+      const triggerShortId = triggerNode.id.substring(0, 7);
+      const reviewerShortId = reviewerNode.id.substring(0, 7);
+
+      // Add feedback arrow from reviewer back to trigger agent
+      // Only show feedback if status is not 'passed'
+      if (loop.status === "passed") {
+        // No feedback arrow needed for passed status
+        continue;
+      }
+
+      // Create feedback label based on status and iteration
+      let label = "";
+      if (loop.status === "pending") {
+        label = `|pending #${loop.iteration}|`;
+      } else if (loop.status === "reviewing") {
+        label = `|reviewing #${loop.iteration}|`;
+      } else if (loop.status === "fixing") {
+        label = `|fixing #${loop.iteration}|`;
+      } else if (loop.status === "failed" || loop.status === "max_reached") {
+        label = `|issues #${loop.iteration}|`;
+      } else {
+        label = `|#${loop.iteration}|`;
+      }
+
+      // Add dotted line back from reviewer to trigger agent
+      lines.push(`  ${reviewerShortId} -.${label}.-> ${triggerShortId}`);
+    }
+
+    lines.push("");
+  }
+
   // Apply status classes
   lines.push("  %% Apply styles");
   for (const node of nodes) {
@@ -694,6 +830,17 @@ function generateMermaidFlowchart(nodes: WorkflowFlowNode[]): string {
 function truncate(str: string, maxLength: number): string {
   if (str.length <= maxLength) return str;
   return str.substring(0, maxLength - 3) + "...";
+}
+
+/**
+ * Sanitize text for Mermaid label to prevent syntax errors
+ */
+function sanitizeMermaidLabel(text: string): string {
+  return text
+    .replace(/`/g, "'")
+    .replace(/"/g, "'")
+    .replace(/\n/g, " ")
+    .replace(/\\/g, "\\\\");
 }
 
 /**
@@ -772,4 +919,314 @@ export function getRecentActions(limit: number = 100): RecentAction[] {
   `;
 
   return db.prepare(query).all(limit) as RecentAction[];
+}
+
+// ============================================================================
+// Parallel Groups and Feedback Loops
+// ============================================================================
+
+/**
+ * Get parallel groups for a workflow
+ */
+export function getParallelGroups(workflowId: string): ParallelGroup[] {
+  const db = getAgentDb().getConnection();
+  if (!db) return [];
+
+  const query = `
+    SELECT
+      id,
+      workflow_id,
+      group_order,
+      status,
+      started_at,
+      ended_at
+    FROM parallel_groups
+    WHERE workflow_id = ?
+    ORDER BY group_order ASC
+  `;
+
+  return db.prepare(query).all(workflowId) as ParallelGroup[];
+}
+
+/**
+ * Get feedback loops for a workflow
+ */
+export function getFeedbackLoops(workflowId: string): FeedbackLoop[] {
+  const db = getAgentDb().getConnection();
+  if (!db) return [];
+
+  const query = `
+    SELECT
+      id,
+      workflow_id,
+      trigger_step_id,
+      trigger_agent,
+      reviewer_agent,
+      iteration,
+      status,
+      trigger_output,
+      review_result,
+      fix_result,
+      started_at,
+      ended_at
+    FROM feedback_loops
+    WHERE workflow_id = ?
+    ORDER BY started_at DESC
+  `;
+
+  return db.prepare(query).all(workflowId) as FeedbackLoop[];
+}
+
+/**
+ * Get feedback loop with iterations
+ */
+export function getFeedbackLoopWithIterations(loopId: number): FeedbackLoopWithIterations | null {
+  const db = getAgentDb().getConnection();
+  if (!db) return null;
+
+  const loopQuery = `
+    SELECT
+      id,
+      workflow_id,
+      trigger_step_id,
+      trigger_agent,
+      reviewer_agent,
+      iteration,
+      status,
+      trigger_output,
+      review_result,
+      fix_result,
+      started_at,
+      ended_at
+    FROM feedback_loops
+    WHERE id = ?
+  `;
+
+  const loop = db.prepare(loopQuery).get(loopId) as FeedbackLoop | undefined;
+  if (!loop) return null;
+
+  const iterationsQuery = `
+    SELECT
+      id,
+      loop_id,
+      iteration,
+      phase,
+      agent_name,
+      input_summary,
+      output_summary,
+      issues_found,
+      issues_resolved,
+      started_at,
+      ended_at
+    FROM feedback_iterations
+    WHERE loop_id = ?
+    ORDER BY iteration ASC, started_at ASC
+  `;
+
+  const iterations = db.prepare(iterationsQuery).all(loopId) as FeedbackIteration[];
+
+  return {
+    ...loop,
+    iterations,
+  };
+}
+
+/**
+ * Get current feedback loop (most recent running or pending)
+ */
+export function getCurrentFeedbackLoop(): FeedbackLoopWithIterations | null {
+  const db = getAgentDb().getConnection();
+  if (!db) return null;
+
+  const query = `
+    SELECT id
+    FROM feedback_loops
+    WHERE status IN ('pending', 'reviewing', 'fixing')
+    ORDER BY started_at DESC
+    LIMIT 1
+  `;
+
+  const result = db.prepare(query).get() as { id: number } | undefined;
+  if (!result) return null;
+
+  return getFeedbackLoopWithIterations(result.id);
+}
+
+/**
+ * Get agent run branches (recursive tree structure)
+ */
+export function getAgentRunBranches(workflowId: string): AgentRunBranch[] {
+  const db = getAgentDb().getConnection();
+  if (!db) return [];
+
+  const query = `
+    WITH RECURSIVE branch_tree AS (
+      SELECT
+        id,
+        agent_name,
+        status,
+        started_at,
+        ended_at,
+        duration_ms,
+        parent_run_id,
+        0 as depth
+      FROM agent_runs
+      WHERE workflow_id = ? AND parent_run_id IS NULL
+
+      UNION ALL
+
+      SELECT
+        ar.id,
+        ar.agent_name,
+        ar.status,
+        ar.started_at,
+        ar.ended_at,
+        ar.duration_ms,
+        ar.parent_run_id,
+        bt.depth + 1
+      FROM agent_runs ar
+      INNER JOIN branch_tree bt ON ar.parent_run_id = bt.id
+      WHERE ar.workflow_id = ?
+    )
+    SELECT
+      id,
+      agent_name,
+      status,
+      started_at,
+      ended_at,
+      duration_ms,
+      parent_run_id,
+      depth
+    FROM branch_tree
+    ORDER BY started_at ASC
+  `;
+
+  const rows = db.prepare(query).all(workflowId, workflowId) as Array<{
+    id: string;
+    agent_name: string;
+    status: string;
+    started_at: string;
+    ended_at: string | null;
+    duration_ms: number | null;
+    parent_run_id: string | null;
+    depth: number;
+  }>;
+
+  const nodeMap = new Map<string, AgentRunBranch>();
+  const rootNodes: AgentRunBranch[] = [];
+
+  for (const row of rows) {
+    const node: AgentRunBranch = {
+      id: row.id,
+      agent_name: row.agent_name,
+      status: row.status,
+      started_at: row.started_at,
+      ended_at: row.ended_at,
+      duration_ms: row.duration_ms,
+      children: [],
+    };
+
+    nodeMap.set(row.id, node);
+
+    if (!row.parent_run_id) {
+      rootNodes.push(node);
+    }
+  }
+
+  for (const row of rows) {
+    if (row.parent_run_id) {
+      const parent = nodeMap.get(row.parent_run_id);
+      const child = nodeMap.get(row.id);
+      if (parent && child) {
+        parent.children.push(child);
+      }
+    }
+  }
+
+  return rootNodes;
+}
+
+/**
+ * Get workflow progress with parallel groups and feedback loops
+ */
+export function getWorkflowProgressExtended(workflowId: string): WorkflowProgressExtended | null {
+  const db = getAgentDb().getConnection();
+  if (!db) return null;
+
+  const workflowQuery = `
+    SELECT
+      w.id as workflow_id,
+      w.task_description,
+      w.status,
+      COUNT(ws.id) as total_steps,
+      SUM(CASE WHEN ws.status = 'completed' THEN 1 ELSE 0 END) as completed_steps,
+      SUM(CASE WHEN ws.status = 'running' THEN 1 ELSE 0 END) as running_steps,
+      SUM(CASE WHEN ws.status = 'failed' THEN 1 ELSE 0 END) as failed_steps
+    FROM workflows w
+    LEFT JOIN workflow_steps ws ON ws.workflow_id = w.id
+    WHERE w.id = ?
+    GROUP BY w.id
+  `;
+
+  const workflow = db.prepare(workflowQuery).get(workflowId) as WorkflowProgressExtended | undefined;
+  if (!workflow) return null;
+
+  const parallelGroups = getParallelGroups(workflowId);
+
+  const groupsWithSteps: ParallelGroupWithSteps[] = parallelGroups.map((group) => {
+    const stepsQuery = `
+      SELECT
+        ws.id,
+        ws.workflow_id,
+        ws.step_number,
+        ws.agent_name,
+        ws.task,
+        ws.status,
+        ws.started_at,
+        ws.ended_at,
+        ws.result
+      FROM workflow_steps ws
+      INNER JOIN parallel_group_steps pgs ON pgs.step_id = ws.id
+      WHERE pgs.group_id = ?
+      ORDER BY ws.step_number ASC
+    `;
+
+    const steps = db.prepare(stepsQuery).all(group.id) as WorkflowStep[];
+
+    const stepsWithRuns: WorkflowStepWithRun[] = steps.map((step) => {
+      const runQuery = `
+        SELECT
+          id,
+          agent_name,
+          status,
+          started_at,
+          ended_at,
+          duration_ms
+        FROM agent_runs
+        WHERE id = ?
+      `;
+
+      const run = step.result
+        ? (db.prepare(runQuery).get(step.result) as Omit<AgentRunBranch, "children"> | undefined)
+        : null;
+
+      return {
+        ...step,
+        agent_run: run ? { ...run, children: [] } : null,
+      };
+    });
+
+    return {
+      ...group,
+      steps: stepsWithRuns,
+    };
+  });
+
+  const currentFeedbackLoop = getCurrentFeedbackLoop();
+
+  return {
+    ...workflow,
+    parallel_groups: groupsWithSteps,
+    current_feedback_loop: currentFeedbackLoop,
+  };
 }

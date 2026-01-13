@@ -18,6 +18,12 @@ import {
   getRecentActions,
   getAgentRelationships,
   getWorkflowFlow,
+  getParallelGroups,
+  getFeedbackLoops,
+  getFeedbackLoopWithIterations,
+  getCurrentFeedbackLoop,
+  getAgentRunBranches,
+  getWorkflowProgressExtended,
   type AgentRunFilters,
 } from "../db/index";
 
@@ -77,6 +83,27 @@ interface WorkflowFlowQueryParams {
  * Route parameters for workflow/run IDs
  */
 interface IdParams {
+  id: string;
+}
+
+/**
+ * Query parameters for GET /api/parallel-groups
+ */
+interface ParallelGroupsQueryParams {
+  workflowId: string;
+}
+
+/**
+ * Query parameters for GET /api/feedback-loops
+ */
+interface FeedbackLoopsQueryParams {
+  workflowId?: string;
+}
+
+/**
+ * Route parameters for feedback loop ID
+ */
+interface LoopIdParams {
   id: string;
 }
 
@@ -414,6 +441,218 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
         const response: ApiResponse<typeof flow> = {
           ok: true,
           data: flow,
+        };
+        return reply.send(response);
+      } catch (error) {
+        const response: ApiResponse<never> = {
+          ok: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+        return reply.status(500).send(response);
+      }
+    }
+  );
+
+  /**
+   * GET /api/parallel-groups
+   * Returns parallel groups for a workflow
+   */
+  fastify.get<{
+    Querystring: ParallelGroupsQueryParams;
+  }>(
+    "/api/parallel-groups",
+    async (request, reply) => {
+      try {
+        const { workflowId } = request.query;
+
+        if (!workflowId) {
+          const response: ApiResponse<never> = {
+            ok: false,
+            error: "workflowId is required",
+          };
+          return reply.status(400).send(response);
+        }
+
+        const groups = getParallelGroups(workflowId);
+        const response: ApiResponse<typeof groups> = {
+          ok: true,
+          data: groups,
+        };
+        return reply.send(response);
+      } catch (error) {
+        const response: ApiResponse<never> = {
+          ok: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+        return reply.status(500).send(response);
+      }
+    }
+  );
+
+  /**
+   * GET /api/feedback-loops
+   * Returns feedback loops for a workflow
+   */
+  fastify.get<{
+    Querystring: FeedbackLoopsQueryParams;
+  }>(
+    "/api/feedback-loops",
+    async (request, reply) => {
+      try {
+        const { workflowId } = request.query;
+
+        if (!workflowId) {
+          const response: ApiResponse<never> = {
+            ok: false,
+            error: "workflowId is required",
+          };
+          return reply.status(400).send(response);
+        }
+
+        const loops = getFeedbackLoops(workflowId);
+        const response: ApiResponse<typeof loops> = {
+          ok: true,
+          data: loops,
+        };
+        return reply.send(response);
+      } catch (error) {
+        const response: ApiResponse<never> = {
+          ok: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+        return reply.status(500).send(response);
+      }
+    }
+  );
+
+  /**
+   * GET /api/feedback-loops/:id
+   * Returns feedback loop with iterations
+   */
+  fastify.get<{
+    Params: LoopIdParams;
+  }>(
+    "/api/feedback-loops/:id",
+    async (request, reply) => {
+      try {
+        const { id } = request.params;
+        const loopId = parseInt(id, 10);
+
+        if (isNaN(loopId)) {
+          const response: ApiResponse<never> = {
+            ok: false,
+            error: "Invalid loop ID",
+          };
+          return reply.status(400).send(response);
+        }
+
+        const loop = getFeedbackLoopWithIterations(loopId);
+
+        if (!loop) {
+          const response: ApiResponse<never> = {
+            ok: false,
+            error: "Feedback loop not found",
+          };
+          return reply.status(404).send(response);
+        }
+
+        const response: ApiResponse<typeof loop> = {
+          ok: true,
+          data: loop,
+        };
+        return reply.send(response);
+      } catch (error) {
+        const response: ApiResponse<never> = {
+          ok: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+        return reply.status(500).send(response);
+      }
+    }
+  );
+
+  /**
+   * GET /api/feedback-loops/current
+   * Returns currently active feedback loop
+   */
+  fastify.get("/api/feedback-loops/current", async (request, reply) => {
+    try {
+      const loop = getCurrentFeedbackLoop();
+
+      if (!loop) {
+        const response: ApiResponse<never> = {
+          ok: false,
+          error: "No active feedback loop",
+        };
+        return reply.status(404).send(response);
+      }
+
+      const response: ApiResponse<typeof loop> = {
+        ok: true,
+        data: loop,
+      };
+      return reply.send(response);
+    } catch (error) {
+      const response: ApiResponse<never> = {
+        ok: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+      return reply.status(500).send(response);
+    }
+  });
+
+  /**
+   * GET /api/workflows/:id/progress-extended
+   * Returns workflow progress with parallel groups and feedback loops
+   */
+  fastify.get<{
+    Params: IdParams;
+  }>(
+    "/api/workflows/:id/progress-extended",
+    async (request, reply) => {
+      try {
+        const { id } = request.params;
+        const progress = getWorkflowProgressExtended(id);
+
+        if (!progress) {
+          const response: ApiResponse<never> = {
+            ok: false,
+            error: "Workflow not found",
+          };
+          return reply.status(404).send(response);
+        }
+
+        const response: ApiResponse<typeof progress> = {
+          ok: true,
+          data: progress,
+        };
+        return reply.send(response);
+      } catch (error) {
+        const response: ApiResponse<never> = {
+          ok: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+        return reply.status(500).send(response);
+      }
+    }
+  );
+
+  /**
+   * GET /api/workflows/:id/branches
+   * Returns agent run branches for a workflow
+   */
+  fastify.get<{
+    Params: IdParams;
+  }>(
+    "/api/workflows/:id/branches",
+    async (request, reply) => {
+      try {
+        const { id } = request.params;
+        const branches = getAgentRunBranches(id);
+
+        const response: ApiResponse<typeof branches> = {
+          ok: true,
+          data: branches,
         };
         return reply.send(response);
       } catch (error) {

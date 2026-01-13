@@ -10,7 +10,7 @@ import {
 } from './components'
 
 export const App: FunctionalComponent = () => {
-  const { status, error } = useSSE('/sse')
+  const { status, error } = useSSE('/api/stream/activity')
 
   return (
     <div class="min-h-screen bg-gray-50">

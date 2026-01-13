@@ -175,36 +175,6 @@ export const FlowChart: FunctionalComponent<FlowChartProps> = ({ sessionId }) =>
         </div>
       </div>
 
-      <div class="mt-4">
-        <h3 class="text-sm font-medium text-gray-700 mb-2">Agent Execution Summary</h3>
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
-          {flow.nodes.map((node) => (
-            <div
-              key={node.id}
-              class={`p-2 rounded text-xs ${
-                node.status === 'completed'
-                  ? 'bg-green-50 border border-green-200'
-                  : node.status === 'failed'
-                  ? 'bg-red-50 border border-red-200'
-                  : node.status === 'running'
-                  ? 'bg-yellow-50 border border-yellow-200'
-                  : 'bg-gray-50 border border-gray-200'
-              }`}
-            >
-              <div class="font-medium truncate">{node.agent_name}</div>
-              {node.duration_ms && (
-                <div class="text-gray-500">{formatDuration(node.duration_ms)}</div>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   )
-}
-
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`
-  return `${(ms / 60000).toFixed(1)}m`
 }
