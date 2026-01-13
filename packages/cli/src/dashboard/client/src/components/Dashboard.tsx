@@ -5,7 +5,7 @@ import { AgentStats } from './AgentStats'
 import { RealTimeLog } from './RealTimeLog'
 import { WorkflowProgress } from './WorkflowProgress'
 import { FeedbackLoopPanel } from './FeedbackLoopPanel'
-import { WorkflowHistory } from './WorkflowHistory'
+import { TasksOverview } from './TasksOverview'
 
 export const Dashboard: FunctionalComponent = () => {
   const [currentActivity, setCurrentActivity] = useState<CurrentActivity | null>(null)
@@ -41,17 +41,24 @@ export const Dashboard: FunctionalComponent = () => {
     <div class="p-8">
       <h1 class="text-3xl font-bold mb-8">Dashboard</h1>
 
-      <div class="mb-8">
-        <WorkflowProgress workflowId={workflowId} />
+      {/* Tasks Overview - Primary Section */}
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+        <div class="lg:col-span-2">
+          <TasksOverview />
+        </div>
+        <div>
+          <AgentStats />
+        </div>
       </div>
 
+      {/* Current Activity & Feedback */}
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        <WorkflowProgress workflowId={workflowId} />
         <FeedbackLoopPanel workflowId={workflowId} />
-        <WorkflowHistory />
       </div>
 
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <AgentStats />
+      {/* Real-time Logs */}
+      <div>
         <RealTimeLog />
       </div>
     </div>

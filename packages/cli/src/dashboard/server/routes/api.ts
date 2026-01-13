@@ -24,7 +24,17 @@ import {
   getCurrentFeedbackLoop,
   getAgentRunBranches,
   getWorkflowProgressExtended,
+  runTaskMigration,
+  getTasks,
+  getTask,
+  getTaskHierarchy,
+  createTask,
+  updateTaskStatus,
+  linkTaskToSession,
+  addTaskDependency,
+  getTaskFlow,
   type AgentRunFilters,
+  type Task,
 } from "../db/index";
 
 /**
@@ -653,6 +663,381 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
         const response: ApiResponse<typeof branches> = {
           ok: true,
           data: branches,
+        };
+        return reply.send(response);
+      } catch (error) {
+        const response: ApiResponse<never> = {
+          ok: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+        return reply.status(500).send(response);
+      }
+    }
+  );
+
+  // ============================================================================
+  // Task Routes
+  // ============================================================================
+
+  /**
+   * POST /api/tasks/migrate
+   * Run task migration (creates tasks tables if not exist)
+   */
+  fastify.post("/api/tasks/migrate", async (request, reply) => {
+    try {
+      const success = runTaskMigration();
+
+      if (!success) {
+        const response: ApiResponse<never> = {
+          ok: false,
+          error: "Failed to run migration",
+        };
+        return reply.status(500).send(response);
+      }
+
+      const response: ApiResponse<{ migrated: boolean }> = {
+        ok: true,
+        data: { migrated: true },
+      };
+      return reply.send(response);
+    } catch (error) {
+      const response: ApiResponse<never> = {
+        ok: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+      return reply.status(500).send(response);
+    }
+  });
+
+  /**
+   * GET /api/tasks
+   * Returns all tasks with optional filters
+   */
+  fastify.get<{
+    Querystring: { status?: string; parentId?: string; root?: string };
+  }>(
+    "/api/tasks",
+    async (request, reply) => {
+      try {
+        const { status, parentId, root } = request.query;
+        const filters: { status?: string; parentId?: string | null } = {};
+
+        if (status) filters.status = status;
+        if (root === "true") {
+          filters.parentId = null;
+        } else if (parentId) {
+          filters.parentId = parentId;
+        }
+
+        const tasks = getTasks(filters);
+        const response: ApiResponse<typeof tasks> = {
+          ok: true,
+          data: tasks,
+        };
+        return reply.send(response);
+      } catch (error) {
+        const response: ApiResponse<never> = {
+          ok: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+        return reply.status(500).send(response);
+      }
+    }
+  );
+
+  /**
+   * GET /api/tasks/:id
+   * Returns a single task with progress
+   */
+  fastify.get<{
+    Params: IdParams;
+  }>(
+    "/api/tasks/:id",
+    async (request, reply) => {
+      try {
+        const { id } = request.params;
+        const task = getTask(id);
+
+        if (!task) {
+          const response: ApiResponse<never> = {
+            ok: false,
+            error: "Task not found",
+          };
+          return reply.status(404).send(response);
+        }
+
+        const response: ApiResponse<typeof task> = {
+          ok: true,
+          data: task,
+        };
+        return reply.send(response);
+      } catch (error) {
+        const response: ApiResponse<never> = {
+          ok: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+        return reply.status(500).send(response);
+      }
+    }
+  );
+
+  /**
+   * GET /api/tasks/:id/hierarchy
+   * Returns task with all subtasks recursively
+   */
+  fastify.get<{
+    Params: IdParams;
+  }>(
+    "/api/tasks/:id/hierarchy",
+    async (request, reply) => {
+      try {
+        const { id } = request.params;
+        const hierarchy = getTaskHierarchy(id);
+
+        if (!hierarchy) {
+          const response: ApiResponse<never> = {
+            ok: false,
+            error: "Task not found",
+          };
+          return reply.status(404).send(response);
+        }
+
+        const response: ApiResponse<typeof hierarchy> = {
+          ok: true,
+          data: hierarchy,
+        };
+        return reply.send(response);
+      } catch (error) {
+        const response: ApiResponse<never> = {
+          ok: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+        return reply.status(500).send(response);
+      }
+    }
+  );
+
+  /**
+   * POST /api/tasks
+   * Create a new task
+   */
+  fastify.post<{
+    Body: Omit<Task, "id" | "created_at">;
+  }>(
+    "/api/tasks",
+    async (request, reply) => {
+      try {
+        const taskData = request.body;
+
+        if (!taskData.title) {
+          const response: ApiResponse<never> = {
+            ok: false,
+            error: "Title is required",
+          };
+          return reply.status(400).send(response);
+        }
+
+        const task = createTask(taskData);
+
+        if (!task) {
+          const response: ApiResponse<never> = {
+            ok: false,
+            error: "Failed to create task",
+          };
+          return reply.status(500).send(response);
+        }
+
+        const response: ApiResponse<typeof task> = {
+          ok: true,
+          data: task,
+        };
+        return reply.status(201).send(response);
+      } catch (error) {
+        const response: ApiResponse<never> = {
+          ok: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+        return reply.status(500).send(response);
+      }
+    }
+  );
+
+  /**
+   * PATCH /api/tasks/:id/status
+   * Update task status
+   */
+  fastify.patch<{
+    Params: IdParams;
+    Body: {
+      status: Task["status"];
+      started_at?: string;
+      completed_at?: string;
+      actual_duration_ms?: number;
+    };
+  }>(
+    "/api/tasks/:id/status",
+    async (request, reply) => {
+      try {
+        const { id } = request.params;
+        const { status, ...options } = request.body;
+
+        if (!status) {
+          const response: ApiResponse<never> = {
+            ok: false,
+            error: "Status is required",
+          };
+          return reply.status(400).send(response);
+        }
+
+        const success = updateTaskStatus(id, status, options);
+
+        if (!success) {
+          const response: ApiResponse<never> = {
+            ok: false,
+            error: "Failed to update task status",
+          };
+          return reply.status(500).send(response);
+        }
+
+        const response: ApiResponse<{ updated: boolean }> = {
+          ok: true,
+          data: { updated: true },
+        };
+        return reply.send(response);
+      } catch (error) {
+        const response: ApiResponse<never> = {
+          ok: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+        return reply.status(500).send(response);
+      }
+    }
+  );
+
+  /**
+   * POST /api/tasks/:id/link-session
+   * Link task to session
+   */
+  fastify.post<{
+    Params: IdParams;
+    Body: {
+      sessionId: string;
+      role?: "primary" | "continuation" | "review" | "fix";
+    };
+  }>(
+    "/api/tasks/:id/link-session",
+    async (request, reply) => {
+      try {
+        const { id } = request.params;
+        const { sessionId, role } = request.body;
+
+        if (!sessionId) {
+          const response: ApiResponse<never> = {
+            ok: false,
+            error: "sessionId is required",
+          };
+          return reply.status(400).send(response);
+        }
+
+        const success = linkTaskToSession(id, sessionId, role);
+
+        if (!success) {
+          const response: ApiResponse<never> = {
+            ok: false,
+            error: "Failed to link task to session",
+          };
+          return reply.status(500).send(response);
+        }
+
+        const response: ApiResponse<{ linked: boolean }> = {
+          ok: true,
+          data: { linked: true },
+        };
+        return reply.send(response);
+      } catch (error) {
+        const response: ApiResponse<never> = {
+          ok: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+        return reply.status(500).send(response);
+      }
+    }
+  );
+
+  /**
+   * POST /api/tasks/:id/dependency
+   * Add task dependency
+   */
+  fastify.post<{
+    Params: IdParams;
+    Body: {
+      dependsOnTaskId: string;
+      dependencyType?: "blocks" | "related" | "continues" | "reviews";
+    };
+  }>(
+    "/api/tasks/:id/dependency",
+    async (request, reply) => {
+      try {
+        const { id } = request.params;
+        const { dependsOnTaskId, dependencyType } = request.body;
+
+        if (!dependsOnTaskId) {
+          const response: ApiResponse<never> = {
+            ok: false,
+            error: "dependsOnTaskId is required",
+          };
+          return reply.status(400).send(response);
+        }
+
+        const success = addTaskDependency(id, dependsOnTaskId, dependencyType);
+
+        if (!success) {
+          const response: ApiResponse<never> = {
+            ok: false,
+            error: "Failed to add dependency",
+          };
+          return reply.status(500).send(response);
+        }
+
+        const response: ApiResponse<{ added: boolean }> = {
+          ok: true,
+          data: { added: true },
+        };
+        return reply.send(response);
+      } catch (error) {
+        const response: ApiResponse<never> = {
+          ok: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+        return reply.status(500).send(response);
+      }
+    }
+  );
+
+  /**
+   * GET /api/task-flow
+   * Returns task flow data for visualization
+   */
+  fastify.get<{
+    Querystring: { taskId?: string };
+  }>(
+    "/api/task-flow",
+    async (request, reply) => {
+      try {
+        const { taskId } = request.query;
+        const flow = getTaskFlow(taskId);
+
+        if (!flow) {
+          const response: ApiResponse<never> = {
+            ok: false,
+            error: "No tasks found",
+          };
+          return reply.status(404).send(response);
+        }
+
+        const response: ApiResponse<typeof flow> = {
+          ok: true,
+          data: flow,
         };
         return reply.send(response);
       } catch (error) {

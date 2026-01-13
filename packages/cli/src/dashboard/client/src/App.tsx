@@ -6,6 +6,8 @@ import {
   Dashboard,
   SessionList,
   SessionDetail,
+  TaskList,
+  TaskDetail,
   WorkflowDetail,
 } from './components'
 
@@ -29,6 +31,9 @@ export const App: FunctionalComponent = () => {
               <a href="/" class="inline-flex items-center px-1 pt-1 text-sm font-medium text-gray-900">
                 Dashboard
               </a>
+              <a href="/tasks" class="inline-flex items-center px-1 pt-1 text-sm font-medium text-gray-500 hover:text-gray-900">
+                Tasks
+              </a>
               <a href="/sessions" class="inline-flex items-center px-1 pt-1 text-sm font-medium text-gray-500 hover:text-gray-900">
                 Sessions
               </a>
@@ -40,6 +45,8 @@ export const App: FunctionalComponent = () => {
       <main>
         <Router>
           <Dashboard path="/" />
+          <TaskList path="/tasks" />
+          <TaskDetail path="/tasks/:id" />
           <SessionList path="/sessions" />
           <SessionDetail path="/sessions/:id" />
           <WorkflowDetail path="/workflows/:id" />

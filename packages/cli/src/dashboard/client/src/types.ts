@@ -149,3 +149,48 @@ export interface ToolCall {
   ended_at: string | null
   duration_ms: number | null
 }
+
+export interface Task {
+  id: string
+  title: string
+  description: string | null
+  parent_task_id: string | null
+  status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled' | 'blocked'
+  priority: number
+  complexity: 'trivial' | 'simple' | 'medium' | 'complex' | 'epic' | null
+  tags: string | null
+  created_at: string
+  started_at: string | null
+  completed_at: string | null
+  estimated_duration: number | null
+  actual_duration: number | null
+  created_by: string | null
+  assigned_to: string | null
+}
+
+export interface TaskWithProgress extends Task {
+  subtask_count: number
+  completed_subtasks: number
+  in_progress_subtasks: number
+  failed_subtasks: number
+  agent_run_count: number
+  progress_percent: number
+  depth: number
+}
+
+export interface TaskHierarchy extends TaskWithProgress {
+  children: TaskHierarchy[]
+}
+
+export interface TaskDependency {
+  id: number
+  task_id: string
+  depends_on_task_id: string
+  dependency_type: 'blocks' | 'requires' | 'related'
+  created_at: string
+}
+
+export interface TaskFlow {
+  tasks: TaskWithProgress[]
+  dependencies: TaskDependency[]
+}

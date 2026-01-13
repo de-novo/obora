@@ -77,9 +77,16 @@ class AgentDbClient {
 
   /**
    * Get database connection
-   * Opens DB in read-only mode
+   * Opens DB in read-only mode by default
    */
-  public getConnection(): Database.Database | null {
+  public getConnection(options: { readonly?: boolean } = { readonly: true }): Database.Database | null {
+    // If requesting writable connection but we have readonly, close and reopen
+    if (this.db && options.readonly === false) {
+      // Need writable but have readonly - return null (can't upgrade)
+      // For migrations, use getWritableConnection instead
+      return null;
+    }
+
     if (this.db) {
       return this.db;
     }
@@ -91,7 +98,7 @@ class AgentDbClient {
 
     try {
       this.db = new Database(this.dbPath, {
-        readonly: true,
+        readonly: options.readonly !== false,
         fileMustExist: true,
       });
 
@@ -99,6 +106,31 @@ class AgentDbClient {
       return this.db;
     } catch (error) {
       consola.error("Failed to connect to agent database:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Get writable database connection for migrations
+   * Creates a separate connection that allows writes
+   */
+  public getWritableConnection(): Database.Database | null {
+    if (!existsSync(this.dbPath)) {
+      consola.warn(`Database not found at ${this.dbPath}`);
+      return null;
+    }
+
+    try {
+      // Create a new writable connection (separate from the readonly singleton)
+      const writableDb = new Database(this.dbPath, {
+        readonly: false,
+        fileMustExist: true,
+      });
+
+      consola.success(`Writable connection established: ${this.dbPath}`);
+      return writableDb;
+    } catch (error) {
+      consola.error("Failed to open writable database connection:", error);
       return null;
     }
   }
