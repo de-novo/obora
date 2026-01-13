@@ -11,10 +11,8 @@ import { initCommand } from "./commands/init";
 import { upgradeCommand } from "./commands/upgrade";
 import { doctorCommand } from "./commands/doctor";
 import { ejectCommand } from "./commands/eject";
-import { dashboardCommand } from "./commands/dashboard";
 import { chatCommand } from "./commands/chat";
 import { runCommand } from "./commands/run";
-import { startServer, stopServer } from "./dashboard/server";
 import { initializeGlobalConfig } from "./utils";
 
 const main = defineCommand({
@@ -34,7 +32,6 @@ const main = defineCommand({
     status: statusCommand,
     list: listCommand,
     "llm-help": llmHelpCommand,
-    dashboard: dashboardCommand,
     chat: chatCommand,
     run: runCommand,
   },
@@ -49,6 +46,5 @@ export function runMain() {
   _runMain(main);
 }
 
-export { createCommand, initCommand, addCommand, removeCommand, upgradeCommand, ejectCommand, doctorCommand, statusCommand, listCommand, llmHelpCommand, dashboardCommand, chatCommand, runCommand };
-export { startServer, stopServer };
+export { createCommand, initCommand, addCommand, removeCommand, upgradeCommand, ejectCommand, doctorCommand, statusCommand, listCommand, llmHelpCommand, chatCommand, runCommand };
 export * from "./orchestrator";
