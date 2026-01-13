@@ -1,49 +1,66 @@
 {
-  "$schema": "../../preset.schema.json",
+  "$schema": "../../preset-v2.schema.json",
   "name": "drizzle",
   "category": "database",
-  "description": "Drizzle ORM - Lightweight, SQL-first, serverless optimized",
-  "operations": {
-    "replace": [],
-    "merge": ["package.json"],
-    "add": [
-      "drizzle.config.ts",
-      "src/db"
-    ],
-    "remove": [],
-    "inject": [
-      {
-        "file": "src/app.module.ts",
-        "marker": "@obora:imports",
-        "content": "import { DatabaseModule } from \"./db/database.module.js\";"
-      },
-      {
-        "file": "src/app.module.ts",
-        "marker": "@obora:modules",
-        "content": "DatabaseModule,"
-      }
-    ]
-  },
-  "conflicts": ["prisma"],
-  "requires": [],
-  "targetApps": ["nestjs-api"],
-  "env": [
-    {
-      "key": "DATABASE_URL",
-      "description": "PostgreSQL connection string (Neon, Supabase, etc.)",
-      "required": true,
-      "secret": true,
-      "example": "postgres://user:pass@host:5432/dbname"
+  "description": "Drizzle ORM - Type-safe SQL",
+  "version": "0.45.0",
+
+  "common": {
+    "devDependencies": {
+      "drizzle-kit": "^0.31.0"
+    },
+    "scripts": {
+      "db:generate": "drizzle-kit generate",
+      "db:push": "drizzle-kit push",
+      "db:studio": "drizzle-kit studio"
     }
-  ],
+  },
+
+  "targets": {
+    "sqlite": {
+      "description": "SQLite with better-sqlite3 (Next.js, standalone)",
+      "dialect": "sqlite",
+      "dependencies": {
+        "drizzle-orm": "^0.45.0",
+        "better-sqlite3": "^11.0.0"
+      },
+      "devDependencies": {
+        "@types/better-sqlite3": "^7.6.11"
+      },
+      "files": ["sqlite"],
+      "env": [
+        {
+          "key": "DATABASE_URL",
+          "description": "SQLite database path",
+          "required": false,
+          "example": "file:./db.sqlite"
+        }
+      ]
+    },
+
+    "postgres": {
+      "description": "PostgreSQL with Neon serverless (NestJS, production)",
+      "dialect": "postgresql",
+      "dependencies": {
+        "drizzle-orm": "^0.45.0",
+        "@neondatabase/serverless": "^0.10.0"
+      },
+      "files": ["postgres"],
+      "env": [
+        {
+          "key": "DATABASE_URL",
+          "description": "PostgreSQL connection string",
+          "required": true,
+          "secret": true,
+          "example": "postgres://user:pass@host:5432/dbname"
+        }
+      ]
+    }
+  },
+
+  "conflicts": ["prisma"],
   "postInstall": [
-    "Generate migrations: pnpm db:generate",
-    "Run migrations: pnpm db:migrate"
-  ],
-  "scripts": {
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
-  }
+    "Define your schema",
+    "Run: pnpm db:push"
+  ]
 }

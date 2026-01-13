@@ -1,0 +1,69 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Obora Preset Manifest v2",
+  "description": "Multi-framework preset with automatic detection",
+  "type": "object",
+  "required": ["name", "category", "description"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "name": {
+      "type": "string",
+      "description": "Preset identifier (e.g., 'drizzle', 'prisma')"
+    },
+    "category": {
+      "type": "string",
+      "enum": ["database", "auth", "payment", "email", "ai", "storage", "analytics", "linting", "validation"]
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description"
+    },
+    "version": {
+      "type": "string",
+      "description": "Preset version"
+    },
+    "common": {
+      "type": "object",
+      "description": "Shared configuration applied to all variants",
+      "properties": {
+        "dependencies": { "type": "object" },
+        "devDependencies": { "type": "object" },
+        "files": { "type": "array", "items": { "type": "string" } },
+        "scripts": { "type": "object" },
+        "env": { "type": "array" }
+      }
+    },
+    "variants": {
+      "type": "object",
+      "description": "Framework-specific configurations",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "detect": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Package names to detect this framework"
+          },
+          "description": { "type": "string" },
+          "dependencies": { "type": "object" },
+          "devDependencies": { "type": "object" },
+          "files": { "type": "array", "items": { "type": "string" } },
+          "scripts": { "type": "object" },
+          "inject": { "type": "array" },
+          "env": { "type": "array" },
+          "postInstall": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "conflicts": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Conflicting preset names"
+    },
+    "postInstall": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Post-install instructions"
+    }
+  }
+}

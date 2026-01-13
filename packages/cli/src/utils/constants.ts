@@ -241,13 +241,7 @@ export const PRESETS: Record<string, PresetInfo> = {
   drizzle: {
     name: "drizzle",
     category: "database",
-    description: "Drizzle ORM - NestJS Type-safe SQL",
-    version: "0.45.0",
-  },
-  "drizzle-nextjs": {
-    name: "drizzle-nextjs",
-    category: "database",
-    description: "Drizzle ORM - Next.js SQLite/PostgreSQL",
+    description: "Drizzle ORM - Type-safe SQL (SQLite/PostgreSQL)",
     version: "0.45.0",
   },
   prisma: {
