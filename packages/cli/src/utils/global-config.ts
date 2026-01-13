@@ -14,7 +14,7 @@ import Database from "better-sqlite3";
 
 const OBORA_DIR = ".obora";
 const DASHBOARD_DB = "dashboard.db";
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 // ============================================================================
 // Paths
@@ -52,7 +52,9 @@ CREATE TABLE IF NOT EXISTS projects (
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-  last_opened_at TEXT
+  last_opened_at TEXT,
+  last_error TEXT,
+  last_sync_at TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_projects_path ON projects(path);
@@ -164,6 +166,66 @@ INSERT OR IGNORE INTO schema_version (version) VALUES (${SCHEMA_VERSION});
 `;
 
 // ============================================================================
+// Migrations
+// ============================================================================
+
+type Migration = (db: Database.Database) => void;
+
+/**
+ * Migration registry - add new migrations here
+ * Key is the target version number
+ */
+const MIGRATIONS: Record<number, Migration> = {
+  // Version 1: Initial schema (handled by DASHBOARD_SCHEMA)
+  1: () => {},
+
+  // Version 2: Example migration - add last_error column to projects
+  2: (db) => {
+    db.exec(`
+      ALTER TABLE projects ADD COLUMN last_error TEXT;
+      ALTER TABLE projects ADD COLUMN last_sync_at TEXT;
+    `);
+  },
+};
+
+/**
+ * Get current schema version from database
+ */
+function getCurrentVersion(db: Database.Database): number {
+  try {
+    const row = db.prepare("SELECT MAX(version) as version FROM schema_version").get() as { version: number | null };
+    return row?.version ?? 0;
+  } catch {
+    // Table doesn't exist yet
+    return 0;
+  }
+}
+
+/**
+ * Run pending migrations
+ */
+function runMigrations(db: Database.Database): void {
+  const currentVersion = getCurrentVersion(db);
+
+  if (currentVersion >= SCHEMA_VERSION) {
+    return; // Already up to date
+  }
+
+  // Run migrations sequentially
+  for (let version = currentVersion + 1; version <= SCHEMA_VERSION; version++) {
+    const migration = MIGRATIONS[version];
+    if (migration) {
+      try {
+        migration(db);
+        db.prepare("INSERT OR REPLACE INTO schema_version (version) VALUES (?)").run(version);
+      } catch (error) {
+        throw new Error(`Migration to version ${version} failed: ${error}`);
+      }
+    }
+  }
+}
+
+// ============================================================================
 // Initialization
 // ============================================================================
 
@@ -188,9 +250,19 @@ export function initializeGlobalConfig(): void {
   const db = new Database(dbPath);
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
-  db.exec(DASHBOARD_SCHEMA);
-  db.close();
 
+  // Check if fresh install or needs migration
+  const currentVersion = getCurrentVersion(db);
+
+  if (currentVersion === 0) {
+    // Fresh install - create all tables
+    db.exec(DASHBOARD_SCHEMA);
+  } else if (currentVersion < SCHEMA_VERSION) {
+    // Existing DB needs migration
+    runMigrations(db);
+  }
+
+  db.close();
   initialized = true;
 }
 
