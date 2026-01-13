@@ -6,9 +6,12 @@ import prompts from "prompts";
 import {
   PRESETS,
   PRESETS_DIR,
+  TEMPLATES_DIR,
   CATEGORIES,
   APP_MODULES,
+  APP_MODULE_NAMES,
   type PresetName,
+  type AppModuleName,
   dirExists,
   fileExists,
   readJson,
@@ -165,30 +168,162 @@ async function injectContent(
 }
 
 // ============================================================================
+// App Template Handler
+// ============================================================================
+
+interface AddArgs {
+  preset?: string;
+  dir: string;
+  app?: string;
+  type?: string;
+  name?: string;
+  yes: boolean;
+  list: boolean;
+}
+
+async function handleAppTemplate(args: AddArgs, targetDir: string): Promise<void> {
+  // Get app template name
+  let templateName: AppModuleName;
+
+  if (args.preset && args.preset in APP_MODULES) {
+    templateName = args.preset as AppModuleName;
+  } else {
+    // Show selection
+    const choices = APP_MODULE_NAMES.map((name) => ({
+      title: name,
+      description: APP_MODULES[name].description,
+      value: name,
+    }));
+
+    const { selected } = await prompts({
+      type: "select",
+      name: "selected",
+      message: "Select an app template:",
+      choices,
+    });
+
+    if (!selected) {
+      consola.info("Cancelled");
+      return;
+    }
+
+    templateName = selected as AppModuleName;
+  }
+
+  const templateFilesDir = join(TEMPLATES_DIR, "apps", templateName, "files");
+
+  // Check if template exists
+  if (!(await dirExists(templateFilesDir))) {
+    consola.error(`Template "${templateName}" not found at ${templateFilesDir}`);
+    process.exit(1);
+  }
+
+  // Ensure target directory exists
+  await ensureDir(targetDir);
+
+  // Check if target already has files
+  const existingFiles = await fs.readdir(targetDir).catch(() => []);
+  if (existingFiles.length > 0 && !args.yes) {
+    const { confirm } = await prompts({
+      type: "confirm",
+      name: "confirm",
+      message: `Target directory "${targetDir}" is not empty. Continue?`,
+      initial: false,
+    });
+
+    if (!confirm) {
+      consola.info("Cancelled");
+      return;
+    }
+  }
+
+  // Determine package name
+  let packageName = args.name;
+  if (!packageName && !args.yes) {
+    const dirName = targetDir.split("/").pop() || templateName;
+    const { name } = await prompts({
+      type: "text",
+      name: "name",
+      message: "Package name:",
+      initial: `@obora/${dirName}`,
+    });
+
+    if (!name) {
+      consola.info("Cancelled");
+      return;
+    }
+
+    packageName = name;
+  }
+
+  packageName = packageName || `@obora/${targetDir.split("/").pop() || templateName}`;
+
+  consola.start(`Adding ${templateName} template to ${targetDir}...`);
+
+  try {
+    // Copy template files
+    const replacements = {
+      PROJECT_NAME: packageName.replace("@", "").replace("/", "-"),
+    };
+
+    await copyTemplateDir(templateFilesDir, targetDir, replacements);
+
+    // Update package.json with correct name
+    const packageJsonPath = join(targetDir, "package.json");
+    if (await fileExists(packageJsonPath)) {
+      const packageJson = await readJson<Record<string, unknown>>(packageJsonPath);
+      packageJson.name = packageName;
+      await writeJson(packageJsonPath, packageJson);
+    }
+
+    consola.success(`Added ${templateName} template!`);
+    consola.info(`  Location: ${targetDir}`);
+    consola.info(`  Package: ${packageName}`);
+    consola.info("");
+    consola.info("Next steps:");
+    consola.info("  1. Run your package manager to install dependencies");
+    consola.info(`  2. cd ${targetDir} && pnpm dev`);
+  } catch (error) {
+    consola.error("Failed to add app template:", error);
+    process.exit(1);
+  }
+}
+
+// ============================================================================
 // Command
 // ============================================================================
 
 export const addCommand = defineCommand({
   meta: {
     name: "add",
-    description: "Add a preset to an existing project",
+    description: "Add a preset or app template to an existing project",
   },
   args: {
     preset: {
       type: "positional",
-      description: "Preset name to add",
+      description: "Preset or app template name to add",
       required: false,
     },
     dir: {
       type: "string",
       alias: "d",
-      description: "Project directory",
+      description: "Target directory (default: current directory)",
       default: ".",
     },
     app: {
       type: "string",
       alias: "a",
       description: "Target app in monorepo (e.g., api, web)",
+    },
+    type: {
+      type: "string",
+      alias: "t",
+      description: "Type to add: preset or app (auto-detected if not specified)",
+    },
+    name: {
+      type: "string",
+      alias: "n",
+      description: "Package name for app template (e.g., @myorg/dashboard)",
     },
     yes: {
       type: "boolean",
@@ -199,12 +334,30 @@ export const addCommand = defineCommand({
     list: {
       type: "boolean",
       alias: "l",
-      description: "List available presets",
+      description: "List available presets and app templates",
       default: false,
     },
   },
   async run({ args }) {
-    const projectDir = resolve(args.dir);
+    const targetDir = resolve(args.dir);
+
+    // Determine if adding app template or preset
+    const isAppTemplate = args.type === "app" ||
+      (args.preset && args.preset in APP_MODULES) ||
+      (!args.preset && args.type !== "preset");
+
+    // ========================================================================
+    // App Template Mode
+    // ========================================================================
+    if (isAppTemplate || (args.preset && args.preset in APP_MODULES)) {
+      await handleAppTemplate(args, targetDir);
+      return;
+    }
+
+    // ========================================================================
+    // Preset Mode (existing logic)
+    // ========================================================================
+    const projectDir = targetDir;
 
     // Check if it's a valid project
     const rootPackageJsonPath = join(projectDir, "package.json");
@@ -230,6 +383,22 @@ export const addCommand = defineCommand({
     } else {
       // Reorganize to group by category
       const groupedChoices: prompts.Choice[] = [];
+
+      // Add app templates section
+      groupedChoices.push({
+        title: `── APP TEMPLATES ──`,
+        value: "",
+        disabled: true,
+      });
+      for (const [name, config] of Object.entries(APP_MODULES)) {
+        groupedChoices.push({
+          title: `  ${name}`,
+          description: config.description,
+          value: `app:${name}`,
+        });
+      }
+
+      // Add presets by category
       for (const category of CATEGORIES) {
         groupedChoices.push({
           title: `── ${category.toUpperCase()} ──`,
@@ -251,12 +420,19 @@ export const addCommand = defineCommand({
       const { preset } = await prompts({
         type: "select",
         name: "preset",
-        message: "Select a preset to add:",
+        message: "Select a preset or app template to add:",
         choices: groupedChoices.filter((c) => !c.disabled || c.value === ""),
       });
 
       if (!preset) {
         consola.info("Cancelled");
+        return;
+      }
+
+      // Check if user selected an app template
+      if (typeof preset === "string" && preset.startsWith("app:")) {
+        const appName = preset.replace("app:", "") as AppModuleName;
+        await handleAppTemplate({ ...args, preset: appName }, targetDir);
         return;
       }
 
@@ -359,7 +535,7 @@ export const addCommand = defineCommand({
     }
 
     // Determine the actual target directory for files
-    const targetDir = targetAppDir || projectDir;
+    const presetTargetDir = targetAppDir || projectDir;
     const packageJsonPath = targetAppDir
       ? join(targetAppDir, "package.json")
       : rootPackageJsonPath;
@@ -446,7 +622,7 @@ export const addCommand = defineCommand({
       if (await dirExists(presetFilesDir)) {
         for (const addPath of manifest.operations.add) {
           const sourcePath = join(presetFilesDir, addPath);
-          const destPath = join(targetDir, addPath);
+          const destPath = join(presetTargetDir, addPath);
 
           if (await dirExists(sourcePath)) {
             // It's a directory
@@ -464,7 +640,7 @@ export const addCommand = defineCommand({
       // Process inject operations
       if (manifest.operations.inject && manifest.operations.inject.length > 0) {
         for (const inject of manifest.operations.inject) {
-          const filePath = join(targetDir, inject.file);
+          const filePath = join(presetTargetDir, inject.file);
           const content = inject.content.replace(/{{PROJECT_NAME}}/g, existingConfig?.base || "project");
 
           const injected = await injectContent(filePath, inject.marker, content);
