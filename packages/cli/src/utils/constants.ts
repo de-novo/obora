@@ -119,7 +119,7 @@ export const APP_MODULES: Record<string, AppModuleConfig> = {
     description: "Next.js 15 web application",
     features: ["Next.js 15", "App Router", "Tailwind CSS v4", "shadcn/ui"],
     targetDir: "apps/web",
-    slots: ["linting", "analytics", "auth"],
+    slots: ["linting", "analytics", "auth", "database"],
   },
   "nestjs-api": {
     name: "nestjs-api",
@@ -241,7 +241,13 @@ export const PRESETS: Record<string, PresetInfo> = {
   drizzle: {
     name: "drizzle",
     category: "database",
-    description: "Drizzle ORM - Type-safe SQL",
+    description: "Drizzle ORM - NestJS Type-safe SQL",
+    version: "0.45.0",
+  },
+  "drizzle-nextjs": {
+    name: "drizzle-nextjs",
+    category: "database",
+    description: "Drizzle ORM - Next.js SQLite/PostgreSQL",
     version: "0.45.0",
   },
   prisma: {
