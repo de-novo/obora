@@ -1,21 +1,16 @@
 /**
  * Dashboard Database Queries
- * CRUD operations for dashboard.db tables
+ * CRUD operations using Drizzle ORM
  */
 
-import Database from "better-sqlite3";
-import { getDashboardDbPath } from "./db";
+import { eq, and, like, or, desc, asc, sql } from "drizzle-orm";
+import { getDb } from "./db";
+import * as schema from "./schema";
 import type {
   Project,
-  ProjectRow,
   Bookmark,
-  BookmarkRow,
   Tag,
-  TagRow,
-  EntityTag,
-  EntityTagRow,
   Annotation,
-  AnnotationRow,
   CreateProjectInput,
   UpdateProjectInput,
   CreateBookmarkInput,
@@ -26,110 +21,21 @@ import type {
 } from "./types";
 
 // ============================================================================
-// Database Connection
+// Utilities
 // ============================================================================
-
-/**
- * Get database connection
- * Opens a new connection - caller should close it when done
- */
-function getDb(): Database.Database {
-  const db = new Database(getDashboardDbPath());
-  db.pragma("journal_mode = WAL");
-  db.pragma("foreign_keys = ON");
-  return db;
-}
-
-// ============================================================================
-// Type Converters
-// ============================================================================
-
-/**
- * Convert ProjectRow (snake_case) to Project (camelCase)
- */
-function rowToProject(row: ProjectRow): Project {
-  return {
-    id: row.id,
-    name: row.name,
-    path: row.path,
-    description: row.description,
-    color: row.color,
-    icon: row.icon,
-    isActive: row.is_active === 1,
-    isFavorite: row.is_favorite === 1,
-    sortOrder: row.sort_order,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    lastOpenedAt: row.last_opened_at,
-    lastError: row.last_error,
-    lastSyncAt: row.last_sync_at,
-  };
-}
-
-/**
- * Convert BookmarkRow (snake_case) to Bookmark (camelCase)
- */
-function rowToBookmark(row: BookmarkRow): Bookmark {
-  return {
-    id: row.id,
-    projectId: row.project_id,
-    entityType: row.entity_type,
-    entityId: row.entity_id,
-    displayName: row.display_name,
-    notes: row.notes,
-    pinned: row.pinned === 1,
-    createdAt: row.created_at,
-  };
-}
-
-/**
- * Convert TagRow (snake_case) to Tag (camelCase)
- */
-function rowToTag(row: TagRow): Tag {
-  return {
-    id: row.id,
-    name: row.name,
-    color: row.color,
-    description: row.description,
-    createdAt: row.created_at,
-  };
-}
-
-/**
- * Convert EntityTagRow (snake_case) to EntityTag (camelCase)
- */
-function rowToEntityTag(row: EntityTagRow): EntityTag {
-  return {
-    tagId: row.tag_id,
-    projectId: row.project_id,
-    entityType: row.entity_type,
-    entityId: row.entity_id,
-    createdAt: row.created_at,
-  };
-}
-
-/**
- * Convert AnnotationRow (snake_case) to Annotation (camelCase)
- */
-function rowToAnnotation(row: AnnotationRow): Annotation {
-  return {
-    id: row.id,
-    projectId: row.project_id,
-    entityType: row.entity_type,
-    entityId: row.entity_id,
-    title: row.title,
-    content: row.content,
-    annotationType: row.annotation_type,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
 
 /**
  * Generate ID with prefix
  */
 function generateId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/**
+ * Get current ISO timestamp
+ */
+function now(): string {
+  return new Date().toISOString();
 }
 
 // ============================================================================
@@ -141,34 +47,43 @@ function generateId(prefix: string): string {
  */
 export function getProjects(filters?: ProjectFilters): Project[] {
   const db = getDb();
+  if (!db) return [];
 
-  try {
-    let query = "SELECT * FROM projects WHERE 1=1";
-    const params: unknown[] = [];
+  let query = db.select().from(schema.projects).$dynamic();
 
-    if (filters?.isActive !== undefined) {
-      query += " AND is_active = ?";
-      params.push(filters.isActive ? 1 : 0);
-    }
+  const conditions = [];
 
-    if (filters?.isFavorite !== undefined) {
-      query += " AND is_favorite = ?";
-      params.push(filters.isFavorite ? 1 : 0);
-    }
-
-    if (filters?.search) {
-      query += " AND (name LIKE ? OR description LIKE ?)";
-      const searchPattern = `%${filters.search}%`;
-      params.push(searchPattern, searchPattern);
-    }
-
-    query += " ORDER BY is_favorite DESC, sort_order ASC, name ASC";
-
-    const rows = db.prepare(query).all(...params) as ProjectRow[];
-    return rows.map(rowToProject);
-  } finally {
-    db.close();
+  if (filters?.isActive !== undefined) {
+    conditions.push(eq(schema.projects.isActive, filters.isActive));
   }
+
+  if (filters?.isFavorite !== undefined) {
+    conditions.push(eq(schema.projects.isFavorite, filters.isFavorite));
+  }
+
+  if (filters?.search) {
+    const searchPattern = `%${filters.search}%`;
+    conditions.push(
+      or(
+        like(schema.projects.name, searchPattern),
+        like(schema.projects.description, searchPattern)
+      )
+    );
+  }
+
+  if (conditions.length > 0) {
+    query = query.where(and(...conditions));
+  }
+
+  const rows = query
+    .orderBy(
+      desc(schema.projects.isFavorite),
+      asc(schema.projects.sortOrder),
+      asc(schema.projects.name)
+    )
+    .all();
+
+  return rows as Project[];
 }
 
 /**
@@ -176,16 +91,15 @@ export function getProjects(filters?: ProjectFilters): Project[] {
  */
 export function getProject(id: string): Project | null {
   const db = getDb();
+  if (!db) return null;
 
-  try {
-    const row = db
-      .prepare("SELECT * FROM projects WHERE id = ?")
-      .get(id) as ProjectRow | undefined;
+  const row = db
+    .select()
+    .from(schema.projects)
+    .where(eq(schema.projects.id, id))
+    .get();
 
-    return row ? rowToProject(row) : null;
-  } finally {
-    db.close();
-  }
+  return row as Project | null;
 }
 
 /**
@@ -193,36 +107,25 @@ export function getProject(id: string): Project | null {
  */
 export function createProject(input: CreateProjectInput): Project {
   const db = getDb();
+  if (!db) throw new Error("Database not available");
 
-  try {
-    const id = generateId("proj");
-    const now = new Date().toISOString();
+  const id = generateId("proj");
+  const timestamp = now();
 
-    db.prepare(`
-      INSERT INTO projects (
-        id, name, path, description, color, icon,
-        created_at, updated_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+  db.insert(schema.projects)
+    .values({
       id,
-      input.name,
-      input.path,
-      input.description ?? null,
-      input.color ?? "#6366f1",
-      input.icon ?? null,
-      now,
-      now
-    );
+      name: input.name,
+      path: input.path,
+      description: input.description ?? null,
+      color: input.color ?? "#6366f1",
+      icon: input.icon ?? null,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    })
+    .run();
 
-    const row = db
-      .prepare("SELECT * FROM projects WHERE id = ?")
-      .get(id) as ProjectRow;
-
-    return rowToProject(row);
-  } finally {
-    db.close();
-  }
+  return getProject(id)!;
 }
 
 /**
@@ -233,66 +136,35 @@ export function updateProject(
   input: UpdateProjectInput
 ): Project | null {
   const db = getDb();
+  if (!db) return null;
 
-  try {
-    const updates: string[] = [];
-    const params: unknown[] = [];
+  const updates: Partial<typeof schema.projects.$inferInsert> = {};
 
-    if (input.name !== undefined) {
-      updates.push("name = ?");
-      params.push(input.name);
-    }
+  if (input.name !== undefined) updates.name = input.name;
+  if (input.description !== undefined) updates.description = input.description;
+  if (input.color !== undefined) updates.color = input.color;
+  if (input.icon !== undefined) updates.icon = input.icon;
+  if (input.isActive !== undefined) updates.isActive = input.isActive;
+  if (input.isFavorite !== undefined) updates.isFavorite = input.isFavorite;
+  if (input.sortOrder !== undefined) updates.sortOrder = input.sortOrder;
 
-    if (input.description !== undefined) {
-      updates.push("description = ?");
-      params.push(input.description);
-    }
-
-    if (input.color !== undefined) {
-      updates.push("color = ?");
-      params.push(input.color);
-    }
-
-    if (input.icon !== undefined) {
-      updates.push("icon = ?");
-      params.push(input.icon);
-    }
-
-    if (input.isActive !== undefined) {
-      updates.push("is_active = ?");
-      params.push(input.isActive ? 1 : 0);
-    }
-
-    if (input.isFavorite !== undefined) {
-      updates.push("is_favorite = ?");
-      params.push(input.isFavorite ? 1 : 0);
-    }
-
-    if (input.sortOrder !== undefined) {
-      updates.push("sort_order = ?");
-      params.push(input.sortOrder);
-    }
-
-    if (updates.length === 0) {
-      return getProject(id);
-    }
-
-    updates.push("updated_at = ?");
-    params.push(new Date().toISOString());
-
-    params.push(id);
-
-    const query = `UPDATE projects SET ${updates.join(", ")} WHERE id = ?`;
-    const result = db.prepare(query).run(...params);
-
-    if (result.changes === 0) {
-      return null;
-    }
-
+  if (Object.keys(updates).length === 0) {
     return getProject(id);
-  } finally {
-    db.close();
   }
+
+  updates.updatedAt = now();
+
+  const result = db
+    .update(schema.projects)
+    .set(updates)
+    .where(eq(schema.projects.id, id))
+    .run();
+
+  if (result.changes === 0) {
+    return null;
+  }
+
+  return getProject(id);
 }
 
 /**
@@ -300,13 +172,14 @@ export function updateProject(
  */
 export function deleteProject(id: string): boolean {
   const db = getDb();
+  if (!db) return false;
 
-  try {
-    const result = db.prepare("DELETE FROM projects WHERE id = ?").run(id);
-    return result.changes > 0;
-  } finally {
-    db.close();
-  }
+  const result = db
+    .delete(schema.projects)
+    .where(eq(schema.projects.id, id))
+    .run();
+
+  return result.changes > 0;
 }
 
 // ============================================================================
@@ -318,33 +191,49 @@ export function deleteProject(id: string): boolean {
  */
 export function getBookmarks(filters?: BookmarkFilters): Bookmark[] {
   const db = getDb();
+  if (!db) return [];
 
-  try {
-    let query = "SELECT * FROM bookmarks WHERE 1=1";
-    const params: unknown[] = [];
+  let query = db.select().from(schema.bookmarks).$dynamic();
 
-    if (filters?.projectId) {
-      query += " AND project_id = ?";
-      params.push(filters.projectId);
-    }
+  const conditions = [];
 
-    if (filters?.entityType) {
-      query += " AND entity_type = ?";
-      params.push(filters.entityType);
-    }
-
-    if (filters?.pinned !== undefined) {
-      query += " AND pinned = ?";
-      params.push(filters.pinned ? 1 : 0);
-    }
-
-    query += " ORDER BY pinned DESC, created_at DESC";
-
-    const rows = db.prepare(query).all(...params) as BookmarkRow[];
-    return rows.map(rowToBookmark);
-  } finally {
-    db.close();
+  if (filters?.projectId) {
+    conditions.push(eq(schema.bookmarks.projectId, filters.projectId));
   }
+
+  if (filters?.entityType) {
+    conditions.push(eq(schema.bookmarks.entityType, filters.entityType as "session" | "workflow" | "agent_run" | "task"));
+  }
+
+  if (filters?.pinned !== undefined) {
+    conditions.push(eq(schema.bookmarks.pinned, filters.pinned));
+  }
+
+  if (conditions.length > 0) {
+    query = query.where(and(...conditions));
+  }
+
+  const rows = query
+    .orderBy(desc(schema.bookmarks.pinned), desc(schema.bookmarks.createdAt))
+    .all();
+
+  return rows as Bookmark[];
+}
+
+/**
+ * Get single bookmark by ID
+ */
+export function getBookmark(id: string): Bookmark | null {
+  const db = getDb();
+  if (!db) return null;
+
+  const row = db
+    .select()
+    .from(schema.bookmarks)
+    .where(eq(schema.bookmarks.id, id))
+    .get();
+
+  return row as Bookmark | null;
 }
 
 /**
@@ -352,36 +241,25 @@ export function getBookmarks(filters?: BookmarkFilters): Bookmark[] {
  */
 export function createBookmark(input: CreateBookmarkInput): Bookmark {
   const db = getDb();
+  if (!db) throw new Error("Database not available");
 
-  try {
-    const id = generateId("bm");
-    const now = new Date().toISOString();
+  const id = generateId("bm");
+  const timestamp = now();
 
-    db.prepare(`
-      INSERT INTO bookmarks (
-        id, project_id, entity_type, entity_id,
-        display_name, notes, pinned, created_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+  db.insert(schema.bookmarks)
+    .values({
       id,
-      input.projectId,
-      input.entityType,
-      input.entityId,
-      input.displayName ?? null,
-      input.notes ?? null,
-      input.pinned ? 1 : 0,
-      now
-    );
+      projectId: input.projectId,
+      entityType: input.entityType as "session" | "workflow" | "agent_run" | "task",
+      entityId: input.entityId,
+      displayName: input.displayName ?? null,
+      notes: input.notes ?? null,
+      pinned: input.pinned ?? false,
+      createdAt: timestamp,
+    })
+    .run();
 
-    const row = db
-      .prepare("SELECT * FROM bookmarks WHERE id = ?")
-      .get(id) as BookmarkRow;
-
-    return rowToBookmark(row);
-  } finally {
-    db.close();
-  }
+  return getBookmark(id)!;
 }
 
 /**
@@ -389,13 +267,14 @@ export function createBookmark(input: CreateBookmarkInput): Bookmark {
  */
 export function deleteBookmark(id: string): boolean {
   const db = getDb();
+  if (!db) return false;
 
-  try {
-    const result = db.prepare("DELETE FROM bookmarks WHERE id = ?").run(id);
-    return result.changes > 0;
-  } finally {
-    db.close();
-  }
+  const result = db
+    .delete(schema.bookmarks)
+    .where(eq(schema.bookmarks.id, id))
+    .run();
+
+  return result.changes > 0;
 }
 
 // ============================================================================
@@ -407,16 +286,15 @@ export function deleteBookmark(id: string): boolean {
  */
 export function getTags(): Tag[] {
   const db = getDb();
+  if (!db) return [];
 
-  try {
-    const rows = db
-      .prepare("SELECT * FROM tags ORDER BY name ASC")
-      .all() as TagRow[];
+  const rows = db
+    .select()
+    .from(schema.tags)
+    .orderBy(asc(schema.tags.name))
+    .all();
 
-    return rows.map(rowToTag);
-  } finally {
-    db.close();
-  }
+  return rows as Tag[];
 }
 
 /**
@@ -428,22 +306,29 @@ export function getEntityTags(
   entityId: string
 ): Tag[] {
   const db = getDb();
+  if (!db) return [];
 
-  try {
-    const rows = db.prepare(`
-      SELECT t.*
-      FROM tags t
-      INNER JOIN entity_tags et ON et.tag_id = t.id
-      WHERE et.project_id = ?
-        AND et.entity_type = ?
-        AND et.entity_id = ?
-      ORDER BY t.name ASC
-    `).all(projectId, entityType, entityId) as TagRow[];
+  const rows = db
+    .select({
+      id: schema.tags.id,
+      name: schema.tags.name,
+      color: schema.tags.color,
+      description: schema.tags.description,
+      createdAt: schema.tags.createdAt,
+    })
+    .from(schema.tags)
+    .innerJoin(schema.entityTags, eq(schema.entityTags.tagId, schema.tags.id))
+    .where(
+      and(
+        eq(schema.entityTags.projectId, projectId),
+        eq(schema.entityTags.entityType, entityType),
+        eq(schema.entityTags.entityId, entityId)
+      )
+    )
+    .orderBy(asc(schema.tags.name))
+    .all();
 
-    return rows.map(rowToTag);
-  } finally {
-    db.close();
-  }
+  return rows as Tag[];
 }
 
 /**
@@ -451,28 +336,28 @@ export function getEntityTags(
  */
 export function createTag(input: CreateTagInput): Tag {
   const db = getDb();
+  if (!db) throw new Error("Database not available");
 
-  try {
-    const id = generateId("tag");
-    const now = new Date().toISOString();
+  const id = generateId("tag");
+  const timestamp = now();
 
-    db.prepare(`
-      INSERT INTO tags (id, name, color, description, created_at)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(
+  db.insert(schema.tags)
+    .values({
       id,
-      input.name,
-      input.color ?? "#6366f1",
-      input.description ?? null,
-      now
-    );
+      name: input.name,
+      color: input.color ?? "#6366f1",
+      description: input.description ?? null,
+      createdAt: timestamp,
+    })
+    .run();
 
-    const row = db.prepare("SELECT * FROM tags WHERE id = ?").get(id) as TagRow;
+  const row = db
+    .select()
+    .from(schema.tags)
+    .where(eq(schema.tags.id, id))
+    .get();
 
-    return rowToTag(row);
-  } finally {
-    db.close();
-  }
+  return row as Tag;
 }
 
 /**
@@ -485,16 +370,21 @@ export function addTagToEntity(
   entityId: string
 ): boolean {
   const db = getDb();
+  if (!db) return false;
+
+  const timestamp = now();
 
   try {
-    const now = new Date().toISOString();
-
-    db.prepare(`
-      INSERT OR IGNORE INTO entity_tags (
-        tag_id, project_id, entity_type, entity_id, created_at
-      )
-      VALUES (?, ?, ?, ?, ?)
-    `).run(tagId, projectId, entityType, entityId, now);
+    db.insert(schema.entityTags)
+      .values({
+        tagId,
+        projectId,
+        entityType,
+        entityId,
+        createdAt: timestamp,
+      })
+      .onConflictDoNothing()
+      .run();
 
     return true;
   } catch (error) {
@@ -502,8 +392,6 @@ export function addTagToEntity(
       throw new Error("Tag or project not found");
     }
     throw error;
-  } finally {
-    db.close();
   }
 }
 
@@ -517,20 +405,21 @@ export function removeTagFromEntity(
   entityId: string
 ): boolean {
   const db = getDb();
+  if (!db) return false;
 
-  try {
-    const result = db.prepare(`
-      DELETE FROM entity_tags
-      WHERE tag_id = ?
-        AND project_id = ?
-        AND entity_type = ?
-        AND entity_id = ?
-    `).run(tagId, projectId, entityType, entityId);
+  const result = db
+    .delete(schema.entityTags)
+    .where(
+      and(
+        eq(schema.entityTags.tagId, tagId),
+        eq(schema.entityTags.projectId, projectId),
+        eq(schema.entityTags.entityType, entityType),
+        eq(schema.entityTags.entityId, entityId)
+      )
+    )
+    .run();
 
-    return result.changes > 0;
-  } finally {
-    db.close();
-  }
+  return result.changes > 0;
 }
 
 // ============================================================================
@@ -546,90 +435,81 @@ export function getAnnotation(
   entityId: string
 ): Annotation | null {
   const db = getDb();
+  if (!db) return null;
 
-  try {
-    const row = db.prepare(`
-      SELECT * FROM annotations
-      WHERE project_id = ?
-        AND entity_type = ?
-        AND entity_id = ?
-    `).get(projectId, entityType, entityId) as AnnotationRow | undefined;
+  const row = db
+    .select()
+    .from(schema.annotations)
+    .where(
+      and(
+        eq(schema.annotations.projectId, projectId),
+        eq(schema.annotations.entityType, entityType),
+        eq(schema.annotations.entityId, entityId)
+      )
+    )
+    .get();
 
-    return row ? rowToAnnotation(row) : null;
-  } finally {
-    db.close();
-  }
+  return row as Annotation | null;
 }
 
 /**
  * Create or update annotation
  */
-export function upsertAnnotation(
-  input: CreateAnnotationInput
-): Annotation {
+export function upsertAnnotation(input: CreateAnnotationInput): Annotation {
   const db = getDb();
+  if (!db) throw new Error("Database not available");
 
-  try {
-    const existing = getAnnotation(
-      input.projectId,
-      input.entityType,
-      input.entityId
-    );
+  const existing = getAnnotation(
+    input.projectId,
+    input.entityType,
+    input.entityId
+  );
 
-    const now = new Date().toISOString();
+  const timestamp = now();
 
-    if (existing) {
-      db.prepare(`
-        UPDATE annotations
-        SET title = ?,
-            content = ?,
-            annotation_type = ?,
-            updated_at = ?
-        WHERE project_id = ?
-          AND entity_type = ?
-          AND entity_id = ?
-      `).run(
-        input.title ?? null,
-        input.content ?? null,
-        input.annotationType ?? "note",
-        now,
-        input.projectId,
-        input.entityType,
-        input.entityId
-      );
-
-      return getAnnotation(input.projectId, input.entityType, input.entityId)!;
-    }
-
-    const id = generateId("ann");
-
-    db.prepare(`
-      INSERT INTO annotations (
-        id, project_id, entity_type, entity_id,
-        title, content, annotation_type,
-        created_at, updated_at
+  if (existing) {
+    db.update(schema.annotations)
+      .set({
+        title: input.title ?? null,
+        content: input.content ?? null,
+        annotationType: (input.annotationType ?? "note") as "note" | "warning" | "error" | "success",
+        updatedAt: timestamp,
+      })
+      .where(
+        and(
+          eq(schema.annotations.projectId, input.projectId),
+          eq(schema.annotations.entityType, input.entityType),
+          eq(schema.annotations.entityId, input.entityId)
+        )
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      id,
-      input.projectId,
-      input.entityType,
-      input.entityId,
-      input.title ?? null,
-      input.content ?? null,
-      input.annotationType ?? "note",
-      now,
-      now
-    );
+      .run();
 
-    const row = db
-      .prepare("SELECT * FROM annotations WHERE id = ?")
-      .get(id) as AnnotationRow;
-
-    return rowToAnnotation(row);
-  } finally {
-    db.close();
+    return getAnnotation(input.projectId, input.entityType, input.entityId)!;
   }
+
+  const id = generateId("ann");
+
+  db.insert(schema.annotations)
+    .values({
+      id,
+      projectId: input.projectId,
+      entityType: input.entityType,
+      entityId: input.entityId,
+      title: input.title ?? null,
+      content: input.content ?? null,
+      annotationType: (input.annotationType ?? "note") as "note" | "warning" | "error" | "success",
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    })
+    .run();
+
+  const row = db
+    .select()
+    .from(schema.annotations)
+    .where(eq(schema.annotations.id, id))
+    .get();
+
+  return row as Annotation;
 }
 
 /**
@@ -641,17 +521,18 @@ export function deleteAnnotation(
   entityId: string
 ): boolean {
   const db = getDb();
+  if (!db) return false;
 
-  try {
-    const result = db.prepare(`
-      DELETE FROM annotations
-      WHERE project_id = ?
-        AND entity_type = ?
-        AND entity_id = ?
-    `).run(projectId, entityType, entityId);
+  const result = db
+    .delete(schema.annotations)
+    .where(
+      and(
+        eq(schema.annotations.projectId, projectId),
+        eq(schema.annotations.entityType, entityType),
+        eq(schema.annotations.entityId, entityId)
+      )
+    )
+    .run();
 
-    return result.changes > 0;
-  } finally {
-    db.close();
-  }
+  return result.changes > 0;
 }
