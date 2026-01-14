@@ -3,7 +3,7 @@
  * CRUD operations using Drizzle ORM
  */
 
-import { eq, and, like, or, desc, asc, sql } from "drizzle-orm";
+import { eq, and, or, desc, asc, sql, like } from "@obora/database";
 import { getDb } from "./db";
 import * as schema from "./schema";
 import type {
