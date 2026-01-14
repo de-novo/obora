@@ -1,6 +1,16 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { getProjects, createProject } from "@/lib/queries";
-import type { ApiResponse, CreateProjectInput } from "@/lib/types";
+import type { ApiResponse } from "@/lib/types";
+
+// Zod 입력 검증 스키마
+const CreateProjectSchema = z.object({
+  name: z.string().min(1, "Name is required").max(100, "Name too long"),
+  path: z.string().min(1, "Path is required").max(500, "Path too long"),
+  description: z.string().max(1000).optional(),
+  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Invalid color format").optional(),
+  icon: z.string().optional(),
+});
 
 export async function GET(request: Request) {
   try {
@@ -37,14 +47,16 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json() as CreateProjectInput;
+    const body = await request.json();
 
-    if (!body.name || !body.path) {
+    // Zod 검증
+    const parsed = CreateProjectSchema.safeParse(body);
+    if (!parsed.success) {
       const response: ApiResponse<never> = {
         success: false,
         error: {
           code: "VALIDATION_ERROR",
-          message: "Name and path are required",
+          message: parsed.error.issues.map((e) => e.message).join(", "),
         },
         timestamp: new Date().toISOString(),
       };
@@ -52,7 +64,7 @@ export async function POST(request: Request) {
       return NextResponse.json(response, { status: 400 });
     }
 
-    const project = createProject(body);
+    const project = createProject(parsed.data);
 
     const response: ApiResponse<typeof project> = {
       success: true,

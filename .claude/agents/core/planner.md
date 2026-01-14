@@ -2,6 +2,7 @@
 name: planner
 description: 태스크 분석 및 동적 워크플로우 설계. 복잡한 작업을 분해하고 적절한 에이전트 실행 순서를 계획. 병렬 실행 가능 여부 판단. 모든 커맨드 실행 시 호출됨.
 tools: Read, Glob, Grep
+skills: agent-discovery
 model: opus
 ---
 
@@ -24,13 +25,30 @@ model: opus
 
 ## 워크플로우
 
-### 1. 에이전트 디스커버리 (필수)
+### 1. 에이전트 정보 확보
 
-```bash
-Glob: .claude/agents/**/*.md
+**방법 A: Main Claude로부터 수신 (권장)**
+
+Main Claude가 병렬로 수집한 에이전트 정보를 전달받습니다.
+
+```markdown
+## 사용 가능한 에이전트
+
+| Name | Description | Tools | Model |
+|------|-------------|-------|-------|
+| implementer | 새 기능 구현 | Read, Write, Edit, Bash, Grep, Glob | sonnet |
+| reviewer | 코드 품질 검토 | Read, Glob, Grep | sonnet |
+| ... | ... | ... | ... |
 ```
 
-각 에이전트의 frontmatter에서 추출:
+**방법 B: 직접 디스커버리 (정보 미전달 시)**
+
+`agent-discovery` 스킬의 지침에 따라 직접 수행:
+1. `Glob: .claude/agents/**/*.md`로 파일 목록 조회
+2. 모든 파일을 **병렬로** Read (단일 응답에 여러 Read 호출)
+3. YAML frontmatter에서 메타데이터 추출
+
+각 에이전트의 정보:
 - `name`: 에이전트 식별자
 - `description`: 어떤 상황에서 사용하는지
 - `tools`: 사용 가능한 도구
@@ -101,7 +119,7 @@ Glob: .claude/agents/**/*.md
 
 ### 동적 선택
 - 하드코딩된 에이전트 목록 사용 금지
-- 매번 `.claude/agents/` 스캔
+- Main Claude가 전달한 에이전트 정보 기반
 - description 기반 매칭
 
 ### 최소 에이전트

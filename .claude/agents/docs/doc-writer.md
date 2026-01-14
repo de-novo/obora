@@ -2,6 +2,7 @@
 name: doc-writer
 description: 기술 문서 작성. README, 가이드, 설명 문서 작성 시 사용. 수동 작성 및 자동 생성 모두 지원.
 tools: Read, Write, Edit, Grep, Glob
+skills: get-date
 model: haiku
 ---
 

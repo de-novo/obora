@@ -1,48 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { WorkflowListItem } from "@/app/components/WorkflowFlow";
-import type { Session, Workflow, ApiResponse } from "@/lib/types";
-
-interface SessionDetailData {
-  session: Session & { projectName: string; projectColor: string };
-  workflows: Workflow[];
-}
+import { fetchSession, queryKeys } from "@/lib/api";
 
 export default function SessionDetailPage() {
   const params = useParams();
   const sessionId = params.id as string;
 
-  const [data, setData] = useState<SessionDetailData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, isLoading, error } = useQuery({
+    queryKey: queryKeys.session(sessionId),
+    queryFn: () => fetchSession(sessionId),
+    enabled: !!sessionId,
+    refetchInterval: (query) => {
+      const session = query.state.data?.session;
+      return session?.status === "active" ? 3000 : false;
+    },
+  });
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const response = await fetch(`/api/sessions/${sessionId}`);
-        const result: ApiResponse<SessionDetailData> = await response.json();
-
-        if (result.success && result.data) {
-          setData(result.data);
-        } else {
-          setError(result.error?.message || "Failed to fetch session");
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Unknown error");
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    if (sessionId) {
-      fetchData();
-    }
-  }, [sessionId]);
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="p-8">
         <div className="mb-4 h-8 w-64 animate-pulse rounded bg-card" />
@@ -73,7 +51,7 @@ export default function SessionDetailPage() {
               d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
             />
           </svg>
-          <p className="text-muted-foreground">{error || "Session not found"}</p>
+          <p className="text-muted-foreground">{error?.message || "Session not found"}</p>
           <Link
             href="/"
             className="mt-4 inline-block rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"

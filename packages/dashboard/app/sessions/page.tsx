@@ -1,32 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import type { ApiResponse } from "@/lib/types";
-import type { SessionWithStats } from "@/lib/queries";
+import { fetchSessions, queryKeys } from "@/lib/api";
 
 export default function SessionsPage() {
-  const [sessions, setSessions] = useState<SessionWithStats[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: sessions = [], isLoading } = useQuery({
+    queryKey: queryKeys.sessions(),
+    queryFn: () => fetchSessions(),
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      const hasActive = data?.some((s) => s.status === "active");
+      return hasActive ? 3000 : false;
+    },
+  });
 
-  useEffect(() => {
-    async function fetchSessions() {
-      try {
-        const response = await fetch("/api/sessions");
-        const data: ApiResponse<SessionWithStats[]> = await response.json();
-        if (data.success && data.data) {
-          setSessions(data.data);
-        }
-      } catch {
-        // Ignore
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchSessions();
-  }, []);
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="canvas-grid h-full p-6">
         <div className="animate-pulse space-y-4">

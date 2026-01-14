@@ -106,8 +106,11 @@ export class WorkflowTracker {
           syncStatus: this.project.syncEnabled ? "pending" : "skipped",
         })
         .run();
-    } catch {
-      // 이벤트 기록 실패는 무시 (주요 동작에 영향 없음)
+    } catch (error) {
+      // 이벤트 기록 실패는 주요 동작에 영향 없음 - 디버그 로깅만 수행
+      if (process.env.DEBUG) {
+        console.debug("[tracker] sync event failed:", error);
+      }
     }
   }
 
@@ -163,6 +166,7 @@ export class WorkflowTracker {
     this.recordEvent("session.completed", "session", this.sessionId, {
       summary,
     });
+
   }
 
   /**
@@ -315,6 +319,7 @@ export class WorkflowTracker {
       output,
       tokensUsed: totalTokens,
     });
+
   }
 
   /**
@@ -365,6 +370,7 @@ export class WorkflowTracker {
     this.recordEvent("step.started", "step", stepId, {
       stepIndex,
     });
+
   }
 
   /**

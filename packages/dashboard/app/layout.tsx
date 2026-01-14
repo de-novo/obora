@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { Providers } from "./providers";
 import { IconSidebar } from "./components/IconSidebar";
 import { Header } from "./components/Header";
 
@@ -19,19 +20,21 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <div className="flex h-screen bg-background">
-          {/* Icon Sidebar */}
-          <IconSidebar />
+        <Providers>
+          <div className="flex h-screen bg-background">
+            {/* Icon Sidebar */}
+            <IconSidebar />
 
-          {/* Main Area */}
-          <div className="flex flex-1 flex-col overflow-hidden">
-            {/* Header */}
-            <Header />
+            {/* Main Area */}
+            <div className="flex flex-1 flex-col overflow-hidden">
+              {/* Header */}
+              <Header />
 
-            {/* Content */}
-            <main className="flex-1 overflow-auto">{children}</main>
+              {/* Content */}
+              <main className="flex-1 overflow-auto">{children}</main>
+            </div>
           </div>
-        </div>
+        </Providers>
       </body>
     </html>
   );

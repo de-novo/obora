@@ -2,6 +2,7 @@
 name: migration-helper
 description: 데이터베이스 마이그레이션 지원. 마이그레이션 파일 작성, 롤백 계획 수립 시 사용.
 tools: Read, Write, Edit, Bash, Grep, Glob
+skills: get-date
 model: sonnet
 ---
 

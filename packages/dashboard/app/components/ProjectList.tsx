@@ -1,36 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import type { Project, ApiResponse } from "@/lib/types";
+import { useQuery } from "@tanstack/react-query";
+import { fetchProjects, queryKeys } from "@/lib/api";
 import { ProjectCard } from "./ProjectCard";
 
 export function ProjectList() {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data: projects = [], isLoading, error } = useQuery({
+    queryKey: queryKeys.projects,
+    queryFn: fetchProjects,
+    refetchInterval: 30000, // 30초마다 갱신
+  });
 
-  useEffect(() => {
-    async function fetchProjects() {
-      try {
-        const response = await fetch("/api/projects");
-        const data: ApiResponse<Project[]> = await response.json();
-
-        if (data.success && data.data) {
-          setProjects(data.data);
-        } else {
-          setError(data.error?.message || "Failed to fetch projects");
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Unknown error");
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchProjects();
-  }, []);
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         {[...Array(6)].map((_, i) => (
@@ -46,7 +27,7 @@ export function ProjectList() {
   if (error) {
     return (
       <div className="rounded-lg border border-red-700 bg-red-900/20 p-6 text-center">
-        <p className="text-red-400">{error}</p>
+        <p className="text-red-400">{error.message}</p>
         <button
           onClick={() => window.location.reload()}
           className="mt-4 rounded bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700"

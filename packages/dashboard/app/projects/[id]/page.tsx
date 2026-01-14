@@ -1,54 +1,32 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import type { Project, ApiResponse } from "@/lib/types";
-import type { SessionWithStats } from "@/lib/queries";
+import { fetchProject, fetchSessions, queryKeys } from "@/lib/api";
 
 export default function ProjectDetailPage() {
   const params = useParams();
   const projectId = params.id as string;
 
-  const [project, setProject] = useState<Project | null>(null);
-  const [sessions, setSessions] = useState<SessionWithStats[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data: project, isLoading: projectLoading, error: projectError } = useQuery({
+    queryKey: queryKeys.project(projectId),
+    queryFn: () => fetchProject(projectId),
+    enabled: !!projectId,
+  });
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const [projectRes, sessionsRes] = await Promise.all([
-          fetch(`/api/projects/${projectId}`),
-          fetch(`/api/sessions?projectId=${projectId}`),
-        ]);
+  const { data: sessions = [] } = useQuery({
+    queryKey: queryKeys.sessions(projectId),
+    queryFn: () => fetchSessions(projectId),
+    enabled: !!projectId,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      const hasActive = data?.some((s) => s.status === "active");
+      return hasActive ? 3000 : false;
+    },
+  });
 
-        const projectData: ApiResponse<Project> = await projectRes.json();
-        const sessionsData: ApiResponse<SessionWithStats[]> = await sessionsRes.json();
-
-        if (projectData.success && projectData.data) {
-          setProject(projectData.data);
-        } else {
-          setError(projectData.error?.message || "Failed to fetch project");
-          return;
-        }
-
-        if (sessionsData.success && sessionsData.data) {
-          setSessions(sessionsData.data);
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Unknown error");
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    if (projectId) {
-      fetchData();
-    }
-  }, [projectId]);
-
-  if (loading) {
+  if (projectLoading) {
     return (
       <div className="p-8">
         <div className="mb-4 h-8 w-64 animate-pulse rounded bg-card" />
@@ -62,7 +40,7 @@ export default function ProjectDetailPage() {
     );
   }
 
-  if (error || !project) {
+  if (projectError || !project) {
     return (
       <div className="flex h-full items-center justify-center p-8">
         <div className="max-w-md rounded-lg bg-card p-6 text-center">
@@ -79,7 +57,7 @@ export default function ProjectDetailPage() {
               d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
             />
           </svg>
-          <p className="text-muted-foreground">{error || "Project not found"}</p>
+          <p className="text-muted-foreground">{projectError?.message || "Project not found"}</p>
           <Link
             href="/"
             className="mt-4 inline-block rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"

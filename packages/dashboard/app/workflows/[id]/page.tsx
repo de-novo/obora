@@ -1,51 +1,33 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { WorkflowFlow } from "@/app/components/WorkflowFlow";
 import { MarkdownView } from "@/app/components/MarkdownView";
-import type { Workflow, WorkflowStep, AgentRun, ApiResponse } from "@/lib/types";
-
-interface WorkflowWithDetails extends Workflow {
-  steps: WorkflowStep[];
-  agentRuns: AgentRun[];
-}
+import { fetchWorkflow, queryKeys } from "@/lib/api";
+import type { WorkflowStep } from "@/lib/types";
 
 export default function WorkflowDetailPage() {
   const params = useParams();
   const workflowId = params.id as string;
 
-  const [workflow, setWorkflow] = useState<WorkflowWithDetails | null>(null);
   const [selectedStep, setSelectedStep] = useState<WorkflowStep | null>(null);
   const [showInfo, setShowInfo] = useState(true);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const response = await fetch(`/api/workflows/${workflowId}`);
-        const result: ApiResponse<WorkflowWithDetails> = await response.json();
+  const { data: workflow, isLoading, error } = useQuery({
+    queryKey: queryKeys.workflow(workflowId),
+    queryFn: () => fetchWorkflow(workflowId),
+    enabled: !!workflowId,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      const isRunning = data?.status === "running" || data?.status === "planning";
+      return isRunning ? 2000 : false;
+    },
+  });
 
-        if (result.success && result.data) {
-          setWorkflow(result.data);
-        } else {
-          setError(result.error?.message || "Failed to fetch workflow");
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Unknown error");
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    if (workflowId) {
-      fetchData();
-    }
-  }, [workflowId]);
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -70,7 +52,7 @@ export default function WorkflowDetailPage() {
               d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
             />
           </svg>
-          <p className="text-muted-foreground">{error || "Workflow not found"}</p>
+          <p className="text-muted-foreground">{error?.message || "Workflow not found"}</p>
           <Link
             href="/"
             className="mt-4 inline-block rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
@@ -258,7 +240,7 @@ export default function WorkflowDetailPage() {
                           {relatedRun.tokensUsed.toLocaleString()} tokens
                         </span>
                       )}
-                      {relatedRun.toolCallCount > 0 && (
+                      {relatedRun.toolCallCount != null && relatedRun.toolCallCount > 0 && (
                         <span className="text-xs text-muted-foreground">
                           {relatedRun.toolCallCount} tools
                         </span>
