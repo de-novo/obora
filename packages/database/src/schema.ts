@@ -171,6 +171,15 @@ export const workflowSteps = sqliteTable(
 // Agent Runs
 // ============================================================================
 
+// Tool call detail for agent runs
+interface ToolCallDetail {
+  toolName: string;
+  input: Record<string, unknown>;
+  output?: unknown;
+  duration?: number;
+  error?: string;
+}
+
 export const agentRuns = sqliteTable(
   "agent_runs",
   {
@@ -187,20 +196,44 @@ export const agentRuns = sqliteTable(
     })
       .notNull()
       .default("running"),
+
+    // ======== Model & Prompt Info ========
+    model: text("model"), // sonnet, opus, haiku, etc.
+    prompt: text("prompt"), // The task/prompt given to the agent
+    systemPrompt: text("system_prompt"), // System prompt if any
+
+    // ======== Execution Details ========
     startedAt: integer("started_at", { mode: "timestamp" })
       .notNull()
       .$defaultFn(() => new Date()),
     endedAt: integer("ended_at", { mode: "timestamp" }),
+
+    // ======== Token Usage ========
     tokensUsed: integer("tokens_used").notNull().default(0),
+    inputTokens: integer("input_tokens").default(0),
+    outputTokens: integer("output_tokens").default(0),
+
+    // ======== Tool Calls (Detailed) ========
     toolsCalled: text("tools_called", { mode: "json" }).$type<string[]>(),
+    toolCallDetails: text("tool_call_details", { mode: "json" }).$type<ToolCallDetail[]>(),
+
+    // ======== Output ========
     result: text("result", { mode: "json" }).$type<Record<string, unknown>>(),
+    output: text("output"), // Raw text output
     error: text("error"),
+
+    // ======== Real-time Tracking ========
+    currentTool: text("current_tool"), // Currently executing tool name
+    currentToolInput: text("current_tool_input", { mode: "json" }).$type<Record<string, unknown>>(), // Current tool input (brief)
+    toolCallCount: integer("tool_call_count").default(0), // Number of tools called so far
+    lastStreamUpdate: integer("last_stream_update", { mode: "timestamp" }),
   },
   (table) => [
     index("idx_agent_runs_session").on(table.sessionId),
     index("idx_agent_runs_step").on(table.workflowStepId),
     index("idx_agent_runs_type").on(table.agentType),
     index("idx_agent_runs_status").on(table.status),
+    index("idx_agent_runs_model").on(table.model),
   ]
 );
 
@@ -486,6 +519,7 @@ export type NewWorkflowStep = typeof workflowSteps.$inferInsert;
 // Agent Runs
 export type AgentRun = typeof agentRuns.$inferSelect;
 export type NewAgentRun = typeof agentRuns.$inferInsert;
+export type { ToolCallDetail };
 
 // Tasks
 export type Task = typeof tasks.$inferSelect;

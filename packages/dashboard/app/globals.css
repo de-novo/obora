@@ -1,1 +1,219 @@
 @import "tailwindcss";
+
+/* Obora Theme - Tailwind v4 */
+@theme {
+  /* Colors */
+  --color-background: #09090b;
+  --color-foreground: #fafafa;
+
+  --color-card: #121215;
+  --color-card-foreground: #fafafa;
+
+  --color-primary: #f59e0b;
+  --color-primary-foreground: #000000;
+
+  --color-secondary: #1a1a1a;
+  --color-secondary-foreground: #a1a1aa;
+
+  --color-muted: #18181b;
+  --color-muted-foreground: #71717a;
+
+  --color-accent: #f59e0b;
+  --color-accent-foreground: #000000;
+
+  --color-destructive: #f43f5e;
+  --color-destructive-foreground: #fafafa;
+
+  --color-border: #27272a;
+  --color-input: #27272a;
+  --color-ring: #f59e0b;
+
+  /* Status colors */
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-error: #f43f5e;
+  --color-info: #0ea5e9;
+
+  /* Radius */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+
+  /* Flow Graph - 4x grid system */
+  --spacing-grid: 1.5rem;      /* 24px */
+  --width-flow-node: 11rem;    /* 176px = 44 * 4 */
+  --width-flow-edge: 3rem;     /* 48px */
+  --height-flow-edge: 1.5rem;  /* 24px */
+}
+
+/* Base */
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+
+/* Canvas grid background */
+.canvas-grid {
+  background-color: var(--color-background);
+  background-image: radial-gradient(circle, var(--color-border) 1px, transparent 1px);
+  background-size: var(--spacing-grid) var(--spacing-grid);
+}
+
+/* Flow node */
+.flow-node {
+  width: var(--width-flow-node);
+}
+
+/* Flow edge */
+.flow-edge {
+  width: var(--width-flow-edge);
+  height: var(--height-flow-edge);
+}
+
+/* Animations */
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes dash-flow {
+  to {
+    stroke-dashoffset: -12;
+  }
+}
+
+.animate-dash {
+  animation: dash-flow 0.5s linear infinite;
+}
+
+/* React Flow Dark Theme Overrides */
+.react-flow {
+  background-color: var(--color-background);
+}
+
+.react-flow__background {
+  background-color: var(--color-background);
+}
+
+/* Node wrapper - ensure no white background */
+.react-flow__node {
+  background: transparent;
+}
+
+.react-flow__node-default,
+.react-flow__node-input,
+.react-flow__node-output,
+.react-flow__node-group {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+/* Pane and viewport */
+.react-flow__pane,
+.react-flow__viewport {
+  background: transparent;
+}
+
+/* Controls */
+.react-flow__controls {
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3);
+}
+
+.react-flow__controls-button {
+  background-color: var(--color-card);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-muted-foreground);
+  width: 28px;
+  height: 28px;
+}
+
+.react-flow__controls-button:hover {
+  background-color: var(--color-muted);
+  color: var(--color-foreground);
+}
+
+.react-flow__controls-button:last-child {
+  border-bottom: none;
+}
+
+.react-flow__controls-button svg {
+  fill: currentColor;
+}
+
+/* Edges */
+.react-flow__edge-path {
+  stroke: var(--color-border);
+  stroke-width: 2;
+}
+
+.react-flow__edge.animated path {
+  stroke-dasharray: 5;
+  animation: dash-flow 0.5s linear infinite;
+}
+
+/* Edge markers */
+.react-flow__arrowhead polyline {
+  stroke: var(--color-border);
+  fill: none;
+}
+
+/* Edge labels */
+.react-flow__edge-textbg {
+  fill: var(--color-card) !important;
+}
+
+.react-flow__edge-text {
+  fill: var(--color-muted-foreground);
+}
+
+/* Marker definitions - ensure no white backgrounds */
+.react-flow__marker {
+  fill: currentColor;
+}
+
+.react-flow__marker path {
+  fill: inherit;
+}
+
+/* Handles */
+.react-flow__handle {
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--color-background);
+}
+
+/* Selection */
+.react-flow__node.selected {
+  box-shadow: 0 0 0 2px var(--color-primary);
+}
+
+/* Attribution hidden */
+.react-flow__attribution {
+  display: none;
+}

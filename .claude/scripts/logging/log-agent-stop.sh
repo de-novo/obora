@@ -1,76 +1,132 @@
 #!/bin/bash
-# 에이전트 종료 로깅
+# 에이전트 종료 로깅 + Transcript 파싱
 # Hook: SubagentStop
 # Input (stdin): JSON with agent result
-
-# set -e 제거 - 중간 실패해도 계속 진행
+# Target: ~/.obora/dashboard.db
+#
+# 역할:
+#   - 상태 업데이트 (completed/failed)
+#   - Transcript 파싱하여 tool_call_details 추출
+#   - 누락된 정보 보완
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEBUG_LOG="${SCRIPT_DIR}/../../logs/hook-debug.log"
+mkdir -p "$(dirname "$DEBUG_LOG")"
 
-# DB 경로 직접 설정
-DB_PATH="${SCRIPT_DIR}/../../logs/agents.db"
+DB_PATH="${HOME}/.obora/dashboard.db"
 
 # stdin에서 JSON 읽기
 INPUT=$(cat)
 
-# JSON 파싱
-AGENT_NAME=$(echo "$INPUT" | jq -r '.agent_name // .subagent_type // "unknown"')
-RUN_ID=$(echo "$INPUT" | jq -r '.agent_id // ""')
-STATUS=$(echo "$INPUT" | jq -r '.status // "completed"')
-OUTPUT=$(echo "$INPUT" | jq -r '.output // .result // ""' | head -c 1000)  # 최대 1000자
-ERROR=$(echo "$INPUT" | jq -r '.error // ""')
+# 디버그 로깅
+echo "=== SubagentStop $(date) ===" >> "$DEBUG_LOG"
+echo "$INPUT" >> "$DEBUG_LOG"
 
-# 상태 매핑
-case "$STATUS" in
-  "success"|"done"|"") STATUS="completed" ;;
-  "error"|"exception") STATUS="failed" ;;
-  *) STATUS="$STATUS" ;;
-esac
-
-# 실행 기록 업데이트
-if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
-  # 특정 RUN_ID 업데이트
-  sqlite3 "$DB_PATH" <<EOF
-UPDATE agent_runs
-SET
-  status = '$STATUS',
-  ended_at = datetime('now'),
-  duration_ms = CAST((julianday('now') - julianday(started_at)) * 86400000 AS INTEGER),
-  output_summary = '$(echo "$OUTPUT" | sed "s/'/''/g")',
-  error_message = $([ -n "$ERROR" ] && [ "$ERROR" != "null" ] && echo "'$(echo "$ERROR" | sed "s/'/''/g")'" || echo "NULL")
-WHERE id = '$RUN_ID';
-EOF
-else
-  # 가장 최근 running 상태의 해당 에이전트 업데이트
-  sqlite3 "$DB_PATH" <<EOF
-UPDATE agent_runs
-SET
-  status = '$STATUS',
-  ended_at = datetime('now'),
-  duration_ms = CAST((julianday('now') - julianday(started_at)) * 86400000 AS INTEGER),
-  output_summary = '$(echo "$OUTPUT" | sed "s/'/''/g")',
-  error_message = $([ -n "$ERROR" ] && [ "$ERROR" != "null" ] && echo "'$(echo "$ERROR" | sed "s/'/''/g")'" || echo "NULL")
-WHERE agent_name = '$AGENT_NAME'
-  AND status = 'running'
-  AND id = (SELECT id FROM agent_runs WHERE agent_name = '$AGENT_NAME' AND status = 'running' ORDER BY started_at DESC LIMIT 1);
-EOF
+# DB 존재 확인
+if [ ! -f "$DB_PATH" ]; then
+  echo "Dashboard DB not found: $DB_PATH" >> "$DEBUG_LOG"
+  exit 0
 fi
 
-# 에이전트 통계 업데이트
-sqlite3 "$DB_PATH" <<EOF
-UPDATE agent_registry
-SET
-  avg_duration_ms = (
-    SELECT ROUND(AVG(duration_ms))
-    FROM agent_runs
-    WHERE agent_name = '$AGENT_NAME' AND duration_ms IS NOT NULL
-  ),
-  success_rate = (
-    SELECT ROUND(100.0 * SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) / COUNT(*), 2)
-    FROM agent_runs
-    WHERE agent_name = '$AGENT_NAME'
-  )
-WHERE name = '$AGENT_NAME';
-EOF
+# JSON 파싱
+AGENT_TYPE=$(echo "$INPUT" | jq -r '.agent_type // .subagent_type // .agent_name // "unknown"')
+RUN_ID=$(echo "$INPUT" | jq -r '.agent_id // ""')
+TRANSCRIPT_PATH=$(echo "$INPUT" | jq -r '.agent_transcript_path // ""')
 
-echo "Agent $AGENT_NAME completed with status: $STATUS"
+TIMESTAMP=$(date +%s)
+
+echo "AGENT_TYPE: $AGENT_TYPE, RUN_ID: $RUN_ID, TRANSCRIPT: $TRANSCRIPT_PATH" >> "$DEBUG_LOG"
+
+# ============================================================================
+# Transcript 파싱 - tool_call_details 추출
+# ============================================================================
+TOOL_CALLS="[]"
+TOOLS_CALLED="[]"
+
+if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
+  echo "Parsing transcript: $TRANSCRIPT_PATH" >> "$DEBUG_LOG"
+
+  # JSONL에서 tool_use 항목 추출
+  # message.content가 배열인 경우만 처리 (문자열인 경우 스킵)
+  TOOL_CALLS=$(cat "$TRANSCRIPT_PATH" | jq -s '
+    [.[] |
+      select(.message.content | type == "array") |
+      .message.content[] |
+      select(.type == "tool_use") |
+      {
+        toolName: .name,
+        input: .input
+      }
+    ]
+  ' 2>/dev/null || echo "[]")
+
+  # 도구 이름 목록 추출
+  TOOLS_CALLED=$(echo "$TOOL_CALLS" | jq -c '[.[].toolName] | unique' 2>/dev/null || echo "[]")
+
+  echo "Extracted tool calls: $(echo "$TOOL_CALLS" | jq -c 'length')" >> "$DEBUG_LOG"
+  echo "Tools called: $TOOLS_CALLED" >> "$DEBUG_LOG"
+fi
+
+# ============================================================================
+# DB 업데이트
+# ============================================================================
+if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
+  # 현재 상태 확인 (PostToolUse에서 이미 업데이트했을 수 있음)
+  CURRENT_STATUS=$(sqlite3 "$DB_PATH" "SELECT status FROM agent_runs WHERE id = '$RUN_ID';" 2>/dev/null)
+
+  echo "Current status for $RUN_ID: $CURRENT_STATUS" >> "$DEBUG_LOG"
+
+  # tool_call_details 업데이트 (transcript에서 추출한 정보)
+  if [ "$TOOL_CALLS" != "[]" ]; then
+    sqlite3 "$DB_PATH" <<EOF 2>> "$DEBUG_LOG"
+UPDATE agent_runs
+SET
+  tools_called = '$(echo "$TOOLS_CALLED" | sed "s/'/''/g")',
+  tool_call_details = '$(echo "$TOOL_CALLS" | sed "s/'/''/g")',
+  current_tool = NULL,
+  last_stream_update = $TIMESTAMP
+WHERE id = '$RUN_ID';
+EOF
+    echo "Tool details update result: $?" >> "$DEBUG_LOG"
+  fi
+
+  # 상태가 running 또는 async_launched이면 completed로 변경
+  if [ "$CURRENT_STATUS" = "running" ] || [ "$CURRENT_STATUS" = "async_launched" ]; then
+    sqlite3 "$DB_PATH" <<EOF 2>> "$DEBUG_LOG"
+UPDATE agent_runs
+SET
+  status = 'completed',
+  ended_at = $TIMESTAMP,
+  current_tool = NULL,
+  last_stream_update = $TIMESTAMP
+WHERE id = '$RUN_ID' AND status = 'running';
+EOF
+    echo "Status update result: $?" >> "$DEBUG_LOG"
+  fi
+
+else
+  # RUN_ID가 없으면 가장 최근 running 상태의 해당 에이전트 업데이트
+  echo "No RUN_ID, updating most recent running agent of type: $AGENT_TYPE" >> "$DEBUG_LOG"
+
+  sqlite3 "$DB_PATH" <<EOF 2>> "$DEBUG_LOG"
+UPDATE agent_runs
+SET
+  status = 'completed',
+  ended_at = $TIMESTAMP,
+  tools_called = '$(echo "$TOOLS_CALLED" | sed "s/'/''/g")',
+  tool_call_details = '$(echo "$TOOL_CALLS" | sed "s/'/''/g")',
+  current_tool = NULL,
+  last_stream_update = $TIMESTAMP
+WHERE agent_type = '$AGENT_TYPE'
+  AND status = 'running'
+  AND id = (
+    SELECT id FROM agent_runs
+    WHERE agent_type = '$AGENT_TYPE' AND status = 'running'
+    ORDER BY started_at DESC LIMIT 1
+  );
+EOF
+  echo "Fallback update result: $?" >> "$DEBUG_LOG"
+fi
+
+echo "" >> "$DEBUG_LOG"
+echo "Agent $AGENT_TYPE completed"

@@ -3,10 +3,19 @@
  * CRUD operations using Drizzle ORM
  */
 
-import { eq, and, or, desc, asc, like } from "@obora/database";
+import { eq, and, or, desc, asc, like, count, sql } from "@obora/database";
 import { getDb } from "./db";
 import * as schema from "./schema";
-import type { Project, Bookmark, Tag, Annotation } from "./schema";
+import type {
+  Project,
+  Bookmark,
+  Tag,
+  Annotation,
+  Session,
+  Workflow,
+  WorkflowStep,
+  AgentRun,
+} from "./schema";
 import type {
   CreateProjectInput,
   UpdateProjectInput,
@@ -505,4 +514,382 @@ export function deleteAnnotation(
     .run();
 
   return result.changes > 0;
+}
+
+// ============================================================================
+// Sessions
+// ============================================================================
+
+/**
+ * Session with workflow count and stats
+ */
+export interface SessionWithStats extends Session {
+  workflowCount: number;
+  projectName: string;
+}
+
+/**
+ * Get sessions for a project
+ */
+export function getProjectSessions(projectId: string): SessionWithStats[] {
+  const db = getDb();
+  if (!db) return [];
+
+  const rows = db
+    .select({
+      id: schema.sessions.id,
+      projectId: schema.sessions.projectId,
+      status: schema.sessions.status,
+      startedAt: schema.sessions.startedAt,
+      endedAt: schema.sessions.endedAt,
+      totalTokens: schema.sessions.totalTokens,
+      summary: schema.sessions.summary,
+      metadata: schema.sessions.metadata,
+      projectName: schema.projects.name,
+      workflowCount: sql<number>`(SELECT COUNT(*) FROM ${schema.workflows} WHERE ${schema.workflows.sessionId} = ${schema.sessions.id})`,
+    })
+    .from(schema.sessions)
+    .innerJoin(schema.projects, eq(schema.projects.id, schema.sessions.projectId))
+    .where(eq(schema.sessions.projectId, projectId))
+    .orderBy(desc(schema.sessions.startedAt))
+    .all();
+
+  return rows as SessionWithStats[];
+}
+
+/**
+ * Get all sessions with stats (across all projects)
+ */
+export function getAllSessions(limit = 50): SessionWithStats[] {
+  const db = getDb();
+  if (!db) return [];
+
+  const rows = db
+    .select({
+      id: schema.sessions.id,
+      projectId: schema.sessions.projectId,
+      status: schema.sessions.status,
+      startedAt: schema.sessions.startedAt,
+      endedAt: schema.sessions.endedAt,
+      totalTokens: schema.sessions.totalTokens,
+      summary: schema.sessions.summary,
+      metadata: schema.sessions.metadata,
+      projectName: schema.projects.name,
+      workflowCount: sql<number>`(SELECT COUNT(*) FROM ${schema.workflows} WHERE ${schema.workflows.sessionId} = ${schema.sessions.id})`,
+    })
+    .from(schema.sessions)
+    .innerJoin(schema.projects, eq(schema.projects.id, schema.sessions.projectId))
+    .orderBy(desc(schema.sessions.startedAt))
+    .limit(limit)
+    .all();
+
+  return rows as SessionWithStats[];
+}
+
+/**
+ * Get single session by ID
+ */
+export function getSession(id: string): Session | null {
+  const db = getDb();
+  if (!db) return null;
+
+  const row = db
+    .select()
+    .from(schema.sessions)
+    .where(eq(schema.sessions.id, id))
+    .get();
+
+  return row as Session | null;
+}
+
+/**
+ * Get session with project info
+ */
+export function getSessionWithProject(id: string): (Session & { projectName: string; projectColor: string }) | null {
+  const db = getDb();
+  if (!db) return null;
+
+  const row = db
+    .select({
+      id: schema.sessions.id,
+      projectId: schema.sessions.projectId,
+      status: schema.sessions.status,
+      startedAt: schema.sessions.startedAt,
+      endedAt: schema.sessions.endedAt,
+      totalTokens: schema.sessions.totalTokens,
+      summary: schema.sessions.summary,
+      metadata: schema.sessions.metadata,
+      projectName: schema.projects.name,
+      projectColor: schema.projects.color,
+    })
+    .from(schema.sessions)
+    .innerJoin(schema.projects, eq(schema.projects.id, schema.sessions.projectId))
+    .where(eq(schema.sessions.id, id))
+    .get();
+
+  return row as (Session & { projectName: string; projectColor: string }) | null;
+}
+
+// ============================================================================
+// Workflows
+// ============================================================================
+
+/**
+ * Workflow with steps
+ */
+export interface WorkflowWithSteps extends Workflow {
+  steps: WorkflowStep[];
+  agentRuns: AgentRun[];
+}
+
+/**
+ * Workflow summary for lists
+ */
+export interface WorkflowSummary {
+  id: string;
+  name: string;
+  type: string;
+  status: string;
+  startedAt: Date | null;
+  endedAt: Date | null;
+  tokensUsed: number;
+  stepCount: number;
+  sessionId: string;
+  projectId: string;
+  projectName: string;
+  projectColor: string;
+}
+
+/**
+ * Get workflows for a session
+ */
+export function getSessionWorkflows(sessionId: string): Workflow[] {
+  const db = getDb();
+  if (!db) return [];
+
+  const rows = db
+    .select()
+    .from(schema.workflows)
+    .where(eq(schema.workflows.sessionId, sessionId))
+    .orderBy(asc(schema.workflows.startedAt))
+    .all();
+
+  return rows as Workflow[];
+}
+
+/**
+ * Get single workflow by ID
+ */
+export function getWorkflow(id: string): Workflow | null {
+  const db = getDb();
+  if (!db) return null;
+
+  const row = db
+    .select()
+    .from(schema.workflows)
+    .where(eq(schema.workflows.id, id))
+    .get();
+
+  return row as Workflow | null;
+}
+
+/**
+ * Get workflow with all details (steps and agent runs)
+ */
+export function getWorkflowWithDetails(id: string): WorkflowWithSteps | null {
+  const db = getDb();
+  if (!db) return null;
+
+  const workflow = getWorkflow(id);
+  if (!workflow) return null;
+
+  const steps = db
+    .select()
+    .from(schema.workflowSteps)
+    .where(eq(schema.workflowSteps.workflowId, id))
+    .orderBy(asc(schema.workflowSteps.stepNumber))
+    .all() as WorkflowStep[];
+
+  const agentRuns = db
+    .select()
+    .from(schema.agentRuns)
+    .where(eq(schema.agentRuns.sessionId, workflow.sessionId))
+    .orderBy(asc(schema.agentRuns.startedAt))
+    .all() as AgentRun[];
+
+  return {
+    ...workflow,
+    steps,
+    agentRuns,
+  };
+}
+
+/**
+ * Get recent workflows across all projects
+ */
+export function getRecentWorkflows(limit = 20): WorkflowSummary[] {
+  const db = getDb();
+  if (!db) return [];
+
+  const rows = db
+    .select({
+      id: schema.workflows.id,
+      name: schema.workflows.name,
+      type: schema.workflows.type,
+      status: schema.workflows.status,
+      startedAt: schema.workflows.startedAt,
+      endedAt: schema.workflows.endedAt,
+      tokensUsed: schema.workflows.tokensUsed,
+      sessionId: schema.workflows.sessionId,
+      projectId: schema.sessions.projectId,
+      projectName: schema.projects.name,
+      projectColor: schema.projects.color,
+      stepCount: sql<number>`(SELECT COUNT(*) FROM ${schema.workflowSteps} WHERE ${schema.workflowSteps.workflowId} = ${schema.workflows.id})`,
+    })
+    .from(schema.workflows)
+    .innerJoin(schema.sessions, eq(schema.sessions.id, schema.workflows.sessionId))
+    .innerJoin(schema.projects, eq(schema.projects.id, schema.sessions.projectId))
+    .orderBy(desc(schema.workflows.startedAt))
+    .limit(limit)
+    .all();
+
+  return rows as WorkflowSummary[];
+}
+
+// ============================================================================
+// Workflow Steps
+// ============================================================================
+
+/**
+ * Get steps for a workflow
+ */
+export function getWorkflowSteps(workflowId: string): WorkflowStep[] {
+  const db = getDb();
+  if (!db) return [];
+
+  const rows = db
+    .select()
+    .from(schema.workflowSteps)
+    .where(eq(schema.workflowSteps.workflowId, workflowId))
+    .orderBy(asc(schema.workflowSteps.stepNumber))
+    .all();
+
+  return rows as WorkflowStep[];
+}
+
+/**
+ * Get single step by ID
+ */
+export function getWorkflowStep(id: string): WorkflowStep | null {
+  const db = getDb();
+  if (!db) return null;
+
+  const row = db
+    .select()
+    .from(schema.workflowSteps)
+    .where(eq(schema.workflowSteps.id, id))
+    .get();
+
+  return row as WorkflowStep | null;
+}
+
+// ============================================================================
+// Agent Runs
+// ============================================================================
+
+/**
+ * Get agent runs for a session
+ */
+export function getSessionAgentRuns(sessionId: string): AgentRun[] {
+  const db = getDb();
+  if (!db) return [];
+
+  const rows = db
+    .select()
+    .from(schema.agentRuns)
+    .where(eq(schema.agentRuns.sessionId, sessionId))
+    .orderBy(asc(schema.agentRuns.startedAt))
+    .all();
+
+  return rows as AgentRun[];
+}
+
+/**
+ * Get agent runs for a step
+ */
+export function getStepAgentRuns(stepId: string): AgentRun[] {
+  const db = getDb();
+  if (!db) return [];
+
+  const rows = db
+    .select()
+    .from(schema.agentRuns)
+    .where(eq(schema.agentRuns.workflowStepId, stepId))
+    .orderBy(asc(schema.agentRuns.startedAt))
+    .all();
+
+  return rows as AgentRun[];
+}
+
+// ============================================================================
+// Dashboard Stats
+// ============================================================================
+
+/**
+ * Dashboard overview stats
+ */
+export interface DashboardStats {
+  totalProjects: number;
+  activeSessions: number;
+  totalWorkflows: number;
+  totalTokens: number;
+  recentWorkflows: WorkflowSummary[];
+}
+
+/**
+ * Get dashboard overview stats
+ */
+export function getDashboardStats(): DashboardStats {
+  const db = getDb();
+  if (!db) {
+    return {
+      totalProjects: 0,
+      activeSessions: 0,
+      totalWorkflows: 0,
+      totalTokens: 0,
+      recentWorkflows: [],
+    };
+  }
+
+  const projectCount = db
+    .select({ count: count() })
+    .from(schema.projects)
+    .where(eq(schema.projects.status, "active"))
+    .get();
+
+  const activeSessionCount = db
+    .select({ count: count() })
+    .from(schema.sessions)
+    .where(eq(schema.sessions.status, "active"))
+    .get();
+
+  const workflowCount = db
+    .select({ count: count() })
+    .from(schema.workflows)
+    .get();
+
+  const totalTokens = db
+    .select({ total: sql<number>`COALESCE(SUM(${schema.sessions.totalTokens}), 0)` })
+    .from(schema.sessions)
+    .get();
+
+  const recentWorkflows = getRecentWorkflows(10);
+
+  return {
+    totalProjects: projectCount?.count ?? 0,
+    activeSessions: activeSessionCount?.count ?? 0,
+    totalWorkflows: workflowCount?.count ?? 0,
+    totalTokens: totalTokens?.total ?? 0,
+    recentWorkflows,
+  };
 }

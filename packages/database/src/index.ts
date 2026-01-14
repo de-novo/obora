@@ -20,4 +20,4 @@ export * from "./schema.js";
 export * from "./client.js";
 
 // Re-export drizzle utilities for convenience
-export { eq, and, or, not, like, desc, asc, sql, inArray, isNull, isNotNull, between, gt, gte, lt, lte } from "drizzle-orm";
+export { eq, and, or, not, like, desc, asc, sql, inArray, isNull, isNotNull, between, gt, gte, lt, lte, count, sum, avg, min, max } from "drizzle-orm";

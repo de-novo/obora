@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { IconSidebar } from "./components/IconSidebar";
+import { Header } from "./components/Header";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "obora-dashboard",
-  description: "Created with obora-kit",
+  title: "Obora Dashboard",
+  description: "Multi-project Claude Code activity dashboard",
 };
 
 export default function RootLayout({
@@ -16,7 +18,21 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>{children}</body>
+      <body className={inter.className}>
+        <div className="flex h-screen bg-background">
+          {/* Icon Sidebar */}
+          <IconSidebar />
+
+          {/* Main Area */}
+          <div className="flex flex-1 flex-col overflow-hidden">
+            {/* Header */}
+            <Header />
+
+            {/* Content */}
+            <main className="flex-1 overflow-auto">{children}</main>
+          </div>
+        </div>
+      </body>
     </html>
   );
 }

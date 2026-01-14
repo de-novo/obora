@@ -9,6 +9,7 @@
 import {
   getDb,
   eq,
+  sql,
   sessions,
   workflows,
   workflowSteps,
@@ -406,11 +407,152 @@ export class WorkflowTracker {
   }
 
   // ==========================================================================
-  // Agent Run Tracking
+  // Agent Run Tracking (Real-time)
   // ==========================================================================
 
+  private currentAgentRunId: string | null = null;
+
   /**
-   * 에이전트 실행 기록
+   * 에이전트 실행 시작 (실시간 추적)
+   */
+  startAgentRun(
+    agentType: string,
+    model: string,
+    prompt: string,
+    stepIndex?: number
+  ): string | null {
+    if (!this.db || !this.sessionId) return null;
+
+    const id = generateId("ar");
+    const stepId =
+      stepIndex !== undefined ? this.stepIds.get(stepIndex) : undefined;
+
+    this.db
+      .insert(agentRuns)
+      .values({
+        id,
+        sessionId: this.sessionId,
+        workflowStepId: stepId,
+        agentType,
+        status: "running",
+        model,
+        prompt: prompt.slice(0, 50000),
+        startedAt: new Date(),
+        tokensUsed: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        toolCallCount: 0,
+        lastStreamUpdate: new Date(),
+      })
+      .run();
+
+    this.currentAgentRunId = id;
+
+    // 이벤트 기록
+    this.recordEvent("agent.started", "agent_run", id, {
+      agentType,
+      model,
+      stepIndex,
+    });
+
+    return id;
+  }
+
+  /**
+   * 현재 도구 업데이트 (실시간)
+   */
+  updateCurrentTool(toolName: string, toolInput?: Record<string, unknown>): void {
+    if (!this.db || !this.currentAgentRunId) return;
+
+    this.db
+      .update(agentRuns)
+      .set({
+        currentTool: toolName,
+        currentToolInput: toolInput,
+        lastStreamUpdate: new Date(),
+      })
+      .where(eq(agentRuns.id, this.currentAgentRunId))
+      .run();
+  }
+
+  /**
+   * 도구 호출 완료 (카운트 증가)
+   */
+  completeToolCall(toolName: string): void {
+    if (!this.db || !this.currentAgentRunId) return;
+
+    try {
+      // tool_call_count 증가, current_tool 클리어
+      // raw SQL로 increment 수행
+      this.db.run(sql`
+        UPDATE agent_runs
+        SET
+          current_tool = NULL,
+          current_tool_input = NULL,
+          tool_call_count = COALESCE(tool_call_count, 0) + 1,
+          last_stream_update = ${Math.floor(Date.now() / 1000)}
+        WHERE id = ${this.currentAgentRunId}
+      `);
+    } catch {
+      // 에러 무시 - 추적 실패가 워크플로우를 중단시키면 안 됨
+    }
+  }
+
+  /**
+   * 에이전트 실행 완료
+   */
+  completeAgentRun(
+    result: AgentResult,
+    tokensUsed: number = 0,
+    inputTokens: number = 0,
+    outputTokens: number = 0
+  ): void {
+    if (!this.db || !this.currentAgentRunId) return;
+
+    const status: AgentRunStatus = result.success ? "completed" : "failed";
+
+    this.db
+      .update(agentRuns)
+      .set({
+        status,
+        endedAt: new Date(),
+        tokensUsed,
+        inputTokens,
+        outputTokens,
+        output: result.output?.slice(0, 50000),
+        result: { output: result.output?.slice(0, 10000) },
+        error: result.error,
+        currentTool: null,
+        currentToolInput: null,
+        lastStreamUpdate: new Date(),
+      })
+      .where(eq(agentRuns.id, this.currentAgentRunId))
+      .run();
+
+    // 이벤트 기록
+    const eventType: SyncEventType = result.success
+      ? "agent.completed"
+      : "agent.failed";
+    this.recordEvent(eventType, "agent_run", this.currentAgentRunId, {
+      success: result.success,
+      error: result.error,
+      tokensUsed,
+      inputTokens,
+      outputTokens,
+    });
+
+    this.currentAgentRunId = null;
+  }
+
+  /**
+   * 현재 에이전트 실행 ID
+   */
+  getCurrentAgentRunId(): string | null {
+    return this.currentAgentRunId;
+  }
+
+  /**
+   * 에이전트 실행 기록 (레거시 - 호환성 유지)
    */
   recordAgentRun(
     agentType: string,

@@ -8,7 +8,7 @@ import { query } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import { loadAgents, formatAgentsForPlanner, getAgentByName, findProjectRoot } from "./agent-loader";
 import type { AgentDefinition, AgentResult, WorkflowPlan } from "./types";
-import type { WorkflowTracker } from "./tracker";
+import { type WorkflowTracker } from "./tracker";
 import type { WorkflowType } from "@obora/database";
 
 /**
@@ -106,27 +106,41 @@ export function restoreOboraSession(): void {
 }
 
 /**
- * 단일 에이전트 실행
+ * 단일 에이전트 실행 (실시간 추적 지원)
  */
 export async function runAgent(
   agent: AgentDefinition,
   task: string,
   cwd: string,
-  onMessage?: (message: unknown) => void
+  options?: {
+    onMessage?: (message: unknown) => void;
+    tracker?: WorkflowTracker;
+    stepIndex?: number;
+    model?: string;
+  }
 ): Promise<AgentResult> {
   // 프로젝트 루트에서 실행 (에이전트가 전체 프로젝트에 접근 가능하도록)
   const projectRoot = findProjectRoot(cwd);
+  const { onMessage, tracker, stepIndex, model = "sonnet" } = options || {};
+
   let output = "";
   let error: string | undefined;
+  let totalTokens = 0;
+  let inputTokens = 0;
+  let outputTokens = 0;
+
+  // 실시간 추적 시작
+  const fullPrompt = `${agent.systemPrompt}\n\n## 작업\n${task}`;
+  tracker?.startAgentRun(agent.name, model, fullPrompt, stepIndex);
 
   try {
     for await (const message of query({
-      prompt: `${agent.systemPrompt}\n\n## 작업\n${task}`,
+      prompt: fullPrompt,
       options: {
         cwd: projectRoot,
         allowedTools: agent.allowedTools,
         maxTurns: 10,
-        settingSources: ["project"], // 프로젝트의 .claude/rules/ 로드
+        settingSources: ["project"],
       },
     })) {
       if (onMessage) {
@@ -138,10 +152,43 @@ export async function runAgent(
       if (msg.type === "assistant") {
         const assistantMsg = msg.message as Record<string, unknown>;
         const content = assistantMsg?.content as Array<Record<string, unknown>>;
+
+        // 토큰 사용량 추출
+        const usage = assistantMsg?.usage as Record<string, number> | undefined;
+        if (usage) {
+          inputTokens += usage.input_tokens || 0;
+          outputTokens += usage.output_tokens || 0;
+          // 캐시 토큰도 포함
+          inputTokens += usage.cache_creation_input_tokens || 0;
+          inputTokens += usage.cache_read_input_tokens || 0;
+        }
+
         if (Array.isArray(content)) {
           for (const block of content) {
             if (block.type === "text" && typeof block.text === "string") {
               output += block.text;
+            } else if (block.type === "tool_use") {
+              // 실시간 도구 추적
+              const toolName = block.name as string;
+              const toolInput = block.input as Record<string, unknown>;
+              tracker?.updateCurrentTool(toolName, toolInput);
+            }
+          }
+        }
+      } else if (msg.type === "user") {
+        // tool_result 처리 - 도구 호출 완료
+        const userMsg = msg.message as Record<string, unknown>;
+        const content = userMsg?.content as Array<Record<string, unknown>>;
+
+        if (Array.isArray(content)) {
+          for (const block of content) {
+            if (block.type === "tool_result") {
+              // 도구 호출 완료 기록
+              // tool_use_id로 도구 이름 알기 어려우므로 마지막 도구 완료 처리
+              const toolCallId = block.tool_use_id as string;
+              // 도구 이름은 이전 assistant 메시지에서 가져와야 하지만
+              // 간단히 "unknown"으로 처리하거나, 별도로 추적 필요
+              tracker?.completeToolCall("tool");
             }
           }
         }
@@ -153,16 +200,34 @@ export async function runAgent(
         if (resultMsg.is_error) {
           error = typeof resultMsg.result === "string" ? resultMsg.result : "Unknown error";
         }
+
+        // 최종 토큰 집계
+        const usage = resultMsg.usage as Record<string, number> | undefined;
+        if (usage) {
+          totalTokens = usage.total_tokens || (inputTokens + outputTokens);
+        }
       }
     }
 
-    return { success: !error, output, error };
+    totalTokens = totalTokens || (inputTokens + outputTokens);
+    const result = { success: !error, output, error };
+
+    // 실시간 추적 완료
+    tracker?.completeAgentRun(result, totalTokens, inputTokens, outputTokens);
+
+    return result;
   } catch (err) {
-    return {
+    const result = {
       success: false,
       output: "",
       error: err instanceof Error ? err.message : "Unknown error",
     };
+
+    // 실시간 추적 완료 (에러) - 토큰 합계 계산
+    const finalTokens = totalTokens || (inputTokens + outputTokens);
+    tracker?.completeAgentRun(result, finalTokens, inputTokens, outputTokens);
+
+    return result;
   }
 }
 
@@ -172,7 +237,10 @@ export async function runAgent(
 export async function planWorkflow(
   task: string,
   cwd: string,
-  onMessage?: (message: unknown) => void
+  options?: {
+    onMessage?: (message: unknown) => void;
+    tracker?: WorkflowTracker;
+  }
 ): Promise<WorkflowPlan> {
   // 에이전트 동적 로드
   const agents = loadAgents(cwd);
@@ -200,7 +268,7 @@ ${task}
     { ...planner, systemPrompt: enhancedPrompt },
     task,
     cwd,
-    onMessage
+    { onMessage: options?.onMessage, tracker: options?.tracker, model: "sonnet" }
   );
 
   // JSON 파싱 및 스키마 검증
@@ -260,7 +328,10 @@ export async function executeWorkflow(
 
   try {
     // 1. Planner 실행
-    const plan = await planWorkflow(task, cwd, options.onMessage);
+    const plan = await planWorkflow(task, cwd, {
+      onMessage: options.onMessage,
+      tracker,
+    });
     options.onPlanComplete?.(plan);
 
     // 계획 완료 기록
@@ -287,12 +358,15 @@ export async function executeWorkflow(
       options.onStepStart?.(step, i);
       tracker?.startStep(i);
 
-      const result = await runAgent(agent, step.task, cwd, options.onMessage);
+      const result = await runAgent(agent, step.task, cwd, {
+        onMessage: options.onMessage,
+        tracker,
+        stepIndex: i,
+      });
       results.push(result);
 
-      // 스텝 완료 및 에이전트 실행 기록
+      // 스텝 완료 기록 (토큰은 runAgent에서 처리)
       tracker?.completeStep(i, result);
-      tracker?.recordAgentRun(step.agent, result, i);
 
       options.onStepComplete?.(step, result, i);
 
@@ -315,11 +389,11 @@ export async function executeWorkflow(
             reviewerAgent,
             "이전 작업 결과를 검토하세요.",
             cwd,
-            options.onMessage
+            {
+              onMessage: options.onMessage,
+              tracker,
+            }
           );
-
-          // 리뷰어 에이전트 실행 기록
-          tracker?.recordAgentRun("reviewer", reviewResult);
 
           // 이슈 파싱 및 스키마 검증
           const jsonData = extractJsonFromOutput(reviewResult.output);
@@ -346,15 +420,15 @@ export async function executeWorkflow(
           // 수정 에이전트 재실행
           const fixAgent = getAgentByName(agents, "debugger");
           if (fixAgent) {
-            const fixResult = await runAgent(
+            await runAgent(
               fixAgent,
               `다음 이슈들을 수정하세요:\n${JSON.stringify(criticalIssues, null, 2)}`,
               cwd,
-              options.onMessage
+              {
+                onMessage: options.onMessage,
+                tracker,
+              }
             );
-
-            // 디버거 에이전트 실행 기록
-            tracker?.recordAgentRun("debugger", fixResult);
           }
 
           iterations++;
@@ -396,7 +470,7 @@ export async function simpleQuery(
       cwd,
       allowedTools,
       maxTurns: 5,
-      settingSources: ["project"], // 프로젝트의 .claude/rules/ 로드
+      settingSources: ["project"],
     },
   })) {
     if (onMessage) {

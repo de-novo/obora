@@ -11,12 +11,18 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@dagrejs/dagre": "^1.1.8",
     "@obora/database": "workspace:*",
+    "@xyflow/react": "^12.10.0",
     "better-sqlite3": "^11.0.0",
+    "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.1",
     "next": "^15.2.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.0",
