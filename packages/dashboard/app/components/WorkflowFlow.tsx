@@ -247,21 +247,18 @@ export function WorkflowFlow({ workflow, steps, onStepClick }: WorkflowFlowProps
 
     let prevNodeId = "trigger";
 
-    // Planner node (if not custom workflow)
-    if (workflow.type !== "custom") {
+    // Planner node (only if planner was actually called)
+    const hasPlannerStep = steps.some(s => s.agentType === "planner");
+    if (hasPlannerStep) {
+      const plannerStep = steps.find(s => s.agentType === "planner");
       nodes.push({
         id: "planner",
         type: "planner",
         position: { x: 0, y: 0 },
         data: {
           label: "Planner",
-          status:
-            workflowStatus === "pending"
-              ? "pending"
-              : workflow.status === "planning"
-              ? "running"
-              : "completed",
-          description: `Workflow: ${workflow.type}`,
+          status: plannerStep ? mapStatus(plannerStep.status) : "completed",
+          description: plannerStep?.taskDescription?.slice(0, 80) || `Workflow: ${workflow.type}`,
         },
       });
 
@@ -285,8 +282,8 @@ export function WorkflowFlow({ workflow, steps, onStepClick }: WorkflowFlowProps
       prevNodeId = "planner";
     }
 
-    // Add collapsed agent nodes
-    collapsedAgents.forEach((agent) => {
+    // Add collapsed agent nodes (excluding planner which is handled separately)
+    collapsedAgents.filter(a => a.agentType !== "planner").forEach((agent) => {
       const nodeId = agent.id;
       const status = mapStatus(agent.status);
       const lastStep = agent.steps[agent.steps.length - 1];
