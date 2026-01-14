@@ -3,14 +3,11 @@
  * CRUD operations using Drizzle ORM
  */
 
-import { eq, and, or, desc, asc, sql, like } from "@obora/database";
+import { eq, and, or, desc, asc, like } from "@obora/database";
 import { getDb } from "./db";
 import * as schema from "./schema";
+import type { Project, Bookmark, Tag, Annotation } from "./schema";
 import type {
-  Project,
-  Bookmark,
-  Tag,
-  Annotation,
   CreateProjectInput,
   UpdateProjectInput,
   CreateBookmarkInput,
@@ -18,6 +15,7 @@ import type {
   CreateAnnotationInput,
   ProjectFilters,
   BookmarkFilters,
+  BookmarkEntityType,
 } from "./types";
 
 // ============================================================================
@@ -29,13 +27,6 @@ import type {
  */
 function generateId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
-}
-
-/**
- * Get current ISO timestamp
- */
-function now(): string {
-  return new Date().toISOString();
 }
 
 // ============================================================================
@@ -53,12 +44,8 @@ export function getProjects(filters?: ProjectFilters): Project[] {
 
   const conditions = [];
 
-  if (filters?.isActive !== undefined) {
-    conditions.push(eq(schema.projects.isActive, filters.isActive));
-  }
-
-  if (filters?.isFavorite !== undefined) {
-    conditions.push(eq(schema.projects.isFavorite, filters.isFavorite));
+  if (filters?.status !== undefined) {
+    conditions.push(eq(schema.projects.status, filters.status));
   }
 
   if (filters?.search) {
@@ -77,8 +64,7 @@ export function getProjects(filters?: ProjectFilters): Project[] {
 
   const rows = query
     .orderBy(
-      desc(schema.projects.isFavorite),
-      asc(schema.projects.sortOrder),
+      desc(schema.projects.updatedAt),
       asc(schema.projects.name)
     )
     .all();
@@ -110,7 +96,6 @@ export function createProject(input: CreateProjectInput): Project {
   if (!db) throw new Error("Database not available");
 
   const id = generateId("proj");
-  const timestamp = now();
 
   db.insert(schema.projects)
     .values({
@@ -120,8 +105,6 @@ export function createProject(input: CreateProjectInput): Project {
       description: input.description ?? null,
       color: input.color ?? "#6366f1",
       icon: input.icon ?? null,
-      createdAt: timestamp,
-      updatedAt: timestamp,
     })
     .run();
 
@@ -144,15 +127,13 @@ export function updateProject(
   if (input.description !== undefined) updates.description = input.description;
   if (input.color !== undefined) updates.color = input.color;
   if (input.icon !== undefined) updates.icon = input.icon;
-  if (input.isActive !== undefined) updates.isActive = input.isActive;
-  if (input.isFavorite !== undefined) updates.isFavorite = input.isFavorite;
-  if (input.sortOrder !== undefined) updates.sortOrder = input.sortOrder;
+  if (input.status !== undefined) updates.status = input.status;
 
   if (Object.keys(updates).length === 0) {
     return getProject(id);
   }
 
-  updates.updatedAt = now();
+  updates.updatedAt = new Date();
 
   const result = db
     .update(schema.projects)
@@ -202,7 +183,7 @@ export function getBookmarks(filters?: BookmarkFilters): Bookmark[] {
   }
 
   if (filters?.entityType) {
-    conditions.push(eq(schema.bookmarks.entityType, filters.entityType as "session" | "workflow" | "agent_run" | "task"));
+    conditions.push(eq(schema.bookmarks.entityType, filters.entityType as BookmarkEntityType));
   }
 
   if (filters?.pinned !== undefined) {
@@ -244,18 +225,16 @@ export function createBookmark(input: CreateBookmarkInput): Bookmark {
   if (!db) throw new Error("Database not available");
 
   const id = generateId("bm");
-  const timestamp = now();
 
   db.insert(schema.bookmarks)
     .values({
       id,
       projectId: input.projectId,
-      entityType: input.entityType as "session" | "workflow" | "agent_run" | "task",
+      entityType: input.entityType as BookmarkEntityType,
       entityId: input.entityId,
       displayName: input.displayName ?? null,
       notes: input.notes ?? null,
       pinned: input.pinned ?? false,
-      createdAt: timestamp,
     })
     .run();
 
@@ -298,11 +277,15 @@ export function getTags(): Tag[] {
 }
 
 /**
+ * Entity type for tags
+ */
+type TagEntityType = "project" | "session" | "workflow" | "step" | "agent_run" | "task";
+
+/**
  * Get tags for specific entity
  */
 export function getEntityTags(
-  projectId: string,
-  entityType: string,
+  entityType: TagEntityType,
   entityId: string
 ): Tag[] {
   const db = getDb();
@@ -320,7 +303,6 @@ export function getEntityTags(
     .innerJoin(schema.entityTags, eq(schema.entityTags.tagId, schema.tags.id))
     .where(
       and(
-        eq(schema.entityTags.projectId, projectId),
         eq(schema.entityTags.entityType, entityType),
         eq(schema.entityTags.entityId, entityId)
       )
@@ -339,7 +321,6 @@ export function createTag(input: CreateTagInput): Tag {
   if (!db) throw new Error("Database not available");
 
   const id = generateId("tag");
-  const timestamp = now();
 
   db.insert(schema.tags)
     .values({
@@ -347,7 +328,6 @@ export function createTag(input: CreateTagInput): Tag {
       name: input.name,
       color: input.color ?? "#6366f1",
       description: input.description ?? null,
-      createdAt: timestamp,
     })
     .run();
 
@@ -365,23 +345,21 @@ export function createTag(input: CreateTagInput): Tag {
  */
 export function addTagToEntity(
   tagId: string,
-  projectId: string,
-  entityType: string,
+  entityType: TagEntityType,
   entityId: string
 ): boolean {
   const db = getDb();
   if (!db) return false;
 
-  const timestamp = now();
+  const id = generateId("et");
 
   try {
     db.insert(schema.entityTags)
       .values({
+        id,
         tagId,
-        projectId,
         entityType,
         entityId,
-        createdAt: timestamp,
       })
       .onConflictDoNothing()
       .run();
@@ -389,7 +367,7 @@ export function addTagToEntity(
     return true;
   } catch (error) {
     if (error instanceof Error && error.message.includes("FOREIGN KEY")) {
-      throw new Error("Tag or project not found");
+      throw new Error("Tag not found");
     }
     throw error;
   }
@@ -400,8 +378,7 @@ export function addTagToEntity(
  */
 export function removeTagFromEntity(
   tagId: string,
-  projectId: string,
-  entityType: string,
+  entityType: TagEntityType,
   entityId: string
 ): boolean {
   const db = getDb();
@@ -412,7 +389,6 @@ export function removeTagFromEntity(
     .where(
       and(
         eq(schema.entityTags.tagId, tagId),
-        eq(schema.entityTags.projectId, projectId),
         eq(schema.entityTags.entityType, entityType),
         eq(schema.entityTags.entityId, entityId)
       )
@@ -427,11 +403,15 @@ export function removeTagFromEntity(
 // ============================================================================
 
 /**
+ * Annotation type enum
+ */
+type AnnotationTypeEnum = "note" | "warning" | "error" | "success" | "info";
+
+/**
  * Get annotation for entity
  */
 export function getAnnotation(
-  projectId: string,
-  entityType: string,
+  entityType: TagEntityType,
   entityId: string
 ): Annotation | null {
   const db = getDb();
@@ -442,7 +422,6 @@ export function getAnnotation(
     .from(schema.annotations)
     .where(
       and(
-        eq(schema.annotations.projectId, projectId),
         eq(schema.annotations.entityType, entityType),
         eq(schema.annotations.entityId, entityId)
       )
@@ -459,32 +438,28 @@ export function upsertAnnotation(input: CreateAnnotationInput): Annotation {
   const db = getDb();
   if (!db) throw new Error("Database not available");
 
-  const existing = getAnnotation(
-    input.projectId,
-    input.entityType,
-    input.entityId
-  );
+  const entityType = input.entityType as TagEntityType;
+  const annotationType = (input.annotationType ?? "note") as AnnotationTypeEnum;
 
-  const timestamp = now();
+  const existing = getAnnotation(entityType, input.entityId);
 
   if (existing) {
     db.update(schema.annotations)
       .set({
         title: input.title ?? null,
         content: input.content ?? null,
-        annotationType: (input.annotationType ?? "note") as "note" | "warning" | "error" | "success",
-        updatedAt: timestamp,
+        annotationType,
+        updatedAt: new Date(),
       })
       .where(
         and(
-          eq(schema.annotations.projectId, input.projectId),
-          eq(schema.annotations.entityType, input.entityType),
+          eq(schema.annotations.entityType, entityType),
           eq(schema.annotations.entityId, input.entityId)
         )
       )
       .run();
 
-    return getAnnotation(input.projectId, input.entityType, input.entityId)!;
+    return getAnnotation(entityType, input.entityId)!;
   }
 
   const id = generateId("ann");
@@ -492,14 +467,11 @@ export function upsertAnnotation(input: CreateAnnotationInput): Annotation {
   db.insert(schema.annotations)
     .values({
       id,
-      projectId: input.projectId,
-      entityType: input.entityType,
+      entityType,
       entityId: input.entityId,
       title: input.title ?? null,
       content: input.content ?? null,
-      annotationType: (input.annotationType ?? "note") as "note" | "warning" | "error" | "success",
-      createdAt: timestamp,
-      updatedAt: timestamp,
+      annotationType,
     })
     .run();
 
@@ -516,8 +488,7 @@ export function upsertAnnotation(input: CreateAnnotationInput): Annotation {
  * Delete annotation
  */
 export function deleteAnnotation(
-  projectId: string,
-  entityType: string,
+  entityType: TagEntityType,
   entityId: string
 ): boolean {
   const db = getDb();
@@ -527,7 +498,6 @@ export function deleteAnnotation(
     .delete(schema.annotations)
     .where(
       and(
-        eq(schema.annotations.projectId, projectId),
         eq(schema.annotations.entityType, entityType),
         eq(schema.annotations.entityId, entityId)
       )

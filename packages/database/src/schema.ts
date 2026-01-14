@@ -1,11 +1,11 @@
 /**
- * Drizzle ORM Schema
- * Shared database schema for obora dashboard
+ * Obora Central Database Schema
+ * Stores all workflow data across projects
  *
  * @see https://orm.drizzle.team/docs/sql-schema-declaration
  */
 
-import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, index, unique } from "drizzle-orm/sqlite-core";
 
 // ============================================================================
 // Schema Version
@@ -13,7 +13,9 @@ import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
 
 export const schemaVersion = sqliteTable("schema_version", {
   version: integer("version").primaryKey(),
-  appliedAt: text("applied_at").notNull().default("datetime('now')"),
+  appliedAt: integer("applied_at", { mode: "timestamp" })
+    .notNull()
+    .$defaultFn(() => new Date()),
 });
 
 // ============================================================================
@@ -29,42 +31,234 @@ export const projects = sqliteTable(
     description: text("description"),
     color: text("color").notNull().default("#6366f1"),
     icon: text("icon"),
-    isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
-    isFavorite: integer("is_favorite", { mode: "boolean" }).notNull().default(false),
-    sortOrder: integer("sort_order").notNull().default(0),
-    createdAt: text("created_at").notNull().default("datetime('now')"),
-    updatedAt: text("updated_at").notNull().default("datetime('now')"),
-    lastOpenedAt: text("last_opened_at"),
-    lastError: text("last_error"),
-    lastSyncAt: text("last_sync_at"),
+    status: text("status", { enum: ["active", "archived"] })
+      .notNull()
+      .default("active"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
   },
   (table) => [
     index("idx_projects_path").on(table.path),
-    index("idx_projects_active").on(table.isActive),
+    index("idx_projects_status").on(table.status),
   ]
 );
 
 // ============================================================================
-// Project Groups
+// Sessions (Terminal session - multiple commands)
 // ============================================================================
 
-export const projectGroups = sqliteTable("project_groups", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  description: text("description"),
-  color: text("color").notNull().default("#6366f1"),
-  sortOrder: integer("sort_order").notNull().default(0),
-  createdAt: text("created_at").notNull().default("datetime('now')"),
-});
+export const sessions = sqliteTable(
+  "sessions",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    status: text("status", {
+      enum: ["active", "completed", "failed", "interrupted"],
+    })
+      .notNull()
+      .default("active"),
+    startedAt: integer("started_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    endedAt: integer("ended_at", { mode: "timestamp" }),
+    totalTokens: integer("total_tokens").notNull().default(0),
+    summary: text("summary"),
+    metadata: text("metadata", { mode: "json" }).$type<Record<string, unknown>>(),
+  },
+  (table) => [
+    index("idx_sessions_project").on(table.projectId),
+    index("idx_sessions_status").on(table.status),
+    index("idx_sessions_started").on(table.startedAt),
+  ]
+);
 
-export const projectGroupMembers = sqliteTable("project_group_members", {
-  projectId: text("project_id")
-    .notNull()
-    .references(() => projects.id, { onDelete: "cascade" }),
-  groupId: text("group_id")
-    .notNull()
-    .references(() => projectGroups.id, { onDelete: "cascade" }),
-});
+// ============================================================================
+// Workflows
+// ============================================================================
+
+export const workflows = sqliteTable(
+  "workflows",
+  {
+    id: text("id").primaryKey(),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => sessions.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    type: text("type", {
+      enum: ["implement", "fix", "review", "commit", "refactor", "test", "custom"],
+    }).notNull(),
+    status: text("status", {
+      enum: ["pending", "planning", "running", "completed", "failed", "cancelled"],
+    })
+      .notNull()
+      .default("pending"),
+    startedAt: integer("started_at", { mode: "timestamp" }),
+    endedAt: integer("ended_at", { mode: "timestamp" }),
+    input: text("input", { mode: "json" }).$type<Record<string, unknown>>(),
+    output: text("output", { mode: "json" }).$type<Record<string, unknown>>(),
+    error: text("error"),
+    tokensUsed: integer("tokens_used").notNull().default(0),
+  },
+  (table) => [
+    index("idx_workflows_session").on(table.sessionId),
+    index("idx_workflows_type").on(table.type),
+    index("idx_workflows_status").on(table.status),
+  ]
+);
+
+// ============================================================================
+// Workflow Steps
+// ============================================================================
+
+export const workflowSteps = sqliteTable(
+  "workflow_steps",
+  {
+    id: text("id").primaryKey(),
+    workflowId: text("workflow_id")
+      .notNull()
+      .references(() => workflows.id, { onDelete: "cascade" }),
+    stepNumber: integer("step_number").notNull(),
+    agentType: text("agent_type").notNull(),
+    taskDescription: text("task_description").notNull(),
+    status: text("status", {
+      enum: ["pending", "running", "completed", "failed", "skipped"],
+    })
+      .notNull()
+      .default("pending"),
+    startedAt: integer("started_at", { mode: "timestamp" }),
+    endedAt: integer("ended_at", { mode: "timestamp" }),
+    input: text("input", { mode: "json" }).$type<Record<string, unknown>>(),
+    output: text("output", { mode: "json" }).$type<Record<string, unknown>>(),
+    error: text("error"),
+    tokensUsed: integer("tokens_used").notNull().default(0),
+  },
+  (table) => [
+    index("idx_steps_workflow").on(table.workflowId),
+    index("idx_steps_status").on(table.status),
+    unique("idx_steps_workflow_number").on(table.workflowId, table.stepNumber),
+  ]
+);
+
+// ============================================================================
+// Agent Runs
+// ============================================================================
+
+export const agentRuns = sqliteTable(
+  "agent_runs",
+  {
+    id: text("id").primaryKey(),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => sessions.id, { onDelete: "cascade" }),
+    workflowStepId: text("workflow_step_id").references(() => workflowSteps.id, {
+      onDelete: "set null",
+    }),
+    agentType: text("agent_type").notNull(),
+    status: text("status", {
+      enum: ["running", "completed", "failed"],
+    })
+      .notNull()
+      .default("running"),
+    startedAt: integer("started_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    endedAt: integer("ended_at", { mode: "timestamp" }),
+    tokensUsed: integer("tokens_used").notNull().default(0),
+    toolsCalled: text("tools_called", { mode: "json" }).$type<string[]>(),
+    result: text("result", { mode: "json" }).$type<Record<string, unknown>>(),
+    error: text("error"),
+  },
+  (table) => [
+    index("idx_agent_runs_session").on(table.sessionId),
+    index("idx_agent_runs_step").on(table.workflowStepId),
+    index("idx_agent_runs_type").on(table.agentType),
+    index("idx_agent_runs_status").on(table.status),
+  ]
+);
+
+// ============================================================================
+// Tasks (Future: Task Queue)
+// ============================================================================
+
+export const tasks = sqliteTable(
+  "tasks",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    description: text("description"),
+    priority: text("priority", {
+      enum: ["low", "medium", "high", "urgent"],
+    })
+      .notNull()
+      .default("medium"),
+    status: text("status", {
+      enum: ["pending", "queued", "in_progress", "completed", "cancelled"],
+    })
+      .notNull()
+      .default("pending"),
+    assignedWorkflowId: text("assigned_workflow_id").references(() => workflows.id, {
+      onDelete: "set null",
+    }),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    dueAt: integer("due_at", { mode: "timestamp" }),
+    completedAt: integer("completed_at", { mode: "timestamp" }),
+    metadata: text("metadata", { mode: "json" }).$type<Record<string, unknown>>(),
+  },
+  (table) => [
+    index("idx_tasks_project").on(table.projectId),
+    index("idx_tasks_status").on(table.status),
+    index("idx_tasks_priority").on(table.priority),
+  ]
+);
+
+// ============================================================================
+// Commands (Future: Command Queue)
+// ============================================================================
+
+export const commands = sqliteTable(
+  "commands",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    commandType: text("command_type", {
+      enum: ["implement", "fix", "review", "commit", "refactor", "test", "custom"],
+    }).notNull(),
+    payload: text("payload", { mode: "json" }).$type<Record<string, unknown>>(),
+    status: text("status", {
+      enum: ["queued", "running", "completed", "failed", "cancelled"],
+    })
+      .notNull()
+      .default("queued"),
+    queuedAt: integer("queued_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    startedAt: integer("started_at", { mode: "timestamp" }),
+    completedAt: integer("completed_at", { mode: "timestamp" }),
+    assignedWorkflowId: text("assigned_workflow_id").references(() => workflows.id, {
+      onDelete: "set null",
+    }),
+    result: text("result", { mode: "json" }).$type<Record<string, unknown>>(),
+    error: text("error"),
+  },
+  (table) => [
+    index("idx_commands_project").on(table.projectId),
+    index("idx_commands_status").on(table.status),
+    index("idx_commands_queued").on(table.queuedAt),
+  ]
+);
 
 // ============================================================================
 // Bookmarks
@@ -78,13 +272,15 @@ export const bookmarks = sqliteTable(
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
     entityType: text("entity_type", {
-      enum: ["session", "workflow", "agent_run", "task"],
+      enum: ["session", "workflow", "step", "agent_run", "task"],
     }).notNull(),
     entityId: text("entity_id").notNull(),
     displayName: text("display_name"),
     notes: text("notes"),
     pinned: integer("pinned", { mode: "boolean" }).notNull().default(false),
-    createdAt: text("created_at").notNull().default("datetime('now')"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
   },
   (table) => [
     index("idx_bookmarks_project").on(table.projectId),
@@ -101,24 +297,30 @@ export const tags = sqliteTable("tags", {
   name: text("name").notNull().unique(),
   color: text("color").notNull().default("#6366f1"),
   description: text("description"),
-  createdAt: text("created_at").notNull().default("datetime('now')"),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .$defaultFn(() => new Date()),
 });
 
 export const entityTags = sqliteTable(
   "entity_tags",
   {
+    id: text("id").primaryKey(),
     tagId: text("tag_id")
       .notNull()
       .references(() => tags.id, { onDelete: "cascade" }),
-    projectId: text("project_id")
-      .notNull()
-      .references(() => projects.id, { onDelete: "cascade" }),
-    entityType: text("entity_type").notNull(),
+    entityType: text("entity_type", {
+      enum: ["project", "session", "workflow", "step", "agent_run", "task"],
+    }).notNull(),
     entityId: text("entity_id").notNull(),
-    createdAt: text("created_at").notNull().default("datetime('now')"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
   },
   (table) => [
-    index("idx_entity_tags_entity").on(table.projectId, table.entityType, table.entityId),
+    index("idx_entity_tags_tag").on(table.tagId),
+    index("idx_entity_tags_entity").on(table.entityType, table.entityId),
+    unique("idx_entity_tags_unique").on(table.tagId, table.entityType, table.entityId),
   ]
 );
 
@@ -126,23 +328,32 @@ export const entityTags = sqliteTable(
 // Annotations
 // ============================================================================
 
-export const annotations = sqliteTable("annotations", {
-  id: text("id").primaryKey(),
-  projectId: text("project_id")
-    .notNull()
-    .references(() => projects.id, { onDelete: "cascade" }),
-  entityType: text("entity_type").notNull(),
-  entityId: text("entity_id").notNull(),
-  title: text("title"),
-  content: text("content"),
-  annotationType: text("annotation_type", {
-    enum: ["note", "warning", "error", "success"],
-  })
-    .notNull()
-    .default("note"),
-  createdAt: text("created_at").notNull().default("datetime('now')"),
-  updatedAt: text("updated_at").notNull().default("datetime('now')"),
-});
+export const annotations = sqliteTable(
+  "annotations",
+  {
+    id: text("id").primaryKey(),
+    entityType: text("entity_type", {
+      enum: ["project", "session", "workflow", "step", "agent_run", "task"],
+    }).notNull(),
+    entityId: text("entity_id").notNull(),
+    title: text("title"),
+    content: text("content"),
+    annotationType: text("annotation_type", {
+      enum: ["note", "warning", "error", "success", "info"],
+    })
+      .notNull()
+      .default("note"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [
+    index("idx_annotations_entity").on(table.entityType, table.entityId),
+  ]
+);
 
 // ============================================================================
 // Preferences
@@ -151,68 +362,72 @@ export const annotations = sqliteTable("annotations", {
 export const preferences = sqliteTable("preferences", {
   key: text("key").primaryKey(),
   value: text("value").notNull(),
-  updatedAt: text("updated_at").notNull().default("datetime('now')"),
-});
-
-// ============================================================================
-// Saved Views
-// ============================================================================
-
-export const savedViews = sqliteTable("saved_views", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  description: text("description"),
-  viewType: text("view_type", {
-    enum: ["sessions", "workflows", "agents", "tasks"],
-  }).notNull(),
-  projectIds: text("project_ids"), // JSON string
-  filters: text("filters").notNull().default("{}"),
-  sortConfig: text("sort_config"),
-  columns: text("columns"),
-  layout: text("layout", { enum: ["table", "grid", "timeline"] })
+  updatedAt: integer("updated_at", { mode: "timestamp" })
     .notNull()
-    .default("table"),
-  isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
-  createdAt: text("created_at").notNull().default("datetime('now')"),
-  updatedAt: text("updated_at").notNull().default("datetime('now')"),
-});
-
-// ============================================================================
-// Metrics Cache
-// ============================================================================
-
-export const metricsCache = sqliteTable("metrics_cache", {
-  projectId: text("project_id")
-    .notNull()
-    .references(() => projects.id, { onDelete: "cascade" }),
-  metricType: text("metric_type").notNull(),
-  data: text("data").notNull(), // JSON string
-  cachedAt: text("cached_at").notNull().default("datetime('now')"),
-  expiresAt: text("expires_at").notNull(),
+    .$defaultFn(() => new Date()),
 });
 
 // ============================================================================
 // Type Exports
 // ============================================================================
 
+// Projects
 export type Project = typeof projects.$inferSelect;
 export type NewProject = typeof projects.$inferInsert;
 
-export type ProjectGroup = typeof projectGroups.$inferSelect;
-export type NewProjectGroup = typeof projectGroups.$inferInsert;
+// Sessions
+export type Session = typeof sessions.$inferSelect;
+export type NewSession = typeof sessions.$inferInsert;
 
+// Workflows
+export type Workflow = typeof workflows.$inferSelect;
+export type NewWorkflow = typeof workflows.$inferInsert;
+
+// Workflow Steps
+export type WorkflowStep = typeof workflowSteps.$inferSelect;
+export type NewWorkflowStep = typeof workflowSteps.$inferInsert;
+
+// Agent Runs
+export type AgentRun = typeof agentRuns.$inferSelect;
+export type NewAgentRun = typeof agentRuns.$inferInsert;
+
+// Tasks
+export type Task = typeof tasks.$inferSelect;
+export type NewTask = typeof tasks.$inferInsert;
+
+// Commands
+export type Command = typeof commands.$inferSelect;
+export type NewCommand = typeof commands.$inferInsert;
+
+// Bookmarks
 export type Bookmark = typeof bookmarks.$inferSelect;
 export type NewBookmark = typeof bookmarks.$inferInsert;
 
+// Tags
 export type Tag = typeof tags.$inferSelect;
 export type NewTag = typeof tags.$inferInsert;
-
 export type EntityTag = typeof entityTags.$inferSelect;
 export type NewEntityTag = typeof entityTags.$inferInsert;
 
+// Annotations
 export type Annotation = typeof annotations.$inferSelect;
 export type NewAnnotation = typeof annotations.$inferInsert;
 
+// Preferences
 export type Preference = typeof preferences.$inferSelect;
-export type SavedView = typeof savedViews.$inferSelect;
-export type MetricsCache = typeof metricsCache.$inferSelect;
+
+// ============================================================================
+// Enum Types
+// ============================================================================
+
+export type ProjectStatus = "active" | "archived";
+export type SessionStatus = "active" | "completed" | "failed" | "interrupted";
+export type WorkflowType = "implement" | "fix" | "review" | "commit" | "refactor" | "test" | "custom";
+export type WorkflowStatus = "pending" | "planning" | "running" | "completed" | "failed" | "cancelled";
+export type StepStatus = "pending" | "running" | "completed" | "failed" | "skipped";
+export type AgentRunStatus = "running" | "completed" | "failed";
+export type TaskPriority = "low" | "medium" | "high" | "urgent";
+export type TaskStatus = "pending" | "queued" | "in_progress" | "completed" | "cancelled";
+export type CommandStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
+export type EntityType = "project" | "session" | "workflow" | "step" | "agent_run" | "task";
+export type AnnotationType = "note" | "warning" | "error" | "success" | "info";
