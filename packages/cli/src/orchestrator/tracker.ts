@@ -2,24 +2,27 @@
  * Workflow Tracker
  *
  * 모든 워크플로우 실행을 중앙 DB에 기록
+ * ProjectService와 통합하여 프로젝트 식별
+ * 이벤트 소싱 패턴으로 SaaS 동기화 준비
  */
 
 import {
   getDb,
   eq,
-  projects,
   sessions,
   workflows,
   workflowSteps,
   agentRuns,
+  syncEvents,
   type DrizzleDb,
   type WorkflowType,
-  type WorkflowStatus,
   type StepStatus,
   type AgentRunStatus,
+  type SyncEventType,
+  type SyncEntityType,
 } from "@obora/database";
-import { initializeDb } from "./db-init.js";
-import type { AgentResult, WorkflowPlan } from "./types.js";
+import { getProjectService, type ProjectService } from "./project-service.js";
+import type { AgentResult, WorkflowPlan, ResolvedProject } from "./types.js";
 
 // ============================================================================
 // ID Generation
@@ -35,17 +38,26 @@ function generateId(prefix: string): string {
 
 export class WorkflowTracker {
   private db: DrizzleDb | null = null;
-  private projectId: string | null = null;
+  private projectService: ProjectService;
+  private project: ResolvedProject | null = null;
   private sessionId: string | null = null;
   private workflowId: string | null = null;
   private stepIds: Map<number, string> = new Map();
 
+  constructor() {
+    this.projectService = getProjectService();
+  }
+
   /**
-   * 트래커 초기화 (DB 연결 및 프로젝트 등록)
+   * 트래커 초기화 (프로젝트 해석 및 DB 연결)
    */
-  async initialize(projectPath: string): Promise<boolean> {
-    // DB 초기화 (없으면 생성)
-    await initializeDb();
+  async initialize(cwd: string): Promise<boolean> {
+    // ProjectService 초기화
+    const initialized = await this.projectService.initialize();
+    if (!initialized) {
+      console.warn("[Tracker] ProjectService initialization failed");
+      return false;
+    }
 
     this.db = getDb();
     if (!this.db) {
@@ -53,48 +65,49 @@ export class WorkflowTracker {
       return false;
     }
 
-    // 프로젝트 등록 또는 조회
-    this.projectId = await this.ensureProject(projectPath);
+    // 프로젝트 해석
+    this.project = await this.projectService.resolveProject(cwd);
     return true;
   }
 
   /**
-   * 프로젝트 등록 또는 기존 프로젝트 조회
+   * 현재 프로젝트 정보 반환
    */
-  private async ensureProject(projectPath: string): Promise<string> {
-    if (!this.db) throw new Error("Database not initialized");
+  getProject(): ResolvedProject | null {
+    return this.project;
+  }
 
-    // 기존 프로젝트 조회
-    const existing = this.db
-      .select()
-      .from(projects)
-      .where(eq(projects.path, projectPath))
-      .get();
+  // ==========================================================================
+  // Event Recording (Event Sourcing)
+  // ==========================================================================
 
-    if (existing) {
-      // 업데이트 시간 갱신
+  /**
+   * 이벤트 기록 (SaaS 동기화용)
+   */
+  private recordEvent(
+    eventType: SyncEventType,
+    entityType: SyncEntityType,
+    entityId: string,
+    payload?: Record<string, unknown>
+  ): void {
+    if (!this.db || !this.project) return;
+
+    try {
       this.db
-        .update(projects)
-        .set({ updatedAt: new Date() })
-        .where(eq(projects.id, existing.id))
+        .insert(syncEvents)
+        .values({
+          id: generateId("evt"),
+          projectId: this.project.id,
+          eventType,
+          entityType,
+          entityId,
+          payload,
+          syncStatus: this.project.syncEnabled ? "pending" : "skipped",
+        })
         .run();
-      return existing.id;
+    } catch {
+      // 이벤트 기록 실패는 무시 (주요 동작에 영향 없음)
     }
-
-    // 새 프로젝트 생성
-    const id = generateId("proj");
-    const name = projectPath.split("/").pop() || "Unknown";
-
-    this.db
-      .insert(projects)
-      .values({
-        id,
-        name,
-        path: projectPath,
-      })
-      .run();
-
-    return id;
   }
 
   // ==========================================================================
@@ -105,19 +118,27 @@ export class WorkflowTracker {
    * 세션 시작 (CLI/Chat 시작 시 호출)
    */
   startSession(): string | null {
-    if (!this.db || !this.projectId) return null;
+    if (!this.db || !this.project) return null;
 
     const id = generateId("sess");
     this.db
       .insert(sessions)
       .values({
         id,
-        projectId: this.projectId,
+        projectId: this.project.id,
         status: "active",
       })
       .run();
 
     this.sessionId = id;
+
+    // 이벤트 기록
+    this.recordEvent("session.started", "session", id, {
+      projectId: this.project.id,
+      projectName: this.project.name,
+      identifiedBy: this.project.identifiedBy,
+    });
+
     return id;
   }
 
@@ -136,12 +157,17 @@ export class WorkflowTracker {
       })
       .where(eq(sessions.id, this.sessionId))
       .run();
+
+    // 이벤트 기록
+    this.recordEvent("session.completed", "session", this.sessionId, {
+      summary,
+    });
   }
 
   /**
    * 세션 실패
    */
-  failSession(): void {
+  failSession(error?: string): void {
     if (!this.db || !this.sessionId) return;
 
     this.db
@@ -149,9 +175,15 @@ export class WorkflowTracker {
       .set({
         status: "failed",
         endedAt: new Date(),
+        metadata: error ? { error } : undefined,
       })
       .where(eq(sessions.id, this.sessionId))
       .run();
+
+    // 이벤트 기록
+    this.recordEvent("session.failed", "session", this.sessionId, {
+      error,
+    });
   }
 
   // ==========================================================================
@@ -161,7 +193,11 @@ export class WorkflowTracker {
   /**
    * 워크플로우 시작 (executeWorkflow 시작 시 호출)
    */
-  startWorkflow(type: WorkflowType, name: string, input?: Record<string, unknown>): string | null {
+  startWorkflow(
+    type: WorkflowType,
+    name: string,
+    input?: Record<string, unknown>
+  ): string | null {
     if (!this.db || !this.sessionId) return null;
 
     const id = generateId("wf");
@@ -180,6 +216,14 @@ export class WorkflowTracker {
 
     this.workflowId = id;
     this.stepIds.clear();
+
+    // 이벤트 기록
+    this.recordEvent("workflow.started", "workflow", id, {
+      type,
+      name,
+      input,
+    });
+
     return id;
   }
 
@@ -201,8 +245,7 @@ export class WorkflowTracker {
     // 스텝 미리 생성
     plan.workflow.forEach((step, index) => {
       const stepId = generateId("step");
-      this.db!
-        .insert(workflowSteps)
+      this.db!.insert(workflowSteps)
         .values({
           id: stepId,
           workflowId: this.workflowId!,
@@ -213,6 +256,13 @@ export class WorkflowTracker {
         })
         .run();
       this.stepIds.set(index, stepId);
+    });
+
+    // 이벤트 기록
+    this.recordEvent("workflow.planned", "workflow", this.workflowId, {
+      analysis: plan.analysis,
+      stepCount: plan.workflow.length,
+      feedbackLoopEnabled: plan.feedbackLoop?.enabled,
     });
   }
 
@@ -258,6 +308,12 @@ export class WorkflowTracker {
           .run();
       }
     }
+
+    // 이벤트 기록
+    this.recordEvent("workflow.completed", "workflow", this.workflowId, {
+      output,
+      tokensUsed: totalTokens,
+    });
   }
 
   /**
@@ -275,6 +331,11 @@ export class WorkflowTracker {
       })
       .where(eq(workflows.id, this.workflowId))
       .run();
+
+    // 이벤트 기록
+    this.recordEvent("workflow.failed", "workflow", this.workflowId, {
+      error,
+    });
   }
 
   // ==========================================================================
@@ -298,12 +359,21 @@ export class WorkflowTracker {
       })
       .where(eq(workflowSteps.id, stepId))
       .run();
+
+    // 이벤트 기록
+    this.recordEvent("step.started", "step", stepId, {
+      stepIndex,
+    });
   }
 
   /**
    * 스텝 완료
    */
-  completeStep(stepIndex: number, result: AgentResult, tokensUsed: number = 0): void {
+  completeStep(
+    stepIndex: number,
+    result: AgentResult,
+    tokensUsed: number = 0
+  ): void {
     if (!this.db) return;
 
     const stepId = this.stepIds.get(stepIndex);
@@ -322,6 +392,17 @@ export class WorkflowTracker {
       })
       .where(eq(workflowSteps.id, stepId))
       .run();
+
+    // 이벤트 기록
+    const eventType: SyncEventType = result.success
+      ? "step.completed"
+      : "step.failed";
+    this.recordEvent(eventType, "step", stepId, {
+      stepIndex,
+      success: result.success,
+      error: result.error,
+      tokensUsed,
+    });
   }
 
   // ==========================================================================
@@ -342,7 +423,8 @@ export class WorkflowTracker {
 
     const id = generateId("ar");
     const status: AgentRunStatus = result.success ? "completed" : "failed";
-    const stepId = stepIndex !== undefined ? this.stepIds.get(stepIndex) : undefined;
+    const stepId =
+      stepIndex !== undefined ? this.stepIds.get(stepIndex) : undefined;
 
     this.db
       .insert(agentRuns)
@@ -360,6 +442,19 @@ export class WorkflowTracker {
       })
       .run();
 
+    // 이벤트 기록
+    const eventType: SyncEventType = result.success
+      ? "agent.completed"
+      : "agent.failed";
+    this.recordEvent(eventType, "agent_run", id, {
+      agentType,
+      stepIndex,
+      success: result.success,
+      error: result.error,
+      tokensUsed,
+      toolsCalled,
+    });
+
     return id;
   }
 
@@ -376,7 +471,7 @@ export class WorkflowTracker {
   }
 
   getProjectId(): string | null {
-    return this.projectId;
+    return this.project?.id ?? null;
   }
 }
 

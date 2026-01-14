@@ -8,7 +8,6 @@ import { defineCommand } from "citty";
 import { consola } from "consola";
 import { createInterface } from "node:readline";
 import { executeWorkflow, simpleQuery, loadAgents, setOboraSession, getTracker } from "../orchestrator";
-import { findProjectRoot } from "../orchestrator/agent-loader";
 
 // OBORA_SESSION 환경 변수 설정 (훅에서 체크)
 setOboraSession();
@@ -37,15 +36,21 @@ export const chatCommand = defineCommand({
       process.exit(1);
     }
 
-    // 트래커 초기화 및 세션 시작
+    // 트래커 초기화 및 세션 시작 (ProjectService 통합)
     const tracker = getTracker();
-    const projectRoot = findProjectRoot(cwd);
-    await tracker.initialize(projectRoot);
+    await tracker.initialize(cwd);
+
+    const project = tracker.getProject();
     tracker.startSession();
+
+    // 프로젝트 정보 표시
+    const projectInfo = project
+      ? `Project: ${project.name} (${project.identifiedBy})`
+      : "Project: Unknown";
 
     consola.box({
       title: "Obora Orchestrator",
-      message: `Loaded ${agents.size} agents\nWorkflow enforcement: ${args.simple ? "OFF (simple mode)" : "ON"}`,
+      message: `${projectInfo}\nLoaded ${agents.size} agents\nWorkflow enforcement: ${args.simple ? "OFF (simple mode)" : "ON"}`,
     });
 
     console.log("\nType your task or question. Type 'exit' to quit.\n");

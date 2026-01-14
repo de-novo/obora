@@ -27,13 +27,32 @@ export const projects = sqliteTable(
   {
     id: text("id").primaryKey(),
     name: text("name").notNull(),
-    path: text("path").notNull().unique(),
+    path: text("path").notNull(),
     description: text("description"),
     color: text("color").notNull().default("#6366f1"),
     icon: text("icon"),
     status: text("status", { enum: ["active", "archived"] })
       .notNull()
       .default("active"),
+
+    // ======== Project Identity (SaaS-ready) ========
+    // .obora/project.yaml의 id - 최우선 식별자
+    configId: text("config_id").unique(),
+    // Git remote origin URL - secondary 식별자
+    gitRemote: text("git_remote"),
+
+    // ======== Cloud Sync (Future SaaS) ========
+    // 클라우드 조직 ID
+    organizationId: text("organization_id"),
+    // 클라우드에서의 프로젝트 ID
+    externalId: text("external_id"),
+    // 동기화 활성화 여부
+    syncEnabled: integer("sync_enabled", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    // 마지막 동기화 시간
+    lastSyncedAt: integer("last_synced_at", { mode: "timestamp" }),
+
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -44,6 +63,9 @@ export const projects = sqliteTable(
   (table) => [
     index("idx_projects_path").on(table.path),
     index("idx_projects_status").on(table.status),
+    index("idx_projects_config_id").on(table.configId),
+    index("idx_projects_git_remote").on(table.gitRemote),
+    index("idx_projects_org").on(table.organizationId),
   ]
 );
 
@@ -368,6 +390,80 @@ export const preferences = sqliteTable("preferences", {
 });
 
 // ============================================================================
+// Sync Events (Event Sourcing for SaaS)
+// ============================================================================
+
+export const syncEvents = sqliteTable(
+  "sync_events",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+
+    // 이벤트 타입
+    eventType: text("event_type", {
+      enum: [
+        // Session events
+        "session.started",
+        "session.completed",
+        "session.failed",
+        // Workflow events
+        "workflow.started",
+        "workflow.planned",
+        "workflow.completed",
+        "workflow.failed",
+        // Step events
+        "step.started",
+        "step.completed",
+        "step.failed",
+        // Agent events
+        "agent.started",
+        "agent.completed",
+        "agent.failed",
+        // Project events
+        "project.created",
+        "project.updated",
+        "project.archived",
+      ],
+    }).notNull(),
+
+    // 관련 엔티티
+    entityType: text("entity_type", {
+      enum: ["project", "session", "workflow", "step", "agent_run"],
+    }).notNull(),
+    entityId: text("entity_id").notNull(),
+
+    // 이벤트 데이터 (JSON)
+    payload: text("payload", { mode: "json" }).$type<Record<string, unknown>>(),
+
+    // 동기화 상태
+    syncStatus: text("sync_status", {
+      enum: ["pending", "synced", "failed", "skipped"],
+    })
+      .notNull()
+      .default("pending"),
+    syncedAt: integer("synced_at", { mode: "timestamp" }),
+    syncError: text("sync_error"),
+
+    // 타임스탬프
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+
+    // Vector clock for conflict resolution (future)
+    vectorClock: text("vector_clock"),
+  },
+  (table) => [
+    index("idx_sync_events_project").on(table.projectId),
+    index("idx_sync_events_type").on(table.eventType),
+    index("idx_sync_events_status").on(table.syncStatus),
+    index("idx_sync_events_entity").on(table.entityType, table.entityId),
+    index("idx_sync_events_created").on(table.createdAt),
+  ]
+);
+
+// ============================================================================
 // Type Exports
 // ============================================================================
 
@@ -416,6 +512,10 @@ export type NewAnnotation = typeof annotations.$inferInsert;
 // Preferences
 export type Preference = typeof preferences.$inferSelect;
 
+// Sync Events
+export type SyncEvent = typeof syncEvents.$inferSelect;
+export type NewSyncEvent = typeof syncEvents.$inferInsert;
+
 // ============================================================================
 // Enum Types
 // ============================================================================
@@ -431,3 +531,25 @@ export type TaskStatus = "pending" | "queued" | "in_progress" | "completed" | "c
 export type CommandStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
 export type EntityType = "project" | "session" | "workflow" | "step" | "agent_run" | "task";
 export type AnnotationType = "note" | "warning" | "error" | "success" | "info";
+
+// Sync Types
+export type SyncEventType =
+  | "session.started"
+  | "session.completed"
+  | "session.failed"
+  | "workflow.started"
+  | "workflow.planned"
+  | "workflow.completed"
+  | "workflow.failed"
+  | "step.started"
+  | "step.completed"
+  | "step.failed"
+  | "agent.started"
+  | "agent.completed"
+  | "agent.failed"
+  | "project.created"
+  | "project.updated"
+  | "project.archived";
+
+export type SyncStatus = "pending" | "synced" | "failed" | "skipped";
+export type SyncEntityType = "project" | "session" | "workflow" | "step" | "agent_run";

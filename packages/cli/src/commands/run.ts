@@ -7,7 +7,6 @@
 import { defineCommand } from "citty";
 import { consola } from "consola";
 import { executeWorkflow, simpleQuery, loadAgents, setOboraSession, getTracker } from "../orchestrator";
-import { findProjectRoot } from "../orchestrator/agent-loader";
 
 // OBORA_SESSION 환경 변수 설정 (훅에서 체크)
 setOboraSession();
@@ -48,13 +47,17 @@ export const runCommand = defineCommand({
       process.exit(1);
     }
 
-    // 트래커 초기화
+    // 트래커 초기화 (ProjectService 통합)
     const tracker = getTracker();
-    const projectRoot = findProjectRoot(cwd);
-    await tracker.initialize(projectRoot);
+    await tracker.initialize(cwd);
+
+    const project = tracker.getProject();
     tracker.startSession();
 
     if (args.verbose) {
+      if (project) {
+        consola.info(`Project: ${project.name} (${project.identifiedBy})`);
+      }
       consola.info(`Loaded ${agents.size} agents`);
       consola.info(`Task: ${task}`);
       consola.info(`Mode: ${args.simple ? "simple" : "workflow"}`);

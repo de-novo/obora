@@ -58,7 +58,7 @@ export async function initializeDb(): Promise<void> {
  * 스키마 생성 (SQL 직접 실행)
  */
 async function createSchema(sqlite: Database.Database): Promise<void> {
-  // 인라인 스키마 정의
+  // 인라인 스키마 정의 (V2 - SaaS 확장 지원)
   const schema = `
 -- Schema Version
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -66,20 +66,32 @@ CREATE TABLE IF NOT EXISTS schema_version (
   applied_at INTEGER NOT NULL
 );
 
--- Projects
+-- Projects (V2: SaaS 확장 필드 추가)
 CREATE TABLE IF NOT EXISTS projects (
   id TEXT PRIMARY KEY NOT NULL,
   name TEXT NOT NULL,
-  path TEXT NOT NULL UNIQUE,
+  path TEXT NOT NULL,
   description TEXT,
   color TEXT NOT NULL DEFAULT '#6366f1',
   icon TEXT,
   status TEXT NOT NULL DEFAULT 'active',
+  -- Project Identity (SaaS-ready)
+  config_id TEXT UNIQUE,
+  git_remote TEXT,
+  -- Cloud Sync (Future SaaS)
+  organization_id TEXT,
+  external_id TEXT,
+  sync_enabled INTEGER NOT NULL DEFAULT 0,
+  last_synced_at INTEGER,
+  -- Timestamps
   created_at INTEGER NOT NULL DEFAULT (unixepoch()),
   updated_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
 CREATE INDEX IF NOT EXISTS idx_projects_path ON projects (path);
 CREATE INDEX IF NOT EXISTS idx_projects_status ON projects (status);
+CREATE INDEX IF NOT EXISTS idx_projects_config_id ON projects (config_id);
+CREATE INDEX IF NOT EXISTS idx_projects_git_remote ON projects (git_remote);
+CREATE INDEX IF NOT EXISTS idx_projects_org ON projects (organization_id);
 
 -- Sessions
 CREATE TABLE IF NOT EXISTS sessions (
@@ -254,8 +266,29 @@ CREATE TABLE IF NOT EXISTS preferences (
   updated_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
 
--- Insert schema version
-INSERT OR IGNORE INTO schema_version (version, applied_at) VALUES (1, unixepoch());
+-- Sync Events (Event Sourcing for SaaS)
+CREATE TABLE IF NOT EXISTS sync_events (
+  id TEXT PRIMARY KEY NOT NULL,
+  project_id TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  payload TEXT,
+  sync_status TEXT NOT NULL DEFAULT 'pending',
+  synced_at INTEGER,
+  sync_error TEXT,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+  vector_clock TEXT,
+  FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_sync_events_project ON sync_events (project_id);
+CREATE INDEX IF NOT EXISTS idx_sync_events_type ON sync_events (event_type);
+CREATE INDEX IF NOT EXISTS idx_sync_events_status ON sync_events (sync_status);
+CREATE INDEX IF NOT EXISTS idx_sync_events_entity ON sync_events (entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_sync_events_created ON sync_events (created_at);
+
+-- Insert schema version (V2 - SaaS 확장)
+INSERT OR IGNORE INTO schema_version (version, applied_at) VALUES (2, unixepoch());
 `;
 
   // 각 statement를 개별 실행
