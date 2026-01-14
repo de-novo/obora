@@ -33,3 +33,14 @@ coverage/
 
 # Tracking (local only)
 .temp/
+
+# SQLite databases
+*.db
+*.db-shm
+*.db-wal
+
+# TypeScript build cache
+tsconfig.tsbuildinfo
+
+# Next.js auto-generated
+next-env.d.ts
