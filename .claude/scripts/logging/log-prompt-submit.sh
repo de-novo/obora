@@ -40,7 +40,10 @@ SESSION_ID=$(cat "$SESSION_FILE")
 # 사용자 프롬프트 추출 (JSON에서)
 USER_PROMPT=$(echo "$INPUT" | jq -r '.prompt // .message // .content // "Unknown task"' | head -c 200)
 # SQL 인젝션 방지: 작은따옴표 이스케이프
-USER_PROMPT=$(echo "$USER_PROMPT" | sed "s/'/''/g")
+USER_PROMPT_ESCAPED=$(echo "$USER_PROMPT" | sed "s/'/''/g")
+# JSON 형식으로 변환 (input 필드가 json mode이므로)
+INPUT_JSON=$(echo "$USER_PROMPT" | jq -Rs '{task: .}')
+INPUT_JSON_ESCAPED=$(echo "$INPUT_JSON" | sed "s/'/''/g")
 
 # 워크플로우 ID 생성
 WORKFLOW_ID="wf_cc_$(date +%s)_$$"
@@ -48,6 +51,7 @@ TIMESTAMP=$(date +%s)
 
 echo "SESSION_ID: $SESSION_ID, WORKFLOW_ID: $WORKFLOW_ID" >> "$DEBUG_LOG"
 echo "USER_PROMPT: $USER_PROMPT" >> "$DEBUG_LOG"
+echo "INPUT_JSON: $INPUT_JSON" >> "$DEBUG_LOG"
 
 # 워크플로우 생성
 sqlite3 "$DB_PATH" <<EOF 2>> "$DEBUG_LOG"
@@ -63,11 +67,11 @@ INSERT INTO workflows (
 ) VALUES (
   '$WORKFLOW_ID',
   '$SESSION_ID',
-  '$USER_PROMPT',
+  '$USER_PROMPT_ESCAPED',
   'claude-code',
   'running',
   $TIMESTAMP,
-  '$USER_PROMPT',
+  '$INPUT_JSON_ESCAPED',
   0
 );
 EOF
