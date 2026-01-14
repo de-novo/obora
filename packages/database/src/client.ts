@@ -1,11 +1,14 @@
 /**
  * Drizzle Database Client
- * Shared database connection for the monorepo
+ * Shared database connection for obora dashboard
  */
 
 import Database from "better-sqlite3";
 import type { Database as DatabaseType } from "better-sqlite3";
 import { drizzle, BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { existsSync } from "node:fs";
 import * as schema from "./schema.js";
 
 // ============================================================================
@@ -15,11 +18,20 @@ import * as schema from "./schema.js";
 export type DrizzleDb = BetterSQLite3Database<typeof schema>;
 
 export interface DatabaseConfig {
-  /** Database file path (default: DATABASE_URL env or ./data/db.sqlite) */
+  /** Database file path (default: ~/.obora/dashboard.db) */
   url?: string;
+  /** Open in read-only mode */
+  readonly?: boolean;
   /** Enable verbose logging */
   verbose?: boolean;
 }
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+const OBORA_DIR = ".obora";
+const DASHBOARD_DB = "dashboard.db";
 
 // ============================================================================
 // Singleton
@@ -27,6 +39,19 @@ export interface DatabaseConfig {
 
 let sqliteInstance: DatabaseType | null = null;
 let drizzleInstance: DrizzleDb | null = null;
+let currentMode: "readonly" | "readwrite" = "readwrite";
+
+// ============================================================================
+// Path Helper
+// ============================================================================
+
+/**
+ * Get the default path to the dashboard database file
+ * @returns Absolute path to ~/.obora/dashboard.db
+ */
+export function getDefaultDbPath(): string {
+  return join(homedir(), OBORA_DIR, DASHBOARD_DB);
+}
 
 // ============================================================================
 // Database Client
@@ -37,30 +62,57 @@ let drizzleInstance: DrizzleDb | null = null;
  *
  * @example
  * ```typescript
- * import { getDb } from "@obora/database/client";
- * import { users } from "@obora/database/schema";
+ * import { getDb, projects } from "@obora/database";
  *
  * const db = getDb();
- * const allUsers = db.select().from(users).all();
+ * if (db) {
+ *   const allProjects = db.select().from(projects).all();
+ * }
  * ```
  */
-export function getDb(config?: DatabaseConfig): DrizzleDb {
-  if (drizzleInstance) return drizzleInstance;
+export function getDb(config?: DatabaseConfig): DrizzleDb | null {
+  const readonly = config?.readonly ?? false;
+  const targetMode = readonly ? "readonly" : "readwrite";
+  const dbPath = config?.url || process.env.DATABASE_URL || getDefaultDbPath();
+  const resolvedPath = dbPath.startsWith("file:") ? dbPath.slice(5) : dbPath;
 
-  const dbUrl =
-    config?.url || process.env.DATABASE_URL || "file:./data/db.sqlite";
-  const dbPath = dbUrl.startsWith("file:") ? dbUrl.slice(5) : dbUrl;
+  // Check if database file exists
+  if (!existsSync(resolvedPath)) {
+    return null;
+  }
 
-  sqliteInstance = new Database(dbPath, {
-    verbose: config?.verbose ? console.log : undefined,
-  });
+  // If we have an existing connection but need to change mode
+  if (sqliteInstance && currentMode !== targetMode) {
+    sqliteInstance.close();
+    sqliteInstance = null;
+    drizzleInstance = null;
+  }
 
-  // Enable WAL mode for better concurrency
-  sqliteInstance.pragma("journal_mode = WAL");
+  // Return existing connection if compatible
+  if (drizzleInstance) {
+    return drizzleInstance;
+  }
 
-  drizzleInstance = drizzle(sqliteInstance, { schema });
+  // Create new connection
+  try {
+    sqliteInstance = new Database(resolvedPath, {
+      readonly,
+      fileMustExist: true,
+      verbose: config?.verbose ? console.log : undefined,
+    });
 
-  return drizzleInstance;
+    // Enable WAL mode for better concurrency (only for read-write mode)
+    if (!readonly) {
+      sqliteInstance.pragma("journal_mode = WAL");
+    }
+
+    drizzleInstance = drizzle(sqliteInstance, { schema });
+    currentMode = targetMode;
+    return drizzleInstance;
+  } catch (error) {
+    console.error("Failed to open database:", error);
+    return null;
+  }
 }
 
 /**
@@ -68,9 +120,14 @@ export function getDb(config?: DatabaseConfig): DrizzleDb {
  */
 export function closeDb(): void {
   if (sqliteInstance) {
-    sqliteInstance.close();
-    sqliteInstance = null;
-    drizzleInstance = null;
+    try {
+      sqliteInstance.close();
+    } catch (error) {
+      console.error("Failed to close database:", error);
+    } finally {
+      sqliteInstance = null;
+      drizzleInstance = null;
+    }
   }
 }
 
@@ -82,8 +139,7 @@ export function getSqlite(): DatabaseType | null {
 }
 
 // ============================================================================
-// Default Export
+// Type Exports
 // ============================================================================
 
-/** Default database instance */
-export const db = getDb();
+export type { DatabaseType };
