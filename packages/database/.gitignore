@@ -1,0 +1,14 @@
+# Build output
+dist/
+
+# Drizzle migrations (generated)
+drizzle/
+
+# Database files
+data/
+*.sqlite
+*.sqlite3
+*.db
+
+# Dependencies
+node_modules/
