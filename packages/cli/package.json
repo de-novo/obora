@@ -29,6 +29,7 @@
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.5",
+    "@obora/database": "workspace:*",
     "better-sqlite3": "^11.10.0",
     "citty": "^0.1.6",
     "consola": "^3.2.3",

@@ -6,7 +6,8 @@
 
 import { defineCommand } from "citty";
 import { consola } from "consola";
-import { executeWorkflow, simpleQuery, loadAgents, setOboraSession } from "../orchestrator";
+import { executeWorkflow, simpleQuery, loadAgents, setOboraSession, getTracker } from "../orchestrator";
+import { findProjectRoot } from "../orchestrator/agent-loader";
 
 // OBORA_SESSION 환경 변수 설정 (훅에서 체크)
 setOboraSession();
@@ -47,6 +48,12 @@ export const runCommand = defineCommand({
       process.exit(1);
     }
 
+    // 트래커 초기화
+    const tracker = getTracker();
+    const projectRoot = findProjectRoot(cwd);
+    await tracker.initialize(projectRoot);
+    tracker.startSession();
+
     if (args.verbose) {
       consola.info(`Loaded ${agents.size} agents`);
       consola.info(`Task: ${task}`);
@@ -77,12 +84,15 @@ export const runCommand = defineCommand({
 
         consola.success("Task completed");
         console.log("\n" + result);
+        tracker.completeSession();
       } else {
         // 워크플로우 모드
         consola.start("Planning workflow...");
 
         let workflowLength = 0;
         const { plan, results } = await executeWorkflow(task, cwd, {
+          tracker,
+          workflowType: "custom",
           onPlanComplete: (p) => {
             workflowLength = p.workflow.length;
             consola.success(`Plan: ${p.analysis}`);
@@ -113,8 +123,10 @@ export const runCommand = defineCommand({
         console.log();
         if (failed === 0) {
           consola.success(`Workflow completed: ${succeeded} steps succeeded`);
+          tracker.completeSession();
         } else {
           consola.warn(`Workflow completed: ${succeeded} succeeded, ${failed} failed`);
+          tracker.failSession();
         }
 
         // 최종 결과
@@ -125,6 +137,7 @@ export const runCommand = defineCommand({
         }
       }
     } catch (error) {
+      tracker.failSession();
       consola.error("Execution failed:", error instanceof Error ? error.message : error);
       process.exit(1);
     }

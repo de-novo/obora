@@ -8,6 +8,8 @@ import { query } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import { loadAgents, formatAgentsForPlanner, getAgentByName, findProjectRoot } from "./agent-loader";
 import type { AgentDefinition, AgentResult, WorkflowPlan } from "./types";
+import type { WorkflowTracker } from "./tracker";
+import type { WorkflowType } from "@obora/database";
 
 /**
  * LLM 출력에서 JSON 추출
@@ -234,6 +236,10 @@ export async function executeWorkflow(
   task: string,
   cwd: string,
   options: {
+    /** 워크플로우 타입 (DB 기록용) */
+    workflowType?: WorkflowType;
+    /** 워크플로우 트래커 (DB 기록용) */
+    tracker?: WorkflowTracker;
     onPlanComplete?: (plan: WorkflowPlan) => void;
     onStepStart?: (step: { agent: string; task: string }, index: number) => void;
     onStepComplete?: (
@@ -244,96 +250,133 @@ export async function executeWorkflow(
     onMessage?: (message: unknown) => void;
   } = {}
 ): Promise<{ plan: WorkflowPlan; results: AgentResult[] }> {
+  const { tracker, workflowType = "custom" } = options;
+
   // 에이전트 로드
   const agents = loadAgents(cwd);
 
-  // 1. Planner 실행
-  const plan = await planWorkflow(task, cwd, options.onMessage);
-  options.onPlanComplete?.(plan);
+  // 워크플로우 시작 기록
+  tracker?.startWorkflow(workflowType, task.slice(0, 100), { task });
 
-  const results: AgentResult[] = [];
+  try {
+    // 1. Planner 실행
+    const plan = await planWorkflow(task, cwd, options.onMessage);
+    options.onPlanComplete?.(plan);
 
-  // 2. 워크플로우 순차 실행
-  for (let i = 0; i < plan.workflow.length; i++) {
-    const step = plan.workflow[i];
-    const agent = getAgentByName(agents, step.agent);
+    // 계획 완료 기록
+    tracker?.planCompleted(plan);
 
-    if (!agent) {
-      results.push({
-        success: false,
-        output: "",
-        error: `Unknown agent: ${step.agent}`,
-      });
-      continue;
+    const results: AgentResult[] = [];
+
+    // 2. 워크플로우 순차 실행
+    for (let i = 0; i < plan.workflow.length; i++) {
+      const step = plan.workflow[i];
+      const agent = getAgentByName(agents, step.agent);
+
+      if (!agent) {
+        const errorResult = {
+          success: false,
+          output: "",
+          error: `Unknown agent: ${step.agent}`,
+        };
+        results.push(errorResult);
+        tracker?.completeStep(i, errorResult);
+        continue;
+      }
+
+      options.onStepStart?.(step, i);
+      tracker?.startStep(i);
+
+      const result = await runAgent(agent, step.task, cwd, options.onMessage);
+      results.push(result);
+
+      // 스텝 완료 및 에이전트 실행 기록
+      tracker?.completeStep(i, result);
+      tracker?.recordAgentRun(step.agent, result, i);
+
+      options.onStepComplete?.(step, result, i);
+
+      // 실패 시 중단
+      if (!result.success) {
+        tracker?.failWorkflow(result.error || "Step failed");
+        break;
+      }
     }
 
-    options.onStepStart?.(step, i);
+    // 3. 피드백 루프 (활성화된 경우)
+    if (plan.feedbackLoop?.enabled) {
+      const reviewerAgent = getAgentByName(agents, "reviewer");
+      if (reviewerAgent) {
+        let iterations = 0;
+        const maxIterations = plan.feedbackLoop.maxIterations || 3;
 
-    const result = await runAgent(agent, step.task, cwd, options.onMessage);
-    results.push(result);
-
-    options.onStepComplete?.(step, result, i);
-
-    // 실패 시 중단
-    if (!result.success) {
-      break;
-    }
-  }
-
-  // 3. 피드백 루프 (활성화된 경우)
-  if (plan.feedbackLoop?.enabled) {
-    const reviewerAgent = getAgentByName(agents, "reviewer");
-    if (reviewerAgent) {
-      let iterations = 0;
-      const maxIterations = plan.feedbackLoop.maxIterations || 3;
-
-      while (iterations < maxIterations) {
-        const reviewResult = await runAgent(
-          reviewerAgent,
-          "이전 작업 결과를 검토하세요.",
-          cwd,
-          options.onMessage
-        );
-
-        // 이슈 파싱 및 스키마 검증
-        const jsonData = extractJsonFromOutput(reviewResult.output);
-
-        // Zod 스키마로 검증
-        const validated = ReviewResultSchema.safeParse(jsonData);
-        if (!validated.success) {
-          break; // 검증 실패 시 종료
-        }
-
-        const review = validated.data;
-        if (review.issues.length === 0) {
-          break; // 이슈 없으면 종료
-        }
-
-        // critical 이슈만 수정
-        const criticalIssues = review.issues.filter(
-          (issue) => issue.severity === "critical"
-        );
-        if (criticalIssues.length === 0) {
-          break;
-        }
-
-        // 수정 에이전트 재실행
-        const fixAgent = getAgentByName(agents, "debugger");
-        if (fixAgent) {
-          await runAgent(
-            fixAgent,
-            `다음 이슈들을 수정하세요:\n${JSON.stringify(criticalIssues, null, 2)}`,
+        while (iterations < maxIterations) {
+          const reviewResult = await runAgent(
+            reviewerAgent,
+            "이전 작업 결과를 검토하세요.",
             cwd,
             options.onMessage
           );
-        }
 
-        iterations++;
+          // 리뷰어 에이전트 실행 기록
+          tracker?.recordAgentRun("reviewer", reviewResult);
+
+          // 이슈 파싱 및 스키마 검증
+          const jsonData = extractJsonFromOutput(reviewResult.output);
+
+          // Zod 스키마로 검증
+          const validated = ReviewResultSchema.safeParse(jsonData);
+          if (!validated.success) {
+            break; // 검증 실패 시 종료
+          }
+
+          const review = validated.data;
+          if (review.issues.length === 0) {
+            break; // 이슈 없으면 종료
+          }
+
+          // critical 이슈만 수정
+          const criticalIssues = review.issues.filter(
+            (issue) => issue.severity === "critical"
+          );
+          if (criticalIssues.length === 0) {
+            break;
+          }
+
+          // 수정 에이전트 재실행
+          const fixAgent = getAgentByName(agents, "debugger");
+          if (fixAgent) {
+            const fixResult = await runAgent(
+              fixAgent,
+              `다음 이슈들을 수정하세요:\n${JSON.stringify(criticalIssues, null, 2)}`,
+              cwd,
+              options.onMessage
+            );
+
+            // 디버거 에이전트 실행 기록
+            tracker?.recordAgentRun("debugger", fixResult);
+          }
+
+          iterations++;
+        }
       }
     }
-  }
 
-  return { plan, results };
+    // 워크플로우 완료 기록
+    const allSuccess = results.every((r) => r.success);
+    if (allSuccess) {
+      tracker?.completeWorkflow({ resultsCount: results.length });
+    } else {
+      const lastError = results.find((r) => !r.success)?.error;
+      tracker?.failWorkflow(lastError || "Workflow failed");
+    }
+
+    return { plan, results };
+  } catch (error) {
+    // 예외 발생 시 실패 기록
+    tracker?.failWorkflow(error instanceof Error ? error.message : "Unknown error");
+    throw error;
+  }
 }
 
 /**

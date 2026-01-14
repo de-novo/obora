@@ -7,7 +7,8 @@
 import { defineCommand } from "citty";
 import { consola } from "consola";
 import { createInterface } from "node:readline";
-import { executeWorkflow, simpleQuery, loadAgents, setOboraSession } from "../orchestrator";
+import { executeWorkflow, simpleQuery, loadAgents, setOboraSession, getTracker } from "../orchestrator";
+import { findProjectRoot } from "../orchestrator/agent-loader";
 
 // OBORA_SESSION 환경 변수 설정 (훅에서 체크)
 setOboraSession();
@@ -36,6 +37,12 @@ export const chatCommand = defineCommand({
       process.exit(1);
     }
 
+    // 트래커 초기화 및 세션 시작
+    const tracker = getTracker();
+    const projectRoot = findProjectRoot(cwd);
+    await tracker.initialize(projectRoot);
+    tracker.startSession();
+
     consola.box({
       title: "Obora Orchestrator",
       message: `Loaded ${agents.size} agents\nWorkflow enforcement: ${args.simple ? "OFF (simple mode)" : "ON"}`,
@@ -59,6 +66,7 @@ export const chatCommand = defineCommand({
 
         if (trimmed.toLowerCase() === "exit" || trimmed.toLowerCase() === "quit") {
           console.log("\nGoodbye!");
+          tracker.completeSession();
           rl.close();
           process.exit(0);
         }
@@ -89,6 +97,8 @@ export const chatCommand = defineCommand({
             console.log("\n\x1b[33m[Orchestrator]\x1b[0m Planning workflow...\n");
 
             const { results } = await executeWorkflow(trimmed, cwd, {
+              tracker,
+              workflowType: "custom",
               onPlanComplete: (p) => {
                 console.log(`\x1b[34m[Plan]\x1b[0m ${p.analysis}\n`);
                 console.log("\x1b[34mWorkflow:\x1b[0m");
