@@ -8,6 +8,9 @@ interface PresetManifest {
   category: string;
   requires?: string[]; // Format: "category:preset"
   conflicts?: string[];
+  capabilities?: string[];
+  requiresCapabilities?: string[];
+  incompatibleCapabilities?: string[];
 }
 
 interface PresetSelection {
@@ -62,10 +65,14 @@ export async function validateAndResolvePresets(
   resolved: SlotSelections;
   added: Array<{ category: string; preset: string; requiredBy: string }>;
   conflicts: Array<{ preset1: string; preset2: string }>;
+  missingCapabilities: Array<{ preset: string; capability: string }>;
+  capabilityConflicts: Array<{ preset: string; capability: string; providedBy: string }>;
 }> {
   const resolved = { ...selections };
   const added: Array<{ category: string; preset: string; requiredBy: string }> = [];
   const conflicts: Array<{ preset1: string; preset2: string }> = [];
+  const missingCapabilities: Array<{ preset: string; capability: string }> = [];
+  const capabilityConflicts: Array<{ preset: string; capability: string; providedBy: string }> = [];
 
   // Collect all selected presets and their manifests
   const selectedPresets: Array<{
@@ -142,7 +149,41 @@ export async function validateAndResolvePresets(
     }
   }
 
-  return { resolved, added, conflicts };
+  // Capability-based compatibility checks
+  const capabilityProviders = new Map<string, string[]>();
+  for (const { category, preset, manifest } of selectedPresets) {
+    const capabilities = manifest.capabilities || [];
+    for (const capability of capabilities) {
+      const providers = capabilityProviders.get(capability) || [];
+      providers.push(`${category}:${preset}`);
+      capabilityProviders.set(capability, providers);
+    }
+  }
+
+  for (const { category, preset, manifest } of selectedPresets) {
+    const presetKey = `${category}:${preset}`;
+
+    if (manifest.requiresCapabilities && manifest.requiresCapabilities.length > 0) {
+      for (const capability of manifest.requiresCapabilities) {
+        if (!capabilityProviders.has(capability)) {
+          missingCapabilities.push({ preset: presetKey, capability });
+        }
+      }
+    }
+
+    if (manifest.incompatibleCapabilities && manifest.incompatibleCapabilities.length > 0) {
+      for (const capability of manifest.incompatibleCapabilities) {
+        const providers = capabilityProviders.get(capability) || [];
+        for (const providedBy of providers) {
+          if (providedBy !== presetKey) {
+            capabilityConflicts.push({ preset: presetKey, capability, providedBy });
+          }
+        }
+      }
+    }
+  }
+
+  return { resolved, added, conflicts, missingCapabilities, capabilityConflicts };
 }
 
 /**
@@ -150,7 +191,9 @@ export async function validateAndResolvePresets(
  */
 export function displayValidationResults(
   added: Array<{ category: string; preset: string; requiredBy: string }>,
-  conflicts: Array<{ preset1: string; preset2: string }>
+  conflicts: Array<{ preset1: string; preset2: string }>,
+  missingCapabilities: Array<{ preset: string; capability: string }> = [],
+  capabilityConflicts: Array<{ preset: string; capability: string; providedBy: string }> = []
 ): void {
   if (added.length > 0) {
     consola.info("\nAuto-added required presets:");
@@ -164,6 +207,22 @@ export function displayValidationResults(
     consola.warn("\nPreset conflicts detected:");
     for (const { preset1, preset2 } of conflicts) {
       consola.warn(`  ! ${preset1} conflicts with ${preset2}`);
+    }
+    console.log();
+  }
+
+  if (missingCapabilities.length > 0) {
+    consola.warn("\nMissing required capabilities:");
+    for (const { preset, capability } of missingCapabilities) {
+      consola.warn(`  ! ${preset} requires capability "${capability}"`);
+    }
+    console.log();
+  }
+
+  if (capabilityConflicts.length > 0) {
+    consola.warn("\nCapability conflicts detected:");
+    for (const { preset, capability, providedBy } of capabilityConflicts) {
+      consola.warn(`  ! ${preset} is incompatible with "${capability}" provided by ${providedBy}`);
     }
     console.log();
   }

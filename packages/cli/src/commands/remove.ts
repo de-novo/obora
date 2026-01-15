@@ -1,45 +1,39 @@
 import { defineCommand } from "citty";
 import { consola } from "consola";
-import { resolve, join } from "pathe";
 import { promises as fs } from "node:fs";
+import { dirname, join, resolve } from "pathe";
 import prompts from "prompts";
 import {
+  APP_MODULES,
+  dirExists,
+  fileExists,
   PRESETS,
   PRESETS_DIR,
-  APP_MODULES,
-  fileExists,
-  dirExists,
   readJson,
+  resolvePresetName,
   writeJson,
 } from "../utils";
 import {
+  getInstalledPresets,
   hasOboraConfig,
   readOboraConfig,
   removeSlotPreset,
-  getInstalledPresets,
 } from "../utils/project-config";
 
 // ============================================================================
 // Types
 // ============================================================================
 
-interface PresetManifest {
-  name: string;
-  category: string;
-  description: string;
-  operations: {
-    replace: string[];
-    merge: string[];
-    add: string[];
-    remove: string[];
-    inject: Array<{
-      file: string;
-      marker: string;
-      content: string;
-    }>;
-  };
-  conflicts?: string[];
-  requires?: string[];
+interface PresetTargetConfig {
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  files?: string[];
+  inject?: Array<{
+    file: string;
+    marker: string;
+    content: string;
+  }>;
+  scripts?: Record<string, string>;
   env?: Array<{
     key: string;
     description: string;
@@ -47,13 +41,264 @@ interface PresetManifest {
     secret: boolean;
     example?: string;
   }>;
-  scripts?: Record<string, string>;
   postInstall?: string[];
+  detect?: string[] | DetectRule;
+}
+
+interface DetectRule {
+  packages?: string[];
+  packageVersions?: Record<string, string>;
+  runtime?: {
+    node?: string;
+    bun?: boolean;
+    deno?: boolean;
+    packageManager?: "pnpm" | "yarn" | "npm" | "bun";
+  };
+}
+
+interface PresetManifest {
+  name: string;
+  category: string;
+  description: string;
+  version?: string;
+  conflicts?: string[];
+  requires?: string[];
+  scripts?: Record<string, string>;
+  env?: Array<{
+    key: string;
+    description: string;
+    required: boolean;
+    secret: boolean;
+    example?: string;
+  }>;
+  postInstall?: string[];
+  common?: PresetTargetConfig;
+  targets?: Record<string, PresetTargetConfig>;
+  variants?: Record<string, PresetTargetConfig>;
 }
 
 // ============================================================================
 // Helper Functions
 // ============================================================================
+
+function collectTargetConfigs(manifest: PresetManifest): Record<string, PresetTargetConfig> {
+  return manifest.targets || manifest.variants || {};
+}
+
+function collectDependencies(
+  manifest: PresetManifest,
+  targetKey?: string
+): { dependencies?: Record<string, string>; devDependencies?: Record<string, string> } {
+  const deps: Record<string, string> = { ...(manifest.common?.dependencies || {}) };
+  const devDeps: Record<string, string> = { ...(manifest.common?.devDependencies || {}) };
+  const targetConfigs = collectTargetConfigs(manifest);
+  const targetKeys = targetKey ? [targetKey] : Object.keys(targetConfigs);
+  for (const key of targetKeys) {
+    const cfg = targetConfigs[key];
+    if (!cfg) continue;
+    Object.assign(deps, cfg.dependencies || {});
+    Object.assign(devDeps, cfg.devDependencies || {});
+  }
+  return {
+    dependencies: Object.keys(deps).length > 0 ? deps : undefined,
+    devDependencies: Object.keys(devDeps).length > 0 ? devDeps : undefined,
+  };
+}
+
+function collectScripts(manifest: PresetManifest, targetKey?: string): Record<string, string> {
+  const scripts: Record<string, string> = {
+    ...(manifest.scripts || {}),
+    ...(manifest.common?.scripts || {}),
+  };
+  const targetConfigs = collectTargetConfigs(manifest);
+  const targetKeys = targetKey ? [targetKey] : Object.keys(targetConfigs);
+  for (const key of targetKeys) {
+    const cfg = targetConfigs[key];
+    if (!cfg?.scripts) continue;
+    Object.assign(scripts, cfg.scripts);
+  }
+  return scripts;
+}
+
+function collectInjects(manifest: PresetManifest, targetKey?: string): Array<{
+  file: string;
+  marker: string;
+  content: string;
+}> {
+  const injects: Array<{ file: string; marker: string; content: string }> = [];
+  const targetConfigs = collectTargetConfigs(manifest);
+  const targetKeys = targetKey ? [targetKey] : Object.keys(targetConfigs);
+  for (const key of targetKeys) {
+    const cfg = targetConfigs[key];
+    if (cfg?.inject) {
+      injects.push(...cfg.inject);
+    }
+  }
+  return injects;
+}
+
+function collectFiles(manifest: PresetManifest, targetKey?: string): string[] {
+  const files: string[] = [];
+  if (manifest.common?.files) {
+    files.push(...manifest.common.files);
+  }
+  const targetConfigs = collectTargetConfigs(manifest);
+  const targetKeys = targetKey ? [targetKey] : Object.keys(targetConfigs);
+  for (const key of targetKeys) {
+    const cfg = targetConfigs[key];
+    if (cfg?.files) {
+      files.push(...cfg.files);
+    }
+  }
+  return Array.from(new Set(files));
+}
+
+async function detectTargetKey(
+  manifest: PresetManifest,
+  packageJsonPath: string
+): Promise<string | null> {
+  const targetConfigs = collectTargetConfigs(manifest);
+  if (!(await fileExists(packageJsonPath))) return null;
+  const pkg = await readJson<{
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+    engines?: { node?: string };
+  }>(packageJsonPath);
+  const deps = new Set([
+    ...Object.keys(pkg.dependencies || {}),
+    ...Object.keys(pkg.devDependencies || {}),
+  ]);
+  const depVersions = {
+    ...(pkg.dependencies || {}),
+    ...(pkg.devDependencies || {}),
+  };
+  const nodeEngine = pkg.engines?.node;
+  const runtimeFlags = await detectRuntimeFlags(dirname(packageJsonPath));
+  for (const [key, cfg] of Object.entries(targetConfigs)) {
+    if (!hasDetectRule(cfg?.detect)) continue;
+    if (matchesDetectRule(cfg!.detect!, deps, depVersions, nodeEngine, runtimeFlags)) {
+      return key;
+    }
+  }
+  return null;
+}
+
+function matchesDetectRule(
+  detect: string[] | DetectRule,
+  deps: Set<string>,
+  depVersions: Record<string, string>,
+  nodeEngine?: string,
+  runtimeFlags?: { bun: boolean; deno: boolean; packageManager?: "pnpm" | "yarn" | "npm" | "bun" }
+): boolean {
+  if (Array.isArray(detect)) {
+    return detect.some((dep) => deps.has(dep));
+  }
+
+  if (detect.packages && !detect.packages.every((dep) => deps.has(dep))) {
+    return false;
+  }
+
+  if (detect.packageVersions) {
+    for (const [pkg, requirement] of Object.entries(detect.packageVersions)) {
+      const version = depVersions[pkg];
+      if (!version || !satisfiesVersion(version, requirement)) {
+        return false;
+      }
+    }
+  }
+
+  if (detect.runtime?.node) {
+    const runtimeVersion = nodeEngine || process.version;
+    if (!satisfiesVersion(runtimeVersion, detect.runtime.node)) {
+      return false;
+    }
+  }
+
+  if (detect.runtime?.bun && !runtimeFlags?.bun) {
+    return false;
+  }
+  if (detect.runtime?.deno && !runtimeFlags?.deno) {
+    return false;
+  }
+  if (detect.runtime?.packageManager && runtimeFlags?.packageManager !== detect.runtime.packageManager) {
+    return false;
+  }
+
+  return true;
+}
+
+async function detectRuntimeFlags(targetDir: string): Promise<{
+  bun: boolean;
+  deno: boolean;
+  packageManager?: "pnpm" | "yarn" | "npm" | "bun";
+}> {
+  const bun = await fileExists(join(targetDir, "bun.lockb")) ||
+    await fileExists(join(targetDir, "bun.lock"));
+  const deno = await fileExists(join(targetDir, "deno.json")) ||
+    await fileExists(join(targetDir, "deno.jsonc"));
+  const pnpm = await fileExists(join(targetDir, "pnpm-lock.yaml"));
+  const yarn = await fileExists(join(targetDir, "yarn.lock"));
+  const npm = await fileExists(join(targetDir, "package-lock.json"));
+  const packageManager = bun
+    ? "bun"
+    : pnpm
+      ? "pnpm"
+      : yarn
+        ? "yarn"
+        : npm
+          ? "npm"
+          : undefined;
+  return { bun, deno, packageManager };
+}
+
+function hasDetectRule(detect?: string[] | DetectRule): boolean {
+  if (!detect) return false;
+  if (Array.isArray(detect)) return detect.length > 0;
+  return Boolean(
+    (detect.packages && detect.packages.length > 0) ||
+    (detect.packageVersions && Object.keys(detect.packageVersions).length > 0) ||
+    detect.runtime
+  );
+}
+
+function satisfiesVersion(actual: string, requirement: string): boolean {
+  const req = parseMajorMinor(requirement);
+  const act = parseMajorMinor(actual);
+  if (!req || !act) return false;
+
+  const useMinor = req.minor !== null;
+  const compare = compareMajorMinor(act, req, useMinor);
+
+  if (requirement.startsWith(">=")) return compare >= 0;
+  if (requirement.startsWith("<=")) return compare <= 0;
+  if (requirement.startsWith(">")) return compare > 0;
+  if (requirement.startsWith("<")) return compare < 0;
+  return compare === 0;
+}
+
+function parseMajorMinor(version: string): { major: number; minor: number | null } | null {
+  const match = version.match(/(\\d+)(?:\\.(\\d+))?/);
+  if (!match) return null;
+  return {
+    major: Number.parseInt(match[1], 10),
+    minor: match[2] ? Number.parseInt(match[2], 10) : null,
+  };
+}
+
+function compareMajorMinor(
+  actual: { major: number; minor: number | null },
+  required: { major: number; minor: number | null },
+  useMinor: boolean
+): number {
+  if (actual.major !== required.major) {
+    return actual.major > required.major ? 1 : -1;
+  }
+  if (!useMinor) return 0;
+  const actualMinor = actual.minor ?? 0;
+  const requiredMinor = required.minor ?? 0;
+  if (actualMinor === requiredMinor) return 0;
+  return actualMinor > requiredMinor ? 1 : -1;
+}
 
 /**
  * Remove dependencies from package.json
@@ -342,6 +587,7 @@ export const removeCommand = defineCommand({
       const getAppDir = (appKey: string): string | null => {
         const appConfig = config.apps[appKey];
         if (!appConfig) return null;
+        if (appConfig.path) return appConfig.path;
         const moduleConfig = APP_MODULES[appConfig.module];
         if (!moduleConfig) return null;
         return join(projectDir, moduleConfig.targetDir);
@@ -392,7 +638,7 @@ export const removeCommand = defineCommand({
             choices: relevantApps.map((app) => {
               const moduleConfig = APP_MODULES[config.apps[app]?.module || ""];
               return {
-                title: `${app} (${moduleConfig?.targetDir || app})`,
+                title: `${app} (${config.apps[app]?.path || moduleConfig?.targetDir || app})`,
                 value: app,
               };
             }),
@@ -447,14 +693,15 @@ export const removeCommand = defineCommand({
 
     try {
       // Get preset info
-      const presetInfo = PRESETS[presetToRemove];
+      const canonicalPreset = resolvePresetName(presetToRemove);
+      const presetInfo = PRESETS[canonicalPreset];
       if (!presetInfo) {
         consola.warn(`Unknown preset: ${presetToRemove}`);
       }
 
       // Try to read manifest for detailed removal
       const presetDir = presetInfo
-        ? join(PRESETS_DIR, presetInfo.category, presetToRemove)
+        ? join(PRESETS_DIR, presetInfo.category, canonicalPreset)
         : null;
 
       let manifest: PresetManifest | null = null;
@@ -465,14 +712,12 @@ export const removeCommand = defineCommand({
         }
       }
 
-      // Read dependencies to remove
-      let depsToRemove: { dependencies?: Record<string, string>; devDependencies?: Record<string, string> } = {};
-      if (presetDir) {
-        const depsPath = join(presetDir, "dependencies.json");
-        if (await fileExists(depsPath)) {
-          depsToRemove = await readJson(depsPath);
-        }
-      }
+      const targetKey = manifest
+        ? (config.presetTargets?.[canonicalPreset] ||
+          await detectTargetKey(manifest, packageJsonPath))
+        : null;
+
+      const depsToRemove = manifest ? collectDependencies(manifest, targetKey || undefined) : {};
 
       // 1. Remove dependencies from package.json
       if (Object.keys(depsToRemove).length > 0) {
@@ -483,16 +728,18 @@ export const removeCommand = defineCommand({
       }
 
       // 2. Remove scripts from package.json
-      if (manifest?.scripts) {
-        const scriptsRemoved = await removeScripts(packageJsonPath, manifest.scripts);
+      const scriptsToRemove = manifest ? collectScripts(manifest, targetKey || undefined) : {};
+      if (Object.keys(scriptsToRemove).length > 0) {
+        const scriptsRemoved = await removeScripts(packageJsonPath, scriptsToRemove);
         if (scriptsRemoved) {
           consola.success(`Removed scripts from package.json`);
         }
       }
 
       // 3. Remove injected content
-      if (manifest?.operations.inject && manifest.operations.inject.length > 0) {
-        for (const inject of manifest.operations.inject) {
+      const injectsToRemove = manifest ? collectInjects(manifest, targetKey || undefined) : [];
+      if (injectsToRemove.length > 0) {
+        for (const inject of injectsToRemove) {
           const filePath = join(targetDir, inject.file);
           const removed = await removeInjectedContent(filePath, inject.marker, inject.content);
           if (removed) {
@@ -502,16 +749,26 @@ export const removeCommand = defineCommand({
       }
 
       // 4. Remove added files/directories (unless keepFiles is true)
-      if (!args.keepFiles && manifest?.operations.add && manifest.operations.add.length > 0) {
-        for (const addPath of manifest.operations.add) {
-          const fullPath = join(targetDir, addPath);
+      const filesToRemove = !args.keepFiles && manifest
+        ? collectFiles(manifest, targetKey || undefined)
+        : [];
+      if (filesToRemove.length > 0) {
+        for (const fileEntry of filesToRemove) {
+          const isRootEntry = targetKey && (
+            fileEntry === targetKey ||
+            (fileEntry === "nextjs" && targetKey.startsWith("nextjs")) ||
+            (fileEntry === "nestjs" && targetKey.startsWith("nestjs"))
+          );
+          const fullPath = isRootEntry
+            ? targetDir
+            : join(targetDir, fileEntry);
 
           if (await dirExists(fullPath)) {
             await removeDirectory(fullPath);
-            consola.success(`Removed directory: ${addPath}`);
+            consola.success(`Removed directory: ${fileEntry}`);
           } else if (await fileExists(fullPath)) {
             await removeFile(fullPath);
-            consola.success(`Removed file: ${addPath}`);
+            consola.success(`Removed file: ${fileEntry}`);
           }
         }
       }

@@ -100,7 +100,7 @@ pnpm dev
 \`\`\`
 my-project/
 ├── apps/api/          # NestJS (src/modules/*, src/db/*)
-├── apps/web/          # Next.js (app/*, src/lib/*)
+├── apps/web/          # Next.js (app/*, src/lib/*, src/modules/*)
 ├── packages/          # Shared packages
 ├── .obora/config.json # Project config
 └── .env.example       # Required env vars

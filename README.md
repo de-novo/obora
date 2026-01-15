@@ -129,6 +129,15 @@ obora-kit/
 | `umami` | nextjs-web | Umami - 경량, 프라이버시 중심 |
 | `posthog` | nextjs-web | PostHog - 올인원 제품 분석 |
 
+### 데이터 패칭 (Data Fetching)
+
+| 프리셋 | 대상 앱 | 설명 |
+|--------|---------|------|
+| `tanstack-query` | nextjs-web | React 비동기 상태 관리, 캐싱/동기화 |
+
+> **사용 경로**: 클라이언트는 `@/lib/query`, 서버 전용 예제는 `@/lib/query/prefetch`를 사용하세요.  
+> 서버 전용 모듈은 클라이언트 컴포넌트에서 import하면 안 됩니다.
+
 ### 이메일 (Email)
 
 | 프리셋 | 대상 앱 | 설명 |

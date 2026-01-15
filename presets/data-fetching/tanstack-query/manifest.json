@@ -1,0 +1,79 @@
+{
+  "$schema": "../../preset.schema.json",
+  "name": "tanstack-query",
+  "category": "data-fetching",
+  "description": "TanStack Query - Async state & data fetching for React",
+  "version": "5.0.0",
+  "common": {
+    "dependencies": {
+      "@tanstack/react-query": "^5.0.0"
+    }
+  },
+  "targets": {
+    "nextjs": {
+      "description": "Next.js (manual provider setup)",
+      "files": ["nextjs"],
+      "detect": {
+        "packages": ["next"],
+        "packageVersions": {
+          "next": ">=14.1"
+        },
+        "runtime": {
+          "node": ">=18.12"
+        }
+      },
+      "postInstall": [
+        "See lib/query-prefetch.ts for SSR/prefetch example.",
+        "Wrap your app with <QueryProvider /> in app/layout.tsx (client component)."
+      ]
+    },
+    "nextjs-auto": {
+      "description": "Next.js (auto layout injection)",
+      "files": ["nextjs"],
+      "inject": [
+        {
+          "file": "app/providers.tsx",
+          "marker": "@obora:providers-imports",
+          "content": "import { QueryProvider } from \"@/lib/query\";",
+          "order": 20
+        },
+        {
+          "file": "app/providers.tsx",
+          "marker": "@obora:providers",
+          "content": "(children) => <QueryProvider>{children}</QueryProvider>,",
+          "order": 20
+        }
+      ],
+      "postInstall": [
+        "Layout is updated to include <Providers> automatically.",
+        "See lib/query-prefetch.ts for SSR/prefetch example."
+      ]
+    },
+    "nextjs-devtools": {
+      "description": "Next.js (auto layout + ReactQueryDevtools)",
+      "dependencies": {
+        "@tanstack/react-query-devtools": "^5.0.0"
+      },
+      "files": ["nextjs"],
+      "inject": [
+        {
+          "file": "app/providers.tsx",
+          "marker": "@obora:providers-imports",
+          "content": "import { QueryProvider } from \"@/lib/query\";\nimport { ReactQueryDevtools } from \"@tanstack/react-query-devtools\";",
+          "order": 20
+        },
+        {
+          "file": "app/providers.tsx",
+          "marker": "@obora:providers",
+          "content": "(children) => <QueryProvider>{children}<ReactQueryDevtools initialIsOpen={false} /></QueryProvider>,",
+          "order": 20
+        }
+      ],
+      "postInstall": [
+        "ReactQueryDevtools is enabled in Providers (client).",
+        "See lib/query-prefetch.ts for SSR/prefetch example."
+      ]
+    }
+  },
+  "postInstall": []
+}

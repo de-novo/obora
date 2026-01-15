@@ -3,18 +3,9 @@
   "name": "eslint-prettier",
   "category": "linting",
   "description": "ESLint + Prettier - Traditional linting with full plugin ecosystem",
-  "operations": {
-    "replace": [],
-    "merge": ["package.json"],
-    "add": [
-      "eslint.config.js",
-      ".prettierrc",
-      ".prettierignore"
-    ],
-    "remove": ["biome.json"],
-    "inject": []
-  },
-  "conflicts": ["biome"],
+  "conflicts": [
+    "biome"
+  ],
   "requires": [],
   "env": [],
   "postInstall": [],
@@ -22,5 +13,35 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write ."
+  },
+  "version": "9.0.0",
+  "targets": {
+    "root": {
+      "files": [
+        "eslint.config.js",
+        ".prettierrc",
+        ".prettierignore"
+      ],
+      "remove": [
+        "biome.json"
+      ]
+    }
+  },
+  "common": {
+    "devDependencies": {
+      "eslint": "^9.0.0",
+      "prettier": "^3.4.0",
+      "@typescript-eslint/parser": "^8.0.0",
+      "@typescript-eslint/eslint-plugin": "^8.0.0",
+      "eslint-config-prettier": "^9.0.0",
+      "eslint-plugin-prettier": "^5.0.0",
+      "eslint-plugin-import": "^2.31.0",
+      "globals": "^15.0.0"
+    },
+    "scripts": {
+      "lint": "eslint .",
+      "lint:fix": "eslint . --fix",
+      "format": "prettier --write ."
+    }
   }
 }

@@ -1,10 +1,9 @@
 {
-  "$schema": "../../preset-v2.schema.json",
+  "$schema": "../../preset.schema.json",
   "name": "drizzle",
   "category": "database",
   "description": "Drizzle ORM - Type-safe SQL",
   "version": "0.45.0",
-
   "common": {
     "devDependencies": {
       "drizzle-kit": "^0.31.0"
@@ -13,9 +12,13 @@
       "db:generate": "drizzle-kit generate",
       "db:push": "drizzle-kit push",
       "db:studio": "drizzle-kit studio"
+    },
+    "dependencies": {
+      "drizzle-orm": "^0.45.0",
+      "@neondatabase/serverless": "^0.10.0",
+      "@paralleldrive/cuid2": "^2.2.0"
     }
   },
-
   "targets": {
     "sqlite": {
       "description": "SQLite with better-sqlite3 (Next.js, standalone)",
@@ -27,7 +30,9 @@
       "devDependencies": {
         "@types/better-sqlite3": "^7.6.11"
       },
-      "files": ["sqlite"],
+      "files": [
+        "sqlite"
+      ],
       "env": [
         {
           "key": "DATABASE_URL",
@@ -35,9 +40,12 @@
           "required": false,
           "example": "file:./db.sqlite"
         }
+      ],
+      "detect": [
+        "better-sqlite3",
+        "sqlite3"
       ]
     },
-
     "postgres": {
       "description": "PostgreSQL with Neon serverless (NestJS, production)",
       "dialect": "postgresql",
@@ -45,7 +53,9 @@
         "drizzle-orm": "^0.45.0",
         "@neondatabase/serverless": "^0.10.0"
       },
-      "files": ["postgres"],
+      "files": [
+        "postgres"
+      ],
       "env": [
         {
           "key": "DATABASE_URL",
@@ -54,11 +64,16 @@
           "secret": true,
           "example": "postgres://user:pass@host:5432/dbname"
         }
+      ],
+      "detect": [
+        "pg",
+        "@neondatabase/serverless"
       ]
     }
   },
-
-  "conflicts": ["prisma"],
+  "conflicts": [
+    "prisma"
+  ],
   "postInstall": [
     "Define your schema",
     "Run: pnpm db:push"

@@ -118,6 +118,11 @@ describe("constants", () => {
         "auth",
         "payment",
         "analytics",
+        "data-fetching",
+        "state",
+        "i18n",
+        "theming",
+        "ui",
         "email",
         "ai",
         "storage",
@@ -128,8 +133,8 @@ describe("constants", () => {
       });
     });
 
-    it("should have 9 categories", () => {
-      expect(CATEGORIES.length).toBe(9);
+    it("should have 14 categories", () => {
+      expect(CATEGORIES.length).toBe(14);
     });
 
     it("should have config for each category", () => {

@@ -1,6 +1,6 @@
-import { join, dirname } from "pathe";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { existsSync } from "node:fs";
+import { dirname, join } from "pathe";
 
 // ============================================================================
 // Directory Paths
@@ -22,6 +22,15 @@ function getBasePath(): string {
   const devPath = join(__dirname, "../../../..");
   if (existsSync(join(devPath, "templates"))) {
     return devPath;
+  }
+  // Walk up to find repo root containing templates/presets
+  let current = __dirname;
+  for (let i = 0; i < 8; i++) {
+    const candidate = join(current, "..");
+    if (existsSync(join(candidate, "templates")) && existsSync(join(candidate, "presets"))) {
+      return candidate;
+    }
+    current = candidate;
   }
   // Fallback to production assumption
   return prodPath;
@@ -60,6 +69,7 @@ export interface PresetInjectOperation {
   file: string;
   marker: string;
   content: string;
+  order?: number;
 }
 
 export interface PresetOperations {
@@ -76,6 +86,23 @@ export interface PresetEnvVar {
   required: boolean;
   secret: boolean;
   example?: string;
+}
+
+// ============================================================================
+// Shared Files (Must Use Inject Markers)
+// ============================================================================
+
+export const SHARED_APP_FILE_PATHS = [
+  "app/layout.tsx",
+  "app/providers.tsx",
+  "src/app.module.ts",
+];
+
+export function isForbiddenPresetFilePath(relativePath: string): boolean {
+  const normalized = relativePath.replace(/\\/g, "/");
+  return SHARED_APP_FILE_PATHS.some(
+    (path) => normalized === path || normalized.endsWith(`/${path}`)
+  );
 }
 
 export interface PresetConfig {
@@ -119,7 +146,7 @@ export const APP_MODULES: Record<string, AppModuleConfig> = {
     description: "Next.js 15 web application",
     features: ["Next.js 15", "App Router", "Tailwind CSS v4", "shadcn/ui"],
     targetDir: "apps/web",
-    slots: ["linting", "analytics", "auth", "database"],
+    slots: ["linting", "analytics", "auth"],
   },
   "nestjs-api": {
     name: "nestjs-api",
@@ -177,6 +204,31 @@ export const CATEGORY_CONFIGS: Record<string, CategoryConfig> = {
     description: "Analytics & Tracking",
     exclusive: false,
   },
+  "data-fetching": {
+    name: "data-fetching",
+    description: "Data Fetching",
+    exclusive: false,
+  },
+  state: {
+    name: "state",
+    description: "State Management",
+    exclusive: false,
+  },
+  i18n: {
+    name: "i18n",
+    description: "Internationalization",
+    exclusive: false,
+  },
+  theming: {
+    name: "theming",
+    description: "Themes & Color Modes",
+    exclusive: false,
+  },
+  ui: {
+    name: "ui",
+    description: "UI Components",
+    exclusive: false,
+  },
   email: {
     name: "email",
     description: "Email Service",
@@ -207,6 +259,11 @@ export type Category =
   | "auth"
   | "payment"
   | "analytics"
+  | "data-fetching"
+  | "state"
+  | "i18n"
+  | "theming"
+  | "ui"
   | "email"
   | "ai"
   | "storage"
@@ -223,115 +280,75 @@ export interface PresetInfo {
   version: string;
 }
 
-export const PRESETS: Record<string, PresetInfo> = {
-  // Linting
-  biome: {
-    name: "biome",
-    category: "linting",
-    description: "Biome - Fast linter & formatter",
-    version: "1.9.0",
-  },
-  "eslint-prettier": {
-    name: "eslint-prettier",
-    category: "linting",
-    description: "ESLint + Prettier",
-    version: "9.0.0",
-  },
-  // Database
-  drizzle: {
-    name: "drizzle",
-    category: "database",
-    description: "Drizzle ORM - Type-safe SQL (SQLite/PostgreSQL)",
-    version: "0.45.0",
-  },
-  prisma: {
-    name: "prisma",
-    category: "database",
-    description: "Prisma ORM - Type-safe ORM",
-    version: "7.0.0",
-  },
-  // Auth
-  clerk: {
-    name: "clerk",
-    category: "auth",
-    description: "Clerk - Managed authentication (NestJS/Next.js)",
-    version: "1.25.0",
-  },
-  "better-auth": {
-    name: "better-auth",
-    category: "auth",
-    description: "Better Auth - Self-hosted authentication (Server/Next.js)",
-    version: "1.4.0",
-  },
-  // Payment
-  polar: {
-    name: "polar",
-    category: "payment",
-    description: "Polar - Merchant of Record",
-    version: "1.0.0",
-  },
-  paddle: {
-    name: "paddle",
-    category: "payment",
-    description: "Paddle - Merchant of Record",
-    version: "1.0.0",
-  },
-  // Analytics
-  umami: {
-    name: "umami",
-    category: "analytics",
-    description: "Umami - Privacy-focused analytics",
-    version: "2.0.0",
-  },
-  posthog: {
-    name: "posthog",
-    category: "analytics",
-    description: "PostHog - Product analytics",
-    version: "1.200.0",
-  },
-  // Email
-  resend: {
-    name: "resend",
-    category: "email",
-    description: "Resend - Developer email",
-    version: "4.0.0",
-  },
-  // AI
-  "vercel-ai": {
-    name: "vercel-ai",
-    category: "ai",
-    description: "Vercel AI SDK",
-    version: "4.0.0",
-  },
-  // Storage
-  uploadthing: {
-    name: "uploadthing",
-    category: "storage",
-    description: "UploadThing - File uploads",
-    version: "7.0.0",
-  },
-  "cloudflare-r2": {
-    name: "cloudflare-r2",
-    category: "storage",
-    description: "Cloudflare R2 - Object storage",
-    version: "1.0.0",
-  },
-  // Validation
-  zod: {
-    name: "zod",
-    category: "validation",
-    description: "Zod - TypeScript-first schema",
-    version: "3.24.0",
-  },
-  "effect-schema": {
-    name: "effect-schema",
-    category: "validation",
-    description: "Effect Schema - Functional validation",
-    version: "3.19.0",
-  },
-};
+let PRESET_REGISTRY: Record<string, PresetInfo> | null = null;
+
+function loadPresetRegistry(): Record<string, PresetInfo> {
+  const registry: Record<string, PresetInfo> = {};
+  let categoryDirs: string[] = [];
+
+  try {
+    categoryDirs = readdirSync(PRESETS_DIR);
+  } catch {
+    return registry;
+  }
+
+  for (const category of categoryDirs) {
+    const categoryPath = join(PRESETS_DIR, category);
+    let presetDirs: string[] = [];
+
+    try {
+      presetDirs = readdirSync(categoryPath);
+    } catch {
+      continue;
+    }
+
+    for (const presetName of presetDirs) {
+      const manifestPath = join(categoryPath, presetName, "manifest.json");
+      try {
+        const raw = readFileSync(manifestPath, "utf-8");
+        const manifest = JSON.parse(raw) as {
+          name?: string;
+          category?: string;
+          description?: string;
+          version?: string;
+        };
+        if (!manifest.name || !manifest.category || !manifest.description) {
+          continue;
+        }
+        registry[manifest.name] = {
+          name: manifest.name,
+          category: manifest.category as Category,
+          description: manifest.description,
+          version: manifest.version || "1.0.0",
+        };
+      } catch {
+        continue;
+      }
+    }
+  }
+
+  return registry;
+}
+
+export function getPresetRegistry(): Record<string, PresetInfo> {
+  if (!PRESET_REGISTRY) {
+    PRESET_REGISTRY = loadPresetRegistry();
+  }
+  return PRESET_REGISTRY;
+}
+
+export const PRESETS: Record<string, PresetInfo> = getPresetRegistry();
 
 export type PresetName = keyof typeof PRESETS;
+
+// Preset aliases (user-facing shortcuts -> canonical preset)
+const PRESET_ALIASES: Record<string, string> = {
+  "clerk-nextjs": "clerk",
+};
+
+export function resolvePresetName(presetName: string): string {
+  return PRESET_ALIASES[presetName] ?? presetName;
+}
 
 // ============================================================================
 // Slot Defaults (per app module)
@@ -355,7 +372,7 @@ export const SLOT_DEFAULTS: Record<string, Record<string, string>> = {
 // ============================================================================
 
 export function getPresetsByCategory(category: Category): string[] {
-  return Object.entries(PRESETS)
+  return Object.entries(getPresetRegistry())
     .filter(([_, preset]) => preset.category === category)
     .map(([name]) => name);
 }

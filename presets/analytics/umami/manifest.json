@@ -3,13 +3,6 @@
   "name": "umami",
   "category": "analytics",
   "description": "Umami - Privacy-focused, lightweight, self-hostable web analytics",
-  "operations": {
-    "replace": [],
-    "merge": [],
-    "add": ["src/lib/analytics"],
-    "remove": [],
-    "inject": []
-  },
   "conflicts": [],
   "requires": [],
   "env": [
@@ -32,5 +25,24 @@
     "Get Website ID from https://umami.is or your self-hosted instance",
     "Add <UmamiScript /> to your root layout",
     "Use trackEvent() for custom events"
-  ]
+  ],
+  "version": "2.0.0",
+  "targets": {
+    "nextjs": {
+      "files": [
+        "src/lib/analytics"
+      ],
+      "detect": {
+        "packages": [
+          "next"
+        ],
+        "packageVersions": {
+          "next": ">=14"
+        },
+        "runtime": {
+          "node": ">=18"
+        }
+      }
+    }
+  }
 }

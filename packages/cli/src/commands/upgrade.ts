@@ -2,10 +2,10 @@ import { defineCommand } from "citty";
 import { consola } from "consola";
 import { resolve } from "pathe";
 import prompts from "prompts";
-import { PRESETS } from "../utils/constants";
+import { PRESETS, resolvePresetName } from "../utils/constants";
 import {
-  readOboraConfig,
   hasOboraConfig,
+  readOboraConfig,
   upgradeSlotPreset,
   type OboraConfig,
 } from "../utils/project-config";
@@ -50,7 +50,8 @@ function findUpgradeCandidates(config: OboraConfig): UpgradeCandidate[] {
   for (const [slot, slotConfig] of Object.entries(config.slots)) {
     if (!slotConfig) continue;
 
-    const presetInfo = PRESETS[slotConfig.preset];
+    const canonicalPreset = resolvePresetName(slotConfig.preset);
+    const presetInfo = PRESETS[canonicalPreset];
     if (!presetInfo) continue;
 
     const currentVersion = slotConfig.version;
@@ -142,14 +143,24 @@ export const upgradeCommand = defineCommand({
 
     // Filter by specific preset if provided
     if (args.preset) {
+      const normalizedArg = resolvePresetName(args.preset);
       candidates = candidates.filter(
-        (c) => c.preset === args.preset || c.slot === args.preset
+        (c) =>
+          c.preset === args.preset ||
+          c.slot === args.preset ||
+          resolvePresetName(c.preset) === normalizedArg ||
+          c.slot === normalizedArg
       );
 
       if (candidates.length === 0) {
         // Check if preset exists but is already up to date
         const slotConfig = Object.entries(config.slots).find(
-          ([slot, sc]) => sc && (sc.preset === args.preset || slot === args.preset)
+          ([slot, sc]) =>
+            sc &&
+            (sc.preset === args.preset ||
+              slot === args.preset ||
+              resolvePresetName(sc.preset) === normalizedArg ||
+              slot === normalizedArg)
         );
 
         if (slotConfig) {

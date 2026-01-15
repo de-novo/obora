@@ -1,0 +1,32 @@
+{
+  "$schema": "../../preset.schema.json",
+  "name": "base-ui",
+  "category": "ui",
+  "description": "Base UI - unstyled, accessible UI primitives for React",
+  "version": "1.0.0",
+  "common": {
+    "dependencies": {
+      "@base-ui/react": "^1.0.0"
+    }
+  },
+  "targets": {
+    "nextjs": {
+      "detect": {
+        "packages": [
+          "next"
+        ],
+        "packageVersions": {
+          "next": ">=14.1"
+        },
+        "runtime": {
+          "node": ">=18.12"
+        }
+      },
+      "files": []
+    }
+  },
+  "postInstall": [
+    "Import components from @base-ui/react and style with your design system.",
+    "See https://base-ui.com for component APIs."
+  ]
+}

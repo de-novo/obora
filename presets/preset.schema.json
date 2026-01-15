@@ -1,9 +1,9 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Obora Preset Manifest",
-  "description": "Schema for obora preset manifest files",
+  "description": "Schema for obora preset manifest files (current)",
   "type": "object",
-  "required": ["name", "category", "description", "operations"],
+  "required": ["name", "category", "description"],
   "properties": {
     "$schema": {
       "type": "string",
@@ -15,59 +15,180 @@
     },
     "category": {
       "type": "string",
-      "enum": ["linting", "database", "auth", "payment", "analytics", "email", "ai", "storage", "validation"],
+      "enum": [
+        "linting",
+        "database",
+        "auth",
+        "payment",
+        "analytics",
+        "data-fetching",
+        "state",
+        "i18n",
+        "theming",
+        "ui",
+        "email",
+        "ai",
+        "storage",
+        "validation"
+      ],
       "description": "Category this preset belongs to"
     },
     "description": {
       "type": "string",
       "description": "Human-readable description of the preset"
     },
-    "operations": {
+    "version": {
+      "type": "string",
+      "description": "Preset version"
+    },
+    "common": {
       "type": "object",
-      "description": "File operations to perform when applying preset",
-      "required": ["replace", "merge", "add", "remove", "inject"],
+      "description": "Shared configuration applied to all variants",
       "properties": {
-        "replace": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Files/directories to replace entirely"
-        },
-        "merge": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Files to merge (e.g., package.json)"
-        },
-        "add": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Files/directories to add"
-        },
-        "remove": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Files/directories to remove"
-        },
-        "inject": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "required": ["file", "marker", "content"],
-            "properties": {
-              "file": {
-                "type": "string",
-                "description": "Target file path"
+        "dependencies": { "type": "object" },
+        "devDependencies": { "type": "object" },
+        "files": { "type": "array", "items": { "type": "string" } },
+        "remove": { "type": "array", "items": { "type": "string" } },
+        "scripts": { "type": "object" },
+        "env": { "type": "array" },
+        "postInstall": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "targets": {
+      "type": "object",
+      "description": "Target-specific configurations",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "description": { "type": "string" },
+          "detect": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Package names to detect this target"
               },
-              "marker": {
-                "type": "string",
-                "description": "Marker comment to inject after (e.g., @obora:imports)"
-              },
-              "content": {
-                "type": "string",
-                "description": "Content to inject"
+              {
+                "type": "object",
+                "description": "Detection rules for target selection",
+                "properties": {
+                  "packages": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "Required package names"
+                  },
+                  "packageVersions": {
+                    "type": "object",
+                    "additionalProperties": { "type": "string" },
+                    "description": "Required package version ranges (major-based)"
+                  },
+                  "runtime": {
+                    "type": "object",
+                    "properties": {
+                      "node": { "type": "string" },
+                      "bun": { "type": "boolean" },
+                      "deno": { "type": "boolean" },
+                      "packageManager": {
+                        "type": "string",
+                        "enum": ["pnpm", "yarn", "npm", "bun"]
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "dependencies": { "type": "object" },
+          "devDependencies": { "type": "object" },
+          "files": { "type": "array", "items": { "type": "string" } },
+          "remove": { "type": "array", "items": { "type": "string" } },
+          "scripts": { "type": "object" },
+          "inject": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["file", "marker", "content"],
+              "properties": {
+                "file": { "type": "string" },
+                "marker": { "type": "string" },
+                "content": { "type": "string" },
+                "order": {
+                  "type": "number",
+                  "description": "Lower numbers are applied first within the same marker"
+                }
               }
             }
           },
-          "description": "Code injections at marker locations"
+          "env": { "type": "array" },
+          "postInstall": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "variants": {
+      "type": "object",
+      "description": "Framework-specific configurations",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "detect": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Package names to detect this framework"
+              },
+              {
+                "type": "object",
+                "description": "Detection rules for target selection",
+                "properties": {
+                  "packages": {
+                    "type": "array",
+                    "items": { "type": "string" }
+                  },
+                  "packageVersions": {
+                    "type": "object",
+                    "additionalProperties": { "type": "string" }
+                  },
+                  "runtime": {
+                    "type": "object",
+                    "properties": {
+                      "node": { "type": "string" },
+                      "bun": { "type": "boolean" },
+                      "deno": { "type": "boolean" },
+                      "packageManager": {
+                        "type": "string",
+                        "enum": ["pnpm", "yarn", "npm", "bun"]
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "description": { "type": "string" },
+          "dependencies": { "type": "object" },
+          "devDependencies": { "type": "object" },
+          "files": { "type": "array", "items": { "type": "string" } },
+          "remove": { "type": "array", "items": { "type": "string" } },
+          "scripts": { "type": "object" },
+          "inject": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["file", "marker", "content"],
+              "properties": {
+                "file": { "type": "string" },
+                "marker": { "type": "string" },
+                "content": { "type": "string" },
+                "order": {
+                  "type": "number",
+                  "description": "Lower numbers are applied first within the same marker"
+                }
+              }
+            }
+          },
+          "env": { "type": "array" },
+          "postInstall": { "type": "array", "items": { "type": "string" } }
         }
       }
     },
@@ -76,24 +197,31 @@
       "items": { "type": "string" },
       "description": "Other preset names that conflict with this one"
     },
+    "capabilities": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Capabilities provided by this preset"
+    },
+    "requiresCapabilities": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Capabilities required by this preset"
+    },
+    "incompatibleCapabilities": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Capabilities that conflict with this preset"
+    },
     "requires": {
       "type": "array",
       "items": { "type": "string" },
       "description": "Required presets in category:name format (e.g., database:prisma)"
     },
-    "targetApps": {
-      "type": "array",
-      "items": {
-        "type": "string",
-        "enum": ["nestjs-api", "nextjs-web", "shared-database", "shared-ui"]
-      },
-      "description": "App modules this preset can be applied to. If not specified, applies to all compatible apps."
-    },
     "env": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["key", "description", "required", "secret"],
+        "required": ["key"],
         "properties": {
           "key": {
             "type": "string",

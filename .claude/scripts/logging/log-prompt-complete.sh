@@ -4,7 +4,9 @@
 # Input (stdin): JSON with completion info
 # Target: ~/.obora/dashboard.db
 #
-# 역할: workflows 테이블의 상태를 completed로 업데이트
+# 역할:
+#   - workflows 테이블의 상태를 completed로 업데이트
+#   - Main Claude의 작업 내용(output) 저장
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEBUG_LOG="${SCRIPT_DIR}/../../logs/hook-debug.log"
@@ -12,6 +14,7 @@ DEBUG_LOG="${SCRIPT_DIR}/../../logs/hook-debug.log"
 # Dashboard DB 경로
 DB_PATH="${HOME}/.obora/dashboard.db"
 WORKFLOW_FILE="${HOME}/.obora/current-workflow.txt"
+PROMPT_FILE="${HOME}/.obora/current-prompt-timestamp.txt"
 
 # stdin에서 JSON 읽기
 INPUT=$(cat)
@@ -34,6 +37,58 @@ fi
 
 WORKFLOW_ID=$(cat "$WORKFLOW_FILE")
 TIMESTAMP=$(date +%s)
+
+# transcript 경로 파싱
+TRANSCRIPT_PATH=$(echo "$INPUT" | jq -r '.transcript_path // ""')
+
+# ============================================================================
+# Main Claude의 출력 추출 (현재 턴의 assistant 메시지만)
+# ============================================================================
+MAIN_OUTPUT=""
+
+if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
+  echo "Parsing main transcript: $TRANSCRIPT_PATH" >> "$DEBUG_LOG"
+
+  # 프롬프트 제출 타임스탬프 읽기 (해당 턴 시작점)
+  PROMPT_TIMESTAMP=""
+  if [ -f "$PROMPT_FILE" ]; then
+    PROMPT_TIMESTAMP=$(cat "$PROMPT_FILE")
+  fi
+
+  if [ -n "$PROMPT_TIMESTAMP" ]; then
+    # 해당 타임스탬프 이후의 assistant 메시지만 추출
+    MAIN_OUTPUT=$(cat "$TRANSCRIPT_PATH" | jq -rs --arg ts "$PROMPT_TIMESTAMP" '
+      [.[] |
+        select(.type == "assistant") |
+        select(.timestamp >= $ts) |
+        select(.message.content | type == "array") |
+        .message.content[] |
+        select(.type == "text") |
+        .text
+      ] | join("\n\n")
+    ' 2>/dev/null || echo "")
+    echo "Extracted main output since $PROMPT_TIMESTAMP, length: ${#MAIN_OUTPUT}" >> "$DEBUG_LOG"
+  else
+    # 타임스탬프 없으면 마지막 assistant 메시지들 추출
+    MAIN_OUTPUT=$(cat "$TRANSCRIPT_PATH" | jq -rs '
+      # 마지막 user 메시지 인덱스 찾기
+      (to_entries | map(select(.value.type == "user")) | last.key) as $last_user_idx |
+      # 그 이후의 assistant 메시지만 추출
+      .[($last_user_idx + 1):] |
+      [.[] |
+        select(.type == "assistant") |
+        select(.message.content | type == "array") |
+        .message.content[] |
+        select(.type == "text") |
+        .text
+      ] | join("\n\n")
+    ' 2>/dev/null || echo "")
+    echo "Extracted main output (last turn), length: ${#MAIN_OUTPUT}" >> "$DEBUG_LOG"
+  fi
+fi
+
+# SQL 이스케이프
+MAIN_OUTPUT_ESCAPED=$(echo "$MAIN_OUTPUT" | sed "s/'/''/g")
 
 echo "WORKFLOW_ID: $WORKFLOW_ID" >> "$DEBUG_LOG"
 

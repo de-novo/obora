@@ -1,8 +1,18 @@
 import { defineCommand } from "citty";
 import consola from "consola";
-import { resolve, join } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
-import type { OboraConfig } from "../utils/project-config";
+import { join, resolve } from "node:path";
+import {
+  APP_MODULES,
+  PRESETS,
+  PRESETS_DIR,
+  resolvePresetName,
+} from "../utils/constants";
+import {
+  hasOboraConfig,
+  readOboraConfig,
+  type OboraConfig,
+} from "../utils/project-config";
 
 interface DiagnosticResult {
   name: string;
@@ -20,18 +30,17 @@ interface DiagnosticCategory {
  * Check if obora.config.json exists
  */
 function checkConfigExists(projectPath: string): DiagnosticResult {
-  const configPath = join(projectPath, "obora.config.json");
-  if (existsSync(configPath)) {
+  if (hasOboraConfig(projectPath)) {
     return {
       name: "Configuration File",
       status: "pass",
-      message: "obora.config.json found",
+      message: ".obora/config.json found",
     };
   }
   return {
     name: "Configuration File",
     status: "fail",
-    message: "obora.config.json not found",
+    message: ".obora/config.json not found",
     suggestion: "Run 'obora init' to initialize the project or 'obora create' to create a new project",
   };
 }
@@ -173,6 +182,123 @@ function checkEnvFiles(projectPath: string): DiagnosticResult {
 /**
  * Check if required environment variables are set based on presets
  */
+interface PresetEnvVar {
+  key: string;
+  description?: string;
+  required?: boolean;
+}
+
+interface PresetManifestV2 {
+  name: string;
+  category: string;
+  description: string;
+  version?: string;
+  common?: { env?: PresetEnvVar[] };
+  targets?: Record<string, { env?: PresetEnvVar[] }>;
+  variants?: Record<string, { env?: PresetEnvVar[] }>;
+}
+
+interface PresetManifestV1 {
+  name: string;
+  category: string;
+  description: string;
+  env?: PresetEnvVar[];
+}
+
+function loadPresetManifest(presetName: string): PresetManifestV1 | PresetManifestV2 | null {
+  const canonical = resolvePresetName(presetName);
+  const presetInfo = PRESETS[canonical];
+  if (!presetInfo) {
+    return null;
+  }
+  const manifestPath = join(PRESETS_DIR, presetInfo.category, canonical, "manifest.json");
+  if (!existsSync(manifestPath)) {
+    return null;
+  }
+  try {
+    return JSON.parse(readFileSync(manifestPath, "utf-8")) as PresetManifestV1 | PresetManifestV2;
+  } catch {
+    return null;
+  }
+}
+
+function collectEnvVars(manifest: PresetManifestV1 | PresetManifestV2): PresetEnvVar[] {
+  const envs: PresetEnvVar[] = [];
+  if ("env" in manifest && manifest.env) {
+    envs.push(...manifest.env);
+  }
+  if ("common" in manifest && manifest.common?.env) {
+    envs.push(...manifest.common.env);
+  }
+  const targets = "targets" in manifest ? manifest.targets : undefined;
+  const variants = "variants" in manifest ? manifest.variants : undefined;
+  const entries = targets || variants || {};
+  for (const target of Object.values(entries)) {
+    if (target.env) {
+      envs.push(...target.env);
+    }
+  }
+  return envs;
+}
+
+function getCandidateDirs(projectPath: string, config: OboraConfig | null): string[] {
+  const dirs = new Set<string>();
+  dirs.add(projectPath);
+  if (!config || config.base === "single") {
+    return Array.from(dirs);
+  }
+
+  for (const appConfig of Object.values(config.apps || {})) {
+    const moduleConfig = APP_MODULES[appConfig.module as keyof typeof APP_MODULES];
+    if (!moduleConfig) continue;
+    dirs.add(join(projectPath, moduleConfig.targetDir));
+  }
+
+  return Array.from(dirs);
+}
+
+function collectExpectedFiles(manifest: PresetManifestV1 | PresetManifestV2): string[] {
+  const files: string[] = [];
+  if ("common" in manifest && manifest.common?.files) {
+    files.push(...manifest.common.files);
+  }
+  const targets = "targets" in manifest ? manifest.targets : undefined;
+  const variants = "variants" in manifest ? manifest.variants : undefined;
+  const entries = targets || variants || {};
+  for (const target of Object.values(entries)) {
+    if (target.files && target.files.length > 0) {
+      files.push(...target.files);
+    }
+  }
+  return Array.from(new Set(files));
+}
+
+function collectInjects(
+  manifest: PresetManifestV1 | PresetManifestV2
+): Array<{ file: string; marker: string; content: string }> {
+  const injects: Array<{ file: string; marker: string; content: string }> = [];
+  const targets = "targets" in manifest ? manifest.targets : undefined;
+  const variants = "variants" in manifest ? manifest.variants : undefined;
+  const entries = targets || variants || {};
+  for (const target of Object.values(entries)) {
+    if (target.inject && target.inject.length > 0) {
+      injects.push(...target.inject);
+    }
+  }
+  return injects;
+}
+
+function hasMarker(content: string, marker: string): boolean {
+  const escaped = marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const patterns = [
+    new RegExp(`\\/\\/ ${escaped}`),
+    new RegExp(`# ${escaped}`),
+    new RegExp(`\\/\\* ${escaped} \\*\\/`),
+    new RegExp(`<!-- ${escaped} -->`),
+  ];
+  return patterns.some((pattern) => pattern.test(content));
+}
+
 function checkRequiredEnvVars(
   projectPath: string,
   config: OboraConfig | null
@@ -182,17 +308,6 @@ function checkRequiredEnvVars(
   if (!config) {
     return results;
   }
-
-  const presetEnvRequirements: Record<string, string[]> = {
-    "clerk-nextjs": ["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY", "CLERK_SECRET_KEY"],
-    "better-auth-nextjs": ["BETTER_AUTH_SECRET", "BETTER_AUTH_URL"],
-    drizzle: ["DATABASE_URL"],
-    prisma: ["DATABASE_URL"],
-    stripe: ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"],
-    resend: ["RESEND_API_KEY"],
-    posthog: ["NEXT_PUBLIC_POSTHOG_KEY", "NEXT_PUBLIC_POSTHOG_HOST"],
-    sentry: ["SENTRY_DSN", "SENTRY_AUTH_TOKEN"],
-  };
 
   // Get installed presets from config
   const installedPresets = Object.values(config.slots || {})
@@ -211,9 +326,11 @@ function checkRequiredEnvVars(
   }
 
   for (const preset of installedPresets) {
-    const requiredVars = presetEnvRequirements[preset];
-    if (!requiredVars) continue;
-
+    const manifest = loadPresetManifest(preset);
+    if (!manifest) continue;
+    const envVars = collectEnvVars(manifest).filter((v) => v.required !== false);
+    if (envVars.length === 0) continue;
+    const requiredVars = envVars.map((v) => v.key);
     const missingVars: string[] = [];
     for (const varName of requiredVars) {
       // Check if variable exists in env file (with any value)
@@ -255,50 +372,74 @@ function checkPresetFiles(
     return results;
   }
 
-  const presetFileChecks: Record<string, string[]> = {
-    "clerk-nextjs": ["src/middleware.ts"],
-    "better-auth-nextjs": ["src/middleware.ts", "src/lib/auth-client.ts"],
-    drizzle: ["drizzle.config.ts"],
-    prisma: ["prisma/schema.prisma"],
-    tailwind: ["tailwind.config.ts", "postcss.config.js"],
-    shadcn: ["components.json"],
-  };
-
   const installedPresets = Object.values(config.slots || {})
     .filter((slot): slot is NonNullable<typeof slot> => slot !== null)
     .map((slot) => slot.preset);
 
+  const candidateDirs = getCandidateDirs(projectPath, config);
+
   for (const preset of installedPresets) {
-    const requiredFiles = presetFileChecks[preset];
-    if (!requiredFiles) continue;
+    const manifest = loadPresetManifest(preset);
+    if (!manifest) {
+      results.push({
+        name: `Preset Integrity: ${preset}`,
+        status: "warn",
+        message: "Manifest not found or invalid",
+        suggestion: `Reinstall preset '${preset}' or update local presets`,
+      });
+      continue;
+    }
 
+    const expectedFiles = collectExpectedFiles(manifest);
+    const injects = collectInjects(manifest);
     const missingFiles: string[] = [];
-    for (const file of requiredFiles) {
-      // Check in project root and common app directories
-      const paths = [
-        join(projectPath, file),
-        join(projectPath, "apps/web", file),
-        join(projectPath, "apps/api", file),
-      ];
+    const missingMarkers: string[] = [];
+    const missingTargets: string[] = [];
 
-      const exists = paths.some((p) => existsSync(p));
+    for (const file of expectedFiles) {
+      const exists = candidateDirs.some((dir) => existsSync(join(dir, file)));
       if (!exists) {
         missingFiles.push(file);
       }
     }
 
-    if (missingFiles.length > 0) {
+    for (const inject of injects) {
+      const candidatePaths = candidateDirs.map((dir) => join(dir, inject.file));
+      const existingPath = candidatePaths.find((p) => existsSync(p));
+      if (!existingPath) {
+        missingTargets.push(inject.file);
+        continue;
+      }
+      const content = readFileSync(existingPath, "utf-8");
+      const hasContent = content.includes(inject.content.trim());
+      const hasMarkerFlag = hasMarker(content, inject.marker);
+      if (!hasContent && !hasMarkerFlag) {
+        missingMarkers.push(`${inject.file} (${inject.marker})`);
+      }
+    }
+
+    if (missingFiles.length > 0 || missingMarkers.length > 0 || missingTargets.length > 0) {
+      const parts: string[] = [];
+      if (missingFiles.length > 0) {
+        parts.push(`Missing files: ${missingFiles.join(", ")}`);
+      }
+      if (missingTargets.length > 0) {
+        parts.push(`Missing inject targets: ${missingTargets.join(", ")}`);
+      }
+      if (missingMarkers.length > 0) {
+        parts.push(`Missing markers: ${missingMarkers.join(", ")}`);
+      }
       results.push({
-        name: `Preset Files: ${preset}`,
+        name: `Preset Integrity: ${preset}`,
         status: "warn",
-        message: `Missing expected files: ${missingFiles.join(", ")}`,
-        suggestion: `Run 'obora add ${preset}' to reinstall the preset`,
+        message: parts.join(" | "),
+        suggestion: `Run 'obora add ${preset}' to reinstall or restore markers`,
       });
     } else {
       results.push({
-        name: `Preset Files: ${preset}`,
+        name: `Preset Integrity: ${preset}`,
         status: "pass",
-        message: `All expected preset files found`,
+        message: "All expected files and markers found",
       });
     }
   }
@@ -389,23 +530,6 @@ function checkMonorepoStructure(
 }
 
 /**
- * Load obora config
- */
-function loadConfig(projectPath: string): OboraConfig | null {
-  const configPath = join(projectPath, "obora.config.json");
-  if (!existsSync(configPath)) {
-    return null;
-  }
-
-  try {
-    const content = readFileSync(configPath, "utf-8");
-    return JSON.parse(content) as OboraConfig;
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Display diagnostic results
  */
 function displayResults(categories: DiagnosticCategory[]): {
@@ -474,7 +598,7 @@ export const doctorCommand = defineCommand({
 
     if (args.json) {
       // JSON output mode
-      const config = loadConfig(projectPath);
+      const config = await readOboraConfig(projectPath);
       const categories: DiagnosticCategory[] = [];
 
       // Project Structure
@@ -512,7 +636,7 @@ export const doctorCommand = defineCommand({
 
     consola.start("Running project diagnostics...\n");
 
-    const config = loadConfig(projectPath);
+    const config = await readOboraConfig(projectPath);
     const categories: DiagnosticCategory[] = [];
 
     // Project Structure

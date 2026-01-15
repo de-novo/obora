@@ -3,24 +3,6 @@
   "name": "vercel-ai",
   "category": "ai",
   "description": "Vercel AI SDK - Build AI-powered applications",
-  "operations": {
-    "replace": [],
-    "merge": ["package.json"],
-    "add": ["src/modules/ai"],
-    "remove": [],
-    "inject": [
-      {
-        "file": "src/app.module.ts",
-        "marker": "@obora:imports",
-        "content": "import { AiModule } from \"./modules/ai/ai.module.js\";"
-      },
-      {
-        "file": "src/app.module.ts",
-        "marker": "@obora:modules",
-        "content": "AiModule,"
-      }
-    ]
-  },
   "conflicts": [],
   "requires": [],
   "env": [
@@ -35,5 +17,43 @@
   "postInstall": [
     "Get API key from https://platform.openai.com",
     "Set OPENAI_API_KEY environment variable"
-  ]
+  ],
+  "version": "4.0.0",
+  "targets": {
+    "nestjs": {
+      "files": [
+        "src/modules/ai"
+      ],
+      "inject": [
+        {
+          "file": "src/app.module.ts",
+          "marker": "@obora:imports",
+          "content": "import { AiModule } from \"./modules/ai/ai.module.js\";"
+        },
+        {
+          "file": "src/app.module.ts",
+          "marker": "@obora:modules",
+          "content": "AiModule,"
+        }
+      ],
+      "detect": {
+        "packages": [
+          "@nestjs/core"
+        ],
+        "packageVersions": {
+          "@nestjs/core": ">=10"
+        },
+        "runtime": {
+          "node": ">=18"
+        }
+      }
+    }
+  },
+  "common": {
+    "dependencies": {
+      "ai": "^3.4.0",
+      "@ai-sdk/openai": "^0.0.70",
+      "@ai-sdk/anthropic": "^0.0.55"
+    }
+  }
 }

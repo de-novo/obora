@@ -3,31 +3,10 @@
   "name": "prisma",
   "category": "database",
   "description": "Prisma ORM - Type-safe database client",
-  "operations": {
-    "replace": [],
-    "merge": ["package.json"],
-    "add": [
-      "prisma",
-      "prisma.config.ts",
-      "src/db"
-    ],
-    "remove": [],
-    "inject": [
-      {
-        "file": "src/app.module.ts",
-        "marker": "@obora:imports",
-        "content": "import { PrismaModule } from \"./db/prisma.module.js\";"
-      },
-      {
-        "file": "src/app.module.ts",
-        "marker": "@obora:modules",
-        "content": "PrismaModule,"
-      }
-    ]
-  },
-  "conflicts": ["drizzle"],
+  "conflicts": [
+    "drizzle"
+  ],
   "requires": [],
-  "targetApps": ["nestjs-api"],
   "env": [
     {
       "key": "DATABASE_URL",
@@ -46,5 +25,54 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:push": "prisma db push",
     "prisma:studio": "prisma studio"
+  },
+  "version": "7.0.0",
+  "targets": {
+    "nestjs": {
+      "files": [
+        "prisma",
+        "prisma.config.ts",
+        "src/db"
+      ],
+      "inject": [
+        {
+          "file": "src/app.module.ts",
+          "marker": "@obora:imports",
+          "content": "import { PrismaModule } from \"./db/prisma.module.js\";"
+        },
+        {
+          "file": "src/app.module.ts",
+          "marker": "@obora:modules",
+          "content": "PrismaModule,"
+        }
+      ],
+      "detect": {
+        "packages": [
+          "@nestjs/core"
+        ],
+        "packageVersions": {
+          "@nestjs/core": ">=10"
+        },
+        "runtime": {
+          "node": ">=18"
+        }
+      }
+    }
+  },
+  "common": {
+    "dependencies": {
+      "@prisma/adapter-pg": "^7.0.0",
+      "pg": "^8.13.0"
+    },
+    "devDependencies": {
+      "prisma": "^7.0.0",
+      "@types/pg": "^8.11.0"
+    },
+    "scripts": {
+      "db:generate": "prisma generate",
+      "db:migrate": "prisma migrate dev",
+      "db:push": "prisma db push",
+      "db:studio": "prisma studio"
+    }
   }
 }

@@ -3,21 +3,9 @@
   "name": "biome",
   "category": "linting",
   "description": "Biome - Fast all-in-one linter & formatter (Rust-based)",
-  "operations": {
-    "replace": [],
-    "merge": ["package.json"],
-    "add": ["biome.json"],
-    "remove": [
-      "eslint.config.js",
-      ".eslintrc.js",
-      ".eslintrc.json",
-      ".prettierrc",
-      ".prettierrc.json",
-      ".prettierignore"
-    ],
-    "inject": []
-  },
-  "conflicts": ["eslint-prettier"],
+  "conflicts": [
+    "eslint-prettier"
+  ],
   "requires": [],
   "env": [],
   "postInstall": [],
@@ -25,5 +13,31 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write ."
+  },
+  "version": "1.9.0",
+  "targets": {
+    "root": {
+      "files": [
+        "biome.json"
+      ],
+      "remove": [
+        "eslint.config.js",
+        ".eslintrc.js",
+        ".eslintrc.json",
+        ".prettierrc",
+        ".prettierrc.json",
+        ".prettierignore"
+      ]
+    }
+  },
+  "common": {
+    "devDependencies": {
+      "@biomejs/biome": "^1.9.0"
+    },
+    "scripts": {
+      "lint": "biome check .",
+      "lint:fix": "biome check --write .",
+      "format": "biome format --write ."
+    }
   }
 }

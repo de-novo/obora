@@ -1,0 +1,48 @@
+{
+  "$schema": "../../preset.schema.json",
+  "name": "next-themes",
+  "category": "theming",
+  "description": "next-themes - Dark/Light theme support for Next.js",
+  "version": "0.4.0",
+  "common": {
+    "dependencies": {
+      "next-themes": "^0.4.0"
+    }
+  },
+  "targets": {
+    "nextjs": {
+      "files": ["nextjs"],
+      "detect": {
+        "packages": ["next"],
+        "packageVersions": {
+          "next": ">=14.1"
+        },
+        "runtime": {
+          "node": ">=18.12"
+        }
+      }
+    },
+    "nextjs-auto": {
+      "description": "Next.js (auto layout provider)",
+      "files": ["nextjs"],
+      "inject": [
+        {
+          "file": "app/providers.tsx",
+          "marker": "@obora:providers-imports",
+          "content": "import { ThemeProvider } from \"@/lib/theme\";",
+          "order": 10
+        },
+        {
+          "file": "app/providers.tsx",
+          "marker": "@obora:providers",
+          "content": "(children) => <ThemeProvider>{children}</ThemeProvider>,",
+          "order": 10
+        }
+      ]
+    }
+  },
+  "postInstall": [
+    "Wrap your app with <ThemeProvider> in app/layout.tsx (client component).",
+    "Set <html suppressHydrationWarning> and use className on <body> if needed."
+  ]
+}

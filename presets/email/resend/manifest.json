@@ -3,24 +3,6 @@
   "name": "resend",
   "category": "email",
   "description": "Resend - Developer-friendly email API",
-  "operations": {
-    "replace": [],
-    "merge": [],
-    "add": ["src/modules/email"],
-    "remove": [],
-    "inject": [
-      {
-        "file": "src/app.module.ts",
-        "marker": "@obora:imports",
-        "content": "import { EmailModule } from \"./modules/email/email.module.js\";"
-      },
-      {
-        "file": "src/app.module.ts",
-        "marker": "@obora:modules",
-        "content": "EmailModule,"
-      }
-    ]
-  },
   "conflicts": [],
   "requires": [],
   "env": [
@@ -43,5 +25,43 @@
     "Get API key from https://resend.com",
     "Verify your domain",
     "Set environment variables"
-  ]
+  ],
+  "version": "4.0.0",
+  "targets": {
+    "nestjs": {
+      "files": [
+        "src/modules/email"
+      ],
+      "inject": [
+        {
+          "file": "src/app.module.ts",
+          "marker": "@obora:imports",
+          "content": "import { EmailModule } from \"./modules/email/email.module.js\";"
+        },
+        {
+          "file": "src/app.module.ts",
+          "marker": "@obora:modules",
+          "content": "EmailModule,"
+        }
+      ],
+      "detect": {
+        "packages": [
+          "@nestjs/core"
+        ],
+        "packageVersions": {
+          "@nestjs/core": ">=10"
+        },
+        "runtime": {
+          "node": ">=18"
+        }
+      }
+    }
+  },
+  "common": {
+    "dependencies": {
+      "resend": "^4.0.0",
+      "@react-email/components": "^0.0.25",
+      "react-email": "^3.0.0"
+    }
+  }
 }

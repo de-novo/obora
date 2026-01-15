@@ -1,17 +1,18 @@
 {
-  "$schema": "../../preset-v2.schema.json",
+  "$schema": "../../preset.schema.json",
   "name": "clerk",
   "category": "auth",
   "description": "Clerk - Managed authentication with great DX",
   "version": "1.25.0",
-
   "targets": {
     "nestjs": {
       "description": "Clerk backend for NestJS API",
       "dependencies": {
         "@clerk/backend": "^1.25.0"
       },
-      "files": ["nestjs"],
+      "files": [
+        "nestjs"
+      ],
       "inject": [
         {
           "file": "src/app.module.ts",
@@ -46,15 +47,27 @@
           "secret": true,
           "example": "whsec_xxx"
         }
-      ]
+      ],
+      "detect": {
+        "packages": [
+          "@nestjs/core"
+        ],
+        "packageVersions": {
+          "@nestjs/core": ">=10"
+        },
+        "runtime": {
+          "node": ">=18"
+        }
+      }
     },
-
     "nextjs": {
       "description": "Clerk client for Next.js with middleware",
       "dependencies": {
         "@clerk/nextjs": "^6.0.0"
       },
-      "files": ["nextjs"],
+      "files": [
+        "nextjs"
+      ],
       "env": [
         {
           "key": "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",
@@ -70,11 +83,23 @@
           "secret": true,
           "example": "sk_test_..."
         }
-      ]
+      ],
+      "detect": {
+        "packages": [
+          "next"
+        ],
+        "packageVersions": {
+          "next": ">=14"
+        },
+        "runtime": {
+          "node": ">=18"
+        }
+      }
     }
   },
-
-  "conflicts": ["better-auth"],
+  "conflicts": [
+    "better-auth"
+  ],
   "postInstall": [
     "Set up Clerk dashboard: https://clerk.com",
     "Configure environment variables"

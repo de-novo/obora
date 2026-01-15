@@ -1,28 +1,28 @@
 import { defineCommand } from "citty";
 import { consola } from "consola";
-import { resolve } from "pathe";
+import { join, resolve } from "pathe";
 import {
-  promptProjectName,
-  promptBase,
-  promptAppModules,
-  promptPresetsForModules,
-  promptPackageManager,
-  promptConfirm,
-  BASES,
   APP_MODULES,
-  PRESETS,
-  type BaseName,
-  type AppModuleName,
-  type Category,
+  BASES,
   dirExists,
-  validateAndResolvePresets,
   displayValidationResults,
+  PRESETS,
+  promptAppModules,
+  promptBase,
+  promptConfirm,
+  promptPackageManager,
+  promptPresetsForModules,
+  promptProjectName,
+  resolvePresetName,
+  validateAndResolvePresets,
+  type AppModuleName,
+  type BaseName
 } from "../utils";
-import { assembleProject } from "../utils/assembler";
+import { assembleProject, type AppModuleInstance } from "../utils/assembler";
 import {
+  addHistoryEntry,
   createInitialConfig,
   writeOboraConfig,
-  addHistoryEntry,
 } from "../utils/project-config";
 
 /**
@@ -42,10 +42,11 @@ function parsePresetsArg(
     const [category, presetName] = pair.trim().split(":");
     if (!category || !presetName) continue;
 
-    const preset = PRESETS[presetName];
+    const normalizedPresetName = resolvePresetName(presetName);
+    const preset = PRESETS[normalizedPresetName];
     if (preset && preset.category === category) {
       selections[category] = {
-        preset: presetName,
+        preset: normalizedPresetName,
         version: preset.version,
       };
     } else {
@@ -54,6 +55,40 @@ function parsePresetsArg(
   }
 
   return Object.keys(selections).length > 0 ? selections : null;
+}
+
+function defaultAppInstance(moduleName: AppModuleName, base: BaseName): AppModuleInstance {
+  const moduleConfig = APP_MODULES[moduleName];
+  const defaultName = moduleConfig?.targetDir?.split("/").pop() || moduleName;
+  const targetDir = base === "single"
+    ? "."
+    : (moduleConfig?.targetDir?.startsWith("packages/")
+      ? join("packages", defaultName)
+      : join("apps", defaultName));
+  return { name: defaultName, module: moduleName, targetDir };
+}
+
+function parseAppInstances(appsArg: string, base: BaseName): AppModuleInstance[] {
+  const tokens = appsArg.split(",").map((token) => token.trim()).filter(Boolean);
+  const instances: AppModuleInstance[] = [];
+  for (const token of tokens) {
+    const separator = token.includes(":") ? ":" : token.includes("=") ? "=" : null;
+    const [rawModule, rawName] = separator ? token.split(separator) : [token, ""];
+    const moduleName = rawModule.trim() as AppModuleName;
+    if (!APP_MODULES[moduleName]) {
+      continue;
+    }
+    const moduleConfig = APP_MODULES[moduleName];
+    const defaultName = moduleConfig?.targetDir?.split("/").pop() || moduleName;
+    const name = rawName?.trim() || defaultName;
+    const targetDir = base === "single"
+      ? "."
+      : (moduleConfig?.targetDir?.startsWith("packages/")
+        ? join("packages", name)
+        : join("apps", name));
+    instances.push({ name, module: moduleName, targetDir });
+  }
+  return instances;
 }
 
 export const createCommand = defineCommand({
@@ -121,18 +156,19 @@ export const createCommand = defineCommand({
     }
 
     // 3. Get app modules
-    let appModules: AppModuleName[];
+    let appInstances: AppModuleInstance[];
     if (args.apps) {
-      appModules = args.apps.split(",").filter((a: string) => a in APP_MODULES) as AppModuleName[];
-      if (appModules.length === 0) {
+      appInstances = parseAppInstances(args.apps, base);
+      if (appInstances.length === 0) {
         consola.error("No valid app modules specified");
         process.exit(1);
       }
     } else if (args.yes) {
-      appModules = ["nextjs-web"];
-      consola.info(`Using default apps: ${appModules.join(", ")}`);
+      appInstances = [defaultAppInstance("nextjs-web", base)];
+      consola.info(`Using default apps: ${appInstances.map((app) => app.module).join(", ")}`);
     } else {
-      appModules = await promptAppModules();
+      const selectedModules = await promptAppModules();
+      appInstances = selectedModules.map((moduleName) => defaultAppInstance(moduleName, base));
     }
 
     // 4. Get presets based on app modules
@@ -142,7 +178,10 @@ export const createCommand = defineCommand({
     const parsedPresets = parsePresetsArg(args.presets);
     if (parsedPresets) {
       // Merge parsed presets with defaults for remaining slots
-      const baseSelections = await promptPresetsForModules(appModules, true); // Use defaults for base
+      const baseSelections = await promptPresetsForModules(
+        appInstances.map((app) => app.module),
+        true
+      ); // Use defaults for base
       slotSelections = { ...baseSelections, ...parsedPresets };
 
       for (const [category, selection] of Object.entries(parsedPresets)) {
@@ -151,20 +190,33 @@ export const createCommand = defineCommand({
         }
       }
     } else {
-      slotSelections = await promptPresetsForModules(appModules, args.yes);
+      slotSelections = await promptPresetsForModules(
+        appInstances.map((app) => app.module),
+        args.yes
+      );
     }
 
     // 4.5. Validate and resolve preset dependencies
-    const { resolved, added, conflicts } = await validateAndResolvePresets(slotSelections);
+    const {
+      resolved,
+      added,
+      conflicts,
+      missingCapabilities,
+      capabilityConflicts,
+    } = await validateAndResolvePresets(slotSelections);
     slotSelections = resolved;
 
     // Display validation results (auto-added presets, conflicts)
-    displayValidationResults(added, conflicts);
+    displayValidationResults(added, conflicts, missingCapabilities, capabilityConflicts);
 
     // If there are conflicts, ask user to confirm
-    if (conflicts.length > 0 && !args.yes) {
+    const hasCompatibilityIssues =
+      conflicts.length > 0 ||
+      missingCapabilities.length > 0 ||
+      capabilityConflicts.length > 0;
+    if (hasCompatibilityIssues && !args.yes) {
       const continueWithConflicts = await promptConfirm(
-        "There are preset conflicts. Continue anyway?"
+        "There are preset compatibility issues. Continue anyway?"
       );
       if (!continueWithConflicts) {
         consola.info("Cancelled");
@@ -204,11 +256,12 @@ export const createCommand = defineCommand({
     }
 
     // 8. Build apps config for .obora/config.json
-    const appsConfig: Record<string, { module: string; version: string }> = {};
-    for (const moduleName of appModules) {
-      appsConfig[moduleName] = {
-        module: moduleName,
+    const appsConfig: Record<string, { module: string; version: string; path?: string }> = {};
+    for (const appInstance of appInstances) {
+      appsConfig[appInstance.name] = {
+        module: appInstance.module,
         version: "1.0.0",
+        path: join(targetDir, appInstance.targetDir),
       };
     }
 
@@ -223,7 +276,7 @@ export const createCommand = defineCommand({
     consola.box(
       `${isDryRun ? "[DRY RUN] " : ""}Project: ${projectName}\n` +
         `Base: ${base}\n` +
-        `Apps: ${appModules.join(", ")}\n` +
+        `Apps: ${appInstances.map((app) => `${app.name}(${app.module})`).join(", ")}\n` +
         `Presets: ${selectedPresets || "none"}\n` +
         `Directory: ${targetDir}\n` +
         `Package Manager: ${pm}`
@@ -258,11 +311,11 @@ export const createCommand = defineCommand({
     // 10. Assemble project
     try {
       consola.start("Copying base template...");
-      await assembleProject({
+      const assemblyResult = await assembleProject({
         base,
         projectName,
         targetDir,
-        apps: appModules,
+        apps: appInstances,
         presets: slotSelections,
         packageManager: pm,
       });
@@ -270,7 +323,7 @@ export const createCommand = defineCommand({
 
       // 11. Generate .obora/config.json
       consola.start("Generating config...");
-      const oboraConfig = createInitialConfig(base, pm, appsConfig, slotSelections);
+      const oboraConfig = createInitialConfig(targetDir, base, pm, appsConfig, slotSelections);
       await writeOboraConfig(targetDir, oboraConfig);
       await addHistoryEntry(targetDir, {
         action: "create",
@@ -296,10 +349,16 @@ export const createCommand = defineCommand({
 
       nextSteps.push(`${pm} dev`);
 
+      const postInstallSteps = assemblyResult.postInstall || [];
+      const postInstallBlock = postInstallSteps.length > 0
+        ? `\n\nPost-install notes:\n${postInstallSteps.map((step) => `  - ${step}`).join("\n")}`
+        : "";
+
       consola.box(
         `Project ready!\n\n` +
           `Next steps:\n` +
-          nextSteps.map((step) => `  ${step}`).join("\n")
+          nextSteps.map((step) => `  ${step}`).join("\n") +
+          postInstallBlock
       );
     } catch (error) {
       if (error instanceof Error) {

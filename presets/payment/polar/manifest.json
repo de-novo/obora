@@ -3,25 +3,9 @@
   "name": "polar",
   "category": "payment",
   "description": "Polar - Merchant of Record for developers (4% + $0.40)",
-  "operations": {
-    "replace": [],
-    "merge": [],
-    "add": ["src/modules/payment"],
-    "remove": [],
-    "inject": [
-      {
-        "file": "src/app.module.ts",
-        "marker": "@obora:imports",
-        "content": "import { PaymentModule } from \"./modules/payment/payment.module.js\";"
-      },
-      {
-        "file": "src/app.module.ts",
-        "marker": "@obora:modules",
-        "content": "PaymentModule,"
-      }
-    ]
-  },
-  "conflicts": ["paddle"],
+  "conflicts": [
+    "paddle"
+  ],
   "requires": [],
   "env": [
     {
@@ -43,5 +27,41 @@
     "Get access token from https://polar.sh",
     "Configure webhook endpoint",
     "Set environment variables"
-  ]
+  ],
+  "version": "1.0.0",
+  "targets": {
+    "nestjs": {
+      "files": [
+        "src/modules/payment"
+      ],
+      "inject": [
+        {
+          "file": "src/app.module.ts",
+          "marker": "@obora:imports",
+          "content": "import { PaymentModule } from \"./modules/payment/payment.module.js\";"
+        },
+        {
+          "file": "src/app.module.ts",
+          "marker": "@obora:modules",
+          "content": "PaymentModule,"
+        }
+      ],
+      "detect": {
+        "packages": [
+          "@nestjs/core"
+        ],
+        "packageVersions": {
+          "@nestjs/core": ">=10"
+        },
+        "runtime": {
+          "node": ">=18"
+        }
+      }
+    }
+  },
+  "common": {
+    "dependencies": {
+      "@polar-sh/sdk": "^0.18.0"
+    }
+  }
 }

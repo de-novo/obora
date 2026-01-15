@@ -3,15 +3,34 @@
   "name": "effect-schema",
   "category": "validation",
   "description": "Effect Schema - Type-safe, bidirectional transformation with runtime validation",
-  "operations": {
-    "replace": [],
-    "merge": ["package.json"],
-    "add": ["src/lib/validation"],
-    "remove": [],
-    "inject": []
-  },
-  "conflicts": ["zod"],
+  "conflicts": [
+    "zod"
+  ],
   "requires": [],
   "env": [],
-  "postInstall": []
+  "postInstall": [],
+  "version": "3.19.0",
+  "targets": {
+    "nestjs": {
+      "files": [
+        "src/lib/validation"
+      ],
+      "detect": {
+        "packages": [
+          "@nestjs/core"
+        ],
+        "packageVersions": {
+          "@nestjs/core": ">=10"
+        },
+        "runtime": {
+          "node": ">=18"
+        }
+      }
+    }
+  },
+  "common": {
+    "dependencies": {
+      "effect": "^3.10.0"
+    }
+  }
 }

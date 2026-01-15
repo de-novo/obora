@@ -769,6 +769,7 @@ export const initCommand = defineCommand({
     }
 
     const config = createInitialConfig(
+      projectPath,
       detectedBase,
       detectedPm,
       detectedApps,

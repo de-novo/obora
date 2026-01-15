@@ -1,23 +1,23 @@
 {
-  "$schema": "../../preset-v2.schema.json",
+  "$schema": "../../preset.schema.json",
   "name": "better-auth",
   "category": "auth",
   "description": "Better Auth - Self-hosted authentication library",
   "version": "1.4.0",
-
   "common": {
     "dependencies": {
       "better-auth": "^1.4.0"
     }
   },
-
   "targets": {
     "server": {
       "description": "Better Auth server for NestJS API",
       "dependencies": {
         "fastify": "^5.0.0"
       },
-      "files": ["server"],
+      "files": [
+        "server"
+      ],
       "inject": [
         {
           "file": "src/app.module.ts",
@@ -47,10 +47,11 @@
         }
       ]
     },
-
     "nextjs": {
       "description": "Better Auth client for Next.js with middleware",
-      "files": ["nextjs"],
+      "files": [
+        "nextjs"
+      ],
       "env": [
         {
           "key": "NEXT_PUBLIC_BETTER_AUTH_URL",
@@ -59,11 +60,23 @@
           "secret": false,
           "example": "http://localhost:3001"
         }
-      ]
+      ],
+      "detect": {
+        "packages": [
+          "next"
+        ],
+        "packageVersions": {
+          "next": ">=14"
+        },
+        "runtime": {
+          "node": ">=18"
+        }
+      }
     }
   },
-
-  "conflicts": ["clerk"],
+  "conflicts": [
+    "clerk"
+  ],
   "postInstall": [
     "Generate secret: openssl rand -base64 32",
     "Configure social providers in auth config"

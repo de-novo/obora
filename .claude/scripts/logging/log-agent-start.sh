@@ -17,6 +17,7 @@ DB_PATH="${HOME}/.obora/dashboard.db"
 SESSION_FILE="${HOME}/.obora/current-session.txt"
 WORKFLOW_FILE="${HOME}/.obora/current-workflow.txt"
 STEP_COUNTER_FILE="${HOME}/.obora/workflow-step-counter.txt"
+CURRENT_STEP_FILE="${HOME}/.obora/current-workflow-step.txt"
 
 # stdin에서 JSON 읽기
 INPUT=$(cat)
@@ -95,6 +96,10 @@ INSERT INTO workflow_steps (
 );
 EOF
   echo "Workflow step insert result: $?" >> "$DEBUG_LOG"
+
+  # 현재 step ID 저장 (log-agent-stop.sh에서 사용)
+  echo "$STEP_ID" > "$CURRENT_STEP_FILE"
+  echo "Saved STEP_ID to: $CURRENT_STEP_FILE" >> "$DEBUG_LOG"
 fi
 
 # 에이전트 실행 기록 삽입

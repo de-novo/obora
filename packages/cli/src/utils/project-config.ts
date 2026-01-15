@@ -1,6 +1,7 @@
-import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { APP_MODULES } from "./constants";
 
 // ============================================================================
 // Types
@@ -10,6 +11,7 @@ export interface AppConfig {
   module: string;
   version: string;
   installedAt: string;
+  path: string;
 }
 
 export interface SlotConfig {
@@ -29,6 +31,16 @@ export interface OboraConfig {
   updatedAt: string;
   apps: Record<string, AppConfig>;
   slots: Record<string, SlotConfig | null>;
+  presetTargets?: Record<string, string>;
+  presetTargetHistory?: Record<
+    string,
+    Array<{
+      target: string;
+      source: "detect" | "manual" | "override" | "default" | "saved";
+      reasonDetail?: string;
+      changedAt: string;
+    }>
+  >;
   packageManager: "npm" | "pnpm" | "yarn" | "bun";
 }
 
@@ -111,19 +123,22 @@ export async function writeOboraConfig(
  * Create initial obora config for a new project
  */
 export function createInitialConfig(
+  projectPath: string,
   base: string,
   packageManager: OboraConfig["packageManager"],
-  apps: Record<string, { module: string; version: string }>,
+  apps: Record<string, { module: string; version: string; path?: string }>,
   slots: Record<string, { preset: string; version: string } | null>
 ): OboraConfig {
   const now = new Date().toISOString();
 
   const appsConfig: Record<string, AppConfig> = {};
   for (const [appName, appValue] of Object.entries(apps)) {
+    const appPath = appValue.path || resolveAppPath(projectPath, base, appName, appValue.module);
     appsConfig[appName] = {
       module: appValue.module,
       version: appValue.version,
       installedAt: now,
+      path: appPath,
     };
   }
 
@@ -148,6 +163,8 @@ export function createInitialConfig(
     updatedAt: now,
     apps: appsConfig,
     slots: slotsConfig,
+    presetTargets: {},
+    presetTargetHistory: {},
     packageManager,
   };
 }
@@ -200,7 +217,8 @@ export async function addApp(
   projectPath: string,
   appName: string,
   module: string,
-  version: string
+  version: string,
+  appPath?: string
 ): Promise<void> {
   const config = await readOboraConfig(projectPath);
 
@@ -214,6 +232,7 @@ export async function addApp(
     module,
     version,
     installedAt: now,
+    path: appPath || resolveAppPath(projectPath, config.base, appName, module),
   };
 
   await writeOboraConfig(projectPath, config);
@@ -223,6 +242,31 @@ export async function addApp(
     module,
     toVersion: version,
   });
+}
+
+function resolveAppPath(
+  projectPath: string,
+  base: string,
+  appName: string,
+  module: string
+): string {
+  const moduleConfig = APP_MODULES[module as keyof typeof APP_MODULES];
+  if (base === "single") {
+    return projectPath;
+  }
+  if (moduleConfig?.targetDir) {
+    const root = moduleConfig.targetDir.split("/")[0];
+    if (root === "packages") {
+      return join(projectPath, "packages", appName);
+    }
+    if (root === "apps") {
+      return join(projectPath, "apps", appName);
+    }
+  }
+  if (module === "shared-database" || module === "shared-ui") {
+    return join(projectPath, "packages", appName);
+  }
+  return join(projectPath, "apps", appName);
 }
 
 export async function removeApp(
@@ -297,6 +341,18 @@ export async function removeSlotPreset(
 
   const previousConfig = config.slots[slot];
   config.slots[slot] = null;
+  if (previousConfig?.preset && config.presetTargets) {
+    delete config.presetTargets[previousConfig.preset];
+    if (Object.keys(config.presetTargets).length === 0) {
+      delete config.presetTargets;
+    }
+  }
+  if (previousConfig?.preset && config.presetTargetHistory) {
+    delete config.presetTargetHistory[previousConfig.preset];
+    if (Object.keys(config.presetTargetHistory).length === 0) {
+      delete config.presetTargetHistory;
+    }
+  }
 
   await writeOboraConfig(projectPath, config);
 
@@ -340,6 +396,40 @@ export async function upgradeSlotPreset(
     fromVersion,
     toVersion: newVersion,
   });
+}
+
+// ============================================================================
+// Preset Target Operations
+// ============================================================================
+
+export async function setPresetTarget(
+  projectPath: string,
+  preset: string,
+  target: string,
+  source: "detect" | "manual" | "override" | "default" | "saved",
+  reasonDetail?: string
+): Promise<void> {
+  const config = await readOboraConfig(projectPath);
+
+  if (!config) {
+    throw new Error("No obora config found. Is this an obora project?");
+  }
+
+  config.presetTargets = config.presetTargets || {};
+  const previous = config.presetTargets[preset];
+  config.presetTargets[preset] = target;
+  if (previous !== target) {
+    config.presetTargetHistory = config.presetTargetHistory || {};
+    config.presetTargetHistory[preset] = config.presetTargetHistory[preset] || [];
+    config.presetTargetHistory[preset].push({
+      target,
+      source,
+      reasonDetail,
+      changedAt: new Date().toISOString(),
+    });
+  }
+
+  await writeOboraConfig(projectPath, config);
 }
 
 // ============================================================================

@@ -13,7 +13,7 @@ export class AiService {
   }
 
   async *streamText(prompt: string) {
-    const result = streamText({
+    const result = await streamText({
       model: openai("gpt-4o-mini"),
       prompt,
     });

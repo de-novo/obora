@@ -2,11 +2,21 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { promises as fs } from "node:fs";
 import { join } from "pathe";
 import { tmpdir } from "node:os";
-import { assembleProject } from "../../src/utils/assembler";
+import { assembleProject, type AppModuleInstance } from "../../src/utils/assembler";
 import { fileExists, readJson } from "../../src/utils/fs";
 
 describe("E2E: Preset Combinations", () => {
   let testDir: string;
+  const buildAppInstances = (
+    modules: Array<"nestjs-api" | "nextjs-web">,
+    base: "single" | "monorepo"
+  ): AppModuleInstance[] => {
+    return modules.map((module) => {
+      const name = module === "nestjs-api" ? "api" : "web";
+      const targetDir = base === "single" ? "." : `apps/${name}`;
+      return { name, module, targetDir };
+    });
+  };
 
   beforeEach(async () => {
     testDir = join(tmpdir(), `obora-e2e-${Date.now()}`);
@@ -271,7 +281,7 @@ describe("E2E: Preset Combinations", () => {
 
       // Verify clerk-nextjs files
       expect(await fileExists(join(projectDir, "middleware.ts"))).toBe(true);
-      expect(await fileExists(join(projectDir, "src/lib/auth.ts"))).toBe(true);
+      expect(await fileExists(join(projectDir, "src/lib/auth/index.ts"))).toBe(true);
 
       // Verify analytics (copied to src/lib/analytics per manifest)
       expect(await fileExists(join(projectDir, "src/lib/analytics/index.ts"))).toBe(true);
@@ -359,7 +369,7 @@ describe("E2E: Preset Combinations", () => {
         base: "monorepo",
         projectName: "test-conflict",
         targetDir: projectDir,
-        apps: ["nestjs-api"],
+        apps: buildAppInstances(["nestjs-api"], "monorepo"),
         presets: {
           database: { preset: "prisma", version: "7.0.0" },
         },

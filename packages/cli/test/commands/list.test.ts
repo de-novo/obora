@@ -186,14 +186,19 @@ describe("list command", () => {
       expect(CATEGORIES).toContain("database");
       expect(CATEGORIES).toContain("payment");
       expect(CATEGORIES).toContain("analytics");
+      expect(CATEGORIES).toContain("data-fetching");
+      expect(CATEGORIES).toContain("state");
+      expect(CATEGORIES).toContain("i18n");
+      expect(CATEGORIES).toContain("theming");
+      expect(CATEGORIES).toContain("ui");
       expect(CATEGORIES).toContain("email");
       expect(CATEGORIES).toContain("ai");
       expect(CATEGORIES).toContain("storage");
       expect(CATEGORIES).toContain("validation");
     });
 
-    it("should have 9 categories", () => {
-      expect(CATEGORIES.length).toBe(9);
+    it("should have 14 categories", () => {
+      expect(CATEGORIES.length).toBe(14);
     });
   });
 });

@@ -1,5 +1,5 @@
 import { promises as fs } from "node:fs";
-import { join, dirname } from "pathe";
+import { join, dirname, relative, normalize } from "pathe";
 import { consola } from "consola";
 
 /**
@@ -103,8 +103,17 @@ export async function writeTemplate(
 export async function copyTemplateDir(
   src: string,
   dest: string,
-  replacements: Record<string, string>
+  replacements: Record<string, string>,
+  options?: {
+    overwrite?: boolean;
+    logSkipped?: boolean;
+    filter?: (relativePath: string, kind: "file" | "dir") => boolean;
+    root?: string;
+  }
 ): Promise<void> {
+  const overwrite = options?.overwrite ?? true;
+  const logSkipped = options?.logSkipped ?? true;
+  const root = options?.root ?? src;
   await ensureDir(dest);
   const entries = await fs.readdir(src, { withFileTypes: true });
 
@@ -118,8 +127,44 @@ export async function copyTemplateDir(
     const destPath = join(dest, destName);
 
     if (entry.isDirectory()) {
-      await copyTemplateDir(srcPath, destPath, replacements);
+      const relDir = normalize(relative(root, srcPath));
+      if (options?.filter && !options.filter(relDir, "dir")) {
+        if (logSkipped) {
+          consola.warn(`Skipped directory ${destPath} by filter.`);
+        }
+        continue;
+      }
+      const destStat = await fs.stat(destPath).catch(() => null);
+      if (destStat && !destStat.isDirectory()) {
+        if (logSkipped) {
+          consola.warn(`Skipped directory ${destPath} (file already exists).`);
+        }
+        continue;
+      }
+      await copyTemplateDir(srcPath, destPath, replacements, { ...options, root });
     } else {
+      const relFile = normalize(relative(root, srcPath));
+      if (options?.filter && !options.filter(relFile, "file")) {
+        if (logSkipped) {
+          consola.warn(`Skipped file ${destPath} by filter.`);
+        }
+        continue;
+      }
+      const destStat = await fs.stat(destPath).catch(() => null);
+      if (destStat) {
+        if (destStat.isDirectory()) {
+          if (logSkipped) {
+            consola.warn(`Skipped file ${destPath} (directory already exists).`);
+          }
+          continue;
+        }
+        if (!overwrite) {
+          if (logSkipped) {
+            consola.warn(`Skipped existing file ${destPath}.`);
+          }
+          continue;
+        }
+      }
       // Check if it's a text file that needs placeholder replacement
       const textExtensions = [
         ".ts",

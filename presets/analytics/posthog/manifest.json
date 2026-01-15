@@ -3,16 +3,8 @@
   "name": "posthog",
   "category": "analytics",
   "description": "PostHog - Open source product analytics",
-  "operations": {
-    "replace": [],
-    "merge": ["package.json"],
-    "add": ["src/lib/posthog"],
-    "remove": [],
-    "inject": []
-  },
   "conflicts": [],
   "requires": [],
-  "targetApps": ["nextjs-web"],
   "env": [
     {
       "key": "NEXT_PUBLIC_POSTHOG_KEY",
@@ -32,5 +24,30 @@
   "postInstall": [
     "Set up PostHog account: https://posthog.com",
     "Get project API key from settings"
-  ]
+  ],
+  "version": "1.200.0",
+  "targets": {
+    "nextjs": {
+      "files": [
+        "src/lib/posthog"
+      ],
+      "detect": {
+        "packages": [
+          "next"
+        ],
+        "packageVersions": {
+          "next": ">=14"
+        },
+        "runtime": {
+          "node": ">=18"
+        }
+      }
+    }
+  },
+  "common": {
+    "dependencies": {
+      "posthog-js": "^1.200.0",
+      "posthog-node": "^4.4.0"
+    }
+  }
 }

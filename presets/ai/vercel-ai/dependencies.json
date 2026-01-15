@@ -1,8 +1,0 @@
-{
-  "dependencies": {
-    "ai": "^3.4.0",
-    "@ai-sdk/openai": "^0.0.70",
-    "@ai-sdk/anthropic": "^0.0.55"
-  },
-  "devDependencies": {}
-}

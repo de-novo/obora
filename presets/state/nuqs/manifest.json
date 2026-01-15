@@ -1,0 +1,52 @@
+{
+  "$schema": "../../preset.schema.json",
+  "name": "nuqs",
+  "category": "state",
+  "description": "nuqs - URL query state for React/Next.js",
+  "version": "1.17.0",
+  "common": {
+    "dependencies": {
+      "nuqs": "^1.17.0"
+    }
+  },
+  "targets": {
+    "nextjs": {
+      "description": "Next.js (manual adapter setup)",
+      "files": ["nextjs"],
+      "detect": {
+        "packages": ["next"],
+        "packageVersions": {
+          "next": ">=14.1"
+        },
+        "runtime": {
+          "node": ">=18.12"
+        }
+      },
+      "postInstall": [
+        "Wrap your app with <NuqsAdapter> in app/layout.tsx or app/providers.tsx."
+      ]
+    },
+    "nextjs-auto": {
+      "description": "Next.js (auto adapter injection)",
+      "files": ["nextjs"],
+      "inject": [
+        {
+          "file": "app/providers.tsx",
+          "marker": "@obora:providers-imports",
+          "content": "import { NuqsAdapter } from \"nuqs/adapters/next/app\";",
+          "order": 5
+        },
+        {
+          "file": "app/providers.tsx",
+          "marker": "@obora:providers",
+          "content": "(children) => <NuqsAdapter>{children}</NuqsAdapter>,",
+          "order": 5
+        }
+      ],
+      "postInstall": [
+        "NuqsAdapter is injected into app/providers.tsx."
+      ]
+    }
+  },
+  "postInstall": []
+}

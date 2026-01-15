@@ -1,28 +1,31 @@
 import { defineCommand } from "citty";
 import { consola } from "consola";
-import { resolve, join, dirname } from "pathe";
 import { promises as fs } from "node:fs";
+import { dirname, join, resolve } from "pathe";
 import prompts from "prompts";
 import {
-  PRESETS,
-  PRESETS_DIR,
-  TEMPLATES_DIR,
-  CATEGORIES,
   APP_MODULES,
   APP_MODULE_NAMES,
-  type PresetName,
   type AppModuleName,
+  CATEGORIES,
+  PRESETS,
+  PRESETS_DIR,
+  isForbiddenPresetFilePath,
+  type PresetName,
+  TEMPLATES_DIR,
+  copyTemplateDir,
   dirExists,
+  ensureDir,
   fileExists,
   readJson,
+  resolvePresetName,
   writeJson,
-  copyTemplateDir,
-  ensureDir,
 } from "../utils";
 import {
+  addSlotPreset,
   hasOboraConfig,
   readOboraConfig,
-  addSlotPreset,
+  setPresetTarget,
 } from "../utils/project-config";
 
 // ============================================================================
@@ -48,12 +51,25 @@ interface PresetTarget {
     file: string;
     marker: string;
     content: string;
+    order?: number;
   }>;
   env?: PresetEnvVar[];
   postInstall?: string[];
+  detect?: string[] | DetectRule;
 }
 
-interface PresetManifestV2 {
+interface DetectRule {
+  packages?: string[];
+  packageVersions?: Record<string, string>;
+  runtime?: {
+    node?: string;
+    bun?: boolean;
+    deno?: boolean;
+    packageManager?: "pnpm" | "yarn" | "npm" | "bun";
+  };
+}
+
+interface PresetManifestTargets {
   name: string;
   category: string;
   description: string;
@@ -65,56 +81,14 @@ interface PresetManifestV2 {
     scripts?: Record<string, string>;
   };
   targets?: Record<string, PresetTarget>;
+  variants?: Record<string, PresetTarget>;
   conflicts?: string[];
-  postInstall?: string[];
-}
-
-interface PresetManifest {
-  name: string;
-  category: string;
-  description: string;
-  operations: {
-    replace: string[];
-    merge: string[];
-    add: string[];
-    remove: string[];
-    inject: Array<{
-      file: string;
-      marker: string;
-      content: string;
-    }>;
-  };
-  conflicts?: string[];
-  requires?: string[];
-  env?: PresetEnvVar[];
-  scripts?: Record<string, string>;
   postInstall?: string[];
 }
 
 // ============================================================================
 // Helper Functions
 // ============================================================================
-
-async function copyFileWithReplacements(
-  src: string,
-  dest: string,
-  replacements: Record<string, string>
-): Promise<void> {
-  await ensureDir(dirname(dest));
-
-  const textExtensions = [".ts", ".tsx", ".js", ".jsx", ".json", ".md", ".yaml", ".yml", ".env", ".example"];
-  const isTextFile = textExtensions.some((ext) => src.endsWith(ext));
-
-  if (isTextFile) {
-    let content = await fs.readFile(src, "utf-8");
-    for (const [key, value] of Object.entries(replacements)) {
-      content = content.replace(new RegExp(`{{${key}}}`, "g"), value);
-    }
-    await fs.writeFile(dest, content);
-  } else {
-    await fs.copyFile(src, dest);
-  }
-}
 
 async function mergePackageJson(
   targetPath: string,
@@ -160,6 +134,166 @@ async function mergePackageJson(
   return updated;
 }
 
+async function resolveTargetFromDetect(
+  targetConfigs: Record<string, PresetTarget>,
+  packageJsonPath: string
+): Promise<{ target: string; reasonDetail: string } | null> {
+  if (!(await fileExists(packageJsonPath))) return null;
+  const pkg = await readJson<{
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+    engines?: { node?: string };
+  }>(packageJsonPath);
+  const deps = new Set([
+    ...Object.keys(pkg.dependencies || {}),
+    ...Object.keys(pkg.devDependencies || {}),
+  ]);
+  const depVersions = {
+    ...(pkg.dependencies || {}),
+    ...(pkg.devDependencies || {}),
+  };
+  const nodeEngine = pkg.engines?.node;
+  const runtimeFlags = await detectRuntimeFlags(dirname(packageJsonPath));
+  for (const [key, config] of Object.entries(targetConfigs)) {
+    if (!hasDetectRule(config.detect)) continue;
+    const reasonDetail = matchesDetectRule(config.detect, deps, depVersions, nodeEngine, runtimeFlags);
+    if (reasonDetail) {
+      return { target: key, reasonDetail };
+    }
+  }
+  return null;
+}
+
+function matchesDetectRule(
+  detect: string[] | DetectRule,
+  deps: Set<string>,
+  depVersions: Record<string, string>,
+  nodeEngine?: string,
+  runtimeFlags?: { bun: boolean; deno: boolean }
+): string | null {
+  if (Array.isArray(detect)) {
+    const matched = detect.find((dep) => deps.has(dep));
+    return matched ? `matched: ${matched}` : null;
+  }
+
+  if (detect.packages && !detect.packages.every((dep) => deps.has(dep))) {
+    return null;
+  }
+
+  if (detect.packageVersions) {
+    for (const [pkg, requirement] of Object.entries(detect.packageVersions)) {
+      const version = depVersions[pkg];
+      if (!version || !satisfiesVersion(version, requirement)) {
+        return null;
+      }
+    }
+  }
+
+  if (detect.runtime?.node) {
+    const runtimeVersion = nodeEngine || process.version;
+    if (!satisfiesVersion(runtimeVersion, detect.runtime.node)) {
+      return null;
+    }
+  }
+
+  if (detect.runtime?.bun && !runtimeFlags?.bun) {
+    return null;
+  }
+  if (detect.runtime?.deno && !runtimeFlags?.deno) {
+    return null;
+  }
+  if (detect.runtime?.packageManager && runtimeFlags?.packageManager !== detect.runtime.packageManager) {
+    return null;
+  }
+
+  const reasonParts: string[] = [];
+  if (detect.packages?.length) reasonParts.push(`packages: ${detect.packages.join(", ")}`);
+  if (detect.packageVersions) {
+    const versionText = Object.entries(detect.packageVersions)
+      .map(([pkg, req]) => `${pkg}${req}`)
+      .join(", ");
+    reasonParts.push(`versions: ${versionText}`);
+  }
+  if (detect.runtime?.node) reasonParts.push(`node: ${detect.runtime.node}`);
+  if (detect.runtime?.bun) reasonParts.push("runtime: bun");
+  if (detect.runtime?.deno) reasonParts.push("runtime: deno");
+  if (detect.runtime?.packageManager) reasonParts.push(`pm: ${detect.runtime.packageManager}`);
+  return reasonParts.length > 0 ? `matched: ${reasonParts.join(" | ")}` : "matched: rule";
+}
+
+function hasDetectRule(detect?: string[] | DetectRule): boolean {
+  if (!detect) return false;
+  if (Array.isArray(detect)) return detect.length > 0;
+  return Boolean(
+    (detect.packages && detect.packages.length > 0) ||
+    (detect.packageVersions && Object.keys(detect.packageVersions).length > 0) ||
+    detect.runtime
+  );
+}
+
+async function detectRuntimeFlags(targetDir: string): Promise<{
+  bun: boolean;
+  deno: boolean;
+  packageManager?: "pnpm" | "yarn" | "npm" | "bun";
+}> {
+  const bun = await fileExists(join(targetDir, "bun.lockb")) ||
+    await fileExists(join(targetDir, "bun.lock"));
+  const deno = await fileExists(join(targetDir, "deno.json")) ||
+    await fileExists(join(targetDir, "deno.jsonc"));
+  const pnpm = await fileExists(join(targetDir, "pnpm-lock.yaml"));
+  const yarn = await fileExists(join(targetDir, "yarn.lock"));
+  const npm = await fileExists(join(targetDir, "package-lock.json"));
+  const packageManager = bun
+    ? "bun"
+    : pnpm
+      ? "pnpm"
+      : yarn
+        ? "yarn"
+        : npm
+          ? "npm"
+          : undefined;
+  return { bun, deno, packageManager };
+}
+
+function satisfiesVersion(actual: string, requirement: string): boolean {
+  const req = parseMajorMinor(requirement);
+  const act = parseMajorMinor(actual);
+  if (!req || !act) return false;
+
+  const useMinor = req.minor !== null;
+  const compare = compareMajorMinor(act, req, useMinor);
+
+  if (requirement.startsWith(">=")) return compare >= 0;
+  if (requirement.startsWith("<=")) return compare <= 0;
+  if (requirement.startsWith(">")) return compare > 0;
+  if (requirement.startsWith("<")) return compare < 0;
+  return compare === 0;
+}
+
+function parseMajorMinor(version: string): { major: number; minor: number | null } | null {
+  const match = version.match(/(\\d+)(?:\\.(\\d+))?/);
+  if (!match) return null;
+  return {
+    major: Number.parseInt(match[1], 10),
+    minor: match[2] ? Number.parseInt(match[2], 10) : null,
+  };
+}
+
+function compareMajorMinor(
+  actual: { major: number; minor: number | null },
+  required: { major: number; minor: number | null },
+  useMinor: boolean
+): number {
+  if (actual.major !== required.major) {
+    return actual.major > required.major ? 1 : -1;
+  }
+  if (!useMinor) return 0;
+  const actualMinor = actual.minor ?? 0;
+  const requiredMinor = required.minor ?? 0;
+  if (actualMinor === requiredMinor) return 0;
+  return actualMinor > requiredMinor ? 1 : -1;
+}
+
 async function injectContent(
   filePath: string,
   marker: string,
@@ -178,24 +312,30 @@ async function injectContent(
     return false;
   }
 
-  // Regex to capture indentation before the marker
-  const markerPattern = new RegExp(`([ \\t]*)\\/\\/ ${marker}`, "g");
+  const escaped = marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const patterns = [
+    new RegExp(`^([ \\t]*)\\/\\/ ${escaped}\\s*$`, "gm"),
+    new RegExp(`^([ \\t]*)# ${escaped}\\s*$`, "gm"),
+    new RegExp(`^([ \\t]*)\\/\\* ${escaped} \\*\\/\\s*$`, "gm"),
+    new RegExp(`^([ \\t]*)\\{\\/\\* ${escaped} \\*\\/\\}\\s*$`, "gm"),
+    new RegExp(`^([ \\t]*)<!-- ${escaped} -->\\s*$`, "gm"),
+  ];
 
-  if (!markerPattern.test(fileContent)) {
+  if (!patterns.some((pattern) => pattern.test(fileContent))) {
     consola.warn(`Marker "${marker}" not found in ${filePath}`);
     return false;
   }
 
-  // Reset regex lastIndex after test()
-  markerPattern.lastIndex = 0;
-
   // Replace with indentation preserved
-  const updatedContent = fileContent.replace(
-    markerPattern,
-    (match: string, indent: string) => {
-      return `${indent}${content}\n${match}`;
-    }
-  );
+  let updatedContent = fileContent;
+  for (const pattern of patterns) {
+    updatedContent = updatedContent.replace(
+      pattern,
+      (match: string, indent: string) => {
+        return `${indent}${content}\n${match}`;
+      }
+    );
+  }
 
   await fs.writeFile(filePath, updatedContent);
   return true;
@@ -213,6 +353,8 @@ interface AddArgs {
   name?: string;
   yes: boolean;
   list: boolean;
+  plan: boolean;
+  dialect?: string;
 }
 
 async function handleAppTemplate(args: AddArgs, targetDir: string): Promise<void> {
@@ -300,7 +442,7 @@ async function handleAppTemplate(args: AddArgs, targetDir: string): Promise<void
       PROJECT_NAME: packageName.replace("@", "").replace("/", "-"),
     };
 
-    await copyTemplateDir(templateFilesDir, targetDir, replacements);
+    await copyTemplateDir(templateFilesDir, targetDir, replacements, { overwrite: true });
 
     // Update package.json with correct name
     const packageJsonPath = join(targetDir, "package.json");
@@ -371,6 +513,11 @@ export const addCommand = defineCommand({
       description: "List available presets and app templates",
       default: false,
     },
+    plan: {
+      type: "boolean",
+      description: "Show a dry-run plan without applying changes",
+      default: false,
+    },
     dialect: {
       type: "string",
       description: "Database dialect for ORM presets (e.g., sqlite, postgres)",
@@ -415,10 +562,17 @@ export const addCommand = defineCommand({
     const isMonorepo = existingConfig?.base === "monorepo";
 
     // Get preset name
-    let presetName: PresetName;
-    if (args.preset && args.preset in PRESETS) {
-      presetName = args.preset as PresetName;
-    } else {
+    let presetName: PresetName | null = null;
+    if (args.preset) {
+      const normalized = resolvePresetName(args.preset);
+      if (normalized in PRESETS) {
+        presetName = normalized as PresetName;
+      } else {
+        consola.error(`Unknown preset: ${args.preset}`);
+        process.exit(1);
+      }
+    }
+    if (!presetName) {
       // Reorganize to group by category
       const groupedChoices: prompts.Choice[] = [];
 
@@ -474,7 +628,7 @@ export const addCommand = defineCommand({
         return;
       }
 
-      presetName = preset as PresetName;
+      presetName = resolvePresetName(preset as PresetName) as PresetName;
     }
 
     const presetInfo = PRESETS[presetName];
@@ -491,6 +645,7 @@ export const addCommand = defineCommand({
       const getAppDir = (appKey: string): string | null => {
         const appConfig = existingConfig.apps[appKey];
         if (!appConfig) return null;
+        if (appConfig.path) return appConfig.path;
         const moduleConfig = APP_MODULES[appConfig.module];
         if (!moduleConfig) return null;
         return join(projectDir, moduleConfig.targetDir);
@@ -544,7 +699,7 @@ export const addCommand = defineCommand({
             choices: relevantApps.map((app) => {
               const moduleConfig = APP_MODULES[existingConfig.apps[app]?.module || ""];
               return {
-                title: `${app} (${moduleConfig?.targetDir || app})`,
+                title: `${app} (${existingConfig.apps[app]?.path || moduleConfig?.targetDir || app})`,
                 value: app,
               };
             }),
@@ -619,7 +774,7 @@ export const addCommand = defineCommand({
         process.exit(1);
       }
 
-      const manifestRaw = await readJson<PresetManifestV2 | PresetManifest>(manifestPath);
+      const manifestRaw = await readJson<PresetManifestTargets>(manifestPath);
 
       // Check for conflicts
       if (manifestRaw.conflicts && existingConfig) {
@@ -636,27 +791,49 @@ export const addCommand = defineCommand({
       }
 
       // ======================================================================
-      // V2 Manifest with targets (dialect-based)
+      // Manifest with targets/variants (dialect-based)
       // ======================================================================
-      if ("targets" in manifestRaw && manifestRaw.targets) {
-        const manifestV2 = manifestRaw as PresetManifestV2;
-        const targetNames = Object.keys(manifestV2.targets);
+      const targetConfigs = manifestRaw.targets || manifestRaw.variants;
+      if (!targetConfigs) {
+        consola.error("Invalid preset: missing targets/variants");
+        process.exit(1);
+      }
+      {
+        const targetNames = Object.keys(targetConfigs);
 
         // Select target (dialect)
         let selectedTarget: string;
+        let targetSource: "detect" | "manual" | "override" | "default" | "saved";
+        let targetReasonDetail: string | undefined;
         if (args.dialect && targetNames.includes(args.dialect)) {
           selectedTarget = args.dialect;
-        } else if (args.yes && targetNames.length > 0) {
+          targetSource = "override";
+        } else if (existingConfig?.presetTargets?.[presetName] &&
+          targetNames.includes(existingConfig.presetTargets[presetName])) {
+          selectedTarget = existingConfig.presetTargets[presetName];
+          consola.info(`Using saved target: ${selectedTarget}`);
+          targetSource = "saved";
+        } else {
+          const detected = await resolveTargetFromDetect(targetConfigs, packageJsonPath);
+          if (detected) {
+            selectedTarget = detected.target;
+            targetReasonDetail = detected.reasonDetail;
+            consola.info(`Detected target: ${selectedTarget}`);
+            targetSource = "detect";
+          }
+        }
+        if (!selectedTarget && args.yes && targetNames.length > 0) {
           selectedTarget = targetNames[0];
           consola.info(`Using default: ${selectedTarget}`);
-        } else {
+          targetSource = "default";
+        } else if (!selectedTarget) {
           const { target } = await prompts({
             type: "select",
             name: "target",
             message: "Select database dialect:",
             choices: targetNames.map((name) => ({
               title: name,
-              description: manifestV2.targets![name].description,
+              description: targetConfigs[name].description,
               value: name,
             })),
           });
@@ -666,10 +843,41 @@ export const addCommand = defineCommand({
             return;
           }
           selectedTarget = target;
+          targetSource = "manual";
         }
 
-        const targetConfig = manifestV2.targets[selectedTarget];
-        const commonConfig = manifestV2.common || {};
+        const targetConfig = targetConfigs[selectedTarget];
+        const commonConfig = manifestRaw.common || {};
+
+        if (args.plan) {
+          const depCount = Object.keys({
+            ...(commonConfig.dependencies || {}),
+            ...(targetConfig.dependencies || {}),
+          }).length;
+          const devDepCount = Object.keys({
+            ...(commonConfig.devDependencies || {}),
+            ...(targetConfig.devDependencies || {}),
+          }).length;
+          const scriptCount = Object.keys({
+            ...(manifestRaw.scripts || {}),
+            ...(commonConfig.scripts || {}),
+            ...(targetConfig.scripts || {}),
+          }).length;
+        const fileCount = (commonConfig.files || []).length + (targetConfig.files || []).length;
+          const injectCount = (targetConfig.inject || []).length;
+          const envCount = (manifestRaw.env || []).length + (targetConfig.env || []).length;
+          consola.box(
+            `Plan: ${presetName} (${selectedTarget})\n` +
+              `Target dir: ${presetTargetDir}\n` +
+              `Dependencies: ${depCount}\n` +
+              `DevDependencies: ${devDepCount}\n` +
+              `Scripts: ${scriptCount}\n` +
+              `Files: ${fileCount}\n` +
+              `Injects: ${injectCount}\n` +
+              `Env vars: ${envCount}`
+          );
+          return;
+        }
 
         // Merge dependencies: common + target
         const mergedDeps = {
@@ -685,6 +893,7 @@ export const addCommand = defineCommand({
 
         // Merge scripts
         const mergedScripts = {
+          ...(manifestRaw.scripts || {}),
           ...commonConfig.scripts,
           ...targetConfig.scripts,
         };
@@ -705,20 +914,36 @@ export const addCommand = defineCommand({
 
         const filesToCopy = [
           ...(commonConfig.files || []),
-          ...targetConfig.files,
+          ...(targetConfig.files || []),
         ];
 
         for (const fileDir of filesToCopy) {
           const sourcePath = join(presetFilesDir, fileDir);
           if (await dirExists(sourcePath)) {
-            await copyTemplateDir(sourcePath, presetTargetDir, replacements);
+            const isRootEntry = fileDir === selectedTarget ||
+              (fileDir === "nextjs" && selectedTarget.startsWith("nextjs")) ||
+              (fileDir === "nestjs" && selectedTarget.startsWith("nestjs"));
+            const destPath = isRootEntry
+              ? presetTargetDir
+              : join(presetTargetDir, fileDir);
+            await copyTemplateDir(sourcePath, destPath, replacements, {
+              overwrite: false,
+              filter: (relPath, kind) =>
+                kind === "file" ? !isForbiddenPresetFilePath(relPath) : true,
+            });
             consola.success(`Copied ${fileDir}/`);
           }
         }
 
         // Process inject operations
         if (targetConfig.inject && targetConfig.inject.length > 0) {
-          for (const inject of targetConfig.inject) {
+          const sortedInjects = [...targetConfig.inject].sort((a, b) => {
+            const orderA = a.order ?? 0;
+            const orderB = b.order ?? 0;
+            if (orderA !== orderB) return orderA - orderB;
+            return 0;
+          });
+          for (const inject of sortedInjects) {
             const filePath = join(presetTargetDir, inject.file);
             const content = inject.content.replace(/{{PROJECT_NAME}}/g, existingConfig?.base || "project");
 
@@ -730,8 +955,12 @@ export const addCommand = defineCommand({
         }
 
         // Show env variables
-        if (targetConfig.env && targetConfig.env.length > 0) {
-          const envVars = targetConfig.env
+        const allEnvVars = [
+          ...(manifestRaw.env || []),
+          ...(targetConfig.env || []),
+        ];
+        if (allEnvVars.length > 0) {
+          const envVars = allEnvVars
             .map((e) => `${e.key}=${e.secret ? "***" : e.example || "value"}`)
             .join("\n");
 
@@ -739,7 +968,7 @@ export const addCommand = defineCommand({
         }
 
         // Show post-install
-        const postInstall = targetConfig.postInstall || manifestV2.postInstall || [];
+        const postInstall = targetConfig.postInstall || manifestRaw.postInstall || [];
         if (postInstall.length > 0) {
           consola.info("Post-install steps:");
           for (const step of postInstall) {
@@ -750,6 +979,7 @@ export const addCommand = defineCommand({
         // Update config
         if (existingConfig) {
           await addSlotPreset(projectDir, presetCategory, presetName, presetInfo.version);
+          await setPresetTarget(projectDir, presetName, selectedTarget, targetSource, targetReasonDetail);
           consola.success(`Updated .obora/config.json`);
         }
 
@@ -757,95 +987,6 @@ export const addCommand = defineCommand({
         consola.info("Run your package manager to install new dependencies.");
         return;
       }
-
-      // ======================================================================
-      // V1 Manifest (legacy operations-based)
-      // ======================================================================
-      const manifest = manifestRaw as PresetManifest;
-
-      // Read and merge dependencies
-      const depsPath = join(presetDir, "dependencies.json");
-      if (await fileExists(depsPath)) {
-        const deps = await readJson<{
-          dependencies?: Record<string, string>;
-          devDependencies?: Record<string, string>;
-        }>(depsPath);
-
-        if (await fileExists(packageJsonPath)) {
-          const updated = await mergePackageJson(packageJsonPath, deps, manifest.scripts);
-          if (updated) {
-            consola.success(`Updated ${targetAppName ? `${targetAppName}/` : ""}package.json`);
-          }
-        }
-      }
-
-      // Copy preset files based on operations.add
-      const presetFilesDir = join(presetDir, "files");
-      const replacements = {
-        PROJECT_NAME: existingConfig?.base || "project",
-      };
-
-      if (await dirExists(presetFilesDir)) {
-        for (const addPath of manifest.operations.add) {
-          const sourcePath = join(presetFilesDir, addPath);
-          const destPath = join(presetTargetDir, addPath);
-
-          if (await dirExists(sourcePath)) {
-            // It's a directory
-            await copyTemplateDir(sourcePath, destPath, replacements);
-          } else if (await fileExists(sourcePath)) {
-            // It's a file
-            await copyFileWithReplacements(sourcePath, destPath, replacements);
-            consola.success(`Copied ${addPath}`);
-          } else {
-            consola.warn(`Source not found: ${addPath}`);
-          }
-        }
-      }
-
-      // Process inject operations
-      if (manifest.operations.inject && manifest.operations.inject.length > 0) {
-        for (const inject of manifest.operations.inject) {
-          const filePath = join(presetTargetDir, inject.file);
-          const content = inject.content.replace(/{{PROJECT_NAME}}/g, existingConfig?.base || "project");
-
-          const injected = await injectContent(filePath, inject.marker, content);
-          if (injected) {
-            consola.success(`Injected content into ${inject.file}`);
-          }
-        }
-      }
-
-      // Show env variables needed
-      if (manifest.env && manifest.env.length > 0) {
-        const envVars = manifest.env
-          .map((e) => `${e.key}=${e.secret ? "***" : e.example || "value"}`)
-          .join("\n");
-
-        consola.box(`Environment variables needed:\n\n${envVars}`);
-      }
-
-      // Show post-install instructions
-      if (manifest.postInstall && manifest.postInstall.length > 0) {
-        consola.info("Post-install steps:");
-        for (const step of manifest.postInstall) {
-          consola.info(`  - ${step}`);
-        }
-      }
-
-      // Update .obora/config.json if it exists
-      if (existingConfig) {
-        await addSlotPreset(
-          projectDir,
-          presetCategory,
-          presetName,
-          presetInfo.version
-        );
-        consola.success(`Updated .obora/config.json`);
-      }
-
-      consola.success(`Added ${presetName} preset!`);
-      consola.info("Run your package manager to install new dependencies.");
     } catch (error) {
       consola.error("Failed to add preset:", error);
       process.exit(1);

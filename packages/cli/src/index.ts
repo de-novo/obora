@@ -13,6 +13,7 @@ import { doctorCommand } from "./commands/doctor";
 import { ejectCommand } from "./commands/eject";
 import { chatCommand } from "./commands/chat";
 import { runCommand } from "./commands/run";
+import { sandboxCommand } from "./commands/sandbox";
 import { initializeGlobalConfig } from "./utils";
 
 const main = defineCommand({
@@ -34,6 +35,7 @@ const main = defineCommand({
     "llm-help": llmHelpCommand,
     chat: chatCommand,
     run: runCommand,
+    sandbox: sandboxCommand,
   },
   setup() {
     // Initialize global ~/.obora/ directory and dashboard.db
@@ -46,5 +48,5 @@ export function runMain() {
   _runMain(main);
 }
 
-export { createCommand, initCommand, addCommand, removeCommand, upgradeCommand, ejectCommand, doctorCommand, statusCommand, listCommand, llmHelpCommand, chatCommand, runCommand };
+export { createCommand, initCommand, addCommand, removeCommand, upgradeCommand, ejectCommand, doctorCommand, statusCommand, listCommand, llmHelpCommand, chatCommand, runCommand, sandboxCommand };
 export * from "./orchestrator";

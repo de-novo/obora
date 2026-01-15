@@ -1,0 +1,66 @@
+{
+  "$schema": "../../preset.schema.json",
+  "name": "shadcn-all",
+  "category": "ui",
+  "description": "shadcn/ui - install all components",
+  "version": "1.0.0",
+  "targets": {
+    "nextjs": {
+      "description": "shadcn/ui (Radix 기반, 기본)",
+      "detect": {
+        "packages": ["next"],
+        "packageVersions": {
+          "next": ">=14.1"
+        },
+        "runtime": {
+          "node": ">=18.12"
+        }
+      },
+      "files": [],
+      "postInstall": [
+        "Run: npx shadcn@latest init -y (if not already initialized)",
+        "Run: npx shadcn@latest add --all"
+      ]
+    },
+    "nextjs-baseui-vega": {
+      "description": "shadcn/ui (Base UI, Vega 스타일)",
+      "files": [],
+      "postInstall": [
+        "Run: npx pnpm@9.15.0 dlx shadcn@latest create --preset \"https://ui.shadcn.com/init?base=base&style=vega&baseColor=neutral&theme=neutral&iconLibrary=phosphor&font=nunito-sans&menuAccent=subtle&menuColor=inverted&radius=small&template=next\" --template next",
+        "Then run: npx pnpm@9.15.0 dlx shadcn@latest add --all --yes"
+      ]
+    },
+    "nextjs-baseui-nova": {
+      "description": "shadcn/ui (Base UI, Nova 스타일)",
+      "files": [],
+      "postInstall": [
+        "Run: npx pnpm@9.15.0 dlx shadcn@latest create --preset \"https://ui.shadcn.com/init?base=base&style=nova&baseColor=neutral&theme=neutral&iconLibrary=phosphor&font=nunito-sans&menuAccent=subtle&menuColor=inverted&radius=small&template=next\" --template next",
+        "Then run: npx pnpm@9.15.0 dlx shadcn@latest add --all --yes"
+      ]
+    },
+    "nextjs-baseui-maia": {
+      "description": "shadcn/ui (Base UI, Maia 스타일)",
+      "files": [],
+      "postInstall": [
+        "Run: npx pnpm@9.15.0 dlx shadcn@latest create --preset \"https://ui.shadcn.com/init?base=base&style=maia&baseColor=neutral&theme=neutral&iconLibrary=phosphor&font=nunito-sans&menuAccent=subtle&menuColor=inverted&radius=small&template=next\" --template next",
+        "Then run: npx pnpm@9.15.0 dlx shadcn@latest add --all --yes"
+      ]
+    },
+    "nextjs-baseui-lyra": {
+      "description": "shadcn/ui (Base UI, Lyra 스타일)",
+      "files": [],
+      "postInstall": [
+        "Run: npx pnpm@9.15.0 dlx shadcn@latest create --preset \"https://ui.shadcn.com/init?base=base&style=lyra&baseColor=neutral&theme=neutral&iconLibrary=phosphor&font=nunito-sans&menuAccent=subtle&menuColor=inverted&radius=small&template=next\" --template next",
+        "Then run: npx pnpm@9.15.0 dlx shadcn@latest add --all --yes"
+      ]
+    },
+    "nextjs-baseui-mira": {
+      "description": "shadcn/ui (Base UI, Mira 스타일)",
+      "files": [],
+      "postInstall": [
+        "Run: npx pnpm@9.15.0 dlx shadcn@latest create --preset \"https://ui.shadcn.com/init?base=base&style=mira&baseColor=neutral&theme=neutral&iconLibrary=phosphor&font=nunito-sans&menuAccent=subtle&menuColor=inverted&radius=small&template=next\" --template next",
+        "Then run: npx pnpm@9.15.0 dlx shadcn@latest add --all --yes"
+      ]
+    }
+  }
+}
