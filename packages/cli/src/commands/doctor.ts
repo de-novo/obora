@@ -19,6 +19,7 @@ interface DiagnosticResult {
   status: "pass" | "warn" | "fail";
   message: string;
   suggestion?: string;
+  details?: Record<string, unknown>;
 }
 
 interface DiagnosticCategory {
@@ -188,14 +189,20 @@ interface PresetEnvVar {
   required?: boolean;
 }
 
+interface PresetTargetConfig {
+  files?: string[];
+  inject?: Array<{ file: string; marker: string; content: string }>;
+  env?: PresetEnvVar[];
+}
+
 interface PresetManifestV2 {
   name: string;
   category: string;
   description: string;
   version?: string;
-  common?: { env?: PresetEnvVar[] };
-  targets?: Record<string, { env?: PresetEnvVar[] }>;
-  variants?: Record<string, { env?: PresetEnvVar[] }>;
+  common?: PresetTargetConfig;
+  targets?: Record<string, PresetTargetConfig>;
+  variants?: Record<string, PresetTargetConfig>;
 }
 
 interface PresetManifestV1 {
@@ -222,7 +229,38 @@ function loadPresetManifest(presetName: string): PresetManifestV1 | PresetManife
   }
 }
 
-function collectEnvVars(manifest: PresetManifestV1 | PresetManifestV2): PresetEnvVar[] {
+function getTargetConfigs(
+  manifest: PresetManifestV1 | PresetManifestV2
+): Record<string, PresetTargetConfig> {
+  if (!("targets" in manifest) && !("variants" in manifest)) {
+    return {};
+  }
+  return ("targets" in manifest && manifest.targets) ||
+    ("variants" in manifest && manifest.variants) ||
+    {};
+}
+
+function selectTargetKey(
+  presetName: string,
+  manifest: PresetManifestV1 | PresetManifestV2,
+  config: OboraConfig | null
+): { targetKey: string | null; source: "presetTargets" | "single" | "all" } {
+  const targetConfigs = getTargetConfigs(manifest);
+  const targetKeys = Object.keys(targetConfigs);
+  const selected = config?.presetTargets?.[presetName];
+  if (selected && targetKeys.includes(selected)) {
+    return { targetKey: selected, source: "presetTargets" };
+  }
+  if (targetKeys.length === 1) {
+    return { targetKey: targetKeys[0], source: "single" };
+  }
+  return { targetKey: null, source: "all" };
+}
+
+function collectEnvVars(
+  manifest: PresetManifestV1 | PresetManifestV2,
+  targetKey: string | null
+): PresetEnvVar[] {
   const envs: PresetEnvVar[] = [];
   if ("env" in manifest && manifest.env) {
     envs.push(...manifest.env);
@@ -230,13 +268,12 @@ function collectEnvVars(manifest: PresetManifestV1 | PresetManifestV2): PresetEn
   if ("common" in manifest && manifest.common?.env) {
     envs.push(...manifest.common.env);
   }
-  const targets = "targets" in manifest ? manifest.targets : undefined;
-  const variants = "variants" in manifest ? manifest.variants : undefined;
-  const entries = targets || variants || {};
-  for (const target of Object.values(entries)) {
-    if (target.env) {
-      envs.push(...target.env);
-    }
+  const targetConfigs = getTargetConfigs(manifest);
+  const targets = targetKey && targetConfigs[targetKey]
+    ? [targetConfigs[targetKey]]
+    : Object.values(targetConfigs);
+  for (const target of targets) {
+    if (target.env) envs.push(...target.env);
   }
   return envs;
 }
@@ -251,39 +288,45 @@ function getCandidateDirs(projectPath: string, config: OboraConfig | null): stri
   for (const appConfig of Object.values(config.apps || {})) {
     const moduleConfig = APP_MODULES[appConfig.module as keyof typeof APP_MODULES];
     if (!moduleConfig) continue;
+    if (appConfig.path) {
+      dirs.add(appConfig.path);
+      continue;
+    }
     dirs.add(join(projectPath, moduleConfig.targetDir));
   }
 
   return Array.from(dirs);
 }
 
-function collectExpectedFiles(manifest: PresetManifestV1 | PresetManifestV2): string[] {
+function collectExpectedFiles(
+  manifest: PresetManifestV1 | PresetManifestV2,
+  targetKey: string | null
+): string[] {
   const files: string[] = [];
   if ("common" in manifest && manifest.common?.files) {
     files.push(...manifest.common.files);
   }
-  const targets = "targets" in manifest ? manifest.targets : undefined;
-  const variants = "variants" in manifest ? manifest.variants : undefined;
-  const entries = targets || variants || {};
-  for (const target of Object.values(entries)) {
-    if (target.files && target.files.length > 0) {
-      files.push(...target.files);
-    }
+  const targetConfigs = getTargetConfigs(manifest);
+  const targets = targetKey && targetConfigs[targetKey]
+    ? [targetConfigs[targetKey]]
+    : Object.values(targetConfigs);
+  for (const target of targets) {
+    if (target.files && target.files.length > 0) files.push(...target.files);
   }
   return Array.from(new Set(files));
 }
 
 function collectInjects(
-  manifest: PresetManifestV1 | PresetManifestV2
+  manifest: PresetManifestV1 | PresetManifestV2,
+  targetKey: string | null
 ): Array<{ file: string; marker: string; content: string }> {
   const injects: Array<{ file: string; marker: string; content: string }> = [];
-  const targets = "targets" in manifest ? manifest.targets : undefined;
-  const variants = "variants" in manifest ? manifest.variants : undefined;
-  const entries = targets || variants || {};
-  for (const target of Object.values(entries)) {
-    if (target.inject && target.inject.length > 0) {
-      injects.push(...target.inject);
-    }
+  const targetConfigs = getTargetConfigs(manifest);
+  const targets = targetKey && targetConfigs[targetKey]
+    ? [targetConfigs[targetKey]]
+    : Object.values(targetConfigs);
+  for (const target of targets) {
+    if (target.inject && target.inject.length > 0) injects.push(...target.inject);
   }
   return injects;
 }
@@ -328,7 +371,8 @@ function checkRequiredEnvVars(
   for (const preset of installedPresets) {
     const manifest = loadPresetManifest(preset);
     if (!manifest) continue;
-    const envVars = collectEnvVars(manifest).filter((v) => v.required !== false);
+    const { targetKey, source } = selectTargetKey(preset, manifest, config);
+    const envVars = collectEnvVars(manifest, targetKey).filter((v) => v.required !== false);
     if (envVars.length === 0) continue;
     const requiredVars = envVars.map((v) => v.key);
     const missingVars: string[] = [];
@@ -346,12 +390,24 @@ function checkRequiredEnvVars(
         status: "warn",
         message: `Missing environment variables: ${missingVars.join(", ")}`,
         suggestion: `Add ${missingVars.join(", ")} to your .env.local file`,
+        details: {
+          targetKey,
+          targetSource: source,
+          requiredVars,
+          missingVars,
+        },
       });
     } else {
       results.push({
         name: `Environment: ${preset}`,
         status: "pass",
         message: `All required environment variables are configured`,
+        details: {
+          targetKey,
+          targetSource: source,
+          requiredVars,
+          missingVars: [],
+        },
       });
     }
   }
@@ -386,12 +442,17 @@ function checkPresetFiles(
         status: "warn",
         message: "Manifest not found or invalid",
         suggestion: `Reinstall preset '${preset}' or update local presets`,
+        details: {
+          targetKey: null,
+          targetSource: "all",
+        },
       });
       continue;
     }
 
-    const expectedFiles = collectExpectedFiles(manifest);
-    const injects = collectInjects(manifest);
+    const { targetKey, source } = selectTargetKey(preset, manifest, config);
+    const expectedFiles = collectExpectedFiles(manifest, targetKey);
+    const injects = collectInjects(manifest, targetKey);
     const missingFiles: string[] = [];
     const missingMarkers: string[] = [];
     const missingTargets: string[] = [];
@@ -434,12 +495,26 @@ function checkPresetFiles(
         status: "warn",
         message: parts.join(" | "),
         suggestion: `Run 'obora add ${preset}' to reinstall or restore markers`,
+        details: {
+          targetKey,
+          targetSource: source,
+          missingFiles,
+          missingTargets,
+          missingMarkers,
+        },
       });
     } else {
       results.push({
         name: `Preset Integrity: ${preset}`,
         status: "pass",
         message: "All expected files and markers found",
+        details: {
+          targetKey,
+          targetSource: source,
+          missingFiles: [],
+          missingTargets: [],
+          missingMarkers: [],
+        },
       });
     }
   }

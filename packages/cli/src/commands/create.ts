@@ -22,6 +22,7 @@ import { assembleProject, type AppModuleInstance } from "../utils/assembler";
 import {
   addHistoryEntry,
   createInitialConfig,
+  updatePresetLockfile,
   writeOboraConfig,
 } from "../utils/project-config";
 
@@ -325,6 +326,7 @@ export const createCommand = defineCommand({
       consola.start("Generating config...");
       const oboraConfig = createInitialConfig(targetDir, base, pm, appsConfig, slotSelections);
       await writeOboraConfig(targetDir, oboraConfig);
+      await updatePresetLockfile(targetDir, oboraConfig);
       await addHistoryEntry(targetDir, {
         action: "create",
       });
@@ -351,13 +353,14 @@ export const createCommand = defineCommand({
 
       const postInstallSteps = assemblyResult.postInstall || [];
       const postInstallBlock = postInstallSteps.length > 0
-        ? `\n\nPost-install notes:\n${postInstallSteps.map((step) => `  - ${step}`).join("\n")}`
+        ? `\n\nPreset guidance:\n${postInstallSteps.map((step) => `  - ${step}`).join("\n")}`
         : "";
 
       consola.box(
         `Project ready!\n\n` +
           `Next steps:\n` +
           nextSteps.map((step) => `  ${step}`).join("\n") +
+          `\n\nPreset lockfile:\n  .obora/presets.lock.json` +
           postInstallBlock
       );
     } catch (error) {

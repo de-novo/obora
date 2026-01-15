@@ -44,6 +44,21 @@ export interface OboraConfig {
   packageManager: "npm" | "pnpm" | "yarn" | "bun";
 }
 
+export interface PresetLockfileEntry {
+  preset: string;
+  version: string;
+  target?: string;
+}
+
+export interface PresetLockfile {
+  version: string;
+  generatedAt: string;
+  base: string;
+  packageManager: "npm" | "pnpm" | "yarn" | "bun";
+  apps: Record<string, AppConfig>;
+  presets: Record<string, PresetLockfileEntry>;
+}
+
 export interface HistoryEntry {
   action: "create" | "add" | "remove" | "upgrade" | "add-app" | "remove-app" | "eject";
   target?: string; // app name or slot name
@@ -65,6 +80,7 @@ export interface OboraHistory {
 const CONFIG_DIR = ".obora";
 const CONFIG_FILE = "config.json";
 const HISTORY_FILE = "history.json";
+const PRESET_LOCK_FILE = "presets.lock.json";
 const SCHEMA_URL = "https://obora.dev/schema/config.json";
 const CONFIG_VERSION = "2.0.0"; // Updated for new schema
 
@@ -82,6 +98,10 @@ export function getConfigPath(projectPath: string): string {
 
 export function getHistoryPath(projectPath: string): string {
   return join(getConfigDir(projectPath), HISTORY_FILE);
+}
+
+export function getPresetLockPath(projectPath: string): string {
+  return join(getConfigDir(projectPath), PRESET_LOCK_FILE);
 }
 
 export function hasOboraConfig(projectPath: string): boolean {
@@ -117,6 +137,57 @@ export async function writeOboraConfig(
   config.updatedAt = new Date().toISOString();
 
   await writeFile(configPath, JSON.stringify(config, null, 2), "utf-8");
+}
+
+function sortRecord<T>(record: Record<string, T>): Record<string, T> {
+  const sorted: Record<string, T> = {};
+  for (const key of Object.keys(record).sort()) {
+    sorted[key] = record[key];
+  }
+  return sorted;
+}
+
+function buildPresetLockfile(config: OboraConfig): PresetLockfile {
+  const presets: Record<string, PresetLockfileEntry> = {};
+  for (const [slot, slotConfig] of Object.entries(config.slots)) {
+    if (!slotConfig) continue;
+    const target = config.presetTargets?.[slotConfig.preset];
+    presets[slot] = {
+      preset: slotConfig.preset,
+      version: slotConfig.version,
+      ...(target ? { target } : {}),
+    };
+  }
+
+  return {
+    version: "1.0.0",
+    generatedAt: new Date().toISOString(),
+    base: config.base,
+    packageManager: config.packageManager,
+    apps: sortRecord(config.apps),
+    presets: sortRecord(presets),
+  };
+}
+
+export async function writePresetLockfile(
+  projectPath: string,
+  lockfile: PresetLockfile
+): Promise<void> {
+  const configDir = getConfigDir(projectPath);
+  const lockPath = getPresetLockPath(projectPath);
+  if (!existsSync(configDir)) {
+    await mkdir(configDir, { recursive: true });
+  }
+  await writeFile(lockPath, JSON.stringify(lockfile, null, 2), "utf-8");
+}
+
+export async function updatePresetLockfile(
+  projectPath: string,
+  config?: OboraConfig | null
+): Promise<void> {
+  const resolvedConfig = config ?? await readOboraConfig(projectPath);
+  if (!resolvedConfig) return;
+  await writePresetLockfile(projectPath, buildPresetLockfile(resolvedConfig));
 }
 
 /**
@@ -236,6 +307,7 @@ export async function addApp(
   };
 
   await writeOboraConfig(projectPath, config);
+  await updatePresetLockfile(projectPath, config);
   await addHistoryEntry(projectPath, {
     action: "add-app",
     target: appName,
@@ -283,6 +355,7 @@ export async function removeApp(
   delete config.apps[appName];
 
   await writeOboraConfig(projectPath, config);
+  await updatePresetLockfile(projectPath, config);
 
   if (previousConfig) {
     await addHistoryEntry(projectPath, {
@@ -321,6 +394,7 @@ export async function addSlotPreset(
   };
 
   await writeOboraConfig(projectPath, config);
+  await updatePresetLockfile(projectPath, config);
   await addHistoryEntry(projectPath, {
     action: "add",
     target: slot,
@@ -355,6 +429,7 @@ export async function removeSlotPreset(
   }
 
   await writeOboraConfig(projectPath, config);
+  await updatePresetLockfile(projectPath, config);
 
   if (previousConfig) {
     await addHistoryEntry(projectPath, {
@@ -389,6 +464,7 @@ export async function upgradeSlotPreset(
   currentSlot.version = newVersion;
 
   await writeOboraConfig(projectPath, config);
+  await updatePresetLockfile(projectPath, config);
   await addHistoryEntry(projectPath, {
     action: "upgrade",
     target: slot,
@@ -430,6 +506,7 @@ export async function setPresetTarget(
   }
 
   await writeOboraConfig(projectPath, config);
+  await updatePresetLockfile(projectPath, config);
 }
 
 // ============================================================================

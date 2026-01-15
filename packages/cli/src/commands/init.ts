@@ -12,6 +12,7 @@ import {
   createInitialConfig,
   writeOboraConfig,
   addHistoryEntry,
+  updatePresetLockfile,
 } from "../utils/project-config";
 
 // ============================================================================
@@ -777,6 +778,7 @@ export const initCommand = defineCommand({
     );
 
     await writeOboraConfig(projectPath, config);
+    await updatePresetLockfile(projectPath, config);
     await addHistoryEntry(projectPath, { action: "create" });
 
     consola.success("Created .obora/config.json");

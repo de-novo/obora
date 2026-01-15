@@ -39,7 +39,7 @@ describe("E2E: Preset Combinations", () => {
         base: "monorepo",
         projectName: "test-project",
         targetDir: projectDir,
-        apps: ["nestjs-api", "nextjs-web"],
+        apps: buildAppInstances(["nestjs-api", "nextjs-web"], "monorepo"),
         presets: {
           linting: { preset: "biome", version: "1.9.0" },
           database: { preset: "drizzle", version: "0.45.0" },
@@ -76,7 +76,7 @@ describe("E2E: Preset Combinations", () => {
         base: "monorepo",
         projectName: "test-project",
         targetDir: projectDir,
-        apps: ["nestjs-api", "nextjs-web"],
+        apps: buildAppInstances(["nestjs-api", "nextjs-web"], "monorepo"),
         presets: {
           linting: { preset: "biome", version: "1.9.0" },
           database: { preset: "prisma", version: "7.0.0" },
@@ -109,7 +109,7 @@ describe("E2E: Preset Combinations", () => {
         base: "monorepo",
         projectName: "test-project",
         targetDir: projectDir,
-        apps: ["nestjs-api", "nextjs-web"],
+        apps: buildAppInstances(["nestjs-api", "nextjs-web"], "monorepo"),
         presets: {
           linting: { preset: "biome", version: "1.9.0" },
           database: { preset: "drizzle", version: "0.45.0" },
@@ -134,7 +134,7 @@ describe("E2E: Preset Combinations", () => {
         base: "monorepo",
         projectName: "test-project",
         targetDir: projectDir,
-        apps: ["nestjs-api", "nextjs-web"],
+        apps: buildAppInstances(["nestjs-api", "nextjs-web"], "monorepo"),
         presets: {
           linting: { preset: "biome", version: "1.9.0" },
           analytics: { preset: "umami", version: "2.0.0" },
@@ -156,7 +156,7 @@ describe("E2E: Preset Combinations", () => {
         base: "monorepo",
         projectName: "test-project",
         targetDir: projectDir,
-        apps: ["nestjs-api", "nextjs-web"],
+        apps: buildAppInstances(["nestjs-api", "nextjs-web"], "monorepo"),
         presets: {
           linting: { preset: "biome", version: "1.9.0" },
           storage: { preset: "uploadthing", version: "7.0.0" },
@@ -178,7 +178,7 @@ describe("E2E: Preset Combinations", () => {
         base: "monorepo",
         projectName: "test-project",
         targetDir: projectDir,
-        apps: ["nestjs-api", "nextjs-web"],
+        apps: buildAppInstances(["nestjs-api", "nextjs-web"], "monorepo"),
         presets: {
           linting: { preset: "biome", version: "1.9.0" },
           ai: { preset: "vercel-ai", version: "4.0.0" },
@@ -203,7 +203,7 @@ describe("E2E: Preset Combinations", () => {
         base: "single",
         projectName: "test-api",
         targetDir: projectDir,
-        apps: ["nestjs-api"],
+        apps: buildAppInstances(["nestjs-api"], "single"),
         presets: {
           linting: { preset: "biome", version: "1.9.0" },
           database: { preset: "drizzle", version: "0.45.0" },
@@ -234,7 +234,7 @@ describe("E2E: Preset Combinations", () => {
         base: "single",
         projectName: "test-api",
         targetDir: projectDir,
-        apps: ["nestjs-api"],
+        apps: buildAppInstances(["nestjs-api"], "single"),
         presets: {
           linting: { preset: "biome", version: "1.9.0" },
           database: { preset: "prisma", version: "7.0.0" },
@@ -266,7 +266,7 @@ describe("E2E: Preset Combinations", () => {
         base: "single",
         projectName: "test-web",
         targetDir: projectDir,
-        apps: ["nextjs-web"],
+        apps: buildAppInstances(["nextjs-web"], "single"),
         presets: {
           linting: { preset: "biome", version: "1.9.0" },
           auth: { preset: "clerk-nextjs", version: "6.0.0" },
@@ -300,7 +300,7 @@ describe("E2E: Preset Combinations", () => {
         base: "monorepo",
         projectName: "test-env",
         targetDir: projectDir,
-        apps: ["nestjs-api", "nextjs-web"],
+        apps: buildAppInstances(["nestjs-api", "nextjs-web"], "monorepo"),
         presets: {
           database: { preset: "drizzle", version: "0.45.0" },
           payment: { preset: "polar", version: "1.0.0" },
@@ -326,7 +326,7 @@ describe("E2E: Preset Combinations", () => {
         base: "monorepo",
         projectName: "test-eslint",
         targetDir: projectDir,
-        apps: ["nestjs-api", "nextjs-web"],
+        apps: buildAppInstances(["nestjs-api", "nextjs-web"], "monorepo"),
         presets: {
           linting: { preset: "eslint-prettier", version: "9.0.0" },
         },
@@ -348,7 +348,7 @@ describe("E2E: Preset Combinations", () => {
         base: "monorepo",
         projectName: "test-biome",
         targetDir: projectDir,
-        apps: ["nestjs-api", "nextjs-web"],
+        apps: buildAppInstances(["nestjs-api", "nextjs-web"], "monorepo"),
         presets: {
           linting: { preset: "biome", version: "1.9.0" },
         },
