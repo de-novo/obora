@@ -11,6 +11,8 @@ import {
 import {
   hasOboraConfig,
   readOboraConfig,
+  readPresetLockfile,
+  createPresetLockfileSnapshot,
   type OboraConfig,
 } from "../utils/project-config";
 
@@ -342,6 +344,258 @@ function hasMarker(content: string, marker: string): boolean {
   return patterns.some((pattern) => pattern.test(content));
 }
 
+function findExistingFile(
+  candidateDirs: string[],
+  relativePaths: string[]
+): string | null {
+  for (const dir of candidateDirs) {
+    for (const rel of relativePaths) {
+      const fullPath = join(dir, rel);
+      if (existsSync(fullPath)) {
+        return fullPath;
+      }
+    }
+  }
+  return null;
+}
+
+function checkPresetGuidance(
+  projectPath: string,
+  config: OboraConfig | null
+): DiagnosticResult[] {
+  const results: DiagnosticResult[] = [];
+  if (!config) return results;
+
+  const candidateDirs = getCandidateDirs(projectPath, config);
+  const installedPresets = Object.values(config.slots || {})
+    .filter((slot): slot is NonNullable<typeof slot> => slot !== null)
+    .map((slot) => slot.preset);
+
+  const providersPath = findExistingFile(candidateDirs, [
+    "app/providers.tsx",
+    "src/app/providers.tsx",
+  ]);
+  const layoutPath = findExistingFile(candidateDirs, [
+    "app/layout.tsx",
+    "src/app/layout.tsx",
+  ]);
+
+  const providersContent = providersPath ? readFileSync(providersPath, "utf-8") : "";
+  const layoutContent = layoutPath ? readFileSync(layoutPath, "utf-8") : "";
+
+  if (installedPresets.includes("next-intl")) {
+    const hasProvider =
+      layoutContent.includes("NextIntlClientProvider") ||
+      hasMarker(layoutContent, "@obora:layout-provider-start");
+    if (!hasProvider) {
+      results.push({
+        name: "Guidance: next-intl",
+        status: "warn",
+        message: "NextIntlClientProvider not found in app/layout.tsx",
+        suggestion: "Wrap your layout with <NextIntlClientProvider> and load messages.",
+        details: {
+          layoutPath,
+        },
+      });
+    } else {
+      results.push({
+        name: "Guidance: next-intl",
+        status: "pass",
+        message: "NextIntlClientProvider detected in layout",
+        details: {
+          layoutPath,
+        },
+      });
+    }
+  }
+
+  if (installedPresets.includes("next-themes")) {
+    const hasProvider =
+      providersContent.includes("ThemeProvider") ||
+      hasMarker(providersContent, "@obora:providers");
+    if (!hasProvider) {
+      results.push({
+        name: "Guidance: next-themes",
+        status: "warn",
+        message: "ThemeProvider not found in app/providers.tsx",
+        suggestion: "Wrap providers with <ThemeProvider> to enable dark/light themes.",
+        details: {
+          providersPath,
+        },
+      });
+    } else {
+      results.push({
+        name: "Guidance: next-themes",
+        status: "pass",
+        message: "ThemeProvider detected in providers",
+        details: {
+          providersPath,
+        },
+      });
+    }
+  }
+
+  if (installedPresets.includes("tanstack-query")) {
+    const hasProvider =
+      providersContent.includes("QueryProvider") ||
+      hasMarker(providersContent, "@obora:providers");
+    if (!hasProvider) {
+      results.push({
+        name: "Guidance: tanstack-query",
+        status: "warn",
+        message: "QueryProvider not found in app/providers.tsx",
+        suggestion: "Wrap providers with <QueryProvider> to enable TanStack Query.",
+        details: {
+          providersPath,
+        },
+      });
+    } else {
+      results.push({
+        name: "Guidance: tanstack-query",
+        status: "pass",
+        message: "QueryProvider detected in providers",
+        details: {
+          providersPath,
+        },
+      });
+    }
+  }
+
+  if (installedPresets.includes("nuqs")) {
+    const hasProvider =
+      providersContent.includes("NuqsAdapter") ||
+      hasMarker(providersContent, "@obora:providers");
+    if (!hasProvider) {
+      results.push({
+        name: "Guidance: nuqs",
+        status: "warn",
+        message: "NuqsAdapter not found in app/providers.tsx",
+        suggestion: "Wrap providers with <NuqsAdapter> for URL state.",
+        details: {
+          providersPath,
+        },
+      });
+    } else {
+      results.push({
+        name: "Guidance: nuqs",
+        status: "pass",
+        message: "NuqsAdapter detected in providers",
+        details: {
+          providersPath,
+        },
+      });
+    }
+  }
+
+  return results;
+}
+
+function diffPresetLockfile(
+  expected: ReturnType<typeof createPresetLockfileSnapshot>,
+  actual: ReturnType<typeof createPresetLockfileSnapshot>
+): string[] {
+  const diffs: string[] = [];
+  if (expected.base !== actual.base) {
+    diffs.push(`base: expected ${expected.base}, got ${actual.base}`);
+  }
+  if (expected.packageManager !== actual.packageManager) {
+    diffs.push(`packageManager: expected ${expected.packageManager}, got ${actual.packageManager}`);
+  }
+
+  const expectedApps = expected.apps;
+  const actualApps = actual.apps;
+  for (const name of new Set([...Object.keys(expectedApps), ...Object.keys(actualApps)])) {
+    const exp = expectedApps[name];
+    const act = actualApps[name];
+    if (!exp) {
+      diffs.push(`apps.${name}: missing in expected`);
+      continue;
+    }
+    if (!act) {
+      diffs.push(`apps.${name}: missing in actual`);
+      continue;
+    }
+    if (exp.module !== act.module) {
+      diffs.push(`apps.${name}.module: expected ${exp.module}, got ${act.module}`);
+    }
+    if (exp.version !== act.version) {
+      diffs.push(`apps.${name}.version: expected ${exp.version}, got ${act.version}`);
+    }
+    if (exp.path !== act.path) {
+      diffs.push(`apps.${name}.path: expected ${exp.path}, got ${act.path}`);
+    }
+  }
+
+  const expectedPresets = expected.presets;
+  const actualPresets = actual.presets;
+  for (const slot of new Set([...Object.keys(expectedPresets), ...Object.keys(actualPresets)])) {
+    const exp = expectedPresets[slot];
+    const act = actualPresets[slot];
+    if (!exp) {
+      diffs.push(`presets.${slot}: missing in expected`);
+      continue;
+    }
+    if (!act) {
+      diffs.push(`presets.${slot}: missing in actual`);
+      continue;
+    }
+    if (exp.preset !== act.preset) {
+      diffs.push(`presets.${slot}.preset: expected ${exp.preset}, got ${act.preset}`);
+    }
+    if (exp.version !== act.version) {
+      diffs.push(`presets.${slot}.version: expected ${exp.version}, got ${act.version}`);
+    }
+    if ((exp.target || "") !== (act.target || "")) {
+      diffs.push(`presets.${slot}.target: expected ${exp.target || "none"}, got ${act.target || "none"}`);
+    }
+  }
+
+  return diffs;
+}
+
+async function checkPresetLockfile(
+  projectPath: string,
+  config: OboraConfig | null
+): DiagnosticResult[] {
+  const results: DiagnosticResult[] = [];
+  if (!config) {
+    return results;
+  }
+
+  const expected = createPresetLockfileSnapshot(config);
+  const actual = await readPresetLockfile(projectPath);
+  if (!actual) {
+    results.push({
+      name: "Preset Lockfile",
+      status: "warn",
+      message: ".obora/presets.lock.json not found or invalid",
+      suggestion: "Re-run obora create/add/remove/upgrade to regenerate the lockfile.",
+    });
+    return results;
+  }
+
+  const diffs = diffPresetLockfile(expected, actual);
+  if (diffs.length > 0) {
+    results.push({
+      name: "Preset Lockfile",
+      status: "warn",
+      message: "Lockfile drift detected",
+      suggestion: "Re-run obora create/add/remove/upgrade to regenerate the lockfile.",
+      details: {
+        diffs,
+      },
+    });
+  } else {
+    results.push({
+      name: "Preset Lockfile",
+      status: "pass",
+      message: "Lockfile matches current configuration",
+    });
+  }
+
+  return results;
+}
+
 function checkRequiredEnvVars(
   projectPath: string,
   config: OboraConfig | null
@@ -667,6 +921,11 @@ export const doctorCommand = defineCommand({
       description: "Output results as JSON",
       default: false,
     },
+    "check-lock": {
+      type: "boolean",
+      description: "Validate presets.lock.json against current config",
+      default: false,
+    },
   },
   async run({ args }) {
     const projectPath = resolve(args.path || ".");
@@ -705,6 +964,20 @@ export const doctorCommand = defineCommand({
         categories.push({ name: "Monorepo", results: monorepoResults });
       }
 
+      // Preset Guidance (missing patterns)
+      const guidanceResults = checkPresetGuidance(projectPath, config);
+      if (guidanceResults.length > 0) {
+        categories.push({ name: "Preset Guidance", results: guidanceResults });
+      }
+
+      // Preset Lockfile
+      if (args["check-lock"]) {
+        const lockResults = await checkPresetLockfile(projectPath, config);
+        if (lockResults.length > 0) {
+          categories.push({ name: "Preset Lockfile", results: lockResults });
+        }
+      }
+
       console.log(JSON.stringify(categories, null, 2));
       return;
     }
@@ -741,6 +1014,20 @@ export const doctorCommand = defineCommand({
     const monorepoResults = checkMonorepoStructure(projectPath, config);
     if (monorepoResults.length > 0) {
       categories.push({ name: "Monorepo", results: monorepoResults });
+    }
+
+    // Preset Guidance (missing patterns)
+    const guidanceResults = checkPresetGuidance(projectPath, config);
+    if (guidanceResults.length > 0) {
+      categories.push({ name: "Preset Guidance", results: guidanceResults });
+    }
+
+    // Preset Lockfile
+    if (args["check-lock"]) {
+      const lockResults = await checkPresetLockfile(projectPath, config);
+      if (lockResults.length > 0) {
+        categories.push({ name: "Preset Lockfile", results: lockResults });
+      }
     }
 
     // Display results

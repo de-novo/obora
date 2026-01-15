@@ -147,7 +147,7 @@ function sortRecord<T>(record: Record<string, T>): Record<string, T> {
   return sorted;
 }
 
-function buildPresetLockfile(config: OboraConfig): PresetLockfile {
+export function createPresetLockfileSnapshot(config: OboraConfig): PresetLockfile {
   const presets: Record<string, PresetLockfileEntry> = {};
   for (const [slot, slotConfig] of Object.entries(config.slots)) {
     if (!slotConfig) continue;
@@ -181,13 +181,28 @@ export async function writePresetLockfile(
   await writeFile(lockPath, JSON.stringify(lockfile, null, 2), "utf-8");
 }
 
+export async function readPresetLockfile(
+  projectPath: string
+): Promise<PresetLockfile | null> {
+  const lockPath = getPresetLockPath(projectPath);
+  if (!existsSync(lockPath)) {
+    return null;
+  }
+  try {
+    const content = await readFile(lockPath, "utf-8");
+    return JSON.parse(content) as PresetLockfile;
+  } catch {
+    return null;
+  }
+}
+
 export async function updatePresetLockfile(
   projectPath: string,
   config?: OboraConfig | null
 ): Promise<void> {
   const resolvedConfig = config ?? await readOboraConfig(projectPath);
   if (!resolvedConfig) return;
-  await writePresetLockfile(projectPath, buildPresetLockfile(resolvedConfig));
+  await writePresetLockfile(projectPath, createPresetLockfileSnapshot(resolvedConfig));
 }
 
 /**
