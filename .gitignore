@@ -33,6 +33,7 @@ coverage/
 
 # Tracking (local only)
 .temp/
+.sandbox/
 
 # SQLite databases
 *.db
