@@ -72,7 +72,7 @@ fi
 
 # single 모드: 최적 매칭 1개 반환
 
-# 1차: 토픽이 있으면 토픽 매칭 시도
+# 토픽이 있으면 토픽 매칭만 시도 (fallback 없음)
 if [ -n "$TOPIC" ]; then
   if [ -n "$PROJECT_ID" ]; then
     INTERVIEW_OUTPUT=$(sqlite3 "$DB_PATH" "
@@ -100,13 +100,16 @@ if [ -n "$TOPIC" ]; then
     " 2>/dev/null)
   fi
 
-  if [ -n "$INTERVIEW_OUTPUT" ]; then
-    echo "$INTERVIEW_OUTPUT"
-    exit 0
+  # 토픽이 있는데 매칭 실패하면 종료 (fallback 없음)
+  if [ -z "$INTERVIEW_OUTPUT" ]; then
+    exit 1
   fi
+
+  echo "$INTERVIEW_OUTPUT"
+  exit 0
 fi
 
-# 2차: 토픽 매칭 실패 또는 토픽 없음 → 최근 요구사항 명세서
+# 토픽 없음 → 최근 요구사항 명세서 반환 (list용 또는 전체 조회)
 if [ -n "$PROJECT_ID" ]; then
   INTERVIEW_OUTPUT=$(sqlite3 "$DB_PATH" "
     SELECT w.output
