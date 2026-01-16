@@ -1,34 +1,114 @@
 ---
 description: 새 기능 구현 (동적 워크플로우)
-allowed-tools: Task, Read, Bash, Glob, Grep
+allowed-tools: Task, Read, Bash, Glob, Grep, AskUserQuestion
 ---
 
 # Implement Feature - Dynamic Workflow
 
-**planner가 동적으로 워크플로우를 설계합니다.**
+## Phase 0: 요청 분석 및 기존 인터뷰 조회
 
-## 실행 절차
+### Step 1: 기존 인터뷰 결과 확인
+
+**먼저 DB에서 최근 인터뷰 결과를 조회합니다:**
+
+```bash
+# 최근 24시간 이내 인터뷰 결과 조회
+./.claude/scripts/queries/get-recent-interview.sh
+```
+
+```yaml
+결과_처리:
+  인터뷰_있음:
+    - 반환된 요구사항 명세서를 requirements 변수에 저장
+    - Phase 1 건너뛰고 Phase 2로 직행
+    - planner에게 요구사항 명세서 전달
+
+  인터뷰_없음:
+    - Phase 0 Step 2로 진행 (명확성 분석)
+```
+
+### Step 2: 요청 명확성 판단 (인터뷰 없을 때만)
+
+```yaml
+명확한_요청:
+  - 구체적인 파일/위치 명시
+  - 명확한 입력/출력 정의
+  - 예: "src/auth/login.ts에서 비밀번호 검증 수정"
+  → Feature 유형 (Phase 2로 직행)
+
+모호한_요청:
+  - 추상적인 기능 설명
+  - What만 있고 How가 없음
+  - 예: "로그인 기능 개선해줘"
+  → FullFeature 유형 (Phase 1 필수)
+```
+
+---
+
+## Phase 1: 요구사항 발견 (조건부)
+
+**조건:**
+- 기존 인터뷰 결과 없음 AND
+- 모호한 요청으로 판단됨
+
+```
+Task(subagent_type="interviewer", prompt="
+요구사항 인터뷰 진행:
+
+사용자 요청: $ARGUMENTS
+
+다음 단계로 진행:
+1. 코드베이스 맥락 파악
+2. 핵심 요구사항 도출 (AskUserQuestion 사용)
+3. 세부사항 탐색
+4. 엣지 케이스 발견
+5. 우선순위 결정
+6. 요구사항 명세서 작성
+
+출력: 구조화된 요구사항 명세서 (# 요구사항 명세서: 로 시작)
+")
+```
+
+**인터뷰 결과는 자동으로 DB에 저장됩니다.**
+
+---
+
+## Phase 2: 워크플로우 설계
 
 ### 1. 에이전트 디스커버리
 
-```
-Glob ".claude/agents/**/*.md"
+```bash
+Glob: .claude/agents/**/*.md
 ```
 
-각 에이전트의 name, description, tools 수집
+모든 에이전트 파일을 병렬로 Read하여 메타데이터 수집
 
-### 2. planner 호출 (동적 워크플로우 설계)
+### 2. 요구사항 컨텍스트 결정
+
+```yaml
+requirements_source:
+  1. DB에서 조회한 최근 인터뷰 결과 (Phase 0에서 발견)
+  2. Phase 1에서 방금 진행한 인터뷰 결과
+  3. 없음 (명확한 요청이라 불필요)
+
+planner_input:
+  - requirements가 있으면: 요구사항 명세서 전체 전달
+  - requirements가 없으면: 사용자 원래 요청만 전달
+```
+
+### 3. planner 호출
 
 ```
 Task(subagent_type="planner", prompt="
-작업: 새 기능 구현
+작업 요청: $ARGUMENTS
 
-요청: $ARGUMENTS
+## 요구사항 명세서 (있는 경우)
+${requirements || "없음 - 사용자 요청을 직접 분석하세요"}
 
 사용 가능한 에이전트:
 [디스커버리 결과 전달]
 
-분석 후 워크플로우를 JSON으로 반환:
+워크플로우 설계:
 {
   \"analysis\": \"작업 분석 내용\",
   \"workflow\": [
@@ -36,73 +116,62 @@ Task(subagent_type="planner", prompt="
       \"agent\": \"에이전트명\",
       \"task\": \"구체적 작업 내용\",
       \"critical\": true,
-      \"parallel_with\": [\"다른에이전트\"]
+      \"parallel_with\": []
     }
   ],
   \"feedback_loop\": {
     \"enabled\": true,
-    \"reviewer\": \"reviewer\",
     \"max_iterations\": 3
-  },
-  \"requires_test\": true
+  }
 }
 
-필수사항:
-- 코드 구현 작업 시 테스트 단계 반드시 포함 (test-writer 또는 test-runner)
+필수:
+- 요구사항 명세서가 있으면 그 내용을 정확히 반영
+- 코드 구현 작업 시 테스트 단계 포함
 - feedback_loop.enabled=true 설정
-- critical 필드로 실패 시 중단 여부 표시
-- parallel_with로 병렬 실행 가능한 에이전트 표시
 ")
 ```
 
 ### 3. 워크플로우 검증
 
-planner 출력 검증:
+```yaml
+검증:
+  - 테스트 단계 포함 여부
+  - feedback_loop.enabled = true
+  - critical 필드 설정
 
-```
-if (workflow에 테스트 관련 에이전트 없음 && 코드 변경 작업):
-    에러: "테스트 단계 누락. 워크플로우 재설계 필요"
-    planner 재호출
-
-if (feedback_loop.enabled !== true && 코드 변경 작업):
-    경고: "피드백 루프 비활성화됨. 품질 검증 없이 진행"
+실패_시: planner 재호출
 ```
 
-### 4. 워크플로우 실행 (병렬/순차)
+---
+
+## Phase 3: 워크플로우 실행
 
 ```python
 results = []
 executed = set()
 
 for step in workflow:
-    # 이미 병렬 실행된 경우 스킵
     if step.agent in executed:
         continue
 
     # 병렬 실행 가능한 에이전트 수집
     parallel_agents = [step]
     if step.parallel_with:
-        for parallel_name in step.parallel_with:
-            parallel_step = find_step(workflow, parallel_name)
+        for name in step.parallel_with:
+            parallel_step = find_step(workflow, name)
             if parallel_step:
                 parallel_agents.append(parallel_step)
 
-    # 병렬 실행 (동시에 Task 호출)
+    # 실행
     if len(parallel_agents) > 1:
-        parallel_results = []
+        # 병렬 실행
         for p_step in parallel_agents:
-            result = Task(subagent_type=p_step.agent, prompt=f"""
-{p_step.task}
-
-이전 단계 결과:
-{format_results(results)}
-""")
-            parallel_results.append(result)
+            result = Task(subagent_type=p_step.agent, ...)
+            results.append(result)
             executed.add(p_step.agent)
-        results.extend(parallel_results)
-
-    # 순차 실행
     else:
+        # 순차 실행
         result = Task(subagent_type=step.agent, prompt=f"""
 {step.task}
 
@@ -110,128 +179,91 @@ for step in workflow:
 {format_results(results)}
 """)
 
-        # 에러 핸들링
-        if result.failed:
-            if step.critical:
-                # Critical 실패 시 워크플로우 중단
-                에러 보고 및 중단
-                break
-            else:
-                # Non-critical 실패 시 경고 후 계속
-                경고: "{step.agent} 실패, 계속 진행"
+        if result.failed and step.critical:
+            break
 
         results.append(result)
         executed.add(step.agent)
 ```
 
-### 5. 피드백 루프 실행
+---
+
+## Phase 4: 피드백 루프
 
 ```python
 if feedback_loop.enabled:
-    iteration = 0
     max_iterations = feedback_loop.max_iterations or 3
+    iteration = 0
 
     while iteration < max_iterations:
-        # 리뷰 실행
-        review_result = Task(subagent_type=feedback_loop.reviewer, prompt=f"""
+        review_result = Task(subagent_type="reviewer", prompt=f"""
 전체 워크플로우 결과 리뷰:
-
 {format_all_results(results)}
 
-이슈 발견 시 다음 형식으로 반환:
+이슈 발견 시:
 {{
-  "issues": [
-    {{
-      "severity": "critical|warning|suggestion",
-      "file": "파일경로",
-      "description": "이슈 설명",
-      "responsible_agent": "수정할 에이전트"
-    }}
-  ]
+  "issues": [...]
 }}
-
-이슈 없으면: {{"issues": []}}
 """)
 
-        # 이슈 없으면 루프 종료
-        if not review_result.issues or len(review_result.issues) == 0:
+        if not review_result.issues:
             break
 
-        # Critical 이슈만 수정 (iteration 절약)
-        critical_issues = [i for i in review_result.issues if i.severity == "critical"]
+        critical_issues = [i for i in review_result.issues
+                          if i.severity == "critical"]
 
         if not critical_issues:
-            # Critical 없으면 warning만 보고하고 종료
-            경고: "Warning/Suggestion 이슈 발견, 수동 확인 권장"
             break
 
-        # 이슈 수정
         for issue in critical_issues:
-            fix_result = Task(subagent_type=issue.responsible_agent, prompt=f"""
-수정 요청:
-- 파일: {issue.file}
-- 이슈: {issue.description}
-- 심각도: {issue.severity}
-
-이전 작업 컨텍스트:
-{format_results(results)}
-""")
+            fix_result = Task(
+                subagent_type=issue.responsible_agent,
+                prompt=f"수정 요청: {issue.description}"
+            )
             results.append(fix_result)
 
         iteration += 1
-
-    if iteration >= max_iterations:
-        경고: "최대 반복 횟수({max_iterations}) 도달. 수동 확인 필요."
 ```
 
-### 6. 결과 요약
+---
 
-```
+## Phase 5: 결과 요약
+
+```markdown
 ## 워크플로우 실행 결과
 
-### 실행된 에이전트
-- explorer: 구조 파악 ✅
-- implementer: 코드 작성 ✅
-- test-writer: 테스트 작성 ✅
-- reviewer: 코드 리뷰 ✅
+### 워크플로우 유형
+[Feature | FullFeature]
+
+### 실행된 단계
+1. ✅ [에이전트]: [작업 요약]
+2. ✅ [에이전트]: [작업 요약]
+...
 
 ### 피드백 루프
-- 반복 횟수: 1/3
-- 발견된 이슈: 2 (수정됨)
+- 반복 횟수: N/3
+- 발견된 이슈: N개 (수정됨)
 
 ### 최종 상태
-- 구현 완료: ✅
-- 테스트 통과: ✅
-- 리뷰 통과: ✅
+- 구현: ✅
+- 테스트: ✅
+- 리뷰: ✅
 ```
 
-## 에러 핸들링 정책
+---
 
-```yaml
-에러_분류:
-  TRANSIENT: # 일시적 에러 (네트워크, 타임아웃)
-    action: 재시도 (최대 2회)
+## 워크플로우 유형별 흐름
 
-  VALIDATION: # 검증 실패 (타입 에러, 린트 에러)
-    action: 해당 에이전트 재호출로 수정
+| 유형 | 조건 | 흐름 |
+|------|------|------|
+| **Feature** | 명확한 요청 | planner → impl → test → review |
+| **FullFeature** | 모호한 요청 | **interviewer** → planner → impl → test → review |
 
-  CRITICAL: # 심각한 에러 (파일 없음, 권한 없음)
-    action: 워크플로우 중단, 사용자 보고
+---
 
-  UNKNOWN: # 알 수 없는 에러
-    action: 로그 기록 후 계속 진행 시도
+## 원칙
 
-롤백_정책:
-  - Git 변경사항은 커밋 전까지 스테이징 안 함
-  - 실패 시 git checkout으로 복구 가능
-  - 중요 파일 백업 후 수정 (선택적)
-```
-
-## 중요 원칙
-
+- 모호한 요청 시 반드시 Phase 1 (인터뷰) 실행
 - 하드코딩된 워크플로우 없음
 - planner가 매번 동적으로 결정
-- **테스트 단계 필수** (코드 변경 시)
-- **피드백 루프 필수** (코드 변경 시)
-- 병렬 실행으로 효율성 향상
-- Critical 에러 시 즉시 중단
+- 테스트 및 피드백 루프 필수

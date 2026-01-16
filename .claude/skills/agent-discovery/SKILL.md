@@ -55,6 +55,9 @@ model: 실행 모델 (opus, sonnet, haiku)
 - `planner`: 워크플로우 설계
 - `explorer`: 코드베이스 탐색
 
+### Discovery
+- `interviewer`: 요구사항 인터뷰 및 분석
+
 ### Code
 - `implementer`: 새 기능 구현
 - `reviewer`: 코드 품질 검토
