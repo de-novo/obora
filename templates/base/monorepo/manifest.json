@@ -1,6 +1,0 @@
-{
-  "name": "monorepo",
-  "description": "Turborepo monorepo structure with pnpm workspaces",
-  "type": "base",
-  "features": ["Turborepo", "pnpm workspaces", "Shared configs"]
-}

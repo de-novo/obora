@@ -1,8 +1,0 @@
-{
-  "name": "shared-ui",
-  "description": "Shared UI component library with shadcn/ui",
-  "type": "package",
-  "targetDir": "packages/ui",
-  "features": ["React 19", "Tailwind CSS v4", "shadcn/ui", "Radix UI"],
-  "slots": []
-}

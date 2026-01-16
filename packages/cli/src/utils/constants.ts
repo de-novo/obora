@@ -1,6 +1,15 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "pathe";
+import {
+  getTemplatesDir,
+  BASE_TEMPLATES,
+  APP_MODULE_TEMPLATES,
+  BASE_NAMES as TEMPLATE_BASE_NAMES,
+  APP_MODULE_NAMES as TEMPLATE_APP_MODULE_NAMES,
+  type BaseName as TemplateBaseName,
+  type AppModuleName as TemplateAppModuleName,
+} from "@obora/project-templates";
 
 // ============================================================================
 // Directory Paths
@@ -9,36 +18,35 @@ import { dirname, join } from "pathe";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Detect environment based on path structure
-// - In production (dist): __dirname = .../cli/dist, need 3 levels up
-// - In development (src/utils): __dirname = .../cli/src/utils, need 4 levels up
-function getBasePath(): string {
+// Re-export from @obora/project-templates
+export const TEMPLATES_DIR = getTemplatesDir();
+
+// Presets directory - still in repo root
+function getPresetsPath(): string {
   // Try production path first (from dist/)
   const prodPath = join(__dirname, "../../..");
-  if (existsSync(join(prodPath, "templates"))) {
-    return prodPath;
+  if (existsSync(join(prodPath, "presets"))) {
+    return join(prodPath, "presets");
   }
   // Try development path (from src/utils/)
   const devPath = join(__dirname, "../../../..");
-  if (existsSync(join(devPath, "templates"))) {
-    return devPath;
+  if (existsSync(join(devPath, "presets"))) {
+    return join(devPath, "presets");
   }
-  // Walk up to find repo root containing templates/presets
+  // Walk up to find repo root containing presets
   let current = __dirname;
   for (let i = 0; i < 8; i++) {
     const candidate = join(current, "..");
-    if (existsSync(join(candidate, "templates")) && existsSync(join(candidate, "presets"))) {
-      return candidate;
+    if (existsSync(join(candidate, "presets"))) {
+      return join(candidate, "presets");
     }
     current = candidate;
   }
   // Fallback to production assumption
-  return prodPath;
+  return join(prodPath, "presets");
 }
 
-const BASE_PATH = getBasePath();
-export const TEMPLATES_DIR = join(BASE_PATH, "templates");
-export const PRESETS_DIR = join(BASE_PATH, "presets");
+export const PRESETS_DIR = getPresetsPath();
 
 // ============================================================================
 // Base Types
@@ -117,62 +125,20 @@ export interface PresetConfig {
 }
 
 // ============================================================================
-// Bases
+// Bases (re-exported from @obora/project-templates)
 // ============================================================================
 
-export const BASES: Record<string, BaseConfig> = {
-  monorepo: {
-    name: "monorepo",
-    description: "Turborepo monorepo structure",
-    features: ["Turborepo", "pnpm workspaces", "Shared configs"],
-  },
-  single: {
-    name: "single",
-    description: "Single project structure",
-    features: ["Simple setup", "No workspace overhead"],
-  },
-} as const;
-
-export type BaseName = keyof typeof BASES;
-export const BASE_NAMES = Object.keys(BASES) as BaseName[];
+export const BASES = BASE_TEMPLATES;
+export type BaseName = TemplateBaseName;
+export const BASE_NAMES = TEMPLATE_BASE_NAMES;
 
 // ============================================================================
-// App Modules
+// App Modules (re-exported from @obora/project-templates)
 // ============================================================================
 
-export const APP_MODULES: Record<string, AppModuleConfig> = {
-  "nextjs-web": {
-    name: "nextjs-web",
-    description: "Next.js 15 web application",
-    features: ["Next.js 15", "App Router", "Tailwind CSS v4", "shadcn/ui"],
-    targetDir: "apps/web",
-    slots: ["linting", "analytics", "auth"],
-  },
-  "nestjs-api": {
-    name: "nestjs-api",
-    description: "NestJS 11 API server",
-    features: ["NestJS 11", "Fastify", "Swagger", "Effect Schema"],
-    targetDir: "apps/api",
-    slots: ["linting", "database", "auth", "payment", "email", "storage", "ai", "validation"],
-  },
-  "shared-database": {
-    name: "shared-database",
-    description: "Shared database package",
-    features: ["Prisma/Drizzle", "Type-safe queries", "Migrations"],
-    targetDir: "packages/database",
-    slots: ["database"],
-  },
-  "shared-ui": {
-    name: "shared-ui",
-    description: "Shared UI component library",
-    features: ["React components", "Tailwind CSS", "shadcn/ui"],
-    targetDir: "packages/ui",
-    slots: [],
-  },
-} as const;
-
-export type AppModuleName = keyof typeof APP_MODULES;
-export const APP_MODULE_NAMES = Object.keys(APP_MODULES) as AppModuleName[];
+export const APP_MODULES = APP_MODULE_TEMPLATES;
+export type AppModuleName = TemplateAppModuleName;
+export const APP_MODULE_NAMES = TEMPLATE_APP_MODULE_NAMES;
 
 // ============================================================================
 // Categories (Preset Categories)

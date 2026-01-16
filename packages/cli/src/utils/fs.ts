@@ -1,43 +1,34 @@
+/**
+ * File System Utilities
+ *
+ * Re-exports from @obora/preset-engine and adds CLI-specific utilities
+ */
+
 import { promises as fs } from "node:fs";
-import { join, dirname, relative, normalize } from "pathe";
+import { dirname, join, normalize, relative } from "pathe";
 import { consola } from "consola";
 
-/**
- * Check if a directory exists
- */
-export async function dirExists(path: string): Promise<boolean> {
-  try {
-    const stat = await fs.stat(path);
-    return stat.isDirectory();
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Check if a file exists
- */
-export async function fileExists(path: string): Promise<boolean> {
-  try {
-    const stat = await fs.stat(path);
-    return stat.isFile();
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Create directory if it doesn't exist
- */
-export async function ensureDir(path: string): Promise<void> {
-  await fs.mkdir(path, { recursive: true });
-}
+// Re-export from preset-engine
+export {
+  dirExists,
+  fileExists,
+  ensureDir,
+  readJson,
+  writeJson,
+  applyReplacements,
+  copyTemplateWithReplacements,
+  removeGitkeepFiles,
+  deepMerge,
+  escapeRegExp,
+  indentMultiline,
+  dedupeLines,
+} from "@obora/preset-engine";
 
 /**
  * Copy directory recursively
  */
 export async function copyDir(src: string, dest: string): Promise<void> {
-  await ensureDir(dest);
+  await fs.mkdir(dest, { recursive: true });
   const entries = await fs.readdir(src, { withFileTypes: true });
 
   for (const entry of entries) {
@@ -50,22 +41,6 @@ export async function copyDir(src: string, dest: string): Promise<void> {
       await fs.copyFile(srcPath, destPath);
     }
   }
-}
-
-/**
- * Read JSON file
- */
-export async function readJson<T = unknown>(path: string): Promise<T> {
-  const content = await fs.readFile(path, "utf-8");
-  return JSON.parse(content) as T;
-}
-
-/**
- * Write JSON file
- */
-export async function writeJson(path: string, data: unknown): Promise<void> {
-  await ensureDir(dirname(path));
-  await fs.writeFile(path, JSON.stringify(data, null, 2) + "\n");
 }
 
 /**
@@ -93,7 +68,7 @@ export async function writeTemplate(
   replacements: Record<string, string>
 ): Promise<void> {
   const content = await readTemplate(srcPath, replacements);
-  await ensureDir(dirname(destPath));
+  await fs.mkdir(dirname(destPath), { recursive: true });
   await fs.writeFile(destPath, content);
 }
 
@@ -114,7 +89,7 @@ export async function copyTemplateDir(
   const overwrite = options?.overwrite ?? true;
   const logSkipped = options?.logSkipped ?? true;
   const root = options?.root ?? src;
-  await ensureDir(dest);
+  await fs.mkdir(dest, { recursive: true });
   const entries = await fs.readdir(src, { withFileTypes: true });
 
   for (const entry of entries) {
@@ -178,7 +153,6 @@ export async function copyTemplateDir(
         ".env",
         ".example",
       ];
-      const ext = entry.name.substring(entry.name.lastIndexOf("."));
 
       if (textExtensions.some((e) => entry.name.endsWith(e))) {
         await writeTemplate(srcPath, destPath, replacements);
