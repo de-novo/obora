@@ -1,4 +1,5 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+// @obora:middleware-imports
 
 const isPublicRoute = createRouteMatcher([
   "/",
@@ -6,11 +7,13 @@ const isPublicRoute = createRouteMatcher([
   "/sign-up(.*)",
   "/api/webhooks(.*)",
 ]);
+// @obora:middleware-setup
 
 export default clerkMiddleware(async (auth, request) => {
   if (!isPublicRoute(request)) {
     await auth.protect();
   }
+  // @obora:middleware-return
 });
 
 export const config = {

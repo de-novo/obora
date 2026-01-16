@@ -7,7 +7,27 @@
   "common": {
     "dependencies": {
       "next-intl": "^4.0.0"
-    }
+    },
+    "inject": [
+      {
+        "file": "middleware.ts",
+        "marker": "@obora:middleware-imports",
+        "content": "import createIntlMiddleware from \"next-intl/middleware\";\nimport { defaultLocale, locales } from \"./src/lib/i18n\";",
+        "order": 10
+      },
+      {
+        "file": "middleware.ts",
+        "marker": "@obora:middleware-setup",
+        "content": "const intlMiddleware = createIntlMiddleware({\n  locales,\n  defaultLocale,\n});",
+        "order": 10
+      },
+      {
+        "file": "middleware.ts",
+        "marker": "@obora:middleware-return",
+        "content": "return intlMiddleware(request);",
+        "order": 10
+      }
+    ]
   },
   "targets": {
     "nextjs": {

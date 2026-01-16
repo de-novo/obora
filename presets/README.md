@@ -93,6 +93,7 @@ Auto 적용(레이아웃 주입): `--dialect nextjs-auto`
 | `next-themes` | Next.js 다크/라이트 테마 지원 | O    |
 
 Auto 적용(레이아웃 주입): `--dialect nextjs-auto`
+주의: `next-themes` 사용 시 `<html suppressHydrationWarning>` 추가 권장
 
 ### UI (컴포넌트)
 
