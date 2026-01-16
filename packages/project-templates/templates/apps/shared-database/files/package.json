@@ -1,0 +1,25 @@
+{
+  "name": "@repo/database",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./src/index.ts",
+      "types": "./src/index.ts"
+    },
+    "./schema": {
+      "import": "./src/schema/index.ts",
+      "types": "./src/schema/index.ts"
+    }
+  },
+  "scripts": {
+    "db:generate": "echo 'Run after adding database preset'",
+    "db:migrate": "echo 'Run after adding database preset'",
+    "db:push": "echo 'Run after adding database preset'",
+    "db:studio": "echo 'Run after adding database preset'"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}

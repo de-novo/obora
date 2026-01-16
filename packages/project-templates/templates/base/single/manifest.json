@@ -1,0 +1,6 @@
+{
+  "name": "single",
+  "description": "Single project structure without workspaces",
+  "type": "base",
+  "features": ["Simple setup", "No workspace overhead"]
+}

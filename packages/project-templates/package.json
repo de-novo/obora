@@ -1,0 +1,25 @@
+{
+  "name": "@obora/project-templates",
+  "version": "0.1.0",
+  "description": "Project templates for obora-kit scaffolding",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./templates/*": "./templates/*"
+  },
+  "files": [
+    "dist",
+    "templates"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.8.0"
+  }
+}
