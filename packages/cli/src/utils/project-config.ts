@@ -5,7 +5,56 @@
  * New code should import directly from @obora/project-config.
  */
 
-export * from "@obora/project-config";
+// Config operations
+export {
+  hasOboraConfig,
+  readOboraConfig,
+  writeOboraConfig,
+  createInitialConfig,
+  defaultAppPathResolver,
+} from "@obora/project-config";
+
+// Slot operations
+export {
+  addSlotPreset,
+  removeSlotPreset,
+  upgradeSlotPreset,
+  setPresetTarget,
+  getInstalledApps,
+  getInstalledPresets,
+} from "@obora/project-config";
+
+// History operations
+export {
+  readOboraHistory,
+  addHistoryEntry,
+} from "@obora/project-config";
+
+// Lockfile operations
+export {
+  readPresetLockfile,
+  updatePresetLockfile,
+  createPresetLockfileSnapshot,
+} from "@obora/project-config";
+
+// Path utilities
+export {
+  getConfigDir,
+  getConfigPath,
+  getHistoryPath,
+  getPresetLockPath,
+} from "@obora/project-config";
+
+// Types
+export type {
+  OboraConfig,
+  SlotConfig,
+  AppConfig,
+  OboraHistory,
+  HistoryEntry,
+  PresetLockfile,
+  AppPathResolver,
+} from "@obora/project-config";
 
 // Legacy re-export: APP_MODULES for path resolution
 import { APP_MODULES } from "./constants";
