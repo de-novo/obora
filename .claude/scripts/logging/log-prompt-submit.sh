@@ -15,6 +15,7 @@ DB_PATH="${HOME}/.obora/dashboard.db"
 SESSION_FILE="${HOME}/.obora/current-session.txt"
 WORKFLOW_FILE="${HOME}/.obora/current-workflow.txt"
 STEP_COUNTER_FILE="${HOME}/.obora/workflow-step-counter.txt"
+PROMPT_TIMESTAMP_FILE="${HOME}/.obora/current-prompt-timestamp.txt"
 
 # stdin에서 JSON 읽기
 INPUT=$(cat)
@@ -84,5 +85,11 @@ echo "Workflow ID saved to: $WORKFLOW_FILE" >> "$DEBUG_LOG"
 
 # 스텝 카운터 초기화
 echo "0" > "$STEP_COUNTER_FILE"
+
+# 프롬프트 타임스탬프 저장 (Stop hook에서 현재 턴의 output 추출용)
+# transcript의 timestamp 형식과 맞추기 위해 ISO 8601 형식 사용
+PROMPT_TS=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
+echo "$PROMPT_TS" > "$PROMPT_TIMESTAMP_FILE"
+echo "Prompt timestamp saved: $PROMPT_TS" >> "$DEBUG_LOG"
 
 echo "" >> "$DEBUG_LOG"

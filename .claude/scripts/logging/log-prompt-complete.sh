@@ -100,13 +100,14 @@ JOIN workflow_steps ws ON ar.workflow_step_id = ws.id
 WHERE ws.workflow_id = '$WORKFLOW_ID';
 " 2>/dev/null)
 
-# 워크플로우 상태 업데이트
+# 워크플로우 상태 업데이트 (output 포함)
 sqlite3 "$DB_PATH" <<EOF 2>> "$DEBUG_LOG"
 UPDATE workflows
 SET
   status = 'completed',
   ended_at = $TIMESTAMP,
-  tokens_used = $TOTAL_TOKENS
+  tokens_used = $TOTAL_TOKENS,
+  output = '$MAIN_OUTPUT_ESCAPED'
 WHERE id = '$WORKFLOW_ID';
 
 -- workflow_steps도 완료 처리
@@ -117,8 +118,9 @@ EOF
 
 echo "Workflow complete update result: $?" >> "$DEBUG_LOG"
 
-# 워크플로우 파일 삭제 (다음 프롬프트에서 새로 생성)
+# 임시 파일 삭제
 rm -f "$WORKFLOW_FILE"
-echo "Workflow file removed" >> "$DEBUG_LOG"
+rm -f "$PROMPT_FILE"
+echo "Workflow and prompt files removed" >> "$DEBUG_LOG"
 
 echo "" >> "$DEBUG_LOG"
