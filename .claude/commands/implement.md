@@ -5,42 +5,91 @@ allowed-tools: Task, Read, Bash, Glob, Grep, AskUserQuestion
 
 # Implement Feature - Dynamic Workflow
 
+## 옵션
+
+```yaml
+--interview <id>:   특정 인터뷰 결과 사용 (workflow ID)
+--no-interview:     인터뷰 조회 건너뛰기
+(기본):             토픽 매칭 + 사용자 확인
+```
+
 ## Phase 0: 요청 분석 및 기존 인터뷰 조회
 
-### Step 1: 기존 인터뷰 결과 확인
+### Step 1: 옵션 파싱
 
-**먼저 DB에서 최근 인터뷰 결과를 조회합니다:**
+```yaml
+$ARGUMENTS 분석:
+  "--no-interview" 포함:
+    - 인터뷰 조회 건너뛰기
+    - Step 3으로 직행
+
+  "--interview <id>" 포함:
+    - 해당 ID로 워크플로우 직접 조회
+    - 요구사항 명세서 추출
+    - Step 3으로 직행
+
+  옵션_없음:
+    - Step 2 진행 (토픽 매칭)
+```
+
+### Step 2: 토픽 매칭 + 사용자 확인
+
+**1. 토픽 추출 및 DB 조회:**
 
 ```bash
-# 최근 24시간 이내 인터뷰 결과 조회
-./.claude/scripts/queries/get-recent-interview.sh
+# 토픽을 추출하여 매칭 조회
+# 예: "/implement 대시보드 기능" → 토픽 = "대시보드"
+./.claude/scripts/queries/get-recent-interview.sh "$(pwd)" "<추출된_토픽>"
 ```
 
-```yaml
-결과_처리:
-  인터뷰_있음:
-    - 반환된 요구사항 명세서를 requirements 변수에 저장
-    - Phase 1 건너뛰고 Phase 2로 직행
-    - planner에게 요구사항 명세서 전달
+**2. 인터뷰 발견 시 사용자 확인 (AskUserQuestion):**
 
-  인터뷰_없음:
-    - Phase 0 Step 2로 진행 (명확성 분석)
+```yaml
+인터뷰_발견:
+  질문: "관련 인터뷰 결과를 발견했습니다. 사용할까요?"
+  옵션:
+    - "사용": 해당 요구사항으로 진행
+    - "무시": 인터뷰 없이 진행
+    - "목록 보기": 다른 인터뷰 선택
+
+  예시_메시지: |
+    24시간 내 관련 인터뷰 발견:
+    - 주제: "대시보드 기능"
+    - 생성: 2시간 전
+
+    이 요구사항을 사용할까요?
+
+인터뷰_없음:
+  - Step 3 진행
 ```
 
-### Step 2: 요청 명확성 판단 (인터뷰 없을 때만)
+**3. 목록 선택 시:**
+
+```bash
+# 후보 목록 조회
+./.claude/scripts/queries/get-recent-interview.sh "$(pwd)" "" "list"
+```
+
+사용자가 선택한 인터뷰 ID로 요구사항 조회
+
+### Step 3: 요청 명확성 판단
 
 ```yaml
-명확한_요청:
-  - 구체적인 파일/위치 명시
-  - 명확한 입력/출력 정의
-  - 예: "src/auth/login.ts에서 비밀번호 검증 수정"
-  → Feature 유형 (Phase 2로 직행)
+요구사항_있음 (Step 2에서 확보):
+  → Phase 2로 직행 (requirements 변수에 저장)
 
-모호한_요청:
-  - 추상적인 기능 설명
-  - What만 있고 How가 없음
-  - 예: "로그인 기능 개선해줘"
-  → FullFeature 유형 (Phase 1 필수)
+요구사항_없음:
+  명확한_요청:
+    - 구체적인 파일/위치 명시
+    - 명확한 입력/출력 정의
+    - 예: "src/auth/login.ts에서 비밀번호 검증 수정"
+    → Feature 유형 (Phase 2로 직행)
+
+  모호한_요청:
+    - 추상적인 기능 설명
+    - What만 있고 How가 없음
+    - 예: "로그인 기능 개선해줘"
+    → FullFeature 유형 (Phase 1 필수)
 ```
 
 ---

@@ -1,16 +1,24 @@
 #!/bin/bash
-# 최근 인터뷰 워크플로우 조회
-# Usage: ./get-recent-interview.sh [project_path]
+# 최근 인터뷰 워크플로우 조회 (토픽 매칭 지원)
 #
-# 출력: 가장 최근 인터뷰의 output (요구사항 문서)
-# 반환값: 0=성공 (요구사항 발견), 1=인터뷰 없음
+# Usage:
+#   ./get-recent-interview.sh [project_path] [topic] [mode]
 #
-# 우선순위:
-#   1. output이 "# 요구사항 명세서:" 로 시작하는 워크플로우 (실제 인터뷰 결과)
-#   2. name에 'interview' 포함하고 output이 있는 워크플로우
+# Arguments:
+#   project_path: 프로젝트 경로 (기본: pwd)
+#   topic: 검색할 토픽/키워드 (옵션)
+#   mode: "list" = 후보 목록 반환, "single" = 최적 매칭 1개 (기본)
+#
+# 출력:
+#   mode=single: 요구사항 문서 내용
+#   mode=list: JSON 형식 [{id, name, topic, created_at}, ...]
+#
+# 반환값: 0=성공, 1=인터뷰 없음
 
 DB_PATH="${HOME}/.obora/dashboard.db"
 PROJECT_PATH="${1:-$(pwd)}"
+TOPIC="${2:-}"
+MODE="${3:-single}"
 
 # DB 존재 확인
 if [ ! -f "$DB_PATH" ]; then
@@ -22,7 +30,83 @@ PROJECT_ID=$(sqlite3 "$DB_PATH" "
 SELECT id FROM projects WHERE path = '$PROJECT_PATH' LIMIT 1;
 " 2>/dev/null)
 
-# 1차: 실제 요구사항 명세서 형식인 워크플로우 찾기
+# SQL 이스케이프
+TOPIC_ESCAPED=$(echo "$TOPIC" | sed "s/'/''/g")
+
+# 모드별 처리
+if [ "$MODE" = "list" ]; then
+  # 후보 목록 반환 (JSON)
+  if [ -n "$PROJECT_ID" ]; then
+    sqlite3 "$DB_PATH" "
+      SELECT json_group_array(json_object(
+        'id', w.id,
+        'name', w.name,
+        'started_at', datetime(w.started_at, 'unixepoch')
+      ))
+      FROM workflows w
+      JOIN sessions s ON w.session_id = s.id
+      WHERE s.project_id = '$PROJECT_ID'
+        AND w.status = 'completed'
+        AND (w.output LIKE '# 요구사항 명세서:%' OR w.name LIKE '%/interview%')
+        AND w.started_at > strftime('%s', 'now', '-24 hours')
+      ORDER BY w.started_at DESC
+      LIMIT 10;
+    " 2>/dev/null
+  else
+    sqlite3 "$DB_PATH" "
+      SELECT json_group_array(json_object(
+        'id', id,
+        'name', name,
+        'started_at', datetime(started_at, 'unixepoch')
+      ))
+      FROM workflows
+      WHERE status = 'completed'
+        AND (output LIKE '# 요구사항 명세서:%' OR name LIKE '%/interview%')
+        AND started_at > strftime('%s', 'now', '-24 hours')
+      ORDER BY started_at DESC
+      LIMIT 10;
+    " 2>/dev/null
+  fi
+  exit 0
+fi
+
+# single 모드: 최적 매칭 1개 반환
+
+# 1차: 토픽이 있으면 토픽 매칭 시도
+if [ -n "$TOPIC" ]; then
+  if [ -n "$PROJECT_ID" ]; then
+    INTERVIEW_OUTPUT=$(sqlite3 "$DB_PATH" "
+      SELECT w.output
+      FROM workflows w
+      JOIN sessions s ON w.session_id = s.id
+      WHERE s.project_id = '$PROJECT_ID'
+        AND w.status = 'completed'
+        AND w.output LIKE '# 요구사항 명세서:%'
+        AND (w.name LIKE '%$TOPIC_ESCAPED%' OR w.output LIKE '%$TOPIC_ESCAPED%')
+        AND w.started_at > strftime('%s', 'now', '-24 hours')
+      ORDER BY w.started_at DESC
+      LIMIT 1;
+    " 2>/dev/null)
+  else
+    INTERVIEW_OUTPUT=$(sqlite3 "$DB_PATH" "
+      SELECT output
+      FROM workflows
+      WHERE status = 'completed'
+        AND output LIKE '# 요구사항 명세서:%'
+        AND (name LIKE '%$TOPIC_ESCAPED%' OR output LIKE '%$TOPIC_ESCAPED%')
+        AND started_at > strftime('%s', 'now', '-24 hours')
+      ORDER BY started_at DESC
+      LIMIT 1;
+    " 2>/dev/null)
+  fi
+
+  if [ -n "$INTERVIEW_OUTPUT" ]; then
+    echo "$INTERVIEW_OUTPUT"
+    exit 0
+  fi
+fi
+
+# 2차: 토픽 매칭 실패 또는 토픽 없음 → 최근 요구사항 명세서
 if [ -n "$PROJECT_ID" ]; then
   INTERVIEW_OUTPUT=$(sqlite3 "$DB_PATH" "
     SELECT w.output
@@ -45,45 +129,6 @@ else
     ORDER BY started_at DESC
     LIMIT 1;
   " 2>/dev/null)
-fi
-
-# 1차에서 못 찾으면 2차: 인터뷰 관련 워크플로우
-if [ -z "$INTERVIEW_OUTPUT" ]; then
-  if [ -n "$PROJECT_ID" ]; then
-    INTERVIEW_OUTPUT=$(sqlite3 "$DB_PATH" "
-      SELECT w.output
-      FROM workflows w
-      JOIN sessions s ON w.session_id = s.id
-      WHERE s.project_id = '$PROJECT_ID'
-        AND (
-          w.name LIKE '%/interview%' OR
-          w.type = 'interview'
-        )
-        AND w.status = 'completed'
-        AND w.output IS NOT NULL
-        AND w.output != ''
-        AND LENGTH(w.output) > 500
-        AND w.started_at > strftime('%s', 'now', '-24 hours')
-      ORDER BY w.started_at DESC
-      LIMIT 1;
-    " 2>/dev/null)
-  else
-    INTERVIEW_OUTPUT=$(sqlite3 "$DB_PATH" "
-      SELECT output
-      FROM workflows
-      WHERE (
-        name LIKE '%/interview%' OR
-        type = 'interview'
-      )
-      AND status = 'completed'
-      AND output IS NOT NULL
-      AND output != ''
-      AND LENGTH(output) > 500
-      AND started_at > strftime('%s', 'now', '-24 hours')
-      ORDER BY started_at DESC
-      LIMIT 1;
-    " 2>/dev/null)
-  fi
 fi
 
 if [ -z "$INTERVIEW_OUTPUT" ]; then
