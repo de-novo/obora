@@ -50,6 +50,10 @@ export function useWorkflowStream(
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isConnectedRef = useRef(false);
 
+  // Store callbacks in refs to avoid reconnecting when they change (advanced-use-latest)
+  const callbacksRef = useRef({ onUpdate, onComplete, onError });
+  callbacksRef.current = { onUpdate, onComplete, onError };
+
   // Cleanup function
   const cleanup = useCallback(() => {
     if (eventSourceRef.current) {
@@ -88,7 +92,7 @@ export function useWorkflowStream(
         // Also invalidate the workflows list to update status indicators
         queryClient.invalidateQueries({ queryKey: ["workflows"] });
 
-        onUpdate?.(workflow);
+        callbacksRef.current.onUpdate?.(workflow);
       } catch (e) {
         console.error("Failed to parse workflow event:", e);
       }
@@ -104,7 +108,7 @@ export function useWorkflowStream(
       try {
         const parsed: StreamEvent = JSON.parse(event.data);
         const { finalStatus } = parsed.data as { finalStatus: string };
-        onComplete?.(finalStatus);
+        callbacksRef.current.onComplete?.(finalStatus);
         cleanup();
       } catch (e) {
         console.error("Failed to parse complete event:", e);
@@ -118,7 +122,7 @@ export function useWorkflowStream(
         try {
           const parsed: StreamEvent = JSON.parse(event.data);
           const { message } = parsed.data as { message: string };
-          onError?.(new Error(message));
+          callbacksRef.current.onError?.(new Error(message));
         } catch {
           // Not a custom error, likely connection issue
         }
@@ -139,7 +143,7 @@ export function useWorkflowStream(
         }, 3000);
       }
     };
-  }, [workflowId, enabled, queryClient, cleanup, onUpdate, onComplete, onError]);
+  }, [workflowId, enabled, queryClient, cleanup]); // Callbacks stored in ref, no need in deps
 
   // Effect to manage connection
   useEffect(() => {

@@ -4,11 +4,24 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { WorkflowFlow } from "@/app/components/WorkflowFlow";
+import dynamic from "next/dynamic";
 import { MarkdownView } from "@/app/components/MarkdownView";
 import { fetchWorkflow, queryKeys } from "@/lib/api";
 import { useWorkflowStream } from "@/lib/useWorkflowStream";
 import type { WorkflowStep } from "@/lib/types";
+
+// Dynamic import for heavy ReactFlow component (bundle-dynamic-imports)
+const WorkflowFlow = dynamic(
+  () => import("@/app/components/WorkflowFlow").then((m) => m.WorkflowFlow),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-full items-center justify-center">
+        <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    ),
+  }
+);
 
 export default function WorkflowDetailPage() {
   const params = useParams();
