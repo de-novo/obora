@@ -15,6 +15,8 @@ DEBUG_LOG="${SCRIPT_DIR}/../../logs/hook-debug.log"
 DB_PATH="${HOME}/.obora/dashboard.db"
 WORKFLOW_FILE="${HOME}/.obora/current-workflow.txt"
 PROMPT_FILE="${HOME}/.obora/current-prompt-timestamp.txt"
+MAIN_STEP_FILE="${HOME}/.obora/current-main-step.txt"
+MAIN_RUN_FILE="${HOME}/.obora/current-main-run.txt"
 
 # stdin에서 JSON 읽기
 INPUT=$(cat)
@@ -102,6 +104,12 @@ JOIN workflow_steps ws ON ar.workflow_step_id = ws.id
 WHERE ws.workflow_id = '$WORKFLOW_ID';
 " 2>/dev/null)
 
+# Main Run ID 읽기
+MAIN_RUN_ID=""
+if [ -f "$MAIN_RUN_FILE" ]; then
+  MAIN_RUN_ID=$(cat "$MAIN_RUN_FILE")
+fi
+
 # 워크플로우 상태 업데이트 (output 포함)
 # NULLIF로 빈 문자열을 NULL로 변환 (Drizzle JSON 파싱 에러 방지)
 sqlite3 "$DB_PATH" <<EOF 2>> "$DEBUG_LOG"
@@ -115,8 +123,22 @@ WHERE id = '$WORKFLOW_ID';
 
 -- workflow_steps도 완료 처리
 UPDATE workflow_steps
-SET status = 'completed', ended_at = $TIMESTAMP
+SET
+  status = 'completed',
+  ended_at = $TIMESTAMP,
+  output = NULLIF('$MAIN_OUTPUT_ESCAPED', '')
 WHERE workflow_id = '$WORKFLOW_ID' AND status = 'running';
+
+-- Main agent_run 완료 처리
+UPDATE agent_runs
+SET
+  status = 'completed',
+  ended_at = $TIMESTAMP,
+  output = NULLIF('$MAIN_OUTPUT_ESCAPED', ''),
+  current_tool = NULL,
+  current_tool_input = NULL,
+  last_stream_update = $TIMESTAMP
+WHERE id = '$MAIN_RUN_ID';
 EOF
 
 echo "Workflow complete update result: $?" >> "$DEBUG_LOG"
@@ -124,6 +146,8 @@ echo "Workflow complete update result: $?" >> "$DEBUG_LOG"
 # 임시 파일 삭제
 rm -f "$WORKFLOW_FILE"
 rm -f "$PROMPT_FILE"
-echo "Workflow and prompt files removed" >> "$DEBUG_LOG"
+rm -f "$MAIN_STEP_FILE"
+rm -f "$MAIN_RUN_FILE"
+echo "Workflow and temp files removed" >> "$DEBUG_LOG"
 
 echo "" >> "$DEBUG_LOG"

@@ -274,7 +274,7 @@ export class WorkflowTracker {
   /**
    * 워크플로우 완료
    */
-  completeWorkflow(output?: Record<string, unknown>): void {
+  completeWorkflow(output?: string): void {
     if (!this.db || !this.workflowId) return;
 
     // 총 토큰 계산
@@ -393,7 +393,7 @@ export class WorkflowTracker {
       .set({
         status,
         endedAt: new Date(),
-        output: { result: result.output },
+        output: result.output,
         error: result.error,
         tokensUsed,
       })

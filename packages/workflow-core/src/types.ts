@@ -198,7 +198,7 @@ export interface WorkflowTracker {
     input?: Record<string, unknown>
   ): string | null;
   planCompleted(plan: WorkflowPlan): void;
-  completeWorkflow(output?: Record<string, unknown>): void;
+  completeWorkflow(output?: string): void;
   failWorkflow(error: string): void;
 
   // Step tracking

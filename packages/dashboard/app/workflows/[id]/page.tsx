@@ -107,7 +107,7 @@ export default function WorkflowDetailPage() {
   };
 
   const workflowInput = workflow.input as Record<string, unknown> | null;
-  const workflowOutput = workflow.output as Record<string, unknown> | null;
+  const workflowOutput = workflow.output as string | null;
 
   return (
     <div className="relative h-full w-full overflow-hidden">
@@ -231,9 +231,9 @@ export default function WorkflowDetailPage() {
                 Output
               </h3>
               {workflow.status === "completed" && workflowOutput ? (
-                <pre className="max-h-32 overflow-auto rounded-lg bg-secondary p-2 text-xs text-muted-foreground">
-                  {JSON.stringify(workflowOutput, null, 2)}
-                </pre>
+                <div className="max-h-32 overflow-auto rounded-lg bg-secondary p-2 text-xs">
+                  <MarkdownView content={workflowOutput} />
+                </div>
               ) : workflow.status === "failed" ? (
                 <p className="text-sm text-error">
                   {workflow.error || "Workflow failed"}
@@ -252,9 +252,7 @@ export default function WorkflowDetailPage() {
         const relatedRun = workflow.agentRuns.find(
           run => run.workflowStepId === selectedStep.id
         );
-        const outputText = relatedRun?.output ||
-          (selectedStep.output as { result?: string })?.result ||
-          (typeof selectedStep.output === 'string' ? selectedStep.output : null);
+        const outputText = relatedRun?.output || selectedStep.output;
 
         return (
           <div className="absolute bottom-4 left-4 right-4 z-10 max-h-[60vh]">

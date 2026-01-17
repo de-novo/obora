@@ -84,7 +84,69 @@ echo "$WORKFLOW_ID" > "$WORKFLOW_FILE"
 echo "Workflow ID saved to: $WORKFLOW_FILE" >> "$DEBUG_LOG"
 
 # 스텝 카운터 초기화
-echo "0" > "$STEP_COUNTER_FILE"
+echo "1" > "$STEP_COUNTER_FILE"
+
+# ============================================================================
+# Main Claude 스텝 생성 (항상 생성)
+# ============================================================================
+MAIN_STEP_ID="step_main_${WORKFLOW_ID}"
+MAIN_RUN_ID="run_main_${WORKFLOW_ID}"
+
+# Main 스텝 생성
+sqlite3 "$DB_PATH" <<EOF 2>> "$DEBUG_LOG"
+INSERT INTO workflow_steps (
+  id,
+  workflow_id,
+  step_number,
+  agent_type,
+  task_description,
+  status,
+  started_at,
+  tokens_used
+) VALUES (
+  '$MAIN_STEP_ID',
+  '$WORKFLOW_ID',
+  0,
+  'main-claude',
+  '$USER_PROMPT_ESCAPED',
+  'running',
+  $TIMESTAMP,
+  0
+);
+EOF
+echo "Main step insert result: $?" >> "$DEBUG_LOG"
+
+# Main agent_run 생성
+sqlite3 "$DB_PATH" <<EOF 2>> "$DEBUG_LOG"
+INSERT INTO agent_runs (
+  id,
+  session_id,
+  workflow_step_id,
+  agent_type,
+  status,
+  started_at,
+  tokens_used,
+  input_tokens,
+  output_tokens,
+  tool_call_count
+) VALUES (
+  '$MAIN_RUN_ID',
+  '$SESSION_ID',
+  '$MAIN_STEP_ID',
+  'main-claude',
+  'running',
+  $TIMESTAMP,
+  0, 0, 0, 0
+);
+EOF
+echo "Main agent_run insert result: $?" >> "$DEBUG_LOG"
+
+# Main 스텝 ID 저장 (tool-use에서 사용)
+MAIN_STEP_FILE="${HOME}/.obora/current-main-step.txt"
+MAIN_RUN_FILE="${HOME}/.obora/current-main-run.txt"
+echo "$MAIN_STEP_ID" > "$MAIN_STEP_FILE"
+echo "$MAIN_RUN_ID" > "$MAIN_RUN_FILE"
+echo "Main step/run IDs saved" >> "$DEBUG_LOG"
 
 # 프롬프트 타임스탬프 저장 (Stop hook에서 현재 턴의 output 추출용)
 # transcript의 timestamp 형식과 맞추기 위해 ISO 8601 형식 사용

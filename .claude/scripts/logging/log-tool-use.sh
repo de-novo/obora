@@ -104,10 +104,16 @@ fi
 # 일반 도구 처리 (실시간 추적)
 # ============================================================================
 
-# RUN_ID가 없으면 (Main Claude의 도구 호출) 스킵
+# RUN_ID가 없으면 Main Claude의 도구 호출 - Main Run ID 사용
+MAIN_RUN_FILE="${HOME}/.obora/current-main-run.txt"
 if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
-  echo "No agent RUN_ID, skipping real-time tracking" >> "$DEBUG_LOG"
-  exit 0
+  if [ -f "$MAIN_RUN_FILE" ]; then
+    RUN_ID=$(cat "$MAIN_RUN_FILE")
+    echo "Using Main Claude RUN_ID: $RUN_ID" >> "$DEBUG_LOG"
+  else
+    echo "No RUN_ID and no Main Run file, skipping" >> "$DEBUG_LOG"
+    exit 0
+  fi
 fi
 
 if [ "$HOOK_TYPE" = "PreToolUse" ] || [ "$HOOK_TYPE" = "pre" ]; then

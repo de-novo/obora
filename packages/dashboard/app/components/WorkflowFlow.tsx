@@ -16,7 +16,7 @@ import dagre from "@dagrejs/dagre";
 
 import "@xyflow/react/dist/style.css";
 
-import { AgentNode, TriggerNode, PlannerNode, OutputNode } from "./flow/FlowNodes";
+import { AgentNode, TriggerNode, PlannerNode, OutputNode, MainClaudeNode } from "./flow/FlowNodes";
 import type { WorkflowStep, Workflow, AgentRun } from "@/lib/types";
 
 // Layout constants (4x grid)
@@ -27,6 +27,7 @@ const NODE_HEIGHT = 100; // Increased for iteration badge
 const nodeTypes = {
   trigger: TriggerNode,
   planner: PlannerNode,
+  mainClaude: MainClaudeNode,
   agent: AgentNode,
   result: OutputNode,
 };
@@ -295,12 +296,15 @@ export function WorkflowFlow({ workflow, steps, agentRuns = [], onStepClick }: W
       );
       const currentTool = runningAgentRun?.currentTool || null;
 
+      // Use mainClaude node type for main-claude agent
+      const nodeType = agent.agentType === "main-claude" ? "mainClaude" : "agent";
+
       nodes.push({
         id: nodeId,
-        type: "agent",
+        type: nodeType,
         position: { x: 0, y: 0 },
         data: {
-          label: agent.agentType,
+          label: agent.agentType === "main-claude" ? "Main Claude" : agent.agentType,
           status,
           description: lastStep.taskDescription.slice(0, 80),
           tokens: agent.totalTokens,

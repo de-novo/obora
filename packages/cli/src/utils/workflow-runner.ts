@@ -72,7 +72,7 @@ export async function executeWorkflow(
     // Complete workflow tracking
     const allSuccess = result.results.every((r) => r.success);
     if (allSuccess) {
-      tracker?.completeWorkflow?.({ resultsCount: result.results.length });
+      tracker?.completeWorkflow?.(`Completed ${result.results.length} steps`);
     } else {
       const lastError = result.results.find((r) => !r.success)?.error;
       tracker?.failWorkflow?.(lastError || "Workflow failed");

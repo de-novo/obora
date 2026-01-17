@@ -123,7 +123,7 @@ export const workflows = sqliteTable(
     startedAt: integer("started_at", { mode: "timestamp" }),
     endedAt: integer("ended_at", { mode: "timestamp" }),
     input: text("input", { mode: "json" }).$type<Record<string, unknown>>(),
-    output: text("output", { mode: "json" }).$type<Record<string, unknown>>(),
+    output: text("output"), // Plain text (Claude's response)
     error: text("error"),
     tokensUsed: integer("tokens_used").notNull().default(0),
   },
@@ -156,7 +156,7 @@ export const workflowSteps = sqliteTable(
     startedAt: integer("started_at", { mode: "timestamp" }),
     endedAt: integer("ended_at", { mode: "timestamp" }),
     input: text("input", { mode: "json" }).$type<Record<string, unknown>>(),
-    output: text("output", { mode: "json" }).$type<Record<string, unknown>>(),
+    output: text("output"), // Plain text (agent's response)
     error: text("error"),
     tokensUsed: integer("tokens_used").notNull().default(0),
   },

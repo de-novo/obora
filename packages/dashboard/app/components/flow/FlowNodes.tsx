@@ -31,6 +31,7 @@ interface AgentNodeData extends BaseNodeData {
 export type TriggerNodeType = Node<BaseNodeData, "trigger">;
 export type PlannerNodeType = Node<BaseNodeData, "planner">;
 export type AgentNodeType = Node<AgentNodeData, "agent">;
+export type MainClaudeNodeType = Node<AgentNodeData, "mainClaude">;
 export type OutputNodeType = Node<BaseNodeData, "result">;
 
 // ============================================================================
@@ -99,6 +100,12 @@ const ErrorIcon = (
 const PendingIcon = (
   <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
+
+const MainClaudeIcon = (
+  <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
   </svg>
 );
 
@@ -187,6 +194,81 @@ export const PlannerNode = memo(function PlannerNode({
         position={Position.Bottom}
         id="bottom"
         className="!h-3 !w-3 !border-2 !border-background !bg-info"
+      />
+    </div>
+  );
+});
+
+// ============================================================================
+// Main Claude Node - Primary processor
+// ============================================================================
+
+export const MainClaudeNode = memo(function MainClaudeNode({
+  data,
+}: NodeProps<MainClaudeNodeType>) {
+  return (
+    <div
+      onClick={data.onClick}
+      className={cn(
+        "rounded-lg border-2 bg-card px-4 py-3 shadow-md transition-all hover:shadow-lg",
+        STATUS_BORDER_COLORS[data.status],
+        data.onClick && "cursor-pointer"
+      )}
+      style={{ width: NODE_WIDTH }}
+    >
+      <Handle
+        type="target"
+        position={Position.Top}
+        id="top"
+        className="!h-3 !w-3 !border-2 !border-background !bg-primary"
+      />
+      <div className="mb-1 flex items-center gap-2">
+        <div className="flex size-6 items-center justify-center rounded bg-primary/20 text-primary">
+          {MainClaudeIcon}
+        </div>
+        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Main
+        </span>
+        <div
+          className={cn("ml-auto size-2 rounded-full", STATUS_COLORS[data.status])}
+        />
+      </div>
+      <div className="font-medium text-foreground">Claude</div>
+      {data.description && (
+        <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+          {data.description}
+        </div>
+      )}
+      {/* Current Tool Indicator (when running) */}
+      {data.status === "running" && data.currentTool && (
+        <div className="mt-2 flex items-center gap-1.5 rounded-md bg-info/10 px-2 py-1">
+          <div className="size-1.5 animate-pulse rounded-full bg-info" />
+          <span className="text-xs font-medium text-info">
+            {data.currentTool}
+          </span>
+        </div>
+      )}
+
+      {/* Running without specific tool */}
+      {data.status === "running" && !data.currentTool && (
+        <div className="mt-2 flex items-center gap-1.5 rounded-md bg-info/10 px-2 py-1">
+          <div className="size-1.5 animate-pulse rounded-full bg-info" />
+          <span className="text-xs text-info">Processing...</span>
+        </div>
+      )}
+
+      {data.tokens && data.tokens > 0 && data.status !== "running" && (
+        <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
+          {TokenIcon}
+          {data.tokens.toLocaleString()} tokens
+        </div>
+      )}
+
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id="bottom"
+        className="!h-3 !w-3 !border-2 !border-background !bg-primary"
       />
     </div>
   );
