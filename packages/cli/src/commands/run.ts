@@ -6,7 +6,10 @@
 
 import { defineCommand } from "citty";
 import { consola } from "consola";
-import { executeWorkflow, simpleQuery, loadAgents, setOboraSession, getTracker } from "../orchestrator";
+import { loadAgents, getTracker } from "@obora/workflow-core";
+import { simpleQuery } from "@obora/agent-claude";
+import { executeWorkflow } from "../utils/workflow-runner";
+import { setOboraSession } from "../utils/session";
 
 // OBORA_SESSION 환경 변수 설정 (훅에서 체크)
 setOboraSession();
@@ -93,7 +96,7 @@ export const runCommand = defineCommand({
         consola.start("Planning workflow...");
 
         let workflowLength = 0;
-        const { plan, results } = await executeWorkflow(task, cwd, {
+        const { results } = await executeWorkflow(task, cwd, {
           tracker,
           workflowType: "custom",
           onPlanComplete: (p) => {

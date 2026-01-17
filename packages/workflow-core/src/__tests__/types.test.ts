@@ -18,6 +18,7 @@ import type {
   ProjectConfig,
   ProjectIdentifier,
   ResolvedProject,
+  WorkflowTracker,
 } from "../types.js";
 
 describe("types", () => {
@@ -242,13 +243,30 @@ describe("types", () => {
         console.log(msg);
       };
 
-      const mockTracker = {
+      const mockTracker: WorkflowTracker = {
+        // Session lifecycle
+        initialize: async () => true,
+        startSession: () => "sess-1",
+        completeSession: () => {},
+        failSession: () => {},
+        // Workflow lifecycle
+        startWorkflow: () => "wf-1",
+        planCompleted: () => {},
+        completeWorkflow: () => {},
+        failWorkflow: () => {},
+        // Step tracking
+        startStep: () => {},
+        completeStep: () => {},
+        // Agent run tracking
         startAgentRun: () => "run-1",
         updateCurrentTool: () => {},
         completeToolCall: () => {},
         completeAgentRun: () => {},
-        startStep: () => {},
-        completeStep: () => {},
+        // Getters
+        getProject: () => null,
+        getSessionId: () => "sess-1",
+        getWorkflowId: () => "wf-1",
+        getProjectId: () => "proj-1",
       };
 
       const options: AgentRunOptions = {

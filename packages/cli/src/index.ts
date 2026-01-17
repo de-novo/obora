@@ -49,4 +49,7 @@ export function runMain() {
 }
 
 export { createCommand, initCommand, addCommand, removeCommand, upgradeCommand, ejectCommand, doctorCommand, statusCommand, listCommand, llmHelpCommand, chatCommand, runCommand, sandboxCommand };
-export * from "./orchestrator";
+
+// Re-export from new packages for backwards compatibility
+export * from "@obora/workflow-core";
+export { ClaudeAgentProvider, simpleQuery } from "@obora/agent-claude";

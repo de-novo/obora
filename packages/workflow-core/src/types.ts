@@ -180,20 +180,40 @@ export interface TokenUsage {
 }
 
 /**
- * WorkflowTracker interface (minimal subset for core)
+ * WorkflowTracker interface
+ *
+ * Full interface for workflow tracking and DB logging
  */
 export interface WorkflowTracker {
+  // Session lifecycle
+  initialize(cwd: string): Promise<boolean>;
+  startSession(): string | null;
+  completeSession(summary?: string): void;
+  failSession(error?: string): void;
+
+  // Workflow lifecycle
+  startWorkflow(
+    type: string,
+    name: string,
+    input?: Record<string, unknown>
+  ): string | null;
+  planCompleted(plan: WorkflowPlan): void;
+  completeWorkflow(output?: Record<string, unknown>): void;
+  failWorkflow(error: string): void;
+
+  // Step tracking
+  startStep(stepIndex: number): void;
+  completeStep(stepIndex: number, result: AgentResult, tokensUsed?: number): void;
+
+  // Agent run tracking
   startAgentRun(
     agentType: string,
     model: string,
     prompt: string,
     stepIndex?: number
   ): string | null;
-
   updateCurrentTool(toolName: string, toolInput?: Record<string, unknown>): void;
-
   completeToolCall(toolName: string): void;
-
   completeAgentRun(
     result: AgentResult,
     tokensUsed?: number,
@@ -201,7 +221,9 @@ export interface WorkflowTracker {
     outputTokens?: number
   ): void;
 
-  startStep(stepIndex: number): void;
-
-  completeStep(stepIndex: number, result: AgentResult, tokensUsed?: number): void;
+  // Getters
+  getProject(): ResolvedProject | null;
+  getSessionId(): string | null;
+  getWorkflowId(): string | null;
+  getProjectId(): string | null;
 }

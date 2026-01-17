@@ -7,7 +7,10 @@
 import { defineCommand } from "citty";
 import { consola } from "consola";
 import { createInterface } from "node:readline";
-import { executeWorkflow, simpleQuery, loadAgents, setOboraSession, getTracker } from "../orchestrator";
+import { loadAgents, getTracker } from "@obora/workflow-core";
+import { simpleQuery } from "@obora/agent-claude";
+import { executeWorkflow } from "../utils/workflow-runner";
+import { setOboraSession } from "../utils/session";
 
 // OBORA_SESSION 환경 변수 설정 (훅에서 체크)
 setOboraSession();
