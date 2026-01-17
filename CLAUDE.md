@@ -94,13 +94,19 @@
 입력: 사용자 요청 또는 요구사항 명세서
 
 사전_조건:
-  1. 에이전트 디스커버리 (Glob → Read 병렬)
-  2. 에이전트 목록 전달
+  1. 에이전트 디스커버리 (스크립트 실행)
+  2. 스킬 디스커버리 (스크립트 실행)
+  3. 에이전트 + 스킬 목록 planner에게 전달
 
 출력:
   analysis: 작업 분석
-  workflow: 에이전트 실행 순서
+  workflow: 에이전트 실행 순서 (각 단계별 skills 포함)
   feedback_loop: 피드백 설정
+
+워크플로우_단계_형식:
+  agent: 에이전트명
+  task: 구체적 작업 내용
+  skills: [관련 스킬 목록]  # 선택적, 빈 배열 가능
 ```
 
 ## Phase 3-5: 실행 → 검증 → 완료
@@ -108,6 +114,8 @@
 ```yaml
 Phase_3:
   - 워크플로우 순차/병렬 실행
+  - 각 단계 실행 전 skills 로드 (Read로 SKILL.md 내용 읽기)
+  - 에이전트 호출 시 스킬 내용 prompt에 포함
   - 결과 수집
 
 Phase_4:
@@ -121,21 +129,21 @@ Phase_5:
 
 ## Commands
 
-| Command | 단축키 | 설명 |
-|---------|--------|------|
-| `/obora-interview <요청>` | - | 요구사항 인터뷰 (Phase 1만 실행) |
-| `/obora-implement <설명>` | `/oi` | 새 기능 구현 |
-| `/obora-fix <버그>` | `/of` | 버그 수정 |
-| `/obora-commit` | `/oc` | 커밋 (직접 실행) |
-| `/obora-review <대상>` | `/or` | 코드 리뷰 (직접 실행) |
+| Command | 유형 | 설명 |
+|---------|------|------|
+| `/interview <요청>` | Discovery | 요구사항 인터뷰 (Phase 1만 실행) |
+| `/implement <설명>` | Feature/FullFeature | 새 기능 구현 |
+| `/fix <버그>` | QuickFix/Feature | 버그 수정 |
+| `/commit` | - | 커밋 (직접 실행) |
+| `/review <대상>` | - | 코드 리뷰 (직접 실행) |
 
 ## 필수 규칙
 
 ```yaml
 반드시_에이전트_통해_수행:
   - 모든 코드 변경 → 적절한 에이전트
-  - 모든 Git 커밋 → obora-commit-helper
-  - 모든 리뷰 → obora-reviewer
+  - 모든 Git 커밋 → commit-helper
+  - 모든 리뷰 → reviewer
 
 예외_허용:
   - 설정 파일 (.json, .yaml) 직접 수정 가능
@@ -162,6 +170,23 @@ Phase_5:
 
 **세부 내용(프롬프트, 지침)은 실행 시점에 로드** → 컨텍스트 절약
 
+## 스킬 디스커버리
+
+```bash
+# 스크립트로 스킬 목록 조회 (name, description, path만)
+.claude/skills/obora/obora-skill-discovery/scripts/discover-skills.sh
+```
+
+**추출 정보:**
+- `name`: 스킬 식별자
+- `description`: 어떤 상황에서 사용하는지
+- `path`: 스킬 폴더 경로
+
+**스킬 선택:**
+- planner가 각 워크플로우 단계에 적합한 스킬 선택
+- obora 스킬 + 사용자 정의 스킬 모두 고려
+- Main Claude가 스킬 내용 로드 후 에이전트에 전달
+
 ## 세션 간 지속성
 
 ```yaml
@@ -180,7 +205,7 @@ Phase_5:
 ## 참조
 
 ```yaml
-Rules: ".claude/rules/obora/workflow/agent-workflow.md"
+Rules: ".claude/rules/workflow/agent-workflow.md"
 Agents: ".claude/agents/**/*.md"      # obora + 사용자 모두
 Commands: ".claude/commands/**/*.md"  # obora + 사용자 모두
 Skills: ".claude/skills/**/*.md"      # obora + 사용자 모두

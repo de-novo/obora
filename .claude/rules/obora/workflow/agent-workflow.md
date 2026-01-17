@@ -203,30 +203,39 @@ Task(subagent_type="obora-interviewer", prompt="
 
 **주체: obora-planner 에이전트**
 
-### 사전 조건: 에이전트 디스커버리
+### 사전 조건: 에이전트 + 스킬 디스커버리
 
-Main Claude가 수행:
+Main Claude가 **병렬로** 수행:
 
 ```bash
-# 스크립트로 에이전트 목록 조회 (name, description, path만)
+# 에이전트 목록 조회
 .claude/skills/obora/obora-agent-discovery/scripts/discover-agents.sh
+
+# 스킬 목록 조회
+.claude/skills/obora/obora-skill-discovery/scripts/discover-skills.sh
 ```
 
-**출력 예시:**
+**에이전트 출력 예시:**
 ```yaml
 agents:
-  - name: "obora-planner"
-    description: "워크플로우 설계. 작업 분석, 에이전트 선택, 실행 순서 결정."
-    path: "obora/core/obora-planner.md"
   - name: "obora-implementer"
     description: "코드 구현. 새 기능, 수정, 리팩토링."
-    path: "obora/code/obora-implementer.md"
   - name: "my-custom-agent"
     description: "사용자 정의 에이전트."
-    path: "my-custom-agent.md"
 ```
 
-**세부 내용(프롬프트, 지침)은 실행 시점에 로드** → 컨텍스트 절약
+**스킬 출력 예시:**
+```yaml
+skills:
+  - name: "obora-typescript"
+    description: "TypeScript 패턴 및 컨벤션."
+  - name: "obora-security"
+    description: "보안 점검 체크리스트."
+  - name: "my-company-style"
+    description: "회사 코딩 스타일 가이드."
+```
+
+**세부 내용은 실행 시점에 로드** → 컨텍스트 절약
 
 ### planner 호출
 
@@ -237,6 +246,9 @@ Task(subagent_type="obora-planner", prompt="
 사용 가능한 에이전트:
 [에이전트 목록 - name: description]
 
+사용 가능한 스킬:
+[스킬 목록 - name: description]
+
 워크플로우 설계:
 {
   \"analysis\": \"작업 분석\",
@@ -244,6 +256,7 @@ Task(subagent_type="obora-planner", prompt="
     {
       \"agent\": \"에이전트명\",
       \"task\": \"구체적 작업\",
+      \"skills\": [\"관련 스킬명\"],
       \"critical\": true,
       \"parallel_with\": []
     }
@@ -256,6 +269,18 @@ Task(subagent_type="obora-planner", prompt="
 ")
 ```
 
+### 스킬 선택 기준
+
+```yaml
+planner가_스킬_선택_시:
+  - 작업 유형과 스킬 description 매칭
+  - 코드 구현 → typescript, testing 관련 스킬
+  - 코드 리뷰 → security, typescript 관련 스킬
+  - 테스트 작성 → testing 관련 스킬
+  - obora 스킬 + 사용자 스킬 모두 선택 가능
+  - 불필요한 스킬은 선택하지 않음
+```
+
 ### 워크플로우 검증
 
 ```yaml
@@ -263,10 +288,11 @@ Task(subagent_type="obora-planner", prompt="
   - 코드 변경 시 테스트 단계 포함?
   - 코드 변경 시 feedback_loop.enabled = true?
   - critical 필드 설정?
+  - 각 단계에 적절한 스킬 할당?
 
 실패_시:
   - planner 재호출
-  - 누락된 단계 추가 요청
+  - 누락된 단계/스킬 추가 요청
 ```
 
 ---
@@ -275,6 +301,16 @@ Task(subagent_type="obora-planner", prompt="
 
 **주체: Main Claude**
 
+### 스킬 로드
+
+각 단계 실행 전, planner가 선택한 스킬의 내용을 로드:
+
+```bash
+# step.skills에 있는 스킬들의 SKILL.md 읽기
+for skill in step.skills:
+    Read: .claude/skills/**/skill/SKILL.md
+```
+
 ### 순차 실행
 
 ```python
@@ -282,9 +318,11 @@ results = []
 executed = set()
 
 for step in workflow:
-    # 이미 병렬 실행된 경우 스킵
     if step.agent in executed:
         continue
+
+    # 스킬 내용 로드
+    skill_contents = load_skills(step.skills)
 
     # 병렬 실행 가능한 에이전트 수집
     parallel_agents = [step]
@@ -296,21 +334,27 @@ for step in workflow:
 
     # 실행 (병렬 또는 순차)
     if len(parallel_agents) > 1:
-        # 병렬 실행: 동시에 여러 Task 호출
         for p_step in parallel_agents:
-            result = Task(subagent_type=p_step.agent, ...)
+            p_skill_contents = load_skills(p_step.skills)
+            result = Task(subagent_type=p_step.agent, prompt=f"""
+{p_step.task}
+
+## 참조 스킬
+{p_skill_contents}
+""")
             results.append(result)
             executed.add(p_step.agent)
     else:
-        # 순차 실행
         result = Task(subagent_type=step.agent, prompt=f"""
 {step.task}
 
-이전 단계 결과:
+## 참조 스킬
+{skill_contents}
+
+## 이전 단계 결과
 {format_results(results)}
 """)
 
-        # Critical 실패 시 중단
         if result.failed and step.critical:
             break
 
@@ -520,6 +564,11 @@ if iteration >= max_iterations:
 
 ```yaml
 에이전트: ".claude/agents/**/*.md"      # obora + 사용자 모두
+스킬: ".claude/skills/**/SKILL.md"      # obora + 사용자 모두
 커맨드: ".claude/commands/**/*.md"      # obora + 사용자 모두
 공용_원칙: ".claude/agents/obora/_shared-principles.md"
+
+디스커버리_스크립트:
+  에이전트: ".claude/skills/obora/obora-agent-discovery/scripts/discover-agents.sh"
+  스킬: ".claude/skills/obora/obora-skill-discovery/scripts/discover-skills.sh"
 ```

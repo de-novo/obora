@@ -8,25 +8,22 @@
 
 | 유형 | 현재 | 권장 | 비고 |
 |------|------|------|------|
-| Agent | 30개 | 10-12개 | 60% 축소 |
-| Skill | 5개 → 10개 | 10개 | ✅ 확장 완료 |
+| Agent | 12개 | 10-12개 | ✅ 27→12 축소 완료 |
+| Skill | 10개 | 10개 | ✅ 확장 완료 |
 | Command | 5개 | 5개 | 유지 |
-| Rule | 28개 | 20개 | 정리 + obora 분리 |
+| Rule | 20개 | 20개 | ✅ 정리 + obora 분리 완료 |
 
-### Agent 카테고리별 현황
+### Agent 카테고리별 현황 (Phase 2 완료 후)
 
 ```
-.claude/agents/
-├── core/        (2) planner, explorer
-├── code/        (4) debugger, implementer, refactorer, reviewer
-├── db/          (3) migration-helper, query-writer, schema-designer
-├── devops/      (3) ci-helper, deploy-checker, docker-helper
-├── discovery/   (1) interviewer
-├── docs/        (4) api-documenter, doc-gc, doc-validator, doc-writer
-├── integration/ (4) commit-helper, jira-helper, linear-helper, pr-helper
-├── obora/       (2) explorer, planner ← 중복!
-├── security/    (3) dependency-checker, secret-scanner, security-auditor
-└── test/        (3) coverage-analyzer, test-runner, test-writer
+.claude/agents/obora/
+├── core/        (3) obora-planner, obora-explorer, obora-interviewer
+├── code/        (3) obora-implementer, obora-reviewer, obora-debugger
+├── test/        (2) obora-test-writer, obora-test-runner
+├── integration/ (2) obora-commit-helper, obora-pr-helper
+└── infra/       (2) obora-db, obora-ops
+
+총 12개 에이전트 (27개에서 축소)
 ```
 
 ---
@@ -667,12 +664,14 @@ aliases:
 - [x] Command 파일에 `name` 필드 추가
 - [x] 문서 업데이트
 
-### Phase 2 (Agent 통합)
+### Phase 2 (Agent 통합) ✅ 완료
 
-- [ ] `db/` → `obora-db` 통합
-- [ ] `devops/` + `security/` → `obora-ops` 통합
-- [ ] `docs/` → Skill 변환 + `obora-doc-writer` 유지
-- [ ] 기타 통합 (refactorer → obora-debugger 등)
+- [x] `code/`: refactorer → obora-debugger에 흡수
+- [x] `test/`: coverage-analyzer → obora-test-runner에 흡수
+- [x] `integration/`: jira-helper, linear-helper → obora-pr-helper에 옵션화
+- [x] `infra/`: db 3개 → obora-db 통합
+- [x] `infra/`: devops 3개 + security 3개 → obora-ops 통합
+- [x] `docs/`: 4개 → 삭제 (Skill로 대체)
 
 ### Phase 3 (Skill 확장) ✅ 완료
 
@@ -699,7 +698,7 @@ aliases:
 우선순위:
 Phase 0 → 완료 (폴더 구조 + 네임스페이스) ✅
 Phase 1 → 완료 (중복 제거, 필드 통일) ✅
-Phase 2 → 단기 (Agent 통합)
+Phase 2 → 완료 (Agent 통합 27→12) ✅
 Phase 3 → 완료 (Skill 확장) ✅
 Phase 4 → 완료 (Rules 정리) ✅
 ```
