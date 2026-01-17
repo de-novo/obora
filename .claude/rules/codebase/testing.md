@@ -1,5 +1,5 @@
 ---
-paths:
+globs:
   - "**/*.{test,spec}.{ts,tsx,js,jsx}"
   - "**/__tests__/**/*.{ts,tsx,js,jsx}"
   - "**/test/**/*.{ts,tsx,js,jsx,py}"
@@ -10,56 +10,36 @@ paths:
 
 테스트 코드 작성 시 준수해야 할 원칙들입니다.
 
-## AAA 패턴
+## 핵심 원칙
 
-모든 테스트는 세 단계로 구성:
+1. **AAA 패턴** - Arrange, Act, Assert
+2. **FIRST** - Fast, Independent, Repeatable, Self-validating, Timely
+3. **하나의 테스트, 하나의 개념** - 명확한 검증 대상
+4. **경계 조건 테스트** - null, 빈 값, 최대/최소
+
+## 테스트 피라미드
 
 ```
-Arrange - 테스트 준비 (데이터, 목 설정)
-Act     - 테스트 대상 실행
-Assert  - 결과 검증
+        /\      E2E (적음)
+       /  \
+      /----\    통합 (중간)
+     /      \
+    /--------\  단위 (많음)
 ```
 
-## FIRST 원칙
+## 금지 사항
 
-- **F**ast: 빠르게 실행
-- **I**ndependent: 테스트 간 독립적
-- **R**epeatable: 어떤 환경에서도 동일 결과
-- **S**elf-validating: 성공/실패 자동 판단
-- **T**imely: 프로덕션 코드 전/후 즉시 작성
+```typescript
+// Bad - 모호한 테스트명
+it("works correctly", () => { });
 
-## 테스트 범위
+// Bad - 여러 개념 검증
+it("should create and update user", () => { });
 
-**단위 테스트:**
-- 함수/메서드 단위
-- 외부 의존성 목(mock) 처리
-- 빠른 피드백
+// Good - 명확한 테스트명
+it("should return error when email is invalid", () => { });
+```
 
-**통합 테스트:**
-- 모듈 간 상호작용
-- 실제 의존성 사용
-- 주요 흐름 검증
+## 상세 가이드
 
-**E2E 테스트:**
-- 사용자 시나리오
-- 전체 시스템 검증
-- 핵심 경로만
-
-## 테스트 작성 가이드
-
-**하나의 테스트, 하나의 개념:**
-- 여러 assert 가능하나 하나의 개념 검증
-
-**테스트 이름은 명확하게:**
-- 무엇을, 어떤 조건에서, 어떤 결과인지
-
-**경계 조건 테스트:**
-- 빈 값, null, 최대/최소값
-- 에러 케이스
-
-## 목(Mock) 사용
-
-- 외부 서비스/API
-- 데이터베이스
-- 시간/난수
-- 파일 시스템
+AAA/BDD 패턴, 모킹, 컴포넌트 테스트 예시는 `obora-testing` 스킬 참조.

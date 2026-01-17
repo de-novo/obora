@@ -1,5 +1,5 @@
 ---
-paths:
+globs:
   - "**/package.json"
   - "**/package-lock.json"
   - "**/pnpm-lock.yaml"

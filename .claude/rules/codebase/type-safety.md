@@ -1,5 +1,5 @@
 ---
-paths:
+globs:
   - "**/*.{ts,tsx,mts,cts}"
 ---
 

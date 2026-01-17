@@ -1,64 +1,35 @@
 ---
-paths:
+globs:
   - "**/*.{ts,tsx,js,jsx,mts,cts}"
   - "**/*.{py,rb,java,kt,go,rs,cs}"
-  - "**/*.{c,cpp,h,hpp}"
 ---
 
 # Security Principles
 
 보안을 고려한 코드를 작성합니다.
 
-## 입력 검증
+## 핵심 원칙
 
-**모든 외부 입력은 신뢰하지 않음:**
-- 사용자 입력
-- API 응답
-- 파일 내용
-- URL 파라미터
-- 환경 변수
+1. **모든 외부 입력은 신뢰하지 않음** - 검증 필수
+2. **민감 정보 하드코딩 금지** - 환경 변수 사용
+3. **파라미터화된 쿼리 사용** - SQL Injection 방지
+4. **출력 이스케이프** - XSS 방지
+5. **최소 권한 원칙** - 필요한 권한만 부여
 
-**검증 방법:**
-- 화이트리스트 기반 검증
-- 타입, 길이, 형식 확인
-- 이스케이프/새니타이즈 처리
+## 금지 사항
 
-## 인증/인가
+```typescript
+// Bad
+const apiKey = "sk-1234567890";
+const query = `SELECT * FROM users WHERE id = ${userId}`;
+element.innerHTML = userInput;
 
-- 비밀번호 평문 저장 금지
-- 세션/토큰 안전하게 관리
-- 권한 검사는 서버에서
-- 최소 권한 원칙
+// Good
+const apiKey = process.env.API_KEY;
+const query = "SELECT * FROM users WHERE id = ?";
+element.textContent = userInput;
+```
 
-## 민감 정보 보호
+## 상세 가이드
 
-**코드에 포함 금지:**
-- API 키
-- 비밀번호
-- 개인정보
-- 내부 URL/IP
-
-**대신 사용:**
-- 환경 변수
-- 비밀 관리 서비스
-- 설정 파일 (.gitignore)
-
-## 일반적인 취약점 방지
-
-**SQL Injection:**
-- 파라미터화된 쿼리 사용
-- ORM 사용
-
-**XSS:**
-- 출력 이스케이프
-- CSP 헤더
-
-**CSRF:**
-- CSRF 토큰
-- SameSite 쿠키
-
-## 의존성 관리
-
-- 정기적인 업데이트
-- 취약점 스캔
-- 최소한의 의존성
+OWASP Top 10, 코드 패턴, 체크리스트는 `obora-security` 스킬 참조.

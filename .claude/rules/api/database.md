@@ -1,5 +1,5 @@
 ---
-paths:
+globs:
   - "**/db/**/*.{ts,js,mts,cts}"
   - "**/database/**/*.{ts,js,mts,cts}"
   - "**/repositories/**/*.{ts,js,mts,cts}"

@@ -1,5 +1,5 @@
 ---
-paths:
+globs:
   - ".claude/**/*.md"
   - "CLAUDE.md"
   - "CLAUDE.local.md"

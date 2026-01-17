@@ -20,7 +20,7 @@ Comprehensive performance optimization guide for React and Next.js applications,
 
 ## Table of Contents
 
-1. [Eliminating Waterfalls](#1-eliminating-waterfalls) — **CRITICAL**
+1. [Eliminating Waterfalls](#1-y-waterfalls) — **CRITICAL**
    - 1.1 [Defer Await Until Needed](#11-defer-await-until-needed)
    - 1.2 [Dependency-Based Parallelization](#12-dependency-based-parallelization)
    - 1.3 [Prevent Waterfall Chains in API Routes](#13-prevent-waterfall-chains-in-api-routes)

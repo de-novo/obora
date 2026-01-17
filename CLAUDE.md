@@ -121,21 +121,21 @@ Phase_5:
 
 ## Commands
 
-| Command | 유형 | 설명 |
-|---------|------|------|
-| `/interview <요청>` | Discovery | 요구사항 인터뷰 (Phase 1만 실행) |
-| `/implement <설명>` | Feature/FullFeature | 새 기능 구현 |
-| `/fix <버그>` | QuickFix/Feature | 버그 수정 |
-| `/commit` | - | 커밋 (직접 실행) |
-| `/review <대상>` | - | 코드 리뷰 (직접 실행) |
+| Command | 단축키 | 설명 |
+|---------|--------|------|
+| `/obora-interview <요청>` | - | 요구사항 인터뷰 (Phase 1만 실행) |
+| `/obora-implement <설명>` | `/oi` | 새 기능 구현 |
+| `/obora-fix <버그>` | `/of` | 버그 수정 |
+| `/obora-commit` | `/oc` | 커밋 (직접 실행) |
+| `/obora-review <대상>` | `/or` | 코드 리뷰 (직접 실행) |
 
 ## 필수 규칙
 
 ```yaml
 반드시_에이전트_통해_수행:
   - 모든 코드 변경 → 적절한 에이전트
-  - 모든 Git 커밋 → commit-helper
-  - 모든 리뷰 → reviewer
+  - 모든 Git 커밋 → obora-commit-helper
+  - 모든 리뷰 → obora-reviewer
 
 예외_허용:
   - 설정 파일 (.json, .yaml) 직접 수정 가능
@@ -151,14 +151,16 @@ Phase_5:
 ## 에이전트 디스커버리
 
 ```bash
-Glob: .claude/agents/**/*.md
+# 스크립트로 에이전트 목록 조회 (name, description, path만)
+.claude/skills/obora/obora-agent-discovery/scripts/discover-agents.sh
 ```
 
-각 에이전트의 YAML frontmatter:
+**추출 정보:**
 - `name`: 식별자 (subagent_type으로 사용)
 - `description`: 언제 사용하는지
-- `tools`: 사용 가능한 도구
-- `model`: 실행 모델
+- `path`: 파일 경로
+
+**세부 내용(프롬프트, 지침)은 실행 시점에 로드** → 컨텍스트 절약
 
 ## 세션 간 지속성
 
@@ -178,8 +180,9 @@ Glob: .claude/agents/**/*.md
 ## 참조
 
 ```yaml
-Rules: ".claude/rules/workflow/agent-workflow.md"
-Agents: ".claude/agents/**/*.md"
-Commands: ".claude/commands/*.md"
+Rules: ".claude/rules/obora/workflow/agent-workflow.md"
+Agents: ".claude/agents/**/*.md"      # obora + 사용자 모두
+Commands: ".claude/commands/**/*.md"  # obora + 사용자 모두
+Skills: ".claude/skills/**/*.md"      # obora + 사용자 모두
 Scripts: ".claude/scripts/**/*.sh"
 ```

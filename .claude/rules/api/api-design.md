@@ -1,5 +1,5 @@
 ---
-paths:
+globs:
   - "**/api/**/*.{ts,js,mts,cts}"
   - "**/routes/**/*.{ts,js,mts,cts}"
   - "**/controllers/**/*.{ts,js,mts,cts}"
