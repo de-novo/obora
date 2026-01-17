@@ -86,8 +86,8 @@ SET
   tokens_used = $TOTAL_TOKENS,
   input_tokens = $TOTAL_INPUT,
   output_tokens = $OUTPUT_TOKENS,
-  output = '$(echo "$RESULT_TEXT" | sed "s/'/''/g")',
-  result = '$(echo "$RESULT_JSON" | sed "s/'/''/g")',
+  output = NULLIF('$(echo "$RESULT_TEXT" | sed "s/'/''/g")', ''),
+  result = NULLIF('$(echo "$RESULT_JSON" | sed "s/'/''/g")', ''),
   current_tool = NULL,
   tool_call_count = $TOOL_USE_COUNT,
   last_stream_update = $TIMESTAMP

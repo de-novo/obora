@@ -55,9 +55,11 @@ if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
     PROMPT_TIMESTAMP=$(cat "$PROMPT_FILE")
   fi
 
+  # 최근 1000줄만 처리 (전체 파일은 손상된 JSON으로 인해 파싱 실패 가능)
+  # 최근 데이터는 일반적으로 유효함
   if [ -n "$PROMPT_TIMESTAMP" ]; then
     # 해당 타임스탬프 이후의 assistant 메시지만 추출
-    MAIN_OUTPUT=$(cat "$TRANSCRIPT_PATH" | jq -rs --arg ts "$PROMPT_TIMESTAMP" '
+    MAIN_OUTPUT=$(tail -1000 "$TRANSCRIPT_PATH" | jq -rs --arg ts "$PROMPT_TIMESTAMP" '
       [.[] |
         select(.type == "assistant") |
         select(.timestamp >= $ts) |
@@ -70,7 +72,7 @@ if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
     echo "Extracted main output since $PROMPT_TIMESTAMP, length: ${#MAIN_OUTPUT}" >> "$DEBUG_LOG"
   else
     # 타임스탬프 없으면 마지막 assistant 메시지들 추출
-    MAIN_OUTPUT=$(cat "$TRANSCRIPT_PATH" | jq -rs '
+    MAIN_OUTPUT=$(tail -1000 "$TRANSCRIPT_PATH" | jq -rs '
       # 마지막 user 메시지 인덱스 찾기
       (to_entries | map(select(.value.type == "user")) | last.key) as $last_user_idx |
       # 그 이후의 assistant 메시지만 추출
@@ -101,13 +103,14 @@ WHERE ws.workflow_id = '$WORKFLOW_ID';
 " 2>/dev/null)
 
 # 워크플로우 상태 업데이트 (output 포함)
+# NULLIF로 빈 문자열을 NULL로 변환 (Drizzle JSON 파싱 에러 방지)
 sqlite3 "$DB_PATH" <<EOF 2>> "$DEBUG_LOG"
 UPDATE workflows
 SET
   status = 'completed',
   ended_at = $TIMESTAMP,
   tokens_used = $TOTAL_TOKENS,
-  output = '$MAIN_OUTPUT_ESCAPED'
+  output = NULLIF('$MAIN_OUTPUT_ESCAPED', '')
 WHERE id = '$WORKFLOW_ID';
 
 -- workflow_steps도 완료 처리

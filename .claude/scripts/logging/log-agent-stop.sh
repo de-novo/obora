@@ -49,6 +49,7 @@ AGENT_OUTPUT=""
 if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
   echo "Parsing transcript: $TRANSCRIPT_PATH" >> "$DEBUG_LOG"
 
+  # 에이전트 transcript는 보통 작고 유효하므로 전체 파일 사용
   # JSONL에서 tool_use 항목 추출
   # message.content가 배열인 경우만 처리 (문자열인 경우 스킵)
   TOOL_CALLS=$(cat "$TRANSCRIPT_PATH" | jq -s '
@@ -103,12 +104,13 @@ if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
   echo "Current status for $RUN_ID: $CURRENT_STATUS" >> "$DEBUG_LOG"
 
   # agent_runs 업데이트 (tool_call_details + output)
+  # NULLIF로 빈 문자열을 NULL로 변환 (Drizzle JSON 파싱 에러 방지)
   sqlite3 "$DB_PATH" <<EOF 2>> "$DEBUG_LOG"
 UPDATE agent_runs
 SET
   tools_called = '$(echo "$TOOLS_CALLED" | sed "s/'/''/g")',
   tool_call_details = '$(echo "$TOOL_CALLS" | sed "s/'/''/g")',
-  output = '$AGENT_OUTPUT_ESCAPED',
+  output = NULLIF('$AGENT_OUTPUT_ESCAPED', ''),
   current_tool = NULL,
   last_stream_update = $TIMESTAMP
 WHERE id = '$RUN_ID';
@@ -134,7 +136,7 @@ EOF
     sqlite3 "$DB_PATH" <<EOF 2>> "$DEBUG_LOG"
 UPDATE workflow_steps
 SET
-  output = '$AGENT_OUTPUT_ESCAPED',
+  output = NULLIF('$AGENT_OUTPUT_ESCAPED', ''),
   status = 'completed',
   ended_at = $TIMESTAMP
 WHERE id = '$STEP_ID' AND status = 'running';
@@ -153,7 +155,7 @@ SET
   ended_at = $TIMESTAMP,
   tools_called = '$(echo "$TOOLS_CALLED" | sed "s/'/''/g")',
   tool_call_details = '$(echo "$TOOL_CALLS" | sed "s/'/''/g")',
-  output = '$AGENT_OUTPUT_ESCAPED',
+  output = NULLIF('$AGENT_OUTPUT_ESCAPED', ''),
   current_tool = NULL,
   last_stream_update = $TIMESTAMP
 WHERE agent_type = '$AGENT_TYPE'
@@ -171,7 +173,7 @@ EOF
     sqlite3 "$DB_PATH" <<EOF 2>> "$DEBUG_LOG"
 UPDATE workflow_steps
 SET
-  output = '$AGENT_OUTPUT_ESCAPED',
+  output = NULLIF('$AGENT_OUTPUT_ESCAPED', ''),
   status = 'completed',
   ended_at = $TIMESTAMP
 WHERE id = '$STEP_ID' AND status = 'running';
