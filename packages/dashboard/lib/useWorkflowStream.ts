@@ -6,7 +6,7 @@
 
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "./api";
 import type { WorkflowWithDetails } from "./api";
@@ -48,7 +48,7 @@ export function useWorkflowStream(
   const queryClient = useQueryClient();
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const isConnectedRef = useRef(false);
+  const [connectionState, setConnectionState] = useState<"disconnected" | "connecting" | "connected">("disconnected");
 
   // Store callbacks in refs to avoid reconnecting when they change (advanced-use-latest)
   const callbacksRef = useRef({ onUpdate, onComplete, onError });
@@ -64,7 +64,7 @@ export function useWorkflowStream(
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
     }
-    isConnectedRef.current = false;
+    setConnectionState("disconnected");
   }, []);
 
   // Connect to SSE endpoint
@@ -72,12 +72,13 @@ export function useWorkflowStream(
     if (!workflowId || !enabled) return;
 
     cleanup();
+    setConnectionState("connecting");
 
     const eventSource = new EventSource(`/api/workflows/${workflowId}/stream`);
     eventSourceRef.current = eventSource;
 
     eventSource.onopen = () => {
-      isConnectedRef.current = true;
+      setConnectionState("connected");
     };
 
     // Handle workflow updates
@@ -131,16 +132,17 @@ export function useWorkflowStream(
 
     // Handle connection errors
     eventSource.onerror = () => {
-      isConnectedRef.current = false;
-
       // Only reconnect if still enabled and not deliberately closed
       if (enabled && eventSource.readyState !== EventSource.CLOSED) {
+        setConnectionState("connecting");
         cleanup();
 
         // Reconnect after 3 seconds
         reconnectTimeoutRef.current = setTimeout(() => {
           connect();
         }, 3000);
+      } else {
+        setConnectionState("disconnected");
       }
     };
   }, [workflowId, enabled, queryClient, cleanup]); // Callbacks stored in ref, no need in deps
@@ -157,7 +159,9 @@ export function useWorkflowStream(
   }, [enabled, workflowId, connect, cleanup]);
 
   return {
-    isConnected: isConnectedRef.current,
+    connectionState,
+    isConnected: connectionState === "connected",
+    isConnecting: connectionState === "connecting",
     disconnect: cleanup,
   };
 }

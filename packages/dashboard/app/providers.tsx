@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { Toaster } from "sonner";
 
 type Theme = "light" | "dark";
 
@@ -77,7 +78,20 @@ export function Providers({ children }: { children: ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider>{children}</ThemeProvider>
+      <ThemeProvider>
+        {children}
+        <Toaster
+          position="bottom-right"
+          toastOptions={{
+            className: "bg-card border-border text-foreground",
+            style: {
+              background: "var(--color-card)",
+              border: "1px solid var(--color-border)",
+              color: "var(--color-foreground)",
+            },
+          }}
+        />
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

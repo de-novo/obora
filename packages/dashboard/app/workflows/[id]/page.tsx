@@ -9,6 +9,7 @@ import { MarkdownView } from "@/app/components/MarkdownView";
 import { fetchWorkflow, queryKeys } from "@/lib/api";
 import { useWorkflowStream } from "@/lib/useWorkflowStream";
 import type { WorkflowStep } from "@/lib/types";
+import { toast } from "sonner";
 
 // Dynamic import for heavy ReactFlow component (bundle-dynamic-imports)
 const WorkflowFlow = dynamic(
@@ -38,8 +39,24 @@ export default function WorkflowDetailPage() {
 
   // Use SSE for real-time updates when workflow is running
   const isRunning = workflow?.status === "running" || workflow?.status === "planning";
-  useWorkflowStream(workflowId, {
+  const { isConnected, isConnecting } = useWorkflowStream(workflowId, {
     enabled: isRunning,
+    onComplete: (finalStatus) => {
+      if (finalStatus === "completed") {
+        toast.success("워크플로우가 완료되었습니다", {
+          description: workflow?.name,
+        });
+      } else if (finalStatus === "failed") {
+        toast.error("워크플로우가 실패했습니다", {
+          description: workflow?.error || "알 수 없는 오류",
+        });
+      }
+    },
+    onError: (error) => {
+      toast.error("연결 오류", {
+        description: error.message,
+      });
+    },
   });
 
   if (isLoading) {
@@ -141,6 +158,23 @@ export default function WorkflowDetailPage() {
             <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
               {workflow.type}
             </span>
+            {/* SSE Connection Indicator */}
+            {isRunning && (
+              <div className="flex items-center gap-1.5 rounded-full bg-secondary px-2 py-0.5">
+                <div
+                  className={`size-2 rounded-full ${
+                    isConnected
+                      ? "bg-success"
+                      : isConnecting
+                        ? "bg-warning animate-pulse"
+                        : "bg-muted-foreground"
+                  }`}
+                />
+                <span className="text-xs text-muted-foreground">
+                  {isConnected ? "실시간" : isConnecting ? "연결 중..." : "연결 끊김"}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Stats */}
