@@ -509,4 +509,5 @@ obora create my-app -t turbo-nextjs-full -y
 - [WORKFLOW-ARCHITECTURE.md](./WORKFLOW-ARCHITECTURE.md) - Workflow/Agent architecture
 - [VISION-AGENT-AGNOSTIC.md](./VISION-AGENT-AGNOSTIC.md) - Agent-agnostic vision and roadmap
 - [CLASSIFICATION-AGENT-SKILL-COMMAND.md](./CLASSIFICATION-AGENT-SKILL-COMMAND.md) - Agent vs Skill vs Command classification
+- [IMPROVEMENT-PLAN-STRUCTURE.md](./IMPROVEMENT-PLAN-STRUCTURE.md) - Structure improvement plan
 - [AGENT-SUBSCRIPTION-RESEARCH.md](./AGENT-SUBSCRIPTION-RESEARCH.md) - Multi-agent subscription research
