@@ -127,13 +127,11 @@ class MyAgentProvider implements AgentProvider {
 }
 ```
 
-## Migration from CLI
+## Related Packages
 
-Existing `packages/cli/src/orchestrator/` code can use this package by:
-
-1. Implementing `ClaudeAgentProvider` (wraps `@anthropic-ai/claude-agent-sdk`)
-2. Replacing direct imports with `@obora/workflow-core`
-3. Passing provider instance to `executeWorkflow()`
+- `@obora/agent-claude` - Claude SDK implementation of AgentProvider
+- `@obora/database` - SQLite database schema
+- `@obora/cli` - CLI that uses workflow-core with agent-claude
 
 ## Future Extensions
 

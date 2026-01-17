@@ -301,54 +301,45 @@ Merchant of Record for global SaaS.
 ```
 obora-kit/
 ├── docs/
-│   ├── ORGANIZATION.md
-│   └── ARCHITECTURE.md
+│   ├── ARCHITECTURE.md           # Template/Preset architecture
+│   └── WORKFLOW-ARCHITECTURE.md  # Workflow/Agent architecture
 ├── packages/
-│   └── cli/
-│       └── src/
-│           ├── commands/
-│           │   └── create.ts
-│           └── utils/
-│               ├── assembler.ts
-│               └── constants.ts
-├── templates/
-│   ├── turbo-nextjs-full/
-│   │   ├── manifest.json
-│   │   └── base/
-│   │       ├── apps/
-│   │       │   └── web/          # Next.js base
-│   │       ├── packages/
-│   │       │   ├── ui/           # shadcn/ui components
-│   │       │   ├── config/       # Shared TypeScript configs
-│   │       │   └── types/        # Shared types
-│   │       ├── turbo.json
-│   │       └── package.json
-│   └── nestjs-api/
-│       ├── manifest.json
-│       └── base/
-└── presets/
-    ├── biome/
-    │   ├── manifest.json
-    │   ├── package.json
-    │   └── files/
-    │       └── biome.json
-    ├── eslint-prettier/
-    │   ├── manifest.json
-    │   ├── package.json
-    │   └── files/
-    │       ├── eslint.config.js
-    │       ├── .prettierrc
-    │       └── .prettierignore
-    ├── nestjs/
-    │   ├── manifest.json
-    │   └── files/
-    │       └── apps/api/         # NestJS app
-    ├── drizzle/
-    ├── prisma/
-    ├── clerk/
-    ├── better-auth/
-    ├── polar/
-    └── paddle/
+│   ├── cli/                      # CLI commands and user interface
+│   │   └── src/
+│   │       ├── commands/         # create, add, list, run, chat, etc.
+│   │       └── utils/            # assembler, constants, prompts
+│   ├── workflow-core/            # Provider-agnostic workflow engine
+│   │   └── src/
+│   │       ├── agent-loader.ts   # Agent definition loading
+│   │       ├── engine.ts         # Workflow execution
+│   │       ├── tracker.ts        # DB tracking
+│   │       └── project-service.ts
+│   ├── agent-claude/             # Claude SDK provider implementation
+│   │   └── src/
+│   │       └── claude-provider.ts
+│   ├── preset-engine/            # Preset validation and file utilities
+│   ├── project-config/           # Project configuration management
+│   ├── project-templates/        # Template files
+│   │   └── templates/
+│   │       ├── apps/nextjs-web/
+│   │       └── apps/nestjs-api/
+│   ├── database/                 # SQLite database schema
+│   └── dashboard/                # Web dashboard (Next.js)
+└── presets/                      # Preset configurations by category
+    ├── auth/                     # clerk, better-auth
+    ├── database/                 # drizzle, prisma
+    ├── linting/                  # biome, eslint-prettier
+    ├── payment/                  # polar, paddle
+    ├── analytics/                # umami, posthog
+    ├── i18n/                     # next-intl
+    ├── theming/                  # next-themes
+    ├── ui/                       # shadcn-all, base-ui
+    ├── data-fetching/            # tanstack-query
+    ├── state/                    # nuqs
+    ├── email/                    # resend
+    ├── storage/                  # uploadthing, cloudflare-r2
+    ├── ai/                       # vercel-ai
+    └── validation/               # zod, effect-schema
 ```
 
 ## CLI Usage

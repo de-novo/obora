@@ -1,6 +1,6 @@
 # obora CLI
 
-CLI for obora-labs project scaffolding.
+CLI for obora-labs project scaffolding and AI-powered workflow orchestration.
 
 ## Installation
 
@@ -13,6 +13,30 @@ npx obora create my-app
 ```
 
 ## Commands
+
+### Workflow Commands
+
+#### `obora run`
+
+Execute an AI-powered workflow for a given task.
+
+```bash
+# Interactive mode
+obora run "Implement user authentication"
+
+# With specific agent
+obora run --agent implementer "Add login form"
+```
+
+#### `obora chat`
+
+Start an interactive chat session with AI agent.
+
+```bash
+obora chat
+```
+
+### Project Commands
 
 ### `obora create`
 
