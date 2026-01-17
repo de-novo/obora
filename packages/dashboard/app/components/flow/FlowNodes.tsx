@@ -24,6 +24,7 @@ interface BaseNodeData extends Record<string, unknown> {
 interface AgentNodeData extends BaseNodeData {
   iterations?: number;
   isInLoop?: boolean;
+  currentTool?: string | null;
 }
 
 // Node type definitions (for proper typing without casting)
@@ -275,7 +276,25 @@ export const AgentNode = memo(function AgentNode({
           {data.description}
         </div>
       )}
-      {data.tokens && data.tokens > 0 && (
+      {/* Current Tool Indicator (when running) */}
+      {data.status === "running" && data.currentTool && (
+        <div className="mt-2 flex items-center gap-1.5 rounded-md bg-info/10 px-2 py-1">
+          <div className="size-1.5 animate-pulse rounded-full bg-info" />
+          <span className="text-xs font-medium text-info">
+            {data.currentTool}
+          </span>
+        </div>
+      )}
+
+      {/* Running without specific tool */}
+      {data.status === "running" && !data.currentTool && (
+        <div className="mt-2 flex items-center gap-1.5 rounded-md bg-info/10 px-2 py-1">
+          <div className="size-1.5 animate-pulse rounded-full bg-info" />
+          <span className="text-xs text-info">Processing...</span>
+        </div>
+      )}
+
+      {data.tokens && data.tokens > 0 && data.status !== "running" && (
         <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
           <svg
             className="size-3"

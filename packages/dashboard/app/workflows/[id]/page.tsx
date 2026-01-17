@@ -7,6 +7,7 @@ import Link from "next/link";
 import { WorkflowFlow } from "@/app/components/WorkflowFlow";
 import { MarkdownView } from "@/app/components/MarkdownView";
 import { fetchWorkflow, queryKeys } from "@/lib/api";
+import { useWorkflowStream } from "@/lib/useWorkflowStream";
 import type { WorkflowStep } from "@/lib/types";
 
 export default function WorkflowDetailPage() {
@@ -20,11 +21,12 @@ export default function WorkflowDetailPage() {
     queryKey: queryKeys.workflow(workflowId),
     queryFn: () => fetchWorkflow(workflowId),
     enabled: !!workflowId,
-    refetchInterval: (query) => {
-      const data = query.state.data;
-      const isRunning = data?.status === "running" || data?.status === "planning";
-      return isRunning ? 2000 : false;
-    },
+  });
+
+  // Use SSE for real-time updates when workflow is running
+  const isRunning = workflow?.status === "running" || workflow?.status === "planning";
+  useWorkflowStream(workflowId, {
+    enabled: isRunning,
   });
 
   if (isLoading) {
@@ -83,6 +85,7 @@ export default function WorkflowDetailPage() {
       <WorkflowFlow
         workflow={workflow}
         steps={workflow.steps}
+        agentRuns={workflow.agentRuns}
         onStepClick={setSelectedStep}
       />
 

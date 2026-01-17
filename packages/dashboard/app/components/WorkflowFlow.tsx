@@ -17,7 +17,7 @@ import dagre from "@dagrejs/dagre";
 import "@xyflow/react/dist/style.css";
 
 import { AgentNode, TriggerNode, PlannerNode, OutputNode } from "./flow/FlowNodes";
-import type { WorkflowStep, Workflow } from "@/lib/types";
+import type { WorkflowStep, Workflow, AgentRun } from "@/lib/types";
 
 // Layout constants (4x grid)
 const NODE_WIDTH = 200;
@@ -212,10 +212,11 @@ function getMarkerColor(status: "pending" | "running" | "completed" | "failed") 
 interface WorkflowFlowProps {
   workflow: Workflow;
   steps: WorkflowStep[];
+  agentRuns?: AgentRun[];
   onStepClick?: (step: WorkflowStep) => void;
 }
 
-export function WorkflowFlow({ workflow, steps, onStepClick }: WorkflowFlowProps) {
+export function WorkflowFlow({ workflow, steps, agentRuns = [], onStepClick }: WorkflowFlowProps) {
   const workflowStatus = mapStatus(workflow.status);
   const workflowInput = workflow.input as Record<string, unknown> | null;
 
@@ -288,6 +289,12 @@ export function WorkflowFlow({ workflow, steps, onStepClick }: WorkflowFlowProps
       const status = mapStatus(agent.status);
       const lastStep = agent.steps[agent.steps.length - 1];
 
+      // Find the running agent run for this agent type to get currentTool
+      const runningAgentRun = agentRuns.find(
+        (run) => run.agentType === agent.agentType && run.status === "running"
+      );
+      const currentTool = runningAgentRun?.currentTool || null;
+
       nodes.push({
         id: nodeId,
         type: "agent",
@@ -300,6 +307,7 @@ export function WorkflowFlow({ workflow, steps, onStepClick }: WorkflowFlowProps
           iterations: agent.iterations,
           isInLoop: agent.isInLoop,
           steps: agent.steps,
+          currentTool,
           onClick: () => onStepClick?.(lastStep),
         },
       });
@@ -399,7 +407,7 @@ export function WorkflowFlow({ workflow, steps, onStepClick }: WorkflowFlowProps
     }
 
     return { initialNodes: nodes, normalEdges: edges, loopEdges: loopEdgeList };
-  }, [workflow, workflowStatus, workflowInput, collapsedAgents, feedbackLoops, onStepClick]);
+  }, [workflow, workflowStatus, workflowInput, collapsedAgents, feedbackLoops, agentRuns, onStepClick]);
 
   // Apply dagre layout (only to normal edges)
   const { nodes: layoutedNodes, edges: layoutedEdges } = useMemo(
