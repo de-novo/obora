@@ -13,6 +13,15 @@ import { ApiTags, ApiOperation, ApiParam, ApiQuery } from "@nestjs/swagger";
 import { PaymentService } from "./payment.service.js";
 import { FastifyRequest } from "fastify";
 
+/**
+ * Paddle webhook event structure
+ */
+interface PaddleWebhookEvent {
+  event_type: string;
+  occurred_at: string;
+  data: Record<string, unknown>;
+}
+
 @ApiTags("Payment")
 @Controller("payment")
 export class PaymentController {
@@ -105,7 +114,7 @@ export class PaymentController {
       return { error: "Invalid signature" };
     }
 
-    const event = req.body as any;
+    const event = req.body as PaddleWebhookEvent;
 
     // Handle different event types
     switch (event.event_type) {

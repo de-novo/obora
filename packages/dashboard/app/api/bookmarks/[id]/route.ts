@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { deleteBookmark } from "@/lib/queries";
-import type { ApiResponse } from "@/lib/types";
+import { getSafeErrorMessage, type ApiResponse } from "@/lib/types";
 
 export async function DELETE(
   _request: Request,
@@ -35,7 +35,7 @@ export async function DELETE(
       success: false,
       error: {
         code: "INTERNAL_ERROR",
-        message: error instanceof Error ? error.message : "Unknown error",
+        message: getSafeErrorMessage(error),
       },
       timestamp: new Date().toISOString(),
     };

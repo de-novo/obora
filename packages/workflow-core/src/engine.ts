@@ -12,7 +12,9 @@ import type {
   WorkflowStep,
   AgentResult,
   WorkflowTracker,
+  Result,
 } from "./types.js";
+import { ok, err } from "./types.js";
 import { loadAgents, getAgentByName, formatAgentsForPlanner } from "./agent-loader.js";
 
 // ============================================================================
@@ -43,27 +45,45 @@ const WorkflowPlanSchema = z.object({
 // ============================================================================
 
 /**
+ * JSON extraction error details
+ */
+export interface JsonParseError {
+  reason: string;
+  context?: string;
+}
+
+/**
  * Extract JSON from LLM output
  *
  * Supports:
  * 1. Code block: ```json ... ``` or ``json ... ``
  * 2. Raw JSON: First complete { ... } object
+ *
+ * @param output - LLM output text
+ * @returns Result containing parsed JSON or error details
  */
-function extractJsonFromOutput(output: string): unknown | null {
+function extractJsonFromOutput(output: string): Result<unknown, JsonParseError> {
   // 1. Try code block extraction
   const jsonMatch = output.match(/`{2,3}json\n?([\s\S]*?)\n?`{2,3}/);
   if (jsonMatch && jsonMatch[1]) {
     try {
-      return JSON.parse(jsonMatch[1]);
-    } catch {
-      // Fall through to raw JSON extraction
+      return ok(JSON.parse(jsonMatch[1]));
+    } catch (e) {
+      const errorMsg = e instanceof Error ? e.message : "Unknown error";
+      return err({
+        reason: "Failed to parse JSON from code block",
+        context: `Parse error: ${errorMsg}`,
+      });
     }
   }
 
   // 2. Extract raw JSON object
   const startIdx = output.indexOf("{");
   if (startIdx === -1) {
-    return null;
+    return err({
+      reason: "No JSON object found in output",
+      context: output.length > 100 ? `${output.slice(0, 100)}...` : output,
+    });
   }
 
   let depth = 0;
@@ -78,13 +98,20 @@ function extractJsonFromOutput(output: string): unknown | null {
   }
 
   if (depth !== 0) {
-    return null;
+    return err({
+      reason: "Incomplete JSON object (unbalanced braces)",
+      context: `Depth: ${depth}`,
+    });
   }
 
   try {
-    return JSON.parse(output.slice(startIdx, endIdx));
-  } catch {
-    return null;
+    return ok(JSON.parse(output.slice(startIdx, endIdx)));
+  } catch (e) {
+    const errorMsg = e instanceof Error ? e.message : "Unknown error";
+    return err({
+      reason: "Failed to parse extracted JSON",
+      context: `Parse error: ${errorMsg}`,
+    });
   }
 }
 
@@ -222,15 +249,24 @@ ${task}
   }
 
   // Parse and validate JSON
-  const jsonData = extractJsonFromOutput(planOutput);
-  if (jsonData) {
-    const validated = WorkflowPlanSchema.safeParse(jsonData);
+  const jsonResult = extractJsonFromOutput(planOutput);
+
+  if (jsonResult.ok) {
+    const validated = WorkflowPlanSchema.safeParse(jsonResult.value);
     if (validated.success) {
       return validated.data;
     }
     // Validation failed - log in debug mode
     if (process.env.DEBUG) {
       console.warn("WorkflowPlan validation failed:", validated.error.issues);
+    }
+  } else {
+    // JSON extraction failed - log in debug mode
+    if (process.env.DEBUG) {
+      console.warn("JSON extraction failed:", jsonResult.error.reason);
+      if (jsonResult.error.context) {
+        console.warn("Context:", jsonResult.error.context);
+      }
     }
   }
 

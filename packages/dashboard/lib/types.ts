@@ -107,6 +107,20 @@ export interface ApiError {
   stack?: string;
 }
 
+/**
+ * Get safe error message based on environment
+ * In production, hides internal error details
+ */
+export function getSafeErrorMessage(error: unknown): string {
+  const isDev = process.env.NODE_ENV === "development";
+
+  if (isDev && error instanceof Error) {
+    return error.message;
+  }
+
+  return "An internal error occurred";
+}
+
 // ============================================================================
 // Input/Update Types
 // ============================================================================

@@ -238,32 +238,36 @@ export class WorkflowTracker {
   planCompleted(plan: WorkflowPlan): void {
     if (!this.db || !this.workflowId) return;
 
-    this.db
-      .update(workflows)
-      .set({
-        status: "running",
-        input: { analysis: plan.analysis, feedbackLoop: plan.feedbackLoop },
-      })
-      .where(eq(workflows.id, this.workflowId))
-      .run();
+    const workflowId = this.workflowId;
 
-    // 스텝 미리 생성
-    plan.workflow.forEach((step, index) => {
-      const stepId = generateId("step");
-      this.db!.insert(workflowSteps)
-        .values({
-          id: stepId,
-          workflowId: this.workflowId!,
-          stepNumber: index,
-          agentType: step.agent,
-          taskDescription: step.task,
-          status: "pending",
+    // 트랜잭션으로 워크플로우 업데이트와 스텝 생성을 원자적으로 수행
+    this.db.transaction((tx) => {
+      tx.update(workflows)
+        .set({
+          status: "running",
+          input: { analysis: plan.analysis, feedbackLoop: plan.feedbackLoop },
         })
+        .where(eq(workflows.id, workflowId))
         .run();
-      this.stepIds.set(index, stepId);
+
+      // 스텝 미리 생성
+      plan.workflow.forEach((step, index) => {
+        const stepId = generateId("step");
+        tx.insert(workflowSteps)
+          .values({
+            id: stepId,
+            workflowId: workflowId,
+            stepNumber: index,
+            agentType: step.agent,
+            taskDescription: step.task,
+            status: "pending",
+          })
+          .run();
+        this.stepIds.set(index, stepId);
+      });
     });
 
-    // 이벤트 기록
+    // 이벤트 기록 (트랜잭션 외부 - 실패해도 무방)
     this.recordEvent("workflow.planned", "workflow", this.workflowId, {
       analysis: plan.analysis,
       stepCount: plan.workflow.length,
@@ -277,49 +281,52 @@ export class WorkflowTracker {
   completeWorkflow(output?: string): void {
     if (!this.db || !this.workflowId) return;
 
+    const workflowId = this.workflowId;
+    const sessionId = this.sessionId;
+
     // 총 토큰 계산
     const stepsResult = this.db
       .select({ tokensUsed: workflowSteps.tokensUsed })
       .from(workflowSteps)
-      .where(eq(workflowSteps.workflowId, this.workflowId))
+      .where(eq(workflowSteps.workflowId, workflowId))
       .all();
 
     const totalTokens = stepsResult.reduce((sum, s) => sum + s.tokensUsed, 0);
 
-    this.db
-      .update(workflows)
-      .set({
-        status: "completed",
-        endedAt: new Date(),
-        output,
-        tokensUsed: totalTokens,
-      })
-      .where(eq(workflows.id, this.workflowId))
-      .run();
+    // 트랜잭션으로 워크플로우와 세션 업데이트를 원자적으로 수행
+    this.db.transaction((tx) => {
+      tx.update(workflows)
+        .set({
+          status: "completed",
+          endedAt: new Date(),
+          output,
+          tokensUsed: totalTokens,
+        })
+        .where(eq(workflows.id, workflowId))
+        .run();
 
-    // 세션 토큰 업데이트
-    if (this.sessionId) {
-      const session = this.db
-        .select({ totalTokens: sessions.totalTokens })
-        .from(sessions)
-        .where(eq(sessions.id, this.sessionId))
-        .get();
+      // 세션 토큰 업데이트
+      if (sessionId) {
+        const session = tx
+          .select({ totalTokens: sessions.totalTokens })
+          .from(sessions)
+          .where(eq(sessions.id, sessionId))
+          .get();
 
-      if (session) {
-        this.db
-          .update(sessions)
-          .set({ totalTokens: session.totalTokens + totalTokens })
-          .where(eq(sessions.id, this.sessionId))
-          .run();
+        if (session) {
+          tx.update(sessions)
+            .set({ totalTokens: session.totalTokens + totalTokens })
+            .where(eq(sessions.id, sessionId))
+            .run();
+        }
       }
-    }
+    });
 
-    // 이벤트 기록
+    // 이벤트 기록 (트랜잭션 외부 - 실패해도 무방)
     this.recordEvent("workflow.completed", "workflow", this.workflowId, {
       output,
       tokensUsed: totalTokens,
     });
-
   }
 
   /**

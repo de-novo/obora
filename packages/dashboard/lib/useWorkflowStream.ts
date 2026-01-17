@@ -48,7 +48,13 @@ export function useWorkflowStream(
   const queryClient = useQueryClient();
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const retryCountRef = useRef(0);
   const [connectionState, setConnectionState] = useState<"disconnected" | "connecting" | "connected">("disconnected");
+
+  // Reconnection config
+  const MAX_RETRIES = 5;
+  const BASE_DELAY = 3000; // 3 seconds
+  const MAX_DELAY = 30000; // 30 seconds
 
   // Store callbacks in refs to avoid reconnecting when they change (advanced-use-latest)
   const callbacksRef = useRef({ onUpdate, onComplete, onError });
@@ -79,6 +85,7 @@ export function useWorkflowStream(
 
     eventSource.onopen = () => {
       setConnectionState("connected");
+      retryCountRef.current = 0; // Reset retry count on successful connection
     };
 
     // Handle workflow updates
@@ -134,13 +141,29 @@ export function useWorkflowStream(
     eventSource.onerror = () => {
       // Only reconnect if still enabled and not deliberately closed
       if (enabled && eventSource.readyState !== EventSource.CLOSED) {
+        retryCountRef.current += 1;
+
+        // Check if max retries exceeded
+        if (retryCountRef.current > MAX_RETRIES) {
+          callbacksRef.current.onError?.(
+            new Error(`SSE connection failed after ${MAX_RETRIES} retries`)
+          );
+          cleanup();
+          return;
+        }
+
         setConnectionState("connecting");
         cleanup();
 
-        // Reconnect after 3 seconds
+        // Exponential backoff: 3s -> 6s -> 12s -> 24s -> 30s (capped)
+        const backoffDelay = Math.min(
+          BASE_DELAY * Math.pow(2, retryCountRef.current - 1),
+          MAX_DELAY
+        );
+
         reconnectTimeoutRef.current = setTimeout(() => {
           connect();
-        }, 3000);
+        }, backoffDelay);
       } else {
         setConnectionState("disconnected");
       }

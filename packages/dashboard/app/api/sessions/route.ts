@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAllSessions, getProjectSessions } from "@/lib/queries";
-import type { ApiResponse } from "@/lib/types";
+import { getSafeErrorMessage, type ApiResponse } from "@/lib/types";
 
 export async function GET(request: Request) {
   try {
@@ -24,7 +24,7 @@ export async function GET(request: Request) {
       success: false,
       error: {
         code: "INTERNAL_ERROR",
-        message: error instanceof Error ? error.message : "Unknown error",
+        message: getSafeErrorMessage(error),
       },
       timestamp: new Date().toISOString(),
     };

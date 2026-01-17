@@ -3,6 +3,33 @@
  */
 
 // ============================================================================
+// Result Pattern
+// ============================================================================
+
+/**
+ * Result type for operations that can fail
+ * @template T - Success value type
+ * @template E - Error type (defaults to Error)
+ */
+export type Result<T, E = Error> =
+  | { ok: true; value: T }
+  | { ok: false; error: E };
+
+/**
+ * Create a successful result
+ */
+export function ok<T>(value: T): Result<T, never> {
+  return { ok: true, value };
+}
+
+/**
+ * Create an error result
+ */
+export function err<E>(error: E): Result<never, E> {
+  return { ok: false, error };
+}
+
+// ============================================================================
 // Project Configuration (.obora/project.yaml)
 // ============================================================================
 

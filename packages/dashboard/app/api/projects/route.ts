@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getProjects, createProject } from "@/lib/queries";
-import type { ApiResponse } from "@/lib/types";
+import { getSafeErrorMessage, type ApiResponse } from "@/lib/types";
 
 // Zod 입력 검증 스키마
 const CreateProjectSchema = z.object({
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
       success: false,
       error: {
         code: "INTERNAL_ERROR",
-        message: error instanceof Error ? error.message : "Unknown error",
+        message: getSafeErrorMessage(error),
       },
       timestamp: new Date().toISOString(),
     };
@@ -78,7 +78,7 @@ export async function POST(request: Request) {
       success: false,
       error: {
         code: "INTERNAL_ERROR",
-        message: error instanceof Error ? error.message : "Unknown error",
+        message: getSafeErrorMessage(error),
       },
       timestamp: new Date().toISOString(),
     };

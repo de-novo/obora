@@ -5,6 +5,7 @@
  */
 
 import { getWorkflowWithDetails } from "@/lib/queries";
+import { getSafeErrorMessage } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -137,7 +138,7 @@ export async function GET(
         } catch (error) {
           sendEvent({
             type: "error",
-            data: { message: error instanceof Error ? error.message : "Unknown error" },
+            data: { message: getSafeErrorMessage(error) },
             timestamp: new Date().toISOString(),
           });
           controller.close();

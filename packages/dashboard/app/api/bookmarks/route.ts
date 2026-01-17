@@ -1,6 +1,17 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { getBookmarks, createBookmark } from "@/lib/queries";
-import type { ApiResponse, CreateBookmarkInput, BookmarkEntityType } from "@/lib/types";
+import { getSafeErrorMessage, type ApiResponse, type BookmarkEntityType } from "@/lib/types";
+
+// Zod 입력 검증 스키마
+const CreateBookmarkSchema = z.object({
+  projectId: z.string().min(1, "Project ID is required"),
+  entityType: z.enum(["session", "workflow", "step", "agent_run", "task"], "Invalid entity type"),
+  entityId: z.string().min(1, "Entity ID is required"),
+  displayName: z.string().max(200, "Display name too long").optional(),
+  notes: z.string().max(1000, "Notes too long").optional(),
+  pinned: z.boolean().optional(),
+});
 
 export async function GET(request: Request) {
   try {
@@ -26,7 +37,7 @@ export async function GET(request: Request) {
       success: false,
       error: {
         code: "INTERNAL_ERROR",
-        message: error instanceof Error ? error.message : "Unknown error",
+        message: getSafeErrorMessage(error),
       },
       timestamp: new Date().toISOString(),
     };
@@ -37,14 +48,16 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json() as CreateBookmarkInput;
+    const body = await request.json();
 
-    if (!body.projectId || !body.entityType || !body.entityId) {
+    // Zod 검증
+    const parsed = CreateBookmarkSchema.safeParse(body);
+    if (!parsed.success) {
       const response: ApiResponse<never> = {
         success: false,
         error: {
           code: "VALIDATION_ERROR",
-          message: "projectId, entityType, and entityId are required",
+          message: parsed.error.issues.map((e) => e.message).join(", "),
         },
         timestamp: new Date().toISOString(),
       };
@@ -52,7 +65,7 @@ export async function POST(request: Request) {
       return NextResponse.json(response, { status: 400 });
     }
 
-    const bookmark = createBookmark(body);
+    const bookmark = createBookmark(parsed.data);
 
     const response: ApiResponse<typeof bookmark> = {
       success: true,
@@ -66,7 +79,7 @@ export async function POST(request: Request) {
       success: false,
       error: {
         code: "INTERNAL_ERROR",
-        message: error instanceof Error ? error.message : "Unknown error",
+        message: getSafeErrorMessage(error),
       },
       timestamp: new Date().toISOString(),
     };

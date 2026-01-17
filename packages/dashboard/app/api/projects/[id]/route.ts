@@ -1,6 +1,16 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { getProject, updateProject, deleteProject } from "@/lib/queries";
-import type { ApiResponse, UpdateProjectInput } from "@/lib/types";
+import { getSafeErrorMessage, type ApiResponse } from "@/lib/types";
+
+// Zod 입력 검증 스키마
+const UpdateProjectSchema = z.object({
+  name: z.string().min(1, "Name is required").max(100, "Name too long").optional(),
+  description: z.string().max(1000, "Description too long").optional(),
+  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Invalid color format").optional(),
+  icon: z.string().optional(),
+  status: z.enum(["active", "archived"]).optional(),
+});
 
 export async function GET(
   _request: Request,
@@ -35,7 +45,7 @@ export async function GET(
       success: false,
       error: {
         code: "INTERNAL_ERROR",
-        message: error instanceof Error ? error.message : "Unknown error",
+        message: getSafeErrorMessage(error),
       },
       timestamp: new Date().toISOString(),
     };
@@ -50,9 +60,24 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    const body = await request.json() as UpdateProjectInput;
+    const body = await request.json();
 
-    const project = updateProject(id, body);
+    // Zod 검증
+    const parsed = UpdateProjectSchema.safeParse(body);
+    if (!parsed.success) {
+      const response: ApiResponse<never> = {
+        success: false,
+        error: {
+          code: "VALIDATION_ERROR",
+          message: parsed.error.issues.map((e) => e.message).join(", "),
+        },
+        timestamp: new Date().toISOString(),
+      };
+
+      return NextResponse.json(response, { status: 400 });
+    }
+
+    const project = updateProject(id, parsed.data);
 
     if (!project) {
       const response: ApiResponse<never> = {
@@ -79,7 +104,7 @@ export async function PATCH(
       success: false,
       error: {
         code: "INTERNAL_ERROR",
-        message: error instanceof Error ? error.message : "Unknown error",
+        message: getSafeErrorMessage(error),
       },
       timestamp: new Date().toISOString(),
     };
@@ -121,7 +146,7 @@ export async function DELETE(
       success: false,
       error: {
         code: "INTERNAL_ERROR",
-        message: error instanceof Error ? error.message : "Unknown error",
+        message: getSafeErrorMessage(error),
       },
       timestamp: new Date().toISOString(),
     };

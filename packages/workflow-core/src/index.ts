@@ -10,6 +10,8 @@
 // ============================================================================
 
 export type {
+  // Result Pattern
+  Result,
   // Project
   ProjectConfig,
   ProjectIdentifier,
@@ -27,6 +29,8 @@ export type {
   AgentMessage,
   TokenUsage,
 } from "./types.js";
+
+export { ok, err } from "./types.js";
 
 // ============================================================================
 // Agent Loading
@@ -46,6 +50,7 @@ export {
 export {
   executeWorkflow,
   type ExecuteWorkflowOptions,
+  type JsonParseError,
 } from "./engine.js";
 
 // ============================================================================

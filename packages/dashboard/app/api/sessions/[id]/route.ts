@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSessionWithProject, getSessionWorkflows } from "@/lib/queries";
-import type { ApiResponse } from "@/lib/types";
+import { getSafeErrorMessage, type ApiResponse } from "@/lib/types";
 
 interface SessionDetailResponse {
   session: NonNullable<ReturnType<typeof getSessionWithProject>>;
@@ -45,7 +45,7 @@ export async function GET(
       success: false,
       error: {
         code: "INTERNAL_ERROR",
-        message: error instanceof Error ? error.message : "Unknown error",
+        message: getSafeErrorMessage(error),
       },
       timestamp: new Date().toISOString(),
     };
