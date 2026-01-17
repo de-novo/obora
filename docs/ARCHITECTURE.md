@@ -503,3 +503,9 @@ obora create my-app -t turbo-nextjs-full -y
 3. **No Lock-in**: All presets can be replaced or removed later
 4. **Type Safety**: Full TypeScript support throughout
 5. **Modern Stack**: Use latest stable versions of all tools
+
+## Related Documents
+
+- [WORKFLOW-ARCHITECTURE.md](./WORKFLOW-ARCHITECTURE.md) - Workflow/Agent architecture
+- [VISION-AGENT-AGNOSTIC.md](./VISION-AGENT-AGNOSTIC.md) - Agent-agnostic vision and roadmap
+- [AGENT-SUBSCRIPTION-RESEARCH.md](./AGENT-SUBSCRIPTION-RESEARCH.md) - Multi-agent subscription research

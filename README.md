@@ -293,6 +293,29 @@ pnpm --filter @obora-labs/cli test
 pnpm --filter @obora-labs/cli test:e2e
 ```
 
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Template/Preset composable architecture |
+| [WORKFLOW-ARCHITECTURE.md](./docs/WORKFLOW-ARCHITECTURE.md) | Workflow engine and agent orchestration |
+| [VISION-AGENT-AGNOSTIC.md](./docs/VISION-AGENT-AGNOSTIC.md) | Agent-agnostic vision and roadmap |
+
+## Vision
+
+obora-kit aims to be **agent-agnostic** like Vercel Skills, supporting all major AI agents:
+
+- Claude Code, Cursor, Codex, Windsurf, OpenCode, Gemini CLI, and more
+
+While providing **workflow automation** capabilities beyond simple skill sharing:
+
+- Dynamic workflow orchestration (planner)
+- Requirements discovery (interviewer)
+- Feedback loops (reviewer)
+- DB persistence across sessions
+
+See [VISION-AGENT-AGNOSTIC.md](./docs/VISION-AGENT-AGNOSTIC.md) for the full roadmap.
+
 ---
 
 *obora-labs*
