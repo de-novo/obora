@@ -1,0 +1,45 @@
+# Vendor Skills Manifest
+# 외부 프로바이더 스킬의 메타데이터를 관리합니다.
+# 스킬 파일(SKILL.md)은 원본 그대로 유지하고, 이 파일에서 버전/동기화 정보를 추적합니다.
+
+vendors:
+  vercel:
+    vercel-react-best-practices:
+      source_url: https://github.com/vercel/next.js
+      description: React and Next.js performance optimization guidelines
+      version: "1.0.0"
+      synced_at: 2026-01-18
+      license: MIT
+
+    web-design-guidelines:
+      source_url: https://github.com/vercel-labs/web-interface-guidelines
+      description: Web Interface Guidelines compliance checker
+      version: "1.0.0"
+      synced_at: 2026-01-18
+      license: MIT
+
+  anthropic:
+    claude-management:
+      source_url: https://code.claude.com/docs/
+      description: Claude Code configuration management
+      version: "1.0.0"
+      synced_at: 2026-01-18
+      license: null
+      note: "공식 문서 기반, 동적 fetch 권장"
+
+# 변경 대응 가이드:
+#
+# 업데이트 시:
+#   1. source_url에서 최신 버전 확인
+#   2. 스킬 파일 업데이트 (덮어쓰기 가능)
+#   3. version, synced_at 필드 갱신
+#
+# Deprecated 시:
+#   1. deprecated: true 필드 추가
+#   2. alternative: "대안 스킬" 필드 추가
+#   3. 의존하는 워크플로우 확인
+#
+# 삭제 시:
+#   1. 로컬 보존 여부 결정
+#   2. removed: true 필드 추가 또는 항목 삭제
+#   3. 의존하는 워크플로우에서 제거

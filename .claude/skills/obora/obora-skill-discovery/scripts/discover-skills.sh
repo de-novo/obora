@@ -53,8 +53,20 @@ find "$SKILLS_DIR" -name "SKILL.md" -type f | sort | while read -r file; do
     skill_folder=$(dirname "$file")
     rel_path="${skill_folder#$SKILLS_DIR/}"
 
+    # Determine provider based on path
+    if [[ "$rel_path" == obora/* ]]; then
+      provider="obora"
+    elif [[ "$rel_path" == vendor/* ]]; then
+      # Extract vendor name (e.g., vendor/vercel/... -> vercel)
+      provider=$(echo "$rel_path" | cut -d'/' -f2)
+    else
+      # User-defined skills (직접 .claude/skills/ 아래에 생성)
+      provider="user"
+    fi
+
     echo "  - name: \"$name\""
     echo "    description: \"$description\""
+    echo "    provider: \"$provider\""
     echo "    path: \"$rel_path\""
   fi
 done
