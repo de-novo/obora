@@ -477,7 +477,7 @@ export async function setPresetTarget(
   projectPath: string,
   preset: string,
   target: string,
-  source: "detect" | "manual" | "override" | "default" | "saved",
+  source: "detect" | "manual" | "override" | "default" | "saved" | "app-module",
   reasonDetail?: string
 ): Promise<void> {
   const config = await readOboraConfig(projectPath);

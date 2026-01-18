@@ -28,6 +28,21 @@
   },
   "version": "7.0.0",
   "targets": {
+    "nextjs": {
+      "files": [
+        "prisma",
+        "prisma.config.ts",
+        "nextjs"
+      ],
+      "detect": {
+        "packages": [
+          "next"
+        ],
+        "packageVersions": {
+          "next": ">=14"
+        }
+      }
+    },
     "nestjs": {
       "files": [
         "prisma",

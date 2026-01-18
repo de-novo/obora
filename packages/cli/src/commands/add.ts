@@ -294,6 +294,30 @@ function compareMajorMinor(
   return actualMinor > requiredMinor ? 1 : -1;
 }
 
+/**
+ * Resolve target key based on app module type
+ * This maps app module names to their preferred preset targets
+ */
+function resolveTargetKeyForAppModule(
+  appModule: string | undefined,
+  targetKeys: string[]
+): string | null {
+  if (!appModule) return null;
+
+  if (appModule === "nextjs-web" || appModule.includes("nextjs") || appModule.includes("next")) {
+    if (targetKeys.includes("nextjs")) return "nextjs";
+    if (targetKeys.includes("sqlite")) return "sqlite";
+  }
+
+  if (appModule === "nestjs-api" || appModule.includes("nestjs") || appModule.includes("nest")) {
+    if (targetKeys.includes("nestjs")) return "nestjs";
+    if (targetKeys.includes("server")) return "server";
+    if (targetKeys.includes("postgres")) return "postgres";
+  }
+
+  return null;
+}
+
 async function injectContent(
   filePath: string,
   marker: string,
@@ -802,18 +826,24 @@ export const addCommand = defineCommand({
         const targetNames = Object.keys(targetConfigs);
 
         // Select target (dialect)
-        let selectedTarget: string;
-        let targetSource: "detect" | "manual" | "override" | "default" | "saved";
+        let selectedTarget: string | undefined;
+        let targetSource: "detect" | "manual" | "override" | "default" | "saved" | "app-module" = "default";
         let targetReasonDetail: string | undefined;
+
+        // 1. CLI argument override
         if (args.dialect && targetNames.includes(args.dialect)) {
           selectedTarget = args.dialect;
           targetSource = "override";
-        } else if (existingConfig?.presetTargets?.[presetName] &&
+        }
+        // 2. Saved preference
+        else if (existingConfig?.presetTargets?.[presetName] &&
           targetNames.includes(existingConfig.presetTargets[presetName])) {
           selectedTarget = existingConfig.presetTargets[presetName];
           consola.info(`Using saved target: ${selectedTarget}`);
           targetSource = "saved";
-        } else {
+        }
+        // 3. Detect from package.json dependencies
+        else {
           const detected = await resolveTargetFromDetect(targetConfigs, packageJsonPath);
           if (detected) {
             selectedTarget = detected.target;
@@ -822,15 +852,31 @@ export const addCommand = defineCommand({
             targetSource = "detect";
           }
         }
+
+        // 4. Resolve from app module type (if target app is known)
+        if (!selectedTarget && targetAppName && existingConfig?.apps?.[targetAppName]) {
+          const appModule = existingConfig.apps[targetAppName].module;
+          const resolved = resolveTargetKeyForAppModule(appModule, targetNames);
+          if (resolved) {
+            selectedTarget = resolved;
+            targetReasonDetail = `app module: ${appModule}`;
+            consola.info(`Resolved target from app module: ${selectedTarget}`);
+            targetSource = "app-module";
+          }
+        }
+
+        // 5. Default to first target (with --yes flag)
         if (!selectedTarget && args.yes && targetNames.length > 0) {
           selectedTarget = targetNames[0];
           consola.info(`Using default: ${selectedTarget}`);
           targetSource = "default";
-        } else if (!selectedTarget) {
+        }
+        // 6. Prompt user to select
+        else if (!selectedTarget) {
           const { target } = await prompts({
             type: "select",
             name: "target",
-            message: "Select database dialect:",
+            message: "Select target variant:",
             choices: targetNames.map((name) => ({
               title: name,
               description: targetConfigs[name].description,
@@ -844,6 +890,12 @@ export const addCommand = defineCommand({
           }
           selectedTarget = target;
           targetSource = "manual";
+        }
+
+        // Safety check
+        if (!selectedTarget) {
+          consola.error("No target selected");
+          process.exit(1);
         }
 
         const targetConfig = targetConfigs[selectedTarget];

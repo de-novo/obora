@@ -24,7 +24,7 @@ export interface SlotConfig {
 
 export interface PresetTargetHistoryEntry {
   target: string;
-  source: "detect" | "manual" | "override" | "default" | "saved";
+  source: "detect" | "manual" | "override" | "default" | "saved" | "app-module";
   reasonDetail?: string;
   changedAt: string;
 }
