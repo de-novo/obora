@@ -5,6 +5,15 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchProjects, queryKeys } from "@/lib/api";
 import { useTheme } from "@/app/providers";
 import type { Project } from "@/lib/types";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
+import { ChevronDown, Sun, Moon, FolderOpen, Check } from "lucide-react";
 
 export function Header() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
@@ -23,6 +32,10 @@ export function Header() {
     }
   }, [projects, selectedProject]);
 
+  const handleProjectSelect = (project: Project) => {
+    setSelectedProject(project);
+  };
+
   return (
     <header className="flex h-12 items-center justify-between border-b border-border bg-card px-4">
       {/* Left: Project Selector */}
@@ -30,20 +43,57 @@ export function Header() {
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-foreground">Obora</span>
           <span className="text-muted-foreground">/</span>
-          {selectedProject ? (
-            <button className="flex items-center gap-1.5 rounded px-2 py-1 text-sm text-foreground hover:bg-muted">
-              <span
-                className="size-2 rounded-full"
-                style={{ backgroundColor: selectedProject.color }}
-              />
-              {selectedProject.name}
-              <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-          ) : (
-            <span className="text-sm text-muted-foreground">Select project</span>
-          )}
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-1.5 rounded px-2 py-1 text-sm text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1">
+                {selectedProject ? (
+                  <>
+                    <span
+                      className="size-2 rounded-full"
+                      style={{ backgroundColor: selectedProject.color }}
+                    />
+                    {selectedProject.name}
+                  </>
+                ) : (
+                  <span className="text-muted-foreground">Select project</span>
+                )}
+                <ChevronDown className="size-4 text-muted-foreground" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56">
+              <DropdownMenuLabel className="text-xs text-muted-foreground">
+                Projects
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {projects.length === 0 ? (
+                <div className="px-2 py-4 text-center text-sm text-muted-foreground">
+                  <FolderOpen className="mx-auto mb-2 size-8 opacity-50" />
+                  <p>No projects yet</p>
+                  <p className="text-xs">Run <code className="rounded bg-muted px-1">obora init</code></p>
+                </div>
+              ) : (
+                projects.map((project) => (
+                  <DropdownMenuItem
+                    key={project.id}
+                    onClick={() => handleProjectSelect(project)}
+                    className="flex items-center justify-between cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="size-2 rounded-full"
+                        style={{ backgroundColor: project.color }}
+                      />
+                      <span>{project.name}</span>
+                    </div>
+                    {selectedProject?.id === project.id && (
+                      <Check className="size-4 text-primary" />
+                    )}
+                  </DropdownMenuItem>
+                ))
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -64,33 +114,9 @@ export function Header() {
           aria-label="Toggle theme"
         >
           {theme === "dark" ? (
-            <svg
-              className="size-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
-              />
-            </svg>
+            <Sun className="size-5" />
           ) : (
-            <svg
-              className="size-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
-              />
-            </svg>
+            <Moon className="size-5" />
           )}
         </button>
       </div>

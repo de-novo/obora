@@ -56,6 +56,20 @@ export function getSettingsSourcePath(): string {
 }
 
 /**
+ * Get the path to bundled styles directory
+ */
+export function getStylesSourcePath(): string {
+  return join(getPackageRoot(), "styles");
+}
+
+/**
+ * Get the path to bundled CLAUDE-OBORA.md template
+ */
+export function getClaudeMdSourcePath(): string {
+  return join(getPackageRoot(), "CLAUDE-OBORA.md");
+}
+
+/**
  * Copy a directory recursively
  */
 async function copyDir(src: string, dest: string): Promise<void> {
@@ -215,6 +229,109 @@ export async function syncScripts(
 }
 
 /**
+ * Sync obora styles to target project
+ * Copies to styles/obora/ directory
+ */
+export async function syncStyles(
+  projectPath: string,
+  options: SyncOptions = {}
+): Promise<SyncResult> {
+  const stylesSource = getStylesSourcePath();
+  const stylesTarget = join(projectPath, "styles", "obora");
+  return syncDirectory(stylesSource, stylesTarget, options);
+}
+
+const OBORA_START_TAG = "<!-- obora -->";
+const OBORA_END_TAG = "<!-- /obora -->";
+
+/**
+ * Sync CLAUDE.md with obora section merge
+ * - If CLAUDE.md doesn't exist: create with obora section
+ * - If obora section doesn't exist: append obora section
+ * - If obora section exists: replace it
+ */
+export async function syncClaudeMd(
+  projectPath: string,
+  options: SyncOptions = {}
+): Promise<SyncResult> {
+  const { force = false, silent = false } = options;
+
+  const result: SyncResult = {
+    copied: [],
+    skipped: [],
+    errors: [],
+  };
+
+  const claudeMdSource = getClaudeMdSourcePath();
+  const claudeMdTarget = join(projectPath, "CLAUDE.md");
+
+  if (!existsSync(claudeMdSource)) {
+    result.errors.push("CLAUDE-OBORA.md source not found");
+    return result;
+  }
+
+  try {
+    // Read obora template
+    const oboraContent = await fs.readFile(claudeMdSource, "utf-8");
+
+    if (!existsSync(claudeMdTarget)) {
+      // CLAUDE.md doesn't exist - create with obora section
+      await fs.writeFile(claudeMdTarget, oboraContent, "utf-8");
+      result.copied.push("CLAUDE.md (created)");
+    } else {
+      // CLAUDE.md exists - merge or replace obora section
+      const existingContent = await fs.readFile(claudeMdTarget, "utf-8");
+
+      const startIdx = existingContent.indexOf(OBORA_START_TAG);
+      const endIdx = existingContent.indexOf(OBORA_END_TAG);
+
+      let newContent: string;
+
+      if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+        // Obora section exists - replace it
+        if (!force) {
+          // Check if content is same
+          const existingOboraSection = existingContent.slice(
+            startIdx,
+            endIdx + OBORA_END_TAG.length
+          );
+          if (existingOboraSection.trim() === oboraContent.trim()) {
+            result.skipped.push("CLAUDE.md (obora section unchanged)");
+            return result;
+          }
+        }
+
+        // Replace obora section
+        newContent =
+          existingContent.slice(0, startIdx) +
+          oboraContent +
+          existingContent.slice(endIdx + OBORA_END_TAG.length);
+
+        result.copied.push("CLAUDE.md (obora section updated)");
+      } else {
+        // Obora section doesn't exist - append it
+        newContent = existingContent.trimEnd() + "\n\n" + oboraContent;
+        result.copied.push("CLAUDE.md (obora section added)");
+      }
+
+      await fs.writeFile(claudeMdTarget, newContent, "utf-8");
+    }
+
+    if (!silent && result.copied.length > 0) {
+      consola.success(`Synced ${result.copied[0]}`);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    result.errors.push(`CLAUDE.md: ${message}`);
+    if (!silent) {
+      consola.error(`Failed to sync CLAUDE.md: ${message}`);
+    }
+  }
+
+  return result;
+}
+
+/**
  * Sync settings.json (merge hooks, don't overwrite)
  */
 export async function syncSettings(
@@ -313,6 +430,8 @@ export interface SyncAllResult {
   rules: SyncResult;
   commands: SyncResult;
   scripts: SyncResult;
+  styles: SyncResult;
+  claudeMd: SyncResult;
   settings: SyncResult;
 }
 
@@ -329,12 +448,14 @@ export async function syncAll(
     consola.info("Syncing obora assets...");
   }
 
-  const [skills, agents, rules, commands, scripts, settings] = await Promise.all([
+  const [skills, agents, rules, commands, scripts, styles, claudeMd, settings] = await Promise.all([
     syncSkills(projectPath, { ...options, silent: true }),
     syncAgents(projectPath, { ...options, silent: true }),
     syncRules(projectPath, { ...options, silent: true }),
     syncCommands(projectPath, { ...options, silent: true }),
     syncScripts(projectPath, { ...options, silent: true }),
+    syncStyles(projectPath, { ...options, silent: true }),
+    syncClaudeMd(projectPath, { ...options, silent: true }),
     syncSettings(projectPath, { ...options, silent: true }),
   ]);
 
@@ -348,6 +469,8 @@ export async function syncAll(
       rules.copied.length +
       commands.copied.length +
       scripts.copied.length +
+      styles.copied.length +
+      claudeMd.copied.length +
       settings.copied.length;
 
     const totalSkipped =
@@ -356,6 +479,8 @@ export async function syncAll(
       rules.skipped.length +
       commands.skipped.length +
       scripts.skipped.length +
+      styles.skipped.length +
+      claudeMd.skipped.length +
       settings.skipped.length;
 
     // Print summary by category
@@ -374,6 +499,13 @@ export async function syncAll(
     if (scripts.copied.length > 0) {
       consola.success(`Scripts: ${scripts.copied.length} copied`);
     }
+    if (styles.copied.length > 0) {
+      consola.success(`Styles: ${styles.copied.length} copied`);
+      consola.info(`  → Import in your CSS: @import "./styles/obora/obora-theme.css";`);
+    }
+    if (claudeMd.copied.length > 0) {
+      consola.success(`CLAUDE.md: ${claudeMd.copied[0]}`);
+    }
     if (settings.copied.length > 0) {
       consola.success(`Settings: merged`);
     }
@@ -387,7 +519,7 @@ export async function syncAll(
     }
   }
 
-  return { skills, agents, rules, commands, scripts, settings };
+  return { skills, agents, rules, commands, scripts, styles, claudeMd, settings };
 }
 
 /**

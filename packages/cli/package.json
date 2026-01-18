@@ -19,7 +19,9 @@
     "rules",
     "commands",
     "scripts",
-    "settings.json"
+    "styles",
+    "settings.json",
+    "CLAUDE-OBORA.md"
   ],
   "scripts": {
     "build": "unbuild",
