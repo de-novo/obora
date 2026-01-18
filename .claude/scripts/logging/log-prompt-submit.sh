@@ -4,11 +4,18 @@
 # Input (stdin): JSON with prompt info
 # Target: ~/.obora/dashboard.db
 #
-# 역할: workflows 테이블에 새 워크플로우 생성
+# 역할:
+#   1. workflows 테이블에 새 워크플로우 생성
+#   2. 워크플로우 컨텍스트 저장 (제목 자동 업데이트용)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEBUG_LOG="${SCRIPT_DIR}/../../logs/hook-debug.log"
 mkdir -p "$(dirname "$DEBUG_LOG")"
+
+# OBORA_INTERNAL=true면 내부 호출이므로 스킵 (title-generate 등)
+if [ "$OBORA_INTERNAL" = "true" ]; then
+  exit 0
+fi
 
 # Dashboard DB 경로
 DB_PATH="${HOME}/.obora/dashboard.db"
@@ -16,6 +23,7 @@ SESSION_FILE="${HOME}/.obora/current-session.txt"
 WORKFLOW_FILE="${HOME}/.obora/current-workflow.txt"
 STEP_COUNTER_FILE="${HOME}/.obora/workflow-step-counter.txt"
 PROMPT_TIMESTAMP_FILE="${HOME}/.obora/current-prompt-timestamp.txt"
+WORKFLOW_CONTEXT_FILE="${HOME}/.obora/workflow-context.json"
 
 # stdin에서 JSON 읽기
 INPUT=$(cat)
@@ -45,6 +53,7 @@ USER_PROMPT_ESCAPED=$(echo "$USER_PROMPT" | sed "s/'/''/g")
 # JSON 형식으로 변환 (input 필드가 json mode이므로)
 INPUT_JSON=$(echo "$USER_PROMPT" | jq -Rs '{task: .}')
 INPUT_JSON_ESCAPED=$(echo "$INPUT_JSON" | sed "s/'/''/g")
+
 
 # 워크플로우 ID 생성
 WORKFLOW_ID="wf_cc_$(date +%s)_$$"
@@ -153,5 +162,19 @@ echo "Main step/run IDs saved" >> "$DEBUG_LOG"
 PROMPT_TS=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
 echo "$PROMPT_TS" > "$PROMPT_TIMESTAMP_FILE"
 echo "Prompt timestamp saved: $PROMPT_TS" >> "$DEBUG_LOG"
+
+# ============================================================================
+# 워크플로우 컨텍스트 저장 (제목 자동 업데이트용)
+# ============================================================================
+cat > "$WORKFLOW_CONTEXT_FILE" <<CONTEXT_EOF
+{
+  "current_workflow_id": "$WORKFLOW_ID",
+  "current_prompt": $(echo "$USER_PROMPT" | jq -Rs '.'),
+  "session_id": "$SESSION_ID",
+  "timestamp": $TIMESTAMP
+}
+CONTEXT_EOF
+
+echo "Workflow context saved to: $WORKFLOW_CONTEXT_FILE" >> "$DEBUG_LOG"
 
 echo "" >> "$DEBUG_LOG"

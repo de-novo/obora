@@ -15,6 +15,7 @@ import { chatCommand } from "./commands/chat";
 import { runCommand } from "./commands/run";
 import { sandboxCommand } from "./commands/sandbox";
 import { configCommand } from "./commands/config";
+import { titleGenerateCommand } from "./commands/title-generate";
 import { initializeGlobalConfig } from "./utils";
 
 const main = defineCommand({
@@ -38,6 +39,7 @@ const main = defineCommand({
     chat: chatCommand,
     run: runCommand,
     sandbox: sandboxCommand,
+    "title-generate": titleGenerateCommand,
   },
   setup() {
     // Initialize global ~/.obora/ directory and dashboard.db
@@ -50,7 +52,7 @@ export function runMain() {
   _runMain(main);
 }
 
-export { createCommand, initCommand, addCommand, removeCommand, upgradeCommand, ejectCommand, doctorCommand, statusCommand, listCommand, configCommand, llmHelpCommand, chatCommand, runCommand, sandboxCommand };
+export { createCommand, initCommand, addCommand, removeCommand, upgradeCommand, ejectCommand, doctorCommand, statusCommand, listCommand, configCommand, llmHelpCommand, chatCommand, runCommand, sandboxCommand, titleGenerateCommand };
 
 // Re-export from new packages for backwards compatibility
 export * from "@obora/workflow-core";

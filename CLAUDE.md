@@ -202,12 +202,22 @@ Phase_5:
   .claude/scripts/queries/get-recent-interview.sh
 ```
 
+## 워크플로우 제목 자동 업데이트
+
+작업 완료 후 워크플로우 제목이 의미없으면 자동 업데이트합니다.
+
+```yaml
+컨텍스트: ~/.obora/workflow-context.json
+스킬: .claude/skills/obora/obora-workflow-title/SKILL.md
+스크립트: .claude/scripts/workflow/update-workflow.sh <id> title "<제목>"
+```
+
 ## 참조
 
 ```yaml
 Rules: ".claude/rules/workflow/agent-workflow.md"
-Agents: ".claude/agents/**/*.md"      # obora + 사용자 모두
-Commands: ".claude/commands/**/*.md"  # obora + 사용자 모두
-Skills: ".claude/skills/**/*.md"      # obora + 사용자 모두
+Agents: ".claude/agents/**/*.md"
+Commands: ".claude/commands/**/*.md"
+Skills: ".claude/skills/**/*.md"
 Scripts: ".claude/scripts/**/*.sh"
 ```

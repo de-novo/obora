@@ -9,7 +9,24 @@
 #   - Main Claude의 작업 내용(output) 저장
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="${SCRIPT_DIR}/../../.."
 DEBUG_LOG="${SCRIPT_DIR}/../../logs/hook-debug.log"
+
+# OBORA_INTERNAL=true면 내부 호출이므로 스킵 (title-generate 등)
+if [ "$OBORA_INTERNAL" = "true" ]; then
+  echo "=== Stop SKIPPED (internal call) $(date) ===" >> "$DEBUG_LOG"
+  exit 0
+fi
+
+# .env 파일 로드 (프로젝트 루트)
+ENV_FILE="${PROJECT_ROOT}/.env"
+if [ -f "$ENV_FILE" ]; then
+  # .env에서 OBORA_DEV 읽기 (export 없이 설정된 경우도 처리)
+  OBORA_DEV_FROM_ENV=$(grep -E "^OBORA_DEV=" "$ENV_FILE" 2>/dev/null | cut -d '=' -f2 | tr -d '"' | tr -d "'")
+  if [ -n "$OBORA_DEV_FROM_ENV" ]; then
+    export OBORA_DEV="$OBORA_DEV_FROM_ENV"
+  fi
+fi
 
 # Dashboard DB 경로
 DB_PATH="${HOME}/.obora/dashboard.db"
@@ -142,6 +159,31 @@ WHERE id = '$MAIN_RUN_ID';
 EOF
 
 echo "Workflow complete update result: $?" >> "$DEBUG_LOG"
+
+# ============================================================================
+# 워크플로우 제목 자동 생성 (백그라운드에서 실행)
+# ============================================================================
+# OBORA_DEV=true: 개발환경 (로컬 프로젝트 CLI 사용)
+# OBORA_DEV 없음: 프로덕션 (글로벌 obora 명령어 사용)
+
+if [ "$OBORA_DEV" = "true" ]; then
+  # 개발환경: 현재 프로젝트의 빌드된 CLI 사용
+  OBORA_SCRIPT="${SCRIPT_DIR}/../../../packages/cli/dist/obora.mjs"
+  if [ -f "$OBORA_SCRIPT" ]; then
+    echo "Running obora title-generate (dev mode)..." >> "$DEBUG_LOG"
+    (OBORA_INTERNAL=true node "$OBORA_SCRIPT" title-generate --quiet >> "$DEBUG_LOG" 2>&1) &
+  else
+    echo "Dev mode but obora script not found: $OBORA_SCRIPT" >> "$DEBUG_LOG"
+  fi
+else
+  # 프로덕션: 글로벌 설치된 obora 사용
+  if command -v obora &> /dev/null; then
+    echo "Running obora title-generate (production)..." >> "$DEBUG_LOG"
+    (OBORA_INTERNAL=true obora title-generate --quiet >> "$DEBUG_LOG" 2>&1) &
+  else
+    echo "obora CLI not found, skipping title generation" >> "$DEBUG_LOG"
+  fi
+fi
 
 # 임시 파일 삭제
 rm -f "$WORKFLOW_FILE"
