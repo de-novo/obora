@@ -326,7 +326,6 @@ export const SLOT_DEFAULTS: Record<string, Record<string, string>> = {
   },
   "nestjs-api": {
     linting: "biome",
-    validation: "effect-schema",
   },
   "shared-database": {
     database: "prisma",

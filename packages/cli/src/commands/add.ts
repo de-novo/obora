@@ -699,14 +699,24 @@ export const addCommand = defineCommand({
             process.exit(1);
           }
         }
-      } else if (isBackendPreset || isFrontendPreset) {
-        // Auto-select or prompt based on preset type
-        const relevantApps = appEntries.filter(([_, appConfig]) => {
-          const module = appConfig?.module;
-          if (isBackendPreset) return module?.includes("nest") || module?.includes("api");
-          if (isFrontendPreset) return module?.includes("next") || module?.includes("web");
-          return true;
-        }).map(([key]) => key);
+      } else {
+        // Determine relevant apps based on preset type
+        let relevantApps: string[];
+
+        if (isBackendPreset) {
+          relevantApps = appEntries.filter(([_, appConfig]) => {
+            const module = appConfig?.module;
+            return module?.includes("nest") || module?.includes("api");
+          }).map(([key]) => key);
+        } else if (isFrontendPreset) {
+          relevantApps = appEntries.filter(([_, appConfig]) => {
+            const module = appConfig?.module;
+            return module?.includes("next") || module?.includes("web");
+          }).map(([key]) => key);
+        } else {
+          // Universal presets (validation, linting, etc.) - all apps are relevant
+          relevantApps = appEntries.map(([key]) => key);
+        }
 
         if (relevantApps.length === 1) {
           const dir = getAppDir(relevantApps[0]);
@@ -715,15 +725,17 @@ export const addCommand = defineCommand({
             targetAppName = relevantApps[0];
             consola.info(`Auto-selected app: ${targetAppName}`);
           }
-        } else if (relevantApps.length > 1 && !args.yes) {
+        } else if (relevantApps.length > 1) {
+          // Always prompt for app selection in monorepo with multiple apps
           const { selectedApp } = await prompts({
             type: "select",
             name: "selectedApp",
-            message: "Select target app:",
+            message: `Select target app for ${presetName}:`,
             choices: relevantApps.map((app) => {
-              const moduleConfig = APP_MODULES[existingConfig.apps[app]?.module || ""];
+              const appConfig = existingConfig.apps[app];
+              const moduleConfig = APP_MODULES[appConfig?.module || ""];
               return {
-                title: `${app} (${existingConfig.apps[app]?.path || moduleConfig?.targetDir || app})`,
+                title: `${app} (${appConfig?.module || moduleConfig?.targetDir || app})`,
                 value: app,
               };
             }),
@@ -738,14 +750,6 @@ export const addCommand = defineCommand({
           if (dir) {
             targetAppDir = dir;
             targetAppName = selectedApp;
-          }
-        } else if (relevantApps.length > 1) {
-          // Default to first relevant app
-          const dir = getAppDir(relevantApps[0]);
-          if (dir) {
-            targetAppDir = dir;
-            targetAppName = relevantApps[0];
-            consola.info(`Using default app: ${targetAppName}`);
           }
         }
       }
