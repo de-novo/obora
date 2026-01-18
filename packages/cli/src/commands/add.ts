@@ -379,6 +379,7 @@ interface AddArgs {
   list: boolean;
   plan: boolean;
   dialect?: string;
+  target?: string;
 }
 
 async function handleAppTemplate(args: AddArgs, targetDir: string): Promise<void> {
@@ -545,6 +546,10 @@ export const addCommand = defineCommand({
     dialect: {
       type: "string",
       description: "Database dialect for ORM presets (e.g., sqlite, postgres)",
+    },
+    target: {
+      type: "string",
+      description: "Target variant for preset (e.g., nextjs, nestjs)",
     },
   },
   async run({ args }) {
@@ -834,10 +839,12 @@ export const addCommand = defineCommand({
         let targetSource: "detect" | "manual" | "override" | "default" | "saved" | "app-module" = "default";
         let targetReasonDetail: string | undefined;
 
-        // 1. CLI argument override
-        if (args.dialect && targetNames.includes(args.dialect)) {
-          selectedTarget = args.dialect;
+        // 1. CLI argument override (--target or --dialect)
+        const cliTarget = args.target || args.dialect;
+        if (cliTarget && targetNames.includes(cliTarget)) {
+          selectedTarget = cliTarget;
           targetSource = "override";
+          consola.info(`Using specified target: ${selectedTarget}`);
         }
         // 2. Saved preference
         else if (existingConfig?.presetTargets?.[presetName] &&

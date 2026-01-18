@@ -6,7 +6,7 @@ import {
   Logger,
 } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
-import type { Request } from "express";
+import type { FastifyRequest } from "fastify";
 import { auth } from "../../modules/auth/auth.js";
 import { IS_PUBLIC_KEY } from "../decorators/public.decorator.js";
 
@@ -26,10 +26,18 @@ export class BetterAuthGuard implements CanActivate {
       return true;
     }
 
-    const request = context.switchToHttp().getRequest<Request>();
+    const request = context.switchToHttp().getRequest<FastifyRequest>();
 
     try {
-      const session = await auth.api.getSession({ headers: request.headers });
+      // Convert IncomingHttpHeaders to Headers object for better-auth
+      const headers = new Headers();
+      for (const [key, value] of Object.entries(request.headers)) {
+        if (value) {
+          headers.set(key, Array.isArray(value) ? value.join(", ") : value);
+        }
+      }
+
+      const session = await auth.api.getSession({ headers });
 
       if (!session?.user) {
         throw new UnauthorizedException("Invalid or expired session");
