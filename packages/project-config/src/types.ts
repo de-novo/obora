@@ -106,3 +106,22 @@ export interface ProjectRegistrationOptions {
   description?: string;
   color?: string;
 }
+
+// ============================================================================
+// Global Preferences Types (~/.obora/dashboard.db preferences table)
+// ============================================================================
+
+export interface GlobalPreferences {
+  /** Default package manager for new projects */
+  packageManager?: PackageManager;
+  /** Default project structure */
+  defaultBase?: "single" | "monorepo";
+  /** Preferred presets to pre-select */
+  preferredPresets?: string[];
+  /** Enable/disable telemetry */
+  telemetry?: boolean;
+  /** Default apps for monorepo projects */
+  defaultApps?: string[];
+}
+
+export type GlobalPreferenceKey = keyof GlobalPreferences;

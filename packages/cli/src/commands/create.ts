@@ -25,6 +25,7 @@ import {
   updatePresetLockfile,
   writeOboraConfig,
 } from "../utils/project-config";
+import { getPreference } from "../utils/global-config";
 
 /**
  * Parse --presets argument string into preset selections
@@ -145,18 +146,19 @@ export const createCommand = defineCommand({
     // 1. Get project name
     const projectName = args.name || (await promptProjectName());
 
-    // 2. Get base structure
+    // 2. Get base structure (check global preference)
     let base: BaseName;
     if (args.base && args.base in BASES) {
       base = args.base as BaseName;
     } else if (args.yes) {
-      base = "monorepo";
+      const globalBase = getPreference("defaultBase");
+      base = globalBase || "monorepo";
       consola.info(`Using default base: ${base}`);
     } else {
       base = await promptBase();
     }
 
-    // 3. Get app modules
+    // 3. Get app modules (check global preference)
     let appInstances: AppModuleInstance[];
     if (args.apps) {
       appInstances = parseAppInstances(args.apps, base);
@@ -165,7 +167,14 @@ export const createCommand = defineCommand({
         process.exit(1);
       }
     } else if (args.yes) {
-      appInstances = [defaultAppInstance("nextjs-web", base)];
+      const globalApps = getPreference("defaultApps");
+      if (globalApps && globalApps.length > 0) {
+        appInstances = globalApps
+          .filter((app) => APP_MODULES[app as AppModuleName])
+          .map((app) => defaultAppInstance(app as AppModuleName, base));
+      } else {
+        appInstances = [defaultAppInstance("nextjs-web", base)];
+      }
       consola.info(`Using default apps: ${appInstances.map((app) => app.module).join(", ")}`);
     } else {
       const selectedModules = await promptAppModules();
@@ -243,7 +252,7 @@ export const createCommand = defineCommand({
       }
     }
 
-    // 7. Get package manager
+    // 7. Get package manager (check global preference)
     type PackageManager = "pnpm" | "npm" | "yarn" | "bun";
     const validPMs: PackageManager[] = ["pnpm", "npm", "yarn", "bun"];
     let pm: PackageManager;
@@ -251,7 +260,8 @@ export const createCommand = defineCommand({
     if (args.pm && validPMs.includes(args.pm as PackageManager)) {
       pm = args.pm as PackageManager;
     } else if (args.yes) {
-      pm = "pnpm";
+      const globalPm = getPreference("packageManager");
+      pm = globalPm || "pnpm";
     } else {
       pm = await promptPackageManager();
     }
@@ -288,8 +298,8 @@ export const createCommand = defineCommand({
       consola.info("\nDry run mode - no files will be created.\n");
       consola.info("Would create:");
       consola.info(`  Base template: ${base}`);
-      for (const app of appModules) {
-        consola.info(`  App module: ${app}`);
+      for (const app of appInstances) {
+        consola.info(`  App module: ${app.module} (${app.name})`);
       }
       for (const [category, selection] of Object.entries(slotSelections)) {
         if (selection) {

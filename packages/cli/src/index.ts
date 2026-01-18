@@ -14,6 +14,7 @@ import { ejectCommand } from "./commands/eject";
 import { chatCommand } from "./commands/chat";
 import { runCommand } from "./commands/run";
 import { sandboxCommand } from "./commands/sandbox";
+import { configCommand } from "./commands/config";
 import { initializeGlobalConfig } from "./utils";
 
 const main = defineCommand({
@@ -32,6 +33,7 @@ const main = defineCommand({
     doctor: doctorCommand,
     status: statusCommand,
     list: listCommand,
+    config: configCommand,
     "llm-help": llmHelpCommand,
     chat: chatCommand,
     run: runCommand,
@@ -48,7 +50,7 @@ export function runMain() {
   _runMain(main);
 }
 
-export { createCommand, initCommand, addCommand, removeCommand, upgradeCommand, ejectCommand, doctorCommand, statusCommand, listCommand, llmHelpCommand, chatCommand, runCommand, sandboxCommand };
+export { createCommand, initCommand, addCommand, removeCommand, upgradeCommand, ejectCommand, doctorCommand, statusCommand, listCommand, configCommand, llmHelpCommand, chatCommand, runCommand, sandboxCommand };
 
 // Re-export from new packages for backwards compatibility
 export * from "@obora/workflow-core";

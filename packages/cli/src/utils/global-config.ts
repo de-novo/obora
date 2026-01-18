@@ -13,4 +13,13 @@ export {
   registerProject,
   getRegisteredProjects,
   resetGlobalConfigState,
+  // Global Preferences
+  getPreference,
+  setPreference,
+  getAllPreferences,
+  setPreferences,
+  deletePreference,
+  clearAllPreferences,
 } from "@obora/project-config";
+
+export type { GlobalPreferences, GlobalPreferenceKey } from "@obora/project-config";

@@ -18,6 +18,8 @@ export type {
   PresetTargetHistoryEntry,
   RegisteredProject,
   ProjectRegistrationOptions,
+  GlobalPreferences,
+  GlobalPreferenceKey,
 } from "./types.js";
 
 // Project Config (local .obora/)
@@ -68,4 +70,11 @@ export {
   registerProject,
   getRegisteredProjects,
   resetGlobalConfigState,
+  // Global Preferences
+  getPreference,
+  setPreference,
+  getAllPreferences,
+  setPreferences,
+  deletePreference,
+  clearAllPreferences,
 } from "./global-config.js";

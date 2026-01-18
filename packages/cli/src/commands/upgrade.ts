@@ -1,8 +1,15 @@
 import { defineCommand } from "citty";
 import { consola } from "consola";
-import { resolve } from "pathe";
+import { join, resolve } from "pathe";
 import prompts from "prompts";
-import { PRESETS, resolvePresetName } from "../utils/constants";
+import {
+  PRESETS,
+  PRESETS_DIR,
+  resolvePresetName,
+  readJson,
+  writeJson,
+  fileExists,
+} from "../utils";
 import {
   hasOboraConfig,
   readOboraConfig,
@@ -15,6 +22,111 @@ interface UpgradeCandidate {
   preset: string;
   currentVersion: string;
   latestVersion: string;
+}
+
+interface PresetManifest {
+  name: string;
+  category: string;
+  version?: string;
+  common?: {
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+  };
+  targets?: Record<string, {
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+  }>;
+}
+
+/**
+ * Read preset manifest from presets directory
+ */
+async function readPresetManifest(preset: string, category: string): Promise<PresetManifest | null> {
+  const manifestPath = join(PRESETS_DIR, category, preset, "manifest.json");
+  if (!(await fileExists(manifestPath))) {
+    return null;
+  }
+  return readJson<PresetManifest>(manifestPath);
+}
+
+/**
+ * Get dependencies from manifest for a specific target
+ */
+function getManifestDependencies(
+  manifest: PresetManifest,
+  target?: string
+): { dependencies: Record<string, string>; devDependencies: Record<string, string> } {
+  const deps: Record<string, string> = {};
+  const devDeps: Record<string, string> = {};
+
+  // Common dependencies
+  if (manifest.common?.dependencies) {
+    Object.assign(deps, manifest.common.dependencies);
+  }
+  if (manifest.common?.devDependencies) {
+    Object.assign(devDeps, manifest.common.devDependencies);
+  }
+
+  // Target-specific dependencies
+  if (target && manifest.targets?.[target]) {
+    const targetConfig = manifest.targets[target];
+    if (targetConfig.dependencies) {
+      Object.assign(deps, targetConfig.dependencies);
+    }
+    if (targetConfig.devDependencies) {
+      Object.assign(devDeps, targetConfig.devDependencies);
+    }
+  }
+
+  return { dependencies: deps, devDependencies: devDeps };
+}
+
+/**
+ * Update package.json with new dependencies
+ */
+async function updatePackageJsonDeps(
+  packageJsonPath: string,
+  newDeps: { dependencies: Record<string, string>; devDependencies: Record<string, string> }
+): Promise<{ updated: boolean; changes: string[] }> {
+  if (!(await fileExists(packageJsonPath))) {
+    return { updated: false, changes: [] };
+  }
+
+  const pkg = await readJson<{
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+  }>(packageJsonPath);
+
+  const changes: string[] = [];
+  let updated = false;
+
+  // Update dependencies
+  for (const [name, version] of Object.entries(newDeps.dependencies)) {
+    const currentVersion = pkg.dependencies?.[name];
+    if (currentVersion && currentVersion !== version) {
+      pkg.dependencies = pkg.dependencies || {};
+      pkg.dependencies[name] = version;
+      changes.push(`${name}: ${currentVersion} → ${version}`);
+      updated = true;
+    }
+  }
+
+  // Update devDependencies
+  for (const [name, version] of Object.entries(newDeps.devDependencies)) {
+    const currentVersion = pkg.devDependencies?.[name];
+    if (currentVersion && currentVersion !== version) {
+      pkg.devDependencies = pkg.devDependencies || {};
+      pkg.devDependencies[name] = version;
+      changes.push(`${name}: ${currentVersion} → ${version} (dev)`);
+      updated = true;
+    }
+  }
+
+  if (updated) {
+    await writeJson(packageJsonPath, pkg);
+  }
+
+  return { updated, changes };
 }
 
 /**
@@ -223,10 +335,58 @@ export const upgradeCommand = defineCommand({
     }
 
     // Perform upgrades
-    consola.start("Upgrading presets...");
+    consola.start("Upgrading presets...\n");
+
+    const allChanges: string[] = [];
 
     for (const candidate of toUpgrade) {
       try {
+        // Get preset info
+        const presetInfo = PRESETS[resolvePresetName(candidate.preset)];
+        if (!presetInfo) {
+          consola.warn(`Preset info not found for ${candidate.preset}, skipping dependency update`);
+          await upgradeSlotPreset(projectPath, candidate.slot, candidate.latestVersion);
+          continue;
+        }
+
+        // Read manifest for new dependencies
+        const manifest = await readPresetManifest(candidate.preset, presetInfo.category);
+        if (!manifest) {
+          consola.warn(`Manifest not found for ${candidate.preset}, updating config only`);
+          await upgradeSlotPreset(projectPath, candidate.slot, candidate.latestVersion);
+          consola.success(`Updated config for ${candidate.preset}`);
+          continue;
+        }
+
+        // Get target from config
+        const target = config.presetTargets?.[candidate.preset];
+        const newDeps = getManifestDependencies(manifest, target);
+
+        // Find package.json to update
+        // For monorepo: check apps, for single: root
+        const packageJsonPaths: string[] = [];
+
+        if (config.base === "monorepo") {
+          // Update root and relevant app package.jsons
+          packageJsonPaths.push(join(projectPath, "package.json"));
+          for (const [, appConfig] of Object.entries(config.apps)) {
+            if (appConfig.path) {
+              packageJsonPaths.push(join(appConfig.path, "package.json"));
+            }
+          }
+        } else {
+          packageJsonPaths.push(join(projectPath, "package.json"));
+        }
+
+        // Update dependencies
+        for (const pkgPath of packageJsonPaths) {
+          const { updated, changes } = await updatePackageJsonDeps(pkgPath, newDeps);
+          if (updated) {
+            allChanges.push(...changes.map(c => `  ${candidate.preset}: ${c}`));
+          }
+        }
+
+        // Update config
         await upgradeSlotPreset(projectPath, candidate.slot, candidate.latestVersion);
         consola.success(
           `Upgraded ${candidate.slot}:${candidate.preset} to ${candidate.latestVersion}`
@@ -239,8 +399,17 @@ export const upgradeCommand = defineCommand({
     }
 
     consola.success("\nUpgrade complete!");
+
+    if (allChanges.length > 0) {
+      consola.info("\nDependency changes:");
+      for (const change of allChanges) {
+        consola.log(change);
+      }
+    }
+
     consola.info("\nNext steps:");
-    consola.info("  1. Run your package manager to update dependencies");
+    consola.info("  1. Run your package manager to install updated dependencies");
+    consola.info("     pnpm install");
     consola.info("  2. Check for any breaking changes in the changelog");
     consola.info("  3. Run tests to verify everything works");
   },

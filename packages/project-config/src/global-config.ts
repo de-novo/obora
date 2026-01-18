@@ -8,7 +8,12 @@ import { homedir } from "node:os";
 import { join } from "pathe";
 import { existsSync, mkdirSync } from "node:fs";
 import Database from "better-sqlite3";
-import type { RegisteredProject, ProjectRegistrationOptions } from "./types.js";
+import type {
+  RegisteredProject,
+  ProjectRegistrationOptions,
+  GlobalPreferences,
+  GlobalPreferenceKey,
+} from "./types.js";
 
 // ============================================================================
 // Constants
@@ -327,4 +332,142 @@ export function getRegisteredProjects(): RegisteredProject[] {
  */
 export function resetGlobalConfigState(): void {
   initialized = false;
+}
+
+// ============================================================================
+// Global Preferences
+// ============================================================================
+
+/**
+ * Get a single preference value
+ */
+export function getPreference<K extends GlobalPreferenceKey>(
+  key: K
+): GlobalPreferences[K] | undefined {
+  const db = getGlobalDb();
+
+  try {
+    const row = db
+      .prepare("SELECT value FROM preferences WHERE key = ?")
+      .get(key) as { value: string } | undefined;
+
+    if (!row) return undefined;
+
+    try {
+      return JSON.parse(row.value) as GlobalPreferences[K];
+    } catch {
+      return row.value as GlobalPreferences[K];
+    }
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Set a single preference value
+ */
+export function setPreference<K extends GlobalPreferenceKey>(
+  key: K,
+  value: GlobalPreferences[K]
+): void {
+  const db = getGlobalDb();
+
+  try {
+    const serialized = typeof value === "string" ? value : JSON.stringify(value);
+
+    db.prepare(
+      `
+      INSERT INTO preferences (key, value, updated_at)
+      VALUES (?, ?, datetime('now'))
+      ON CONFLICT(key) DO UPDATE SET
+        value = excluded.value,
+        updated_at = datetime('now')
+    `
+    ).run(key, serialized);
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Get all preferences
+ */
+export function getAllPreferences(): GlobalPreferences {
+  const db = getGlobalDb();
+
+  try {
+    const rows = db
+      .prepare("SELECT key, value FROM preferences")
+      .all() as Array<{ key: string; value: string }>;
+
+    const prefs: GlobalPreferences = {};
+
+    for (const row of rows) {
+      try {
+        (prefs as Record<string, unknown>)[row.key] = JSON.parse(row.value);
+      } catch {
+        (prefs as Record<string, unknown>)[row.key] = row.value;
+      }
+    }
+
+    return prefs;
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Set multiple preferences at once
+ */
+export function setPreferences(prefs: Partial<GlobalPreferences>): void {
+  const db = getGlobalDb();
+
+  try {
+    const stmt = db.prepare(`
+      INSERT INTO preferences (key, value, updated_at)
+      VALUES (?, ?, datetime('now'))
+      ON CONFLICT(key) DO UPDATE SET
+        value = excluded.value,
+        updated_at = datetime('now')
+    `);
+
+    const transaction = db.transaction(() => {
+      for (const [key, value] of Object.entries(prefs)) {
+        if (value !== undefined) {
+          const serialized = typeof value === "string" ? value : JSON.stringify(value);
+          stmt.run(key, serialized);
+        }
+      }
+    });
+
+    transaction();
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Delete a preference
+ */
+export function deletePreference(key: GlobalPreferenceKey): void {
+  const db = getGlobalDb();
+
+  try {
+    db.prepare("DELETE FROM preferences WHERE key = ?").run(key);
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Clear all preferences
+ */
+export function clearAllPreferences(): void {
+  const db = getGlobalDb();
+
+  try {
+    db.prepare("DELETE FROM preferences").run();
+  } finally {
+    db.close();
+  }
 }
