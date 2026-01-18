@@ -13,7 +13,13 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "skills",
+    "agents",
+    "rules",
+    "commands",
+    "scripts",
+    "settings.json"
   ],
   "scripts": {
     "build": "unbuild",
