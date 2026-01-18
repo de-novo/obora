@@ -10,6 +10,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEBUG_LOG="${SCRIPT_DIR}/../../logs/hook-debug.log"
 mkdir -p "$(dirname "$DEBUG_LOG")"
 
+# OBORA_INTERNAL=true면 내부 호출이므로 스킵 (title-generate 등)
+if [ "$OBORA_INTERNAL" = "true" ]; then
+  exit 0
+fi
+
 # Dashboard DB 경로
 DB_PATH="${HOME}/.obora/dashboard.db"
 SESSION_FILE="${HOME}/.obora/current-session.txt"
