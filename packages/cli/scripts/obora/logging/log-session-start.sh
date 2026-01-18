@@ -46,16 +46,30 @@ if [ -n "$CWD" ] && [ "$CWD" != "null" ]; then
   PROJECT_ID=$(sqlite3 "$DB_PATH" "SELECT id FROM projects WHERE path = '$CWD' LIMIT 1;" 2>/dev/null)
 fi
 
-# 프로젝트가 없으면 기본 프로젝트 사용 또는 생성
+# 프로젝트가 없으면 CWD 기반으로 새 프로젝트 자동 생성
 if [ -z "$PROJECT_ID" ]; then
-  PROJECT_ID=$(sqlite3 "$DB_PATH" "SELECT id FROM projects WHERE name = 'Claude Code Sessions' LIMIT 1;" 2>/dev/null)
+  # CWD에서 프로젝트 이름 추출 (마지막 디렉토리명)
+  if [ -n "$CWD" ] && [ "$CWD" != "null" ] && [ "$CWD" != "/" ]; then
+    PROJECT_NAME=$(basename "$CWD")
+    # 경로 해시로 고유 ID 생성
+    PATH_HASH=$(echo "$CWD" | md5 | head -c 16)
+    PROJECT_ID="proj_${PATH_HASH}"
 
-  if [ -z "$PROJECT_ID" ]; then
-    PROJECT_ID="proj_claude_code"
     sqlite3 "$DB_PATH" <<EOF 2>> "$DEBUG_LOG"
 INSERT OR IGNORE INTO projects (id, name, path, description, color, status)
-VALUES ('$PROJECT_ID', 'Claude Code Sessions', '${CWD:-/}', 'Auto-created for Claude Code sessions', '#8b5cf6', 'active');
+VALUES ('$PROJECT_ID', '$PROJECT_NAME', '$CWD', 'Auto-created from Claude Code session', '#6366f1', 'active');
 EOF
+    echo "Auto-created project: $PROJECT_NAME ($PROJECT_ID)" >> "$DEBUG_LOG"
+  else
+    # CWD가 없거나 루트인 경우 기본 프로젝트 사용
+    PROJECT_ID=$(sqlite3 "$DB_PATH" "SELECT id FROM projects WHERE name = 'Default' LIMIT 1;" 2>/dev/null)
+    if [ -z "$PROJECT_ID" ]; then
+      PROJECT_ID="proj_default"
+      sqlite3 "$DB_PATH" <<EOF 2>> "$DEBUG_LOG"
+INSERT OR IGNORE INTO projects (id, name, path, description, color, status)
+VALUES ('$PROJECT_ID', 'Default', '/', 'Default project for unknown paths', '#8b5cf6', 'active');
+EOF
+    fi
   fi
 fi
 
