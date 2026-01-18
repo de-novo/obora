@@ -94,7 +94,7 @@ globs:
 유형_선택:
   Discovery:
     조건: 요구사항 정리만 필요
-    트리거: "/interview" 또는 명시적 요청
+    트리거: "/obora-interview" 또는 명시적 요청
     흐름: interviewer → 문서 출력
 
   QuickFix:
@@ -118,7 +118,7 @@ globs:
 ```
 요청 수신
     │
-    ├─ "/interview" 명령? ─────────────────→ Discovery
+    ├─ "/obora-interview" 명령? ─────────────→ Discovery
     │
     ├─ 구체적인 버그/에러? ────────────────→ QuickFix
     │
@@ -466,7 +466,7 @@ if iteration >= max_iterations:
 
 | 유형 | 트리거 | 흐름 | Phase 1 |
 |------|--------|------|---------|
-| **Discovery** | /interview | interviewer → 문서 | ✅ 필수 |
+| **Discovery** | /obora-interview | interviewer → 문서 | ✅ 필수 |
 | **QuickFix** | 명확한 버그 | fix → test → review | ❌ 생략 |
 | **Feature** | 구체적 기능 | planner → impl → test → review | ❌ 생략 |
 | **FullFeature** | 모호한 기능 | **interviewer** → planner → impl → test → review | ✅ 필수 |
@@ -497,9 +497,9 @@ if iteration >= max_iterations:
   - 피드백 루프 생략 (코드 변경 시)
 
 예외:
-  - /commit: 커밋만 수행
-  - /review: 리뷰만 수행
-  - /interview: 인터뷰만 수행
+  - /obora-commit: 커밋만 수행
+  - /obora-review: 리뷰만 수행
+  - /obora-interview: 인터뷰만 수행
 ```
 
 ### Phase 1 임의 생략 금지
@@ -552,6 +552,7 @@ if iteration >= max_iterations:
 
 | Command | 단축키 | 설명 |
 |---------|--------|------|
+| `/obora-workflow <요청>` | `/ow` | 자동 워크플로우 판단 및 실행 |
 | `/obora-interview <요청>` | - | 요구사항 인터뷰 (Phase 1만 실행) |
 | `/obora-implement <설명>` | `/oi` | 새 기능 구현 |
 | `/obora-fix <버그>` | `/of` | 버그 수정 |
@@ -560,15 +561,9 @@ if iteration >= max_iterations:
 
 ---
 
-## 참조
+## 디스커버리 스크립트
 
 ```yaml
-에이전트: ".claude/agents/**/*.md"      # obora + 사용자 모두
-스킬: ".claude/skills/**/SKILL.md"      # obora + 사용자 모두
-커맨드: ".claude/commands/**/*.md"      # obora + 사용자 모두
-공용_원칙: ".claude/agents/obora/_shared-principles.md"
-
-디스커버리_스크립트:
-  에이전트: ".claude/skills/obora/obora-agent-discovery/scripts/discover-agents.sh"
-  스킬: ".claude/skills/obora/obora-skill-discovery/scripts/discover-skills.sh"
+에이전트: ".claude/skills/obora/obora-agent-discovery/scripts/discover-agents.sh"
+스킬: ".claude/skills/obora/obora-skill-discovery/scripts/discover-skills.sh"
 ```

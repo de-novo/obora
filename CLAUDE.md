@@ -227,12 +227,3 @@ obora sync -f           # 강제 덮어쓰기
 obora sync -l           # 사용 가능한 에셋 목록
 ```
 
-## 참조
-
-```yaml
-Rules: ".claude/rules/"
-Agents: ".claude/agents/obora/"
-Commands: ".claude/commands/obora/"
-Skills: ".claude/skills/obora/"
-Scripts: ".claude/scripts/obora/"
-```
