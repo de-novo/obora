@@ -2,9 +2,12 @@ import { NextResponse } from "next/server";
 import { getDashboardStats } from "@/lib/queries";
 import { getSafeErrorMessage, type ApiResponse } from "@/lib/types";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const stats = getDashboardStats();
+    const { searchParams } = new URL(request.url);
+    const projectId = searchParams.get("projectId") || undefined;
+
+    const stats = getDashboardStats(projectId);
 
     const response: ApiResponse<typeof stats> = {
       success: true,

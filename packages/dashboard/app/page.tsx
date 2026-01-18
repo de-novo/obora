@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { fetchStats, queryKeys } from "@/lib/api";
+import { useProject } from "@/app/providers";
 
 function formatTokens(tokens: number): string {
   if (tokens >= 1000000) {
@@ -15,9 +16,12 @@ function formatTokens(tokens: number): string {
 }
 
 export default function DashboardPage() {
+  const { selectedProject } = useProject();
+  const projectId = selectedProject?.id;
+
   const { data: stats, isLoading, error } = useQuery({
-    queryKey: queryKeys.stats,
-    queryFn: fetchStats,
+    queryKey: queryKeys.stats(projectId),
+    queryFn: () => fetchStats(projectId),
     refetchInterval: 5000, // 5초마다 갱신
   });
 

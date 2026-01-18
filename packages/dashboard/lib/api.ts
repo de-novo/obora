@@ -43,8 +43,9 @@ async function postApi<T, B>(endpoint: string, body: B): Promise<T> {
 // Stats
 // ============================================================================
 
-export async function fetchStats(): Promise<DashboardStats> {
-  return fetchApi<DashboardStats>("/api/stats");
+export async function fetchStats(projectId?: string): Promise<DashboardStats> {
+  const query = projectId ? `?projectId=${projectId}` : "";
+  return fetchApi<DashboardStats>(`/api/stats${query}`);
 }
 
 // ============================================================================
@@ -85,8 +86,10 @@ export async function fetchSession(id: string): Promise<SessionDetailData> {
 // Workflows
 // ============================================================================
 
-export async function fetchWorkflows(limit = 50): Promise<WorkflowSummary[]> {
-  return fetchApi<WorkflowSummary[]>(`/api/workflows?limit=${limit}`);
+export async function fetchWorkflows(limit = 50, projectId?: string): Promise<WorkflowSummary[]> {
+  const params = new URLSearchParams({ limit: limit.toString() });
+  if (projectId) params.set("projectId", projectId);
+  return fetchApi<WorkflowSummary[]>(`/api/workflows?${params.toString()}`);
 }
 
 export interface WorkflowWithDetails extends Workflow {
@@ -103,11 +106,11 @@ export async function fetchWorkflow(id: string): Promise<WorkflowWithDetails> {
 // ============================================================================
 
 export const queryKeys = {
-  stats: ["stats"] as const,
+  stats: (projectId?: string) => ["stats", { projectId }] as const,
   projects: ["projects"] as const,
   project: (id: string) => ["projects", id] as const,
   sessions: (projectId?: string) => ["sessions", { projectId }] as const,
   session: (id: string) => ["sessions", id] as const,
-  workflows: (limit?: number) => ["workflows", { limit }] as const,
+  workflows: (limit?: number, projectId?: string) => ["workflows", { limit, projectId }] as const,
   workflow: (id: string) => ["workflows", id] as const,
 };

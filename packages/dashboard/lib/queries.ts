@@ -725,13 +725,13 @@ export function getWorkflowWithDetails(id: string): WorkflowWithSteps | null {
 }
 
 /**
- * Get recent workflows across all projects
+ * Get recent workflows (optionally filtered by project)
  */
-export function getRecentWorkflows(limit = 20): WorkflowSummary[] {
+export function getRecentWorkflows(limit = 20, projectId?: string): WorkflowSummary[] {
   const db = getDb();
   if (!db) return [];
 
-  const rows = db
+  let query = db
     .select({
       id: schema.workflows.id,
       name: schema.workflows.name,
@@ -749,6 +749,13 @@ export function getRecentWorkflows(limit = 20): WorkflowSummary[] {
     .from(schema.workflows)
     .innerJoin(schema.sessions, eq(schema.sessions.id, schema.workflows.sessionId))
     .innerJoin(schema.projects, eq(schema.projects.id, schema.sessions.projectId))
+    .$dynamic();
+
+  if (projectId) {
+    query = query.where(eq(schema.sessions.projectId, projectId));
+  }
+
+  const rows = query
     .orderBy(desc(schema.workflows.startedAt))
     .limit(limit)
     .all();
@@ -847,9 +854,9 @@ export interface DashboardStats {
 }
 
 /**
- * Get dashboard overview stats
+ * Get dashboard overview stats (optionally filtered by project)
  */
-export function getDashboardStats(): DashboardStats {
+export function getDashboardStats(projectId?: string): DashboardStats {
   const db = getDb();
   if (!db) {
     return {
@@ -861,6 +868,42 @@ export function getDashboardStats(): DashboardStats {
     };
   }
 
+  // If projectId is provided, filter stats for that project only
+  if (projectId) {
+    const activeSessionCount = db
+      .select({ count: count() })
+      .from(schema.sessions)
+      .where(and(
+        eq(schema.sessions.status, "active"),
+        eq(schema.sessions.projectId, projectId)
+      ))
+      .get();
+
+    const workflowCount = db
+      .select({ count: count() })
+      .from(schema.workflows)
+      .innerJoin(schema.sessions, eq(schema.sessions.id, schema.workflows.sessionId))
+      .where(eq(schema.sessions.projectId, projectId))
+      .get();
+
+    const totalTokens = db
+      .select({ total: sql<number>`COALESCE(SUM(${schema.sessions.totalTokens}), 0)` })
+      .from(schema.sessions)
+      .where(eq(schema.sessions.projectId, projectId))
+      .get();
+
+    const recentWorkflows = getRecentWorkflows(10, projectId);
+
+    return {
+      totalProjects: 1, // Single project selected
+      activeSessions: activeSessionCount?.count ?? 0,
+      totalWorkflows: workflowCount?.count ?? 0,
+      totalTokens: totalTokens?.total ?? 0,
+      recentWorkflows,
+    };
+  }
+
+  // All projects stats
   const projectCount = db
     .select({ count: count() })
     .from(schema.projects)

@@ -4,11 +4,15 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { WorkflowListItem } from "../components/WorkflowFlow";
 import { fetchWorkflows, queryKeys } from "@/lib/api";
+import { useProject } from "@/app/providers";
 
 export default function WorkflowsPage() {
+  const { selectedProject } = useProject();
+  const projectId = selectedProject?.id;
+
   const { data: workflows = [], isLoading, error } = useQuery({
-    queryKey: queryKeys.workflows(50),
-    queryFn: () => fetchWorkflows(50),
+    queryKey: queryKeys.workflows(50, projectId),
+    queryFn: () => fetchWorkflows(50, projectId),
     refetchInterval: (query) => {
       // 진행 중인 워크플로우가 있으면 2초마다 갱신
       const data = query.state.data;
