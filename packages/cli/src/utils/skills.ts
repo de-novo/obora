@@ -9,8 +9,8 @@ import { consola } from "consola";
 function getPackageRoot(): string {
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = dirname(__filename);
-  // From dist/utils/skills.mjs -> ../..
-  return join(__dirname, "..", "..");
+  // After unbuild bundling: dist/index.mjs -> ..
+  return join(__dirname, "..");
 }
 
 /**
