@@ -131,11 +131,12 @@ Phase_5:
 
 | Command | 유형 | 설명 |
 |---------|------|------|
-| `/interview <요청>` | Discovery | 요구사항 인터뷰 (Phase 1만 실행) |
-| `/implement <설명>` | Feature/FullFeature | 새 기능 구현 |
-| `/fix <버그>` | QuickFix/Feature | 버그 수정 |
-| `/commit` | - | 커밋 (직접 실행) |
-| `/review <대상>` | - | 코드 리뷰 (직접 실행) |
+| `/obora-workflow <요청>` | Auto | 자동 워크플로우 판단 및 실행 |
+| `/obora-interview <요청>` | Discovery | 요구사항 인터뷰 (Phase 1만 실행) |
+| `/obora-implement <설명>` | Feature/FullFeature | 새 기능 구현 |
+| `/obora-fix <버그>` | QuickFix/Feature | 버그 수정 |
+| `/obora-commit` | - | 커밋 (직접 실행) |
+| `/obora-review <대상>` | - | 코드 리뷰 (직접 실행) |
 
 ## 필수 규칙
 
@@ -199,7 +200,7 @@ Phase_5:
   세션2: /implement → DB 조회 → 요구사항 발견 → planner 전달
 
 조회_스크립트:
-  .claude/scripts/queries/get-recent-interview.sh
+  .claude/scripts/obora/queries/get-recent-interview.sh
 ```
 
 ## 워크플로우 제목 자동 업데이트
@@ -209,15 +210,29 @@ Phase_5:
 ```yaml
 컨텍스트: ~/.obora/workflow-context.json
 스킬: .claude/skills/obora/obora-workflow-title/SKILL.md
-스크립트: .claude/scripts/workflow/update-workflow.sh <id> title "<제목>"
+스크립트: .claude/scripts/obora/workflow/update-workflow.sh <id> title "<제목>"
+```
+
+## CLI 명령어
+
+```bash
+# 프로젝트 초기화 (에셋 자동 동기화)
+obora init
+
+# 에셋 동기화 (업데이트 시)
+obora sync              # 전체 동기화
+obora sync -t skills    # 스킬만 동기화
+obora sync -t settings  # 설정(훅)만 동기화
+obora sync -f           # 강제 덮어쓰기
+obora sync -l           # 사용 가능한 에셋 목록
 ```
 
 ## 참조
 
 ```yaml
-Rules: ".claude/rules/workflow/agent-workflow.md"
-Agents: ".claude/agents/**/*.md"
-Commands: ".claude/commands/**/*.md"
-Skills: ".claude/skills/**/*.md"
-Scripts: ".claude/scripts/**/*.sh"
+Rules: ".claude/rules/"
+Agents: ".claude/agents/obora/"
+Commands: ".claude/commands/obora/"
+Skills: ".claude/skills/obora/"
+Scripts: ".claude/scripts/obora/"
 ```
