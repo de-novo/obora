@@ -31,7 +31,7 @@ npx @obora/kit create my-project
 
 ## 빠른 시작
 
-### Monorepo (NestJS + Next.js)
+### 1. 새 프로젝트 생성
 
 ```bash
 # 풀스택 SaaS 프로젝트 생성
@@ -44,23 +44,56 @@ obora create my-saas
 
 cd my-saas
 pnpm install
-pnpm dev
 ```
 
-### Single App
+### 2. AI 에셋 초기화 (Claude Code 통합)
 
 ```bash
+# AI 에이전트, 스킬, 룰 설정
+obora init
+
+# 결과:
+# ✅ .claude/ 디렉토리 생성 (에이전트, 스킬, 룰)
+# ✅ Claude Code hooks 설정
+# ✅ CLAUDE.md 워크플로우 가이드 생성
+```
+
+### 3. 개발 시작
+
+```bash
+# 개발 서버 실행
+pnpm dev
+
+# Claude Code로 AI 워크플로우 사용
+# - /obora-implement "새 기능 구현"
+# - /obora-fix "버그 수정"
+# - /obora-commit "변경사항 커밋"
+```
+
+### 기존 프로젝트에 적용
+
+```bash
+cd existing-project
+
+# AI 에셋만 추가 (스캐폴딩 없이)
+obora init
+
+# 또는 특정 에셋만 동기화
+obora sync -t skills    # 스킬만
+obora sync -t settings  # hooks 설정만
+```
+
+### 템플릿 옵션
+
+```bash
+# Monorepo (NestJS + Next.js)
+obora create my-saas --base monorepo
+
 # NestJS API만
-obora create my-api
-# - Base: single
-# - Apps: nestjs-api
-# - Presets: drizzle, clerk, resend
+obora create my-api --base single --apps nestjs-api
 
 # Next.js Web만
-obora create my-web
-# - Base: single
-# - Apps: nextjs-web
-# - Presets: clerk-nextjs, umami
+obora create my-web --base single --apps nextjs-web
 ```
 
 ## 구조
@@ -173,13 +206,29 @@ obora-kit/
 
 ## CLI 명령어
 
+### 프로젝트 스캐폴딩
+
 ```bash
 obora create <name>           # 새 프로젝트 생성
-obora init                    # 기존 프로젝트에 obora 초기화
 obora add <preset>            # 프리셋 추가
 obora remove <preset>         # 프리셋 제거
 obora status                  # 현재 설정 상태 확인
 obora list                    # 사용 가능한 템플릿/프리셋 목록
+```
+
+### AI 에셋 관리
+
+```bash
+obora init                    # AI 에셋(에이전트, 스킬, 룰) 초기화
+obora sync                    # AI 에셋 동기화 (최신 버전으로 업데이트)
+obora sync -t skills          # 특정 에셋만 동기화
+obora sync -l                 # 사용 가능한 에셋 목록
+```
+
+### 유틸리티
+
+```bash
+obora doctor                  # 프로젝트 설정 진단
 obora llm-help                # LLM 친화적 문서 출력
 ```
 
@@ -276,6 +325,72 @@ obora create my-saas \
 | Email | Resend |
 | AI | Vercel AI SDK |
 | Linting | Biome |
+
+## AI 통합 (Claude Code)
+
+obora-kit은 Claude Code와의 통합을 통해 AI 기반 워크플로우 자동화를 제공합니다.
+
+### 초기 설정
+
+```bash
+# 기존 프로젝트에 AI 에셋 초기화
+cd my-project
+obora init
+
+# 생성되는 구조:
+# .claude/
+# ├── agents/          # AI 에이전트 정의
+# ├── skills/          # 재사용 가능한 스킬
+# ├── rules/           # 코드 규칙 및 가이드라인
+# ├── scripts/         # 자동화 스크립트
+# └── settings.json    # Claude Code 설정 (hooks 등)
+```
+
+### AI 에셋 동기화
+
+새 버전의 에셋이 릴리즈되면 동기화:
+
+```bash
+obora sync              # 전체 동기화
+obora sync -t skills    # 스킬만 동기화
+obora sync -t settings  # 설정(hooks)만 동기화
+obora sync -f           # 강제 덮어쓰기
+```
+
+### Claude Code 워크플로우
+
+`/obora-*` 슬래시 명령어로 AI 워크플로우 실행:
+
+| 명령어 | 설명 |
+|--------|------|
+| `/obora-workflow <요청>` | 자동 워크플로우 판단 및 실행 |
+| `/obora-implement <설명>` | 새 기능 구현 |
+| `/obora-fix <버그>` | 버그 수정 |
+| `/obora-commit` | 커밋 생성 |
+| `/obora-review` | 코드 리뷰 |
+
+## 대시보드
+
+Claude Code 세션과 워크플로우를 모니터링하는 웹 대시보드:
+
+```bash
+# 대시보드 실행
+cd packages/dashboard
+pnpm dev
+
+# http://localhost:3847 에서 접속
+```
+
+### 기능
+
+- **프로젝트별 필터링**: 여러 프로젝트의 세션을 분리하여 확인
+- **세션 모니터링**: 활성/완료된 Claude 세션 추적
+- **워크플로우 추적**: 실행된 워크플로우 상태 및 결과 확인
+- **토큰 사용량**: 프로젝트별 토큰 소비량 모니터링
+
+### 데이터 저장
+
+세션 및 워크플로우 데이터는 `~/.obora/dashboard.db` (SQLite)에 저장됩니다.
 
 ## 개발
 

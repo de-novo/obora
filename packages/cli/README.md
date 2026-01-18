@@ -5,40 +5,24 @@ CLI for obora-labs project scaffolding and AI-powered workflow orchestration.
 ## Installation
 
 ```bash
-# Global install
+# Global install (npm)
 npm install -g obora
 
 # Or use npx
 npx obora create my-app
+
+# Development mode
+git clone https://github.com/obora-labs/obora-kit.git
+cd obora-kit/packages/cli
+pnpm install && pnpm dev:stub
+npm link
 ```
 
 ## Commands
 
-### Workflow Commands
+### Project Scaffolding
 
-#### `obora run`
-
-Execute an AI-powered workflow for a given task.
-
-```bash
-# Interactive mode
-obora run "Implement user authentication"
-
-# With specific agent
-obora run --agent implementer "Add login form"
-```
-
-#### `obora chat`
-
-Start an interactive chat session with AI agent.
-
-```bash
-obora chat
-```
-
-### Project Commands
-
-### `obora create`
+#### `obora create`
 
 Create a new project from a template.
 
@@ -53,14 +37,8 @@ obora create my-app -t nestjs-api
 obora create my-app -p clerk,drizzle,polar
 
 # With package manager
-obora create my-app --pm npm
-obora create my-app --pm bun
-
-# Skip prompts (use defaults: pnpm)
-obora create my-app -y
+obora create my-app --pm pnpm
 ```
-
-**Options:**
 
 | Flag | Alias | Description |
 |------|-------|-------------|
@@ -70,88 +48,184 @@ obora create my-app -y
 | `--pm` | - | Package manager (pnpm, npm, yarn, bun) |
 | `--yes` | `-y` | Skip confirmation prompts |
 
-### `obora add`
+#### `obora add`
 
 Add a preset to an existing project.
 
 ```bash
-# Interactive mode
-obora add
-
-# Specific preset
 obora add clerk
-
-# In different directory
 obora add drizzle -d ./my-project
 ```
 
-**Options:**
+#### `obora remove`
 
-| Flag | Alias | Description |
-|------|-------|-------------|
-| `--dir` | `-d` | Project directory |
+Remove a preset from the project.
 
-### `obora list`
+```bash
+obora remove clerk
+```
+
+#### `obora list`
 
 List available templates and presets.
 
 ```bash
-# List all
-obora list
-
-# Templates only
-obora list -t templates
-
-# Presets only
-obora list -t presets
-
-# Presets by category
-obora list -t presets -c auth
+obora list                    # List all
+obora list -t templates       # Templates only
+obora list -t presets -c auth # Presets by category
 ```
 
-**Options:**
+### AI Asset Management
+
+#### `obora init`
+
+Initialize obora AI assets (Claude Code integration) in an existing project.
+
+```bash
+# Initialize in current directory
+obora init
+
+# Initialize in specific directory
+obora init -d ./my-project
+
+# Force overwrite existing config
+obora init -f
+```
+
+This command:
+- Creates `.claude/` directory structure
+- Copies agents, skills, rules, scripts, and hooks
+- Sets up Claude Code workflow integration
+- Creates `.obora/` config if not exists
 
 | Flag | Alias | Description |
 |------|-------|-------------|
-| `--type` | `-t` | Filter: templates, presets |
-| `--category` | `-c` | Filter presets by category |
+| `--dir` | `-d` | Project directory |
+| `--force` | `-f` | Overwrite existing .obora config |
+| `--yes` | `-y` | Skip confirmation prompts |
+
+#### `obora sync`
+
+Sync obora assets (skills, agents, rules, commands, scripts, hooks) to a project.
+
+```bash
+# Sync all assets
+obora sync
+
+# Sync specific asset type
+obora sync -t skills
+obora sync -t settings
+
+# Sync to different directory
+obora sync -d ./my-project
+
+# Force overwrite
+obora sync -f
+
+# List available assets
+obora sync -l
+```
+
+| Flag | Alias | Description |
+|------|-------|-------------|
+| `--dir` | `-d` | Project directory |
+| `--force` | `-f` | Overwrite existing files |
+| `--type` | `-t` | Sync type: skills, agents, rules, commands, scripts, settings, all |
+| `--list` | `-l` | List available assets |
+
+### Project Management
+
+#### `obora status`
+
+Show current project configuration status.
+
+```bash
+obora status
+```
+
+#### `obora doctor`
+
+Diagnose project health and configuration issues.
+
+```bash
+obora doctor
+```
+
+#### `obora upgrade`
+
+Upgrade presets to latest versions.
+
+```bash
+obora upgrade
+```
+
+#### `obora eject`
+
+Eject preset configuration files for customization.
+
+```bash
+obora eject
+```
+
+### AI Workflow (Experimental)
+
+#### `obora run`
+
+Execute a single task with workflow enforcement.
+
+```bash
+obora run "Implement user authentication"
+obora run --agent implementer "Add login form"
+```
+
+#### `obora chat`
+
+Interactive workflow orchestrator (enforces agent workflows).
+
+```bash
+obora chat
+```
+
+### Utilities
+
+#### `obora llm-help`
+
+Output LLM-friendly documentation for AI assistants.
+
+```bash
+obora llm-help
+```
+
+#### `obora config`
+
+Manage global obora preferences.
+
+```bash
+obora config
+```
 
 ## Templates
 
 | Template | Description |
 |----------|-------------|
-| `turbo-nextjs-full` | Full-stack Next.js 15 + Turborepo |
-| `nestjs-api` | NestJS 10 API with Fastify |
+| `monorepo` | Full-stack monorepo (NestJS + Next.js) |
+| `single` | Single app project |
+| `nestjs-api` | NestJS 11 API with Fastify |
+| `nextjs-web` | Next.js 15 Web App |
 
 ## Presets
 
-### Auth
-- `clerk` - Clerk authentication
-- `better-auth` - Self-hosted authentication
-
-### Database
-- `drizzle` - Drizzle ORM
-- `prisma` - Prisma ORM
-
-### Payment
-- `polar` - Polar payments (MoR)
-- `paddle` - Paddle payments (MoR)
-
-### Analytics
-- `umami` - Umami analytics
-- `posthog` - PostHog analytics
-
-### Email
-- `resend` - Resend email
-
-### AI
-- `vercel-ai` - Vercel AI SDK
-
-### Storage
-- `uploadthing` - UploadThing file uploads
-
-### Validation
-- `effect-schema` - @effect/schema validation
+| Category | Presets |
+|----------|---------|
+| Auth | `clerk`, `clerk-nextjs`, `better-auth` |
+| Database | `drizzle`, `prisma` |
+| Payment | `polar`, `paddle` |
+| Analytics | `umami`, `posthog` |
+| Email | `resend` |
+| AI | `vercel-ai` |
+| Storage | `uploadthing`, `cloudflare-r2` |
+| Validation | `zod`, `effect-schema` |
+| Linting | `biome`, `eslint-prettier` |
 
 ## Development
 
@@ -159,14 +233,17 @@ obora list -t presets -c auth
 # Install dependencies
 pnpm install
 
-# Development mode (with stub)
-pnpm dev
+# Development mode (with stub - changes apply instantly)
+pnpm dev:stub
 
 # Build
 pnpm build
 
+# Link globally
+npm link
+
 # Test locally
-node bin/obora.mjs create test-app
+obora --version
 ```
 
 ## License
