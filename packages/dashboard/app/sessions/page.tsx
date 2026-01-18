@@ -3,11 +3,15 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { fetchSessions, queryKeys } from "@/lib/api";
+import { useProject } from "@/app/providers";
 
 export default function SessionsPage() {
+  const { selectedProject } = useProject();
+  const projectId = selectedProject?.id;
+
   const { data: sessions = [], isLoading } = useQuery({
-    queryKey: queryKeys.sessions(),
-    queryFn: () => fetchSessions(),
+    queryKey: queryKeys.sessions(projectId),
+    queryFn: () => fetchSessions(projectId),
     refetchInterval: (query) => {
       const data = query.state.data;
       const hasActive = data?.some((s) => s.status === "active");
@@ -31,7 +35,21 @@ export default function SessionsPage() {
     <div className="canvas-grid h-full overflow-auto p-6">
       <div className="mb-6">
         <h1 className="text-lg font-semibold text-foreground">Sessions</h1>
-        <p className="text-sm text-muted-foreground">All Claude Code sessions</p>
+        <p className="text-sm text-muted-foreground">
+          {selectedProject ? (
+            <>
+              <span
+                className="mr-1.5 inline-block size-2 rounded-full align-middle"
+                style={{ backgroundColor: selectedProject.color }}
+              />
+              {selectedProject.name}
+            </>
+          ) : (
+            "All projects"
+          )}
+          {" · "}
+          {sessions.length} session{sessions.length !== 1 ? "s" : ""}
+        </p>
       </div>
 
       {sessions.length === 0 ? (
@@ -56,11 +74,18 @@ export default function SessionsPage() {
                     </svg>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-foreground">
-                      Session {session.id.slice(0, 8)}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-foreground">
+                        Session {session.id.slice(0, 8)}
+                      </p>
+                      {!selectedProject && session.projectName && (
+                        <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                          {session.projectName}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-muted-foreground">
-                      {session.workflowCount} workflows
+                      {session.workflowCount} workflow{session.workflowCount !== 1 ? "s" : ""}
                     </p>
                   </div>
                 </div>

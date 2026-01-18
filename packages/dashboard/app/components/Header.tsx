@@ -1,10 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchProjects, queryKeys } from "@/lib/api";
-import { useTheme } from "@/app/providers";
-import type { Project } from "@/lib/types";
+import { useTheme, useProject } from "@/app/providers";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,10 +11,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
-import { ChevronDown, Sun, Moon, FolderOpen, Check } from "lucide-react";
+import { ChevronDown, Sun, Moon, FolderOpen, Check, Layers } from "lucide-react";
 
 export function Header() {
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const { selectedProject, setSelectedProject } = useProject();
   const isConnected = true;
   const { theme, toggleTheme } = useTheme();
 
@@ -25,16 +23,6 @@ export function Header() {
     queryFn: fetchProjects,
     refetchInterval: 30000,
   });
-
-  useEffect(() => {
-    if (projects.length > 0 && !selectedProject) {
-      setSelectedProject(projects[0]);
-    }
-  }, [projects, selectedProject]);
-
-  const handleProjectSelect = (project: Project) => {
-    setSelectedProject(project);
-  };
 
   return (
     <header className="flex h-12 items-center justify-between border-b border-border bg-card px-4">
@@ -56,7 +44,10 @@ export function Header() {
                     {selectedProject.name}
                   </>
                 ) : (
-                  <span className="text-muted-foreground">Select project</span>
+                  <>
+                    <Layers className="size-3.5 text-muted-foreground" />
+                    <span>All Projects</span>
+                  </>
                 )}
                 <ChevronDown className="size-4 text-muted-foreground" />
               </button>
@@ -65,6 +56,20 @@ export function Header() {
               <DropdownMenuLabel className="text-xs text-muted-foreground">
                 Projects
               </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {/* All Projects Option */}
+              <DropdownMenuItem
+                onClick={() => setSelectedProject(null)}
+                className="flex items-center justify-between cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <Layers className="size-3.5 text-muted-foreground" />
+                  <span>All Projects</span>
+                </div>
+                {selectedProject === null && (
+                  <Check className="size-4 text-primary" />
+                )}
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               {projects.length === 0 ? (
                 <div className="px-2 py-4 text-center text-sm text-muted-foreground">
@@ -76,7 +81,7 @@ export function Header() {
                 projects.map((project) => (
                   <DropdownMenuItem
                     key={project.id}
-                    onClick={() => handleProjectSelect(project)}
+                    onClick={() => setSelectedProject(project)}
                     className="flex items-center justify-between cursor-pointer"
                   >
                     <div className="flex items-center gap-2">

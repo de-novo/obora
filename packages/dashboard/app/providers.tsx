@@ -9,6 +9,11 @@ import {
   type ReactNode,
 } from "react";
 import { Toaster } from "sonner";
+import type { Project } from "@/lib/types";
+
+// ============================================================================
+// Theme Context
+// ============================================================================
 
 type Theme = "light" | "dark";
 
@@ -25,6 +30,35 @@ export function useTheme() {
     throw new Error("useTheme must be used within ThemeProvider");
   }
   return context;
+}
+
+// ============================================================================
+// Project Context
+// ============================================================================
+
+type ProjectContextType = {
+  selectedProject: Project | null;
+  setSelectedProject: (project: Project | null) => void;
+};
+
+const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
+
+export function useProject() {
+  const context = useContext(ProjectContext);
+  if (!context) {
+    throw new Error("useProject must be used within ProjectProvider");
+  }
+  return context;
+}
+
+function ProjectProvider({ children }: { children: ReactNode }) {
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+
+  return (
+    <ProjectContext.Provider value={{ selectedProject, setSelectedProject }}>
+      {children}
+    </ProjectContext.Provider>
+  );
 }
 
 function ThemeProvider({ children }: { children: ReactNode }) {
@@ -81,18 +115,20 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        {children}
-        <Toaster
-          position="bottom-right"
-          toastOptions={{
-            className: "bg-card border-border text-foreground",
-            style: {
-              background: "var(--color-card)",
-              border: "1px solid var(--color-border)",
-              color: "var(--color-foreground)",
-            },
-          }}
-        />
+        <ProjectProvider>
+          {children}
+          <Toaster
+            position="bottom-right"
+            toastOptions={{
+              className: "bg-card border-border text-foreground",
+              style: {
+                background: "var(--color-card)",
+                border: "1px solid var(--color-border)",
+                color: "var(--color-foreground)",
+              },
+            }}
+          />
+        </ProjectProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );
