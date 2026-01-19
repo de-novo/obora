@@ -525,6 +525,7 @@ interface WorkflowListItemProps {
     projectId?: string;
     projectName: string;
     projectColor: string;
+    cwd?: string | null;
   };
   onClick?: () => void;
 }
@@ -570,6 +571,11 @@ export function WorkflowListItem({ workflow, onClick }: WorkflowListItemProps) {
               <span className="truncate text-xs text-muted-foreground">
                 {workflow.projectName}
               </span>
+              {workflow.cwd && (
+                <span className="truncate text-xs text-muted-foreground/60" title={workflow.cwd}>
+                  · {workflow.cwd.split("/").slice(-2).join("/")}
+                </span>
+              )}
             </div>
             <h3 className="mb-1 truncate font-medium text-foreground">
               {workflow.name}

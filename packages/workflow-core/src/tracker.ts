@@ -41,6 +41,7 @@ export class WorkflowTracker {
   private db: DrizzleDb | null = null;
   private projectService: ProjectService;
   private project: ResolvedProject | null = null;
+  private cwd: string | null = null;
   private sessionId: string | null = null;
   private workflowId: string | null = null;
   private stepIds: Map<number, string> = new Map();
@@ -65,6 +66,9 @@ export class WorkflowTracker {
       console.warn("[Tracker] Database not available");
       return false;
     }
+
+    // cwd 저장
+    this.cwd = cwd;
 
     // 프로젝트 해석
     this.project = await this.projectService.resolveProject(cwd);
@@ -130,6 +134,7 @@ export class WorkflowTracker {
       .values({
         id,
         projectId: this.project.id,
+        cwd: this.cwd,
         status: "active",
       })
       .run();
@@ -211,6 +216,7 @@ export class WorkflowTracker {
       .values({
         id,
         sessionId: this.sessionId,
+        cwd: this.cwd,
         name,
         type,
         status: "planning",

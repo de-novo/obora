@@ -16,6 +16,31 @@ function formatTokens(tokens: number): string {
   return tokens.toString();
 }
 
+// Hoisted static JSX elements (vercel-react-best-practices: rendering-hoist-jsx)
+// Avoids recreating these elements on every render
+const statSkeletons = Array.from({ length: 4 }, (_, i) => (
+  <div key={i} className="h-28 animate-pulse rounded-xl bg-card" />
+));
+
+const loadingSkeleton = (
+  <div className="p-6 lg:p-8">
+    <div className="mb-6 h-8 w-48 animate-pulse rounded bg-card" />
+    <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 lg:gap-6">
+      {statSkeletons}
+    </div>
+  </div>
+);
+
+const emptyWorkflowsPlaceholder = (
+  <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-8">
+    <GitBranch className="mb-2 size-8 text-muted-foreground/50" />
+    <p className="text-sm text-muted-foreground">No workflows yet</p>
+    <p className="mt-1 text-xs text-muted-foreground/60">
+      Run <code className="rounded bg-muted px-1">/obora-workflow</code> to get started
+    </p>
+  </div>
+);
+
 const statsConfig = [
   {
     key: "projects",
@@ -62,16 +87,7 @@ export default function DashboardPage() {
   });
 
   if (isLoading) {
-    return (
-      <div className="p-6 lg:p-8">
-        <div className="mb-6 h-8 w-48 animate-pulse rounded bg-card" />
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 lg:gap-6">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-28 animate-pulse rounded-xl bg-card" />
-          ))}
-        </div>
-      </div>
-    );
+    return loadingSkeleton;
   }
 
   if (error || !stats) {
@@ -138,13 +154,7 @@ export default function DashboardPage() {
         </div>
 
         {stats.recentWorkflows.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-8">
-            <GitBranch className="mb-2 size-8 text-muted-foreground/50" />
-            <p className="text-sm text-muted-foreground">No workflows yet</p>
-            <p className="mt-1 text-xs text-muted-foreground/60">
-              Run <code className="rounded bg-muted px-1">/obora-workflow</code> to get started
-            </p>
-          </div>
+          emptyWorkflowsPlaceholder
         ) : (
           <div className="space-y-2">
             {stats.recentWorkflows.map((workflow) => (
@@ -180,7 +190,7 @@ export default function DashboardPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <p className="truncate text-sm font-medium">{workflow.name || "Untitled"}</p>
-                      {!selectedProject && workflow.projectName && (
+                      {workflow.projectName && (
                         <span className="flex shrink-0 items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                           <span
                             className="size-1.5 rounded-full"
@@ -190,7 +200,14 @@ export default function DashboardPage() {
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-muted-foreground">{workflow.type}</p>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span>{workflow.type}</span>
+                      {workflow.cwd && (
+                        <span className="truncate text-muted-foreground/60" title={workflow.cwd}>
+                          · {workflow.cwd.split("/").slice(-2).join("/")}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">

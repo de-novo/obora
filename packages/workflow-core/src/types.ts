@@ -74,6 +74,46 @@ export interface ProjectConfig {
   };
 }
 
+// ============================================================================
+// Project Manifest (auto-detected from package.json, Cargo.toml, etc.)
+// ============================================================================
+
+/**
+ * 프로젝트 타입 (매니페스트 파일 기반)
+ */
+export type ProjectType = "node" | "rust" | "python" | "go" | "ruby" | "java" | "unknown";
+
+/**
+ * 프로젝트 매니페스트 정보 (자동 감지)
+ */
+export interface ProjectManifest {
+  /** 프로젝트 타입 */
+  type: ProjectType;
+  /** 프로젝트 이름 (매니페스트에서 추출) */
+  name: string;
+  /** 프로젝트 설명 */
+  description?: string;
+  /** 버전 */
+  version?: string;
+  /** 리포지토리 URL */
+  repository?: string;
+  /** 매니페스트 파일 경로 */
+  manifestPath: string;
+}
+
+/**
+ * 프로젝트 타입별 색상/아이콘 설정
+ */
+export const PROJECT_TYPE_CONFIG: Record<ProjectType, { color: string; icon: string }> = {
+  node: { color: "#68a063", icon: "📦" },      // Node.js green
+  rust: { color: "#dea584", icon: "🦀" },      // Rust orange
+  python: { color: "#3776ab", icon: "🐍" },    // Python blue
+  go: { color: "#00add8", icon: "🐹" },        // Go cyan
+  ruby: { color: "#cc342d", icon: "💎" },      // Ruby red
+  java: { color: "#f89820", icon: "☕" },      // Java orange
+  unknown: { color: "#6366f1", icon: "📁" },   // Default indigo
+};
+
 /**
  * 프로젝트 식별자 (해석 우선순위)
  */
@@ -84,6 +124,8 @@ export interface ProjectIdentifier {
   gitRemote?: string;
   /** 프로젝트 로컬 경로 (fallback) */
   localPath: string;
+  /** 자동 감지된 매니페스트 정보 */
+  manifest?: ProjectManifest;
 }
 
 /**

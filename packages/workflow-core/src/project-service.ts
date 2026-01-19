@@ -23,7 +23,9 @@ import type {
   ProjectConfig,
   ProjectIdentifier,
   ResolvedProject,
+  ProjectManifest,
 } from "./types.js";
+import { PROJECT_TYPE_CONFIG } from "./types.js";
 
 // ============================================================================
 // Constants
@@ -143,6 +145,227 @@ function stringifyYaml(obj: Record<string, unknown>, indent = 0): string {
 }
 
 // ============================================================================
+// Project Manifest Detection
+// ============================================================================
+
+/**
+ * Detect and parse project manifest files
+ */
+function detectProjectManifest(projectRoot: string): ProjectManifest | null {
+  // Try each manifest type in order of priority
+  const detectors: Array<() => ProjectManifest | null> = [
+    () => parsePackageJson(projectRoot),
+    () => parseCargoToml(projectRoot),
+    () => parsePyprojectToml(projectRoot),
+    () => parseGoMod(projectRoot),
+    () => parseGemspec(projectRoot),
+    () => parsePomXml(projectRoot),
+  ];
+
+  for (const detector of detectors) {
+    const manifest = detector();
+    if (manifest) return manifest;
+  }
+
+  return null;
+}
+
+/**
+ * Parse package.json (Node.js/JavaScript/TypeScript)
+ */
+function parsePackageJson(projectRoot: string): ProjectManifest | null {
+  const filePath = join(projectRoot, "package.json");
+  if (!existsSync(filePath)) return null;
+
+  try {
+    const content = readFileSync(filePath, "utf-8");
+    const pkg = JSON.parse(content) as {
+      name?: string;
+      description?: string;
+      version?: string;
+      repository?: string | { url?: string };
+    };
+
+    if (!pkg.name) return null;
+
+    // Extract repository URL
+    let repository: string | undefined;
+    if (typeof pkg.repository === "string") {
+      repository = pkg.repository;
+    } else if (pkg.repository?.url) {
+      repository = pkg.repository.url;
+    }
+
+    return {
+      type: "node",
+      name: pkg.name,
+      description: pkg.description,
+      version: pkg.version,
+      repository,
+      manifestPath: filePath,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Parse Cargo.toml (Rust)
+ */
+function parseCargoToml(projectRoot: string): ProjectManifest | null {
+  const filePath = join(projectRoot, "Cargo.toml");
+  if (!existsSync(filePath)) return null;
+
+  try {
+    const content = readFileSync(filePath, "utf-8");
+
+    // Simple TOML parsing for [package] section
+    const nameMatch = content.match(/^\s*name\s*=\s*"([^"]+)"/m);
+    const descMatch = content.match(/^\s*description\s*=\s*"([^"]+)"/m);
+    const versionMatch = content.match(/^\s*version\s*=\s*"([^"]+)"/m);
+    const repoMatch = content.match(/^\s*repository\s*=\s*"([^"]+)"/m);
+
+    const name = nameMatch?.[1];
+    if (!name) return null;
+
+    return {
+      type: "rust",
+      name,
+      description: descMatch?.[1],
+      version: versionMatch?.[1],
+      repository: repoMatch?.[1],
+      manifestPath: filePath,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Parse pyproject.toml (Python)
+ */
+function parsePyprojectToml(projectRoot: string): ProjectManifest | null {
+  const filePath = join(projectRoot, "pyproject.toml");
+  if (!existsSync(filePath)) return null;
+
+  try {
+    const content = readFileSync(filePath, "utf-8");
+
+    // Simple TOML parsing for [project] or [tool.poetry] section
+    const nameMatch = content.match(/^\s*name\s*=\s*"([^"]+)"/m);
+    const descMatch = content.match(/^\s*description\s*=\s*"([^"]+)"/m);
+    const versionMatch = content.match(/^\s*version\s*=\s*"([^"]+)"/m);
+
+    const name = nameMatch?.[1];
+    if (!name) return null;
+
+    return {
+      type: "python",
+      name,
+      description: descMatch?.[1],
+      version: versionMatch?.[1],
+      manifestPath: filePath,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Parse go.mod (Go)
+ */
+function parseGoMod(projectRoot: string): ProjectManifest | null {
+  const filePath = join(projectRoot, "go.mod");
+  if (!existsSync(filePath)) return null;
+
+  try {
+    const content = readFileSync(filePath, "utf-8");
+
+    // Extract module name
+    const moduleMatch = content.match(/^module\s+(.+)$/m);
+    const modulePath = moduleMatch?.[1]?.trim();
+    if (!modulePath) return null;
+
+    // Extract last part of module path as name
+    const name = modulePath.split("/").pop() || modulePath;
+
+    return {
+      type: "go",
+      name,
+      repository: modulePath.startsWith("github.com") ? `https://${modulePath}` : undefined,
+      manifestPath: filePath,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Parse *.gemspec (Ruby)
+ */
+function parseGemspec(projectRoot: string): ProjectManifest | null {
+  try {
+    // Find .gemspec file using readdirSync
+    const { readdirSync } = require("node:fs") as typeof import("node:fs");
+    const files = readdirSync(projectRoot);
+    const gemspecFile = files.find((f: string) => f.endsWith(".gemspec"));
+
+    if (!gemspecFile) return null;
+
+    const filePath = join(projectRoot, gemspecFile);
+    const content = readFileSync(filePath, "utf-8");
+
+    // Extract name from gemspec
+    const nameMatch = content.match(/\.name\s*=\s*["']([^"']+)["']/);
+    const descMatch = content.match(/\.summary\s*=\s*["']([^"']+)["']/);
+    const versionMatch = content.match(/\.version\s*=\s*["']([^"']+)["']/);
+
+    if (!nameMatch?.[1]) return null;
+
+    return {
+      type: "ruby",
+      name: nameMatch[1],
+      description: descMatch?.[1],
+      version: versionMatch?.[1],
+      manifestPath: filePath,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Parse pom.xml (Java/Maven)
+ */
+function parsePomXml(projectRoot: string): ProjectManifest | null {
+  const filePath = join(projectRoot, "pom.xml");
+  if (!existsSync(filePath)) return null;
+
+  try {
+    const content = readFileSync(filePath, "utf-8");
+
+    // Simple XML parsing
+    const nameMatch = content.match(/<name>([^<]+)<\/name>/);
+    const artifactMatch = content.match(/<artifactId>([^<]+)<\/artifactId>/);
+    const descMatch = content.match(/<description>([^<]+)<\/description>/);
+    const versionMatch = content.match(/<version>([^<]+)<\/version>/);
+
+    const name = nameMatch?.[1] || artifactMatch?.[1];
+    if (!name) return null;
+
+    return {
+      type: "java",
+      name,
+      description: descMatch?.[1],
+      version: versionMatch?.[1],
+      manifestPath: filePath,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ============================================================================
 // Project Service
 // ============================================================================
 
@@ -230,6 +453,12 @@ export class ProjectService {
     const gitRemote = this.getGitRemoteUrl(projectRoot);
     if (gitRemote) {
       identifier.gitRemote = gitRemote;
+    }
+
+    // 프로젝트 매니페스트 감지 (package.json, Cargo.toml 등)
+    const manifest = detectProjectManifest(projectRoot);
+    if (manifest) {
+      identifier.manifest = manifest;
     }
 
     return identifier;
@@ -347,9 +576,15 @@ export class ProjectService {
       };
     }
 
-    // 새 프로젝트 생성
+    // 새 프로젝트 생성 - 매니페스트 정보 활용
     const id = generateProjectId();
-    const name = this.extractProjectName(identifier.localPath, identifier.gitRemote);
+    const manifest = identifier.manifest;
+
+    // 이름 우선순위: manifest > git remote > 디렉토리명
+    const name = manifest?.name || this.extractProjectName(identifier.localPath, identifier.gitRemote);
+
+    // 프로젝트 타입에 따른 색상/아이콘
+    const typeConfig = manifest ? PROJECT_TYPE_CONFIG[manifest.type] : PROJECT_TYPE_CONFIG.unknown;
 
     this.db
       .insert(projects)
@@ -357,6 +592,9 @@ export class ProjectService {
         id,
         name,
         path: identifier.localPath,
+        description: manifest?.description,
+        color: typeConfig.color,
+        icon: typeConfig.icon,
         gitRemote: identifier.gitRemote,
       })
       .run();
@@ -365,6 +603,7 @@ export class ProjectService {
     this.recordEvent(id, "project.created", "project", id, {
       identifiedBy: "git",
       gitRemote: identifier.gitRemote,
+      manifestType: manifest?.type,
     });
 
     return {
@@ -383,11 +622,13 @@ export class ProjectService {
   private async resolveByPath(
     identifier: ProjectIdentifier
   ): Promise<ResolvedProject> {
+    const manifest = identifier.manifest;
+
     if (!this.db) {
-      // DB 없이 동작 (fallback)
+      // DB 없이 동작 (fallback) - 매니페스트 이름 사용
       return {
         id: this.hashPath(identifier.localPath),
-        name: identifier.localPath.split("/").pop() || "Unknown",
+        name: manifest?.name || identifier.localPath.split("/").pop() || "Unknown",
         path: identifier.localPath,
         identifiedBy: "path",
         hasConfig: false,
@@ -413,9 +654,14 @@ export class ProjectService {
       };
     }
 
-    // 새 프로젝트 생성
+    // 새 프로젝트 생성 - 매니페스트 정보 활용
     const id = generateProjectId();
-    const name = identifier.localPath.split("/").pop() || "Unknown";
+
+    // 이름 우선순위: manifest > 디렉토리명
+    const name = manifest?.name || identifier.localPath.split("/").pop() || "Unknown";
+
+    // 프로젝트 타입에 따른 색상/아이콘
+    const typeConfig = manifest ? PROJECT_TYPE_CONFIG[manifest.type] : PROJECT_TYPE_CONFIG.unknown;
 
     this.db
       .insert(projects)
@@ -423,6 +669,9 @@ export class ProjectService {
         id,
         name,
         path: identifier.localPath,
+        description: manifest?.description,
+        color: typeConfig.color,
+        icon: typeConfig.icon,
         gitRemote: identifier.gitRemote,
       })
       .run();
@@ -430,6 +679,7 @@ export class ProjectService {
     // 이벤트 기록 (경로 기반은 동기화 안 함 - 경고 의미)
     this.recordEvent(id, "project.created", "project", id, {
       identifiedBy: "path",
+      manifestType: manifest?.type,
       warning: "Project identified by path only. Consider running 'obora init' for better tracking.",
     });
 
@@ -477,14 +727,22 @@ export class ProjectService {
       mkdirSync(oboraDir, { recursive: true });
     }
 
+    // 매니페스트 감지하여 기본값으로 사용
+    const manifest = detectProjectManifest(projectRoot);
+
     // 설정 파일 생성
     const projectId = generateProjectId();
-    const name = options?.name || projectRoot.split("/").pop() || "Unknown";
+
+    // 이름 우선순위: options > manifest > 디렉토리명
+    const name = options?.name || manifest?.name || projectRoot.split("/").pop() || "Unknown";
+
+    // 설명 우선순위: options > manifest
+    const description = options?.description || manifest?.description;
 
     const config: ProjectConfig = {
       id: projectId,
       name,
-      description: options?.description,
+      description,
       createdAt: new Date().toISOString(),
       workflow: {
         defaultType: "custom",

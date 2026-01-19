@@ -24,6 +24,7 @@ WORKFLOW_FILE="${HOME}/.obora/current-workflow.txt"
 STEP_COUNTER_FILE="${HOME}/.obora/workflow-step-counter.txt"
 PROMPT_TIMESTAMP_FILE="${HOME}/.obora/current-prompt-timestamp.txt"
 WORKFLOW_CONTEXT_FILE="${HOME}/.obora/workflow-context.json"
+CWD_FILE="${HOME}/.obora/current-cwd.txt"
 
 # stdin에서 JSON 읽기
 INPUT=$(cat)
@@ -46,6 +47,34 @@ fi
 
 SESSION_ID=$(cat "$SESSION_FILE")
 
+# CWD 읽기: 먼저 stdin JSON에서 시도, 없으면 파일에서 읽기
+CWD=$(echo "$INPUT" | jq -r '.cwd // ""')
+if [ -z "$CWD" ] || [ "$CWD" = "null" ]; then
+  if [ -f "$CWD_FILE" ]; then
+    CWD=$(cat "$CWD_FILE")
+  fi
+fi
+
+# CWD 기반 프로젝트 ID 조회/생성
+PROJECT_ID=""
+if [ -n "$CWD" ] && [ "$CWD" != "null" ] && [ "$CWD" != "/" ]; then
+  # 기존 프로젝트 조회
+  PROJECT_ID=$(sqlite3 "$DB_PATH" "SELECT id FROM projects WHERE path = '$CWD' LIMIT 1;" 2>/dev/null)
+
+  # 프로젝트가 없으면 자동 생성
+  if [ -z "$PROJECT_ID" ]; then
+    PROJECT_NAME=$(basename "$CWD")
+    PATH_HASH=$(echo "$CWD" | md5 | head -c 16)
+    PROJECT_ID="proj_${PATH_HASH}"
+
+    sqlite3 "$DB_PATH" <<PROJ_EOF 2>> "$DEBUG_LOG"
+INSERT OR IGNORE INTO projects (id, name, path, description, color, status)
+VALUES ('$PROJECT_ID', '$PROJECT_NAME', '$CWD', 'Auto-created from workflow', '#6366f1', 'active');
+PROJ_EOF
+    echo "Auto-created project from workflow: $PROJECT_NAME ($PROJECT_ID)" >> "$DEBUG_LOG"
+  fi
+fi
+
 # 사용자 프롬프트 추출 (JSON에서)
 USER_PROMPT=$(echo "$INPUT" | jq -r '.prompt // .message // .content // "Unknown task"' | head -c 200)
 # SQL 인젝션 방지: 작은따옴표 이스케이프
@@ -59,29 +88,40 @@ INPUT_JSON_ESCAPED=$(echo "$INPUT_JSON" | sed "s/'/''/g")
 WORKFLOW_ID="wf_cc_$(date +%s)_$$"
 TIMESTAMP=$(date +%s)
 
-echo "SESSION_ID: $SESSION_ID, WORKFLOW_ID: $WORKFLOW_ID" >> "$DEBUG_LOG"
+echo "SESSION_ID: $SESSION_ID, WORKFLOW_ID: $WORKFLOW_ID, CWD: $CWD, PROJECT_ID: $PROJECT_ID" >> "$DEBUG_LOG"
 echo "USER_PROMPT: $USER_PROMPT" >> "$DEBUG_LOG"
 echo "INPUT_JSON: $INPUT_JSON" >> "$DEBUG_LOG"
 
-# 워크플로우 생성
+# project_id 값 준비 (NULL 또는 quoted string)
+if [ -n "$PROJECT_ID" ]; then
+  PROJECT_ID_SQL="'$PROJECT_ID'"
+else
+  PROJECT_ID_SQL="NULL"
+fi
+
+# 워크플로우 생성 (cwd, project_id 컬럼 포함)
 sqlite3 "$DB_PATH" <<EOF 2>> "$DEBUG_LOG"
 INSERT INTO workflows (
   id,
   session_id,
+  project_id,
   name,
   type,
   status,
   started_at,
   input,
+  cwd,
   tokens_used
 ) VALUES (
   '$WORKFLOW_ID',
   '$SESSION_ID',
+  $PROJECT_ID_SQL,
   '$USER_PROMPT_ESCAPED',
   'claude-code',
   'running',
   $TIMESTAMP,
   '$INPUT_JSON_ESCAPED',
+  '$CWD',
   0
 );
 EOF

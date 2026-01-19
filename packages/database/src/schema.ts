@@ -80,6 +80,8 @@ export const sessions = sqliteTable(
     projectId: text("project_id")
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
+    // Current Working Directory where the session was started
+    cwd: text("cwd"),
     status: text("status", {
       enum: ["active", "completed", "failed", "interrupted"],
     })
@@ -111,6 +113,10 @@ export const workflows = sqliteTable(
     sessionId: text("session_id")
       .notNull()
       .references(() => sessions.id, { onDelete: "cascade" }),
+    // Direct project reference (optional, for cross-session queries)
+    projectId: text("project_id").references(() => projects.id),
+    // Current Working Directory where the workflow was started
+    cwd: text("cwd"),
     name: text("name").notNull(),
     type: text("type", {
       enum: ["implement", "fix", "review", "commit", "refactor", "test", "custom"],
@@ -129,6 +135,7 @@ export const workflows = sqliteTable(
   },
   (table) => [
     index("idx_workflows_session").on(table.sessionId),
+    index("idx_workflows_project").on(table.projectId),
     index("idx_workflows_type").on(table.type),
     index("idx_workflows_status").on(table.status),
   ]

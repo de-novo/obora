@@ -7,6 +7,30 @@ import { WorkflowListItem } from "../components/WorkflowFlow";
 import { fetchWorkflows, queryKeys } from "@/lib/api";
 import { useProject } from "@/app/providers";
 
+// Hoisted static JSX elements (vercel-react-best-practices: rendering-hoist-jsx)
+const workflowSkeletons = Array.from({ length: 8 }, (_, i) => (
+  <div key={i} className="h-20 animate-pulse rounded-xl bg-card" />
+));
+
+const loadingSkeleton = (
+  <div className="p-6 lg:p-8">
+    <div className="mb-6 h-8 w-40 animate-pulse rounded bg-card" />
+    <div className="space-y-3">{workflowSkeletons}</div>
+  </div>
+);
+
+const emptyWorkflowsPlaceholder = (
+  <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-16">
+    <div className="mb-4 flex size-12 items-center justify-center rounded-full bg-muted">
+      <GitBranch className="size-6 text-muted-foreground" />
+    </div>
+    <p className="mb-1 font-medium text-foreground">No workflows yet</p>
+    <p className="text-sm text-muted-foreground">
+      Run <code className="rounded bg-muted px-1.5 py-0.5">/obora-workflow</code> to get started
+    </p>
+  </div>
+);
+
 export default function WorkflowsPage() {
   const { selectedProject } = useProject();
   const projectId = selectedProject?.id;
@@ -23,16 +47,7 @@ export default function WorkflowsPage() {
   });
 
   if (isLoading) {
-    return (
-      <div className="p-6 lg:p-8">
-        <div className="mb-6 h-8 w-40 animate-pulse rounded bg-card" />
-        <div className="space-y-3">
-          {[...Array(8)].map((_, i) => (
-            <div key={i} className="h-20 animate-pulse rounded-xl bg-card" />
-          ))}
-        </div>
-      </div>
-    );
+    return loadingSkeleton;
   }
 
   if (error) {
@@ -71,15 +86,7 @@ export default function WorkflowsPage() {
       </div>
 
       {workflows.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-16">
-          <div className="mb-4 flex size-12 items-center justify-center rounded-full bg-muted">
-            <GitBranch className="size-6 text-muted-foreground" />
-          </div>
-          <p className="mb-1 font-medium text-foreground">No workflows yet</p>
-          <p className="text-sm text-muted-foreground">
-            Run <code className="rounded bg-muted px-1.5 py-0.5">/obora-workflow</code> to get started
-          </p>
-        </div>
+        emptyWorkflowsPlaceholder
       ) : (
         <div className="space-y-3">
           {workflows.map((workflow) => (

@@ -6,6 +6,28 @@ import { Zap, ChevronRight, Coins, GitBranch } from "lucide-react";
 import { fetchSessions, queryKeys } from "@/lib/api";
 import { useProject } from "@/app/providers";
 
+// Hoisted static JSX elements (vercel-react-best-practices: rendering-hoist-jsx)
+const sessionSkeletons = Array.from({ length: 5 }, (_, i) => (
+  <div key={i} className="h-20 animate-pulse rounded-xl bg-card" />
+));
+
+const loadingSkeleton = (
+  <div className="h-full p-6 lg:p-8">
+    <div className="mb-6 h-8 w-32 animate-pulse rounded bg-card" />
+    <div className="space-y-3">{sessionSkeletons}</div>
+  </div>
+);
+
+const emptySessionsPlaceholder = (
+  <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-16">
+    <div className="mb-4 flex size-12 items-center justify-center rounded-full bg-muted">
+      <Zap className="size-6 text-muted-foreground" />
+    </div>
+    <p className="mb-1 font-medium text-foreground">No sessions yet</p>
+    <p className="text-sm text-muted-foreground">Sessions will appear when you run Claude Code.</p>
+  </div>
+);
+
 export default function SessionsPage() {
   const { selectedProject } = useProject();
   const projectId = selectedProject?.id;
@@ -21,16 +43,7 @@ export default function SessionsPage() {
   });
 
   if (isLoading) {
-    return (
-      <div className="h-full p-6 lg:p-8">
-        <div className="mb-6 h-8 w-32 animate-pulse rounded bg-card" />
-        <div className="space-y-3">
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-20 animate-pulse rounded-xl bg-card" />
-          ))}
-        </div>
-      </div>
-    );
+    return loadingSkeleton;
   }
 
   return (
@@ -55,13 +68,7 @@ export default function SessionsPage() {
       </div>
 
       {sessions.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-16">
-          <div className="mb-4 flex size-12 items-center justify-center rounded-full bg-muted">
-            <Zap className="size-6 text-muted-foreground" />
-          </div>
-          <p className="mb-1 font-medium text-foreground">No sessions yet</p>
-          <p className="text-sm text-muted-foreground">Sessions will appear when you run Claude Code.</p>
-        </div>
+        emptySessionsPlaceholder
       ) : (
         <div className="space-y-3">
           {sessions.map((session) => (

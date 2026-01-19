@@ -75,7 +75,7 @@ fi
 
 echo "PROJECT_ID: $PROJECT_ID, SESSION_ID: $SESSION_ID" >> "$DEBUG_LOG"
 
-# 세션 레코드 생성
+# 세션 레코드 생성 (cwd 컬럼 포함)
 sqlite3 "$DB_PATH" <<EOF 2>> "$DEBUG_LOG"
 INSERT INTO sessions (
   id,
@@ -83,6 +83,7 @@ INSERT INTO sessions (
   status,
   started_at,
   total_tokens,
+  cwd,
   metadata
 ) VALUES (
   '$SESSION_ID',
@@ -90,18 +91,24 @@ INSERT INTO sessions (
   'active',
   $TIMESTAMP,
   0,
-  '{"type": "$SESSION_TYPE", "source": "claude-code", "cwd": "$CWD"}'
+  '$CWD',
+  '{"type": "$SESSION_TYPE", "source": "claude-code"}'
 );
 EOF
 
 RESULT=$?
 echo "Session insert result: $RESULT" >> "$DEBUG_LOG"
 
-# 세션 ID를 파일에 저장 (다른 훅에서 사용)
+# 세션 ID와 CWD를 파일에 저장 (다른 훅에서 사용)
 if [ $RESULT -eq 0 ]; then
   mkdir -p "$(dirname "$SESSION_FILE")"
   echo "$SESSION_ID" > "$SESSION_FILE"
   echo "Session ID saved to: $SESSION_FILE" >> "$DEBUG_LOG"
+
+  # CWD 저장 (log-prompt-submit.sh에서 workflows.cwd에 사용)
+  CWD_FILE="${HOME}/.obora/current-cwd.txt"
+  echo "$CWD" > "$CWD_FILE"
+  echo "CWD saved to: $CWD_FILE" >> "$DEBUG_LOG"
 fi
 
 echo "" >> "$DEBUG_LOG"

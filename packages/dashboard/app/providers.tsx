@@ -61,37 +61,51 @@ function ProjectProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// Cache for localStorage reads (vercel-react-best-practices: js-cache-storage)
+let cachedTheme: Theme | null = null;
+
+function getStoredTheme(): Theme {
+  if (typeof window === "undefined") return "dark";
+  if (cachedTheme !== null) return cachedTheme;
+
+  try {
+    const stored = localStorage.getItem("theme");
+    cachedTheme = stored === "light" || stored === "dark" ? stored : "dark";
+  } catch {
+    cachedTheme = "dark";
+  }
+  return cachedTheme;
+}
+
 function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<Theme>("dark");
+  // Lazy state initialization to read from cache/localStorage once
+  // (vercel-react-best-practices: rerender-lazy-state-init)
+  const [theme, setTheme] = useState<Theme>(() => getStoredTheme());
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    const stored = localStorage.getItem("theme") as Theme | null;
-    if (stored) {
-      setTheme(stored);
-    }
+    // Sync with cached value after mount (in case inline script set it)
+    const current = getStoredTheme();
+    setTheme(current);
   }, []);
 
   useEffect(() => {
     if (!mounted) return;
 
     const root = document.documentElement;
-    if (theme === "light") {
-      root.classList.add("light");
-      root.classList.remove("dark");
-    } else {
-      root.classList.remove("light");
-      root.classList.add("dark");
-    }
+    root.classList.remove("light", "dark");
+    root.classList.add(theme);
+
+    // Update both localStorage and cache
     localStorage.setItem("theme", theme);
+    cachedTheme = theme;
   }, [theme, mounted]);
 
   const toggleTheme = () => {
     setTheme((prev) => (prev === "dark" ? "light" : "dark"));
   };
 
-  // 항상 Provider를 렌더링하여 SSR/SSG 빌드 시에도 컨텍스트 제공
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme }}>
       {children}

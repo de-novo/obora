@@ -4,7 +4,8 @@
   "description": "CLI for scaffolding TypeScript SaaS projects with modular presets",
   "type": "module",
   "bin": {
-    "obora": "./dist/obora.mjs"
+    "obora": "./dist/obora.mjs",
+    "obora-dev": "./dist/obora.mjs"
   },
   "exports": {
     ".": {

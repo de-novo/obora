@@ -12,6 +12,20 @@ export const metadata: Metadata = {
   description: "Multi-project Claude Code activity dashboard",
 };
 
+// Inline script to prevent theme flicker (vercel-react-best-practices: rendering-hydration-no-flicker)
+// This runs before React hydrates, preventing the flash of wrong theme
+const themeScript = `
+  (function() {
+    try {
+      var theme = localStorage.getItem('theme');
+      if (theme === 'light' || theme === 'dark') {
+        document.documentElement.classList.remove('light', 'dark');
+        document.documentElement.classList.add(theme);
+      }
+    } catch (e) {}
+  })();
+`;
+
 export default function RootLayout({
   children,
 }: {
@@ -19,6 +33,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body className={inter.className}>
         <Providers>
           <div className="flex h-screen bg-background">

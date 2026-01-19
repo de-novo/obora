@@ -526,6 +526,7 @@ export function deleteAnnotation(
 export interface SessionWithStats extends Session {
   workflowCount: number;
   projectName: string;
+  cwd: string | null;
 }
 
 /**
@@ -539,6 +540,7 @@ export function getProjectSessions(projectId: string): SessionWithStats[] {
     .select({
       id: schema.sessions.id,
       projectId: schema.sessions.projectId,
+      cwd: schema.sessions.cwd,
       status: schema.sessions.status,
       startedAt: schema.sessions.startedAt,
       endedAt: schema.sessions.endedAt,
@@ -568,6 +570,7 @@ export function getAllSessions(limit = 50): SessionWithStats[] {
     .select({
       id: schema.sessions.id,
       projectId: schema.sessions.projectId,
+      cwd: schema.sessions.cwd,
       status: schema.sessions.status,
       startedAt: schema.sessions.startedAt,
       endedAt: schema.sessions.endedAt,
@@ -658,6 +661,7 @@ export interface WorkflowSummary {
   projectId: string;
   projectName: string;
   projectColor: string;
+  cwd: string | null;
 }
 
 /**
@@ -726,11 +730,13 @@ export function getWorkflowWithDetails(id: string): WorkflowWithSteps | null {
 
 /**
  * Get recent workflows (optionally filtered by project)
+ * Uses workflow.project_id if available, falls back to session.project_id
  */
 export function getRecentWorkflows(limit = 20, projectId?: string): WorkflowSummary[] {
   const db = getDb();
   if (!db) return [];
 
+  // Use COALESCE to prefer workflow.project_id over session.project_id
   let query = db
     .select({
       id: schema.workflows.id,
@@ -741,18 +747,33 @@ export function getRecentWorkflows(limit = 20, projectId?: string): WorkflowSumm
       endedAt: schema.workflows.endedAt,
       tokensUsed: schema.workflows.tokensUsed,
       sessionId: schema.workflows.sessionId,
-      projectId: schema.sessions.projectId,
-      projectName: schema.projects.name,
-      projectColor: schema.projects.color,
+      cwd: schema.workflows.cwd,
+      projectId: sql<string>`COALESCE(${schema.workflows.projectId}, ${schema.sessions.projectId})`,
+      projectName: sql<string>`COALESCE(wp.name, ${schema.projects.name})`,
+      projectColor: sql<string>`COALESCE(wp.color, ${schema.projects.color})`,
       stepCount: sql<number>`(SELECT COUNT(*) FROM ${schema.workflowSteps} WHERE ${schema.workflowSteps.workflowId} = ${schema.workflows.id})`,
     })
     .from(schema.workflows)
     .innerJoin(schema.sessions, eq(schema.sessions.id, schema.workflows.sessionId))
     .innerJoin(schema.projects, eq(schema.projects.id, schema.sessions.projectId))
+    // Left join workflow's own project if exists
+    .leftJoin(
+      sql`${schema.projects} as wp`,
+      sql`wp.id = ${schema.workflows.projectId}`
+    )
     .$dynamic();
 
   if (projectId) {
-    query = query.where(eq(schema.sessions.projectId, projectId));
+    // Filter by either workflow.project_id or session.project_id
+    query = query.where(
+      or(
+        eq(schema.workflows.projectId, projectId),
+        and(
+          sql`${schema.workflows.projectId} IS NULL`,
+          eq(schema.sessions.projectId, projectId)
+        )
+      )
+    );
   }
 
   const rows = query
