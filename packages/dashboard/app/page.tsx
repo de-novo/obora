@@ -177,8 +177,19 @@ export default function DashboardPage() {
                       }`}
                     />
                   </div>
-                  <div>
-                    <p className="text-sm font-medium">{workflow.name}</p>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-sm font-medium">{workflow.name || "Untitled"}</p>
+                      {!selectedProject && workflow.projectName && (
+                        <span className="flex shrink-0 items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                          <span
+                            className="size-1.5 rounded-full"
+                            style={{ backgroundColor: workflow.projectColor }}
+                          />
+                          {workflow.projectName}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-muted-foreground">{workflow.type}</p>
                   </div>
                 </div>
