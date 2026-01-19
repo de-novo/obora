@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
+import { Zap, ChevronRight, Coins, GitBranch } from "lucide-react";
 import { fetchSessions, queryKeys } from "@/lib/api";
 import { useProject } from "@/app/providers";
 
@@ -21,10 +22,11 @@ export default function SessionsPage() {
 
   if (isLoading) {
     return (
-      <div className="canvas-grid h-full p-6">
-        <div className="animate-pulse space-y-4">
+      <div className="h-full p-6 lg:p-8">
+        <div className="mb-6 h-8 w-32 animate-pulse rounded bg-card" />
+        <div className="space-y-3">
           {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-16 rounded-lg bg-card" />
+            <div key={i} className="h-20 animate-pulse rounded-xl bg-card" />
           ))}
         </div>
       </div>
@@ -32,69 +34,81 @@ export default function SessionsPage() {
   }
 
   return (
-    <div className="canvas-grid h-full overflow-auto p-6">
+    <div className="h-full overflow-auto p-6 lg:p-8">
       <div className="mb-6">
-        <h1 className="text-lg font-semibold text-foreground">Sessions</h1>
-        <p className="text-sm text-muted-foreground">
+        <h1 className="text-2xl font-bold lg:text-3xl">Sessions</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           {selectedProject ? (
-            <>
+            <span className="flex items-center gap-2">
               <span
-                className="mr-1.5 inline-block size-2 rounded-full align-middle"
+                className="size-2 rounded-full"
                 style={{ backgroundColor: selectedProject.color }}
               />
               {selectedProject.name}
-            </>
+              <span className="text-muted-foreground/60">·</span>
+              {sessions.length} session{sessions.length !== 1 ? "s" : ""}
+            </span>
           ) : (
-            "All projects"
+            `All projects · ${sessions.length} session${sessions.length !== 1 ? "s" : ""}`
           )}
-          {" · "}
-          {sessions.length} session{sessions.length !== 1 ? "s" : ""}
         </p>
       </div>
 
       {sessions.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-lg bg-card py-12">
-          <div className="mb-3 flex size-10 items-center justify-center rounded-full bg-muted">
-            <svg className="size-5 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-16">
+          <div className="mb-4 flex size-12 items-center justify-center rounded-full bg-muted">
+            <Zap className="size-6 text-muted-foreground" />
           </div>
-          <p className="mb-1 text-sm font-medium text-foreground">No sessions yet</p>
-          <p className="text-xs text-muted-foreground">Sessions will appear when you run Claude Code.</p>
+          <p className="mb-1 font-medium text-foreground">No sessions yet</p>
+          <p className="text-sm text-muted-foreground">Sessions will appear when you run Claude Code.</p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {sessions.map((session) => (
             <Link key={session.id} href={`/sessions/${session.id}`}>
-              <div className="flex items-center justify-between rounded-lg bg-card p-3 transition-colors hover:bg-muted">
-                <div className="flex items-center gap-3">
-                  <div className="flex size-8 items-center justify-center rounded-lg bg-muted">
-                    <svg className="size-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
+              <div className="group flex items-center justify-between rounded-xl border border-border bg-card/50 p-4 transition-all hover:border-primary/30 hover:bg-card">
+                <div className="flex items-center gap-4">
+                  <div
+                    className={`flex size-10 items-center justify-center rounded-xl ${
+                      session.status === "active" ? "bg-blue-500/10" : "bg-green-500/10"
+                    }`}
+                  >
+                    <Zap
+                      className={`size-5 ${
+                        session.status === "active" ? "text-blue-400" : "text-green-400"
+                      }`}
+                    />
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-foreground">
+                      <p className="font-medium text-foreground">
                         Session {session.id.slice(0, 8)}
                       </p>
+                      {session.status === "active" && (
+                        <span className="flex items-center gap-1 rounded-full bg-blue-500/20 px-2 py-0.5 text-xs text-blue-400">
+                          <span className="size-1.5 animate-pulse rounded-full bg-blue-400" />
+                          Active
+                        </span>
+                      )}
                       {!selectedProject && session.projectName && (
-                        <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                        <span className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                           {session.projectName}
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      {session.workflowCount} workflow{session.workflowCount !== 1 ? "s" : ""}
-                    </p>
+                    <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <GitBranch className="size-3" />
+                        {session.workflowCount} workflow{session.workflowCount !== 1 ? "s" : ""}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Coins className="size-3" />
+                        {session.totalTokens.toLocaleString()} tokens
+                      </span>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-4">
-                  <span className="text-xs text-muted-foreground">
-                    {session.totalTokens.toLocaleString()} tokens
-                  </span>
-                  <span className={`size-2 rounded-full ${session.status === "active" ? "bg-info animate-pulse" : "bg-success"}`} />
-                </div>
+                <ChevronRight className="size-5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
               </div>
             </Link>
           ))}

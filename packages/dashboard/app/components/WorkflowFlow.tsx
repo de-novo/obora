@@ -531,58 +531,74 @@ interface WorkflowListItemProps {
 
 export function WorkflowListItem({ workflow, onClick }: WorkflowListItemProps) {
   const status = mapStatus(workflow.status);
-  const statusClasses: Record<string, string> = {
-    pending: "bg-muted-foreground",
-    running: "bg-info",
-    completed: "bg-success",
-    failed: "bg-error",
+  const statusConfig: Record<string, { bg: string; text: string; iconBg: string }> = {
+    pending: { bg: "bg-muted", text: "text-muted-foreground", iconBg: "bg-muted" },
+    running: { bg: "bg-blue-500/20", text: "text-blue-400", iconBg: "bg-blue-500/10" },
+    completed: { bg: "bg-green-500/20", text: "text-green-400", iconBg: "bg-green-500/10" },
+    failed: { bg: "bg-red-500/20", text: "text-red-400", iconBg: "bg-red-500/10" },
   };
+  const config = statusConfig[status];
 
   return (
     <div
       onClick={onClick}
-      className="cursor-pointer rounded-lg bg-card p-4 transition-colors hover:bg-muted"
+      className="group cursor-pointer rounded-xl border border-border bg-card/50 p-4 transition-all hover:border-primary/30 hover:bg-card"
     >
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <div className="mb-1 flex items-center gap-2">
-            <div
-              className="size-2.5 rounded-full"
-              style={{ backgroundColor: workflow.projectColor }}
-            />
-            <span className="text-xs text-muted-foreground">
-              {workflow.projectName}
-            </span>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className={`mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl ${config.iconBg}`}>
+            <svg
+              className={`size-5 ${config.text}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7"
+              />
+            </svg>
           </div>
-          <h3 className="mb-1 font-medium text-foreground">
-            {workflow.name}
-          </h3>
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="rounded bg-muted px-1.5 py-0.5">
-              {workflow.type}
-            </span>
-            <span>{workflow.stepCount} steps</span>
-            {workflow.tokensUsed > 0 && (
-              <span>{workflow.tokensUsed.toLocaleString()} tokens</span>
-            )}
+          <div className="min-w-0 flex-1">
+            <div className="mb-1 flex items-center gap-2">
+              <div
+                className="size-2 shrink-0 rounded-full"
+                style={{ backgroundColor: workflow.projectColor }}
+              />
+              <span className="truncate text-xs text-muted-foreground">
+                {workflow.projectName}
+              </span>
+            </div>
+            <h3 className="mb-1 truncate font-medium text-foreground">
+              {workflow.name}
+            </h3>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <span className="rounded-md bg-muted px-2 py-0.5">
+                {workflow.type}
+              </span>
+              <span>{workflow.stepCount} steps</span>
+              {workflow.tokensUsed > 0 && (
+                <span>{workflow.tokensUsed.toLocaleString()} tokens</span>
+              )}
+              {workflow.startedAt && (
+                <span className="hidden sm:inline">
+                  {new Date(workflow.startedAt).toLocaleString()}
+                </span>
+              )}
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <div
-            className={`size-2.5 rounded-full ${statusClasses[status]} ${
-              status === "running" ? "animate-pulse" : ""
-            }`}
-          />
-          <span className="text-xs capitalize text-muted-foreground">
+        <div className="flex shrink-0 items-center gap-2">
+          <span className={`rounded-full px-2 py-0.5 text-xs ${config.bg} ${config.text}`}>
+            {status === "running" && (
+              <span className="mr-1.5 inline-block size-1.5 animate-pulse rounded-full bg-current" />
+            )}
             {workflow.status}
           </span>
         </div>
       </div>
-      {workflow.startedAt && (
-        <div className="mt-2 text-xs text-muted-foreground">
-          {new Date(workflow.startedAt).toLocaleString()}
-        </div>
-      )}
     </div>
   );
 }

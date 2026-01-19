@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
+import { GitBranch } from "lucide-react";
 import { WorkflowListItem } from "../components/WorkflowFlow";
 import { fetchWorkflows, queryKeys } from "@/lib/api";
 import { useProject } from "@/app/providers";
@@ -23,11 +24,11 @@ export default function WorkflowsPage() {
 
   if (isLoading) {
     return (
-      <div className="p-8">
-        <div className="mb-8 h-10 w-48 animate-pulse rounded bg-card" />
+      <div className="p-6 lg:p-8">
+        <div className="mb-6 h-8 w-40 animate-pulse rounded bg-card" />
         <div className="space-y-3">
           {[...Array(8)].map((_, i) => (
-            <div key={i} className="h-16 animate-pulse rounded-lg bg-card" />
+            <div key={i} className="h-20 animate-pulse rounded-xl bg-card" />
           ))}
         </div>
       </div>
@@ -38,34 +39,60 @@ export default function WorkflowsPage() {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="text-center">
-          <p className="text-muted-foreground">Failed to load workflows</p>
-          <p className="text-sm text-muted-foreground/60">{error.message}</p>
+          <div className="mb-4 flex size-12 items-center justify-center rounded-full bg-red-500/10 mx-auto">
+            <GitBranch className="size-6 text-red-400" />
+          </div>
+          <p className="font-medium text-foreground">Failed to load workflows</p>
+          <p className="mt-1 text-sm text-muted-foreground">{error.message}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-8">
-      <h1 className="mb-8 text-3xl font-bold">Workflows</h1>
-
-      <div className="space-y-2">
-        {workflows.map((workflow) => (
-          <Link
-            key={workflow.id}
-            href={`/workflows/${workflow.id}`}
-            className="block"
-          >
-            <WorkflowListItem workflow={workflow} />
-          </Link>
-        ))}
-
-        {workflows.length === 0 && (
-          <div className="rounded-xl border border-dashed border-border p-12 text-center">
-            <p className="text-muted-foreground">No workflows yet</p>
-          </div>
-        )}
+    <div className="p-6 lg:p-8">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold lg:text-3xl">Workflows</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {selectedProject ? (
+            <span className="flex items-center gap-2">
+              <span
+                className="size-2 rounded-full"
+                style={{ backgroundColor: selectedProject.color }}
+              />
+              {selectedProject.name}
+              <span className="text-muted-foreground/60">·</span>
+              {workflows.length} workflow{workflows.length !== 1 ? "s" : ""}
+            </span>
+          ) : (
+            `All projects · ${workflows.length} workflow${workflows.length !== 1 ? "s" : ""}`
+          )}
+        </p>
       </div>
+
+      {workflows.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-16">
+          <div className="mb-4 flex size-12 items-center justify-center rounded-full bg-muted">
+            <GitBranch className="size-6 text-muted-foreground" />
+          </div>
+          <p className="mb-1 font-medium text-foreground">No workflows yet</p>
+          <p className="text-sm text-muted-foreground">
+            Run <code className="rounded bg-muted px-1.5 py-0.5">/obora-workflow</code> to get started
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {workflows.map((workflow) => (
+            <Link
+              key={workflow.id}
+              href={`/workflows/${workflow.id}`}
+              className="block"
+            >
+              <WorkflowListItem workflow={workflow} />
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

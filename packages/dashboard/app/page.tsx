@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
+import { FolderOpen, Zap, GitBranch, Coins, ChevronRight, Clock } from "lucide-react";
 import { fetchStats, queryKeys } from "@/lib/api";
 import { useProject } from "@/app/providers";
 
@@ -15,6 +16,41 @@ function formatTokens(tokens: number): string {
   return tokens.toString();
 }
 
+const statsConfig = [
+  {
+    key: "projects",
+    label: "Projects",
+    icon: FolderOpen,
+    getValue: (stats: any) => stats.totalProjects,
+    color: "text-blue-400",
+    bgColor: "bg-blue-500/10",
+  },
+  {
+    key: "sessions",
+    label: "Active Sessions",
+    icon: Zap,
+    getValue: (stats: any) => stats.activeSessions,
+    color: "text-green-400",
+    bgColor: "bg-green-500/10",
+  },
+  {
+    key: "workflows",
+    label: "Workflows",
+    icon: GitBranch,
+    getValue: (stats: any) => stats.totalWorkflows,
+    color: "text-purple-400",
+    bgColor: "bg-purple-500/10",
+  },
+  {
+    key: "tokens",
+    label: "Total Tokens",
+    icon: Coins,
+    getValue: (stats: any) => formatTokens(stats.totalTokens),
+    color: "text-amber-400",
+    bgColor: "bg-amber-500/10",
+  },
+];
+
 export default function DashboardPage() {
   const { selectedProject } = useProject();
   const projectId = selectedProject?.id;
@@ -27,11 +63,11 @@ export default function DashboardPage() {
 
   if (isLoading) {
     return (
-      <div className="p-8">
-        <div className="mb-8 h-10 w-64 animate-pulse rounded bg-card" />
-        <div className="grid grid-cols-4 gap-6">
+      <div className="p-6 lg:p-8">
+        <div className="mb-6 h-8 w-48 animate-pulse rounded bg-card" />
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 lg:gap-6">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-32 animate-pulse rounded-xl bg-card" />
+            <div key={i} className="h-28 animate-pulse rounded-xl bg-card" />
           ))}
         </div>
       </div>
@@ -50,64 +86,122 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="p-8">
-      <h1 className="mb-8 text-3xl font-bold">Dashboard</h1>
+    <div className="p-6 lg:p-8">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold lg:text-3xl">Dashboard</h1>
+        {selectedProject && (
+          <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
+            <span
+              className="size-2 rounded-full"
+              style={{ backgroundColor: selectedProject.color }}
+            />
+            {selectedProject.name}
+          </p>
+        )}
+      </div>
 
       {/* Stats Grid */}
-      <div className="mb-8 grid grid-cols-4 gap-6">
-        <div className="rounded-xl border border-border bg-card/50 p-6">
-          <p className="text-sm text-muted-foreground">Projects</p>
-          <p className="text-3xl font-bold">{stats.totalProjects}</p>
-        </div>
-        <div className="rounded-xl border border-border bg-card/50 p-6">
-          <p className="text-sm text-muted-foreground">Active Sessions</p>
-          <p className="text-3xl font-bold">{stats.activeSessions}</p>
-        </div>
-        <div className="rounded-xl border border-border bg-card/50 p-6">
-          <p className="text-sm text-muted-foreground">Workflows</p>
-          <p className="text-3xl font-bold">{stats.totalWorkflows}</p>
-        </div>
-        <div className="rounded-xl border border-border bg-card/50 p-6">
-          <p className="text-sm text-muted-foreground">Total Tokens</p>
-          <p className="text-3xl font-bold">{formatTokens(stats.totalTokens)}</p>
-        </div>
+      <div className="mb-6 grid grid-cols-2 gap-4 lg:mb-8 lg:grid-cols-4 lg:gap-6">
+        {statsConfig.map((stat) => {
+          const Icon = stat.icon;
+          return (
+            <div
+              key={stat.key}
+              className="group rounded-xl border border-border bg-card/50 p-4 transition-colors hover:bg-card lg:p-6"
+            >
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-xs text-muted-foreground lg:text-sm">{stat.label}</p>
+                <div className={`flex size-8 items-center justify-center rounded-lg ${stat.bgColor}`}>
+                  <Icon className={`size-4 ${stat.color}`} />
+                </div>
+              </div>
+              <p className="text-2xl font-bold lg:text-3xl">{stat.getValue(stats)}</p>
+            </div>
+          );
+        })}
       </div>
 
       {/* Recent Workflows */}
-      <div className="rounded-xl border border-border bg-card/50 p-6">
+      <div className="rounded-xl border border-border bg-card/50 p-4 lg:p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Recent Workflows</h2>
-          <Link href="/workflows" className="text-sm text-primary hover:underline">
+          <div className="flex items-center gap-2">
+            <Clock className="size-4 text-muted-foreground" />
+            <h2 className="font-semibold lg:text-lg">Recent Workflows</h2>
+          </div>
+          <Link
+            href="/workflows"
+            className="flex items-center gap-1 text-xs text-primary transition-colors hover:text-primary/80 lg:text-sm"
+          >
             View all
+            <ChevronRight className="size-3 lg:size-4" />
           </Link>
         </div>
-        <div className="space-y-2">
-          {stats.recentWorkflows.map((workflow) => (
-            <Link
-              key={workflow.id}
-              href={`/workflows/${workflow.id}`}
-              className="flex items-center justify-between rounded-lg p-3 transition-colors hover:bg-muted/50"
-            >
-              <div>
-                <p className="font-medium">{workflow.name}</p>
-                <p className="text-sm text-muted-foreground">{workflow.type}</p>
-              </div>
-              <span
-                className={`rounded-full px-2 py-1 text-xs ${
-                  workflow.status === "completed"
-                    ? "bg-green-500/20 text-green-400"
-                    : workflow.status === "running"
-                      ? "bg-blue-500/20 text-blue-400"
-                      : workflow.status === "failed"
-                        ? "bg-red-500/20 text-red-400"
-                        : "bg-muted text-muted-foreground"
-                }`}
+
+        {stats.recentWorkflows.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-8">
+            <GitBranch className="mb-2 size-8 text-muted-foreground/50" />
+            <p className="text-sm text-muted-foreground">No workflows yet</p>
+            <p className="mt-1 text-xs text-muted-foreground/60">
+              Run <code className="rounded bg-muted px-1">/obora-workflow</code> to get started
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {stats.recentWorkflows.map((workflow) => (
+              <Link
+                key={workflow.id}
+                href={`/workflows/${workflow.id}`}
+                className="group flex items-center justify-between rounded-lg border border-transparent p-3 transition-all hover:border-border hover:bg-muted/50"
               >
-                {workflow.status}
-              </span>
-            </Link>
-          ))}
-        </div>
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`flex size-8 items-center justify-center rounded-lg ${
+                      workflow.status === "completed"
+                        ? "bg-green-500/10"
+                        : workflow.status === "running"
+                          ? "bg-blue-500/10"
+                          : workflow.status === "failed"
+                            ? "bg-red-500/10"
+                            : "bg-muted"
+                    }`}
+                  >
+                    <GitBranch
+                      className={`size-4 ${
+                        workflow.status === "completed"
+                          ? "text-green-400"
+                          : workflow.status === "running"
+                            ? "text-blue-400"
+                            : workflow.status === "failed"
+                              ? "text-red-400"
+                              : "text-muted-foreground"
+                      }`}
+                    />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">{workflow.name}</p>
+                    <p className="text-xs text-muted-foreground">{workflow.type}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs ${
+                      workflow.status === "completed"
+                        ? "bg-green-500/20 text-green-400"
+                        : workflow.status === "running"
+                          ? "bg-blue-500/20 text-blue-400"
+                          : workflow.status === "failed"
+                            ? "bg-red-500/20 text-red-400"
+                            : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {workflow.status}
+                  </span>
+                  <ChevronRight className="size-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
