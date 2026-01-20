@@ -72,6 +72,52 @@
           "node": ">=18"
         }
       }
+    },
+    "standalone": {
+      "description": "CLI tools, scripts, Lambda, and non-framework environments",
+      "files": [
+        "prisma",
+        "prisma.config.ts",
+        "standalone"
+      ],
+      "detect": {
+        "excludes": [
+          "next",
+          "@nestjs/core"
+        ]
+      }
+    },
+    "monorepo": {
+      "description": "Shared database package for monorepo (packages/database)",
+      "files": [
+        "prisma",
+        "prisma.config.ts",
+        "monorepo"
+      ],
+      "packageJson": {
+        "name": "@{{workspace}}/database",
+        "main": "./dist/index.js",
+        "types": "./dist/index.d.ts",
+        "exports": {
+          ".": {
+            "import": "./dist/index.js",
+            "types": "./dist/index.d.ts"
+          }
+        },
+        "scripts": {
+          "build": "tsc",
+          "db:generate": "prisma generate",
+          "db:migrate": "prisma migrate dev",
+          "db:push": "prisma db push"
+        }
+      },
+      "detect": {
+        "files": [
+          "pnpm-workspace.yaml",
+          "lerna.json",
+          "nx.json"
+        ]
+      }
     }
   },
   "common": {

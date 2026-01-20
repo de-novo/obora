@@ -69,6 +69,49 @@
         "pg",
         "@neondatabase/serverless"
       ]
+    },
+    "monorepo": {
+      "description": "Shared database package for monorepo (packages/database)",
+      "dialect": "postgresql",
+      "dependencies": {
+        "drizzle-orm": "^0.45.0",
+        "@neondatabase/serverless": "^0.10.0"
+      },
+      "files": [
+        "monorepo"
+      ],
+      "env": [
+        {
+          "key": "DATABASE_URL",
+          "description": "PostgreSQL connection string",
+          "required": true,
+          "secret": true,
+          "example": "postgres://user:pass@host:5432/dbname"
+        }
+      ],
+      "packageJson": {
+        "name": "@{{workspace}}/database",
+        "main": "./dist/index.js",
+        "types": "./dist/index.d.ts",
+        "exports": {
+          ".": {
+            "import": "./dist/index.js",
+            "types": "./dist/index.d.ts"
+          }
+        },
+        "scripts": {
+          "build": "tsc",
+          "db:generate": "drizzle-kit generate",
+          "db:push": "drizzle-kit push"
+        }
+      },
+      "detect": {
+        "files": [
+          "pnpm-workspace.yaml",
+          "lerna.json",
+          "nx.json"
+        ]
+      }
     }
   },
   "conflicts": [
