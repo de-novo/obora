@@ -54,7 +54,7 @@ import {
 } from "../utils/project-config";
 import type { FileBackup } from "../utils/transform";
 import { Errors, showError } from "../utils/errors";
-import { withSpinner, ProgressGroup } from "../utils/progress";
+import { withSpinner, NestedProgress } from "../utils/progress";
 
 // ============================================================================
 // Types
@@ -1397,6 +1397,16 @@ export const addCommand = defineCommand({
           return;
         }
 
+        // Initialize progress display
+        const progress = new NestedProgress(`Installing ${presetName}`, { showTime: true });
+        progress.start();
+
+        // Add steps
+        progress.addStep("deps", "Updating dependencies");
+        progress.addStep("files", "Copying files");
+        progress.addStep("transforms", "Applying transforms");
+        progress.addStep("config", "Updating configuration");
+
         // Merge dependencies: common + target
         const mergedDeps = {
           dependencies: {
@@ -1417,11 +1427,16 @@ export const addCommand = defineCommand({
         };
 
         // Update package.json
+        progress.runStep("deps");
         if (await fileExists(packageJsonPath)) {
           const updated = await mergePackageJson(packageJsonPath, mergedDeps, mergedScripts);
           if (updated) {
-            consola.success(`Updated ${targetAppName ? `${targetAppName}/` : ""}package.json`);
+            progress.succeedStep("deps", `Updated ${targetAppName ? `${targetAppName}/` : ""}package.json`);
+          } else {
+            progress.succeedStep("deps", "No changes");
           }
+        } else {
+          progress.skipStep("deps", "No package.json");
         }
 
         // Copy files: common + target
@@ -1435,6 +1450,8 @@ export const addCommand = defineCommand({
           ...(targetConfig.files || []),
         ];
 
+        progress.runStep("files");
+        let filesCopied = 0;
         for (const fileDir of filesToCopy) {
           const sourcePath = join(presetFilesDir, fileDir);
           if (await dirExists(sourcePath)) {
@@ -1449,11 +1466,18 @@ export const addCommand = defineCommand({
               filter: (relPath, kind) =>
                 kind === "file" ? !isForbiddenPresetFilePath(relPath) : true,
             });
-            consola.success(`Copied ${fileDir}/`);
+            filesCopied++;
+            progress.updateStep("files", { count: { current: filesCopied, total: filesToCopy.length } });
           }
+        }
+        if (filesCopied > 0) {
+          progress.succeedStep("files", `${filesCopied} director${filesCopied === 1 ? "y" : "ies"} copied`);
+        } else {
+          progress.skipStep("files", "No files to copy");
         }
 
         // Process transform operations (AST-based)
+        progress.runStep("transforms");
         if (targetConfig.transform && targetConfig.transform.length > 0) {
           const transformStats = await processTransforms(
             targetConfig.transform.map((t) => ({
@@ -1464,12 +1488,18 @@ export const addCommand = defineCommand({
             presetTargetDir
           );
 
-          if (transformStats.success > 0) {
-            consola.success(`Applied ${transformStats.success} transform(s)`);
-          }
           if (transformStats.failed > 0) {
-            consola.warn(`${transformStats.failed} transform(s) failed`);
+            progress.updateStep("transforms", {
+              status: "warning",
+              detail: `${transformStats.success} applied, ${transformStats.failed} failed`,
+            });
+          } else if (transformStats.success > 0) {
+            progress.succeedStep("transforms", `${transformStats.success} transform(s) applied`);
+          } else {
+            progress.skipStep("transforms", "No transforms applied");
           }
+        } else {
+          progress.skipStep("transforms", "No transforms");
         }
 
         // Show env variables
@@ -1495,10 +1525,11 @@ export const addCommand = defineCommand({
         }
 
         // Update config
+        progress.runStep("config");
         if (existingConfig) {
           await addSlotPreset(projectDir, presetCategory, presetName, presetInfo.version);
           await setPresetTarget(projectDir, presetName, selectedTarget, targetSource, targetReasonDetail);
-          consola.success(`Updated .obora/config.json`);
+          progress.succeedStep("config", "Updated .obora/config.json");
 
           // Save undo data for rollback capability
           const backupId = generateBackupId();
@@ -1542,9 +1573,12 @@ export const addCommand = defineCommand({
               },
             },
           });
+        } else {
+          progress.skipStep("config", "No project config");
         }
 
-        consola.success(`Added ${presetName} (${selectedTarget}) preset!`);
+        // Complete progress
+        progress.succeed(`Added ${presetName} (${selectedTarget}) preset`);
         consola.info("Run your package manager to install new dependencies.");
         return;
       }

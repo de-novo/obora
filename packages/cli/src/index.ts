@@ -68,4 +68,4 @@ export { ClaudeAgentProvider, simpleQuery } from "@obora/agent-claude";
 
 // CLI utilities
 export { CLIError, Errors, showError, type ErrorCode } from "./utils/errors";
-export { withSpinner, ProgressGroup, runTasks, runPreflightChecks, showResults, showSummary, createSpinner, type TaskStep, type TaskOptions, type PreflightCheck, type PreflightResult, type SummaryItem } from "./utils/progress";
+export { withSpinner, ProgressGroup, runTasks, runPreflightChecks, showResults, showSummary, createSpinner, NestedProgress, runInstallSteps, type TaskStep, type TaskOptions, type PreflightCheck, type PreflightResult, type SummaryItem, type NestedStep, type InstallStep } from "./utils/progress";

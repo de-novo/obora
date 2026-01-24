@@ -346,3 +346,265 @@ function getStatusIcon(type?: "success" | "warning" | "error" | "info"): string 
       return "•";
   }
 }
+
+// ============================================================================
+// Nested Progress (Tree-style progress display)
+// ============================================================================
+
+export interface NestedStep {
+  id: string;
+  label: string;
+  status: "pending" | "running" | "success" | "warning" | "error" | "skipped";
+  detail?: string;
+  count?: { current: number; total: number };
+}
+
+export interface NestedProgressOptions {
+  /** Show elapsed time */
+  showTime?: boolean;
+  /** Persist completed steps (don't clear) */
+  persistSteps?: boolean;
+}
+
+/**
+ * Tree-style nested progress display
+ *
+ * @example
+ * const progress = new NestedProgress("Installing clerk");
+ * progress.start();
+ * progress.addStep("deps", "Adding dependencies");
+ * progress.updateStep("deps", { status: "running", count: { current: 1, total: 5 } });
+ * progress.updateStep("deps", { status: "success" });
+ * progress.addStep("transform", "Transforming files");
+ * progress.succeed();
+ */
+export class NestedProgress {
+  private spinner: Ora | null = null;
+  private title: string;
+  private steps: Map<string, NestedStep> = new Map();
+  private stepOrder: string[] = [];
+  private startTime: number = 0;
+  private options: NestedProgressOptions;
+  private completedLines: string[] = [];
+
+  constructor(title: string, options: NestedProgressOptions = {}) {
+    this.title = title;
+    this.options = options;
+  }
+
+  /**
+   * Start the progress display
+   */
+  start(): this {
+    this.startTime = Date.now();
+    this.spinner = createSpinner(this.title);
+    return this;
+  }
+
+  /**
+   * Add a new step
+   */
+  addStep(id: string, label: string, options?: { count?: { current: number; total: number } }): this {
+    this.steps.set(id, {
+      id,
+      label,
+      status: "pending",
+      count: options?.count,
+    });
+    this.stepOrder.push(id);
+    this.render();
+    return this;
+  }
+
+  /**
+   * Update an existing step
+   */
+  updateStep(id: string, update: Partial<Omit<NestedStep, "id">>): this {
+    const step = this.steps.get(id);
+    if (step) {
+      Object.assign(step, update);
+
+      // If step completed and persistSteps, save it
+      if (this.options.persistSteps && (update.status === "success" || update.status === "error" || update.status === "warning")) {
+        this.completedLines.push(this.formatStepLine(step, this.stepOrder.indexOf(id) === this.stepOrder.length - 1));
+      }
+
+      this.render();
+    }
+    return this;
+  }
+
+  /**
+   * Mark a step as running
+   */
+  runStep(id: string, detail?: string): this {
+    return this.updateStep(id, { status: "running", detail });
+  }
+
+  /**
+   * Mark a step as successful
+   */
+  succeedStep(id: string, detail?: string): this {
+    return this.updateStep(id, { status: "success", detail });
+  }
+
+  /**
+   * Mark a step as failed
+   */
+  failStep(id: string, detail?: string): this {
+    return this.updateStep(id, { status: "error", detail });
+  }
+
+  /**
+   * Mark a step as skipped
+   */
+  skipStep(id: string, detail?: string): this {
+    return this.updateStep(id, { status: "skipped", detail });
+  }
+
+  /**
+   * Complete the progress successfully
+   */
+  succeed(message?: string): void {
+    const elapsed = Date.now() - this.startTime;
+    const timeStr = this.options.showTime ? ` (${formatTime(elapsed)})` : "";
+
+    if (this.spinner) {
+      // Clear spinner and show final output
+      this.spinner.stop();
+
+      // Print completed steps if persisted
+      if (this.options.persistSteps && this.completedLines.length > 0) {
+        for (const line of this.completedLines) {
+          console.log(line);
+        }
+      }
+
+      // Final success message
+      const finalMessage = message || `${this.title} complete`;
+      console.log(`✓ ${finalMessage}${timeStr}`);
+    }
+  }
+
+  /**
+   * Complete the progress with failure
+   */
+  fail(message?: string): void {
+    if (this.spinner) {
+      this.spinner.fail(message || `${this.title} failed`);
+    }
+  }
+
+  /**
+   * Render the current progress state
+   */
+  private render(): void {
+    if (!this.spinner) return;
+
+    const lines: string[] = [this.title];
+
+    for (let i = 0; i < this.stepOrder.length; i++) {
+      const id = this.stepOrder[i];
+      const step = this.steps.get(id);
+      if (!step) continue;
+
+      const isLast = i === this.stepOrder.length - 1;
+      lines.push(this.formatStepLine(step, isLast));
+    }
+
+    this.spinner.text = lines.join("\n");
+  }
+
+  /**
+   * Format a single step line
+   */
+  private formatStepLine(step: NestedStep, isLast: boolean): string {
+    const prefix = isLast ? "  └─" : "  ├─";
+    const icon = this.getStepIcon(step.status);
+    const countStr = step.count ? ` (${step.count.current}/${step.count.total})` : "";
+    const detailStr = step.detail ? ` - ${step.detail}` : "";
+
+    return `${prefix} ${icon} ${step.label}${countStr}${detailStr}`;
+  }
+
+  /**
+   * Get icon for step status
+   */
+  private getStepIcon(status: NestedStep["status"]): string {
+    switch (status) {
+      case "success":
+        return "✓";
+      case "error":
+        return "✗";
+      case "warning":
+        return "⚠";
+      case "skipped":
+        return "○";
+      case "running":
+        return "◌";
+      case "pending":
+      default:
+        return "·";
+    }
+  }
+}
+
+// ============================================================================
+// Installation Progress (Preset-specific)
+// ============================================================================
+
+export interface InstallStep {
+  id: string;
+  label: string;
+  run: () => Promise<void>;
+  skip?: () => boolean | Promise<boolean>;
+}
+
+/**
+ * Run installation steps with nested progress display
+ */
+export async function runInstallSteps(
+  title: string,
+  steps: InstallStep[],
+  options?: NestedProgressOptions
+): Promise<{ succeeded: number; failed: number; skipped: number }> {
+  const progress = new NestedProgress(title, { showTime: true, ...options });
+  progress.start();
+
+  const results = { succeeded: 0, failed: 0, skipped: 0 };
+
+  // Add all steps first
+  for (const step of steps) {
+    progress.addStep(step.id, step.label);
+  }
+
+  // Run each step
+  for (const step of steps) {
+    // Check skip condition
+    if (step.skip) {
+      const shouldSkip = await step.skip();
+      if (shouldSkip) {
+        progress.skipStep(step.id, "skipped");
+        results.skipped++;
+        continue;
+      }
+    }
+
+    progress.runStep(step.id);
+
+    try {
+      await step.run();
+      progress.succeedStep(step.id);
+      results.succeeded++;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      progress.failStep(step.id, message);
+      results.failed++;
+      progress.fail();
+      throw error;
+    }
+  }
+
+  progress.succeed();
+  return results;
+}
