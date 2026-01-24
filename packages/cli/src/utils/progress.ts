@@ -18,8 +18,8 @@ import consola from "consola";
 export interface TaskStep {
   /** Step name for display */
   name: string;
-  /** Task function to execute */
-  task: () => Promise<void>;
+  /** Task function to execute (return value is ignored) */
+  task: () => Promise<unknown>;
   /** Optional: skip condition */
   skip?: () => boolean | Promise<boolean>;
 }

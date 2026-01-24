@@ -207,6 +207,16 @@ export const CATEGORY_CONFIGS: Record<string, CategoryConfig> = {
     description: "Schema Validation",
     exclusive: true,
   },
+  testing: {
+    name: "testing",
+    description: "Testing Framework",
+    exclusive: true,
+  },
+  form: {
+    name: "form",
+    description: "Form Handling",
+    exclusive: false,
+  },
 } as const;
 
 export const CATEGORIES = Object.keys(CATEGORY_CONFIGS) as Category[];
@@ -225,7 +235,9 @@ export type Category =
   | "email"
   | "ai"
   | "storage"
-  | "validation";
+  | "validation"
+  | "testing"
+  | "form";
 
 // ============================================================================
 // Presets

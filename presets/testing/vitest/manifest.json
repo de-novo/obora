@@ -1,0 +1,38 @@
+{
+  "$schema": "../../preset.schema.json",
+  "name": "vitest",
+  "category": "testing",
+  "description": "Vitest - Fast unit testing framework",
+  "version": "3.0.0",
+  "common": {
+    "devDependencies": {
+      "vitest": "^3.0.0",
+      "@testing-library/react": "^16.0.0",
+      "@testing-library/dom": "^10.0.0",
+      "jsdom": "^26.0.0"
+    },
+    "scripts": {
+      "test": "vitest",
+      "test:ui": "vitest --ui",
+      "test:coverage": "vitest run --coverage"
+    }
+  },
+  "targets": {
+    "nextjs": {
+      "description": "Next.js (React Testing Library)",
+      "files": ["nextjs"],
+      "detect": {
+        "packages": ["next"],
+        "packageVersions": {
+          "next": ">=14.1"
+        }
+      },
+      "postInstall": [
+        "Create test files with .test.ts or .spec.ts extension",
+        "Run: pnpm test"
+      ]
+    }
+  },
+  "conflicts": ["jest", "playwright"],
+  "postInstall": []
+}

@@ -92,7 +92,7 @@ export const syncCommand = defineCommand({
 
     // Single type sync
     if (args.type !== "all") {
-      const syncFunctions: Record<string, () => Promise<void>> = {
+      const syncFunctions: Record<string, () => Promise<unknown>> = {
         skills: () => syncSkills(projectPath, options),
         agents: () => syncAgents(projectPath, options),
         rules: () => syncRules(projectPath, options),

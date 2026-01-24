@@ -1,0 +1,48 @@
+{
+  "$schema": "../../preset.schema.json",
+  "name": "jotai",
+  "category": "state",
+  "description": "Jotai - Primitive and flexible state management",
+  "version": "2.10.0",
+  "common": {
+    "dependencies": {
+      "jotai": "^2.10.0"
+    }
+  },
+  "targets": {
+    "nextjs": {
+      "description": "Next.js (atomic state)",
+      "files": ["nextjs"],
+      "detect": {
+        "packages": ["next"],
+        "packageVersions": {
+          "next": ">=14.1"
+        }
+      },
+      "postInstall": [
+        "See lib/atoms/example.ts for atom examples",
+        "Import and use atoms in your components"
+      ]
+    },
+    "nextjs-auto": {
+      "description": "Next.js with Provider (auto setup)",
+      "files": ["nextjs"],
+      "transform": [
+        {
+          "target": "app/providers.tsx",
+          "type": "import",
+          "content": "import { Provider as JotaiProvider } from \"jotai\";"
+        },
+        {
+          "target": "app/providers.tsx",
+          "type": "provider-wrap",
+          "provider": "JotaiProvider"
+        }
+      ],
+      "postInstall": [
+        "See lib/atoms/example.ts for atom examples"
+      ]
+    }
+  },
+  "postInstall": []
+}

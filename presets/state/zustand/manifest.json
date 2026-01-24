@@ -1,0 +1,40 @@
+{
+  "$schema": "../../preset.schema.json",
+  "name": "zustand",
+  "category": "state",
+  "description": "Zustand - Lightweight state management",
+  "version": "5.0.0",
+  "common": {
+    "dependencies": {
+      "zustand": "^5.0.0"
+    }
+  },
+  "targets": {
+    "nextjs": {
+      "description": "Next.js (client-side state)",
+      "files": ["nextjs"],
+      "detect": {
+        "packages": ["next"],
+        "packageVersions": {
+          "next": ">=14.1"
+        }
+      },
+      "postInstall": [
+        "See lib/store/example.ts for store example",
+        "Import and use stores in your components"
+      ]
+    },
+    "nextjs-persist": {
+      "description": "Next.js with persistence middleware",
+      "dependencies": {
+        "zustand": "^5.0.0"
+      },
+      "files": ["nextjs"],
+      "postInstall": [
+        "See lib/store/example.ts for store with persistence",
+        "Data persists in localStorage"
+      ]
+    }
+  },
+  "postInstall": []
+}

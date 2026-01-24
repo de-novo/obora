@@ -1,0 +1,31 @@
+{
+  "$schema": "../../preset.schema.json",
+  "name": "react-hook-form",
+  "category": "form",
+  "description": "React Hook Form with Zod validation",
+  "version": "7.54.0",
+  "common": {
+    "dependencies": {
+      "react-hook-form": "^7.54.0",
+      "@hookform/resolvers": "^3.9.0",
+      "zod": "^3.24.0"
+    }
+  },
+  "targets": {
+    "nextjs": {
+      "description": "Next.js (form with Zod validation)",
+      "files": ["nextjs"],
+      "detect": {
+        "packages": ["next"],
+        "packageVersions": {
+          "next": ">=14.1"
+        }
+      },
+      "postInstall": [
+        "See lib/form/example-schema.ts for Zod schema examples",
+        "See lib/form/use-form-example.ts for form hook examples"
+      ]
+    }
+  },
+  "postInstall": []
+}
