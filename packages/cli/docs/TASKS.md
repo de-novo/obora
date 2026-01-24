@@ -286,28 +286,52 @@ $ obora create-preset my-preset
 
 ### 4.1 에러 메시지 표준화
 
-**상태**: 🟡 부분 구현
+**상태**: ✅ 완료
 
 **목표**: 모든 에러에 일관된 포맷과 해결 방법 제시
 
 ```
-✖ Transform failed: Could not find {children} in providers.tsx
+[E305] Failed to wrap with provider 'QueryClientProvider' in 'app/providers.tsx'
 
-Expected:
-  return <>{children}</>
+Details:
+  target: app/providers.tsx
+  provider: QueryClientProvider
+  reason: Could not find {children}
 
-Solution:
-  1. Open app/providers.tsx
-  2. Ensure the Providers component returns {children}
-  3. Run the command again
+Suggestions:
+  → Ensure the file contains a valid React component with {children}
+  → Check if the component uses JSX syntax
+  → Verify the file exports a Providers component
+  → Manual fix: wrap {children} with the provider component
 
-Documentation: https://obora.dev/docs/errors/transform-001
+Related:
+  - app/providers.tsx
 ```
 
+**관련 파일**:
+- `src/utils/errors.ts` - 에러 시스템 핵심
+
+**에러 코드 체계**:
+| 범위 | 카테고리 |
+|------|----------|
+| E1xx | Config 에러 |
+| E2xx | Preset 에러 |
+| E3xx | Transform 에러 |
+| E4xx | 의존성 에러 |
+| E5xx | 파일 시스템 에러 |
+| E6xx | 프로젝트 에러 |
+| E7xx | 네트워크 에러 |
+| E8xx | 검증 에러 |
+| E9xx | 일반 에러 |
+
 **작업 항목**:
-- [ ] 에러 코드 체계 정의
-- [ ] 에러별 해결 방법 문서화
-- [ ] 링크 추가
+- [x] 에러 코드 체계 정의 (E1xx ~ E9xx)
+- [x] Transform 에러 세분화 (E304-E310)
+- [x] 검증 에러 추가 (E801-E803)
+- [x] CLIError 클래스 (code, message, details, suggestions, related)
+- [x] Factory 함수 (Errors.transformProviderWrapFailed 등)
+- [x] Transform 에러 컨텍스트 타입 및 헬퍼
+- [ ] 에러별 문서 링크 (향후 웹사이트 구축 시)
 
 ---
 

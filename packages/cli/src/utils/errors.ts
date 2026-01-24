@@ -31,6 +31,13 @@ export const ErrorCode = {
   TRANSFORM_FAILED: "E301",
   TRANSFORM_FILE_NOT_FOUND: "E302",
   TRANSFORM_PARSE_ERROR: "E303",
+  TRANSFORM_IMPORT_FAILED: "E304",
+  TRANSFORM_PROVIDER_WRAP_FAILED: "E305",
+  TRANSFORM_LAYOUT_COMPONENT_FAILED: "E306",
+  TRANSFORM_NESTJS_MODULE_FAILED: "E307",
+  TRANSFORM_MARKER_NOT_FOUND: "E308",
+  TRANSFORM_PATTERN_NOT_FOUND: "E309",
+  TRANSFORM_DUPLICATE_DETECTED: "E310",
 
   // Dependency errors (E4xx)
   DEP_INSTALL_FAILED: "E401",
@@ -51,6 +58,11 @@ export const ErrorCode = {
   // Network errors (E7xx)
   NETWORK_ERROR: "E701",
   NETWORK_TIMEOUT: "E702",
+
+  // Validation errors (E8xx)
+  INVALID_ARGUMENT: "E801",
+  MISSING_REQUIRED: "E802",
+  VALIDATION_FAILED: "E803",
 
   // General errors (E9xx)
   OPERATION_FAILED: "E901",
@@ -189,6 +201,63 @@ export function showWarning(
 }
 
 // ============================================================================
+// Transform Error Context Types
+// ============================================================================
+
+export type TransformErrorType =
+  | "import"
+  | "export"
+  | "dependency"
+  | "provider-wrap"
+  | "layout-component"
+  | "nestjs-module"
+  | "marker"
+  | "json-property"
+  | "config"
+  | "script"
+  | "env";
+
+export interface TransformErrorContext {
+  type: TransformErrorType;
+  target: string;
+  content?: string;
+  reason?: string;
+  expected?: string;
+}
+
+/**
+ * Create a CLIError from transform context
+ */
+export function createTransformError(ctx: TransformErrorContext): CLIError {
+  switch (ctx.type) {
+    case "import":
+      return Errors.transformImportFailed(ctx.target, ctx.content || "", ctx.reason);
+    case "provider-wrap":
+      return Errors.transformProviderWrapFailed(ctx.target, ctx.content || "", ctx.reason);
+    case "layout-component":
+      return Errors.transformLayoutComponentFailed(ctx.target, ctx.content || "", ctx.reason);
+    case "nestjs-module":
+      return Errors.transformNestJsModuleFailed(ctx.target, ctx.content || "", ctx.reason);
+    case "marker":
+      return Errors.transformMarkerNotFound(ctx.target, ctx.content || "");
+    default:
+      return Errors.transformFailed(ctx.target, ctx.type, ctx.reason);
+  }
+}
+
+/**
+ * Format a transform error message with suggestions for console output
+ * Returns a structured error string that includes actionable guidance
+ */
+export function formatTransformError(
+  ctx: TransformErrorContext,
+  verbose = false
+): string {
+  const error = createTransformError(ctx);
+  return error.format();
+}
+
+// ============================================================================
 // Error Factory Functions
 // ============================================================================
 
@@ -299,6 +368,127 @@ export const Errors = {
       ],
     }),
 
+  transformImportFailed: (
+    target: string,
+    importSpec: string,
+    reason?: string
+  ): CLIError =>
+    new CLIError({
+      code: ErrorCode.TRANSFORM_IMPORT_FAILED,
+      message: `Failed to add import to '${target}'`,
+      details: { target, import: importSpec, reason },
+      suggestions: [
+        "Check if the file uses ES modules syntax",
+        "Verify the target file is a valid JavaScript/TypeScript file",
+        "Ensure the import statement syntax is correct",
+      ],
+      related: [target],
+    }),
+
+  transformProviderWrapFailed: (
+    target: string,
+    provider: string,
+    reason?: string
+  ): CLIError =>
+    new CLIError({
+      code: ErrorCode.TRANSFORM_PROVIDER_WRAP_FAILED,
+      message: `Failed to wrap with provider '${provider}' in '${target}'`,
+      details: { target, provider, reason },
+      suggestions: [
+        "Ensure the file contains a valid React component with {children}",
+        "Check if the component uses JSX syntax",
+        "Verify the file exports a Providers component",
+        "Manual fix: wrap {children} with the provider component",
+      ],
+      related: [target],
+    }),
+
+  transformLayoutComponentFailed: (
+    target: string,
+    component: string,
+    reason?: string
+  ): CLIError =>
+    new CLIError({
+      code: ErrorCode.TRANSFORM_LAYOUT_COMPONENT_FAILED,
+      message: `Failed to add component '${component}' to layout '${target}'`,
+      details: { target, component, reason },
+      suggestions: [
+        "Ensure the layout file returns valid JSX",
+        "Check if the layout has a <body> or container element",
+        "Verify the component import is correct",
+        "Manual fix: add the component inside the layout's JSX",
+      ],
+      related: [target],
+    }),
+
+  transformNestJsModuleFailed: (
+    target: string,
+    module: string,
+    reason?: string
+  ): CLIError =>
+    new CLIError({
+      code: ErrorCode.TRANSFORM_NESTJS_MODULE_FAILED,
+      message: `Failed to add NestJS module '${module}' to '${target}'`,
+      details: { target, module, reason },
+      suggestions: [
+        "Ensure the target is a valid NestJS module with @Module decorator",
+        "Check if the imports array exists in @Module",
+        "Verify the module name is spelled correctly",
+        "Manual fix: add the module to the imports array in @Module",
+      ],
+      related: [target],
+    }),
+
+  transformMarkerNotFound: (
+    target: string,
+    marker: string
+  ): CLIError =>
+    new CLIError({
+      code: ErrorCode.TRANSFORM_MARKER_NOT_FOUND,
+      message: `Marker '${marker}' not found in '${target}'`,
+      details: { target, marker },
+      suggestions: [
+        `Add the marker comment to the target file: // ${marker}`,
+        "Check if the marker was removed or modified",
+        "Use the correct marker syntax for your file type",
+      ],
+      related: [target],
+    }),
+
+  transformPatternNotFound: (
+    target: string,
+    pattern: string,
+    expected?: string
+  ): CLIError =>
+    new CLIError({
+      code: ErrorCode.TRANSFORM_PATTERN_NOT_FOUND,
+      message: `Required pattern not found in '${target}'`,
+      details: { target, pattern, expected },
+      suggestions: [
+        expected ? `Expected to find: ${expected}` : "Check the file structure",
+        "The file structure may have changed",
+        "Verify the preset is compatible with your project",
+      ],
+      related: [target],
+    }),
+
+  transformDuplicateDetected: (
+    target: string,
+    type: string,
+    content: string
+  ): CLIError =>
+    new CLIError({
+      code: ErrorCode.TRANSFORM_DUPLICATE_DETECTED,
+      message: `Duplicate ${type} already exists in '${target}'`,
+      details: { target, type, content },
+      suggestions: [
+        "The transform was skipped to avoid duplicates",
+        "Remove the existing entry if you want to re-add it",
+        "This is usually safe to ignore",
+      ],
+      related: [target],
+    }),
+
   // Dependency errors
   depInstallFailed: (packages: string[], reason?: string): CLIError =>
     new CLIError({
@@ -372,6 +562,54 @@ export const Errors = {
       suggestions: [
         "Use --force to reinitialize",
         "Run 'obora sync' to update assets instead",
+      ],
+    }),
+
+  // Validation errors
+  invalidArgument: (
+    messageOrArgument: string,
+    reason?: string,
+    expected?: string
+  ): CLIError => {
+    // Support both simple message and structured format
+    const isSimple = reason === undefined;
+    const message = isSimple
+      ? messageOrArgument
+      : `Invalid argument '${messageOrArgument}': ${reason}`;
+
+    return new CLIError({
+      code: ErrorCode.INVALID_ARGUMENT,
+      message,
+      details: expected ? { expected } : undefined,
+      suggestions: [
+        expected ? `Expected: ${expected}` : "Check the argument value",
+        "Run the command with --help for usage information",
+      ].filter(Boolean),
+    });
+  },
+
+  missingRequired: (field: string, context?: string): CLIError =>
+    new CLIError({
+      code: ErrorCode.MISSING_REQUIRED,
+      message: `Missing required ${context ? `${context} ` : ""}field: ${field}`,
+      suggestions: [
+        `Provide the required ${field}`,
+        "Run the command with --help for usage information",
+      ],
+    }),
+
+  validationFailed: (
+    field: string,
+    value: unknown,
+    reason: string
+  ): CLIError =>
+    new CLIError({
+      code: ErrorCode.VALIDATION_FAILED,
+      message: `Validation failed for '${field}': ${reason}`,
+      details: { field, value, reason },
+      suggestions: [
+        "Check the input value format",
+        "Refer to the documentation for valid values",
       ],
     }),
 
