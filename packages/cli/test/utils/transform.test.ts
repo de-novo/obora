@@ -475,13 +475,60 @@ export function Providers({ children }: { children: React.ReactNode }) {
       expect(content).toContain("</ThemeProvider>");
     });
 
-    it("should return error for non-existent file", async () => {
-      const result = await addProviderWrap(join(testDir, "nonexistent.tsx"), {
-        provider: "QueryProvider",
+    it("should auto-create providers.tsx with default template when file does not exist", async () => {
+      const filePath = join(testDir, "new-providers.tsx");
+
+      const result = await addProviderWrap(filePath, { provider: "QueryProvider" });
+
+      expect(result.success).toBe(true);
+      expect(result.changed).toBe(true);
+
+      // File should be created
+      const exists = await fs.access(filePath).then(() => true).catch(() => false);
+      expect(exists).toBe(true);
+
+      // File should contain the provider
+      const content = await fs.readFile(filePath, "utf-8");
+      expect(content).toContain('"use client"');
+      expect(content).toContain("export function Providers");
+      expect(content).toContain("<QueryProvider>");
+      expect(content).toContain("</QueryProvider>");
+    });
+
+    it("should preview auto-creation without actually creating file in dry-run mode", async () => {
+      const filePath = join(testDir, "dry-run-providers.tsx");
+
+      const result = await addProviderWrap(
+        filePath,
+        { provider: "AuthProvider" },
+        { dryRun: true }
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.changed).toBe(true);
+      expect(result.preview).toBeDefined();
+      expect(result.preview).toContain("<AuthProvider>");
+      expect(result.preview).toContain("</AuthProvider>");
+
+      // File should NOT be created in dry-run mode
+      const exists = await fs.access(filePath).then(() => true).catch(() => false);
+      expect(exists).toBe(false);
+    });
+
+    it("should auto-create providers.tsx with props", async () => {
+      const filePath = join(testDir, "new-providers-with-props.tsx");
+
+      const result = await addProviderWrap(filePath, {
+        provider: "ThemeProvider",
+        props: { attribute: '"class"' },
       });
 
-      expect(result.success).toBe(false);
-      expect(result.error).toContain("File not found");
+      expect(result.success).toBe(true);
+      expect(result.changed).toBe(true);
+
+      const content = await fs.readFile(filePath, "utf-8");
+      expect(content).toContain('<ThemeProvider attribute={"class"}');
+      expect(content).toContain("</ThemeProvider>");
     });
 
     it("should return preview without writing file in dry-run mode", async () => {

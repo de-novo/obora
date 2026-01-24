@@ -522,11 +522,30 @@ export async function addNestJsModule(
 // ============================================================================
 
 /**
+ * Default providers.tsx template for Next.js App Router.
+ * Used when the file doesn't exist and needs to be created.
+ */
+const DEFAULT_PROVIDERS_TEMPLATE = `"use client";
+
+import type { ReactNode } from "react";
+
+export function Providers({ children }: { children: ReactNode }) {
+  return (
+    <>
+      {children}
+    </>
+  );
+}
+`;
+
+/**
  * Add a provider wrapper to a React providers file.
  * Supports the common patterns used in Next.js App Router.
  *
  * Pattern 1: Array-based providers (app/providers.tsx with compose pattern)
  * Pattern 2: Direct JSX nesting
+ *
+ * If the file doesn't exist, a default providers.tsx template is created.
  *
  * @param filePath - Path to the providers file
  * @param spec - Provider wrap specification
@@ -539,11 +558,22 @@ export async function addProviderWrap(
   options?: TransformOptions
 ): Promise<TransformResult> {
   try {
-    if (!(await fileExists(filePath))) {
-      return { success: false, error: `File not found: ${filePath}` };
-    }
+    let content: string;
 
-    const content = await fs.readFile(filePath, "utf-8");
+    // Auto-create providers file if it doesn't exist
+    if (!(await fileExists(filePath))) {
+      if (options?.dryRun) {
+        consola.info(`[dry-run] Would create ${filePath} with default template`);
+        // Use template content for dry-run preview
+        content = DEFAULT_PROVIDERS_TEMPLATE;
+      } else {
+        await fs.writeFile(filePath, DEFAULT_PROVIDERS_TEMPLATE);
+        consola.success(`Created ${filePath} with default template`);
+        content = DEFAULT_PROVIDERS_TEMPLATE;
+      }
+    } else {
+      content = await fs.readFile(filePath, "utf-8");
+    }
 
     // Check if provider already exists
     const providerPattern = new RegExp(`<${spec.provider}[\\s>]`);
