@@ -14,8 +14,12 @@ import type {
   PresetLockfile,
   PresetLockfileEntry,
   HistoryEntry,
+  HistoryEntryWithUndo,
   OboraHistory,
   PackageManager,
+  FileBackup,
+  UndoData,
+  BackupManifest,
 } from "./types.js";
 
 // ============================================================================
@@ -530,4 +534,239 @@ export function getInstalledPresets(
   }
 
   return installed;
+}
+
+// ============================================================================
+// Backup Operations
+// ============================================================================
+
+const BACKUPS_DIR = "backups";
+
+/**
+ * Get the backups directory path
+ */
+export function getBackupsDir(projectPath: string): string {
+  return join(getConfigDir(projectPath), BACKUPS_DIR);
+}
+
+/**
+ * Get the path for a specific backup
+ */
+export function getBackupPath(projectPath: string, backupId: string): string {
+  return join(getBackupsDir(projectPath), backupId);
+}
+
+/**
+ * Generate a unique backup ID
+ */
+export function generateBackupId(): string {
+  const timestamp = Date.now();
+  const random = Math.random().toString(36).substring(2, 8);
+  return `${timestamp}-${random}`;
+}
+
+/**
+ * Save file backups to disk
+ */
+export async function saveBackups(
+  projectPath: string,
+  backupId: string,
+  backups: FileBackup[],
+  action: HistoryEntry["action"]
+): Promise<void> {
+  const backupDir = getBackupPath(projectPath, backupId);
+
+  // Create backup directory
+  await mkdir(backupDir, { recursive: true });
+
+  // Save each backup file
+  const files: string[] = [];
+  for (let i = 0; i < backups.length; i++) {
+    const backup = backups[i];
+    const fileName = `${i}.backup`;
+    const metaFileName = `${i}.meta.json`;
+
+    // Save file content (if it existed)
+    if (backup.content !== null) {
+      await writeFile(join(backupDir, fileName), backup.content, "utf-8");
+    }
+
+    // Save metadata (path and whether file existed)
+    await writeFile(
+      join(backupDir, metaFileName),
+      JSON.stringify({
+        path: backup.path,
+        existed: backup.content !== null,
+      }),
+      "utf-8"
+    );
+
+    files.push(backup.path);
+  }
+
+  // Save manifest
+  const manifest: BackupManifest = {
+    id: backupId,
+    createdAt: new Date().toISOString(),
+    action,
+    files,
+  };
+
+  await writeFile(
+    join(backupDir, "manifest.json"),
+    JSON.stringify(manifest, null, 2),
+    "utf-8"
+  );
+}
+
+/**
+ * Load backups from disk
+ */
+export async function loadBackups(
+  projectPath: string,
+  backupId: string
+): Promise<FileBackup[]> {
+  const backupDir = getBackupPath(projectPath, backupId);
+  const backups: FileBackup[] = [];
+
+  if (!existsSync(backupDir)) {
+    return backups;
+  }
+
+  // Read manifest to get file count
+  const manifestPath = join(backupDir, "manifest.json");
+  if (!existsSync(manifestPath)) {
+    return backups;
+  }
+
+  const manifestContent = await readFile(manifestPath, "utf-8");
+  const manifest = JSON.parse(manifestContent) as BackupManifest;
+
+  // Load each backup
+  for (let i = 0; i < manifest.files.length; i++) {
+    const metaPath = join(backupDir, `${i}.meta.json`);
+    const backupPath = join(backupDir, `${i}.backup`);
+
+    if (!existsSync(metaPath)) continue;
+
+    const metaContent = await readFile(metaPath, "utf-8");
+    const meta = JSON.parse(metaContent) as { path: string; existed: boolean };
+
+    let content: string | null = null;
+    if (meta.existed && existsSync(backupPath)) {
+      content = await readFile(backupPath, "utf-8");
+    }
+
+    backups.push({
+      path: meta.path,
+      content,
+    });
+  }
+
+  return backups;
+}
+
+/**
+ * Delete backup directory
+ */
+export async function deleteBackup(
+  projectPath: string,
+  backupId: string
+): Promise<void> {
+  const backupDir = getBackupPath(projectPath, backupId);
+
+  if (!existsSync(backupDir)) {
+    return;
+  }
+
+  // Read directory contents and delete files
+  const { readdir, unlink, rmdir } = await import("node:fs/promises");
+  const files = await readdir(backupDir);
+
+  for (const file of files) {
+    await unlink(join(backupDir, file));
+  }
+
+  await rmdir(backupDir);
+}
+
+/**
+ * Get backup manifest
+ */
+export async function getBackupManifest(
+  projectPath: string,
+  backupId: string
+): Promise<BackupManifest | null> {
+  const manifestPath = join(getBackupPath(projectPath, backupId), "manifest.json");
+
+  if (!existsSync(manifestPath)) {
+    return null;
+  }
+
+  try {
+    const content = await readFile(manifestPath, "utf-8");
+    return JSON.parse(content) as BackupManifest;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Add history entry with undo data
+ */
+export async function addHistoryEntryWithUndo(
+  projectPath: string,
+  entry: Omit<HistoryEntryWithUndo, "timestamp">
+): Promise<void> {
+  const configDir = getConfigDir(projectPath);
+  const historyPath = getHistoryPath(projectPath);
+
+  if (!existsSync(configDir)) {
+    await mkdir(configDir, { recursive: true });
+  }
+
+  const history = await readOboraHistory(projectPath);
+
+  history.entries.push({
+    ...entry,
+    timestamp: new Date().toISOString(),
+  } as HistoryEntry);
+
+  await writeFile(historyPath, JSON.stringify(history, null, 2), "utf-8");
+}
+
+/**
+ * Get the last undoable history entry
+ */
+export async function getLastUndoableEntry(
+  projectPath: string
+): Promise<HistoryEntryWithUndo | null> {
+  const history = await readOboraHistory(projectPath);
+
+  // Search from the end for an entry with undoData
+  for (let i = history.entries.length - 1; i >= 0; i--) {
+    const entry = history.entries[i] as HistoryEntryWithUndo;
+    if (entry.undoData) {
+      return entry;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Remove an entry from history (after successful undo)
+ */
+export async function removeHistoryEntry(
+  projectPath: string,
+  timestamp: string
+): Promise<void> {
+  const historyPath = getHistoryPath(projectPath);
+  const history = await readOboraHistory(projectPath);
+
+  history.entries = history.entries.filter(
+    (entry) => entry.timestamp !== timestamp
+  );
+
+  await writeFile(historyPath, JSON.stringify(history, null, 2), "utf-8");
 }

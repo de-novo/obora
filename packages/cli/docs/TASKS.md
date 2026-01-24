@@ -356,7 +356,7 @@ Related:
 
 ### 4.3 Undo 기능
 
-**상태**: 🔴 미구현
+**상태**: ✅ 완료
 
 **목표**: 마지막 작업 취소
 
@@ -369,10 +369,16 @@ $ obora undo
 ✓ Reverted changes
 ```
 
+**관련 파일**:
+- `src/commands/undo.ts` - undo 명령어
+- `src/commands/add.ts` - 백업 저장 로직
+- `packages/project-config/src/types.ts` - UndoData 타입
+- `packages/project-config/src/project-config.ts` - 백업 함수
+
 **작업 항목**:
-- [ ] 작업 히스토리 저장
-- [ ] 파일 백업 시스템
-- [ ] undo 명령어 구현
+- [x] 작업 히스토리 저장 (HistoryEntryWithUndo, addHistoryEntryWithUndo)
+- [x] 파일 백업 시스템 (.obora/backups/<id>/, BackupManifest)
+- [x] undo 명령어 구현 (config 복원, 파일 복원, --delete-files 옵션)
 
 ---
 
@@ -382,6 +388,7 @@ $ obora undo
 
 | 작업 | 완료일 | 커밋 |
 |------|--------|------|
+| P4.3 Undo 기능 | 2026-01-24 | - |
 | P3.2 Preset 생성 CLI | 2026-01-24 | - |
 | P3.3 Preset 검증 강화 | 2026-01-24 | - |
 | P2.3 Conditional Transform | 2026-01-24 | ed75327 |

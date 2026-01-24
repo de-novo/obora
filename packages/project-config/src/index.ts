@@ -12,6 +12,7 @@ export type {
   PresetLockfile,
   PresetLockfileEntry,
   HistoryEntry,
+  HistoryEntryWithUndo,
   HistoryAction,
   OboraHistory,
   PackageManager,
@@ -20,6 +21,11 @@ export type {
   ProjectRegistrationOptions,
   GlobalPreferences,
   GlobalPreferenceKey,
+  // Undo types
+  FileBackup,
+  UndoData,
+  UndoConfigChanges,
+  BackupManifest,
 } from "./types.js";
 
 // Project Config (local .obora/)
@@ -59,6 +65,17 @@ export {
   // Query helpers
   getInstalledApps,
   getInstalledPresets,
+  // Backup operations
+  getBackupsDir,
+  getBackupPath,
+  generateBackupId,
+  saveBackups,
+  loadBackups,
+  deleteBackup,
+  getBackupManifest,
+  addHistoryEntryWithUndo,
+  getLastUndoableEntry,
+  removeHistoryEntry,
 } from "./project-config.js";
 
 // Global Config (~/.obora/)

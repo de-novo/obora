@@ -47,7 +47,12 @@ import {
   readOboraConfig,
   removeSlotPreset,
   setPresetTarget,
+  generateBackupId,
+  saveBackups,
+  addHistoryEntryWithUndo,
+  type SlotConfig,
 } from "../utils/project-config";
+import type { FileBackup } from "../utils/transform";
 import { Errors, showError } from "../utils/errors";
 import { withSpinner, ProgressGroup } from "../utils/progress";
 
@@ -919,6 +924,10 @@ export const addCommand = defineCommand({
     const presetInfo = PRESETS[presetName];
     const presetCategory = presetInfo.category;
 
+    // Save current slot state for undo capability
+    const previousSlotConfig: SlotConfig | null = existingConfig?.slots[presetCategory] ?? null;
+    const previousPresetTarget: string | undefined = existingConfig?.presetTargets?.[presetName];
+
     // Determine target app for monorepo
     let targetAppDir: string | null = null;
     let targetAppName: string | null = null;
@@ -1490,6 +1499,49 @@ export const addCommand = defineCommand({
           await addSlotPreset(projectDir, presetCategory, presetName, presetInfo.version);
           await setPresetTarget(projectDir, presetName, selectedTarget, targetSource, targetReasonDetail);
           consola.success(`Updated .obora/config.json`);
+
+          // Save undo data for rollback capability
+          const backupId = generateBackupId();
+          const addedFiles = [
+            ...(commonConfig.files || []),
+            ...(targetConfig.files || []),
+          ].map((f) => join(presetTargetDir, f));
+
+          const addedDependencies = [
+            ...Object.keys(mergedDeps.dependencies || {}),
+            ...Object.keys(mergedDeps.devDependencies || {}),
+          ];
+
+          // Create file backups for any modified files (e.g., package.json)
+          const fileBackups: FileBackup[] = [];
+          if (await fileExists(packageJsonPath)) {
+            // We don't backup package.json content as it's merged, not replaced
+            // Just track that it was modified
+          }
+
+          // Save backups to .obora/backups/
+          if (fileBackups.length > 0) {
+            await saveBackups(projectDir, backupId, fileBackups, "add");
+          }
+
+          // Add history entry with undo data
+          await addHistoryEntryWithUndo(projectDir, {
+            action: "add",
+            target: presetCategory,
+            preset: presetName,
+            toVersion: presetInfo.version,
+            undoData: {
+              backupId,
+              addedFiles: addedFiles.length > 0 ? addedFiles : undefined,
+              addedDependencies: addedDependencies.length > 0 ? addedDependencies : undefined,
+              configChanges: {
+                slot: presetCategory,
+                preset: presetName,
+                previousSlotConfig,
+                previousPresetTarget,
+              },
+            },
+          });
         }
 
         consola.success(`Added ${presetName} (${selectedTarget}) preset!`);

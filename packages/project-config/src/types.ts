@@ -91,6 +91,70 @@ export interface OboraHistory {
 }
 
 // ============================================================================
+// Undo Types (.obora/backups/)
+// ============================================================================
+
+/**
+ * File backup for undo operation
+ */
+export interface FileBackup {
+  /** Absolute or relative path to the file */
+  path: string;
+  /** Original content (null if file didn't exist before) */
+  content: string | null;
+}
+
+/**
+ * Config changes that can be reverted
+ */
+export interface UndoConfigChanges {
+  /** Slot that was modified */
+  slot?: string;
+  /** Preset that was added/modified */
+  preset?: string;
+  /** Previous slot configuration (null if slot was empty) */
+  previousSlotConfig?: SlotConfig | null;
+  /** Previous preset target */
+  previousPresetTarget?: string;
+}
+
+/**
+ * Data required to undo an operation
+ */
+export interface UndoData {
+  /** Unique backup identifier */
+  backupId: string;
+  /** Files that were created (to delete on undo) */
+  addedFiles?: string[];
+  /** Dependencies that were added (package names) */
+  addedDependencies?: string[];
+  /** Config changes to revert */
+  configChanges?: UndoConfigChanges;
+}
+
+/**
+ * Extended history entry with undo support
+ */
+export interface HistoryEntryWithUndo extends HistoryEntry {
+  /** Undo data (if operation is undoable) */
+  undoData?: UndoData;
+}
+
+/**
+ * Backup manifest stored in .obora/backups/<id>/manifest.json
+ */
+export interface BackupManifest {
+  /** Backup ID */
+  id: string;
+  /** When the backup was created */
+  createdAt: string;
+  /** Related history action */
+  action: HistoryAction;
+  /** Files included in backup */
+  files: string[];
+}
+
+// ============================================================================
 // Global Config Types (~/.obora/)
 // ============================================================================
 

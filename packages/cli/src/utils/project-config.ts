@@ -28,6 +28,20 @@ export {
 export {
   readOboraHistory,
   addHistoryEntry,
+  addHistoryEntryWithUndo,
+  getLastUndoableEntry,
+  removeHistoryEntry,
+} from "@obora/project-config";
+
+// Backup operations
+export {
+  getBackupsDir,
+  getBackupPath,
+  generateBackupId,
+  saveBackups,
+  loadBackups,
+  deleteBackup,
+  getBackupManifest,
 } from "@obora/project-config";
 
 // Lockfile operations
@@ -52,8 +66,13 @@ export type {
   AppConfig,
   OboraHistory,
   HistoryEntry,
+  HistoryEntryWithUndo,
   PresetLockfile,
   AppPathResolver,
+  // Undo types (FileBackup is already exported from transform.ts)
+  UndoData,
+  UndoConfigChanges,
+  BackupManifest,
 } from "@obora/project-config";
 
 // Legacy re-export: APP_MODULES for path resolution

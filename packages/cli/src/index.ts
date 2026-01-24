@@ -19,6 +19,7 @@ import { configCommand } from "./commands/config";
 import { titleGenerateCommand } from "./commands/title-generate";
 import { syncCommand } from "./commands/sync";
 import { transformCommand } from "./commands/transform";
+import { undoCommand } from "./commands/undo";
 import { initializeGlobalConfig } from "./utils";
 
 const main = defineCommand({
@@ -45,6 +46,7 @@ const main = defineCommand({
     sandbox: sandboxCommand,
     sync: syncCommand,
     transform: transformCommand,
+    undo: undoCommand,
     "title-generate": titleGenerateCommand,
   },
   setup() {
@@ -58,7 +60,7 @@ export function runMain() {
   _runMain(main);
 }
 
-export { createCommand, createPresetCommand, initCommand, addCommand, removeCommand, upgradeCommand, ejectCommand, doctorCommand, statusCommand, listCommand, configCommand, llmHelpCommand, chatCommand, runCommand, sandboxCommand, syncCommand, transformCommand, titleGenerateCommand };
+export { createCommand, createPresetCommand, initCommand, addCommand, removeCommand, upgradeCommand, ejectCommand, doctorCommand, statusCommand, listCommand, configCommand, llmHelpCommand, chatCommand, runCommand, sandboxCommand, syncCommand, transformCommand, undoCommand, titleGenerateCommand };
 
 // Re-export from new packages for backwards compatibility
 export * from "@obora/workflow-core";
