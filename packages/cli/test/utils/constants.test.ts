@@ -151,6 +151,7 @@ describe("constants", () => {
         "linting",
         "database",
         "auth",
+        "api",
         "payment",
         "analytics",
         "data-fetching",
@@ -170,8 +171,8 @@ describe("constants", () => {
       });
     });
 
-    it("should have 16 categories", () => {
-      expect(CATEGORIES.length).toBe(16);
+    it("should have 17 categories", () => {
+      expect(CATEGORIES.length).toBe(17);
     });
 
     it("should have config for each category", () => {

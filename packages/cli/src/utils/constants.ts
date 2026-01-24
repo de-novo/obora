@@ -152,6 +152,11 @@ export const CATEGORY_CONFIGS: Record<string, CategoryConfig> = {
     description: "Authentication",
     exclusive: true,
   },
+  api: {
+    name: "api",
+    description: "API Framework",
+    exclusive: false,
+  },
   payment: {
     name: "payment",
     description: "Payment Processing",
@@ -225,6 +230,7 @@ export type Category =
   | "linting"
   | "database"
   | "auth"
+  | "api"
   | "payment"
   | "analytics"
   | "data-fetching"

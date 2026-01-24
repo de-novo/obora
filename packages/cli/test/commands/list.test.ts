@@ -184,6 +184,7 @@ describe("list command", () => {
       expect(CATEGORIES).toContain("linting");
       expect(CATEGORIES).toContain("auth");
       expect(CATEGORIES).toContain("database");
+      expect(CATEGORIES).toContain("api");
       expect(CATEGORIES).toContain("payment");
       expect(CATEGORIES).toContain("analytics");
       expect(CATEGORIES).toContain("data-fetching");
@@ -199,8 +200,8 @@ describe("list command", () => {
       expect(CATEGORIES).toContain("form");
     });
 
-    it("should have 16 categories", () => {
-      expect(CATEGORIES.length).toBe(16);
+    it("should have 17 categories", () => {
+      expect(CATEGORIES.length).toBe(17);
     });
   });
 });

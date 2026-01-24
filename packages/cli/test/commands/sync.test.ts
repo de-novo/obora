@@ -1,8 +1,26 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { syncCommand } from "../../src/commands/sync";
 import { join } from "pathe";
 import { promises as fs, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
+
+// Mock consola to avoid test output
+vi.mock("consola", () => {
+  const mockFns = {
+    log: vi.fn(),
+    info: vi.fn(),
+    success: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+    start: vi.fn(),
+    box: vi.fn(),
+  };
+  return {
+    default: mockFns,
+    consola: mockFns,
+  };
+});
 
 // Note: These tests validate command behavior, not actual syncing
 // (source assets may not exist in test environment before build)

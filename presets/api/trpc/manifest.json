@@ -1,0 +1,106 @@
+{
+  "$schema": "../../preset.schema.json",
+  "name": "trpc",
+  "category": "api",
+  "description": "tRPC - End-to-end typesafe APIs for TypeScript",
+  "version": "11.0.0",
+  "common": {
+    "dependencies": {
+      "@trpc/server": "^11.0.0",
+      "@trpc/client": "^11.0.0",
+      "superjson": "^2.2.1"
+    }
+  },
+  "targets": {
+    "nextjs": {
+      "description": "Next.js App Router with tRPC",
+      "dependencies": {
+        "@trpc/server": "^11.0.0",
+        "@trpc/client": "^11.0.0",
+        "@trpc/react-query": "^11.0.0",
+        "@tanstack/react-query": "^5.60.0",
+        "superjson": "^2.2.1"
+      },
+      "files": [
+        "nextjs"
+      ],
+      "transform": [
+        {
+          "target": "app/providers.tsx",
+          "type": "import",
+          "content": "import { TRPCProvider } from \"@/lib/trpc/provider\";"
+        },
+        {
+          "target": "app/providers.tsx",
+          "type": "provider-wrap",
+          "provider": "TRPCProvider"
+        }
+      ],
+      "postInstall": [
+        "Add TRPCProvider to app/layout.tsx if not using providers.tsx",
+        "Define your procedures in lib/trpc/routers/"
+      ],
+      "detect": [
+        "next"
+      ]
+    },
+    "standalone": {
+      "description": "Standalone tRPC server (Express adapter)",
+      "dependencies": {
+        "@trpc/server": "^11.0.0",
+        "superjson": "^2.2.1",
+        "express": "^5.0.0",
+        "cors": "^2.8.5"
+      },
+      "devDependencies": {
+        "@types/express": "^5.0.0",
+        "@types/cors": "^2.8.17"
+      },
+      "files": [
+        "standalone"
+      ],
+      "detect": {
+        "excludes": [
+          "next",
+          "@nestjs/core"
+        ]
+      }
+    },
+    "monorepo": {
+      "description": "Shared tRPC package for monorepo (packages/api)",
+      "dependencies": {
+        "@trpc/server": "^11.0.0",
+        "@trpc/client": "^11.0.0",
+        "superjson": "^2.2.1"
+      },
+      "files": [
+        "monorepo"
+      ],
+      "packageJson": {
+        "name": "@{{workspace}}/api",
+        "main": "./dist/index.js",
+        "types": "./dist/index.d.ts",
+        "exports": {
+          ".": {
+            "import": "./dist/index.js",
+            "types": "./dist/index.d.ts"
+          },
+          "./client": {
+            "import": "./dist/client.js",
+            "types": "./dist/client.d.ts"
+          }
+        },
+        "scripts": {
+          "build": "tsc"
+        }
+      },
+      "detect": {
+        "files": [
+          "pnpm-workspace.yaml",
+          "lerna.json",
+          "nx.json"
+        ]
+      }
+    }
+  }
+}
