@@ -44,6 +44,8 @@
     "@obora/project-config": "workspace:*",
     "@obora/project-templates": "workspace:*",
     "@obora/workflow-core": "workspace:*",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
     "better-sqlite3": "^11.10.0",
     "citty": "^0.1.6",
     "consola": "^3.2.3",

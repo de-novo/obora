@@ -10,7 +10,7 @@ Obora CLI 개발 태스크 목록입니다.
 
 | 영역 | 완성도 |
 |------|--------|
-| CLI 명령어 | 17개 구현됨 |
+| CLI 명령어 | 18개 구현됨 |
 | Transform 타입 | 8개 구현됨 |
 | Preset | 22개 구현됨 |
 | 테스트 | 주요 명령어 커버됨 |
@@ -120,7 +120,7 @@ auth (exclusive)
 
 ### 2.1 Conflict 해결 UI
 
-**상태**: 🟡 기본 구현
+**상태**: ✅ 완료
 
 **배경**: 현재는 충돌 시 에러만 표시. 사용자가 선택할 수 있어야 함.
 
@@ -142,9 +142,9 @@ $ obora add drizzle
 - `src/utils/prompts.ts`
 
 **작업 항목**:
-- [ ] 충돌 감지 시 프롬프트 표시
-- [ ] replace 옵션 구현 (remove + add)
-- [ ] 경고 메시지 개선
+- [x] 충돌 감지 시 프롬프트 표시
+- [x] replace 옵션 구현 (remove + add)
+- [x] 경고 메시지 개선
 
 ---
 
@@ -234,49 +234,51 @@ obora add npm:@company/preset-auth
 
 ### 3.2 Preset 생성 CLI
 
-**상태**: 🔴 미구현
+**상태**: ✅ 완료
 
-**목표**: `obora create preset` 명령어로 preset 스캐폴딩
+**목표**: `obora create-preset` 명령어로 preset 스캐폴딩
 
 ```bash
-$ obora create preset my-preset
+$ obora create-preset my-preset
 
-? Category: database
+? Select category: database
 ? Description: My custom database preset
-? Exclusive: Yes
 
 ✓ Created presets/database/my-preset/
   ├─ manifest.json
-  └─ README.md
+  ├─ README.md
+  └─ files/
+      ├─ standalone/
+      └─ monorepo/
 ```
 
 **관련 파일**:
-- `src/commands/create.ts` (확장)
-- 새 파일: `src/utils/preset-scaffold.ts`
+- `src/commands/create-preset.ts`
 
 **작업 항목**:
-- [ ] create preset 서브커맨드
-- [ ] manifest.json 템플릿
-- [ ] 카테고리 선택 프롬프트
-- [ ] README 자동 생성
+- [x] create-preset 명령어 구현
+- [x] manifest.json 템플릿 생성
+- [x] 카테고리 선택 프롬프트
+- [x] README 자동 생성
+- [x] standalone/monorepo 타겟 디렉토리 생성
 
 ---
 
 ### 3.3 Preset 검증 강화
 
-**상태**: 🟡 기본 구현
+**상태**: ✅ 완료
 
 **목표**: manifest.json 스키마 검증 강화
 
 **관련 파일**:
 - `presets/preset.schema.json`
-- `src/utils/preset-validator.ts`
+- `src/utils/preset-schema-validator.ts`
 
 **작업 항목**:
-- [ ] JSON Schema 기반 검증
-- [ ] transform spec 검증
-- [ ] 파일 경로 검증
-- [ ] `obora doctor --presets` 추가
+- [x] JSON Schema 기반 검증 (Ajv 라이브러리 사용)
+- [x] transform spec 검증 (타입별 필수 필드 검증)
+- [x] 파일 경로 검증 (files 배열 참조 파일 존재 검증)
+- [x] `obora doctor --presets` 추가
 
 ---
 
@@ -356,6 +358,8 @@ $ obora undo
 
 | 작업 | 완료일 | 커밋 |
 |------|--------|------|
+| P3.2 Preset 생성 CLI | 2026-01-24 | - |
+| P3.3 Preset 검증 강화 | 2026-01-24 | - |
 | P2.3 Conditional Transform | 2026-01-24 | ed75327 |
 | P2.2 Preset 의존성 체인 | 2026-01-24 | 5cf6a4f |
 | P2.1 Conflict 해결 UI | 2026-01-24 | bbf8a80 |

@@ -9,6 +9,10 @@ import {
   resolvePresetName,
 } from "../utils/constants";
 import {
+  validateAllPresets,
+  type PresetValidationResult,
+} from "../utils/preset-schema-validator";
+import {
   hasOboraConfig,
   readOboraConfig,
   readPresetLockfile,
@@ -793,6 +797,51 @@ function checkMonorepoStructure(
 }
 
 /**
+ * Convert preset validation results to diagnostic results
+ */
+function convertPresetValidationResults(
+  results: PresetValidationResult[]
+): DiagnosticResult[] {
+  return results.map((result) => {
+    if (result.valid) {
+      return {
+        name: `Schema: ${result.presetName}`,
+        status: "pass" as const,
+        message: "Manifest is valid",
+      };
+    }
+
+    const errorMessages: string[] = [];
+
+    for (const error of result.schemaErrors) {
+      errorMessages.push(`Schema ${error.path}: ${error.message}`);
+    }
+
+    for (const error of result.transformErrors) {
+      errorMessages.push(`Transform: ${error.message}`);
+    }
+
+    for (const error of result.fileErrors) {
+      errorMessages.push(`File: ${error.message}`);
+    }
+
+    return {
+      name: `Schema: ${result.presetName}`,
+      status: "fail" as const,
+      message: errorMessages[0] || "Validation failed",
+      suggestion: errorMessages.length > 1
+        ? `${errorMessages.length - 1} more error(s). Run with --json for details.`
+        : "Fix the manifest.json according to the preset schema",
+      details: {
+        schemaErrors: result.schemaErrors,
+        transformErrors: result.transformErrors,
+        fileErrors: result.fileErrors,
+      },
+    };
+  });
+}
+
+/**
  * Display diagnostic results
  */
 function displayResults(categories: DiagnosticCategory[]): {
@@ -860,6 +909,11 @@ export const doctorCommand = defineCommand({
       description: "Validate presets.lock.json against current config",
       default: false,
     },
+    presets: {
+      type: "boolean",
+      description: "Validate all preset manifests against JSON Schema",
+      default: false,
+    },
   },
   async run({ args }) {
     const projectPath = resolve(args.path || ".");
@@ -912,6 +966,18 @@ export const doctorCommand = defineCommand({
         }
       }
 
+      // Preset Schema Validation
+      if (args.presets) {
+        const validationResults = validateAllPresets(PRESETS_DIR, {
+          checkFiles: true,
+          checkTransforms: true,
+        });
+        const schemaResults = convertPresetValidationResults(validationResults);
+        if (schemaResults.length > 0) {
+          categories.push({ name: "Preset Schema Validation", results: schemaResults });
+        }
+      }
+
       console.log(JSON.stringify(categories, null, 2));
       return;
     }
@@ -961,6 +1027,18 @@ export const doctorCommand = defineCommand({
       const lockResults = await checkPresetLockfile(projectPath, config);
       if (lockResults.length > 0) {
         categories.push({ name: "Preset Lockfile", results: lockResults });
+      }
+    }
+
+    // Preset Schema Validation
+    if (args.presets) {
+      const validationResults = validateAllPresets(PRESETS_DIR, {
+        checkFiles: true,
+        checkTransforms: true,
+      });
+      const schemaResults = convertPresetValidationResults(validationResults);
+      if (schemaResults.length > 0) {
+        categories.push({ name: "Preset Schema Validation", results: schemaResults });
       }
     }
 

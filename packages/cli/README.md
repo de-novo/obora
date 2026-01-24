@@ -1,65 +1,89 @@
-# obora CLI
+# Obora CLI
 
-CLI for obora-labs project scaffolding and AI-powered workflow orchestration.
+Next.js/NestJS 프로젝트 스캐폴딩, Preset 관리, Claude Code 워크플로우 통합을 위한 CLI 도구.
 
-## Installation
+## 주요 기능
+
+- **프로젝트 스캐폴딩**: 템플릿 기반 프로젝트 생성
+- **Preset 시스템**: 모듈화된 기능 추가/제거 (ORM, Auth, Payment 등)
+- **Transform 엔진**: AST 기반 코드 자동 변환
+- **Claude Code 통합**: AI 워크플로우 에이전트 및 스킬 관리
+
+## 설치
 
 ```bash
-# Global install (npm)
+# Global 설치
 npm install -g obora
 
-# Or use npx
+# 또는 npx 사용
 npx obora create my-app
 
-# Development mode
+# 개발 모드
 git clone https://github.com/obora-labs/obora-kit.git
 cd obora-kit/packages/cli
 pnpm install && pnpm dev:stub
 npm link
 ```
 
-## Commands
+## 명령어
 
-### Project Scaffolding
+### 프로젝트 생성
 
-#### `obora create`
+#### `obora create <name>`
 
-Create a new project from a template.
+템플릿 기반으로 새 프로젝트 생성.
 
 ```bash
-# Interactive mode
+# 인터랙티브 모드
 obora create my-app
 
-# With template
+# 템플릿 지정
 obora create my-app -t nestjs-api
 
-# With presets
+# Preset 포함
 obora create my-app -p clerk,drizzle,polar
 
-# With package manager
+# 패키지 매니저 지정
 obora create my-app --pm pnpm
 ```
 
-| Flag | Alias | Description |
-|------|-------|-------------|
-| `--template` | `-t` | Template to use |
-| `--presets` | `-p` | Comma-separated presets |
-| `--dir` | `-d` | Output directory |
-| `--pm` | - | Package manager (pnpm, npm, yarn, bun) |
-| `--yes` | `-y` | Skip confirmation prompts |
+| 옵션 | 별칭 | 설명 |
+|------|------|------|
+| `--template` | `-t` | 사용할 템플릿 |
+| `--presets` | `-p` | 쉼표로 구분된 preset 목록 |
+| `--dir` | `-d` | 출력 디렉토리 |
+| `--pm` | - | 패키지 매니저 (pnpm, npm, yarn, bun) |
+| `--yes` | `-y` | 확인 프롬프트 스킵 |
 
-#### `obora add`
+### Preset 관리
 
-Add a preset to an existing project.
+#### `obora add [preset]`
+
+프로젝트에 preset 추가.
 
 ```bash
-obora add clerk
-obora add drizzle -d ./my-project
+# 인터랙티브 모드 (카테고리 → preset → variant 선택)
+obora add
+
+# 직접 지정
+obora add drizzle
+
+# Variant 선택
+obora add drizzle --variant postgres
+
+# 대상 지정 (standalone/monorepo)
+obora add drizzle --target monorepo
 ```
 
-#### `obora remove`
+**주요 기능:**
+- **Interactive 모드**: 카테고리/preset/variant 순차 선택
+- **Variant 지원**: SQLite/PostgreSQL 등 옵션 선택
+- **충돌 해결**: 같은 카테고리의 exclusive preset 충돌 시 교체/유지 선택
+- **의존성 체인**: requires 필드 기반 자동 의존성 설치 제안
 
-Remove a preset from the project.
+#### `obora remove <preset>`
+
+프로젝트에서 preset 제거.
 
 ```bash
 obora remove clerk
@@ -67,77 +91,51 @@ obora remove clerk
 
 #### `obora list`
 
-List available templates and presets.
+사용 가능한 템플릿 및 preset 목록 조회.
 
 ```bash
-obora list                    # List all
-obora list -t templates       # Templates only
-obora list -t presets -c auth # Presets by category
+# 전체 목록
+obora list
+
+# 사용 가능한 preset만
+obora list --available
+
+# 카테고리별 필터
+obora list -t presets -c auth
 ```
 
-### AI Asset Management
+### Preset 개발
 
-#### `obora init`
+#### `obora create-preset [name]`
 
-Initialize obora AI assets (Claude Code integration) in an existing project.
+새 preset 스캐폴드 생성.
 
 ```bash
-# Initialize in current directory
-obora init
+# 인터랙티브 모드
+obora create-preset
 
-# Initialize in specific directory
-obora init -d ./my-project
+# 이름 지정
+obora create-preset my-auth
 
-# Force overwrite existing config
-obora init -f
+# 옵션 지정
+obora create-preset my-auth -c auth -d "Custom authentication" -y
 ```
 
-This command:
-- Creates `.claude/` directory structure
-- Copies agents, skills, rules, scripts, and hooks
-- Sets up Claude Code workflow integration
-- Creates `.obora/` config if not exists
-
-| Flag | Alias | Description |
-|------|-------|-------------|
-| `--dir` | `-d` | Project directory |
-| `--force` | `-f` | Overwrite existing .obora config |
-| `--yes` | `-y` | Skip confirmation prompts |
-
-#### `obora sync`
-
-Sync obora assets (skills, agents, rules, commands, scripts, hooks) to a project.
-
-```bash
-# Sync all assets
-obora sync
-
-# Sync specific asset type
-obora sync -t skills
-obora sync -t settings
-
-# Sync to different directory
-obora sync -d ./my-project
-
-# Force overwrite
-obora sync -f
-
-# List available assets
-obora sync -l
+생성되는 구조:
+```
+presets/{category}/{name}/
+├── manifest.json
+├── README.md
+└── files/
+    ├── standalone/
+    └── monorepo/
 ```
 
-| Flag | Alias | Description |
-|------|-------|-------------|
-| `--dir` | `-d` | Project directory |
-| `--force` | `-f` | Overwrite existing files |
-| `--type` | `-t` | Sync type: skills, agents, rules, commands, scripts, settings, all |
-| `--list` | `-l` | List available assets |
-
-### Project Management
+### 프로젝트 검사
 
 #### `obora status`
 
-Show current project configuration status.
+현재 프로젝트 상태 확인.
 
 ```bash
 obora status
@@ -145,15 +143,22 @@ obora status
 
 #### `obora doctor`
 
-Diagnose project health and configuration issues.
+프로젝트 및 preset 설정 진단.
 
 ```bash
+# 기본 진단
 obora doctor
+
+# Preset 스키마 검증 포함
+obora doctor --presets
+
+# JSON 출력
+obora doctor --json
 ```
 
 #### `obora upgrade`
 
-Upgrade presets to latest versions.
+Preset을 최신 버전으로 업그레이드.
 
 ```bash
 obora upgrade
@@ -161,36 +166,74 @@ obora upgrade
 
 #### `obora eject`
 
-Eject preset configuration files for customization.
+Preset 설정 파일을 프로젝트로 추출.
 
 ```bash
 obora eject
 ```
 
-### AI Workflow (Experimental)
+### Claude Code 통합
 
-#### `obora run`
+#### `obora init`
 
-Execute a single task with workflow enforcement.
-
-```bash
-obora run "Implement user authentication"
-obora run --agent implementer "Add login form"
-```
-
-#### `obora chat`
-
-Interactive workflow orchestrator (enforces agent workflows).
+기존 프로젝트에 Claude Code 에셋 초기화.
 
 ```bash
-obora chat
+# 현재 디렉토리
+obora init
+
+# 특정 디렉토리
+obora init -d ./my-project
+
+# 강제 덮어쓰기
+obora init -f
 ```
 
-### Utilities
+생성되는 에셋:
+- `.claude/agents/` - 에이전트 정의
+- `.claude/skills/` - 스킬 정의
+- `.claude/rules/` - 규칙 파일
+- `.claude/scripts/` - 유틸리티 스크립트
+- `.claude/settings.json` - 설정 및 훅
+
+#### `obora sync`
+
+Obora 에셋을 프로젝트에 동기화.
+
+```bash
+# 전체 동기화
+obora sync
+
+# 특정 타입만
+obora sync -t skills
+obora sync -t settings
+
+# 강제 덮어쓰기
+obora sync -f
+
+# 에셋 목록 조회
+obora sync -l
+```
+
+| 옵션 | 별칭 | 설명 |
+|------|------|------|
+| `--type` | `-t` | 동기화 타입: skills, agents, rules, commands, scripts, settings, all |
+| `--force` | `-f` | 기존 파일 덮어쓰기 |
+| `--list` | `-l` | 에셋 목록 조회 |
+
+### 유틸리티
+
+#### `obora transform`
+
+Transform 작업 수동 실행.
+
+```bash
+obora transform
+```
 
 #### `obora llm-help`
 
-Output LLM-friendly documentation for AI assistants.
+LLM 친화적인 문서 출력.
 
 ```bash
 obora llm-help
@@ -198,54 +241,119 @@ obora llm-help
 
 #### `obora config`
 
-Manage global obora preferences.
+글로벌 설정 관리.
 
 ```bash
 obora config
 ```
 
-## Templates
+## 템플릿
 
-| Template | Description |
-|----------|-------------|
-| `monorepo` | Full-stack monorepo (NestJS + Next.js) |
-| `single` | Single app project |
-| `nestjs-api` | NestJS 11 API with Fastify |
-| `nextjs-web` | Next.js 15 Web App |
+| 템플릿 | 설명 |
+|--------|------|
+| `monorepo` | 풀스택 모노레포 (NestJS + Next.js) |
+| `single` | 단일 앱 프로젝트 |
+| `nestjs-api` | NestJS 11 API (Fastify) |
+| `nextjs-web` | Next.js 15 웹앱 |
 
-## Presets
+## Preset 카테고리
 
-| Category | Presets |
-|----------|---------|
-| Auth | `clerk`, `clerk-nextjs`, `better-auth` |
-| Database | `drizzle`, `prisma` |
-| Payment | `polar`, `paddle` |
-| Analytics | `umami`, `posthog` |
-| Email | `resend` |
-| AI | `vercel-ai` |
-| Storage | `uploadthing`, `cloudflare-r2` |
-| Validation | `zod`, `effect-schema` |
-| Linting | `biome`, `eslint-prettier` |
+| 카테고리 | Preset | 설명 |
+|----------|--------|------|
+| **database** | `drizzle`, `prisma` | ORM (exclusive) |
+| **auth** | `clerk`, `clerk-nextjs`, `better-auth` | 인증 (exclusive) |
+| **payment** | `polar`, `paddle` | 결제 (exclusive) |
+| **email** | `resend` | 이메일 |
+| **ai** | `vercel-ai` | AI SDK |
+| **analytics** | `umami`, `posthog`, `vercel-analytics` | 분석 |
+| **storage** | `uploadthing`, `cloudflare-r2` | 파일 스토리지 |
+| **validation** | `zod`, `effect-schema` | 검증 |
+| **linting** | `biome`, `eslint-prettier` | 린팅 (exclusive) |
+| **data-fetching** | `tanstack-query` | 데이터 fetching |
+| **state** | `zustand` | 상태 관리 |
+| **ui** | `shadcn`, `lucide`, `motion` | UI 라이브러리 |
 
-## Development
+## Transform 시스템
+
+Preset은 코드를 자동으로 변환합니다:
+
+| 타입 | 설명 |
+|------|------|
+| `import` | import 문 추가 |
+| `dependency` | package.json 의존성 추가 |
+| `provider-wrap` | Provider 컴포넌트로 감싸기 |
+| `layout-component` | Layout에 컴포넌트 추가 |
+| `nestjs-module` | NestJS 모듈 import 추가 |
+| `script` | package.json scripts 추가 |
+| `env` | 환경 변수 템플릿 추가 |
+| `marker` | 마커 기반 코드 주입 |
+
+### Conditional Transform
+
+조건부 transform 지원:
+
+```json
+{
+  "transform": [{
+    "type": "import",
+    "condition": { "fileExists": "app/providers.tsx" },
+    "target": "app/providers.tsx",
+    "spec": { ... }
+  }]
+}
+```
+
+## Manifest 구조
+
+```json
+{
+  "$schema": "../../preset.schema.json",
+  "name": "my-preset",
+  "category": "database",
+  "description": "My custom preset",
+  "version": "1.0.0",
+  "common": {
+    "dependencies": {},
+    "devDependencies": {},
+    "scripts": {},
+    "files": [],
+    "transform": []
+  },
+  "targets": {
+    "standalone": { ... },
+    "monorepo": { ... }
+  },
+  "variants": {
+    "sqlite": { ... },
+    "postgres": { ... }
+  },
+  "requires": ["other-preset"],
+  "conflicts": ["conflicting-preset"]
+}
+```
+
+## 개발
 
 ```bash
-# Install dependencies
+# 의존성 설치
 pnpm install
 
-# Development mode (with stub - changes apply instantly)
+# 개발 모드 (stub - 변경 즉시 반영)
 pnpm dev:stub
 
-# Build
+# 빌드
 pnpm build
 
-# Link globally
+# 테스트
+pnpm test
+
+# 글로벌 링크
 npm link
 
-# Test locally
+# 로컬 테스트
 obora --version
 ```
 
-## License
+## 라이선스
 
 MIT

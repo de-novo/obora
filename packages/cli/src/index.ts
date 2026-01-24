@@ -2,6 +2,7 @@ import { defineCommand, runMain as _runMain } from "citty";
 import { consola } from "consola";
 import { name, version, description } from "../package.json";
 import { createCommand } from "./commands/create";
+import { createPresetCommand } from "./commands/create-preset";
 import { addCommand } from "./commands/add";
 import { removeCommand } from "./commands/remove";
 import { statusCommand } from "./commands/status";
@@ -28,6 +29,7 @@ const main = defineCommand({
   },
   subCommands: {
     create: createCommand,
+    "create-preset": createPresetCommand,
     init: initCommand,
     add: addCommand,
     remove: removeCommand,
@@ -56,7 +58,7 @@ export function runMain() {
   _runMain(main);
 }
 
-export { createCommand, initCommand, addCommand, removeCommand, upgradeCommand, ejectCommand, doctorCommand, statusCommand, listCommand, configCommand, llmHelpCommand, chatCommand, runCommand, sandboxCommand, syncCommand, transformCommand, titleGenerateCommand };
+export { createCommand, createPresetCommand, initCommand, addCommand, removeCommand, upgradeCommand, ejectCommand, doctorCommand, statusCommand, listCommand, configCommand, llmHelpCommand, chatCommand, runCommand, sandboxCommand, syncCommand, transformCommand, titleGenerateCommand };
 
 // Re-export from new packages for backwards compatibility
 export * from "@obora/workflow-core";
