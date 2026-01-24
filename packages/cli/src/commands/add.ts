@@ -38,6 +38,7 @@ import {
   promptPreset,
   promptTarget,
   promptConflictResolution,
+  promptInstallDependency,
   type ConflictAction,
 } from "../utils/prompts";
 import {
@@ -128,6 +129,8 @@ interface PresetManifestTargets {
   targets?: Record<string, PresetTarget>;
   variants?: Record<string, PresetTarget>;
   conflicts?: string[];
+  /** Required presets in category:name format (e.g., database:prisma) */
+  requires?: string[];
   postInstall?: string[];
   scripts?: Record<string, string>;
   env?: PresetEnvVar[];
@@ -801,7 +804,7 @@ export const addCommand = defineCommand({
     }
 
     // Read existing config if available
-    const existingConfig = await readOboraConfig(projectDir);
+    let existingConfig = await readOboraConfig(projectDir);
     const isMonorepo = existingConfig?.base === "monorepo";
 
     // Get preset name
@@ -840,7 +843,7 @@ export const addCommand = defineCommand({
 
       // Helper to get actual directory for an app
       const getAppDir = (appKey: string): string | null => {
-        const appConfig = existingConfig.apps[appKey];
+        const appConfig = existingConfig?.apps[appKey];
         if (!appConfig) return null;
         if (appConfig.path) return appConfig.path;
         const moduleConfig = APP_MODULES[appConfig.module];
@@ -905,7 +908,7 @@ export const addCommand = defineCommand({
             name: "selectedApp",
             message: `Select target app for ${presetName}:`,
             choices: relevantApps.map((app) => {
-              const appConfig = existingConfig.apps[app];
+              const appConfig = existingConfig?.apps[app];
               const moduleConfig = APP_MODULES[appConfig?.module || ""];
               return {
                 title: `${app} (${appConfig?.module || moduleConfig?.targetDir || app})`,
@@ -972,6 +975,90 @@ export const addCommand = defineCommand({
       }
 
       const manifestRaw = await readJson<PresetManifestTargets>(manifestPath);
+
+      // Check for required preset dependencies
+      if (manifestRaw.requires && manifestRaw.requires.length > 0) {
+        // Track installation chain to detect circular dependencies
+        let installChain: string[] = [];
+        try {
+          const chainEnv = process.env.OBORA_INSTALL_CHAIN;
+          if (chainEnv) {
+            installChain = JSON.parse(chainEnv);
+          }
+        } catch {
+          // Ignore parse errors
+        }
+
+        // Check for circular dependency
+        if (installChain.includes(presetName)) {
+          consola.error(`Circular dependency detected: ${[...installChain, presetName].join(" → ")}`);
+          process.exit(1);
+        }
+
+        for (const requirement of manifestRaw.requires) {
+          // Parse requirement (format: category:name)
+          const [reqCategory, reqPresetName] = requirement.split(":");
+          if (!reqCategory || !reqPresetName) {
+            consola.warn(`Invalid requirement format: ${requirement}. Expected category:name`);
+            continue;
+          }
+
+          // Check if required preset is already installed
+          const isInstalled = existingConfig?.slots[reqCategory]?.preset === reqPresetName;
+
+          if (!isInstalled) {
+            // Prompt user to install required preset
+            const shouldInstall = await promptInstallDependency(
+              presetName,
+              reqPresetName,
+              reqCategory
+            );
+
+            if (!shouldInstall) {
+              consola.warn(`\n${presetName} may not work correctly without ${reqPresetName}.`);
+              consola.info("You can install it later with: obora add " + reqPresetName);
+              continue;
+            }
+
+            // Install the required preset first
+            consola.info(`\nInstalling required preset: ${reqPresetName}...\n`);
+
+            // Run the add command recursively by spawning a new process
+            const { spawn } = await import("node:child_process");
+            try {
+              await new Promise<void>((resolve, reject) => {
+                const child = spawn(
+                  "npx",
+                  ["obora", "add", reqPresetName, "--cwd", projectDir],
+                  {
+                    stdio: "inherit",
+                    shell: true,
+                    env: {
+                      ...process.env,
+                      OBORA_INSTALL_CHAIN: JSON.stringify([...installChain, presetName]),
+                    },
+                  }
+                );
+                child.on("close", (code) => {
+                  if (code === 0) resolve();
+                  else reject(new Error(`Process exited with code ${code}`));
+                });
+                child.on("error", reject);
+              });
+              consola.success(`Installed ${reqPresetName}\n`);
+
+              // Refresh the config after installing the dependency
+              existingConfig = await readOboraConfig(projectDir);
+            } catch (error) {
+              consola.error(`Failed to install required preset ${reqPresetName}`);
+              consola.info("You can try installing it manually: obora add " + reqPresetName);
+              process.exit(1);
+            }
+          } else {
+            consola.info(`✓ Required preset ${reqPresetName} is already installed`);
+          }
+        }
+      }
 
       // Check for conflicts
       if (manifestRaw.conflicts && existingConfig) {

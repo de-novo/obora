@@ -414,3 +414,23 @@ export async function promptConflictResolution(
 
   return action;
 }
+
+/**
+ * Prompt for installing required preset dependencies
+ */
+export async function promptInstallDependency(
+  targetPreset: string,
+  requiredPreset: string,
+  category: string
+): Promise<boolean> {
+  consola.info(`\n${targetPreset} requires ${requiredPreset} (${category})`);
+
+  const { install } = await prompts({
+    type: "confirm",
+    name: "install",
+    message: `Install ${requiredPreset} as well?`,
+    initial: true,
+  });
+
+  return install ?? false;
+}
