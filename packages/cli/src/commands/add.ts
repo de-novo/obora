@@ -27,6 +27,7 @@ import {
   type DependencySpec,
   type NestJsModuleSpec,
   type ProviderWrapSpec,
+  type LayoutComponentSpec,
   type TransformOptions,
   type TransformOperation,
 } from "../utils";
@@ -55,7 +56,7 @@ interface PresetTransform {
   /** Target file path (relative to preset target directory) */
   target: string;
   /** Transform type */
-  type: "import" | "dependency" | "nestjs-module" | "provider-wrap";
+  type: "import" | "dependency" | "nestjs-module" | "provider-wrap" | "layout-component";
   /** For import: import statement string or ImportSpec */
   content?: string;
   /** For dependency: package name */
@@ -70,6 +71,12 @@ interface PresetTransform {
   provider?: string;
   /** For provider-wrap: optional props to pass to the provider */
   props?: Record<string, string>;
+  /** For layout-component: component name to add */
+  component?: string;
+  /** For layout-component: position in layout (body-start, body-end, html-start, html-end) */
+  position?: "body-start" | "body-end" | "html-start" | "html-end";
+  /** For layout-component: self-closing tag (default: true) */
+  selfClosing?: boolean;
 }
 
 interface PresetTarget {
@@ -405,6 +412,20 @@ function convertToTransformOperation(transform: PresetTransform): TransformOpera
       }
       return null;
 
+    case "layout-component":
+      if (transform.component && transform.position) {
+        return {
+          type: "layout-component",
+          spec: {
+            component: transform.component,
+            position: transform.position,
+            props: transform.props,
+            selfClosing: transform.selfClosing,
+          } as LayoutComponentSpec,
+        };
+      }
+      return null;
+
     default:
       return null;
   }
@@ -423,6 +444,8 @@ function getTransformDescription(transform: PresetTransform): string {
       return `Add ${transform.module} to @Module imports`;
     case "provider-wrap":
       return `Wrap children with <${transform.provider}>`;
+    case "layout-component":
+      return `Add <${transform.component} /> at ${transform.position} in layout`;
     default:
       return JSON.stringify(transform);
   }

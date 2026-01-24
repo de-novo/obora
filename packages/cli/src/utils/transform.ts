@@ -42,9 +42,9 @@ export interface ImportSpec {
 }
 
 export interface TransformOperation {
-  type: "import" | "export" | "dependency" | "config" | "nestjs-module" | "provider-wrap" | "json-property";
+  type: "import" | "export" | "dependency" | "config" | "nestjs-module" | "provider-wrap" | "json-property" | "layout-component";
   /** For import: ImportSpec, for dependency: { name, version, dev? } */
-  spec: ImportSpec | ExportSpec | DependencySpec | ConfigSpec | NestJsModuleSpec | ProviderWrapSpec | JsonPropertySpec;
+  spec: ImportSpec | ExportSpec | DependencySpec | ConfigSpec | NestJsModuleSpec | ProviderWrapSpec | JsonPropertySpec | LayoutComponentSpec;
 }
 
 export interface DependencySpec {
@@ -87,6 +87,17 @@ export interface JsonPropertySpec {
   value: unknown;
   /** If true, merge objects/arrays instead of replacing */
   merge?: boolean;
+}
+
+export interface LayoutComponentSpec {
+  /** Component to add (e.g., "UmamiScript") */
+  component: string;
+  /** Where to add in layout.tsx */
+  position: "body-start" | "body-end" | "html-start" | "html-end";
+  /** Optional props as key-value pairs */
+  props?: Record<string, string>;
+  /** Self-closing tag (default: true) */
+  selfClosing?: boolean;
 }
 
 // ============================================================================
@@ -654,6 +665,113 @@ function escapeRegExp(string: string): string {
 }
 
 // ============================================================================
+// Layout Component Transformations
+// ============================================================================
+
+/**
+ * Add a component to a Next.js layout file (layout.tsx).
+ * Supports adding components at various positions within the layout.
+ *
+ * @param filePath - Path to the layout file
+ * @param spec - Layout component specification
+ * @param options - Transform options (including dryRun)
+ * @returns TransformResult with success status
+ */
+export async function addLayoutComponent(
+  filePath: string,
+  spec: LayoutComponentSpec,
+  options?: TransformOptions
+): Promise<TransformResult> {
+  try {
+    if (!(await fileExists(filePath))) {
+      return { success: false, error: `File not found: ${filePath}` };
+    }
+
+    const content = await fs.readFile(filePath, "utf-8");
+
+    // Check if component already exists
+    const componentPattern = new RegExp(`<${spec.component}[\\s/>]`);
+    if (componentPattern.test(content)) {
+      return { success: true, changed: false, content };
+    }
+
+    // Build component JSX
+    const propsStr = spec.props
+      ? " " + Object.entries(spec.props).map(([k, v]) => `${k}={${v}}`).join(" ")
+      : "";
+    const selfClosing = spec.selfClosing !== false;
+    const componentJsx = selfClosing
+      ? `<${spec.component}${propsStr} />`
+      : `<${spec.component}${propsStr}></${spec.component}>`;
+
+    let newContent: string;
+
+    switch (spec.position) {
+      case "body-start": {
+        // Insert after <body...>
+        const bodyOpenPattern = /(<body[^>]*>)/;
+        const match = content.match(bodyOpenPattern);
+        if (!match) {
+          return { success: false, error: "Could not find <body> tag in layout" };
+        }
+        newContent = content.replace(bodyOpenPattern, `$1\n        ${componentJsx}`);
+        break;
+      }
+
+      case "body-end": {
+        // Insert before </body>
+        const bodyClosePattern = /(\s*)(<\/body>)/;
+        const match = content.match(bodyClosePattern);
+        if (!match) {
+          return { success: false, error: "Could not find </body> tag in layout" };
+        }
+        const indent = match[1] || "\n        ";
+        newContent = content.replace(bodyClosePattern, `${indent}${componentJsx}$1$2`);
+        break;
+      }
+
+      case "html-start": {
+        // Insert after <html...>
+        const htmlOpenPattern = /(<html[^>]*>)/;
+        const match = content.match(htmlOpenPattern);
+        if (!match) {
+          return { success: false, error: "Could not find <html> tag in layout" };
+        }
+        newContent = content.replace(htmlOpenPattern, `$1\n      ${componentJsx}`);
+        break;
+      }
+
+      case "html-end": {
+        // Insert before </html>
+        const htmlClosePattern = /(\s*)(<\/html>)/;
+        const match = content.match(htmlClosePattern);
+        if (!match) {
+          return { success: false, error: "Could not find </html> tag in layout" };
+        }
+        const indent = match[1] || "\n      ";
+        newContent = content.replace(htmlClosePattern, `${indent}${componentJsx}$1$2`);
+        break;
+      }
+
+      default:
+        return { success: false, error: `Unknown position: ${spec.position}` };
+    }
+
+    // Dry-run mode: return preview without writing
+    if (options?.dryRun) {
+      return { success: true, changed: true, content, preview: newContent };
+    }
+
+    await fs.writeFile(filePath, newContent);
+
+    return { success: true, changed: true, content: newContent };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { success: false, error: `Failed to add layout component: ${message}` };
+  }
+}
+
+// ============================================================================
 // JSON Property Transformations
 // ============================================================================
 
@@ -854,6 +972,9 @@ export async function applyTransforms(
         break;
       case "json-property":
         result = await updateJsonProperty(filePath, operation.spec as JsonPropertySpec, options);
+        break;
+      case "layout-component":
+        result = await addLayoutComponent(filePath, operation.spec as LayoutComponentSpec, options);
         break;
       default:
         result = { success: false, error: `Unknown operation type: ${operation.type}` };

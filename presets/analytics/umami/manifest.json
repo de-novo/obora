@@ -29,6 +29,7 @@
   "version": "2.0.0",
   "targets": {
     "nextjs": {
+      "description": "Manual setup - requires adding UmamiScript to layout",
       "files": [
         "src/lib/analytics"
       ],
@@ -43,6 +44,36 @@
           "node": ">=18"
         }
       }
+    },
+    "nextjs-auto": {
+      "description": "Auto setup - automatically adds UmamiScript to root layout",
+      "files": [
+        "src/lib/analytics"
+      ],
+      "detect": {
+        "packages": [
+          "next"
+        ],
+        "packageVersions": {
+          "next": ">=14"
+        },
+        "runtime": {
+          "node": ">=18"
+        }
+      },
+      "transform": [
+        {
+          "target": "app/layout.tsx",
+          "type": "import",
+          "content": "import { UmamiScript } from \"@/lib/analytics\";"
+        },
+        {
+          "target": "app/layout.tsx",
+          "type": "layout-component",
+          "component": "UmamiScript",
+          "position": "body-end"
+        }
+      ]
     }
   }
 }

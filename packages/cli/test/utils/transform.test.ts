@@ -8,6 +8,7 @@ import {
   addDependency,
   addNestJsModule,
   addProviderWrap,
+  addLayoutComponent,
   updateJsonProperty,
   parseImportStatement,
   isImportStatement,
@@ -946,6 +947,206 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
       // Backup should record that file didn't exist
       expect(result.backups[0].content).toBeNull();
+    });
+  });
+
+  describe("addLayoutComponent", () => {
+    it("should add component at body-end position", async () => {
+      const filePath = join(testDir, "layout.tsx");
+      await fs.writeFile(
+        filePath,
+        `export default function Layout({ children }) {
+  return (
+    <html>
+      <body>
+        {children}
+      </body>
+    </html>
+  );
+}
+`
+      );
+
+      const result = await addLayoutComponent(filePath, {
+        component: "UmamiScript",
+        position: "body-end",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.changed).toBe(true);
+
+      const content = await fs.readFile(filePath, "utf-8");
+      expect(content).toContain("<UmamiScript />");
+      expect(content).toMatch(/<UmamiScript \/>\s*<\/body>/);
+    });
+
+    it("should add component at body-start position", async () => {
+      const filePath = join(testDir, "layout.tsx");
+      await fs.writeFile(
+        filePath,
+        `export default function Layout({ children }) {
+  return (
+    <html>
+      <body>
+        {children}
+      </body>
+    </html>
+  );
+}
+`
+      );
+
+      const result = await addLayoutComponent(filePath, {
+        component: "Toaster",
+        position: "body-start",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.changed).toBe(true);
+
+      const content = await fs.readFile(filePath, "utf-8");
+      expect(content).toContain("<Toaster />");
+      expect(content).toMatch(/<body[^>]*>\s*<Toaster \/>/);
+    });
+
+    it("should add component with props", async () => {
+      const filePath = join(testDir, "layout.tsx");
+      await fs.writeFile(
+        filePath,
+        `export default function Layout({ children }) {
+  return (
+    <html>
+      <body>
+        {children}
+      </body>
+    </html>
+  );
+}
+`
+      );
+
+      const result = await addLayoutComponent(filePath, {
+        component: "Analytics",
+        position: "body-end",
+        props: { debug: "true", id: '"my-id"' },
+      });
+
+      expect(result.success).toBe(true);
+      const content = await fs.readFile(filePath, "utf-8");
+      expect(content).toContain("debug={true}");
+      expect(content).toContain('id={"my-id"}');
+    });
+
+    it("should add non-self-closing component", async () => {
+      const filePath = join(testDir, "layout.tsx");
+      await fs.writeFile(
+        filePath,
+        `export default function Layout({ children }) {
+  return (
+    <html>
+      <body>
+        {children}
+      </body>
+    </html>
+  );
+}
+`
+      );
+
+      const result = await addLayoutComponent(filePath, {
+        component: "Provider",
+        position: "body-start",
+        selfClosing: false,
+      });
+
+      expect(result.success).toBe(true);
+      const content = await fs.readFile(filePath, "utf-8");
+      expect(content).toContain("<Provider>");
+    });
+
+    it("should not add duplicate component", async () => {
+      const filePath = join(testDir, "layout.tsx");
+      await fs.writeFile(
+        filePath,
+        `export default function Layout({ children }) {
+  return (
+    <html>
+      <body>
+        <UmamiScript />
+        {children}
+      </body>
+    </html>
+  );
+}
+`
+      );
+
+      const result = await addLayoutComponent(filePath, {
+        component: "UmamiScript",
+        position: "body-end",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.changed).toBe(false);
+
+      const content = await fs.readFile(filePath, "utf-8");
+      // Should only have one occurrence
+      const matches = content.match(/<UmamiScript/g);
+      expect(matches?.length).toBe(1);
+    });
+
+    it("should handle html-start position", async () => {
+      const filePath = join(testDir, "layout.tsx");
+      await fs.writeFile(
+        filePath,
+        `export default function Layout({ children }) {
+  return (
+    <html lang="en">
+      <body>
+        {children}
+      </body>
+    </html>
+  );
+}
+`
+      );
+
+      const result = await addLayoutComponent(filePath, {
+        component: "Script",
+        position: "html-start",
+      });
+
+      expect(result.success).toBe(true);
+      const content = await fs.readFile(filePath, "utf-8");
+      expect(content).toContain("<Script />");
+      expect(content).toMatch(/<html[^>]*>\s*<Script \/>/);
+    });
+
+    it("should handle html-end position", async () => {
+      const filePath = join(testDir, "layout.tsx");
+      await fs.writeFile(
+        filePath,
+        `export default function Layout({ children }) {
+  return (
+    <html lang="en">
+      <body>
+        {children}
+      </body>
+    </html>
+  );
+}
+`
+      );
+
+      const result = await addLayoutComponent(filePath, {
+        component: "Analytics",
+        position: "html-end",
+      });
+
+      expect(result.success).toBe(true);
+      const content = await fs.readFile(filePath, "utf-8");
+      expect(content).toContain("<Analytics />");
+      expect(content).toMatch(/<Analytics \/>\s*<\/html>/);
     });
   });
 });

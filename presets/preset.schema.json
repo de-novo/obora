@@ -116,7 +116,7 @@
                 },
                 "type": {
                   "type": "string",
-                  "enum": ["import", "dependency", "nestjs-module", "provider-wrap"],
+                  "enum": ["import", "dependency", "nestjs-module", "provider-wrap", "layout-component"],
                   "description": "Type of transformation"
                 },
                 "content": {
@@ -147,6 +147,19 @@
                   "type": "object",
                   "additionalProperties": { "type": "string" },
                   "description": "Props to pass to provider (for type: provider-wrap)"
+                },
+                "component": {
+                  "type": "string",
+                  "description": "Component name to add (for type: layout-component)"
+                },
+                "position": {
+                  "type": "string",
+                  "enum": ["body-start", "body-end", "html-start", "html-end"],
+                  "description": "Position in layout.tsx (for type: layout-component)"
+                },
+                "selfClosing": {
+                  "type": "boolean",
+                  "description": "Whether the component is self-closing (for type: layout-component, default: true)"
                 }
               }
             }
@@ -216,7 +229,7 @@
                 },
                 "type": {
                   "type": "string",
-                  "enum": ["import", "dependency", "nestjs-module", "provider-wrap"],
+                  "enum": ["import", "dependency", "nestjs-module", "provider-wrap", "layout-component"],
                   "description": "Type of transformation"
                 },
                 "content": {
@@ -247,6 +260,19 @@
                   "type": "object",
                   "additionalProperties": { "type": "string" },
                   "description": "Props to pass to provider (for type: provider-wrap)"
+                },
+                "component": {
+                  "type": "string",
+                  "description": "Component name to add (for type: layout-component)"
+                },
+                "position": {
+                  "type": "string",
+                  "enum": ["body-start", "body-end", "html-start", "html-end"],
+                  "description": "Position in layout.tsx (for type: layout-component)"
+                },
+                "selfClosing": {
+                  "type": "boolean",
+                  "description": "Whether the component is self-closing (for type: layout-component, default: true)"
                 }
               }
             }
