@@ -12,6 +12,7 @@ import {
   PRESETS_DIR,
   isForbiddenPresetFilePath,
   type PresetName,
+  type Category,
   TEMPLATES_DIR,
   copyTemplateDir,
   dirExists,
@@ -31,6 +32,11 @@ import {
   type TransformOptions,
   type TransformOperation,
 } from "../utils";
+import {
+  promptCategory,
+  promptPreset,
+  promptTarget,
+} from "../utils/prompts";
 import {
   addSlotPreset,
   hasOboraConfig,
@@ -806,62 +812,16 @@ export const addCommand = defineCommand({
       }
     }
     if (!presetName) {
-      // Reorganize to group by category
-      const groupedChoices: prompts.Choice[] = [];
+      // Interactive mode: category → preset → target
+      consola.info("Interactive mode: Select category and preset\n");
 
-      // Add app templates section
-      groupedChoices.push({
-        title: `── APP TEMPLATES ──`,
-        value: "",
-        disabled: true,
-      });
-      for (const [name, config] of Object.entries(APP_MODULES)) {
-        groupedChoices.push({
-          title: `  ${name}`,
-          description: config.description,
-          value: `app:${name}`,
-        });
-      }
+      // Step 1: Select category
+      const selectedCategory = await promptCategory();
 
-      // Add presets by category
-      for (const category of CATEGORIES) {
-        groupedChoices.push({
-          title: `── ${category.toUpperCase()} ──`,
-          value: "",
-          disabled: true,
-        });
-        const categoryPresets = Object.values(PRESETS).filter(
-          (p) => p.category === category
-        );
-        for (const preset of categoryPresets) {
-          groupedChoices.push({
-            title: `  ${preset.name}`,
-            description: preset.description,
-            value: preset.name,
-          });
-        }
-      }
+      // Step 2: Select preset within category
+      const selectedPreset = await promptPreset(selectedCategory);
 
-      const { preset } = await prompts({
-        type: "select",
-        name: "preset",
-        message: "Select a preset or app template to add:",
-        choices: groupedChoices.filter((c) => !c.disabled || c.value === ""),
-      });
-
-      if (!preset) {
-        consola.info("Cancelled");
-        return;
-      }
-
-      // Check if user selected an app template
-      if (typeof preset === "string" && preset.startsWith("app:")) {
-        const appName = preset.replace("app:", "") as AppModuleName;
-        await handleAppTemplate({ ...args, preset: appName }, targetDir);
-        return;
-      }
-
-      presetName = resolvePresetName(preset as PresetName) as PresetName;
+      presetName = resolvePresetName(selectedPreset) as PresetName;
     }
 
     const presetInfo = PRESETS[presetName];
@@ -1084,22 +1044,13 @@ export const addCommand = defineCommand({
         }
         // 6. Prompt user to select
         else if (!selectedTarget) {
-          const { target } = await prompts({
-            type: "select",
-            name: "target",
-            message: "Select target variant:",
-            choices: targetNames.map((name) => ({
-              title: name,
-              description: targetConfigs[name].description,
-              value: name,
-            })),
-          });
+          const targets = targetNames.map((name) => ({
+            name,
+            description: targetConfigs[name].description,
+            dialect: targetConfigs[name].dialect,
+          }));
 
-          if (!target) {
-            consola.info("Cancelled");
-            return;
-          }
-          selectedTarget = target;
+          selectedTarget = await promptTarget(targets);
           targetSource = "manual";
         }
 

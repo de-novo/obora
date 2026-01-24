@@ -5,6 +5,7 @@ import {
   APP_MODULES,
   PRESETS,
   CATEGORIES,
+  CATEGORY_CONFIGS,
   getPresetsByCategory,
   getSlotDefault,
   type BaseName,
@@ -255,4 +256,105 @@ export async function promptSelect(
   }
 
   return selected;
+}
+
+/**
+ * Prompt for category selection (for interactive mode)
+ */
+export async function promptCategory(): Promise<Category> {
+  const choices = CATEGORIES.map((cat) => {
+    const config = CATEGORY_CONFIGS[cat];
+    const presetCount = getPresetsByCategory(cat).length;
+    return {
+      title: `${config.description}${config.exclusive ? " (exclusive)" : ""}`,
+      description: `${presetCount} preset${presetCount !== 1 ? "s" : ""} available`,
+      value: cat,
+    };
+  }).filter((c) => {
+    // Only show categories with presets
+    const presets = getPresetsByCategory(c.value as Category);
+    return presets.length > 0;
+  });
+
+  const { category } = await prompts({
+    type: "select",
+    name: "category",
+    message: "Select category:",
+    choices,
+  });
+
+  if (!category) {
+    consola.error("Category selection is required");
+    process.exit(1);
+  }
+
+  return category as Category;
+}
+
+/**
+ * Prompt for preset selection from a category (for interactive mode)
+ */
+export async function promptPreset(category: Category): Promise<PresetName> {
+  const presets = getPresetsByCategory(category);
+
+  if (presets.length === 0) {
+    consola.error(`No presets available in category: ${category}`);
+    process.exit(1);
+  }
+
+  const choices = presets.map((name) => {
+    const preset = PRESETS[name];
+    return {
+      title: preset.name,
+      description: preset.description,
+      value: preset.name,
+    };
+  });
+
+  const { preset } = await prompts({
+    type: "select",
+    name: "preset",
+    message: "Select preset:",
+    choices,
+  });
+
+  if (!preset) {
+    consola.error("Preset selection is required");
+    process.exit(1);
+  }
+
+  return preset as PresetName;
+}
+
+/**
+ * Prompt for target selection (for ORM preset dialect selection)
+ */
+export async function promptTarget(
+  targets: Array<{ name: string; description?: string; dialect?: string }>
+): Promise<string> {
+  const choices = targets.map((t) => {
+    let title = t.name;
+    if (t.dialect) {
+      title = `${t.name} (${t.dialect})`;
+    }
+    return {
+      title,
+      description: t.description || "",
+      value: t.name,
+    };
+  });
+
+  const { target } = await prompts({
+    type: "select",
+    name: "target",
+    message: "Select target/variant:",
+    choices,
+  });
+
+  if (!target) {
+    consola.error("Target selection is required");
+    process.exit(1);
+  }
+
+  return target;
 }

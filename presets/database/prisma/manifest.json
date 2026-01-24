@@ -3,82 +3,99 @@
   "name": "prisma",
   "category": "database",
   "description": "Prisma ORM - Type-safe database client",
-  "conflicts": [
-    "drizzle"
-  ],
-  "requires": [],
-  "env": [
-    {
-      "key": "DATABASE_URL",
-      "description": "PostgreSQL connection string",
-      "required": true,
-      "secret": true,
-      "example": "postgresql://postgres:postgres@localhost:5432/mydb"
-    }
-  ],
-  "postInstall": [
-    "Generate client: pnpm prisma generate",
-    "Run migrations: pnpm prisma migrate dev"
-  ],
-  "scripts": {
-    "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev",
-    "prisma:push": "prisma db push",
-    "prisma:studio": "prisma studio"
-  },
   "version": "7.0.0",
-  "targets": {
-    "nextjs": {
-      "files": [
-        "prisma",
-        "prisma.config.ts",
-        "nextjs"
-      ],
-      "detect": {
-        "packages": [
-          "next"
-        ],
-        "packageVersions": {
-          "next": ">=14"
-        }
-      }
+  "common": {
+    "devDependencies": {
+      "prisma": "^7.0.0"
     },
-    "nestjs": {
+    "scripts": {
+      "db:generate": "prisma generate",
+      "db:migrate": "prisma migrate dev",
+      "db:push": "prisma db push",
+      "db:studio": "prisma studio"
+    }
+  },
+  "targets": {
+    "sqlite": {
+      "description": "SQLite for development and simple apps (Next.js, standalone)",
+      "dialect": "sqlite",
+      "dependencies": {
+        "@prisma/client": "^7.0.0"
+      },
       "files": [
-        "prisma",
-        "prisma.config.ts",
-        "src/db"
+        "sqlite"
       ],
-      "transform": [
+      "env": [
         {
-          "target": "src/app.module.ts",
-          "type": "import",
-          "content": "import { PrismaModule } from \"./db/prisma.module.js\";"
-        },
-        {
-          "target": "src/app.module.ts",
-          "type": "nestjs-module",
-          "module": "PrismaModule"
+          "key": "DATABASE_URL",
+          "description": "SQLite database path",
+          "required": false,
+          "example": "file:./dev.db"
         }
       ],
-      "detect": {
-        "packages": [
-          "@nestjs/core"
-        ],
-        "packageVersions": {
-          "@nestjs/core": ">=10"
-        },
-        "runtime": {
-          "node": ">=18"
+      "detect": [
+        "better-sqlite3",
+        "sqlite3"
+      ],
+      "postInstall": [
+        "Generate client: pnpm db:generate",
+        "Push schema: pnpm db:push"
+      ]
+    },
+    "postgres": {
+      "description": "PostgreSQL for production (Next.js, NestJS)",
+      "dialect": "postgresql",
+      "dependencies": {
+        "@prisma/client": "^7.0.0",
+        "@prisma/adapter-pg": "^7.0.0",
+        "pg": "^8.13.0"
+      },
+      "devDependencies": {
+        "@types/pg": "^8.11.0"
+      },
+      "files": [
+        "postgres"
+      ],
+      "env": [
+        {
+          "key": "DATABASE_URL",
+          "description": "PostgreSQL connection string",
+          "required": true,
+          "secret": true,
+          "example": "postgresql://postgres:postgres@localhost:5432/mydb"
         }
-      }
+      ],
+      "detect": [
+        "pg",
+        "@prisma/adapter-pg"
+      ],
+      "postInstall": [
+        "Generate client: pnpm db:generate",
+        "Run migrations: pnpm db:migrate"
+      ]
     },
     "standalone": {
-      "description": "CLI tools, scripts, Lambda, and non-framework environments",
+      "description": "CLI tools, scripts, Lambda (PostgreSQL)",
+      "dialect": "postgresql",
+      "dependencies": {
+        "@prisma/client": "^7.0.0",
+        "@prisma/adapter-pg": "^7.0.0",
+        "pg": "^8.13.0"
+      },
+      "devDependencies": {
+        "@types/pg": "^8.11.0"
+      },
       "files": [
-        "prisma",
-        "prisma.config.ts",
         "standalone"
+      ],
+      "env": [
+        {
+          "key": "DATABASE_URL",
+          "description": "PostgreSQL connection string",
+          "required": true,
+          "secret": true,
+          "example": "postgresql://postgres:postgres@localhost:5432/mydb"
+        }
       ],
       "detect": {
         "excludes": [
@@ -89,9 +106,16 @@
     },
     "monorepo": {
       "description": "Shared database package for monorepo (packages/database)",
+      "dialect": "postgresql",
+      "dependencies": {
+        "@prisma/client": "^7.0.0",
+        "@prisma/adapter-pg": "^7.0.0",
+        "pg": "^8.13.0"
+      },
+      "devDependencies": {
+        "@types/pg": "^8.11.0"
+      },
       "files": [
-        "prisma",
-        "prisma.config.ts",
         "monorepo"
       ],
       "packageJson": {
@@ -111,6 +135,15 @@
           "db:push": "prisma db push"
         }
       },
+      "env": [
+        {
+          "key": "DATABASE_URL",
+          "description": "PostgreSQL connection string",
+          "required": true,
+          "secret": true,
+          "example": "postgresql://postgres:postgres@localhost:5432/mydb"
+        }
+      ],
       "detect": {
         "files": [
           "pnpm-workspace.yaml",
@@ -120,21 +153,7 @@
       }
     }
   },
-  "common": {
-    "dependencies": {
-      "@prisma/client": "^7.0.0",
-      "@prisma/adapter-pg": "^7.0.0",
-      "pg": "^8.13.0"
-    },
-    "devDependencies": {
-      "prisma": "^7.0.0",
-      "@types/pg": "^8.11.0"
-    },
-    "scripts": {
-      "db:generate": "prisma generate",
-      "db:migrate": "prisma migrate dev",
-      "db:push": "prisma db push",
-      "db:studio": "prisma studio"
-    }
-  }
+  "conflicts": [
+    "drizzle"
+  ]
 }
