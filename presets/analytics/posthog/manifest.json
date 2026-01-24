@@ -28,8 +28,38 @@
   "version": "1.200.0",
   "targets": {
     "nextjs": {
+      "description": "Next.js (manual provider setup)",
       "files": [
         "src/lib/posthog"
+      ],
+      "detect": {
+        "packages": [
+          "next"
+        ],
+        "packageVersions": {
+          "next": ">=14"
+        },
+        "runtime": {
+          "node": ">=18"
+        }
+      }
+    },
+    "nextjs-auto": {
+      "description": "Next.js (auto provider injection)",
+      "files": [
+        "src/lib/posthog"
+      ],
+      "transform": [
+        {
+          "target": "app/providers.tsx",
+          "type": "import",
+          "content": "import { PostHogProvider } from \"@/lib/posthog\";"
+        },
+        {
+          "target": "app/providers.tsx",
+          "type": "provider-wrap",
+          "provider": "PostHogProvider"
+        }
       ],
       "detect": {
         "packages": [

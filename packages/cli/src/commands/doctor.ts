@@ -15,6 +15,7 @@ import {
   createPresetLockfileSnapshot,
   type OboraConfig,
 } from "../utils/project-config";
+import { runPreflightChecks, showResults, type PreflightCheck, type SummaryItem } from "../utils/progress";
 
 interface DiagnosticResult {
   name: string;
@@ -193,7 +194,6 @@ interface PresetEnvVar {
 
 interface PresetTargetConfig {
   files?: string[];
-  inject?: Array<{ file: string; marker: string; content: string }>;
   env?: PresetEnvVar[];
 }
 
@@ -318,32 +318,6 @@ function collectExpectedFiles(
   return Array.from(new Set(files));
 }
 
-function collectInjects(
-  manifest: PresetManifestV1 | PresetManifestV2,
-  targetKey: string | null
-): Array<{ file: string; marker: string; content: string }> {
-  const injects: Array<{ file: string; marker: string; content: string }> = [];
-  const targetConfigs = getTargetConfigs(manifest);
-  const targets = targetKey && targetConfigs[targetKey]
-    ? [targetConfigs[targetKey]]
-    : Object.values(targetConfigs);
-  for (const target of targets) {
-    if (target.inject && target.inject.length > 0) injects.push(...target.inject);
-  }
-  return injects;
-}
-
-function hasMarker(content: string, marker: string): boolean {
-  const escaped = marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const patterns = [
-    new RegExp(`\\/\\/ ${escaped}`),
-    new RegExp(`# ${escaped}`),
-    new RegExp(`\\/\\* ${escaped} \\*\\/`),
-    new RegExp(`<!-- ${escaped} -->`),
-  ];
-  return patterns.some((pattern) => pattern.test(content));
-}
-
 function findExistingFile(
   candidateDirs: string[],
   relativePaths: string[]
@@ -384,9 +358,7 @@ function checkPresetGuidance(
   const layoutContent = layoutPath ? readFileSync(layoutPath, "utf-8") : "";
 
   if (installedPresets.includes("next-intl")) {
-    const hasProvider =
-      layoutContent.includes("NextIntlClientProvider") ||
-      hasMarker(layoutContent, "@obora:layout-provider-start");
+    const hasProvider = layoutContent.includes("NextIntlClientProvider");
     if (!hasProvider) {
       results.push({
         name: "Guidance: next-intl",
@@ -410,9 +382,7 @@ function checkPresetGuidance(
   }
 
   if (installedPresets.includes("next-themes")) {
-    const hasProvider =
-      providersContent.includes("ThemeProvider") ||
-      hasMarker(providersContent, "@obora:providers");
+    const hasProvider = providersContent.includes("ThemeProvider");
     if (!hasProvider) {
       results.push({
         name: "Guidance: next-themes",
@@ -436,9 +406,7 @@ function checkPresetGuidance(
   }
 
   if (installedPresets.includes("tanstack-query")) {
-    const hasProvider =
-      providersContent.includes("QueryProvider") ||
-      hasMarker(providersContent, "@obora:providers");
+    const hasProvider = providersContent.includes("QueryProvider");
     if (!hasProvider) {
       results.push({
         name: "Guidance: tanstack-query",
@@ -462,9 +430,7 @@ function checkPresetGuidance(
   }
 
   if (installedPresets.includes("nuqs")) {
-    const hasProvider =
-      providersContent.includes("NuqsAdapter") ||
-      hasMarker(providersContent, "@obora:providers");
+    const hasProvider = providersContent.includes("NuqsAdapter");
     if (!hasProvider) {
       results.push({
         name: "Guidance: nuqs",
@@ -556,7 +522,7 @@ function diffPresetLockfile(
 async function checkPresetLockfile(
   projectPath: string,
   config: OboraConfig | null
-): DiagnosticResult[] {
+): Promise<DiagnosticResult[]> {
   const results: DiagnosticResult[] = [];
   if (!config) {
     return results;
@@ -706,10 +672,7 @@ function checkPresetFiles(
 
     const { targetKey, source } = selectTargetKey(preset, manifest, config);
     const expectedFiles = collectExpectedFiles(manifest, targetKey);
-    const injects = collectInjects(manifest, targetKey);
     const missingFiles: string[] = [];
-    const missingMarkers: string[] = [];
-    const missingTargets: string[] = [];
 
     for (const file of expectedFiles) {
       const exists = candidateDirs.some((dir) => existsSync(join(dir, file)));
@@ -718,56 +681,27 @@ function checkPresetFiles(
       }
     }
 
-    for (const inject of injects) {
-      const candidatePaths = candidateDirs.map((dir) => join(dir, inject.file));
-      const existingPath = candidatePaths.find((p) => existsSync(p));
-      if (!existingPath) {
-        missingTargets.push(inject.file);
-        continue;
-      }
-      const content = readFileSync(existingPath, "utf-8");
-      const hasContent = content.includes(inject.content.trim());
-      const hasMarkerFlag = hasMarker(content, inject.marker);
-      if (!hasContent && !hasMarkerFlag) {
-        missingMarkers.push(`${inject.file} (${inject.marker})`);
-      }
-    }
-
-    if (missingFiles.length > 0 || missingMarkers.length > 0 || missingTargets.length > 0) {
-      const parts: string[] = [];
-      if (missingFiles.length > 0) {
-        parts.push(`Missing files: ${missingFiles.join(", ")}`);
-      }
-      if (missingTargets.length > 0) {
-        parts.push(`Missing inject targets: ${missingTargets.join(", ")}`);
-      }
-      if (missingMarkers.length > 0) {
-        parts.push(`Missing markers: ${missingMarkers.join(", ")}`);
-      }
+    if (missingFiles.length > 0) {
       results.push({
         name: `Preset Integrity: ${preset}`,
         status: "warn",
-        message: parts.join(" | "),
-        suggestion: `Run 'obora add ${preset}' to reinstall or restore markers`,
+        message: `Missing files: ${missingFiles.join(", ")}`,
+        suggestion: `Run 'obora add ${preset}' to reinstall`,
         details: {
           targetKey,
           targetSource: source,
           missingFiles,
-          missingTargets,
-          missingMarkers,
         },
       });
     } else {
       results.push({
         name: `Preset Integrity: ${preset}`,
         status: "pass",
-        message: "All expected files and markers found",
+        message: "All expected files found",
         details: {
           targetKey,
           targetSource: source,
           missingFiles: [],
-          missingTargets: [],
-          missingMarkers: [],
         },
       });
     }

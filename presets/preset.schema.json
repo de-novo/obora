@@ -103,18 +103,50 @@
           "files": { "type": "array", "items": { "type": "string" } },
           "remove": { "type": "array", "items": { "type": "string" } },
           "scripts": { "type": "object" },
-          "inject": {
+          "transform": {
             "type": "array",
+            "description": "AST-based code transformations",
             "items": {
               "type": "object",
-              "required": ["file", "marker", "content"],
+              "required": ["target", "type"],
               "properties": {
-                "file": { "type": "string" },
-                "marker": { "type": "string" },
-                "content": { "type": "string" },
-                "order": {
-                  "type": "number",
-                  "description": "Lower numbers are applied first within the same marker"
+                "target": {
+                  "type": "string",
+                  "description": "Target file path relative to project root"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": ["import", "dependency", "nestjs-module", "provider-wrap"],
+                  "description": "Type of transformation"
+                },
+                "content": {
+                  "type": "string",
+                  "description": "Import statement (for type: import)"
+                },
+                "name": {
+                  "type": "string",
+                  "description": "Package name (for type: dependency)"
+                },
+                "version": {
+                  "type": "string",
+                  "description": "Package version (for type: dependency)"
+                },
+                "dev": {
+                  "type": "boolean",
+                  "description": "Install as devDependency (for type: dependency)"
+                },
+                "module": {
+                  "type": "string",
+                  "description": "Module name to add to imports array (for type: nestjs-module)"
+                },
+                "provider": {
+                  "type": "string",
+                  "description": "Provider component name (for type: provider-wrap)"
+                },
+                "props": {
+                  "type": "object",
+                  "additionalProperties": { "type": "string" },
+                  "description": "Props to pass to provider (for type: provider-wrap)"
                 }
               }
             }
@@ -171,18 +203,50 @@
           "files": { "type": "array", "items": { "type": "string" } },
           "remove": { "type": "array", "items": { "type": "string" } },
           "scripts": { "type": "object" },
-          "inject": {
+          "transform": {
             "type": "array",
+            "description": "AST-based code transformations",
             "items": {
               "type": "object",
-              "required": ["file", "marker", "content"],
+              "required": ["target", "type"],
               "properties": {
-                "file": { "type": "string" },
-                "marker": { "type": "string" },
-                "content": { "type": "string" },
-                "order": {
-                  "type": "number",
-                  "description": "Lower numbers are applied first within the same marker"
+                "target": {
+                  "type": "string",
+                  "description": "Target file path relative to project root"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": ["import", "dependency", "nestjs-module", "provider-wrap"],
+                  "description": "Type of transformation"
+                },
+                "content": {
+                  "type": "string",
+                  "description": "Import statement (for type: import)"
+                },
+                "name": {
+                  "type": "string",
+                  "description": "Package name (for type: dependency)"
+                },
+                "version": {
+                  "type": "string",
+                  "description": "Package version (for type: dependency)"
+                },
+                "dev": {
+                  "type": "boolean",
+                  "description": "Install as devDependency (for type: dependency)"
+                },
+                "module": {
+                  "type": "string",
+                  "description": "Module name to add to imports array (for type: nestjs-module)"
+                },
+                "provider": {
+                  "type": "string",
+                  "description": "Provider component name (for type: provider-wrap)"
+                },
+                "props": {
+                  "type": "object",
+                  "additionalProperties": { "type": "string" },
+                  "description": "Props to pass to provider (for type: provider-wrap)"
                 }
               }
             }

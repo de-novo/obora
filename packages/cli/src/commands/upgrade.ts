@@ -16,6 +16,8 @@ import {
   upgradeSlotPreset,
   type OboraConfig,
 } from "../utils/project-config";
+import { Errors, showError } from "../utils/errors";
+import { withSpinner, runTasks, type TaskStep } from "../utils/progress";
 
 interface UpgradeCandidate {
   slot: string;
@@ -240,13 +242,13 @@ export const upgradeCommand = defineCommand({
 
     // Check for obora config
     if (!hasOboraConfig(projectPath)) {
-      consola.error("No obora config found. Run 'obora init' first.");
+      showError(Errors.projectNotInitialized(projectPath));
       process.exit(1);
     }
 
     const config = await readOboraConfig(projectPath);
     if (!config) {
-      consola.error("Failed to read obora config.");
+      showError(Errors.configInvalid(join(projectPath, ".obora/config.json"), "Failed to read config"));
       process.exit(1);
     }
 
@@ -278,7 +280,7 @@ export const upgradeCommand = defineCommand({
         if (slotConfig) {
           consola.success(`${args.preset} is already up to date.`);
         } else {
-          consola.error(`Preset '${args.preset}' not found in this project.`);
+          showError(Errors.presetNotFound(args.preset));
         }
         return;
       }
@@ -335,27 +337,23 @@ export const upgradeCommand = defineCommand({
     }
 
     // Perform upgrades
-    consola.start("Upgrading presets...\n");
-
     const allChanges: string[] = [];
 
-    for (const candidate of toUpgrade) {
-      try {
+    const upgradeTasks: TaskStep[] = toUpgrade.map((candidate) => ({
+      name: `Upgrade ${candidate.slot}:${candidate.preset}`,
+      task: async () => {
         // Get preset info
         const presetInfo = PRESETS[resolvePresetName(candidate.preset)];
         if (!presetInfo) {
-          consola.warn(`Preset info not found for ${candidate.preset}, skipping dependency update`);
           await upgradeSlotPreset(projectPath, candidate.slot, candidate.latestVersion);
-          continue;
+          return { warning: `Preset info not found, skipped dependency update` };
         }
 
         // Read manifest for new dependencies
         const manifest = await readPresetManifest(candidate.preset, presetInfo.category);
         if (!manifest) {
-          consola.warn(`Manifest not found for ${candidate.preset}, updating config only`);
           await upgradeSlotPreset(projectPath, candidate.slot, candidate.latestVersion);
-          consola.success(`Updated config for ${candidate.preset}`);
-          continue;
+          return { warning: `Manifest not found, updated config only` };
         }
 
         // Get target from config
@@ -363,11 +361,9 @@ export const upgradeCommand = defineCommand({
         const newDeps = getManifestDependencies(manifest, target);
 
         // Find package.json to update
-        // For monorepo: check apps, for single: root
         const packageJsonPaths: string[] = [];
 
         if (config.base === "monorepo") {
-          // Update root and relevant app package.jsons
           packageJsonPaths.push(join(projectPath, "package.json"));
           for (const [, appConfig] of Object.entries(config.apps)) {
             if (appConfig.path) {
@@ -388,17 +384,22 @@ export const upgradeCommand = defineCommand({
 
         // Update config
         await upgradeSlotPreset(projectPath, candidate.slot, candidate.latestVersion);
-        consola.success(
-          `Upgraded ${candidate.slot}:${candidate.preset} to ${candidate.latestVersion}`
-        );
-      } catch (error) {
-        consola.error(
-          `Failed to upgrade ${candidate.preset}: ${error instanceof Error ? error.message : error}`
-        );
-      }
-    }
+        return { success: `${candidate.currentVersion} → ${candidate.latestVersion}` };
+      },
+    }));
 
-    consola.success("\nUpgrade complete!");
+    const upgradeResults = await runTasks(upgradeTasks, {
+      continueOnError: true,
+    });
+
+    const successCount = upgradeResults.succeeded;
+    const failCount = upgradeResults.failed;
+
+    if (failCount > 0) {
+      consola.warn(`\nUpgrade completed with ${failCount} failure(s)`);
+    } else {
+      consola.success("\nUpgrade complete!");
+    }
 
     if (allChanges.length > 0) {
       consola.info("\nDependency changes:");

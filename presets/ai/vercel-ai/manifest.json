@@ -24,16 +24,16 @@
       "files": [
         "src/modules/ai"
       ],
-      "inject": [
+      "transform": [
         {
-          "file": "src/app.module.ts",
-          "marker": "@obora:imports",
+          "target": "src/app.module.ts",
+          "type": "import",
           "content": "import { AiModule } from \"./modules/ai/ai.module.js\";"
         },
         {
-          "file": "src/app.module.ts",
-          "marker": "@obora:modules",
-          "content": "AiModule,"
+          "target": "src/app.module.ts",
+          "type": "nestjs-module",
+          "module": "AiModule"
         }
       ],
       "detect": {

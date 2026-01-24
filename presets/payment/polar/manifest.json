@@ -34,16 +34,16 @@
       "files": [
         "src/modules/payment"
       ],
-      "inject": [
+      "transform": [
         {
-          "file": "src/app.module.ts",
-          "marker": "@obora:imports",
+          "target": "src/app.module.ts",
+          "type": "import",
           "content": "import { PaymentModule } from \"./modules/payment/payment.module.js\";"
         },
         {
-          "file": "src/app.module.ts",
-          "marker": "@obora:modules",
-          "content": "PaymentModule,"
+          "target": "src/app.module.ts",
+          "type": "nestjs-module",
+          "module": "PaymentModule"
         }
       ],
       "detect": {

@@ -79,8 +79,9 @@ describe("eject command", () => {
         cmd: ejectCommand,
       });
 
+      // showError formats the error with code and suggestions
       expect(consola.error).toHaveBeenCalledWith(
-        "No obora config found. Run 'obora init' first."
+        expect.stringContaining("Project is not initialized")
       );
     });
 
@@ -102,8 +103,9 @@ describe("eject command", () => {
         cmd: ejectCommand,
       });
 
+      // showError formats the error with code and suggestions
       expect(consola.error).toHaveBeenCalledWith(
-        "Preset 'tailwind' is not installed in this project."
+        expect.stringContaining("Preset 'tailwind' not found")
       );
     });
 
@@ -125,8 +127,9 @@ describe("eject command", () => {
         cmd: ejectCommand,
       });
 
+      // showError formats the error with code and suggestions
       expect(consola.error).toHaveBeenCalledWith(
-        "Preset 'resend' does not support ejecting."
+        expect.stringContaining("does not support ejecting")
       );
     });
 
@@ -251,9 +254,8 @@ describe("eject command", () => {
         cmd: ejectCommand,
       });
 
-      expect(consola.start).toHaveBeenCalledWith(
-        "Ejecting tailwind configuration files..."
-      );
+      // writeOboraConfig is called after successful eject
+      expect(writeOboraConfig).toHaveBeenCalled();
     });
 
     it("should warn when files already exist without --force", async () => {

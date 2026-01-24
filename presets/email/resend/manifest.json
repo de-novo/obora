@@ -32,16 +32,16 @@
       "files": [
         "src/modules/email"
       ],
-      "inject": [
+      "transform": [
         {
-          "file": "src/app.module.ts",
-          "marker": "@obora:imports",
+          "target": "src/app.module.ts",
+          "type": "import",
           "content": "import { EmailModule } from \"./modules/email/email.module.js\";"
         },
         {
-          "file": "src/app.module.ts",
-          "marker": "@obora:modules",
-          "content": "EmailModule,"
+          "target": "src/app.module.ts",
+          "type": "nestjs-module",
+          "module": "EmailModule"
         }
       ],
       "detect": {

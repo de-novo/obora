@@ -30,22 +30,19 @@
     "nextjs-auto": {
       "description": "Next.js (auto layout injection)",
       "files": ["nextjs"],
-      "inject": [
+      "transform": [
         {
-          "file": "app/providers.tsx",
-          "marker": "@obora:providers-imports",
-          "content": "import { QueryProvider } from \"@/lib/query\";",
-          "order": 20
+          "target": "app/providers.tsx",
+          "type": "import",
+          "content": "import { QueryProvider } from \"@/lib/query\";"
         },
         {
-          "file": "app/providers.tsx",
-          "marker": "@obora:providers",
-          "content": "(children) => <QueryProvider>{children}</QueryProvider>,",
-          "order": 20
+          "target": "app/providers.tsx",
+          "type": "provider-wrap",
+          "provider": "QueryProvider"
         }
       ],
       "postInstall": [
-        "Layout is updated to include <Providers> automatically.",
         "See lib/query-prefetch.ts for SSR/prefetch example."
       ]
     },
@@ -55,22 +52,25 @@
         "@tanstack/react-query-devtools": "^5.0.0"
       },
       "files": ["nextjs"],
-      "inject": [
+      "transform": [
         {
-          "file": "app/providers.tsx",
-          "marker": "@obora:providers-imports",
-          "content": "import { QueryProvider } from \"@/lib/query\";\nimport { ReactQueryDevtools } from \"@tanstack/react-query-devtools\";",
-          "order": 20
+          "target": "app/providers.tsx",
+          "type": "import",
+          "content": "import { QueryProvider } from \"@/lib/query\";"
         },
         {
-          "file": "app/providers.tsx",
-          "marker": "@obora:providers",
-          "content": "(children) => <QueryProvider>{children}<ReactQueryDevtools initialIsOpen={false} /></QueryProvider>,",
-          "order": 20
+          "target": "app/providers.tsx",
+          "type": "import",
+          "content": "import { ReactQueryDevtools } from \"@tanstack/react-query-devtools\";"
+        },
+        {
+          "target": "app/providers.tsx",
+          "type": "provider-wrap",
+          "provider": "QueryProvider"
         }
       ],
       "postInstall": [
-        "ReactQueryDevtools is enabled in Providers (client).",
+        "Add <ReactQueryDevtools /> inside QueryProvider",
         "See lib/query-prefetch.ts for SSR/prefetch example."
       ]
     }

@@ -165,15 +165,42 @@ presets/<category>/<name>/
 
 ### 적용 순서
 
-- `files` 복사 → `inject` 주입 → `dependencies/scripts` 병합 → `env` 안내 → `postInstall` 안내
+- `files` 복사 → `transform` 적용 → `dependencies/scripts` 병합 → `env` 안내 → `postInstall` 안내
 
-### 충돌 방지 원칙
+### Transform 시스템
 
-- 여러 프리셋이 같은 파일을 수정해야 할 때는 **덮어쓰기 금지**, 반드시 `inject` 마커 기반으로 합성합니다.
-- 예시 마커:
-  - `app/layout.tsx`: `@obora:layout-imports`, `@obora:layout-async`, `@obora:layout-provider-start/end`
-  - `app/providers.tsx`: `@obora:providers-imports`, `@obora:providers`
-- 여러 Provider 순서가 중요한 경우, `inject.order`로 우선순위를 지정합니다. (낮을수록 먼저 적용)
+AST 기반 코드 변환 시스템을 사용하여 기존 파일에 안전하게 코드를 추가합니다.
+
+**지원 타입:**
+- `import`: import 문 추가 (중복 자동 병합)
+- `dependency`: package.json 의존성 추가
+- `nestjs-module`: NestJS @Module imports 배열에 모듈 추가
+- `provider-wrap`: React Provider로 children 감싸기
+
+**예시:**
+```json
+{
+  "transform": [
+    {
+      "target": "app/providers.tsx",
+      "type": "import",
+      "content": "import { QueryProvider } from \"@/lib/query\";"
+    },
+    {
+      "target": "app/providers.tsx",
+      "type": "provider-wrap",
+      "provider": "QueryProvider"
+    }
+  ]
+}
+```
+
+**장점:**
+- 마커 불필요 - AST가 자동으로 올바른 위치 결정
+- 중복 삽입 자동 방지
+- 기존 코드 포맷 보존
+
+자세한 내용은 [Transform System 문서](../packages/cli/docs/transform-system.md)를 참조하세요.
 
 ### 타겟 선택 우선순위
 

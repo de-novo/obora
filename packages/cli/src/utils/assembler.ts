@@ -53,7 +53,6 @@ interface PresetTargetConfig {
   scripts?: Record<string, string>;
   files?: string[];
   remove?: string[];
-  inject?: Array<{ file: string; marker: string; content: string; order?: number }>;
   env?: Array<{ key: string; description: string; example?: string }>;
   postInstall?: string[];
   detect?: string[] | DetectRule;
@@ -147,10 +146,7 @@ export async function assembleProject(
     }
   }
 
-  // 4. Process all injection markers
-  await processMarkers(targetDir);
-
-  // 5. Update root package.json based on package manager
+  // 4. Update root package.json based on package manager
   await updatePackageManager(targetDir, packageManager);
 
   consola.success(`Project assembled successfully!`);
@@ -326,10 +322,6 @@ async function applyPresetTargets(params: {
           });
         }
       }
-    }
-
-    if (merged.inject && merged.inject.length > 0) {
-      await storeInjections(projectDir, [targetDir], merged.inject);
     }
 
     if (merged.dependencies || merged.devDependencies) {
@@ -621,7 +613,6 @@ function mergeTargetConfig(
     scripts: { ...(common?.scripts || {}), ...(specific?.scripts || {}) },
     files: [...(common?.files || []), ...(specific?.files || [])],
     remove: [...(common?.remove || []), ...(specific?.remove || [])],
-    inject: [...(common?.inject || []), ...(specific?.inject || [])],
     env: [...(common?.env || []), ...(specific?.env || [])],
     postInstall: [...(common?.postInstall || []), ...(specific?.postInstall || [])],
   };
@@ -931,146 +922,5 @@ async function addEnvVariables(
   }
 
   await fs.writeFile(envPath, content, "utf-8");
-}
-
-async function storeInjections(
-  projectDir: string,
-  targetDirs: string[],
-  injections: Array<{ file: string; marker: string; content: string; order?: number }>
-): Promise<void> {
-  for (const appTargetDir of targetDirs) {
-    const relativeDir = relative(projectDir, appTargetDir) || "root";
-    const moduleDir = join(projectDir, ".obora", "injections", relativeDir);
-    const injectionsPath = join(moduleDir, "injections.json");
-    let existingInjections: Array<{ file: string; marker: string; content: string; order?: number }> = [];
-
-    try {
-      existingInjections = await readJson<typeof existingInjections>(injectionsPath);
-    } catch {
-      // No existing injections
-    }
-
-    const adjustedInjections = injections.map((injection) => ({
-      ...injection,
-      file: join(appTargetDir, injection.file),
-    }));
-
-    const allInjections = [...existingInjections, ...adjustedInjections];
-    await writeJson(injectionsPath, allInjections);
-  }
-}
-
-/**
- * Processes all @obora:* markers in target files
- */
-async function processMarkers(targetDir: string): Promise<void> {
-  const injectionsDir = join(targetDir, ".obora", "injections");
-  const legacyInjectionsPath = join(targetDir, ".obora-injections.json");
-  const injectionFiles: string[] = [];
-
-  if (await fileExists(legacyInjectionsPath)) {
-    injectionFiles.push(legacyInjectionsPath);
-  }
-
-  if (await dirExists(injectionsDir)) {
-    const collectJsonFiles = async (dir: string): Promise<void> => {
-      const entries = await fs.readdir(dir, { withFileTypes: true });
-      for (const entry of entries) {
-        const fullPath = join(dir, entry.name);
-        if (entry.isDirectory()) {
-          await collectJsonFiles(fullPath);
-        } else if (entry.name.endsWith(".json")) {
-          injectionFiles.push(fullPath);
-        }
-      }
-    };
-    await collectJsonFiles(injectionsDir);
-  }
-
-  if (injectionFiles.length === 0) {
-    return;
-  }
-
-  const injections: Array<{ file: string; marker: string; content: string; order?: number }> = [];
-  for (const filePath of injectionFiles) {
-    try {
-      const items = await readJson<typeof injections>(filePath);
-      injections.push(...items);
-    } catch {
-      // Skip invalid injection file
-    }
-  }
-
-  // Group injections by file
-  const byFile = new Map<
-    string,
-    Array<{ marker: string; content: string; order?: number; index: number }>
-  >();
-
-  for (const [index, injection] of injections.entries()) {
-    const existing = byFile.get(injection.file) || [];
-    existing.push({
-      marker: injection.marker,
-      content: injection.content,
-      order: injection.order,
-      index,
-    });
-    byFile.set(injection.file, existing);
-  }
-
-  // Process each file
-  for (const [filePath, fileInjections] of byFile) {
-    const fullPath = filePath;
-
-    if (!(await fileExists(fullPath))) {
-      consola.warn(`Injection target not found: ${fullPath}`);
-      continue;
-    }
-
-    let content = await fs.readFile(fullPath, "utf-8");
-
-    const sortedInjections = [...fileInjections].sort((a, b) => {
-      const orderA = a.order ?? 0;
-      const orderB = b.order ?? 0;
-      if (orderA !== orderB) return orderA - orderB;
-      return a.index - b.index;
-    });
-
-    for (const { marker, content: injectContent } of sortedInjections) {
-      const escapedMarker = escapeRegExp(marker);
-      const patterns = [
-        new RegExp(`^([ \\t]*)\\/\\/ ${escapedMarker}\\s*$`, "gm"),
-        new RegExp(`^([ \\t]*)# ${escapedMarker}\\s*$`, "gm"),
-        new RegExp(`^([ \\t]*)\\/\\* ${escapedMarker} \\*\\/\\s*$`, "gm"),
-        new RegExp(`^([ \\t]*)\\{\\/\\* ${escapedMarker} \\*\\/\\}\\s*$`, "gm"),
-        new RegExp(`^([ \\t]*)<!-- ${escapedMarker} -->\\s*$`, "gm"),
-      ];
-
-      for (const pattern of patterns) {
-        content = content.replace(pattern, (match: string, indent: string) => {
-          const indented = indentMultiline(injectContent, indent);
-          return `${indented}\n${match}`;
-        });
-      }
-    }
-
-    await fs.writeFile(fullPath, content, "utf-8");
-  }
-
-  // Remove temporary injections files
-  for (const filePath of injectionFiles) {
-    await fs.rm(filePath, { force: true });
-  }
-}
-
-function indentMultiline(content: string, indent: string): string {
-  return content
-    .split("\n")
-    .map((line) => (line.length > 0 ? `${indent}${line}` : line))
-    .join("\n");
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 

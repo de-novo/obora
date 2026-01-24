@@ -4,6 +4,28 @@ import { join } from "pathe";
 import { promises as fs, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 
+// Mock consola - factory must not reference external variables (hoisted)
+vi.mock("consola", () => {
+  const mockConsola = {
+    info: vi.fn(),
+    log: vi.fn(),
+    success: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    box: vi.fn(),
+    start: vi.fn(),
+    ready: vi.fn(),
+    debug: vi.fn(),
+    trace: vi.fn(),
+    fail: vi.fn(),
+    fatal: vi.fn(),
+  };
+  return {
+    consola: mockConsola,
+    default: mockConsola,
+  };
+});
+
 // Note: These tests validate command behavior, not actual syncing
 // (source assets may not exist in test environment before build)
 
@@ -122,19 +144,31 @@ describe("sync command", () => {
   });
 
   describe("error handling", () => {
-    it("should warn if .claude directory does not exist", async () => {
+    it("should exit with error if .claude directory does not exist", async () => {
       const noClaudeDir = join(tmpdir(), `obora-test-no-claude-${Date.now()}`);
       await fs.mkdir(noClaudeDir, { recursive: true });
 
-      // Run sync on directory without .claude
-      await syncCommand.run?.({
-        args: { dir: noClaudeDir, force: false, type: "all", list: false },
-        cmd: syncCommand,
-        rawArgs: [],
-      } as any);
+      // Mock process.exit to prevent test from exiting
+      const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => {
+        throw new Error("process.exit called");
+      });
 
-      // Should complete without error (just warns)
-      await fs.rm(noClaudeDir, { recursive: true, force: true });
+      try {
+        // Run sync on directory without .claude
+        await expect(
+          syncCommand.run?.({
+            args: { dir: noClaudeDir, force: false, type: "all", list: false },
+            cmd: syncCommand,
+            rawArgs: [],
+          } as any)
+        ).rejects.toThrow("process.exit called");
+
+        // Should call process.exit(1)
+        expect(exitSpy).toHaveBeenCalledWith(1);
+      } finally {
+        exitSpy.mockRestore();
+        await fs.rm(noClaudeDir, { recursive: true, force: true });
+      }
     });
   });
 });

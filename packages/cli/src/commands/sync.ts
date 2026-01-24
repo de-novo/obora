@@ -13,6 +13,14 @@ import {
   listAvailableSkills,
   listAvailableAgents,
 } from "../utils/skills";
+import { Errors, showError } from "../utils/errors";
+import {
+  withSpinner,
+  runTasks,
+  runPreflightChecks,
+  showResults,
+  type TaskStep,
+} from "../utils/progress";
 
 export const syncCommand = defineCommand({
   meta: {
@@ -65,45 +73,76 @@ export const syncCommand = defineCommand({
       return;
     }
 
-    // Check if .claude directory exists
+    // Pre-flight checks
     const claudeDir = resolve(projectPath, ".claude");
-    if (!existsSync(claudeDir)) {
-      consola.warn("No .claude directory found. Run 'obora init' first.");
-      return;
+    const { passed } = await runPreflightChecks([
+      {
+        name: ".claude directory exists",
+        check: () => existsSync(claudeDir),
+        required: true,
+      },
+    ]);
+
+    if (!passed) {
+      showError(Errors.projectNotInitialized(projectPath));
+      process.exit(1);
     }
 
     const options = { force: args.force };
 
-    switch (args.type) {
-      case "skills":
-        await syncSkills(projectPath, options);
-        consola.success("Skills synced");
-        break;
-      case "agents":
-        await syncAgents(projectPath, options);
-        consola.success("Agents synced");
-        break;
-      case "rules":
-        await syncRules(projectPath, options);
-        consola.success("Rules synced");
-        break;
-      case "commands":
-        await syncCommands(projectPath, options);
-        consola.success("Commands synced");
-        break;
-      case "scripts":
-        await syncScripts(projectPath, options);
-        consola.success("Scripts synced");
-        break;
-      case "settings":
-        await syncSettings(projectPath, options);
-        consola.success("Settings synced");
-        break;
-      case "all":
-      default:
-        await syncAll(projectPath, options);
-        consola.success("\nSync complete!");
-        break;
+    // Single type sync
+    if (args.type !== "all") {
+      const syncFunctions: Record<string, () => Promise<void>> = {
+        skills: () => syncSkills(projectPath, options),
+        agents: () => syncAgents(projectPath, options),
+        rules: () => syncRules(projectPath, options),
+        commands: () => syncCommands(projectPath, options),
+        scripts: () => syncScripts(projectPath, options),
+        settings: () => syncSettings(projectPath, options),
+      };
+
+      const syncFn = syncFunctions[args.type];
+      if (!syncFn) {
+        consola.error(`Unknown sync type: ${args.type}`);
+        consola.info("Available types: skills, agents, rules, commands, scripts, settings, all");
+        process.exit(1);
+      }
+
+      await withSpinner(
+        `Syncing ${args.type}...`,
+        syncFn,
+        {
+          successText: `${args.type} synced`,
+          showTime: true,
+        }
+      );
+      return;
+    }
+
+    // Sync all assets with progress
+    const tasks: TaskStep[] = [
+      { name: "Syncing skills", task: () => syncSkills(projectPath, options) },
+      { name: "Syncing agents", task: () => syncAgents(projectPath, options) },
+      { name: "Syncing rules", task: () => syncRules(projectPath, options) },
+      { name: "Syncing commands", task: () => syncCommands(projectPath, options) },
+      { name: "Syncing scripts", task: () => syncScripts(projectPath, options) },
+      { name: "Syncing settings", task: () => syncSettings(projectPath, options) },
+    ];
+
+    consola.log(""); // Empty line before tasks
+    const results = await runTasks(tasks, {
+      showTime: true,
+      continueOnError: true,
+    });
+
+    // Show summary
+    showResults(results);
+
+    if (results.failed === 0) {
+      consola.success("\nSync complete!");
+    } else {
+      consola.warn(`\nSync completed with ${results.failed} error(s)`);
+      process.exit(1);
     }
   },
 });

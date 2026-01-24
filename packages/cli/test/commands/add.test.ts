@@ -310,4 +310,205 @@ describe("add command", () => {
       expect(isFrontendPreset).toBe(true);
     });
   });
+
+  describe("transform integration", () => {
+    it("should parse manifest with transform field", async () => {
+      const manifestPath = join(testDir, "manifest.json");
+      const manifest = {
+        name: "tanstack-query",
+        transform: [
+          {
+            type: "import",
+            target: "app/providers.tsx",
+            from: "@tanstack/react-query",
+            named: ["QueryClient", "QueryClientProvider"],
+          },
+          {
+            type: "dependency",
+            target: "package.json",
+            name: "@tanstack/react-query",
+            version: "^5.0.0",
+          },
+          {
+            type: "provider-wrap",
+            target: "app/providers.tsx",
+            provider: "QueryClientProvider",
+            props: { client: "queryClient" },
+          },
+        ],
+      };
+
+      await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+
+      const content = await fs.readFile(manifestPath, "utf-8");
+      const parsed = JSON.parse(content);
+
+      expect(parsed.transform).toBeDefined();
+      expect(parsed.transform).toHaveLength(3);
+      expect(parsed.transform[0].type).toBe("import");
+      expect(parsed.transform[1].type).toBe("dependency");
+      expect(parsed.transform[2].type).toBe("provider-wrap");
+    });
+
+    it("should support nestjs-module transform type", async () => {
+      const manifestPath = join(testDir, "manifest.json");
+      const manifest = {
+        name: "prisma",
+        transform: [
+          {
+            type: "nestjs-module",
+            target: "src/app.module.ts",
+            module: "PrismaModule",
+          },
+        ],
+      };
+
+      await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+
+      const content = await fs.readFile(manifestPath, "utf-8");
+      const parsed = JSON.parse(content);
+
+      expect(parsed.transform[0].type).toBe("nestjs-module");
+      expect(parsed.transform[0].module).toBe("PrismaModule");
+    });
+
+    it("should support combined inject and transform in manifest", async () => {
+      const manifestPath = join(testDir, "manifest.json");
+      const manifest = {
+        name: "clerk",
+        inject: [
+          {
+            target: "src/app.module.ts",
+            marker: "@obora:providers",
+            content: "ClerkProvider,",
+          },
+        ],
+        transform: [
+          {
+            type: "import",
+            target: "src/app.module.ts",
+            from: "@clerk/nextjs",
+            named: ["ClerkProvider"],
+          },
+          {
+            type: "dependency",
+            target: "package.json",
+            name: "@clerk/nextjs",
+            version: "^5.0.0",
+          },
+        ],
+      };
+
+      await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+
+      const content = await fs.readFile(manifestPath, "utf-8");
+      const parsed = JSON.parse(content);
+
+      // Both inject and transform should be present
+      expect(parsed.inject).toBeDefined();
+      expect(parsed.inject).toHaveLength(1);
+      expect(parsed.transform).toBeDefined();
+      expect(parsed.transform).toHaveLength(2);
+    });
+
+    it("should validate transform target paths", async () => {
+      const transforms = [
+        { type: "import", target: "src/providers.tsx", from: "react" },
+        { type: "dependency", target: "package.json", name: "zod", version: "^3.0.0" },
+        { type: "nestjs-module", target: "src/app.module.ts", module: "AuthModule" },
+      ];
+
+      for (const transform of transforms) {
+        expect(transform.target).toBeDefined();
+        expect(typeof transform.target).toBe("string");
+        expect(transform.target.length).toBeGreaterThan(0);
+      }
+    });
+  });
+
+  describe("plan mode preview", () => {
+    it("should collect transforms for preview", async () => {
+      const transforms = [
+        {
+          type: "import",
+          target: "app/providers.tsx",
+          from: "@tanstack/react-query",
+          named: ["QueryClient"],
+        },
+        {
+          type: "dependency",
+          target: "package.json",
+          name: "@tanstack/react-query",
+          version: "^5.0.0",
+        },
+      ];
+
+      // Simulate collecting transforms for plan preview
+      const previewItems = transforms.map((t) => ({
+        type: t.type,
+        target: t.target,
+        description:
+          t.type === "import"
+            ? `Add import from ${t.from}`
+            : t.type === "dependency"
+              ? `Add dependency ${t.name}@${t.version}`
+              : `Apply ${t.type} transform`,
+      }));
+
+      expect(previewItems).toHaveLength(2);
+      expect(previewItems[0].description).toContain("@tanstack/react-query");
+      expect(previewItems[1].description).toContain("@tanstack/react-query@^5.0.0");
+    });
+
+    it("should format transform preview for display", async () => {
+      const preview = {
+        file: "app/providers.tsx",
+        transforms: [
+          { type: "import", from: "@tanstack/react-query", named: ["QueryClient"] },
+          { type: "provider-wrap", provider: "QueryClientProvider" },
+        ],
+      };
+
+      // Format for display
+      const formatted = preview.transforms
+        .map((t) => {
+          if (t.type === "import") {
+            const imports = t.named?.join(", ") || t.default || "*";
+            return `+ import { ${imports} } from "${t.from}"`;
+          }
+          if (t.type === "provider-wrap") {
+            return `+ Wrap with <${t.provider}>`;
+          }
+          return `+ ${t.type}`;
+        })
+        .join("\n");
+
+      expect(formatted).toContain("import { QueryClient }");
+      expect(formatted).toContain("Wrap with <QueryClientProvider>");
+    });
+
+    it("should group transforms by target file", async () => {
+      const transforms = [
+        { type: "import", target: "app/providers.tsx", from: "react" },
+        { type: "dependency", target: "package.json", name: "zod", version: "^3.0.0" },
+        { type: "provider-wrap", target: "app/providers.tsx", provider: "ZodProvider" },
+        { type: "dependency", target: "package.json", name: "react", version: "^18.0.0" },
+      ];
+
+      // Group by target
+      const grouped = transforms.reduce(
+        (acc, t) => {
+          const key = t.target;
+          if (!acc[key]) acc[key] = [];
+          acc[key].push(t);
+          return acc;
+        },
+        {} as Record<string, typeof transforms>
+      );
+
+      expect(Object.keys(grouped)).toHaveLength(2);
+      expect(grouped["app/providers.tsx"]).toHaveLength(2);
+      expect(grouped["package.json"]).toHaveLength(2);
+    });
+  });
 });

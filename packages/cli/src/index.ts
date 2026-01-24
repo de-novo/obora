@@ -17,6 +17,7 @@ import { sandboxCommand } from "./commands/sandbox";
 import { configCommand } from "./commands/config";
 import { titleGenerateCommand } from "./commands/title-generate";
 import { syncCommand } from "./commands/sync";
+import { transformCommand } from "./commands/transform";
 import { initializeGlobalConfig } from "./utils";
 
 const main = defineCommand({
@@ -41,6 +42,7 @@ const main = defineCommand({
     run: runCommand,
     sandbox: sandboxCommand,
     sync: syncCommand,
+    transform: transformCommand,
     "title-generate": titleGenerateCommand,
   },
   setup() {
@@ -54,8 +56,12 @@ export function runMain() {
   _runMain(main);
 }
 
-export { createCommand, initCommand, addCommand, removeCommand, upgradeCommand, ejectCommand, doctorCommand, statusCommand, listCommand, configCommand, llmHelpCommand, chatCommand, runCommand, sandboxCommand, syncCommand, titleGenerateCommand };
+export { createCommand, initCommand, addCommand, removeCommand, upgradeCommand, ejectCommand, doctorCommand, statusCommand, listCommand, configCommand, llmHelpCommand, chatCommand, runCommand, sandboxCommand, syncCommand, transformCommand, titleGenerateCommand };
 
 // Re-export from new packages for backwards compatibility
 export * from "@obora/workflow-core";
 export { ClaudeAgentProvider, simpleQuery } from "@obora/agent-claude";
+
+// CLI utilities
+export { CLIError, Errors, showError, type ErrorCode } from "./utils/errors";
+export { withSpinner, ProgressGroup, runTasks, runPreflightChecks, showResults, showSummary, createSpinner, type TaskStep, type TaskOptions, type PreflightCheck, type PreflightResult, type SummaryItem } from "./utils/progress";

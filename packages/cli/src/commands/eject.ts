@@ -10,6 +10,8 @@ import {
   addHistoryEntry,
   type SlotConfig,
 } from "../utils/project-config";
+import { Errors, showError } from "../utils/errors";
+import { withSpinner } from "../utils/progress";
 
 /**
  * Eject configuration for each preset
@@ -266,7 +268,7 @@ export const ejectCommand = defineCommand({
     // Read config
     const config = await readOboraConfig(projectPath);
     if (!config) {
-      consola.error("No obora config found. Run 'obora init' first.");
+      showError(Errors.projectNotInitialized(projectPath));
       return;
     }
 
@@ -335,7 +337,7 @@ export const ejectCommand = defineCommand({
     const presetToEject = presetName!;
     const category = findPresetCategory(config.slots, presetToEject);
     if (!category) {
-      consola.error(`Preset '${presetToEject}' is not installed in this project.`);
+      showError(Errors.presetNotFound(presetToEject));
       return;
     }
 
@@ -348,7 +350,7 @@ export const ejectCommand = defineCommand({
 
     const ejectableFiles = EJECTABLE_FILES[presetToEject];
     if (!ejectableFiles) {
-      consola.error(`Preset '${presetToEject}' does not support ejecting.`);
+      showError(Errors.operationFailed("eject", `Preset '${presetToEject}' does not support ejecting`));
       consola.info("Ejectable presets: " + Object.keys(EJECTABLE_FILES).join(", "));
       return;
     }
@@ -417,42 +419,46 @@ export const ejectCommand = defineCommand({
     const presetPath = getPresetPath(presetToEject, category);
 
     // Eject files
-    consola.start(`Ejecting ${presetToEject} configuration files...`);
+    const ejectedFiles = await withSpinner(
+      `Ejecting ${presetToEject} configuration files`,
+      async () => {
+        const files = await ejectFiles(
+          projectPath,
+          presetPath,
+          filesToEject,
+          args.force as boolean
+        );
 
-    const ejectedFiles = await ejectFiles(
-      projectPath,
-      presetPath,
-      filesToEject,
-      args.force as boolean
+        if (files.length === 0) {
+          throw new Error("No files were ejected");
+        }
+
+        // Add header comments to ejected files
+        await createCustomConfig(projectPath, presetToEject, filesToEject);
+
+        // Update config
+        config.slots[category] = {
+          ...slot,
+          ejected: true,
+          ejectedAt: new Date().toISOString(),
+          ejectedFiles: files,
+        };
+        config.updatedAt = new Date().toISOString();
+
+        await writeOboraConfig(projectPath, config);
+
+        // Add history entry
+        await addHistoryEntry(projectPath, {
+          action: "eject",
+          target: category,
+          preset: presetToEject,
+        });
+
+        return files;
+      },
+      { successText: `Ejected ${filesToEject.length} file(s) from '${presetToEject}'`, showTime: true }
     );
 
-    if (ejectedFiles.length === 0) {
-      consola.warn("No files were ejected.");
-      return;
-    }
-
-    // Add header comments to ejected files
-    await createCustomConfig(projectPath, presetToEject, filesToEject);
-
-    // Update config
-    config.slots[category] = {
-      ...slot,
-      ejected: true,
-      ejectedAt: new Date().toISOString(),
-      ejectedFiles,
-    };
-    config.updatedAt = new Date().toISOString();
-
-    await writeOboraConfig(projectPath, config);
-
-    // Add history entry
-    await addHistoryEntry(projectPath, {
-      action: "eject",
-      target: category,
-      preset: presetToEject,
-    });
-
-    consola.success(`Successfully ejected ${ejectedFiles.length} file(s) from '${presetToEject}'.`);
     consola.info("These files will not be overwritten by 'obora upgrade'.");
     consola.info("You can now customize them freely.");
   },

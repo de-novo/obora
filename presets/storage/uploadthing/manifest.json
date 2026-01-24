@@ -33,16 +33,16 @@
       "files": [
         "src/modules/storage"
       ],
-      "inject": [
+      "transform": [
         {
-          "file": "src/app.module.ts",
-          "marker": "@obora:imports",
+          "target": "src/app.module.ts",
+          "type": "import",
           "content": "import { StorageModule } from \"./modules/storage/storage.module.js\";"
         },
         {
-          "file": "src/app.module.ts",
-          "marker": "@obora:modules",
-          "content": "StorageModule,"
+          "target": "src/app.module.ts",
+          "type": "nestjs-module",
+          "module": "StorageModule"
         }
       ],
       "detect": {

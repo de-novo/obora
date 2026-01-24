@@ -56,6 +56,18 @@
       "files": [
         "postgres"
       ],
+      "transform": [
+        {
+          "target": "src/app.module.ts",
+          "type": "import",
+          "content": "import { DatabaseModule } from \"./db/database.module.js\";"
+        },
+        {
+          "target": "src/app.module.ts",
+          "type": "nestjs-module",
+          "module": "DatabaseModule"
+        }
+      ],
       "env": [
         {
           "key": "DATABASE_URL",

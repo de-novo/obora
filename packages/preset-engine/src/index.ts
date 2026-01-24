@@ -22,6 +22,16 @@ export type {
   AppModuleConfig,
   PresetInfo,
   CopyOptions,
+  // Transform types
+  TransformType,
+  TransformConfig,
+  BaseTransformConfig,
+  ImportTransformConfig,
+  ExportTransformConfig,
+  DependencyTransformConfig,
+  NestJsModuleTransformConfig,
+  ProviderWrapTransformConfig,
+  JsonPropertyTransformConfig,
 } from "./types.js";
 
 // Assembler
@@ -49,3 +59,13 @@ export {
   indentMultiline,
   dedupeLines,
 } from "./fs-utils.js";
+
+// Transform Validator
+export {
+  validateTransformConfigs,
+  validateSingleTransform,
+  formatTransformErrors,
+  isValidTransformConfigArray,
+  type TransformValidationError,
+  type TransformValidationResult,
+} from "./transform-validator.js";

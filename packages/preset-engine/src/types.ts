@@ -54,6 +54,7 @@ export interface PresetTargetConfig {
   files?: string[];
   remove?: string[];
   inject?: InjectionConfig[];
+  transform?: TransformConfig[];
   env?: EnvVar[];
   postInstall?: string[];
   detect?: string[] | DetectRule;
@@ -65,6 +66,70 @@ export interface InjectionConfig {
   content: string;
   order?: number;
 }
+
+// ============================================================================
+// Transform Types
+// ============================================================================
+
+export type TransformType =
+  | "import"
+  | "export"
+  | "dependency"
+  | "nestjs-module"
+  | "provider-wrap"
+  | "json-property";
+
+export interface BaseTransformConfig {
+  type: TransformType;
+  target: string;
+}
+
+export interface ImportTransformConfig extends BaseTransformConfig {
+  type: "import";
+  from: string;
+  named?: string[];
+  default?: string;
+}
+
+export interface ExportTransformConfig extends BaseTransformConfig {
+  type: "export";
+  exported: string;
+  from?: string;
+  default?: boolean;
+}
+
+export interface DependencyTransformConfig extends BaseTransformConfig {
+  type: "dependency";
+  name: string;
+  version: string;
+  dev?: boolean;
+}
+
+export interface NestJsModuleTransformConfig extends BaseTransformConfig {
+  type: "nestjs-module";
+  module: string;
+}
+
+export interface ProviderWrapTransformConfig extends BaseTransformConfig {
+  type: "provider-wrap";
+  provider: string;
+  props?: Record<string, string>;
+}
+
+export interface JsonPropertyTransformConfig extends BaseTransformConfig {
+  type: "json-property";
+  path: string;
+  value: unknown;
+  merge?: boolean;
+}
+
+export type TransformConfig =
+  | ImportTransformConfig
+  | ExportTransformConfig
+  | DependencyTransformConfig
+  | NestJsModuleTransformConfig
+  | ProviderWrapTransformConfig
+  | JsonPropertyTransformConfig;
 
 export interface EnvVar {
   key: string;

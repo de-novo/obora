@@ -73,19 +73,11 @@ export interface CategoryConfig {
   exclusive: boolean;
 }
 
-export interface PresetInjectOperation {
-  file: string;
-  marker: string;
-  content: string;
-  order?: number;
-}
-
 export interface PresetOperations {
   replace: string[];
   merge: string[];
   add: string[];
   remove: string[];
-  inject: PresetInjectOperation[];
 }
 
 export interface PresetEnvVar {
@@ -97,7 +89,7 @@ export interface PresetEnvVar {
 }
 
 // ============================================================================
-// Shared Files (Must Use Inject Markers)
+// Shared Files (Use Transform Instead of Direct File Inclusion)
 // ============================================================================
 
 export const SHARED_APP_FILE_PATHS = [

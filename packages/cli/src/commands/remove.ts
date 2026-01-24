@@ -19,6 +19,8 @@ import {
   readOboraConfig,
   removeSlotPreset,
 } from "../utils/project-config";
+import { Errors, showError } from "../utils/errors";
+import { withSpinner } from "../utils/progress";
 
 // ============================================================================
 // Types
@@ -28,11 +30,6 @@ interface PresetTargetConfig {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   files?: string[];
-  inject?: Array<{
-    file: string;
-    marker: string;
-    content: string;
-  }>;
   scripts?: Record<string, string>;
   env?: Array<{
     key: string;
@@ -118,23 +115,6 @@ function collectScripts(manifest: PresetManifest, targetKey?: string): Record<st
     Object.assign(scripts, cfg.scripts);
   }
   return scripts;
-}
-
-function collectInjects(manifest: PresetManifest, targetKey?: string): Array<{
-  file: string;
-  marker: string;
-  content: string;
-}> {
-  const injects: Array<{ file: string; marker: string; content: string }> = [];
-  const targetConfigs = collectTargetConfigs(manifest);
-  const targetKeys = targetKey ? [targetKey] : Object.keys(targetConfigs);
-  for (const key of targetKeys) {
-    const cfg = targetConfigs[key];
-    if (cfg?.inject) {
-      injects.push(...cfg.inject);
-    }
-  }
-  return injects;
 }
 
 function collectFiles(manifest: PresetManifest, targetKey?: string): string[] {
@@ -386,60 +366,6 @@ async function removeScripts(
 }
 
 /**
- * Remove injected content from a file
- */
-async function removeInjectedContent(
-  filePath: string,
-  marker: string,
-  content: string
-): Promise<boolean> {
-  if (!(await fileExists(filePath))) {
-    return false;
-  }
-
-  let fileContent = await fs.readFile(filePath, "utf-8");
-
-  // Escape special regex characters in content
-  const escapedContent = content.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-  // Pattern: indentation + content + newline + indentation + marker
-  // The content was injected with matching indentation before the marker
-  const injectedPattern = new RegExp(
-    `([ \\t]*)${escapedContent}\\n([ \\t]*)\\/\\/ ${marker}`,
-    "g"
-  );
-
-  if (injectedPattern.test(fileContent)) {
-    // Reset lastIndex after test()
-    injectedPattern.lastIndex = 0;
-
-    // Replace with just the marker (preserving its indentation)
-    fileContent = fileContent.replace(
-      injectedPattern,
-      (_match: string, _contentIndent: string, markerIndent: string) => {
-        return `${markerIndent}// ${marker}`;
-      }
-    );
-    await fs.writeFile(filePath, fileContent);
-    return true;
-  }
-
-  // Fallback: try removing just the content line if it exists
-  const contentLine = content.trim();
-  if (fileContent.includes(contentLine)) {
-    const lines = fileContent.split("\n");
-    const filteredLines = lines.filter((line) => !line.trim().includes(contentLine));
-
-    if (filteredLines.length < lines.length) {
-      await fs.writeFile(filePath, filteredLines.join("\n"));
-      return true;
-    }
-  }
-
-  return false;
-}
-
-/**
  * Remove a directory recursively
  */
 async function removeDirectory(dirPath: string): Promise<boolean> {
@@ -507,23 +433,20 @@ export const removeCommand = defineCommand({
     // Check if it's a valid project
     const rootPackageJsonPath = join(projectDir, "package.json");
     if (!(await fileExists(rootPackageJsonPath))) {
-      consola.error("No package.json found. Are you in a project directory?");
+      showError(Errors.fsNotFound(rootPackageJsonPath, "file"));
       process.exit(1);
     }
 
     // Check if it's an obora project
     if (!hasOboraConfig(projectDir)) {
-      consola.error(
-        "No .obora/config.json found. This is not an obora project."
-      );
-      consola.info("Use 'obora create' to start a new obora project.");
+      showError(Errors.projectNotInitialized(projectDir));
       process.exit(1);
     }
 
     // Read existing config
     const config = await readOboraConfig(projectDir);
     if (!config) {
-      consola.error("Failed to read .obora/config.json");
+      showError(Errors.configInvalid(join(projectDir, ".obora/config.json"), "Failed to read configuration"));
       process.exit(1);
     }
 
@@ -546,10 +469,7 @@ export const removeCommand = defineCommand({
       // Find slot by preset name
       const entry = installedList.find(([_, preset]) => preset === args.preset);
       if (!entry) {
-        consola.error(`Preset "${args.preset}" is not installed.`);
-        consola.info(
-          `Installed presets: ${installedList.map(([_, p]) => p).join(", ")}`
-        );
+        showError(Errors.presetNotFound(args.preset, installedList.map(([_, p]) => p)));
         process.exit(1);
       }
       [slotToRemove, presetToRemove] = entry;
@@ -611,7 +531,7 @@ export const removeCommand = defineCommand({
             targetAppDir = dir;
             targetAppName = args.app;
           } else {
-            consola.error(`App "${args.app}" not found`);
+            showError(Errors.fsNotFound(join(projectDir, "apps", args.app), "directory"));
             process.exit(1);
           }
         }
@@ -689,101 +609,78 @@ export const removeCommand = defineCommand({
       }
     }
 
-    consola.start(`Removing ${presetToRemove} preset...`);
-
     try {
-      // Get preset info
-      const canonicalPreset = resolvePresetName(presetToRemove);
-      const presetInfo = PRESETS[canonicalPreset];
-      if (!presetInfo) {
-        consola.warn(`Unknown preset: ${presetToRemove}`);
-      }
+      await withSpinner(
+        `Removing ${presetToRemove} preset`,
+        async () => {
+          // Get preset info
+          const canonicalPreset = resolvePresetName(presetToRemove);
+          const presetInfo = PRESETS[canonicalPreset];
 
-      // Try to read manifest for detailed removal
-      const presetDir = presetInfo
-        ? join(PRESETS_DIR, presetInfo.category, canonicalPreset)
-        : null;
+          // Try to read manifest for detailed removal
+          const presetDir = presetInfo
+            ? join(PRESETS_DIR, presetInfo.category, canonicalPreset)
+            : null;
 
-      let manifest: PresetManifest | null = null;
-      if (presetDir) {
-        const manifestPath = join(presetDir, "manifest.json");
-        if (await fileExists(manifestPath)) {
-          manifest = await readJson<PresetManifest>(manifestPath);
-        }
-      }
-
-      const targetKey = manifest
-        ? (config.presetTargets?.[canonicalPreset] ||
-          await detectTargetKey(manifest, packageJsonPath))
-        : null;
-
-      const depsToRemove = manifest ? collectDependencies(manifest, targetKey || undefined) : {};
-
-      // 1. Remove dependencies from package.json
-      if (Object.keys(depsToRemove).length > 0) {
-        const depsRemoved = await removeDependencies(packageJsonPath, depsToRemove);
-        if (depsRemoved) {
-          consola.success(`Removed dependencies from ${targetAppName ? `${targetAppName}/` : ""}package.json`);
-        }
-      }
-
-      // 2. Remove scripts from package.json
-      const scriptsToRemove = manifest ? collectScripts(manifest, targetKey || undefined) : {};
-      if (Object.keys(scriptsToRemove).length > 0) {
-        const scriptsRemoved = await removeScripts(packageJsonPath, scriptsToRemove);
-        if (scriptsRemoved) {
-          consola.success(`Removed scripts from package.json`);
-        }
-      }
-
-      // 3. Remove injected content
-      const injectsToRemove = manifest ? collectInjects(manifest, targetKey || undefined) : [];
-      if (injectsToRemove.length > 0) {
-        for (const inject of injectsToRemove) {
-          const filePath = join(targetDir, inject.file);
-          const removed = await removeInjectedContent(filePath, inject.marker, inject.content);
-          if (removed) {
-            consola.success(`Removed injected content from ${inject.file}`);
+          let manifest: PresetManifest | null = null;
+          if (presetDir) {
+            const manifestPath = join(presetDir, "manifest.json");
+            if (await fileExists(manifestPath)) {
+              manifest = await readJson<PresetManifest>(manifestPath);
+            }
           }
-        }
-      }
 
-      // 4. Remove added files/directories (unless keepFiles is true)
-      const filesToRemove = !args.keepFiles && manifest
-        ? collectFiles(manifest, targetKey || undefined)
-        : [];
-      if (filesToRemove.length > 0) {
-        for (const fileEntry of filesToRemove) {
-          const isRootEntry = targetKey && (
-            fileEntry === targetKey ||
-            (fileEntry === "nextjs" && targetKey.startsWith("nextjs")) ||
-            (fileEntry === "nestjs" && targetKey.startsWith("nestjs"))
-          );
-          const fullPath = isRootEntry
-            ? targetDir
-            : join(targetDir, fileEntry);
+          const targetKey = manifest
+            ? (config.presetTargets?.[canonicalPreset] ||
+              await detectTargetKey(manifest, packageJsonPath))
+            : null;
 
-          if (await dirExists(fullPath)) {
-            await removeDirectory(fullPath);
-            consola.success(`Removed directory: ${fileEntry}`);
-          } else if (await fileExists(fullPath)) {
-            await removeFile(fullPath);
-            consola.success(`Removed file: ${fileEntry}`);
+          const depsToRemove = manifest ? collectDependencies(manifest, targetKey || undefined) : {};
+
+          // 1. Remove dependencies from package.json
+          if (Object.keys(depsToRemove).length > 0) {
+            await removeDependencies(packageJsonPath, depsToRemove);
           }
-        }
-      }
 
-      // 5. Update .obora/config.json
-      const removedConfig = await removeSlotPreset(projectDir, slotToRemove);
-      if (removedConfig) {
-        consola.success(`Updated .obora/config.json`);
-      }
+          // 2. Remove scripts from package.json
+          const scriptsToRemove = manifest ? collectScripts(manifest, targetKey || undefined) : {};
+          if (Object.keys(scriptsToRemove).length > 0) {
+            await removeScripts(packageJsonPath, scriptsToRemove);
+          }
 
-      consola.success(`Removed ${presetToRemove} preset!`);
+          // 3. Remove added files/directories (unless keepFiles is true)
+          const filesToRemove = !args.keepFiles && manifest
+            ? collectFiles(manifest, targetKey || undefined)
+            : [];
+          if (filesToRemove.length > 0) {
+            for (const fileEntry of filesToRemove) {
+              const isRootEntry = targetKey && (
+                fileEntry === targetKey ||
+                (fileEntry === "nextjs" && targetKey.startsWith("nextjs")) ||
+                (fileEntry === "nestjs" && targetKey.startsWith("nestjs"))
+              );
+              const fullPath = isRootEntry
+                ? targetDir
+                : join(targetDir, fileEntry);
+
+              if (await dirExists(fullPath)) {
+                await removeDirectory(fullPath);
+              } else if (await fileExists(fullPath)) {
+                await removeFile(fullPath);
+              }
+            }
+          }
+
+          // 4. Update .obora/config.json
+          await removeSlotPreset(projectDir, slotToRemove);
+        },
+        { successText: `Removed ${presetToRemove} preset`, showTime: true }
+      );
+
       consola.info("Run your package manager to clean up unused dependencies.");
 
     } catch (error) {
-      consola.error("Failed to remove preset:", error);
+      showError(Errors.unknown(error));
       process.exit(1);
     }
   },

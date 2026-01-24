@@ -20,6 +20,15 @@ import {
   readJson,
   resolvePresetName,
   writeJson,
+  applyTransformsWithRollback,
+  parseImportStatement,
+  isImportStatement,
+  type ImportSpec,
+  type DependencySpec,
+  type NestJsModuleSpec,
+  type ProviderWrapSpec,
+  type TransformOptions,
+  type TransformOperation,
 } from "../utils";
 import {
   addSlotPreset,
@@ -27,6 +36,8 @@ import {
   readOboraConfig,
   setPresetTarget,
 } from "../utils/project-config";
+import { Errors, showError } from "../utils/errors";
+import { withSpinner, ProgressGroup } from "../utils/progress";
 
 // ============================================================================
 // Types
@@ -40,6 +51,27 @@ interface PresetEnvVar {
   example?: string;
 }
 
+interface PresetTransform {
+  /** Target file path (relative to preset target directory) */
+  target: string;
+  /** Transform type */
+  type: "import" | "dependency" | "nestjs-module" | "provider-wrap";
+  /** For import: import statement string or ImportSpec */
+  content?: string;
+  /** For dependency: package name */
+  name?: string;
+  /** For dependency: package version */
+  version?: string;
+  /** For dependency: true if devDependency */
+  dev?: boolean;
+  /** For nestjs-module: module name to add to imports array */
+  module?: string;
+  /** For provider-wrap: provider component name */
+  provider?: string;
+  /** For provider-wrap: optional props to pass to the provider */
+  props?: Record<string, string>;
+}
+
 interface PresetTarget {
   description: string;
   dialect?: string;
@@ -47,12 +79,8 @@ interface PresetTarget {
   devDependencies?: Record<string, string>;
   files: string[];
   scripts?: Record<string, string>;
-  inject?: Array<{
-    file: string;
-    marker: string;
-    content: string;
-    order?: number;
-  }>;
+  /** AST-based code transformations */
+  transform?: PresetTransform[];
   env?: PresetEnvVar[];
   postInstall?: string[];
   detect?: string[] | DetectRule;
@@ -84,6 +112,8 @@ interface PresetManifestTargets {
   variants?: Record<string, PresetTarget>;
   conflicts?: string[];
   postInstall?: string[];
+  scripts?: Record<string, string>;
+  env?: PresetEnvVar[];
 }
 
 // ============================================================================
@@ -169,7 +199,7 @@ function matchesDetectRule(
   deps: Set<string>,
   depVersions: Record<string, string>,
   nodeEngine?: string,
-  runtimeFlags?: { bun: boolean; deno: boolean }
+  runtimeFlags?: { bun: boolean; deno: boolean; packageManager?: "pnpm" | "yarn" | "npm" | "bun" }
 ): string | null {
   if (Array.isArray(detect)) {
     const matched = detect.find((dep) => deps.has(dep));
@@ -221,7 +251,7 @@ function matchesDetectRule(
   return reasonParts.length > 0 ? `matched: ${reasonParts.join(" | ")}` : "matched: rule";
 }
 
-function hasDetectRule(detect?: string[] | DetectRule): boolean {
+function hasDetectRule(detect?: string[] | DetectRule): detect is string[] | DetectRule {
   if (!detect) return false;
   if (Array.isArray(detect)) return detect.length > 0;
   return Boolean(
@@ -318,51 +348,199 @@ function resolveTargetKeyForAppModule(
   return null;
 }
 
-async function injectContent(
-  filePath: string,
-  marker: string,
-  content: string
-): Promise<boolean> {
-  if (!(await fileExists(filePath))) {
-    consola.warn(`Inject target not found: ${filePath}`);
-    return false;
-  }
+interface TransformPreview {
+  target: string;
+  type: string;
+  description: string;
+  preview?: string;
+  status: "will-apply" | "already-exists" | "error";
+  error?: string;
+}
 
-  let fileContent = await fs.readFile(filePath, "utf-8");
-
-  // Check if content already exists
-  if (fileContent.includes(content.trim())) {
-    consola.info(`Content already exists in ${filePath}`);
-    return false;
-  }
-
-  const escaped = marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const patterns = [
-    new RegExp(`^([ \\t]*)\\/\\/ ${escaped}\\s*$`, "gm"),
-    new RegExp(`^([ \\t]*)# ${escaped}\\s*$`, "gm"),
-    new RegExp(`^([ \\t]*)\\/\\* ${escaped} \\*\\/\\s*$`, "gm"),
-    new RegExp(`^([ \\t]*)\\{\\/\\* ${escaped} \\*\\/\\}\\s*$`, "gm"),
-    new RegExp(`^([ \\t]*)<!-- ${escaped} -->\\s*$`, "gm"),
-  ];
-
-  if (!patterns.some((pattern) => pattern.test(fileContent))) {
-    consola.warn(`Marker "${marker}" not found in ${filePath}`);
-    return false;
-  }
-
-  // Replace with indentation preserved
-  let updatedContent = fileContent;
-  for (const pattern of patterns) {
-    updatedContent = updatedContent.replace(
-      pattern,
-      (match: string, indent: string) => {
-        return `${indent}${content}\n${match}`;
+/**
+ * Convert PresetTransform to TransformOperation for use with applyTransformsWithRollback.
+ */
+function convertToTransformOperation(transform: PresetTransform): TransformOperation | null {
+  switch (transform.type) {
+    case "import":
+      if (transform.content && isImportStatement(transform.content)) {
+        const importSpec = parseImportStatement(transform.content);
+        if (importSpec) {
+          return { type: "import", spec: importSpec };
+        }
       }
-    );
+      return null;
+
+    case "dependency":
+      if (transform.name && transform.version) {
+        return {
+          type: "dependency",
+          spec: {
+            name: transform.name,
+            version: transform.version,
+            dev: transform.dev,
+          } as DependencySpec,
+        };
+      }
+      return null;
+
+    case "nestjs-module":
+      if (transform.module) {
+        return {
+          type: "nestjs-module",
+          spec: { module: transform.module } as NestJsModuleSpec,
+        };
+      }
+      return null;
+
+    case "provider-wrap":
+      if (transform.provider) {
+        return {
+          type: "provider-wrap",
+          spec: {
+            provider: transform.provider,
+            props: transform.props,
+          } as ProviderWrapSpec,
+        };
+      }
+      return null;
+
+    default:
+      return null;
+  }
+}
+
+/**
+ * Get human-readable description for a transform operation.
+ */
+function getTransformDescription(transform: PresetTransform): string {
+  switch (transform.type) {
+    case "import":
+      return `Add import: ${transform.content}`;
+    case "dependency":
+      return `Add ${transform.dev ? "devDependency" : "dependency"}: ${transform.name}@${transform.version}`;
+    case "nestjs-module":
+      return `Add ${transform.module} to @Module imports`;
+    case "provider-wrap":
+      return `Wrap children with <${transform.provider}>`;
+    default:
+      return JSON.stringify(transform);
+  }
+}
+
+/**
+ * Process AST-based transform operations with automatic rollback on failure.
+ * This is the preferred method for code modifications as it understands AST structure.
+ *
+ * Uses applyTransformsWithRollback internally to ensure all changes are rolled back
+ * if any transformation fails, preventing partial/broken state.
+ *
+ * @param transforms - Array of transform operations from preset manifest
+ * @param presetTargetDir - Target directory for transforms
+ * @param options - Transform options (including dryRun for preview mode)
+ * @returns Stats and optional previews in dry-run mode
+ */
+async function processTransforms(
+  transforms: PresetTransform[],
+  presetTargetDir: string,
+  options?: TransformOptions
+): Promise<{ success: number; failed: number; skipped: number; previews?: TransformPreview[]; rolledBack?: boolean }> {
+  const stats = { success: 0, failed: 0, skipped: 0 };
+  const previews: TransformPreview[] = [];
+  const isDryRun = options?.dryRun ?? false;
+
+  // Convert PresetTransforms to TransformOperations
+  const operations: Array<{ target: string; operation: TransformOperation }> = [];
+  const transformMap = new Map<string, PresetTransform>();
+
+  for (const transform of transforms) {
+    const operation = convertToTransformOperation(transform);
+
+    if (operation) {
+      // For dependency type, target is always package.json
+      const target = transform.type === "dependency" ? "package.json" : transform.target;
+      operations.push({ target, operation });
+      transformMap.set(target, transform);
+    } else {
+      // Invalid transform - record as failed
+      stats.failed++;
+      if (isDryRun) {
+        previews.push({
+          target: transform.target || "unknown",
+          type: transform.type,
+          description: getTransformDescription(transform),
+          status: "error",
+          error: "Invalid transform operation or missing required fields",
+        });
+      } else {
+        consola.warn(`Invalid transform operation: ${JSON.stringify(transform)}`);
+      }
+    }
   }
 
-  await fs.writeFile(filePath, updatedContent);
-  return true;
+  // If no valid operations, return early
+  if (operations.length === 0) {
+    return { ...stats, previews: isDryRun ? previews : undefined };
+  }
+
+  // Use applyTransformsWithRollback for atomic operations
+  const batchResult = await applyTransformsWithRollback(operations, presetTargetDir, options);
+
+  // Process results and build stats/previews
+  for (const { target, result } of batchResult.results) {
+    const transform = transformMap.get(target) || transforms.find(t =>
+      (t.type === "dependency" ? "package.json" : t.target) === target
+    );
+    const transformType = transform?.type || "unknown";
+    const description = transform ? getTransformDescription(transform) : `Unknown transform for ${target}`;
+
+    if (result.success) {
+      if (result.changed) {
+        stats.success++;
+        if (isDryRun) {
+          previews.push({
+            target,
+            type: transformType,
+            description,
+            preview: result.preview,
+            status: "will-apply",
+          });
+        }
+      } else {
+        stats.skipped++;
+        if (isDryRun) {
+          previews.push({
+            target,
+            type: transformType,
+            description,
+            status: "already-exists",
+          });
+        }
+      }
+    } else {
+      stats.failed++;
+      if (isDryRun) {
+        previews.push({
+          target,
+          type: transformType,
+          description,
+          status: "error",
+          error: result.error,
+        });
+      }
+    }
+  }
+
+  // Report rollback if it occurred
+  if (batchResult.rolledBack) {
+    consola.warn("Transform operations rolled back due to failure");
+  }
+
+  return {
+    ...stats,
+    previews: isDryRun ? previews : undefined,
+    rolledBack: batchResult.rolledBack,
+  };
 }
 
 // ============================================================================
@@ -415,7 +593,7 @@ async function handleAppTemplate(args: AddArgs, targetDir: string): Promise<void
 
   // Check if template exists
   if (!(await dirExists(templateFilesDir))) {
-    consola.error(`Template "${templateName}" not found at ${templateFilesDir}`);
+    showError(Errors.fsNotFound(templateFilesDir, "directory"));
     process.exit(1);
   }
 
@@ -459,25 +637,28 @@ async function handleAppTemplate(args: AddArgs, targetDir: string): Promise<void
 
   packageName = packageName || `@obora/${targetDir.split("/").pop() || templateName}`;
 
-  consola.start(`Adding ${templateName} template to ${targetDir}...`);
-
   try {
-    // Copy template files
-    const replacements = {
-      PROJECT_NAME: packageName.replace("@", "").replace("/", "-"),
-    };
+    // Copy template files with progress
+    await withSpinner(
+      `Adding ${templateName} template`,
+      async () => {
+        const replacements = {
+          PROJECT_NAME: packageName.replace("@", "").replace("/", "-"),
+        };
 
-    await copyTemplateDir(templateFilesDir, targetDir, replacements, { overwrite: true });
+        await copyTemplateDir(templateFilesDir, targetDir, replacements, { overwrite: true });
 
-    // Update package.json with correct name
-    const packageJsonPath = join(targetDir, "package.json");
-    if (await fileExists(packageJsonPath)) {
-      const packageJson = await readJson<Record<string, unknown>>(packageJsonPath);
-      packageJson.name = packageName;
-      await writeJson(packageJsonPath, packageJson);
-    }
+        // Update package.json with correct name
+        const pkgJsonPath = join(targetDir, "package.json");
+        if (await fileExists(pkgJsonPath)) {
+          const packageJson = await readJson<Record<string, unknown>>(pkgJsonPath);
+          packageJson.name = packageName;
+          await writeJson(pkgJsonPath, packageJson);
+        }
+      },
+      { successText: `Added ${templateName} template`, showTime: true }
+    );
 
-    consola.success(`Added ${templateName} template!`);
     consola.info(`  Location: ${targetDir}`);
     consola.info(`  Package: ${packageName}`);
     consola.info("");
@@ -485,7 +666,7 @@ async function handleAppTemplate(args: AddArgs, targetDir: string): Promise<void
     consola.info("  1. Run your package manager to install dependencies");
     consola.info(`  2. cd ${targetDir} && pnpm dev`);
   } catch (error) {
-    consola.error("Failed to add app template:", error);
+    showError(Errors.unknown(error));
     process.exit(1);
   }
 }
@@ -576,7 +757,7 @@ export const addCommand = defineCommand({
     // Check if it's a valid project
     const rootPackageJsonPath = join(projectDir, "package.json");
     if (!(await fileExists(rootPackageJsonPath))) {
-      consola.error("No package.json found. Are you in a project directory?");
+      showError(Errors.projectNotInitialized(projectDir));
       process.exit(1);
     }
 
@@ -597,7 +778,7 @@ export const addCommand = defineCommand({
       if (normalized in PRESETS) {
         presetName = normalized as PresetName;
       } else {
-        consola.error(`Unknown preset: ${args.preset}`);
+        showError(Errors.presetNotFound(args.preset, Object.keys(PRESETS)));
         process.exit(1);
       }
     }
@@ -700,7 +881,7 @@ export const addCommand = defineCommand({
             targetAppDir = dir;
             targetAppName = args.app;
           } else {
-            consola.error(`App "${args.app}" not found`);
+            showError(Errors.fsNotFound(join(projectDir, "apps", args.app), "directory"));
             process.exit(1);
           }
         }
@@ -787,23 +968,19 @@ export const addCommand = defineCommand({
       }
     }
 
-    consola.start(`Adding ${presetName} preset...`);
-
     try {
       // Check preset directory
       const presetDir = join(PRESETS_DIR, presetInfo.category, presetName);
 
       if (!(await dirExists(presetDir))) {
-        consola.warn(`Preset ${presetName} not found locally. Downloading...`);
-        // TODO: Download from GitHub
-        consola.error("Remote preset download not implemented yet");
+        showError(Errors.presetNotFound(presetName, Object.keys(PRESETS)));
         process.exit(1);
       }
 
       // Read preset manifest
       const manifestPath = join(presetDir, "manifest.json");
       if (!(await fileExists(manifestPath))) {
-        consola.error("Invalid preset: missing manifest.json");
+        showError(Errors.configInvalid(manifestPath, "missing manifest.json"));
         process.exit(1);
       }
 
@@ -817,7 +994,7 @@ export const addCommand = defineCommand({
             .map((s) => s!.preset);
 
           if (installedPresets.includes(conflict)) {
-            consola.error(`Conflict: "${presetName}" conflicts with installed preset "${conflict}"`);
+            showError(Errors.presetConflict(presetName, [conflict], "Cannot install conflicting presets"));
             process.exit(1);
           }
         }
@@ -828,7 +1005,7 @@ export const addCommand = defineCommand({
       // ======================================================================
       const targetConfigs = manifestRaw.targets || manifestRaw.variants;
       if (!targetConfigs) {
-        consola.error("Invalid preset: missing targets/variants");
+        showError(Errors.presetNoTargets(presetName));
         process.exit(1);
       }
       {
@@ -905,7 +1082,7 @@ export const addCommand = defineCommand({
 
         // Safety check
         if (!selectedTarget) {
-          consola.error("No target selected");
+          showError(Errors.presetNoTargets(presetName));
           process.exit(1);
         }
 
@@ -926,9 +1103,11 @@ export const addCommand = defineCommand({
             ...(commonConfig.scripts || {}),
             ...(targetConfig.scripts || {}),
           }).length;
-        const fileCount = (commonConfig.files || []).length + (targetConfig.files || []).length;
-          const injectCount = (targetConfig.inject || []).length;
+          const fileCount = (commonConfig.files || []).length + (targetConfig.files || []).length;
+          const transformCount = (targetConfig.transform || []).length;
           const envCount = (manifestRaw.env || []).length + (targetConfig.env || []).length;
+
+          // Show basic plan info
           consola.box(
             `Plan: ${presetName} (${selectedTarget})\n` +
               `Target dir: ${presetTargetDir}\n` +
@@ -936,9 +1115,62 @@ export const addCommand = defineCommand({
               `DevDependencies: ${devDepCount}\n` +
               `Scripts: ${scriptCount}\n` +
               `Files: ${fileCount}\n` +
-              `Injects: ${injectCount}\n` +
+              `Transforms: ${transformCount}\n` +
               `Env vars: ${envCount}`
           );
+
+          // Show transform previews if any transforms exist
+          if (targetConfig.transform && targetConfig.transform.length > 0) {
+            consola.info("\nTransform operations (dry-run preview):");
+            const transformResult = await processTransforms(
+              targetConfig.transform.map((t) => ({
+                ...t,
+                content: t.content?.replace(/{{PROJECT_NAME}}/g, existingConfig?.base || "project"),
+              })),
+              presetTargetDir,
+              { dryRun: true }
+            );
+
+            if (transformResult.previews) {
+              for (const preview of transformResult.previews) {
+                const statusIcon = preview.status === "will-apply" ? "→" :
+                  preview.status === "already-exists" ? "○" : "✗";
+                const statusColor = preview.status === "will-apply" ? "green" :
+                  preview.status === "already-exists" ? "gray" : "red";
+
+                consola.log(`  ${statusIcon} [${preview.type}] ${preview.target}`);
+                consola.log(`    ${preview.description}`);
+
+                if (preview.status === "error" && preview.error) {
+                  consola.log(`    Error: ${preview.error}`);
+                }
+              }
+
+              consola.log("");
+              consola.log(`  Summary: ${transformResult.success} will apply, ${transformResult.skipped} already exist, ${transformResult.failed} errors`);
+            }
+          }
+
+          // Show dependencies that will be added
+          const allDeps = {
+            ...(commonConfig.dependencies || {}),
+            ...(targetConfig.dependencies || {}),
+          };
+          const allDevDeps = {
+            ...(commonConfig.devDependencies || {}),
+            ...(targetConfig.devDependencies || {}),
+          };
+
+          if (Object.keys(allDeps).length > 0 || Object.keys(allDevDeps).length > 0) {
+            consola.info("\nDependencies to add:");
+            for (const [name, version] of Object.entries(allDeps)) {
+              consola.log(`  + ${name}@${version}`);
+            }
+            for (const [name, version] of Object.entries(allDevDeps)) {
+              consola.log(`  + ${name}@${version} (dev)`);
+            }
+          }
+
           return;
         }
 
@@ -998,22 +1230,22 @@ export const addCommand = defineCommand({
           }
         }
 
-        // Process inject operations
-        if (targetConfig.inject && targetConfig.inject.length > 0) {
-          const sortedInjects = [...targetConfig.inject].sort((a, b) => {
-            const orderA = a.order ?? 0;
-            const orderB = b.order ?? 0;
-            if (orderA !== orderB) return orderA - orderB;
-            return 0;
-          });
-          for (const inject of sortedInjects) {
-            const filePath = join(presetTargetDir, inject.file);
-            const content = inject.content.replace(/{{PROJECT_NAME}}/g, existingConfig?.base || "project");
+        // Process transform operations (AST-based)
+        if (targetConfig.transform && targetConfig.transform.length > 0) {
+          const transformStats = await processTransforms(
+            targetConfig.transform.map((t) => ({
+              ...t,
+              // Replace template variables in content
+              content: t.content?.replace(/{{PROJECT_NAME}}/g, existingConfig?.base || "project"),
+            })),
+            presetTargetDir
+          );
 
-            const injected = await injectContent(filePath, inject.marker, content);
-            if (injected) {
-              consola.success(`Injected content into ${inject.file}`);
-            }
+          if (transformStats.success > 0) {
+            consola.success(`Applied ${transformStats.success} transform(s)`);
+          }
+          if (transformStats.failed > 0) {
+            consola.warn(`${transformStats.failed} transform(s) failed`);
           }
         }
 
@@ -1051,7 +1283,7 @@ export const addCommand = defineCommand({
         return;
       }
     } catch (error) {
-      consola.error("Failed to add preset:", error);
+      showError(Errors.unknown(error));
       process.exit(1);
     }
   },

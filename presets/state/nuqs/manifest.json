@@ -29,22 +29,17 @@
     "nextjs-auto": {
       "description": "Next.js (auto adapter injection)",
       "files": ["nextjs"],
-      "inject": [
+      "transform": [
         {
-          "file": "app/providers.tsx",
-          "marker": "@obora:providers-imports",
-          "content": "import { NuqsAdapter } from \"nuqs/adapters/next/app\";",
-          "order": 5
+          "target": "app/providers.tsx",
+          "type": "import",
+          "content": "import { NuqsAdapter } from \"nuqs/adapters/next/app\";"
         },
         {
-          "file": "app/providers.tsx",
-          "marker": "@obora:providers",
-          "content": "(children) => <NuqsAdapter>{children}</NuqsAdapter>,",
-          "order": 5
+          "target": "app/providers.tsx",
+          "type": "provider-wrap",
+          "provider": "NuqsAdapter"
         }
-      ],
-      "postInstall": [
-        "NuqsAdapter is injected into app/providers.tsx."
       ]
     }
   },

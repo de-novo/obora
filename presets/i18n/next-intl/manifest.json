@@ -7,27 +7,7 @@
   "common": {
     "dependencies": {
       "next-intl": "^4.0.0"
-    },
-    "inject": [
-      {
-        "file": "middleware.ts",
-        "marker": "@obora:middleware-imports",
-        "content": "import createIntlMiddleware from \"next-intl/middleware\";\nimport { defaultLocale, locales } from \"./src/lib/i18n\";",
-        "order": 10
-      },
-      {
-        "file": "middleware.ts",
-        "marker": "@obora:middleware-setup",
-        "content": "const intlMiddleware = createIntlMiddleware({\n  locales,\n  defaultLocale,\n});",
-        "order": 10
-      },
-      {
-        "file": "middleware.ts",
-        "marker": "@obora:middleware-return",
-        "content": "return intlMiddleware(request);",
-        "order": 10
-      }
-    ]
+    }
   },
   "targets": {
     "nextjs": {
@@ -41,40 +21,12 @@
           "node": ">=18.12"
         }
       }
-    },
-    "nextjs-auto": {
-      "description": "Next.js (auto layout provider)",
-      "files": ["nextjs"],
-      "inject": [
-        {
-          "file": "app/layout.tsx",
-          "marker": "@obora:layout-imports",
-          "content": "import { NextIntlClientProvider } from \"next-intl\";\nimport { getMessages } from \"next-intl/server\";",
-          "order": 10
-        },
-        {
-          "file": "app/layout.tsx",
-          "marker": "@obora:layout-async",
-          "content": "const messages = await getMessages();",
-          "order": 10
-        },
-        {
-          "file": "app/layout.tsx",
-          "marker": "@obora:layout-provider-start",
-          "content": "<NextIntlClientProvider messages={messages}>",
-          "order": 10
-        },
-        {
-          "file": "app/layout.tsx",
-          "marker": "@obora:layout-provider-end",
-          "content": "</NextIntlClientProvider>",
-          "order": 10
-        }
-      ]
     }
   },
   "postInstall": [
-    "Configure middleware and layout to use next-intl.",
-    "Set locales and default locale in lib/i18n.ts."
+    "Configure middleware.ts to use createIntlMiddleware",
+    "Wrap layout with NextIntlClientProvider",
+    "Set locales and default locale in lib/i18n.ts",
+    "See https://next-intl-docs.vercel.app/docs/getting-started/app-router"
   ]
 }

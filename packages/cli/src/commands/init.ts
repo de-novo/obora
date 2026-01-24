@@ -15,6 +15,8 @@ import {
   updatePresetLockfile,
 } from "../utils/project-config";
 import { syncAll } from "../utils/skills";
+import { Errors, showError } from "../utils/errors";
+import { withSpinner, ProgressGroup } from "../utils/progress";
 
 // Mapping of package names to presets
 const PACKAGE_TO_PRESET: Record<string, { preset: string; category: Category }> = {
@@ -243,15 +245,14 @@ export const initCommand = defineCommand({
 
     // Check for existing config
     if (hasOboraConfig(projectPath) && !args.force) {
-      consola.error("This project already has an obora config.");
-      consola.info("Use --force to overwrite.");
+      showError(Errors.configInvalid(join(projectPath, ".obora"), "Project already has an obora config. Use --force to overwrite."));
       process.exit(1);
     }
 
     // Check for package.json
     const packageJsonPath = join(projectPath, "package.json");
     if (!existsSync(packageJsonPath)) {
-      consola.error("No package.json found. Is this a JavaScript/TypeScript project?");
+      showError(Errors.fsNotFound(packageJsonPath, "file"));
       process.exit(1);
     }
 
@@ -259,11 +260,20 @@ export const initCommand = defineCommand({
     const packageJsonContent = await fs.readFile(packageJsonPath, "utf-8");
     const packageJson = JSON.parse(packageJsonContent) as PackageJson;
 
-    // Detect configuration
-    const detectedPm = detectPackageManager(projectPath, packageJson);
-    const detectedBase = detectBase(projectPath, packageJson);
-    const detectedPresets = detectPresets(packageJson);
-    const detectedApps = await detectApps(projectPath, detectedBase);
+    // Detect configuration with progress
+    const detection = await withSpinner(
+      "Detecting project configuration",
+      async () => {
+        const pm = detectPackageManager(projectPath, packageJson);
+        const base = detectBase(projectPath, packageJson);
+        const presets = detectPresets(packageJson);
+        const apps = await detectApps(projectPath, base);
+        return { pm, base, presets, apps };
+      },
+      { successText: "Project configuration detected", showTime: true }
+    );
+
+    const { pm: detectedPm, base: detectedBase, presets: detectedPresets, apps: detectedApps } = detection;
 
     // Display detected configuration
     consola.info("\nDetected configuration:");
@@ -288,28 +298,31 @@ export const initCommand = defineCommand({
     }
 
     // Create config
-    const slotsConfig: Record<string, { preset: string; version: string } | null> = {};
-    for (const [category, presetInfo] of Object.entries(detectedPresets)) {
-      slotsConfig[category] = presetInfo;
-    }
+    await withSpinner(
+      "Creating configuration",
+      async () => {
+        const slotsConfig: Record<string, { preset: string; version: string } | null> = {};
+        for (const [category, presetInfo] of Object.entries(detectedPresets)) {
+          slotsConfig[category] = presetInfo;
+        }
 
-    const config = createInitialConfig(
-      projectPath,
-      detectedBase,
-      detectedPm,
-      detectedApps,
-      slotsConfig
+        const config = createInitialConfig(
+          projectPath,
+          detectedBase,
+          detectedPm,
+          detectedApps,
+          slotsConfig
+        );
+
+        await writeOboraConfig(projectPath, config);
+        await updatePresetLockfile(projectPath, config);
+        await addHistoryEntry(projectPath, { action: "create" });
+      },
+      { successText: "Created .obora/config.json", showTime: true }
     );
-
-    await writeOboraConfig(projectPath, config);
-    await updatePresetLockfile(projectPath, config);
-    await addHistoryEntry(projectPath, { action: "create" });
-
-    consola.success("Created .obora/config.json");
 
     // Claude SDK setup - sync all obora assets
     console.log();
-    consola.info("Setting up Claude configuration...");
 
     let syncAssets = true;
     if (!args.yes) {
@@ -323,7 +336,13 @@ export const initCommand = defineCommand({
     }
 
     if (syncAssets) {
-      await syncAll(projectPath, { force: args.force });
+      await withSpinner(
+        "Syncing obora assets",
+        async () => {
+          await syncAll(projectPath, { force: args.force });
+        },
+        { successText: "Obora assets synced", showTime: true }
+      );
     }
 
     console.log();

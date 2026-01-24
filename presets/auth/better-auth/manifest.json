@@ -19,16 +19,16 @@
       "files": [
         "server"
       ],
-      "inject": [
+      "transform": [
         {
-          "file": "src/app.module.ts",
-          "marker": "@obora:imports",
+          "target": "src/app.module.ts",
+          "type": "import",
           "content": "import { AuthModule } from \"./modules/auth/auth.module.js\";"
         },
         {
-          "file": "src/app.module.ts",
-          "marker": "@obora:modules",
-          "content": "AuthModule,"
+          "target": "src/app.module.ts",
+          "type": "nestjs-module",
+          "module": "AuthModule"
         }
       ],
       "env": [

@@ -49,16 +49,16 @@
         "prisma.config.ts",
         "src/db"
       ],
-      "inject": [
+      "transform": [
         {
-          "file": "src/app.module.ts",
-          "marker": "@obora:imports",
+          "target": "src/app.module.ts",
+          "type": "import",
           "content": "import { PrismaModule } from \"./db/prisma.module.js\";"
         },
         {
-          "file": "src/app.module.ts",
-          "marker": "@obora:modules",
-          "content": "PrismaModule,"
+          "target": "src/app.module.ts",
+          "type": "nestjs-module",
+          "module": "PrismaModule"
         }
       ],
       "detect": {

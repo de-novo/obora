@@ -25,18 +25,16 @@
     "nextjs-auto": {
       "description": "Next.js (auto layout provider)",
       "files": ["nextjs"],
-      "inject": [
+      "transform": [
         {
-          "file": "app/providers.tsx",
-          "marker": "@obora:providers-imports",
-          "content": "import { ThemeProvider } from \"@/lib/theme\";",
-          "order": 10
+          "target": "app/providers.tsx",
+          "type": "import",
+          "content": "import { ThemeProvider } from \"@/lib/theme\";"
         },
         {
-          "file": "app/providers.tsx",
-          "marker": "@obora:providers",
-          "content": "(children) => <ThemeProvider>{children}</ThemeProvider>,",
-          "order": 10
+          "target": "app/providers.tsx",
+          "type": "provider-wrap",
+          "provider": "ThemeProvider"
         }
       ]
     }
