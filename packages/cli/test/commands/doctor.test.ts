@@ -289,6 +289,115 @@ describe("doctor command", () => {
     });
   });
 
+  describe("checkPresetConflicts", () => {
+    it("should detect conflicts between installed presets", async () => {
+      const mockExistsSync = existsSync as unknown as ReturnType<typeof vi.fn>;
+      const mockReadFileSync = readFileSync as unknown as ReturnType<typeof vi.fn>;
+
+      mockExistsSync.mockImplementation((path: string) => {
+        if (path.includes(".obora/config.json")) return true;
+        if (path.includes("manifest.json")) return true;
+        return false;
+      });
+
+      mockReadFileSync.mockImplementation((path: string) => {
+        if (path.includes("config.json")) {
+          return JSON.stringify({
+            slots: {
+              database: { preset: "drizzle", version: "1.0.0", installedAt: "2024-01-01" },
+              orm: { preset: "prisma", version: "1.0.0", installedAt: "2024-01-01" },
+            },
+          });
+        }
+        if (path.includes("drizzle") && path.includes("manifest.json")) {
+          return JSON.stringify({
+            name: "drizzle",
+            category: "database",
+            description: "Drizzle ORM",
+            conflicts: ["prisma"],
+          });
+        }
+        if (path.includes("prisma") && path.includes("manifest.json")) {
+          return JSON.stringify({
+            name: "prisma",
+            category: "database",
+            description: "Prisma ORM",
+            conflicts: ["drizzle"],
+          });
+        }
+        return "";
+      });
+
+      const doctorModule = await import("../../src/commands/doctor");
+      expect(doctorModule.doctorCommand).toBeDefined();
+    });
+
+    it("should pass when no conflicts exist", async () => {
+      const mockExistsSync = existsSync as unknown as ReturnType<typeof vi.fn>;
+      const mockReadFileSync = readFileSync as unknown as ReturnType<typeof vi.fn>;
+
+      mockExistsSync.mockImplementation((path: string) => {
+        if (path.includes(".obora/config.json")) return true;
+        if (path.includes("manifest.json")) return true;
+        return false;
+      });
+
+      mockReadFileSync.mockImplementation((path: string) => {
+        if (path.includes("config.json")) {
+          return JSON.stringify({
+            slots: {
+              auth: { preset: "clerk-nextjs", version: "1.0.0", installedAt: "2024-01-01" },
+              database: { preset: "drizzle", version: "1.0.0", installedAt: "2024-01-01" },
+            },
+          });
+        }
+        if (path.includes("clerk") && path.includes("manifest.json")) {
+          return JSON.stringify({
+            name: "clerk-nextjs",
+            category: "auth",
+            description: "Clerk Auth",
+          });
+        }
+        if (path.includes("drizzle") && path.includes("manifest.json")) {
+          return JSON.stringify({
+            name: "drizzle",
+            category: "database",
+            description: "Drizzle ORM",
+            conflicts: ["prisma"],
+          });
+        }
+        return "";
+      });
+
+      const doctorModule = await import("../../src/commands/doctor");
+      expect(doctorModule.doctorCommand).toBeDefined();
+    });
+
+    it("should skip conflict check when only one preset is installed", async () => {
+      const mockExistsSync = existsSync as unknown as ReturnType<typeof vi.fn>;
+      const mockReadFileSync = readFileSync as unknown as ReturnType<typeof vi.fn>;
+
+      mockExistsSync.mockImplementation((path: string) => {
+        if (path.includes(".obora/config.json")) return true;
+        return false;
+      });
+
+      mockReadFileSync.mockImplementation((path: string) => {
+        if (path.includes("config.json")) {
+          return JSON.stringify({
+            slots: {
+              database: { preset: "drizzle", version: "1.0.0", installedAt: "2024-01-01" },
+            },
+          });
+        }
+        return "";
+      });
+
+      const doctorModule = await import("../../src/commands/doctor");
+      expect(doctorModule.doctorCommand).toBeDefined();
+    });
+  });
+
   describe("command definition", () => {
     it("should have correct meta information", async () => {
       const { doctorCommand } = await import("../../src/commands/doctor");

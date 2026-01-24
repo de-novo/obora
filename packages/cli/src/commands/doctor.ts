@@ -206,6 +206,7 @@ interface PresetManifestV2 {
   category: string;
   description: string;
   version?: string;
+  conflicts?: string[];
   common?: PresetTargetConfig;
   targets?: Record<string, PresetTargetConfig>;
   variants?: Record<string, PresetTargetConfig>;
@@ -797,6 +798,77 @@ function checkMonorepoStructure(
 }
 
 /**
+ * Check for conflicts between installed presets
+ */
+function checkPresetConflicts(
+  config: OboraConfig | null
+): DiagnosticResult[] {
+  const results: DiagnosticResult[] = [];
+
+  if (!config) {
+    return results;
+  }
+
+  const installedPresets = Object.values(config.slots || {})
+    .filter((slot): slot is NonNullable<typeof slot> => slot !== null)
+    .map((slot) => slot.preset);
+
+  if (installedPresets.length < 2) {
+    return results;
+  }
+
+  const conflicts: Array<{ preset: string; conflictsWith: string }> = [];
+
+  for (const preset of installedPresets) {
+    const manifest = loadPresetManifest(preset);
+    if (!manifest || !("conflicts" in manifest) || !manifest.conflicts) {
+      continue;
+    }
+
+    for (const conflictingPreset of manifest.conflicts) {
+      if (installedPresets.includes(conflictingPreset)) {
+        conflicts.push({
+          preset,
+          conflictsWith: conflictingPreset,
+        });
+      }
+    }
+  }
+
+  if (conflicts.length > 0) {
+    const uniqueConflicts = conflicts.filter(
+      (c, i, arr) =>
+        arr.findIndex(
+          (x) =>
+            (x.preset === c.preset && x.conflictsWith === c.conflictsWith) ||
+            (x.preset === c.conflictsWith && x.conflictsWith === c.preset)
+        ) === i
+    );
+
+    for (const conflict of uniqueConflicts) {
+      results.push({
+        name: "Preset Conflict",
+        status: "warn",
+        message: `'${conflict.preset}' conflicts with '${conflict.conflictsWith}'`,
+        suggestion: `Remove one of the conflicting presets using 'obora remove ${conflict.preset}' or 'obora remove ${conflict.conflictsWith}'`,
+        details: {
+          preset: conflict.preset,
+          conflictsWith: conflict.conflictsWith,
+        },
+      });
+    }
+  } else {
+    results.push({
+      name: "Preset Conflicts",
+      status: "pass",
+      message: "No conflicts detected between installed presets",
+    });
+  }
+
+  return results;
+}
+
+/**
  * Convert preset validation results to diagnostic results
  */
 function convertPresetValidationResults(
@@ -942,8 +1014,10 @@ export const doctorCommand = defineCommand({
 
       // Presets
       const presetResults = checkPresetFiles(projectPath, config);
-      if (presetResults.length > 0) {
-        categories.push({ name: "Presets", results: presetResults });
+      const conflictResults = checkPresetConflicts(config);
+      const allPresetResults = [...presetResults, ...conflictResults];
+      if (allPresetResults.length > 0) {
+        categories.push({ name: "Presets", results: allPresetResults });
       }
 
       // Monorepo
@@ -1006,8 +1080,10 @@ export const doctorCommand = defineCommand({
 
     // Presets
     const presetResults = checkPresetFiles(projectPath, config);
-    if (presetResults.length > 0) {
-      categories.push({ name: "Presets", results: presetResults });
+    const conflictResults = checkPresetConflicts(config);
+    const allPresetResults = [...presetResults, ...conflictResults];
+    if (allPresetResults.length > 0) {
+      categories.push({ name: "Presets", results: allPresetResults });
     }
 
     // Monorepo
