@@ -111,6 +111,88 @@ React providers 파일에서 `{children}`을 Provider 컴포넌트로 감쌉니�
 
 **주의:** 복잡한 JSX 구조에서는 수동 추가가 필요할 수 있습니다.
 
+### 5. layout-component
+
+Next.js layout.tsx 파일에 컴포넌트를 추가합니다.
+
+```json
+{
+  "target": "app/layout.tsx",
+  "type": "layout-component",
+  "component": "UmamiScript",
+  "position": "body-end",
+  "props": {
+    "src": "process.env.NEXT_PUBLIC_UMAMI_URL",
+    "data-website-id": "process.env.NEXT_PUBLIC_UMAMI_WEBSITE_ID"
+  },
+  "selfClosing": true
+}
+```
+
+**필드:**
+- `component`: 추가할 컴포넌트 이름 (필수)
+- `position`: 삽입 위치 (필수)
+  - `body-start`: `<body>` 태그 바로 다음
+  - `body-end`: `</body>` 태그 바로 전
+  - `html-start`: `<html>` 태그 바로 다음
+  - `html-end`: `</html>` 태그 바로 전
+- `props`: 컴포넌트에 전달할 props (선택)
+- `selfClosing`: self-closing 태그 여부 (선택, 기본값: true)
+
+**동작:**
+- 해당 위치에 컴포넌트 JSX 삽입
+- 이미 해당 컴포넌트가 있으면 건너뜀
+- 들여쓰기 자동 처리
+
+**주의:** 해당 컴포넌트의 import 문은 별도의 `type: "import"` transform으로 추가해야 합니다.
+
+### 6. json-property
+
+JSON 파일(tsconfig.json, package.json 등)의 속성을 수정합니다.
+
+```json
+{
+  "target": "tsconfig.json",
+  "type": "json-property",
+  "path": "compilerOptions.strict",
+  "value": true
+}
+```
+
+**필드:**
+- `path`: 점 표기법 경로 (필수)
+- `value`: 설정할 값 (필수)
+- `merge`: true이면 기존 객체/배열과 병합 (선택, 기본값: false)
+
+**동작:**
+- 경로가 없으면 자동 생성
+- 이미 동일한 값이면 건너뜀
+- `merge: true`일 때 배열은 중복 제거하여 병합
+
+### 7. export
+
+TypeScript/JavaScript 파일에 export 문을 추가합니다.
+
+```json
+{
+  "target": "src/index.ts",
+  "type": "export",
+  "exported": "UserService",
+  "from": "./user/user.service"
+}
+```
+
+**필드:**
+- `exported`: export할 항목 (필수)
+- `from`: re-export 시 소스 모듈 (선택)
+- `default`: default export 여부 (선택)
+
+**지원 형식:**
+- Named export: `export { UserService };`
+- Re-export: `export { UserService } from './module';`
+- Star re-export: `export * from './module';`
+- Default re-export: `export { default as User } from './module';`
+
 ## Manifest 스키마
 
 preset manifest.json의 transform 필드 스키마:
@@ -121,7 +203,7 @@ interface PresetTransform {
   target: string;
 
   /** Transform 타입 */
-  type: "import" | "dependency" | "nestjs-module" | "provider-wrap";
+  type: "import" | "dependency" | "nestjs-module" | "provider-wrap" | "layout-component" | "json-property" | "export";
 
   /** import: import 문 문자열 */
   content?: string;
@@ -138,11 +220,36 @@ interface PresetTransform {
   /** nestjs-module: 모듈 이름 */
   module?: string;
 
-  /** provider-wrap: Provider 컴포넌트 이름 */
+  /** provider-wrap/layout-component: 컴포넌트 이름 */
   provider?: string;
+  component?: string;
 
-  /** provider-wrap: props 객체 */
+  /** provider-wrap/layout-component: props 객체 */
   props?: Record<string, string>;
+
+  /** layout-component: 삽입 위치 */
+  position?: "body-start" | "body-end" | "html-start" | "html-end";
+
+  /** layout-component: self-closing 태그 여부 */
+  selfClosing?: boolean;
+
+  /** json-property: 점 표기법 경로 */
+  path?: string;
+
+  /** json-property: 설정할 값 */
+  value?: unknown;
+
+  /** json-property: 병합 여부 */
+  merge?: boolean;
+
+  /** export: export할 항목 */
+  exported?: string;
+
+  /** export: re-export 소스 모듈 */
+  from?: string;
+
+  /** export: default export 여부 */
+  default?: boolean;
 }
 ```
 
@@ -178,6 +285,36 @@ interface PresetTransform {
           "target": "src/app.module.ts",
           "type": "nestjs-module",
           "module": "PrismaModule"
+        }
+      ]
+    }
+  }
+}
+```
+
+### Next.js Analytics (Umami) Preset
+
+```json
+{
+  "name": "umami",
+  "category": "analytics",
+  "version": "1.0.0",
+  "targets": {
+    "nextjs-auto": {
+      "files": [
+        "lib/umami.tsx"
+      ],
+      "transform": [
+        {
+          "target": "app/layout.tsx",
+          "type": "import",
+          "content": "import { UmamiScript } from '@/lib/umami'"
+        },
+        {
+          "target": "app/layout.tsx",
+          "type": "layout-component",
+          "component": "UmamiScript",
+          "position": "body-end"
         }
       ]
     }
@@ -278,6 +415,48 @@ const spec: ProviderWrapSpec = {
 };
 
 const result = await addProviderWrap("app/providers.tsx", spec);
+```
+
+### addLayoutComponent
+
+```typescript
+import { addLayoutComponent, LayoutComponentSpec } from "@obora/cli/utils/transform";
+
+const spec: LayoutComponentSpec = {
+  component: "UmamiScript",
+  position: "body-end",
+  props: { src: "process.env.UMAMI_URL" },
+  selfClosing: true
+};
+
+const result = await addLayoutComponent("app/layout.tsx", spec);
+```
+
+### updateJsonProperty
+
+```typescript
+import { updateJsonProperty, JsonPropertySpec } from "@obora/cli/utils/transform";
+
+const spec: JsonPropertySpec = {
+  path: "compilerOptions.strict",
+  value: true,
+  merge: false
+};
+
+const result = await updateJsonProperty("tsconfig.json", spec);
+```
+
+### addExport
+
+```typescript
+import { addExport, ExportSpec } from "@obora/cli/utils/transform";
+
+const spec: ExportSpec = {
+  exported: "UserService",
+  from: "./user/user.service"
+};
+
+const result = await addExport("src/index.ts", spec);
 ```
 
 ### applyTransforms
