@@ -8,6 +8,7 @@ import { parseModule, generateCode, builders } from "magicast";
 import { promises as fs } from "node:fs";
 import { consola } from "consola";
 import { fileExists } from "./fs";
+import { loadTemplate, type TemplateName } from "../templates";
 
 // ============================================================================
 // Types
@@ -28,6 +29,11 @@ export interface TransformOptions {
    * Useful for showing users what will be changed before applying.
    */
   dryRun?: boolean;
+  /**
+   * Project root directory for user template lookup.
+   * If provided, user templates from .obora/templates/ take precedence.
+   */
+  projectRoot?: string;
 }
 
 export interface ImportSpec {
@@ -476,7 +482,21 @@ export async function addNestJsModule(
     if (!match) {
       return {
         success: false,
-        error: "Could not find imports array in @Module decorator",
+        error: `Could not find imports array in @Module decorator in ${filePath}.
+
+Expected pattern:
+  @Module({
+    imports: [  ← looking for this
+      // modules here
+    ],
+  })
+
+Manual fix:
+  Add imports array to @Module decorator:
+
+  @Module({
+    imports: [${spec.module}],
+  })`,
       };
     }
 
@@ -522,23 +542,6 @@ export async function addNestJsModule(
 // ============================================================================
 
 /**
- * Default providers.tsx template for Next.js App Router.
- * Used when the file doesn't exist and needs to be created.
- */
-const DEFAULT_PROVIDERS_TEMPLATE = `"use client";
-
-import type { ReactNode } from "react";
-
-export function Providers({ children }: { children: ReactNode }) {
-  return (
-    <>
-      {children}
-    </>
-  );
-}
-`;
-
-/**
  * Add a provider wrapper to a React providers file.
  * Supports the common patterns used in Next.js App Router.
  *
@@ -546,10 +549,13 @@ export function Providers({ children }: { children: ReactNode }) {
  * Pattern 2: Direct JSX nesting
  *
  * If the file doesn't exist, a default providers.tsx template is created.
+ * Templates are loaded from:
+ * 1. User custom template (project/.obora/templates/providers.tsx)
+ * 2. Built-in template (package templates/providers.tsx)
  *
  * @param filePath - Path to the providers file
  * @param spec - Provider wrap specification
- * @param options - Transform options (including dryRun)
+ * @param options - Transform options (including dryRun and projectRoot)
  * @returns TransformResult with success status
  */
 export async function addProviderWrap(
@@ -562,14 +568,19 @@ export async function addProviderWrap(
 
     // Auto-create providers file if it doesn't exist
     if (!(await fileExists(filePath))) {
+      // Load template (user custom or built-in)
+      const template = await loadTemplate("providers", {
+        projectRoot: options?.projectRoot,
+      });
+
       if (options?.dryRun) {
-        consola.info(`[dry-run] Would create ${filePath} with default template`);
+        consola.info(`[dry-run] Would create ${filePath} with template`);
         // Use template content for dry-run preview
-        content = DEFAULT_PROVIDERS_TEMPLATE;
+        content = template;
       } else {
-        await fs.writeFile(filePath, DEFAULT_PROVIDERS_TEMPLATE);
-        consola.success(`Created ${filePath} with default template`);
-        content = DEFAULT_PROVIDERS_TEMPLATE;
+        await fs.writeFile(filePath, template);
+        consola.success(`Created ${filePath} with template`);
+        content = template;
       }
     } else {
       content = await fs.readFile(filePath, "utf-8");
@@ -607,13 +618,28 @@ export async function addProviderWrap(
       }
     }
 
-    // Try Pattern 2: Find return statement with JSX and wrap the outermost element
-    // This is more complex and might need manual intervention
-    // For now, return a helpful error
+    // Pattern not found - provide helpful manual fix guidance
+    const propsExample = spec.props
+      ? " " + Object.entries(spec.props).map(([k, v]) => `${k}={${v}}`).join(" ")
+      : "";
 
     return {
       success: false,
-      error: `Could not find a suitable location to add ${spec.provider}. Please add it manually.`,
+      error: `Could not find {children} pattern in ${filePath}.
+
+Expected pattern:
+  return (
+    <>
+      {children}  ← looking for this
+    </>
+  );
+
+Manual fix:
+  Wrap {children} with <${spec.provider}${propsExample}>:
+
+  <${spec.provider}${propsExample}>
+    {children}
+  </${spec.provider}>`,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -708,9 +734,14 @@ function escapeRegExp(string: string): string {
  * Add a component to a Next.js layout file (layout.tsx).
  * Supports adding components at various positions within the layout.
  *
+ * If the file doesn't exist, a default layout.tsx template is created.
+ * Templates are loaded from:
+ * 1. User custom template (project/.obora/templates/layout.tsx)
+ * 2. Built-in template (package templates/layout.tsx)
+ *
  * @param filePath - Path to the layout file
  * @param spec - Layout component specification
- * @param options - Transform options (including dryRun)
+ * @param options - Transform options (including dryRun and projectRoot)
  * @returns TransformResult with success status
  */
 export async function addLayoutComponent(
@@ -719,11 +750,27 @@ export async function addLayoutComponent(
   options?: TransformOptions
 ): Promise<TransformResult> {
   try {
-    if (!(await fileExists(filePath))) {
-      return { success: false, error: `File not found: ${filePath}` };
-    }
+    let content: string;
 
-    const content = await fs.readFile(filePath, "utf-8");
+    // Auto-create layout file if it doesn't exist
+    if (!(await fileExists(filePath))) {
+      // Load template (user custom or built-in)
+      const template = await loadTemplate("layout", {
+        projectRoot: options?.projectRoot,
+      });
+
+      if (options?.dryRun) {
+        consola.info(`[dry-run] Would create ${filePath} with template`);
+        // Use template content for dry-run preview
+        content = template;
+      } else {
+        await fs.writeFile(filePath, template);
+        consola.success(`Created ${filePath} with template`);
+        content = template;
+      }
+    } else {
+      content = await fs.readFile(filePath, "utf-8");
+    }
 
     // Check if component already exists
     const componentPattern = new RegExp(`<${spec.component}[\\s/>]`);
@@ -748,7 +795,25 @@ export async function addLayoutComponent(
         const bodyOpenPattern = /(<body[^>]*>)/;
         const match = content.match(bodyOpenPattern);
         if (!match) {
-          return { success: false, error: "Could not find <body> tag in layout" };
+          return {
+            success: false,
+            error: `Could not find <body> tag in ${filePath}.
+
+Expected layout structure:
+  <html>
+    <body>  ← looking for this
+      {children}
+    </body>
+  </html>
+
+Manual fix:
+  Add ${componentJsx} after <body>:
+
+  <body>
+    ${componentJsx}
+    {children}
+  </body>`,
+          };
         }
         newContent = content.replace(bodyOpenPattern, `$1\n        ${componentJsx}`);
         break;
@@ -759,7 +824,25 @@ export async function addLayoutComponent(
         const bodyClosePattern = /(\s*)(<\/body>)/;
         const match = content.match(bodyClosePattern);
         if (!match) {
-          return { success: false, error: "Could not find </body> tag in layout" };
+          return {
+            success: false,
+            error: `Could not find </body> tag in ${filePath}.
+
+Expected layout structure:
+  <html>
+    <body>
+      {children}
+    </body>  ← looking for this
+  </html>
+
+Manual fix:
+  Add ${componentJsx} before </body>:
+
+  <body>
+    {children}
+    ${componentJsx}
+  </body>`,
+          };
         }
         const indent = match[1] || "\n        ";
         newContent = content.replace(bodyClosePattern, `${indent}${componentJsx}$1$2`);
@@ -771,7 +854,24 @@ export async function addLayoutComponent(
         const htmlOpenPattern = /(<html[^>]*>)/;
         const match = content.match(htmlOpenPattern);
         if (!match) {
-          return { success: false, error: "Could not find <html> tag in layout" };
+          return {
+            success: false,
+            error: `Could not find <html> tag in ${filePath}.
+
+Expected layout structure:
+  <html>  ← looking for this
+    <body>
+      {children}
+    </body>
+  </html>
+
+Manual fix:
+  Add ${componentJsx} after <html>:
+
+  <html>
+    ${componentJsx}
+    <body>...`,
+          };
         }
         newContent = content.replace(htmlOpenPattern, `$1\n      ${componentJsx}`);
         break;
@@ -782,7 +882,24 @@ export async function addLayoutComponent(
         const htmlClosePattern = /(\s*)(<\/html>)/;
         const match = content.match(htmlClosePattern);
         if (!match) {
-          return { success: false, error: "Could not find </html> tag in layout" };
+          return {
+            success: false,
+            error: `Could not find </html> tag in ${filePath}.
+
+Expected layout structure:
+  <html>
+    <body>
+      {children}
+    </body>
+  </html>  ← looking for this
+
+Manual fix:
+  Add ${componentJsx} before </html>:
+
+    </body>
+    ${componentJsx}
+  </html>`,
+          };
         }
         const indent = match[1] || "\n      ";
         newContent = content.replace(htmlClosePattern, `${indent}${componentJsx}$1$2`);

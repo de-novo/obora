@@ -1195,5 +1195,64 @@ export function Providers({ children }: { children: React.ReactNode }) {
       expect(content).toContain("<Analytics />");
       expect(content).toMatch(/<Analytics \/>\s*<\/html>/);
     });
+
+    it("should auto-create layout.tsx with default template when file does not exist", async () => {
+      const filePath = join(testDir, "new-layout.tsx");
+
+      const result = await addLayoutComponent(filePath, {
+        component: "Analytics",
+        position: "body-end",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.changed).toBe(true);
+
+      // File should be created
+      const exists = await fs.access(filePath).then(() => true).catch(() => false);
+      expect(exists).toBe(true);
+
+      // File should contain the component and default template elements
+      const content = await fs.readFile(filePath, "utf-8");
+      expect(content).toContain("export default function RootLayout");
+      expect(content).toContain("<html");
+      expect(content).toContain("<body>");
+      expect(content).toContain("<Analytics />");
+    });
+
+    it("should preview auto-creation without actually creating file in dry-run mode", async () => {
+      const filePath = join(testDir, "dry-run-layout.tsx");
+
+      const result = await addLayoutComponent(
+        filePath,
+        { component: "Script", position: "html-start" },
+        { dryRun: true }
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.changed).toBe(true);
+      expect(result.preview).toBeDefined();
+      expect(result.preview).toContain("<Script />");
+      expect(result.preview).toContain("<html");
+
+      // File should NOT be created in dry-run mode
+      const exists = await fs.access(filePath).then(() => true).catch(() => false);
+      expect(exists).toBe(false);
+    });
+
+    it("should auto-create layout.tsx with component props", async () => {
+      const filePath = join(testDir, "new-layout-with-props.tsx");
+
+      const result = await addLayoutComponent(filePath, {
+        component: "UmamiScript",
+        position: "body-end",
+        props: { "data-website-id": '"abc123"' },
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.changed).toBe(true);
+
+      const content = await fs.readFile(filePath, "utf-8");
+      expect(content).toContain('<UmamiScript data-website-id={"abc123"} />');
+    });
   });
 });
