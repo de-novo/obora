@@ -1,0 +1,107 @@
+{
+  "$schema": "../../preset.schema.json",
+  "name": "vercel-analytics",
+  "category": "analytics",
+  "description": "Vercel Analytics - Privacy-friendly, zero-config analytics",
+  "conflicts": [],
+  "requires": [],
+  "env": [],
+  "postInstall": [
+    "Analytics will automatically start tracking page views",
+    "Use track() for custom events: https://vercel.com/docs/analytics/custom-events"
+  ],
+  "version": "1.4.0",
+  "targets": {
+    "nextjs": {
+      "description": "Manual setup - add Analytics component to layout",
+      "files": [
+        "src/lib/analytics"
+      ],
+      "detect": {
+        "packages": [
+          "next"
+        ],
+        "packageVersions": {
+          "next": ">=14"
+        },
+        "runtime": {
+          "node": ">=18"
+        }
+      }
+    },
+    "nextjs-auto": {
+      "description": "Auto setup - automatically adds Analytics to root layout",
+      "files": [
+        "src/lib/analytics"
+      ],
+      "detect": {
+        "packages": [
+          "next"
+        ],
+        "packageVersions": {
+          "next": ">=14"
+        },
+        "runtime": {
+          "node": ">=18"
+        }
+      },
+      "transform": [
+        {
+          "target": "app/layout.tsx",
+          "type": "import",
+          "content": "import { VercelAnalytics } from \"@/lib/analytics\";"
+        },
+        {
+          "target": "app/layout.tsx",
+          "type": "layout-component",
+          "component": "VercelAnalytics",
+          "position": "body-end"
+        }
+      ]
+    },
+    "nextjs-with-speed-insights": {
+      "description": "Auto setup with Speed Insights",
+      "files": [
+        "src/lib/analytics"
+      ],
+      "dependencies": {
+        "@vercel/speed-insights": "^1.0.0"
+      },
+      "detect": {
+        "packages": [
+          "next"
+        ],
+        "packageVersions": {
+          "next": ">=14"
+        },
+        "runtime": {
+          "node": ">=18"
+        }
+      },
+      "transform": [
+        {
+          "target": "app/layout.tsx",
+          "type": "import",
+          "content": "import { VercelAnalytics, SpeedInsights } from \"@/lib/analytics\";"
+        },
+        {
+          "target": "app/layout.tsx",
+          "type": "layout-component",
+          "component": "VercelAnalytics",
+          "position": "body-end"
+        },
+        {
+          "target": "app/layout.tsx",
+          "type": "layout-component",
+          "component": "SpeedInsights",
+          "position": "body-end"
+        }
+      ]
+    }
+  },
+  "common": {
+    "dependencies": {
+      "@vercel/analytics": "^1.4.0"
+    }
+  }
+}
