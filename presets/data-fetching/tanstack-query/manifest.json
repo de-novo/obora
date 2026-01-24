@@ -73,6 +73,36 @@
         "Add <ReactQueryDevtools /> inside QueryProvider",
         "See lib/query-prefetch.ts for SSR/prefetch example."
       ]
+    },
+    "monorepo": {
+      "description": "Shared query package for monorepo (packages/query)",
+      "files": ["monorepo"],
+      "packageJson": {
+        "name": "@{{workspace}}/query",
+        "main": "./dist/index.js",
+        "types": "./dist/index.d.ts",
+        "exports": {
+          ".": {
+            "import": "./dist/index.js",
+            "types": "./dist/index.d.ts"
+          }
+        },
+        "scripts": {
+          "build": "tsc",
+          "dev": "tsc --watch"
+        }
+      },
+      "detect": {
+        "files": [
+          "pnpm-workspace.yaml",
+          "lerna.json",
+          "nx.json"
+        ]
+      },
+      "postInstall": [
+        "Build package: pnpm build",
+        "Import in apps: import { QueryProvider, useQuery } from '@{{workspace}}/query'"
+      ]
     }
   },
   "postInstall": []

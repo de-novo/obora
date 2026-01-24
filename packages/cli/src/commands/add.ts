@@ -122,6 +122,15 @@ interface PresetTarget {
   env?: PresetEnvVar[];
   postInstall?: string[];
   detect?: string[] | DetectRule;
+  /** Package.json configuration for monorepo shared packages */
+  packageJson?: {
+    name?: string;
+    main?: string;
+    types?: string;
+    exports?: Record<string, unknown>;
+    scripts?: Record<string, string>;
+    [key: string]: unknown;
+  };
 }
 
 interface DetectRule {
@@ -202,6 +211,72 @@ async function mergePackageJson(
   }
 
   return updated;
+}
+
+/**
+ * Generate a package.json file for monorepo shared packages.
+ * Applies template variable replacements (e.g., {{workspace}}).
+ */
+async function generateMonorepoPackageJson(
+  targetDir: string,
+  packageJsonConfig: NonNullable<PresetTarget["packageJson"]>,
+  replacements: Record<string, string>,
+  deps: { dependencies?: Record<string, string>; devDependencies?: Record<string, string> }
+): Promise<boolean> {
+  const packageJsonPath = join(targetDir, "package.json");
+
+  // Apply template replacements to string values
+  const applyReplacements = (value: unknown): unknown => {
+    if (typeof value === "string") {
+      let result = value;
+      for (const [key, replacement] of Object.entries(replacements)) {
+        result = result.replace(new RegExp(`{{${key}}}`, "g"), replacement);
+      }
+      return result;
+    }
+    if (Array.isArray(value)) {
+      return value.map(applyReplacements);
+    }
+    if (typeof value === "object" && value !== null) {
+      const result: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(value)) {
+        result[k] = applyReplacements(v);
+      }
+      return result;
+    }
+    return value;
+  };
+
+  // Build the package.json content
+  const packageJson: Record<string, unknown> = {};
+
+  // Apply replacements to all config values
+  for (const [key, value] of Object.entries(packageJsonConfig)) {
+    packageJson[key] = applyReplacements(value);
+  }
+
+  // Merge dependencies from the target config
+  if (deps.dependencies && Object.keys(deps.dependencies).length > 0) {
+    packageJson.dependencies = {
+      ...(packageJson.dependencies as Record<string, string> || {}),
+      ...deps.dependencies,
+    };
+  }
+
+  if (deps.devDependencies && Object.keys(deps.devDependencies).length > 0) {
+    packageJson.devDependencies = {
+      ...(packageJson.devDependencies as Record<string, string> || {}),
+      ...deps.devDependencies,
+    };
+  }
+
+  // Ensure target directory exists
+  await ensureDir(targetDir);
+
+  // Write the package.json
+  await writeJson(packageJsonPath, packageJson);
+
+  return true;
 }
 
 async function resolveTargetFromDetect(
@@ -1441,8 +1516,10 @@ export const addCommand = defineCommand({
 
         // Copy files: common + target
         const presetFilesDir = join(presetDir, "files");
+        const workspaceName = existingConfig?.base || "project";
         const replacements = {
-          PROJECT_NAME: existingConfig?.base || "project",
+          PROJECT_NAME: workspaceName,
+          workspace: workspaceName,
         };
 
         const filesToCopy = [
@@ -1474,6 +1551,19 @@ export const addCommand = defineCommand({
           progress.succeedStep("files", `${filesCopied} director${filesCopied === 1 ? "y" : "ies"} copied`);
         } else {
           progress.skipStep("files", "No files to copy");
+        }
+
+        // Generate package.json for monorepo shared packages
+        if (targetConfig.packageJson) {
+          const generated = await generateMonorepoPackageJson(
+            presetTargetDir,
+            targetConfig.packageJson,
+            replacements,
+            mergedDeps
+          );
+          if (generated) {
+            consola.info(`  Generated package.json in ${presetTargetDir}`);
+          }
         }
 
         // Process transform operations (AST-based)

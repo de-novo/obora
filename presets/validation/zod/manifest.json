@@ -39,6 +39,39 @@
           "node": ">=18"
         }
       }
+    },
+    "monorepo": {
+      "description": "Shared validation package for monorepo (packages/validation)",
+      "dependencies": {
+        "zod": "^3.24.0"
+      },
+      "files": ["monorepo"],
+      "packageJson": {
+        "name": "@{{workspace}}/validation",
+        "main": "./dist/index.js",
+        "types": "./dist/index.d.ts",
+        "exports": {
+          ".": {
+            "import": "./dist/index.js",
+            "types": "./dist/index.d.ts"
+          }
+        },
+        "scripts": {
+          "build": "tsc",
+          "dev": "tsc --watch"
+        }
+      },
+      "detect": {
+        "files": [
+          "pnpm-workspace.yaml",
+          "lerna.json",
+          "nx.json"
+        ]
+      },
+      "postInstall": [
+        "Build package: pnpm build",
+        "Import in apps: import { z, emailSchema, safeParse } from '@{{workspace}}/validation'"
+      ]
     }
   },
   "common": {
