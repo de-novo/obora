@@ -70,7 +70,9 @@ describe("fs utilities", () => {
     });
 
     it("should not throw if directory already exists", async () => {
-      await expect(ensureDir(testDir)).resolves.not.toThrow();
+      // Should complete without throwing
+      await ensureDir(testDir);
+      expect(await dirExists(testDir)).toBe(true);
     });
   });
 

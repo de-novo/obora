@@ -1,30 +1,8 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, spyOn } from "bun:test";
 import { syncCommand } from "../../src/commands/sync";
 import { join } from "pathe";
 import { promises as fs, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
-
-// Mock consola - factory must not reference external variables (hoisted)
-vi.mock("consola", () => {
-  const mockConsola = {
-    info: vi.fn(),
-    log: vi.fn(),
-    success: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    box: vi.fn(),
-    start: vi.fn(),
-    ready: vi.fn(),
-    debug: vi.fn(),
-    trace: vi.fn(),
-    fail: vi.fn(),
-    fatal: vi.fn(),
-  };
-  return {
-    consola: mockConsola,
-    default: mockConsola,
-  };
-});
 
 // Note: These tests validate command behavior, not actual syncing
 // (source assets may not exist in test environment before build)
@@ -46,52 +24,47 @@ describe("sync command", () => {
   describe("sync all", () => {
     it("should run without error", async () => {
       // Command should complete without throwing
-      await expect(
-        syncCommand.run?.({
-          args: { dir: tempDir, force: true, type: "all", list: false },
-          cmd: syncCommand,
-          rawArgs: [],
-        } as any)
-      ).resolves.not.toThrow();
+      await syncCommand.run?.({
+        args: { dir: tempDir, force: true, type: "all", list: false },
+        cmd: syncCommand,
+        rawArgs: [],
+      } as any);
+      // If we reach here, no error was thrown
+      expect(true).toBe(true);
     });
   });
 
   describe("sync specific type", () => {
     it("should run settings sync without error", async () => {
-      await expect(
-        syncCommand.run?.({
-          args: { dir: tempDir, force: true, type: "settings", list: false },
-          cmd: syncCommand,
-          rawArgs: [],
-        } as any)
-      ).resolves.not.toThrow();
+      await syncCommand.run?.({
+        args: { dir: tempDir, force: true, type: "settings", list: false },
+        cmd: syncCommand,
+        rawArgs: [],
+      } as any);
+      expect(true).toBe(true);
     });
 
     it("should run skills sync without error", async () => {
-      await expect(
-        syncCommand.run?.({
-          args: { dir: tempDir, force: true, type: "skills", list: false },
-          cmd: syncCommand,
-          rawArgs: [],
-        } as any)
-      ).resolves.not.toThrow();
+      await syncCommand.run?.({
+        args: { dir: tempDir, force: true, type: "skills", list: false },
+        cmd: syncCommand,
+        rawArgs: [],
+      } as any);
+      expect(true).toBe(true);
     });
 
     it("should run agents sync without error", async () => {
-      await expect(
-        syncCommand.run?.({
-          args: { dir: tempDir, force: true, type: "agents", list: false },
-          cmd: syncCommand,
-          rawArgs: [],
-        } as any)
-      ).resolves.not.toThrow();
+      await syncCommand.run?.({
+        args: { dir: tempDir, force: true, type: "agents", list: false },
+        cmd: syncCommand,
+        rawArgs: [],
+      } as any);
+      expect(true).toBe(true);
     });
   });
 
   describe("list mode", () => {
     it("should list assets without syncing when --list", async () => {
-      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-
       await syncCommand.run?.({
         args: { dir: tempDir, force: false, type: "all", list: true },
         cmd: syncCommand,
@@ -100,7 +73,7 @@ describe("sync command", () => {
 
       // In list mode, no files should be copied
       // (The command only lists available assets)
-      consoleSpy.mockRestore();
+      expect(true).toBe(true);
     });
   });
 
@@ -115,13 +88,11 @@ describe("sync command", () => {
       await fs.writeFile(settingsPath, JSON.stringify(existingSettings, null, 2));
 
       // Sync without force (should merge or skip)
-      await expect(
-        syncCommand.run?.({
-          args: { dir: tempDir, force: false, type: "settings", list: false },
-          cmd: syncCommand,
-          rawArgs: [],
-        } as any)
-      ).resolves.not.toThrow();
+      await syncCommand.run?.({
+        args: { dir: tempDir, force: false, type: "settings", list: false },
+        cmd: syncCommand,
+        rawArgs: [],
+      } as any);
 
       // File should still exist
       expect(existsSync(settingsPath)).toBe(true);
@@ -133,13 +104,12 @@ describe("sync command", () => {
       await fs.writeFile(settingsPath, "{}");
 
       // Force sync
-      await expect(
-        syncCommand.run?.({
-          args: { dir: tempDir, force: true, type: "settings", list: false },
-          cmd: syncCommand,
-          rawArgs: [],
-        } as any)
-      ).resolves.not.toThrow();
+      await syncCommand.run?.({
+        args: { dir: tempDir, force: true, type: "settings", list: false },
+        cmd: syncCommand,
+        rawArgs: [],
+      } as any);
+      expect(true).toBe(true);
     });
   });
 
@@ -148,27 +118,34 @@ describe("sync command", () => {
       const noClaudeDir = join(tmpdir(), `obora-test-no-claude-${Date.now()}`);
       await fs.mkdir(noClaudeDir, { recursive: true });
 
+      let exitCalled = false;
+      let exitCode: number | undefined;
+
       // Mock process.exit to prevent test from exiting
-      const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => {
+      const originalExit = process.exit;
+      process.exit = ((code?: number) => {
+        exitCalled = true;
+        exitCode = code;
         throw new Error("process.exit called");
-      });
+      }) as any;
 
       try {
         // Run sync on directory without .claude
-        await expect(
-          syncCommand.run?.({
-            args: { dir: noClaudeDir, force: false, type: "all", list: false },
-            cmd: syncCommand,
-            rawArgs: [],
-          } as any)
-        ).rejects.toThrow("process.exit called");
-
-        // Should call process.exit(1)
-        expect(exitSpy).toHaveBeenCalledWith(1);
+        await syncCommand.run?.({
+          args: { dir: noClaudeDir, force: false, type: "all", list: false },
+          cmd: syncCommand,
+          rawArgs: [],
+        } as any);
+      } catch (error) {
+        // Expected error from mocked process.exit
       } finally {
-        exitSpy.mockRestore();
+        process.exit = originalExit;
         await fs.rm(noClaudeDir, { recursive: true, force: true });
       }
+
+      // Should call process.exit(1)
+      expect(exitCalled).toBe(true);
+      expect(exitCode).toBe(1);
     });
   });
 });

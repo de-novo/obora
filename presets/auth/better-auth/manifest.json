@@ -9,7 +9,7 @@
       "better-auth": "^1.4.0"
     }
   },
-  "requires": ["prisma"],
+  "requires": ["database:prisma"],
   "targets": {
     "server": {
       "description": "Better Auth server for NestJS API (requires Prisma)",

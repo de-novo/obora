@@ -263,9 +263,10 @@ export class AppModule {}`;
     it("should not throw when removing non-existent path", async () => {
       const nonExistentPath = join(testDir, "does-not-exist");
 
-      await expect(
-        fs.rm(nonExistentPath, { force: true })
-      ).resolves.not.toThrow();
+      // fs.rm with force: true should not throw for non-existent paths
+      await fs.rm(nonExistentPath, { force: true });
+      // If we reach here without throwing, the test passes
+      expect(true).toBe(true);
     });
   });
 
