@@ -119,6 +119,24 @@
                   "enum": ["import", "dependency", "nestjs-module", "provider-wrap", "layout-component"],
                   "description": "Type of transformation"
                 },
+                "condition": {
+                  "type": "object",
+                  "description": "Condition for conditional transform execution. Transform is skipped if condition is not met.",
+                  "properties": {
+                    "fileExists": {
+                      "type": "string",
+                      "description": "Execute only if file exists (relative path from target directory)"
+                    },
+                    "envVar": {
+                      "type": "string",
+                      "description": "Execute only if environment variable is set"
+                    },
+                    "envValue": {
+                      "type": "string",
+                      "description": "Expected value for envVar (if not specified, just checks if set)"
+                    }
+                  }
+                },
                 "content": {
                   "type": "string",
                   "description": "Import statement (for type: import)"
@@ -231,6 +249,24 @@
                   "type": "string",
                   "enum": ["import", "dependency", "nestjs-module", "provider-wrap", "layout-component"],
                   "description": "Type of transformation"
+                },
+                "condition": {
+                  "type": "object",
+                  "description": "Condition for conditional transform execution. Transform is skipped if condition is not met.",
+                  "properties": {
+                    "fileExists": {
+                      "type": "string",
+                      "description": "Execute only if file exists (relative path from target directory)"
+                    },
+                    "envVar": {
+                      "type": "string",
+                      "description": "Execute only if environment variable is set"
+                    },
+                    "envValue": {
+                      "type": "string",
+                      "description": "Expected value for envVar (if not specified, just checks if set)"
+                    }
+                  }
                 },
                 "content": {
                   "type": "string",

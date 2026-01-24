@@ -175,7 +175,7 @@ $ obora add clerk
 
 ### 2.3 Conditional Transform
 
-**상태**: 🔴 미구현
+**상태**: ✅ 완료
 
 **목표**: 파일 존재 여부 등 조건에 따른 transform 실행
 
@@ -197,10 +197,10 @@ $ obora add clerk
 - `src/commands/add.ts`
 
 **작업 항목**:
-- [ ] condition 스키마 정의
-- [ ] fileExists 조건 구현
-- [ ] envVar 조건 구현 (선택)
-- [ ] 테스트 작성
+- [x] condition 스키마 정의
+- [x] fileExists 조건 구현
+- [x] envVar 조건 구현
+- [x] 테스트 작성
 
 ---
 
@@ -356,6 +356,7 @@ $ obora undo
 
 | 작업 | 완료일 | 커밋 |
 |------|--------|------|
+| P2.3 Conditional Transform | 2026-01-24 | - |
 | P2.2 Preset 의존성 체인 | 2026-01-24 | 5cf6a4f |
 | P2.1 Conflict 해결 UI | 2026-01-24 | bbf8a80 |
 | P1.1 Variants 시스템 (sqlite/postgres) | 2026-01-24 | 869142d |

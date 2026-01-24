@@ -63,11 +63,26 @@ interface PresetEnvVar {
   example?: string;
 }
 
+/**
+ * Condition for conditional transform execution.
+ * Transform is only executed if the condition evaluates to true.
+ */
+interface TransformCondition {
+  /** Execute only if file exists (relative path from target directory) */
+  fileExists?: string;
+  /** Execute only if environment variable is set (and optionally matches value) */
+  envVar?: string;
+  /** Expected value for envVar (if not specified, just checks if set) */
+  envValue?: string;
+}
+
 interface PresetTransform {
   /** Target file path (relative to preset target directory) */
   target: string;
   /** Transform type */
   type: "import" | "dependency" | "nestjs-module" | "provider-wrap" | "layout-component";
+  /** Condition for conditional execution (transform skipped if condition is false) */
+  condition?: TransformCondition;
   /** For import: import statement string or ImportSpec */
   content?: string;
   /** For dependency: package name */
@@ -373,8 +388,57 @@ interface TransformPreview {
   type: string;
   description: string;
   preview?: string;
-  status: "will-apply" | "already-exists" | "error";
+  status: "will-apply" | "already-exists" | "error" | "condition-not-met";
   error?: string;
+}
+
+/**
+ * Evaluate a transform condition to determine if the transform should be executed.
+ *
+ * @param condition - The condition to evaluate
+ * @param baseDir - Base directory for file path resolution
+ * @returns true if condition is met (or no condition), false otherwise
+ */
+async function evaluateCondition(
+  condition: TransformCondition | undefined,
+  baseDir: string
+): Promise<{ met: boolean; reason?: string }> {
+  // No condition means always execute
+  if (!condition) {
+    return { met: true };
+  }
+
+  // Check fileExists condition
+  if (condition.fileExists) {
+    const filePath = join(baseDir, condition.fileExists);
+    const exists = await fileExists(filePath);
+    if (!exists) {
+      return {
+        met: false,
+        reason: `File not found: ${condition.fileExists}`,
+      };
+    }
+  }
+
+  // Check envVar condition
+  if (condition.envVar) {
+    const envValue = process.env[condition.envVar];
+    if (envValue === undefined) {
+      return {
+        met: false,
+        reason: `Environment variable not set: ${condition.envVar}`,
+      };
+    }
+    // If envValue is specified, check for exact match
+    if (condition.envValue !== undefined && envValue !== condition.envValue) {
+      return {
+        met: false,
+        reason: `Environment variable ${condition.envVar} is "${envValue}", expected "${condition.envValue}"`,
+      };
+    }
+  }
+
+  return { met: true };
 }
 
 /**
@@ -490,6 +554,27 @@ async function processTransforms(
   const transformMap = new Map<string, PresetTransform>();
 
   for (const transform of transforms) {
+    // Evaluate condition if present
+    if (transform.condition) {
+      const conditionResult = await evaluateCondition(transform.condition, presetTargetDir);
+      if (!conditionResult.met) {
+        // Condition not met - skip this transform
+        stats.skipped++;
+        if (isDryRun) {
+          previews.push({
+            target: transform.target || "unknown",
+            type: transform.type,
+            description: getTransformDescription(transform),
+            status: "condition-not-met",
+            error: conditionResult.reason,
+          });
+        } else {
+          consola.debug(`Skipping transform (condition not met): ${conditionResult.reason}`);
+        }
+        continue;
+      }
+    }
+
     const operation = convertToTransformOperation(transform);
 
     if (operation) {

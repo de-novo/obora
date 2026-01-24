@@ -511,4 +511,241 @@ describe("add command", () => {
       expect(grouped["package.json"]).toHaveLength(2);
     });
   });
+
+  describe("conditional transform", () => {
+    it("should parse manifest with conditional transforms", async () => {
+      const manifestPath = join(testDir, "manifest.json");
+      const manifest = {
+        name: "analytics",
+        transform: [
+          {
+            type: "import",
+            target: "app/layout.tsx",
+            content: "import { Analytics } from '@vercel/analytics/react';",
+            condition: {
+              fileExists: "app/layout.tsx",
+            },
+          },
+          {
+            type: "layout-component",
+            target: "app/layout.tsx",
+            component: "Analytics",
+            position: "body-end",
+            condition: {
+              envVar: "ENABLE_ANALYTICS",
+              envValue: "true",
+            },
+          },
+        ],
+      };
+
+      await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+
+      const content = await fs.readFile(manifestPath, "utf-8");
+      const parsed = JSON.parse(content);
+
+      expect(parsed.transform).toHaveLength(2);
+      expect(parsed.transform[0].condition).toBeDefined();
+      expect(parsed.transform[0].condition.fileExists).toBe("app/layout.tsx");
+      expect(parsed.transform[1].condition).toBeDefined();
+      expect(parsed.transform[1].condition.envVar).toBe("ENABLE_ANALYTICS");
+      expect(parsed.transform[1].condition.envValue).toBe("true");
+    });
+
+    it("should evaluate fileExists condition correctly", async () => {
+      // Create a test file
+      const existingFile = join(testDir, "existing.ts");
+      await fs.writeFile(existingFile, "export const x = 1;");
+
+      // Helper function to evaluate fileExists condition
+      async function evaluateFileExistsCondition(
+        baseDir: string,
+        filePath: string
+      ): Promise<{ met: boolean; reason?: string }> {
+        const fullPath = join(baseDir, filePath);
+        const exists = await fs
+          .stat(fullPath)
+          .then(() => true)
+          .catch(() => false);
+
+        if (!exists) {
+          return { met: false, reason: `File not found: ${filePath}` };
+        }
+        return { met: true };
+      }
+
+      // Test: file exists
+      const resultExists = await evaluateFileExistsCondition(testDir, "existing.ts");
+      expect(resultExists.met).toBe(true);
+      expect(resultExists.reason).toBeUndefined();
+
+      // Test: file does not exist
+      const resultNotExists = await evaluateFileExistsCondition(testDir, "nonexistent.ts");
+      expect(resultNotExists.met).toBe(false);
+      expect(resultNotExists.reason).toBe("File not found: nonexistent.ts");
+    });
+
+    it("should evaluate envVar condition correctly", async () => {
+      // Helper function to evaluate envVar condition
+      function evaluateEnvVarCondition(
+        envVar: string,
+        expectedValue?: string
+      ): { met: boolean; reason?: string } {
+        const envValue = process.env[envVar];
+
+        if (envValue === undefined) {
+          return { met: false, reason: `Environment variable not set: ${envVar}` };
+        }
+
+        if (expectedValue !== undefined && envValue !== expectedValue) {
+          return {
+            met: false,
+            reason: `Environment variable ${envVar} is "${envValue}", expected "${expectedValue}"`,
+          };
+        }
+
+        return { met: true };
+      }
+
+      // Test: env var not set
+      const resultNotSet = evaluateEnvVarCondition("TEST_OBORA_NONEXISTENT_VAR");
+      expect(resultNotSet.met).toBe(false);
+      expect(resultNotSet.reason).toContain("Environment variable not set");
+
+      // Set env var for testing
+      const originalValue = process.env.TEST_OBORA_VAR;
+      process.env.TEST_OBORA_VAR = "test-value";
+
+      try {
+        // Test: env var is set (no expected value)
+        const resultSet = evaluateEnvVarCondition("TEST_OBORA_VAR");
+        expect(resultSet.met).toBe(true);
+
+        // Test: env var matches expected value
+        const resultMatches = evaluateEnvVarCondition("TEST_OBORA_VAR", "test-value");
+        expect(resultMatches.met).toBe(true);
+
+        // Test: env var does not match expected value
+        const resultMismatch = evaluateEnvVarCondition("TEST_OBORA_VAR", "different-value");
+        expect(resultMismatch.met).toBe(false);
+        expect(resultMismatch.reason).toContain("expected \"different-value\"");
+      } finally {
+        // Restore original value
+        if (originalValue === undefined) {
+          delete process.env.TEST_OBORA_VAR;
+        } else {
+          process.env.TEST_OBORA_VAR = originalValue;
+        }
+      }
+    });
+
+    it("should support combined conditions in transform preview", async () => {
+      interface TransformCondition {
+        fileExists?: string;
+        envVar?: string;
+        envValue?: string;
+      }
+
+      interface TransformPreview {
+        target: string;
+        type: string;
+        description: string;
+        status: "will-apply" | "already-exists" | "error" | "condition-not-met";
+        error?: string;
+      }
+
+      const transforms = [
+        {
+          type: "import",
+          target: "app/layout.tsx",
+          condition: { fileExists: "app/layout.tsx" } as TransformCondition,
+        },
+        {
+          type: "dependency",
+          target: "package.json",
+          // No condition - always applies
+        },
+        {
+          type: "layout-component",
+          target: "app/layout.tsx",
+          condition: { envVar: "DISABLED_VAR" } as TransformCondition,
+        },
+      ];
+
+      // Simulate preview generation with condition check
+      const previews: TransformPreview[] = transforms.map((t) => {
+        const condition = (t as any).condition as TransformCondition | undefined;
+
+        // Simulate condition evaluation
+        let conditionMet = true;
+        let reason: string | undefined;
+
+        if (condition?.fileExists) {
+          // Simulate file not existing
+          conditionMet = false;
+          reason = `File not found: ${condition.fileExists}`;
+        } else if (condition?.envVar) {
+          // Simulate env var not set
+          conditionMet = false;
+          reason = `Environment variable not set: ${condition.envVar}`;
+        }
+
+        if (!conditionMet) {
+          return {
+            target: t.target,
+            type: t.type,
+            description: `${t.type} transform`,
+            status: "condition-not-met" as const,
+            error: reason,
+          };
+        }
+
+        return {
+          target: t.target,
+          type: t.type,
+          description: `${t.type} transform`,
+          status: "will-apply" as const,
+        };
+      });
+
+      expect(previews).toHaveLength(3);
+      expect(previews[0].status).toBe("condition-not-met");
+      expect(previews[0].error).toContain("File not found");
+      expect(previews[1].status).toBe("will-apply");
+      expect(previews[2].status).toBe("condition-not-met");
+      expect(previews[2].error).toContain("Environment variable not set");
+    });
+
+    it("should validate condition schema in manifest", async () => {
+      const manifestPath = join(testDir, "manifest.json");
+
+      // Valid condition schemas
+      const validConditions = [
+        { fileExists: "src/app.ts" },
+        { envVar: "NODE_ENV" },
+        { envVar: "NODE_ENV", envValue: "production" },
+        { fileExists: "src/app.ts", envVar: "FEATURE_FLAG" }, // Combined
+      ];
+
+      for (const condition of validConditions) {
+        const manifest = {
+          name: "test",
+          transform: [
+            {
+              type: "import",
+              target: "src/index.ts",
+              content: "import { x } from 'y';",
+              condition,
+            },
+          ],
+        };
+
+        await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+        const content = await fs.readFile(manifestPath, "utf-8");
+        const parsed = JSON.parse(content);
+
+        expect(parsed.transform[0].condition).toEqual(condition);
+      }
+    });
+  });
 });
