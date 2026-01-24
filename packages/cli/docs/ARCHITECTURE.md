@@ -84,7 +84,7 @@ packages/cli/
 
 ## 명령어 시스템
 
-### 구현된 명령어 (17개)
+### 구현된 명령어 (19개)
 
 | 명령어 | 설명 | 상태 |
 |--------|------|------|
@@ -100,6 +100,8 @@ packages/cli/
 | `list` | 설치된 preset 목록 | ✅ |
 | `status` | 프로젝트 상태 | ✅ |
 | `config` | 설정 관리 | ✅ |
+| `undo` | 마지막 작업 취소 | ✅ |
+| `create-preset` | 새 preset 생성 | ✅ |
 | `title-generate` | 제목 자동 생성 | ✅ |
 | `chat` | Claude 상호작용 | ⚠️ 프로토타입 |
 | `run` | 스크립트 실행 | ⚠️ 기본 |
@@ -234,7 +236,7 @@ interface PresetTargetConfig {
 }
 ```
 
-### 카테고리 (14개)
+### 카테고리 (16개)
 
 | 카테고리 | 설명 | Exclusive | 구현된 Preset |
 |----------|------|-----------|---------------|
@@ -245,17 +247,19 @@ interface PresetTargetConfig {
 | `storage` | 파일 저장소 | ✅ | uploadthing, cloudflare-r2 |
 | `email` | 이메일 서비스 | ✅ | resend |
 | `validation` | 스키마 검증 | ✅ | zod, effect-schema |
+| `testing` | 테스트 프레임워크 | ✅ | vitest, playwright |
 | `analytics` | 애널리틱스 | ❌ | vercel-analytics, posthog, umami |
 | `data-fetching` | 데이터 페칭 | ❌ | tanstack-query |
-| `state` | 상태 관리 | ❌ | nuqs |
+| `state` | 상태 관리 | ❌ | zustand, jotai, nuqs |
 | `theming` | 테마 | ❌ | next-themes |
-| `ui` | UI 컴포넌트 | ❌ | shadcn-all, base-ui |
+| `ui` | UI 컴포넌트 | ❌ | shadcn, shadcn-all, base-ui |
 | `i18n` | 국제화 | ❌ | next-intl |
 | `ai` | AI 통합 | ❌ | vercel-ai |
+| `form` | 폼 처리 | ❌ | react-hook-form |
 
 **Exclusive**: 해당 카테고리에서 하나의 preset만 선택 가능
 
-### 구현된 Preset (22개)
+### 구현된 Preset (29개)
 
 ```
 linting/        biome, eslint-prettier
@@ -265,13 +269,15 @@ payment/        polar, paddle
 storage/        uploadthing, cloudflare-r2
 email/          resend
 validation/     zod, effect-schema
+testing/        vitest, playwright
 analytics/      vercel-analytics, posthog, umami
 data-fetching/  tanstack-query
-state/          nuqs
+state/          zustand, jotai, nuqs
 theming/        next-themes
-ui/             shadcn-all, base-ui
+ui/             shadcn, shadcn-all, base-ui
 i18n/           next-intl
 ai/             vercel-ai
+form/           react-hook-form
 ```
 
 ### Preset 처리 흐름
