@@ -29,7 +29,9 @@
         "email",
         "ai",
         "storage",
-        "validation"
+        "validation",
+        "testing",
+        "form"
       ],
       "description": "Category this preset belongs to"
     },

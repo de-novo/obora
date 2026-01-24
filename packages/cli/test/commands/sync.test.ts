@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, spyOn } from "bun:test";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { syncCommand } from "../../src/commands/sync";
 import { join } from "pathe";
 import { promises as fs, existsSync } from "node:fs";

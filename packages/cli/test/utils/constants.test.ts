@@ -90,6 +90,41 @@ describe("constants", () => {
       expect(PRESETS.resend.category).toBe("email");
     });
 
+    it("should have vitest preset", () => {
+      expect(PRESETS.vitest).toBeDefined();
+      expect(PRESETS.vitest.category).toBe("testing");
+    });
+
+    it("should have playwright preset", () => {
+      expect(PRESETS.playwright).toBeDefined();
+      expect(PRESETS.playwright.category).toBe("testing");
+    });
+
+    it("should have zustand preset", () => {
+      expect(PRESETS.zustand).toBeDefined();
+      expect(PRESETS.zustand.category).toBe("state");
+    });
+
+    it("should have jotai preset", () => {
+      expect(PRESETS.jotai).toBeDefined();
+      expect(PRESETS.jotai.category).toBe("state");
+    });
+
+    it("should have react-hook-form preset", () => {
+      expect(PRESETS["react-hook-form"]).toBeDefined();
+      expect(PRESETS["react-hook-form"].category).toBe("form");
+    });
+
+    it("should have shadcn preset", () => {
+      expect(PRESETS.shadcn).toBeDefined();
+      expect(PRESETS.shadcn.category).toBe("ui");
+    });
+
+    it("should have shadcn-all preset", () => {
+      expect(PRESETS["shadcn-all"]).toBeDefined();
+      expect(PRESETS["shadcn-all"].category).toBe("ui");
+    });
+
     it("should have all presets with valid category", () => {
       Object.values(PRESETS).forEach((preset) => {
         expect(CATEGORIES).toContain(preset.category);
@@ -127,14 +162,16 @@ describe("constants", () => {
         "ai",
         "storage",
         "validation",
+        "testing",
+        "form",
       ];
       expected.forEach((cat) => {
         expect(CATEGORIES).toContain(cat);
       });
     });
 
-    it("should have 14 categories", () => {
-      expect(CATEGORIES.length).toBe(14);
+    it("should have 16 categories", () => {
+      expect(CATEGORIES.length).toBe(16);
     });
 
     it("should have config for each category", () => {
@@ -158,12 +195,52 @@ describe("constants", () => {
       expect(dbPresets).toContain("prisma");
     });
 
+    it("getPresetsByCategory should return presets for testing category", () => {
+      const testingPresets = getPresetsByCategory("testing");
+      expect(testingPresets).toContain("vitest");
+      expect(testingPresets).toContain("playwright");
+    });
+
+    it("getPresetsByCategory should return presets for state category", () => {
+      const statePresets = getPresetsByCategory("state");
+      expect(statePresets).toContain("zustand");
+      expect(statePresets).toContain("jotai");
+    });
+
+    it("getPresetsByCategory should return presets for form category", () => {
+      const formPresets = getPresetsByCategory("form");
+      expect(formPresets).toContain("react-hook-form");
+    });
+
+    it("getPresetsByCategory should return presets for ui category", () => {
+      const uiPresets = getPresetsByCategory("ui");
+      expect(uiPresets).toContain("shadcn");
+      expect(uiPresets).toContain("shadcn-all");
+      expect(uiPresets).toContain("base-ui");
+    });
+
     it("isExclusiveCategory should return true for auth", () => {
       expect(isExclusiveCategory("auth")).toBe(true);
     });
 
     it("isExclusiveCategory should return false for analytics", () => {
       expect(isExclusiveCategory("analytics")).toBe(false);
+    });
+
+    it("isExclusiveCategory should return true for testing", () => {
+      expect(isExclusiveCategory("testing")).toBe(true);
+    });
+
+    it("isExclusiveCategory should return false for form", () => {
+      expect(isExclusiveCategory("form")).toBe(false);
+    });
+
+    it("isExclusiveCategory should return false for state", () => {
+      expect(isExclusiveCategory("state")).toBe(false);
+    });
+
+    it("isExclusiveCategory should return false for ui", () => {
+      expect(isExclusiveCategory("ui")).toBe(false);
     });
 
     it("getAppModuleSlots should return slots for nestjs-api", () => {

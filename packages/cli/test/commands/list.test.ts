@@ -195,10 +195,12 @@ describe("list command", () => {
       expect(CATEGORIES).toContain("ai");
       expect(CATEGORIES).toContain("storage");
       expect(CATEGORIES).toContain("validation");
+      expect(CATEGORIES).toContain("testing");
+      expect(CATEGORIES).toContain("form");
     });
 
-    it("should have 14 categories", () => {
-      expect(CATEGORIES.length).toBe(14);
+    it("should have 16 categories", () => {
+      expect(CATEGORIES.length).toBe(16);
     });
   });
 });
