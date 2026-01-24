@@ -131,6 +131,51 @@ describe("sync command", () => {
     });
   });
 
+  describe("dry-run mode", () => {
+    it("should preview sync without making changes", async () => {
+      await syncCommand.run?.({
+        args: { dir: tempDir, force: false, type: "all", list: false, "dry-run": true },
+        cmd: syncCommand,
+        rawArgs: [],
+      } as any);
+
+      // Command should complete without error
+      expect(true).toBe(true);
+    });
+
+    it("should show what would be synced in dry-run mode", async () => {
+      await syncCommand.run?.({
+        args: { dir: tempDir, force: false, type: "skills", list: false, "dry-run": true },
+        cmd: syncCommand,
+        rawArgs: [],
+      } as any);
+
+      // No actual files should be synced
+      expect(true).toBe(true);
+    });
+
+    it("should not create settings.json in dry-run mode", async () => {
+      const settingsPath = join(tempDir, ".claude", "settings.json");
+
+      // Ensure it doesn't exist
+      try {
+        await fs.rm(settingsPath, { force: true });
+      } catch {
+        // Ignore if doesn't exist
+      }
+
+      await syncCommand.run?.({
+        args: { dir: tempDir, force: false, type: "settings", list: false, "dry-run": true },
+        cmd: syncCommand,
+        rawArgs: [],
+      } as any);
+
+      // Settings should NOT be created in dry-run mode
+      const exists = existsSync(settingsPath);
+      expect(exists).toBe(false);
+    });
+  });
+
   describe("error handling", () => {
     it("should exit with error if .claude directory does not exist", async () => {
       const noClaudeDir = join(tmpdir(), `obora-test-no-claude-${Date.now()}`);

@@ -201,6 +201,63 @@ describe("init command", () => {
     });
   });
 
+  describe("dry-run mode", () => {
+    it("should preview changes without making modifications", async () => {
+      await fs.writeFile(
+        join(tempDir, "package.json"),
+        JSON.stringify({
+          name: "test",
+          dependencies: {
+            "drizzle-orm": "^0.30.0",
+          },
+        })
+      );
+
+      await initCommand.run?.({
+        args: { dir: tempDir, force: false, yes: true, "dry-run": true },
+        cmd: initCommand,
+        rawArgs: [],
+      } as any);
+
+      // Config should NOT be created in dry-run mode
+      const configPath = join(tempDir, ".obora", "config.json");
+      const exists = await fs
+        .stat(configPath)
+        .then(() => true)
+        .catch(() => false);
+
+      expect(exists).toBe(false);
+    });
+
+    it("should detect presets in dry-run mode", async () => {
+      await fs.writeFile(
+        join(tempDir, "package.json"),
+        JSON.stringify({
+          name: "test",
+          dependencies: {
+            "@clerk/nextjs": "^5.0.0",
+          },
+        })
+      );
+
+      // Should complete without error
+      await initCommand.run?.({
+        args: { dir: tempDir, force: false, yes: true, "dry-run": true },
+        cmd: initCommand,
+        rawArgs: [],
+      } as any);
+
+      // Verify no actual changes were made
+      const configPath = join(tempDir, ".obora", "config.json");
+      const exists = await fs
+        .stat(configPath)
+        .then(() => true)
+        .catch(() => false);
+
+      expect(exists).toBe(false);
+    });
+  });
+
   describe("error handling", () => {
     it("should fail if no package.json", async () => {
       const mockExit = vi.spyOn(process, "exit").mockImplementation(() => {

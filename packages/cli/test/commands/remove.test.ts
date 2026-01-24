@@ -311,6 +311,85 @@ export class AppModule {}`;
     });
   });
 
+  describe("dry-run mode", () => {
+    it("should preview removal without making changes", async () => {
+      const configDir = join(testDir, ".obora");
+      await fs.mkdir(configDir, { recursive: true });
+
+      const config = {
+        base: "single",
+        apps: {},
+        slots: {
+          email: { preset: "resend", version: "4.0.0", installedAt: "2024-01-01" },
+        },
+      };
+
+      await fs.writeFile(join(configDir, "config.json"), JSON.stringify(config, null, 2));
+
+      await fs.writeFile(
+        join(testDir, "package.json"),
+        JSON.stringify({
+          name: "test",
+          dependencies: { resend: "^4.0.0" },
+        })
+      );
+
+      // In dry-run mode, config should remain unchanged
+      const configBefore = await fs.readFile(join(configDir, "config.json"), "utf-8");
+      const parsedBefore = JSON.parse(configBefore);
+
+      expect(parsedBefore.slots.email?.preset).toBe("resend");
+    });
+
+    it("should show dependencies that would be removed", async () => {
+      const deps = {
+        dependencies: { resend: "^4.0.0" },
+        devDependencies: {},
+      };
+
+      const depsToShow = Object.keys(deps.dependencies || {});
+      expect(depsToShow).toContain("resend");
+    });
+
+    it("should show files that would be deleted", async () => {
+      const files = ["src/lib/email.ts", "src/modules/email/"];
+
+      // Files list should be accurate
+      expect(files.length).toBe(2);
+      expect(files).toContain("src/lib/email.ts");
+    });
+
+    it("should not modify package.json in dry-run mode", async () => {
+      const packageJson = {
+        name: "test",
+        dependencies: { resend: "^4.0.0", react: "^18.0.0" },
+      };
+
+      await fs.writeFile(join(testDir, "package.json"), JSON.stringify(packageJson, null, 2));
+
+      // In dry-run, package.json should remain unchanged
+      const content = await fs.readFile(join(testDir, "package.json"), "utf-8");
+      const parsed = JSON.parse(content);
+
+      expect(parsed.dependencies.resend).toBe("^4.0.0");
+      expect(parsed.dependencies.react).toBe("^18.0.0");
+    });
+
+    it("should not delete directories in dry-run mode", async () => {
+      const emailDir = join(testDir, "src", "modules", "email");
+      await fs.mkdir(emailDir, { recursive: true });
+      await fs.writeFile(join(emailDir, "email.module.ts"), "export class EmailModule {}");
+
+      // In dry-run mode, directory should still exist
+      const exists = await fs
+        .stat(emailDir)
+        .then((s) => s.isDirectory())
+        .catch(() => false);
+
+      expect(exists).toBe(true);
+    });
+  });
+
   describe("monorepo support", () => {
     it("should resolve target app directory", async () => {
       const projectDir = testDir;

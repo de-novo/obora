@@ -309,6 +309,91 @@ describe("eject command", () => {
     });
   });
 
+  describe("dry-run mode", () => {
+    it("should preview eject without making changes", async () => {
+      const { readOboraConfig, writeOboraConfig } = await import("../../src/utils/project-config");
+      const consola = (await import("consola")).default;
+      const mockExistsSync = existsSync as unknown as ReturnType<typeof vi.fn>;
+
+      mockExistsSync.mockReturnValue(false);
+
+      (readOboraConfig as ReturnType<typeof vi.fn>).mockResolvedValue({
+        slots: {
+          styling: { preset: "tailwind", version: "1.0.0", installedAt: "2024-01-01" },
+        },
+      });
+
+      const { ejectCommand } = await import("../../src/commands/eject");
+
+      await ejectCommand.run?.({
+        args: { preset: "tailwind", all: true, force: false, list: false, "dry-run": true },
+        rawArgs: [],
+        cmd: ejectCommand,
+      });
+
+      // Should show dry-run messages
+      expect(consola.info).toHaveBeenCalledWith(
+        expect.stringContaining("[dry-run]")
+      );
+
+      // writeOboraConfig should NOT be called in dry-run mode
+      expect(writeOboraConfig).not.toHaveBeenCalled();
+    });
+
+    it("should show files that would be ejected", async () => {
+      const { readOboraConfig } = await import("../../src/utils/project-config");
+      const consola = (await import("consola")).default;
+      const mockExistsSync = existsSync as unknown as ReturnType<typeof vi.fn>;
+
+      mockExistsSync.mockReturnValue(false);
+
+      (readOboraConfig as ReturnType<typeof vi.fn>).mockResolvedValue({
+        slots: {
+          styling: { preset: "tailwind", version: "1.0.0", installedAt: "2024-01-01" },
+        },
+      });
+
+      const { ejectCommand } = await import("../../src/commands/eject");
+
+      await ejectCommand.run?.({
+        args: { preset: "tailwind", all: true, force: false, list: false, "dry-run": true },
+        rawArgs: [],
+        cmd: ejectCommand,
+      });
+
+      // Should show success message for preview
+      expect(consola.success).toHaveBeenCalledWith(
+        expect.stringContaining("[dry-run]")
+      );
+    });
+
+    it("should indicate overwrite status in dry-run for existing files", async () => {
+      const { readOboraConfig } = await import("../../src/utils/project-config");
+      const consola = (await import("consola")).default;
+      const mockExistsSync = existsSync as unknown as ReturnType<typeof vi.fn>;
+
+      // Simulate existing file
+      mockExistsSync.mockReturnValue(true);
+
+      (readOboraConfig as ReturnType<typeof vi.fn>).mockResolvedValue({
+        slots: {
+          styling: { preset: "tailwind", version: "1.0.0", installedAt: "2024-01-01" },
+        },
+      });
+
+      const { ejectCommand } = await import("../../src/commands/eject");
+
+      await ejectCommand.run?.({
+        args: { preset: "tailwind", all: true, force: true, list: false, "dry-run": true },
+        rawArgs: [],
+        cmd: ejectCommand,
+      });
+
+      // Should indicate files would be overwritten
+      expect(consola.info).toHaveBeenCalled();
+    });
+  });
+
   describe("config update after eject", () => {
     it("should update slot config with ejected status", async () => {
       const { readOboraConfig, writeOboraConfig, addHistoryEntry } = await import(
