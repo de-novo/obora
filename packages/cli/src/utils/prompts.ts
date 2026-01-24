@@ -258,6 +258,19 @@ export async function promptSelect(
   return selected;
 }
 
+// Category icons for better visual distinction
+const CATEGORY_ICONS: Record<string, string> = {
+  database: "🗄️",
+  auth: "🔐",
+  validation: "✅",
+  linting: "🔍",
+  payment: "💳",
+  email: "📧",
+  analytics: "📊",
+  storage: "☁️",
+  ai: "🤖",
+};
+
 /**
  * Prompt for category selection (for interactive mode)
  */
@@ -265,9 +278,10 @@ export async function promptCategory(): Promise<Category> {
   const choices = CATEGORIES.map((cat) => {
     const config = CATEGORY_CONFIGS[cat];
     const presetCount = getPresetsByCategory(cat).length;
+    const icon = CATEGORY_ICONS[cat] || "📦";
     return {
-      title: `${config.description}${config.exclusive ? " (exclusive)" : ""}`,
-      description: `${presetCount} preset${presetCount !== 1 ? "s" : ""} available`,
+      title: `${icon}  ${config.description}`,
+      description: `${presetCount} preset${presetCount !== 1 ? "s" : ""} available${config.exclusive ? " • exclusive" : ""}`,
       value: cat,
     };
   }).filter((c) => {
@@ -279,7 +293,7 @@ export async function promptCategory(): Promise<Category> {
   const { category } = await prompts({
     type: "select",
     name: "category",
-    message: "Select category:",
+    message: "Select a category:",
     choices,
   });
 
@@ -302,19 +316,32 @@ export async function promptPreset(category: Category): Promise<PresetName> {
     process.exit(1);
   }
 
-  const choices = presets.map((name) => {
+  // Sort presets: popular ones first (drizzle, biome, zod, clerk)
+  const popularPresets = ["drizzle", "biome", "zod", "clerk", "resend"];
+  const sortedPresets = [...presets].sort((a, b) => {
+    const aPopular = popularPresets.includes(a);
+    const bPopular = popularPresets.includes(b);
+    if (aPopular && !bPopular) return -1;
+    if (!aPopular && bPopular) return 1;
+    return 0;
+  });
+
+  const choices = sortedPresets.map((name, index) => {
     const preset = PRESETS[name];
+    const isPopular = popularPresets.includes(name);
+    const versionBadge = preset.version ? ` v${preset.version}` : "";
     return {
-      title: preset.name,
+      title: `${preset.name}${versionBadge}${isPopular ? " ★" : ""}`,
       description: preset.description,
       value: preset.name,
     };
   });
 
+  const categoryConfig = CATEGORY_CONFIGS[category];
   const { preset } = await prompts({
     type: "select",
     name: "preset",
-    message: "Select preset:",
+    message: `Select ${categoryConfig?.description || category}:`,
     choices,
   });
 
@@ -326,16 +353,55 @@ export async function promptPreset(category: Category): Promise<PresetName> {
   return preset as PresetName;
 }
 
+// Target type icons
+const TARGET_ICONS: Record<string, string> = {
+  postgres: "🐘",
+  postgresql: "🐘",
+  mysql: "🐬",
+  sqlite: "📁",
+  turso: "🚀",
+  neon: "⚡",
+  supabase: "⚡",
+  planetscale: "🌍",
+  nextjs: "▲",
+  nestjs: "🐱",
+  standalone: "📦",
+  monorepo: "📂",
+};
+
 /**
  * Prompt for target selection (for ORM preset dialect selection)
  */
 export async function promptTarget(
-  targets: Array<{ name: string; description?: string; dialect?: string }>
+  targets: Array<{ name: string; description?: string; dialect?: string }>,
+  contextMessage?: string
 ): Promise<string> {
+  // Determine what kind of targets we're selecting
+  const hasDialect = targets.some((t) => t.dialect);
+  const isFrameworkTarget = targets.some((t) =>
+    t.name.includes("nextjs") || t.name.includes("nestjs")
+  );
+  const isProjectTarget = targets.some((t) =>
+    t.name.includes("standalone") || t.name.includes("monorepo")
+  );
+
   const choices = targets.map((t) => {
-    let title = t.name;
+    // Find appropriate icon
+    const iconKey = t.dialect?.toLowerCase() || t.name.toLowerCase();
+    let icon = "";
+    for (const [key, emoji] of Object.entries(TARGET_ICONS)) {
+      if (iconKey.includes(key)) {
+        icon = emoji + " ";
+        break;
+      }
+    }
+
+    let title = icon + t.name;
     if (t.dialect) {
-      title = `${t.name} (${t.dialect})`;
+      title = `${icon}${t.dialect}`;
+      if (t.name !== t.dialect.toLowerCase()) {
+        title += ` (${t.name})`;
+      }
     }
     return {
       title,
@@ -344,10 +410,22 @@ export async function promptTarget(
     };
   });
 
+  // Determine message based on context
+  let message = contextMessage || "Select target/variant:";
+  if (!contextMessage) {
+    if (hasDialect) {
+      message = "Select database:";
+    } else if (isFrameworkTarget) {
+      message = "Select framework target:";
+    } else if (isProjectTarget) {
+      message = "Select project type:";
+    }
+  }
+
   const { target } = await prompts({
     type: "select",
     name: "target",
-    message: "Select target/variant:",
+    message,
     choices,
   });
 
@@ -373,19 +451,23 @@ export async function promptConflictResolution(
   category: string,
   isExclusive: boolean
 ): Promise<ConflictAction> {
-  consola.warn(`\nConflict detected!`);
-  console.log(`  ${existingPreset} (${category}) is already installed.`);
-  console.log(`  ${newPreset} conflicts with ${existingPreset}.\n`);
+  // Display conflict information in a clear format
+  consola.box(
+    `⚠️  Conflict Detected\n\n` +
+    `Current: ${existingPreset}\n` +
+    `New:     ${newPreset}\n` +
+    `Slot:    ${category}${isExclusive ? " (exclusive)" : ""}`
+  );
 
   const choices: Array<{ title: string; description: string; value: ConflictAction }> = [
     {
-      title: `Replace ${existingPreset} with ${newPreset}`,
-      description: `Remove ${existingPreset} and install ${newPreset}`,
+      title: `🔄 Replace with ${newPreset}`,
+      description: `Remove ${existingPreset}, install ${newPreset}`,
       value: "replace",
     },
     {
-      title: `Keep ${existingPreset}`,
-      description: "Cancel installation",
+      title: `✋ Keep ${existingPreset}`,
+      description: "Cancel this installation",
       value: "keep",
     },
   ];
@@ -393,8 +475,8 @@ export async function promptConflictResolution(
   // Only show "both" option for non-exclusive categories (with warning)
   if (!isExclusive) {
     choices.push({
-      title: `Install both (not recommended)`,
-      description: "May cause conflicts at runtime",
+      title: `⚡ Install both`,
+      description: "Not recommended - may cause runtime conflicts",
       value: "both",
     });
   }
@@ -402,7 +484,7 @@ export async function promptConflictResolution(
   const { action } = await prompts({
     type: "select",
     name: "action",
-    message: "How do you want to proceed?",
+    message: "Choose an action:",
     choices,
     initial: 0,
   });

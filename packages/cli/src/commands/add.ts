@@ -985,7 +985,16 @@ export const addCommand = defineCommand({
     }
     if (!presetName) {
       // Interactive mode: category → preset → target
-      consola.info("Interactive mode: Select category and preset\n");
+      const totalPresets = Object.keys(PRESETS).length;
+      const totalCategories = CATEGORIES.filter(
+        (c) => Object.values(PRESETS).some((p) => p.category === c)
+      ).length;
+
+      consola.box(
+        `🎯 Interactive Preset Selection\n\n` +
+        `${totalCategories} categories • ${totalPresets} presets available\n\n` +
+        `Tip: Use 'obora add <preset>' to skip this wizard`
+      );
 
       // Step 1: Select category
       const selectedCategory = await promptCategory();
@@ -1068,19 +1077,25 @@ export const addCommand = defineCommand({
           if (dir) {
             targetAppDir = dir;
             targetAppName = relevantApps[0];
-            consola.info(`Auto-selected app: ${targetAppName}`);
+            consola.info(`📍 Auto-selected app: ${targetAppName}`);
           }
         } else if (relevantApps.length > 1) {
           // Always prompt for app selection in monorepo with multiple apps
+          const appTypeLabel = isBackendPreset ? "backend" : isFrontendPreset ? "frontend" : "";
           const { selectedApp } = await prompts({
             type: "select",
             name: "selectedApp",
-            message: `Select target app for ${presetName}:`,
+            message: `Select target${appTypeLabel ? ` ${appTypeLabel}` : ""} app for ${presetName}:`,
             choices: relevantApps.map((app) => {
               const appConfig = existingConfig?.apps[app];
-              const moduleConfig = APP_MODULES[appConfig?.module || ""];
+              const moduleName = appConfig?.module || "";
+              const moduleConfig = APP_MODULES[moduleName];
+              const isBackend = moduleName.includes("nest") || moduleName.includes("api");
+              const isFrontend = moduleName.includes("next") || moduleName.includes("web");
+              const typeIcon = isBackend ? "⚙️" : isFrontend ? "🌐" : "📦";
               return {
-                title: `${app} (${appConfig?.module || moduleConfig?.targetDir || app})`,
+                title: `${typeIcon}  ${app}`,
+                description: moduleConfig?.description || moduleName || app,
                 value: app,
               };
             }),
@@ -1110,20 +1125,20 @@ export const addCommand = defineCommand({
     if (existingConfig && !args.yes) {
       const existingSlot = existingConfig.slots[presetCategory];
       if (existingSlot) {
-        consola.warn(
-          `Slot "${presetCategory}" already has "${existingSlot.preset}" installed.`
+        const categoryConfig = CATEGORY_CONFIGS[presetCategory];
+        const action = await promptConflictResolution(
+          presetName,
+          existingSlot.preset,
+          presetCategory,
+          categoryConfig?.exclusive ?? true
         );
-        const { confirm } = await prompts({
-          type: "confirm",
-          name: "confirm",
-          message: `Replace "${existingSlot.preset}" with "${presetName}"?`,
-          initial: false,
-        });
 
-        if (!confirm) {
-          consola.info("Cancelled");
+        if (action === "keep") {
+          consola.info("Installation cancelled");
           return;
         }
+
+        // Note: "replace" continues, "both" is not recommended but allowed for non-exclusive
       }
     }
 

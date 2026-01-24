@@ -1,5 +1,7 @@
 # Obora CLI
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 Next.js/NestJS 프로젝트 스캐폴딩, Preset 관리, Claude Code 워크플로우 통합을 위한 CLI 도구.
 
 ## 주요 기능
@@ -8,6 +10,45 @@ Next.js/NestJS 프로젝트 스캐폴딩, Preset 관리, Claude Code 워크플�
 - **Preset 시스템**: 모듈화된 기능 추가/제거 (ORM, Auth, Payment 등)
 - **Transform 엔진**: AST 기반 코드 자동 변환
 - **Claude Code 통합**: AI 워크플로우 에이전트 및 스킬 관리
+
+## 빠른 시작
+
+### 새 프로젝트 생성
+
+```bash
+# 인터랙티브 모드로 새 프로젝트 생성
+npx obora create my-app
+
+# 프롬프트에서 선택:
+# ✔ Select project structure: monorepo
+# ✔ Select app modules: nestjs-api, nextjs-web
+# ✔ Select database: drizzle
+# ✔ Select auth: clerk
+```
+
+### 기존 프로젝트에 Preset 추가
+
+```bash
+cd my-project
+
+# 인터랙티브 모드
+obora add
+# 🎯 Interactive Preset Selection
+# 9 categories • 25 presets available
+
+# 또는 직접 지정
+obora add drizzle
+```
+
+### AI 워크플로우 초기화
+
+```bash
+# Claude Code 에이전트, 스킬, 룰 설정
+obora init
+
+# ✔ Created .obora/config.json
+# ✔ Obora assets synced
+```
 
 ## 설치
 
@@ -64,22 +105,51 @@ obora create my-app --pm pnpm
 ```bash
 # 인터랙티브 모드 (카테고리 → preset → variant 선택)
 obora add
+# 출력:
+# ┌──────────────────────────────────────────┐
+# │ 🎯 Interactive Preset Selection          │
+# │                                          │
+# │ 9 categories • 25 presets available      │
+# │                                          │
+# │ Tip: Use 'obora add <preset>' to skip    │
+# └──────────────────────────────────────────┘
+# ? Select a category:
+#   🗄️  Database (2 presets • exclusive)
+#   🔐  Auth (3 presets • exclusive)
+#   💳  Payment (2 presets • exclusive)
+#   ...
 
 # 직접 지정
 obora add drizzle
 
-# Variant 선택
+# Variant 선택 (데이터베이스 종류)
 obora add drizzle --variant postgres
+# ? Select database:
+#   🐘 PostgreSQL (postgres)
+#   🐬 MySQL (mysql)
+#   📁 SQLite (sqlite)
 
 # 대상 지정 (standalone/monorepo)
 obora add drizzle --target monorepo
+
+# Dry-run (실제 변경 없이 미리보기)
+obora add drizzle --dry-run
 ```
 
 **주요 기능:**
-- **Interactive 모드**: 카테고리/preset/variant 순차 선택
-- **Variant 지원**: SQLite/PostgreSQL 등 옵션 선택
-- **충돌 해결**: 같은 카테고리의 exclusive preset 충돌 시 교체/유지 선택
+- **Interactive 모드**: 카테고리별 아이콘과 preset 수 표시
+- **Variant 지원**: 데이터베이스 종류 등 옵션 선택
+- **충돌 해결**: 같은 카테고리의 exclusive preset 충돌 시 시각적 안내
 - **의존성 체인**: requires 필드 기반 자동 의존성 설치 제안
+- **Dry-run**: 변경 사항 미리보기
+
+| 옵션 | 별칭 | 설명 |
+|------|------|------|
+| `--variant` | `-v` | Preset variant (예: postgres, mysql) |
+| `--target` | - | 대상 타입 (standalone, monorepo) |
+| `--app` | `-a` | 대상 앱 (monorepo에서 특정 앱 지정) |
+| `--dry-run` | - | 실제 변경 없이 미리보기 |
+| `--yes` | `-y` | 확인 프롬프트 스킵 |
 
 #### `obora remove <preset>`
 
@@ -87,7 +157,31 @@ obora add drizzle --target monorepo
 
 ```bash
 obora remove clerk
+# ✔ Removed preset: clerk
 ```
+
+#### `obora undo`
+
+마지막 preset 설치 되돌리기.
+
+```bash
+# 마지막 작업 되돌리기
+obora undo
+# ? Undo last action: Added drizzle (2 minutes ago)? Yes
+# ✔ Reverted config changes
+# ✔ Undo completed
+
+# 파일도 함께 삭제
+obora undo --delete-files
+
+# 확인 없이 즉시 실행
+obora undo -y
+```
+
+| 옵션 | 별칭 | 설명 |
+|------|------|------|
+| `--delete-files` | - | 추가된 파일도 삭제 (주의 필요) |
+| `--yes` | `-y` | 확인 프롬프트 스킵 |
 
 #### `obora list`
 
@@ -139,6 +233,14 @@ presets/{category}/{name}/
 
 ```bash
 obora status
+# Project: my-app
+# Base: monorepo
+# Apps: nestjs-api, nextjs-web
+#
+# Installed Presets:
+#   database: drizzle v0.45.0
+#   auth: clerk v1.25.0
+#   linting: biome v1.9.0
 ```
 
 #### `obora doctor`
@@ -170,6 +272,8 @@ Preset 설정 파일을 프로젝트로 추출.
 
 ```bash
 obora eject
+# ? Select preset to eject: tailwind
+# ✔ Ejected 2 file(s) from 'tailwind'
 ```
 
 ### Claude Code 통합
@@ -261,7 +365,7 @@ obora config
 | 카테고리 | Preset | 설명 |
 |----------|--------|------|
 | **database** | `drizzle`, `prisma` | ORM (exclusive) |
-| **auth** | `clerk`, `clerk-nextjs`, `better-auth` | 인증 (exclusive) |
+| **auth** | `clerk`, `clerk-nextjs`, `better-auth`, `lucia` | 인증 (exclusive) |
 | **payment** | `polar`, `paddle` | 결제 (exclusive) |
 | **email** | `resend` | 이메일 |
 | **ai** | `vercel-ai` | AI SDK |
@@ -269,7 +373,7 @@ obora config
 | **storage** | `uploadthing`, `cloudflare-r2` | 파일 스토리지 |
 | **validation** | `zod`, `effect-schema` | 검증 |
 | **linting** | `biome`, `eslint-prettier` | 린팅 (exclusive) |
-| **data-fetching** | `tanstack-query` | 데이터 fetching |
+| **data-fetching** | `tanstack-query`, `trpc` | 데이터 fetching |
 | **state** | `zustand` | 상태 관리 |
 | **ui** | `shadcn`, `lucide`, `motion` | UI 라이브러리 |
 
@@ -330,6 +434,58 @@ Preset은 코드를 자동으로 변환합니다:
   "requires": ["other-preset"],
   "conflicts": ["conflicting-preset"]
 }
+```
+
+## Troubleshooting
+
+### Preset 추가 후 타입 에러
+
+```bash
+# 의존성 재설치
+pnpm install
+
+# 타입 체크
+pnpm tsc --noEmit
+```
+
+### Transform 실패
+
+```bash
+# 진단 실행
+obora doctor --presets
+
+# Dry-run으로 확인
+obora add <preset> --dry-run
+```
+
+### 충돌 해결
+
+같은 카테고리에 exclusive preset이 이미 있는 경우:
+
+```
+⚠️  Conflict Detected
+
+Current: drizzle
+New:     prisma
+Slot:    database (exclusive)
+
+? Choose an action:
+  🔄 Replace with prisma
+  ✋ Keep drizzle
+```
+
+### 마지막 작업 되돌리기
+
+```bash
+obora undo
+```
+
+### Config 초기화
+
+```bash
+# .obora 디렉토리 삭제 후 재초기화
+rm -rf .obora
+obora init
 ```
 
 ## 개발
