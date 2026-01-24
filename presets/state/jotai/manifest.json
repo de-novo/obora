@@ -42,6 +42,39 @@
       "postInstall": [
         "See lib/atoms/example.ts for atom examples"
       ]
+    },
+    "monorepo": {
+      "description": "Shared state package for monorepo (packages/state)",
+      "dependencies": {
+        "jotai": "^2.10.0"
+      },
+      "files": ["monorepo"],
+      "packageJson": {
+        "name": "@{{workspace}}/state",
+        "main": "./dist/index.js",
+        "types": "./dist/index.d.ts",
+        "exports": {
+          ".": {
+            "import": "./dist/index.js",
+            "types": "./dist/index.d.ts"
+          }
+        },
+        "scripts": {
+          "build": "tsc",
+          "dev": "tsc --watch"
+        }
+      },
+      "detect": {
+        "files": [
+          "pnpm-workspace.yaml",
+          "lerna.json",
+          "nx.json"
+        ]
+      },
+      "postInstall": [
+        "Build package: pnpm build",
+        "Import in apps: import { atom, createPersistedAtom } from '@{{workspace}}/state'"
+      ]
     }
   },
   "postInstall": []

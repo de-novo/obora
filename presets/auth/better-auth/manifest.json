@@ -80,6 +80,39 @@
           "node": ">=18"
         }
       }
+    },
+    "monorepo": {
+      "description": "Shared auth utilities package for monorepo (packages/auth)",
+      "dependencies": {
+        "better-auth": "^1.4.0"
+      },
+      "files": ["monorepo"],
+      "packageJson": {
+        "name": "@{{workspace}}/auth",
+        "main": "./dist/index.js",
+        "types": "./dist/index.d.ts",
+        "exports": {
+          ".": {
+            "import": "./dist/index.js",
+            "types": "./dist/index.d.ts"
+          }
+        },
+        "scripts": {
+          "build": "tsc",
+          "dev": "tsc --watch"
+        }
+      },
+      "detect": {
+        "files": [
+          "pnpm-workspace.yaml",
+          "lerna.json",
+          "nx.json"
+        ]
+      },
+      "postInstall": [
+        "Build package: pnpm build",
+        "Import in apps: import { Session, createAuthConfig } from '@{{workspace}}/auth'"
+      ]
     }
   },
   "conflicts": [

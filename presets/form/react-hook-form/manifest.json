@@ -25,6 +25,48 @@
         "See lib/form/example-schema.ts for Zod schema examples",
         "See lib/form/use-form-example.ts for form hook examples"
       ]
+    },
+    "monorepo": {
+      "description": "Shared form validation package for monorepo (packages/form)",
+      "dependencies": {
+        "react-hook-form": "^7.54.0",
+        "@hookform/resolvers": "^3.9.0",
+        "zod": "^3.24.0"
+      },
+      "devDependencies": {
+        "react": "^18.0.0",
+        "@types/react": "^18.0.0"
+      },
+      "files": ["monorepo"],
+      "packageJson": {
+        "name": "@{{workspace}}/form",
+        "main": "./dist/index.js",
+        "types": "./dist/index.d.ts",
+        "exports": {
+          ".": {
+            "import": "./dist/index.js",
+            "types": "./dist/index.d.ts"
+          }
+        },
+        "scripts": {
+          "build": "tsc",
+          "dev": "tsc --watch"
+        },
+        "peerDependencies": {
+          "react": ">=18.0.0"
+        }
+      },
+      "detect": {
+        "files": [
+          "pnpm-workspace.yaml",
+          "lerna.json",
+          "nx.json"
+        ]
+      },
+      "postInstall": [
+        "Build package: pnpm build",
+        "Import in apps: import { loginSchema, createResolver } from '@{{workspace}}/form'"
+      ]
     }
   },
   "postInstall": []

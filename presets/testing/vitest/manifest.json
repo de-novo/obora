@@ -31,6 +31,48 @@
         "Create test files with .test.ts or .spec.ts extension",
         "Run: pnpm test"
       ]
+    },
+    "monorepo": {
+      "description": "Shared testing utilities package for monorepo (packages/testing)",
+      "devDependencies": {
+        "vitest": "^3.0.0",
+        "@vitejs/plugin-react": "^4.0.0",
+        "@testing-library/react": "^16.0.0",
+        "@testing-library/dom": "^10.0.0",
+        "@testing-library/user-event": "^14.0.0",
+        "jsdom": "^26.0.0"
+      },
+      "files": ["monorepo"],
+      "packageJson": {
+        "name": "@{{workspace}}/testing",
+        "main": "./dist/index.js",
+        "types": "./dist/index.d.ts",
+        "exports": {
+          ".": {
+            "import": "./dist/index.js",
+            "types": "./dist/index.d.ts"
+          }
+        },
+        "scripts": {
+          "build": "tsc",
+          "dev": "tsc --watch"
+        },
+        "peerDependencies": {
+          "react": ">=18.0.0",
+          "vitest": ">=3.0.0"
+        }
+      },
+      "detect": {
+        "files": [
+          "pnpm-workspace.yaml",
+          "lerna.json",
+          "nx.json"
+        ]
+      },
+      "postInstall": [
+        "Build package: pnpm build",
+        "Import in apps: import { createConfig, renderWithUser } from '@{{workspace}}/testing'"
+      ]
     }
   },
   "conflicts": ["jest", "playwright"],
