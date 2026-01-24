@@ -356,7 +356,7 @@ $ obora undo
 
 | 작업 | 완료일 | 커밋 |
 |------|--------|------|
-| P2.3 Conditional Transform | 2026-01-24 | - |
+| P2.3 Conditional Transform | 2026-01-24 | ed75327 |
 | P2.2 Preset 의존성 체인 | 2026-01-24 | 5cf6a4f |
 | P2.1 Conflict 해결 UI | 2026-01-24 | bbf8a80 |
 | P1.1 Variants 시스템 (sqlite/postgres) | 2026-01-24 | 869142d |
