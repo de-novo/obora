@@ -21,7 +21,7 @@ Obora CLI 개발 태스크 목록입니다.
 
 ### 1.1 Variants 시스템 완성
 
-**상태**: 🟡 부분 구현
+**상태**: ✅ 완료
 
 **배경**: manifest.json에 `variants` 필드가 정의되어 있지만, 실제 선택 UI와 적용 로직이 미완성.
 
@@ -36,17 +36,17 @@ Obora CLI 개발 태스크 목록입니다.
 - `presets/database/drizzle/manifest.json`
 
 **작업 항목**:
-- [ ] variant 선택 프롬프트 구현
-- [ ] variant 병합 로직 구현
-- [ ] prisma preset에 sqlite/postgres variant 추가
-- [ ] drizzle preset에 dialect variant 추가
-- [ ] 테스트 작성
+- [x] variant 선택 프롬프트 구현
+- [x] variant 병합 로직 구현
+- [x] prisma preset에 sqlite/postgres variant 추가
+- [x] drizzle preset에 dialect variant 추가
+- [x] 테스트 작성
 
 ---
 
 ### 1.2 Interactive 모드
 
-**상태**: 🔴 미구현
+**상태**: ✅ 완료
 
 **목표**: `obora add` 실행 시 프롬프트로 옵션 선택 가능
 
@@ -74,16 +74,16 @@ $ obora add
 - `src/utils/prompts.ts`
 
 **작업 항목**:
-- [ ] 카테고리 선택 프롬프트
-- [ ] preset 선택 프롬프트
-- [ ] variant 선택 프롬프트 (해당 시)
-- [ ] --interactive / -i 플래그 추가
+- [x] 카테고리 선택 프롬프트
+- [x] preset 선택 프롬프트
+- [x] variant 선택 프롬프트 (해당 시)
+- [x] --interactive / -i 플래그 추가
 
 ---
 
 ### 1.3 Preset 브라우저
 
-**상태**: 🔴 미구현
+**상태**: ✅ 완료
 
 **목표**: 사용 가능한 preset 목록 조회
 
@@ -109,10 +109,10 @@ auth (exclusive)
 - `src/utils/constants.ts`
 
 **작업 항목**:
-- [ ] --available 플래그 추가
-- [ ] 카테고리별 그룹화 출력
-- [ ] preset 설명 표시
-- [ ] exclusive 표시
+- [x] --available 플래그 추가
+- [x] 카테고리별 그룹화 출력
+- [x] preset 설명 표시
+- [x] exclusive 표시
 
 ---
 
@@ -356,6 +356,9 @@ $ obora undo
 
 | 작업 | 완료일 | 커밋 |
 |------|--------|------|
+| P1.1 Variants 시스템 (sqlite/postgres) | 2026-01-24 | 869142d |
+| P1.2 Interactive 모드 | 2026-01-24 | 869142d |
+| P1.3 Preset 브라우저 | 2026-01-24 | 869142d |
 | 템플릿 시스템 외부화 | 2026-01-24 | b2ed739 |
 | Transform 에러 메시지 개선 | 2026-01-24 | b2ed739 |
 | layout.tsx 자동 생성 | 2026-01-24 | 710758a |
