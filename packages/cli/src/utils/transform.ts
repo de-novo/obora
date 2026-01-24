@@ -141,15 +141,17 @@ export async function addImport(
     }
 
     const result = generateCode(mod);
+    // Fix double semicolons that magicast sometimes generates
+    const fixedCode = result.code.replace(/;;+/g, ";");
 
     // Dry-run mode: return preview without writing
     if (options?.dryRun) {
-      return { success: true, changed: true, content, preview: result.code };
+      return { success: true, changed: true, content, preview: fixedCode };
     }
 
-    await fs.writeFile(filePath, result.code);
+    await fs.writeFile(filePath, fixedCode);
 
-    return { success: true, changed: true, content: result.code };
+    return { success: true, changed: true, content: fixedCode };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return { success: false, error: `Failed to add import: ${message}` };
