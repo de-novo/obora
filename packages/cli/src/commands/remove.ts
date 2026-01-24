@@ -426,6 +426,11 @@ export const removeCommand = defineCommand({
       description: "Keep files, only update config and dependencies",
       default: false,
     },
+    "dry-run": {
+      type: "boolean",
+      description: "Preview what would be removed without making changes",
+      default: false,
+    },
   },
   async run({ args }) {
     const projectDir = resolve(args.dir);
@@ -589,6 +594,79 @@ export const removeCommand = defineCommand({
     const packageJsonPath = targetAppDir
       ? join(targetAppDir, "package.json")
       : rootPackageJsonPath;
+
+    const isDryRun = args["dry-run"] as boolean;
+
+    // Dry-run mode: show what would be removed
+    if (isDryRun) {
+      consola.info("[dry-run] Preview mode - no changes will be made\n");
+      consola.info(`Preset to remove: ${presetToRemove} (${slotToRemove})`);
+
+      // Get preset info for dry-run preview
+      const canonicalPreset = resolvePresetName(presetToRemove);
+      const presetInfo = PRESETS[canonicalPreset];
+      const presetDir = presetInfo
+        ? join(PRESETS_DIR, presetInfo.category, canonicalPreset)
+        : null;
+
+      let manifest: PresetManifest | null = null;
+      if (presetDir) {
+        const manifestPath = join(presetDir, "manifest.json");
+        if (await fileExists(manifestPath)) {
+          manifest = await readJson<PresetManifest>(manifestPath);
+        }
+      }
+
+      const targetKey = manifest
+        ? (config.presetTargets?.[canonicalPreset] ||
+          await detectTargetKey(manifest, packageJsonPath))
+        : null;
+
+      const depsToRemove = manifest ? collectDependencies(manifest, targetKey || undefined) : {};
+      const scriptsToRemove = manifest ? collectScripts(manifest, targetKey || undefined) : {};
+      const filesToRemove = !args.keepFiles && manifest
+        ? collectFiles(manifest, targetKey || undefined)
+        : [];
+
+      console.log();
+      consola.info("[dry-run] Would remove:\n");
+
+      // Dependencies
+      const allDeps = [
+        ...Object.keys(depsToRemove.dependencies || {}),
+        ...Object.keys(depsToRemove.devDependencies || {}),
+      ];
+      if (allDeps.length > 0) {
+        consola.info("Dependencies:");
+        allDeps.forEach((dep) => consola.info(`  - ${dep}`));
+        console.log();
+      }
+
+      // Scripts
+      const scriptNames = Object.keys(scriptsToRemove);
+      if (scriptNames.length > 0) {
+        consola.info("Scripts:");
+        scriptNames.forEach((name) => consola.info(`  - ${name}`));
+        console.log();
+      }
+
+      // Files
+      if (filesToRemove.length > 0) {
+        consola.info("Files/Directories:");
+        filesToRemove.forEach((file) => consola.info(`  - ${file}`));
+        console.log();
+      } else if (args.keepFiles) {
+        consola.info("Files: (kept due to --keepFiles flag)");
+        console.log();
+      }
+
+      consola.info("Config changes:");
+      consola.info(`  - .obora/config.json (remove ${slotToRemove} slot)`);
+      console.log();
+
+      consola.success("[dry-run] Preview complete. Run without --dry-run to apply changes.");
+      return;
+    }
 
     // Confirm removal
     if (!args.yes) {

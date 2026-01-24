@@ -237,9 +237,19 @@ export const initCommand = defineCommand({
       description: "Skip confirmation prompts",
       default: false,
     },
+    "dry-run": {
+      type: "boolean",
+      description: "Preview what would be created without making changes",
+      default: false,
+    },
   },
   async run({ args }) {
     const projectPath = resolve(args.dir || process.cwd());
+    const isDryRun = args["dry-run"] as boolean;
+
+    if (isDryRun) {
+      consola.info("[dry-run] Preview mode - no changes will be made\n");
+    }
 
     consola.info(`Initializing obora-kit in: ${projectPath}`);
 
@@ -281,6 +291,26 @@ export const initCommand = defineCommand({
     consola.info(`  Package Manager: ${detectedPm}`);
     consola.info(`  Apps: ${Object.entries(detectedApps).map(([n, a]) => `${n} (${a.module})`).join(", ") || "none"}`);
     consola.info(`  Presets: ${Object.entries(detectedPresets).map(([c, p]) => `${c}:${p.preset}`).join(", ") || "none"}`);
+
+    // Dry-run mode: show what would be created and exit
+    if (isDryRun) {
+      console.log();
+      consola.info("[dry-run] Would create:");
+      consola.info(`  - .obora/config.json`);
+      consola.info(`  - .obora/preset-lock.json`);
+      consola.info(`  - .obora/history.json`);
+      console.log();
+      consola.info("[dry-run] Would sync obora assets to:");
+      consola.info(`  - .claude/skills/obora/`);
+      consola.info(`  - .claude/agents/`);
+      consola.info(`  - .claude/rules/`);
+      consola.info(`  - .claude/commands/`);
+      consola.info(`  - .claude/scripts/obora/`);
+      consola.info(`  - .claude/settings.json (hooks)`);
+      console.log();
+      consola.success("[dry-run] Preview complete. Run without --dry-run to apply changes.");
+      return;
+    }
 
     // Confirm with user
     if (!args.yes) {

@@ -261,6 +261,11 @@ export const ejectCommand = defineCommand({
       alias: "l",
       default: false,
     },
+    "dry-run": {
+      type: "boolean",
+      description: "Preview what would be ejected without making changes",
+      default: false,
+    },
   },
   async run({ args }) {
     const projectPath = resolve(".");
@@ -413,6 +418,33 @@ export const ejectCommand = defineCommand({
       }
 
       filesToEject = selectedFiles;
+    }
+
+    // Dry-run mode: show what would be ejected
+    const isDryRun = args["dry-run"] as boolean;
+    if (isDryRun) {
+      consola.info("[dry-run] Preview mode - no changes will be made\n");
+      consola.info(`Preset to eject: ${presetToEject} (${category})\n`);
+
+      consola.info("[dry-run] Would eject the following files:\n");
+
+      for (const file of filesToEject) {
+        const destPath = join(projectPath, file.destination);
+        const existsIndicator = existsSync(destPath)
+          ? args.force ? " (will overwrite)" : " (exists, will skip)"
+          : "";
+        consola.info(`  → ${file.destination}${existsIndicator}`);
+        consola.info(`    ${file.description}`);
+      }
+
+      console.log();
+      consola.info("[dry-run] Would update:");
+      consola.info(`  - .obora/config.json (mark ${presetToEject} as ejected)`);
+      consola.info(`  - .obora/history.json (add eject entry)`);
+      console.log();
+
+      consola.success("[dry-run] Preview complete. Run without --dry-run to apply changes.");
+      return;
     }
 
     // Get preset path

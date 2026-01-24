@@ -51,9 +51,64 @@ export const syncCommand = defineCommand({
       description: "List available assets instead of syncing",
       default: false,
     },
+    "dry-run": {
+      type: "boolean",
+      description: "Preview what would be synced without making changes",
+      default: false,
+    },
   },
   async run({ args }) {
     const projectPath = resolve(args.dir || process.cwd());
+    const isDryRun = args["dry-run"] as boolean;
+
+    // Dry-run mode
+    if (isDryRun) {
+      consola.info("[dry-run] Preview mode - no changes will be made\n");
+
+      const skills = await listAvailableSkills();
+      const agents = await listAvailableAgents();
+
+      consola.info("[dry-run] Would sync the following assets:\n");
+
+      if (args.type === "all" || args.type === "skills") {
+        consola.info("Skills:");
+        skills.forEach((s) => consola.info(`  → .claude/skills/obora/${s}/`));
+        console.log();
+      }
+
+      if (args.type === "all" || args.type === "agents") {
+        consola.info("Agents:");
+        agents.forEach((a) => consola.info(`  → .claude/agents/${a}.md`));
+        console.log();
+      }
+
+      if (args.type === "all" || args.type === "rules") {
+        consola.info("Rules:");
+        consola.info("  → .claude/rules/ (multiple files)");
+        console.log();
+      }
+
+      if (args.type === "all" || args.type === "commands") {
+        consola.info("Commands:");
+        consola.info("  → .claude/commands/ (multiple files)");
+        console.log();
+      }
+
+      if (args.type === "all" || args.type === "scripts") {
+        consola.info("Scripts:");
+        consola.info("  → .claude/scripts/obora/ (multiple files)");
+        console.log();
+      }
+
+      if (args.type === "all" || args.type === "settings") {
+        consola.info("Settings:");
+        consola.info("  → .claude/settings.json (hooks)");
+        console.log();
+      }
+
+      consola.success("[dry-run] Preview complete. Run without --dry-run to apply changes.");
+      return;
+    }
 
     // List mode
     if (args.list) {
