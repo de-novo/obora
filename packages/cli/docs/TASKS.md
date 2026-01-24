@@ -331,7 +331,7 @@ Related:
 - [x] CLIError 클래스 (code, message, details, suggestions, related)
 - [x] Factory 함수 (Errors.transformProviderWrapFailed 등)
 - [x] Transform 에러 컨텍스트 타입 및 헬퍼
-- [ ] 에러별 문서 링크 (향후 웹사이트 구축 시)
+- [x] 에러별 문서 링크 인프라 (getErrorDocsUrl, helpUrl 필드 적용)
 
 ---
 
@@ -394,6 +394,7 @@ $ obora undo
 
 | 작업 | 완료일 | 커밋 |
 |------|--------|------|
+| P4.1 에러별 문서 링크 인프라 | 2026-01-24 | - |
 | P4.2 진행 상황 개선 | 2026-01-24 | - |
 | P4.3 Undo 기능 | 2026-01-24 | - |
 | P3.2 Preset 생성 CLI | 2026-01-24 | - |

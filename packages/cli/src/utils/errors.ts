@@ -72,6 +72,23 @@ export const ErrorCode = {
 export type ErrorCodeType = (typeof ErrorCode)[keyof typeof ErrorCode];
 
 // ============================================================================
+// Error Documentation URLs
+// ============================================================================
+
+/**
+ * Base URL for error documentation
+ * TODO: Update when website is deployed
+ */
+const DOCS_BASE_URL = "https://obora.dev/docs/errors";
+
+/**
+ * Generate documentation URL for an error code
+ */
+export function getErrorDocsUrl(code: ErrorCodeType): string {
+  return `${DOCS_BASE_URL}/${code.toLowerCase()}`;
+}
+
+// ============================================================================
 // Error Context Interface
 // ============================================================================
 
@@ -272,6 +289,7 @@ export const Errors = {
         "Run 'obora init' to initialize the project",
         "Check if you're in the correct directory",
       ],
+      helpUrl: getErrorDocsUrl(ErrorCode.CONFIG_NOT_FOUND),
     }),
 
   configInvalid: (path: string, reason?: string): CLIError =>
@@ -283,6 +301,7 @@ export const Errors = {
         "Check the configuration file syntax",
         "Run 'obora doctor' to diagnose issues",
       ],
+      helpUrl: getErrorDocsUrl(ErrorCode.CONFIG_INVALID),
     }),
 
   // Preset errors
@@ -296,6 +315,7 @@ export const Errors = {
         "Check the preset name spelling",
         available?.length ? `Similar: ${available.slice(0, 3).join(", ")}` : "",
       ].filter(Boolean),
+      helpUrl: getErrorDocsUrl(ErrorCode.PRESET_NOT_FOUND),
     }),
 
   presetConflict: (
@@ -311,6 +331,7 @@ export const Errors = {
         `Remove conflicting presets first: obora remove ${conflictsWith.join(" ")}`,
         "Use --force to override (not recommended)",
       ],
+      helpUrl: getErrorDocsUrl(ErrorCode.PRESET_CONFLICT),
     }),
 
   presetNoTargets: (presetName: string): CLIError =>
@@ -321,6 +342,7 @@ export const Errors = {
         "Check if your project framework is supported",
         "Run 'obora doctor' to verify project detection",
       ],
+      helpUrl: getErrorDocsUrl(ErrorCode.PRESET_NO_TARGETS),
     }),
 
   presetIncompatible: (
@@ -336,6 +358,7 @@ export const Errors = {
         `Upgrade to meet the requirement: ${requirement}`,
         "Check preset documentation for alternatives",
       ],
+      helpUrl: getErrorDocsUrl(ErrorCode.PRESET_INCOMPATIBLE),
     }),
 
   // Transform errors
@@ -354,6 +377,7 @@ export const Errors = {
         "Try running with --verbose for more details",
       ],
       related: [target],
+      helpUrl: getErrorDocsUrl(ErrorCode.TRANSFORM_FAILED),
     }),
 
   transformFileNotFound: (path: string): CLIError =>
@@ -366,6 +390,7 @@ export const Errors = {
         "Create the file manually if it should exist",
         "Check if a different file path is intended",
       ],
+      helpUrl: getErrorDocsUrl(ErrorCode.TRANSFORM_FILE_NOT_FOUND),
     }),
 
   transformImportFailed: (
@@ -383,6 +408,7 @@ export const Errors = {
         "Ensure the import statement syntax is correct",
       ],
       related: [target],
+      helpUrl: getErrorDocsUrl(ErrorCode.TRANSFORM_IMPORT_FAILED),
     }),
 
   transformProviderWrapFailed: (
@@ -401,6 +427,7 @@ export const Errors = {
         "Manual fix: wrap {children} with the provider component",
       ],
       related: [target],
+      helpUrl: getErrorDocsUrl(ErrorCode.TRANSFORM_PROVIDER_WRAP_FAILED),
     }),
 
   transformLayoutComponentFailed: (
@@ -419,6 +446,7 @@ export const Errors = {
         "Manual fix: add the component inside the layout's JSX",
       ],
       related: [target],
+      helpUrl: getErrorDocsUrl(ErrorCode.TRANSFORM_LAYOUT_COMPONENT_FAILED),
     }),
 
   transformNestJsModuleFailed: (
@@ -437,6 +465,7 @@ export const Errors = {
         "Manual fix: add the module to the imports array in @Module",
       ],
       related: [target],
+      helpUrl: getErrorDocsUrl(ErrorCode.TRANSFORM_NESTJS_MODULE_FAILED),
     }),
 
   transformMarkerNotFound: (
@@ -453,6 +482,7 @@ export const Errors = {
         "Use the correct marker syntax for your file type",
       ],
       related: [target],
+      helpUrl: getErrorDocsUrl(ErrorCode.TRANSFORM_MARKER_NOT_FOUND),
     }),
 
   transformPatternNotFound: (
@@ -470,6 +500,7 @@ export const Errors = {
         "Verify the preset is compatible with your project",
       ],
       related: [target],
+      helpUrl: getErrorDocsUrl(ErrorCode.TRANSFORM_PATTERN_NOT_FOUND),
     }),
 
   transformDuplicateDetected: (
@@ -487,6 +518,7 @@ export const Errors = {
         "This is usually safe to ignore",
       ],
       related: [target],
+      helpUrl: getErrorDocsUrl(ErrorCode.TRANSFORM_DUPLICATE_DETECTED),
     }),
 
   // Dependency errors
@@ -500,6 +532,7 @@ export const Errors = {
         "Try running the package manager install manually",
         "Clear node_modules and lock file, then retry",
       ],
+      helpUrl: getErrorDocsUrl(ErrorCode.DEP_INSTALL_FAILED),
     }),
 
   depConflict: (
@@ -516,6 +549,7 @@ export const Errors = {
         "Check if other packages depend on the current version",
         "Use --force to override (may cause issues)",
       ],
+      helpUrl: getErrorDocsUrl(ErrorCode.DEP_CONFLICT),
     }),
 
   // File system errors
@@ -528,6 +562,7 @@ export const Errors = {
         `Verify the ${type} path is correct`,
         `Create the ${type} if it should exist`,
       ],
+      helpUrl: getErrorDocsUrl(ErrorCode.FS_NOT_FOUND),
     }),
 
   fsPermissionDenied: (path: string, operation: string): CLIError =>
@@ -540,6 +575,7 @@ export const Errors = {
         "Run with appropriate permissions",
         "Ensure the file is not locked by another process",
       ],
+      helpUrl: getErrorDocsUrl(ErrorCode.FS_PERMISSION_DENIED),
     }),
 
   // Project errors
@@ -552,6 +588,7 @@ export const Errors = {
         "Run 'obora init' to initialize the project",
         "Ensure you're in the correct directory",
       ],
+      helpUrl: getErrorDocsUrl(ErrorCode.PROJECT_NOT_INITIALIZED),
     }),
 
   projectAlreadyInitialized: (dir?: string): CLIError =>
@@ -563,6 +600,7 @@ export const Errors = {
         "Use --force to reinitialize",
         "Run 'obora sync' to update assets instead",
       ],
+      helpUrl: getErrorDocsUrl(ErrorCode.PROJECT_ALREADY_INITIALIZED),
     }),
 
   // Validation errors
@@ -585,6 +623,7 @@ export const Errors = {
         expected ? `Expected: ${expected}` : "Check the argument value",
         "Run the command with --help for usage information",
       ].filter(Boolean),
+      helpUrl: getErrorDocsUrl(ErrorCode.INVALID_ARGUMENT),
     });
   },
 
@@ -596,6 +635,7 @@ export const Errors = {
         `Provide the required ${field}`,
         "Run the command with --help for usage information",
       ],
+      helpUrl: getErrorDocsUrl(ErrorCode.MISSING_REQUIRED),
     }),
 
   validationFailed: (
@@ -611,6 +651,7 @@ export const Errors = {
         "Check the input value format",
         "Refer to the documentation for valid values",
       ],
+      helpUrl: getErrorDocsUrl(ErrorCode.VALIDATION_FAILED),
     }),
 
   // General errors
@@ -622,6 +663,7 @@ export const Errors = {
         "Check the error message for details",
         "Run with --verbose for more information",
       ],
+      helpUrl: getErrorDocsUrl(ErrorCode.OPERATION_FAILED),
     }),
 
   unknown: (error: unknown): CLIError => {
@@ -634,6 +676,7 @@ export const Errors = {
         "Run 'obora doctor' to check for issues",
         "Report this issue if it persists",
       ],
+      helpUrl: getErrorDocsUrl(ErrorCode.UNKNOWN_ERROR),
     });
   },
 };
