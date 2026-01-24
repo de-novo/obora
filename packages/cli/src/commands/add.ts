@@ -8,6 +8,7 @@ import {
   APP_MODULE_NAMES,
   type AppModuleName,
   CATEGORIES,
+  CATEGORY_CONFIGS,
   PRESETS,
   PRESETS_DIR,
   isForbiddenPresetFilePath,
@@ -36,11 +37,14 @@ import {
   promptCategory,
   promptPreset,
   promptTarget,
+  promptConflictResolution,
+  type ConflictAction,
 } from "../utils/prompts";
 import {
   addSlotPreset,
   hasOboraConfig,
   readOboraConfig,
+  removeSlotPreset,
   setPresetTarget,
 } from "../utils/project-config";
 import { Errors, showError } from "../utils/errors";
@@ -977,9 +981,73 @@ export const addCommand = defineCommand({
             .map((s) => s!.preset);
 
           if (installedPresets.includes(conflict)) {
-            showError(Errors.presetConflict(presetName, [conflict], "Cannot install conflicting presets"));
-            process.exit(1);
+            // Find the slot/category of the conflicting preset
+            const conflictSlot = Object.entries(existingConfig.slots)
+              .find(([_, slotConfig]) => slotConfig?.preset === conflict)?.[0];
+
+            if (!conflictSlot) {
+              showError(Errors.presetConflict(presetName, [conflict], "Cannot install conflicting presets"));
+              process.exit(1);
+            }
+
+            // Check if the category is exclusive
+            const isExclusive = CATEGORY_CONFIGS[conflictSlot as Category]?.exclusive ?? true;
+
+            // Prompt user for conflict resolution
+            const action = await promptConflictResolution(
+              presetName,
+              conflict,
+              conflictSlot,
+              isExclusive
+            );
+
+            if (action === "keep") {
+              consola.info("Installation cancelled.");
+              process.exit(0);
+            }
+
+            if (action === "replace") {
+              // Remove the conflicting preset from config
+              consola.info(`Removing ${conflict}...`);
+              await removeSlotPreset(projectDir, conflictSlot);
+              consola.success(`Removed ${conflict} from configuration.`);
+              consola.info("Note: Run your package manager to remove unused dependencies.\n");
+            }
+
+            // "both" action: continue without removing (with warning already shown in prompt)
+            if (action === "both") {
+              consola.warn(`Installing ${presetName} alongside ${conflict}. This may cause runtime conflicts.\n`);
+            }
           }
+        }
+      }
+
+      // Check for exclusive category conflict (same slot already occupied)
+      if (existingConfig && presetCategory) {
+        const existingSlotPreset = existingConfig.slots[presetCategory];
+        const isExclusive = CATEGORY_CONFIGS[presetCategory as Category]?.exclusive ?? true;
+
+        if (isExclusive && existingSlotPreset && existingSlotPreset.preset !== presetName) {
+          // Already has a different preset in this exclusive category
+          const action = await promptConflictResolution(
+            presetName,
+            existingSlotPreset.preset,
+            presetCategory,
+            true // isExclusive
+          );
+
+          if (action === "keep") {
+            consola.info("Installation cancelled.");
+            process.exit(0);
+          }
+
+          if (action === "replace") {
+            consola.info(`Replacing ${existingSlotPreset.preset}...`);
+            await removeSlotPreset(projectDir, presetCategory);
+            consola.success(`Removed ${existingSlotPreset.preset} from configuration.`);
+            consola.info("Note: Run your package manager to remove unused dependencies.\n");
+          }
+          // Note: "both" action is not available for exclusive categories
         }
       }
 

@@ -358,3 +358,59 @@ export async function promptTarget(
 
   return target;
 }
+
+/**
+ * Conflict resolution action
+ */
+export type ConflictAction = "replace" | "keep" | "both";
+
+/**
+ * Prompt for conflict resolution when installing a preset that conflicts with an existing one
+ */
+export async function promptConflictResolution(
+  newPreset: string,
+  existingPreset: string,
+  category: string,
+  isExclusive: boolean
+): Promise<ConflictAction> {
+  consola.warn(`\nConflict detected!`);
+  console.log(`  ${existingPreset} (${category}) is already installed.`);
+  console.log(`  ${newPreset} conflicts with ${existingPreset}.\n`);
+
+  const choices: Array<{ title: string; description: string; value: ConflictAction }> = [
+    {
+      title: `Replace ${existingPreset} with ${newPreset}`,
+      description: `Remove ${existingPreset} and install ${newPreset}`,
+      value: "replace",
+    },
+    {
+      title: `Keep ${existingPreset}`,
+      description: "Cancel installation",
+      value: "keep",
+    },
+  ];
+
+  // Only show "both" option for non-exclusive categories (with warning)
+  if (!isExclusive) {
+    choices.push({
+      title: `Install both (not recommended)`,
+      description: "May cause conflicts at runtime",
+      value: "both",
+    });
+  }
+
+  const { action } = await prompts({
+    type: "select",
+    name: "action",
+    message: "How do you want to proceed?",
+    choices,
+    initial: 0,
+  });
+
+  if (!action) {
+    consola.info("Installation cancelled");
+    process.exit(0);
+  }
+
+  return action;
+}
