@@ -494,6 +494,80 @@ export async function promptConflictResolution(
     process.exit(0);
   }
 
+
+/**
+ * Improved conflict resolution with detailed conflict information
+ */
+export async function promptConflictResolutionImproved(
+  newPreset: string,
+  existingPreset: string,
+  category: string,
+  isExclusive: boolean,
+  conflictReason?: string,
+  conflictType?: 'exclusive' | 'manifest'
+): Promise<ConflictAction> {
+  // Determine conflict type if not provided
+  const type = conflictType || (isExclusive ? 'exclusive' : 'manifest');
+  
+  // Build reason text
+  const reasonText = conflictReason || 
+    (type === 'exclusive' 
+      ? `${category} slot is already occupied by ${existingPreset} (exclusive category)`
+      : `Manifest-level conflict: ${existingPreset} conflicts with ${newPreset}`);
+  
+  // Display conflict information
+  consola.box(
+    `⚠️  Conflict Detected\n\n` +
+    `Type: ${type}\n` +
+    `Reason: ${reasonText}\n\n` +
+    `Current preset: ${existingPreset}\n` +
+    `New preset: ${newPreset}\n` +
+    `Category: ${category}`
+  );
+  
+  // Build choices based on conflict type
+  const choices: Array<{ title: string; description: string; value: ConflictAction }> = [
+    {
+      title: "🔄 Replace",
+      description: `Remove ${existingPreset}, install ${newPreset}`,
+      value: "replace",
+    },
+    {
+      title: "✋ Keep existing",
+      description: `Cancel ${newPreset} installation`,
+      value: "keep",
+    },
+  ];
+  
+  // Add "both" option for non-exclusive categories with warning
+  if (!isExclusive && type === 'manifest') {
+    choices.push({
+      title: "⚡ Install both",
+      description: "⚠️  Risky - install both presets (may cause conflicts)",
+      value: "both",
+    });
+  }
+  
+  // Add danger warning for exclusive categories
+  if (isExclusive && type === 'exclusive') {
+    consola.warn(`\n⚠️  DANGER: This will remove ${existingPreset}!\n`);
+  }
+  
+  const { action } = await prompts({
+    type: "select",
+    name: "action",
+    message: "Choose an action:",
+    choices,
+    initial: 0,
+  });
+  
+  if (!action) {
+    consola.info("Installation cancelled");
+    process.exit(0);
+  }
+  
+  return action;
+}
   return action;
 }
 

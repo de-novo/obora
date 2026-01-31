@@ -6,3 +6,4 @@ export * from "./preset-validator";
 export * from "./global-config";
 export * from "./transform";
 export * from "../templates";
+export * from "./detect-conflicts";

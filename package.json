@@ -31,6 +31,7 @@
     "i18next": "^25.7.4",
     "meilisearch": "^0.55.0",
     "next-intl": "^4.7.0",
+    "obora-kit": "link:/Users/novo/Desktop/denovo/obora-labs/obora-kit",
     "payload": "^3.71.1",
     "prettier": "^3.7.4",
     "redis": "^5.10.0",

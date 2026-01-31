@@ -1,0 +1,34 @@
+{
+  "$schema": "../../preset.schema.json",
+  "name": "default-version-preset",
+  "category": "linting",
+  "description": "Test preset",
+  "version": "1.0.0",
+  "common": {
+    "dependencies": {},
+    "devDependencies": {},
+    "scripts": {},
+    "files": [],
+    "transform": []
+  },
+  "targets": {
+    "standalone": {
+      "description": "For standalone Next.js projects",
+      "files": [
+        "standalone"
+      ],
+      "transform": [],
+      "env": []
+    },
+    "monorepo": {
+      "description": "For monorepo setups",
+      "files": [
+        "monorepo"
+      ],
+      "transform": [],
+      "env": []
+    }
+  },
+  "conflicts": [],
+  "postInstall": []
+}

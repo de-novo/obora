@@ -11,14 +11,12 @@
   },
   "requires": ["database:prisma"],
   "targets": {
-    "server": {
+    "nestjs": {
       "description": "Better Auth server for NestJS API (requires Prisma)",
       "dependencies": {
         "fastify": "^5.0.0"
       },
-      "files": [
-        "server"
-      ],
+      "files": ["nestjs"],
       "transform": [
         {
           "target": "src/app.module.ts",
@@ -57,9 +55,7 @@
     },
     "nextjs": {
       "description": "Better Auth client for Next.js with middleware",
-      "files": [
-        "nextjs"
-      ],
+      "files": ["nextjs"],
       "env": [
         {
           "key": "NEXT_PUBLIC_BETTER_AUTH_URL",
@@ -70,9 +66,7 @@
         }
       ],
       "detect": {
-        "packages": [
-          "next"
-        ],
+        "packages": ["next"],
         "packageVersions": {
           "next": ">=14"
         },
@@ -103,11 +97,7 @@
         }
       },
       "detect": {
-        "files": [
-          "pnpm-workspace.yaml",
-          "lerna.json",
-          "nx.json"
-        ]
+        "files": ["pnpm-workspace.yaml", "lerna.json", "nx.json"]
       },
       "postInstall": [
         "Build package: pnpm build",
@@ -115,9 +105,7 @@
       ]
     }
   },
-  "conflicts": [
-    "clerk"
-  ],
+  "conflicts": ["clerk"],
   "postInstall": [
     "Generate secret: openssl rand -base64 32",
     "Configure social providers in auth config"

@@ -28,13 +28,13 @@ turbo-nextjs-full/
 
 **Slots:**
 
-| Slot | Required | Options | Default |
-|------|----------|---------|---------|
-| linting | Yes | biome, eslint-prettier | biome |
-| backend | No | nestjs, none | none |
-| database | Yes | prisma, drizzle | prisma |
-| auth | No | clerk, better-auth | - |
-| payment | No | polar, paddle | - |
+| Slot     | Required | Options                | Default |
+| -------- | -------- | ---------------------- | ------- |
+| linting  | Yes      | biome, eslint-prettier | biome   |
+| backend  | No       | nestjs, none           | none    |
+| database | Yes      | prisma, drizzle        | prisma  |
+| auth     | No       | clerk, better-auth     | -       |
+| payment  | No       | polar, paddle          | -       |
 
 ### nestjs-api (Standalone API)
 
@@ -42,11 +42,11 @@ For standalone backend services without frontend.
 
 **Slots:**
 
-| Slot | Required | Options | Default |
-|------|----------|---------|---------|
-| database | Yes | prisma, drizzle | prisma |
-| auth | No | clerk, better-auth | - |
-| payment | No | polar, paddle | - |
+| Slot     | Required | Options            | Default |
+| -------- | -------- | ------------------ | ------- |
+| database | Yes      | prisma, drizzle    | prisma  |
+| auth     | No       | clerk, better-auth | -       |
+| payment  | No       | polar, paddle      | -       |
 
 ## Preset Categories
 
@@ -56,51 +56,51 @@ For standalone backend services without frontend.
 const CATEGORIES = {
   // Code Quality (NEW)
   linting: {
-    name: 'linting',
-    description: 'Linting & Formatting',
+    name: "linting",
+    description: "Linting & Formatting",
     exclusive: true,
-    presets: ['biome', 'eslint-prettier']
+    presets: ["biome", "eslint-prettier"],
   },
 
   // Architecture (NEW)
   backend: {
-    name: 'backend',
-    description: 'Backend API',
+    name: "backend",
+    description: "Backend API",
     exclusive: true,
-    presets: ['nestjs', 'none']
+    presets: ["nestjs", "none"],
   },
 
   // Data Layer
   database: {
-    name: 'database',
-    description: 'Database & ORM',
+    name: "database",
+    description: "Database & ORM",
     exclusive: true,
-    presets: ['prisma', 'drizzle']
+    presets: ["prisma", "drizzle"],
   },
 
   // Authentication
   auth: {
-    name: 'auth',
-    description: 'Authentication',
+    name: "auth",
+    description: "Authentication",
     exclusive: true,
-    presets: ['clerk', 'better-auth']
+    presets: ["clerk", "better-auth"],
   },
 
   // Monetization
   payment: {
-    name: 'payment',
-    description: 'Payment Processing',
+    name: "payment",
+    description: "Payment Processing",
     exclusive: true,
-    presets: ['polar', 'paddle']
+    presets: ["polar", "paddle"],
   },
 
   // Observability
   analytics: {
-    name: 'analytics',
-    description: 'Analytics & Tracking',
-    exclusive: false,  // Can have multiple
-    presets: ['posthog', 'umami']
-  }
+    name: "analytics",
+    description: "Analytics & Tracking",
+    exclusive: false, // Can have multiple
+    presets: ["posthog", "umami"],
+  },
 };
 ```
 
@@ -136,6 +136,7 @@ Fast, all-in-one linter and formatter.
 ```
 
 **Dependencies:**
+
 - `@biomejs/biome: ^1.9.0`
 
 #### eslint-prettier
@@ -148,17 +149,14 @@ Traditional ESLint + Prettier setup with full plugin ecosystem.
   "category": "linting",
   "description": "ESLint + Prettier",
   "operations": {
-    "add": [
-      "eslint.config.js",
-      ".prettierrc",
-      ".prettierignore"
-    ],
+    "add": ["eslint.config.js", ".prettierrc", ".prettierignore"],
     "merge": ["package.json"]
   }
 }
 ```
 
 **Dependencies:**
+
 - `eslint: ^9.0.0`
 - `prettier: ^3.4.0`
 - `@typescript-eslint/parser: ^8.0.0`
@@ -215,6 +213,7 @@ Full-featured ORM with Prisma Studio.
 ```
 
 **Dependencies:**
+
 - `@prisma/client: ^7.0.0`
 - `prisma: ^7.0.0`
 
@@ -237,6 +236,7 @@ Type-safe SQL with excellent DX, optimized for serverless.
 ```
 
 **Dependencies:**
+
 - `drizzle-orm: ^0.45.0`
 - `drizzle-kit: ^0.31.0`
 - `postgres: ^3.4.5`
@@ -264,6 +264,7 @@ Managed authentication with excellent DX.
 ```
 
 **Dependencies:**
+
 - `@clerk/nextjs: ^6.0.0` (frontend)
 - `@clerk/backend: ^1.25.0` (backend)
 
@@ -277,13 +278,12 @@ Self-hosted authentication library.
   "category": "auth",
   "description": "Better Auth ^1.4.0",
   "requires": ["database"],
-  "env": [
-    { "key": "BETTER_AUTH_SECRET", "required": true, "secret": true }
-  ]
+  "env": [{ "key": "BETTER_AUTH_SECRET", "required": true, "secret": true }]
 }
 ```
 
 **Dependencies:**
+
 - `better-auth: ^1.4.0`
 
 ### Payment
@@ -452,6 +452,7 @@ obora create my-app -t turbo-nextjs-full -y
 ## Assembly Process
 
 1. **Copy Base Template**
+
    ```
    templates/turbo-nextjs-full/base/ → target/
    ```
@@ -479,22 +480,22 @@ obora create my-app -t turbo-nextjs-full -y
 7. **Finalize**
    - Merge all package.json files
    - Generate .env.example from all presets
-   - Process @obora:* markers
+   - Process @obora:\* markers
    - Format code with selected linter
 
 ## Version Requirements
 
-| Package | Version | Notes |
-|---------|---------|-------|
-| Node.js | ≥20.0.0 | Required for modern features |
-| pnpm | ≥9.0.0 | Recommended package manager |
-| NestJS | ^11.1.0 | Latest with improved logging |
-| Next.js | ^15.0.0 | App Router, Server Actions |
-| Drizzle | ^0.45.0 | Type-safe SQL |
-| Prisma | ^7.0.0 | prisma-client provider |
-| Effect | ^3.19.0 | Schema integrated |
-| Biome | ^1.9.0 | Fast linter/formatter |
-| TypeScript | ^5.8.0 | Latest features |
+| Package    | Version | Notes                        |
+| ---------- | ------- | ---------------------------- |
+| Node.js    | ≥20.0.0 | Required for modern features |
+| pnpm       | ≥9.0.0  | Recommended package manager  |
+| NestJS     | ^11.1.0 | Latest with improved logging |
+| Next.js    | ^15.0.0 | App Router, Server Actions   |
+| Drizzle    | ^0.45.0 | Type-safe SQL                |
+| Prisma     | ^7.0.0  | prisma-client provider       |
+| Effect     | ^3.19.0 | Schema integrated            |
+| Biome      | ^1.9.0  | Fast linter/formatter        |
+| TypeScript | ^5.8.0  | Latest features              |
 
 ## Design Principles
 
@@ -511,3 +512,4 @@ obora create my-app -t turbo-nextjs-full -y
 - [CLASSIFICATION-AGENT-SKILL-COMMAND.md](./CLASSIFICATION-AGENT-SKILL-COMMAND.md) - Agent vs Skill vs Command classification
 - [IMPROVEMENT-PLAN-STRUCTURE.md](./IMPROVEMENT-PLAN-STRUCTURE.md) - Structure improvement plan
 - [AGENT-SUBSCRIPTION-RESEARCH.md](./AGENT-SUBSCRIPTION-RESEARCH.md) - Multi-agent subscription research
+- [CODE-PATTERNS.md](./CODE-PATTERNS.md) - Preset code patterns and naming conventions

@@ -748,6 +748,758 @@ async function processTransforms(
 // App Template Handler
 // ============================================================================
 
+  dryRun?: boolean;
+  force?: boolean;
+} from "citty";
+import { consola } from "consola";
+import { promises as fs } from "node:fs";
+import { dirname, join, resolve } from "pathe";
+import prompts from "prompts";
+import {
+  APP_MODULES,
+  APP_MODULE_NAMES,
+  type AppModuleName,
+  CATEGORIES,
+  CATEGORY_CONFIGS,
+  PRESETS,
+  PRESETS_DIR,
+  isForbiddenPresetFilePath,
+  type PresetName,
+  type Category,
+  TEMPLATES_DIR,
+  copyTemplateDir,
+  dirExists,
+  ensureDir,
+  fileExists,
+  readJson,
+  resolvePresetName,
+  writeJson,
+  applyTransformsWithRollback,
+  parseImportStatement,
+  isImportStatement,
+  type ImportSpec,
+  type DependencySpec,
+  type NestJsModuleSpec,
+  type ProviderWrapSpec,
+  type LayoutComponentSpec,
+  type TransformOptions,
+  type TransformOperation,
+} from "../utils";
+import {
+  promptCategory,
+  promptPreset,
+  promptTarget,
+  promptConflictResolution,
+  promptInstallDependency,
+  type ConflictAction,
+} from "../utils/prompts";
+import {
+  addSlotPreset,
+  hasOboraConfig,
+  readOboraConfig,
+  removeSlotPreset,
+  setPresetTarget,
+  generateBackupId,
+  saveBackups,
+  addHistoryEntryWithUndo,
+  type SlotConfig,
+} from "../utils/project-config";
+import type { FileBackup } from "../utils/transform";
+import { Errors, showError } from "../utils/errors";
+import { withSpinner, NestedProgress } from "../utils/progress";
+
+// ============================================================================
+// Types
+// ============================================================================
+
+interface PresetEnvVar {
+  key: string;
+  description: string;
+  required: boolean;
+  secret: boolean;
+  example?: string;
+}
+
+/**
+ * Condition for conditional transform execution.
+ * Transform is only executed if the condition evaluates to true.
+ */
+interface TransformCondition {
+  /** Execute only if file exists (relative path from target directory) */
+  fileExists?: string;
+  /** Execute only if environment variable is set (and optionally matches value) */
+  envVar?: string;
+  /** Expected value for envVar (if not specified, just checks if set) */
+  envValue?: string;
+}
+
+interface PresetTransform {
+  /** Target file path (relative to preset target directory) */
+  target: string;
+  /** Transform type */
+  type: "import" | "dependency" | "nestjs-module" | "provider-wrap" | "layout-component";
+  /** Condition for conditional execution (transform skipped if condition is false) */
+  condition?: TransformCondition;
+  /** For import: import statement string or ImportSpec */
+  content?: string;
+  /** For dependency: package name */
+  name?: string;
+  /** For dependency: package version */
+  version?: string;
+  /** For dependency: true if devDependency */
+  dev?: boolean;
+  /** For nestjs-module: module name to add to imports array */
+  module?: string;
+  /** For provider-wrap: provider component name */
+  provider?: string;
+  /** For provider-wrap: optional props to pass to the provider */
+  props?: Record<string, string>;
+  /** For layout-component: component name to add */
+  component?: string;
+  /** For layout-component: position in layout (body-start, body-end, html-start, html-end) */
+  position?: "body-start" | "body-end" | "html-start" | "html-end";
+  /** For layout-component: self-closing tag (default: true) */
+  selfClosing?: boolean;
+}
+
+interface PresetTarget {
+  description: string;
+  dialect?: string;
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  files: string[];
+  scripts?: Record<string, string>;
+  /** AST-based code transformations */
+  transform?: PresetTransform[];
+  env?: PresetEnvVar[];
+  postInstall?: string[];
+  detect?: string[] | DetectRule;
+  /** Package.json configuration for monorepo shared packages */
+  packageJson?: {
+    name?: string;
+    main?: string;
+    types?: string;
+    exports?: Record<string, unknown>;
+    scripts?: Record<string, string>;
+    [key: string]: unknown;
+  };
+}
+
+interface DetectRule {
+  packages?: string[];
+  packageVersions?: Record<string, string>;
+  runtime?: {
+    node?: string;
+    bun?: boolean;
+    deno?: boolean;
+    packageManager?: "pnpm" | "yarn" | "npm" | "bun";
+  };
+}
+
+interface PresetManifestTargets {
+  name: string;
+  category: string;
+  description: string;
+  version?: string;
+  common?: {
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+    files?: string[];
+    scripts?: Record<string, string>;
+  };
+  targets?: Record<string, PresetTarget>;
+  variants?: Record<string, PresetTarget>;
+  conflicts?: string[];
+  /** Required presets in category:name format (e.g., database:prisma) */
+  requires?: string[];
+  postInstall?: string[];
+  scripts?: Record<string, string>;
+  env?: PresetEnvVar[];
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+async function mergePackageJson(
+  targetPath: string,
+  deps: { dependencies?: Record<string, string>; devDependencies?: Record<string, string> },
+  scripts?: Record<string, string>
+): Promise<boolean> {
+  const packageJson = await readJson<{
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+    scripts?: Record<string, string>;
+  }>(targetPath);
+
+  let updated = false;
+
+  if (deps.dependencies && Object.keys(deps.dependencies).length > 0) {
+    packageJson.dependencies = {
+      ...packageJson.dependencies,
+      ...deps.dependencies,
+    };
+    updated = true;
+  }
+
+  if (deps.devDependencies && Object.keys(deps.devDependencies).length > 0) {
+    packageJson.devDependencies = {
+      ...packageJson.devDependencies,
+      ...deps.devDependencies,
+    };
+    updated = true;
+  }
+
+  if (scripts && Object.keys(scripts).length > 0) {
+    packageJson.scripts = {
+      ...packageJson.scripts,
+      ...scripts,
+    };
+    updated = true;
+  }
+
+  if (updated) {
+    await writeJson(targetPath, packageJson);
+  }
+
+  return updated;
+}
+
+/**
+ * Generate a package.json file for monorepo shared packages.
+ * Applies template variable replacements (e.g., {{workspace}}).
+ */
+async function generateMonorepoPackageJson(
+  targetDir: string,
+  packageJsonConfig: NonNullable<PresetTarget["packageJson"]>,
+  replacements: Record<string, string>,
+  deps: { dependencies?: Record<string, string>; devDependencies?: Record<string, string> }
+): Promise<boolean> {
+  const packageJsonPath = join(targetDir, "package.json");
+
+  // Apply template replacements to string values
+  const applyReplacements = (value: unknown): unknown => {
+    if (typeof value === "string") {
+      let result = value;
+      for (const [key, replacement] of Object.entries(replacements)) {
+        result = result.replace(new RegExp(`{{${key}}}`, "g"), replacement);
+      }
+      return result;
+    }
+    if (Array.isArray(value)) {
+      return value.map(applyReplacements);
+    }
+    if (typeof value === "object" && value !== null) {
+      const result: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(value)) {
+        result[k] = applyReplacements(v);
+      }
+      return result;
+    }
+    return value;
+  };
+
+  // Build the package.json content
+  const packageJson: Record<string, unknown> = {};
+
+  // Apply replacements to all config values
+  for (const [key, value] of Object.entries(packageJsonConfig)) {
+    packageJson[key] = applyReplacements(value);
+  }
+
+  // Merge dependencies from the target config
+  if (deps.dependencies && Object.keys(deps.dependencies).length > 0) {
+    packageJson.dependencies = {
+      ...(packageJson.dependencies as Record<string, string> || {}),
+      ...deps.dependencies,
+    };
+  }
+
+  if (deps.devDependencies && Object.keys(deps.devDependencies).length > 0) {
+    packageJson.devDependencies = {
+      ...(packageJson.devDependencies as Record<string, string> || {}),
+      ...deps.devDependencies,
+    };
+  }
+
+  // Ensure target directory exists
+  await ensureDir(targetDir);
+
+  // Write the package.json
+  await writeJson(packageJsonPath, packageJson);
+
+  return true;
+}
+
+async function resolveTargetFromDetect(
+  targetConfigs: Record<string, PresetTarget>,
+  packageJsonPath: string
+): Promise<{ target: string; reasonDetail: string } | null> {
+  if (!(await fileExists(packageJsonPath))) return null;
+  const pkg = await readJson<{
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+    engines?: { node?: string };
+  }>(packageJsonPath);
+  const deps = new Set([
+    ...Object.keys(pkg.dependencies || {}),
+    ...Object.keys(pkg.devDependencies || {}),
+  ]);
+  const depVersions = {
+    ...(pkg.dependencies || {}),
+    ...(pkg.devDependencies || {}),
+  };
+  const nodeEngine = pkg.engines?.node;
+  const runtimeFlags = await detectRuntimeFlags(dirname(packageJsonPath));
+  for (const [key, config] of Object.entries(targetConfigs)) {
+    if (!hasDetectRule(config.detect)) continue;
+    const reasonDetail = matchesDetectRule(config.detect, deps, depVersions, nodeEngine, runtimeFlags);
+    if (reasonDetail) {
+      return { target: key, reasonDetail };
+    }
+  }
+  return null;
+}
+
+function matchesDetectRule(
+  detect: string[] | DetectRule,
+  deps: Set<string>,
+  depVersions: Record<string, string>,
+  nodeEngine?: string,
+  runtimeFlags?: { bun: boolean; deno: boolean; packageManager?: "pnpm" | "yarn" | "npm" | "bun" }
+): string | null {
+  if (Array.isArray(detect)) {
+    const matched = detect.find((dep) => deps.has(dep));
+    return matched ? `matched: ${matched}` : null;
+  }
+
+  if (detect.packages && !detect.packages.every((dep) => deps.has(dep))) {
+    return null;
+  }
+
+  if (detect.packageVersions) {
+    for (const [pkg, requirement] of Object.entries(detect.packageVersions)) {
+      const version = depVersions[pkg];
+      if (!version || !satisfiesVersion(version, requirement)) {
+        return null;
+      }
+    }
+  }
+
+  if (detect.runtime?.node) {
+    const runtimeVersion = nodeEngine || process.version;
+    if (!satisfiesVersion(runtimeVersion, detect.runtime.node)) {
+      return null;
+    }
+  }
+
+  if (detect.runtime?.bun && !runtimeFlags?.bun) {
+    return null;
+  }
+  if (detect.runtime?.deno && !runtimeFlags?.deno) {
+    return null;
+  }
+  if (detect.runtime?.packageManager && runtimeFlags?.packageManager !== detect.runtime.packageManager) {
+    return null;
+  }
+
+  const reasonParts: string[] = [];
+  if (detect.packages?.length) reasonParts.push(`packages: ${detect.packages.join(", ")}`);
+  if (detect.packageVersions) {
+    const versionText = Object.entries(detect.packageVersions)
+      .map(([pkg, req]) => `${pkg}${req}`)
+      .join(", ");
+    reasonParts.push(`versions: ${versionText}`);
+  }
+  if (detect.runtime?.node) reasonParts.push(`node: ${detect.runtime.node}`);
+  if (detect.runtime?.bun) reasonParts.push("runtime: bun");
+  if (detect.runtime?.deno) reasonParts.push("runtime: deno");
+  if (detect.runtime?.packageManager) reasonParts.push(`pm: ${detect.runtime.packageManager}`);
+  return reasonParts.length > 0 ? `matched: ${reasonParts.join(" | ")}` : "matched: rule";
+}
+
+function hasDetectRule(detect?: string[] | DetectRule): detect is string[] | DetectRule {
+  if (!detect) return false;
+  if (Array.isArray(detect)) return detect.length > 0;
+  return Boolean(
+    (detect.packages && detect.packages.length > 0) ||
+    (detect.packageVersions && Object.keys(detect.packageVersions).length > 0) ||
+    detect.runtime
+  );
+}
+
+async function detectRuntimeFlags(targetDir: string): Promise<{
+  bun: boolean;
+  deno: boolean;
+  packageManager?: "pnpm" | "yarn" | "npm" | "bun";
+}> {
+  const bun = await fileExists(join(targetDir, "bun.lockb")) ||
+    await fileExists(join(targetDir, "bun.lock"));
+  const deno = await fileExists(join(targetDir, "deno.json")) ||
+    await fileExists(join(targetDir, "deno.jsonc"));
+  const pnpm = await fileExists(join(targetDir, "pnpm-lock.yaml"));
+  const yarn = await fileExists(join(targetDir, "yarn.lock"));
+  const npm = await fileExists(join(targetDir, "package-lock.json"));
+  const packageManager = bun
+    ? "bun"
+    : pnpm
+      ? "pnpm"
+      : yarn
+        ? "yarn"
+        : npm
+          ? "npm"
+          : undefined;
+  return { bun, deno, packageManager };
+}
+
+function satisfiesVersion(actual: string, requirement: string): boolean {
+  const req = parseMajorMinor(requirement);
+  const act = parseMajorMinor(actual);
+  if (!req || !act) return false;
+
+  const useMinor = req.minor !== null;
+  const compare = compareMajorMinor(act, req, useMinor);
+
+  if (requirement.startsWith(">=")) return compare >= 0;
+  if (requirement.startsWith("<=")) return compare <= 0;
+  if (requirement.startsWith(">")) return compare > 0;
+  if (requirement.startsWith("<")) return compare < 0;
+  return compare === 0;
+}
+
+function parseMajorMinor(version: string): { major: number; minor: number | null } | null {
+  const match = version.match(/(\\d+)(?:\\.(\\d+))?/);
+  if (!match) return null;
+  return {
+    major: Number.parseInt(match[1], 10),
+    minor: match[2] ? Number.parseInt(match[2], 10) : null,
+  };
+}
+
+function compareMajorMinor(
+  actual: { major: number; minor: number | null },
+  required: { major: number; minor: number | null },
+  useMinor: boolean
+): number {
+  if (actual.major !== required.major) {
+    return actual.major > required.major ? 1 : -1;
+  }
+  if (!useMinor) return 0;
+  const actualMinor = actual.minor ?? 0;
+  const requiredMinor = required.minor ?? 0;
+  if (actualMinor === requiredMinor) return 0;
+  return actualMinor > requiredMinor ? 1 : -1;
+}
+
+/**
+ * Resolve target key based on app module type
+ * This maps app module names to their preferred preset targets
+ */
+function resolveTargetKeyForAppModule(
+  appModule: string | undefined,
+  targetKeys: string[]
+): string | null {
+  if (!appModule) return null;
+
+  if (appModule === "nextjs-web" || appModule.includes("nextjs") || appModule.includes("next")) {
+    if (targetKeys.includes("nextjs")) return "nextjs";
+    if (targetKeys.includes("sqlite")) return "sqlite";
+  }
+
+  if (appModule === "nestjs-api" || appModule.includes("nestjs") || appModule.includes("nest")) {
+    if (targetKeys.includes("nestjs")) return "nestjs";
+    if (targetKeys.includes("server")) return "server";
+    if (targetKeys.includes("postgres")) return "postgres";
+  }
+
+  return null;
+}
+
+interface TransformPreview {
+  target: string;
+  type: string;
+  description: string;
+  preview?: string;
+  status: "will-apply" | "already-exists" | "error" | "condition-not-met";
+  error?: string;
+}
+
+/**
+ * Evaluate a transform condition to determine if the transform should be executed.
+ *
+ * @param condition - The condition to evaluate
+ * @param baseDir - Base directory for file path resolution
+ * @returns true if condition is met (or no condition), false otherwise
+ */
+async function evaluateCondition(
+  condition: TransformCondition | undefined,
+  baseDir: string
+): Promise<{ met: boolean; reason?: string }> {
+  // No condition means always execute
+  if (!condition) {
+    return { met: true };
+  }
+
+  // Check fileExists condition
+  if (condition.fileExists) {
+    const filePath = join(baseDir, condition.fileExists);
+    const exists = await fileExists(filePath);
+    if (!exists) {
+      return {
+        met: false,
+        reason: `File not found: ${condition.fileExists}`,
+      };
+    }
+  }
+
+  // Check envVar condition
+  if (condition.envVar) {
+    const envValue = process.env[condition.envVar];
+    if (envValue === undefined) {
+      return {
+        met: false,
+        reason: `Environment variable not set: ${condition.envVar}`,
+      };
+    }
+    // If envValue is specified, check for exact match
+    if (condition.envValue !== undefined && envValue !== condition.envValue) {
+      return {
+        met: false,
+        reason: `Environment variable ${condition.envVar} is "${envValue}", expected "${condition.envValue}"`,
+      };
+    }
+  }
+
+  return { met: true };
+}
+
+/**
+ * Convert PresetTransform to TransformOperation for use with applyTransformsWithRollback.
+ */
+function convertToTransformOperation(transform: PresetTransform): TransformOperation | null {
+  switch (transform.type) {
+    case "import":
+      if (transform.content && isImportStatement(transform.content)) {
+        const importSpec = parseImportStatement(transform.content);
+        if (importSpec) {
+          return { type: "import", spec: importSpec };
+        }
+      }
+      return null;
+
+    case "dependency":
+      if (transform.name && transform.version) {
+        return {
+          type: "dependency",
+          spec: {
+            name: transform.name,
+            version: transform.version,
+            dev: transform.dev,
+          } as DependencySpec,
+        };
+      }
+      return null;
+
+    case "nestjs-module":
+      if (transform.module) {
+        return {
+          type: "nestjs-module",
+          spec: { module: transform.module } as NestJsModuleSpec,
+        };
+      }
+      return null;
+
+    case "provider-wrap":
+      if (transform.provider) {
+        return {
+          type: "provider-wrap",
+          spec: {
+            provider: transform.provider,
+            props: transform.props,
+          } as ProviderWrapSpec,
+        };
+      }
+      return null;
+
+    case "layout-component":
+      if (transform.component && transform.position) {
+        return {
+          type: "layout-component",
+          spec: {
+            component: transform.component,
+            position: transform.position,
+            props: transform.props,
+            selfClosing: transform.selfClosing,
+          } as LayoutComponentSpec,
+        };
+      }
+      return null;
+
+    default:
+      return null;
+  }
+}
+
+/**
+ * Get human-readable description for a transform operation.
+ */
+function getTransformDescription(transform: PresetTransform): string {
+  switch (transform.type) {
+    case "import":
+      return `Add import: ${transform.content}`;
+    case "dependency":
+      return `Add ${transform.dev ? "devDependency" : "dependency"}: ${transform.name}@${transform.version}`;
+    case "nestjs-module":
+      return `Add ${transform.module} to @Module imports`;
+    case "provider-wrap":
+      return `Wrap children with <${transform.provider}>`;
+    case "layout-component":
+      return `Add <${transform.component} /> at ${transform.position} in layout`;
+    default:
+      return JSON.stringify(transform);
+  }
+}
+
+/**
+ * Process AST-based transform operations with automatic rollback on failure.
+ * This is the preferred method for code modifications as it understands AST structure.
+ *
+ * Uses applyTransformsWithRollback internally to ensure all changes are rolled back
+ * if any transformation fails, preventing partial/broken state.
+ *
+ * @param transforms - Array of transform operations from preset manifest
+ * @param presetTargetDir - Target directory for transforms
+ * @param options - Transform options (including dryRun for preview mode)
+ * @returns Stats and optional previews in dry-run mode
+ */
+async function processTransforms(
+  transforms: PresetTransform[],
+  presetTargetDir: string,
+  options?: TransformOptions
+): Promise<{ success: number; failed: number; skipped: number; previews?: TransformPreview[]; rolledBack?: boolean }> {
+  const stats = { success: 0, failed: 0, skipped: 0 };
+  const previews: TransformPreview[] = [];
+  const isDryRun = options?.dryRun ?? false;
+
+  // Convert PresetTransforms to TransformOperations
+  const operations: Array<{ target: string; operation: TransformOperation }> = [];
+  const transformMap = new Map<string, PresetTransform>();
+
+  for (const transform of transforms) {
+    // Evaluate condition if present
+    if (transform.condition) {
+      const conditionResult = await evaluateCondition(transform.condition, presetTargetDir);
+      if (!conditionResult.met) {
+        // Condition not met - skip this transform
+        stats.skipped++;
+        if (isDryRun) {
+          previews.push({
+            target: transform.target || "unknown",
+            type: transform.type,
+            description: getTransformDescription(transform),
+            status: "condition-not-met",
+            error: conditionResult.reason,
+          });
+        } else {
+          consola.debug(`Skipping transform (condition not met): ${conditionResult.reason}`);
+        }
+        continue;
+      }
+    }
+
+    const operation = convertToTransformOperation(transform);
+
+    if (operation) {
+      // For dependency type, target is always package.json
+      const target = transform.type === "dependency" ? "package.json" : transform.target;
+      operations.push({ target, operation });
+      transformMap.set(target, transform);
+    } else {
+      // Invalid transform - record as failed
+      stats.failed++;
+      if (isDryRun) {
+        previews.push({
+          target: transform.target || "unknown",
+          type: transform.type,
+          description: getTransformDescription(transform),
+          status: "error",
+          error: "Invalid transform operation or missing required fields",
+        });
+      } else {
+        consola.warn(`Invalid transform operation: ${JSON.stringify(transform)}`);
+      }
+    }
+  }
+
+  // If no valid operations, return early
+  if (operations.length === 0) {
+    return { ...stats, previews: isDryRun ? previews : undefined };
+  }
+
+  // Use applyTransformsWithRollback for atomic operations
+  const batchResult = await applyTransformsWithRollback(operations, presetTargetDir, options);
+
+  // Process results and build stats/previews
+  for (const { target, result } of batchResult.results) {
+    const transform = transformMap.get(target) || transforms.find(t =>
+      (t.type === "dependency" ? "package.json" : t.target) === target
+    );
+    const transformType = transform?.type || "unknown";
+    const description = transform ? getTransformDescription(transform) : `Unknown transform for ${target}`;
+
+    if (result.success) {
+      if (result.changed) {
+        stats.success++;
+        if (isDryRun) {
+          previews.push({
+            target,
+            type: transformType,
+            description,
+            preview: result.preview,
+            status: "will-apply",
+          });
+        }
+      } else {
+        stats.skipped++;
+        if (isDryRun) {
+          previews.push({
+            target,
+            type: transformType,
+            description,
+            status: "already-exists",
+          });
+        }
+      }
+    } else {
+      stats.failed++;
+      if (isDryRun) {
+        previews.push({
+          target,
+          type: transformType,
+          description,
+          status: "error",
+          error: result.error,
+        });
+      }
+    }
+  }
+
+  // Report rollback if it occurred
+  if (batchResult.rolledBack) {
+    consola.warn("Transform operations rolled back due to failure");
+  }
+
+  return {
+    ...stats,
+    previews: isDryRun ? previews : undefined,
+    rolledBack: batchResult.rolledBack,
+  };
+}
+
+// ============================================================================
+// App Template Handler
+// ============================================================================
+
 interface AddArgs {
   preset?: string;
   dir: string;
@@ -759,7 +1511,8 @@ interface AddArgs {
   plan: boolean;
   dialect?: string;
   target?: string;
-}
+  dryRun?: boolean;
+  force?: boolean;}
 
 async function handleAppTemplate(args: AddArgs, targetDir: string): Promise<void> {
   // Get app template name
@@ -1006,6 +1759,47 @@ export const addCommand = defineCommand({
     }
 
     const presetInfo = PRESETS[presetName];
+
+    // Early conflict detection using detectConflicts
+    if (!args.force && !args.dryRun) {
+      const conflictResult = await detectConflicts(projectDir, presetName);
+      if (conflictResult.hasConflict) {
+        consola.warn(`\nConflict detected: ${conflictResult.reason}`);
+        if (conflictResult.conflictSlot) {
+          consola.warn(`  Conflict slot: ${conflictResult.conflictSlot}`);
+        }
+        if (conflictResult.conflictingPresets.length > 0) {
+          consola.warn(`  Conflicting presets: ${conflictResult.conflictingPresets.join(", ")}`);
+        }
+        
+        // Ask user how to proceed
+        const { action } = await prompts({
+          type: "select",
+          name: "action",
+          message: "How would you like to proceed?",
+          choices: [
+            { title: "Cancel installation", value: "cancel" },
+            { title: "Force installation (not recommended)", value: "force" },
+          ],
+        });
+
+        if (!action || action === "cancel") {
+          consola.info("Installation cancelled");
+          process.exit(0);
+        }
+      }
+    }
+
+    // Dry-run mode: only show conflicts, don't install
+    if (args.dryRun) {
+      const conflictResult = await detectConflicts(projectDir, presetName);
+      if (conflictResult.hasConflict) {
+        consola.error(`\n${conflictResult.reason}`);
+        process.exit(1);
+      }
+      consola.success("No conflicts detected");
+      return;
+    }
     const presetCategory = presetInfo.category;
 
     // Save current slot state for undo capability

@@ -22,6 +22,8 @@ export interface SlotConfig {
   ejectedFiles?: string[];
 }
 
+export type PackageManager = "npm" | "pnpm" | "yarn" | "bun";
+
 export interface PresetTargetHistoryEntry {
   target: string;
   source: "detect" | "manual" | "override" | "default" | "saved" | "app-module";
@@ -41,8 +43,6 @@ export interface OboraConfig {
   presetTargetHistory?: Record<string, PresetTargetHistoryEntry[]>;
   packageManager: PackageManager;
 }
-
-export type PackageManager = "npm" | "pnpm" | "yarn" | "bun";
 
 // ============================================================================
 // Preset Lockfile Types (.obora/presets.lock.json)
@@ -98,7 +98,7 @@ export interface OboraHistory {
  * File backup for undo operation
  */
 export interface FileBackup {
-  /** Absolute or relative path to the file */
+  /** Absolute or relative path to file */
   path: string;
   /** Original content (null if file didn't exist before) */
   content: string | null;
@@ -146,7 +146,7 @@ export interface HistoryEntryWithUndo extends HistoryEntry {
 export interface BackupManifest {
   /** Backup ID */
   id: string;
-  /** When the backup was created */
+  /** When backup was created */
   createdAt: string;
   /** Related history action */
   action: HistoryAction;

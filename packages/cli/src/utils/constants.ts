@@ -101,7 +101,7 @@ export const SHARED_APP_FILE_PATHS = [
 export function isForbiddenPresetFilePath(relativePath: string): boolean {
   const normalized = relativePath.replace(/\\/g, "/");
   return SHARED_APP_FILE_PATHS.some(
-    (path) => normalized === path || normalized.endsWith(`/${path}`)
+    (path) => normalized === path || normalized.endsWith(`/${path}`),
   );
 }
 
@@ -254,6 +254,10 @@ export interface PresetInfo {
   category: Category;
   description: string;
   version: string;
+  /** Other presets that conflict with this one */
+  conflicts?: string[];
+  /** Other presets that this preset requires */
+  requires?: string[];
 }
 
 let PRESET_REGISTRY: Record<string, PresetInfo> | null = null;
@@ -287,6 +291,8 @@ function loadPresetRegistry(): Record<string, PresetInfo> {
           category?: string;
           description?: string;
           version?: string;
+          conflicts?: string[];
+          requires?: string[];
         };
         if (!manifest.name || !manifest.category || !manifest.description) {
           continue;
@@ -296,6 +302,8 @@ function loadPresetRegistry(): Record<string, PresetInfo> {
           category: manifest.category as Category,
           description: manifest.description,
           version: manifest.version || "1.0.0",
+          conflicts: manifest.conflicts,
+          requires: manifest.requires,
         };
       } catch {
         continue;
@@ -360,11 +368,16 @@ export function getAppModuleSlots(moduleName: AppModuleName): string[] {
   return APP_MODULES[moduleName]?.slots ?? [];
 }
 
-export function getSlotDefault(moduleName: AppModuleName, slotName: string): string | undefined {
+export function getSlotDefault(
+  moduleName: AppModuleName,
+  slotName: string,
+): string | undefined {
   return SLOT_DEFAULTS[moduleName]?.[slotName];
 }
 
-export function getRequiredSlotsForModules(moduleNames: AppModuleName[]): Category[] {
+export function getRequiredSlotsForModules(
+  moduleNames: AppModuleName[],
+): Category[] {
   const slots = new Set<Category>();
 
   for (const moduleName of moduleNames) {
@@ -378,4 +391,3 @@ export function getRequiredSlotsForModules(moduleNames: AppModuleName[]): Catego
 
   return Array.from(slots);
 }
-
