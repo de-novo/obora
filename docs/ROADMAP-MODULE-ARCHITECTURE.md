@@ -54,7 +54,6 @@ presets/
 export const prismaModule: ModuleDefinition = {
   name: "prisma",
   category: "database",
-  version: "7.0.0",
 
   // 정적 파일 (기존 방식 호환)
   files: "./files",

@@ -95,7 +95,6 @@ description: When to use this skill
 license: MIT
 metadata:
   author: obora-labs
-  version: "1.0.0"
 
 # Claude 스타일 (도구/권한)
 allowed-tools: Read, Write, Glob
