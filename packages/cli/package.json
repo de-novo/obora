@@ -16,7 +16,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@obora/core": "workspace:*"
+    "@obora/core": "workspace:*",
+    "commander": "^14.0.3"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

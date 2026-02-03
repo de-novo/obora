@@ -1,6 +1,7 @@
 {
   "name": "obora-kit",
   "version": "0.1.0",
+  "type": "module",
   "private": true,
   "description": "Fast SaaS development toolkit - templates, presets, and shared packages",
   "scripts": {
