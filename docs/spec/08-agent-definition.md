@@ -611,43 +611,396 @@ steps:
     ↓
 3. 프롬프트 + 입력 파일 조합
     ↓
-4. OpenClaw sessions_spawn 호출
+4. OpenClawExecutor.spawn() 호출
     ↓
-5. 결과를 출력 파일로 저장
+5. 타임아웃/재시도 관리
+    ↓
+6. 결과를 출력 파일로 저장
 ```
 
-### OpenClaw 호출 형식
+### OpenClawExecutor 래퍼 클래스
 
 ```typescript
-interface OpenClawTask {
-  task: string;          // 조합된 프롬프트
-  model?: string;        // 에이전트 설정 또는 기본값
-  timeout?: number;      // 타임아웃
+import { EventEmitter } from 'events';
+
+/** OpenClaw 연동 설정 */
+interface OpenClawConfig {
+  /** 기본 모델 */
+  defaultModel: string;
+  
+  /** 기본 타임아웃 (ms) */
+  defaultTimeout: number;
+  
+  /** 최대 재시도 횟수 */
+  maxRetries: number;
+  
+  /** 재시도 기본 간격 (ms) */
+  retryDelay: number;
+  
+  /** 지수 백오프 활성화 */
+  exponentialBackoff: boolean;
+  
+  /** OpenClaw 게이트웨이 URL */
+  gatewayUrl?: string;
+  
+  /** 연결 타임아웃 (ms) */
+  connectionTimeout: number;
+}
+
+/** 스폰 옵션 */
+interface SpawnOptions {
+  task: string;
+  model?: string;
+  timeout?: number;
   cleanup?: 'delete' | 'keep';
+  label?: string;
   env?: Record<string, string>;
 }
 
-async function executeAgent(
-  agent: AgentDefinition,
-  inputs: Map<string, string>,
-  step: Step
-): Promise<string> {
-  // 프롬프트 조합
-  const fullPrompt = buildPrompt(agent, inputs);
+/** 스폰 결과 */
+interface SpawnResult {
+  sessionKey: string;
+  output: string;
+  exitCode: number;
+  duration: number;
+  model: string;
+}
+
+/** 에러 유형 */
+type OpenClawErrorType = 
+  | 'connection_failed'
+  | 'timeout'
+  | 'session_error'
+  | 'rate_limited'
+  | 'model_unavailable';
+
+/** OpenClaw 에러 */
+class OpenClawError extends Error {
+  constructor(
+    public type: OpenClawErrorType,
+    message: string,
+    public retryable: boolean = false
+  ) {
+    super(message);
+    this.name = 'OpenClawError';
+  }
+}
+
+/** OpenClaw 실행기 */
+class OpenClawExecutor extends EventEmitter {
+  private config: OpenClawConfig;
   
-  // OpenClaw 호출
-  const result = await openclawExecutor.spawn({
-    task: fullPrompt,
-    model: agent.config?.model || defaultModel,
-    timeout: agent.config?.timeout || 300000,
-    cleanup: 'delete',
-    env: {
-      OBORA_FEATURE: currentFeature,
-      OBORA_STEP: step.name,
-    },
-  });
+  constructor(config: Partial<OpenClawConfig> = {}) {
+    super();
+    this.config = {
+      defaultModel: 'zai/glm-4.7',
+      defaultTimeout: 300000,      // 5분
+      maxRetries: 3,
+      retryDelay: 10000,           // 10초
+      exponentialBackoff: true,
+      connectionTimeout: 5000,     // 5초
+      ...config,
+    };
+  }
   
-  return result.output;
+  /**
+   * 에이전트 세션 생성 및 실행
+   */
+  async spawn(options: SpawnOptions): Promise<SpawnResult> {
+    const timeout = options.timeout ?? this.config.defaultTimeout;
+    const model = options.model ?? this.config.defaultModel;
+    
+    let lastError: Error | undefined;
+    
+    for (let attempt = 0; attempt <= this.config.maxRetries; attempt++) {
+      try {
+        this.emit('attempt', { attempt, options });
+        
+        const result = await this.executeWithTimeout(
+          { ...options, model },
+          timeout
+        );
+        
+        this.emit('success', { attempt, result });
+        return result;
+        
+      } catch (error) {
+        lastError = error as Error;
+        
+        const shouldRetry = this.shouldRetry(error as Error, attempt);
+        
+        if (shouldRetry) {
+          const delay = this.calculateDelay(attempt);
+          this.emit('retry', { attempt, delay, error });
+          await this.sleep(delay);
+        } else {
+          break;
+        }
+      }
+    }
+    
+    this.emit('failed', { error: lastError });
+    throw lastError;
+  }
+  
+  /**
+   * 타임아웃 적용 실행
+   */
+  private async executeWithTimeout(
+    options: SpawnOptions & { model: string },
+    timeout: number
+  ): Promise<SpawnResult> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    
+    try {
+      const startTime = Date.now();
+      
+      // OpenClaw CLI 호출 (실제 구현)
+      const result = await this.callOpenClaw(options, controller.signal);
+      
+      return {
+        ...result,
+        duration: Date.now() - startTime,
+        model: options.model,
+      };
+      
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+  
+  /**
+   * 재시도 여부 판단
+   */
+  private shouldRetry(error: Error, attempt: number): boolean {
+    if (attempt >= this.config.maxRetries) return false;
+    
+    if (error instanceof OpenClawError) {
+      return error.retryable;
+    }
+    
+    // 네트워크 에러는 재시도
+    if (error.message.includes('ECONNREFUSED')) return true;
+    if (error.message.includes('timeout')) return true;
+    
+    return false;
+  }
+  
+  /**
+   * 재시도 간격 계산 (지수 백오프)
+   */
+  private calculateDelay(attempt: number): number {
+    if (!this.config.exponentialBackoff) {
+      return this.config.retryDelay;
+    }
+    
+    const delay = this.config.retryDelay * Math.pow(2, attempt);
+    const jitter = Math.random() * 1000; // 0-1초 랜덤
+    
+    return Math.min(delay + jitter, 300000); // 최대 5분
+  }
+  
+  /**
+   * OpenClaw CLI 호출 (실제 구현 - 예시)
+   */
+  private async callOpenClaw(
+    options: SpawnOptions & { model: string },
+    signal: AbortSignal
+  ): Promise<Omit<SpawnResult, 'duration' | 'model'>> {
+    // 실제 구현에서는 openclaw CLI 또는 API 호출
+    // 여기서는 인터페이스만 정의
+    
+    const args = [
+      'sessions', 'spawn',
+      '--task', options.task,
+      '--model', options.model,
+      '--cleanup', options.cleanup ?? 'delete',
+    ];
+    
+    if (options.label) {
+      args.push('--label', options.label);
+    }
+    
+    // 환경 변수 전달
+    const env = {
+      ...process.env,
+      ...options.env,
+    };
+    
+    // exec 호출 (구현 생략)
+    // const result = await exec('openclaw', args, { env, signal });
+    
+    throw new Error('Not implemented - use actual OpenClaw integration');
+  }
+  
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+}
+```
+
+### 타임아웃/재시도 정책
+
+```typescript
+/** 재시도 정책 */
+interface RetryPolicy {
+  /** 최대 재시도 횟수 */
+  maxRetries: number;
+  
+  /** 기본 대기 시간 (ms) */
+  baseDelay: number;
+  
+  /** 백오프 전략 */
+  backoff: 'fixed' | 'linear' | 'exponential';
+  
+  /** 최대 대기 시간 (ms) */
+  maxDelay: number;
+  
+  /** Jitter 사용 여부 */
+  jitter: boolean;
+  
+  /** 재시도 가능 에러 유형 */
+  retryableErrors: OpenClawErrorType[];
+}
+
+const DEFAULT_RETRY_POLICY: RetryPolicy = {
+  maxRetries: 3,
+  baseDelay: 10000,     // 10초
+  backoff: 'exponential',
+  maxDelay: 300000,     // 5분
+  jitter: true,
+  retryableErrors: ['connection_failed', 'timeout', 'rate_limited'],
+};
+
+/** 에러별 재시도 가능 여부 */
+const RETRYABLE_ERRORS: Record<OpenClawErrorType, boolean> = {
+  connection_failed: true,
+  timeout: true,
+  rate_limited: true,
+  session_error: false,
+  model_unavailable: false,
+};
+```
+
+### 에러 핸들링 패턴
+
+```typescript
+/** 에러 핸들러 */
+interface ErrorHandler {
+  /** 에러 처리 */
+  handle(error: Error, context: ExecutionContext): ErrorHandlerResult;
+  
+  /** 복구 가능 여부 */
+  canRecover(error: Error): boolean;
+}
+
+interface ErrorHandlerResult {
+  action: 'retry' | 'skip' | 'abort' | 'pause';
+  message?: string;
+  notifyChannels?: string[];
+}
+
+interface ExecutionContext {
+  feature: string;
+  step: string;
+  workflow: string;
+  runId: string;
+  attempt: number;
+}
+
+/** 기본 에러 핸들러 */
+class DefaultErrorHandler implements ErrorHandler {
+  handle(error: Error, context: ExecutionContext): ErrorHandlerResult {
+    // 타임아웃
+    if (error.message.includes('timeout')) {
+      return {
+        action: 'retry',
+        message: `Step ${context.step} timed out (attempt ${context.attempt})`,
+      };
+    }
+    
+    // 연결 실패
+    if (error.message.includes('connection')) {
+      return {
+        action: 'pause',
+        message: 'OpenClaw connection failed',
+        notifyChannels: ['telegram'],
+      };
+    }
+    
+    // 기타 에러
+    return {
+      action: 'abort',
+      message: error.message,
+      notifyChannels: ['telegram'],
+    };
+  }
+  
+  canRecover(error: Error): boolean {
+    if (error instanceof OpenClawError) {
+      return error.retryable;
+    }
+    return false;
+  }
+}
+```
+
+### Context 전달 방식
+
+```typescript
+/** 실행 컨텍스트 */
+interface OboraContext {
+  /** 프로젝트 경로 */
+  projectPath: string;
+  
+  /** 피처 정보 */
+  feature: {
+    name: string;
+    path: string;
+  };
+  
+  /** 워크플로우 정보 */
+  workflow: {
+    name: string;
+    version?: string;
+  };
+  
+  /** 현재 실행 */
+  run: {
+    id: string;
+    startedAt: Date;
+    mode: 'auto' | 'supervised' | 'gated';
+  };
+  
+  /** 현재 단계 */
+  step: {
+    name: string;
+    index: number;
+    agent: string;
+  };
+  
+  /** 입력 파일 */
+  inputs: Map<string, string>;
+  
+  /** 이전 단계 출력 */
+  previousOutputs: Map<string, string>;
+}
+
+/** 컨텍스트 직렬화 */
+function serializeContext(context: OboraContext): Record<string, string> {
+  return {
+    OBORA_PROJECT_PATH: context.projectPath,
+    OBORA_FEATURE: context.feature.name,
+    OBORA_FEATURE_PATH: context.feature.path,
+    OBORA_WORKFLOW: context.workflow.name,
+    OBORA_WORKFLOW_VERSION: context.workflow.version ?? '',
+    OBORA_RUN_ID: context.run.id,
+    OBORA_RUN_MODE: context.run.mode,
+    OBORA_STEP: context.step.name,
+    OBORA_STEP_INDEX: String(context.step.index),
+    OBORA_AGENT: context.step.agent,
+  };
 }
 ```
 
@@ -678,9 +1031,13 @@ function buildPrompt(
 |------|------|
 | `OBORA_PROJECT_PATH` | 프로젝트 경로 |
 | `OBORA_FEATURE` | 현재 feature 이름 |
-| `OBORA_STEP` | 현재 단계 이름 |
+| `OBORA_FEATURE_PATH` | feature 폴더 경로 |
 | `OBORA_WORKFLOW` | 워크플로우 이름 |
+| `OBORA_WORKFLOW_VERSION` | 워크플로우 버전 |
 | `OBORA_RUN_ID` | 실행 ID |
+| `OBORA_RUN_MODE` | 실행 모드 (auto/supervised/gated) |
+| `OBORA_STEP` | 현재 단계 이름 |
+| `OBORA_STEP_INDEX` | 단계 인덱스 (0부터) |
 | `OBORA_AGENT` | 에이전트 ID |
 
 ---

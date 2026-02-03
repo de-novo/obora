@@ -148,6 +148,27 @@ on_failure:
 | `pause: true` | 실행 일시 정지 |
 | `abort: true` | 워크플로우 중단 |
 
+### backoff (지수 백오프)
+
+재시도 간격 증가 전략입니다.
+
+```yaml
+backoff:
+  exponential: true    # 지수 증가 활성화
+  max_delay: 5m        # 최대 대기 시간
+  multiplier: 2        # 배율 (기본: 2)
+  jitter: true         # 무작위 변동 추가
+```
+
+### on_failure enum
+
+| 값 | 설명 |
+|------|------|
+| `continue` | 에러 무시하고 계속 |
+| `pause` | 일시 정지 (수동 재개) |
+| `abort` | 워크플로우 중단 |
+| `retry` | 재시도 (retry 설정 사용) |
+
 ---
 
 ## steps 구조
@@ -606,6 +627,191 @@ steps:
   - name: c
     depends_on: [b]
 # ERROR: 순환 의존성 감지: a → c → b → a
+```
+
+---
+
+## TypeScript 타입 정의
+
+완전한 TypeScript 타입 정의입니다.
+
+```typescript
+/** 시간 간격 타입 (예: "30s", "5m", "1h") */
+type Duration = `${number}${'s' | 'm' | 'h' | 'd'}`;
+
+/** Duration 파싱 함수 */
+function parseDuration(duration: Duration): number {
+  const match = duration.match(/^(\d+)(s|m|h|d)$/);
+  if (!match) throw new Error(`Invalid duration: ${duration}`);
+  
+  const value = parseInt(match[1], 10);
+  const unit = match[2];
+  
+  const multipliers: Record<string, number> = {
+    s: 1000,
+    m: 60 * 1000,
+    h: 60 * 60 * 1000,
+    d: 24 * 60 * 60 * 1000,
+  };
+  
+  return value * multipliers[unit];
+}
+
+/** 실행 모드 */
+type ExecutionMode = 'auto' | 'supervised' | 'gated';
+
+/** 실패 시 동작 */
+type OnFailure = 'continue' | 'pause' | 'abort' | 'retry';
+
+/** 액션 (discriminated union) */
+type Action = 
+  | { notify: string }
+  | { snapshot: boolean }
+  | { pause: boolean }
+  | { abort: boolean };
+
+/** 백오프 전략 */
+interface BackoffStrategy {
+  exponential?: boolean;
+  max_delay?: Duration;
+  multiplier?: number;    // 기본값: 2
+  jitter?: boolean;       // 무작위 변동
+}
+
+/** 전역 설정 */
+interface WorkflowConfig {
+  retry?: number;
+  retry_delay?: Duration;
+  timeout?: Duration;
+  on_failure?: Action[];
+  env?: Record<string, string>;
+}
+
+/** 단계 정의 */
+interface Step {
+  /** 단계 이름 (고유, 필수) */
+  name: string;
+  
+  /** 에이전트 ID (필수) */
+  agent: string;
+  
+  /** 단계 설명 */
+  description?: string;
+  
+  /** 실패해도 계속 진행 */
+  optional?: boolean;
+  
+  /** 병렬 실행 허용 (기본: true) */
+  parallel?: boolean;
+  
+  /** 승인 게이트 (gated 모드) */
+  gate?: boolean;
+  
+  /** 재시도 횟수 */
+  retry?: number;
+  
+  /** 재시도 간격 */
+  retry_delay?: Duration;
+  
+  /** 백오프 전략 */
+  backoff?: BackoffStrategy;
+  
+  /** 타임아웃 */
+  timeout?: Duration;
+  
+  /** 입력 파일 목록 */
+  inputs?: string[];
+  
+  /** 출력 파일 목록 */
+  outputs?: string[];
+  
+  /** 의존 단계 목록 */
+  depends_on?: string[];
+  
+  /** 실패 시 동작 */
+  on_failure?: Action[];
+  
+  /** 환경 변수 */
+  env?: Record<string, string>;
+}
+
+/** 워크플로우 정의 */
+interface Workflow {
+  /** 워크플로우 이름 (필수) */
+  name: string;
+  
+  /** 설명 */
+  description?: string;
+  
+  /** 버전 (semver) */
+  version?: string;
+  
+  /** 실행 모드 (기본: auto) */
+  mode?: ExecutionMode;
+  
+  /** 전역 설정 */
+  config?: WorkflowConfig;
+  
+  /** 단계 목록 (필수, 1개 이상) */
+  steps: Step[];
+}
+
+/** 검증 결과 */
+interface ValidationResult {
+  valid: boolean;
+  errors: ValidationError[];
+  warnings: ValidationWarning[];
+}
+
+interface ValidationError {
+  code: string;           // E2xxx, E3xxx
+  message: string;
+  path?: string;          // JSON path (e.g., "steps[0].name")
+  line?: number;
+}
+
+interface ValidationWarning {
+  code: string;
+  message: string;
+  path?: string;
+  suggestion?: string;
+}
+```
+
+### Duration 파싱 규칙
+
+| 입력 | 결과 (ms) | 유효 |
+|------|----------|------|
+| `30s` | 30000 | ✅ |
+| `5m` | 300000 | ✅ |
+| `1h` | 3600000 | ✅ |
+| `7d` | 604800000 | ✅ |
+| `30` | - | ❌ (단위 없음) |
+| `5min` | - | ❌ (잘못된 단위) |
+| `-5m` | - | ❌ (음수) |
+| `5.5m` | - | ❌ (소수) |
+
+### 타입 가드
+
+```typescript
+function isValidDuration(value: unknown): value is Duration {
+  if (typeof value !== 'string') return false;
+  return /^\d+[smhd]$/.test(value);
+}
+
+function isValidAction(value: unknown): value is Action {
+  if (typeof value !== 'object' || value === null) return false;
+  const keys = Object.keys(value);
+  if (keys.length !== 1) return false;
+  const key = keys[0];
+  return ['notify', 'snapshot', 'pause', 'abort'].includes(key);
+}
+
+function isValidStep(value: unknown): value is Step {
+  if (typeof value !== 'object' || value === null) return false;
+  const step = value as Record<string, unknown>;
+  return typeof step.name === 'string' && typeof step.agent === 'string';
+}
 ```
 
 ---

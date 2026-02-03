@@ -11,9 +11,10 @@
 ## 작업 내용
 1. **명령어 인터페이스 구현**
    - `obora new <feature-name> [options]` 명령어 등록
-   - `--type` 옵션 (feature, bugfix, refactor 등)
-   - `--description` 옵션
-   - 대화형 모드 지원 (옵션 미입력 시)
+   - `--workflow`, `-w` 옵션 (사용할 워크플로우 지정)
+   - `--from-existing` 옵션 (기존 문서에서 시작, Brownfield)
+   - `--template`, `-t` 옵션 (템플릿 선택)
+   - 참조: [[spec/02-cli-commands.md#obora new]]
 
 2. **피처 폴더 구조 생성**
    - `.obora/features/<name>/` 폴더 생성
@@ -31,10 +32,15 @@
    - `.obora/features/<name>/status.yaml` 생성
    - 초기 상태: `proposed`
 
-5. **유효성 검사**
-   - 피처 이름 형식 검증 (kebab-case)
-   - 중복 피처 이름 검사
-   - 부적절한 이름 검사
+5. **유효성 검사** (참조: [[spec/10-error-codes.md]])
+   - 피처 이름 형식 검증:
+     - 허용 문자: `[a-z0-9-]` (소문자, 숫자, 하이픈)
+     - 최대 길이: 64자
+     - 시작/끝 문자: 영소문자 또는 숫자 (하이픈 불가)
+     - 연속 하이픈 불가 (`--`)
+   - 예약어 금지: `init`, `new`, `plan`, `run`, `status`, `done`, `validate`, `lock`, `config`
+   - 중복 피처 이름 검사 (.obora/features/ 내 존재 여부)
+   - 아카이브된 피처와 이름 충돌 경고 (에러 아님)
 
 ## 완료 조건
 - [ ] `obora new my-feature` 실행 시 폴더 구조 생성
@@ -57,16 +63,30 @@ obora new authentication
 ls -la .obora/features/authentication/
 cat .obora/features/authentication/status.yaml
 
-# 타입 지정
-obora new bugfix-login-issue --type bugfix
+# 워크플로우 지정
+obora new user-auth --workflow standard
 
-# 설명 추가
-obora new user-dashboard --type feature --description "사용자 대시보드 추가"
+# 기존 문서에서 시작 (Brownfield)
+obora new legacy-refactor --from-existing
+
+# 템플릿 지정
+obora new api-endpoint --template api
+
+# 조합 사용
+obora new feature-x --workflow standard --from-existing
 
 # 에러 케이스
-obora new existing-feature  # 중복 이름 시 에러
-obora new Invalid_Name      # 잘못된 형식 시 에러
+obora new existing-feature  # 중복 이름 → 에러
+obora new Invalid_Name      # 잘못된 형식 → 에러 (kebab-case 필수)
+obora new .hidden           # 숨김 파일 형식 → 에러
 ```
+
+## 종료 코드
+| 코드 | 의미 |
+|------|------|
+| 0 | 성공 |
+| 1 | 일반 에러 |
+| 3 | 초기화 필요 (.obora/ 없음) |
 
 ## 참고 자료
 - [handlebars 템플릿 엔진](https://handlebarsjs.com/)

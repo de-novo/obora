@@ -11,8 +11,10 @@
 ## 작업 내용
 1. **명령어 인터페이스 구현**
    - `obora init [options]` 명령어 등록
-   - `--force` 옵션 (기존 `.obora/` 덮어쓰기)
-   - `--template` 옵션 (템플릿 선택)
+   - `--force`, `-f` 옵션 (기존 `.obora/` 덮어쓰기)
+   - `--workflow`, `-w` 옵션 (기본 워크플로우 선택: simple/standard)
+   - `--minimal`, `-m` 옵션 (최소 설정으로 초기화)
+   - 참조: [[spec/02-cli-commands.md#obora init]]
 
 2. **폴더 구조 생성**
    - `.obora/` 폴더 생성
@@ -53,15 +55,29 @@ obora init
 ls -la .obora/
 cat .obora/config.yaml
 
-# 강제 초기화
+# 강제 초기화 (기존 설정 덮어쓰기)
 obora init --force
 
-# 템플릿 지정 (추후 구현)
-obora init --template minimal
+# 워크플로우 지정
+obora init --workflow standard
+
+# 최소 설정으로 초기화 (Brownfield)
+obora init --minimal
+
+# 조합 사용
+obora init --workflow standard --force
 
 # 에러 케이스
-# 이미 존재할 때 경고 메시지 확인
+obora init           # 이미 존재할 때 → 에러 코드 2
+obora init --force   # 강제 덮어쓰기 → 성공
 ```
+
+## 종료 코드
+| 코드 | 의미 |
+|------|------|
+| 0 | 성공 |
+| 1 | 일반 에러 |
+| 2 | 이미 초기화됨 (`--force` 없이)
 
 ## 참고 자료
 - [Commander.js 옵션 처리](https://github.com/tj/commander.js#options)
