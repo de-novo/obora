@@ -11,7 +11,7 @@
 ## 작업 내용
 1. **JSON Schema 정의**
    - 워크플로우 스키마 정의 (`workflow.schema.json`)
-   - 스테이지 스키마 정의
+   - Step 스키마 정의
    - 태스크 스키마 정의
 
 2. **JSON Schema 검증 구현**
@@ -28,7 +28,7 @@
 4. **참조 무결성 검사**
    - 존재하지 않는 태스크 참조 검사
    - 자기 참조(자기 자신을 의존성으로 지정) 검사
-   - 동일 스테이지 내 참조 제한 검사
+   - 동일 Step 내 참조 제한 검사
 
 5. **에러 메시지 포맷팅**
    - 사용자 친화적인 에러 메시지
@@ -99,8 +99,16 @@ expect(missingRef.errors).toContainEqual(
 순환 감지 로직은 TASK-006(YAML 검증기)과 TASK-008(의존성 해석기)에서 공통으로 사용됩니다.
 중복을 방지하기 위해 `@obora/core/graph` 모듈에 구현합니다.
 
+### 모듈 위치
+- **패키지 경로**: `packages/core/src/graph/`
+
+### 내보내는 함수
+- `detectCycles(graph: Graph): CycleResult` - 순환 의존성 감지
+- `topologicalSort(graph: Graph): string[] | null` - 위상 정렬
+- `computeLevels(graph: Graph): Map<string, number>` - 실행 레벨 계산
+
 ```typescript
-// @obora/core/graph/index.ts
+// packages/core/src/graph/index.ts
 export interface Graph {
   nodes: Set<string>;
   edges: Map<string, Set<string>>;
@@ -112,6 +120,8 @@ export interface CycleResult {
 }
 
 export function detectCycles(graph: Graph): CycleResult;
+export function topologicalSort(graph: Graph): string[] | null;
+export function computeLevels(graph: Graph): Map<string, number>;
 export function buildGraph(steps: Step[]): Graph;
 ```
 

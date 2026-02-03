@@ -143,11 +143,45 @@ function topologicalSort(steps: Step[]): string[] | null {
 ### DFS 순환 감지 (공통 모듈 사용)
 ```typescript
 // @obora/core/graph 모듈에서 import
-import { detectCycles, CycleResult } from '@obora/core/graph';
+// 모듈 위치: packages/core/src/graph/
+import {
+  detectCycles,
+  topologicalSort,
+  computeLevels,
+  CycleResult
+} from '@obora/core/graph';
 
 function checkCycles(steps: Step[]): CycleResult {
   const graph = buildGraph(steps);
   return detectCycles(graph);
+}
+
+function getExecutionPlan(steps: Step[]): ExecutionPlan {
+  const graph = buildGraph(steps);
+
+  // 순환 감지
+  const cycleResult = detectCycles(graph);
+  if (cycleResult.hasCycle) {
+    return {
+      isValid: false,
+      executionOrder: [],
+      cyclicPath: cycleResult.cyclePath,
+      stepGroups: []
+    };
+  }
+
+  // 위상 정렬 (공통 모듈 사용)
+  const executionOrder = topologicalSort(graph) || [];
+
+  // 실행 레벨 계산 (공통 모듈 사용)
+  const levels = computeLevels(graph);
+  const stepGroups = groupByLevel(steps, levels);
+
+  return {
+    isValid: true,
+    executionOrder,
+    stepGroups
+  };
 }
 ```
 

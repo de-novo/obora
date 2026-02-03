@@ -17,9 +17,10 @@
 
 2. **피처 폴더 구조 생성**
    - `.obora/features/<name>/` 폴더 생성
-   - `proposals/` 폴더 생성 (제안서)
-   - `designs/` 폴더 생성 (설계서)
-   - `evidence/` 폴더 생성 (증거)
+   - `proposal.md` 파일 생성 (기획서)
+   - `design.md` 파일 생성 (설계서)
+   - `tasks.md` 파일 생성 (작업 목록)
+   - `context/` 폴더 생성 (에이전트 출력용)
 
 3. **템플릿 파일 생성**
    - `proposal.md` 템플릿 적용
@@ -37,8 +38,10 @@
 
 ## 완료 조건
 - [ ] `obora new my-feature` 실행 시 폴더 구조 생성
-- [ ] `proposal.md` 템플릿 생성
-- [ ] `design.md` 템플릿 생성
+- [ ] `proposal.md` 템플릿 생성 (기획서)
+- [ ] `design.md` 템플릿 생성 (설계서)
+- [ ] `tasks.md` 템플릿 생성 (작업 목록)
+- [ ] `context/` 폴더 생성 (에이전트 출력용)
 - [ ] `status.yaml` 생성 및 초기 상태 설정
 - [ ] 중복 이름 시 에러 메시지 출력
 
