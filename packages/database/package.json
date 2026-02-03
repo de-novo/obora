@@ -1,0 +1,23 @@
+{
+  "name": "@obora/database",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Obora database layer with DuckDB",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "dev": "tsc --watch",
+    "build": "tsc",
+    "lint": "eslint src --ext .ts",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "duckdb": "^1.0.0",
+    "@obora/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.3"
+  }
+}
