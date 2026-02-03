@@ -13,11 +13,11 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "duckdb": "^1.0.0",
     "@obora/core": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "duckdb": "^1.4.4",
     "typescript": "^5.9.3"
   }
 }

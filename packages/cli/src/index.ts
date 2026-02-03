@@ -2,8 +2,13 @@ import { createRequire } from "node:module";
 
 import { Command } from "commander";
 
+import { createDoneCommand } from "./commands/done.js";
 import { createInitCommand } from "./commands/init.js";
 import { createNewCommand } from "./commands/new.js";
+import { createPlanCommand } from "./commands/plan.js";
+import { createRunCommand } from "./commands/run.js";
+import { createStatusCommand } from "./commands/status.js";
+import { validateCommand } from "./commands/validate.js";
 
 const require = createRequire(import.meta.url);
 const { version } = require("../package.json");
@@ -15,6 +20,11 @@ program.name("obora").description("AI Agent-based workflow automation tool").ver
 // Register commands
 program.addCommand(createInitCommand());
 program.addCommand(createNewCommand());
+program.addCommand(createPlanCommand());
+program.addCommand(createRunCommand());
+program.addCommand(createStatusCommand());
+program.addCommand(createDoneCommand());
+program.addCommand(validateCommand());
 
 export function main() {
   program.parse();

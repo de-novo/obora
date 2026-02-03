@@ -17,6 +17,10 @@ const RESERVED_WORDS = [
   "config",
 ];
 
+// Valid workflow types
+const VALID_WORKFLOWS = ["simple", "standard"] as const;
+type WorkflowType = (typeof VALID_WORKFLOWS)[number];
+
 // Templates
 const PROPOSAL_TEMPLATE = (name: string, date: string) => `# ${name} - 기획서 (Proposal)
 
@@ -177,6 +181,19 @@ interface NewOptions {
 }
 
 /**
+ * Validate workflow type
+ */
+function validateWorkflowType(workflow: string): WorkflowType {
+  if (!VALID_WORKFLOWS.includes(workflow as WorkflowType)) {
+    console.error(
+      `Error: Invalid workflow type '${workflow}'. Valid options: ${VALID_WORKFLOWS.join(", ")}`
+    );
+    process.exit(1);
+  }
+  return workflow as WorkflowType;
+}
+
+/**
  * Validate feature name
  * - Only lowercase letters, numbers, and hyphens
  * - Max 64 characters
@@ -281,7 +298,8 @@ async function runNew(name: string, options: NewOptions): Promise<void> {
   }
 
   const now = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
-  const workflow = options.workflow || "simple";
+  // Validate and use workflow type
+  const workflow = validateWorkflowType(options.workflow || "simple");
 
   console.log(`Creating feature: ${name}`);
 

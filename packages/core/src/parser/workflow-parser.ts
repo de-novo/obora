@@ -119,12 +119,23 @@ function parseStep(raw: unknown, index: number, options: ParserOptions): Step {
     if (!Array.isArray(obj.inputs)) {
       throw new ParseError("E2003", `Step '${obj.name}': 'inputs' must be an array`);
     }
+    if (!obj.inputs.every((i) => typeof i === "string")) {
+      throw new ParseError("E2003", `Step '${obj.name}': 'inputs' must be an array of strings`);
+    }
   }
 
   if (obj.outputs !== undefined) {
     if (!Array.isArray(obj.outputs)) {
       throw new ParseError("E2003", `Step '${obj.name}': 'outputs' must be an array`);
     }
+    if (!obj.outputs.every((o) => typeof o === "string")) {
+      throw new ParseError("E2003", `Step '${obj.name}': 'outputs' must be an array of strings`);
+    }
+  }
+
+  // Validate description type
+  if (obj.description !== undefined && typeof obj.description !== "string") {
+    throw new ParseError("E2003", `Step '${obj.name}': 'description' must be a string`);
   }
 
   return {
@@ -153,12 +164,24 @@ function parseConfig(raw: unknown, options: ParserOptions): WorkflowConfig | und
 
   checkUnknownFields(obj, KNOWN_CONFIG_FIELDS, "config", options);
 
-  // Validate duration fields
+  // Validate config field types
+  if (obj.retry !== undefined && typeof obj.retry !== "number") {
+    throw new ParseError("E2003", "'config.retry' must be a number");
+  }
+
   if (obj.retry_delay !== undefined) {
     if (typeof obj.retry_delay !== "string") {
       throw new ParseError("E2003", "'config.retry_delay' must be a string");
     }
     validateDuration(obj.retry_delay, "config.retry_delay");
+  }
+
+  if (obj.continue_on_error !== undefined && typeof obj.continue_on_error !== "boolean") {
+    throw new ParseError("E2003", "'config.continue_on_error' must be a boolean");
+  }
+
+  if (obj.max_parallel !== undefined && typeof obj.max_parallel !== "number") {
+    throw new ParseError("E2003", "'config.max_parallel' must be a number");
   }
 
   return {
@@ -333,6 +356,15 @@ export function parseWorkflow(yamlContent: string, options: ParserOptions = {}):
   }
   if (!Array.isArray(obj.steps)) {
     throw new ParseError("E2003", "'steps' must be an array");
+  }
+
+  // Validate optional workflow field types
+  if (obj.version !== undefined && typeof obj.version !== "string") {
+    throw new ParseError("E2003", "'version' must be a string");
+  }
+
+  if (obj.description !== undefined && typeof obj.description !== "string") {
+    throw new ParseError("E2003", "'description' must be a string");
   }
 
   // Validate mode if present

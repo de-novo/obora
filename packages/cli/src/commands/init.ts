@@ -20,13 +20,14 @@ settings:
     path: ".obora/data.db"
 `;
 
-const MINIMAL_CONFIG = `# obora-kit Configuration (Minimal)
+// Minimal config generator - respects workflow choice
+const createMinimalConfig = (workflow: string) => `# obora-kit Configuration (Minimal)
 project:
   name: "my-project"
   version: "0.1.0"
 
 settings:
-  workflow: "simple"
+  workflow: "${workflow}"
 `;
 
 const STANDARD_CONFIG = `# obora-kit Configuration (Standard)
@@ -92,10 +93,27 @@ stages:
       - done
 `;
 
+// Valid workflow types
+const VALID_WORKFLOWS = ["simple", "standard"] as const;
+type WorkflowType = (typeof VALID_WORKFLOWS)[number];
+
 interface InitOptions {
   force?: boolean;
-  workflow?: "simple" | "standard";
+  workflow?: string;
   minimal?: boolean;
+}
+
+/**
+ * Validate workflow type
+ */
+function validateWorkflowType(workflow: string): WorkflowType {
+  if (!VALID_WORKFLOWS.includes(workflow as WorkflowType)) {
+    console.error(
+      `Error: Invalid workflow type '${workflow}'. Valid options: ${VALID_WORKFLOWS.join(", ")}`
+    );
+    process.exit(1);
+  }
+  return workflow as WorkflowType;
 }
 
 export function createInitCommand(): Command {
@@ -114,6 +132,9 @@ export function createInitCommand(): Command {
 async function runInit(options: InitOptions): Promise<void> {
   const cwd = process.cwd();
   const oboraDir = join(cwd, ".obora");
+
+  // Validate workflow type
+  const workflowType = validateWorkflowType(options.workflow || "simple");
 
   // Check if already initialized
   if (existsSync(oboraDir)) {
@@ -140,11 +161,11 @@ async function runInit(options: InitOptions): Promise<void> {
     console.log(`  Created: ${dir.replace(cwd, ".")}`);
   }
 
-  // Determine config content
+  // Determine config content - respect workflow choice even with --minimal
   let configContent: string;
   if (options.minimal) {
-    configContent = MINIMAL_CONFIG;
-  } else if (options.workflow === "standard") {
+    configContent = createMinimalConfig(workflowType);
+  } else if (workflowType === "standard") {
     configContent = STANDARD_CONFIG;
   } else {
     configContent = DEFAULT_CONFIG;
@@ -155,8 +176,7 @@ async function runInit(options: InitOptions): Promise<void> {
   await fs.writeFile(configPath, configContent, "utf-8");
   console.log(`  Created: .obora/config.yaml`);
 
-  // Copy workflow template
-  const workflowType = options.workflow || "simple";
+  // Copy workflow template (workflowType already validated above)
   const workflowContent = workflowType === "standard" ? STANDARD_WORKFLOW : SIMPLE_WORKFLOW;
   const workflowPath = join(oboraDir, "workflows", `${workflowType}.yaml`);
   await fs.writeFile(workflowPath, workflowContent, "utf-8");
