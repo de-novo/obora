@@ -22,16 +22,16 @@
 3. **폴더 삭제 기능**
    - `deleteFeature(name, options)` 함수 구현
    - `--force` 옵션 시 완전 삭제
-   - 기본 동작은 `.obora/archive/`로 이동
+   - 기본 동작은 `.obora/archive/`로 이동 (status: `cancelled`)
 
 4. **보관(archive) 기능**
    - `archiveFeature(name)` 함수 구현
    - `.obora/archive/<date>/<name>/`로 이동
-   - 보관 날짜 및 사유 기록
+   - 보관 날짜 및 사유 기록 (status: `cancelled`)
 
 5. **상태 추적**
    - `status.yaml` 파일 관리
-   - 상태 전이 관리 (proposed → active → archived)
+   - 상태 전이 관리 (`pending` → `running` → `completed` 또는 `failed`/`cancelled`)
    - 상태 변경 이력 기록
 
 6. **유효성 검사**
@@ -56,14 +56,17 @@ interface FeatureStructure {
   path: string;
   status: FeatureStatus;
   createdAt: Date;
-  archivedAt?: Date;
+  updatedAt: Date;
 }
 
 enum FeatureStatus {
-  PROPOSED = 'proposed',
-  ACTIVE = 'active',
+  PENDING = 'pending',
+  RUNNING = 'running',
   COMPLETED = 'completed',
-  ARCHIVED = 'archived'
+  FAILED = 'failed',
+  BLOCKED = 'blocked',
+  PAUSED = 'paused',
+  CANCELLED = 'cancelled'
 }
 
 interface StatusFile {
@@ -71,7 +74,6 @@ interface StatusFile {
   status: FeatureStatus;
   createdAt: string;
   updatedAt: string;
-  archivedAt?: string;
   history: StatusHistory[];
 }
 
@@ -135,7 +137,7 @@ function createFeature(
   // 6. DuckDB에 상태 기록
   await db.insertFeature({
     name,
-    status: FeatureStatus.PROPOSED,
+    status: FeatureStatus.PENDING,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     path: featurePath
@@ -144,7 +146,7 @@ function createFeature(
   return {
     name,
     path: featurePath,
-    status: FeatureStatus.PROPOSED,
+    status: FeatureStatus.PENDING,
     createdAt: new Date()
   };
 }
@@ -176,10 +178,10 @@ function archiveFeature(
 
   // 4. 상태 업데이트
   const status = readStatusFile(archivePath);
-  status.status = FeatureStatus.ARCHIVED;
-  status.archivedAt = new Date().toISOString();
+  status.status = FeatureStatus.CANCELLED;
+  status.updatedAt = new Date().toISOString();
   status.history.push({
-    status: FeatureStatus.ARCHIVED,
+    status: FeatureStatus.CANCELLED,
     changedAt: new Date().toISOString(),
     reason
   });
@@ -194,7 +196,7 @@ function archiveFeature(
 // 피처 생성
 const feature = await createFeature('user-auth');
 expect(fs.existsSync(feature.path)).toBe(true);
-expect(feature.status).toBe(FeatureStatus.PROPOSED);
+expect(feature.status).toBe(FeatureStatus.PENDING);
 
 // 필수 파일 존재 확인 (04-folder-structure.md 기준)
 expect(fs.existsSync(path.join(feature.path, 'proposal.md'))).toBe(true);
@@ -206,8 +208,7 @@ await expect(createFeature('user-auth')).rejects.toThrow();
 
 // 피처 보관
 const archived = await archiveFeature('user-auth', '완료됨');
-expect(archived.status).toBe(FeatureStatus.ARCHIVED);
-expect(archived.archivedAt).toBeDefined();
+expect(archived.status).toBe(FeatureStatus.CANCELLED);
 
 // 보관 경로 확인 (YYYY-MM 형식)
 const archiveDate = new Date().toISOString().slice(0, 7);  // YYYY-MM

@@ -30,7 +30,7 @@
 
 4. **상태 추적 초기화**
    - `.obora/features/<name>/status.yaml` 생성
-   - 초기 상태: `proposed`
+   - 초기 상태: `pending`
 
 5. **유효성 검사** (참조: [[spec/10-error-codes.md]])
    - 피처 이름 형식 검증:
