@@ -144,6 +144,9 @@ importers:
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.8
+      chalk:
+        specifier: ^5.6.2
+        version: 5.6.2
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -154,9 +157,15 @@ importers:
         specifier: ^2.8.2
         version: 2.8.2
     devDependencies:
+      '@types/ajv':
+        specifier: ^1.0.4
+        version: 1.0.4
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.8
+      ajv:
+        specifier: ^8.17.1
+        version: 8.17.1
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -1867,6 +1876,10 @@ packages:
     resolution: {integrity: sha512-XCuKFP5PS55gnMVu3dty8KPatLqUoy/ZYzDzAGCQ8JNFCkLXzmI7vNHCR+XpbZaMWQK/vQubr7PkYq8g470J/A==}
     engines: {node: '>= 10'}
 
+  '@types/ajv@1.0.4':
+    resolution: {integrity: sha512-hq9s/qlTIJ2KYjs9MDt/ALvO7g/xIfGsVr2kjuNYLC52TieBkKAIQr7Fhk7jiQfmRXLQawY4nVgc/7wvxHow0g==}
+    deprecated: This is a stub types definition. ajv provides its own type definitions, so you do not need this installed.
+
   '@types/busboy@1.5.4':
     resolution: {integrity: sha512-kG7WrUuAKK0NoyxfQHsVE6j1m01s6kMma64E+OZenQABMQyTJop1DumUWcLwAQ2JzpefU7PDYoRDKl8uZosFjw==}
 
@@ -2205,6 +2218,10 @@ packages:
   chalk@4.1.2:
     resolution: {integrity: sha512-oKnbhFyRIXpUuez8iBMmyEa4nbj4IOQyuhc/wy9kY7/WVPcwIO9VA668Pu8RkO7+0G76SLROeyw9CpQ061i4mA==}
     engines: {node: '>=10'}
+
+  chalk@5.6.2:
+    resolution: {integrity: sha512-7NzBL0rN6fMUW+f7A6Io4h40qQlG+xGmtMxfbnH/K7TAtt8JQWVQK+6g0UXKMeVJoyV5EkkNsErQ8pVD3bLHbA==}
+    engines: {node: ^12.17.0 || ^14.13 || >=16.0.0}
 
   check-error@2.1.3:
     resolution: {integrity: sha512-PAJdDJusoxnwm1VwW07VWwUN1sl7smmC3OKggvndJFadxxDRyFJBX/ggnu/KE4kQAB7a3Dp8f/YXC1FlUprWmA==}
@@ -6351,6 +6368,10 @@ snapshots:
 
   '@tootallnate/once@2.0.0': {}
 
+  '@types/ajv@1.0.4':
+    dependencies:
+      ajv: 8.17.1
+
   '@types/busboy@1.5.4':
     dependencies:
       '@types/node': 22.19.8
@@ -6814,6 +6835,8 @@ snapshots:
     dependencies:
       ansi-styles: 4.3.0
       supports-color: 7.2.0
+
+  chalk@5.6.2: {}
 
   check-error@2.1.3: {}
 
