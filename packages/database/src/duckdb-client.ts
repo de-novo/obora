@@ -75,7 +75,8 @@ export class OboraDatabase {
   private initialized: boolean = false;
 
   constructor(dbPath: string = ".obora/obora.db") {
-    this.dbPath = path.resolve(dbPath);
+    // :memory: is a special DuckDB path for in-memory databases
+    this.dbPath = dbPath === ':memory:' ? ':memory:' : path.resolve(dbPath);
     this.db = new duckdb.Database(this.dbPath);
     this.connection = this.db.connect();
   }
@@ -88,9 +89,15 @@ export class OboraDatabase {
       return;
     }
 
+    // Create sequences for auto-incrementing IDs
+    await this.run(`CREATE SEQUENCE IF NOT EXISTS projects_id_seq START 1`);
+    await this.run(`CREATE SEQUENCE IF NOT EXISTS workflow_runs_id_seq START 1`);
+    await this.run(`CREATE SEQUENCE IF NOT EXISTS step_executions_id_seq START 1`);
+    await this.run(`CREATE SEQUENCE IF NOT EXISTS metrics_id_seq START 1`);
+
     await this.run(`
       CREATE TABLE IF NOT EXISTS projects (
-        id INTEGER PRIMARY KEY,
+        id INTEGER PRIMARY KEY DEFAULT nextval('projects_id_seq'),
         name VARCHAR(100) NOT NULL,
         path VARCHAR(500) NOT NULL UNIQUE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -100,7 +107,7 @@ export class OboraDatabase {
 
     await this.run(`
       CREATE TABLE IF NOT EXISTS workflow_runs (
-        id INTEGER PRIMARY KEY,
+        id INTEGER PRIMARY KEY DEFAULT nextval('workflow_runs_id_seq'),
         project_id INTEGER NOT NULL,
         feature VARCHAR(100) NOT NULL,
         workflow VARCHAR(100) NOT NULL,
@@ -116,7 +123,7 @@ export class OboraDatabase {
 
     await this.run(`
       CREATE TABLE IF NOT EXISTS step_executions (
-        id INTEGER PRIMARY KEY,
+        id INTEGER PRIMARY KEY DEFAULT nextval('step_executions_id_seq'),
         run_id INTEGER NOT NULL,
         step_name VARCHAR(50) NOT NULL,
         step_index INTEGER NOT NULL,
@@ -133,7 +140,7 @@ export class OboraDatabase {
 
     await this.run(`
       CREATE TABLE IF NOT EXISTS metrics (
-        id INTEGER PRIMARY KEY,
+        id INTEGER PRIMARY KEY DEFAULT nextval('metrics_id_seq'),
         run_id INTEGER NOT NULL,
         step_id INTEGER,
         metric_name VARCHAR(100) NOT NULL,
@@ -171,10 +178,14 @@ export class OboraDatabase {
   run(sql: string, params?: any[]): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        (this.connection as any).run(sql, params, (err: any) => {
+        const args: any[] = params ? [sql, ...params, (err: any) => {
           if (err) reject(err);
           else resolve();
-        });
+        }] : [sql, (err: any) => {
+          if (err) reject(err);
+          else resolve();
+        }];
+        (this.connection as any).run(...args);
       } catch (error) {
         reject(error);
       }
@@ -188,10 +199,14 @@ export class OboraDatabase {
   query(sql: string, params?: any[]): Promise<any[]> {
     return new Promise((resolve, reject) => {
       try {
-        (this.connection as any).all(sql, params, (err: any, rows: any[]) => {
+        const args: any[] = params ? [sql, ...params, (err: any, rows: any[]) => {
           if (err) reject(err);
-          else resolve(rows);
-        });
+          else resolve(rows || []);
+        }] : [sql, (err: any, rows: any[]) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        }];
+        (this.connection as any).all(...args);
       } catch (error) {
         reject(error);
       }
@@ -205,10 +220,14 @@ export class OboraDatabase {
   queryOne(sql: string, params?: any[]): Promise<any | null> {
     return new Promise((resolve, reject) => {
       try {
-        (this.connection as any).get(sql, params, (err: any, row: any) => {
+        const args: any[] = params ? [sql, ...params, (err: any, rows: any[]) => {
           if (err) reject(err);
-          else resolve(row || null);
-        });
+          else resolve(rows && rows.length > 0 ? rows[0] : null);
+        }] : [sql, (err: any, rows: any[]) => {
+          if (err) reject(err);
+          else resolve(rows && rows.length > 0 ? rows[0] : null);
+        }];
+        (this.connection as any).all(...args);
       } catch (error) {
         reject(error);
       }
@@ -374,7 +393,7 @@ export async function listWorkflowRuns(
   projectId: number
 ): Promise<WorkflowRun[]> {
   const rows = await db.query(
-    "SELECT * FROM workflow_runs WHERE project_id = ? ORDER BY started_at DESC",
+    "SELECT * FROM workflow_runs WHERE project_id = ? ORDER BY started_at DESC, id DESC",
     [projectId]
   );
   return rows as WorkflowRun[];
@@ -570,7 +589,10 @@ export async function aggregateMetric(
     `SELECT ${aggregate}(metric_value) as value FROM metrics WHERE run_id = ? AND metric_name = ?`,
     [runId, metricName]
   );
-  return result ? (result.value as number) : null;
+  if (!result) return null;
+  // DuckDB returns BigInt for COUNT, convert to Number
+  const value = result.value;
+  return typeof value === 'bigint' ? Number(value) : (value as number);
 }
 
 /**
