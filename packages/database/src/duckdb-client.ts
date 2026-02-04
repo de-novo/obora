@@ -144,6 +144,23 @@ export class OboraDatabase {
       )
     `);
 
+    // Create indexes for better query performance
+    await this.run(`CREATE INDEX IF NOT EXISTS idx_projects_path ON projects(path)`);
+    await this.run(
+      `CREATE INDEX IF NOT EXISTS idx_workflow_runs_project ON workflow_runs(project_id)`
+    );
+    await this.run(
+      `CREATE INDEX IF NOT EXISTS idx_workflow_runs_feature ON workflow_runs(feature)`
+    );
+    await this.run(`CREATE INDEX IF NOT EXISTS idx_workflow_runs_status ON workflow_runs(status)`);
+    await this.run(`CREATE INDEX IF NOT EXISTS idx_step_executions_run ON step_executions(run_id)`);
+    await this.run(
+      `CREATE INDEX IF NOT EXISTS idx_step_executions_status ON step_executions(status)`
+    );
+    await this.run(`CREATE INDEX IF NOT EXISTS idx_metrics_run ON metrics(run_id)`);
+    await this.run(`CREATE INDEX IF NOT EXISTS idx_metrics_step ON metrics(step_id)`);
+    await this.run(`CREATE INDEX IF NOT EXISTS idx_metrics_name ON metrics(metric_name)`);
+
     this.initialized = true;
   }
 
@@ -153,10 +170,14 @@ export class OboraDatabase {
 
   run(sql: string, params?: any[]): Promise<void> {
     return new Promise((resolve, reject) => {
-      (this.connection as any).run(sql, params, (err: any) => {
-        if (err) reject(err);
-        else resolve();
-      });
+      try {
+        (this.connection as any).run(sql, params, (err: any) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      } catch (error) {
+        reject(error);
+      }
     });
   }
 
@@ -166,10 +187,14 @@ export class OboraDatabase {
 
   query(sql: string, params?: any[]): Promise<any[]> {
     return new Promise((resolve, reject) => {
-      (this.connection as any).all(sql, params, (err: any, rows: any[]) => {
-        if (err) reject(err);
-        else resolve(rows);
-      });
+      try {
+        (this.connection as any).all(sql, params, (err: any, rows: any[]) => {
+          if (err) reject(err);
+          else resolve(rows);
+        });
+      } catch (error) {
+        reject(error);
+      }
     });
   }
 
@@ -179,10 +204,14 @@ export class OboraDatabase {
 
   queryOne(sql: string, params?: any[]): Promise<any | null> {
     return new Promise((resolve, reject) => {
-      (this.connection as any).get(sql, params, (err: any, row: any) => {
-        if (err) reject(err);
-        else resolve(row || null);
-      });
+      try {
+        (this.connection as any).get(sql, params, (err: any, row: any) => {
+          if (err) reject(err);
+          else resolve(row || null);
+        });
+      } catch (error) {
+        reject(error);
+      }
     });
   }
 
@@ -222,8 +251,14 @@ export function getDatabase(dbPath?: string): OboraDatabase {
  */
 export function resetDatabase(): void {
   if (dbInstance) {
-    dbInstance.close();
-    dbInstance = null;
+    try {
+      dbInstance.close();
+    } catch (error) {
+      // Log error but still reset instance
+      console.error("Warning: Error closing database connection:", error);
+    } finally {
+      dbInstance = null;
+    }
   }
 }
 

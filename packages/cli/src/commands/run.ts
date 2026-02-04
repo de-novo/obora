@@ -5,6 +5,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import * as path from "node:path";
 
 import {
   log,
@@ -17,26 +18,11 @@ import {
 import type { Workflow, Step, WorkflowConfig } from "@obora/core";
 import { Command } from "commander";
 import fs from "fs-extra";
+import yaml from "yaml";
 
-/**
- * Status file structure
- */
-interface StatusFile {
-  feature: {
-    name: string;
-    created_at: string;
-    workflow: string;
-  };
-  status: string;
-  progress: {
-    current_stage: string;
-    completed_stages: string[];
-  };
-  metadata: {
-    last_updated: string;
-    notes: string;
-  };
-}
+import { CLIError } from "../errors.js";
+import { validatePathComponent } from "../utils/path-utils.js";
+import { type StatusFile, readStatus } from "../utils/status.js";
 
 /**
  * Run options
@@ -46,6 +32,28 @@ interface RunOptions {
   fromStep?: string;
   verbose?: boolean;
   continueOnError?: boolean;
+  feature?: string;
+  mode?: "auto" | "supervised" | "gated";
+}
+
+/**
+ * Detect feature name from current directory
+ */
+function detectFeatureName(): string | null {
+  const cwd = process.cwd();
+
+  // Check if we're in .obora/features/<feature> directory
+  if (cwd.includes(join(".obora", "features"))) {
+    const parts = cwd.split(join(".obora", "features"));
+    if (parts.length > 1) {
+      const featurePart = parts[1].split(path.sep)[1];
+      if (featurePart) {
+        return featurePart;
+      }
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -79,82 +87,40 @@ interface StepRun {
 }
 
 /**
- * Read and parse status.yaml
- */
-function readStatus(featurePath: string): StatusFile {
-  const statusPath = join(featurePath, "status.yaml");
-  if (!existsSync(statusPath)) {
-    throw new Error(`Status file not found: ${statusPath}`);
-  }
-
-  const content = readFileSync(statusPath, "utf-8");
-  const lines = content.split("\n");
-  const status: StatusFile = {
-    feature: { name: "", created_at: "", workflow: "" },
-    status: "pending",
-    progress: { current_stage: "planning", completed_stages: [] },
-    metadata: { last_updated: "", notes: "" },
-  };
-
-  let currentSection: keyof StatusFile | null = null;
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-
-    if (trimmed.startsWith("feature:")) {
-      currentSection = "feature";
-      continue;
-    }
-    if (trimmed.startsWith("status:")) {
-      currentSection = "status";
-      status.status = trimmed.split(":")[1]?.trim() || "pending";
-      continue;
-    }
-    if (trimmed.startsWith("progress:")) {
-      currentSection = "progress";
-      continue;
-    }
-    if (trimmed.startsWith("metadata:")) {
-      currentSection = "metadata";
-      continue;
-    }
-
-    if (currentSection === "feature" && trimmed.startsWith("name:")) {
-      status.feature.name = trimmed.split(":")[1]?.trim().replace(/"/g, "") || "";
-    }
-    if (currentSection === "feature" && trimmed.startsWith("created_at:")) {
-      status.feature.created_at = trimmed.split(":")[1]?.trim().replace(/"/g, "") || "";
-    }
-    if (currentSection === "feature" && trimmed.startsWith("workflow:")) {
-      status.feature.workflow = trimmed.split(":")[1]?.trim().replace(/"/g, "") || "";
-    }
-    if (currentSection === "progress" && trimmed.startsWith("current_stage:")) {
-      status.progress.current_stage = trimmed.split(":")[1]?.trim() || "planning";
-    }
-    if (currentSection === "metadata" && trimmed.startsWith("last_updated:")) {
-      status.metadata.last_updated = trimmed.split(":")[1]?.trim().replace(/"/g, "") || "";
-    }
-  }
-
-  return status;
-}
-
-/**
- * Update status.yaml
+ * Update status.yaml using YAML
  */
 async function updateStatus(featurePath: string, updates: Partial<StatusFile>): Promise<void> {
   const statusPath = join(featurePath, "status.yaml");
-  let content = readFileSync(statusPath, "utf-8");
+  const content = readFileSync(statusPath, "utf-8");
 
-  if (updates.status !== undefined) {
-    content = content.replace(/^status:.*$/m, `status: ${updates.status}`);
-  }
-  if (updates.metadata?.last_updated !== undefined) {
-    const now = updates.metadata.last_updated;
-    content = content.replace(/^ {2}last_updated:.*$/m, `  last_updated: "${now}"`);
-  }
+  try {
+    const parsed = yaml.parse(content) as Record<string, any>;
 
-  await fs.writeFile(statusPath, content, "utf-8");
+    if (updates.status !== undefined) {
+      parsed.status = updates.status;
+    }
+    if (updates.metadata?.last_updated !== undefined) {
+      if (!parsed.metadata) parsed.metadata = {};
+      parsed.metadata.last_updated = updates.metadata.last_updated;
+    }
+    if (updates.metadata?.notes !== undefined) {
+      if (!parsed.metadata) parsed.metadata = {};
+      parsed.metadata.notes = updates.metadata.notes;
+    }
+
+    await fs.writeFile(statusPath, yaml.stringify(parsed), "utf-8");
+  } catch (error) {
+    // If YAML parsing fails, try regex-based update as fallback
+    let newContent = content;
+    if (updates.status !== undefined) {
+      newContent = newContent.replace(/^status:.*$/m, `status: ${updates.status}`);
+    }
+    if (updates.metadata?.last_updated !== undefined) {
+      const now = updates.metadata.last_updated;
+      newContent = newContent.replace(/^ {2}last_updated:.*$/m, `  last_updated: "${now}"`);
+    }
+    await fs.writeFile(statusPath, newContent, "utf-8");
+  }
 }
 
 /**
@@ -240,14 +206,6 @@ async function executeStep(
 
 In production, this will contain the actual output from the agent execution.
 `;
-
-  // Simulate occasional failures for retry demonstration
-  if (attempt < (workflowConfig?.retry || 0) && Math.random() < 0.1) {
-    return {
-      success: false,
-      error: "Simulated execution failure (for retry testing)",
-    };
-  }
 
   return { success: true, output: simulatedOutput };
 }
@@ -424,25 +382,31 @@ async function executeWorkflow(
 async function runRun(featureName: string, options: RunOptions): Promise<void> {
   const cwd = process.cwd();
   const oboraDir = join(cwd, ".obora");
-  const featuresDir = join(oboraDir, "features");
-  const featureDir = join(featuresDir, featureName);
+  const featureDir = join(cwd, ".obora", "features", featureName);
   const workflowsDir = join(oboraDir, "workflows");
+
+  // Validate feature name for path traversal
+  validatePathComponent(featureName);
 
   // Validate .obora exists
   if (!existsSync(oboraDir)) {
     console.error("Error: Not in an obora project. Run 'obora init' first.");
-    process.exit(3);
+    throw new CLIError("Not in an obora project. Run 'obora init' first.", 3);
   }
 
   // Validate feature exists
   if (!existsSync(featureDir)) {
     console.error(`Error: Feature '${featureName}' not found.`);
     console.error(`  Run 'obora new ${featureName}' to create it first.`);
-    process.exit(1);
+    throw new CLIError(`Feature '${featureName}' not found.`, 1);
   }
 
   // Read status
   const status = readStatus(featureDir);
+  if (!status) {
+    console.error(`Error: Status file not found for feature '${featureName}'.`);
+    throw new CLIError(`Status file not found for feature '${featureName}'.`, 1);
+  }
   log(`Feature: ${featureName}`);
   log(`Current status: ${status.status}`);
 
@@ -452,7 +416,7 @@ async function runRun(featureName: string, options: RunOptions): Promise<void> {
 
   if (!existsSync(workflowPath)) {
     console.error(`Error: Workflow file not found: ${workflowPath}`);
-    process.exit(1);
+    throw new CLIError(`Workflow file not found: ${workflowPath}`, 1);
   }
 
   const workflowContent = readWorkflow(workflowPath);
@@ -466,7 +430,7 @@ async function runRun(featureName: string, options: RunOptions): Promise<void> {
   } catch (error) {
     if (error instanceof OboraError) {
       console.error(`Error: ${error.message}`);
-      process.exit(1);
+      throw new CLIError(error.message, 1);
     }
     throw error;
   }
@@ -509,7 +473,7 @@ async function runRun(featureName: string, options: RunOptions): Promise<void> {
 
   if (result.failedSteps.length > 0) {
     console.log(`  Failed: ${result.failedSteps.join(", ")}`);
-    process.exit(1);
+    throw new CLIError(`Workflow execution failed: ${result.failedSteps.join(", ")}`, 1);
   }
 
   console.log("");
@@ -526,13 +490,24 @@ async function runRun(featureName: string, options: RunOptions): Promise<void> {
 export function createRunCommand(): Command {
   const cmd = new Command("run")
     .description("Execute workflow")
-    .argument("<name>", "Feature name")
+    .option("-f, --feature <name>", "Feature name")
+    .option("-m, --mode <type>", "Execution mode (auto, supervised, gated)", "auto")
     .option("--dry-run", "Show execution plan without running")
-    .option("-f, --from-step <name>", "Start from a specific step")
+    .option("--from-step <name>", "Start from a specific step")
     .option("-v, --verbose", "Verbose output")
     .option("--continue-on-error", "Continue execution even if a step fails")
-    .action(async (name: string, options: RunOptions) => {
-      await runRun(name, options);
+    .action(async (options: RunOptions) => {
+      // Detect feature if not specified
+      const featureName = options.feature || detectFeatureName();
+      if (!featureName) {
+        console.error("Error: Feature name required.");
+        console.error("  Specify with --feature or run from within a feature directory.");
+        throw new CLIError(
+          "Feature name required. Specify with --feature or run from within a feature directory.",
+          1
+        );
+      }
+      await runRun(featureName, options);
     });
 
   return cmd;

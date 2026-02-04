@@ -4,6 +4,9 @@ import { join } from "node:path";
 import { Command } from "commander";
 import fs from "fs-extra";
 
+import { CLIError } from "../errors.js";
+import { validatePathComponent } from "../utils/path-utils.js";
+
 // Reserved words that cannot be used as feature names
 const RESERVED_WORDS = [
   "init",
@@ -174,6 +177,35 @@ metadata:
   notes: ""
 `;
 
+const CONTEXT_README_TEMPLATE = (name: string) => `# Context Directory
+
+This directory stores contextual information and assets for the **${name}** feature.
+
+## Purpose
+
+The \`context/\` folder contains:
+
+- **Reference materials**: Links to relevant documentation, specs, or external resources
+- **Draft notes**: Temporary notes, brainstorming, or scratchpad content
+- **Supporting files**: Any additional files that help understand or implement the feature
+
+## Usage
+
+- Store files here that provide context but aren't part of the main deliverables
+- This folder is **not** included in the final feature archive
+- Use \`proposal.md\`, \`design.md\`, and \`tasks.md\` for formal documentation
+
+## Examples
+
+\`\`\`
+context/
+├── reference-links.md     # External documentation links
+├── brainstorming.md        # Initial ideas and notes
+├── screenshots/            # UI mockups or reference images
+└── api-examples.json       # Sample API responses
+\`\`\`
+`;
+
 interface NewOptions {
   workflow?: string;
   fromExisting?: boolean;
@@ -188,7 +220,10 @@ function validateWorkflowType(workflow: string): WorkflowType {
     console.error(
       `Error: Invalid workflow type '${workflow}'. Valid options: ${VALID_WORKFLOWS.join(", ")}`
     );
-    process.exit(1);
+    throw new CLIError(
+      `Invalid workflow type '${workflow}'. Valid options: ${VALID_WORKFLOWS.join(", ")}`,
+      1
+    );
   }
   return workflow as WorkflowType;
 }
@@ -200,8 +235,19 @@ function validateWorkflowType(workflow: string): WorkflowType {
  * - Cannot start or end with hyphen
  * - No consecutive hyphens
  * - Not a reserved word
+ * - No path traversal characters
  */
 function validateFeatureName(name: string): { valid: boolean; error?: string } {
+  // Check for path traversal (security)
+  try {
+    validatePathComponent(name);
+  } catch (err) {
+    return {
+      valid: false,
+      error: err instanceof Error ? err.message : "Invalid feature name",
+    };
+  }
+
   // Check reserved words
   if (RESERVED_WORDS.includes(name.toLowerCase())) {
     return {
@@ -273,20 +319,20 @@ async function runNew(name: string, options: NewOptions): Promise<void> {
   // Check if .obora/ exists
   if (!existsSync(oboraDir)) {
     console.error("Error: Not in an obora project. Run 'obora init' first.");
-    process.exit(3);
+    throw new CLIError("Not in an obora project. Run 'obora init' first.", 3);
   }
 
   // Validate feature name
   const validation = validateFeatureName(name);
   if (!validation.valid) {
     console.error(`Error: ${validation.error}`);
-    process.exit(1);
+    throw new CLIError(validation.error || "Invalid feature name", 1);
   }
 
   // Check for duplicate feature
   if (existsSync(featureDir)) {
     console.error(`Error: Feature '${name}' already exists.`);
-    process.exit(1);
+    throw new CLIError(`Feature '${name}' already exists.`, 1);
   }
 
   // Warn if archived feature with same name exists
@@ -326,6 +372,13 @@ async function runNew(name: string, options: NewOptions): Promise<void> {
 
   await fs.writeFile(join(featureDir, "context", ".gitkeep"), "", "utf-8");
   console.log(`  Created: .obora/features/${name}/context/`);
+
+  await fs.writeFile(
+    join(featureDir, "context", "README.md"),
+    CONTEXT_README_TEMPLATE(name),
+    "utf-8"
+  );
+  console.log(`  Created: .obora/features/${name}/context/README.md`);
 
   if (options.fromExisting) {
     console.log("");

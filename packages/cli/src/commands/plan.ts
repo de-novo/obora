@@ -5,30 +5,16 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import * as path from "node:path";
 
 import { log } from "@obora/core";
 import { Command } from "commander";
 import fs from "fs-extra";
+import yaml from "yaml";
 
-/**
- * Status file structure
- */
-interface StatusFile {
-  feature: {
-    name: string;
-    created_at: string;
-    workflow: string;
-  };
-  status: string;
-  progress: {
-    current_stage: string;
-    completed_stages: string[];
-  };
-  metadata: {
-    last_updated: string;
-    notes: string;
-  };
-}
+import { CLIError } from "../errors.js";
+import { validatePathComponent } from "../utils/path-utils.js";
+import { type StatusFile, readStatus } from "../utils/status.js";
 
 /**
  * Plan options
@@ -37,87 +23,64 @@ interface PlanOptions {
   dryRun?: boolean;
   agent?: string;
   model?: string;
+  feature?: string;
 }
 
 /**
- * Read and parse status.yaml
+ * Detect feature name from current directory
  */
-function readStatus(featurePath: string): StatusFile {
-  const statusPath = join(featurePath, "status.yaml");
-  if (!existsSync(statusPath)) {
-    throw new Error(`Status file not found: ${statusPath}`);
-  }
+function detectFeatureName(): string | null {
+  const cwd = process.cwd();
 
-  const content = readFileSync(statusPath, "utf-8");
-  // Simple YAML parser (enough for our structure)
-  const lines = content.split("\n");
-  const status: StatusFile = {
-    feature: { name: "", created_at: "", workflow: "" },
-    status: "pending",
-    progress: { current_stage: "planning", completed_stages: [] },
-    metadata: { last_updated: "", notes: "" },
-  };
-
-  let currentSection: keyof StatusFile | null = null;
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-
-    if (trimmed.startsWith("feature:")) {
-      currentSection = "feature";
-      continue;
-    }
-    if (trimmed.startsWith("status:")) {
-      currentSection = "status";
-      status.status = trimmed.split(":")[1]?.trim() || "pending";
-      continue;
-    }
-    if (trimmed.startsWith("progress:")) {
-      currentSection = "progress";
-      continue;
-    }
-    if (trimmed.startsWith("metadata:")) {
-      currentSection = "metadata";
-      continue;
-    }
-
-    if (currentSection === "feature" && trimmed.startsWith("name:")) {
-      status.feature.name = trimmed.split(":")[1]?.trim().replace(/"/g, "") || "";
-    }
-    if (currentSection === "feature" && trimmed.startsWith("created_at:")) {
-      status.feature.created_at = trimmed.split(":")[1]?.trim().replace(/"/g, "") || "";
-    }
-    if (currentSection === "feature" && trimmed.startsWith("workflow:")) {
-      status.feature.workflow = trimmed.split(":")[1]?.trim().replace(/"/g, "") || "";
-    }
-    if (currentSection === "progress" && trimmed.startsWith("current_stage:")) {
-      status.progress.current_stage = trimmed.split(":")[1]?.trim() || "planning";
-    }
-    if (currentSection === "metadata" && trimmed.startsWith("last_updated:")) {
-      status.metadata.last_updated = trimmed.split(":")[1]?.trim().replace(/"/g, "") || "";
+  // Check if we're in .obora/features/<feature> directory
+  if (cwd.includes(join(".obora", "features"))) {
+    const parts = cwd.split(join(".obora", "features"));
+    if (parts.length > 1) {
+      const featurePart = parts[1].split(path.sep)[1];
+      if (featurePart) {
+        return featurePart;
+      }
     }
   }
 
-  return status;
+  return null;
 }
 
 /**
- * Update status.yaml
+ * Update status.yaml using YAML
  */
 async function updateStatus(featurePath: string, updates: Partial<StatusFile>): Promise<void> {
   const statusPath = join(featurePath, "status.yaml");
-  let content = readFileSync(statusPath, "utf-8");
+  const content = readFileSync(statusPath, "utf-8");
 
-  // Update fields
-  if (updates.status !== undefined) {
-    content = content.replace(/^status:.*$/m, `status: ${updates.status}`);
-  }
-  if (updates.metadata?.last_updated !== undefined) {
-    const now = updates.metadata.last_updated;
-    content = content.replace(/^ {2}last_updated:.*$/m, `  last_updated: "${now}"`);
-  }
+  try {
+    const parsed = yaml.parse(content) as Record<string, any>;
 
-  await fs.writeFile(statusPath, content, "utf-8");
+    if (updates.status !== undefined) {
+      parsed.status = updates.status;
+    }
+    if (updates.metadata?.last_updated !== undefined) {
+      if (!parsed.metadata) parsed.metadata = {};
+      parsed.metadata.last_updated = updates.metadata.last_updated;
+    }
+    if (updates.metadata?.notes !== undefined) {
+      if (!parsed.metadata) parsed.metadata = {};
+      parsed.metadata.notes = updates.metadata.notes;
+    }
+
+    await fs.writeFile(statusPath, yaml.stringify(parsed), "utf-8");
+  } catch (error) {
+    // If YAML parsing fails, try regex-based update as fallback
+    let newContent = content;
+    if (updates.status !== undefined) {
+      newContent = newContent.replace(/^status:.*$/m, `status: ${updates.status}`);
+    }
+    if (updates.metadata?.last_updated !== undefined) {
+      const now = updates.metadata.last_updated;
+      newContent = newContent.replace(/^ {2}last_updated:.*$/m, `  last_updated: "${now}"`);
+    }
+    await fs.writeFile(statusPath, newContent, "utf-8");
+  }
 }
 
 /**
@@ -245,20 +208,22 @@ async function updateTasks(featurePath: string, planContent: string): Promise<vo
 async function runPlan(featureName: string, options: PlanOptions): Promise<void> {
   const cwd = process.cwd();
   const oboraDir = join(cwd, ".obora");
-  const featuresDir = join(oboraDir, "features");
-  const featureDir = join(featuresDir, featureName);
+  const featureDir = join(cwd, ".obora", "features", featureName);
+
+  // Validate feature name for path traversal
+  validatePathComponent(featureName);
 
   // Validate .obora exists
   if (!existsSync(oboraDir)) {
     console.error("Error: Not in an obora project. Run 'obora init' first.");
-    process.exit(3);
+    throw new CLIError("Not in an obora project. Run 'obora init' first.", 3);
   }
 
   // Validate feature exists
   if (!existsSync(featureDir)) {
     console.error(`Error: Feature '${featureName}' not found.`);
     console.error(`  Run 'obora new ${featureName}' to create it first.`);
-    process.exit(1);
+    throw new CLIError(`Feature '${featureName}' not found.`, 1);
   }
 
   console.log(`Generating plan for: ${featureName}`);
@@ -266,6 +231,10 @@ async function runPlan(featureName: string, options: PlanOptions): Promise<void>
 
   // Read status file
   const status = readStatus(featureDir);
+  if (!status) {
+    console.error(`Error: Status file not found for feature '${featureName}'.`);
+    throw new CLIError(`Status file not found for feature '${featureName}'.`, 1);
+  }
   log(`  Current status: ${status.status}`);
   log(`  Current stage: ${status.progress.current_stage}`);
 
@@ -313,12 +282,22 @@ async function runPlan(featureName: string, options: PlanOptions): Promise<void>
 export function createPlanCommand(): Command {
   const cmd = new Command("plan")
     .description("Generate implementation plan using AI")
-    .argument("<name>", "Feature name")
+    .option("-f, --feature <name>", "Feature name")
     .option("--dry-run", "Show what would be done without making changes")
     .option("-a, --agent <name>", "AI agent to use (default: architect)")
     .option("-m, --model <name>", "AI model to use (default: claude-opus-4-5)")
-    .action(async (name: string, options: PlanOptions) => {
-      await runPlan(name, options);
+    .action(async (options: PlanOptions) => {
+      // Detect feature if not specified
+      const featureName = options.feature || detectFeatureName();
+      if (!featureName) {
+        console.error("Error: Feature name required.");
+        console.error("  Specify with --feature or run from within a feature directory.");
+        throw new CLIError(
+          "Feature name required. Specify with --feature or run from within a feature directory.",
+          1
+        );
+      }
+      await runPlan(featureName, options);
     });
 
   return cmd;

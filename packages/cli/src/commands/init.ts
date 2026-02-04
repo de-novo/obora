@@ -1,8 +1,11 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
+import { OboraDatabase } from "@obora/database";
 import { Command } from "commander";
 import fs from "fs-extra";
+
+import { CLIError } from "../errors.js";
 
 // Default config template
 const DEFAULT_CONFIG = `# obora-kit Configuration
@@ -111,7 +114,10 @@ function validateWorkflowType(workflow: string): WorkflowType {
     console.error(
       `Error: Invalid workflow type '${workflow}'. Valid options: ${VALID_WORKFLOWS.join(", ")}`
     );
-    process.exit(1);
+    throw new CLIError(
+      `Invalid workflow type '${workflow}'. Valid options: ${VALID_WORKFLOWS.join(", ")}`,
+      1
+    );
   }
   return workflow as WorkflowType;
 }
@@ -140,7 +146,7 @@ async function runInit(options: InitOptions): Promise<void> {
   if (existsSync(oboraDir)) {
     if (!options.force) {
       console.error("Error: .obora/ already exists. Use --force to overwrite.");
-      process.exit(2);
+      throw new CLIError(".obora/ already exists. Use --force to overwrite.", 2);
     }
     console.log("Removing existing .obora/ directory...");
     await fs.remove(oboraDir);
@@ -154,6 +160,7 @@ async function runInit(options: InitOptions): Promise<void> {
     join(oboraDir, "workflows"),
     join(oboraDir, "features"),
     join(oboraDir, "archive"),
+    join(oboraDir, "agents"),
   ];
 
   for (const dir of dirs) {
@@ -185,6 +192,13 @@ async function runInit(options: InitOptions): Promise<void> {
   // Create .gitkeep files for empty directories
   await fs.writeFile(join(oboraDir, "features", ".gitkeep"), "", "utf-8");
   await fs.writeFile(join(oboraDir, "archive", ".gitkeep"), "", "utf-8");
+  await fs.writeFile(join(oboraDir, "agents", ".gitkeep"), "", "utf-8");
+
+  // Initialize DuckDB
+  const db = new OboraDatabase(join(oboraDir, "obora.db"));
+  await db.initialize();
+  db.close();
+  console.log("  Created: .obora/obora.db");
 
   console.log("");
   console.log("✓ obora project initialized successfully!");

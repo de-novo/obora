@@ -62,7 +62,7 @@ const workflowSchema = {
     name: { type: "string" },
     version: { type: "string" },
     description: { type: "string" },
-    mode: { type: "string", enum: ["auto", "gated", "manual"] },
+    mode: { type: "string", enum: ["auto", "supervised", "gated", "manual"] },
     config: {
       type: "object",
       properties: {

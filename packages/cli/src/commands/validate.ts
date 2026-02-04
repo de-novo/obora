@@ -10,6 +10,9 @@ import { parseAndValidate, type ValidationResult, type ValidationError } from "@
 import chalk from "chalk";
 import { Command } from "commander";
 
+import { CLIError } from "../errors.js";
+import { validatePath } from "../utils/path-utils.js";
+
 /**
  * Options for validate command
  */
@@ -20,6 +23,10 @@ interface ValidateOptions {
   file?: string;
   /** Treat warnings as errors */
   strict: boolean;
+  /** Output format */
+  format?: "default" | "json";
+  /** Show detailed output */
+  verbose?: boolean;
 }
 
 /**
@@ -128,6 +135,33 @@ function printSummary(total: number, passed: number, failed: number, warnings: n
 }
 
 /**
+ * Format validation result as JSON
+ */
+function formatJsonResult(files: string[], results: Map<string, ValidationResult>): string {
+  const output: Record<
+    string,
+    {
+      valid: boolean;
+      errors: ValidationError[];
+      warnings: ValidationError[];
+    }
+  > = {};
+
+  for (const file of files) {
+    const result = results.get(file);
+    if (result) {
+      output[file] = {
+        valid: result.isValid,
+        errors: result.errors,
+        warnings: result.warnings,
+      };
+    }
+  }
+
+  return JSON.stringify(output, null, 2);
+}
+
+/**
  * Main validate command handler
  */
 export function validateCommand(): Command {
@@ -136,17 +170,28 @@ export function validateCommand(): Command {
     .option("--all", "Validate all workflow files in .obora/workflows and .obora/features")
     .option("-f, --file <path>", "Validate a specific workflow file")
     .option("--strict", "Treat warnings as errors")
+    .option("-o, --format <type>", "Output format (default, json)", "default")
+    .option("-v, --verbose", "Show detailed output")
     .action((options: ValidateOptions) => {
       let files: string[] = [];
 
       if (options.file) {
         // Validate specific file
-        if (!fs.existsSync(options.file)) {
-          console.error(`${SYMBOLS.error} File not found: ${chalk.red(options.file)}`);
-          process.exit(1);
+        // Resolve the file path and validate against current working directory
+        const resolvedPath = path.resolve(options.file);
+        try {
+          validatePath(options.file, process.cwd());
+        } catch (err) {
+          console.error(`${SYMBOLS.error} Invalid file path: ${chalk.red(options.file)}`);
+          throw new CLIError(`Invalid file path: ${options.file}`, 1);
         }
 
-        files = [path.resolve(options.file)];
+        if (!fs.existsSync(resolvedPath)) {
+          console.error(`${SYMBOLS.error} File not found: ${chalk.red(options.file)}`);
+          throw new CLIError(`File not found: ${options.file}`, 1);
+        }
+
+        files = [resolvedPath];
       } else if (options.all) {
         // Validate all workflow files
         const oboraDir = path.join(process.cwd(), ".obora");
@@ -163,12 +208,11 @@ export function validateCommand(): Command {
           console.log(
             `${SYMBOLS.warning} No workflow files found in .obora/workflows or .obora/features`
           );
-          process.exit(0);
+          return; // Exit normally
         }
       } else {
-        // Default behavior: validate if no options, show help
-        cmd.help();
-        return;
+        // Default behavior: validate all (same as --all)
+        options.all = true;
       }
 
       // Validate files
@@ -176,47 +220,64 @@ export function validateCommand(): Command {
       let totalWarnings = 0;
       let passedCount = 0;
       let failedCount = 0;
+      const results = new Map<string, ValidationResult>();
 
       for (const file of files) {
-        console.log("");
-        console.log(`${SYMBOLS.info} Checking ${chalk.dim(path.relative(process.cwd(), file))}`);
-
         const result = validateFile(file);
+        results.set(file, result);
 
         if (result.isValid && result.warnings.length === 0) {
-          console.log(`${SYMBOLS.success} ${chalk.green("Valid")}${chalk.dim(" - no issues")}`);
           passedCount++;
         } else {
-          console.log("");
           failedCount++;
-
-          // Print errors
-          for (const error of result.errors) {
-            console.log(formatError(error, file));
-            totalErrors++;
-          }
-
-          // Print warnings
-          for (const warning of result.warnings) {
-            console.log(formatWarning(warning, file));
-            totalWarnings++;
-          }
+          totalErrors += result.errors.length;
+          totalWarnings += result.warnings.length;
         }
       }
 
-      // Print summary
-      printSummary(files.length, passedCount, failedCount, totalWarnings);
+      // Output results
+      if (options.format === "json") {
+        console.log(formatJsonResult(files, results));
+      } else {
+        // Default format
+        for (const file of files) {
+          const result = results.get(file);
+          if (!result) continue;
+
+          console.log("");
+          console.log(`${SYMBOLS.info} Checking ${chalk.dim(path.relative(process.cwd(), file))}`);
+
+          if (result.isValid && result.warnings.length === 0) {
+            console.log(`${SYMBOLS.success} ${chalk.green("Valid")}${chalk.dim(" - no issues")}`);
+          } else {
+            console.log("");
+
+            // Print errors
+            for (const error of result.errors) {
+              console.log(formatError(error, file));
+            }
+
+            // Print warnings
+            for (const warning of result.warnings) {
+              console.log(formatWarning(warning, file));
+            }
+          }
+        }
+
+        // Print summary
+        printSummary(files.length, passedCount, failedCount, totalWarnings);
+      }
 
       // Exit with appropriate code
       if (totalErrors > 0) {
-        process.exit(1);
+        throw new CLIError("Validation failed with errors", 1);
       }
 
       if (options.strict && totalWarnings > 0) {
-        process.exit(2);
+        throw new CLIError("Validation failed with warnings in strict mode", 2);
       }
 
-      process.exit(0);
+      return; // Success
     });
 
   return cmd;

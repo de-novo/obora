@@ -6,6 +6,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+import yaml from "yaml";
+
 /**
  * Feature lifecycle status
  */
@@ -165,6 +167,11 @@ export function validateFeatureName(name: string): void {
     throw new Error("Feature name must be a non-empty string");
   }
 
+  // Check for path traversal characters
+  if (name.includes("..") || name.includes("/") || name.includes("\\") || name.includes(path.sep)) {
+    throw new Error(`Invalid feature name: '${name}' contains path separators`);
+  }
+
   if (!/^[a-z0-9-]+$/.test(name)) {
     throw new Error("Feature name must contain only lowercase letters, numbers, and hyphens");
   }
@@ -211,87 +218,46 @@ export function readStatusFile(featurePath: string): StatusFile {
 }
 
 /**
- * Parse status file content
+ * Parse status file content using YAML parser
  */
 function parseStatusFile(content: string): StatusFile {
-  // Simple YAML-like parser (for now - could use YAML parser)
-  const lines = content.split("\n");
-  const status: Partial<StatusFile> = {};
-  let currentKey = "";
-  const history: StatusHistory[] = [];
+  try {
+    const parsed = yaml.parse(content) as Record<string, any>;
 
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-
-    // Check for history entries
-    const historyMatch = trimmed.match(/^- (.+)$/);
-    if (historyMatch && status.history) {
-      const entry = historyMatch[1];
-      const parts = entry.split(" | ");
-      if (parts.length >= 2) {
-        history.push({
-          status: parts[0] as FeatureStatus,
-          changedAt: parts[1],
-          reason: parts[2],
-        });
-      }
-      continue;
-    }
-
-    // Parse key-value pairs
-    const colonIndex = trimmed.indexOf(":");
-    if (colonIndex > 0) {
-      currentKey = trimmed.slice(0, colonIndex).trim().toLowerCase();
-      const value = trimmed.slice(colonIndex + 1).trim();
-
-      switch (currentKey) {
-        case "name":
-          status.name = value;
-          break;
-        case "status":
-          status.status = value as FeatureStatus;
-          break;
-        case "created_at":
-          status.createdAt = value;
-          break;
-        case "updated_at":
-          status.updatedAt = value;
-          break;
-      }
-    }
+    return {
+      name: parsed.name || "",
+      status: parsed.status || FeatureStatus.PENDING,
+      createdAt: parsed.created_at || new Date().toISOString(),
+      updatedAt: parsed.updated_at || new Date().toISOString(),
+      history: Array.isArray(parsed.history) ? parsed.history : [],
+    };
+  } catch (error) {
+    // If YAML parsing fails, return default status
+    return {
+      name: "",
+      status: FeatureStatus.PENDING,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      history: [],
+    };
   }
-
-  return {
-    name: status.name || "",
-    status: status.status || FeatureStatus.PENDING,
-    createdAt: status.createdAt || new Date().toISOString(),
-    updatedAt: status.updatedAt || new Date().toISOString(),
-    history,
-  };
 }
 
 /**
- * Write status file
+ * Write status file using YAML
  */
 function writeStatusFile(featurePath: string, status: StatusFile): void {
   const statusPath = getStatusFilePath(featurePath);
 
-  const lines = [
-    `# Feature Status`,
-    ``,
-    `name: ${status.name}`,
-    `status: ${status.status}`,
-    `created_at: ${status.createdAt}`,
-    `updated_at: ${status.updatedAt}`,
-    ``,
-    `# History`,
-    ...status.history.map(
-      (h) => `- ${h.status} | ${h.changedAt}${h.reason ? ` | ${h.reason}` : ""}`
-    ),
-  ];
+  const data = {
+    name: status.name,
+    status: status.status,
+    created_at: status.createdAt,
+    updated_at: status.updatedAt,
+    history: status.history,
+  };
 
-  fs.writeFileSync(statusPath, lines.join("\n"), "utf-8");
+  fs.writeFileSync(statusPath, yaml.stringify(data), "utf-8");
 }
 
 /**

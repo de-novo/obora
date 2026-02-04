@@ -3,31 +3,15 @@
  * @module @obora/cli/commands/status
  */
 
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 import { log } from "@obora/core";
 import { Command } from "commander";
 
-/**
- * Status file structure
- */
-interface StatusFile {
-  feature: {
-    name: string;
-    created_at: string;
-    workflow: string;
-  };
-  status: string;
-  progress: {
-    current_stage: string;
-    completed_stages: string[];
-  };
-  metadata: {
-    last_updated: string;
-    notes: string;
-  };
-}
+import { CLIError } from "../errors.js";
+import { validatePathComponent } from "../utils/path-utils.js";
+import { type StatusFile, readStatus } from "../utils/status.js";
 
 /**
  * Workflow run record from DuckDB
@@ -66,70 +50,6 @@ interface StatusOptions {
   format?: "default" | "json" | "minimal";
   feature?: string;
   verbose?: boolean;
-}
-
-/**
- * Read and parse status.yaml
- */
-function readStatus(featurePath: string): StatusFile | null {
-  const statusPath = join(featurePath, "status.yaml");
-  if (!existsSync(statusPath)) {
-    return null;
-  }
-
-  const content = readFileSync(statusPath, "utf-8");
-  const lines = content.split("\n");
-  const status: StatusFile = {
-    feature: { name: "", created_at: "", workflow: "" },
-    status: "pending",
-    progress: { current_stage: "planning", completed_stages: [] },
-    metadata: { last_updated: "", notes: "" },
-  };
-
-  let currentSection: keyof StatusFile | null = null;
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-
-    if (trimmed.startsWith("feature:")) {
-      currentSection = "feature";
-      continue;
-    }
-    if (trimmed.startsWith("status:")) {
-      currentSection = "status";
-      status.status = trimmed.split(":")[1]?.trim() || "pending";
-      continue;
-    }
-    if (trimmed.startsWith("progress:")) {
-      currentSection = "progress";
-      continue;
-    }
-    if (trimmed.startsWith("metadata:")) {
-      currentSection = "metadata";
-      continue;
-    }
-
-    if (currentSection === "feature" && trimmed.startsWith("name:")) {
-      status.feature.name = trimmed.split(":")[1]?.trim().replace(/"/g, "") || "";
-    }
-    if (currentSection === "feature" && trimmed.startsWith("created_at:")) {
-      status.feature.created_at = trimmed.split(":")[1]?.trim().replace(/"/g, "") || "";
-    }
-    if (currentSection === "feature" && trimmed.startsWith("workflow:")) {
-      status.feature.workflow = trimmed.split(":")[1]?.trim().replace(/"/g, "") || "";
-    }
-    if (currentSection === "progress" && trimmed.startsWith("current_stage:")) {
-      status.progress.current_stage = trimmed.split(":")[1]?.trim() || "planning";
-    }
-    if (currentSection === "metadata" && trimmed.startsWith("last_updated:")) {
-      status.metadata.last_updated = trimmed.split(":")[1]?.trim().replace(/"/g, "") || "";
-    }
-    if (currentSection === "metadata" && trimmed.startsWith("notes:")) {
-      status.metadata.notes = trimmed.split(":").slice(1).join(":").trim().replace(/"/g, "") || "";
-    }
-  }
-
-  return status;
 }
 
 /**
@@ -241,11 +161,14 @@ async function displayDefaultStatus(featureName: string, verbose: boolean): Prom
   const featuresDir = join(oboraDir, "features");
   const featureDir = join(featuresDir, featureName);
 
+  // Validate feature name for path traversal
+  validatePathComponent(featureName);
+
   // Read feature status
   const status = readStatus(featureDir);
   if (!status) {
     console.error(`Error: Feature '${featureName}' not found or has no status file.`);
-    process.exit(1);
+    throw new CLIError(`Feature '${featureName}' not found or has no status file.`, 1);
   }
 
   console.log(`Feature: ${status.feature.name}`);
@@ -308,6 +231,9 @@ async function displayMinimalStatus(featureName: string): Promise<void> {
   const featuresDir = join(oboraDir, "features");
   const featureDir = join(featuresDir, featureName);
 
+  // Validate feature name for path traversal
+  validatePathComponent(featureName);
+
   const status = readStatus(featureDir);
   if (!status) {
     console.log("not found");
@@ -333,10 +259,13 @@ async function displayJsonStatus(featureName: string, verbose: boolean): Promise
   const featuresDir = join(oboraDir, "features");
   const featureDir = join(featuresDir, featureName);
 
+  // Validate feature name for path traversal
+  validatePathComponent(featureName);
+
   const status = readStatus(featureDir);
   if (!status) {
     console.error(`Error: Feature '${featureName}' not found or has no status file.`);
-    process.exit(1);
+    throw new CLIError(`Feature '${featureName}' not found or has no status file.`, 1);
   }
 
   const runs = await getWorkflowRuns(featureName);
@@ -366,7 +295,7 @@ async function displayAllFeaturesStatus(format: string, _verbose: boolean): Prom
 
   if (!existsSync(featuresDir)) {
     console.error("Error: Features directory not found.");
-    process.exit(1);
+    throw new CLIError("Features directory not found.", 1);
   }
 
   const featureNames = readdirSync(featuresDir, { withFileTypes: true })
@@ -414,7 +343,7 @@ async function runStatus(options: StatusOptions): Promise<void> {
   // Validate .obora exists
   if (!existsSync(oboraDir)) {
     console.error("Error: Not in an obora project. Run 'obora init' first.");
-    process.exit(3);
+    throw new CLIError("Not in an obora project. Run 'obora init' first.", 3);
   }
 
   const format = options.format || "default";
@@ -444,7 +373,7 @@ export function createStatusCommand(): Command {
   const cmd = new Command("status")
     .description("Show workflow status")
     .option("-f, --format <type>", "Output format: default, json, minimal", "default")
-    .option("--feature <name>", "Show status for a specific feature")
+    .option("-F, --feature <name>", "Show status for a specific feature")
     .option("-v, --verbose", "Verbose output (show step details)")
     .action(async (options: StatusOptions) => {
       await runStatus(options);

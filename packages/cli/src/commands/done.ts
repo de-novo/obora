@@ -5,30 +5,16 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import * as path from "node:path";
 
 import { log } from "@obora/core";
 import { Command } from "commander";
 import fs from "fs-extra";
+import yaml from "yaml";
 
-/**
- * Status file structure
- */
-interface StatusFile {
-  feature: {
-    name: string;
-    created_at: string;
-    workflow: string;
-  };
-  status: string;
-  progress: {
-    current_stage: string;
-    completed_stages: string[];
-  };
-  metadata: {
-    last_updated: string;
-    notes: string;
-  };
-}
+import { CLIError } from "../errors.js";
+import { validatePathComponent } from "../utils/path-utils.js";
+import { type StatusFile, readStatus } from "../utils/status.js";
 
 /**
  * Workflow run record from DuckDB
@@ -52,67 +38,27 @@ interface DoneOptions {
   message?: string;
   noArchive?: boolean;
   dryRun?: boolean;
+  feature?: string;
 }
 
 /**
- * Read and parse status.yaml
+ * Detect feature name from current directory
  */
-function readStatus(featurePath: string): StatusFile | null {
-  const statusPath = join(featurePath, "status.yaml");
-  if (!existsSync(statusPath)) {
-    return null;
-  }
+function detectFeatureName(): string | null {
+  const cwd = process.cwd();
 
-  const content = readFileSync(statusPath, "utf-8");
-  const lines = content.split("\n");
-  const status: StatusFile = {
-    feature: { name: "", created_at: "", workflow: "" },
-    status: "pending",
-    progress: { current_stage: "planning", completed_stages: [] },
-    metadata: { last_updated: "", notes: "" },
-  };
-
-  let currentSection: keyof StatusFile | null = null;
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-
-    if (trimmed.startsWith("feature:")) {
-      currentSection = "feature";
-      continue;
-    }
-    if (trimmed.startsWith("status:")) {
-      currentSection = "status";
-      status.status = trimmed.split(":")[1]?.trim() || "pending";
-      continue;
-    }
-    if (trimmed.startsWith("progress:")) {
-      currentSection = "progress";
-      continue;
-    }
-    if (trimmed.startsWith("metadata:")) {
-      currentSection = "metadata";
-      continue;
-    }
-
-    if (currentSection === "feature" && trimmed.startsWith("name:")) {
-      status.feature.name = trimmed.split(":")[1]?.trim().replace(/"/g, "") || "";
-    }
-    if (currentSection === "feature" && trimmed.startsWith("created_at:")) {
-      status.feature.created_at = trimmed.split(":")[1]?.trim().replace(/"/g, "") || "";
-    }
-    if (currentSection === "feature" && trimmed.startsWith("workflow:")) {
-      status.feature.workflow = trimmed.split(":")[1]?.trim().replace(/"/g, "") || "";
-    }
-    if (currentSection === "progress" && trimmed.startsWith("current_stage:")) {
-      status.progress.current_stage = trimmed.split(":")[1]?.trim() || "planning";
-    }
-    if (currentSection === "metadata" && trimmed.startsWith("last_updated:")) {
-      status.metadata.last_updated = trimmed.split(":")[1]?.trim().replace(/"/g, "") || "";
+  // Check if we're in .obora/features/<feature> directory
+  if (cwd.includes(join(".obora", "features"))) {
+    const parts = cwd.split(join(".obora", "features"));
+    if (parts.length > 1) {
+      const featurePart = parts[1].split(path.sep)[1];
+      if (featurePart) {
+        return featurePart;
+      }
     }
   }
 
-  return status;
+  return null;
 }
 
 /**
@@ -210,32 +156,46 @@ async function moveToArchive(
   featureName: string
 ): Promise<void> {
   const sourcePath = join(featuresDir, featureName);
-  const targetPath = join(archiveDir, featureName);
+
+  // Generate archive name: YYYY-MM-featureName
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const archiveName = `${year}-${month}-${featureName}`;
+  const targetPath = join(archiveDir, archiveName);
+
+  // Ensure archive directory exists
+  await fs.ensureDir(archiveDir);
 
   // Check if target already exists
   if (existsSync(targetPath)) {
     // Add timestamp suffix
     const timestamp = Date.now();
-    const timestampedPath = join(archiveDir, `${featureName}-${timestamp}`);
+    const timestampedPath = join(archiveDir, `${archiveName}-${timestamp}`);
     await fs.move(sourcePath, timestampedPath, { overwrite: true });
-    log(`  Moved to archive as ${featureName}-${timestamp}`);
+    log(`  Moved to archive as ${archiveName}-${timestamp}`);
   } else {
     await fs.move(sourcePath, targetPath, { overwrite: true });
-    log(`  Moved to archive as ${featureName}`);
+    log(`  Moved to archive as ${archiveName}`);
   }
 }
 
 /**
- * Update status to done
+ * Update status to done using YAML
  */
 async function updateStatusToDone(featurePath: string): Promise<void> {
   const statusPath = join(featurePath, "status.yaml");
-  let content = readFileSync(statusPath, "utf-8");
+  const content = readFileSync(statusPath, "utf-8");
 
-  // Update status
-  content = content.replace(/^status:.*$/m, `status: done`);
-
-  await fs.writeFile(statusPath, content, "utf-8");
+  try {
+    const parsed = yaml.parse(content) as Record<string, any>;
+    parsed.status = "completed";
+    await fs.writeFile(statusPath, yaml.stringify(parsed), "utf-8");
+  } catch (error) {
+    // If YAML parsing fails, try regex-based update as fallback
+    const newContent = content.replace(/^status:.*$/m, `status: completed`);
+    await fs.writeFile(statusPath, newContent, "utf-8");
+  }
 }
 
 /**
@@ -261,7 +221,7 @@ async function createGitCommit(featureName: string, message?: string): Promise<v
  */
 function validateFeatureDone(status: StatusFile): { valid: boolean; reason?: string } {
   // Check if already done
-  if (status.status === "done") {
+  if (status.status === "completed") {
     return { valid: false, reason: "Feature is already marked as done" };
   }
 
@@ -294,16 +254,19 @@ async function runDone(featureName: string, options: DoneOptions): Promise<void>
   const archiveDir = join(oboraDir, "archive");
   const featureDir = join(featuresDir, featureName);
 
+  // Validate feature name for path traversal
+  validatePathComponent(featureName);
+
   // Validate .obora exists
   if (!existsSync(oboraDir)) {
     console.error("Error: Not in an obora project. Run 'obora init' first.");
-    process.exit(3);
+    throw new CLIError("Not in an obora project. Run 'obora init' first.", 3);
   }
 
   // Validate feature exists
   if (!existsSync(featureDir)) {
     console.error(`Error: Feature '${featureName}' not found.`);
-    process.exit(1);
+    throw new CLIError(`Feature '${featureName}' not found.`, 1);
   }
 
   console.log(`Marking feature as done: ${featureName}`);
@@ -313,7 +276,7 @@ async function runDone(featureName: string, options: DoneOptions): Promise<void>
   const status = readStatus(featureDir);
   if (!status) {
     console.error(`Error: Status file not found for feature '${featureName}'.`);
-    process.exit(1);
+    throw new CLIError(`Status file not found for feature '${featureName}'.`, 1);
   }
 
   log(`  Current status: ${status.status}`);
@@ -323,7 +286,7 @@ async function runDone(featureName: string, options: DoneOptions): Promise<void>
   const validation = validateFeatureDone(status);
   if (!validation.valid) {
     console.error(`Error: ${validation.reason}`);
-    process.exit(1);
+    throw new CLIError(validation.reason || "Cannot mark feature as done", 1);
   }
 
   // Get workflow runs from DuckDB
@@ -333,7 +296,7 @@ async function runDone(featureName: string, options: DoneOptions): Promise<void>
   if (options.dryRun) {
     console.log("");
     console.log("Dry-run mode: would perform the following actions:");
-    console.log(`  1. Update status to 'done'`);
+    console.log(`  1. Update status to 'completed'`);
     console.log(`  2. Generate execution.log`);
     if (!options.noArchive) {
       console.log(`  3. Move to archive/`);
@@ -355,7 +318,7 @@ async function runDone(featureName: string, options: DoneOptions): Promise<void>
 
   // Update workflow run status in DuckDB
   if (runs.length > 0) {
-    await updateWorkflowRunStatus(runs[0].id, "done");
+    await updateWorkflowRunStatus(runs[0].id, "completed");
   }
 
   // Move to archive
@@ -375,7 +338,7 @@ async function runDone(featureName: string, options: DoneOptions): Promise<void>
   console.log("");
   console.log("Summary:");
   console.log(`  Feature: ${featureName}`);
-  console.log(`  Status: done`);
+  console.log(`  Status: completed`);
   console.log(`  Workflow runs: ${runs.length}`);
   if (!options.noArchive) {
     console.log(`  Archived: yes`);
@@ -393,13 +356,23 @@ async function runDone(featureName: string, options: DoneOptions): Promise<void>
 export function createDoneCommand(): Command {
   const cmd = new Command("done")
     .description("Mark feature as done and archive")
-    .argument("<name>", "Feature name")
+    .option("-f, --feature <name>", "Feature name")
     .option("-c, --commit", "Create git commit after archiving")
     .option("-m, --message <text>", "Git commit message")
     .option("--no-archive", "Skip moving to archive directory")
     .option("--dry-run", "Show what would be done without making changes")
-    .action(async (name: string, options: DoneOptions) => {
-      await runDone(name, options);
+    .action(async (options: DoneOptions) => {
+      // Detect feature if not specified
+      const featureName = options.feature || detectFeatureName();
+      if (!featureName) {
+        console.error("Error: Feature name required.");
+        console.error("  Specify with --feature or run from within a feature directory.");
+        throw new CLIError(
+          "Feature name required. Specify with --feature or run from within a feature directory.",
+          1
+        );
+      }
+      await runDone(featureName, options);
     });
 
   return cmd;

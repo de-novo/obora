@@ -9,6 +9,7 @@ import { createPlanCommand } from "./commands/plan.js";
 import { createRunCommand } from "./commands/run.js";
 import { createStatusCommand } from "./commands/status.js";
 import { validateCommand } from "./commands/validate.js";
+import { CLIError } from "./errors.js";
 
 const require = createRequire(import.meta.url);
 const { version } = require("../package.json");
@@ -26,6 +27,17 @@ program.addCommand(createStatusCommand());
 program.addCommand(createDoneCommand());
 program.addCommand(validateCommand());
 
-export function main() {
-  program.parse();
+export async function main() {
+  try {
+    await program.parseAsync(process.argv);
+  } catch (err) {
+    if (err instanceof CLIError) {
+      if (err.message) {
+        console.error(err.message);
+      }
+      process.exit(err.exitCode);
+    }
+    // Re-throw non-CLI errors
+    throw err;
+  }
 }

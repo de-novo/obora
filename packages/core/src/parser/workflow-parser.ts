@@ -369,7 +369,7 @@ export function parseWorkflow(yamlContent: string, options: ParserOptions = {}):
 
   // Validate mode if present
   if (obj.mode !== undefined) {
-    const validModes: WorkflowMode[] = ["auto", "gated", "manual"];
+    const validModes: WorkflowMode[] = ["auto", "supervised", "gated", "manual"];
     if (!validModes.includes(obj.mode as WorkflowMode)) {
       throw new ParseError("E2003", `'mode' must be one of: ${validModes.join(", ")}`);
     }

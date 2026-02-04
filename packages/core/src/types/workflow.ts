@@ -6,7 +6,7 @@
 /**
  * Workflow execution mode
  */
-export type WorkflowMode = "auto" | "gated" | "manual";
+export type WorkflowMode = "auto" | "supervised" | "gated" | "manual";
 
 /**
  * Workflow configuration options
