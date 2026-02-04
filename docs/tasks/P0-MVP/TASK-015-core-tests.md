@@ -2,7 +2,7 @@
 
 ## 개요
 - 우선순위: P0
-- 예상 소요: 7시간
+- 예상 소요: 8시간
 - 담당: 개발자
 
 ## 목표
@@ -351,6 +351,146 @@ steps:
     const result = validateWorkflow(invalidWorkflow);
     expect(result.isValid).toBe(false);
   });
+
+  it('should reject invalid timeout format', () => {
+    const invalidTimeoutWorkflow: Workflow = {
+      name: 'test-workflow',
+      mode: 'auto',
+      steps: [
+        {
+          name: 'plan',
+          agent: 'architect',
+          timeout: '0s', // invalid: starts with 0
+        },
+      ],
+    };
+
+    const result = validateWorkflow(invalidTimeoutWorkflow);
+    expect(result.isValid).toBe(false);
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({
+        code: 'INVALID_SCHEMA',
+        message: expect.stringContaining('pattern'),
+      })
+    );
+  });
+
+  it('should reject timeout with letters only', () => {
+    const invalidTimeoutWorkflow: Workflow = {
+      name: 'test-workflow',
+      mode: 'auto',
+      steps: [
+        {
+          name: 'plan',
+          agent: 'architect',
+          timeout: 'abc', // invalid: no numbers
+        },
+      ],
+    };
+
+    const result = validateWorkflow(invalidTimeoutWorkflow);
+    expect(result.isValid).toBe(false);
+  });
+
+  it('should reject timeout with decimal numbers', () => {
+    const invalidTimeoutWorkflow: Workflow = {
+      name: 'test-workflow',
+      mode: 'auto',
+      steps: [
+        {
+          name: 'plan',
+          agent: 'architect',
+          timeout: '5.5s', // invalid: decimal
+        },
+      ],
+    };
+
+    const result = validateWorkflow(invalidTimeoutWorkflow);
+    expect(result.isValid).toBe(false);
+  });
+
+  it('should reject empty agent name', () => {
+    const emptyAgentWorkflow: Workflow = {
+      name: 'test-workflow',
+      mode: 'auto',
+      steps: [
+        {
+          name: 'plan',
+          agent: '', // invalid: empty string
+        },
+      ],
+    };
+
+    const result = validateWorkflow(emptyAgentWorkflow);
+    expect(result.isValid).toBe(false);
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({
+        code: 'INVALID_SCHEMA',
+        message: expect.stringContaining('agent'),
+      })
+    );
+  });
+
+  it('should reject agent name with whitespace', () => {
+    const whitespaceAgentWorkflow: Workflow = {
+      name: 'test-workflow',
+      mode: 'auto',
+      steps: [
+        {
+          name: 'plan',
+          agent: '   ', // invalid: only whitespace
+        },
+      ],
+    };
+
+    const result = validateWorkflow(whitespaceAgentWorkflow);
+    expect(result.isValid).toBe(false);
+  });
+
+  it('should reject malformed YAML syntax', () => {
+    const malformedYaml = `
+name: test-workflow
+mode: auto
+steps:
+  - name: plan
+    agent: architect
+    description: Unclosed [bracket
+`;
+
+    const result = parseAndValidate(malformedYaml);
+    expect(result.isValid).toBe(false);
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({
+        code: expect.stringMatching(/E2001|INVALID_SCHEMA|Parse/),
+      })
+    );
+  });
+
+  it('should reject YAML with invalid indentation', () => {
+    const invalidIndentYaml = `
+name: test-workflow
+mode: auto
+steps:
+ - name: plan
+  agent: architect
+`;
+
+    const result = parseAndValidate(invalidIndentYaml);
+    expect(result.isValid).toBe(false);
+  });
+
+  it('should reject YAML with unclosed quotes', () => {
+    const unclosedQuoteYaml = `
+name: test-workflow
+mode: auto
+steps:
+  - name: plan
+    agent: "architect
+`;
+
+    const result = parseAndValidate(unclosedQuoteYaml);
+    expect(result.isValid).toBe(false);
+  });
 });
 
 describe('graph/index', () => {
@@ -382,6 +522,96 @@ describe('graph/index', () => {
 
     expect(result.success).toBe(true);
     expect(result.order).toEqual(['plan', 'implement', 'test']);
+  });
+
+  it('should detect implicit dependencies via inputs/outputs', () => {
+    const steps = [
+      {
+        name: 'plan',
+        agent: 'architect',
+        outputs: ['design.md'],
+      },
+      {
+        name: 'implement',
+        agent: 'coder',
+        inputs: ['design.md'], // implicitly depends on plan step
+        outputs: ['code.ts'],
+      },
+      {
+        name: 'test',
+        agent: 'tester',
+        inputs: ['code.ts'], // implicitly depends on implement step
+      },
+    ];
+
+    const { buildGraph, computeLevels } = require('../graph/index');
+    const graph = buildGraph(steps);
+    const levels = computeLevels(graph);
+
+    // Verify levels reflect implicit dependency chain
+    expect(levels.get('plan')).toBe(0);
+    expect(levels.get('implement')).toBeGreaterThan(levels.get('plan')!);
+    expect(levels.get('test')).toBeGreaterThan(levels.get('implement')!);
+  });
+
+  it('should handle mixed explicit and implicit dependencies', () => {
+    const steps = [
+      {
+        name: 'spec',
+        agent: 'analyst',
+        outputs: ['proposal.md'],
+      },
+      {
+        name: 'design',
+        agent: 'architect',
+        inputs: ['proposal.md'], // implicit
+        depends_on: [], // explicit (empty)
+        outputs: ['design.md'],
+      },
+      {
+        name: 'implement',
+        agent: 'coder',
+        depends_on: ['design'], // explicit
+        inputs: ['design.md'], // redundant implicit
+        outputs: ['code.ts'],
+      },
+    ];
+
+    const { topologicalSort, buildGraph } = require('../graph/index');
+    const graph = buildGraph(steps);
+    const result = topologicalSort(graph);
+
+    expect(result.success).toBe(true);
+    expect(result.order).toEqual(['spec', 'design', 'implement']);
+  });
+
+  it('should detect conflict between explicit and implicit dependencies', () => {
+    const steps = [
+      {
+        name: 'plan',
+        agent: 'architect',
+        outputs: ['design.md'],
+      },
+      {
+        name: 'review',
+        agent: 'reviewer',
+        depends_on: ['plan'],
+        inputs: ['design.md'],
+      },
+      {
+        name: 'implement',
+        agent: 'coder',
+        depends_on: ['review'], // explicit dependency order
+        inputs: ['design.md'], // but also needs plan's output
+      },
+    ];
+
+    const { buildGraph, computeLevels } = require('../graph/index');
+    const graph = buildGraph(steps);
+    const levels = computeLevels(graph);
+
+    // Both explicit and implicit should be considered
+    expect(levels.get('plan')).toBeLessThan(levels.get('implement')!);
   });
 });
 ```

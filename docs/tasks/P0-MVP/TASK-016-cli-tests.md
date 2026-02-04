@@ -2,7 +2,7 @@
 
 ## 개요
 - 우선순위: P0
-- 예상 소요: 12시간
+- 예상 소요: 14시간
 - 담당: 개발자
 
 ## 목표
@@ -296,6 +296,425 @@ validatePathComponent.mockReturnValueOnce(undefined);
 // 경로 조작 공격 차단
 validatePathComponent.mockImplementationOnce(() => {
   throw new Error('Invalid path component');
+});
+```
+
+### 에이전트 실행 Mock 전략
+
+**목표:** 실제 에이전트 실행을 mocking하여 빠르고 안정적인 테스트 수행
+
+#### Mock 레벨 구조
+
+```typescript
+// 1단계: 완전 Mock (빠르지만 신뢰도 낮음)
+vi.mock('@obora/core', () => ({
+  executeAgent: vi.fn().mockResolvedValue({
+    status: 'success',
+    output: 'Mocked output',
+  }),
+}));
+
+// 2단계: 상태 Mock (실제 로직 검증)
+vi.mock('../agents/runner', () => ({
+  executeAgent: vi.fn()
+    .mockImplementation(async (agent: string, input: string) => {
+      if (agent === 'architect') {
+        return { status: 'success', output: 'Design created' };
+      }
+      if (agent === 'coder') {
+        return { status: 'success', output: 'Code written' };
+      }
+      if (agent === 'tester') {
+        return { status: 'success', output: 'Tests passed' };
+      }
+      throw new Error(`Unknown agent: ${agent}`);
+    }),
+}));
+
+// 3단계: 타임아웃/에러 시뮬레이션
+vi.mock('../agents/runner', () => ({
+  executeAgent: vi.fn()
+    .mockImplementation(async (agent: string, input: string) => {
+      if (input.includes('timeout')) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        throw new Error('Agent execution timeout');
+      }
+      if (input.includes('error')) {
+        throw new Error('Agent execution failed');
+      }
+      return { status: 'success', output: 'Success' };
+    }),
+}));
+
+// 4단계: 퍼지 테스트 (무작위 응답)
+vi.mock('../agents/runner', () => ({
+  executeAgent: vi.fn()
+    .mockImplementation(async () => {
+      const responses = [
+        { status: 'success', output: 'Result 1' },
+        { status: 'success', output: 'Result 2' },
+        { status: 'error', output: 'Agent error' },
+        { status: 'timeout', output: 'Timeout' },
+      ];
+      return responses[Math.floor(Math.random() * responses.length)];
+    }),
+}));
+```
+
+#### 통합 테스트용 Mock 팩토리
+
+```typescript
+// test/mocks/agent-runner.ts
+export function createMockAgentRunner(config: {
+  responses?: Map<string, { status: string; output: string }>;
+  delay?: number;
+  failOn?: string[];
+}) {
+  const { responses = new Map(), delay = 0, failOn = [] } = config;
+
+  return {
+    executeAgent: vi.fn()
+      .mockImplementation(async (agent: string, input: string) => {
+        await new Promise(resolve => setTimeout(resolve, delay));
+
+        if (failOn.some(pattern => input.includes(pattern))) {
+          throw new Error(`Agent execution failed: ${input}`);
+        }
+
+        if (responses.has(agent)) {
+          return responses.get(agent)!;
+        }
+
+        return {
+          status: 'success',
+          output: `Mocked ${agent} output for: ${input}`,
+        };
+      }),
+  };
+}
+
+// 사용 예시
+const mockRunner = createMockAgentRunner({
+  responses: new Map([
+    ['architect', { status: 'success', output: 'Design: component.ts' }],
+    ['coder', { status: 'success', output: 'Code: component.ts implemented' }],
+  ]),
+  delay: 10, // 10ms 지연 (비동기 테스트)
+  failOn: ['invalid', 'timeout'],
+});
+
+vi.mock('../agents/runner', () => mockRunner);
+```
+
+#### 상태 기반 Mock (Stateful Mock)
+
+```typescript
+// 에이전트 상태 추적
+class MockAgentRunner {
+  private executionCount = new Map<string, number>();
+  private history: Array<{ agent: string; input: string; result: any }> = [];
+
+  async executeAgent(agent: string, input: string): Promise<any> {
+    const count = (this.executionCount.get(agent) || 0) + 1;
+    this.executionCount.set(agent, count);
+
+    const result = this.execute(agent, input, count);
+    this.history.push({ agent, input, result });
+    return result;
+  }
+
+  private execute(agent: string, input: string, count: number) {
+    // 3회 재시차 후 성공
+    if (count < 3) {
+      throw new Error(`${agent}: Temporary failure (attempt ${count})`);
+    }
+
+    // 입력에 따른 다른 응답
+    if (input.includes('proposal')) {
+      return { status: 'success', output: 'Proposal generated' };
+    }
+    if (input.includes('design')) {
+      return { status: 'success', output: 'Design created' };
+    }
+
+    return { status: 'success', output: 'Default output' };
+  }
+
+  getExecutionCount(agent: string): number {
+    return this.executionCount.get(agent) || 0;
+  }
+
+  getHistory() {
+    return [...this.history];
+  }
+
+  reset() {
+    this.executionCount.clear();
+    this.history = [];
+  }
+}
+
+// 테스트에서 사용
+const mockRunner = new MockAgentRunner();
+vi.mock('../agents/runner', () => ({ executeAgent: mockRunner.executeAgent.bind(mockRunner) }));
+
+// 테스트 후 검증
+expect(mockRunner.getExecutionCount('architect')).toBe(1);
+expect(mockRunner.getHistory()).toHaveLength(3);
+```
+
+#### Mock Spy/호출 검증
+
+```typescript
+describe('agent execution', () => {
+  let mockExecuteAgent: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    mockExecuteAgent = vi.fn().mockResolvedValue({
+      status: 'success',
+      output: 'Mock output',
+    });
+
+    vi.doMock('@obora/core', () => ({
+      executeAgent: mockExecuteAgent,
+    }));
+  });
+
+  it('should call agent with correct parameters', async () => {
+    await runWorkflow('test-feature', {});
+
+    expect(mockExecuteAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: 'architect',
+        input: expect.stringContaining('proposal'),
+      })
+    );
+  });
+
+  it('should retry on failure', async () => {
+    mockExecuteAgent
+      .mockRejectedValueOnce(new Error('Timeout'))
+      .mockRejectedValueOnce(new Error('Timeout'))
+      .mockResolvedValueOnce({ status: 'success', output: 'Success' });
+
+    await runWorkflow('test-feature', { retry: 3 });
+
+    expect(mockExecuteAgent).toHaveBeenCalledTimes(3);
+  });
+
+  it('should respect timeout', async () => {
+    mockExecuteAgent.mockImplementation(() =>
+      new Promise(resolve => setTimeout(resolve, 5000))
+    );
+
+    await expect(
+      runWorkflow('test-feature', { timeout: 1000 })
+    ).rejects.toThrow('Agent timeout');
+  });
+});
+```
+
+### --continue-on-error 테스트 예시
+
+```typescript
+describe('run command --continue-on-error', () => {
+  it('should continue execution when step fails with --continue-on-error', async () => {
+    const mockExecuteAgent = vi.fn()
+      .mockResolvedValueOnce({ status: 'success', output: 'Plan created' })
+      .mockRejectedValueOnce(new Error('Agent failed'))
+      .mockResolvedValueOnce({ status: 'success', output: 'Tests passed' });
+
+    vi.mock('../agents/runner', () => ({ executeAgent: mockExecuteAgent }));
+
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(parseWorkflow).mockReturnValue({
+      name: 'test-workflow',
+      steps: [
+        { name: 'plan', agent: 'architect' },
+        { name: 'implement', agent: 'coder', depends_on: ['plan'] },
+        { name: 'test', agent: 'tester', depends_on: ['implement'] },
+      ],
+    });
+
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const cmd = createRunCommand();
+    await cmd.parseAsync(['run', '--feature', 'test-feature', '--continue-on-error'], {
+      from: 'user',
+    });
+
+    // All 3 steps should be attempted
+    expect(mockExecuteAgent).toHaveBeenCalledTimes(3);
+
+    // Error should be logged
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Agent failed')
+    );
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  it('should mark failed steps and continue', async () => {
+    const mockExecuteAgent = vi.fn()
+      .mockResolvedValueOnce({ status: 'success', output: 'Plan created' })
+      .mockRejectedValueOnce(new Error('Implementation failed'))
+      .mockResolvedValueOnce({ status: 'success', output: 'Tests passed' });
+
+    vi.mock('../agents/runner', () => ({ executeAgent: mockExecuteAgent }));
+
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(parseWorkflow).mockReturnValue({
+      name: 'test-workflow',
+      steps: [
+        { name: 'plan', agent: 'architect' },
+        { name: 'implement', agent: 'coder', depends_on: ['plan'] },
+        { name: 'test', agent: 'tester', depends_on: ['implement'] },
+      ],
+    });
+
+    const cmd = createRunCommand();
+    await cmd.parseAsync(['run', '--feature', 'test-feature', '--continue-on-error'], {
+      from: 'user',
+    });
+
+    // Verify agents called in order
+    expect(mockExecuteAgent).toHaveBeenNthCalledWith(1, 'architect', expect.any(Object));
+    expect(mockExecuteAgent).toHaveBeenNthCalledWith(2, 'coder', expect.any(Object));
+    expect(mockExecuteAgent).toHaveBeenNthCalledWith(3, 'tester', expect.any(Object));
+  });
+
+  it('should report final status with failures', async () => {
+    const mockExecuteAgent = vi.fn()
+      .mockResolvedValueOnce({ status: 'success', output: 'Plan created' })
+      .mockRejectedValueOnce(new Error('Implementation failed'));
+
+    vi.mock('../agents/runner', () => ({ executeAgent: mockExecuteAgent }));
+
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(parseWorkflow).mockReturnValue({
+      name: 'test-workflow',
+      steps: [
+        { name: 'plan', agent: 'architect' },
+        { name: 'implement', agent: 'coder', depends_on: ['plan'] },
+      ],
+    });
+
+    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const cmd = createRunCommand();
+    await cmd.parseAsync(['run', '--feature', 'test-feature', '--continue-on-error'], {
+      from: 'user',
+    });
+
+    expect(consoleLogSpy).toHaveBeenCalledWith(
+      expect.stringContaining('completed with errors')
+    );
+
+    consoleLogSpy.mockRestore();
+  });
+
+  it('should stop execution when --continue-on-error is not set', async () => {
+    const mockExecuteAgent = vi.fn()
+      .mockResolvedValueOnce({ status: 'success', output: 'Plan created' })
+      .mockRejectedValueOnce(new Error('Implementation failed'))
+      .mockResolvedValueOnce({ status: 'success', output: 'Tests passed' });
+
+    vi.mock('../agents/runner', () => ({ executeAgent: mockExecuteAgent }));
+
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(parseWorkflow).mockReturnValue({
+      name: 'test-workflow',
+      steps: [
+        { name: 'plan', agent: 'architect' },
+        { name: 'implement', agent: 'coder', depends_on: ['plan'] },
+        { name: 'test', agent: 'tester', depends_on: ['implement'] },
+      ],
+    });
+
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const cmd = createRunCommand();
+    await expect(
+      cmd.parseAsync(['run', '--feature', 'test-feature'], { from: 'user' })
+    ).rejects.toThrow('Implementation failed');
+
+    // Only 2 steps should be called (stopped at failure)
+    expect(mockExecuteAgent).toHaveBeenCalledTimes(2);
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  it('should handle multiple failures with --continue-on-error', async () => {
+    const mockExecuteAgent = vi.fn()
+      .mockResolvedValueOnce({ status: 'success', output: 'Plan created' })
+      .mockRejectedValueOnce(new Error('Implement failed'))
+      .mockRejectedValueOnce(new Error('Test failed'));
+
+    vi.mock('../agents/runner', () => ({ executeAgent: mockExecuteAgent }));
+
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(parseWorkflow).mockReturnValue({
+      name: 'test-workflow',
+      steps: [
+        { name: 'plan', agent: 'architect' },
+        { name: 'implement', agent: 'coder', depends_on: ['plan'] },
+        { name: 'test', agent: 'tester', depends_on: ['implement'] },
+      ],
+    });
+
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const cmd = createRunCommand();
+    await cmd.parseAsync(['run', '--feature', 'test-feature', '--continue-on-error'], {
+      from: 'user',
+    });
+
+    // All steps attempted
+    expect(mockExecuteAgent).toHaveBeenCalledTimes(3);
+
+    // Both errors logged
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Implement failed')
+    );
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Test failed')
+    );
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  it('should update status.yaml with partial completion', async () => {
+    const mockExecuteAgent = vi.fn()
+      .mockResolvedValueOnce({ status: 'success', output: 'Plan created' })
+      .mockRejectedValueOnce(new Error('Implement failed'))
+      .mockResolvedValueOnce({ status: 'success', output: 'Tests passed' });
+
+    vi.mock('../agents/runner', () => ({ executeAgent: mockExecuteAgent }));
+
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(parseWorkflow).mockReturnValue({
+      name: 'test-workflow',
+      steps: [
+        { name: 'plan', agent: 'architect' },
+        { name: 'implement', agent: 'coder', depends_on: ['plan'] },
+        { name: 'test', agent: 'tester', depends_on: ['implement'] },
+      ],
+    });
+
+    const writeFileSpy = vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const cmd = createRunCommand();
+    await cmd.parseAsync(['run', '--feature', 'test-feature', '--continue-on-error'], {
+      from: 'user',
+    });
+
+    // status.yaml should be updated with failure info
+    expect(writeFileSpy).toHaveBeenCalledWith(
+      expect.stringContaining('status.yaml'),
+      expect.stringContaining('status: "failed"'),
+      'utf-8'
+    );
+  });
 });
 ```
 
@@ -638,30 +1057,1022 @@ describe('run command', () => {
       expect.objectContaining({ fromStep: 'implement' })
     );
   });
+
+  it('should throw error when .obora does not exist', async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+
+    const cmd = createRunCommand();
+
+    await expect(
+      cmd.parseAsync(['run', '--feature', 'test-feature'], { from: 'user' })
+    ).rejects.toThrow("Not in an obora project");
+  });
 });
+
+### new.ts 테스트 예시
+```typescript
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { createNewCommand } from '../commands/new';
+import * as fs from 'fs-extra';
+
+vi.mock('fs-extra');
+
+describe('new command', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('should create new feature directory', async () => {
+    vi.mocked(fs.existsSync)
+      .mockImplementation((path) => {
+        // .obora exists, but feature does not
+        return String(path).includes('.obora') && !String(path).includes('test-feature');
+      });
+
+    vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+    const writeFileSpy = vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const cmd = createNewCommand();
+    await cmd.parseAsync(['new', 'test-feature'], { from: 'user' });
+
+    expect(writeFileSpy).toHaveBeenCalledWith(
+      '.obora/features/test-feature/proposal.md',
+      expect.stringContaining('# test-feature'),
+      'utf-8'
+    );
+  });
+
+  it('should create all required files', async () => {
+    vi.mocked(fs.existsSync)
+      .mockImplementation((path) => {
+        return String(path).includes('.obora') && !String(path).includes('test-feature');
+      });
+
+    vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+    const writeFileSpy = vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const cmd = createNewCommand();
+    await cmd.parseAsync(['new', 'test-feature'], { from: 'user' });
+
+    expect(writeFileSpy).toHaveBeenCalledWith(
+      expect.stringContaining('proposal.md'),
+      expect.any(String),
+      'utf-8'
+    );
+    expect(writeFileSpy).toHaveBeenCalledWith(
+      expect.stringContaining('design.md'),
+      expect.any(String),
+      'utf-8'
+    );
+    expect(writeFileSpy).toHaveBeenCalledWith(
+      expect.stringContaining('tasks.md'),
+      expect.any(String),
+      'utf-8'
+    );
+    expect(writeFileSpy).toHaveBeenCalledWith(
+      expect.stringContaining('status.yaml'),
+      expect.any(String),
+      'utf-8'
+    );
+  });
+
+  it('should create context directory with README', async () => {
+    vi.mocked(fs.existsSync)
+      .mockImplementation((path) => {
+        return String(path).includes('.obora') && !String(path).includes('test-feature');
+      });
+
+    vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+    vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const cmd = createNewCommand();
+    await cmd.parseAsync(['new', 'test-feature'], { from: 'user' });
+
+    expect(fs.ensureDir).toHaveBeenCalledWith('.obora/features/test-feature/context');
+  });
+
+  it('should reject feature name with uppercase letters', async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+
+    const cmd = createNewCommand();
+
+    await expect(
+      cmd.parseAsync(['new', 'TestFeature'], { from: 'user' })
+    ).rejects.toThrow("Feature name must contain only lowercase letters");
+  });
+
+  it('should reject feature name with path traversal', async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+
+    const cmd = createNewCommand();
+
+    await expect(
+      cmd.parseAsync(['new', '../../../etc/passwd'], { from: 'user' })
+    ).rejects.toThrow("Invalid feature name");
+  });
+
+  it('should reject empty feature name', async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+
+    const cmd = createNewCommand();
+
+    await expect(
+      cmd.parseAsync(['new', ''], { from: 'user' })
+    ).rejects.toThrow("Feature name cannot be empty");
+  });
+
+  it('should reject feature name with consecutive hyphens', async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+
+    const cmd = createNewCommand();
+
+    await expect(
+      cmd.parseAsync(['new', 'test--feature'], { from: 'user' })
+    ).rejects.toThrow("Feature name cannot contain consecutive hyphens");
+  });
+
+  it('should reject feature name starting with hyphen', async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+
+    const cmd = createNewCommand();
+
+    await expect(
+      cmd.parseAsync(['new', '-test'], { from: 'user' })
+    ).rejects.toThrow("Feature name cannot start or end with a hyphen");
+  });
+
+  it('should reject feature name ending with hyphen', async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+
+    const cmd = createNewCommand();
+
+    await expect(
+      cmd.parseAsync(['new', 'test-'], { from: 'user' })
+    ).rejects.toThrow("Feature name cannot start or end with a hyphen");
+  });
+
+  it('should reject reserved word as feature name', async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+
+    const cmd = createNewCommand();
+
+    await expect(
+      cmd.parseAsync(['new', 'init'], { from: 'user' })
+    ).rejects.toThrow("is a reserved word");
+  });
+
+  it('should reject feature name exceeding 64 characters', async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    const longName = 'a'.repeat(65);
+
+    const cmd = createNewCommand();
+
+    await expect(
+      cmd.parseAsync(['new', longName], { from: 'user' })
+    ).rejects.toThrow("Feature name cannot exceed 64 characters");
+  });
+
+  it('should reject duplicate feature name', async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+
+    const cmd = createNewCommand();
+
+    await expect(
+      cmd.parseAsync(['new', 'test-feature'], { from: 'user' })
+    ).rejects.toThrow("Feature 'test-feature' already exists");
+  });
+
+  it('should warn about archived feature with same name', async () => {
+    vi.mocked(fs.existsSync)
+      .mockImplementation((path) => {
+        // .obora/archive/test-feature exists
+        return String(path).includes('archive/test-feature') || String(path).includes('.obora');
+      });
+
+    vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+    vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const cmd = createNewCommand();
+    await cmd.parseAsync(['new', 'test-feature'], { from: 'user' });
+
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("An archived feature with name 'test-feature' exists")
+    );
+
+    consoleWarnSpy.mockRestore();
+  });
+
+  it('should throw error when not in obora project', async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+
+    const cmd = createNewCommand();
+
+    await expect(
+      cmd.parseAsync(['new', 'test-feature'], { from: 'user' })
+    ).rejects.toThrow("Not in an obora project");
+  });
+
+  it('should create feature with standard workflow', async () => {
+    vi.mocked(fs.existsSync)
+      .mockImplementation((path) => {
+        return String(path).includes('.obora') && !String(path).includes('test-feature');
+      });
+
+    vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+    const writeFileSpy = vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const cmd = createNewCommand();
+    await cmd.parseAsync(['new', 'test-feature', '--workflow', 'standard'], { from: 'user' });
+
+    expect(writeFileSpy).toHaveBeenCalledWith(
+      '.obora/features/test-feature/status.yaml',
+      expect.stringContaining('workflow: "standard"'),
+      'utf-8'
+    );
+  });
+
+  it('should reject invalid workflow type', async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+
+    const cmd = createNewCommand();
+
+    await expect(
+      cmd.parseAsync(['new', 'test-feature', '--workflow', 'invalid'], { from: 'user' })
+    ).rejects.toThrow("Invalid workflow type 'invalid'");
+  });
+
+  it('should handle --from-existing flag', async () => {
+    vi.mocked(fs.existsSync)
+      .mockImplementation((path) => {
+        return String(path).includes('.obora') && !String(path).includes('test-feature');
+      });
+
+    vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+    vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const cmd = createNewCommand();
+    await cmd.parseAsync(['new', 'test-feature', '--from-existing'], { from: 'user' });
+
+    expect(consoleLogSpy).toHaveBeenCalledWith(
+      expect.stringContaining('--from-existing mode enabled')
+    );
+
+    consoleLogSpy.mockRestore();
+  });
+});
+
+### done.ts 테스트 예시
+```typescript
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { createDoneCommand } from '../commands/done';
+import * as fs from 'fs-extra';
+
+vi.mock('fs-extra');
+
+describe('done command', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.readFileSync).mockReturnValue(`
+feature:
+  name: "test-feature"
+  created_at: "2026-02-04T00:00:00Z"
+  workflow: "simple"
+
+status: pending
+
+progress:
+  current_stage: planning
+  completed_stages: []
+
+metadata:
+  last_updated: "2026-02-04T00:00:00Z"
+  notes: ""
+`);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('should mark feature as done successfully', async () => {
+    vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+    vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+    vi.mocked(fs.move).mockResolvedValue(undefined);
+
+    const cmd = createDoneCommand();
+    await cmd.parseAsync(['done', '--feature', 'test-feature'], { from: 'user' });
+
+    expect(fs.writeFile).toHaveBeenCalledWith(
+      '.obora/features/test-feature/status.yaml',
+      expect.stringContaining('status: completed'),
+      'utf-8'
+    );
+  });
+
+  it('should generate execution.log', async () => {
+    vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+    vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+    vi.mocked(fs.move).mockResolvedValue(undefined);
+
+    const writeFileSpy = vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const cmd = createDoneCommand();
+    await cmd.parseAsync(['done', '--feature', 'test-feature'], { from: 'user' });
+
+    expect(writeFileSpy).toHaveBeenCalledWith(
+      '.obora/features/test-feature/execution.log',
+      expect.stringContaining('# Execution Log: test-feature'),
+      'utf-8'
+    );
+  });
+
+  it('should move feature to archive', async () => {
+    vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+    vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+    const moveSpy = vi.mocked(fs.move).mockResolvedValue(undefined);
+
+    const cmd = createDoneCommand();
+    await cmd.parseAsync(['done', '--feature', 'test-feature'], { from: 'user' });
+
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const archiveName = `${year}-${month}-test-feature`;
+
+    expect(moveSpy).toHaveBeenCalledWith(
+      '.obora/features/test-feature',
+      `.obora/archive/${archiveName}`,
+      { overwrite: true }
+    );
+  });
+
+  it('should skip archiving with --no-archive flag', async () => {
+    vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+    vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+    const moveSpy = vi.mocked(fs.move).mockResolvedValue(undefined);
+
+    const cmd = createDoneCommand();
+    await cmd.parseAsync(['done', '--feature', 'test-feature', '--no-archive'], { from: 'user' });
+
+    expect(moveSpy).not.toHaveBeenCalled();
+  });
+
+  it('should handle dry-run mode', async () => {
+    vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+    vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+    const writeFileSpy = vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const cmd = createDoneCommand();
+    await cmd.parseAsync(['done', '--feature', 'test-feature', '--dry-run'], { from: 'user' });
+
+    // Should not write files in dry-run mode
+    expect(writeFileSpy).not.toHaveBeenCalled();
+    expect(consoleLogSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Dry-run mode')
+    );
+
+    consoleLogSpy.mockRestore();
+  });
+
+  it('should detect feature name from current directory', async () => {
+    const originalCwd = process.cwd;
+    vi.spyOn(process, 'cwd').mockReturnValue('/project/.obora/features/test-feature');
+
+    vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+    vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+    vi.mocked(fs.move).mockResolvedValue(undefined);
+
+    const writeFileSpy = vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const cmd = createDoneCommand();
+    await cmd.parseAsync(['done'], { from: 'user' });
+
+    expect(writeFileSpy).toHaveBeenCalledWith(
+      expect.stringContaining('status.yaml'),
+      expect.any(String),
+      'utf-8'
+    );
+
+    process.cwd = originalCwd;
+  });
+
+  it('should throw error when feature not found', async () => {
+    vi.mocked(fs.existsSync).mockImplementation((path) => {
+      return !String(path).includes('nonexistent-feature');
+    });
+
+    const cmd = createDoneCommand();
+
+    await expect(
+      cmd.parseAsync(['done', '--feature', 'nonexistent-feature'], { from: 'user' })
+    ).rejects.toThrow("Feature 'nonexistent-feature' not found");
+  });
+
+  it('should throw error when not in obora project', async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+
+    const cmd = createDoneCommand();
+
+    await expect(
+      cmd.parseAsync(['done', '--feature', 'test-feature'], { from: 'user' })
+    ).rejects.toThrow("Not in an obora project");
+  });
+
+  it('should throw error when feature is already completed', async () => {
+    vi.mocked(fs.readFileSync).mockReturnValue(`
+feature:
+  name: "test-feature"
+  created_at: "2026-02-04T00:00:00Z"
+  workflow: "simple"
+
+status: completed
+
+progress:
+  current_stage: done
+  completed_stages: []
+
+metadata:
+  last_updated: "2026-02-04T00:00:00Z"
+  notes: ""
+`);
+
+    const cmd = createDoneCommand();
+
+    await expect(
+      cmd.parseAsync(['done', '--feature', 'test-feature'], { from: 'user' })
+    ).rejects.toThrow("Feature is already marked as done");
+  });
+
+  it('should throw error when feature is still running', async () => {
+    vi.mocked(fs.readFileSync).mockReturnValue(`
+feature:
+  name: "test-feature"
+  created_at: "2026-02-04T00:00:00Z"
+  workflow: "simple"
+
+status: running
+
+progress:
+  current_stage: implementation
+  completed_stages: []
+
+metadata:
+  last_updated: "2026-02-04T00:00:00Z"
+  notes: ""
+`);
+
+    const cmd = createDoneCommand();
+
+    await expect(
+      cmd.parseAsync(['done', '--feature', 'test-feature'], { from: 'user' })
+    ).rejects.toThrow("Feature is still running");
+  });
+
+  it('should throw error when feature has failed', async () => {
+    vi.mocked(fs.readFileSync).mockReturnValue(`
+feature:
+  name: "test-feature"
+  created_at: "2026-02-04T00:00:00Z"
+  workflow: "simple"
+
+status: failed
+
+progress:
+  current_stage: implementation
+  completed_stages: []
+
+metadata:
+  last_updated: "2026-02-04T00:00:00Z"
+  notes: ""
+`);
+
+    const cmd = createDoneCommand();
+
+    await expect(
+      cmd.parseAsync(['done', '--feature', 'test-feature'], { from: 'user' })
+    ).rejects.toThrow("Feature workflow failed");
+  });
+
+  it('should handle path traversal attack', async () => {
+    vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+    vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+    vi.mocked(fs.move).mockResolvedValue(undefined);
+
+    const cmd = createDoneCommand();
+
+    await expect(
+      cmd.parseAsync(['done', '--feature', '../../../etc/passwd'], { from: 'user' })
+    ).rejects.toThrow("Invalid path");
+  });
+
+  it('should handle archived name conflict', async () => {
+    vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+    vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+    vi.mocked(fs.existsSync).mockImplementation((path) => {
+      if (String(path).includes('archive/2026-02-test-feature')) {
+        return true;
+      }
+      return true; // .obora and feature exist
+    });
+
+    const moveSpy = vi.mocked(fs.move).mockResolvedValue(undefined);
+
+    const cmd = createDoneCommand();
+    await cmd.parseAsync(['done', '--feature', 'test-feature'], { from: 'user' });
+
+    // Should add timestamp suffix when archive already exists
+    expect(moveSpy).toHaveBeenCalledWith(
+      '.obora/features/test-feature',
+      expect.stringMatching(/\.obora\/archive\/2026-02-test-feature-\d+/),
+      { overwrite: true }
+    );
+  });
+
+  it('should create git commit with --commit flag', async () => {
+    vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+    vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+    vi.mocked(fs.move).mockResolvedValue(undefined);
+
+    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const cmd = createDoneCommand();
+    await cmd.parseAsync(['done', '--feature', 'test-feature', '--commit'], { from: 'user' });
+
+    expect(consoleLogSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Creating git commit')
+    );
+
+    consoleLogSpy.mockRestore();
+  });
+
+  it('should use custom commit message with --message flag', async () => {
+    vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+    vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+    vi.mocked(fs.move).mockResolvedValue(undefined);
+
+    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const cmd = createDoneCommand();
+    await cmd.parseAsync([
+      'done',
+      '--feature', 'test-feature',
+      '--commit',
+      '--message', 'Custom completion message'
+    ], { from: 'user' });
+
+    expect(consoleLogSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Custom completion message')
+    );
+
+    consoleLogSpy.mockRestore();
+  });
+
+  it('should require feature name when not in feature directory', async () => {
+    const originalCwd = process.cwd;
+    vi.spyOn(process, 'cwd').mockReturnValue('/project');
+
+    const cmd = createDoneCommand();
+
+    await expect(
+      cmd.parseAsync(['done'], { from: 'user' })
+    ).rejects.toThrow("Feature name required");
+
+    process.cwd = originalCwd;
+  });
+});
+
+### plan.ts 테스트 예시
+```typescript
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { createPlanCommand } from '../commands/plan';
+import * as fs from 'fs-extra';
+
+vi.mock('fs-extra');
+
+describe('plan command', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.readFileSync)
+      .mockImplementation((path) => {
+        if (String(path).includes('status.yaml')) {
+          return `
+feature:
+  name: "test-feature"
+  created_at: "2026-02-04T00:00:00Z"
+  workflow: "simple"
+
+status: pending
+
+progress:
+  current_stage: planning
+  completed_stages: []
+
+metadata:
+  last_updated: "2026-02-04T00:00:00Z"
+  notes: ""
+`;
+        }
+        if (String(path).includes('proposal.md')) {
+          return '# Proposal\n\nThis is a test proposal.';
+        }
+        if (String(path).includes('design.md')) {
+          return '# Design\n\nThis is a test design.';
+        }
+        if (String(path).includes('tasks.md')) {
+          return '# Tasks\n\nInitial tasks.';
+        }
+        return '';
+      });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('should generate plan successfully', async () => {
+    vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+    const writeFileSpy = vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const cmd = createPlanCommand();
+    await cmd.parseAsync(['plan', '--feature', 'test-feature'], { from: 'user' });
+
+    expect(writeFileSpy).toHaveBeenCalledWith(
+      '.obora/features/test-feature/tasks.md',
+      expect.stringContaining('## Implementation Plan'),
+      'utf-8'
+    );
+  });
+
+  it('should update status to planned', async () => {
+    vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+    const writeFileSpy = vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const cmd = createPlanCommand();
+    await cmd.parseAsync(['plan', '--feature', 'test-feature'], { from: 'user' });
+
+    expect(writeFileSpy).toHaveBeenCalledWith(
+      '.obora/features/test-feature/status.yaml',
+      expect.stringContaining('status: planned'),
+      'utf-8'
+    );
+  });
+
+  it('should read proposal and design files', async () => {
+    vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+    vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const readFileSyncSpy = vi.mocked(fs.readFileSync);
+
+    const cmd = createPlanCommand();
+    await cmd.parseAsync(['plan', '--feature', 'test-feature'], { from: 'user' });
+
+    expect(readFileSyncSpy).toHaveBeenCalledWith(
+      '.obora/features/test-feature/proposal.md',
+      'utf-8'
+    );
+    expect(readFileSyncSpy).toHaveBeenCalledWith(
+      '.obora/features/test-feature/design.md',
+      'utf-8'
+    );
+  });
+
+  it('should append plan to tasks.md when no existing plan section', async () => {
+    vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+    vi.mocked(fs.readFileSync)
+      .mockImplementation((path) => {
+        if (String(path).includes('tasks.md')) {
+          return '# Tasks\n\nInitial tasks without plan.';
+        }
+        return fs.readFileSync(path);
+      });
+
+    const writeFileSpy = vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const cmd = createPlanCommand();
+    await cmd.parseAsync(['plan', '--feature', 'test-feature'], { from: 'user' });
+
+    expect(writeFileSpy).toHaveBeenCalledWith(
+      '.obora/features/test-feature/tasks.md',
+      expect.stringContaining('---\n\n# Implementation Plan'),
+      'utf-8'
+    );
+  });
+
+  it('should replace existing plan section in tasks.md', async () => {
+    vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+    vi.mocked(fs.readFileSync)
+      .mockImplementation((path) => {
+        if (String(path).includes('tasks.md')) {
+          return '# Tasks\n\n## Implementation Plan\n\nOld plan content.\n\n## Other Tasks';
+        }
+        return fs.readFileSync(path);
+      });
+
+    const writeFileSpy = vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const cmd = createPlanCommand();
+    await cmd.parseAsync(['plan', '--feature', 'test-feature'], { from: 'user' });
+
+    // Should replace the old plan section
+    const call = writeFileSpy.mock.calls.find(
+      (call) => call[0] === '.obora/features/test-feature/tasks.md'
+    );
+    expect(call?.[1]).toContain('## Implementation Plan');
+    expect(call?.[1]).not.toContain('Old plan content');
+  });
+
+  it('should handle dry-run mode', async () => {
+    vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+    const writeFileSpy = vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const cmd = createPlanCommand();
+    await cmd.parseAsync(['plan', '--feature', 'test-feature', '--dry-run'], { from: 'user' });
+
+    // Should not write files in dry-run mode
+    expect(writeFileSpy).not.toHaveBeenCalled();
+    expect(consoleLogSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Dry-run mode')
+    );
+
+    consoleLogSpy.mockRestore();
+  });
+
+  it('should detect feature name from current directory', async () => {
+    const originalCwd = process.cwd;
+    vi.spyOn(process, 'cwd').mockReturnValue('/project/.obora/features/test-feature');
+
+    vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+    vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const writeFileSpy = vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const cmd = createPlanCommand();
+    await cmd.parseAsync(['plan'], { from: 'user' });
+
+    expect(writeFileSpy).toHaveBeenCalledWith(
+      expect.stringContaining('tasks.md'),
+      expect.any(String),
+      'utf-8'
+    );
+
+    process.cwd = originalCwd;
+  });
+
+  it('should throw error when feature not found', async () => {
+    vi.mocked(fs.existsSync).mockImplementation((path) => {
+      return !String(path).includes('nonexistent-feature');
+    });
+
+    const cmd = createPlanCommand();
+
+    await expect(
+      cmd.parseAsync(['plan', '--feature', 'nonexistent-feature'], { from: 'user' })
+    ).rejects.toThrow("Feature 'nonexistent-feature' not found");
+  });
+
+  it('should throw error when not in obora project', async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+
+    const cmd = createPlanCommand();
+
+    await expect(
+      cmd.parseAsync(['plan', '--feature', 'test-feature'], { from: 'user' })
+    ).rejects.toThrow("Not in an obora project");
+  });
+
+  it('should handle missing proposal.md gracefully', async () => {
+    vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+    vi.mocked(fs.readFileSync)
+      .mockImplementation((path) => {
+        if (String(path).includes('proposal.md')) {
+          return '# No proposal\n';
+        }
+        return fs.readFileSync(path);
+      });
+    vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const cmd = createPlanCommand();
+    await cmd.parseAsync(['plan', '--feature', 'test-feature'], { from: 'user' });
+
+    // Should not throw when proposal is missing/empty
+    expect(fs.writeFile).toHaveBeenCalled();
+  });
+
+  it('should handle missing design.md gracefully', async () => {
+    vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+    vi.mocked(fs.readFileSync)
+      .mockImplementation((path) => {
+        if (String(path).includes('design.md')) {
+          return '# No design\n';
+        }
+        return fs.readFileSync(path);
+      });
+    vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const cmd = createPlanCommand();
+    await cmd.parseAsync(['plan', '--feature', 'test-feature'], { from: 'user' });
+
+    // Should not throw when design is missing/empty
+    expect(fs.writeFile).toHaveBeenCalled();
+  });
+
+  it('should update last_updated timestamp in metadata', async () => {
+    vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+    vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const writeFileSpy = vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const cmd = createPlanCommand();
+    await cmd.parseAsync(['plan', '--feature', 'test-feature'], { from: 'user' });
+
+    const call = writeFileSpy.mock.calls.find(
+      (call) => call[0] === '.obora/features/test-feature/status.yaml'
+    );
+    expect(call?.[1]).toMatch(/last_updated:\s*"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+  });
+});
+```
+```
+```
 ```
 
 ### init.ts 테스트 예시
 ```typescript
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { createInitCommand } from '../commands/init';
+import * as fs from 'fs-extra';
+import { OboraDatabase } from '@obora/database';
+
+vi.mock('fs-extra');
+vi.mock('@obora/database');
+
 describe('init command', () => {
-  it('should create .obora directory', async () => {
-    const mkdirSpy = vi.fn();
-    vi.mocked(fs.ensureDir).mockImplementation(mkdirSpy);
+  let dbMock: any;
 
-    const cmd = createInitCommand();
-    await cmd.parseAsync(['init', '--name', 'test-project'], { from: 'user' });
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(fs.existsSync).mockReturnValue(false);
 
-    expect(mkdirSpy).toHaveBeenCalledWith('.obora');
+    // DuckDB mock
+    dbMock = {
+      initialize: vi.fn().mockResolvedValue(undefined),
+      close: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.mocked(OboraDatabase).mockImplementation(() => dbMock);
   });
 
-  it('should overwrite with --force option', async () => {
-    vi.mocked(fs.existsSync).mockReturnValue(true);
-    const writeFileSpy = vi.spyOn(fs, 'writeFile').mockResolvedValue();
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('should create .obora directory structure', async () => {
+    const ensureDirSpy = vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+    const writeFileSpy = vi.mocked(fs.writeFile).mockResolvedValue(undefined);
 
     const cmd = createInitCommand();
-    await cmd.parseAsync(['init', '--name', 'test-project', '--force'], { from: 'user' });
+    await cmd.parseAsync(['init'], { from: 'user' });
 
-    expect(writeFileSpy).toHaveBeenCalled();
+    // Verify directories created
+    expect(ensureDirSpy).toHaveBeenCalledWith('.obora');
+    expect(ensureDirSpy).toHaveBeenCalledWith('.obora/workflows');
+    expect(ensureDirSpy).toHaveBeenCalledWith('.obora/features');
+    expect(ensureDirSpy).toHaveBeenCalledWith('.obora/archive');
+    expect(ensureDirSpy).toHaveBeenCalledWith('.obora/agents');
+  });
+
+  it('should create config.yaml with default settings', async () => {
+    vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+    const writeFileSpy = vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const cmd = createInitCommand();
+    await cmd.parseAsync(['init'], { from: 'user' });
+
+    expect(writeFileSpy).toHaveBeenCalledWith(
+      '.obora/config.yaml',
+      expect.stringContaining('project:'),
+      'utf-8'
+    );
+  });
+
+  it('should create simple workflow by default', async () => {
+    vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+    const writeFileSpy = vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const cmd = createInitCommand();
+    await cmd.parseAsync(['init'], { from: 'user' });
+
+    expect(writeFileSpy).toHaveBeenCalledWith(
+      '.obora/workflows/simple.yaml',
+      expect.stringContaining('name: simple'),
+      'utf-8'
+    );
+  });
+
+  it('should create standard workflow with --workflow standard', async () => {
+    vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+    const writeFileSpy = vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const cmd = createInitCommand();
+    await cmd.parseAsync(['init', '--workflow', 'standard'], { from: 'user' });
+
+    expect(writeFileSpy).toHaveBeenCalledWith(
+      '.obora/workflows/standard.yaml',
+      expect.stringContaining('name: standard'),
+      'utf-8'
+    );
+  });
+
+  it('should reject invalid workflow type', async () => {
+    const cmd = createInitCommand();
+
+    await expect(
+      cmd.parseAsync(['init', '--workflow', 'invalid'], { from: 'user' })
+    ).rejects.toThrow("Invalid workflow type 'invalid'");
+  });
+
+  it('should overwrite with --force option when .obora exists', async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.remove).mockResolvedValue(undefined);
+    vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+    vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const cmd = createInitCommand();
+    await cmd.parseAsync(['init', '--force'], { from: 'user' });
+
+    expect(fs.remove).toHaveBeenCalledWith('.obora');
+  });
+
+  it('should throw error when .obora exists without --force', async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+
+    const cmd = createInitCommand();
+
+    await expect(
+      cmd.parseAsync(['init'], { from: 'user' })
+    ).rejects.toThrow(".obora/ already exists. Use --force to overwrite.");
+  });
+
+  it('should initialize DuckDB database', async () => {
+    vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+    vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const cmd = createInitCommand();
+    await cmd.parseAsync(['init'], { from: 'user' });
+
+    expect(dbMock.initialize).toHaveBeenCalled();
+    expect(dbMock.close).toHaveBeenCalled();
+  });
+
+  it('should create .gitkeep files for empty directories', async () => {
+    vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+    const writeFileSpy = vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const cmd = createInitCommand();
+    await cmd.parseAsync(['init'], { from: 'user' });
+
+    expect(writeFileSpy).toHaveBeenCalledWith(
+      '.obora/features/.gitkeep',
+      '',
+      'utf-8'
+    );
+    expect(writeFileSpy).toHaveBeenCalledWith(
+      '.obora/archive/.gitkeep',
+      '',
+      'utf-8'
+    );
+    expect(writeFileSpy).toHaveBeenCalledWith(
+      '.obora/agents/.gitkeep',
+      '',
+      'utf-8'
+    );
+  });
+
+  it('should use minimal config with --minimal flag', async () => {
+    vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+    const writeFileSpy = vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const cmd = createInitCommand();
+    await cmd.parseAsync(['init', '--minimal'], { from: 'user' });
+
+    expect(writeFileSpy).toHaveBeenCalledWith(
+      '.obora/config.yaml',
+      expect.stringContaining('workflow: "simple"'),
+      'utf-8'
+    );
   });
 });
 ```

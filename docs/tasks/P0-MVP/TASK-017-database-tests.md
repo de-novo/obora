@@ -863,6 +863,684 @@ describe('Database singleton', () => {
 });
 ```
 
+### FK Cascade 삭제 테스트
+```typescript
+import {
+  OboraDatabase,
+  insertProject,
+  insertWorkflowRun,
+  insertStepExecution,
+  insertMetric,
+  deleteWorkflowRun,
+  deleteProject,
+  listStepExecutions,
+  listWorkflowRuns,
+  getMetricsForRun,
+} from '../duckdb-client';
+
+describe('FK cascade delete', () => {
+  let db: OboraDatabase;
+
+  beforeEach(async () => {
+    db = new OboraDatabase(':memory:');
+    await db.initialize();
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
+  describe('workflow_run 삭제 시 step_executions 자동 삭제', () => {
+    it('should delete all step_executions when workflow_run is deleted', async () => {
+      // Setup: project → workflow_run → step_executions
+      const projectId = await insertProject(db, {
+        name: 'test-project',
+        path: '/path/to/project',
+      });
+
+      const runId = await insertWorkflowRun(db, {
+        project_id: projectId,
+        feature: 'test-feature',
+        workflow: 'simple',
+        mode: 'auto',
+        status: 'running',
+      });
+
+      // Create multiple step executions
+      await insertStepExecution(db, {
+        run_id: runId,
+        step_name: 'plan',
+        step_index: 0,
+        agent: 'architect',
+        status: 'completed',
+      });
+
+      await insertStepExecution(db, {
+        run_id: runId,
+        step_name: 'implement',
+        step_index: 1,
+        agent: 'coder',
+        status: 'running',
+      });
+
+      await insertStepExecution(db, {
+        run_id: runId,
+        step_name: 'test',
+        step_index: 2,
+        agent: 'tester',
+        status: 'pending',
+      });
+
+      // Verify steps exist
+      let steps = await listStepExecutions(db, runId);
+      expect(steps).toHaveLength(3);
+
+      // Delete workflow run
+      await deleteWorkflowRun(db, runId);
+
+      // Verify steps are also deleted (cascade)
+      steps = await listStepExecutions(db, runId);
+      expect(steps).toHaveLength(0);
+    });
+
+    it('should delete metrics when workflow_run is deleted', async () => {
+      const projectId = await insertProject(db, {
+        name: 'test-project',
+        path: '/path/to/project',
+      });
+
+      const runId = await insertWorkflowRun(db, {
+        project_id: projectId,
+        feature: 'test-feature',
+        workflow: 'simple',
+        mode: 'auto',
+        status: 'running',
+      });
+
+      // Create metrics
+      await insertMetric(db, {
+        run_id: runId,
+        metric_name: 'execution_time',
+        metric_value: 1000,
+      });
+
+      await insertMetric(db, {
+        run_id: runId,
+        metric_name: 'memory_usage',
+        metric_value: 512,
+      });
+
+      // Verify metrics exist
+      let metrics = await getMetricsForRun(db, runId);
+      expect(metrics).toHaveLength(2);
+
+      // Delete workflow run
+      await deleteWorkflowRun(db, runId);
+
+      // Verify metrics are also deleted (cascade)
+      metrics = await getMetricsForRun(db, runId);
+      expect(metrics).toHaveLength(0);
+    });
+
+    it('should not affect other workflow_runs when deleting one', async () => {
+      const projectId = await insertProject(db, {
+        name: 'test-project',
+        path: '/path/to/project',
+      });
+
+      const runId1 = await insertWorkflowRun(db, {
+        project_id: projectId,
+        feature: 'feature-1',
+        workflow: 'simple',
+        mode: 'auto',
+        status: 'completed',
+      });
+
+      const runId2 = await insertWorkflowRun(db, {
+        project_id: projectId,
+        feature: 'feature-2',
+        workflow: 'simple',
+        mode: 'auto',
+        status: 'running',
+      });
+
+      await insertStepExecution(db, {
+        run_id: runId1,
+        step_name: 'plan',
+        step_index: 0,
+        agent: 'architect',
+        status: 'completed',
+      });
+
+      await insertStepExecution(db, {
+        run_id: runId2,
+        step_name: 'plan',
+        step_index: 0,
+        agent: 'architect',
+        status: 'running',
+      });
+
+      // Delete only run1
+      await deleteWorkflowRun(db, runId1);
+
+      // Verify run2's steps still exist
+      const steps = await listStepExecutions(db, runId2);
+      expect(steps).toHaveLength(1);
+      expect(steps[0].step_name).toBe('plan');
+    });
+  });
+
+  describe('project 삭제 시 관련 runs 자동 삭제', () => {
+    it('should delete all workflow_runs when project is deleted', async () => {
+      const projectId = await insertProject(db, {
+        name: 'test-project',
+        path: '/path/to/project',
+      });
+
+      // Create multiple workflow runs
+      await insertWorkflowRun(db, {
+        project_id: projectId,
+        feature: 'feature-1',
+        workflow: 'simple',
+        mode: 'auto',
+        status: 'completed',
+      });
+
+      await insertWorkflowRun(db, {
+        project_id: projectId,
+        feature: 'feature-2',
+        workflow: 'standard',
+        mode: 'supervised',
+        status: 'running',
+      });
+
+      await insertWorkflowRun(db, {
+        project_id: projectId,
+        feature: 'feature-3',
+        workflow: 'simple',
+        mode: 'gated',
+        status: 'pending',
+      });
+
+      // Verify runs exist
+      let runs = await listWorkflowRuns(db, projectId);
+      expect(runs).toHaveLength(3);
+
+      // Delete project
+      await deleteProject(db, projectId);
+
+      // Verify runs are also deleted (cascade)
+      runs = await listWorkflowRuns(db, projectId);
+      expect(runs).toHaveLength(0);
+    });
+
+    it('should cascade delete through all levels: project → runs → steps → metrics', async () => {
+      const projectId = await insertProject(db, {
+        name: 'test-project',
+        path: '/path/to/project',
+      });
+
+      const runId = await insertWorkflowRun(db, {
+        project_id: projectId,
+        feature: 'test-feature',
+        workflow: 'simple',
+        mode: 'auto',
+        status: 'running',
+      });
+
+      const stepId = await insertStepExecution(db, {
+        run_id: runId,
+        step_name: 'plan',
+        step_index: 0,
+        agent: 'architect',
+        status: 'completed',
+      });
+
+      await insertMetric(db, {
+        run_id: runId,
+        step_id: stepId,
+        metric_name: 'tokens_used',
+        metric_value: 1234,
+      });
+
+      // Verify all records exist
+      let runs = await listWorkflowRuns(db, projectId);
+      expect(runs).toHaveLength(1);
+
+      let steps = await listStepExecutions(db, runId);
+      expect(steps).toHaveLength(1);
+
+      let metrics = await getMetricsForRun(db, runId);
+      expect(metrics).toHaveLength(1);
+
+      // Delete project (should cascade to all)
+      await deleteProject(db, projectId);
+
+      // Verify all are deleted
+      runs = await listWorkflowRuns(db, projectId);
+      expect(runs).toHaveLength(0);
+
+      steps = await listStepExecutions(db, runId);
+      expect(steps).toHaveLength(0);
+
+      metrics = await getMetricsForRun(db, runId);
+      expect(metrics).toHaveLength(0);
+    });
+
+    it('should not affect other projects when deleting one', async () => {
+      const projectId1 = await insertProject(db, {
+        name: 'project-1',
+        path: '/path/1',
+      });
+
+      const projectId2 = await insertProject(db, {
+        name: 'project-2',
+        path: '/path/2',
+      });
+
+      await insertWorkflowRun(db, {
+        project_id: projectId1,
+        feature: 'feature-1',
+        workflow: 'simple',
+        mode: 'auto',
+        status: 'completed',
+      });
+
+      await insertWorkflowRun(db, {
+        project_id: projectId2,
+        feature: 'feature-2',
+        workflow: 'simple',
+        mode: 'auto',
+        status: 'running',
+      });
+
+      // Delete only project1
+      await deleteProject(db, projectId1);
+
+      // Verify project2's runs still exist
+      const runs = await listWorkflowRuns(db, projectId2);
+      expect(runs).toHaveLength(1);
+      expect(runs[0].feature).toBe('feature-2');
+    });
+  });
+});
+```
+
+### aggregateMetric 음수/NULL 엣지 케이스 테스트
+```typescript
+import {
+  OboraDatabase,
+  insertProject,
+  insertWorkflowRun,
+  insertMetric,
+  aggregateMetric,
+} from '../duckdb-client';
+
+describe('aggregateMetric edge cases', () => {
+  let db: OboraDatabase;
+  let runId: number;
+
+  beforeEach(async () => {
+    db = new OboraDatabase(':memory:');
+    await db.initialize();
+
+    const projectId = await insertProject(db, {
+      name: 'test-project',
+      path: '/path/to/project',
+    });
+
+    runId = await insertWorkflowRun(db, {
+      project_id: projectId,
+      feature: 'test-feature',
+      workflow: 'simple',
+      mode: 'auto',
+      status: 'running',
+    });
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
+  describe('음수 값 처리', () => {
+    it('should handle negative metric values', async () => {
+      await insertMetric(db, {
+        run_id: runId,
+        metric_name: 'delta',
+        metric_value: -100,
+      });
+
+      await insertMetric(db, {
+        run_id: runId,
+        metric_name: 'delta',
+        metric_value: -50,
+      });
+
+      const sum = await aggregateMetric(db, runId, 'delta', 'SUM');
+      expect(sum).toBe(-150);
+
+      const avg = await aggregateMetric(db, runId, 'delta', 'AVG');
+      expect(avg).toBe(-75);
+
+      const min = await aggregateMetric(db, runId, 'delta', 'MIN');
+      expect(min).toBe(-100);
+
+      const max = await aggregateMetric(db, runId, 'delta', 'MAX');
+      expect(max).toBe(-50);
+    });
+
+    it('should handle mixed positive and negative values', async () => {
+      await insertMetric(db, {
+        run_id: runId,
+        metric_name: 'change',
+        metric_value: 100,
+      });
+
+      await insertMetric(db, {
+        run_id: runId,
+        metric_name: 'change',
+        metric_value: -50,
+      });
+
+      await insertMetric(db, {
+        run_id: runId,
+        metric_name: 'change',
+        metric_value: 30,
+      });
+
+      const sum = await aggregateMetric(db, runId, 'change', 'SUM');
+      expect(sum).toBe(80); // 100 - 50 + 30
+
+      const avg = await aggregateMetric(db, runId, 'change', 'AVG');
+      expect(avg).toBeCloseTo(26.67, 1); // (100 - 50 + 30) / 3
+
+      const min = await aggregateMetric(db, runId, 'change', 'MIN');
+      expect(min).toBe(-50);
+
+      const max = await aggregateMetric(db, runId, 'change', 'MAX');
+      expect(max).toBe(100);
+    });
+
+    it('should handle zero values', async () => {
+      await insertMetric(db, {
+        run_id: runId,
+        metric_name: 'zero_test',
+        metric_value: 0,
+      });
+
+      await insertMetric(db, {
+        run_id: runId,
+        metric_name: 'zero_test',
+        metric_value: 0,
+      });
+
+      const sum = await aggregateMetric(db, runId, 'zero_test', 'SUM');
+      expect(sum).toBe(0);
+
+      const avg = await aggregateMetric(db, runId, 'zero_test', 'AVG');
+      expect(avg).toBe(0);
+
+      const count = await aggregateMetric(db, runId, 'zero_test', 'COUNT');
+      expect(count).toBe(2);
+    });
+  });
+
+  describe('NULL 처리', () => {
+    it('should return null for non-existent metric name', async () => {
+      await insertMetric(db, {
+        run_id: runId,
+        metric_name: 'existing_metric',
+        metric_value: 100,
+      });
+
+      const result = await aggregateMetric(db, runId, 'nonexistent_metric', 'SUM');
+      expect(result).toBeNull();
+    });
+
+    it('should return null for empty result set', async () => {
+      // No metrics inserted for this run
+      const sum = await aggregateMetric(db, runId, 'any_metric', 'SUM');
+      expect(sum).toBeNull();
+
+      const avg = await aggregateMetric(db, runId, 'any_metric', 'AVG');
+      expect(avg).toBeNull();
+
+      const min = await aggregateMetric(db, runId, 'any_metric', 'MIN');
+      expect(min).toBeNull();
+
+      const max = await aggregateMetric(db, runId, 'any_metric', 'MAX');
+      expect(max).toBeNull();
+    });
+
+    it('should return 0 for COUNT on empty result set', async () => {
+      const count = await aggregateMetric(db, runId, 'nonexistent', 'COUNT');
+      expect(count).toBe(0);
+    });
+
+    it('should return null for non-existent run_id', async () => {
+      const nonExistentRunId = 999999;
+
+      const sum = await aggregateMetric(db, nonExistentRunId, 'any_metric', 'SUM');
+      expect(sum).toBeNull();
+    });
+  });
+
+  describe('극단값 처리', () => {
+    it('should handle very large numbers', async () => {
+      const largeValue = Number.MAX_SAFE_INTEGER;
+
+      await insertMetric(db, {
+        run_id: runId,
+        metric_name: 'large',
+        metric_value: largeValue,
+      });
+
+      const sum = await aggregateMetric(db, runId, 'large', 'SUM');
+      expect(sum).toBe(largeValue);
+    });
+
+    it('should handle very small decimal numbers', async () => {
+      await insertMetric(db, {
+        run_id: runId,
+        metric_name: 'small',
+        metric_value: 0.0000001,
+      });
+
+      await insertMetric(db, {
+        run_id: runId,
+        metric_name: 'small',
+        metric_value: 0.0000002,
+      });
+
+      const sum = await aggregateMetric(db, runId, 'small', 'SUM');
+      expect(sum).toBeCloseTo(0.0000003, 10);
+    });
+
+    it('should handle Infinity gracefully', async () => {
+      // Note: DuckDB may handle Infinity differently
+      // This test documents expected behavior
+
+      await insertMetric(db, {
+        run_id: runId,
+        metric_name: 'infinity',
+        metric_value: Number.POSITIVE_INFINITY,
+      });
+
+      const sum = await aggregateMetric(db, runId, 'infinity', 'SUM');
+      expect(sum).toBe(Number.POSITIVE_INFINITY);
+    });
+  });
+});
+```
+
+### 커넥션 누수 테스트
+```typescript
+import { OboraDatabase, getDatabase, resetDatabase } from '../duckdb-client';
+
+describe('Connection leak tests', () => {
+  afterEach(() => {
+    resetDatabase();
+  });
+
+  it('should not leak connections when creating multiple databases', async () => {
+    const databases: OboraDatabase[] = [];
+
+    // Create many database instances
+    for (let i = 0; i < 10; i++) {
+      const db = new OboraDatabase(':memory:');
+      await db.initialize();
+      databases.push(db);
+    }
+
+    // All databases should be accessible
+    for (const db of databases) {
+      const result = await db.query('SELECT 1 as test');
+      expect(result).toHaveLength(1);
+    }
+
+    // Close all databases
+    for (const db of databases) {
+      db.close();
+    }
+
+    // Should not throw after closing
+    expect(() => {
+      // Creating new instance after closing all should work
+      const newDb = new OboraDatabase(':memory:');
+      newDb.close();
+    }).not.toThrow();
+  });
+
+  it('should throw error when using closed database', async () => {
+    const db = new OboraDatabase(':memory:');
+    await db.initialize();
+
+    // Verify it works before closing
+    const result = await db.query('SELECT 1 as test');
+    expect(result).toHaveLength(1);
+
+    // Close the database
+    db.close();
+
+    // Should throw when trying to use closed connection
+    await expect(db.query('SELECT 1 as test')).rejects.toThrow();
+  });
+
+  it('should handle double close gracefully', async () => {
+    const db = new OboraDatabase(':memory:');
+    await db.initialize();
+
+    // First close
+    db.close();
+
+    // Second close should not throw
+    expect(() => {
+      db.close();
+    }).not.toThrow();
+  });
+
+  it('should properly reset singleton and allow new connection', async () => {
+    // Get singleton instance
+    const db1 = getDatabase(':memory:');
+    await db1.initialize();
+
+    // Use the database
+    await db1.query('SELECT 1 as test');
+
+    // Reset singleton
+    resetDatabase();
+
+    // Get new singleton instance
+    const db2 = getDatabase(':memory:');
+    await db2.initialize();
+
+    // New instance should work
+    const result = await db2.query('SELECT 1 as test');
+    expect(result).toHaveLength(1);
+
+    // Old instance should not work
+    await expect(db1.query('SELECT 1 as test')).rejects.toThrow();
+
+    resetDatabase();
+  });
+
+  it('should not leak connections in rapid create/close cycles', async () => {
+    // Stress test: rapidly create and close databases
+    for (let i = 0; i < 50; i++) {
+      const db = new OboraDatabase(':memory:');
+      await db.initialize();
+      await db.query('SELECT 1 as test');
+      db.close();
+    }
+
+    // If connections leaked, this would eventually fail
+    // or throw "too many open files" error
+    const finalDb = new OboraDatabase(':memory:');
+    await finalDb.initialize();
+    const result = await finalDb.query('SELECT 1 as test');
+    expect(result).toHaveLength(1);
+    finalDb.close();
+  });
+
+  it('should cleanup on error during initialization', async () => {
+    // Create a database with invalid path to trigger error
+    const db = new OboraDatabase('/nonexistent/path/db.duckdb');
+
+    // Initialization should fail
+    await expect(db.initialize()).rejects.toThrow();
+
+    // Trying to use it should also fail gracefully
+    await expect(db.query('SELECT 1')).rejects.toThrow();
+
+    // Close should not throw even after failed init
+    expect(() => {
+      db.close();
+    }).not.toThrow();
+  });
+
+  it('should handle concurrent database access', async () => {
+    const db = new OboraDatabase(':memory:');
+    await db.initialize();
+
+    // Create a project
+    await db.run(
+      'INSERT INTO projects (name, path) VALUES (?, ?)',
+      ['test', '/test']
+    );
+
+    // Concurrent reads should not deadlock or fail
+    const promises = Array(10)
+      .fill(null)
+      .map(() => db.query('SELECT * FROM projects'));
+
+    const results = await Promise.all(promises);
+
+    // All queries should succeed
+    for (const result of results) {
+      expect(result).toHaveLength(1);
+    }
+
+    db.close();
+  });
+
+  it('should track connection state accurately', async () => {
+    const db = new OboraDatabase(':memory:');
+
+    // Before initialization
+    const pathBefore = db.getPath();
+    expect(pathBefore).toContain(':memory:');
+
+    await db.initialize();
+
+    // After initialization
+    const pathAfter = db.getPath();
+    expect(pathAfter).toContain(':memory:');
+
+    db.close();
+  });
+});
+```
+
 ## 엣지 케이스 목록
 
 ### Database 초기화
