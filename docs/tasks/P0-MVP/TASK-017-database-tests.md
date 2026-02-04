@@ -2,7 +2,7 @@
 
 ## 개요
 - 우선순위: P1
-- 예상 소요: 3시간
+- 예상 소요: 5시간
 - 담당: 개발자
 
 ## 목표
@@ -14,52 +14,893 @@
 - vitest.config.ts 생성 (packages/database/)
 - in-memory DuckDB 사용
 
-### 2. duckdb-client.ts 테스트
-- 데이터베이스 연결 성공
-- 테이블 생성 (features, tasks, logs)
-- CRUD 작업
-  - 피처 생성/조회/수정/삭제
-  - 태스크 생성/조회/수정/삭제
-  - 로그 기록/조회
-- 쿼리 에러 처리
-- 커넥션 close() 검증
+### 2. 테이블 구조
 
-### 3. 인덱스 테스트
+**실제 테이블:**
+- `projects` - 프로젝트 정보
+- `workflow_runs` - 워크플로우 실행 기록
+- `step_executions` - 스텝 실행 기록
+- `metrics` - 메트릭 데이터
+
+### 3. duckdb-client.ts 테스트
+
+**OboraDatabase 클래스:**
+```typescript
+class OboraDatabase {
+  constructor(dbPath: string = ".obora/obora.db")
+  async initialize(): Promise<void>
+  run(sql: string, params?: any[]): Promise<void>
+  query(sql: string, params?: any[]): Promise<any[]>
+  queryOne(sql: string, params?: any[]): Promise<any | null>
+  close(): void
+  getPath(): string
+}
+```
+
+**CRUD 함수들:**
+```typescript
+// Project CRUD
+async function insertProject(db: OboraDatabase, project: Omit<Project, "id" | "created_at" | "updated_at">): Promise<number>
+async function getProject(db: OboraDatabase, id: number): Promise<Project | null>
+async function getProjectByPath(db: OboraDatabase, projectPath: string): Promise<Project | null>
+async function listProjects(db: OboraDatabase): Promise<Project[]>
+async function updateProject(db: OboraDatabase, id: number, updates: Partial<Project>): Promise<void>
+async function deleteProject(db: OboraDatabase, id: number): Promise<void>
+
+// WorkflowRun CRUD
+async function insertWorkflowRun(db: OboraDatabase, run: Omit<WorkflowRun, "id" | "started_at">): Promise<number>
+async function getWorkflowRun(db: OboraDatabase, id: number): Promise<WorkflowRun | null>
+async function listWorkflowRuns(db: OboraDatabase, projectId: number): Promise<WorkflowRun[]>
+async function updateWorkflowRunStatus(db: OboraDatabase, id: number, status: WorkflowRun["status"], currentStep?: string, errorMessage?: string): Promise<void>
+async function deleteWorkflowRun(db: OboraDatabase, id: number): Promise<void>
+
+// StepExecution CRUD
+async function insertStepExecution(db: OboraDatabase, step: Omit<StepExecution, "id" | "started_at">): Promise<number>
+async function getStepExecution(db: OboraDatabase, id: number): Promise<StepExecution | null>
+async function listStepExecutions(db: OboraDatabase, runId: number): Promise<StepExecution[]>
+async function updateStepExecutionStatus(db: OboraDatabase, id: number, status: StepExecution["status"], output?: string, errorMessage?: string): Promise<void>
+async function incrementStepRetry(db: OboraDatabase, id: number): Promise<void>
+async function deleteStepExecutions(db: OboraDatabase, runId: number): Promise<void>
+
+// Metrics CRUD
+async function insertMetric(db: OboraDatabase, metric: Omit<Metric, "id" | "recorded_at">): Promise<number>
+async function getMetricsForRun(db: OboraDatabase, runId: number): Promise<Metric[]>
+async function getMetricsForStep(db: OboraDatabase, stepId: number): Promise<Metric[]>
+async function aggregateMetric(db: OboraDatabase, runId: number, metricName: string, aggregate: "SUM" | "AVG" | "MIN" | "MAX" | "COUNT"): Promise<number | null>
+async function deleteMetrics(db: OboraDatabase, runId: number): Promise<void>
+
+// Utility
+function getDatabase(dbPath?: string): OboraDatabase
+function resetDatabase(): void
+```
+
+### 4. 테스트 케이스
+
+**Database 초기화:**
+- in-memory DB로 연결 성공
+- 테이블 생성 확인 (projects, workflow_runs, step_executions, metrics)
+- 인덱스 생성 확인
+- initialize() 중복 호출 안전 처리
+
+**Project CRUD:**
+- 프로젝트 생성 및 자동 ID 할당
+- ID로 프로젝트 조회
+- path로 프로젝트 조회
+- 전체 프로젝트 목록 조회
+- 프로젝트 수정 (name, path)
+- 프로젝트 삭제
+- 존재하지 않는 프로젝트 조회 시 null 반환
+
+**WorkflowRun CRUD:**
+- 워크플로우 실행 생성
+- 실행 기록 조회
+- 프로젝트별 실행 목록 조회
+- 상태 업데이트 (pending → running → completed)
+- current_step 업데이트
+- error_message 업데이트
+- 실행 삭제
+- completed_at 자동 설정
+
+**StepExecution CRUD:**
+- 스텝 실행 생성
+- 스텝 실행 조회
+- 실행별 스텝 목록 조회 (step_index 순 정렬)
+- 상태 업데이트
+- output_path 업데이트
+- error_message 업데이트
+- retry_count 증가
+- 스텝 삭제 (cascade 효과 확인)
+- completed_at 자동 설정
+
+**Metrics CRUD:**
+- 메트릭 기록
+- 실행별 메트릭 조회
+- 스텝별 메트릭 조회
+- 메트릭 집계 (SUM, AVG, MIN, MAX, COUNT)
+- 메트릭 삭제
+
+**인덱스 테스트:**
 - 인덱스 생성 확인
 - 쿼리 성능 (선택적)
+
+**에러 처리:**
+- 잘못된 SQL 쿼리 에러
+- 제약 조건 위반 (UNIQUE, FOREIGN KEY)
+- 파라미터 SQL 인젝션 방지 확인
+
+**커넥션 관리:**
+- close() 호출 후 재사용 불가
+- 커넥션 누수 없음
+- resetDatabase()로 싱글톤 초기화
+
+## Mock 전략
+
+### DuckDB In-Memory 사용법
+
+```typescript
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { OboraDatabase, getDatabase, resetDatabase } from '../duckdb-client';
+
+describe('OboraDatabase', () => {
+  let db: OboraDatabase;
+
+  beforeEach(async () => {
+    // in-memory DB 사용 (테스트 후 자동 삭제)
+    db = new OboraDatabase(':memory:');
+    await db.initialize();
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
+  it('should create tables on initialize', async () => {
+    const tables = await db.query('SHOW TABLES');
+    const tableNames = tables.map((t: any) => t.name);
+    expect(tableNames).toContain('projects');
+    expect(tableNames).toContain('workflow_runs');
+    expect(tableNames).toContain('step_executions');
+    expect(tableNames).toContain('metrics');
+  });
+});
+```
+
+### 테스트 데이터셋 헬퍼
+
+```typescript
+import {
+  insertProject,
+  insertWorkflowRun,
+  insertStepExecution,
+  insertMetric,
+} from '../duckdb-client';
+
+async function createTestProject(db: OboraDatabase, name: string, path: string): Promise<number> {
+  return await insertProject(db, { name, path });
+}
+
+async function createTestWorkflowRun(
+  db: OboraDatabase,
+  projectId: number,
+  feature: string,
+  workflow: string,
+  mode: 'auto' | 'supervised' | 'gated'
+): Promise<number> {
+  return await insertWorkflowRun(db, {
+    project_id: projectId,
+    feature,
+    workflow,
+    mode,
+    status: 'pending',
+  });
+}
+
+async function createTestStepExecution(
+  db: OboraDatabase,
+  runId: number,
+  stepName: string,
+  agent: string,
+  stepIndex: number
+): Promise<number> {
+  return await insertStepExecution(db, {
+    run_id: runId,
+    step_name: stepName,
+    step_index: stepIndex,
+    agent,
+    status: 'pending',
+  });
+}
+
+async function createTestMetric(
+  db: OboraDatabase,
+  runId: number,
+  metricName: string,
+  metricValue: number,
+  stepId?: number
+): Promise<number> {
+  return await insertMetric(db, {
+    run_id: runId,
+    step_id: stepId,
+    metric_name: metricName,
+    metric_value: metricValue,
+  });
+}
+```
+
+### Mock DuckDB (선택적)
+
+```typescript
+// DuckDB 모듈 mock (실제 DB 대신 사용 시)
+import { vi } from 'vitest';
+
+vi.mock('duckdb', () => ({
+  default: vi.fn().mockImplementation(() => ({
+    connect: vi.fn().mockReturnValue({
+      run: vi.fn((sql, params, callback) => callback(null)),
+      all: vi.fn((sql, params, callback) => callback(null, [])),
+      get: vi.fn((sql, params, callback) => callback(null, null)),
+      close: vi.fn(),
+    }),
+    close: vi.fn(),
+  })),
+}));
+```
 
 ## 완료 조건
 - [ ] 테스트 커버리지 80% 이상
 - [ ] in-memory DB로 빠른 테스트
 - [ ] 커넥션 누수 없음
+- [ ] 모든 CRUD 작업 테스트
 
 ## 의존성
 - TASK-010 (duckdb-setup)
 
+## 테스트 파일 구조
+```
+packages/database/
+├── src/
+│   └── duckdb-client.ts
+└── test/
+    ├── duckdb-client.test.ts
+    ├── project.test.ts
+    ├── workflow-run.test.ts
+    ├── step-execution.test.ts
+    ├── metrics.test.ts
+    └── helpers.ts
+```
+
 ## 테스트 케이스 예시
+
+### Database 초기화 테스트
 ```typescript
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { DuckDBClient } from '../duckdb-client';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { OboraDatabase, getDatabase, resetDatabase } from '../duckdb-client';
 
-describe('DuckDBClient', () => {
-  let client: DuckDBClient;
+describe('OboraDatabase initialization', () => {
+  it('should create tables on initialize', async () => {
+    const db = new OboraDatabase(':memory:');
+    await db.initialize();
 
-  beforeEach(async () => {
-    client = new DuckDBClient(':memory:');
-    await client.initialize();
+    const tables = await db.query('SHOW TABLES');
+    const tableNames = tables.map((t: any) => t.name);
+
+    expect(tableNames).toContain('projects');
+    expect(tableNames).toContain('workflow_runs');
+    expect(tableNames).toContain('step_executions');
+    expect(tableNames).toContain('metrics');
+
+    await db.close();
   });
 
-  afterEach(async () => {
-    await client.close();
+  it('should create indexes', async () => {
+    const db = new OboraDatabase(':memory:');
+    await db.initialize();
+
+    const indexes = await db.query('SELECT index_name FROM duckdb_indexes() WHERE table_name = ? OR table_name = ? OR table_name = ? OR table_name = ?', ['projects', 'workflow_runs', 'step_executions', 'metrics']);
+
+    expect(indexes.length).toBeGreaterThan(0);
+
+    await db.close();
   });
 
-  it('should create tables', async () => {
-    const tables = await client.query('SHOW TABLES');
-    expect(tables).toContain('features');
+  it('should be idempotent on multiple initialize calls', async () => {
+    const db = new OboraDatabase(':memory:');
+
+    await db.initialize();
+    await db.initialize(); // Should not throw
+    await db.initialize(); // Should not throw
+
+    await db.close();
   });
 });
 ```
 
+### Project CRUD 테스트
+```typescript
+import {
+  insertProject,
+  getProject,
+  getProjectByPath,
+  listProjects,
+  updateProject,
+  deleteProject,
+} from '../duckdb-client';
+
+describe('Project CRUD', () => {
+  let db: OboraDatabase;
+
+  beforeEach(async () => {
+    db = new OboraDatabase(':memory:');
+    await db.initialize();
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
+  it('should insert a project and return id', async () => {
+    const id = await insertProject(db, {
+      name: 'test-project',
+      path: '/path/to/project',
+    });
+
+    expect(typeof id).toBe('number');
+    expect(id).toBeGreaterThan(0);
+  });
+
+  it('should get project by id', async () => {
+    const id = await insertProject(db, {
+      name: 'test-project',
+      path: '/path/to/project',
+    });
+
+    const project = await getProject(db, id);
+
+    expect(project).not.toBeNull();
+    expect(project?.name).toBe('test-project');
+    expect(project?.path).toBe('/path/to/project');
+    expect(project?.id).toBe(id);
+    expect(project?.created_at).toBeDefined();
+    expect(project?.updated_at).toBeDefined();
+  });
+
+  it('should get project by path', async () => {
+    const id = await insertProject(db, {
+      name: 'test-project',
+      path: '/path/to/project',
+    });
+
+    const project = await getProjectByPath(db, '/path/to/project');
+
+    expect(project).not.toBeNull();
+    expect(project?.id).toBe(id);
+    expect(project?.name).toBe('test-project');
+  });
+
+  it('should return null for non-existent project', async () => {
+    const project = await getProject(db, 999999);
+    expect(project).toBeNull();
+  });
+
+  it('should list all projects', async () => {
+    await insertProject(db, { name: 'project-1', path: '/path/1' });
+    await insertProject(db, { name: 'project-2', path: '/path/2' });
+    await insertProject(db, { name: 'project-3', path: '/path/3' });
+
+    const projects = await listProjects(db);
+
+    expect(projects).toHaveLength(3);
+    expect(projects.map((p) => p.name)).toEqual(['project-1', 'project-2', 'project-3']);
+  });
+
+  it('should update project name', async () => {
+    const id = await insertProject(db, {
+      name: 'old-name',
+      path: '/path/to/project',
+    });
+
+    await updateProject(db, id, { name: 'new-name' });
+
+    const project = await getProject(db, id);
+    expect(project?.name).toBe('new-name');
+    expect(project?.path).toBe('/path/to/project');
+  });
+
+  it('should delete project', async () => {
+    const id = await insertProject(db, {
+      name: 'test-project',
+      path: '/path/to/project',
+    });
+
+    await deleteProject(db, id);
+
+    const project = await getProject(db, id);
+    expect(project).toBeNull();
+  });
+});
+```
+
+### WorkflowRun CRUD 테스트
+```typescript
+import {
+  insertProject,
+  insertWorkflowRun,
+  getWorkflowRun,
+  listWorkflowRuns,
+  updateWorkflowRunStatus,
+  deleteWorkflowRun,
+} from '../duckdb-client';
+
+describe('WorkflowRun CRUD', () => {
+  let db: OboraDatabase;
+  let projectId: number;
+
+  beforeEach(async () => {
+    db = new OboraDatabase(':memory:');
+    await db.initialize();
+    projectId = await insertProject(db, {
+      name: 'test-project',
+      path: '/path/to/project',
+    });
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
+  it('should insert a workflow run', async () => {
+    const id = await insertWorkflowRun(db, {
+      project_id: projectId,
+      feature: 'example-feature',
+      workflow: 'simple',
+      mode: 'auto',
+      status: 'pending',
+    });
+
+    expect(typeof id).toBe('number');
+
+    const run = await getWorkflowRun(db, id);
+    expect(run).not.toBeNull();
+    expect(run?.project_id).toBe(projectId);
+    expect(run?.feature).toBe('example-feature');
+    expect(run?.status).toBe('pending');
+    expect(run?.started_at).toBeDefined();
+  });
+
+  it('should update workflow run status', async () => {
+    const id = await insertWorkflowRun(db, {
+      project_id: projectId,
+      feature: 'example-feature',
+      workflow: 'simple',
+      mode: 'auto',
+      status: 'pending',
+    });
+
+    await updateWorkflowRunStatus(db, id, 'running', 'plan');
+
+    let run = await getWorkflowRun(db, id);
+    expect(run?.status).toBe('running');
+    expect(run?.current_step).toBe('plan');
+
+    await updateWorkflowRunStatus(db, id, 'completed', 'done');
+
+    run = await getWorkflowRun(db, id);
+    expect(run?.status).toBe('completed');
+    expect(run?.completed_at).toBeDefined();
+  });
+
+  it('should update with error message', async () => {
+    const id = await insertWorkflowRun(db, {
+      project_id: projectId,
+      feature: 'example-feature',
+      workflow: 'simple',
+      mode: 'auto',
+      status: 'running',
+    });
+
+    await updateWorkflowRunStatus(
+      db,
+      id,
+      'failed',
+      'implement',
+      'Agent execution timeout'
+    );
+
+    const run = await getWorkflowRun(db, id);
+    expect(run?.status).toBe('failed');
+    expect(run?.error_message).toBe('Agent execution timeout');
+  });
+
+  it('should list workflow runs for a project', async () => {
+    await insertWorkflowRun(db, {
+      project_id: projectId,
+      feature: 'feature-1',
+      workflow: 'simple',
+      mode: 'auto',
+      status: 'completed',
+    });
+    await insertWorkflowRun(db, {
+      project_id: projectId,
+      feature: 'feature-2',
+      workflow: 'complex',
+      mode: 'auto',
+      status: 'running',
+    });
+
+    const runs = await listWorkflowRuns(db, projectId);
+    expect(runs).toHaveLength(2);
+    expect(runs.map((r) => r.feature)).toEqual(['feature-1', 'feature-2']);
+  });
+
+  it('should delete workflow run', async () => {
+    const id = await insertWorkflowRun(db, {
+      project_id: projectId,
+      feature: 'example-feature',
+      workflow: 'simple',
+      mode: 'auto',
+      status: 'pending',
+    });
+
+    await deleteWorkflowRun(db, id);
+
+    const run = await getWorkflowRun(db, id);
+    expect(run).toBeNull();
+  });
+});
+```
+
+### StepExecution CRUD 테스트
+```typescript
+import {
+  insertProject,
+  insertWorkflowRun,
+  insertStepExecution,
+  getStepExecution,
+  listStepExecutions,
+  updateStepExecutionStatus,
+  incrementStepRetry,
+  deleteStepExecutions,
+} from '../duckdb-client';
+
+describe('StepExecution CRUD', () => {
+  let db: OboraDatabase;
+  let runId: number;
+
+  beforeEach(async () => {
+    db = new OboraDatabase(':memory:');
+    await db.initialize();
+    const projectId = await insertProject(db, {
+      name: 'test-project',
+      path: '/path/to/project',
+    });
+    runId = await insertWorkflowRun(db, {
+      project_id: projectId,
+      feature: 'example-feature',
+      workflow: 'simple',
+      mode: 'auto',
+      status: 'running',
+    });
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
+  it('should insert a step execution', async () => {
+    const id = await insertStepExecution(db, {
+      run_id: runId,
+      step_name: 'plan',
+      step_index: 0,
+      agent: 'architect',
+      status: 'pending',
+    });
+
+    expect(typeof id).toBe('number');
+
+    const step = await getStepExecution(db, id);
+    expect(step).not.toBeNull();
+    expect(step?.run_id).toBe(runId);
+    expect(step?.step_name).toBe('plan');
+    expect(step?.step_index).toBe(0);
+    expect(step?.agent).toBe('architect');
+    expect(step?.status).toBe('pending');
+  });
+
+  it('should list steps for a run in order', async () => {
+    await insertStepExecution(db, {
+      run_id: runId,
+      step_name: 'plan',
+      step_index: 0,
+      agent: 'architect',
+      status: 'completed',
+    });
+    await insertStepExecution(db, {
+      run_id: runId,
+      step_name: 'implement',
+      step_index: 1,
+      agent: 'coder',
+      status: 'running',
+    });
+    await insertStepExecution(db, {
+      run_id: runId,
+      step_name: 'test',
+      step_index: 2,
+      agent: 'tester',
+      status: 'pending',
+    });
+
+    const steps = await listStepExecutions(db, runId);
+
+    expect(steps).toHaveLength(3);
+    expect(steps[0].step_name).toBe('plan');
+    expect(steps[1].step_name).toBe('implement');
+    expect(steps[2].step_name).toBe('test');
+  });
+
+  it('should update step status with output', async () => {
+    const id = await insertStepExecution(db, {
+      run_id: runId,
+      step_name: 'plan',
+      step_index: 0,
+      agent: 'architect',
+      status: 'pending',
+    });
+
+    await updateStepExecutionStatus(db, id, 'completed', '/path/to/output.md');
+
+    const step = await getStepExecution(db, id);
+    expect(step?.status).toBe('completed');
+    expect(step?.output_path).toBe('/path/to/output.md');
+    expect(step?.completed_at).toBeDefined();
+  });
+
+  it('should increment retry count', async () => {
+    const id = await insertStepExecution(db, {
+      run_id: runId,
+      step_name: 'plan',
+      step_index: 0,
+      agent: 'architect',
+      status: 'failed',
+    });
+
+    await incrementStepRetry(db, id);
+    await incrementStepRetry(db, id);
+
+    const step = await getStepExecution(db, id);
+    expect(step?.retry_count).toBe(2);
+  });
+
+  it('should delete all steps for a run', async () => {
+    await insertStepExecution(db, {
+      run_id: runId,
+      step_name: 'plan',
+      step_index: 0,
+      agent: 'architect',
+      status: 'pending',
+    });
+    await insertStepExecution(db, {
+      run_id: runId,
+      step_name: 'implement',
+      step_index: 1,
+      agent: 'coder',
+      status: 'pending',
+    });
+
+    await deleteStepExecutions(db, runId);
+
+    const steps = await listStepExecutions(db, runId);
+    expect(steps).toHaveLength(0);
+  });
+});
+```
+
+### Metrics CRUD 테스트
+```typescript
+import {
+  insertProject,
+  insertWorkflowRun,
+  insertMetric,
+  getMetricsForRun,
+  getMetricsForStep,
+  aggregateMetric,
+  deleteMetrics,
+} from '../duckdb-client';
+
+describe('Metrics CRUD', () => {
+  let db: OboraDatabase;
+  let runId: number;
+  let stepId: number;
+
+  beforeEach(async () => {
+    db = new OboraDatabase(':memory:');
+    await db.initialize();
+    const projectId = await insertProject(db, {
+      name: 'test-project',
+      path: '/path/to/project',
+    });
+    runId = await insertWorkflowRun(db, {
+      project_id: projectId,
+      feature: 'example-feature',
+      workflow: 'simple',
+      mode: 'auto',
+      status: 'running',
+    });
+    stepId = await insertStepExecution(db, {
+      run_id: runId,
+      step_name: 'plan',
+      step_index: 0,
+      agent: 'architect',
+      status: 'completed',
+    });
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
+  it('should insert a metric', async () => {
+    const id = await insertMetric(db, {
+      run_id: runId,
+      metric_name: 'execution_time',
+      metric_value: 1234.5,
+    });
+
+    expect(typeof id).toBe('number');
+  });
+
+  it('should get metrics for a run', async () => {
+    await insertMetric(db, {
+      run_id: runId,
+      metric_name: 'execution_time',
+      metric_value: 1000,
+    });
+    await insertMetric(db, {
+      run_id: runId,
+      metric_name: 'memory_usage',
+      metric_value: 512,
+    });
+
+    const metrics = await getMetricsForRun(db, runId);
+
+    expect(metrics).toHaveLength(2);
+    expect(metrics.map((m) => m.metric_name)).toEqual(['execution_time', 'memory_usage']);
+  });
+
+  it('should get metrics for a step', async () => {
+    await insertMetric(db, {
+      run_id: runId,
+      step_id: stepId,
+      metric_name: 'tokens_used',
+      metric_value: 1234,
+    });
+    await insertMetric(db, {
+      run_id: runId,
+      step_id: stepId,
+      metric_name: 'cost',
+      metric_value: 0.05,
+    });
+
+    const metrics = await getMetricsForStep(db, stepId);
+
+    expect(metrics).toHaveLength(2);
+    expect(metrics.map((m) => m.metric_name)).toEqual(['tokens_used', 'cost']);
+  });
+
+  it('should aggregate metrics', async () => {
+    await insertMetric(db, {
+      run_id: runId,
+      metric_name: 'execution_time',
+      metric_value: 1000,
+    });
+    await insertMetric(db, {
+      run_id: runId,
+      metric_name: 'execution_time',
+      metric_value: 2000,
+    });
+    await insertMetric(db, {
+      run_id: runId,
+      metric_name: 'execution_time',
+      metric_value: 3000,
+    });
+
+    const sum = await aggregateMetric(db, runId, 'execution_time', 'SUM');
+    expect(sum).toBe(6000);
+
+    const avg = await aggregateMetric(db, runId, 'execution_time', 'AVG');
+    expect(avg).toBe(2000);
+
+    const min = await aggregateMetric(db, runId, 'execution_time', 'MIN');
+    expect(min).toBe(1000);
+
+    const max = await aggregateMetric(db, runId, 'execution_time', 'MAX');
+    expect(max).toBe(3000);
+
+    const count = await aggregateMetric(db, runId, 'execution_time', 'COUNT');
+    expect(count).toBe(3);
+  });
+
+  it('should delete metrics for a run', async () => {
+    await insertMetric(db, {
+      run_id: runId,
+      metric_name: 'execution_time',
+      metric_value: 1000,
+    });
+    await insertMetric(db, {
+      run_id: runId,
+      metric_name: 'memory_usage',
+      metric_value: 512,
+    });
+
+    await deleteMetrics(db, runId);
+
+    const metrics = await getMetricsForRun(db, runId);
+    expect(metrics).toHaveLength(0);
+  });
+});
+```
+
+### Singleton 패턴 테스트
+```typescript
+describe('Database singleton', () => {
+  afterEach(() => {
+    resetDatabase();
+  });
+
+  it('should return same instance for getDatabase', () => {
+    const db1 = getDatabase(':memory:');
+    const db2 = getDatabase(':memory:');
+
+    expect(db1).toBe(db2);
+  });
+
+  it('should reset database instance', () => {
+    const db1 = getDatabase(':memory:');
+    resetDatabase();
+    const db2 = getDatabase(':memory:');
+
+    expect(db1).not.toBe(db2);
+  });
+});
+```
+
+## 엣지 케이스 목록
+
+### Database 초기화
+1. 이미 테이블이 존재하는 상태에서 initialize() 호출
+2. 인덱스가 이미 존재하는 상태에서 initialize() 호출
+3. DB 경로가 유효하지 않은 경우
+
+### Project CRUD
+1. 중복된 path로 프로젝트 생성 (UNIQUE 제약)
+2. 긴 프로젝트 이름 (>100자)
+3. 빈 문자열 name/path
+4. ID가 0 또는 음수인 경우 조회
+
+### WorkflowRun CRUD
+1. 존재하지 않는 project_id로 실행 생성 (FOREIGN KEY 제약)
+2. 잘못된 status 값
+3. 잘못된 mode 값
+4. 존재하지 않는 실행 업데이트
+
+### StepExecution CRUD
+1. 존재하지 않는 run_id로 스텝 생성 (FOREIGN KEY 제약)
+2. 음수 step_index
+3. retry_count 음수로 설정 시도 (SQL로 직접 시도)
+4. status enum 외의 값
+
+### Metrics CRUD
+1. 음수 metric_value
+2. 매우 큰 metric_value
+3. 특수 문자가 포함된 metric_name
+4. run_id 또는 step_id가 없는 metric
+
+### 에러 처리
+1. SQL 문법 오류
+2. 파라미터 타입 불일치
+3. NULL 제약 위반
+4. FOREIGN KEY 제약 위반
+
 ## 참고 자료
 - [DuckDB Node.js API](https://duckdb.org/docs/api/nodejs/overview)
+- [Vitest 공식 문서](https://vitest.dev/)
 - SPEC-010-database-schema.md
