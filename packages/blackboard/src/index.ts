@@ -42,6 +42,9 @@
 // Core exports
 export * from './core';
 
+// Events exports
+export * from './events';
+
 // All types
 export * from './types';
 

@@ -65,3 +65,9 @@ export {
   KnowledgeSectionAccessor,
   DecisionsSectionAccessor,
 } from './accessors';
+
+// Event-aware Blackboard
+export {
+  EventAwareBlackboard,
+  EventAwareBlackboardOptions,
+} from './blackboard-events';
