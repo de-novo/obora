@@ -1,0 +1,326 @@
+/**
+ * @module snapshot/snapshot-manager
+ * @description 스냅샷 관리자 (파사드 패턴)
+ */
+
+import type { BlackboardState } from '../types';
+import type {
+  Snapshot,
+  SnapshotMeta,
+  CreateSnapshotOptions,
+  RestoreSnapshotOptions,
+  SnapshotValidationResult,
+} from './types';
+import type {
+  SnapshotCreatorOptions,
+} from './snapshot-creator';
+import type {
+  SnapshotRestorerOptions,
+} from './snapshot-restorer';
+import type {
+  SnapshotDiff,
+  SectionDiff,
+  SectionData,
+} from './snapshot-comparer';
+
+import { SnapshotCreator } from './snapshot-creator';
+import { SnapshotValidator } from './snapshot-validator';
+import {
+  SnapshotRestorer,
+  SnapshotRestoreError,
+} from './snapshot-restorer';
+import { SnapshotSerializer } from './snapshot-serializer';
+import {
+  SnapshotComparer,
+} from './snapshot-comparer';
+
+/**
+ * 스냅샷 관리자 설정
+ */
+export interface SnapshotManagerOptions extends SnapshotCreatorOptions, SnapshotRestorerOptions {
+  /** 자동 압축 임계값 (바이트, 기본: 10KB) */
+  autoCompressThreshold?: number;
+  /** 기본 압축 사용 */
+  defaultCompress?: boolean;
+  /** ID 생성 함수 */
+  idGenerator?: () => string;
+}
+
+/**
+ * 스냅샷 복원 에러
+ */
+export { SnapshotRestoreError };
+
+/**
+ * 스냅샷 관리자
+ * @description Blackboard 상태의 스냅샷 생성, 검증, 복원 담당
+ *
+ * 파사드 패턴으로 각 전문 클래스를 조합하여 기존 API 유지
+ *
+ * @example
+ * ```typescript
+ * const manager = new SnapshotManager();
+ *
+ * // 스냅샷 생성
+ * const snapshot = await manager.createSnapshot(board.getState(), {
+ *   description: 'Before major decision',
+ *   tags: ['checkpoint', 'decision-001'],
+ *   compress: true,
+ * });
+ *
+ * // JSON으로 저장
+ * const json = manager.toJSON(snapshot);
+ * fs.writeFileSync('snapshot.json', json);
+ *
+ * // JSON에서 로드
+ * const loaded = manager.fromJSON(fs.readFileSync('snapshot.json', 'utf-8'));
+ *
+ * // 검증
+ * const validation = await manager.validate(loaded);
+ * if (!validation.valid) {
+ *   console.error('Invalid snapshot:', validation.errors);
+ * }
+ *
+ * // 복원
+ * const restoredState = manager.restore(loaded, {
+ *   newSessionId: true,
+ * });
+ * board.replaceState(restoredState);
+ * ```
+ */
+export class SnapshotManager {
+  private creator: SnapshotCreator;
+  private validator: SnapshotValidator;
+  private restorer: SnapshotRestorer;
+  private serializer: SnapshotSerializer;
+  private comparer: SnapshotComparer;
+
+  constructor(options: SnapshotManagerOptions = {}) {
+    // 각 전문 클래스 초기화
+    this.creator = new SnapshotCreator(options);
+    this.validator = new SnapshotValidator();
+    this.restorer = new SnapshotRestorer(options);
+    this.serializer = new SnapshotSerializer();
+    this.comparer = new SnapshotComparer();
+  }
+
+  // === 생성 (SnapshotCreator 위임) ===
+
+  /**
+   * 스냅샷 생성 (비동기)
+   * @param state - 현재 Blackboard 상태
+   * @param options - 생성 옵션
+   * @returns 스냅샷
+   */
+  async createSnapshot(
+    state: BlackboardState,
+    options?: CreateSnapshotOptions
+  ): Promise<Snapshot> {
+    return this.creator.createSnapshot(state, options);
+  }
+
+  /**
+   * 메타데이터만 포함된 스냅샷 생성 (비동기)
+   * @param state - 현재 상태
+   * @param description - 설명
+   * @returns 메타 전용 스냅샷
+   */
+  async createMetaSnapshot(
+    state: BlackboardState,
+    description?: string
+  ): Promise<SnapshotMeta> {
+    return this.creator.createMetaSnapshot(state, description);
+  }
+
+  // === 검증 (SnapshotValidator 위임) ===
+
+  /**
+   * 스냅샷 검증 (비동기)
+   * @param snapshot - 검증할 스냅샷
+   * @returns 검증 결과
+   */
+  async validate(snapshot: Snapshot): Promise<SnapshotValidationResult> {
+    return this.validator.validate(snapshot);
+  }
+
+  /**
+   * 버전 호환성 체크
+   * @param formatVersion - 스냅샷 형식 버전
+   * @returns 호환 여부 및 상세 정보
+   */
+  checkVersionCompatibility(formatVersion: string): {
+    compatible: boolean;
+    current: string;
+    snapshot: string;
+    migrationRequired: boolean;
+  } {
+    return this.validator.checkVersionCompatibility(formatVersion);
+  }
+
+  /**
+   * 동기 체크섬 검증 (구조적 검증만, 체크섬 제외)
+   * @description restore()에서 사용하는 동기 검증 메서드
+   * 체크섬 검증은 비동기이므로 validate()에서 수행해야 함
+   * @param snapshot - 검증할 스냅샷
+   * @returns 검증 결과
+   */
+  validateSync(snapshot: Snapshot): {
+    valid: boolean;
+    errors: string[];
+  } {
+    return this.validator.validateSync(snapshot);
+  }
+
+  // === 복원 (SnapshotRestorer 위임) ===
+
+  /**
+   * 스냅샷에서 상태 복원
+   * @param snapshot - 스냅샷
+   * @param options - 복원 옵션
+   * @returns 복원된 상태
+   * @throws {SnapshotRestoreError} 복원 실패 시
+   */
+  restore(
+    snapshot: Snapshot,
+    options?: RestoreSnapshotOptions
+  ): BlackboardState {
+    return this.restorer.restore(snapshot, options);
+  }
+
+  /**
+   * 부분 복원 (특정 섹션만)
+   * @param snapshot - 스냅샷
+   * @param currentState - 현재 상태
+   * @param sections - 복원할 섹션
+   * @returns 병합된 상태
+   */
+  partialRestore(
+    snapshot: Snapshot,
+    currentState: BlackboardState,
+    sections: ('state' | 'knowledge' | 'decisions')[]
+  ): BlackboardState {
+    return this.restorer.partialRestore(snapshot, currentState, sections);
+  }
+
+  // === 직렬화 (SnapshotSerializer 위임) ===
+
+  /**
+   * 스냅샷 → JSON 문자열
+   * @param snapshot - 스냅샷
+   * @param pretty - 예쁜 출력 여부
+   * @returns JSON 문자열
+   */
+  toJSON(snapshot: Snapshot, pretty = false): string {
+    return this.serializer.toJSON(snapshot, pretty);
+  }
+
+  /**
+   * JSON 문자열 → 스냅샷
+   * @param json - JSON 문자열
+   * @returns 스냅샷
+   * @throws {Error} JSON 파싱 실패 시 명확한 에러 메시지
+   */
+  fromJSON(json: string): Snapshot {
+    return this.serializer.fromJSON(json);
+  }
+
+  /**
+   * 스냅샷 → Uint8Array (바이너리)
+   * @param snapshot - 스냅샷
+   * @returns Uint8Array
+   */
+  toUint8Array(snapshot: Snapshot): Uint8Array {
+    return this.serializer.toUint8Array(snapshot);
+  }
+
+  /**
+   * Uint8Array → 스냅샷
+   * @param bytes - 바이트 배열
+   * @returns 스냅샷
+   * @throws {Error} 디코딩 실패 시 명확한 에러 메시지
+   */
+  fromUint8Array(bytes: Uint8Array): Snapshot {
+    return this.serializer.fromUint8Array(bytes);
+  }
+
+  // === 비교 (SnapshotComparer 위임) ===
+
+  /**
+   * 스냅샷 비교
+   * @param a - 첫 번째 스냅샷
+   * @param b - 두 번째 스냅샷
+   * @returns 차이점 목록
+   */
+  compare(a: Snapshot, b: Snapshot): SnapshotDiff {
+    return this.comparer.compare(a, b);
+  }
+
+  /**
+   * 섹션 차이점 생성
+   * @param data1 - 첫 번째 데이터
+   * @param data2 - 두 번째 데이터
+   * @returns 섹션 차이점
+   */
+  createSectionDiff(data1: SectionData, data2: SectionData): SectionDiff {
+    return this.comparer.createSectionDiff(data1, data2);
+  }
+
+  /**
+   * 상태 데이터 추출
+   * @param snapshot - 스냅샷
+   * @returns 상태 데이터
+   */
+  extractStateData(snapshot: Snapshot): SectionData {
+    return this.comparer.extractStateData(snapshot);
+  }
+
+  /**
+   * 지식 데이터 추출
+   * @param snapshot - 스냅샷
+   * @returns 지식 데이터
+   */
+  extractKnowledgeData(snapshot: Snapshot): SectionData {
+    return this.comparer.extractKnowledgeData(snapshot);
+  }
+
+  /**
+   * 의사결정 데이터 추출
+   * @param snapshot - 스냅샷
+   * @returns 의사결정 데이터
+   */
+  extractDecisionsData(snapshot: Snapshot): SectionData {
+    return this.comparer.extractDecisionsData(snapshot);
+  }
+
+  // === 유틸리티 ===
+
+  /**
+   * 스냅샷 메타데이터만 추출
+   */
+  extractMeta(snapshot: Snapshot): SnapshotMeta {
+    return snapshot.meta;
+  }
+
+  /**
+   * 스냅샷 크기 계산
+   */
+  calculateSize(snapshot: Snapshot): {
+    total: number;
+    data: number;
+    meta: number;
+    compressed: boolean;
+  } {
+    const metaSize = JSON.stringify(snapshot.meta).length;
+    const dataSize =
+      typeof snapshot.data === 'string'
+        ? snapshot.data.length
+        : JSON.stringify(snapshot.data).length;
+
+    return {
+      total: metaSize + dataSize,
+      data: dataSize,
+      meta: metaSize,
+      compressed: snapshot.meta.compressed,
+    };
+  }
+}
