@@ -16,48 +16,31 @@ AI 이사회의 상태 전이(FSM)를 구현합니다. idle → discussion → d
 **파일 위치:** `packages/board/src/types/state-machine.ts`
 
 ```typescript
+// 스펙: [[15-board-system.md]]#state-machine
 // === 이사회 상태 ===
-export enum BoardState {
-  IDLE = 'idle',                 // 대기 상태
-  AGENDA_SETTING = 'agenda_setting', // 안건 설정 중
-  DISCUSSION = 'discussion',     // 토론 진행 중
-  DEBATE = 'debate',             // 반론/심화 토론
-  VOTING = 'voting',             // 투표 진행 중
-  TALLYING = 'tallying',         // 집계 중
-  RESOLVED = 'resolved',         // 결의 완료
-  SUSPENDED = 'suspended',       // 일시 중단
-  ADJOURNED = 'adjourned'        // 휴회
-}
+export type BoardState =
+  | 'idle'            // 대기
+  | 'agenda_setting'  // 안건 설정
+  | 'discussion'      // 토론
+  | 'debate'          // 논쟁 (심화 토론)
+  | 'voting'          // 투표
+  | 'counting'        // 집계
+  | 'resolving'       // 결정 도출
+  | 'resolved';       // 완료
 
 // === 상태 전이 이벤트 ===
-export enum BoardEvent {
-  // 진행 이벤트
-  START = 'START',
-  SUBMIT_AGENDA = 'SUBMIT_AGENDA',
-  CONFIRM_AGENDA = 'CONFIRM_AGENDA',
-  BEGIN_DISCUSSION = 'BEGIN_DISCUSSION',
-  REQUEST_DEBATE = 'REQUEST_DEBATE',
-  END_DEBATE = 'END_DEBATE',
-  CALL_VOTE = 'CALL_VOTE',
-  COMPLETE_VOTING = 'COMPLETE_VOTING',
-  ANNOUNCE_RESULT = 'ANNOUNCE_RESULT',
-  
-  // 제어 이벤트
-  SUSPEND = 'SUSPEND',
-  RESUME = 'RESUME',
-  ADJOURN = 'ADJOURN',
-  RECESS = 'RECESS',
-  RESET = 'RESET',
-  
-  // 타임아웃 이벤트
-  TIMEOUT = 'TIMEOUT',
-  DEADLINE_REACHED = 'DEADLINE_REACHED',
-  
-  // 예외 이벤트
-  QUORUM_LOST = 'QUORUM_LOST',
-  EMERGENCY_STOP = 'EMERGENCY_STOP',
-  ESCALATE = 'ESCALATE'
-}
+export type BoardEvent =
+  | { type: 'START'; agendaId: string }
+  | { type: 'AGENDA_CONFIRMED' }
+  | { type: 'ALL_SPOKE' }
+  | { type: 'REBUT' }
+  | { type: 'EXTEND' }
+  | { type: 'CALL_VOTE' }
+  | { type: 'VOTES_COLLECTED' }
+  | { type: 'CONSENSUS_REACHED'; result: ConsensusResult }
+  | { type: 'TIMEOUT' }
+  | { type: 'COMPLETE' }
+  | { type: 'CANCEL'; reason: string };
 
 // === 상태 컨텍스트 ===
 export interface BoardContext {
@@ -154,7 +137,7 @@ export class BoardStateMachine {
   private _transitions: TransitionRule[];
   private _eventBus: EventBus;
   private _timeoutHandle?: NodeJS.Timeout;
-  
+
   private agendaManager: AgendaManager;
   private votingManager: VotingManager;
   private consensusEngine: ConsensusEngine;
@@ -228,163 +211,113 @@ export interface BoardStateMachineSnapshot {
 export const DEFAULT_TRANSITIONS: TransitionRule[] = [
   // === IDLE 상태에서의 전이 ===
   {
-    from: BoardState.IDLE,
-    event: BoardEvent.START,
-    to: BoardState.AGENDA_SETTING,
+    from: 'idle',
+    event: { type: 'START' },
+    to: 'agenda_setting',
     guard: (ctx) => ctx.presentMembers.size >= 2,
     action: (ctx) => {
       ctx.startedAt = new Date();
     }
   },
-  
+
   // === AGENDA_SETTING 상태에서의 전이 ===
   {
-    from: BoardState.AGENDA_SETTING,
-    event: BoardEvent.CONFIRM_AGENDA,
-    to: BoardState.DISCUSSION,
+    from: 'agenda_setting',
+    event: { type: 'AGENDA_CONFIRMED' },
+    to: 'discussion',
     guard: (ctx) => ctx.currentAgendaId !== undefined
   },
   {
-    from: BoardState.AGENDA_SETTING,
-    event: BoardEvent.TIMEOUT,
-    to: BoardState.ADJOURNED,
+    from: 'agenda_setting',
+    event: { type: 'TIMEOUT' },
+    to: 'idle',
     action: (ctx) => {
-      // 안건 미설정으로 휴회
+      // 안건 미설정으로 복귀
     }
   },
-  
+
   // === DISCUSSION 상태에서의 전이 ===
   {
-    from: BoardState.DISCUSSION,
-    event: BoardEvent.REQUEST_DEBATE,
-    to: BoardState.DEBATE,
+    from: 'discussion',
+    event: { type: 'EXTEND' },
+    to: 'debate',
     guard: (ctx) => ctx.speakers.history.length >= 1 // 최소 1명 발언 후
   },
   {
-    from: BoardState.DISCUSSION,
-    event: BoardEvent.CALL_VOTE,
-    to: BoardState.VOTING,
+    from: 'discussion',
+    event: { type: 'CALL_VOTE' },
+    to: 'voting',
     guard: (ctx) => {
       // 모든 참가자가 발언 기회를 가졌거나, 충분한 토론 진행
       return ctx.speakers.history.length >= ctx.presentMembers.size * 0.5;
     }
   },
   {
-    from: BoardState.DISCUSSION,
-    event: BoardEvent.TIMEOUT,
-    to: BoardState.VOTING
+    from: 'discussion',
+    event: { type: 'TIMEOUT' },
+    to: 'voting'
   },
-  
+
   // === DEBATE 상태에서의 전이 ===
   {
-    from: BoardState.DEBATE,
-    event: BoardEvent.END_DEBATE,
-    to: BoardState.DISCUSSION
+    from: 'debate',
+    event: { type: 'ALL_SPOKE' },
+    to: 'discussion'
   },
   {
-    from: BoardState.DEBATE,
-    event: BoardEvent.CALL_VOTE,
-    to: BoardState.VOTING
+    from: 'debate',
+    event: { type: 'CALL_VOTE' },
+    to: 'voting'
   },
   {
-    from: BoardState.DEBATE,
-    event: BoardEvent.TIMEOUT,
-    to: BoardState.VOTING
+    from: 'debate',
+    event: { type: 'TIMEOUT' },
+    to: 'voting'
   },
-  
+
   // === VOTING 상태에서의 전이 ===
   {
-    from: BoardState.VOTING,
-    event: BoardEvent.COMPLETE_VOTING,
-    to: BoardState.TALLYING
+    from: 'voting',
+    event: { type: 'VOTES_COLLECTED' },
+    to: 'resolving'
   },
   {
-    from: BoardState.VOTING,
-    event: BoardEvent.TIMEOUT,
-    to: BoardState.TALLYING
+    from: 'voting',
+    event: { type: 'TIMEOUT' },
+    to: 'resolving'
   },
-  
-  // === TALLYING 상태에서의 전이 ===
+
+  // === RESOLVING 상태에서의 전이 ===
   {
-    from: BoardState.TALLYING,
-    event: BoardEvent.ANNOUNCE_RESULT,
-    to: BoardState.RESOLVED
+    from: 'resolving',
+    event: { type: 'CONSENSUS_REACHED' },
+    to: 'resolved'
   },
-  
+
   // === RESOLVED 상태에서의 전이 ===
   {
-    from: BoardState.RESOLVED,
-    event: BoardEvent.SUBMIT_AGENDA,
-    to: BoardState.AGENDA_SETTING,
+    from: 'resolved',
+    event: { type: 'START' },
+    to: 'agenda_setting',
     action: (ctx) => {
       ctx.currentAgendaId = undefined;
       ctx.currentVotingSessionId = undefined;
     }
   },
   {
-    from: BoardState.RESOLVED,
-    event: BoardEvent.ADJOURN,
-    to: BoardState.ADJOURNED
+    from: 'resolved',
+    event: { type: 'COMPLETE' },
+    to: 'idle'
   },
-  {
-    from: BoardState.RESOLVED,
-    event: BoardEvent.RESET,
-    to: BoardState.IDLE
-  },
-  
-  // === 공통 전이 (여러 상태에서 가능) ===
-  {
-    from: [
-      BoardState.DISCUSSION,
-      BoardState.DEBATE,
-      BoardState.VOTING
-    ],
-    event: BoardEvent.SUSPEND,
-    to: BoardState.SUSPENDED
-  },
-  {
-    from: BoardState.SUSPENDED,
-    event: BoardEvent.RESUME,
-    to: BoardState.DISCUSSION, // 이전 상태로 복귀 필요
-    action: (ctx) => {
-      // 이전 상태 복구 로직
-    }
-  },
-  {
-    from: [
-      BoardState.IDLE,
-      BoardState.DISCUSSION,
-      BoardState.DEBATE,
-      BoardState.RESOLVED,
-      BoardState.SUSPENDED
-    ],
-    event: BoardEvent.ADJOURN,
-    to: BoardState.ADJOURNED
-  },
-  
+
   // === 예외 상황 전이 ===
   {
-    from: [
-      BoardState.DISCUSSION,
-      BoardState.DEBATE,
-      BoardState.VOTING
-    ],
-    event: BoardEvent.QUORUM_LOST,
-    to: BoardState.SUSPENDED,
+    from: ['discussion', 'debate', 'voting'],
+    event: { type: 'CANCEL' },
+    to: 'idle',
     action: (ctx) => {
-      // 정족수 미달 처리
+      // 취소 처리
     }
-  },
-  {
-    from: [
-      BoardState.AGENDA_SETTING,
-      BoardState.DISCUSSION,
-      BoardState.DEBATE,
-      BoardState.VOTING,
-      BoardState.TALLYING
-    ],
-    event: BoardEvent.EMERGENCY_STOP,
-    to: BoardState.SUSPENDED
   }
 ];
 ```
@@ -395,11 +328,11 @@ export const DEFAULT_TRANSITIONS: TransitionRule[] = [
 // packages/board/src/state-machine/state-configs.ts
 
 export const DEFAULT_STATE_CONFIGS: Record<BoardState, StateConfig> = {
-  [BoardState.IDLE]: {
-    state: BoardState.IDLE,
+  idle: {
+    state: 'idle',
     allowedEvents: [
-      BoardEvent.START,
-      BoardEvent.SUBMIT_AGENDA
+      { type: 'START' },
+      { type: 'COMPLETE' }
     ],
     onEnter: (ctx) => {
       ctx.currentAgendaId = undefined;
@@ -407,29 +340,27 @@ export const DEFAULT_STATE_CONFIGS: Record<BoardState, StateConfig> = {
       ctx.speakers = { queue: [], history: [] };
     }
   },
-  
-  [BoardState.AGENDA_SETTING]: {
-    state: BoardState.AGENDA_SETTING,
+
+  agenda_setting: {
+    state: 'agenda_setting',
     timeoutMs: 10 * 60 * 1000, // 10분
     allowedEvents: [
-      BoardEvent.CONFIRM_AGENDA,
-      BoardEvent.TIMEOUT,
-      BoardEvent.SUSPEND,
-      BoardEvent.ADJOURN
+      { type: 'AGENDA_CONFIRMED' },
+      { type: 'TIMEOUT' },
+      { type: 'CANCEL' }
     ],
-    onTimeout: () => BoardEvent.ADJOURN
+    onTimeout: () => ({ type: 'CANCEL', reason: 'agenda timeout' })
   },
-  
-  [BoardState.DISCUSSION]: {
-    state: BoardState.DISCUSSION,
+
+  discussion: {
+    state: 'discussion',
     timeoutMs: 30 * 60 * 1000, // 30분
     minDurationMs: 5 * 60 * 1000, // 최소 5분
     allowedEvents: [
-      BoardEvent.REQUEST_DEBATE,
-      BoardEvent.CALL_VOTE,
-      BoardEvent.TIMEOUT,
-      BoardEvent.SUSPEND,
-      BoardEvent.QUORUM_LOST
+      { type: 'EXTEND' },
+      { type: 'CALL_VOTE' },
+      { type: 'TIMEOUT' },
+      { type: 'CANCEL' }
     ],
     onEnter: (ctx) => {
       // 발언자 큐 초기화
@@ -439,76 +370,55 @@ export const DEFAULT_STATE_CONFIGS: Record<BoardState, StateConfig> = {
         history: []
       };
     },
-    onTimeout: () => BoardEvent.CALL_VOTE
+    onTimeout: () => ({ type: 'CALL_VOTE' })
   },
-  
-  [BoardState.DEBATE]: {
-    state: BoardState.DEBATE,
+
+  debate: {
+    state: 'debate',
     timeoutMs: 15 * 60 * 1000, // 15분
     maxDurationMs: 30 * 60 * 1000, // 최대 30분
     allowedEvents: [
-      BoardEvent.END_DEBATE,
-      BoardEvent.CALL_VOTE,
-      BoardEvent.TIMEOUT,
-      BoardEvent.SUSPEND
+      { type: 'ALL_SPOKE' },
+      { type: 'CALL_VOTE' },
+      { type: 'TIMEOUT' },
+      { type: 'CANCEL' }
     ],
-    onTimeout: () => BoardEvent.CALL_VOTE
+    onTimeout: () => ({ type: 'CALL_VOTE' })
   },
-  
-  [BoardState.VOTING]: {
-    state: BoardState.VOTING,
+
+  voting: {
+    state: 'voting',
     timeoutMs: 5 * 60 * 1000, // 5분
     allowedEvents: [
-      BoardEvent.COMPLETE_VOTING,
-      BoardEvent.TIMEOUT,
-      BoardEvent.EMERGENCY_STOP
+      { type: 'VOTES_COLLECTED' },
+      { type: 'TIMEOUT' },
+      { type: 'CANCEL' }
     ],
     onEnter: async (ctx) => {
       // 투표 세션 생성
     },
-    onTimeout: () => BoardEvent.COMPLETE_VOTING
+    onTimeout: () => ({ type: 'VOTES_COLLECTED' })
   },
-  
-  [BoardState.TALLYING]: {
-    state: BoardState.TALLYING,
+
+  resolving: {
+    state: 'resolving',
     timeoutMs: 1 * 60 * 1000, // 1분
     allowedEvents: [
-      BoardEvent.ANNOUNCE_RESULT
+      { type: 'CONSENSUS_REACHED' }
     ],
     onEnter: async (ctx) => {
       // 집계 시작
     }
   },
-  
-  [BoardState.RESOLVED]: {
-    state: BoardState.RESOLVED,
+
+  resolved: {
+    state: 'resolved',
     timeoutMs: 5 * 60 * 1000, // 5분
     allowedEvents: [
-      BoardEvent.SUBMIT_AGENDA,
-      BoardEvent.ADJOURN,
-      BoardEvent.RESET
+      { type: 'START' },
+      { type: 'COMPLETE' }
     ],
-    onTimeout: () => BoardEvent.ADJOURN
-  },
-  
-  [BoardState.SUSPENDED]: {
-    state: BoardState.SUSPENDED,
-    timeoutMs: 60 * 60 * 1000, // 1시간
-    allowedEvents: [
-      BoardEvent.RESUME,
-      BoardEvent.ADJOURN
-    ],
-    onTimeout: () => BoardEvent.ADJOURN
-  },
-  
-  [BoardState.ADJOURNED]: {
-    state: BoardState.ADJOURNED,
-    allowedEvents: [
-      BoardEvent.RESET
-    ],
-    onEnter: (ctx) => {
-      // 세션 종료 처리
-    }
+    onTimeout: () => ({ type: 'COMPLETE' })
   }
 };
 ```
@@ -526,15 +436,15 @@ export const DEFAULT_STATE_CONFIGS: Record<BoardState, StateConfig> = {
                           ┌────────│AGENDA_SETTING│
                           │        │  (안건설정)   │
                           │timeout └──────┬───────┘
-                          │               │ CONFIRM_AGENDA
+                          │               │ AGENDA_CONFIRMED
                           │               ▼
                           │        ┌──────────────┐
                           │   ┌───▶│  DISCUSSION  │◀───┐
                           │   │    │   (토론)     │    │
                           │   │    └──────┬───────┘    │
                           │   │           │            │
-                          │   │REQUEST    │CALL_VOTE   │END_DEBATE
-                          │   │DEBATE     │            │
+                          │   │EXTEND     │CALL_VOTE   │ALL_SPOKE
+                          │   │           │            │
                           │   │           │    ┌───────┴───────┐
                           │   │           │    │    DEBATE     │
                           │   │           │    │   (반론)      │
@@ -544,31 +454,24 @@ export const DEFAULT_STATE_CONFIGS: Record<BoardState, StateConfig> = {
                           │   │    │   VOTING     │
                           │   │    │   (투표)     │
                           │   │    └──────┬───────┘
-                          │   │           │ COMPLETE_VOTING
+                          │   │           │ VOTES_COLLECTED
                           │   │           ▼
                           │   │    ┌──────────────┐
-                          │   │    │  TALLYING    │
+                          │   │    │  RESOLVING   │
                           │   │    │   (집계)     │
                           │   │    └──────┬───────┘
-                          │   │           │ ANNOUNCE_RESULT
+                          │   │           │ CONSENSUS_REACHED
                           │   │           ▼
                           │   │    ┌──────────────┐
-                          │   │    │  RESOLVED    │────SUBMIT_AGENDA
+                          │   │    │  RESOLVED    │──── START
                           │   │    │   (결의)     │
                           │   │    └──────┬───────┘
-                          │   │           │ ADJOURN
+                          │   │           │ COMPLETE
+                          │   │           ▼
                           ▼   │           ▼
                        ┌──────────────────────────┐
-                       │       ADJOURNED          │
-                       │        (휴회)            │
+                       │         IDLE             │
                        └──────────────────────────┘
-                       
-예외 상태:
-┌──────────────┐
-│  SUSPENDED   │◀── SUSPEND (토론/반론/투표 중)
-│  (일시중단)   │
-│              │──── RESUME ──▶ 이전 상태
-└──────────────┘
 ```
 
 ### 6. 이벤트 발행
@@ -583,8 +486,6 @@ export const DEFAULT_STATE_CONFIGS: Record<BoardState, StateConfig> = {
 | `board.state.exiting` | 상태 이탈 전 | `{ state, context }` |
 | `board.timeout.warning` | 타임아웃 임박 | `{ state, remainingMs }` |
 | `board.timeout.occurred` | 타임아웃 발생 | `{ state, elapsed }` |
-| `board.quorum.lost` | 정족수 미달 | `{ required, actual }` |
-| `board.quorum.restored` | 정족수 회복 | `{ required, actual }` |
 | `board.speaker.changed` | 발언자 변경 | `{ previous, current }` |
 | `board.speaker.timeout` | 발언 시간 초과 | `{ speaker }` |
 
@@ -601,7 +502,7 @@ describe('BoardStateMachine basic transitions', () => {
   });
 
   it('should start in IDLE state', () => {
-    expect(machine.state).toBe(BoardState.IDLE);
+    expect(machine.state).toBe('idle');
   });
 
   it('should transition from IDLE to AGENDA_SETTING on START', () => {
@@ -610,9 +511,9 @@ describe('BoardStateMachine basic transitions', () => {
     machine.markPresent('ceo');
     machine.markPresent('cto');
 
-    machine.send(BoardEvent.START);
+    machine.send({ type: 'START', agendaId: 'agenda-1' });
 
-    expect(machine.state).toBe(BoardState.AGENDA_SETTING);
+    expect(machine.state).toBe('agenda_setting');
     expect(machine.context.startedAt).toBeDefined();
   });
 
@@ -620,29 +521,29 @@ describe('BoardStateMachine basic transitions', () => {
     machine.addParticipant('ceo');
     machine.markPresent('ceo');
 
-    expect(() => machine.send(BoardEvent.START)).toThrow('GUARD_FAILED');
-    expect(machine.state).toBe(BoardState.IDLE);
+    expect(() => machine.send({ type: 'START', agendaId: 'agenda-1' })).toThrow('GUARD_FAILED');
+    expect(machine.state).toBe('idle');
   });
 
   it('should transition through full flow', () => {
     setupQuorum(machine);
-    
-    machine.send(BoardEvent.START);
-    expect(machine.state).toBe(BoardState.AGENDA_SETTING);
-    
+
+    machine.send({ type: 'START', agendaId: 'agenda-1' });
+    expect(machine.state).toBe('agenda_setting');
+
     machine.context.currentAgendaId = 'agenda-1';
-    machine.send(BoardEvent.CONFIRM_AGENDA);
-    expect(machine.state).toBe(BoardState.DISCUSSION);
-    
+    machine.send({ type: 'AGENDA_CONFIRMED' });
+    expect(machine.state).toBe('discussion');
+
     simulateDiscussion(machine);
-    machine.send(BoardEvent.CALL_VOTE);
-    expect(machine.state).toBe(BoardState.VOTING);
-    
-    machine.send(BoardEvent.COMPLETE_VOTING);
-    expect(machine.state).toBe(BoardState.TALLYING);
-    
-    machine.send(BoardEvent.ANNOUNCE_RESULT);
-    expect(machine.state).toBe(BoardState.RESOLVED);
+    machine.send({ type: 'CALL_VOTE' });
+    expect(machine.state).toBe('voting');
+
+    machine.send({ type: 'VOTES_COLLECTED' });
+    expect(machine.state).toBe('resolving');
+
+    machine.send({ type: 'CONSENSUS_REACHED', result: { decision: 'approved' } });
+    expect(machine.state).toBe('resolved');
   });
 });
 ```
@@ -656,38 +557,38 @@ describe('BoardStateMachine discussion and debate', () => {
   beforeEach(() => {
     machine = createBoardStateMachine();
     setupQuorum(machine);
-    machine.send(BoardEvent.START);
+    machine.send({ type: 'START', agendaId: 'agenda-1' });
     machine.context.currentAgendaId = 'agenda-1';
-    machine.send(BoardEvent.CONFIRM_AGENDA);
+    machine.send({ type: 'AGENDA_CONFIRMED' });
   });
 
   it('should allow debate request after at least one speaker', () => {
     // 발언자 없이는 반론 요청 불가
-    expect(() => machine.send(BoardEvent.REQUEST_DEBATE)).toThrow('GUARD_FAILED');
+    expect(() => machine.send({ type: 'EXTEND' })).toThrow('GUARD_FAILED');
 
     // 발언 후 반론 요청 가능
     machine.requestToSpeak('ceo');
     machine.grantSpeaker('ceo');
     machine.endCurrentSpeaker();
 
-    machine.send(BoardEvent.REQUEST_DEBATE);
-    expect(machine.state).toBe(BoardState.DEBATE);
+    machine.send({ type: 'EXTEND' });
+    expect(machine.state).toBe('debate');
   });
 
   it('should return to discussion after debate ends', () => {
     simulateSpeaker(machine, 'ceo');
-    machine.send(BoardEvent.REQUEST_DEBATE);
-    
-    machine.send(BoardEvent.END_DEBATE);
-    expect(machine.state).toBe(BoardState.DISCUSSION);
+    machine.send({ type: 'EXTEND' });
+
+    machine.send({ type: 'ALL_SPOKE' });
+    expect(machine.state).toBe('discussion');
   });
 
   it('should allow direct vote from debate', () => {
     simulateSpeaker(machine, 'ceo');
-    machine.send(BoardEvent.REQUEST_DEBATE);
-    
-    machine.send(BoardEvent.CALL_VOTE);
-    expect(machine.state).toBe(BoardState.VOTING);
+    machine.send({ type: 'EXTEND' });
+
+    machine.send({ type: 'CALL_VOTE' });
+    expect(machine.state).toBe('voting');
   });
 });
 ```
@@ -715,31 +616,31 @@ describe('BoardStateMachine timeouts', () => {
     vi.useRealTimers();
   });
 
-  it('should timeout from AGENDA_SETTING to ADJOURNED', () => {
+  it('should timeout from AGENDA_SETTING to IDLE', () => {
     setupQuorum(machine);
-    machine.send(BoardEvent.START);
+    machine.send({ type: 'START', agendaId: 'agenda-1' });
 
     vi.advanceTimersByTime(1001);
 
-    expect(machine.state).toBe(BoardState.ADJOURNED);
+    expect(machine.state).toBe('idle');
   });
 
   it('should timeout from DISCUSSION to VOTING', () => {
     setupQuorum(machine);
-    machine.send(BoardEvent.START);
+    machine.send({ type: 'START', agendaId: 'agenda-1' });
     machine.context.currentAgendaId = 'agenda-1';
-    machine.send(BoardEvent.CONFIRM_AGENDA);
+    machine.send({ type: 'AGENDA_CONFIRMED' });
 
     vi.advanceTimersByTime(2001);
 
-    expect(machine.state).toBe(BoardState.VOTING);
+    expect(machine.state).toBe('voting');
   });
 
   it('should emit timeout warning before timeout', () => {
     const eventBus = createMockEventBus();
     machine = createBoardStateMachine({ eventBus });
     setupQuorum(machine);
-    machine.send(BoardEvent.START);
+    machine.send({ type: 'START', agendaId: 'agenda-1' });
 
     // 90% 시점에서 경고
     vi.advanceTimersByTime(900);
@@ -747,16 +648,16 @@ describe('BoardStateMachine timeouts', () => {
     expect(eventBus.publish).toHaveBeenCalledWith(
       'board.timeout.warning',
       expect.objectContaining({
-        state: BoardState.AGENDA_SETTING
+        state: 'agenda_setting'
       })
     );
   });
 
   it('should extend time', () => {
     setupQuorum(machine);
-    machine.send(BoardEvent.START);
+    machine.send({ type: 'START', agendaId: 'agenda-1' });
     machine.context.currentAgendaId = 'agenda-1';
-    machine.send(BoardEvent.CONFIRM_AGENDA);
+    machine.send({ type: 'AGENDA_CONFIRMED' });
 
     // 1.5초 후 시간 연장
     vi.advanceTimersByTime(1500);
@@ -764,18 +665,18 @@ describe('BoardStateMachine timeouts', () => {
 
     // 원래 타임아웃 시점 (2초)
     vi.advanceTimersByTime(600);
-    expect(machine.state).toBe(BoardState.DISCUSSION);
+    expect(machine.state).toBe('discussion');
 
     // 연장된 시간 후
     vi.advanceTimersByTime(2000);
-    expect(machine.state).toBe(BoardState.VOTING);
+    expect(machine.state).toBe('voting');
   });
 
   it('should return remaining time', () => {
     setupQuorum(machine);
-    machine.send(BoardEvent.START);
+    machine.send({ type: 'START', agendaId: 'agenda-1' });
     machine.context.currentAgendaId = 'agenda-1';
-    machine.send(BoardEvent.CONFIRM_AGENDA);
+    machine.send({ type: 'AGENDA_CONFIRMED' });
 
     vi.advanceTimersByTime(1000);
     const remaining = machine.getRemainingTime();
@@ -864,20 +765,6 @@ describe('BoardStateMachine quorum management', () => {
     expect(machine.isQuorumMet()).toBe(true);
   });
 
-  it('should suspend on quorum lost during discussion', () => {
-    machine.markPresent('ceo');
-    machine.markPresent('cto');
-    machine.markPresent('cfo');
-    goToDiscussion(machine);
-
-    machine.markAbsent('cto');
-    machine.markAbsent('cfo');
-    // 정족수 미달 감지
-    machine.send(BoardEvent.QUORUM_LOST);
-
-    expect(machine.state).toBe(BoardState.SUSPENDED);
-  });
-
   it('should emit quorum lost event', () => {
     const eventBus = createMockEventBus();
     machine = createBoardStateMachine({ eventBus });
@@ -913,22 +800,13 @@ describe('BoardStateMachine suspend and resume', () => {
   it('should suspend session', () => {
     machine.suspendSession('휴식');
 
-    expect(machine.state).toBe(BoardState.SUSPENDED);
-  });
-
-  it('should resume to previous state', () => {
-    const prevState = machine.state;
-    machine.suspendSession();
-    machine.resumeSession();
-
-    // 토론 상태로 복귀 (구현에 따라 다를 수 있음)
-    expect(machine.state).toBe(BoardState.DISCUSSION);
+    expect(machine.state).toBe('idle');
   });
 
   it('should adjourn session', () => {
     machine.adjournSession('오늘 회의 종료');
 
-    expect(machine.state).toBe(BoardState.ADJOURNED);
+    expect(machine.state).toBe('idle');
     expect(machine.isActive).toBe(false);
   });
 });
@@ -946,29 +824,29 @@ describe('BoardStateMachine history', () => {
   });
 
   it('should record state transitions', () => {
-    machine.send(BoardEvent.START);
+    machine.send({ type: 'START', agendaId: 'agenda-1' });
     machine.context.currentAgendaId = 'agenda-1';
-    machine.send(BoardEvent.CONFIRM_AGENDA);
+    machine.send({ type: 'AGENDA_CONFIRMED' });
 
     const history = machine.getHistory();
 
     expect(history).toHaveLength(2);
     expect(history[0]).toMatchObject({
-      from: BoardState.IDLE,
-      to: BoardState.AGENDA_SETTING,
-      event: BoardEvent.START
+      from: 'idle',
+      to: 'agenda_setting',
+      event: { type: 'START' }
     });
   });
 
   it('should calculate state duration', () => {
     vi.useFakeTimers();
 
-    machine.send(BoardEvent.START);
+    machine.send({ type: 'START', agendaId: 'agenda-1' });
     vi.advanceTimersByTime(5000);
     machine.context.currentAgendaId = 'agenda-1';
-    machine.send(BoardEvent.CONFIRM_AGENDA);
+    machine.send({ type: 'AGENDA_CONFIRMED' });
 
-    const duration = machine.getStateDuration(BoardState.AGENDA_SETTING);
+    const duration = machine.getStateDuration('agenda_setting');
     expect(duration).toBe(5000);
 
     vi.useRealTimers();
@@ -977,10 +855,10 @@ describe('BoardStateMachine history', () => {
   it('should calculate total session duration', () => {
     vi.useFakeTimers();
 
-    machine.send(BoardEvent.START);
+    machine.send({ type: 'START', agendaId: 'agenda-1' });
     vi.advanceTimersByTime(5000);
     machine.context.currentAgendaId = 'agenda-1';
-    machine.send(BoardEvent.CONFIRM_AGENDA);
+    machine.send({ type: 'AGENDA_CONFIRMED' });
     vi.advanceTimersByTime(10000);
 
     const total = machine.getTotalDuration();
@@ -998,20 +876,20 @@ describe('BoardStateMachine serialization', () => {
   it('should serialize to JSON', () => {
     const machine = createBoardStateMachine();
     setupQuorum(machine);
-    machine.send(BoardEvent.START);
+    machine.send({ type: 'START', agendaId: 'agenda-1' });
 
     const snapshot = machine.toJSON();
 
-    expect(snapshot.state).toBe(BoardState.AGENDA_SETTING);
+    expect(snapshot.state).toBe('agenda_setting');
     expect(snapshot.context.sessionId).toBeDefined();
   });
 
   it('should restore from JSON', () => {
     const original = createBoardStateMachine();
     setupQuorum(original);
-    original.send(BoardEvent.START);
+    original.send({ type: 'START', agendaId: 'agenda-1' });
     original.context.currentAgendaId = 'agenda-1';
-    original.send(BoardEvent.CONFIRM_AGENDA);
+    original.send({ type: 'AGENDA_CONFIRMED' });
 
     const snapshot = original.toJSON();
     const restored = BoardStateMachine.fromJSON(snapshot, {
@@ -1059,6 +937,8 @@ packages/board/
 - [ ] 정족수 관리 구현 완료
 - [ ] 세션 중단/재개 구현 완료
 - [ ] 직렬화/역직렬화 구현 완료
+- [ ] **BoardController 클래스 구현 완료** (스펙 추가)
+- [ ] **runMeeting() 메서드 구현 완료** (스펙 추가)
 - [ ] 이벤트 발행 구현 완료
 - [ ] 테스트 커버리지 80% 이상
 - [ ] pnpm test 성공
@@ -1070,7 +950,95 @@ packages/board/
 - TASK-036 (AgendaManager)
 - @obora-kit/core 패키지 (EventBus)
 
-### 11. 참고 문서
+### 11. BoardController 추가 (스펙)
+
+스펙에 따라 BoardController를 추가합니다.
+
+```typescript
+// packages/board/src/controller/BoardController.ts
+
+export interface IBoardController {
+  // 세션 관리
+  startSession(config?: SessionConfig): Promise<BoardSession>;
+  endSession(sessionId: string): Promise<void>;
+  getCurrentSession(): BoardSession | null;
+
+  // 안건 처리
+  processAgenda(agenda: Agenda): Promise<Resolution>;
+
+  // 전체 흐름 실행
+  runMeeting(agenda: Agenda): AsyncIterable<MeetingEvent>;
+
+  // 상태 조회
+  getStatus(): BoardStatus;
+}
+
+export class BoardController implements IBoardController {
+  private stateMachine: IBoardStateMachine;
+  private agendaManager: IAgendaManager;
+  private votingManager: IVotingManager;
+  private consensusManager: IConsensusManager;
+  private blackboard: IBlackboard;
+
+  private currentSession: BoardSession | null = null;
+
+  constructor(config: BoardConfig);
+
+  async startSession(config?: SessionConfig): Promise<BoardSession>;
+  async endSession(sessionId: string): Promise<void>;
+  getCurrentSession(): BoardSession | null;
+  async processAgenda(agenda: Agenda): Promise<Resolution>;
+  async *runMeeting(agenda: Agenda): AsyncIterable<MeetingEvent>;
+  getStatus(): BoardStatus;
+}
+
+export interface BoardConfig {
+  stateMachine: IBoardStateMachine;
+  agendaManager: IAgendaManager;
+  votingManager: IVotingManager;
+  consensusManager: IConsensusManager;
+  blackboard: IBlackboard;
+}
+
+export interface SessionConfig {
+  participants: string[];
+  coordinator: string;
+  timeLimit?: number;           // ms
+  rules?: MeetingRules;
+}
+
+export interface MeetingRules {
+  speakingTimeLimit?: number;   // 발언 시간 제한 (ms)
+  maxRebuttals?: number;        // 최대 반박 횟수
+  votingTimeLimit?: number;     // 투표 시간 제한 (ms)
+  allowLateJoin?: boolean;
+}
+
+export interface BoardStatus {
+  sessionId: string | null;
+  state: BoardState;
+  participants: string[];
+  currentAgenda: Agenda | null;
+  uptime: number;               // ms
+}
+
+export type MeetingEvent =
+  | { type: 'session_started'; session: BoardSession }
+  | { type: 'agenda_presented'; agenda: Agenda }
+  | { type: 'discussion_started' }
+  | { type: 'opinion_submitted'; opinion: Opinion }
+  | { type: 'debate_started' }
+  | { type: 'rebuttal'; agentId: string; content: string }
+  | { type: 'voting_started'; session: VotingSession }
+  | { type: 'vote_cast'; vote: Vote }
+  | { type: 'voting_ended'; result: VotingResult }
+  | { type: 'consensus_reached'; consensus: ConsensusResult }
+  | { type: 'resolution_made'; resolution: Resolution }
+  | { type: 'session_ended' }
+  | { type: 'error'; error: BoardError };
+```
+
+### 12. 참고 문서
 
 - [Blackboard Actor Design](../../architecture/blackboard-actor-design.md)
 - [상태 전이 다이어그램](../../architecture/blackboard-actor-design.md#43-상태-전이-다이어그램)
