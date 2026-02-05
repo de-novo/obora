@@ -126,6 +126,12 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@22.19.8)
 
+  packages/blackboard:
+    devDependencies:
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
+
   packages/cli:
     dependencies:
       '@obora/core':
