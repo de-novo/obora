@@ -1,91 +1,14 @@
 /**
+ * @obora-kit/blackboard
+ *
+ * Blackboard pattern implementation for AI agent coordination.
+ *
  * @packageDocumentation
- * @module @obora-kit/blackboard
- * @description Blackboard 시스템 - 이사회 협업 패턴 구현
- *
- * 이 패키지는 AI 에이전트들의 이사회 협업 패턴을 구현하는 Blackboard 시스템을 제공합니다.
- *
- * @example
- * ```typescript
- * import {
- *   Blackboard,
- *   createSessionId,
- *   createAgentId,
- *   AgentStatusEnum,
- *   AgendaStatus,
- * } from '@obora-kit/blackboard';
- *
- * // Blackboard 생성
- * const board = new Blackboard({
- *   sessionId: createSessionId('session-001'),
- * });
- *
- * // 에이전트 등록
- * board.state.registerAgent({
- *   id: createAgentId('ceo'),
- *   role: 'director',
- *   status: AgentStatusEnum.ACTIVE,
- *   currentTask: null,
- *   lastHeartbeat: new Date(),
- *   metadata: { model: 'gpt-4' },
- *   createdAt: new Date(),
- *   updatedAt: new Date(),
- * });
- *
- * // 이벤트 수신
- * board.on('agent_joined', (data) => {
- *   console.log(`Agent ${data.agentId} joined`);
- * });
- * ```
  */
 
-// Core exports
-export * from './core';
-
-// Events exports
-export * from './events';
-
-// All types
-export * from './types';
-
-// Re-export commonly used types
-export {
-  BlackboardState,
-  BlackboardMeta,
-  StateSection,
-  KnowledgeSection,
-  DecisionsSection,
-  BoardPhase,
-} from './types';
-
-export {
-  AgentStatusEnum,
-  AgentRole,
-  AgentStatus,
-} from './types';
-
-export {
-  TaskStatus,
-  TaskPriority,
-  Task,
-} from './types';
-
-export {
-  AgendaStatus,
-  Agenda,
-  Opinion,
-  Resolution,
-  Stance,
-  DecisionType,
-} from './types';
-
-export {
-  Fact,
-  Inference,
-  Pattern,
-} from './types';
-
-export {
+// === Types ===
+export type {
+  // Base types
   AgentId,
   TaskId,
   AgendaId,
@@ -93,11 +16,112 @@ export {
   Timestamped,
   Versioned,
   Identifiable,
+
+  // Agent types
+  AgentRole,
+  AgentStatus,
+  AgentStatusEnum,
+
+  // Task types
+  Task,
+  TaskStatus,
+  TaskPriority,
+  TaskError,
+
+  // Decision types
+  Agenda,
+  AgendaStatus,
+  Opinion,
+  Stance,
+  Resolution,
+  DecisionType,
+  VoteSummary,
+  VotingMethod,
+
+  // Knowledge types
+  Fact,
+  Inference,
+  Pattern,
+
+  // Message types
+  Message,
+  MessageType,
+
+  // Blackboard types
+  BlackboardState,
+  BlackboardMeta,
+  StateSection,
+  KnowledgeSection,
+  DecisionsSection,
+  BoardPhase,
+  BlackboardEvent,
+  BlackboardEventType,
+  BlackboardStats,
+  StateUpdateRequest,
+  StateUpdateResult,
 } from './types';
 
+// ID creator functions (from types)
 export {
   createAgentId,
   createTaskId,
   createAgendaId,
   createSessionId,
 } from './types';
+
+// === Core ===
+export {
+  Blackboard,
+  EventAwareBlackboard,
+  VersionConflictError,
+  PathNotFoundError,
+} from './core';
+
+export type {
+  BlackboardOptions,
+  QueryOptions,
+  WriteResult,
+} from './core';
+
+// === Events ===
+export {
+  EventBus,
+  EventFactory,
+} from './events';
+
+export type {
+  Event,
+  EventType,
+  EventHandler,
+  Unsubscribe,
+  EventFilter,
+  EventBusOptions,
+  EventBusStats,
+} from './events';
+
+// === Snapshot ===
+export {
+  SnapshotManager,
+  StateSerializer,
+  SnapshotRestoreError,
+  SNAPSHOT_FORMAT_VERSION,
+} from './snapshot';
+
+export type {
+  Snapshot,
+  SnapshotMeta,
+  CreateSnapshotOptions,
+  RestoreSnapshotOptions,
+  SnapshotValidationResult,
+} from './snapshot';
+
+// === Utilities ===
+export {
+  DefaultIdGenerator,
+  SequentialIdGenerator,
+} from './core/id-generator';
+
+export {
+  deepClone,
+  deepFreeze,
+} from './core/immutable';

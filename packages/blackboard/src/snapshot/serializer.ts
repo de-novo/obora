@@ -458,7 +458,7 @@ async function calculateChecksumNodeJS(data: string): Promise<string> {
   // Node.js 환경인지 확인
   if (typeof process === 'object' && typeof require === 'function') {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+       
       const crypto = require('crypto');
       return crypto.createHash('sha256').update(data).digest('hex');
     } catch (e) {

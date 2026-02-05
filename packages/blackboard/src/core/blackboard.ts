@@ -14,6 +14,27 @@ import type {
 } from '../types';
 import { createSessionId } from '../types/base';
 
+import { VersionManager, VersionConflictError, DEFAULT_VERSIONING_CONFIG } from './versioning';
+import { getByPath, setByPath, deleteByPath, parsePath, isValidPath } from './path-utils';
+import { deepClone, mapToObject, objectToMap } from './immutable';
+import { DefaultIdGenerator, sequentialIdGenerator } from './id-generator';
+
+import { StateSectionAccessor } from './accessors/state-accessor';
+import { KnowledgeSectionAccessor } from './accessors/knowledge-accessor';
+import { DecisionsSectionAccessor } from './accessors/decisions-accessor';
+
+// Snapshot imports
+import { SnapshotManager } from '../snapshot';
+import type {
+  Snapshot,
+  CreateSnapshotOptions,
+  RestoreSnapshotOptions,
+  SnapshotValidationResult,
+} from '../snapshot';
+
+// Re-export types for convenience
+export { BoardPhase };
+
 /**
  * 간단한 EventEmitter 구현
  */
@@ -59,18 +80,6 @@ class SimpleEventEmitter {
     return this._listeners.get(event)?.length ?? 0;
   }
 }
-
-import { VersionManager, VersionConflictError, DEFAULT_VERSIONING_CONFIG } from './versioning';
-import { getByPath, setByPath, deleteByPath, parsePath, isValidPath } from './path-utils';
-import { deepClone, mapToObject, objectToMap } from './immutable';
-import { DefaultIdGenerator, sequentialIdGenerator } from './id-generator';
-
-import { StateSectionAccessor } from './accessors/state-accessor';
-import { KnowledgeSectionAccessor } from './accessors/knowledge-accessor';
-import { DecisionsSectionAccessor } from './accessors/decisions-accessor';
-
-// Re-export types for convenience
-export { BoardPhase };
 
 /**
  * Blackboard 설정 옵션
@@ -230,6 +239,7 @@ export class Blackboard extends SimpleEventEmitter {
   private _state: BlackboardState;
   private readonly versionManager: VersionManager;
   private readonly options: Required<BlackboardOptions>;
+  private _snapshotManager: SnapshotManager;
 
   // 섹션 접근자
   private _stateAccessor?: StateSectionAccessor;
@@ -245,6 +255,7 @@ export class Blackboard extends SimpleEventEmitter {
       retryDelay: this.options.retryDelay,
       exponentialBackoff: true,
     });
+    this._snapshotManager = new SnapshotManager();
 
     // 접근자 초기화
     this._stateAccessor = new StateSectionAccessor(this);
@@ -367,6 +378,11 @@ export class Blackboard extends SimpleEventEmitter {
   /** 세션 ID */
   get sessionId(): SessionId {
     return this._state.meta.sessionId;
+  }
+
+  /** 스냅샷 관리자 (public) */
+  get snapshotManager(): SnapshotManager {
+    return this._snapshotManager;
   }
 
   // === Core API ===
@@ -617,8 +633,51 @@ export class Blackboard extends SimpleEventEmitter {
     }
   }
 
+  // === Snapshot Methods ===
+
   /**
-   * 스냅샷 생성 (JSON 직렬화용)
+   * 현재 상태 스냅샷 생성 (비동기)
+   * @param options - 스냅샷 옵션
+   * @returns 스냅샷
+   */
+  async createSnapshot(options?: CreateSnapshotOptions): Promise<Snapshot> {
+    const state = this.getState();
+    return this._snapshotManager.createSnapshot(state, options);
+  }
+
+  /**
+   * 스냅샷에서 상태 복원
+   * @param snapshot - 복원할 스냅샷
+   * @param options - 복원 옵션
+   */
+  restoreSnapshot(snapshot: Snapshot, options?: RestoreSnapshotOptions): void {
+    const restoredState = this._snapshotManager.restore(snapshot, options);
+    this.replaceState(restoredState);
+  }
+
+  /**
+   * 스냅샷 검증 (비동기)
+   * @param snapshot - 검증할 스냅샷
+   */
+  async validateSnapshot(snapshot: Snapshot): Promise<SnapshotValidationResult> {
+    return this._snapshotManager.validate(snapshot);
+  }
+
+  /**
+   * 전체 상태 교체 (내부용)
+   * @param newState - 새 상태
+   */
+  private replaceState(newState: BlackboardState): void {
+    this._state = deepClone(newState);
+
+    // 접근자 재초기화
+    this._stateAccessor = new StateSectionAccessor(this);
+    this._knowledgeAccessor = new KnowledgeSectionAccessor(this);
+    this._decisionsAccessor = new DecisionsSectionAccessor(this);
+  }
+
+  /**
+   * 스냅샷 생성 (JSON 직렬화용) - 하위 호환성 유지
    */
   toJSON(): unknown {
     return {
@@ -640,7 +699,7 @@ export class Blackboard extends SimpleEventEmitter {
   }
 
   /**
-   * 스냅샷에서 복원
+   * 스냅샷에서 복원 - 하위 호환성 유지
    */
   static fromJSON(json: { meta?: unknown; state?: unknown; knowledge?: unknown; decisions?: unknown }): Blackboard {
     const now = new Date();

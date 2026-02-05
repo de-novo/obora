@@ -1,18 +1,32 @@
 {
+  // 독립 설정 유지: tsconfig.base.json 파일이 존재하지 않음
   "compilerOptions": {
-    "target": "ES2022",
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "declarationDir": "./dist",
+
+    /* Module */
     "module": "ESNext",
-    "lib": ["ES2022"],
     "moduleResolution": "bundler",
-    "resolveJsonModule": true,
-    "allowSyntheticDefaultImports": true,
-    "esModuleInterop": true,
+    "target": "ES2022",
+
+    /* Type Checking */
     "strict": true,
-    "skipLibCheck": true,
+    "noUncheckedIndexedAccess": false,
+    "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": false,
+
+    /* Emit */
     "declaration": true,
     "declarationMap": true,
-    "outDir": "./dist",
-    "rootDir": "./src"
+    "sourceMap": true,
+
+    /* Paths */
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "test"]
 }
