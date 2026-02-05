@@ -73,8 +73,8 @@ export interface DecisionsSection {
   current: Agenda | null;
   /** 대기 중인 안건들 */
   pending: Agenda[];
-  /** 에이전트별 의견 */
-  opinions: Map<AgentId, Opinion>;
+  /** 의견 맵 (키: agendaId:agentId) */
+  opinions: Map<string, Opinion>;
   /** 결정 이력 */
   history: Resolution[];
 }

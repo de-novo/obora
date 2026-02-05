@@ -1,0 +1,325 @@
+/**
+ * @module state-accessor
+ * @description 상태 섹션 접근자
+ */
+
+import type { Blackboard } from '../blackboard';
+import type {
+  BoardPhase,
+  StateSection,
+} from '../../types';
+import type {
+  AgentStatus,
+  AgentRole,
+} from '../../types';
+import {
+  AgentStatusEnum,
+} from '../../types';
+import type {
+  Task,
+  TaskId,
+} from '../../types';
+import {
+  TaskStatus,
+} from '../../types';
+import type { AgentId } from '../../types';
+import { BlackboardError, BlackboardErrorCode } from '../blackboard';
+
+/**
+ * 상태 섹션 접근자
+ * @description state 섹션에 대한 타입 안전한 접근 제공
+ */
+export class StateSectionAccessor {
+  constructor(private readonly board: Blackboard) {}
+
+  // === 단계 관리 ===
+
+  /** 현재 단계 */
+  get phase(): BoardPhase {
+    return this.board.read<StateSection>('state').phase;
+  }
+
+  set phase(value: BoardPhase) {
+    this.board.write('state.phase', value);
+  }
+
+  /** 컨텍스트 데이터 */
+  get context(): Record<string, unknown> {
+    return this.board.read<StateSection>('state').context;
+  }
+
+  setContext(key: string, value: unknown): void {
+    this.board.write(`state.context.${key}`, value);
+  }
+
+  getContext<T>(key: string): T | undefined {
+    return this.board.read<T>(`state.context.${key}`);
+  }
+
+  // === 에이전트 관리 ===
+
+  /**
+   * 에이전트 등록
+   * @param agent - 에이전트 상태 정보
+   */
+  registerAgent(agent: AgentStatus): void {
+    const state = this.board.read<StateSection>('state');
+
+    if (state.agents.has(agent.id)) {
+      throw new BlackboardError(
+        BlackboardErrorCode.AGENT_ALREADY_REGISTERED,
+        `Agent ${agent.id} already registered`
+      );
+    }
+
+    const updatedAgents = new Map(state.agents);
+    updatedAgents.set(agent.id, agent);
+
+    this.board.write('state.agents', updatedAgents);
+    this.board.emit('agent_joined', { agentId: agent.id, agent });
+  }
+
+  /**
+   * 에이전트 상태 업데이트
+   * @param agentId - 에이전트 ID
+   * @param updates - 업데이트할 필드
+   */
+  updateAgent(agentId: AgentId, updates: Partial<AgentStatus>): void {
+    const state = this.board.read<StateSection>('state');
+    const agent = state.agents.get(agentId);
+
+    if (!agent) {
+      throw new BlackboardError(
+        BlackboardErrorCode.AGENT_NOT_FOUND,
+        `Agent ${agentId} not found`
+      );
+    }
+
+    const updatedAgent = {
+      ...agent,
+      ...updates,
+      updatedAt: new Date(),
+    };
+
+    const updatedAgents = new Map(state.agents);
+    updatedAgents.set(agentId, updatedAgent);
+
+    this.board.write('state.agents', updatedAgents);
+
+    if (updates.status !== undefined && updates.status !== agent.status) {
+      this.board.emit('agent_status_changed', {
+        agentId,
+        previousStatus: agent.status,
+        newStatus: updates.status,
+      });
+    }
+  }
+
+  /**
+   * 에이전트 제거
+   * @param agentId - 에이전트 ID
+   */
+  removeAgent(agentId: AgentId): void {
+    const state = this.board.read<StateSection>('state');
+
+    if (!state.agents.has(agentId)) {
+      throw new BlackboardError(
+        BlackboardErrorCode.AGENT_NOT_FOUND,
+        `Agent ${agentId} not found`
+      );
+    }
+
+    const updatedAgents = new Map(state.agents);
+    updatedAgents.delete(agentId);
+
+    this.board.write('state.agents', updatedAgents);
+    this.board.emit('agent_left', { agentId });
+  }
+
+  /**
+   * 에이전트 조회
+   * @param agentId - 에이전트 ID
+   */
+  getAgent(agentId: AgentId): AgentStatus | undefined {
+    const state = this.board.read<StateSection>('state');
+    return state.agents.get(agentId);
+  }
+
+  /**
+   * 모든 에이전트 조회
+   * @param filter - 필터 조건
+   */
+  getAgents(filter?: { role?: AgentRole; status?: AgentStatusEnum }): AgentStatus[] {
+    const state = this.board.read<StateSection>('state');
+    const agents = Array.from(state.agents.values());
+
+    if (!filter) {
+      return agents;
+    }
+
+    return agents.filter(agent => {
+      if (filter.role !== undefined && agent.role !== filter.role) {
+        return false;
+      }
+      if (filter.status !== undefined && agent.status !== filter.status) {
+        return false;
+      }
+      return true;
+    });
+  }
+
+  /**
+   * 에이전트 수 조회
+   */
+  getAgentCount(): number {
+    return this.board.read<StateSection>('state').agents.size;
+  }
+
+  /**
+   * 활성 에이전트 수 조회
+   */
+  getActiveAgentCount(): number {
+    return this.getAgents({ status: AgentStatusEnum.BUSY }).length;
+  }
+
+  // === 작업 관리 ===
+
+  /**
+   * 작업 추가
+   */
+  addTask(task: Task): void {
+    const state = this.board.read<StateSection>('state');
+
+    if (state.tasks.has(task.id)) {
+      throw new BlackboardError(
+        BlackboardErrorCode.TASK_ALREADY_ASSIGNED,
+        `Task ${task.id} already exists`
+      );
+    }
+
+    const updatedTasks = new Map(state.tasks);
+    updatedTasks.set(task.id, task);
+
+    this.board.write('state.tasks', updatedTasks);
+    this.board.emit('task_created', { taskId: task.id, task });
+  }
+
+  /**
+   * 작업 업데이트
+   */
+  updateTask(taskId: TaskId, updates: Partial<Task>): void {
+    const state = this.board.read<StateSection>('state');
+    const task = state.tasks.get(taskId);
+
+    if (!task) {
+      throw new BlackboardError(
+        BlackboardErrorCode.TASK_NOT_FOUND,
+        `Task ${taskId} not found`
+      );
+    }
+
+    const updatedTask = {
+      ...task,
+      ...updates,
+      updatedAt: new Date(),
+      version: task.version + 1,
+    };
+
+    const updatedTasks = new Map(state.tasks);
+    updatedTasks.set(taskId, updatedTask);
+
+    this.board.write('state.tasks', updatedTasks);
+    this.board.emit('task_updated', { taskId, task: updatedTask });
+  }
+
+  /**
+   * 작업 조회
+   */
+  getTask(taskId: TaskId): Task | undefined {
+    const state = this.board.read<StateSection>('state');
+    return state.tasks.get(taskId);
+  }
+
+  /**
+   * 작업 목록 조회
+   */
+  getTasks(filter?: { status?: TaskStatus; assignedTo?: AgentId }): Task[] {
+    const state = this.board.read<StateSection>('state');
+    const tasks = Array.from(state.tasks.values());
+
+    if (!filter) {
+      return tasks;
+    }
+
+    return tasks.filter(task => {
+      if (filter.status !== undefined && task.status !== filter.status) {
+        return false;
+      }
+      if (filter.assignedTo !== undefined && task.assignedTo !== filter.assignedTo) {
+        return false;
+      }
+      return true;
+    });
+  }
+
+  /**
+   * 작업 삭제
+   */
+  removeTask(taskId: TaskId): void {
+    const state = this.board.read<StateSection>('state');
+
+    if (!state.tasks.has(taskId)) {
+      throw new BlackboardError(
+        BlackboardErrorCode.TASK_NOT_FOUND,
+        `Task ${taskId} not found`
+      );
+    }
+
+    const updatedTasks = new Map(state.tasks);
+    updatedTasks.delete(taskId);
+
+    this.board.write('state.tasks', updatedTasks);
+  }
+
+  /**
+   * 다음 실행 가능한 작업들
+   * @param completedTasks - 완료된 작업 ID 목록
+   */
+  getNextTasks(completedTasks: Set<TaskId> = new Set()): Task[] {
+    const tasks = this.getTasks({ status: TaskStatus.PENDING });
+
+    return tasks.filter(task => {
+      // 모든 의존 작업이 완료되어야 함
+      return task.dependsOn.every(depId => completedTasks.has(depId));
+    }).sort((a, b) => b.priority - a.priority); // 우선순위 내림차순
+  }
+
+  /**
+   * 에이전트의 현재 작업 조회
+   */
+  getAgentCurrentTask(agentId: AgentId): Task | undefined {
+    const tasks = this.getTasks({ assignedTo: agentId, status: TaskStatus.RUNNING });
+    return tasks[0];
+  }
+
+  /**
+   * 작업 수 조회
+   */
+  getTaskCount(): number {
+    return this.board.read<StateSection>('state').tasks.size;
+  }
+
+  /**
+   * 실행 중인 작업 수 조회
+   */
+  getRunningTaskCount(): number {
+    return this.getTasks({ status: TaskStatus.RUNNING }).length;
+  }
+
+  /**
+   * 대기 중인 작업 수 조회
+   */
+  getPendingTaskCount(): number {
+    return this.getTasks({ status: TaskStatus.PENDING }).length;
+  }
+}
