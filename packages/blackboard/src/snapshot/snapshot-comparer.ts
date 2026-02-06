@@ -49,6 +49,19 @@ export interface SectionDiff {
  */
 export class SnapshotComparer {
   /**
+   * Optional logger for error reporting
+   * If not provided, errors are silently ignored (fail-safe)
+   */
+  private logger?: (msg: string, error?: string) => void;
+
+  /**
+   * Set the logger for error reporting
+   */
+  setLogger(logger: (msg: string, error?: string) => void): void {
+    this.logger = logger;
+  }
+
+  /**
    * 스냅샷 비교
    * @param a - 첫 번째 스냅샷
    * @param b - 두 번째 스냅샷
@@ -125,13 +138,30 @@ export class SnapshotComparer {
   }
 
   /**
+   * Generic section data extraction
+   * @param snapshot - 스냅샷
+   * @param section - 섹션 이름
+   * @returns 섹션 데이터
+   */
+  private extractSection<T>(snapshot: Snapshot, section: keyof SerializedState): T {
+    try {
+      const serialized = decompressSnapshotData(snapshot);
+      return (serialized?.[section] as T) ?? ({} as T);
+    } catch (error) {
+      // Safe error handling: only log error.message to avoid exposing sensitive info
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.logger?.(`[SnapshotComparer] extractSection (${section}) failed: ${errorMessage}`);
+      return {} as T;
+    }
+  }
+
+  /**
    * 상태 데이터 추출
    * @param snapshot - 스냅샷
    * @returns 상태 데이터
    */
   extractStateData(snapshot: Snapshot): SectionData {
-    const serialized = decompressSnapshotData(snapshot);
-    return serialized?.state ?? {};
+    return this.extractSection<SectionData>(snapshot, 'state');
   }
 
   /**
@@ -140,8 +170,7 @@ export class SnapshotComparer {
    * @returns 지식 데이터
    */
   extractKnowledgeData(snapshot: Snapshot): SectionData {
-    const serialized = decompressSnapshotData(snapshot);
-    return serialized?.knowledge ?? {};
+    return this.extractSection<SectionData>(snapshot, 'knowledge');
   }
 
   /**
@@ -150,7 +179,6 @@ export class SnapshotComparer {
    * @returns 의사결정 데이터
    */
   extractDecisionsData(snapshot: Snapshot): SectionData {
-    const serialized = decompressSnapshotData(snapshot);
-    return serialized?.decisions ?? {};
+    return this.extractSection<SectionData>(snapshot, 'decisions');
   }
 }

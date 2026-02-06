@@ -7,6 +7,7 @@ import {
   TaskStatus,
   TaskPriority,
   AgendaStatus,
+  type SessionId,
   type AgentStatus,
   type Task,
   type Agenda,
@@ -72,7 +73,7 @@ export const defaultAgenda: Agenda = {
 /**
  * 초기 Blackboard 상태 픽스처
  */
-export function createInitialState(sessionId?: string): BlackboardState {
+export function createInitialState(sessionId?: SessionId): BlackboardState {
   return {
     meta: {
       version: 1,

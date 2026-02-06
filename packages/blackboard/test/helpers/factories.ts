@@ -1,6 +1,6 @@
-import { 
-  createAgentId, 
-  createTaskId, 
+import {
+  createAgentId,
+  createTaskId,
   createAgendaId,
   AgentStatusEnum,
   TaskStatus,
@@ -11,22 +11,27 @@ import {
   type Agenda,
 } from '../../src';
 
-let counter = 0;
+// 각 팩토리 함수에서 독립적인 ID 생성 (병렬 테스트 안전)
+// timestamp + random suffix로 중복 방지
+function generateId(prefix: string): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
 
 /**
  * 에이전트 팩토리
  */
 export function createTestAgent(overrides: Partial<AgentStatus> = {}): AgentStatus {
-  counter++;
+  const id = overrides.id ?? createAgentId(generateId('agent'));
+  const timestamp = Date.now();
   return {
-    id: createAgentId(`agent-${counter}`),
+    id,
     role: 'analyst',
     status: AgentStatusEnum.IDLE,
     currentTask: null,
-    lastHeartbeat: new Date('2026-02-06T12:00:00Z'),
+    lastHeartbeat: new Date('2026-02-04T12:00:00Z'),
     metadata: {},
-    createdAt: new Date('2026-02-06T10:00:00Z'),
-    updatedAt: new Date('2026-02-06T12:00:00Z'),
+    createdAt: new Date('2026-02-04T10:00:00Z'),
+    updatedAt: new Date('2026-02-04T12:00:00Z'),
     ...overrides,
   };
 }
@@ -35,10 +40,11 @@ export function createTestAgent(overrides: Partial<AgentStatus> = {}): AgentStat
  * 작업 팩토리
  */
 export function createTestTask(overrides: Partial<Task> = {}): Task {
-  counter++;
+  const id = overrides.id ?? createTaskId(generateId('task'));
+  const name = overrides.name ?? `Task-${Date.now()}`;
   return {
-    id: createTaskId(`task-${counter}`),
-    name: `Task ${counter}`,
+    id,
+    name,
     description: 'Test task',
     assignedTo: null,
     status: TaskStatus.PENDING,
@@ -51,8 +57,8 @@ export function createTestTask(overrides: Partial<Task> = {}): Task {
     completedAt: null,
     timeout: null,
     version: 1,
-    createdAt: new Date('2026-02-06T10:00:00Z'),
-    updatedAt: new Date('2026-02-06T10:00:00Z'),
+    createdAt: new Date('2026-02-04T10:00:00Z'),
+    updatedAt: new Date('2026-02-04T10:00:00Z'),
     ...overrides,
   };
 }
@@ -61,29 +67,23 @@ export function createTestTask(overrides: Partial<Task> = {}): Task {
  * 안건 팩토리
  */
 export function createTestAgenda(overrides: Partial<Agenda> = {}): Agenda {
-  counter++;
+  const id = overrides.id ?? createAgendaId(generateId('agenda'));
+  const title = overrides.title ?? `Test Agenda-${Date.now()}`;
   return {
-    id: createAgendaId(`agenda-${counter}`),
-    title: `Test Agenda ${counter}`,
+    id,
+    title,
     description: 'Test agenda',
     proposer: createAgentId('agent-001'),
     status: AgendaStatus.SUBMITTED,
-    deadline: new Date('2026-02-10T12:00:00Z'),
+    deadline: new Date('2026-02-08T12:00:00Z'),
     requiredQuorum: 3,
     votingMethod: 'majority',
     priority: 5,
     tags: ['test'],
     attachments: [],
     version: 1,
-    createdAt: new Date('2026-02-06T10:00:00Z'),
-    updatedAt: new Date('2026-02-06T10:00:00Z'),
+    createdAt: new Date('2026-02-04T10:00:00Z'),
+    updatedAt: new Date('2026-02-04T10:00:00Z'),
     ...overrides,
   };
-}
-
-/**
- * 카운터 리셋
- */
-export function resetFactories(): void {
-  counter = 0;
 }

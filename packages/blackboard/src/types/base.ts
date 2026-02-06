@@ -81,6 +81,70 @@ export function createSessionId(id: string): SessionId {
 }
 
 /**
+ * 에이전트 ID 타입 가드
+ * @param value - 확인할 값
+ * @returns AgentId 여부
+ * @example
+ * ```typescript
+ * const value = 'agent-001';
+ * if (isAgentId(value)) {
+ *   // value는 AgentId로 취급됨
+ * }
+ * ```
+ */
+export function isAgentId(value: unknown): value is AgentId {
+  return typeof value === 'string' && value.length > 0;
+}
+
+/**
+ * 작업 ID 타입 가드
+ * @param value - 확인할 값
+ * @returns TaskId 여부
+ * @example
+ * ```typescript
+ * const value = 'task-001';
+ * if (isTaskId(value)) {
+ *   // value는 TaskId로 취급됨
+ * }
+ * ```
+ */
+export function isTaskId(value: unknown): value is TaskId {
+  return typeof value === 'string' && value.length > 0;
+}
+
+/**
+ * 안건 ID 타입 가드
+ * @param value - 확인할 값
+ * @returns AgendaId 여부
+ * @example
+ * ```typescript
+ * const value = 'agenda-001';
+ * if (isAgendaId(value)) {
+ *   // value는 AgendaId로 취급됨
+ * }
+ * ```
+ */
+export function isAgendaId(value: unknown): value is AgendaId {
+  return typeof value === 'string' && value.length > 0;
+}
+
+/**
+ * 세션 ID 타입 가드
+ * @param value - 확인할 값
+ * @returns SessionId 여부
+ * @example
+ * ```typescript
+ * const value = 'session-001';
+ * if (isSessionId(value)) {
+ *   // value는 SessionId로 취급됨
+ * }
+ * ```
+ */
+export function isSessionId(value: unknown): value is SessionId {
+  return typeof value === 'string' && value.length > 0;
+}
+
+/**
  * 공통 인터페이스
  */
 
