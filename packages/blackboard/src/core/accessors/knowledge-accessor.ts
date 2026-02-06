@@ -13,9 +13,10 @@ import type {
   Pattern,
   PatternCreateInput,
   KnowledgeQuery,
+  InferenceQuery,
+  PatternQuery,
 } from '../../types';
-import type { AgentId, createAgentId, createTaskId, createAgendaId } from '../../types';
-import { createAgentId as createId } from '../../types';
+import type { AgentId } from '../../types';
 import { BlackboardError, BlackboardErrorCode } from '../blackboard';
 
 /**
@@ -24,6 +25,50 @@ import { BlackboardError, BlackboardErrorCode } from '../blackboard';
  */
 export class KnowledgeSectionAccessor {
   constructor(private readonly board: Blackboard) {}
+
+  // === Getters ===
+
+  /**
+   * 전체 사실 목록
+   */
+  get facts(): Fact[] {
+    return this.board.read<KnowledgeSection>('knowledge').facts;
+  }
+
+  /**
+   * 전체 추론 목록
+   */
+  get inferences(): Inference[] {
+    return this.board.read<KnowledgeSection>('knowledge').inferences;
+  }
+
+  /**
+   * 전체 패턴 목록
+   */
+  get patterns(): Pattern[] {
+    return this.board.read<KnowledgeSection>('knowledge').patterns;
+  }
+
+  /**
+   * 사실 수
+   */
+  get factCount(): number {
+    return this.board.read<KnowledgeSection>('knowledge').facts.length;
+  }
+
+  /**
+   * 추론 수
+   */
+  get inferenceCount(): number {
+    return this.board.read<KnowledgeSection>('knowledge').inferences.length;
+  }
+
+  /**
+   * 패턴 수
+   */
+  get patternCount(): number {
+    return this.board.read<KnowledgeSection>('knowledge').patterns.length;
+  }
 
   // === 사실 관리 ===
 
@@ -62,6 +107,33 @@ export class KnowledgeSectionAccessor {
   }
 
   /**
+   * 사실 업데이트
+   */
+  updateFact(factId: string, updates: Partial<Omit<Fact, 'id' | 'createdAt'>>): Fact | undefined {
+    const knowledge = this.board.read<KnowledgeSection>('knowledge');
+    const factIndex = knowledge.facts.findIndex(f => f.id === factId);
+
+    if (factIndex === -1) {
+      return undefined;
+    }
+
+    const existingFact = knowledge.facts[factIndex];
+    const updatedFact: Fact = {
+      ...existingFact,
+      ...updates,
+      id: existingFact.id,
+      createdAt: existingFact.createdAt,
+      updatedAt: new Date(),
+    };
+
+    const updatedFacts = [...knowledge.facts];
+    updatedFacts[factIndex] = updatedFact;
+    this.board.write('knowledge.facts', updatedFacts);
+
+    return updatedFact;
+  }
+
+  /**
    * 사실 검색
    */
   findFacts(query: KnowledgeQuery): Fact[] {
@@ -86,6 +158,11 @@ export class KnowledgeSectionAccessor {
 
       // 최소 신뢰도 필터
       if (query.minConfidence !== undefined && fact.confidence < query.minConfidence) {
+        return false;
+      }
+
+      // 단일 태그 필터
+      if (query.tag !== undefined && !fact.tags.includes(query.tag)) {
         return false;
       }
 
@@ -144,10 +221,10 @@ export class KnowledgeSectionAccessor {
   }
 
   /**
-   * 사실 수 조회
+   * 사실 수 조회 (deprecated: factCount getter 사용)
    */
   getFactCount(): number {
-    return this.board.read<KnowledgeSection>('knowledge').facts.length;
+    return this.factCount;
   }
 
   // === 추론 관리 ===
@@ -159,23 +236,14 @@ export class KnowledgeSectionAccessor {
     const knowledge = this.board.read<KnowledgeSection>('knowledge');
     const now = new Date();
 
-    // 전제 사실 검증
-    const factIds = new Set(knowledge.facts.map(f => f.id));
-    const invalidPremises = inferenceInput.premises.filter(p => !factIds.has(p));
-    if (invalidPremises.length > 0) {
-      throw new BlackboardError(
-        BlackboardErrorCode.INVALID_PREMISES,
-        `Invalid premises: ${invalidPremises.join(', ')}`
-      );
-    }
-
     const inference: Inference = {
       id: `inference-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
       conclusion: inferenceInput.conclusion,
       premises: inferenceInput.premises,
-      derivedBy: inferenceInput.derivedBy,
+      source: inferenceInput.source,
       method: inferenceInput.method,
       confidence: inferenceInput.confidence,
+      tags: inferenceInput.tags || [],
       createdAt: now,
       updatedAt: now,
     };
@@ -195,6 +263,65 @@ export class KnowledgeSectionAccessor {
   }
 
   /**
+   * 추론 업데이트
+   */
+  updateInference(
+    inferenceId: string,
+    updates: Partial<Omit<Inference, 'id' | 'createdAt'>>
+  ): Inference | undefined {
+    const knowledge = this.board.read<KnowledgeSection>('knowledge');
+    const inferenceIndex = knowledge.inferences.findIndex(i => i.id === inferenceId);
+
+    if (inferenceIndex === -1) {
+      return undefined;
+    }
+
+    const existingInference = knowledge.inferences[inferenceIndex];
+    const updatedInference: Inference = {
+      ...existingInference,
+      ...updates,
+      id: existingInference.id,
+      createdAt: existingInference.createdAt,
+      updatedAt: new Date(),
+    };
+
+    const updatedInferences = [...knowledge.inferences];
+    updatedInferences[inferenceIndex] = updatedInference;
+    this.board.write('knowledge.inferences', updatedInferences);
+
+    return updatedInference;
+  }
+
+  /**
+   * 추론 검색
+   */
+  findInferences(query: InferenceQuery): Inference[] {
+    const knowledge = this.board.read<KnowledgeSection>('knowledge');
+
+    return knowledge.inferences.filter(inference => {
+      // 출처 필터
+      if (query.source !== undefined && inference.source !== query.source) {
+        return false;
+      }
+
+      // 전제 필터 (모든 전제 포함)
+      if (query.premises && query.premises.length > 0) {
+        const hasAllPremises = query.premises.every(p => inference.premises.includes(p));
+        if (!hasAllPremises) {
+          return false;
+        }
+      }
+
+      // 최소 신뢰도 필터
+      if (query.minConfidence !== undefined && inference.confidence < query.minConfidence) {
+        return false;
+      }
+
+      return true;
+    });
+  }
+
+  /**
    * 특정 사실을 전제로 하는 추론 찾기
    */
   findInferencesByPremise(factId: string): Inference[] {
@@ -207,7 +334,7 @@ export class KnowledgeSectionAccessor {
    */
   findInferencesByAgent(agentId: AgentId): Inference[] {
     const knowledge = this.board.read<KnowledgeSection>('knowledge');
-    return knowledge.inferences.filter(i => i.derivedBy === agentId);
+    return knowledge.inferences.filter(i => i.source === agentId);
   }
 
   /**
@@ -228,13 +355,41 @@ export class KnowledgeSectionAccessor {
   }
 
   /**
-   * 추론 수 조회
+   * 추론 수 조회 (deprecated: inferenceCount getter 사용)
    */
   getInferenceCount(): number {
-    return this.board.read<KnowledgeSection>('knowledge').inferences.length;
+    return this.inferenceCount;
   }
 
   // === 패턴 관리 ===
+
+  /**
+   * 패턴 추가
+   */
+  addPattern(patternInput: PatternCreateInput): Pattern {
+    const knowledge = this.board.read<KnowledgeSection>('knowledge');
+    const now = new Date();
+
+    const pattern: Pattern = {
+      id: `pattern-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      name: patternInput.name,
+      description: patternInput.description,
+      conditions: patternInput.conditions,
+      consequences: patternInput.consequences,
+      confidence: patternInput.confidence,
+      tags: patternInput.tags || [],
+      discoveredBy: patternInput.discoveredBy,
+      usageCount: patternInput.usageCount ?? 0,
+      successRate: patternInput.successRate ?? 0,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const updatedPatterns = [...knowledge.patterns, pattern];
+    this.board.write('knowledge.patterns', updatedPatterns);
+
+    return pattern;
+  }
 
   /**
    * 패턴 추가/업데이트
@@ -253,7 +408,11 @@ export class KnowledgeSectionAccessor {
       const updatedPattern: Pattern = {
         ...existingPattern,
         description: patternInput.description,
-        discoveredBy: patternInput.discoveredBy,
+        conditions: patternInput.conditions,
+        consequences: patternInput.consequences,
+        confidence: patternInput.confidence,
+        tags: patternInput.tags || existingPattern.tags,
+        discoveredBy: patternInput.discoveredBy ?? existingPattern.discoveredBy,
         updatedAt: now,
       };
 
@@ -266,21 +425,74 @@ export class KnowledgeSectionAccessor {
     }
 
     // 새 패턴 생성
-    const pattern: Pattern = {
-      id: `pattern-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-      name: patternInput.name,
-      description: patternInput.description,
-      discoveredBy: patternInput.discoveredBy,
-      usageCount: patternInput.usageCount ?? 0,
-      successRate: patternInput.successRate ?? 0,
-      createdAt: now,
-      updatedAt: now,
+    return this.addPattern(patternInput);
+  }
+
+  /**
+   * 패턴 조회
+   */
+  getPattern(patternId: string): Pattern | undefined {
+    const knowledge = this.board.read<KnowledgeSection>('knowledge');
+    return knowledge.patterns.find(p => p.id === patternId);
+  }
+
+  /**
+   * 패턴 업데이트
+   */
+  updatePattern(
+    patternId: string,
+    updates: Partial<Omit<Pattern, 'id' | 'createdAt'>>
+  ): Pattern | undefined {
+    const knowledge = this.board.read<KnowledgeSection>('knowledge');
+    const patternIndex = knowledge.patterns.findIndex(p => p.id === patternId);
+
+    if (patternIndex === -1) {
+      return undefined;
+    }
+
+    const existingPattern = knowledge.patterns[patternIndex];
+    const updatedPattern: Pattern = {
+      ...existingPattern,
+      ...updates,
+      id: existingPattern.id,
+      createdAt: existingPattern.createdAt,
+      updatedAt: new Date(),
     };
 
-    const updatedPatterns = [...knowledge.patterns, pattern];
+    const updatedPatterns = [...knowledge.patterns];
+    updatedPatterns[patternIndex] = updatedPattern;
     this.board.write('knowledge.patterns', updatedPatterns);
 
-    return pattern;
+    return updatedPattern;
+  }
+
+  /**
+   * 패턴 검색
+   */
+  findPatterns(query: PatternQuery): Pattern[] {
+    const knowledge = this.board.read<KnowledgeSection>('knowledge');
+
+    return knowledge.patterns.filter(pattern => {
+      // 태그 필터
+      if (query.tag !== undefined && !pattern.tags.includes(query.tag)) {
+        return false;
+      }
+
+      // 최소 신뢰도 필터
+      if (query.minConfidence !== undefined && pattern.confidence < query.minConfidence) {
+        return false;
+      }
+
+      return true;
+    });
+  }
+
+  /**
+   * 에이전트가 발견한 패턴 조회
+   */
+  findPatternsByAgent(agentId: AgentId): Pattern[] {
+    const knowledge = this.board.read<KnowledgeSection>('knowledge');
+    return knowledge.patterns.filter(p => p.discoveredBy === agentId);
   }
 
   /**
@@ -297,8 +509,10 @@ export class KnowledgeSectionAccessor {
       );
     }
 
-    const newUsageCount = pattern.usageCount + 1;
-    const newSuccessRate = (pattern.successRate * pattern.usageCount + (success ? 1 : 0)) / newUsageCount;
+    const currentUsageCount = pattern.usageCount ?? 0;
+    const currentSuccessRate = pattern.successRate ?? 0;
+    const newUsageCount = currentUsageCount + 1;
+    const newSuccessRate = (currentSuccessRate * currentUsageCount + (success ? 1 : 0)) / newUsageCount;
 
     const updatedPattern: Pattern = {
       ...pattern,
@@ -312,22 +526,6 @@ export class KnowledgeSectionAccessor {
     );
 
     this.board.write('knowledge.patterns', updatedPatterns);
-  }
-
-  /**
-   * 패턴 조회
-   */
-  getPattern(patternId: string): Pattern | undefined {
-    const knowledge = this.board.read<KnowledgeSection>('knowledge');
-    return knowledge.patterns.find(p => p.id === patternId);
-  }
-
-  /**
-   * 에이전트가 발견한 패턴 조회
-   */
-  findPatternsByAgent(agentId: AgentId): Pattern[] {
-    const knowledge = this.board.read<KnowledgeSection>('knowledge');
-    return knowledge.patterns.filter(p => p.discoveredBy === agentId);
   }
 
   /**
@@ -348,10 +546,21 @@ export class KnowledgeSectionAccessor {
   }
 
   /**
-   * 패턴 수 조회
+   * 패턴 수 조회 (deprecated: patternCount getter 사용)
    */
   getPatternCount(): number {
-    return this.board.read<KnowledgeSection>('knowledge').patterns.length;
+    return this.patternCount;
+  }
+
+  // === 전체 관리 ===
+
+  /**
+   * 모든 지식 초기화
+   */
+  clearAll(): void {
+    this.board.write('knowledge.facts', []);
+    this.board.write('knowledge.inferences', []);
+    this.board.write('knowledge.patterns', []);
   }
 
   // === 통계 ===

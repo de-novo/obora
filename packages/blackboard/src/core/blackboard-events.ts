@@ -280,7 +280,7 @@ export class EventAwareBlackboard extends Blackboard {
     const inference = this.knowledge.addInference(inferenceInput);
 
     this.emitEvent(() =>
-      this.eventFactory.createInferenceAdded(inference, { source: inferenceInput.derivedBy })
+      this.eventFactory.createInferenceAdded(inference, { source: inferenceInput.source })
     );
 
     return inference;

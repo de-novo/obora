@@ -268,13 +268,16 @@ describe('Compression', () => {
     });
 
     it('should throw on corrupted compressed data', () => {
-      const original = 'Hello, World!';
-      const compressed = compress(original);
+      const original = 'Hello, World!'.repeat(100);
+      const compressed = compress(original, { outputFormat: 'buffer' });
       
-      // Corrupt the data
+      // Corrupt the data - corrupt critical bytes in the compressed payload
       if (Buffer.isBuffer(compressed)) {
-        compressed[5] = 255;
-        compressed[6] = 255;
+        // Corrupt multiple bytes in the middle of the compressed data
+        const midPoint = Math.floor(compressed.length / 2);
+        compressed[midPoint] = 255;
+        compressed[midPoint + 1] = 255;
+        compressed[midPoint + 2] = 0;
       }
       
       expect(() => decompress(compressed)).toThrow();

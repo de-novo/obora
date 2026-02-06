@@ -4,7 +4,7 @@
  */
 
 import type { Identifiable, Timestamped, Versioned } from './base';
-import type { AgentId, AgendaId } from './base';
+import type { AgentId, AgendaId, OpinionId } from './base';
 import type { createAgendaId } from './base';
 
 /**
@@ -117,6 +117,7 @@ export interface Agenda extends Identifiable<AgendaId>, Timestamped, Versioned {
  * @example
  * ```typescript
  * const opinion: Opinion = {
+ *   id: createOpinionId('opinion-001'),
  *   agentId: createAgentId('agent-001'),
  *   agendaId: createAgendaId('agenda-001'),
  *   stance: 'approve',
@@ -129,7 +130,7 @@ export interface Agenda extends Identifiable<AgendaId>, Timestamped, Versioned {
  * };
  * ```
  */
-export interface Opinion extends Timestamped {
+export interface Opinion extends Identifiable<OpinionId>, Timestamped {
   /** 의견 제출자 */
   agentId: AgentId;
   /** 관련 안건 ID */

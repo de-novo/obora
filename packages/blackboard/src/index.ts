@@ -13,6 +13,9 @@ export type {
   TaskId,
   AgendaId,
   SessionId,
+  FactId,
+  InferenceId,
+  PatternId,
   Timestamped,
   Versioned,
   Identifiable,
@@ -20,17 +23,13 @@ export type {
   // Agent types
   AgentRole,
   AgentStatus,
-  AgentStatusEnum,
 
   // Task types
   Task,
-  TaskStatus,
-  TaskPriority,
   TaskError,
 
   // Decision types
   Agenda,
-  AgendaStatus,
   Opinion,
   Stance,
   Resolution,
@@ -45,7 +44,6 @@ export type {
 
   // Message types
   Message,
-  MessageType,
 
   // Blackboard types
   BlackboardState,
@@ -61,12 +59,24 @@ export type {
   StateUpdateResult,
 } from './types';
 
+// Enum exports (export as values, not just types)
+export {
+  AgentStatusEnum,
+  TaskStatus,
+  TaskPriority,
+  AgendaStatus,
+  MessageType,
+} from './types';
+
 // ID creator functions (from types)
 export {
   createAgentId,
   createTaskId,
   createAgendaId,
   createSessionId,
+  createFactId,
+  createInferenceId,
+  createPatternId,
 } from './types';
 
 // === Core ===

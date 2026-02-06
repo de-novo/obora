@@ -18,12 +18,14 @@ import {
 import type {
   Task,
   TaskId,
+  TaskError,
 } from '../../types';
 import {
   TaskStatus,
+  TaskPriority,
 } from '../../types';
 import type { AgentId } from '../../types';
-import { BlackboardError, BlackboardErrorCode } from '../blackboard';
+import { BlackboardError, BlackboardErrorCode, PathNotFoundError } from '../blackboard';
 
 /**
  * 상태 섹션 접근자
@@ -52,8 +54,58 @@ export class StateSectionAccessor {
     this.board.write(`state.context.${key}`, value);
   }
 
-  getContext<T>(key: string): T | undefined {
-    return this.board.read<T>(`state.context.${key}`);
+  /**
+   * 컨텍스트 값 조회 (기본값 포함)
+   */
+  getContext<T>(key: string, defaultValue?: T): T | undefined {
+    try {
+      const value = this.board.read<T>(`state.context.${key}`);
+      return value !== undefined ? value : defaultValue;
+    } catch (e) {
+      if (e instanceof PathNotFoundError) {
+        return defaultValue;
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * 컨텍스트 값 조회 (기본값 포함) - 별칭 메서드
+   */
+  getContextValue<T>(key: string, defaultValue?: T): T | undefined {
+    return this.getContext(key, defaultValue);
+  }
+
+  /**
+   * 컨텍스트 항목 삭제
+   */
+  deleteContext(key: string): void {
+    try {
+      const state = this.board.read<StateSection>('state');
+      const { [key]: _, ...remaining } = state.context;
+      this.board.write('state.context', remaining);
+    } catch (e) {
+      if (e instanceof PathNotFoundError) {
+        // 이미 존재하지 않는 키면 무시
+        return;
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * 컨텍스트 병합
+   */
+  mergeContext(partial: Record<string, unknown>): void {
+    const state = this.board.read<StateSection>('state');
+    this.board.write('state.context', { ...state.context, ...partial });
+  }
+
+  /**
+   * 컨텍스트 초기화
+   */
+  clearContext(): void {
+    this.board.write('state.context', {});
   }
 
   // === 에이전트 관리 ===
@@ -169,10 +221,41 @@ export class StateSectionAccessor {
   }
 
   /**
-   * 에이전트 수 조회
+   * 에이전트 수 조회 (getter)
+   */
+  get agentCount(): number {
+    return this.board.read<StateSection>('state').agents.size;
+  }
+
+  /**
+   * 에이전트 수 조회 (호환성 메서드)
    */
   getAgentCount(): number {
-    return this.board.read<StateSection>('state').agents.size;
+    return this.agentCount;
+  }
+
+  /**
+   * 에이전트 존재 여부 확인
+   */
+  hasAgent(id: AgentId): boolean {
+    return this.board.read<StateSection>('state').agents.has(id);
+  }
+
+  /**
+   * 에이전트 하트비트 업데이트
+   */
+  updateAgentHeartbeat(id: AgentId): void {
+    const agent = this.getAgent(id);
+    if (!agent) {
+      throw new BlackboardError(
+        BlackboardErrorCode.AGENT_NOT_FOUND,
+        `Agent ${id} not found`
+      );
+    }
+
+    this.updateAgent(id, {
+      lastHeartbeat: new Date(),
+    });
   }
 
   /**
@@ -243,7 +326,7 @@ export class StateSectionAccessor {
   /**
    * 작업 목록 조회
    */
-  getTasks(filter?: { status?: TaskStatus; assignedTo?: AgentId }): Task[] {
+  getTasks(filter?: { status?: TaskStatus; assignedTo?: AgentId; priority?: TaskPriority }): Task[] {
     const state = this.board.read<StateSection>('state');
     const tasks = Array.from(state.tasks.values());
 
@@ -256,6 +339,9 @@ export class StateSectionAccessor {
         return false;
       }
       if (filter.assignedTo !== undefined && task.assignedTo !== filter.assignedTo) {
+        return false;
+      }
+      if (filter.priority !== undefined && task.priority !== filter.priority) {
         return false;
       }
       return true;
@@ -303,10 +389,76 @@ export class StateSectionAccessor {
   }
 
   /**
-   * 작업 수 조회
+   * 작업 수 조회 (getter)
+   */
+  get taskCount(): number {
+    return this.board.read<StateSection>('state').tasks.size;
+  }
+
+  /**
+   * 작업 수 조회 (호환성 메서드)
    */
   getTaskCount(): number {
-    return this.board.read<StateSection>('state').tasks.size;
+    return this.taskCount;
+  }
+
+  /**
+   * 작업 존재 여부 확인
+   */
+  hasTask(id: TaskId): boolean {
+    return this.board.read<StateSection>('state').tasks.has(id);
+  }
+
+  /**
+   * 작업 할당
+   */
+  assignTask(taskId: TaskId, agentId: AgentId): void {
+    this.updateTask(taskId, {
+      assignedTo: agentId,
+      status: TaskStatus.RUNNING,
+      startedAt: new Date(),
+    });
+  }
+
+  /**
+   * 작업 할당 해제
+   */
+  unassignTask(taskId: TaskId): void {
+    const task = this.getTask(taskId);
+    if (!task) {
+      throw new BlackboardError(
+        BlackboardErrorCode.TASK_NOT_FOUND,
+        `Task ${taskId} not found`
+      );
+    }
+
+    this.updateTask(taskId, {
+      assignedTo: null,
+      status: TaskStatus.PENDING,
+      startedAt: null,
+    });
+  }
+
+  /**
+   * 작업 완료 처리
+   */
+  completeTask(taskId: TaskId, outputs: Record<string, unknown>): void {
+    this.updateTask(taskId, {
+      status: TaskStatus.COMPLETED,
+      outputs,
+      completedAt: new Date(),
+    });
+  }
+
+  /**
+   * 작업 실패 처리
+   */
+  failTask(taskId: TaskId, error: TaskError): void {
+    this.updateTask(taskId, {
+      status: TaskStatus.FAILED,
+      error,
+      completedAt: new Date(),
+    });
   }
 
   /**

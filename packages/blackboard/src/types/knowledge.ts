@@ -56,9 +56,9 @@ export interface Fact extends Identifiable, Timestamped {
  *   id: 'inference-001',
  *   conclusion: '고객 만족도가 매출 증가와 상관관계가 있음',
  *   premises: ['fact-001', 'fact-002'],
- *   derivedBy: createAgentId('analyst-agent'),
- *   method: 'induction',
+ *   source: createAgentId('analyst-agent'),
  *   confidence: 0.8,
+ *   tags: ['correlation'],
  *   createdAt: new Date(),
  *   updatedAt: new Date(),
  * };
@@ -69,12 +69,24 @@ export interface Inference extends Identifiable, Timestamped {
   conclusion: string;
   /** 전제 (참조하는 Fact ID들) */
   premises: string[];
-  /** 추론한 에이전트 */
-  derivedBy: AgentId;
+  /** 추론한 에이전트 (deprecated: source 사용) */
+  derivedBy?: AgentId;
+  /** 출처 에이전트 */
+  source: AgentId;
   /** 추론 방법 */
-  method: InferenceMethod;
+  method?: InferenceMethod;
   /** 신뢰도 */
   confidence: number;
+  /** 태그 */
+  tags: string[];
+}
+
+/**
+ * 패턴 조건/결과 항목
+ */
+export interface PatternCondition {
+  type: string;
+  value: string;
 }
 
 /**
@@ -87,9 +99,10 @@ export interface Inference extends Identifiable, Timestamped {
  *   id: 'pattern-001',
  *   name: '매출 증가 패턴',
  *   description: '고객 만족도 상승 후 2달 내 매출 증가',
- *   discoveredBy: createAgentId('analyst-agent'),
- *   usageCount: 5,
- *   successRate: 0.85,
+ *   conditions: [{ type: 'trigger', value: 'satisfaction_up' }],
+ *   consequences: [{ type: 'result', value: 'revenue_increase' }],
+ *   confidence: 0.85,
+ *   tags: ['finance'],
  *   createdAt: new Date(),
  *   updatedAt: new Date(),
  * };
@@ -100,12 +113,20 @@ export interface Pattern extends Identifiable, Timestamped {
   name: string;
   /** 패턴 설명 */
   description: string;
-  /** 발견한 에이전트 */
-  discoveredBy: AgentId;
+  /** 패턴 조건 */
+  conditions: PatternCondition[];
+  /** 패턴 결과 */
+  consequences: PatternCondition[];
+  /** 신뢰도 */
+  confidence: number;
+  /** 태그 */
+  tags: string[];
+  /** 발견한 에이전트 (optional) */
+  discoveredBy?: AgentId;
   /** 적용 횟수 */
-  usageCount: number;
+  usageCount?: number;
   /** 성공률 */
-  successRate: number;
+  successRate?: number;
 }
 
 /**
@@ -136,12 +157,14 @@ export interface InferenceCreateInput {
   conclusion: string;
   /** 전제 (참조하는 Fact ID들) */
   premises: string[];
-  /** 추론한 에이전트 */
-  derivedBy: AgentId;
-  /** 추론 방법 */
-  method: InferenceMethod;
+  /** 출처 에이전트 */
+  source: AgentId;
+  /** 추론 방법 (optional) */
+  method?: InferenceMethod;
   /** 신뢰도 */
   confidence: number;
+  /** 태그 */
+  tags?: string[];
 }
 
 /**
@@ -153,8 +176,16 @@ export interface PatternCreateInput {
   name: string;
   /** 패턴 설명 */
   description: string;
-  /** 발견한 에이전트 */
-  discoveredBy: AgentId;
+  /** 패턴 조건 */
+  conditions: PatternCondition[];
+  /** 패턴 결과 */
+  consequences: PatternCondition[];
+  /** 신뢰도 */
+  confidence: number;
+  /** 태그 */
+  tags?: string[];
+  /** 발견한 에이전트 (optional) */
+  discoveredBy?: AgentId;
   /** 초기 적용 횟수 */
   usageCount?: number;
   /** 초기 성공률 */
@@ -168,8 +199,10 @@ export interface PatternCreateInput {
 export interface KnowledgeQuery {
   /** 검색할 카테고리 */
   category?: string;
-  /** 검색할 태그 */
+  /** 검색할 태그 (복수) */
   tags?: string[];
+  /** 검색할 태그 (단일) */
+  tag?: string;
   /** 최소 신뢰도 */
   minConfidence?: number;
   /** 만료되지 않은 것만 검색 */
@@ -178,4 +211,26 @@ export interface KnowledgeQuery {
   source?: AgentId;
   /** 검색 텍스트 */
   text?: string;
+}
+
+/**
+ * 추론 검색 쿼리
+ */
+export interface InferenceQuery {
+  /** 출처 에이전트 */
+  source?: AgentId;
+  /** 전제 포함 */
+  premises?: string[];
+  /** 최소 신뢰도 */
+  minConfidence?: number;
+}
+
+/**
+ * 패턴 검색 쿼리
+ */
+export interface PatternQuery {
+  /** 태그 */
+  tag?: string;
+  /** 최소 신뢰도 */
+  minConfidence?: number;
 }

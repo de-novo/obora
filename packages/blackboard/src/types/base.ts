@@ -20,6 +20,18 @@ export type AgendaId = string & { readonly __brand: 'AgendaId' };
 /** 세션 고유 ID 타입 */
 export type SessionId = string & { readonly __brand: 'SessionId' };
 
+/** 사실 고유 ID 타입 */
+export type FactId = string & { readonly __brand: 'FactId' };
+
+/** 추론 고유 ID 타입 */
+export type InferenceId = string & { readonly __brand: 'InferenceId' };
+
+/** 패턴 고유 ID 타입 */
+export type PatternId = string & { readonly __brand: 'PatternId' };
+
+/** 의견 고유 ID 타입 */
+export type OpinionId = string & { readonly __brand: 'OpinionId' };
+
 /**
  * 타입 가드 및 생성 함수
  */
@@ -78,6 +90,62 @@ export function createAgendaId(id: string): AgendaId {
  */
 export function createSessionId(id: string): SessionId {
   return id as SessionId;
+}
+
+/**
+ * 사실 ID 생성 함수
+ * @param id - 원본 문자열 ID
+ * @returns 브랜드 타입이 적용된 FactId
+ * @example
+ * ```typescript
+ * const factId = createFactId('fact-001');
+ * // 타입: FactId
+ * ```
+ */
+export function createFactId(id: string): FactId {
+  return id as FactId;
+}
+
+/**
+ * 추론 ID 생성 함수
+ * @param id - 원본 문자열 ID
+ * @returns 브랜드 타입이 적용된 InferenceId
+ * @example
+ * ```typescript
+ * const inferenceId = createInferenceId('inference-001');
+ * // 타입: InferenceId
+ * ```
+ */
+export function createInferenceId(id: string): InferenceId {
+  return id as InferenceId;
+}
+
+/**
+ * 패턴 ID 생성 함수
+ * @param id - 원본 문자열 ID
+ * @returns 브랜드 타입이 적용된 PatternId
+ * @example
+ * ```typescript
+ * const patternId = createPatternId('pattern-001');
+ * // 타입: PatternId
+ * ```
+ */
+export function createPatternId(id: string): PatternId {
+  return id as PatternId;
+}
+
+/**
+ * 의견 ID 생성 함수
+ * @param id - 원본 문자열 ID
+ * @returns 브랜드 타입이 적용된 OpinionId
+ * @example
+ * ```typescript
+ * const opinionId = createOpinionId('opinion-001');
+ * // 타입: OpinionId
+ * ```
+ */
+export function createOpinionId(id: string): OpinionId {
+  return id as OpinionId;
 }
 
 /**
