@@ -4,35 +4,8 @@
  */
 
 import type { Snapshot } from './types';
+import { sortedKeyReplacer, decompressSnapshotData } from './utils';
 import type { SerializedState } from './types';
-import { decompress, detectCompression } from './compression';
-
-/**
- * 타입 가드: SerializedState 여부 확인
- */
-function isSerializedState(value: unknown): value is SerializedState {
-  if (typeof value !== 'object' || value === null) {
-    return false;
-  }
-
-  const obj = value as Partial<SerializedState>;
-
-  // meta 필드 필수 확인
-  if (!obj.meta || typeof obj.meta !== 'object') {
-    return false;
-  }
-
-  // meta의 필수 필드 확인
-  const meta = obj.meta;
-  if (!meta.sessionId || typeof meta.sessionId !== 'string') {
-    return false;
-  }
-  if (typeof meta.version !== 'number') {
-    return false;
-  }
-
-  return true;
-}
 
 /**
  * 스냅샷 차이점
@@ -129,9 +102,14 @@ export class SnapshotComparer {
       if (!keys1.has(key)) {
         added++;
         changes.set(key, [undefined, data2[key]]);
-      } else if (JSON.stringify(data1[key]) !== JSON.stringify(data2[key])) {
-        modified++;
-        changes.set(key, [data1[key], data2[key]]);
+      } else {
+        // JSON.stringify 순서 독립적 비교 (sortedKeyReplacer 사용)
+        const json1 = JSON.stringify(data1[key], sortedKeyReplacer);
+        const json2 = JSON.stringify(data2[key], sortedKeyReplacer);
+        if (json1 !== json2) {
+          modified++;
+          changes.set(key, [data1[key], data2[key]]);
+        }
       }
     }
 
@@ -147,41 +125,12 @@ export class SnapshotComparer {
   }
 
   /**
-   * 스냅샷 데이터 압축 해제 (공통 헬퍼)
-   * @param snapshot - 스냅샷
-   * @returns 역직렬화된 상태 데이터
-   * @throws {Error} 압축 해제 실패 또는 타입 불일치 시
-   */
-  private decompressData(snapshot: Snapshot): SerializedState {
-    if (!snapshot.meta.compressed) {
-      if (!isSerializedState(snapshot.data)) {
-        throw new Error('Invalid snapshot data: not a SerializedState');
-      }
-      return snapshot.data;
-    }
-
-    if (typeof snapshot.data !== 'string') {
-      throw new Error('Invalid compressed data: expected string');
-    }
-
-    const algorithm = detectCompression(snapshot.data) ?? 'gzip';
-    const json = decompress(snapshot.data, algorithm);
-    const parsed = JSON.parse(json);
-
-    if (!isSerializedState(parsed)) {
-      throw new Error('Invalid snapshot data: deserialized data is not a SerializedState');
-    }
-
-    return parsed;
-  }
-
-  /**
    * 상태 데이터 추출
    * @param snapshot - 스냅샷
    * @returns 상태 데이터
    */
   extractStateData(snapshot: Snapshot): SectionData {
-    const serialized = this.decompressData(snapshot);
+    const serialized = decompressSnapshotData(snapshot);
     return serialized?.state ?? {};
   }
 
@@ -191,7 +140,7 @@ export class SnapshotComparer {
    * @returns 지식 데이터
    */
   extractKnowledgeData(snapshot: Snapshot): SectionData {
-    const serialized = this.decompressData(snapshot);
+    const serialized = decompressSnapshotData(snapshot);
     return serialized?.knowledge ?? {};
   }
 
@@ -201,7 +150,7 @@ export class SnapshotComparer {
    * @returns 의사결정 데이터
    */
   extractDecisionsData(snapshot: Snapshot): SectionData {
-    const serialized = this.decompressData(snapshot);
+    const serialized = decompressSnapshotData(snapshot);
     return serialized?.decisions ?? {};
   }
 }

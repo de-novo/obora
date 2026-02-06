@@ -20,6 +20,7 @@ import type {
   BoardPhase,
 } from '../types';
 import type { SerializedState } from './types';
+import { sortedKeyReplacer } from './utils';
 
 /**
  * 직렬화 옵션
@@ -205,25 +206,6 @@ function validateAgenda(value: unknown, fieldName: string): ValidationResult {
 }
 
 /**
- * JSON.stringify replacer for key sorting
- * @param key - Property key
- * @param value - Property value
- * @returns Value with sorted keys for objects
- */
-function sortedKeyReplacer(key: string, value: unknown): unknown {
-  if (value && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
-    const sortedObj: Record<string, unknown> = {};
-    Object.keys(value as Record<string, unknown>)
-      .sort()
-      .forEach((k) => {
-        sortedObj[k] = (value as Record<string, unknown>)[k];
-      });
-    return sortedObj;
-  }
-  return value;
-}
-
-/**
  * 상태 직렬화기
  * @description Map, Date 등을 JSON 호환 형식으로 변환
  */
@@ -376,8 +358,12 @@ export class StateSerializer {
    */
   fromJSON(json: string): BlackboardState {
     try {
-      const serialized = JSON.parse(json) as SerializedState;
-      return this.deserialize(serialized);
+      const parsed = JSON.parse(json) as SerializedState | null | undefined;
+      // P1: null/undefined 검증 추가 (parsed.meta 접근 전)
+      if (!parsed || typeof parsed !== 'object') {
+        throw new Error('Invalid serialized state: parsed data is null or undefined');
+      }
+      return this.deserialize(parsed);
     } catch (error) {
       if (error instanceof SyntaxError) {
         throw new Error(`Invalid JSON in serialized state: ${error.message}`);
@@ -426,6 +412,11 @@ export class StateSerializer {
       throw new Error(`Invalid date value: expected string, got ${typeof str}`);
     }
 
+    // P1: 빈 문자열 입력 검증 추가
+    if (!str || str.trim() === '') {
+      throw new Error('Invalid date value: string must not be empty or whitespace-only');
+    }
+
     const asNum = Number(str);
     if (!isNaN(asNum) && asNum > 1000000000) {
       return new Date(asNum);
@@ -455,14 +446,14 @@ export class StateSerializer {
  * Node.js crypto 모듈 fallback (WebCrypto 없는 환경)
  */
 async function calculateChecksumNodeJS(data: string): Promise<string> {
-  // Node.js 환경인지 확인
-  if (typeof process === 'object' && typeof require === 'function') {
+  // P0: Node.js require → ESM import 변경
+  if (typeof process === 'object') {
     try {
-       
-      const crypto = require('crypto');
-      return crypto.createHash('sha256').update(data).digest('hex');
+      // Dynamic import for Node.js crypto module (ESM compatible)
+      const { createHash } = await import('crypto');
+      return createHash('sha256').update(data).digest('hex');
     } catch (e) {
-      // require 실패 시 fallback
+      // Import 실패 시 fallback
     }
   }
   throw new Error('No crypto implementation available. Please use a browser environment or Node.js with crypto support.');
@@ -474,7 +465,13 @@ async function calculateChecksumNodeJS(data: string): Promise<string> {
  * @returns SHA-256 해시
  */
 export async function calculateChecksum(data: unknown): Promise<string> {
-  const str = typeof data === 'string' ? data : JSON.stringify(data);
+  let str: string;
+  if (typeof data === 'string') {
+    str = data;
+  } else {
+    // 순서 독립적 체크섬 계산을 위해 키 정렬
+    str = JSON.stringify(data, sortedKeyReplacer as (key: string, value: unknown) => unknown);
+  }
   const encoder = new TextEncoder();
   const bytes = encoder.encode(str);
 

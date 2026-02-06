@@ -103,8 +103,8 @@ export interface CreateSnapshotOptions {
 export interface RestoreSnapshotOptions {
   /** 버전 체크 건너뛰기 */
   skipVersionCheck?: boolean;
-  /** 체크섬 검증 건너뛰기 */
-  skipChecksumValidation?: boolean;
+  /** 구조적 검증 건너뛰기 (validateSync) */
+  skipStructuralValidation?: boolean;
   /** 특정 섹션만 복원 */
   restoreSections?: ('state' | 'knowledge' | 'decisions')[];
   /** 복원 후 버전 리셋 여부 (기본: true) */

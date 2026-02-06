@@ -7,10 +7,10 @@ import type { BlackboardState, SessionId } from '../types';
 import type {
   Snapshot,
   RestoreSnapshotOptions,
-  SerializedState,
 } from './types';
+import type { SerializedState } from './types';
 import { StateSerializer } from './serializer';
-import { decompress, detectCompression } from './compression';
+import { decompressSnapshotData } from './utils';
 import { SnapshotValidator } from './snapshot-validator';
 import { createIdGenerator, type IdGenerator } from './id-utils';
 
@@ -33,34 +33,7 @@ export class SnapshotRestoreError extends Error {
  */
 export interface SnapshotRestorerOptions {
   /** ID 생성 함수 */
-  idGenerator?: IdGenerator;
-}
-
-/**
- * 타입 가드: SerializedState 여부 확인
- */
-function isSerializedState(value: unknown): value is SerializedState {
-  if (typeof value !== 'object' || value === null) {
-    return false;
-  }
-
-  const obj = value as Partial<SerializedState>;
-
-  // meta 필드 필수 확인
-  if (!obj.meta || typeof obj.meta !== 'object') {
-    return false;
-  }
-
-  // meta의 필수 필드 확인
-  const meta = obj.meta;
-  if (!meta.sessionId || typeof meta.sessionId !== 'string') {
-    return false;
-  }
-  if (typeof meta.version !== 'number') {
-    return false;
-  }
-
-  return true;
+  idGenerator?: () => string;
 }
 
 /**
@@ -87,8 +60,8 @@ export class SnapshotRestorer {
    * @description
    * **옵션 동작:**
    * - `skipVersionCheck`: 포맷 버전 호환성 검사 건너뜀
-   * - `skipChecksumValidation`: 메타데이터 체크섬 검증 건너뜀
-   *   - 참고: `validateSync()`는 구조/타입 검증만 수행, 체크섬 검증 X
+   * - `skipStructuralValidation`: 구조적 검증 건너뜀 (validateSync)
+   *   - 참고: 체크섬 검증은 validate()에서 수행됨
    * - `resetVersion`: 상태 버전 0으로 초기화 (기본: true)
    * - `newSessionId`: 새 세션 ID 생성 (기본: true)
    */
@@ -113,55 +86,20 @@ export class SnapshotRestorer {
     // 2. 데이터 역직렬화
     let serialized: SerializedState;
 
-    if (snapshot.meta.compressed) {
-      if (typeof snapshot.data !== 'string') {
-        throw new SnapshotRestoreError(
-          'Invalid compressed data format',
-          'DATA_CORRUPTED'
-        );
-      }
-
-      try {
-        const algorithm = detectCompression(snapshot.data) ?? 'gzip';
-        const json = decompress(snapshot.data, algorithm);
-        const parsed = JSON.parse(json);
-
-        // 타입 가드로 안전하게 타입 확인
-        if (!isSerializedState(parsed)) {
-          throw new SnapshotRestoreError(
-            'Invalid snapshot data structure',
-            'DATA_CORRUPTED'
-          );
-        }
-
-        serialized = parsed;
-      } catch (e) {
-        if (e instanceof Error) {
-          throw new SnapshotRestoreError(
-            `Failed to decompress snapshot data: ${e.message}`,
-            'DATA_CORRUPTED',
-            e
-          );
-        }
-        throw new SnapshotRestoreError(
-          'Failed to decompress snapshot data',
-          'DATA_CORRUPTED',
-          e
-        );
-      }
-    } else {
-      // 타입 가드로 안전하게 타입 확인
-      if (!isSerializedState(snapshot.data)) {
-        throw new SnapshotRestoreError(
-          'Invalid snapshot data structure',
-          'DATA_CORRUPTED'
-        );
-      }
-      serialized = snapshot.data;
+    try {
+      serialized = decompressSnapshotData(snapshot);
+    } catch (e) {
+      // P2: catch 블록 타입 명시
+      const error = e instanceof Error ? e : new Error(String(e));
+      throw new SnapshotRestoreError(
+        `Failed to deserialize snapshot data: ${error.message}`,
+        'DATA_CORRUPTED',
+        error
+      );
     }
 
     // 3. 구조/타입 검증 (체크섬 X)
-    if (!opts.skipChecksumValidation) {
+    if (!opts.skipStructuralValidation) {
       const syncValidation = this.validator.validateSync(snapshot);
       if (!syncValidation.valid) {
         throw new SnapshotRestoreError(
@@ -210,7 +148,7 @@ export class SnapshotRestorer {
     // 스냅샷 복원
     const snapshotState = this.restore(snapshot, {
       skipVersionCheck: true,
-      skipChecksumValidation: true,
+      skipStructuralValidation: true,
       resetVersion: false,
       newSessionId: false,
     });

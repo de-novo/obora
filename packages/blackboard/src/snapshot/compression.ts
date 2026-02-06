@@ -93,20 +93,31 @@ export function compress(
   data: string,
   options?: CompressionOptions
 ): string {
+  // P1: 빈 문자열 입력 검증 추가
+  if (!data || data.trim() === '') {
+    throw new Error('compress(): input data must not be empty or whitespace-only');
+  }
+
   const algorithm = options?.algorithm ?? 'gzip';
 
   if (algorithm === 'none') {
     return data;
   }
 
-  const input = stringToUint8Array(data);
+  try {
+    const input = stringToUint8Array(data);
 
-  // pako gzip 압축 옵션 (동기)
-  // 기본 level은 6, 범위는 0-9 (-1은 기본값)
-  const defaultLevel = 6 as const;
-  const compressed = gzip(input, { level: options?.level ?? defaultLevel });
+    // pako gzip 압축 옵션 (동기)
+    // 기본 level은 6, 범위는 0-9 (-1은 기본값)
+    const defaultLevel = 6 as const;
+    const compressed = gzip(input, { level: options?.level ?? defaultLevel });
 
-  return uint8ArrayToBase64(compressed);
+    return uint8ArrayToBase64(compressed);
+  } catch (e) {
+    // P1: 에러 메시지 구체화
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(`Failed to compress data: ${msg}`);
+  }
 }
 
 /**
@@ -122,37 +133,58 @@ export function decompress(
   algorithm: CompressionAlgorithm = 'gzip',
   maxSize: number = 100 * 1024 * 1024 // 100MB
 ): string {
+  // P1: 빈 문자열 입력 검증 추가
+  if (!compressed || compressed.trim() === '') {
+    throw new Error('decompress(): input data must not be empty or whitespace-only');
+  }
+
   if (algorithm === 'none') {
     return compressed;
   }
 
-  const buffer = base64ToUint8Array(compressed);
-
-  // DoS 방지: 압축 해제 전 크기 체크
-  if (buffer.length > maxSize) {
-    throw new Error(
-      `Compressed data too large: ${buffer.length} bytes (max: ${maxSize} bytes)`
-    );
-  }
-
-  // pako gzip 압축 해제 옵션 (동기)
-  const ungzipOptions: PakoUngzipOptions = {};
-  let decompressed: Uint8Array;
-
   try {
-    decompressed = ungzip(buffer, ungzipOptions);
+    const buffer = base64ToUint8Array(compressed);
+
+    // DoS 방지: 압축 해제 전 크기 체크
+    if (buffer.length > maxSize) {
+      throw new Error(
+        `Compressed data too large: ${buffer.length} bytes (max: ${maxSize} bytes)`
+      );
+    }
+
+    // pako gzip 압축 해제 옵션 (동기)
+    const ungzipOptions: PakoUngzipOptions = {};
+    let decompressed: Uint8Array;
+
+    try {
+      decompressed = ungzip(buffer, ungzipOptions);
+    } catch (e) {
+      // P1: 에러 메시지 구체화 - gzip 헤더 유효성 체크
+      if (buffer.length >= 2) {
+        const magic = `${buffer[0].toString(16).padStart(2, '0')}${buffer[1].toString(16).padStart(2, '0')}`;
+        if (magic !== '1f8b') {
+          throw new Error(`Invalid gzip header: expected magic number 0x1f8b, got 0x${magic}`);
+        }
+      }
+      throw new Error(`Failed to decompress gzip data: ${e instanceof Error ? e.message : String(e)}`);
+    }
+
+    // DoS 방지: 압축 해제 후 크기 체크
+    if (decompressed.length > maxSize) {
+      throw new Error(
+        `Decompressed data too large: ${decompressed.length} bytes (max: ${maxSize} bytes)`
+      );
+    }
+
+    return uint8ArrayToString(decompressed);
   } catch (e) {
-    throw new Error(`Failed to decompress data: ${e instanceof Error ? e.message : String(e)}`);
+    // Base64 디코딩 실패 등의 에러도 잡기 위한 외부 try-catch
+    if (e instanceof Error && e.message.includes('must not be empty')) {
+      throw e; // 이미 처리된 에러는 다시 throw
+    }
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(`Failed to decompress data: ${msg}`);
   }
-
-  // DoS 방지: 압축 해제 후 크기 체크
-  if (decompressed.length > maxSize) {
-    throw new Error(
-      `Decompressed data too large: ${decompressed.length} bytes (max: ${maxSize} bytes)`
-    );
-  }
-
-  return uint8ArrayToString(decompressed);
 }
 
 /**

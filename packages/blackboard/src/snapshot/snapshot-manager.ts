@@ -179,6 +179,12 @@ export class SnapshotManager {
    * @param options - 복원 옵션
    * @returns 복원된 상태
    * @throws {SnapshotRestoreError} 복원 실패 시
+   * @description
+   * **옵션 동작:**
+   * - `skipVersionCheck`: 포맷 버전 호환성 검사 건너뜀
+   * - `skipStructuralValidation`: 구조적 검증 건너뜀 (validateSync)
+   * - `resetVersion`: 상태 버전 0으로 초기화 (기본: true)
+   * - `newSessionId`: 새 세션 ID 생성 (기본: true)
    */
   restore(
     snapshot: Snapshot,

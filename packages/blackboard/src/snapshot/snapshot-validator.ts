@@ -13,34 +13,9 @@ import type {
 } from './types';
 import { StateSerializer, verifyChecksum } from './serializer';
 import { decompress, detectCompression } from './compression';
+import { decompressSnapshotData } from './utils';
 import { SNAPSHOT_FORMAT_VERSION } from './types';
-
-/**
- * 타입 가드: SerializedState 여부 확인
- */
-function isSerializedState(value: unknown): value is SerializedState {
-  if (typeof value !== 'object' || value === null) {
-    return false;
-  }
-
-  const obj = value as Partial<SerializedState>;
-
-  // meta 필드 필수 확인
-  if (!obj.meta || typeof obj.meta !== 'object') {
-    return false;
-  }
-
-  // meta의 필수 필드 확인
-  const meta = obj.meta;
-  if (!meta.sessionId || typeof meta.sessionId !== 'string') {
-    return false;
-  }
-  if (typeof meta.version !== 'number') {
-    return false;
-  }
-
-  return true;
-}
+import { isSerializedState } from './type-guards';
 
 /**
  * 스냅샷 검증자
@@ -152,40 +127,9 @@ export class SnapshotValidator {
     // 7. 역직렬화 테스트
     if (errors.length === 0) {
       try {
-        let state: SerializedState | undefined;
+        const state = decompressSnapshotData(snapshot);
 
-        if (meta.compressed && typeof snapshot.data === 'string') {
-          // 압축 데이터: 먼저 압축 해제 후 역직렬화
-          const algorithm = detectCompression(snapshot.data) ?? 'gzip';
-          const json = decompress(snapshot.data, algorithm);
-          const parsed = JSON.parse(json);
-
-          if (!isSerializedState(parsed)) {
-            errors.push({
-              code: 'DATA_CORRUPTED',
-              message: 'Deserialized state is invalid',
-            });
-          } else {
-            state = parsed;
-          }
-        } else if (typeof snapshot.data === 'object') {
-          // 비압축 데이터: 직접 역직렬화
-          if (!isSerializedState(snapshot.data)) {
-            errors.push({
-              code: 'DATA_CORRUPTED',
-              message: 'Deserialized state is invalid',
-            });
-          } else {
-            state = snapshot.data;
-          }
-        } else {
-          errors.push({
-            code: 'DATA_CORRUPTED',
-            message: 'Invalid snapshot data format',
-          });
-        }
-
-        if (state && (!state.meta || !state.state)) {
+        if (!state.meta || !state.state) {
           errors.push({
             code: 'DATA_CORRUPTED',
             message: 'Deserialized state is missing required fields',
@@ -302,6 +246,7 @@ export class SnapshotValidator {
   /**
    * 런타임 구조 검증 (P0: agents/tasks/opinions)
    * @description 역직렬화 후 실제 데이터 구조 검증
+   * P1: 에러 수집 모드 (break 제거)
    */
   private validateRuntimeStructure(snapshot: Snapshot): {
     valid: boolean;
@@ -352,7 +297,7 @@ export class SnapshotValidator {
                   code: 'DATA_CORRUPTED',
                   message: `state.agents[${i}] must be a [string, unknown] tuple`,
                 });
-                break;
+                // P1: break 제거 - 전체 에러 수집
               }
             }
           }
@@ -373,7 +318,7 @@ export class SnapshotValidator {
                   code: 'DATA_CORRUPTED',
                   message: `state.tasks[${i}] must be a [string, unknown] tuple`,
                 });
-                break;
+                // P1: break 제거 - 전체 에러 수집
               }
             }
           }
@@ -399,7 +344,7 @@ export class SnapshotValidator {
                   code: 'DATA_CORRUPTED',
                   message: `decisions.opinions[${i}] must be a [string, unknown] tuple`,
                 });
-                break;
+                // P1: break 제거 - 전체 에러 수집
               }
             }
           }

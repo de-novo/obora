@@ -43,6 +43,11 @@ export class SnapshotSerializer {
    * @throws {Error} JSON 파싱 실패 시 명확한 에러 메시지
    */
   fromJSON(json: string): Snapshot {
+    // P1: 빈 문자열 입력 검증 추가
+    if (!json || json.trim() === '') {
+      throw new Error('fromJSON(): input JSON must not be empty or whitespace-only');
+    }
+
     try {
       const parsed = JSON.parse(json);
 
