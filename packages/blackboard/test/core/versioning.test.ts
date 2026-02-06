@@ -99,9 +99,22 @@ describe('Versioning', () => {
     });
 
     describe('executeWithRetry()', () => {
+      // 테스트용 빠른 재시도 설정
+      let fastManager: VersionManager;
+
+      beforeEach(() => {
+        // 실제 타이머 사용 (sleep이 동작하려면 필요)
+        vi.useRealTimers();
+        fastManager = new VersionManager({
+          maxRetries: 3,
+          retryDelay: 10, // 빠른 재시도
+          exponentialBackoff: false,
+        });
+      });
+
       it('should return result on success', async () => {
         const operation = vi.fn().mockReturnValue('success');
-        const result = await manager.executeWithRetry(operation);
+        const result = await fastManager.executeWithRetry(operation);
 
         expect(result).toBe('success');
         expect(operation).toHaveBeenCalledTimes(1);
@@ -109,38 +122,43 @@ describe('Versioning', () => {
 
       it('should return async result on success', async () => {
         const operation = vi.fn().mockResolvedValue('async success');
-        const result = await manager.executeWithRetry(operation);
+        const result = await fastManager.executeWithRetry(operation);
 
         expect(result).toBe('async success');
         expect(operation).toHaveBeenCalledTimes(1);
       });
 
       it('should retry on VersionConflictError', async () => {
-        const operation = vi.fn()
-          .mockRejectedValueOnce(new VersionConflictError(1, 2, 'test'))
-          .mockResolvedValue('success after retry');
+        let callCount = 0;
+        const operation = vi.fn().mockImplementation(() => {
+          callCount++;
+          if (callCount === 1) {
+            return Promise.reject(new VersionConflictError(1, 2, 'test'));
+          }
+          return Promise.resolve('success after retry');
+        });
 
-        const result = await manager.executeWithRetry(operation);
+        const result = await fastManager.executeWithRetry(operation);
 
         expect(result).toBe('success after retry');
         expect(operation).toHaveBeenCalledTimes(2);
-      });
+      }, 5000);
 
       it('should throw after max retries', async () => {
-        const operation = vi.fn().mockRejectedValue(
-          new VersionConflictError(1, 2, 'test')
-        );
+        const operation = vi.fn().mockImplementation(() => {
+          return Promise.reject(new VersionConflictError(1, 2, 'test'));
+        });
 
-        await expect(manager.executeWithRetry(operation)).rejects.toThrow(
+        await expect(fastManager.executeWithRetry(operation)).rejects.toThrow(
           VersionConflictError
         );
         expect(operation).toHaveBeenCalledTimes(3); // maxRetries
-      });
+      }, 5000);
 
       it('should immediately throw non-VersionConflictError', async () => {
         const operation = vi.fn().mockRejectedValue(new Error('Other error'));
 
-        await expect(manager.executeWithRetry(operation)).rejects.toThrow(
+        await expect(fastManager.executeWithRetry(operation)).rejects.toThrow(
           'Other error'
         );
         expect(operation).toHaveBeenCalledTimes(1);

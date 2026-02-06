@@ -71,6 +71,10 @@ export class SnapshotRestorer {
   ): BlackboardState {
     const opts = options ?? {};
 
+    // skipValidation은 skipStructuralValidation의 별칭
+    const shouldSkipStructuralValidation =
+      opts.skipValidation || opts.skipStructuralValidation;
+
     // 1. 버전 호환성 체크
     if (!opts.skipVersionCheck) {
       const versionCheck = this.validator.checkVersionCompatibility(snapshot.meta.formatVersion);
@@ -83,7 +87,31 @@ export class SnapshotRestorer {
       }
     }
 
-    // 2. 데이터 역직렬화
+    // 2. 구조/타입 검증 (체크섬 X)
+    if (!shouldSkipStructuralValidation) {
+      const syncValidation = this.validator.validateSyncStructure(snapshot);
+      if (!syncValidation.valid) {
+        throw new SnapshotRestoreError(
+          `Snapshot validation failed: ${syncValidation.errors.join(', ')}`,
+          'VALIDATION_FAILED',
+          syncValidation.errors
+        );
+      }
+    }
+
+    // 3. 체크섬 검증 (skipValidation이 false일 때만)
+    if (!shouldSkipStructuralValidation) {
+      const fullValidation = this.validator.validateSync(snapshot);
+      if (!fullValidation.valid) {
+        throw new SnapshotRestoreError(
+          `Snapshot checksum validation failed: ${fullValidation.errors.map(e => e.message).join(', ')}`,
+          'CHECKSUM_INVALID',
+          fullValidation.errors
+        );
+      }
+    }
+
+    // 4. 데이터 역직렬화
     let serialized: SerializedState;
 
     try {
@@ -96,18 +124,6 @@ export class SnapshotRestorer {
         'DATA_CORRUPTED',
         error
       );
-    }
-
-    // 3. 구조/타입 검증 (체크섬 X)
-    if (!opts.skipStructuralValidation) {
-      const syncValidation = this.validator.validateSync(snapshot);
-      if (!syncValidation.valid) {
-        throw new SnapshotRestoreError(
-          `Snapshot validation failed: ${syncValidation.errors.join(', ')}`,
-          'VALIDATION_FAILED',
-          syncValidation.errors
-        );
-      }
     }
 
     // 4. State 역직렬화

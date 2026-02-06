@@ -21,7 +21,6 @@ export { VersionConflictError } from './versioning';
 // Versioning
 export {
   VersionManager,
-  VersionConflictError as _VersionConflictError,
   VersioningConfig,
   DEFAULT_VERSIONING_CONFIG,
 } from './versioning';

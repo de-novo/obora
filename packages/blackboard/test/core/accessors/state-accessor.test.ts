@@ -103,15 +103,16 @@ describe('StateAccessor', () => {
     it('should update agent', () => {
       const agent = createTestAgent();
       board.state.registerAgent(agent);
-      
+
+      const taskId = createTaskId('task-1');
       board.state.updateAgent(agent.id, {
         status: AgentStatusEnum.BUSY,
-        currentTask: createTaskId('task-1'),
+        currentTask: taskId,
       });
-      
+
       const updated = board.state.getAgent(agent.id);
       expect(updated?.status).toBe(AgentStatusEnum.BUSY);
-      expect(updated?.currentTask).toBe('tsk_task-1');
+      expect(updated?.currentTask).toBe(taskId);
     });
 
     it('should throw on updating non-existent agent', () => {
@@ -154,8 +155,7 @@ describe('StateAccessor', () => {
       board.state.registerAgent(createTestAgent({ status: AgentStatusEnum.BUSY }));
       board.state.registerAgent(createTestAgent({ status: AgentStatusEnum.IDLE }));
       board.state.registerAgent(createTestAgent({ status: AgentStatusEnum.BUSY }));
-      board.state.registerAgent(createTestAgent({ status: AgentStatusEnum.BUSY }));
-      
+
       const active = board.state.getAgents({ status: AgentStatusEnum.BUSY });
       expect(active).toHaveLength(2);
     });

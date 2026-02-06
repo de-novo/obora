@@ -256,9 +256,13 @@ describe('EventBus', () => {
   });
 
   describe('emitAsync()', () => {
+    beforeEach(() => {
+      vi.useRealTimers();
+    });
+
     it('should wait for async handlers', async () => {
       const results: number[] = [];
-      
+
       bus.subscribe('task.completed', async () => {
         await new Promise(r => setTimeout(r, 10));
         results.push(1);
@@ -334,9 +338,13 @@ describe('EventBus', () => {
   });
 
   describe('waitFor()', () => {
+    beforeEach(() => {
+      vi.useRealTimers();
+    });
+
     it('should resolve when event occurs', async () => {
       const promise = bus.waitFor('task.completed', 1000);
-      
+
       setTimeout(() => {
         bus.emit(factory.createTaskCompleted(createTaskId('t1'), {}, 100));
       }, 10);

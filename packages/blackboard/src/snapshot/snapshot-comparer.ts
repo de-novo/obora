@@ -22,6 +22,13 @@ export interface SnapshotDiff {
     knowledge: SectionDiff;
     decisions: SectionDiff;
   };
+  /** 차이점 존재 여부 */
+  hasDifferences: boolean;
+  /** 상세 변경 정보 */
+  details?: {
+    phase?: { before: unknown; after: unknown };
+    [key: string]: unknown;
+  };
 }
 
 /**
@@ -79,19 +86,44 @@ export class SnapshotComparer {
       this.extractStateData(b)
     );
 
+    const knowledgeSection = this.createSectionDiff(
+      this.extractKnowledgeData(a),
+      this.extractKnowledgeData(b)
+    );
+
+    const decisionsSection = this.createSectionDiff(
+      this.extractDecisionsData(a),
+      this.extractDecisionsData(b)
+    );
+
+    // 차이점 존재 여부 계산
+    const hasDifferences =
+      metaDiff.versionDiff !== 0 ||
+      stateSection.added > 0 ||
+      stateSection.removed > 0 ||
+      stateSection.modified > 0 ||
+      knowledgeSection.added > 0 ||
+      knowledgeSection.removed > 0 ||
+      knowledgeSection.modified > 0 ||
+      decisionsSection.added > 0 ||
+      decisionsSection.removed > 0 ||
+      decisionsSection.modified > 0;
+
+    // 상세 변경 정보 추출
+    const details: Record<string, unknown> = {};
+    for (const [key, [before, after]] of stateSection.changes.entries()) {
+      details[key] = { before, after };
+    }
+
     return {
       meta: metaDiff,
       sections: {
         state: stateSection,
-        knowledge: this.createSectionDiff(
-          this.extractKnowledgeData(a),
-          this.extractKnowledgeData(b)
-        ),
-        decisions: this.createSectionDiff(
-          this.extractDecisionsData(a),
-          this.extractDecisionsData(b)
-        ),
+        knowledge: knowledgeSection,
+        decisions: decisionsSection,
       },
+      hasDifferences,
+      details: Object.keys(details).length > 0 ? details : undefined,
     };
   }
 

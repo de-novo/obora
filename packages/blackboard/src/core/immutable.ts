@@ -6,19 +6,18 @@
 /**
  * 깊은 복사
  * @param obj - 복사할 객체
- * @param seen - 순환 참조 추적용 WeakSet (내부용)
+ * @param cloneMap - 순환 참조 추적용 WeakMap (낮은용)
  * @returns 깊은 복사본
  */
-export function deepClone<T>(obj: T, seen = new WeakSet<object>()): T {
-  if (obj === null || typeof obj !== 'object') {
+export function deepClone<T>(obj: T, cloneMap = new WeakMap<object, object>()): T {
+  if (obj === null || typeof obj !== "object") {
     return obj;
   }
 
-  // 순환 참조 감지
-  if (seen.has(obj as object)) {
-    throw new Error('Circular reference detected');
+  // 순환 참조 감지 - 이미 복사한 객체가 있으면 해당 복사본 반환
+  if (cloneMap.has(obj as object)) {
+    return cloneMap.get(obj as object) as T;
   }
-  seen.add(obj as object);
 
   if (obj instanceof Date) {
     return new Date(obj.getTime()) as T;
@@ -26,31 +25,39 @@ export function deepClone<T>(obj: T, seen = new WeakSet<object>()): T {
 
   if (obj instanceof Map) {
     const clonedMap = new Map();
+    cloneMap.set(obj as object, clonedMap);
     for (const [key, value] of obj.entries()) {
-      clonedMap.set(deepClone(key, seen), deepClone(value, seen));
+      clonedMap.set(deepClone(key, cloneMap), deepClone(value, cloneMap));
     }
     return clonedMap as T;
   }
 
   if (obj instanceof Set) {
     const clonedSet = new Set();
+    cloneMap.set(obj as object, clonedSet);
     for (const value of obj) {
-      clonedSet.add(deepClone(value, seen));
+      clonedSet.add(deepClone(value, cloneMap));
     }
     return clonedSet as T;
   }
 
   if (obj instanceof Array) {
-    return obj.map(item => deepClone(item, seen)) as T;
+    const clonedArray: unknown[] = [];
+    cloneMap.set(obj as object, clonedArray);
+    for (let i = 0; i < obj.length; i++) {
+      clonedArray[i] = deepClone(obj[i], cloneMap);
+    }
+    return clonedArray as T;
   }
 
   // 일반 객체
   const clonedObj = {} as T;
+  cloneMap.set(obj as object, clonedObj as object);
   for (const key in obj) {
     if (Object.prototype.hasOwnProperty.call(obj, key)) {
       (clonedObj as Record<string, unknown>)[key] = deepClone(
         (obj as Record<string, unknown>)[key],
-        seen
+        cloneMap
       );
     }
   }
@@ -63,7 +70,7 @@ export function deepClone<T>(obj: T, seen = new WeakSet<object>()): T {
  * @returns 동결된 객체
  */
 export function deepFreeze<T>(obj: T): Readonly<T> {
-  if (obj === null || typeof obj !== 'object') {
+  if (obj === null || typeof obj !== "object") {
     return obj as Readonly<T>;
   }
 
@@ -73,7 +80,7 @@ export function deepFreeze<T>(obj: T): Readonly<T> {
 
   for (const name of propNames) {
     const value = (obj as Record<string, unknown>)[name];
-    if (value !== null && typeof value === 'object') {
+    if (value !== null && typeof value === "object") {
       deepFreeze(value);
     }
   }
@@ -89,12 +96,8 @@ export function deepFreeze<T>(obj: T): Readonly<T> {
  * @param updater - 업데이트 함수
  * @returns 새 객체
  */
-export function immutableUpdate<T>(
-  obj: T,
-  path: string,
-  updater: (value: unknown) => unknown
-): T {
-  const segments = path.split('.');
+export function immutableUpdate<T>(obj: T, path: string, updater: (value: unknown) => unknown): T {
+  const segments = path.split(".");
   const newObj = deepClone(obj);
 
   let current: Record<string, unknown> = newObj as Record<string, unknown>;
@@ -126,9 +129,7 @@ export function immutableUpdate<T>(
  * @param map - 변환할 Map
  * @returns 일반 객체
  */
-export function mapToObject<K extends string, V>(
-  map: Map<K, V>
-): Record<K, V> {
+export function mapToObject<K extends string, V>(map: Map<K, V>): Record<K, V> {
   const obj = {} as Record<K, V>;
   for (const [key, value] of map.entries()) {
     obj[key] = value;
@@ -141,9 +142,7 @@ export function mapToObject<K extends string, V>(
  * @param obj - 변환할 객체
  * @returns Map
  */
-export function objectToMap<K extends string, V>(
-  obj: Record<K, V>
-): Map<K, V> {
+export function objectToMap<K extends string, V>(obj: Record<K, V>): Map<K, V> {
   return new Map(Object.entries(obj) as [K, V][]);
 }
 
@@ -153,19 +152,16 @@ export function objectToMap<K extends string, V>(
  * @param sources - 병합할 소스들
  * @returns 병합된 새 객체
  */
-export function merge<T extends Record<string, unknown>>(
-  target: T,
-  ...sources: Partial<T>[]
-): T {
+export function merge<T extends Record<string, unknown>>(target: T, ...sources: Partial<T>[]): T {
   const result = deepClone(target);
 
   for (const source of sources) {
     for (const key in source) {
       if (Object.prototype.hasOwnProperty.call(source, key)) {
         const value = source[key];
-        if (value !== null && typeof value === 'object') {
+        if (value !== null && typeof value === "object") {
           const existingValue = (result as Record<string, unknown>)[key];
-          if (existingValue !== null && typeof existingValue === 'object') {
+          if (existingValue !== null && typeof existingValue === "object") {
             (result as Record<string, unknown>)[key] = merge(
               existingValue as Record<string, unknown>,
               value as Record<string, unknown>

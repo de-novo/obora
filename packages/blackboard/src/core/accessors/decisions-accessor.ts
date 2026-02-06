@@ -3,8 +3,8 @@
  * @description 의사결정 섹션 접근자
  */
 
-import type { Blackboard } from '../blackboard';
-import type { DecisionsSection } from '../../types';
+import type { Blackboard } from "../blackboard";
+import type { DecisionsSection } from "../../types";
 import type {
   Agenda,
   AgendaCreateInput,
@@ -15,14 +15,11 @@ import type {
   VoteSummary,
   NextAction,
   OpinionId,
-} from '../../types';
-import {
-  AgendaStatus,
-  createOpinionId,
-} from '../../types';
-import type { AgentId, AgendaId } from '../../types';
-import { createAgendaId } from '../../types';
-import { BlackboardError, BlackboardErrorCode } from '../blackboard';
+  AgendaId,
+} from "../../types";
+import type { AgentId } from "../../types";
+import { AgendaStatus, createOpinionId, createAgendaId } from "../../types";
+import { BlackboardError, BlackboardErrorCode } from "../blackboard";
 
 /**
  * 의사결정 섹션 접근자
@@ -44,7 +41,7 @@ export class DecisionsSectionAccessor {
    * @private
    */
   private findOpinionKey(opinionId: OpinionId): string | undefined {
-    const decisions = this.board.read<DecisionsSection>('decisions');
+    const decisions = this.board.read<DecisionsSection>("decisions");
     for (const [key, opinion] of decisions.opinions.entries()) {
       if (opinion.id === opinionId) {
         return key;
@@ -57,34 +54,34 @@ export class DecisionsSectionAccessor {
 
   /** 현재 안건 */
   get current(): Agenda | null {
-    const decisions = this.board.read<DecisionsSection>('decisions');
+    const decisions = this.board.read<DecisionsSection>("decisions");
     return decisions.current;
   }
 
   /** 대기 중인 안건들 */
   get pending(): Agenda[] {
-    const decisions = this.board.read<DecisionsSection>('decisions');
-    return decisions.pending.filter(a => a.status === AgendaStatus.SUBMITTED);
+    const decisions = this.board.read<DecisionsSection>("decisions");
+    return decisions.pending.filter((a) => a.status === AgendaStatus.SUBMITTED);
   }
 
   /** 모든 대기 안건 */
   get allPending(): Agenda[] {
-    return this.board.read<DecisionsSection>('decisions').pending;
+    return this.board.read<DecisionsSection>("decisions").pending;
   }
 
   /** 결정 이력 전체 */
   get history(): Resolution[] {
-    return this.board.read<DecisionsSection>('decisions').history;
+    return this.board.read<DecisionsSection>("decisions").history;
   }
 
   /** 대기 중인 안건 수 */
   get pendingCount(): number {
-    return this.board.read<DecisionsSection>('decisions').pending.length;
+    return this.board.read<DecisionsSection>("decisions").pending.length;
   }
 
   /** 결정 이력 수 */
   get historyCount(): number {
-    return this.board.read<DecisionsSection>('decisions').history.length;
+    return this.board.read<DecisionsSection>("decisions").history.length;
   }
 
   /**
@@ -92,18 +89,29 @@ export class DecisionsSectionAccessor {
    * @param agendaInput - 새 안건 입력
    */
   submitAgenda(agendaInput: AgendaCreateInput): Agenda {
-    const decisions = this.board.read<DecisionsSection>('decisions');
+    // 필수 필드 검증
+    if (!agendaInput.title?.trim()) {
+      throw new BlackboardError(BlackboardErrorCode.INVALID_INPUT, "Title is required");
+    }
+    if (!agendaInput.description?.trim()) {
+      throw new BlackboardError(BlackboardErrorCode.INVALID_INPUT, "Description is required");
+    }
+    if (!agendaInput.proposer) {
+      throw new BlackboardError(BlackboardErrorCode.INVALID_INPUT, "Proposer is required");
+    }
+
+    const decisions = this.board.read<DecisionsSection>("decisions");
     const now = new Date();
 
     const agenda: Agenda = {
-      id: createAgendaId(`agenda-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`),
+      id: createAgendaId(`agenda-${crypto.randomUUID()}`),
       title: agendaInput.title,
       description: agendaInput.description,
       proposer: agendaInput.proposer,
       status: AgendaStatus.SUBMITTED,
       deadline: agendaInput.deadline ?? null,
       requiredQuorum: agendaInput.requiredQuorum ?? 3,
-      votingMethod: agendaInput.votingMethod ?? 'majority',
+      votingMethod: agendaInput.votingMethod ?? "majority",
       priority: agendaInput.priority ?? 1,
       tags: agendaInput.tags ?? [],
       attachments: agendaInput.attachments ?? [],
@@ -113,8 +121,8 @@ export class DecisionsSectionAccessor {
     };
 
     const updatedPending = [...decisions.pending, agenda];
-    this.board.write('decisions.pending', updatedPending);
-    this.board.emit('agenda_submitted', { agendaId: agenda.id, agenda });
+    this.board.write("decisions.pending", updatedPending);
+    this.board.emit("agenda_submitted", { agendaId: agenda.id, agenda });
 
     return agenda;
   }
@@ -123,7 +131,7 @@ export class DecisionsSectionAccessor {
    * 안건 상태 변경
    */
   updateAgendaStatus(agendaId: AgendaId, status: AgendaStatus): void {
-    const decisions = this.board.read<DecisionsSection>('decisions');
+    const decisions = this.board.read<DecisionsSection>("decisions");
 
     // pending에서 찾기
     let targetIndex = -1;
@@ -160,7 +168,7 @@ export class DecisionsSectionAccessor {
       const updatedPending = [...decisions.pending];
       updatedPending[targetIndex] = updatedAgenda;
 
-      this.board.write('decisions.pending', updatedPending);
+      this.board.write("decisions.pending", updatedPending);
     } else if (decisions.current) {
       const updatedAgenda = {
         ...decisions.current,
@@ -169,17 +177,17 @@ export class DecisionsSectionAccessor {
         version: decisions.current.version + 1,
       };
 
-      this.board.write('decisions.current', updatedAgenda);
+      this.board.write("decisions.current", updatedAgenda);
     }
 
-    this.board.emit('agenda_updated', { agendaId, status });
+    this.board.emit("agenda_updated", { agendaId, status });
   }
 
   /**
    * 현재 안건 설정
    */
   setCurrentAgenda(agendaId: AgendaId): void {
-    const decisions = this.board.read<DecisionsSection>('decisions');
+    const decisions = this.board.read<DecisionsSection>("decisions");
 
     // 현재 안건이 있으면 pending으로 이동
     let updatedPending = [...decisions.pending];
@@ -188,7 +196,7 @@ export class DecisionsSectionAccessor {
     }
 
     // pending에서 해당 안건 찾기
-    const agendaIndex = updatedPending.findIndex(a => a.id === agendaId);
+    const agendaIndex = updatedPending.findIndex((a) => a.id === agendaId);
     if (agendaIndex === -1) {
       throw new BlackboardError(
         BlackboardErrorCode.AGENDA_NOT_FOUND,
@@ -206,25 +214,25 @@ export class DecisionsSectionAccessor {
       version: agenda.version + 1,
     };
 
-    this.board.write('decisions.current', updatedAgenda);
-    this.board.write('decisions.pending', updatedPending);
+    this.board.write("decisions.current", updatedAgenda);
+    this.board.write("decisions.pending", updatedPending);
   }
 
   /**
    * 안건 취소
    */
   cancelAgenda(agendaId: AgendaId, reason: string): void {
-    const decisions = this.board.read<DecisionsSection>('decisions');
+    const decisions = this.board.read<DecisionsSection>("decisions");
 
     // current 안건인 경우
     if (decisions.current?.id === agendaId) {
-      this.board.write('decisions.current', null);
-      this.board.emit('agenda_updated', { agendaId, status: AgendaStatus.CANCELLED, reason });
+      this.board.write("decisions.current", null);
+      this.board.emit("agenda_updated", { agendaId, status: AgendaStatus.CANCELLED, reason });
       return;
     }
 
     // pending 안건인 경우
-    const agendaIndex = decisions.pending.findIndex(a => a.id === agendaId);
+    const agendaIndex = decisions.pending.findIndex((a) => a.id === agendaId);
     if (agendaIndex === -1) {
       throw new BlackboardError(
         BlackboardErrorCode.AGENDA_NOT_FOUND,
@@ -232,22 +240,22 @@ export class DecisionsSectionAccessor {
       );
     }
 
-    const updatedPending = decisions.pending.filter(a => a.id !== agendaId);
-    this.board.write('decisions.pending', updatedPending);
-    this.board.emit('agenda_updated', { agendaId, status: AgendaStatus.CANCELLED, reason });
+    const updatedPending = decisions.pending.filter((a) => a.id !== agendaId);
+    this.board.write("decisions.pending", updatedPending);
+    this.board.emit("agenda_updated", { agendaId, status: AgendaStatus.CANCELLED, reason });
   }
 
   /**
    * 안건 조회
    */
   getAgenda(agendaId: AgendaId): Agenda | undefined {
-    const decisions = this.board.read<DecisionsSection>('decisions');
+    const decisions = this.board.read<DecisionsSection>("decisions");
 
     if (decisions.current?.id === agendaId) {
       return decisions.current;
     }
 
-    const pendingAgenda = decisions.pending.find(a => a.id === agendaId);
+    const pendingAgenda = decisions.pending.find((a) => a.id === agendaId);
     if (pendingAgenda) {
       return pendingAgenda;
     }
@@ -261,7 +269,7 @@ export class DecisionsSectionAccessor {
    * 모든 안건 조회
    */
   getAllAgendas(): Agenda[] {
-    const decisions = this.board.read<DecisionsSection>('decisions');
+    const decisions = this.board.read<DecisionsSection>("decisions");
     const result: Agenda[] = [];
 
     if (decisions.current) {
@@ -276,34 +284,55 @@ export class DecisionsSectionAccessor {
 
   /**
    * 의견 제출
+   * @param opinionInput - 의견 생성 입력 (agentId 포함)
    */
-  submitOpinion(
-    opinion: Omit<Opinion, 'id' | 'createdAt' | 'updatedAt'>
-  ): Opinion {
-    const decisions = this.board.read<DecisionsSection>('decisions');
+  submitOpinion(opinionInput: OpinionCreateInput & { agentId: AgentId }): Opinion {
+    // 필수 필드 검증
+    if (!opinionInput.stance) {
+      throw new BlackboardError(BlackboardErrorCode.INVALID_INPUT, "Stance is required");
+    }
+    if (
+      opinionInput.confidence !== undefined &&
+      (opinionInput.confidence < 0 ||
+        opinionInput.confidence > 1 ||
+        Number.isNaN(opinionInput.confidence))
+    ) {
+      throw new BlackboardError(
+        BlackboardErrorCode.INVALID_INPUT,
+        "Confidence must be between 0 and 1"
+      );
+    }
+
+    const decisions = this.board.read<DecisionsSection>("decisions");
     const now = new Date();
 
     // 안건 확인
-    const agenda = this.getAgenda(opinion.agendaId);
+    const agenda = this.getAgenda(opinionInput.agendaId);
     if (!agenda) {
       throw new BlackboardError(
         BlackboardErrorCode.AGENDA_NOT_FOUND,
-        `Agenda ${opinion.agendaId} not found`
+        `Agenda ${opinionInput.agendaId} not found`
       );
     }
 
     // 중복 의견 확인
-    const opinionKey = this.getOpinionKey(opinion.agendaId, opinion.agentId);
+    const opinionKey = this.getOpinionKey(opinionInput.agendaId, opinionInput.agentId);
     if (decisions.opinions.has(opinionKey)) {
       throw new BlackboardError(
         BlackboardErrorCode.DUPLICATE_OPINION,
-        `Agent ${opinion.agentId} already submitted an opinion for agenda ${opinion.agendaId}`
+        `Agent ${opinionInput.agentId} already submitted an opinion for agenda ${opinionInput.agendaId}`
       );
     }
 
     const fullOpinion: Opinion = {
-      ...opinion,
-      id: createOpinionId(`opinion-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`),
+      id: createOpinionId(`opinion-${crypto.randomUUID()}`),
+      agentId: opinionInput.agentId,
+      agendaId: opinionInput.agendaId,
+      stance: opinionInput.stance,
+      reason: opinionInput.reason,
+      conditions: opinionInput.conditions ?? [],
+      confidence: opinionInput.confidence,
+      references: opinionInput.references ?? [],
       createdAt: now,
       updatedAt: now,
     };
@@ -311,8 +340,8 @@ export class DecisionsSectionAccessor {
     const updatedOpinions = new Map(decisions.opinions);
     updatedOpinions.set(opinionKey, fullOpinion);
 
-    this.board.write('decisions.opinions', updatedOpinions);
-    this.board.emit('opinion_added', { opinion: fullOpinion });
+    this.board.write("decisions.opinions", updatedOpinions);
+    this.board.emit("opinion_added", { opinion: fullOpinion });
 
     return fullOpinion;
   }
@@ -321,7 +350,7 @@ export class DecisionsSectionAccessor {
    * 특정 안건의 모든 의견 조회
    */
   getOpinions(agendaId: AgendaId): Opinion[] {
-    const decisions = this.board.read<DecisionsSection>('decisions');
+    const decisions = this.board.read<DecisionsSection>("decisions");
     const opinions: Opinion[] = [];
 
     for (const opinion of decisions.opinions.values()) {
@@ -335,8 +364,7 @@ export class DecisionsSectionAccessor {
 
   /**
    * 에이전트의 의견 조회 (agendaId 먼저)
-   * @param agendaId - 안건 ID
-   * @param agentId - 에이전트 ID
+   * @deprecated getAgentOpinion() 사용 권장
    */
   getOpinionByAgent(agendaId: AgendaId, agentId: AgentId): Opinion | undefined {
     return this.getAgentOpinion(agentId, agendaId);
@@ -348,7 +376,7 @@ export class DecisionsSectionAccessor {
    * @param agendaId - 안건 ID (필수)
    */
   getAgentOpinion(agentId: AgentId, agendaId: AgendaId): Opinion | undefined {
-    const decisions = this.board.read<DecisionsSection>('decisions');
+    const decisions = this.board.read<DecisionsSection>("decisions");
     // agendaId + agentId 조합으로 키 조회
     const opinionKey = this.getOpinionKey(agendaId, agentId);
     const opinion = decisions.opinions.get(opinionKey);
@@ -380,14 +408,18 @@ export class DecisionsSectionAccessor {
       quorumReached: false,
     };
 
+    // 유효한 stance 값인지 확인 후 처리
+    const validStances: readonly string[] = ["approve", "reject", "conditional", "abstain"];
+
     for (const opinion of opinions) {
-      summary[opinion.stance]++;
+      if (validStances.includes(opinion.stance)) {
+        summary[opinion.stance as keyof typeof summary]++;
+      }
     }
 
     // 승인률 계산 (찬성 / 총 투표수)
-    summary.approvalRate = summary.total > 0
-      ? (summary.approve + summary.conditional) / summary.total
-      : 0;
+    summary.approvalRate =
+      summary.total > 0 ? (summary.approve + summary.conditional) / summary.total : 0;
 
     // 정족수 도달 여부 확인
     const agenda = this.getAgenda(agendaId);
@@ -402,7 +434,7 @@ export class DecisionsSectionAccessor {
    * 모든 의견 초기화 (재투표 시)
    */
   clearOpinions(agendaId: AgendaId): void {
-    const decisions = this.board.read<DecisionsSection>('decisions');
+    const decisions = this.board.read<DecisionsSection>("decisions");
     const updatedOpinions = new Map(decisions.opinions);
 
     for (const [key, opinion] of decisions.opinions.entries()) {
@@ -411,14 +443,14 @@ export class DecisionsSectionAccessor {
       }
     }
 
-    this.board.write('decisions.opinions', updatedOpinions);
+    this.board.write("decisions.opinions", updatedOpinions);
   }
 
   /**
    * 의견 업데이트
    */
-  updateOpinion(opinionId: OpinionId, updates: Partial<Omit<Opinion, 'id' | 'createdAt'>>): void {
-    const decisions = this.board.read<DecisionsSection>('decisions');
+  updateOpinion(opinionId: OpinionId, updates: Partial<Omit<Opinion, "id" | "createdAt">>): void {
+    const decisions = this.board.read<DecisionsSection>("decisions");
     const opinionKey = this.findOpinionKey(opinionId);
 
     if (!opinionKey) {
@@ -447,15 +479,15 @@ export class DecisionsSectionAccessor {
     const updatedOpinions = new Map(decisions.opinions);
     updatedOpinions.set(opinionKey, updatedOpinion);
 
-    this.board.write('decisions.opinions', updatedOpinions);
-    this.board.emit('opinion_updated', { opinion: updatedOpinion });
+    this.board.write("decisions.opinions", updatedOpinions);
+    this.board.emit("opinion_updated", { opinion: updatedOpinion });
   }
 
   /**
    * 의견 삭제
    */
   removeOpinion(opinionId: OpinionId): void {
-    const decisions = this.board.read<DecisionsSection>('decisions');
+    const decisions = this.board.read<DecisionsSection>("decisions");
     const opinionKey = this.findOpinionKey(opinionId);
 
     if (!opinionKey) {
@@ -465,28 +497,29 @@ export class DecisionsSectionAccessor {
       );
     }
 
-    const opinion = decisions.opinions.get(opinionKey);
-
     const updatedOpinions = new Map(decisions.opinions);
     updatedOpinions.delete(opinionKey);
 
-    this.board.write('decisions.opinions', updatedOpinions);
-    this.board.emit('opinion_removed', { opinionId, opinion });
+    this.board.write("decisions.opinions", updatedOpinions);
+    this.board.emit("opinion_removed", { opinionId });
   }
 
   // === 결정 관리 ===
 
   /**
-   * 결정 기록
+   * 결정 기록 (안건 제거)
    * @description 새 결정을 기록하고 관련 안건을 제거합니다.
-   * @note 안건을 유지하려면 closeAgenda를 사용하세요.
+   * @warning closeAgenda()를 사용하면 안건이 RESOLVED 상태로 유지됩니다.
+   * 이 메서드는 안건을 완전히 제거합니다.
    */
-  recordResolution(resolutionInput: Omit<Resolution, 'id' | 'createdAt' | 'updatedAt'>): Resolution {
-    const decisions = this.board.read<DecisionsSection>('decisions');
+  recordResolution(
+    resolutionInput: Omit<Resolution, "id" | "createdAt" | "updatedAt">
+  ): Resolution {
+    const decisions = this.board.read<DecisionsSection>("decisions");
     const now = new Date();
 
     const resolution: Resolution = {
-      id: `resolution-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      id: `resolution-${crypto.randomUUID()}`,
       agendaId: resolutionInput.agendaId,
       decision: resolutionInput.decision,
       summary: resolutionInput.summary,
@@ -500,18 +533,18 @@ export class DecisionsSectionAccessor {
     };
 
     const updatedHistory = [...decisions.history, resolution];
-    this.board.write('decisions.history', updatedHistory);
+    this.board.write("decisions.history", updatedHistory);
 
     // 현재 안건 초기화
     if (decisions.current?.id === resolution.agendaId) {
-      this.board.write('decisions.current', null);
+      this.board.write("decisions.current", null);
     } else {
       // pending에서 제거
-      const updatedPending = decisions.pending.filter(a => a.id !== resolution.agendaId);
-      this.board.write('decisions.pending', updatedPending);
+      const updatedPending = decisions.pending.filter((a) => a.id !== resolution.agendaId);
+      this.board.write("decisions.pending", updatedPending);
     }
 
-    this.board.emit('resolution_created', { resolution });
+    this.board.emit("resolution_created", { resolution });
 
     return resolution;
   }
@@ -521,12 +554,14 @@ export class DecisionsSectionAccessor {
    * @description 안건을 제거하지 않고 결정만 기록합니다.
    * @private
    */
-  private recordResolutionKeepAgenda(resolutionInput: Omit<Resolution, 'id' | 'createdAt' | 'updatedAt'>): Resolution {
-    const decisions = this.board.read<DecisionsSection>('decisions');
+  private recordResolutionKeepAgenda(
+    resolutionInput: Omit<Resolution, "id" | "createdAt" | "updatedAt">
+  ): Resolution {
+    const decisions = this.board.read<DecisionsSection>("decisions");
     const now = new Date();
 
     const resolution: Resolution = {
-      id: `resolution-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      id: `resolution-${crypto.randomUUID()}`,
       agendaId: resolutionInput.agendaId,
       decision: resolutionInput.decision,
       summary: resolutionInput.summary,
@@ -540,8 +575,8 @@ export class DecisionsSectionAccessor {
     };
 
     const updatedHistory = [...decisions.history, resolution];
-    this.board.write('decisions.history', updatedHistory);
-    this.board.emit('resolution_created', { resolution });
+    this.board.write("decisions.history", updatedHistory);
+    this.board.emit("resolution_created", { resolution });
 
     return resolution;
   }
@@ -550,7 +585,7 @@ export class DecisionsSectionAccessor {
    * 결정 이력 조회
    */
   getHistory(filter?: { agendaId?: AgendaId; decision?: DecisionType }): Resolution[] {
-    const decisions = this.board.read<DecisionsSection>('decisions');
+    const decisions = this.board.read<DecisionsSection>("decisions");
     let history = [...decisions.history];
 
     if (!filter) {
@@ -558,11 +593,11 @@ export class DecisionsSectionAccessor {
     }
 
     if (filter.agendaId) {
-      history = history.filter(r => r.agendaId === filter.agendaId);
+      history = history.filter((r) => r.agendaId === filter.agendaId);
     }
 
     if (filter.decision) {
-      history = history.filter(r => r.decision === filter.decision);
+      history = history.filter((r) => r.decision === filter.decision);
     }
 
     return history;
@@ -572,7 +607,7 @@ export class DecisionsSectionAccessor {
    * 최근 N개 결정 조회
    */
   getRecentResolutions(count: number): Resolution[] {
-    const decisions = this.board.read<DecisionsSection>('decisions');
+    const decisions = this.board.read<DecisionsSection>("decisions");
     return decisions.history.slice(-count).reverse();
   }
 
@@ -580,16 +615,16 @@ export class DecisionsSectionAccessor {
    * 결정 조회
    */
   getResolution(resolutionId: string): Resolution | undefined {
-    const decisions = this.board.read<DecisionsSection>('decisions');
-    return decisions.history.find(r => r.id === resolutionId);
+    const decisions = this.board.read<DecisionsSection>("decisions");
+    return decisions.history.find((r) => r.id === resolutionId);
   }
 
   /**
    * 안건에 대한 결정 조회
    */
   getResolutionByAgenda(agendaId: AgendaId): Resolution | undefined {
-    const decisions = this.board.read<DecisionsSection>('decisions');
-    return decisions.history.find(r => r.agendaId === agendaId);
+    const decisions = this.board.read<DecisionsSection>("decisions");
+    return decisions.history.find((r) => r.agendaId === agendaId);
   }
 
   // === 통계 ===
@@ -598,14 +633,14 @@ export class DecisionsSectionAccessor {
    * 결정 수 조회
    */
   getResolutionCount(): number {
-    return this.board.read<DecisionsSection>('decisions').history.length;
+    return this.board.read<DecisionsSection>("decisions").history.length;
   }
 
   /**
    * 안건 수 조회
    */
   getAgendaCount(): number {
-    const decisions = this.board.read<DecisionsSection>('decisions');
+    const decisions = this.board.read<DecisionsSection>("decisions");
     let count = decisions.current ? 1 : 0;
     count += decisions.pending.length;
     return count;
@@ -615,17 +650,18 @@ export class DecisionsSectionAccessor {
    * 의견 수 조회
    */
   getOpinionCount(): number {
-    return this.board.read<DecisionsSection>('decisions').opinions.size;
+    return this.board.read<DecisionsSection>("decisions").opinions.size;
   }
 
   // === 투표 ===
 
   /**
    * 투표 결과 확인
+   * @note conditional은 승인으로 카운트됩니다 (찬성 = approve + conditional)
    */
   checkVotingResult(agendaId: AgendaId): {
     passed: boolean;
-    method: 'majority' | 'unanimous' | 'weighted' | 'supermajority';
+    method: "majority" | "unanimous" | "weighted" | "supermajority";
     summary: {
       total: number;
       approve: number;
@@ -648,21 +684,21 @@ export class DecisionsSectionAccessor {
     let passed = false;
 
     switch (agenda.votingMethod) {
-      case 'unanimous':
+      case "unanimous":
         // 전체 찬성 (반대 없음)
         passed = summary.reject === 0 && summary.total > 0;
         break;
-      case 'majority':
+      case "majority":
         // 단순 과반수 (50% 초과)
         const approveCount = summary.approve + summary.conditional;
         passed = approveCount > summary.total / 2;
         break;
-      case 'supermajority':
+      case "supermajority":
         // 2/3 이상 찬성
         const superMajorityCount = summary.approve + summary.conditional;
         passed = superMajorityCount >= (summary.total * 2) / 3;
         break;
-      case 'weighted':
+      case "weighted":
         // 가중치 투표 (현재는 과반수와 동일하게 처리)
         const weightedCount = summary.approve + summary.conditional;
         passed = weightedCount > summary.total / 2;
@@ -680,8 +716,19 @@ export class DecisionsSectionAccessor {
 
   /**
    * 안건 종료 (결정 기록)
+   * @description 안건을 RESOLVED 상태로 변경하고 결정을 기록합니다.
+   *
+   * **정책:** 안건은 RESOLVED 상태로 변경 후에도 pending/current에 유지됩니다.
+   * 이는 결정 이력 추적 및 후속 조치 관리를 위함입니다.
+   * 안건을 완전히 제거하려면 {@link recordResolution()}을 직접 호출하세요.
+   *
+   * @param agendaId - 종료할 안건 ID
+   * @param decision - 결정 유형 (기본: approved)
    */
-  closeAgenda(agendaId: AgendaId, decision: 'approved' | 'rejected' | 'deferred' = 'approved'): void {
+  closeAgenda(
+    agendaId: AgendaId,
+    decision: "approved" | "rejected" | "deferred" = "approved"
+  ): void {
     const agenda = this.getAgenda(agendaId);
     if (!agenda) {
       throw new BlackboardError(
@@ -695,7 +742,7 @@ export class DecisionsSectionAccessor {
     // 먼저 안건 상태 업데이트 (agenda를 찾을 수 있도록)
     this.updateAgendaStatus(agendaId, AgendaStatus.RESOLVED);
 
-    // 결정 기록 생성 (agenda 제거하지 않음)
+    // 결정 기록 생성 (안건 유지 - 정책에 따름)
     this.recordResolutionKeepAgenda({
       agendaId,
       decision: decision as DecisionType,
@@ -717,8 +764,8 @@ export class DecisionsSectionAccessor {
   /**
    * 안건 업데이트
    */
-  updateAgenda(agendaId: AgendaId, updates: Partial<Omit<Agenda, 'id' | 'createdAt'>>): Agenda {
-    const decisions = this.board.read<DecisionsSection>('decisions');
+  updateAgenda(agendaId: AgendaId, updates: Partial<Omit<Agenda, "id" | "createdAt">>): Agenda {
+    const decisions = this.board.read<DecisionsSection>("decisions");
 
     // current 안건 확인
     if (decisions.current?.id === agendaId) {
@@ -731,13 +778,13 @@ export class DecisionsSectionAccessor {
         version: decisions.current.version + 1,
       };
 
-      this.board.write('decisions.current', updatedAgenda);
-      this.board.emit('agenda_updated', { agendaId, agenda: updatedAgenda });
+      this.board.write("decisions.current", updatedAgenda);
+      this.board.emit("agenda_updated", { agendaId, agenda: updatedAgenda });
       return updatedAgenda;
     }
 
     // pending 안건 확인
-    const pendingIndex = decisions.pending.findIndex(a => a.id === agendaId);
+    const pendingIndex = decisions.pending.findIndex((a) => a.id === agendaId);
     if (pendingIndex === -1) {
       throw new BlackboardError(
         BlackboardErrorCode.AGENDA_NOT_FOUND,
@@ -758,8 +805,8 @@ export class DecisionsSectionAccessor {
     const updatedPending = [...decisions.pending];
     updatedPending[pendingIndex] = updatedAgenda;
 
-    this.board.write('decisions.pending', updatedPending);
-    this.board.emit('agenda_updated', { agendaId, agenda: updatedAgenda });
+    this.board.write("decisions.pending", updatedPending);
+    this.board.emit("agenda_updated", { agendaId, agenda: updatedAgenda });
     return updatedAgenda;
   }
 
@@ -769,10 +816,10 @@ export class DecisionsSectionAccessor {
    * 모든 결정 초기화
    */
   clearAll(): void {
-    this.board.write('decisions.current', null);
-    this.board.write('decisions.pending', []);
-    this.board.write('decisions.opinions', new Map());
-    this.board.write('decisions.history', []);
-    this.board.emit('decisions_cleared', {});
+    this.board.write("decisions.current", null);
+    this.board.write("decisions.pending", []);
+    this.board.write("decisions.opinions", new Map());
+    this.board.write("decisions.history", []);
+    this.board.emit("decisions_cleared", {});
   }
 }

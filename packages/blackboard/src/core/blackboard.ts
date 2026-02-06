@@ -11,26 +11,26 @@ import type {
   DecisionsSection,
   BoardPhase,
   SessionId,
-} from '../types';
-import { createSessionId } from '../types/base';
+} from "../types";
+import { createSessionId } from "../types/base";
 
-import { VersionManager, VersionConflictError, DEFAULT_VERSIONING_CONFIG } from './versioning';
-import { getByPath, setByPath, deleteByPath, parsePath, isValidPath } from './path-utils';
-import { deepClone, mapToObject, objectToMap } from './immutable';
-import { DefaultIdGenerator, sequentialIdGenerator } from './id-generator';
+import { VersionManager, VersionConflictError, DEFAULT_VERSIONING_CONFIG } from "./versioning";
+import { getByPath, setByPath, deleteByPath, parsePath, isValidPath } from "./path-utils";
+import { deepClone, mapToObject, objectToMap } from "./immutable";
+import { DefaultIdGenerator, sequentialIdGenerator } from "./id-generator";
 
-import { StateSectionAccessor } from './accessors/state-accessor';
-import { KnowledgeSectionAccessor } from './accessors/knowledge-accessor';
-import { DecisionsSectionAccessor } from './accessors/decisions-accessor';
+import { StateSectionAccessor } from "./accessors/state-accessor";
+import { KnowledgeSectionAccessor } from "./accessors/knowledge-accessor";
+import { DecisionsSectionAccessor } from "./accessors/decisions-accessor";
 
 // Snapshot imports
-import { SnapshotManager } from '../snapshot';
+import { SnapshotManager } from "../snapshot";
 import type {
   Snapshot,
   CreateSnapshotOptions,
   RestoreSnapshotOptions,
   SnapshotValidationResult,
-} from '../snapshot';
+} from "../snapshot";
 
 // Re-export types for convenience
 export { BoardPhase };
@@ -59,11 +59,29 @@ class SimpleEventEmitter {
     return this;
   }
 
+  once(event: string, listener: EventListener): this {
+    const onceWrapper = (...args: unknown[]) => {
+      this.off(event, onceWrapper);
+      listener(...args);
+    };
+    return this.on(event, onceWrapper);
+  }
+
   emit(event: string, ...args: unknown[]): boolean {
     const listeners = this._listeners.get(event) ?? [];
     for (const listener of listeners) {
       listener(...args);
     }
+
+    // 와일드카드 지원 (예: 'state.*' -> 'state.updated' 매칭)
+    for (const [pattern, wildcardListeners] of this._listeners.entries()) {
+      if (pattern.endsWith("*") && event.startsWith(pattern.slice(0, -1))) {
+        for (const listener of wildcardListeners) {
+          listener(...args);
+        }
+      }
+    }
+
     return listeners.length > 0;
   }
 
@@ -93,6 +111,8 @@ export interface BlackboardOptions {
   maxRetries?: number;
   /** 재시도 간격 (ms) */
   retryDelay?: number;
+  /** 이벤트 리스너 */
+  onEvent?: (event: { type: string; timestamp: Date }) => void;
 }
 
 /**
@@ -104,7 +124,7 @@ export interface QueryOptions {
   /** 필터 조건 */
   filter?: Record<string, unknown>;
   /** 정렬 기준 */
-  sort?: { field: string; order: 'asc' | 'desc' };
+  sort?: { field: string; order: "asc" | "desc" };
   /** 결과 제한 */
   limit?: number;
   /** 오프셋 */
@@ -132,7 +152,7 @@ export interface WriteResult {
  */
 export interface Operation {
   /** 연산 타입 */
-  type: 'read' | 'write' | 'delete';
+  type: "read" | "write" | "delete";
   /** 섹션 */
   section: string;
   /** 키/경로 */
@@ -199,7 +219,7 @@ export class PathNotFoundError extends Error {
 
   constructor(public readonly path: string) {
     super(`Path not found: ${path}`);
-    this.name = 'PathNotFoundError';
+    this.name = "PathNotFoundError";
   }
 }
 
@@ -213,7 +233,7 @@ export class BlackboardError extends Error {
     public readonly details?: unknown
   ) {
     super(message);
-    this.name = 'BlackboardError';
+    this.name = "BlackboardError";
   }
 }
 
@@ -240,7 +260,8 @@ export class BlackboardError extends Error {
 export class Blackboard extends SimpleEventEmitter {
   private _state: BlackboardState;
   private readonly versionManager: VersionManager;
-  private readonly options: Required<BlackboardOptions>;
+  private readonly options: Required<Omit<BlackboardOptions, "onEvent">> &
+    Pick<BlackboardOptions, "onEvent">;
   private _snapshotManager: SnapshotManager;
 
   // 섹션 접근자
@@ -263,17 +284,25 @@ export class Blackboard extends SimpleEventEmitter {
     this._stateAccessor = new StateSectionAccessor(this);
     this._knowledgeAccessor = new KnowledgeSectionAccessor(this);
     this._decisionsAccessor = new DecisionsSectionAccessor(this);
+
+    // state.initialized 이벤트 발생 (onEvent 옵션이 있는 경우)
+    if (options.onEvent) {
+      options.onEvent({ type: "state.initialized", timestamp: new Date() });
+    }
   }
 
   /**
    * 옵션 정규화
    */
-  private normalizeOptions(options: BlackboardOptions): Required<BlackboardOptions> {
+  private normalizeOptions(
+    options: BlackboardOptions
+  ): Required<Omit<BlackboardOptions, "onEvent">> & Pick<BlackboardOptions, "onEvent"> {
     return {
       sessionId: options.sessionId ?? createSessionId(`session-${Date.now()}`),
       initialState: options.initialState ?? {},
       maxRetries: options.maxRetries ?? 3,
       retryDelay: options.retryDelay ?? 100,
+      onEvent: options.onEvent,
     };
   }
 
@@ -288,13 +317,13 @@ export class Blackboard extends SimpleEventEmitter {
     if (this.options.initialState.meta) {
       return {
         meta: {
-          version: this.options.initialState.meta?.version ?? 0,
+          version: this.options.initialState.meta?.version ?? 1,
           lastUpdated: this.options.initialState.meta?.lastUpdated ?? now,
           sessionId: this.options.initialState.meta?.sessionId ?? sessionId,
           createdAt: this.options.initialState.meta?.createdAt ?? now,
         },
         state: this.options.initialState.state ?? {
-          phase: 'idle',
+          phase: "idle",
           context: {},
           agents: new Map(),
           tasks: new Map(),
@@ -316,13 +345,13 @@ export class Blackboard extends SimpleEventEmitter {
     // 새 상태 생성
     return {
       meta: {
-        version: 0,
+        version: 1,
         lastUpdated: now,
         sessionId,
         createdAt: now,
       },
       state: {
-        phase: 'idle',
+        phase: "idle",
         context: {},
         agents: new Map(),
         tasks: new Map(),
@@ -345,7 +374,12 @@ export class Blackboard extends SimpleEventEmitter {
 
   /** 메타데이터 섹션 (읽기 전용) */
   get meta(): Readonly<BlackboardMeta> {
-    return deepClone(this._state.meta);
+    return {
+      version: this._state.meta.version,
+      lastUpdated: new Date(this._state.meta.lastUpdated.getTime()),
+      sessionId: this._state.meta.sessionId,
+      createdAt: new Date(this._state.meta.createdAt.getTime()),
+    };
   }
 
   /** 상태 섹션 접근자 */
@@ -394,7 +428,31 @@ export class Blackboard extends SimpleEventEmitter {
    * @returns 현재 Blackboard 상태 (스냅샷용)
    */
   getState(): BlackboardState {
-    return deepClone(this._state);
+    return {
+      meta: {
+        version: this._state.meta.version,
+        lastUpdated: new Date(this._state.meta.lastUpdated.getTime()),
+        sessionId: this._state.meta.sessionId,
+        createdAt: new Date(this._state.meta.createdAt.getTime()),
+      },
+      state: {
+        phase: this._state.state.phase,
+        context: deepClone(this._state.state.context),
+        agents: new Map(this._state.state.agents.entries()),
+        tasks: new Map(this._state.state.tasks.entries()),
+      },
+      knowledge: {
+        facts: this._state.knowledge.facts.map((f) => deepClone(f)),
+        inferences: this._state.knowledge.inferences.map((i) => deepClone(i)),
+        patterns: this._state.knowledge.patterns.map((p) => deepClone(p)),
+      },
+      decisions: {
+        current: this._state.decisions.current ? deepClone(this._state.decisions.current) : null,
+        pending: this._state.decisions.pending.map((d) => deepClone(d)),
+        opinions: new Map(this._state.decisions.opinions.entries()),
+        history: this._state.decisions.history.map((h) => deepClone(h)),
+      },
+    };
   }
 
   /**
@@ -403,11 +461,12 @@ export class Blackboard extends SimpleEventEmitter {
    * @param options - 쿼리 옵션
    * @returns 해당 경로의 값
    */
-  read<T = unknown>(path: string, options?: QueryOptions): T {
+  read<T = unknown>(path: string, options?: QueryOptions & { strict?: boolean }): T {
     const shouldDeepClone = options?.deep !== false;
+    const strict = options?.strict !== false;
     const value = getByPath(this._state, path);
 
-    if (value === undefined) {
+    if (value === undefined && strict) {
       throw new PathNotFoundError(path);
     }
 
@@ -421,67 +480,36 @@ export class Blackboard extends SimpleEventEmitter {
    * @param options - 쓰기 옵션 (expectedVersion 포함)
    * @returns 쓰기 결과
    */
-  write(
-    path: string,
-    value: unknown,
-    options?: { expectedVersion?: number }
-  ): WriteResult {
+  write(path: string, value: unknown, options?: { expectedVersion?: number }): WriteResult {
     // 경로 검증
     if (!isValidPath(path)) {
-      return {
-        success: false,
-        version: this.version,
-        path,
-        previousValue: undefined,
-        error: new BlackboardError(BlackboardErrorCode.INVALID_PATH, `Invalid path: ${path}`),
-      };
+      throw new BlackboardError(BlackboardErrorCode.INVALID_PATH, `Invalid path: ${path}`);
     }
 
     // 버전 검증
     if (options?.expectedVersion !== undefined) {
-      try {
-        this.versionManager.validateVersion(
-          this.version,
-          options.expectedVersion,
-          path
-        );
-      } catch (error) {
-        return {
-          success: false,
-          version: this.version,
-          path,
-          previousValue: undefined,
-          error: error as Error,
-        };
-      }
+      this.versionManager.validateVersion(this.version, options.expectedVersion, path);
     }
 
     const previousValue = getByPath(this._state, path);
 
-    try {
-      const newState = setByPath(this._state, path, value);
-      this._state = newState;
+    const newState = setByPath(this._state, path, value);
+    this._state = newState;
 
-      // 메타데이터 업데이트
-      const newVersion = this.versionManager.incrementVersion(this.version);
-      this._state.meta.version = newVersion;
-      this._state.meta.lastUpdated = new Date();
+    // 메타데이터 업데이트
+    const newVersion = this.versionManager.incrementVersion(this.version);
+    this._state.meta.version = newVersion;
+    this._state.meta.lastUpdated = new Date();
 
-      return {
-        success: true,
-        version: newVersion,
-        path,
-        previousValue,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        version: this.version,
-        path,
-        previousValue,
-        error: error as Error,
-      };
-    }
+    // state.updated 이벤트 발생
+    this.emit("state.updated", { type: "state.updated", path, value, timestamp: new Date() });
+
+    return {
+      success: true,
+      version: newVersion,
+      path,
+      previousValue,
+    };
   }
 
   /**
@@ -490,10 +518,7 @@ export class Blackboard extends SimpleEventEmitter {
    * @param options - 삭제 옵션
    * @returns 삭제 결과
    */
-  delete(
-    path: string,
-    options?: { expectedVersion?: number }
-  ): WriteResult {
+  delete(path: string, options?: { expectedVersion?: number; strict?: boolean }): WriteResult {
     // 경로 검증
     if (!isValidPath(path)) {
       return {
@@ -508,23 +533,21 @@ export class Blackboard extends SimpleEventEmitter {
     // 경로가 존재하는지 확인
     const previousValue = getByPath(this._state, path);
     if (previousValue === undefined) {
+      if (options?.strict !== false) {
+        throw new PathNotFoundError(path);
+      }
       return {
         success: false,
         version: this.version,
         path,
         previousValue: undefined,
-        error: new PathNotFoundError(path),
       };
     }
 
     // 버전 검증
     if (options?.expectedVersion !== undefined) {
       try {
-        this.versionManager.validateVersion(
-          this.version,
-          options.expectedVersion,
-          path
-        );
+        this.versionManager.validateVersion(this.version, options.expectedVersion, path);
       } catch (error) {
         return {
           success: false,
@@ -578,22 +601,54 @@ export class Blackboard extends SimpleEventEmitter {
    */
   transaction(
     operations: Array<{
-      type: 'write' | 'delete';
+      type: "write" | "delete";
       path: string;
       value?: unknown;
+      expectedVersion?: number;
     }>
   ): WriteResult[] {
     const originalVersion = this._state.meta.version;
     const results: WriteResult[] = [];
-    const backup = deepClone(this._state);
+    const backup = {
+      meta: {
+        version: this._state.meta.version,
+        lastUpdated: new Date(this._state.meta.lastUpdated.getTime()),
+        sessionId: this._state.meta.sessionId,
+        createdAt: new Date(this._state.meta.createdAt.getTime()),
+      },
+      state: {
+        phase: this._state.state.phase,
+        context: deepClone(this._state.state.context),
+        agents: new Map(this._state.state.agents.entries()),
+        tasks: new Map(this._state.state.tasks.entries()),
+      },
+      knowledge: {
+        facts: this._state.knowledge.facts.map((f) => deepClone(f)),
+        inferences: this._state.knowledge.inferences.map((i) => deepClone(i)),
+        patterns: this._state.knowledge.patterns.map((p) => deepClone(p)),
+      },
+      decisions: {
+        current: this._state.decisions.current ? deepClone(this._state.decisions.current) : null,
+        pending: this._state.decisions.pending.map((d) => deepClone(d)),
+        opinions: new Map(this._state.decisions.opinions.entries()),
+        history: this._state.decisions.history.map((h) => deepClone(h)),
+      },
+    };
 
     try {
+      // 버전 검증 (모든 연산 전에 수행)
+      for (const op of operations) {
+        if (op.expectedVersion !== undefined) {
+          this.versionManager.validateVersion(originalVersion, op.expectedVersion, op.path);
+        }
+      }
+
       // 모든 연산 실행 (버전 증가 없이)
       for (const op of operations) {
         let result: WriteResult;
 
         // 내부 메서드를 사용하여 버전 증가 없이 쓰기/삭제 수행
-        if (op.type === 'write') {
+        if (op.type === "write") {
           const previousValue = getByPath(this._state, op.path);
           this._state = setByPath(this._state, op.path, op.value);
           results.push({
@@ -619,7 +674,7 @@ export class Blackboard extends SimpleEventEmitter {
       this._state.meta.lastUpdated = new Date();
 
       // 결과에 최종 버전 업데이트
-      return results.map(r => ({ ...r, version: this._state.meta.version }));
+      return results.map((r) => ({ ...r, version: this._state.meta.version }));
     } catch (error) {
       // 롤백: 상태 복원 및 버전 복원
       this._state = backup;
@@ -628,7 +683,7 @@ export class Blackboard extends SimpleEventEmitter {
       return operations.map(() => ({
         success: false,
         version: originalVersion,
-        path: '',
+        path: "",
         previousValue: undefined,
         error: error as Error,
       }));
@@ -703,21 +758,30 @@ export class Blackboard extends SimpleEventEmitter {
   /**
    * 스냅샷에서 복원 - 하위 호환성 유지
    */
-  static fromJSON(json: { meta?: unknown; state?: unknown; knowledge?: unknown; decisions?: unknown }): Blackboard {
+  static fromJSON(json: {
+    meta?: unknown;
+    state?: unknown;
+    knowledge?: unknown;
+    decisions?: unknown;
+  }): Blackboard {
     const now = new Date();
 
     const state: Partial<BlackboardState> = {
       meta: json.meta as BlackboardMeta,
-      state: json.state ? {
-        ...(json.state as any),
-        agents: objectToMap((json.state as any).agents ?? {}),
-        tasks: objectToMap((json.state as any).tasks ?? {}),
-      } : undefined,
+      state: json.state
+        ? {
+            ...(json.state as any),
+            agents: objectToMap((json.state as any).agents ?? {}),
+            tasks: objectToMap((json.state as any).tasks ?? {}),
+          }
+        : undefined,
       knowledge: json.knowledge as KnowledgeSection,
-      decisions: json.decisions ? {
-        ...(json.decisions as any),
-        opinions: objectToMap((json.decisions as any).opinions ?? {}),
-      } : undefined,
+      decisions: json.decisions
+        ? {
+            ...(json.decisions as any),
+            opinions: objectToMap((json.decisions as any).opinions ?? {}),
+          }
+        : undefined,
     };
 
     return new Blackboard({ initialState: state });
@@ -726,4 +790,3 @@ export class Blackboard extends SimpleEventEmitter {
 
 // Re-export error classes
 export { VersionConflictError };
-export type { VersionConflictError as _VersionConflictError } from './versioning';

@@ -11,7 +11,13 @@ export * from './types';
 export { createDefaultId, createIdGenerator } from './id-utils';
 
 // Serializer exports
-export { StateSerializer, calculateChecksum, verifyChecksum } from './serializer';
+export {
+  StateSerializer,
+  calculateChecksum,
+  calculateChecksumSync,
+  verifyChecksum,
+  verifyChecksumSync,
+} from './serializer';
 export type { SerializeOptions } from './serializer';
 
 // Compression exports

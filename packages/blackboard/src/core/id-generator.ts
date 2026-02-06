@@ -3,24 +3,34 @@
  * @description ID 생성기
  */
 
-import type { AgentId, TaskId, AgendaId, SessionId } from '../types';
-import { createAgentId, createTaskId, createAgendaId, createSessionId } from '../types';
+import type { AgentId, TaskId, AgendaId, SessionId } from "../types";
+import { createAgentId, createTaskId, createAgendaId, createSessionId } from "../types";
 
 /**
  * UUID v4 생성 (crypto.randomUUID 사용 가능한 경우)
  */
 function uuidv4(): string {
   // Node.js 환경에서 crypto 사용 시도
-  if (typeof globalThis.crypto !== 'undefined' && globalThis.crypto.randomUUID) {
+  if (typeof globalThis.crypto !== "undefined" && globalThis.crypto.randomUUID) {
     return globalThis.crypto.randomUUID();
   }
 
-  // Fallback: Math.random() 기반 구현
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
+  // Fallback: crypto.getRandomValues() 사용 (보안상 안전)
+  const array = new Uint8Array(16);
+  if (typeof globalThis.crypto !== "undefined" && globalThis.crypto.getRandomValues) {
+    globalThis.crypto.getRandomValues(array);
+  } else {
+    // Node.js 환경: 동기적 randomFillSync 사용
+    const nodeCrypto = require("crypto");
+    nodeCrypto.randomFillSync(array);
+  }
+
+  // UUID v4 형식으로 변환
+  array[6] = (array[6] & 0x0f) | 0x40; // Version 4
+  array[8] = (array[8] & 0x3f) | 0x80; // Variant 10
+
+  const hex = Array.from(array, (b) => b.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 }
 
 /**
@@ -54,7 +64,7 @@ export class DefaultIdGenerator implements IdGenerator {
     return createSessionId(`session-${uuidv4()}`);
   }
 
-  generateGenericId(prefix: string = 'id'): string {
+  generateGenericId(prefix: string = "id"): string {
     return `${prefix}-${uuidv4()}`;
   }
 }
@@ -72,28 +82,28 @@ export class SequentialIdGenerator implements IdGenerator {
   }
 
   generateAgentId(): AgentId {
-    const num = this.nextCounter('agent');
-    return createAgentId(`agent-${String(num).padStart(4, '0')}`);
+    const num = this.nextCounter("agent");
+    return createAgentId(`agent-${String(num).padStart(4, "0")}`);
   }
 
   generateTaskId(): TaskId {
-    const num = this.nextCounter('task');
-    return createTaskId(`task-${String(num).padStart(4, '0')}`);
+    const num = this.nextCounter("task");
+    return createTaskId(`task-${String(num).padStart(4, "0")}`);
   }
 
   generateAgendaId(): AgendaId {
-    const num = this.nextCounter('agenda');
-    return createAgendaId(`agenda-${String(num).padStart(4, '0')}`);
+    const num = this.nextCounter("agenda");
+    return createAgendaId(`agenda-${String(num).padStart(4, "0")}`);
   }
 
   generateSessionId(): SessionId {
-    const num = this.nextCounter('session');
-    return createSessionId(`session-${String(num).padStart(4, '0')}`);
+    const num = this.nextCounter("session");
+    return createSessionId(`session-${String(num).padStart(4, "0")}`);
   }
 
-  generateGenericId(prefix: string = 'id'): string {
+  generateGenericId(prefix: string = "id"): string {
     const num = this.nextCounter(prefix);
-    return `${prefix}-${String(num).padStart(4, '0')}`;
+    return `${prefix}-${String(num).padStart(4, "0")}`;
   }
 
   /**

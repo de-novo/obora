@@ -13,6 +13,7 @@ import type {
   Task,
   Agenda,
   Opinion,
+  OpinionCreateInput,
   Resolution,
   Fact,
   Inference,
@@ -92,7 +93,7 @@ export class EventAwareBlackboard extends Blackboard {
   // === 이벤트 헬퍼 메서드 ===
 
   private generateEventId(): string {
-    return `evt-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+    return `evt-${crypto.randomUUID()}`;
   }
 
   private emitEvent(eventCreator: () => BBEvent): void {
@@ -244,11 +245,14 @@ export class EventAwareBlackboard extends Blackboard {
     // 실패 이벤트
     if (updates.status === TaskStatus.FAILED && previousTask.status !== TaskStatus.FAILED) {
       const error = updates.error ?? { code: 'UNKNOWN', message: 'Unknown error', retryable: false };
+      const duration = newTask.completedAt && newTask.startedAt
+        ? newTask.completedAt.getTime() - newTask.startedAt.getTime()
+        : 0;
       this.emitEvent(() =>
         this.eventFactory.createStateTaskFailed(taskId, error, error.retryable, { source: 'system' })
       );
       this.emitEvent(() =>
-        this.eventFactory.createTaskFailed(taskId, error, error.retryable, { source: 'system' })
+        this.eventFactory.createTaskFailed(taskId, error, duration, { source: 'system' })
       );
     }
 
@@ -352,14 +356,14 @@ export class EventAwareBlackboard extends Blackboard {
   }
 
   /** 의견 제출 */
-  submitOpinion(opinion: Omit<Opinion, 'createdAt' | 'updatedAt'>): void {
-    this.decisions.submitOpinion(opinion);
+  submitOpinion(opinionInput: OpinionCreateInput & { agentId: AgentId }): void {
+    const opinion = this.decisions.submitOpinion(opinionInput);
 
     this.emitEvent(() =>
-      this.eventFactory.createDecisionsOpinionSubmitted(opinion as Opinion, { source: opinion.agentId })
+      this.eventFactory.createDecisionsOpinionSubmitted(opinion, { source: opinionInput.agentId })
     );
     this.emitEvent(() =>
-      this.eventFactory.createOpinionSubmitted(opinion as Opinion, { source: opinion.agentId })
+      this.eventFactory.createOpinionSubmitted(opinion, { source: opinionInput.agentId })
     );
   }
 

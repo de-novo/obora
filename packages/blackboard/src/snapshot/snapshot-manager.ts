@@ -35,6 +35,20 @@ import {
 } from './snapshot-comparer';
 
 /**
+ * 스냅샷 목록 필터 옵션
+ */
+export interface ListSnapshotOptions {
+  /** 태그로 필터링 */
+  tags?: string[];
+  /** 세션 ID로 필터링 */
+  sessionId?: string;
+  /** 정렬 기준 */
+  sortBy?: 'date' | 'id';
+  /** 정렬 순서 */
+  order?: 'asc' | 'desc';
+}
+
+/**
  * 스냅샷 관리자 설정
  */
 export interface SnapshotManagerOptions extends SnapshotCreatorOptions, SnapshotRestorerOptions {
@@ -94,6 +108,7 @@ export class SnapshotManager {
   private restorer: SnapshotRestorer;
   private serializer: SnapshotSerializer;
   private comparer: SnapshotComparer;
+  private storage: Map<string, Snapshot> = new Map();
 
   constructor(options: SnapshotManagerOptions = {}) {
     // 각 전문 클래스 초기화
@@ -104,42 +119,126 @@ export class SnapshotManager {
     this.comparer = new SnapshotComparer();
   }
 
+  // === 내부 저장소 관리 ===
+
+  /**
+   * 스냅샷 저장 (내부)
+   */
+  private storeSnapshot(snapshot: Snapshot): void {
+    this.storage.set(snapshot.meta.id, snapshot);
+  }
+
+  /**
+   * 저장된 스냅샷 목록 조회
+   * @param options - 필터 및 정렬 옵션
+   * @returns 스냅샷 목록
+   */
+  list(options?: ListSnapshotOptions): Snapshot[] {
+    let snapshots = Array.from(this.storage.values());
+
+    // 필터링
+    if (options?.tags && options.tags.length > 0) {
+      snapshots = snapshots.filter(snapshot =>
+        options.tags!.some(tag =>
+          snapshot.meta.tags?.includes(tag)
+        )
+      );
+    }
+
+    if (options?.sessionId) {
+      snapshots = snapshots.filter(snapshot =>
+        snapshot.meta.sessionId === options.sessionId
+      );
+    }
+
+    // 정렬
+    if (options?.sortBy) {
+      snapshots.sort((a, b) => {
+        let comparison = 0;
+
+        if (options.sortBy === 'date') {
+          comparison = a.meta.createdAt.getTime() - b.meta.createdAt.getTime();
+        } else if (options.sortBy === 'id') {
+          comparison = a.meta.id.localeCompare(b.meta.id);
+        }
+
+        return options.order === 'desc' ? -comparison : comparison;
+      });
+    }
+
+    return snapshots;
+  }
+
+  /**
+   * ID로 스냅샷 조회
+   * @param id - 스냅샷 ID
+   * @returns 스냅샷 또는 undefined
+   */
+  get(id: string): Snapshot | undefined {
+    return this.storage.get(id);
+  }
+
+  /**
+   * ID로 스냅샷 삭제
+   * @param id - 스냅샷 ID
+   * @returns 삭제 성공 여부
+   */
+  delete(id: string): boolean {
+    return this.storage.delete(id);
+  }
+
   // === 생성 (SnapshotCreator 위임) ===
 
   /**
-   * 스냅샷 생성 (비동기)
+   * 스냅샷 생성 (동기)
    * @param state - 현재 Blackboard 상태
    * @param options - 생성 옵션
    * @returns 스냅샷
    */
-  async createSnapshot(
+  createSnapshot(
     state: BlackboardState,
     options?: CreateSnapshotOptions
-  ): Promise<Snapshot> {
-    return this.creator.createSnapshot(state, options);
+  ): Snapshot {
+    const snapshot = this.creator.createSnapshot(state, options);
+
+    // store 옵션이 true면 내부 저장소에 저장
+    if (options?.store === true) {
+      this.storeSnapshot(snapshot);
+    }
+
+    return snapshot;
   }
 
   /**
-   * 메타데이터만 포함된 스냅샷 생성 (비동기)
+   * 메타데이터만 포함된 스냅샷 생성 (동기)
    * @param state - 현재 상태
    * @param description - 설명
    * @returns 메타 전용 스냅샷
    */
-  async createMetaSnapshot(
+  createMetaSnapshot(
     state: BlackboardState,
     description?: string
-  ): Promise<SnapshotMeta> {
+  ): SnapshotMeta {
     return this.creator.createMetaSnapshot(state, description);
   }
 
   // === 검증 (SnapshotValidator 위임) ===
 
   /**
+   * 스냅샷 검증 (동기)
+   * @param snapshot - 검증할 스냅샷
+   * @returns 검증 결과
+   */
+  validate(snapshot: Snapshot): SnapshotValidationResult {
+    return this.validator.validateSync(snapshot);
+  }
+
+  /**
    * 스냅샷 검증 (비동기)
    * @param snapshot - 검증할 스냅샷
    * @returns 검증 결과
    */
-  async validate(snapshot: Snapshot): Promise<SnapshotValidationResult> {
+  async validateAsync(snapshot: Snapshot): Promise<SnapshotValidationResult> {
     return this.validator.validate(snapshot);
   }
 
@@ -160,15 +259,14 @@ export class SnapshotManager {
   /**
    * 동기 체크섬 검증 (구조적 검증만, 체크섬 제외)
    * @description restore()에서 사용하는 동기 검증 메서드
-   * 체크섬 검증은 비동기이므로 validate()에서 수행해야 함
    * @param snapshot - 검증할 스냅샷
    * @returns 검증 결과
    */
-  validateSync(snapshot: Snapshot): {
+  validateSyncStructure(snapshot: Snapshot): {
     valid: boolean;
     errors: string[];
   } {
-    return this.validator.validateSync(snapshot);
+    return this.validator.validateSyncStructure(snapshot);
   }
 
   // === 복원 (SnapshotRestorer 위임) ===
@@ -308,7 +406,22 @@ export class SnapshotManager {
   }
 
   /**
-   * 스냅샷 크기 계산
+   * 스냅샷 크기 계산 (숫자)
+   * @param snapshot - 스냅샷
+   * @returns 바이트 크기
+   */
+  size(snapshot: Snapshot): number {
+    const metaSize = JSON.stringify(snapshot.meta).length;
+    const dataSize =
+      typeof snapshot.data === 'string'
+        ? snapshot.data.length
+        : JSON.stringify(snapshot.data).length;
+
+    return metaSize + dataSize;
+  }
+
+  /**
+   * 스냅샷 크기 계산 (상세)
    */
   calculateSize(snapshot: Snapshot): {
     total: number;

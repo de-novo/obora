@@ -54,6 +54,8 @@ export interface EventBusOptions {
   maxListeners?: number;
   /** 비동기 핸들러 에러 시 throw 여부 (기본: false) */
   throwOnAsyncError?: boolean;
+  /** 비동기 핸들러 에러 시 에러 이벤트 발행 여부 (기본: true) */
+  emitErrorEvent?: boolean;
   /** 이벤트 히스토리 유지 개수 (기본: 0 = 유지 안함) */
   historySize?: number;
   /** 디버그 모드 */
@@ -133,11 +135,14 @@ export class EventBus {
   private stats: EventBusStats;
   private subscriptions: Set<Subscription<Event>>;
   private nextSubscriptionId = 0;
+  /** 에러 이벤트 발행 중인지 체크 (재귀 방지) */
+  private isEmittingError = false;
 
   constructor(options: EventBusOptions = {}) {
     this.options = {
       maxListeners: options.maxListeners ?? 100,
       throwOnAsyncError: options.throwOnAsyncError ?? false,
+      emitErrorEvent: options.emitErrorEvent ?? true,
       historySize: options.historySize ?? 0,
       debug: options.debug ?? false,
     };
@@ -258,6 +263,43 @@ export class EventBus {
     }
   }
 
+  /**
+   * 모든 구독 해제
+   * @param eventType - 특정 이벤트 타입만 해제 (선택)
+   */
+  unsubscribeAll<T extends EventType>(
+    eventType?: T | `${EventCategory}.*` | '*'
+  ): void {
+    if (eventType) {
+      // 특정 타입의 구독만 해제
+      const toRemove: Subscription<Event>[] = [];
+      for (const sub of this.subscriptions) {
+        if (sub.eventType === eventType) {
+          toRemove.push(sub);
+        }
+      }
+      for (const sub of toRemove) {
+        this.subscriptions.delete(sub);
+      }
+      this.debugLog(`Unsubscribed all from event type: ${eventType}`);
+    } else {
+      // 모든 구독 해제
+      this.subscriptions.clear();
+      this.debugLog('Unsubscribed all subscribers');
+    }
+    this.updateSubscriberStats();
+  }
+
+  /**
+   * 이벤트 버스 초기화 (히스토리만 지움, 구독자는 유지)
+   */
+  clear(): void {
+    this.history = [];
+    this.stats = this.createInitialStats();
+    this.updateSubscriberStats();
+    this.debugLog('EventBus history cleared');
+  }
+
   // === 발행 API ===
 
   /**
@@ -294,14 +336,30 @@ export class EventBus {
         // 비동기 핸들러 처리
         if (result instanceof Promise) {
           result.catch((error) => {
-            if (this.options.throwOnAsyncError) {
-              throw error;
+            // 에러 이벤트 핸들러 실패 시 별도 경고 로그 (에러 이벤트 재발행 방지)
+            if (event.type === 'system.error') {
+              console.warn('[EventBus] Error handler failed:', error);
+              // 에러 이벤트의 에러는 재발행하지 않음 (무한 루프 방지)
+            } else {
+              if (this.options.throwOnAsyncError) {
+                throw error;
+              }
+              console.error(`Error in async event handler:`, error);
+
+              // 에러 이벤트 발행
+              if (this.options.emitErrorEvent) {
+                this.emitError(error, event, sub.eventType);
+              }
             }
-            console.error(`Error in async event handler:`, error);
           });
         }
       } catch (error) {
         console.error(`Error in event handler:`, error);
+
+        // 에러 이벤트 발행
+        if (this.options.emitErrorEvent) {
+          this.emitError(error, event, sub.eventType);
+        }
       }
 
       // 일회성 구독인 경우 제거 대기열에 추가
@@ -399,8 +457,9 @@ export class EventBus {
       source?: AgentId | 'system';
       since?: Date;
       until?: Date;
+      limit?: number;
     },
-    limit?: number
+    limitArg?: number
   ): Event[] {
     let events = this.history;
 
@@ -423,7 +482,8 @@ export class EventBus {
       events = events.filter((e) => e.timestamp <= filter.until!);
     }
 
-    // 제한
+    // 제한 (filter.limit 또는 두 번째 인자 사용)
+    const limit = filter?.limit ?? limitArg;
     if (limit !== undefined && limit > 0) {
       events = events.slice(-limit);
     }
@@ -457,12 +517,18 @@ export class EventBus {
   /**
    * 통계 조회
    */
-  getStats(): Readonly<EventBusStats> {
+  getStats(): Readonly<EventBusStats> & { eventsByType: Record<string, number> } {
+    const eventsByType: Record<string, number> = {};
+    for (const [type, count] of this.stats.emittedByType.entries()) {
+      eventsByType[type] = count;
+    }
+
     return {
       totalEmitted: this.stats.totalEmitted,
       emittedByType: new Map(this.stats.emittedByType),
       subscriberCount: this.stats.subscriberCount,
       subscribersByType: new Map(this.stats.subscribersByType),
+      eventsByType,
     };
   }
 
@@ -506,7 +572,8 @@ export class EventBus {
    */
   waitFor<T extends EventType>(
     eventType: T,
-    timeout: number = 30000
+    timeout: number = 30000,
+    predicate?: (event: EventByType<T>) => boolean
   ): Promise<EventByType<T>> {
     return new Promise((resolve, reject) => {
       let unsubscribe: Unsubscribe | null = null;
@@ -523,10 +590,21 @@ export class EventBus {
         }
       };
 
-      unsubscribe = this.subscribeOnce(eventType, (event) => {
-        cleanup();
-        resolve(event as EventByType<T>);
-      });
+      if (predicate) {
+        // 필터가 있는 경우 subscribe 사용 (한 번만 호출)
+        unsubscribe = this.subscribe(eventType, (event) => {
+          if (predicate(event as EventByType<T>)) {
+            cleanup();
+            resolve(event as EventByType<T>);
+          }
+        });
+      } else {
+        // 필터가 없는 경우 subscribeOnce 사용
+        unsubscribe = this.subscribeOnce(eventType, (event) => {
+          cleanup();
+          resolve(event as EventByType<T>);
+        });
+      }
 
       timeoutId = setTimeout(() => {
         cleanup();
@@ -577,6 +655,53 @@ export class EventBus {
   }
 
   // === 내부 메서드 ===
+
+  /**
+   * 에러 이벤트 발행
+   * @description 핸들러 에러 발생 시 시스템 에러 이벤트 발행
+   * @private
+   */
+  private emitError(error: unknown, originalEvent: Event, handlerEventType: string): void {
+    // 재귀 방지: 이미 에러 이벤트 발행 중이면 추가 발행을 막음
+    if (this.isEmittingError) {
+      console.error('Suppressing recursive error event:', error);
+      return;
+    }
+
+    this.isEmittingError = true;
+    try {
+      // 에러 객체 정제 (민감 데이터 노출 방지)
+      const sanitizedError = {
+        message: error instanceof Error ? error.message : String(error),
+        name: error instanceof Error ? error.name : 'Error',
+        stack: error instanceof Error ? error.stack : undefined,
+      };
+
+      const errorEvent = {
+        id: `evt-error-${crypto.randomUUID()}`,
+        type: 'system.error' as const,
+        timestamp: new Date(),
+        source: 'system' as const,
+        payload: {
+          code: 'EVENT_HANDLER_ERROR',
+          message: sanitizedError.message,
+          details: {
+            originalEventType: originalEvent.type,
+            handlerEventType,
+            error: sanitizedError,
+          },
+        },
+      };
+
+      // emit()을 통해서만 발행 (emit() 내에서 히스토리/통계 처리)
+      this.emit(errorEvent as Event);
+    } catch (e) {
+      // 에러 이벤트 발행 자체가 실패하면 무시
+      console.error('Failed to emit error event:', e);
+    } finally {
+      this.isEmittingError = false;
+    }
+  }
 
   /**
    * 와일드카드 패턴 매칭

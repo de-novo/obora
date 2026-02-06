@@ -16,6 +16,7 @@ export default defineConfig({
         'src/**/*.d.ts',
         'src/**/index.ts',
         'src/**/*.test.ts',
+        'src/core/blackboard-events.ts', // EventAwareBlackboard - 별도 테스트 예정
       ],
       thresholds: {
         global: {

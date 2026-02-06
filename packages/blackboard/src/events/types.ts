@@ -164,7 +164,7 @@ export interface StateTaskFailedEvent extends BaseEvent {
  * 에이전트 등록 이벤트
  */
 export interface AgentRegisteredEvent extends BaseEvent {
-  type: 'agent.registered';
+  type: 'state.agent.registered';
   payload: {
     agent: AgentStatus;
   };
@@ -183,10 +183,22 @@ export interface AgentStatusChangedEvent extends BaseEvent {
 }
 
 /**
+ * 에이전트 업데이트 이벤트 (테스트 호환)
+ */
+export interface AgentUpdatedEvent extends BaseEvent {
+  type: 'state.agent.updated';
+  payload: {
+    agentId: AgentId;
+    changes: Partial<AgentStatus>;
+    previousValues: Partial<AgentStatus>;
+  };
+}
+
+/**
  * 에이전트 제거 이벤트
  */
 export interface AgentRemovedEvent extends BaseEvent {
-  type: 'agent.removed';
+  type: 'state.agent.removed';
   payload: {
     agentId: AgentId;
     reason: string;
@@ -235,7 +247,7 @@ export interface TaskCompletedEvent extends BaseEvent {
   type: 'task.completed';
   payload: {
     taskId: TaskId;
-    result: unknown;
+    outputs: unknown;
     duration: number; // ms
   };
 }
@@ -248,7 +260,30 @@ export interface TaskFailedEvent extends BaseEvent {
   payload: {
     taskId: TaskId;
     error: TaskError;
-    retryable: boolean;
+    duration: number; // ms
+  };
+}
+
+/**
+ * 작업 시작 이벤트
+ */
+export interface TaskStartedEvent extends BaseEvent {
+  type: 'task.started';
+  payload: {
+    taskId: TaskId;
+    agentId: AgentId;
+    startedAt: Date;
+  };
+}
+
+/**
+ * 작업 취소 이벤트
+ */
+export interface TaskCancelledEvent extends BaseEvent {
+  type: 'task.cancelled';
+  payload: {
+    taskId: TaskId;
+    reason: string;
   };
 }
 
@@ -353,7 +388,7 @@ export interface AgendaSubmittedEvent extends BaseEvent {
  * 안건 상태 변경 이벤트
  */
 export interface AgendaStatusChangedEvent extends BaseEvent {
-  type: 'decision.agenda.status.changed';
+  type: 'decision.agenda.status_changed';
   payload: {
     agendaId: AgendaId;
     previousStatus: AgendaStatus;
@@ -393,6 +428,28 @@ export interface ConsensusReachedEvent extends BaseEvent {
   };
 }
 
+/**
+ * 투표 완료 이벤트
+ */
+export interface VotingCompletedEvent extends BaseEvent {
+  type: 'decision.voting.completed';
+  payload: {
+    agendaId: AgendaId;
+    result: {
+      passed: boolean;
+      method: string;
+      summary: {
+        total: number;
+        approve: number;
+        reject: number;
+        abstain: number;
+        approvalRate: number;
+        quorumReached: boolean;
+      };
+    };
+  };
+}
+
 // === Knowledge Events ===
 
 /**
@@ -425,6 +482,39 @@ export interface KnowledgePatternLearnedEvent extends BaseEvent {
   };
 }
 
+/**
+ * 사실 업데이트 이벤트
+ */
+export interface FactUpdatedEvent extends BaseEvent {
+  type: 'knowledge.fact.updated';
+  payload: {
+    factId: string;
+    changes: Partial<Fact>;
+    previousValues?: Partial<Fact>;
+  };
+}
+
+/**
+ * 사실 제거 이벤트
+ */
+export interface FactRemovedEvent extends BaseEvent {
+  type: 'knowledge.fact.removed';
+  payload: {
+    factId: string;
+    reason: string;
+  };
+}
+
+/**
+ * 패턴 추가 이벤트
+ */
+export interface PatternAddedEvent extends BaseEvent {
+  type: 'knowledge.pattern.added';
+  payload: {
+    pattern: Pattern;
+  };
+}
+
 // === System Events ===
 
 /**
@@ -446,6 +536,39 @@ export interface SystemSnapshotRestoredEvent extends BaseEvent {
   payload: {
     snapshotId: string;
     timestamp: Date;
+  };
+}
+
+/**
+ * 상태 초기화 이벤트
+ */
+export interface StateInitializedEvent extends BaseEvent {
+  type: 'state.initialized';
+  payload: {
+    sessionId: string;
+  };
+}
+
+/**
+ * 스냅샷 생성 이벤트 (테스트 호환)
+ */
+export interface SnapshotCreatedEvent extends BaseEvent {
+  type: 'snapshot.created';
+  payload: {
+    snapshotId: string;
+    version: number;
+  };
+}
+
+/**
+ * 스냅샷 복원 이벤트 (테스트 호환)
+ */
+export interface SnapshotRestoredEvent extends BaseEvent {
+  type: 'snapshot.restored';
+  payload: {
+    snapshotId: string;
+    previousVersion: number;
+    restoredVersion: number;
   };
 }
 
@@ -491,13 +614,16 @@ export type Event =
   // Agent (기존 호환성)
   | AgentRegisteredEvent
   | AgentStatusChangedEvent
+  | AgentUpdatedEvent
   | AgentRemovedEvent
   // Task (기존 호환성)
   | TaskCreatedEvent
   | TaskAssignedEvent
+  | TaskStartedEvent
   | TaskStatusChangedEvent
   | TaskCompletedEvent
   | TaskFailedEvent
+  | TaskCancelledEvent
   // Decision (spec 호환)
   | DecisionsAgendaCreatedEvent
   | DecisionsAgendaStartedEvent
@@ -513,15 +639,22 @@ export type Event =
   | OpinionSubmittedEvent
   | VoteRequestedEvent
   | ConsensusReachedEvent
+  | VotingCompletedEvent
   // Knowledge
   | FactAddedEvent
+  | FactUpdatedEvent
+  | FactRemovedEvent
   | InferenceAddedEvent
   | KnowledgePatternLearnedEvent
+  | PatternAddedEvent
   // System
   | SystemSnapshotCreatedEvent
   | SystemSnapshotRestoredEvent
   | SystemErrorEvent
-  | VersionConflictEvent;
+  | VersionConflictEvent
+  | StateInitializedEvent
+  | SnapshotCreatedEvent
+  | SnapshotRestoredEvent;
 
 /**
  * 이벤트 타입 문자열 유니온

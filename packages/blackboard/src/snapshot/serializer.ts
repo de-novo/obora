@@ -18,16 +18,16 @@ import type {
   AgentStatus,
   Task,
   BoardPhase,
-} from '../types';
-import type { SerializedState } from './types';
-import { sortedKeyReplacer } from './utils';
+} from "../types";
+import type { SerializedState } from "./types";
+import { sortedKeyReplacer } from "./utils";
 
 /**
  * 직렬화 옵션
  */
 export interface SerializeOptions {
   /** 날짜 형식 (기본: 'iso') */
-  dateFormat?: 'iso' | 'timestamp';
+  dateFormat?: "iso" | "timestamp";
   /** 정렬된 키 (재현 가능한 출력용) */
   sortKeys?: boolean;
   /** 들여쓰기 (기본: 0 = 압축) */
@@ -49,32 +49,33 @@ function validateFactArray(value: unknown): ValidationResult {
   const errors: string[] = [];
 
   if (!Array.isArray(value)) {
-    return { valid: false, errors: ['facts must be an array'] };
+    return { valid: false, errors: ["facts must be an array"] };
   }
 
   for (let i = 0; i < value.length; i++) {
     const item = value[i];
-    if (!item || typeof item !== 'object') {
+    if (!item || typeof item !== "object") {
       errors.push(`facts[${i}]: must be an object`);
       continue;
     }
 
     const fact = item as Record<string, unknown>;
 
-    if (typeof fact.id !== 'string') {
+    if (typeof fact.id !== "string") {
       errors.push(`facts[${i}].id: must be a string`);
     }
 
-    if (typeof fact.content !== 'string') {
+    if (typeof fact.content !== "string") {
       errors.push(`facts[${i}].content: must be a string`);
     }
 
-    if (typeof fact.confidence !== 'number' || fact.confidence < 0 || fact.confidence > 1) {
+    if (typeof fact.confidence !== "number" || fact.confidence < 0 || fact.confidence > 1) {
       errors.push(`facts[${i}].confidence: must be a number between 0 and 1`);
     }
 
-    if (typeof fact.createdAt !== 'string') {
-      errors.push(`facts[${i}].createdAt: must be a string`);
+    // createdAt은 문자열(ISO) 또는 Date 객체 허용
+    if (typeof fact.createdAt !== "string" && !(fact.createdAt instanceof Date)) {
+      errors.push(`facts[${i}].createdAt: must be a string or Date`);
     }
   }
 
@@ -88,28 +89,41 @@ function validateInferenceArray(value: unknown): ValidationResult {
   const errors: string[] = [];
 
   if (!Array.isArray(value)) {
-    return { valid: false, errors: ['inferences must be an array'] };
+    return { valid: false, errors: ["inferences must be an array"] };
   }
 
   for (let i = 0; i < value.length; i++) {
     const item = value[i];
-    if (!item || typeof item !== 'object') {
+    if (!item || typeof item !== "object") {
       errors.push(`inferences[${i}]: must be an object`);
       continue;
     }
 
     const inference = item as Record<string, unknown>;
 
-    if (typeof inference.id !== 'string') {
+    if (typeof inference.id !== "string") {
       errors.push(`inferences[${i}].id: must be a string`);
     }
 
-    if (typeof inference.conclusion !== 'string') {
+    if (typeof inference.conclusion !== "string") {
       errors.push(`inferences[${i}].conclusion: must be a string`);
     }
 
-    if (typeof inference.confidence !== 'number' || inference.confidence < 0 || inference.confidence > 1) {
+    if (
+      typeof inference.confidence !== "number" ||
+      inference.confidence < 0 ||
+      inference.confidence > 1
+    ) {
       errors.push(`inferences[${i}].confidence: must be a number between 0 and 1`);
+    }
+
+    // createdAt은 선택적 (문자열 또는 Date 객체)
+    if (
+      inference.createdAt !== undefined &&
+      typeof inference.createdAt !== "string" &&
+      !(inference.createdAt instanceof Date)
+    ) {
+      errors.push(`inferences[${i}].createdAt: must be a string, Date, or undefined`);
     }
   }
 
@@ -123,24 +137,33 @@ function validatePatternArray(value: unknown): ValidationResult {
   const errors: string[] = [];
 
   if (!Array.isArray(value)) {
-    return { valid: false, errors: ['patterns must be an array'] };
+    return { valid: false, errors: ["patterns must be an array"] };
   }
 
   for (let i = 0; i < value.length; i++) {
     const item = value[i];
-    if (!item || typeof item !== 'object') {
+    if (!item || typeof item !== "object") {
       errors.push(`patterns[${i}]: must be an object`);
       continue;
     }
 
     const pattern = item as Record<string, unknown>;
 
-    if (typeof pattern.id !== 'string') {
+    if (typeof pattern.id !== "string") {
       errors.push(`patterns[${i}].id: must be a string`);
     }
 
-    if (typeof pattern.name !== 'string') {
+    if (typeof pattern.name !== "string") {
       errors.push(`patterns[${i}].name: must be a string`);
+    }
+
+    // createdAt은 선택적 (문자열 또는 Date 객체)
+    if (
+      pattern.createdAt !== undefined &&
+      typeof pattern.createdAt !== "string" &&
+      !(pattern.createdAt instanceof Date)
+    ) {
+      errors.push(`patterns[${i}].createdAt: must be a string, Date, or undefined`);
     }
   }
 
@@ -154,23 +177,23 @@ function validateResolutionArray(value: unknown): ValidationResult {
   const errors: string[] = [];
 
   if (!Array.isArray(value)) {
-    return { valid: false, errors: ['history must be an array'] };
+    return { valid: false, errors: ["history must be an array"] };
   }
 
   for (let i = 0; i < value.length; i++) {
     const item = value[i];
-    if (!item || typeof item !== 'object') {
+    if (!item || typeof item !== "object") {
       errors.push(`history[${i}]: must be an object`);
       continue;
     }
 
     const resolution = item as Record<string, unknown>;
 
-    if (typeof resolution.agendaId !== 'string') {
+    if (typeof resolution.agendaId !== "string") {
       errors.push(`history[${i}].agendaId: must be a string`);
     }
 
-    if (typeof resolution.decision !== 'string') {
+    if (typeof resolution.decision !== "string") {
       errors.push(`history[${i}].decision: must be a string`);
     }
   }
@@ -188,17 +211,17 @@ function validateAgenda(value: unknown, fieldName: string): ValidationResult {
     return { valid: true, errors };
   }
 
-  if (!value || typeof value !== 'object') {
+  if (!value || typeof value !== "object") {
     return { valid: false, errors: [`${fieldName}: must be an object or null`] };
   }
 
   const agenda = value as Record<string, unknown>;
 
-  if (typeof agenda.id !== 'string') {
+  if (typeof agenda.id !== "string") {
     errors.push(`${fieldName}.id: must be a string`);
   }
 
-  if (typeof agenda.title !== 'string') {
+  if (typeof agenda.title !== "string") {
     errors.push(`${fieldName}.title: must be a string`);
   }
 
@@ -246,18 +269,52 @@ export class StateSerializer {
   }
 
   /**
+   * 임의의 객체를 JSON 문자열로 직렬화
+   * @param obj - 직렬화할 객체
+   * @returns JSON 문자열
+   * @description Date, Map, Set 등을 포함한 일반 객체 직렬화
+   */
+  serializeJSON(obj: unknown): string {
+    const indent = this.options.indent ?? 0;
+    const replacer = this.options.sortKeys
+      ? (sortedKeyReplacer as (key: string, value: unknown) => unknown)
+      : undefined;
+
+    // JSON.stringify 직렬화
+    return JSON.stringify(obj, replacer, indent);
+  }
+
+  /**
+   * JSON 문자열을 객체로 역직렬화
+   * @param json - JSON 문자열
+   * @returns 역직렬화된 객체
+   * @throws {Error} JSON 파싱 실패 시
+   * @description JSON.parse를 사용한 기본 역직렬화
+   */
+  deserializeJSON<T = unknown>(json: string): T {
+    try {
+      return JSON.parse(json) as T;
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        throw new Error(`Invalid JSON: ${error.message}`);
+      }
+      throw error;
+    }
+  }
+
+  /**
    * SerializedState → BlackboardState
    * @param serialized - 직렬화된 상태
    * @returns 복원된 상태
    */
   deserialize(serialized: SerializedState): BlackboardState {
     // 구조 검증 (P1: 입력 검증 강화)
-    if (!serialized || typeof serialized !== 'object') {
-      throw new Error('Invalid serialized state: must be an object');
+    if (!serialized || typeof serialized !== "object") {
+      throw new Error("Invalid serialized state: must be an object");
     }
 
     // 필수 필드 검증
-    const requiredSections = ['meta', 'state', 'knowledge', 'decisions'] as const;
+    const requiredSections = ["meta", "state", "knowledge", "decisions"] as const;
     for (const section of requiredSections) {
       if (!serialized[section]) {
         throw new Error(`Invalid serialized state: missing section '${section}'`);
@@ -267,42 +324,47 @@ export class StateSerializer {
     // P1: 런타임 타입 검증 - facts
     const factsValidation = validateFactArray(serialized.knowledge.facts);
     if (!factsValidation.valid) {
-      throw new Error(`Invalid facts data: ${factsValidation.errors.join(', ')}`);
+      throw new Error(`Invalid facts data: ${factsValidation.errors.join(", ")}`);
     }
 
     // P1: 런타임 타입 검증 - inferences
     const inferencesValidation = validateInferenceArray(serialized.knowledge.inferences);
     if (!inferencesValidation.valid) {
-      throw new Error(`Invalid inferences data: ${inferencesValidation.errors.join(', ')}`);
+      throw new Error(`Invalid inferences data: ${inferencesValidation.errors.join(", ")}`);
     }
 
     // P1: 런타임 타입 검증 - patterns
     const patternsValidation = validatePatternArray(serialized.knowledge.patterns);
     if (!patternsValidation.valid) {
-      throw new Error(`Invalid patterns data: ${patternsValidation.errors.join(', ')}`);
+      throw new Error(`Invalid patterns data: ${patternsValidation.errors.join(", ")}`);
     }
 
     // P1: 런타임 타입 검증 - current
-    const currentValidation = validateAgenda(serialized.decisions.current, 'decisions.current');
+    const currentValidation = validateAgenda(serialized.decisions.current, "decisions.current");
     if (!currentValidation.valid) {
-      throw new Error(`Invalid current agenda: ${currentValidation.errors.join(', ')}`);
+      throw new Error(`Invalid current agenda: ${currentValidation.errors.join(", ")}`);
     }
 
     // P1: 런타임 타입 검증 - pending
     if (!Array.isArray(serialized.decisions.pending)) {
-      throw new Error('Invalid pending agendas: must be an array');
+      throw new Error("Invalid pending agendas: must be an array");
     }
     for (let i = 0; i < serialized.decisions.pending.length; i++) {
-      const pendingValidation = validateAgenda(serialized.decisions.pending[i], `decisions.pending[${i}]`);
+      const pendingValidation = validateAgenda(
+        serialized.decisions.pending[i],
+        `decisions.pending[${i}]`
+      );
       if (!pendingValidation.valid) {
-        throw new Error(`Invalid pending agenda at index ${i}: ${pendingValidation.errors.join(', ')}`);
+        throw new Error(
+          `Invalid pending agenda at index ${i}: ${pendingValidation.errors.join(", ")}`
+        );
       }
     }
 
     // P1: 런타임 타입 검증 - history
     const historyValidation = validateResolutionArray(serialized.decisions.history);
     if (!historyValidation.valid) {
-      throw new Error(`Invalid history data: ${historyValidation.errors.join(', ')}`);
+      throw new Error(`Invalid history data: ${historyValidation.errors.join(", ")}`);
     }
 
     // 런타임 검증 완료 후 타입 어서션 사용 (TypeScript는 런타임 검증을 이해하지 못함)
@@ -345,7 +407,11 @@ export class StateSerializer {
     // P1: sortKeys 옵션 구현
     // Note: JSON.stringify는 null을 허용하지 않으므로 조건부 처리
     if (this.options.sortKeys) {
-      return JSON.stringify(serialized, sortedKeyReplacer as (key: string, value: unknown) => unknown, indent);
+      return JSON.stringify(
+        serialized,
+        sortedKeyReplacer as (key: string, value: unknown) => unknown,
+        indent
+      );
     }
     return JSON.stringify(serialized, null, indent);
   }
@@ -360,8 +426,8 @@ export class StateSerializer {
     try {
       const parsed = JSON.parse(json) as SerializedState | null | undefined;
       // P1: null/undefined 검증 추가 (parsed.meta 접근 전)
-      if (!parsed || typeof parsed !== 'object') {
-        throw new Error('Invalid serialized state: parsed data is null or undefined');
+      if (!parsed || typeof parsed !== "object") {
+        throw new Error("Invalid serialized state: parsed data is null or undefined");
       }
       return this.deserialize(parsed);
     } catch (error) {
@@ -397,7 +463,7 @@ export class StateSerializer {
    * Date → string 변환
    */
   private serializeDate(date: Date): string {
-    if (this.options.dateFormat === 'timestamp') {
+    if (this.options.dateFormat === "timestamp") {
       return date.getTime().toString();
     }
     return date.toISOString();
@@ -408,13 +474,13 @@ export class StateSerializer {
    */
   private deserializeDate(str: string): Date {
     // P1: 입력 검증 강화
-    if (typeof str !== 'string') {
+    if (typeof str !== "string") {
       throw new Error(`Invalid date value: expected string, got ${typeof str}`);
     }
 
     // P1: 빈 문자열 입력 검증 추가
-    if (!str || str.trim() === '') {
-      throw new Error('Invalid date value: string must not be empty or whitespace-only');
+    if (!str || str.trim() === "") {
+      throw new Error("Invalid date value: string must not be empty or whitespace-only");
     }
 
     const asNum = Number(str);
@@ -435,7 +501,7 @@ export class StateSerializer {
    * @description 문자열 타입 안전성 검증 후 반환
    */
   private restoreIds<T extends string>(obj: unknown): T {
-    if (typeof obj !== 'string') {
+    if (typeof obj !== "string") {
       throw new TypeError(`Expected string ID, got ${typeof obj}`);
     }
     return obj as T;
@@ -447,16 +513,18 @@ export class StateSerializer {
  */
 async function calculateChecksumNodeJS(data: string): Promise<string> {
   // P0: Node.js require → ESM import 변경
-  if (typeof process === 'object') {
+  if (typeof process === "object") {
     try {
       // Dynamic import for Node.js crypto module (ESM compatible)
-      const { createHash } = await import('crypto');
-      return createHash('sha256').update(data).digest('hex');
+      const { createHash } = await import("crypto");
+      return createHash("sha256").update(data).digest("hex");
     } catch (e) {
       // Import 실패 시 fallback
     }
   }
-  throw new Error('No crypto implementation available. Please use a browser environment or Node.js with crypto support.');
+  throw new Error(
+    "No crypto implementation available. Please use a browser environment or Node.js with crypto support."
+  );
 }
 
 /**
@@ -466,7 +534,7 @@ async function calculateChecksumNodeJS(data: string): Promise<string> {
  */
 export async function calculateChecksum(data: unknown): Promise<string> {
   let str: string;
-  if (typeof data === 'string') {
+  if (typeof data === "string") {
     str = data;
   } else {
     // 순서 독립적 체크섬 계산을 위해 키 정렬
@@ -476,14 +544,14 @@ export async function calculateChecksum(data: unknown): Promise<string> {
   const bytes = encoder.encode(str);
 
   // P1: crypto.subtle fallback - Web Crypto API 우선, Node.js fallback
-  if (typeof crypto !== 'undefined' && typeof crypto.subtle !== 'undefined') {
+  if (typeof crypto !== "undefined" && typeof crypto.subtle !== "undefined") {
     // Web Crypto API 사용 (브라우저/Node.js 호환)
     try {
-      const hashBuffer = await crypto.subtle.digest('SHA-256', bytes);
+      const hashBuffer = await crypto.subtle.digest("SHA-256", bytes);
 
       // ArrayBuffer → hex string 변환
       const hashArray = Array.from(new Uint8Array(hashBuffer));
-      const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 
       return hashHex;
     } catch (e) {
@@ -502,10 +570,49 @@ export async function calculateChecksum(data: unknown): Promise<string> {
  * @param expectedChecksum - 예상 체크섬
  * @returns 일치 여부
  */
-export async function verifyChecksum(
-  data: unknown,
-  expectedChecksum: string
-): Promise<boolean> {
+export async function verifyChecksum(data: unknown, expectedChecksum: string): Promise<boolean> {
   const actualChecksum = await calculateChecksum(data);
+  return actualChecksum === expectedChecksum;
+}
+
+/**
+ * 동기 체크섬 계산 (Node.js 전용)
+ * @param data - 대상 데이터
+ * @returns SHA-256 해시
+ * @description 테스트 환경 등에서 동기 체크섬이 필요한 경우 사용
+ */
+export function calculateChecksumSync(data: unknown): string {
+  let str: string;
+  if (typeof data === "string") {
+    str = data;
+  } else {
+    // 순서 독립적 체크섬 계산을 위해 키 정렬
+    str = JSON.stringify(data, sortedKeyReplacer as (key: string, value: unknown) => unknown);
+  }
+
+  // Node.js 환경에서 동기 해싱
+  if (typeof process === "object") {
+    try {
+      const { createHash } = require("crypto");
+      return createHash("sha256").update(str).digest("hex");
+    } catch (e) {
+      throw new Error(
+        "Failed to calculate checksum synchronously. Ensure Node.js crypto module is available."
+      );
+    }
+  }
+
+  throw new Error("Synchronous checksum calculation is only supported in Node.js environments.");
+}
+
+/**
+ * 동기 체크섬 검증 (Node.js 전용)
+ * @param data - 대상 데이터
+ * @param expectedChecksum - 예상 체크섬
+ * @returns 일치 여부
+ * @description 테스트 환경 등에서 동기 체크섬이 필요한 경우 사용
+ */
+export function verifyChecksumSync(data: unknown, expectedChecksum: string): boolean {
+  const actualChecksum = calculateChecksumSync(data);
   return actualChecksum === expectedChecksum;
 }

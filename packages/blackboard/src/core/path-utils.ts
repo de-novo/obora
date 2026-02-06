@@ -3,12 +3,14 @@
  * @description 경로 유틸리티
  */
 
+import { deepClone } from "./immutable";
+
 /**
  * 경로 파싱 결과
  */
 export interface ParsedPath {
   /** 섹션 (meta, state, knowledge, decisions) */
-  section: 'meta' | 'state' | 'knowledge' | 'decisions';
+  section: "meta" | "state" | "knowledge" | "decisions";
   /** 나머지 경로 세그먼트 */
   segments: string[];
   /** 전체 경로 */
@@ -18,13 +20,31 @@ export interface ParsedPath {
 /**
  * 유효한 섹션 이름들
  */
-const VALID_SECTIONS = ['meta', 'state', 'knowledge', 'decisions'] as const;
+const VALID_SECTIONS = ["meta", "state", "knowledge", "decisions"] as const;
+
+/**
+ * 프로토타입 오염 방지: 위험한 키 목록
+ */
+const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
 /**
  * 섹션인지 확인
  */
-function isValidSection(section: string): section is typeof VALID_SECTIONS[number] {
-  return VALID_SECTIONS.includes(section as typeof VALID_SECTIONS[number]);
+function isValidSection(section: string): section is (typeof VALID_SECTIONS)[number] {
+  return VALID_SECTIONS.includes(section as (typeof VALID_SECTIONS)[number]);
+}
+
+/**
+ * 프로토타입 오염 방지: 경로 세그먼트 검증
+ * @param segments - 검증할 경로 세그먼트 배열
+ * @throws {Error} 위험한 키가 포함된 경우
+ */
+function validatePathSegments(segments: string[]): void {
+  for (const segment of segments) {
+    if (DANGEROUS_KEYS.has(segment)) {
+      throw new Error(`Invalid path segment: ${segment} is not allowed`);
+    }
+  }
 }
 
 /**
@@ -34,11 +54,12 @@ function isValidSection(section: string): section is typeof VALID_SECTIONS[numbe
  * @returns 해당 경로의 값
  */
 export function getByPath<T = unknown>(obj: unknown, path: string): T | undefined {
-  if (typeof obj !== 'object' || obj === null) {
+  if (typeof obj !== "object" || obj === null) {
     return undefined;
   }
 
-  const segments = path.split('.').filter(Boolean);
+  const segments = path.split(".").filter(Boolean);
+  validatePathSegments(segments);
 
   if (segments.length === 0) {
     return obj as T;
@@ -47,7 +68,7 @@ export function getByPath<T = unknown>(obj: unknown, path: string): T | undefine
   let current: unknown = obj;
 
   for (const segment of segments) {
-    if (typeof current !== 'object' || current === null) {
+    if (typeof current !== "object" || current === null) {
       return undefined;
     }
 
@@ -86,11 +107,12 @@ export function getByPath<T = unknown>(obj: unknown, path: string): T | undefine
  * @returns 수정된 객체 (불변성 유지)
  */
 export function setByPath<T>(obj: T, path: string, value: unknown): T {
-  if (typeof obj !== 'object' || obj === null) {
+  if (typeof obj !== "object" || obj === null) {
     return obj;
   }
 
-  const segments = path.split('.').filter(Boolean);
+  const segments = path.split(".").filter(Boolean);
+  validatePathSegments(segments);
 
   if (segments.length === 0) {
     return value as T;
@@ -109,7 +131,7 @@ export function setByPath<T>(obj: T, path: string, value: unknown): T {
       current[segment] = deepClone(current[segment]);
     }
 
-    if (typeof current[segment] !== 'object' || current[segment] === null) {
+    if (typeof current[segment] !== "object" || current[segment] === null) {
       current[segment] = {};
     }
 
@@ -123,60 +145,18 @@ export function setByPath<T>(obj: T, path: string, value: unknown): T {
 }
 
 /**
- * 깊은 복사 (내부 유틸리티)
- */
-function deepClone<T>(obj: T): T {
-  if (obj === null || typeof obj !== 'object') {
-    return obj;
-  }
-
-  if (obj instanceof Date) {
-    return new Date(obj.getTime()) as T;
-  }
-
-  if (obj instanceof Map) {
-    const clonedMap = new Map();
-    for (const [key, value] of obj.entries()) {
-      clonedMap.set(deepClone(key), deepClone(value));
-    }
-    return clonedMap as T;
-  }
-
-  if (obj instanceof Set) {
-    const clonedSet = new Set();
-    for (const value of obj) {
-      clonedSet.add(deepClone(value));
-    }
-    return clonedSet as T;
-  }
-
-  if (obj instanceof Array) {
-    return obj.map(item => deepClone(item)) as T;
-  }
-
-  const clonedObj = {} as T;
-  for (const key in obj) {
-    if (Object.prototype.hasOwnProperty.call(obj, key)) {
-      (clonedObj as Record<string, unknown>)[key] = deepClone(
-        (obj as Record<string, unknown>)[key]
-      );
-    }
-  }
-  return clonedObj;
-}
-
-/**
  * 경로 기반 값 삭제
  * @param obj - 대상 객체
  * @param path - 점(.)으로 구분된 경로
  * @returns 수정된 객체 (불변성 유지)
  */
 export function deleteByPath<T>(obj: T, path: string): T {
-  if (typeof obj !== 'object' || obj === null) {
+  if (typeof obj !== "object" || obj === null) {
     return obj;
   }
 
-  const segments = path.split('.').filter(Boolean);
+  const segments = path.split(".").filter(Boolean);
+  validatePathSegments(segments);
 
   if (segments.length === 0) {
     return obj;
@@ -202,7 +182,7 @@ export function deleteByPath<T>(obj: T, path: string): T {
 
     current[segment] = deepClone(current[segment]);
 
-    if (typeof current[segment] !== 'object' || current[segment] === null) {
+    if (typeof current[segment] !== "object" || current[segment] === null) {
       return obj;
     }
 
@@ -222,16 +202,18 @@ export function deleteByPath<T>(obj: T, path: string): T {
  */
 export function parsePath(path: string): ParsedPath {
   const normalized = normalizePath(path);
-  const segments = normalized.split('.').filter(Boolean);
+  const segments = normalized.split(".").filter(Boolean);
 
   if (segments.length === 0) {
     throw new Error(`Invalid path: ${path}`);
   }
 
+  validatePathSegments(segments);
+
   const section = segments[0];
 
   if (!isValidSection(section)) {
-    throw new Error(`Invalid section: ${section}. Valid sections: ${VALID_SECTIONS.join(', ')}`);
+    throw new Error(`Invalid section: ${section}. Valid sections: ${VALID_SECTIONS.join(", ")}`);
   }
 
   return {
@@ -263,9 +245,9 @@ export function isValidPath(path: string): boolean {
 export function normalizePath(path: string): string {
   return path
     .trim()
-    .replace(/\s+/g, '')
-    .replace(/\.+/g, '.')
-    .replace(/^\.+|\.+$/g, '');
+    .replace(/\s+/g, "")
+    .replace(/\.+/g, ".")
+    .replace(/^\.+|\.+$/g, "");
 }
 
 /**
@@ -275,9 +257,9 @@ export function normalizePath(path: string): string {
  */
 export function joinPath(...parts: string[]): string {
   return parts
-    .map(p => normalizePath(p))
+    .map((p) => normalizePath(p))
     .filter(Boolean)
-    .join('.');
+    .join(".");
 }
 
 /**
@@ -294,7 +276,7 @@ export function isSubPath(parent: string, child: string): boolean {
     return false;
   }
 
-  return normalizedChild.startsWith(normalizedParent + '.');
+  return normalizedChild.startsWith(normalizedParent + ".");
 }
 
 /**
@@ -305,11 +287,11 @@ export function isSubPath(parent: string, child: string): boolean {
  */
 export function getParentPath(path: string, levels: number = 1): string {
   const normalized = normalizePath(path);
-  const segments = normalized.split('.').filter(Boolean);
+  const segments = normalized.split(".").filter(Boolean);
 
   if (segments.length <= levels) {
-    return '';
+    return "";
   }
 
-  return segments.slice(0, segments.length - levels).join('.');
+  return segments.slice(0, segments.length - levels).join(".");
 }

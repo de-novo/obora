@@ -93,6 +93,7 @@ export class VersionManager {
   ): Promise<T> {
     let lastError: Error | null = null;
 
+    // 최대 maxRetries번 시도 (첫 시도 + 재시도 maxRetries-1번)
     for (let attempt = 0; attempt < this.config.maxRetries; attempt++) {
       try {
         return await operation();

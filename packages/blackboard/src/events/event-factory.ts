@@ -18,12 +18,15 @@ import type {
   StateTaskFailedEvent,
   AgentRegisteredEvent,
   AgentStatusChangedEvent,
+  AgentUpdatedEvent,
   AgentRemovedEvent,
   TaskCreatedEvent,
   TaskAssignedEvent,
+  TaskStartedEvent,
   TaskStatusChangedEvent,
   TaskCompletedEvent,
   TaskFailedEvent,
+  TaskCancelledEvent,
   DecisionsAgendaCreatedEvent,
   DecisionsAgendaStartedEvent,
   DecisionsOpinionSubmittedEvent,
@@ -37,13 +40,20 @@ import type {
   OpinionSubmittedEvent,
   VoteRequestedEvent,
   ConsensusReachedEvent,
+  VotingCompletedEvent,
   FactAddedEvent,
+  FactUpdatedEvent,
+  FactRemovedEvent,
   InferenceAddedEvent,
   KnowledgePatternLearnedEvent,
+  PatternAddedEvent,
   SystemSnapshotCreatedEvent,
   SystemSnapshotRestoredEvent,
   SystemErrorEvent,
   VersionConflictEvent,
+  StateInitializedEvent,
+  SnapshotCreatedEvent,
+  SnapshotRestoredEvent,
   BoardPhase,
   AgentStatus,
   TaskStatus,
@@ -73,15 +83,26 @@ export interface CreateEventOptions {
  * @description 타입 안전한 이벤트 생성
  */
 export class EventFactory {
-  constructor(private idGenerator: () => string) {}
+  constructor(private idGenerator?: () => string) {
+    if (!this.idGenerator) {
+      let counter = 0;
+      this.idGenerator = () => `evt_${++counter}`;
+    }
+  }
 
   // === State Events ===
 
   createPhaseChanged(
     previousPhase: BoardPhase,
     newPhase: BoardPhase,
-    options?: CreateEventOptions
+    optionsOrSource?: CreateEventOptions | AgentId | 'system'
   ): PhaseChangedEvent {
+    // 세 번째 인자가 string이면 source로 처리
+    const options =
+      typeof optionsOrSource === 'string'
+        ? { source: optionsOrSource as AgentId | 'system' }
+        : optionsOrSource;
+
     return {
       id: this.idGenerator(),
       type: 'state.phase.changed',
@@ -201,7 +222,7 @@ export class EventFactory {
   createAgentRegistered(agent: AgentStatus, options?: CreateEventOptions): AgentRegisteredEvent {
     return {
       id: this.idGenerator(),
-      type: 'agent.registered',
+      type: 'state.agent.registered',
       timestamp: new Date(),
       source: options?.source ?? 'system',
       correlationId: options?.correlationId,
@@ -228,11 +249,27 @@ export class EventFactory {
   createAgentRemoved(agentId: AgentId, reason: string, options?: CreateEventOptions): AgentRemovedEvent {
     return {
       id: this.idGenerator(),
-      type: 'agent.removed',
+      type: 'state.agent.removed',
       timestamp: new Date(),
       source: options?.source ?? 'system',
       correlationId: options?.correlationId,
       payload: { agentId, reason },
+    };
+  }
+
+  createAgentUpdated(
+    agentId: AgentId,
+    changes: Partial<AgentStatus>,
+    previousValues: Partial<AgentStatus>,
+    options?: CreateEventOptions
+  ): AgentUpdatedEvent {
+    return {
+      id: this.idGenerator(),
+      type: 'state.agent.updated',
+      timestamp: new Date(),
+      source: options?.source ?? 'system',
+      correlationId: options?.correlationId,
+      payload: { agentId, changes, previousValues },
     };
   }
 
@@ -249,14 +286,14 @@ export class EventFactory {
     };
   }
 
-  createTaskAssigned(taskId: TaskId, assignedTo: AgentId, options?: CreateEventOptions): TaskAssignedEvent {
+  createTaskAssigned(taskId: TaskId, agentId: AgentId, options?: CreateEventOptions): TaskAssignedEvent {
     return {
       id: this.idGenerator(),
       type: 'task.assigned',
       timestamp: new Date(),
       source: options?.source ?? 'system',
       correlationId: options?.correlationId,
-      payload: { taskId, assignedTo },
+      payload: { taskId, agentId },
     };
   }
 
@@ -278,7 +315,7 @@ export class EventFactory {
 
   createTaskCompleted(
     taskId: TaskId,
-    result: unknown,
+    outputs: unknown,
     duration: number,
     options?: CreateEventOptions
   ): TaskCompletedEvent {
@@ -288,14 +325,14 @@ export class EventFactory {
       timestamp: new Date(),
       source: options?.source ?? 'system',
       correlationId: options?.correlationId,
-      payload: { taskId, result, duration },
+      payload: { taskId, outputs, duration },
     };
   }
 
   createTaskFailed(
     taskId: TaskId,
     error: TaskError,
-    retryable: boolean,
+    duration: number,
     options?: CreateEventOptions
   ): TaskFailedEvent {
     return {
@@ -304,7 +341,29 @@ export class EventFactory {
       timestamp: new Date(),
       source: options?.source ?? 'system',
       correlationId: options?.correlationId,
-      payload: { taskId, error, retryable },
+      payload: { taskId, error, duration },
+    };
+  }
+
+  createTaskStarted(taskId: TaskId, agentId: AgentId, options?: CreateEventOptions): TaskStartedEvent {
+    return {
+      id: this.idGenerator(),
+      type: 'task.started',
+      timestamp: new Date(),
+      source: options?.source ?? 'system',
+      correlationId: options?.correlationId,
+      payload: { taskId, agentId, startedAt: new Date() },
+    };
+  }
+
+  createTaskCancelled(taskId: TaskId, reason: string, options?: CreateEventOptions): TaskCancelledEvent {
+    return {
+      id: this.idGenerator(),
+      type: 'task.cancelled',
+      timestamp: new Date(),
+      source: options?.source ?? 'system',
+      correlationId: options?.correlationId,
+      payload: { taskId, reason },
     };
   }
 
@@ -436,7 +495,7 @@ export class EventFactory {
   ): AgendaStatusChangedEvent {
     return {
       id: this.idGenerator(),
-      type: 'decision.agenda.status.changed',
+      type: 'decision.agenda.status_changed',
       timestamp: new Date(),
       source: options?.source ?? 'system',
       correlationId: options?.correlationId,
@@ -482,6 +541,32 @@ export class EventFactory {
     };
   }
 
+  createVotingCompleted(
+    agendaId: AgendaId,
+    result: {
+      passed: boolean;
+      method: string;
+      summary: {
+        total: number;
+        approve: number;
+        reject: number;
+        abstain: number;
+        approvalRate: number;
+        quorumReached: boolean;
+      };
+    },
+    options?: CreateEventOptions
+  ): VotingCompletedEvent {
+    return {
+      id: this.idGenerator(),
+      type: 'decision.voting.completed',
+      timestamp: new Date(),
+      source: options?.source ?? 'system',
+      correlationId: options?.correlationId,
+      payload: { agendaId, result },
+    };
+  }
+
   // === Knowledge Events ===
 
   createFactAdded(fact: Fact, options?: CreateEventOptions): FactAddedEvent {
@@ -510,6 +595,44 @@ export class EventFactory {
     return {
       id: this.idGenerator(),
       type: 'knowledge.pattern.learned',
+      timestamp: new Date(),
+      source: options?.source ?? 'system',
+      correlationId: options?.correlationId,
+      payload: { pattern },
+    };
+  }
+
+  createFactUpdated(
+    factId: string,
+    changes: Partial<Fact>,
+    previousValues?: Partial<Fact>,
+    options?: CreateEventOptions
+  ): FactUpdatedEvent {
+    return {
+      id: this.idGenerator(),
+      type: 'knowledge.fact.updated',
+      timestamp: new Date(),
+      source: options?.source ?? 'system',
+      correlationId: options?.correlationId,
+      payload: { factId, changes, previousValues },
+    };
+  }
+
+  createFactRemoved(factId: string, reason: string, options?: CreateEventOptions): FactRemovedEvent {
+    return {
+      id: this.idGenerator(),
+      type: 'knowledge.fact.removed',
+      timestamp: new Date(),
+      source: options?.source ?? 'system',
+      correlationId: options?.correlationId,
+      payload: { factId, reason },
+    };
+  }
+
+  createPatternAdded(pattern: Pattern, options?: CreateEventOptions): PatternAddedEvent {
+    return {
+      id: this.idGenerator(),
+      type: 'knowledge.pattern.added',
       timestamp: new Date(),
       source: options?.source ?? 'system',
       correlationId: options?.correlationId,
@@ -578,6 +701,44 @@ export class EventFactory {
       source: options?.source ?? 'system',
       correlationId: options?.correlationId,
       payload: { path, expectedVersion, actualVersion },
+    };
+  }
+
+  createStateInitialized(sessionId: string, options?: CreateEventOptions): StateInitializedEvent {
+    return {
+      id: this.idGenerator(),
+      type: 'state.initialized',
+      timestamp: new Date(),
+      source: options?.source ?? 'system',
+      correlationId: options?.correlationId,
+      payload: { sessionId },
+    };
+  }
+
+  createSnapshotCreated(snapshotId: string, version: number, options?: CreateEventOptions): SnapshotCreatedEvent {
+    return {
+      id: this.idGenerator(),
+      type: 'snapshot.created',
+      timestamp: new Date(),
+      source: options?.source ?? 'system',
+      correlationId: options?.correlationId,
+      payload: { snapshotId, version },
+    };
+  }
+
+  createSnapshotRestored(
+    snapshotId: string,
+    previousVersion: number,
+    restoredVersion: number,
+    options?: CreateEventOptions
+  ): SnapshotRestoredEvent {
+    return {
+      id: this.idGenerator(),
+      type: 'snapshot.restored',
+      timestamp: new Date(),
+      source: options?.source ?? 'system',
+      correlationId: options?.correlationId,
+      payload: { snapshotId, previousVersion, restoredVersion },
     };
   }
 }

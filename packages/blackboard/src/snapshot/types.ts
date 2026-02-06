@@ -3,13 +3,13 @@
  * @description 스냅샷 타입 정의
  */
 
-import type { BlackboardState, SessionId } from '../types';
+import type { BlackboardState, SessionId } from "../types";
 
 /**
  * 스냅샷 형식 버전
  * @description 역직렬화 시 호환성 체크에 사용
  */
-export const SNAPSHOT_FORMAT_VERSION = '1.0.0';
+export const SNAPSHOT_FORMAT_VERSION = "1.0.0";
 
 /**
  * 스냅샷 메타데이터
@@ -92,9 +92,11 @@ export interface CreateSnapshotOptions {
   /** 압축 사용 여부 (기본: false) */
   compress?: boolean;
   /** 특정 섹션만 포함 */
-  includeSections?: ('state' | 'knowledge' | 'decisions')[];
+  includeSections?: ("state" | "knowledge" | "decisions")[];
   /** 메타만 포함 (상태 제외) */
   metaOnly?: boolean;
+  /** 내부 저장소에 저장 여부 */
+  store?: boolean;
 }
 
 /**
@@ -105,8 +107,10 @@ export interface RestoreSnapshotOptions {
   skipVersionCheck?: boolean;
   /** 구조적 검증 건너뛰기 (validateSync) */
   skipStructuralValidation?: boolean;
+  /** 검증 건너뛰기 (별칭: skipStructuralValidation) */
+  skipValidation?: boolean;
   /** 특정 섹션만 복원 */
-  restoreSections?: ('state' | 'knowledge' | 'decisions')[];
+  restoreSections?: ("state" | "knowledge" | "decisions")[];
   /** 복원 후 버전 리셋 여부 (기본: true) */
   resetVersion?: boolean;
   /** 새 세션 ID 발급 (기본: true) */
@@ -129,7 +133,12 @@ export interface SnapshotValidationResult {
  * 검증 에러
  */
 export interface SnapshotValidationError {
-  code: 'VERSION_MISMATCH' | 'CHECKSUM_INVALID' | 'DATA_CORRUPTED' | 'FORMAT_INVALID';
+  code:
+    | "VERSION_MISMATCH"
+    | "CHECKSUM_INVALID"
+    | "DATA_CORRUPTED"
+    | "FORMAT_INVALID"
+    | "MISSING_FIELD";
   message: string;
   details?: unknown;
 }
@@ -138,7 +147,7 @@ export interface SnapshotValidationError {
  * 검증 경고
  */
 export interface SnapshotValidationWarning {
-  code: 'DEPRECATED_FORMAT' | 'UNKNOWN_FIELDS' | 'PARTIAL_DATA';
+  code: "DEPRECATED_FORMAT" | "UNKNOWN_FIELDS" | "PARTIAL_DATA";
   message: string;
   details?: unknown;
 }

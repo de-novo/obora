@@ -26,6 +26,23 @@ import { BlackboardError, BlackboardErrorCode } from '../blackboard';
 export class KnowledgeSectionAccessor {
   constructor(private readonly board: Blackboard) {}
 
+  // === 헬퍼 메서드 ===
+
+  /**
+   * confidence 값 검증
+   * @private
+   */
+  private validateConfidence(value: number | undefined, fieldName = 'confidence'): void {
+    if (value !== undefined) {
+      if (typeof value !== 'number' || value < 0 || value > 1 || Number.isNaN(value)) {
+        throw new BlackboardError(
+          BlackboardErrorCode.INVALID_INPUT,
+          `${fieldName} must be a number between 0 and 1`
+        );
+      }
+    }
+  }
+
   // === Getters ===
 
   /**
@@ -77,11 +94,32 @@ export class KnowledgeSectionAccessor {
    * @param factInput - 새 사실 입력
    */
   addFact(factInput: FactCreateInput): Fact {
+    // 필수 필드 검증
+    if (!factInput.content || factInput.content.trim().length === 0) {
+      throw new BlackboardError(
+        BlackboardErrorCode.INVALID_INPUT,
+        'Fact content is required'
+      );
+    }
+    if (!factInput.source) {
+      throw new BlackboardError(
+        BlackboardErrorCode.INVALID_INPUT,
+        'Fact source is required'
+      );
+    }
+    if (!factInput.category || factInput.category.trim().length === 0) {
+      throw new BlackboardError(
+        BlackboardErrorCode.INVALID_INPUT,
+        'Fact category is required'
+      );
+    }
+    this.validateConfidence(factInput.confidence, 'Fact confidence');
+
     const knowledge = this.board.read<KnowledgeSection>('knowledge');
     const now = new Date();
 
     const fact: Fact = {
-      id: `fact-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      id: `fact-${crypto.randomUUID()}`,
       content: factInput.content,
       source: factInput.source,
       confidence: factInput.confidence,
@@ -157,8 +195,10 @@ export class KnowledgeSectionAccessor {
       }
 
       // 최소 신뢰도 필터
-      if (query.minConfidence !== undefined && fact.confidence < query.minConfidence) {
-        return false;
+      if (query.minConfidence !== undefined) {
+        if (fact.confidence === undefined || fact.confidence < query.minConfidence) {
+          return false;
+        }
       }
 
       // 단일 태그 필터
@@ -233,11 +273,32 @@ export class KnowledgeSectionAccessor {
    * 추론 추가
    */
   addInference(inferenceInput: InferenceCreateInput): Inference {
+    // 필수 필드 검증
+    if (!inferenceInput.conclusion || inferenceInput.conclusion.trim().length === 0) {
+      throw new BlackboardError(
+        BlackboardErrorCode.INVALID_INPUT,
+        'Inference conclusion is required'
+      );
+    }
+    if (!inferenceInput.source) {
+      throw new BlackboardError(
+        BlackboardErrorCode.INVALID_INPUT,
+        'Inference source is required'
+      );
+    }
+    if (!Array.isArray(inferenceInput.premises)) {
+      throw new BlackboardError(
+        BlackboardErrorCode.INVALID_INPUT,
+        'Inference premises must be an array'
+      );
+    }
+    this.validateConfidence(inferenceInput.confidence, 'Inference confidence');
+
     const knowledge = this.board.read<KnowledgeSection>('knowledge');
     const now = new Date();
 
     const inference: Inference = {
-      id: `inference-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      id: `inference-${crypto.randomUUID()}`,
       conclusion: inferenceInput.conclusion,
       premises: inferenceInput.premises,
       source: inferenceInput.source,
@@ -313,8 +374,10 @@ export class KnowledgeSectionAccessor {
       }
 
       // 최소 신뢰도 필터
-      if (query.minConfidence !== undefined && inference.confidence < query.minConfidence) {
-        return false;
+      if (query.minConfidence !== undefined) {
+        if (inference.confidence === undefined || inference.confidence < query.minConfidence) {
+          return false;
+        }
       }
 
       return true;
@@ -367,11 +430,38 @@ export class KnowledgeSectionAccessor {
    * 패턴 추가
    */
   addPattern(patternInput: PatternCreateInput): Pattern {
+    // 필수 필드 검증
+    if (!patternInput.name || patternInput.name.trim().length === 0) {
+      throw new BlackboardError(
+        BlackboardErrorCode.INVALID_INPUT,
+        'Pattern name is required'
+      );
+    }
+    if (!patternInput.description || patternInput.description.trim().length === 0) {
+      throw new BlackboardError(
+        BlackboardErrorCode.INVALID_INPUT,
+        'Pattern description is required'
+      );
+    }
+    if (!Array.isArray(patternInput.conditions)) {
+      throw new BlackboardError(
+        BlackboardErrorCode.INVALID_INPUT,
+        'Pattern conditions must be an array'
+      );
+    }
+    if (!Array.isArray(patternInput.consequences)) {
+      throw new BlackboardError(
+        BlackboardErrorCode.INVALID_INPUT,
+        'Pattern consequences must be an array'
+      );
+    }
+    this.validateConfidence(patternInput.confidence, 'Pattern confidence');
+
     const knowledge = this.board.read<KnowledgeSection>('knowledge');
     const now = new Date();
 
     const pattern: Pattern = {
-      id: `pattern-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      id: `pattern-${crypto.randomUUID()}`,
       name: patternInput.name,
       description: patternInput.description,
       conditions: patternInput.conditions,
@@ -479,8 +569,10 @@ export class KnowledgeSectionAccessor {
       }
 
       // 최소 신뢰도 필터
-      if (query.minConfidence !== undefined && pattern.confidence < query.minConfidence) {
-        return false;
+      if (query.minConfidence !== undefined) {
+        if (pattern.confidence === undefined || pattern.confidence < query.minConfidence) {
+          return false;
+        }
       }
 
       return true;

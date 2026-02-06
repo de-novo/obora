@@ -11,7 +11,7 @@ import type {
   SnapshotValidationWarning,
   SerializedState,
 } from './types';
-import { StateSerializer, verifyChecksum } from './serializer';
+import { StateSerializer, verifyChecksum, verifyChecksumSync } from './serializer';
 import { decompress, detectCompression } from './compression';
 import { decompressSnapshotData } from './utils';
 import { SNAPSHOT_FORMAT_VERSION } from './types';
@@ -50,7 +50,7 @@ export class SnapshotValidator {
     const { meta } = snapshot;
     if (!meta.id || !meta.formatVersion || !meta.sessionId || !meta.checksum) {
       errors.push({
-        code: 'FORMAT_INVALID',
+        code: 'MISSING_FIELD',
         message: 'Snapshot metadata missing required fields',
         details: meta,
       });
@@ -65,11 +65,22 @@ export class SnapshotValidator {
           message: `Snapshot format ${versionCheck.snapshot} may require migration to ${versionCheck.current}`,
         });
       } else {
+        // 미래 버전: 경고 + 에러 모두 추가
+        warnings.push({
+          code: 'DEPRECATED_FORMAT',
+          message: `Snapshot format ${versionCheck.snapshot} is from future version (current: ${versionCheck.current})`,
+        });
         errors.push({
           code: 'VERSION_MISMATCH',
           message: `Incompatible snapshot format: ${versionCheck.snapshot} (current: ${versionCheck.current})`,
         });
       }
+    } else if (versionCheck.migrationRequired) {
+      // 호환되지만 마이그레이션이 필요한 이전 버전
+      warnings.push({
+        code: 'DEPRECATED_FORMAT',
+        message: `Snapshot format ${versionCheck.snapshot} may require migration to ${versionCheck.current}`,
+      });
     }
 
     // 4. 데이터 무결성 검증
@@ -98,6 +109,141 @@ export class SnapshotValidator {
         // 압축 데이터 체크섬 검증
         if (meta.compressedChecksum) {
           const checksumValid = await verifyChecksum(snapshot.data, meta.compressedChecksum);
+          if (!checksumValid) {
+            errors.push({
+              code: 'CHECKSUM_INVALID',
+              message: 'Compressed data checksum does not match metadata',
+              details: { expected: meta.compressedChecksum },
+            });
+          }
+        }
+      } catch (e) {
+        errors.push({
+          code: 'DATA_CORRUPTED',
+          message: 'Failed to detect compression format',
+          details: e,
+        });
+      }
+    }
+
+    // 6. 런타임 검증 (P0: agents/tasks/opinions 구조 검증)
+    if (errors.length === 0) {
+      const runtimeValidation = this.validateRuntimeStructure(snapshot);
+      if (!runtimeValidation.valid) {
+        errors.push(...runtimeValidation.errors);
+        warnings.push(...runtimeValidation.warnings);
+      }
+    }
+
+    // 7. 역직렬화 테스트
+    if (errors.length === 0) {
+      try {
+        const state = decompressSnapshotData(snapshot);
+
+        if (!state.meta || !state.state) {
+          errors.push({
+            code: 'DATA_CORRUPTED',
+            message: 'Deserialized state is missing required fields',
+          });
+        }
+      } catch (e) {
+        errors.push({
+          code: 'DATA_CORRUPTED',
+          message: 'Failed to deserialize snapshot data',
+          details: e,
+        });
+      }
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors,
+      warnings,
+    };
+  }
+
+  /**
+   * 스냅샷 검증 (동기)
+   * @param snapshot - 검증할 스냅샷
+   * @returns 검증 결과
+   * @description 테스트 환경 등에서 동기 검증이 필요한 경우 사용
+   */
+  validateSync(snapshot: Snapshot): SnapshotValidationResult {
+    const errors: SnapshotValidationError[] = [];
+    const warnings: SnapshotValidationWarning[] = [];
+
+    // 1. 기본 구조 검증
+    if (!snapshot.meta || !snapshot.data) {
+      errors.push({
+        code: 'FORMAT_INVALID',
+        message: 'Snapshot missing required fields (meta or data)',
+      });
+      return { valid: false, errors, warnings };
+    }
+
+    // 2. 필수 메타데이터 필드 검증
+    const { meta } = snapshot;
+    if (!meta.id || !meta.formatVersion || !meta.sessionId || !meta.checksum) {
+      errors.push({
+        code: 'MISSING_FIELD',
+        message: 'Snapshot metadata missing required fields',
+        details: meta,
+      });
+    }
+
+    // 3. 형식 버전 호환성 체크
+    const versionCheck = this.checkVersionCompatibility(meta.formatVersion);
+    if (!versionCheck.compatible) {
+      if (versionCheck.migrationRequired) {
+        warnings.push({
+          code: 'DEPRECATED_FORMAT',
+          message: `Snapshot format ${versionCheck.snapshot} may require migration to ${versionCheck.current}`,
+        });
+      } else {
+        // 미래 버전: 경고 + 에러 모두 추가
+        warnings.push({
+          code: 'DEPRECATED_FORMAT',
+          message: `Snapshot format ${versionCheck.snapshot} is from future version (current: ${versionCheck.current})`,
+        });
+        errors.push({
+          code: 'VERSION_MISMATCH',
+          message: `Incompatible snapshot format: ${versionCheck.snapshot} (current: ${versionCheck.current})`,
+        });
+      }
+    } else if (versionCheck.migrationRequired) {
+      // 호환되지만 마이그레이션이 필요한 이전 버전
+      warnings.push({
+        code: 'DEPRECATED_FORMAT',
+        message: `Snapshot format ${versionCheck.snapshot} may require migration to ${versionCheck.current}`,
+      });
+    }
+
+    // 4. 데이터 무결성 검증 (동기)
+    if (!meta.compressed && typeof snapshot.data === 'object' && snapshot.data !== null) {
+      const isValid = verifyChecksumSync(snapshot.data, meta.checksum);
+      if (!isValid) {
+        errors.push({
+          code: 'CHECKSUM_INVALID',
+          message: 'Snapshot data checksum does not match metadata',
+          details: { expected: meta.checksum },
+        });
+      }
+    }
+
+    // 5. 압축 데이터 검증
+    if (meta.compressed && typeof snapshot.data === 'string') {
+      try {
+        const algorithm = detectCompression(snapshot.data);
+        if (!algorithm) {
+          errors.push({
+            code: 'FORMAT_INVALID',
+            message: 'Snapshot marked as compressed but data is not valid compressed format',
+          });
+        }
+
+        // 압축 데이터 체크섬 검증 (동기)
+        if (meta.compressedChecksum) {
+          const checksumValid = verifyChecksumSync(snapshot.data, meta.compressedChecksum);
           if (!checksumValid) {
             errors.push({
               code: 'CHECKSUM_INVALID',
@@ -190,7 +336,7 @@ export class SnapshotValidator {
    * @param snapshot - 검증할 스냅샷
    * @returns 검증 결과
    */
-  validateSync(snapshot: Snapshot): {
+  validateSyncStructure(snapshot: Snapshot): {
     valid: boolean;
     errors: string[];
   } {
