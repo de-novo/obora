@@ -9,7 +9,6 @@ import type { Result } from "./result";
 import type { Message } from "./message";
 import type { ActorMetrics } from "./metrics";
 import type { IMessageBus } from "./message";
-import { generateActorId } from "../runtime/crypto";
 
 /**
  * Actor 고유 ID 타입
@@ -277,8 +276,8 @@ export interface Actor {
  * ```
  */
 export function createActorId(role: ActorRole): ActorId {
-  const id = generateActorId(role);
-  return id as ActorId;
+  const uuid = crypto.randomUUID();
+  return `${role}-${uuid}` as ActorId;
 }
 
 /**
