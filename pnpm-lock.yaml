@@ -129,6 +129,39 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@22.19.8)
 
+  packages/actor:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.8
+      '@typescript-eslint/eslint-plugin':
+        specifier: ^8.23.0
+        version: 8.54.0(@typescript-eslint/parser@8.54.0(eslint@9.39.2)(typescript@5.9.3))(eslint@9.39.2)(typescript@5.9.3)
+      '@typescript-eslint/parser':
+        specifier: ^8.23.0
+        version: 8.54.0(eslint@9.39.2)(typescript@5.9.3)
+      '@vitest/coverage-v8':
+        specifier: ^1.0.0
+        version: 1.6.1(vitest@1.6.1(@types/node@22.19.8))
+      eslint:
+        specifier: ^9.19.0
+        version: 9.39.2
+      rimraf:
+        specifier: ^5.0.0
+        version: 5.0.10
+      tsup:
+        specifier: ^8.0.0
+        version: 8.5.1(@swc/core@1.15.11(@swc/helpers@0.5.18))(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
+      typescript-eslint:
+        specifier: ^8.54.0
+        version: 8.54.0(eslint@9.39.2)(typescript@5.9.3)
+      vitest:
+        specifier: ^1.0.0
+        version: 1.6.1(@types/node@22.19.8)
+
   packages/blackboard:
     dependencies:
       pako:
