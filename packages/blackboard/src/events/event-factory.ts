@@ -80,8 +80,12 @@ export interface CreateEventOptions {
  * @description 타입 안전한 이벤트 생성
  */
 export class EventFactory {
-  constructor(private idGenerator?: () => string) {
-    if (!this.idGenerator) {
+  private idGenerator: () => string;
+
+  constructor(idGenerator?: () => string) {
+    if (idGenerator) {
+      this.idGenerator = idGenerator;
+    } else {
       let counter = 0;
       this.idGenerator = () => `evt_${++counter}`;
     }
@@ -101,7 +105,7 @@ export class EventFactory {
         : optionsOrSource;
 
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "state.phase.changed",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -117,7 +121,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): ContextUpdatedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "state.context.updated",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -131,7 +135,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): StateAgentRegisteredEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "state.agent.registered",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -147,7 +151,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): StateAgentUpdatedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "state.agent.updated",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -158,7 +162,7 @@ export class EventFactory {
 
   createStateTaskCreated(task: Task, options?: CreateEventOptions): StateTaskCreatedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "state.task.created",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -173,7 +177,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): StateTaskAssignedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "state.task.assigned",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -189,7 +193,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): StateTaskCompletedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "state.task.completed",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -205,7 +209,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): StateTaskFailedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "state.task.failed",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -218,7 +222,7 @@ export class EventFactory {
 
   createAgentRegistered(agent: AgentStatus, options?: CreateEventOptions): AgentRegisteredEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "state.agent.registered",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -234,7 +238,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): AgentStatusChangedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "agent.status.changed",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -249,7 +253,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): AgentRemovedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "state.agent.removed",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -265,7 +269,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): AgentUpdatedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "state.agent.updated",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -278,7 +282,7 @@ export class EventFactory {
 
   createTaskCreated(task: Task, options?: CreateEventOptions): TaskCreatedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "task.created",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -293,7 +297,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): TaskAssignedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "task.assigned",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -309,7 +313,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): TaskStatusChangedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "task.status.changed",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -325,7 +329,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): TaskCompletedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "task.completed",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -341,7 +345,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): TaskFailedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "task.failed",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -356,7 +360,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): TaskStartedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "task.started",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -371,7 +375,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): TaskCancelledEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "task.cancelled",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -387,7 +391,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): DecisionsAgendaCreatedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "decisions.agenda.created",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -401,7 +405,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): DecisionsAgendaStartedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "decisions.agenda.started",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -415,7 +419,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): DecisionsOpinionSubmittedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "decisions.opinion.submitted",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -430,7 +434,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): DecisionsVotingStartedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "decisions.voting.started",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -446,7 +450,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): DecisionsVoteSubmittedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "decisions.vote.submitted",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -461,7 +465,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): DecisionsVotingEndedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "decisions.voting.ended",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -475,7 +479,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): DecisionsConsensusReachedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "decisions.consensus.reached",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -490,7 +494,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): DecisionsAgendaResolvedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "decisions.agenda.resolved",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -503,7 +507,7 @@ export class EventFactory {
 
   createAgendaSubmitted(agenda: Agenda, options?: CreateEventOptions): AgendaSubmittedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "decision.agenda.submitted",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -519,7 +523,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): AgendaStatusChangedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "decision.agenda.status_changed",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -530,7 +534,7 @@ export class EventFactory {
 
   createOpinionSubmitted(opinion: Opinion, options?: CreateEventOptions): OpinionSubmittedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "decision.opinion.submitted",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -546,7 +550,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): VoteRequestedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "decision.vote.requested",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -560,7 +564,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): ConsensusReachedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "decision.consensus.reached",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -586,7 +590,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): VotingCompletedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "decision.voting.completed",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -599,7 +603,7 @@ export class EventFactory {
 
   createFactAdded(fact: Fact, options?: CreateEventOptions): FactAddedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "knowledge.fact.added",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -610,7 +614,7 @@ export class EventFactory {
 
   createInferenceAdded(inference: Inference, options?: CreateEventOptions): InferenceAddedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "knowledge.inference.added",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -624,7 +628,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): KnowledgePatternLearnedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "knowledge.pattern.learned",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -640,7 +644,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): FactUpdatedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "knowledge.fact.updated",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -655,7 +659,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): FactRemovedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "knowledge.fact.removed",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -666,7 +670,7 @@ export class EventFactory {
 
   createPatternAdded(pattern: Pattern, options?: CreateEventOptions): PatternAddedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "knowledge.pattern.added",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -683,7 +687,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): SystemSnapshotCreatedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "system.snapshot.created",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -698,7 +702,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): SystemSnapshotRestoredEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "system.snapshot.restored",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -714,7 +718,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): SystemErrorEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "system.error",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -730,7 +734,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): VersionConflictEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "system.version.conflict",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -741,7 +745,7 @@ export class EventFactory {
 
   createStateInitialized(sessionId: string, options?: CreateEventOptions): StateInitializedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "state.initialized",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -756,7 +760,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): SnapshotCreatedEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "snapshot.created",
       timestamp: new Date(),
       source: options?.source ?? "system",
@@ -772,7 +776,7 @@ export class EventFactory {
     options?: CreateEventOptions
   ): SnapshotRestoredEvent {
     return {
-      id: this.idGenerator!(),
+      id: this.idGenerator(),
       type: "snapshot.restored",
       timestamp: new Date(),
       source: options?.source ?? "system",
