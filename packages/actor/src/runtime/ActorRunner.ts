@@ -17,6 +17,9 @@ export interface RunnerOptions {
 
   /** 종료 조건 콜백 */
   stopCondition?: () => boolean | Promise<boolean>;
+
+  /** 디버그 모드 */
+  debug?: boolean;
 }
 
 /**
@@ -38,6 +41,7 @@ export class ActorRunner {
       maxIterations: Infinity,
       stopOnError: true,
       stopCondition: () => false,
+      debug: false,
       ...options,
     };
   }
@@ -75,16 +79,21 @@ export class ActorRunner {
         await this.runCycle();
         this.iterationCount++;
       } catch (error) {
-        // 에러 로깅 추가 (stopOnError와 무관하게)
-        console.error(`[ActorRunner] Cycle error:`, error);
+        // 에러 로깅 (debug 모드와 무관하게 항상 로그)
+        this.log(`Cycle error`, error);
         if (this.options.stopOnError) {
           throw error;
         }
         // 에러 무시하고 계속
       }
 
-      // 대기
-      await delay(this.options.interval);
+      // 대기 (AbortSignal 연동)
+      try {
+        await delay(this.options.interval, this.abortController?.signal);
+      } catch {
+        // abort 시 무시하고 루프 종료
+        break;
+      }
     }
 
     this.isRunning = false;
@@ -143,4 +152,15 @@ export class ActorRunner {
     return await this.options.stopCondition();
   }
 
+  private log(message: string, error?: unknown): void {
+    // 에러는 항상 출력 (debug 옵션 무관)
+    if (error) {
+      console.error(`[ActorRunner] ${message}`, error);
+      return;
+    }
+
+    // 일반 로그는 debug 모드에서만
+    if (!this.options.debug) return;
+    console.log(`[ActorRunner] ${message}`);
+  }
 }

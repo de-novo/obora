@@ -90,19 +90,17 @@ export class ActorRuntime {
    * @param actorId Actor ID (제공되지 않으면 런타임 종료)
    */
   async stop(actorId?: ActorId): Promise<void> {
+    // 런타임 상태 체크 (일관성: 실행 중이 아니면 무시)
+    if (!this.isRunning) {
+      return;
+    }
+
     if (actorId) {
       // 특정 Actor 중지
-      // 런타임 상태 체크 추가
-      if (!this.isRunning) {
-        throw new Error("Runtime is not running");
-      }
       const actor = this.getActor(actorId);
       await this.stopActor(actor.id);
     } else {
       // 런타임 종료
-      if (!this.isRunning) {
-        return;
-      }
 
       this.log("Stopping runtime...");
 
@@ -164,7 +162,10 @@ export class ActorRuntime {
         }),
       ]);
 
-      // 등록
+      // 등록 전 중복 체크 (auto-generated ID 포함)
+      if (this.actors.has(actor.id)) {
+        throw new Error(`Actor ID collision: ${actor.id}`);
+      }
       this.actors.set(actor.id, actor);
       this.actorConfigs.set(actor.id, config);
 
@@ -376,12 +377,14 @@ export class ActorRuntime {
   }
 
   private log(message: string, error?: unknown): void {
-    if (!this.config.debug) return;
-
+    // 에러는 항상 출력 (debug 옵션 무관)
     if (error) {
       console.error(`[ActorRuntime] ${message}`, error);
-    } else {
-      console.log(`[ActorRuntime] ${message}`);
+      return;
     }
+
+    // 일반 로그는 debug 모드에서만
+    if (!this.config.debug) return;
+    console.log(`[ActorRuntime] ${message}`);
   }
 }
