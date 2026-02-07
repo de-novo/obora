@@ -76,6 +76,7 @@ export class StateSectionAccessor {
   deleteContext(key: string): void {
     try {
       const state = this.board.read<StateSection>("state");
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { [key]: _, ...remaining } = state.context;
       this.board.write("state.context", remaining);
     } catch (e) {

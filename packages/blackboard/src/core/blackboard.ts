@@ -6,18 +6,15 @@
 import type {
   BlackboardState,
   BlackboardMeta,
-  StateSection,
   KnowledgeSection,
-  DecisionsSection,
   BoardPhase,
   SessionId,
 } from "../types";
 import { createSessionId } from "../types/base";
 
-import { VersionManager, VersionConflictError, DEFAULT_VERSIONING_CONFIG } from "./versioning";
-import { getByPath, setByPath, deleteByPath, parsePath, isValidPath } from "./path-utils";
+import { VersionManager, VersionConflictError } from "./versioning";
+import { getByPath, setByPath, deleteByPath, isValidPath } from "./path-utils";
 import { deepClone, mapToObject, objectToMap } from "./immutable";
-import { DefaultIdGenerator, sequentialIdGenerator } from "./id-generator";
 
 import { StateSectionAccessor } from "./accessors/state-accessor";
 import { KnowledgeSectionAccessor } from "./accessors/knowledge-accessor";
@@ -645,9 +642,7 @@ export class Blackboard extends SimpleEventEmitter {
 
       // 모든 연산 실행 (버전 증가 없이)
       for (const op of operations) {
-        let result: WriteResult;
-
-        // 내부 메서드를 사용하여 버전 증가 없이 쓰기/삭제 수행
+        // 내�的方法를 사용하여 버전 증가 없이 쓰기/삭제 수행
         if (op.type === "write") {
           const previousValue = getByPath(this._state, op.path);
           this._state = setByPath(this._state, op.path, op.value);
@@ -764,21 +759,24 @@ export class Blackboard extends SimpleEventEmitter {
     knowledge?: unknown;
     decisions?: unknown;
   }): Blackboard {
-    const now = new Date();
-
     const state: Partial<BlackboardState> = {
       meta: json.meta as BlackboardMeta,
       state: json.state
         ? {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             ...(json.state as any),
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             agents: objectToMap((json.state as any).agents ?? {}),
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             tasks: objectToMap((json.state as any).tasks ?? {}),
           }
         : undefined,
       knowledge: json.knowledge as KnowledgeSection,
       decisions: json.decisions
         ? {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             ...(json.decisions as any),
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             opinions: objectToMap((json.decisions as any).opinions ?? {}),
           }
         : undefined,

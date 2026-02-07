@@ -3,15 +3,14 @@
  * @description 의사결정 관련 타입 정의 - Agenda, Opinion, Resolution
  */
 
-import type { Identifiable, Timestamped, Versioned } from './base';
-import type { AgentId, AgendaId, OpinionId } from './base';
-import type { createAgendaId } from './base';
+import type { Identifiable, Timestamped, Versioned } from "./base";
+import type { AgentId, AgendaId, OpinionId } from "./base";
 
 /**
  * 투표 방식
  * @description 안건 결정을 위한 투표 방식
  */
-export type VotingMethod = 'majority' | 'unanimous' | 'weighted' | 'supermajority';
+export type VotingMethod = "majority" | "unanimous" | "weighted" | "supermajority";
 
 /**
  * 안건 상태
@@ -19,34 +18,34 @@ export type VotingMethod = 'majority' | 'unanimous' | 'weighted' | 'supermajorit
  */
 export enum AgendaStatus {
   /** 초안 - 아직 제출되지 않음 */
-  DRAFT = 'draft',
+  DRAFT = "draft",
   /** 제출됨 - 논의 대기 */
-  SUBMITTED = 'submitted',
+  SUBMITTED = "submitted",
   /** 논의 중 */
-  DISCUSSING = 'discussing',
+  DISCUSSING = "discussing",
   /** 토론 중 */
-  DEBATING = 'debating',
+  DEBATING = "debating",
   /** 투표 중 */
-  VOTING = 'voting',
+  VOTING = "voting",
   /** 결정됨 */
-  RESOLVED = 'resolved',
+  RESOLVED = "resolved",
   /** 연기됨 */
-  DEFERRED = 'deferred',
+  DEFERRED = "deferred",
   /** 취소됨 */
-  CANCELLED = 'cancelled',
+  CANCELLED = "cancelled",
 }
 
 /**
  * 입장 (스탠스)
  * @description 의견 제출자의 입장
  */
-export type Stance = 'approve' | 'reject' | 'conditional' | 'abstain';
+export type Stance = "approve" | "reject" | "conditional" | "abstain";
 
 /**
  * 최종 결정 유형
  * @description 안건에 대한 최종 결정의 유형
  */
-export type DecisionType = 'approved' | 'rejected' | 'deferred' | 'amended';
+export type DecisionType = "approved" | "rejected" | "deferred" | "amended";
 
 /**
  * 첨부 자료

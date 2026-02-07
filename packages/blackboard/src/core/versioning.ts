@@ -36,10 +36,8 @@ export class VersionConflictError extends Error {
     public readonly actualVersion: number,
     public readonly path: string
   ) {
-    super(
-      `Version conflict at ${path}: expected ${expectedVersion}, got ${actualVersion}`
-    );
-    this.name = 'VersionConflictError';
+    super(`Version conflict at ${path}: expected ${expectedVersion}, got ${actualVersion}`);
+    this.name = "VersionConflictError";
   }
 }
 
@@ -48,9 +46,7 @@ export class VersionConflictError extends Error {
  * @description 동시 쓰기 충돌을 감지하고 처리
  */
 export class VersionManager {
-  constructor(
-    private config: VersioningConfig = DEFAULT_VERSIONING_CONFIG
-  ) {}
+  constructor(private config: VersioningConfig = DEFAULT_VERSIONING_CONFIG) {}
 
   /**
    * 버전 검증
@@ -59,11 +55,7 @@ export class VersionManager {
    * @param path - 경로 (에러 메시지용)
    * @throws {VersionConflictError} 버전 불일치 시
    */
-  validateVersion(
-    currentVersion: number,
-    expectedVersion: number,
-    path: string
-  ): void {
+  validateVersion(currentVersion: number, expectedVersion: number, path: string): void {
     if (currentVersion !== expectedVersion) {
       throw new VersionConflictError(expectedVersion, currentVersion, path);
     }
@@ -89,7 +81,8 @@ export class VersionManager {
    */
   async executeWithRetry<T>(
     operation: () => T | Promise<T>,
-    context?: string
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _context?: string
   ): Promise<T> {
     let lastError: Error | null = null;
 
@@ -138,7 +131,7 @@ export class VersionManager {
    * 지연 (내부 유틸리티)
    */
   private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   /**

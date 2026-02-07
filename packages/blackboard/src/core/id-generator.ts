@@ -21,6 +21,7 @@ function uuidv4(): string {
     globalThis.crypto.getRandomValues(array);
   } else {
     // Node.js 환경: 동기적 randomFillSync 사용
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const nodeCrypto = require("crypto");
     nodeCrypto.randomFillSync(array);
   }

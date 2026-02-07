@@ -3,8 +3,8 @@
  * @description 에이전트 관련 타입 정의
  */
 
-import type { Timestamped } from './base';
-import type { AgentId, TaskId, createAgentId, createTaskId } from './base';
+import type { Timestamped } from "./base";
+import type { AgentId, TaskId } from "./base";
 
 /**
  * 에이전트 상태 enum
@@ -12,20 +12,20 @@ import type { AgentId, TaskId, createAgentId, createTaskId } from './base';
  */
 export enum AgentStatusEnum {
   /** 유휴 상태 - 작업 대기 중 */
-  IDLE = 'idle',
+  IDLE = "idle",
   /** 작업 중 - 활성 상태 */
-  BUSY = 'busy',
+  BUSY = "busy",
   /** 오류 상태 - 복구 필요 */
-  ERROR = 'error',
+  ERROR = "error",
   /** 중지됨 */
-  STOPPED = 'stopped',
+  STOPPED = "stopped",
 }
 
 /**
  * 에이전트 역할 타입
  * @description 에이전트가 수행할 수 있는 역할
  */
-export type AgentRole = 'analyst' | 'executor' | 'verifier' | 'director';
+export type AgentRole = "analyst" | "executor" | "verifier" | "director";
 
 /**
  * 에이전트 상태 정보

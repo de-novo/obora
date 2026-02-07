@@ -12,8 +12,6 @@ import type {
   OpinionCreateInput,
   Resolution,
   DecisionType,
-  VoteSummary,
-  NextAction,
   OpinionId,
   AgendaId,
 } from "../../types";
@@ -190,7 +188,7 @@ export class DecisionsSectionAccessor {
     const decisions = this.board.read<DecisionsSection>("decisions");
 
     // 현재 안건이 있으면 pending으로 이동
-    let updatedPending = [...decisions.pending];
+    const updatedPending = [...decisions.pending];
     if (decisions.current) {
       updatedPending.push(decisions.current);
     }
@@ -331,7 +329,7 @@ export class DecisionsSectionAccessor {
       stance: opinionInput.stance,
       reason: opinionInput.reason,
       conditions: opinionInput.conditions ?? [],
-      confidence: opinionInput.confidence,
+      confidence: opinionInput.confidence ?? 0.5,
       references: opinionInput.references ?? [],
       createdAt: now,
       updatedAt: now,
@@ -688,21 +686,24 @@ export class DecisionsSectionAccessor {
         // 전체 찬성 (반대 없음)
         passed = summary.reject === 0 && summary.total > 0;
         break;
-      case "majority":
+      case "majority": {
         // 단순 과반수 (50% 초과)
         const approveCount = summary.approve + summary.conditional;
         passed = approveCount > summary.total / 2;
         break;
-      case "supermajority":
+      }
+      case "supermajority": {
         // 2/3 이상 찬성
         const superMajorityCount = summary.approve + summary.conditional;
         passed = superMajorityCount >= (summary.total * 2) / 3;
         break;
-      case "weighted":
+      }
+      case "weighted": {
         // 가중치 투표 (현재는 과반수와 동일하게 처리)
         const weightedCount = summary.approve + summary.conditional;
         passed = weightedCount > summary.total / 2;
         break;
+      }
     }
 
     return {

@@ -3,7 +3,7 @@
  * @description 스냅샷 타입 정의
  */
 
-import type { BlackboardState, SessionId } from "../types";
+import type { SessionId } from "../types";
 
 /**
  * 스냅샷 형식 버전

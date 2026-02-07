@@ -3,19 +3,18 @@
  * @description 스냅샷 검증 담당
  */
 
-import type { BlackboardState } from '../types';
 import type {
   Snapshot,
   SnapshotValidationResult,
   SnapshotValidationError,
   SnapshotValidationWarning,
   SerializedState,
-} from './types';
-import { StateSerializer, verifyChecksum, verifyChecksumSync } from './serializer';
-import { decompress, detectCompression } from './compression';
-import { decompressSnapshotData } from './utils';
-import { SNAPSHOT_FORMAT_VERSION } from './types';
-import { isSerializedState } from './type-guards';
+} from "./types";
+import { StateSerializer, verifyChecksum, verifyChecksumSync } from "./serializer";
+import { decompress, detectCompression } from "./compression";
+import { decompressSnapshotData } from "./utils";
+import { SNAPSHOT_FORMAT_VERSION } from "./types";
+import { isSerializedState } from "./type-guards";
 
 /**
  * 스냅샷 검증자
@@ -40,8 +39,8 @@ export class SnapshotValidator {
     // 1. 기본 구조 검증
     if (!snapshot.meta || !snapshot.data) {
       errors.push({
-        code: 'FORMAT_INVALID',
-        message: 'Snapshot missing required fields (meta or data)',
+        code: "FORMAT_INVALID",
+        message: "Snapshot missing required fields (meta or data)",
       });
       return { valid: false, errors, warnings };
     }
@@ -50,8 +49,8 @@ export class SnapshotValidator {
     const { meta } = snapshot;
     if (!meta.id || !meta.formatVersion || !meta.sessionId || !meta.checksum) {
       errors.push({
-        code: 'MISSING_FIELD',
-        message: 'Snapshot metadata missing required fields',
+        code: "MISSING_FIELD",
+        message: "Snapshot metadata missing required fields",
         details: meta,
       });
     }
@@ -61,48 +60,48 @@ export class SnapshotValidator {
     if (!versionCheck.compatible) {
       if (versionCheck.migrationRequired) {
         warnings.push({
-          code: 'DEPRECATED_FORMAT',
+          code: "DEPRECATED_FORMAT",
           message: `Snapshot format ${versionCheck.snapshot} may require migration to ${versionCheck.current}`,
         });
       } else {
         // 미래 버전: 경고 + 에러 모두 추가
         warnings.push({
-          code: 'DEPRECATED_FORMAT',
+          code: "DEPRECATED_FORMAT",
           message: `Snapshot format ${versionCheck.snapshot} is from future version (current: ${versionCheck.current})`,
         });
         errors.push({
-          code: 'VERSION_MISMATCH',
+          code: "VERSION_MISMATCH",
           message: `Incompatible snapshot format: ${versionCheck.snapshot} (current: ${versionCheck.current})`,
         });
       }
     } else if (versionCheck.migrationRequired) {
       // 호환되지만 마이그레이션이 필요한 이전 버전
       warnings.push({
-        code: 'DEPRECATED_FORMAT',
+        code: "DEPRECATED_FORMAT",
         message: `Snapshot format ${versionCheck.snapshot} may require migration to ${versionCheck.current}`,
       });
     }
 
     // 4. 데이터 무결성 검증
-    if (!meta.compressed && typeof snapshot.data === 'object' && snapshot.data !== null) {
+    if (!meta.compressed && typeof snapshot.data === "object" && snapshot.data !== null) {
       const isValid = await verifyChecksum(snapshot.data, meta.checksum);
       if (!isValid) {
         errors.push({
-          code: 'CHECKSUM_INVALID',
-          message: 'Snapshot data checksum does not match metadata',
+          code: "CHECKSUM_INVALID",
+          message: "Snapshot data checksum does not match metadata",
           details: { expected: meta.checksum },
         });
       }
     }
 
     // 5. 압축 데이터 검증
-    if (meta.compressed && typeof snapshot.data === 'string') {
+    if (meta.compressed && typeof snapshot.data === "string") {
       try {
         const algorithm = detectCompression(snapshot.data);
         if (!algorithm) {
           errors.push({
-            code: 'FORMAT_INVALID',
-            message: 'Snapshot marked as compressed but data is not valid compressed format',
+            code: "FORMAT_INVALID",
+            message: "Snapshot marked as compressed but data is not valid compressed format",
           });
         }
 
@@ -111,16 +110,16 @@ export class SnapshotValidator {
           const checksumValid = await verifyChecksum(snapshot.data, meta.compressedChecksum);
           if (!checksumValid) {
             errors.push({
-              code: 'CHECKSUM_INVALID',
-              message: 'Compressed data checksum does not match metadata',
+              code: "CHECKSUM_INVALID",
+              message: "Compressed data checksum does not match metadata",
               details: { expected: meta.compressedChecksum },
             });
           }
         }
       } catch (e) {
         errors.push({
-          code: 'DATA_CORRUPTED',
-          message: 'Failed to detect compression format',
+          code: "DATA_CORRUPTED",
+          message: "Failed to detect compression format",
           details: e,
         });
       }
@@ -142,14 +141,14 @@ export class SnapshotValidator {
 
         if (!state.meta || !state.state) {
           errors.push({
-            code: 'DATA_CORRUPTED',
-            message: 'Deserialized state is missing required fields',
+            code: "DATA_CORRUPTED",
+            message: "Deserialized state is missing required fields",
           });
         }
       } catch (e) {
         errors.push({
-          code: 'DATA_CORRUPTED',
-          message: 'Failed to deserialize snapshot data',
+          code: "DATA_CORRUPTED",
+          message: "Failed to deserialize snapshot data",
           details: e,
         });
       }
@@ -175,8 +174,8 @@ export class SnapshotValidator {
     // 1. 기본 구조 검증
     if (!snapshot.meta || !snapshot.data) {
       errors.push({
-        code: 'FORMAT_INVALID',
-        message: 'Snapshot missing required fields (meta or data)',
+        code: "FORMAT_INVALID",
+        message: "Snapshot missing required fields (meta or data)",
       });
       return { valid: false, errors, warnings };
     }
@@ -185,8 +184,8 @@ export class SnapshotValidator {
     const { meta } = snapshot;
     if (!meta.id || !meta.formatVersion || !meta.sessionId || !meta.checksum) {
       errors.push({
-        code: 'MISSING_FIELD',
-        message: 'Snapshot metadata missing required fields',
+        code: "MISSING_FIELD",
+        message: "Snapshot metadata missing required fields",
         details: meta,
       });
     }
@@ -196,48 +195,48 @@ export class SnapshotValidator {
     if (!versionCheck.compatible) {
       if (versionCheck.migrationRequired) {
         warnings.push({
-          code: 'DEPRECATED_FORMAT',
+          code: "DEPRECATED_FORMAT",
           message: `Snapshot format ${versionCheck.snapshot} may require migration to ${versionCheck.current}`,
         });
       } else {
         // 미래 버전: 경고 + 에러 모두 추가
         warnings.push({
-          code: 'DEPRECATED_FORMAT',
+          code: "DEPRECATED_FORMAT",
           message: `Snapshot format ${versionCheck.snapshot} is from future version (current: ${versionCheck.current})`,
         });
         errors.push({
-          code: 'VERSION_MISMATCH',
+          code: "VERSION_MISMATCH",
           message: `Incompatible snapshot format: ${versionCheck.snapshot} (current: ${versionCheck.current})`,
         });
       }
     } else if (versionCheck.migrationRequired) {
       // 호환되지만 마이그레이션이 필요한 이전 버전
       warnings.push({
-        code: 'DEPRECATED_FORMAT',
+        code: "DEPRECATED_FORMAT",
         message: `Snapshot format ${versionCheck.snapshot} may require migration to ${versionCheck.current}`,
       });
     }
 
     // 4. 데이터 무결성 검증 (동기)
-    if (!meta.compressed && typeof snapshot.data === 'object' && snapshot.data !== null) {
+    if (!meta.compressed && typeof snapshot.data === "object" && snapshot.data !== null) {
       const isValid = verifyChecksumSync(snapshot.data, meta.checksum);
       if (!isValid) {
         errors.push({
-          code: 'CHECKSUM_INVALID',
-          message: 'Snapshot data checksum does not match metadata',
+          code: "CHECKSUM_INVALID",
+          message: "Snapshot data checksum does not match metadata",
           details: { expected: meta.checksum },
         });
       }
     }
 
     // 5. 압축 데이터 검증
-    if (meta.compressed && typeof snapshot.data === 'string') {
+    if (meta.compressed && typeof snapshot.data === "string") {
       try {
         const algorithm = detectCompression(snapshot.data);
         if (!algorithm) {
           errors.push({
-            code: 'FORMAT_INVALID',
-            message: 'Snapshot marked as compressed but data is not valid compressed format',
+            code: "FORMAT_INVALID",
+            message: "Snapshot marked as compressed but data is not valid compressed format",
           });
         }
 
@@ -246,16 +245,16 @@ export class SnapshotValidator {
           const checksumValid = verifyChecksumSync(snapshot.data, meta.compressedChecksum);
           if (!checksumValid) {
             errors.push({
-              code: 'CHECKSUM_INVALID',
-              message: 'Compressed data checksum does not match metadata',
+              code: "CHECKSUM_INVALID",
+              message: "Compressed data checksum does not match metadata",
               details: { expected: meta.compressedChecksum },
             });
           }
         }
       } catch (e) {
         errors.push({
-          code: 'DATA_CORRUPTED',
-          message: 'Failed to detect compression format',
+          code: "DATA_CORRUPTED",
+          message: "Failed to detect compression format",
           details: e,
         });
       }
@@ -277,14 +276,14 @@ export class SnapshotValidator {
 
         if (!state.meta || !state.state) {
           errors.push({
-            code: 'DATA_CORRUPTED',
-            message: 'Deserialized state is missing required fields',
+            code: "DATA_CORRUPTED",
+            message: "Deserialized state is missing required fields",
           });
         }
       } catch (e) {
         errors.push({
-          code: 'DATA_CORRUPTED',
-          message: 'Failed to deserialize snapshot data',
+          code: "DATA_CORRUPTED",
+          message: "Failed to deserialize snapshot data",
           details: e,
         });
       }
@@ -317,8 +316,8 @@ export class SnapshotValidator {
     }
 
     // 메이저 버전 체크 (semver 간단 구현)
-    const currentMajor = parseInt(current.split('.')[0], 10);
-    const snapshotMajor = parseInt(snapshot.split('.')[0], 10);
+    const currentMajor = parseInt(current.split(".")[0], 10);
+    const snapshotMajor = parseInt(snapshot.split(".")[0], 10);
 
     if (snapshotMajor > currentMajor) {
       // 미래 버전 - 호환 불가
@@ -344,14 +343,14 @@ export class SnapshotValidator {
 
     // 1. 기본 구조 검증
     if (!snapshot.meta || !snapshot.data) {
-      errors.push('Snapshot missing required fields (meta or data)');
+      errors.push("Snapshot missing required fields (meta or data)");
       return { valid: false, errors };
     }
 
     // 2. 필수 메타데이터 필드 검증
     const { meta } = snapshot;
     if (!meta.id || !meta.formatVersion || !meta.sessionId || !meta.checksum) {
-      errors.push('Snapshot metadata missing required fields');
+      errors.push("Snapshot metadata missing required fields");
     }
 
     // 3. 형식 버전 호환성 체크
@@ -363,23 +362,23 @@ export class SnapshotValidator {
     }
 
     // 4. 데이터 타입 검증
-    if (!meta.compressed && typeof snapshot.data !== 'object') {
-      errors.push('Snapshot data must be an object when not compressed');
+    if (!meta.compressed && typeof snapshot.data !== "object") {
+      errors.push("Snapshot data must be an object when not compressed");
     }
 
-    if (meta.compressed && typeof snapshot.data !== 'string') {
-      errors.push('Snapshot data must be a string when compressed');
+    if (meta.compressed && typeof snapshot.data !== "string") {
+      errors.push("Snapshot data must be a string when compressed");
     }
 
     // 5. 압축 데이터 형식 검증
-    if (meta.compressed && typeof snapshot.data === 'string') {
+    if (meta.compressed && typeof snapshot.data === "string") {
       try {
         const algorithm = detectCompression(snapshot.data);
         if (!algorithm) {
-          errors.push('Snapshot marked as compressed but data is not valid compressed format');
+          errors.push("Snapshot marked as compressed but data is not valid compressed format");
         }
-      } catch (e) {
-        errors.push('Failed to detect compression format');
+      } catch {
+        errors.push("Failed to detect compression format");
       }
     }
 
@@ -406,20 +405,20 @@ export class SnapshotValidator {
       let serializedState: SerializedState | undefined;
 
       // 압축 데이터 처리
-      if (snapshot.meta.compressed && typeof snapshot.data === 'string') {
-        const algorithm = detectCompression(snapshot.data) ?? 'gzip';
-        const json = decompress(snapshot.data, algorithm);
+      if (snapshot.meta.compressed && typeof snapshot.data === "string") {
+        const algorithm = detectCompression(snapshot.data) ?? "gzip";
+        const json = decompress(snapshot.data, { algorithm }) as string;
         const parsed = JSON.parse(json);
         serializedState = isSerializedState(parsed) ? parsed : undefined;
-      } else if (typeof snapshot.data === 'object' && isSerializedState(snapshot.data)) {
+      } else if (typeof snapshot.data === "object" && isSerializedState(snapshot.data)) {
         serializedState = snapshot.data;
       }
 
       // 타입 가드 실패 시 에러 반환
       if (!serializedState) {
         errors.push({
-          code: 'DATA_CORRUPTED',
-          message: 'Failed to parse serialized state data',
+          code: "DATA_CORRUPTED",
+          message: "Failed to parse serialized state data",
         });
         return { valid: false, errors, warnings };
       }
@@ -432,15 +431,15 @@ export class SnapshotValidator {
         if (stateSection.agents) {
           if (!Array.isArray(stateSection.agents)) {
             errors.push({
-              code: 'DATA_CORRUPTED',
-              message: 'state.agents must be an array of [id, data] tuples',
+              code: "DATA_CORRUPTED",
+              message: "state.agents must be an array of [id, data] tuples",
             });
           } else {
             for (let i = 0; i < stateSection.agents.length; i++) {
               const item = stateSection.agents[i];
-              if (!Array.isArray(item) || item.length !== 2 || typeof item[0] !== 'string') {
+              if (!Array.isArray(item) || item.length !== 2 || typeof item[0] !== "string") {
                 errors.push({
-                  code: 'DATA_CORRUPTED',
+                  code: "DATA_CORRUPTED",
                   message: `state.agents[${i}] must be a [string, unknown] tuple`,
                 });
                 // P1: break 제거 - 전체 에러 수집
@@ -453,15 +452,15 @@ export class SnapshotValidator {
         if (stateSection.tasks) {
           if (!Array.isArray(stateSection.tasks)) {
             errors.push({
-              code: 'DATA_CORRUPTED',
-              message: 'state.tasks must be an array of [id, data] tuples',
+              code: "DATA_CORRUPTED",
+              message: "state.tasks must be an array of [id, data] tuples",
             });
           } else {
             for (let i = 0; i < stateSection.tasks.length; i++) {
               const item = stateSection.tasks[i];
-              if (!Array.isArray(item) || item.length !== 2 || typeof item[0] !== 'string') {
+              if (!Array.isArray(item) || item.length !== 2 || typeof item[0] !== "string") {
                 errors.push({
-                  code: 'DATA_CORRUPTED',
+                  code: "DATA_CORRUPTED",
                   message: `state.tasks[${i}] must be a [string, unknown] tuple`,
                 });
                 // P1: break 제거 - 전체 에러 수집
@@ -479,15 +478,15 @@ export class SnapshotValidator {
         if (decisionsSection.opinions) {
           if (!Array.isArray(decisionsSection.opinions)) {
             errors.push({
-              code: 'DATA_CORRUPTED',
-              message: 'decisions.opinions must be an array of [id, data] tuples',
+              code: "DATA_CORRUPTED",
+              message: "decisions.opinions must be an array of [id, data] tuples",
             });
           } else {
             for (let i = 0; i < decisionsSection.opinions.length; i++) {
               const item = decisionsSection.opinions[i];
-              if (!Array.isArray(item) || item.length !== 2 || typeof item[0] !== 'string') {
+              if (!Array.isArray(item) || item.length !== 2 || typeof item[0] !== "string") {
                 errors.push({
-                  code: 'DATA_CORRUPTED',
+                  code: "DATA_CORRUPTED",
                   message: `decisions.opinions[${i}] must be a [string, unknown] tuple`,
                 });
                 // P1: break 제거 - 전체 에러 수집
@@ -498,8 +497,8 @@ export class SnapshotValidator {
       }
     } catch (e) {
       errors.push({
-        code: 'DATA_CORRUPTED',
-        message: 'Failed to validate runtime structure',
+        code: "DATA_CORRUPTED",
+        message: "Failed to validate runtime structure",
         details: e,
       });
     }

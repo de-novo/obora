@@ -8,7 +8,6 @@ import type {
   AgentId,
   TaskId,
   SessionId,
-  AgendaId,
   Fact,
   Inference,
   Pattern,
@@ -518,7 +517,7 @@ async function calculateChecksumNodeJS(data: string): Promise<string> {
       // Dynamic import for Node.js crypto module (ESM compatible)
       const { createHash } = await import("crypto");
       return createHash("sha256").update(data).digest("hex");
-    } catch (e) {
+    } catch {
       // Import 실패 시 fallback
     }
   }
@@ -554,7 +553,7 @@ export async function calculateChecksum(data: unknown): Promise<string> {
       const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 
       return hashHex;
-    } catch (e) {
+    } catch {
       // Web Crypto 실패 시 Node.js fallback 시도
       return calculateChecksumNodeJS(str);
     }
@@ -593,9 +592,10 @@ export function calculateChecksumSync(data: unknown): string {
   // Node.js 환경에서 동기 해싱
   if (typeof process === "object") {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { createHash } = require("crypto");
       return createHash("sha256").update(str).digest("hex");
-    } catch (e) {
+    } catch {
       throw new Error(
         "Failed to calculate checksum synchronously. Ensure Node.js crypto module is available."
       );

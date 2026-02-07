@@ -3,21 +3,13 @@
  * @description Event Bus 구현 - Pub/Sub 패턴, 와일드카드 구독, 이벤트 필터링 지원
  */
 
-import type {
-  Event,
-  EventType,
-  EventByType,
-  BaseEvent,
-  EventCategory,
-} from './types';
-import type { AgentId } from '../types';
+import type { Event, EventType, EventByType, EventCategory } from "./types";
+import type { AgentId } from "../types";
 
 /**
  * 이벤트 핸들러 타입
  */
-export type EventHandler<T extends Event = Event> = (
-  event: T
-) => void | Promise<void>;
+export type EventHandler<T extends Event = Event> = (event: T) => void | Promise<void>;
 
 /**
  * 구독 정보 인터페이스
@@ -39,7 +31,7 @@ export type Unsubscribe = () => void;
  */
 export interface EventFilter {
   /** 소스 에이전트 ID */
-  source?: AgentId | 'system';
+  source?: AgentId | "system";
   /** 상관 ID */
   correlationId?: string;
   /** 커스텀 필터 함수 */
@@ -82,7 +74,7 @@ export interface EventBusStats {
 export class EventTimeoutError extends Error {
   constructor(eventType: string, timeout: number) {
     super(`Timeout waiting for event '${eventType}' after ${timeout}ms`);
-    this.name = 'EventTimeoutError';
+    this.name = "EventTimeoutError";
   }
 }
 
@@ -160,7 +152,7 @@ export class EventBus {
    * @returns 구독 해제 함수
    */
   subscribe<T extends EventType>(
-    eventType: T | `${EventCategory}.*` | '*',
+    eventType: T | `${EventCategory}.*` | "*",
     handler: EventHandler<EventByType<T>>
   ): Unsubscribe {
     this.debugLog(`Subscribing to event type: ${eventType}`);
@@ -189,14 +181,11 @@ export class EventBus {
    * @returns 구독 해제 함수
    */
   subscribeWithFilter<T extends EventType>(
-    eventType: T | `${EventCategory}.*` | '*',
+    eventType: T | `${EventCategory}.*` | "*",
     filter: EventFilter,
     handler: EventHandler<EventByType<T>>
   ): Unsubscribe {
-    this.debugLog(
-      `Subscribing with filter to event type: ${eventType}`,
-      filter
-    );
+    this.debugLog(`Subscribing with filter to event type: ${eventType}`, filter);
 
     const subscription: Subscription<Event> = {
       handler: handler as EventHandler<Event>,
@@ -211,9 +200,7 @@ export class EventBus {
     return () => {
       this.subscriptions.delete(subscription);
       this.updateSubscriberStats();
-      this.debugLog(
-        `Unsubscribed (with filter) from event type: ${eventType}`
-      );
+      this.debugLog(`Unsubscribed (with filter) from event type: ${eventType}`);
     };
   }
 
@@ -250,7 +237,7 @@ export class EventBus {
    * @param handler - 제거할 핸들러
    */
   unsubscribe<T extends EventType>(
-    eventType: T | `${EventCategory}.*` | '*',
+    eventType: T | `${EventCategory}.*` | "*",
     handler: EventHandler<EventByType<T>>
   ): void {
     for (const sub of this.subscriptions) {
@@ -267,9 +254,7 @@ export class EventBus {
    * 모든 구독 해제
    * @param eventType - 특정 이벤트 타입만 해제 (선택)
    */
-  unsubscribeAll<T extends EventType>(
-    eventType?: T | `${EventCategory}.*` | '*'
-  ): void {
+  unsubscribeAll<T extends EventType>(eventType?: T | `${EventCategory}.*` | "*"): void {
     if (eventType) {
       // 특정 타입의 구독만 해제
       const toRemove: Subscription<Event>[] = [];
@@ -285,7 +270,7 @@ export class EventBus {
     } else {
       // 모든 구독 해제
       this.subscriptions.clear();
-      this.debugLog('Unsubscribed all subscribers');
+      this.debugLog("Unsubscribed all subscribers");
     }
     this.updateSubscriberStats();
   }
@@ -297,7 +282,7 @@ export class EventBus {
     this.history = [];
     this.stats = this.createInitialStats();
     this.updateSubscriberStats();
-    this.debugLog('EventBus history cleared');
+    this.debugLog("EventBus history cleared");
   }
 
   // === 발행 API ===
@@ -337,8 +322,8 @@ export class EventBus {
         if (result instanceof Promise) {
           result.catch((error) => {
             // 에러 이벤트 핸들러 실패 시 별도 경고 로그 (에러 이벤트 재발행 방지)
-            if (event.type === 'system.error') {
-              console.warn('[EventBus] Error handler failed:', error);
+            if (event.type === "system.error") {
+              console.warn("[EventBus] Error handler failed:", error);
               // 에러 이벤트의 에러는 재발행하지 않음 (무한 루프 방지)
             } else {
               if (this.options.throwOnAsyncError) {
@@ -454,7 +439,7 @@ export class EventBus {
   getHistory(
     filter?: {
       type?: EventType | `${EventCategory}.*`;
-      source?: AgentId | 'system';
+      source?: AgentId | "system";
       since?: Date;
       until?: Date;
       limit?: number;
@@ -509,7 +494,7 @@ export class EventBus {
    */
   clearHistory(): void {
     this.history = [];
-    this.debugLog('History cleared');
+    this.debugLog("History cleared");
   }
 
   // === 유틸리티 API ===
@@ -539,15 +524,13 @@ export class EventBus {
     this.subscriptions.clear();
     this.stats.subscriberCount = 0;
     this.stats.subscribersByType.clear();
-    this.debugLog('All subscribers removed');
+    this.debugLog("All subscribers removed");
   }
 
   /**
    * 특정 타입의 모든 구독 해제
    */
-  removeSubscribersForType(
-    eventType: EventType | `${EventCategory}.*` | '*'
-  ): void {
+  removeSubscribersForType(eventType: EventType | `${EventCategory}.*` | "*"): void {
     const toRemove: Subscription<Event>[] = [];
 
     for (const sub of this.subscriptions) {
@@ -664,7 +647,7 @@ export class EventBus {
   private emitError(error: unknown, originalEvent: Event, handlerEventType: string): void {
     // 재귀 방지: 이미 에러 이벤트 발행 중이면 추가 발행을 막음
     if (this.isEmittingError) {
-      console.error('Suppressing recursive error event:', error);
+      console.error("Suppressing recursive error event:", error);
       return;
     }
 
@@ -673,17 +656,17 @@ export class EventBus {
       // 에러 객체 정제 (민감 데이터 노출 방지)
       const sanitizedError = {
         message: error instanceof Error ? error.message : String(error),
-        name: error instanceof Error ? error.name : 'Error',
+        name: error instanceof Error ? error.name : "Error",
         stack: error instanceof Error ? error.stack : undefined,
       };
 
       const errorEvent = {
         id: `evt-error-${crypto.randomUUID()}`,
-        type: 'system.error' as const,
+        type: "system.error" as const,
         timestamp: new Date(),
-        source: 'system' as const,
+        source: "system" as const,
         payload: {
-          code: 'EVENT_HANDLER_ERROR',
+          code: "EVENT_HANDLER_ERROR",
           message: sanitizedError.message,
           details: {
             originalEventType: originalEvent.type,
@@ -697,7 +680,7 @@ export class EventBus {
       this.emit(errorEvent as Event);
     } catch (e) {
       // 에러 이벤트 발행 자체가 실패하면 무시
-      console.error('Failed to emit error event:', e);
+      console.error("Failed to emit error event:", e);
     } finally {
       this.isEmittingError = false;
     }
@@ -709,11 +692,11 @@ export class EventBus {
    * @param eventType - 실제 이벤트 타입
    */
   private matchesPattern(pattern: string, eventType: string): boolean {
-    if (pattern === '*') {
+    if (pattern === "*") {
       return true;
     }
 
-    if (pattern.endsWith('*')) {
+    if (pattern.endsWith("*")) {
       const prefix = pattern.slice(0, -1); // '*' 제거
       return eventType.startsWith(prefix);
     }

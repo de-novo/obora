@@ -3,22 +3,20 @@
  * @description EventAwareBlackboard - 이벤트 발행 기능이 통합된 Blackboard
  */
 
-import { Blackboard, type BlackboardOptions } from './blackboard';
-import { EventBus, type EventBusOptions } from '../events/event-bus';
-import { EventFactory, type CreateEventOptions } from '../events/event-factory';
-import type { Event as BBEvent } from '../events/types';
+import { Blackboard, type BlackboardOptions } from "./blackboard";
+import { EventBus, type EventBusOptions } from "../events/event-bus";
+import { EventFactory } from "../events/event-factory";
+import type { Event as BBEvent } from "../events/types";
 
 import type {
   AgentStatus,
   Task,
   Agenda,
-  Opinion,
   OpinionCreateInput,
   Resolution,
   Fact,
   Inference,
   Pattern,
-  TaskError,
   BoardPhase,
   AgentId,
   TaskId,
@@ -27,8 +25,8 @@ import type {
   InferenceCreateInput,
   PatternCreateInput,
   AgendaCreateInput,
-} from '../types';
-import { TaskStatus, AgendaStatus } from '../types';
+} from "../types";
+import { TaskStatus, AgendaStatus } from "../types";
 
 /**
  * 이벤트 발행 기능이 통합된 Blackboard 옵션
@@ -81,7 +79,12 @@ export class EventAwareBlackboard extends Blackboard {
   private readonly _throwOnEventError: boolean;
 
   constructor(options: EventAwareBlackboardOptions = {}) {
-    const { eventBusOptions, autoEmitEvents = true, throwOnEventError = false, ...blackboardOptions } = options;
+    const {
+      eventBusOptions,
+      autoEmitEvents = true,
+      throwOnEventError = false,
+      ...blackboardOptions
+    } = options;
     super(blackboardOptions);
 
     this.events = new EventBus(eventBusOptions);
@@ -106,7 +109,7 @@ export class EventAwareBlackboard extends Blackboard {
       if (this._throwOnEventError) {
         throw error;
       }
-      console.error('Error emitting event:', error);
+      console.error("Error emitting event:", error);
     }
   }
 
@@ -135,7 +138,7 @@ export class EventAwareBlackboard extends Blackboard {
     this.state.phase = newPhase;
 
     this.emitEvent(() =>
-      this.eventFactory.createPhaseChanged(previousPhase, newPhase, { source: 'system' })
+      this.eventFactory.createPhaseChanged(previousPhase, newPhase, { source: "system" })
     );
   }
 
@@ -145,7 +148,7 @@ export class EventAwareBlackboard extends Blackboard {
     this.state.setContext(key, value);
 
     this.emitEvent(() =>
-      this.eventFactory.createContextUpdated(key, previousValue, value, { source: 'system' })
+      this.eventFactory.createContextUpdated(key, previousValue, value, { source: "system" })
     );
   }
 
@@ -155,12 +158,8 @@ export class EventAwareBlackboard extends Blackboard {
   registerAgent(agent: AgentStatus): void {
     this.state.registerAgent(agent);
 
-    this.emitEvent(() =>
-      this.eventFactory.createStateAgentRegistered(agent, { source: agent.id })
-    );
-    this.emitEvent(() =>
-      this.eventFactory.createAgentRegistered(agent, { source: agent.id })
-    );
+    this.emitEvent(() => this.eventFactory.createStateAgentRegistered(agent, { source: agent.id }));
+    this.emitEvent(() => this.eventFactory.createAgentRegistered(agent, { source: agent.id }));
   }
 
   /** 에이전트 업데이트 */
@@ -174,22 +173,22 @@ export class EventAwareBlackboard extends Blackboard {
 
     this.emitEvent(() =>
       this.eventFactory.createStateAgentUpdated(agentId, previousAgent, newAgent, {
-        source: updates.lastHeartbeat ? agentId : 'system',
+        source: updates.lastHeartbeat ? agentId : "system",
       })
     );
     this.emitEvent(() =>
       this.eventFactory.createAgentStatusChanged(agentId, previousAgent, newAgent, {
-        source: updates.lastHeartbeat ? agentId : 'system',
+        source: updates.lastHeartbeat ? agentId : "system",
       })
     );
   }
 
   /** 에이전트 제거 */
-  removeAgent(agentId: AgentId, reason: string = 'unknown'): void {
+  removeAgent(agentId: AgentId, reason: string = "unknown"): void {
     this.state.removeAgent(agentId);
 
     this.emitEvent(() =>
-      this.eventFactory.createAgentRemoved(agentId, reason, { source: 'system' })
+      this.eventFactory.createAgentRemoved(agentId, reason, { source: "system" })
     );
   }
 
@@ -200,10 +199,10 @@ export class EventAwareBlackboard extends Blackboard {
     this.state.addTask(task);
 
     this.emitEvent(() =>
-      this.eventFactory.createStateTaskCreated(task, { source: task.assignedTo ?? 'system' })
+      this.eventFactory.createStateTaskCreated(task, { source: task.assignedTo ?? "system" })
     );
     this.emitEvent(() =>
-      this.eventFactory.createTaskCreated(task, { source: task.assignedTo ?? 'system' })
+      this.eventFactory.createTaskCreated(task, { source: task.assignedTo ?? "system" })
     );
   }
 
@@ -216,43 +215,55 @@ export class EventAwareBlackboard extends Blackboard {
     const newTask = this.state.getTask(taskId)!;
 
     // 할당 변경 이벤트
-    if (updates.assignedTo !== undefined && updates.assignedTo !== previousTask.assignedTo && updates.assignedTo !== null) {
+    if (
+      updates.assignedTo !== undefined &&
+      updates.assignedTo !== previousTask.assignedTo &&
+      updates.assignedTo !== null
+    ) {
       this.emitEvent(() =>
-        this.eventFactory.createStateTaskAssigned(taskId, updates.assignedTo!, { source: 'system' })
+        this.eventFactory.createStateTaskAssigned(taskId, updates.assignedTo!, { source: "system" })
       );
       this.emitEvent(() =>
-        this.eventFactory.createTaskAssigned(taskId, updates.assignedTo!, { source: 'system' })
+        this.eventFactory.createTaskAssigned(taskId, updates.assignedTo!, { source: "system" })
       );
     }
 
     // 완료 이벤트
     if (updates.status === TaskStatus.COMPLETED && previousTask.status !== TaskStatus.COMPLETED) {
-      const duration = newTask.completedAt && newTask.startedAt
-        ? newTask.completedAt.getTime() - newTask.startedAt.getTime()
-        : 0;
+      const duration =
+        newTask.completedAt && newTask.startedAt
+          ? newTask.completedAt.getTime() - newTask.startedAt.getTime()
+          : 0;
       this.emitEvent(() =>
         this.eventFactory.createStateTaskCompleted(taskId, newTask.outputs, duration, {
-          source: newTask.assignedTo ?? 'system',
+          source: newTask.assignedTo ?? "system",
         })
       );
       this.emitEvent(() =>
         this.eventFactory.createTaskCompleted(taskId, newTask.outputs, duration, {
-          source: newTask.assignedTo ?? 'system',
+          source: newTask.assignedTo ?? "system",
         })
       );
     }
 
     // 실패 이벤트
     if (updates.status === TaskStatus.FAILED && previousTask.status !== TaskStatus.FAILED) {
-      const error = updates.error ?? { code: 'UNKNOWN', message: 'Unknown error', retryable: false };
-      const duration = newTask.completedAt && newTask.startedAt
-        ? newTask.completedAt.getTime() - newTask.startedAt.getTime()
-        : 0;
+      const error = updates.error ?? {
+        code: "UNKNOWN",
+        message: "Unknown error",
+        retryable: false,
+      };
+      const duration =
+        newTask.completedAt && newTask.startedAt
+          ? newTask.completedAt.getTime() - newTask.startedAt.getTime()
+          : 0;
       this.emitEvent(() =>
-        this.eventFactory.createStateTaskFailed(taskId, error, error.retryable, { source: 'system' })
+        this.eventFactory.createStateTaskFailed(taskId, error, error.retryable, {
+          source: "system",
+        })
       );
       this.emitEvent(() =>
-        this.eventFactory.createTaskFailed(taskId, error, duration, { source: 'system' })
+        this.eventFactory.createTaskFailed(taskId, error, duration, { source: "system" })
       );
     }
 
@@ -260,7 +271,7 @@ export class EventAwareBlackboard extends Blackboard {
     if (updates.status !== undefined && updates.status !== previousTask.status) {
       this.emitEvent(() =>
         this.eventFactory.createTaskStatusChanged(taskId, previousTask.status, updates.status!, {
-          source: 'system',
+          source: "system",
         })
       );
     }
@@ -272,9 +283,7 @@ export class EventAwareBlackboard extends Blackboard {
   addFact(factInput: FactCreateInput): Fact {
     const fact = this.knowledge.addFact(factInput);
 
-    this.emitEvent(() =>
-      this.eventFactory.createFactAdded(fact, { source: factInput.source })
-    );
+    this.emitEvent(() => this.eventFactory.createFactAdded(fact, { source: factInput.source }));
 
     return fact;
   }
@@ -295,7 +304,9 @@ export class EventAwareBlackboard extends Blackboard {
     const pattern = this.knowledge.upsertPattern(patternInput);
 
     this.emitEvent(() =>
-      this.eventFactory.createKnowledgePatternLearned(pattern, { source: patternInput.discoveredBy })
+      this.eventFactory.createKnowledgePatternLearned(pattern, {
+        source: patternInput.discoveredBy,
+      })
     );
 
     return pattern;
@@ -326,15 +337,20 @@ export class EventAwareBlackboard extends Blackboard {
 
     this.emitEvent(() =>
       this.eventFactory.createDecisionsAgendaStarted(agendaId, {
-        source: agenda?.proposer ?? 'system',
+        source: agenda?.proposer ?? "system",
       })
     );
 
     if (previousStatus && agenda) {
       this.emitEvent(() =>
-        this.eventFactory.createAgendaStatusChanged(agendaId, previousStatus, AgendaStatus.DISCUSSING, {
-          source: 'system',
-        })
+        this.eventFactory.createAgendaStatusChanged(
+          agendaId,
+          previousStatus,
+          AgendaStatus.DISCUSSING,
+          {
+            source: "system",
+          }
+        )
       );
     }
   }
@@ -348,9 +364,14 @@ export class EventAwareBlackboard extends Blackboard {
 
     if (previousStatus && agenda) {
       this.emitEvent(() =>
-        this.eventFactory.createAgendaStatusChanged(agendaId, previousStatus, AgendaStatus.CANCELLED, {
-          source: 'system',
-        })
+        this.eventFactory.createAgendaStatusChanged(
+          agendaId,
+          previousStatus,
+          AgendaStatus.CANCELLED,
+          {
+            source: "system",
+          }
+        )
       );
     }
   }
@@ -368,11 +389,15 @@ export class EventAwareBlackboard extends Blackboard {
   }
 
   /** 결정 기록 */
-  recordResolution(resolutionInput: Omit<Resolution, 'id' | 'createdAt' | 'updatedAt'>): Resolution {
+  recordResolution(
+    resolutionInput: Omit<Resolution, "id" | "createdAt" | "updatedAt">
+  ): Resolution {
     const resolution = this.decisions.recordResolution(resolutionInput);
 
     this.emitEvent(() =>
-      this.eventFactory.createDecisionsConsensusReached(resolution, { source: resolutionInput.decidedBy })
+      this.eventFactory.createDecisionsConsensusReached(resolution, {
+        source: resolutionInput.decidedBy,
+      })
     );
     this.emitEvent(() =>
       this.eventFactory.createDecisionsAgendaResolved(resolutionInput.agendaId, resolution, {
@@ -391,28 +416,30 @@ export class EventAwareBlackboard extends Blackboard {
   /** 스냅샷 생성 이벤트 발행 */
   emitSnapshotCreated(snapshotId: string): void {
     this.emitEvent(() =>
-      this.eventFactory.createSystemSnapshotCreated(snapshotId, new Date(), { source: 'system' })
+      this.eventFactory.createSystemSnapshotCreated(snapshotId, new Date(), { source: "system" })
     );
   }
 
   /** 스냅샷 복원 이벤트 발행 */
   emitSnapshotRestored(snapshotId: string): void {
     this.emitEvent(() =>
-      this.eventFactory.createSystemSnapshotRestored(snapshotId, new Date(), { source: 'system' })
+      this.eventFactory.createSystemSnapshotRestored(snapshotId, new Date(), { source: "system" })
     );
   }
 
   /** 시스템 에러 이벤트 발행 */
   emitSystemError(code: string, message: string, details?: unknown): void {
     this.emitEvent(() =>
-      this.eventFactory.createSystemError(code, message, details, { source: 'system' })
+      this.eventFactory.createSystemError(code, message, details, { source: "system" })
     );
   }
 
   /** 버전 충돌 이벤트 발행 */
   emitVersionConflict(path: string, expectedVersion: number, actualVersion: number): void {
     this.emitEvent(() =>
-      this.eventFactory.createVersionConflict(path, expectedVersion, actualVersion, { source: 'system' })
+      this.eventFactory.createVersionConflict(path, expectedVersion, actualVersion, {
+        source: "system",
+      })
     );
   }
 }

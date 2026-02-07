@@ -127,7 +127,7 @@ export class SnapshotRestorer {
     }
 
     // 4. State 역직렬화
-    let state = this.serializer.deserialize(serialized);
+    const state = this.serializer.deserialize(serialized);
 
     // 5. 버전/세션 ID 처리
     if (opts.resetVersion !== false) {

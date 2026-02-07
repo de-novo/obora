@@ -3,9 +3,9 @@
  * @description 유틸리티 함수들 (중복 제거)
  */
 
-import type { Snapshot, SerializedState } from './types';
-import { decompress, detectCompression } from './compression';
-import { isSerializedState } from './type-guards';
+import type { Snapshot, SerializedState } from "./types";
+import { decompress, detectCompression } from "./compression";
+import { isSerializedState } from "./type-guards";
 
 /**
  * JSON.stringify replacer for key sorting
@@ -14,7 +14,7 @@ import { isSerializedState } from './type-guards';
  * @returns Value with sorted keys for objects
  */
 export function sortedKeyReplacer(key: string, value: unknown): unknown {
-  if (value && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
+  if (value && typeof value === "object" && !Array.isArray(value) && !(value instanceof Date)) {
     const sortedObj: Record<string, unknown> = {};
     Object.keys(value as Record<string, unknown>)
       .sort()
@@ -36,21 +36,21 @@ export function sortedKeyReplacer(key: string, value: unknown): unknown {
 export function decompressSnapshotData(snapshot: Snapshot): SerializedState {
   if (!snapshot.meta.compressed) {
     if (!isSerializedState(snapshot.data)) {
-      throw new Error('Invalid snapshot data: not a SerializedState');
+      throw new Error("Invalid snapshot data: not a SerializedState");
     }
     return snapshot.data;
   }
 
-  if (typeof snapshot.data !== 'string') {
-    throw new Error('Invalid compressed data: expected string');
+  if (typeof snapshot.data !== "string") {
+    throw new Error("Invalid compressed data: expected string");
   }
 
-  const algorithm = detectCompression(snapshot.data) ?? 'gzip';
-  const json = decompress(snapshot.data, algorithm);
+  const algorithm = detectCompression(snapshot.data) ?? "gzip";
+  const json = decompress(snapshot.data, { algorithm }) as string;
   const parsed = JSON.parse(json);
 
   if (!isSerializedState(parsed)) {
-    throw new Error('Invalid snapshot data: deserialized data is not a SerializedState');
+    throw new Error("Invalid snapshot data: deserialized data is not a SerializedState");
   }
 
   return parsed;
