@@ -154,11 +154,9 @@ export class ActorRunner {
   }
 
   private log(message: string, error?: unknown): void {
-    if (!this.options.debug) return;
-
     if (error) {
       console.error(`[ActorRunner] ${message}`, error);
-    } else {
+    } else if (this.options.debug) {
       console.log(`[ActorRunner] ${message}`);
     }
   }

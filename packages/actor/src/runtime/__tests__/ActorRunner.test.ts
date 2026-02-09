@@ -155,4 +155,24 @@ describe("ActorRunner", () => {
     await expect(runner.start()).rejects.toThrow("Runner is already running");
     await startPromise;
   });
+
+  it("should log errors even when debug mode is disabled", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const error = new Error("Test error");
+
+    const debugRunner = new ActorRunner(actor, {
+      interval: 10,
+      maxIterations: 1,
+      stopOnError: false,
+      debug: false,
+    });
+
+    actor.act.mockRejectedValueOnce(error);
+
+    await debugRunner.start();
+
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("Cycle error"), error);
+    errorSpy.mockRestore();
+  });
 });

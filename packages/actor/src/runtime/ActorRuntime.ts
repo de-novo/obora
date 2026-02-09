@@ -91,7 +91,7 @@ export class ActorRuntime {
    * @param actorId Actor ID (제공되지 않으면 런타임 종료)
    */
   async stop(actorId?: ActorId): Promise<void> {
-    if (actorId) {
+    if (actorId !== undefined) {
       // 특정 Actor 중지 - 런타임 실행 여부 체크
       if (!this.isRunning) {
         throw new Error("Runtime is not running");
@@ -367,11 +367,12 @@ export class ActorRuntime {
         stopAbort.abort();
         throw error;
       }
+
+      this.log(`Actor stopped: ${actorId}`);
     } catch (error) {
       this.log(`Actor stop failed or timed out: ${actorId}`, error);
       throw error;
     } finally {
-      // 항상 등록 해제 (강제 정리)
       this.actors.delete(actorId);
       this.actorConfigs.delete(actorId);
       this.log(`Actor removed: ${actorId}`);
