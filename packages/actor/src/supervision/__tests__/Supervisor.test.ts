@@ -201,10 +201,38 @@ describe("Supervisor", () => {
       expect(restartSpy).toHaveBeenCalledWith("actor-2" as any);
       expect(restartSpy).toHaveBeenCalledWith("actor-3" as any);
     });
+
+    it("should restart failed and subsequent actors with REST_FOR_ONE", async () => {
+      const restForOneSupervisor = new Supervisor(runtime as unknown as ActorRuntime, {
+        strategy: RestartStrategy.REST_FOR_ONE,
+        backoff: {
+          policy: BackoffPolicy.FIXED,
+          initialDelay: 10,
+          maxDelay: 100,
+        },
+        maxRestarts: 3,
+        restartWindow: 60000,
+        debug: false,
+      });
+
+      restForOneSupervisor.start();
+      restForOneSupervisor.watch("actor-1" as any);
+      restForOneSupervisor.watch("actor-2" as any);
+      restForOneSupervisor.watch("actor-3" as any);
+
+      const restartSpy = vi.spyOn(runtime, "restart");
+
+      await restForOneSupervisor.handleFailure("actor-2" as any, new Error("Test"));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(restartSpy).not.toHaveBeenCalledWith("actor-1" as any);
+      expect(restartSpy).toHaveBeenCalledWith("actor-2" as any);
+      expect(restartSpy).toHaveBeenCalledWith("actor-3" as any);
+    });
   });
 
   describe("backoff policies", () => {
-    it("should use fixed backoff", () => {
+    it("should use fixed backoff", async () => {
       const fixedSupervisor = new Supervisor(runtime as unknown as ActorRuntime, {
         strategy: RestartStrategy.ONE_FOR_ONE,
         backoff: {
@@ -216,12 +244,19 @@ describe("Supervisor", () => {
         restartWindow: 60000,
       });
 
-      // 내부 메서드 테스트는 private이므로 결과로 검증
-      // 실제로는 재시작 시간을 측정하여 검증
-      expect(fixedSupervisor).toBeDefined();
+      const delaySpy = vi.spyOn(fixedSupervisor as any, "delay").mockResolvedValue(undefined);
+
+      fixedSupervisor.start();
+      fixedSupervisor.watch("actor-1" as any);
+
+      await fixedSupervisor.handleFailure("actor-1" as any, new Error("Test"));
+
+      expect(delaySpy).toHaveBeenCalledWith(100);
+
+      delaySpy.mockRestore();
     });
 
-    it("should use exponential backoff", () => {
+    it("should use exponential backoff", async () => {
       const expSupervisor = new Supervisor(runtime as unknown as ActorRuntime, {
         strategy: RestartStrategy.ONE_FOR_ONE,
         backoff: {
@@ -234,8 +269,75 @@ describe("Supervisor", () => {
         restartWindow: 60000,
       });
 
-      // delay 시퀀스: 100, 200, 400, 800, 1600, ...
-      expect(expSupervisor).toBeDefined();
+      const delaySpy = vi.spyOn(expSupervisor as any, "delay").mockResolvedValue(undefined);
+
+      expSupervisor.start();
+      expSupervisor.watch("actor-1" as any);
+
+      await expSupervisor.handleFailure("actor-1" as any, new Error("Test"));
+
+      expect(delaySpy).toHaveBeenCalledWith(100);
+
+      await expSupervisor.handleFailure("actor-1" as any, new Error("Test 2"));
+      expect(delaySpy).toHaveBeenCalledWith(200);
+
+      delaySpy.mockRestore();
+    });
+
+    it("should use linear backoff", async () => {
+      const linearSupervisor = new Supervisor(runtime as unknown as ActorRuntime, {
+        strategy: RestartStrategy.ONE_FOR_ONE,
+        backoff: {
+          policy: BackoffPolicy.LINEAR,
+          initialDelay: 100,
+          maxDelay: 10000,
+        },
+        maxRestarts: 5,
+        restartWindow: 60000,
+      });
+
+      const delaySpy = vi.spyOn(linearSupervisor as any, "delay").mockResolvedValue(undefined);
+
+      linearSupervisor.start();
+      linearSupervisor.watch("actor-1" as any);
+
+      await linearSupervisor.handleFailure("actor-1" as any, new Error("Test"));
+
+      expect(delaySpy).toHaveBeenCalledWith(100);
+
+      await linearSupervisor.handleFailure("actor-1" as any, new Error("Test 2"));
+      expect(delaySpy).toHaveBeenCalledWith(200);
+
+      delaySpy.mockRestore();
+    });
+
+    it("should use exponential jitter backoff", async () => {
+      const jitterSupervisor = new Supervisor(runtime as unknown as ActorRuntime, {
+        strategy: RestartStrategy.ONE_FOR_ONE,
+        backoff: {
+          policy: BackoffPolicy.EXPONENTIAL_JITTER,
+          initialDelay: 100,
+          maxDelay: 10000,
+          multiplier: 2,
+          jitterFactor: 0.1,
+        },
+        maxRestarts: 5,
+        restartWindow: 60000,
+      });
+
+      const delaySpy = vi.spyOn(jitterSupervisor as any, "delay").mockResolvedValue(undefined);
+
+      jitterSupervisor.start();
+      jitterSupervisor.watch("actor-1" as any);
+
+      await jitterSupervisor.handleFailure("actor-1" as any, new Error("Test"));
+
+      expect(delaySpy).toHaveBeenCalled();
+      const delayValue = delaySpy.mock.calls[0][0];
+      expect(delayValue).toBeGreaterThan(90);
+      expect(delayValue).toBeLessThan(110);
+
+      delaySpy.mockRestore();
     });
   });
 
@@ -260,10 +362,38 @@ describe("Supervisor", () => {
 
       // Dead letter 추가 확인
       const deadLetters = supervisor.getDeadLetters();
-      expect(deadLetters.length).toBeGreaterThanOrEqual(0);
+      expect(deadLetters.length).toBeGreaterThanOrEqual(1);
+
+      // dead-letter 이벤트 핸들러 호출 확인
+      expect(deadLetterHandler).toHaveBeenCalled();
+
+      // dead letter 객체의 핵심 필드 검증
+      const firstLetter = deadLetters[0];
+      expect(firstLetter.actorId).toBe("actor-1" as any);
+      expect(firstLetter.error).toBeInstanceOf(Error);
+      expect(firstLetter.timestamp).toBeInstanceOf(Date);
+      expect(firstLetter.retryCount).toBeGreaterThanOrEqual(1);
     });
 
-    it("should clear dead letter queue", () => {
+    it("should clear dead letter queue after populating", async () => {
+      // 먼저 dead letter를 추가
+      runtime.actors.delete("actor-1");
+
+      supervisor.start();
+      supervisor.watch("actor-1" as any);
+
+      try {
+        await supervisor.handleFailure("actor-1" as any, new Error("Test error"));
+      } catch {
+        // 예외 무시
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // 큐에 항목이 있는지 확인
+      expect(supervisor.getDeadLetters().length).toBeGreaterThanOrEqual(1);
+
+      // 비우기 및 확인
       supervisor.clearDeadLetters();
       expect(supervisor.getDeadLetters()).toHaveLength(0);
     });

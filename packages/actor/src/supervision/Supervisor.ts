@@ -255,8 +255,15 @@ export class Supervisor extends EventEmitter {
         this.addDeadLetter(actorId, restartError as Error, attempt);
       }
 
-      // 재귀적으로 다시 시도
-      await this.handleFailure(actorId, restartError as Error);
+      // attempt 카운터 기반으로 절대적 재시작 횟수 제한
+      const currentAttempt = this.restartCounts.get(actorId) || 0;
+      if (currentAttempt >= this.config.maxRestarts) {
+        this.emit("max-restarts-exceeded", actorId);
+        await this.performStop(actorId, "Max restarts exceeded after restart failure");
+      } else {
+        // handleFailure를 통해 decideRestart 로직을 재평가
+        await this.handleFailure(actorId, restartError as Error);
+      }
     }
   }
 

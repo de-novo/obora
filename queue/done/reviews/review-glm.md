@@ -1,40 +1,72 @@
-I'll verify each checklist item by examining the actual code. Let me start by finding the relevant files.
-Now let me check the Actor types and the types.ts file:
-Now let me analyze each checklist item:
-
 # 체크리스트 검증 결과
 
 ## 항목별 결과
-
-- [PASS] 항목1: stopActor에서 stop 실패/타임아웃 시에도 actor를 Map에서 항상 삭제 (ActorRuntime.ts:375-379)
-  - `stopActor` 메서드의 `finally` 블록에서 항상 `this.actors.delete(actorId)`와 `this.actorConfigs.delete(actorId)` 호출
-
-- [PASS] 항목2: stop() 메서드의 falsy ActorId 분기 문제 (ActorRuntime.ts:93-114)
-  - `if (actorId !== undefined)`로 명시적으로 `undefined`만 체크하여 런타임 종료와 Actor 중지를 구분
-
-- [PASS] 항목3: ActorRunner의 주석-코드 불일치: 에러 로깅이 debug 모드에서만 동작 (ActorRunner.ts:156-162, 83-84)
-  - `log` 메서드에서 error가 있을 경우 `console.error`로 debug 모드와 무관하게 항상 로그 출력
-  - 주석 "// 에러 로깅 (debug 모드와 무관하게 항상 로그)"이 코드 동작과 일치
-
-- [PASS] 항목4: Method name collision - `stop()` 중복 정의 (Gemini) (ActorRuntime.ts:93-114)
-  - 단일 `stop(actorId?: ActorId)` 메서드로 두 가지 기능(Actor 중지, 런타임 종료)을 처리하는 overload가 아닌 optional parameter 패턴 사용
-
-- [PASS] 항목5: Constructor and Method signature mismatches in Tests (Gemini) (actor.ts:186-263, DefaultActorFactory.ts:10-17, types.ts:39)
-  - Actor 인터페이스의 `start()`, `stop()`, `restart()`, `receive()`, `observe()`, `think()`, `act()`, `report()` 메서드가 모두 `void | Promise<void>` 타입을 지원
-  - Test mock 구현이 동기 메서드를 사용하고 ActorRunner에서 `await`를 사용하는 패턴이 올바름
-
-- [PASS] 항목6: ActorRunner fails to await async Actor methods (Gemini) (ActorRunner.ts:132-143)
-  - `runCycle` 메서드에서 `await this.actor.observe()`, `await this.actor.think(obs)`, `await this.actor.act(action)`, `await this.actor.report(result)`로 모든 메서드가 올바르게 await됨
-
-- [PASS] 항목7: DefaultActorFactory constructor arguments mismatch (Gemini) (DefaultActorFactory.ts:10-17, 55-78)
-  - `ActorConstructor` 타입과 `DefaultActorFactory.create()`에서 Actor 생성자 호출이 일치
-  - 테스트의 `MockActor` 생성자 시그니처가 `(id: string, name: string, role: ActorRole, board: IBlackboard, messageBus: IMessageBus)`로 일치
-
-- [PASS] 항목8: 테스트 코드의 Actor.status 타입 불일치 (GLM) (actor.ts:186-194, ActorRunner.test.ts:41-71, ActorRuntime.test.ts:25-40, DefaultActorFactory.test.ts:24-39)
-  - Actor 인터페이스의 `status: ActorStatus`는 객체 타입이며 `ActorStatus.status: ActorLifecycleStatus` 프로퍼티 포함
-  - Test mock의 `status` 객체 구조가 올바르게 `status.status` 프로퍼티 포함
-  - ActorRunner의 `this.actor.status.status` 접근이 올바름
+- [PASS] 항목1 (만료된 task가 submitAndWait 호출자에게 전파되지 않음): 만료된 task가 recordTaskResult()를 통해 pendingResults에 저장되고, submitAndWait에서 대기 중인 작업으로 에러가 전파됨 (ActorPool.ts:680-682, 735-736)
+- [FAIL] 항목2 (submitAndWait의 폴링 interval이 Pool 종료 시 정리되지 않음): waitForTaskResult가 반환하는 cleanup 객체가 submitAndWait에서 사용되지 않아 Pool 종료 시 모든 폴링 interval이 정리되지 않음 (ActorPool.ts:345-390, 848-851)
+- [PASS] 항목3 (dispatchTask()에서 Actor 없으면 무한 재삽입 사이클): Actor가 없으면 break하여 무한 루프를 방지함 (ActorPool.ts:740-742)
+- [PASS] 항목4 (getActorStatus()에서 actor.status 대신 actor.getStatus() 사용해야 함): actor.getStatus()를 올바르게 사용함 (ActorPool.ts:461)
+- [PASS] 항목5 (selectLeastBusy()에서 actor.status.messageQueue 직접 접근): actor.getStatus().messageQueue를 올바르게 사용함 (ActorPool.ts:589-592)
+- [PASS] 항목6 (Pool 모듈이 패키지 엔트리포인트에서 내보내지 않음): index.ts에서 pool을 내보냄 (packages/actor/src/index.ts:11)
+- [PASS] 항목7 (단위 테스트 파일 전체 누락): 테스트 파일들이 존재함 (packages/actor/src/pool/__tests__/)
+- [FAIL] 항목8 (IBlackboard.write()는 void를 반환하나 await로 호출): write()는 void 반환인데 await로 호출됨 (ActorPool.ts:620, blackboard.ts:32)
+- [PASS] 항목9 (ActorPool/PoolManager 생성자 시그니처가 스펙과 불일치): 스펙과 일치함 (ActorPool.ts:176-181, PoolManager.ts:42-46)
 
 ## 점수
-- 통과: 8/8
-- **총점: 10/10**
+- 통과: 7/9
+- **총점: 7/10**
+
+## FAIL 항목 수정 방법
+### [P2] submitAndWait의 폴링 interval이 Pool 종료 시 정리되지 않음
+- **파일**: packages/actor/src/pool/ActorPool.ts:345-390
+- **문제점**: waitForTaskResult가 반환하는 cleanup 객체가 submitAndWait에서 사용되지 않아, Pool이 종료되더라도 모든 폴링 interval이 정리되지 않음
+- **수정 전 코드**:
+```typescript
+waiter = this.waitForTaskResult(
+  taskId,
+  () => {
+    if (settled) return;
+    settled = true;
+    cleanup();
+  },
+  resolve,
+  reject
+);
+```
+- **수정 후 코드**:
+```typescript
+waiter = this.waitForTaskResult(
+  taskId,
+  () => {
+    if (settled) return;
+    settled = true;
+    waiter?.cleanup(); // waiter가 정의된 후 cleanup 사용
+  },
+  resolve,
+  reject
+);
+```
+
+### [P2] IBlackboard.write()는 void를 반환하나 await로 호출
+- **파일**: packages/actor/src/pool/ActorPool.ts:620
+- **문제점**: write()는 void 반환 메서드인데 불필요하게 await를 사용함
+- **수정 전 코드**:
+```typescript
+this.board.write(taskSection, {
+  taskId: task.id,
+  actorId: actor.id,
+  data: task.data,
+  priority: task.priority,
+  createdAt: task.createdAt,
+});
+```
+- **수정 후 코드**:
+```typescript
+this.board.write(taskSection, {
+  taskId: task.id,
+  actorId: actor.id,
+  data: task.data,
+  priority: task.priority,
+  createdAt: task.createdAt,
+});
+// await 제거 (write()는 void 반환)
+```

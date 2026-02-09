@@ -1,9 +1,9 @@
 <review>
   <mode>checklist_verification</mode>
   <task>
-    <name>TASK-025-actor-runtime</name>
+    <name>TASK-026-actor-pool</name>
     <spec><![CDATA[
-# TASK-025: Actor 런타임 구현
+# TASK-026: Actor Pool 관리
 
 ## 개요
 - **상태**: 📋 대기
@@ -13,686 +13,888 @@
 - Phase: Week 3-4
 
 ## 목표
-Actor 런타임을 구현하여 Actor의 생명주기(spawn, stop, restart)를 관리하고 Blackboard와 연동합니다.
+Actor Pool을 구현하여 동적 확장/축소와 작업 분배를 통해 효율적인 리소스 관리를 제공합니다.
 
 ## 작업 내용
 
-### 1. ActorRuntime 클래스 정의
+### 1. ActorPool 클래스 정의
 
-**파일:** `packages/actor/src/runtime/ActorRuntime.ts`
+**파일:** `packages/actor/src/pool/ActorPool.ts`
 
 #### 기본 인터페이스
 
 ```typescript
-import { Actor, ActorId, ActorLifecycleStatus, ActorRole } from '../types/actor';
-import { IBlackboard } from '../types/blackboard';
-import { IMessageBus } from '../types/message';
-import { ActorFactory, ActorConfig } from './types';
+import { Actor, ActorId, ActorRole, ActorLifecycleStatus, ActorStatus } from '../types/actor';
+import { Blackboard } from '../types/blackboard';
+import { ActorConfig, ActorFactory } from '../runtime/types';
 
 /**
- * Actor 런타임 설정
+ * Actor Pool 설정
  */
-export interface RuntimeConfig {
-  /** 최대 동시 Actor 수 */
-  maxActors?: number;
+export interface PoolConfig {
+  /** 풀 이름 */
+  name: string;
 
-  /** Actor 생성 시 기본 타임아웃 (ms) */
-  spawnTimeout?: number;
+  /** Actor 역할 (풀 내 모든 Actor는 동일 역할) */
+  role: ActorRole;
 
-  /** Actor 종료 시 기본 타임아웃 (ms) */
-  stopTimeout?: number;
+  /** Actor 유형 */
+  type: string;
 
-  /** 재시작 최대 횟수 */
-  maxRestarts?: number;
+  /** 초기 Actor 수 */
+  initialSize?: number;
 
-  /** 재시작 백오프 초기값 (ms) */
-  initialBackoff?: number;
+  /** 최소 Actor 수 */
+  minSize?: number;
 
-  /** 재시작 백오프 최대값 (ms) */
-  maxBackoff?: number;
+  /** 최대 Actor 수 */
+  maxSize?: number;
+
+  /** Idle 타임아웃 (ms) - 지정 시간 동안 작업 없으면 Actor 종료 */
+  idleTimeout?: number;
+
+  /** 확장 전략 */
+  scaleStrategy?: 'fixed' | 'dynamic' | 'adaptive';
+
+  /** 작업 분배 전략 */
+  dispatchStrategy?: 'round-robin' | 'least-busy' | 'random';
+
+  /** 작업 큐 최대 크기 */
+  maxQueueSize?: number;
+
+  /** 작업 대기 타임아웃 (ms) */
+  taskTimeout?: number;
 
   /** 디버그 모드 */
   debug?: boolean;
 }
 
 /**
- * Actor 런타임
- *
- * Actor의 생성, 관리, 종료를 담당합니다.
+ * 작업
  */
-export class ActorRuntime {
-  private readonly actors: Map<ActorId, Actor>;
-  private readonly actorConfigs: Map<ActorId, ActorConfig>;
-  private readonly board: IBlackboard;
-  private readonly messageBus: IMessageBus;
-  private readonly config: Required<RuntimeConfig>;
-  private readonly factory: ActorFactory;
-  private isRunning: boolean;
+export interface Task<T = unknown> {
+  /** 작업 ID */
+  id: string;
 
-  constructor(board: IBlackboard, messageBus: IMessageBus, factory: ActorFactory, config?: RuntimeConfig) {
+  /** 작업 데이터 */
+  data: T;
+
+  /** 생성 시간 */
+  createdAt: Date;
+
+  /** 우선순위 (높을수록 우선) */
+  priority: number;
+
+  /** 만료 시간 */
+  expiresAt?: Date;
+
+  /** 완료 콜백 */
+  onComplete?: (result: unknown, error?: Error) => void;
+}
+
+/**
+ * 작업 결과
+ */
+export interface TaskResult {
+  /** 작업 ID */
+  taskId: string;
+
+  /** 처리한 Actor ID */
+  actorId: ActorId;
+
+  /** 결과 데이터 */
+  result: unknown;
+
+  /** 에러 (실패 시) */
+  error?: Error;
+
+  /** 시작 시간 */
+  startedAt: Date;
+
+  /** 완료 시간 */
+  completedAt: Date;
+
+  /** 실행 시간 (ms) */
+  duration: number;
+}
+
+/**
+ * Actor Pool 메트릭 (스펙 기준)
+ *
+ * 참고: [[spec/13-actor.md|13-actor.md]]
+ */
+export interface PoolMetrics {
+  /** 총 Actor 수 */
+  totalActors: number;
+
+  /** 활성 Actor 수 */
+  activeActors: number;
+
+  /** Idle 상태 Actor 수 */
+  idleActors: number;
+
+  /** 에러 상태 Actor 수 */
+  errorActors: number;
+
+  /** 대기열 크기 */
+  queueSize: number;
+
+  /** 평균 대기 시간 (ms) */
+  averageQueueTime: number;
+
+  /** 처리량 */
+  throughput: {
+    messagesPerSecond: number;
+    actionsPerSecond: number;
+  };
+
+  /** 이용률 (0.0 ~ 1.0) */
+  utilization: number;
+}
+
+/**
+ * Actor Pool
+ *
+ * 동적으로 확장/축소 가능한 Actor 풀을 관리하고,
+ * 작업을 분배하여 효율적인 리소스 사용을 제공합니다.
+ */
+export class ActorPool {
+  private readonly config: Required<PoolConfig>;
+  private readonly board: Blackboard;
+  private readonly factory: ActorFactory;
+  private readonly actors: Map<ActorId, Actor>;
+  private readonly taskQueue: Task[];
+  private readonly inProgress: Map<string, Task>;
+  private readonly completedTasks: TaskResult[];
+  private readonly metrics: PoolMetrics;
+  private readonly actorConfigs: Map<ActorId, ActorConfig>;
+  private isRunning: boolean;
+  private roundRobinIndex: number;
+  private idleTimers: Map<ActorId, NodeJS.Timeout>;
+  private scaleTimer?: NodeJS.Timeout;
+  private dispatchTimer?: NodeJS.Timeout;
+
+  constructor(config: PoolConfig, board: Blackboard, factory: ActorFactory) {
     this.board = board;
-    this.messageBus = messageBus;
     this.factory = factory;
     this.actors = new Map();
+    this.taskQueue = [];
+    this.inProgress = new Map();
+    this.completedTasks = [];
     this.actorConfigs = new Map();
+    this.idleTimers = new Map();
     this.isRunning = false;
+    this.roundRobinIndex = 0;
 
     // 기본 설정
-    const defaults: Required<RuntimeConfig> = {
-      maxActors: 100,
-      spawnTimeout: 5000,
-      stopTimeout: 5000,
-      maxRestarts: 3,
-      initialBackoff: 1000,
-      maxBackoff: 30000,
-      debug: false,
+    const defaults: Required<PoolConfig> = {
+      name: config.name,
+      role: config.role,
+      type: config.type,
+      initialSize: config.initialSize ?? 3,
+      minSize: config.minSize ?? 1,
+      maxSize: config.maxSize ?? 10,
+      idleTimeout: config.idleTimeout ?? 30000, // 30초
+      scaleStrategy: config.scaleStrategy ?? 'dynamic',
+      dispatchStrategy: config.dispatchStrategy ?? 'round-robin',
+      maxQueueSize: config.maxQueueSize ?? 100,
+      taskTimeout: config.taskTimeout ?? 30000,
+      debug: config.debug ?? false,
     };
-    this.config = { ...defaults, ...config };
+    this.config = defaults;
+
+    // 메트릭 초기화
+    this.metrics = {
+      totalActors: 0,
+      activeActors: 0,
+      idleActors: 0,
+      errorActors: 0,
+      queueSize: 0,
+      averageQueueTime: 0,
+      throughput: {
+        messagesPerSecond: 0,
+        actionsPerSecond: 0,
+      },
+      utilization: 0,
+    };
   }
 
   /**
-   * 런타임 시작
+   * 풀 시작
    */
   async start(): Promise<void> {
     if (this.isRunning) {
-      throw new Error('Runtime is already running');
+      throw new Error('Pool is already running');
     }
+
     this.isRunning = true;
-    this.log('Runtime started');
+
+    // 초기 Actor 생성
+    await this.scaleTo(this.config.initialSize);
+
+    // 작업 분배 시작
+    this.startDispatch();
+
+    // 자동 스케일링 시작 (dynamic/adaptive 모드)
+    if (this.config.scaleStrategy !== 'fixed') {
+      this.startAutoScale();
+    }
+
+    this.log(`Pool started: ${this.config.name} (${this.config.initialSize} actors)`);
   }
 
   /**
-   * 런타임 종료
+   * 풀 종료
    */
   async stop(): Promise<void> {
     if (!this.isRunning) {
       return;
     }
 
-    this.log('Stopping runtime...');
+    this.isRunning = false;
+
+    // 타이머 정리
+    this.clearTimers();
+
+    // Idle 타이머 정리
+    this.idleTimers.forEach((timer) => clearTimeout(timer));
+    this.idleTimers.clear();
 
     // 모든 Actor 중지
     const stopPromises = Array.from(this.actors.values()).map((actor) =>
-      this.stopActor(actor.id)
+      actor.stop()
     );
-
     await Promise.allSettled(stopPromises);
-    this.actors.clear();
-    this.isRunning = false;
 
-    this.log('Runtime stopped');
+    // 큐 정리
+    this.taskQueue.length = 0;
+    this.inProgress.clear();
+
+    this.log(`Pool stopped: ${this.config.name}`);
   }
 
   /**
-   * 새 Actor 생성 (spawn)
-   * @param config Actor 설정
-   * @returns 생성된 Actor
+   * 작업 제출
+   * @param data 작업 데이터
+   * @param priority 우선순위 (높을수록 우선)
+   * @returns 작업 ID
    */
-  async spawn(config: ActorConfig): Promise<Actor> {
+  async submit<T = unknown>(
+    data: T,
+    priority: number = 0
+  ): Promise<string> {
     if (!this.isRunning) {
-      throw new Error('Runtime is not running');
+      throw new Error('Pool is not running');
     }
 
-    // 최대 Actor 수 체크
-    if (this.actors.size >= this.config.maxActors) {
-      throw new Error(`Maximum actors limit reached: ${this.config.maxActors}`);
+    // 큐 크기 체크
+    if (this.taskQueue.length >= this.config.maxQueueSize) {
+      throw new Error(`Task queue is full: ${this.config.maxQueueSize}`);
     }
 
-    // 중복 ID 체크
-    if (this.actors.has(config.id)) {
-      throw new Error(`Actor already exists: ${config.id}`);
-    }
+    const task: Task<T> = {
+      id: crypto.randomUUID(),
+      data,
+      createdAt: new Date(),
+      priority,
+    };
 
-    this.log(`Spawning actor: ${config.id} (${config.role})`);
+    // 우선순위 순으로 삽입
+    this.enqueueTask(task);
 
-    // 상태 변경: CREATED → STARTING
-    const startTime = Date.now();
+    this.log(`Task submitted: ${task.id} (priority: ${priority})`);
 
-    try {
-      // Actor 생성
-      const actor = await this.factory.create(config, this.board, this.messageBus);
-
-      // Actor 시작
-      await actor.start();
-
-      // 등록
-      this.actors.set(actor.id, actor);
-      this.actorConfigs.set(actor.id, config);
-
-      const duration = Date.now() - startTime;
-      this.log(`Actor spawned: ${config.id} (${duration}ms)`);
-
-      return actor;
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      this.log(`Actor spawn failed: ${config.id} (${duration}ms)`, error);
-      throw error;
-    }
+    return task.id;
   }
 
   /**
-   * Actor 중지
-   * @param actorId Actor ID
+   * 작업 제출 및 결과 대기
+   * @param data 작업 데이터
+   * @param priority 우선순위
+   * @returns 작업 결과
    */
-  async stop(actorId: ActorId): Promise<void> {
-    const actor = this.getActor(actorId);
-    await this.stopActor(actor);
+  async submitAndWait<T = unknown, R = unknown>(
+    data: T,
+    priority: number = 0
+  ): Promise<R> {
+    const taskId = await this.submit(data, priority);
+
+    return new Promise<R>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.inProgress.delete(taskId);
+        reject(new Error(`Task timeout: ${taskId}`));
+      }, this.config.taskTimeout);
+
+      // 결과 기다림 (실제로는 이벤트 기반으로 구현)
+      this.waitForTaskResult(taskId, timeout, resolve, reject);
+    });
   }
 
   /**
-   * Actor 재시작
-   * @param actorId Actor ID
-   * @param restartCount 현재 재시작 횟수 (내부용)
+   * 풀 크기 조정
+   * @param size 목표 크기
    */
-  async restart(actorId: ActorId, restartCount = 0): Promise<Actor> {
-    if (restartCount >= this.config.maxRestarts) {
-      throw new Error(
-        `Max restarts (${this.config.maxRestarts}) exceeded for actor: ${actorId}`
-      );
+  async scaleTo(size: number): Promise<void> {
+    const currentSize = this.actors.size;
+
+    if (size === currentSize) {
+      return;
     }
 
-    const actor = this.getActor(actorId);
-    const config = this.actorConfigs.get(actorId);
+    this.log(`Scaling pool: ${currentSize} → ${size}`);
 
-    if (!config) {
-      throw new Error(`Actor config not found: ${actorId}`);
-    }
-
-    this.log(`Restarting actor: ${actorId} (attempt ${restartCount + 1})`);
-
-    // 상태 변경: ERROR/STOPPED → RESTARTING
-    actor['setStatus'](ActorLifecycleStatus.RESTARTING);
-
-    try {
-      // 기존 Actor 중지
-      await this.stopActor(actor);
-
-      // 백오프 대기
-      const backoff = this.calculateBackoff(restartCount);
-      if (backoff > 0) {
-        await this.delay(backoff);
+    if (size > currentSize) {
+      // 확장
+      const diff = size - currentSize;
+      for (let i = 0; i < diff; i++) {
+        await this.spawnActor();
       }
-
-      // 새 Actor 생성
-      const newActor = await this.spawn(config);
-
-      this.log(`Actor restarted: ${actorId}`);
-
-      return newActor;
-    } catch (error) {
-      this.log(`Actor restart failed: ${actorId}`, error);
-      throw error;
+    } else {
+      // 축소 (최소 크기 보장)
+      const targetSize = Math.max(size, this.config.minSize);
+      if (targetSize < currentSize) {
+        const diff = currentSize - targetSize;
+        await this.removeIdleActors(diff);
+      }
     }
   }
 
   /**
-   * Actor 조회
-   * @param actorId Actor ID
-   * @returns Actor 인스턴스
+   * 풀 크기 증가
+   * @param count 증가할 Actor 수
    */
-  getActor(actorId: ActorId): Actor {
-    const actor = this.actors.get(actorId);
-    if (!actor) {
-      throw new Error(`Actor not found: ${actorId}`);
-    }
-    return actor;
+  async scaleUp(count: number = 1): Promise<void> {
+    const newSize = Math.min(
+      this.actors.size + count,
+      this.config.maxSize
+    );
+    await this.scaleTo(newSize);
   }
 
   /**
-   * Actor 존재 여부 확인
-   * @param actorId Actor ID
-   * @returns 존재 여부
+   * 풀 크기 감소
+   * @param count 감소할 Actor 수
    */
-  hasActor(actorId: ActorId): boolean {
-    return this.actors.has(actorId);
+  async scaleDown(count: number = 1): Promise<void> {
+    const newSize = Math.max(
+      this.actors.size - count,
+      this.config.minSize
+    );
+    await this.scaleTo(newSize);
   }
 
   /**
-   * 모든 Actor ID 반환
-   * @returns Actor ID 배열
+   * 풀 메트릭 조회
    */
-  listActors(): ActorId[] {
+  getMetrics(): PoolMetrics {
+    return { ...this.metrics };
+  }
+
+  /**
+   * Actor 목록 조회
+   */
+  getActors(): ActorId[] {
     return Array.from(this.actors.keys());
   }
 
   /**
-   * 역할별 Actor 목록
-   * @param role Actor 역할
-   * @returns Actor ID 배열
+   * Actor 상태 조회
    */
-  listActorsByRole(role: ActorRole): ActorId[] {
-    return Array.from(this.actors.values())
-      .filter((actor) => actor.role === role)
-      .map((actor) => actor.id);
-  }
-
-  /**
-   * 특정 상태의 Actor 목록
-   * @param status Actor 상태
-   * @returns Actor ID 배열
-   */
-  listActorsByStatus(status: ActorLifecycleStatus): ActorId[] {
-    return Array.from(this.actors.values())
-      .filter((actor) => actor.status === status)
-      .map((actor) => actor.id);
-  }
-
-  /**
-   * 현재 Actor 수
-   */
-  size(): number {
-    return this.actors.size;
-  }
-
-  /**
-   * 런타임 상태
-   */
-  getStatus(): { running: boolean; actorCount: number } {
-    return {
-      running: this.isRunning,
-      actorCount: this.actors.size,
-    };
+  getActorStatus(actorId: ActorId): ActorStatus {
+    const actor = this.actors.get(actorId);
+    if (!actor) {
+      throw new Error(`Actor not found: ${actorId}`);
+    }
+    return actor.getStatus();
   }
 
   // ==================== 내부 메서드 ====================
 
-  private async stopActor(actor: Actor): Promise<void> {
-    this.log(`Stopping actor: ${actor.id}`);
+  private async spawnActor(): Promise<Actor> {
+    const id = this.generateActorId();
+    const config: ActorConfig = {
+      id,
+      role: this.config.role,
+      type: this.config.type,
+    };
 
-    // 상태 변경: RUNNING → STOPPING
-    actor['setStatus'](ActorLifecycleStatus.STOPPING);
+    this.actorConfigs.set(id, config);
 
-    try {
-      // 타임아웃과 함께 stop 호출
-      await Promise.race([
-        actor.stop(),
-        this.delay(this.config.stopTimeout),
-      ]);
+    const actor = this.factory.create(config, this.board);
+    this.actors.set(id, actor);
 
-      // 상태 변경: STOPPING → STOPPED
-      actor['setStatus'](ActorLifecycleStatus.STOPPED);
+    // Actor 시작
+    actor['setStatus']('running' as ActorLifecycleStatus);
 
-      // 등록 해제
-      this.actors.delete(actor.id);
-      this.actorConfigs.delete(actor.id);
+    // Idle 타이머 시작
+    this.startIdleTimer(id);
 
-      this.log(`Actor stopped: ${actor.id}`);
-    } catch (error) {
-      // 상태 변경: STOPPING → ERROR
-      actor['setStatus'](ActorLifecycleStatus.ERROR);
-      this.log(`Actor stop failed: ${actor.id}`, error);
-      throw error;
-    }
-  }
+    // 메트릭 업데이트
+    this.metrics.totalActors = this.actors.size;
+    this.metrics.idleActors++;
 
-  /**
-   * getActorConfig() 구현 방법 (스펙 기준)
-   *
-   * ActorConfig는 Actor 생성 시 필요한 설정 정보입니다.
-   * 구현 방법은 다음과 같습니다:
-   *
-   * 1. **Map에 저장**: Actor 생성 시 actorConfigs Map에 config 저장
-   * 2. **조회 방법**: getActorConfig()에서 Map에서 조회
-   * 3. **용도**: 재시작 시 동일한 설정으로 Actor 재생성
-   *
-   * 참고: [[spec/13-actor.md|13-actor.md]] - ActorConfig 인터페이스
-   *
-   * @param actorId Actor ID
-   * @returns ActorConfig
-   */
-  private getActorConfig(actorId: ActorId): ActorConfig {
-    const config = this.actorConfigs.get(actorId);
-    if (!config) {
-      throw new Error(`Actor config not found: ${actorId}`);
-    }
-    return config;
-  }
-
-  /**
-   * getActorConfig() 구현 방법 (스펙 기준)
-   *
-   * ActorConfig는 Actor 생성 시 필요한 설정 정보입니다.
-   * 구현 방법은 다음과 같습니다:
-   *
-   * 1. **Map에 저장**: Actor 생성 시 actorConfigs Map에 config 저장
-   * 2. **조회 방법**: getActorConfig()에서 Map에서 조회
-   * 3. **용도**: 재시작 시 동일한 설정으로 Actor 재생성
-   *
-   * 참고: [[spec/13-actor.md|13-actor.md]] - ActorConfig 인터페이스
-   *
-   * @param actorId Actor ID
-   * @returns ActorConfig
-   */
-  private getActorConfig(actorId: ActorId): ActorConfig {
-    const config = this.actorConfigs.get(actorId);
-    if (!config) {
-      throw new Error(`Actor config not found: ${actorId}`);
-    }
-    return config;
-  }
-
-  private calculateBackoff(restartCount: number): number {
-    const factor = Math.pow(2, restartCount);
-    const backoff = this.config.initialBackoff * factor;
-    return Math.min(backoff, this.config.maxBackoff);
-  }
-
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  private log(message: string, error?: unknown): void {
-    if (!this.config.debug) return;
-
-    if (error) {
-      console.error(`[ActorRuntime] ${message}`, error);
-    } else {
-      console.log(`[ActorRuntime] ${message}`);
-    }
-  }
-}
-```
-
-### 2. ActorFactory 인터페이스
-
-**파일:** `packages/actor/src/runtime/types.ts`
-
-```typescript
-import { Actor, ActorId, ActorRole } from '../types/actor';
-import { IBlackboard } from '../types/blackboard';
-import { IMessageBus } from '../types/message';
-
-/**
- * Actor 생성 설정 (스펙 기준)
- *
- * 참고: [[spec/13-actor.md|13-actor.md]]
- */
-export interface ActorConfig {
-  /** Actor ID (생략 시 자동 생성) */
-  id?: ActorId;
-
-  /** Actor 이름 */
-  name: string;
-
-  /** Actor 역할 */
-  role: ActorRole;
-
-  /** Actor 유형 (구체적인 Actor 클래스 식별자) */
-  type: string;
-
-  /** Actor 초기 설정 */
-  config?: Record<string, unknown>;
-}
-
-/**
- * Actor 팩토리
- *
- * Actor 인스턴스 생성을 담당하는 인터페이스입니다.
- * 구체적인 Actor 구현은 이 팩토리를 통해 생성됩니다.
- */
-export interface ActorFactory {
-  /**
-   * Actor 인스턴스 생성 (스펙 기준)
-   * @param config Actor 설정
-   * @param board Blackboard 인스턴스
-   * @param messageBus MessageBus 인스턴스
-   * @returns 생성된 Actor 인스턴스
-   */
-  create(config: ActorConfig, board: IBlackboard, messageBus: IMessageBus): Promise<Actor> | Actor;
-}
-```
-
-### 3. 기본 ActorFactory 구현
-
-**파일:** `packages/actor/src/runtime/DefaultActorFactory.ts`
-
-```typescript
-import { Actor } from '../types/actor';
-import { Blackboard } from '../types/blackboard';
-import { ActorFactory, ActorConfig } from './types';
-
-/**
- * Actor 클래스 등록소
- */
-type ActorConstructor = new (
-  id: string,
-  role: any,
-  board: Blackboard,
-  config?: Record<string, unknown>
-) => Actor;
-
-/**
- * 기본 Actor 팩토리
- *
- * Actor 클래스를 등록하고 생성할 수 있는 팩토리입니다.
- */
-export class DefaultActorFactory implements ActorFactory {
-  private readonly registry: Map<string, ActorConstructor>;
-
-  constructor() {
-    this.registry = new Map();
-  }
-
-  /**
-   * Actor 클래스 등록
-   * @param type Actor 유형 식별자
-   * @param constructor Actor 생성자
-   */
-  register(type: string, constructor: ActorConstructor): void {
-    this.registry.set(type, constructor);
-  }
-
-  /**
-   * Actor 클래스 등록 해제
-   * @param type Actor 유형 식별자
-   */
-  unregister(type: string): void {
-    this.registry.delete(type);
-  }
-
-  /**
-   * Actor 인스턴스 생성 (스펙 기준)
-   * @param config Actor 설정
-   * @param board Blackboard 인스턴스
-   * @param messageBus MessageBus 인스턴스
-   * @returns 생성된 Actor 인스턴스
-   */
-  create(config: ActorConfig, board: IBlackboard, messageBus: IMessageBus): Actor {
-    const { id, name, role, type, config: actorConfig } = config;
-
-    // 등록된 생성자 조회
-    const Constructor = this.registry.get(type);
-    if (!Constructor) {
-      throw new Error(`Unknown actor type: ${type}`);
-    }
-
-    // Actor 생성
-    const actor = new Constructor(
-      id || this.generateId(role),
-      name || `actor-${role}`,
-      role,
-      board,
-      messageBus,
-      actorConfig
-    );
-
+    this.log(`Actor spawned: ${id}`);
     return actor;
   }
 
+  private async removeIdleActors(count: number): Promise<void> {
+    let removed = 0;
+
+    for (const [id, actor] of this.actors.entries()) {
+      if (removed >= count) break;
+
+      // Idle 상태인 Actor만 제거
+      if (actor.status === 'running' && !this.isActorBusy(id)) {
+        await this.removeActor(id);
+        removed++;
+      }
+    }
+  }
+
+  private async removeActor(actorId: ActorId): Promise<void> {
+    const actor = this.actors.get(actorId);
+    if (!actor) return;
+
+    // Idle 타이머 정리
+    const timer = this.idleTimers.get(actorId);
+    if (timer) {
+      clearTimeout(timer);
+      this.idleTimers.delete(actorId);
+    }
+
+    // Actor 종료
+    await actor.stop();
+    this.actors.delete(actorId);
+    this.actorConfigs.delete(actorId);
+
+    // 메트릭 업데이트
+    this.metrics.totalActors = this.actors.size;
+    this.metrics.idleActors--;
+
+    this.log(`Actor removed: ${actorId}`);
+  }
+
+  private selectActor(): Actor | null {
+    const idleActors = Array.from(this.actors.values()).filter((actor) =>
+      this.isActorAvailable(actor.id)
+    );
+
+    if (idleActors.length === 0) {
+      return null;
+    }
+
+    switch (this.config.dispatchStrategy) {
+      case 'round-robin':
+        return this.selectRoundRobin(idleActors);
+      case 'least-busy':
+        return this.selectLeastBusy(idleActors);
+      case 'random':
+        return this.selectRandom(idleActors);
+      default:
+        return idleActors[0];
+    }
+  }
+
+  private selectRoundRobin(actors: Actor[]): Actor {
+    const index = this.roundRobinIndex % actors.length;
+    this.roundRobinIndex++;
+    return actors[index];
+  }
+
   /**
-   * Actor ID 생성
-   * @param role Actor 역할
-   * @returns Actor ID
+   * Least Loaded 전략 (스펙 기준: Least Loaded)
+   *
+   * 대기열 크기가 가장 적은 Actor를 선택합니다.
+   *
+   * 참고: [[spec/13-actor.md|13-actor.md]] - LoadBalancingStrategy
    */
-  private generateId(role: string): string {
+  private selectLeastBusy(actors: Actor[]): Actor {
+    return actors.reduce((least, actor) => {
+      const leastQueue = least.getStatus().messageQueue.pending;
+      const actorQueue = actor.getStatus().messageQueue.pending;
+      return actorQueue < leastQueue ? actor : least;
+    });
+  }
+
+  private selectRandom(actors: Actor[]): Actor {
+    const index = Math.floor(Math.random() * actors.length);
+    return actors[index];
+  }
+
+  private async dispatchTask(task: Task): Promise<void> {
+    const actor = this.selectActor();
+    if (!actor) {
+      // 사용 가능한 Actor 없음 - 대기
+      return;
+    }
+
+    this.inProgress.set(task.id, task);
+
+    // Idle 타이머 리셋
+    this.resetIdleTimer(actor.id);
+
+    // 메트릭 업데이트
+    this.metrics.idleActors--;
+    this.metrics.activeActors++;
+
+    this.log(`Task ${task.id} → Actor ${actor.id}`);
+
+    try {
+      const startTime = Date.now();
+
+      // 작업 실행
+      const obs = await actor.observe();
+      const action = await actor.think(obs);
+      const result = await actor.act(action);
+      await actor.report(result);
+
+      const duration = Date.now() - startTime;
+
+      // 결과 기록
+      const taskResult: TaskResult = {
+        taskId: task.id,
+        actorId: actor.id,
+        result: result.data,
+        error: result.error || undefined,
+        startedAt: new Date(startTime),
+        completedAt: new Date(),
+        duration,
+      };
+
+      this.recordTaskResult(taskResult);
+
+      // 콜백 호출
+      task.onComplete?.(result.data, result.error || undefined);
+    } catch (error) {
+      const err = error as Error;
+      this.log(`Task ${task.id} failed: ${err.message}`);
+
+      const taskResult: TaskResult = {
+        taskId: task.id,
+        actorId: actor.id,
+        result: null,
+        error: err,
+        startedAt: new Date(),
+        completedAt: new Date(),
+        duration: 0,
+      };
+
+      this.recordTaskResult(taskResult);
+      task.onComplete?.(null, err);
+    } finally {
+      this.inProgress.delete(task.id);
+      this.metrics.activeActors--;
+      this.metrics.idleActors++;
+      this.resetIdleTimer(actor.id);
+    }
+  }
+
+  private recordTaskResult(result: TaskResult): void {
+    this.completedTasks.push(result);
+
+    // 메트릭 업데이트 - throughput 계산
+    const now = Date.now();
+    const oneSecondAgo = now - 1000;
+
+    // 최근 1초 내 완료된 작업 수 계산
+    const recentCompletions = this.completedTasks.filter(
+      r => r.completedAt.getTime() >= oneSecondAgo
+    ).length;
+
+    this.metrics.throughput.actionsPerSecond = recentCompletions;
+
+    // 완료된 작업 결과 기록 (최근 1000개 유지)
+    if (this.completedTasks.length > 1000) {
+      this.completedTasks.shift();
+    }
+  }
+
+  private enqueueTask(task: Task): void {
+    // 우선순위 순으로 삽입
+    let inserted = false;
+    for (let i = 0; i < this.taskQueue.length; i++) {
+      if (task.priority > this.taskQueue[i].priority) {
+        this.taskQueue.splice(i, 0, task);
+        inserted = true;
+        break;
+      }
+    }
+    if (!inserted) {
+      this.taskQueue.push(task);
+    }
+
+    this.metrics.queuedTasks = this.taskQueue.length;
+  }
+
+  private startDispatch(): void {
+    this.dispatchTimer = setInterval(() => {
+      if (this.taskQueue.length > 0) {
+        const task = this.taskQueue.shift();
+        if (task) {
+          this.metrics.queueSize = this.taskQueue.length;
+          this.dispatchTask(task);
+        }
+      }
+    }, 100); // 100ms마다 체크
+  }
+
+  private startAutoScale(): void {
+    this.scaleTimer = setInterval(() => {
+      this.autoScale();
+    }, 5000); // 5초마다 체크
+  }
+
+  private autoScale(): void {
+    if (this.config.scaleStrategy === 'fixed') {
+      return;
+    }
+
+    const queueLength = this.taskQueue.length;
+    const idleRatio = this.metrics.idleActors / this.metrics.currentSize;
+
+    if (this.config.scaleStrategy === 'dynamic') {
+      // 간단한 동적 스케일링
+      if (queueLength > 2 && this.metrics.currentSize < this.config.maxSize) {
+        this.scaleUp();
+      } else if (idleRatio > 0.5 && this.metrics.currentSize > this.config.minSize) {
+        this.scaleDown();
+      }
+    } else if (this.config.scaleStrategy === 'adaptive') {
+      // 적응형 스케일링 (CPU, 메모리 등 메트릭 기반)
+      // TODO: 더 복잡한 로직 구현
+      if (queueLength > 5 && this.metrics.currentSize < this.config.maxSize) {
+        this.scaleUp();
+      } else if (idleRatio > 0.7 && this.metrics.currentSize > this.config.minSize) {
+        this.scaleDown();
+      }
+    }
+  }
+
+  private startIdleTimer(actorId: ActorId): void {
+    const timer = setTimeout(() => {
+      // 최소 크기 유지 체크
+      if (this.metrics.totalActors > this.config.minSize) {
+        this.removeActor(actorId);
+      }
+    }, this.config.idleTimeout);
+
+    this.idleTimers.set(actorId, timer);
+  }
+
+  private resetIdleTimer(actorId: ActorId): void {
+    const timer = this.idleTimers.get(actorId);
+    if (timer) {
+      clearTimeout(timer);
+    }
+    this.startIdleTimer(actorId);
+  }
+
+  private isActorAvailable(actorId: ActorId): boolean {
+    const actor = this.actors.get(actorId);
+    if (!actor) return false;
+    return actor.status === 'running' && !this.isActorBusy(actorId);
+  }
+
+  private isActorBusy(actorId: ActorId): boolean {
+    // 현재 작업 중인지 확인
+    for (const task of this.inProgress.values()) {
+      // 실제 구현에서는 작업-Actor 매핑을 추적해야 함
+    }
+    return false;
+  }
+
+  private waitForTaskResult<T>(
+    taskId: string,
+    timeout: NodeJS.Timeout,
+    resolve: (value: T) => void,
+    reject: (reason?: unknown) => void
+  ): void {
+    // TODO: 이벤트 기반 결과 대기 구현
+    // 간단한 폴링 방식으로 구현 (실제로는 EventEmitter 사용)
+    const checkInterval = setInterval(() => {
+      const result = this.completedTasks.find((r) => r.taskId === taskId);
+      if (result) {
+        clearInterval(checkInterval);
+        clearTimeout(timeout);
+
+        if (result.error) {
+          reject(result.error);
+        } else {
+          resolve(result.result as T);
+        }
+      }
+    }, 100);
+  }
+
+  private clearTimers(): void {
+    if (this.scaleTimer) {
+      clearInterval(this.scaleTimer);
+      this.scaleTimer = undefined;
+    }
+    if (this.dispatchTimer) {
+      clearInterval(this.dispatchTimer);
+      this.dispatchTimer = undefined;
+    }
+  }
+
+  private generateActorId(): string {
     const uuid = crypto.randomUUID();
-    return `${role}-${uuid}`;
+    return `${this.config.role}-${uuid}`;
+  }
+
+  private log(message: string): void {
+    if (!this.config.debug) return;
+    console.log(`[ActorPool:${this.config.name}] ${message}`);
   }
 }
 ```
 
-### 4. Actor 실행 루프 (옵션)
+### 2. PoolManager (여러 Pool 관리)
 
-**파일:** `packages/actor/src/runtime/ActorRunner.ts`
+**파일:** `packages/actor/src/pool/PoolManager.ts`
 
 ```typescript
-import { Actor, ActorStatus, Observation, Action, Result } from '../types/actor';
+import { ActorPool, PoolConfig, PoolMetrics } from './ActorPool';
+import { Blackboard } from '../types/blackboard';
+import { ActorFactory } from '../runtime/types';
 
 /**
- * Actor 실행 루프 옵션
- */
-export interface RunnerOptions {
-  /** 실행 간격 (ms) */
-  interval?: number;
-
-  /** 최대 연속 실행 횟수 */
-  maxIterations?: number;
-
-  /** 에러 발생 시 중지 여부 */
-  stopOnError?: boolean;
-
-  /** 종료 조건 콜백 */
-  stopCondition?: () => boolean | Promise<boolean>;
-}
-
-/**
- * Actor 실행 루프
+ * Pool Manager
  *
- * Actor의 observe-think-act-report 사이클을 반복 실행합니다.
+ * 여러 Actor Pool을 관리하는 매니저입니다.
  */
-export class ActorRunner {
-  private readonly actor: Actor;
-  private readonly options: Required<RunnerOptions>;
-  private isRunning: boolean = false;
-  private iterationCount: number = 0;
-  private abortController: AbortController | null = null;
+export class PoolManager {
+  private readonly board: Blackboard;
+  private readonly factory: ActorFactory;
+  private readonly pools: Map<string, ActorPool>;
+  private isRunning: boolean;
 
-  constructor(actor: Actor, options?: RunnerOptions) {
-    this.actor = actor;
-    this.options = {
-      interval: 1000,
-      maxIterations: Infinity,
-      stopOnError: true,
-      stopCondition: () => false,
-      ...options,
-    };
+  constructor(board: Blackboard, factory: ActorFactory) {
+    this.board = board;
+    this.factory = factory;
+    this.pools = new Map();
+    this.isRunning = false;
   }
 
   /**
-   * 실행 루프 시작
+   * 매니저 시작
    */
   async start(): Promise<void> {
     if (this.isRunning) {
-      throw new Error('Runner is already running');
+      throw new Error('PoolManager is already running');
     }
 
     this.isRunning = true;
-    this.iterationCount = 0;
-    this.abortController = new AbortController();
 
-    while (this.isRunning) {
-      // 종료 조건 확인
-      if (await this.shouldStop()) {
-        break;
-      }
-
-      // 최대 반복 횟수 확인
-      if (this.iterationCount >= this.options.maxIterations) {
-        break;
-      }
-
-      // Actor 상태 확인
-      if (this.actor.status !== ActorStatus.RUNNING) {
-        break;
-      }
-
-      try {
-        // 한 사이클 실행
-        await this.runCycle();
-        this.iterationCount++;
-      } catch (error) {
-        if (this.options.stopOnError) {
-          throw error;
-        }
-        // 에러 무지하고 계속
-      }
-
-      // 대기
-      await this.delay(this.options.interval);
-    }
-
-    this.isRunning = false;
-    this.abortController = null;
+    // 모든 Pool 시작
+    const startPromises = Array.from(this.pools.values()).map((pool) =>
+      pool.start()
+    );
+    await Promise.all(startPromises);
   }
 
   /**
-   * 실행 루프 중지
+   * 매니저 종료
    */
-  stop(): void {
+  async stop(): Promise<void> {
     if (!this.isRunning) {
       return;
     }
 
+    // 모든 Pool 종료
+    const stopPromises = Array.from(this.pools.values()).map((pool) =>
+      pool.stop()
+    );
+    await Promise.all(stopPromises);
+
     this.isRunning = false;
-    this.abortController?.abort();
   }
 
   /**
-   * 현재 실행 중인지 확인
+   * Pool 등록
+   * @param config Pool 설정
+   * @returns 생성된 Pool
    */
-  running(): boolean {
-    return this.isRunning;
-  }
+  registerPool(config: PoolConfig): ActorPool {
+    const pool = new ActorPool(config, this.board, this.factory);
+    this.pools.set(config.name, pool);
 
-  /**
-   * 현재 반복 횟수
-   */
-  getIterationCount(): number {
-    return this.iterationCount;
-  }
-
-  // ==================== 내부 메서드 ====================
-
-  private async runCycle(): Promise<void> {
-    // 1. Observe (동기)
-    const obs = this.actor.observe();
-
-    // 2. Think (동기)
-    const action = this.actor.think(obs);
-
-    // 3. Act (동기)
-    const result = this.actor.act(action);
-
-    // 4. Report (동기)
-    this.actor.report(result);
-  }
-
-  private async shouldStop(): Promise<boolean> {
-    // AbortController 확인
-    if (this.abortController?.signal.aborted) {
-      return true;
+    // 이미 실행 중이면 Pool 시작
+    if (this.isRunning) {
+      pool.start().catch((err) => {
+        console.error(`Failed to start pool: ${config.name}`, err);
+      });
     }
 
-    // 종료 조건 확인
-    return await this.options.stopCondition();
+    return pool;
   }
 
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+  /**
+   * Pool 등록 해제
+   * @param name Pool 이름
+   */
+  async unregisterPool(name: string): Promise<void> {
+    const pool = this.pools.get(name);
+    if (!pool) {
+      throw new Error(`Pool not found: ${name}`);
+    }
+
+    await pool.stop();
+    this.pools.delete(name);
+  }
+
+  /**
+   * Pool 조회
+   * @param name Pool 이름
+   * @returns Pool 인스턴스
+   */
+  getPool(name: string): ActorPool {
+    const pool = this.pools.get(name);
+    if (!pool) {
+      throw new Error(`Pool not found: ${name}`);
+    }
+    return pool;
+  }
+
+  /**
+   * 모든 Pool 이름 조회
+   * @returns Pool 이름 배열
+   */
+  listPools(): string[] {
+    return Array.from(this.pools.keys());
+  }
+
+  /**
+   * 모든 Pool의 메트릭 조회
+   * @returns Pool 이름별 메트릭 맵
+   */
+  getAllMetrics(): Map<string, PoolMetrics> {
+    const metrics = new Map<string, PoolMetrics>();
+    for (const [name, pool] of this.pools.entries()) {
+      metrics.set(name, pool.getMetrics());
+    }
+    return metrics;
+  }
+
+  /**
+   * Pool 개수
+   */
+  size(): number {
+    return this.pools.size;
   }
 }
 ```
 
-### 5. 단위 테스트 작성
+### 3. 단위 테스트 작성
 
-**파일:** `packages/actor/src/runtime/__tests__/ActorRuntime.test.ts`
+**파일:** `packages/actor/src/pool/__tests__/ActorPool.test.ts`
 
 ```typescript
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Actor, ActorRole, ActorLifecycleStatus } from '../../types/actor';
 import { Blackboard } from '../../types/blackboard';
-import { ActorRuntime } from '../ActorRuntime';
-import { ActorFactory, ActorConfig } from '../types';
+import { ActorPool, PoolConfig } from '../ActorPool';
+import { ActorFactory, ActorConfig } from '../../runtime/types';
 
 class MockActor implements Actor {
   readonly id: string;
@@ -702,16 +904,7 @@ class MockActor implements Actor {
   readonly status: ActorLifecycleStatus = ActorLifecycleStatus.RUNNING;
   lastActivity: Date = new Date();
   createdAt: Date = new Date();
-  metrics = {
-    totalRuns: 0,
-    successCount: 0,
-    failureCount: 0,
-    lastError: null,
-    averageExecutionTime: 0,
-    lastExecutionTime: null,
-    totalCpuTime: 0,
-    memoryUsage: 0,
-  };
+  metrics = { totalRuns: 0, successCount: 0, failureCount: 0, lastError: null, averageExecutionTime: 0, lastExecutionTime: null, totalCpuTime: 0, memoryUsage: 0 };
 
   constructor(id: string, role: ActorRole, board: Blackboard) {
     this.id = id;
@@ -731,13 +924,10 @@ class MockFactory implements ActorFactory {
   create(config: ActorConfig, board: Blackboard): Actor {
     return new MockActor(config.id || 'test-id', config.role, board);
   }
-  createAsync(_config: ActorConfig, _board: Blackboard, _messageBus: any): Promise<Actor> {
-    return Promise.resolve(new MockActor('test-id', 'analyst', _board));
-  }
 }
 
-describe('ActorRuntime', () => {
-  let runtime: ActorRuntime;
+describe('ActorPool', () => {
+  let pool: ActorPool;
   let board: Blackboard;
   let factory: ActorFactory;
 
@@ -749,385 +939,408 @@ describe('ActorRuntime', () => {
       version: 1,
     };
     factory = new MockFactory();
-    runtime = new ActorRuntime(board, factory, { debug: false });
+
+    const config: PoolConfig = {
+      name: 'test-pool',
+      role: 'analyst',
+      type: 'mock',
+      initialSize: 2,
+      minSize: 1,
+      maxSize: 5,
+      idleTimeout: 5000,
+      debug: false,
+    };
+
+    pool = new ActorPool(config, board, factory);
   });
 
   describe('start/stop', () => {
-    it('should start runtime', async () => {
-      await runtime.start();
-      const status = runtime.getStatus();
-      expect(status.running).toBe(true);
+    it('should start pool with initial actors', async () => {
+      await pool.start();
+      const metrics = pool.getMetrics();
+      expect(metrics.currentSize).toBe(2);
+      expect(metrics.idleActors).toBe(2);
     });
 
-    it('should stop runtime', async () => {
-      await runtime.start();
-      await runtime.stop();
-      const status = runtime.getStatus();
-      expect(status.running).toBe(false);
+    it('should stop pool', async () => {
+      await pool.start();
+      await pool.stop();
+      const metrics = pool.getMetrics();
+      expect(metrics.currentSize).toBe(0);
     });
 
-    it('should throw when starting already running runtime', async () => {
-      await runtime.start();
-      await expect(runtime.start()).rejects.toThrow('Runtime is already running');
-    });
-  });
-
-  describe('spawn', () => {
-    beforeEach(async () => {
-      await runtime.start();
-    });
-
-    it('should spawn actor successfully', async () => {
-      const config = {
-        id: 'test-actor-1',
-        role: ActorRole.ANALYST,
-        type: 'mock',
-      };
-      const actor = await runtime.spawn(config);
-
-      expect(actor).toBeInstanceOf(MockActor);
-      expect(actor.id).toBe('test-actor-1');
-      expect(actor.role).toBe(ActorRole.ANALYST);
-      expect(runtime.hasActor('test-actor-1')).toBe(true);
-      expect(runtime.size()).toBe(1);
-    });
-
-    it('should throw when runtime is not running', async () => {
-      await runtime.stop();
-      const config = {
-        id: 'test-actor-1',
-        role: ActorRole.ANALYST,
-        type: 'mock',
-      };
-
-      await expect(runtime.spawn(config)).rejects.toThrow('Runtime is not running');
-    });
-
-    it('should throw when max actors limit reached', async () => {
-      const runtimeWithLimit = new ActorRuntime(board, factory, { maxActors: 2, debug: false });
-      await runtimeWithLimit.start();
-
-      await runtimeWithLimit.spawn({ role: ActorRole.ANALYST, type: 'mock' });
-      await runtimeWithLimit.spawn({ role: ActorRole.ANALYST, type: 'mock' });
-
-      await expect(
-        runtimeWithLimit.spawn({ role: ActorRole.ANALYST, type: 'mock' })
-      ).rejects.toThrow('Maximum actors limit reached');
-    });
-
-    it('should throw when actor ID already exists', async () => {
-      const config = {
-        id: 'test-actor-1',
-        role: ActorRole.ANALYST,
-        type: 'mock',
-      };
-      await runtime.spawn(config);
-
-      await expect(runtime.spawn(config)).rejects.toThrow('Actor already exists');
+    it('should throw when starting already running pool', async () => {
+      await pool.start();
+      await expect(pool.start()).rejects.toThrow('Pool is already running');
     });
   });
 
-  describe('stop', () => {
+  describe('scale', () => {
     beforeEach(async () => {
-      await runtime.start();
-      await runtime.spawn({
-        id: 'test-actor-1',
-        role: ActorRole.ANALYST,
-        type: 'mock',
-      });
+      await pool.start();
     });
 
-    it('should stop actor successfully', async () => {
-      await runtime.stop('test-actor-1');
-      expect(runtime.hasActor('test-actor-1')).toBe(false);
-      expect(runtime.size()).toBe(0);
+    it('should scale up', async () => {
+      await pool.scaleUp(2);
+      const metrics = pool.getMetrics();
+      expect(metrics.currentSize).toBe(4);
     });
 
-    it('should throw when actor not found', async () => {
-      await expect(runtime.stop('non-existent')).rejects.toThrow('Actor not found');
+    it('should scale down', async () => {
+      await pool.scaleDown();
+      const metrics = pool.getMetrics();
+      expect(metrics.currentSize).toBe(1);
+    });
+
+    it('should respect min size', async () => {
+      await pool.scaleDown();
+      await pool.scaleDown();
+      const metrics = pool.getMetrics();
+      expect(metrics.currentSize).toBe(1); // minSize = 1
+    });
+
+    it('should respect max size', async () => {
+      await pool.scaleUp(10); // maxSize = 5
+      const metrics = pool.getMetrics();
+      expect(metrics.currentSize).toBe(5);
+    });
+
+    it('should scale to specific size', async () => {
+      await pool.scaleTo(3);
+      const metrics = pool.getMetrics();
+      expect(metrics.currentSize).toBe(3);
     });
   });
 
-  describe('restart', () => {
+  describe('task submission', () => {
     beforeEach(async () => {
-      await runtime.start();
-      await runtime.spawn({
-        id: 'test-actor-1',
+      await pool.start();
+    });
+
+    it('should submit task', async () => {
+      const taskId = await pool.submit({ data: 'test' });
+      expect(taskId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+    });
+
+    it('should queue tasks when no idle actors', async () => {
+      // 최대 크기보다 많은 작업 제출
+      const config: PoolConfig = {
+        name: 'test-pool',
         role: 'analyst',
         type: 'mock',
-      });
-    });
-
-    it('should restart actor successfully', async () => {
-      const newActor = await runtime.restart('test-actor-1');
-      expect(newActor).toBeInstanceOf(MockActor);
-      expect(newActor.id).toBe('test-actor-1');
-    });
-
-    it('should respect max restarts limit', async () => {
-      const runtimeWithLimit = new ActorRuntime(board, factory, {
-        maxRestarts: 2,
+        initialSize: 1,
+        maxSize: 1,
         debug: false,
-      });
-      await runtimeWithLimit.start();
+      };
+      const smallPool = new ActorPool(config, board, factory);
+      await smallPool.start();
 
-      await runtimeWithLimit.spawn({
-        id: 'test-actor-1',
+      const taskId1 = await smallPool.submit({ data: 'task1' });
+      const taskId2 = await smallPool.submit({ data: 'task2' });
+      const taskId3 = await smallPool.submit({ data: 'task3' }, 10); // 우선순위 높음
+
+      const metrics = smallPool.getMetrics();
+      expect(metrics.queuedTasks).toBeGreaterThan(0);
+
+      await smallPool.stop();
+    });
+
+    it('should respect priority', async () => {
+      const taskId1 = await pool.submit({ data: 'low' }, 0);
+      const taskId2 = await pool.submit({ data: 'high' }, 10);
+      const taskId3 = await pool.submit({ data: 'medium' }, 5);
+
+      // 우선순위 순으로 처리되어야 함
+      // 실제 검증은 작업 완료 이벤트를 통해 수행
+      expect(taskId2).toBeDefined();
+    });
+
+    it('should throw when queue is full', async () => {
+      const config: PoolConfig = {
+        name: 'test-pool',
         role: 'analyst',
         type: 'mock',
-      });
+        initialSize: 1,
+        maxQueueSize: 2,
+        debug: false,
+      };
+      const smallPool = new ActorPool(config, board, factory);
+      await smallPool.start();
 
-      // First restart should succeed
-      await runtimeWithLimit.restart('test-actor-1', 1);
+      await smallPool.submit({ data: 'task1' });
+      await smallPool.submit({ data: 'task2' });
 
-      // Second restart should fail
-      await expect(
-        runtimeWithLimit.restart('test-actor-1', 2)
-      ).rejects.toThrow('Max restarts');
+      await expect(smallPool.submit({ data: 'task3' })).rejects.toThrow(
+        'Task queue is full'
+      );
+
+      await smallPool.stop();
     });
   });
 
-  describe('query methods', () => {
+  describe('dispatch strategies', () => {
     beforeEach(async () => {
-      await runtime.start();
-      await runtime.spawn({
-        id: 'analyst-1',
+      await pool.start();
+    });
+
+    it('should use round-robin dispatch', async () => {
+      const config: PoolConfig = {
+        name: 'test-pool',
         role: 'analyst',
         type: 'mock',
-      });
-      await runtime.spawn({
-        id: 'analyst-2',
+        initialSize: 3,
+        dispatchStrategy: 'round-robin',
+        debug: false,
+      };
+      const rrPool = new ActorPool(config, board, factory);
+      await rrPool.start();
+
+      // 여러 작업 제출 - 순환 분배 확인
+      for (let i = 0; i < 6; i++) {
+        await rrPool.submit({ data: `task${i}` });
+      }
+
+      // 검증 방식: 각 Actor의 메트릭 확인
+      const actors = rrPool.getActors();
+      expect(actors.length).toBe(3);
+
+      await rrPool.stop();
+    });
+
+    it('should use least-busy dispatch', async () => {
+      const config: PoolConfig = {
+        name: 'test-pool',
         role: 'analyst',
         type: 'mock',
-      });
-      await runtime.spawn({
-        id: 'executor-1',
-        role: 'executor',
+        initialSize: 3,
+        dispatchStrategy: 'least-busy',
+        debug: false,
+      };
+      const lbPool = new ActorPool(config, board, factory);
+      await lbPool.start();
+
+      for (let i = 0; i < 3; i++) {
+        await lbPool.submit({ data: `task${i}` });
+      }
+
+      await lbPool.stop();
+    });
+
+    it('should use random dispatch', async () => {
+      const config: PoolConfig = {
+        name: 'test-pool',
+        role: 'analyst',
         type: 'mock',
-      });
+        initialSize: 3,
+        dispatchStrategy: 'random',
+        debug: false,
+      };
+      const randomPool = new ActorPool(config, board, factory);
+      await randomPool.start();
+
+      for (let i = 0; i < 3; i++) {
+        await randomPool.submit({ data: `task${i}` });
+      }
+
+      await randomPool.stop();
+    });
+  });
+
+  describe('metrics', () => {
+    beforeEach(async () => {
+      await pool.start();
     });
 
-    it('should list all actors', () => {
-      const actors = runtime.listActors();
-      expect(actors).toHaveLength(3);
-      expect(actors).toContain('analyst-1');
-      expect(actors).toContain('analyst-2');
-      expect(actors).toContain('executor-1');
-    });
+    it('should track metrics correctly', async () => {
+      const initialMetrics = pool.getMetrics();
+      expect(initialMetrics.currentSize).toBe(2);
+      expect(initialMetrics.idleActors).toBe(2);
+      expect(initialMetrics.activeActors).toBe(0);
 
-    it('should list actors by role', () => {
-      const analysts = runtime.listActorsByRole('analyst');
-      expect(analysts).toHaveLength(2);
-      expect(analysts).toContain('analyst-1');
-      expect(analysts).toContain('analyst-2');
-
-      const executors = runtime.listActorsByRole('executor');
-      expect(executors).toHaveLength(1);
-      expect(executors).toContain('executor-1');
+      await pool.scaleUp();
+      const afterScaleMetrics = pool.getMetrics();
+      expect(afterScaleMetrics.currentSize).toBe(3);
     });
+  });
 
-    it('should list actors by status', () => {
-      const running = runtime.listActorsByStatus(ActorLifecycleStatus.RUNNING);
-      expect(running).toHaveLength(3);
-    });
+  describe('idle timeout', () => {
+    it('should remove idle actors after timeout', async () => {
+      const config: PoolConfig = {
+        name: 'test-pool',
+        role: 'analyst',
+        type: 'mock',
+        initialSize: 3,
+        minSize: 1,
+        idleTimeout: 100, // 100ms
+        scaleStrategy: 'fixed',
+        debug: false,
+      };
+      const fastPool = new ActorPool(config, board, factory);
+      await fastPool.start();
 
-    it('should get actor by id', () => {
-      const actor = runtime.getActor('analyst-1');
-      expect(actor).toBeInstanceOf(MockActor);
-      expect(actor.id).toBe('analyst-1');
-    });
+      expect(fastPool.getMetrics().currentSize).toBe(3);
 
-    it('should throw when getting non-existent actor', () => {
-      expect(() => runtime.getActor('non-existent')).toThrow('Actor not found');
-    });
+      // 타임아웃 대기
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // minSize 유지
+      expect(fastPool.getMetrics().currentSize).toBe(1);
+
+      await fastPool.stop();
+    }, 10000);
   });
 });
 ```
 
-**파일:** `packages/actor/src/runtime/__tests__/DefaultActorFactory.test.ts`
+**파일:** `packages/actor/src/pool/__tests__/PoolManager.test.ts`
 
 ```typescript
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Actor, ActorRole } from '../../types/actor';
-import { Blackboard } from '../../types/blackboard';
-import { DefaultActorFactory } from '../DefaultActorFactory';
+import { ActorPool, PoolConfig } from '../ActorPool';
+import { PoolManager } from '../PoolManager';
+import { ActorRole } from '../../types/actor';
+import { ActorFactory, ActorConfig } from '../../runtime/types';
 
-class TestActor implements Actor {
-  readonly id: string;
-  readonly role: ActorRole;
-  board: Blackboard;
-  readonly status = 'running' as any;
-  lastActivity: Date = new Date();
-  createdAt: Date = new Date();
-  metrics = { totalRuns: 0, successCount: 0, failureCount: 0, lastError: null, averageExecutionTime: 0, lastExecutionTime: null, totalCpuTime: 0, memoryUsage: 0 };
-
-  constructor(id: string, role: ActorRole, board: Blackboard) {
-    this.id = id;
-    this.role = role;
-    this.board = board;
-  }
-
-  async observe() { return { timestamp: new Date(), section: 'test', data: null, metadata: { source: 'read', latency: 0 } }; }
-  async think() { return { id: '1', type: 'read', params: {}, priority: 0, createdAt: new Date() }; }
-  async act() { return { actionId: '1', success: true, data: null, error: null, executionTime: 10, completedAt: new Date(), metadata: { retryCount: 0, resources: { cpu: 0, memory: 0 } } }; }
-  async report() { /* mock */ }
-  async stop() { /* mock */ }
-  getStatus() { return this.status; }
-}
-
-describe('DefaultActorFactory', () => {
-  let factory: DefaultActorFactory;
-  let board: Blackboard;
-
-  beforeEach(() => {
-    factory = new DefaultActorFactory();
-    board = {
-      read: async () => {},
-      write: async () => {},
-      subscribe: () => () => {},
-      version: 1,
+class MockFactory implements ActorFactory {
+  create(config: ActorConfig, board: any): any {
+    return {
+      id: config.id || 'test-id',
+      role: config.role,
+      board,
+      status: 'running',
+      lastActivity: new Date(),
+      createdAt: new Date(),
+      metrics: { totalRuns: 0, successCount: 0, failureCount: 0, lastError: null, averageExecutionTime: 0, lastExecutionTime: null, totalCpuTime: 0, memoryUsage: 0 },
+      async observe() { return { timestamp: new Date(), section: 'test', data: null, metadata: { source: 'read', latency: 0 } }; },
+      async think() { return { id: '1', type: 'read', params: {}, priority: 0, createdAt: new Date() }; },
+      async act() { return { actionId: '1', success: true, data: null, error: null, executionTime: 10, completedAt: new Date(), metadata: { retryCount: 0, resources: { cpu: 0, memory: 0 } } }; },
+      async report() { /* mock */ },
+      async stop() { /* mock */ },
+      getStatus() { return 'running'; },
     };
-  });
-
-  it('should register and create actor', () => {
-    factory.register('test', TestActor as any);
-
-    const actor = factory.create(
-      { id: 'test-id', role: ActorRole.ANALYST, type: 'test' },
-      board
-    );
-
-    expect(actor).toBeInstanceOf(TestActor);
-    expect(actor.id).toBe('test-id');
-  });
-
-  it('should auto-generate actor id if not provided', () => {
-    factory.register('test', TestActor as any);
-
-    const actor = factory.create(
-      { role: ActorRole.ANALYST, type: 'test' },
-      board
-    );
-
-    expect(actor.id).toMatch(/^analyst-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
-  });
-
-  it('should throw for unknown actor type', () => {
-    expect(() => {
-      factory.create(
-        { role: ActorRole.ANALYST, type: 'unknown' },
-        board
-      );
-    }).toThrow('Unknown actor type: unknown');
-  });
-
-  it('should unregister actor type', () => {
-    factory.register('test', TestActor as any);
-    factory.unregister('test');
-
-    expect(() => {
-      factory.create(
-        { role: ActorRole.ANALYST, type: 'test' },
-        board
-      );
-    }).toThrow('Unknown actor type: test');
-  });
-});
-```
-
-**파일:** `packages/actor/src/runtime/__tests__/ActorRunner.test.ts`
-
-```typescript
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ActorRunner } from '../ActorRunner';
-import { Actor, ActorStatus, ActorRole } from '../../types/actor';
-
-class TestActor implements Actor {
-  readonly id = 'test-actor';
-  readonly role = ActorRole.ANALYST;
-  board: any;
-  readonly status = ActorStatus.RUNNING;
-  lastActivity = new Date();
-  createdAt = new Date();
-  metrics = { totalRuns: 0, successCount: 0, failureCount: 0, lastError: null, averageExecutionTime: 0, lastExecutionTime: null, totalCpuTime: 0, memoryUsage: 0 };
-
-  observe = vi.fn().mockResolvedValue({ timestamp: new Date(), section: 'test', data: null, metadata: { source: 'read', latency: 0 } });
-  think = vi.fn().mockResolvedValue({ id: '1', type: 'read', params: {}, priority: 0, createdAt: new Date() });
-  act = vi.fn().mockResolvedValue({ actionId: '1', success: true, data: null, error: null, executionTime: 10, completedAt: new Date(), metadata: { retryCount: 0, resources: { cpu: 0, memory: 0 } } });
-  report = vi.fn().mockResolvedValue(undefined);
-  stop = vi.fn().mockResolvedValue(undefined);
-  getStatus = vi.fn().mockReturnValue(ActorStatus.RUNNING);
+  }
 }
 
-describe('ActorRunner', () => {
-  let runner: ActorRunner;
-  let actor: TestActor;
+describe('PoolManager', () => {
+  let manager: PoolManager;
+  let factory: ActorFactory;
 
   beforeEach(() => {
-    actor = new TestActor();
-    runner = new ActorRunner(actor, {
-      interval: 10, // 빠른 테스트를 위해 짧게 설정
-      maxIterations: 3,
+    factory = new MockFactory();
+    manager = new PoolManager({ version: 1 }, factory);
+  });
+
+  describe('start/stop', () => {
+    it('should start manager', async () => {
+      const config1: PoolConfig = {
+        name: 'pool1',
+        role: 'analyst',
+        type: 'mock',
+      };
+      const config2: PoolConfig = {
+        name: 'pool2',
+        role: 'executor',
+        type: 'mock',
+      };
+
+      manager.registerPool(config1);
+      manager.registerPool(config2);
+      await manager.start();
+
+      expect(manager.size()).toBe(2);
+    });
+
+    it('should stop manager', async () => {
+      const config: PoolConfig = {
+        name: 'pool1',
+        role: ActorRole.ANALYST,
+        type: 'mock',
+      };
+
+      manager.registerPool(config);
+      await manager.start();
+      await manager.stop();
+
+      expect(manager.size()).toBe(2); // Pool은 등록된 상태 유지
     });
   });
 
-  it('should run cycles', async () => {
-    await runner.start();
+  describe('pool management', () => {
+    it('should register pool', () => {
+      const config: PoolConfig = {
+        name: 'pool1',
+        role: ActorRole.ANALYST,
+        type: 'mock',
+      };
 
-    expect(actor.observe).toHaveBeenCalledTimes(3);
-    expect(actor.think).toHaveBeenCalledTimes(3);
-    expect(actor.act).toHaveBeenCalledTimes(3);
-    expect(actor.report).toHaveBeenCalledTimes(3);
-    expect(runner.getIterationCount()).toBe(3);
-  });
-
-  it('should stop after max iterations', async () => {
-    await runner.start();
-    expect(runner.getIterationCount()).toBe(3);
-    expect(runner.running()).toBe(false);
-  });
-
-  it('should stop manually', async () => {
-    runner.start();
-    await new Promise(resolve => setTimeout(resolve, 20));
-    runner.stop();
-
-    const count = runner.getIterationCount();
-    await new Promise(resolve => setTimeout(resolve, 50));
-
-    expect(runner.getIterationCount()).toBe(count);
-  });
-
-  it('should respect stop condition', async () => {
-    let shouldStop = false;
-    const runnerWithCondition = new ActorRunner(actor, {
-      interval: 10,
-      stopCondition: () => shouldStop,
+      const pool = manager.registerPool(config);
+      expect(pool).toBeInstanceOf(ActorPool);
+      expect(manager.listPools()).toContain('pool1');
     });
 
-    setTimeout(() => { shouldStop = true; }, 25);
-    await runnerWithCondition.start();
+    it('should unregister pool', async () => {
+      const config: PoolConfig = {
+        name: 'pool1',
+        role: ActorRole.ANALYST,
+        type: 'mock',
+      };
 
-    expect(runnerWithCondition.getIterationCount()).toBeLessThan(5);
-  });
+      manager.registerPool(config);
+      await manager.unregisterPool('pool1');
 
-  it('should throw when starting already running runner', async () => {
-    const startPromise = runner.start();
-    await expect(runner.start()).rejects.toThrow('Runner is already running');
-    await startPromise;
+      expect(manager.listPools()).not.toContain('pool1');
+    });
+
+    it('should get pool by name', () => {
+      const config: PoolConfig = {
+        name: 'pool1',
+        role: ActorRole.ANALYST,
+        type: 'mock',
+      };
+
+      const registered = manager.registerPool(config);
+      const retrieved = manager.getPool('pool1');
+
+      expect(retrieved).toBe(registered);
+    });
+
+    it('should throw when pool not found', () => {
+      expect(() => manager.getPool('non-existent')).toThrow('Pool not found');
+    });
+
+    it('should get all metrics', async () => {
+      const config1: PoolConfig = {
+        name: 'pool1',
+        role: 'analyst',
+        type: 'mock',
+        initialSize: 2,
+      };
+      const config2: PoolConfig = {
+        name: 'pool2',
+        role: 'executor',
+        type: 'mock',
+        initialSize: 3,
+      };
+
+      manager.registerPool(config1);
+      manager.registerPool(config2);
+
+      const metrics = manager.getAllMetrics();
+      expect(metrics.size).toBe(2);
+      expect(metrics.get('pool1')?.currentSize).toBe(2);
+      expect(metrics.get('pool2')?.currentSize).toBe(3);
+    });
   });
 });
 ```
 
-### 6. 내보내기 설정
+### 4. 내보내기 설정
 
-**파일:** `packages/actor/src/runtime/index.ts`
+**파일:** `packages/actor/src/pool/index.ts`
 
 ```typescript
-export * from './ActorRuntime';
-export * from './types';
-export * from './DefaultActorFactory';
-export * from './ActorRunner';
+export * from './ActorPool';
+export * from './PoolManager';
 ```
 
 **파일:** `packages/actor/src/index.ts` (업데이트)
@@ -1136,53 +1349,54 @@ export * from './ActorRunner';
 export * from './types';
 export * from './base/BaseActor';
 export * from './runtime';
+export * from './pool';
 ```
 
 ## 파일 구조
 
 ```
 packages/actor/src/
-├── runtime/
+├── pool/
 │   ├── __tests__/
-│   │   ├── ActorRuntime.test.ts
-│   │   ├── DefaultActorFactory.test.ts
-│   │   └── ActorRunner.test.ts
-│   ├── ActorRuntime.ts       # Actor 런타임
-│   ├── types.ts              # 런타임 타입
-│   ├── DefaultActorFactory.ts # 기본 팩토리
-│   └── ActorRunner.ts        # 실행 루프
+│   │   ├── ActorPool.test.ts
+│   │   └── PoolManager.test.ts
+│   ├── ActorPool.ts       # Actor Pool
+│   └── PoolManager.ts     # Pool Manager
+├── runtime/
 ├── types/
 ├── base/
 └── index.ts
 ```
 
 ## 완료 조건
-- [ ] ActorRuntime 클래스 구현 완료
-- [ ] spawn(config) 메서드 구현 완료
-- [ ] stop(actorId) 메서드 구현 완료
-- [ ] restart(actorId) 메서드 구현 완료
-- [ ] ActorFactory 인터페이스 정의 완료
-- [ ] DefaultActorFactory 구현 완료
-- [ ] ActorRunner (옵션) 구현 완료
-- [ ] Blackboard 연동 완료
+- [ ] ActorPool 클래스 구현 완료
+- [ ] PoolManager 클래스 구현 완료
+- [ ] 동적 확장/축소 기능 구현 완료
+- [ ] 작업 분배 전략 (round-robin, least-busy, random) 구현 완료
+- [ ] 우선순위 기반 작업 큐 구현 완료
+- [ ] Idle 타임아웃 기능 구현 완료
+- [ ] 로드 밸런싱 메트릭 추적 완료
 - [ ] 단위 테스트 작성 완료
 - [ ] 테스트 커버리지 85% 이상
 - [ ] TypeScript 타입 체크 통과
 
 ## 의존성
-- TASK-024 (Actor 인터페이스)
+- TASK-025 (Actor 런타임)
 
 ## 참고 자료
 - `/docs/architecture/blackboard-actor-design.md` - 아키텍처 설계
 - TASK-024 - Actor 인터페이스
+- TASK-025 - Actor 런타임
 
 ## 수락 기준
-1. Actor 런타임이 Actor의 생명주기를 올바르게 관리한다
-2. spawn/stop/restart 작업이 타임아웃을 준수한다
-3. 재시작 시 백오프 정책이 적용된다
-4. 최대 Actor 수 제한이 동작한다
-5. Blackboard와 연결된 Actor가 데이터를 읽고 쓸 수 있다
-6. 단위 테스트가 모든 주요 시나리오를 커버한다
+1. Actor Pool이 초기 크기로 올바르게 생성된다
+2. scaleUp/scaleDown이 minSize/maxSize를 준수한다
+3. 작업이 우선순위 순으로 처리된다
+4. 작업 분배 전략이 올바르게 동작한다
+5. Idle Actor가 타임아웃 후 제거된다
+6. 메트릭이 정확하게 추적된다
+7. PoolManager가 여러 Pool을 올바르게 관리한다
+8. 단위 테스트가 모든 주요 시나리오를 커버한다
 ]]></spec>
   </task>
 
@@ -1201,16 +1415,17 @@ packages/actor/src/
 
   <checklist>
 # 자동 생성 체크리스트
-# 생성 시각: 2026-02-09 18:29:00
+# 생성 시각: 2026-02-09 19:24:15
 
-1. stopActor에서 stop 실패/타임아웃 시에도 actor를 Map에서 항상 삭제
-2. stop() 메서드의 falsy ActorId 분기 문제
-3. ActorRunner의 주석-코드 불일치: 에러 로깅이 debug 모드에서만 동작
-4. Method name collision - `stop()` 중복 정의 (Gemini)
-5. Constructor and Method signature mismatches in Tests (Gemini)
-6. ActorRunner fails to await async Actor methods (Gemini)
-7. DefaultActorFactory constructor arguments mismatch (Gemini)
-8. 테스트 코드의 Actor.status 타입 불일치 (GLM)
+1. 만료된 task가 submitAndWait 호출자에게 전파되지 않음
+2. submitAndWait의 폴링 interval이 Pool 종료 시 정리되지 않음
+3. dispatchTask()에서 Actor 없으면 무한 재삽입 사이클
+4. getActorStatus()에서 actor.status 대신 actor.getStatus() 사용해야 함
+5. selectLeastBusy()에서 actor.status.messageQueue 직접 접근
+6. Pool 모듈이 패키지 엔트리포인트에서 내보내지 않음
+7. 단위 테스트 파일 전체 누락
+8. IBlackboard.write()는 void를 반환하나 await로 호출
+9. ActorPool/PoolManager 생성자 시그니처가 스펙과 불일치
   </checklist>
 
   <source_files>
