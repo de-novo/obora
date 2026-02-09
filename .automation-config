@@ -1,0 +1,2 @@
+# obora-kit 자동화 설정
+TEST_COMMAND="cd packages/actor && npm test"
