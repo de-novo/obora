@@ -1,8 +1,31 @@
 import type { ActorFactory } from "../runtime/types";
 import type { IBlackboard } from "../types/actor";
-import type { IMessageBus } from "../types/message";
+import type { IMessageBus, Message, MessageType, UnsubscribeFn } from "../types/message";
 
 import { ActorPool, PoolConfig, PoolMetrics } from "./ActorPool";
+
+/**
+ * No-Op MessageBus - 기본값으로 사용되는 빈 구현
+ */
+class NoOpMessageBus implements IMessageBus {
+  send(message: Message): void {}
+  sendTo(to: any, message: Omit<Message, "to">): void {}
+  broadcast(message: Omit<Message, "to">): void {}
+  receive(handler: (message: Message) => void): void {}
+  request<T>(message: Message, timeoutMs?: number): Promise<Message<T>> {
+    return Promise.resolve(message as Message<T>);
+  }
+  subscribe(messageType: MessageType, handler: (message: Message) => void): UnsubscribeFn {
+    return () => {};
+  }
+  getQueueSize(actorId: any): number {
+    return 0;
+  }
+  clearQueue(actorId: any): void {}
+  filter(predicate: (message: Message) => boolean): Message[] {
+    return [];
+  }
+}
 
 /**
  * Pool Manager
@@ -16,7 +39,11 @@ export class PoolManager {
   private readonly pools: Map<string, ActorPool>;
   private isRunning: boolean;
 
-  constructor(board: IBlackboard, messageBus: IMessageBus, factory: ActorFactory) {
+  constructor(
+    board: IBlackboard,
+    factory: ActorFactory,
+    messageBus: IMessageBus = new NoOpMessageBus()
+  ) {
     this.board = board;
     this.messageBus = messageBus;
     this.factory = factory;
@@ -67,7 +94,7 @@ export class PoolManager {
       throw new Error(`Pool already exists: ${config.name}`);
     }
 
-    const pool = new ActorPool(config, this.board, this.messageBus, this.factory);
+    const pool = new ActorPool(config, this.board, this.factory, this.messageBus);
     this.pools.set(config.name, pool);
 
     // 이미 실행 중이면 Pool 시작

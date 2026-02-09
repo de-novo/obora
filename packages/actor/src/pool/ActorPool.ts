@@ -1,7 +1,30 @@
 import type { ActorFactory, ActorConfig } from "../runtime/types";
 import type { Actor, ActorId, ActorRole, ActorStatus } from "../types/actor";
 import type { IBlackboard } from "../types/actor";
-import type { IMessageBus } from "../types/message";
+import type { IMessageBus, Message, MessageType, UnsubscribeFn } from "../types/message";
+
+/**
+ * No-Op MessageBus - 기본값으로 사용되는 빈 구현
+ */
+class NoOpMessageBus implements IMessageBus {
+  send(message: Message): void {}
+  sendTo(to: ActorId, message: Omit<Message, "to">): void {}
+  broadcast(message: Omit<Message, "to">): void {}
+  receive(handler: (message: Message) => void): void {}
+  request<T>(message: Message, timeoutMs?: number): Promise<Message<T>> {
+    return Promise.resolve(message as Message<T>);
+  }
+  subscribe(messageType: MessageType, handler: (message: Message) => void): UnsubscribeFn {
+    return () => {};
+  }
+  getQueueSize(actorId: ActorId): number {
+    return 0;
+  }
+  clearQueue(actorId: ActorId): void {}
+  filter(predicate: (message: Message) => boolean): Message[] {
+    return [];
+  }
+}
 
 /**
  * Actor Pool 설정
@@ -153,8 +176,8 @@ export class ActorPool {
   constructor(
     config: PoolConfig,
     board: IBlackboard,
-    messageBus: IMessageBus,
-    factory: ActorFactory
+    factory: ActorFactory,
+    messageBus: IMessageBus = new NoOpMessageBus()
   ) {
     this.board = board;
     this.messageBus = messageBus;
@@ -435,7 +458,7 @@ export class ActorPool {
     if (!actor) {
       throw new Error(`Actor not found: ${actorId}`);
     }
-    return actor.status;
+    return actor.getStatus();
   }
 
   /**
@@ -563,8 +586,10 @@ export class ActorPool {
 
   private selectLeastBusy(actors: Actor[]): Actor {
     return actors.reduce((least, actor) => {
-      const leastQueue = least.status.messageQueue?.pending ?? 0;
-      const actorQueue = actor.status.messageQueue?.pending ?? 0;
+      const leastStatus = least.getStatus();
+      const actorStatus = actor.getStatus();
+      const leastQueue = leastStatus.messageQueue.pending;
+      const actorQueue = actorStatus.messageQueue.pending;
       return actorQueue < leastQueue ? actor : least;
     });
   }
@@ -574,14 +599,7 @@ export class ActorPool {
     return actors[index];
   }
 
-  private async dispatchTask(task: Task): Promise<void> {
-    const actor = this.selectActor();
-    if (!actor) {
-      // 사용 가능한 Actor 없음 - 큐에 다시 넣음
-      this.enqueueTask(task);
-      return;
-    }
-
+  private async dispatchTaskToActor(task: Task, actor: Actor): Promise<void> {
     this.inProgress.set(task.id, { task, actorId: actor.id });
 
     // Idle 타이머 리셋
@@ -599,7 +617,7 @@ export class ActorPool {
       // 작업 데이터를 blackboard에 기록 (Actor가 observe()에서 읽을 수 있도록)
       // task별 고유 키 사용하여 병렬 처리 시 충돌 방지
       const taskSection = `pool:${this.config.name}:task:${task.id}`;
-      await this.board.write(taskSection, {
+      this.board.write(taskSection, {
         taskId: task.id,
         actorId: actor.id,
         data: task.data,
@@ -697,20 +715,35 @@ export class ActorPool {
 
   private startDispatch(): void {
     this.dispatchTimer = setInterval(() => {
-      if (this.taskQueue.length > 0) {
-        const task = this.taskQueue.shift();
-        if (task) {
+      while (this.taskQueue.length > 0) {
+        // 먼저 만료된 작업을 큐 앞에서 제거
+        const peek = this.taskQueue[0];
+        if (peek.expiresAt && peek.expiresAt.getTime() < Date.now()) {
+          this.taskQueue.shift();
           this.metrics.queueSize = this.taskQueue.length;
-
-          // 만료된 작업 체크
-          if (task.expiresAt && task.expiresAt.getTime() < Date.now()) {
-            this.log(`Task expired: ${task.id}`);
-            task.onComplete?.(null, new Error(`Task expired: ${task.id}`));
-            return;
-          }
-
-          this.dispatchTask(task);
+          this.log(`Task expired: ${peek.id}`);
+          const expiredError = new Error(`Task expired: ${peek.id}`);
+          const taskResult: TaskResult = {
+            taskId: peek.id,
+            actorId: "" as ActorId,
+            result: null,
+            error: expiredError,
+            startedAt: new Date(),
+            completedAt: new Date(),
+            duration: 0,
+          };
+          this.recordTaskResult(taskResult);
+          peek.onComplete?.(null, expiredError);
+          continue;
         }
+
+        // 사용 가능한 Actor가 없으면 중단
+        const actor = this.selectActor();
+        if (!actor) break;
+
+        const task = this.taskQueue.shift()!;
+        this.metrics.queueSize = this.taskQueue.length;
+        this.dispatchTaskToActor(task, actor);
       }
     }, 100); // 100ms마다 체크
   }
@@ -787,6 +820,13 @@ export class ActorPool {
     reject: (reason?: unknown) => void
   ): { cleanup: () => void } {
     const checkInterval = setInterval(() => {
+      // Pool이 종료되면 즉시 reject
+      if (!this.isRunning) {
+        clearInterval(checkInterval);
+        onSettled();
+        reject(new Error("Pool has been stopped"));
+        return;
+      }
       const result = this.pendingResults.get(taskId);
       if (result) {
         // 메모리 최적화: 사용된 결과 캐시에서 제거

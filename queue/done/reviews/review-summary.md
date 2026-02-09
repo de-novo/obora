@@ -1,11 +1,11 @@
-# 리뷰 요약 - TASK-024-actor-interface
+# 리뷰 요약 - TASK-025-actor-runtime
 
 ## 검토 대상
-- 태스크: /Users/denovo/workspace/github/obora-kit/queue/TASK-024-actor-interface.md
+- 태스크: /Users/denovo/workspace/github/obora-kit/queue/TASK-025-actor-runtime.md
 - 프로젝트: /Users/denovo/workspace/github/obora-kit
-- 리뷰 시작: 2026-02-09 12:36:14
-- 리뷰 완료: 2026-02-09 12:43:40
-- 소요 시간: 7m 26s
+- 리뷰 시작: 2026-02-09 19:08:22
+- 리뷰 완료: 2026-02-09 19:11:24
+- 소요 시간: 3m 2s
 - 완료된 리뷰: 4/4
 
 ## 모델별 결과
@@ -15,57 +15,42 @@
 
 
 
-I'll start by exploring the actual source files to verify each checklist item against the implementation.
-Now let me read the actual source files in detail to verify each checklist item:
-Now let me read the test files to verify the remaining checklist items:
-Now let me run the tests to verify actual pass/fail status:
-Now let me check for TypeScript compilation errors:
-Good - no TypeScript errors in the actual source code (only pre-existing issues in node_modules type definitions). Now I have all the information I need to verify each checklist item. Let me compile my analysis:
+I'll verify each checklist item against the actual code. Let me first explore the codebase to find the relevant files.
+Good. Now let me read all the relevant source files and test files in parallel.
+Now let me also check the delay utility:
+Now I have all the code. Let me verify each checklist item systematically.
 
 # 체크리스트 검증 결과
 
 ## 항목별 결과
 
-- **[PASS] 항목 1: createAction, createSuccessResult, createFailureResult 시그니처 불일치 — 15개 테스트 실패**
-  - 근거: 실제 구현의 시그니처는 스펙과 일치합니다.
-    - `createAction(actorId, type, params?, taskId?)` — `action.ts:85-89`
-    - `createSuccessResult(actionId, actorId, output, duration)` — `result.ts:105-109`
-    - `createFailureResult(actionId, actorId, error, duration)` — `result.ts:139-143`
-  - 테스트에서도 이 시그니처로 호출하며, 전체 114개 테스트 모두 PASS 확인. 스펙에 명시된 시그니처와 구현이 동일합니다.
+- **[PASS] 1. stopActor에서 stop 실패/타임아웃 시에도 actor를 Map에서 항상 삭제**
+  근거: `ActorRuntime.ts:375-377` — `stopActor` 메서드에서 `finally` 블록을 사용하여 성공/실패/타임아웃 여부와 무관하게 항상 `this.actors.delete(actorId)` 및 `this.actorConfigs.delete(actorId)`를 실행합니다.
 
-- **[PASS] 항목 2: Actor 인터페이스와 BaseActor 간 async/sync 불일치 — TypeScript 컴파일 에러 4개**
-  - 근거: Actor 인터페이스에서 OODA 메서드는 `T | Promise<T>` 유니온 반환 타입을 사용합니다 (`actor.ts:217,224,231,237`). BaseActor에서 abstract 메서드도 동일한 유니온 타입을 선언합니다 (`BaseActor.ts:89,95,101`). `report()`도 `void | Promise<void>` (`BaseActor.ts:134`). TypeScript 컴파일 시 소스 코드 에러 0건 확인.
+- **[PASS] 2. stop() 메서드의 falsy ActorId 분기 문제**
+  근거: `ActorRuntime.ts:93-94` — `stop(actorId?: ActorId)` 메서드에서 `actorId !== undefined`로 엄격하게 검사합니다. falsy 값(`""` 등)도 빈 문자열은 `ActorId` 브랜드 타입에 해당하지 않으므로, `undefined` 체크로 충분히 분기를 구분합니다.
 
-- **[PASS] 항목 3: Actor 인터페이스에 restart(), getStatus(), isAlive() 누락**
-  - 근거: Actor 인터페이스에 세 메서드 모두 정의되어 있습니다.
-    - `restart()` — `actor.ts:252`
-    - `getStatus()` — `actor.ts:257`
-    - `isAlive()` — `actor.ts:262`
+- **[PASS] 3. ActorRunner의 주석-코드 불일치: 에러 로깅이 debug 모드에서만 동작**
+  근거: `ActorRunner.ts:156-161` — `log` 메서드에서 에러가 있을 때(`if (error)`)는 `debug` 모드와 무관하게 `console.error`를 호출합니다. `debug` 조건은 에러가 없는 일반 로그에만 적용됩니다. 또한 `ActorRunner.test.ts:159-177`에 이를 검증하는 테스트(`"should log errors even when debug mode is disabled"`)가 추가되어 있습니다.
 
-- **[PASS] 항목 4: Actor 인터페이스의 board/messageBus가 readonly — 스펙 불일치**
-  - 근거: 실제 구현에서 `board`와 `messageBus`는 `readonly`가 아닙니다 (`actor.ts:196-198`). 스펙에서도 `readonly`가 아닌 것으로 정의되어 있으므로 일치합니다.
+- **[PASS] 4. Method name collision — `stop()` 중복 정의 (Gemini)**
+  근거: `ActorRuntime.ts:93` — `stop(actorId?: ActorId)` 메서드가 하나만 존재하며, 인자 유무에 따라 런타임 종료와 개별 Actor 중지를 분기합니다. 스펙에서 별도였던 `stop()` (런타임)과 `stop(actorId)` (Actor)가 하나의 오버로드된 메서드로 통합되었습니다. `stopActor`는 `private` 메서드(`ActorRuntime.ts:347`)로 내부에서만 사용됩니다. 중복 정의 문제는 해결되었습니다.
 
-- **[PASS] 항목 5: BaseActor.updateMetrics()에서 `result.metrics?.executionTimeMs` 참조 — 필드명 불일치**
-  - 근거: `BaseActor.updateMetrics()`는 `result.metrics?.duration`을 참조합니다 (`BaseActor.ts:274,277`). `Result` 인터페이스의 `ResultMetrics`에서 해당 필드명은 `duration`입니다 (`result.ts:27`). 필드명이 올바르게 일치합니다.
+- **[PASS] 5. Constructor and Method signature mismatches in Tests (Gemini)**
+  근거: 테스트의 `MockActor` 생성자 시그니처 (`ActorRuntime.test.ts:45-51`: `id, name, role, board, messageBus`)와 `MockFactory.create` (`ActorRuntime.test.ts:128-132`)가 올바르게 일치합니다. `DefaultActorFactory.test.ts`의 `TestActor`도 동일한 시그니처를 사용하며(`DefaultActorFactory.test.ts:44-49`), `ActorRuntime` 생성자도 `(board, messageBus, factory, config?)` 순서로 올바르게 호출됩니다(`ActorRuntime.test.ts:162`).
 
-- **[PASS] 항목 6: types/index.ts에서 blackboard.ts export 누락**
-  - 근거: `types/index.ts:7`에 `export * from "./blackboard";`가 명시되어 있습니다.
+- **[PASS] 6. ActorRunner fails to await async Actor methods (Gemini)**
+  근거: `ActorRunner.ts:132-143` — `runCycle` 메서드에서 모든 Actor 메서드 호출에 `await`를 사용합니다: `await this.actor.observe()`, `await this.actor.think(obs)`, `await this.actor.act(action)`, `await this.actor.report(result)`. Actor 인터페이스(`actor.ts:217-237`)에서 이 메서드들은 `T | Promise<T>` 반환 타입을 가지므로 `await`가 적절합니다.
 
-- **[PASS] 항목 7: IBlackboard 중복 정의 — actor.ts와 blackboard.ts**
-  - 근거: `IBlackboard`는 `blackboard.ts:14`에서만 정의됩니다. `actor.ts:334`에서는 `export type { IBlackboard } from "./blackboard";`로 re-export만 하고 있습니다. 중복 정의가 아닙니다.
+- **[PASS] 7. DefaultActorFactory constructor arguments mismatch (Gemini)**
+  근거: `DefaultActorFactory.ts:10-17` — `ActorConstructor` 타입이 `(id, name, role, board, messageBus, config?)` 순서로 정의되어 있고, `create` 메서드(`DefaultActorFactory.ts:68-74`)에서 `new Constructor(actorId, name || ..., role, board, messageBus, actorConfig)` 순서로 호출합니다. 인자 개수와 순서가 일치합니다.
 
-- **[PASS] 항목 8: 상태 전이 테이블 스펙 불일치 — RUNNING/IDLE/BUSY → RESTARTING**
-  - 근거: 구현의 상태 전이 테이블에서 `RUNNING → RESTARTING` (`actor.ts:158`), `IDLE → RESTARTING` (`actor.ts:163`), `BUSY → RESTARTING` (`actor.ts:168`)가 모두 포함되어 있습니다. 이는 `actor.ts:134-136`의 JSDoc 주석에도 문서화되어 있으며, 테스트에서도 검증합니다 (`actor.test.ts:47-55`). 스펙에서는 원래 이 전이를 포함하지 않았지만, 구현 코드와 테스트가 일관되게 이를 지원합니다.
-
-- **[PASS] 항목 9: `result.test.ts:73-91` 첫 번째 테스트가 객체 패턴 사용 — P0 수정 후 깨짐**
-  - 근거: `result.test.ts:73-86`의 `createSuccessResult` 첫 번째 테스트는 `createSuccessResult(mockActionId, mockActorId, mockOutput, duration)` 4개 인자 시그니처로 호출하며, 결과를 개별 속성 어설션으로 검증합니다. 전체 114개 테스트 모두 PASS 확인.
+- **[PASS] 8. 테스트 코드의 Actor.status 타입 불일치 (GLM)**
+  근거: `Actor` 인터페이스(`actor.ts:194`)에서 `status`는 `ActorStatus` 타입(객체)으로 정의되어 있습니다. 테스트의 `MockActor`(`ActorRuntime.test.ts:25-40`, `57-72`)에서 `status`를 `ActorStatus` 구조체(id, name, role, status, messageQueue, metrics 등 포함)로 올바르게 정의하고 있습니다. `ActorRunner.test.ts:41-71`에서도 동일하게 올바른 타입으로 정의되어 있습니다. 이전 스펙에서 `status`를 enum 값으로 직접 사용하던 문제가 해결되었습니다.
 
 ## 점수
-- 통과: 9/9
+- 통과: 8/8
 - **총점: 10/10**
-
-## FAIL 항목 수정 방법
-해당 없음 — 모든 항목 PASS.
 
 ---
 ### codex (openai/gpt-5.2-codex)
@@ -73,162 +58,96 @@ Good - no TypeScript errors in the actual source code (only pre-existing issues 
 # Checklist Verification Result
 
 ## Item Results
-- [PASS] Item1: createAction/createSuccessResult/createFailureResult signatures align with tests (packages/actor/src/types/action.ts:85, packages/actor/src/types/result.ts:105)
-- [PASS] Item2: Actor and BaseActor both allow async/sync observe/think/act (packages/actor/src/types/actor.ts:217, packages/actor/src/base/BaseActor.ts:89)
-- [PASS] Item3: restart/getStatus/isAlive are defined on Actor interface (packages/actor/src/types/actor.ts:249)
-- [PASS] Item4: board/messageBus are not readonly on Actor interface (packages/actor/src/types/actor.ts:196)
-- [PASS] Item5: updateMetrics uses `result.metrics?.duration`, not `executionTimeMs` (packages/actor/src/base/BaseActor.ts:74)
-- [PASS] Item6: types index exports blackboard (packages/actor/src/types/index.ts:7)
-- [PASS] Item7: IBlackboard defined only in blackboard.ts; actor.ts only imports/exports it (packages/actor/src/types/actor.ts:12, packages/actor/src/types/blackboard.ts:14)
-- [FAIL] Item8: Transition table allows RUNNING/IDLE/BUSY → RESTARTING (spec says no) (packages/actor/src/types/actor.ts:134)
-- [PASS] Item9: result.test first success test uses positional args, not object pattern (packages/actor/src/types/__tests__/result.test.ts:73)
+- [PASS] Item1: `packages/actor/src/runtime/ActorRuntime.ts:75`
+- [PASS] Item2: `packages/actor/src/runtime/ActorRuntime.ts:93`
+- [PASS] Item3: `packages/actor/src/runtime/ActorRunner.ts:82`
+- [PASS] Item4: `packages/actor/src/runtime/ActorRuntime.ts:93`
+- [PASS] Item5: `packages/actor/src/runtime/__tests__/ActorRuntime.test.ts:62`
+- [PASS] Item6: `packages/actor/src/runtime/ActorRunner.ts:32`
+- [PASS] Item7: `packages/actor/src/runtime/DefaultActorFactory.ts:55`
+- [PASS] Item8: `packages/actor/src/runtime/__tests__/ActorRunner.test.ts:41`
 
 ## Score
-- Passed: 8/9
-- **Total: 9/10**
+- Passed: 8/8
+- **Total: 10/10**
 
 ## Fix for FAIL Items
-### [P1] FAIL Status Transition Table Includes RESTARTING
-- **File**: packages/actor/src/types/actor.ts:134
-- **Problem**: RUNNING/IDLE/BUSY transitions include RESTARTING, which conflicts with the spec.
-- **Before Code**:
-```ts
-// RUNNING → IDLE | BUSY | STOPPING | ERROR | RESTARTING
-// IDLE → BUSY | STOPPING | RESTARTING
-// BUSY → IDLE | ERROR | RESTARTING
-[ActorLifecycleStatus.RUNNING]: [
-  ActorLifecycleStatus.IDLE,
-  ActorLifecycleStatus.BUSY,
-  ActorLifecycleStatus.STOPPING,
-  ActorLifecycleStatus.ERROR,
-  ActorLifecycleStatus.RESTARTING,
-],
-[ActorLifecycleStatus.IDLE]: [
-  ActorLifecycleStatus.BUSY,
-  ActorLifecycleStatus.STOPPING,
-  ActorLifecycleStatus.RESTARTING,
-],
-[ActorLifecycleStatus.BUSY]: [
-  ActorLifecycleStatus.IDLE,
-  ActorLifecycleStatus.ERROR,
-  ActorLifecycleStatus.RESTARTING,
-],
-```
-- **After Code**:
-```ts
-// RUNNING → IDLE | BUSY | STOPPING | ERROR
-// IDLE → BUSY | STOPPING
-// BUSY → IDLE | ERROR
-[ActorLifecycleStatus.RUNNING]: [
-  ActorLifecycleStatus.IDLE,
-  ActorLifecycleStatus.BUSY,
-  ActorLifecycleStatus.STOPPING,
-  ActorLifecycleStatus.ERROR,
-],
-[ActorLifecycleStatus.IDLE]: [
-  ActorLifecycleStatus.BUSY,
-  ActorLifecycleStatus.STOPPING,
-],
-[ActorLifecycleStatus.BUSY]: [
-  ActorLifecycleStatus.IDLE,
-  ActorLifecycleStatus.ERROR,
-],
-```
+None.
 
 ---
 ### glm (zai-coding-plan/glm-4.7)
 
-I'll verify each checklist item by examining the relevant files.
-Now let me verify each checklist item systematically:
+I'll verify each checklist item by examining the actual code. Let me start by finding the relevant files.
+Now let me check the Actor types and the types.ts file:
+Now let me analyze each checklist item:
+
 # 체크리스트 검증 결과
 
 ## 항목별 결과
-- [FAIL] 항목1: 근거 - 모든 테스트 통과 (114/114), createAction/createSuccessResult/createFailureResult 시그니처가 스펙과 일치함 (action.ts:85-99, result.ts:105-120, result.ts:139-154)
-- [FAIL] 항목2: 근거 - TypeScript 컴파일 에러는 의존성 충돌(chai/vitest 중복 식별자)로 인한 것이며, Actor 인터페이스와 BaseActor 간 불일치가 아님 (actor.ts:217-237, BaseActor.ts:89-101)
-- [FAIL] 항목3: 근거 - Actor 인터페이스에 restart(), getStatus(), isAlive() 모두 존재함 (actor.ts:252-262, BaseActor.ts:207-261)
-- [FAIL] 항목4: 근거 - 스펙에서도 board/messageBus가 readonly가 아니며, Actor 인터페이스와 BaseActor 구현 모두 readonly가 아님 (actor.ts:196-198, BaseActor.ts:28-29)
-- [FAIL] 항목5: 근거 - BaseActor.updateMetrics()는 result.metrics?.duration를 올바르게 참조함 (BaseActor.ts:274-277)
-- [FAIL] 항목6: 근거 - types/index.ts에서 blackboard.ts가 정상적으로 export됨 (types/index.ts:7)
-- [FAIL] 항목7: 근거 - IBlackboard는 blackboard.ts에만 정의되어 있고 actor.ts에서 재export됨, 중복 정의 아님 (blackboard.ts:14-52, actor.ts:334)
-- [FAIL] 항목8: 근거 - 상태 전이 테이블이 스펙과 일치함, RUNNING/IDLE/BUSY 모두 RESTARTING으로 전이 가능 (actor.ts:150-174)
-- [FAIL] 항목9: 근거 - result.test.ts의 첫 번째 테스트는 .toMatch()를 올바르게 사용하며 모든 테스트 통과함 (result.test.ts:73-86)
+
+- [PASS] 항목1: stopActor에서 stop 실패/타임아웃 시에도 actor를 Map에서 항상 삭제 (ActorRuntime.ts:375-379)
+  - `stopActor` 메서드의 `finally` 블록에서 항상 `this.actors.delete(actorId)`와 `this.actorConfigs.delete(actorId)` 호출
+
+- [PASS] 항목2: stop() 메서드의 falsy ActorId 분기 문제 (ActorRuntime.ts:93-114)
+  - `if (actorId !== undefined)`로 명시적으로 `undefined`만 체크하여 런타임 종료와 Actor 중지를 구분
+
+- [PASS] 항목3: ActorRunner의 주석-코드 불일치: 에러 로깅이 debug 모드에서만 동작 (ActorRunner.ts:156-162, 83-84)
+  - `log` 메서드에서 error가 있을 경우 `console.error`로 debug 모드와 무관하게 항상 로그 출력
+  - 주석 "// 에러 로깅 (debug 모드와 무관하게 항상 로그)"이 코드 동작과 일치
+
+- [PASS] 항목4: Method name collision - `stop()` 중복 정의 (Gemini) (ActorRuntime.ts:93-114)
+  - 단일 `stop(actorId?: ActorId)` 메서드로 두 가지 기능(Actor 중지, 런타임 종료)을 처리하는 overload가 아닌 optional parameter 패턴 사용
+
+- [PASS] 항목5: Constructor and Method signature mismatches in Tests (Gemini) (actor.ts:186-263, DefaultActorFactory.ts:10-17, types.ts:39)
+  - Actor 인터페이스의 `start()`, `stop()`, `restart()`, `receive()`, `observe()`, `think()`, `act()`, `report()` 메서드가 모두 `void | Promise<void>` 타입을 지원
+  - Test mock 구현이 동기 메서드를 사용하고 ActorRunner에서 `await`를 사용하는 패턴이 올바름
+
+- [PASS] 항목6: ActorRunner fails to await async Actor methods (Gemini) (ActorRunner.ts:132-143)
+  - `runCycle` 메서드에서 `await this.actor.observe()`, `await this.actor.think(obs)`, `await this.actor.act(action)`, `await this.actor.report(result)`로 모든 메서드가 올바르게 await됨
+
+- [PASS] 항목7: DefaultActorFactory constructor arguments mismatch (Gemini) (DefaultActorFactory.ts:10-17, 55-78)
+  - `ActorConstructor` 타입과 `DefaultActorFactory.create()`에서 Actor 생성자 호출이 일치
+  - 테스트의 `MockActor` 생성자 시그니처가 `(id: string, name: string, role: ActorRole, board: IBlackboard, messageBus: IMessageBus)`로 일치
+
+- [PASS] 항목8: 테스트 코드의 Actor.status 타입 불일치 (GLM) (actor.ts:186-194, ActorRunner.test.ts:41-71, ActorRuntime.test.ts:25-40, DefaultActorFactory.test.ts:24-39)
+  - Actor 인터페이스의 `status: ActorStatus`는 객체 타입이며 `ActorStatus.status: ActorLifecycleStatus` 프로퍼티 포함
+  - Test mock의 `status` 객체 구조가 올바르게 `status.status` 프로퍼티 포함
+  - ActorRunner의 `this.actor.status.status` 접근이 올바름
 
 ## 점수
-- 통과: 0/9
-- **총점: 10/10** (모든 체크리스트 항목이 부정확하므로 만점)
-
-## FAIL 항목 수정 방안
-
-모든 체크리스트 항목이 부정확한 주장이므로 수정할 필요가 없습니다. 구현이 스펙을 올바르게 따르고 있으며 모든 테스트가 통과합니다. 체크리스트가 기반으로 하는 정보가 부정확하거나 구현이 체크리스트 작성 후 수정되었을 수 있습니다.
+- 통과: 8/8
+- **총점: 10/10**
 
 ---
-### gemini (google/gemini-3-flash-preview)
+### gemini (google/antigravity-gemini-3-flash)
 
+I will begin by listing the files in the `packages/actor/src/runtime` directory to confirm their existence and locations. Subsequently, I will read the contents of these files to verify each item on the checklist.
+I will read `packages/actor/src/runtime/ActorRuntime.ts`, `packages/actor/src/runtime/ActorRunner.ts`, and `packages/actor/src/runtime/DefaultActorFactory.ts` to examine the implementation and check for any issues. I will also review the test files to identify any mismatches.
+I will read the `packages/actor/src/types/actor.ts` file to confirm the `Actor` interface and the type of its `status` property.
+I will read `packages/actor/src/runtime/__tests__/DefaultActorFactory.test.ts` to verify the constructor and method signatures.
+I will read `packages/actor/src/runtime/__tests__/ActorRunner.test.ts` to examine its implementation and check for any potential issues.
 # Checklist Verification Result
 
 ## Item Results
-- [PASS] Item1: Signatures in `action.ts:85` and `result.ts:105,139` use positional arguments matching the spec. `npx vitest` confirms all 15 result tests and 8 action tests pass (Total 114 tests passed).
-- [PASS] Item2: `Actor` interface (`actor.ts:211-252`) and `BaseActor` (`BaseActor.ts:106-207`) consistently use `void | Promise<void>` or `async` patterns. No sync/async mismatches found.
-- [PASS] Item3: `restart()`, `getStatus()`, and `isAlive()` are correctly defined in `Actor` interface (`actor.ts:252-262`).
-- [PASS] Item4: `board` and `messageBus` properties in `Actor` interface are NOT `readonly` (`actor.ts:196-198`), matching the spec.
-- [PASS] Item5: `BaseActor.updateMetrics()` correctly refers to `result.metrics?.duration` (`BaseActor.ts:274`), matching the `ResultMetrics` interface definition in `result.ts:27`.
-- [PASS] Item6: `blackboard.ts` is exported from `packages/actor/src/types/index.ts:7`.
-- [PASS] Item7: `IBlackboard` is defined only in `blackboard.ts:14` and imported/re-exported in `actor.ts:12,334`. No duplicate definition found.
-- [FAIL] Item8: `isValidTransition` in `actor.ts:158,163,168` allows transition to `RESTARTING` from `RUNNING`, `IDLE`, and `BUSY`, which contradicts the provided status transition spec.
-- [PASS] Item9: `result.test.ts:74` uses positional arguments (`createSuccessResult(mockActionId, mockActorId, mockOutput, duration)`), not the object pattern.
+- [PASS] Item1: `stopActor` uses a `finally` block to ensure actor deletion from `this.actors` and `this.actorConfigs` even on failure or timeout (ActorRuntime.ts:375-379).
+- [PASS] Item2: `stop()` method correctly uses `actorId !== undefined` to avoid issues with potential falsy `ActorId` values (ActorRuntime.ts:94).
+- [PASS] Item3: `ActorRunner` logs errors regardless of the `debug` setting, matching its documentation (ActorRunner.ts:157-161).
+- [PASS] Item4: Method name collision is resolved; only one `stop()` method exists in `ActorRuntime`, using an optional `actorId` parameter (ActorRuntime.ts:93).
+- [PASS] Item5: Constructor and method signatures in tests (`ActorRuntime.test.ts`, `DefaultActorFactory.test.ts`) have been updated to match the current implementation (ActorRuntime.test.ts:45, 128, 162).
+- [PASS] Item6: `ActorRunner` correctly awaits all asynchronous actor methods within the execution cycle (ActorRunner.ts:134-143).
+- [PASS] Item7: `DefaultActorFactory` uses a consistent `ActorConstructor` type that matches both the `create` method and the registered actor implementations (DefaultActorFactory.ts:10, 68).
+- [PASS] Item8: `MockActor` in test files correctly implements the `ActorStatus` interface, ensuring type compatibility with `ActorRuntime`'s status access (ActorRuntime.test.ts:25, 57).
 
 ## Score
-- Passed: 8/9
-- **Total: 8.8/10**
-
-## Fix for FAIL Items
-### [P1] FAIL Item8: Status transition table spec mismatch
-- **File**: `packages/actor/src/types/actor.ts:153-169`
-- **Problem**: The implementation allows direct transitions from `RUNNING`, `IDLE`, and `BUSY` to `RESTARTING`, but the specification limits `RESTARTING` as reachable only from `ERROR`.
-- **Before Code**:
-```typescript
-    [ActorLifecycleStatus.RUNNING]: [
-      ActorLifecycleStatus.IDLE,
-      ActorLifecycleStatus.BUSY,
-      ActorLifecycleStatus.STOPPING,
-      ActorLifecycleStatus.ERROR,
-      ActorLifecycleStatus.RESTARTING,
-    ],
-    [ActorLifecycleStatus.IDLE]: [
-      ActorLifecycleStatus.BUSY,
-      ActorLifecycleStatus.STOPPING,
-      ActorLifecycleStatus.RESTARTING,
-    ],
-    [ActorLifecycleStatus.BUSY]: [
-      ActorLifecycleStatus.IDLE,
-      ActorLifecycleStatus.ERROR,
-      ActorLifecycleStatus.RESTARTING,
-    ],
-```
-- **After Code**:
-```typescript
-    [ActorLifecycleStatus.RUNNING]: [
-      ActorLifecycleStatus.IDLE,
-      ActorLifecycleStatus.BUSY,
-      ActorLifecycleStatus.STOPPING,
-      ActorLifecycleStatus.ERROR,
-    ],
-    [ActorLifecycleStatus.IDLE]: [
-      ActorLifecycleStatus.BUSY,
-      ActorLifecycleStatus.STOPPING,
-    ],
-    [ActorLifecycleStatus.BUSY]: [
-      ActorLifecycleStatus.IDLE,
-      ActorLifecycleStatus.ERROR,
-    ],
-```
+- Passed: 8/8
+- **Total: 10/10**
 
 ---
 ## 최종 평가
 
-**최저 점수: 8.8/10** (목표: 9/10)
-**최우선 이슈: P0**
-**소요 시간: 7m 26s**
+**최저 점수: 10/10** (목표: 9/10)
+**최우선 이슈: 없음**
+**소요 시간: 3m 2s**
 
 ### 통과 여부
-❌ **미통과** - 개선 필요
+✅ **통과** - 모든 기준 충족

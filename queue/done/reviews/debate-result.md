@@ -1,105 +1,80 @@
 
 
-I'll analyze all four model reviews and verify the issues against the actual source code and spec.
-Now let me verify the spec's transition diagram vs the implementation:
-Now I have all the information needed. Let me compile the final judgment.
-
 # 토론 결과
 
 ## 최종 점수
-- **종합 점수: 9.2/10**
+- **종합 점수: 10/10**
 
-| 모델 | 점수 | 비고 |
-|------|------|------|
-| Opus | 10/10 | 모든 항목 PASS 판정 |
-| Codex | 9/10 | Item8 FAIL 발견 |
-| GLM | 10/10 | 모든 항목 PASS 판정 (체크리스트 오류라 판단) |
-| Gemini | 8.8/10 | Item8 FAIL 발견 |
-| **종합** | **9.2/10** | P2 이슈 1건 확정 |
+## 분석 요약
 
----
+4개 AI 모델(Opus, Codex, GLM, Gemini) 모두 8개 체크리스트 항목에 대해 **전원 PASS** 판정을 내렸습니다. 모델 간 이견이 없으며, 각 항목에 대해 구체적인 코드 라인 참조와 함께 근거를 제시하고 있습니다.
+
+### 항목별 전원 합의 확인
+
+| # | 항목 | Opus | Codex | GLM | Gemini |
+|---|------|------|-------|-----|--------|
+| 1 | stopActor finally 블록으로 항상 삭제 | PASS | PASS | PASS | PASS |
+| 2 | stop() falsy ActorId 분기 (`!== undefined`) | PASS | PASS | PASS | PASS |
+| 3 | ActorRunner 에러 로깅 debug 무관 동작 | PASS | PASS | PASS | PASS |
+| 4 | stop() 중복 정의 해결 (optional param) | PASS | PASS | PASS | PASS |
+| 5 | 테스트 Constructor/Method 시그니처 일치 | PASS | PASS | PASS | PASS |
+| 6 | ActorRunner async await 처리 | PASS | PASS | PASS | PASS |
+| 7 | DefaultActorFactory 생성자 인자 일치 | PASS | PASS | PASS | PASS |
+| 8 | 테스트 Actor.status 타입 일치 | PASS | PASS | PASS | PASS |
+
+### 개별 모델 점수
+
+| 모델 | 점수 |
+|------|------|
+| Opus | 10/10 |
+| Codex | 10/10 |
+| GLM | 10/10 |
+| Gemini | 10/10 |
 
 ## 확정된 이슈
 
-### [P2] 상태 전이 테이블 스펙 확장: RUNNING/IDLE/BUSY → RESTARTING
-
-- **판정 근거**: Codex와 Gemini가 발견. 태스크 스펙의 전이 다이어그램에서는 `RESTARTING`으로의 전이를 `ERROR`에서만 허용하지만, 실제 구현(`actor.ts:153-168`)은 `RUNNING`, `IDLE`, `BUSY`에서도 `RESTARTING`으로 전이를 허용함.
-- **동의 모델**: Codex, Gemini
-- **반대 모델**: Opus (구현과 테스트가 일관되므로 PASS), GLM (구현이 올바르다고 판단)
-- **함수**: `isValidTransition()`
-- **문제점**: 태스크 스펙의 전이 다이어그램:
-  ```
-  RUNNING → IDLE | BUSY | STOPPING | ERROR
-  IDLE → BUSY | STOPPING
-  BUSY → IDLE | ERROR
-  ERROR → RESTARTING | STOPPING
-  ```
-  구현의 전이 다이어그램:
-  ```
-  RUNNING → IDLE | BUSY | STOPPING | ERROR | RESTARTING
-  IDLE → BUSY | STOPPING | RESTARTING
-  BUSY → IDLE | ERROR | RESTARTING
-  ERROR → RESTARTING | STOPPING
-  ```
-  
-  **그러나**, 구현 코드(`BaseActor.restart()` at `BaseActor.ts:207-240`)에서 실제로 `RUNNING/IDLE/BUSY → RESTARTING` 전이를 적극 사용하고 있으며, 테스트(`actor.test.ts:47-55`, `BaseActor.test.ts:174-207`)도 이를 검증하고 있음. 이는 **의도적인 스펙 확장**으로 판단됨 — `restart()`가 에러 상태뿐 아니라 실행 중 상태에서도 동작해야 하는 것은 합리적 설계 판단.
-
-  **최종 판정: P2** — 스펙 문서의 전이 다이어그램을 구현에 맞게 업데이트하면 해결되는 문서 불일치 이슈. 구현 자체는 내부적으로 일관성이 있음 (전이 테이블, JSDoc, BaseActor, 테스트 모두 동일한 동작).
-
-- **수정 지시**: 태스크 스펙 문서의 전이 다이어그램을 구현에 맞게 업데이트 (코드 수정 불필요)
-- **수정 전 코드 (스펙 문서)**:
-```
-RUNNING → IDLE | BUSY | STOPPING | ERROR
-IDLE → BUSY | STOPPING
-BUSY → IDLE | ERROR
-```
-- **수정 후 코드 (스펙 문서)**:
-```
-RUNNING → IDLE | BUSY | STOPPING | ERROR | RESTARTING
-IDLE → BUSY | STOPPING | RESTARTING
-BUSY → IDLE | ERROR | RESTARTING
-```
-
----
+없음. 4개 모델 모두 8개 검증 항목을 통과로 판정했으며, 추가 이슈를 제기한 모델이 없습니다.
 
 ## 기각된 이슈
 
-### Item1: createAction/createSuccessResult/createFailureResult 시그니처 불일치
-- **기각 이유**: 4개 모델 전원 PASS 판정. 실제 시그니처가 스펙과 일치하며, 114개 테스트 전부 통과. 원래 체크리스트 항목 자체가 잘못된 전제 기반.
-- **발견 모델**: 없음 (체크리스트 항목이었으나 문제 없음)
+없음. 어떤 모델에서도 새로운 이슈를 제기하지 않았습니다.
 
-### Item2: Actor/BaseActor 간 async/sync 불일치
-- **기각 이유**: 4개 모델 전원 PASS 판정. `void | Promise<void>` 유니온 타입으로 일관되게 처리. TypeScript 컴파일 에러는 의존성 충돌(chai/vitest)에 의한 것이며 소스 코드 문제 아님.
-- **발견 모델**: 없음
+## 근거 검증 상세
 
-### Item3: Actor 인터페이스에 restart/getStatus/isAlive 누락
-- **기각 이유**: 4개 모델 전원 PASS 판정. `actor.ts:252-262`에 세 메서드 모두 정의됨.
-- **발견 모델**: 없음
+### 항목 1: stopActor finally 블록
+- **4모델 합의**: `ActorRuntime.ts:375-379`의 `finally` 블록에서 `this.actors.delete(actorId)`, `this.actorConfigs.delete(actorId)` 실행
+- **판정**: 타임아웃/에러 시에도 리소스 누수 없이 Map에서 제거됨. 유효.
 
-### Item4: board/messageBus readonly 스펙 불일치
-- **기각 이유**: 4개 모델 전원 PASS 판정. 스펙과 구현 모두 `readonly`가 아님.
-- **발견 모델**: 없음
+### 항목 2: stop() falsy 분기
+- **4모델 합의**: `actorId !== undefined`로 엄격 비교하여 빈 문자열 등 falsy 값에도 올바르게 동작
+- **판정**: 런타임 종료와 개별 Actor 중지가 안전하게 분기됨. 유효.
 
-### Item5: updateMetrics 필드명 불일치
-- **기각 이유**: 4개 모델 전원 PASS 판정. `result.metrics?.duration` 참조가 `ResultMetrics.duration`과 정확히 일치.
-- **발견 모델**: 없음
+### 항목 3: 에러 로깅 debug 무관
+- **4모델 합의**: `ActorRunner.ts:156-161`에서 error 존재 시 debug 모드와 무관하게 `console.error` 호출
+- **판정**: 주석과 코드 동작이 일치. 테스트도 존재. 유효.
 
-### Item6: types/index.ts blackboard export 누락
-- **기각 이유**: 4개 모델 전원 PASS 판정. `types/index.ts:7`에 export 존재.
-- **발견 모델**: 없음
+### 항목 4: stop() 중복 정의
+- **4모델 합의**: 단일 `stop(actorId?: ActorId)` 메서드로 optional parameter 패턴 사용
+- **판정**: TypeScript에서 valid한 패턴. 스펙의 두 기능이 안전하게 통합됨. 유효.
 
-### Item7: IBlackboard 중복 정의
-- **기각 이유**: 4개 모델 전원 PASS 판정. `blackboard.ts`에만 정의, `actor.ts`에서 re-export만 수행.
-- **발견 모델**: 없음
+### 항목 5: 테스트 시그니처 일치
+- **4모델 합의**: MockActor, MockFactory, ActorRuntime 생성자 호출이 모두 실제 인터페이스와 일치
+- **판정**: 유효.
 
-### Item9: result.test.ts 객체 패턴 사용
-- **기각 이유**: 4개 모델 전원 PASS 판정. 위치 인자(positional arguments) 패턴 사용 확인.
-- **발견 모델**: 없음
+### 항목 6: async await 처리
+- **4모델 합의**: `runCycle`에서 observe/think/act/report 모두 `await` 사용
+- **판정**: `T | Promise<T>` 반환 타입에 대해 올바르게 await. 유효.
 
----
+### 항목 7: Factory 생성자 인자
+- **4모델 합의**: `ActorConstructor` 타입 `(id, name, role, board, messageBus, config?)` 순서와 `create()` 호출 순서 일치
+- **판정**: 유효.
+
+### 항목 8: Actor.status 타입
+- **4모델 합의**: `Actor.status`가 `ActorStatus` 객체 타입이며, 테스트 mock이 올바른 구조로 구현
+- **판정**: 유효.
 
 ## Fixer 지시사항
 
-확정된 P0/P1 이슈가 없습니다. 수정 작업이 필요하지 않습니다.
+확정된 P0/P1 이슈가 없으므로 **수정할 사항이 없습니다**.
 
-유일한 확정 이슈(P2)는 태스크 스펙 문서의 상태 전이 다이어그램을 구현에 맞게 업데이트하는 것이며, 이는 코드 수정이 아닌 문서 수정 사항입니다. P2 이슈는 수정하지 마세요.
+현재 구현은 8개 검증 항목 모두를 통과하며, 4개 AI 모델이 만장일치로 PASS 판정을 내렸습니다.

@@ -1,206 +1,415 @@
 <review>
   <mode>checklist_verification</mode>
   <task>
-    <name>TASK-024-actor-interface</name>
+    <name>TASK-025-actor-runtime</name>
     <spec><![CDATA[
-# TASK-024: Actor 인터페이스 정의
+# TASK-025: Actor 런타임 구현
 
 ## 개요
 - **상태**: 📋 대기
 - 우선순위: P1
-- 예상 소요: 4시간
+- 예상 소요: 8시간
 - 담당: 개발자
 - Phase: Week 3-4
 
 ## 목표
-Actor 시스템의 핵심 인터페이스와 타입을 정의하여 Blackboard와 Actor 간의 명확한 계약을 수립합니다.
+Actor 런타임을 구현하여 Actor의 생명주기(spawn, stop, restart)를 관리하고 Blackboard와 연동합니다.
 
 ## 작업 내용
 
-### 1. Actor 인터페이스 정의
+### 1. ActorRuntime 클래스 정의
 
-**파일:** `packages/actor/src/types/actor.ts`
+**파일:** `packages/actor/src/runtime/ActorRuntime.ts`
 
-#### Actor 기본 인터페이스
+#### 기본 인터페이스
 
 ```typescript
+import { Actor, ActorId, ActorLifecycleStatus, ActorRole } from '../types/actor';
+import { IBlackboard } from '../types/blackboard';
+import { IMessageBus } from '../types/message';
+import { ActorFactory, ActorConfig } from './types';
+
 /**
- * Actor는 Blackboard와 상호작용하는 독립적인 실행 단위입니다.
- * "뇌(Blackboard) ↔ 손발(Actor)" 패러다임에서 손발 역할을 수행합니다.
- *
- * 스펙 기준: [[spec/13-actor.md|13-actor.md]]
+ * Actor 런타임 설정
  */
-export interface Actor {
-  /** 고유 식별자 */
-  readonly id: ActorId;
+export interface RuntimeConfig {
+  /** 최대 동시 Actor 수 */
+  maxActors?: number;
 
-  /** Actor 이름 */
-  readonly name: string;
+  /** Actor 생성 시 기본 타임아웃 (ms) */
+  spawnTimeout?: number;
 
-  /** Actor 역할 */
-  readonly role: ActorRole;
+  /** Actor 종료 시 기본 타임아웃 (ms) */
+  stopTimeout?: number;
 
-  /** 연결된 Blackboard 인스턴스 */
-  board: IBlackboard;
+  /** 재시작 최대 횟수 */
+  maxRestarts?: number;
 
-  /** 메시지 버스 */
-  messageBus: IMessageBus;
+  /** 재시작 백오프 초기값 (ms) */
+  initialBackoff?: number;
 
-  /** Actor 현재 상태 */
-  readonly status: ActorStatus;
+  /** 재시작 백오프 최대값 (ms) */
+  maxBackoff?: number;
 
-  /** 마지막 활동 시간 */
-  lastActivity: Date;
+  /** 디버그 모드 */
+  debug?: boolean;
+}
 
-  /** 생성 시간 */
-  createdAt: Date;
+/**
+ * Actor 런타임
+ *
+ * Actor의 생성, 관리, 종료를 담당합니다.
+ */
+export class ActorRuntime {
+  private readonly actors: Map<ActorId, Actor>;
+  private readonly actorConfigs: Map<ActorId, ActorConfig>;
+  private readonly board: IBlackboard;
+  private readonly messageBus: IMessageBus;
+  private readonly config: Required<RuntimeConfig>;
+  private readonly factory: ActorFactory;
+  private isRunning: boolean;
 
-  /** 실행 메트릭 */
-  metrics: ActorMetrics;
+  constructor(board: IBlackboard, messageBus: IMessageBus, factory: ActorFactory, config?: RuntimeConfig) {
+    this.board = board;
+    this.messageBus = messageBus;
+    this.factory = factory;
+    this.actors = new Map();
+    this.actorConfigs = new Map();
+    this.isRunning = false;
 
-  /**
-   * 메시지 수신
-   * @param message 수신할 메시지
-   */
-  receive(message: Message): void | Promise<void>;
-
-  /**
-   * 관찰 단계: Blackboard에서 필요한 정보를 읽습니다.
-   * @returns 관찰된 데이터 (Observation)
-   */
-  observe(): Observation;
-
-  /**
-   * 사고 단계: 관찰된 데이터를 바탕으로 수행할 행동을 결정합니다.
-   * @param obs 관찰된 데이터
-   * @returns 수행할 행동 (Action)
-   */
-  think(observation: Observation): Action;
-
-  /**
-   * 실행 단계: 결정된 행동을 실제로 수행합니다.
-   * @param action 수행할 행동
-   * @returns 실행 결과 (Result)
-   */
-  act(action: Action): Result;
-
-  /**
-   * 보고 단계: 실행 결과를 Blackboard에 기록합니다.
-   * @param result 실행 결과
-   */
-  report(result: Result): void;
+    // 기본 설정
+    const defaults: Required<RuntimeConfig> = {
+      maxActors: 100,
+      spawnTimeout: 5000,
+      stopTimeout: 5000,
+      maxRestarts: 3,
+      initialBackoff: 1000,
+      maxBackoff: 30000,
+      debug: false,
+    };
+    this.config = { ...defaults, ...config };
+  }
 
   /**
-   * Actor를 시작합니다.
+   * 런타임 시작
    */
-  start(): void | Promise<void>;
+  async start(): Promise<void> {
+    if (this.isRunning) {
+      throw new Error('Runtime is already running');
+    }
+    this.isRunning = true;
+    this.log('Runtime started');
+  }
 
   /**
-   * Actor를 정상적으로 종료합니다.
+   * 런타임 종료
    */
-  stop(): void | Promise<void>;
+  async stop(): Promise<void> {
+    if (!this.isRunning) {
+      return;
+    }
+
+    this.log('Stopping runtime...');
+
+    // 모든 Actor 중지
+    const stopPromises = Array.from(this.actors.values()).map((actor) =>
+      this.stopActor(actor.id)
+    );
+
+    await Promise.allSettled(stopPromises);
+    this.actors.clear();
+    this.isRunning = false;
+
+    this.log('Runtime stopped');
+  }
 
   /**
-   * Actor를 재시작합니다.
+   * 새 Actor 생성 (spawn)
+   * @param config Actor 설정
+   * @returns 생성된 Actor
    */
-  restart(): void | Promise<void>;
+  async spawn(config: ActorConfig): Promise<Actor> {
+    if (!this.isRunning) {
+      throw new Error('Runtime is not running');
+    }
+
+    // 최대 Actor 수 체크
+    if (this.actors.size >= this.config.maxActors) {
+      throw new Error(`Maximum actors limit reached: ${this.config.maxActors}`);
+    }
+
+    // 중복 ID 체크
+    if (this.actors.has(config.id)) {
+      throw new Error(`Actor already exists: ${config.id}`);
+    }
+
+    this.log(`Spawning actor: ${config.id} (${config.role})`);
+
+    // 상태 변경: CREATED → STARTING
+    const startTime = Date.now();
+
+    try {
+      // Actor 생성
+      const actor = await this.factory.create(config, this.board, this.messageBus);
+
+      // Actor 시작
+      await actor.start();
+
+      // 등록
+      this.actors.set(actor.id, actor);
+      this.actorConfigs.set(actor.id, config);
+
+      const duration = Date.now() - startTime;
+      this.log(`Actor spawned: ${config.id} (${duration}ms)`);
+
+      return actor;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      this.log(`Actor spawn failed: ${config.id} (${duration}ms)`, error);
+      throw error;
+    }
+  }
 
   /**
-   * Actor의 현재 상태를 조회합니다.
+   * Actor 중지
+   * @param actorId Actor ID
    */
-  getStatus(): ActorStatus;
+  async stop(actorId: ActorId): Promise<void> {
+    const actor = this.getActor(actorId);
+    await this.stopActor(actor);
+  }
 
   /**
-   * Actor가 살아있는지 확인합니다.
+   * Actor 재시작
+   * @param actorId Actor ID
+   * @param restartCount 현재 재시작 횟수 (내부용)
    */
-  isAlive(): boolean;
+  async restart(actorId: ActorId, restartCount = 0): Promise<Actor> {
+    if (restartCount >= this.config.maxRestarts) {
+      throw new Error(
+        `Max restarts (${this.config.maxRestarts}) exceeded for actor: ${actorId}`
+      );
+    }
+
+    const actor = this.getActor(actorId);
+    const config = this.actorConfigs.get(actorId);
+
+    if (!config) {
+      throw new Error(`Actor config not found: ${actorId}`);
+    }
+
+    this.log(`Restarting actor: ${actorId} (attempt ${restartCount + 1})`);
+
+    // 상태 변경: ERROR/STOPPED → RESTARTING
+    actor['setStatus'](ActorLifecycleStatus.RESTARTING);
+
+    try {
+      // 기존 Actor 중지
+      await this.stopActor(actor);
+
+      // 백오프 대기
+      const backoff = this.calculateBackoff(restartCount);
+      if (backoff > 0) {
+        await this.delay(backoff);
+      }
+
+      // 새 Actor 생성
+      const newActor = await this.spawn(config);
+
+      this.log(`Actor restarted: ${actorId}`);
+
+      return newActor;
+    } catch (error) {
+      this.log(`Actor restart failed: ${actorId}`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Actor 조회
+   * @param actorId Actor ID
+   * @returns Actor 인스턴스
+   */
+  getActor(actorId: ActorId): Actor {
+    const actor = this.actors.get(actorId);
+    if (!actor) {
+      throw new Error(`Actor not found: ${actorId}`);
+    }
+    return actor;
+  }
+
+  /**
+   * Actor 존재 여부 확인
+   * @param actorId Actor ID
+   * @returns 존재 여부
+   */
+  hasActor(actorId: ActorId): boolean {
+    return this.actors.has(actorId);
+  }
+
+  /**
+   * 모든 Actor ID 반환
+   * @returns Actor ID 배열
+   */
+  listActors(): ActorId[] {
+    return Array.from(this.actors.keys());
+  }
+
+  /**
+   * 역할별 Actor 목록
+   * @param role Actor 역할
+   * @returns Actor ID 배열
+   */
+  listActorsByRole(role: ActorRole): ActorId[] {
+    return Array.from(this.actors.values())
+      .filter((actor) => actor.role === role)
+      .map((actor) => actor.id);
+  }
+
+  /**
+   * 특정 상태의 Actor 목록
+   * @param status Actor 상태
+   * @returns Actor ID 배열
+   */
+  listActorsByStatus(status: ActorLifecycleStatus): ActorId[] {
+    return Array.from(this.actors.values())
+      .filter((actor) => actor.status === status)
+      .map((actor) => actor.id);
+  }
+
+  /**
+   * 현재 Actor 수
+   */
+  size(): number {
+    return this.actors.size;
+  }
+
+  /**
+   * 런타임 상태
+   */
+  getStatus(): { running: boolean; actorCount: number } {
+    return {
+      running: this.isRunning,
+      actorCount: this.actors.size,
+    };
+  }
+
+  // ==================== 내부 메서드 ====================
+
+  private async stopActor(actor: Actor): Promise<void> {
+    this.log(`Stopping actor: ${actor.id}`);
+
+    // 상태 변경: RUNNING → STOPPING
+    actor['setStatus'](ActorLifecycleStatus.STOPPING);
+
+    try {
+      // 타임아웃과 함께 stop 호출
+      await Promise.race([
+        actor.stop(),
+        this.delay(this.config.stopTimeout),
+      ]);
+
+      // 상태 변경: STOPPING → STOPPED
+      actor['setStatus'](ActorLifecycleStatus.STOPPED);
+
+      // 등록 해제
+      this.actors.delete(actor.id);
+      this.actorConfigs.delete(actor.id);
+
+      this.log(`Actor stopped: ${actor.id}`);
+    } catch (error) {
+      // 상태 변경: STOPPING → ERROR
+      actor['setStatus'](ActorLifecycleStatus.ERROR);
+      this.log(`Actor stop failed: ${actor.id}`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * getActorConfig() 구현 방법 (스펙 기준)
+   *
+   * ActorConfig는 Actor 생성 시 필요한 설정 정보입니다.
+   * 구현 방법은 다음과 같습니다:
+   *
+   * 1. **Map에 저장**: Actor 생성 시 actorConfigs Map에 config 저장
+   * 2. **조회 방법**: getActorConfig()에서 Map에서 조회
+   * 3. **용도**: 재시작 시 동일한 설정으로 Actor 재생성
+   *
+   * 참고: [[spec/13-actor.md|13-actor.md]] - ActorConfig 인터페이스
+   *
+   * @param actorId Actor ID
+   * @returns ActorConfig
+   */
+  private getActorConfig(actorId: ActorId): ActorConfig {
+    const config = this.actorConfigs.get(actorId);
+    if (!config) {
+      throw new Error(`Actor config not found: ${actorId}`);
+    }
+    return config;
+  }
+
+  /**
+   * getActorConfig() 구현 방법 (스펙 기준)
+   *
+   * ActorConfig는 Actor 생성 시 필요한 설정 정보입니다.
+   * 구현 방법은 다음과 같습니다:
+   *
+   * 1. **Map에 저장**: Actor 생성 시 actorConfigs Map에 config 저장
+   * 2. **조회 방법**: getActorConfig()에서 Map에서 조회
+   * 3. **용도**: 재시작 시 동일한 설정으로 Actor 재생성
+   *
+   * 참고: [[spec/13-actor.md|13-actor.md]] - ActorConfig 인터페이스
+   *
+   * @param actorId Actor ID
+   * @returns ActorConfig
+   */
+  private getActorConfig(actorId: ActorId): ActorConfig {
+    const config = this.actorConfigs.get(actorId);
+    if (!config) {
+      throw new Error(`Actor config not found: ${actorId}`);
+    }
+    return config;
+  }
+
+  private calculateBackoff(restartCount: number): number {
+    const factor = Math.pow(2, restartCount);
+    const backoff = this.config.initialBackoff * factor;
+    return Math.min(backoff, this.config.maxBackoff);
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private log(message: string, error?: unknown): void {
+    if (!this.config.debug) return;
+
+    if (error) {
+      console.error(`[ActorRuntime] ${message}`, error);
+    } else {
+      console.log(`[ActorRuntime] ${message}`);
+    }
+  }
 }
 ```
 
-### 2. 타입 정의
+### 2. ActorFactory 인터페이스
 
-#### ActorId
-
-```typescript
-/**
- * Actor 고유 식별자
- *
- * 형식: `<role>-<uuid>`
- * 예: analyst-550e8400-e29b-41d4-a716-446655440000
- */
-export type ActorId = string;
-export type ActionId = string;
-export type ResultId = string;
-export type TaskId = string;
-
-/**
- * ActorId 유효성 검사
- * @param id 검사할 ActorId
- * @returns 유효 여부
- */
-export function isValidActorId(id: string): id is ActorId {
-  const pattern = /^([a-z]+)-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  return pattern.test(id);
-}
-
-/**
- * ActorId 생성
- * @param role Actor 역할
- * @returns 새 ActorId
- */
-export function createActorId(role: ActorRole): ActorId {
-  const uuid = crypto.randomUUID();
-  return `${role}-${uuid}`;
-}
-```
-
-#### ActorLifecycleStatus
+**파일:** `packages/actor/src/runtime/types.ts`
 
 ```typescript
+import { Actor, ActorId, ActorRole } from '../types/actor';
+import { IBlackboard } from '../types/blackboard';
+import { IMessageBus } from '../types/message';
+
 /**
- * Actor 생명주기 상태 (스펙 기준)
+ * Actor 생성 설정 (스펙 기준)
  *
  * 참고: [[spec/13-actor.md|13-actor.md]]
  */
-export enum ActorLifecycleStatus {
-  /** 생성됨 */
-  CREATED = 'created',
-
-  /** 시작 중 */
-  STARTING = 'starting',
-
-  /** 실행 중 */
-  RUNNING = 'running',
-
-  /** 대기 중 (작업 없음) */
-  IDLE = 'idle',
-
-  /** 작업 중 */
-  BUSY = 'busy',
-
-  /** 중지 중 */
-  STOPPING = 'stopping',
-
-  /** 중지됨 */
-  STOPPED = 'stopped',
-
-  /** 재시작 중 */
-  RESTARTING = 'restarting',
-
-  /** 에러 상태 */
-  ERROR = 'error',
-}
-
-/**
- * Actor 상태 (스펙 기준)
- *
- * Actor의 현재 상태 정보를 포함하는 인터페이스
- *
- * 참고: [[spec/13-actor.md|13-actor.md]]
- */
-export interface ActorStatus {
-  /** Actor ID */
-  id: ActorId;
+export interface ActorConfig {
+  /** Actor ID (생략 시 자동 생성) */
+  id?: ActorId;
 
   /** Actor 이름 */
   name: string;
@@ -208,155 +417,292 @@ export interface ActorStatus {
   /** Actor 역할 */
   role: ActorRole;
 
-  /** 생명주기 상태 */
-  status: ActorLifecycleStatus;
+  /** Actor 유형 (구체적인 Actor 클래스 식별자) */
+  type: string;
 
-  /** 메시지 큐 상태 */
-  messageQueue: {
-    pending: number;
-    processing: boolean;
-  };
-
-  /** 현재 작업 */
-  currentTask?: {
-    id: TaskId;
-    type: string;
-    startedAt: Date;
-  };
-
-  /** 성능 메트릭 */
-  metrics: {
-    totalMessagesProcessed: number;
-    totalActionsExecuted: number;
-    totalErrors: number;
-    averageResponseTime: number; // ms
-    uptime: number; // ms
-  };
-
-  /** 마지막 활동 */
-  lastSeen: Date;
-
-  /** 마지막 활동 유형 */
-  lastActivity?: 'message_received' | 'action_executed' | 'error_occurred';
-
-  /** 에러 상태 */
-  errorCount: number;
-
-  /** 마지막 에러 */
-  lastError?: {
-    message: string;
-    timestamp: Date;
-  };
+  /** Actor 초기 설정 */
+  config?: Record<string, unknown>;
 }
 
 /**
- * 상태 전이 유효성 검사 (스펙 기준)
+ * Actor 팩토리
  *
- * 상태 전이 다이어그램:
- * CREATED → STARTING
- * STARTING → RUNNING | ERROR
- * RUNNING → IDLE | BUSY | STOPPING | ERROR
- * IDLE → BUSY | STOPPING
- * BUSY → IDLE | ERROR
- * ERROR → RESTARTING | STOPPING
- * RESTARTING → RUNNING | ERROR
- * STOPPING → STOPPED
- * STOPPED → (터미널 상태)
- *
- * @param current 현재 상태
- * @param next 다음 상태
- * @returns 유효 여부
+ * Actor 인스턴스 생성을 담당하는 인터페이스입니다.
+ * 구체적인 Actor 구현은 이 팩토리를 통해 생성됩니다.
  */
-export function isValidTransition(
-  current: ActorLifecycleStatus,
-  next: ActorLifecycleStatus
-): boolean {
-  const transitions: Record<ActorLifecycleStatus, ActorLifecycleStatus[]> = {
-    [ActorLifecycleStatus.CREATED]: [ActorLifecycleStatus.STARTING],
-    [ActorLifecycleStatus.STARTING]: [ActorLifecycleStatus.RUNNING, ActorLifecycleStatus.ERROR],
-    [ActorLifecycleStatus.RUNNING]: [ActorLifecycleStatus.IDLE, ActorLifecycleStatus.BUSY, ActorLifecycleStatus.STOPPING, ActorLifecycleStatus.ERROR],
-    [ActorLifecycleStatus.IDLE]: [ActorLifecycleStatus.BUSY, ActorLifecycleStatus.STOPPING],
-    [ActorLifecycleStatus.BUSY]: [ActorLifecycleStatus.IDLE, ActorLifecycleStatus.ERROR],
-    [ActorLifecycleStatus.ERROR]: [ActorLifecycleStatus.RESTARTING, ActorLifecycleStatus.STOPPING],
-    [ActorLifecycleStatus.RESTARTING]: [ActorLifecycleStatus.RUNNING, ActorLifecycleStatus.ERROR],
-    [ActorLifecycleStatus.STOPPING]: [ActorLifecycleStatus.STOPPED],
-    [ActorLifecycleStatus.STOPPED]: [],
-  };
-
-  return transitions[current]?.includes(next) ?? false;
+export interface ActorFactory {
+  /**
+   * Actor 인스턴스 생성 (스펙 기준)
+   * @param config Actor 설정
+   * @param board Blackboard 인스턴스
+   * @param messageBus MessageBus 인스턴스
+   * @returns 생성된 Actor 인스턴스
+   */
+  create(config: ActorConfig, board: IBlackboard, messageBus: IMessageBus): Promise<Actor> | Actor;
 }
 ```
 
-#### ActorRole
+### 3. 기본 ActorFactory 구현
+
+**파일:** `packages/actor/src/runtime/DefaultActorFactory.ts`
 
 ```typescript
-/**
- * Actor 역할 유형 (스펙 기준)
- *
- * 참고: [[spec/13-actor.md|13-actor.md]]
- */
-export type ActorRole = 'analyst' | 'executor' | 'verifier' | 'director';
+import { Actor } from '../types/actor';
+import { Blackboard } from '../types/blackboard';
+import { ActorFactory, ActorConfig } from './types';
 
 /**
- * 역할별 기능 설명 (스펙 기준)
- *
- * 참고: [[spec/13-actor.md|13-actor.md]]
+ * Actor 클래스 등록소
  */
-export const ActorRoleDescription: Record<ActorRole, string> = {
-  analyst: '데이터 분석, 추론, 위험 평가 수행',
-  executor: 'API 호출, 파일 처리, 외부 작업 실행',
-  verifier: '결과 검증, 품질 체크, 오류 탐지',
-  director: '회의 진행, 투표 관리, 의사결정 조율',
-};
+type ActorConstructor = new (
+  id: string,
+  role: any,
+  board: Blackboard,
+  config?: Record<string, unknown>
+) => Actor;
 
 /**
- * 역할별 권한 레벨 (스펙 기준)
+ * 기본 Actor 팩토리
+ *
+ * Actor 클래스를 등록하고 생성할 수 있는 팩토리입니다.
  */
-export const ActorRoleLevel: Record<ActorRole, number> = {
-  analyst: 1,
-  executor: 1,
-  verifier: 1,
-  director: 2, // 상위 레벨
-};
+export class DefaultActorFactory implements ActorFactory {
+  private readonly registry: Map<string, ActorConstructor>;
+
+  constructor() {
+    this.registry = new Map();
+  }
+
+  /**
+   * Actor 클래스 등록
+   * @param type Actor 유형 식별자
+   * @param constructor Actor 생성자
+   */
+  register(type: string, constructor: ActorConstructor): void {
+    this.registry.set(type, constructor);
+  }
+
+  /**
+   * Actor 클래스 등록 해제
+   * @param type Actor 유형 식별자
+   */
+  unregister(type: string): void {
+    this.registry.delete(type);
+  }
+
+  /**
+   * Actor 인스턴스 생성 (스펙 기준)
+   * @param config Actor 설정
+   * @param board Blackboard 인스턴스
+   * @param messageBus MessageBus 인스턴스
+   * @returns 생성된 Actor 인스턴스
+   */
+  create(config: ActorConfig, board: IBlackboard, messageBus: IMessageBus): Actor {
+    const { id, name, role, type, config: actorConfig } = config;
+
+    // 등록된 생성자 조회
+    const Constructor = this.registry.get(type);
+    if (!Constructor) {
+      throw new Error(`Unknown actor type: ${type}`);
+    }
+
+    // Actor 생성
+    const actor = new Constructor(
+      id || this.generateId(role),
+      name || `actor-${role}`,
+      role,
+      board,
+      messageBus,
+      actorConfig
+    );
+
+    return actor;
+  }
+
+  /**
+   * Actor ID 생성
+   * @param role Actor 역할
+   * @returns Actor ID
+   */
+  private generateId(role: string): string {
+    const uuid = crypto.randomUUID();
+    return `${role}-${uuid}`;
+  }
+}
 ```
 
-#### ActorMetrics
+### 4. Actor 실행 루프 (옵션)
+
+**파일:** `packages/actor/src/runtime/ActorRunner.ts`
 
 ```typescript
+import { Actor, ActorStatus, Observation, Action, Result } from '../types/actor';
+
 /**
- * Actor 실행 메트릭
+ * Actor 실행 루프 옵션
  */
-export interface ActorMetrics {
-  /** 총 실행 횟수 */
-  totalRuns: number;
+export interface RunnerOptions {
+  /** 실행 간격 (ms) */
+  interval?: number;
 
-  /** 성공 횟수 */
-  successCount: number;
+  /** 최대 연속 실행 횟수 */
+  maxIterations?: number;
 
-  /** 실패 횟수 */
-  failureCount: number;
+  /** 에러 발생 시 중지 여부 */
+  stopOnError?: boolean;
 
-  /** 마지막 에러 (있는 경우) */
-  lastError: Error | null;
-
-  /** 평균 실행 시간 (ms) */
-  averageExecutionTime: number;
-
-  /** 마지막 실행 시간 (ms) */
-  lastExecutionTime: number | null;
-
-  /** 총 CPU 시간 (ms) */
-  totalCpuTime: number;
-
-  /** 메모리 사용량 (bytes) */
-  memoryUsage: number;
+  /** 종료 조건 콜백 */
+  stopCondition?: () => boolean | Promise<boolean>;
 }
 
 /**
- * ActorMetrics 초기화
+ * Actor 실행 루프
+ *
+ * Actor의 observe-think-act-report 사이클을 반복 실행합니다.
  */
-export function createActorMetrics(): ActorMetrics {
-  return {
+export class ActorRunner {
+  private readonly actor: Actor;
+  private readonly options: Required<RunnerOptions>;
+  private isRunning: boolean = false;
+  private iterationCount: number = 0;
+  private abortController: AbortController | null = null;
+
+  constructor(actor: Actor, options?: RunnerOptions) {
+    this.actor = actor;
+    this.options = {
+      interval: 1000,
+      maxIterations: Infinity,
+      stopOnError: true,
+      stopCondition: () => false,
+      ...options,
+    };
+  }
+
+  /**
+   * 실행 루프 시작
+   */
+  async start(): Promise<void> {
+    if (this.isRunning) {
+      throw new Error('Runner is already running');
+    }
+
+    this.isRunning = true;
+    this.iterationCount = 0;
+    this.abortController = new AbortController();
+
+    while (this.isRunning) {
+      // 종료 조건 확인
+      if (await this.shouldStop()) {
+        break;
+      }
+
+      // 최대 반복 횟수 확인
+      if (this.iterationCount >= this.options.maxIterations) {
+        break;
+      }
+
+      // Actor 상태 확인
+      if (this.actor.status !== ActorStatus.RUNNING) {
+        break;
+      }
+
+      try {
+        // 한 사이클 실행
+        await this.runCycle();
+        this.iterationCount++;
+      } catch (error) {
+        if (this.options.stopOnError) {
+          throw error;
+        }
+        // 에러 무지하고 계속
+      }
+
+      // 대기
+      await this.delay(this.options.interval);
+    }
+
+    this.isRunning = false;
+    this.abortController = null;
+  }
+
+  /**
+   * 실행 루프 중지
+   */
+  stop(): void {
+    if (!this.isRunning) {
+      return;
+    }
+
+    this.isRunning = false;
+    this.abortController?.abort();
+  }
+
+  /**
+   * 현재 실행 중인지 확인
+   */
+  running(): boolean {
+    return this.isRunning;
+  }
+
+  /**
+   * 현재 반복 횟수
+   */
+  getIterationCount(): number {
+    return this.iterationCount;
+  }
+
+  // ==================== 내부 메서드 ====================
+
+  private async runCycle(): Promise<void> {
+    // 1. Observe (동기)
+    const obs = this.actor.observe();
+
+    // 2. Think (동기)
+    const action = this.actor.think(obs);
+
+    // 3. Act (동기)
+    const result = this.actor.act(action);
+
+    // 4. Report (동기)
+    this.actor.report(result);
+  }
+
+  private async shouldStop(): Promise<boolean> {
+    // AbortController 확인
+    if (this.abortController?.signal.aborted) {
+      return true;
+    }
+
+    // 종료 조건 확인
+    return await this.options.stopCondition();
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+}
+```
+
+### 5. 단위 테스트 작성
+
+**파일:** `packages/actor/src/runtime/__tests__/ActorRuntime.test.ts`
+
+```typescript
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { Actor, ActorRole, ActorLifecycleStatus } from '../../types/actor';
+import { Blackboard } from '../../types/blackboard';
+import { ActorRuntime } from '../ActorRuntime';
+import { ActorFactory, ActorConfig } from '../types';
+
+class MockActor implements Actor {
+  readonly id: string;
+  readonly name: string = 'mock';
+  readonly role: ActorRole;
+  board: Blackboard;
+  readonly status: ActorLifecycleStatus = ActorLifecycleStatus.RUNNING;
+  lastActivity: Date = new Date();
+  createdAt: Date = new Date();
+  metrics = {
     totalRuns: 0,
     successCount: 0,
     failureCount: 0,
@@ -366,937 +712,477 @@ export function createActorMetrics(): ActorMetrics {
     totalCpuTime: 0,
     memoryUsage: 0,
   };
-}
-```
 
-### 3. 행동 사이클 타입
-
-#### Observation
-
-```typescript
-/**
- * Observation: 보드에서 관찰한 정보 (스펙 기준)
- *
- * 참고: [[spec/13-actor.md|13-actor.md]]
- */
-export interface Observation {
-  /** Actor ID */
-  actorId: ActorId;
-
-  /** 관찰 시간 */
-  timestamp: Date;
-
-  /** 관찰한 섹션별 데이터 */
-  state?: {
-    context: Record<string, unknown>;
-    agents: unknown[]; // AgentStatus[]
-    tasks: unknown[]; // Task[]
-  };
-
-  knowledge?: {
-    facts: unknown[]; // Fact[]
-    inferences: unknown[]; // Inference[]
-  };
-
-  decisions?: {
-    currentAgenda: unknown | null; // Agenda | null
-    opinions: unknown[]; // Opinion[]
-  };
-}
-
-/**
- * Observation 생성 헬퍼 (스펙 기준)
- */
-export function createObservation(
-  actorId: ActorId,
-  data?: Partial<Observation>
-): Observation {
-  return {
-    actorId,
-    timestamp: new Date(),
-    ...data,
-  };
-}
-```
-
-#### Action
-
-```typescript
-/**
- * Actor가 수행하기로 결정한 행동 (스펙 기준)
- *
- * 참고: [[spec/13-actor.md|13-actor.md]]
- */
-export interface Action {
-  /** 행동 ID */
-  id: ActionId;
-
-  /** 수행 Actor ID */
-  actorId: ActorId;
-
-  /** 행동 유형 */
-  type: ActionType;
-
-  /** 타임스탬프 */
-  timestamp: Date;
-
-  /** 액션별 파라미터 */
-  params?: Record<string, unknown>;
-
-  /** 관련 태스크 ID (선택사항) */
-  taskId?: TaskId;
-}
-
-/**
- * 행동 유형 (스펙 기준)
- *
- * 참고: [[spec/13-actor.md|13-actor.md]]
- */
-export type ActionType =
-  | 'analyze'           // 분석 수행
-  | 'execute'           // 실행 수행
-  | 'verify'            // 검증 수행
-  | 'coordinate'        // 조율 수행
-  | 'submit_opinion'    // 의견 제출
-  | 'submit_vote'       // 투표 제출
-  | 'create_agenda'     // 안건 생성
-  | 'unknown';
-
-/**
- * Action 생성 헬퍼
- */
-/**
- * Action 생성 헬퍼 (스펙 기준)
- */
-export function createAction(
-  actorId: ActorId,
-  type: ActionType,
-  params?: Record<string, unknown>,
-  taskId?: TaskId
-): Action {
-  return {
-    id: crypto.randomUUID(),
-    actorId,
-    type,
-    params,
-    taskId,
-    timestamp: new Date(),
-  };
-}
-```
-
-#### Result
-
-```typescript
-/**
- * Action 실행 결과 (스펙 기준)
- *
- * 참고: [[spec/13-actor.md|13-actor.md]]
- */
-export interface Result {
-  /** 결과 ID */
-  id: ResultId;
-
-  /** 원본 Action ID */
-  actionId: ActionId;
-
-  /** 수행 Actor ID */
-  actorId: ActorId;
-
-  /** 타임스탬프 */
-  timestamp: Date;
-
-  /** 상태 */
-  status: 'success' | 'failure' | 'partial';
-
-  /** 성공 시 결과 */
-  output?: unknown;
-
-  /** 실패 시 에러 */
-  error?: string;
-
-  /** 메트릭 */
-  metrics?: {
-    duration: number; // ms 단위
-    memoryUsage?: number;
-  };
-
-  /** 보드에 기록할 데이터 */
-  toRecord?: {
-    section: 'state' | 'knowledge' | 'decisions';
-    data: unknown;
-  };
-}
-
-/**
- * 성공 Result 생성 (스펙 기준)
- */
-export function createSuccessResult(
-  actionId: ActionId,
-  actorId: ActorId,
-  output: unknown,
-  duration: number
-): Result {
-  return {
-    id: crypto.randomUUID() as ResultId,
-    actionId,
-    actorId,
-    timestamp: new Date(),
-    status: 'success',
-    output,
-    metrics: { duration },
-  };
-}
-
-/**
- * 실패 Result 생성 (스펙 기준)
- */
-export function createFailureResult(
-  actionId: ActionId,
-  actorId: ActorId,
-  error: string,
-  duration: number
-): Result {
-  return {
-    id: crypto.randomUUID() as ResultId,
-    actionId,
-    actorId,
-    timestamp: new Date(),
-    status: 'failure',
-    error,
-    metrics: { duration },
-  };
-}
-```
-
-### 4. Blackboard 인터페이스 (Actor 연결용)
-
-**파일:** `packages/actor/src/types/blackboard.ts`
-
-### 5. Message 타입 (스펙 기준)
-
-**파일:** `packages/actor/src/types/message.ts`
-
-```typescript
-/**
- * Message 기본 구조 (스펙 기준)
- *
- * 참고: [[spec/13-actor.md|13-actor.md]]
- */
-export interface Message<T = unknown> {
-  /** 메시지 ID */
-  id: MessageId;
-
-  /** 메시지 타입 */
-  type: MessageType;
-
-  /** 발신자 Actor ID */
-  from: ActorId;
-
-  /** 수신자 Actor ID ('broadcast' 시 전체 전송) */
-  to: ActorId | 'broadcast';
-
-  /** 메시지 페이로드 */
-  payload: T;
-
-  /** 타임스탬프 */
-  timestamp: Date;
-
-  /** 응답 연관용 ID */
-  correlationId?: string;
-
-  /** 응답 대상 */
-  replyTo?: ActorId;
-
-  /** 메시지 우선순위 */
-  priority?: MessagePriority;
-
-  /** Time to Live (ms) */
-  ttl?: number;
-
-  /** 전달 확인 요청 */
-  deliveryReceipt?: boolean;
-}
-
-export type MessageId = string;
-
-/**
- * 메시지 우선순위
- */
-export enum MessagePriority {
-  LOW = 0,
-  NORMAL = 1,
-  HIGH = 2,
-  CRITICAL = 3,
-}
-
-/**
- * 메시지 타입 (스펙 기준)
- *
- * 참고: [[spec/13-actor.md|13-actor.md]]
- */
-export enum MessageType {
-  // 상태 관련
-  STATE_READ = 'state.read',
-  STATE_WRITE = 'state.write',
-  STATE_SUBSCRIBE = 'state.subscribe',
-  STATE_UNSUBSCRIBE = 'state.unsubscribe',
-
-  // 작업 관련
-  TASK_ASSIGN = 'task.assign',
-  TASK_START = 'task.start',
-  TASK_COMPLETE = 'task.complete',
-  TASK_FAILED = 'task.failed',
-  TASK_CANCEL = 'task.cancel',
-
-  // 의사결정 관련
-  DECISION_REQUEST = 'decision.request',
-  OPINION_SUBMIT = 'opinion.submit',
-  OPINION_REQUEST = 'opinion.request',
-  VOTE_SUBMIT = 'vote.submit',
-  VOTE_REQUEST = 'vote.request',
-  CONSENSUS_REACHED = 'consensus.reached',
-
-  // 시스템 관련
-  PING = 'ping',
-  PONG = 'pong',
-  HEARTBEAT = 'heartbeat',
-  STATUS_REQUEST = 'status.request',
-  STATUS_RESPONSE = 'status.response',
-
-  // 에러 관련
-  ERROR = 'error',
-  ERROR_ACK = 'error.ack',
-
-  // 생명주기 관련
-  START = 'start',
-  STOP = 'stop',
-  RESTART = 'restart',
-  KILL = 'kill',
-
-  // 사용자 정의
-  CUSTOM = 'custom',
-}
-
-/**
- * IMessageBus 인터페이스 (스펙 기준)
- *
- * 참고: [[spec/13-actor.md|13-actor.md]]
- */
-export interface IMessageBus {
-  /**
-   * 메시지 전송
-   */
-  send(message: Message): void;
-
-  /**
-   * 특정 Actor에 메시지 전송
-   */
-  sendTo(to: ActorId, message: Omit<Message, 'to'>): void;
-
-  /**
-   * 브로드캐스트 전송
-   */
-  broadcast(message: Omit<Message, 'to'>): void;
-
-  /**
-   * 메시지 수신
-   */
-  receive(handler: (message: Message) => void): void;
-
-  /**
-   * 요청-응답 패턴
-   */
-  request<T>(message: Message, timeoutMs?: number): Promise<Message<T>>;
-
-  /**
-   * 메시지 타입 구독
-   */
-  subscribe(
-    messageType: MessageType,
-    handler: (message: Message) => void
-  ): UnsubscribeFn;
-
-  /**
-   * 메시지 큐 크기 조회
-   */
-  getQueueSize(actorId: ActorId): number;
-
-  /**
-   * 메시지 큐 비우기
-   */
-  clearQueue(actorId: ActorId): void;
-
-  /**
-   * 메시지 필터링
-   */
-  filter(predicate: (message: Message) => boolean): void;
-}
-
-/**
- * 구독 취소 함수
- */
-export type UnsubscribeFn = () => void;
-```
-
-### 6. Blackboard 인터페이스 (Actor 연결용)
-
-**파일:** `packages/actor/src/types/blackboard.ts`
-
-```typescript
-/**
- * Actor와 상호작용하는 Blackboard 인터페이스 (스펙 기준: IBlackboard)
- *
- * Actor 시스템에서 필요한 Blackboard의 최소 기능만 정의합니다.
- * 전체 구현은 @obora-kit/blackboard 패키지에서 제공됩니다.
- *
- * 참고: [[spec/13-actor.md|13-actor.md]]
- */
-export interface IBlackboard {
-  /**
-   * 현재 Blackboard 버전
-   */
-  readonly version: number;
-}
-```
-
-### 5. 기본 Actor 구현 (추상 클래스)
-
-**파일:** `packages/actor/src/base/BaseActor.ts`
-
-```typescript
-import { Actor, ActorId, ActorRole, ActorStatus, Observation, Action, Result } from '../types/actor';
-import { Blackboard } from '../types/blackboard';
-import { createActorMetrics, ActorMetrics } from '../types/actor';
-
-/**
- * Actor 구현을 위한 추상 기본 클래스 (스펙 기준)
- *
- * 구체적인 Actor 구현 시 이 클래스를 상속받아 필요한 메서드를 구현합니다.
- *
- * 참고: [[spec/13-actor.md|13-actor.md]]
- */
-export abstract class BaseActor implements Actor {
-  readonly id: ActorId;
-  readonly name: string;
-  readonly role: ActorRole;
-  board: IBlackboard;
-  messageBus: IMessageBus;
-  private _status: ActorLifecycleStatus;
-  lastActivity: Date;
-  createdAt: Date;
-  metrics: ActorMetrics;
-
-  constructor(
-    id: ActorId,
-    name: string,
-    role: ActorRole,
-    board: IBlackboard,
-    messageBus: IMessageBus
-  ) {
+  constructor(id: string, role: ActorRole, board: Blackboard) {
     this.id = id;
-    this.name = name;
     this.role = role;
     this.board = board;
-    this.messageBus = messageBus;
-    this._status = ActorStatus.CREATED;
-    this.lastActivity = new Date();
-    this.createdAt = new Date();
-    this.metrics = createActorMetrics();
   }
 
-  get status(): ActorLifecycleStatus {
-    return this._status;
-  }
-
-  protected setStatus(newStatus: ActorLifecycleStatus): void {
-    if (!isValidTransition(this._status, newStatus)) {
-      throw new Error(
-        `Invalid status transition: ${this._status} → ${newStatus}`
-      );
-    }
-    this._status = newStatus;
-    this.lastActivity = new Date();
-  }
-
-  /**
-   * 하위 클래스에서 observe()를 구현해야 합니다 (동기).
-   */
-  abstract observe(): Observation;
-
-  /**
-   * 하위 클래스에서 think()를 구현해야 합니다 (동기).
-   */
-  abstract think(observation: Observation): Action;
-
-  /**
-   * 하위 클래스에서 act()를 구현해야 합니다 (동기).
-   */
-  abstract act(action: Action): Result;
-
-  /**
-   * receive()의 기본 구현 - 메시지 처리
-   */
-  async receive(message: Message): Promise<void> {
-    this.updateLastSeen();
-
-    switch (message.type) {
-      case MessageType.PING:
-        this.handlePing(message);
-        break;
-      case MessageType.TASK_ASSIGN:
-        await this.handleTaskAssign(message);
-        break;
-      case MessageType.STATUS_REQUEST:
-        this.handleStatusRequest(message);
-        break;
-      case MessageType.STOP:
-        await this.stop();
-        break;
-      case MessageType.RESTART:
-        await this.restart();
-        break;
-      default:
-        this.handleCustomMessage(message);
-    }
-  }
-
-  /**
-   * report()의 기본 구현 - Blackboard에 결과 기록 (동기)
-   */
-  report(result: Result): void {
-    if (result.toRecord) {
-      const { section, data } = result.toRecord;
-      // 동기 write는 인터페이스에 따라 다를 수 있음
-      // 실제 구현에서는 비동기로 처리 후 결과 반환
-    }
-
-    // 이벤트 발행
-    this.messageBus.broadcast({
-      id: crypto.randomUUID() as MessageId,
-      type: MessageType.TASK_COMPLETE,
-      from: this.id,
-      to: 'broadcast',
-      payload: { taskId: result.actionId, result },
-      timestamp: new Date(),
-    });
-  }
-
-  /**
-   * start()의 기본 구현
-   */
-  async start(): Promise<void> {
-    if (this._status === ActorStatus.RUNNING) return;
-
-    this.setStatus(ActorStatus.STARTING);
-
-    try {
-      // 메시지 수신 시작
-      this.setupMessageHandlers();
-
-      // 상태 변경
-      this.setStatus(ActorStatus.RUNNING);
-
-      // 하트비트 시작
-      this.startHeartbeat();
-    } catch (error) {
-      this.setStatus(ActorStatus.ERROR);
-      throw error;
-    }
-  }
-
-  /**
-   * stop()의 기본 구현
-   */
-  async stop(): Promise<void> {
-    if (this._status === ActorStatus.STOPPED) return;
-
-    this.setStatus(ActorStatus.STOPPING);
-
-    // 하트비트 정지
-    this.stopHeartbeat();
-
-    this.setStatus(ActorStatus.STOPPED);
-  }
-
-  /**
-   * restart()의 기본 구현
-   */
-  async restart(): Promise<void> {
-    await this.stop();
-    await this.start();
-  }
-
-  /**
-   * isAlive() 기본 구현
-   */
-  isAlive(): boolean {
-    return (
-      this._status === ActorStatus.RUNNING ||
-      this._status === ActorStatus.IDLE ||
-      this._status === ActorStatus.BUSY
-    );
-  }
-
-  /**
-   * 메트릭 업데이트
-   */
-  protected updateMetrics(result: Result): void {
-    this.metrics.totalRuns++;
-    if (result.status === 'success') {
-      this.metrics.successCount++;
-    } else {
-      this.metrics.failureCount++;
-      this.metrics.lastError = result.error ? new Error(result.error) : null;
-    }
-    this.metrics.lastExecutionTime = result.metrics?.duration || 0;
-    this.metrics.averageExecutionTime =
-      (this.metrics.averageExecutionTime * (this.metrics.totalRuns - 1) +
-        (result.metrics?.duration || 0)) / this.metrics.totalRuns;
-  }
-
-  // ==================== 핸들러 ====================
-
-  private async handleTaskAssign(message: Message): Promise<void> {
-    // 작업 수행
-    const observation = this.observe();
-    const action = this.think(observation);
-    const result = this.act(action);
-    this.report(result);
-  }
-
-  private handlePing(message: Message): void {
-    this.messageBus.sendTo(message.from, {
-      id: crypto.randomUUID() as MessageId,
-      type: MessageType.PONG,
-      from: this.id,
-      to: message.from,
-      payload: {},
-      timestamp: new Date(),
-    });
-  }
-
-  private handleStatusRequest(message: Message): void {
-    const status = this.getStatus();
-
-    this.messageBus.sendTo(message.from, {
-      id: crypto.randomUUID() as MessageId,
-      type: MessageType.STATUS_RESPONSE,
-      from: this.id,
-      to: message.from,
-      payload: { status },
-      timestamp: new Date(),
-    });
-  }
-
-  protected handleCustomMessage(_message: Message): void {
-    // 서브클래스에서 오버라이드
-  }
-
-  private setupMessageHandlers(): void {
-    this.messageBus.subscribe(MessageType.PING, (msg) => this.receive(msg));
-    this.messageBus.subscribe(MessageType.TASK_ASSIGN, (msg) =>
-      this.receive(msg)
-    );
-    this.messageBus.subscribe(MessageType.STATUS_REQUEST, (msg) =>
-      this.receive(msg)
-    );
-    this.messageBus.subscribe(MessageType.STOP, (msg) => this.receive(msg));
-    this.messageBus.subscribe(MessageType.RESTART, (msg) => this.receive(msg));
-  }
-
-  private heartbeatTimer?: NodeJS.Timeout;
-
-  private startHeartbeat(): void {
-    this.heartbeatTimer = setInterval(() => {
-      this.messageBus.broadcast({
-        id: crypto.randomUUID() as MessageId,
-        type: MessageType.HEARTBEAT,
-        from: this.id,
-        to: 'broadcast',
-        payload: {
-          timestamp: new Date(),
-          status: this._status,
-        },
-        timestamp: new Date(),
-      });
-    }, 30000); // 30초마다
-  }
-
-  private stopHeartbeat(): void {
-    if (this.heartbeatTimer) {
-      clearInterval(this.heartbeatTimer);
-      this.heartbeatTimer = undefined;
-    }
-  }
-
-  private updateLastSeen(): void {
-    this.lastActivity = new Date();
-  }
+  observe() { return { actorId: this.id, timestamp: new Date() }; }
+  think() { return { id: '1', actorId: this.id, type: 'execute', timestamp: new Date() }; }
+  act() { return { id: '1', actionId: '1', actorId: this.id, timestamp: new Date(), status: 'success' }; }
+  report() { /* mock */ }
+  async stop() { /* mock */ }
+  getStatus() { return { id: this.id, name: this.name, role: this.role, status: this.status, messageQueue: { pending: 0, processing: false }, metrics: { totalMessagesProcessed: 0, totalActionsExecuted: 0, totalErrors: 0, averageResponseTime: 0, uptime: 0 }, lastSeen: new Date(), errorCount: 0 }; }
 }
-```
 
-### 6. 내보내기 설정
-
-**파일:** `packages/actor/src/types/index.ts`
-
-```typescript
-export * from './actor';
-export * from './blackboard';
-export * from './message';
-```
-
-**파일:** `packages/actor/src/index.ts`
-
-```typescript
-export * from './types';
-export * from './base/BaseActor';
-```
-
-### 7. 단위 테스트 작성
-
-**파일:** `packages/actor/src/types/__tests__/actor.test.ts`
-
-```typescript
-import { describe, it, expect } from 'vitest';
-import {
-  ActorId,
-  ActorRole,
-  ActorStatus,
-  ActorMetrics,
-  isValidActorId,
-  createActorId,
-  isValidTransition,
-  createActorMetrics,
-  createObservation,
-  createAction,
-  createSuccessResult,
-  createFailureResult,
-} from '../actor';
-
-describe('ActorId', () => {
-  it('should validate correct ActorId format', () => {
-    const validId = 'analyst-550e8400-e29b-41d4-a716-446655440000';
-    expect(isValidActorId(validId)).toBe(true);
-  });
-
-  it('should reject invalid ActorId formats', () => {
-    expect(isValidActorId('invalid')).toBe(false);
-    expect(isValidActorId('analyst-123')).toBe(false);
-    expect(isValidActorId('550e8400-e29b-41d4-a716-446655440000')).toBe(false);
-  });
-
-  it('should create valid ActorId for each role', () => {
-    Object.values(ActorRole).forEach((role) => {
-      const id = createActorId(role);
-      expect(isValidActorId(id)).toBe(true);
-      expect(id.startsWith(role)).toBe(true);
-    });
-  });
-});
-
-describe('ActorStatus', () => {
-  it('should allow valid transitions', () => {
-    expect(isValidTransition(ActorLifecycleStatus.CREATED, ActorLifecycleStatus.STARTING)).toBe(true);
-    expect(isValidTransition(ActorLifecycleStatus.RUNNING, ActorLifecycleStatus.IDLE)).toBe(true);
-    expect(isValidTransition(ActorLifecycleStatus.RUNNING, ActorLifecycleStatus.STOPPING)).toBe(true);
-  });
-
-  it('should reject invalid transitions', () => {
-    expect(isValidTransition(ActorLifecycleStatus.CREATED, ActorLifecycleStatus.RUNNING)).toBe(false);
-    expect(isValidTransition(ActorLifecycleStatus.STOPPED, ActorLifecycleStatus.RUNNING)).toBe(false);
-    expect(isValidTransition(ActorLifecycleStatus.RUNNING, ActorLifecycleStatus.CREATED)).toBe(false);
-  });
-
-  it('should handle all status values', () => {
-    Object.values(ActorLifecycleStatus).forEach((status) => {
-      expect(typeof status).toBe('string');
-    });
-  });
-});
-
-describe('ActorMetrics', () => {
-  it('should create initial metrics with zeros', () => {
-    const metrics = createActorMetrics();
-    expect(metrics.totalRuns).toBe(0);
-    expect(metrics.successCount).toBe(0);
-    expect(metrics.failureCount).toBe(0);
-    expect(metrics.lastError).toBeNull();
-    expect(metrics.averageExecutionTime).toBe(0);
-    expect(metrics.lastExecutionTime).toBeNull();
-  });
-});
-
-describe('Observation', () => {
-  it('should create observation with timestamp', () => {
-    const obs = createObservation('state', { key: 'value' });
-    expect(obs.timestamp).toBeInstanceOf(Date);
-    expect(obs.section).toBe('state');
-    expect(obs.data).toEqual({ key: 'value' });
-    expect(obs.metadata.source).toBe('read');
-  });
-
-  it('should accept custom metadata', () => {
-    const obs = createObservation('state', null, {
-      source: 'event',
-      latency: 42,
-    });
-    expect(obs.metadata.source).toBe('event');
-    expect(obs.metadata.latency).toBe(42);
-  });
-});
-
-describe('Action', () => {
-  it('should create action with UUID', () => {
-    const action = createAction('read', { key: 'value' });
-    expect(action.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
-    expect(action.type).toBe('read');
-    expect(action.params).toEqual({ key: 'value' });
-    expect(action.priority).toBe(0);
-  });
-
-  it('should accept custom options', () => {
-    const action = createAction('write', { data: 'test' }, {
-      priority: 10,
-      target: 'section-1',
-    });
-    expect(action.priority).toBe(10);
-    expect(action.target).toBe('section-1');
-  });
-});
-
-describe('Result', () => {
-  it('should create success result', () => {
-    const result = createSuccessResult('action-1', { output: 'value' }, 100);
-    expect(result.actionId).toBe('action-1');
-    expect(result.success).toBe(true);
-    expect(result.data).toEqual({ output: 'value' });
-    expect(result.error).toBeNull();
-    expect(result.executionTime).toBe(100);
-    expect(result.metadata.retryCount).toBe(0);
-  });
-
-  it('should create failure result', () => {
-    const error = new Error('Test error');
-    const result = createFailureResult('action-1', error, 50);
-    expect(result.success).toBe(false);
-    expect(result.error).toBe(error);
-    expect(result.data).toBeNull();
-    expect(result.executionTime).toBe(50);
-  });
-});
-```
-
-**파일:** `packages/actor/src/base/__tests__/BaseActor.test.ts`
-
-```typescript
-import { describe, it, expect, beforeEach } from 'vitest';
-import { ActorRole, ActorStatus } from '../types/actor';
-import { Blackboard } from '../types/blackboard';
-import { BaseActor } from '../BaseActor';
-
-class TestActor extends BaseActor {
-  observe() {
-    return { actorId: this.id, timestamp: new Date() };
+class MockFactory implements ActorFactory {
+  create(config: ActorConfig, board: Blackboard): Actor {
+    return new MockActor(config.id || 'test-id', config.role, board);
   }
-
-  think(obs: any) {
-    return { id: crypto.randomUUID(), actorId: this.id, type: 'execute' as const, timestamp: new Date() };
-  }
-
-  act(action: any) {
-    return { id: crypto.randomUUID(), actionId: action.id, actorId: this.id, timestamp: new Date(), status: 'success' as const };
+  createAsync(_config: ActorConfig, _board: Blackboard, _messageBus: any): Promise<Actor> {
+    return Promise.resolve(new MockActor('test-id', 'analyst', _board));
   }
 }
 
-describe('BaseActor', () => {
-  let mockBoard: Blackboard;
-  let actor: TestActor;
+describe('ActorRuntime', () => {
+  let runtime: ActorRuntime;
+  let board: Blackboard;
+  let factory: ActorFactory;
 
   beforeEach(() => {
-    mockBoard = {
+    board = {
       read: vi.fn(),
       write: vi.fn(),
       subscribe: vi.fn(),
       version: 1,
     };
-    actor = new TestActor('analyst-test-id', 'analyst', mockBoard, {} as any);
+    factory = new MockFactory();
+    runtime = new ActorRuntime(board, factory, { debug: false });
   });
 
-  it('should initialize with correct properties', () => {
-    expect(actor.id).toBe('analyst-test-id');
-    expect(actor.role).toBe('analyst');
-    expect(actor.board).toBe(mockBoard);
-    expect(actor.status).toBe(ActorLifecycleStatus.CREATED);
+  describe('start/stop', () => {
+    it('should start runtime', async () => {
+      await runtime.start();
+      const status = runtime.getStatus();
+      expect(status.running).toBe(true);
+    });
+
+    it('should stop runtime', async () => {
+      await runtime.start();
+      await runtime.stop();
+      const status = runtime.getStatus();
+      expect(status.running).toBe(false);
+    });
+
+    it('should throw when starting already running runtime', async () => {
+      await runtime.start();
+      await expect(runtime.start()).rejects.toThrow('Runtime is already running');
+    });
   });
 
-  it('should reject invalid status transitions', () => {
-    expect(() => {
-      actor['setStatus'](ActorLifecycleStatus.RUNNING);
-    }).toThrow();
+  describe('spawn', () => {
+    beforeEach(async () => {
+      await runtime.start();
+    });
+
+    it('should spawn actor successfully', async () => {
+      const config = {
+        id: 'test-actor-1',
+        role: ActorRole.ANALYST,
+        type: 'mock',
+      };
+      const actor = await runtime.spawn(config);
+
+      expect(actor).toBeInstanceOf(MockActor);
+      expect(actor.id).toBe('test-actor-1');
+      expect(actor.role).toBe(ActorRole.ANALYST);
+      expect(runtime.hasActor('test-actor-1')).toBe(true);
+      expect(runtime.size()).toBe(1);
+    });
+
+    it('should throw when runtime is not running', async () => {
+      await runtime.stop();
+      const config = {
+        id: 'test-actor-1',
+        role: ActorRole.ANALYST,
+        type: 'mock',
+      };
+
+      await expect(runtime.spawn(config)).rejects.toThrow('Runtime is not running');
+    });
+
+    it('should throw when max actors limit reached', async () => {
+      const runtimeWithLimit = new ActorRuntime(board, factory, { maxActors: 2, debug: false });
+      await runtimeWithLimit.start();
+
+      await runtimeWithLimit.spawn({ role: ActorRole.ANALYST, type: 'mock' });
+      await runtimeWithLimit.spawn({ role: ActorRole.ANALYST, type: 'mock' });
+
+      await expect(
+        runtimeWithLimit.spawn({ role: ActorRole.ANALYST, type: 'mock' })
+      ).rejects.toThrow('Maximum actors limit reached');
+    });
+
+    it('should throw when actor ID already exists', async () => {
+      const config = {
+        id: 'test-actor-1',
+        role: ActorRole.ANALYST,
+        type: 'mock',
+      };
+      await runtime.spawn(config);
+
+      await expect(runtime.spawn(config)).rejects.toThrow('Actor already exists');
+    });
   });
 
-  it('should update metrics on success result', async () => {
-    const result = createSuccessResult('1', null, 100);
-    await actor.report(result);
-    expect(actor.metrics.totalRuns).toBe(1);
-    expect(actor.metrics.successCount).toBe(1);
-    expect(actor.metrics.lastExecutionTime).toBe(100);
+  describe('stop', () => {
+    beforeEach(async () => {
+      await runtime.start();
+      await runtime.spawn({
+        id: 'test-actor-1',
+        role: ActorRole.ANALYST,
+        type: 'mock',
+      });
+    });
+
+    it('should stop actor successfully', async () => {
+      await runtime.stop('test-actor-1');
+      expect(runtime.hasActor('test-actor-1')).toBe(false);
+      expect(runtime.size()).toBe(0);
+    });
+
+    it('should throw when actor not found', async () => {
+      await expect(runtime.stop('non-existent')).rejects.toThrow('Actor not found');
+    });
   });
 
-  it('should update metrics on failure result', async () => {
-    const result = createFailureResult('1', new Error('test'), 50);
-    await actor.report(result);
-    expect(actor.metrics.totalRuns).toBe(1);
-    expect(actor.metrics.failureCount).toBe(1);
-    expect(actor.metrics.lastError).toBeInstanceOf(Error);
+  describe('restart', () => {
+    beforeEach(async () => {
+      await runtime.start();
+      await runtime.spawn({
+        id: 'test-actor-1',
+        role: 'analyst',
+        type: 'mock',
+      });
+    });
+
+    it('should restart actor successfully', async () => {
+      const newActor = await runtime.restart('test-actor-1');
+      expect(newActor).toBeInstanceOf(MockActor);
+      expect(newActor.id).toBe('test-actor-1');
+    });
+
+    it('should respect max restarts limit', async () => {
+      const runtimeWithLimit = new ActorRuntime(board, factory, {
+        maxRestarts: 2,
+        debug: false,
+      });
+      await runtimeWithLimit.start();
+
+      await runtimeWithLimit.spawn({
+        id: 'test-actor-1',
+        role: 'analyst',
+        type: 'mock',
+      });
+
+      // First restart should succeed
+      await runtimeWithLimit.restart('test-actor-1', 1);
+
+      // Second restart should fail
+      await expect(
+        runtimeWithLimit.restart('test-actor-1', 2)
+      ).rejects.toThrow('Max restarts');
+    });
+  });
+
+  describe('query methods', () => {
+    beforeEach(async () => {
+      await runtime.start();
+      await runtime.spawn({
+        id: 'analyst-1',
+        role: 'analyst',
+        type: 'mock',
+      });
+      await runtime.spawn({
+        id: 'analyst-2',
+        role: 'analyst',
+        type: 'mock',
+      });
+      await runtime.spawn({
+        id: 'executor-1',
+        role: 'executor',
+        type: 'mock',
+      });
+    });
+
+    it('should list all actors', () => {
+      const actors = runtime.listActors();
+      expect(actors).toHaveLength(3);
+      expect(actors).toContain('analyst-1');
+      expect(actors).toContain('analyst-2');
+      expect(actors).toContain('executor-1');
+    });
+
+    it('should list actors by role', () => {
+      const analysts = runtime.listActorsByRole('analyst');
+      expect(analysts).toHaveLength(2);
+      expect(analysts).toContain('analyst-1');
+      expect(analysts).toContain('analyst-2');
+
+      const executors = runtime.listActorsByRole('executor');
+      expect(executors).toHaveLength(1);
+      expect(executors).toContain('executor-1');
+    });
+
+    it('should list actors by status', () => {
+      const running = runtime.listActorsByStatus(ActorLifecycleStatus.RUNNING);
+      expect(running).toHaveLength(3);
+    });
+
+    it('should get actor by id', () => {
+      const actor = runtime.getActor('analyst-1');
+      expect(actor).toBeInstanceOf(MockActor);
+      expect(actor.id).toBe('analyst-1');
+    });
+
+    it('should throw when getting non-existent actor', () => {
+      expect(() => runtime.getActor('non-existent')).toThrow('Actor not found');
+    });
   });
 });
+```
+
+**파일:** `packages/actor/src/runtime/__tests__/DefaultActorFactory.test.ts`
+
+```typescript
+import { describe, it, expect, beforeEach } from 'vitest';
+import { Actor, ActorRole } from '../../types/actor';
+import { Blackboard } from '../../types/blackboard';
+import { DefaultActorFactory } from '../DefaultActorFactory';
+
+class TestActor implements Actor {
+  readonly id: string;
+  readonly role: ActorRole;
+  board: Blackboard;
+  readonly status = 'running' as any;
+  lastActivity: Date = new Date();
+  createdAt: Date = new Date();
+  metrics = { totalRuns: 0, successCount: 0, failureCount: 0, lastError: null, averageExecutionTime: 0, lastExecutionTime: null, totalCpuTime: 0, memoryUsage: 0 };
+
+  constructor(id: string, role: ActorRole, board: Blackboard) {
+    this.id = id;
+    this.role = role;
+    this.board = board;
+  }
+
+  async observe() { return { timestamp: new Date(), section: 'test', data: null, metadata: { source: 'read', latency: 0 } }; }
+  async think() { return { id: '1', type: 'read', params: {}, priority: 0, createdAt: new Date() }; }
+  async act() { return { actionId: '1', success: true, data: null, error: null, executionTime: 10, completedAt: new Date(), metadata: { retryCount: 0, resources: { cpu: 0, memory: 0 } } }; }
+  async report() { /* mock */ }
+  async stop() { /* mock */ }
+  getStatus() { return this.status; }
+}
+
+describe('DefaultActorFactory', () => {
+  let factory: DefaultActorFactory;
+  let board: Blackboard;
+
+  beforeEach(() => {
+    factory = new DefaultActorFactory();
+    board = {
+      read: async () => {},
+      write: async () => {},
+      subscribe: () => () => {},
+      version: 1,
+    };
+  });
+
+  it('should register and create actor', () => {
+    factory.register('test', TestActor as any);
+
+    const actor = factory.create(
+      { id: 'test-id', role: ActorRole.ANALYST, type: 'test' },
+      board
+    );
+
+    expect(actor).toBeInstanceOf(TestActor);
+    expect(actor.id).toBe('test-id');
+  });
+
+  it('should auto-generate actor id if not provided', () => {
+    factory.register('test', TestActor as any);
+
+    const actor = factory.create(
+      { role: ActorRole.ANALYST, type: 'test' },
+      board
+    );
+
+    expect(actor.id).toMatch(/^analyst-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+  });
+
+  it('should throw for unknown actor type', () => {
+    expect(() => {
+      factory.create(
+        { role: ActorRole.ANALYST, type: 'unknown' },
+        board
+      );
+    }).toThrow('Unknown actor type: unknown');
+  });
+
+  it('should unregister actor type', () => {
+    factory.register('test', TestActor as any);
+    factory.unregister('test');
+
+    expect(() => {
+      factory.create(
+        { role: ActorRole.ANALYST, type: 'test' },
+        board
+      );
+    }).toThrow('Unknown actor type: test');
+  });
+});
+```
+
+**파일:** `packages/actor/src/runtime/__tests__/ActorRunner.test.ts`
+
+```typescript
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { ActorRunner } from '../ActorRunner';
+import { Actor, ActorStatus, ActorRole } from '../../types/actor';
+
+class TestActor implements Actor {
+  readonly id = 'test-actor';
+  readonly role = ActorRole.ANALYST;
+  board: any;
+  readonly status = ActorStatus.RUNNING;
+  lastActivity = new Date();
+  createdAt = new Date();
+  metrics = { totalRuns: 0, successCount: 0, failureCount: 0, lastError: null, averageExecutionTime: 0, lastExecutionTime: null, totalCpuTime: 0, memoryUsage: 0 };
+
+  observe = vi.fn().mockResolvedValue({ timestamp: new Date(), section: 'test', data: null, metadata: { source: 'read', latency: 0 } });
+  think = vi.fn().mockResolvedValue({ id: '1', type: 'read', params: {}, priority: 0, createdAt: new Date() });
+  act = vi.fn().mockResolvedValue({ actionId: '1', success: true, data: null, error: null, executionTime: 10, completedAt: new Date(), metadata: { retryCount: 0, resources: { cpu: 0, memory: 0 } } });
+  report = vi.fn().mockResolvedValue(undefined);
+  stop = vi.fn().mockResolvedValue(undefined);
+  getStatus = vi.fn().mockReturnValue(ActorStatus.RUNNING);
+}
+
+describe('ActorRunner', () => {
+  let runner: ActorRunner;
+  let actor: TestActor;
+
+  beforeEach(() => {
+    actor = new TestActor();
+    runner = new ActorRunner(actor, {
+      interval: 10, // 빠른 테스트를 위해 짧게 설정
+      maxIterations: 3,
+    });
+  });
+
+  it('should run cycles', async () => {
+    await runner.start();
+
+    expect(actor.observe).toHaveBeenCalledTimes(3);
+    expect(actor.think).toHaveBeenCalledTimes(3);
+    expect(actor.act).toHaveBeenCalledTimes(3);
+    expect(actor.report).toHaveBeenCalledTimes(3);
+    expect(runner.getIterationCount()).toBe(3);
+  });
+
+  it('should stop after max iterations', async () => {
+    await runner.start();
+    expect(runner.getIterationCount()).toBe(3);
+    expect(runner.running()).toBe(false);
+  });
+
+  it('should stop manually', async () => {
+    runner.start();
+    await new Promise(resolve => setTimeout(resolve, 20));
+    runner.stop();
+
+    const count = runner.getIterationCount();
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    expect(runner.getIterationCount()).toBe(count);
+  });
+
+  it('should respect stop condition', async () => {
+    let shouldStop = false;
+    const runnerWithCondition = new ActorRunner(actor, {
+      interval: 10,
+      stopCondition: () => shouldStop,
+    });
+
+    setTimeout(() => { shouldStop = true; }, 25);
+    await runnerWithCondition.start();
+
+    expect(runnerWithCondition.getIterationCount()).toBeLessThan(5);
+  });
+
+  it('should throw when starting already running runner', async () => {
+    const startPromise = runner.start();
+    await expect(runner.start()).rejects.toThrow('Runner is already running');
+    await startPromise;
+  });
+});
+```
+
+### 6. 내보내기 설정
+
+**파일:** `packages/actor/src/runtime/index.ts`
+
+```typescript
+export * from './ActorRuntime';
+export * from './types';
+export * from './DefaultActorFactory';
+export * from './ActorRunner';
+```
+
+**파일:** `packages/actor/src/index.ts` (업데이트)
+
+```typescript
+export * from './types';
+export * from './base/BaseActor';
+export * from './runtime';
 ```
 
 ## 파일 구조
 
 ```
 packages/actor/src/
+├── runtime/
+│   ├── __tests__/
+│   │   ├── ActorRuntime.test.ts
+│   │   ├── DefaultActorFactory.test.ts
+│   │   └── ActorRunner.test.ts
+│   ├── ActorRuntime.ts       # Actor 런타임
+│   ├── types.ts              # 런타임 타입
+│   ├── DefaultActorFactory.ts # 기본 팩토리
+│   └── ActorRunner.ts        # 실행 루프
 ├── types/
-│   ├── __tests__/
-│   │   └── actor.test.ts
-│   ├── actor.ts          # Actor 인터페이스 및 타입
-│   ├── blackboard.ts     # Blackboard 인터페이스
-│   ├── message.ts        # Message, IMessageBus 타입
-│   └── index.ts          # 타입 내보내기
 ├── base/
-│   ├── __tests__/
-│   │   └── BaseActor.test.ts
-│   └── BaseActor.ts      # 추상 기본 클래스
-└── index.ts              # 패키지 내보내기
+└── index.ts
 ```
 
 ## 완료 조건
-- [ ] Actor 인터페이스 정의 완료
-- [ ] ActorId, ActorStatus, ActorRole 타입 정의 완료
-- [ ] Observation, Action, Result 타입 정의 완료
-- [ ] ActorMetrics 타입 정의 완료
-- [ ] Blackboard 인터페이스 정의 완료
-- [ ] BaseActor 추상 클래스 구현 완료
-- [ ] 모든 타입에 대한 단위 테스트 작성 완료
-- [ ] 테스트 커버리지 90% 이상
+- [ ] ActorRuntime 클래스 구현 완료
+- [ ] spawn(config) 메서드 구현 완료
+- [ ] stop(actorId) 메서드 구현 완료
+- [ ] restart(actorId) 메서드 구현 완료
+- [ ] ActorFactory 인터페이스 정의 완료
+- [ ] DefaultActorFactory 구현 완료
+- [ ] ActorRunner (옵션) 구현 완료
+- [ ] Blackboard 연동 완료
+- [ ] 단위 테스트 작성 완료
+- [ ] 테스트 커버리지 85% 이상
 - [ ] TypeScript 타입 체크 통과
 
 ## 의존성
-- TASK-018 (Blackboard 기본 구조)
+- TASK-024 (Actor 인터페이스)
 
 ## 참고 자료
 - `/docs/architecture/blackboard-actor-design.md` - 아키텍처 설계
-- `/docs/tasks/P0-MVP/TASK-015-core-tests.md` - 태스크 문서 형식 참조
+- TASK-024 - Actor 인터페이스
 
 ## 수락 기준
-1. Actor 인터페이스의 4가지 메서드 (observe, think, act, report)가 정의되어 있다
-2. ActorStatus 상태 전이 규칙이 올바르게 구현되어 있다
-3. ActorRole이 4가지 역할을 모두 포함한다
-4. 모든 타입이 타입 안전하게 정의되어 있다
-5. 단위 테스트가 모든 엣지 케이스를 커버한다
-6. BaseActor 클래스가 하위 클래스에서 사용하기 쉽게 설계되어 있다
+1. Actor 런타임이 Actor의 생명주기를 올바르게 관리한다
+2. spawn/stop/restart 작업이 타임아웃을 준수한다
+3. 재시작 시 백오프 정책이 적용된다
+4. 최대 Actor 수 제한이 동작한다
+5. Blackboard와 연결된 Actor가 데이터를 읽고 쓸 수 있다
+6. 단위 테스트가 모든 주요 시나리오를 커버한다
 ]]></spec>
   </task>
 
@@ -1304,21 +1190,27 @@ packages/actor/src/
     Verify ONLY the checklist items below. Do NOT find new issues.
     For each item, output PASS or FAIL + evidence (file:line).
     All PASS = 10 points, deduct for each FAIL.
+
+    ## Verification Rules
+    - For each item, verify whether "this issue found in the previous review has been **fixed in the current code**".
+    - [PASS] = The issue has been fixed, or the problem no longer exists in the current code
+    - [FAIL] = The issue still exists and has not been fixed
+    - "Pattern exists but is intentional design" → [PASS] (if specified in the spec)
+    - When judging whether a fix was applied, check the **actual code**. Do not guess.
   </instructions>
 
   <checklist>
 # 자동 생성 체크리스트
-# 생성 시각: 2026-02-09 11:50:32
+# 생성 시각: 2026-02-09 18:29:00
 
-1. createAction, createSuccessResult, createFailureResult 시그니처 불일치 — 15개 테스트 실패
-2. Actor 인터페이스와 BaseActor 간 async/sync 불일치 — TypeScript 컴파일 에러 4개
-3. Actor 인터페이스에 restart(), getStatus(), isAlive() 누락
-4. Actor 인터페이스의 board/messageBus가 readonly — 스펙 불일치
-5. BaseActor.updateMetrics()에서 `result.metrics?.executionTimeMs` 참조 — 필드명 불일치
-6. types/index.ts에서 blackboard.ts export 누락
-7. IBlackboard 중복 정의 — actor.ts와 blackboard.ts
-8. 상태 전이 테이블 스펙 불일치 — RUNNING/IDLE/BUSY → RESTARTING
-9. `result.test.ts:73-91` 첫 번째 테스트가 객체 패턴 사용 — P0 수정 후 깨짐
+1. stopActor에서 stop 실패/타임아웃 시에도 actor를 Map에서 항상 삭제
+2. stop() 메서드의 falsy ActorId 분기 문제
+3. ActorRunner의 주석-코드 불일치: 에러 로깅이 debug 모드에서만 동작
+4. Method name collision - `stop()` 중복 정의 (Gemini)
+5. Constructor and Method signature mismatches in Tests (Gemini)
+6. ActorRunner fails to await async Actor methods (Gemini)
+7. DefaultActorFactory constructor arguments mismatch (Gemini)
+8. 테스트 코드의 Actor.status 타입 불일치 (GLM)
   </checklist>
 
   <source_files>

@@ -8,3 +8,4 @@
 export * from "./types";
 export * from "./base/BaseActor";
 export * from "./runtime";
+export * from "./pool";
