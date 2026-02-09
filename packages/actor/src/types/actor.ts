@@ -9,6 +9,7 @@ import type { Result } from "./result";
 import type { Message } from "./message";
 import type { ActorMetrics } from "./metrics";
 import type { IMessageBus } from "./message";
+import type { IBlackboard } from "./blackboard";
 import { generateActorId } from "../runtime/crypto";
 
 /**
@@ -33,21 +34,6 @@ export type TaskId = string & { readonly __brand: "TaskId" };
 export type ActorRole = "analyst" | "executor" | "verifier" | "director";
 
 /**
- * Actor 역할 수준 열거형
- * @description 액터의 역할 수준 정의
- */
-export enum ActorRoleLevel {
-  /** 초급 */
-  JUNIOR = "JUNIOR",
-  /** 중급 */
-  MID = "MID",
-  /** 고급 */
-  SENIOR = "SENIOR",
-  /** 전문가 */
-  EXPERT = "EXPERT",
-}
-
-/**
  * Actor 역할 설명
  * @description 각 역할의 설명 정의
  */
@@ -62,7 +48,7 @@ export const ActorRoleDescription: Record<ActorRole, string> = {
  * Actor 역할별 권한 레벨
  * @description 각 역할의 권한 레벨 정의
  */
-export const ActorRoleLevelMap: Record<ActorRole, number> = {
+export const ActorRoleLevel: Record<ActorRole, number> = {
   analyst: 1,
   executor: 1,
   verifier: 1,
@@ -145,9 +131,9 @@ export interface ActorStatus {
  * 상태 전이 다이어그램:
  * CREATED → STARTING
  * STARTING → RUNNING | ERROR
- * RUNNING → IDLE | BUSY | STOPPING | ERROR
- * IDLE → BUSY | STOPPING
- * BUSY → IDLE | ERROR
+ * RUNNING → IDLE | BUSY | STOPPING | ERROR | RESTARTING
+ * IDLE → BUSY | STOPPING | RESTARTING
+ * BUSY → IDLE | ERROR | RESTARTING
  * ERROR → RESTARTING | STOPPING
  * RESTARTING → RUNNING | ERROR
  * STOPPING → STOPPED
@@ -169,9 +155,18 @@ export function isValidTransition(
       ActorLifecycleStatus.BUSY,
       ActorLifecycleStatus.STOPPING,
       ActorLifecycleStatus.ERROR,
+      ActorLifecycleStatus.RESTARTING,
     ],
-    [ActorLifecycleStatus.IDLE]: [ActorLifecycleStatus.BUSY, ActorLifecycleStatus.STOPPING],
-    [ActorLifecycleStatus.BUSY]: [ActorLifecycleStatus.IDLE, ActorLifecycleStatus.ERROR],
+    [ActorLifecycleStatus.IDLE]: [
+      ActorLifecycleStatus.BUSY,
+      ActorLifecycleStatus.STOPPING,
+      ActorLifecycleStatus.RESTARTING,
+    ],
+    [ActorLifecycleStatus.BUSY]: [
+      ActorLifecycleStatus.IDLE,
+      ActorLifecycleStatus.ERROR,
+      ActorLifecycleStatus.RESTARTING,
+    ],
     [ActorLifecycleStatus.ERROR]: [ActorLifecycleStatus.RESTARTING, ActorLifecycleStatus.STOPPING],
     [ActorLifecycleStatus.RESTARTING]: [ActorLifecycleStatus.RUNNING, ActorLifecycleStatus.ERROR],
     [ActorLifecycleStatus.STOPPING]: [ActorLifecycleStatus.STOPPED],
@@ -181,25 +176,7 @@ export function isValidTransition(
   return transitions[current]?.includes(next) ?? false;
 }
 
-/**
- * Blackboard 인터페이스
- * @description 액터 간 공유 데이터 저장소
- */
-export interface IBlackboard {
-  /** 현재 Blackboard 버전 */
-  readonly version: number;
-  /** 데이터 읽기 */
-  read(key: string): unknown | undefined;
-  /** 데이터 쓰기 */
-  write(key: string, value: unknown): void;
-  /** 데이터 삭제 */
-  delete(key: string): void;
-  /** 모든 키 조회 */
-  keys(): string[];
-  /** 특정 패턴의 키 조회 */
-  find(pattern: string): string[];
-}
-
+// IBlackboard는 blackboard.ts에서 정의됩니다.
 // IMessageBus는 message.ts에서 정의됩니다.
 
 /**
@@ -215,55 +192,74 @@ export interface Actor {
   readonly role: ActorRole;
   /** 현재 상태 */
   readonly status: ActorStatus;
-  /** 성능 메트릭 */
-  readonly metrics: ActorMetrics;
   /** 공유 데이터 저장소 (Blackboard) */
-  readonly board: IBlackboard;
+  board: IBlackboard;
   /** 메시지 버스 (message.ts의 IMessageBus 타입 사용) */
-  readonly messageBus: IMessageBus;
+  messageBus: IMessageBus;
+  /** 마지막 활동 시간 */
+  lastActivity: Date;
+  /** 생성 시간 */
+  createdAt: Date;
+  /** 성능 메트릭 */
+  metrics: ActorMetrics;
 
   /**
    * 메시지 수신
    * @param message - 수신할 메시지
    * @returns 메시지 처리 결과
    */
-  receive(message: Message): Promise<void>;
+  receive(message: Message): void | Promise<void>;
 
   /**
    * 환경 관찰
    * @returns 관찰 결과
    */
-  observe(): Promise<Observation>;
+  observe(): Observation | Promise<Observation>;
 
   /**
    * 의사결정 (생각)
    * @param observation - 관찰 결과
    * @returns 결정된 행동
    */
-  think(observation: Observation): Promise<Action>;
+  think(observation: Observation): Action | Promise<Action>;
 
   /**
    * 행동 수행
    * @param action - 수행할 행동
    * @returns 행동 결과
    */
-  act(action: Action): Promise<Result>;
+  act(action: Action): Result | Promise<Result>;
 
   /**
    * 결과 보고
    * @param result - 보고할 결과
    */
-  report(result: Result): Promise<void>;
+  report(result: Result): void | Promise<void>;
 
   /**
    * 액터 시작
    */
-  start(): Promise<void>;
+  start(): void | Promise<void>;
 
   /**
    * 액터 중지
    */
-  stop(): Promise<void>;
+  stop(): void | Promise<void>;
+
+  /**
+   * 액터 재시작
+   */
+  restart(): void | Promise<void>;
+
+  /**
+   * 액터 현재 상태 조회
+   */
+  getStatus(): ActorStatus;
+
+  /**
+   * 액터가 살아있는지 확인
+   */
+  isAlive(): boolean;
 }
 
 /**
@@ -313,8 +309,8 @@ export function isValidActorId(value: unknown): value is ActorId {
  * ```
  */
 export function createTaskId(id: string): TaskId {
-  if (!id.startsWith("task-")) {
-    throw new Error("TaskId must start with 'task-'");
+  if (!/^task-.+/.test(id)) {
+    throw new Error("TaskId must start with 'task-' followed by an identifier");
   }
   return id as TaskId;
 }
@@ -332,5 +328,7 @@ export function createTaskId(id: string): TaskId {
  * ```
  */
 export function isValidTaskId(value: unknown): value is TaskId {
-  return typeof value === "string" && value.length > 0 && value.startsWith("task-");
+  return typeof value === "string" && /^task-.+/.test(value);
 }
+
+export type { IBlackboard } from "./blackboard";

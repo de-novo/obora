@@ -72,21 +72,28 @@ export function isValidActionId(value: unknown): value is ActionId {
 
 /**
  * Action 생성 함수
- * @param params - Action 생성 파라미터
+ * @param actorId - 액터 ID
+ * @param type - 행동 유형
+ * @param params - 행동 파라미터 (선택적)
+ * @param taskId - 관련 작업 ID (선택적)
  * @returns 생성된 Action 객체
  * @example
  * ```typescript
- * const action = createAction({
- *   id: createActionId('action-001'),
- *   actorId: createActorId('actor-001'),
- *   type: 'analyze',
- *   params: { target: 'data-001' }
- * });
+ * const action = createAction('actor-001', 'analyze', { target: 'data-001' });
  * ```
  */
-export function createAction(params: Omit<Action, "timestamp">): Action {
+export function createAction(
+  actorId: ActorId,
+  type: ActionType,
+  params?: Record<string, unknown>,
+  taskId?: string
+): Action {
   return {
-    ...params,
+    id: createActionId(`action-${crypto.randomUUID()}`),
+    actorId,
+    type,
+    params,
+    taskId,
     timestamp: new Date(),
   };
 }

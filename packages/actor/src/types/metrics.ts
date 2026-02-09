@@ -17,9 +17,9 @@ export interface ActorMetrics {
   /** 실패 횟수 */
   failureCount: number;
   /** 마지막 오류 */
-  lastError?: Error;
-  /** 평균 실행 시간 (밀리초) */
-  averageExecutionTimeMs: number;
+  lastError: Error | null;
+  /** 평균 실행 시간 */
+  averageExecutionTime: number;
   /** 총 실행 시간 (밀리초) */
   totalExecutionTimeMs: number;
   /** 마지막 실행 시간 */
@@ -29,7 +29,7 @@ export interface ActorMetrics {
   /** 마지막 업데이트 시간 */
   updatedAt: Date;
   /** 마지막 실행 시간 (밀리초) */
-  lastExecutionTime: number;
+  lastExecutionTime: number | null;
   /** 총 CPU 사용 시간 (밀리초) */
   totalCpuTime: number;
   /** 메모리 사용량 (바이트) */
@@ -38,24 +38,24 @@ export interface ActorMetrics {
 
 /**
  * Actor 메트릭 생성 함수
- * @param actorId - 액터 ID
  * @returns 생성된 ActorMetrics 객체
  * @example
  * ```typescript
- * const metrics = createActorMetrics(createActorId('actor-001'));
+ * const metrics = createActorMetrics();
  * ```
  */
-export function createActorMetrics(actorId: ActorId): ActorMetrics {
+export function createActorMetrics(): ActorMetrics {
   const now = new Date();
   return {
     totalRuns: 0,
     successCount: 0,
     failureCount: 0,
-    averageExecutionTimeMs: 0,
+    lastError: null,
+    averageExecutionTime: 0,
     totalExecutionTimeMs: 0,
     createdAt: now,
     updatedAt: now,
-    lastExecutionTime: 0,
+    lastExecutionTime: null,
     totalCpuTime: 0,
     memoryUsage: 0,
   };

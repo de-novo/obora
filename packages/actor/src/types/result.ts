@@ -24,9 +24,9 @@ export type ResultStatus = "success" | "failure" | "partial";
  */
 export interface ResultMetrics {
   /** 실행 시간 (밀리초) */
-  executionTimeMs: number;
-  /** 사용된 리소스 */
-  resourcesUsed?: Record<string, number>;
+  duration: number;
+  /** 메모리 사용량 (바이트) */
+  memoryUsage?: number;
   /** 추가 메트릭 */
   [key: string]: unknown;
 }
@@ -52,8 +52,11 @@ export interface Result {
   error?: string;
   /** 성능 메트릭 */
   metrics?: ResultMetrics;
-  /** 레코드 변환 메서드 */
-  toRecord?(): Record<string, unknown>;
+  /** 보드에 기록할 데이터 */
+  toRecord?: {
+    section: "state" | "knowledge" | "decisions";
+    data: unknown;
+  };
 }
 
 /**
@@ -84,48 +87,68 @@ export function isValidResultId(value: unknown): value is ResultId {
 
 /**
  * 성공 Result 생성 함수
- * @param params - Result 생성 파라미터
+ * @param actionId - Action ID
+ * @param actorId - 액터 ID
+ * @param output - 출력 데이터
+ * @param duration - 실행 시간 (밀리초)
  * @returns 생성된 성공 Result 객체
  * @example
  * ```typescript
- * const result = createSuccessResult({
- *   id: createResultId('result-001'),
- *   actionId: createActionId('action-001'),
- *   actorId: createActorId('actor-001'),
- *   output: { data: 'analysis result' }
- * });
+ * const result = createSuccessResult(
+ *   createActionId('action-001'),
+ *   createActorId('actor-001'),
+ *   { data: 'analysis result' },
+ *   100
+ * );
  * ```
  */
 export function createSuccessResult(
-  params: Omit<Result, "timestamp" | "status" | "error" | "toRecord"> & { output: unknown }
-): Omit<Result, "toRecord"> {
+  actionId: ActionId,
+  actorId: ActorId,
+  output: unknown,
+  duration: number
+): Result {
   return {
-    ...params,
+    id: createResultId(`result-${crypto.randomUUID()}`),
+    actionId,
+    actorId,
     timestamp: new Date(),
     status: "success",
+    output,
+    metrics: { duration },
   };
 }
 
 /**
  * 실패 Result 생성 함수
- * @param params - Result 생성 파라미터
+ * @param actionId - Action ID
+ * @param actorId - 액터 ID
+ * @param error - 오류 메시지
+ * @param duration - 실행 시간 (밀리초)
  * @returns 생성된 실패 Result 객체
  * @example
  * ```typescript
- * const result = createFailureResult({
- *   id: createResultId('result-001'),
- *   actionId: createActionId('action-001'),
- *   actorId: createActorId('actor-001'),
- *   error: 'Analysis failed'
- * });
+ * const result = createFailureResult(
+ *   createActionId('action-001'),
+ *   createActorId('actor-001'),
+ *   'Analysis failed',
+ *   50
+ * );
  * ```
  */
 export function createFailureResult(
-  params: Omit<Result, "timestamp" | "status" | "output" | "toRecord"> & { error: string }
-): Omit<Result, "toRecord"> {
+  actionId: ActionId,
+  actorId: ActorId,
+  error: string,
+  duration: number
+): Result {
   return {
-    ...params,
+    id: createResultId(`result-${crypto.randomUUID()}`),
+    actionId,
+    actorId,
     timestamp: new Date(),
     status: "failure",
+    error,
+    metrics: { duration },
   };
 }

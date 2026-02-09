@@ -4,6 +4,7 @@
  */
 
 export * from "./actor";
+export * from "./blackboard";
 export * from "./observation";
 export * from "./action";
 export * from "./result";
