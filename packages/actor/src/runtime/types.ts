@@ -10,7 +10,7 @@ export interface ActorConfig {
   id?: ActorId;
 
   /** Actor 이름 */
-  name?: string;
+  name: string;
 
   /** Actor 역할 */
   role: ActorRole;

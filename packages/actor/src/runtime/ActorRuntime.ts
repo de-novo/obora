@@ -143,21 +143,41 @@ export class ActorRuntime {
     let actor: Actor | null = null;
 
     try {
-      // Actor 생성 (타임아웃 적용)
-      actor = await Promise.race([
-        Promise.resolve(this.factory.create(config, this.board, this.messageBus)),
-        delay(this.config.spawnTimeout).then(() => {
-          throw new Error(`Actor spawn timeout: ${config.id || "unknown"}`);
-        }),
-      ]);
+      const spawnAbort = new AbortController();
+      const createPromise = Promise.resolve(
+        this.factory.create(config, this.board, this.messageBus)
+      );
+      createPromise.catch(() => {});
 
-      // Actor 시작 (타임아웃 적용)
-      await Promise.race([
-        actor.start(),
-        delay(this.config.spawnTimeout).then(() => {
-          throw new Error(`Actor start timeout: ${actor!.id}`);
-        }),
-      ]);
+      try {
+        actor = await Promise.race([
+          createPromise,
+          delay(this.config.spawnTimeout, spawnAbort.signal).then(() => {
+            throw new Error(`Actor spawn timeout: ${config.id || "unknown"}`);
+          }),
+        ]);
+        spawnAbort.abort();
+      } catch (error) {
+        spawnAbort.abort();
+        throw error;
+      }
+
+      const startAbort = new AbortController();
+      const startPromise = Promise.resolve(actor!.start());
+      startPromise.catch(() => {});
+
+      try {
+        await Promise.race([
+          startPromise,
+          delay(this.config.spawnTimeout, startAbort.signal).then(() => {
+            throw new Error(`Actor start timeout: ${actor!.id}`);
+          }),
+        ]);
+        startAbort.abort();
+      } catch (error) {
+        startAbort.abort();
+        throw error;
+      }
 
       // 등록 전 중복 체크 (auto-generated ID 포함)
       if (this.actors.has(actor.id)) {
@@ -331,15 +351,25 @@ export class ActorRuntime {
     this.log(`Stopping actor: ${actorId}`);
 
     try {
-      const stopPromise = actor.stop();
-      const timeoutPromise = delay(this.config.stopTimeout).then(() => {
-        throw new Error(`Actor stop timeout: ${actorId}`);
-      });
+      const stopAbort = new AbortController();
+      const stopPromise = Promise.resolve(actor.stop());
+      stopPromise.catch(() => {});
 
-      await Promise.race([stopPromise, timeoutPromise]);
+      try {
+        await Promise.race([
+          stopPromise,
+          delay(this.config.stopTimeout, stopAbort.signal).then(() => {
+            throw new Error(`Actor stop timeout: ${actorId}`);
+          }),
+        ]);
+        stopAbort.abort();
+      } catch (error) {
+        stopAbort.abort();
+        throw error;
+      }
     } catch (error) {
       this.log(`Actor stop failed or timed out: ${actorId}`, error);
-      // 타임아웃이든 에러든 강제 정리
+      throw error;
     } finally {
       // 항상 등록 해제 (강제 정리)
       this.actors.delete(actorId);
@@ -393,14 +423,12 @@ export class ActorRuntime {
   }
 
   private log(message: string, error?: unknown): void {
-    // 에러는 항상 출력 (debug 옵션 무관)
+    if (!this.config.debug) return;
+
     if (error) {
       console.error(`[ActorRuntime] ${message}`, error);
-      return;
+    } else {
+      console.log(`[ActorRuntime] ${message}`);
     }
-
-    // 일반 로그는 debug 모드에서만
-    if (!this.config.debug) return;
-    console.log(`[ActorRuntime] ${message}`);
   }
 }

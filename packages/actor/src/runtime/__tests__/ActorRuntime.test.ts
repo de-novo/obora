@@ -244,6 +244,50 @@ describe("ActorRuntime", () => {
 
       await expect(runtime.spawn(config)).rejects.toThrow("Actor already exists");
     });
+
+    it("should not leave actor partially registered when start() fails", async () => {
+      class FailingStartActor extends MockActor {
+        override async start(): Promise<void> {
+          throw new Error("Start failed");
+        }
+      }
+
+      class FailingFactory implements ActorFactory {
+        async create(
+          config: ActorConfig,
+          board: IBlackboard,
+          messageBus: IMessageBus
+        ): Promise<Actor> {
+          const actorId = config.id || createActorId(config.role);
+          const actor = new FailingStartActor(
+            actorId as string,
+            config.name,
+            config.role,
+            board,
+            messageBus
+          );
+          return Promise.resolve(actor);
+        }
+      }
+
+      const failingRuntime = new ActorRuntime(board, messageBus, new FailingFactory(), {
+        debug: false,
+      });
+      await failingRuntime.start();
+
+      const actorId = createActorId("analyst");
+      const config: ActorConfig = {
+        id: actorId,
+        name: "test",
+        role: "analyst" as ActorRole,
+        type: "failing",
+      };
+
+      await expect(failingRuntime.spawn(config)).rejects.toThrow("Start failed");
+
+      expect(failingRuntime.hasActor(actorId)).toBe(false);
+      expect(failingRuntime.size()).toBe(0);
+    });
   });
 
   describe("stop", () => {

@@ -154,14 +154,12 @@ export class ActorRunner {
   }
 
   private log(message: string, error?: unknown): void {
-    // 에러는 항상 출력 (debug 옵션 무관)
+    if (!this.options.debug) return;
+
     if (error) {
       console.error(`[ActorRunner] ${message}`, error);
-      return;
+    } else {
+      console.log(`[ActorRunner] ${message}`);
     }
-
-    // 일반 로그는 debug 모드에서만
-    if (!this.options.debug) return;
-    console.log(`[ActorRunner] ${message}`);
   }
 }
