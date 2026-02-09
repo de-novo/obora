@@ -7,7 +7,11 @@
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
+    "build:actor": "pnpm --filter @obora-kit/actor build",
+    "test": "pnpm -r test",
+    "test:actor": "pnpm --filter @obora-kit/actor test",
     "lint": "turbo lint",
+    "typecheck": "pnpm -r typecheck",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "clean": "turbo clean && rm -rf node_modules"
   },

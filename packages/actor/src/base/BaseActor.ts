@@ -9,6 +9,7 @@ import {
 } from "../types/actor";
 import type { IBlackboard } from "../types/blackboard";
 import type { IMessageBus, Message, MessageId } from "../types/message";
+import { createMessageId } from "../types/message";
 import { MessageType } from "../types/message";
 import { createActorMetrics, ActorMetrics } from "../types/metrics";
 import type { Observation } from "../types/observation";
@@ -134,14 +135,14 @@ export abstract class BaseActor implements Actor {
   report(result: Result): void | Promise<void> {
     if (result.toRecord) {
       const { section, data } = result.toRecord;
-      this.board.write?.(section, data);
+      this.board.write(section, data);
     }
 
     this.updateMetrics(result);
 
     // 이벤트 발행
     this.messageBus.broadcast({
-      id: crypto.randomUUID() as MessageId,
+      id: createMessageId(`msg-${crypto.randomUUID()}`),
       type: MessageType.TASK_COMPLETE,
       from: this.id,
       payload: { taskId: result.actionId, result },
@@ -297,7 +298,7 @@ export abstract class BaseActor implements Actor {
 
   private handlePing(message: Message): void {
     this.messageBus.sendTo(message.from, {
-      id: crypto.randomUUID() as MessageId,
+      id: createMessageId(`msg-${crypto.randomUUID()}`),
       type: MessageType.PONG,
       from: this.id,
       payload: {},
@@ -309,7 +310,7 @@ export abstract class BaseActor implements Actor {
     const status = this.getStatus();
 
     this.messageBus.sendTo(message.from, {
-      id: crypto.randomUUID() as MessageId,
+      id: createMessageId(`msg-${crypto.randomUUID()}`),
       type: MessageType.STATUS_RESPONSE,
       from: this.id,
       payload: { status },
@@ -353,7 +354,7 @@ export abstract class BaseActor implements Actor {
   private startHeartbeat(): void {
     this.heartbeatTimer = setInterval(() => {
       this.messageBus.broadcast({
-        id: crypto.randomUUID() as MessageId,
+        id: createMessageId(`msg-${crypto.randomUUID()}`),
         type: MessageType.HEARTBEAT,
         from: this.id,
         payload: {

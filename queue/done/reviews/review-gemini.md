@@ -1,25 +1,18 @@
-I will now verify the checklist items by examining the codebase.
-
-First, I'll list the files in the `packages/actor` directory to verify the structure and existence of the relevant files.
-I will now read the core files to verify the checklist items.
-I will now search for any occurrences of `await this.board.write` to confirm if the issue has been resolved.
-I will now read the `ActorPool.ts` file again to verify the usage of `board.write`.
-I will now check the `packages/actor/src/types/blackboard.ts` file to see the definition of `Blackboard`.
-I will now check the `packages/actor/src/types/actor.ts` file to see the definition of `ActorStatus`.
-I will now read the `ActorPool.test.ts` file to ensure it is not empty and covers the required scenarios.
+I will begin by listing the files in the `packages/actor/src/supervision/` directory to verify the existence of the implementation and test files.
+I will read `packages/actor/src/index.ts` to check if the `supervision` module is exported.
+I will read `packages/actor/src/supervision/Supervisor.ts` to examine the `handleFailure` implementation for potential infinite loop risks.
+I will read `packages/actor/src/supervision/__tests__/Supervisor.test.ts` to verify the presence of tests for the `REST_FOR_ONE` strategy and additional backoff policies.
+I will read `packages/actor/src/supervision/__tests__/SupervisorTree.test.ts` to ensure it contains substantial test cases.
+I will read `packages/actor/src/supervision/index.ts` to confirm that it correctly exports all relevant components.
 # Checklist Verification Result
 
 ## Item Results
-- [PASS] Item1: Expired tasks are recorded via `recordTaskResult` and propagated to `submitAndWait` callers through the `pendingResults` cache and `waitForTaskResult` polling mechanism (ActorPool.ts:736, 830).
-- [PASS] Item2: The polling interval in `waitForTaskResult` is explicitly cleared if the pool stops (`!this.isRunning`) and via a returned `cleanup` function called by `submitAndWait` (ActorPool.ts:825, 849, 356).
-- [PASS] Item3: `startDispatch` now uses a `break` statement when no actor is available, preventing the infinite loop of shifting and re-inserting tasks (ActorPool.ts:742).
-- [PASS] Item4: `getActorStatus` correctly uses the `actor.getStatus()` method instead of the `status` property (ActorPool.ts:461).
-- [PASS] Item5: `selectLeastBusy` uses `getStatus()` to retrieve the actor's status before accessing `messageQueue.pending` (ActorPool.ts:589-592).
-- [PASS] Item6: The `pool` module is correctly exported from the package entry point (packages/actor/src/index.ts:11).
-- [PASS] Item7: Comprehensive unit tests for `ActorPool` and `PoolManager` are present in the `pool/__tests__` directory.
-- [PASS] Item8: `IBlackboard.write()` is called synchronously as it returns `void`, with no `await` keyword used (ActorPool.ts:620).
-- [PASS] Item9: Constructor signatures for `ActorPool` and `PoolManager` align with the spec for required arguments while providing an optional `messageBus` for dependency injection (ActorPool.ts:176, PoolManager.ts:42).
+- [PASS] Item1: supervision 모듈이 패키지 공개 API에서 내보내짐 (`packages/actor/src/index.ts:12`, `packages/actor/src/supervision/index.ts:1-3`)
+- [PASS] Item2: SupervisorTree 테스트 파일 존재 및 정상 구현 (`packages/actor/src/supervision/__tests__/SupervisorTree.test.ts`)
+- [PASS] Item3: handleFailure 재귀 호출 시 `currentAttempt` 및 `maxRestarts`를 비교하여 무한 루프 방지 로직 구현됨 (`packages/actor/src/supervision/Supervisor.ts:260-263`)
+- [PASS] Item4: REST_FOR_ONE 전략 및 LINEAR, EXPONENTIAL_JITTER 백오프 정책에 대한 테스트 케이스 추가됨 (`packages/actor/src/supervision/__tests__/Supervisor.test.ts:205, 287, 314`)
+- [PASS] Item5: Dead Letter Queue 테스트에서 단순 길이 체크 이상의 의미 있는 어설션(핵심 필드 검증) 추가됨 (`packages/actor/src/supervision/__tests__/Supervisor.test.ts:365-375`)
 
 ## Score
-- Passed: 9/9
+- Passed: 5/5
 - **Total: 10/10**

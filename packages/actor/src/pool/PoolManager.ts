@@ -1,31 +1,9 @@
 import type { ActorFactory } from "../runtime/types";
 import type { IBlackboard } from "../types/actor";
-import type { IMessageBus, Message, MessageType, UnsubscribeFn } from "../types/message";
+import type { IMessageBus } from "../types/message";
 
 import { ActorPool, PoolConfig, PoolMetrics } from "./ActorPool";
-
-/**
- * No-Op MessageBus - 기본값으로 사용되는 빈 구현
- */
-class NoOpMessageBus implements IMessageBus {
-  send(message: Message): void {}
-  sendTo(to: any, message: Omit<Message, "to">): void {}
-  broadcast(message: Omit<Message, "to">): void {}
-  receive(handler: (message: Message) => void): void {}
-  request<T>(message: Message, timeoutMs?: number): Promise<Message<T>> {
-    return Promise.resolve(message as Message<T>);
-  }
-  subscribe(messageType: MessageType, handler: (message: Message) => void): UnsubscribeFn {
-    return () => {};
-  }
-  getQueueSize(actorId: any): number {
-    return 0;
-  }
-  clearQueue(actorId: any): void {}
-  filter(predicate: (message: Message) => boolean): Message[] {
-    return [];
-  }
-}
+import { NoOpMessageBus } from "./NoOpMessageBus";
 
 /**
  * Pool Manager

@@ -1,41 +1,28 @@
 
 
-I'll verify each checklist item against the actual code. Let me start by exploring the codebase.
-Now let me read the actual source files in detail to verify each checklist item:
-Now let me also check the type definitions for `IBlackboard.write()` and `ActorFactory.create()` signatures:
-Now I have all the information I need. Let me verify each checklist item against the actual code.
+I'll verify each checklist item by examining the actual code. Let me start by finding the relevant files.
+Now let me verify each checklist item by reading the specific files in detail.
+Now I have all the information needed to verify each checklist item. Let me compile the results.
 
 # 체크리스트 검증 결과
 
 ## 항목별 결과
 
-- **[PASS] 1. 만료된 task가 submitAndWait 호출자에게 전파되지 않음**
-  - 근거: `ActorPool.ts:719-737` — `startDispatch()`에서 만료된 task를 감지하면 `recordTaskResult()`를 호출하여 에러 결과를 `pendingResults`에 저장하고, `submitAndWait`의 `waitForTaskResult` 폴링이 이를 감지하여 reject합니다. 만료된 task 에러가 `submitAndWait` 호출자에게 정상적으로 전파됩니다.
+- **[PASS] 1. supervision 모듈이 패키지 공개 API에서 내보내지 않음**
+  - 근거: `packages/actor/src/index.ts:12`에 `export * from "./supervision";` 이 존재하며, `packages/actor/src/supervision/index.ts:1-3`에서 types, Supervisor, SupervisorTree를 모두 re-export하고 있음. 이슈가 수정됨.
 
-- **[PASS] 2. submitAndWait의 폴링 interval이 Pool 종료 시 정리되지 않음**
-  - 근거: `ActorPool.ts:822-828` — `waitForTaskResult()`에서 `if (!this.isRunning)` 체크를 통해 Pool 종료 시 `clearInterval(checkInterval)`을 호출하고 reject합니다. 또한 `submitAndWait` 내에서 `waiter.cleanup()`이 반환되어(`ActorPool.ts:849-851`) 타임아웃이나 settle 시에도 정리됩니다.
+- **[PASS] 2. SupervisorTree 테스트 파일 누락**
+  - 근거: `packages/actor/src/supervision/__tests__/SupervisorTree.test.ts` 파일이 존재하며, 97줄에 걸쳐 createRoot, createChild, remove, shutdown, printTree에 대한 10개 테스트를 포함하고 있음. 이슈가 수정됨.
 
-- **[PASS] 3. dispatchTask()에서 Actor 없으면 무한 재삽입 사이클**
-  - 근거: `ActorPool.ts:740-742` — `startDispatch()`에서 Actor가 없으면 (`if (!actor) break;`) while 루프를 탈출합니다. 스펙의 원래 코드는 task를 큐에서 꺼낸 후 actor가 없으면 다시 넣는 구조였지만, 현재 코드는 actor 선택 실패 시 task를 큐에서 꺼내기 전에 break하므로 재삽입 사이클이 없습니다.
+- **[PASS] 3. handleFailure 재귀 호출 시 무한 루프 위험**
+  - 근거: `packages/actor/src/supervision/Supervisor.ts:258-266`에서 재시작 실패 시 `this.restartCounts.get(actorId)` 값을 확인하여 `maxRestarts` 이상이면 `performStop`을 호출하고 재귀를 중단함. `handleFailure`를 다시 호출하는 경로(라인 265)에 도달하더라도 `decideRestart`(라인 200)에서 타임스탬프 기반 윈도우 체크가 STOP을 반환하므로, 이중 안전장치가 적용됨. 이슈가 수정됨.
 
-- **[PASS] 4. getActorStatus()에서 actor.status 대신 actor.getStatus() 사용해야 함**
-  - 근거: `ActorPool.ts:456-462` — `getActorStatus()`가 `actor.getStatus()`를 호출하여 `ActorStatus`를 반환합니다. `actor.status`를 직접 접근하지 않습니다.
+- **[PASS] 4. REST_FOR_ONE 전략 및 추가 백오프 정책 테스트 누락**
+  - 근거: `packages/actor/src/supervision/__tests__/Supervisor.test.ts:205-231`에 REST_FOR_ONE 전략 테스트가 추가되어 actor-2 실패 시 actor-1은 재시작되지 않고, actor-2와 actor-3만 재시작되는 것을 검증함. 백오프 정책 테스트도 FIXED(라인 235-257), EXPONENTIAL(라인 259-285), LINEAR(라인 287-312), EXPONENTIAL_JITTER(라인 314-341) 4가지 모두 구현됨. 이슈가 수정됨.
 
-- **[PASS] 5. selectLeastBusy()에서 actor.status.messageQueue 직접 접근**
-  - 근거: `ActorPool.ts:587-594` — `selectLeastBusy()`에서 `least.getStatus()`와 `actor.getStatus()`를 호출한 후 반환값의 `messageQueue.pending`에 접근합니다. `actor.status.messageQueue`를 직접 접근하지 않습니다.
-
-- **[PASS] 6. Pool 모듈이 패키지 엔트리포인트에서 내보내지 않음**
-  - 근거: `packages/actor/src/index.ts:11` — `export * from "./pool";`이 존재하며, `packages/actor/src/pool/index.ts`에서 `ActorPool`과 `PoolManager`를 모두 re-export합니다.
-
-- **[PASS] 7. 단위 테스트 파일 전체 누락**
-  - 근거: `packages/actor/src/pool/__tests__/ActorPool.test.ts` (586줄)과 `packages/actor/src/pool/__tests__/PoolManager.test.ts` (421줄)이 모두 존재하며, 주요 시나리오를 커버하는 테스트 스위트가 포함되어 있습니다.
-
-- **[PASS] 8. IBlackboard.write()는 void를 반환하나 await로 호출**
-  - 근거: `ActorPool.ts:620` — `this.board.write(taskSection, {...})`를 `await` 없이 동기적으로 호출합니다. `IBlackboard.write()`의 시그니처(`blackboard.ts:32`)는 `void`를 반환하며, 코드에서 이를 올바르게 동기 호출합니다.
-
-- **[PASS] 9. ActorPool/PoolManager 생성자 시그니처가 스펙과 불일치**
-  - 근거: 스펙에서는 `constructor(config: PoolConfig, board: Blackboard, factory: ActorFactory)`이고 현재 코드는 `constructor(config: PoolConfig, board: IBlackboard, factory: ActorFactory, messageBus: IMessageBus = new NoOpMessageBus())`(`ActorPool.ts:176-180`). `Blackboard` 대신 `IBlackboard`를 사용하고 `messageBus`가 추가되었지만, 이는 실제 타입 시스템에 맞게 개선된 것이며 `messageBus`는 기본값이 있어 하위 호환됩니다. `PoolManager`도 동일하게 `IBlackboard`와 optional `messageBus`를 사용(`PoolManager.ts:42-46`). `ActorFactory.create()` 시그니처가 `messageBus`를 받도록 변경(`runtime/types.ts:39`)되었으므로 전체적으로 일관성 있게 수정되었습니다.
+- **[PASS] 5. Dead Letter Queue 테스트의 무의미한 어설션**
+  - 근거: `packages/actor/src/supervision/__tests__/Supervisor.test.ts:345-399`에서 기존의 `toBeGreaterThanOrEqual(0)` 같은 무의미한 어설션이 제거되고, `toBeGreaterThanOrEqual(1)`(라인 365), `deadLetterHandler` 호출 확인(라인 368), dead letter 객체의 핵심 필드 검증(actorId, error, timestamp, retryCount — 라인 371-375)이 추가됨. 두 번째 테스트(라인 378-399)도 먼저 dead letter를 추가한 뒤 비우는 방식으로 의미 있게 변경됨. 이슈가 수정됨.
 
 ## 점수
-- 통과: 9/9
+- 통과: 5/5
 - **총점: 10/10**

@@ -3,51 +3,47 @@
 # 토론 결과
 
 ## 최종 점수
-- **종합 점수: 9.5/10**
+- **종합 점수: 10/10**
 
-| 모델 | 점수 | FAIL 항목 |
-|------|------|-----------|
-| Opus | 10/10 | 없음 |
-| Codex | 10/10 | 없음 |
-| GLM | 7/10 | 항목2, 항목8 |
-| Gemini | 10/10 | 없음 |
+## 분석 요약
 
-> 종합 산출: Opus(10) + Codex(10) + GLM(7) + Gemini(10) = 37/40 → **9.25/10**, 그러나 GLM의 FAIL 2건을 개별 검증한 결과 모두 기각 대상이므로 실질 점수 **9.5/10** (코드 품질 자체의 minor 개선점 감안)
-
----
+4개 AI 모델(Opus, Codex, GLM, Gemini) 모두 5개 체크리스트 항목에 대해 **만장일치 PASS** 판정을 내렸습니다. 각 항목별로 코드 라인 참조와 함께 구체적 근거를 제시하고 있으며, 모델 간 교차 검증 결과 불일치가 없습니다.
 
 ## 확정된 이슈
 
-없음. 모든 P0/P1 이슈 후보를 검증한 결과 확정된 P0 또는 P1 이슈가 없습니다.
+**없음** — 4개 모델 모두 모든 항목을 PASS로 판정했으며, 추가 이슈를 제기한 모델이 없습니다.
 
----
+## 항목별 검증 종합
+
+### [PASS] 항목 1: supervision 모듈 공개 API 내보내기
+- **동의 모델**: Opus, Codex, GLM, Gemini (4/4)
+- **근거**: `packages/actor/src/index.ts:12`에 `export * from "./supervision"` 존재, `packages/actor/src/supervision/index.ts:1-3`에서 types, Supervisor, SupervisorTree를 re-export
+
+### [PASS] 항목 2: SupervisorTree 테스트 파일 존재
+- **동의 모델**: Opus, Codex, GLM, Gemini (4/4)
+- **근거**: `packages/actor/src/supervision/__tests__/SupervisorTree.test.ts` 파일이 존재하며, createRoot, createChild, remove, shutdown, printTree에 대한 테스트 포함
+
+### [PASS] 항목 3: handleFailure 재귀 호출 무한 루프 방지
+- **동의 모델**: Opus, Codex, GLM, Gemini (4/4)
+- **근거**: `Supervisor.ts:258-266`에서 `restartCounts`와 `maxRestarts` 비교를 통한 가드 구현. 타임스탬프 기반 윈도우 체크(`decideRestart`)가 이중 안전장치로 작동
+
+### [PASS] 항목 4: REST_FOR_ONE 전략 및 추가 백오프 정책 테스트
+- **동의 모델**: Opus, Codex, GLM, Gemini (4/4)
+- **근거**: 
+  - REST_FOR_ONE: `Supervisor.test.ts:205-231`
+  - FIXED: `Supervisor.test.ts:235-257`
+  - EXPONENTIAL: `Supervisor.test.ts:259-285`
+  - LINEAR: `Supervisor.test.ts:287-312`
+  - EXPONENTIAL_JITTER: `Supervisor.test.ts:314-341`
+
+### [PASS] 항목 5: Dead Letter Queue 테스트 어설션 개선
+- **동의 모델**: Opus, Codex, GLM, Gemini (4/4)
+- **근거**: `Supervisor.test.ts:345-399`에서 `toBeGreaterThanOrEqual(1)`, actorId/error/timestamp/retryCount 필드 검증 등 의미 있는 어설션으로 개선됨
 
 ## 기각된 이슈
 
-### 이슈 1: submitAndWait의 폴링 interval이 Pool 종료 시 정리되지 않음
-- **기각 이유**: GLM만 FAIL 판정했으나, 나머지 3개 모델(Opus, Codex, Gemini)이 모두 PASS로 판정. 실제 코드를 보면 `waitForTaskResult` 내부에서 `!this.isRunning` 가드가 존재하여 Pool 종료 시 `clearInterval(checkInterval)`을 호출하고 reject합니다(`ActorPool.ts:822-828`). 또한 `submitAndWait` 내에서 `waiter.cleanup()`이 반환되어 타임아웃이나 settle 시에도 정리됩니다. GLM이 제시한 수정 전/후 코드가 실질적으로 동일하여 실제 버그가 아닙니다.
-- **발견 모델**: GLM
-- **심각도**: 기각 (버그 아님)
-
-### 이슈 2: IBlackboard.write()는 void를 반환하나 await로 호출
-- **기각 이유**: GLM만 FAIL 판정했으나, 나머지 3개 모델이 모두 PASS로 판정. 실제 코드(`ActorPool.ts:620`)에서 `this.board.write()`를 `await` 없이 동기적으로 호출하고 있어, GLM이 주장한 문제가 현재 코드에는 존재하지 않습니다. GLM의 수정 전/후 코드도 동일한 내용이며, 단지 주석만 추가한 것입니다. `IBlackboard.write()`가 `void`를 반환하고, 코드에서도 `await` 없이 호출하므로 문제 없습니다.
-- **발견 모델**: GLM
-- **심각도**: 기각 (현재 코드에 이미 올바르게 구현됨)
-
----
-
-## 참고 사항 (P2 수준 개선 제안)
-
-코드 전체적으로 스펙을 충실히 구현했으며, 9개 체크리스트 항목 모두 4개 모델 중 최소 3개가 PASS로 합의했습니다. 아래는 코드 품질 개선을 위한 참고 사항입니다:
-
-1. **`isActorBusy()` 구현이 항상 `false` 반환** — 스펙 코드에서 `for...of` 루프 내부가 비어있어 실질적으로 busy 판별을 하지 못합니다. 현재 구현에서는 작업-Actor 매핑을 별도로 추적하고 있어 해결되었을 수 있으나, 스펙 원문에서는 TODO 수준의 미완성 로직이었습니다.
-
-2. **`autoScale()` 내 `this.metrics.currentSize` 참조** — 스펙 코드에서 `PoolMetrics` 인터페이스에 `currentSize` 필드가 없고 `totalActors`만 있어 타입 불일치 가능성이 있습니다. 실제 구현에서 이를 어떻게 처리했는지에 따라 다릅니다.
-
----
+**없음** — 어떤 모델도 FAIL 이슈나 추가 문제점을 제기하지 않았습니다.
 
 ## Fixer 지시사항
 
-확정된 P0/P1 이슈가 없으므로 수정할 사항이 없습니다.
-
-P2 이슈도 수정 대상이 아닙니다.
+수정할 P0/P1 이슈가 없습니다. 모든 체크리스트 항목이 통과되었으므로 추가 수정이 필요하지 않습니다.
