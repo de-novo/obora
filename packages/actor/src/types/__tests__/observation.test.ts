@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { Observation, createObservation } from "../observation";
+
 import { createActorId } from "../actor";
+import { Observation, createObservation } from "../observation";
 
 describe("observation.test.ts", () => {
   describe("createObservation()", () => {

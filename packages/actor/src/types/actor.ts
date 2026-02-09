@@ -3,14 +3,14 @@
  * @description Actor 타입 정의 - 액터의 기본 인터페이스와 상태 관리
  */
 
-import type { Observation } from "./observation";
 import type { Action } from "./action";
-import type { Result } from "./result";
-import type { Message } from "./message";
-import type { ActorMetrics } from "./metrics";
-import type { IMessageBus } from "./message";
 import type { IBlackboard } from "./blackboard";
-import { generateActorId } from "../runtime/crypto";
+import type { Message } from "./message";
+import type { IMessageBus } from "./message";
+import type { ActorMetrics } from "./metrics";
+import type { Observation } from "./observation";
+import type { Result } from "./result";
+import { generateActorId } from "./crypto";
 
 /**
  * Actor 고유 ID 타입

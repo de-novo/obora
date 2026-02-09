@@ -1,7 +1,7 @@
+import type { ActorFactory, ActorConfig } from "../runtime/types";
 import type { Actor, ActorId, ActorRole, ActorStatus } from "../types/actor";
 import type { IBlackboard } from "../types/actor";
 import type { IMessageBus } from "../types/message";
-import type { ActorFactory, ActorConfig } from "../runtime/types";
 
 /**
  * Actor Pool 설정
@@ -248,9 +248,7 @@ export class ActorPool {
     this.idleTimers.clear();
 
     // 모든 Actor 중지
-    const stopPromises = Array.from(this.actors.values()).map((actor) =>
-      actor.stop()
-    );
+    const stopPromises = Array.from(this.actors.values()).map((actor) => actor.stop());
     await Promise.allSettled(stopPromises);
 
     // 정리
@@ -276,11 +274,7 @@ export class ActorPool {
    * @param expiresIn 만료 시간 (ms, 선택)
    * @returns 작업 ID
    */
-  async submit<T = unknown>(
-    data: T,
-    priority: number = 0,
-    expiresIn?: number
-  ): Promise<string> {
+  async submit<T = unknown>(data: T, priority: number = 0, expiresIn?: number): Promise<string> {
     if (!this.isRunning) {
       throw new Error("Pool is not running");
     }
@@ -319,10 +313,7 @@ export class ActorPool {
    * @param priority 우선순위
    * @returns 작업 결과
    */
-  async submitAndWait<T = unknown, R = unknown>(
-    data: T,
-    priority: number = 0
-  ): Promise<R> {
+  async submitAndWait<T = unknown, R = unknown>(data: T, priority: number = 0): Promise<R> {
     const taskId = await this.submit(data, priority);
 
     // 대기 중인 작업으로 등록 (recordTaskResult에서 pendingResults에 저장하도록)
@@ -381,10 +372,7 @@ export class ActorPool {
    * @param size 목표 크기
    */
   async scaleTo(size: number): Promise<void> {
-    const targetSize = Math.max(
-      this.config.minSize,
-      Math.min(size, this.config.maxSize)
-    );
+    const targetSize = Math.max(this.config.minSize, Math.min(size, this.config.maxSize));
     const currentSize = this.actors.size;
 
     if (targetSize === currentSize) {
@@ -841,8 +829,7 @@ export class ActorPool {
 
     // 이용률 계산
     if (this.metrics.totalActors > 0) {
-      this.metrics.utilization =
-        this.metrics.activeActors / this.metrics.totalActors;
+      this.metrics.utilization = this.metrics.activeActors / this.metrics.totalActors;
     } else {
       this.metrics.utilization = 0;
     }
@@ -851,8 +838,7 @@ export class ActorPool {
     // 최근 작업들의 duration으로 대략적인 처리 시간 추정
     if (this.completedTasks.length > 0) {
       const recentTasks = this.completedTasks.slice(-100);
-      const avgDuration =
-        recentTasks.reduce((sum, t) => sum + t.duration, 0) / recentTasks.length;
+      const avgDuration = recentTasks.reduce((sum, t) => sum + t.duration, 0) / recentTasks.length;
       // 큐 크기 기반 예상 대기 시간
       this.metrics.averageQueueTime = this.taskQueue.length * avgDuration;
     } else {

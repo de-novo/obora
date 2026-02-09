@@ -1,7 +1,8 @@
-import type { Actor, ActorId, ActorRole } from "../types/actor";
 import { ActorLifecycleStatus } from "../types/actor";
+import type { Actor, ActorId, ActorRole } from "../types/actor";
 import type { IBlackboard } from "../types/actor";
 import type { IMessageBus } from "../types/message";
+
 import type { ActorFactory, ActorConfig } from "./types";
 import { delay } from "./utils/delay";
 
@@ -90,29 +91,25 @@ export class ActorRuntime {
    * @param actorId Actor ID (제공되지 않으면 런타임 종료)
    */
   async stop(actorId?: ActorId): Promise<void> {
-    // 런타임 상태 체크 (일관성: 실행 중이 아니면 무시)
-    if (!this.isRunning) {
-      return;
-    }
-
     if (actorId) {
-      // 특정 Actor 중지
+      // 특정 Actor 중지 - 런타임 실행 여부 체크
+      if (!this.isRunning) {
+        throw new Error("Runtime is not running");
+      }
       const actor = this.getActor(actorId);
       await this.stopActor(actor.id);
     } else {
-      // 런타임 종료
-
+      // 런타임 종료 - idempotent
+      if (!this.isRunning) {
+        return;
+      }
       this.log("Stopping runtime...");
-
-      // 모든 Actor 중지
       const stopPromises = Array.from(this.actors.values()).map((actor) =>
         this.stopActor(actor.id)
       );
-
       await Promise.allSettled(stopPromises);
       this.actors.clear();
       this.isRunning = false;
-
       this.log("Runtime stopped");
     }
   }
@@ -148,7 +145,7 @@ export class ActorRuntime {
     try {
       // Actor 생성 (타임아웃 적용)
       actor = await Promise.race([
-        this.factory.create(config, this.board, this.messageBus),
+        Promise.resolve(this.factory.create(config, this.board, this.messageBus)),
         delay(this.config.spawnTimeout).then(() => {
           throw new Error(`Actor spawn timeout: ${config.id || "unknown"}`);
         }),
@@ -198,37 +195,59 @@ export class ActorRuntime {
       throw new Error(`Max restarts (${this.config.maxRestarts}) exceeded for actor: ${actorId}`);
     }
 
-    const actor = this.getActor(actorId);
+    const actor = this.actors.get(actorId);
     const config = this.actorConfigs.get(actorId);
 
-    if (!config) {
-      throw new Error(`Actor config not found: ${actorId}`);
+    if (!actor || !config) {
+      throw new Error(`Actor or config not found: ${actorId}`);
     }
+
+    const savedConfig = { ...config, id: actorId };
 
     this.log(`Restarting actor: ${actorId} (attempt ${restartCount + 1})`);
 
     try {
-      // 기존 Actor 중지
       await this.stopActor(actor.id);
 
-      // 백오프 대기
       const backoff = this.calculateBackoff(restartCount);
       if (backoff > 0) {
         await delay(backoff);
       }
 
-      // 새 Actor 생성 (기존 ID 유지)
-      const configWithId = { ...config, id: actorId };
-      const newActor = await this.spawn(configWithId);
-
+      const newActor = await this.spawn(savedConfig);
       this.log(`Actor restarted: ${actorId}`);
-
       return newActor;
     } catch (error) {
       this.log(`Actor restart failed: ${actorId}`, error);
-      // 재시도 로직 추가
       if (restartCount + 1 < this.config.maxRestarts) {
-        return this.restart(actorId, restartCount + 1);
+        return this.retryRestart(actorId, savedConfig, restartCount + 1);
+      }
+      throw error;
+    }
+  }
+
+  private async retryRestart(
+    actorId: ActorId,
+    config: ActorConfig,
+    restartCount: number
+  ): Promise<Actor> {
+    if (restartCount >= this.config.maxRestarts) {
+      throw new Error(`Max restarts (${this.config.maxRestarts}) exceeded for actor: ${actorId}`);
+    }
+
+    const backoff = this.calculateBackoff(restartCount);
+    if (backoff > 0) {
+      await delay(backoff);
+    }
+
+    try {
+      const newActor = await this.spawn(config);
+      this.log(`Actor restarted: ${actorId}`);
+      return newActor;
+    } catch (error) {
+      this.log(`Actor retry restart failed: ${actorId}`, error);
+      if (restartCount + 1 < this.config.maxRestarts) {
+        return this.retryRestart(actorId, config, restartCount + 1);
       }
       throw error;
     }
@@ -340,9 +359,6 @@ export class ActorRuntime {
    * @param config 검증할 ActorConfig
    */
   private validateConfig(config: ActorConfig): void {
-    if (!config.name || config.name.trim() === "") {
-      throw new Error("Actor name is required");
-    }
     if (!config.role) {
       throw new Error("Actor role is required");
     }

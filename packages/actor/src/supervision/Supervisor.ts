@@ -1,6 +1,8 @@
-import { EventEmitter } from 'events';
-import type { ActorId, Actor } from '../types/actor';
-import type { ActorRuntime } from '../runtime/ActorRuntime';
+import { EventEmitter } from "events";
+
+import type { ActorRuntime } from "../runtime/ActorRuntime";
+import type { ActorId, Actor } from "../types/actor";
+
 import {
   SupervisorConfig,
   RestartStrategy,
@@ -9,7 +11,7 @@ import {
   RestartHistory,
   DeadLetter,
   SupervisorEvents,
-} from './types';
+} from "./types";
 
 /**
  * 기본 Supervisor 설정
@@ -61,10 +63,10 @@ export class Supervisor extends EventEmitter {
    */
   start(): void {
     if (this.isRunning) {
-      throw new Error('Supervisor is already running');
+      throw new Error("Supervisor is already running");
     }
     this.isRunning = true;
-    this.log('Supervisor started');
+    this.log("Supervisor started");
   }
 
   /**
@@ -76,7 +78,7 @@ export class Supervisor extends EventEmitter {
     }
     this.isRunning = false;
     this.watchedActors.clear();
-    this.log('Supervisor stopped');
+    this.log("Supervisor stopped");
   }
 
   /**
@@ -85,7 +87,7 @@ export class Supervisor extends EventEmitter {
    */
   watch(actorId: ActorId): void {
     if (!this.isRunning) {
-      throw new Error('Supervisor is not running');
+      throw new Error("Supervisor is not running");
     }
 
     this.watchedActors.add(actorId);
@@ -118,7 +120,7 @@ export class Supervisor extends EventEmitter {
     }
 
     this.log(`Actor failed: ${actorId} - ${error.message}`);
-    this.emit('actor:failed', actorId, error);
+    this.emit("actor:failed", actorId, error);
 
     // 재시작 결정
     const directive = this.decideRestart(actorId, error);
@@ -129,7 +131,7 @@ export class Supervisor extends EventEmitter {
         break;
 
       case RestartDirective.STOP:
-        await this.performStop(actorId, 'Decider returned STOP');
+        await this.performStop(actorId, "Decider returned STOP");
         break;
 
       case RestartDirective.ESCALATE:
@@ -193,15 +195,13 @@ export class Supervisor extends EventEmitter {
     const windowStart = now - this.config.restartWindow;
 
     // 윈도우 내 재시작 횟수 계산
-    const recentRestarts = timestamps.filter(
-      (t) => t.getTime() > windowStart
-    ).length;
+    const recentRestarts = timestamps.filter((t) => t.getTime() > windowStart).length;
 
     if (recentRestarts >= this.config.maxRestarts) {
       this.log(
         `Max restarts exceeded for ${actorId}: ${recentRestarts}/${this.config.maxRestarts}`
       );
-      this.emit('max-restarts-exceeded', actorId);
+      this.emit("max-restarts-exceeded", actorId);
       return RestartDirective.STOP;
     }
 
@@ -243,7 +243,7 @@ export class Supervisor extends EventEmitter {
 
       // 이력 기록
       this.recordHistory(actorId, error, attempt, true);
-      this.emit('actor:restarted', actorId, attempt);
+      this.emit("actor:restarted", actorId, attempt);
 
       this.log(`Actor restarted: ${actorId} (attempt ${attempt})`);
     } catch (restartError) {
@@ -315,7 +315,7 @@ export class Supervisor extends EventEmitter {
     }
 
     this.unwatch(actorId);
-    this.emit('actor:stopped', actorId, reason);
+    this.emit("actor:stopped", actorId, reason);
   }
 
   /**
@@ -326,7 +326,7 @@ export class Supervisor extends EventEmitter {
 
     // 상위 Supervisor에게 전달 (구현에 따라 다름)
     // 여기서는 이벤트로 처리
-    this.emit('escalate', actorId, error);
+    this.emit("escalate", actorId, error);
   }
 
   /**
@@ -373,12 +373,7 @@ export class Supervisor extends EventEmitter {
   /**
    * 이력 기록
    */
-  private recordHistory(
-    actorId: ActorId,
-    error: Error,
-    attempt: number,
-    success: boolean
-  ): void {
+  private recordHistory(actorId: ActorId, error: Error, attempt: number, success: boolean): void {
     this.restartHistory.push({
       actorId,
       timestamp: new Date(),
@@ -396,11 +391,7 @@ export class Supervisor extends EventEmitter {
   /**
    * Dead Letter 추가
    */
-  private addDeadLetter(
-    actorId: ActorId,
-    error: Error,
-    retryCount: number
-  ): void {
+  private addDeadLetter(actorId: ActorId, error: Error, retryCount: number): void {
     const letter: DeadLetter = {
       payload: null, // 실제 구현에서는 실패한 메시지 포함
       actorId,
@@ -417,7 +408,7 @@ export class Supervisor extends EventEmitter {
       this.deadLetterQueue.shift();
     }
 
-    this.emit('dead-letter', letter);
+    this.emit("dead-letter", letter);
     this.log(`Dead letter added for ${actorId}`);
   }
 

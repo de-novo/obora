@@ -1,6 +1,7 @@
+import type { ActorFactory } from "../runtime/types";
 import type { IBlackboard } from "../types/actor";
 import type { IMessageBus } from "../types/message";
-import type { ActorFactory } from "../runtime/types";
+
 import { ActorPool, PoolConfig, PoolMetrics } from "./ActorPool";
 
 /**
@@ -34,9 +35,7 @@ export class PoolManager {
     this.isRunning = true;
 
     // 모든 Pool 시작
-    const startPromises = Array.from(this.pools.values()).map((pool) =>
-      pool.start()
-    );
+    const startPromises = Array.from(this.pools.values()).map((pool) => pool.start());
     await Promise.all(startPromises);
 
     this.log("PoolManager started");
@@ -51,9 +50,7 @@ export class PoolManager {
     }
 
     // 모든 Pool 종료
-    const stopPromises = Array.from(this.pools.values()).map((pool) =>
-      pool.stop()
-    );
+    const stopPromises = Array.from(this.pools.values()).map((pool) => pool.stop());
     await Promise.allSettled(stopPromises);
 
     this.isRunning = false;

@@ -1,4 +1,4 @@
-import type { ActorId, Actor } from '../types/actor';
+import type { ActorId, Actor } from "../types/actor";
 
 /**
  * 재시작 전략 유형
@@ -9,20 +9,20 @@ export enum RestartStrategy {
    * - 다른 Actor에 영향 없음
    * - 독립적인 Actor에 적합
    */
-  ONE_FOR_ONE = 'one-for-one',
+  ONE_FOR_ONE = "one-for-one",
 
   /**
    * AllForOne: 하나가 실패하면 모든 Actor 재시작
    * - 강한 의존성이 있는 Actor 그룹에 적합
    * - 일관된 상태 복원 필요 시 사용
    */
-  ALL_FOR_ONE = 'all-for-one',
+  ALL_FOR_ONE = "all-for-one",
 
   /**
    * RestForOne: 실패한 Actor와 이후 생성된 Actor들 재시작
    * - 순서 의존성이 있는 Actor에 적합
    */
-  REST_FOR_ONE = 'rest-for-one',
+  REST_FOR_ONE = "rest-for-one",
 }
 
 /**
@@ -30,13 +30,13 @@ export enum RestartStrategy {
  */
 export enum RestartDirective {
   /** 재시작 */
-  RESTART = 'restart',
+  RESTART = "restart",
 
   /** 재시작하지 않음 (정상 종료 처리) */
-  STOP = 'stop',
+  STOP = "stop",
 
   /** 상위 Supervisor로 에스컬레이션 */
-  ESCALATE = 'escalate',
+  ESCALATE = "escalate",
 }
 
 /**
@@ -44,16 +44,16 @@ export enum RestartDirective {
  */
 export enum BackoffPolicy {
   /** 고정 대기 시간 */
-  FIXED = 'fixed',
+  FIXED = "fixed",
 
   /** 지수 백오프 */
-  EXPONENTIAL = 'exponential',
+  EXPONENTIAL = "exponential",
 
   /** 선형 백오프 */
-  LINEAR = 'linear',
+  LINEAR = "linear",
 
   /** 지터가 포함된 지수 백오프 */
-  EXPONENTIAL_JITTER = 'exponential-jitter',
+  EXPONENTIAL_JITTER = "exponential-jitter",
 }
 
 /**
@@ -150,19 +150,19 @@ export interface DeadLetter {
  */
 export interface SupervisorEvents {
   /** Actor 실패 시 */
-  'actor:failed': (actorId: ActorId, error: Error) => void;
+  "actor:failed": (actorId: ActorId, error: Error) => void;
 
   /** Actor 재시작 시 */
-  'actor:restarted': (actorId: ActorId, attempt: number) => void;
+  "actor:restarted": (actorId: ActorId, attempt: number) => void;
 
   /** Actor 영구 정지 시 */
-  'actor:stopped': (actorId: ActorId, reason: string) => void;
+  "actor:stopped": (actorId: ActorId, reason: string) => void;
 
   /** Dead Letter 발생 시 */
-  'dead-letter': (letter: DeadLetter) => void;
+  "dead-letter": (letter: DeadLetter) => void;
 
   /** 최대 재시작 초과 시 */
-  'max-restarts-exceeded': (actorId: ActorId) => void;
+  "max-restarts-exceeded": (actorId: ActorId) => void;
 
   /** 에스컬레이션 */
   escalate: (actorId: ActorId, error: Error) => void;

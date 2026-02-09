@@ -3,8 +3,8 @@
  * @description Result 타입 정의 - Action 수행 결과
  */
 
-import type { ActorId } from "./actor";
 import type { ActionId } from "./action";
+import type { ActorId } from "./actor";
 
 /**
  * Result 고유 ID 타입

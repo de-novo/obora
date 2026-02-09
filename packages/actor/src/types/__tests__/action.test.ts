@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+
 import { ActionType, createAction, createActionId, isValidActionId } from "../action";
 import { createActorId } from "../actor";
 

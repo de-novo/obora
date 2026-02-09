@@ -10,7 +10,7 @@ export interface ActorConfig {
   id?: ActorId;
 
   /** Actor 이름 */
-  name: string;
+  name?: string;
 
   /** Actor 역할 */
   role: ActorRole;
@@ -36,5 +36,5 @@ export interface ActorFactory {
    * @param messageBus MessageBus 인스턴스
    * @returns 생성된 Actor 인스턴스
    */
-  create(config: ActorConfig, board: IBlackboard, messageBus: IMessageBus): Promise<Actor>;
+  create(config: ActorConfig, board: IBlackboard, messageBus: IMessageBus): Promise<Actor> | Actor;
 }

@@ -1,3 +1,4 @@
+import type { Action } from "../types/action";
 import {
   Actor,
   ActorId,
@@ -9,10 +10,9 @@ import {
 import type { IBlackboard } from "../types/blackboard";
 import type { IMessageBus, Message, MessageId } from "../types/message";
 import { MessageType } from "../types/message";
-import type { Observation } from "../types/observation";
-import type { Action } from "../types/action";
-import type { Result } from "../types/result";
 import { createActorMetrics, ActorMetrics } from "../types/metrics";
+import type { Observation } from "../types/observation";
+import type { Result } from "../types/result";
 
 /**
  * Actor 구현을 위한 추상 기본 클래스 (스펙 기준)

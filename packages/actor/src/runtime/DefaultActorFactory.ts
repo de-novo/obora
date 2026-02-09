@@ -1,7 +1,8 @@
 import type { Actor, ActorId, ActorRole, IBlackboard } from "../types/actor";
 import type { IMessageBus } from "../types/message";
 import type { ActorFactory, ActorConfig } from "./types";
-import { generateActorId } from "./crypto";
+
+import { generateActorId } from "../types/crypto";
 
 /**
  * Actor 클래스 등록소

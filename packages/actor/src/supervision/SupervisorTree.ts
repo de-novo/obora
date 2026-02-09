@@ -1,7 +1,8 @@
-import type { ActorId } from '../types/actor';
-import type { ActorRuntime } from '../runtime/ActorRuntime';
-import { Supervisor } from './Supervisor';
-import type { SupervisorConfig } from './types';
+import type { ActorRuntime } from "../runtime/ActorRuntime";
+import type { ActorId } from "../types/actor";
+
+import { Supervisor } from "./Supervisor";
+import type { SupervisorConfig } from "./types";
 
 /**
  * Supervisor 트리 노드
@@ -37,10 +38,10 @@ export class SupervisorTree {
    */
   createRoot(config?: Partial<SupervisorConfig>): string {
     if (this.rootId) {
-      throw new Error('Root supervisor already exists');
+      throw new Error("Root supervisor already exists");
     }
 
-    const id = this.generateId('root');
+    const id = this.generateId("root");
     const supervisor = new Supervisor(this.runtime, config);
 
     this.nodes.set(id, {
@@ -54,11 +55,8 @@ export class SupervisorTree {
     supervisor.start();
 
     // 에스컬레이션 처리 (루트는 에스컬레이션 불가)
-    supervisor.on('escalate', (actorId: ActorId, error: Error) => {
-      console.error(
-        `[SupervisorTree] Escalation at root for ${actorId}:`,
-        error
-      );
+    supervisor.on("escalate", (actorId: ActorId, error: Error) => {
+      console.error(`[SupervisorTree] Escalation at root for ${actorId}:`, error);
     });
 
     return id;
@@ -76,7 +74,7 @@ export class SupervisorTree {
       throw new Error(`Parent supervisor not found: ${parentId}`);
     }
 
-    const id = this.generateId('child');
+    const id = this.generateId("child");
     const supervisor = new Supervisor(this.runtime, config);
 
     this.nodes.set(id, {
@@ -90,7 +88,7 @@ export class SupervisorTree {
     supervisor.start();
 
     // 에스컬레이션 처리
-    supervisor.on('escalate', (actorId: ActorId, error: Error) => {
+    supervisor.on("escalate", (actorId: ActorId, error: Error) => {
       this.handleEscalation(id, actorId, error);
     });
 
@@ -167,28 +165,21 @@ export class SupervisorTree {
    */
   printTree(): string {
     if (!this.rootId) {
-      return '(empty tree)';
+      return "(empty tree)";
     }
 
     const lines: string[] = [];
     this.printNode(this.rootId, 0, lines);
-    return lines.join('\n');
+    return lines.join("\n");
   }
 
   // ==================== 내부 메서드 ====================
 
-  private handleEscalation(
-    supervisorId: string,
-    actorId: ActorId,
-    error: Error
-  ): void {
+  private handleEscalation(supervisorId: string, actorId: ActorId, error: Error): void {
     const node = this.nodes.get(supervisorId);
     if (!node || !node.parent) {
       // 루트 도달 - 처리 불가
-      console.error(
-        `[SupervisorTree] Unhandled escalation for ${actorId}:`,
-        error
-      );
+      console.error(`[SupervisorTree] Unhandled escalation for ${actorId}:`, error);
       return;
     }
 
@@ -203,9 +194,9 @@ export class SupervisorTree {
     const node = this.nodes.get(id);
     if (!node) return;
 
-    const indent = '  '.repeat(depth);
+    const indent = "  ".repeat(depth);
     const watched = node.supervisor.getWatchedActors();
-    lines.push(`${indent}[${id}] watching: ${watched.join(', ') || '(none)'}`);
+    lines.push(`${indent}[${id}] watching: ${watched.join(", ") || "(none)"}`);
 
     for (const childId of node.children) {
       this.printNode(childId, depth + 1, lines);

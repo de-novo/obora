@@ -13,9 +13,13 @@ export function delay(ms: number, signal?: AbortSignal): Promise<void> {
 
     const timeoutId = setTimeout(resolve, ms);
 
-    signal?.addEventListener("abort", () => {
-      clearTimeout(timeoutId);
-      reject(new DOMException("Aborted", "AbortError"));
-    }, { once: true });
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timeoutId);
+        reject(new DOMException("Aborted", "AbortError"));
+      },
+      { once: true }
+    );
   });
 }
