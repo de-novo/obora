@@ -163,11 +163,11 @@ describe("Blackboard Integration", () => {
         agents: [],
       });
 
-      const actorId = createActorId(ActorRole.ANALYST);
+      const actorId = createActorId("analyst");
       await runtime.spawn({
         id: actorId,
         name: "test",
-        role: ActorRole.ANALYST,
+        role: "analyst",
         type: "mock",
       });
 
@@ -180,11 +180,11 @@ describe("Blackboard Integration", () => {
     });
 
     it("should write results to blackboard", async () => {
-      const actorId = createActorId(ActorRole.EXECUTOR);
+      const actorId = createActorId("executor");
       await runtime.spawn({
         id: actorId,
         name: "test",
-        role: ActorRole.EXECUTOR,
+        role: "executor",
         type: "mock",
       });
 
@@ -198,26 +198,26 @@ describe("Blackboard Integration", () => {
     });
 
     it("should handle concurrent writes", async () => {
-      const actorId1 = createActorId(ActorRole.ANALYST);
-      const actorId2 = createActorId(ActorRole.ANALYST);
-      const actorId3 = createActorId(ActorRole.ANALYST);
+      const actorId1 = createActorId("analyst-1");
+      const actorId2 = createActorId("analyst-2");
+      const actorId3 = createActorId("analyst-3");
 
       await runtime.spawn({
         id: actorId1,
         name: "test",
-        role: ActorRole.ANALYST,
+        role: "analyst",
         type: "mock",
       });
       await runtime.spawn({
         id: actorId2,
         name: "test",
-        role: ActorRole.ANALYST,
+        role: "analyst",
         type: "mock",
       });
       await runtime.spawn({
         id: actorId3,
         name: "test",
-        role: ActorRole.ANALYST,
+        role: "analyst",
         type: "mock",
       });
 
@@ -273,7 +273,7 @@ describe("Blackboard Integration", () => {
       const pool = new ActorPool(
         {
           name: "processors",
-          role: ActorRole.EXECUTOR,
+          role: "executor",
           type: "mock",
           initialSize: 2,
           minSize: 1,
