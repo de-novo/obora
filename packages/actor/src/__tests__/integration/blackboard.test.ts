@@ -286,8 +286,8 @@ describe("Blackboard Integration", () => {
           debug: false,
         },
         board,
-        messageBus,
-        factory
+        factory,
+        messageBus
       );
 
       await pool.start();
@@ -296,7 +296,7 @@ describe("Blackboard Integration", () => {
       await new Promise((resolve) => setTimeout(resolve, 100));
 
       const metrics = pool.getMetrics();
-      expect(metrics.completedTasks + metrics.queuedTasks).toBeGreaterThanOrEqual(0);
+      expect(metrics.totalActors).toBeGreaterThan(0);
 
       await pool.stop();
     });
