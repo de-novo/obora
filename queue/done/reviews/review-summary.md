@@ -1,11 +1,11 @@
-# 리뷰 요약 - TASK-027-supervision
+# 리뷰 요약 - TASK-029-actor-tests
 
 ## 검토 대상
-- 태스크: /Users/denovo/workspace/github/obora-kit/queue/TASK-027-supervision.md
+- 태스크: /Users/denovo/workspace/github/obora-kit/queue/TASK-029-actor-tests.md
 - 프로젝트: /Users/denovo/workspace/github/obora-kit
-- 리뷰 시작: 2026-02-09 20:38:55
-- 리뷰 완료: 2026-02-09 20:40:26
-- 소요 시간: 1m 31s
+- 리뷰 시작: 2026-02-10 11:30:02
+- 리뷰 완료: 2026-02-10 11:50:50
+- 소요 시간: 20m 48s
 - 완료된 리뷰: 4/4
 
 ## 모델별 결과
@@ -15,31 +15,62 @@
 
 
 
-I'll verify each checklist item by examining the actual code. Let me start by finding the relevant files.
-Now let me verify each checklist item by reading the specific files in detail.
-Now I have all the information needed to verify each checklist item. Let me compile the results.
+I'll verify each checklist item by examining the actual files in the repository. Let me start by searching for the relevant files.
+Now let me read the actual content of the key files to verify each checklist item in detail.
+Now let me read the helper files and index files to verify the remaining checklist items:
+Now I have all the information needed. Let me also verify the `any` type issue in the blackboard.test.ts MockActor more carefully:
+No `any` usage found. Let me also verify the spec's expected exports match by checking the exact spec requirement for `index.ts`:
+
+The spec says:
+```typescript
+// Test helpers
+export { MockBlackboard } from './helpers/MockBlackboard';
+export { TestActor, TestActorConfig } from './helpers/TestActor';
+export { TestActorFactory } from './helpers/TestActorFactory';
+```
+
+The actual `__tests__/index.ts`:
+```typescript
+export { MockBlackboard } from "./helpers/MockBlackboard";
+export { TestActor, type TestActorConfig } from "./helpers/TestActor";
+export { TestActorFactory } from "./helpers/TestActorFactory";
+```
+
+The difference is `type TestActorConfig` vs plain `TestActorConfig`. This is actually an improvement (proper type-only export), not a mismatch — all three names are exported.
+
+Now I have everything I need. Here are my findings:
+
+---
 
 # 체크리스트 검증 결과
 
 ## 항목별 결과
 
-- **[PASS] 1. supervision 모듈이 패키지 공개 API에서 내보내지 않음**
-  - 근거: `packages/actor/src/index.ts:12`에 `export * from "./supervision";` 이 존재하며, `packages/actor/src/supervision/index.ts:1-3`에서 types, Supervisor, SupervisorTree를 모두 re-export하고 있음. 이슈가 수정됨.
+- **[PASS]** 항목1: 통합 테스트 파일 3개 누락 (lifecycle.test.ts, pool.test.ts, supervision.test.ts)
+  - 근거: 세 파일 모두 존재하며 충실한 테스트 구현이 포함됨
+    - `packages/actor/src/__tests__/integration/lifecycle.test.ts` (385줄)
+    - `packages/actor/src/__tests__/integration/pool.test.ts` (428줄)
+    - `packages/actor/src/__tests__/integration/supervision.test.ts` (471줄)
 
-- **[PASS] 2. SupervisorTree 테스트 파일 누락**
-  - 근거: `packages/actor/src/supervision/__tests__/SupervisorTree.test.ts` 파일이 존재하며, 97줄에 걸쳐 createRoot, createChild, remove, shutdown, printTree에 대한 10개 테스트를 포함하고 있음. 이슈가 수정됨.
+- **[PASS]** 항목2: TestActor 헬퍼 미구현
+  - 근거: `packages/actor/src/__tests__/helpers/TestActor.ts` (217줄) — `TestActorConfig` 인터페이스 포함, `failureRate`/`executionTime`/`maxExecutions` 설정 지원, `Actor` 인터페이스 완전 구현 (observe, think, act, report, start, stop, restart, receive, getStatus, isAlive)
 
-- **[PASS] 3. handleFailure 재귀 호출 시 무한 루프 위험**
-  - 근거: `packages/actor/src/supervision/Supervisor.ts:258-266`에서 재시작 실패 시 `this.restartCounts.get(actorId)` 값을 확인하여 `maxRestarts` 이상이면 `performStop`을 호출하고 재귀를 중단함. `handleFailure`를 다시 호출하는 경로(라인 265)에 도달하더라도 `decideRestart`(라인 200)에서 타임스탬프 기반 윈도우 체크가 STOP을 반환하므로, 이중 안전장치가 적용됨. 이슈가 수정됨.
+- **[PASS]** 항목3: TestActorFactory 헬퍼 미구현
+  - 근거: `packages/actor/src/__tests__/helpers/TestActorFactory.ts` (37줄) — `ActorFactory` 인터페이스 구현, `getCreatedActors()`, `clearCreatedActors()`, `setActorConfig()` 헬퍼 메서드 포함
 
-- **[PASS] 4. REST_FOR_ONE 전략 및 추가 백오프 정책 테스트 누락**
-  - 근거: `packages/actor/src/supervision/__tests__/Supervisor.test.ts:205-231`에 REST_FOR_ONE 전략 테스트가 추가되어 actor-2 실패 시 actor-1은 재시작되지 않고, actor-2와 actor-3만 재시작되는 것을 검증함. 백오프 정책 테스트도 FIXED(라인 235-257), EXPONENTIAL(라인 259-285), LINEAR(라인 287-312), EXPONENTIAL_JITTER(라인 314-341) 4가지 모두 구현됨. 이슈가 수정됨.
+- **[PASS]** 항목4: 테스트 헬퍼 내보내기 index.ts가 스펙과 불일치
+  - 근거: `packages/actor/src/__tests__/index.ts:1-3` — 스펙과 동일하게 `MockBlackboard`, `TestActor`, `TestActorConfig`, `TestActorFactory` 모두 내보내기 됨. `type TestActorConfig`은 TypeScript 모범 사례에 따른 개선으로, 실질적 불일치 아님
 
-- **[PASS] 5. Dead Letter Queue 테스트의 무의미한 어설션**
-  - 근거: `packages/actor/src/supervision/__tests__/Supervisor.test.ts:345-399`에서 기존의 `toBeGreaterThanOrEqual(0)` 같은 무의미한 어설션이 제거되고, `toBeGreaterThanOrEqual(1)`(라인 365), `deadLetterHandler` 호출 확인(라인 368), dead letter 객체의 핵심 필드 검증(actorId, error, timestamp, retryCount — 라인 371-375)이 추가됨. 두 번째 테스트(라인 378-399)도 먼저 dead letter를 추가한 뒤 비우는 방식으로 의미 있게 변경됨. 이슈가 수정됨.
+- **[PASS]** 항목5: blackboard.test.ts에서 Event Subscription 테스트 누락
+  - 근거: `packages/actor/src/__tests__/integration/blackboard.test.ts:252-273` — `describe("Event Subscription")` 블록에 두 개의 테스트 존재:
+    - `"should receive blackboard events"` (라인 253-259)
+    - `"should unsubscribe from events"` (라인 262-273)
+
+- **[PASS]** 항목6: blackboard.test.ts의 MockActor에서 `any` 타입 남용
+  - 근거: `packages/actor/src/__tests__/integration/blackboard.test.ts` 전체에서 `any` 키워드 0건. `MockActor`의 모든 프로퍼티와 메서드가 구체적 타입 사용 (`string`, `ActorRole`, `IBlackboard`, `IMessageBus`, `Action`, `Result`, `Observation` 등). `id: string` 및 `status` 내부 필드도 명시적 타입으로 선언됨 (라인 17-47)
 
 ## 점수
-- 통과: 5/5
+- 통과: 6/6
 - **총점: 10/10**
 
 ---
@@ -48,14 +79,15 @@ Now I have all the information needed to verify each checklist item. Let me comp
 # Checklist Verification Result
 
 ## Item Results
-- [PASS] Item1: `packages/actor/src/index.ts:8-12` (exports include `./supervision`)
-- [PASS] Item2: `packages/actor/src/supervision/__tests__/SupervisorTree.test.ts:1-96`
-- [PASS] Item3: `packages/actor/src/supervision/Supervisor.ts:258-266` (guards retry by maxRestarts and stops)
-- [PASS] Item4: `packages/actor/src/supervision/__tests__/Supervisor.test.ts:205-231` (REST_FOR_ONE), `packages/actor/src/supervision/__tests__/Supervisor.test.ts:234-341` (backoff policies)
-- [PASS] Item5: `packages/actor/src/supervision/__tests__/Supervisor.test.ts:344-376` (non-trivial assertions on dead letters)
+- [PASS] Item1: Integration test files present (packages/actor/src/__tests__/integration/lifecycle.test.ts:1; packages/actor/src/__tests__/integration/pool.test.ts:1; packages/actor/src/__tests__/integration/supervision.test.ts:1)
+- [PASS] Item2: TestActor helper implemented (packages/actor/src/__tests__/helpers/TestActor.ts:14)
+- [PASS] Item3: TestActorFactory helper implemented (packages/actor/src/__tests__/helpers/TestActorFactory.ts:9)
+- [PASS] Item4: Test helpers exported per spec (packages/actor/src/__tests__/index.ts:1)
+- [PASS] Item5: Event Subscription tests present (packages/actor/src/__tests__/integration/blackboard.test.ts:52)
+- [PASS] Item6: MockActor uses typed fields, no `any` (packages/actor/src/__tests__/integration/blackboard.test.ts:17)
 
 ## Score
-- Passed: 5/5
+- Passed: 6/6
 - **Total: 10/10**
 
 ## Fix for FAIL Items
@@ -64,40 +96,60 @@ None.
 ---
 ### glm (zai-coding-plan/glm-4.7)
 
-I'll verify each checklist item by examining the actual source code. Let me search for the relevant files.
 # 체크리스트 검증 결과
 
 ## 항목별 결과
-- [PASS] 항목1: supervision 모듈이 packages/actor/src/index.ts:12에서 `export * from "./supervision";`로 내보내짐
-- [PASS] 항목2: SupervisorTree 테스트 파일이 packages/actor/src/supervision/__tests__/SupervisorTree.test.ts에 존재함
-- [PASS] 항목3: handleFailure 재귀 호출에 maxRestarts 기반 가드 추가됨 (Supervisor.ts:258-267)
-- [PASS] 항목4: REST_FOR_ONE 테스트(205-231행), LINEAR 백오프 테스트(287-312행), EXPONENTIAL_JITTER 백오프 테스트(314-341행) 존재
-- [PASS] 항목5: Dead Letter Queue 테스트에 actorId, error, timestamp, retryCount 등 의미 있는 어설션 추가됨 (Supervisor.test.ts:370-375)
+- [PASS] 항목1: 모든 통합 테스트 파일 존재함 (lifecycle.test.ts, pool.test.ts, supervision.test.ts)
+- [PASS] 항목2: TestActor 헬퍼 구현됨 (packages/actor/src/__tests__/helpers/TestActor.ts)
+- [PASS] 항목3: TestActorFactory 헬퍼 구현됨 (packages/actor/src/__tests__/helpers/TestActorFactory.ts)
+- [PASS] 항목4: index.ts 내보내기 스펙과 일치함 (type TestActorConfig 형태로 호환 가능)
+- [PASS] 항목5: Event Subscription 테스트 존재함 (blackboard.test.ts:252-274)
+- [PASS] 항목6: MockActor에서 명시적 타입 사용됨, any 타입 남용 없음
 
 ## 점수
-- 통과: 5/5
+- 통과: 6/6
 - **총점: 10/10**
 
 ---
 ### gemini (google/antigravity-gemini-3-flash)
 
-I will begin by listing the files in the `packages/actor/src/supervision/` directory to verify the existence of the implementation and test files.
-I will read `packages/actor/src/index.ts` to check if the `supervision` module is exported.
-I will read `packages/actor/src/supervision/Supervisor.ts` to examine the `handleFailure` implementation for potential infinite loop risks.
-I will read `packages/actor/src/supervision/__tests__/Supervisor.test.ts` to verify the presence of tests for the `REST_FOR_ONE` strategy and additional backoff policies.
-I will read `packages/actor/src/supervision/__tests__/SupervisorTree.test.ts` to ensure it contains substantial test cases.
-I will read `packages/actor/src/supervision/index.ts` to confirm that it correctly exports all relevant components.
-# Checklist Verification Result
+I'll verify the checklist items by examining the current state of the codebase in `packages/actor/src/__tests__/`.
 
-## Item Results
-- [PASS] Item1: supervision 모듈이 패키지 공개 API에서 내보내짐 (`packages/actor/src/index.ts:12`, `packages/actor/src/supervision/index.ts:1-3`)
-- [PASS] Item2: SupervisorTree 테스트 파일 존재 및 정상 구현 (`packages/actor/src/supervision/__tests__/SupervisorTree.test.ts`)
-- [PASS] Item3: handleFailure 재귀 호출 시 `currentAttempt` 및 `maxRestarts`를 비교하여 무한 루프 방지 로직 구현됨 (`packages/actor/src/supervision/Supervisor.ts:260-263`)
-- [PASS] Item4: REST_FOR_ONE 전략 및 LINEAR, EXPONENTIAL_JITTER 백오프 정책에 대한 테스트 케이스 추가됨 (`packages/actor/src/supervision/__tests__/Supervisor.test.ts:205, 287, 314`)
-- [PASS] Item5: Dead Letter Queue 테스트에서 단순 길이 체크 이상의 의미 있는 어설션(핵심 필드 검증) 추가됨 (`packages/actor/src/supervision/__tests__/Supervisor.test.ts:365-375`)
+### 1. File Structure Verification
+First, I'll list the files in the test directory to check for missing files and helpers.
+
+[tool_call: glob for pattern 'packages/actor/src/__tests__/**/*']
+
+### 2. Helper Implementation Check
+I'll read the helper files to verify if `TestActor` and `TestActorFactory` are implemented correctly according to the spec.
+
+[tool_call: read for absolute_path '/Users/denovo/workspace/github/obora-kit/packages/actor/src/__tests__/helpers/TestActor.ts']
+[tool_call: read for absolute_path '/Users/denovo/workspace/github/obora-kit/packages/actor/src/__tests__/helpers/TestActorFactory.ts']
+
+### 3. Blackboard Test Verification
+I'll check `blackboard.test.ts` for event subscription tests and `any` type usage.
+
+[tool_call: read for absolute_path '/Users/denovo/workspace/github/obora-kit/packages/actor/src/__tests__/integration/blackboard.test.ts']
+
+### 4. Index Verification
+I'll check the export file.
+
+[tool_call: read for absolute_path '/Users/denovo/workspace/github/obora-kit/packages/actor/src/__tests__/index.ts']
+
+I will now execute these checks.
+I have verified the checklist items by exploring the codebase and reading the relevant files. All items from the previous review have been addressed.
+
+### Checklist Verification Result
+
+- [PASS] Item 1: The integration test files `lifecycle.test.ts`, `pool.test.ts`, and `supervision.test.ts` are all present in `packages/actor/src/__tests__/integration/`.
+- [PASS] Item 2: `TestActor` is implemented in `packages/actor/src/__tests__/helpers/TestActor.ts` and correctly implements the `Actor` interface.
+- [PASS] Item 3: `TestActorFactory` is implemented in `packages/actor/src/__tests__/helpers/TestActorFactory.ts` and correctly implements the `ActorFactory` interface.
+- [PASS] Item 4: `packages/actor/src/__tests__/index.ts` correctly exports the test helpers as per the spec.
+- [PASS] Item 5: `blackboard.test.ts` includes a comprehensive `Event Subscription` test suite (lines 252-274).
+- [PASS] Item 6: `MockActor` in `blackboard.test.ts` uses proper TypeScript interfaces (`Actor`, `ActorRole`, `IBlackboard`, etc.) and avoids `any` type usage.
 
 ## Score
-- Passed: 5/5
+- Passed: 6/6
 - **Total: 10/10**
 
 ---
@@ -105,7 +157,7 @@ I will read `packages/actor/src/supervision/index.ts` to confirm that it correct
 
 **최저 점수: 10/10** (목표: 9/10)
 **최우선 이슈: 없음**
-**소요 시간: 1m 31s**
+**소요 시간: 20m 48s**
 
 ### 통과 여부
 ✅ **통과** - 모든 기준 충족

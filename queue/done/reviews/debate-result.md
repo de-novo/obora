@@ -7,43 +7,51 @@
 
 ## 분석 요약
 
-4개 AI 모델(Opus, Codex, GLM, Gemini) 모두 5개 체크리스트 항목에 대해 **만장일치 PASS** 판정을 내렸습니다. 각 항목별로 코드 라인 참조와 함께 구체적 근거를 제시하고 있으며, 모델 간 교차 검증 결과 불일치가 없습니다.
+4개 모델(Opus, Codex, GLM, Gemini) 모두 6개 체크리스트 항목에 대해 **전원 PASS** 판정을 내렸습니다. 모델 간 이견이 없으며, 각 항목에 대한 근거도 일관됩니다.
+
+| 항목 | Opus | Codex | GLM | Gemini | 최종 |
+|------|------|-------|-----|--------|------|
+| 항목1: 통합 테스트 파일 존재 | PASS | PASS | PASS | PASS | PASS |
+| 항목2: TestActor 헬퍼 구현 | PASS | PASS | PASS | PASS | PASS |
+| 항목3: TestActorFactory 헬퍼 구현 | PASS | PASS | PASS | PASS | PASS |
+| 항목4: index.ts 내보내기 스펙 일치 | PASS | PASS | PASS | PASS | PASS |
+| 항목5: Event Subscription 테스트 존재 | PASS | PASS | PASS | PASS | PASS |
+| 항목6: MockActor any 타입 미사용 | PASS | PASS | PASS | PASS | PASS |
 
 ## 확정된 이슈
 
-**없음** — 4개 모델 모두 모든 항목을 PASS로 판정했으며, 추가 이슈를 제기한 모델이 없습니다.
-
-## 항목별 검증 종합
-
-### [PASS] 항목 1: supervision 모듈 공개 API 내보내기
-- **동의 모델**: Opus, Codex, GLM, Gemini (4/4)
-- **근거**: `packages/actor/src/index.ts:12`에 `export * from "./supervision"` 존재, `packages/actor/src/supervision/index.ts:1-3`에서 types, Supervisor, SupervisorTree를 re-export
-
-### [PASS] 항목 2: SupervisorTree 테스트 파일 존재
-- **동의 모델**: Opus, Codex, GLM, Gemini (4/4)
-- **근거**: `packages/actor/src/supervision/__tests__/SupervisorTree.test.ts` 파일이 존재하며, createRoot, createChild, remove, shutdown, printTree에 대한 테스트 포함
-
-### [PASS] 항목 3: handleFailure 재귀 호출 무한 루프 방지
-- **동의 모델**: Opus, Codex, GLM, Gemini (4/4)
-- **근거**: `Supervisor.ts:258-266`에서 `restartCounts`와 `maxRestarts` 비교를 통한 가드 구현. 타임스탬프 기반 윈도우 체크(`decideRestart`)가 이중 안전장치로 작동
-
-### [PASS] 항목 4: REST_FOR_ONE 전략 및 추가 백오프 정책 테스트
-- **동의 모델**: Opus, Codex, GLM, Gemini (4/4)
-- **근거**: 
-  - REST_FOR_ONE: `Supervisor.test.ts:205-231`
-  - FIXED: `Supervisor.test.ts:235-257`
-  - EXPONENTIAL: `Supervisor.test.ts:259-285`
-  - LINEAR: `Supervisor.test.ts:287-312`
-  - EXPONENTIAL_JITTER: `Supervisor.test.ts:314-341`
-
-### [PASS] 항목 5: Dead Letter Queue 테스트 어설션 개선
-- **동의 모델**: Opus, Codex, GLM, Gemini (4/4)
-- **근거**: `Supervisor.test.ts:345-399`에서 `toBeGreaterThanOrEqual(1)`, actorId/error/timestamp/retryCount 필드 검증 등 의미 있는 어설션으로 개선됨
+없음. 4개 모델 모두 이슈를 발견하지 않았습니다.
 
 ## 기각된 이슈
 
-**없음** — 어떤 모델도 FAIL 이슈나 추가 문제점을 제기하지 않았습니다.
+없음. 제기된 이슈 자체가 없습니다.
+
+## 세부 검증 내역
+
+### 항목1: 통합 테스트 파일 3개 존재 여부
+- **판정**: PASS (4/4 동의)
+- **근거**: `lifecycle.test.ts`(385줄), `pool.test.ts`(428줄), `supervision.test.ts`(471줄) 모두 `packages/actor/src/__tests__/integration/` 디렉토리에 존재하며 충실한 테스트 구현 포함
+
+### 항목2: TestActor 헬퍼 구현
+- **판정**: PASS (4/4 동의)
+- **근거**: `packages/actor/src/__tests__/helpers/TestActor.ts`(217줄)에 `TestActorConfig` 인터페이스 포함, `failureRate`/`executionTime`/`maxExecutions` 설정 지원, `Actor` 인터페이스 완전 구현
+
+### 항목3: TestActorFactory 헬퍼 구현
+- **판정**: PASS (4/4 동의)
+- **근거**: `packages/actor/src/__tests__/helpers/TestActorFactory.ts`(37줄)에 `ActorFactory` 인터페이스 구현, 헬퍼 메서드 포함
+
+### 항목4: index.ts 내보내기 스펙 일치
+- **판정**: PASS (4/4 동의)
+- **근거**: `MockBlackboard`, `TestActor`, `TestActorConfig`, `TestActorFactory` 모두 내보내기 됨. `type TestActorConfig`은 TypeScript 모범 사례에 따른 개선으로 실질적 불일치 아님
+
+### 항목5: Event Subscription 테스트 존재
+- **판정**: PASS (4/4 동의)
+- **근거**: `blackboard.test.ts` 라인 252-274에 `describe("Event Subscription")` 블록 존재, 구독/해제 테스트 2건 포함
+
+### 항목6: MockActor any 타입 미사용
+- **판정**: PASS (4/4 동의)
+- **근거**: `blackboard.test.ts` 전체에서 `any` 키워드 0건. 모든 프로퍼티와 메서드가 구체적 타입(`string`, `ActorRole`, `IBlackboard`, `Action`, `Result`, `Observation` 등) 사용
 
 ## Fixer 지시사항
 
-수정할 P0/P1 이슈가 없습니다. 모든 체크리스트 항목이 통과되었으므로 추가 수정이 필요하지 않습니다.
+수정할 이슈가 없습니다. 모든 체크리스트 항목이 통과되었으며, P0/P1/P2 이슈가 발견되지 않았습니다.

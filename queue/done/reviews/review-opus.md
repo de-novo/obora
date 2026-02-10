@@ -1,28 +1,59 @@
 
 
-I'll verify each checklist item by examining the actual code. Let me start by finding the relevant files.
-Now let me verify each checklist item by reading the specific files in detail.
-Now I have all the information needed to verify each checklist item. Let me compile the results.
+I'll verify each checklist item by examining the actual files in the repository. Let me start by searching for the relevant files.
+Now let me read the actual content of the key files to verify each checklist item in detail.
+Now let me read the helper files and index files to verify the remaining checklist items:
+Now I have all the information needed. Let me also verify the `any` type issue in the blackboard.test.ts MockActor more carefully:
+No `any` usage found. Let me also verify the spec's expected exports match by checking the exact spec requirement for `index.ts`:
+
+The spec says:
+```typescript
+// Test helpers
+export { MockBlackboard } from './helpers/MockBlackboard';
+export { TestActor, TestActorConfig } from './helpers/TestActor';
+export { TestActorFactory } from './helpers/TestActorFactory';
+```
+
+The actual `__tests__/index.ts`:
+```typescript
+export { MockBlackboard } from "./helpers/MockBlackboard";
+export { TestActor, type TestActorConfig } from "./helpers/TestActor";
+export { TestActorFactory } from "./helpers/TestActorFactory";
+```
+
+The difference is `type TestActorConfig` vs plain `TestActorConfig`. This is actually an improvement (proper type-only export), not a mismatch — all three names are exported.
+
+Now I have everything I need. Here are my findings:
+
+---
 
 # 체크리스트 검증 결과
 
 ## 항목별 결과
 
-- **[PASS] 1. supervision 모듈이 패키지 공개 API에서 내보내지 않음**
-  - 근거: `packages/actor/src/index.ts:12`에 `export * from "./supervision";` 이 존재하며, `packages/actor/src/supervision/index.ts:1-3`에서 types, Supervisor, SupervisorTree를 모두 re-export하고 있음. 이슈가 수정됨.
+- **[PASS]** 항목1: 통합 테스트 파일 3개 누락 (lifecycle.test.ts, pool.test.ts, supervision.test.ts)
+  - 근거: 세 파일 모두 존재하며 충실한 테스트 구현이 포함됨
+    - `packages/actor/src/__tests__/integration/lifecycle.test.ts` (385줄)
+    - `packages/actor/src/__tests__/integration/pool.test.ts` (428줄)
+    - `packages/actor/src/__tests__/integration/supervision.test.ts` (471줄)
 
-- **[PASS] 2. SupervisorTree 테스트 파일 누락**
-  - 근거: `packages/actor/src/supervision/__tests__/SupervisorTree.test.ts` 파일이 존재하며, 97줄에 걸쳐 createRoot, createChild, remove, shutdown, printTree에 대한 10개 테스트를 포함하고 있음. 이슈가 수정됨.
+- **[PASS]** 항목2: TestActor 헬퍼 미구현
+  - 근거: `packages/actor/src/__tests__/helpers/TestActor.ts` (217줄) — `TestActorConfig` 인터페이스 포함, `failureRate`/`executionTime`/`maxExecutions` 설정 지원, `Actor` 인터페이스 완전 구현 (observe, think, act, report, start, stop, restart, receive, getStatus, isAlive)
 
-- **[PASS] 3. handleFailure 재귀 호출 시 무한 루프 위험**
-  - 근거: `packages/actor/src/supervision/Supervisor.ts:258-266`에서 재시작 실패 시 `this.restartCounts.get(actorId)` 값을 확인하여 `maxRestarts` 이상이면 `performStop`을 호출하고 재귀를 중단함. `handleFailure`를 다시 호출하는 경로(라인 265)에 도달하더라도 `decideRestart`(라인 200)에서 타임스탬프 기반 윈도우 체크가 STOP을 반환하므로, 이중 안전장치가 적용됨. 이슈가 수정됨.
+- **[PASS]** 항목3: TestActorFactory 헬퍼 미구현
+  - 근거: `packages/actor/src/__tests__/helpers/TestActorFactory.ts` (37줄) — `ActorFactory` 인터페이스 구현, `getCreatedActors()`, `clearCreatedActors()`, `setActorConfig()` 헬퍼 메서드 포함
 
-- **[PASS] 4. REST_FOR_ONE 전략 및 추가 백오프 정책 테스트 누락**
-  - 근거: `packages/actor/src/supervision/__tests__/Supervisor.test.ts:205-231`에 REST_FOR_ONE 전략 테스트가 추가되어 actor-2 실패 시 actor-1은 재시작되지 않고, actor-2와 actor-3만 재시작되는 것을 검증함. 백오프 정책 테스트도 FIXED(라인 235-257), EXPONENTIAL(라인 259-285), LINEAR(라인 287-312), EXPONENTIAL_JITTER(라인 314-341) 4가지 모두 구현됨. 이슈가 수정됨.
+- **[PASS]** 항목4: 테스트 헬퍼 내보내기 index.ts가 스펙과 불일치
+  - 근거: `packages/actor/src/__tests__/index.ts:1-3` — 스펙과 동일하게 `MockBlackboard`, `TestActor`, `TestActorConfig`, `TestActorFactory` 모두 내보내기 됨. `type TestActorConfig`은 TypeScript 모범 사례에 따른 개선으로, 실질적 불일치 아님
 
-- **[PASS] 5. Dead Letter Queue 테스트의 무의미한 어설션**
-  - 근거: `packages/actor/src/supervision/__tests__/Supervisor.test.ts:345-399`에서 기존의 `toBeGreaterThanOrEqual(0)` 같은 무의미한 어설션이 제거되고, `toBeGreaterThanOrEqual(1)`(라인 365), `deadLetterHandler` 호출 확인(라인 368), dead letter 객체의 핵심 필드 검증(actorId, error, timestamp, retryCount — 라인 371-375)이 추가됨. 두 번째 테스트(라인 378-399)도 먼저 dead letter를 추가한 뒤 비우는 방식으로 의미 있게 변경됨. 이슈가 수정됨.
+- **[PASS]** 항목5: blackboard.test.ts에서 Event Subscription 테스트 누락
+  - 근거: `packages/actor/src/__tests__/integration/blackboard.test.ts:252-273` — `describe("Event Subscription")` 블록에 두 개의 테스트 존재:
+    - `"should receive blackboard events"` (라인 253-259)
+    - `"should unsubscribe from events"` (라인 262-273)
+
+- **[PASS]** 항목6: blackboard.test.ts의 MockActor에서 `any` 타입 남용
+  - 근거: `packages/actor/src/__tests__/integration/blackboard.test.ts` 전체에서 `any` 키워드 0건. `MockActor`의 모든 프로퍼티와 메서드가 구체적 타입 사용 (`string`, `ActorRole`, `IBlackboard`, `IMessageBus`, `Action`, `Result`, `Observation` 등). `id: string` 및 `status` 내부 필드도 명시적 타입으로 선언됨 (라인 17-47)
 
 ## 점수
-- 통과: 5/5
+- 통과: 6/6
 - **총점: 10/10**

@@ -1,14 +1,15 @@
 # Checklist Verification Result
 
 ## Item Results
-- [PASS] Item1: `packages/actor/src/index.ts:8-12` (exports include `./supervision`)
-- [PASS] Item2: `packages/actor/src/supervision/__tests__/SupervisorTree.test.ts:1-96`
-- [PASS] Item3: `packages/actor/src/supervision/Supervisor.ts:258-266` (guards retry by maxRestarts and stops)
-- [PASS] Item4: `packages/actor/src/supervision/__tests__/Supervisor.test.ts:205-231` (REST_FOR_ONE), `packages/actor/src/supervision/__tests__/Supervisor.test.ts:234-341` (backoff policies)
-- [PASS] Item5: `packages/actor/src/supervision/__tests__/Supervisor.test.ts:344-376` (non-trivial assertions on dead letters)
+- [PASS] Item1: Integration test files present (packages/actor/src/__tests__/integration/lifecycle.test.ts:1; packages/actor/src/__tests__/integration/pool.test.ts:1; packages/actor/src/__tests__/integration/supervision.test.ts:1)
+- [PASS] Item2: TestActor helper implemented (packages/actor/src/__tests__/helpers/TestActor.ts:14)
+- [PASS] Item3: TestActorFactory helper implemented (packages/actor/src/__tests__/helpers/TestActorFactory.ts:9)
+- [PASS] Item4: Test helpers exported per spec (packages/actor/src/__tests__/index.ts:1)
+- [PASS] Item5: Event Subscription tests present (packages/actor/src/__tests__/integration/blackboard.test.ts:52)
+- [PASS] Item6: MockActor uses typed fields, no `any` (packages/actor/src/__tests__/integration/blackboard.test.ts:17)
 
 ## Score
-- Passed: 5/5
+- Passed: 6/6
 - **Total: 10/10**
 
 ## Fix for FAIL Items

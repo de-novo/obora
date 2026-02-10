@@ -1,13 +1,13 @@
-I'll verify each checklist item by examining the actual source code. Let me search for the relevant files.
 # 체크리스트 검증 결과
 
 ## 항목별 결과
-- [PASS] 항목1: supervision 모듈이 packages/actor/src/index.ts:12에서 `export * from "./supervision";`로 내보내짐
-- [PASS] 항목2: SupervisorTree 테스트 파일이 packages/actor/src/supervision/__tests__/SupervisorTree.test.ts에 존재함
-- [PASS] 항목3: handleFailure 재귀 호출에 maxRestarts 기반 가드 추가됨 (Supervisor.ts:258-267)
-- [PASS] 항목4: REST_FOR_ONE 테스트(205-231행), LINEAR 백오프 테스트(287-312행), EXPONENTIAL_JITTER 백오프 테스트(314-341행) 존재
-- [PASS] 항목5: Dead Letter Queue 테스트에 actorId, error, timestamp, retryCount 등 의미 있는 어설션 추가됨 (Supervisor.test.ts:370-375)
+- [PASS] 항목1: 모든 통합 테스트 파일 존재함 (lifecycle.test.ts, pool.test.ts, supervision.test.ts)
+- [PASS] 항목2: TestActor 헬퍼 구현됨 (packages/actor/src/__tests__/helpers/TestActor.ts)
+- [PASS] 항목3: TestActorFactory 헬퍼 구현됨 (packages/actor/src/__tests__/helpers/TestActorFactory.ts)
+- [PASS] 항목4: index.ts 내보내기 스펙과 일치함 (type TestActorConfig 형태로 호환 가능)
+- [PASS] 항목5: Event Subscription 테스트 존재함 (blackboard.test.ts:252-274)
+- [PASS] 항목6: MockActor에서 명시적 타입 사용됨, any 타입 남용 없음
 
 ## 점수
-- 통과: 5/5
+- 통과: 6/6
 - **총점: 10/10**
