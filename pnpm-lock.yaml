@@ -167,6 +167,10 @@ importers:
         version: 1.6.1(@types/node@22.19.8)
 
   packages/agents:
+    dependencies:
+      '@obora-kit/blackboard':
+        specifier: workspace:*
+        version: link:../blackboard
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
