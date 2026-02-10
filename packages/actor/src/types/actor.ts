@@ -28,20 +28,29 @@ export type ActorId = string & { readonly __brand: "ActorId" };
 export type TaskId = string & { readonly __brand: "TaskId" };
 
 /**
- * Actor 역할 타입
+ * Actor 역할 열거형
  * @description 액터가 수행하는 역할을 정의
  */
-export type ActorRole = "analyst" | "executor" | "verifier" | "director";
+export enum ActorRole {
+  /** 데이터 분석, 추론, 위험 평가 수행 */
+  ANALYST = "analyst",
+  /** API 호출, 파일 처리, 외부 작업 실행 */
+  EXECUTOR = "executor",
+  /** 결과 검증, 품질 체크, 오류 탐지 */
+  VERIFIER = "verifier",
+  /** 회의 진행, 투표 관리, 의사결정 조율 */
+  DIRECTOR = "director",
+}
 
 /**
  * Actor 역할 설명
  * @description 각 역할의 설명 정의
  */
 export const ActorRoleDescription: Record<ActorRole, string> = {
-  analyst: "데이터 분석, 추론, 위험 평가 수행",
-  executor: "API 호출, 파일 처리, 외부 작업 실행",
-  verifier: "결과 검증, 품질 체크, 오류 탐지",
-  director: "회의 진행, 투표 관리, 의사결정 조율",
+  [ActorRole.ANALYST]: "데이터 분석, 추론, 위험 평가 수행",
+  [ActorRole.EXECUTOR]: "API 호출, 파일 처리, 외부 작업 실행",
+  [ActorRole.VERIFIER]: "결과 검증, 품질 체크, 오류 탐지",
+  [ActorRole.DIRECTOR]: "회의 진행, 투표 관리, 의사결정 조율",
 };
 
 /**
@@ -49,10 +58,10 @@ export const ActorRoleDescription: Record<ActorRole, string> = {
  * @description 각 역할의 권한 레벨 정의
  */
 export const ActorRoleLevel: Record<ActorRole, number> = {
-  analyst: 1,
-  executor: 1,
-  verifier: 1,
-  director: 2,
+  [ActorRole.ANALYST]: 1,
+  [ActorRole.EXECUTOR]: 1,
+  [ActorRole.VERIFIER]: 1,
+  [ActorRole.DIRECTOR]: 2,
 };
 
 /**
@@ -293,8 +302,11 @@ export function isValidActorId(value: unknown): value is ActorId {
   if (typeof value !== "string") {
     return false;
   }
-  const pattern =
-    /^(analyst|executor|verifier|director)-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const rolePattern = Object.values(ActorRole).join("|");
+  const pattern = new RegExp(
+    `^(${rolePattern})-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`,
+    "i"
+  );
   return pattern.test(value);
 }
 
