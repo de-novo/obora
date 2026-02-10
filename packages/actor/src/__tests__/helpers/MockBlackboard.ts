@@ -1,11 +1,14 @@
+import { EventEmitter } from "events";
 import { IBlackboard } from "../../types/blackboard";
 
 export class MockBlackboard implements IBlackboard {
   private readonly data: Map<string, unknown>;
+  private readonly events: EventEmitter;
   readonly version: number = 1;
 
   constructor() {
     this.data = new Map();
+    this.events = new EventEmitter();
   }
 
   read(key: string): unknown | undefined {
@@ -14,6 +17,12 @@ export class MockBlackboard implements IBlackboard {
 
   write(key: string, value: unknown): void {
     this.data.set(key, value);
+    this.events.emit(`${key}.updated`, value);
+  }
+
+  subscribe(event: string, handler: (data: unknown) => void): () => void {
+    this.events.on(event, handler);
+    return () => this.events.off(event, handler);
   }
 
   delete(key: string): void {
