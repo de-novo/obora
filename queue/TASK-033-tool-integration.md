@@ -185,29 +185,34 @@ export interface ToolExecutionResult<TResult = unknown> {
 }
 
 /**
- * Function Calling 스키마 (LLM용, 스펙 14-ai-agents.md와 일치)
+ * Tool Definition (OpenAI 스타일 Tool Calling)
+ * LLMAdapter 타입과 일치 (packages/agents/src/llm/adapter.ts 참조)
  */
-export interface FunctionCallingSchema {
+export interface ToolDefinition {
   type: 'function';
   function: {
     name: string;
     description: string;
-    parameters: JSONSchema;  // 스펙과 일치하도록 JSONSchema 사용
+    parameters: Record<string, unknown>;
   };
 }
 
 /**
- * Function Definition (스펙 14-ai-agents.md와 일치)
- * 도구의 정의를 나타내는 기본 타입
+ * Tool Call (OpenAI 스타일 Tool Calling)
+ * LLMAdapter 타입과 일치 (packages/agents/src/llm/adapter.ts 참조)
  */
-export interface FunctionDefinition {
-  name: string;
-  description: string;
-  parameters: JSONSchema;
+export interface ToolCall {
+  id: string;
+  type: 'function';
+  function: {
+    name: string;
+    arguments: string;
+  };
 }
 
 /**
- * Function Calling 요청
+ * Function Call 요청 (레거시 호환성을 위해 유지)
+ * @deprecated ToolCall 사용 권장
  */
 export interface FunctionCallRequest {
   id: string;
@@ -234,7 +239,7 @@ import {
   Tool,
   ToolContext,
   ToolExecutionResult,
-  FunctionCallingSchema,
+  ToolDefinition,
 } from './types';
 
 /**
@@ -447,9 +452,10 @@ export class ToolRegistry {
   }
 
   /**
-   * Function Calling 스키마 생성
+   * Tool Definition 생성 (OpenAI 스타일 Tool Calling)
+   * chatCompletion의 params.tools로 전달
    */
-  toFunctionCallingSchema(names?: string[]): FunctionCallingSchema[] {
+  toToolDefinitions(names?: string[]): ToolDefinition[] {
     const toolNames = names ?? Array.from(this.tools.keys());
 
     return toolNames
@@ -460,9 +466,17 @@ export class ToolRegistry {
         function: {
           name: tool.name,
           description: tool.description,
-          parameters: tool.parameters,
+          parameters: tool.parameters as Record<string, unknown>,
         },
       }));
+  }
+
+  /**
+   * Function Calling 스키마 생성 (레거시 호환성)
+   * @deprecated toToolDefinitions 사용 권장
+   */
+  toFunctionCallingSchema(names?: string[]): ToolDefinition[] {
+    return this.toToolDefinitions(names);
   }
 
   /**
@@ -1097,14 +1111,14 @@ const result = await registry.execute(
 console.log(result.data); // "Hello, Alice!"
 ```
 
-### Function Calling 스키마 생성
+### Tool Definition 생성 (OpenAI 스타일 Tool Calling)
 ```typescript
-const schema = registry.toFunctionCallingSchema(['calculator', 'get_current_time']);
-// LLM에 전달할 도구 스키마
+const tools = registry.toToolDefinitions(['calculator', 'get_current_time']);
+// LLM chatCompletion의 params.tools로 전달
 
 const llmResult = await llm.chatCompletion({
   messages: [{ role: 'user', content: 'What is 15 * 7?' }],
-  tools: schema,
+  tools: tools,
   toolChoice: 'auto',
 });
 ```

@@ -381,17 +381,24 @@ export interface JSONSchema {
 
 /**
  * ChatMessage 타입 (스펙에서 참조)
+ * LLMAdapter 타입과 일치하도록 정의 (packages/agents/src/llm/adapter.ts 참조)
  */
 export type AgentRole = 'analyst' | 'executor' | 'verifier' | 'director';
 
-export interface ChatMessage {
-  role: 'system' | 'user' | 'assistant' | 'function';
-  content: string;
-  name?: string;
-  functionCall?: {
+export interface ToolCall {
+  id: string;
+  type: 'function';
+  function: {
     name: string;
     arguments: string;
   };
+}
+
+export interface ChatMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string;
+  toolCallId?: string;
+  toolCalls?: ToolCall[];
 }
 ```
 
