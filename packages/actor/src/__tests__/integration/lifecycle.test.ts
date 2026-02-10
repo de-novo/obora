@@ -1,140 +1,20 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { ActorRuntime } from "../../runtime/ActorRuntime";
-import { ActorRole, ActorLifecycleStatus, ActorStatus, ActorId } from "../../types/actor";
-import { createActorMetrics } from "../../types/metrics";
-import { createObservation } from "../../types/observation";
-import { createAction, createActionId } from "../../types/action";
-import { createSuccessResult } from "../../types/result";
-import { MockBlackboard } from "../helpers/MockBlackboard";
+import { ActorRole, ActorLifecycleStatus, ActorId } from "../../types/actor";
 import { createActorId } from "../../types/actor";
-import type { ActorFactory, ActorConfig } from "../../runtime/types";
-import type { IBlackboard } from "../../types/actor";
+import { MockBlackboard } from "../helpers/MockBlackboard";
+import { TestActorFactory } from "../helpers/TestActorFactory";
 import type { IMessageBus } from "../../types/message";
-import type { Actor } from "../../types/actor";
-import type { Observation } from "../../types/observation";
-import type { Action } from "../../types/action";
-import type { Result } from "../../types/result";
-import type { Message } from "../../types/message";
-
-class TestActor implements Actor {
-  readonly id: ActorId;
-  readonly name: string = "test";
-  readonly role: ActorRole;
-  board: IBlackboard;
-  messageBus: IMessageBus;
-  status: ActorStatus;
-  lastActivity: Date = new Date();
-  createdAt: Date = new Date();
-  metrics = createActorMetrics();
-
-  constructor(id: ActorId, role: ActorRole, board: IBlackboard, messageBus: IMessageBus) {
-    this.id = id;
-    this.role = role;
-    this.board = board;
-    this.messageBus = messageBus;
-    this.status = {
-      id: this.id,
-      name: "test",
-      role: this.role,
-      status: ActorLifecycleStatus.CREATED,
-      messageQueue: { pending: 0, processing: false },
-      metrics: {
-        totalMessagesProcessed: 0,
-        totalActionsExecuted: 0,
-        totalErrors: 0,
-        averageResponseTime: 0,
-        uptime: 0,
-      },
-      lastSeen: new Date(),
-      errorCount: 0,
-    };
-  }
-
-  observe(): Observation {
-    const stateData = this.board.read("state") as Record<string, unknown>;
-    return createObservation({
-      actorId: this.id,
-      state: stateData ? { context: stateData, agents: [], tasks: [] } : undefined,
-    });
-  }
-
-  think(observation: Observation): Action {
-    return createAction(this.id, "execute", {
-      section: "results",
-      data: { processed: observation.state?.context },
-    });
-  }
-
-  async act(action: Action): Promise<Result> {
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    const params = action.params as Record<string, unknown>;
-    if (params.section && params.data) {
-      this.board.write(params.section as string, params.data);
-    }
-    this.metrics.totalRuns++;
-    this.metrics.successCount++;
-    this.metrics.lastExecutionTime = 10;
-    this.metrics.totalExecutionTimeMs += 10;
-    this.metrics.updatedAt = new Date();
-    this.metrics.averageExecutionTime = this.metrics.totalExecutionTimeMs / this.metrics.totalRuns;
-    return createSuccessResult(action.id, this.id, { written: true }, 10);
-  }
-
-  async report(result: Result): Promise<void> {
-    this.status.metrics.totalActionsExecuted++;
-    if (result.toRecord) {
-      this.board.write(result.toRecord.section, result.toRecord.data);
-    }
-  }
-
-  async receive(message: Message): Promise<void> {
-    this.status.metrics.totalMessagesProcessed++;
-    this.lastActivity = new Date();
-  }
-
-  async start(): Promise<void> {
-    this.status.status = ActorLifecycleStatus.RUNNING;
-  }
-
-  async stop(): Promise<void> {
-    this.status.status = ActorLifecycleStatus.STOPPED;
-  }
-
-  async restart(): Promise<void> {
-    this.status.status = ActorLifecycleStatus.RESTARTING;
-    const oldMetrics = { ...this.metrics };
-    this.metrics = createActorMetrics();
-    this.metrics.updatedAt = new Date();
-    this.status.errorCount = 0;
-    this.status.status = ActorLifecycleStatus.RUNNING;
-  }
-
-  getStatus(): ActorStatus {
-    return this.status;
-  }
-
-  isAlive(): boolean {
-    return this.status.status === ActorLifecycleStatus.RUNNING;
-  }
-}
-
-class TestFactory implements ActorFactory {
-  async create(config: ActorConfig, board: IBlackboard, messageBus: IMessageBus): Promise<Actor> {
-    const actorId = config.id || createActorId(config.role);
-    const actor = new TestActor(actorId, config.role, board, messageBus);
-    return Promise.resolve(actor);
-  }
-}
 
 describe("Actor Lifecycle Integration", () => {
   let runtime: ActorRuntime;
   let board: MockBlackboard;
-  let factory: TestFactory;
+  let factory: TestActorFactory;
   let messageBus: IMessageBus;
 
   beforeEach(async () => {
     board = new MockBlackboard();
-    factory = new TestFactory();
+    factory = new TestActorFactory();
     messageBus = {
       send: vi.fn(),
       sendTo: vi.fn(),
@@ -219,7 +99,7 @@ describe("Actor Lifecycle Integration", () => {
       expect(obs.state?.context).toEqual({ input: "test-data" });
 
       const action = await actor.think(obs);
-      expect(action.type).toBe("execute");
+      expect(action.type).toBe("analyze");
 
       const result = await actor.act(action);
       expect(result.status).toBe("success");

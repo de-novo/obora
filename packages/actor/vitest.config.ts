@@ -5,13 +5,7 @@ export default defineConfig({
     globals: true,
     environment: "node",
     include: ["src/**/*.test.ts", "src/**/__tests__/**/*.ts"],
-    exclude: [
-      "node_modules",
-      "dist",
-      "**/src/__tests__/helpers/**",
-      "**/src/__tests__/setup.ts",
-      "**/src/__tests__/index.ts",
-    ],
+    exclude: ["node_modules", "dist", "**/src/__tests__/helpers/**", "**/src/__tests__/setup.ts"],
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],

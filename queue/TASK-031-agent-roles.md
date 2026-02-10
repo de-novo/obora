@@ -183,8 +183,8 @@ export abstract class BaseAgent {
    * 관찰 - Blackboard에서 정보 수집
    */
   protected async observe(context: AgentContext): Promise<Record<string, unknown>> {
-    const state = context.board.read('state', {}) as Record<string, unknown>;
-    const knowledge = context.board.read('knowledge', {}) as Record<string, unknown>;
+    const state = context.board.read('state') as Record<string, unknown>;
+    const knowledge = context.board.read('knowledge') as Record<string, unknown>;
 
     return {
       currentState: state,
@@ -227,12 +227,10 @@ export abstract class BaseAgent {
     result: unknown,
     context: AgentContext
   ): Promise<void> {
-    context.board.write('state', {
-      [`agent.${this.id}.lastResult`]: {
-        taskId: task.id,
-        timestamp: new Date(),
-        result,
-      },
+    context.board.write(`state.agent.${this.id}.lastResult`, {
+      taskId: task.id,
+      timestamp: new Date(),
+      result,
     });
   }
 
@@ -541,12 +539,10 @@ Be thorough, objective, and analytical in your approach.`;
     const analysis = action as AnalysisResult;
 
     // 분석 결과를 지식 베이스에 저장
-    context.board.write('knowledge', {
-      [`analysis.${this.id}.${Date.now()}`]: analysis,
-    });
+    context.board.write(`knowledge.analysis.${this.id}.${Date.now()}`, analysis);
 
     // 이벤트 발행
-    context.board.events.emit('analysis.completed', {
+    context.board.emit('analysis.completed', {
       agentId: this.id,
       result: analysis,
     });
@@ -657,12 +653,10 @@ Be precise, efficient, and safety-conscious in your execution.`;
       );
 
       // 실행 결과를 상태에 저장
-      context.board.write('state', {
-        [`execution.${this.id}.${Date.now()}`]: {
-          plan,
-          result,
-          timestamp: new Date(),
-        },
+      context.board.write(`state.execution.${this.id}.${Date.now()}`, {
+        plan,
+        result,
+        timestamp: new Date(),
       });
 
       return result;
@@ -676,9 +670,7 @@ Be precise, efficient, and safety-conscious in your execution.`;
       timestamp: new Date(),
     };
 
-    context.board.write('state', {
-      [`execution.${this.id}.${Date.now()}`]: result,
-    });
+    context.board.write(`state.execution.${this.id}.${Date.now()}`, result);
 
     return result;
   }
@@ -775,19 +767,17 @@ Be thorough, objective, and constructive in your verification.`;
     const verification = action as VerifierOutput;
 
     // 검증 결과를 지식 베이스에 저장
-    context.board.write('knowledge', {
-      [`verification.${this.id}.${Date.now()}`]: verification,
-    });
+    context.board.write(`knowledge.verification.${this.id}.${Date.now()}`, verification);
 
     // 이벤트 발행
-    context.board.events.emit('verification.completed', {
+    context.board.emit('verification.completed', {
       agentId: this.id,
       result: verification,
     });
 
     // Critical 이슈가 있는 경우 경고 이벤트
     if (verification.findings.some(f => f.severity === 'critical')) {
-      context.board.events.emit('verification.critical', {
+      context.board.emit('verification.critical', {
         agentId: this.id,
         findings: verification.findings.filter(f => f.severity === 'critical'),
       });
@@ -895,12 +885,10 @@ Be diplomatic, organized, and results-oriented in your coordination.`;
     const plan = action as DirectorOutput;
 
     // 조율 계획을 결정 섹션에 저장
-    context.board.write('decisions', {
-      [`coordination.${this.id}.${Date.now()}`]: plan,
-    });
+    context.board.write(`decisions.coordination.${this.id}.${Date.now()}`, plan);
 
     // 이벤트 발행
-    context.board.events.emit('coordination.started', {
+    context.board.emit('coordination.started', {
       agentId: this.id,
       plan,
     });
@@ -940,16 +928,14 @@ Be diplomatic, organized, and results-oriented in your coordination.`;
     participants: string[],
     context: AgentContext
   ): Promise<void> {
-    context.board.write('decisions', {
-      [`voting.${agendaId}`]: {
-        started: new Date(),
-        participants,
-        votes: {},
-        status: 'in-progress',
-      },
+    context.board.write(`decisions.voting.${agendaId}`, {
+      started: new Date(),
+      participants,
+      votes: {},
+      status: 'in-progress',
     });
 
-    context.board.events.emit('voting.started', {
+    context.board.emit('voting.started', {
       agendaId,
       participants,
     });
@@ -962,7 +948,7 @@ Be diplomatic, organized, and results-oriented in your coordination.`;
     agendaId: string,
     context: AgentContext
   ): Promise<Record<string, number>> {
-    const voting = context.board.read('decisions', {}) as Record<string, unknown>;
+    const voting = context.board.read('decisions') as Record<string, unknown>;
     const session = voting[`voting.${agendaId}`] as Record<string, unknown>;
 
     if (!session || (session.status as string) !== 'completed') {

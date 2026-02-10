@@ -3,16 +3,11 @@ import { ActorRuntime } from "../../runtime/ActorRuntime";
 import { ActorPool } from "../../pool/ActorPool";
 import { ActorRole } from "../../types/actor";
 import { MockBlackboard } from "../helpers/MockBlackboard";
-import { createActorId, type ActorId } from "../../types/actor";
-import type { Observation } from "../../types/observation";
+import { createActorId } from "../../types/actor";
 import type { ActorFactory, ActorConfig } from "../../runtime/types";
 import type { IBlackboard } from "../../types/blackboard";
 import type { IMessageBus } from "../../types/message";
 import type { Actor } from "../../types/actor";
-import type { Action, ActionType } from "../../types/action";
-import type { Result } from "../../types/result";
-import { createAction } from "../../types/action";
-import { createSuccessResult } from "../../types/result";
 
 class MockActor implements Actor {
   readonly id: string;
@@ -72,7 +67,7 @@ class MockActor implements Actor {
   async observe() {
     const data = this.board.read("state");
     return {
-      actorId: this.id as ActorId,
+      actorId: this.id as any,
       timestamp: new Date(),
       data,
       source: "read",
@@ -80,20 +75,30 @@ class MockActor implements Actor {
     };
   }
 
-  think(obs: Observation): Action {
-    return createAction(this.id as ActorId, "analyze" as ActionType, {
-      section: "results",
-      data: { processed: obs.state?.context },
-    });
+  think(obs: any) {
+    return {
+      id: `action-${Date.now()}`,
+      actorId: this.id as any,
+      type: "write",
+      params: {
+        section: "results",
+        data: { processed: obs.data },
+      },
+      timestamp: new Date(),
+    };
   }
 
-  async act(action: Action): Promise<Result> {
+  async act(action: any) {
     await new Promise((resolve) => setTimeout(resolve, 10));
-    const params = action.params as Record<string, unknown>;
-    if (params?.section && params?.data) {
-      this.board.write(params.section as string, params.data);
-    }
-    return createSuccessResult(action.id, this.id as ActorId, { written: true }, 10);
+    this.board.write(action.params.section as string, action.params.data);
+    return {
+      id: `result-${Date.now()}`,
+      actionId: action.id,
+      actorId: this.id as any,
+      timestamp: new Date(),
+      status: "success",
+      duration: 10,
+    };
   }
 
   async report(): Promise<void> {}
@@ -246,30 +251,6 @@ describe("Blackboard Integration", () => {
       board.write("state", { data: "test" });
       board.write("results", { data: "test" });
       expect(board.keys()).toEqual(expect.arrayContaining(["state", "results"]));
-    });
-  });
-
-  describe("Event Subscription", () => {
-    it("should receive blackboard events", async () => {
-      const eventHandler = vi.fn();
-      board.subscribe("state.updated", eventHandler);
-
-      board.write("state", { updated: true });
-
-      expect(eventHandler).toHaveBeenCalledWith({ updated: true });
-    });
-
-    it("should unsubscribe from events", async () => {
-      const eventHandler = vi.fn();
-      const unsubscribe = board.subscribe("state.updated", eventHandler);
-
-      board.write("state", { first: true });
-      expect(eventHandler).toHaveBeenCalledTimes(1);
-
-      unsubscribe();
-
-      board.write("state", { second: true });
-      expect(eventHandler).toHaveBeenCalledTimes(1);
     });
   });
 

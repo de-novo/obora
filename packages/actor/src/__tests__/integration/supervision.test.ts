@@ -3,170 +3,22 @@ import { Supervisor } from "../../supervision/Supervisor";
 import { SupervisorTree } from "../../supervision/SupervisorTree";
 import { RestartStrategy, BackoffPolicy } from "../../supervision/types";
 import { ActorRuntime } from "../../runtime/ActorRuntime";
-import { ActorRole, ActorLifecycleStatus, ActorId } from "../../types/actor";
-import { MockBlackboard } from "../helpers/MockBlackboard";
-import type { ActorFactory, ActorConfig } from "../../runtime/types";
-import type { IBlackboard } from "../../types/actor";
-import type { IMessageBus } from "../../types/message";
-import type { Actor } from "../../types/actor";
-import type { Observation } from "../../types/observation";
-import type { Action } from "../../types/action";
-import type { Result } from "../../types/result";
-import type { Message } from "../../types/message";
-import { createActorMetrics } from "../../types/metrics";
-import { createObservation } from "../../types/observation";
-import { createAction, createActionId } from "../../types/action";
-import { createSuccessResult } from "../../types/result";
+import { ActorId } from "../../types/actor";
 import { createActorId } from "../../types/actor";
-
-class TestActor implements Actor {
-  readonly id: ActorId;
-  readonly name: string = "test";
-  readonly role: ActorRole;
-  board: IBlackboard;
-  messageBus: IMessageBus;
-  status: {
-    id: ActorId;
-    name: string;
-    role: ActorRole;
-    status: ActorLifecycleStatus;
-    messageQueue: { pending: number; processing: boolean };
-    metrics: {
-      totalMessagesProcessed: number;
-      totalActionsExecuted: number;
-      totalErrors: number;
-      averageResponseTime: number;
-      uptime: number;
-    };
-    lastSeen: Date;
-    errorCount: number;
-  };
-  lastActivity: Date = new Date();
-  createdAt: Date = new Date();
-  metrics = createActorMetrics();
-
-  private shouldFail: boolean = false;
-  private failureCount: number = 0;
-
-  constructor(id: ActorId, role: ActorRole, board: IBlackboard, messageBus: IMessageBus) {
-    this.id = id;
-    this.role = role;
-    this.board = board;
-    this.messageBus = messageBus;
-    this.status = {
-      id: this.id,
-      name: "test",
-      role: this.role,
-      status: ActorLifecycleStatus.RUNNING,
-      messageQueue: { pending: 0, processing: false },
-      metrics: {
-        totalMessagesProcessed: 0,
-        totalActionsExecuted: 0,
-        totalErrors: 0,
-        averageResponseTime: 0,
-        uptime: 0,
-      },
-      lastSeen: new Date(),
-      errorCount: 0,
-    };
-  }
-
-  setFailureMode(shouldFail: boolean): void {
-    this.shouldFail = shouldFail;
-  }
-
-  getFailureCount(): number {
-    return this.failureCount;
-  }
-
-  observe(): Observation {
-    return createObservation({
-      actorId: this.id,
-    });
-  }
-
-  think(observation: Observation): Action {
-    return createAction(this.id, "execute", {});
-  }
-
-  async act(action: Action): Promise<Result> {
-    await new Promise((resolve) => setTimeout(resolve, 10));
-
-    if (this.shouldFail) {
-      this.failureCount++;
-      throw new Error("Simulated failure");
-    }
-
-    this.metrics.totalRuns++;
-    this.metrics.successCount++;
-    this.metrics.lastExecutionTime = 10;
-    this.metrics.totalExecutionTimeMs += 10;
-    this.metrics.updatedAt = new Date();
-    this.metrics.averageExecutionTime = this.metrics.totalExecutionTimeMs / this.metrics.totalRuns;
-    return createSuccessResult(action.id, this.id, { processed: true }, 10);
-  }
-
-  async report(result: Result): Promise<void> {
-    this.status.metrics.totalActionsExecuted++;
-  }
-
-  async receive(message: Message): Promise<void> {
-    this.status.metrics.totalMessagesProcessed++;
-  }
-
-  async start(): Promise<void> {
-    this.status.status = ActorLifecycleStatus.RUNNING;
-  }
-
-  async stop(): Promise<void> {
-    this.status.status = ActorLifecycleStatus.STOPPED;
-  }
-
-  async restart(): Promise<void> {
-    this.status.status = ActorLifecycleStatus.RESTARTING;
-    this.metrics = createActorMetrics();
-    this.status.errorCount = 0;
-    this.status.status = ActorLifecycleStatus.RUNNING;
-  }
-
-  getStatus() {
-    return this.status;
-  }
-
-  isAlive(): boolean {
-    return this.status.status === ActorLifecycleStatus.RUNNING;
-  }
-}
-
-class TestFactory implements ActorFactory {
-  private readonly createdActors: Map<ActorId, TestActor> = new Map();
-
-  async create(config: ActorConfig, board: IBlackboard, messageBus: IMessageBus): Promise<Actor> {
-    const actorId = config.id || createActorId(config.role);
-    const actor = new TestActor(actorId, config.role, board, messageBus);
-    this.createdActors.set(actorId, actor);
-    return Promise.resolve(actor);
-  }
-
-  getActor(actorId: ActorId): TestActor | undefined {
-    return this.createdActors.get(actorId);
-  }
-
-  clear(): void {
-    this.createdActors.clear();
-  }
-}
+import { MockBlackboard } from "../helpers/MockBlackboard";
+import { TestActorFactory } from "../helpers/TestActorFactory";
+import type { IMessageBus } from "../../types/message";
 
 describe("Supervision Integration", () => {
   let runtime: ActorRuntime;
   let supervisor: Supervisor;
   let board: MockBlackboard;
-  let factory: TestFactory;
+  let factory: TestActorFactory;
   let messageBus: IMessageBus;
 
   beforeEach(async () => {
     board = new MockBlackboard();
-    factory = new TestFactory();
+    factory = new TestActorFactory();
     messageBus = {
       send: vi.fn(),
       sendTo: vi.fn(),
@@ -200,7 +52,7 @@ describe("Supervision Integration", () => {
     supervisor.stop();
     await runtime.stop();
     board.clear();
-    factory.clear();
+    factory.clearCreatedActors();
   });
 
   describe("Failure Handling", () => {
@@ -400,12 +252,12 @@ describe("Supervisor Tree Integration", () => {
   let tree: SupervisorTree;
   let runtime: ActorRuntime;
   let board: MockBlackboard;
-  let factory: TestFactory;
+  let factory: TestActorFactory;
   let messageBus: IMessageBus;
 
   beforeEach(async () => {
     board = new MockBlackboard();
-    factory = new TestFactory();
+    factory = new TestActorFactory();
     messageBus = {
       send: vi.fn(),
       sendTo: vi.fn(),
@@ -426,7 +278,7 @@ describe("Supervisor Tree Integration", () => {
     tree.shutdown();
     await runtime.stop();
     board.clear();
-    factory.clear();
+    factory.clearCreatedActors();
   });
 
   it("should create hierarchical supervision", async () => {

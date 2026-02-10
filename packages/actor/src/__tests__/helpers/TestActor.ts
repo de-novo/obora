@@ -32,6 +32,8 @@ export class TestActor implements Actor {
   private executionCount = 0;
   private currentLifecycleStatus: ActorLifecycleStatus = ActorLifecycleStatus.CREATED;
   private subscriptions: Array<() => void> = [];
+  private shouldFail: boolean = false;
+  private failureCount: number = 0;
 
   constructor(
     id: ActorId,
@@ -91,6 +93,14 @@ export class TestActor implements Actor {
     this.executionCount = 0;
   }
 
+  setFailureMode(shouldFail: boolean): void {
+    this.shouldFail = shouldFail;
+  }
+
+  getFailureCount(): number {
+    return this.failureCount;
+  }
+
   async observe(): Promise<Observation> {
     const data = this.board.read("state");
     this.updateStatus(ActorLifecycleStatus.RUNNING);
@@ -118,6 +128,11 @@ export class TestActor implements Actor {
   async act(action: Action): Promise<Result> {
     this.executionCount++;
     this.lastActivity = new Date();
+
+    if (this.shouldFail) {
+      this.failureCount++;
+      throw new Error("Simulated failure");
+    }
 
     if (this.executionCount > this.config.maxExecutions) {
       this.updateStatus(ActorLifecycleStatus.ERROR);
@@ -181,6 +196,7 @@ export class TestActor implements Actor {
   async restart(): Promise<void> {
     this.updateStatus(ActorLifecycleStatus.RESTARTING);
     this.resetExecutionCount();
+    this.failureCount = 0;
     await this.delay(1);
     this.updateStatus(ActorLifecycleStatus.RUNNING);
   }
