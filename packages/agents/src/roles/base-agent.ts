@@ -114,6 +114,18 @@ export abstract class BaseAgent {
    * 작업 실행
    */
   async execute(task: Task, context: AgentContext): Promise<TaskResult> {
+    if (this.hasExceededMaxErrors()) {
+      this.state = AgentState.ERROR;
+      return {
+        taskId: task.id,
+        success: false,
+        output: null,
+        error: new Error(`Agent ${this.id} has exceeded maximum error count (${this.maxErrors})`),
+        duration: 0,
+        tokensUsed: { prompt: 0, completion: 0, total: 0 },
+      };
+    }
+
     const startTime = Date.now();
     this.state = AgentState.THINKING;
 
@@ -211,7 +223,7 @@ export abstract class BaseAgent {
    * 보고 - 결과를 Blackboard에 기록
    */
   protected async report(task: Task, result: unknown, context: AgentContext): Promise<void> {
-    context.board.write(`state.context.agent_${this.id}_lastResult`, {
+    context.board.write(`state.context.agent.${this.id}.lastResult`, {
       taskId: task.id,
       timestamp: new Date(),
       result,

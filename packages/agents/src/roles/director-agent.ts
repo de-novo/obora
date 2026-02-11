@@ -64,7 +64,7 @@ Be diplomatic, organized, and results-oriented in your coordination.`;
     const plan = action as DirectorOutput;
 
     // 조율 계획을 결정 섹션에 저장
-    context.board.write(`state.context.coordination_${this.id}_${Date.now()}`, plan);
+    context.board.write(`decisions.coordination.${this.id}.${Date.now()}`, plan);
 
     // 이벤트 발행
     context.board.emit("coordination.started", {

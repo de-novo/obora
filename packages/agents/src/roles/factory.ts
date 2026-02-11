@@ -55,7 +55,15 @@ export function createAgentTeam(
     toolRegistry: config.toolRegistry,
   };
 
-  const count = config.analysts ?? 1;
+  const hasAnyRoleSpecified =
+    config.analysts !== undefined ||
+    config.executors !== undefined ||
+    config.verifiers !== undefined ||
+    config.directors !== undefined;
+
+  const defaultCount = hasAnyRoleSpecified ? 0 : 1;
+
+  const count = config.analysts ?? defaultCount;
   for (let i = 0; i < count; i++) {
     agents.push(
       createAgent({
@@ -66,7 +74,7 @@ export function createAgentTeam(
     );
   }
 
-  const executorCount = config.executors ?? 1;
+  const executorCount = config.executors ?? defaultCount;
   for (let i = 0; i < executorCount; i++) {
     agents.push(
       createAgent({
@@ -77,7 +85,7 @@ export function createAgentTeam(
     );
   }
 
-  const verifierCount = config.verifiers ?? 1;
+  const verifierCount = config.verifiers ?? defaultCount;
   for (let i = 0; i < verifierCount; i++) {
     agents.push(
       createAgent({
@@ -88,7 +96,7 @@ export function createAgentTeam(
     );
   }
 
-  const directorCount = config.directors ?? 1;
+  const directorCount = config.directors ?? defaultCount;
   for (let i = 0; i < directorCount; i++) {
     agents.push(
       createAgent({

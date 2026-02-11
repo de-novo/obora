@@ -23,11 +23,31 @@ export class MockLLMAdapter implements LLMAdapter {
     await new Promise((resolve) => setTimeout(resolve, 100));
 
     const lastUserMessage = params.messages.filter((m) => m.role === "user").pop();
-    const key = lastUserMessage?.content ?? "default";
+    const messageContent = lastUserMessage?.content ?? "";
+
+    // 1. 정확한 키 매칭 시도
+    let matchedKey: string | undefined = undefined;
+    if (messageContent in this.responses) {
+      matchedKey = messageContent;
+    } else {
+      // 2. 부분 문자열 매칭 시도 (등록된 키가 메시지에 포함되어 있는지)
+      for (const registeredKey of Object.keys(this.responses)) {
+        if (registeredKey && messageContent.includes(registeredKey)) {
+          matchedKey = registeredKey;
+          break;
+        }
+      }
+      // 3. 빈 문자열 키를 기본 폴백으로 사용
+      if (matchedKey === undefined && "" in this.responses) {
+        matchedKey = "";
+      }
+    }
+
+    const selected = matchedKey !== undefined ? this.responses[matchedKey] : undefined;
     const content =
-      typeof this.responses[key] === "function"
-        ? (this.responses[key] as (p: ChatCompletionParams) => string)(params)
-        : (this.responses[key] ?? `Mock response to: ${key}`);
+      typeof selected === "function"
+        ? (selected as (p: ChatCompletionParams) => string)(params)
+        : (selected ?? `Mock response to: ${messageContent || "default"}`);
 
     return {
       id: `mock-${Date.now()}`,

@@ -50,7 +50,7 @@ Be thorough, objective, and constructive in your verification.`;
     const verification = action as VerifierOutput;
 
     // 검증 결과를 지식 베이스에 저장
-    context.board.write(`state.context.verification_${this.id}_${Date.now()}`, verification);
+    context.board.write(`knowledge.verification.${this.id}.${Date.now()}`, verification);
 
     // 이벤트 발행
     context.board.emit("verification.completed", {

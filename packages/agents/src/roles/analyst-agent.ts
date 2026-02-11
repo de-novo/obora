@@ -44,7 +44,7 @@ Be thorough, objective, and analytical in your approach.`;
     const analysis = action as AnalystOutput;
 
     // 분석 결과를 지식 베이스에 저장
-    context.board.write(`state.context.analysis_${this.id}_${Date.now()}`, analysis);
+    context.board.write(`knowledge.analysis.${this.id}.${Date.now()}`, analysis);
 
     // 이벤트 발행
     context.board.emit("analysis.completed", {
@@ -76,7 +76,7 @@ Be thorough, objective, and analytical in your approach.`;
         summary: content,
         keyFindings: [],
         recommendations: [],
-        confidence: 0.5,
+        confidence: 50,
         reasoning: content,
       };
     }
