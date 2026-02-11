@@ -27,7 +27,7 @@ When planning execution, structure your response as follows:
 ## Parameters
 
 ```json
-{{#if parameters}}{{parameters}}{{else}}{{{/if}}}
+{{#if parameters}}{{parameters}}{{else}}{}{{/if}}
 ```
 
 ## Steps

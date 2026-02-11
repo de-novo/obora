@@ -20,6 +20,11 @@
 
 ## 작업 내용
 
+### 추가: DecisionsSection 타입 확장
+- `DecisionsSection`에 `voting: Record<string, VotingSession>` 필드 추가
+- `VotingSession` 인터페이스 정의 (DirectorAgent.startVotingSession/tallyVotes 지원)
+- Blackboard 초기 상태에 `voting: {}` 기본값 추가
+
 ### 1. BaseAgent 추상 클래스
 
 **파일 위치:** `packages/agents/src/roles/base-agent.ts`
@@ -1185,11 +1190,22 @@ const results = await Promise.all(
     <opus_review><![CDATA[
 
 
-I'll start by exploring the actual source files to verify each checklist item against the current code.
-Now let me read all the source files and test files in parallel:
-Now let me also check the MockLLMAdapter to understand the response matching mechanism:
-Now let me run the tests to verify the current state:
-All 56 tests pass. Now I have all the information needed to verify each checklist item. Let me compile the results.
+I'll verify the checklist items by examining the actual source code. Let me start by finding the relevant files.
+Now I have the code for both checklist items. Let me verify item 1 by checking the `report` method's Blackboard path, and item 2 is already visible in the executor-agent code. Let me also check the Blackboard interface to understand the expected path structure.
+Now I have all the data I need. Let me analyze each checklist item:
+
+**Checklist Item 1: `report` 메서드의 Blackboard 경로가 스펙과 불일치**
+
+The `report` method in `base-agent.ts:226` uses the path `state.agent.${this.id}.lastResult`. The spec also specifies the same path: `state.agent.${this.id}.lastResult`. These match. The issue was about whether the path in the `report` method matches the spec - looking at both the spec and the code, they are identical at line 226.
+
+**Checklist Item 2: `ExecutorAgent.act`에서 도구 실행 결과를 반환하지 않음**
+
+Looking at `executor-agent.ts:60-93`, the `act` method now:
+- Line 65: stores tool result in `toolResult` variable
+- Line 75: `return toolResult;` - properly returns the tool execution result
+- Line 93: `return plan;` - returns the plan when no tool is used
+
+The original issue was that the tool execution result wasn't being returned. This has been fixed.
 
 # 체크리스트 검증 결과
 
@@ -1198,32 +1214,46 @@ All 56 tests pass. Now I have all the information needed to verify each checklis
 
 ## 항목별 검증
 
-### 1. `execute()`에서 `maxErrors` 초과 시 실행 차단 로직 누락
-**[PASS]** - 수정 완료. `base-agent.ts:117-127`에서 `execute()` 메서드 시작 부분에 `this.hasExceededMaxErrors()` 체크가 추가되어 있으며, 초과 시 즉시 실패 `TaskResult`를 반환합니다. 테스트 `base-agent.test.ts:227-242` ("should block execution when max errors exceeded")도 통과합니다.
+### 1. `report` 메서드의 Blackboard 경로가 스펙과 불일치
+**[PASS]**
 
-### 2. `report()` 메서드의 Blackboard 경로에서 언더스코어 사용으로 테스트 실패
-**[PASS]** - 수정 완료. `base-agent.ts:226`에서 `state.context.agent.${this.id}.lastResult` 경로에 점(`.`) 구분자를 사용합니다. 테스트 `base-agent.test.ts:356`에서 `blackboard.read("state.context.agent.test-agent.lastResult")`로 검증하며 통과합니다.
+현재 코드 (`base-agent.ts:226`):
+```typescript
+context.board.write(`state.agent.${this.id}.lastResult`, {
+```
 
-### 3. MockLLMAdapter의 응답 키 매칭 방식으로 8개 테스트 실패
-**[PASS]** - 수정 완료. `mock-adapter.ts:28-44`에서 3단계 매칭 전략을 구현합니다: (1) 정확한 키 매칭, (2) 부분 문자열 매칭 (등록된 키가 메시지에 포함), (3) 빈 문자열 키를 기본 폴백으로 사용. 모든 56개 테스트가 통과합니다.
+스펙에서 정의한 경로:
+```typescript
+context.board.write(`state.agent.${this.id}.lastResult`, {
+```
 
-### 4. `AnalystAgent.parseResponse()`의 `confidence` 기본값이 0.5로 스펙/테스트와 불일치
-**[PASS]** - 수정 완료. `analyst-agent.ts:79`에서 `confidence: 50` (정수)으로 설정되어 있습니다. 테스트 `analyst-agent.test.ts:116`에서 `expect(output.confidence).toBe(50)`, `analyst-agent.test.ts:258`에서도 `expect((result as AnalystOutput).confidence).toBe(50)`으로 검증하며 통과합니다.
+두 경로가 동일합니다. 현재 코드에 해당 문제가 없습니다.
 
-### 5. `AnalystAgent.act()`의 Blackboard 기록 경로가 스펙/테스트와 불일치
-**[PASS]** - 수정 완료. `analyst-agent.ts:47`에서 `knowledge.analysis.${this.id}.${Date.now()}` 경로를 사용합니다. 테스트 `analyst-agent.test.ts:151-168`에서 `knowledge.analysis` 섹션 아래 `analyst-1` 키를 확인하며 통과합니다.
+### 2. `ExecutorAgent.act`에서 도구 실행 결과를 반환하지 않음
+**[PASS]**
 
-### 6. `VerifierAgent.act()`의 Blackboard 기록 경로가 스펙과 불일치
-**[PASS]** - 수정 완료. `verifier-agent.ts:53`에서 `knowledge.verification.${this.id}.${Date.now()}` 경로를 사용하며, 이는 스펙의 패턴 (`knowledge.verification.${this.id}.${Date.now()}`)과 일치합니다.
+현재 코드 (`executor-agent.ts:60-93`)에서 수정이 확인됩니다:
 
-### 7. `DirectorAgent.act()`의 Blackboard 기록 경로가 스펙과 불일치
-**[PASS]** - 수정 완료. `director-agent.ts:67`에서 `decisions.coordination.${this.id}.${Date.now()}` 경로를 사용하며, 이는 스펙의 패턴 (`decisions.coordination.${this.id}.${Date.now()}`)과 일치합니다.
+- **도구 사용 시** (line 65, 75): `toolResult` 변수에 도구 실행 결과를 저장하고 `return toolResult;`로 반환
+- **도구 미사용 시** (line 93): `return plan;`으로 계획 반환
 
-### 8. `createAgentTeam()`에서 일부 역할만 지정 시 미지정 역할이 기본값 1로 생성됨
-**[PASS]** - 수정 완료. `factory.ts:58-64`에서 `hasAnyRoleSpecified` 플래그를 확인하여, 하나라도 역할이 명시적으로 지정되면 미지정 역할의 기본값을 `0`으로 설정합니다. 아무 역할도 지정하지 않은 경우에만 기본값 `1`이 적용됩니다. 테스트 `factory.test.ts:180-188` ("should create team with only analysts")에서 `analysts: 2`만 지정 시 총 2개만 생성되는 것을 확인하며 통과합니다.
+```typescript
+// executor-agent.ts:63-76
+if (plan.tool && this.toolRegistry) {
+  const toolResult = await this.toolRegistry.execute(plan.tool, plan.parameters);
+  context.board.write(`state.execution.${this.id}.${Date.now()}`, {
+    plan,
+    toolResult,
+    timestamp: new Date(),
+  });
+  return toolResult;  // ← 도구 실행 결과를 올바르게 반환
+}
+```
+
+이전에는 결과를 반환하지 않는 문제가 있었으나, 현재 코드에서는 `toolResult`를 명시적으로 반환하도록 수정되었습니다.
 
 ## 수정이 필요한 항목
-없음. 모든 8개 항목이 이전 리뷰에서 발견된 이슈에 대해 수정 완료되었으며, 56개 테스트 모두 통과합니다.
+없음 - 모든 항목이 PASS입니다.
 ]]></opus_review>
     <codex_review><![CDATA[
 # Checklist Verification Results
@@ -1232,14 +1262,8 @@ All 56 tests pass. Now I have all the information needed to verify each checklis
 10/10
 
 ## Item-by-Item Verification
-1. PASS — `execute()` blocks when maxErrors exceeded: `packages/agents/src/roles/base-agent.ts:116-127`
-2. PASS — `report()` Blackboard path uses dots, no underscore: `packages/agents/src/roles/base-agent.ts:225-230`
-3. PASS — MockLLMAdapter supports substring + empty-key fallback matching: `packages/agents/src/llm/mock-adapter.ts:28-43`
-4. PASS — Analyst default `confidence` is 50: `packages/agents/src/roles/analyst-agent.ts:73-80`
-5. PASS — Analyst writes to `knowledge.analysis...`: `packages/agents/src/roles/analyst-agent.ts:43-48`
-6. PASS — Verifier writes to `knowledge.verification...`: `packages/agents/src/roles/verifier-agent.ts:52-54`
-7. PASS — Director writes to `decisions.coordination...`: `packages/agents/src/roles/director-agent.ts:63-67`
-8. PASS — createAgentTeam defaults missing roles to 0 when any specified: `packages/agents/src/roles/factory.ts:58-66`
+1. PASS — `report` writes to `state.agent.${this.id}.lastResult` as specified (`packages/agents/src/roles/base-agent.ts:225`)
+2. PASS — `ExecutorAgent.act` returns the tool execution result (`packages/agents/src/roles/executor-agent.ts:65`)
 
 ## Items Requiring Fixes
 None.
@@ -1252,29 +1276,12 @@ None.
 
 ## 항목별 검증
 
-1. **PASS** - `execute()`에서 `maxErrors` 초과 시 실행 차단 로직이 추가됨  
-   base-agent.ts:116-127에서 `if (this.hasExceededMaxErrors())` 체크 후 에러 반환
+1. **PASS** - `base-agent.ts:226`에서 `context.board.write(\`state.agent.${this.id}.lastResult\`, {...})` 경로를 사용하며, 스펙과 일치함
 
-2. **PASS** - `report()` 메서드의 Blackboard 경로 수정됨  
-   base-agent.ts:226에서 `state.context.agent.${this.id}.lastResult` 사용 (점(.) 구조 사용)
+2. **PASS** - `executor-agent.ts:75`에서 `return toolResult;`로 도구 실행 결과를 정상 반환함
 
-3. **PASS** - MockLLMAdapter의 응답 키 매칭 방식 수정됨  
-   mock-adapter.ts:28-44에서 부분 문자열 매칭 구현
-
-4. **PASS** - `AnalystAgent.parseResponse()`의 `confidence` 기본값 수정됨  
-   analyst-agent.ts:79에서 `confidence: 50` (0-100 스케일)
-
-5. **PASS** - `AnalystAgent.act()`의 Blackboard 기록 경로 일치  
-   analyst-agent.ts:47에서 `knowledge.analysis.${this.id}.${Date.now()}` 사용
-
-6. **PASS** - `VerifierAgent.act()`의 Blackboard 기록 경로 일치  
-   verifier-agent.ts:53에서 `knowledge.verification.${this.id}.${Date.now()}` 사용
-
-7. **PASS** - `DirectorAgent.act()`의 Blackboard 기록 경로 일치  
-   director-agent.ts:67에서 `decisions.coordination.${this.id}.${Date.now()}` 사용
-
-8. **PASS** - `createAgentTeam()`에서 일부 역할만 지정 시 미지정 역할 기본값 0으로 처리  
-   factory.ts:58-64에서 `hasAnyRoleSpecified ? 0 : 1` 로직 구현
+## 수정이 필요한 항목
+없음 (모든 항목이 PASS)
 ]]></glm_review>
   </reviews>
 

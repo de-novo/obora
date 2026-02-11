@@ -1,5 +1,6 @@
 export type { AgentRole } from "./template";
-export { PromptTemplate, IPromptTemplate, ValidationResult } from "./template";
+export { PromptTemplate } from "./template";
+export type { IPromptTemplate, ValidationResult } from "./template";
 export type {
   VariableDefinition,
   PromptTemplateConfig,

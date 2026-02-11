@@ -174,6 +174,38 @@ describe("PromptTemplate", () => {
     expect(cloned.role).toBe(original.role);
   });
 
+  it("should clone template with variableDefinitions", () => {
+    const config: PromptTemplateConfig = {
+      id: "clone-template-with-vars",
+      name: "Clone Template with Variables",
+      role: "analyst" as AgentRole,
+      system: "System",
+      user: "Analyze: {{context}}",
+      variables: [
+        {
+          name: "context",
+          type: "string",
+          required: true,
+          description: "Analysis context",
+        },
+      ],
+    };
+
+    const original = new PromptTemplate(config);
+    const cloned = original.clone();
+
+    const originalValidation = original.validate({});
+    const clonedValidation = cloned.validate({});
+
+    expect(originalValidation.valid).toBe(false);
+    expect(originalValidation.errors).toHaveLength(1);
+    expect(originalValidation.errors?.[0]).toContain("Required variable 'context' is missing");
+
+    expect(clonedValidation.valid).toBe(false);
+    expect(clonedValidation.errors).toHaveLength(1);
+    expect(clonedValidation.errors?.[0]).toContain("Required variable 'context' is missing");
+  });
+
   it("should handle empty variables gracefully", () => {
     const template = new PromptTemplate("Hello {{name}}, how are you?");
     const result = template.render({});
@@ -239,5 +271,53 @@ describe("PromptTemplate", () => {
 
     expect(result).not.toContain("Show this");
     expect(result).not.toContain("Unless this");
+  });
+
+  it("should detect circular template inheritance", () => {
+    const templateA = new PromptTemplate("Template A");
+    const templateB = new PromptTemplate("Template B");
+    templateA.extend(templateB);
+    templateB.extend(templateA);
+
+    expect(() => templateA.render({})).toThrow("Circular template inheritance detected");
+  });
+
+  it("should detect multi-level circular template inheritance", () => {
+    const templateA = new PromptTemplate("Template A");
+    const templateB = new PromptTemplate("Template B");
+    const templateC = new PromptTemplate("Template C");
+    templateA.extend(templateB);
+    templateB.extend(templateC);
+    templateC.extend(templateA);
+
+    expect(() => templateA.render({})).toThrow("Circular template inheritance detected");
+  });
+
+  it("should handle {{@index}} in each loops", () => {
+    const template = new PromptTemplate("{{#each steps}}Step {{@index}}: {{this}}{{/each}}");
+    const result = template.render({
+      steps: ["First step", "Second step", "Third step"],
+    });
+
+    expect(result).toContain("Step 0: First step");
+    expect(result).toContain("Step 1: Second step");
+    expect(result).toContain("Step 2: Third step");
+  });
+
+  it("should handle {{@index}} with objects in each loops", () => {
+    const template = new PromptTemplate(
+      "{{#each items}}### Step {{@index}}: {{description}}{{/each}}"
+    );
+    const result = template.render({
+      items: [
+        { description: "Gather data" },
+        { description: "Analyze data" },
+        { description: "Report results" },
+      ],
+    });
+
+    expect(result).toContain("### Step 0: Gather data");
+    expect(result).toContain("### Step 1: Analyze data");
+    expect(result).toContain("### Step 2: Report results");
   });
 });

@@ -11,8 +11,7 @@ export function buildAnalystTemplate(config?: {
     )
     .addNewline()
     .addHeader(2, "Your responsibilities")
-    .addVariable("responsibilities", config?.responsibilities)
-    .addUnless("responsibilities", "")
+    .addText("{{#if responsibilities}}{{responsibilities}}{{else}}")
     .addNewline()
     .addText("1. Analyze the provided information thoroughly")
     .addNewline()
@@ -23,6 +22,7 @@ export function buildAnalystTemplate(config?: {
     .addText("4. Assess confidence in your conclusions")
     .addNewline()
     .addText("5. Support your findings with reasoning")
+    .addText("{{/if}}")
     .addNewline()
     .addHeader(2, "When providing analysis, structure your response as follows:")
     .addNewline()
@@ -51,7 +51,7 @@ export function buildAnalystTemplate(config?: {
     .addHeader(3, "Reasoning")
     .addText("Provide your thought process and evidence supporting your conclusions.")
     .addNewline()
-    .addConditional("sources", "")
+    .addText("{{#if sources}}")
     .addNewline()
     .addHeader(3, "Sources")
     .addVariable("sources", config?.sources)
@@ -69,8 +69,7 @@ export function buildExecutorTemplate(config?: {
     .addText("You are an executor agent responsible for taking action and executing tasks.")
     .addNewline()
     .addHeader(2, "Your responsibilities")
-    .addVariable("responsibilities", config?.responsibilities)
-    .addUnless("responsibilities", "")
+    .addText("{{#if responsibilities}}{{responsibilities}}{{else}}")
     .addNewline()
     .addText("1. Understand the task requirements clearly")
     .addNewline()
@@ -81,6 +80,7 @@ export function buildExecutorTemplate(config?: {
     .addText("4. Report the outcome accurately")
     .addNewline()
     .addText("5. Handle errors gracefully")
+    .addText("{{/if}}")
     .addNewline()
     .addText(`Available tools: {{tools|${config?.tools ?? "none"}}}`)
     .addNewline()
@@ -94,7 +94,7 @@ export function buildExecutorTemplate(config?: {
     .addUnless("tool", "No tool required")
     .addNewline()
     .addHeader(3, "Parameters")
-    .addCodeBlock("{{#if parameters}}{{parameters}}{{else}}{{{/if}}}", "json")
+    .addCodeBlock("{{#if parameters}}{{parameters}}{{else}}{}{{/if}}", "json")
     .addNewline()
     .addHeader(3, "Steps")
     .addText("1. [First step]")
@@ -107,11 +107,11 @@ export function buildExecutorTemplate(config?: {
     .addVariable("expectedOutcome", "The expected result")
     .addNewline()
     .addText("Be precise, efficient, and safety-conscious in your execution.")
-    .addUnless("safety_notes", "")
+    .addText("{{#if safetyNotes}}")
     .addNewline()
     .addHeader(3, "Safety Notes")
-    .addVariable("safetyNotes", config?.safetyNotes)
-    .addText("{{/unless}}");
+    .addText("{{safetyNotes}}")
+    .addText("{{/if}}");
 }
 
 export function buildVerifierTemplate(config?: {
@@ -121,8 +121,7 @@ export function buildVerifierTemplate(config?: {
     .addText("You are a verifier agent responsible for validating results and ensuring quality.")
     .addNewline()
     .addHeader(2, "Your responsibilities")
-    .addVariable("responsibilities", config?.responsibilities)
-    .addUnless("responsibilities", "")
+    .addText("{{#if responsibilities}}{{responsibilities}}{{else}}")
     .addNewline()
     .addText("1. Review the provided work thoroughly")
     .addNewline()
@@ -133,6 +132,7 @@ export function buildVerifierTemplate(config?: {
     .addText("4. Provide specific feedback for improvements")
     .addNewline()
     .addText("5. Verify correctness and completeness")
+    .addText("{{/if}}")
     .addNewline()
     .addHeader(2, "When conducting verification, structure your response as follows:")
     .addNewline()
@@ -190,8 +190,7 @@ export function buildDirectorTemplate(config?: {
     )
     .addNewline()
     .addHeader(2, "Your responsibilities")
-    .addVariable("responsibilities", config?.responsibilities)
-    .addUnless("responsibilities", "")
+    .addText("{{#if responsibilities}}{{responsibilities}}{{else}}")
     .addNewline()
     .addText("1. Understand the overall goal and requirements")
     .addNewline()
@@ -202,6 +201,7 @@ export function buildDirectorTemplate(config?: {
     .addText("4. Monitor progress and adjust plans as needed")
     .addNewline()
     .addText("5. Provide clear direction and guidance")
+    .addText("{{/if}}")
     .addNewline()
     .addHeader(2, "When creating a coordination plan, structure your response as follows:")
     .addNewline()
@@ -215,7 +215,7 @@ export function buildDirectorTemplate(config?: {
     .addEach(
       "steps",
       `
-### Step {{description}}
+### Step {{@index}}: {{description}}
 {{#if assignee}}Assignee: {{assignee}}{{/if}}
 {{#if dependencies}}Dependencies: {{dependencies}}{{/if}}
 {{#if estimatedDuration}}Duration: {{estimatedDuration}}{{/if}}
@@ -238,9 +238,9 @@ export function buildDirectorTemplate(config?: {
     ])
     .addNewline()
     .addText("Be diplomatic, organized, and results-oriented in your coordination.")
-    .addUnless("notes", "")
+    .addText("{{#if notes}}")
     .addNewline()
     .addHeader(3, "Notes")
-    .addVariable("notes")
-    .addText("{{/unless}}");
+    .addText("{{notes}}")
+    .addText("{{/if}}");
 }

@@ -28,13 +28,12 @@ describe("Role Templates", () => {
     });
 
     it("should accept custom responsibilities", () => {
-      const builder = buildAnalystTemplate({
-        responsibilities: "Custom responsibility description",
-      });
+      const builder = buildAnalystTemplate();
       const template = builder.build();
-      const result = template.render({});
+      const result = template.render({ responsibilities: "Custom responsibility description" });
 
       expect(result).toContain("Custom responsibility description");
+      expect(result).not.toContain("Analyze the provided information thoroughly");
     });
 
     it("should include context when provided", () => {
@@ -86,12 +85,24 @@ describe("Role Templates", () => {
 
       expect(result).toContain("executor agent");
       expect(result).toContain("Your responsibilities");
+      expect(result).toContain("Understand the task requirements clearly");
       expect(result).toContain("Available tools: tool1, tool2");
       expect(result).toContain("Action");
       expect(result).toContain("Tool");
       expect(result).toContain("Parameters");
       expect(result).toContain("Steps");
       expect(result).toContain("Expected Outcome");
+    });
+
+    it("should accept custom responsibilities", () => {
+      const builder = buildExecutorTemplate({
+        responsibilities: "Custom executor responsibility",
+      });
+      const template = builder.build();
+      const result = template.render({ responsibilities: "Custom executor responsibility" });
+
+      expect(result).toContain("Custom executor responsibility");
+      expect(result).not.toContain("Understand the task requirements clearly");
     });
 
     it("should use default tools value when not provided in config", () => {
@@ -154,12 +165,24 @@ describe("Role Templates", () => {
 
       expect(result).toContain("verifier agent");
       expect(result).toContain("Your responsibilities");
+      expect(result).toContain("Review the provided work thoroughly");
       expect(result).toContain("Overall Result");
       expect(result).toContain("✅ PASSED");
       expect(result).toContain("Verification Checks");
       expect(result).toContain("Summary");
       expect(result).toContain("Issues Found");
       expect(result).toContain("Suggestions");
+    });
+
+    it("should accept custom responsibilities", () => {
+      const builder = buildVerifierTemplate({
+        responsibilities: "Custom verifier responsibility",
+      });
+      const template = builder.build();
+      const result = template.render({ responsibilities: "Custom verifier responsibility" });
+
+      expect(result).toContain("Custom verifier responsibility");
+      expect(result).not.toContain("Review the provided work thoroughly");
     });
 
     it("should show failed status when not passed", () => {
@@ -240,6 +263,7 @@ describe("Role Templates", () => {
 
       expect(result).toContain("director agent");
       expect(result).toContain("Your responsibilities");
+      expect(result).toContain("Understand the overall goal and requirements");
       expect(result).toContain("Agenda");
       expect(result).toContain("Project kickoff meeting");
       expect(result).toContain("Participants");
@@ -247,6 +271,17 @@ describe("Role Templates", () => {
       expect(result).toContain("Timeline");
       expect(result).toContain("Expected Outcome");
       expect(result).toContain("Key Principles for Coordination");
+    });
+
+    it("should accept custom responsibilities", () => {
+      const builder = buildDirectorTemplate({
+        responsibilities: "Custom director responsibility",
+      });
+      const template = builder.build();
+      const result = template.render({ responsibilities: "Custom director responsibility" });
+
+      expect(result).toContain("Custom director responsibility");
+      expect(result).not.toContain("Understand the overall goal and requirements");
     });
 
     it("should handle participants list", () => {

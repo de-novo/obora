@@ -1,13 +1,13 @@
 # 체크리스트 검증 결과
 
-## 항목별 결과
-- [PASS] 항목1: 모든 통합 테스트 파일 존재함 (lifecycle.test.ts, pool.test.ts, supervision.test.ts)
-- [PASS] 항목2: TestActor 헬퍼 구현됨 (packages/actor/src/__tests__/helpers/TestActor.ts)
-- [PASS] 항목3: TestActorFactory 헬퍼 구현됨 (packages/actor/src/__tests__/helpers/TestActorFactory.ts)
-- [PASS] 항목4: index.ts 내보내기 스펙과 일치함 (type TestActorConfig 형태로 호환 가능)
-- [PASS] 항목5: Event Subscription 테스트 존재함 (blackboard.test.ts:252-274)
-- [PASS] 항목6: MockActor에서 명시적 타입 사용됨, any 타입 남용 없음
+## 총점
+10/10
 
-## 점수
-- 통과: 6/6
-- **총점: 10/10**
+## 항목별 검증
+
+1. **PASS** - `base-agent.ts:226`에서 `context.board.write(\`state.agent.${this.id}.lastResult\`, {...})` 경로를 사용하며, 스펙과 일치함
+
+2. **PASS** - `executor-agent.ts:75`에서 `return toolResult;`로 도구 실행 결과를 정상 반환함
+
+## 수정이 필요한 항목
+없음 (모든 항목이 PASS)

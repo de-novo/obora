@@ -66,10 +66,19 @@ export class PromptTemplate implements IPromptTemplate {
   }
 
   render(variables: Record<string, unknown>): string {
+    return this.renderInternal(variables, new Set<PromptTemplate>());
+  }
+
+  private renderInternal(variables: Record<string, unknown>, visited: Set<PromptTemplate>): string {
+    if (visited.has(this)) {
+      throw new Error(`Circular template inheritance detected: '${this.id}'`);
+    }
+    visited.add(this);
+
     let result = this.template;
 
     if (this.parent) {
-      const parentResult = this.parent.render(variables);
+      const parentResult = this.parent.renderInternal(variables, visited);
       result = `${parentResult}\n\n${result}`;
     }
 
@@ -81,10 +90,12 @@ export class PromptTemplate implements IPromptTemplate {
   }
 
   private extractVariables(template: string): void {
-    const pattern = /\{\{([\w.]+)\}\}/g;
-    let match;
-    while ((match = pattern.exec(template)) !== null) {
-      this.variables.add(match[1]);
+    const patterns = [/\{\{([\w.]+)\}\}/g, /\{\{([\w.]+)\|[^}]+\}\}/g];
+    for (const pattern of patterns) {
+      let match;
+      while ((match = pattern.exec(template)) !== null) {
+        this.variables.add(match[1]);
+      }
     }
   }
 
@@ -131,8 +142,9 @@ export class PromptTemplate implements IPromptTemplate {
             return "";
           }
           return value
-            .map((item: unknown) => {
-              let itemContent = content.replace(/\{\{this\}\}/g, String(item));
+            .map((item: unknown, index: number) => {
+              let itemContent = content.replace(/\{\{@index\}\}/g, String(index));
+              itemContent = itemContent.replace(/\{\{this\}\}/g, String(item));
               if (typeof item === "object" && item !== null && !Array.isArray(item)) {
                 itemContent = this.substituteVariables(
                   itemContent,
@@ -218,6 +230,7 @@ export class PromptTemplate implements IPromptTemplate {
     cloned.role = this.role;
     cloned.systemPrompt = this.systemPrompt;
     cloned.variables = new Set(this.variables);
+    cloned.variableDefinitions = [...this.variableDefinitions];
     return cloned;
   }
 

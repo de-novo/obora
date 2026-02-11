@@ -17,6 +17,11 @@
 
 ## 작업 내용
 
+### 추가: DecisionsSection 타입 확장
+- `DecisionsSection`에 `voting: Record<string, VotingSession>` 필드 추가
+- `VotingSession` 인터페이스 정의 (DirectorAgent.startVotingSession/tallyVotes 지원)
+- Blackboard 초기 상태에 `voting: {}` 기본값 추가
+
 ### 1. BaseAgent 추상 클래스
 
 **파일 위치:** `packages/agents/src/roles/base-agent.ts`
