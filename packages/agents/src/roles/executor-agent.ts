@@ -71,8 +71,8 @@ Be precise, efficient, and safety-conscious in your execution.`;
         timestamp: new Date(),
       });
 
-      // 도구 실행 후에도 계획(ExecutorOutput)을 반환
-      return plan;
+      // 도구 실행 결과를 반환
+      return toolResult;
     }
 
     // 도구 없는 경우 기본 실행
@@ -98,12 +98,14 @@ Be precise, efficient, and safety-conscious in your execution.`;
       const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[1]);
-        return { type: "execution", content, ...parsed } as ExecutorOutput;
+        const { type: _type, ...safeParsed } = parsed as Record<string, unknown>;
+        return { ...safeParsed, type: "execution", content } as ExecutorOutput;
       }
 
       const cleanContent = content.replace(/^[^{]*({[\s\S]*})[^}]*$/, "$1");
       const parsed = JSON.parse(cleanContent);
-      return { type: "execution", content, ...parsed } as ExecutorOutput;
+      const { type: _type, ...safeParsed } = parsed as Record<string, unknown>;
+      return { ...safeParsed, type: "execution", content } as ExecutorOutput;
     } catch {
       return {
         type: "execution",

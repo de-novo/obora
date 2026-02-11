@@ -101,8 +101,7 @@ describe("ExecutorAgent", () => {
 
       expect(result.success).toBe(true);
       expect(result.output).toBeDefined();
-      expect((result.output as ExecutorOutput).type).toBe("execution");
-      expect((result.output as ExecutorOutput).action).toBe("process files");
+      expect(result.output).toEqual({ result: "executed" });
     });
 
     it("should parse JSON response correctly", async () => {
@@ -117,12 +116,8 @@ describe("ExecutorAgent", () => {
 
       const result = await agent.execute(task, context);
 
-      const output = result.output as ExecutorOutput;
-      expect(output.action).toBe("Test action");
-      expect(output.tool).toBe("tool2");
-      expect(output.parameters).toEqual({ key: "value" });
-      expect(output.steps).toEqual(["Step 1", "Step 2"]);
-      expect(output.expectedOutcome).toBe("Test outcome");
+      expect(result.output).toEqual({ result: "executed" });
+      expect(mockToolRegistry.execute).toHaveBeenCalledWith("tool2", { key: "value" });
     });
 
     it("should handle non-JSON response gracefully", async () => {
@@ -146,9 +141,8 @@ describe("ExecutorAgent", () => {
 
       const result = await agent.execute(task, context);
 
-      const output = result.output as ExecutorOutput;
-      expect(output.action).toBe("Parsed action");
-      expect(output.tool).toBe("tool1");
+      expect(result.output).toEqual({ result: "executed" });
+      expect(mockToolRegistry.execute).toHaveBeenCalledWith("tool1", { key: "value" });
     });
 
     it("should write execution result to state section", async () => {
@@ -377,7 +371,7 @@ describe("ExecutorAgent", () => {
       expect(mockToolRegistry.execute).toHaveBeenCalledWith("tool1", {
         input: "test",
       });
-      expect(result).toEqual(plan);
+      expect(result).toEqual({ result: "executed" });
     });
   });
 

@@ -353,7 +353,7 @@ describe("BaseAgent", () => {
         history: [],
       });
 
-      const stored = blackboard.read("state.context.agent.test-agent.lastResult");
+      const stored = blackboard.read("state.agent.test-agent.lastResult");
       expect(stored).toEqual({
         taskId: "task-1",
         timestamp: expect.any(Date),

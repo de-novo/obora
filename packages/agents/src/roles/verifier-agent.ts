@@ -75,12 +75,14 @@ Be thorough, objective, and constructive in your verification.`;
       const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[1]);
-        return { type: "verification", content, ...parsed } as VerifierOutput;
+        const { type: _type, ...safeParsed } = parsed as Record<string, unknown>;
+        return { ...safeParsed, type: "verification", content } as VerifierOutput;
       }
 
       const cleanContent = content.replace(/^[^{]*({[\s\S]*})[^}]*$/, "$1");
       const parsed = JSON.parse(cleanContent);
-      return { type: "verification", content, ...parsed } as VerifierOutput;
+      const { type: _type, ...safeParsed } = parsed as Record<string, unknown>;
+      return { ...safeParsed, type: "verification", content } as VerifierOutput;
     } catch {
       return {
         type: "verification",

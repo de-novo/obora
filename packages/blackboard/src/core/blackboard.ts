@@ -335,6 +335,7 @@ export class Blackboard extends SimpleEventEmitter {
           pending: [],
           opinions: new Map(),
           history: [],
+          voting: {},
         },
       };
     }
@@ -363,6 +364,7 @@ export class Blackboard extends SimpleEventEmitter {
         pending: [],
         opinions: new Map(),
         history: [],
+        voting: {},
       },
     };
   }
@@ -448,6 +450,7 @@ export class Blackboard extends SimpleEventEmitter {
         pending: this._state.decisions.pending.map((d) => deepClone(d)),
         opinions: new Map(this._state.decisions.opinions.entries()),
         history: this._state.decisions.history.map((h) => deepClone(h)),
+        voting: deepClone(this._state.decisions.voting),
       },
     };
   }
@@ -629,6 +632,7 @@ export class Blackboard extends SimpleEventEmitter {
         pending: this._state.decisions.pending.map((d) => deepClone(d)),
         opinions: new Map(this._state.decisions.opinions.entries()),
         history: this._state.decisions.history.map((h) => deepClone(h)),
+        voting: deepClone(this._state.decisions.voting),
       },
     };
 
@@ -746,6 +750,7 @@ export class Blackboard extends SimpleEventEmitter {
         pending: this._state.decisions.pending,
         opinions: mapToObject(this._state.decisions.opinions),
         history: this._state.decisions.history,
+        voting: this._state.decisions.voting,
       },
     };
   }
@@ -778,6 +783,8 @@ export class Blackboard extends SimpleEventEmitter {
             ...(json.decisions as any),
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             opinions: objectToMap((json.decisions as any).opinions ?? {}),
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            voting: (json.decisions as any).voting ?? {},
           }
         : undefined,
     };

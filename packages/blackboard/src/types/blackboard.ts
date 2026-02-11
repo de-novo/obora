@@ -77,6 +77,23 @@ export interface DecisionsSection {
   opinions: Map<string, Opinion>;
   /** 결정 이력 */
   history: Resolution[];
+  /** 투표 세션 맵 (키: sessionId 또는 agendaId) */
+  voting: Record<string, VotingSession>;
+}
+
+/**
+ * 투표 세션
+ * @description DirectorAgent.startVotingSession/tallyVotes 지원
+ */
+export interface VotingSession {
+  /** 시작 시간 */
+  started: Date;
+  /** 참여자 목록 */
+  participants: string[];
+  /** 투표 기록 */
+  votes: Record<string, unknown>;
+  /** 세션 상태 */
+  status: 'in-progress' | 'completed' | 'cancelled';
 }
 
 /**

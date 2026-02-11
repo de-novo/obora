@@ -61,13 +61,15 @@ Be thorough, objective, and analytical in your approach.`;
       const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[1]);
-        return { type: "analysis", content, ...parsed } as AnalystOutput;
+        const { type: _type, ...safeParsed } = parsed as Record<string, unknown>;
+        return { ...safeParsed, type: "analysis", content } as AnalystOutput;
       }
 
       // JSON 블록 없으면 전체에서 파싱 시도
       const cleanContent = content.replace(/^[^{]*({[\s\S]*})[^}]*$/, "$1");
       const parsed = JSON.parse(cleanContent);
-      return { type: "analysis", content, ...parsed } as AnalystOutput;
+      const { type: _type, ...safeParsed } = parsed as Record<string, unknown>;
+      return { ...safeParsed, type: "analysis", content } as AnalystOutput;
     } catch {
       // 파싱 실패 시 기본 형식으로 변환
       return {

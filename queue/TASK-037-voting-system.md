@@ -1,5 +1,7 @@
 # TASK-037: @obora-kit/board - Voting System
 
+> **참고**: `DecisionsSection.voting` 필드와 `VotingSession` 기본 인터페이스는 TASK-031에서 이미 추가됨. 이 태스크에서는 VotingSession을 확장하고 투표 집계 로직을 구현.
+
 ## 개요
 - **상태**: 📋 대기
 - 우선순위: P1

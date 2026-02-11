@@ -80,12 +80,14 @@ Be diplomatic, organized, and results-oriented in your coordination.`;
       const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[1]);
-        return { type: "coordination", content, ...parsed } as DirectorOutput;
+        const { type: _type, ...safeParsed } = parsed as Record<string, unknown>;
+        return { ...safeParsed, type: "coordination", content } as DirectorOutput;
       }
 
       const cleanContent = content.replace(/^[^{]*({[\s\S]*})[^}]*$/, "$1");
       const parsed = JSON.parse(cleanContent);
-      return { type: "coordination", content, ...parsed } as DirectorOutput;
+      const { type: _type, ...safeParsed } = parsed as Record<string, unknown>;
+      return { ...safeParsed, type: "coordination", content } as DirectorOutput;
     } catch {
       return {
         type: "coordination",
