@@ -107,7 +107,7 @@ Be diplomatic, organized, and results-oriented in your coordination.`;
     participants: string[],
     context: AgentContext
   ): Promise<void> {
-    context.board.write(`state.context.voting_${agendaId}`, {
+    context.board.write(`decisions.voting.${agendaId}`, {
       started: new Date(),
       participants,
       votes: {},
@@ -124,12 +124,14 @@ Be diplomatic, organized, and results-oriented in your coordination.`;
    * 투표 집계
    */
   async tallyVotes(agendaId: string, context: AgentContext): Promise<Record<string, number>> {
-    const session = context.board.read<Record<string, unknown>>(
-      `state.context.voting_${agendaId}`,
-      { strict: true }
-    );
+    const session = context.board.read<Record<string, unknown>>(`decisions.voting.${agendaId}`, {
+      strict: false,
+    });
 
-    if (!session || session.status !== "completed") {
+    if (!session) {
+      throw new Error(`Voting session ${agendaId} not found`);
+    }
+    if (session.status !== "completed") {
       throw new Error(`Voting session ${agendaId} not completed`);
     }
 

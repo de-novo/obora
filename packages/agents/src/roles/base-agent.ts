@@ -223,7 +223,7 @@ export abstract class BaseAgent {
    * 보고 - 결과를 Blackboard에 기록
    */
   protected async report(task: Task, result: unknown, context: AgentContext): Promise<void> {
-    context.board.write(`state.context.agent.${this.id}.lastResult`, {
+    context.board.write(`state.agent.${this.id}.lastResult`, {
       taskId: task.id,
       timestamp: new Date(),
       result,

@@ -62,16 +62,17 @@ Be precise, efficient, and safety-conscious in your execution.`;
 
     if (plan.tool && this.toolRegistry) {
       // 도구 레지스트리에서 도구 실행
-      const result = await this.toolRegistry.execute(plan.tool, plan.parameters);
+      const toolResult = await this.toolRegistry.execute(plan.tool, plan.parameters);
 
       // 실행 결과를 상태에 저장
-      context.board.write(`state.context.execution_${this.id}_${Date.now()}`, {
+      context.board.write(`state.execution.${this.id}.${Date.now()}`, {
         plan,
-        result,
+        toolResult,
         timestamp: new Date(),
       });
 
-      return result;
+      // 도구 실행 후에도 계획(ExecutorOutput)을 반환
+      return plan;
     }
 
     // 도구 없는 경우 기본 실행
@@ -82,9 +83,14 @@ Be precise, efficient, and safety-conscious in your execution.`;
       timestamp: new Date(),
     };
 
-    context.board.write(`state.context.execution_${this.id}_${Date.now()}`, result);
+    context.board.write(`state.execution.${this.id}.${Date.now()}`, {
+      plan,
+      result,
+      timestamp: new Date(),
+    });
 
-    return result;
+    // 계획(ExecutorOutput)을 반환
+    return plan;
   }
 
   protected parseResponse(content: string, task: Task): ExecutorOutput {

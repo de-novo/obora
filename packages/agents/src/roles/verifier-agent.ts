@@ -59,10 +59,11 @@ Be thorough, objective, and constructive in your verification.`;
     });
 
     // Critical 이슈가 있는 경우 경고 이벤트
-    if (verification.findings.some((f) => f.severity === "critical")) {
+    const findings = Array.isArray(verification.findings) ? verification.findings : [];
+    if (findings.some((f) => f.severity === "critical")) {
       context.board.emit("verification.critical", {
         agentId: this.id,
-        findings: verification.findings.filter((f) => f.severity === "critical"),
+        findings: findings.filter((f) => f.severity === "critical"),
       });
     }
 
