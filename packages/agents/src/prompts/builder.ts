@@ -17,7 +17,7 @@ export class PromptTemplateBuilder {
 
   addSection(name: string, content: string): this {
     this.sections.set(name, content);
-    this.parts.push(`{{section:${name}}}`);
+    this.parts.push(content);
     return this;
   }
 

@@ -1,4 +1,3 @@
-export type { AgentRole } from "./template";
 export { PromptTemplate } from "./template";
 export type { IPromptTemplate, ValidationResult } from "./template";
 export type {
@@ -16,4 +15,3 @@ export {
   buildVerifierTemplate,
   buildDirectorTemplate,
 } from "./role-templates";
-export type { ChatMessage, ToolCall } from "../llm/adapter";

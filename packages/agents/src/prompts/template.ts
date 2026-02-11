@@ -1,4 +1,5 @@
 import type { ChatMessage, ToolCall } from "../llm/adapter";
+import { AgentRole } from "../roles/base-agent";
 
 /**
  * 유효성 검사 결과
@@ -34,6 +35,8 @@ export class PromptTemplate implements IPromptTemplate {
   private parent?: PromptTemplate;
   private systemPrompt?: string;
   private variableDefinitions: VariableDefinition[] = [];
+  private examples: Example[] = [];
+  private outputFormat?: OutputFormat;
 
   constructor(template: string, parent?: PromptTemplate);
   constructor(config: PromptTemplateConfig);
@@ -41,7 +44,7 @@ export class PromptTemplate implements IPromptTemplate {
     if (typeof templateOrConfig === "string") {
       this.id = `template-${Date.now()}`;
       this.name = "Unnamed Template";
-      this.role = "analyst";
+      this.role = AgentRole.ANALYST;
       this.template = templateOrConfig;
       this.parent = parent;
     } else {
@@ -52,6 +55,8 @@ export class PromptTemplate implements IPromptTemplate {
       this.template = config.user;
       this.systemPrompt = config.system;
       this.variableDefinitions = config.variables;
+      this.examples = config.examples ?? [];
+      this.outputFormat = config.outputFormat;
     }
     this.variables = new Set();
     this.extractVariables(this.template);
@@ -312,5 +317,3 @@ export interface JSONSchema {
   enum?: unknown[];
   description?: string;
 }
-
-export type AgentRole = "analyst" | "executor" | "verifier" | "director";

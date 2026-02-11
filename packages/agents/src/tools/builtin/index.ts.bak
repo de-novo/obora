@@ -1,0 +1,203 @@
+import { Tool, ToolContext } from "../types";
+import { params } from "../decorators";
+import { ToolRegistry } from "../registry";
+
+export const getCurrentTimeTool: Tool<{}, string> = {
+  name: "get_current_time",
+  description: "Get the current date and time in ISO format",
+  parameters: {
+    type: "object",
+    properties: {},
+  },
+  category: "utility",
+  hasSideEffects: false,
+  async execute() {
+    return new Date().toISOString();
+  },
+};
+
+export const calculatorTool: Tool<{ expression: string }, number> = {
+  name: "calculator",
+  description: "Evaluate a mathematical expression",
+  parameters: params()
+    .string("expression", "Mathematical expression to evaluate", { required: true })
+    .build(),
+  category: "utility",
+  hasSideEffects: false,
+  async execute(params) {
+    try {
+      const { evaluate } = await import("mathjs");
+      return evaluate(params.expression);
+    } catch (e) {
+      throw new Error(`Invalid expression: ${(e as Error).message}`);
+    }
+  },
+};
+
+export const parseJsonTool: Tool<{ json: string }, unknown> = {
+  name: "parse_json",
+  description: "Parse a JSON string into an object",
+  parameters: params().string("json", "JSON string to parse", { required: true }).build(),
+  category: "utility",
+  hasSideEffects: false,
+  async execute(params) {
+    return JSON.parse(params.json);
+  },
+};
+
+export const searchTextTool: Tool<
+  {
+    text: string;
+    query: string;
+    caseSensitive?: boolean;
+  },
+  { found: boolean; matches: string[] }
+> = {
+  name: "search_text",
+  description: "Search for a query string within text",
+  parameters: params()
+    .string("text", "Text to search in", { required: true })
+    .string("query", "Query string to find", { required: true })
+    .boolean("caseSensitive", "Whether to perform case-sensitive search", {
+      default: false,
+    })
+    .build(),
+  category: "text",
+  hasSideEffects: false,
+  async execute(params) {
+    const text = params.caseSensitive ? params.text : params.text.toLowerCase();
+    const query = params.caseSensitive ? params.query : params.query.toLowerCase();
+
+    const matches: string[] = [];
+    let index = text.indexOf(query);
+
+    while (index !== -1) {
+      matches.push(params.text.substring(index, index + params.query.length));
+      index = text.indexOf(query, index + 1);
+    }
+
+    return {
+      found: matches.length > 0,
+      matches,
+    };
+  },
+};
+
+export const httpRequestTool: Tool<
+  {
+    url: string;
+    method?: "GET" | "POST" | "PUT" | "DELETE";
+    headers?: Record<string, string>;
+    body?: string;
+  },
+  { status: number; headers: Record<string, string>; body: string }
+> = {
+  name: "http_request",
+  description: "Make an HTTP request to a URL",
+  parameters: params()
+    .string("url", "URL to request", { required: true })
+    .string("method", "HTTP method", {
+      enum: ["GET", "POST", "PUT", "DELETE"],
+      default: "GET",
+    })
+    .object("headers", "Request headers", {})
+    .string("body", "Request body")
+    .build(),
+  category: "network",
+  hasSideEffects: true,
+  requiredPermissions: ["network"],
+  async execute(params, context) {
+    const controller = new AbortController();
+    const timeout = context.timeout ?? 30000;
+
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    try {
+      const response = await fetch(params.url, {
+        method: params.method ?? "GET",
+        headers: params.headers,
+        body: params.body,
+        signal: controller.signal,
+      });
+
+      const headers: Record<string, string> = {};
+      response.headers.forEach((value, key) => {
+        headers[key] = value;
+      });
+
+      const body = await response.text();
+
+      return {
+        status: response.status,
+        headers,
+        body,
+      };
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  },
+};
+
+export const randomGeneratorTool: Tool<
+  {
+    type: "number" | "string" | "uuid";
+    min?: number;
+    max?: number;
+    length?: number;
+  },
+  string | number
+> = {
+  name: "random_generator",
+  description: "Generate random values (numbers, strings, or UUIDs)",
+  parameters: params()
+    .string("type", "Type of random value to generate", {
+      required: true,
+      enum: ["number", "string", "uuid"],
+    })
+    .number("min", "Minimum value for numbers", { default: 0 })
+    .number("max", "Maximum value for numbers", { default: 100 })
+    .number("length", "Length for string generation", { default: 10 })
+    .build(),
+  category: "utility",
+  hasSideEffects: false,
+  async execute(params) {
+    switch (params.type) {
+      case "number":
+        const min = params.min ?? 0;
+        const max = params.max ?? 100;
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+
+      case "string":
+        const length = params.length ?? 10;
+        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        return Array.from({ length }, () =>
+          chars.charAt(Math.floor(Math.random() * chars.length))
+        ).join("");
+
+      case "uuid":
+        return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+          const r = (Math.random() * 16) | 0;
+          const v = c === "x" ? r : (r & 0x3) | 0x8;
+          return v.toString(16);
+        });
+
+      default:
+        throw new Error(`Unknown type: ${params.type}`);
+    }
+  },
+};
+
+export const builtinTools: Tool[] = [
+  getCurrentTimeTool,
+  calculatorTool,
+  parseJsonTool,
+  searchTextTool,
+  httpRequestTool,
+  randomGeneratorTool,
+];
+
+export function registerBuiltinTools(registry: ToolRegistry): void {
+  for (const tool of builtinTools) {
+    registry.register(tool);
+  }
+}

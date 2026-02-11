@@ -108,6 +108,22 @@ describe("PromptTemplateBuilder", () => {
     expect(templateString).toContain("{{#each items}}- {{this}}{{/each}}");
   });
 
+  it("should add sections with inline content", () => {
+    const result = builder.addSection("intro", "Introduction content").build().render({});
+    expect(result).toContain("Introduction content");
+  });
+
+  it("should add multiple sections", () => {
+    const result = builder
+      .addSection("header", "# Header")
+      .addSection("body", "Body content")
+      .build()
+      .render({});
+
+    expect(result).toContain("# Header");
+    expect(result).toContain("Body content");
+  });
+
   it("should chain multiple builder methods", () => {
     const result = builder
       .addHeader(1, "Report")
