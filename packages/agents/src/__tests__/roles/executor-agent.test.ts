@@ -21,7 +21,7 @@ describe("ExecutorAgent", () => {
         { name: "tool2", description: "Test tool 2" },
       ]),
       execute: vi.fn().mockResolvedValue({ result: "executed" }),
-    };
+    } as unknown as ToolRegistry;
     agent = new ExecutorAgent({
       id: "executor-1",
       llm: mockLlm,
@@ -117,7 +117,11 @@ describe("ExecutorAgent", () => {
       const result = await agent.execute(task, context);
 
       expect(result.output).toEqual({ result: "executed" });
-      expect(mockToolRegistry.execute).toHaveBeenCalledWith("tool2", { key: "value" });
+      expect(mockToolRegistry.execute).toHaveBeenCalledWith(
+        "tool2",
+        { key: "value" },
+        expect.any(Object)
+      );
     });
 
     it("should handle non-JSON response gracefully", async () => {
@@ -142,7 +146,11 @@ describe("ExecutorAgent", () => {
       const result = await agent.execute(task, context);
 
       expect(result.output).toEqual({ result: "executed" });
-      expect(mockToolRegistry.execute).toHaveBeenCalledWith("tool1", { key: "value" });
+      expect(mockToolRegistry.execute).toHaveBeenCalledWith(
+        "tool1",
+        { key: "value" },
+        expect.any(Object)
+      );
     });
 
     it("should write execution result to state section", async () => {
@@ -179,9 +187,13 @@ describe("ExecutorAgent", () => {
 
       await agent.execute(task, context);
 
-      expect(mockToolRegistry.execute).toHaveBeenCalledWith("tool1", {
-        input: "test",
-      });
+      expect(mockToolRegistry.execute).toHaveBeenCalledWith(
+        "tool1",
+        {
+          input: "test",
+        },
+        expect.any(Object)
+      );
     });
 
     it("should write execution state with tool result", async () => {
@@ -368,19 +380,23 @@ describe("ExecutorAgent", () => {
 
       const result = await agent["act"](plan, context);
 
-      expect(mockToolRegistry.execute).toHaveBeenCalledWith("tool1", {
-        input: "test",
-      });
+      expect(mockToolRegistry.execute).toHaveBeenCalledWith(
+        "tool1",
+        {
+          input: "test",
+        },
+        expect.any(Object)
+      );
       expect(result).toEqual({ result: "executed" });
     });
   });
 
   describe("setToolRegistry", () => {
     it("should set tool registry", () => {
-      const newToolRegistry: ToolRegistry = {
+      const newToolRegistry = {
         listTools: vi.fn().mockReturnValue([{ name: "newTool", description: "New tool" }]),
         execute: vi.fn().mockResolvedValue({ result: "new result" }),
-      };
+      } as unknown as ToolRegistry;
 
       agent.setToolRegistry(newToolRegistry);
 

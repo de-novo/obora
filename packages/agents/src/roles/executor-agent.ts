@@ -7,7 +7,7 @@ import {
   ExecutorInput,
   ExecutorOutput,
 } from "./base-agent";
-import { ToolRegistry } from "../tools";
+import { ToolRegistry, ToolContext as ToolCtx } from "../tools";
 
 /**
  * Executor 에이전트
@@ -62,7 +62,14 @@ Be precise, efficient, and safety-conscious in your execution.`;
 
     if (plan.tool && this.toolRegistry) {
       // 도구 레지스트리에서 도구 실행
-      const toolResult = await this.toolRegistry.execute(plan.tool, plan.parameters);
+      const toolContext: ToolCtx = {
+        sessionId: context.sessionId,
+        agentId: this.id,
+        taskId: context.currentTask?.id,
+        metadata: context.currentTask?.metadata,
+        permissions: new Set(["*"]),
+      };
+      const toolResult = await this.toolRegistry.execute(plan.tool, plan.parameters, toolContext);
 
       // 실행 결과를 상태에 저장
       context.board.write(`state.execution.${this.id}.${Date.now()}`, {

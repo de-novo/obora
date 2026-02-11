@@ -118,17 +118,22 @@ export class ToolRegistry {
 
     try {
       const timeoutMs = context.timeout ?? 30000;
-      const result = await Promise.race([
-        tool.execute(params, context),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("Tool execution timeout")), timeoutMs)
-        ),
-      ]);
-      return {
-        success: true,
-        data: result as TResult,
-        duration: Date.now() - startTime,
-      };
+      let timeoutId: ReturnType<typeof setTimeout>;
+      try {
+        const result = await Promise.race([
+          tool.execute(params, context),
+          new Promise<never>((_, reject) => {
+            timeoutId = setTimeout(() => reject(new Error("Tool execution timeout")), timeoutMs);
+          }),
+        ]);
+        return {
+          success: true,
+          data: result as TResult,
+          duration: Date.now() - startTime,
+        };
+      } finally {
+        clearTimeout(timeoutId!);
+      }
     } catch (error) {
       return {
         success: false,

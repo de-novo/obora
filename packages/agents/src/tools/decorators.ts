@@ -1,5 +1,5 @@
-import { Tool, ToolParameterSchema, PropertySchema } from './types';
-import { globalToolRegistry } from './registry';
+import { Tool, ToolParameterSchema, PropertySchema } from "./types";
+import { globalToolRegistry } from "./registry";
 
 interface ToolMetadata {
   name: string;
@@ -22,13 +22,15 @@ export function tool(metadata: ToolMetadata) {
     const toolDef: Tool = {
       name: metadata.name,
       description: metadata.description,
-      parameters: metadata.parameters ?? { type: 'object', properties: {} },
+      parameters: metadata.parameters ?? { type: "object", properties: {} },
       category: metadata.category,
       version: metadata.version,
       hasSideEffects: metadata.hasSideEffects ?? true,
       requiredPermissions: metadata.requiredPermissions,
       async execute(params, context) {
-        return originalMethod.call(target, params, context);
+        // Note: target is the class prototype, not an instance.
+        // Decorated tools must be stateless (no this-dependent logic).
+        return originalMethod(params, context);
       },
     };
 
@@ -40,61 +42,83 @@ export function tool(metadata: ToolMetadata) {
 
 export class ParameterSchemaBuilder {
   private schema: ToolParameterSchema = {
-    type: 'object',
+    type: "object",
     properties: {},
     required: [],
   };
 
-  string(name: string, description: string, options?: {
-    required?: boolean;
-    enum?: string[];
-    default?: string;
-    pattern?: string;
-    minLength?: number;
-    maxLength?: number;
-  }): this {
+  string(
+    name: string,
+    description: string,
+    options?: {
+      required?: boolean;
+      enum?: string[];
+      default?: string;
+      pattern?: string;
+      minLength?: number;
+      maxLength?: number;
+    }
+  ): this {
     const { required, ...restOptions } = options ?? {};
-    this.schema.properties![name] = { type: 'string', description, ...restOptions };
+    this.schema.properties![name] = { type: "string", description, ...restOptions };
     if (required) this.schema.required!.push(name);
     return this;
   }
 
-  number(name: string, description: string, options?: {
-    required?: boolean;
-    minimum?: number;
-    maximum?: number;
-    default?: number;
-  }): this {
+  number(
+    name: string,
+    description: string,
+    options?: {
+      required?: boolean;
+      minimum?: number;
+      maximum?: number;
+      default?: number;
+    }
+  ): this {
     const { required, ...restOptions } = options ?? {};
-    this.schema.properties![name] = { type: 'number', description, ...restOptions };
+    this.schema.properties![name] = { type: "number", description, ...restOptions };
     if (required) this.schema.required!.push(name);
     return this;
   }
 
-  boolean(name: string, description: string, options?: {
-    required?: boolean;
-    default?: boolean;
-  }): this {
+  boolean(
+    name: string,
+    description: string,
+    options?: {
+      required?: boolean;
+      default?: boolean;
+    }
+  ): this {
     const { required, ...restOptions } = options ?? {};
-    this.schema.properties![name] = { type: 'boolean', description, ...restOptions };
+    this.schema.properties![name] = { type: "boolean", description, ...restOptions };
     if (required) this.schema.required!.push(name);
     return this;
   }
 
-  array(name: string, description: string, items: PropertySchema, options?: {
-    required?: boolean;
-  }): this {
+  array(
+    name: string,
+    description: string,
+    items: PropertySchema,
+    options?: {
+      required?: boolean;
+    }
+  ): this {
     const { required, ...restOptions } = options ?? {};
-    this.schema.properties![name] = { type: 'array', description, items, ...restOptions };
+    this.schema.properties![name] = { type: "array", description, items, ...restOptions };
     if (required) this.schema.required!.push(name);
     return this;
   }
 
-  object(name: string, description: string, properties: Record<string, PropertySchema>, options?: {
-    required?: boolean;
-  }): this {
+  object(
+    name: string,
+    description: string,
+    properties: Record<string, PropertySchema>,
+    options?: {
+      required?: boolean;
+    }
+  ): this {
     const { required, ...restOptions } = options ?? {};
-    this.schema.properties![name] = { type: 'object', description, properties, ...restOptions };
+    this.schema.properties![name] = { type: "object", description, properties, ...restOptions };
     if (required) this.schema.required!.push(name);
     return this;
   }

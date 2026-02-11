@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { ToolRegistry } from "../../tools/registry";
-import { ToolExecutor } from "../../tools/executor";
+import { ToolExecutor, ToolExecutionChain } from "../../tools/executor";
 import { ToolContext } from "../../tools/types";
 
 describe("ToolExecutor", () => {
@@ -73,5 +73,105 @@ describe("ToolExecutor", () => {
     expect(responses).toHaveLength(2);
     expect(responses[0].result).toBe(JSON.stringify({ a: 1 }));
     expect(responses[1].result).toBe(JSON.stringify({ b: 2 }));
+  });
+
+  it("should handle tool that returns undefined", async () => {
+    const registry = new ToolRegistry();
+    registry.register({
+      name: "void_tool",
+      description: "returns undefined",
+      parameters: { type: "object", properties: {} },
+      async execute() {
+        return undefined;
+      },
+    });
+    const executor = new ToolExecutor(registry);
+    const response = await executor.handleFunctionCall(
+      { id: "1", name: "void_tool", arguments: "{}" },
+      context
+    );
+    expect(response.result).toBe("null");
+    expect(response.error).toBeUndefined();
+  });
+});
+
+describe("ToolExecutionChain", () => {
+  const context: ToolContext = {
+    sessionId: "s1",
+    agentId: "a1",
+    permissions: new Set(["*"]),
+  };
+
+  it("should execute tool chain with JSON parsing error handling", async () => {
+    const registry = new ToolRegistry();
+    registry.register({
+      name: "greet",
+      description: "greet",
+      parameters: { type: "object", properties: {} },
+      async execute() {
+        return { message: "hello" };
+      },
+    });
+    registry.register({
+      name: "echo",
+      description: "echo",
+      parameters: { type: "object", properties: {} },
+      async execute() {
+        return "plain text";
+      },
+    });
+
+    const executor = new ToolExecutor(registry);
+    const chain = new ToolExecutionChain(executor);
+
+    const results = await chain.then("greet", {}).then("echo", {}).execute(context);
+
+    expect(results).toHaveLength(2);
+    expect(results[0].success).toBe(true);
+    expect(results[0].data).toEqual({ message: "hello" });
+    expect(results[1].success).toBe(true);
+    expect(results[1].data).toBe("plain text");
+  });
+
+  it("should handle empty result string", async () => {
+    const registry = new ToolRegistry();
+    registry.register({
+      name: "empty",
+      description: "returns empty string",
+      parameters: { type: "object", properties: {} },
+      async execute() {
+        return "";
+      },
+    });
+
+    const executor = new ToolExecutor(registry);
+    const chain = new ToolExecutionChain(executor);
+
+    const results = await chain.then("empty", {}).execute(context);
+
+    expect(results).toHaveLength(1);
+    expect(results[0].success).toBe(true);
+    expect(results[0].data).toBe("");
+  });
+
+  it("should handle tool that returns null", async () => {
+    const registry = new ToolRegistry();
+    registry.register({
+      name: "null_tool",
+      description: "returns null",
+      parameters: { type: "object", properties: {} },
+      async execute() {
+        return null;
+      },
+    });
+
+    const executor = new ToolExecutor(registry);
+    const chain = new ToolExecutionChain(executor);
+
+    const results = await chain.then("null_tool", {}).execute(context);
+
+    expect(results).toHaveLength(1);
+    expect(results[0].success).toBe(true);
+    expect(results[0].data).toBe(null);
   });
 });

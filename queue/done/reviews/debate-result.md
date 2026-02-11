@@ -1,9 +1,8 @@
 
 
-I need to examine the actual source code to verify the checklist items before making a final judgment.
-Now let me also check the test files and the Blackboard/LLM adapter interfaces to fully understand the context:
-Now let me verify the tests pass:
-All 124 tests pass. Now I have the full picture to write the final review judgment.
+Let me first examine the actual code files to verify the claims made by all three reviewers.
+Now let me also check the markdown template files and run the typecheck to be thorough:
+The typecheck passes cleanly. Now I have all the information needed to produce the final adjudication.
 
 ## 최종 점수
 - **총점: 10/10**
@@ -14,29 +13,17 @@ All 124 tests pass. Now I have the full picture to write the final review judgme
 
 ## 기각된 이슈
 
-없음 — 3개 리뷰 모두 체크리스트 2개 항목에 대해 만장일치로 **PASS**를 부여했으며, 추가 이슈를 제기하지 않았습니다.
+### 1. `AgentRole` 타입 충돌으로 typecheck 실패
+- **기각 이유**: 3개 리뷰 모두 PASS로 판정. 실제 코드 확인 결과 `template.ts:2`에서 `import { AgentRole } from "../roles/base-agent"`로 올바르게 import하며, `base-agent.ts:12-17`에 단일 `enum AgentRole` 정의만 존재. `prompts/index.ts`에서 `AgentRole`을 re-export하지 않아 충돌 없음. `npx tsc --noEmit` 통과 확인.
 
-### 검증 세부 내용
+### 2. `addSection()`이 `{{section:name}}` 플레이스홀더를 삽입하지만 렌더링 시 처리되지 않음
+- **기각 이유**: 3개 리뷰 모두 PASS로 판정. 실제 코드 `builder.ts:18-21`에서 `addSection()`은 `content`를 직접 `this.parts.push(content)`로 삽입하며, `{{section:name}}` 플레이스홀더를 사용하지 않음. 스펙 코드에 존재하던 문제가 구현 시 이미 수정됨.
 
-| # | 체크리스트 항목 | Opus | Codex | GLM | 실제 코드 확인 | 최종 판정 |
-|---|---|---|---|---|---|---|
-| 1 | `report` 메서드의 Blackboard 경로가 스펙과 일치하는지 | PASS | PASS | PASS | `base-agent.ts:226` — `state.agent.${this.id}.lastResult` 경로로 스펙과 동일 | **PASS** |
-| 2 | `ExecutorAgent.act`에서 도구 실행 결과를 반환하는지 | PASS | PASS | PASS | `executor-agent.ts:75` — `return toolResult;`로 정상 반환 | **PASS** |
+### 3. `PromptTemplateConfig`의 `examples`와 `outputFormat` 필드가 constructor에서 저장되지 않음
+- **기각 이유**: 3개 리뷰 모두 PASS로 판정. 실제 코드 `template.ts:38-39`에 `private examples: Example[] = []`과 `private outputFormat?: OutputFormat` 선언이 있고, `template.ts:58-59`의 config 분기 constructor에서 `this.examples = config.examples ?? []`, `this.outputFormat = config.outputFormat`으로 올바르게 저장.
 
-### 추가 코드 품질 확인 사항 (P0/P1 해당 없음)
-
-실제 코드를 검토한 결과, 스펙 대비 아래와 같은 **개선 사항**이 구현에 반영되어 있습니다:
-
-1. **`BaseAgent.execute`에 최대 에러 사전 차단 로직 추가** (`base-agent.ts:117-127`) — 스펙에는 없었으나 엣지 케이스 7번을 구현한 합리적 추가
-2. **`think` 메서드가 `usage` 반환** (`base-agent.ts:198-214`) — 스펙에서는 `tokensUsed`에 하드코딩된 0을 넣었으나, 실제 구현에서는 LLM 응답의 `usage`를 올바르게 전달
-3. **`observe`에서 `strict: false` 옵션 사용** (`base-agent.ts:179-181`) — Blackboard에 키가 없을 때 에러 대신 `null` 반환으로 안전하게 처리
-4. **`createAgentTeam`의 기본 카운트 로직 개선** (`factory.ts:58-64`) — 역할이 하나라도 지정되면 미지정 역할은 0, 아무것도 지정 안 되면 각 1개씩 생성
-5. **`parseResponse`에서 `type` 필드 덮어쓰기 안전 처리** — 모든 에이전트에서 `{ type: _type, ...safeParsed }` 패턴으로 LLM 응답의 `type` 필드가 있더라도 안전하게 덮어씀
-
-이들은 모두 스펙의 의도를 충실히 따르면서 견고성을 높인 합리적 구현이며, 이슈로 분류할 사항이 아닙니다.
-
-모든 테스트 124개가 통과합니다 (6개 테스트 파일).
+### 4. `ChatMessage`/`ToolCall` 불필요한 re-export로 잠재적 충돌 위험
+- **기각 이유**: 3개 리뷰 모두 PASS로 판정. 실제 코드 `template.ts:1`에서 `import type { ChatMessage, ToolCall } from "../llm/adapter"`로 type-only import 사용. `prompts/index.ts`에서 `ChatMessage`, `ToolCall`을 re-export하지 않음. 정식 export는 `llm/adapter.ts`에서만 이루어져 충돌 없음.
 
 ## Fixer 지시사항
-
-수정할 P0/P1 이슈가 없습니다. 현재 구현은 스펙을 충실히 반영하고 있으며, 모든 테스트를 통과합니다.
+확정된 P0/P1 이슈가 없으므로 수정할 사항이 없습니다.

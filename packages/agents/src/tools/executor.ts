@@ -30,7 +30,7 @@ export class ToolExecutor {
     if (result.success) {
       return {
         id: call.id,
-        result: JSON.stringify(result.data),
+        result: JSON.stringify(result.data ?? null),
       };
     } else {
       return {
@@ -91,9 +91,18 @@ export class ToolExecutionChain {
         context
       );
 
+      let parsedData: unknown;
+      if (!result.error) {
+        try {
+          parsedData = result.result ? JSON.parse(result.result) : null;
+        } catch {
+          parsedData = result.result;
+        }
+      }
+
       const executionResult: ToolExecutionResult = {
         success: !result.error,
-        data: result.error ? undefined : JSON.parse(result.result),
+        data: result.error ? undefined : parsedData,
         error: result.error ? { code: "EXECUTION_ERROR", message: result.error } : undefined,
         duration: 0,
       };

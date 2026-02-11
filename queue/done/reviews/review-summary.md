@@ -1,10 +1,10 @@
-# 리뷰 요약 - TASK-031-agent-roles
+# 리뷰 요약 - TASK-032-prompt-templates
 
 ## 검토 대상
-- 태스크: /Users/denovo/workspace/github/obora-kit/queue/TASK-031-agent-roles.md
+- 태스크: /Users/denovo/workspace/github/obora-kit/queue/TASK-032-prompt-templates.md
 - 프로젝트: /Users/denovo/workspace/github/obora-kit
-- 리뷰 시작: 2026-02-12 00:14:52
-- 리뷰 완료: 2026-02-12 00:16:03
+- 리뷰 시작: 2026-02-12 02:17:14
+- 리뷰 완료: 2026-02-12 02:18:25
 - 소요 시간: 1m 11s
 - 완료된 리뷰: 3/3
 
@@ -15,22 +15,12 @@
 
 
 
-I'll verify the checklist items by examining the actual source code. Let me start by finding the relevant files.
-Now I have the code for both checklist items. Let me verify item 1 by checking the `report` method's Blackboard path, and item 2 is already visible in the executor-agent code. Let me also check the Blackboard interface to understand the expected path structure.
-Now I have all the data I need. Let me analyze each checklist item:
-
-**Checklist Item 1: `report` 메서드의 Blackboard 경로가 스펙과 불일치**
-
-The `report` method in `base-agent.ts:226` uses the path `state.agent.${this.id}.lastResult`. The spec also specifies the same path: `state.agent.${this.id}.lastResult`. These match. The issue was about whether the path in the `report` method matches the spec - looking at both the spec and the code, they are identical at line 226.
-
-**Checklist Item 2: `ExecutorAgent.act`에서 도구 실행 결과를 반환하지 않음**
-
-Looking at `executor-agent.ts:60-93`, the `act` method now:
-- Line 65: stores tool result in `toolResult` variable
-- Line 75: `return toolResult;` - properly returns the tool execution result
-- Line 93: `return plan;` - returns the plan when no tool is used
-
-The original issue was that the tool execution result wasn't being returned. This has been fixed.
+I'll verify each checklist item by examining the actual source code. Let me start by finding the relevant files.
+Now let me read the key files to verify each checklist item:
+Now let me also check the index.ts and the agents package main export to verify checklist items 1 and 4:
+Now let me check if there are any remaining `AgentRole` type alias definitions that could conflict, and verify the exports more closely:
+Now let me run the typecheck to verify item 1 concretely:
+Good - typecheck passes cleanly. Now I have all the information needed to verify each checklist item. Let me compile the results.
 
 # 체크리스트 검증 결과
 
@@ -39,46 +29,57 @@ The original issue was that the tool execution result wasn't being returned. Thi
 
 ## 항목별 검증
 
-### 1. `report` 메서드의 Blackboard 경로가 스펙과 불일치
+### 1. `AgentRole` 타입 충돌으로 typecheck 실패
 **[PASS]**
 
-현재 코드 (`base-agent.ts:226`):
-```typescript
-context.board.write(`state.agent.${this.id}.lastResult`, {
-```
+스펙에서는 `AgentRole`을 `template.ts`에서 `type AgentRole = 'analyst' | 'executor' | 'verifier' | 'director'`로 로컬 정의했으나, 현재 코드에서는 이를 제거하고 `base-agent.ts`에서 정의된 `enum AgentRole`을 import하여 사용합니다.
 
-스펙에서 정의한 경로:
-```typescript
-context.board.write(`state.agent.${this.id}.lastResult`, {
-```
+- `packages/agents/src/prompts/template.ts:2` — `import { AgentRole } from "../roles/base-agent";`
+- `packages/agents/src/roles/base-agent.ts:12-17` — `enum AgentRole` 단일 정의
+- `packages/agents/src/prompts/index.ts` — `AgentRole`를 re-export하지 않음 (충돌 방지)
+- `npx tsc --noEmit` 통과 확인
 
-두 경로가 동일합니다. 현재 코드에 해당 문제가 없습니다.
-
-### 2. `ExecutorAgent.act`에서 도구 실행 결과를 반환하지 않음
+### 2. `addSection()`이 `{{section:name}}` 플레이스홀더를 삽입하지만 렌더링 시 처리되지 않음
 **[PASS]**
 
-현재 코드 (`executor-agent.ts:60-93`)에서 수정이 확인됩니다:
+수정됨. 현재 `addSection()` 메서드는 `{{section:name}}` 플레이스홀더를 삽입하지 않고, `content` 자체를 직접 `parts`에 추가합니다.
 
-- **도구 사용 시** (line 65, 75): `toolResult` 변수에 도구 실행 결과를 저장하고 `return toolResult;`로 반환
-- **도구 미사용 시** (line 93): `return plan;`으로 계획 반환
+- `packages/agents/src/prompts/builder.ts:18-21`:
+  ```typescript
+  addSection(name: string, content: string): this {
+    this.sections.set(name, content);
+    this.parts.push(content);  // 플레이스홀더가 아닌 실제 content를 삽입
+    return this;
+  }
+  ```
 
-```typescript
-// executor-agent.ts:63-76
-if (plan.tool && this.toolRegistry) {
-  const toolResult = await this.toolRegistry.execute(plan.tool, plan.parameters);
-  context.board.write(`state.execution.${this.id}.${Date.now()}`, {
-    plan,
-    toolResult,
-    timestamp: new Date(),
-  });
-  return toolResult;  // ← 도구 실행 결과를 올바르게 반환
-}
-```
+### 3. `PromptTemplateConfig`의 `examples`와 `outputFormat` 필드가 constructor에서 저장되지 않음
+**[PASS]**
 
-이전에는 결과를 반환하지 않는 문제가 있었으나, 현재 코드에서는 `toolResult`를 명시적으로 반환하도록 수정되었습니다.
+수정됨. 현재 constructor에서 두 필드를 모두 저장합니다.
+
+- `packages/agents/src/prompts/template.ts:38-39` — 클래스에 `examples`와 `outputFormat` 프로퍼티 선언:
+  ```typescript
+  private examples: Example[] = [];
+  private outputFormat?: OutputFormat;
+  ```
+- `packages/agents/src/prompts/template.ts:58-59` — constructor config 분기에서 저장:
+  ```typescript
+  this.examples = config.examples ?? [];
+  this.outputFormat = config.outputFormat;
+  ```
+
+### 4. `ChatMessage`/`ToolCall` 불필요한 re-export로 잠재적 충돌 위험
+**[PASS]**
+
+수정됨. 현재 `template.ts`는 `ChatMessage`와 `ToolCall`을 `import type`으로 가져오며, `prompts/index.ts`에서 이들을 re-export하지 않습니다.
+
+- `packages/agents/src/prompts/template.ts:1` — `import type { ChatMessage, ToolCall } from "../llm/adapter";` (type-only import)
+- `packages/agents/src/prompts/index.ts` — `ChatMessage`, `ToolCall`을 export 목록에 포함하지 않음
+- 정식 export는 `packages/agents/src/llm/adapter.ts`를 통해서만 이루어짐 → 충돌 없음
 
 ## 수정이 필요한 항목
-없음 - 모든 항목이 PASS입니다.
+없음. 모든 항목이 PASS입니다.
 
 ---
 ### codex (openai/gpt-5.2-codex)
@@ -89,8 +90,10 @@ if (plan.tool && this.toolRegistry) {
 10/10
 
 ## Item-by-Item Verification
-1. PASS — `report` writes to `state.agent.${this.id}.lastResult` as specified (`packages/agents/src/roles/base-agent.ts:225`)
-2. PASS — `ExecutorAgent.act` returns the tool execution result (`packages/agents/src/roles/executor-agent.ts:65`)
+1. PASS — AgentRole now imported from shared enum, avoiding conflicting local type (`packages/agents/src/prompts/template.ts:2`, `packages/agents/src/roles/base-agent.ts:12`)
+2. PASS — `addSection()` inserts content directly (no unused `{{section:name}}` placeholder) (`packages/agents/src/prompts/builder.ts:18-21`)
+3. PASS — `examples` and `outputFormat` stored in constructor (`packages/agents/src/prompts/template.ts:58-59`)
+4. PASS — No re-export of `ChatMessage`/`ToolCall` from prompts index (`packages/agents/src/prompts/template.ts:1`, `packages/agents/src/prompts/index.ts:1-17`)
 
 ## Items Requiring Fixes
 None.
@@ -98,6 +101,8 @@ None.
 ---
 ### glm (zai-coding-plan/glm-4.7)
 
+I need to check the actual code files to verify the checklist items. Let me read the relevant files first.
+Now let me check if there's a type check issue:
 # 체크리스트 검증 결과
 
 ## 총점
@@ -105,12 +110,13 @@ None.
 
 ## 항목별 검증
 
-1. **PASS** - `base-agent.ts:226`에서 `context.board.write(\`state.agent.${this.id}.lastResult\`, {...})` 경로를 사용하며, 스펙과 일치함
+1. **PASS** - `AgentRole` 타입은 template.ts:2에서 올바르게 import되어 사용되며, typecheck에 성공함. base-agent.ts:12-17에 정의된 enum 사용 중으로 충돌 없음
 
-2. **PASS** - `executor-agent.ts:75`에서 `return toolResult;`로 도구 실행 결과를 정상 반환함
+2. **PASS** - builder.ts:18-22에서 `addSection()`이 `{{section:name}}` 플레이스홀더 대신 content를 직접 추가하도록 수정되어 렌더링 문제 해결됨
 
-## 수정이 필요한 항목
-없음 (모든 항목이 PASS)
+3. **PASS** - template.ts:38-39에 `examples`, `outputFormat` 필드가 선언되고, template.ts:58-59 constructor에서 올바르게 저장됨
+
+4. **PASS** - template.ts:1에서 `import type { ChatMessage, ToolCall }`으로 type import만 하며, index.ts에서 re-export하지 않아 충돌 위험 없음
 
 ---
 ## 최종 평가

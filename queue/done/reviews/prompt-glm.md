@@ -1,1186 +1,1321 @@
 <review>
   <mode>checklist_verification</mode>
   <task>
-    <name>TASK-031-agent-roles</name>
+    <name>TASK-032-prompt-templates</name>
     <spec><![CDATA[
-# TASK-031: 역할별 에이전트 구현
+# TASK-032: 프롬프트 템플릿 시스템
 
 ## 개요
 - **상태**: 📋 대기
 - 우선순위: P1
-- 예상 소요: 12시간
+- 예상 소요: 6시간
 - 담당: 개발자
 - Phase: Week 5-6
 
 ## 목표
-역할별 AI 에이전트 구현 (Analyst/Executor/Verifier/Director)
-
-> **설계 원칙 (4모델 토론 결과)**
-> - 모든 에이전트는 공통 `execute(input: AgentInput): Promise<AgentOutput>` 메서드 사용
-> - 역할별 특화 메서드 대신 **입출력 타입**으로 역할 구분
-> - LLM Adapter는 `chatCompletion()` 메서드명 통일
+에이전트용 프롬프트 템플릿 시스템 구현
 
 ## 작업 내용
 
-### 추가: DecisionsSection 타입 확장
-- `DecisionsSection`에 `voting: Record<string, VotingSession>` 필드 추가
-- `VotingSession` 인터페이스 정의 (DirectorAgent.startVotingSession/tallyVotes 지원)
-- Blackboard 초기 상태에 `voting: {}` 기본값 추가
+### 1. PromptTemplate 클래스
 
-### 1. BaseAgent 추상 클래스
-
-**파일 위치:** `packages/agents/src/roles/base-agent.ts`
+**파일 위치:** `packages/agents/src/prompts/template.ts`
 
 ```typescript
-import { LLMAdapter, ChatMessage, ChatCompletionParams } from '../llm/adapter';
-import type { Blackboard } from '@obora-kit/blackboard';
-
 /**
- * 에이전트 ID 타입
+ * 유효성 검사 결과
  */
-export type AgentId = string;
-
-/**
- * 에이전트 역할
- */
-export enum AgentRole {
-  ANALYST = 'analyst',
-  EXECUTOR = 'executor',
-  VERIFIER = 'verifier',
-  DIRECTOR = 'director',
+export interface ValidationResult {
+  valid: boolean;
+  errors?: string[];
 }
 
 /**
- * 에이전트 상태
+ * 프롬프트 템플릿 인터페이스 (스펙 14-ai-agents.md와 일치)
  */
-export enum AgentState {
-  IDLE = 'idle',
-  THINKING = 'thinking',
-  ACTING = 'acting',
-  WAITING = 'waiting',
-  ERROR = 'error',
-}
-
-/**
- * 회의 단계
- */
-export enum MeetingPhase {
-  OPENING = 'opening',
-  DISCUSSION = 'discussion',
-  VOTING = 'voting',
-  CONSENSUS = 'consensus',
-  CLOSING = 'closing',
-  ESCALATION = 'escalation',
-}
-
-/**
- * 에이전트 상태 정보
- */
-export interface AgentStatus {
-  id: AgentId;
-  role: AgentRole;
-  state: AgentState;
-  lastActivity: Date;
-  currentTask?: string;
-  errorCount: number;
-}
-
-/**
- * 에이전트 컨텍스트
- */
-export interface AgentContext {
-  sessionId: string;
-  board: Blackboard;
-  currentTask?: Task;
-  history: ChatMessage[];
-}
-
-/**
- * 작업
- */
-export interface Task {
+export interface IPromptTemplate {
+  // 템플릿 ID
   id: string;
-  type: string;
-  description: string;
-  input: Record<string, unknown>;
-  priority: number;
-  deadline?: Date;
-  metadata?: Record<string, unknown>;
+
+  // 템플릿 이름
+  name: string;
+
+  // 역할
+  role: AgentRole;
+
+  // 템플릿 렌더링
+  render(variables: Record<string, unknown>): string;
+
+  // 메시지 생성 (스펙에 추가됨)
+  toMessages(variables: Record<string, unknown>): ChatMessage[];
+
+  // 변수 검증 (스펙에 추가됨)
+  validate(variables: Record<string, unknown>): ValidationResult;
 }
 
 /**
- * 작업 결과
+ * 프롬프트 템플릿
+ * 변수 치환, 조건부 섹션, 템플릿 상속 지원
  */
-export interface TaskResult {
-  taskId: string;
-  success: boolean;
-  output: unknown;
-  error?: Error;
-  duration: number;
-  tokensUsed: {
-    prompt: number;
-    completion: number;
-    total: number;
-  };
-}
+export class PromptTemplate implements IPromptTemplate {
+  id: string;
+  name: string;
+  role: AgentRole;
 
-/**
- * 기반 에이전트 추상 클래스
- */
-export abstract class BaseAgent {
-  readonly id: AgentId;
-  readonly role: AgentRole;
-  protected state: AgentState = AgentState.IDLE;
-  protected llm: LLMAdapter;
-  protected systemPrompt: string;
-  protected errorCount: number = 0;
-  protected maxErrors: number = 3;
+  private template: string;
+  private variables: Set<string>;
+  private parent?: PromptTemplate;
+  private systemPrompt?: string;
+  private variableDefinitions: VariableDefinition[] = [];
 
-  constructor(config: BaseAgentConfig) {
-    this.id = config.id ?? `${config.role}-${Date.now()}`;
-    this.role = config.role;
-    this.llm = config.llm;
-    this.systemPrompt = config.systemPrompt ?? this.getDefaultSystemPrompt();
+  constructor(template: string, parent?: PromptTemplate);
+  constructor(config: PromptTemplateConfig);
+  constructor(templateOrConfig: string | PromptTemplateConfig, parent?: PromptTemplate) {
+    if (typeof templateOrConfig === 'string') {
+      // 기존 호환성: 문자열로 생성
+      this.id = `template-${Date.now()}`;
+      this.name = 'Unnamed Template';
+      this.role = 'analyst';
+      this.template = templateOrConfig;
+      this.parent = parent;
+    } else {
+      // 스펙 기반: 설정 객체로 생성
+      const config = templateOrConfig;
+      this.id = config.id;
+      this.name = config.name;
+      this.role = config.role;
+      this.template = config.user;
+      this.systemPrompt = config.system;
+      this.variableDefinitions = config.variables;
+    }
+    this.variables = new Set();
+    this.extractVariables(this.template);
   }
 
   /**
-   * 작업 실행
+   * 시스템 프롬프트 설정
    */
-  async execute(task: Task, context: AgentContext): Promise<TaskResult> {
-    const startTime = Date.now();
-    this.state = AgentState.THINKING;
+  setSystemPrompt(systemPrompt: string): void {
+    this.systemPrompt = systemPrompt;
+  }
 
-    try {
-      // 1. 관찰 (Observe) - Blackboard에서 정보 읽기
-      const observation = await this.observe(context);
+  /**
+   * 변수 정의 설정
+   */
+  setVariableDefinitions(variables: VariableDefinition[]): void {
+    this.variableDefinitions = variables;
+  }
 
-      // 2. 사고 (Think) - LLM을 사용하여 의사결정
-      const action = await this.think(task, observation, context);
+  /**
+   * 템플릿 렌더링
+   */
+  render(variables: Record<string, unknown>): string {
+    let result = this.template;
 
-      // 3. 실행 (Act) - 의사결정 수행
-      this.state = AgentState.ACTING;
-      const result = await this.act(action, context);
+    // 부모 템플릿 먼저 렌더링
+    if (this.parent) {
+      const parentResult = this.parent.render(variables);
+      result = `${parentResult}\n\n${result}`;
+    }
 
-      // 4. 보고 (Report) - 결과를 Blackboard에 기록
-      await this.report(task, result, context);
+    // 조건부 섹션 처리
+    result = this.processConditionals(result, variables);
 
-      this.state = AgentState.IDLE;
-      this.errorCount = 0;
+    // 변수 치환
+    result = this.substituteVariables(result, variables);
 
-      return {
-        taskId: task.id,
-        success: true,
-        output: result,
-        duration: Date.now() - startTime,
-        tokensUsed: { prompt: 0, completion: 0, total: 0 },
-      };
-    } catch (error) {
-      this.state = AgentState.ERROR;
-      this.errorCount++;
+    // 미치환 변수 처리
+    result = this.handleUnsubstituted(result, variables);
 
-      return {
-        taskId: task.id,
-        success: false,
-        output: null,
-        error: error as Error,
-        duration: Date.now() - startTime,
-        tokensUsed: { prompt: 0, completion: 0, total: 0 },
-      };
+    return result.trim();
+  }
+
+  /**
+   * 변수 추출
+   */
+  private extractVariables(template: string): void {
+    const pattern = /\{\{(\w+)\}\}/g;
+    let match;
+    while ((match = pattern.exec(template)) !== null) {
+      this.variables.add(match[1]);
     }
   }
 
   /**
-   * 관찰 - Blackboard에서 정보 수집
+   * 변수 치환
    */
-  protected async observe(context: AgentContext): Promise<Record<string, unknown>> {
-    const state = context.board.read('state') as Record<string, unknown>;
-    const knowledge = context.board.read('knowledge') as Record<string, unknown>;
-
-    return {
-      currentState: state,
-      availableKnowledge: knowledge,
-      currentTask: context.currentTask,
-      sessionId: context.sessionId,
-    };
-  }
-
-  /**
-   * 사고 - LLM을 사용하여 의사결정
-   */
-  protected async think(
-    task: Task,
-    observation: Record<string, unknown>,
-    context: AgentContext
-  ): Promise<unknown> {
-    const messages = this.buildMessages(task, observation, context);
-
-    const result = await this.llm.chatCompletion({
-      messages,
-      temperature: 0.7,
-      maxTokens: 2048,
-    });
-
-    // 역할별 응답 파싱
-    return this.parseResponse(result.message.content ?? '', task);
-  }
-
-  /**
-   * 실행 - 의사결정 수행 (하위 클래스에서 구현)
-   */
-  protected abstract act(action: unknown, context: AgentContext): Promise<unknown>;
-
-  /**
-   * 보고 - 결과를 Blackboard에 기록
-   */
-  protected async report(
-    task: Task,
-    result: unknown,
-    context: AgentContext
-  ): Promise<void> {
-    context.board.write(`state.agent.${this.id}.lastResult`, {
-      taskId: task.id,
-      timestamp: new Date(),
-      result,
+  private substituteVariables(
+    template: string,
+    variables: Record<string, unknown>
+  ): string {
+    return template.replace(/\{\{(\w+)\}\}/g, (match, name) => {
+      const value = this.getNestedValue(variables, name);
+      if (value === undefined) {
+        return match; // 나중에 처리
+      }
+      return String(value);
     });
   }
 
   /**
-   * 메시지 빌드
+   * 중첩 값 가져오기
    */
-  protected buildMessages(
-    task: Task,
-    observation: Record<string, unknown>,
-    context: AgentContext
-  ): ChatMessage[] {
-    const messages: ChatMessage[] = [
-      { role: 'system', content: this.systemPrompt },
-    ];
+  private getNestedValue(obj: Record<string, unknown>, path: string): unknown {
+    const parts = path.split('.');
+    let current: unknown = obj;
 
-    // 이력에 최근 N개의 메시지 추가
-    const recentHistory = context.history.slice(-10);
-    messages.push(...recentHistory);
+    for (const part of parts) {
+      if (typeof current === 'object' && current !== null) {
+        current = (current as Record<string, unknown>)[part];
+      } else {
+        return undefined;
+      }
+    }
 
-    // 현재 컨텍스트 정보 추가
+    return current;
+  }
+
+  /**
+   * 조건부 섹션 처리
+   * 형식: {{#if variable}}...{{/if}}
+   * 형식: {{#unless variable}}...{{/unless}}
+   */
+  private processConditionals(
+    template: string,
+    variables: Record<string, unknown>
+  ): string {
+    // {{#if}} 처리
+    template = template.replace(
+      /\{\{#if\s+(\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g,
+      (match, name, content) => {
+        const value = this.getNestedValue(variables, name);
+        return this.isTruthy(value) ? content : '';
+      }
+    );
+
+    // {{#unless}} 처리
+    template = template.replace(
+      /\{\{#unless\s+(\w+)\}\}([\s\S]*?)\{\{\/unless\}\}/g,
+      (match, name, content) => {
+        const value = this.getNestedValue(variables, name);
+        return !this.isTruthy(value) ? content : '';
+      }
+    );
+
+    return template;
+  }
+
+  /**
+   * Truthy 판별
+   */
+  private isTruthy(value: unknown): boolean {
+    if (value === null || value === undefined) return false;
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value !== 0;
+    if (typeof value === 'string') return value.length > 0;
+    if (Array.isArray(value)) return value.length > 0;
+    return true;
+  }
+
+  /**
+   * 미치환 변수 처리
+   */
+  private handleUnsubstituted(
+    template: string,
+    variables: Record<string, unknown>
+  ): string {
+    // 기본값 처리: {{variable|default}}
+    template = template.replace(
+      /\{\{(\w+)\|([^}]+)\}\}/g,
+      (match, name, defaultValue) => {
+        const value = this.getNestedValue(variables, name);
+        return value !== undefined ? String(value) : defaultValue;
+      }
+    );
+
+    // 여전히 미치환된 변수는 빈 문자열로 대체
+    return template.replace(/\{\{\w+\}\}/g, '');
+  }
+
+  /**
+   * 변수 목록 반환
+   */
+  getVariables(): string[] {
+    return Array.from(this.variables);
+  }
+
+  /**
+   * 부모 템플릿 설정
+   */
+  extend(parent: PromptTemplate): void {
+    this.parent = parent;
+  }
+
+  /**
+   * 템플릿 병합
+   */
+  merge(other: PromptTemplate): PromptTemplate {
+    const mergedTemplate = `${this.template}\n\n${other.template}`;
+    const merged = new PromptTemplate(mergedTemplate, this.parent);
+    merged.variables = new Set([...this.variables, ...other.variables]);
+    return merged;
+  }
+
+  /**
+   * 템플릿 복제
+   */
+  clone(): PromptTemplate {
+    const cloned = new PromptTemplate(this.template, this.parent);
+    cloned.id = this.id;
+    cloned.name = this.name;
+    cloned.role = this.role;
+    cloned.systemPrompt = this.systemPrompt;
+    cloned.variables = new Set(this.variables);
+    return cloned;
+  }
+
+  /**
+   * 메시지 생성 (스펙 IPromptTemplate 인터페이스)
+   * ChatMessage[] 형식으로 변환하여 LLM에 전달
+   */
+  toMessages(variables: Record<string, unknown>): ChatMessage[] {
+    const messages: ChatMessage[] = [];
+
+    // 시스템 프롬프트 추가 (있는 경우)
+    if (this.systemPrompt) {
+      messages.push({ role: 'system', content: this.systemPrompt });
+    }
+
+    // 렌더링된 사용자 프롬프트 추가
     messages.push({
       role: 'user',
-      content: this.formatTaskAndObservation(task, observation),
+      content: this.render(variables),
     });
 
     return messages;
   }
 
   /**
-   * 작업 및 관찰 포맷팅
+   * 변수 검증 (스펙 IPromptTemplate 인터페이스)
+   * 정의된 변수 정의와 비교하여 유효성 검사
    */
-  protected formatTaskAndObservation(
-    task: Task,
-    observation: Record<string, unknown>
-  ): string {
-    return `
-Current Task:
-- ID: ${task.id}
-- Type: ${task.type}
-- Description: ${task.description}
-- Input: ${JSON.stringify(task.input, null, 2)}
+  validate(variables: Record<string, unknown>): ValidationResult {
+    const errors: string[] = [];
 
-Current Context:
-- Session ID: ${observation.sessionId}
-- Available: ${JSON.stringify(observation, null, 2)}
+    // 템플릿에서 추출한 변수들 중 필수 변수 확인
+    for (const varDef of this.variableDefinitions) {
+      if (varDef.required && variables[varDef.name] === undefined) {
+        errors.push(`Required variable '${varDef.name}' is missing`);
+      }
 
-Please analyze and provide your response in the appropriate format.
-`.trim();
-  }
+      const value = variables[varDef.name];
+      if (value !== undefined && typeof value !== varDef.type) {
+        errors.push(`Variable '${varDef.name}' should be type '${varDef.type}', but got '${typeof value}'`);
+      }
+    }
 
-  /**
-   * 응답 파싱 (하위 클래스에서 구현)
-   */
-  protected abstract parseResponse(content: string, task: Task): unknown;
-
-  /**
-   * 기본 시스템 프롬프트 (하위 클래스에서 오버라이드)
-   */
-  protected abstract getDefaultSystemPrompt(): string;
-
-  /**
-   * 상태 가져오기
-   */
-  getStatus(): AgentStatus {
     return {
-      id: this.id,
-      role: this.role,
-      state: this.state,
-      lastActivity: new Date(),
-      currentTask: undefined,
-      errorCount: this.errorCount,
+      valid: errors.length === 0,
+      errors: errors.length > 0 ? errors : undefined,
     };
   }
-
-  /**
-   * 에러 카운트 리셋
-   */
-  resetErrorCount(): void {
-    this.errorCount = 0;
-  }
-
-  /**
-   * 최대 에러 도달 여부 확인
-   */
-  hasExceededMaxErrors(): boolean {
-    return this.errorCount >= this.maxErrors;
-  }
 }
 
 /**
- * 기반 에이전트 설정
+ * 변수 정의
  */
-export interface BaseAgentConfig {
-  id?: AgentId;
+export interface VariableDefinition {
+  name: string;
+  type: 'string' | 'number' | 'boolean' | 'object' | 'array';
+  required: boolean;
+  default?: unknown;
+  description?: string;
+}
+
+/**
+ * PromptTemplate 설정 (스펙 PromptTemplateConfig와 일치)
+ */
+export interface PromptTemplateConfig {
+  id: string;
+  name: string;
   role: AgentRole;
-  llm: LLMAdapter;
-  systemPrompt?: string;
-  maxErrors?: number;
-}
 
-// ============================================
-// 역할별 입출력 타입 정의 (스펙 14-ai-agents.md와 일치)
-// ============================================
+  // 시스템 프롬프트
+  system: string;
 
-/**
- * Analyst 입력 타입
- */
-export interface AnalystInput {
-  type: 'analysis';
-  content: string;
-  goal?: string;
-  constraints?: string[];
-  resources?: string[];
-  previousPlans?: Plan[];
-  context?: Record<string, unknown>;
+  // 사용자 프롬프트 템플릿
+  user: string;
+
+  // 변수 정의
+  variables: VariableDefinition[];
+
+  // 예시 (Few-shot)
+  examples?: Example[];
+
+  // 출력 형식
+  outputFormat?: OutputFormat;
 }
 
 /**
- * Analyst 출력 타입
+ * 예시
  */
-export interface AnalystOutput {
-  type: 'analysis';
-  content: string;
-  summary: string;
-  keyFindings: string[];
-  recommendations: string[];
-  confidence: number;
-  reasoning: string;
-  sources?: string[];
+export interface Example {
+  input: Record<string, unknown>;
+  output: string;
 }
 
 /**
- * Executor 입력 타입
+ * 출력 형식
  */
-export interface ExecutorInput {
-  type: 'execution';
-  content: string;
-  taskDescription: string;
-  inputs?: Record<string, unknown>;
-  expectedOutput?: string;
-  tools?: string[];
-  context?: Record<string, unknown>;
+export interface OutputFormat {
+  type: 'text' | 'json' | 'markdown' | 'code';
+  schema?: JSONSchema;  // JSON 출력 시
 }
 
 /**
- * Executor 출력 타입
+ * JSON Schema
  */
-export interface ExecutorOutput {
-  type: 'execution';
-  content: string;
-  action: string;
-  tool?: string;
-  parameters: Record<string, unknown>;
-  steps: string[];
-  expectedOutcome: string;
+export interface JSONSchema {
+  type: 'object' | 'array' | 'string' | 'number' | 'boolean';
+  properties?: Record<string, JSONSchema>;
+  required?: string[];
+  items?: JSONSchema;
+  enum?: unknown[];
+  description?: string;
 }
 
 /**
- * Verifier 입력 타입
+ * ChatMessage 타입 (스펙에서 참조)
+ * LLMAdapter 타입과 일치하도록 정의 (packages/agents/src/llm/adapter.ts 참조)
  */
-export interface VerifierInput {
-  type: 'verification';
-  content: string;
-  artifact: Artifact;
-  criteria?: string[];
-  requirements?: string[];
-  context?: Record<string, unknown>;
-}
+export type AgentRole = 'analyst' | 'executor' | 'verifier' | 'director';
 
-/**
- * Verifier 출력 타입
- */
-export interface VerifierOutput {
-  type: 'verification';
-  content: string;
-  passed: boolean;
-  score: number;  // 0-100
-  checks: VerificationCheck[];
-  findings: Finding[];
-  suggestions: string[];
-}
-
-/**
- * Director 입력 타입
- */
-export interface DirectorInput {
-  type: 'coordination';
-  content: string;
-  agenda: string;
-  participants: string[];
-  currentOpinions?: string[];
-  conflict?: Conflict;
-  context?: Record<string, unknown>;
-}
-
-/**
- * Director 출력 타입 (스펙 14-ai-agents.md와 일치)
- */
-export interface DirectorOutput {
-  type: 'coordination';
-  content: string;
-  agenda: string;
-  participants: string[];
-  steps: CoordinationStep[];
-  timeline: string[];
-  expectedOutcome: string;
-  // 스펙에 없는 필드:
-  // - phase: 테스트용 추가 필드, 구현에서는 불필요
-  // - action: 테스트용 추가 필드, 구현에서는 불필요
-}
-
-/**
- * 검증 체크 항목
- */
-export interface VerificationCheck {
-  name: string;
-  description: string;
-  status: 'passed' | 'failed' | 'skipped';
-  evidence: string;
-}
-
-/**
- * 발견된 이슈
- */
-export interface Finding {
+export interface ToolCall {
   id: string;
-  type: 'error' | 'warning' | 'info';
-  description: string;
-  location?: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
+  type: 'function';
+  function: {
+    name: string;
+    arguments: string;
+  };
 }
 
-/**
- * 조율 단계
- */
-export interface CoordinationStep {
-  step: number;
-  description: string;
-  assignee?: string;
-  dependencies: string[];
-  estimatedDuration?: string;
-}
-
-/**
- * 갈등 정보
- */
-export interface Conflict {
-  id: string;
-  topic: string;
-  parties: string[];
-  positions: Record<string, string>;
-  severity: 'minor' | 'moderate' | 'major';
-}
-
-/**
- * 아티팩트
- */
-export interface Artifact {
-  id: string;
-  type: 'code' | 'document' | 'data' | 'plan' | 'review';
-  name: string;
-  content: string | Record<string, unknown>;
+export interface ChatMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string;
+  toolCallId?: string;
+  toolCalls?: ToolCall[];
 }
 ```
 
-### 2. AnalystAgent 구현
+### 2. 템플릿 레지스트리
 
-**파일 위치:** `packages/agents/src/roles/analyst-agent.ts`
+**파일 위치:** `packages/agents/src/prompts/registry.ts`
 
 ```typescript
-import { BaseAgent, AgentContext, Task, AgentRole, AnalystInput, AnalystOutput } from './base-agent';
+import { PromptTemplate } from './template';
 
 /**
- * Analyst 에이전트
- * 역할: 데이터 분석, 위험 평가, 패턴 인식
- * 
- * 입력: AnalystInput
- * 출력: AnalystOutput
+ * 템플릿 레지스트리
  */
-export class AnalystAgent extends BaseAgent {
-  constructor(config: Omit<Parameters<typeof BaseAgent.prototype>[0], 'role'>) {
-    super({ ...config, role: AgentRole.ANALYST });
+export class PromptTemplateRegistry {
+  private templates: Map<string, PromptTemplate>;
+  private aliases: Map<string, string>;
+
+  constructor() {
+    this.templates = new Map();
+    this.aliases = new Map();
   }
 
-  protected getDefaultSystemPrompt(): string {
-    return `You are an expert analyst with deep expertise in data analysis, risk assessment, and pattern recognition.
+  /**
+   * 템플릿 등록
+   */
+  register(name: string, template: string): void {
+    this.templates.set(name, new PromptTemplate(template));
+  }
+
+  /**
+   * 템플릿 가져오기
+   */
+  get(name: string): PromptTemplate | undefined {
+    const resolvedName = this.aliases.get(name) ?? name;
+    return this.templates.get(resolvedName);
+  }
+
+  /**
+   * 템플릿 렌더링
+   */
+  render(name: string, variables: Record<string, unknown>): string {
+    const template = this.get(name);
+    if (!template) {
+      throw new Error(`Template not found: ${name}`);
+    }
+    return template.render(variables);
+  }
+
+  /**
+   * 별칭 등록
+   */
+  alias(name: string, alias: string): void {
+    this.aliases.set(alias, name);
+  }
+
+  /**
+   * 템플릿 상속 설정
+   */
+  extend(name: string, parent: string): void {
+    const child = this.get(name);
+    const parentTemplate = this.get(parent);
+
+    if (!child || !parentTemplate) {
+      throw new Error(`Template not found: ${!child ? name : parent}`);
+    }
+
+    child.extend(parentTemplate);
+  }
+
+  /**
+   * 모든 템플릿 이름 반환
+   */
+  list(): string[] {
+    return Array.from(this.templates.keys());
+  }
+
+  /**
+   * 파일에서 템플릿 로드
+   */
+  async loadFromFile(path: string, name?: string): Promise<void> {
+    // Node.js 환경에서만 사용 가능
+    if (typeof process === 'undefined') {
+      throw new Error('loadFromFile is only available in Node.js environment');
+    }
+
+    const fs = await import('fs/promises');
+    const content = await fs.readFile(path, 'utf-8');
+    const templateName = name ?? this.extractNameFromPath(path);
+    this.register(templateName, content);
+  }
+
+  /**
+   * 디렉토리에서 템플릿 로드
+   */
+  async loadFromDirectory(dir: string): Promise<void> {
+    if (typeof process === 'undefined') {
+      throw new Error('loadFromDirectory is only available in Node.js environment');
+    }
+
+    const fs = await import('fs/promises');
+    const path = await import('path');
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      if (entry.isFile() && entry.name.endsWith('.md')) {
+        const fullPath = path.join(dir, entry.name);
+        await this.loadFromFile(fullPath);
+      }
+    }
+  }
+
+  /**
+   * 경로에서 이름 추출
+   */
+  private extractNameFromPath(path: string): string {
+    const filename = path.split('/').pop() ?? path;
+    return filename.replace(/\.(md|txt)$/, '');
+  }
+
+  /**
+   * 레지스트리 초기화
+   */
+  clear(): void {
+    this.templates.clear();
+    this.aliases.clear();
+  }
+}
+
+/**
+ * 전역 레지스트리 인스턴스
+ */
+export const globalPromptRegistry = new PromptTemplateRegistry();
+```
+
+### 3. 역할별 기본 템플릿
+
+**파일 위치:** `packages/agents/src/prompts/templates/analyst.md`
+
+```markdown
+You are an expert analyst with deep expertise in data analysis, risk assessment, and pattern recognition.
 
 Your responsibilities:
+{{#if responsibilities}}
+{{responsibilities}}
+{{else}}
 1. Analyze the provided information thoroughly
 2. Identify key findings and patterns
 3. Provide actionable recommendations
 4. Assess confidence in your conclusions
 5. Support your findings with reasoning
+{{/if}}
 
 When providing analysis, structure your response as follows:
-- Summary: A concise overview of your analysis
-- Key Findings: Bullet points of important discoveries
-- Recommendations: Actionable suggestions based on findings
-- Confidence: A score from 0-100 indicating your certainty
-- Reasoning: Your thought process and evidence
 
-Be thorough, objective, and analytical in your approach.`;
-  }
+## Summary
+{{#if context}}Context: {{context}}{{/if}}
+Provide a concise overview of your analysis.
 
-  protected async act(action: unknown, context: AgentContext): Promise<unknown> {
-    const analysis = action as AnalysisResult;
+## Key Findings
+- Finding 1: [description]
+- Finding 2: [description]
+- ...
 
-    // 분석 결과를 지식 베이스에 저장
-    context.board.write(`knowledge.analysis.${this.id}.${Date.now()}`, analysis);
+## Recommendations
+- Recommendation 1: [actionable suggestion]
+- Recommendation 2: [actionable suggestion]
+- ...
 
-    // 이벤트 발행
-    context.board.emit('analysis.completed', {
-      agentId: this.id,
-      result: analysis,
-    });
+## Confidence
+{{confidence|85}}/100
 
-    return analysis;
-  }
+## Reasoning
+Provide your thought process and evidence supporting your conclusions.
 
-  protected parseResponse(content: string, task: Task): AnalystOutput {
-    // JSON 형식으로 파싱 시도
-    try {
-      const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[1]);
-        return { type: 'analysis', content, ...parsed } as AnalystOutput;
-      }
+{{#if sources}}
+## Sources
+{{sources}}
+{{/if}}
 
-      // JSON 블록 없으면 전체에서 파싱 시도
-      const cleanContent = content.replace(/^[^{]*({[\s\S]*})[^}]*$/, '$1');
-      const parsed = JSON.parse(cleanContent);
-      return { type: 'analysis', content, ...parsed } as AnalystOutput;
-    } catch {
-      // 파싱 실패 시 기본 형식으로 변환
-      return {
-        type: 'analysis',
-        content,
-        summary: content,
-        keyFindings: [],
-        recommendations: [],
-        confidence: 0.5,
-        reasoning: content,
-      };
-    }
-  }
-}
-
-/**
- * 분석 에이전트 생성
- */
-export function createAnalystAgent(
-  id: string,
-  llm: BaseAgentConfig['llm']
-): AnalystAgent {
-  return new AnalystAgent({ id, llm });
-}
+Be thorough, objective, and analytical in your approach.
 ```
 
-### 3. ExecutorAgent 구현
+**파일 위치:** `packages/agents/src/prompts/templates/executor.md`
 
-**파일 위치:** `packages/agents/src/roles/executor-agent.ts`
-
-```typescript
-import { BaseAgent, AgentContext, Task, AgentRole, ExecutorInput, ExecutorOutput } from './base-agent';
-import { ToolRegistry } from '../tools';
-
-/**
- * Executor 에이전트
- * 역할: 작업 실행, API 호출, 파일 처리
- *
- * 입력: ExecutorInput
- * 출력: ExecutorOutput
- */
-export class ExecutorAgent extends BaseAgent {
-  private toolRegistry?: ToolRegistry;
-
-  constructor(
-    config: Omit<Parameters<typeof BaseAgent.prototype>[0], 'role'> & {
-      toolRegistry?: ToolRegistry;
-    }
-  ) {
-    super({ ...config, role: AgentRole.EXECUTOR });
-    this.toolRegistry = config.toolRegistry;
-  }
-
-  protected getDefaultSystemPrompt(): string {
-    const availableTools = this.toolRegistry
-      ? this.toolRegistry.listTools().map(t => t.name).join(', ')
-      : 'none';
-
-    return `You are an executor agent responsible for taking action and executing tasks.
+```markdown
+You are an executor agent responsible for taking action and executing tasks.
 
 Your responsibilities:
+{{#if responsibilities}}
+{{responsibilities}}
+{{else}}
 1. Understand the task requirements clearly
 2. Determine the best approach to complete the task
 3. Execute the action using available tools
 4. Report the outcome accurately
 5. Handle errors gracefully
+{{/if}}
 
-Available tools: ${availableTools}
+Available tools: {{tools|none}}
 
 When planning execution, structure your response as follows:
-- Action: What action will you take?
-- Tool: Which tool will you use? (if applicable)
-- Parameters: What parameters are needed for the tool?
-- Steps: Break down the execution into steps
-- Expected Outcome: What result do you expect?
 
-Be precise, efficient, and safety-conscious in your execution.`;
-  }
+## Action
+{{action|The action you will take}}
 
-  protected async act(action: unknown, context: AgentContext): Promise<unknown> {
-    const plan = action as ExecutionPlan;
+## Tool
+{{#if tool}}Tool: {{tool}}{{else}}No tool required{{/if}}
 
-    if (plan.tool && this.toolRegistry) {
-      // 도구 레지스트리에서 도구 실행
-      const result = await this.toolRegistry.execute(
-        plan.tool,
-        plan.parameters
-      );
-
-      // 실행 결과를 상태에 저장
-      context.board.write(`state.execution.${this.id}.${Date.now()}`, {
-        plan,
-        result,
-        timestamp: new Date(),
-      });
-
-      return result;
-    }
-
-    // 도구 없는 경우 기본 실행
-    const result = {
-      action: plan.action,
-      steps: plan.steps,
-      outcome: plan.expectedOutcome,
-      timestamp: new Date(),
-    };
-
-    context.board.write(`state.execution.${this.id}.${Date.now()}`, result);
-
-    return result;
-  }
-
-  protected parseResponse(content: string, task: Task): ExecutorOutput {
-    try {
-      const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[1]);
-        return { type: 'execution', content, ...parsed } as ExecutorOutput;
-      }
-
-      const cleanContent = content.replace(/^[^{]*({[\s\S]*})[^}]*$/, '$1');
-      const parsed = JSON.parse(cleanContent);
-      return { type: 'execution', content, ...parsed } as ExecutorOutput;
-    } catch {
-      return {
-        type: 'execution',
-        content,
-        action: content,
-        parameters: {},
-        steps: [content],
-        expectedOutcome: 'Task execution',
-      };
-    }
-  }
-
-  /**
-   * 도구 레지스트리 설정
-   */
-  setToolRegistry(registry: ToolRegistry): void {
-    this.toolRegistry = registry;
-  }
-}
-
-/**
- * 실행 에이전트 생성
- */
-export function createExecutorAgent(
-  id: string,
-  llm: BaseAgentConfig['llm'],
-  toolRegistry?: ToolRegistry
-): ExecutorAgent {
-  return new ExecutorAgent({ id, llm, toolRegistry });
-}
+## Parameters
+```json
+{{#if parameters}}{{parameters}}{{else}}{{{/if}}}
 ```
 
-### 4. VerifierAgent 구현
+## Steps
+1. [First step]
+2. [Second step]
+...
 
-**파일 위치:** `packages/agents/src/roles/verifier-agent.ts`
+## Expected Outcome
+{{expectedOutcome|The expected result}}
 
-```typescript
-import { BaseAgent, AgentContext, Task, AgentRole, VerifierInput, VerifierOutput, VerificationCheck, Finding } from './base-agent';
+Be precise, efficient, and safety-conscious in your execution.
 
-/**
- * Verifier 에이전트
- * 역할: 결과 검증, 품질 체크, 정확성 확인
- *
- * 입력: VerifierInput
- * 출력: VerifierOutput
- */
-export class VerifierAgent extends BaseAgent {
-  constructor(config: Omit<Parameters<typeof BaseAgent.prototype>[0], 'role'>) {
-    super({ ...config, role: AgentRole.VERIFIER });
-  }
+{{#if safety_notes}}
+## Safety Notes
+{{safety_notes}}
+{{/if}}
+```
 
-  protected getDefaultSystemPrompt(): string {
-    return `You are a verifier agent responsible for validating results and ensuring quality.
+**파일 위치:** `packages/agents/src/prompts/templates/verifier.md`
+
+```markdown
+You are a verifier agent responsible for validating results and ensuring quality.
 
 Your responsibilities:
+{{#if responsibilities}}
+{{responsibilities}}
+{{else}}
 1. Review the provided work thoroughly
 2. Check against requirements and specifications
 3. Identify any issues or discrepancies
 4. Provide specific feedback for improvements
 5. Verify correctness and completeness
+{{/if}}
 
 When conducting verification, structure your response as follows:
-- Passed: Overall pass/fail status (true/false)
-- Checks: List of specific verification checks performed
-- Summary: Brief overview of the verification
-- Issues: Detailed list of issues found, with severity levels
-- Suggestions: Recommendations for improvement
+
+## Overall Result
+{{#if passed}}✅ PASSED{{else}}❌ FAILED{{/if}}
+
+## Verification Checks
+| Check | Description | Status | Evidence |
+|-------|-------------|--------|----------|
+| 1 | [check description] | [passed/failed/skipped] | [evidence] |
+| 2 | [check description] | [passed/failed/skipped] | [evidence] |
+
+## Summary
+{{summary|Brief overview of the verification}}
+
+## Issues Found
+{{#unless issues}}No issues found.{{/unless}}
+{{#if issues}}
+{{#each issues}}
+### {{severity|medium}}: {{description}}
+{{#if location}}Location: {{location}}{{/if}}
+{{#if recommendation}}Recommendation: {{recommendation}}{{/if}}
+---
+{{/each}}
+{{/if}}
+
+## Suggestions
+{{#unless suggestions}}No suggestions.{{/unless}}
+{{#if suggestions}}
+{{#each suggestions}}
+- {{this}}
+{{/each}}
+{{/if}}
 
 Issue severity levels:
-- Critical: Must be fixed before proceeding
-- High: Should be fixed soon
-- Medium: Can be addressed later
-- Low: Minor improvements or suggestions
+- **Critical**: Must be fixed before proceeding
+- **High**: Should be fixed soon
+- **Medium**: Can be addressed later
+- **Low**: Minor improvements or suggestions
 
-Be thorough, objective, and constructive in your verification.`;
-  }
-
-  protected async act(action: unknown, context: AgentContext): Promise<unknown> {
-    const verification = action as VerifierOutput;
-
-    // 검증 결과를 지식 베이스에 저장
-    context.board.write(`knowledge.verification.${this.id}.${Date.now()}`, verification);
-
-    // 이벤트 발행
-    context.board.emit('verification.completed', {
-      agentId: this.id,
-      result: verification,
-    });
-
-    // Critical 이슈가 있는 경우 경고 이벤트
-    if (verification.findings.some(f => f.severity === 'critical')) {
-      context.board.emit('verification.critical', {
-        agentId: this.id,
-        findings: verification.findings.filter(f => f.severity === 'critical'),
-      });
-    }
-
-    return verification;
-  }
-
-  protected parseResponse(content: string, task: Task): VerifierOutput {
-    try {
-      const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[1]);
-        return { type: 'verification', content, ...parsed } as VerifierOutput;
-      }
-
-      const cleanContent = content.replace(/^[^{]*({[\s\S]*})[^}]*$/, '$1');
-      const parsed = JSON.parse(cleanContent);
-      return { type: 'verification', content, ...parsed } as VerifierOutput;
-    } catch {
-      return {
-        type: 'verification',
-        content,
-        passed: false,
-        score: 0,
-        checks: [],
-        findings: [],
-        suggestions: [],
-      };
-    }
-  }
-}
-
-/**
- * 검증 에이전트 생성
- */
-export function createVerifierAgent(
-  id: string,
-  llm: BaseAgentConfig['llm']
-): VerifierAgent {
-  return new VerifierAgent({ id, llm });
-}
+Be thorough, objective, and constructive in your verification.
 ```
 
-### 5. DirectorAgent 구현
+**파일 위치:** `packages/agents/src/prompts/templates/director.md`
 
-**파일 위치:** `packages/agents/src/roles/director-agent.ts`
-
-```typescript
-import { BaseAgent, AgentContext, Task, AgentRole, DirectorInput, DirectorOutput, CoordinationStep } from './base-agent';
-
-/**
- * Director 에이전트
- * 역할: 조율, 진행 관리, 합의 도출
- *
- * 입력: DirectorInput
- * 출력: DirectorOutput
- */
-export class DirectorAgent extends BaseAgent {
-  constructor(config: Omit<Parameters<typeof BaseAgent.prototype>[0], 'role'>) {
-    super({ ...config, role: AgentRole.DIRECTOR });
-  }
-
-  protected getDefaultSystemPrompt(): string {
-    return `You are a director agent responsible for coordinating activities and facilitating collaboration.
+```markdown
+You are a director agent responsible for coordinating activities and facilitating collaboration.
 
 Your responsibilities:
+{{#if responsibilities}}
+{{responsibilities}}
+{{else}}
 1. Understand the overall goal and requirements
 2. Coordinate between different agents and stakeholders
 3. Facilitate discussions and consensus-building
 4. Monitor progress and adjust plans as needed
 5. Provide clear direction and guidance
+{{/if}}
 
-When creating a coordination plan, structure your response as follows (JSON format):
-{
-  "type": "coordination",
-  "content": "Description of the coordination plan",
-  "agenda": "Main goal or purpose",
-  "participants": ["participant1", "participant2", ...],
-  "steps": [
-    {
-      "step": 1,
-      "description": "First step description",
-      "assignee": "who handles this step",
-      "dependencies": [],
-      "estimatedDuration": "time estimate"
-    },
-    ...
-  ],
-  "timeline": ["step1 timeline", "step2 timeline", ...],
-  "expectedOutcome": "What should be achieved"
-}
+When creating a coordination plan, structure your response as follows:
 
-Key principles for effective coordination:
+## Agenda
+{{agenda|The main goal or purpose}}
+
+## Participants
+{{#each participants}}
+- {{this}}
+{{/each}}
+
+## Steps
+{{#each steps}}
+### Step {{@index}}: {{description}}
+{{#if assignee}}Assignee: {{assignee}}{{/if}}
+{{#if dependencies}}Dependencies: {{dependencies}}{{/if}}
+{{#if estimatedDuration}}Duration: {{estimatedDuration}}{{/if}}
+{{/each}}
+
+## Timeline
+{{#each timeline}}
+- {{this}}
+{{/each}}
+
+## Expected Outcome
+{{expectedOutcome|What should be achieved}}
+
+## Key Principles for Coordination
 - Clear communication
 - Inclusive participation
 - Transparent decision-making
 - Agile adaptation to changes
 - Focus on results
 
-Be diplomatic, organized, and results-oriented in your coordination.`;
-  }
+Be diplomatic, organized, and results-oriented in your coordination.
 
-  protected async act(action: unknown, context: AgentContext): Promise<unknown> {
-    const plan = action as DirectorOutput;
+{{#if notes}}
+## Notes
+{{notes}}
+{{/if}}
+```
 
-    // 조율 계획을 결정 섹션에 저장
-    context.board.write(`decisions.coordination.${this.id}.${Date.now()}`, plan);
+### 4. 템플릿 빌더
 
-    // 이벤트 발행
-    context.board.emit('coordination.started', {
-      agentId: this.id,
-      plan,
-    });
+**파일 위치:** `packages/agents/src/prompts/builder.ts`
 
-    return plan;
-  }
+```typescript
+import { PromptTemplate } from './template';
 
-  protected parseResponse(content: string, task: Task): DirectorOutput {
-    try {
-      const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[1]);
-        return { type: 'coordination', content, ...parsed } as DirectorOutput;
-      }
+/**
+ * 프롬프트 템플릿 빌더
+ */
+export class PromptTemplateBuilder {
+  private parts: string[];
+  private sections: Map<string, string>;
+  private extends?: string;
 
-      const cleanContent = content.replace(/^[^{]*({[\s\S]*})[^}]*$/, '$1');
-      const parsed = JSON.parse(cleanContent);
-      return { type: 'coordination', content, ...parsed } as DirectorOutput;
-    } catch {
-      return {
-        type: 'coordination',
-        content,
-        agenda: content,
-        participants: [],
-        steps: [],
-        timeline: [],
-        expectedOutcome: 'Coordination complete',
-      };
-    }
+  constructor() {
+    this.parts = [];
+    this.sections = new Map();
   }
 
   /**
-   * 투표 세션 시작
+   * 기본 텍스트 추가
    */
-  async startVotingSession(
-    agendaId: string,
-    participants: string[],
-    context: AgentContext
-  ): Promise<void> {
-    context.board.write(`decisions.voting.${agendaId}`, {
-      started: new Date(),
-      participants,
-      votes: {},
-      status: 'in-progress',
-    });
-
-    context.board.emit('voting.started', {
-      agendaId,
-      participants,
-    });
+  addText(text: string): this {
+    this.parts.push(text);
+    return this;
   }
 
   /**
-   * 투표 집계
+   * 섹션 추가
    */
-  async tallyVotes(
-    agendaId: string,
-    context: AgentContext
-  ): Promise<Record<string, number>> {
-    const voting = context.board.read('decisions') as Record<string, unknown>;
-    const session = voting[`voting.${agendaId}`] as Record<string, unknown>;
+  addSection(name: string, content: string): this {
+    this.sections.set(name, content);
+    this.parts.push(`{{section:${name}}}`);
+    return this;
+  }
 
-    if (!session || (session.status as string) !== 'completed') {
-      throw new Error(`Voting session ${agendaId} not completed`);
+  /**
+   * 조건부 섹션 추가
+   */
+  addConditional(variable: string, content: string): this {
+    this.parts.push(`{{#if ${variable}}}${content}{{/if}}`);
+    return this;
+  }
+
+  /**
+   * 변수 추가
+   */
+  addVariable(name: string, defaultValue?: string): this {
+    const placeholder = defaultValue ? `{{${name}|${defaultValue}}}` : `{{${name}}}`;
+    this.parts.push(placeholder);
+    return this;
+  }
+
+  /**
+   * 헤더 추가
+   */
+  addHeader(level: number, text: string): this {
+    const prefix = '#'.repeat(level);
+    this.parts.push(`\n${prefix} ${text}\n`);
+    return this;
+  }
+
+  /**
+   * 리스트 추가
+   */
+  addList(items: string[], ordered: boolean = false): this {
+    const prefix = ordered ? '1. ' : '- ';
+    this.parts.push('\n' + items.map(item => `${prefix}${item}`).join('\n') + '\n');
+    return this;
+  }
+
+  /**
+   * 코드 블록 추가
+   */
+  addCodeBlock(code: string, language: string = ''): this {
+    this.parts.push(`\n\`\`\`${language}\n${code}\n\`\`\`\n`);
+    return this;
+  }
+
+  /**
+   * 테이블 추가
+   */
+  addTable(headers: string[], rows: string[][]): this {
+    const separator = headers.map(() => '---').join(' | ');
+
+    this.parts.push(`\n| ${headers.join(' | ')} |`);
+    this.parts.push(`| ${separator} |`);
+
+    for (const row of rows) {
+      this.parts.push(`| ${row.join(' | ')} |`);
     }
 
-    return session.votes as Record<string, number>;
+    this.parts.push('\n');
+    return this;
   }
-}
 
-/**
- * 디렉터 에이전트 생성
- */
-export function createDirectorAgent(
-  id: string,
-  llm: BaseAgentConfig['llm']
-): DirectorAgent {
-  return new DirectorAgent({ id, llm });
+  /**
+   * 구분선 추가
+   */
+  addDivider(): this {
+    this.parts.push('\n---\n');
+    return this;
+  }
+
+  /**
+   * 빈 줄 추가
+   */
+  addNewline(count: number = 1): this {
+    this.parts.push('\n'.repeat(count));
+    return this;
+  }
+
+  /**
+   * 상속 설정
+   */
+  extends(template: string): this {
+    this.extends = template;
+    return this;
+  }
+
+  /**
+   * 템플릿 빌드
+   */
+  build(): PromptTemplate {
+    const template = this.parts.join('');
+
+    const promptTemplate = new PromptTemplate(template);
+    if (this.extends) {
+      // 부모 템플릿 설정은 레지스트리를 통해서만 가능
+      promptTemplate['parentName'] = this.extends;
+    }
+
+    return promptTemplate;
+  }
+
+  /**
+   * 템플릿 문자열 반환
+   */
+  toString(): string {
+    return this.parts.join('');
+  }
+
+  /**
+   * 빌더 초기화
+   */
+  reset(): this {
+    this.parts = [];
+    this.sections.clear();
+    this.extends = undefined;
+    return this;
+  }
+
+  /**
+   * 빌더 복제
+   */
+  clone(): PromptTemplateBuilder {
+    const builder = new PromptTemplateBuilder();
+    builder.parts = [...this.parts];
+    builder.sections = new Map(this.sections);
+    builder.extends = this.extends;
+    return builder;
+  }
 }
 ```
 
-### 6. 에이전트 팩토리
+### 5. 역할별 템플릿 팩토리
 
-**파일 위치:** `packages/agents/src/roles/factory.ts`
+**파일 위치:** `packages/agents/src/prompts/role-templates.ts`
 
 ```typescript
-import { BaseAgent } from './base-agent';
-import { AnalystAgent, createAnalystAgent } from './analyst-agent';
-import { ExecutorAgent, createExecutorAgent } from './executor-agent';
-import { VerifierAgent, createVerifierAgent } from './verifier-agent';
-import { DirectorAgent, createDirectorAgent } from './director-agent';
-import type { ToolRegistry } from '../tools';
+import { PromptTemplateBuilder } from './builder';
 
 /**
- * 에이전트 생성 설정
+ * Analyst 템플릿 빌더
  */
-export interface CreateAgentConfig {
-  id: string;
-  role: 'analyst' | 'executor' | 'verifier' | 'director';
-  llm: BaseAgent['llm'];
-  toolRegistry?: ToolRegistry;
+export function buildAnalystTemplate(
+  config?: {
+    responsibilities?: string;
+    context?: string;
+    sources?: string;
+  }
+): PromptTemplateBuilder {
+  return new PromptTemplateBuilder()
+    .addText('You are an expert analyst with deep expertise in data analysis, risk assessment, and pattern recognition.')
+    .addNewline()
+    .addHeader(2, 'Your responsibilities')
+    .addConditional('responsibilities', '{{responsibilities}}')
+    .addConditional('responsibilities', '', 'else')
+    .addList([
+      'Analyze the provided information thoroughly',
+      'Identify key findings and patterns',
+      'Provide actionable recommendations',
+      'Assess confidence in your conclusions',
+      'Support your findings with reasoning',
+    ])
+    .addText('{{/if}}')
+    .addNewline()
+    .addHeader(2, 'When providing analysis, structure your response as follows:')
+    .addNewline()
+    .addHeader(3, 'Summary')
+    .addConditional('context', 'Context: {{context}}')
+    .addText('Provide a concise overview of your analysis.')
+    .addNewline()
+    .addHeader(3, 'Key Findings')
+    .addText('- Finding 1: [description]')
+    .addText('- Finding 2: [description]')
+    .addText('- ...')
+    .addNewline()
+    .addHeader(3, 'Recommendations')
+    .addText('- Recommendation 1: [actionable suggestion]')
+    .addText('- Recommendation 2: [actionable suggestion]')
+    .addText('- ...')
+    .addNewline()
+    .addHeader(3, 'Confidence')
+    .addVariable('confidence', '85')
+    .addText('/100')
+    .addNewline()
+    .addHeader(3, 'Reasoning')
+    .addText('Provide your thought process and evidence supporting your conclusions.')
+    .addConditional('sources', '')
+    .addNewline()
+    .addHeader(3, 'Sources')
+    .addVariable('sources')
+    .addText('{{/if}}')
+    .addNewline()
+    .addText('Be thorough, objective, and analytical in your approach.');
 }
 
 /**
- * 에이전트 생성
+ * Executor 템플릿 빌더
  */
-export function createAgent(config: CreateAgentConfig): BaseAgent {
-  switch (config.role) {
-    case 'analyst':
-      return createAnalystAgent(config.id, config.llm);
-
-    case 'executor':
-      return createExecutorAgent(config.id, config.llm, config.toolRegistry);
-
-    case 'verifier':
-      return createVerifierAgent(config.id, config.llm);
-
-    case 'director':
-      return createDirectorAgent(config.id, config.llm);
-
-    default:
-      throw new Error(`Unknown agent role: ${config.role}`);
+export function buildExecutorTemplate(
+  config?: {
+    responsibilities?: string;
+    tools?: string;
+    safetyNotes?: string;
   }
+): PromptTemplateBuilder {
+  return new PromptTemplateBuilder()
+    .addText('You are an executor agent responsible for taking action and executing tasks.')
+    .addNewline()
+    .addHeader(2, 'Your responsibilities')
+    .addConditional('responsibilities', '{{responsibilities}}')
+    .addConditional('responsibilities', '', 'else')
+    .addList([
+      'Understand the task requirements clearly',
+      'Determine the best approach to complete the task',
+      'Execute the action using available tools',
+      'Report the outcome accurately',
+      'Handle errors gracefully',
+    ])
+    .addText('{{/if}}')
+    .addNewline()
+    .addText(`Available tools: {{tools|${config?.tools ?? 'none'}}}`)
+    .addNewline()
+    .addHeader(2, 'When planning execution, structure your response as follows:')
+    .addNewline()
+    .addHeader(3, 'Action')
+    .addVariable('action', 'The action you will take')
+    .addNewline()
+    .addHeader(3, 'Tool')
+    .addConditional('tool', 'Tool: {{tool}}', 'else')
+    .addText('No tool required')
+    .addText('{{/if}}')
+    .addNewline()
+    .addHeader(3, 'Parameters')
+    .addCodeBlock('{{#if parameters}}{{parameters}}{{else}}{{{/if}}}', 'json')
+    .addNewline()
+    .addHeader(3, 'Steps')
+    .addText('1. [First step]')
+    .addText('2. [Second step]')
+    .addText('...')
+    .addNewline()
+    .addHeader(3, 'Expected Outcome')
+    .addVariable('expectedOutcome', 'The expected result')
+    .addNewline()
+    .addText('Be precise, efficient, and safety-conscious in your execution.')
+    .addConditional('safety_notes', '')
+    .addNewline()
+    .addHeader(3, 'Safety Notes')
+    .addVariable('safetyNotes')
+    .addText('{{/if}}');
 }
 
 /**
- * 에이전트 팀 생성
+ * Verifier 템플릿 빌더
  */
-export function createAgentTeam(
-  config: Omit<CreateAgentConfig, 'id' | 'role'> & {
-    analysts?: number;
-    executors?: number;
-    verifiers?: number;
-    directors?: number;
+export function buildVerifierTemplate(
+  config?: {
+    responsibilities?: string;
   }
-): BaseAgent[] {
-  const agents: BaseAgent[] = [];
-  const baseConfig = {
-    llm: config.llm,
-    toolRegistry: config.toolRegistry,
-  };
+): PromptTemplateBuilder {
+  return new PromptTemplateBuilder()
+    .addText('You are a verifier agent responsible for validating results and ensuring quality.')
+    .addNewline()
+    .addHeader(2, 'Your responsibilities')
+    .addConditional('responsibilities', '{{responsibilities}}')
+    .addConditional('responsibilities', '', 'else')
+    .addList([
+      'Review the provided work thoroughly',
+      'Check against requirements and specifications',
+      'Identify any issues or discrepancies',
+      'Provide specific feedback for improvements',
+      'Verify correctness and completeness',
+    ])
+    .addText('{{/if}}')
+    .addNewline()
+    .addHeader(2, 'When conducting verification, structure your response as follows:')
+    .addNewline()
+    .addHeader(3, 'Overall Result')
+    .addConditional('passed', '✅ PASSED', 'else')
+    .addText('❌ FAILED')
+    .addText('{{/if}}')
+    .addNewline()
+    .addHeader(3, 'Verification Checks')
+    .addTable(
+      ['Check', 'Description', 'Status', 'Evidence'],
+      [
+        ['1', '[check description]', '[passed/failed/skipped]', '[evidence]'],
+        ['2', '[check description]', '[passed/failed/skipped]', '[evidence]'],
+      ]
+    )
+    .addNewline()
+    .addHeader(3, 'Summary')
+    .addVariable('summary', 'Brief overview of the verification')
+    .addNewline()
+    .addHeader(3, 'Issues Found')
+    .addConditional('issues', 'No issues found.', 'unless')
+    .addText('{{#if issues}}')
+    .addText('{{#each issues}}')
+    .addHeader(4, '{{severity|medium}}: {{description}}')
+    .addConditional('location', 'Location: {{location}}')
+    .addConditional('recommendation', 'Recommendation: {{recommendation}}')
+    .addText('---')
+    .addText('{{/each}}')
+    .addText('{{/if}}')
+    .addNewline()
+    .addHeader(3, 'Suggestions')
+    .addConditional('suggestions', 'No suggestions.', 'unless')
+    .addText('{{#if suggestions}}')
+    .addText('{{#each suggestions}}')
+    .addText('- {{this}}')
+    .addText('{{/each}}')
+    .addText('{{/if}}')
+    .addNewline()
+    .addText('Issue severity levels:')
+    .addList([
+      '**Critical**: Must be fixed before proceeding',
+      '**High**: Should be fixed soon',
+      '**Medium**: Can be addressed later',
+      '**Low**: Minor improvements or suggestions',
+    ])
+    .addNewline()
+    .addText('Be thorough, objective, and constructive in your verification.');
+}
 
-  const count = config.analysts ?? 1;
-  for (let i = 0; i < count; i++) {
-    agents.push(createAgent({
-      id: `analyst-${i + 1}`,
-      role: 'analyst',
-      ...baseConfig,
-    }));
+/**
+ * Director 템플릿 빌더
+ */
+export function buildDirectorTemplate(
+  config?: {
+    responsibilities?: string;
   }
-
-  const executorCount = config.executors ?? 1;
-  for (let i = 0; i < executorCount; i++) {
-    agents.push(createAgent({
-      id: `executor-${i + 1}`,
-      role: 'executor',
-      ...baseConfig,
-    }));
-  }
-
-  const verifierCount = config.verifiers ?? 1;
-  for (let i = 0; i < verifierCount; i++) {
-    agents.push(createAgent({
-      id: `verifier-${i + 1}`,
-      role: 'verifier',
-      ...baseConfig,
-    }));
-  }
-
-  const directorCount = config.directors ?? 1;
-  for (let i = 0; i < directorCount; i++) {
-    agents.push(createAgent({
-      id: `director-${i + 1}`,
-      role: 'director',
-      ...baseConfig,
-    }));
-  }
-
-  return agents;
+): PromptTemplateBuilder {
+  return new PromptTemplateBuilder()
+    .addText('You are a director agent responsible for coordinating activities and facilitating collaboration.')
+    .addNewline()
+    .addHeader(2, 'Your responsibilities')
+    .addConditional('responsibilities', '{{responsibilities}}')
+    .addConditional('responsibilities', '', 'else')
+    .addList([
+      'Understand the overall goal and requirements',
+      'Coordinate between different agents and stakeholders',
+      'Facilitate discussions and consensus-building',
+      'Monitor progress and adjust plans as needed',
+      'Provide clear direction and guidance',
+    ])
+    .addText('{{/if}}')
+    .addNewline()
+    .addHeader(2, 'When creating a coordination plan, structure your response as follows:')
+    .addNewline()
+    .addHeader(3, 'Agenda')
+    .addVariable('agenda', 'The main goal or purpose')
+    .addNewline()
+    .addHeader(3, 'Participants')
+    .addText('{{#each participants}}')
+    .addText('- {{this}}')
+    .addText('{{/each}}')
+    .addNewline()
+    .addHeader(3, 'Steps')
+    .addText('{{#each steps}}')
+    .addHeader(4, 'Step {{@index}}: {{description}}')
+    .addConditional('assignee', 'Assignee: {{assignee}}')
+    .addConditional('dependencies', 'Dependencies: {{dependencies}}')
+    .addConditional('estimatedDuration', 'Duration: {{estimatedDuration}}')
+    .addText('{{/each}}')
+    .addNewline()
+    .addHeader(3, 'Timeline')
+    .addText('{{#each timeline}}')
+    .addText('- {{this}}')
+    .addText('{{/each}}')
+    .addNewline()
+    .addHeader(3, 'Expected Outcome')
+    .addVariable('expectedOutcome', 'What should be achieved')
+    .addNewline()
+    .addHeader(2, 'Key Principles for Coordination')
+    .addList([
+      'Clear communication',
+      'Inclusive participation',
+      'Transparent decision-making',
+      'Agile adaptation to changes',
+      'Focus on results',
+    ])
+    .addNewline()
+    .addText('Be diplomatic, organized, and results-oriented in your coordination.')
+    .addConditional('notes', '')
+    .addNewline()
+    .addHeader(3, 'Notes')
+    .addVariable('notes')
+    .addText('{{/if}}');
 }
 ```
 
-### 7. 내보내기 설정
+### 6. 내보내기 설정
 
-**파일 위치:** `packages/agents/src/roles/index.ts`
+**파일 위치:** `packages/agents/src/prompts/index.ts`
 
 ```typescript
-export * from './base-agent';
-export * from './analyst-agent';
-export * from './executor-agent';
-export * from './verifier-agent';
-export * from './director-agent';
-export * from './factory';
+export * from './template';
+export * from './registry';
+export * from './builder';
+export * from './role-templates';
+
+export { globalPromptRegistry as registry } from './registry';
 ```
 
 ## 완료 조건
-- [ ] BaseAgent 추상 클래스 구현 완료
-- [ ] AnalystAgent 구현 완료
-- [ ] ExecutorAgent 구현 완료
-- [ ] VerifierAgent 구현 완료
-- [ ] DirectorAgent 구현 완료
-- [ ] 에이전트 팩토리 구현 완료
+- [ ] PromptTemplate 클래스 구현 완료
+- [ ] PromptTemplateRegistry 구현 완료
+- [ ] PromptTemplateBuilder 구현 완료
+- [ ] 역할별 기본 템플릿 작성 완료
+- [ ] 역할별 템플릿 팩토리 구현 완료
 - [ ] 단위 테스트 작성
 
 ## 의존성
-- TASK-030 (LLM Adapter)
-- @obora-kit/blackboard 패키지
-- TASK-033 (Tool Integration, ExecutorAgent용)
+- TASK-031 (Agent Roles)
 
 ## 사용 예시
 
-### 단일 에이전트 생성
+### 기본 템플릿 사용
 ```typescript
-import { createLLMAdapterFromEnv } from '@obora-kit/agents';
-import { createAnalystAgent } from '@obora-kit/agents';
+import { PromptTemplate } from '@obora-kit/agents';
 
-const llm = createLLMAdapterFromEnv();
-const analyst = createAnalystAgent('analyst-1', llm);
+const template = new PromptTemplate(`
+Hello {{name}},
 
-const result = await analyst.execute(
-  {
-    id: 'task-1',
-    type: 'analysis',
-    description: 'Analyze the market trends',
-    input: { data: marketData },
-    priority: 1,
-  },
-  {
-    sessionId: 'session-123',
-    board: blackboard,
-    history: [],
-  }
-);
-```
+You are assigned to: {{task}}
 
-### 에이전트 팀 생성
-```typescript
-import { createAgentTeam, createLLMAdapterFromEnv } from '@obora-kit/agents';
-import { ToolRegistry } from '@obora-kit/agents';
+{{#if deadline}}
+Deadline: {{deadline}}
+{{/if}}
+{{#unless deadline}}
+No deadline set
+{{/unless}}
 
-const llm = createLLMAdapterFromEnv();
-const toolRegistry = new ToolRegistry();
+Best regards,
+{{sender|Your AI Assistant}}
+`);
 
-const team = createAgentTeam({
-  llm,
-  toolRegistry,
-  analysts: 2,
-  executors: 2,
-  verifiers: 1,
-  directors: 1,
+const result = template.render({
+  name: 'Alice',
+  task: 'Analyze the data',
+  deadline: '2026-02-10',
+  sender: 'Director',
 });
 
-console.log(`Created team with ${team.length} agents`);
+console.log(result);
 ```
 
-### 병렬 에이전트 실행
+### 레지스트리 사용
 ```typescript
-const tasks = [
-  { id: 'task-1', type: 'analysis', description: 'Analyze A', input: {}, priority: 1 },
-  { id: 'task-2', type: 'execution', description: 'Execute B', input: {}, priority: 1 },
-  { id: 'task-3', type: 'verification', description: 'Verify C', input: {}, priority: 1 },
-];
+import { PromptTemplateRegistry } from '@obora-kit/agents';
 
-const results = await Promise.all(
-  team.map((agent, i) => agent.execute(tasks[i], context))
-);
+const registry = new PromptTemplateRegistry();
+
+registry.register('analyst', `
+You are an expert analyst.
+Context: {{context}}
+{{#if data}}Data: {{data}}{{/if}}
+`);
+
+const rendered = registry.render('analyst', {
+  context: 'Market analysis',
+  data: 'Revenue data Q4',
+});
+```
+
+### 빌더 사용
+```typescript
+import { PromptTemplateBuilder } from '@obora-kit/agents';
+
+const builder = new PromptTemplateBuilder()
+  .addHeader(1, 'Analysis Report')
+  .addNewline()
+  .addText('Context: {{context}}')
+  .addNewline()
+  .addHeader(2, 'Findings')
+  .addList([
+    'Finding 1: {{finding1}}',
+    'Finding 2: {{finding2}}',
+  ])
+  .addNewline()
+  .addConditional('recommendation', 'Recommendation: {{recommendation}}');
+
+const template = builder.build();
+const rendered = template.render({
+  context: 'Market analysis',
+  finding1: 'Revenue increased by 20%',
+  finding2: 'Customer satisfaction dropped',
+  recommendation: 'Focus on improving customer service',
+});
+```
+
+### 역할별 템플릿 빌더
+```typescript
+import { buildAnalystTemplate, buildExecutorTemplate } from '@obora-kit/agents';
+
+const analystTemplate = buildAnalystTemplate({
+  context: 'Financial analysis',
+}).build();
+
+const executorTemplate = buildExecutorTemplate({
+  tools: 'file-writer, api-caller',
+  safetyNotes: 'Ensure all API calls are rate-limited',
+}).build();
+```
+
+### 파일에서 템플릿 로드
+```typescript
+import { PromptTemplateRegistry } from '@obora-kit/agents';
+
+const registry = new PromptTemplateRegistry();
+
+// 단일 파일 로드
+await registry.loadFromFile('./prompts/analyst.md', 'analyst');
+
+// 디렉토리에서 모든 템플릿 로드
+await registry.loadFromDirectory('./prompts/');
+
+// 템플릿 렌더링
+const result = registry.render('analyst', {
+  context: 'Data analysis',
+});
 ```
 
 ## 엣지 케이스
-1. LLM 응답 파싱 실패 시 기본 응답 반환
-2. Blackboard 연결 실패 처리
-3. 툴 레지스트리에 도구가 없는 경우 처리
-4. 에이전트 오류 발생 시 재시도 로직
-5. 동시 작업 처리 시 상태 충돌 방지
-6. 메시지 기록이 너무 길어지는 경우 트리밍
-7. 최대 에러 도달 시 에이전트 비활성화
+1. 중첩 변수 경로 처리 (`user.profile.name`)
+2. 순환 참조 상속 탐지 및 방지
+3. 빈 템플릿 렌더링 처리
+4. 대규모 템플릿 메모리 최적화
+5. UTF-8 외 문자 처리
+6. 기본값 변수 재정의 확인
+7. 조건부 블록 내부에서의 변수 치환 순서
 
 ## 참고 자료
-- ADR-001: Blackboard + Actor 아키텍처 선택
-- TASK-030: Pi Mono LLM Adapter 구현
-- TASK-033: Function Calling / 도구 통합
-- @obora-kit/blackboard 패키지 문서
+- Handlebars 템플릿 문법 참고
+- TASK-031: 역할별 에이전트 구현
 
 ---
 
@@ -1204,10 +1339,12 @@ const results = await Promise.all(
 
   <checklist>
 # 자동 생성 체크리스트
-# 생성 시각: 2026-02-12 00:10:48
+# 생성 시각: 2026-02-12 02:10:40
 
-1. `report` 메서드의 Blackboard 경로가 스펙과 불일치
-2. `ExecutorAgent.act`에서 도구 실행 결과를 반환하지 않음
+1. `AgentRole` 타입 충돌으로 typecheck 실패
+2. `addSection()`이 `{{section:name}}` 플레이스홀더를 삽입하지만 렌더링 시 처리되지 않음
+3. `PromptTemplateConfig`의 `examples`와 `outputFormat` 필드가 constructor에서 저장되지 않음
+4. `ChatMessage`/`ToolCall` 불필요한 re-export로 잠재적 충돌 위험
   </checklist>
 
   <source_files>
