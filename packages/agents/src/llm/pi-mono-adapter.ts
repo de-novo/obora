@@ -162,34 +162,42 @@ export class PiMonoAdapter implements LLMAdapter {
 
   private transformResponse(data: unknown): ChatCompletionResult {
     const response = data as PiMonoAPIResponse;
+    const choice = response.choices?.[0];
+    if (!choice) {
+      throw new PiMonoError("No choices in API response", 500);
+    }
     return {
       id: response.id,
       model: response.model,
       message: {
         role: "assistant",
-        content: response.choices[0].message.content,
-        toolCalls: response.choices[0].message.tool_calls,
+        content: choice.message.content,
+        toolCalls: choice.message.tool_calls,
       },
       usage: {
         promptTokens: response.usage.prompt_tokens,
         completionTokens: response.usage.completion_tokens,
         totalTokens: response.usage.total_tokens,
       },
-      finishReason: response.choices[0].finish_reason,
+      finishReason: choice.finish_reason,
     };
   }
 
   private transformChunk(data: unknown): ChatCompletionChunk {
     const chunk = data as PiMonoStreamChunk;
+    const choice = chunk.choices?.[0];
+    if (!choice) {
+      throw new PiMonoError("No choices in stream chunk", 500);
+    }
     return {
       id: chunk.id,
       model: chunk.model,
       delta: {
-        role: chunk.choices[0].delta.role,
-        content: chunk.choices[0].delta.content,
-        toolCalls: chunk.choices[0].delta.tool_calls,
+        role: choice.delta.role,
+        content: choice.delta.content,
+        toolCalls: choice.delta.tool_calls,
       },
-      finishReason: chunk.choices[0].finish_reason,
+      finishReason: choice.finish_reason,
       usage: chunk.usage
         ? {
             promptTokens: chunk.usage.prompt_tokens,

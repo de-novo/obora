@@ -3,4 +3,4 @@ export * from "./registry";
 export * from "./decorators";
 export * from "./executor";
 export * from "./builtin";
-export { globalToolRegistry as registry } from "./registry";
+export { globalToolRegistry as toolRegistry } from "./registry";

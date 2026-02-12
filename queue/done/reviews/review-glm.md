@@ -1,5 +1,3 @@
-I need to check the actual code files to verify the checklist items. Let me read the relevant files first.
-Now let me check if there's a type check issue:
 # 체크리스트 검증 결과
 
 ## 총점
@@ -7,10 +5,23 @@ Now let me check if there's a type check issue:
 
 ## 항목별 검증
 
-1. **PASS** - `AgentRole` 타입은 template.ts:2에서 올바르게 import되어 사용되며, typecheck에 성공함. base-agent.ts:12-17에 정의된 enum 사용 중으로 충돌 없음
+1. **`ToolRegistry.execute` 타임아웃 시 타이머 누수**
+   - [PASS] `registry.ts:119-136` - try-finally 블록에서 clearTimeout 호출로 타이머 누수 방지됨
 
-2. **PASS** - builder.ts:18-22에서 `addSection()`이 `{{section:name}}` 플레이스홀더 대신 content를 직접 추가하도록 수정되어 렌더링 문제 해결됨
+2. **`ToolExecutionChain.execute`에서 `JSON.parse` 크래시 가능성**
+   - [PASS] `executor.ts:94-100` - try-catch 블록에서 JSON.parse 예외 처리됨
 
-3. **PASS** - template.ts:38-39에 `examples`, `outputFormat` 필드가 선언되고, template.ts:58-59 constructor에서 올바르게 저장됨
+3. **`tools/index.ts` barrel export가 스펙과 완전히 불일치**
+   - [PASS] `tools/index.ts:1-6` - 스펙과 완전히 일치
 
-4. **PASS** - template.ts:1에서 `import type { ChatMessage, ToolCall }`으로 type import만 하며, index.ts에서 re-export하지 않아 충돌 위험 없음
+4. **`src/index.ts`에서 tools 모듈 미 export**
+   - [PASS] `src/index.ts:4` - `export * from "./tools"` 존재
+
+5. **`ExecutorAgent`의 `ToolRegistry.execute` 호출 시 `ToolContext` 누락**
+   - [PASS] `executor-agent.ts:65-72` - toolContext 객체 생성 후 전달됨
+
+6. **`@tool` 데코레이터의 `this` 바인딩 오류**
+   - [PASS] `decorators.ts:30-34` - 주석으로 stateless 제한이 의도된 설계로 명시됨
+
+## 수정이 필요한 항목
+없음

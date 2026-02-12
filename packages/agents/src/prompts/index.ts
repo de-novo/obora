@@ -7,7 +7,7 @@ export type {
   OutputFormat,
   JSONSchema,
 } from "./template";
-export { PromptTemplateRegistry, globalPromptRegistry as registry } from "./registry";
+export { PromptTemplateRegistry, globalPromptRegistry as promptRegistry } from "./registry";
 export { PromptTemplateBuilder } from "./builder";
 export {
   buildAnalystTemplate,

@@ -1,3 +1,6 @@
+import type { ToolDefinition, ToolCall } from "../llm/adapter";
+import type { JSONSchema } from "../prompts/template";
+
 export interface Tool<TParams = Record<string, unknown>, TResult = unknown> {
   name: string;
   description: string;
@@ -19,14 +22,7 @@ export interface ToolParameterSchema {
   description?: string;
 }
 
-export interface JSONSchema {
-  type: "object" | "array" | "string" | "number" | "boolean";
-  properties?: Record<string, JSONSchema>;
-  required?: string[];
-  items?: JSONSchema;
-  enum?: unknown[];
-  description?: string;
-}
+export type { JSONSchema, ToolDefinition, ToolCall };
 
 export interface PropertySchema {
   type: "string" | "number" | "boolean" | "array" | "object";
@@ -63,24 +59,6 @@ export interface ToolExecutionResult<TResult = unknown> {
   };
   duration: number;
   metadata?: Record<string, unknown>;
-}
-
-export interface ToolDefinition {
-  type: "function";
-  function: {
-    name: string;
-    description: string;
-    parameters: Record<string, unknown>;
-  };
-}
-
-export interface ToolCall {
-  id: string;
-  type: "function";
-  function: {
-    name: string;
-    arguments: string;
-  };
 }
 
 /** @deprecated ToolCall 사용 권장 */

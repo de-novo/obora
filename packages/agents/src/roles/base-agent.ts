@@ -1,10 +1,8 @@
 import { LLMAdapter, ChatMessage, ChatCompletionParams } from "../llm/adapter";
 import type { Blackboard } from "@obora-kit/blackboard";
+import type { AgentId } from "../types";
 
-/**
- * 에이전트 ID 타입
- */
-export type AgentId = string;
+export type { AgentId };
 
 /**
  * 에이전트 역할

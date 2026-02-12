@@ -1,379 +1,92 @@
 <review>
   <mode>checklist_verification</mode>
   <task>
-    <name>TASK-032-prompt-templates</name>
+    <name>TASK-033-tool-integration</name>
     <spec><![CDATA[
-# TASK-032: 프롬프트 템플릿 시스템
+# TASK-033: Function Calling / 도구 통합
 
 ## 개요
 - **상태**: 📋 대기
 - 우선순위: P1
-- 예상 소요: 6시간
+- 예상 소요: 8시간
 - 담당: 개발자
 - Phase: Week 5-6
 
 ## 목표
-에이전트용 프롬프트 템플릿 시스템 구현
+AI 에이전트가 외부 도구를 사용할 수 있도록 Function Calling / Tool 통합 구현
 
 ## 작업 내용
 
-### 1. PromptTemplate 클래스
+### 1. Tool 인터페이스 정의
 
-**파일 위치:** `packages/agents/src/prompts/template.ts`
+**파일 위치:** `packages/agents/src/tools/types.ts`
 
 ```typescript
 /**
- * 유효성 검사 결과
+ * 도구 정의
  */
-export interface ValidationResult {
-  valid: boolean;
-  errors?: string[];
+export interface Tool<TParams = Record<string, unknown>, TResult = unknown> {
+  /**
+   * 도구 고유 이름
+   */
+  name: string;
+
+  /**
+   * 도구 설명 (LLM이 참조)
+   */
+  description: string;
+
+  /**
+   * 파라미터 JSON Schema (ToolParameterSchema 또는 JSONSchema 사용 가능)
+   */
+  parameters: ToolParameterSchema | JSONSchema;
+
+  /**
+   * 도구 실행 함수
+   */
+  execute(params: TParams, context: ToolContext): Promise<TResult>;
+
+  /**
+   * 도구 검증 (선택적)
+   */
+  validate?(params: unknown): params is TParams;
+
+  /**
+   * 도구 카테고리 (선택적)
+   */
+  category?: string;
+
+  /**
+   * 도구 버전 (선택적)
+   */
+  version?: string;
+
+  /**
+   * 부작용 여부 (읽기 전용 vs 변경)
+   */
+  hasSideEffects?: boolean;
+
+  /**
+   * 필요한 권한
+   */
+  requiredPermissions?: string[];
 }
 
 /**
- * 프롬프트 템플릿 인터페이스 (스펙 14-ai-agents.md와 일치)
+ * 파라미터 스키마 (JSON Schema, 스펙 14-ai-agents.md의 JSONSchema와 일치)
  */
-export interface IPromptTemplate {
-  // 템플릿 ID
-  id: string;
-
-  // 템플릿 이름
-  name: string;
-
-  // 역할
-  role: AgentRole;
-
-  // 템플릿 렌더링
-  render(variables: Record<string, unknown>): string;
-
-  // 메시지 생성 (스펙에 추가됨)
-  toMessages(variables: Record<string, unknown>): ChatMessage[];
-
-  // 변수 검증 (스펙에 추가됨)
-  validate(variables: Record<string, unknown>): ValidationResult;
-}
-
-/**
- * 프롬프트 템플릿
- * 변수 치환, 조건부 섹션, 템플릿 상속 지원
- */
-export class PromptTemplate implements IPromptTemplate {
-  id: string;
-  name: string;
-  role: AgentRole;
-
-  private template: string;
-  private variables: Set<string>;
-  private parent?: PromptTemplate;
-  private systemPrompt?: string;
-  private variableDefinitions: VariableDefinition[] = [];
-
-  constructor(template: string, parent?: PromptTemplate);
-  constructor(config: PromptTemplateConfig);
-  constructor(templateOrConfig: string | PromptTemplateConfig, parent?: PromptTemplate) {
-    if (typeof templateOrConfig === 'string') {
-      // 기존 호환성: 문자열로 생성
-      this.id = `template-${Date.now()}`;
-      this.name = 'Unnamed Template';
-      this.role = 'analyst';
-      this.template = templateOrConfig;
-      this.parent = parent;
-    } else {
-      // 스펙 기반: 설정 객체로 생성
-      const config = templateOrConfig;
-      this.id = config.id;
-      this.name = config.name;
-      this.role = config.role;
-      this.template = config.user;
-      this.systemPrompt = config.system;
-      this.variableDefinitions = config.variables;
-    }
-    this.variables = new Set();
-    this.extractVariables(this.template);
-  }
-
-  /**
-   * 시스템 프롬프트 설정
-   */
-  setSystemPrompt(systemPrompt: string): void {
-    this.systemPrompt = systemPrompt;
-  }
-
-  /**
-   * 변수 정의 설정
-   */
-  setVariableDefinitions(variables: VariableDefinition[]): void {
-    this.variableDefinitions = variables;
-  }
-
-  /**
-   * 템플릿 렌더링
-   */
-  render(variables: Record<string, unknown>): string {
-    let result = this.template;
-
-    // 부모 템플릿 먼저 렌더링
-    if (this.parent) {
-      const parentResult = this.parent.render(variables);
-      result = `${parentResult}\n\n${result}`;
-    }
-
-    // 조건부 섹션 처리
-    result = this.processConditionals(result, variables);
-
-    // 변수 치환
-    result = this.substituteVariables(result, variables);
-
-    // 미치환 변수 처리
-    result = this.handleUnsubstituted(result, variables);
-
-    return result.trim();
-  }
-
-  /**
-   * 변수 추출
-   */
-  private extractVariables(template: string): void {
-    const pattern = /\{\{(\w+)\}\}/g;
-    let match;
-    while ((match = pattern.exec(template)) !== null) {
-      this.variables.add(match[1]);
-    }
-  }
-
-  /**
-   * 변수 치환
-   */
-  private substituteVariables(
-    template: string,
-    variables: Record<string, unknown>
-  ): string {
-    return template.replace(/\{\{(\w+)\}\}/g, (match, name) => {
-      const value = this.getNestedValue(variables, name);
-      if (value === undefined) {
-        return match; // 나중에 처리
-      }
-      return String(value);
-    });
-  }
-
-  /**
-   * 중첩 값 가져오기
-   */
-  private getNestedValue(obj: Record<string, unknown>, path: string): unknown {
-    const parts = path.split('.');
-    let current: unknown = obj;
-
-    for (const part of parts) {
-      if (typeof current === 'object' && current !== null) {
-        current = (current as Record<string, unknown>)[part];
-      } else {
-        return undefined;
-      }
-    }
-
-    return current;
-  }
-
-  /**
-   * 조건부 섹션 처리
-   * 형식: {{#if variable}}...{{/if}}
-   * 형식: {{#unless variable}}...{{/unless}}
-   */
-  private processConditionals(
-    template: string,
-    variables: Record<string, unknown>
-  ): string {
-    // {{#if}} 처리
-    template = template.replace(
-      /\{\{#if\s+(\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g,
-      (match, name, content) => {
-        const value = this.getNestedValue(variables, name);
-        return this.isTruthy(value) ? content : '';
-      }
-    );
-
-    // {{#unless}} 처리
-    template = template.replace(
-      /\{\{#unless\s+(\w+)\}\}([\s\S]*?)\{\{\/unless\}\}/g,
-      (match, name, content) => {
-        const value = this.getNestedValue(variables, name);
-        return !this.isTruthy(value) ? content : '';
-      }
-    );
-
-    return template;
-  }
-
-  /**
-   * Truthy 판별
-   */
-  private isTruthy(value: unknown): boolean {
-    if (value === null || value === undefined) return false;
-    if (typeof value === 'boolean') return value;
-    if (typeof value === 'number') return value !== 0;
-    if (typeof value === 'string') return value.length > 0;
-    if (Array.isArray(value)) return value.length > 0;
-    return true;
-  }
-
-  /**
-   * 미치환 변수 처리
-   */
-  private handleUnsubstituted(
-    template: string,
-    variables: Record<string, unknown>
-  ): string {
-    // 기본값 처리: {{variable|default}}
-    template = template.replace(
-      /\{\{(\w+)\|([^}]+)\}\}/g,
-      (match, name, defaultValue) => {
-        const value = this.getNestedValue(variables, name);
-        return value !== undefined ? String(value) : defaultValue;
-      }
-    );
-
-    // 여전히 미치환된 변수는 빈 문자열로 대체
-    return template.replace(/\{\{\w+\}\}/g, '');
-  }
-
-  /**
-   * 변수 목록 반환
-   */
-  getVariables(): string[] {
-    return Array.from(this.variables);
-  }
-
-  /**
-   * 부모 템플릿 설정
-   */
-  extend(parent: PromptTemplate): void {
-    this.parent = parent;
-  }
-
-  /**
-   * 템플릿 병합
-   */
-  merge(other: PromptTemplate): PromptTemplate {
-    const mergedTemplate = `${this.template}\n\n${other.template}`;
-    const merged = new PromptTemplate(mergedTemplate, this.parent);
-    merged.variables = new Set([...this.variables, ...other.variables]);
-    return merged;
-  }
-
-  /**
-   * 템플릿 복제
-   */
-  clone(): PromptTemplate {
-    const cloned = new PromptTemplate(this.template, this.parent);
-    cloned.id = this.id;
-    cloned.name = this.name;
-    cloned.role = this.role;
-    cloned.systemPrompt = this.systemPrompt;
-    cloned.variables = new Set(this.variables);
-    return cloned;
-  }
-
-  /**
-   * 메시지 생성 (스펙 IPromptTemplate 인터페이스)
-   * ChatMessage[] 형식으로 변환하여 LLM에 전달
-   */
-  toMessages(variables: Record<string, unknown>): ChatMessage[] {
-    const messages: ChatMessage[] = [];
-
-    // 시스템 프롬프트 추가 (있는 경우)
-    if (this.systemPrompt) {
-      messages.push({ role: 'system', content: this.systemPrompt });
-    }
-
-    // 렌더링된 사용자 프롬프트 추가
-    messages.push({
-      role: 'user',
-      content: this.render(variables),
-    });
-
-    return messages;
-  }
-
-  /**
-   * 변수 검증 (스펙 IPromptTemplate 인터페이스)
-   * 정의된 변수 정의와 비교하여 유효성 검사
-   */
-  validate(variables: Record<string, unknown>): ValidationResult {
-    const errors: string[] = [];
-
-    // 템플릿에서 추출한 변수들 중 필수 변수 확인
-    for (const varDef of this.variableDefinitions) {
-      if (varDef.required && variables[varDef.name] === undefined) {
-        errors.push(`Required variable '${varDef.name}' is missing`);
-      }
-
-      const value = variables[varDef.name];
-      if (value !== undefined && typeof value !== varDef.type) {
-        errors.push(`Variable '${varDef.name}' should be type '${varDef.type}', but got '${typeof value}'`);
-      }
-    }
-
-    return {
-      valid: errors.length === 0,
-      errors: errors.length > 0 ? errors : undefined,
-    };
-  }
-}
-
-/**
- * 변수 정의
- */
-export interface VariableDefinition {
-  name: string;
-  type: 'string' | 'number' | 'boolean' | 'object' | 'array';
-  required: boolean;
-  default?: unknown;
+export interface ToolParameterSchema {
+  type: 'object' | 'array' | 'string' | 'number' | 'boolean';
+  properties?: Record<string, PropertySchema>;
+  required?: string[];
+  items?: ToolParameterSchema;
+  enum?: (string | number | boolean)[];
   description?: string;
 }
 
 /**
- * PromptTemplate 설정 (스펙 PromptTemplateConfig와 일치)
- */
-export interface PromptTemplateConfig {
-  id: string;
-  name: string;
-  role: AgentRole;
-
-  // 시스템 프롬프트
-  system: string;
-
-  // 사용자 프롬프트 템플릿
-  user: string;
-
-  // 변수 정의
-  variables: VariableDefinition[];
-
-  // 예시 (Few-shot)
-  examples?: Example[];
-
-  // 출력 형식
-  outputFormat?: OutputFormat;
-}
-
-/**
- * 예시
- */
-export interface Example {
-  input: Record<string, unknown>;
-  output: string;
-}
-
-/**
- * 출력 형식
- */
-export interface OutputFormat {
-  type: 'text' | 'json' | 'markdown' | 'code';
-  schema?: JSONSchema;  // JSON 출력 시
-}
-
-/**
- * JSON Schema
+ * JSON Schema (스펙 14-ai-agents.md와 일치)
+ * FunctionDefinition.parameters 타입으로 사용
  */
 export interface JSONSchema {
   type: 'object' | 'array' | 'string' | 'number' | 'boolean';
@@ -385,11 +98,114 @@ export interface JSONSchema {
 }
 
 /**
- * ChatMessage 타입 (스펙에서 참조)
- * LLMAdapter 타입과 일치하도록 정의 (packages/agents/src/llm/adapter.ts 참조)
+ * 속성 스키마
  */
-export type AgentRole = 'analyst' | 'executor' | 'verifier' | 'director';
+export interface PropertySchema {
+  type: 'string' | 'number' | 'boolean' | 'array' | 'object';
+  description?: string;
+  enum?: (string | number | boolean)[];
+  items?: PropertySchema;
+  properties?: Record<string, PropertySchema>;
+  required?: string[];
+  default?: unknown;
+  minimum?: number;
+  maximum?: number;
+  minLength?: number;
+  maxLength?: number;
+  pattern?: string;
+}
 
+/**
+ * 도구 실행 컨텍스트
+ */
+export interface ToolContext {
+  /**
+   * 세션 ID
+   */
+  sessionId: string;
+
+  /**
+   * 호출한 에이전트 ID
+   */
+  agentId: string;
+
+  /**
+   * 작업 ID (선택적)
+   */
+  taskId?: string;
+
+  /**
+   * 추가 메타데이터
+   */
+  metadata?: Record<string, unknown>;
+
+  /**
+   * 권한
+   */
+  permissions: Set<string>;
+
+  /**
+   * 타임아웃 (ms)
+   */
+  timeout?: number;
+
+  /**
+   * 실행 취소 시그널
+   */
+  abortSignal?: AbortSignal;
+}
+
+/**
+ * 도구 실행 결과
+ */
+export interface ToolExecutionResult<TResult = unknown> {
+  /**
+   * 성공 여부
+   */
+  success: boolean;
+
+  /**
+   * 결과 데이터
+   */
+  data?: TResult;
+
+  /**
+   * 에러 정보
+   */
+  error?: {
+    code: string;
+    message: string;
+    details?: unknown;
+  };
+
+  /**
+   * 실행 시간 (ms)
+   */
+  duration: number;
+
+  /**
+   * 메타데이터
+   */
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Tool Definition (OpenAI 스타일 Tool Calling)
+ * LLMAdapter 타입과 일치 (packages/agents/src/llm/adapter.ts 참조)
+ */
+export interface ToolDefinition {
+  type: 'function';
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
+}
+
+/**
+ * Tool Call (OpenAI 스타일 Tool Calling)
+ * LLMAdapter 타입과 일치 (packages/agents/src/llm/adapter.ts 참조)
+ */
 export interface ToolCall {
   id: string;
   type: 'function';
@@ -399,922 +215,990 @@ export interface ToolCall {
   };
 }
 
-export interface ChatMessage {
-  role: 'system' | 'user' | 'assistant' | 'tool';
-  content: string;
-  toolCallId?: string;
-  toolCalls?: ToolCall[];
+/**
+ * Function Call 요청 (레거시 호환성을 위해 유지)
+ * @deprecated ToolCall 사용 권장
+ */
+export interface FunctionCallRequest {
+  id: string;
+  name: string;
+  arguments: string; // JSON string
+}
+
+/**
+ * Function Calling 응답
+ */
+export interface FunctionCallResponse {
+  id: string;
+  result: string; // JSON string
+  error?: string;
 }
 ```
 
-### 2. 템플릿 레지스트리
+### 2. ToolRegistry 클래스
 
-**파일 위치:** `packages/agents/src/prompts/registry.ts`
+**파일 위치:** `packages/agents/src/tools/registry.ts`
 
 ```typescript
-import { PromptTemplate } from './template';
+import {
+  Tool,
+  ToolContext,
+  ToolExecutionResult,
+  ToolDefinition,
+} from './types';
 
 /**
- * 템플릿 레지스트리
+ * 도구 레지스트리
+ * 도구 등록, 검색, 실행을 관리
  */
-export class PromptTemplateRegistry {
-  private templates: Map<string, PromptTemplate>;
+export class ToolRegistry {
+  private tools: Map<string, Tool>;
+  private categories: Map<string, Set<string>>;
   private aliases: Map<string, string>;
 
   constructor() {
-    this.templates = new Map();
+    this.tools = new Map();
+    this.categories = new Map();
     this.aliases = new Map();
   }
 
   /**
-   * 템플릿 등록
+   * 도구 등록
    */
-  register(name: string, template: string): void {
-    this.templates.set(name, new PromptTemplate(template));
-  }
-
-  /**
-   * 템플릿 가져오기
-   */
-  get(name: string): PromptTemplate | undefined {
-    const resolvedName = this.aliases.get(name) ?? name;
-    return this.templates.get(resolvedName);
-  }
-
-  /**
-   * 템플릿 렌더링
-   */
-  render(name: string, variables: Record<string, unknown>): string {
-    const template = this.get(name);
-    if (!template) {
-      throw new Error(`Template not found: ${name}`);
+  register<TParams, TResult>(tool: Tool<TParams, TResult>): void {
+    if (this.tools.has(tool.name)) {
+      throw new Error(`Tool "${tool.name}" is already registered`);
     }
-    return template.render(variables);
+
+    this.tools.set(tool.name, tool as Tool);
+
+    // 카테고리 등록
+    if (tool.category) {
+      if (!this.categories.has(tool.category)) {
+        this.categories.set(tool.category, new Set());
+      }
+      this.categories.get(tool.category)!.add(tool.name);
+    }
+  }
+
+  /**
+   * 도구 등록 해제
+   */
+  unregister(name: string): boolean {
+    const tool = this.tools.get(name);
+    if (!tool) return false;
+
+    this.tools.delete(name);
+
+    // 카테고리에서 제거
+    if (tool.category) {
+      this.categories.get(tool.category)?.delete(name);
+    }
+
+    // 별칭 제거
+    for (const [alias, target] of this.aliases.entries()) {
+      if (target === name) {
+        this.aliases.delete(alias);
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * 도구 가져오기
+   */
+  get(name: string): Tool | undefined {
+    const resolvedName = this.aliases.get(name) ?? name;
+    return this.tools.get(resolvedName);
+  }
+
+  /**
+   * 도구 존재 여부 확인
+   */
+  has(name: string): boolean {
+    const resolvedName = this.aliases.get(name) ?? name;
+    return this.tools.has(resolvedName);
   }
 
   /**
    * 별칭 등록
    */
   alias(name: string, alias: string): void {
+    if (!this.has(name)) {
+      throw new Error(`Tool "${name}" not found`);
+    }
     this.aliases.set(alias, name);
   }
 
   /**
-   * 템플릿 상속 설정
+   * 모든 도구 목록 반환
    */
-  extend(name: string, parent: string): void {
-    const child = this.get(name);
-    const parentTemplate = this.get(parent);
-
-    if (!child || !parentTemplate) {
-      throw new Error(`Template not found: ${!child ? name : parent}`);
-    }
-
-    child.extend(parentTemplate);
+  listTools(): Array<{
+    name: string;
+    description: string;
+    category?: string;
+  }> {
+    return Array.from(this.tools.values()).map(tool => ({
+      name: tool.name,
+      description: tool.description,
+      category: tool.category,
+    }));
   }
 
   /**
-   * 모든 템플릿 이름 반환
+   * 카테고리별 도구 목록 반환
    */
-  list(): string[] {
-    return Array.from(this.templates.keys());
+  listByCategory(category: string): Tool[] {
+    const names = this.categories.get(category);
+    if (!names) return [];
+
+    return Array.from(names)
+      .map(name => this.tools.get(name)!)
+      .filter(Boolean);
   }
 
   /**
-   * 파일에서 템플릿 로드
+   * 모든 카테고리 목록 반환
    */
-  async loadFromFile(path: string, name?: string): Promise<void> {
-    // Node.js 환경에서만 사용 가능
-    if (typeof process === 'undefined') {
-      throw new Error('loadFromFile is only available in Node.js environment');
-    }
-
-    const fs = await import('fs/promises');
-    const content = await fs.readFile(path, 'utf-8');
-    const templateName = name ?? this.extractNameFromPath(path);
-    this.register(templateName, content);
+  listCategories(): string[] {
+    return Array.from(this.categories.keys());
   }
 
   /**
-   * 디렉토리에서 템플릿 로드
+   * 도구 실행
    */
-  async loadFromDirectory(dir: string): Promise<void> {
-    if (typeof process === 'undefined') {
-      throw new Error('loadFromDirectory is only available in Node.js environment');
+  async execute<TResult = unknown>(
+    name: string,
+    params: Record<string, unknown>,
+    context: ToolContext
+  ): Promise<ToolExecutionResult<TResult>> {
+    const startTime = Date.now();
+    const tool = this.get(name);
+
+    if (!tool) {
+      return {
+        success: false,
+        error: {
+          code: 'TOOL_NOT_FOUND',
+          message: `Tool "${name}" not found`,
+        },
+        duration: Date.now() - startTime,
+      };
     }
 
-    const fs = await import('fs/promises');
-    const path = await import('path');
-    const entries = await fs.readdir(dir, { withFileTypes: true });
-
-    for (const entry of entries) {
-      if (entry.isFile() && entry.name.endsWith('.md')) {
-        const fullPath = path.join(dir, entry.name);
-        await this.loadFromFile(fullPath);
+    // 권한 확인
+    if (tool.requiredPermissions) {
+      const missingPermissions = tool.requiredPermissions.filter(
+        p => !context.permissions.has(p)
+      );
+      if (missingPermissions.length > 0) {
+        return {
+          success: false,
+          error: {
+            code: 'PERMISSION_DENIED',
+            message: `Missing permissions: ${missingPermissions.join(', ')}`,
+          },
+          duration: Date.now() - startTime,
+        };
       }
     }
+
+    // 파라미터 검증
+    if (tool.validate && !tool.validate(params)) {
+      return {
+        success: false,
+        error: {
+          code: 'INVALID_PARAMS',
+          message: 'Parameter validation failed',
+        },
+        duration: Date.now() - startTime,
+      };
+    }
+
+    try {
+      // 타임아웃 처리
+      const timeoutMs = context.timeout ?? 30000;
+      const result = await Promise.race([
+        tool.execute(params, context),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Tool execution timeout')), timeoutMs)
+        ),
+      ]);
+
+      return {
+        success: true,
+        data: result as TResult,
+        duration: Date.now() - startTime,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: {
+          code: 'EXECUTION_ERROR',
+          message: (error as Error).message,
+          details: error,
+        },
+        duration: Date.now() - startTime,
+      };
+    }
   }
 
   /**
-   * 경로에서 이름 추출
+   * 배치 실행
    */
-  private extractNameFromPath(path: string): string {
-    const filename = path.split('/').pop() ?? path;
-    return filename.replace(/\.(md|txt)$/, '');
+  async executeBatch(
+    calls: Array<{ name: string; params: Record<string, unknown> }>,
+    context: ToolContext
+  ): Promise<ToolExecutionResult[]> {
+    return Promise.all(
+      calls.map(call => this.execute(call.name, call.params, context))
+    );
+  }
+
+  /**
+   * Tool Definition 생성 (OpenAI 스타일 Tool Calling)
+   * chatCompletion의 params.tools로 전달
+   */
+  toToolDefinitions(names?: string[]): ToolDefinition[] {
+    const toolNames = names ?? Array.from(this.tools.keys());
+
+    return toolNames
+      .map(name => this.tools.get(name))
+      .filter((tool): tool is Tool => tool !== undefined)
+      .map(tool => ({
+        type: 'function' as const,
+        function: {
+          name: tool.name,
+          description: tool.description,
+          parameters: tool.parameters as Record<string, unknown>,
+        },
+      }));
+  }
+
+  /**
+   * Function Calling 스키마 생성 (레거시 호환성)
+   * @deprecated toToolDefinitions 사용 권장
+   */
+  toFunctionCallingSchema(names?: string[]): ToolDefinition[] {
+    return this.toToolDefinitions(names);
   }
 
   /**
    * 레지스트리 초기화
    */
   clear(): void {
-    this.templates.clear();
+    this.tools.clear();
+    this.categories.clear();
     this.aliases.clear();
   }
+
+  /**
+   * 등록된 도구 수 반환
+   */
+  get size(): number {
+    return this.tools.size;
+  }
 }
 
 /**
- * 전역 레지스트리 인스턴스
+ * 전역 도구 레지스트리
  */
-export const globalPromptRegistry = new PromptTemplateRegistry();
+export const globalToolRegistry = new ToolRegistry();
 ```
 
-### 3. 역할별 기본 템플릿
+### 3. Tool 데코레이터
 
-**파일 위치:** `packages/agents/src/prompts/templates/analyst.md`
-
-```markdown
-You are an expert analyst with deep expertise in data analysis, risk assessment, and pattern recognition.
-
-Your responsibilities:
-{{#if responsibilities}}
-{{responsibilities}}
-{{else}}
-1. Analyze the provided information thoroughly
-2. Identify key findings and patterns
-3. Provide actionable recommendations
-4. Assess confidence in your conclusions
-5. Support your findings with reasoning
-{{/if}}
-
-When providing analysis, structure your response as follows:
-
-## Summary
-{{#if context}}Context: {{context}}{{/if}}
-Provide a concise overview of your analysis.
-
-## Key Findings
-- Finding 1: [description]
-- Finding 2: [description]
-- ...
-
-## Recommendations
-- Recommendation 1: [actionable suggestion]
-- Recommendation 2: [actionable suggestion]
-- ...
-
-## Confidence
-{{confidence|85}}/100
-
-## Reasoning
-Provide your thought process and evidence supporting your conclusions.
-
-{{#if sources}}
-## Sources
-{{sources}}
-{{/if}}
-
-Be thorough, objective, and analytical in your approach.
-```
-
-**파일 위치:** `packages/agents/src/prompts/templates/executor.md`
-
-```markdown
-You are an executor agent responsible for taking action and executing tasks.
-
-Your responsibilities:
-{{#if responsibilities}}
-{{responsibilities}}
-{{else}}
-1. Understand the task requirements clearly
-2. Determine the best approach to complete the task
-3. Execute the action using available tools
-4. Report the outcome accurately
-5. Handle errors gracefully
-{{/if}}
-
-Available tools: {{tools|none}}
-
-When planning execution, structure your response as follows:
-
-## Action
-{{action|The action you will take}}
-
-## Tool
-{{#if tool}}Tool: {{tool}}{{else}}No tool required{{/if}}
-
-## Parameters
-```json
-{{#if parameters}}{{parameters}}{{else}}{{{/if}}}
-```
-
-## Steps
-1. [First step]
-2. [Second step]
-...
-
-## Expected Outcome
-{{expectedOutcome|The expected result}}
-
-Be precise, efficient, and safety-conscious in your execution.
-
-{{#if safety_notes}}
-## Safety Notes
-{{safety_notes}}
-{{/if}}
-```
-
-**파일 위치:** `packages/agents/src/prompts/templates/verifier.md`
-
-```markdown
-You are a verifier agent responsible for validating results and ensuring quality.
-
-Your responsibilities:
-{{#if responsibilities}}
-{{responsibilities}}
-{{else}}
-1. Review the provided work thoroughly
-2. Check against requirements and specifications
-3. Identify any issues or discrepancies
-4. Provide specific feedback for improvements
-5. Verify correctness and completeness
-{{/if}}
-
-When conducting verification, structure your response as follows:
-
-## Overall Result
-{{#if passed}}✅ PASSED{{else}}❌ FAILED{{/if}}
-
-## Verification Checks
-| Check | Description | Status | Evidence |
-|-------|-------------|--------|----------|
-| 1 | [check description] | [passed/failed/skipped] | [evidence] |
-| 2 | [check description] | [passed/failed/skipped] | [evidence] |
-
-## Summary
-{{summary|Brief overview of the verification}}
-
-## Issues Found
-{{#unless issues}}No issues found.{{/unless}}
-{{#if issues}}
-{{#each issues}}
-### {{severity|medium}}: {{description}}
-{{#if location}}Location: {{location}}{{/if}}
-{{#if recommendation}}Recommendation: {{recommendation}}{{/if}}
----
-{{/each}}
-{{/if}}
-
-## Suggestions
-{{#unless suggestions}}No suggestions.{{/unless}}
-{{#if suggestions}}
-{{#each suggestions}}
-- {{this}}
-{{/each}}
-{{/if}}
-
-Issue severity levels:
-- **Critical**: Must be fixed before proceeding
-- **High**: Should be fixed soon
-- **Medium**: Can be addressed later
-- **Low**: Minor improvements or suggestions
-
-Be thorough, objective, and constructive in your verification.
-```
-
-**파일 위치:** `packages/agents/src/prompts/templates/director.md`
-
-```markdown
-You are a director agent responsible for coordinating activities and facilitating collaboration.
-
-Your responsibilities:
-{{#if responsibilities}}
-{{responsibilities}}
-{{else}}
-1. Understand the overall goal and requirements
-2. Coordinate between different agents and stakeholders
-3. Facilitate discussions and consensus-building
-4. Monitor progress and adjust plans as needed
-5. Provide clear direction and guidance
-{{/if}}
-
-When creating a coordination plan, structure your response as follows:
-
-## Agenda
-{{agenda|The main goal or purpose}}
-
-## Participants
-{{#each participants}}
-- {{this}}
-{{/each}}
-
-## Steps
-{{#each steps}}
-### Step {{@index}}: {{description}}
-{{#if assignee}}Assignee: {{assignee}}{{/if}}
-{{#if dependencies}}Dependencies: {{dependencies}}{{/if}}
-{{#if estimatedDuration}}Duration: {{estimatedDuration}}{{/if}}
-{{/each}}
-
-## Timeline
-{{#each timeline}}
-- {{this}}
-{{/each}}
-
-## Expected Outcome
-{{expectedOutcome|What should be achieved}}
-
-## Key Principles for Coordination
-- Clear communication
-- Inclusive participation
-- Transparent decision-making
-- Agile adaptation to changes
-- Focus on results
-
-Be diplomatic, organized, and results-oriented in your coordination.
-
-{{#if notes}}
-## Notes
-{{notes}}
-{{/if}}
-```
-
-### 4. 템플릿 빌더
-
-**파일 위치:** `packages/agents/src/prompts/builder.ts`
+**파일 위치:** `packages/agents/src/tools/decorators.ts`
 
 ```typescript
-import { PromptTemplate } from './template';
+import { Tool, ToolParameterSchema, ToolContext } from './types';
+import { globalToolRegistry } from './registry';
 
 /**
- * 프롬프트 템플릿 빌더
+ * 도구 메타데이터
  */
-export class PromptTemplateBuilder {
-  private parts: string[];
-  private sections: Map<string, string>;
-  private extends?: string;
+interface ToolMetadata {
+  name: string;
+  description: string;
+  parameters?: ToolParameterSchema;
+  category?: string;
+  version?: string;
+  hasSideEffects?: boolean;
+  requiredPermissions?: string[];
+}
 
-  constructor() {
-    this.parts = [];
-    this.sections = new Map();
-  }
+/**
+ * 도구 데코레이터
+ * 클래스 메서드를 도구로 변환
+ */
+export function tool(metadata: ToolMetadata) {
+  return function <T extends (...args: any[]) => any>(
+    target: any,
+    propertyKey: string,
+    descriptor: PropertyDescriptor
+  ) {
+    const originalMethod = descriptor.value;
 
-  /**
-   * 기본 텍스트 추가
-   */
-  addText(text: string): this {
-    this.parts.push(text);
+    const toolDef: Tool = {
+      name: metadata.name,
+      description: metadata.description,
+      parameters: metadata.parameters ?? {
+        type: 'object',
+        properties: {},
+      },
+      category: metadata.category,
+      version: metadata.version,
+      hasSideEffects: metadata.hasSideEffects ?? true,
+      requiredPermissions: metadata.requiredPermissions,
+      async execute(params, context) {
+        return originalMethod.call(target, params, context);
+      },
+    };
+
+    // 전역 레지스트리에 등록
+    globalToolRegistry.register(toolDef);
+
+    return descriptor;
+  };
+}
+
+/**
+ * 파라미터 스키마 빌더
+ */
+export class ParameterSchemaBuilder {
+  private schema: ToolParameterSchema = {
+    type: 'object',
+    properties: {},
+    required: [],
+  };
+
+  string(name: string, description: string, options?: {
+    required?: boolean;
+    enum?: string[];
+    default?: string;
+    pattern?: string;
+    minLength?: number;
+    maxLength?: number;
+  }): this {
+    this.schema.properties[name] = {
+      type: 'string',
+      description,
+      ...options,
+    };
+    if (options?.required) {
+      this.schema.required!.push(name);
+    }
     return this;
   }
 
-  /**
-   * 섹션 추가
-   */
-  addSection(name: string, content: string): this {
-    this.sections.set(name, content);
-    this.parts.push(`{{section:${name}}}`);
+  number(name: string, description: string, options?: {
+    required?: boolean;
+    minimum?: number;
+    maximum?: number;
+    default?: number;
+  }): this {
+    this.schema.properties[name] = {
+      type: 'number',
+      description,
+      ...options,
+    };
+    if (options?.required) {
+      this.schema.required!.push(name);
+    }
     return this;
   }
 
-  /**
-   * 조건부 섹션 추가
-   */
-  addConditional(variable: string, content: string): this {
-    this.parts.push(`{{#if ${variable}}}${content}{{/if}}`);
+  boolean(name: string, description: string, options?: {
+    required?: boolean;
+    default?: boolean;
+  }): this {
+    this.schema.properties[name] = {
+      type: 'boolean',
+      description,
+      ...options,
+    };
+    if (options?.required) {
+      this.schema.required!.push(name);
+    }
     return this;
   }
 
-  /**
-   * 변수 추가
-   */
-  addVariable(name: string, defaultValue?: string): this {
-    const placeholder = defaultValue ? `{{${name}|${defaultValue}}}` : `{{${name}}}`;
-    this.parts.push(placeholder);
+  array(name: string, description: string, items: PropertySchema, options?: {
+    required?: boolean;
+  }): this {
+    this.schema.properties[name] = {
+      type: 'array',
+      description,
+      items,
+    };
+    if (options?.required) {
+      this.schema.required!.push(name);
+    }
     return this;
   }
 
-  /**
-   * 헤더 추가
-   */
-  addHeader(level: number, text: string): this {
-    const prefix = '#'.repeat(level);
-    this.parts.push(`\n${prefix} ${text}\n`);
+  object(name: string, description: string, properties: Record<string, PropertySchema>, options?: {
+    required?: boolean;
+  }): this {
+    this.schema.properties[name] = {
+      type: 'object',
+      description,
+      properties,
+    };
+    if (options?.required) {
+      this.schema.required!.push(name);
+    }
     return this;
   }
 
-  /**
-   * 리스트 추가
-   */
-  addList(items: string[], ordered: boolean = false): this {
-    const prefix = ordered ? '1. ' : '- ';
-    this.parts.push('\n' + items.map(item => `${prefix}${item}`).join('\n') + '\n');
-    return this;
+  build(): ToolParameterSchema {
+    return this.schema;
   }
+}
+
+/**
+ * 파라미터 스키마 빌더 생성
+ */
+export function params(): ParameterSchemaBuilder {
+  return new ParameterSchemaBuilder();
+}
+```
+
+### 4. 도구 실행 핸들러
+
+**파일 위치:** `packages/agents/src/tools/executor.ts`
+
+```typescript
+import {
+  FunctionCallRequest,
+  FunctionCallResponse,
+  ToolContext,
+  ToolExecutionResult,
+} from './types';
+import { ToolRegistry } from './registry';
+
+/**
+ * 도구 실행 핸들러
+ * LLM의 Function Calling 응답을 처리
+ */
+export class ToolExecutor {
+  constructor(private registry: ToolRegistry) {}
 
   /**
-   * 코드 블록 추가
+   * 단일 Function Call 처리
    */
-  addCodeBlock(code: string, language: string = ''): this {
-    this.parts.push(`\n\`\`\`${language}\n${code}\n\`\`\`\n`);
-    return this;
-  }
+  async handleFunctionCall(
+    call: FunctionCallRequest,
+    context: ToolContext
+  ): Promise<FunctionCallResponse> {
+    let params: Record<string, unknown>;
 
-  /**
-   * 테이블 추가
-   */
-  addTable(headers: string[], rows: string[][]): this {
-    const separator = headers.map(() => '---').join(' | ');
-
-    this.parts.push(`\n| ${headers.join(' | ')} |`);
-    this.parts.push(`| ${separator} |`);
-
-    for (const row of rows) {
-      this.parts.push(`| ${row.join(' | ')} |`);
+    try {
+      params = JSON.parse(call.arguments);
+    } catch (e) {
+      return {
+        id: call.id,
+        result: '',
+        error: `Invalid JSON arguments: ${(e as Error).message}`,
+      };
     }
 
-    this.parts.push('\n');
+    const result = await this.registry.execute(call.name, params, context);
+
+    if (result.success) {
+      return {
+        id: call.id,
+        result: JSON.stringify(result.data),
+      };
+    } else {
+      return {
+        id: call.id,
+        result: '',
+        error: result.error?.message ?? 'Unknown error',
+      };
+    }
+  }
+
+  /**
+   * 다중 Function Call 처리
+   */
+  async handleFunctionCalls(
+    calls: FunctionCallRequest[],
+    context: ToolContext
+  ): Promise<FunctionCallResponse[]> {
+    return Promise.all(
+      calls.map(call => this.handleFunctionCall(call, context))
+    );
+  }
+
+  /**
+   * Function Call 결과를 메시지로 변환
+   */
+  formatAsMessages(
+    responses: FunctionCallResponse[]
+  ): Array<{ role: 'tool'; content: string; toolCallId: string }> {
+    return responses.map(response => ({
+      role: 'tool' as const,
+      content: response.error
+        ? `Error: ${response.error}`
+        : response.result,
+      toolCallId: response.id,
+    }));
+  }
+}
+
+/**
+ * 도구 실행 체인
+ * 도구 호출 시퀀스 관리
+ */
+export class ToolExecutionChain {
+  private steps: Array<{
+    toolName: string;
+    params: Record<string, unknown> | ((prev: unknown) => Record<string, unknown>);
+  }> = [];
+
+  constructor(private executor: ToolExecutor) {}
+
+  /**
+   * 도구 호출 추가
+   */
+  then(
+    toolName: string,
+    params: Record<string, unknown> | ((prev: unknown) => Record<string, unknown>)
+  ): this {
+    this.steps.push({ toolName, params });
     return this;
   }
 
   /**
-   * 구분선 추가
+   * 체인 실행
    */
-  addDivider(): this {
-    this.parts.push('\n---\n');
-    return this;
-  }
+  async execute(context: ToolContext): Promise<ToolExecutionResult[]> {
+    const results: ToolExecutionResult[] = [];
+    let prevResult: unknown = undefined;
 
-  /**
-   * 빈 줄 추가
-   */
-  addNewline(count: number = 1): this {
-    this.parts.push('\n'.repeat(count));
-    return this;
-  }
+    for (const step of this.steps) {
+      const params = typeof step.params === 'function'
+        ? step.params(prevResult)
+        : step.params;
 
-  /**
-   * 상속 설정
-   */
-  extends(template: string): this {
-    this.extends = template;
-    return this;
-  }
+      const result = await this.executor.handleFunctionCall(
+        {
+          id: `chain-${Date.now()}-${results.length}`,
+          name: step.toolName,
+          arguments: JSON.stringify(params),
+        },
+        context
+      );
 
-  /**
-   * 템플릿 빌드
-   */
-  build(): PromptTemplate {
-    const template = this.parts.join('');
+      const executionResult: ToolExecutionResult = {
+        success: !result.error,
+        data: result.error ? undefined : JSON.parse(result.result),
+        error: result.error
+          ? { code: 'EXECUTION_ERROR', message: result.error }
+          : undefined,
+        duration: 0,
+      };
 
-    const promptTemplate = new PromptTemplate(template);
-    if (this.extends) {
-      // 부모 템플릿 설정은 레지스트리를 통해서만 가능
-      promptTemplate['parentName'] = this.extends;
+      results.push(executionResult);
+
+      if (!executionResult.success) {
+        break; // 에러 시 체인 중단
+      }
+
+      prevResult = executionResult.data;
     }
 
-    return promptTemplate;
-  }
-
-  /**
-   * 템플릿 문자열 반환
-   */
-  toString(): string {
-    return this.parts.join('');
-  }
-
-  /**
-   * 빌더 초기화
-   */
-  reset(): this {
-    this.parts = [];
-    this.sections.clear();
-    this.extends = undefined;
-    return this;
-  }
-
-  /**
-   * 빌더 복제
-   */
-  clone(): PromptTemplateBuilder {
-    const builder = new PromptTemplateBuilder();
-    builder.parts = [...this.parts];
-    builder.sections = new Map(this.sections);
-    builder.extends = this.extends;
-    return builder;
+    return results;
   }
 }
 ```
 
-### 5. 역할별 템플릿 팩토리
+### 5. 내장 도구 구현
 
-**파일 위치:** `packages/agents/src/prompts/role-templates.ts`
+**파일 위치:** `packages/agents/src/tools/builtin/index.ts`
 
 ```typescript
-import { PromptTemplateBuilder } from './builder';
+import { Tool, ToolContext } from '../types';
+import { params } from '../decorators';
 
 /**
- * Analyst 템플릿 빌더
+ * 현재 시간 조회 도구
  */
-export function buildAnalystTemplate(
-  config?: {
-    responsibilities?: string;
-    context?: string;
-    sources?: string;
-  }
-): PromptTemplateBuilder {
-  return new PromptTemplateBuilder()
-    .addText('You are an expert analyst with deep expertise in data analysis, risk assessment, and pattern recognition.')
-    .addNewline()
-    .addHeader(2, 'Your responsibilities')
-    .addConditional('responsibilities', '{{responsibilities}}')
-    .addConditional('responsibilities', '', 'else')
-    .addList([
-      'Analyze the provided information thoroughly',
-      'Identify key findings and patterns',
-      'Provide actionable recommendations',
-      'Assess confidence in your conclusions',
-      'Support your findings with reasoning',
-    ])
-    .addText('{{/if}}')
-    .addNewline()
-    .addHeader(2, 'When providing analysis, structure your response as follows:')
-    .addNewline()
-    .addHeader(3, 'Summary')
-    .addConditional('context', 'Context: {{context}}')
-    .addText('Provide a concise overview of your analysis.')
-    .addNewline()
-    .addHeader(3, 'Key Findings')
-    .addText('- Finding 1: [description]')
-    .addText('- Finding 2: [description]')
-    .addText('- ...')
-    .addNewline()
-    .addHeader(3, 'Recommendations')
-    .addText('- Recommendation 1: [actionable suggestion]')
-    .addText('- Recommendation 2: [actionable suggestion]')
-    .addText('- ...')
-    .addNewline()
-    .addHeader(3, 'Confidence')
-    .addVariable('confidence', '85')
-    .addText('/100')
-    .addNewline()
-    .addHeader(3, 'Reasoning')
-    .addText('Provide your thought process and evidence supporting your conclusions.')
-    .addConditional('sources', '')
-    .addNewline()
-    .addHeader(3, 'Sources')
-    .addVariable('sources')
-    .addText('{{/if}}')
-    .addNewline()
-    .addText('Be thorough, objective, and analytical in your approach.');
-}
+export const getCurrentTimeTool: Tool<{}, string> = {
+  name: 'get_current_time',
+  description: 'Get the current date and time in ISO format',
+  parameters: {
+    type: 'object',
+    properties: {},
+  },
+  category: 'utility',
+  hasSideEffects: false,
+  async execute() {
+    return new Date().toISOString();
+  },
+};
 
 /**
- * Executor 템플릿 빌더
+ * 계산기 도구
  */
-export function buildExecutorTemplate(
-  config?: {
-    responsibilities?: string;
-    tools?: string;
-    safetyNotes?: string;
-  }
-): PromptTemplateBuilder {
-  return new PromptTemplateBuilder()
-    .addText('You are an executor agent responsible for taking action and executing tasks.')
-    .addNewline()
-    .addHeader(2, 'Your responsibilities')
-    .addConditional('responsibilities', '{{responsibilities}}')
-    .addConditional('responsibilities', '', 'else')
-    .addList([
-      'Understand the task requirements clearly',
-      'Determine the best approach to complete the task',
-      'Execute the action using available tools',
-      'Report the outcome accurately',
-      'Handle errors gracefully',
-    ])
-    .addText('{{/if}}')
-    .addNewline()
-    .addText(`Available tools: {{tools|${config?.tools ?? 'none'}}}`)
-    .addNewline()
-    .addHeader(2, 'When planning execution, structure your response as follows:')
-    .addNewline()
-    .addHeader(3, 'Action')
-    .addVariable('action', 'The action you will take')
-    .addNewline()
-    .addHeader(3, 'Tool')
-    .addConditional('tool', 'Tool: {{tool}}', 'else')
-    .addText('No tool required')
-    .addText('{{/if}}')
-    .addNewline()
-    .addHeader(3, 'Parameters')
-    .addCodeBlock('{{#if parameters}}{{parameters}}{{else}}{{{/if}}}', 'json')
-    .addNewline()
-    .addHeader(3, 'Steps')
-    .addText('1. [First step]')
-    .addText('2. [Second step]')
-    .addText('...')
-    .addNewline()
-    .addHeader(3, 'Expected Outcome')
-    .addVariable('expectedOutcome', 'The expected result')
-    .addNewline()
-    .addText('Be precise, efficient, and safety-conscious in your execution.')
-    .addConditional('safety_notes', '')
-    .addNewline()
-    .addHeader(3, 'Safety Notes')
-    .addVariable('safetyNotes')
-    .addText('{{/if}}');
-}
+export const calculatorTool: Tool<{ expression: string }, number> = {
+  name: 'calculator',
+  description: 'Evaluate a mathematical expression',
+  parameters: params()
+    .string('expression', 'Mathematical expression to evaluate', { required: true })
+    .build(),
+  category: 'utility',
+  hasSideEffects: false,
+  async execute(params) {
+    // 안전한 수학 표현식 평가 (mathjs 사용)
+    try {
+      // mathjs import 필요: import { evaluate } from 'mathjs';
+      // @ts-ignore - mathjs는 실제 구현에서 별도 의존성으로 추가됨
+      const { evaluate } = await import('mathjs');
+      return evaluate(params.expression);
+    } catch (e) {
+      throw new Error(`Invalid expression: ${(e as Error).message}`);
+    }
+  },
+};
 
 /**
- * Verifier 템플릿 빌더
+ * JSON 파싱 도구
  */
-export function buildVerifierTemplate(
-  config?: {
-    responsibilities?: string;
-  }
-): PromptTemplateBuilder {
-  return new PromptTemplateBuilder()
-    .addText('You are a verifier agent responsible for validating results and ensuring quality.')
-    .addNewline()
-    .addHeader(2, 'Your responsibilities')
-    .addConditional('responsibilities', '{{responsibilities}}')
-    .addConditional('responsibilities', '', 'else')
-    .addList([
-      'Review the provided work thoroughly',
-      'Check against requirements and specifications',
-      'Identify any issues or discrepancies',
-      'Provide specific feedback for improvements',
-      'Verify correctness and completeness',
-    ])
-    .addText('{{/if}}')
-    .addNewline()
-    .addHeader(2, 'When conducting verification, structure your response as follows:')
-    .addNewline()
-    .addHeader(3, 'Overall Result')
-    .addConditional('passed', '✅ PASSED', 'else')
-    .addText('❌ FAILED')
-    .addText('{{/if}}')
-    .addNewline()
-    .addHeader(3, 'Verification Checks')
-    .addTable(
-      ['Check', 'Description', 'Status', 'Evidence'],
-      [
-        ['1', '[check description]', '[passed/failed/skipped]', '[evidence]'],
-        ['2', '[check description]', '[passed/failed/skipped]', '[evidence]'],
-      ]
-    )
-    .addNewline()
-    .addHeader(3, 'Summary')
-    .addVariable('summary', 'Brief overview of the verification')
-    .addNewline()
-    .addHeader(3, 'Issues Found')
-    .addConditional('issues', 'No issues found.', 'unless')
-    .addText('{{#if issues}}')
-    .addText('{{#each issues}}')
-    .addHeader(4, '{{severity|medium}}: {{description}}')
-    .addConditional('location', 'Location: {{location}}')
-    .addConditional('recommendation', 'Recommendation: {{recommendation}}')
-    .addText('---')
-    .addText('{{/each}}')
-    .addText('{{/if}}')
-    .addNewline()
-    .addHeader(3, 'Suggestions')
-    .addConditional('suggestions', 'No suggestions.', 'unless')
-    .addText('{{#if suggestions}}')
-    .addText('{{#each suggestions}}')
-    .addText('- {{this}}')
-    .addText('{{/each}}')
-    .addText('{{/if}}')
-    .addNewline()
-    .addText('Issue severity levels:')
-    .addList([
-      '**Critical**: Must be fixed before proceeding',
-      '**High**: Should be fixed soon',
-      '**Medium**: Can be addressed later',
-      '**Low**: Minor improvements or suggestions',
-    ])
-    .addNewline()
-    .addText('Be thorough, objective, and constructive in your verification.');
-}
+export const parseJsonTool: Tool<{ json: string }, unknown> = {
+  name: 'parse_json',
+  description: 'Parse a JSON string into an object',
+  parameters: params()
+    .string('json', 'JSON string to parse', { required: true })
+    .build(),
+  category: 'utility',
+  hasSideEffects: false,
+  async execute(params) {
+    return JSON.parse(params.json);
+  },
+};
 
 /**
- * Director 템플릿 빌더
+ * 텍스트 검색 도구
  */
-export function buildDirectorTemplate(
-  config?: {
-    responsibilities?: string;
+export const searchTextTool: Tool<{
+  text: string;
+  query: string;
+  caseSensitive?: boolean;
+}, { found: boolean; matches: string[] }> = {
+  name: 'search_text',
+  description: 'Search for a query string within text',
+  parameters: params()
+    .string('text', 'Text to search in', { required: true })
+    .string('query', 'Query string to find', { required: true })
+    .boolean('caseSensitive', 'Whether to perform case-sensitive search', {
+      default: false,
+    })
+    .build(),
+  category: 'text',
+  hasSideEffects: false,
+  async execute(params) {
+    const text = params.caseSensitive
+      ? params.text
+      : params.text.toLowerCase();
+    const query = params.caseSensitive
+      ? params.query
+      : params.query.toLowerCase();
+
+    const matches: string[] = [];
+    let index = text.indexOf(query);
+
+    while (index !== -1) {
+      matches.push(params.text.substring(index, index + params.query.length));
+      index = text.indexOf(query, index + 1);
+    }
+
+    return {
+      found: matches.length > 0,
+      matches,
+    };
+  },
+};
+
+/**
+ * HTTP 요청 도구
+ */
+export const httpRequestTool: Tool<{
+  url: string;
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  headers?: Record<string, string>;
+  body?: string;
+}, { status: number; headers: Record<string, string>; body: string }> = {
+  name: 'http_request',
+  description: 'Make an HTTP request to a URL',
+  parameters: params()
+    .string('url', 'URL to request', { required: true })
+    .string('method', 'HTTP method', {
+      enum: ['GET', 'POST', 'PUT', 'DELETE'],
+      default: 'GET',
+    })
+    .object('headers', 'Request headers', {})
+    .string('body', 'Request body')
+    .build(),
+  category: 'network',
+  hasSideEffects: true,
+  requiredPermissions: ['network'],
+  async execute(params, context) {
+    const controller = new AbortController();
+    const timeout = context.timeout ?? 30000;
+
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    try {
+      const response = await fetch(params.url, {
+        method: params.method ?? 'GET',
+        headers: params.headers,
+        body: params.body,
+        signal: controller.signal,
+      });
+
+      const headers: Record<string, string> = {};
+      response.headers.forEach((value, key) => {
+        headers[key] = value;
+      });
+
+      const body = await response.text();
+
+      return {
+        status: response.status,
+        headers,
+        body,
+      };
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  },
+};
+
+/**
+ * 랜덤 생성 도구
+ */
+export const randomGeneratorTool: Tool<{
+  type: 'number' | 'string' | 'uuid';
+  min?: number;
+  max?: number;
+  length?: number;
+}, string | number> = {
+  name: 'random_generator',
+  description: 'Generate random values (numbers, strings, or UUIDs)',
+  parameters: params()
+    .string('type', 'Type of random value to generate', {
+      required: true,
+      enum: ['number', 'string', 'uuid'],
+    })
+    .number('min', 'Minimum value for numbers', { default: 0 })
+    .number('max', 'Maximum value for numbers', { default: 100 })
+    .number('length', 'Length for string generation', { default: 10 })
+    .build(),
+  category: 'utility',
+  hasSideEffects: false,
+  async execute(params) {
+    switch (params.type) {
+      case 'number':
+        const min = params.min ?? 0;
+        const max = params.max ?? 100;
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+
+      case 'string':
+        const length = params.length ?? 10;
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        return Array.from({ length }, () =>
+          chars.charAt(Math.floor(Math.random() * chars.length))
+        ).join('');
+
+      case 'uuid':
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+          const r = Math.random() * 16 | 0;
+          const v = c === 'x' ? r : (r & 0x3 | 0x8);
+          return v.toString(16);
+        });
+
+      default:
+        throw new Error(`Unknown type: ${params.type}`);
+    }
+  },
+};
+
+/**
+ * 내장 도구 목록
+ */
+export const builtinTools: Tool[] = [
+  getCurrentTimeTool,
+  calculatorTool,
+  parseJsonTool,
+  searchTextTool,
+  httpRequestTool,
+  randomGeneratorTool,
+];
+
+/**
+ * 내장 도구 등록
+ */
+export function registerBuiltinTools(registry: ToolRegistry): void {
+  for (const tool of builtinTools) {
+    registry.register(tool);
   }
-): PromptTemplateBuilder {
-  return new PromptTemplateBuilder()
-    .addText('You are a director agent responsible for coordinating activities and facilitating collaboration.')
-    .addNewline()
-    .addHeader(2, 'Your responsibilities')
-    .addConditional('responsibilities', '{{responsibilities}}')
-    .addConditional('responsibilities', '', 'else')
-    .addList([
-      'Understand the overall goal and requirements',
-      'Coordinate between different agents and stakeholders',
-      'Facilitate discussions and consensus-building',
-      'Monitor progress and adjust plans as needed',
-      'Provide clear direction and guidance',
-    ])
-    .addText('{{/if}}')
-    .addNewline()
-    .addHeader(2, 'When creating a coordination plan, structure your response as follows:')
-    .addNewline()
-    .addHeader(3, 'Agenda')
-    .addVariable('agenda', 'The main goal or purpose')
-    .addNewline()
-    .addHeader(3, 'Participants')
-    .addText('{{#each participants}}')
-    .addText('- {{this}}')
-    .addText('{{/each}}')
-    .addNewline()
-    .addHeader(3, 'Steps')
-    .addText('{{#each steps}}')
-    .addHeader(4, 'Step {{@index}}: {{description}}')
-    .addConditional('assignee', 'Assignee: {{assignee}}')
-    .addConditional('dependencies', 'Dependencies: {{dependencies}}')
-    .addConditional('estimatedDuration', 'Duration: {{estimatedDuration}}')
-    .addText('{{/each}}')
-    .addNewline()
-    .addHeader(3, 'Timeline')
-    .addText('{{#each timeline}}')
-    .addText('- {{this}}')
-    .addText('{{/each}}')
-    .addNewline()
-    .addHeader(3, 'Expected Outcome')
-    .addVariable('expectedOutcome', 'What should be achieved')
-    .addNewline()
-    .addHeader(2, 'Key Principles for Coordination')
-    .addList([
-      'Clear communication',
-      'Inclusive participation',
-      'Transparent decision-making',
-      'Agile adaptation to changes',
-      'Focus on results',
-    ])
-    .addNewline()
-    .addText('Be diplomatic, organized, and results-oriented in your coordination.')
-    .addConditional('notes', '')
-    .addNewline()
-    .addHeader(3, 'Notes')
-    .addVariable('notes')
-    .addText('{{/if}}');
 }
 ```
 
 ### 6. 내보내기 설정
 
-**파일 위치:** `packages/agents/src/prompts/index.ts`
+**파일 위치:** `packages/agents/src/tools/index.ts`
 
 ```typescript
-export * from './template';
+export * from './types';
 export * from './registry';
-export * from './builder';
-export * from './role-templates';
+export * from './decorators';
+export * from './executor';
+export * from './builtin';
 
-export { globalPromptRegistry as registry } from './registry';
+export { globalToolRegistry as registry } from './registry';
 ```
 
 ## 완료 조건
-- [ ] PromptTemplate 클래스 구현 완료
-- [ ] PromptTemplateRegistry 구현 완료
-- [ ] PromptTemplateBuilder 구현 완료
-- [ ] 역할별 기본 템플릿 작성 완료
-- [ ] 역할별 템플릿 팩토리 구현 완료
+- [ ] Tool 인터페이스 정의 완료
+- [ ] ToolRegistry 클래스 구현 완료
+- [ ] 도구 데코레이터 구현 완료
+- [ ] ToolExecutor 구현 완료
+- [ ] 내장 도구 5개 이상 구현 완료
 - [ ] 단위 테스트 작성
 
 ## 의존성
 - TASK-031 (Agent Roles)
+- TASK-030 (LLM Adapter - Function Calling 지원)
 
 ## 사용 예시
 
-### 기본 템플릿 사용
+### 도구 등록 및 실행
 ```typescript
-import { PromptTemplate } from '@obora-kit/agents';
+import { ToolRegistry, registerBuiltinTools } from '@obora-kit/agents';
 
-const template = new PromptTemplate(`
-Hello {{name}},
+const registry = new ToolRegistry();
+registerBuiltinTools(registry);
 
-You are assigned to: {{task}}
-
-{{#if deadline}}
-Deadline: {{deadline}}
-{{/if}}
-{{#unless deadline}}
-No deadline set
-{{/unless}}
-
-Best regards,
-{{sender|Your AI Assistant}}
-`);
-
-const result = template.render({
-  name: 'Alice',
-  task: 'Analyze the data',
-  deadline: '2026-02-10',
-  sender: 'Director',
+// 커스텀 도구 등록
+registry.register({
+  name: 'greet',
+  description: 'Generate a greeting message',
+  parameters: {
+    type: 'object',
+    properties: {
+      name: {
+        type: 'string',
+        description: 'Name to greet',
+      },
+    },
+    required: ['name'],
+  },
+  async execute(params) {
+    return `Hello, ${params.name}!`;
+  },
 });
 
-console.log(result);
+// 도구 실행
+const result = await registry.execute(
+  'greet',
+  { name: 'Alice' },
+  {
+    sessionId: 'session-123',
+    agentId: 'agent-1',
+    permissions: new Set(['*']),
+  }
+);
+
+console.log(result.data); // "Hello, Alice!"
 ```
 
-### 레지스트리 사용
+### Tool Definition 생성 (OpenAI 스타일 Tool Calling)
 ```typescript
-import { PromptTemplateRegistry } from '@obora-kit/agents';
+const tools = registry.toToolDefinitions(['calculator', 'get_current_time']);
+// LLM chatCompletion의 params.tools로 전달
 
-const registry = new PromptTemplateRegistry();
-
-registry.register('analyst', `
-You are an expert analyst.
-Context: {{context}}
-{{#if data}}Data: {{data}}{{/if}}
-`);
-
-const rendered = registry.render('analyst', {
-  context: 'Market analysis',
-  data: 'Revenue data Q4',
-});
-```
-
-### 빌더 사용
-```typescript
-import { PromptTemplateBuilder } from '@obora-kit/agents';
-
-const builder = new PromptTemplateBuilder()
-  .addHeader(1, 'Analysis Report')
-  .addNewline()
-  .addText('Context: {{context}}')
-  .addNewline()
-  .addHeader(2, 'Findings')
-  .addList([
-    'Finding 1: {{finding1}}',
-    'Finding 2: {{finding2}}',
-  ])
-  .addNewline()
-  .addConditional('recommendation', 'Recommendation: {{recommendation}}');
-
-const template = builder.build();
-const rendered = template.render({
-  context: 'Market analysis',
-  finding1: 'Revenue increased by 20%',
-  finding2: 'Customer satisfaction dropped',
-  recommendation: 'Focus on improving customer service',
+const llmResult = await llm.chatCompletion({
+  messages: [{ role: 'user', content: 'What is 15 * 7?' }],
+  tools: tools,
+  toolChoice: 'auto',
 });
 ```
 
-### 역할별 템플릿 빌더
+### LLM Function Call 처리
 ```typescript
-import { buildAnalystTemplate, buildExecutorTemplate } from '@obora-kit/agents';
+import { ToolExecutor } from '@obora-kit/agents';
 
-const analystTemplate = buildAnalystTemplate({
-  context: 'Financial analysis',
-}).build();
+const executor = new ToolExecutor(registry);
 
-const executorTemplate = buildExecutorTemplate({
-  tools: 'file-writer, api-caller',
-  safetyNotes: 'Ensure all API calls are rate-limited',
-}).build();
+// LLM 응답에서 도구 호출 처리
+if (llmResult.message.toolCalls) {
+  const responses = await executor.handleFunctionCalls(
+    llmResult.message.toolCalls,
+    context
+  );
+
+  // 결과를 메시지로 변환하여 다시 LLM에 전달
+  const toolMessages = executor.formatAsMessages(responses);
+  messages.push(...toolMessages);
+
+  // 최종 응답 요청
+  const finalResult = await llm.chatCompletion({ messages });
+}
 ```
 
-### 파일에서 템플릿 로드
+### 도구 실행 체인
 ```typescript
-import { PromptTemplateRegistry } from '@obora-kit/agents';
+import { ToolExecutionChain, ToolExecutor } from '@obora-kit/agents';
 
-const registry = new PromptTemplateRegistry();
+const executor = new ToolExecutor(registry);
+const chain = new ToolExecutionChain(executor);
 
-// 단일 파일 로드
-await registry.loadFromFile('./prompts/analyst.md', 'analyst');
+const results = await chain
+  .then('get_current_time', {})
+  .then('calculator', (prev) => ({
+    expression: `2 * 12`, // 이전 결과를 사용할 수 있음
+  }))
+  .execute(context);
+```
 
-// 디렉토리에서 모든 템플릿 로드
-await registry.loadFromDirectory('./prompts/');
+### 데코레이터로 도구 정의
+```typescript
+import { tool, params } from '@obora-kit/agents';
 
-// 템플릿 렌더링
-const result = registry.render('analyst', {
-  context: 'Data analysis',
-});
+class MyTools {
+  @tool({
+    name: 'format_date',
+    description: 'Format a date string',
+    parameters: params()
+      .string('date', 'Date string to format', { required: true })
+      .string('format', 'Output format', { default: 'YYYY-MM-DD' })
+      .build(),
+    category: 'utility',
+    hasSideEffects: false,
+  })
+  async formatDate(params: { date: string; format: string }) {
+    // 날짜 포맷팅 로직
+    return new Date(params.date).toISOString();
+  }
+}
 ```
 
 ## 엣지 케이스
-1. 중첩 변수 경로 처리 (`user.profile.name`)
-2. 순환 참조 상속 탐지 및 방지
-3. 빈 템플릿 렌더링 처리
-4. 대규모 템플릿 메모리 최적화
-5. UTF-8 외 문자 처리
-6. 기본값 변수 재정의 확인
-7. 조건부 블록 내부에서의 변수 치환 순서
+1. 잘못된 JSON 인자 처리
+2. 도구 실행 타임아웃 처리
+3. 권한 없는 도구 호출 차단
+4. 순환 도구 호출 탐지
+5. 도구 중복 등록 방지
+6. 존재하지 않는 도구 호출 처리
+7. 체인 실행 중 에러 시 롤백 처리
 
 ## 참고 자료
-- Handlebars 템플릿 문법 참고
+- [OpenAI Function Calling 문서](https://platform.openai.com/docs/guides/function-calling)
+- TASK-030: Pi Mono LLM Adapter 구현
 - TASK-031: 역할별 에이전트 구현
 
 ---
@@ -1339,12 +1223,14 @@ const result = registry.render('analyst', {
 
   <checklist>
 # 자동 생성 체크리스트
-# 생성 시각: 2026-02-12 02:10:40
+# 생성 시각: 2026-02-12 02:29:17
 
-1. `AgentRole` 타입 충돌으로 typecheck 실패
-2. `addSection()`이 `{{section:name}}` 플레이스홀더를 삽입하지만 렌더링 시 처리되지 않음
-3. `PromptTemplateConfig`의 `examples`와 `outputFormat` 필드가 constructor에서 저장되지 않음
-4. `ChatMessage`/`ToolCall` 불필요한 re-export로 잠재적 충돌 위험
+1. `ToolRegistry.execute` 타임아웃 시 타이머 누수 (Memory Leak)
+2. `ToolExecutionChain.execute`에서 `JSON.parse` 크래시 가능성
+3. `tools/index.ts` barrel export가 스펙과 완전히 불일치
+4. `src/index.ts`에서 tools 모듈 미 export
+5. `ExecutorAgent`의 `ToolRegistry.execute` 호출 시 `ToolContext` 누락
+6. `@tool` 데코레이터의 `this` 바인딩 오류
   </checklist>
 
   <source_files>
