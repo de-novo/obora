@@ -4,7 +4,7 @@
 
 ## 핵심 원칙
 
-**"태스크 완료 = 구현 + 4모델 리뷰(9+) + 커밋"**
+**"태스크 완료 = 구현 + 3모델 리뷰(9+) + 커밋"**
 
 리뷰 없이 커밋하지 않는다. 9+ 미달 시 다음 태스크로 넘어가지 않는다.
 
@@ -15,13 +15,13 @@
 1. ✅ 코드 구현 완료
 2. ✅ `pnpm build` 성공
 3. ✅ `pnpm lint` 통과
-4. ✅ **4모델 리뷰 통과** (모든 모델 9+/10 필수)
+4. ✅ **3모델 리뷰 통과** (모든 모델 9+/10 필수)
 5. ✅ 리뷰 피드백 반영 완료
 6. ✅ Git 커밋 & 푸시
 
 ---
 
-## 4모델 리뷰 구성
+## 3모델 리뷰 구성
 
 > **중요**: 모든 모델이 동일한 전반적 검토를 수행한다. 역할을 제한하지 않는다.
 > 서로 다른 관점에서 같은 항목을 검토하여 놓치는 부분을 잡는다.
@@ -30,10 +30,9 @@
 
 | 모델 | 도구 | 모델명 | 목표 |
 |------|------|--------|------|
-| **Claude Opus 4.5** | OpenClaw sessions_spawn | `anthropic/claude-opus-4-5` | 9+/10 |
 | **GLM 4.7** | OpenClaw sessions_spawn | `zai/glm-4.7` | 9+/10 |
 | **Kimi K 2.5** | OpenCode CLI | `opencode/kimi-k2.5-free` | 9+/10 |
-| **Codex (GPT-5.2)** | OpenCode CLI | `openai/gpt-5.2-codex` | 9+/10 |
+| **Codex (GPT-5.3)** | OpenCode CLI | `openai/gpt-5.3-codex` | 9+/10 |
 
 ### 모든 모델이 검토하는 항목 (공통)
 
@@ -47,14 +46,14 @@
 
 ## 📋 모델별 리뷰 실행 방법
 
-### 1. Claude Opus 4.5 (OpenClaw)
+### 1. GLM 4.7 (OpenClaw)
 
 **명령어**:
 ```bash
 sessions_spawn \
-  --model anthropic/claude-opus-4-5 \
+  --model zai/glm-4.7 \
   --task "<프롬프트>" \
-  --label "review-opus-<task-id>" \
+  --label "review-glm-<task-id>" \
   --cleanup delete
 ```
 
@@ -86,22 +85,7 @@ Telegram (7986044327)으로 결과 전송
 
 ---
 
-### 2. GLM 4.7 (OpenClaw)
-
-**명령어**:
-```bash
-sessions_spawn \
-  --model zai/glm-4.7 \
-  --task "<프롬프트>" \
-  --label "review-glm-<task-id>" \
-  --cleanup delete
-```
-
-**프롬프트**: Opus와 동일한 형식 사용
-
----
-
-### 3. Kimi K 2.5 (OpenCode)
+### 2. Kimi K 2.5 (OpenCode)
 
 **명령어 (비대화형 모드)**:
 ```bash
@@ -147,12 +131,12 @@ cat /tmp/review-kimi-*.txt
 
 ---
 
-### 4. Codex / GPT-5.2 (OpenCode)
+### 3. Codex / GPT-5.3 (OpenCode)
 
 **명령어 (비대화형 모드)**:
 ```bash
 cd /path/to/project
-opencode run -m openai/gpt-5.2-codex "<프롬프트>" > /tmp/review-codex.txt 2>&1
+opencode run -m openai/gpt-5.3-codex "<프롬프트>" > /tmp/review-codex.txt 2>&1
 ```
 
 **프롬프트 예시**:
@@ -179,7 +163,7 @@ IMPORTANT: Write detailed review to /tmp/review-codex-detailed.txt
 **예시**:
 ```bash
 # 결과를 파일로 저장
-opencode run -m openai/gpt-5.2-codex \
+opencode run -m openai/gpt-5.3-codex \
   "Review code. Save result to /tmp/review-codex-$(date +%Y%m%d-%H%M%S).txt" \
   > /tmp/opencode-codex.log 2>&1 &
 
@@ -189,41 +173,37 @@ cat /tmp/review-codex-*.txt
 
 **주의사항**:
 - `codex exec`가 아닌 `opencode run` 사용
-- 모델명: `openai/gpt-5.2-codex`
+- 모델명: `openai/gpt-5.3-codex`
 - 비대화형 모드: 리디렉션으로 로그 저장
 
 ---
 
 ## 🔄 전체 리뷰 실행 순서
 
-### Step 1: 4개 모델 병렬 실행
+### Step 1: 3개 모델 병렬 실행
 
 ```bash
-# 터미널 1: Opus 4.5 (OpenClaw)
-sessions_spawn --model anthropic/claude-opus-4-5 \
-  --task "전체 코드 리뷰..." --label "review-opus"
-
-# 터미널 2: GLM 4.7 (OpenClaw)
+# 터미널 1: GLM 4.7 (OpenClaw)
 sessions_spawn --model zai/glm-4.7 \
   --task "전체 코드 리뷰..." --label "review-glm"
 
-# 터미널 3: Kimi K 2.5 (OpenCode)
+# 터미널 2: Kimi K 2.5 (OpenCode)
 cd /path/to/project
 opencode run -m opencode/kimi-k2.5-free "Review all files..."
 
-# 터미널 4: Codex (OpenCode)
+# 터미널 3: Codex (OpenCode)
 cd /path/to/project
-opencode run -m openai/gpt-5.2-codex "Review code..."
+opencode run -m openai/gpt-5.3-codex "Review code..."
 ```
 
 ### Step 2: 결과 수집
 
-- Opus, GLM: Telegram 알림으로 수신
+- GLM: Telegram 알림으로 수신
 - Kimi, Codex: 터미널 출력 확인
 
 ### Step 3: 이슈 통합 & 피드백 반영
 
-4개 모델의 피드백 합쳐서:
+3개 모델의 피드백 합쳐서:
 1. 중복 제거
 2. 우선순위 정렬
 3. 수정 계획 수립
@@ -239,22 +219,22 @@ opencode run -m openai/gpt-5.2-codex "Review code..."
 
 | 실수 | 해결책 |
 |------|--------|
-| `codex exec` 사용 | `opencode run -m openai/gpt-5.2-codex` 사용 |
+| `codex exec` 사용 | `opencode run -m openai/gpt-5.3-codex` 사용 |
 | 모델명 오타 | 정확히 복사: `opencode/kimi-k2.5-free` |
 | Telegram ID 누락 | 프롬프트에 `7986044327` 포함 |
-| 한 모델만 리뷰 | 4개 모두 실행 필수 |
+| 한 모델만 리뷰 | 3개 모두 실행 필수 |
 | 역할 제한 | "전체 검토" 명시 |
 | 프로젝트 디렉토리 안 감 | `cd /path/to/project` 먼저 실행 |
 
 ---
 
-## 왜 4개 모델인가?
+## 왜 3개 모델인가?
 
 ```
-같은 코드 → Opus / GLM / Kimi / Codex
-             ↓      ↓      ↓       ↓
-          관점A  관점B  관점C   관점D
-             └──────┴──────┴───────┘
+같은 코드 → GLM / Kimi / Codex
+             ↓      ↓       ↓
+          관점A  관점B   관점C
+             └──────┴───────┘
                        ↓
             놓치는 부분 최소화
 ```
