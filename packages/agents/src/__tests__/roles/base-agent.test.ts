@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { MockLLMAdapter } from "../../llm/mock-adapter";
 import { AgentRole, AgentState, BaseAgent, Task, TaskResult } from "../../roles/base-agent";
 import { Blackboard } from "@obora-kit/blackboard";
+import type { AgentContext } from "../../roles/base-agent";
+import type { ChatMessage } from "../../llm/adapter";
 
 class TestAgent extends BaseAgent {
   protected getDefaultSystemPrompt(): string {
@@ -21,7 +23,7 @@ describe("BaseAgent", () => {
   let mockLlm: MockLLMAdapter;
   let blackboard: Blackboard;
   let agent: TestAgent;
-  let context: { sessionId: string; board: Blackboard; history: unknown[] };
+  let context: AgentContext;
 
   beforeEach(() => {
     mockLlm = new MockLLMAdapter();
@@ -34,7 +36,7 @@ describe("BaseAgent", () => {
     context = {
       sessionId: "session-1",
       board: blackboard,
-      history: [],
+      history: [] as ChatMessage[],
     };
     mockLlm.clearResponses();
   });
@@ -249,7 +251,7 @@ describe("BaseAgent", () => {
       const observation = await agent["observe"]({
         sessionId: "session-1",
         board: blackboard,
-        history: [],
+        history: [] as ChatMessage[],
       });
 
       expect(observation.currentState).toMatchObject({ context: { test: { value: "test" } } });
@@ -264,7 +266,7 @@ describe("BaseAgent", () => {
       const observation = await agent["observe"]({
         sessionId: "session-1",
         board: blackboard,
-        history: [],
+        history: [] as ChatMessage[],
       });
 
       expect(observation.currentState).toBeDefined();
@@ -350,7 +352,7 @@ describe("BaseAgent", () => {
       await agent["report"](task, result, {
         sessionId: "session-1",
         board: blackboard,
-        history: [],
+        history: [] as ChatMessage[],
       });
 
       const stored = blackboard.read("state.agent.test-agent.lastResult");

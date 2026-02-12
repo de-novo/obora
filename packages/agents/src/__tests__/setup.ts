@@ -7,11 +7,10 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
-  vi.useFakeTimers();
+  // fake timers는 필요한 테스트에서 개별적으로 사용
 });
 
 afterEach(() => {
-  vi.useRealTimers();
   vi.clearAllMocks();
   globalToolRegistry.clear();
   globalPromptRegistry.clear();

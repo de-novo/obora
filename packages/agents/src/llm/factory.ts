@@ -1,11 +1,18 @@
 import { LLMAdapter } from "./adapter";
-import { PiMonoAdapter } from "./pi-mono-adapter";
+import { PiMonoAdapter, type PiMonoConfig } from "./pi-mono-adapter";
 import { withRetry } from "./retry-handler";
 
-export function createLLMAdapter(provider: "pi-mono", config: unknown): LLMAdapter {
+type LLMAdapterConfigMap = {
+  "pi-mono": PiMonoConfig;
+};
+
+export function createLLMAdapter<P extends keyof LLMAdapterConfigMap>(
+  provider: P,
+  config: LLMAdapterConfigMap[P]
+): LLMAdapter {
   switch (provider) {
     case "pi-mono": {
-      const adapter = new PiMonoAdapter(config as { apiKey: string });
+      const adapter = new PiMonoAdapter(config as PiMonoConfig);
       return withRetry(adapter);
     }
 

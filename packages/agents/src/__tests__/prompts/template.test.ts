@@ -4,8 +4,8 @@ import {
   PromptTemplate,
   type PromptTemplateConfig,
   type ValidationResult,
-  type AgentRole,
 } from "../../prompts/template";
+import type { AgentRole } from "../../roles/base-agent";
 
 describe("PromptTemplate", () => {
   it("should render simple template with variable substitution", () => {

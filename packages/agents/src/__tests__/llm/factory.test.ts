@@ -22,7 +22,7 @@ describe("Factory", () => {
     });
 
     it("should throw for unsupported provider", () => {
-      expect(() => createLLMAdapter("unknown" as "pi-mono", {})).toThrow(
+      expect(() => createLLMAdapter("unknown" as "pi-mono", { apiKey: "test" } as never)).toThrow(
         "Unsupported LLM provider: unknown"
       );
     });

@@ -55,7 +55,7 @@
     "typescript": "^5.9.3",
     "typesense": "^2.1.0",
     "unleash-client": "^6.9.0",
-    "vitest": "^2.1.0"
+    "vitest": "^2.1.9"
   },
   "packageManager": "pnpm@9.0.0",
   "engines": {
