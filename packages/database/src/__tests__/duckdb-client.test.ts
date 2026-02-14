@@ -6,8 +6,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   OboraDatabase,
-  getDatabase,
-  resetDatabase,
   // Project CRUD
   insertProject,
   getProject,
@@ -35,6 +33,7 @@ import {
   aggregateMetric,
   deleteMetrics,
 } from '../duckdb-client.js';
+import { getDatabase, resetDatabase } from '../testing.js';
 
 // ============================================================
 // Test Helpers

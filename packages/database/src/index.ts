@@ -1,2 +1,6 @@
-export * from "./duckdb.js";
-export * from "./duckdb-client.js";
+/**
+ * Entry point for @obora/database.
+ * Public API only.
+ */
+
+export * from "./public-api.js";

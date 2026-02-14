@@ -250,37 +250,6 @@ export class OboraDatabase {
   }
 }
 
-/**
- * Singleton database instance
- */
-let dbInstance: OboraDatabase | null = null;
-
-/**
- * Get or create database instance
- */
-export function getDatabase(dbPath?: string): OboraDatabase {
-  if (!dbInstance) {
-    dbInstance = new OboraDatabase(dbPath);
-  }
-  return dbInstance;
-}
-
-/**
- * Reset database instance (for testing)
- */
-export function resetDatabase(): void {
-  if (dbInstance) {
-    try {
-      dbInstance.close();
-    } catch (error) {
-      // Log error but still reset instance
-      console.error("Warning: Error closing database connection:", error);
-    } finally {
-      dbInstance = null;
-    }
-  }
-}
-
 // ===== Project CRUD =====
 
 /**
