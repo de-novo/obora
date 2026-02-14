@@ -2,6 +2,27 @@
 
 > 빠른 SaaS 개발을 위한 공용 도구, 템플릿, 프리셋 허브
 
+## 패키지 상태 (2026-02)
+
+상태 라벨 기준:
+- **implemented**: 프로덕션 사용 가능한 수준으로 구현/검증 완료
+- **partial**: 핵심 기능은 있으나 범위/안정성 보강 필요
+- **idea**: 설계/초안 단계
+
+| 패키지 | 설명 | 상태 | 메모 |
+|---|---|---|---|
+| `@obora-kit/blackboard` | 에이전트 협업용 블랙보드 도메인/스토어 구현 | implemented | 성숙 |
+| `@obora-kit/actor` | 에이전트 실행 단위와 라이프사이클 조정 | implemented | 성숙 |
+| `@obora-kit/agents` | LLM 어댑터 및 에이전트 유틸리티 | implemented | - |
+| `@obora/cli` | 프로젝트 생성/초기화/동기화 CLI | implemented | E2E 검증 완료 |
+| `@obora/core` | 공통 타입/유틸/기반 추상화 | implemented | 안정 |
+| `@obora/database` | DB 레이어 및 런타임 저장소 어댑터 | implemented | API 단일화 완료 |
+| `@obora-kit/board` | blackboard 상위 오케스트레이션 파사드 | implemented | 파사드 |
+| `@obora/preset-engine` | 템플릿/프리셋 조합 및 적용 엔진 | implemented | - |
+| `@obora/project-templates` | 스캐폴딩용 프로젝트 템플릿 모음 | implemented | - |
+
+> 현재 기준 모든 핵심 패키지는 `implemented` 단계입니다.
+
 ## 설치
 
 ### 내부 사용 (GitHub에서 직접)
