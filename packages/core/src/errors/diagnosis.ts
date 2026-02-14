@@ -20,6 +20,41 @@ export interface DiagnosisTemplate {
 }
 
 const templates: Record<string, DiagnosisTemplate> = {
+  E4001: {
+    code: "E4001",
+    title: "Agent execution failed",
+    hypothesis:
+      "BaseAgent.execute() returned { success: false }. The agent encountered a business-logic failure (bad prompt, invalid input, etc.).",
+    evidence: "Review step output and agent logs for the failure reason.",
+    commands: [
+      "obora run --from-step <failed-step> -f <feature>  # Re-run from failed step",
+      "# Check agent configuration and step inputs",
+    ],
+    rollback: "No side effects — agent failure is contained within the step.",
+  },
+  E4002: {
+    code: "E4002",
+    title: "Step execution timeout",
+    hypothesis:
+      "The step exceeded its configured timeout. The agent.execute() call was aborted via AbortSignal.",
+    evidence: "Check step timeout configuration and agent response time.",
+    commands: [
+      "# Increase timeout in workflow YAML: timeout: '5m'",
+      "obora run --from-step <failed-step> -f <feature>  # Re-run",
+    ],
+    rollback: "No side effects — timeout aborts cleanly via AbortController.",
+  },
+  E4003: {
+    code: "E4003",
+    title: "Agent resolution failed",
+    hypothesis:
+      "AgentResolver.resolve() could not find or instantiate the agent specified in the step. The agent name may be misspelled or unregistered.",
+    evidence: "Check step.agent value against registered agent names.",
+    commands: [
+      "obora validate  # Verify workflow agent references",
+    ],
+    rollback: "No side effects — resolution failure occurs before execution.",
+  },
   E4004: {
     code: "E4004",
     title: "Lock acquisition failed",
@@ -58,6 +93,18 @@ const templates: Record<string, DiagnosisTemplate> = {
       "# Then create/fix the missing spec files",
     ],
     rollback: "No destructive action — just add the missing files.",
+  },
+  E4007: {
+    code: "E4007",
+    title: "Context assembly failed",
+    hypothesis:
+      "ContextBuilder failed to assemble AgentContext (Blackboard init, sessionId, etc.). This is an infrastructure error.",
+    evidence: "Check Blackboard availability and context configuration.",
+    commands: [
+      "# Verify blackboard package is installed and configured",
+      "obora validate  # Check project integrity",
+    ],
+    rollback: "No side effects — context assembly failure occurs before execution.",
   },
   E6003: {
     code: "E6003",

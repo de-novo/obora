@@ -57,13 +57,17 @@ describe("diagnosis templates", () => {
   });
 
   describe("getAllDiagnoses", () => {
-    it("should return all 4 templates", () => {
+    it("should return all templates", () => {
       const all = getAllDiagnoses();
-      expect(all.length).toBe(4);
+      expect(all.length).toBe(8);
       const codes = all.map((d) => d.code);
+      expect(codes).toContain("E4001");
+      expect(codes).toContain("E4002");
+      expect(codes).toContain("E4003");
       expect(codes).toContain("E4004");
       expect(codes).toContain("E4005");
       expect(codes).toContain("E4006");
+      expect(codes).toContain("E4007");
       expect(codes).toContain("E6003");
     });
   });

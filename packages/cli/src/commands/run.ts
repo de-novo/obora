@@ -18,6 +18,12 @@ import {
   formatDiagnosis,
 } from "@obora/core";
 import type { Workflow, Step, WorkflowConfig } from "@obora/core";
+
+import {
+  executeStep as executeStepBridge,
+  type AgentResolver,
+  type StepResult,
+} from "../runtime/step-executor.js";
 import { Command } from "commander";
 import fs from "fs-extra";
 import yaml from "yaml";
@@ -177,29 +183,57 @@ function parseDuration(duration: string): number {
 }
 
 /**
- * Execute a single step (placeholder for actual agent execution)
- * In production, this would call the specified agent via OpenClaw API
+ * Global AgentResolver — set by runtime bootstrap (TASK-043b).
+ * When null, executeStep falls back to simulation mode.
+ */
+let activeResolver: AgentResolver | null = null;
+
+/**
+ * Set the global AgentResolver (called by runtime bootstrap).
+ * @internal exported for testing
+ */
+export function setAgentResolver(resolver: AgentResolver | null): void {
+  activeResolver = resolver;
+}
+
+/**
+ * Execute a single step.
+ *
+ * When an AgentResolver is registered (post-043b), delegates to
+ * StepExecutor which calls BaseAgent.execute().
+ * Otherwise falls back to simulation mode for backward compatibility.
  */
 async function executeStep(
   step: Step,
   featurePath: string,
   workflowConfig: WorkflowConfig | undefined,
   attempt: number
-): Promise<{ success: boolean; output?: string; error?: string }> {
+): Promise<{ success: boolean; output?: string; error?: string; diagnosisCode?: string }> {
   log(`  [Attempt ${attempt}] Executing step: ${step.name} (agent: ${step.agent})`);
 
+  // --- Bridge path: real agent execution ---
+  if (activeResolver) {
+    // Context assembly placeholder — will be replaced by ContextBuilder (043c)
+    const stubContext = {
+      sessionId: `session-${Date.now()}`,
+      board: { read: () => ({}), write: () => {} } as any,
+      history: [],
+    };
+
+    const result: StepResult = await executeStepBridge(
+      step,
+      activeResolver,
+      stubContext,
+    );
+    return result;
+  }
+
+  // --- Fallback: simulation mode (pre-043b) ---
   if (step.timeout) {
     const timeoutMs = parseDuration(step.timeout);
     log(`    Timeout: ${step.timeout} (${timeoutMs}ms)`);
   }
 
-  // Placeholder: In production, this would:
-  // 1. Call OpenClaw API with the specified agent
-  // 2. Pass step context (inputs, config)
-  // 3. Wait for completion or timeout
-  // 4. Return result
-
-  // Simulated execution
   const simulatedOutput = `# Output from step: ${step.name}
 
 > Agent: ${step.agent}

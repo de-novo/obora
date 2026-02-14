@@ -264,6 +264,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@obora-kit/agents':
+        specifier: workspace:*
+        version: link:../agents
       '@obora/core':
         specifier: workspace:*
         version: link:../core
