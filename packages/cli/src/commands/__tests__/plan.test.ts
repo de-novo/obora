@@ -346,6 +346,72 @@ describe('plan command', () => {
       expect(tasksCall?.[1]).toContain('Initial tasks.');
       expect(tasksCall?.[1]).toContain('Implementation Plan');
     });
+
+    it('should replace only implementation plan section with non-greedy regex', async () => {
+      const existingTasks = [
+        '# Tasks',
+        '',
+        '## Implementation Plan',
+        '',
+        '- old plan',
+        '',
+        '## Notes',
+        '',
+        '- keep this section',
+      ].join('\n');
+
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readFileSync).mockImplementation((path) => {
+        const strPath = String(path);
+        if (strPath.includes('proposal.md')) return mockProposal;
+        if (strPath.includes('design.md')) return mockDesign;
+        if (strPath.includes('tasks.md')) return existingTasks;
+        if (strPath.includes('status.yaml')) return 'status: pending';
+        return '';
+      });
+      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+      await runPlan('test-feature', {});
+
+      const writeFileCalls = vi.mocked(fs.writeFile).mock.calls;
+      const tasksCall = writeFileCalls.find((call) => String(call[0]).includes('tasks.md'));
+      const updatedTasks = String(tasksCall?.[1]);
+      expect(updatedTasks).toContain('## Implementation Plan');
+      expect(updatedTasks).toContain('Mock plan task');
+      expect(updatedTasks).toContain('## Notes');
+      expect(updatedTasks).toContain('- keep this section');
+    });
+  });
+
+  describe('project root resolution', () => {
+    it('should find .obora from parent directory when running inside feature directory', async () => {
+      const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue('/repo/.obora/features/test-feature');
+
+      vi.mocked(existsSync).mockImplementation((path) => {
+        const strPath = String(path);
+        if (strPath === '/repo/.obora/features/test-feature/.obora') return false;
+        if (strPath === '/repo/.obora/features/.obora') return false;
+        if (strPath === '/repo/.obora/.obora') return false;
+        if (strPath === '/repo/.obora') return true;
+        if (strPath.includes('/repo/.obora/features/test-feature')) return true;
+        return false;
+      });
+
+      vi.mocked(readFileSync).mockImplementation((path) => {
+        const strPath = String(path);
+        if (strPath.includes('proposal.md')) return mockProposal;
+        if (strPath.includes('design.md')) return mockDesign;
+        if (strPath.includes('tasks.md')) return mockTasks;
+        if (strPath.includes('status.yaml')) return 'status: pending';
+        return '';
+      });
+      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+      await runPlan('test-feature', {});
+
+      expect(readStatus).toHaveBeenCalledWith('/repo/.obora/features/test-feature');
+      cwdSpy.mockRestore();
+    });
   });
 
   describe('commander integration', () => {

@@ -4,7 +4,7 @@
  */
 
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import * as path from "node:path";
 
 import { log } from "@obora/core";
@@ -53,6 +53,24 @@ function detectFeatureName(): string | null {
   }
 
   return null;
+}
+
+function findProjectRoot(startDir: string): string | null {
+  let currentDir = startDir;
+
+  while (true) {
+    const oboraDir = join(currentDir, ".obora");
+    if (existsSync(oboraDir)) {
+      return currentDir;
+    }
+
+    const parentDir = dirname(currentDir);
+    if (parentDir === currentDir) {
+      return null;
+    }
+
+    currentDir = parentDir;
+  }
 }
 
 /**
@@ -207,7 +225,7 @@ async function updateTasks(featurePath: string, planContent: string): Promise<vo
 
   if (hasPlanSection) {
     // Replace existing plan section
-    const updated = existingContent.replace(/## Implementation Plan[\s\S]*(?=\n##|$)/, planContent);
+    const updated = existingContent.replace(/## Implementation Plan[\s\S]*?(?=\n## |$)/, planContent);
     await fs.writeFile(tasksPath, updated, "utf-8");
     log("  Updated existing plan in tasks.md");
   } else {
@@ -224,17 +242,18 @@ async function updateTasks(featurePath: string, planContent: string): Promise<vo
  */
 async function runPlan(featureName: string, options: PlanOptions): Promise<void> {
   const cwd = process.cwd();
-  const oboraDir = join(cwd, ".obora");
-  const featureDir = join(cwd, ".obora", "features", featureName);
+  const projectRoot = findProjectRoot(cwd);
 
-  // Validate feature name for path traversal
-  validatePathComponent(featureName);
-
-  // Validate .obora exists
-  if (!existsSync(oboraDir)) {
+  if (!projectRoot) {
     console.error("Error: Not in an obora project. Run 'obora init' first.");
     throw new CLIError("Not in an obora project. Run 'obora init' first.", 3);
   }
+
+  const oboraDir = join(projectRoot, ".obora");
+  const featureDir = join(oboraDir, "features", featureName);
+
+  // Validate feature name for path traversal
+  validatePathComponent(featureName);
 
   // Validate feature exists
   if (!existsSync(featureDir)) {
