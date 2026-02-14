@@ -17,3 +17,8 @@
 - `pnpm --filter @obora-kit/blackboard test` ✅ (470 passed)
 - `pnpm --filter @obora-kit/blackboard typecheck` ✅
 - `pnpm --filter @obora-kit/blackboard build` ✅
+
+## 추가 점검 로그 (2026-02-14 15:57 KST 런)
+- blackboard-first 라인(TASK-018) 최소 점검 1건 수행
+- 실행: `pnpm --filter @obora-kit/blackboard typecheck`
+- 결과: 통과
