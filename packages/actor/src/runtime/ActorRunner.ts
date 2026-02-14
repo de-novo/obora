@@ -59,46 +59,48 @@ export class ActorRunner {
     this.iterationCount = 0;
     this.abortController = new AbortController();
 
-    while (this.isRunning) {
-      // 종료 조건 확인
-      if (await this.shouldStop()) {
-        break;
-      }
-
-      // 최대 반복 횟수 확인
-      if (this.iterationCount >= this.options.maxIterations) {
-        break;
-      }
-
-      // Actor 상태 확인
-      if (this.actor.status.status !== ActorLifecycleStatus.RUNNING) {
-        break;
-      }
-
-      try {
-        // 한 사이클 실행
-        await this.runCycle();
-        this.iterationCount++;
-      } catch (error) {
-        // 에러 로깅 (debug 모드와 무관하게 항상 로그)
-        this.log(`Cycle error`, error);
-        if (this.options.stopOnError) {
-          throw error;
+    try {
+      while (this.isRunning) {
+        // 종료 조건 확인
+        if (await this.shouldStop()) {
+          break;
         }
-        // 에러 무시하고 계속
-      }
 
-      // 대기 (AbortSignal 연동)
-      try {
-        await delay(this.options.interval, this.abortController?.signal);
-      } catch {
-        // abort 시 무시하고 루프 종료
-        break;
+        // 최대 반복 횟수 확인
+        if (this.iterationCount >= this.options.maxIterations) {
+          break;
+        }
+
+        // Actor 상태 확인
+        if (this.actor.status.status !== ActorLifecycleStatus.RUNNING) {
+          break;
+        }
+
+        try {
+          // 한 사이클 실행
+          await this.runCycle();
+          this.iterationCount++;
+        } catch (error) {
+          // 에러 로깅 (debug 모드와 무관하게 항상 로그)
+          this.log(`Cycle error`, error);
+          if (this.options.stopOnError) {
+            throw error;
+          }
+          // 에러 무시하고 계속
+        }
+
+        // 대기 (AbortSignal 연동)
+        try {
+          await delay(this.options.interval, this.abortController?.signal);
+        } catch {
+          // abort 시 무시하고 루프 종료
+          break;
+        }
       }
+    } finally {
+      this.isRunning = false;
+      this.abortController = null;
     }
-
-    this.isRunning = false;
-    this.abortController = null;
   }
 
   /**

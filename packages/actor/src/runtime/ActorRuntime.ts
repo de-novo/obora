@@ -6,6 +6,13 @@ import type { IMessageBus } from "../types/message";
 import type { ActorFactory, ActorConfig } from "./types";
 import { delay } from "./utils/delay";
 
+export class ActorStopTimeoutError extends Error {
+  constructor(actorId: ActorId) {
+    super(`Actor stop timeout: ${actorId}`);
+    this.name = "ActorStopTimeoutError";
+  }
+}
+
 /**
  * Actor runtime configuration.
  */
@@ -133,8 +140,8 @@ export class ActorRuntime {
     // Validate ActorConfig input
     this.validateConfig(config);
 
-    // Check maximum actor count
-    if (this.actors.size >= this.config.maxActors) {
+    // Check maximum actor count (including in-flight spawns)
+    if (this.actors.size + this.spawningActorIds.size >= this.config.maxActors) {
       throw new Error(`Maximum actors limit reached: ${this.config.maxActors}`);
     }
 
@@ -172,6 +179,13 @@ export class ActorRuntime {
         throw error;
       }
 
+      // Protect auto-generated IDs during in-flight start/registration window
+      const hadSpawningActorId = this.spawningActorIds.has(actor.id);
+      if (hadSpawningActorId && actor.id !== reservedId) {
+        throw new Error(`Actor already exists: ${actor.id}`);
+      }
+      this.spawningActorIds.add(actor.id);
+
       const startAbort = new AbortController();
       const startPromise = Promise.resolve(actor!.start());
       startPromise.catch(() => {});
@@ -193,9 +207,6 @@ export class ActorRuntime {
       if (this.actors.has(actor.id)) {
         throw new Error(`Actor ID collision: ${actor.id}`);
       }
-      if (this.spawningActorIds.has(actor.id) && actor.id !== reservedId) {
-        throw new Error(`Actor already exists: ${actor.id}`);
-      }
 
       this.actors.set(actor.id, actor);
       this.actorConfigs.set(actor.id, config);
@@ -210,7 +221,22 @@ export class ActorRuntime {
       // Cleanup on timeout or error
       if (actor) {
         try {
-          await actor.stop();
+          const cleanupAbort = new AbortController();
+          const cleanupStopPromise = Promise.resolve(actor.stop());
+          cleanupStopPromise.catch(() => {});
+
+          try {
+            await Promise.race([
+              cleanupStopPromise,
+              delay(this.config.stopTimeout, cleanupAbort.signal).then(() => {
+                throw new ActorStopTimeoutError(actor!.id);
+              }),
+            ]);
+            cleanupAbort.abort();
+          } catch {
+            cleanupAbort.abort();
+            // cleanup failure is ignored by outer catch
+          }
         } catch {
           // Ignore cleanup failure
         }
@@ -221,6 +247,9 @@ export class ActorRuntime {
     } finally {
       if (reservedId) {
         this.spawningActorIds.delete(reservedId);
+      }
+      if (actor) {
+        this.spawningActorIds.delete(actor.id);
       }
     }
   }
@@ -399,7 +428,7 @@ export class ActorRuntime {
         await Promise.race([
           stopPromise,
           delay(this.config.stopTimeout, stopAbort.signal).then(() => {
-            throw new Error(`Actor stop timeout: ${actorId}`);
+            throw new ActorStopTimeoutError(actorId);
           }),
         ]);
         stopAbort.abort();
@@ -427,8 +456,8 @@ export class ActorRuntime {
     }
   }
 
-  private isStopTimeoutError(error: unknown, actorId: ActorId): boolean {
-    return error instanceof Error && error.message === `Actor stop timeout: ${actorId}`;
+  private isStopTimeoutError(error: unknown, _actorId: ActorId): boolean {
+    return error instanceof ActorStopTimeoutError;
   }
 
   /**

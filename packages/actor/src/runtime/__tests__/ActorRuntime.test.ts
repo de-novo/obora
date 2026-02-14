@@ -13,7 +13,7 @@ import type { IBlackboard } from "../../types/actor";
 import type { IMessageBus } from "../../types/message";
 import { createActorMetrics } from "../../types/metrics";
 import { createResultId } from "../../types/result";
-import { ActorRuntime } from "../ActorRuntime";
+import { ActorRuntime, ActorStopTimeoutError } from "../ActorRuntime";
 import type { ActorFactory, ActorConfig } from "../types";
 
 class MockActor implements Actor {
@@ -232,6 +232,42 @@ describe("ActorRuntime", () => {
       ).rejects.toThrow("Maximum actors limit reached");
     });
 
+    it("should count in-flight spawns for max actors limit", async () => {
+      let releaseCreate: (() => void) | null = null;
+
+      class BlockingFactory implements ActorFactory {
+        async create(config: ActorConfig, board: IBlackboard, messageBus: IMessageBus): Promise<Actor> {
+          await new Promise<void>((resolve) => {
+            releaseCreate = resolve;
+          });
+          const actorId = config.id || createActorId(config.role);
+          return new MockActor(actorId as string, config.name, config.role, board, messageBus);
+        }
+      }
+
+      const runtimeWithLimit = new ActorRuntime(board, messageBus, new BlockingFactory(), {
+        maxActors: 1,
+        spawnTimeout: 200,
+        debug: false,
+      });
+      await runtimeWithLimit.start();
+
+      const firstSpawn = runtimeWithLimit.spawn({
+        id: createActorId("analyst"),
+        name: "first",
+        role: "analyst" as ActorRole,
+        type: "mock",
+      });
+      await Promise.resolve();
+
+      await expect(
+        runtimeWithLimit.spawn({ name: "second", role: "analyst" as ActorRole, type: "mock" })
+      ).rejects.toThrow("Maximum actors limit reached");
+
+      releaseCreate?.();
+      await expect(firstSpawn).resolves.toBeDefined();
+    });
+
     it("should throw when actor ID already exists", async () => {
       const actorId = createActorId("analyst");
       const config: ActorConfig = {
@@ -279,6 +315,42 @@ describe("ActorRuntime", () => {
       releaseCreate?.();
       await expect(firstSpawn).resolves.toBeDefined();
       expect(blockingRuntime.hasActor(actorId)).toBe(true);
+    });
+
+    it("should guard auto-generated id during start before registration", async () => {
+      let releaseStart: (() => void) | null = null;
+      const fixedId = createActorId("analyst");
+
+      class SlowStartActor extends MockActor {
+        override async start(): Promise<void> {
+          await new Promise<void>((resolve) => {
+            releaseStart = resolve;
+          });
+        }
+      }
+
+      class FixedIdFactory implements ActorFactory {
+        async create(config: ActorConfig, board: IBlackboard, messageBus: IMessageBus): Promise<Actor> {
+          return new SlowStartActor(fixedId as string, config.name, config.role, board, messageBus);
+        }
+      }
+
+      const fixedRuntime = new ActorRuntime(board, messageBus, new FixedIdFactory(), {
+        spawnTimeout: 200,
+        debug: false,
+      });
+      await fixedRuntime.start();
+
+      const firstSpawn = fixedRuntime.spawn({ name: "first", role: "analyst" as ActorRole, type: "mock" });
+      await Promise.resolve();
+
+      await expect(
+        fixedRuntime.spawn({ name: "second", role: "analyst" as ActorRole, type: "mock" })
+      ).rejects.toThrow("Actor already exists");
+
+      releaseStart?.();
+      await expect(firstSpawn).resolves.toBeDefined();
+      expect(fixedRuntime.hasActor(fixedId)).toBe(true);
     });
 
     it("should throw when actor name is missing", async () => {
@@ -423,7 +495,13 @@ describe("ActorRuntime", () => {
       const id = createActorId("analyst");
       await timeoutRuntime.spawn({ id, name: "slow-stop", role: "analyst" as ActorRole, type: "mock" });
 
-      await expect(timeoutRuntime.stopById(id)).rejects.toThrow(`Actor stop timeout: ${id}`);
+      try {
+        await timeoutRuntime.stopById(id);
+        throw new Error("Expected stopById to throw timeout");
+      } catch (error) {
+        expect(error).toBeInstanceOf(ActorStopTimeoutError);
+        expect((error as Error).message).toBe(`Actor stop timeout: ${id}`);
+      }
       expect(timeoutRuntime.getZombies()).toContain(id);
       expect(timeoutRuntime.hasActor(id)).toBe(false);
     });

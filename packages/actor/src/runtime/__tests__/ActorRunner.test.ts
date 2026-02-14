@@ -179,4 +179,33 @@ describe("ActorRunner", () => {
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("Cycle error"), error);
     errorSpy.mockRestore();
   });
+
+  it("should cleanup running state when start throws and allow restart", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const error = new Error("boom");
+
+    const strictRunner = new ActorRunner(actor, {
+      interval: 10,
+      maxIterations: 1,
+      stopOnError: true,
+    });
+
+    actor.act.mockRejectedValueOnce(error);
+
+    await expect(strictRunner.start()).rejects.toThrow("boom");
+    expect(strictRunner.running()).toBe(false);
+
+    actor.act.mockResolvedValueOnce({
+      id: createResultId("result-retry"),
+      actionId: createActionId("action-1"),
+      actorId: actor.id,
+      timestamp: new Date(),
+      status: "success",
+    });
+
+    await expect(strictRunner.start()).resolves.toBeUndefined();
+    expect(strictRunner.getIterationCount()).toBe(1);
+
+    errorSpy.mockRestore();
+  });
 });
