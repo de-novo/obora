@@ -245,6 +245,42 @@ describe("ActorRuntime", () => {
       await expect(runtime.spawn(config)).rejects.toThrow("Actor already exists");
     });
 
+    it("should prevent duplicate spawn while first spawn is in-flight", async () => {
+      let releaseCreate: (() => void) | null = null;
+
+      class BlockingFactory implements ActorFactory {
+        async create(config: ActorConfig, board: IBlackboard, messageBus: IMessageBus): Promise<Actor> {
+          await new Promise<void>((resolve) => {
+            releaseCreate = resolve;
+          });
+          const actorId = config.id || createActorId(config.role);
+          return new MockActor(actorId as string, config.name, config.role, board, messageBus);
+        }
+      }
+
+      const blockingRuntime = new ActorRuntime(board, messageBus, new BlockingFactory(), {
+        spawnTimeout: 200,
+        debug: false,
+      });
+      await blockingRuntime.start();
+
+      const actorId = createActorId("analyst");
+      const config: ActorConfig = {
+        id: actorId,
+        name: "test",
+        role: "analyst" as ActorRole,
+        type: "mock",
+      };
+
+      const firstSpawn = blockingRuntime.spawn(config);
+      await Promise.resolve();
+      await expect(blockingRuntime.spawn(config)).rejects.toThrow("Actor already exists");
+
+      releaseCreate?.();
+      await expect(firstSpawn).resolves.toBeDefined();
+      expect(blockingRuntime.hasActor(actorId)).toBe(true);
+    });
+
     it("should throw when actor name is missing", async () => {
       const invalidConfig = {
         role: "analyst" as ActorRole,
@@ -359,6 +395,38 @@ describe("ActorRuntime", () => {
       await runtime.stop();
       await expect(runtime.stopById(actorId)).resolves.toBeUndefined();
     });
+
+    it("should track zombie actor when stop times out", async () => {
+      class SlowStopActor extends MockActor {
+        override async stop(): Promise<void> {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+      }
+
+      class SlowStopFactory implements ActorFactory {
+        async create(
+          config: ActorConfig,
+          board: IBlackboard,
+          messageBus: IMessageBus
+        ): Promise<Actor> {
+          const actorId = config.id || createActorId(config.role);
+          return new SlowStopActor(actorId as string, config.name, config.role, board, messageBus);
+        }
+      }
+
+      const timeoutRuntime = new ActorRuntime(board, messageBus, new SlowStopFactory(), {
+        stopTimeout: 10,
+        debug: false,
+      });
+      await timeoutRuntime.start();
+
+      const id = createActorId("analyst");
+      await timeoutRuntime.spawn({ id, name: "slow-stop", role: "analyst" as ActorRole, type: "mock" });
+
+      await expect(timeoutRuntime.stopById(id)).rejects.toThrow(`Actor stop timeout: ${id}`);
+      expect(timeoutRuntime.getZombies()).toContain(id);
+      expect(timeoutRuntime.hasActor(id)).toBe(false);
+    });
   });
 
   describe("restart", () => {
@@ -399,7 +467,7 @@ describe("ActorRuntime", () => {
       await expect(runtimeWithLimit.restart(id, 2)).rejects.toThrow("Max restarts");
     });
 
-    it("should retry restart recursively until success within maxRestarts", async () => {
+    it("should retry restart with loop until success within maxRestarts", async () => {
       class FlakyFactory implements ActorFactory {
         private attempts = 0;
 

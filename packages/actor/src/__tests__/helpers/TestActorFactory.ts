@@ -14,7 +14,7 @@ export class TestActorFactory implements ActorFactory {
     this.actorConfig = config || {};
   }
 
-  create(config: ActorConfig, board: IBlackboard, messageBus: IMessageBus): Actor {
+  async create(config: ActorConfig, board: IBlackboard, messageBus: IMessageBus): Promise<Actor> {
     const id = config.id || createActorId(config.role);
     const actor = new TestActor(id, config.name, config.role, board, messageBus, {
       ...this.actorConfig,

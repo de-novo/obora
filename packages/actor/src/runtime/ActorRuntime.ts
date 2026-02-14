@@ -7,39 +7,41 @@ import type { ActorFactory, ActorConfig } from "./types";
 import { delay } from "./utils/delay";
 
 /**
- * Actor 런타임 설정
+ * Actor runtime configuration.
  */
 export interface RuntimeConfig {
-  /** 최대 동시 Actor 수 */
+  /** Maximum number of concurrent actors. */
   maxActors?: number;
 
-  /** Actor 생성 시 기본 타임아웃 (ms) */
+  /** Default timeout for actor spawn/start in milliseconds. */
   spawnTimeout?: number;
 
-  /** Actor 종료 시 기본 타임아웃 (ms) */
+  /** Default timeout for actor stop in milliseconds. */
   stopTimeout?: number;
 
-  /** 재시작 최대 횟수 */
+  /** Maximum number of restart attempts. */
   maxRestarts?: number;
 
-  /** 재시작 백오프 초기값 (ms) */
+  /** Initial restart backoff in milliseconds. */
   initialBackoff?: number;
 
-  /** 재시작 백오프 최대값 (ms) */
+  /** Maximum restart backoff in milliseconds. */
   maxBackoff?: number;
 
-  /** 디버그 모드 */
+  /** Enables debug logging. */
   debug?: boolean;
 }
 
 /**
- * Actor 런타임
+ * Actor runtime.
  *
- * Actor의 생성, 관리, 종료를 담당합니다.
+ * Responsible for actor creation, management, and shutdown.
  */
 export class ActorRuntime {
   private readonly actors: Map<ActorId, Actor>;
   private readonly actorConfigs: Map<ActorId, ActorConfig>;
+  private readonly spawningActorIds: Set<ActorId>;
+  private readonly zombies: Set<ActorId>;
   private readonly board: IBlackboard;
   private readonly messageBus: IMessageBus;
   private readonly config: Required<RuntimeConfig>;
@@ -57,9 +59,11 @@ export class ActorRuntime {
     this.factory = factory;
     this.actors = new Map();
     this.actorConfigs = new Map();
+    this.spawningActorIds = new Set();
+    this.zombies = new Set();
     this.isRunning = false;
 
-    // 기본 설정
+    // Default configuration
     const defaults: Required<RuntimeConfig> = {
       maxActors: 100,
       spawnTimeout: 5000,
@@ -71,12 +75,12 @@ export class ActorRuntime {
     };
     this.config = { ...defaults, ...config };
 
-    // RuntimeConfig 검증
+    // Validate RuntimeConfig
     this.validateRuntimeConfig(this.config);
   }
 
   /**
-   * 런타임 시작
+   * Starts the runtime.
    */
   async start(): Promise<void> {
     if (this.isRunning) {
@@ -87,10 +91,10 @@ export class ActorRuntime {
   }
 
   /**
-   * 런타임 종료
+   * Stops the runtime.
    */
   async stop(): Promise<void> {
-    // 런타임 종료 - idempotent
+    // Runtime shutdown is idempotent
     if (!this.isRunning) {
       return;
     }
@@ -104,8 +108,8 @@ export class ActorRuntime {
   }
 
   /**
-   * 특정 Actor 중지
-   * @param actorId Actor ID
+   * Stops a specific actor by ID.
+   * @param actorId Actor ID.
    */
   async stopById(actorId: ActorId): Promise<void> {
     if (!this.isRunning) {
@@ -117,26 +121,32 @@ export class ActorRuntime {
   }
 
   /**
-   * 새 Actor 생성 (spawn)
-   * @param config Actor 설정
-   * @returns 생성된 Actor
+   * Spawns a new actor.
+   * @param config Actor configuration.
+   * @returns The created actor.
    */
   async spawn(config: ActorConfig): Promise<Actor> {
     if (!this.isRunning) {
       throw new Error("Runtime is not running");
     }
 
-    // ActorConfig 입력 검증
+    // Validate ActorConfig input
     this.validateConfig(config);
 
-    // 최대 Actor 수 체크
+    // Check maximum actor count
     if (this.actors.size >= this.config.maxActors) {
       throw new Error(`Maximum actors limit reached: ${this.config.maxActors}`);
     }
 
-    // 중복 ID 체크
-    if (config.id && this.actors.has(config.id)) {
-      throw new Error(`Actor already exists: ${config.id}`);
+    // Node.js는 단일 스레드이므로 await 이전 구간은 원자적으로 실행됩니다.
+    // 다만 await 경계 사이에서는 interleaving이 발생할 수 있으므로,
+    // 명시 ID는 spawn 시작 시 placeholder(Set)로 선점하여 TOCTOU를 방지합니다.
+    const reservedId = config.id;
+    if (reservedId) {
+      if (this.actors.has(reservedId) || this.spawningActorIds.has(reservedId)) {
+        throw new Error(`Actor already exists: ${reservedId}`);
+      }
+      this.spawningActorIds.add(reservedId);
     }
 
     this.log(`Spawning actor: ${config.id || "auto-generated"} (${config.role})`);
@@ -146,9 +156,7 @@ export class ActorRuntime {
 
     try {
       const spawnAbort = new AbortController();
-      const createPromise = Promise.resolve(
-        this.factory.create(config, this.board, this.messageBus)
-      );
+      const createPromise = this.factory.create(config, this.board, this.messageBus);
       createPromise.catch(() => {});
 
       try {
@@ -181,36 +189,49 @@ export class ActorRuntime {
         throw error;
       }
 
-      // 등록 전 중복 체크 (auto-generated ID 포함)
+      // Check duplication before registration (including auto-generated IDs)
       if (this.actors.has(actor.id)) {
         throw new Error(`Actor ID collision: ${actor.id}`);
       }
+      if (this.spawningActorIds.has(actor.id) && actor.id !== reservedId) {
+        throw new Error(`Actor already exists: ${actor.id}`);
+      }
+
       this.actors.set(actor.id, actor);
       this.actorConfigs.set(actor.id, config);
+      this.spawningActorIds.delete(actor.id);
+      this.zombies.delete(actor.id);
 
       const duration = Date.now() - startTime;
       this.log(`Actor spawned: ${actor.id} (${duration}ms)`);
 
       return actor;
     } catch (error) {
-      // 타임아웃이나 에러 발생 시 cleanup
+      // Cleanup on timeout or error
       if (actor) {
         try {
           await actor.stop();
         } catch {
-          // cleanup 실패는 무시
+          // Ignore cleanup failure
         }
       }
       const duration = Date.now() - startTime;
       this.log(`Actor spawn failed: ${config.id || "unknown"} (${duration}ms)`, error);
       throw error;
+    } finally {
+      if (reservedId) {
+        this.spawningActorIds.delete(reservedId);
+      }
     }
   }
 
   /**
-   * Restart an actor.
+   * Restarts an actor.
+   *
+   * Total restart attempts are capped at `maxRestarts`.
    * @param actorId Actor ID.
    * @param restartCount Current restart attempt count (internal use).
+   * @internal
    */
   async restart(actorId: ActorId, restartCount = 0): Promise<Actor> {
     if (restartCount >= this.config.maxRestarts) {
@@ -230,7 +251,7 @@ export class ActorRuntime {
 
     try {
       await this.stopActor(actor.id);
-      return this.retryRestart(actorId, savedConfig, restartCount + 1);
+      return this.retryRestart(actorId, savedConfig, restartCount);
     } catch (error) {
       this.log(`Actor restart failed: ${actorId}`, error);
       throw error;
@@ -238,46 +259,43 @@ export class ActorRuntime {
   }
 
   /**
-   * Retry actor spawn with exponential backoff.
-   *
-   * Boundary behavior: when `restartCount === maxRestarts`, this method still performs
-   * one final spawn attempt for that boundary count. It only recurses when
-   * `restartCount < maxRestarts`; otherwise the last error is rethrown.
+   * Retries actor spawn with exponential backoff.
+   * @param actorId Actor ID.
+   * @param config Actor configuration.
+   * @param restartCount Current restart attempt count.
    */
   private async retryRestart(
     actorId: ActorId,
     config: ActorConfig,
     restartCount: number
   ): Promise<Actor> {
-    if (restartCount > this.config.maxRestarts) {
-      throw new Error(`Max restarts (${this.config.maxRestarts}) exceeded for actor: ${actorId}`);
-    }
+    let attempt = restartCount;
 
-    this.log(`Retrying actor restart: ${actorId} (attempt ${restartCount})`);
+    while (attempt < this.config.maxRestarts) {
+      this.log(`Retrying actor restart: ${actorId} (attempt ${attempt + 1})`);
 
-    const backoff = this.calculateBackoff(restartCount - 1);
-    if (backoff > 0) {
-      await delay(backoff);
-    }
-
-    try {
-      const newActor = await this.spawn(config);
-      this.log(`Actor restarted: ${actorId}`);
-      return newActor;
-    } catch (error) {
-      this.log(`Actor retry restart failed: ${actorId}`, error);
-      if (restartCount < this.config.maxRestarts) {
-        return this.retryRestart(actorId, config, restartCount + 1);
+      const backoff = this.calculateBackoff(attempt);
+      if (backoff > 0) {
+        await delay(backoff);
       }
-      // Boundary case: restartCount === maxRestarts already consumed the final spawn attempt.
-      throw error;
+
+      try {
+        const newActor = await this.spawn(config);
+        this.log(`Actor restarted: ${actorId}`);
+        return newActor;
+      } catch (error) {
+        this.log(`Actor retry restart failed: ${actorId}`, error);
+        attempt += 1;
+      }
     }
+
+    throw new Error(`Max restarts (${this.config.maxRestarts}) exceeded for actor: ${actorId}`);
   }
 
   /**
-   * Actor 조회
-   * @param actorId Actor ID
-   * @returns Actor 인스턴스
+   * Gets an actor by ID.
+   * @param actorId Actor ID.
+   * @returns Actor instance.
    */
   getActor(actorId: ActorId): Actor {
     const actor = this.actors.get(actorId);
@@ -288,26 +306,26 @@ export class ActorRuntime {
   }
 
   /**
-   * Actor 존재 여부 확인
-   * @param actorId Actor ID
-   * @returns 존재 여부
+   * Checks whether an actor exists.
+   * @param actorId Actor ID.
+   * @returns True if the actor exists.
    */
   hasActor(actorId: ActorId): boolean {
     return this.actors.has(actorId);
   }
 
   /**
-   * 모든 Actor ID 반환
-   * @returns Actor ID 배열
+   * Returns all actor IDs.
+   * @returns Array of actor IDs.
    */
   listActors(): ActorId[] {
     return Array.from(this.actors.keys());
   }
 
   /**
-   * 역할별 Actor 목록
-   * @param role Actor 역할
-   * @returns Actor ID 배열
+   * Returns actors filtered by role.
+   * @param role Actor role.
+   * @returns Array of actor IDs.
    */
   listActorsByRole(role: ActorRole): ActorId[] {
     return Array.from(this.actors.values())
@@ -316,9 +334,9 @@ export class ActorRuntime {
   }
 
   /**
-   * 특정 상태의 Actor 목록
-   * @param status Actor 상태
-   * @returns Actor ID 배열
+   * Returns actors filtered by lifecycle status.
+   * @param status Actor lifecycle status.
+   * @returns Array of actor IDs.
    */
   listActorsByStatus(status: ActorLifecycleStatus): ActorId[] {
     return Array.from(this.actors.values())
@@ -327,14 +345,14 @@ export class ActorRuntime {
   }
 
   /**
-   * 현재 Actor 수
+   * Returns the current number of actors.
    */
   size(): number {
     return this.actors.size;
   }
 
   /**
-   * 런타임 상태
+   * Returns runtime status.
    */
   getStatus(): { running: boolean; actorCount: number } {
     return {
@@ -343,14 +361,21 @@ export class ActorRuntime {
     };
   }
 
-  // ==================== 내부 메서드 ====================
+  /**
+   * Returns actor IDs that timed out during stop and may still be running.
+   */
+  getZombies(): ActorId[] {
+    return Array.from(this.zombies);
+  }
+
+  // ==================== Internal methods ====================
 
   /**
-   * Stop a managed actor and release runtime references.
+   * Stops a managed actor and releases runtime references.
    *
    * Timeout trade-off:
    * - `actor.stop()` is raced against `stopTimeout`.
-   * - In `finally`, the runtime always removes the actor/config map entries, even when
+   * - In `finally`, the runtime always removes actor/config map entries, even when
    *   stop fails or times out.
    *
    * Why: keeping stale map entries blocks respawn/restart paths and leaks management state.
@@ -362,6 +387,8 @@ export class ActorRuntime {
     if (!actor) return;
 
     this.log(`Stopping actor: ${actorId}`);
+
+    let timedOut = false;
 
     try {
       const stopAbort = new AbortController();
@@ -378,9 +405,14 @@ export class ActorRuntime {
         stopAbort.abort();
       } catch (error) {
         stopAbort.abort();
+        if (this.isStopTimeoutError(error, actorId)) {
+          timedOut = true;
+          this.zombies.add(actorId);
+        }
         throw error;
       }
 
+      this.zombies.delete(actorId);
       this.log(`Actor stopped: ${actorId}`);
     } catch (error) {
       this.log(`Actor stop failed or timed out: ${actorId}`, error);
@@ -388,10 +420,22 @@ export class ActorRuntime {
     } finally {
       this.actors.delete(actorId);
       this.actorConfigs.delete(actorId);
+      if (timedOut) {
+        this.log(`Actor marked as zombie: ${actorId}`);
+      }
       this.log(`Actor removed: ${actorId}`);
     }
   }
 
+  private isStopTimeoutError(error: unknown, actorId: ActorId): boolean {
+    return error instanceof Error && error.message === `Actor stop timeout: ${actorId}`;
+  }
+
+  /**
+   * Calculates exponential backoff for restart attempts.
+   * @param restartCount Current restart attempt count.
+   * @returns Backoff duration in milliseconds.
+   */
   private calculateBackoff(restartCount: number): number {
     const factor = Math.pow(2, restartCount);
     const backoff = this.config.initialBackoff * factor;
@@ -399,8 +443,8 @@ export class ActorRuntime {
   }
 
   /**
-   * ActorConfig 입력 검증
-   * @param config 검증할 ActorConfig
+   * Validates ActorConfig input.
+   * @param config ActorConfig to validate.
    */
   private validateConfig(config: ActorConfig): void {
     if (!config.name || config.name.trim() === "") {
@@ -415,8 +459,8 @@ export class ActorRuntime {
   }
 
   /**
-   * RuntimeConfig 검증
-   * @param config 검증할 RuntimeConfig
+   * Validates RuntimeConfig input.
+   * @param config RuntimeConfig to validate.
    */
   private validateRuntimeConfig(config: Required<RuntimeConfig>): void {
     if (config.maxActors <= 0) {
