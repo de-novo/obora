@@ -59,6 +59,8 @@ import yaml from "yaml";
 import { CLIError } from "../errors.js";
 import { validatePathComponent } from "../utils/path-utils.js";
 import { type StatusFile, readStatus } from "../utils/status.js";
+import { RunTuiController } from "../tui/run-tui.js";
+import { promptErrorAction } from "../tui/error-ui.js";
 
 /**
  * Run options
@@ -70,6 +72,7 @@ interface RunOptions {
   continueOnError?: boolean;
   feature?: string;
   mode?: "auto" | "supervised" | "gated";
+  tui?: boolean;
 }
 
 /**
@@ -297,6 +300,7 @@ async function executeStep(
   workflowConfig: WorkflowConfig | undefined,
   attempt: number,
   runtimeCtx?: { board: Blackboard; sessionId: string; history: ChatMessage[] },
+  tui?: RunTuiController,
 ): Promise<{ success: boolean; output?: string; error?: string; diagnosisCode?: ErrorCode }> {
   log(`  [Attempt ${attempt}] Executing step: ${step.name} (agent: ${step.agent})`);
 
@@ -326,7 +330,34 @@ async function executeStep(
       step,
       runtimeState.activeResolver,
       context,
-      { resolvedAgentConfig }
+      {
+        resolvedAgentConfig,
+        onEvent: (event) => {
+          const maybe = event as {
+            type?: string;
+            delta?: string;
+            usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number };
+            model?: string;
+          };
+
+          if (typeof maybe.delta === "string" && maybe.delta.length > 0) {
+            tui?.renderEvent({ type: "stream", chunk: maybe.delta });
+          }
+
+          if (maybe.usage) {
+            tui?.renderEvent({
+              type: "usage",
+              promptTokens: maybe.usage.promptTokens,
+              completionTokens: maybe.usage.completionTokens,
+              totalTokens: maybe.usage.totalTokens,
+            });
+          }
+
+          if (typeof maybe.model === "string") {
+            // model is exposed from resolved config at step start
+          }
+        },
+      }
     );
     return result;
   }
@@ -457,7 +488,8 @@ async function executeWorkflow(
   featurePath: string,
   featureName: string,
   options: RunOptions,
-  dbAdapter: RunDatabaseAdapter
+  dbAdapter: RunDatabaseAdapter,
+  tui?: RunTuiController
 ): Promise<{
   success: boolean;
   completedSteps: string[];
@@ -485,6 +517,12 @@ async function executeWorkflow(
 
   // Create workflow run record
   const workflowRunId = `run-${Date.now()}`;
+  tui?.renderEvent({
+    type: "workflow-start",
+    featureName,
+    workflowName: workflow.name,
+    totalSteps: executionOrder.length,
+  });
   publishAgentCoreEvent({ kind: "workflow", phase: "started", featureName, workflow: workflow.name, workflowRunId });
   await recordWorkflowRun(dbAdapter, {
     local_id: featureName,
@@ -504,6 +542,11 @@ async function executeWorkflow(
 
   // Execute steps in order
   for (const [stepIndex, stepName] of executionOrder.entries()) {
+    if (tui?.isAbortRequested()) {
+      tui.renderEvent({ type: "workflow-abort", reason: "Interrupted by Ctrl+C" });
+      break;
+    }
+
     // Skip if before fromStep
     if (
       options.fromStep &&
@@ -526,6 +569,19 @@ async function executeWorkflow(
     }
 
     publishAgentCoreEvent({ kind: "workflow", phase: "step-started", featureName, workflowRunId, stepName, stepIndex });
+    const resolvedForUi = runtimeState.configResolver?.resolveForStep(step.agent, {
+      provider: step.provider,
+      model: step.model,
+    }) as { model?: string; thinkingLevel?: string } | undefined;
+    tui?.renderEvent({
+      type: "step-start",
+      stepName,
+      stepIndex,
+      totalSteps: executionOrder.length,
+      agentName: step.agent,
+      modelName: resolvedForUi?.model,
+      thinkingLevel: resolvedForUi?.thinkingLevel,
+    });
 
     // Create step run record
     const stepRunId = `step-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -554,7 +610,7 @@ async function executeWorkflow(
       const runtimeCtx = board
         ? { board, sessionId: workflowRunId, history: chatHistory }
         : undefined;
-      const result = await executeStep(step, featurePath, workflow.config, attempt, runtimeCtx);
+      const result = await executeStep(step, featurePath, workflow.config, attempt, runtimeCtx, tui);
 
       if (result.success) {
         stepSuccess = true;
@@ -610,6 +666,7 @@ async function executeWorkflow(
     }
 
     if (stepSuccess) {
+      tui?.renderEvent({ type: "step-complete", stepName });
       publishAgentCoreEvent({ kind: "workflow", phase: "step-completed", featureName, workflowRunId, stepName, stepIndex });
       completedSteps.push(stepName);
       if (stepOutput) {
@@ -617,6 +674,7 @@ async function executeWorkflow(
       }
       log(`  ✓ Step ${stepName} completed`);
     } else {
+      tui?.renderEvent({ type: "step-failed", stepName, error: stepError ?? "Unknown error" });
       publishAgentCoreEvent({ kind: "workflow", phase: "step-failed", featureName, workflowRunId, stepName, stepIndex, error: stepError, diagnosisCode: lastDiagnosisCode });
       failedSteps.push(stepName);
       if (lastDiagnosisCode) {
@@ -628,6 +686,27 @@ async function executeWorkflow(
       log(`  ✗ Step ${stepName} failed: ${stepError}${lastDiagnosisCode ? ` [${lastDiagnosisCode}]` : ""}`);
 
       if (!continueOnError) {
+        if (tui && process.stdin.isTTY) {
+          const action = await promptErrorAction({ stepName, error: stepError ?? "Unknown error" });
+          if (action === "retry") {
+            const runtimeCtx = board
+              ? { board, sessionId: workflowRunId, history: chatHistory }
+              : undefined;
+            const retryResult = await executeStep(step, featurePath, workflow.config, actualAttempts + 1, runtimeCtx, tui);
+            if (retryResult.success) {
+              completedSteps.push(stepName);
+              failedSteps.pop();
+              if (retryResult.output) {
+                await saveStepOutput(featurePath, stepName, retryResult.output);
+              }
+              tui?.renderEvent({ type: "step-complete", stepName });
+              continue;
+            }
+          }
+          if (action === "skip") {
+            continue;
+          }
+        }
         log("  Stopping execution due to step failure (use --continue-on-error to continue)");
         break;
       }
@@ -642,6 +721,7 @@ async function executeWorkflow(
     failedSteps,
     completedSteps,
   });
+  tui?.renderEvent({ type: "workflow-complete", failedSteps: failedSteps.length });
 
   // Update workflow run record
   await recordWorkflowRun(dbAdapter, {
@@ -792,6 +872,9 @@ async function runRun(featureName: string, options: RunOptions): Promise<void> {
     return;
   }
 
+  const shouldUseTui = options.tui !== false && process.stdout.isTTY;
+  const tui = shouldUseTui ? new RunTuiController(featureName, workflow.name, workflow.steps.length) : undefined;
+
   if (!runtimeState.activeResolver) {
     try {
       const resolver = await bootstrapAgentResolver(cwd);
@@ -804,14 +887,20 @@ async function runRun(featureName: string, options: RunOptions): Promise<void> {
     }
   }
 
-  console.log("");
-  console.log(`Running workflow: ${workflow.name}`);
-  console.log(`Feature: ${featureName}`);
-  console.log("");
+  if (!tui) {
+    console.log("");
+    console.log(`Running workflow: ${workflow.name}`);
+    console.log(`Feature: ${featureName}`);
+    console.log("");
+  }
 
   const dbAdapter = await initRunDatabase(cwd, featureDir);
 
   try {
+    if (tui) {
+      await tui.start();
+    }
+
     // Update status to running
     await updateStatus(featureDir, {
       status: "running",
@@ -819,7 +908,7 @@ async function runRun(featureName: string, options: RunOptions): Promise<void> {
     });
 
     // Execute workflow
-    const result = await executeWorkflow(workflow, featureDir, featureName, options, dbAdapter);
+    const result = await executeWorkflow(workflow, featureDir, featureName, options, dbAdapter, tui);
 
     // Update final status, persisting the actual step failure code for later diagnosis
     const finalStatus = result.success ? "completed" : "failed";
@@ -861,6 +950,9 @@ async function runRun(featureName: string, options: RunOptions): Promise<void> {
     console.log(`  2. Run 'obora done ${featureName}' to archive the feature`);
     console.log(`  3. Verify DB: duckdb .obora/features/${featureName}/.obora/obora.db \"SELECT * FROM workflow_runs ORDER BY id DESC LIMIT 5;\"`);
   } finally {
+    if (tui) {
+      await tui.stop();
+    }
     if (dbAdapter.db) {
       try {
         dbAdapter.db.close();
@@ -883,6 +975,7 @@ export function createRunCommand(): Command {
     .option("--from-step <name>", "Start from a specific step")
     .option("-v, --verbose", "Verbose output")
     .option("--continue-on-error", "Continue execution even if a step fails")
+    .option("--no-tui", "Disable TUI dashboard and use plain console output")
     .action(async (options: RunOptions) => {
       // Detect feature if not specified
       const featureName = options.feature || detectFeatureName();

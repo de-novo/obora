@@ -195,6 +195,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@mariozechner/pi-tui':
+        specifier: ^0.20.1
+        version: 0.20.2
       '@obora-kit/agents':
         specifier: workspace:*
         version: link:../agents
@@ -962,6 +965,10 @@ packages:
     resolution: {integrity: sha512-oF7OMJu1aUx7MXJeJoJ/3JDXzD2a5SqK9nHVK3mCA8DRQaykv9g+wcFZaANcCl0vAR2QSDr5KN3ZMARlFNWiVg==}
     engines: {node: '>=20.0.0'}
     hasBin: true
+
+  '@mariozechner/pi-tui@0.20.2':
+    resolution: {integrity: sha512-QtEQD9+geo7a9bIKLsdSixcDHwVlqQQ+5A5xEdr0zocNEKItqeJMuZPg+qhurupRTAF7bWdjO8mFb/0dSd/50A==}
+    engines: {node: '>=20.0.0'}
 
   '@mariozechner/pi-tui@0.52.12':
     resolution: {integrity: sha512-QQ4LUlAYKN2BvT3EMU63+kYLlIkyr706+rUFBGWvkiT8ZyMy5if3oaVJpO5qAndsMB+MaUnttIBPh3iHiaJ01g==}
@@ -3679,6 +3686,10 @@ packages:
     resolution: {integrity: sha512-HnLOCR3vjcY8beoNLtcjZ5/nxn2afmME6lhrDrebokqMap+XbeW8n9TXpPDOqdGK5qcI3oT0GKTW6wC7EMiVqA==}
     engines: {node: '>=12'}
 
+  string-width@8.1.1:
+    resolution: {integrity: sha512-KpqHIdDL9KwYk22wEOg/VIqYbrnLeSApsKT/bSj6Ez7pn3CftUiLAv2Lccpq1ALcpLV9UX1Ppn92npZWu2w/aw==}
+    engines: {node: '>=20'}
+
   string.prototype.trim@1.2.10:
     resolution: {integrity: sha512-Rs66F0P/1kedk5lyYyH9uBzuiI/kNRmwJAR9quK6VOtIpZ2G+hMZd+HQbbv25MgCA6gEffoMZYxlTod4WcdrKA==}
     engines: {node: '>= 0.4'}
@@ -5052,6 +5063,14 @@ snapshots:
       - utf-8-validate
       - ws
       - zod
+
+  '@mariozechner/pi-tui@0.20.2':
+    dependencies:
+      '@types/mime-types': 2.1.4
+      chalk: 5.6.2
+      marked: 15.0.12
+      mime-types: 3.0.2
+      string-width: 8.1.1
 
   '@mariozechner/pi-tui@0.52.12':
     dependencies:
@@ -8188,6 +8207,11 @@ snapshots:
     dependencies:
       eastasianwidth: 0.2.0
       emoji-regex: 9.2.2
+      strip-ansi: 7.1.2
+
+  string-width@8.1.1:
+    dependencies:
+      get-east-asian-width: 1.4.0
       strip-ansi: 7.1.2
 
   string.prototype.trim@1.2.10:

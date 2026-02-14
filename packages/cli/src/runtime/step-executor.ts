@@ -133,6 +133,7 @@ export interface ExecuteStepOptions {
   signal?: AbortSignal;
   retryAttempts?: number;
   resolvedAgentConfig?: AgentConfig;
+  onEvent?: (event: unknown) => void;
 }
 
 async function executeOnce(
@@ -141,6 +142,7 @@ async function executeOnce(
   context: AgentContext,
   timeoutMs: number,
   externalSignal?: AbortSignal,
+  onEvent?: (event: unknown) => void,
 ): Promise<StepResult> {
   const timeoutCtrl = new AbortController();
 
@@ -172,8 +174,8 @@ async function executeOnce(
   try {
     const subscribable = agent as BaseAgent & { subscribe?: (listener: (event: unknown) => void) => () => void };
     if (typeof subscribable.subscribe === "function") {
-      unsubscribe = subscribable.subscribe((_event) => {
-        // event stream hook: reserved for runtime progress/DB integration
+      unsubscribe = subscribable.subscribe((event) => {
+        onEvent?.(event);
       });
     }
 
@@ -303,7 +305,7 @@ export async function executeStep(
   try {
     const maxAttempts = Math.max(1, (options?.retryAttempts ?? 0) + 1);
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      const result = await executeOnce(step, agent, context, timeoutMs, options?.signal);
+      const result = await executeOnce(step, agent, context, timeoutMs, options?.signal, options?.onEvent);
       if (result.success) return result;
 
       const retryable = result.diagnosisCode === "E4001";
