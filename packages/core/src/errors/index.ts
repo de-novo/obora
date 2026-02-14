@@ -34,6 +34,7 @@ export const ErrorCodes = {
   E4004: "Lock acquisition failed",
   E4005: "Step failed after retries exhausted",
   E4006: "Spec validation failed",
+  E4007: "Context assembly failed",
 
   // Agent errors (E6xxx)
   E6003: "OpenClaw connection failed",

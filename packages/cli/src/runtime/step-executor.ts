@@ -11,14 +11,8 @@
  */
 
 import type { Step } from "@obora/core";
+import { type ErrorCode } from "@obora/core";
 import type { BaseAgent, Task, TaskResult, AgentContext } from "@obora-kit/agents";
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-/** Error codes used by the step execution layer */
-export type ErrorCode = "E4001" | "E4002" | "E4003" | "E4005" | "E4007";
 
 /** Result of a single step execution */
 export interface StepResult {
@@ -130,14 +124,18 @@ export async function executeStep(
     };
   }
 
-  // --- compute timeout ---
-  let timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  if (step.timeout) {
+  // --- compute timeout (caller override > step YAML > default) ---
+  let timeoutMs: number;
+  if (options?.timeoutMs != null) {
+    timeoutMs = options.timeoutMs;
+  } else if (step.timeout) {
     try {
       timeoutMs = parseDuration(step.timeout);
     } catch {
-      // invalid format → use default
+      timeoutMs = DEFAULT_TIMEOUT_MS;
     }
+  } else {
+    timeoutMs = DEFAULT_TIMEOUT_MS;
   }
 
   // --- execute with abort ---

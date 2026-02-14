@@ -1,0 +1,11 @@
+# Simple Workflow
+# Minimal workflow for quick iteration
+
+name: simple
+version: "1.0"
+description: "Minimal demo workflow"
+
+steps:
+  - name: hello
+    agent: echo
+    description: "Simple hello step"

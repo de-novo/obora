@@ -1,0 +1,7 @@
+# obora-kit Configuration (Minimal)
+project:
+  name: "my-project"
+  version: "0.1.0"
+
+settings:
+  workflow: "simple"

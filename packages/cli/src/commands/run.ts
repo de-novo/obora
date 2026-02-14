@@ -17,7 +17,7 @@ import {
   getDiagnosis,
   formatDiagnosis,
 } from "@obora/core";
-import type { Workflow, Step, WorkflowConfig } from "@obora/core";
+import type { Workflow, Step, WorkflowConfig, ErrorCode } from "@obora/core";
 
 import {
   executeStep as executeStepBridge,
@@ -208,7 +208,7 @@ async function executeStep(
   featurePath: string,
   workflowConfig: WorkflowConfig | undefined,
   attempt: number
-): Promise<{ success: boolean; output?: string; error?: string; diagnosisCode?: string }> {
+): Promise<{ success: boolean; output?: string; error?: string; diagnosisCode?: ErrorCode }> {
   log(`  [Attempt ${attempt}] Executing step: ${step.name} (agent: ${step.agent})`);
 
   // --- Bridge path: real agent execution ---
@@ -275,7 +275,7 @@ async function executeWorkflow(
   workflow: Workflow,
   featurePath: string,
   options: RunOptions
-): Promise<{ success: boolean; completedSteps: string[]; failedSteps: string[]; errorCode?: string }> {
+): Promise<{ success: boolean; completedSteps: string[]; failedSteps: string[]; errorCode?: ErrorCode }> {
   const completedSteps: string[] = [];
   const failedSteps: string[] = [];
 
@@ -410,7 +410,7 @@ async function executeWorkflow(
   });
 
   // Derive error code: E4005 when retries were exhausted, E4001 otherwise
-  const errorCode =
+  const errorCode: ErrorCode | undefined =
     failedSteps.length > 0
       ? (workflow.config?.retry ?? 0) > 0
         ? "E4005"

@@ -195,6 +195,41 @@ describe("executeStep — resolver failure (E4003)", () => {
   });
 });
 
+describe("executeStep — timeout precedence", () => {
+  it("should prefer options.timeoutMs over step.timeout", async () => {
+    // step.timeout = "1s" (1000ms), but options.timeoutMs = 50ms should win
+    const agent = {
+      execute: vi.fn().mockImplementation(
+        () => new Promise((resolve) => setTimeout(resolve, 5000)),
+      ),
+    } as any;
+    const resolver = makeResolver(agent);
+    const step = makeStep({ timeout: "10s" }); // 10s from YAML
+
+    const result = await executeStep(step, resolver, makeContext(), { timeoutMs: 50 });
+
+    // Should timeout at 50ms (options), not 10s (step)
+    expect(result.success).toBe(false);
+    expect(result.diagnosisCode).toBe("E4002");
+  });
+
+  it("should use step.timeout when options.timeoutMs is undefined", async () => {
+    // step.timeout = "1s" → agent takes 5s → should timeout at 1s
+    const agent = {
+      execute: vi.fn().mockImplementation(
+        () => new Promise((resolve) => setTimeout(resolve, 5000)),
+      ),
+    } as any;
+    const resolver = makeResolver(agent);
+    const step = makeStep({ timeout: "1s" });
+
+    const result = await executeStep(step, resolver, makeContext());
+
+    expect(result.success).toBe(false);
+    expect(result.diagnosisCode).toBe("E4002");
+  });
+});
+
 describe("executeStep — timeout (E4002)", () => {
   it("should return E4002 when step exceeds timeout", async () => {
     const agent = {
@@ -222,7 +257,7 @@ describe("executeStep — timeout (E4002)", () => {
 // ---------------------------------------------------------------------------
 
 describe("executeStep — single-writer policy", () => {
-  it("should NOT write to context.board (status.yaml is caller's responsibility)", async () => {
+  it("should NOT call board.write — status persistence is executeWorkflow's responsibility", async () => {
     const writeSpy = vi.fn();
     const ctx: AgentContext = {
       sessionId: "s",
@@ -230,19 +265,48 @@ describe("executeStep — single-writer policy", () => {
       history: [],
     };
 
-    // Note: the agent itself may call board.write via report(), but
-    // StepExecutor should not call it directly. We verify by checking
-    // that StepExecutor returns a plain result object without side effects.
     const agent = makeAgent();
     const resolver = makeResolver(agent);
 
-    const result = await executeStep(makeStep(), resolver, ctx);
+    await executeStep(makeStep(), resolver, ctx);
 
-    // StepExecutor itself does not call board.write — only BaseAgent.report() might
-    expect(result.success).toBe(true);
-    expect(result).toHaveProperty("success");
-    expect(result).toHaveProperty("output");
-    // No diagnosisCode on success
-    expect(result.diagnosisCode).toBeUndefined();
+    // Single-writer invariant: StepExecutor must NEVER call board.write
+    expect(writeSpy).not.toHaveBeenCalled();
+  });
+
+  it("should not call board.write even on agent failure", async () => {
+    const writeSpy = vi.fn();
+    const ctx: AgentContext = {
+      sessionId: "s",
+      board: { read: () => ({}), write: writeSpy } as any,
+      history: [],
+    };
+
+    const agent = makeAgent({ success: false, error: new Error("fail") });
+    const resolver = makeResolver(agent);
+
+    await executeStep(makeStep(), resolver, ctx);
+
+    expect(writeSpy).not.toHaveBeenCalled();
+  });
+
+  it("should not call board.write on timeout", async () => {
+    const writeSpy = vi.fn();
+    const ctx: AgentContext = {
+      sessionId: "s",
+      board: { read: () => ({}), write: writeSpy } as any,
+      history: [],
+    };
+
+    const agent = {
+      execute: vi.fn().mockImplementation(
+        () => new Promise((resolve) => setTimeout(resolve, 5000)),
+      ),
+    } as any;
+    const resolver = makeResolver(agent);
+
+    await executeStep(makeStep(), resolver, ctx, { timeoutMs: 50 });
+
+    expect(writeSpy).not.toHaveBeenCalled();
   });
 });
