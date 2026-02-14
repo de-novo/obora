@@ -6,8 +6,8 @@ export function maskSecret(value: string): string {
   return `${value.slice(0, 6)}...${value.slice(-4)}`;
 }
 
-export function maskProviderAuth(auth: Record<string, unknown>): Record<string, unknown> {
-  const clone = { ...auth };
+export function maskProviderAuth(auth: Record<string, unknown> | object): Record<string, unknown> {
+  const clone = { ...auth } as Record<string, unknown>;
 
   for (const key of ["apiKey", "token", "accessToken", "refreshToken"]) {
     const value = clone[key];
