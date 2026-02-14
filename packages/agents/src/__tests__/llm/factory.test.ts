@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 import type { LLMAdapter } from "../../llm/adapter";
 import { createLLMAdapter, createAdapterFromEnv } from "../../llm/factory";
@@ -58,11 +58,47 @@ describe("Factory", () => {
       expect(adapter.id).toBe("pi-mono");
     });
 
-    it("should throw when PIMONO_API_KEY is missing", () => {
+    it("should throw when PIMONO_API_KEY is missing in production", () => {
       process.env!.OBORA_LLM_PROVIDER = "pi-mono";
+      process.env!.NODE_ENV = "production";
       delete process.env!.PIMONO_API_KEY;
 
-      expect(createAdapterFromEnv).toThrow("PIMONO_API_KEY environment variable is required");
+      expect(createAdapterFromEnv).toThrow("PIMONO_API_KEY environment variable is required in production");
+    });
+
+    it("should fallback to MockLLMAdapter with warning in development when key missing", () => {
+      process.env!.OBORA_LLM_PROVIDER = "pi-mono";
+      process.env!.NODE_ENV = "development";
+      delete process.env!.PIMONO_API_KEY;
+
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const adapter = createAdapterFromEnv();
+
+      expect(adapter).toBeInstanceOf(MockLLMAdapter);
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("PIMONO_API_KEY not set")
+      );
+      warnSpy.mockRestore();
+    });
+
+    it("should fallback to MockLLMAdapter when NODE_ENV is unset (defaults to development)", () => {
+      delete process.env!.OBORA_LLM_PROVIDER;
+      delete process.env!.NODE_ENV;
+      delete process.env!.PIMONO_API_KEY;
+
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const adapter = createAdapterFromEnv();
+
+      expect(adapter).toBeInstanceOf(MockLLMAdapter);
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+
+    it("should create MockLLMAdapter when provider is explicitly mock", () => {
+      process.env!.OBORA_LLM_PROVIDER = "mock";
+
+      const adapter = createAdapterFromEnv();
+      expect(adapter).toBeInstanceOf(MockLLMAdapter);
     });
 
     it("should throw for unsupported provider from env", () => {

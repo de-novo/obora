@@ -25,6 +25,7 @@ import {
   type StepResult,
 } from "../runtime/step-executor.js";
 import { AgentRegistry } from "../runtime/agent-registry.js";
+import { createAdapterFromEnv } from "@obora-kit/agents";
 import { Command } from "commander";
 import fs from "fs-extra";
 import yaml from "yaml";
@@ -205,7 +206,6 @@ export function setAgentResolver(resolver: AgentResolver | null): void {
  * @internal exported for testing
  */
 export function bootstrapAgentResolver(): AgentResolver {
-  const { createAdapterFromEnv } = require("@obora-kit/agents");
   const llm = createAdapterFromEnv();
   const registry = new AgentRegistry({ llm });
   setAgentResolver(registry);
