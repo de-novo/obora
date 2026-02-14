@@ -45,3 +45,8 @@
 
 ## 용어 정리
 - **Board 상태기계** → **Blackboard workflow 상태기계**
+
+## 추가 점검 로그 (2026-02-14 21:57 KST)
+- 기준선 확인: 작업 브랜치 `main` (HEAD 유지), 기준 브랜치 `origin/main`
+- 실행: `pnpm vitest run packages/blackboard/test/workflow/meeting-state-machine.test.ts`
+- 결과: ✅ 1 file / 2 tests 통과
