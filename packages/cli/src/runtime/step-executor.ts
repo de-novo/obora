@@ -10,7 +10,6 @@ import {
   type Task,
   type TaskResult,
   type AgentContext,
-  PiMonoError,
   RetryExhaustedError,
 } from "@obora-kit/agents";
 import type { StepErrorMetadata } from "./types.js";
@@ -98,9 +97,12 @@ function mapErrorToDiagnosis(error: unknown): ErrorCode {
     return error.code;
   }
 
-  // Aggregate PiMono internal rate-limit code to retry-exhausted diagnosis
-  if (error instanceof PiMonoError && error.code === "E4011") {
-    return "E4005";
+  // Aggregate provider-internal rate-limit code to retry-exhausted diagnosis
+  if (error instanceof Error && "code" in error) {
+    const code = (error as Error & { code?: unknown }).code;
+    if (code === "E4011") {
+      return "E4005";
+    }
   }
 
   // Preserve typed E4xxx codes on generic Error objects

@@ -69,6 +69,7 @@
     "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
+    "@mariozechner/pi-ai": "^0.52.12",
     "@obora-kit/blackboard": "workspace:*",
     "yaml": "^2.8.2"
   },

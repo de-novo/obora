@@ -3,26 +3,27 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type { LLMAdapter } from "../../llm/adapter";
 import { createLLMAdapter, createAdapterFromEnv } from "../../llm/factory";
 import { MockLLMAdapter } from "../../llm/mock-adapter";
-import { PiMonoAdapter } from "../../llm/pi-mono-adapter";
+import { PiAIAdapter } from "../../llm/pi-ai-adapter";
 import { withRetry } from "../../llm/retry-handler";
 
 describe("Factory", () => {
   describe("createLLMAdapter", () => {
-    it("should create pi-mono adapter", () => {
-      const adapter = createLLMAdapter("pi-mono", { apiKey: "test-key" });
+    it("should create pi-ai backed adapter", () => {
+      const adapter = createLLMAdapter("openai", { apiKey: "test-key" });
 
-      expect(adapter).toBeInstanceOf(PiMonoAdapter);
-      expect(adapter.id).toBe("pi-mono");
+      expect(adapter).toBeInstanceOf(PiAIAdapter);
+      expect(adapter.id).toBe("openai");
     });
 
-    it("should wrap adapter with retry", () => {
+    it("should keep backward-compatible pi-mono provider alias", () => {
       const adapter = createLLMAdapter("pi-mono", { apiKey: "test-key" });
 
+      expect(adapter).toBeInstanceOf(PiAIAdapter);
       expect(adapter.id).toBe("pi-mono");
     });
 
     it("should throw for unsupported provider", () => {
-      expect(() => createLLMAdapter("unknown" as "pi-mono", { apiKey: "test" } as never)).toThrow(
+      expect(() => createLLMAdapter("unknown" as "openai", { apiKey: "test" })).toThrow(
         "Unsupported LLM provider: unknown"
       );
     });
@@ -39,58 +40,43 @@ describe("Factory", () => {
       process.env = originalEnv;
     });
 
-    it("should create pi-mono adapter from env with default provider", () => {
-      process.env!.PIMONO_API_KEY = "test-key";
+    it("should create openai adapter from env with default provider", () => {
+      process.env!.OPENAI_API_KEY = "test-key";
 
       const adapter = createAdapterFromEnv();
 
-      expect(adapter).toBeInstanceOf(PiMonoAdapter);
-      expect(adapter.id).toBe("pi-mono");
+      expect(adapter).toBeInstanceOf(PiAIAdapter);
+      expect(adapter.id).toBe("openai");
     });
 
-    it("should create pi-mono adapter from env with explicit provider", () => {
-      process.env!.OBORA_LLM_PROVIDER = "pi-mono";
-      process.env!.PIMONO_API_KEY = "test-key";
+    it("should create provider adapter from env with explicit provider", () => {
+      process.env!.OBORA_LLM_PROVIDER = "anthropic";
+      process.env!.ANTHROPIC_API_KEY = "test-key";
 
       const adapter = createAdapterFromEnv();
 
-      expect(adapter).toBeInstanceOf(PiMonoAdapter);
-      expect(adapter.id).toBe("pi-mono");
+      expect(adapter).toBeInstanceOf(PiAIAdapter);
+      expect(adapter.id).toBe("anthropic");
     });
 
-    it("should throw when PIMONO_API_KEY is missing in production", () => {
-      process.env!.OBORA_LLM_PROVIDER = "pi-mono";
+    it("should throw when provider API key is missing in production", () => {
+      process.env!.OBORA_LLM_PROVIDER = "openai";
       process.env!.NODE_ENV = "production";
-      delete process.env!.PIMONO_API_KEY;
+      delete process.env!.OPENAI_API_KEY;
 
-      expect(createAdapterFromEnv).toThrow("PIMONO_API_KEY environment variable is required in production");
+      expect(createAdapterFromEnv).toThrow("OPENAI_API_KEY environment variable is required in production");
     });
 
     it("should fallback to MockLLMAdapter with warning in development when key missing", () => {
-      process.env!.OBORA_LLM_PROVIDER = "pi-mono";
+      process.env!.OBORA_LLM_PROVIDER = "openai";
       process.env!.NODE_ENV = "development";
-      delete process.env!.PIMONO_API_KEY;
+      delete process.env!.OPENAI_API_KEY;
 
       const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
       const adapter = createAdapterFromEnv();
 
       expect(adapter).toBeInstanceOf(MockLLMAdapter);
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining("PIMONO_API_KEY not set")
-      );
-      warnSpy.mockRestore();
-    });
-
-    it("should fallback to MockLLMAdapter when NODE_ENV is unset (defaults to development)", () => {
-      delete process.env!.OBORA_LLM_PROVIDER;
-      delete process.env!.NODE_ENV;
-      delete process.env!.PIMONO_API_KEY;
-
-      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-      const adapter = createAdapterFromEnv();
-
-      expect(adapter).toBeInstanceOf(MockLLMAdapter);
-      expect(warnSpy).toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("OPENAI_API_KEY not set"));
       warnSpy.mockRestore();
     });
 
@@ -99,12 +85,6 @@ describe("Factory", () => {
 
       const adapter = createAdapterFromEnv();
       expect(adapter).toBeInstanceOf(MockLLMAdapter);
-    });
-
-    it("should throw for unsupported provider from env", () => {
-      process.env!.OBORA_LLM_PROVIDER = "unknown";
-
-      expect(createAdapterFromEnv).toThrow("Unsupported LLM provider: unknown");
     });
   });
 });

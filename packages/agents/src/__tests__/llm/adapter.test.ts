@@ -1,6 +1,40 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 
 import type { ChatCompletionParams, ChatCompletionResult } from "../../llm/adapter";
+import { PiAIAdapter } from "../../llm/pi-ai-adapter";
+
+vi.mock("@mariozechner/pi-ai", () => ({
+  getModel: vi.fn(() => ({ id: "gpt-4o-mini", provider: "openai", api: "openai-completions", baseUrl: "https://api.openai.com/v1" })),
+  getModels: vi.fn(() => [{ id: "gpt-4o-mini", provider: "openai", api: "openai-completions", baseUrl: "https://api.openai.com/v1" }]),
+  complete: vi.fn(async () => ({
+    role: "assistant",
+    content: [{ type: "text", text: "hello" }],
+    api: "openai-completions",
+    provider: "openai",
+    model: "gpt-4o-mini",
+    usage: { input: 5, output: 3, cacheRead: 0, cacheWrite: 0, totalTokens: 8, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+    stopReason: "stop",
+    timestamp: 1,
+  })),
+  stream: vi.fn(() => ({
+    async *[Symbol.asyncIterator]() {
+      yield { type: "text_delta", delta: "he" };
+      yield { type: "text_delta", delta: "llo" };
+    },
+    async result() {
+      return {
+        role: "assistant",
+        content: [{ type: "text", text: "hello" }],
+        api: "openai-completions",
+        provider: "openai",
+        model: "gpt-4o-mini",
+        usage: { input: 5, output: 3, cacheRead: 0, cacheWrite: 0, totalTokens: 8, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+        stopReason: "stop",
+        timestamp: 1,
+      };
+    },
+  })),
+}));
 
 describe("LLMAdapter Interface", () => {
   it("should define the correct interface structure", () => {
@@ -61,5 +95,38 @@ describe("LLMAdapter Interface", () => {
     expect(result.usage.completionTokens).toBe(20);
     expect(result.usage.totalTokens).toBe(30);
     expect(result.finishReason).toBe("stop");
+  });
+});
+
+describe("PiAIAdapter", () => {
+  it("should map complete() response to ChatCompletionResult", async () => {
+    const adapter = new PiAIAdapter({ provider: "openai", apiKey: "test", model: "gpt-4o-mini" });
+
+    const result = await adapter.chatCompletion({
+      messages: [{ role: "user", content: "hello" }],
+    });
+
+    expect(result.message.content).toBe("hello");
+    expect(result.usage.totalTokens).toBe(8);
+    expect(result.finishReason).toBe("stop");
+  });
+
+  it("should emit stream chunks and return final result", async () => {
+    const adapter = new PiAIAdapter({ provider: "openai", apiKey: "test", model: "gpt-4o-mini" });
+
+    const chunks: string[] = [];
+    const result = await adapter.streamChatCompletion(
+      {
+        messages: [{ role: "user", content: "hello" }],
+      },
+      (chunk) => {
+        if (chunk.delta.content) {
+          chunks.push(chunk.delta.content);
+        }
+      }
+    );
+
+    expect(chunks.join("")).toBe("hello");
+    expect(result.message.content).toBe("hello");
   });
 });
