@@ -2,6 +2,7 @@ import { createRequire } from "node:module";
 
 import { Command } from "commander";
 
+import { createAuthCommand } from "./commands/auth.js";
 import { createDoneCommand } from "./commands/done.js";
 import { createInitCommand } from "./commands/init.js";
 import { createNewCommand } from "./commands/new.js";
@@ -20,6 +21,7 @@ program.name("obora").description("AI Agent-based workflow automation tool").ver
 
 // Register commands
 program.addCommand(createInitCommand());
+program.addCommand(createAuthCommand());
 program.addCommand(createNewCommand());
 program.addCommand(createPlanCommand());
 program.addCommand(createRunCommand());

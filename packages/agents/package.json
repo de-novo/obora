@@ -34,6 +34,10 @@
       "types": "./dist/llm/index.d.ts",
       "import": "./dist/llm/index.js"
     },
+    "./auth": {
+      "types": "./dist/auth/index.d.ts",
+      "import": "./dist/auth/index.js"
+    },
     "./roles": {
       "types": "./dist/roles/index.d.ts",
       "import": "./dist/roles/index.js"

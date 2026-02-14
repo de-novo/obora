@@ -1,4 +1,5 @@
 export * from "./llm";
+export * from "./auth";
 export * from "./roles";
 export * from "./prompts";
 export * from "./tools";
