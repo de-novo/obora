@@ -5,6 +5,7 @@ import { Command } from "commander";
 import { createAgentsCommand } from "./commands/agents.js";
 import { createAuthCommand } from "./commands/auth.js";
 import { createDoneCommand } from "./commands/done.js";
+import { createDashboardCommand } from "./commands/dashboard.js";
 import { createInitCommand } from "./commands/init.js";
 import { createNewCommand } from "./commands/new.js";
 import { createPlanCommand } from "./commands/plan.js";
@@ -31,6 +32,7 @@ program.addCommand(createPlanCommand());
 program.addCommand(createRunCommand());
 program.addCommand(createStatusCommand());
 program.addCommand(createDoneCommand());
+program.addCommand(createDashboardCommand());
 program.addCommand(validateCommand());
 
 export async function main() {

@@ -38,6 +38,7 @@ import {
   type StepResult,
 } from "../runtime/step-executor.js";
 import { AgentConfigResolver } from "@obora-kit/agents";
+import { publishAgentCoreEvent } from "@obora/dashboard";
 import {
   createWorkflowBlackboard,
   buildAgentContext,
@@ -484,6 +485,7 @@ async function executeWorkflow(
 
   // Create workflow run record
   const workflowRunId = `run-${Date.now()}`;
+  publishAgentCoreEvent({ kind: "workflow", phase: "started", featureName, workflow: workflow.name, workflowRunId });
   await recordWorkflowRun(dbAdapter, {
     local_id: featureName,
     workflow_name: workflow.name,
@@ -522,6 +524,8 @@ async function executeWorkflow(
     if (step.description) {
       console.log(`  ${step.description}`);
     }
+
+    publishAgentCoreEvent({ kind: "workflow", phase: "step-started", featureName, workflowRunId, stepName, stepIndex });
 
     // Create step run record
     const stepRunId = `step-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -606,12 +610,14 @@ async function executeWorkflow(
     }
 
     if (stepSuccess) {
+      publishAgentCoreEvent({ kind: "workflow", phase: "step-completed", featureName, workflowRunId, stepName, stepIndex });
       completedSteps.push(stepName);
       if (stepOutput) {
         await saveStepOutput(featurePath, stepName, stepOutput);
       }
       log(`  ✓ Step ${stepName} completed`);
     } else {
+      publishAgentCoreEvent({ kind: "workflow", phase: "step-failed", featureName, workflowRunId, stepName, stepIndex, error: stepError, diagnosisCode: lastDiagnosisCode });
       failedSteps.push(stepName);
       if (lastDiagnosisCode) {
         if (!firstFailureCode) {
@@ -627,6 +633,15 @@ async function executeWorkflow(
       }
     }
   }
+
+  publishAgentCoreEvent({
+    kind: "workflow",
+    phase: failedSteps.length === 0 ? "completed" : "failed",
+    featureName,
+    workflowRunId,
+    failedSteps,
+    completedSteps,
+  });
 
   // Update workflow run record
   await recordWorkflowRun(dbAdapter, {
