@@ -48,8 +48,8 @@ async function executeWorkflow(workflow, featurePath, options) {
     const result = await stepExecutor.execute(step, resolver, context);
 
     // 이전 스텝 출력을 board에 기록 → 다음 스텝이 참조 가능
-    // Blackboard는 meta|state|knowledge|decisions 섹션만 허용
-    board.write(`state.steps.${stepName}.result`, result);
+    // single-writer: context-builder의 record* 함수만 board에 기록
+    recordStepResult(board, stepName, result); // → state.context.steps.{stepName}
   }
 }
 ```
@@ -68,14 +68,14 @@ async function executeWorkflow(workflow, featurePath, options) {
 - `history`: 이전 스텝들의 LLM 대화 이력 (초기에는 빈 배열, 이후 누적)
 
 ### 3. 스텝 간 상태 전파
-- 스텝 완료 시 `board.write(`state.steps.{name}.result`, result)` 기록
-- 다음 스텝에서 `board.read(`state.steps.{prevStep}.result`)` 가능
+- 스텝 완료 시 `recordStepResult(board, name, result)` → `state.context.steps.{name}` 에 `StepResultRecord` 기록
+- 다음 스텝에서 `readStepResult(board, prevStep)` → `state.context.steps.{prevStep}` 조회
 - ⚠️ Blackboard 경로는 반드시 `meta|state|knowledge|decisions` 중 하나의 섹션으로 시작해야 함 (`path-utils.ts` 제약)
 - `step.inputs`에 명시된 의존 스텝의 출력을 자동 조회
 
 ### 4. 실패 경로 연동
-- 스텝 실패 시 `board.write(`state.steps.{name}.error`, error)` 기록
-- `status.yaml` 업데이트 시 board 상태에서 에러 코드 추출
+- 스텝 실패 시 `recordStepError(board, name, result)` → `state.context.steps.{name}` 에 에러 포함 `StepResultRecord` 기록
+- 진단 코드는 board 의 `StepResultRecord.diagnosisCode` 필드에서 조회 (CLI 출력 또는 `obora status` 표시용)
 - `obora status` 명령에서 진단 정보 표시 가능
 
 ## 인터페이스 정의

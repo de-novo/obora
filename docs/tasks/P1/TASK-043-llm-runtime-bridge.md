@@ -31,7 +31,7 @@ links:
 
 ## 수용 기준 (AC)
 - [ ] `obora run -f test-feature` 실행 시 실제 LLM 호출 발생 (mock adapter로 검증 가능)
-- [ ] step 실패 시 진단 코드가 `status.yaml`에 기록됨
+- [ ] step 실패 시 진단 코드가 Blackboard (`state.context.steps.<name>.diagnosisCode`)에 기록됨
 - [ ] `--dry-run` 모드에서는 LLM 호출 없음
 - [ ] 기존 CLI 테스트 regression 없음
 
@@ -75,7 +75,7 @@ execute(
 | `BaseAgent.execute()` — LLM 실패 (transient) | — | `RetryHandler`가 내부 retry → 소진 시 `RetryExhaustedError` throw → StepExecutor retry 루프 |
 | `BaseAgent.execute()` — 비즈니스 실패 | `E4001` | `TaskResult { success: false, error }` 반환 → StepExecutor retry 루프 |
 | `BaseAgent.execute()` — timeout | `E4002` | adapter-level timeout → `RetryHandler`가 retry 또는 throw → StepExecutor retry 루프 |
-| StepExecutor retry 소진 | `E4005` | `status.yaml` 기록 + CLI 출력 |
+| StepExecutor retry 소진 | `E4005` | Blackboard `state.context.steps.<name>` 기록 + CLI 출력 |
 | `ContextBuilder` — blackboard 조립 실패 | `E4001` | `OboraError` throw → StepExecutor catch → 즉시 실패 |
 
 ### role 타입 정합성

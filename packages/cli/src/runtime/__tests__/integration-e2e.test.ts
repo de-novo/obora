@@ -21,6 +21,7 @@
  * Scenario D: inter-step state propagation chain verification
  * Scenario E: single-writer guard tests (only context-builder writes board)
  * Scenario F: test isolation verification (no cross-test leakage)
+ * Scenario G: appendHistory MAX_HISTORY_LENGTH boundary trimming
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
@@ -38,6 +39,7 @@ import {
   readStepResult,
   appendHistory,
   setClock,
+  MAX_HISTORY_LENGTH,
   type StepResultRecord,
 } from "../context-builder.js";
 import { MockLLMAdapter } from "@obora-kit/agents";
@@ -526,9 +528,26 @@ describe("E2E Scenario E: single-writer guard", () => {
     const stored = readStepResult(board, "analyze");
     expect(stored!.output).toBe("second");
 
-    // Only one key in steps for "analyze"
+    // Exactly one key — overwrite does not create duplicate entries
     const raw = board.read<Record<string, unknown>>("state.context.steps");
-    expect(Object.keys(raw)).toContain("analyze");
+    expect(Object.keys(raw)).toEqual(["analyze"]);
+  });
+
+  it("recordStepError drops result.output (hardcodes null) — data-loss contract", () => {
+    // When an error occurs, recordStepError intentionally discards any partial output.
+    // This is a deliberate design choice: error records carry error/diagnosisCode only.
+    const code: ErrorCode = "E4001";
+    recordStepError(board, "x", {
+      success: false,
+      output: "partial output that should be dropped",
+      error: "runtime failure",
+      diagnosisCode: code,
+    });
+
+    const stored = readStepResult(board, "x");
+    expect(stored).not.toBeNull();
+    expect(stored!.output).toBeNull(); // contract: output is always null for errors
+    expect(stored!.error).toBe("runtime failure");
   });
 });
 
@@ -565,6 +584,40 @@ describe("E2E Scenario F: test isolation verification", () => {
     const ts = readStepResult(board2, "execute")!.completedAt!;
     expect(ts).not.toBe("2099-12-31T23:59:59.000Z");
     expect(ts).toMatch(/^\d{4}-\d{2}-\d{2}T/); // real ISO timestamp
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Scenario G: appendHistory trimming at MAX_HISTORY_LENGTH boundary
+// ---------------------------------------------------------------------------
+
+describe("E2E Scenario G: appendHistory MAX_HISTORY_LENGTH boundary", () => {
+  it("trims oldest entries when history exceeds MAX_HISTORY_LENGTH", () => {
+    const history: ChatMessage[] = [];
+
+    // Fill to exactly MAX_HISTORY_LENGTH
+    for (let i = 0; i < MAX_HISTORY_LENGTH; i++) {
+      appendHistory(history, { role: "assistant", content: `msg-${i}` });
+    }
+    expect(history).toHaveLength(MAX_HISTORY_LENGTH);
+    expect(history[0].content).toBe("msg-0"); // oldest preserved
+
+    // Add one more — should trim the oldest
+    appendHistory(history, { role: "assistant", content: "overflow" });
+    expect(history).toHaveLength(MAX_HISTORY_LENGTH);
+    expect(history[0].content).toBe("msg-1"); // msg-0 trimmed
+    expect(history[history.length - 1].content).toBe("overflow");
+  });
+
+  it("bulk overflow trims multiple oldest entries", () => {
+    const history: ChatMessage[] = [];
+
+    // Fill to MAX + 5 in one go
+    for (let i = 0; i < MAX_HISTORY_LENGTH + 5; i++) {
+      appendHistory(history, { role: "assistant", content: `m-${i}` });
+    }
+    expect(history).toHaveLength(MAX_HISTORY_LENGTH);
+    expect(history[0].content).toBe("m-5"); // first 5 trimmed
   });
 });
 
