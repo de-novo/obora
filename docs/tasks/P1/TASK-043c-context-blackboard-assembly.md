@@ -71,7 +71,6 @@ async function executeWorkflow(workflow, featurePath, options) {
 - 스텝 완료 시 `recordStepResult(board, name, result)` → `state.context.steps.{name}` 에 `StepResultRecord` 기록
 - 다음 스텝에서 `readStepResult(board, prevStep)` → `state.context.steps.{prevStep}` 조회
 - ⚠️ Blackboard 경로는 반드시 `meta|state|knowledge|decisions` 중 하나의 섹션으로 시작해야 함 (`path-utils.ts` 제약)
-- `step.inputs`에 명시된 의존 스텝의 출력을 자동 조회
 
 ### 4. 실패 경로 연동
 - 스텝 실패 시 `recordStepError(board, name, result)` → `state.context.steps.{name}` 에 에러 포함 `StepResultRecord` 기록

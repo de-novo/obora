@@ -355,11 +355,16 @@ describe("E2E Scenario C: timeout failure with blackboard recording", () => {
     setClock(null);
   });
 
-  it("records E4002 timeout on blackboard", async () => {
-    // Use fake timers to eliminate any CI scheduling jitter risk.
-    // The never-resolving promise + fake timer advance is fully deterministic.
+  // Reset fake timers after each test to prevent cross-test leakage
+  beforeEach(() => {
     vi.useFakeTimers();
+  });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("records E4002 timeout on blackboard", async () => {
     const board = createWorkflowBlackboard(SESSION_ID, WORKFLOW, "feat");
 
     const slowResolver: AgentResolver = {
@@ -372,7 +377,9 @@ describe("E2E Scenario C: timeout failure with blackboard recording", () => {
     const step: Step = { name: "slow-step", agent: "executor", timeout: "1s" } as Step;
     const ctx = buildAgentContext(SESSION_ID, board, step, []);
 
-    // Start execution (will hang until timeout fires)
+    // We use `timeoutMs: 5000` override to bypass the `step.timeout` parsing path
+    // (`parseDuration`) and directly test the timeout abort behavior. The `parseDuration`
+    // function is tested separately in step-executor.test.ts unit tests.
     const resultPromise = executeStep(step, slowResolver, ctx, {
       timeoutMs: 5000,
     });
@@ -392,8 +399,6 @@ describe("E2E Scenario C: timeout failure with blackboard recording", () => {
     expect(stored!.success).toBe(false);
     expect(stored!.diagnosisCode).toBe("E4002");
     expect(stored!.failedAt).toBe(FIXED_TIME);
-
-    vi.useRealTimers();
   });
 });
 
@@ -572,7 +577,9 @@ describe("E2E Scenario E: single-writer guard", () => {
 describe("E2E Scenario F: test isolation verification", () => {
   // Note: setClock uses module-level state for determinism. Each test that
   // calls setClock MUST restore the default clock to avoid cross-test leakage.
-  // The tests below verify this behavior works correctly.
+  // Vitest's beforeEach/afterEach hooks run even on test failure, ensuring cleanup.
+  // This scenario also tests the manual try/finally pattern for self-contained tests.
+  // The tests below verify isolation works correctly.
 
   it("each test gets a fresh board (no shared mutable state)", () => {
     const board1 = createWorkflowBlackboard("s1", WORKFLOW, "f1");
