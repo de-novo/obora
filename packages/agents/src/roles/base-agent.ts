@@ -1,12 +1,11 @@
-import { LLMAdapter, ChatMessage, ChatCompletionParams } from "../llm/adapter";
+import { getModel, EventStream, type AssistantMessage, type Message, type Model, type KnownProvider, Type } from "@mariozechner/pi-ai";
+import { Agent, type AgentEvent, type AgentMessage, type AgentTool } from "@mariozechner/pi-agent-core";
+import { LLMAdapter, ChatMessage } from "../llm/adapter";
 import type { Blackboard } from "@obora-kit/blackboard";
 import type { AgentId } from "../types";
 
 export type { AgentId };
 
-/**
- * 에이전트 역할
- */
 export enum AgentRole {
   ANALYST = "analyst",
   EXECUTOR = "executor",
@@ -14,9 +13,6 @@ export enum AgentRole {
   DIRECTOR = "director",
 }
 
-/**
- * 에이전트 상태
- */
 export enum AgentState {
   IDLE = "idle",
   THINKING = "thinking",
@@ -25,9 +21,6 @@ export enum AgentState {
   ERROR = "error",
 }
 
-/**
- * 회의 단계
- */
 export enum MeetingPhase {
   OPENING = "opening",
   DISCUSSION = "discussion",
@@ -37,9 +30,6 @@ export enum MeetingPhase {
   ESCALATION = "escalation",
 }
 
-/**
- * 에이전트 상태 정보
- */
 export interface AgentStatus {
   id: AgentId;
   role: AgentRole;
@@ -49,19 +39,14 @@ export interface AgentStatus {
   errorCount: number;
 }
 
-/**
- * 에이전트 컨텍스트
- */
 export interface AgentContext {
   sessionId: string;
   board: Blackboard;
   currentTask?: Task;
   history: ChatMessage[];
+  signal?: AbortSignal;
 }
 
-/**
- * 작업
- */
 export interface Task {
   id: string;
   type: string;
@@ -72,9 +57,6 @@ export interface Task {
   metadata?: Record<string, unknown>;
 }
 
-/**
- * 작업 결과
- */
 export interface TaskResult {
   taskId: string;
   success: boolean;
@@ -88,9 +70,6 @@ export interface TaskResult {
   };
 }
 
-/**
- * 기반 에이전트 추상 클래스
- */
 export abstract class BaseAgent {
   readonly id: AgentId;
   readonly role: AgentRole;
@@ -100,17 +79,22 @@ export abstract class BaseAgent {
   protected errorCount: number = 0;
   protected maxErrors: number = 3;
 
+  private coreAgent?: Agent;
+  private unsubscribe?: () => void;
+  private currentContext?: AgentContext;
+  private currentTask?: Task;
+  private latestUsage = { prompt: 0, completion: 0, total: 0 };
+
   constructor(config: BaseAgentConfig) {
     this.id = config.id ?? `${config.role}-${Date.now()}`;
     this.role = config.role;
     this.llm = config.llm;
     this.systemPrompt = config.systemPrompt ?? this.getDefaultSystemPrompt();
     this.maxErrors = config.maxErrors ?? 3;
+
+    this.coreAgent = this.createPiAgent(config);
   }
 
-  /**
-   * 작업 실행
-   */
   async execute(task: Task, context: AgentContext): Promise<TaskResult> {
     if (this.hasExceededMaxErrors()) {
       this.state = AgentState.ERROR;
@@ -125,40 +109,41 @@ export abstract class BaseAgent {
     }
 
     const startTime = Date.now();
+    this.currentContext = context;
+    this.currentTask = task;
+    this.latestUsage = { prompt: 0, completion: 0, total: 0 };
     this.state = AgentState.THINKING;
 
     try {
-      // 1. 관찰 (Observe) - Blackboard에서 정보 읽기
       const observation = await this.observe(context);
+      let output: unknown;
 
-      // 2. 사고 (Think) - LLM을 사용하여 의사결정
-      const { action, usage } = await this.think(task, observation, context);
-
-      // 3. 실행 (Act) - 의사결정 수행
-      this.state = AgentState.ACTING;
-      const result = await this.act(action, context);
-
-      // 4. 보고 (Report) - 결과를 Blackboard에 기록
-      await this.report(task, result, context);
-
-      this.state = AgentState.IDLE;
-      this.errorCount = 0;
-
-      return {
-        taskId: task.id,
-        success: true,
-        output: result,
-        duration: Date.now() - startTime,
-        tokensUsed: {
+      if (this.coreAgent) {
+        output = await this.executeWithPiAgent(task, observation, context);
+      } else {
+        const { action, usage } = await this.think(task, observation, context);
+        this.state = AgentState.ACTING;
+        output = await this.act(action, context);
+        await this.report(task, output, context);
+        this.latestUsage = {
           prompt: usage.promptTokens,
           completion: usage.completionTokens,
           total: usage.totalTokens,
-        },
+        };
+      }
+
+      this.state = AgentState.IDLE;
+      this.errorCount = 0;
+      return {
+        taskId: task.id,
+        success: true,
+        output,
+        duration: Date.now() - startTime,
+        tokensUsed: this.latestUsage,
       };
     } catch (error) {
       this.state = AgentState.ERROR;
       this.errorCount++;
-
       return {
         taskId: task.id,
         success: false,
@@ -167,12 +152,26 @@ export abstract class BaseAgent {
         duration: Date.now() - startTime,
         tokensUsed: { prompt: 0, completion: 0, total: 0 },
       };
+    } finally {
+      this.currentContext = undefined;
+      this.currentTask = undefined;
     }
   }
 
-  /**
-   * 관찰 - Blackboard에서 정보 수집
-   */
+  continue(): Promise<void> {
+    if (!this.coreAgent) {
+      throw new Error("continue() requires pi-agent-core runtime");
+    }
+    return this.coreAgent.continue();
+  }
+
+  subscribe(listener: (event: AgentEvent) => void): () => void {
+    if (!this.coreAgent) {
+      return () => {};
+    }
+    return this.coreAgent.subscribe(listener);
+  }
+
   protected async observe(context: AgentContext): Promise<Record<string, unknown>> {
     const state = (context.board.read("state", { strict: false }) as Record<string, unknown>) ?? {};
     const knowledge =
@@ -186,9 +185,6 @@ export abstract class BaseAgent {
     };
   }
 
-  /**
-   * 사고 - LLM을 사용하여 의사결정
-   */
   protected async think(
     task: Task,
     observation: Record<string, unknown>,
@@ -205,21 +201,14 @@ export abstract class BaseAgent {
       maxTokens: 2048,
     });
 
-    // 역할별 응답 파싱
     return {
       action: this.parseResponse(result.message.content ?? "", task),
       usage: result.usage,
     };
   }
 
-  /**
-   * 실행 - 의사결정 수행 (하위 클래스에서 구현)
-   */
   protected abstract act(action: unknown, context: AgentContext): Promise<unknown>;
 
-  /**
-   * 보고 - 결과를 Blackboard에 기록
-   */
   protected async report(task: Task, result: unknown, context: AgentContext): Promise<void> {
     context.board.write(`state.agent.${this.id}.lastResult`, {
       taskId: task.id,
@@ -228,32 +217,17 @@ export abstract class BaseAgent {
     });
   }
 
-  /**
-   * 메시지 빌드
-   */
   protected buildMessages(
     task: Task,
     observation: Record<string, unknown>,
     context: AgentContext
   ): ChatMessage[] {
     const messages: ChatMessage[] = [{ role: "system", content: this.systemPrompt }];
-
-    // 이력에 최근 N개의 메시지 추가
-    const recentHistory = context.history.slice(-10);
-    messages.push(...recentHistory);
-
-    // 현재 컨텍스트 정보 추가
-    messages.push({
-      role: "user",
-      content: this.formatTaskAndObservation(task, observation),
-    });
-
+    messages.push(...context.history.slice(-10));
+    messages.push({ role: "user", content: this.formatTaskAndObservation(task, observation) });
     return messages;
   }
 
-  /**
-   * 작업 및 관찰 포맷팅
-   */
   protected formatTaskAndObservation(task: Task, observation: Record<string, unknown>): string {
     return `
 Current Task:
@@ -266,23 +240,13 @@ Current Context:
 - Session ID: ${observation.sessionId}
 - Available: ${JSON.stringify(observation, null, 2)}
 
-Please analyze and provide your response in the appropriate format.
+Use board_read to inspect context, then perform role_action, and finish with board_write report.
 `.trim();
   }
 
-  /**
-   * 응답 파싱 (하위 클래스에서 구현)
-   */
   protected abstract parseResponse(content: string, task: Task): unknown;
-
-  /**
-   * 기본 시스템 프롬프트 (하위 클래스에서 오버라이드)
-   */
   protected abstract getDefaultSystemPrompt(): string;
 
-  /**
-   * 상태 가져오기
-   */
   getStatus(): AgentStatus {
     return {
       id: this.id,
@@ -294,33 +258,217 @@ Please analyze and provide your response in the appropriate format.
     };
   }
 
-  /**
-   * 에러 카운트 리셋
-   */
   resetErrorCount(): void {
     this.errorCount = 0;
   }
 
-  /**
-   * 최대 에러 도달 여부 확인
-   */
   hasExceededMaxErrors(): boolean {
     return this.errorCount >= this.maxErrors;
   }
+
+  private createPiAgent(config: BaseAgentConfig): Agent | undefined {
+    if (!config.enablePiRuntime) {
+      return undefined;
+    }
+
+    if (config.llm.id === "mock-llm") {
+      return undefined;
+    }
+
+    if (!config.provider || !config.model) {
+      return undefined;
+    }
+
+    try {
+      const model = getModel(config.provider as KnownProvider, config.model as never) as Model<any> | undefined;
+      if (!model) {
+        return undefined;
+      }
+      const agent = new Agent({
+        initialState: {
+          model,
+          systemPrompt: this.systemPrompt,
+          thinkingLevel: config.thinkingLevel ?? "medium",
+          tools: this.createAgentTools(),
+        },
+        streamFn: this.createStreamFn(),
+        sessionId: config.sessionId,
+      });
+      return agent;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private createAgentTools(): AgentTool[] {
+    return [
+      {
+        name: "board_read",
+        label: "Read blackboard context",
+        description: "Read a path from workflow blackboard",
+        parameters: Type.Object({ path: Type.String() }),
+        execute: async (_id, params: any) => {
+          const value = this.currentContext?.board.read(String(params?.path ?? ""), { strict: false });
+          return {
+            content: [{ type: "text", text: JSON.stringify(value ?? null) }],
+            details: { value: value ?? null },
+          };
+        },
+      },
+      {
+        name: "role_action",
+        label: "Execute role-specific action",
+        description: "Execute the role specific act() with parsed result",
+        parameters: Type.Object({ content: Type.String() }),
+        execute: async (_id, params: any) => {
+          if (!this.currentContext || !this.currentTask) throw new Error("Missing task context");
+          const parsed = this.parseResponse(String(params?.content ?? ""), this.currentTask);
+          this.state = AgentState.ACTING;
+          const result = await this.act(parsed, this.currentContext);
+          return {
+            content: [{ type: "text", text: JSON.stringify(result) }],
+            details: { result },
+          };
+        },
+      },
+      {
+        name: "board_write",
+        label: "Write agent report",
+        description: "Write task execution report to blackboard",
+        parameters: Type.Object({ result: Type.Any() }),
+        execute: async (_id, params: any) => {
+          if (!this.currentContext || !this.currentTask) throw new Error("Missing task context");
+          await this.report(this.currentTask, params?.result, this.currentContext);
+          return {
+            content: [{ type: "text", text: "ok" }],
+            details: { written: true },
+          };
+        },
+      },
+    ];
+  }
+
+  private createStreamFn() {
+    return async (model: Model<any>, context: { systemPrompt?: string; messages: Message[] }) => {
+      const stream = new EventStream<any, AssistantMessage>((e) => e.type === "done" || e.type === "error", (e) => e.message ?? e.error);
+      queueMicrotask(async () => {
+        try {
+          const res = await this.llm.chatCompletion({
+            messages: [
+              ...(context.systemPrompt ? [{ role: "system", content: context.systemPrompt } as const] : []),
+              ...context.messages.map((m): ChatMessage => {
+                if (m.role === "user") {
+                  return { role: "user", content: typeof m.content === "string" ? m.content : JSON.stringify(m.content) };
+                }
+                if (m.role === "assistant") {
+                  return { role: "assistant", content: m.content.filter((c) => c.type === "text").map((c) => c.text).join("") };
+                }
+                return {
+                  role: "tool",
+                  toolCallId: m.toolCallId,
+                  content: m.content.filter((c) => c.type === "text").map((c) => c.text).join("\n"),
+                };
+              }),
+            ],
+            temperature: 0.7,
+            maxTokens: 2048,
+          });
+
+          this.latestUsage = {
+            prompt: res.usage.promptTokens,
+            completion: res.usage.completionTokens,
+            total: res.usage.totalTokens,
+          };
+
+          const assistant: AssistantMessage = {
+            role: "assistant",
+            content: res.message.toolCalls && res.message.toolCalls.length > 0
+              ? res.message.toolCalls.map((tc) => ({
+                  type: "toolCall" as const,
+                  id: tc.id,
+                  name: tc.function.name,
+                  arguments: JSON.parse(tc.function.arguments || "{}"),
+                }))
+              : [{ type: "text", text: res.message.content ?? "" }],
+            api: "openai-completions",
+            provider: this.llm.id,
+            model: res.model,
+            usage: {
+              input: res.usage.promptTokens,
+              output: res.usage.completionTokens,
+              cacheRead: 0,
+              cacheWrite: 0,
+              totalTokens: res.usage.totalTokens,
+              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+            },
+            stopReason: res.finishReason === "tool_calls" ? "toolUse" : "stop",
+            timestamp: Date.now(),
+          };
+
+          stream.push({ type: "start", partial: assistant });
+          stream.push({ type: "done", reason: assistant.stopReason === "toolUse" ? "toolUse" : "stop", message: assistant });
+          stream.end(assistant);
+        } catch (error) {
+          const errMessage: AssistantMessage = {
+            role: "assistant",
+            content: [{ type: "text", text: (error as Error).message }],
+            api: "openai-completions",
+            provider: this.llm.id,
+            model: "unknown",
+            usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+            stopReason: "error",
+            errorMessage: (error as Error).message,
+            timestamp: Date.now(),
+          };
+          stream.push({ type: "error", reason: "error", error: errMessage });
+          stream.end(errMessage);
+        }
+      });
+      return stream;
+    };
+  }
+
+  private async executeWithPiAgent(
+    task: Task,
+    observation: Record<string, unknown>,
+    context: AgentContext
+  ): Promise<unknown> {
+    const prompt = this.formatTaskAndObservation(task, observation);
+    const unsubscribe = this.coreAgent!.subscribe(() => {});
+    this.unsubscribe?.();
+    this.unsubscribe = unsubscribe;
+
+    await this.coreAgent!.prompt(prompt);
+
+    const messages = this.coreAgent!.state.messages;
+    const lastAssistant = [...messages]
+      .reverse()
+      .find((m): m is AssistantMessage => (m as { role?: string }).role === "assistant") as AssistantMessage | undefined;
+
+    const text = lastAssistant?.content
+      .filter((c): c is { type: "text"; text: string } => c.type === "text")
+      .map((c) => c.text)
+      .join("\n") ?? "";
+
+    const parsed = this.parseResponse(text, task);
+    await this.report(task, parsed, context);
+    return parsed;
+  }
 }
 
-/**
- * 기반 에이전트 설정
- */
 export interface BaseAgentConfig {
   id?: AgentId;
   role: AgentRole;
   llm: LLMAdapter;
   systemPrompt?: string;
   maxErrors?: number;
+  provider?: string;
+  model?: string;
+  sessionId?: string;
+  thinkingLevel?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+  enablePiRuntime?: boolean;
 }
 
-// ============================================
 // 역할별 입출력 타입 정의 (스펙 14-ai-agents.md와 일치)
 // ============================================
 

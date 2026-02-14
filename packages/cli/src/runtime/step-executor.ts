@@ -165,7 +165,16 @@ async function executeOnce(
 
   let abortHandler: (() => void) | undefined;
 
+  let unsubscribe: (() => void) | undefined;
+
   try {
+    const subscribable = agent as BaseAgent & { subscribe?: (listener: (event: unknown) => void) => () => void };
+    if (typeof subscribable.subscribe === "function") {
+      unsubscribe = subscribable.subscribe((_event) => {
+        // event stream hook: reserved for runtime progress/DB integration
+      });
+    }
+
     const result = await Promise.race([
       agent.execute(taskToRun(step), {
         ...context,
@@ -226,6 +235,7 @@ async function executeOnce(
     if (abortHandler) {
       signal.removeEventListener("abort", abortHandler);
     }
+    unsubscribe?.();
     clearTimeout(timeoutId);
   }
 }
@@ -276,6 +286,15 @@ export async function executeStep(
     const retryable = result.diagnosisCode === "E4001";
     if (!retryable || attempt >= maxAttempts) {
       return result;
+    }
+
+    const continuable = agent as BaseAgent & { continue?: () => Promise<void> };
+    if (typeof continuable.continue === "function") {
+      try {
+        await continuable.continue();
+      } catch {
+        // continue() best-effort, fallback to delay retry
+      }
     }
 
     const delay = calculateDelay(attempt - 1, {

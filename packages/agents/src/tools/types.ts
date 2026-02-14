@@ -1,5 +1,6 @@
 import type { ToolDefinition, ToolCall } from "../llm/adapter";
 import type { JSONSchema } from "../prompts/template";
+import type { AgentTool } from "@mariozechner/pi-agent-core";
 
 export interface Tool<TParams = Record<string, unknown>, TResult = unknown> {
   name: string;
@@ -22,7 +23,7 @@ export interface ToolParameterSchema {
   description?: string;
 }
 
-export type { JSONSchema, ToolDefinition, ToolCall };
+export type { JSONSchema, ToolDefinition, ToolCall, AgentTool };
 
 export interface PropertySchema {
   type: "string" | "number" | "boolean" | "array" | "object";

@@ -1,8 +1,8 @@
 import { BaseAgent } from "./base-agent";
-import { AnalystAgent, createAnalystAgent } from "./analyst-agent";
-import { ExecutorAgent, createExecutorAgent } from "./executor-agent";
-import { VerifierAgent, createVerifierAgent } from "./verifier-agent";
-import { DirectorAgent, createDirectorAgent } from "./director-agent";
+import { AnalystAgent } from "./analyst-agent";
+import { ExecutorAgent } from "./executor-agent";
+import { VerifierAgent } from "./verifier-agent";
+import { DirectorAgent } from "./director-agent";
 import type { LLMAdapter } from "../llm/adapter";
 import type { ToolRegistry } from "../tools";
 
@@ -14,6 +14,11 @@ export interface CreateAgentConfig {
   role: "analyst" | "executor" | "verifier" | "director";
   llm: LLMAdapter;
   toolRegistry?: ToolRegistry;
+  systemPrompt?: string;
+  provider?: string;
+  model?: string;
+  sessionId?: string;
+  enablePiRuntime?: boolean;
 }
 
 /**
@@ -22,16 +27,49 @@ export interface CreateAgentConfig {
 export function createAgent(config: CreateAgentConfig): BaseAgent {
   switch (config.role) {
     case "analyst":
-      return createAnalystAgent(config.id, config.llm);
+      return new AnalystAgent({
+        id: config.id,
+        llm: config.llm,
+        ...(config.systemPrompt ? { systemPrompt: config.systemPrompt } : {}),
+        ...(config.provider ? { provider: config.provider } : {}),
+        ...(config.model ? { model: config.model } : {}),
+        ...(config.sessionId ? { sessionId: config.sessionId } : {}),
+        ...(config.enablePiRuntime !== undefined ? { enablePiRuntime: config.enablePiRuntime } : {}),
+      });
 
     case "executor":
-      return createExecutorAgent(config.id, config.llm, config.toolRegistry);
+      return new ExecutorAgent({
+        id: config.id,
+        llm: config.llm,
+        toolRegistry: config.toolRegistry,
+        ...(config.systemPrompt ? { systemPrompt: config.systemPrompt } : {}),
+        ...(config.provider ? { provider: config.provider } : {}),
+        ...(config.model ? { model: config.model } : {}),
+        ...(config.sessionId ? { sessionId: config.sessionId } : {}),
+        ...(config.enablePiRuntime !== undefined ? { enablePiRuntime: config.enablePiRuntime } : {}),
+      });
 
     case "verifier":
-      return createVerifierAgent(config.id, config.llm);
+      return new VerifierAgent({
+        id: config.id,
+        llm: config.llm,
+        ...(config.systemPrompt ? { systemPrompt: config.systemPrompt } : {}),
+        ...(config.provider ? { provider: config.provider } : {}),
+        ...(config.model ? { model: config.model } : {}),
+        ...(config.sessionId ? { sessionId: config.sessionId } : {}),
+        ...(config.enablePiRuntime !== undefined ? { enablePiRuntime: config.enablePiRuntime } : {}),
+      });
 
     case "director":
-      return createDirectorAgent(config.id, config.llm);
+      return new DirectorAgent({
+        id: config.id,
+        llm: config.llm,
+        ...(config.systemPrompt ? { systemPrompt: config.systemPrompt } : {}),
+        ...(config.provider ? { provider: config.provider } : {}),
+        ...(config.model ? { model: config.model } : {}),
+        ...(config.sessionId ? { sessionId: config.sessionId } : {}),
+        ...(config.enablePiRuntime !== undefined ? { enablePiRuntime: config.enablePiRuntime } : {}),
+      });
 
     default:
       throw new Error(`Unknown agent role: ${config.role}`);

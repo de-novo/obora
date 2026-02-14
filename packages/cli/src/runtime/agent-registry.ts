@@ -83,6 +83,9 @@ export class AgentRegistry implements AgentResolver {
       llm,
       toolRegistry: this.toolRegistry,
       ...(resolvedConfig?.systemPrompt ? { systemPrompt: resolvedConfig.systemPrompt } : {}),
+      ...(resolvedConfig?.provider ? { provider: resolvedConfig.provider } : {}),
+      ...(resolvedConfig?.model ? { model: resolvedConfig.model } : {}),
+      enablePiRuntime: Boolean(resolvedConfig?.provider && resolvedConfig?.model && llm.id !== "mock-llm"),
     });
   }
 

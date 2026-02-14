@@ -90,6 +90,9 @@ importers:
 
   packages/agents:
     dependencies:
+      '@mariozechner/pi-agent-core':
+        specifier: ^0.52.12
+        version: 0.52.12(ws@8.19.0)(zod@3.25.76)
       '@mariozechner/pi-ai':
         specifier: ^0.52.12
         version: 0.52.12(ws@8.19.0)(zod@3.25.76)
@@ -887,6 +890,10 @@ packages:
     resolution: {integrity: sha512-uwPAhccfFJlsfCxMYTwOdVfOz3xqyj8xYL3zJj8f0pb30tLohnnFPhLuqp4/qoEz8sNxe4SESZedcBojRefIzg==}
     engines: {node: '>=18'}
     hasBin: true
+
+  '@mariozechner/pi-agent-core@0.52.12':
+    resolution: {integrity: sha512-fBQdwLMvTteHUP9nJxMjtMpEHH4I8tdGnkerOoCFnS9y03AHdqy96IhtL+zZjw9N3dmVCOVqh8gwGjAGLZT31Q==}
+    engines: {node: '>=20.0.0'}
 
   '@mariozechner/pi-ai@0.52.12':
     resolution: {integrity: sha512-oF7OMJu1aUx7MXJeJoJ/3JDXzD2a5SqK9nHVK3mCA8DRQaykv9g+wcFZaANcCl0vAR2QSDr5KN3ZMARlFNWiVg==}
@@ -4417,6 +4424,18 @@ snapshots:
     transitivePeerDependencies:
       - encoding
       - supports-color
+
+  '@mariozechner/pi-agent-core@0.52.12(ws@8.19.0)(zod@3.25.76)':
+    dependencies:
+      '@mariozechner/pi-ai': 0.52.12(ws@8.19.0)(zod@3.25.76)
+    transitivePeerDependencies:
+      - '@modelcontextprotocol/sdk'
+      - aws-crt
+      - bufferutil
+      - supports-color
+      - utf-8-validate
+      - ws
+      - zod
 
   '@mariozechner/pi-ai@0.52.12(ws@8.19.0)(zod@3.25.76)':
     dependencies:
