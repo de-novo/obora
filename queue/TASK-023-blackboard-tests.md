@@ -17,3 +17,7 @@
 
 ## 추가 점검 로그 (2026-02-13 17:28 KST)
 - `pnpm --filter @obora-kit/blackboard test -- test/events/event-bus.test.ts` ✅ (1 file, 33 tests passed)
+
+## 추가 점검 로그 (2026-02-14 14:27 KST)
+- `pnpm --filter @obora-kit/blackboard test -- test/events/event-bus.test.ts` ✅ (1 file, 33 tests passed)
+- 비고: 에러 핸들러 graceful 처리 검증 케이스에서 의도된 `stderr` 로그 출력 확인(테스트는 정상 통과)
