@@ -436,6 +436,50 @@ describe("ActorRuntime", () => {
       expect(failingRuntime.hasActor(actorId)).toBe(false);
       expect(failingRuntime.size()).toBe(0);
     });
+
+    it("should track zombie actor when spawn cleanup stop times out", async () => {
+      class FailingStartSlowStopActor extends MockActor {
+        override async start(): Promise<void> {
+          throw new Error("Start failed");
+        }
+
+        override async stop(): Promise<void> {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+      }
+
+      class FailingStartSlowStopFactory implements ActorFactory {
+        async create(
+          config: ActorConfig,
+          board: IBlackboard,
+          messageBus: IMessageBus
+        ): Promise<Actor> {
+          const actorId = config.id || createActorId(config.role);
+          return new FailingStartSlowStopActor(
+            actorId as string,
+            config.name,
+            config.role,
+            board,
+            messageBus
+          );
+        }
+      }
+
+      const timeoutRuntime = new ActorRuntime(board, messageBus, new FailingStartSlowStopFactory(), {
+        stopTimeout: 10,
+        debug: false,
+      });
+      await timeoutRuntime.start();
+
+      const actorId = createActorId("analyst");
+      await expect(
+        timeoutRuntime.spawn({ id: actorId, name: "test", role: "analyst" as ActorRole, type: "mock" })
+      ).rejects.toThrow("Start failed");
+
+      expect(timeoutRuntime.getZombies()).toContain(actorId);
+      expect(timeoutRuntime.hasActor(actorId)).toBe(false);
+      expect(timeoutRuntime.size()).toBe(0);
+    });
   });
 
   describe("stop", () => {

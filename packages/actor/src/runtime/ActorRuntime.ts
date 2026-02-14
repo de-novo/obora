@@ -220,25 +220,28 @@ export class ActorRuntime {
     } catch (error) {
       // Cleanup on timeout or error
       if (actor) {
-        try {
-          const cleanupAbort = new AbortController();
-          const cleanupStopPromise = Promise.resolve(actor.stop());
-          cleanupStopPromise.catch(() => {});
+        const cleanupAbort = new AbortController();
+        const cleanupStopPromise = Promise.resolve(actor.stop());
+        cleanupStopPromise.catch(() => {});
 
-          try {
-            await Promise.race([
-              cleanupStopPromise,
-              delay(this.config.stopTimeout, cleanupAbort.signal).then(() => {
-                throw new ActorStopTimeoutError(actor!.id);
-              }),
-            ]);
-            cleanupAbort.abort();
-          } catch {
-            cleanupAbort.abort();
-            // cleanup failure is ignored by outer catch
+        try {
+          const cleanupResult = await Promise.race<"stopped" | "timeout">([
+            cleanupStopPromise.then(() => "stopped"),
+            delay(this.config.stopTimeout ?? this.config.spawnTimeout, cleanupAbort.signal).then(
+              () => "timeout"
+            ),
+          ]);
+
+          cleanupAbort.abort();
+
+          if (cleanupResult === "timeout") {
+            this.zombies.add(actor.id);
+            this.log(`Spawn cleanup timeout, actor ${actor.id} added to zombies`);
           }
-        } catch {
-          // Ignore cleanup failure
+        } catch (cleanupError) {
+          cleanupAbort.abort();
+          this.zombies.add(actor.id);
+          this.log(`Spawn cleanup failed, actor ${actor.id} added to zombies`, cleanupError);
         }
       }
       const duration = Date.now() - startTime;
