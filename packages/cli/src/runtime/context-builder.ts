@@ -21,7 +21,7 @@ import { stepToTask } from "./step-executor.js";
 // Types
 // ---------------------------------------------------------------------------
 
-/** Metadata stored in blackboard state.workflow for replay/trace */
+/** Metadata stored in blackboard state.context.workflow for replay/trace */
 export interface WorkflowMeta {
   workflowName: string;
   workflowVersion: string;
@@ -64,7 +64,7 @@ export function setClock(clock: Clock | null): void {
 /**
  * Create a Blackboard instance scoped to a single workflow run.
  *
- * Initialises `state.workflow` with replay-friendly metadata and
+ * Initialises `state.context.workflow` with replay-friendly metadata and
  * `state.steps` as an empty container for per-step results.
  */
 export function createWorkflowBlackboard(
