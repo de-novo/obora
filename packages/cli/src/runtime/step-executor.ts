@@ -58,27 +58,32 @@ function buildStepErrorMetadata(error: Error, diagnosisCode: ErrorCode): StepErr
     attempts?: number;
   };
 
-  const retryRootCause =
-    error instanceof RetryExhaustedError
-      ? (error as RetryExhaustedError & { cause?: unknown; lastError?: unknown; originalError?: unknown })
-          .cause ??
-        (error as RetryExhaustedError & { lastError?: unknown }).lastError ??
-        (error as RetryExhaustedError & { originalError?: unknown }).originalError
-      : undefined;
+  const retryLastError = (() => {
+    if (!(error instanceof RetryExhaustedError)) return undefined;
+
+    const retryError = error as RetryExhaustedError & {
+      getLastErrorCode?: () => string | undefined;
+      getRootCause?: () => unknown;
+      lastError?: { lastErrorCode?: string };
+    };
+
+    const lastErrorCode =
+      retryError.getLastErrorCode?.() ?? retryError.lastError?.lastErrorCode;
+    if (lastErrorCode?.startsWith("E4")) {
+      return lastErrorCode as ErrorCode;
+    }
+
+    const rootCause = retryError.getRootCause?.() ?? retryError.originalError ?? retryError.lastError;
+    return mapErrorToDiagnosis(rootCause);
+  })();
 
   return {
     code: diagnosisCode as StepErrorMetadata["code"],
     message: error.message,
     provider: errorWithMeta.provider,
     statusCode: errorWithMeta.statusCode,
-    attempts:
-      error instanceof RetryExhaustedError
-        ? ((error as RetryExhaustedError & { attemptCount?: number }).attemptCount ?? error.attempts)
-        : errorWithMeta.attempts,
-    lastError:
-      error instanceof RetryExhaustedError
-        ? (mapErrorToDiagnosis(retryRootCause) ?? undefined)
-        : undefined,
+    attempts: error instanceof RetryExhaustedError ? error.attempts : errorWithMeta.attempts,
+    lastError: retryLastError,
     failedAt: new Date().toISOString(),
   };
 }

@@ -5,6 +5,7 @@ export interface RetryErrorMetadata {
   statusCode?: number;
   attempts?: number;
   lastError?: string;
+  lastErrorCode?: string;
   failedAt?: string;
 }
 
@@ -36,6 +37,7 @@ export class RetryExhaustedError extends Error {
         code: "E4005",
         message: originalError?.message ?? message,
         lastError: originalError?.message,
+        lastErrorCode: this.extractErrorCode(originalError),
       };
       return;
     }
@@ -50,5 +52,22 @@ export class RetryExhaustedError extends Error {
     this.originalError = lastError.lastError
       ? new Error(lastError.lastError)
       : undefined;
+  }
+
+  getRootCause(): unknown {
+    return this.cause ?? this.originalError ?? this.lastError;
+  }
+
+  getLastErrorCode(): string | undefined {
+    return this.lastError.lastErrorCode;
+  }
+
+  private extractErrorCode(error?: unknown): string | undefined {
+    if (!error || typeof error !== "object" || !("code" in error)) {
+      return undefined;
+    }
+
+    const code = (error as { code?: unknown }).code;
+    return typeof code === "string" ? code : undefined;
   }
 }
