@@ -316,7 +316,7 @@ export class Supervisor extends EventEmitter {
     this.log(`Stopping actor permanently: ${actorId} - ${reason}`);
 
     try {
-      await this.runtime.stop(actorId);
+      await this.runtime.stopById(actorId);
     } catch {
       // 이미 정지됨
     }

@@ -71,7 +71,7 @@ export class DefaultActorFactory implements ActorFactory {
       role,
       board,
       messageBus,
-      actorConfig
+      actorConfig ?? {}
     );
 
     return actor;

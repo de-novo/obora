@@ -87,31 +87,33 @@ export class ActorRuntime {
   }
 
   /**
-   * 런타임 종료 또는 Actor 중지
-   * @param actorId Actor ID (제공되지 않으면 런타임 종료)
+   * 런타임 종료
    */
-  async stop(actorId?: ActorId): Promise<void> {
-    if (actorId !== undefined) {
-      // 특정 Actor 중지 - 런타임 실행 여부 체크
-      if (!this.isRunning) {
-        throw new Error("Runtime is not running");
-      }
-      const actor = this.getActor(actorId);
-      await this.stopActor(actor.id);
-    } else {
-      // 런타임 종료 - idempotent
-      if (!this.isRunning) {
-        return;
-      }
-      this.log("Stopping runtime...");
-      const stopPromises = Array.from(this.actors.values()).map((actor) =>
-        this.stopActor(actor.id)
-      );
-      await Promise.allSettled(stopPromises);
-      this.actors.clear();
-      this.isRunning = false;
-      this.log("Runtime stopped");
+  async stop(): Promise<void> {
+    // 런타임 종료 - idempotent
+    if (!this.isRunning) {
+      return;
     }
+
+    this.log("Stopping runtime...");
+    const stopPromises = Array.from(this.actors.values()).map((actor) => this.stopActor(actor.id));
+    await Promise.allSettled(stopPromises);
+    this.actors.clear();
+    this.isRunning = false;
+    this.log("Runtime stopped");
+  }
+
+  /**
+   * 특정 Actor 중지
+   * @param actorId Actor ID
+   */
+  async stopById(actorId: ActorId): Promise<void> {
+    if (!this.isRunning) {
+      throw new Error("Runtime is not running");
+    }
+
+    const actor = this.getActor(actorId);
+    await this.stopActor(actor.id);
   }
 
   /**

@@ -131,16 +131,16 @@ export class ActorRunner {
 
   private async runCycle(): Promise<void> {
     // 1. Observe
-    const obs = await this.actor.observe();
+    const obs = await Promise.resolve(this.actor.observe());
 
     // 2. Think
-    const action = await this.actor.think(obs);
+    const action = await Promise.resolve(this.actor.think(obs));
 
     // 3. Act
-    const result = await this.actor.act(action);
+    const result = await Promise.resolve(this.actor.act(action));
 
     // 4. Report
-    await this.actor.report(result);
+    await Promise.resolve(this.actor.report(result));
   }
 
   private async shouldStop(): Promise<boolean> {
@@ -149,8 +149,8 @@ export class ActorRunner {
       return true;
     }
 
-    // 종료 조건 확인
-    return await this.options.stopCondition();
+    // 종료 조건 확인 (sync/async 모두 지원)
+    return Promise.resolve(this.options.stopCondition());
   }
 
   private log(message: string, error?: unknown): void {

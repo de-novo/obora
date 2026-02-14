@@ -305,14 +305,14 @@ describe("ActorRuntime", () => {
     });
 
     it("should stop actor successfully", async () => {
-      await runtime.stop(actorId);
+      await runtime.stopById(actorId);
       expect(runtime.hasActor(actorId)).toBe(false);
       expect(runtime.size()).toBe(0);
     });
 
     it("should throw when actor not found", async () => {
       const nonExistentId = createActorId("executor");
-      await expect(runtime.stop(nonExistentId)).rejects.toThrow("Actor not found");
+      await expect(runtime.stopById(nonExistentId)).rejects.toThrow("Actor not found");
     });
   });
 
