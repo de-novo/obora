@@ -184,6 +184,18 @@ describe("injectable clock", () => {
     }
   });
 
+  it("uses injected clock for workflow metadata startedAt", () => {
+    const FIXED = "2026-03-01T09:00:00.000Z";
+    setClock(() => FIXED);
+    try {
+      const board = createWorkflowBlackboard(SESSION, WORKFLOW, "feat");
+      const meta = board.read<Record<string, unknown>>("state.context.workflow");
+      expect(meta.startedAt).toBe(FIXED);
+    } finally {
+      setClock(null);
+    }
+  });
+
   it("uses injected clock for error timestamps", () => {
     const FIXED = "2026-06-15T12:00:00.000Z";
     setClock(() => FIXED);

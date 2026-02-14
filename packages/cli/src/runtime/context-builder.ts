@@ -168,18 +168,18 @@ export function recordStepError(
  * Read a previous step's result from the blackboard.
  * Returns null if the step has not been recorded yet.
  *
- * Uses `board.exists()` for an explicit existence check rather than
- * relying on `read({ strict: false })` returning `undefined`.
+ * Uses a single `board.read({ strict: false })` call for atomicity
+ * and efficiency (one traversal instead of exists + read).
  */
 export function readStepResult(
   board: Blackboard,
   stepName: string,
 ): StepResultRecord | null {
-  const key = `state.context.steps.${stepName}`;
-  if (!board.exists(key)) {
-    return null;
-  }
-  return board.read<StepResultRecord>(key);
+  const value = board.read<StepResultRecord | undefined>(
+    `state.context.steps.${stepName}`,
+    { strict: false },
+  );
+  return value ?? null;
 }
 
 // ---------------------------------------------------------------------------
@@ -196,6 +196,9 @@ export const MAX_HISTORY_LENGTH = 200;
 /**
  * Append a message to the chat history, trimming the oldest entries when
  * the history exceeds `MAX_HISTORY_LENGTH`.
+ *
+ * **Note:** Mutates the input array in-place for performance. Callers
+ * sharing the array reference should be aware of this contract.
  */
 export function appendHistory(
   history: ChatMessage[],
