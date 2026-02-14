@@ -244,7 +244,7 @@ async function executeStep(
       return {
         success: false,
         error: "Resolver is active but runtime context is missing — possible Blackboard creation failure or misconfiguration",
-        diagnosisCode: "E4001",
+        diagnosisCode: "E4007",
       };
     }
     const context = buildAgentContext(

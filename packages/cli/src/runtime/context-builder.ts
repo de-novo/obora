@@ -78,7 +78,7 @@ export function createWorkflowBlackboard(
     workflowName: workflow.name,
     workflowVersion: workflow.version ?? "1.0",
     featureName,
-    startedAt: new Date().toISOString(),
+    startedAt: activeClock(),
     sessionId,
   };
 
@@ -168,7 +168,7 @@ export function recordStepError(
  * Read a previous step's result from the blackboard.
  * Returns null if the step has not been recorded yet.
  *
- * Uses `board.has()` for an explicit existence check rather than
+ * Uses `board.exists()` for an explicit existence check rather than
  * relying on `read({ strict: false })` returning `undefined`.
  */
 export function readStepResult(
