@@ -9,7 +9,11 @@ export default defineConfig({
     'snapshot/index': 'src/snapshot/index.ts',
   },
   format: ['cjs', 'esm'],
-  dts: true,
+  dts: {
+    compilerOptions: {
+      composite: false,
+    },
+  },
   splitting: true,
   sourcemap: true,
   clean: true,

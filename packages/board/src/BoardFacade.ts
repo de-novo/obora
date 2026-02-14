@@ -116,13 +116,13 @@ export class BoardFacade {
   private readonly votingStore = new VotingSessionStore();
   private readonly stateMachine = new MeetingStateMachine();
 
-  createAgenda(input: CreateAgendaInput) {
+  createAgenda(input: CreateAgendaInput): ReturnType<AgendaStore['create']> {
     const agenda = this.agendaStore.create(input);
     this.stateMachine.apply({ type: 'agenda.created', timestamp: new Date() });
     return agenda;
   }
 
-  listAgendas() {
+  listAgendas(): ReturnType<AgendaStore['list']> {
     return this.agendaStore.list();
   }
 
