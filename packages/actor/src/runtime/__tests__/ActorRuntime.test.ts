@@ -245,6 +245,46 @@ describe("ActorRuntime", () => {
       await expect(runtime.spawn(config)).rejects.toThrow("Actor already exists");
     });
 
+    it("should throw when actor name is missing", async () => {
+      const invalidConfig = {
+        role: "analyst" as ActorRole,
+        type: "mock",
+      } as unknown as ActorConfig;
+
+      await expect(runtime.spawn(invalidConfig)).rejects.toThrow("Actor name is required");
+    });
+
+    it("should throw when actor name is empty", async () => {
+      await expect(
+        runtime.spawn({ name: "   ", role: "analyst" as ActorRole, type: "mock" })
+      ).rejects.toThrow("Actor name is required");
+    });
+
+    it("should timeout when actor creation exceeds spawn timeout", async () => {
+      class SlowFactory implements ActorFactory {
+        async create(): Promise<Actor> {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          return new MockActor(
+            createActorId("analyst") as string,
+            "slow",
+            "analyst" as ActorRole,
+            board,
+            messageBus
+          );
+        }
+      }
+
+      const timeoutRuntime = new ActorRuntime(board, messageBus, new SlowFactory(), {
+        spawnTimeout: 10,
+        debug: false,
+      });
+      await timeoutRuntime.start();
+
+      await expect(
+        timeoutRuntime.spawn({ name: "slow", role: "analyst" as ActorRole, type: "slow" })
+      ).rejects.toThrow("Actor spawn timeout");
+    });
+
     it("should not leave actor partially registered when start() fails", async () => {
       class FailingStartActor extends MockActor {
         override async start(): Promise<void> {
@@ -314,6 +354,11 @@ describe("ActorRuntime", () => {
       const nonExistentId = createActorId("executor");
       await expect(runtime.stopById(nonExistentId)).rejects.toThrow("Actor not found");
     });
+
+    it("should handle stopById gracefully when runtime is not running", async () => {
+      await runtime.stop();
+      await expect(runtime.stopById(actorId)).resolves.toBeUndefined();
+    });
   });
 
   describe("restart", () => {
@@ -352,6 +397,50 @@ describe("ActorRuntime", () => {
       });
 
       await expect(runtimeWithLimit.restart(id, 2)).rejects.toThrow("Max restarts");
+    });
+
+    it("should retry restart recursively until success within maxRestarts", async () => {
+      class FlakyFactory implements ActorFactory {
+        private attempts = 0;
+
+        async create(config: ActorConfig, board: IBlackboard, messageBus: IMessageBus): Promise<Actor> {
+          this.attempts += 1;
+          const actor = new MockActor(
+            (config.id || createActorId(config.role)) as string,
+            config.name,
+            config.role,
+            board,
+            messageBus
+          );
+
+          if (this.attempts >= 2 && this.attempts <= 3) {
+            actor.start = vi.fn().mockRejectedValue(new Error("Start failed"));
+          }
+
+          return actor;
+        }
+      }
+
+      const flakyRuntime = new ActorRuntime(board, messageBus, new FlakyFactory(), {
+        maxRestarts: 3,
+        spawnTimeout: 100,
+        initialBackoff: 1,
+        maxBackoff: 5,
+        debug: false,
+      });
+      await flakyRuntime.start();
+
+      const id = createActorId("analyst");
+      await flakyRuntime.spawn({
+        id,
+        name: "test",
+        role: "analyst" as ActorRole,
+        type: "flaky",
+      });
+
+      const restarted = await flakyRuntime.restart(id);
+      expect(restarted.id).toBe(id);
+      expect(flakyRuntime.hasActor(id)).toBe(true);
     });
   });
 

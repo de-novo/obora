@@ -153,6 +153,12 @@ export class ActorRunner {
     return Promise.resolve(this.options.stopCondition());
   }
 
+  /**
+   * 내부 로그 출력.
+   *
+   * - `error`가 전달되면 `debug` 옵션과 무관하게 `console.error`로 항상 출력합니다.
+   * - 일반 로그는 `debug: true`일 때만 `console.log`로 출력합니다.
+   */
   private log(message: string, error?: unknown): void {
     if (error) {
       console.error(`[ActorRunner] ${message}`, error);

@@ -65,14 +65,7 @@ export class DefaultActorFactory implements ActorFactory {
     const actorId = id || this.generateId(role);
 
     // Actor 생성
-    const actor = new Constructor(
-      actorId,
-      name || `actor-${role}`,
-      role,
-      board,
-      messageBus,
-      actorConfig ?? {}
-    );
+    const actor = new Constructor(actorId, name, role, board, messageBus, actorConfig ?? {});
 
     return actor;
   }

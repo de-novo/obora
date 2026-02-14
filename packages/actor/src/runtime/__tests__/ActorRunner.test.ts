@@ -125,14 +125,18 @@ describe("ActorRunner", () => {
   });
 
   it("should stop manually", async () => {
-    runner.start();
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    vi.useFakeTimers();
+
+    const runPromise = runner.start();
+    await vi.advanceTimersByTimeAsync(20);
     runner.stop();
 
     const count = runner.getIterationCount();
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await vi.advanceTimersByTimeAsync(50);
+    await runPromise;
 
     expect(runner.getIterationCount()).toBe(count);
+    vi.useRealTimers();
   });
 
   it("should respect stop condition", async () => {

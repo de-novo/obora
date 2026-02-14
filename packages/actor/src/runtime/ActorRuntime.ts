@@ -109,7 +109,7 @@ export class ActorRuntime {
    */
   async stopById(actorId: ActorId): Promise<void> {
     if (!this.isRunning) {
-      throw new Error("Runtime is not running");
+      return;
     }
 
     const actor = this.getActor(actorId);
@@ -230,20 +230,9 @@ export class ActorRuntime {
 
     try {
       await this.stopActor(actor.id);
-
-      const backoff = this.calculateBackoff(restartCount);
-      if (backoff > 0) {
-        await delay(backoff);
-      }
-
-      const newActor = await this.spawn(savedConfig);
-      this.log(`Actor restarted: ${actorId}`);
-      return newActor;
+      return this.retryRestart(actorId, savedConfig, restartCount + 1);
     } catch (error) {
       this.log(`Actor restart failed: ${actorId}`, error);
-      if (restartCount + 1 < this.config.maxRestarts) {
-        return this.retryRestart(actorId, savedConfig, restartCount + 1);
-      }
       throw error;
     }
   }
@@ -253,11 +242,13 @@ export class ActorRuntime {
     config: ActorConfig,
     restartCount: number
   ): Promise<Actor> {
-    if (restartCount >= this.config.maxRestarts) {
+    if (restartCount > this.config.maxRestarts) {
       throw new Error(`Max restarts (${this.config.maxRestarts}) exceeded for actor: ${actorId}`);
     }
 
-    const backoff = this.calculateBackoff(restartCount);
+    this.log(`Retrying actor restart: ${actorId} (attempt ${restartCount})`);
+
+    const backoff = this.calculateBackoff(restartCount - 1);
     if (backoff > 0) {
       await delay(backoff);
     }
@@ -268,7 +259,7 @@ export class ActorRuntime {
       return newActor;
     } catch (error) {
       this.log(`Actor retry restart failed: ${actorId}`, error);
-      if (restartCount + 1 < this.config.maxRestarts) {
+      if (restartCount < this.config.maxRestarts) {
         return this.retryRestart(actorId, config, restartCount + 1);
       }
       throw error;
@@ -392,6 +383,9 @@ export class ActorRuntime {
    * @param config 검증할 ActorConfig
    */
   private validateConfig(config: ActorConfig): void {
+    if (!config.name || config.name.trim() === "") {
+      throw new Error("Actor name is required");
+    }
     if (!config.role) {
       throw new Error("Actor role is required");
     }

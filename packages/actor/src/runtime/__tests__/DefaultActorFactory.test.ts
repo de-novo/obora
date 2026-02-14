@@ -42,13 +42,13 @@ class TestActor implements Actor {
   metrics = createActorMetrics();
 
   constructor(
-    id: string,
+    id: ActorId,
     name: string,
     role: ActorRole,
     board: IBlackboard,
     messageBus: IMessageBus
   ) {
-    this.id = id as ActorId;
+    this.id = id;
     this.role = role;
     this.name = name;
     this.board = board;
@@ -152,7 +152,7 @@ describe("DefaultActorFactory", () => {
   });
 
   it("should register and create actor", async () => {
-    factory.register("test", TestActor as any);
+    factory.register("test", TestActor);
 
     const actorId = createActorId("analyst");
     const actor = await factory.create(
@@ -166,7 +166,7 @@ describe("DefaultActorFactory", () => {
   });
 
   it("should auto-generate actor id if not provided", async () => {
-    factory.register("test", TestActor as any);
+    factory.register("test", TestActor);
 
     const actor = await factory.create(
       { name: "test", role: "analyst" as ActorRole, type: "test" },
@@ -190,7 +190,7 @@ describe("DefaultActorFactory", () => {
   });
 
   it("should unregister actor type", async () => {
-    factory.register("test", TestActor as any);
+    factory.register("test", TestActor);
     factory.unregister("test");
 
     await expect(
