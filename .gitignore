@@ -34,7 +34,7 @@ coverage/
 # Tracking (local only)
 .temp/
 .sandbox/
-sandbox/
+# sandbox/ — tracked for PoC demos
 
 # SQLite databases
 *.db

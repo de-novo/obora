@@ -1,0 +1,22 @@
+[
+  { "post_id": "p1", "user": "alice",   "type": "up" },
+  { "post_id": "p1", "user": "bob",     "type": "up" },
+  { "post_id": "p1", "user": "charlie", "type": "up" },
+  { "post_id": "p1", "user": "dave",    "type": "up" },
+  { "post_id": "p1", "user": "eve",     "type": "down" },
+
+  { "post_id": "p2", "user": "denovo",  "type": "up" },
+  { "post_id": "p2", "user": "bob",     "type": "up" },
+  { "post_id": "p2", "user": "charlie", "type": "down" },
+
+  { "post_id": "p3", "user": "alice",   "type": "up" },
+  { "post_id": "p3", "user": "denovo",  "type": "up" },
+  { "post_id": "p3", "user": "charlie", "type": "up" },
+  { "post_id": "p3", "user": "dave",    "type": "up" },
+  { "post_id": "p3", "user": "eve",     "type": "up" },
+  { "post_id": "p3", "user": "frank",   "type": "up" },
+
+  { "post_id": "p4", "user": "alice",   "type": "up" },
+  { "post_id": "p4", "user": "eve",     "type": "down" },
+  { "post_id": "p4", "user": "frank",   "type": "down" }
+]

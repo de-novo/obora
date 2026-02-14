@@ -1,0 +1,57 @@
+# Reddit-like PoC Workflow
+# Obora-only: no external server, pure workflow execution
+
+name: reddit-basic
+version: "1.0"
+description: "Minimal Reddit-like service - posts, comments, votes, hot ranking"
+
+config:
+  continue_on_error: false
+
+steps:
+  - name: ingest-posts
+    agent: data-loader
+    description: "Load seed posts into the system"
+    outputs:
+      - posts.json
+
+  - name: ingest-comments
+    agent: data-loader
+    description: "Load seed comments and attach to posts"
+    depends_on:
+      - ingest-posts
+    outputs:
+      - comments.json
+
+  - name: ingest-votes
+    agent: data-loader
+    description: "Load seed votes (upvote/downvote) for posts"
+    depends_on:
+      - ingest-posts
+    outputs:
+      - votes.json
+
+  - name: tally-votes
+    agent: aggregator
+    description: "Aggregate upvotes and downvotes per post"
+    depends_on:
+      - ingest-votes
+    outputs:
+      - vote-tallies.json
+
+  - name: compute-hot-score
+    agent: ranker
+    description: "Compute hot score using simplified Reddit algorithm (score + time decay)"
+    depends_on:
+      - tally-votes
+      - ingest-comments
+    outputs:
+      - hot-ranking.json
+
+  - name: render-feed
+    agent: renderer
+    description: "Render the final ranked feed as markdown"
+    depends_on:
+      - compute-hot-score
+    outputs:
+      - feed.md

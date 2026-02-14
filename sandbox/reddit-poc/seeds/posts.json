@@ -1,0 +1,34 @@
+[
+  {
+    "id": "p1",
+    "title": "Obora-kit v0.1 Released!",
+    "author": "denovo",
+    "body": "We just shipped the first version of obora-kit. Workflow-driven SaaS toolkit.",
+    "created_at": "2026-02-14T10:00:00Z",
+    "subreddit": "obora"
+  },
+  {
+    "id": "p2",
+    "title": "AI Agent coordination patterns",
+    "author": "alice",
+    "body": "What patterns do you use for multi-agent coordination? Blackboard? Actor model?",
+    "created_at": "2026-02-14T08:00:00Z",
+    "subreddit": "obora"
+  },
+  {
+    "id": "p3",
+    "title": "Show HN: Built a Reddit clone with just YAML workflows",
+    "author": "bob",
+    "body": "No server, no database, just obora workflows. Here's how.",
+    "created_at": "2026-02-14T12:00:00Z",
+    "subreddit": "showhn"
+  },
+  {
+    "id": "p4",
+    "title": "Monorepo tooling in 2026",
+    "author": "charlie",
+    "body": "Turborepo vs Nx vs pnpm workspaces - what are you using?",
+    "created_at": "2026-02-13T20:00:00Z",
+    "subreddit": "programming"
+  }
+]
