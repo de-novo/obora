@@ -171,9 +171,15 @@ describe("ActorRuntime", () => {
 
     it("should stop runtime", async () => {
       await runtime.start();
-      await runtime.stop();
+      const result = await runtime.stop();
       const status = runtime.getStatus();
       expect(status.running).toBe(false);
+      expect(result).toEqual({ stopped: [], failed: [] });
+    });
+
+    it("should return empty stop result when runtime is not running", async () => {
+      const result = await runtime.stop();
+      expect(result).toEqual({ stopped: [], failed: [] });
     });
 
     it("should throw when starting already running runtime", async () => {
@@ -393,6 +399,42 @@ describe("ActorRuntime", () => {
       ).rejects.toThrow("Actor spawn timeout");
     });
 
+    it("should pass abort signal to factory.create and abort on spawn timeout", async () => {
+      let receivedSignal: AbortSignal | undefined;
+
+      class SignalAwareSlowFactory implements ActorFactory {
+        async create(
+          _config: ActorConfig,
+          _board: IBlackboard,
+          _messageBus: IMessageBus,
+          options?: { signal?: AbortSignal }
+        ): Promise<Actor> {
+          receivedSignal = options?.signal;
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          return new MockActor(
+            createActorId("analyst") as string,
+            "slow",
+            "analyst" as ActorRole,
+            board,
+            messageBus
+          );
+        }
+      }
+
+      const timeoutRuntime = new ActorRuntime(board, messageBus, new SignalAwareSlowFactory(), {
+        spawnTimeout: 10,
+        debug: false,
+      });
+      await timeoutRuntime.start();
+
+      await expect(
+        timeoutRuntime.spawn({ name: "slow", role: "analyst" as ActorRole, type: "slow" })
+      ).rejects.toThrow("Actor spawn timeout");
+
+      expect(receivedSignal).toBeDefined();
+      expect(receivedSignal?.aborted).toBe(true);
+    });
+
     it("should not leave actor partially registered when start() fails", async () => {
       class FailingStartActor extends MockActor {
         override async start(): Promise<void> {
@@ -512,6 +554,13 @@ describe("ActorRuntime", () => {
       await expect(runtime.stopById(actorId)).resolves.toBeUndefined();
     });
 
+    it("should return stopped ids from runtime.stop", async () => {
+      const result = await runtime.stop();
+
+      expect(result.stopped).toContain(actorId);
+      expect(result.failed).toEqual([]);
+    });
+
     it("should track zombie actor when stop times out", async () => {
       class SlowStopActor extends MockActor {
         override async stop(): Promise<void> {
@@ -548,6 +597,39 @@ describe("ActorRuntime", () => {
       }
       expect(timeoutRuntime.getZombies()).toContain(id);
       expect(timeoutRuntime.hasActor(id)).toBe(false);
+    });
+
+    it("should include zombie actor in runtime.stop failed results", async () => {
+      class FailingStartSlowStopActor extends MockActor {
+        override async start(): Promise<void> {
+          throw new Error("Start failed");
+        }
+
+        override async stop(): Promise<void> {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+      }
+
+      class FailingStartSlowStopFactory implements ActorFactory {
+        async create(config: ActorConfig, board: IBlackboard, messageBus: IMessageBus): Promise<Actor> {
+          const id = config.id || createActorId(config.role);
+          return new FailingStartSlowStopActor(id as string, config.name, config.role, board, messageBus);
+        }
+      }
+
+      const timeoutRuntime = new ActorRuntime(board, messageBus, new FailingStartSlowStopFactory(), {
+        stopTimeout: 10,
+        debug: false,
+      });
+      await timeoutRuntime.start();
+
+      const id = createActorId("analyst");
+      await expect(
+        timeoutRuntime.spawn({ id, name: "test", role: "analyst" as ActorRole, type: "mock" })
+      ).rejects.toThrow("Start failed");
+
+      const result = await timeoutRuntime.stop();
+      expect(result.failed.some((entry) => entry.id === id)).toBe(true);
     });
   });
 

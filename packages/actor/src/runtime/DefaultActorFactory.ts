@@ -52,7 +52,12 @@ export class DefaultActorFactory implements ActorFactory {
    * @param messageBus MessageBus 인스턴스
    * @returns 생성된 Actor 인스턴스
    */
-  async create(config: ActorConfig, board: IBlackboard, messageBus: IMessageBus): Promise<Actor> {
+  async create(
+    config: ActorConfig,
+    board: IBlackboard,
+    messageBus: IMessageBus,
+    _options?: { signal?: AbortSignal }
+  ): Promise<Actor> {
     const { id, name, role, type, config: actorConfig } = config;
 
     // 등록된 생성자 조회

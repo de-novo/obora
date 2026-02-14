@@ -31,10 +31,20 @@ export interface ActorConfig {
 export interface ActorFactory {
   /**
    * Actor 인스턴스 생성
+   *
+   * Factory implementations SHOULD abort actor creation when `options.signal`
+   * is aborted.
+   *
    * @param config Actor 설정
    * @param board Blackboard 인스턴스
    * @param messageBus MessageBus 인스턴스
+   * @param options 생성 옵션
    * @returns 생성된 Actor 인스턴스
    */
-  create(config: ActorConfig, board: IBlackboard, messageBus: IMessageBus): Promise<Actor>;
+  create(
+    config: ActorConfig,
+    board: IBlackboard,
+    messageBus: IMessageBus,
+    options?: { signal?: AbortSignal }
+  ): Promise<Actor>;
 }

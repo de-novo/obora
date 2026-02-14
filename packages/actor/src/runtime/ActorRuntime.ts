@@ -44,6 +44,11 @@ export interface RuntimeConfig {
  *
  * Responsible for actor creation, management, and shutdown.
  */
+export interface RuntimeStopResult {
+  stopped: ActorId[];
+  failed: Array<{ id: ActorId; error: unknown }>;
+}
+
 export class ActorRuntime {
   private readonly actors: Map<ActorId, Actor>;
   private readonly actorConfigs: Map<ActorId, ActorConfig>;
@@ -100,18 +105,41 @@ export class ActorRuntime {
   /**
    * Stops the runtime.
    */
-  async stop(): Promise<void> {
+  async stop(): Promise<RuntimeStopResult> {
     // Runtime shutdown is idempotent
     if (!this.isRunning) {
-      return;
+      return { stopped: [], failed: [] };
     }
 
     this.log("Stopping runtime...");
-    const stopPromises = Array.from(this.actors.values()).map((actor) => this.stopActor(actor.id));
-    await Promise.allSettled(stopPromises);
+
+    const actorIds = Array.from(this.actors.keys());
+    const settled = await Promise.allSettled(actorIds.map((actorId) => this.stopActor(actorId)));
+
+    const stopped: ActorId[] = [];
+    const failed: Array<{ id: ActorId; error: unknown }> = [];
+
+    settled.forEach((result, index) => {
+      const actorId = actorIds[index]!;
+      if (result.status === "fulfilled") {
+        stopped.push(actorId);
+      } else {
+        failed.push({ id: actorId, error: result.reason });
+      }
+    });
+
+    const failedIds = new Set(failed.map((entry) => entry.id));
+    for (const zombieId of this.zombies) {
+      if (!failedIds.has(zombieId)) {
+        failed.push({ id: zombieId, error: new ActorStopTimeoutError(zombieId) });
+      }
+    }
+
     this.actors.clear();
     this.isRunning = false;
     this.log("Runtime stopped");
+
+    return { stopped, failed };
   }
 
   /**
@@ -163,19 +191,25 @@ export class ActorRuntime {
 
     try {
       const spawnAbort = new AbortController();
-      const createPromise = this.factory.create(config, this.board, this.messageBus);
+      const createAbort = new AbortController();
+      const createPromise = this.factory.create(config, this.board, this.messageBus, {
+        signal: createAbort.signal,
+      });
       createPromise.catch(() => {});
 
       try {
         actor = await Promise.race([
           createPromise,
           delay(this.config.spawnTimeout, spawnAbort.signal).then(() => {
+            createAbort.abort();
             throw new Error(`Actor spawn timeout: ${config.id || "unknown"}`);
           }),
         ]);
+        createAbort.abort();
         spawnAbort.abort();
       } catch (error) {
         spawnAbort.abort();
+        createAbort.abort();
         throw error;
       }
 
