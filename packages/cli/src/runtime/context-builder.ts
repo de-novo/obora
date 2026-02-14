@@ -16,6 +16,7 @@ import type { AgentContext, Task, ChatMessage } from "@obora-kit/agents";
 import type { Step, Workflow } from "@obora/core";
 import type { StepResult } from "./step-executor.js";
 import { stepToTask } from "./step-executor.js";
+import type { StepErrorMetadata } from "./types.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -35,6 +36,7 @@ export interface StepResultRecord {
   success: boolean;
   output: string | null;
   error: string | null;
+  errorMeta?: StepErrorMetadata | null;
   diagnosisCode: string | null;
   completedAt: string | null;
   failedAt: string | null;
@@ -133,6 +135,7 @@ export function recordStepResult(
     success: result.success,
     output: result.output ?? null,
     error: null,
+    errorMeta: null,
     diagnosisCode: null,
     completedAt: activeClock(),
     failedAt: null,
@@ -153,6 +156,7 @@ export function recordStepError(
     success: false,
     output: null,
     error: result.error ?? "Unknown error",
+    errorMeta: result.errorMeta ?? null,
     diagnosisCode: result.diagnosisCode ?? null,
     completedAt: null,
     failedAt: activeClock(),

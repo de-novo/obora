@@ -56,7 +56,7 @@ import fs from 'fs-extra';
 import { log, parseWorkflow, topologicalSort, buildGraph, groupByLevel } from '@obora/core';
 import { validatePathComponent } from '../../utils/path-utils.js';
 import { readStatus } from '../../utils/status.js';
-import { createRunCommand, runRun } from '../run.js';
+import { createRunCommand, runRun, setAgentResolver } from '../run.js';
 
 describe('run command', () => {
   let consoleLogSpy: ReturnType<typeof vi.spyOn>;
@@ -130,9 +130,21 @@ steps:
     });
     vi.mocked(groupByLevel).mockReturnValue(new Map());
     vi.mocked(validatePathComponent).mockImplementation(() => undefined);
+    setAgentResolver({
+      resolve: vi.fn(() => ({
+        execute: vi.fn(async () => ({
+          taskId: 'task',
+          success: true,
+          output: 'ok',
+          duration: 1,
+          tokensUsed: { prompt: 0, completion: 0, total: 0 },
+        })),
+      })),
+    } as any);
   });
 
   afterEach(() => {
+    setAgentResolver(null);
     consoleLogSpy.mockRestore();
     consoleErrorSpy.mockRestore();
   });

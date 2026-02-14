@@ -172,30 +172,7 @@ async function saveStepOutput(
 }
 
 /**
- * Parse duration string to milliseconds
- */
-function parseDuration(duration: string): number {
-  const match = duration.match(/^(\d+)([smhd])$/);
-  if (!match) {
-    throw new Error(`Invalid duration format: ${duration}`);
-  }
-
-  const value = parseInt(match[1], 10);
-  const unit = match[2];
-
-  const multipliers: Record<string, number> = {
-    s: 1000,
-    m: 60 * 1000,
-    h: 60 * 60 * 1000,
-    d: 24 * 60 * 60 * 1000,
-  };
-
-  return value * multipliers[unit];
-}
-
-/**
  * Global AgentResolver — set by runtime bootstrap (TASK-043b).
- * When null, executeStep falls back to simulation mode.
  */
 let activeResolver: AgentResolver | null = null;
 
@@ -224,9 +201,8 @@ export function bootstrapAgentResolver(): AgentResolver {
 /**
  * Execute a single step.
  *
- * When an AgentResolver is registered (post-043b), delegates to
- * StepExecutor which calls BaseAgent.execute().
- * Otherwise falls back to simulation mode for backward compatibility.
+ * Delegates to StepExecutor via an active AgentResolver.
+ * Simulation fallback is only allowed in --dry-run mode at the command level.
  */
 async function executeStep(
   step: Step,
@@ -262,26 +238,11 @@ async function executeStep(
     return result;
   }
 
-  // --- Fallback: simulation mode (pre-043b) ---
-  if (step.timeout) {
-    const timeoutMs = parseDuration(step.timeout);
-    log(`    Timeout: ${step.timeout} (${timeoutMs}ms)`);
-  }
-
-  const simulatedOutput = `# Output from step: ${step.name}
-
-> Agent: ${step.agent}
-> Executed at: ${new Date().toISOString()}
-> Attempt: ${attempt}
-
-## Results
-
-*Simulated step execution result*
-
-In production, this will contain the actual output from the agent execution.
-`;
-
-  return { success: true, output: simulatedOutput };
+  return {
+    success: false,
+    error: "Agent resolver is not initialized (bootstrap invariant violated)",
+    diagnosisCode: "E4007",
+  };
 }
 
 /**
@@ -565,6 +526,14 @@ async function runRun(featureName: string, options: RunOptions): Promise<void> {
     console.log(`  Steps: ${workflow.steps.map((s) => s.name).join(", ")}`);
     console.log(`  From step: ${options.fromStep || "beginning"}`);
     return;
+  }
+
+  if (!activeResolver) {
+    const resolver = bootstrapAgentResolver();
+    if (!resolver) {
+      throw new OboraError("E4007", "Agent resolver bootstrap invariant violated");
+    }
+    setAgentResolver(resolver);
   }
 
   console.log("");

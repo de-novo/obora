@@ -12,7 +12,14 @@
 
 import type { Step } from "@obora/core";
 import { type ErrorCode } from "@obora/core";
-import type { BaseAgent, Task, TaskResult, AgentContext } from "@obora-kit/agents";
+import {
+  type BaseAgent,
+  type Task,
+  type TaskResult,
+  type AgentContext,
+  RetryExhaustedError,
+} from "@obora-kit/agents";
+import type { StepErrorMetadata } from "./types.js";
 
 /** Result of a single step execution */
 export interface StepResult {
@@ -20,6 +27,7 @@ export interface StepResult {
   output?: string;
   error?: string;
   diagnosisCode?: ErrorCode;
+  errorMeta?: StepErrorMetadata;
 }
 
 /**
@@ -28,6 +36,7 @@ export interface StepResult {
  */
 export interface AgentResolver {
   resolve(agentName: string): BaseAgent;
+  resolve(query: { agent?: string; type?: string }): BaseAgent;
 }
 
 // ---------------------------------------------------------------------------
@@ -80,11 +89,38 @@ function formatOutput(result: TaskResult): string {
   return JSON.stringify(result.output, null, 2);
 }
 
+function buildStepErrorMetadata(error: Error, diagnosisCode: ErrorCode): StepErrorMetadata {
+  const errorWithMeta = error as Error & {
+    provider?: string;
+    statusCode?: number;
+    attempts?: number;
+    originalError?: Error;
+  };
+
+  return {
+    code: diagnosisCode,
+    message: error.message,
+    provider: errorWithMeta.provider,
+    statusCode: errorWithMeta.statusCode,
+    attempts:
+      error instanceof RetryExhaustedError
+        ? error.attempts
+        : errorWithMeta.attempts,
+    lastError:
+      error instanceof RetryExhaustedError
+        ? error.originalError?.message
+        : errorWithMeta.originalError?.message,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Error → diagnosis code mapping
 // ---------------------------------------------------------------------------
 
 function mapErrorToDiagnosis(error: Error): ErrorCode {
+  if (error instanceof RetryExhaustedError) {
+    return "E4005";
+  }
   // All non-timeout runtime errors from BaseAgent map to E4001
   return "E4001";
 }
@@ -115,7 +151,7 @@ export async function executeStep(
   // --- resolve agent (E4003 on failure) ---
   let agent: BaseAgent;
   try {
-    agent = resolver.resolve(step.agent);
+    agent = resolver.resolve({ agent: step.agent });
   } catch {
     return {
       success: false,
@@ -164,11 +200,14 @@ export async function executeStep(
         diagnosisCode: "E4002",
       };
     }
-    // Unexpected error → E4001
+    const diagnosisCode = e instanceof Error ? mapErrorToDiagnosis(e) : "E4001";
     return {
       success: false,
       error: e instanceof Error ? e.message : String(e),
-      diagnosisCode: "E4001",
+      diagnosisCode,
+      ...(e instanceof Error
+        ? { errorMeta: buildStepErrorMetadata(e, diagnosisCode) }
+        : {}),
     };
   } finally {
     clearTimeout(timer);
@@ -176,11 +215,15 @@ export async function executeStep(
 
   // --- map result ---
   if (!result.success) {
+    const diagnosisCode = result.error ? mapErrorToDiagnosis(result.error) : "E4001";
     return {
       success: false,
       output: formatOutput(result),
       error: result.error?.message,
-      diagnosisCode: result.error ? mapErrorToDiagnosis(result.error) : "E4001",
+      diagnosisCode,
+      ...(result.error
+        ? { errorMeta: buildStepErrorMetadata(result.error, diagnosisCode) }
+        : {}),
     };
   }
 

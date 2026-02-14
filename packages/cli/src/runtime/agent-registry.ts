@@ -50,11 +50,22 @@ export class AgentRegistry implements AgentResolver {
   }
 
   /**
-   * Resolve an agent name to a BaseAgent instance.
-   * @throws OboraError E4003 if the name is not in the mapping table.
+   * Resolve an agent name/query to a BaseAgent instance.
+   * @throws OboraError E4003 if the name/type is not in the mapping table.
    */
-  resolve(agentName: string): BaseAgent {
-    const role = this.mapToRole(agentName);
+  resolve(agentName: string): BaseAgent;
+  resolve(query: { agent?: string; type?: string }): BaseAgent;
+  resolve(queryOrName: string | { agent?: string; type?: string }): BaseAgent {
+    const normalized =
+      typeof queryOrName === "string"
+        ? queryOrName
+        : queryOrName.agent ?? queryOrName.type;
+
+    if (!normalized) {
+      throw new OboraError("E4003", "Agent resolution failed: missing agent/type query");
+    }
+
+    const role = this.mapToRole(normalized);
     return createAgent({
       id: `${role}-${Date.now()}`,
       role: role as "analyst" | "executor" | "verifier" | "director",
