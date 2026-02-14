@@ -44,6 +44,8 @@ export interface Step {
   outputs?: string[];
   /** Timeout for the step (e.g., "5m", "1h") */
   timeout?: string;
+  /** Optional skills to activate for this step */
+  skills?: string[];
   /** Step-specific configuration */
   config?: Record<string, unknown>;
 }

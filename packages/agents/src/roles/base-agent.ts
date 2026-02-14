@@ -70,12 +70,19 @@ export interface TaskResult {
   };
 }
 
+export interface RuntimeExtensions {
+  tools?: AgentTool[];
+  systemPromptAppend?: string;
+}
+
 export abstract class BaseAgent {
   readonly id: AgentId;
   readonly role: AgentRole;
   protected state: AgentState = AgentState.IDLE;
   protected llm: LLMAdapter;
   protected systemPrompt: string;
+  protected runtimeTools: AgentTool[] = [];
+  protected runtimeSystemPromptAppend = "";
   protected errorCount: number = 0;
   protected maxErrors: number = 3;
 
@@ -222,7 +229,7 @@ export abstract class BaseAgent {
     observation: Record<string, unknown>,
     context: AgentContext
   ): ChatMessage[] {
-    const messages: ChatMessage[] = [{ role: "system", content: this.systemPrompt }];
+    const messages: ChatMessage[] = [{ role: "system", content: this.getEffectiveSystemPrompt() }];
     messages.push(...context.history.slice(-10));
     messages.push({ role: "user", content: this.formatTaskAndObservation(task, observation) });
     return messages;
@@ -246,6 +253,27 @@ Use board_read to inspect context, then perform role_action, and finish with boa
 
   protected abstract parseResponse(content: string, task: Task): unknown;
   protected abstract getDefaultSystemPrompt(): string;
+
+  configureRuntimeExtensions(extensions: RuntimeExtensions): void {
+    this.runtimeTools = extensions.tools ?? [];
+    this.runtimeSystemPromptAppend = extensions.systemPromptAppend ?? "";
+    const state = this.coreAgent?.state as { systemPrompt?: string; tools?: AgentTool[] } | undefined;
+    if (state) {
+      state.systemPrompt = this.getEffectiveSystemPrompt();
+      state.tools = this.createAgentTools();
+    }
+  }
+
+  clearRuntimeExtensions(): void {
+    this.configureRuntimeExtensions({ tools: [], systemPromptAppend: "" });
+  }
+
+  private getEffectiveSystemPrompt(): string {
+    if (!this.runtimeSystemPromptAppend) {
+      return this.systemPrompt;
+    }
+    return `${this.systemPrompt}\n\n${this.runtimeSystemPromptAppend}`;
+  }
 
   getStatus(): AgentStatus {
     return {
@@ -287,7 +315,7 @@ Use board_read to inspect context, then perform role_action, and finish with boa
       const agent = new Agent({
         initialState: {
           model,
-          systemPrompt: this.systemPrompt,
+          systemPrompt: this.getEffectiveSystemPrompt(),
           thinkingLevel: config.thinkingLevel ?? "medium",
           tools: this.createAgentTools(),
         },
@@ -345,6 +373,7 @@ Use board_read to inspect context, then perform role_action, and finish with boa
           };
         },
       },
+      ...this.runtimeTools,
     ];
   }
 

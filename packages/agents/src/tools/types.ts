@@ -1,6 +1,7 @@
 import type { ToolDefinition, ToolCall } from "../llm/adapter";
 import type { JSONSchema } from "../prompts/template";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
+import { Type } from "@mariozechner/pi-ai";
 
 export interface Tool<TParams = Record<string, unknown>, TResult = unknown> {
   name: string;
@@ -60,6 +61,30 @@ export interface ToolExecutionResult<TResult = unknown> {
   };
   duration: number;
   metadata?: Record<string, unknown>;
+}
+
+export function toolDefinitionToAgentTool(definition: ToolDefinition): AgentTool {
+  return {
+    name: definition.function.name,
+    label: definition.function.name,
+    description: definition.function.description,
+    parameters: Type.Object({}, { additionalProperties: true }),
+    execute: async () => ({
+      content: [{ type: "text" as const, text: `${definition.function.name} is not implemented yet` }],
+      details: { stub: true },
+    }),
+  };
+}
+
+export function agentToolToToolDefinition(tool: AgentTool): ToolDefinition {
+  return {
+    type: "function",
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: {},
+    },
+  };
 }
 
 /** @deprecated ToolCall 사용 권장 */

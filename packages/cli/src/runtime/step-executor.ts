@@ -11,6 +11,8 @@ import {
   type TaskResult,
   type AgentContext,
   RetryExhaustedError,
+  SkillLoader,
+  SkillRegistry,
 } from "@obora-kit/agents";
 import type { StepErrorMetadata } from "./types.js";
 import { parseDuration } from "./utils.js";
@@ -265,6 +267,26 @@ export async function executeStep(
     };
   }
 
+  let loadedSkills: Awaited<ReturnType<SkillLoader["loadSkills"]>> | undefined;
+  const skillLoader = new SkillLoader(new SkillRegistry({ cwd: process.cwd() }));
+
+  if (step.skills && step.skills.length > 0) {
+    loadedSkills = await skillLoader.loadSkills(step.skills, {
+      cwd: process.cwd(),
+      agentId: agent.id,
+      stepName: step.name,
+    });
+
+    const configurable = agent as BaseAgent & {
+      configureRuntimeExtensions?: (input: { tools?: unknown[]; systemPromptAppend?: string }) => void;
+    };
+
+    configurable.configureRuntimeExtensions?.({
+      tools: loadedSkills.tools,
+      systemPromptAppend: loadedSkills.systemPrompt,
+    });
+  }
+
   let timeoutMs: number;
   if (options?.timeoutMs != null) {
     timeoutMs = options.timeoutMs;
@@ -278,47 +300,55 @@ export async function executeStep(
     timeoutMs = DEFAULT_TIMEOUT_MS;
   }
 
-  const maxAttempts = Math.max(1, (options?.retryAttempts ?? 0) + 1);
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const result = await executeOnce(step, agent, context, timeoutMs, options?.signal);
-    if (result.success) return result;
+  try {
+    const maxAttempts = Math.max(1, (options?.retryAttempts ?? 0) + 1);
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const result = await executeOnce(step, agent, context, timeoutMs, options?.signal);
+      if (result.success) return result;
 
-    const retryable = result.diagnosisCode === "E4001";
-    if (!retryable || attempt >= maxAttempts) {
-      return result;
-    }
+      const retryable = result.diagnosisCode === "E4001";
+      if (!retryable || attempt >= maxAttempts) {
+        return result;
+      }
 
-    const continuable = agent as BaseAgent & { continue?: () => Promise<void> };
-    if (typeof continuable.continue === "function") {
+      const continuable = agent as BaseAgent & { continue?: () => Promise<void> };
+      if (typeof continuable.continue === "function") {
+        try {
+          await continuable.continue();
+        } catch {
+          // continue() best-effort, fallback to delay retry
+        }
+      }
+
+      const delay = calculateDelay(attempt - 1, {
+        baseDelayMs: 1000,
+        maxDelayMs: 30_000,
+      });
+
       try {
-        await continuable.continue();
-      } catch {
-        // continue() best-effort, fallback to delay retry
+        await waitWithAbort(delay, options?.signal);
+      } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") {
+          return {
+            success: false,
+            error: "Execution cancelled",
+            diagnosisCode: "E4006",
+          };
+        }
+        throw e;
       }
     }
 
-    const delay = calculateDelay(attempt - 1, {
-      baseDelayMs: 1000,
-      maxDelayMs: 30_000,
-    });
-
-    try {
-      await waitWithAbort(delay, options?.signal);
-    } catch (e) {
-      if (e instanceof DOMException && e.name === "AbortError") {
-        return {
-          success: false,
-          error: "Execution cancelled",
-          diagnosisCode: "E4006",
-        };
-      }
-      throw e;
+    return {
+      success: false,
+      error: "Unknown execution failure",
+      diagnosisCode: "E4001",
+    };
+  } finally {
+    if (loadedSkills) {
+      await skillLoader.teardown(loadedSkills.loaded);
     }
+    const configurable = agent as BaseAgent & { clearRuntimeExtensions?: () => void };
+    configurable.clearRuntimeExtensions?.();
   }
-
-  return {
-    success: false,
-    error: "Unknown execution failure",
-    diagnosisCode: "E4001",
-  };
 }

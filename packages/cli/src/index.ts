@@ -10,6 +10,7 @@ import { createNewCommand } from "./commands/new.js";
 import { createPlanCommand } from "./commands/plan.js";
 import { createRunCommand } from "./commands/run.js";
 import { createStatusCommand } from "./commands/status.js";
+import { createSkillsCommand } from "./commands/skills.js";
 import { validateCommand } from "./commands/validate.js";
 import { CLIError } from "./errors.js";
 
@@ -24,6 +25,7 @@ program.name("obora").description("AI Agent-based workflow automation tool").ver
 program.addCommand(createInitCommand());
 program.addCommand(createAuthCommand());
 program.addCommand(createAgentsCommand());
+program.addCommand(createSkillsCommand());
 program.addCommand(createNewCommand());
 program.addCommand(createPlanCommand());
 program.addCommand(createRunCommand());

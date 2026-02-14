@@ -88,6 +88,7 @@ const workflowSchema = {
           inputs: { type: "array", items: { type: "string" } },
           outputs: { type: "array", items: { type: "string" } },
           timeout: { type: "string", pattern: "^[1-9]\\d*[smhd]$" },
+          skills: { type: "array", items: { type: "string" } },
           config: { type: "object" },
         },
         additionalProperties: false,

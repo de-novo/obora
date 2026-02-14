@@ -28,6 +28,7 @@ const KNOWN_STEP_FIELDS = [
   "inputs",
   "outputs",
   "timeout",
+  "skills",
   "config",
 ];
 
@@ -148,6 +149,15 @@ function parseStep(raw: unknown, index: number, options: ParserOptions): Step {
     throw new ParseError("E2003", `Step '${obj.name}': 'description' must be a string`);
   }
 
+  if (obj.skills !== undefined) {
+    if (!Array.isArray(obj.skills)) {
+      throw new ParseError("E2003", `Step '${obj.name}': 'skills' must be an array`);
+    }
+    if (!obj.skills.every((skill) => typeof skill === "string")) {
+      throw new ParseError("E2003", `Step '${obj.name}': 'skills' must be an array of strings`);
+    }
+  }
+
   return {
     name: obj.name,
     agent: obj.agent,
@@ -158,6 +168,7 @@ function parseStep(raw: unknown, index: number, options: ParserOptions): Step {
     inputs: obj.inputs as string[] | undefined,
     outputs: obj.outputs as string[] | undefined,
     timeout: obj.timeout as string | undefined,
+    skills: obj.skills as string[] | undefined,
     config: obj.config as Record<string, unknown> | undefined,
   };
 }
