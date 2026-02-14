@@ -1,4 +1,7 @@
+import { RetryExhaustedError } from "../errors";
 import { LLMAdapter } from "./adapter";
+
+export { RetryExhaustedError } from "../errors";
 
 export class RetryHandler {
   constructor(
@@ -58,17 +61,6 @@ export class RetryHandler {
       message.includes("econnrefused") ||
       ((error as { statusCode?: number }).statusCode ?? 0) >= 500
     );
-  }
-}
-
-export class RetryExhaustedError extends Error {
-  constructor(
-    message: string,
-    public readonly originalError: Error,
-    public readonly attempts: number
-  ) {
-    super(message);
-    this.name = "RetryExhaustedError";
   }
 }
 

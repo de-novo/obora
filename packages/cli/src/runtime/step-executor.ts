@@ -1,27 +1,21 @@
 /**
  * StepExecutor — bridges workflow Step to BaseAgent.execute()
- *
- * Responsibilities:
- * - Convert Step (core) → Task (agents)
- * - Invoke BaseAgent.execute() with timeout/abort
- * - Map errors to diagnosis codes (E4001/E4002)
- * - Return StepResult (never writes status.yaml — single-writer policy)
- *
- * @module @obora/cli/runtime/step-executor
  */
 
 import type { Step } from "@obora/core";
-import { type ErrorCode } from "@obora/core";
+import { OboraError, type ErrorCode } from "@obora/core";
 import {
   type BaseAgent,
   type Task,
   type TaskResult,
   type AgentContext,
+  PiMonoError,
   RetryExhaustedError,
 } from "@obora-kit/agents";
 import type { StepErrorMetadata } from "./types.js";
+import { parseDuration } from "./utils.js";
+import { calculateDelay, waitWithAbort } from "./retry-policy.js";
 
-/** Result of a single step execution */
 export interface StepResult {
   success: boolean;
   output?: string;
@@ -30,41 +24,13 @@ export interface StepResult {
   errorMeta?: StepErrorMetadata;
 }
 
-/**
- * Resolves a step's agent name to a BaseAgent instance.
- * Implementation provided by TASK-043b; for now callers inject a stub/mock.
- */
 export interface AgentResolver {
   resolve(agentName: string): BaseAgent;
   resolve(query: { agent?: string; type?: string }): BaseAgent;
 }
 
-// ---------------------------------------------------------------------------
-// Step → Task conversion
-// ---------------------------------------------------------------------------
+export { parseDuration } from "./utils.js";
 
-/**
- * Parse a duration string (e.g. "60s", "5m", "1h") to milliseconds.
- */
-export function parseDuration(duration: string): number {
-  const match = duration.match(/^(\d+)([smhd])$/);
-  if (!match) {
-    throw new Error(`Invalid duration format: ${duration}`);
-  }
-  const value = parseInt(match[1], 10);
-  const unit = match[2];
-  const multipliers: Record<string, number> = {
-    s: 1000,
-    m: 60_000,
-    h: 3_600_000,
-    d: 86_400_000,
-  };
-  return value * multipliers[unit];
-}
-
-/**
- * Convert a workflow Step (core) to an agent Task (agents).
- */
 export function stepToTask(step: Step): Task {
   return {
     id: step.name,
@@ -79,10 +45,6 @@ export function stepToTask(step: Step): Task {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Output formatting
-// ---------------------------------------------------------------------------
-
 function formatOutput(result: TaskResult): string {
   if (typeof result.output === "string") return result.output;
   if (result.output == null) return "";
@@ -94,64 +56,184 @@ function buildStepErrorMetadata(error: Error, diagnosisCode: ErrorCode): StepErr
     provider?: string;
     statusCode?: number;
     attempts?: number;
-    originalError?: Error;
   };
 
+  const retryRootCause =
+    error instanceof RetryExhaustedError
+      ? (error as RetryExhaustedError & { cause?: unknown; lastError?: unknown; originalError?: unknown })
+          .cause ??
+        (error as RetryExhaustedError & { lastError?: unknown }).lastError ??
+        (error as RetryExhaustedError & { originalError?: unknown }).originalError
+      : undefined;
+
   return {
-    code: diagnosisCode,
+    code: diagnosisCode as StepErrorMetadata["code"],
     message: error.message,
     provider: errorWithMeta.provider,
     statusCode: errorWithMeta.statusCode,
     attempts:
       error instanceof RetryExhaustedError
-        ? error.attempts
+        ? ((error as RetryExhaustedError & { attemptCount?: number }).attemptCount ?? error.attempts)
         : errorWithMeta.attempts,
     lastError:
       error instanceof RetryExhaustedError
-        ? error.originalError?.message
-        : errorWithMeta.originalError?.message,
+        ? (mapErrorToDiagnosis(retryRootCause) ?? undefined)
+        : undefined,
+    failedAt: new Date().toISOString(),
   };
 }
 
-// ---------------------------------------------------------------------------
-// Error → diagnosis code mapping
-// ---------------------------------------------------------------------------
+function mapErrorToDiagnosis(error: unknown): ErrorCode {
+  if (error instanceof RetryExhaustedError) return "E4005";
+  if (error instanceof DOMException && error.name === "AbortError") return "E4002";
 
-function mapErrorToDiagnosis(error: Error): ErrorCode {
-  if (error instanceof RetryExhaustedError) {
+  // Preserve agent-layer error codes (E4010, E4012, E4013)
+  if (error instanceof OboraError && error.code) {
+    return error.code;
+  }
+
+  // Aggregate PiMono internal rate-limit code to retry-exhausted diagnosis
+  if (error instanceof PiMonoError && error.code === "E4011") {
     return "E4005";
   }
-  // All non-timeout runtime errors from BaseAgent map to E4001
+
+  // Preserve typed E4xxx codes on generic Error objects
+  if (error instanceof Error && "code" in error) {
+    const code = (error as Error & { code?: unknown }).code;
+    if (typeof code === "string" && code.startsWith("E4")) {
+      return code as ErrorCode;
+    }
+  }
+
+  // Preserve typed E4xxx codes on plain objects (e.g. RetryErrorMetadata)
+  if (error && typeof error === "object" && "code" in error) {
+    const code = (error as { code?: unknown }).code;
+    if (typeof code === "string" && code.startsWith("E4")) {
+      return code as ErrorCode;
+    }
+  }
+
   return "E4001";
 }
-
-// ---------------------------------------------------------------------------
-// StepExecutor
-// ---------------------------------------------------------------------------
 
 const DEFAULT_TIMEOUT_MS = 60_000;
 
 export interface ExecuteStepOptions {
-  /** Override timeout in ms (default: step.timeout parsed, or 60 s) */
   timeoutMs?: number;
+  signal?: AbortSignal;
+  retryAttempts?: number;
 }
 
-/**
- * Execute a single workflow step by delegating to a BaseAgent.
- *
- * This function does NOT write to status.yaml (single-writer policy).
- * The caller (executeWorkflow) is responsible for persisting results.
- */
+async function executeOnce(
+  step: Step,
+  agent: BaseAgent,
+  context: AgentContext,
+  timeoutMs: number,
+  externalSignal?: AbortSignal,
+): Promise<StepResult> {
+  const timeoutCtrl = new AbortController();
+
+  if (externalSignal?.aborted) {
+    return {
+      success: false,
+      error: "Execution cancelled before start",
+      diagnosisCode: "E4006",
+    };
+  }
+
+  const timeoutId = setTimeout(() => timeoutCtrl.abort("timeout"), timeoutMs);
+  const signal = externalSignal
+    ? AbortSignal.any([externalSignal, timeoutCtrl.signal])
+    : timeoutCtrl.signal;
+
+  if (signal.aborted) {
+    return {
+      success: false,
+      error: "Execution cancelled before start",
+      diagnosisCode: "E4006",
+    };
+  }
+
+  let abortHandler: (() => void) | undefined;
+
+  try {
+    const result = await Promise.race([
+      agent.execute(taskToRun(step), {
+        ...context,
+        signal,
+      } as AgentContext),
+      new Promise<never>((_resolve, reject) => {
+        abortHandler = () => reject(new DOMException("Aborted", "AbortError"));
+        signal.addEventListener("abort", abortHandler, { once: true });
+      }),
+    ]);
+
+    if (!result.success) {
+      let diagnosisCode: ErrorCode;
+      if (externalSignal?.aborted) {
+        diagnosisCode = "E4006";
+      } else if (timeoutCtrl.signal.aborted) {
+        diagnosisCode = "E4002";
+      } else {
+        diagnosisCode = result.error ? mapErrorToDiagnosis(result.error) : "E4001";
+      }
+
+      return {
+        success: false,
+        output: formatOutput(result),
+        error: result.error?.message,
+        diagnosisCode,
+        ...(result.error
+          ? { errorMeta: buildStepErrorMetadata(result.error, diagnosisCode) }
+          : {}),
+      };
+    }
+
+    return { success: true, output: formatOutput(result) };
+  } catch (e: unknown) {
+    if (e instanceof DOMException && e.name === "AbortError") {
+      if (timeoutCtrl.signal.aborted) {
+        return {
+          success: false,
+          error: "Timeout exceeded",
+          diagnosisCode: "E4002",
+        };
+      }
+      return {
+        success: false,
+        error: "Execution cancelled",
+        diagnosisCode: "E4006",
+      };
+    }
+
+    const diagnosisCode = mapErrorToDiagnosis(e);
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : String(e),
+      diagnosisCode,
+      ...(e instanceof Error ? { errorMeta: buildStepErrorMetadata(e, diagnosisCode) } : {}),
+    };
+  } finally {
+    if (abortHandler) {
+      signal.removeEventListener("abort", abortHandler);
+    }
+    clearTimeout(timeoutId);
+  }
+}
+
+function taskToRun(step: Step): Task {
+  return stepToTask(step);
+}
+
 export async function executeStep(
   step: Step,
   resolver: AgentResolver,
   context: AgentContext,
   options?: ExecuteStepOptions,
 ): Promise<StepResult> {
-  // --- resolve agent (E4003 on failure) ---
   let agent: BaseAgent;
   try {
-    agent = resolver.resolve({ agent: step.agent });
+    agent = resolver.resolve({ agent: step.agent, type: step.agent });
   } catch {
     return {
       success: false,
@@ -160,7 +242,6 @@ export async function executeStep(
     };
   }
 
-  // --- compute timeout (caller override > step YAML > default) ---
   let timeoutMs: number;
   if (options?.timeoutMs != null) {
     timeoutMs = options.timeoutMs;
@@ -174,65 +255,38 @@ export async function executeStep(
     timeoutMs = DEFAULT_TIMEOUT_MS;
   }
 
-  // --- execute with abort ---
-  const task = stepToTask(step);
-  const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), timeoutMs);
+  const maxAttempts = Math.max(1, (options?.retryAttempts ?? 0) + 1);
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const result = await executeOnce(step, agent, context, timeoutMs, options?.signal);
+    if (result.success) return result;
 
-  let result: TaskResult;
-  let abortHandler: (() => void) | undefined;
-
-  try {
-    // BaseAgent.execute() currently has (task, context) signature.
-    // Signal propagation will be added when agents package adopts ExecuteOptions.
-    // For now we race against the abort timer externally.
-    result = await Promise.race([
-      agent.execute(task, context),
-      new Promise<never>((_resolve, reject) => {
-        abortHandler = () => reject(new DOMException("Step timeout exceeded", "AbortError"));
-        ac.signal.addEventListener("abort", abortHandler, { once: true });
-      }),
-    ]);
-  } catch (e: unknown) {
-    if (e instanceof DOMException && e.name === "AbortError") {
-      return {
-        success: false,
-        error: "Timeout exceeded",
-        diagnosisCode: "E4002",
-      };
+    const retryable = result.diagnosisCode === "E4001";
+    if (!retryable || attempt >= maxAttempts) {
+      return result;
     }
-    const diagnosisCode = e instanceof Error ? mapErrorToDiagnosis(e) : "E4001";
-    return {
-      success: false,
-      error: e instanceof Error ? e.message : String(e),
-      diagnosisCode,
-      ...(e instanceof Error
-        ? { errorMeta: buildStepErrorMetadata(e, diagnosisCode) }
-        : {}),
-    };
-  } finally {
-    clearTimeout(timer);
-    if (abortHandler) {
-      ac.signal.removeEventListener("abort", abortHandler);
-    }
-  }
 
-  // --- map result ---
-  if (!result.success) {
-    const diagnosisCode = result.error ? mapErrorToDiagnosis(result.error) : "E4001";
-    return {
-      success: false,
-      output: formatOutput(result),
-      error: result.error?.message,
-      diagnosisCode,
-      ...(result.error
-        ? { errorMeta: buildStepErrorMetadata(result.error, diagnosisCode) }
-        : {}),
-    };
+    const delay = calculateDelay(attempt - 1, {
+      baseDelayMs: 1000,
+      maxDelayMs: 30_000,
+    });
+
+    try {
+      await waitWithAbort(delay, options?.signal);
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") {
+        return {
+          success: false,
+          error: "Execution cancelled",
+          diagnosisCode: "E4006",
+        };
+      }
+      throw e;
+    }
   }
 
   return {
-    success: true,
-    output: formatOutput(result),
+    success: false,
+    error: "Unknown execution failure",
+    diagnosisCode: "E4001",
   };
 }

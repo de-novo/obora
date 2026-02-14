@@ -12,7 +12,6 @@ import {
   parseWorkflow,
   topologicalSort,
   buildGraph,
-  groupByLevel,
   OboraError,
   getDiagnosis,
   formatDiagnosis,
@@ -33,8 +32,10 @@ import {
 } from "../runtime/context-builder.js";
 import { AgentRegistry } from "../runtime/agent-registry.js";
 import { createAdapterFromEnv } from "@obora-kit/agents";
-import type { Blackboard } from "@obora-kit/blackboard";
 import type { ChatMessage } from "@obora-kit/agents";
+import type { Blackboard } from "../runtime/blackboard.js";
+import { parseDuration } from "../runtime/utils.js";
+import { calculateDelay, waitWithAbort } from "../runtime/retry-policy.js";
 import { Command } from "commander";
 import fs from "fs-extra";
 import yaml from "yaml";
@@ -110,54 +111,83 @@ interface StepRun {
  */
 async function updateStatus(featurePath: string, updates: Partial<StatusFile>): Promise<void> {
   const statusPath = join(featurePath, "status.yaml");
-  const content = readFileSync(statusPath, "utf-8");
+  const backupPath = `${statusPath}.bak`;
+  const isCI = Boolean(process.env.CI);
+  const content = typeof fs.readFile === "function"
+    ? await fs.readFile(statusPath, "utf-8")
+    : readFileSync(statusPath, "utf-8");
+
+  const throwRollbackFailure = (reason: "parse" | "write", rollbackError: unknown): never => {
+    const recoveryMsg =
+      `Failed to recover status.yaml after ${reason} error: ${String(rollbackError)}`;
+
+    if (!isCI) {
+      console.error(`[manual-recovery] ${recoveryMsg}`);
+      console.error(`[manual-recovery] Restore backup file: ${backupPath} -> ${statusPath}`);
+      console.error("[manual-recovery] Verify status.yaml and rerun the command.");
+    }
+
+    throw new OboraError("E4014" as ErrorCode, recoveryMsg);
+  };
+
+  if (typeof fs.copyFile === "function") {
+    await fs.copyFile(statusPath, backupPath);
+  } else {
+    await fs.writeFile(backupPath, content, "utf-8");
+  }
+
+  let parsed: Record<string, any>;
+  try {
+    parsed = yaml.parse(content) as Record<string, any>;
+    if (!parsed || typeof parsed !== "object") {
+      throw new Error("Invalid YAML object");
+    }
+  } catch (parseError) {
+    try {
+      if (typeof fs.copyFile === "function") {
+        await fs.copyFile(backupPath, statusPath);
+      } else {
+        const backupContent = readFileSync(backupPath, "utf-8");
+        await fs.writeFile(statusPath, backupContent, "utf-8");
+      }
+    } catch (rollbackError) {
+      throwRollbackFailure("parse", rollbackError);
+    }
+
+    throw new OboraError("E4007", `Failed to parse status.yaml: ${String(parseError)}`);
+  }
+
+  if (updates.status !== undefined) {
+    parsed.status = updates.status;
+  }
+  if (updates.metadata?.last_updated !== undefined) {
+    if (!parsed.metadata) parsed.metadata = {};
+    parsed.metadata.last_updated = updates.metadata.last_updated;
+  }
+  if (updates.metadata?.notes !== undefined) {
+    if (!parsed.metadata) parsed.metadata = {};
+    parsed.metadata.notes = updates.metadata.notes;
+  }
+  if (updates.metadata?.last_error_code !== undefined) {
+    if (!parsed.metadata) parsed.metadata = {};
+    parsed.metadata.last_error_code = updates.metadata.last_error_code;
+  }
 
   try {
-    const parsed = yaml.parse(content) as Record<string, any>;
-
-    if (updates.status !== undefined) {
-      parsed.status = updates.status;
-    }
-    if (updates.metadata?.last_updated !== undefined) {
-      if (!parsed.metadata) parsed.metadata = {};
-      parsed.metadata.last_updated = updates.metadata.last_updated;
-    }
-    if (updates.metadata?.notes !== undefined) {
-      if (!parsed.metadata) parsed.metadata = {};
-      parsed.metadata.notes = updates.metadata.notes;
-    }
-    if (updates.metadata?.last_error_code !== undefined) {
-      if (!parsed.metadata) parsed.metadata = {};
-      parsed.metadata.last_error_code = updates.metadata.last_error_code;
-    }
-
     await fs.writeFile(statusPath, yaml.stringify(parsed), "utf-8");
-  } catch (error) {
-    log(`  Warning: YAML status update failed, using regex fallback (${String(error)})`);
-
-    // If YAML parsing fails, try regex-based update as fallback
-    let newContent = content;
-    if (updates.status !== undefined) {
-      newContent = newContent.replace(/^status:.*$/m, `status: ${updates.status}`);
-    }
-    if (updates.metadata?.last_updated !== undefined) {
-      const now = updates.metadata.last_updated;
-      newContent = newContent.replace(/^ {2}last_updated:.*$/m, `  last_updated: "${now}"`);
-    }
-    if (updates.metadata?.last_error_code !== undefined) {
-      const code = updates.metadata.last_error_code;
-      if (/^ {2}last_error_code:.*$/m.test(newContent)) {
-        newContent = newContent.replace(/^ {2}last_error_code:.*$/m, `  last_error_code: ${code}`);
-      } else {
-        newContent += `\nmetadata:\n  last_error_code: ${code}\n`;
-      }
-    }
-
+  } catch (writeError) {
     try {
-      await fs.writeFile(statusPath, newContent, "utf-8");
-    } catch (fallbackError) {
-      throw new Error(`Failed to update status.yaml (primary + fallback): ${String(fallbackError)}`);
+      if (typeof fs.copyFile === "function") {
+        await fs.copyFile(backupPath, statusPath);
+      } else {
+        const backupContent = readFileSync(backupPath, "utf-8");
+        await fs.writeFile(statusPath, backupContent, "utf-8");
+      }
+    } catch (rollbackError) {
+      throwRollbackFailure("write", rollbackError);
     }
+
+    throw writeError;
   }
 }
 
@@ -312,8 +342,6 @@ async function executeWorkflow(
   const executionOrder = topoResult.order;
   log(`  Execution order: ${executionOrder.join(" -> ")}`);
 
-  // Group steps by level for display
-  const _levelGroups = groupByLevel(workflow.steps);
 
   // Create workflow run record
   const workflowRunId = `run-${Date.now()}`;
@@ -378,7 +406,10 @@ async function executeWorkflow(
     const maxRetries = workflow.config?.retry || 0;
     let actualAttempts = 0;
 
-    // Execute with retry logic
+    // Workflow-level retry loop:
+    // - This retries the whole step execution when a step fails.
+    // - Agent-level retry remains inside step-executor (different layer, different purpose).
+    const retryDelayBaseMs = parseDuration(workflow.config?.retry_delay || "5s");
     for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
       actualAttempts = attempt;
       const runtimeCtx = board
@@ -394,9 +425,14 @@ async function executeWorkflow(
         stepError = result.error;
         lastDiagnosisCode = result.diagnosisCode;
         if (attempt < maxRetries + 1) {
-          const retryDelay = workflow.config?.retry_delay || "5s";
-          log(`    Step failed, retrying in ${retryDelay}...`);
-          // In production, would actually wait
+          const delayMs = calculateDelay(attempt - 1, {
+            baseDelayMs: retryDelayBaseMs,
+            maxDelayMs: retryDelayBaseMs,
+            backoffMultiplier: 1,
+            jitterRatio: 0,
+          });
+          log(`    Step failed, retrying in ${Math.ceil(delayMs / 1000)}s...`);
+          await waitWithAbort(delayMs);
         }
       }
     }
@@ -560,11 +596,15 @@ async function runRun(featureName: string, options: RunOptions): Promise<void> {
   }
 
   if (!runtimeState.activeResolver) {
-    const resolver = bootstrapAgentResolver();
-    if (!resolver) {
-      throw new OboraError("E4007", "Agent resolver bootstrap invariant violated");
+    try {
+      const resolver = bootstrapAgentResolver();
+      if (!resolver) {
+        throw new Error("bootstrap returned empty resolver");
+      }
+      setAgentResolver(resolver);
+    } catch (error) {
+      throw new OboraError("E4007", `Agent resolver bootstrap invariant violated: ${String(error)}`);
     }
-    setAgentResolver(resolver);
   }
 
   console.log("");

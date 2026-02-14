@@ -1,5 +1,8 @@
 export interface LLMAdapter {
-  chatCompletion(params: ChatCompletionParams): Promise<ChatCompletionResult>;
+  chatCompletion(
+    params: ChatCompletionParams,
+    options?: { signal?: AbortSignal }
+  ): Promise<ChatCompletionResult>;
 
   streamChatCompletion(
     params: ChatCompletionParams,

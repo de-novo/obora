@@ -128,7 +128,7 @@ describe("executeStep — success", () => {
     expect(result.success).toBe(true);
     expect(result.output).toBe("agent output");
     expect(result.diagnosisCode).toBeUndefined();
-    expect(resolver.resolve).toHaveBeenCalledWith({ agent: "executor" });
+    expect(resolver.resolve).toHaveBeenCalledWith({ agent: "executor", type: "executor" });
     expect(agent.execute).toHaveBeenCalledTimes(1);
   });
 

@@ -68,7 +68,7 @@ export class AgentRegistry implements AgentResolver {
     const role = this.mapToRole(normalized);
     return createAgent({
       id: `${role}-${Date.now()}`,
-      role: role as "analyst" | "executor" | "verifier" | "director",
+      role,
       llm: this.llm,
       toolRegistry: this.toolRegistry,
     });

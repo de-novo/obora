@@ -11,8 +11,8 @@
  * @module @obora/cli/runtime/context-builder
  */
 
-import { Blackboard, createSessionId } from "@obora-kit/blackboard";
 import type { AgentContext, Task, ChatMessage } from "@obora-kit/agents";
+import { Blackboard } from "./blackboard.js";
 import type { Step, Workflow } from "@obora/core";
 import type { StepResult } from "./step-executor.js";
 import { stepToTask } from "./step-executor.js";
@@ -74,8 +74,6 @@ export function createWorkflowBlackboard(
   workflow: Workflow,
   featureName: string,
 ): Blackboard {
-  const board = new Blackboard({ sessionId: createSessionId(sessionId) });
-
   const meta: WorkflowMeta = {
     workflowName: workflow.name,
     workflowVersion: workflow.version ?? "1.0",
@@ -84,8 +82,29 @@ export function createWorkflowBlackboard(
     sessionId,
   };
 
-  board.write("state.context.workflow", meta);
-  board.write("state.context.steps", {});
+  const board = new Blackboard({
+    state: {
+      context: {
+        workflow: meta as unknown as Record<string, unknown>,
+        steps: {},
+      },
+    },
+  });
+
+  // Compatibility shim for agents expecting board.write().
+  // Deprecated no-op to avoid crashing legacy agents while preserving
+  // runtime single-writer policy via recordStepResult/recordStepError.
+  Object.defineProperty(board as unknown as { write?: (path: string, value: unknown) => void }, "write", {
+    value: (path: string, _value: unknown) => {
+      console.warn(
+        `[Blackboard] Deprecated: direct write("${path}") is a no-op. Use recordStepResult/recordStepError.`,
+      );
+      // no-op: single-writer policy — mutation only via recordStepResult/recordStepError
+    },
+    configurable: false,
+    enumerable: false,
+    writable: false,
+  });
 
   return board;
 }
@@ -104,7 +123,7 @@ export function createWorkflowBlackboard(
  */
 export function buildAgentContext(
   sessionId: string,
-  board: Blackboard,
+  board: Blackboard | AgentContext["board"],
   step: Step,
   history: ChatMessage[] = [],
 ): AgentContext {
@@ -112,7 +131,7 @@ export function buildAgentContext(
 
   return {
     sessionId,
-    board,
+    board: board as unknown as AgentContext["board"],
     currentTask: task,
     history,
   };
@@ -127,7 +146,7 @@ export function buildAgentContext(
  * Path: `state.context.steps.<stepName>`
  */
 export function recordStepResult(
-  board: Blackboard,
+  board: Blackboard | AgentContext["board"],
   stepName: string,
   result: StepResult,
 ): void {
@@ -140,7 +159,7 @@ export function recordStepResult(
     completedAt: activeClock(),
     failedAt: null,
   };
-  board.write(`state.context.steps.${stepName}`, record);
+  (board as Blackboard).recordStepResult(stepName, record);
 }
 
 /**
@@ -148,7 +167,7 @@ export function recordStepResult(
  * Path: `state.context.steps.<stepName>`
  */
 export function recordStepError(
-  board: Blackboard,
+  board: Blackboard | AgentContext["board"],
   stepName: string,
   result: StepResult,
 ): void {
@@ -161,7 +180,11 @@ export function recordStepError(
     completedAt: null,
     failedAt: activeClock(),
   };
-  board.write(`state.context.steps.${stepName}`, record);
+  (board as Blackboard).recordStepError(stepName, {
+    message: record.error ?? "Unknown error",
+    code: record.diagnosisCode as StepErrorMetadata["code"] | undefined,
+    failedAt: record.failedAt ?? undefined,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -176,7 +199,7 @@ export function recordStepError(
  * and efficiency (one traversal instead of exists + read).
  */
 export function readStepResult(
-  board: Blackboard,
+  board: Blackboard | AgentContext["board"],
   stepName: string,
 ): StepResultRecord | null {
   const value = board.read<StepResultRecord | undefined>(

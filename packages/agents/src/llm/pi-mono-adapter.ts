@@ -29,7 +29,10 @@ export class PiMonoAdapter implements LLMAdapter {
     }
   }
 
-  async chatCompletion(params: ChatCompletionParams): Promise<ChatCompletionResult> {
+  async chatCompletion(
+    params: ChatCompletionParams,
+    options?: { signal?: AbortSignal }
+  ): Promise<ChatCompletionResult> {
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
@@ -37,12 +40,14 @@ export class PiMonoAdapter implements LLMAdapter {
         Authorization: `Bearer ${this.apiKey}`,
       },
       body: JSON.stringify(this.transformParams(params)),
+      signal: options?.signal,
     });
 
     if (!response.ok) {
       throw new PiMonoError(
         `Pi Mono API error: ${response.status} ${response.statusText}`,
-        response.status
+        response.status,
+        response.status === 429 ? "E4011" : undefined,
       );
     }
 
@@ -69,7 +74,8 @@ export class PiMonoAdapter implements LLMAdapter {
     if (!response.ok) {
       throw new PiMonoError(
         `Pi Mono API error: ${response.status} ${response.statusText}`,
-        response.status
+        response.status,
+        response.status === 429 ? "E4011" : undefined,
       );
     }
 

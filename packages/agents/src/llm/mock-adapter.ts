@@ -19,7 +19,10 @@ export class MockLLMAdapter implements LLMAdapter {
     return true;
   }
 
-  async chatCompletion(params: ChatCompletionParams): Promise<ChatCompletionResult> {
+  async chatCompletion(
+    params: ChatCompletionParams,
+    _options?: { signal?: AbortSignal }
+  ): Promise<ChatCompletionResult> {
     await new Promise((resolve) => setTimeout(resolve, 100));
 
     const lastUserMessage = params.messages.filter((m) => m.role === "user").pop();
