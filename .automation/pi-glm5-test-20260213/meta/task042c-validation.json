@@ -1,0 +1,9 @@
+{
+  "task": "TASK-042c",
+  "attempts": 4,
+  "completed": false,
+  "reason": "pi --provider zai --model glm-5 command did not produce output and stayed running until manually killed (multiple attempts).",
+  "log_file": "/Users/denovo/workspace/github/obora-kit/.automation/pi-glm5-test-20260213/logs/task042c-pi-glm5.log",
+  "log_size_bytes": 0,
+  "normal_exit": false
+}

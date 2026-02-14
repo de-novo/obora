@@ -1,0 +1,9 @@
+output_nonempty=False
+line_count=0
+SCORE:=False
+P0:=False
+P1:=False
+DECISION:=False
+output_has_build_or_runtime_noise=False
+exit=EXIT_CODE:1
+error_head=file:///Users/denovo/.asdf/installs/nodejs/lts/lib/node_modules/@mariozechner/pi-coding-agent/dist/core/agent-session.js:556

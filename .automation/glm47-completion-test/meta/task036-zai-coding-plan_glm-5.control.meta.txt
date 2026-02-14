@@ -1,0 +1,4 @@
+exit_code=KILLED
+bytes=88
+lines=4
+required_line_count=0

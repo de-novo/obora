@@ -1,7 +1,7 @@
 # TASK-021: 스냅샷/복원 기능
 
 ## 개요
-- **상태**: 📋 대기
+- **상태**: ✅ 완료
 - **우선순위**: P1
 - **예상 소요**: 4시간
 - **담당**: 개발자
@@ -662,13 +662,13 @@ if (!compat.compatible) {
 
 ## 완료 조건
 
-- [ ] 스냅샷 타입 정의 완료
-- [ ] 직렬화/역직렬화 구현 완료
-- [ ] 압축/압축해제 동작 확인
-- [ ] 버전 호환성 체크 동작 확인
-- [ ] 체크섬 검증 동작 확인
-- [ ] Blackboard 통합 완료
-- [ ] `tsc --noEmit` 통과
+- [x] 스냅샷 타입 정의 완료
+- [x] 직렬화/역직렬화 구현 완료
+- [x] 압축/압축해제 동작 확인
+- [x] 버전 호환성 체크 동작 확인
+- [x] 체크섬 검증 동작 확인
+- [x] Blackboard 통합 완료
+- [x] `tsc --noEmit` 통과
 
 ---
 
@@ -677,3 +677,20 @@ if (!compat.compatible) {
 - [TASK-019: Blackboard Core](./TASK-019-blackboard-core.md)
 - [Blackboard + Actor 설계 문서](../../architecture/blackboard-actor-design.md)
 - Node.js zlib 모듈 문서
+
+---
+
+## 재동기화 판정 (2026-02-13)
+- 최종 판정: **✅ 완료**
+- 근거 코드:
+  - `packages/blackboard/src/snapshot/types.ts`
+  - `packages/blackboard/src/snapshot/serializer.ts`
+  - `packages/blackboard/src/snapshot/compression.ts`
+  - `packages/blackboard/src/snapshot/snapshot-manager.ts`
+  - `packages/blackboard/src/core/blackboard.ts`
+- 검증 결과: 스냅샷 생성/검증/복원 및 직렬화/압축 기능이 구현되어 스냅샷 테스트가 통과합니다.
+- 검증 명령:
+  - `pnpm --filter @obora-kit/blackboard test` ✅ (14 files, 470 tests passed)
+  - `pnpm --filter @obora-kit/blackboard typecheck` ✅
+  - `pnpm --filter @obora-kit/blackboard build` ✅
+

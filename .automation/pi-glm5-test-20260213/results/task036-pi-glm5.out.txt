@@ -1,0 +1,4 @@
+SCORE: 9.2
+P0: 없음
+P1: barrel export completeness 미흡; 이벤트 불변성/날짜 뮤테이션 검증 보강 필요
+DECISION: FAIL

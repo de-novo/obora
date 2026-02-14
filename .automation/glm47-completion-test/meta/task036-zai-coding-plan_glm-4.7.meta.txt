@@ -1,0 +1,4 @@
+exit_code=0
+bytes=276
+lines=8
+required_line_count=4

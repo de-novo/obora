@@ -25,6 +25,8 @@ export interface StatusFile {
   metadata: {
     last_updated: string;
     notes: string;
+    /** Error code from the last failed run (e.g. "E4005") */
+    last_error_code?: string;
   };
 }
 
@@ -57,6 +59,7 @@ export function readStatus(featurePath: string): StatusFile | null {
       metadata: {
         last_updated: parsed.metadata?.last_updated || "",
         notes: parsed.metadata?.notes || "",
+        last_error_code: parsed.metadata?.last_error_code || undefined,
       },
     };
   } catch (error) {

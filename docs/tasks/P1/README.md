@@ -30,7 +30,7 @@ P1의 목표는 **AI 이사회 의사결정 시스템**의 핵심 인프라를 �
 | @obora-kit/blackboard | 공유 상태 관리, 이벤트 버스 | Phase 1 |
 | @obora-kit/actor | Actor 런타임, 풀 관리, Supervision | Phase 2 |
 | @obora-kit/agents | Pi Mono 어댑터, 역할별 에이전트 | Phase 3 |
-| @obora-kit/board | 안건 관리, 투표, 합의 알고리즘 | Phase 4 |
+| @obora-kit/board | Blackboard 도메인 조합(Facade/오케스트레이션) | Phase 4(후속) |
 
 ## 🎮 사용 예시
 
@@ -68,8 +68,9 @@ console.log(result.voteSummary); // { approve: 2, reject: 1, abstain: 0 }
 | Phase 1 | TASK-018~023 | 30h | 📋 대기 |
 | Phase 2 | TASK-024~029 | 34h | 📋 대기 |
 | Phase 3 | TASK-030~035 | 40h | 📋 대기 |
-| Phase 4 | TASK-036~041 | 38h | 📋 대기 |
-| **총계** | **24개 태스크** | **142h** | - |
+| Phase 4 | TASK-036~041 (blackboard-first rebaseline) | 36h | 📋 대기 |
+| Phase 5 | TASK-042, 042a~042c | 24h | 📋 대기 |
+| **총계** | **28개 태스크** | **166h** | - |
 
 ### Phase별 태스크 상세
 
@@ -103,15 +104,23 @@ console.log(result.voteSummary); // { approve: 2, reject: 1, abstain: 0 }
 | TASK-034 | Agents 패키지 구성 | 4h | 📋 대기 |
 | TASK-035 | Agents 테스트 작성 | 10h | 📋 대기 |
 
-#### Phase 4: Board System (TASK-036~041)
+#### Phase 4: Board System (Rebaseline: blackboard-first)
 | 태스크 | 제목 | 예상 시간 | 상태 |
 |--------|------|:---------:|:----:|
-| TASK-036 | 안건 관리 구현 | 5h | 📋 대기 |
-| TASK-037 | 투표 시스템 구현 | 7h | 📋 대기 |
-| TASK-038 | 합의 알고리즘 구현 | 8h | 📋 대기 |
-| TASK-039 | 상태 기계 (State Machine) 구현 | 7h | 📋 대기 |
-| TASK-040 | Board 패키지 구성 | 5h | 📋 대기 |
-| TASK-041 | E2E 테스트 작성 | 6h | 📋 대기 |
+| TASK-036 | Blackboard Agenda Stream 정비 | 5h | 📋 대기 (재정의) |
+| TASK-037 | Blackboard Voting Session 모델 재정의 | 7h | 📋 대기 (재정의) |
+| TASK-038 | Consensus Rule Engine 기준 재정렬 | 8h | 📋 대기 (재정의) |
+| TASK-039 | 회의 상태기계 재정의 (Event-driven) | 7h | 📋 대기 (재정의) |
+| TASK-041 | Blackboard-first E2E 시나리오 정비 | 6h | 📋 대기 (유지/범위조정) |
+| TASK-040 | Board 패키지 스캐폴딩 | 3h | 📋 대기 (보류, 후속) |
+
+#### Phase 5: TKG Rollout (TASK-042, 042a~042c)
+| 태스크 | 제목 | 예상 시간 | 상태 |
+|--------|------|:---------:|:----:|
+| TASK-042 | TKG + Observer/Reflector 조건부 적용(상위) | 12h | 📋 대기 |
+| TASK-042a | 타입/인터페이스 MVP | 3h | 📋 대기 |
+| TASK-042b | Observer/Reflector MVP | 5h | 📋 대기 |
+| TASK-042c | Conflict/Guardrail 고도화 | 4h | 📋 대기 |
 
 ## 🔮 P1 이후 (P2 계획)
 
@@ -123,7 +132,7 @@ console.log(result.voteSummary); // { approve: 2, reject: 1, abstain: 0 }
 ## 📚 참조 문서
 
 - [[../architecture/blackboard-actor-design|Blackboard + Actor 아키텍처 설계]]
-- [[TASK-018-blackboard-schema|TASK-018]] ~ [[TASK-041-board-e2e-tests|TASK-041]]
+- [[TASK-018-blackboard-schema|TASK-018]] ~ [[TASK-042c-conflict-guardrail-advanced|TASK-042c]]
 
 ---
 

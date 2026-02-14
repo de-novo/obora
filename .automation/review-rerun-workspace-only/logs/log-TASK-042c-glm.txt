@@ -1,0 +1,10 @@
+[0m
+
+
+[0m> build · glm-5[0m✱ [0mGlob "**/*042c*"[90m 11 matches[0m
+
+[0m✱ [0mGlob "**/*TASK-042c*"[90m 11 matches[0m[0m→ [0mRead .automation/review-rerun-workspace-only/results/result-TASK-042c-glm.md
+[0m→ [0mRead docs/tasks/P1/TASK-042c-conflict-guardrail-advanced.md
+[0m→ [0mRead .automation/review-rerun-workspace-only/results/result-TASK-042c-codex.md
+
+[0m→ [0mRead .automation/review-rerun-workspace-only/results/result-TASK-042c-opus.md

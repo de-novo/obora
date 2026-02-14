@@ -34,7 +34,7 @@ import {
   getMetricsForStep,
   aggregateMetric,
   deleteMetrics,
-} from '../duckdb-client';
+} from '../duckdb-client.js';
 
 // ============================================================
 // Test Helpers

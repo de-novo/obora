@@ -1,6 +1,6 @@
 # obora-kit 개발 워크플로우
 
-> 2026-02-13 재정비 (Codex 5.3 + GLM 4.7 2모델로 통일)
+> 2026-02-13 재정비 (Codex 5.3 + GLM 5 2모델로 통일)
 
 ## 핵심 원칙
 
@@ -30,7 +30,7 @@
 
 | 모델 | 도구 | 모델명 | 목표 |
 |------|------|--------|------|
-| **GLM 4.7** | OpenCode CLI | `zai-coding-plan/glm-4.7` | 9+/10 |
+| **GLM 5** | OpenCode CLI | `zai-coding-plan/glm-5` | 9+/10 |
 | **Codex 5.3** | OpenCode CLI | `openai/gpt-5.3-codex` | 9+/10 |
 
 > ⚠️ **통과 기준**: **각 모델이 개별 9점 이상** (평균 아님!) + **P0/P1 이슈 없음**
@@ -47,12 +47,12 @@
 
 ## 📋 모델별 리뷰 실행 방법
 
-### 1. GLM 4.7 (OpenCode)
+### 1. GLM 5 (OpenCode)
 
 **명령어**:
 ```bash
 cd /path/to/project
-opencode run -m zai-coding-plan/glm-4.7 "<프롬프트>" > /tmp/review-glm.txt 2>&1
+opencode run -m zai-coding-plan/glm-5 "<프롬프트>" > /tmp/review-glm.txt 2>&1
 ```
 
 **프롬프트 예시**:
@@ -117,9 +117,9 @@ opencode run -m openai/gpt-5.3-codex "<프롬프트>" > /tmp/review-codex.txt 2>
 ### Step 1: 2개 모델 병렬 실행
 
 ```bash
-# 터미널 1: GLM 4.7 (OpenCode)
+# 터미널 1: GLM 5 (OpenCode)
 cd /path/to/project
-opencode run -m zai-coding-plan/glm-4.7 "전체 코드 리뷰..."
+opencode run -m zai-coding-plan/glm-5 "전체 코드 리뷰..."
 
 # 터미널 2: Codex 5.3 (OpenCode)
 cd /path/to/project
@@ -150,7 +150,7 @@ opencode run -m openai/gpt-5.3-codex "Review code..."
 | 실수 | 해결책 |
 |------|--------|
 | sessions_spawn 사용 | `opencode run -m <model>` 사용 |
-| 모델명 오타 | 정확히: `openai/gpt-5.3-codex`, `zai-coding-plan/glm-4.7` |
+| 모델명 오타 | 정확히: `openai/gpt-5.3-codex`, `zai-coding-plan/glm-5` |
 | PTY 모드 미설정 | `pty: true` 필수 |
 | 한 모델만 리뷰 | 2개 모두 필수 |
 | 역할 제한 | "전체 검토" 명시 |

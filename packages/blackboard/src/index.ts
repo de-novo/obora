@@ -57,6 +57,17 @@ export type {
   BlackboardStats,
   StateUpdateRequest,
   StateUpdateResult,
+  NodeId,
+  EdgeId,
+  TemporalNode,
+  TemporalEdge,
+  GraphQuery,
+  QueryResult,
+  MergeResult,
+  PromotionMeta,
+  PromotionResult,
+  ValidationResult,
+  IProductionPromotionPort,
 } from './types';
 
 // Enum exports (export as values, not just types)
@@ -66,6 +77,8 @@ export {
   TaskPriority,
   AgendaStatus,
   MessageType,
+  createNodeId,
+  createEdgeId,
 } from './types';
 
 // ID creator functions (from types)
@@ -91,6 +104,11 @@ export type {
   BlackboardOptions,
   QueryOptions,
   WriteResult,
+  TemporalKnowledgeGraph,
+  StagingTKG,
+  ProductionTKG,
+  PromotableProductionTKG,
+  IReflector,
 } from './core';
 
 // === Events ===
@@ -98,6 +116,80 @@ export {
   EventBus,
   EventFactory,
 } from './events';
+
+// === Domains ===
+export {
+  AgendaStore,
+  AgendaValidationError,
+  AgendaNotFoundError,
+  AgendaTransitionError,
+  AGENDA_STATUS_TRANSITIONS,
+  createAgendaEventMeta,
+} from './domains/agenda';
+
+export type {
+  AgendaStoreOptions,
+  AgendaDomainEvent,
+  AgendaCreatedEvent as AgendaDomainCreatedEvent,
+  AgendaUpdatedEvent as AgendaDomainUpdatedEvent,
+  AgendaStatusChangedEvent as AgendaDomainStatusChangedEvent,
+  AgendaDeletedEvent as AgendaDomainDeletedEvent,
+  AgendaStatus as DomainAgendaStatus,
+  CreateAgendaInput,
+  UpdateAgendaInput,
+} from './domains/agenda';
+
+export { VOTING_SESSION_STATUSES, VotingSessionStore } from './domains/voting';
+
+export type {
+  VotingSessionId,
+  VotingSessionStatus,
+  VotingPolicy,
+  VotingSession,
+  Vote,
+  TallyResult,
+} from './domains/voting';
+
+export { evaluateConsensus, CONSENSUS_STATUSES, isConsensusResult } from './domains/consensus';
+
+export type {
+  ConsensusMethod,
+  EvaluateConsensusOptions,
+  ConsensusStatus,
+  VotingSessionSnapshot,
+  ConsensusCondition,
+  ConsensusEscalation,
+  ConsensusResult,
+} from './domains/consensus';
+
+export {
+  InMemoryStagingTKG,
+  InMemoryProductionTKG,
+  TKGObserver,
+  TKGReflector,
+  JsonFileReflectorStateStore,
+} from './domains/tkg';
+
+export type {
+  ObserverOptions,
+  ReflectorOptions,
+  ReflectorOperationalMetrics,
+  ReflectorOperationalReport,
+  ManualReviewItem,
+  ReflectorPersistedState,
+  ReflectorStateStore,
+} from './domains/tkg';
+
+export { MeetingStateMachine } from './workflow';
+
+export type {
+  MeetingState,
+  MeetingEventType,
+  MeetingEvent,
+  TransitionLog,
+  MeetingStateSnapshot,
+  MeetingStateMachineOptions,
+} from './workflow';
 
 export type {
   Event,

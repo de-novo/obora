@@ -456,6 +456,44 @@ describe("VerifierAgent", () => {
       expect(checks[1].status).toBe("failed");
       expect(checks[2].status).toBe("skipped");
     });
+
+    it("should clamp score into 0-100", () => {
+      const over = agent["parseResponse"]('{"score": 120, "findings": [], "checks": [], "suggestions": []}', task);
+      const under = agent["parseResponse"]('{"score": -5, "findings": [], "checks": [], "suggestions": []}', task);
+
+      expect((over as VerifierOutput).score).toBe(100);
+      expect((under as VerifierOutput).score).toBe(0);
+    });
+
+    it("should map legacy issues field into findings", () => {
+      const content = JSON.stringify({
+        passed: false,
+        score: 40,
+        checks: [],
+        issues: [
+          {
+            id: "legacy-1",
+            type: "error",
+            description: "Legacy issue",
+            severity: "high",
+          },
+        ],
+        suggestions: [],
+      });
+
+      const result = agent["parseResponse"](content, task) as VerifierOutput;
+
+      expect(result.findings).toHaveLength(1);
+      expect(result.findings[0].id).toBe("legacy-1");
+    });
+
+    it("should default passed to false when omitted", () => {
+      const content = '{"score": 95, "checks": [], "findings": [], "suggestions": []}';
+
+      const result = agent["parseResponse"](content, task) as VerifierOutput;
+
+      expect(result.passed).toBe(false);
+    });
   });
 
   describe("act", () => {
@@ -588,6 +626,55 @@ describe("VerifierAgent", () => {
       await agent["act"](verification, context);
 
       expect(eventSpy).not.toHaveBeenCalled();
+    });
+
+    it("should emit verification.critical event for capitalized severity", async () => {
+      const eventSpy = vi.fn();
+      blackboard.on?.("verification.critical", eventSpy);
+
+      const verification = {
+        type: "verification",
+        content: "Test content",
+        passed: false,
+        score: 40,
+        checks: [],
+        findings: [
+          {
+            id: "critical-uppercase",
+            type: "error",
+            description: "Critical issue",
+            severity: " Critical ",
+          },
+        ],
+        suggestions: [],
+      } as unknown as VerifierOutput;
+
+      await agent["act"](verification, context);
+
+      expect(eventSpy).toHaveBeenCalled();
+      const eventData = eventSpy.mock.calls[0][0];
+      expect(eventData.findings[0].id).toBe("critical-uppercase");
+    });
+
+    it("should ignore malformed findings without throwing", async () => {
+      const eventSpy = vi.fn();
+      blackboard.on?.("verification.critical", eventSpy);
+
+      const malformed = {
+        type: "verification",
+        content: "Test",
+        passed: false,
+        score: 20,
+        checks: [],
+        findings: [null, 42, { id: "ok", type: "error", description: "x", severity: "critical" }],
+        suggestions: [],
+      } as unknown as VerifierOutput;
+
+      await expect(agent["act"](malformed, context)).resolves.toBeDefined();
+      expect(eventSpy).toHaveBeenCalledTimes(1);
+      const eventData = eventSpy.mock.calls[0][0];
+      expect(eventData.findings).toHaveLength(1);
+      expect(eventData.findings[0].id).toBe("ok");
     });
   });
 });

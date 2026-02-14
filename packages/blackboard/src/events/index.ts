@@ -64,6 +64,14 @@ export type {
   ConsensusReachedEvent,
 } from './types';
 
+// Agenda Domain Events
+export type {
+  AgendaCreatedDomainEvent,
+  AgendaUpdatedDomainEvent,
+  AgendaStatusChangedDomainEvent,
+  AgendaDeletedDomainEvent,
+} from './types';
+
 // Knowledge Events
 export type {
   FactAddedEvent,

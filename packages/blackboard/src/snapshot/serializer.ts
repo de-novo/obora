@@ -17,6 +17,7 @@ import type {
   AgentStatus,
   Task,
   BoardPhase,
+  VotingSession,
 } from "../types";
 import type { SerializedState } from "./types";
 import { sortedKeyReplacer } from "./utils";
@@ -263,6 +264,7 @@ export class StateSerializer {
         pending: state.decisions.pending,
         opinions: this.serializeMap(state.decisions.opinions),
         history: state.decisions.history,
+        voting: state.decisions.voting,
       },
     };
   }
@@ -390,6 +392,7 @@ export class StateSerializer {
         pending: serialized.decisions.pending as Agenda[],
         opinions: this.deserializeMap(serialized.decisions.opinions as Array<[string, Opinion]>),
         history: serialized.decisions.history as Resolution[],
+        voting: (serialized.decisions.voting ?? {}) as Record<string, VotingSession>,
       },
     };
   }

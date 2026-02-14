@@ -6,7 +6,7 @@
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
-import { log } from "@obora/core";
+import { log, getAllDiagnoses, formatDiagnosis, getDiagnosis } from "@obora/core";
 import { Command } from "commander";
 
 import { CLIError } from "../errors.js";
@@ -50,6 +50,7 @@ interface StatusOptions {
   format?: "default" | "json" | "minimal";
   feature?: string;
   verbose?: boolean;
+  diagnose?: boolean;
 }
 
 /**
@@ -348,6 +349,46 @@ async function runStatus(options: StatusOptions): Promise<void> {
 
   const format = options.format || "default";
 
+  // --diagnose: show diagnosis templates for failed features or all known errors
+  if (options.diagnose) {
+    if (options.feature) {
+      // Show diagnosis for a specific feature's last error
+      const featuresDir = join(oboraDir, "features");
+      const featureDir = join(featuresDir, options.feature);
+      validatePathComponent(options.feature);
+      const status = readStatus(featureDir);
+      if (status && status.status === "failed") {
+        // Use the feature's last recorded error code when available;
+        // fall back to showing all diagnosis templates if unknown.
+        const lastCode = status.metadata?.last_error_code;
+        if (lastCode) {
+          console.log(`Diagnosis for failed feature '${options.feature}' (${lastCode}):\n`);
+          const diag = getDiagnosis(lastCode);
+          if (diag) {
+            console.log(formatDiagnosis(diag));
+          } else {
+            console.log(`No diagnosis template found for ${lastCode}.`);
+          }
+        } else {
+          // No recorded error code — show all relevant diagnoses
+          console.log(`Diagnosis guides for failed feature '${options.feature}':\n`);
+          for (const diag of getAllDiagnoses()) {
+            console.log(formatDiagnosis(diag));
+          }
+        }
+      } else {
+        console.log(`Feature '${options.feature}' is not in failed state (status: ${status?.status || "unknown"}).`);
+      }
+    } else {
+      // Show all diagnosis templates
+      console.log("Available diagnosis guides:\n");
+      for (const diag of getAllDiagnoses()) {
+        console.log(formatDiagnosis(diag));
+      }
+    }
+    return;
+  }
+
   if (options.feature) {
     // Show status for specific feature
     switch (format) {
@@ -375,6 +416,7 @@ export function createStatusCommand(): Command {
     .option("-f, --format <type>", "Output format: default, json, minimal", "default")
     .option("-F, --feature <name>", "Show status for a specific feature")
     .option("-v, --verbose", "Verbose output (show step details)")
+    .option("-d, --diagnose", "Show actionable diagnosis guides for errors")
     .action(async (options: StatusOptions) => {
       await runStatus(options);
     });

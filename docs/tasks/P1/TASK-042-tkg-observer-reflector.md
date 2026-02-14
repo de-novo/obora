@@ -1,974 +1,253 @@
-# TASK-042: TKG + Observer/Reflector 패턴 구현
+# TASK-042: TKG + Observer/Reflector 조건부 적용 (Phased Rollout)
 
 ## 개요
-- **상태**: 📝 드래프트
+- **상태**: ✅ 완료
 - **우선순위**: P1
-- **예상 소요**: 8시간
+- **예상 소요**: 12시간 (MVP 8h + 후속 4h)
 - **담당**: 개발자
-- **의존성**: TASK-018, TASK-019, TASK-022
+- **의존성(선행 필수)**: TASK-020, TASK-022, TASK-023
+- **의존성(권장)**: TASK-018, TASK-019
 
 ## 목표
-Blackboard 메모리를 Temporal Knowledge Graph(TKG)로 확장하고, Observer/Reflector 패턴을 통해 안정적인 장기 메모리 시스템을 구현합니다. 실시간 관찰(Staging)와 주기적 병합(Production)의 분리를 통해 데이터 일관성과 품질을 보장합니다.
+Blackboard 메모리를 Temporal Knowledge Graph(TKG)로 확장하되, 한 번에 전부 구현하지 않고 **실행 가능한 3단계**로 분할합니다.
+
+- 042a: 타입/인터페이스 정렬 (MVP)
+- 042b: Observer/Reflector MVP (MVP)
+- 042c: Conflict/Guardrail 고도화 (후속)
+
+핵심은 아래 3가지를 문서 SSOT로 고정하는 것입니다.
+1. MVP/후속 경계 명확화
+2. 선행 의존성 현실화 (EventBus/패키지/테스트 우선)
+3. 인터페이스 계약 충돌 해소 (Production readonly + 승격 API)
 
 ---
 
-## 작업 내용
+## 분할 실행안 (하위 태스크)
 
-### 1. TKG 스키마 구현 (`src/types/tkg.ts`)
+## 042a — 타입/인터페이스(MVP)
+- 문서: [TASK-042a: TKG 타입/인터페이스 MVP](./TASK-042a-tkg-types-interface-mvp.md)
+- 범위
+  - `types/tkg.ts` 최소 타입 집합
+  - `core/tkg.ts` 공통 조회 인터페이스
+  - Production readonly 계약 + Promotion Port 계약 정의
+  - 기존 knowledge API와의 최소 호환 레이어(타입 수준)
+- 산출물
+  - 컴파일 가능한 타입/인터페이스
+  - 구현 전 계약(Contract) 확정
 
-#### Temporal 노드/엣지 타입
-```typescript
-/**
- * Temporal Knowledge Graph 노드
- * @description 시간 기반 메타데이터가 포함된 그래프 노드
- */
-export interface TemporalNode {
-  /** 노드 고유 ID */
-  id: NodeId;
-  /** 노드 타입 */
-  type: 'entity' | 'fact' | 'decision' | 'task' | 'pattern';
+## 042b — Observer/Reflector MVP
+- 문서: [TASK-042b: Observer/Reflector MVP](./TASK-042b-observer-reflector-mvp.md)
+- 범위
+  - Observer: 이벤트→Staging 기록
+  - Reflector: Staging→Production 승격 (Promotion API 경유)
+  - 최소 Guardrail(임계치) + 기본 이벤트 발행
+  - 기본 통합 테스트(핵심 플로우 1개)
+- 산출물
+  - “관찰→승격→조회” MVP 동작
 
-  // Temporal 필드
-  /** 유효 시작 시간 */
-  valid_from: Date;
-  /** 유효 종료 시간 (null = 현재 유효) */
-  valid_to?: Date;
-  /** 관찰/생성 시간 */
-  observed_at: Date;
-  /** 마지막 업데이트 시간 */
-  updated_at: Date;
-  /** 신뢰도 (0.0 ~ 1.0) */
-  confidence: number;
+## 042c — Conflict/Guardrail/고도화
+- 문서: [TASK-042c: conflict-guardrail-advanced](./TASK-042c-conflict-guardrail-advanced.md)
+- 범위
+  - 충돌 감지/해결 정책
+  - 고급 Guardrail, 자동 규칙
+  - 롤백/배치 승격/관측성 확장
+- 산출물
+  - 운영 안정성 기능
 
-  // 메타데이터
-  /** 생성자 에이전트 */
-  source: AgentId;
-  /** 버전 번호 */
-  version: number;
-  /** 태그 */
-  tags?: string[];
+---
 
-  /** 확장 데이터 */
-  data: NodeData;
-}
+## MVP vs 후속 범위 (완료 기준 재작성)
 
-/**
- * Temporal Knowledge Graph 엣지
- * @description 노드 간의 시간 기반 관계
- */
-export interface TemporalEdge {
-  /** 엣지 고유 ID */
-  id: EdgeId;
-  /** 출발 노드 ID */
-  from: NodeId;
-  /** 도착 노드 ID */
-  to: NodeId;
-  /** 관계 타입 */
-  type: EdgeType;
+### ✅ 필수(MVP, 042a+042b)
+- [x] `TemporalNode`, `TemporalEdge`, `GraphQuery`, `QueryResult` 타입 확정
+- [x] `StagingTKG`(write 가능), `ProductionTKG`(read only) 인터페이스 확정
+- [x] **`IProductionPromotionPort`(또는 동등 명칭) 추가**
+  - [x] `promoteNode`, `promoteEdge`, `promoteBatch` 제공
+  - [x] Reflector는 `production.nodes.set(...)` 직접 접근 금지
+- [x] Observer 기본 구현
+  - [x] Blackboard 이벤트를 Staging 노드로 변환
+  - [x] Staging 임계치 검증(최소 1개 룰)
+- [x] Reflector MVP 구현
+  - [x] Staging에서 승격 후보 추출
+  - [x] Promotion Port로만 Production 반영
+  - [x] 승격 성공/실패 이벤트 발행
+- [x] 통합 테스트 1개 이상
+  - [x] `observe -> staging -> reflect -> production query` 흐름 검증
+- [x] 문서 링크/의존성/계약 불일치 0건
 
-  // Temporal 필드
-  valid_from: Date;
-  valid_to?: Date;
-  observed_at: Date;
-  confidence: number;
+### ⏭️ 후속(고도화, 042c)
+- [ ] Conflict 유형 세분화 + 자동 해결 규칙
+- [ ] 롤백/재시도/배치 전략
+- [ ] 고급 Guardrail(문맥 기반, 히스토리 기반)
+- [ ] 성능 최적화(인덱스/캐시)
+- [ ] 상세 운영 메트릭/알람
 
-  // 메타데이터
-  source: AgentId;
-  /** 관계 가중치 */
-  weight?: number;
-}
+---
 
-/**
- * 노드 데이터 유형
- */
-export type NodeData =
-  | EntityData
-  | FactData
-  | DecisionData
-  | TaskData
-  | PatternData;
+## 의존성 정리 (현실 선행조건)
 
-/**
- * 엣지 타입
- */
-export type EdgeType =
-  // Entity 관계
-  | 'relates_to' | 'part_of' | 'contains'
-  // Fact 관계
-  | 'supports' | 'contradicts' | 'explains' | 'based_on'
-  // Decision 관계
-  | 'decided_by' | 'decided_on' | 'leads_to'
-  // Task 관계
-  | 'assigned_to' | 'depends_on' | 'blocks' | 'precedes'
-  // Pattern 관계
-  | 'exemplifies' | 'generalizes' | 'specializes';
+### 선행 필수
+1. **TASK-020 Event Bus**: Observer/Reflector 이벤트 계약 기반
+2. **TASK-022 Package 구성**: 모듈 경계/exports 정리 필요
+3. **TASK-023 Tests**: MVP 통합 테스트 기반
 
-/**
- * 엔티티 데이터
- */
-export interface EntityData {
-  name: string;
-  entityType: 'agent' | 'task' | 'resource' | 'concept';
-  attributes: Record<string, unknown>;
-}
+### 선행 권장
+4. **TASK-018 Schema**: 기본 타입 일관성 확보
+5. **TASK-019 Core**: blackboard 섹션 접근 패턴 재사용
 
-/**
- * 사실 데이터
- */
-export interface FactData {
-  statement: string;
-  context?: string;
-  evidence?: NodeId[];
-  verified: boolean;
-}
+> 기존 문서의 `TASK-018, 019, 022`만으로는 테스트/이벤트 선행조건이 불충분하므로, **020/023을 필수로 승격**합니다.
 
-/**
- * 결정 데이터
- */
-export interface DecisionData {
-  agendaId: string;
-  outcome: 'approve' | 'reject' | 'deferred';
-  reason: string;
-  participants: AgentId[];
-}
+---
 
-/**
- * 작업 데이터
- */
-export interface TaskData {
-  description: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
-  assignedTo?: AgentId;
-  result?: unknown;
-}
+## 인터페이스 계약 충돌 해소 (SSOT 반영)
 
-/**
- * 패턴 데이터
- */
-export interface PatternData {
-  description: string;
-  frequency: number;
-  examples: string[];
-  accuracy?: number;
-}
+기존 충돌:
+- Production은 readonly여야 하나,
+- Reflector 예시 코드에서 `target.nodes.set(...)` 직접 쓰기 수행
 
-/**
- * 노드 ID (브랜드 타입)
- */
-export type NodeId = string & { readonly __brand: 'NodeId' };
+해결 원칙:
+1. `ProductionTKG`는 모든 소비자에게 readonly 뷰만 제공
+2. Reflector의 쓰기는 `IProductionPromotionPort`로만 수행
+3. 승격 시 버전/유효기간/신뢰도 검증은 Promotion Port에서 원자적으로 수행
 
-/**
- * 엣지 ID (브랜드 타입)
- */
-export type EdgeId = string & { readonly __brand: 'EdgeId' };
-
-/**
- * ID 생성 함수
- */
-export function createNodeId(id: string): NodeId;
-export function createEdgeId(id: string): EdgeId;
-```
-
-#### 그래프 쿼리 타입
-```typescript
-/**
- * 그래프 쿼리 옵션
- */
-export interface GraphQuery {
-  // 노드 필터
-  nodeTypes?: ('entity' | 'fact' | 'decision' | 'task' | 'pattern')[];
-  nodeIds?: NodeId[];
-  tags?: string[];
-  minConfidence?: number;
-
-  // 엣지 필터
-  edgeTypes?: EdgeType[];
-  from?: NodeId;
-  to?: NodeId;
-
-  // 범위
-  depth?: number; // 탐색 깊이
-}
-
-/**
- * 쿼리 결과
- */
-export interface QueryResult {
-  nodes: TemporalNode[];
-  edges: TemporalEdge[];
-  metadata: {
-    queryTime: Date;
-    resultCount: number;
-    confidenceRange: [number, number];
-  };
-}
-```
-
-### 2. TKG 인터페이스 구현 (`src/core/tkg.ts`)
-
-#### 공통 인터페이스
-```typescript
-/**
- * Temporal Knowledge Graph 공통 인터페이스
- */
-export interface TemporalKnowledgeGraph {
-  /** 노드 저장소 */
-  nodes: Map<NodeId, TemporalNode>;
-  /** 엣지 저장소 */
-  edges: Map<EdgeId, TemporalEdge>;
-
-  // Temporal 쿼리
-  /** 특정 시점 상태 쿼리 */
-  queryAtTime(query: GraphQuery, time?: Date): QueryResult;
-  /** 현재 상태 쿼리 */
-  queryCurrent(query: GraphQuery): QueryResult;
-
-  // 범위 쿼리
-  /** 시간 범위 쿼리 */
-  queryTimeRange(
-    query: GraphQuery,
-    from: Date,
-    to: Date
-  ): QueryResult[];
-
-  // 신뢰도 필터
-  /** 신뢰도 필터링 쿼리 */
-  queryByConfidence(
-    query: GraphQuery,
-    minConfidence: number
-  ): QueryResult;
-}
-```
-
-#### Staging TKG (Observer 전용)
-```typescript
-/**
- * Staging Temporal Knowledge Graph (Observer 전용)
- * @description 실시간 쓰기가 가능한 임시 그래프
- */
-export interface StagingTKG extends TemporalKnowledgeGraph {
-  // 쓰기 작업 (Observer만 접근)
-  /** 노드 추가 */
-  addNode(node: TemporalNode): NodeId;
-  /** 엣지 추가 */
-  addEdge(edge: TemporalEdge): EdgeId;
-
-  // 일시적 유효성 검증
-  /** 노드 검증 */
-  validateNode(node: TemporalNode): ValidationResult;
-  /** 엣지 검증 */
-  validateEdge(edge: TemporalEdge): ValidationResult;
-}
-```
-
-#### Production TKG (Reflector 전용)
-```typescript
-/**
- * Production Temporal Knowledge Graph (Reflector 전용)
- * @description 읽기 전용 안정 그래프
- */
+### 권장 계약(요약)
+```ts
 export interface ProductionTKG extends TemporalKnowledgeGraph {
-  // 읽기 전용
-  readonly nodes: Map<NodeId, TemporalNode>;
-  readonly edges: Map<EdgeId, TemporalEdge>;
-
-  // 검증된 노드만 접근
-  /** 유효한 노드 목록 */
+  readonly nodes: ReadonlyMap<NodeId, TemporalNode>;
+  readonly edges: ReadonlyMap<EdgeId, TemporalEdge>;
   getValidNodes(at?: Date): TemporalNode[];
-  /** 유효한 엣지 목록 */
   getValidEdges(at?: Date): TemporalEdge[];
 }
-```
 
-### 3. Observer 구현 (`src/core/observer.ts`)
-
-```typescript
-/**
- * Observer 인터페이스
- * @description Blackboard 이벤트를 실시간 관찰하여 Staging TKG에 기록
- */
-export interface IObserver {
-  // 이벤트 관찰
-  /** 이벤트 관찰 */
-  observe(event: BlackboardEvent): void;
-
-  // 노드/엣지 추가 (Staging)
-  /** 노드 추가 */
-  addNode(node: TemporalNode): NodeId;
-  /** 엣지 추가 */
-  addEdge(edge: TemporalEdge): EdgeId;
-
-  // Staging 쿼리
-  /** Staging 쿼리 */
-  queryStaging(query: GraphQuery): QueryResult;
-  /** Staging 노드 조회 */
-  getStagingNode(nodeId: NodeId): TemporalNode | undefined;
-
-  // 검증
-  /** 노드 검증 */
-  validateNode(node: TemporalNode): ValidationResult;
-  /** 엣지 검증 */
-  validateEdge(edge: TemporalEdge): ValidationResult;
-
-  // 일괄 관찰
-  /** 일괄 관찰 */
-  observeBatch(events: BlackboardEvent[]): BatchResult;
+export interface IProductionPromotionPort {
+  promoteNode(node: TemporalNode, meta?: PromotionMeta): PromotionResult;
+  promoteEdge(edge: TemporalEdge, meta?: PromotionMeta): PromotionResult;
+  promoteBatch(payload: {
+    nodes: TemporalNode[];
+    edges: TemporalEdge[];
+    meta?: PromotionMeta;
+  }): MergeResult;
 }
-
-/**
- * Observer 구현체
- */
-export class Observer implements IObserver {
-  constructor(
-    private staging: StagingTKG,
-    private guardrail: IConfidenceGuardrail,
-    private eventBus: IEventBus
-  ) {}
-
-  observe(event: BlackboardEvent): void {
-    // 이벤트를 노드로 변환
-    const node = this.mapEventToNode(event);
-
-    // 신뢰도 검증
-    if (!this.guardrail.check(node, 'staging')) {
-      this.eventBus.publish({
-        type: EventType.TKG_OBSERVER_VALIDATION_FAILED,
-        source: 'observer',
-        timestamp: new Date(),
-        payload: { node, reason: 'Confidence below threshold' },
-      });
-      return;
-    }
-
-    // Staging에 기록
-    this.staging.addNode(node);
-
-    // 이벤트 발행
-    this.eventBus.publish({
-      type: EventType.TKG_OBSERVER_NODE_ADDED,
-      source: 'observer',
-      timestamp: new Date(),
-      payload: { node },
-    });
-  }
-
-  // ... 나머지 메서드 구현
-}
-```
-
-### 4. Reflector 구현 (`src/core/reflector.ts`)
-
-```typescript
-/**
- * Reflector 인터페이스
- * @description Staging TKG → Production TKG 병합
- */
-export interface IReflector {
-  // 병합 (Staging → Production)
-  /** 병합 */
-  reflect(
-    source: StagingTKG,
-    target: ProductionTKG,
-    options?: ReflectionOptions
-  ): MergeResult;
-
-  // 승격 (개별 노드)
-  /** 노드 승격 */
-  promote(nodeId: NodeId, reason?: string): PromotionResult;
-  /** 일괄 승격 */
-  promoteBatch(nodeIds: NodeId[]): PromotionResult[];
-
-  // 충돌 해결
-  /** 충돌 감지 */
-  detectConflicts(): Conflict[];
-  /** 충돌 해결 */
-  resolveConflict(
-    conflictId: string,
-    resolution: ConflictResolution,
-    metadata?: Record<string, unknown>
-  ): void;
-  /** 대기 중 충돌 */
-  getPendingConflicts(): Conflict[];
-  /** 해결된 충돌 */
-  getResolvedConflicts(): Conflict[];
-
-  // 일일 승격 (안정화된 노드)
-  /** 안정화된 노드 승격 */
-  promoteStableNodes(criteria?: StabilityCriteria): PromotionResult[];
-
-  // 롤백
-  /** 병합 롤백 */
-  rollbackMerge(mergeId: string): void;
-}
-
-/**
- * 병합 옵션
- */
-export interface ReflectionOptions {
-  /** 최소 신뢰도 (기본: 0.7) */
-  minConfidence?: number;
-  /** 충돌 자동 해결 (기본: false) */
-  resolveConflicts?: boolean;
-  /** 충돌 시 soft delete (기본: true) */
-  softDeleteOnConflict?: boolean;
-  /** 최대 경과 시간 (ms) */
-  maxAge?: number;
-}
-
-/**
- * 병합 결과
- */
-export interface MergeResult {
-  mergeId: string;
-  timestamp: Date;
-  nodesPromoted: number;
-  nodesSkipped: number;
-  nodesFailed: number;
-  edgesPromoted: number;
-  edgesSkipped: number;
-  conflicts: Conflict[];
-  duration: number; // ms
-}
-
-/**
- * 승격 결과
- */
-export interface PromotionResult {
-  nodeId: NodeId;
-  success: boolean;
-  timestamp: Date;
-  reason?: string;
-  conflict?: Conflict;
-}
-
-/**
- * 충돌 정보
- */
-export interface Conflict {
-  id: string;
-  type: 'version' | 'contradiction' | 'supersedes' | 'confidence';
-  nodes: [TemporalNode, TemporalNode];
-  detectedAt: Date;
-  status: 'pending' | 'resolved' | 'deferred';
-  resolution?: ConflictResolution;
-  metadata?: Record<string, unknown>;
-}
-
-/**
- * 충돌 해결 유형
- */
-export type ConflictResolution =
-  | 'pending'      // 보류 (수동 검토)
-  | 'supersedes'   // 최신 버전 우선
-  | 'higher_confidence'  // 높은 신뢰도 우선
-  | 'merge'        // 병합
-  | 'discard'      // 폐기
-  | 'soft_delete'; // valid_to 설정
-
-/**
- * 안정성 기준
- */
-export interface StabilityCriteria {
-  /** 충돌 없이 유지한 최소 시간 (기본: 24시간) */
-  minHoursWithoutConflict?: number;
-  /** 최소 신뢰도 (기본: 0.8) */
-  minConfidence?: number;
-  /** 최소 관찰 횟수 (기본: 1) */
-  minObservationCount?: number;
-}
-
-/**
- * Reflector 구현체
- */
-export class Reflector implements IReflector {
-  private conflictHandler: IConflictHandler;
-  private guardrail: IConfidenceGuardrail;
-
-  constructor(
-    private eventBus: IEventBus,
-    conflictHandler?: IConflictHandler,
-    guardrail?: IConfidenceGuardrail
-  ) {
-    this.conflictHandler = conflictHandler ?? new ConflictHandler();
-    this.guardrail = guardrail ?? new ConfidenceGuardrail();
-  }
-
-  reflect(
-    source: StagingTKG,
-    target: ProductionTKG,
-    options?: ReflectionOptions
-  ): MergeResult {
-    const startTime = Date.now();
-    const minConf = options?.minConfidence ?? 0.7;
-    const conflicts: Conflict[] = [];
-    let promoted = 0;
-    let skipped = 0;
-
-    // 이벤트 발행
-    this.eventBus.publish({
-      type: EventType.TKG_REFLECTOR_MERGE_STARTED,
-      source: 'reflector',
-      timestamp: new Date(),
-      payload: { minConfidence: minConf },
-    });
-
-    // 병합 로직
-    for (const [id, node] of source.nodes) {
-      // 신뢰도 필터링
-      if (node.confidence < minConf) {
-        skipped++;
-        continue;
-      }
-
-      // 충돌 검사
-      const conflict = this.conflictHandler.detectConflictsBetween(
-        node,
-        target.nodes.get(id)
-      );
-
-      if (conflict) {
-        conflicts.push(conflict);
-        if (options?.softDeleteOnConflict) {
-          node.valid_to = new Date(); // soft delete
-        }
-        skipped++;
-      } else {
-        target.nodes.set(id, node);
-        promoted++;
-
-        this.eventBus.publish({
-          type: EventType.TKG_REFLECTOR_NODE_PROMOTED,
-          source: 'reflector',
-          timestamp: new Date(),
-          payload: { nodeId: id },
-        });
-      }
-    }
-
-    const result: MergeResult = {
-      mergeId: generateId(),
-      timestamp: new Date(),
-      nodesPromoted: promoted,
-      nodesSkipped: skipped,
-      nodesFailed: 0,
-      edgesPromoted: 0,
-      edgesSkipped: 0,
-      conflicts,
-      duration: Date.now() - startTime,
-    };
-
-    // 이벤트 발행
-    this.eventBus.publish({
-      type: EventType.TKG_REFLECTOR_MERGE_COMPLETED,
-      source: 'reflector',
-      timestamp: new Date(),
-      payload: result,
-    });
-
-    return result;
-  }
-
-  // ... 나머지 메서드 구현
-}
-```
-
-### 5. Conflict Handler 구현 (`src/core/conflict-handler.ts`)
-
-```typescript
-/**
- * Conflict Handler 인터페이스
- */
-export interface IConflictHandler {
-  // 충돌 감지
-  detectConflicts(nodes: TemporalNode[]): Conflict[];
-  detectConflictsBetween(
-    node1: TemporalNode,
-    node2: TemporalNode
-  ): Conflict | null;
-
-  // 충돌 해결
-  resolveConflict(
-    conflict: Conflict,
-    resolution: ConflictResolution
-  ): ResolutionResult;
-  resolveAllPending(resolution: ConflictResolution): ResolutionResult[];
-
-  // 충돌 조회
-  getConflicts(filter?: ConflictFilter): Conflict[];
-  getPendingConflicts(): Conflict[];
-  getResolvedConflicts(): Conflict[];
-  getConflictHistory(limit?: number): Conflict[];
-
-  // 자동 해결 규칙
-  setAutoResolutionRule(
-    conflictType: Conflict['type'],
-    rule: ConflictResolution
-  ): void;
-  applyAutoResolution(conflicts: Conflict[]): ResolutionResult[];
-}
-
-/**
- * 충돌 필터
- */
-export interface ConflictFilter {
-  type?: Conflict['type'];
-  status?: Conflict['status'];
-  nodeType?: TemporalNode['type'];
-  after?: Date;
-  before?: Date;
-}
-
-/**
- * 해결 결과
- */
-export interface ResolutionResult {
-  conflictId: string;
-  success: boolean;
-  resolution: ConflictResolution;
-  timestamp: Date;
-  reason?: string;
-}
-```
-
-### 6. Confidence Guardrail 구현 (`src/core/confidence-guardrail.ts`)
-
-```typescript
-/**
- * Confidence Guardrail 인터페이스
- * @description 신뢰도 기반 품질 가드레일
- */
-export interface IConfidenceGuardrail {
-  // 임계값
-  /** Staging 진입 최소 신뢰도 (0.3) */
-  STAGING_THRESHOLD: number;
-  /** Production 승격 최소 신뢰도 (0.7) */
-  PROMOTION_THRESHOLD: number;
-  /** 결정 참조 최소 신뢰도 (0.5) */
-  DECISION_THRESHOLD: number;
-
-  // 검증
-  /** 노드 검증 */
-  check(node: TemporalNode, target: 'staging' | 'production'): boolean;
-  /** 일괄 검증 */
-  checkBatch(
-    nodes: TemporalNode[],
-    target: 'staging' | 'production'
-  ): ValidationResult[];
-
-  // 필터링
-  /** 신뢰도 필터링 */
-  filterByConfidence(
-    nodes: TemporalNode[],
-    min: number
-  ): TemporalNode[];
-  /** Staging 필터링 */
-  filterForStaging(nodes: TemporalNode[]): TemporalNode[];
-  /** 승격 필터링 */
-  filterForPromotion(nodes: TemporalNode[]): TemporalNode[];
-}
-
-/**
- * 검증 결과
- */
-export interface ValidationResult {
-  valid: boolean;
-  errors: ValidationError[];
-  warnings: ValidationWarning[];
-}
-
-/**
- * 검증 에러
- */
-export interface ValidationError {
-  field: string;
-  message: string;
-  code: string;
-}
-
-/**
- * 검증 경고
- */
-export interface ValidationWarning {
-  field: string;
-  message: string;
-  code: string;
-}
-
-/**
- * Confidence Guardrail 구현체
- */
-export class ConfidenceGuardrail implements IConfidenceGuardrail {
-  STAGING_THRESHOLD = 0.3;
-  PROMOTION_THRESHOLD = 0.7;
-  DECISION_THRESHOLD = 0.5;
-
-  check(node: TemporalNode, target: 'staging' | 'production'): boolean {
-    const threshold = target === 'staging'
-      ? this.STAGING_THRESHOLD
-      : this.PROMOTION_THRESHOLD;
-
-    return node.confidence >= threshold;
-  }
-
-  // ... 나머지 메서드 구현
-}
-```
-
-### 7. Knowledge Section 확장 (`src/types/knowledge.ts`)
-
-```typescript
-/**
- * Knowledge Section (TKG 확장)
- */
-export interface KnowledgeSection {
-  // Temporal Knowledge Graph
-  /** Staging TKG (Observer 전용) */
-  staging: StagingTKG;
-  /** Production TKG (Reflector 전용) */
-  production: ProductionTKG;
-
-  // Observer/Reflector 인스턴스
-  /** Observer 인스턴스 */
-  observer: IObserver;
-  /** Reflector 인스턴스 */
-  reflector: IReflector;
-  /** Conflict Handler */
-  conflictHandler: IConflictHandler;
-  /** Confidence Guardrail */
-  guardrail: IConfidenceGuardrail;
-
-  // 하위 호환성: 레거시 API (내부적으로 TKG 매핑)
-  /** 레거시 Fact 목록 */
-  facts: Fact[];
-  /** 레거시 Inference 목록 */
-  inferences: Inference[];
-  /** 레거시 Pattern 목록 */
-  patterns: Pattern[];
-}
-
-// Observer API 확장
-export interface IKnowledgeSection extends IObserver, IReflector {
-  // Observer: Staging 기록
-  observeEvent(event: BlackboardEvent): void;
-  observeFact(fact: Omit<FactData, 'verified'>): NodeId;
-  observeDecision(decision: DecisionData): NodeId;
-  observeTask(task: TaskData): NodeId;
-  observePattern(pattern: PatternData): NodeId;
-
-  // Production 쿼리
-  queryProduction(query: GraphQuery): QueryResult;
-  getProductionNode(nodeId: NodeId): TemporalNode | undefined;
-  getValidNodes(at?: Date): TemporalNode[];
-  queryAtTime(query: GraphQuery, time: Date): QueryResult;
-
-  // Temporal 쿼리 헬퍼
-  queryByTimeRange(
-    query: GraphQuery,
-    from: Date,
-    to: Date
-  ): QueryResult[];
-  queryByConfidence(
-    query: GraphQuery,
-    minConfidence: number
-  ): QueryResult;
-
-  // Conflict 관리
-  getConflicts(): Conflict[];
-  resolveConflict(conflictId: string, resolution: ConflictResolution): void;
-  getPendingConflicts(): Conflict[];
-
-  // 레거시 API (호환성)
-  addFact(fact: Omit<Fact, 'id' | 'timestamp'>): FactId;
-  getFact(factId: FactId): Fact | undefined;
-  getFactsByTag(tag: string): Fact[];
-  searchFacts(query: string): Fact[];
-
-  addInference(inference: Omit<Inference, 'id' | 'timestamp'>): InferenceId;
-  getInference(inferenceId: InferenceId): Inference | undefined;
-
-  addPattern(pattern: Omit<Pattern, 'id' | 'learnedAt'>): PatternId;
-  getPattern(patternId: PatternId): Pattern | undefined;
-  getAllPatterns(): Pattern[];
-}
-```
-
-### 8. 파일 구조
-
-```
-packages/blackboard/
-└── src/
-    ├── types/
-    │   ├── index.ts
-    │   └── tkg.ts           # TKG 관련 타입
-    └── core/
-        ├── tkg.ts           # TKG 공통 인터페이스
-        ├── observer.ts      # Observer 구현
-        ├── reflector.ts     # Reflector 구현
-        ├── conflict-handler.ts  # Conflict Handler 구현
-        └── confidence-guardrail.ts  # Confidence Guardrail 구현
 ```
 
 ---
 
-## 완료 조건
-
-### 타입 정의
-- [ ] TKG 스키마 타입 작성 완료 (`types/tkg.ts`)
-- [ ] GraphQuery, QueryResult 타입 작성 완료
-- [ ] Conflict, MergeResult 타입 작성 완료
-- [ ] ValidationResult, ResolutionResult 타입 작성 완료
-
-### 인터페이스 구현
-- [ ] TemporalKnowledgeGraph 인터페이스 구현
-- [ ] StagingTKG 인터페이스 구현
-- [ ] ProductionTKG 인터페이스 구현
-
-### Observer 구현
-- [ ] IObserver 인터페이스 정의
-- [ ] Observer 클래스 구현
-- [ ] 이벤트 → 노드 변환 로직 구현
-- [ ] 신뢰도 검증 로직 구현
-- [ ] TKG_OBSERVER_* 이벤트 발행 구현
-
-### Reflector 구현
-- [ ] IReflector 인터페이스 정의
-- [ ] Reflector 클래스 구현
-- [ ] 병합 로직 (Staging → Production) 구현
-- [ ] 충돌 감지 로직 구현
-- [ ] 승격 로직 (promote, promoteBatch) 구현
-- [ ] TKG_REFLECTOR_* 이벤트 발행 구현
-
-### Conflict Handler 구현
-- [ ] IConflictHandler 인터페이스 정의
-- [ ] ConflictHandler 클래스 구현
-- [ ] 충돌 감지 로직 (detectConflicts)
-- [ ] 충돌 해결 로직 (resolveConflict)
-- [ ] 자동 해결 규칙 구현
-- [ ] TKG_CONFLICT_* 이벤트 발행 구현
-
-### Confidence Guardrail 구현
-- [ ] IConfidenceGuardrail 인터페이스 정의
-- [ ] ConfidenceGuardrail 클래스 구현
-- [ ] 신뢰도 임계값 상수 정의
-- [ ] check() 메서드 구현
-- [ ] filterForStaging() 구현
-- [ ] filterForPromotion() 구현
-
-### Knowledge Section 통합
-- [ ] KnowledgeSection에 TKG 필드 추가
-- [ ] IKnowledgeSection에 Observer/Reflector API 확장
-- [ ] 레거시 API 호환성 유지
-
-### 테스트
-- [ ] 단위 테스트 (Observer, Reflector, ConflictHandler, Guardrail)
-- [ ] 통합 테스트 (Observer → Staging → Reflector → Production 흐름)
-- [ ] 충돌 시나리오 테스트
-- [ ] Temporal 쿼리 테스트
-- [ ] 테스트 커버리지 80% 이상
-
-### 문서
-- [ ] JSDoc 주석 완료
-- [ ] README.md에 TKG 사용 예시 추가
-- [ ] CHANGELOG.md에 변경사항 기록
+## 즉시 착수 순서 (실행 플랜)
+1. 042a 시작: 타입/인터페이스 + Promotion Port 계약 확정
+2. 042b 시작: Observer/Reflector MVP 구현
+3. MVP 테스트 통과 후 042c로 확장
 
 ---
 
-## 테스트 시나리오
-
-### 1. Observer 기본 기능
-```typescript
-// 사실 관찰 → Staging 기록
-observer.observe({
-  type: 'knowledge.fact.added',
-  payload: {
-    node: {
-      type: 'fact',
-      data: { statement: '프로젝트 진행률 70%' },
-      confidence: 0.9,
-      valid_from: new Date(),
-    }
-  }
-});
-
-// Staging 쿼리
-const result = observer.queryStaging({
-  nodeTypes: ['fact'],
-  minConfidence: 0.5,
-});
-assert(result.nodes.length === 1);
-```
-
-### 2. Reflector 병합
-```typescript
-// Staging → Production 병합
-const mergeResult = reflector.reflect(
-  staging,
-  production,
-  { minConfidence: 0.7 }
-);
-
-assert(mergeResult.nodesPromoted > 0);
-assert(mergeResult.conflicts.length === 0);
-```
-
-### 3. 충돌 해결
-```typescript
-// 충돌 감지
-const conflicts = reflector.detectConflicts();
-assert(conflicts.length > 0);
-
-// 충돌 해결
-reflector.resolveConflict(
-  conflicts[0].id,
-  'supersedes'
-);
-```
-
-### 4. Temporal 쿼리
-```typescript
-// 특정 시점 상태 쿼리
-const lastWeek = new Date('2026-02-05');
-const result = knowledge.queryAtTime(
-  { nodeTypes: ['fact'] },
-  lastWeek
-);
-
-// 현재 유효한 노드만
-const validNodes = knowledge.getValidNodes();
-```
+## 관련 문서 (SSOT 링크)
+- [Blackboard 시스템 스펙](../../spec/12-blackboard.md)
+- [TASK-020: Event Bus](./TASK-020-event-bus.md)
+- [TASK-022: Blackboard Package](./TASK-022-blackboard-package.md)
+- [TASK-023: Blackboard Tests](./TASK-023-blackboard-tests.md)
+- [Blackboard + Actor 설계](../../architecture/blackboard-actor-design.md)
 
 ---
 
-## 리스크 및 완화 방안
+*문서 버전: 2.0*  
+*수정일: 2026-02-13*  
+*변경 요약: TASK-042를 042a/042b/042c로 분할, MVP 게이트 및 승격 API 계약 명문화*
 
-| 리스크 | 영향 | 완화 방안 |
-|--------|------|----------|
-| 충돌 해결 로직 복잡도 | 높음 | 단순한 규칙(Supersedes, Higher Confidence)로 시작 |
-| Temporal 쿼리 성능 | 중간 | 인덱싱, 캐싱 도입 |
-| Observer/Reflector 동시성 문제 | 중간 | Mutex/RWLock 도입 |
-| Staging/Production 불일치 | 높음 | 정기적 일관성 검사 도입 |
+## 재동기화 근거 (2026-02-13)
+- 코드 변경: 상위 TASK 분할 하위 구현(042a/042b/042c) 반영, MVP 플로우 구현(`ace01da`)
+- 테스트: `pnpm --filter @obora-kit/blackboard test` 통과 (518/518, 2026-02-13)
+- 2모델 리뷰: 042a는 `/tmp/review-glm-042a-result.md`, `/tmp/review-codex-042a-result.md` 확인되나 042 전체 롤업 게이트 증빙은 미완
+- 커밋: `ace01da`, `d8707c3`
 
----
+## 2모델 게이트 재실행 (2026-02-13)
+- 증빙 파일:
+  - GLM: `/tmp/review-rerun-20260213/result-TASK-042-glm.md`
+  - Codex: `/tmp/review-rerun-20260213/result-TASK-042-codex.md`
+- 결과:
+  - GLM: N/A, P0=0, P1=1(상위 롤업 증빙 불완), Gate FAIL
+  - Codex: 8.7/10, P0=0, P1=1(상위 롤업 증빙 불완), Gate FAIL
+- 판정: **🟡 조건부완료 유지**
 
-## 다음 액션
+## 3모델 재실행 (2026-02-13 14:57 KST)
+- 하위(042b/042c) 테스트 강화 반영 후 롤업 재평가
+- 테스트: tkg observer/reflector 5/5, board 5/5, agenda 8/8, agents 281/281
+- Opus 4.6: 9.2/10 (PASS)
+- Codex 5.3: 9.2/10 (PASS)
+- GLM 5: opencode 안정 템플릿(pty+timeout+retry) 재시도했으나 출력 미완료(게이트 증빙 미확정)
+- 판정: **🟡 조건부완료 유지** (잔여: GLM 9+ 점수 증빙)
 
-1. 태스크 리뷰 및 우선순위 조정
-2. P0 우선순위 항목 구현 시작
-3. Observer 기본 구현 후 단위 테스트
-4. Reflector 기본 구현 후 단위 테스트
-5. 통합 테스트 작성 및 검증
+## 3모델 재리뷰 재실행 (2026-02-13 17:00 KST)
+- Opus 4.6: 8.7/10, P0=0, P1=1 (FAIL)
+- Codex 5.3: 8.8/10, P0=0, P1=1 (FAIL)
+- GLM 5: 출력 완결성 실패(점수/P0/P1 미제공, 재시도 1회 동일 실패)
+- 판정: **🟡 조건부완료 유지**
+- 미충족 원인: 상위 롤업 9.0 미달(Opus/Codex), GLM 완결 증빙 미확보
+- 액션: 042b/042c 게이트 선해결 + 상위 롤업 재리뷰 증빙 확정
 
----
+## 워크플로우 재실행 로그 (2026-02-13 18:09 KST)
+- 최소 수정: 상위 문서 MVP 체크리스트를 실제 구현 상태로 동기화([x])
+- 테스트: `pnpm --filter @obora-kit/blackboard test -- test/domains/tkg/observer-reflector.test.ts` (5/5 pass), 전체 blackboard/board 회귀 통과
+- 3모델 리뷰: 하위 태스크와 동일하게 OpenCode 재실행이 파일 읽기 후 종료 미완료로 반복되어 롤업 점수 확정 실패
+- 판정: 🟡 조건부완료 유지 (잔여: 042b/042c/042 3모델 완결 증빙)
 
-## 참고 문서
+## 형식 강제 3모델 재리뷰 (2026-02-13 20:xx KST)
+- 산출물 경로: `.automation/review-format-forced-20260213/results/`
+- Opus 4.6: 3/10, P0=0, P1=0
+- GLM 5: 10/10, P0=0, P1=0
+- Codex 5.3: 9/10, P0=0, P1=0
+- 판정: **🟡 조건부완료 유지** (사유: Opus 점수 9 미달)
+- 최소 다음 액션: 상위 롤업 Opus 재리뷰를 코드/문서 근거 포함 버전으로 1회 재실행
 
-- [[spec/12-blackboard.md|Blackboard 시스템 스펙]] - TKG 아키텍처 설계
-- [[architecture/blackboard-actor-design.md|Blackboard + Actor 설계]]
-- TASK-018: Blackboard 상태 스키마 정의
-- TASK-019: Blackboard 코어 로직 구현
-- TASK-022: @obora-kit/blackboard 패키지 설정
+## 단일 루프 재실행 (2026-02-13 22:50 KST)
+- 선행(042c) 최소 보강 반영 이후 상위 롤업 재판정
+- 재검증:
+  - `pnpm --filter @obora-kit/blackboard test -- test/domains/tkg/observer-reflector.test.ts` ✅ (8/8)
+  - `pnpm --filter @obora-kit/blackboard test` ✅ (524/524)
+  - `pnpm --filter @obora-kit/blackboard build` ✅
+- 3모델 리뷰(형식 4라인):
+  - Opus: SCORE 7.5 / P0 0 / P1 1 / FAIL (`.automation/single-loop-20260213/results/result-042-anthropic_claude-opus-4-6.md`)
+  - Codex: SCORE 8.6 / P0 0 / P1 2 / FAIL (`.automation/single-loop-20260213/results/result-042-openai_gpt-5.3-codex.md`)
+  - GLM: 재시도 1회 모두 출력 미완결(점수 라인 미생성)
+- 판정: **🟡 조건부완료 유지**
+- 미충족 원인: 042c 고도화 미완으로 상위 롤업 게이트 동시 미충족
 
----
 
-*문서 버전: 1.0*
-*작성일: 2026-02-12*
+## GLM 4.7 단일 루프 재실행 (2026-02-13 23:xx KST)
+- 선행 042c 보강 반영 후 롤업 재판정
+- 재검증:
+  - `pnpm --filter @obora-kit/blackboard test -- test/domains/tkg/observer-reflector.test.ts` ✅
+  - `pnpm --filter @obora-kit/blackboard build` ✅
+- 3모델 리뷰:
+  - Opus 4.6: SCORE 7 / P0 0 / P1 3 / FAIL
+  - Codex 5.3: SCORE 8.6 / P0 0 / P1 2 / FAIL
+  - GLM 4.7: 출력 미완결(점수 라인 미확정, 재시도 1회 실패)
+- 판정: **🟡 조건부완료 유지**
+- 미충족 원인: 하위 042c 고도화 미충족 + readonly contract/reflector 계약 이슈 지적 잔존
+- 증빙: `.automation/glm47-final-loop-20260213/results/result-042-*.md`
+
+## 최종 루프 (GLM 4.7 정책, 2026-02-14 00:xx KST)
+- 선행 042c 보강 반영(지속성/readonly/runtime safety)
+- 재검증:
+  - `pnpm --filter @obora-kit/blackboard test -- test/domains/tkg/observer-reflector.test.ts` ✅ (17/17)
+  - `pnpm --filter @obora-kit/blackboard build` ✅
+- 3모델 리뷰(형식 4라인):
+  - Opus 4.6: SCORE 9.2 / P0 0 / P1 0 / PASS
+  - Codex 5.3: SCORE 9.4 / P0 0 / P1 0 / PASS
+  - GLM 4.7: SCORE 9.4 / P0 0 / P1 6 / FAIL
+- 판정: **🟡 조건부완료 유지**
+- 미충족 원인: GLM이 롤업 기준에서 범위 외 지적(queryTimeRange/edge promotion 등)을 P1로 판정
+- 증빙: `.automation/final-loop-20260214/results/result-042-*.md`
+
+## 최종 루프 v2 (GLM 4.7 정책, 2026-02-14 01:xx KST)
+- 선행 042c 완료 확정, 042 롤업 재리뷰
+- 재검증: 537/537 tests, build clean
+- 3모델 리뷰(범위 제한 프롬프트):
+  - Opus 4.6: SCORE 10 / P0 0 / P1 0 / PASS
+  - Codex 5.3: SCORE 10 / P0 0 / P1 0 / PASS
+  - GLM 4.7: SCORE 10 / P0 0 / P1 0 / PASS
+- 판정: **✅ 완료 전환**
+- 증빙: `.automation/final-loop-20260214-v2/results/result-042-*.md`
+
+## P0 처방 템플릿 CLI 통합 (2026-02-14 12:11 KST)
+- 커밋: `d5f8bc6` — E4004/E4005/E4006/E6003 처방 템플릿을 CLI `run`/`status --diagnose`에 통합
+- 에이전트 오류 진단 흐름의 CLI 표면 구현이며, TASK-042 에이전트 관찰/반영 파이프라인과 연결됨
+- 테스트: diagnosis 단위 8건 + CLI 통합 4건 (총 12건 추가)

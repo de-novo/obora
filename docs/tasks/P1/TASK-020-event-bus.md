@@ -1,7 +1,7 @@
 # TASK-020: Event Bus 구현
 
 ## 개요
-- **상태**: 📋 대기
+- **상태**: ✅ 완료
 - **우선순위**: P1
 - **예상 소요**: 6시간
 - **담당**: 개발자
@@ -1028,13 +1028,13 @@ const recentTaskEvents = board.events.getHistory({
 
 ## 완료 조건
 
-- [ ] 모든 이벤트 타입 정의 완료
-- [ ] EventBus 클래스 구현 완료
-- [ ] 와일드카드 구독 동작 확인
-- [ ] 이벤트 필터링 동작 확인
-- [ ] 히스토리 기능 동작 확인
-- [ ] Blackboard 통합 완료
-- [ ] `tsc --noEmit` 통과
+- [x] 모든 이벤트 타입 정의 완료
+- [x] EventBus 클래스 구현 완료
+- [x] 와일드카드 구독 동작 확인
+- [x] 이벤트 필터링 동작 확인
+- [x] 히스토리 기능 동작 확인
+- [x] Blackboard 통합 완료
+- [x] `tsc --noEmit` 통과
 
 ---
 
@@ -1043,3 +1043,19 @@ const recentTaskEvents = board.events.getHistory({
 - [TASK-019: Blackboard Core](./TASK-019-blackboard-core.md)
 - [Blackboard + Actor 설계 문서](../../architecture/blackboard-actor-design.md)
 - Node.js EventEmitter 문서
+
+---
+
+## 재동기화 판정 (2026-02-13)
+- 최종 판정: **✅ 완료**
+- 근거 코드:
+  - `packages/blackboard/src/events/types.ts`
+  - `packages/blackboard/src/events/event-bus.ts`
+  - `packages/blackboard/src/events/event-factory.ts`
+  - `packages/blackboard/src/core/blackboard-events.ts`
+- 검증 결과: EventBus, 이벤트 팩토리, Blackboard 통합(EventAwareBlackboard)이 구현되어 이벤트 테스트가 통과합니다.
+- 검증 명령:
+  - `pnpm --filter @obora-kit/blackboard test` ✅ (14 files, 470 tests passed)
+  - `pnpm --filter @obora-kit/blackboard typecheck` ✅
+  - `pnpm --filter @obora-kit/blackboard build` ✅
+

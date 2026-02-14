@@ -31,6 +31,12 @@ export const ErrorCodes = {
   E4001: "Step execution failed",
   E4002: "Timeout exceeded",
   E4003: "Agent not found",
+  E4004: "Lock acquisition failed",
+  E4005: "Step failed after retries exhausted",
+  E4006: "Spec validation failed",
+
+  // Agent errors (E6xxx)
+  E6003: "OpenClaw connection failed",
 } as const;
 
 export type ErrorCode = keyof typeof ErrorCodes;

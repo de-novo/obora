@@ -1,0 +1,89 @@
+[0m
+
+> build · glm-4.7
+[0m[0m→ [0mRead docs/tasks/P1/TASK-036-agenda-management.md
+[0m✱ [0mGlob "packages/blackboard/src/domains/agenda/**/*.ts"[90m 4 matches[0m
+[0m✱ [0mGlob "packages/blackboard/src/domains/agenda/**/*.tsx"[90m 0 matches[0m
+[0m→ [0mRead packages/blackboard/src/domains/agenda/AgendaStore.ts
+[0m→ [0mRead packages/blackboard/src/domains/agenda/events.ts
+[0m→ [0mRead packages/blackboard/src/domains/agenda/types.ts
+[0m→ [0mRead packages/blackboard/src/domains/agenda/index.ts
+
+[0m✱ [0mGlob "packages/blackboard/test/domains/agenda/**/*.ts"[90m 1 match[0m[0m→ [0mRead packages/blackboard/test/domains/agenda/agenda-store.test.ts
+[0m
+> @obora-kit/blackboard@0.1.0 test /Users/denovo/workspace/github/obora-kit/packages/blackboard
+> vitest run "test/domains/agenda"
+
+
+ RUN  v1.6.1 /Users/denovo/workspace/github/obora-kit/packages/blackboard
+
+ ✓ test/domains/agenda/agenda-store.test.ts  (9 tests) 5ms
+
+ Test Files  1 passed (1)
+      Tests  9 passed (9)
+   Start at  23:36:18
+   Duration  258ms (transform 62ms, setup 12ms, collect 65ms, tests 5ms, environment 0ms, prepare 51ms)
+[0m$ [0mpnpm --filter @obora-kit/blackboard test -- test/domains/agenda 2>&1 | tail -20
+[0m
+[0m→ [0mRead packages/blackboard/src/events/types.ts
+[0m✱ [0mGrep "AgendaCreatedDomainEvent|AgendaUpdatedDomainEvent|AgendaStatusChangedDomainEvent|AgendaDeletedDomainEvent"[90m in packages/blackboard/src · 19 matches[0m
+[0m→ [0mRead packages/blackboard/src/events/index.ts[90m [limit=100][0m
+[0m$ [0mpnpm --filter @obora-kit/blackboard test -- test/domains/agenda/agenda-store.test.ts --reporter=verbose 2>&1
+
+[0m
+> @obora-kit/blackboard@0.1.0 test /Users/denovo/workspace/github/obora-kit/packages/blackboard
+> vitest run "test/domains/agenda/agenda-store.test.ts" "--reporter=verbose"
+
+
+ RUN  v1.6.1 /Users/denovo/workspace/github/obora-kit/packages/blackboard
+
+ ✓ test/domains/agenda/agenda-store.test.ts > AgendaStore > creates agenda with defaults
+ ✓ test/domains/agenda/agenda-store.test.ts > AgendaStore > validates priority range
+ ✓ test/domains/agenda/agenda-store.test.ts > AgendaStore > rejects empty description consistently on create
+ ✓ test/domains/agenda/agenda-store.test.ts > AgendaStore > enforces linear status transitions
+ ✓ test/domains/agenda/agenda-store.test.ts > AgendaStore > emits agenda domain events via event bus
+ ✓ test/domains/agenda/agenda-store.test.ts > AgendaStore > prevents external mutation through returned agenda objects
+ ✓ test/domains/agenda/agenda-store.test.ts > AgendaStore > supports clearing optional fields explicitly
+ ✓ test/domains/agenda/agenda-store.test.ts > AgendaStore > emits immutable event payload snapshots
+ ✓ test/domains/agenda/agenda-store.test.ts > AgendaStore > deletes agenda and prevents further reads
+
+ Test Files  1 passed (1)
+      Tests  9 passed (9)
+   Start at  23:36:34
+   Duration  273ms (transform 64ms, setup 11ms, collect 70ms, tests 5ms, environment 0ms, prepare 56ms)
+[0m
+[0m
+[0m$ [0mpnpm --filter @obora-kit/blackboard build 2>&1 | tail -30
+ESM dist/events/index.js.map   69.00 B
+ESM dist/chunk-XQNBWKUD.js.map 78.00 B
+ESM dist/chunk-2TTBYIUF.js.map 66.77 KB
+ESM dist/chunk-3PJPZJ3Y.js.map 28.77 KB
+ESM dist/chunk-WC5COLG3.js.map 192.32 KB
+ESM dist/chunk-ZEPOQJW7.js.map 136.92 KB
+ESM ⚡️ Build success in 342ms
+DTS ⚡️ Build success in 2236ms
+DTS dist/core/index.d.cts                2.65 KB
+DTS dist/snapshot/index.d.cts            4.92 KB
+DTS dist/index.d.cts                     13.61 KB
+DTS dist/types/index.d.cts               5.68 KB
+DTS dist/events/index.d.cts              1.47 KB
+DTS dist/tkg-C8jGQPxl.d.cts              5.94 KB
+DTS dist/serializer-BGNMRIwy.d.cts       3.04 KB
+DTS dist/snapshot-manager-DS46jni-.d.cts 15.03 KB
+DTS dist/blackboard-Czo3Q41n.d.cts       25.22 KB
+DTS dist/tkg-CJthvL8j.d.cts              28.69 KB
+DTS dist/index-DMzSW2my.d.cts            26.68 KB
+DTS dist/core/index.d.ts                 2.65 KB
+DTS dist/snapshot/index.d.ts             4.91 KB
+DTS dist/index.d.ts                      13.60 KB
+DTS dist/types/index.d.ts                5.67 KB
+DTS dist/events/index.d.ts               1.46 KB
+DTS dist/tkg-DL6Qd1BT.d.ts               5.94 KB
+DTS dist/serializer-Cc6GeiWO.d.ts        3.04 KB
+DTS dist/snapshot-manager-BvOUavuR.d.ts  15.03 KB
+DTS dist/blackboard-Czo3Q41n.d.ts        25.22 KB
+DTS dist/tkg-C9P7P7vW.d.ts               28.69 KB
+DTS dist/index-IJOa3oNa.d.ts             26.68 KBSCORE: 9.2
+P0: 0
+P1: 1
+DECISION: FAIL

@@ -1,7 +1,7 @@
 # TASK-029: Actor 통합 테스트
 
 ## 개요
-- **상태**: 📋 대기
+- **상태**: ✅ 완료
 - 우선순위: P1
 - 예상 소요: 6시간
 - 담당: 개발자
@@ -1274,3 +1274,9 @@ pnpm --filter @obora-kit/actor test:coverage
 # watch 모드
 pnpm --filter @obora-kit/actor test:watch
 ```
+
+## 재동기화 근거 (2026-02-13)
+- 코드 변경: Actor 통합 테스트/시나리오 확장 반영
+- 테스트: `pnpm --filter @obora-kit/actor test` 통과 (256/256, 2026-02-13)
+- 2모델 리뷰: 완료 커밋 메시지(score 10/10) 기준 게이트 충족
+- 커밋: `3b9463a`

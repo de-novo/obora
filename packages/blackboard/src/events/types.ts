@@ -8,6 +8,10 @@ import type {
   TaskId,
   AgendaId,
 } from '../types';
+import type {
+  Agenda as DomainAgenda,
+  AgendaStatus as DomainAgendaStatus,
+} from '../domains/agenda/types';
 import {
   BoardPhase,
   AgentStatus,
@@ -48,6 +52,7 @@ export type EventCategory =
   | 'decision'   // 의사결정 관련
   | 'task'       // 작업 관련
   | 'agent'      // 에이전트 관련
+  | 'agenda'     // blackboard agenda 도메인
   | 'system';    // 시스템 이벤트
 
 /**
@@ -450,6 +455,53 @@ export interface VotingCompletedEvent extends BaseEvent {
   };
 }
 
+// === Agenda Domain Events ===
+
+/**
+ * Agenda 생성 이벤트
+ */
+export interface AgendaCreatedDomainEvent extends BaseEvent {
+  type: 'agenda.created';
+  payload: {
+    agenda: DomainAgenda;
+  };
+}
+
+/**
+ * Agenda 수정 이벤트
+ */
+export interface AgendaUpdatedDomainEvent extends BaseEvent {
+  type: 'agenda.updated';
+  payload: {
+    agendaId: AgendaId;
+    previous: DomainAgenda;
+    current: DomainAgenda;
+  };
+}
+
+/**
+ * Agenda 상태 변경 이벤트
+ */
+export interface AgendaStatusChangedDomainEvent extends BaseEvent {
+  type: 'agenda.status.changed';
+  payload: {
+    agendaId: AgendaId;
+    previousStatus: DomainAgendaStatus;
+    newStatus: DomainAgendaStatus;
+  };
+}
+
+/**
+ * Agenda 삭제 이벤트
+ */
+export interface AgendaDeletedDomainEvent extends BaseEvent {
+  type: 'agenda.deleted';
+  payload: {
+    agendaId: AgendaId;
+    deleted: DomainAgenda;
+  };
+}
+
 // === Knowledge Events ===
 
 /**
@@ -640,6 +692,11 @@ export type Event =
   | VoteRequestedEvent
   | ConsensusReachedEvent
   | VotingCompletedEvent
+  // Agenda domain
+  | AgendaCreatedDomainEvent
+  | AgendaUpdatedDomainEvent
+  | AgendaStatusChangedDomainEvent
+  | AgendaDeletedDomainEvent
   // Knowledge
   | FactAddedEvent
   | FactUpdatedEvent

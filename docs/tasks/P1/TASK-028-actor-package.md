@@ -1,7 +1,7 @@
 # TASK-028: @obora-kit/actor 패키지 설정
 
 ## 개요
-- **상태**: 📋 대기
+- **상태**: ✅ 완료
 - 우선순위: P1
 - 예상 소요: 2시간
 - 담당: 개발자
@@ -586,3 +586,9 @@ node -e "import('@obora-kit/actor/runtime').then(m => console.log(Object.keys(m)
 node -e "import('@obora-kit/actor/pool').then(m => console.log(Object.keys(m)))"
 node -e "import('@obora-kit/actor/supervision').then(m => console.log(Object.keys(m)))"
 ```
+
+## 재동기화 근거 (2026-02-13)
+- 코드 변경: `packages/actor/package.json`, `src/index.ts` 등 패키지 구성 반영
+- 테스트: `pnpm --filter @obora-kit/actor test` 통과 (256/256, 2026-02-13)
+- 2모델 리뷰: 완료 커밋 메시지(score 9.5/10) 기준 게이트 충족
+- 커밋: `ed205d0`

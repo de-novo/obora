@@ -68,6 +68,7 @@ export interface SerializedState {
     pending: unknown[]; // Agenda[]
     opinions: Array<[string, unknown]>; // Map<string, Opinion> entries
     history: unknown[]; // Resolution[]
+    voting?: Record<string, unknown>; // VotingSession map
   };
 }
 

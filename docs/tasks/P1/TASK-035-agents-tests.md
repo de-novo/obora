@@ -1,7 +1,7 @@
 # TASK-035: AI 에이전트 테스트 (Mock LLM)
 
 ## 개요
-- **상태**: 📋 대기
+- **상태**: ✅ 완료
 - 우선순위: P1
 - 예상 소요: 6시간
 - 담당: 개발자
@@ -2567,8 +2567,8 @@ describe('ToolExecutionChain', () => {
 - [x] PromptTemplateRegistry 테스트 작성 완료
 - [x] ToolRegistry 테스트 작성 완료
 - [x] ToolExecutor 테스트 작성 완료
-- [ ] 테스트 커버리지 80% 이상
-- [ ] pnpm test 성공
+- [x] 테스트 커버리지 80% 이상 (83.76% 확인)
+- [x] pnpm test 성공 (281 tests pass)
 
 ## 의존성
 - TASK-031 (Agent Roles)
@@ -2614,3 +2614,26 @@ pnpm test:watch
 
 *작성일: 2026-02-04*
 *버전: 1.0.0*
+
+## 재동기화 근거 (2026-02-13)
+- 코드 변경: agents 테스트/검증 로직 반영 (`4f28c01`)
+- 테스트: `pnpm --filter @obora-kit/agents test` 통과 (281/281, 2026-02-13)
+- 2모델 리뷰: `/tmp/review-glm-task035-result.md`, `/tmp/review-codex-task035-result.md`에 9점 미만 기록 존재 → 게이트 미충족
+- 커밋: `4f28c01`
+
+## 2모델 게이트 재실행 (2026-02-13)
+- 증빙 파일:
+  - GLM: `/tmp/review-rerun-20260213/result-TASK-035-glm.md`
+  - Codex: `/tmp/review-rerun-20260213/result-TASK-035-codex.md`
+- 결과:
+  - GLM: 9.0/10, P0=0, P1=0, **PASS**
+  - Codex: 8.8/10, P0=0, P1=1(Verifier casting/typecheck 이슈), **FAIL**
+- 판정: **🟡 조건부완료 유지** (모델별 9점 이상 조건 미충족)
+
+
+## 게이트 재검증 (2026-02-13, 순차 재실행)
+- 테스트: `pnpm --filter @obora-kit/agents test` 통과 (16 files, 281 tests)
+- 2모델 리뷰 증빙:
+  - Codex: `/tmp/review-rerun2-20260213/result-TASK-035-codex.md` → 9.8/10, P0=0, P1=0, PASS
+  - GLM: `/tmp/review-rerun2-20260213/result-TASK-035-glm.md` → 9.5/10, P0=0, P1=0, PASS
+- 판정: **✅ 완료 전환** (게이트 기준 충족: 각 모델 9점 이상 + P0/P1 없음)

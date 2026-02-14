@@ -1,7 +1,7 @@
 # TASK-035: AI 에이전트 테스트 (Mock LLM)
 
 ## 개요
-- **상태**: 📋 대기
+- **상태**: ✅ 완료
 - 우선순위: P1
 - 예상 소요: 6시간
 - 담당: 개발자
@@ -2567,8 +2567,8 @@ describe('ToolExecutionChain', () => {
 - [x] PromptTemplateRegistry 테스트 작성 완료
 - [x] ToolRegistry 테스트 작성 완료
 - [x] ToolExecutor 테스트 작성 완료
-- [ ] 테스트 커버리지 80% 이상
-- [ ] pnpm test 성공
+- [x] 테스트 커버리지 80% 이상 (83.76% 확인)
+- [x] pnpm test 성공 (281 tests pass)
 
 ## 의존성
 - TASK-031 (Agent Roles)

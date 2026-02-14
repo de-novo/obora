@@ -1,0 +1,9 @@
+[0m
+
+[0m> build · glm-5
+[0m→ [0mRead packages/blackboard/src/domains/agenda/types.ts
+[0m→ [0mRead docs/tasks/P1/TASK-036-agenda-management.md
+[0m→ [0mRead packages/blackboard/src/domains/agenda/AgendaStore.ts
+[0m→ [0mRead packages/blackboard/src/domains/agenda/events.ts
+
+[0m→ [0mRead packages/blackboard/test/domains/agenda/agenda-store.test.ts

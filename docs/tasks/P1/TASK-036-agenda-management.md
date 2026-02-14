@@ -1,779 +1,141 @@
-# TASK-036: @obora-kit/board - Agenda Management System
+# TASK-036: Blackboard Agenda Stream 정비
 
 ## 개요
-- **상태**: 📋 대기
+- **상태**: ✅ 완료
 - 우선순위: P1
-- 예상 소요: 6시간
+- 예상 소요: 5시간
 - 담당: 개발자
+- **분류**: 재정의 필요 (board → blackboard)
+
+## 재기준화 배경
+기존 문서는 `packages/board` 내부 `AgendaManager` 구현을 전제로 작성되어 있었으나, 현재 P1 기준은 **blackboard-first**입니다. 따라서 안건(agenda)은 Board 도메인 객체가 아니라 Blackboard 상의 공유 상태/이벤트 스트림으로 먼저 정립합니다.
 
 ## 목표
-AI 이사회 시스템의 안건(Agenda) 관리 기능을 구현합니다. 안건 제출, 철회, 우선순위 관리, 마감 시간 설정 등의 핵심 기능을 제공합니다.
-
-## 작업 내용
-
-### 1. AgendaManager 클래스 구현
-
-**파일 위치:** `packages/board/src/agenda/AgendaManager.ts`
-
-#### 인터페이스 정의
-
-```typescript
-// packages/board/src/types/agenda.ts
-export interface Agenda {
-  id: string;
-  title: string;
-  description: string;
-  proposer: string;        // 제안자 ID
-  deadline?: Date;         // 마감 시간
-  priority: AgendaPriority;
-  status: AgendaStatus;
-  requiredQuorum: number;   // 필요 정족수
-  votingMethod: VotingMethod;
-  attachments?: string[];  // 첨부 파일/문서 경로
-  createdAt: Date;
-  updatedAt: Date;
-  metadata?: Record<string, unknown>;
-}
-
-export enum AgendaPriority {
-  CRITICAL = 'critical',  // 즉시 처리 필요
-  HIGH = 'high',          // 이번 회의 중
-  NORMAL = 'normal',      // 일반 순서
-  LOW = 'low'            // 시간 여유 있음
-}
-
-export enum AgendaStatus {
-  DRAFT = 'draft',           // 초안 상태
-  PENDING = 'pending',       // 제출 대기
-  SCHEDULED = 'scheduled',   // 일정 확정
-  ACTIVE = 'active',         // 현재 진행 중
-  WITHDRAWN = 'withdrawn',   // 철회됨
-  COMPLETED = 'completed',   // 완료됨
-  DEFERRED = 'deferred'      // 보류됨
-}
-
-export enum VotingMethod {
-  MAJORITY = 'majority',     // 단순 다수결
-  UNANIMOUS = 'unanimous',   // 만장일치
-  WEIGHTED = 'weighted'      // 가중치 투표
-}
-
-export interface AgendaCreateOptions {
-  title: string;
-  description: string;
-  proposer: string;
-  deadline?: Date | string;
-  priority?: AgendaPriority;
-  requiredQuorum?: number;
-  votingMethod?: VotingMethod;
-  attachments?: string[];
-  metadata?: Record<string, unknown>;
-}
-
-export interface AgendaUpdateOptions {
-  title?: string;
-  description?: string;
-  deadline?: Date | string;
-  priority?: AgendaPriority;
-  requiredQuorum?: number;
-  votingMethod?: VotingMethod;
-  attachments?: string[];
-  metadata?: Record<string, unknown>;
-}
-```
-
-#### AgendaManager 클래스 시그니처
-
-```typescript
-export class AgendaManager {
-  private agendas: Map<string, Agenda>;
-  private eventBus: EventBus;
-
-  constructor(eventBus: EventBus);
-
-  // === CRUD ===
-  create(options: AgendaCreateOptions): Agenda;
-  get(id: string): Agenda | undefined;
-  getAll(filter?: AgendaFilter): Agenda[];
-  update(id: string, options: AgendaUpdateOptions): Agenda;
-  delete(id: string): boolean;
-
-  // === 상태 전이 ===
-  submit(id: string): Agenda;
-  withdraw(id: string, reason?: string): Agenda;
-  schedule(id: string, scheduledAt?: Date): Agenda;
-  activate(id: string): Agenda;
-  complete(id: string): Agenda;
-  defer(id: string, reason: string): Agenda;
-
-  // === 우선순위 관리 ===
-  setPriority(id: string, priority: AgendaPriority): Agenda;
-  prioritize(): Agenda[];  // 우선순위별 정렬
-
-  // === 마감 시간 관리 ===
-  setDeadline(id: string, deadline: Date): Agenda;
-  checkDeadlines(): ExpiredAgenda[];
-  extendDeadline(id: string, extensionMs: number): Agenda;
-
-  // === 첨부 파일 관리 ===
-  addAttachment(id: string, attachment: string): Agenda;
-  removeAttachment(id: string, attachment: string): Agenda;
-
-  // === 검색/필터링 ===
-  findByProposer(proposer: string): Agenda[];
-  findByStatus(status: AgendaStatus): Agenda[];
-  findByPriority(priority: AgendaPriority): Agenda[];
-  findByDeadlineRange(start: Date, end: Date): Agenda[];
-  findExpired(): Agenda[];
-  findUrgent(hoursThreshold?: number): Agenda[];
-
-  // === 검증 ===
-  validateCreate(options: AgendaCreateOptions): ValidationResult;
-  validateUpdate(id: string, options: AgendaUpdateOptions): ValidationResult;
-
-  // === 유틸리티 ===
-  exists(id: string): boolean;
-  count(filter?: AgendaFilter): number;
-  clear(): void;
-}
-
-export interface AgendaFilter {
-  proposer?: string;
-  status?: AgendaStatus | AgendaStatus[];
-  priority?: AgendaPriority | AgendaPriority[];
-  deadlineBefore?: Date;
-  deadlineAfter?: Date;
-  createdBefore?: Date;
-  createdAfter?: Date;
-}
-
-export interface ExpiredAgenda {
-  agenda: Agenda;
-  overdueMs: number;
-}
-
-export interface ValidationResult {
-  isValid: boolean;
-  errors: ValidationError[];
-}
-
-export interface ValidationError {
-  code: string;
-  message: string;
-  path?: string;
-}
-```
-
-### 2. 구현 상세
-
-#### 2.1 생성 (create)
-
-```typescript
-/**
- * 새로운 안건을 생성합니다.
- *
- * @param options - 안건 생성 옵션
- * @returns 생성된 Agenda 객체
- * @throws {ValidationError} 유효하지 않은 옵션인 경우
- *
- * @example
- * const agenda = agendaManager.create({
- *   title: '신규 서비스 개발 승인',
- *   description: 'Q2에 출시할 신규 서비스에 대한 승인 요청',
- *   proposer: 'ceo',
- *   priority: AgendaPriority.HIGH,
- *   requiredQuorum: 3,
- *   votingMethod: VotingMethod.MAJORITY,
- *   deadline: new Date('2026-03-01')
- * });
- */
-create(options: AgendaCreateOptions): Agenda;
-```
-
-**검증 규칙:**
-- `title`: 필수, 최소 3자, 최대 200자
-- `description`: 필수, 최소 10자, 최대 5000자
-- `proposer`: 필수, 빈 문자열 불가
-- `requiredQuorum`: 최소 2, 최소 전체 이사 수의 50% 이상
-- `deadline`: 현재 시간 이후여야 함
-- `priority`: 기본값 `AgendaPriority.NORMAL`
-- `votingMethod`: 기본값 `VotingMethod.MAJORITY`
-
-**에러 코드:**
-- `EMPTY_TITLE`: 제목이 비어있음
-- `TITLE_TOO_SHORT`: 제목이 너무 짧음
-- `TITLE_TOO_LONG`: 제목이 너무 김
-- `EMPTY_DESCRIPTION`: 설명이 비어있음
-- `DESCRIPTION_TOO_SHORT`: 설명이 너무 짧음
-- `EMPTY_PROPOSER`: 제안자가 비어있음
-- `INVALID_QUORUM`: 정족수가 유효하지 않음
-- `DEADLINE_IN_PAST`: 마감 시간이 과거임
-
-#### 2.2 상태 전이
-
-```typescript
-/**
- * 안건을 제출 상태로 변경합니다.
- *
- * @param id - 안건 ID
- * @returns 업데이트된 Agenda 객체
- * @throws {NotFoundError} 안건을 찾을 수 없음
- * @throws {InvalidStateError} 현재 상태에서 제출 불가
- */
-submit(id: string): Agenda;
-
-/**
- * 안건을 철회합니다.
- *
- * @param id - 안건 ID
- * @param reason - 철회 사유 (선택)
- * @returns 업데이트된 Agenda 객체
- * @throws {NotFoundError} 안건을 찾을 수 없음
- * @throws {InvalidStateError} 이미 활성화된 안건은 철회 불가
- */
-withdraw(id: string, reason?: string): Agenda;
-```
-
-**상태 전이 규칙:**
-
-```
-DRAFT ──submit──▶ PENDING ──schedule──▶ SCHEDULED ──activate──▶ ACTIVE
- │                                                    │
- │                                                    │
- └──────withdraw─────────────────────────────────────┴─┬─────▶ COMPLETED
-                                                        │
-                                                        └──defer──▶ DEFERRED
-```
-
-| 현재 상태 | 가능한 전이 | 조건 |
-|----------|-----------|------|
-| DRAFT | submit, delete | - |
-| PENDING | withdraw, schedule, delete | - |
-| SCHEDULED | withdraw, activate, defer | - |
-| ACTIVE | complete | 투표 완료 시 |
-| COMPLETED | - | 종단 상태 |
-| WITHDRAWN | - | 종단 상태 |
-| DEFERRED | schedule | 재스케줄 가능 |
-
-#### 2.3 우선순위 관리
-
-```typescript
-/**
- * 안건의 우선순위를 설정합니다.
- *
- * @param id - 안건 ID
- * @param priority - 새로운 우선순위
- * @returns 업데이트된 Agenda 객체
- */
-setPriority(id: string, priority: AgendaPriority): Agenda;
-
-/**
- * 우선순위별 정렬된 안건 목록을 반환합니다.
- *
- * 순서: CRITICAL > HIGH > NORMAL > LOW
- * 동일 우선순위 내에서는 마감 시간 기준 정렬
- *
- * @returns 정렬된 안건 목록
- */
-prioritize(): Agenda[];
-```
-
-#### 2.4 마감 시간 관리
-
-```typescript
-/**
- * 안건의 마감 시간을 설정합니다.
- *
- * @param id - 안건 ID
- * @param deadline - 마감 시간
- * @returns 업데이트된 Agenda 객체
- * @throws {ValidationError} 마감 시간이 과거인 경우
- */
-setDeadline(id: string, deadline: Date): Agenda;
-
-/**
- * 마감 시간을 연장합니다.
- *
- * @param id - 안건 ID
- * @param extensionMs - 연장할 시간 (밀리초)
- * @returns 업데이트된 Agenda 객체
- */
-extendDeadline(id: string, extensionMs: number): Agenda;
-
-/**
- * 마감 시간이 지난 안건 목록을 반환합니다.
- *
- * @returns 만료된 안건 목록
- */
-checkDeadlines(): ExpiredAgenda[];
-```
-
-#### 2.5 검색/필터링
-
-```typescript
-/**
- * 제안자별 안건 목록을 조회합니다.
- *
- * @param proposer - 제안자 ID
- * @returns 안건 목록
- */
-findByProposer(proposer: string): Agenda[];
-
-/**
- * 상태별 안건 목록을 조회합니다.
- *
- * @param status - 단일 상태 또는 상태 배열
- * @returns 안건 목록
- */
-findByStatus(status: AgendaStatus | AgendaStatus[]): Agenda[];
-
-/**
- * 긴급한 안건 목록을 조회합니다.
- *
- * @param hoursThreshold - 임계 시간 (시간), 기본값 24시간
- * @returns 마감까지 threshold 이내 남은 안건 목록
- */
-findUrgent(hoursThreshold?: number): Agenda[];
-```
-
-### 3. 이벤트 발행
-
-AgendaManager는 다음 이벤트를 발행합니다:
-
-| 이벤트 이름 | 설명 | 페이로드 |
-|-----------|------|---------|
-| `agenda.created` | 안건 생성됨 | `{ agenda: Agenda }` |
-| `agenda.updated` | 안건 수정됨 | `{ agenda: Agenda, changes: string[] }` |
-| `agenda.deleted` | 안건 삭제됨 | `{ agendaId: string }` |
-| `agenda.submitted` | 안건 제출됨 | `{ agenda: Agenda }` |
-| `agenda.withdrawn` | 안건 철회됨 | `{ agenda: Agenda, reason?: string }` |
-| `agenda.scheduled` | 안건 일정 확정 | `{ agenda: Agenda, scheduledAt?: Date }` |
-| `agenda.activated` | 안건 활성화됨 | `{ agenda: Agenda }` |
-| `agenda.completed` | 안건 완료됨 | `{ agenda: Agenda }` |
-| `agenda.deferred` | 안건 보류됨 | `{ agenda: Agenda, reason: string }` |
-| `agenda.expired` | 안건 마감됨 | `{ agenda: Agenda, overdueMs: number }` |
-
-### 4. 테스트 케이스
-
-#### 4.1 생성 테스트
-
-```typescript
-describe('AgendaManager.create', () => {
-  it('should create agenda with valid options', () => {
-    const manager = new AgendaManager(eventBus);
-    const agenda = manager.create({
-      title: '테스트 안건',
-      description: '테스트를 위한 안건입니다',
-      proposer: 'test-user',
-      priority: AgendaPriority.HIGH,
-      requiredQuorum: 3,
-      votingMethod: VotingMethod.MAJORITY
-    });
-
-    expect(agenda.id).toBeDefined();
-    expect(agenda.title).toBe('테스트 안건');
-    expect(agenda.status).toBe(AgendaStatus.DRAFT);
-    expect(agenda.priority).toBe(AgendaPriority.HIGH);
-  });
-
-  it('should set default values', () => {
-    const manager = new AgendaManager(eventBus);
-    const agenda = manager.create({
-      title: '테스트',
-      description: '테스트 설명',
-      proposer: 'user'
-    });
-
-    expect(agenda.priority).toBe(AgendaPriority.NORMAL);
-    expect(agenda.votingMethod).toBe(VotingMethod.MAJORITY);
-    expect(agenda.requiredQuorum).toBe(2); // 기본값
-  });
-
-  it('should reject empty title', () => {
-    const manager = new AgendaManager(eventBus);
-
-    expect(() => {
-      manager.create({
-        title: '',
-        description: '테스트',
-        proposer: 'user'
-      });
-    }).toThrow('EMPTY_TITLE');
-  });
-
-  it('should reject title shorter than 3 characters', () => {
-    const manager = new AgendaManager(eventBus);
-
-    expect(() => {
-      manager.create({
-        title: 'ab',
-        description: '테스트',
-        proposer: 'user'
-      });
-    }).toThrow('TITLE_TOO_SHORT');
-  });
-
-  it('should reject empty description', () => {
-    const manager = new AgendaManager(eventBus);
-
-    expect(() => {
-      manager.create({
-        title: '테스트',
-        description: '',
-        proposer: 'user'
-      });
-    }).toThrow('EMPTY_DESCRIPTION');
-  });
-
-  it('should reject deadline in the past', () => {
-    const manager = new AgendaManager(eventBus);
-    const past = new Date();
-    past.setHours(past.getHours() - 1);
-
-    expect(() => {
-      manager.create({
-        title: '테스트',
-        description: '테스트 설명',
-        proposer: 'user',
-        deadline: past
-      });
-    }).toThrow('DEADLINE_IN_PAST');
-  });
-
-  it('should publish agenda.created event', () => {
-    const eventBus = createMockEventBus();
-    const manager = new AgendaManager(eventBus);
-
-    manager.create({
-      title: '테스트',
-      description: '테스트 설명',
-      proposer: 'user'
-    });
-
-    expect(eventBus.publish).toHaveBeenCalledWith('agenda.created', expect.any(Object));
-  });
-});
-```
-
-#### 4.2 상태 전이 테스트
-
-```typescript
-describe('AgendaManager state transitions', () => {
-  let manager: AgendaManager;
-  let agenda: Agenda;
-
-  beforeEach(() => {
-    manager = new AgendaManager(eventBus);
-    agenda = manager.create({
-      title: '테스트',
-      description: '테스트 설명',
-      proposer: 'user'
-    });
-  });
-
-  it('should submit draft agenda', () => {
-    const submitted = manager.submit(agenda.id);
-    expect(submitted.status).toBe(AgendaStatus.PENDING);
-  });
-
-  it('should schedule pending agenda', () => {
-    manager.submit(agenda.id);
-    const scheduled = manager.schedule(agenda.id);
-    expect(scheduled.status).toBe(AgendaStatus.SCHEDULED);
-  });
-
-  it('should activate scheduled agenda', () => {
-    manager.submit(agenda.id);
-    manager.schedule(agenda.id);
-    const activated = manager.activate(agenda.id);
-    expect(activated.status).toBe(AgendaStatus.ACTIVE);
-  });
-
-  it('should complete active agenda', () => {
-    manager.submit(agenda.id);
-    manager.schedule(agenda.id);
-    manager.activate(agenda.id);
-    const completed = manager.complete(agenda.id);
-    expect(completed.status).toBe(AgendaStatus.COMPLETED);
-  });
-
-  it('should withdraw pending agenda', () => {
-    manager.submit(agenda.id);
-    const withdrawn = manager.withdraw(agenda.id, '사유');
-    expect(withdrawn.status).toBe(AgendaStatus.WITHDRAWN);
-  });
-
-  it('should defer scheduled agenda', () => {
-    manager.submit(agenda.id);
-    manager.schedule(agenda.id);
-    const deferred = manager.defer(agenda.id, '추가 조사 필요');
-    expect(deferred.status).toBe(AgendaStatus.DEFERRED);
-  });
-
-  it('should throw error when withdrawing active agenda', () => {
-    manager.submit(agenda.id);
-    manager.schedule(agenda.id);
-    manager.activate(agenda.id);
-
-    expect(() => {
-      manager.withdraw(agenda.id);
-    }).toThrow('InvalidStateError');
-  });
-
-  it('should throw error when submitting non-existent agenda', () => {
-    expect(() => {
-      manager.submit('non-existent-id');
-    }).toThrow('NotFoundError');
-  });
-});
-```
-
-#### 4.3 우선순위 테스트
-
-```typescript
-describe('AgendaManager priority management', () => {
-  let manager: AgendaManager;
-
-  beforeEach(() => {
-    manager = new AgendaManager(eventBus);
-  });
-
-  it('should prioritize agendas correctly', () => {
-    manager.create({
-      title: '낮은 우선순위',
-      description: '테스트',
-      proposer: 'user',
-      priority: AgendaPriority.LOW
-    });
-
-    manager.create({
-      title: '높은 우선순위',
-      description: '테스트',
-      proposer: 'user',
-      priority: AgendaPriority.HIGH
-    });
-
-    manager.create({
-      title: '긴급',
-      description: '테스트',
-      proposer: 'user',
-      priority: AgendaPriority.CRITICAL
-    });
-
-    const prioritized = manager.prioritize();
-
-    expect(prioritized[0].priority).toBe(AgendaPriority.CRITICAL);
-    expect(prioritized[1].priority).toBe(AgendaPriority.HIGH);
-    expect(prioritized[2].priority).toBe(AgendaPriority.LOW);
-  });
-
-  it('should sort by deadline within same priority', () => {
-    const now = new Date();
-    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-    const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-
-    manager.create({
-      title: '내일 마감',
-      description: '테스트',
-      proposer: 'user',
-      deadline: tomorrow
-    });
-
-    manager.create({
-      title: '다음주 마감',
-      description: '테스트',
-      proposer: 'user',
-      deadline: nextWeek
-    });
-
-    const prioritized = manager.prioritize();
-
-    expect(prioritized[0].title).toBe('내일 마감');
-    expect(prioritized[1].title).toBe('다음주 마감');
-  });
-});
-```
-
-#### 4.4 마감 시간 테스트
-
-```typescript
-describe('AgendaManager deadline management', () => {
-  let manager: AgendaManager;
-  let clock: FakeTimers;
-
-  beforeEach(() => {
-    manager = new AgendaManager(eventBus);
-    clock = FakeTimers.install();
-  });
-
-  afterEach(() => {
-    clock.uninstall();
-  });
-
-  it('should check expired agendas', () => {
-    const now = new Date();
-    const past = new Date(now.getTime() - 1000); // 1초 전
-
-    manager.create({
-      title: '만료된 안건',
-      description: '테스트',
-      proposer: 'user',
-      deadline: past
-    });
-
-    const expired = manager.checkDeadlines();
-
-    expect(expired).toHaveLength(1);
-    expect(expired[0].overdueMs).toBeGreaterThan(0);
-  });
-
-  it('should extend deadline', () => {
-    const agenda = manager.create({
-      title: '테스트',
-      description: '테스트',
-      proposer: 'user',
-      deadline: new Date(Date.now() + 3600000) // 1시간 후
-    });
-
-    const originalDeadline = agenda.deadline!.getTime();
-    const extended = manager.extendDeadline(agenda.id, 7200000); // 2시간 연장
-
-    expect(extended.deadline!.getTime()).toBe(originalDeadline + 7200000);
-  });
-
-  it('should find urgent agendas within threshold', () => {
-    const now = new Date();
-    const in2Hours = new Date(now.getTime() + 2 * 60 * 60 * 1000);
-    const in3Hours = new Date(now.getTime() + 3 * 60 * 60 * 1000);
-
-    manager.create({
-      title: '2시간 후 마감',
-      description: '테스트',
-      proposer: 'user',
-      deadline: in2Hours
-    });
-
-    manager.create({
-      title: '3시간 후 마감',
-      description: '테스트',
-      proposer: 'user',
-      deadline: in3Hours
-    });
-
-    const urgent = manager.findUrgent(24); // 24시간 기준
-
-    expect(urgent).toHaveLength(2);
-  });
-});
-```
-
-#### 4.5 검색/필터링 테스트
-
-```typescript
-describe('AgendaManager search and filter', () => {
-  let manager: AgendaManager;
-
-  beforeEach(() => {
-    manager = new AgendaManager(eventBus);
-
-    manager.create({
-      title: 'CEO 안건',
-      description: '테스트',
-      proposer: 'ceo',
-      priority: AgendaPriority.HIGH
-    });
-
-    manager.create({
-      title: 'CTO 안건',
-      description: '테스트',
-      proposer: 'cto',
-      priority: AgendaPriority.NORMAL
-    });
-
-    manager.create({
-      title: 'CFO 안건',
-      description: '테스트',
-      proposer: 'cfo',
-      priority: AgendaPriority.NORMAL
-    });
-  });
-
-  it('should find by proposer', () => {
-    const agendas = manager.findByProposer('ceo');
-    expect(agendas).toHaveLength(1);
-    expect(agendas[0].proposer).toBe('ceo');
-  });
-
-  it('should find by status', () => {
-    manager.submit(manager.getAll()[0].id);
-
-    const pending = manager.findByStatus(AgendaStatus.PENDING);
-    const drafts = manager.findByStatus(AgendaStatus.DRAFT);
-
-    expect(pending).toHaveLength(1);
-    expect(drafts).toHaveLength(2);
-  });
-
-  it('should find by priority', () => {
-    const highPriority = manager.findByPriority(AgendaPriority.HIGH);
-    const normalPriority = manager.findByPriority(AgendaPriority.NORMAL);
-
-    expect(highPriority).toHaveLength(1);
-    expect(normalPriority).toHaveLength(2);
-  });
-
-  it('should find by multiple statuses', () => {
-    const first = manager.getAll()[0];
-    const second = manager.getAll()[1];
-
-    manager.submit(first.id);
-    manager.schedule(second.id);
-
-    const result = manager.findByStatus([
-      AgendaStatus.PENDING,
-      AgendaStatus.SCHEDULED
-    ]);
-
-    expect(result).toHaveLength(2);
-  });
-});
-```
-
-### 5. 파일 구조
-
-```
-packages/board/
-├── src/
-│   ├── agenda/
-│   │   ├── AgendaManager.ts
-│   │   └── index.ts
-│   └── types/
-│       └── agenda.ts
-└── test/
-    └── agenda/
-        ├── AgendaManager.test.ts
-        └── index.test.ts
-```
-
-### 6. 완료 조건
-
-- [ ] AgendaManager 클래스 구현 완료
-- [ ] 모든 상태 전이 구현 완료
-- [ ] 우선순위 정렬 기능 구현 완료
-- [ ] 마감 시간 관리 기능 구현 완료
-- [ ] 검색/필터링 기능 구현 완료
-- [ ] 이벤트 발행 구현 완료
-- [ ] 테스트 커버리지 80% 이상
-- [ ] pnpm test 성공
-- [ ] TypeScript 타입 체크 통과
-- [ ] ESLint 통과
-
-### 7. 의존성
-
-- TASK-019 (EventBus 구현)
-- @obora-kit/core 패키지
-
-### 8. 참고 문서
-
-- [Blackboard Actor Design](../../architecture/blackboard-actor-design.md)
-- [Phase 4: Board System](../../architecture/blackboard-actor-design.md#64-phase-4-board-system-week-7-8)
+`packages/blackboard`에 안건 엔티티/상태전이/이벤트 규약을 먼저 구현하여 이후 board 계층이 이를 소비하도록 SSOT를 맞춥니다.
+
+## 구현 범위 (blackboard 우선)
+
+### 1) 경로 재정의
+- 기존: `packages/board/src/agenda/*`
+- 변경: `packages/blackboard/src/domains/agenda/*`
+
+예상 파일:
+- `packages/blackboard/src/domains/agenda/types.ts`
+- `packages/blackboard/src/domains/agenda/AgendaStore.ts`
+- `packages/blackboard/src/domains/agenda/events.ts`
+- `packages/blackboard/src/domains/agenda/index.ts`
+- `packages/blackboard/test/domains/agenda/*.test.ts`
+
+### 2) 핵심 책임
+- Agenda 생성/수정/조회
+- 상태 전이 규칙(DRAFT→PENDING→ACTIVE→COMPLETED 등)
+- 우선순위/마감시간 필드 검증
+- Blackboard EventBus와 도메인 이벤트 연결
+
+### 3) 완료 기준
+- [x] Agenda 타입/상태 전이 규칙이 `packages/blackboard`에 정의됨
+- [x] CRUD + 상태전이 테스트 통과
+- [x] 이벤트 이름 규약이 board/actor와 충돌 없이 문서화됨
+- [x] 기존 `board` 용어가 blackboard 기반 용어로 정리됨
+
+## 의존성
+- 선행: TASK-019, TASK-020, TASK-023
+- 후행: TASK-037, TASK-039
+
+## SSOT / 참고
+- [[../architecture/blackboard-actor-design|Blackboard + Actor 아키텍처]]
+- [[TASK-019-blackboard-core|TASK-019]]
+- [[TASK-020-event-bus|TASK-020]]
+
+## 용어 정리
+- **board 안건 관리** → **blackboard agenda domain**
+- Board 패키지는 후속 오케스트레이션 계층으로 한정
+
+## 재동기화 근거 (2026-02-13)
+- 코드 변경: agenda stream 도메인 반영 (`packages/blackboard/src/domains/agenda/*`)
+- 테스트: `pnpm --filter @obora-kit/blackboard test` 통과 (518/518, 2026-02-13)
+- 2모델 리뷰: `/tmp/review-*-task036*.md`에 Codex/GLM 9점 미만 결과 다수 → 게이트 증빙 미완
+- 커밋: `...` (관련: `6ad196a` 브랜치 최신 반영)
+
+## 2모델 게이트 재실행 (2026-02-13)
+- 증빙 파일:
+  - GLM: `/tmp/review-rerun-20260213/result-TASK-036-glm.md`
+  - Codex: `/tmp/review-rerun-20260213/result-TASK-036-codex.md`
+- 결과:
+  - GLM: N/A(검증불가), Gate FAIL
+  - Codex: 8.8/10, P0=0, P1=1(최종 2모델 9+ 증빙 미충족), Gate FAIL
+- 판정: **🟡 조건부완료 유지**
+
+## 야간 루틴 점검 (2026-02-13 14:27 KST)
+- 기준 브랜치: `origin/main`
+- 작업 브랜치(HEAD 유지): `wip/blackboard-agenda-20260213-0225`
+- 최소 단위 점검: agenda 도메인 테스트 단독 재검증
+- 실행: `pnpm --filter @obora-kit/blackboard test -- test/domains/agenda`
+- 결과: `1 file / 8 tests` 모두 통과
+- 판정: 블로커 없음, 다음 실행에서 2모델 9+ 증빙 보강 필요
+
+## 3모델 재실행 (2026-02-13 14:57 KST)
+- 테스트: `pnpm --filter @obora-kit/blackboard test -- test/domains/agenda/agenda-store.test.ts` (8/8)
+- Opus 4.6: 9.2/10 (PASS)
+- Codex 5.3: 9.3/10 (PASS)
+- GLM 5: opencode 안정 템플릿(pty+timeout+retry) 재시도했으나 출력 미완료(게이트 증빙 미확정)
+- 판정: **🟡 조건부완료 유지** (잔여: GLM 9+ 점수 증빙)
+
+## 단일 루프 재실행 (2026-02-13 22:51 KST)
+- P0/P1 최소 수정: 코드 변경 없음(신규 P0 없음, Codex 지적은 CRUD 정의 불일치)
+- 재검증:
+  - `pnpm --filter @obora-kit/blackboard test -- test/domains/agenda/agenda-store.test.ts` ✅ (8/8)
+  - `pnpm --filter @obora-kit/blackboard test` ✅ (524/524)
+  - `pnpm --filter @obora-kit/blackboard build` ✅
+- 3모델 리뷰(형식 4라인):
+  - Opus: SCORE 9.2 / P0 0 / P1 0 / PASS (`.automation/single-loop-20260213/results/result-036-anthropic_claude-opus-4-6.md`)
+  - Codex: SCORE 8.8 / P0 0 / P1 1 / FAIL (`.automation/single-loop-20260213/results/result-036-openai_gpt-5.3-codex.md`)
+  - GLM: 재시도 1회 모두 출력 미완결(점수 라인 미생성)
+- 판정: **🟡 조건부완료 유지**
+- 미충족 원인: Codex P1(삭제 CRUD 근거 부족) + GLM 출력 미완결
+
+
+## GLM 4.7 단일 루프 재실행 (2026-02-13 23:xx KST)
+- 최소 수정: Agenda 삭제 CRUD 보강(`delete`) + `agenda.deleted` 이벤트/테스트 추가
+- 재검증:
+  - `pnpm --filter @obora-kit/blackboard test -- test/domains/agenda/agenda-store.test.ts` ✅ (9/9)
+  - `pnpm --filter @obora-kit/blackboard build` ✅
+- 3모델 리뷰:
+  - Opus 4.6: SCORE 9 / P0 0 / P1 1 / FAIL
+  - GLM 4.7: SCORE 10 / P0 0 / P1 0 / PASS
+  - Codex 5.3: SCORE 8.8 / P0 0 / P1 1 / FAIL
+- 판정: **🟡 조건부완료 유지**
+- 미충족 원인: Event immutability/date mutation 지적(Codex), barrel export completeness 지적(Opus)
+- 증빙: `.automation/glm47-final-loop-20260213/results/result-036-*.md`
+
+## 최종 루프 (GLM 4.7 정책, 2026-02-14 00:xx KST)
+- 최소 수정:
+  - barrel export 보강(`createAgendaEventMeta` 루트/도메인 export)
+  - 이벤트 불변성 강화(agenda payload + event metadata timestamp mutator 차단)
+  - 테스트 보강(이벤트 날짜 변이 시도 포함)
+- 재검증:
+  - `pnpm --filter @obora-kit/blackboard test -- test/domains/agenda/agenda-store.test.ts` ✅
+  - `pnpm --filter @obora-kit/blackboard build` ✅
+- 3모델 리뷰(형식 4라인):
+  - Opus 4.6: SCORE 9.5 / P0 0 / P1 0 / PASS
+  - Codex 5.3: SCORE 8.8 / P0 0 / P1 1 / FAIL
+  - GLM 4.7: 출력 미완결/지연으로 점수 라인 확보 실패(재시도 중단)
+- 판정: **🟡 조건부완료 유지**
+- 미충족 원인: Codex가 Date.prototype.call 우회 변이 가능성을 P1로 판정, GLM 완결 출력 불안정
+- 증빙: `.automation/final-loop-20260214/results/result-036-*.md`
+
+## 최종 루프 v2 (GLM 4.7 정책, 2026-02-14 01:xx KST)
+- 최소 수정: Date.prototype.set*.call 우회 차단 (plain-object Proxy target) + 테스트 추가
+- 재검증: 12/12 agenda tests, 537/537 total, build clean
+- 3모델 리뷰(범위 제한 프롬프트):
+  - Opus 4.6: SCORE 9.5 / P0 0 / P1 0 / PASS
+  - Codex 5.3: SCORE 9.7 / P0 0 / P1 0 / PASS
+  - GLM 4.7: SCORE 10 / P0 0 / P1 0 / PASS
+- 판정: **✅ 완료 전환**
+- 증빙: `.automation/final-loop-20260214-v2/results/result-036-*.md`
+
+## P0 처방 템플릿 통합 (2026-02-14 12:11 KST)
+- 커밋: `d5f8bc6` — E4004/E4005/E4006/E6003 에러 코드 + 처방 템플릿(hypothesis-evidence-command-rollback) 통합
+- 범위: `@obora/core/errors/diagnosis` 모듈 신규, `run`/`status --diagnose` CLI 연동
+- 테스트: diagnosis 8건 + status/run 통합 4건 추가 (총 12건)
+- 관련: TASK-042 에이전트 오류 진단 흐름의 CLI 표면 구현

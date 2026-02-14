@@ -14,6 +14,22 @@ vi.mock('node:fs', () => ({
 // Mock @obora/core
 vi.mock('@obora/core', () => ({
   log: vi.fn(),
+  getAllDiagnoses: vi.fn(() => [
+    { code: 'E4004', title: 'Lock acquisition failed', hypothesis: 'h', evidence: 'e', commands: ['cmd'], rollback: 'r' },
+    { code: 'E4005', title: 'Step failed', hypothesis: 'h', evidence: 'e', commands: ['cmd'], rollback: 'r' },
+    { code: 'E4006', title: 'Spec validation failed', hypothesis: 'h', evidence: 'e', commands: ['cmd'], rollback: 'r' },
+    { code: 'E6003', title: 'OpenClaw connection failed', hypothesis: 'h', evidence: 'e', commands: ['cmd'], rollback: 'r' },
+  ]),
+  formatDiagnosis: vi.fn((d: any) => `\n💊 Diagnosis for ${d.code}: ${d.title}\n`),
+  getDiagnosis: vi.fn((code: string) => {
+    const map: Record<string, any> = {
+      E4004: { code: 'E4004', title: 'Lock acquisition failed', hypothesis: 'h', evidence: 'e', commands: ['cmd'], rollback: 'r' },
+      E4005: { code: 'E4005', title: 'Step failed', hypothesis: 'h', evidence: 'e', commands: ['cmd'], rollback: 'r' },
+      E4006: { code: 'E4006', title: 'Spec validation failed', hypothesis: 'h', evidence: 'e', commands: ['cmd'], rollback: 'r' },
+      E6003: { code: 'E6003', title: 'OpenClaw connection failed', hypothesis: 'h', evidence: 'e', commands: ['cmd'], rollback: 'r' },
+    };
+    return map[code];
+  }),
 }));
 
 // Mock path-utils
@@ -250,6 +266,69 @@ describe('status command', () => {
       const cmd = createStatusCommand();
       cmd.exitOverride();
       await expect(cmd.parseAsync([], { from: 'user' })).rejects.toThrow();
+    });
+  });
+
+  describe('--diagnose option', () => {
+    it('should have --diagnose option', () => {
+      const cmd = createStatusCommand();
+      const diagnoseOption = cmd.options.find((opt) => opt.long === '--diagnose');
+      expect(diagnoseOption).toBeDefined();
+    });
+
+    it('should show all diagnosis guides without feature', async () => {
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readdirSync).mockReturnValue([]);
+
+      const cmd = createStatusCommand();
+      cmd.exitOverride();
+      await cmd.parseAsync(['--diagnose'], { from: 'user' });
+
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Available diagnosis guides'));
+    });
+
+    it('should show diagnosis for failed feature', async () => {
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readStatus).mockReturnValue({
+        ...mockStatus,
+        status: 'failed',
+      });
+
+      const cmd = createStatusCommand();
+      cmd.exitOverride();
+      await cmd.parseAsync(['--feature', 'test-feature', '--diagnose'], { from: 'user' });
+
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Diagnosis guides for failed feature'));
+    });
+
+    it('should show specific diagnosis when last_error_code is present', async () => {
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readStatus).mockReturnValue({
+        ...mockStatus,
+        status: 'failed',
+        metadata: { ...mockStatus.metadata, last_error_code: 'E4005' },
+      });
+
+      const cmd = createStatusCommand();
+      cmd.exitOverride();
+      await cmd.parseAsync(['--feature', 'test-feature', '--diagnose'], { from: 'user' });
+
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Diagnosis for failed feature'));
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('E4005'));
+    });
+
+    it('should show not-failed message for non-failed feature', async () => {
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readStatus).mockReturnValue({
+        ...mockStatus,
+        status: 'running',
+      });
+
+      const cmd = createStatusCommand();
+      cmd.exitOverride();
+      await cmd.parseAsync(['--feature', 'test-feature', '--diagnose'], { from: 'user' });
+
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('not in failed state'));
     });
   });
 

@@ -14,6 +14,8 @@ import {
   buildGraph,
   groupByLevel,
   OboraError,
+  getDiagnosis,
+  formatDiagnosis,
 } from "@obora/core";
 import type { Workflow, Step, WorkflowConfig } from "@obora/core";
 import { Command } from "commander";
@@ -106,6 +108,10 @@ async function updateStatus(featurePath: string, updates: Partial<StatusFile>): 
     if (updates.metadata?.notes !== undefined) {
       if (!parsed.metadata) parsed.metadata = {};
       parsed.metadata.notes = updates.metadata.notes;
+    }
+    if (updates.metadata?.last_error_code !== undefined) {
+      if (!parsed.metadata) parsed.metadata = {};
+      parsed.metadata.last_error_code = updates.metadata.last_error_code;
     }
 
     await fs.writeFile(statusPath, yaml.stringify(parsed), "utf-8");
@@ -235,7 +241,7 @@ async function executeWorkflow(
   workflow: Workflow,
   featurePath: string,
   options: RunOptions
-): Promise<{ success: boolean; completedSteps: string[]; failedSteps: string[] }> {
+): Promise<{ success: boolean; completedSteps: string[]; failedSteps: string[]; errorCode?: string }> {
   const completedSteps: string[] = [];
   const failedSteps: string[] = [];
 
@@ -369,10 +375,19 @@ async function executeWorkflow(
     completed_steps: completedSteps.length,
   });
 
+  // Derive error code: E4005 when retries were exhausted, E4001 otherwise
+  const errorCode =
+    failedSteps.length > 0
+      ? (workflow.config?.retry ?? 0) > 0
+        ? "E4005"
+        : "E4001"
+      : undefined;
+
   return {
     success: failedSteps.length === 0,
     completedSteps,
     failedSteps,
+    errorCode,
   };
 }
 
@@ -430,6 +445,10 @@ async function runRun(featureName: string, options: RunOptions): Promise<void> {
   } catch (error) {
     if (error instanceof OboraError) {
       console.error(`Error: ${error.message}`);
+      const diag = getDiagnosis(error.code);
+      if (diag) {
+        console.error(formatDiagnosis(diag));
+      }
       throw new CLIError(error.message, 1);
     }
     throw error;
@@ -459,11 +478,15 @@ async function runRun(featureName: string, options: RunOptions): Promise<void> {
   // Execute workflow
   const result = await executeWorkflow(workflow, featureDir, options);
 
-  // Update final status
+  // Update final status, persisting the error code for later diagnosis
   const finalStatus = result.success ? "completed" : "failed";
   await updateStatus(featureDir, {
     status: finalStatus,
-    metadata: { last_updated: new Date().toISOString(), notes: "" },
+    metadata: {
+      last_updated: new Date().toISOString(),
+      notes: "",
+      ...(result.errorCode ? { last_error_code: result.errorCode } : {}),
+    },
   });
 
   console.log("");
@@ -473,6 +496,17 @@ async function runRun(featureName: string, options: RunOptions): Promise<void> {
 
   if (result.failedSteps.length > 0) {
     console.log(`  Failed: ${result.failedSteps.join(", ")}`);
+
+    // Derive diagnosis from actual error context rather than hardcoding E4005.
+    // E4005 ("step failed after retries") is the most common, but the workflow
+    // config may surface other codes (E4001, E4002, etc.) in the future.
+    // Exit code 1 = standard CLI failure (POSIX convention).
+    const failureCode = result.errorCode ?? "E4005";
+    const diag = getDiagnosis(failureCode);
+    if (diag) {
+      console.error(formatDiagnosis(diag));
+    }
+
     throw new CLIError(`Workflow execution failed: ${result.failedSteps.join(", ")}`, 1);
   }
 

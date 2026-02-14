@@ -1,7 +1,7 @@
 # TASK-027: Supervision 패턴 구현
 
 ## 개요
-- **상태**: 📋 대기
+- **상태**: ✅ 완료
 - 우선순위: P1
 - 예상 소요: 8시간
 - 담당: 개발자
@@ -1326,3 +1326,9 @@ packages/actor/src/
 5. Dead Letter Queue가 실패한 메시지를 보관한다
 6. SupervisorTree가 계층적 에스컬레이션을 처리한다
 7. 단위 테스트가 모든 주요 시나리오를 커버한다
+
+## 재동기화 근거 (2026-02-13)
+- 코드 변경: `packages/actor/src/supervision/*` 구현 반영
+- 테스트: `pnpm --filter @obora-kit/actor test` 통과 (256/256, 2026-02-13)
+- 2모델 리뷰: 완료 커밋 메시지(score 10/10) 기준 게이트 충족
+- 커밋: `bc0e132`

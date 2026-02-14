@@ -5,6 +5,7 @@ export * from "./types/workflow.js";
 
 // Errors
 export * from "./errors/index.js";
+export * from "./errors/diagnosis.js";
 
 // Parser
 export * from "./parser/workflow-parser.js";

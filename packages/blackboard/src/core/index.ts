@@ -70,3 +70,12 @@ export {
   EventAwareBlackboard,
   EventAwareBlackboardOptions,
 } from './blackboard-events';
+
+// TKG contracts
+export type {
+  TemporalKnowledgeGraph,
+  StagingTKG,
+  ProductionTKG,
+  PromotableProductionTKG,
+  IReflector,
+} from './tkg';

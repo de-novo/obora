@@ -15,3 +15,6 @@ export * from './message';
 
 // Blackboard types
 export * from './blackboard';
+
+// TKG types
+export * from './tkg';
