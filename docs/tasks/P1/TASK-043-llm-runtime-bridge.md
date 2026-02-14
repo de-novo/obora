@@ -36,8 +36,12 @@ links:
 - [ ] 기존 CLI 테스트 regression 없음
 
 ## 테스트 기준
-- [ ] E2E: mock LLM adapter로 3-step 워크플로우 실행 성공
-- [ ] E2E: step 실패 → retry → 최종 실패 → 진단 코드 기록
+- [ ] E2E (integration-e2e.test.ts): mock LLM adapter로 3-step 워크플로우 실행 성공
+- [ ] E2E (integration-e2e.test.ts): step 실패 (E4003 unknown agent) → blackboard 기록 + fallback 실행
+- [ ] E2E (integration-e2e.test.ts): timeout (E4002) → blackboard 기록
+- [ ] E2E (integration-e2e.test.ts): inter-step 전파, single-writer guard, history trimming
+- [ ] Unit (step-executor.test.ts): E4001 runtime failure, timeout, parseDuration
+- [ ] _(향후)_ Workflow orchestration: retry loop → E4005 retry 소진 → 최종 실패
 - [ ] 기존 `run.test.ts` 통과
 
 ## 통합 인터페이스 계약

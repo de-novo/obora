@@ -10,8 +10,12 @@
  * - agent-registry: Agent name resolution to BaseAgent instances
  *
  * NOTE: Full workflow orchestration (executeWorkflow with dependency resolution,
- * retry logic, parallel execution, etc.) is tested separately. Here we manually
+ * retry logic, parallel execution, E4005 retry-exhaustion, --dry-run, etc.)
+ * is tested separately in workflow-orchestration tests. Here we manually
  * drive step execution to validate the core contract between layers.
+ * Specifically OUT OF SCOPE: E4005 (retry exhaustion), step-level retry loops,
+ * --dry-run mode, and E4001 from TaskResult { success: false } (covered in
+ * step-executor.test.ts unit tests).
  *
  * Scenario A: 3-step success workflow with blackboard state propagation
  * Scenario B: failure-recovery with unknown agent (E4003) + graceful fallback

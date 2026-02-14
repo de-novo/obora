@@ -80,15 +80,19 @@ async function executeWorkflow(workflow, featurePath, options) {
 
 ## 인터페이스 정의
 ```typescript
-interface ContextBuilder {
-  createBlackboard(featurePath: string, workflow: Workflow): Blackboard;
-  buildContext(
-    sessionId: string,
-    board: Blackboard,
-    step: Step,
-    history: ChatMessage[],
-  ): AgentContext;
-}
+// Implemented as module-level functions in context-builder.ts
+function createWorkflowBlackboard(
+  sessionId: string,
+  workflow: Workflow,
+  featureName: string,
+): Blackboard;
+
+function buildAgentContext(
+  sessionId: string,
+  board: Blackboard,
+  step: Step,
+  history: ChatMessage[],
+): AgentContext;
 ```
 
 ## 테스트 기준
