@@ -180,6 +180,8 @@ export async function executeStep(
   const timer = setTimeout(() => ac.abort(), timeoutMs);
 
   let result: TaskResult;
+  let abortHandler: (() => void) | undefined;
+
   try {
     // BaseAgent.execute() currently has (task, context) signature.
     // Signal propagation will be added when agents package adopts ExecuteOptions.
@@ -187,9 +189,8 @@ export async function executeStep(
     result = await Promise.race([
       agent.execute(task, context),
       new Promise<never>((_resolve, reject) => {
-        ac.signal.addEventListener("abort", () => {
-          reject(new DOMException("Step timeout exceeded", "AbortError"));
-        });
+        abortHandler = () => reject(new DOMException("Step timeout exceeded", "AbortError"));
+        ac.signal.addEventListener("abort", abortHandler, { once: true });
       }),
     ]);
   } catch (e: unknown) {
@@ -211,6 +212,9 @@ export async function executeStep(
     };
   } finally {
     clearTimeout(timer);
+    if (abortHandler) {
+      ac.signal.removeEventListener("abort", abortHandler);
+    }
   }
 
   // --- map result ---

@@ -133,6 +133,8 @@ async function updateStatus(featurePath: string, updates: Partial<StatusFile>): 
 
     await fs.writeFile(statusPath, yaml.stringify(parsed), "utf-8");
   } catch (error) {
+    log(`  Warning: YAML status update failed, using regex fallback (${String(error)})`);
+
     // If YAML parsing fails, try regex-based update as fallback
     let newContent = content;
     if (updates.status !== undefined) {
@@ -142,7 +144,20 @@ async function updateStatus(featurePath: string, updates: Partial<StatusFile>): 
       const now = updates.metadata.last_updated;
       newContent = newContent.replace(/^ {2}last_updated:.*$/m, `  last_updated: "${now}"`);
     }
-    await fs.writeFile(statusPath, newContent, "utf-8");
+    if (updates.metadata?.last_error_code !== undefined) {
+      const code = updates.metadata.last_error_code;
+      if (/^ {2}last_error_code:.*$/m.test(newContent)) {
+        newContent = newContent.replace(/^ {2}last_error_code:.*$/m, `  last_error_code: ${code}`);
+      } else {
+        newContent += `\nmetadata:\n  last_error_code: ${code}\n`;
+      }
+    }
+
+    try {
+      await fs.writeFile(statusPath, newContent, "utf-8");
+    } catch (fallbackError) {
+      throw new Error(`Failed to update status.yaml (primary + fallback): ${String(fallbackError)}`);
+    }
   }
 }
 
@@ -174,14 +189,16 @@ async function saveStepOutput(
 /**
  * Global AgentResolver — set by runtime bootstrap (TASK-043b).
  */
-let activeResolver: AgentResolver | null = null;
+const runtimeState: { activeResolver: AgentResolver | null } = {
+  activeResolver: null,
+};
 
 /**
  * Set the global AgentResolver (called by runtime bootstrap).
  * @internal exported for testing
  */
 export function setAgentResolver(resolver: AgentResolver | null): void {
-  activeResolver = resolver;
+  runtimeState.activeResolver = resolver;
 }
 
 /**
@@ -214,7 +231,7 @@ async function executeStep(
   log(`  [Attempt ${attempt}] Executing step: ${step.name} (agent: ${step.agent})`);
 
   // --- Bridge path: real agent execution ---
-  if (activeResolver) {
+  if (runtimeState.activeResolver) {
     // Guard: ensure runtimeCtx is provided when resolver is active
     if (!runtimeCtx) {
       return {
@@ -232,7 +249,7 @@ async function executeStep(
 
     const result: StepResult = await executeStepBridge(
       step,
-      activeResolver,
+      runtimeState.activeResolver,
       context,
     );
     return result;
@@ -271,9 +288,18 @@ async function executeWorkflow(
   featurePath: string,
   featureName: string,
   options: RunOptions
-): Promise<{ success: boolean; completedSteps: string[]; failedSteps: string[]; errorCode?: ErrorCode }> {
+): Promise<{
+  success: boolean;
+  completedSteps: string[];
+  failedSteps: string[];
+  errorCode?: ErrorCode;
+  firstFailureCode?: ErrorCode;
+  lastFailureCode?: ErrorCode;
+}> {
   const completedSteps: string[] = [];
   const failedSteps: string[] = [];
+  let firstFailureCode: ErrorCode | undefined;
+  let lastFailureCode: ErrorCode | undefined;
 
   // Build graph and get execution order
   const graph = buildGraph(workflow.steps);
@@ -305,7 +331,7 @@ async function executeWorkflow(
   const continueOnError = options.continueOnError ?? workflow.config?.continue_on_error ?? false;
 
   // --- TASK-043c: create shared Blackboard for the workflow run ---
-  const board = activeResolver
+  const board = runtimeState.activeResolver
     ? createWorkflowBlackboard(workflowRunId, workflow, featureName)
     : undefined;
   const chatHistory: ChatMessage[] = [];
@@ -418,7 +444,13 @@ async function executeWorkflow(
       log(`  ✓ Step ${stepName} completed`);
     } else {
       failedSteps.push(stepName);
-      log(`  ✗ Step ${stepName} failed: ${stepError}`);
+      if (lastDiagnosisCode) {
+        if (!firstFailureCode) {
+          firstFailureCode = lastDiagnosisCode;
+        }
+        lastFailureCode = lastDiagnosisCode;
+      }
+      log(`  ✗ Step ${stepName} failed: ${stepError}${lastDiagnosisCode ? ` [${lastDiagnosisCode}]` : ""}`);
 
       if (!continueOnError) {
         log("  Stopping execution due to step failure (use --continue-on-error to continue)");
@@ -439,19 +471,18 @@ async function executeWorkflow(
     completed_steps: completedSteps.length,
   });
 
-  // Derive error code: E4005 when retries were exhausted, E4001 otherwise
-  const errorCode: ErrorCode | undefined =
-    failedSteps.length > 0
-      ? (workflow.config?.retry ?? 0) > 0
-        ? "E4005"
-        : "E4001"
-      : undefined;
+  // Use the actual failing step diagnosis code captured during workflow execution.
+  const errorCode: ErrorCode | undefined = failedSteps.length > 0
+    ? lastFailureCode ?? firstFailureCode
+    : undefined;
 
   return {
     success: failedSteps.length === 0,
     completedSteps,
     failedSteps,
     errorCode,
+    firstFailureCode,
+    lastFailureCode,
   };
 }
 
@@ -528,7 +559,7 @@ async function runRun(featureName: string, options: RunOptions): Promise<void> {
     return;
   }
 
-  if (!activeResolver) {
+  if (!runtimeState.activeResolver) {
     const resolver = bootstrapAgentResolver();
     if (!resolver) {
       throw new OboraError("E4007", "Agent resolver bootstrap invariant violated");
@@ -550,14 +581,15 @@ async function runRun(featureName: string, options: RunOptions): Promise<void> {
   // Execute workflow
   const result = await executeWorkflow(workflow, featureDir, featureName, options);
 
-  // Update final status, persisting the error code for later diagnosis
+  // Update final status, persisting the actual step failure code for later diagnosis
   const finalStatus = result.success ? "completed" : "failed";
+  const failureCode = result.lastFailureCode ?? result.firstFailureCode ?? result.errorCode;
   await updateStatus(featureDir, {
     status: finalStatus,
     metadata: {
       last_updated: new Date().toISOString(),
       notes: "",
-      ...(result.errorCode ? { last_error_code: result.errorCode } : {}),
+      ...(failureCode ? { last_error_code: failureCode } : {}),
     },
   });
 
@@ -569,11 +601,10 @@ async function runRun(featureName: string, options: RunOptions): Promise<void> {
   if (result.failedSteps.length > 0) {
     console.log(`  Failed: ${result.failedSteps.join(", ")}`);
 
-    // Derive diagnosis from actual error context rather than hardcoding E4005.
-    // E4005 ("step failed after retries") is the most common, but the workflow
-    // config may surface other codes (E4001, E4002, etc.) in the future.
+    // Use exactly the same failure code persisted into status.yaml.
     // Exit code 1 = standard CLI failure (POSIX convention).
-    const failureCode = result.errorCode ?? "E4005";
+    const failureCode = result.lastFailureCode ?? result.firstFailureCode ?? result.errorCode ?? "E4001";
+    console.error(`  Error code: ${failureCode}`);
     const diag = getDiagnosis(failureCode);
     if (diag) {
       console.error(formatDiagnosis(diag));
