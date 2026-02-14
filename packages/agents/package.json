@@ -69,7 +69,8 @@
     "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
-    "@obora-kit/blackboard": "workspace:*"
+    "@obora-kit/blackboard": "workspace:*",
+    "yaml": "^2.8.2"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
