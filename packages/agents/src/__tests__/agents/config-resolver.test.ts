@@ -19,6 +19,49 @@ afterEach(async () => {
 });
 
 describe("AgentConfigResolver", () => {
+  it("uses auth-aware provider/model defaults when no config defaults exist", async () => {
+    const originalHome = process.env.HOME;
+    const tempHome = await mkdtemp(path.join(os.tmpdir(), "obora-home-"));
+    const tempProject = await mkdtemp(path.join(os.tmpdir(), "obora-project-"));
+    cleanupPaths.push(tempHome, tempProject);
+
+    try {
+      process.env.HOME = tempHome;
+
+      await setupConfig(
+        tempHome,
+        ".obora/auth.json",
+        JSON.stringify({
+          version: 1,
+          providers: {
+            openai: {
+              provider: "openai",
+              type: "apiKey",
+              apiKey: "test-key",
+              addedAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+            anthropic: {
+              provider: "anthropic",
+              type: "apiKey",
+              apiKey: "test-key",
+              addedAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+          },
+        })
+      );
+
+      const resolver = await AgentConfigResolver.create(tempProject);
+      const resolved = resolver.resolve("default");
+
+      expect(resolved.provider).toBe("anthropic");
+      expect(resolved.model).toBe("claude-opus-4-1-20250805");
+    } finally {
+      process.env.HOME = originalHome;
+    }
+  });
+
   it("resolves using 7-step merge with provider shallow merge", async () => {
     const originalHome = process.env.HOME;
     const tempHome = await mkdtemp(path.join(os.tmpdir(), "obora-home-"));

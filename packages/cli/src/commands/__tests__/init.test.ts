@@ -33,9 +33,19 @@ vi.mock('@obora/core', () => ({
   log: vi.fn(),
 }));
 
+vi.mock('@obora-kit/agents', () => ({
+  FileAuthManager: class MockFileAuthManager {
+    listProviders = vi.fn().mockResolvedValue([]);
+  },
+  pickPreferredProvider: vi.fn(() => undefined),
+  getProviderDefaultModel: vi.fn(() => undefined),
+  isSupportedProvider: vi.fn(() => true),
+}));
+
 import { existsSync } from 'node:fs';
 import fs from 'fs-extra';
 import { OboraDatabase } from '@obora/database';
+import { getProviderDefaultModel, pickPreferredProvider } from '@obora-kit/agents';
 import { createInitCommand, runInit } from '../init.js';
 
 describe('init command', () => {
@@ -44,6 +54,8 @@ describe('init command', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(pickPreferredProvider).mockReturnValue(undefined);
+    vi.mocked(getProviderDefaultModel).mockReturnValue(undefined);
     consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
   });
@@ -137,6 +149,22 @@ describe('init command', () => {
       expect(workflowCall).toBeDefined();
       expect(String(workflowCall?.[1])).toContain('name: simple');
       expect(String(workflowCall?.[1])).toContain('steps:');
+    });
+
+    it('should include defaults section when auth provider is available', async () => {
+      vi.mocked(existsSync).mockReturnValue(false);
+      vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+      vi.mocked(pickPreferredProvider).mockReturnValue('anthropic');
+      vi.mocked(getProviderDefaultModel).mockReturnValue('claude-opus-4-1-20250805');
+
+      await runInit({});
+
+      const writeFileCalls = vi.mocked(fs.writeFile).mock.calls;
+      const configCall = writeFileCalls.find((call) => String(call[0]).includes('config.yaml'));
+      expect(String(configCall?.[1])).toContain('defaults:');
+      expect(String(configCall?.[1])).toContain('provider: anthropic');
+      expect(String(configCall?.[1])).toContain('model: claude-opus-4-1-20250805');
     });
 
     it('should initialize DuckDB database', async () => {

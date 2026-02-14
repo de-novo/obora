@@ -1,6 +1,12 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
+import {
+  FileAuthManager,
+  getProviderDefaultModel,
+  isSupportedProvider,
+  pickPreferredProvider,
+} from "@obora-kit/agents";
 import { OboraDatabase } from "@obora/database";
 import { Command } from "commander";
 import fs from "fs-extra";
@@ -52,6 +58,19 @@ features:
   archive: true
   dependencies: true
 `;
+
+function appendAuthAwareDefaults(configContent: string, provider?: string): string {
+  if (!provider) {
+    return configContent;
+  }
+
+  const model = getProviderDefaultModel(provider);
+  if (!model) {
+    return configContent;
+  }
+
+  return `${configContent}\ndefaults:\n  provider: ${provider}\n  model: ${model}\n`;
+}
 
 // Default workflow templates
 const SIMPLE_WORKFLOW = `# Simple Workflow
@@ -170,6 +189,12 @@ async function runInit(options: InitOptions): Promise<void> {
     console.log(`  Created: ${dir.replace(cwd, ".")}`);
   }
 
+  const authManager = new FileAuthManager();
+  const providers = await authManager.listProviders();
+  const preferredProvider = pickPreferredProvider(
+    providers.map((item) => item.provider).filter(isSupportedProvider)
+  );
+
   // Determine config content - respect workflow choice even with --minimal
   let configContent: string;
   if (options.minimal) {
@@ -179,6 +204,8 @@ async function runInit(options: InitOptions): Promise<void> {
   } else {
     configContent = DEFAULT_CONFIG;
   }
+
+  configContent = appendAuthAwareDefaults(configContent, preferredProvider);
 
   // Write config.yaml
   const configPath = join(oboraDir, "config.yaml");

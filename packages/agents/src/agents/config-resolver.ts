@@ -1,3 +1,4 @@
+import { FileAuthManager } from "../auth";
 import { getGlobalConfigPath, getProjectConfigPath, loadConfigFile } from "../config/loader";
 import type {
   AgentConfig,
@@ -5,6 +6,11 @@ import type {
   AgentConfigResolverContract,
   AgentStepOverride,
 } from "../config/types";
+import {
+  getProviderDefaultModel,
+  isSupportedProvider,
+  pickPreferredProvider,
+} from "../llm/factory";
 
 const BUILTIN_DEFAULTS: AgentConfig = {
   provider: "pi-mono",
@@ -38,21 +44,34 @@ function applyProviderLayer(config: AgentConfig, layer?: { defaultModel?: string
 export class AgentConfigResolver implements AgentConfigResolverContract {
   private constructor(
     private readonly globalConfig: AgentConfigFile,
-    private readonly projectConfig: AgentConfigFile
+    private readonly projectConfig: AgentConfigFile,
+    private readonly authAwareDefaults: Partial<AgentConfig>
   ) {}
 
   static async create(cwd: string = process.cwd()): Promise<AgentConfigResolver> {
-    const [globalConfig, projectConfig] = await Promise.all([
+    const authManager = new FileAuthManager();
+    const [globalConfig, projectConfig, providers] = await Promise.all([
       loadConfigFile(getGlobalConfigPath()),
       loadConfigFile(getProjectConfigPath(cwd)),
+      authManager.listProviders(),
     ]);
 
-    return new AgentConfigResolver(globalConfig, projectConfig);
+    const preferredProvider = pickPreferredProvider(
+      providers.map((item) => item.provider).filter(isSupportedProvider)
+    );
+    const authAwareDefaults: Partial<AgentConfig> = preferredProvider
+      ? {
+        provider: preferredProvider,
+        model: getProviderDefaultModel(preferredProvider) ?? BUILTIN_DEFAULTS.model,
+      }
+      : {};
+
+    return new AgentConfigResolver(globalConfig, projectConfig, authAwareDefaults);
   }
 
   resolve(agentName: string): AgentConfig {
-    // 1) built-in defaults
-    let resolved = { ...BUILTIN_DEFAULTS };
+    // 1) built-in defaults + auth-aware defaults
+    let resolved = mergeShallow({ ...BUILTIN_DEFAULTS }, this.authAwareDefaults);
 
     // 2) global defaults
     resolved = mergeShallow(resolved, this.globalConfig.defaults);

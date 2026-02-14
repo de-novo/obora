@@ -22,6 +22,36 @@ interface ProviderDefinition {
   provider: KnownProvider;
 }
 
+const AUTH_PROVIDER_PRIORITY = ["anthropic", "openai", "openai-codex", "zai", "google"] as const;
+
+function providerPriority(provider: string): number {
+  const idx = AUTH_PROVIDER_PRIORITY.indexOf(provider as (typeof AUTH_PROVIDER_PRIORITY)[number]);
+  return idx === -1 ? AUTH_PROVIDER_PRIORITY.length : idx;
+}
+
+export function pickPreferredProvider(providers: LLMProvider[]): LLMProvider | undefined {
+  if (providers.length === 0) {
+    return undefined;
+  }
+
+  return [...providers].sort((a, b) => {
+    const pa = providerPriority(a);
+    const pb = providerPriority(b);
+    if (pa !== pb) {
+      return pa - pb;
+    }
+    return a.localeCompare(b);
+  })[0];
+}
+
+export function isSupportedProvider(provider: string): provider is LLMProvider {
+  return provider in PROVIDER_DEFINITIONS;
+}
+
+export function getProviderDefaultModel(provider: string): string | undefined {
+  return PROVIDER_DEFINITIONS[provider as LLMProvider]?.defaultModel;
+}
+
 const PROVIDER_DEFINITIONS: Record<LLMProvider, ProviderDefinition> = {
   "pi-mono": {
     envApiKey: "PIMONO_API_KEY",
@@ -198,7 +228,36 @@ export async function createAdapter(
     return createAdapterFromAuth(provider, storedAuth, options, authManager);
   }
 
+  if (hasEnvApiKey(provider)) {
+    return createAdapterFromEnv(provider, options);
+  }
+
+  const providers = await authManager.listProviders();
+  const fallbackProvider = pickPreferredProvider(
+    providers
+      .map((item) => item.provider)
+      .filter((name): name is LLMProvider => name !== provider && name in PROVIDER_DEFINITIONS)
+  );
+
+  if (fallbackProvider) {
+    const fallbackAuth = await authManager.getProvider(fallbackProvider);
+    if (fallbackAuth) {
+      console.warn(
+        `[obora-agents] WARNING: auth not found for provider '${provider}'. ` +
+          `Falling back to authenticated provider '${fallbackProvider}'.`
+      );
+      return createAdapterFromAuth(fallbackProvider, fallbackAuth, options, authManager);
+    }
+  }
+
   return createAdapterFromEnv(provider, options);
+}
+
+function hasEnvApiKey(provider: LLMProvider): boolean {
+  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
+    ?.env;
+  const definition = PROVIDER_DEFINITIONS[provider];
+  return Boolean(env?.[definition.envApiKey]);
 }
 
 export function createAdapterFromEnv(
