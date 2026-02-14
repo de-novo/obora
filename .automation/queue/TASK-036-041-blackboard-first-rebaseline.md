@@ -23,3 +23,11 @@ Board 단계 태스크를 blackboard 우선 구현 순서로 재배치하고, �
 - queue 등록 시 `packages/board` 직접 구현 요청은 보류 처리
 - `packages/blackboard` 경로 우선 태깅
 - board 관련 신규 요청은 facade 범위인지 선확인
+
+## 야간 자동 점검 로그 (2026-02-14 23:27 KST)
+- 기준 브랜치: `origin/main` (`661cb43`)
+- 작업 브랜치(HEAD 유지): `main` (`661cb43`)
+- 점검 단위: blackboard-first 완료 구간(TASK-036~041) 회귀 최소검증 1건
+- 실행: `pnpm --filter @obora-kit/blackboard test -- test/domains/agenda/agenda-store.test.ts`
+- 결과: ✅ `1 file / 12 tests passed`
+- 판정: 블로커 없음, 다음 실행은 보류 태스크(TASK-040) 착수 조건 점검 권장
