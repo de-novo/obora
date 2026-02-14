@@ -28,7 +28,7 @@
  * Scenario G: appendHistory MAX_HISTORY_LENGTH boundary trimming
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { AgentRegistry } from "../agent-registry.js";
 import {
   executeStep,
@@ -356,10 +356,12 @@ describe("E2E Scenario C: timeout failure with blackboard recording", () => {
   });
 
   it("records E4002 timeout on blackboard", async () => {
+    // Use fake timers to eliminate any CI scheduling jitter risk.
+    // The never-resolving promise + fake timer advance is fully deterministic.
+    vi.useFakeTimers();
+
     const board = createWorkflowBlackboard(SESSION_ID, WORKFLOW, "feat");
 
-    // Resolver returns an agent whose execute() hangs indefinitely.
-    // Using a never-resolving promise avoids any timer precision issues.
     const slowResolver: AgentResolver = {
       resolve: () => ({
         execute: () => new Promise<never>(() => {}), // never resolves
@@ -370,9 +372,15 @@ describe("E2E Scenario C: timeout failure with blackboard recording", () => {
     const step: Step = { name: "slow-step", agent: "executor", timeout: "1s" } as Step;
     const ctx = buildAgentContext(SESSION_ID, board, step, []);
 
-    const result = await executeStep(step, slowResolver, ctx, {
-      timeoutMs: 200, // safe margin — minimal risk of CI scheduling jitter
+    // Start execution (will hang until timeout fires)
+    const resultPromise = executeStep(step, slowResolver, ctx, {
+      timeoutMs: 5000,
     });
+
+    // Advance fake timers past the timeout — deterministic, no real delay
+    await vi.advanceTimersByTimeAsync(5001);
+
+    const result = await resultPromise;
 
     expect(result.success).toBe(false);
     expect(result.diagnosisCode).toBe("E4002");
@@ -384,6 +392,8 @@ describe("E2E Scenario C: timeout failure with blackboard recording", () => {
     expect(stored!.success).toBe(false);
     expect(stored!.diagnosisCode).toBe("E4002");
     expect(stored!.failedAt).toBe(FIXED_TIME);
+
+    vi.useRealTimers();
   });
 });
 
