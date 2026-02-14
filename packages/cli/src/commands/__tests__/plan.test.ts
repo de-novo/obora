@@ -22,6 +22,22 @@ vi.mock('@obora/core', () => ({
   log: vi.fn(),
 }));
 
+// Mock @obora-kit/agents
+const chatCompletionMock = vi.fn().mockResolvedValue({
+  id: 'mock-1',
+  model: 'mock-model',
+  message: { role: 'assistant', content: '## Implementation Plan\n\n- [ ] Mock plan task' },
+  usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+  finishReason: 'stop',
+});
+
+vi.mock('@obora-kit/agents', () => ({
+  createAdapterFromEnv: vi.fn(() => ({
+    id: 'mock-llm',
+    chatCompletion: chatCompletionMock,
+  })),
+}));
+
 // Mock path-utils
 vi.mock('../../utils/path-utils.js', () => ({
   validatePathComponent: vi.fn(),
@@ -66,6 +82,14 @@ describe('plan command', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    chatCompletionMock.mockClear();
+    chatCompletionMock.mockResolvedValue({
+      id: 'mock-1',
+      model: 'mock-model',
+      message: { role: 'assistant', content: '## Implementation Plan\n\n- [ ] Mock plan task' },
+      usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+      finishReason: 'stop',
+    });
     consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.mocked(readStatus).mockReturnValue(mockStatus);
@@ -166,6 +190,15 @@ describe('plan command', () => {
 
       expect(log).toHaveBeenCalledWith(expect.stringContaining('Read proposal.md'));
       expect(log).toHaveBeenCalledWith(expect.stringContaining('Read design.md'));
+      expect(chatCompletionMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: expect.arrayContaining([
+            expect.objectContaining({ role: 'system' }),
+            expect.objectContaining({ role: 'user', content: expect.stringContaining('### Proposal') }),
+          ]),
+        }),
+        expect.any(Object)
+      );
     });
   });
 
