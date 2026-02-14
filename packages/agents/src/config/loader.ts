@@ -5,7 +5,7 @@ import path from "node:path";
 
 import YAML from "yaml";
 
-import type { AgentConfig, AgentConfigFile, ProviderConfig } from "./types";
+import type { AgentConfig, AgentConfigFile, AgentModelConfig, ProviderConfig } from "./types";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -45,6 +45,41 @@ function validateProvider(provider: unknown, fieldPrefix: string, filePath: stri
   }) as ProviderConfig;
 }
 
+function validateReviewModels(
+  value: unknown,
+  fieldPrefix: string,
+  filePath: string
+): AgentModelConfig[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!Array.isArray(value)) {
+    throw new Error(`Invalid config at ${filePath}: ${fieldPrefix} must be an array`);
+  }
+
+  return value.map((item, index) => {
+    const itemField = `${fieldPrefix}[${index}]`;
+    if (!isObject(item)) {
+      throw new Error(`Invalid config at ${filePath}: ${itemField} must be an object`);
+    }
+
+    assertString(item.name, `${itemField}.name`, filePath);
+    assertString(item.provider, `${itemField}.provider`, filePath);
+    assertString(item.model, `${itemField}.model`, filePath);
+
+    if (!item.provider || !item.model) {
+      throw new Error(`Invalid config at ${filePath}: ${itemField}.provider and ${itemField}.model are required`);
+    }
+
+    return compactObject({
+      name: item.name as string | undefined,
+      provider: item.provider as string,
+      model: item.model as string,
+    }) as AgentModelConfig;
+  });
+}
+
 function validateAgent(agent: unknown, fieldPrefix: string, filePath: string): Partial<AgentConfig> {
   if (!isObject(agent)) {
     throw new Error(`Invalid config at ${filePath}: ${fieldPrefix} must be an object`);
@@ -57,6 +92,7 @@ function validateAgent(agent: unknown, fieldPrefix: string, filePath: string): P
   assertNumber(agent.temperature, `${fieldPrefix}.temperature`, filePath);
   assertNumber(agent.maxTokens, `${fieldPrefix}.maxTokens`, filePath);
   assertNumber(agent.timeout, `${fieldPrefix}.timeout`, filePath);
+  const reviewModels = validateReviewModels(agent.reviewModels, `${fieldPrefix}.reviewModels`, filePath);
 
   return compactObject({
     provider: agent.provider as string | undefined,
@@ -66,6 +102,7 @@ function validateAgent(agent: unknown, fieldPrefix: string, filePath: string): P
     timeout: agent.timeout as number | undefined,
     systemPrompt: agent.systemPrompt as string | undefined,
     baseUrl: agent.baseUrl as string | undefined,
+    reviewModels,
   }) as Partial<AgentConfig>;
 }
 

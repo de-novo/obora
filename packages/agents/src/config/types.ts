@@ -5,6 +5,12 @@ export interface ProviderConfig {
   maxTokens?: number;
 }
 
+export interface AgentModelConfig {
+  name?: string;
+  provider: string;
+  model: string;
+}
+
 export interface AgentConfig {
   provider: string;
   model: string;
@@ -13,6 +19,7 @@ export interface AgentConfig {
   timeout?: number;
   systemPrompt?: string;
   baseUrl?: string;
+  reviewModels?: AgentModelConfig[];
 }
 
 export interface AgentConfigFile {

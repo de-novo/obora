@@ -47,6 +47,21 @@ agents:
     temperature: 0.2
 
   reviewer:
-    provider: zai
-    model: glm-4.7
+    # Primary/default reviewer model used when a single model is required
+    provider: anthropic
+    model: claude-opus-4-6
     temperature: 0.0
+    # Multi-model review gate (run reviews across all models)
+    reviewModels:
+      - name: opus
+        provider: anthropic
+        model: claude-opus-4-6
+      - name: codex
+        provider: openai-codex
+        model: gpt-5.3-codex
+      - name: glm-4.7
+        provider: zai
+        model: glm-4.7
+      - name: glm-5
+        provider: zai
+        model: glm-5
