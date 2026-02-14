@@ -257,6 +257,9 @@ importers:
       '@obora/core':
         specifier: workspace:*
         version: link:../core
+      duckdb:
+        specifier: ^1.4.4
+        version: 1.4.4(encoding@0.1.13)
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
@@ -264,9 +267,6 @@ importers:
       '@vitest/coverage-v8':
         specifier: ^4.0.18
         version: 4.0.18(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@22.19.8)(tsx@4.21.0)(yaml@2.8.2))
-      duckdb:
-        specifier: ^1.4.4
-        version: 1.4.4(encoding@0.1.13)
       typescript:
         specifier: ^5.9.3
         version: 5.9.3

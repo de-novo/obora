@@ -14,12 +14,12 @@
     "test": "vitest"
   },
   "dependencies": {
-    "@obora/core": "workspace:*"
+    "@obora/core": "workspace:*",
+    "duckdb": "^1.4.4"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@vitest/coverage-v8": "^4.0.18",
-    "duckdb": "^1.4.4",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   }

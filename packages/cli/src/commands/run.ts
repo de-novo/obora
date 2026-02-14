@@ -4,7 +4,7 @@
  */
 
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import * as path from "node:path";
 
 import {
@@ -16,7 +16,21 @@ import {
   getDiagnosis,
   formatDiagnosis,
 } from "@obora/core";
+import {
+  OboraDatabase,
+  getProjectByPath,
+  insertProject,
+  insertWorkflowRun,
+  updateWorkflowRunStatus,
+  insertStepExecution,
+  updateStepExecutionStatus,
+  incrementStepRetry,
+} from "@obora/database";
 import type { Workflow, Step, WorkflowConfig, ErrorCode } from "@obora/core";
+import type {
+  WorkflowRun as DbWorkflowRun,
+  StepExecution as DbStepExecution,
+} from "@obora/database";
 
 import {
   executeStep as executeStepBridge,
@@ -76,34 +90,39 @@ function detectFeatureName(): string | null {
   return null;
 }
 
-/**
- * Workflow execution record for DuckDB
- */
-interface WorkflowRun {
-  id: string;
-  feature_name: string;
+interface WorkflowRunRecord {
+  local_id: string;
   workflow_name: string;
-  started_at: string;
-  completed_at?: string;
-  status: string; // running, completed, failed, cancelled
-  total_steps: number;
-  completed_steps: number;
+  mode: DbWorkflowRun["mode"];
+  status: DbWorkflowRun["status"];
+  current_step?: string;
+  error_message?: string;
 }
 
-/**
- * Step execution record for DuckDB
- */
-interface StepRun {
-  id: string;
-  workflow_run_id: string;
+interface StepRunRecord {
+  local_id: string;
   step_name: string;
+  step_index: number;
   agent: string;
-  started_at: string;
-  completed_at?: string;
-  status: string; // pending, running, completed, failed, skipped
+  status: DbStepExecution["status"];
   output?: string;
   error_message?: string;
   retry_count: number;
+}
+
+interface RunDatabaseAdapter {
+  db: OboraDatabase | null;
+  enabled: boolean;
+  projectId: number | null;
+  workflowRunId: number | null;
+  stepRunIds: Map<string, number>;
+}
+
+function toDbMode(mode: Workflow["mode"] | RunOptions["mode"] | undefined): DbWorkflowRun["mode"] {
+  if (mode === "supervised" || mode === "gated") {
+    return mode;
+  }
+  return "auto";
 }
 
 /**
@@ -293,21 +312,114 @@ async function executeStep(
 }
 
 /**
- * Record workflow run in DuckDB (placeholder)
- * In production, this would insert into the database
+ * Initialize per-run DB adapter.
+ * On failure, returns disabled adapter so workflow execution can continue.
  */
-async function recordWorkflowRun(run: WorkflowRun): Promise<void> {
-  log(`  [DuckDB] Recording workflow run: ${run.id}`);
-  // Placeholder: In production, this would insert into DuckDB
+async function initRunDatabase(projectPath: string, featurePath: string): Promise<RunDatabaseAdapter> {
+  const dbDir = join(featurePath, ".obora");
+  const dbPath = join(dbDir, "obora.db");
+  const adapter: RunDatabaseAdapter = {
+    db: null,
+    enabled: false,
+    projectId: null,
+    workflowRunId: null,
+    stepRunIds: new Map<string, number>(),
+  };
+
+  try {
+    await fs.ensureDir(dbDir);
+    const db = new OboraDatabase(dbPath);
+    await db.initialize();
+
+    const existing = await getProjectByPath(db, projectPath);
+    const projectId = existing?.id ?? (await insertProject(db, {
+      name: basename(projectPath),
+      path: projectPath,
+    }));
+
+    adapter.db = db;
+    adapter.enabled = true;
+    adapter.projectId = projectId;
+    log(`  [DuckDB] Connected: ${dbPath}`);
+  } catch (error) {
+    log(`  [DuckDB] Disabled (connection/init failed): ${String(error)}`);
+  }
+
+  return adapter;
 }
 
-/**
- * Record step run in DuckDB (placeholder)
- * In production, this would insert into the database
- */
-async function recordStepRun(stepRun: StepRun): Promise<void> {
-  log(`  [DuckDB] Recording step run: ${stepRun.id}`);
-  // Placeholder: In production, this would insert into DuckDB
+async function recordWorkflowRun(dbAdapter: RunDatabaseAdapter, run: WorkflowRunRecord): Promise<void> {
+  if (!dbAdapter.enabled || !dbAdapter.db || !dbAdapter.projectId) {
+    return;
+  }
+
+  try {
+    if (!dbAdapter.workflowRunId) {
+      dbAdapter.workflowRunId = await insertWorkflowRun(dbAdapter.db, {
+        project_id: dbAdapter.projectId,
+        feature: run.local_id,
+        workflow: run.workflow_name,
+        mode: run.mode,
+        status: run.status,
+        current_step: run.current_step,
+        completed_at: undefined,
+        error_message: run.error_message,
+      });
+      log(`  [DuckDB] workflow_runs inserted: ${dbAdapter.workflowRunId}`);
+      return;
+    }
+
+    await updateWorkflowRunStatus(
+      dbAdapter.db,
+      dbAdapter.workflowRunId,
+      run.status,
+      run.current_step,
+      run.error_message
+    );
+  } catch (error) {
+    log(`  [DuckDB] workflow_runs write failed, fallback to log-only: ${String(error)}`);
+    dbAdapter.enabled = false;
+  }
+}
+
+async function recordStepRun(dbAdapter: RunDatabaseAdapter, stepRun: StepRunRecord): Promise<void> {
+  if (!dbAdapter.enabled || !dbAdapter.db || !dbAdapter.workflowRunId) {
+    return;
+  }
+
+  try {
+    const existingStepId = dbAdapter.stepRunIds.get(stepRun.local_id);
+
+    if (!existingStepId) {
+      const stepId = await insertStepExecution(dbAdapter.db, {
+        run_id: dbAdapter.workflowRunId,
+        step_name: stepRun.step_name,
+        step_index: stepRun.step_index,
+        agent: stepRun.agent,
+        status: stepRun.status,
+        completed_at: undefined,
+        error_message: undefined,
+        output_path: undefined,
+      });
+      dbAdapter.stepRunIds.set(stepRun.local_id, stepId);
+      return;
+    }
+
+    for (let i = 0; i < stepRun.retry_count; i++) {
+      await incrementStepRetry(dbAdapter.db, existingStepId);
+    }
+
+    await updateStepExecutionStatus(
+      dbAdapter.db,
+      existingStepId,
+      stepRun.status,
+      stepRun.output,
+      stepRun.error_message
+    );
+  } catch (error) {
+    log(`  [DuckDB] step_executions write failed, fallback to log-only: ${String(error)}`);
+    dbAdapter.enabled = false;
+  }
 }
 
 /**
@@ -317,7 +429,8 @@ async function executeWorkflow(
   workflow: Workflow,
   featurePath: string,
   featureName: string,
-  options: RunOptions
+  options: RunOptions,
+  dbAdapter: RunDatabaseAdapter
 ): Promise<{
   success: boolean;
   completedSteps: string[];
@@ -345,14 +458,11 @@ async function executeWorkflow(
 
   // Create workflow run record
   const workflowRunId = `run-${Date.now()}`;
-  await recordWorkflowRun({
-    id: workflowRunId,
-    feature_name: workflow.name,
+  await recordWorkflowRun(dbAdapter, {
+    local_id: featureName,
     workflow_name: workflow.name,
-    started_at: new Date().toISOString(),
+    mode: toDbMode(options.mode || workflow.mode),
     status: "running",
-    total_steps: workflow.steps.length,
-    completed_steps: 0,
   });
 
   const stepMap = new Map(workflow.steps.map((s) => [s.name, s]));
@@ -365,7 +475,7 @@ async function executeWorkflow(
   const chatHistory: ChatMessage[] = [];
 
   // Execute steps in order
-  for (const stepName of executionOrder) {
+  for (const [stepIndex, stepName] of executionOrder.entries()) {
     // Skip if before fromStep
     if (
       options.fromStep &&
@@ -389,12 +499,11 @@ async function executeWorkflow(
 
     // Create step run record
     const stepRunId = `step-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-    await recordStepRun({
-      id: stepRunId,
-      workflow_run_id: workflowRunId,
+    await recordStepRun(dbAdapter, {
+      local_id: stepRunId,
       step_name: stepName,
+      step_index: stepIndex,
       agent: step.agent,
-      started_at: new Date().toISOString(),
       status: "running",
       retry_count: 0,
     });
@@ -438,13 +547,11 @@ async function executeWorkflow(
     }
 
     // Record step result
-    await recordStepRun({
-      id: stepRunId,
-      workflow_run_id: workflowRunId,
+    await recordStepRun(dbAdapter, {
+      local_id: stepRunId,
       step_name: stepName,
+      step_index: stepIndex,
       agent: step.agent,
-      started_at: new Date().toISOString(),
-      completed_at: new Date().toISOString(),
       status: stepSuccess ? "completed" : "failed",
       output: stepOutput,
       error_message: stepError,
@@ -496,15 +603,12 @@ async function executeWorkflow(
   }
 
   // Update workflow run record
-  await recordWorkflowRun({
-    id: workflowRunId,
-    feature_name: workflow.name,
+  await recordWorkflowRun(dbAdapter, {
+    local_id: featureName,
     workflow_name: workflow.name,
-    started_at: new Date().toISOString(),
-    completed_at: new Date().toISOString(),
+    mode: toDbMode(options.mode || workflow.mode),
     status: failedSteps.length === 0 ? "completed" : "failed",
-    total_steps: workflow.steps.length,
-    completed_steps: completedSteps.length,
+    error_message: failedSteps.length > 0 ? `Failed steps: ${failedSteps.join(", ")}` : undefined,
   });
 
   // Use the actual failing step diagnosis code captured during workflow execution.
@@ -612,53 +716,66 @@ async function runRun(featureName: string, options: RunOptions): Promise<void> {
   console.log(`Feature: ${featureName}`);
   console.log("");
 
-  // Update status to running
-  await updateStatus(featureDir, {
-    status: "running",
-    metadata: { last_updated: new Date().toISOString(), notes: "" },
-  });
+  const dbAdapter = await initRunDatabase(cwd, featureDir);
 
-  // Execute workflow
-  const result = await executeWorkflow(workflow, featureDir, featureName, options);
+  try {
+    // Update status to running
+    await updateStatus(featureDir, {
+      status: "running",
+      metadata: { last_updated: new Date().toISOString(), notes: "" },
+    });
 
-  // Update final status, persisting the actual step failure code for later diagnosis
-  const finalStatus = result.success ? "completed" : "failed";
-  const failureCode = result.lastFailureCode ?? result.firstFailureCode ?? result.errorCode;
-  await updateStatus(featureDir, {
-    status: finalStatus,
-    metadata: {
-      last_updated: new Date().toISOString(),
-      notes: "",
-      ...(failureCode ? { last_error_code: failureCode } : {}),
-    },
-  });
+    // Execute workflow
+    const result = await executeWorkflow(workflow, featureDir, featureName, options, dbAdapter);
 
-  console.log("");
-  console.log("Execution complete!");
-  console.log(`  Completed steps: ${result.completedSteps.length}`);
-  console.log(`  Failed steps: ${result.failedSteps.length}`);
+    // Update final status, persisting the actual step failure code for later diagnosis
+    const finalStatus = result.success ? "completed" : "failed";
+    const failureCode = result.lastFailureCode ?? result.firstFailureCode ?? result.errorCode;
+    await updateStatus(featureDir, {
+      status: finalStatus,
+      metadata: {
+        last_updated: new Date().toISOString(),
+        notes: "",
+        ...(failureCode ? { last_error_code: failureCode } : {}),
+      },
+    });
 
-  if (result.failedSteps.length > 0) {
-    console.log(`  Failed: ${result.failedSteps.join(", ")}`);
+    console.log("");
+    console.log("Execution complete!");
+    console.log(`  Completed steps: ${result.completedSteps.length}`);
+    console.log(`  Failed steps: ${result.failedSteps.length}`);
 
-    // Use exactly the same failure code persisted into status.yaml.
-    // Exit code 1 = standard CLI failure (POSIX convention).
-    const failureCode = result.lastFailureCode ?? result.firstFailureCode ?? result.errorCode ?? "E4001";
-    console.error(`  Error code: ${failureCode}`);
-    const diag = getDiagnosis(failureCode);
-    if (diag) {
-      console.error(formatDiagnosis(diag));
+    if (result.failedSteps.length > 0) {
+      console.log(`  Failed: ${result.failedSteps.join(", ")}`);
+
+      // Use exactly the same failure code persisted into status.yaml.
+      // Exit code 1 = standard CLI failure (POSIX convention).
+      const failureCode = result.lastFailureCode ?? result.firstFailureCode ?? result.errorCode ?? "E4001";
+      console.error(`  Error code: ${failureCode}`);
+      const diag = getDiagnosis(failureCode);
+      if (diag) {
+        console.error(formatDiagnosis(diag));
+      }
+
+      throw new CLIError(`Workflow execution failed: ${result.failedSteps.join(", ")}`, 1);
     }
 
-    throw new CLIError(`Workflow execution failed: ${result.failedSteps.join(", ")}`, 1);
+    console.log("");
+    console.log("✓ Workflow completed successfully!");
+    console.log("");
+    console.log("Next steps:");
+    console.log(`  1. Review outputs in .obora/features/${featureName}/.obora/outputs/`);
+    console.log(`  2. Run 'obora done ${featureName}' to archive the feature`);
+    console.log(`  3. Verify DB: duckdb .obora/features/${featureName}/.obora/obora.db \"SELECT * FROM workflow_runs ORDER BY id DESC LIMIT 5;\"`);
+  } finally {
+    if (dbAdapter.db) {
+      try {
+        dbAdapter.db.close();
+      } catch {
+        // no-op: close failure should not mask workflow result
+      }
+    }
   }
-
-  console.log("");
-  console.log("✓ Workflow completed successfully!");
-  console.log("");
-  console.log("Next steps:");
-  console.log(`  1. Review outputs in .obora/features/${featureName}/.obora/outputs/`);
-  console.log(`  2. Run 'obora done ${featureName}' to archive the feature`);
 }
 
 /**
