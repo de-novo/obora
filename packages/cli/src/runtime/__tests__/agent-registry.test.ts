@@ -7,41 +7,42 @@ import { AgentRegistry } from "../agent-registry.js";
 import { AgentRole, MockLLMAdapter } from "@obora-kit/agents";
 import { OboraError } from "@obora/core";
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function makeRegistry() {
   return new AgentRegistry({ llm: new MockLLMAdapter() });
 }
 
-// ---------------------------------------------------------------------------
-// resolve — valid roles
-// ---------------------------------------------------------------------------
-
 describe("AgentRegistry.resolve — valid roles", () => {
-  it.each(["analyst", "executor", "verifier", "director"])(
-    "should resolve '%s' to a BaseAgent",
-    async (name) => {
-      const registry = makeRegistry();
-      const agent = await registry.resolve(name);
-      expect(agent).toBeDefined();
-      expect(agent.role).toBe(name);
-    },
-  );
+  it.each([
+    "analyst",
+    "executor",
+    "verifier",
+    "director",
+    "architect",
+    "developer",
+    "reviewer",
+    "planner",
+  ])("should resolve '%s' to a BaseAgent", async (name) => {
+    const registry = makeRegistry();
+    const agent = await registry.resolve(name);
+    expect(agent).toBeDefined();
+  });
+
+  it("should map TASK-053/054 aliases to runtime roles", async () => {
+    const registry = makeRegistry();
+    expect((await registry.resolve("architect")).role).toBe(AgentRole.ANALYST);
+    expect((await registry.resolve("developer")).role).toBe(AgentRole.EXECUTOR);
+    expect((await registry.resolve("reviewer")).role).toBe(AgentRole.VERIFIER);
+    expect((await registry.resolve("planner")).role).toBe(AgentRole.DIRECTOR);
+  });
 
   it("should be case-insensitive", async () => {
     const registry = makeRegistry();
-    expect((await registry.resolve("Analyst")).role).toBe(AgentRole.ANALYST);
-    expect((await registry.resolve("EXECUTOR")).role).toBe(AgentRole.EXECUTOR);
-    expect((await registry.resolve("Verifier")).role).toBe(AgentRole.VERIFIER);
-    expect((await registry.resolve("DIRECTOR")).role).toBe(AgentRole.DIRECTOR);
+    expect((await registry.resolve("Architect")).role).toBe(AgentRole.ANALYST);
+    expect((await registry.resolve("DEVELOPER")).role).toBe(AgentRole.EXECUTOR);
+    expect((await registry.resolve("Reviewer")).role).toBe(AgentRole.VERIFIER);
+    expect((await registry.resolve("PLANNER")).role).toBe(AgentRole.DIRECTOR);
   });
 });
-
-// ---------------------------------------------------------------------------
-// resolve — unknown agent (E4003)
-// ---------------------------------------------------------------------------
 
 describe("AgentRegistry.resolve — unknown agent", () => {
   it("should throw OboraError with code E4003 for unknown agent", async () => {
@@ -61,27 +62,14 @@ describe("AgentRegistry.resolve — unknown agent", () => {
     const registry = makeRegistry();
     await expect(registry.resolve("")).rejects.toThrow(OboraError);
   });
-
-  it("should throw E4003 for planner (not yet supported)", async () => {
-    const registry = makeRegistry();
-    await expect(registry.resolve("planner")).rejects.toThrow(OboraError);
-    try {
-      await registry.resolve("planner");
-    } catch (e) {
-      expect((e as OboraError).code).toBe("E4003");
-    }
-  });
 });
-
-// ---------------------------------------------------------------------------
-// has
-// ---------------------------------------------------------------------------
 
 describe("AgentRegistry.has", () => {
   it("should return true for valid agent names", () => {
     const registry = makeRegistry();
     expect(registry.has("analyst")).toBe(true);
-    expect(registry.has("Executor")).toBe(true);
+    expect(registry.has("architect")).toBe(true);
+    expect(registry.has("Planner")).toBe(true);
   });
 
   it("should return false for unknown agent names", () => {
@@ -91,27 +79,27 @@ describe("AgentRegistry.has", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// listAvailable
-// ---------------------------------------------------------------------------
-
 describe("AgentRegistry.listAvailable", () => {
-  it("should return all 4 supported agent names", () => {
+  it("should include both legacy and TASK-053/054 names", () => {
     const registry = makeRegistry();
     const available = registry.listAvailable();
-    expect(available).toEqual(["analyst", "executor", "verifier", "director"]);
+    expect(available).toEqual([
+      "analyst",
+      "executor",
+      "verifier",
+      "director",
+      "architect",
+      "developer",
+      "reviewer",
+      "planner",
+    ]);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Integration with AgentResolver interface
-// ---------------------------------------------------------------------------
 
 describe("AgentRegistry as AgentResolver", () => {
   it("should satisfy AgentResolver interface contract", async () => {
     const registry = makeRegistry();
-    // AgentResolver requires resolve(agentName: string): BaseAgent
-    const agent = await registry.resolve("analyst");
+    const agent = await registry.resolve("architect");
     expect(typeof agent.execute).toBe("function");
   });
 });
