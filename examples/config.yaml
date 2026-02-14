@@ -1,5 +1,5 @@
-# obora-kit project config template
-# This file is merged with ~/.obora/config.yaml by AgentConfigResolver.
+# obora-kit global config example (TASK-053 style)
+# Place this at ~/.obora/config.yaml for user-level defaults.
 
 defaults:
   provider: anthropic
@@ -10,6 +10,7 @@ defaults:
 
 providers:
   anthropic:
+    # token auth (placeholder reference)
     authMode: token
     authRef: env:ANTHROPIC_API_KEY
     defaultModel: claude-opus-4-6
@@ -17,6 +18,7 @@ providers:
     maxTokens: 8192
 
   zai:
+    # api_key auth (placeholder reference)
     authMode: api_key
     authRef: env:ZAI_API_KEY
     defaultModel: glm-4.7
@@ -24,6 +26,7 @@ providers:
     maxTokens: 8192
 
   openai-codex:
+    # oauth auth (placeholder reference)
     authMode: oauth
     authRef: obora-auth:openai-codex
     defaultModel: gpt-5.3-codex
@@ -31,6 +34,7 @@ providers:
     maxTokens: 16384
 
 agents:
+  # Workflow role mapping
   planner:
     provider: anthropic
     model: claude-opus-4-6
