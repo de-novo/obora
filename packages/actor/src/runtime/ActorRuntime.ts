@@ -208,9 +208,9 @@ export class ActorRuntime {
   }
 
   /**
-   * Actor 재시작
-   * @param actorId Actor ID
-   * @param restartCount 현재 재시작 횟수 (내부용)
+   * Restart an actor.
+   * @param actorId Actor ID.
+   * @param restartCount Current restart attempt count (internal use).
    */
   async restart(actorId: ActorId, restartCount = 0): Promise<Actor> {
     if (restartCount >= this.config.maxRestarts) {
@@ -237,6 +237,13 @@ export class ActorRuntime {
     }
   }
 
+  /**
+   * Retry actor spawn with exponential backoff.
+   *
+   * Boundary behavior: when `restartCount === maxRestarts`, this method still performs
+   * one final spawn attempt for that boundary count. It only recurses when
+   * `restartCount < maxRestarts`; otherwise the last error is rethrown.
+   */
   private async retryRestart(
     actorId: ActorId,
     config: ActorConfig,
@@ -262,6 +269,7 @@ export class ActorRuntime {
       if (restartCount < this.config.maxRestarts) {
         return this.retryRestart(actorId, config, restartCount + 1);
       }
+      // Boundary case: restartCount === maxRestarts already consumed the final spawn attempt.
       throw error;
     }
   }
@@ -337,6 +345,18 @@ export class ActorRuntime {
 
   // ==================== 내부 메서드 ====================
 
+  /**
+   * Stop a managed actor and release runtime references.
+   *
+   * Timeout trade-off:
+   * - `actor.stop()` is raced against `stopTimeout`.
+   * - In `finally`, the runtime always removes the actor/config map entries, even when
+   *   stop fails or times out.
+   *
+   * Why: keeping stale map entries blocks respawn/restart paths and leaks management state.
+   * Trade-off: the underlying actor implementation might still be running after timeout
+   * ("zombie" actor) because JavaScript promises are not force-cancelled.
+   */
   private async stopActor(actorId: ActorId): Promise<void> {
     const actor = this.actors.get(actorId);
     if (!actor) return;
