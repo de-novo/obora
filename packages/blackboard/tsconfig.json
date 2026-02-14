@@ -20,6 +20,8 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
+    // composite: true is required for project references and tsc --noEmit.
+    // tsup overrides this to false during DTS generation to avoid TS6307.
     "composite": true,
     "incremental": true,
     "tsBuildInfoFile": "./dist/.tsbuildinfo",

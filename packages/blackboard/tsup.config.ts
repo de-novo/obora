@@ -10,6 +10,9 @@ export default defineConfig({
   },
   format: ['cjs', 'esm'],
   dts: {
+    // Override composite to false for DTS generation only.
+    // tsconfig.json keeps composite:true for IDE project references and tsc --noEmit.
+    // tsup's multi-entry DTS generation conflicts with composite's file-list constraint (TS6307).
     compilerOptions: {
       composite: false,
     },
