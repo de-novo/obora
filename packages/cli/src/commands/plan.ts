@@ -8,7 +8,7 @@ import { dirname, join } from "node:path";
 import * as path from "node:path";
 
 import { log } from "@obora/core";
-import { createAdapterFromEnv } from "@obora-kit/agents";
+import { AgentConfigResolver, createAdapter } from "@obora-kit/agents";
 import { Command } from "commander";
 import fs from "fs-extra";
 import yaml from "yaml";
@@ -153,18 +153,24 @@ async function generatePlanWithAI(
 ): Promise<string> {
   log("Generating implementation plan with AI...");
 
-  const model = context.model || options.model || "pi-mono-1";
-  const agent = options.agent || "architect";
-  const llm = createAdapterFromEnv();
+  const agent = options.agent || "planner";
+  const resolver = await AgentConfigResolver.create(process.cwd());
+  const resolved = resolver.resolveForStep(agent, { model: context.model || options.model });
+  const llm = await createAdapter(resolved.provider as "pi-mono" | "openai" | "anthropic" | "google", {
+    model: resolved.model,
+    baseUrl: resolved.baseUrl,
+  });
 
-  log(`  Model: ${model}`);
+  log(`  Provider: ${resolved.provider}`);
+  log(`  Model: ${resolved.model}`);
   log(`  Agent: ${agent}`);
   log(`  Adapter: ${llm.id}`);
 
   const systemPrompt =
-    "You are an expert software architect and project planner. " +
-    "Given a feature proposal and design document, generate a detailed implementation plan " +
-    "with phases, tasks, dependencies, and estimates. Output in Markdown format.";
+    resolved.systemPrompt ||
+    ("You are an expert software architect and project planner. " +
+      "Given a feature proposal and design document, generate a detailed implementation plan " +
+      "with phases, tasks, dependencies, and estimates. Output in Markdown format.");
 
   const userPrompt = [
     `## Feature: ${context.featureName}`,
@@ -183,9 +189,9 @@ async function generatePlanWithAI(
   try {
     const response = await llm.chatCompletion(
       {
-        model,
-        temperature: 0.2,
-        maxTokens: 4096,
+        model: resolved.model,
+        temperature: resolved.temperature ?? 0.2,
+        maxTokens: resolved.maxTokens ?? 4096,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -199,7 +205,7 @@ async function generatePlanWithAI(
       throw new CLIError("[E5102] LLM returned empty plan content.", 1);
     }
 
-    return normalizePlanMarkdown(generated, response.model || model, agent, context.featureName);
+    return normalizePlanMarkdown(generated, response.model || resolved.model, agent, context.featureName);
   } catch (error) {
     if (error instanceof CLIError) {
       throw error;

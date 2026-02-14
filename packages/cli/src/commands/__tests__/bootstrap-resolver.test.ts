@@ -20,6 +20,11 @@ vi.mock("@obora-kit/agents", () => {
 
   return {
     createAdapterFromEnv: vi.fn(() => new MockLLMAdapter()),
+    AgentConfigResolver: {
+      create: vi.fn(async () => ({
+        resolveForStep: vi.fn(() => ({ provider: "mock", model: "mock" })),
+      })),
+    },
     AgentRole: { ANALYST: "analyst", EXECUTOR: "executor", VERIFIER: "verifier", DIRECTOR: "director" },
     createAgent: vi.fn(({ role }: any) => ({
       id: `${role}-test`,
@@ -51,33 +56,33 @@ describe("bootstrapAgentResolver", () => {
     setAgentResolver(null);
   });
 
-  it("should call createAdapterFromEnv and return an AgentResolver", () => {
-    const resolver = bootstrapAgentResolver();
+  it("should call createAdapterFromEnv and return an AgentResolver", async () => {
+    const resolver = await bootstrapAgentResolver();
 
     expect(createAdapterFromEnv).toHaveBeenCalled();
     expect(resolver).toBeDefined();
     expect(typeof resolver.resolve).toBe("function");
   });
 
-  it("should resolve known agent names", () => {
-    const resolver = bootstrapAgentResolver();
+  it("should resolve known agent names", async () => {
+    const resolver = await bootstrapAgentResolver();
 
-    const agent = resolver.resolve("analyst");
+    const agent = await resolver.resolve("analyst");
     expect(agent).toBeDefined();
   });
 
-  it("should throw on unknown agent names (E4003)", () => {
-    const resolver = bootstrapAgentResolver();
+  it("should throw on unknown agent names (E4003)", async () => {
+    const resolver = await bootstrapAgentResolver();
 
-    expect(() => resolver.resolve("unknown-agent")).toThrow(/E4003/);
+    await expect(resolver.resolve("unknown-agent")).rejects.toThrow(/E4003/);
   });
 
-  it("should register the resolver globally (setAgentResolver)", () => {
+  it("should register the resolver globally (setAgentResolver)", async () => {
     // Before bootstrap, resolver is null
-    const resolver = bootstrapAgentResolver();
+    await bootstrapAgentResolver();
 
     // After bootstrap, calling it again should still work
-    const resolver2 = bootstrapAgentResolver();
+    const resolver2 = await bootstrapAgentResolver();
     expect(resolver2).toBeDefined();
   });
 });

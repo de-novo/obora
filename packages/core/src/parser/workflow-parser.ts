@@ -22,6 +22,8 @@ const KNOWN_STEP_FIELDS = [
   "name",
   "agent",
   "description",
+  "provider",
+  "model",
   "depends_on",
   "inputs",
   "outputs",
@@ -98,6 +100,14 @@ function parseStep(raw: unknown, index: number, options: ParserOptions): Step {
   // Check unknown fields
   checkUnknownFields(obj, KNOWN_STEP_FIELDS, `step '${obj.name}'`, options);
 
+  if (obj.provider !== undefined && typeof obj.provider !== "string") {
+    throw new ParseError("E2003", `Step '${obj.name}': 'provider' must be a string`);
+  }
+
+  if (obj.model !== undefined && typeof obj.model !== "string") {
+    throw new ParseError("E2003", `Step '${obj.name}': 'model' must be a string`);
+  }
+
   // Validate optional fields
   if (obj.timeout !== undefined) {
     if (typeof obj.timeout !== "string") {
@@ -142,6 +152,8 @@ function parseStep(raw: unknown, index: number, options: ParserOptions): Step {
     name: obj.name,
     agent: obj.agent,
     description: obj.description as string | undefined,
+    provider: obj.provider as string | undefined,
+    model: obj.model as string | undefined,
     depends_on: obj.depends_on as string[] | undefined,
     inputs: obj.inputs as string[] | undefined,
     outputs: obj.outputs as string[] | undefined,

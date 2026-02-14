@@ -82,6 +82,8 @@ const workflowSchema = {
           name: { type: "string" },
           agent: { type: "string" },
           description: { type: "string" },
+          provider: { type: "string" },
+          model: { type: "string" },
           depends_on: { type: "array", items: { type: "string" } },
           inputs: { type: "array", items: { type: "string" } },
           outputs: { type: "array", items: { type: "string" } },

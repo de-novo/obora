@@ -54,6 +54,39 @@ describe("AgentConfigResolver", () => {
     }
   });
 
+  it("applies step override precedence while inheriting provider for model-only override", async () => {
+    const originalHome = process.env.HOME;
+    const tempHome = await mkdtemp(path.join(os.tmpdir(), "obora-home-"));
+    const tempProject = await mkdtemp(path.join(os.tmpdir(), "obora-project-"));
+    cleanupPaths.push(tempHome, tempProject);
+
+    try {
+      process.env.HOME = tempHome;
+
+      await setupConfig(
+        tempHome,
+        ".obora/config.yaml",
+        `defaults:\n  provider: openai\n  model: gpt-4o-mini\nagents:\n  reviewer:\n    provider: anthropic\n    model: claude-3-5-sonnet-latest\n`
+      );
+
+      const resolver = await AgentConfigResolver.create(tempProject);
+
+      const modelOnly = resolver.resolveForStep("reviewer", { model: "claude-haiku-4" });
+      expect(modelOnly.provider).toBe("anthropic");
+      expect(modelOnly.model).toBe("claude-haiku-4");
+
+      const providerOnly = resolver.resolveForStep("reviewer", { provider: "openai" });
+      expect(providerOnly.provider).toBe("openai");
+      expect(providerOnly.model).toBe("claude-3-5-sonnet-latest");
+
+      const full = resolver.resolveForStep("reviewer", { provider: "openai", model: "gpt-4.1" });
+      expect(full.provider).toBe("openai");
+      expect(full.model).toBe("gpt-4.1");
+    } finally {
+      process.env.HOME = originalHome;
+    }
+  });
+
   it("lists agents from global and project maps", async () => {
     const originalHome = process.env.HOME;
     const tempHome = await mkdtemp(path.join(os.tmpdir(), "obora-home-"));

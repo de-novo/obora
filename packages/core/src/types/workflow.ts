@@ -32,6 +32,10 @@ export interface Step {
   agent: string;
   /** Optional description of the step */
   description?: string;
+  /** Optional provider override for this step */
+  provider?: string;
+  /** Optional model override for this step */
+  model?: string;
   /** Explicit dependencies on other steps */
   depends_on?: string[];
   /** Input files or artifacts required */

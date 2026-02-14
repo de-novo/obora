@@ -3,6 +3,7 @@
  */
 
 import type { Step } from "@obora/core";
+import type { AgentConfig } from "@obora-kit/agents";
 import { OboraError, type ErrorCode } from "@obora/core";
 import {
   type BaseAgent,
@@ -25,8 +26,8 @@ export interface StepResult {
 }
 
 export interface AgentResolver {
-  resolve(agentName: string): BaseAgent;
-  resolve(query: { agent?: string; type?: string }): BaseAgent;
+  resolve(agentName: string): BaseAgent | Promise<BaseAgent>;
+  resolve(query: { agent?: string; type?: string; config?: AgentConfig }): BaseAgent | Promise<BaseAgent>;
 }
 
 export { parseDuration } from "./utils.js";
@@ -127,6 +128,7 @@ export interface ExecuteStepOptions {
   timeoutMs?: number;
   signal?: AbortSignal;
   retryAttempts?: number;
+  resolvedAgentConfig?: AgentConfig;
 }
 
 async function executeOnce(
@@ -238,7 +240,11 @@ export async function executeStep(
 ): Promise<StepResult> {
   let agent: BaseAgent;
   try {
-    agent = resolver.resolve({ agent: step.agent, type: step.agent });
+    agent = await resolver.resolve({
+      agent: step.agent,
+      type: step.agent,
+      config: options?.resolvedAgentConfig,
+    });
   } catch {
     return {
       success: false,

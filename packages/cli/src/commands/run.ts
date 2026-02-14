@@ -37,6 +37,7 @@ import {
   type AgentResolver,
   type StepResult,
 } from "../runtime/step-executor.js";
+import { AgentConfigResolver } from "@obora-kit/agents";
 import {
   createWorkflowBlackboard,
   buildAgentContext,
@@ -238,8 +239,12 @@ async function saveStepOutput(
 /**
  * Global AgentResolver — set by runtime bootstrap (TASK-043b).
  */
-const runtimeState: { activeResolver: AgentResolver | null } = {
+const runtimeState: {
+  activeResolver: AgentResolver | null;
+  configResolver: AgentConfigResolver | null;
+} = {
   activeResolver: null,
+  configResolver: null,
 };
 
 /**
@@ -248,6 +253,9 @@ const runtimeState: { activeResolver: AgentResolver | null } = {
  */
 export function setAgentResolver(resolver: AgentResolver | null): void {
   runtimeState.activeResolver = resolver;
+  if (!resolver) {
+    runtimeState.configResolver = null;
+  }
 }
 
 /**
@@ -257,9 +265,14 @@ export function setAgentResolver(resolver: AgentResolver | null): void {
  *
  * @internal exported for testing
  */
-export function bootstrapAgentResolver(): AgentResolver {
+export async function bootstrapAgentResolver(cwd: string = process.cwd()): Promise<AgentResolver> {
   const llm = createAdapterFromEnv();
   const registry = new AgentRegistry({ llm });
+  const configResolverFactory = (AgentConfigResolver as { create?: (cwd: string) => Promise<AgentConfigResolver> } | undefined)?.create;
+  if (typeof configResolverFactory === "function") {
+    const configResolver = await configResolverFactory(cwd);
+    runtimeState.configResolver = configResolver;
+  }
   setAgentResolver(registry);
   return registry;
 }
@@ -296,10 +309,16 @@ async function executeStep(
       runtimeCtx.history,
     );
 
+    const resolvedAgentConfig = runtimeState.configResolver?.resolveForStep(step.agent, {
+      provider: step.provider,
+      model: step.model,
+    });
+
     const result: StepResult = await executeStepBridge(
       step,
       runtimeState.activeResolver,
       context,
+      { resolvedAgentConfig }
     );
     return result;
   }
@@ -701,7 +720,7 @@ async function runRun(featureName: string, options: RunOptions): Promise<void> {
 
   if (!runtimeState.activeResolver) {
     try {
-      const resolver = bootstrapAgentResolver();
+      const resolver = await bootstrapAgentResolver(cwd);
       if (!resolver) {
         throw new Error("bootstrap returned empty resolver");
       }

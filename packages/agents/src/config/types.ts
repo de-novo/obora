@@ -21,7 +21,13 @@ export interface AgentConfigFile {
   agents?: Record<string, Partial<AgentConfig>>;
 }
 
+export interface AgentStepOverride {
+  provider?: string;
+  model?: string;
+}
+
 export interface AgentConfigResolverContract {
   resolve(agentName: string): AgentConfig;
+  resolveForStep(agentName: string, override?: AgentStepOverride): AgentConfig;
   listAgents(): Array<{ name: string; config: AgentConfig }>;
 }

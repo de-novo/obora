@@ -1,5 +1,10 @@
 import { getGlobalConfigPath, getProjectConfigPath, loadConfigFile } from "../config/loader";
-import type { AgentConfig, AgentConfigFile, AgentConfigResolverContract } from "../config/types";
+import type {
+  AgentConfig,
+  AgentConfigFile,
+  AgentConfigResolverContract,
+  AgentStepOverride,
+} from "../config/types";
 
 const BUILTIN_DEFAULTS: AgentConfig = {
   provider: "pi-mono",
@@ -74,6 +79,20 @@ export class AgentConfigResolver implements AgentConfigResolverContract {
     }
 
     return resolved;
+  }
+
+  resolveForStep(agentName: string, override?: AgentStepOverride): AgentConfig {
+    const base = this.resolve(agentName);
+
+    if (!override?.provider && !override?.model) {
+      return base;
+    }
+
+    return {
+      ...base,
+      ...(override.provider ? { provider: override.provider } : {}),
+      ...(override.model ? { model: override.model } : {}),
+    };
   }
 
   listAgents(): Array<{ name: string; config: AgentConfig }> {

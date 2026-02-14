@@ -32,10 +32,20 @@ const chatCompletionMock = vi.fn().mockResolvedValue({
 });
 
 vi.mock('@obora-kit/agents', () => ({
-  createAdapterFromEnv: vi.fn(() => ({
+  createAdapter: vi.fn(async () => ({
     id: 'mock-llm',
     chatCompletion: chatCompletionMock,
   })),
+  AgentConfigResolver: {
+    create: vi.fn(async () => ({
+      resolveForStep: vi.fn((agent: string, override?: { model?: string }) => ({
+        provider: 'openai',
+        model: override?.model || 'mock-model',
+        temperature: 0.2,
+        maxTokens: 4096,
+      })),
+    })),
+  },
 }));
 
 // Mock path-utils
