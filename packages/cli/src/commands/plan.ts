@@ -8,7 +8,7 @@ import { dirname, join } from "node:path";
 import * as path from "node:path";
 
 import { log } from "@obora/core";
-import { AgentConfigResolver, createAdapter } from "@obora-kit/agents";
+import { AgentConfigResolver, createAdapter, type LLMProvider } from "@obora-kit/agents";
 import { Command } from "commander";
 import fs from "fs-extra";
 import yaml from "yaml";
@@ -156,7 +156,7 @@ async function generatePlanWithAI(
   const agent = options.agent || "planner";
   const resolver = await AgentConfigResolver.create(process.cwd());
   const resolved = resolver.resolveForStep(agent, { model: context.model || options.model });
-  const llm = await createAdapter(resolved.provider as "pi-mono" | "openai" | "anthropic" | "google", {
+  const llm = await createAdapter(resolved.provider as LLMProvider, {
     model: resolved.model,
     baseUrl: resolved.baseUrl,
   });

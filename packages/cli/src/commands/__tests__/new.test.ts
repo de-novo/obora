@@ -69,6 +69,12 @@ describe('new command', () => {
       const templateOption = cmd.options.find((opt) => opt.long === '--template');
       expect(templateOption).toBeDefined();
     });
+
+    it('should have --description option', () => {
+      const cmd = createNewCommand();
+      const descriptionOption = cmd.options.find((opt) => opt.long === '--description');
+      expect(descriptionOption).toBeDefined();
+    });
   });
 
   describe('feature creation', () => {
@@ -152,6 +158,21 @@ describe('new command', () => {
       expect(proposalCall?.[1]).toContain('요구사항');
     });
 
+
+    it('should set description in status.yaml when provided', async () => {
+      vi.mocked(existsSync).mockImplementation((path) => {
+        const strPath = String(path);
+        return strPath.includes('.obora') && !strPath.includes('test-feature');
+      });
+      vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
+      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+      await runNew('test-feature', { description: 'my feature desc' });
+
+      const writeFileCalls = vi.mocked(fs.writeFile).mock.calls;
+      const statusCall = writeFileCalls.find((call) => String(call[0]).includes('status.yaml'));
+      expect(statusCall?.[1]).toContain('description: "my feature desc"');
+    });
     it('should set correct workflow in status.yaml', async () => {
       vi.mocked(existsSync).mockImplementation((path) => {
         const strPath = String(path);

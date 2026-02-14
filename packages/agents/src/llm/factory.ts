@@ -6,13 +6,15 @@ import { OpenAICompatibleAdapter } from "./openai-compatible-adapter";
 import { PiMonoAdapter, type PiMonoConfig } from "./pi-mono-adapter";
 import { withRetry } from "./retry-handler";
 
-export type LLMProvider = "pi-mono" | "openai" | "anthropic" | "google";
+export type LLMProvider = "pi-mono" | "openai" | "openai-codex" | "anthropic" | "google" | "zai";
 
 type LLMAdapterConfigMap = {
   "pi-mono": PiMonoConfig;
   openai: { apiKey: string; baseUrl?: string; model?: string };
   anthropic: { apiKey: string; baseUrl?: string; model?: string };
   google: { apiKey: string; baseUrl?: string; model?: string };
+  zai: { apiKey: string; baseUrl?: string; model?: string };
+  "openai-codex": { apiKey: string; baseUrl?: string; model?: string };
 };
 
 interface ProviderDefinition<P extends LLMProvider> {
@@ -69,6 +71,33 @@ const PROVIDER_REGISTRY: { [K in LLMProvider]: ProviderDefinition<K> } = {
           (config as { baseUrl?: string }).baseUrl ??
           "https://generativelanguage.googleapis.com/v1beta/openai",
         defaultModel: (config as { model?: string }).model ?? "gemini-2.0-flash",
+      }),
+  },
+
+  zai: {
+    envApiKey: "ZAI_API_KEY",
+    envBaseUrl: "ZAI_BASE_URL",
+    defaultBaseUrl: "https://api.z.ai/v1",
+    defaultModel: "glm-4",
+    create: (config) =>
+      new OpenAICompatibleAdapter({
+        provider: "zai",
+        authToken: (config as { apiKey: string }).apiKey,
+        baseUrl: (config as { baseUrl?: string }).baseUrl ?? "https://api.z.ai/v1",
+        defaultModel: (config as { model?: string }).model ?? "glm-4",
+      }),
+  },
+  "openai-codex": {
+    envApiKey: "OPENAI_CODEX_API_KEY",
+    envBaseUrl: "OPENAI_CODEX_BASE_URL",
+    defaultBaseUrl: "https://api.openai.com/v1",
+    defaultModel: "gpt-5.3-codex",
+    create: (config) =>
+      new OpenAICompatibleAdapter({
+        provider: "openai",
+        authToken: (config as { apiKey: string }).apiKey,
+        baseUrl: (config as { baseUrl?: string }).baseUrl ?? "https://api.openai.com/v1",
+        defaultModel: (config as { model?: string }).model ?? "gpt-5.3-codex",
       }),
   },
 };

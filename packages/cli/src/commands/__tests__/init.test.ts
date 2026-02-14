@@ -136,7 +136,7 @@ describe('init command', () => {
       const workflowCall = writeFileCalls.find((call) => String(call[0]).includes('workflows/simple.yaml'));
       expect(workflowCall).toBeDefined();
       expect(String(workflowCall?.[1])).toContain('name: simple');
-      expect(String(workflowCall?.[1])).toContain('stages:');
+      expect(String(workflowCall?.[1])).toContain('steps:');
     });
 
     it('should initialize DuckDB database', async () => {

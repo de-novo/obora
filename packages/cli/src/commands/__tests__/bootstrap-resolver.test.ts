@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-// Mock @obora-kit/agents — we only need createAdapterFromEnv
+// Mock @obora-kit/agents
 vi.mock("@obora-kit/agents", () => {
   const MockLLMAdapter = class {
     readonly id = "mock-llm";
@@ -19,9 +19,10 @@ vi.mock("@obora-kit/agents", () => {
   };
 
   return {
-    createAdapterFromEnv: vi.fn(() => new MockLLMAdapter()),
+    createAdapter: vi.fn(async () => new MockLLMAdapter()),
     AgentConfigResolver: {
       create: vi.fn(async () => ({
+        resolve: vi.fn(() => ({ provider: "mock", model: "mock" })),
         resolveForStep: vi.fn(() => ({ provider: "mock", model: "mock" })),
       })),
     },
@@ -40,7 +41,7 @@ vi.mock("../../runtime/step-executor.js", () => ({
   executeStep: vi.fn(),
 }));
 
-import { createAdapterFromEnv } from "@obora-kit/agents";
+import { createAdapter } from "@obora-kit/agents";
 import { bootstrapAgentResolver, setAgentResolver } from "../run.js";
 
 describe("bootstrapAgentResolver", () => {
@@ -56,10 +57,10 @@ describe("bootstrapAgentResolver", () => {
     setAgentResolver(null);
   });
 
-  it("should call createAdapterFromEnv and return an AgentResolver", async () => {
+  it("should call createAdapter and return an AgentResolver", async () => {
     const resolver = await bootstrapAgentResolver();
 
-    expect(createAdapterFromEnv).toHaveBeenCalled();
+    expect(createAdapter).toHaveBeenCalled();
     expect(resolver).toBeDefined();
     expect(typeof resolver.resolve).toBe("function");
   });

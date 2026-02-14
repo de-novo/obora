@@ -46,7 +46,7 @@ import {
   appendHistory,
 } from "../runtime/context-builder.js";
 import { AgentRegistry } from "../runtime/agent-registry.js";
-import { createAdapterFromEnv } from "@obora-kit/agents";
+import { createAdapter, type LLMProvider } from "@obora-kit/agents";
 import type { ChatMessage } from "@obora-kit/agents";
 import type { Blackboard } from "../runtime/blackboard.js";
 import { parseDuration } from "../runtime/utils.js";
@@ -266,13 +266,20 @@ export function setAgentResolver(resolver: AgentResolver | null): void {
  * @internal exported for testing
  */
 export async function bootstrapAgentResolver(cwd: string = process.cwd()): Promise<AgentResolver> {
-  const llm = createAdapterFromEnv();
-  const registry = new AgentRegistry({ llm });
   const configResolverFactory = (AgentConfigResolver as { create?: (cwd: string) => Promise<AgentConfigResolver> } | undefined)?.create;
-  if (typeof configResolverFactory === "function") {
-    const configResolver = await configResolverFactory(cwd);
-    runtimeState.configResolver = configResolver;
+  if (typeof configResolverFactory !== "function") {
+    throw new Error("AgentConfigResolver.create is not available");
   }
+
+  const configResolver = await configResolverFactory(cwd);
+  runtimeState.configResolver = configResolver;
+  const defaultConfig = configResolver.resolve("default");
+  const llm = await createAdapter(defaultConfig.provider as LLMProvider, {
+    model: defaultConfig.model,
+    baseUrl: defaultConfig.baseUrl,
+  });
+
+  const registry = new AgentRegistry({ llm });
   setAgentResolver(registry);
   return registry;
 }
@@ -645,6 +652,58 @@ async function executeWorkflow(
   };
 }
 
+function convertLegacyStagesToSteps(workflowDoc: Record<string, any>): Workflow | null {
+  const stages = workflowDoc.stages;
+  if (!Array.isArray(stages) || stages.length === 0) {
+    return null;
+  }
+
+  const steps: Step[] = [];
+  let previousStepName: string | undefined;
+
+  for (const stage of stages) {
+    const stageName = typeof stage?.name === "string" ? stage.name : "stage";
+    const tasks = Array.isArray(stage?.tasks) ? stage.tasks : [];
+
+    for (const task of tasks) {
+      const taskName = String(task);
+      const stepName = `${stageName}-${taskName}`;
+      steps.push({
+        name: stepName,
+        agent: taskName,
+        ...(previousStepName ? { depends_on: [previousStepName] } : {}),
+      });
+      previousStepName = stepName;
+    }
+  }
+
+  if (steps.length === 0) {
+    return null;
+  }
+
+  return {
+    name: String(workflowDoc.name ?? "legacy-workflow"),
+    version: String(workflowDoc.version ?? "1.0"),
+    ...(typeof workflowDoc.mode === "string" ? { mode: workflowDoc.mode } : {}),
+    ...(typeof workflowDoc.description === "string" ? { description: workflowDoc.description } : {}),
+    steps,
+  } as Workflow;
+}
+
+function parseWorkflowWithFallback(workflowContent: string): Workflow {
+  try {
+    return parseWorkflow(workflowContent);
+  } catch (error) {
+    const workflowDoc = yaml.parse(workflowContent) as Record<string, any>;
+    const converted = workflowDoc ? convertLegacyStagesToSteps(workflowDoc) : null;
+    if (converted) {
+      log("Legacy workflow format detected (stages); converted to steps for execution.");
+      return converted;
+    }
+    throw error;
+  }
+}
+
 /**
  * Main run command logic
  */
@@ -692,7 +751,7 @@ async function runRun(featureName: string, options: RunOptions): Promise<void> {
   let workflow: Workflow;
 
   try {
-    workflow = parseWorkflow(workflowContent);
+    workflow = parseWorkflowWithFallback(workflowContent);
     log(`Workflow: ${workflow.name} (version: ${workflow.version || "1.0"})`);
     log(`Steps: ${workflow.steps.length}`);
     log(`Mode: ${workflow.mode || "auto"}`);

@@ -60,15 +60,17 @@ const SIMPLE_WORKFLOW = `# Simple Workflow
 name: simple
 version: "1.0"
 
-stages:
-  - name: develop
-    tasks:
-      - implement
-      - test
-  - name: complete
-    tasks:
-      - review
-      - done
+description: "Minimal demo workflow"
+
+steps:
+  - name: implement
+    agent: developer
+  - name: test
+    agent: reviewer
+    depends_on: [implement]
+  - name: done
+    agent: planner
+    depends_on: [test]
 `;
 
 const STANDARD_WORKFLOW = `# Standard Workflow
@@ -77,23 +79,23 @@ const STANDARD_WORKFLOW = `# Standard Workflow
 name: standard
 version: "1.0"
 
-stages:
-  - name: planning
-    tasks:
-      - spec
-      - design
-  - name: development
-    tasks:
-      - implement
-      - test
-  - name: review
-    tasks:
-      - code-review
-      - qa
-  - name: completion
-    tasks:
-      - docs
-      - done
+description: "Standard implementation workflow"
+
+steps:
+  - name: spec
+    agent: architect
+  - name: design
+    agent: architect
+    depends_on: [spec]
+  - name: implement
+    agent: developer
+    depends_on: [design]
+  - name: test
+    agent: reviewer
+    depends_on: [implement]
+  - name: docs
+    agent: planner
+    depends_on: [test]
 `;
 
 // Valid workflow types
