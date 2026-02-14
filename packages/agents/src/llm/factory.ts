@@ -27,11 +27,17 @@ export function createAdapterFromEnv(): LLMAdapter {
       ?.OBORA_LLM_PROVIDER ?? "pi-mono";
 
   switch (provider) {
+    case "mock":
+      // Explicit mock provider — useful for testing / CI
+      return new (require("./mock-adapter").MockLLMAdapter)();
+
     case "pi-mono": {
       const apiKey = (globalThis as { process?: { env?: Record<string, string | undefined> } })
         .process?.env?.PIMONO_API_KEY;
       if (!apiKey) {
-        throw new Error("PIMONO_API_KEY environment variable is required");
+        // Fallback to MockLLMAdapter when API key is not configured
+        const { MockLLMAdapter } = require("./mock-adapter");
+        return new MockLLMAdapter();
       }
       return createLLMAdapter("pi-mono", { apiKey });
     }

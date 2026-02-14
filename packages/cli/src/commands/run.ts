@@ -24,6 +24,7 @@ import {
   type AgentResolver,
   type StepResult,
 } from "../runtime/step-executor.js";
+import { AgentRegistry } from "../runtime/agent-registry.js";
 import { Command } from "commander";
 import fs from "fs-extra";
 import yaml from "yaml";
@@ -194,6 +195,21 @@ let activeResolver: AgentResolver | null = null;
  */
 export function setAgentResolver(resolver: AgentResolver | null): void {
   activeResolver = resolver;
+}
+
+/**
+ * Bootstrap the AgentRegistry from environment.
+ * Creates an LLM adapter (falls back to MockLLMAdapter when unconfigured)
+ * and registers a global AgentResolver.
+ *
+ * @internal exported for testing
+ */
+export function bootstrapAgentResolver(): AgentResolver {
+  const { createAdapterFromEnv } = require("@obora-kit/agents");
+  const llm = createAdapterFromEnv();
+  const registry = new AgentRegistry({ llm });
+  setAgentResolver(registry);
+  return registry;
 }
 
 /**
