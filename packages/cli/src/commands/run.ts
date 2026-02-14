@@ -29,6 +29,7 @@ import {
   buildAgentContext,
   recordStepResult,
   recordStepError,
+  appendHistory,
 } from "../runtime/context-builder.js";
 import { AgentRegistry } from "../runtime/agent-registry.js";
 import { createAdapterFromEnv } from "@obora-kit/agents";
@@ -242,7 +243,7 @@ async function executeStep(
     if (!runtimeCtx) {
       return {
         success: false,
-        error: "Resolver is active but runtime context is missing (misconfiguration)",
+        error: "Resolver is active but runtime context is missing — possible Blackboard creation failure or misconfiguration",
         diagnosisCode: "E4001",
       };
     }
@@ -388,9 +389,11 @@ async function executeWorkflow(
     let stepError: string | undefined;
     let lastDiagnosisCode: ErrorCode | undefined;
     const maxRetries = workflow.config?.retry || 0;
+    let actualAttempts = 0;
 
     // Execute with retry logic
     for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+      actualAttempts = attempt;
       const runtimeCtx = board
         ? { board, sessionId: workflowRunId, history: chatHistory }
         : undefined;
@@ -422,7 +425,7 @@ async function executeWorkflow(
       status: stepSuccess ? "completed" : "failed",
       output: stepOutput,
       error_message: stepError,
-      retry_count: stepSuccess ? 0 : maxRetries,
+      retry_count: actualAttempts - 1,
     });
 
     // --- TASK-043c: record result on blackboard (single-writer) ---
@@ -440,7 +443,7 @@ async function executeWorkflow(
 
     // --- TASK-043c: accumulate chat history for subsequent steps ---
     if (stepSuccess) {
-      chatHistory.push({
+      appendHistory(chatHistory, {
         role: "assistant",
         content: `[${stepName}] ${stepOutput ?? "(no output)"}`,
       });

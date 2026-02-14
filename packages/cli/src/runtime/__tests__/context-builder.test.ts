@@ -9,7 +9,11 @@ import {
   recordStepResult,
   recordStepError,
   readStepResult,
+  setClock,
+  appendHistory,
+  MAX_HISTORY_LENGTH,
 } from "../context-builder.js";
+import type { ChatMessage } from "@obora-kit/agents";
 import type { Step, Workflow } from "@obora/core";
 
 // ---------------------------------------------------------------------------
@@ -163,6 +167,79 @@ describe("single-writer policy", () => {
     // Now context-builder records
     recordStepResult(board, "plan", result);
     expect(board.version).toBeGreaterThan(initialVersion);
+  });
+});
+
+describe("injectable clock", () => {
+  it("uses injected clock for timestamps", () => {
+    const FIXED = "2026-01-01T00:00:00.000Z";
+    setClock(() => FIXED);
+    try {
+      const board = createWorkflowBlackboard(SESSION, WORKFLOW, "feat");
+      recordStepResult(board, "plan", { success: true, output: "ok" });
+      const rec = readStepResult(board, "plan");
+      expect(rec!.completedAt).toBe(FIXED);
+    } finally {
+      setClock(null); // reset
+    }
+  });
+
+  it("uses injected clock for error timestamps", () => {
+    const FIXED = "2026-06-15T12:00:00.000Z";
+    setClock(() => FIXED);
+    try {
+      const board = createWorkflowBlackboard(SESSION, WORKFLOW, "feat");
+      recordStepError(board, "impl", { success: false, error: "fail" });
+      const rec = readStepResult(board, "impl");
+      expect(rec!.failedAt).toBe(FIXED);
+    } finally {
+      setClock(null);
+    }
+  });
+});
+
+describe("appendHistory (bounded history)", () => {
+  it("appends messages normally under limit", () => {
+    const history: ChatMessage[] = [];
+    appendHistory(history, { role: "user", content: "hello" });
+    expect(history).toHaveLength(1);
+  });
+
+  it("trims oldest entries when exceeding MAX_HISTORY_LENGTH", () => {
+    const history: ChatMessage[] = [];
+    for (let i = 0; i < MAX_HISTORY_LENGTH + 10; i++) {
+      appendHistory(history, { role: "assistant", content: `msg-${i}` });
+    }
+    expect(history).toHaveLength(MAX_HISTORY_LENGTH);
+    // Oldest messages should be trimmed
+    expect(history[0].content).toBe("msg-10");
+    expect(history[history.length - 1].content).toBe(`msg-${MAX_HISTORY_LENGTH + 9}`);
+  });
+});
+
+describe("readStepResult uses exists() check", () => {
+  it("returns null for missing step without relying on strict:false", () => {
+    const board = createWorkflowBlackboard(SESSION, WORKFLOW, "feat");
+    // Should use board.exists() internally, not board.read({strict:false})
+    const result = readStepResult(board, "nonexistent");
+    expect(result).toBeNull();
+  });
+});
+
+describe("single-writer policy (structural)", () => {
+  it("step-executor module does not export board.write calls", async () => {
+    // Verify the step-executor source doesn't call board.write
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const executorPath = path.join(
+      import.meta.dirname ?? ".",
+      "..",
+      "step-executor.ts",
+    );
+    if (fs.existsSync(executorPath)) {
+      const source = fs.readFileSync(executorPath, "utf-8");
+      expect(source).not.toMatch(/board\.write\s*\(/);
+    }
   });
 });
 

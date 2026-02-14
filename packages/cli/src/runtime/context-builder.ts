@@ -41,6 +41,23 @@ export interface StepResultRecord {
 }
 
 // ---------------------------------------------------------------------------
+// Clock abstraction (injectable for testing)
+// ---------------------------------------------------------------------------
+
+/** Returns an ISO-8601 timestamp string. Injectable for deterministic tests. */
+export type Clock = () => string;
+
+const defaultClock: Clock = () => new Date().toISOString();
+
+/** Module-level clock; override via `setClock()` for testing. */
+let activeClock: Clock = defaultClock;
+
+/** Override the clock used by record* functions. Pass `null` to reset. */
+export function setClock(clock: Clock | null): void {
+  activeClock = clock ?? defaultClock;
+}
+
+// ---------------------------------------------------------------------------
 // Blackboard factory
 // ---------------------------------------------------------------------------
 
@@ -117,7 +134,7 @@ export function recordStepResult(
     output: result.output ?? null,
     error: null,
     diagnosisCode: null,
-    completedAt: new Date().toISOString(),
+    completedAt: activeClock(),
     failedAt: null,
   };
   board.write(`state.context.steps.${stepName}`, record);
@@ -138,7 +155,7 @@ export function recordStepError(
     error: result.error ?? "Unknown error",
     diagnosisCode: result.diagnosisCode ?? null,
     completedAt: null,
-    failedAt: new Date().toISOString(),
+    failedAt: activeClock(),
   };
   board.write(`state.context.steps.${stepName}`, record);
 }
@@ -150,14 +167,44 @@ export function recordStepError(
 /**
  * Read a previous step's result from the blackboard.
  * Returns null if the step has not been recorded yet.
+ *
+ * Uses `board.has()` for an explicit existence check rather than
+ * relying on `read({ strict: false })` returning `undefined`.
  */
 export function readStepResult(
   board: Blackboard,
   stepName: string,
 ): StepResultRecord | null {
-  const value = board.read<StepResultRecord | undefined>(
-    `state.context.steps.${stepName}`,
-    { strict: false },
-  );
-  return value ?? null;
+  const key = `state.context.steps.${stepName}`;
+  if (!board.exists(key)) {
+    return null;
+  }
+  return board.read<StepResultRecord>(key);
+}
+
+// ---------------------------------------------------------------------------
+// History management
+// ---------------------------------------------------------------------------
+
+/**
+ * Maximum number of chat messages retained in the rolling history window.
+ * Prevents unbounded memory growth in long workflows while keeping enough
+ * context for downstream steps.
+ */
+export const MAX_HISTORY_LENGTH = 200;
+
+/**
+ * Append a message to the chat history, trimming the oldest entries when
+ * the history exceeds `MAX_HISTORY_LENGTH`.
+ */
+export function appendHistory(
+  history: ChatMessage[],
+  message: ChatMessage,
+): void {
+  history.push(message);
+  if (history.length > MAX_HISTORY_LENGTH) {
+    // Remove oldest entries to stay within budget
+    const excess = history.length - MAX_HISTORY_LENGTH;
+    history.splice(0, excess);
+  }
 }
