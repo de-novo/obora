@@ -24,8 +24,16 @@ import {
   type AgentResolver,
   type StepResult,
 } from "../runtime/step-executor.js";
+import {
+  createWorkflowBlackboard,
+  buildAgentContext,
+  recordStepResult,
+  recordStepError,
+} from "../runtime/context-builder.js";
 import { AgentRegistry } from "../runtime/agent-registry.js";
 import { createAdapterFromEnv } from "@obora-kit/agents";
+import type { Blackboard } from "@obora-kit/blackboard";
+import type { ChatMessage } from "@obora-kit/agents";
 import { Command } from "commander";
 import fs from "fs-extra";
 import yaml from "yaml";
@@ -223,23 +231,32 @@ async function executeStep(
   step: Step,
   featurePath: string,
   workflowConfig: WorkflowConfig | undefined,
-  attempt: number
+  attempt: number,
+  runtimeCtx?: { board: Blackboard; sessionId: string; history: ChatMessage[] },
 ): Promise<{ success: boolean; output?: string; error?: string; diagnosisCode?: ErrorCode }> {
   log(`  [Attempt ${attempt}] Executing step: ${step.name} (agent: ${step.agent})`);
 
   // --- Bridge path: real agent execution ---
   if (activeResolver) {
-    // Context assembly placeholder — will be replaced by ContextBuilder (043c)
-    const stubContext = {
-      sessionId: `session-${Date.now()}`,
-      board: { read: () => ({}), write: () => {} } as any,
-      history: [],
-    };
+    // Guard: ensure runtimeCtx is provided when resolver is active
+    if (!runtimeCtx) {
+      return {
+        success: false,
+        error: "Resolver is active but runtime context is missing (misconfiguration)",
+        diagnosisCode: "E4001",
+      };
+    }
+    const context = buildAgentContext(
+      runtimeCtx.sessionId,
+      runtimeCtx.board,
+      step,
+      runtimeCtx.history,
+    );
 
     const result: StepResult = await executeStepBridge(
       step,
       activeResolver,
-      stubContext,
+      context,
     );
     return result;
   }
@@ -290,6 +307,7 @@ async function recordStepRun(stepRun: StepRun): Promise<void> {
 async function executeWorkflow(
   workflow: Workflow,
   featurePath: string,
+  featureName: string,
   options: RunOptions
 ): Promise<{ success: boolean; completedSteps: string[]; failedSteps: string[]; errorCode?: ErrorCode }> {
   const completedSteps: string[] = [];
@@ -323,6 +341,12 @@ async function executeWorkflow(
 
   const stepMap = new Map(workflow.steps.map((s) => [s.name, s]));
   const continueOnError = options.continueOnError ?? workflow.config?.continue_on_error ?? false;
+
+  // --- TASK-043c: create shared Blackboard for the workflow run ---
+  const board = activeResolver
+    ? createWorkflowBlackboard(workflowRunId, workflow, featureName)
+    : undefined;
+  const chatHistory: ChatMessage[] = [];
 
   // Execute steps in order
   for (const stepName of executionOrder) {
@@ -362,11 +386,15 @@ async function executeWorkflow(
     let stepSuccess = false;
     let stepOutput: string | undefined;
     let stepError: string | undefined;
+    let lastDiagnosisCode: ErrorCode | undefined;
     const maxRetries = workflow.config?.retry || 0;
 
     // Execute with retry logic
     for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
-      const result = await executeStep(step, featurePath, workflow.config, attempt);
+      const runtimeCtx = board
+        ? { board, sessionId: workflowRunId, history: chatHistory }
+        : undefined;
+      const result = await executeStep(step, featurePath, workflow.config, attempt, runtimeCtx);
 
       if (result.success) {
         stepSuccess = true;
@@ -374,6 +402,7 @@ async function executeWorkflow(
         break;
       } else {
         stepError = result.error;
+        lastDiagnosisCode = result.diagnosisCode;
         if (attempt < maxRetries + 1) {
           const retryDelay = workflow.config?.retry_delay || "5s";
           log(`    Step failed, retrying in ${retryDelay}...`);
@@ -395,6 +424,27 @@ async function executeWorkflow(
       error_message: stepError,
       retry_count: stepSuccess ? 0 : maxRetries,
     });
+
+    // --- TASK-043c: record result on blackboard (single-writer) ---
+    if (board) {
+      if (stepSuccess) {
+        recordStepResult(board, stepName, { success: true, output: stepOutput });
+      } else {
+        recordStepError(board, stepName, {
+          success: false,
+          error: stepError,
+          diagnosisCode: lastDiagnosisCode,
+        });
+      }
+    }
+
+    // --- TASK-043c: accumulate chat history for subsequent steps ---
+    if (stepSuccess) {
+      chatHistory.push({
+        role: "assistant",
+        content: `[${stepName}] ${stepOutput ?? "(no output)"}`,
+      });
+    }
 
     if (stepSuccess) {
       completedSteps.push(stepName);
@@ -526,7 +576,7 @@ async function runRun(featureName: string, options: RunOptions): Promise<void> {
   });
 
   // Execute workflow
-  const result = await executeWorkflow(workflow, featureDir, options);
+  const result = await executeWorkflow(workflow, featureDir, featureName, options);
 
   // Update final status, persisting the error code for later diagnosis
   const finalStatus = result.success ? "completed" : "failed";

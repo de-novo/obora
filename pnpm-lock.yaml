@@ -267,6 +267,9 @@ importers:
       '@obora-kit/agents':
         specifier: workspace:*
         version: link:../agents
+      '@obora-kit/blackboard':
+        specifier: workspace:*
+        version: link:../blackboard
       '@obora/core':
         specifier: workspace:*
         version: link:../core

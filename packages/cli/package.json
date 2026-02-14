@@ -21,6 +21,7 @@
     "@obora/core": "workspace:*",
     "@obora/database": "workspace:*",
     "@obora-kit/agents": "workspace:*",
+    "@obora-kit/blackboard": "workspace:*",
     "commander": "^14.0.3",
     "fs-extra": "^11.3.3",
     "yaml": "^2.8.2"
