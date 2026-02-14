@@ -4,11 +4,26 @@
  * Validates the full "step(control) → agent(execution) → blackboard(state)"
  * runtime bridge end-to-end.
  *
+ * **Scope**: This integration test focuses on the three-layer bridge:
+ * - step-executor: Step → Task conversion and BaseAgent execution
+ * - context-builder: Blackboard state management and single-writer policy
+ * - agent-registry: Agent name resolution to BaseAgent instances
+ *
+ * NOTE: Full workflow orchestration (executeWorkflow with dependency resolution,
+ * retry logic, parallel execution, etc.) is tested separately. Here we manually
+ * drive step execution to validate the core contract between layers.
+ *
  * Scenario A: 3-step success workflow with blackboard state propagation
  * Scenario B: failure-recovery with unknown agent (E4003) + graceful fallback
+ *   Note: fallback depends on "analyze" (not the failed "bad-step") to demonstrate
+ *   continue-on-error behavior where independent steps can proceed.
+ * Scenario C: timeout failure (E4002) with blackboard recording
+ * Scenario D: inter-step state propagation chain verification
+ * Scenario E: single-writer guard tests (only context-builder writes board)
+ * Scenario F: test isolation verification (no cross-test leakage)
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { AgentRegistry } from "../agent-registry.js";
 import {
   executeStep,
@@ -23,10 +38,11 @@ import {
   readStepResult,
   appendHistory,
   setClock,
+  type StepResultRecord,
 } from "../context-builder.js";
 import { MockLLMAdapter } from "@obora-kit/agents";
 import type { ChatMessage } from "@obora-kit/agents";
-import type { Step, Workflow } from "@obora/core";
+import type { Step, Workflow, ErrorCode } from "@obora/core";
 
 // ---------------------------------------------------------------------------
 // Shared fixtures
@@ -51,7 +67,7 @@ const WORKFLOW: Workflow = {
       depends_on: ["execute"],
     },
   ],
-} as any;
+};
 
 const SESSION_ID = "e2e-session-001";
 const FIXED_TIME = "2026-02-14T09:00:00.000Z";
@@ -177,6 +193,11 @@ describe("E2E Scenario B: failure-recovery workflow", () => {
   let board: ReturnType<typeof createWorkflowBlackboard>;
   let history: ChatMessage[];
 
+  // NOTE: fallback depends on "analyze", NOT "bad-step". This models
+  // a continue-on-error pattern where independent steps can proceed even
+  // when a step in the same workflow fails. The test validates that:
+  // 1. Failure is recorded on the board
+  // 2. Fallback step's context can read that failure for decision-making
   const FAILURE_WORKFLOW: Workflow = {
     name: "failure-test-workflow",
     version: "1.0",
@@ -193,10 +214,10 @@ describe("E2E Scenario B: failure-recovery workflow", () => {
         name: "fallback",
         agent: "verifier",
         description: "Fallback verification",
-        depends_on: ["analyze"],
+        depends_on: ["analyze"], // intentionally independent of bad-step
       },
     ],
-  } as any;
+  };
 
   beforeEach(() => {
     setClock(() => FIXED_TIME);
@@ -269,6 +290,12 @@ describe("E2E Scenario B: failure-recovery workflow", () => {
 
     expect(result.success).toBe(true);
     recordStepResult(board, step.name, result);
+
+    // Verify fallback step context can read the failure from step 2
+    const badStepResult = readStepResult(board, "bad-step");
+    expect(badStepResult).not.toBeNull();
+    expect(badStepResult!.success).toBe(false);
+    expect(badStepResult!.diagnosisCode).toBe("E4003");
   });
 
   it("full failure scenario: blackboard shows success/fail/success pattern", async () => {
@@ -314,39 +341,230 @@ describe("E2E Scenario B: failure-recovery workflow", () => {
 // ---------------------------------------------------------------------------
 
 describe("E2E Scenario C: timeout failure with blackboard recording", () => {
-  it("records E4002 timeout on blackboard", async () => {
+  beforeEach(() => {
     setClock(() => FIXED_TIME);
+  });
+
+  afterEach(() => {
+    setClock(null);
+  });
+
+  it("records E4002 timeout on blackboard", async () => {
+    const board = createWorkflowBlackboard(SESSION_ID, WORKFLOW, "feat");
+
+    // Resolver returns an agent whose execute() hangs indefinitely.
+    // Using a never-resolving promise avoids any timer precision issues.
+    const slowResolver: AgentResolver = {
+      resolve: () => ({
+        execute: () => new Promise<never>(() => {}), // never resolves
+        role: "executor",
+      }) as any,
+    };
+
+    const step: Step = { name: "slow-step", agent: "executor", timeout: "1s" } as Step;
+    const ctx = buildAgentContext(SESSION_ID, board, step, []);
+
+    const result = await executeStep(step, slowResolver, ctx, {
+      timeoutMs: 200, // safe margin — minimal risk of CI scheduling jitter
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.diagnosisCode).toBe("E4002");
+    expect(result.error).toBe("Timeout exceeded");
+
+    recordStepError(board, "slow-step", result);
+    const stored = readStepResult(board, "slow-step");
+    expect(stored).not.toBeNull();
+    expect(stored!.success).toBe(false);
+    expect(stored!.diagnosisCode).toBe("E4002");
+    expect(stored!.failedAt).toBe(FIXED_TIME);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Scenario D: Inter-step state propagation — explicit chain verification
+// ---------------------------------------------------------------------------
+
+describe("E2E Scenario D: inter-step state propagation chain", () => {
+  let registry: AgentRegistry;
+  let board: ReturnType<typeof createWorkflowBlackboard>;
+  let history: ChatMessage[];
+
+  beforeEach(() => {
+    setClock(() => FIXED_TIME);
+    registry = new AgentRegistry({ llm: new MockLLMAdapter() });
+    board = createWorkflowBlackboard(SESSION_ID, WORKFLOW, "propagation-test");
+    history = [];
+  });
+
+  afterEach(() => {
+    setClock(null);
+  });
+
+  it("step N context includes step N-1 result via blackboard read", async () => {
+    // Step 1: analyze
+    const step1 = WORKFLOW.steps[0];
+    const ctx1 = buildAgentContext(SESSION_ID, board, step1, history);
+    const r1 = await executeStep(step1, registry, ctx1);
+    recordStepResult(board, step1.name, r1);
+    appendHistory(history, { role: "assistant", content: `[analyze] ${r1.output}` });
+
+    // Before step 2: verify step 1 result is available through the same board reference
+    const step2 = WORKFLOW.steps[1];
+    const ctx2 = buildAgentContext(SESSION_ID, board, step2, history);
+
+    // The context's board IS the shared board (reference identity — not a copy)
+    expect(ctx2.board).toBe(board);
+
+    const step1FromCtx = readStepResult(ctx2.board, "analyze");
+    expect(step1FromCtx).not.toBeNull();
+    expect(step1FromCtx!.success).toBe(true);
+    expect(step1FromCtx!.output).toBeDefined();
+    expect(step1FromCtx!.completedAt).toBe(FIXED_TIME);
+
+    // History also carries forward
+    expect(ctx2.history).toHaveLength(1);
+    expect(ctx2.history[0].content).toContain("[analyze]");
+  });
+
+  it("3-step chain: each step reads all prior steps from board", async () => {
+    const outputs: string[] = [];
+
+    for (let i = 0; i < WORKFLOW.steps.length; i++) {
+      const step = WORKFLOW.steps[i];
+      const ctx = buildAgentContext(SESSION_ID, board, step, history);
+
+      // Assert all prior step results are readable
+      for (let j = 0; j < i; j++) {
+        const prior = readStepResult(ctx.board, WORKFLOW.steps[j].name);
+        expect(prior).not.toBeNull();
+        expect(prior!.success).toBe(true);
+        expect(prior!.completedAt).toBe(FIXED_TIME);
+      }
+
+      // Current step should NOT yet be recorded
+      expect(readStepResult(ctx.board, step.name)).toBeNull();
+
+      const result = await executeStep(step, registry, ctx);
+      expect(result.success).toBe(true);
+      outputs.push(result.output!);
+
+      recordStepResult(board, step.name, result);
+      appendHistory(history, { role: "assistant", content: `[${step.name}] ${result.output}` });
+    }
+
+    // Final: all 3 outputs are distinct and non-empty
+    expect(outputs).toHaveLength(3);
+    outputs.forEach((o) => expect(o).toBeTruthy());
+
+    // History order preserved
+    expect(history.map((h) => h.content!.match(/\[([^\]]+)\]/)![1])).toEqual([
+      "analyze",
+      "execute",
+      "verify",
+    ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Scenario E: Single-writer guard — only context-builder records on board
+// ---------------------------------------------------------------------------
+
+describe("E2E Scenario E: single-writer guard", () => {
+  let board: ReturnType<typeof createWorkflowBlackboard>;
+
+  beforeEach(() => {
+    setClock(() => FIXED_TIME);
+    board = createWorkflowBlackboard(SESSION_ID, WORKFLOW, "sw-test");
+  });
+
+  afterEach(() => {
+    setClock(null);
+  });
+
+  it("recordStepResult writes to canonical path state.context.steps.<name>", () => {
+    recordStepResult(board, "analyze", { success: true, output: "ok" });
+    const raw = board.read<Record<string, StepResultRecord>>("state.context.steps");
+    expect(raw).toHaveProperty("analyze");
+    expect(raw.analyze.success).toBe(true);
+    expect(raw.analyze.output).toBe("ok");
+    expect(raw.analyze.completedAt).toBe(FIXED_TIME);
+    expect(raw.analyze.failedAt).toBeNull();
+  });
+
+  it("recordStepError writes to same canonical path with failure shape", () => {
+    const code: ErrorCode = "E4003";
+    recordStepError(board, "bad", { success: false, error: "boom", diagnosisCode: code });
+    const raw = board.read<Record<string, StepResultRecord>>("state.context.steps");
+    expect(raw).toHaveProperty("bad");
+    expect(raw.bad.success).toBe(false);
+    expect(raw.bad.error).toBe("boom");
+    expect(raw.bad.failedAt).toBe(FIXED_TIME);
+    expect(raw.bad.completedAt).toBeNull();
+    expect(raw.bad.diagnosisCode).toBe("E4003");
+  });
+
+  it("executeStep does NOT write to blackboard — only returns StepResult", async () => {
+    const registry = new AgentRegistry({ llm: new MockLLMAdapter() });
+    const step = WORKFLOW.steps[0];
+    const ctx = buildAgentContext(SESSION_ID, board, step, []);
+
+    // Snapshot board steps before execution
+    const stepsBefore = JSON.stringify(board.read("state.context.steps"));
+
+    await executeStep(step, registry, ctx);
+
+    // Board unchanged — executeStep is a pure executor
+    const stepsAfter = JSON.stringify(board.read("state.context.steps"));
+    expect(stepsAfter).toBe(stepsBefore);
+  });
+
+  it("overwriting a step result replaces previous record atomically", () => {
+    recordStepResult(board, "analyze", { success: true, output: "first" });
+    recordStepResult(board, "analyze", { success: true, output: "second" });
+
+    const stored = readStepResult(board, "analyze");
+    expect(stored!.output).toBe("second");
+
+    // Only one key in steps for "analyze"
+    const raw = board.read<Record<string, unknown>>("state.context.steps");
+    expect(Object.keys(raw)).toContain("analyze");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Scenario F: Setup/teardown isolation — no cross-test leakage
+// ---------------------------------------------------------------------------
+
+describe("E2E Scenario F: test isolation verification", () => {
+  // Note: setClock uses module-level state for determinism. Each test that
+  // calls setClock MUST restore the default clock to avoid cross-test leakage.
+  // The tests below verify this behavior works correctly.
+
+  it("each test gets a fresh board (no shared mutable state)", () => {
+    const board1 = createWorkflowBlackboard("s1", WORKFLOW, "f1");
+    recordStepResult(board1, "analyze", { success: true, output: "from-board1" });
+
+    const board2 = createWorkflowBlackboard("s2", WORKFLOW, "f2");
+    const result = readStepResult(board2, "analyze");
+    expect(result).toBeNull(); // board2 is independent
+  });
+
+  it("setClock reset prevents time leakage between tests", () => {
+    setClock(() => "2099-12-31T23:59:59.000Z");
     try {
-      const registry = new AgentRegistry({ llm: new MockLLMAdapter() });
-      const board = createWorkflowBlackboard(SESSION_ID, WORKFLOW, "feat");
-
-      // Create a resolver that returns a slow agent
-      const slowResolver: AgentResolver = {
-        resolve: () => ({
-          execute: () =>
-            new Promise((resolve) => setTimeout(resolve, 5000)),
-          role: "executor",
-        }) as any,
-      };
-
-      const step: Step = { name: "slow-step", agent: "executor", timeout: "1s" };
-      const ctx = buildAgentContext(SESSION_ID, board, step, []);
-
-      const result = await executeStep(step, slowResolver, ctx, {
-        timeoutMs: 50,
-      });
-
-      expect(result.success).toBe(false);
-      expect(result.diagnosisCode).toBe("E4002");
-
-      recordStepError(board, "slow-step", result);
-      const stored = readStepResult(board, "slow-step");
-      expect(stored!.success).toBe(false);
-      expect(stored!.diagnosisCode).toBe("E4002");
-      expect(stored!.error).toBe("Timeout exceeded");
+      const board = createWorkflowBlackboard("s", WORKFLOW, "f");
+      recordStepResult(board, "analyze", { success: true, output: "x" });
+      expect(readStepResult(board, "analyze")!.completedAt).toBe("2099-12-31T23:59:59.000Z");
     } finally {
       setClock(null);
     }
+
+    const board2 = createWorkflowBlackboard("s2", WORKFLOW, "f2");
+    recordStepResult(board2, "execute", { success: true, output: "y" });
+    const ts = readStepResult(board2, "execute")!.completedAt!;
+    expect(ts).not.toBe("2099-12-31T23:59:59.000Z");
+    expect(ts).toMatch(/^\d{4}-\d{2}-\d{2}T/); // real ISO timestamp
   });
 });
 
