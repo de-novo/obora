@@ -26,6 +26,7 @@ E2E 검증 자체는 즉시 필요하며 blackboard-first 기준에도 직접 �
 - 2026-02-14 12:12 KST cron 점검: 단일 E2E(`pnpm vitest run packages/blackboard/test/e2e/workflow-e2e.test.ts`) 재실행 5/5 통과(총 423ms), 최근 점검(09:57/10:42/12:12) 연속 통과로 회귀 안정성 유지 확인.
 - 2026-02-14 12:12 KST cron 점검: 단일 E2E(`pnpm vitest run packages/blackboard/test/e2e/workflow-e2e.test.ts`) 재실행 5/5 통과(총 490ms), `.github/workflows` 미구성 상태로 CI 체크박스 보류 유지.
 - 2026-02-14 13:42 KST cron 점검: 단일 E2E(`pnpm vitest run packages/blackboard/test/e2e/workflow-e2e.test.ts`) 재실행 5/5 통과(총 1.55s), blackboard-first 회귀선 유지 및 CI 미구성으로 마지막 체크박스 보류 유지.
+- 2026-02-14 18:12 KST cron 점검: 단일 E2E(`pnpm vitest run packages/blackboard/test/e2e/workflow-e2e.test.ts`) 재실행 5/5 통과(총 427ms), 최근 점검(12:12/13:42/18:12) 연속 통과로 workflow 회귀 안정성 유지 확인.
 
 ## 목표
 agenda → voting → consensus → workflow 상태전이의 통합 흐름을 blackboard 기준으로 검증합니다.
