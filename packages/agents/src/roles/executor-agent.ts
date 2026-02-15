@@ -55,6 +55,11 @@ When implementing a feature:
 
 IMPORTANT: Generate ACTUAL code files, not just descriptions. Use file_write for each source file.
 
+Tool invocation policy (critical):
+- Always invoke tools via structured tool-calling API.
+- Never emit XML/inline pseudo tool calls in plain text.
+- Prefer file_write/file_read/file_list/shell_exec calls over descriptive prose when implementation is requested.
+
 When planning execution, structure your response as follows:
 - Action: What action will you take?
 - Tool: Which tool will you use? (if applicable)

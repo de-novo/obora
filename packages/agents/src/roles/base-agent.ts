@@ -477,6 +477,15 @@ Use board_read to inspect context, then perform role_action, and finish with boa
       const stream = new EventStream<any, AssistantMessage>((e) => e.type === "done" || e.type === "error", (e) => e.message ?? e.error);
       queueMicrotask(async () => {
         try {
+          const tools = this.createAgentTools().map((tool) => ({
+            type: "function" as const,
+            function: {
+              name: tool.name,
+              description: tool.description,
+              parameters: (tool.parameters ?? { type: "object", properties: {} }) as Record<string, unknown>,
+            },
+          }));
+
           const res = await this.llm.chatCompletion({
             messages: [
               ...(context.systemPrompt ? [{ role: "system", content: context.systemPrompt } as const] : []),
@@ -485,7 +494,20 @@ Use board_read to inspect context, then perform role_action, and finish with boa
                   return { role: "user", content: typeof m.content === "string" ? m.content : JSON.stringify(m.content) };
                 }
                 if (m.role === "assistant") {
-                  return { role: "assistant", content: m.content.filter((c) => c.type === "text").map((c) => c.text).join("") };
+                  return {
+                    role: "assistant",
+                    content: m.content.filter((c) => c.type === "text").map((c) => c.text).join(""),
+                    toolCalls: m.content
+                      .filter((c): c is { type: "toolCall"; id: string; name: string; arguments?: Record<string, unknown> } => c.type === "toolCall")
+                      .map((c) => ({
+                        id: c.id,
+                        type: "function" as const,
+                        function: {
+                          name: c.name,
+                          arguments: JSON.stringify(c.arguments ?? {}),
+                        },
+                      })),
+                  };
                 }
                 return {
                   role: "tool",
@@ -494,6 +516,8 @@ Use board_read to inspect context, then perform role_action, and finish with boa
                 };
               }),
             ],
+            tools,
+            toolChoice: "auto",
             temperature: 0.7,
             maxTokens: 8192,
           });
