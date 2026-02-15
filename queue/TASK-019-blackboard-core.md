@@ -21,3 +21,8 @@
 ## 추가 점검 로그 (2026-02-13 03:57 KST)
 - `pnpm --filter @obora-kit/blackboard test -- test/core/accessors/state-accessor.test.ts` ✅ (1 file, 38 tests passed)
 - `pnpm --filter @obora-kit/blackboard test -- test/core/blackboard.test.ts` ✅ (1 file, 52 tests passed)
+
+## 추가 점검 로그 (2026-02-15 11:27 KST)
+- 기준선 확인: 작업 브랜치 `main`(HEAD 유지), 기준 브랜치 `origin/main`=`d58951e`
+- 최소 단위 점검: TASK-019(Core blackboard 단일 테스트) 재검증
+- `pnpm --filter @obora-kit/blackboard test -- test/core/blackboard.test.ts` ✅ (1 file, 52 tests passed)
