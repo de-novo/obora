@@ -605,17 +605,14 @@ Use board_read to inspect context, then perform role_action, and finish with boa
             arguments: JSON.parse(tc.function.arguments || "{}"),
           }));
 
+          const contentParts = [
+            ...(textContent ? [{ type: "text" as const, text: textContent }] : []),
+            ...toolCallContent,
+          ];
+
           const assistant: AssistantMessage = {
             role: "assistant",
-            content: [
-              ...(textContent ? [{ type: "text" as const, text: textContent }] : []),
-              ...toolCallContent,
-            ].length > 0
-              ? [
-                  ...(textContent ? [{ type: "text" as const, text: textContent }] : []),
-                  ...toolCallContent,
-                ]
-              : [{ type: "text", text: "" }],
+            content: contentParts.length > 0 ? contentParts : [{ type: "text", text: "" }],
             api: "openai-completions",
             provider: this.llm.id,
             model: res.model,
@@ -736,7 +733,7 @@ Use board_read to inspect context, then perform role_action, and finish with boa
   }
 
   private isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null;
+    return typeof value === "object" && value !== null && !Array.isArray(value);
   }
 
   private resolveAndValidatePath(relativePath: string, options?: { allowNonExistentTarget?: boolean }): string {
