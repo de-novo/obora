@@ -496,19 +496,27 @@ Use board_read to inspect context, then perform role_action, and finish with boa
           const execAsync = promisify(exec);
           const projectRoot = process.cwd();
           try {
-            const { stdout } = await execAsync(parsedParams.command, {
+            const { stdout, stderr } = await execAsync(parsedParams.command, {
               cwd: projectRoot,
               timeout: 30000,
               maxBuffer: 1024 * 1024,
             });
+            const output = [stdout, stderr].filter(Boolean).join("\n---stderr---\n");
             return {
-              content: [{ type: "text", text: stdout.slice(0, 4000) }],
+              content: [{ type: "text", text: output.slice(0, 4000) }],
               details: { exitCode: 0 },
             };
           } catch (e: unknown) {
-            const error = e as { message?: string; stdout?: string; code?: number };
+            const error = e as { message?: string; stdout?: string; stderr?: string; code?: number };
+            const output = [
+              `Error: ${error.message ?? "Execution failed"}`,
+              error.stdout,
+              error.stderr,
+            ]
+              .filter(Boolean)
+              .join("\n---stderr---\n");
             return {
-              content: [{ type: "text", text: `Error: ${error.message ?? "Execution failed"}\n${error.stdout ?? ""}`.slice(0, 4000) }],
+              content: [{ type: "text", text: output.slice(0, 4000) }],
               details: { exitCode: error.code ?? 1 },
             };
           }
@@ -734,9 +742,28 @@ Use board_read to inspect context, then perform role_action, and finish with boa
       return realTargetPath;
     }
 
-    const parentPath = dirname(resolvedPath);
-    const realParentPath = realpathSync(parentPath);
-    if (!(realParentPath === projectRoot || realParentPath.startsWith(`${projectRoot}/`))) {
+    let nearestExistingAncestor = dirname(resolvedPath);
+
+    while (!existsSync(nearestExistingAncestor)) {
+      const nextAncestor = dirname(nearestExistingAncestor);
+      if (nextAncestor === nearestExistingAncestor) {
+        throw new Error("Path validation failed: no existing parent directory found");
+      }
+      nearestExistingAncestor = nextAncestor;
+    }
+
+    let realAncestorPath: string;
+    try {
+      realAncestorPath = realpathSync(nearestExistingAncestor);
+    } catch (error: unknown) {
+      const err = error as NodeJS.ErrnoException;
+      if (err.code === "ENOENT") {
+        throw new Error("Path validation failed: parent directory disappeared during validation");
+      }
+      throw error;
+    }
+
+    if (!(realAncestorPath === projectRoot || realAncestorPath.startsWith(`${projectRoot}/`))) {
       throw new Error("Path validation failed: parent escapes project directory");
     }
 
@@ -751,6 +778,9 @@ Use board_read to inspect context, then perform role_action, and finish with boa
       /(?:^|\s)rm\s+-rf\s+\.(?:\s|$)/i,
       /(?:^|\s)curl\b[^|\n]*\|\s*(?:sh|bash)(?:\s|$)/i,
       /(?:^|\s)wget\b[^|\n]*\|\s*(?:sh|bash)(?:\s|$)/i,
+      /(?:^|\s)(?:echo|printf)\b[\s\S]*\|\s*base64\s+-d\s*\|\s*(?:sh|bash)(?:\s|$)/i,
+      /\$'[^']*'/,
+      /`[^`]+`/,
       /(?:^|\s)chmod\s+777(?:\s|$)/i,
       /(?:^|\s)sudo(?:\s|$)/i,
       /(?:^|\s)mkfs(?:\.|\s|$)/i,
