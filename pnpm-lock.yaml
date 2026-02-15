@@ -395,7 +395,32 @@ importers:
         version: 2.1.9(@types/node@22.19.8)
 
   packages/runtime:
+    dependencies:
+      '@mariozechner/pi-agent-core':
+        specifier: ^0.52.12
+        version: 0.52.12(ws@8.19.0)(zod@3.25.76)
+      '@mariozechner/pi-ai':
+        specifier: ^0.52.12
+        version: 0.52.12(ws@8.19.0)(zod@3.25.76)
+      duckdb:
+        specifier: ^1.4.4
+        version: 1.4.4(encoding@0.1.13)
+      pako:
+        specifier: ^2.1.0
+        version: 2.1.0
+      yaml:
+        specifier: ^2.8.2
+        version: 2.8.2
     devDependencies:
+      '@obora-kit/adapters':
+        specifier: workspace:*
+        version: link:../adapters
+      '@obora-kit/agents':
+        specifier: workspace:*
+        version: link:../agents
+      '@obora/core':
+        specifier: workspace:*
+        version: link:../core
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.8

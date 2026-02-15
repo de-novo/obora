@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-import type { Action } from "../../types/action";
-import { ActorRole, ActorLifecycleStatus } from "../../types/actor";
-import type { IBlackboard } from "../../types/blackboard";
-import type { IMessageBus, Message } from "../../types/message";
-import type { Observation } from "../../types/observation";
-import { createSuccessResult, createFailureResult } from "../../types/result";
-import type { Result } from "../../types/result";
-import { BaseActor } from "../BaseActor";
+import type { Action } from "../../actor-types/action";
+import { ActorRole, ActorLifecycleStatus } from "../../actor-types/actor";
+import type { IBlackboard } from "../../actor-types/blackboard";
+import type { IMessageBus, Message } from "../../actor-types/message";
+import type { Observation } from "../../actor-types/observation";
+import { createSuccessResult, createFailureResult } from "../../actor-types/result";
+import type { Result } from "../../actor-types/result";
+import { BaseActor } from "../../BaseActor";
 
 class TestActor extends BaseActor {
   observe(): Observation {

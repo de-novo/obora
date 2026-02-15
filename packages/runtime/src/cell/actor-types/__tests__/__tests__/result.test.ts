@@ -6,7 +6,7 @@ import {
   createSuccessResult,
   createFailureResult,
   type ResultId,
-} from "../result";
+} from "../../result";
 
 describe("createResultId", () => {
   it("should create a valid ResultId with correct prefix", () => {

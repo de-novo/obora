@@ -12,8 +12,8 @@ import {
   setClock,
   appendHistory,
   MAX_HISTORY_LENGTH,
-} from "../context-builder.js";
-import type { ChatMessage } from "@obora-kit/agents";
+} from "../ExecutionContextBuilder.js";
+import type { ChatMessage } from "@obora-kit/adapters";
 import type { Step, Workflow } from "@obora/core";
 
 // ---------------------------------------------------------------------------

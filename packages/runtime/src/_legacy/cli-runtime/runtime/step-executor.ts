@@ -10,7 +10,6 @@ import {
   type Task,
   type TaskResult,
   type AgentContext,
-  RetryExhaustedError,
   SkillLoader,
   SkillRegistry,
 } from "@obora-kit/agents";
@@ -47,6 +46,10 @@ export function stepToTask(step: Step): Task {
   };
 }
 
+function isRetryExhaustedError(error: unknown): error is { attempts?: number; originalError?: unknown; lastError?: unknown; getLastErrorCode?: () => string | undefined; getRootCause?: () => unknown } {
+  return !!error && typeof error === "object" && ((error as { name?: string }).name === "RetryExhaustedError" || "attempts" in (error as object));
+}
+
 function formatOutput(result: TaskResult): string {
   if (typeof result.output === "string") return result.output;
   if (result.output == null) return "";
@@ -61,9 +64,9 @@ function buildStepErrorMetadata(error: Error, diagnosisCode: ErrorCode): StepErr
   };
 
   const retryLastError = (() => {
-    if (!(error instanceof RetryExhaustedError)) return undefined;
+    if (!isRetryExhaustedError(error)) return undefined;
 
-    const retryError = error as RetryExhaustedError & {
+    const retryError = error as {
       getLastErrorCode?: () => string | undefined;
       getRootCause?: () => unknown;
       lastError?: { lastErrorCode?: string };
@@ -84,14 +87,14 @@ function buildStepErrorMetadata(error: Error, diagnosisCode: ErrorCode): StepErr
     message: error.message,
     provider: errorWithMeta.provider,
     statusCode: errorWithMeta.statusCode,
-    attempts: error instanceof RetryExhaustedError ? error.attempts : errorWithMeta.attempts,
+    attempts: isRetryExhaustedError(error) ? error.attempts : errorWithMeta.attempts,
     lastError: retryLastError,
     failedAt: new Date().toISOString(),
   };
 }
 
 function mapErrorToDiagnosis(error: unknown): ErrorCode {
-  if (error instanceof RetryExhaustedError) return "E4005";
+  if (isRetryExhaustedError(error)) return "E4005";
   if (error instanceof DOMException && error.name === "AbortError") return "E4002";
 
   // Preserve agent-layer error codes (E4010, E4012, E4013)

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { ActorRuntime } from "../../runtime/ActorRuntime";
 import { ActorPool } from "../../pool/ActorPool";
 import { ActorRole } from "../../types/actor";

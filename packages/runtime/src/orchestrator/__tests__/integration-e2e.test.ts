@@ -29,12 +29,12 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { AgentRegistry } from "../agent-registry.js";
+import { AgentRegistry } from "../../cell/AgentRegistry.js";
 import {
   executeStep,
   stepToTask,
   type AgentResolver,
-} from "../step-executor.js";
+} from "../StepScheduler.js";
 import {
   createWorkflowBlackboard,
   buildAgentContext,
@@ -45,9 +45,9 @@ import {
   setClock,
   MAX_HISTORY_LENGTH,
   type StepResultRecord,
-} from "../context-builder.js";
-import { MockLLMAdapter } from "@obora-kit/agents";
-import type { ChatMessage } from "@obora-kit/agents";
+} from "../ExecutionContextBuilder.js";
+import { MockLLMAdapter } from "../../../../adapters/src/llm/mock-adapter";
+import type { ChatMessage } from "@obora-kit/adapters";
 import type { Step, Workflow, ErrorCode } from "@obora/core";
 
 // ---------------------------------------------------------------------------

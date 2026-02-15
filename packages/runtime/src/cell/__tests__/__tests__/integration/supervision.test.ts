@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { Supervisor } from "../../supervision/Supervisor";
-import { SupervisorTree } from "../../supervision/SupervisorTree";
-import { RestartStrategy, BackoffPolicy } from "../../supervision/types";
-import { ActorRuntime } from "../../runtime/ActorRuntime";
-import { ActorId } from "../../types/actor";
-import { createActorId } from "../../types/actor";
+import { Supervisor } from "../../../../_legacy/actor/supervision/Supervisor";
+import { SupervisorTree } from "../../../../_legacy/actor/supervision/SupervisorTree";
+import { RestartStrategy, BackoffPolicy } from "../../../../_legacy/actor/supervision/types";
+import { ActorRuntime } from "../../../CellManager";
+import { ActorId } from "../../../actor-types/actor";
+import { createActorId } from "../../../actor-types/actor";
 import { MockBlackboard } from "../helpers/MockBlackboard";
 import { TestActorFactory } from "../helpers/TestActorFactory";
-import type { IMessageBus } from "../../types/message";
+import type { IMessageBus } from "../../../actor-types/message";
 
 describe("Supervision Integration", () => {
   let runtime: ActorRuntime;

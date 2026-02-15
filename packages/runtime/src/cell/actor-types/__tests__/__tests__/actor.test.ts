@@ -11,8 +11,8 @@ import {
   ActorRoleLevel,
   createTaskId,
   isValidTaskId,
-} from "../actor";
-import { createActorMetrics } from "../metrics";
+} from "../../actor";
+import { createActorMetrics } from "../../metrics";
 
 describe("ActorId", () => {
   it("should validate correct ActorId format", () => {

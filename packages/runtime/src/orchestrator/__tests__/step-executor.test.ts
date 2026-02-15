@@ -9,7 +9,7 @@ import {
   executeStep,
   type AgentResolver,
   type StepResult,
-} from "../step-executor.js";
+} from "../StepScheduler.js";
 import type { Step } from "@obora/core";
 import type { BaseAgent, Task, TaskResult, AgentContext } from "@obora-kit/agents";
 

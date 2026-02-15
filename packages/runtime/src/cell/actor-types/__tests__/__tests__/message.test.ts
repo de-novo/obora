@@ -7,7 +7,7 @@ import {
   type MessageId,
   MessageType,
   MessagePriority,
-} from "../message";
+} from "../../message";
 
 describe("createMessageId", () => {
   it("should create a valid MessageId with correct prefix", () => {

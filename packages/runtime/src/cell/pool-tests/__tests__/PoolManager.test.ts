@@ -1,23 +1,23 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-import { ActorPool, PoolConfig } from "../ActorPool";
-import { PoolManager } from "../PoolManager";
-import type { ActorFactory, ActorConfig } from "../../runtime/types";
+import { ActorPool, PoolConfig } from "../../ActorPool";
+import { PoolManager } from "../../PoolManager";
+import type { ActorFactory, ActorConfig } from "../../types";
 import type {
   Actor,
   IBlackboard,
   ActorId,
   ActorLifecycleStatus,
   ActorRole,
-} from "../../types/actor";
-import type { IMessageBus } from "../../types/message";
-import type { Observation } from "../../types/observation";
-import type { Action } from "../../types/action";
-import type { Result } from "../../types/result";
-import { createActionId } from "../../types/action";
-import { createResultId } from "../../types/result";
-import { createActorMetrics } from "../../types/metrics";
-import { createActorId, ActorRole as ActorRoleEnum } from "../../types/actor";
+} from "../../actor-types/actor";
+import type { IMessageBus } from "../../actor-types/message";
+import type { Observation } from "../../actor-types/observation";
+import type { Action } from "../../actor-types/action";
+import type { Result } from "../../actor-types/result";
+import { createActionId } from "../../actor-types/action";
+import { createResultId } from "../../actor-types/result";
+import { createActorMetrics } from "../../actor-types/metrics";
+import { createActorId, ActorRole as ActorRoleEnum } from "../../actor-types/actor";
 
 class MockActor implements Actor {
   readonly id: ActorId;

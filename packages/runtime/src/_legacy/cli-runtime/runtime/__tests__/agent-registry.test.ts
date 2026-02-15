@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from "vitest";
 import { AgentRegistry } from "../agent-registry.js";
-import { AgentRole, MockLLMAdapter } from "@obora-kit/agents";
+import { MockLLMAdapter } from "../../../../../../adapters/src/llm/mock-adapter";
 import { OboraError } from "@obora/core";
 
 function makeRegistry() {
@@ -29,18 +29,18 @@ describe("AgentRegistry.resolve — valid roles", () => {
 
   it("should map TASK-053/054 aliases to runtime roles", async () => {
     const registry = makeRegistry();
-    expect((await registry.resolve("architect")).role).toBe(AgentRole.ANALYST);
-    expect((await registry.resolve("developer")).role).toBe(AgentRole.EXECUTOR);
-    expect((await registry.resolve("reviewer")).role).toBe(AgentRole.VERIFIER);
-    expect((await registry.resolve("planner")).role).toBe(AgentRole.DIRECTOR);
+    expect((await registry.resolve("architect")).role).toBe("analyst");
+    expect((await registry.resolve("developer")).role).toBe("executor");
+    expect((await registry.resolve("reviewer")).role).toBe("verifier");
+    expect((await registry.resolve("planner")).role).toBe("director");
   });
 
   it("should be case-insensitive", async () => {
     const registry = makeRegistry();
-    expect((await registry.resolve("Architect")).role).toBe(AgentRole.ANALYST);
-    expect((await registry.resolve("DEVELOPER")).role).toBe(AgentRole.EXECUTOR);
-    expect((await registry.resolve("Reviewer")).role).toBe(AgentRole.VERIFIER);
-    expect((await registry.resolve("PLANNER")).role).toBe(AgentRole.DIRECTOR);
+    expect((await registry.resolve("Architect")).role).toBe("analyst");
+    expect((await registry.resolve("DEVELOPER")).role).toBe("executor");
+    expect((await registry.resolve("Reviewer")).role).toBe("verifier");
+    expect((await registry.resolve("PLANNER")).role).toBe("director");
   });
 });
 

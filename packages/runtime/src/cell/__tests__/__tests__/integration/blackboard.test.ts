@@ -1,13 +1,13 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { ActorRuntime } from "../../runtime/ActorRuntime";
-import { ActorPool } from "../../pool/ActorPool";
-import { ActorRole } from "../../types/actor";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { ActorRuntime } from "../../../CellManager";
+import { ActorPool } from "../../../ActorPool";
+import { ActorRole } from "../../../actor-types/actor";
 import { MockBlackboard } from "../helpers/MockBlackboard";
-import { createActorId } from "../../types/actor";
-import type { ActorFactory, ActorConfig } from "../../runtime/types";
-import type { IBlackboard } from "../../types/blackboard";
-import type { IMessageBus } from "../../types/message";
-import type { Actor } from "../../types/actor";
+import { createActorId } from "../../../actor-types/actor";
+import type { ActorFactory, ActorConfig } from "../../../types";
+import type { IBlackboard } from "../../../actor-types/blackboard";
+import type { IMessageBus } from "../../../actor-types/message";
+import type { Actor } from "../../../actor-types/actor";
 
 class MockActor implements Actor {
   readonly id: string;

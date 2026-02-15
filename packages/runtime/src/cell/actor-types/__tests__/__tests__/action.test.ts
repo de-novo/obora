@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 
-import { ActionType, createAction, createActionId, isValidActionId } from "../action";
-import { createActorId } from "../actor";
+import { ActionType, createAction, createActionId, isValidActionId } from "../../action";
+import { createActorId } from "../../actor";
 
 describe("action.test.ts", () => {
   describe("createActionId()", () => {

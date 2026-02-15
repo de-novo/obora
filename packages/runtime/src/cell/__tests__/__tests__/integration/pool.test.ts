@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { ActorPool, PoolConfig } from "../../pool/ActorPool";
-import { PoolManager } from "../../pool/PoolManager";
+import { ActorPool, PoolConfig } from "../../../ActorPool";
+import { PoolManager } from "../../../PoolManager";
 import { MockBlackboard } from "../helpers/MockBlackboard";
 import { TestActorFactory } from "../helpers/TestActorFactory";
-import type { IMessageBus } from "../../types/message";
+import type { IMessageBus } from "../../../actor-types/message";
 
 describe("Actor Pool Integration", () => {
   let pool: ActorPool;

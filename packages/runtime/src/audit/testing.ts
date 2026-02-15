@@ -4,7 +4,7 @@
  * @internal This module is intended for tests only and is not part of the public API surface.
  */
 
-import { OboraDatabase } from "./duckdb-client.js";
+import { OboraDatabase } from "../_legacy/database/src/duckdb-client.js";
 
 let dbInstance: OboraDatabase | null = null;
 

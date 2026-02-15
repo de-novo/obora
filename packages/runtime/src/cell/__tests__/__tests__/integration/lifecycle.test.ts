@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { ActorRuntime } from "../../runtime/ActorRuntime";
-import { ActorRole, ActorLifecycleStatus, ActorId } from "../../types/actor";
-import { createActorId } from "../../types/actor";
+import { ActorRuntime } from "../../../CellManager";
+import { ActorRole, ActorLifecycleStatus, ActorId } from "../../../actor-types/actor";
+import { createActorId } from "../../../actor-types/actor";
 import { MockBlackboard } from "../helpers/MockBlackboard";
 import { TestActorFactory } from "../helpers/TestActorFactory";
-import type { IMessageBus } from "../../types/message";
+import type { IMessageBus } from "../../../actor-types/message";
 
 describe("Actor Lifecycle Integration", () => {
   let runtime: ActorRuntime;

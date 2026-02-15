@@ -1,15 +1,15 @@
-import type { Actor, ActorId, ActorRole, ActorStatus } from "../../types/actor";
-import { ActorLifecycleStatus } from "../../types/actor";
-import type { IBlackboard } from "../../types/blackboard";
-import type { IMessageBus, MessageType, Message } from "../../types/message";
-import type { Observation } from "../../types/observation";
-import type { Action, ActionType } from "../../types/action";
-import type { Result } from "../../types/result";
-import type { ActorMetrics } from "../../types/metrics";
-import { createActorMetrics } from "../../types/metrics";
-import { createObservation } from "../../types/observation";
-import { createAction } from "../../types/action";
-import { createSuccessResult, createFailureResult } from "../../types/result";
+import type { Actor, ActorId, ActorRole, ActorStatus } from "../../../actor-types/actor";
+import { ActorLifecycleStatus } from "../../../actor-types/actor";
+import type { IBlackboard } from "../../../actor-types/blackboard";
+import type { IMessageBus, MessageType, Message } from "../../../actor-types/message";
+import type { Observation } from "../../../actor-types/observation";
+import type { Action, ActionType } from "../../../actor-types/action";
+import type { Result } from "../../../actor-types/result";
+import type { ActorMetrics } from "../../../actor-types/metrics";
+import { createActorMetrics } from "../../../actor-types/metrics";
+import { createObservation } from "../../../actor-types/observation";
+import { createAction } from "../../../actor-types/action";
+import { createSuccessResult, createFailureResult } from "../../../actor-types/result";
 
 export interface TestActorConfig {
   failureRate?: number;

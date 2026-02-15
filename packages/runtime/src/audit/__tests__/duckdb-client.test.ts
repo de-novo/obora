@@ -32,7 +32,7 @@ import {
   getMetricsForStep,
   aggregateMetric,
   deleteMetrics,
-} from '../duckdb-client.js';
+} from '../../_legacy/database/src/duckdb-client.js';
 import { getDatabase, resetDatabase } from '../testing.js';
 
 // ============================================================
