@@ -36,3 +36,8 @@
 - 최소 단위 점검: TASK-023(EventBus 단일 테스트) 재검증 수행
 - `pnpm --filter @obora-kit/blackboard test -- test/events/event-bus.test.ts` ✅ (1 file, 33 tests passed)
 - 비고: `emit()` 에러 핸들러 graceful 처리 케이스의 `stderr` 출력은 기대 동작
+
+## 추가 점검 로그 (2026-02-15 22:42 KST)
+- 기준선 확인: 작업 브랜치 `main`(HEAD 유지), 기준 브랜치 `origin/main`=`11a58df`
+- 최소 단위 점검: TASK-023(Types 테스트) 단일 검증 수행
+- `pnpm --filter @obora-kit/blackboard test -- test/types/types.test.ts` ✅ (1 file, 69 tests passed)
