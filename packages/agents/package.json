@@ -76,7 +76,8 @@
     "@mariozechner/pi-agent-core": "^0.52.12",
     "@mariozechner/pi-ai": "^0.52.12",
     "@obora-kit/blackboard": "workspace:*",
-    "yaml": "^2.8.2"
+    "yaml": "^2.8.2",
+    "@obora-kit/adapters": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

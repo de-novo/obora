@@ -16,6 +16,36 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       }
+    },
+    "./llm": {
+      "import": {
+        "types": "./dist/llm/index.d.ts",
+        "default": "./dist/llm/index.js"
+      },
+      "require": {
+        "types": "./dist/llm/index.d.cts",
+        "default": "./dist/llm/index.cjs"
+      }
+    },
+    "./tools": {
+      "import": {
+        "types": "./dist/tools/index.d.ts",
+        "default": "./dist/tools/index.js"
+      },
+      "require": {
+        "types": "./dist/tools/index.d.cts",
+        "default": "./dist/tools/index.cjs"
+      }
+    },
+    "./auth": {
+      "import": {
+        "types": "./dist/auth/index.d.ts",
+        "default": "./dist/auth/index.js"
+      },
+      "require": {
+        "types": "./dist/auth/index.d.cts",
+        "default": "./dist/auth/index.cjs"
+      }
     }
   },
   "files": [
@@ -40,5 +70,9 @@
     "typescript": {
       "optional": true
     }
+  },
+  "dependencies": {
+    "@mariozechner/pi-ai": "^0.52.12",
+    "@mariozechner/pi-agent-core": "^0.52.12"
   }
 }

@@ -1,4 +1,2 @@
-export * from "./types";
-export * from "./store";
-export * from "./manager";
-export * from "./mask";
+// @obora-kit/agents/auth — deprecated, use @obora-kit/adapters
+export * from "@obora-kit/adapters/auth";

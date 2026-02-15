@@ -89,6 +89,13 @@ importers:
         version: 1.6.1(@types/node@22.19.8)
 
   packages/adapters:
+    dependencies:
+      '@mariozechner/pi-agent-core':
+        specifier: ^0.52.12
+        version: 0.52.12(ws@8.19.0)(zod@3.25.76)
+      '@mariozechner/pi-ai':
+        specifier: ^0.52.12
+        version: 0.52.12(ws@8.19.0)(zod@3.25.76)
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
@@ -111,6 +118,9 @@ importers:
       '@mariozechner/pi-ai':
         specifier: ^0.52.12
         version: 0.52.12(ws@8.19.0)(zod@3.25.76)
+      '@obora-kit/adapters':
+        specifier: workspace:*
+        version: link:../adapters
       '@obora-kit/blackboard':
         specifier: workspace:*
         version: link:../blackboard
