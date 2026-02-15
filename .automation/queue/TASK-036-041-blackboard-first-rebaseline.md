@@ -185,3 +185,11 @@ Board 단계 태스크를 blackboard 우선 구현 순서로 재배치하고, �
 - 실행: `pnpm --filter @obora-kit/board test`
 - 결과: ✅ `3 files / 31 tests passed` (439ms)
 - 판정: 블로커 없음, 다음 실행은 agents 패키지 TOCTOU 검증 테스트 1건 점검 권장
+
+## 야간 자동 점검 로그 (2026-02-16 02:27 KST)
+- 기준 브랜치: `origin/main` (`8482e0d`)
+- 작업 브랜치(HEAD 유지): `main` (`8482e0d`)
+- 점검 단위: blackboard voting 도메인 최소검증 1건 (`test/domains/voting`)
+- 실행: `pnpm --filter @obora-kit/blackboard test -- test/domains/voting`
+- 결과: ✅ `1 file / 26 tests passed` (248ms)
+- 판정: 블로커 없음, 다음 실행은 blackboard consensus rule-engine 최소검증 1건(`test/domains/consensus/rule-engine.test.ts`) 점검 권장
