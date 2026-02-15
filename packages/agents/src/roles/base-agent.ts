@@ -597,16 +597,25 @@ Use board_read to inspect context, then perform role_action, and finish with boa
             total: res.usage.totalTokens,
           };
 
+          const textContent = res.message.content?.trim();
+          const toolCallContent = (res.message.toolCalls ?? []).map((tc) => ({
+            type: "toolCall" as const,
+            id: tc.id,
+            name: tc.function.name,
+            arguments: JSON.parse(tc.function.arguments || "{}"),
+          }));
+
           const assistant: AssistantMessage = {
             role: "assistant",
-            content: res.message.toolCalls && res.message.toolCalls.length > 0
-              ? res.message.toolCalls.map((tc) => ({
-                  type: "toolCall" as const,
-                  id: tc.id,
-                  name: tc.function.name,
-                  arguments: JSON.parse(tc.function.arguments || "{}"),
-                }))
-              : [{ type: "text", text: res.message.content ?? "" }],
+            content: [
+              ...(textContent ? [{ type: "text" as const, text: textContent }] : []),
+              ...toolCallContent,
+            ].length > 0
+              ? [
+                  ...(textContent ? [{ type: "text" as const, text: textContent }] : []),
+                  ...toolCallContent,
+                ]
+              : [{ type: "text", text: "" }],
             api: "openai-completions",
             provider: this.llm.id,
             model: res.model,
@@ -773,20 +782,29 @@ Use board_read to inspect context, then perform role_action, and finish with boa
   private isBlockedShellCommand(command: string): boolean {
     const trimmed = command.trim();
     const denyPatterns = [
-      /(?:^|\s)rm\s+-rf\s+\/(?:\s|$)/i,
-      /(?:^|\s)rm\s+-rf\s+~(?:\s|$)/i,
-      /(?:^|\s)rm\s+-rf\s+\.(?:\s|$)/i,
-      /(?:^|\s)curl\b[^|\n]*\|\s*(?:sh|bash)(?:\s|$)/i,
-      /(?:^|\s)wget\b[^|\n]*\|\s*(?:sh|bash)(?:\s|$)/i,
-      /(?:^|\s)(?:echo|printf)\b[\s\S]*\|\s*base64\s+-d\s*\|\s*(?:sh|bash)(?:\s|$)/i,
-      /\$'[^']*'/,
-      /`[^`]+`/,
-      /(?:^|\s)chmod\s+777(?:\s|$)/i,
+      // Destructive file operations
+      /(?:^|\s)rm\s+(-[a-z]*r[a-z]*\s+|--recursive\s+)[\/~\.]/i,
+      // Pipe to shell execution
+      /\|\s*(?:sh|bash|zsh|ksh|dash)(?:\s|$)/i,
+      // Shell wrapper execution (sh -c, bash -c, etc.)
+      /(?:^|\s)(?:sh|bash|zsh|ksh|dash)\s+-[a-z]*c\s+/i,
+      // Command substitution with dangerous commands
+      /\$\([^)]*(?:rm|curl|wget|chmod|sudo|mkfs|dd)[^)]*\)/i,
+      // Backtick command substitution with dangerous commands
+      /`[^`]*(?:rm|curl|wget|chmod|sudo|mkfs|dd)[^`]*`/i,
+      // Base64 decode to shell
+      /base64\s+(?:-d|--decode)\s*\|\s*(?:sh|bash|zsh)/i,
+      // Dangerous permissions
+      /(?:^|\s)chmod\s+(?:777|a\+rwx)(?:\s|$)/i,
+      // Privilege escalation
       /(?:^|\s)sudo(?:\s|$)/i,
+      // Filesystem destruction
       /(?:^|\s)mkfs(?:\.|\s|$)/i,
-      /(?:^|\s)dd\s+if=/i,
-      />\s*\/dev\/sda(?:\d+)?/i,
+      /(?:^|\s)dd\s+(?:if|of)=/i,
+      />\s*\/dev\/sd[a-z](?:\d+)?/i,
+      // Fork bomb
       /:\(\)\{:\|:&\};:/,
+      // Environment variable dump (exact match only)
       /^(?:env|printenv)$/i,
     ];
 
