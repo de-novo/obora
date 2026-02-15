@@ -17,3 +17,8 @@
 
 ## 추가 점검 로그 (2026-02-13 21:58 KST)
 - `pnpm --filter @obora-kit/blackboard test -- test/snapshot/snapshot-manager.test.ts` ✅ (1 file, 43 tests passed)
+
+## 추가 점검 로그 (2026-02-15 16:42 KST)
+- 기준선 확인: `git fetch origin main` 후 기준 브랜치를 `origin/main`으로 고정
+- 최소 단위 점검: TASK-021(Snapshot/Restore) 단일 테스트 재검증
+- `pnpm --filter @obora-kit/blackboard test -- test/snapshot/snapshot-manager.test.ts` ✅ (1 file, 43 tests passed)
