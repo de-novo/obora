@@ -137,3 +137,11 @@ Board 단계 태스크를 blackboard 우선 구현 순서로 재배치하고, �
 - 실행: `pnpm --filter @obora-kit/blackboard test -- test/domains/agenda/agenda-store.test.ts`
 - 결과: ✅ `21 files / 537 tests passed` (852ms, 패턴 지정 시 전체 스위트 실행)
 - 판정: 블로커 없음, 다음 실행은 board e2e 최소검증 1건(`pnpm --filter @obora-kit/board test -- test/e2e-policy-quorum.test.ts`) 점검 권장
+
+## 야간 자동 점검 로그 (2026-02-15 17:27 KST)
+- 기준 브랜치: `origin/main` (`bd6a6be`)
+- 작업 브랜치(HEAD 유지): `main` (local ahead 2)
+- 점검 단위: board e2e quorum/policy 회귀 최소검증 1건
+- 실행: `pnpm --filter @obora-kit/board test -- test/e2e-policy-quorum.test.ts`
+- 결과: ✅ `1 file / 9 tests passed` (434ms)
+- 판정: 블로커 없음, 다음 실행은 blackboard voting 도메인 최소검증 1건(`test/domains/voting/`) 점검 권장
