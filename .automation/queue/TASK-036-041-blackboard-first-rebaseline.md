@@ -227,3 +227,11 @@ Board 단계 태스크를 blackboard 우선 구현 순서로 재배치하고, �
 - 실행: `pnpm --filter @obora-kit/blackboard test -- test/e2e/workflow-e2e.test.ts`
 - 결과: ✅ `1 file / 5 tests passed` (389ms)
 - 판정: 블로커 없음, 다음 실행은 board 패키지 전체 테스트 스위트 회귀 점검 권장
+
+## 야간 자동 점검 로그 (2026-02-16 07:42 KST)
+- 기준 브랜치: `origin/main` (`ef54166`)
+- 작업 브랜치(HEAD 유지): `main` (`9b9aa5f`, local ahead 11)
+- 점검 단위: board 패키지 전체 테스트 스위트 회귀 점검
+- 실행: `pnpm --filter @obora-kit/board test`
+- 결과: ✅ `3 files / 31 tests passed` (444ms)
+- 판정: 블로커 없음, 다음 실행은 blackboard voting 도메인 최소검증 1건(`pnpm --filter @obora-kit/blackboard test -- test/domains/voting`) 점검 권장
