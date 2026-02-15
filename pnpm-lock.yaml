@@ -262,6 +262,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@obora-kit/workflow':
+        specifier: workspace:*
+        version: link:../workflow
       yaml:
         specifier: ^2.8.2
         version: 2.8.2
@@ -397,7 +400,20 @@ importers:
         version: 2.1.9(@types/node@22.19.8)
 
   packages/workflow:
+    dependencies:
+      ajv:
+        specifier: ^8.17.1
+        version: 8.17.1
+      ajv-formats:
+        specifier: ^3.0.1
+        version: 3.0.1(ajv@8.17.1)
+      yaml:
+        specifier: ^2.8.2
+        version: 2.8.2
     devDependencies:
+      '@types/ajv':
+        specifier: ^1.0.4
+        version: 1.0.4
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.8

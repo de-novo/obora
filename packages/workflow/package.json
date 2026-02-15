@@ -31,7 +31,8 @@
     "@types/node": "^22.0.0",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
-    "vitest": "^2.1.9"
+    "vitest": "^2.1.9",
+    "@types/ajv": "^1.0.4"
   },
   "peerDependencies": {
     "typescript": ">=5.0.0"
@@ -40,5 +41,10 @@
     "typescript": {
       "optional": true
     }
+  },
+  "dependencies": {
+    "yaml": "^2.8.2",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1"
   }
 }
