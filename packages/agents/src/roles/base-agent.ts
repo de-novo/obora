@@ -1,5 +1,7 @@
 import { getModel, EventStream, type AssistantMessage, type Message, type Model, type KnownProvider, Type } from "@mariozechner/pi-ai";
 import { Agent, type AgentEvent, type AgentMessage, type AgentTool } from "@mariozechner/pi-agent-core";
+import { mkdir, readFile, writeFile, readdir } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
 import { LLMAdapter, ChatMessage } from "../llm/adapter";
 import type { Blackboard } from "@obora-kit/blackboard";
 import type { AgentId } from "../types";
@@ -205,7 +207,7 @@ export abstract class BaseAgent {
     const result = await this.llm.chatCompletion({
       messages,
       temperature: 0.7,
-      maxTokens: 2048,
+      maxTokens: 8192,
     });
 
     return {
@@ -373,6 +375,99 @@ Use board_read to inspect context, then perform role_action, and finish with boa
           };
         },
       },
+      {
+        name: "file_write",
+        label: "Write file to project",
+        description: "Create or overwrite a file in the project directory. Use for generating source code, configs, etc.",
+        parameters: Type.Object({
+          path: Type.String({ description: "Relative path from project root" }),
+          content: Type.String({ description: "File content to write" }),
+        }),
+        execute: async (_id, params: any) => {
+          const projectRoot = process.cwd();
+          const filePath = resolve(join(projectRoot, String(params?.path ?? "")));
+          if (!(filePath === projectRoot || filePath.startsWith(`${projectRoot}/`))) {
+            throw new Error("Cannot write outside project directory");
+          }
+          await mkdir(dirname(filePath), { recursive: true });
+          const content = String(params?.content ?? "");
+          await writeFile(filePath, content, "utf-8");
+          return {
+            content: [{ type: "text", text: `Written: ${params.path}` }],
+            details: { path: params.path, bytesWritten: content.length },
+          };
+        },
+      },
+      {
+        name: "file_read",
+        label: "Read file from project",
+        description: "Read a file from the project directory",
+        parameters: Type.Object({
+          path: Type.String({ description: "Relative path from project root" }),
+        }),
+        execute: async (_id, params: any) => {
+          const projectRoot = process.cwd();
+          const filePath = resolve(join(projectRoot, String(params?.path ?? "")));
+          if (!(filePath === projectRoot || filePath.startsWith(`${projectRoot}/`))) {
+            throw new Error("Cannot read outside project directory");
+          }
+          const content = await readFile(filePath, "utf-8");
+          return {
+            content: [{ type: "text", text: content }],
+            details: { path: params.path, bytesRead: content.length },
+          };
+        },
+      },
+      {
+        name: "file_list",
+        label: "List directory contents",
+        description: "List files and directories at a path",
+        parameters: Type.Object({
+          path: Type.String({ description: "Relative directory path from project root" }),
+        }),
+        execute: async (_id, params: any) => {
+          const projectRoot = process.cwd();
+          const dirPath = resolve(join(projectRoot, String(params?.path ?? ".")));
+          if (!(dirPath === projectRoot || dirPath.startsWith(`${projectRoot}/`))) {
+            throw new Error("Cannot list outside project directory");
+          }
+          const entries = await readdir(dirPath, { withFileTypes: true });
+          const list = entries.map((e) => `${e.isDirectory() ? "d" : "f"} ${e.name}`).join("\n");
+          return {
+            content: [{ type: "text", text: list }],
+            details: { count: entries.length },
+          };
+        },
+      },
+      {
+        name: "shell_exec",
+        label: "Execute shell command",
+        description: "Run a shell command in the project directory. Use for npm init, test runs, etc.",
+        parameters: Type.Object({
+          command: Type.String({ description: "Shell command to execute" }),
+        }),
+        execute: async (_id, params: any) => {
+          const { execSync } = await import("node:child_process");
+          const projectRoot = process.cwd();
+          try {
+            const output = execSync(String(params?.command ?? "echo ok"), {
+              cwd: projectRoot,
+              timeout: 30000,
+              maxBuffer: 1024 * 1024,
+              encoding: "utf-8",
+            });
+            return {
+              content: [{ type: "text", text: output.slice(0, 4000) }],
+              details: { exitCode: 0 },
+            };
+          } catch (e: any) {
+            return {
+              content: [{ type: "text", text: `Error: ${e.message}\n${e.stdout || ""}`.slice(0, 4000) }],
+              details: { exitCode: e.status ?? 1 },
+            };
+          }
+        },
+      },
       ...this.runtimeTools,
     ];
   }
@@ -400,7 +495,7 @@ Use board_read to inspect context, then perform role_action, and finish with boa
               }),
             ],
             temperature: 0.7,
-            maxTokens: 2048,
+            maxTokens: 8192,
           });
 
           this.latestUsage = {

@@ -224,23 +224,8 @@ async function generatePlanWithAI(
  */
 async function updateTasks(featurePath: string, planContent: string): Promise<void> {
   const tasksPath = join(featurePath, "tasks.md");
-  const existingContent = existsSync(tasksPath) ? readFileSync(tasksPath, "utf-8") : "";
-
-  // Check if tasks.md already has plan section
-  const hasPlanSection = existingContent.includes("## Implementation Plan");
-
-  if (hasPlanSection) {
-    // Replace existing plan section
-    const updated = existingContent.replace(/## Implementation Plan[\s\S]*?(?=\n## |$)/, planContent);
-    await fs.writeFile(tasksPath, updated, "utf-8");
-    log("  Updated existing plan in tasks.md");
-  } else {
-    // Append plan to tasks.md
-    const separator = existingContent ? "\n\n---\n\n" : "";
-    const updated = existingContent + separator + planContent;
-    await fs.writeFile(tasksPath, updated, "utf-8");
-    log("  Appended plan to tasks.md");
-  }
+  await fs.writeFile(tasksPath, planContent, "utf-8");
+  log("  Updated tasks.md with generated plan");
 }
 
 /**
