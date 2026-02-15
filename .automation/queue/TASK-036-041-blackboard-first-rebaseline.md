@@ -145,3 +145,11 @@ Board 단계 태스크를 blackboard 우선 구현 순서로 재배치하고, �
 - 실행: `pnpm --filter @obora-kit/board test -- test/e2e-policy-quorum.test.ts`
 - 결과: ✅ `1 file / 9 tests passed` (434ms)
 - 판정: 블로커 없음, 다음 실행은 blackboard voting 도메인 최소검증 1건(`test/domains/voting/`) 점검 권장
+
+## 야간 자동 점검 로그 (2026-02-15 19:42 KST)
+- 기준 브랜치: `origin/main` (`d085e3c`)
+- 작업 브랜치(HEAD 유지): `main` (`d085e3c`)
+- 점검 단위: blackboard voting 도메인 최소검증 1건
+- 실행: `pnpm --filter @obora-kit/blackboard test -- test/domains/voting`
+- 결과: ✅ `1 file / 26 tests passed` (209ms)
+- 판정: 블로커 없음, 다음 실행은 blackboard consensus 최소검증 1건(`test/domains/consensus/rule-engine.test.ts`) 점검 권장
