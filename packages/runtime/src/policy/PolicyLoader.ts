@@ -1,0 +1,160 @@
+import { readFile } from "node:fs/promises";
+import { parse } from "yaml";
+import type { GatePolicy, PolicySet, ResourcePolicy, SandboxPolicy, ToolPolicy } from "./types.js";
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function toStringArray(value: unknown, field: string): string[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string")) {
+    throw new Error(`Invalid ${field}: expected string[]`);
+  }
+  return value;
+}
+
+function normalizeToolPolicy(input: unknown, index: number): ToolPolicy {
+  if (!isObject(input)) {
+    throw new Error(`Invalid tools[${index}]: expected object`);
+  }
+
+  const { name, effect, when } = input;
+  if (typeof name !== "string" || name.length === 0) {
+    throw new Error(`Invalid tools[${index}].name: expected non-empty string`);
+  }
+
+  if (effect !== "allow" && effect !== "deny" && effect !== "transform" && effect !== "gate") {
+    throw new Error(`Invalid tools[${index}].effect: ${String(effect)}`);
+  }
+
+  let normalizedWhen: ToolPolicy["when"];
+  if (when !== undefined) {
+    if (!isObject(when)) {
+      throw new Error(`Invalid tools[${index}].when: expected object`);
+    }
+
+    normalizedWhen = {
+      matches: toStringArray(when.matches, `tools[${index}].when.matches`),
+      not_matches: toStringArray(when.not_matches, `tools[${index}].when.not_matches`),
+    };
+  }
+
+  return { name, effect, when: normalizedWhen };
+}
+
+function normalizeSandboxPolicy(input: unknown): SandboxPolicy | undefined {
+  if (input === undefined) return undefined;
+  if (!isObject(input)) {
+    throw new Error("Invalid sandbox: expected object");
+  }
+
+  const root = input.root;
+  const denyOutsideRoot = input.denyOutsideRoot ?? input.deny_outside_root;
+  const denyPatterns = input.denyPatterns ?? input.deny_patterns;
+  const maxFileSize = input.maxFileSize ?? input.max_file_size;
+
+  if (typeof root !== "string" || root.length === 0) {
+    throw new Error("Invalid sandbox.root: expected non-empty string");
+  }
+  if (typeof denyOutsideRoot !== "boolean") {
+    throw new Error("Invalid sandbox.denyOutsideRoot: expected boolean");
+  }
+  if (denyPatterns !== undefined && (!Array.isArray(denyPatterns) || denyPatterns.some((v) => typeof v !== "string"))) {
+    throw new Error("Invalid sandbox.denyPatterns: expected string[]");
+  }
+  if (maxFileSize !== undefined && typeof maxFileSize !== "string") {
+    throw new Error("Invalid sandbox.maxFileSize: expected string");
+  }
+
+  return {
+    root,
+    denyOutsideRoot,
+    denyPatterns,
+    maxFileSize,
+  };
+}
+
+function normalizeResourcePolicy(input: unknown): ResourcePolicy | undefined {
+  if (input === undefined) return undefined;
+  if (!isObject(input)) {
+    throw new Error("Invalid resources: expected object");
+  }
+
+  const timeoutMs = input.timeoutMs ?? input.timeout_ms;
+  const maxTokens = input.maxTokens ?? input.max_tokens;
+  const maxCostUsd = input.maxCostUsd ?? input.max_cost_usd;
+  const maxToolCalls = input.maxToolCalls ?? input.max_tool_calls;
+
+  const numericFields: Array<[string, unknown]> = [
+    ["resources.timeoutMs", timeoutMs],
+    ["resources.maxTokens", maxTokens],
+    ["resources.maxCostUsd", maxCostUsd],
+    ["resources.maxToolCalls", maxToolCalls],
+  ];
+
+  for (const [field, value] of numericFields) {
+    if (value !== undefined && typeof value !== "number") {
+      throw new Error(`Invalid ${field}: expected number`);
+    }
+  }
+
+  return { timeoutMs, maxTokens, maxCostUsd, maxToolCalls };
+}
+
+function normalizeGatePolicy(input: unknown, index: number): GatePolicy {
+  if (!isObject(input)) {
+    throw new Error(`Invalid gates[${index}]: expected object`);
+  }
+
+  const { step, type, required, timeout, fallback } = input;
+  if (typeof step !== "string" || step.length === 0) {
+    throw new Error(`Invalid gates[${index}].step: expected non-empty string`);
+  }
+  if (type !== "human-approval" && type !== "consensus" && type !== "external") {
+    throw new Error(`Invalid gates[${index}].type: ${String(type)}`);
+  }
+  if (typeof required !== "boolean") {
+    throw new Error(`Invalid gates[${index}].required: expected boolean`);
+  }
+  if (timeout !== undefined && typeof timeout !== "string") {
+    throw new Error(`Invalid gates[${index}].timeout: expected string`);
+  }
+  if (fallback !== undefined && fallback !== "fail" && fallback !== "escalate") {
+    throw new Error(`Invalid gates[${index}].fallback: ${String(fallback)}`);
+  }
+
+  return { step, type, required, timeout, fallback };
+}
+
+export function normalizePolicySet(input: unknown): PolicySet {
+  if (!isObject(input)) {
+    throw new Error("Invalid policy YAML: expected object");
+  }
+
+  const toolsRaw = input.tools;
+  const gatesRaw = input.gates;
+
+  if (toolsRaw !== undefined && !Array.isArray(toolsRaw)) {
+    throw new Error("Invalid tools: expected array");
+  }
+  if (gatesRaw !== undefined && !Array.isArray(gatesRaw)) {
+    throw new Error("Invalid gates: expected array");
+  }
+
+  const policySet: PolicySet = {
+    version: typeof input.version === "string" ? input.version : undefined,
+    tools: toolsRaw?.map((tool, index) => normalizeToolPolicy(tool, index)),
+    sandbox: normalizeSandboxPolicy(input.sandbox),
+    resources: normalizeResourcePolicy(input.resources),
+    gates: gatesRaw?.map((gate, index) => normalizeGatePolicy(gate, index)),
+  };
+
+  return policySet;
+}
+
+export async function loadPolicyFromYaml(path: string): Promise<PolicySet> {
+  const content = await readFile(path, "utf-8");
+  const parsed = parse(content);
+  return normalizePolicySet(parsed);
+}

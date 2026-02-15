@@ -1,0 +1,14 @@
+version: "1.0"
+tools:
+  - name: shell_exec
+    effect: deny
+    when:
+      matches: ["sudo", "rm -rf"]
+  - name: file_write
+    effect: allow
+sandbox:
+  root: ./output
+  denyOutsideRoot: true
+resources:
+  timeoutMs: 300000
+  maxTokens: 100000
