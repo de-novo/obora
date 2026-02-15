@@ -498,7 +498,7 @@ Use board_read to inspect context, then perform role_action, and finish with boa
                     role: "assistant",
                     content: m.content.filter((c) => c.type === "text").map((c) => c.text).join(""),
                     toolCalls: m.content
-                      .filter((c): c is { type: "toolCall"; id: string; name: string; arguments?: Record<string, unknown> } => c.type === "toolCall")
+                      .filter((c) => c.type === "toolCall")
                       .map((c) => ({
                         id: c.id,
                         type: "function" as const,

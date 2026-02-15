@@ -1,4 +1,5 @@
 import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 
 import { Command } from "commander";
 
@@ -48,4 +49,10 @@ export async function main() {
     // Re-throw non-CLI errors
     throw err;
   }
+}
+
+const isDirectExecution = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+
+if (isDirectExecution) {
+  void main();
 }
