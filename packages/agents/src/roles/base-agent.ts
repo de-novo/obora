@@ -365,6 +365,15 @@ Use board_read to inspect context, then perform role_action, and finish with boa
     }
   }
 
+  /**
+   * Defines tools available to the LLM via pi-agent-core's tool-calling mechanism.
+   * These tools are registered with the Agent at creation time and executed
+   * by pi-agent-core when the LLM issues tool calls through the API.
+   *
+   * Security:
+   * - file_write/file_read/file_list: Path validated with fs.realpathSync (symlink-safe)
+   * - shell_exec: Denylist blocks dangerous command patterns
+   */
   private createAgentTools(): AgentTool[] {
     return [
       {
@@ -509,6 +518,20 @@ Use board_read to inspect context, then perform role_action, and finish with boa
     ];
   }
 
+  /**
+   * Creates a stream function bridge for pi-agent-core's Agent runtime.
+   *
+   * ARCHITECTURE NOTE - Tool-Calling Loop:
+   * The tool execution loop is fully delegated to pi-agent-core's Agent class.
+   * This streamFn is called by pi-agent-core on each LLM turn. When the LLM
+   * returns tool_calls (stopReason: "toolUse"), pi-agent-core automatically:
+   *   1. Executes the matching tool from createAgentTools()
+   *   2. Appends the tool result as a "tool" message
+   *   3. Calls this streamFn again with the updated message history
+   *   4. Repeats until the LLM returns stopReason: "stop"
+   *
+   * obora-kit does NOT implement its own tool loop — pi-agent-core handles it.
+   */
   private createStreamFn() {
     return async (model: Model<any>, context: { systemPrompt?: string; messages: Message[] }) => {
       const stream = new EventStream<any, AssistantMessage>((e) => e.type === "done" || e.type === "error", (e) => e.message ?? e.error);
@@ -614,6 +637,11 @@ Use board_read to inspect context, then perform role_action, and finish with boa
     };
   }
 
+  /**
+   * Delegates task execution to pi-agent-core's Agent runtime.
+   * The Agent.prompt() call triggers the full tool-calling loop internally.
+   * See createStreamFn() for the tool loop architecture.
+   */
   private async executeWithPiAgent(
     task: Task,
     observation: Record<string, unknown>,
