@@ -193,3 +193,12 @@ Board 단계 태스크를 blackboard 우선 구현 순서로 재배치하고, �
 - 실행: `pnpm --filter @obora-kit/blackboard test -- test/domains/voting`
 - 결과: ✅ `1 file / 26 tests passed` (248ms)
 - 판정: 블로커 없음, 다음 실행은 blackboard consensus rule-engine 최소검증 1건(`test/domains/consensus/rule-engine.test.ts`) 점검 권장
+
+## 야간 자동 점검 로그 (2026-02-16 03:12 KST)
+- 기준 브랜치: `origin/main` (`682203e`)
+- 작업 브랜치(HEAD 유지): `main` (`682203e`)
+- 점검 단위: blackboard consensus rule-engine 최소검증 1건
+- 실행: `pnpm --filter @obora-kit/blackboard test -- test/domains/consensus/rule-engine.test.ts`
+- 결과: ✅ `1 file / 3 tests passed` (246ms)
+- 비고: `packages/agents/src/roles/executor-agent.ts`에 미커밋 변경 있으나 blackboard-first 범위 밖이므로 미처리
+- 판정: 블로커 없음, 다음 실행은 blackboard event-bus 최소검증 1건(`test/events/event-bus.test.ts`) 점검 권장
