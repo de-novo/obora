@@ -375,7 +375,7 @@ Use board_read to inspect context, then perform role_action, and finish with boa
    * - shell_exec: Denylist blocks dangerous command patterns
    */
   private createAgentTools(): AgentTool[] {
-    return [
+    const baseTools: AgentTool[] = [
       {
         name: "board_read",
         label: "Read blackboard context",
@@ -422,6 +422,14 @@ Use board_read to inspect context, then perform role_action, and finish with boa
           };
         },
       },
+    ];
+
+    const roleTools = this.role === AgentRole.EXECUTOR ? this.createExecutorTools() : [];
+    return [...baseTools, ...roleTools, ...this.runtimeTools];
+  }
+
+  private createExecutorTools(): AgentTool[] {
+    return [
       {
         name: "file_write",
         label: "Write file to project",
@@ -494,7 +502,7 @@ Use board_read to inspect context, then perform role_action, and finish with boa
 
           const { exec } = await import("node:child_process");
           const execAsync = promisify(exec);
-          const projectRoot = process.cwd();
+          const projectRoot = realpathSync(process.cwd());
           try {
             const { stdout, stderr } = await execAsync(parsedParams.command, {
               cwd: projectRoot,
@@ -522,9 +530,9 @@ Use board_read to inspect context, then perform role_action, and finish with boa
           }
         },
       },
-      ...this.runtimeTools,
     ];
   }
+
 
   /**
    * Creates a stream function bridge for pi-agent-core's Agent runtime.
@@ -598,12 +606,20 @@ Use board_read to inspect context, then perform role_action, and finish with boa
           };
 
           const textContent = res.message.content?.trim();
-          const toolCallContent = (res.message.toolCalls ?? []).map((tc) => ({
-            type: "toolCall" as const,
-            id: tc.id,
-            name: tc.function.name,
-            arguments: JSON.parse(tc.function.arguments || "{}"),
-          }));
+          const toolCallContent = (res.message.toolCalls ?? []).map((tc) => {
+            let args: Record<string, unknown> = {};
+            try {
+              args = JSON.parse(tc.function.arguments || "{}");
+            } catch {
+              args = { _raw: tc.function.arguments };
+            }
+            return {
+              type: "toolCall" as const,
+              id: tc.id,
+              name: tc.function.name,
+              arguments: args,
+            };
+          });
 
           const contentParts = [
             ...(textContent ? [{ type: "text" as const, text: textContent }] : []),
@@ -780,7 +796,10 @@ Use board_read to inspect context, then perform role_action, and finish with boa
     const trimmed = command.trim();
     const denyPatterns = [
       // Destructive file operations
-      /(?:^|\s)rm\s+(-[a-z]*r[a-z]*\s+|--recursive\s+)[\/~\.]/i,
+      /(?:^|\s)rm\s+-[a-z\-\s]*r[a-z\-\s]*f[a-z\-\s]*\s+(?:--no-preserve-root\s+)?(?:\/|~|\.)/i,
+      /(?:^|\s)rm\s+--no-preserve-root\s+-[a-z\-\s]*r[a-z\-\s]*f[a-z\-\s]*\s+(?:\/|~|\.)/i,
+      /(?:^|\s)rm\s+(?:-[a-zA-Z]+\s+)+(?:\/|~|\.)/i,
+      /(?:^|\s)rm\s+(?:--[a-zA-Z\-]+\s+)*(?:\/|~|\.)/i,
       // Pipe to shell execution
       /\|\s*(?:sh|bash|zsh|ksh|dash)(?:\s|$)/i,
       // Shell wrapper execution (sh -c, bash -c, etc.)
@@ -801,6 +820,9 @@ Use board_read to inspect context, then perform role_action, and finish with boa
       />\s*\/dev\/sd[a-z](?:\d+)?/i,
       // Fork bomb
       /:\(\)\{:\|:&\};:/,
+      // Standalone network I/O commands
+      /^\s*curl(?:\s|$)/i,
+      /^\s*wget(?:\s|$)/i,
       // Environment variable dump (exact match only)
       /^(?:env|printenv)$/i,
     ];
