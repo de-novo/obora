@@ -1,8 +1,8 @@
 import { getModel, EventStream, type AssistantMessage, type Message, type Model, type KnownProvider, Type } from "@mariozechner/pi-ai";
 import { Agent, type AgentEvent, type AgentMessage, type AgentTool } from "@mariozechner/pi-agent-core";
 import { existsSync, realpathSync } from "node:fs";
-import { mkdir, readFile, writeFile, readdir } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { mkdir, open, readdir, unlink, writeFile } from "node:fs/promises";
+import { dirname, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import { LLMAdapter, ChatMessage } from "../llm/adapter";
 import type { Blackboard } from "@obora-kit/blackboard";
@@ -120,6 +120,39 @@ export abstract class BaseAgent {
   protected maxErrors: number = 3;
   protected thinkMaxTokens: number;
   protected executeMaxTokens: number;
+
+  private readonly BLOCKED_PATTERNS: RegExp[] = [
+    // Destructive file operations
+    /(?:^|\s)rm\s+-[a-z\-\s]*r[a-z\-\s]*f[a-z\-\s]*\s+(?:--no-preserve-root\s+)?(?:\/|~|\.)/i,
+    /(?:^|\s)rm\s+--no-preserve-root\s+-[a-z\-\s]*r[a-z\-\s]*f[a-z\-\s]*\s+(?:\/|~|\.)/i,
+    /(?:^|\s)rm\s+(?:-[a-zA-Z]+\s+)+(?:\/|~|\.)/i,
+    /(?:^|\s)rm\s+(?:--[a-zA-Z\-]+\s+)*(?:\/|~|\.)/i,
+    // Pipe to shell execution
+    /\|\s*(?:sh|bash|zsh|ksh|dash)(?:\s|$)/i,
+    // Shell wrapper execution (sh -c, bash -c, etc.)
+    /(?:^|\s)(?:sh|bash|zsh|ksh|dash)\s+-[a-z]*c\s+/i,
+    // Command substitution with dangerous commands
+    /\$\([^)]*(?:rm|curl|wget|chmod|sudo|mkfs|dd)[^)]*\)/i,
+    // Backtick command substitution with dangerous commands
+    /`[^`]*(?:rm|curl|wget|chmod|sudo|mkfs|dd)[^`]*`/i,
+    // Base64 decode to shell
+    /base64\s+(?:-d|--decode)\s*\|\s*(?:sh|bash|zsh)/i,
+    // Dangerous permissions
+    /(?:^|\s)chmod\s+(?:777|a\+rwx)(?:\s|$)/i,
+    // Privilege escalation
+    /(?:^|\s)sudo(?:\s|$)/i,
+    // Filesystem destruction
+    /(?:^|\s)mkfs(?:\.|\s|$)/i,
+    /(?:^|\s)dd\s+(?:if|of)=/i,
+    />\s*\/dev\/sd[a-z](?:\d+)?/i,
+    // Fork bomb
+    /:\(\)\{:\|:&\};:/,
+    // Standalone network I/O commands
+    /^\s*curl(?:\s|$)/i,
+    /^\s*wget(?:\s|$)/i,
+    // Environment variable dump (exact match only)
+    /^(?:env|printenv)$/i,
+  ];
 
   private coreAgent?: Agent;
   private unsubscribe?: () => void;
@@ -443,6 +476,14 @@ Use board_read to inspect context, then perform role_action, and finish with boa
           const filePath = this.resolveAndValidatePath(parsedParams.path, { allowNonExistentTarget: true });
           await mkdir(dirname(filePath), { recursive: true });
           await writeFile(filePath, parsedParams.content, "utf-8");
+
+          const writtenRealPath = realpathSync(filePath);
+          const projectRoot = realpathSync(process.cwd());
+          if (!writtenRealPath.startsWith(projectRoot + sep) && writtenRealPath !== projectRoot) {
+            await unlink(filePath);
+            throw new Error("Security: file was written outside project boundary (TOCTOU detected)");
+          }
+
           return {
             content: [{ type: "text", text: `Written: ${parsedParams.path}` }],
             details: { path: parsedParams.path, bytesWritten: parsedParams.content.length },
@@ -459,7 +500,21 @@ Use board_read to inspect context, then perform role_action, and finish with boa
         execute: async (_id, params: unknown) => {
           const parsedParams = this.parseFileReadParams(params);
           const filePath = this.resolveAndValidatePath(parsedParams.path);
-          const content = await readFile(filePath, "utf-8");
+
+          const fileHandle = await open(filePath, "r");
+          let content = "";
+          try {
+            const openedRealPath = this.resolveFdRealPath(fileHandle.fd);
+            const projectRoot = realpathSync(process.cwd());
+            if (!openedRealPath.startsWith(projectRoot + sep) && openedRealPath !== projectRoot) {
+              throw new Error("Security: file read escaped project boundary (TOCTOU detected)");
+            }
+
+            content = await fileHandle.readFile({ encoding: "utf-8" });
+          } finally {
+            await fileHandle.close();
+          }
+
           return {
             content: [{ type: "text", text: content }],
             details: { path: parsedParams.path, bytesRead: content.length },
@@ -794,40 +849,28 @@ Use board_read to inspect context, then perform role_action, and finish with boa
 
   private isBlockedShellCommand(command: string): boolean {
     const trimmed = command.trim();
-    const denyPatterns = [
-      // Destructive file operations
-      /(?:^|\s)rm\s+-[a-z\-\s]*r[a-z\-\s]*f[a-z\-\s]*\s+(?:--no-preserve-root\s+)?(?:\/|~|\.)/i,
-      /(?:^|\s)rm\s+--no-preserve-root\s+-[a-z\-\s]*r[a-z\-\s]*f[a-z\-\s]*\s+(?:\/|~|\.)/i,
-      /(?:^|\s)rm\s+(?:-[a-zA-Z]+\s+)+(?:\/|~|\.)/i,
-      /(?:^|\s)rm\s+(?:--[a-zA-Z\-]+\s+)*(?:\/|~|\.)/i,
-      // Pipe to shell execution
-      /\|\s*(?:sh|bash|zsh|ksh|dash)(?:\s|$)/i,
-      // Shell wrapper execution (sh -c, bash -c, etc.)
-      /(?:^|\s)(?:sh|bash|zsh|ksh|dash)\s+-[a-z]*c\s+/i,
-      // Command substitution with dangerous commands
-      /\$\([^)]*(?:rm|curl|wget|chmod|sudo|mkfs|dd)[^)]*\)/i,
-      // Backtick command substitution with dangerous commands
-      /`[^`]*(?:rm|curl|wget|chmod|sudo|mkfs|dd)[^`]*`/i,
-      // Base64 decode to shell
-      /base64\s+(?:-d|--decode)\s*\|\s*(?:sh|bash|zsh)/i,
-      // Dangerous permissions
-      /(?:^|\s)chmod\s+(?:777|a\+rwx)(?:\s|$)/i,
-      // Privilege escalation
-      /(?:^|\s)sudo(?:\s|$)/i,
-      // Filesystem destruction
-      /(?:^|\s)mkfs(?:\.|\s|$)/i,
-      /(?:^|\s)dd\s+(?:if|of)=/i,
-      />\s*\/dev\/sd[a-z](?:\d+)?/i,
-      // Fork bomb
-      /:\(\)\{:\|:&\};:/,
-      // Standalone network I/O commands
-      /^\s*curl(?:\s|$)/i,
-      /^\s*wget(?:\s|$)/i,
-      // Environment variable dump (exact match only)
-      /^(?:env|printenv)$/i,
-    ];
+    const segments = command
+      .split(/[;|]|&&|\|\|/)
+      .map((segment) => segment.trim())
+      .filter(Boolean);
 
-    return denyPatterns.some((pattern) => pattern.test(trimmed));
+    return (
+      this.BLOCKED_PATTERNS.some((pattern) => pattern.test(trimmed)) ||
+      segments.some((segment) => this.BLOCKED_PATTERNS.some((pattern) => pattern.test(segment)))
+    );
+  }
+
+  private resolveFdRealPath(fd: number): string {
+    const fdLinks = [`/proc/self/fd/${fd}`, `/dev/fd/${fd}`];
+    for (const fdLink of fdLinks) {
+      try {
+        return realpathSync(fdLink);
+      } catch {
+        continue;
+      }
+    }
+
+    throw new Error("Security: unable to resolve opened file descriptor path for validation");
   }
 }
 
