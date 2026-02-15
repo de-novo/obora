@@ -71,3 +71,11 @@ Board 단계 태스크를 blackboard 우선 구현 순서로 재배치하고, �
 - 실행: `pnpm --filter @obora-kit/blackboard test -- test/events/event-bus.test.ts`
 - 결과: ✅ `1 file / 33 tests passed` (stderr는 의도된 예외 처리 검증 케이스)
 - 판정: 블로커 없음, 다음 실행은 board E2E 1건(`test/e2e-policy-quorum.test.ts`) 재점검 권장
+
+## 야간 자동 점검 로그 (2026-02-15 09:57 KST)
+- 기준 브랜치: `origin/main` (`d58951e`)
+- 작업 브랜치(HEAD 유지): `main` (`98e2b61`)
+- 점검 단위: board E2E quorum/policy 회귀 최소검증 1건
+- 실행: `pnpm --filter @obora-kit/board test -- test/e2e-policy-quorum.test.ts`
+- 결과: ✅ `1 file / 9 tests passed` (421ms)
+- 판정: 블로커 없음, 다음 실행은 blackboard scheduler 도메인 최소검증 1건(`test/domains/scheduler/scheduler-store.test.ts`) 점검 권장
