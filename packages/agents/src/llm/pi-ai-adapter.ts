@@ -53,6 +53,12 @@ export class PiAIAdapter implements LLMAdapter {
     const model = this.resolveModel(params.model);
     const context = this.toContext(params);
     const response = await complete(model, context, this.toStreamOptions(params, options));
+
+    if (response.stopReason === "error") {
+      const errorMessage = (response as AssistantMessage & { errorMessage?: string }).errorMessage;
+      throw new Error(errorMessage ?? `pi-ai returned error stopReason for model ${model.id}`);
+    }
+
     return this.toChatCompletionResult(response, model.id);
   }
 
@@ -98,28 +104,42 @@ export class PiAIAdapter implements LLMAdapter {
     }
 
     const response = await eventStream.result();
+
+    if (response.stopReason === "error") {
+      const errorMessage = (response as AssistantMessage & { errorMessage?: string }).errorMessage;
+      throw new Error(errorMessage ?? `pi-ai returned error stopReason for model ${model.id}`);
+    }
+
     return this.toChatCompletionResult(response, model.id);
   }
 
   private resolveModel(modelId?: string): Model<string> {
     const requested = modelId ?? this.config.model;
 
-    if (requested) {
-      try {
-        const model = getModel(this.config.provider, requested as never);
-        return this.withOverrides(model);
-      } catch {
-        // graceful fallback below
+    if (!requested) {
+      throw new Error(
+        `No model specified for provider '${this.config.provider}'. ` +
+          `Available models: ${this.listAvailableModels()}`
+      );
+    }
+
+    try {
+      const model = getModel(this.config.provider, requested as never);
+      if (!model) {
+        throw new Error("Model not found");
       }
+      return this.withOverrides(model);
+    } catch {
+      throw new Error(
+        `Model '${requested}' not found for provider '${this.config.provider}'. ` +
+          `Available models: ${this.listAvailableModels()}`
+      );
     }
+  }
 
+  private listAvailableModels(): string {
     const models = getModels(this.config.provider);
-    const fallback = models[0];
-    if (!fallback) {
-      throw new Error(`No models available for provider: ${this.config.provider}`);
-    }
-
-    return this.withOverrides(fallback);
+    return models.map((model) => model.id).join(", ");
   }
 
   private withOverrides<TApi extends string>(model: Model<TApi>): Model<TApi> {

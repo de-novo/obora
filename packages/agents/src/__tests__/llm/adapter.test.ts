@@ -4,7 +4,17 @@ import type { ChatCompletionParams, ChatCompletionResult } from "../../llm/adapt
 import { PiAIAdapter } from "../../llm/pi-ai-adapter";
 
 vi.mock("@mariozechner/pi-ai", () => ({
-  getModel: vi.fn(() => ({ id: "gpt-4o-mini", provider: "openai", api: "openai-completions", baseUrl: "https://api.openai.com/v1" })),
+  getModel: vi.fn((provider: string, modelId: string) => {
+    if (provider === "openai" && modelId === "gpt-4o-mini") {
+      return {
+        id: "gpt-4o-mini",
+        provider: "openai",
+        api: "openai-completions",
+        baseUrl: "https://api.openai.com/v1",
+      };
+    }
+    throw new Error(`Unknown model: ${provider}/${modelId}`);
+  }),
   getModels: vi.fn(() => [{ id: "gpt-4o-mini", provider: "openai", api: "openai-completions", baseUrl: "https://api.openai.com/v1" }]),
   complete: vi.fn(async () => ({
     role: "assistant",
@@ -128,5 +138,30 @@ describe("PiAIAdapter", () => {
 
     expect(chunks.join("")).toBe("hello");
     expect(result.message.content).toBe("hello");
+  });
+
+  it("should throw when no model is specified", async () => {
+    const adapter = new PiAIAdapter({ provider: "openai", apiKey: "test" });
+
+    await expect(
+      adapter.chatCompletion({
+        messages: [{ role: "user", content: "hello" }],
+      })
+    ).rejects.toThrow(
+      "No model specified for provider 'openai'. Available models: gpt-4o-mini"
+    );
+  });
+
+  it("should throw with available models when requested model is invalid", async () => {
+    const adapter = new PiAIAdapter({ provider: "openai", apiKey: "test", model: "gpt-4o-mini" });
+
+    await expect(
+      adapter.chatCompletion({
+        model: "bad-model",
+        messages: [{ role: "user", content: "hello" }],
+      })
+    ).rejects.toThrow(
+      "Model 'bad-model' not found for provider 'openai'. Available models: gpt-4o-mini"
+    );
   });
 });

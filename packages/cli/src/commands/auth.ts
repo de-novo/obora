@@ -24,7 +24,7 @@ export function createAuthCommand(): Command {
   auth
     .command("add <provider>")
     .description("Add or update provider authentication")
-    .option("-t, --type <type>", "Auth type: apiKey | token | oauth", "apiKey")
+    .option("-t, --type <type>", "Auth type: apiKey | token | oauth")
     .option("--apiKey <value>", "API key value")
     .option("--token <value>", "Token value")
     .option("--accessToken <value>", "OAuth access token")
@@ -81,9 +81,25 @@ export function createAuthCommand(): Command {
   return auth;
 }
 
+function inferAuthType(provider: string, options: AddOptions): AuthType {
+  void provider;
+  if (options.type) return options.type as AuthType;
+
+  // OAuth explicit fields
+  if (options.accessToken) return "oauth";
+
+  // Anthropic OAT token detection
+  const value = options.apiKey || options.token || "";
+  if (value.startsWith("sk-ant-oat")) return "token";
+
+  // Default
+  if (options.token) return "token";
+  return "apiKey";
+}
+
 function buildProviderAuth(provider: string, options: AddOptions): ProviderAuth {
   const now = new Date().toISOString();
-  const type = (options.type ?? "apiKey") as AuthType;
+  const type = inferAuthType(provider, options);
 
   if (type === "apiKey") {
     if (!options.apiKey) {
@@ -100,13 +116,14 @@ function buildProviderAuth(provider: string, options: AddOptions): ProviderAuth 
   }
 
   if (type === "token") {
-    if (!options.token) {
+    const token = options.token ?? options.apiKey;
+    if (!token) {
       throw new Error("--token is required when --type=token");
     }
     return {
       provider,
       type,
-      token: options.token,
+      token,
       baseUrl: options.baseUrl,
       addedAt: now,
       updatedAt: now,

@@ -297,7 +297,7 @@ export function createAdapterFromEnv(
 
   return createLLMAdapter(selectedProvider, {
     apiKey,
-    baseUrl: options?.baseUrl ?? env?.[definition.envBaseUrl ?? ""] ?? definition.defaultBaseUrl,
+    baseUrl: options?.baseUrl ?? (definition.envBaseUrl ? env?.[definition.envBaseUrl] : undefined),
     model: options?.model ?? definition.defaultModel,
   });
 }
@@ -313,7 +313,7 @@ async function createAdapterFromAuth(
 
   return createLLMAdapter(provider, {
     apiKey,
-    baseUrl: options?.baseUrl ?? auth.baseUrl ?? definition.defaultBaseUrl,
+    baseUrl: options?.baseUrl ?? auth.baseUrl,
     model: options?.model ?? definition.defaultModel,
   });
 }

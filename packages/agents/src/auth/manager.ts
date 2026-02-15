@@ -48,7 +48,13 @@ export class FileAuthManager implements AuthManager {
 
     const token = getAuthToken(auth);
     const baseUrl = auth.baseUrl ?? DEFAULT_BASE_URLS[provider];
-    const headers: Record<string, string> = endpoint.header === "x-api-key"
+    const headers: Record<string, string> = provider === "anthropic" && auth.type === "token"
+      ? {
+        Authorization: `Bearer ${token}`,
+        "anthropic-version": "2023-06-01",
+        "anthropic-beta": "oauth-2025-04-20",
+      }
+      : endpoint.header === "x-api-key"
       ? { "x-api-key": token, "anthropic-version": "2023-06-01" }
       : { Authorization: `Bearer ${token}` };
 
