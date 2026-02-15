@@ -1,24 +1,59 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "ui": "stream",
-  "globalDependencies": [".env"],
+  "globalDependencies": [
+    ".env"
+  ],
   "tasks": {
     "build": {
-      "dependsOn": ["^build"],
-      "outputs": ["dist/**"]
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        "dist/**"
+      ]
     },
     "dev": {
       "cache": false,
       "persistent": true
     },
     "lint": {
-      "dependsOn": ["^build"]
+      "dependsOn": [
+        "^build"
+      ]
     },
     "format": {
       "cache": false
     },
     "clean": {
       "cache": false
+    },
+    "@obora-kit/runtime#build": {
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        "dist/**"
+      ]
+    },
+    "@obora-kit/workflow#build": {
+      "dependsOn": [
+        "^build",
+        "@obora-kit/runtime#build"
+      ],
+      "outputs": [
+        "dist/**"
+      ]
+    },
+    "@obora-kit/adapters#build": {
+      "dependsOn": [
+        "^build",
+        "@obora-kit/runtime#build",
+        "@obora-kit/workflow#build"
+      ],
+      "outputs": [
+        "dist/**"
+      ]
     }
   }
 }
