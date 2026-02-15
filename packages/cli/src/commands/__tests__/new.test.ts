@@ -171,7 +171,7 @@ describe('new command', () => {
 
       const writeFileCalls = vi.mocked(fs.writeFile).mock.calls;
       const statusCall = writeFileCalls.find((call) => String(call[0]).includes('status.yaml'));
-      expect(statusCall?.[1]).toContain('description: "my feature desc"');
+      expect(statusCall?.[1]).toContain('description: my feature desc');
     });
     it('should set correct workflow in status.yaml', async () => {
       vi.mocked(existsSync).mockImplementation((path) => {
@@ -185,7 +185,7 @@ describe('new command', () => {
 
       const writeFileCalls = vi.mocked(fs.writeFile).mock.calls;
       const statusCall = writeFileCalls.find((call) => String(call[0]).includes('status.yaml'));
-      expect(statusCall?.[1]).toContain('workflow: "standard"');
+      expect(statusCall?.[1]).toContain('workflow: standard');
     });
   });
 
@@ -325,7 +325,7 @@ describe('new command', () => {
 
       const writeFileCalls = vi.mocked(fs.writeFile).mock.calls;
       const statusCall = writeFileCalls.find((call) => String(call[0]).includes('status.yaml'));
-      expect(statusCall?.[1]).toContain('workflow: "standard"');
+      expect(statusCall?.[1]).toContain('workflow: standard');
     });
 
     it('should reject invalid workflow type', async () => {
@@ -370,7 +370,7 @@ describe('new command', () => {
 
       const writeFileCalls = vi.mocked(fs.writeFile).mock.calls;
       const statusCall = writeFileCalls.find((call) => String(call[0]).includes('status.yaml'));
-      expect(statusCall?.[1]).toContain('workflow: "standard"');
+      expect(statusCall?.[1]).toContain('workflow: standard');
     });
   });
 });
