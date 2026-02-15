@@ -79,3 +79,13 @@ Board 단계 태스크를 blackboard 우선 구현 순서로 재배치하고, �
 - 실행: `pnpm --filter @obora-kit/board test -- test/e2e-policy-quorum.test.ts`
 - 결과: ✅ `1 file / 9 tests passed` (421ms)
 - 판정: 블로커 없음, 다음 실행은 blackboard scheduler 도메인 최소검증 1건(`test/domains/scheduler/scheduler-store.test.ts`) 점검 권장
+
+## 야간 자동 점검 로그 (2026-02-15 12:12 KST)
+- 기준 브랜치: `origin/main` (`d58951e`)
+- 작업 브랜치(HEAD 유지): `main` (`98e2b61`)
+- 점검 단위: blackboard-first 회귀 점검 1건 (workflow state machine)
+- 1차 실행: `pnpm --filter @obora-kit/blackboard test -- test/domains/scheduler/scheduler-store.test.ts`
+- 1차 결과: ❌ No test files found (scheduler 테스트 파일 미존재 확인)
+- 재선정 실행: `pnpm --filter @obora-kit/blackboard test -- test/workflow/meeting-state-machine.test.ts`
+- 재선정 결과: ✅ `1 file / 2 tests passed` (229ms)
+- 판정: 블로커 없음, 다음 실행은 blackboard e2e 최소검증 1건(`test/e2e/workflow-e2e.test.ts`) 점검 권장
