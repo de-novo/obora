@@ -27,6 +27,13 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "@mariozechner/pi-agent-core": "^0.52.12",
+    "@mariozechner/pi-ai": "^0.52.12",
+    "duckdb": "^1.4.4",
+    "pako": "^2.1.0",
+    "yaml": "^2.8.2"
+  },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "tsup": "^8.5.1",
