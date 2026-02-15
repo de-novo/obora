@@ -29,12 +29,10 @@ export class ExecutorAgent extends BaseAgent {
   }
 
   protected getDefaultSystemPrompt(): string {
+    const runtimeTools = ["file_write", "file_read", "file_list", "shell_exec"];
     const availableTools = this.toolRegistry
-      ? this.toolRegistry
-          .listTools()
-          .map((t) => t.name)
-          .join(", ")
-      : "none";
+      ? [...new Set([...this.toolRegistry.listTools().map((t) => t.name), ...runtimeTools])].join(", ")
+      : runtimeTools.join(", ");
 
     return `You are an executor agent responsible for taking action and executing tasks.
 
@@ -45,7 +43,7 @@ Your responsibilities:
 4. Report the outcome accurately
 5. Handle errors gracefully
 
-Available tools: ${availableTools}, file_write, file_read, file_list, shell_exec
+Available tools: ${availableTools}
 
 When implementing a feature:
 1. Use board_read to understand the task context

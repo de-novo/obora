@@ -1,7 +1,9 @@
 import { getModel, EventStream, type AssistantMessage, type Message, type Model, type KnownProvider, Type } from "@mariozechner/pi-ai";
 import { Agent, type AgentEvent, type AgentMessage, type AgentTool } from "@mariozechner/pi-agent-core";
+import { existsSync, realpathSync } from "node:fs";
 import { mkdir, readFile, writeFile, readdir } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { promisify } from "node:util";
 import { LLMAdapter, ChatMessage } from "../llm/adapter";
 import type { Blackboard } from "@obora-kit/blackboard";
 import type { AgentId } from "../types";
@@ -77,6 +79,35 @@ export interface RuntimeExtensions {
   systemPromptAppend?: string;
 }
 
+interface BoardReadParams {
+  path: string;
+}
+
+interface RoleActionParams {
+  content: string;
+}
+
+interface BoardWriteParams {
+  result: unknown;
+}
+
+interface FileWriteParams {
+  path: string;
+  content: string;
+}
+
+interface FileReadParams {
+  path: string;
+}
+
+interface FileListParams {
+  path: string;
+}
+
+interface ShellExecParams {
+  command: string;
+}
+
 export abstract class BaseAgent {
   readonly id: AgentId;
   readonly role: AgentRole;
@@ -87,6 +118,8 @@ export abstract class BaseAgent {
   protected runtimeSystemPromptAppend = "";
   protected errorCount: number = 0;
   protected maxErrors: number = 3;
+  protected thinkMaxTokens: number;
+  protected executeMaxTokens: number;
 
   private coreAgent?: Agent;
   private unsubscribe?: () => void;
@@ -100,6 +133,8 @@ export abstract class BaseAgent {
     this.llm = config.llm;
     this.systemPrompt = config.systemPrompt ?? this.getDefaultSystemPrompt();
     this.maxErrors = config.maxErrors ?? 3;
+    this.thinkMaxTokens = config.thinkMaxTokens ?? 2048;
+    this.executeMaxTokens = config.executeMaxTokens ?? 8192;
 
     this.coreAgent = this.createPiAgent(config);
   }
@@ -207,7 +242,7 @@ export abstract class BaseAgent {
     const result = await this.llm.chatCompletion({
       messages,
       temperature: 0.7,
-      maxTokens: 8192,
+      maxTokens: this.thinkMaxTokens,
     });
 
     return {
@@ -337,8 +372,9 @@ Use board_read to inspect context, then perform role_action, and finish with boa
         label: "Read blackboard context",
         description: "Read a path from workflow blackboard",
         parameters: Type.Object({ path: Type.String() }),
-        execute: async (_id, params: any) => {
-          const value = this.currentContext?.board.read(String(params?.path ?? ""), { strict: false });
+        execute: async (_id, params: unknown) => {
+          const parsedParams = this.parseBoardReadParams(params);
+          const value = this.currentContext?.board.read(parsedParams.path, { strict: false });
           return {
             content: [{ type: "text", text: JSON.stringify(value ?? null) }],
             details: { value: value ?? null },
@@ -350,9 +386,10 @@ Use board_read to inspect context, then perform role_action, and finish with boa
         label: "Execute role-specific action",
         description: "Execute the role specific act() with parsed result",
         parameters: Type.Object({ content: Type.String() }),
-        execute: async (_id, params: any) => {
+        execute: async (_id, params: unknown) => {
           if (!this.currentContext || !this.currentTask) throw new Error("Missing task context");
-          const parsed = this.parseResponse(String(params?.content ?? ""), this.currentTask);
+          const parsedParams = this.parseRoleActionParams(params);
+          const parsed = this.parseResponse(parsedParams.content, this.currentTask);
           this.state = AgentState.ACTING;
           const result = await this.act(parsed, this.currentContext);
           return {
@@ -366,9 +403,10 @@ Use board_read to inspect context, then perform role_action, and finish with boa
         label: "Write agent report",
         description: "Write task execution report to blackboard",
         parameters: Type.Object({ result: Type.Any() }),
-        execute: async (_id, params: any) => {
+        execute: async (_id, params: unknown) => {
           if (!this.currentContext || !this.currentTask) throw new Error("Missing task context");
-          await this.report(this.currentTask, params?.result, this.currentContext);
+          const parsedParams = this.parseBoardWriteParams(params);
+          await this.report(this.currentTask, parsedParams.result, this.currentContext);
           return {
             content: [{ type: "text", text: "ok" }],
             details: { written: true },
@@ -383,18 +421,14 @@ Use board_read to inspect context, then perform role_action, and finish with boa
           path: Type.String({ description: "Relative path from project root" }),
           content: Type.String({ description: "File content to write" }),
         }),
-        execute: async (_id, params: any) => {
-          const projectRoot = process.cwd();
-          const filePath = resolve(join(projectRoot, String(params?.path ?? "")));
-          if (!(filePath === projectRoot || filePath.startsWith(`${projectRoot}/`))) {
-            throw new Error("Cannot write outside project directory");
-          }
+        execute: async (_id, params: unknown) => {
+          const parsedParams = this.parseFileWriteParams(params);
+          const filePath = this.resolveAndValidatePath(parsedParams.path, { allowNonExistentTarget: true });
           await mkdir(dirname(filePath), { recursive: true });
-          const content = String(params?.content ?? "");
-          await writeFile(filePath, content, "utf-8");
+          await writeFile(filePath, parsedParams.content, "utf-8");
           return {
-            content: [{ type: "text", text: `Written: ${params.path}` }],
-            details: { path: params.path, bytesWritten: content.length },
+            content: [{ type: "text", text: `Written: ${parsedParams.path}` }],
+            details: { path: parsedParams.path, bytesWritten: parsedParams.content.length },
           };
         },
       },
@@ -405,16 +439,13 @@ Use board_read to inspect context, then perform role_action, and finish with boa
         parameters: Type.Object({
           path: Type.String({ description: "Relative path from project root" }),
         }),
-        execute: async (_id, params: any) => {
-          const projectRoot = process.cwd();
-          const filePath = resolve(join(projectRoot, String(params?.path ?? "")));
-          if (!(filePath === projectRoot || filePath.startsWith(`${projectRoot}/`))) {
-            throw new Error("Cannot read outside project directory");
-          }
+        execute: async (_id, params: unknown) => {
+          const parsedParams = this.parseFileReadParams(params);
+          const filePath = this.resolveAndValidatePath(parsedParams.path);
           const content = await readFile(filePath, "utf-8");
           return {
             content: [{ type: "text", text: content }],
-            details: { path: params.path, bytesRead: content.length },
+            details: { path: parsedParams.path, bytesRead: content.length },
           };
         },
       },
@@ -425,12 +456,9 @@ Use board_read to inspect context, then perform role_action, and finish with boa
         parameters: Type.Object({
           path: Type.String({ description: "Relative directory path from project root" }),
         }),
-        execute: async (_id, params: any) => {
-          const projectRoot = process.cwd();
-          const dirPath = resolve(join(projectRoot, String(params?.path ?? ".")));
-          if (!(dirPath === projectRoot || dirPath.startsWith(`${projectRoot}/`))) {
-            throw new Error("Cannot list outside project directory");
-          }
+        execute: async (_id, params: unknown) => {
+          const parsedParams = this.parseFileListParams(params);
+          const dirPath = this.resolveAndValidatePath(parsedParams.path);
           const entries = await readdir(dirPath, { withFileTypes: true });
           const list = entries.map((e) => `${e.isDirectory() ? "d" : "f"} ${e.name}`).join("\n");
           return {
@@ -446,24 +474,33 @@ Use board_read to inspect context, then perform role_action, and finish with boa
         parameters: Type.Object({
           command: Type.String({ description: "Shell command to execute" }),
         }),
-        execute: async (_id, params: any) => {
-          const { execSync } = await import("node:child_process");
+        execute: async (_id, params: unknown) => {
+          const parsedParams = this.parseShellExecParams(params);
+          if (this.isBlockedShellCommand(parsedParams.command)) {
+            return {
+              content: [{ type: "text", text: "Error: Blocked by security policy (dangerous command pattern detected)." }],
+              details: { exitCode: 1, blocked: true },
+            };
+          }
+
+          const { exec } = await import("node:child_process");
+          const execAsync = promisify(exec);
           const projectRoot = process.cwd();
           try {
-            const output = execSync(String(params?.command ?? "echo ok"), {
+            const { stdout } = await execAsync(parsedParams.command, {
               cwd: projectRoot,
               timeout: 30000,
               maxBuffer: 1024 * 1024,
-              encoding: "utf-8",
             });
             return {
-              content: [{ type: "text", text: output.slice(0, 4000) }],
+              content: [{ type: "text", text: stdout.slice(0, 4000) }],
               details: { exitCode: 0 },
             };
-          } catch (e: any) {
+          } catch (e: unknown) {
+            const error = e as { message?: string; stdout?: string; code?: number };
             return {
-              content: [{ type: "text", text: `Error: ${e.message}\n${e.stdout || ""}`.slice(0, 4000) }],
-              details: { exitCode: e.status ?? 1 },
+              content: [{ type: "text", text: `Error: ${error.message ?? "Execution failed"}\n${error.stdout ?? ""}`.slice(0, 4000) }],
+              details: { exitCode: error.code ?? 1 },
             };
           }
         },
@@ -494,19 +531,20 @@ Use board_read to inspect context, then perform role_action, and finish with boa
                   return { role: "user", content: typeof m.content === "string" ? m.content : JSON.stringify(m.content) };
                 }
                 if (m.role === "assistant") {
+                  const calls = m.content
+                    .filter((c) => c.type === "toolCall")
+                    .map((c) => ({
+                      id: c.id,
+                      type: "function" as const,
+                      function: {
+                        name: c.name,
+                        arguments: JSON.stringify(c.arguments ?? {}),
+                      },
+                    }));
                   return {
                     role: "assistant",
                     content: m.content.filter((c) => c.type === "text").map((c) => c.text).join(""),
-                    toolCalls: m.content
-                      .filter((c) => c.type === "toolCall")
-                      .map((c) => ({
-                        id: c.id,
-                        type: "function" as const,
-                        function: {
-                          name: c.name,
-                          arguments: JSON.stringify(c.arguments ?? {}),
-                        },
-                      })),
+                    toolCalls: calls.length > 0 ? calls : undefined,
                   };
                 }
                 return {
@@ -519,7 +557,7 @@ Use board_read to inspect context, then perform role_action, and finish with boa
             tools,
             toolChoice: "auto",
             temperature: 0.7,
-            maxTokens: 8192,
+            maxTokens: this.executeMaxTokens,
           });
 
           this.latestUsage = {
@@ -602,6 +640,100 @@ Use board_read to inspect context, then perform role_action, and finish with boa
     await this.report(task, parsed, context);
     return parsed;
   }
+
+  private parseBoardReadParams(params: unknown): BoardReadParams {
+    if (!this.isRecord(params) || typeof params.path !== "string") {
+      throw new Error("Invalid params: board_read.path must be a string");
+    }
+    return { path: params.path };
+  }
+
+  private parseRoleActionParams(params: unknown): RoleActionParams {
+    if (!this.isRecord(params) || typeof params.content !== "string") {
+      throw new Error("Invalid params: role_action.content must be a string");
+    }
+    return { content: params.content };
+  }
+
+  private parseBoardWriteParams(params: unknown): BoardWriteParams {
+    if (!this.isRecord(params) || !("result" in params)) {
+      throw new Error("Invalid params: board_write.result is required");
+    }
+    return { result: params.result };
+  }
+
+  private parseFileWriteParams(params: unknown): FileWriteParams {
+    if (!this.isRecord(params) || typeof params.path !== "string" || typeof params.content !== "string") {
+      throw new Error("Invalid params: file_write.path/content must be strings");
+    }
+    return { path: params.path, content: params.content };
+  }
+
+  private parseFileReadParams(params: unknown): FileReadParams {
+    if (!this.isRecord(params) || typeof params.path !== "string") {
+      throw new Error("Invalid params: file_read.path must be a string");
+    }
+    return { path: params.path };
+  }
+
+  private parseFileListParams(params: unknown): FileListParams {
+    if (!this.isRecord(params) || typeof params.path !== "string") {
+      throw new Error("Invalid params: file_list.path must be a string");
+    }
+    return { path: params.path };
+  }
+
+  private parseShellExecParams(params: unknown): ShellExecParams {
+    if (!this.isRecord(params) || typeof params.command !== "string") {
+      throw new Error("Invalid params: shell_exec.command must be a string");
+    }
+    return { command: params.command };
+  }
+
+  private isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null;
+  }
+
+  private resolveAndValidatePath(relativePath: string, options?: { allowNonExistentTarget?: boolean }): string {
+    const projectRoot = realpathSync(process.cwd());
+    const resolvedPath = resolve(projectRoot, relativePath);
+
+    if (!options?.allowNonExistentTarget || existsSync(resolvedPath)) {
+      const realTargetPath = realpathSync(resolvedPath);
+      if (!(realTargetPath === projectRoot || realTargetPath.startsWith(`${projectRoot}/`))) {
+        throw new Error("Path validation failed: target escapes project directory");
+      }
+      return realTargetPath;
+    }
+
+    const parentPath = dirname(resolvedPath);
+    const realParentPath = realpathSync(parentPath);
+    if (!(realParentPath === projectRoot || realParentPath.startsWith(`${projectRoot}/`))) {
+      throw new Error("Path validation failed: parent escapes project directory");
+    }
+
+    return resolvedPath;
+  }
+
+  private isBlockedShellCommand(command: string): boolean {
+    const trimmed = command.trim();
+    const denyPatterns = [
+      /(?:^|\s)rm\s+-rf\s+\/(?:\s|$)/i,
+      /(?:^|\s)rm\s+-rf\s+~(?:\s|$)/i,
+      /(?:^|\s)rm\s+-rf\s+\.(?:\s|$)/i,
+      /(?:^|\s)curl\b[^|\n]*\|\s*(?:sh|bash)(?:\s|$)/i,
+      /(?:^|\s)wget\b[^|\n]*\|\s*(?:sh|bash)(?:\s|$)/i,
+      /(?:^|\s)chmod\s+777(?:\s|$)/i,
+      /(?:^|\s)sudo(?:\s|$)/i,
+      /(?:^|\s)mkfs(?:\.|\s|$)/i,
+      /(?:^|\s)dd\s+if=/i,
+      />\s*\/dev\/sda(?:\d+)?/i,
+      /:\(\)\{:\|:&\};:/,
+      /^(?:env|printenv)$/i,
+    ];
+
+    return denyPatterns.some((pattern) => pattern.test(trimmed));
+  }
 }
 
 export interface BaseAgentConfig {
@@ -615,6 +747,8 @@ export interface BaseAgentConfig {
   sessionId?: string;
   thinkingLevel?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
   enablePiRuntime?: boolean;
+  thinkMaxTokens?: number;
+  executeMaxTokens?: number;
 }
 
 // 역할별 입출력 타입 정의 (스펙 14-ai-agents.md와 일치)
