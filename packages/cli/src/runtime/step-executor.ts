@@ -126,7 +126,7 @@ function mapErrorToDiagnosis(error: unknown): ErrorCode {
   return "E4001";
 }
 
-const DEFAULT_TIMEOUT_MS = 60_000;
+const DEFAULT_TIMEOUT_MS = 600_000;
 
 export interface ExecuteStepOptions {
   timeoutMs?: number;
