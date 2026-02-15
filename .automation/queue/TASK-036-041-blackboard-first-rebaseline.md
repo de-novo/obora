@@ -219,3 +219,11 @@ Board 단계 태스크를 blackboard 우선 구현 순서로 재배치하고, �
 - 실행: `pnpm --filter @obora-kit/blackboard test -- test/workflow/meeting-state-machine.test.ts`
 - 결과: ✅ `1 file / 2 tests passed` (251ms)
 - 판정: 블로커 없음, 다음 실행은 blackboard e2e workflow 최소검증 1건(`test/e2e/workflow-e2e.test.ts`) 점검 권장
+
+## 야간 자동 점검 로그 (2026-02-16 06:12 KST)
+- 기준 브랜치: `origin/main` (`ef54166`)
+- 작업 브랜치(HEAD 유지): `main` (`efc4789`, local ahead 1)
+- 점검 단위: blackboard e2e workflow 최소검증 1건
+- 실행: `pnpm --filter @obora-kit/blackboard test -- test/e2e/workflow-e2e.test.ts`
+- 결과: ✅ `1 file / 5 tests passed` (389ms)
+- 판정: 블로커 없음, 다음 실행은 board 패키지 전체 테스트 스위트 회귀 점검 권장
