@@ -75,3 +75,11 @@
 - 실행 테스트: `pnpm --filter @obora-kit/blackboard test -- test/domains/agenda`
 - 결과: 통과 (1 file, 12 tests)
 - 기준선 참조: `origin/main` 대비 현재 작업 브랜치에서 agenda domain 테스트 정상
+
+## 야간 점검 로그 (2026-02-15 18:12 KST)
+- 점검 단위: blackboard-first TASK-036 agenda domain 회귀 검증 1건
+- 기준 브랜치: `origin/main` (`bd6a6be`)
+- 작업 브랜치: `main` (HEAD `8fab233`, 유지)
+- 실행 테스트: `pnpm --filter @obora-kit/blackboard test -- test/domains/agenda`
+- 결과: 통과 (1 file, 12 tests)
+- 메모: 기능 변경 없이 안정성 점검만 수행
