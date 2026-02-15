@@ -1,7 +1,7 @@
 import { getModel, EventStream, type AssistantMessage, type Message, type Model, type KnownProvider, Type } from "@mariozechner/pi-ai";
 import { Agent, type AgentEvent, type AgentMessage, type AgentTool } from "@mariozechner/pi-agent-core";
 import { existsSync, realpathSync } from "node:fs";
-import { mkdir, open, readdir, unlink, writeFile } from "node:fs/promises";
+import { mkdir, open, readdir, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import { LLMAdapter, ChatMessage } from "../llm/adapter";
@@ -480,7 +480,10 @@ Use board_read to inspect context, then perform role_action, and finish with boa
           const writtenRealPath = realpathSync(filePath);
           const projectRoot = realpathSync(process.cwd());
           if (!writtenRealPath.startsWith(projectRoot + sep) && writtenRealPath !== projectRoot) {
-            await unlink(filePath);
+            await Promise.allSettled([
+              unlink(filePath),
+              writtenRealPath === filePath ? Promise.resolve() : unlink(writtenRealPath),
+            ]);
             throw new Error("Security: file was written outside project boundary (TOCTOU detected)");
           }
 
@@ -504,10 +507,16 @@ Use board_read to inspect context, then perform role_action, and finish with boa
           const fileHandle = await open(filePath, "r");
           let content = "";
           try {
-            const openedRealPath = this.resolveFdRealPath(fileHandle.fd);
             const projectRoot = realpathSync(process.cwd());
-            if (!openedRealPath.startsWith(projectRoot + sep) && openedRealPath !== projectRoot) {
+            const openedFdStat = await fileHandle.stat();
+            const postOpenRealPath = realpathSync(filePath);
+            if (!postOpenRealPath.startsWith(projectRoot + sep) && postOpenRealPath !== projectRoot) {
               throw new Error("Security: file read escaped project boundary (TOCTOU detected)");
+            }
+
+            const postOpenPathStat = await stat(postOpenRealPath);
+            if (openedFdStat.dev !== postOpenPathStat.dev || openedFdStat.ino !== postOpenPathStat.ino) {
+              throw new Error("Security: file changed during open/read boundary validation (TOCTOU detected)");
             }
 
             content = await fileHandle.readFile({ encoding: "utf-8" });
@@ -850,7 +859,7 @@ Use board_read to inspect context, then perform role_action, and finish with boa
   private isBlockedShellCommand(command: string): boolean {
     const trimmed = command.trim();
     const segments = command
-      .split(/[;|]|&&|\|\|/)
+      .split(/(?:;|&&|\|\||\|)/)
       .map((segment) => segment.trim())
       .filter(Boolean);
 
@@ -860,19 +869,8 @@ Use board_read to inspect context, then perform role_action, and finish with boa
     );
   }
 
-  private resolveFdRealPath(fd: number): string {
-    const fdLinks = [`/proc/self/fd/${fd}`, `/dev/fd/${fd}`];
-    for (const fdLink of fdLinks) {
-      try {
-        return realpathSync(fdLink);
-      } catch {
-        continue;
-      }
-    }
-
-    throw new Error("Security: unable to resolve opened file descriptor path for validation");
-  }
 }
+
 
 export interface BaseAgentConfig {
   id?: AgentId;
