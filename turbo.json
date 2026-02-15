@@ -38,8 +38,7 @@
     },
     "@obora-kit/workflow#build": {
       "dependsOn": [
-        "^build",
-        "@obora-kit/runtime#build"
+        "^build"
       ],
       "outputs": [
         "dist/**"
@@ -47,9 +46,7 @@
     },
     "@obora-kit/adapters#build": {
       "dependsOn": [
-        "^build",
-        "@obora-kit/runtime#build",
-        "@obora-kit/workflow#build"
+        "^build"
       ],
       "outputs": [
         "dist/**"
