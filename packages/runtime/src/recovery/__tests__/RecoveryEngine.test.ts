@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { InMemoryAuditStore } from "../../audit/InMemoryAuditStore.js";
 import { RecoveryEngine } from "../RecoveryEngine";
 import type { CellFailure } from "../types";
 
@@ -114,5 +115,55 @@ describe("RecoveryEngine", () => {
     );
     expect(result.status).toBe("recovered");
     expect(result.strategy).toBe("alternative");
+  });
+
+  it("records recovery_start and recovery_end into AuditTrail", async () => {
+    const auditTrail = new InMemoryAuditStore();
+    const executeRetry = vi.fn().mockResolvedValue({ ok: true });
+
+    const engine = new RecoveryEngine({
+      auditTrail,
+      wait: vi.fn().mockResolvedValue(undefined),
+      retryExecutor: { executeRetry },
+    });
+
+    await engine.handle(createFailure(), {
+      type: "retry",
+      mode: "linear",
+      maxAttempts: 3,
+      initialDelayMs: 10,
+      maxDelayMs: 50,
+    });
+
+    const events = await auditTrail.query({ executionId: "exec-1" });
+    expect(events.map((event) => event.type)).toContain("recovery_start");
+    expect(events.map((event) => event.type)).toContain("recovery_end");
+  });
+
+  it("blocks recovery when consensus gate is not passed", async () => {
+    const executeRetry = vi.fn().mockResolvedValue({ ok: true });
+    const engine = new RecoveryEngine({
+      wait: vi.fn().mockResolvedValue(undefined),
+      retryExecutor: { executeRetry },
+      consensusGate: {
+        evaluate: () => ({ status: "fail" }),
+      },
+    });
+
+    const result = await engine.handle(
+      createFailure(),
+      {
+        type: "retry",
+        mode: "linear",
+        maxAttempts: 3,
+        initialDelayMs: 10,
+        maxDelayMs: 50,
+      },
+      { consensusSessionId: "consensus-1" }
+    );
+
+    expect(result.status).toBe("failed");
+    expect(result.error?.message).toContain("recovery blocked by consensus status: fail");
+    expect(executeRetry).not.toHaveBeenCalled();
   });
 });

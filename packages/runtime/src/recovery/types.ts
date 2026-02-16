@@ -71,11 +71,26 @@ export interface AlternativeStepExecutor {
   }): Promise<unknown>;
 }
 
+export interface RecoveryConsensusGate {
+  evaluate(sessionId: string): { status: "pass" | "fail" | "pending" | "timeout" };
+}
+
 export interface RecoveryContext {
   retryExecutor?: RetryExecutor;
   snapshotStore?: SnapshotStore;
   escalationNotifier?: EscalationNotifier;
   alternativeExecutor?: AlternativeStepExecutor;
+  consensusGate?: RecoveryConsensusGate;
+  auditTrail?: {
+    record(event: {
+      id: string;
+      executionId: string;
+      cellId?: string;
+      timestamp: Date;
+      type: "recovery_start" | "recovery_end";
+      data: unknown;
+    }): Promise<void>;
+  };
   wait?: (ms: number) => Promise<void>;
 }
 
@@ -98,8 +113,16 @@ export interface RecoveryStrategyPlugin {
   ): Promise<RecoveryResult>;
 }
 
+export interface RecoveryHandleOptions {
+  consensusSessionId?: string;
+}
+
 export interface RecoveryEngine {
-  handle(failure: CellFailure, strategy: RecoveryStrategy): Promise<RecoveryResult>;
+  handle(
+    failure: CellFailure,
+    strategy: RecoveryStrategy,
+    options?: RecoveryHandleOptions
+  ): Promise<RecoveryResult>;
 }
 
 // Legacy export for compatibility during M1 migration.

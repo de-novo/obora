@@ -5,6 +5,7 @@ import type {
   RecoveryContext,
   RecoveryEngine as RecoveryEngineContract,
   RecoveryResult,
+  RecoveryHandleOptions,
   RecoveryStrategy,
   RecoveryStrategyPlugin,
   RollbackRecoveryStrategy,
@@ -164,6 +165,8 @@ export class RecoveryEngine implements RecoveryEngineContract {
       snapshotStore: context.snapshotStore,
       escalationNotifier: context.escalationNotifier,
       alternativeExecutor: context.alternativeExecutor,
+      consensusGate: context.consensusGate,
+      auditTrail: context.auditTrail,
       wait: context.wait ?? defaultWait,
     };
 
@@ -177,13 +180,70 @@ export class RecoveryEngine implements RecoveryEngineContract {
     this.plugins.set(plugin.type, plugin);
   }
 
-  async handle(failure: CellFailure, strategy: RecoveryStrategy): Promise<RecoveryResult> {
-    const plugin = this.plugins.get(strategy.type);
-    if (!plugin) {
-      return fail(strategy.type, new Error(`unsupported recovery strategy: ${strategy.type}`));
+  async handle(
+    failure: CellFailure,
+    strategy: RecoveryStrategy,
+    options: RecoveryHandleOptions = {}
+  ): Promise<RecoveryResult> {
+    await this.recordAudit("recovery_start", failure, {
+      strategy: strategy.type,
+      options,
+    });
+
+    if (options.consensusSessionId && this.context.consensusGate) {
+      const consensus = this.context.consensusGate.evaluate(options.consensusSessionId);
+      if (consensus.status !== "pass") {
+        const blockedResult: RecoveryResult = {
+          status: "failed",
+          strategy: strategy.type,
+          error: new Error(
+            `recovery blocked by consensus status: ${consensus.status} (session: ${options.consensusSessionId})`
+          ),
+          details: {
+            consensusSessionId: options.consensusSessionId,
+            consensusStatus: consensus.status,
+          },
+        };
+
+        await this.recordAudit("recovery_end", failure, {
+          strategy: strategy.type,
+          result: blockedResult,
+        });
+
+        return blockedResult;
+      }
     }
 
-    return plugin.execute(failure, strategy, this.context);
+    const plugin = this.plugins.get(strategy.type);
+    const result = !plugin
+      ? fail(strategy.type, new Error(`unsupported recovery strategy: ${strategy.type}`))
+      : await plugin.execute(failure, strategy, this.context);
+
+    await this.recordAudit("recovery_end", failure, {
+      strategy: strategy.type,
+      result,
+    });
+
+    return result;
+  }
+
+  private async recordAudit(
+    type: "recovery_start" | "recovery_end",
+    failure: CellFailure,
+    data: unknown
+  ): Promise<void> {
+    if (!this.context.auditTrail) {
+      return;
+    }
+
+    await this.context.auditTrail.record({
+      id: crypto.randomUUID(),
+      executionId: failure.executionId,
+      cellId: failure.cellId,
+      timestamp: new Date(),
+      type,
+      data,
+    });
   }
 }
 
