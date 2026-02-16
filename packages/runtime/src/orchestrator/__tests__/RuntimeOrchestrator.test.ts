@@ -186,6 +186,100 @@ steps:
     expect(resumed.completedSteps).toEqual(["build", "deploy"]);
   });
 
+  it("auto-approves on gate timeout when fallback is auto-approve", async () => {
+    const executed: string[] = [];
+    const auditTrail = new InMemoryAuditStore();
+    const orchestrator = new DefaultRuntimeOrchestrator({
+      cellManager: createCellManager(executed),
+      policyEngine: createPolicyEngine((action) =>
+        action.name === "deploy"
+          ? { type: "gate", gateType: "human-approval", config: { timeout: "1h", fallback: "auto-approve" } }
+          : { type: "allow" }
+      ),
+      auditTrail,
+    });
+
+    orchestrator.define("gate-timeout-auto-approve", {
+      name: "gate-timeout-auto-approve",
+      steps: [
+        { name: "build", agent: "analyst" },
+        { name: "deploy", agent: "executor", depends_on: ["build"] },
+      ],
+    });
+
+    const waiting = await orchestrator.run("gate-timeout-auto-approve", {});
+    expect(waiting.status).toBe("waiting");
+
+    const resumed = await orchestrator.onGateTimeout(waiting.id);
+
+    expect(resumed.status).toBe("completed");
+    expect(resumed.completedSteps).toEqual(["build", "deploy"]);
+    expect(executed).toEqual(["build", "deploy"]);
+
+    const events = await auditTrail.query({ executionId: waiting.id });
+    expect(events.find((event) => event.type === "gate_resolve")?.data).toMatchObject({
+      stepName: "deploy",
+      gateType: "human-approval",
+      status: "approved",
+      fallback: "auto-approve",
+    });
+  });
+
+  it("fails on gate timeout when fallback is fail", async () => {
+    const orchestrator = new DefaultRuntimeOrchestrator({
+      cellManager: createCellManager([]),
+      policyEngine: createPolicyEngine((action) =>
+        action.name === "deploy"
+          ? { type: "gate", gateType: "human-approval", config: { timeout: "1h", fallback: "fail" } }
+          : { type: "allow" }
+      ),
+    });
+
+    orchestrator.define("gate-timeout-fail", {
+      name: "gate-timeout-fail",
+      steps: [
+        { name: "build", agent: "analyst" },
+        { name: "deploy", agent: "executor", depends_on: ["build"] },
+      ],
+    });
+
+    const waiting = await orchestrator.run("gate-timeout-fail", {});
+    const timedOut = await orchestrator.onGateTimeout(waiting.id);
+
+    expect(timedOut.status).toBe("failed");
+    expect(timedOut.stepRecords.deploy.status).toBe("failed");
+    expect(timedOut.stepRecords.deploy.error).toBe("Gate timeout: human-approval");
+  });
+
+  it("enters recovery escalation on gate timeout when fallback is escalate", async () => {
+    const recoveryEngine = new RecoveryEngine();
+    const recoverSpy = vi.spyOn(recoveryEngine, "handle");
+
+    const orchestrator = new DefaultRuntimeOrchestrator({
+      cellManager: createCellManager([]),
+      policyEngine: createPolicyEngine((action) =>
+        action.name === "deploy"
+          ? { type: "gate", gateType: "human-approval", config: { timeout: "1h", fallback: "escalate" } }
+          : { type: "allow" }
+      ),
+      recoveryEngine,
+    });
+
+    orchestrator.define("gate-timeout-escalate", {
+      name: "gate-timeout-escalate",
+      steps: [
+        { name: "build", agent: "analyst" },
+        { name: "deploy", agent: "executor", depends_on: ["build"] },
+      ],
+    });
+
+    const waiting = await orchestrator.run("gate-timeout-escalate", {});
+    const timedOut = await orchestrator.onGateTimeout(waiting.id);
+
+    expect(timedOut.status).toBe("failed");
+    expect(timedOut.stepRecords.deploy.recovery?.strategy).toBe("escalate");
+    expect(recoverSpy).toHaveBeenCalledOnce();
+  });
 
   it("uses step.gate and step.gate_config even when policy allows", async () => {
     const orchestrator = new DefaultRuntimeOrchestrator({

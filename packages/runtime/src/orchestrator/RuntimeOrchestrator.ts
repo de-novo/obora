@@ -187,6 +187,44 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
       throw new Error(`Execution is not waiting on gate: ${executionId}`);
     }
 
+    const waitingContext = this.waitingContexts.get(executionId);
+
+    if (gate.fallback === "auto-approve") {
+      if (!waitingContext) {
+        throw new Error(`Execution waiting context is missing: ${executionId}`);
+      }
+
+      gate.status = "approved";
+      await this.gateWaitStateStore.save(gate);
+      await this.gateWaitStateStore.delete(executionId);
+      await this.recordAudit(execution.id, "gate_resolve", {
+        stepName: gate.stepName,
+        gateType: gate.gateType,
+        status: "approved",
+        fallback: "auto-approve",
+      });
+
+      const record = execution.stepRecords[gate.stepName]!;
+      record.status = "pending";
+      record.error = undefined;
+      record.endedAt = undefined;
+
+      execution.waitingGate = undefined;
+      execution.status = "running";
+      execution.error = undefined;
+      waitingContext.scheduled.delete(gate.stepName);
+      this.approvedGateSteps.add(`${execution.id}:${gate.stepName}`);
+      this.waitingContexts.delete(executionId);
+
+      return this.executeLoop(
+        execution,
+        waitingContext.workflow,
+        waitingContext.input,
+        waitingContext.completed,
+        waitingContext.scheduled
+      );
+    }
+
     gate.status = "timeout";
     await this.gateWaitStateStore.save(gate);
     await this.gateWaitStateStore.delete(executionId);
