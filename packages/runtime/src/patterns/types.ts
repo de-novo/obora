@@ -148,6 +148,19 @@ export interface SupervisorPatternConfig {
   backoff?: "linear" | "exponential";
 }
 
+export interface CompositeStage {
+  name: string;
+  pattern: string;
+  config?: Record<string, unknown>;
+  participants?: Record<string, string>;
+  input_from?: "previous" | "root" | string;
+}
+
+export interface CompositePatternConfig {
+  stages: CompositeStage[];
+  on_stage_failure?: "fail" | "skip" | "escalate";
+}
+
 export interface CustomPatternConfig {
   [key: string]: unknown;
 }
@@ -161,6 +174,7 @@ export type PatternConfig =
   | PipelinePatternConfig
   | FanOutFanInPatternConfig
   | SupervisorPatternConfig
+  | CompositePatternConfig
   | CustomPatternConfig;
 
 export type PatternConfigByKind = {

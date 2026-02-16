@@ -11,6 +11,8 @@ import { PeerReviewPattern } from "../patterns/builtin/PeerReviewPattern.js";
 import { SupervisorPattern } from "../patterns/builtin/SupervisorPattern.js";
 import { FanOutFanInPattern } from "../patterns/builtin/FanOutFanInPattern.js";
 import { RedBluePattern } from "../patterns/builtin/RedBluePattern.js";
+import { CompositePattern } from "../patterns/builtin/CompositePattern.js";
+import type { PatternRegistry } from "../patterns/PatternRegistry.js";
 import type {
   AgentPlugin,
   AnyPlugin,
@@ -128,6 +130,16 @@ export class RedBluePatternPlugin extends RedBluePattern implements PatternPlugi
   readonly version = "1.0.0";
 }
 
+export class CompositePatternPlugin extends CompositePattern implements PatternPlugin {
+  readonly type = "pattern" as const;
+  readonly name = "composite";
+  readonly version = "1.0.0";
+
+  constructor(registry: PatternRegistry) {
+    super(registry);
+  }
+}
+
 export class AllowAllPolicyRulePlugin implements PolicyRulePlugin {
   readonly type = "policy-rule" as const;
   readonly name = "allow-all-policy";
@@ -191,7 +203,9 @@ export class IdentityStateTransformPlugin implements StateTransformPlugin {
   }
 }
 
-export function createBuiltinPlugins(options: { sandboxRoot?: string } = {}): AnyPlugin[] {
+export function createBuiltinPlugins(options: { sandboxRoot?: string; patternRegistry?: PatternRegistry } = {}): AnyPlugin[] {
+  const patternRegistry = options.patternRegistry;
+
   return [
     new BuiltinAgentPlugin(),
     new FileWriteToolPlugin(options.sandboxRoot),
@@ -203,6 +217,7 @@ export function createBuiltinPlugins(options: { sandboxRoot?: string } = {}): An
     new SupervisorPatternPlugin(),
     new FanOutFanInPatternPlugin(),
     new RedBluePatternPlugin(),
+    ...(patternRegistry ? [new CompositePatternPlugin(patternRegistry)] : []),
     new AllowAllPolicyRulePlugin(),
     new RetryRecoveryStrategyPlugin(),
     new MajorityConsensusRulePlugin(),
@@ -213,9 +228,12 @@ export function createBuiltinPlugins(options: { sandboxRoot?: string } = {}): An
 
 export async function registerBuiltinPlugins(
   registry: PluginRegistry,
-  options: { sandboxRoot?: string; replace?: boolean } = {}
+  options: { sandboxRoot?: string; replace?: boolean; patternRegistry?: PatternRegistry } = {}
 ): Promise<void> {
-  const builtins = createBuiltinPlugins({ sandboxRoot: options.sandboxRoot });
+  const builtins = createBuiltinPlugins({
+    sandboxRoot: options.sandboxRoot,
+    patternRegistry: options.patternRegistry,
+  });
   for (const plugin of builtins) {
     await registry.register(plugin, { replace: options.replace });
   }
