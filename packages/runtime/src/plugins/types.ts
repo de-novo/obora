@@ -1,5 +1,5 @@
 import type { AuditEvent, AuditFilter } from "../audit/types.js";
-import type { PatternContext, PatternResult } from "../patterns/types.js";
+import type { PatternRuntimeContext, PatternRuntimeResult } from "../patterns/types.js";
 
 export type PluginType =
   | "agent"
@@ -32,7 +32,7 @@ export interface ToolPlugin extends OboraPlugin {
 
 export interface PatternPlugin extends OboraPlugin {
   type: "pattern";
-  execute(context: PatternContext): Promise<PatternResult>;
+  execute(context: PatternRuntimeContext): Promise<PatternRuntimeResult>;
 }
 
 export interface PolicyRulePlugin extends OboraPlugin {

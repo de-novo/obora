@@ -1,9 +1,10 @@
-import type { CollaborationPattern, PatternContext, PatternResult } from "../types.js";
+import { CollaborationPatternBase, type BuiltinPatternKind, type PatternResult, type PatternRuntimeContext } from "../types.js";
 
-export class PipelinePattern implements CollaborationPattern {
+export class PipelinePattern extends CollaborationPatternBase {
   readonly name = "pipeline";
+  readonly kind: BuiltinPatternKind = "pipeline";
 
-  async execute(context: PatternContext): Promise<PatternResult> {
+  protected async onExecute(context: PatternRuntimeContext): Promise<PatternResult> {
     const steps = context.steps ?? [];
     let current = context.input;
 

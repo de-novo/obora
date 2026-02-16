@@ -118,6 +118,7 @@ describe("PatternRegistry + PipelinePattern", () => {
     registry.register(new PipelinePattern());
 
     const result = await registry.get("pipeline").execute({
+      pattern: "pipeline",
       input: 1,
       steps: [(value) => Number(value) + 2, (value) => Number(value) * 3],
     });

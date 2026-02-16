@@ -1,0 +1,63 @@
+import { describe, expect, it } from "vitest";
+
+import { PipelinePattern } from "../builtin/PipelinePattern.js";
+import {
+  BUILTIN_PATTERN_KINDS,
+  PATTERN_BLACKBOARD_DOMAIN_MAP,
+  PATTERN_ERROR_CODE_MAP,
+  OboraErrorCode,
+  isBuiltinPatternKind,
+} from "../types.js";
+import { createBuiltinPlugins } from "../../plugins/builtins.js";
+
+describe("Pattern runtime contracts", () => {
+  it("defines exactly 8 built-in pattern kinds", () => {
+    expect(BUILTIN_PATTERN_KINDS).toEqual([
+      "pipeline",
+      "discussion",
+      "consensus",
+      "brainstorming",
+      "peer-review",
+      "red-blue",
+      "fan-out-fan-in",
+      "supervisor",
+    ]);
+  });
+
+  it("maps all built-in patterns to blackboard domains", () => {
+    for (const kind of BUILTIN_PATTERN_KINDS) {
+      expect(PATTERN_BLACKBOARD_DOMAIN_MAP[kind].length).toBeGreaterThan(0);
+    }
+  });
+
+  it("maps failure/timeout/escalation codes for all built-in patterns", () => {
+    for (const kind of BUILTIN_PATTERN_KINDS) {
+      const mapping = PATTERN_ERROR_CODE_MAP[kind];
+      expect(mapping.failure).toBeDefined();
+      expect(mapping.timeout).toBeDefined();
+      expect(mapping.escalation).toBe(OboraErrorCode.RECOVERY_ESCALATION_TIMEOUT);
+    }
+  });
+
+  it("keeps M1 pipeline behavior and exposes M2 pattern runtime result", async () => {
+    const pattern = new PipelinePattern();
+
+    const result = await pattern.execute({
+      pattern: "pipeline",
+      input: 2,
+      steps: [(value) => Number(value) + 3, (value) => Number(value) * 2],
+      config: { stages: ["a", "b"] },
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.output).toBe(10);
+    expect(result.metadata?.steps).toBe(2);
+    expect(result.pattern).toBe("pipeline");
+  });
+
+  it("registers pipeline built-in as pattern plugin wrapper", () => {
+    const patternPlugin = createBuiltinPlugins().find((plugin) => plugin.type === "pattern" && plugin.name === "pipeline");
+    expect(patternPlugin).toBeDefined();
+    expect(isBuiltinPatternKind(patternPlugin!.name)).toBe(true);
+  });
+});
