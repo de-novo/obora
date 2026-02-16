@@ -6,6 +6,7 @@ import type { AuditEvent, AuditFilter } from "../audit/types.js";
 import { PipelinePattern } from "../patterns/builtin/PipelinePattern.js";
 import { DiscussionPattern } from "../patterns/builtin/DiscussionPattern.js";
 import { ConsensusPattern } from "../patterns/builtin/ConsensusPattern.js";
+import { BrainstormPattern } from "../patterns/builtin/BrainstormPattern.js";
 import type {
   AgentPlugin,
   AnyPlugin,
@@ -93,6 +94,12 @@ export class ConsensusPatternPlugin extends ConsensusPattern implements PatternP
   readonly version = "1.0.0";
 }
 
+export class BrainstormPatternPlugin extends BrainstormPattern implements PatternPlugin {
+  readonly type = "pattern" as const;
+  readonly name = "brainstorming";
+  readonly version = "1.0.0";
+}
+
 export class AllowAllPolicyRulePlugin implements PolicyRulePlugin {
   readonly type = "policy-rule" as const;
   readonly name = "allow-all-policy";
@@ -163,6 +170,7 @@ export function createBuiltinPlugins(options: { sandboxRoot?: string } = {}): An
     new PipelinePatternPlugin(),
     new DiscussionPatternPlugin(),
     new ConsensusPatternPlugin(),
+    new BrainstormPatternPlugin(),
     new AllowAllPolicyRulePlugin(),
     new RetryRecoveryStrategyPlugin(),
     new MajorityConsensusRulePlugin(),
