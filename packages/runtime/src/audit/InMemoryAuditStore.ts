@@ -1,4 +1,4 @@
-import type { AuditTrail } from "./AuditTrail.js";
+import type { AuditTrail, ReplayOptions, ReplayResult } from "./AuditTrail.js";
 import type { AuditEvent, AuditEventType, AuditFilter } from "./types.js";
 
 function cloneEvent(event: AuditEvent): AuditEvent {
@@ -16,6 +16,16 @@ function escapeCsv(value: unknown): string {
   const raw = typeof value === "string" ? value : JSON.stringify(value);
   const escaped = raw.replaceAll('"', '""');
   return `"${escaped}"`;
+}
+
+function sleep(ms: number): Promise<void> {
+  if (ms <= 0) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 export class InMemoryAuditStore implements AuditTrail {
@@ -63,6 +73,49 @@ export class InMemoryAuditStore implements AuditTrail {
     }
 
     return result.map(cloneEvent);
+  }
+
+  async replay(options: ReplayOptions): Promise<ReplayResult> {
+    const mode = options.mode ?? "event-playback";
+    if (mode !== "event-playback") {
+      throw new Error(`Replay mode '${mode}' is not supported in M1`);
+    }
+
+    const speed = options.speed ?? 1;
+    if (!Number.isFinite(speed) || speed <= 0) {
+      throw new Error("Replay speed must be a positive finite number");
+    }
+
+    const sequence = await this.query({ executionId: options.executionId });
+    const startedAt = new Date();
+
+    for (let index = 0; index < sequence.length; index += 1) {
+      const current = sequence[index];
+      const next = sequence[index + 1];
+
+      if (options.onEvent) {
+        await options.onEvent(cloneEvent(current), index);
+      }
+
+      if (next) {
+        const deltaMs = next.timestamp.getTime() - current.timestamp.getTime();
+        if (deltaMs > 0) {
+          await sleep(deltaMs / speed);
+        }
+      }
+    }
+
+    const completedAt = new Date();
+
+    return {
+      mode: "event-playback",
+      executionId: options.executionId,
+      totalEvents: sequence.length,
+      startedAt,
+      completedAt,
+      durationMs: completedAt.getTime() - startedAt.getTime(),
+      sequence,
+    };
   }
 
   async export(executionId: string, format: "json" | "csv"): Promise<string> {
