@@ -75,3 +75,11 @@
 - 실행 테스트: `pnpm --filter @obora-kit/board test -- test/BoardFacade.test.ts`
 - 결과: 통과 (1 file, 21 tests)
 - 메모: 변경 없이 회귀 통과 확인, 조건부완료 상태 유지
+
+## 야간 점검 로그 (2026-02-17 08:27 KST)
+- 점검 단위: blackboard-first 기준 TASK-040 facade 회귀 검증 1건
+- 기준 브랜치: `origin/main` (`ef54166`)
+- 작업 브랜치: `main` (HEAD 유지, `21424c4`)
+- 실행 테스트: `pnpm --filter @obora-kit/board test -- test/BoardFacade.test.ts`
+- 결과: 통과 (1 file, 21 tests)
+- 메모: 블로커 없음, 조건부완료 상태 유지
