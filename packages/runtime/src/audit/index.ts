@@ -5,6 +5,7 @@ export * from "./DefaultAuditRecorder.js";
 export * from "./EventBusAdapter.js";
 export * from "./ReExecutionPlanner.js";
 export * from "./ReExecutionDiffReport.js";
+export * from "./ReExecutionRuntime.js";
 
 // Legacy re-exports kept for compatibility during M1 migration.
 export * from "./event-bus.js";

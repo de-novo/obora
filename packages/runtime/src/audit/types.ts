@@ -16,12 +16,22 @@ export type AuditEventType =
   | "consensus_result"
   | "gate_wait"
   | "gate_resolve"
+  | "gate_assignment_created"
+  | "gate_assignment_reassigned"
+  | "gate_assignment_expired"
+  | "gate_approval_decision"
+  | "gate_sla_warning"
+  | "gate_sla_expired"
   | "recovery_start"
   | "recovery_end"
   | "snapshot_create"
   | "snapshot_restore"
   | "plugin_load"
   | "plugin_unload"
+  | "reexecution_start"
+  | "reexecution_step_start"
+  | "reexecution_step_end"
+  | "reexecution_end"
   | "error";
 
 export interface AuditEvent {
