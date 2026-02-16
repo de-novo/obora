@@ -40,7 +40,37 @@ function normalizeToolPolicy(input: unknown, index: number): ToolPolicy {
     };
   }
 
-  return { name, effect, when: normalizedWhen };
+  const transform = input.transform;
+  let normalizedTransform: ToolPolicy["transform"];
+  if (transform !== undefined) {
+    if (!isObject(transform) || typeof transform.fn !== "string" || transform.fn.length === 0) {
+      throw new Error(`Invalid tools[${index}].transform.fn: expected non-empty string`);
+    }
+    normalizedTransform = { fn: transform.fn };
+  }
+
+  const gate = input.gate;
+  let normalizedGate: ToolPolicy["gate"];
+  if (gate !== undefined) {
+    if (!isObject(gate)) {
+      throw new Error(`Invalid tools[${index}].gate: expected object`);
+    }
+
+    if (gate.type !== "human-approval" && gate.type !== "consensus" && gate.type !== "external") {
+      throw new Error(`Invalid tools[${index}].gate.type: ${String(gate.type)}`);
+    }
+
+    if (gate.timeout !== undefined && typeof gate.timeout !== "string") {
+      throw new Error(`Invalid tools[${index}].gate.timeout: expected string`);
+    }
+
+    normalizedGate = {
+      type: gate.type,
+      timeout: gate.timeout,
+    };
+  }
+
+  return { name, effect, when: normalizedWhen, transform: normalizedTransform, gate: normalizedGate };
 }
 
 function normalizeSandboxPolicy(input: unknown): SandboxPolicy | undefined {
@@ -85,6 +115,7 @@ function normalizeResourcePolicy(input: unknown): ResourcePolicy | undefined {
   const maxTokens = input.maxTokens ?? input.max_tokens;
   const maxCostUsd = input.maxCostUsd ?? input.max_cost_usd;
   const maxToolCalls = input.maxToolCalls ?? input.max_tool_calls;
+  const maxOutputSize = input.maxOutputSize ?? input.max_output_size;
 
   const numericFields: Array<[string, unknown]> = [
     ["resources.timeoutMs", timeoutMs],
@@ -98,8 +129,11 @@ function normalizeResourcePolicy(input: unknown): ResourcePolicy | undefined {
       throw new Error(`Invalid ${field}: expected number`);
     }
   }
+  if (maxOutputSize !== undefined && typeof maxOutputSize !== "string") {
+    throw new Error("Invalid resources.maxOutputSize: expected string");
+  }
 
-  return { timeoutMs, maxTokens, maxCostUsd, maxToolCalls };
+  return { timeoutMs, maxTokens, maxCostUsd, maxToolCalls, maxOutputSize };
 }
 
 function normalizeGatePolicy(input: unknown, index: number): GatePolicy {

@@ -8,7 +8,13 @@ tools:
     effect: allow
 sandbox:
   root: ./output
-  denyOutsideRoot: true
+  deny_outside_root: true
 resources:
-  timeoutMs: 300000
-  maxTokens: 100000
+  timeout_ms: 300000
+  max_tokens: 100000
+gates:
+  - step: deploy
+    type: human-approval
+    required: true
+    timeout: 24h
+    fallback: escalate
