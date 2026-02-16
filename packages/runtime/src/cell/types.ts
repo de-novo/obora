@@ -16,11 +16,15 @@ export interface StateChange {
 }
 
 export interface ToolCallRecord {
+  id: string;
   toolName: string;
   params: unknown;
-  result: unknown;
+  status: "success" | "error";
+  result?: unknown;
+  error?: string;
+  startedAt: Date;
+  endedAt: Date;
   durationMs: number;
-  timestamp: Date;
 }
 
 export interface CellMetrics {

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { BaseActor } from "./BaseActor.js";
 import type { IBlackboard } from "../_legacy/actor/types/blackboard.js";
 import { createActorId } from "../_legacy/actor/types/actor.js";
@@ -159,7 +160,7 @@ export class DefaultExecutionCell implements ExecutionCell {
     this.actor = new CellActor(this.id, blackboard, messageBus, async (task) => {
       await this.waitIfSuspended();
       this.throwIfAborted();
-      return this.defaultRunner(task, this.buildInstrumentedContext());
+      return this.defaultRunner(task, this.buildInstrumentedContext(task));
     });
   }
 
@@ -181,6 +182,8 @@ export class DefaultExecutionCell implements ExecutionCell {
     const startMs = Date.now();
 
     try {
+      await Promise.resolve(this.rawContext.policy?.beforeExecute?.(task));
+
       this.actor.setTask(task);
       const observation = await this.actor.observe();
       await this.waitIfSuspended();
@@ -210,6 +213,7 @@ export class DefaultExecutionCell implements ExecutionCell {
 
       this.statusValue = "completed";
       await this.recordAudit("cell_end", { status: this.statusValue, taskId: task.id });
+      await Promise.resolve(this.rawContext.policy?.afterExecute?.(task, { success: true, output }));
 
       return {
         success: true,
@@ -225,6 +229,12 @@ export class DefaultExecutionCell implements ExecutionCell {
         taskId: task.id,
         reason: (error as Error).message,
       });
+      await Promise.resolve(
+        this.rawContext.policy?.afterExecute?.(task, {
+          success: false,
+          output: { error: (error as Error).message },
+        })
+      );
 
       return {
         success: false,
@@ -269,11 +279,11 @@ export class DefaultExecutionCell implements ExecutionCell {
     this.suspendedWaiter = null;
   }
 
-  private buildInstrumentedContext(): CellContext {
+  private buildInstrumentedContext(task: Task): CellContext {
     return {
       ...this.rawContext,
       blackboard: this.wrapBlackboard(this.rawContext.blackboard),
-      tools: this.wrapTools(this.rawContext.tools),
+      tools: this.wrapTools(this.rawContext.tools, task),
     };
   }
 
@@ -293,7 +303,7 @@ export class DefaultExecutionCell implements ExecutionCell {
     };
   }
 
-  private wrapTools(tools: ToolSet): ToolSet {
+  private wrapTools(tools: ToolSet, task: Task): ToolSet {
     return {
       invoke: async (toolName: string, params: unknown) => {
         if (
@@ -303,25 +313,105 @@ export class DefaultExecutionCell implements ExecutionCell {
           throw new Error(`Tool call limit exceeded: ${this.rawContext.config.maxToolCalls}`);
         }
 
+        await Promise.resolve(
+          this.rawContext.policy?.beforeToolCall?.({
+            cellId: this.id,
+            toolName,
+            params,
+            task,
+          })
+        );
+
+        const toolCallId = randomUUID();
+        const startedAt = new Date();
         const start = Date.now();
-        const result = await tools.invoke(toolName, params);
-        const durationMs = Date.now() - start;
 
-        this.toolCalls.push({
-          toolName,
-          params,
-          result,
-          durationMs,
-          timestamp: new Date(),
-        });
+        try {
+          const result = await tools.invoke(toolName, params);
+          const durationMs = Date.now() - start;
+          const endedAt = new Date();
 
-        await this.recordAudit("tool_call", {
-          cellId: this.id,
-          toolName,
-          durationMs,
-        });
+          this.toolCalls.push({
+            id: toolCallId,
+            toolName,
+            params,
+            status: "success",
+            result,
+            startedAt,
+            endedAt,
+            durationMs,
+          });
 
-        return result;
+          await this.recordAudit("tool_call", {
+            cellId: this.id,
+            toolCallId,
+            toolName,
+            durationMs,
+            status: "success",
+          });
+          await this.recordAudit("tool_result", {
+            cellId: this.id,
+            toolCallId,
+            toolName,
+            durationMs,
+          });
+
+          await Promise.resolve(
+            this.rawContext.policy?.afterToolCall?.({
+              cellId: this.id,
+              toolName,
+              params,
+              task,
+              durationMs,
+              result,
+            })
+          );
+
+          return result;
+        } catch (error) {
+          const durationMs = Date.now() - start;
+          const endedAt = new Date();
+          const normalizedError = error instanceof Error ? error : new Error(String(error));
+
+          this.toolCalls.push({
+            id: toolCallId,
+            toolName,
+            params,
+            status: "error",
+            error: normalizedError.message,
+            startedAt,
+            endedAt,
+            durationMs,
+          });
+
+          await this.recordAudit("tool_call", {
+            cellId: this.id,
+            toolCallId,
+            toolName,
+            durationMs,
+            status: "error",
+          });
+          await this.recordAudit("tool_error", {
+            cellId: this.id,
+            toolCallId,
+            toolName,
+            durationMs,
+            error: normalizedError.message,
+          });
+
+          await Promise.resolve(
+            this.rawContext.policy?.afterToolCall?.({
+              cellId: this.id,
+              toolName,
+              params,
+              task,
+              durationMs,
+              error: normalizedError,
+            })
+          );
+
+          throw normalizedError;
+        }
       },
     };
   }

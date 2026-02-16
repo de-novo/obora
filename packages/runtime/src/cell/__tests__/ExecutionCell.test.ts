@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { DefaultExecutionCell } from "../ExecutionCell.js";
 import type { CellContext } from "../CellContext.js";
 import type { Task } from "../types.js";
@@ -156,5 +156,57 @@ describe("DefaultExecutionCell", () => {
     expect(result.metrics.endTime).toBeInstanceOf(Date);
     expect(result.metrics.durationMs).toBeGreaterThanOrEqual(0);
     expect(result.metrics.endTime.getTime()).toBeGreaterThanOrEqual(result.metrics.startTime.getTime());
+  });
+
+  it("invokes policy hooks around execution and tool calls", async () => {
+    const beforeExecute = vi.fn();
+    const afterExecute = vi.fn();
+    const beforeToolCall = vi.fn();
+    const afterToolCall = vi.fn();
+
+    const cell = new DefaultExecutionCell({
+      id: "cell-8",
+      context: createContext({
+        policy: {
+          beforeExecute,
+          afterExecute,
+          beforeToolCall,
+          afterToolCall,
+        },
+      }),
+      runTask: async (_task, context) => {
+        return context.tools.invoke("echo", { foo: "bar" });
+      },
+    });
+
+    const result = await cell.execute(createTask());
+
+    expect(result.success).toBe(true);
+    expect(beforeExecute).toHaveBeenCalledTimes(1);
+    expect(afterExecute).toHaveBeenCalledTimes(1);
+    expect(beforeToolCall).toHaveBeenCalledTimes(1);
+    expect(afterToolCall).toHaveBeenCalledTimes(1);
+  });
+
+  it("tracks failed tool call records", async () => {
+    const cell = new DefaultExecutionCell({
+      id: "cell-9",
+      context: createContext({
+        tools: {
+          invoke: async () => {
+            throw new Error("tool failed");
+          },
+        },
+      }),
+      runTask: async (_task, context) => context.tools.invoke("fail-tool", { a: 1 }),
+    });
+
+    const result = await cell.execute(createTask());
+
+    expect(result.success).toBe(false);
+    expect(result.toolCalls).toHaveLength(1);
+    expect(result.toolCalls[0].toolName).toBe("fail-tool");
+    expect(result.toolCalls[0].status).toBe("error");
+    expect(result.toolCalls[0].error).toBe("tool failed");
   });
 });
