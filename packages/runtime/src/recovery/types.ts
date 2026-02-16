@@ -1,4 +1,4 @@
-export type RecoveryStrategyType = "retry" | "rollback" | "escalate" | "alternative";
+export type RecoveryStrategyType = "retry" | "rollback" | "escalate" | "alternative" | "custom";
 
 export interface CellFailure {
   executionId: string;
@@ -40,11 +40,17 @@ export interface AlternativeRecoveryStrategy extends BaseRecoveryStrategy {
   payload?: unknown;
 }
 
+export interface CustomRecoveryStrategy extends BaseRecoveryStrategy {
+  type: "custom";
+  handlerPath: string;
+}
+
 export type RecoveryStrategy =
   | RetryRecoveryStrategy
   | RollbackRecoveryStrategy
   | EscalateRecoveryStrategy
-  | AlternativeRecoveryStrategy;
+  | AlternativeRecoveryStrategy
+  | CustomRecoveryStrategy;
 
 export interface RetryExecutor {
   executeRetry(failure: CellFailure): Promise<unknown>;

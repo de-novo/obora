@@ -320,6 +320,25 @@ steps:
       expect(() => parseWorkflow(yaml, { strict: true })).toThrow(/Unknown/);
     });
 
+
+    it('accepts workflow policy/audit fields in strict mode', () => {
+      const yaml = `
+name: strict-with-policy-audit
+policy: ./policy/prod.yaml
+audit:
+  store: duckdb
+  path: ./audit.db
+steps:
+  - name: plan
+    agent: architect
+`;
+
+      const workflow = parseWorkflow(yaml, { strict: true });
+      expect(workflow.policy).toBe('./policy/prod.yaml');
+      expect(workflow.audit?.store).toBe('duckdb');
+      expect(workflow.audit?.path).toBe('./audit.db');
+    });
+
     it('should throw on unknown config fields in strict mode', () => {
       const yaml = `
 name: test-workflow

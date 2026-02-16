@@ -112,6 +112,13 @@ export interface Step {
 /**
  * Complete workflow definition
  */
+export interface AuditConfig {
+  store: "duckdb" | "sqlite" | "custom";
+  path?: string;
+  retention?: string;
+  custom?: string;
+}
+
 export interface RecoveryStrategyConfig {
   on_fail: "retry" | "rollback" | "escalate" | "alternative" | "custom";
   max_retries?: number;
@@ -133,10 +140,14 @@ export interface Workflow {
   mode?: WorkflowMode;
   /** Global workflow configuration */
   config?: WorkflowConfig;
+  /** Workflow-level policy path */
+  policy?: string;
   /** List of steps */
   steps: Step[];
   /** Workflow-level recovery by step name */
   recovery?: Record<string, RecoveryStrategyConfig>;
+  /** Workflow-level audit configuration */
+  audit?: AuditConfig;
 }
 
 /**

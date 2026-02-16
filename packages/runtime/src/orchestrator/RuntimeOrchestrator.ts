@@ -38,6 +38,16 @@ interface WaitingContext {
   input: unknown;
 }
 
+interface StepGateDecision {
+  gateType: GateWaitState["gateType"];
+  config?: { timeout?: string; fallback?: "fail" | "escalate" };
+}
+
+interface RuntimeGateDecision extends Extract<PolicyDecision, { type: "gate" }> {
+  gateType: GateWaitState["gateType"];
+  config?: { timeout?: string; fallback?: "fail" | "escalate" };
+}
+
 const inMemoryGateStateStore = (): GateWaitStateStore => {
   const states = new Map<string, GateWaitState>();
   return {
@@ -371,26 +381,31 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
       return { step, status: "failed", error: decision.reason };
     }
 
-    if (decision.type === "gate") {
+    const gateDecision = this.mergeGateDecision(
+      decision.type === "gate" ? decision : undefined,
+      this.extractGateConfig(step)
+    );
+
+    if (gateDecision) {
       const approvedKey = `${execution.id}:${step.name}`;
       if (this.approvedGateSteps.has(approvedKey)) {
         this.approvedGateSteps.delete(approvedKey);
       } else {
-        const gateWait = this.createGateWaitState(execution.id, step, decision);
+        const gateWait = this.createGateWaitState(execution.id, step, gateDecision);
         await this.recordAudit(execution.id, "gate_wait", {
           stepName: step.name,
-          gateType: decision.gateType,
+          gateType: gateDecision.gateType,
           timeout: gateWait.timeout,
         });
         if (this.options.onGate) {
-          const gateResult = await this.options.onGate(execution, step, decision);
+          const gateResult = await this.options.onGate(execution, step, gateDecision);
           if (gateResult === "rejected") {
             record.status = "failed";
-            record.error = `Gate rejected: ${decision.gateType}`;
+            record.error = `Gate rejected: ${gateDecision.gateType}`;
             record.endedAt = this.now();
             await this.recordAudit(execution.id, "gate_resolve", {
               stepName: step.name,
-              gateType: decision.gateType,
+              gateType: gateDecision.gateType,
               status: "rejected",
             });
             await this.recordAudit(execution.id, "step_end", {
@@ -402,12 +417,12 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
           }
           await this.recordAudit(execution.id, "gate_resolve", {
             stepName: step.name,
-            gateType: decision.gateType,
+            gateType: gateDecision.gateType,
             status: "approved",
           });
         } else {
           record.status = "waiting";
-          record.error = `Gate required: ${decision.gateType}`;
+          record.error = `Gate required: ${gateDecision.gateType}`;
           record.endedAt = this.now();
           execution.waitingGate = gateWait;
           await this.gateWaitStateStore.save(gateWait);
@@ -559,6 +574,78 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
     return { step, status: "failed", error };
   }
 
+  private extractGateConfig(step: Step): StepGateDecision | undefined {
+    const rawStep = step as Step & { gate?: unknown; gate_config?: unknown; config?: Record<string, unknown> };
+    const gate = rawStep.gate;
+    const gateConfig = rawStep.gate_config ?? (rawStep.config as Record<string, unknown> | undefined)?.gate_config;
+
+    const validGateTypes: GateWaitState["gateType"][] = ["human-approval", "consensus", "external"];
+
+    const parseConfig = (value: unknown): StepGateDecision["config"] => {
+      if (!value || typeof value !== "object") {
+        return undefined;
+      }
+      const config = value as Record<string, unknown>;
+      return {
+        timeout: typeof config.timeout === "string" ? config.timeout : undefined,
+        fallback: config.fallback === "fail" || config.fallback === "escalate" ? config.fallback : undefined,
+      };
+    };
+
+    if (gate === undefined || gate === false) {
+      return undefined;
+    }
+
+    if (gate === true) {
+      const parsedConfig = parseConfig(gateConfig);
+      const gateType = parsedConfig && gateConfig && typeof gateConfig === "object"
+        && validGateTypes.includes((gateConfig as Record<string, unknown>).type as GateWaitState["gateType"])
+        ? (gateConfig as Record<string, unknown>).type as GateWaitState["gateType"]
+        : "human-approval";
+      return { gateType, config: parsedConfig };
+    }
+
+    if (typeof gate === "string" && validGateTypes.includes(gate as GateWaitState["gateType"])) {
+      return { gateType: gate as GateWaitState["gateType"], config: parseConfig(gateConfig) };
+    }
+
+    if (typeof gate === "object" && gate !== null) {
+      const gateObj = gate as Record<string, unknown>;
+      const gateType = typeof gateObj.type === "string" && validGateTypes.includes(gateObj.type as GateWaitState["gateType"])
+        ? gateObj.type as GateWaitState["gateType"]
+        : "human-approval";
+      const mergedConfig = { ...parseConfig(gateObj), ...parseConfig(gateConfig) };
+      return { gateType, config: mergedConfig };
+    }
+
+    return undefined;
+  }
+
+  private mergeGateDecision(
+    policyDecision?: Extract<PolicyDecision, { type: "gate" }>,
+    stepGate?: StepGateDecision
+  ): RuntimeGateDecision | undefined {
+    if (!policyDecision && !stepGate) {
+      return undefined;
+    }
+
+    const policyConfig = policyDecision?.config && typeof policyDecision.config === "object"
+      ? policyDecision.config as { timeout?: unknown; fallback?: unknown }
+      : undefined;
+
+    const mergedConfig = {
+      timeout: typeof policyConfig?.timeout === "string" ? policyConfig.timeout : undefined,
+      fallback: policyConfig?.fallback === "fail" || policyConfig?.fallback === "escalate" ? policyConfig.fallback : undefined,
+      ...stepGate?.config,
+    };
+
+    return {
+      type: "gate",
+      gateType: stepGate?.gateType ?? (policyDecision?.gateType as GateWaitState["gateType"] ?? "human-approval"),
+      config: mergedConfig,
+    };
+  }
+
   private extractConsensusConfig(step: Step) {
     const directConsensus = (step as Step & { consensus?: Record<string, unknown> }).consensus;
     const fallbackConsensus = (step.config as Record<string, unknown> | undefined)?.consensus as
@@ -570,6 +657,8 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
       return undefined;
     }
 
+    // SCHEMAS.md uses `consensus.min`; runtime consensus gate consumes `minRequired` internally.
+    // Keep backward compatibility with legacy `minRequired` while prioritizing `min`.
     const minRequired = typeof raw.min === "number"
       ? raw.min
       : typeof raw.minRequired === "number"
@@ -642,6 +731,10 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
       };
     }
 
+    if (raw.on_fail === "custom" && typeof raw.custom === "string") {
+      return { type: "custom" as const, handlerPath: raw.custom };
+    }
+
     return undefined;
   }
 
@@ -688,7 +781,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
   private createGateWaitState(
     executionId: string,
     step: Step,
-    decision: Extract<PolicyDecision, { type: "gate" }>
+    decision: RuntimeGateDecision
   ): GateWaitState {
     const config = (decision.config ?? {}) as { timeout?: string; fallback?: "fail" | "escalate" };
     return {

@@ -19,10 +19,11 @@ import type {
   Workflow,
   WorkflowConfig,
   WorkflowMode,
+  AuditConfig,
 } from "../types/workflow.js";
 
 // Known fields for strict mode validation
-const KNOWN_WORKFLOW_FIELDS = ["name", "version", "description", "mode", "config", "steps", "recovery"];
+const KNOWN_WORKFLOW_FIELDS = ["name", "version", "description", "mode", "config", "policy", "steps", "recovery", "audit"];
 
 const KNOWN_STEP_FIELDS = [
   "name",
@@ -355,6 +356,28 @@ function parseConfig(raw: unknown, options: ParserOptions): WorkflowConfig | und
   };
 }
 
+function parseAudit(raw: unknown): AuditConfig | undefined {
+  if (raw === undefined) {
+    return undefined;
+  }
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw new ParseError("E2003", "'audit' must be an object");
+  }
+
+  const audit = raw as Record<string, unknown>;
+  const store = audit.store;
+  if (store !== "duckdb" && store !== "sqlite" && store !== "custom") {
+    throw new ParseError("E2003", "'audit.store' must be one of: duckdb, sqlite, custom");
+  }
+
+  return {
+    store,
+    path: typeof audit.path === "string" ? audit.path : undefined,
+    retention: typeof audit.retention === "string" ? audit.retention : undefined,
+    custom: typeof audit.custom === "string" ? audit.custom : undefined,
+  };
+}
+
 function parseRecovery(raw: unknown): Record<string, RecoveryStrategyConfig> | undefined {
   if (raw === undefined) {
     return undefined;
@@ -566,6 +589,10 @@ export function parseWorkflow(yamlContent: string, options: ParserOptions = {}):
     throw new ParseError("E2003", "'description' must be a string");
   }
 
+  if (obj.policy !== undefined && typeof obj.policy !== "string") {
+    throw new ParseError("E2003", "'policy' must be a string");
+  }
+
   // Validate mode if present
   if (obj.mode !== undefined) {
     const validModes: WorkflowMode[] = ["auto", "supervised", "gated", "manual"];
@@ -590,8 +617,10 @@ export function parseWorkflow(yamlContent: string, options: ParserOptions = {}):
     description: obj.description as string | undefined,
     mode: obj.mode as WorkflowMode | undefined,
     config: parseConfig(obj.config, options),
+    policy: obj.policy as string | undefined,
     steps,
     recovery: parseRecovery(obj.recovery),
+    audit: parseAudit(obj.audit),
   };
 }
 

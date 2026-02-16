@@ -185,6 +185,37 @@ steps:
     expect(resumed.completedSteps).toEqual(["build", "deploy"]);
   });
 
+
+  it("uses step.gate and step.gate_config even when policy allows", async () => {
+    const orchestrator = new DefaultRuntimeOrchestrator({
+      cellManager: createCellManager([]),
+      policyEngine: createPolicyEngine(() => ({ type: "allow" })),
+    });
+
+    orchestrator.define("step-gate-case", {
+      name: "step-gate-case",
+      steps: [
+        {
+          name: "review",
+          agent: "verifier",
+          gate: true,
+          gate_config: {
+            type: "external",
+            timeout: "45m",
+            fallback: "escalate",
+          },
+        } as unknown as { name: string; agent: string },
+      ],
+    });
+
+    const waiting = await orchestrator.run("step-gate-case", {});
+    expect(waiting.status).toBe("waiting");
+    expect(waiting.waitingGate?.stepName).toBe("review");
+    expect(waiting.waitingGate?.gateType).toBe("external");
+    expect(waiting.waitingGate?.timeout).toBe("45m");
+    expect(waiting.waitingGate?.fallback).toBe("escalate");
+  });
+
   it("integrates consensus gate and fails on consensus rejection", async () => {
     const executed: string[] = [];
     const consensusGate = new DefaultConsensusGate({
@@ -273,6 +304,31 @@ steps:
     expect(execution.status).toBe("completed");
     expect(execution.stepRecords.unstable.recovery?.status).toBe("recovered");
     expect(retryExecutor.executeRetry).toHaveBeenCalledOnce();
+  });
+
+
+  it("parses workflow.recovery custom strategy", async () => {
+    const orchestrator = new DefaultRuntimeOrchestrator({
+      cellManager: createCellManager([], "unstable"),
+      policyEngine: createPolicyEngine(),
+      recoveryEngine: new RecoveryEngine(),
+    });
+
+    orchestrator.define("recovery-custom-case", {
+      name: "recovery-custom-case",
+      steps: [{ name: "unstable", agent: "executor" }],
+      recovery: {
+        unstable: {
+          on_fail: "custom",
+          custom: "./handlers/recover.ts",
+        },
+      },
+    });
+
+    const execution = await orchestrator.run("recovery-custom-case", {});
+    expect(execution.status).toBe("failed");
+    expect(execution.stepRecords.unstable.recovery?.strategy).toBe("custom");
+    expect(execution.stepRecords.unstable.recovery?.error?.message).toContain("unsupported recovery strategy");
   });
 
   it("runs state binding after step completion and records end-to-end audit events", async () => {
