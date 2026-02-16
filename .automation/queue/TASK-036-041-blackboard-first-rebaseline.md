@@ -405,3 +405,13 @@ Board 단계 태스크를 blackboard 우선 구현 순서로 재배치하고, �
 - 실행: `pnpm --filter @obora-kit/blackboard test -- test/core/accessors`
 - 결과: ✅ `3 files / 82 tests passed` (665ms)
 - 판정: 블로커 없음, 다음 실행은 blackboard snapshot replayer 최소검증 1건(`pnpm --filter @obora-kit/blackboard test -- test/snapshot/replayer.test.ts`) 점검 권장
+
+## 야간 자동 점검 로그 (2026-02-17 02:27 KST)
+- 기준 브랜치: `origin/main` (`ef54166`)
+- 작업 브랜치(HEAD 유지): `main` (`f0cabe3`, local ahead 83)
+- 점검 단위: blackboard snapshot replayer 최소검증 1건
+- 1차 시도: `pnpm --filter @obora-kit/blackboard test -- test/snapshot/replayer.test.ts`
+- 1차 결과: ❌ No test files found (replayer 테스트 파일 미존재 확인)
+- 재선정 실행: `pnpm --filter @obora-kit/blackboard test -- test/snapshot/snapshot-manager.test.ts`
+- 재선정 결과: ✅ `1 file / 43 tests passed` (420ms)
+- 판정: 블로커 없음, 다음 실행은 blackboard snapshot serializer 최소검증 1건(`pnpm --filter @obora-kit/blackboard test -- test/snapshot/serializer.test.ts`) 점검 권장
