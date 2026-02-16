@@ -83,6 +83,11 @@ describe("Expression DSL parser", () => {
   it("handles parse errors", () => {
     expect(() => parseExpression('context.stepName == "deploy" &&')).toThrow("POLICY_2007");
   });
+
+  it("rejects deeply nested expressions beyond max depth", () => {
+    const nested = `${"(".repeat(60)}context.stepName == "deploy"${")".repeat(60)}`;
+    expect(() => parseExpression(nested)).toThrow("Expression nesting depth exceeds maximum (50)");
+  });
 });
 
 describe("Expression DSL evaluator", () => {

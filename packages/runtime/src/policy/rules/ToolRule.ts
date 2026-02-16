@@ -114,9 +114,13 @@ export class ToolRule implements PolicyRulePlugin {
       return null;
     }
 
-    const dynamicRule = resolveDynamicToolRule(action, context, policies.dynamicToolRules);
-    if (dynamicRule) {
-      return this.toDecisionFromDynamicRule(action, dynamicRule);
+    const dynamicResolution = resolveDynamicToolRule(action, context, policies.dynamicToolRules);
+    if (dynamicResolution.denyDecision) {
+      return dynamicResolution.denyDecision;
+    }
+
+    if (dynamicResolution.matchedRule) {
+      return this.toDecisionFromDynamicRule(action, dynamicResolution.matchedRule);
     }
 
     for (const rule of policies.tools ?? []) {

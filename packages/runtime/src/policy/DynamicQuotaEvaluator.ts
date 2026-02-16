@@ -23,6 +23,7 @@ const fieldToReason: Record<DynamicResourceLimit["field"], string> = {
   duration_ms: "Timeout exceeded",
 };
 
+const MAX_CACHE_SIZE = 1000;
 const expressionCache = new Map<string, ExpressionAST>();
 
 function getExpressionAst(expression: string): ExpressionAST {
@@ -32,6 +33,12 @@ function getExpressionAst(expression: string): ExpressionAST {
   }
 
   const ast = parseExpression(expression);
+  if (expressionCache.size >= MAX_CACHE_SIZE) {
+    const oldestKey = expressionCache.keys().next().value;
+    if (oldestKey !== undefined) {
+      expressionCache.delete(oldestKey);
+    }
+  }
   expressionCache.set(expression, ast);
   return ast;
 }
@@ -60,7 +67,19 @@ export function evaluateDynamicResourceDecision(
   const limits = policy.dynamicQuota?.limits ?? [];
 
   for (const limit of limits) {
-    if (!conditionMatches(limit, action, context)) {
+    let matches = false;
+    try {
+      matches = conditionMatches(limit, action, context);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        type: "deny",
+        reason: `dynamic quota condition evaluation failed: ${message}`,
+        rule: "dynamic-quota",
+      };
+    }
+
+    if (!matches) {
       continue;
     }
 
@@ -116,3 +135,10 @@ export function getStaticRulePath(field: DynamicResourceLimit["field"]): string 
 export function getStaticReason(field: DynamicResourceLimit["field"]): string {
   return fieldToReason[field];
 }
+
+export const __internal = {
+  getExpressionCacheSize: (): number => expressionCache.size,
+  clearExpressionCache: (): void => {
+    expressionCache.clear();
+  },
+};

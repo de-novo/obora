@@ -49,6 +49,7 @@ export interface ArrayLiteralExpression {
   items: ExpressionAST[];
 }
 
+const MAX_DEPTH = 50;
 const ALLOWED_ROOTS = new Set(["action", "context", "state", "step", "execution", "actor", "metrics", "previousResults"]);
 const BLOCKED_FIELD_NAMES = new Set(["__proto__", "prototype", "constructor"]);
 const ALLOWED_FUNCTIONS = new Set(["contains", "matches", "startsWith", "endsWith", "in"]);
@@ -235,9 +236,21 @@ class Tokenizer {
 class Parser {
   private readonly tokens: Token[];
   private index = 0;
+  private depth = 0;
 
   constructor(tokens: Token[]) {
     this.tokens = tokens;
+  }
+
+  private enterDepth(): void {
+    this.depth += 1;
+    if (this.depth > MAX_DEPTH) {
+      throw new ExpressionParseError(`Expression nesting depth exceeds maximum (${MAX_DEPTH})`);
+    }
+  }
+
+  private exitDepth(): void {
+    this.depth = Math.max(0, this.depth - 1);
   }
 
   parse(): ExpressionAST {
@@ -247,99 +260,124 @@ class Parser {
   }
 
   private parseOrExpression(): ExpressionAST {
-    let left = this.parseAndExpression();
+    this.enterDepth();
+    try {
+      let left = this.parseAndExpression();
 
-    while (this.matchOperator("||")) {
-      const right = this.parseAndExpression();
-      left = { type: "logical", operator: "||", left, right };
+      while (this.matchOperator("||")) {
+        const right = this.parseAndExpression();
+        left = { type: "logical", operator: "||", left, right };
+      }
+
+      return left;
+    } finally {
+      this.exitDepth();
     }
-
-    return left;
   }
 
   private parseAndExpression(): ExpressionAST {
-    let left = this.parseUnaryExpression();
+    this.enterDepth();
+    try {
+      let left = this.parseUnaryExpression();
 
-    while (this.matchOperator("&&")) {
-      const right = this.parseUnaryExpression();
-      left = { type: "logical", operator: "&&", left, right };
+      while (this.matchOperator("&&")) {
+        const right = this.parseUnaryExpression();
+        left = { type: "logical", operator: "&&", left, right };
+      }
+
+      return left;
+    } finally {
+      this.exitDepth();
     }
-
-    return left;
   }
 
   private parseUnaryExpression(): ExpressionAST {
-    if (this.matchOperator("!")) {
-      return { type: "not", expression: this.parseUnaryExpression() };
-    }
+    this.enterDepth();
+    try {
+      if (this.matchOperator("!")) {
+        return { type: "not", expression: this.parseUnaryExpression() };
+      }
 
-    return this.parseComparisonExpression();
+      return this.parseComparisonExpression();
+    } finally {
+      this.exitDepth();
+    }
   }
 
   private parseComparisonExpression(): ExpressionAST {
-    const left = this.parsePrimaryExpression();
-    const token = this.peek();
+    this.enterDepth();
+    try {
+      const left = this.parsePrimaryExpression();
+      const token = this.peek();
 
-    if (token.type === "operator" && ["==", "!=", ">", ">=", "<", "<="].includes(token.value)) {
-      this.index += 1;
-      const right = this.parsePrimaryExpression();
-      return {
-        type: "comparison",
-        operator: token.value as ComparisonExpression["operator"],
-        left,
-        right,
-      };
+      if (token.type === "operator" && ["==", "!=", ">", ">=", "<", "<="].includes(token.value)) {
+        this.index += 1;
+        const right = this.parsePrimaryExpression();
+        return {
+          type: "comparison",
+          operator: token.value as ComparisonExpression["operator"],
+          left,
+          right,
+        };
+      }
+
+      return left;
+    } finally {
+      this.exitDepth();
     }
-
-    return left;
   }
 
   private parsePrimaryExpression(): ExpressionAST {
-    const token = this.peek();
+    this.enterDepth();
+    try {
+      const token = this.peek();
 
-    if (token.type === "paren_open") {
-      this.index += 1;
-      const expression = this.parseOrExpression();
-      this.expect("paren_close");
-      return expression;
-    }
-
-    if (token.type === "string") {
-      this.index += 1;
-      return { type: "literal", value: token.value };
-    }
-
-    if (token.type === "number") {
-      this.index += 1;
-      return { type: "literal", value: Number(token.value) };
-    }
-
-    if (token.type === "boolean") {
-      this.index += 1;
-      return { type: "literal", value: token.value === "true" };
-    }
-
-    if (token.type === "null") {
-      this.index += 1;
-      return { type: "literal", value: null };
-    }
-
-    if (token.type === "bracket_open") {
-      return this.parseArrayLiteral();
-    }
-
-    if (token.type === "identifier") {
-      this.index += 1;
-      const identifier = token.value;
-
-      if (this.peek().type === "paren_open") {
-        return this.parseFunctionCall(identifier, token.index);
+      if (token.type === "paren_open") {
+        this.index += 1;
+        const expression = this.parseOrExpression();
+        this.expect("paren_close");
+        return expression;
       }
 
-      return this.parseFieldRef(identifier, token.index);
-    }
+      if (token.type === "string") {
+        this.index += 1;
+        return { type: "literal", value: token.value };
+      }
 
-    throw new ExpressionParseError(`Unexpected token '${token.value}' at position ${token.index}`);
+      if (token.type === "number") {
+        this.index += 1;
+        return { type: "literal", value: Number(token.value) };
+      }
+
+      if (token.type === "boolean") {
+        this.index += 1;
+        return { type: "literal", value: token.value === "true" };
+      }
+
+      if (token.type === "null") {
+        this.index += 1;
+        return { type: "literal", value: null };
+      }
+
+      if (token.type === "bracket_open") {
+        return this.parseArrayLiteral();
+      }
+
+      if (token.type === "identifier") {
+        this.index += 1;
+        const identifier = token.value;
+
+        if (this.peek().type === "paren_open") {
+          return this.parseFunctionCall(identifier, token.index);
+        }
+
+        return this.parseFieldRef(identifier, token.index);
+      }
+
+      throw new ExpressionParseError(`Unexpected token '${token.value}' at position ${token.index}`);
+    } finally {
+      this.exitDepth();
+    }
   }
 
   private parseArrayLiteral(): ExpressionAST {

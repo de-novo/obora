@@ -49,11 +49,26 @@ export class MultiStageApprovalGate {
 
     for (let stageIndex = 0; stageIndex < this.config.stages.length; stageIndex += 1) {
       const stage = this.config.stages[stageIndex]!;
-      const allowed = evaluateGateCondition(stage.condition, {
-        ...(this.context.conditionContext ?? {}),
-        stageIndex,
-        stageName: stage.name,
-      });
+      let allowed = false;
+      try {
+        allowed = evaluateGateCondition(stage.condition, {
+          ...(this.context.conditionContext ?? {}),
+          stageIndex,
+          stageName: stage.name,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        stageResults.push({
+          name: stage.name,
+          status: "rejected",
+          decisions: [],
+        });
+        return {
+          approved: false,
+          stages: stageResults,
+          reason: `condition_evaluation_error: ${message}`,
+        };
+      }
 
       if (!allowed) {
         stageResults.push({ name: stage.name, status: "skipped", decisions: [] });

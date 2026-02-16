@@ -42,18 +42,20 @@ export function parseDurationToMs(duration?: string): number | undefined {
   return value * 86_400_000;
 }
 
+/**
+ * Evaluate a gate condition expression.
+ *
+ * @throws {Error} When parsing or evaluation fails. Callers must handle this
+ *   as a fail-closed error path (stage failure), not as a skipped stage.
+ */
 export function evaluateGateCondition(condition: string | undefined, context: Record<string, unknown>): boolean {
   if (!condition) {
     return true;
   }
 
-  try {
-    const ast = parseExpression(condition);
-    return evaluateExpression(ast, {
-      action: { type: "step_start", name: "gate-condition" },
-      context,
-    });
-  } catch {
-    return false;
-  }
+  const ast = parseExpression(condition);
+  return evaluateExpression(ast, {
+    action: { type: "step_start", name: "gate-condition" },
+    context,
+  });
 }

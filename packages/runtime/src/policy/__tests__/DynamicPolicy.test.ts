@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { AuditEvent } from "../../audit/types.js";
+import { __internal as dynamicQuotaInternal, evaluateDynamicResourceDecision } from "../DynamicQuotaEvaluator.js";
 import { buildDynamicPolicyVars } from "../DynamicPolicyContext.js";
+import { __internal as dynamicToolInternal, resolveDynamicToolRule } from "../DynamicToolPolicy.js";
 import { DefaultPolicyEngine } from "../DefaultPolicyEngine.js";
 
 function makeAuditEvent(partial: Partial<AuditEvent>): AuditEvent {
@@ -101,6 +103,54 @@ describe("Dynamic policy", () => {
     });
   });
 
+  it("denies when dynamic quota condition evaluation fails", () => {
+    const engine = new DefaultPolicyEngine();
+    engine.loadInline({
+      resources: {
+        dynamicQuota: {
+          limits: [
+            {
+              field: "cost",
+              condition: 'matches(execution.workflowName, "(")',
+              limit: 1,
+              action: "deny",
+            },
+          ],
+        },
+      },
+    });
+
+    const decision = engine.enforce(
+      { type: "resource_use", name: "runtime" },
+      {
+        currentCost: 10,
+        dynamicVars: {
+          execution: {
+            id: "exec-1",
+            workflowName: "wf",
+            startedAt: new Date(),
+            elapsedMs: 100,
+            totalTokens: 0,
+            totalCost: 10,
+            totalToolCalls: 0,
+            completedSteps: [],
+          },
+          step: { name: "deploy", agent: "agent", index: 1 },
+          actor: { id: "cell" },
+          state: {},
+          metrics: { errorCount: 0, retryCount: 0, avgStepDurationMs: 0, maxStepDurationMs: 0 },
+          previousResults: {},
+        },
+      },
+    );
+
+    expect(decision).toMatchObject({
+      type: "deny",
+      rule: "dynamic-quota",
+    });
+    expect((decision as { reason: string }).reason).toContain("dynamic quota condition evaluation failed:");
+  });
+
   it("resolves dynamic tool rules by priority and deny-first tie", () => {
     const engine = new DefaultPolicyEngine();
     engine.loadInline({
@@ -135,6 +185,77 @@ describe("Dynamic policy", () => {
     );
 
     expect(decision).toMatchObject({ type: "deny", rule: "dynamicTools.shell_exec" });
+  });
+
+  it("denies when dynamic tool rule evaluation fails", () => {
+    const engine = new DefaultPolicyEngine();
+    engine.loadInline({
+      dynamicToolRules: [
+        { name: "shell_exec", condition: 'matches(action.name, "(")', effect: "deny", priority: 10 },
+      ],
+      tools: [{ name: "shell_exec", effect: "allow" }],
+    });
+
+    const decision = engine.enforce(
+      { type: "tool_call", name: "shell_exec", params: {} },
+      {
+        dynamicVars: {
+          execution: {
+            id: "exec-1",
+            workflowName: "wf",
+            startedAt: new Date(),
+            elapsedMs: 100,
+            totalTokens: 0,
+            totalCost: 0,
+            totalToolCalls: 0,
+            completedSteps: [],
+          },
+          step: { name: "deploy", agent: "agent", index: 1 },
+          actor: { id: "cell" },
+          state: {},
+          metrics: { errorCount: 0, retryCount: 0, avgStepDurationMs: 0, maxStepDurationMs: 0 },
+          previousResults: {},
+        },
+      },
+    );
+
+    expect(decision).toMatchObject({
+      type: "deny",
+      rule: "shell_exec",
+    });
+    expect((decision as { reason: string }).reason).toContain("dynamic tool rule condition evaluation failed:");
+  });
+
+  it("evicts old expression cache entries at max size", () => {
+    dynamicQuotaInternal.clearExpressionCache();
+    dynamicToolInternal.clearExpressionCache();
+
+    const action = { type: "resource_use", name: "runtime" } as const;
+    const context = { currentCost: 0 };
+
+    for (let i = 0; i < 1001; i += 1) {
+      evaluateDynamicResourceDecision(
+        {
+          dynamicQuota: {
+            limits: [{ field: "cost", condition: `context.currentCost >= ${i}`, limit: 9999, action: "deny" }],
+          },
+        },
+        action,
+        context,
+      );
+    }
+
+    expect(dynamicQuotaInternal.getExpressionCacheSize()).toBe(1000);
+
+    for (let i = 0; i < 1001; i += 1) {
+      resolveDynamicToolRule(
+        { type: "tool_call", name: "shell_exec", params: {} },
+        {},
+        [{ name: "shell_exec", condition: `context.currentCost >= ${i}`, effect: "allow" }],
+      );
+    }
+
+    expect(dynamicToolInternal.getExpressionCacheSize()).toBe(1000);
   });
 
   it("pins snapshot per execution and keeps enforcement stable after reload", () => {

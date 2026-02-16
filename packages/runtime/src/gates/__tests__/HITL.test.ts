@@ -73,6 +73,23 @@ describe("HITL gates", () => {
     expect(result.stages[1]?.status).toBe("skipped");
   });
 
+  it("fails closed when gate condition evaluation throws", async () => {
+    const gate = new MultiStageApprovalGate(
+      {
+        stages: [
+          { name: "reviewer", approvers: ["alice"], required: 1, condition: 'matches(context.requireOwner, "(")' },
+        ],
+      },
+      { conditionContext: { requireOwner: "owner" } }
+    );
+
+    const result = await gate.evaluate([]);
+
+    expect(result.approved).toBe(false);
+    expect(result.stages[0]?.status).toBe("rejected");
+    expect(result.reason).toContain("condition_evaluation_error:");
+  });
+
   it("supports partial approval threshold (2 of 3)", async () => {
     const gate = new MultiStageApprovalGate({
       stages: [{ name: "security", approvers: ["a", "b", "c"], required: 2 }],
