@@ -21,9 +21,15 @@ export interface PolicyLifecycleEvent {
   error?: string;
 }
 
+export interface PolicySnapshotPinnedAuditEvent {
+  type: "policy_snapshot_pinned";
+  executionId: string;
+  version: string;
+}
+
 export interface DefaultPolicyEngineOptions {
   onLifecycleEvent?: (event: PolicyLifecycleEvent) => void | Promise<void>;
-  onAuditEvent?: (event: PolicyConditionAuditEvent) => void | Promise<void>;
+  onAuditEvent?: (event: PolicyConditionAuditEvent | PolicySnapshotPinnedAuditEvent) => void | Promise<void>;
 }
 
 export class DefaultPolicyEngine implements PolicyEngine {
@@ -33,10 +39,13 @@ export class DefaultPolicyEngine implements PolicyEngine {
   private readonly versions: PolicyVersion[] = [];
   private readonly rules: readonly PolicyRulePlugin[];
   private readonly onLifecycleEvent?: (event: PolicyLifecycleEvent) => void | Promise<void>;
+  private readonly onAuditEvent?: (event: PolicyConditionAuditEvent | PolicySnapshotPinnedAuditEvent) => void | Promise<void>;
+  private readonly pinnedSnapshots = new Map<string, PolicySnapshot>();
 
   constructor(rules?: readonly PolicyRulePlugin[], options?: DefaultPolicyEngineOptions) {
     this.rules = rules ?? [new ToolRule({ onAuditEvent: options?.onAuditEvent }), new SandboxRule(), new ResourceRule(), new GateRule()];
     this.onLifecycleEvent = options?.onLifecycleEvent;
+    this.onAuditEvent = options?.onAuditEvent;
   }
 
   async load(pathToPolicy: string): Promise<PolicyVersion> {
@@ -55,6 +64,11 @@ export class DefaultPolicyEngine implements PolicyEngine {
   }
 
   enforce(action: PolicyAction, context: PolicyContext): PolicyDecision {
+    const pinned = context.executionId ? this.pinnedSnapshots.get(context.executionId) : undefined;
+    if (pinned) {
+      return pinned.enforce(action, context);
+    }
+
     for (const rule of this.rules) {
       const decision = rule.evaluate(action, context, this.policySet);
       if (decision) {
@@ -107,6 +121,25 @@ export class DefaultPolicyEngine implements PolicyEngine {
     };
   }
 
+  pinForExecution(executionId: string): PolicySnapshot {
+    const snapshot = this.snapshot();
+    this.pinnedSnapshots.set(executionId, snapshot);
+    void this.onAuditEvent?.({
+      type: "policy_snapshot_pinned",
+      executionId,
+      version: snapshot.version.version,
+    });
+    return snapshot;
+  }
+
+  unpinExecution(executionId: string): void {
+    this.pinnedSnapshots.delete(executionId);
+  }
+
+  getPinnedSnapshot(executionId: string): PolicySnapshot | undefined {
+    return this.pinnedSnapshots.get(executionId);
+  }
+
   private enforceWithPolicy(policySet: PolicySet, action: PolicyAction, context: PolicyContext): PolicyDecision {
     for (const rule of this.rules) {
       const decision = rule.evaluate(action, context, policySet);
@@ -144,6 +177,32 @@ function validatePolicyConditions(policySet: PolicySet): void {
       const details = error instanceof Error ? error.message : String(error);
       const wrapped = new Error(
         `[${OboraErrorCode.POLICY_LOAD_FAILED}] Invalid tool condition at tools.${tool.name}: ${details}`,
+      ) as Error & { code?: OboraErrorCode };
+      wrapped.code = OboraErrorCode.POLICY_LOAD_FAILED;
+      throw wrapped;
+    }
+  }
+
+  for (const rule of policySet.dynamicToolRules ?? []) {
+    try {
+      parseExpression(rule.condition);
+    } catch (error) {
+      const details = error instanceof Error ? error.message : String(error);
+      const wrapped = new Error(
+        `[${OboraErrorCode.POLICY_LOAD_FAILED}] Invalid dynamic tool condition at dynamicToolRules.${rule.name}: ${details}`,
+      ) as Error & { code?: OboraErrorCode };
+      wrapped.code = OboraErrorCode.POLICY_LOAD_FAILED;
+      throw wrapped;
+    }
+  }
+
+  for (const limit of policySet.resources?.dynamicQuota?.limits ?? []) {
+    try {
+      parseExpression(limit.condition);
+    } catch (error) {
+      const details = error instanceof Error ? error.message : String(error);
+      const wrapped = new Error(
+        `[${OboraErrorCode.POLICY_LOAD_FAILED}] Invalid dynamic quota condition at resources.dynamicQuota.${limit.field}: ${details}`,
       ) as Error & { code?: OboraErrorCode };
       wrapped.code = OboraErrorCode.POLICY_LOAD_FAILED;
       throw wrapped;

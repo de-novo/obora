@@ -9,4 +9,7 @@ export interface PolicyEngine {
   currentVersion(): PolicyVersion | undefined;
   history(): readonly PolicyVersion[];
   snapshot(): PolicySnapshot;
+  pinForExecution(executionId: string): PolicySnapshot;
+  unpinExecution(executionId: string): void;
+  getPinnedSnapshot(executionId: string): PolicySnapshot | undefined;
 }

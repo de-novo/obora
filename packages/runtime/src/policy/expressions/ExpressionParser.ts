@@ -49,7 +49,7 @@ export interface ArrayLiteralExpression {
   items: ExpressionAST[];
 }
 
-const ALLOWED_ROOTS = new Set(["action", "context", "state", "step"]);
+const ALLOWED_ROOTS = new Set(["action", "context", "state", "step", "execution", "actor", "metrics", "previousResults"]);
 const BLOCKED_FIELD_NAMES = new Set(["__proto__", "prototype", "constructor"]);
 const ALLOWED_FUNCTIONS = new Set(["contains", "matches", "startsWith", "endsWith", "in"]);
 
@@ -389,7 +389,9 @@ class Parser {
     const path = identifier.split(".");
 
     if (path.length === 0 || !ALLOWED_ROOTS.has(path[0])) {
-      throw new ExpressionParseError(`Field reference '${identifier}' must start with action/context/state/step at ${index}`);
+      throw new ExpressionParseError(
+        `Field reference '${identifier}' must start with action/context/state/step/execution/actor/metrics/previousResults at ${index}`,
+      );
     }
 
     for (const segment of path) {

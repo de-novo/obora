@@ -1,3 +1,4 @@
+import { evaluateDynamicResourceDecision } from "../DynamicQuotaEvaluator.js";
 import type { PolicyAction, PolicyContext, PolicyDecision, PolicyRulePlugin, PolicySet } from "../types.js";
 
 export class ResourceRule implements PolicyRulePlugin {
@@ -11,6 +12,12 @@ export class ResourceRule implements PolicyRulePlugin {
     }
 
     const resources = policies.resources;
+
+    const dynamicDecision = evaluateDynamicResourceDecision(resources, action, context);
+    if (dynamicDecision) {
+      return dynamicDecision;
+    }
+
     if (resources.timeoutMs !== undefined && (context.currentDurationMs ?? 0) > resources.timeoutMs) {
       return { type: "deny", reason: "Timeout exceeded", rule: "resources.timeoutMs" };
     }

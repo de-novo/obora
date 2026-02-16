@@ -1,6 +1,15 @@
 import { readFile } from "node:fs/promises";
 import { parse } from "yaml";
-import type { GatePolicy, PolicySet, ResourcePolicy, SandboxPolicy, ToolPolicy } from "./types.js";
+import type {
+  DynamicQuotaConfig,
+  DynamicResourceLimit,
+  DynamicToolRule,
+  GatePolicy,
+  PolicySet,
+  ResourcePolicy,
+  SandboxPolicy,
+  ToolPolicy,
+} from "./types.js";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -34,9 +43,14 @@ function normalizeToolPolicy(input: unknown, index: number): ToolPolicy {
       throw new Error(`Invalid tools[${index}].when: expected object`);
     }
 
+    if (when.condition !== undefined && typeof when.condition !== "string") {
+      throw new Error(`Invalid tools[${index}].when.condition: expected string`);
+    }
+
     normalizedWhen = {
       matches: toStringArray(when.matches, `tools[${index}].when.matches`),
       not_matches: toStringArray(when.not_matches, `tools[${index}].when.not_matches`),
+      condition: when.condition,
     };
   }
 
@@ -133,7 +147,79 @@ function normalizeResourcePolicy(input: unknown): ResourcePolicy | undefined {
     throw new Error("Invalid resources.maxOutputSize: expected string");
   }
 
-  return { timeoutMs, maxTokens, maxCostUsd, maxToolCalls, maxOutputSize };
+  return {
+    timeoutMs,
+    maxTokens,
+    maxCostUsd,
+    maxToolCalls,
+    maxOutputSize,
+    dynamicQuota: normalizeDynamicQuota(input.dynamicQuota ?? input.dynamic_quota),
+  };
+}
+
+function normalizeDynamicToolRule(input: unknown, index: number): DynamicToolRule {
+  if (!isObject(input)) {
+    throw new Error(`Invalid dynamicToolRules[${index}]: expected object`);
+  }
+
+  const { name, condition, effect, priority } = input;
+  if (typeof name !== "string" || name.length === 0) {
+    throw new Error(`Invalid dynamicToolRules[${index}].name: expected non-empty string`);
+  }
+  if (typeof condition !== "string" || condition.length === 0) {
+    throw new Error(`Invalid dynamicToolRules[${index}].condition: expected non-empty string`);
+  }
+  if (effect !== "allow" && effect !== "deny" && effect !== "transform" && effect !== "gate") {
+    throw new Error(`Invalid dynamicToolRules[${index}].effect: ${String(effect)}`);
+  }
+  if (priority !== undefined && typeof priority !== "number") {
+    throw new Error(`Invalid dynamicToolRules[${index}].priority: expected number`);
+  }
+
+  return { name, condition, effect, priority };
+}
+
+function normalizeDynamicQuota(input: unknown): DynamicQuotaConfig | undefined {
+  if (input === undefined) {
+    return undefined;
+  }
+  if (!isObject(input)) {
+    throw new Error("Invalid resources.dynamicQuota: expected object");
+  }
+
+  const limits = input.limits;
+  if (!Array.isArray(limits)) {
+    throw new Error("Invalid resources.dynamicQuota.limits: expected array");
+  }
+
+  const normalizedLimits: DynamicResourceLimit[] = limits.map((limit, index) => {
+    if (!isObject(limit)) {
+      throw new Error(`Invalid resources.dynamicQuota.limits[${index}]: expected object`);
+    }
+
+    const { field, condition, action, limit: limitValue } = limit;
+    if (field !== "tokens" && field !== "cost" && field !== "tool_calls" && field !== "duration_ms") {
+      throw new Error(`Invalid resources.dynamicQuota.limits[${index}].field: ${String(field)}`);
+    }
+    if (typeof condition !== "string" || condition.length === 0) {
+      throw new Error(`Invalid resources.dynamicQuota.limits[${index}].condition: expected non-empty string`);
+    }
+    if (typeof limitValue !== "number") {
+      throw new Error(`Invalid resources.dynamicQuota.limits[${index}].limit: expected number`);
+    }
+    if (action !== "deny" && action !== "warn" && action !== "gate") {
+      throw new Error(`Invalid resources.dynamicQuota.limits[${index}].action: ${String(action)}`);
+    }
+
+    return {
+      field,
+      condition,
+      limit: limitValue,
+      action,
+    };
+  });
+
+  return { limits: normalizedLimits };
 }
 
 function normalizeGatePolicy(input: unknown, index: number): GatePolicy {
@@ -173,6 +259,7 @@ export function normalizePolicySet(input: unknown): PolicySet {
 
   const toolsRaw = input.tools;
   const gatesRaw = input.gates;
+  const dynamicToolRulesRaw = input.dynamicToolRules ?? input.dynamic_tool_rules;
 
   if (toolsRaw !== undefined && !Array.isArray(toolsRaw)) {
     throw new Error("Invalid tools: expected array");
@@ -180,10 +267,14 @@ export function normalizePolicySet(input: unknown): PolicySet {
   if (gatesRaw !== undefined && !Array.isArray(gatesRaw)) {
     throw new Error("Invalid gates: expected array");
   }
+  if (dynamicToolRulesRaw !== undefined && !Array.isArray(dynamicToolRulesRaw)) {
+    throw new Error("Invalid dynamicToolRules: expected array");
+  }
 
   const policySet: PolicySet = {
     version: typeof input.version === "string" ? input.version : undefined,
     tools: toolsRaw?.map((tool, index) => normalizeToolPolicy(tool, index)),
+    dynamicToolRules: dynamicToolRulesRaw?.map((rule, index) => normalizeDynamicToolRule(rule, index)),
     sandbox: normalizeSandboxPolicy(input.sandbox),
     resources: normalizeResourcePolicy(input.resources),
     gates: gatesRaw?.map((gate, index) => normalizeGatePolicy(gate, index)),

@@ -1,6 +1,7 @@
+import { resolveDynamicToolRule } from "../DynamicToolPolicy.js";
 import { evaluateExpression, type ExpressionContext } from "../expressions/ExpressionEvaluator.js";
 import { parseExpression, type ExpressionAST } from "../expressions/ExpressionParser.js";
-import type { PolicyAction, PolicyContext, PolicyDecision, PolicyRulePlugin, PolicySet, ToolPolicy } from "../types.js";
+import type { DynamicToolRule, PolicyAction, PolicyContext, PolicyDecision, PolicyRulePlugin, PolicySet, ToolPolicy } from "../types.js";
 
 export interface PolicyConditionAuditEvent {
   type: "policy_condition_evaluated";
@@ -113,6 +114,11 @@ export class ToolRule implements PolicyRulePlugin {
       return null;
     }
 
+    const dynamicRule = resolveDynamicToolRule(action, context, policies.dynamicToolRules);
+    if (dynamicRule) {
+      return this.toDecisionFromDynamicRule(action, dynamicRule);
+    }
+
     for (const rule of policies.tools ?? []) {
       const matchResult = matchesToolRule(rule, action, context, this.getExpressionAst.bind(this), this.onAuditEvent);
       if (!matchResult.matched) {
@@ -164,6 +170,42 @@ export class ToolRule implements PolicyRulePlugin {
     }
 
     return null;
+  }
+
+  private toDecisionFromDynamicRule(action: PolicyAction, rule: DynamicToolRule): PolicyDecision {
+    if (rule.effect === "allow") {
+      return { type: "allow" };
+    }
+
+    if (rule.effect === "deny") {
+      return {
+        type: "deny",
+        reason: `Tool call denied for ${action.name}`,
+        rule: `dynamicTools.${rule.name}`,
+      };
+    }
+
+    if (rule.effect === "gate") {
+      return {
+        type: "gate",
+        gateType: "human-approval",
+        config: {
+          tool: action.name,
+          rule: `dynamicTools.${rule.name}`,
+        },
+      };
+    }
+
+    return {
+      type: "transform",
+      original: action.params,
+      transformed: {
+        params: action.params,
+        transform: "dynamic",
+      },
+      rule: `dynamicTools.${rule.name}`,
+      transformFn: "dynamic",
+    };
   }
 
   private getExpressionAst(expression: string): ExpressionAST {

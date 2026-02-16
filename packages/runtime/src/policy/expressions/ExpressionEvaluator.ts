@@ -11,6 +11,27 @@ export interface ExpressionContext {
     agent: string;
     config?: Record<string, unknown>;
   };
+  execution?: {
+    id: string;
+    workflowName: string;
+    startedAt: Date;
+    elapsedMs: number;
+    totalTokens: number;
+    totalCost: number;
+    totalToolCalls: number;
+    completedSteps: string[];
+  };
+  actor?: {
+    id: string;
+    role?: string;
+  };
+  metrics?: {
+    errorCount: number;
+    retryCount: number;
+    avgStepDurationMs: number;
+    maxStepDurationMs: number;
+  };
+  previousResults?: Record<string, { success: boolean; output?: unknown }>;
 }
 
 const BLOCKED_FIELD_NAMES = new Set(["__proto__", "prototype", "constructor"]);
@@ -136,6 +157,14 @@ function resolveField(path: string[], ctx: ExpressionContext): unknown {
     current = ctx.state;
   } else if (root === "step") {
     current = ctx.step;
+  } else if (root === "execution") {
+    current = ctx.execution;
+  } else if (root === "actor") {
+    current = ctx.actor;
+  } else if (root === "metrics") {
+    current = ctx.metrics;
+  } else if (root === "previousResults") {
+    current = ctx.previousResults;
   } else {
     throw new ExpressionEvaluationError(`Unsupported root '${root}' in field path`);
   }

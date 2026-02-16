@@ -2,5 +2,8 @@ export * from "./types.js";
 export * from "./PolicyEngine.js";
 export * from "./PolicyLoader.js";
 export * from "./DefaultPolicyEngine.js";
+export * from "./DynamicPolicyContext.js";
+export * from "./DynamicQuotaEvaluator.js";
+export * from "./DynamicToolPolicy.js";
 export * from "./rules/index.js";
 export * from "./expressions/index.js";

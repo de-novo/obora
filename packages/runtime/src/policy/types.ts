@@ -20,15 +20,18 @@ export interface PolicyAction {
 export interface PolicyContext {
   cellId?: string;
   stepName?: string;
+  executionId?: string;
   currentTokens?: number;
   currentCost?: number;
   currentToolCalls?: number;
   currentDurationMs?: number;
+  dynamicVars?: DynamicPolicyVars;
 }
 
 export interface PolicySet {
   version?: string;
   tools?: ToolPolicy[];
+  dynamicToolRules?: DynamicToolRule[];
   sandbox?: SandboxPolicy;
   resources?: ResourcePolicy;
   gates?: GatePolicy[];
@@ -57,11 +60,29 @@ export interface ToolPolicy {
   };
 }
 
+export interface DynamicToolRule {
+  name: string;
+  condition: string;
+  effect: "allow" | "deny" | "transform" | "gate";
+  priority?: number;
+}
+
 export interface SandboxPolicy {
   root: string;
   denyOutsideRoot: boolean;
   denyPatterns?: string[];
   maxFileSize?: string;
+}
+
+export interface DynamicResourceLimit {
+  field: "tokens" | "cost" | "tool_calls" | "duration_ms";
+  condition: string;
+  limit: number;
+  action: "deny" | "warn" | "gate";
+}
+
+export interface DynamicQuotaConfig {
+  limits: DynamicResourceLimit[];
 }
 
 export interface ResourcePolicy {
@@ -70,6 +91,38 @@ export interface ResourcePolicy {
   maxCostUsd?: number;
   maxToolCalls?: number;
   maxOutputSize?: string;
+  dynamicQuota?: DynamicQuotaConfig;
+}
+
+export interface DynamicPolicyVars {
+  execution: {
+    id: string;
+    workflowName: string;
+    startedAt: Date;
+    elapsedMs: number;
+    totalTokens: number;
+    totalCost: number;
+    totalToolCalls: number;
+    completedSteps: string[];
+  };
+  step: {
+    name: string;
+    agent: string;
+    index: number;
+    config?: Record<string, unknown>;
+  };
+  actor: {
+    id: string;
+    role?: string;
+  };
+  state: Record<string, unknown>;
+  metrics: {
+    errorCount: number;
+    retryCount: number;
+    avgStepDurationMs: number;
+    maxStepDurationMs: number;
+  };
+  previousResults: Record<string, { success: boolean; output?: unknown }>;
 }
 
 export interface GatePolicy {

@@ -1,0 +1,118 @@
+import { evaluateExpression, type ExpressionContext } from "./expressions/ExpressionEvaluator.js";
+import { parseExpression, type ExpressionAST } from "./expressions/ExpressionParser.js";
+import type { DynamicResourceLimit, PolicyAction, PolicyContext, PolicyDecision, ResourcePolicy } from "./types.js";
+
+const fieldToContextValue: Record<DynamicResourceLimit["field"], (context: PolicyContext) => number> = {
+  tokens: (context) => context.currentTokens ?? 0,
+  cost: (context) => context.currentCost ?? 0,
+  tool_calls: (context) => context.currentToolCalls ?? 0,
+  duration_ms: (context) => context.currentDurationMs ?? 0,
+};
+
+const fieldToRulePath: Record<DynamicResourceLimit["field"], string> = {
+  tokens: "resources.maxTokens",
+  cost: "resources.maxCostUsd",
+  tool_calls: "resources.maxToolCalls",
+  duration_ms: "resources.timeoutMs",
+};
+
+const fieldToReason: Record<DynamicResourceLimit["field"], string> = {
+  tokens: "Token limit exceeded",
+  cost: "Cost limit exceeded",
+  tool_calls: "Tool call limit exceeded",
+  duration_ms: "Timeout exceeded",
+};
+
+const expressionCache = new Map<string, ExpressionAST>();
+
+function getExpressionAst(expression: string): ExpressionAST {
+  const cached = expressionCache.get(expression);
+  if (cached) {
+    return cached;
+  }
+
+  const ast = parseExpression(expression);
+  expressionCache.set(expression, ast);
+  return ast;
+}
+
+function conditionMatches(limit: DynamicResourceLimit, action: PolicyAction, context: PolicyContext): boolean {
+  const ast = getExpressionAst(limit.condition);
+  const evalContext: ExpressionContext = {
+    action,
+    context,
+    state: context.dynamicVars?.state,
+    step: context.dynamicVars?.step,
+    execution: context.dynamicVars?.execution,
+    actor: context.dynamicVars?.actor,
+    metrics: context.dynamicVars?.metrics,
+    previousResults: context.dynamicVars?.previousResults,
+  };
+
+  return evaluateExpression(ast, evalContext);
+}
+
+export function evaluateDynamicResourceDecision(
+  policy: ResourcePolicy,
+  action: PolicyAction,
+  context: PolicyContext,
+): PolicyDecision | null {
+  const limits = policy.dynamicQuota?.limits ?? [];
+
+  for (const limit of limits) {
+    if (!conditionMatches(limit, action, context)) {
+      continue;
+    }
+
+    const current = fieldToContextValue[limit.field](context);
+    if (current <= limit.limit) {
+      continue;
+    }
+
+    if (limit.action === "deny") {
+      return {
+        type: "deny",
+        reason: fieldToReason[limit.field],
+        rule: `resources.dynamic.${limit.field}`,
+      };
+    }
+
+    return {
+      type: "gate",
+      gateType: "human-approval",
+      config: {
+        reason: `${fieldToReason[limit.field]} (dynamic)`,
+        action: limit.action,
+        field: limit.field,
+        limit: limit.limit,
+        current,
+        rule: `resources.dynamic.${limit.field}`,
+      },
+    };
+  }
+
+  return null;
+}
+
+export function getEffectiveStaticLimit(policy: ResourcePolicy, field: DynamicResourceLimit["field"]): number | undefined {
+  switch (field) {
+    case "tokens":
+      return policy.maxTokens;
+    case "cost":
+      return policy.maxCostUsd;
+    case "tool_calls":
+      return policy.maxToolCalls;
+    case "duration_ms":
+      return policy.timeoutMs;
+    default:
+      return undefined;
+  }
+}
+
+export function getStaticRulePath(field: DynamicResourceLimit["field"]): string {
+  return fieldToRulePath[field];
+}
+
+export function getStaticReason(field: DynamicResourceLimit["field"]): string {
+  return fieldToReason[field];
+}
