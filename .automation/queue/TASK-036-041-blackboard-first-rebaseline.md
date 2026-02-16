@@ -78,6 +78,15 @@ Board 단계 태스크를 blackboard 우선 구현 순서로 재배치하고, �
 - 점검 단위: board E2E quorum/policy 회귀 최소검증 1건
 - 실행: `pnpm --filter @obora-kit/board test -- test/e2e-policy-quorum.test.ts`
 - 결과: ✅ `1 file / 9 tests passed` (421ms)
+- 판정: 블로커 없음, 다음 실행은 voting domain 회귀 점검 권장
+
+## 야간 자동 점검 로그 (2026-02-16 16:42 KST)
+- 기준 브랜치: `origin/main` (`ef54166`)
+- 작업 브랜치(HEAD 유지): `main` (`401574c`)
+- 점검 단위: blackboard voting domain 회귀 최소검증 1건
+- 실행: `pnpm --filter @obora-kit/blackboard test -- test/domains/voting/voting-store.test.ts`
+- 결과: ✅ `1 file / 26 tests passed` (234ms)
+- 판정: 블로커 없음, 다음 실행은 workflow state-machine 회귀 점검 권장
 - 판정: 블로커 없음, 다음 실행은 blackboard scheduler 도메인 최소검증 1건(`test/domains/scheduler/scheduler-store.test.ts`) 점검 권장
 
 ## 야간 자동 점검 로그 (2026-02-15 12:12 KST)
