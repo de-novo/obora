@@ -5,6 +5,7 @@ import {
   CollaborationPatternBase,
   type BuiltinPatternKind,
   type DiscussionPatternConfig,
+  PATTERN_BLACKBOARD_DOMAIN_MAP,
   type PatternPayloadResult,
   type PatternRuntimeContext,
 } from "../types.js";
@@ -156,7 +157,7 @@ export class DiscussionPattern extends CollaborationPatternBase {
           rounds: rounds.length,
           converged: true,
           convergence,
-          blackboard_domains: ["agenda", "meeting-state-machine", "message-bus"],
+          blackboard_domains: PATTERN_BLACKBOARD_DOMAIN_MAP["discussion"],
           meeting_state: meetingStateMachine.getState(),
         },
       };
@@ -191,7 +192,7 @@ export class DiscussionPattern extends CollaborationPatternBase {
         converged: false,
         convergence,
         on_deadlock: onDeadlock,
-        blackboard_domains: ["agenda", "meeting-state-machine", "message-bus"],
+        blackboard_domains: PATTERN_BLACKBOARD_DOMAIN_MAP["discussion"],
         meeting_state: meetingStateMachine.getState(),
       },
     };

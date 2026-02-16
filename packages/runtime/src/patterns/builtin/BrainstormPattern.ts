@@ -2,6 +2,7 @@ import {
   CollaborationPatternBase,
   type BrainstormingPatternConfig,
   type BuiltinPatternKind,
+  PATTERN_BLACKBOARD_DOMAIN_MAP,
   type PatternPayloadResult,
   type PatternRuntimeContext,
 } from "../types.js";
@@ -134,7 +135,7 @@ export class BrainstormPattern extends CollaborationPatternBase {
         },
       },
       metadata: {
-        blackboard_domains: ["knowledge"],
+        blackboard_domains: PATTERN_BLACKBOARD_DOMAIN_MAP["brainstorming"],
         generated_count: generatedIdeas.length,
         deduped_count: dedupedIdeas.length,
         ranked_count: ranked.length,

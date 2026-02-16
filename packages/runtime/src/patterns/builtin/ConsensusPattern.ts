@@ -4,6 +4,7 @@ import {
   CollaborationPatternBase,
   type BuiltinPatternKind,
   type ConsensusPatternConfig,
+  PATTERN_BLACKBOARD_DOMAIN_MAP,
   type PatternPayloadResult,
   type PatternRuntimeContext,
 } from "../types.js";
@@ -183,7 +184,7 @@ export class ConsensusPattern extends CollaborationPatternBase {
         },
         metadata: {
           rule,
-          blackboard_domains: ["consensus-rule-engine", "voting-session-store"],
+          blackboard_domains: PATTERN_BLACKBOARD_DOMAIN_MAP["consensus"],
           required_participants: requiredParticipants,
           best_effort: [...bestEffort],
         },
@@ -213,7 +214,7 @@ export class ConsensusPattern extends CollaborationPatternBase {
       metadata: {
         rule,
         threshold: config.threshold,
-        blackboard_domains: ["consensus-rule-engine", "voting-session-store"],
+        blackboard_domains: PATTERN_BLACKBOARD_DOMAIN_MAP["consensus"],
         required_participants: requiredParticipants,
         best_effort: [...bestEffort],
       },
