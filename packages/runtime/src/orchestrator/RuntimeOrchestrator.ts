@@ -694,6 +694,12 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
     };
   }
 
+  /**
+   * Consensus schema compatibility:
+   * - Canonical (SCHEMAS.md): `step.consensus.rule`, `step.consensus.best_effort`
+   * - Legacy compatibility: `step.consensus.type`, `step.consensus.bestEffort`
+   * - Transitional fallback: `step.config.consensus` (older workflow fixtures)
+   */
   private extractConsensusConfig(step: Step) {
     const directConsensus = (step as Step & { consensus?: Record<string, unknown> }).consensus;
     const fallbackConsensus = (step.config as Record<string, unknown> | undefined)?.consensus as
@@ -720,7 +726,10 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
         : undefined;
 
     return {
-      type: (raw.type as "majority" | "unanimous" | "weighted" | "score-threshold" | "custom") ?? "majority",
+      type:
+        (raw.rule as "majority" | "unanimous" | "weighted" | "score-threshold" | "custom") ??
+        (raw.type as "majority" | "unanimous" | "weighted" | "score-threshold" | "custom") ??
+        "majority",
       voters: Array.isArray(raw.voters) ? raw.voters as Array<{ id: string; weight?: number }> : [],
       minRequired,
       threshold: typeof raw.threshold === "number" ? raw.threshold : undefined,
