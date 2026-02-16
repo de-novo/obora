@@ -380,3 +380,11 @@ Board 단계 태스크를 blackboard 우선 구현 순서로 재배치하고, �
 - 실행: `pnpm --filter @obora-kit/blackboard test -- test/snapshot/snapshot-manager.test.ts`
 - 결과: ✅ `1 file / 43 tests passed` (444ms)
 - 판정: 블로커 없음, 다음 실행은 blackboard snapshot serializer 최소검증 1건(`pnpm --filter @obora-kit/blackboard test -- test/snapshot/serializer.test.ts`) 점검 권장
+
+## 야간 자동 점검 로그 (2026-02-17 00:12 KST)
+- 기준 브랜치: `origin/main` (`ef54166`)
+- 작업 브랜치(HEAD 유지): `main` (`f25d9e9`, local ahead 60)
+- 점검 단위: blackboard snapshot serializer 최소검증 1건
+- 실행: `pnpm --filter @obora-kit/blackboard test -- test/snapshot/serializer.test.ts`
+- 결과: ✅ `1 file / 15 tests passed` (265ms)
+- 판정: 블로커 없음, 다음 실행은 blackboard store hydration 최소검증 1건(`pnpm --filter @obora-kit/blackboard test -- test/store/hydration.test.ts`) 점검 권장
