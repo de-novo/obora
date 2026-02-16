@@ -1,0 +1,41 @@
+name: three-ai-consensus
+version: "1.0.0"
+
+steps:
+  - name: generate
+    agent: generator
+    description: "Generate initial artifact"
+
+  - name: review
+    agent: reviewer
+    pattern: consensus
+    depends_on: [generate]
+    participants:
+      opus: ai-model-1
+      codex: ai-model-2
+      glm: ai-model-3
+    consensus:
+      rule: majority
+      min: 2
+      of: 3
+      timeout: "5m"
+      best_effort: ["glm"]
+
+  - name: finalize
+    agent: finalizer
+    depends_on: [review]
+    gate: human-approval
+    gate_config:
+      timeout: "1h"
+      fallback: escalate
+      escalation_to: "senior-reviewer"
+
+recovery:
+  review:
+    on_fail: retry
+    max_retries: 1
+    backoff: linear
+    backoff_base: "1s"
+  finalize:
+    on_fail: escalate
+    to: "senior-reviewer"
