@@ -1,5 +1,7 @@
 export * from "./types.js";
 export * from "./PatternRegistry.js";
+export * from "./CustomPatternAPI.js";
+export * from "./resolveCustomPattern.js";
 export * from "./builtin/PipelinePattern.js";
 export * from "./builtin/DiscussionPattern.js";
 export * from "./builtin/ConsensusPattern.js";
