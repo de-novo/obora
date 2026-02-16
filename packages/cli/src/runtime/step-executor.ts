@@ -53,6 +53,10 @@ function formatOutput(result: TaskResult): string {
   return JSON.stringify(result.output, null, 2);
 }
 
+function isRetryExhaustedError(error: unknown): error is RetryExhaustedError {
+  return typeof RetryExhaustedError === "function" && error instanceof RetryExhaustedError;
+}
+
 function buildStepErrorMetadata(error: Error, diagnosisCode: ErrorCode): StepErrorMetadata {
   const errorWithMeta = error as Error & {
     provider?: string;
@@ -61,7 +65,7 @@ function buildStepErrorMetadata(error: Error, diagnosisCode: ErrorCode): StepErr
   };
 
   const retryLastError = (() => {
-    if (!(error instanceof RetryExhaustedError)) return undefined;
+    if (!isRetryExhaustedError(error)) return undefined;
 
     const retryError = error as RetryExhaustedError & {
       getLastErrorCode?: () => string | undefined;
@@ -84,14 +88,14 @@ function buildStepErrorMetadata(error: Error, diagnosisCode: ErrorCode): StepErr
     message: error.message,
     provider: errorWithMeta.provider,
     statusCode: errorWithMeta.statusCode,
-    attempts: error instanceof RetryExhaustedError ? error.attempts : errorWithMeta.attempts,
+    attempts: isRetryExhaustedError(error) ? error.attempts : errorWithMeta.attempts,
     lastError: retryLastError,
     failedAt: new Date().toISOString(),
   };
 }
 
 function mapErrorToDiagnosis(error: unknown): ErrorCode {
-  if (error instanceof RetryExhaustedError) return "E4005";
+  if (isRetryExhaustedError(error)) return "E4005";
   if (error instanceof DOMException && error.name === "AbortError") return "E4002";
 
   // Preserve agent-layer error codes (E4010, E4012, E4013)
