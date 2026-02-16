@@ -1,7 +1,20 @@
+import type { PluginRegistry } from "../plugins/PluginRegistry.js";
+import type { PatternPlugin } from "../plugins/types.js";
 import type { CollaborationPattern } from "./types.js";
 
+/**
+ * PatternRegistry is a convenience facade over the pattern bucket in PluginRegistry.
+ *
+ * - Runtime implementations may register plain CollaborationPattern instances here.
+ * - If a PluginRegistry facade is provided, lookup/list operations are type-linked to
+ *   `type = "pattern"` plugin entries.
+ */
 export class PatternRegistry {
   private readonly patterns = new Map<string, CollaborationPattern>();
+
+  constructor(
+    private readonly pluginFacade?: Pick<PluginRegistry, "get" | "has" | "list">
+  ) {}
 
   register(pattern: CollaborationPattern): void {
     if (!pattern.name || pattern.name.trim().length === 0) {
@@ -16,19 +29,33 @@ export class PatternRegistry {
   }
 
   get(name: string): CollaborationPattern {
-    const pattern = this.patterns.get(name);
-    if (!pattern) {
-      throw new Error(`Pattern '${name}' was not found`);
+    if (this.patterns.has(name)) {
+      return this.patterns.get(name)!;
     }
 
-    return pattern;
+    if (this.pluginFacade?.has("pattern", name)) {
+      return this.pluginFacade.get<PatternPlugin>("pattern", name);
+    }
+
+    throw new Error(`Pattern '${name}' was not found`);
   }
 
   has(name: string): boolean {
-    return this.patterns.has(name);
+    return this.patterns.has(name) || (this.pluginFacade?.has("pattern", name) ?? false);
   }
 
   list(): CollaborationPattern[] {
-    return [...this.patterns.values()];
+    if (!this.pluginFacade) {
+      return [...this.patterns.values()];
+    }
+
+    const pluginPatterns = this.pluginFacade.list("pattern") as PatternPlugin[];
+    const merged = new Map<string, CollaborationPattern>(pluginPatterns.map((pattern) => [pattern.name, pattern]));
+
+    for (const [name, pattern] of this.patterns.entries()) {
+      merged.set(name, pattern);
+    }
+
+    return [...merged.values()];
   }
 }

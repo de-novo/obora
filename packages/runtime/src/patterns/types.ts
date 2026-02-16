@@ -1,3 +1,7 @@
+import { OboraErrorCode } from "../errors/OboraErrorCode.js";
+
+export { OboraErrorCode };
+
 export const BUILTIN_PATTERN_KINDS = [
   "pipeline",
   "discussion",
@@ -13,41 +17,6 @@ export type BuiltinPatternKind = (typeof BUILTIN_PATTERN_KINDS)[number];
 
 export type PatternFailureCategory = "failure" | "timeout" | "escalation";
 
-export enum OboraErrorCode {
-  CELL_TIMEOUT = "CELL_1001",
-  CELL_TOOL_DENIED = "CELL_1002",
-  CELL_LLM_ERROR = "CELL_1003",
-  CELL_ABORTED = "CELL_1004",
-
-  POLICY_DENY = "POLICY_2001",
-  POLICY_GATE_REQUIRED = "POLICY_2002",
-  POLICY_GATE_TIMEOUT = "POLICY_2003",
-  POLICY_GATE_REJECTED = "POLICY_2004",
-  POLICY_SANDBOX_VIOLATION = "POLICY_2005",
-  POLICY_RESOURCE_EXCEEDED = "POLICY_2006",
-  POLICY_LOAD_FAILED = "POLICY_2007",
-
-  CONSENSUS_FAIL = "CONSENSUS_3001",
-  CONSENSUS_TIMEOUT = "CONSENSUS_3002",
-  CONSENSUS_QUORUM_NOT_MET = "CONSENSUS_3003",
-
-  RECOVERY_RETRY_EXHAUSTED = "RECOVERY_4001",
-  RECOVERY_ROLLBACK_FAILED = "RECOVERY_4002",
-  RECOVERY_ESCALATION_TIMEOUT = "RECOVERY_4003",
-
-  ORCH_WORKFLOW_NOT_FOUND = "ORCH_5001",
-  ORCH_STEP_NOT_FOUND = "ORCH_5002",
-  ORCH_DEPENDENCY_FAILED = "ORCH_5003",
-  ORCH_EXECUTION_TIMEOUT = "ORCH_5004",
-
-  AUDIT_STORE_ERROR = "AUDIT_6001",
-  AUDIT_REPLAY_NOT_FOUND = "AUDIT_6002",
-
-  ADAPTER_LLM_UNAVAILABLE = "ADAPTER_7001",
-  ADAPTER_AUTH_FAILED = "ADAPTER_7002",
-  ADAPTER_TOOL_NOT_FOUND = "ADAPTER_7003",
-}
-
 export interface PatternRuntimeHooks {
   onStart?(context: PatternRuntimeContext): Promise<void> | void;
   onEvent?(event: PatternRuntimeEvent, context: PatternRuntimeContext): Promise<void> | void;
@@ -55,13 +24,19 @@ export interface PatternRuntimeHooks {
   onError?(error: unknown, context: PatternRuntimeContext): Promise<void> | void;
 }
 
+export type PatternExecutionFn = (context: PatternRuntimeContext) => Promise<PatternRuntimeResult>;
+
+/**
+ * External runtime contract used by orchestrator/executors.
+ * `run` is the stable entrypoint for runtime integration.
+ */
 export interface PatternRuntimeContract {
   readonly name: string;
   readonly kind: BuiltinPatternKind | (string & {});
   readonly version?: string;
 
   validateConfig?(config: PatternConfig): void;
-  run(context: PatternRuntimeContext): Promise<PatternRuntimeResult>;
+  run: PatternExecutionFn;
 }
 
 export interface PatternRuntimeEvent {
@@ -70,13 +45,13 @@ export interface PatternRuntimeEvent {
   timestamp?: string;
 }
 
-export interface PatternContext {
+export interface PatternPayloadContext {
   steps?: Array<(input: unknown) => unknown | Promise<unknown>>;
   input?: unknown;
   [key: string]: unknown;
 }
 
-export interface PatternRuntimeContext extends PatternContext {
+export interface PatternRuntimeContext extends PatternPayloadContext {
   executionId?: string;
   stepName?: string;
   pattern: string;
@@ -86,15 +61,22 @@ export interface PatternRuntimeContext extends PatternContext {
   hooks?: PatternRuntimeHooks;
 }
 
-export interface PatternResult {
+export interface PatternPayloadResult {
   success: boolean;
   output: unknown;
   metadata?: Record<string, unknown>;
 }
 
-export interface PatternRuntimeResult extends PatternResult {
+export interface PatternRuntimeResult extends PatternPayloadResult {
   pattern: string;
 }
+
+/**
+ * SCHEMAS SSOT naming uses PatternContext/PatternResult.
+ * Keep these aliases bound to runtime I/O types.
+ */
+export type PatternContext = PatternRuntimeContext;
+export type PatternResult = PatternRuntimeResult;
 
 export interface DiscussionPatternConfig {
   max_rounds?: number;
@@ -251,8 +233,12 @@ export function isBuiltinPatternKind(value: string): value is BuiltinPatternKind
   return (BUILTIN_PATTERN_KINDS as readonly string[]).includes(value);
 }
 
+/**
+ * Internal pattern implementation contract.
+ * `execute` is canonical for pattern implementations and is bridged to `run`.
+ */
 export interface CollaborationPattern extends PatternRuntimeContract {
-  execute(context: PatternRuntimeContext): Promise<PatternRuntimeResult>;
+  execute: PatternExecutionFn;
 }
 
 export abstract class CollaborationPatternBase implements CollaborationPattern {
@@ -286,5 +272,5 @@ export abstract class CollaborationPatternBase implements CollaborationPattern {
     }
   }
 
-  protected abstract onExecute(context: PatternRuntimeContext): Promise<PatternResult>;
+  protected abstract onExecute(context: PatternRuntimeContext): Promise<PatternPayloadResult>;
 }

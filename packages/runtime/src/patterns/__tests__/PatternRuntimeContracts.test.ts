@@ -58,6 +58,8 @@ describe("Pattern runtime contracts", () => {
   it("registers pipeline built-in as pattern plugin wrapper", () => {
     const patternPlugin = createBuiltinPlugins().find((plugin) => plugin.type === "pattern" && plugin.name === "pipeline");
     expect(patternPlugin).toBeDefined();
+    expect(patternPlugin?.name).toBe("pipeline");
+    expect(patternPlugin?.version).toBe("1.0.0");
     expect(isBuiltinPatternKind(patternPlugin!.name)).toBe(true);
   });
 });

@@ -75,6 +75,7 @@ export class FileWriteToolPlugin implements ToolPlugin {
 
 export class PipelinePatternPlugin extends PipelinePattern implements PatternPlugin {
   readonly type = "pattern" as const;
+  readonly name = "pipeline";
   readonly version = "1.0.0";
 }
 

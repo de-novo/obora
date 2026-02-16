@@ -32,6 +32,9 @@ export interface ToolPlugin extends OboraPlugin {
 
 export interface PatternPlugin extends OboraPlugin {
   type: "pattern";
+  /** Explicitly restated for pattern plugin contract readability. */
+  name: string;
+  version: string;
   execute(context: PatternRuntimeContext): Promise<PatternRuntimeResult>;
 }
 

@@ -127,4 +127,21 @@ describe("PatternRegistry + PipelinePattern", () => {
     expect(result.output).toBe(9);
     expect(result.metadata?.steps).toBe(2);
   });
+
+  it("can resolve pattern plugins through PluginRegistry facade", async () => {
+    const pluginRegistry = new PluginRegistry();
+    await registerBuiltinPlugins(pluginRegistry);
+
+    const registry = new PatternRegistry(pluginRegistry);
+    expect(registry.has("pipeline")).toBe(true);
+
+    const result = await registry.get("pipeline").execute({
+      pattern: "pipeline",
+      input: 3,
+      steps: [(value) => Number(value) + 1],
+    });
+
+    expect(result.output).toBe(4);
+    expect(registry.list().some((pattern) => pattern.name === "pipeline")).toBe(true);
+  });
 });

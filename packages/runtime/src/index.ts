@@ -3,6 +3,7 @@ export * from "./policy/index.js";
 export * from "./state/index.js";
 export * from "./consensus/index.js";
 export * from "./audit/index.js";
+export * from "./errors/index.js";
 export * from "./recovery/index.js";
 export * from "./orchestrator/index.js";
 export * from "./patterns/index.js";
