@@ -1,4 +1,5 @@
 export * from "./StateManager.js";
+export * from "./StateBinder.js";
 export * from "./RuntimeBlackboardCompat.js";
 export * from "./accessors/index.js";
 export * from "./snapshot/index.js";
