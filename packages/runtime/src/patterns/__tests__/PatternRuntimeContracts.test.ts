@@ -62,4 +62,12 @@ describe("Pattern runtime contracts", () => {
     expect(patternPlugin?.version).toBe("1.0.0");
     expect(isBuiltinPatternKind(patternPlugin!.name)).toBe(true);
   });
+
+  it("registers discussion built-in as pattern plugin wrapper", () => {
+    const patternPlugin = createBuiltinPlugins().find((plugin) => plugin.type === "pattern" && plugin.name === "discussion");
+    expect(patternPlugin).toBeDefined();
+    expect(patternPlugin?.name).toBe("discussion");
+    expect(patternPlugin?.version).toBe("1.0.0");
+    expect(isBuiltinPatternKind(patternPlugin!.name)).toBe(true);
+  });
 });

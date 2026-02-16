@@ -4,6 +4,7 @@ import path from "node:path";
 import { InMemoryAuditStore } from "../audit/InMemoryAuditStore.js";
 import type { AuditEvent, AuditFilter } from "../audit/types.js";
 import { PipelinePattern } from "../patterns/builtin/PipelinePattern.js";
+import { DiscussionPattern } from "../patterns/builtin/DiscussionPattern.js";
 import type {
   AgentPlugin,
   AnyPlugin,
@@ -79,6 +80,12 @@ export class PipelinePatternPlugin extends PipelinePattern implements PatternPlu
   readonly version = "1.0.0";
 }
 
+export class DiscussionPatternPlugin extends DiscussionPattern implements PatternPlugin {
+  readonly type = "pattern" as const;
+  readonly name = "discussion";
+  readonly version = "1.0.0";
+}
+
 export class AllowAllPolicyRulePlugin implements PolicyRulePlugin {
   readonly type = "policy-rule" as const;
   readonly name = "allow-all-policy";
@@ -147,6 +154,7 @@ export function createBuiltinPlugins(options: { sandboxRoot?: string } = {}): An
     new BuiltinAgentPlugin(),
     new FileWriteToolPlugin(options.sandboxRoot),
     new PipelinePatternPlugin(),
+    new DiscussionPatternPlugin(),
     new AllowAllPolicyRulePlugin(),
     new RetryRecoveryStrategyPlugin(),
     new MajorityConsensusRulePlugin(),
