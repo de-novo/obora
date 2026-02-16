@@ -1,3 +1,4 @@
+import type { AuditRecorder } from "../audit/AuditTrail.js";
 import type { CellResult } from "../cell/types.js";
 
 export interface StateBinding {
@@ -21,6 +22,7 @@ export type TransformFn = (value: unknown, cellResult: CellResult, binding: Stat
 export interface StateBinderOptions {
   transforms?: Record<string, TransformFn>;
   evaluateCondition?: (condition: string, value: unknown, cellResult: CellResult, binding: StateBinding) => boolean;
+  auditRecorder?: Pick<AuditRecorder, "recordStateChange">;
 }
 
 const PATH_SEGMENT_PATTERN = /[^.[\]]+|\[(\d+)\]/g;
@@ -91,6 +93,7 @@ function evaluateConditionExpression(
 export class DefaultStateBinder implements StateBinder {
   private readonly transforms: Record<string, TransformFn>;
   private readonly evaluateCondition: NonNullable<StateBinderOptions["evaluateCondition"]>;
+  private readonly auditRecorder?: Pick<AuditRecorder, "recordStateChange">;
 
   constructor(
     private readonly stateStore: StateStore,
@@ -98,6 +101,7 @@ export class DefaultStateBinder implements StateBinder {
   ) {
     this.transforms = options.transforms ?? {};
     this.evaluateCondition = options.evaluateCondition ?? evaluateConditionExpression;
+    this.auditRecorder = options.auditRecorder;
   }
 
   async bind(cellResult: CellResult, bindings: StateBinding[]): Promise<void> {
@@ -112,7 +116,17 @@ export class DefaultStateBinder implements StateBinder {
         ? this.applyTransform(binding.transform, sourceValue, cellResult, binding)
         : sourceValue;
 
+      const oldValue = this.readSafely(binding.target);
       this.stateStore.write(binding.target, targetValue);
+      await this.auditRecorder?.recordStateChange(binding.target, oldValue, targetValue);
+    }
+  }
+
+  private readSafely(path: string): unknown {
+    try {
+      return this.stateStore.read(path);
+    } catch {
+      return undefined;
     }
   }
 

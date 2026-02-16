@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { CellResult } from "../../cell/types.js";
 import { DefaultStateBinder } from "../StateBinder.js";
@@ -101,5 +101,52 @@ describe("DefaultStateBinder", () => {
     ]);
 
     expect(state.read("decisions.voting.latest_score")).toBe(10);
+  });
+
+  it("records state_change audit event when binding writes state", async () => {
+    const state = new StateManager();
+    const recordStateChange = vi.fn(async () => undefined);
+    const binder = new DefaultStateBinder(state, {
+      auditRecorder: {
+        recordStateChange,
+      },
+    });
+
+    await binder.bind(createCellResult({ score: 9 }), [
+      {
+        source: "output.score",
+        target: "decisions.review.score",
+      },
+    ]);
+
+    expect(recordStateChange).toHaveBeenCalledTimes(1);
+    expect(recordStateChange).toHaveBeenCalledWith("decisions.review.score", undefined, 9);
+  });
+
+  it("records old and new values for repeated bindings", async () => {
+    const state = new StateManager();
+    const recordStateChange = vi.fn(async () => undefined);
+    const binder = new DefaultStateBinder(state, {
+      auditRecorder: {
+        recordStateChange,
+      },
+    });
+
+    await binder.bind(createCellResult({ score: 7 }), [
+      {
+        source: "output.score",
+        target: "decisions.review.score",
+      },
+    ]);
+
+    await binder.bind(createCellResult({ score: 10 }), [
+      {
+        source: "output.score",
+        target: "decisions.review.score",
+      },
+    ]);
+
+    expect(recordStateChange).toHaveBeenNthCalledWith(1, "decisions.review.score", undefined, 7);
+    expect(recordStateChange).toHaveBeenNthCalledWith(2, "decisions.review.score", 7, 10);
   });
 });
