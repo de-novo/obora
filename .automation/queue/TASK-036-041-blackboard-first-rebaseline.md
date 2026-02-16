@@ -439,3 +439,11 @@ Board 단계 태스크를 blackboard 우선 구현 순서로 재배치하고, �
 - 실행: `pnpm --filter @obora-kit/blackboard test -- test/events/event-bus.test.ts`
 - 결과: ✅ `1 file / 33 tests passed` (465ms, stderr 1건은 의도된 handler error 검증 케이스)
 - 판정: 블로커 없음, 다음 실행은 blackboard snapshot-manager 최소검증 1건(`pnpm --filter @obora-kit/blackboard test -- test/snapshot/snapshot-manager.test.ts`) 점검 권장
+
+## 야간 자동 점검 로그 (2026-02-17 06:57 KST)
+- 기준 브랜치: `origin/main` (`ef54166`)
+- 작업 브랜치(HEAD 유지): `main` (`3a08172`, local ahead 91)
+- 점검 단위: blackboard snapshot-manager 최소검증 1건
+- 실행: `pnpm --filter @obora-kit/blackboard test -- test/snapshot/snapshot-manager.test.ts`
+- 결과: ✅ `1 file / 43 tests passed` (451ms)
+- 판정: 블로커 없음, 다음 실행은 blackboard snapshot serializer 최소검증 1건(`pnpm --filter @obora-kit/blackboard test -- test/snapshot/serializer.test.ts`) 점검 권장
