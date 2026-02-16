@@ -75,7 +75,8 @@ describe("PeerReviewPattern", () => {
     expect(result.success).toBe(false);
     expect(result.output).toMatchObject({
       status: "fail",
-      reason: OboraErrorCode.CONSENSUS_FAIL,
+      reason: "score_below_threshold",
+      error_codes: [OboraErrorCode.CONSENSUS_FAIL],
     });
   });
 
@@ -104,7 +105,8 @@ describe("PeerReviewPattern", () => {
     expect(result.success).toBe(false);
     expect(result.output).toMatchObject({
       status: "fail",
-      reason: OboraErrorCode.CONSENSUS_FAIL,
+      reason: "p0_exceeded",
+      error_codes: [OboraErrorCode.CONSENSUS_FAIL],
       review: {
         report: {
           issue_counts: {
@@ -177,6 +179,42 @@ describe("PeerReviewPattern", () => {
     expect(result.success).toBe(true);
     expect(result.metadata).toMatchObject({
       best_effort_reviewers: ["bestEffort"],
+    });
+  });
+
+  it("fails with quorum_not_met when required reviewers do not respond within max_rounds", async () => {
+    const pattern = new PeerReviewPattern();
+
+    const result = await pattern.execute({
+      pattern: "peer-review",
+      participants: {
+        requiredA: "agent-a",
+        requiredB: "agent-b",
+      },
+      config: {
+        max_rounds: 2,
+      },
+      input: {
+        rounds: [
+          {
+            reviews: {
+              requiredA: { score: 0.8, issues: [] },
+            },
+          },
+          {
+            reviews: {
+              requiredA: { score: 0.9, issues: [] },
+            },
+          },
+        ],
+      },
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.output).toMatchObject({
+      status: "fail",
+      reason: "quorum_not_met",
+      error_codes: [OboraErrorCode.CONSENSUS_FAIL],
     });
   });
 

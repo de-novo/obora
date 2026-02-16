@@ -9,6 +9,7 @@ import {
 } from "../types.js";
 
 type IssueSeverity = "P0" | "P1" | "P2";
+type PeerReviewFailureReason = "score_below_threshold" | "p0_exceeded" | "quorum_not_met";
 
 interface ReviewIssue {
   severity?: unknown;
@@ -57,6 +58,30 @@ const DEFAULT_MIN_SCORE = 0;
 const DEFAULT_P0_ALLOWED = 0;
 const DEFAULT_MAX_ROUNDS = 1;
 
+/**
+ * Peer review pattern contract.
+ *
+ * Quorum
+ * - required reviewers = participants - best_effort
+ * - quorum = all required reviewers responded in the same round
+ * - best_effort reviewers do not block quorum when missing
+ * - if quorum is not met, continue to next round until max_rounds
+ * - when max_rounds is exhausted without quorum, return success:false with reason "quorum_not_met"
+ *
+ * Termination channel
+ * - Return `success:false` (business failure) for:
+ *   - average score < min_score => reason "score_below_threshold"
+ *   - P0 count > p0_allowed => reason "p0_exceeded"
+ *   - quorum not met after max_rounds => reason "quorum_not_met"
+ *   - all business failures include `OboraErrorCode.CONSENSUS_FAIL` in output.error_codes
+ * - Throw for external constraint violations:
+ *   - timeout exceeded (`startedAt` + `config.timeout`) => throws with `OboraErrorCode.CONSENSUS_TIMEOUT`
+ *
+ * best_effort semantics
+ * - `best_effort` is a list of participant IDs
+ * - missing best_effort reviewers are ignored for quorum
+ * - responded best_effort reviews are included in average score, issue aggregation, and P0 checks
+ */
 export class PeerReviewPattern extends CollaborationPatternBase {
   readonly name = "peer-review";
   readonly kind: BuiltinPatternKind = "peer-review";
@@ -101,12 +126,27 @@ export class PeerReviewPattern extends CollaborationPatternBase {
 
     const requiredReviewers = reviewers.filter((reviewer) => !bestEffort.has(reviewer));
     const input = this.getInput(context);
+    const timeoutMs = parseTimeoutToMs(config.timeout);
 
     const rounds = this.resolveRounds(input, maxRounds);
     const roundSummaries: RoundSummary[] = [];
     let finalReviews: NormalizedReview[] = [];
 
     for (let index = 0; index < maxRounds; index += 1) {
+      if (this.hasTimedOut(timeoutMs, input.startedAt, context)) {
+        await context.emit?.({
+          type: "peer_review_result",
+          payload: {
+            status: "timeout",
+            reason: "timeout_exceeded",
+          },
+        });
+
+        throw Object.assign(new Error("peer-review timed out"), {
+          code: OboraErrorCode.CONSENSUS_TIMEOUT,
+        });
+      }
+
       const roundNumber = index + 1;
       const round = rounds[index] ?? {};
 
@@ -146,27 +186,21 @@ export class PeerReviewPattern extends CollaborationPatternBase {
 
       if (missingRequired.length > 0) {
         const isLastRound = roundNumber >= maxRounds;
-        if (isLastRound) {
-          const timeoutMs = parseTimeoutToMs(config.timeout);
-          if (timeoutMs !== undefined && this.hasTimedOut(timeoutMs, input.startedAt, context)) {
-            await context.emit?.({
-              type: "peer_review_result",
-              payload: {
-                status: "timeout",
-                reason: "required_reviewers_timeout",
-                missing_required_reviewers: missingRequired,
-              },
-            });
-
-            throw Object.assign(new Error("peer-review timed out waiting for required reviewers"), {
-              code: OboraErrorCode.CONSENSUS_TIMEOUT,
-            });
-          }
-        }
-
         if (!isLastRound) {
           continue;
         }
+
+        return this.buildBusinessFailureResult({
+          context,
+          input,
+          reason: "quorum_not_met",
+          minScore,
+          p0Allowed,
+          maxRounds,
+          bestEffort,
+          roundSummaries,
+          finalReport: report,
+        });
       }
 
       finalReviews = reviews;
@@ -174,9 +208,9 @@ export class PeerReviewPattern extends CollaborationPatternBase {
     }
 
     if (finalReviews.length === 0) {
-      const last = roundSummaries.at(-1);
-      finalReviews = this.collectReviews(reviewers, rounds[Math.max(0, roundSummaries.length - 1)]?.reviews);
-      if (!last) {
+      const lastRound = rounds[Math.max(0, roundSummaries.length - 1)]?.reviews;
+      finalReviews = this.collectReviews(reviewers, lastRound);
+      if (roundSummaries.length === 0) {
         throw new Error("peer-review failed to collect review rounds");
       }
     }
@@ -186,11 +220,26 @@ export class PeerReviewPattern extends CollaborationPatternBase {
     const passByP0 = finalReport.issue_counts.P0 <= p0Allowed;
     const passed = passByScore && passByP0;
 
+    if (!passed) {
+      const reason: PeerReviewFailureReason = !passByScore ? "score_below_threshold" : "p0_exceeded";
+      return this.buildBusinessFailureResult({
+        context,
+        input,
+        reason,
+        minScore,
+        p0Allowed,
+        maxRounds,
+        bestEffort,
+        roundSummaries,
+        finalReport,
+      });
+    }
+
     await context.emit?.({
       type: "peer_review_result",
       payload: {
-        status: passed ? "pass" : "fail",
-        reason: passed ? "criteria_satisfied" : "criteria_not_satisfied",
+        status: "pass",
+        reason: "criteria_satisfied",
         average_score: finalReport.average_score,
         min_score: minScore,
         p0_count: finalReport.issue_counts.P0,
@@ -199,10 +248,9 @@ export class PeerReviewPattern extends CollaborationPatternBase {
     });
 
     return {
-      success: passed,
+      success: true,
       output: {
-        status: passed ? "pass" : "fail",
-        reason: passed ? undefined : OboraErrorCode.CONSENSUS_FAIL,
+        status: "pass",
         subject: input.subject,
         review: {
           rounds: roundSummaries,
@@ -216,7 +264,62 @@ export class PeerReviewPattern extends CollaborationPatternBase {
       },
       metadata: {
         blackboard_domains: PATTERN_BLACKBOARD_DOMAIN_MAP["peer-review"],
-        decision: passed ? "PASS" : "FAIL",
+        decision: "PASS",
+        max_rounds: maxRounds,
+        best_effort_reviewers: [...bestEffort],
+      },
+    };
+  }
+
+  private async buildBusinessFailureResult(params: {
+    context: PatternRuntimeContext;
+    input: PeerReviewInputShape;
+    reason: PeerReviewFailureReason;
+    minScore: number;
+    p0Allowed: number;
+    maxRounds: number;
+    bestEffort: Set<string>;
+    roundSummaries: RoundSummary[];
+    finalReport: {
+      issue_counts: Record<IssueSeverity, number>;
+      scores_by_reviewer: Record<string, number[]>;
+      average_score: number;
+    };
+  }): Promise<PatternPayloadResult> {
+    const { context, input, reason, minScore, p0Allowed, maxRounds, bestEffort, roundSummaries, finalReport } = params;
+
+    await context.emit?.({
+      type: "peer_review_result",
+      payload: {
+        status: "fail",
+        reason,
+        average_score: finalReport.average_score,
+        min_score: minScore,
+        p0_count: finalReport.issue_counts.P0,
+        p0_allowed: p0Allowed,
+      },
+    });
+
+    return {
+      success: false,
+      output: {
+        status: "fail",
+        reason,
+        error_codes: [OboraErrorCode.CONSENSUS_FAIL],
+        subject: input.subject,
+        review: {
+          rounds: roundSummaries,
+          final_round: roundSummaries.at(-1)?.round ?? 0,
+          criteria: {
+            min_score: minScore,
+            p0_allowed: p0Allowed,
+          },
+          report: finalReport,
+        },
+      },
+      metadata: {
+        blackboard_domains: PATTERN_BLACKBOARD_DOMAIN_MAP["peer-review"],
+        decision: "FAIL",
         max_rounds: maxRounds,
         best_effort_reviewers: [...bestEffort],
       },
@@ -305,7 +408,11 @@ export class PeerReviewPattern extends CollaborationPatternBase {
     };
   }
 
-  private hasTimedOut(timeoutMs: number, startedAt: Date | string | undefined, context: PatternRuntimeContext): boolean {
+  private hasTimedOut(timeoutMs: number | undefined, startedAt: Date | string | undefined, context: PatternRuntimeContext): boolean {
+    if (timeoutMs === undefined) {
+      return false;
+    }
+
     const now = this.resolveNow(context);
     const start = resolveStartTime(startedAt, now);
     return now.getTime() - start.getTime() >= timeoutMs;
