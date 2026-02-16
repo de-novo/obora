@@ -5,4 +5,7 @@ export * from "./builtin/DiscussionPattern.js";
 export * from "./builtin/ConsensusPattern.js";
 export * from "./builtin/BrainstormPattern.js";
 export * from "./builtin/PeerReviewPattern.js";
+export * from "./builtin/SupervisorPattern.js";
+export * from "./builtin/FanOutFanInPattern.js";
+export * from "./builtin/RedBluePattern.js";
 export * from "./builtin/discussion/index.js";

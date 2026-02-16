@@ -8,6 +8,9 @@ import { DiscussionPattern } from "../patterns/builtin/DiscussionPattern.js";
 import { ConsensusPattern } from "../patterns/builtin/ConsensusPattern.js";
 import { BrainstormPattern } from "../patterns/builtin/BrainstormPattern.js";
 import { PeerReviewPattern } from "../patterns/builtin/PeerReviewPattern.js";
+import { SupervisorPattern } from "../patterns/builtin/SupervisorPattern.js";
+import { FanOutFanInPattern } from "../patterns/builtin/FanOutFanInPattern.js";
+import { RedBluePattern } from "../patterns/builtin/RedBluePattern.js";
 import type {
   AgentPlugin,
   AnyPlugin,
@@ -107,6 +110,24 @@ export class PeerReviewPatternPlugin extends PeerReviewPattern implements Patter
   readonly version = "1.0.0";
 }
 
+export class SupervisorPatternPlugin extends SupervisorPattern implements PatternPlugin {
+  readonly type = "pattern" as const;
+  readonly name = "supervisor";
+  readonly version = "1.0.0";
+}
+
+export class FanOutFanInPatternPlugin extends FanOutFanInPattern implements PatternPlugin {
+  readonly type = "pattern" as const;
+  readonly name = "fan-out-fan-in";
+  readonly version = "1.0.0";
+}
+
+export class RedBluePatternPlugin extends RedBluePattern implements PatternPlugin {
+  readonly type = "pattern" as const;
+  readonly name = "red-blue";
+  readonly version = "1.0.0";
+}
+
 export class AllowAllPolicyRulePlugin implements PolicyRulePlugin {
   readonly type = "policy-rule" as const;
   readonly name = "allow-all-policy";
@@ -179,6 +200,9 @@ export function createBuiltinPlugins(options: { sandboxRoot?: string } = {}): An
     new ConsensusPatternPlugin(),
     new BrainstormPatternPlugin(),
     new PeerReviewPatternPlugin(),
+    new SupervisorPatternPlugin(),
+    new FanOutFanInPatternPlugin(),
+    new RedBluePatternPlugin(),
     new AllowAllPolicyRulePlugin(),
     new RetryRecoveryStrategyPlugin(),
     new MajorityConsensusRulePlugin(),

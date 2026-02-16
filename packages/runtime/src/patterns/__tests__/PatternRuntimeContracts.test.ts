@@ -94,4 +94,20 @@ describe("Pattern runtime contracts", () => {
     expect(patternPlugin?.version).toBe("1.0.0");
     expect(isBuiltinPatternKind(patternPlugin!.name)).toBe(true);
   });
+
+  it("registers fan-out-fan-in built-in as pattern plugin wrapper", () => {
+    const patternPlugin = createBuiltinPlugins().find((plugin) => plugin.type === "pattern" && plugin.name === "fan-out-fan-in");
+    expect(patternPlugin).toBeDefined();
+    expect(patternPlugin?.name).toBe("fan-out-fan-in");
+    expect(patternPlugin?.version).toBe("1.0.0");
+    expect(isBuiltinPatternKind(patternPlugin!.name)).toBe(true);
+  });
+
+  it("registers red-blue built-in as pattern plugin wrapper", () => {
+    const patternPlugin = createBuiltinPlugins().find((plugin) => plugin.type === "pattern" && plugin.name === "red-blue");
+    expect(patternPlugin).toBeDefined();
+    expect(patternPlugin?.name).toBe("red-blue");
+    expect(patternPlugin?.version).toBe("1.0.0");
+    expect(isBuiltinPatternKind(patternPlugin!.name)).toBe(true);
+  });
 });
