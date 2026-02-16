@@ -34,6 +34,18 @@ export interface PolicySet {
   gates?: GatePolicy[];
 }
 
+export interface PolicyVersion {
+  version: string;
+  loadedAt: Date;
+  source: string;
+  hash: string;
+}
+
+export interface PolicySnapshot {
+  readonly version: PolicyVersion;
+  enforce(action: PolicyAction, context: PolicyContext): PolicyDecision;
+}
+
 export interface ToolPolicy {
   name: string;
   effect: "allow" | "deny" | "transform" | "gate";

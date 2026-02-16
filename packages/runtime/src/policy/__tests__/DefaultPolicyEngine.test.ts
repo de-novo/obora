@@ -1,3 +1,5 @@
+import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -10,9 +12,13 @@ describe("DefaultPolicyEngine", () => {
 
   it("loads YAML policy successfully", async () => {
     const engine = new DefaultPolicyEngine();
-    await engine.load(fixturePath);
+    const loadedVersion = await engine.load(fixturePath);
 
     expect(engine.version()).toBe("1.0");
+    expect(loadedVersion.source).toBe(fixturePath);
+    expect(loadedVersion.hash).toHaveLength(64);
+    expect(engine.currentVersion()).toEqual(loadedVersion);
+    expect(engine.history()).toHaveLength(1);
   });
 
   it("enforces tool/sandbox/resource/gate rules in order", async () => {
@@ -104,6 +110,92 @@ describe("DefaultPolicyEngine", () => {
         rule: "tools.release",
       },
     });
+  });
+
+  it("keeps snapshot isolation between running and newly created cells", () => {
+    const engine = new DefaultPolicyEngine();
+    engine.loadInline({
+      version: "v1",
+      tools: [{ name: "shell_exec", effect: "deny", when: { matches: ["rm -rf"] } }],
+    });
+
+    const runningCellSnapshot = engine.snapshot();
+
+    engine.loadInline({
+      version: "v2",
+      tools: [{ name: "shell_exec", effect: "allow" }],
+    });
+
+    const newCellSnapshot = engine.snapshot();
+
+    const runningDecision = runningCellSnapshot.enforce(
+      { type: "tool_call", name: "shell_exec", params: { command: "rm -rf /tmp/a" } },
+      {},
+    );
+    const newDecision = newCellSnapshot.enforce(
+      { type: "tool_call", name: "shell_exec", params: { command: "rm -rf /tmp/a" } },
+      {},
+    );
+
+    expect(runningCellSnapshot.version.version).toBe("v1");
+    expect(newCellSnapshot.version.version).toBe("v2");
+    expect(runningDecision.type).toBe("deny");
+    expect(newDecision.type).toBe("allow");
+  });
+
+  it("rolls back to previous version when reload fails", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "policy-reload-"));
+    const filePath = path.join(dir, "policy.yaml");
+
+    await fs.writeFile(
+      filePath,
+      [
+        "version: stable",
+        "tools:",
+        "  - name: shell_exec",
+        "    effect: deny",
+        "    when:",
+        "      matches:",
+        "        - rm -rf",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const engine = new DefaultPolicyEngine();
+    const stable = await engine.load(filePath);
+
+    await fs.writeFile(filePath, "version: broken\ntools: [", "utf8");
+
+    await expect(engine.reload()).rejects.toThrow();
+
+    expect(engine.currentVersion()).toEqual(stable);
+    expect(engine.version()).toBe("stable");
+    expect(engine.history()).toHaveLength(1);
+  });
+
+  it("emits lifecycle events for reload success/failure", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "policy-events-"));
+    const filePath = path.join(dir, "policy.yaml");
+    const events: string[] = [];
+
+    await fs.writeFile(filePath, "version: v1\n", "utf8");
+
+    const engine = new DefaultPolicyEngine(undefined, {
+      onLifecycleEvent: (event) => {
+        events.push(event.type);
+      },
+    });
+
+    await engine.load(filePath);
+
+    await fs.writeFile(filePath, "version: v2\n", "utf8");
+    await engine.reload();
+
+    await fs.writeFile(filePath, "version: broken\ntools: [", "utf8");
+    await expect(engine.reload()).rejects.toThrow();
+
+    expect(events).toEqual(["load", "reload_success", "reload_failure"]);
   });
 
   it("throws on invalid YAML", async () => {
