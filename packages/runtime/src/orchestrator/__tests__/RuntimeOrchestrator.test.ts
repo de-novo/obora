@@ -214,12 +214,10 @@ steps:
           {
             name: "review",
             agent: "verifier",
-            config: {
-              consensus: {
-                type: "majority",
-                voters: [{ id: "opus" }, { id: "codex" }],
-                minRequired: 2,
-              },
+            consensus: {
+              type: "majority",
+              voters: [{ id: "opus" }, { id: "codex" }],
+              min: 2,
             },
           },
         ],
@@ -232,7 +230,7 @@ steps:
     expect(execution.stepRecords.review.error).toContain("majority not reached");
   });
 
-  it("integrates recovery engine and recovers failed step", async () => {
+  it("integrates recovery engine and reads workflow.recovery before legacy config fallback", async () => {
     const retryExecutor = {
       executeRetry: vi.fn(async () => ({ ok: true })),
     };
@@ -241,32 +239,35 @@ steps:
       wait: async () => {},
     });
 
-    const orchestrator = new DefaultRuntimeOrchestrator(
-      {
-        cellManager: createCellManager([], "unstable"),
-        policyEngine: createPolicyEngine(),
-        recoveryEngine,
-      },
-      {
-        defaultRecoveryStrategy: {
-          type: "retry",
-          mode: "linear",
-          maxAttempts: 2,
-          initialDelayMs: 0,
-          maxDelayMs: 0,
-        },
-      }
-    );
+    const orchestrator = new DefaultRuntimeOrchestrator({
+      cellManager: createCellManager([], "unstable"),
+      policyEngine: createPolicyEngine(),
+      recoveryEngine,
+    });
 
-    orchestrator.define(
-      "recovery-case",
-      `
-name: recovery-case
-steps:
-  - name: unstable
-    agent: executor
-`
-    );
+    orchestrator.define("recovery-case", {
+      name: "recovery-case",
+      steps: [
+        {
+          name: "unstable",
+          agent: "executor",
+          config: {
+            recovery: {
+              type: "rollback",
+              snapshotId: "legacy-should-not-be-used",
+            },
+          },
+        },
+      ],
+      recovery: {
+        unstable: {
+          on_fail: "retry",
+          max_retries: 2,
+          backoff: "linear",
+          backoff_base: "1s",
+        },
+      },
+    });
 
     const execution = await orchestrator.run("recovery-case", {});
     expect(execution.status).toBe("completed");
@@ -290,14 +291,12 @@ steps:
         {
           name: "generate",
           agent: "analyst",
-          config: {
-            bindings: [
-              {
-                source: "output.stepName",
-                target: "knowledge.last_step",
-              },
-            ],
-          },
+          bindings: [
+            {
+              source: "output.stepName",
+              target: "knowledge.last_step",
+            },
+          ],
         },
       ],
     });

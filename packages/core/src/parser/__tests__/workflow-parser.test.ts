@@ -246,6 +246,43 @@ steps:
         expect(workflow.config!.retry_delay).toBe(delay);
       }
     });
+
+    it('should parse SCHEMAS.md fields on step/workflow', () => {
+      const yaml = `
+name: schema-aligned
+steps:
+  - name: review
+    agent: reviewer
+    gate: consensus
+    gate_config:
+      timeout: 10m
+      fallback: escalate
+      escalation_to: human
+    consensus:
+      type: majority
+      min: 2
+      voters:
+        - id: opus
+        - id: codex
+    bindings:
+      - source: output.summary
+        target: knowledge.summary
+recovery:
+  review:
+    on_fail: retry
+    max_retries: 2
+    backoff: exponential
+    backoff_base: 5s
+`;
+
+      const workflow = parseWorkflow(yaml);
+      expect(workflow.steps[0].gate).toBe('consensus');
+      expect(workflow.steps[0].gate_config?.fallback).toBe('escalate');
+      expect(workflow.steps[0].consensus?.min).toBe(2);
+      expect(workflow.steps[0].bindings?.[0]?.target).toBe('knowledge.summary');
+      expect(workflow.recovery?.review?.on_fail).toBe('retry');
+      expect(workflow.recovery?.review?.backoff_base).toBe('5s');
+    });
   });
 
   describe('parseWorkflow - strict mode', () => {

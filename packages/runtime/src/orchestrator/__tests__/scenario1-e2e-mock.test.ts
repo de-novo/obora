@@ -149,16 +149,15 @@ steps:
   - name: review
     agent: reviewer
     depends_on: [generate]
-    config:
-      consensus:
-        type: majority
-        voters:
-          - id: opus
-          - id: codex
-          - id: glm-4.7
-          - id: glm-5
-        minRequired: 3
-        bestEffort: [glm-5]
+    consensus:
+      type: majority
+      voters:
+        - id: opus
+        - id: codex
+        - id: glm-4.7
+        - id: glm-5
+      min: 3
+      best_effort: [glm-5]
   - name: deploy
     agent: deployer
     depends_on: [review]

@@ -35,19 +35,34 @@ describe("DefaultStateBinder", () => {
     expect(state.read("knowledge.generated_code")).toEqual(["index.ts", "app.ts"]);
   });
 
-  it("supports condition expression and skips binding when condition is false", async () => {
+  it("supports safe condition expression parser and skips binding when condition is false", async () => {
     const state = new StateManager();
     const binder = new DefaultStateBinder(state);
 
-    await binder.bind(createCellResult({ summary: null }), [
+    await binder.bind(createCellResult({ summary: null, score: 7 }), [
       {
         source: "output.summary",
         target: "knowledge.generation_summary",
-        condition: "value != null",
+        condition: "value != null && cellResult.output.score >= 9",
       },
     ]);
 
     expect(() => state.read("knowledge.generation_summary")).toThrowError("Path not found");
+  });
+
+  it("throws for unsupported condition tokens instead of executing arbitrary code", async () => {
+    const state = new StateManager();
+    const binder = new DefaultStateBinder(state);
+
+    await expect(
+      binder.bind(createCellResult({ summary: "ok" }), [
+        {
+          source: "output.summary",
+          target: "knowledge.generation_summary",
+          condition: "(() => true)()",
+        },
+      ])
+    ).rejects.toThrow(/Unsupported token|Unexpected/);
   });
 
   it("applies built-in global transform function (JSON.parse)", async () => {

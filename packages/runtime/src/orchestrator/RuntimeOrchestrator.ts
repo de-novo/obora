@@ -524,7 +524,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
     const record = execution.stepRecords[step.name]!;
     const error = this.extractError(output);
 
-    const strategy = this.extractRecoveryStrategy(step) ?? this.options.defaultRecoveryStrategy;
+    const strategy = this.extractRecoveryStrategy(step, execution) ?? this.options.defaultRecoveryStrategy;
     if (strategy && this.dependencies.recoveryEngine) {
       await this.recordAudit(execution.id, "recovery_start", {
         stepName: step.name,
@@ -560,25 +560,92 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
   }
 
   private extractConsensusConfig(step: Step) {
-    const config = step.config as Record<string, unknown> | undefined;
-    const raw = config?.consensus as Record<string, unknown> | undefined;
+    const directConsensus = (step as Step & { consensus?: Record<string, unknown> }).consensus;
+    const fallbackConsensus = (step.config as Record<string, unknown> | undefined)?.consensus as
+      | Record<string, unknown>
+      | undefined;
+    const raw = directConsensus ?? fallbackConsensus;
+
     if (!raw) {
       return undefined;
     }
 
+    const minRequired = typeof raw.min === "number"
+      ? raw.min
+      : typeof raw.minRequired === "number"
+        ? raw.minRequired
+        : 1;
+
+    const bestEffort = Array.isArray(raw.best_effort)
+      ? raw.best_effort
+      : Array.isArray(raw.bestEffort)
+        ? raw.bestEffort
+        : undefined;
+
     return {
       type: (raw.type as "majority" | "unanimous" | "weighted" | "score-threshold" | "custom") ?? "majority",
       voters: Array.isArray(raw.voters) ? raw.voters as Array<{ id: string; weight?: number }> : [],
-      minRequired: typeof raw.minRequired === "number" ? raw.minRequired : 1,
+      minRequired,
       threshold: typeof raw.threshold === "number" ? raw.threshold : undefined,
       timeout: typeof raw.timeout === "string" ? raw.timeout : undefined,
-      bestEffort: Array.isArray(raw.bestEffort) ? raw.bestEffort as string[] : undefined,
+      bestEffort: Array.isArray(bestEffort) ? bestEffort.filter((value): value is string => typeof value === "string") : undefined,
     };
   }
 
-  private extractRecoveryStrategy(step: Step) {
-    const config = step.config as Record<string, unknown> | undefined;
-    const raw = config?.recovery as Record<string, unknown> | undefined;
+  private extractRecoveryStrategy(step: Step, execution: Execution) {
+    const workflow = this.workflows.get(execution.workflowName);
+    const workflowRecovery = workflow?.recovery?.[step.name] as Record<string, unknown> | undefined;
+    const legacyRecovery = (step.config as Record<string, unknown> | undefined)?.recovery as Record<string, unknown> | undefined;
+
+    const modern = this.toRecoveryStrategyFromWorkflow(workflowRecovery);
+    if (modern) {
+      return modern;
+    }
+
+    return this.toRecoveryStrategyFromLegacy(legacyRecovery);
+  }
+
+  private toRecoveryStrategyFromWorkflow(raw?: Record<string, unknown>) {
+    if (!raw || typeof raw.on_fail !== "string") {
+      return undefined;
+    }
+
+    if (raw.on_fail === "retry") {
+      return {
+        type: "retry" as const,
+        mode: (raw.backoff as "linear" | "exponential") ?? "linear",
+        maxAttempts: typeof raw.max_retries === "number" ? raw.max_retries : 1,
+        initialDelayMs: typeof raw.backoff_base === "string" ? parseDuration(raw.backoff_base) : 0,
+        maxDelayMs: 0,
+      };
+    }
+
+    if (raw.on_fail === "rollback") {
+      return { type: "rollback" as const, snapshotId: String(raw.snapshot_id ?? raw.snapshotId ?? "") };
+    }
+
+    if (raw.on_fail === "escalate") {
+      return {
+        type: "escalate" as const,
+        severity: "high" as const,
+        channel: String(raw.to ?? "human"),
+        summary: typeof raw.summary === "string" ? raw.summary : undefined,
+      };
+    }
+
+    if (raw.on_fail === "alternative") {
+      const fallback = raw.fallback as { name?: unknown } | undefined;
+      return {
+        type: "alternative" as const,
+        stepName: typeof fallback?.name === "string" ? fallback.name : String(raw.to ?? ""),
+        payload: fallback,
+      };
+    }
+
+    return undefined;
+  }
+
+  private toRecoveryStrategyFromLegacy(raw?: Record<string, unknown>) {
     if (!raw || typeof raw.type !== "string") {
       return undefined;
     }

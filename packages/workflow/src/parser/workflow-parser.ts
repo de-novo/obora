@@ -7,8 +7,14 @@ import { parse as parseYaml, YAMLParseError } from "yaml";
 
 import { DependencyError, ParseError } from "../errors/index.js";
 import type {
+  ConsensusConfig,
   DependencyMap,
+  GateConfig,
+  GateType,
   ParserOptions,
+  PolicyOverride,
+  RecoveryStrategyConfig,
+  StateBinding,
   Step,
   Workflow,
   WorkflowConfig,
@@ -16,7 +22,7 @@ import type {
 } from "../types/workflow.js";
 
 // Known fields for strict mode validation
-const KNOWN_WORKFLOW_FIELDS = ["name", "version", "description", "mode", "config", "steps"];
+const KNOWN_WORKFLOW_FIELDS = ["name", "version", "description", "mode", "config", "steps", "recovery"];
 
 const KNOWN_STEP_FIELDS = [
   "name",
@@ -29,6 +35,14 @@ const KNOWN_STEP_FIELDS = [
   "outputs",
   "timeout",
   "skills",
+  "tools",
+  "bindings",
+  "consensus",
+  "gate",
+  "gate_config",
+  "pattern",
+  "participants",
+  "policy",
   "config",
 ];
 
@@ -76,6 +90,103 @@ function checkUnknownFields(
 /**
  * Parse a raw YAML object into a Step
  */
+function parseStateBindings(raw: unknown, stepName: string): StateBinding[] | undefined {
+  if (raw === undefined) {
+    return undefined;
+  }
+  if (!Array.isArray(raw)) {
+    throw new ParseError("E2003", `Step '${stepName}': 'bindings' must be an array`);
+  }
+
+  return raw.map((item, index) => {
+    if (typeof item !== "object" || item === null) {
+      throw new ParseError("E2003", `Step '${stepName}': 'bindings[${index}]' must be an object`);
+    }
+    const binding = item as Record<string, unknown>;
+    if (typeof binding.source !== "string" || typeof binding.target !== "string") {
+      throw new ParseError("E2003", `Step '${stepName}': binding requires string 'source' and 'target'`);
+    }
+
+    return {
+      source: binding.source,
+      target: binding.target,
+      transform: typeof binding.transform === "string" ? binding.transform : undefined,
+      condition: typeof binding.condition === "string" ? binding.condition : undefined,
+    };
+  });
+}
+
+function parseConsensus(raw: unknown, stepName: string): ConsensusConfig | undefined {
+  if (raw === undefined) {
+    return undefined;
+  }
+
+  if (typeof raw !== "object" || raw === null) {
+    throw new ParseError("E2003", `Step '${stepName}': 'consensus' must be an object`);
+  }
+
+  const obj = raw as Record<string, unknown>;
+  const validTypes = ["majority", "unanimous", "weighted", "score-threshold", "custom"] as const;
+  const type = obj.type;
+  if (typeof type !== "string" || !validTypes.includes(type as (typeof validTypes)[number])) {
+    throw new ParseError("E2003", `Step '${stepName}': 'consensus.type' is invalid`);
+  }
+
+  return {
+    type: type as ConsensusConfig["type"],
+    voters: Array.isArray(obj.voters) ? obj.voters as ConsensusConfig["voters"] : undefined,
+    min: typeof obj.min === "number" ? obj.min : undefined,
+    of: typeof obj.of === "number" ? obj.of : undefined,
+    threshold: typeof obj.threshold === "number" ? obj.threshold : undefined,
+    timeout: typeof obj.timeout === "string" ? obj.timeout : undefined,
+    best_effort: Array.isArray(obj.best_effort) ? obj.best_effort.filter((x): x is string => typeof x === "string") : undefined,
+    custom: typeof obj.custom === "string" ? obj.custom : undefined,
+  };
+}
+
+function parseGateConfig(raw: unknown, stepName: string): GateConfig | undefined {
+  if (raw === undefined) {
+    return undefined;
+  }
+  if (typeof raw !== "object" || raw === null) {
+    throw new ParseError("E2003", `Step '${stepName}': 'gate_config' must be an object`);
+  }
+
+  const config = raw as Record<string, unknown>;
+  return {
+    timeout: typeof config.timeout === "string" ? config.timeout : undefined,
+    fallback:
+      config.fallback === "fail" || config.fallback === "escalate" || config.fallback === "auto-approve"
+        ? config.fallback
+        : undefined,
+    escalation_to: typeof config.escalation_to === "string" ? config.escalation_to : undefined,
+  };
+}
+
+function parsePolicyOverride(raw: unknown, stepName: string): PolicyOverride | undefined {
+  if (raw === undefined) {
+    return undefined;
+  }
+  if (typeof raw !== "object" || raw === null) {
+    throw new ParseError("E2003", `Step '${stepName}': 'policy' must be an object`);
+  }
+
+  const policy = raw as Record<string, unknown>;
+  return {
+    sandbox: typeof policy.sandbox === "string" ? policy.sandbox : undefined,
+    tools_override: Array.isArray(policy.tools_override)
+      ? policy.tools_override.filter((item): item is { name: string; effect: "allow" | "deny" | "transform" | "gate" } => {
+        if (typeof item !== "object" || item === null) {
+          return false;
+        }
+        const candidate = item as Record<string, unknown>;
+        return typeof candidate.name === "string"
+          && (candidate.effect === "allow" || candidate.effect === "deny" || candidate.effect === "transform" || candidate.effect === "gate");
+      })
+      : undefined,
+  };
+}
+
 function parseStep(raw: unknown, index: number, options: ParserOptions): Step {
   if (typeof raw !== "object" || raw === null) {
     throw new ParseError("E2003", `Step at index ${index} must be an object`);
@@ -158,6 +269,27 @@ function parseStep(raw: unknown, index: number, options: ParserOptions): Step {
     }
   }
 
+  if (obj.tools !== undefined) {
+    if (!Array.isArray(obj.tools) || !obj.tools.every((tool) => typeof tool === "string")) {
+      throw new ParseError("E2003", `Step '${obj.name}': 'tools' must be an array of strings`);
+    }
+  }
+
+  if (obj.gate !== undefined) {
+    const validGates: GateType[] = ["human-approval", "consensus", "external"];
+    if (!validGates.includes(obj.gate as GateType)) {
+      throw new ParseError("E2003", `Step '${obj.name}': 'gate' must be one of ${validGates.join(", ")}`);
+    }
+  }
+
+  if (obj.pattern !== undefined && typeof obj.pattern !== "string") {
+    throw new ParseError("E2003", `Step '${obj.name}': 'pattern' must be a string`);
+  }
+
+  if (obj.participants !== undefined && (typeof obj.participants !== "object" || obj.participants === null || Array.isArray(obj.participants))) {
+    throw new ParseError("E2003", `Step '${obj.name}': 'participants' must be an object`);
+  }
+
   return {
     name: obj.name,
     agent: obj.agent,
@@ -169,6 +301,14 @@ function parseStep(raw: unknown, index: number, options: ParserOptions): Step {
     outputs: obj.outputs as string[] | undefined,
     timeout: obj.timeout as string | undefined,
     skills: obj.skills as string[] | undefined,
+    tools: obj.tools as string[] | undefined,
+    bindings: parseStateBindings(obj.bindings, obj.name),
+    consensus: parseConsensus(obj.consensus, obj.name),
+    gate: obj.gate as GateType | undefined,
+    gate_config: parseGateConfig(obj.gate_config, obj.name),
+    pattern: obj.pattern as string | undefined,
+    participants: obj.participants as Record<string, string> | undefined,
+    policy: parsePolicyOverride(obj.policy, obj.name),
     config: obj.config as Record<string, unknown> | undefined,
   };
 }
@@ -213,6 +353,42 @@ function parseConfig(raw: unknown, options: ParserOptions): WorkflowConfig | und
     continue_on_error: obj.continue_on_error as boolean | undefined,
     max_parallel: obj.max_parallel as number | undefined,
   };
+}
+
+function parseRecovery(raw: unknown): Record<string, RecoveryStrategyConfig> | undefined {
+  if (raw === undefined) {
+    return undefined;
+  }
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw new ParseError("E2003", "'recovery' must be an object");
+  }
+
+  const recovery = raw as Record<string, unknown>;
+  const parsed: Record<string, RecoveryStrategyConfig> = {};
+
+  for (const [stepName, config] of Object.entries(recovery)) {
+    if (typeof config !== "object" || config === null) {
+      throw new ParseError("E2003", `'recovery.${stepName}' must be an object`);
+    }
+
+    const item = config as Record<string, unknown>;
+    const valid = ["retry", "rollback", "escalate", "alternative", "custom"];
+    if (!valid.includes(String(item.on_fail))) {
+      throw new ParseError("E2003", `'recovery.${stepName}.on_fail' is invalid`);
+    }
+
+    parsed[stepName] = {
+      on_fail: item.on_fail as RecoveryStrategyConfig["on_fail"],
+      max_retries: typeof item.max_retries === "number" ? item.max_retries : undefined,
+      backoff: item.backoff === "linear" || item.backoff === "exponential" ? item.backoff : undefined,
+      backoff_base: typeof item.backoff_base === "string" ? item.backoff_base : undefined,
+      to: typeof item.to === "string" ? item.to : undefined,
+      fallback: item.fallback as RecoveryStrategyConfig["fallback"],
+      custom: typeof item.custom === "string" ? item.custom : undefined,
+    };
+  }
+
+  return parsed;
 }
 
 /**
@@ -415,6 +591,7 @@ export function parseWorkflow(yamlContent: string, options: ParserOptions = {}):
     mode: obj.mode as WorkflowMode | undefined,
     config: parseConfig(obj.config, options),
     steps,
+    recovery: parseRecovery(obj.recovery),
   };
 }
 

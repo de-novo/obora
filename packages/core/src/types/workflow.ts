@@ -25,6 +25,49 @@ export interface WorkflowConfig {
 /**
  * Step definition within a workflow
  */
+export type GateType = "human-approval" | "consensus" | "external";
+
+export interface StateBinding {
+  source: string;
+  target: string;
+  transform?: string;
+  condition?: string;
+}
+
+export interface ConsensusVoterSpec {
+  id: string;
+  weight?: number;
+  role?: "ai" | "human" | "service";
+  required?: boolean;
+}
+
+export interface ConsensusConfig {
+  type: "majority" | "unanimous" | "weighted" | "score-threshold" | "custom";
+  voters?: ConsensusVoterSpec[];
+  min?: number;
+  of?: number;
+  threshold?: number;
+  timeout?: string;
+  best_effort?: string[];
+  custom?: string;
+}
+
+export interface GateConfig {
+  timeout?: string;
+  fallback?: "fail" | "escalate" | "auto-approve";
+  escalation_to?: string;
+}
+
+export interface ToolPolicyOverride {
+  name: string;
+  effect: "allow" | "deny" | "transform" | "gate";
+}
+
+export interface PolicyOverride {
+  sandbox?: string;
+  tools_override?: ToolPolicyOverride[];
+}
+
 export interface Step {
   /** Unique name for the step */
   name: string;
@@ -46,13 +89,39 @@ export interface Step {
   timeout?: string;
   /** Optional skills to activate for this step */
   skills?: string[];
-  /** Step-specific configuration */
+  /** Optional tool whitelist */
+  tools?: string[];
+  /** State binding declarations */
+  bindings?: StateBinding[];
+  /** Step consensus configuration */
+  consensus?: ConsensusConfig;
+  /** Step gate type */
+  gate?: GateType;
+  /** Step gate details */
+  gate_config?: GateConfig;
+  /** Collaboration pattern */
+  pattern?: string;
+  /** Pattern participant mapping */
+  participants?: Record<string, string>;
+  /** Step policy override */
+  policy?: PolicyOverride;
+  /** Step-specific configuration (legacy/backward compatibility) */
   config?: Record<string, unknown>;
 }
 
 /**
  * Complete workflow definition
  */
+export interface RecoveryStrategyConfig {
+  on_fail: "retry" | "rollback" | "escalate" | "alternative" | "custom";
+  max_retries?: number;
+  backoff?: "linear" | "exponential";
+  backoff_base?: string;
+  to?: string;
+  fallback?: Omit<Step, "depends_on">;
+  custom?: string;
+}
+
 export interface Workflow {
   /** Workflow name */
   name: string;
@@ -66,6 +135,8 @@ export interface Workflow {
   config?: WorkflowConfig;
   /** List of steps */
   steps: Step[];
+  /** Workflow-level recovery by step name */
+  recovery?: Record<string, RecoveryStrategyConfig>;
 }
 
 /**
