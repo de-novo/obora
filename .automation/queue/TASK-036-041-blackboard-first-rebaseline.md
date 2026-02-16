@@ -388,3 +388,20 @@ Board 단계 태스크를 blackboard 우선 구현 순서로 재배치하고, �
 - 실행: `pnpm --filter @obora-kit/blackboard test -- test/snapshot/serializer.test.ts`
 - 결과: ✅ `1 file / 15 tests passed` (265ms)
 - 판정: 블로커 없음, 다음 실행은 blackboard store hydration 최소검증 1건(`pnpm --filter @obora-kit/blackboard test -- test/store/hydration.test.ts`) 점검 권장
+
+## 야간 자동 점검 로그 (2026-02-17 00:57 KST)
+- 기준 브랜치: `origin/main` (`ef54166`)
+- 작업 브랜치(HEAD 유지): `main` (`8983a4f`, local ahead 62)
+- 점검 단위: blackboard core 통합 최소검증 1건 (`test/core/blackboard.test.ts`)
+- 1차 시도: `test/store/hydration.test.ts` → 파일 미존재 (No test files found)
+- 재선정 실행: `pnpm --filter @obora-kit/blackboard test -- test/core/blackboard.test.ts`
+- 결과: ✅ `1 file / 52 tests passed` (466ms)
+- 판정: 블로커 없음, 다음 실행은 blackboard core accessors 최소검증 1건(`pnpm --filter @obora-kit/blackboard test -- test/core/accessors/`) 점검 권장
+
+## 야간 자동 점검 로그 (2026-02-17 01:42 KST)
+- 기준 브랜치: `origin/main` (`ef54166`)
+- 작업 브랜치(HEAD 유지): `main` (`604a9b6`, local ahead 73)
+- 점검 단위: blackboard core accessors 최소검증 1건 (`test/core/accessors/`)
+- 실행: `pnpm --filter @obora-kit/blackboard test -- test/core/accessors`
+- 결과: ✅ `3 files / 82 tests passed` (665ms)
+- 판정: 블로커 없음, 다음 실행은 blackboard snapshot replayer 최소검증 1건(`pnpm --filter @obora-kit/blackboard test -- test/snapshot/replayer.test.ts`) 점검 권장
