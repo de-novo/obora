@@ -139,8 +139,6 @@ export interface PipelinePatternConfig {
 }
 
 export interface FanOutFanInPatternConfig {
-  input?: unknown;
-  agents?: string[];
   merge?: "concatenate" | "rank" | "vote" | "custom";
 }
 

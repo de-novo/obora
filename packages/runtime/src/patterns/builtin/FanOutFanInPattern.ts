@@ -1,3 +1,4 @@
+import { OboraErrorCode } from "../../errors/OboraErrorCode.js";
 import {
   CollaborationPatternBase,
   type BuiltinPatternKind,
@@ -89,6 +90,7 @@ export class FanOutFanInPattern extends CollaborationPatternBase {
         success: false,
         output: {
           reason: "all_participants_failed",
+          error_codes: [OboraErrorCode.ORCH_DEPENDENCY_FAILED],
           merged: [],
           participant_results: participantResults,
           merge_strategy: mergeStrategy,

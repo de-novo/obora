@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { OboraErrorCode } from "../../errors/OboraErrorCode.js";
 import { FanOutFanInPattern } from "./FanOutFanInPattern.js";
 
 describe("FanOutFanInPattern", () => {
@@ -164,6 +165,7 @@ describe("FanOutFanInPattern", () => {
     expect(result.success).toBe(false);
     expect(result.output).toMatchObject({
       reason: "all_participants_failed",
+      error_codes: [OboraErrorCode.ORCH_DEPENDENCY_FAILED],
       merge_strategy: "concatenate",
     });
   });

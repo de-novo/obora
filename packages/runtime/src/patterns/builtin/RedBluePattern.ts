@@ -185,6 +185,11 @@ export class RedBluePattern extends CollaborationPatternBase {
         throw new Error("red-blue.red_team and red-blue.blue_team must each contain at least one participant");
       }
 
+      const overlap = redTeam.filter((member) => blueTeam.includes(member));
+      if (overlap.length > 0) {
+        throw new Error(`red-blue: participants cannot be on both teams: ${overlap.join(", ")}`);
+      }
+
       return { redTeam, blueTeam };
     }
 

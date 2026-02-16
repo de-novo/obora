@@ -236,4 +236,23 @@ describe("RedBluePattern", () => {
       ],
     });
   });
+
+  it("throws when a participant is included in both red and blue teams", async () => {
+    const pattern = new RedBluePattern();
+
+    await expect(
+      pattern.execute({
+        pattern: "red-blue",
+        participants: {
+          p1: "agent-1",
+          p2: "agent-2",
+          p3: "agent-3",
+        },
+        config: {
+          red_team: ["p1", "p2"],
+          blue_team: ["p2", "p3"],
+        },
+      })
+    ).rejects.toThrow("red-blue: participants cannot be on both teams: p2");
+  });
 });
