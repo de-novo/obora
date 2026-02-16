@@ -154,7 +154,12 @@ function normalizeGatePolicy(input: unknown, index: number): GatePolicy {
   if (timeout !== undefined && typeof timeout !== "string") {
     throw new Error(`Invalid gates[${index}].timeout: expected string`);
   }
-  if (fallback !== undefined && fallback !== "fail" && fallback !== "escalate") {
+  if (
+    fallback !== undefined
+    && fallback !== "fail"
+    && fallback !== "escalate"
+    && fallback !== "auto-approve"
+  ) {
     throw new Error(`Invalid gates[${index}].fallback: ${String(fallback)}`);
   }
 

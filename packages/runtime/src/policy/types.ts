@@ -77,5 +77,5 @@ export interface GatePolicy {
   type: "human-approval" | "consensus" | "external";
   required: boolean;
   timeout?: string;
-  fallback?: "fail" | "escalate";
+  fallback?: "fail" | "escalate" | "auto-approve";
 }

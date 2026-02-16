@@ -14,7 +14,7 @@ export interface GateWaitState {
   status: "waiting" | "approved" | "rejected" | "timeout";
   createdAt: Date;
   timeout?: string;
-  fallback?: "fail" | "escalate";
+  fallback?: "fail" | "escalate" | "auto-approve";
   persisted: true;
 }
 

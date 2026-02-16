@@ -158,7 +158,7 @@ steps:
       cellManager: createCellManager([]),
       policyEngine: createPolicyEngine((action) =>
         action.name === "deploy"
-          ? { type: "gate", gateType: "human-approval", config: { timeout: "1h", fallback: "fail" } }
+          ? { type: "gate", gateType: "human-approval", config: { timeout: "1h", fallback: "auto-approve" } }
           : { type: "allow" }
       ),
     });
@@ -179,6 +179,7 @@ steps:
     const waiting = await orchestrator.run("gate-case", {});
     expect(waiting.status).toBe("waiting");
     expect(waiting.waitingGate?.stepName).toBe("deploy");
+    expect(waiting.waitingGate?.fallback).toBe("auto-approve");
 
     const resumed = await orchestrator.approve(waiting.id);
     expect(resumed.status).toBe("completed");

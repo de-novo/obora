@@ -40,12 +40,12 @@ interface WaitingContext {
 
 interface StepGateDecision {
   gateType: GateWaitState["gateType"];
-  config?: { timeout?: string; fallback?: "fail" | "escalate" };
+  config?: { timeout?: string; fallback?: "fail" | "escalate" | "auto-approve" };
 }
 
 interface RuntimeGateDecision extends Extract<PolicyDecision, { type: "gate" }> {
   gateType: GateWaitState["gateType"];
-  config?: { timeout?: string; fallback?: "fail" | "escalate" };
+  config?: { timeout?: string; fallback?: "fail" | "escalate" | "auto-approve" };
 }
 
 const inMemoryGateStateStore = (): GateWaitStateStore => {
@@ -588,7 +588,12 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
       const config = value as Record<string, unknown>;
       return {
         timeout: typeof config.timeout === "string" ? config.timeout : undefined,
-        fallback: config.fallback === "fail" || config.fallback === "escalate" ? config.fallback : undefined,
+        fallback:
+          config.fallback === "fail" ||
+          config.fallback === "escalate" ||
+          config.fallback === "auto-approve"
+            ? config.fallback
+            : undefined,
       };
     };
 
@@ -635,7 +640,12 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
 
     const mergedConfig = {
       timeout: typeof policyConfig?.timeout === "string" ? policyConfig.timeout : undefined,
-      fallback: policyConfig?.fallback === "fail" || policyConfig?.fallback === "escalate" ? policyConfig.fallback : undefined,
+      fallback:
+        policyConfig?.fallback === "fail" ||
+        policyConfig?.fallback === "escalate" ||
+        policyConfig?.fallback === "auto-approve"
+          ? policyConfig.fallback
+          : undefined,
       ...stepGate?.config,
     };
 
@@ -783,7 +793,10 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
     step: Step,
     decision: RuntimeGateDecision
   ): GateWaitState {
-    const config = (decision.config ?? {}) as { timeout?: string; fallback?: "fail" | "escalate" };
+    const config = (decision.config ?? {}) as {
+      timeout?: string;
+      fallback?: "fail" | "escalate" | "auto-approve";
+    };
     return {
       executionId,
       stepName: step.name,
