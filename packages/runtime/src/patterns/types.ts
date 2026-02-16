@@ -2,6 +2,10 @@ import { OboraErrorCode } from "../errors/OboraErrorCode.js";
 
 export { OboraErrorCode };
 
+/**
+ * Core domain patterns. "composite" is a meta-pattern registered separately
+ * because it orchestrates other patterns rather than implementing domain logic.
+ */
 export const BUILTIN_PATTERN_KINDS = [
   "pipeline",
   "discussion",
@@ -161,6 +165,15 @@ export interface CompositePatternConfig {
   on_stage_failure?: "fail" | "skip" | "escalate";
 }
 
+export interface CustomPatternDefinition {
+  name: string;
+  version?: string;
+  kind?: string;
+  description?: string;
+  execute: (context: PatternRuntimeContext) => Promise<PatternPayloadResult>;
+  validateConfig?: (config: PatternConfig) => void;
+}
+
 export interface CustomPatternConfig {
   [key: string]: unknown;
 }
@@ -186,9 +199,10 @@ export type PatternConfigByKind = {
   pipeline: PipelinePatternConfig;
   "fan-out-fan-in": FanOutFanInPatternConfig;
   supervisor: SupervisorPatternConfig;
+  composite: CompositePatternConfig;
 };
 
-export type PatternYamlStep<K extends BuiltinPatternKind = BuiltinPatternKind> = {
+export type PatternYamlStep<K extends keyof PatternConfigByKind = keyof PatternConfigByKind> = {
   pattern: K;
   config?: PatternConfigByKind[K];
 };
@@ -206,7 +220,7 @@ export type BlackboardDomain =
   | "supervisor"
   | "supervisor-tree";
 
-export type PatternBlackboardDomainMapping = Record<BuiltinPatternKind, readonly BlackboardDomain[]>;
+export type PatternBlackboardDomainMapping = Record<keyof PatternConfigByKind, readonly BlackboardDomain[]>;
 
 export const PATTERN_BLACKBOARD_DOMAIN_MAP: PatternBlackboardDomainMapping = {
   discussion: ["agenda", "meeting-state-machine", "message-bus"],
@@ -217,9 +231,10 @@ export const PATTERN_BLACKBOARD_DOMAIN_MAP: PatternBlackboardDomainMapping = {
   pipeline: ["state"],
   "fan-out-fan-in": ["actor-pool", "knowledge"],
   supervisor: ["supervisor", "supervisor-tree"],
+  composite: ["state", "knowledge"],
 };
 
-export const PATTERN_ERROR_CODE_MAP: Record<BuiltinPatternKind, Record<PatternFailureCategory, OboraErrorCode>> = {
+export const PATTERN_ERROR_CODE_MAP: Record<keyof PatternConfigByKind, Record<PatternFailureCategory, OboraErrorCode>> = {
   discussion: {
     failure: OboraErrorCode.CONSENSUS_FAIL,
     timeout: OboraErrorCode.CONSENSUS_TIMEOUT,
@@ -258,6 +273,11 @@ export const PATTERN_ERROR_CODE_MAP: Record<BuiltinPatternKind, Record<PatternFa
   supervisor: {
     failure: OboraErrorCode.RECOVERY_RETRY_EXHAUSTED,
     timeout: OboraErrorCode.CELL_TIMEOUT,
+    escalation: OboraErrorCode.RECOVERY_ESCALATION_TIMEOUT,
+  },
+  composite: {
+    failure: OboraErrorCode.ORCH_DEPENDENCY_FAILED,
+    timeout: OboraErrorCode.ORCH_EXECUTION_TIMEOUT,
     escalation: OboraErrorCode.RECOVERY_ESCALATION_TIMEOUT,
   },
 };

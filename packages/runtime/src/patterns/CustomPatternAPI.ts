@@ -2,23 +2,17 @@ import type { PatternRegistry } from "./PatternRegistry.js";
 import {
   CollaborationPatternBase,
   type CollaborationPattern,
+  type CustomPatternDefinition,
   type PatternConfig,
   type PatternPayloadResult,
   type PatternRuntimeContext,
 } from "./types.js";
 
+export type { CustomPatternDefinition } from "./types.js";
+
 export interface RegisterCustomPatternOptions {
   replace?: boolean;
   logger?: Pick<Console, "warn">;
-}
-
-export interface CustomPatternDefinition {
-  name: string;
-  version?: string;
-  kind?: string;
-  description?: string;
-  execute: (context: PatternRuntimeContext) => Promise<PatternPayloadResult>;
-  validateConfig?: (config: PatternConfig) => void;
 }
 
 class ConfigBackedCustomPattern extends CollaborationPatternBase {

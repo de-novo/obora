@@ -5,7 +5,12 @@ import { CompositePattern } from "./CompositePattern.js";
 import { ConsensusPattern } from "./ConsensusPattern.js";
 import { DiscussionPattern } from "./DiscussionPattern.js";
 import { PatternRegistry } from "../PatternRegistry.js";
-import { CollaborationPatternBase, type PatternPayloadResult, type PatternRuntimeContext } from "../types.js";
+import {
+  CollaborationPatternBase,
+  OboraErrorCode,
+  type PatternPayloadResult,
+  type PatternRuntimeContext,
+} from "../types.js";
 
 class EchoPattern extends CollaborationPatternBase {
   readonly name = "echo";
@@ -214,7 +219,7 @@ describe("CompositePattern", () => {
     });
   });
 
-  it("throws on stage failure with on_stage_failure: escalate", async () => {
+  it("throws structured error with code on stage failure with on_stage_failure: escalate", async () => {
     const registry = createRegistry();
     const pattern = new CompositePattern(registry);
 
@@ -229,7 +234,14 @@ describe("CompositePattern", () => {
           ],
         },
       })
-    ).rejects.toThrow("composite stage 'bad' failed");
+    ).rejects.toMatchObject({
+      message: 'composite stage "bad" (pattern: failer) failed and escalation requested',
+      code: OboraErrorCode.RECOVERY_ESCALATION_TIMEOUT,
+      stageResult: {
+        success: false,
+        output: { reason: "failed" },
+      },
+    });
   });
 
   it("composes real builtin patterns (brainstorm -> discussion -> consensus)", async () => {

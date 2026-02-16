@@ -1,6 +1,7 @@
 import type { PatternRegistry } from "../PatternRegistry.js";
 import {
   CollaborationPatternBase,
+  OboraErrorCode,
   type PatternPayloadResult,
   type PatternRuntimeContext,
   type CompositePatternConfig,
@@ -137,11 +138,17 @@ export class CompositePattern extends CollaborationPatternBase {
 
         if (!stageResult.success) {
           if (onStageFailure === "skip") {
+            // When on_stage_failure is "skip", the failed stage's output ({ reason: "failed" })
+            // becomes available to subsequent stages via input_from. This is intentional:
+            // downstream stages can inspect the failure and react accordingly.
             continue;
           }
 
           if (onStageFailure === "escalate") {
-            throw new Error(`composite stage '${stage.name}' failed`);
+            throw Object.assign(
+              new Error(`composite stage "${stage.name}" (pattern: ${stage.pattern}) failed and escalation requested`),
+              { code: OboraErrorCode.RECOVERY_ESCALATION_TIMEOUT, stageResult }
+            );
           }
 
           await context.emit?.({

@@ -31,6 +31,11 @@ export function resolveCustomPattern(
   );
 }
 
+/**
+ * File-path based pattern loading (experimental — not yet implemented).
+ * Provide a custom `fileLoader` to enable. Default loader throws NotImplementedError.
+ * @experimental
+ */
 export function loadCustomPatternFromFile(_filePath: string, _options?: { cwd?: string }): CollaborationPattern {
   throw new Error("Custom pattern file loader is not implemented yet. Register custom patterns inline for now.");
 }

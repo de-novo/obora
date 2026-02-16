@@ -30,6 +30,10 @@ describe("Pattern runtime contracts", () => {
     }
   });
 
+  it("provides blackboard domain mapping for composite meta-pattern", () => {
+    expect(PATTERN_BLACKBOARD_DOMAIN_MAP.composite).toEqual(["state", "knowledge"]);
+  });
+
   it("maps failure/timeout/escalation codes for all built-in patterns", () => {
     for (const kind of BUILTIN_PATTERN_KINDS) {
       const mapping = PATTERN_ERROR_CODE_MAP[kind];
