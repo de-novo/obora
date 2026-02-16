@@ -19,3 +19,9 @@
 - 최소 단위 점검: TASK-020(EventBus 단일 테스트) 재검증
 - `pnpm --filter @obora-kit/blackboard test -- test/events/event-bus.test.ts` ✅ (1 file, 33 tests passed)
 - 비고: handler error graceful 처리 검증에서 `stderr` 출력은 기대 동작이며 테스트는 정상 통과
+
+## 추가 점검 로그 (2026-02-17 03:57 KST)
+- 기준선 확인: 작업 브랜치 `main`(HEAD 유지), 기준 브랜치 `origin/main`=`ef54166`, 현 HEAD=`005d43c`
+- blackboard-first 최소 단위 점검: TASK-020(EventBus 단일 테스트) 재검증
+- `pnpm --filter @obora-kit/blackboard test -- test/events/event-bus.test.ts` ✅ (1 file, 33 tests passed)
+- 비고: `emit()` 에러 핸들러 graceful 처리 케이스 `stderr` 출력은 기대 동작이며 테스트는 정상 통과
