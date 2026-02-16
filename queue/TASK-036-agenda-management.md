@@ -83,3 +83,12 @@
 - 실행 테스트: `pnpm --filter @obora-kit/blackboard test -- test/domains/agenda`
 - 결과: 통과 (1 file, 12 tests)
 - 메모: 기능 변경 없이 안정성 점검만 수행
+
+## 야간 점검 로그 (2026-02-16 21:57 KST)
+- 점검 단위: blackboard-first TASK-036 agenda domain 회귀 검증 1건
+- 기준 브랜치: `origin/main` (`ef54166`)
+- 작업 브랜치: `main` (HEAD 유지)
+- 1차 검증(실패): `npm test -- --runInBand --passWithNoTests` → pnpm 재귀 테스트 옵션 불일치(Unknown options)
+- 실행 테스트(정상): `pnpm --filter @obora-kit/blackboard test -- test/domains/agenda`
+- 결과: 통과 (1 file, 12 tests)
+- 메모: 블로커 없음, 명령 템플릿을 package-manager 특성에 맞게 유지 필요
