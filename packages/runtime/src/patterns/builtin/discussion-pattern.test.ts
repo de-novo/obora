@@ -77,6 +77,7 @@ describe("DiscussionPattern", () => {
 
   it("escalates when max rounds are reached with escalate strategy", async () => {
     const pattern = new DiscussionPattern();
+    const emit = vi.fn();
 
     const result = await pattern.execute({
       pattern: "discussion",
@@ -92,6 +93,7 @@ describe("DiscussionPattern", () => {
       input: {
         rounds: [{ a: "x", b: "y" }],
       },
+      emit,
     });
 
     expect(result.success).toBe(false);
@@ -99,6 +101,8 @@ describe("DiscussionPattern", () => {
       status: "escalated",
       reason: "max_rounds_reached",
     });
+    expect(emit.mock.calls.map((call) => call[0].type)).toEqual(["discussion_round_start", "discussion_round_end"]);
+    expect(emit.mock.calls[1]?.[0]?.payload).toMatchObject({ converged: false });
   });
 
   it("validates config", () => {

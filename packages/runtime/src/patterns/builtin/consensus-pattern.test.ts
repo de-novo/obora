@@ -185,8 +185,41 @@ describe("ConsensusPattern", () => {
     expect(result.success).toBe(true);
   });
 
+  it("emits consensus_result for quorum_not_met", async () => {
+    const pattern = new ConsensusPattern();
+    const emit = vi.fn();
+
+    const result = await pattern.execute({
+      pattern: "consensus",
+      participants: {
+        requiredA: "agent-a",
+        requiredB: "agent-b",
+      },
+      config: {
+        rule: "majority",
+      },
+      input: {
+        votes: {
+          requiredA: true,
+        },
+      },
+      emit,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.output).toMatchObject({ status: "quorum-not-met" });
+    expect(emit.mock.calls.at(-1)?.[0]).toMatchObject({
+      type: "consensus_result",
+      payload: {
+        status: "fail",
+        reason: "quorum_not_met",
+      },
+    });
+  });
+
   it("throws timeout code when required voters are missing after timeout", async () => {
     const pattern = new ConsensusPattern();
+    const emit = vi.fn();
 
     await expect(
       pattern.execute({
@@ -206,8 +239,17 @@ describe("ConsensusPattern", () => {
           },
         },
         now: () => new Date("2026-02-16T00:00:10.000Z"),
+        emit,
       } as never)
     ).rejects.toMatchObject({ code: OboraErrorCode.CONSENSUS_TIMEOUT });
+
+    expect(emit.mock.calls.at(-1)?.[0]).toMatchObject({
+      type: "consensus_result",
+      payload: {
+        status: "timeout",
+        reason: "required voters timeout",
+      },
+    });
   });
 
   it("emits vote start/cast/result events", async () => {

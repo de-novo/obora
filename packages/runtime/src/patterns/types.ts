@@ -78,10 +78,30 @@ export interface PatternRuntimeResult extends PatternPayloadResult {
 export type PatternContext = PatternRuntimeContext;
 export type PatternResult = PatternRuntimeResult;
 
+export type CustomConvergenceFn = (context: {
+  round: number;
+  opinions: Record<string, string>;
+  participants: string[];
+}) => boolean;
+
+export type CustomEvaluator = (context: {
+  votes: Array<{ voterId: string; approved: boolean; score?: number; reason?: string }>;
+  participants: string[];
+  requiredParticipants: string[];
+  config: ConsensusPatternConfig;
+}) =>
+  | boolean
+  | {
+      approved: boolean;
+      reason?: string;
+      score?: number;
+    };
+
 export interface DiscussionPatternConfig {
   max_rounds?: number;
   convergence?: "no_disagreements" | "majority" | "unanimous" | "custom";
   on_deadlock?: "escalate" | "retry" | "fail";
+  custom_convergence?: CustomConvergenceFn;
 }
 
 export interface ConsensusPatternConfig {
@@ -90,6 +110,7 @@ export interface ConsensusPatternConfig {
   threshold?: number;
   timeout?: string;
   best_effort?: string[];
+  custom_evaluate?: CustomEvaluator;
 }
 
 export interface BrainstormingPatternConfig {
@@ -235,7 +256,9 @@ export function isBuiltinPatternKind(value: string): value is BuiltinPatternKind
 
 /**
  * Internal pattern implementation contract.
- * `execute` is canonical for pattern implementations and is bridged to `run`.
+ * - `run`: external runtime entrypoint (called by orchestrator/executors)
+ * - `execute`: internal compatibility entrypoint (delegates to `run`)
+ * External callers should always use `run`.
  */
 export interface CollaborationPattern extends PatternRuntimeContract {
   execute: PatternExecutionFn;
@@ -250,10 +273,19 @@ export abstract class CollaborationPatternBase implements CollaborationPattern {
     // optional override
   }
 
+  /**
+   * Internal compatibility entrypoint; delegates to `run`.
+   */
   async execute(context: PatternRuntimeContext): Promise<PatternRuntimeResult> {
     return this.run(context);
   }
 
+  /**
+   * External runtime entrypoint used by orchestrator.
+   * Error channel contract:
+   * - throw: unrecoverable external constraint violations (timeout/policy/etc), handled by upper recovery.
+   * - return { success: false }: expected business-level failure (e.g., quorum not met / rejected).
+   */
   async run(context: PatternRuntimeContext): Promise<PatternRuntimeResult> {
     await context.hooks?.onStart?.(context);
 
