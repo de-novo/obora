@@ -2,10 +2,13 @@ import { randomUUID } from "node:crypto";
 import { generateExecutionPlan, getNextSteps, parseWorkflow, type Step, type Workflow } from "@obora/core";
 import type { CellManager } from "../cell/CellManager.js";
 import type { Task } from "../cell/types.js";
+import type { AuditTrail } from "../audit/AuditTrail.js";
+import type { AuditEventType } from "../audit/types.js";
 import type { ConsensusGate } from "../consensus/ConsensusGate.js";
 import type { PolicyEngine } from "../policy/PolicyEngine.js";
 import type { PolicyDecision } from "../policy/types.js";
 import type { RecoveryEngine } from "../recovery/types.js";
+import type { StateBinder, StateBinding } from "../state/StateBinder.js";
 import { parseDuration } from "./utils.js";
 import type {
   Execution,
@@ -20,6 +23,8 @@ import type {
 export interface RuntimeOrchestratorDependencies {
   cellManager: CellManager;
   policyEngine: PolicyEngine;
+  stateBinder?: StateBinder;
+  auditTrail?: AuditTrail;
   consensusGate?: ConsensusGate;
   recoveryEngine?: RecoveryEngine;
   gateWaitStateStore?: GateWaitStateStore;
@@ -86,6 +91,12 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
     const execution = this.createExecution(name, workflow, input, plan.executionOrder);
     this.executions.set(execution.id, execution);
 
+    await this.recordAudit(execution.id, "execution_start", {
+      workflowName: name,
+      stepOrder: execution.stepOrder,
+      input,
+    });
+
     const completed = new Set<string>();
     const scheduled = new Set<string>();
     return this.executeLoop(execution, workflow, input, completed, scheduled);
@@ -101,6 +112,11 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
     execution.waitingGate.status = "approved";
     await this.gateWaitStateStore.save(execution.waitingGate);
     await this.gateWaitStateStore.delete(executionId);
+    await this.recordAudit(execution.id, "gate_resolve", {
+      stepName: waitingContext.step.name,
+      gateType: execution.waitingGate.gateType,
+      status: "approved",
+    });
 
     const record = execution.stepRecords[waitingContext.step.name]!;
     record.status = "pending";
@@ -132,6 +148,12 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
     execution.waitingGate.status = "rejected";
     await this.gateWaitStateStore.save(execution.waitingGate);
     await this.gateWaitStateStore.delete(executionId);
+    await this.recordAudit(execution.id, "gate_resolve", {
+      stepName: execution.waitingGate.stepName,
+      gateType: execution.waitingGate.gateType,
+      status: "rejected",
+      reason,
+    });
 
     const record = execution.stepRecords[execution.waitingGate.stepName]!;
     record.status = "failed";
@@ -143,6 +165,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
     execution.endedAt = this.now();
     execution.waitingGate = undefined;
     this.waitingContexts.delete(executionId);
+    await this.recordExecutionEnd(execution);
 
     return this.cloneExecution(execution);
   }
@@ -157,6 +180,11 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
     gate.status = "timeout";
     await this.gateWaitStateStore.save(gate);
     await this.gateWaitStateStore.delete(executionId);
+    await this.recordAudit(execution.id, "gate_resolve", {
+      stepName: gate.stepName,
+      gateType: gate.gateType,
+      status: "timeout",
+    });
 
     const record = execution.stepRecords[gate.stepName]!;
     record.status = "failed";
@@ -182,6 +210,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
     execution.endedAt = this.now();
     execution.waitingGate = undefined;
     this.waitingContexts.delete(executionId);
+    await this.recordExecutionEnd(execution);
     return this.cloneExecution(execution);
   }
 
@@ -231,6 +260,8 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
         execution.status = "failed";
         execution.error = "No executable step found while execution is incomplete";
         execution.endedAt = this.now();
+        await this.recordAudit(execution.id, "error", { message: execution.error });
+        await this.recordExecutionEnd(execution);
         return this.cloneExecution(execution);
       }
 
@@ -265,12 +296,14 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
         execution.status = "failed";
         execution.error = result.error ?? `Step failed: ${result.step.name}`;
         execution.endedAt = this.now();
+        await this.recordExecutionEnd(execution);
         return this.cloneExecution(execution);
       }
     }
 
     execution.status = "completed";
     execution.endedAt = this.now();
+    await this.recordExecutionEnd(execution);
     return this.cloneExecution(execution);
   }
 
@@ -306,17 +339,35 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
     record.status = "running";
     record.startedAt = this.now();
 
+    await this.recordAudit(execution.id, "step_start", {
+      stepName: step.name,
+      agent: step.agent,
+    });
+
     const decision = this.dependencies.policyEngine.enforce(
       { type: "step_start", name: step.name, params: { agent: step.agent } },
       { stepName: step.name }
     );
 
     record.policyDecision = decision;
+    await this.recordAudit(execution.id, "policy_check", {
+      stepName: step.name,
+      decision,
+    });
 
     if (decision.type === "deny") {
       record.status = "failed";
       record.error = decision.reason;
       record.endedAt = this.now();
+      await this.recordAudit(execution.id, "policy_deny", {
+        stepName: step.name,
+        reason: decision.reason,
+      });
+      await this.recordAudit(execution.id, "step_end", {
+        stepName: step.name,
+        status: record.status,
+        error: record.error,
+      });
       return { step, status: "failed", error: decision.reason };
     }
 
@@ -326,14 +377,34 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
         this.approvedGateSteps.delete(approvedKey);
       } else {
         const gateWait = this.createGateWaitState(execution.id, step, decision);
+        await this.recordAudit(execution.id, "gate_wait", {
+          stepName: step.name,
+          gateType: decision.gateType,
+          timeout: gateWait.timeout,
+        });
         if (this.options.onGate) {
           const gateResult = await this.options.onGate(execution, step, decision);
           if (gateResult === "rejected") {
             record.status = "failed";
             record.error = `Gate rejected: ${decision.gateType}`;
             record.endedAt = this.now();
+            await this.recordAudit(execution.id, "gate_resolve", {
+              stepName: step.name,
+              gateType: decision.gateType,
+              status: "rejected",
+            });
+            await this.recordAudit(execution.id, "step_end", {
+              stepName: step.name,
+              status: record.status,
+              error: record.error,
+            });
             return { step, status: "failed", error: record.error };
           }
+          await this.recordAudit(execution.id, "gate_resolve", {
+            stepName: step.name,
+            gateType: decision.gateType,
+            status: "approved",
+          });
         } else {
           record.status = "waiting";
           record.error = `Gate required: ${decision.gateType}`;
@@ -350,26 +421,74 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
       runTask: async (task) => this.buildStepOutput(step, task, workflowInput, execution.outputs),
     });
 
+    await this.recordAudit(execution.id, "cell_start", {
+      stepName: step.name,
+      cellId,
+    }, { cellId });
+
     try {
       const result = await this.dependencies.cellManager.execute(cellId, this.stepToTask(step, workflowInput));
       record.result = result;
       record.endedAt = this.now();
 
-      if (!result.success) {
-        return this.handleStepFailure(execution, step, cellId, result.output);
+      await this.recordAudit(execution.id, "cell_end", {
+        stepName: step.name,
+        success: result.success,
+        metrics: result.metrics,
+      }, { cellId });
+
+      for (const toolCall of result.toolCalls) {
+        await this.recordAudit(execution.id, "tool_call", {
+          stepName: step.name,
+          toolName: toolCall.toolName,
+          params: toolCall.params,
+        }, { cellId, durationMs: toolCall.durationMs });
+        await this.recordAudit(execution.id, "tool_result", {
+          stepName: step.name,
+          toolName: toolCall.toolName,
+          status: toolCall.status,
+          result: toolCall.result,
+          error: toolCall.error,
+        }, { cellId, durationMs: toolCall.durationMs });
       }
+
+      if (!result.success) {
+        const failure = await this.handleStepFailure(execution, step, cellId, result.output);
+        await this.recordAudit(execution.id, "step_end", {
+          stepName: step.name,
+          status: "failed",
+          error: failure.error,
+        }, { cellId });
+        return failure;
+      }
+
+      await this.bindStepState(execution, step, result);
 
       const consensusResult = await this.evaluateConsensusIfNeeded(step, execution);
       if (consensusResult) {
         record.consensus = consensusResult;
+        await this.recordAudit(execution.id, "consensus_result", {
+          stepName: step.name,
+          result: consensusResult,
+        });
         if (consensusResult.status !== "pass") {
           const reason = consensusResult.status === "fail" ? consensusResult.reason : `consensus ${consensusResult.status}`;
-          return this.handleStepFailure(execution, step, cellId, { error: reason });
+          const failure = await this.handleStepFailure(execution, step, cellId, { error: reason });
+          await this.recordAudit(execution.id, "step_end", {
+            stepName: step.name,
+            status: "failed",
+            error: failure.error,
+          }, { cellId });
+          return failure;
         }
       }
 
       record.status = "completed";
       execution.outputs[step.name] = result.output;
+      await this.recordAudit(execution.id, "step_end", {
+        stepName: step.name,
+        status: "completed",
+      }, { cellId });
       return { step, status: "completed" };
     } finally {
       await this.dependencies.cellManager.stopCell(cellId, "Step execution finished");
@@ -385,7 +504,14 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
 
     const session = consensusGate.setup(consensusConfig);
     const votes = await this.options.consensusVoteProvider?.(step, this.cloneExecution(execution), consensusConfig) ?? [];
-    votes.forEach((vote) => consensusGate.registerVote(session.id, vote));
+    for (const vote of votes) {
+      consensusGate.registerVote(session.id, vote);
+      await this.recordAudit(execution.id, "consensus_vote", {
+        stepName: step.name,
+        sessionId: session.id,
+        vote,
+      });
+    }
     return consensusGate.evaluate(session.id);
   }
 
@@ -400,6 +526,11 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
 
     const strategy = this.extractRecoveryStrategy(step) ?? this.options.defaultRecoveryStrategy;
     if (strategy && this.dependencies.recoveryEngine) {
+      await this.recordAudit(execution.id, "recovery_start", {
+        stepName: step.name,
+        strategy,
+        error,
+      }, { cellId });
       const recovery = await this.dependencies.recoveryEngine.handle(
         {
           executionId: execution.id,
@@ -410,6 +541,11 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
         },
         strategy
       );
+      await this.recordAudit(execution.id, "recovery_end", {
+        stepName: step.name,
+        strategy,
+        recovery,
+      }, { cellId });
       record.recovery = recovery;
       if (recovery.status === "recovered") {
         record.status = "completed";
@@ -540,6 +676,69 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
       workflowInput,
       previousOutputs: { ...outputs },
     };
+  }
+
+  private async bindStepState(execution: Execution, step: Step, result: { success: boolean; output: unknown }): Promise<void> {
+    const bindings = this.extractStateBindings(step);
+    if (!this.dependencies.stateBinder || bindings.length === 0) {
+      return;
+    }
+
+    await this.dependencies.stateBinder.bind(result, bindings);
+  }
+
+  private extractStateBindings(step: Step): StateBinding[] {
+    const directBindings = (step as Step & { bindings?: unknown }).bindings;
+    if (Array.isArray(directBindings)) {
+      return directBindings.filter(this.isStateBinding);
+    }
+
+    const config = step.config as Record<string, unknown> | undefined;
+    const configBindings = config?.bindings;
+    if (Array.isArray(configBindings)) {
+      return configBindings.filter(this.isStateBinding);
+    }
+
+    return [];
+  }
+
+  private readonly isStateBinding = (value: unknown): value is StateBinding => {
+    if (!value || typeof value !== "object") {
+      return false;
+    }
+
+    const candidate = value as Record<string, unknown>;
+    return typeof candidate.source === "string" && typeof candidate.target === "string";
+  };
+
+  private async recordExecutionEnd(execution: Execution): Promise<void> {
+    await this.recordAudit(execution.id, "execution_end", {
+      status: execution.status,
+      completedSteps: execution.completedSteps,
+      error: execution.error,
+      endedAt: execution.endedAt,
+    });
+  }
+
+  private async recordAudit(
+    executionId: string,
+    type: AuditEventType,
+    data: unknown,
+    options: { cellId?: string; durationMs?: number } = {}
+  ): Promise<void> {
+    if (!this.dependencies.auditTrail) {
+      return;
+    }
+
+    await this.dependencies.auditTrail.record({
+      id: randomUUID(),
+      executionId,
+      cellId: options.cellId,
+      timestamp: this.now(),
+      type,
+      data,
+      metadata: options.durationMs !== undefined ? { durationMs: options.durationMs } : undefined,
+    });
   }
 
   private extractError(output: unknown): string {

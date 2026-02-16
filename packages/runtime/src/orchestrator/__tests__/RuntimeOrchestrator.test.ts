@@ -4,7 +4,10 @@ import { DefaultConsensusGate } from "../../consensus/ConsensusGate.js";
 import { DefaultPolicyEngine } from "../../policy/DefaultPolicyEngine.js";
 import type { PolicyAction, PolicyContext, PolicyDecision, PolicySet } from "../../policy/types.js";
 import type { PolicyEngine } from "../../policy/PolicyEngine.js";
+import { InMemoryAuditStore } from "../../audit/InMemoryAuditStore.js";
 import { RecoveryEngine } from "../../recovery/RecoveryEngine.js";
+import { DefaultStateBinder } from "../../state/StateBinder.js";
+import { StateManager } from "../../state/StateManager.js";
 import { DefaultRuntimeOrchestrator } from "../RuntimeOrchestrator.js";
 
 function createPolicyEngine(
@@ -269,5 +272,57 @@ steps:
     expect(execution.status).toBe("completed");
     expect(execution.stepRecords.unstable.recovery?.status).toBe("recovered");
     expect(retryExecutor.executeRetry).toHaveBeenCalledOnce();
+  });
+
+  it("runs state binding after step completion and records end-to-end audit events", async () => {
+    const state = new StateManager();
+    const auditTrail = new InMemoryAuditStore();
+    const orchestrator = new DefaultRuntimeOrchestrator({
+      cellManager: createCellManager([]),
+      policyEngine: createPolicyEngine(),
+      stateBinder: new DefaultStateBinder(state),
+      auditTrail,
+    });
+
+    orchestrator.define("binding-audit-case", {
+      name: "binding-audit-case",
+      steps: [
+        {
+          name: "generate",
+          agent: "analyst",
+          config: {
+            bindings: [
+              {
+                source: "output.stepName",
+                target: "knowledge.last_step",
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    const execution = await orchestrator.run("binding-audit-case", { request: "task" });
+
+    expect(execution.status).toBe("completed");
+    expect(state.read("knowledge.last_step")).toBe("generate");
+
+    const events = await auditTrail.query({ executionId: execution.id });
+    expect(events.map((event) => event.type)).toEqual(
+      expect.arrayContaining([
+        "execution_start",
+        "step_start",
+        "policy_check",
+        "cell_start",
+        "cell_end",
+        "step_end",
+        "execution_end",
+      ])
+    );
+
+    expect(events.find((event) => event.type === "step_end")?.data).toMatchObject({
+      stepName: "generate",
+      status: "completed",
+    });
   });
 });
