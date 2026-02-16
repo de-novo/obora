@@ -1,0 +1,47 @@
+name: red-blue-security-audit
+version: "1.0"
+description: Red/Blue audit + supervisor + fan-out/fan-in reporting
+
+steps:
+  - name: adversarial-audit
+    pattern: red-blue
+    participants:
+      red1: red-analyst-1
+      red2: red-analyst-2
+      blue1: blue-defender-1
+      blue2: blue-defender-2
+    config:
+      red_team: [red1, red2]
+      blue_team: [blue1, blue2]
+      max_rounds: 3
+      convergence: red_finds_nothing
+
+  - name: supervisor-monitoring
+    pattern: supervisor
+    depends_on: [adversarial-audit]
+    participants:
+      workerA: patch-worker-a
+      workerB: patch-worker-b
+      workerC: patch-worker-c
+    config:
+      strategy: one_for_one
+      max_restarts: 2
+      backoff: exponential
+
+  - name: parallel-reporters
+    pattern: fan-out-fan-in
+    depends_on: [supervisor-monitoring]
+    participants:
+      appsec: appsec-reporter
+      infra: infra-reporter
+      compliance: compliance-reporter
+    config:
+      merge: concatenate
+    input:
+      task: "Generate domain-specific remediation report"
+
+  - name: final-aggregation
+    pattern: pipeline
+    depends_on: [parallel-reporters]
+    config:
+      stages: [normalize, deduplicate, prioritize, publish]

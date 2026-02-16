@@ -1,0 +1,64 @@
+name: doc-review-pipeline
+version: "1.0"
+description: Brainstorm -> peer review -> consensus -> human approval
+
+steps:
+  - name: brainstorm-outline
+    pattern: brainstorming
+    participants:
+      ideatorA: writer-a
+      ideatorB: writer-b
+      ideatorC: writer-c
+    config:
+      phase_1: generate
+      phase_2: evaluate
+      top_n: 5
+      dedup: semantic
+    input:
+      topic: "M2 Runtime release note"
+
+  - name: peer-review-draft
+    pattern: peer-review
+    depends_on: [brainstorm-outline]
+    participants:
+      reviewer1: review-opus
+      reviewer2: review-codex
+      reviewer3: review-glm
+    config:
+      min_score: 0.85
+      p0_allowed: 0
+      max_rounds: 2
+
+  - name: consensus-signoff
+    pattern: consensus
+    depends_on: [peer-review-draft]
+    participants:
+      lead: tech-lead
+      qa: qa-lead
+      writer: docs-owner
+    config:
+      rule: weighted
+      threshold: 0.7
+      weights:
+        lead: 0.4
+        qa: 0.3
+        writer: 0.3
+
+  - name: human-approval
+    type: gate
+    gate: multi-stage-approval
+    depends_on: [consensus-signoff]
+    config:
+      stages:
+        - name: security
+          approvers: [security-owner]
+          required: 1
+        - name: release
+          approvers: [release-manager]
+          required: 1
+      on_reject: fail
+      sla:
+        timeout: 24h
+        warning_at: 2h
+        fallback: escalate
+        escalation_chain: [engineering-director]
