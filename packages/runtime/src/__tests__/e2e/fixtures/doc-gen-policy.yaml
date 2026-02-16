@@ -1,0 +1,18 @@
+version: "1.0"
+tools:
+  - name: file_write
+    effect: allow
+  - name: shell_exec
+    effect: deny
+sandbox:
+  root: "./output"
+  deny_outside_root: true
+resources:
+  max_tokens: 100000
+  max_cost_usd: 10
+gates:
+  - step: approval
+    type: human-approval
+    required: true
+    timeout: "24h"
+    fallback: escalate

@@ -1,0 +1,52 @@
+name: doc-generation-pipeline
+version: "1.0.0"
+policy: "./doc-gen-policy.yaml"
+
+steps:
+  - name: brainstorm
+    agent: ideator
+    pattern: brainstorming
+    participants:
+      alice: ideator-1
+      bob: ideator-2
+      carol: ideator-3
+    config:
+      phase_1: generate
+      phase_2: evaluate
+      top_n: 5
+      dedup: exact
+
+  - name: draft
+    agent: writer
+    depends_on: [brainstorm]
+    description: "Generate document from top ideas"
+
+  - name: peer-review
+    agent: reviewer
+    pattern: peer-review
+    depends_on: [draft]
+    participants:
+      reviewer-a: opus
+      reviewer-b: codex
+      reviewer-c: glm
+    config:
+      min_score: 7
+      p0_allowed: 0
+      max_rounds: 2
+
+  - name: approval
+    agent: approver
+    depends_on: [peer-review]
+    gate: human-approval
+    gate_config:
+      timeout: "24h"
+      fallback: escalate
+      escalation_to: "team-lead"
+
+recovery:
+  peer-review:
+    on_fail: retry
+    max_retries: 1
+  approval:
+    on_fail: escalate
+    to: "team-lead"
