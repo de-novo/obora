@@ -6,3 +6,4 @@ export * from "./audit/index.js";
 export * from "./recovery/index.js";
 export * from "./orchestrator/index.js";
 export * from "./patterns/index.js";
+export * from "./plugins/index.js";

@@ -17,6 +17,7 @@
 | `@obora/cli` | 프로젝트 생성/초기화/동기화 CLI | implemented | E2E 검증 완료 |
 | `@obora/core` | 공통 타입/유틸/기반 추상화 | implemented | 안정 |
 | `@obora/database` | DB 레이어 및 런타임 저장소 어댑터 | implemented | API 단일화 완료 |
+| `@obora-kit/runtime` | Runtime Core (orchestrator/policy/state/recovery/plugin) | partial | M1 진행중, M1-21 plugin validation 도입 |
 | `@obora-kit/board` | blackboard 상위 오케스트레이션 파사드 | implemented | 파사드 |
 | `@obora/preset-engine` | 템플릿/프리셋 조합 및 적용 엔진 | implemented | - |
 | `@obora/project-templates` | 스캐폴딩용 프로젝트 템플릿 모음 | implemented | - |
