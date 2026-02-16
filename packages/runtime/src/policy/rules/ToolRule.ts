@@ -1,4 +1,19 @@
+import { evaluateExpression, type ExpressionContext } from "../expressions/ExpressionEvaluator.js";
+import { parseExpression, type ExpressionAST } from "../expressions/ExpressionParser.js";
 import type { PolicyAction, PolicyContext, PolicyDecision, PolicyRulePlugin, PolicySet, ToolPolicy } from "../types.js";
+
+export interface PolicyConditionAuditEvent {
+  type: "policy_condition_evaluated";
+  expression: string;
+  result: boolean;
+  rule: string;
+  action: string;
+  error?: string;
+}
+
+export interface ToolRuleOptions {
+  onAuditEvent?: (event: PolicyConditionAuditEvent) => void | Promise<void>;
+}
 
 function toActionText(action: PolicyAction): string {
   if (typeof action.params === "string") {
@@ -15,14 +30,20 @@ function toActionText(action: PolicyAction): string {
   }
 }
 
-function matchesToolRule(rule: ToolPolicy, action: PolicyAction): boolean {
+function matchesToolRule(
+  rule: ToolPolicy,
+  action: PolicyAction,
+  context: PolicyContext,
+  getExpressionAst: (expression: string) => ExpressionAST,
+  onAuditEvent?: ToolRuleOptions["onAuditEvent"],
+): { matched: boolean; evaluationError?: string } {
   if (rule.name !== action.name) {
-    return false;
+    return { matched: false };
   }
 
   const when = rule.when;
   if (!when) {
-    return true;
+    return { matched: true };
   }
 
   const text = toActionText(action);
@@ -32,22 +53,78 @@ function matchesToolRule(rule: ToolPolicy, action: PolicyAction): boolean {
   const includesAnyMatch = matches.length === 0 || matches.some((pattern) => text.includes(pattern));
   const includesNotMatch = notMatches.some((pattern) => text.includes(pattern));
 
-  return includesAnyMatch && !includesNotMatch;
+  if (!(includesAnyMatch && !includesNotMatch)) {
+    return { matched: false };
+  }
+
+  if (!when.condition) {
+    return { matched: true };
+  }
+
+  const rulePath = `tools.${rule.name}`;
+
+  try {
+    const ast = getExpressionAst(when.condition);
+    const evalContext: ExpressionContext = { action, context };
+    const result = evaluateExpression(ast, evalContext);
+
+    void onAuditEvent?.({
+      type: "policy_condition_evaluated",
+      expression: when.condition,
+      result,
+      rule: rulePath,
+      action: action.name,
+    });
+
+    return { matched: result };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    void onAuditEvent?.({
+      type: "policy_condition_evaluated",
+      expression: when.condition,
+      result: false,
+      rule: rulePath,
+      action: action.name,
+      error: message,
+    });
+
+    return {
+      matched: true,
+      evaluationError: `Policy condition evaluation failed for '${rulePath}': ${message}`,
+    };
+  }
 }
 
 export class ToolRule implements PolicyRulePlugin {
   readonly name = "tool";
-  readonly version = "1.0.0";
+  readonly version = "1.1.0";
   readonly type = "policy-rule" as const;
 
-  evaluate(action: PolicyAction, _context: PolicyContext, policies: PolicySet): PolicyDecision | null {
+  private readonly expressionCache = new Map<string, ExpressionAST>();
+  private readonly onAuditEvent?: ToolRuleOptions["onAuditEvent"];
+
+  constructor(options?: ToolRuleOptions) {
+    this.onAuditEvent = options?.onAuditEvent;
+  }
+
+  evaluate(action: PolicyAction, context: PolicyContext, policies: PolicySet): PolicyDecision | null {
     if (action.type !== "tool_call") {
       return null;
     }
 
     for (const rule of policies.tools ?? []) {
-      if (!matchesToolRule(rule, action)) {
+      const matchResult = matchesToolRule(rule, action, context, this.getExpressionAst.bind(this), this.onAuditEvent);
+      if (!matchResult.matched) {
         continue;
+      }
+
+      if (matchResult.evaluationError) {
+        return {
+          type: "deny",
+          reason: matchResult.evaluationError,
+          rule: `tools.${rule.name}`,
+        };
       }
 
       if (rule.effect === "allow") {
@@ -87,5 +164,16 @@ export class ToolRule implements PolicyRulePlugin {
     }
 
     return null;
+  }
+
+  private getExpressionAst(expression: string): ExpressionAST {
+    const cached = this.expressionCache.get(expression);
+    if (cached) {
+      return cached;
+    }
+
+    const ast = parseExpression(expression);
+    this.expressionCache.set(expression, ast);
+    return ast;
   }
 }

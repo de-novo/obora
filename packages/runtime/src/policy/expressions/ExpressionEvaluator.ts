@@ -1,0 +1,185 @@
+import { OboraErrorCode } from "../../errors/OboraErrorCode.js";
+import type { PolicyAction, PolicyContext } from "../types.js";
+import type { ArrayLiteralExpression, ComparisonExpression, ExpressionAST, FunctionCallExpression } from "./ExpressionParser.js";
+
+export interface ExpressionContext {
+  action: PolicyAction;
+  context: PolicyContext;
+  state?: Record<string, unknown>;
+  step?: {
+    name: string;
+    agent: string;
+    config?: Record<string, unknown>;
+  };
+}
+
+const BLOCKED_FIELD_NAMES = new Set(["__proto__", "prototype", "constructor"]);
+
+class ExpressionEvaluationError extends Error {
+  readonly code = OboraErrorCode.POLICY_DENY;
+
+  constructor(message: string) {
+    super(`[${OboraErrorCode.POLICY_DENY}] ${message}`);
+    this.name = "ExpressionEvaluationError";
+  }
+}
+
+export function evaluateExpression(ast: ExpressionAST, ctx: ExpressionContext): boolean {
+  const result = evaluateNode(ast, ctx);
+  return Boolean(result);
+}
+
+function evaluateNode(ast: ExpressionAST, ctx: ExpressionContext): unknown {
+  switch (ast.type) {
+    case "literal":
+      return ast.value;
+    case "field_ref":
+      return resolveField(ast.path, ctx);
+    case "array_literal":
+      return ast.items.map((item) => evaluateNode(item, ctx));
+    case "not":
+      return !Boolean(evaluateNode(ast.expression, ctx));
+    case "logical": {
+      if (ast.operator === "&&") {
+        return Boolean(evaluateNode(ast.left, ctx)) && Boolean(evaluateNode(ast.right, ctx));
+      }
+      return Boolean(evaluateNode(ast.left, ctx)) || Boolean(evaluateNode(ast.right, ctx));
+    }
+    case "comparison":
+      return evaluateComparison(ast, ctx);
+    case "function_call":
+      return evaluateFunctionCall(ast, ctx);
+    default:
+      return assertNever(ast);
+  }
+}
+
+function evaluateComparison(ast: ComparisonExpression, ctx: ExpressionContext): boolean {
+  const left = evaluateNode(ast.left, ctx);
+  const right = evaluateNode(ast.right, ctx);
+
+  switch (ast.operator) {
+    case "==":
+      return left === right;
+    case "!=":
+      return left !== right;
+    case ">":
+      ensureComparable(left, right, ast.operator);
+      return (left as number | string) > (right as number | string);
+    case ">=":
+      ensureComparable(left, right, ast.operator);
+      return (left as number | string) >= (right as number | string);
+    case "<":
+      ensureComparable(left, right, ast.operator);
+      return (left as number | string) < (right as number | string);
+    case "<=":
+      ensureComparable(left, right, ast.operator);
+      return (left as number | string) <= (right as number | string);
+    default:
+      return assertNever(ast.operator);
+  }
+}
+
+function evaluateFunctionCall(ast: FunctionCallExpression, ctx: ExpressionContext): boolean {
+  const evaluatedArgs = ast.args.map((arg) => evaluateNode(arg, ctx));
+
+  switch (ast.name) {
+    case "contains": {
+      ensureArgCount(ast, 2);
+      const [value, needle] = evaluatedArgs;
+      return String(value ?? "").includes(String(needle ?? ""));
+    }
+    case "startsWith": {
+      ensureArgCount(ast, 2);
+      const [value, prefix] = evaluatedArgs;
+      return String(value ?? "").startsWith(String(prefix ?? ""));
+    }
+    case "endsWith": {
+      ensureArgCount(ast, 2);
+      const [value, suffix] = evaluatedArgs;
+      return String(value ?? "").endsWith(String(suffix ?? ""));
+    }
+    case "matches": {
+      ensureArgCount(ast, 2);
+      const [value, regexPattern] = evaluatedArgs;
+      try {
+        const regex = new RegExp(String(regexPattern ?? ""));
+        return regex.test(String(value ?? ""));
+      } catch (error) {
+        throw new ExpressionEvaluationError(
+          `Invalid regex in matches(): ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+    case "in": {
+      ensureArgCount(ast, 2);
+      const [value, list] = evaluatedArgs;
+      if (!Array.isArray(list)) {
+        throw new ExpressionEvaluationError("in() expects an array as the second argument");
+      }
+      return list.some((item) => item === value);
+    }
+    default:
+      return assertNever(ast.name);
+  }
+}
+
+function resolveField(path: string[], ctx: ExpressionContext): unknown {
+  const [root, ...segments] = path;
+  let current: unknown;
+
+  if (root === "action") {
+    current = ctx.action;
+  } else if (root === "context") {
+    current = ctx.context;
+  } else if (root === "state") {
+    current = ctx.state;
+  } else if (root === "step") {
+    current = ctx.step;
+  } else {
+    throw new ExpressionEvaluationError(`Unsupported root '${root}' in field path`);
+  }
+
+  for (const segment of segments) {
+    if (BLOCKED_FIELD_NAMES.has(segment)) {
+      throw new ExpressionEvaluationError(`Blocked field segment '${segment}'`);
+    }
+
+    if (!isObject(current)) {
+      return undefined;
+    }
+
+    if (!Object.hasOwn(current, segment)) {
+      return undefined;
+    }
+
+    current = (current as Record<string, unknown>)[segment];
+  }
+
+  return current;
+}
+
+function ensureComparable(left: unknown, right: unknown, operator: string): void {
+  const sameType = typeof left === typeof right;
+  const allowedType = typeof left === "number" || typeof left === "string";
+
+  if (!sameType || !allowedType) {
+    throw new ExpressionEvaluationError(
+      `Operator '${operator}' expects both sides to be the same comparable type (number or string)`,
+    );
+  }
+}
+
+function ensureArgCount(ast: FunctionCallExpression, expected: number): void {
+  if (ast.args.length !== expected) {
+    throw new ExpressionEvaluationError(`${ast.name}() expects ${expected} arguments, got ${ast.args.length}`);
+  }
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object";
+}
+
+function assertNever(value: never): never {
+  throw new ExpressionEvaluationError(`Unsupported AST node: ${JSON.stringify(value)}`);
+}

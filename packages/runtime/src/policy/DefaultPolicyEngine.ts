@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
+import { OboraErrorCode } from "../errors/OboraErrorCode.js";
+import { parseExpression } from "./expressions/ExpressionParser.js";
 import type { PolicyEngine } from "./PolicyEngine.js";
 import { loadPolicyFromYaml } from "./PolicyLoader.js";
-import { GateRule, ResourceRule, SandboxRule, ToolRule } from "./rules/index.js";
+import { GateRule, ResourceRule, SandboxRule, ToolRule, type PolicyConditionAuditEvent } from "./rules/index.js";
 import type {
   PolicyAction,
   PolicyContext,
@@ -12,8 +14,6 @@ import type {
   PolicyVersion,
 } from "./types.js";
 
-const DEFAULT_RULE_ORDER: PolicyRulePlugin[] = [new ToolRule(), new SandboxRule(), new ResourceRule(), new GateRule()];
-
 export interface PolicyLifecycleEvent {
   type: "load" | "reload_success" | "reload_failure";
   version?: PolicyVersion;
@@ -23,6 +23,7 @@ export interface PolicyLifecycleEvent {
 
 export interface DefaultPolicyEngineOptions {
   onLifecycleEvent?: (event: PolicyLifecycleEvent) => void | Promise<void>;
+  onAuditEvent?: (event: PolicyConditionAuditEvent) => void | Promise<void>;
 }
 
 export class DefaultPolicyEngine implements PolicyEngine {
@@ -33,8 +34,8 @@ export class DefaultPolicyEngine implements PolicyEngine {
   private readonly rules: readonly PolicyRulePlugin[];
   private readonly onLifecycleEvent?: (event: PolicyLifecycleEvent) => void | Promise<void>;
 
-  constructor(rules: readonly PolicyRulePlugin[] | undefined = DEFAULT_RULE_ORDER, options?: DefaultPolicyEngineOptions) {
-    this.rules = rules ?? DEFAULT_RULE_ORDER;
+  constructor(rules?: readonly PolicyRulePlugin[], options?: DefaultPolicyEngineOptions) {
+    this.rules = rules ?? [new ToolRule({ onAuditEvent: options?.onAuditEvent }), new SandboxRule(), new ResourceRule(), new GateRule()];
     this.onLifecycleEvent = options?.onLifecycleEvent;
   }
 
@@ -118,6 +119,7 @@ export class DefaultPolicyEngine implements PolicyEngine {
   }
 
   private applyPolicy(policySet: PolicySet, source: string): PolicyVersion {
+    validatePolicyConditions(policySet);
     this.policySet = clonePolicy(policySet);
     this.policyVersion = buildVersion(this.policySet, source);
     this.versions.push(this.policyVersion);
@@ -126,6 +128,26 @@ export class DefaultPolicyEngine implements PolicyEngine {
 
   private async emit(event: PolicyLifecycleEvent): Promise<void> {
     await Promise.resolve(this.onLifecycleEvent?.(event));
+  }
+}
+
+function validatePolicyConditions(policySet: PolicySet): void {
+  for (const tool of policySet.tools ?? []) {
+    const condition = tool.when?.condition;
+    if (!condition) {
+      continue;
+    }
+
+    try {
+      parseExpression(condition);
+    } catch (error) {
+      const details = error instanceof Error ? error.message : String(error);
+      const wrapped = new Error(
+        `[${OboraErrorCode.POLICY_LOAD_FAILED}] Invalid tool condition at tools.${tool.name}: ${details}`,
+      ) as Error & { code?: OboraErrorCode };
+      wrapped.code = OboraErrorCode.POLICY_LOAD_FAILED;
+      throw wrapped;
+    }
   }
 }
 

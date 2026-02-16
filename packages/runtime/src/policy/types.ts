@@ -49,7 +49,7 @@ export interface PolicySnapshot {
 export interface ToolPolicy {
   name: string;
   effect: "allow" | "deny" | "transform" | "gate";
-  when?: { matches?: string[]; not_matches?: string[] };
+  when?: { matches?: string[]; not_matches?: string[]; condition?: string };
   transform?: { fn: string };
   gate?: {
     type: "human-approval" | "consensus" | "external";
