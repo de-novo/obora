@@ -307,3 +307,11 @@ Board 단계 태스크를 blackboard 우선 구현 순서로 재배치하고, �
 - 실행: `pnpm --filter @obora-kit/blackboard test -- test/domains/tkg/observer-reflector.test.ts`
 - 결과: ✅ `1 file / 17 tests passed` (281ms)
 - 판정: 블로커 없음, 다음 실행은 blackboard consensus types 최소검증 1건(`test/domains/consensus/types.test.ts`) 점검 권장
+
+## 야간 자동 점검 로그 (2026-02-16 15:57 KST)
+- 기준 브랜치: `origin/main` (`ef54166`)
+- 작업 브랜치(HEAD 유지): `main` (`3dc863a`, local ahead 20)
+- 점검 단위: blackboard consensus types 최소검증 1건 (`test/domains/consensus/types.test.ts`)
+- 실행: `pnpm --filter @obora-kit/blackboard test -- test/domains/consensus/types.test.ts`
+- 결과: ✅ `1 file / 2 tests passed` (193ms)
+- 판정: 블로커 없음, 다음 실행은 blackboard event-bus 최소검증 1건(`test/events/event-bus.test.ts`) 점검 권장
