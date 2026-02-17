@@ -161,8 +161,8 @@ export const createWsBridge = (server: FastifyInstance, options: WsBridgeOptions
     const nextSequence = (sequenceByExecution.get(auditEvent.executionId) ?? 0) + 1;
     sequenceByExecution.set(auditEvent.executionId, nextSequence);
 
-    const knownType = KNOWN_TYPE_BY_AUDIT_TYPE[auditEvent.type] ?? 'error';
-    const severity = SEVERITY_BY_KNOWN_TYPE[knownType];
+    const knownType = KNOWN_TYPE_BY_AUDIT_TYPE[auditEvent.type] ?? undefined;
+    const severity = knownType ? SEVERITY_BY_KNOWN_TYPE[knownType] : undefined;
     const data = (auditEvent.data as Record<string, unknown> | null) ?? {};
     const status =
       typeof data.status === 'string' && ['running', 'completed', 'failed', 'waiting', 'skipped'].includes(data.status)

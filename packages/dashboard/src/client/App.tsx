@@ -15,6 +15,7 @@ import {
   useExecutionStore,
   type ExecutionStep,
 } from './store/execution-store';
+import type { KnownExecutionEventType } from '../server/types.js';
 
 const resolveWsUrl = (): string => {
   const explicit = import.meta.env.VITE_DASHBOARD_WS_URL;
@@ -25,6 +26,20 @@ const resolveWsUrl = (): string => {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   return `${protocol}//${window.location.host}/ws`;
 };
+
+const KNOWN_EVENT_TYPES: ReadonlySet<KnownExecutionEventType> = new Set([
+  'execution_start',
+  'execution_end',
+  'step_start',
+  'step_end',
+  'policy_check',
+  'policy_deny',
+  'gate_wait',
+  'gate_resolve',
+  'recovery_start',
+  'recovery_end',
+  'error',
+]);
 
 const DashboardView = (): JSX.Element => {
   const [selectedExecutionId, setSelectedExecutionId] = useState<string | undefined>(undefined);
@@ -101,7 +116,9 @@ const DashboardView = (): JSX.Element => {
           executionId: event.executionId,
           timestamp: event.timestamp,
           type: event.type,
-          knownType: event.type,
+          knownType: KNOWN_EVENT_TYPES.has(event.type as KnownExecutionEventType)
+            ? (event.type as KnownExecutionEventType)
+            : undefined,
           stepName: event.stepName,
           payload: (event.payload ?? {}) as Record<string, unknown>,
         });
