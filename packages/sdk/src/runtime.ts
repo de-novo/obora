@@ -483,12 +483,17 @@ export class OboraRuntime {
                     return undefined;
                   }
 
-                  const agentConfig = loadedConfig.agents?.[agentName];
-                  if (!agentConfig) {
-                    return undefined;
-                  }
+                  const yamlAgentRaw = runtimeAgents.get(agentName)?.();
+                  const yamlAgent =
+                    yamlAgentRaw && typeof yamlAgentRaw === "object"
+                      ? (yamlAgentRaw as { provider?: string; model?: string; temperature?: number })
+                      : undefined;
+                  const configAgent = loadedConfig.agents?.[agentName];
+                  const preferYamlAgent = Boolean(yamlAgent);
 
-                  const resolvedProviderName = agentConfig.provider ?? loadedConfig.defaults?.provider;
+                  const resolvedProviderName = preferYamlAgent
+                    ? (yamlAgent?.provider ?? loadedConfig.defaults?.provider)
+                    : (configAgent?.provider ?? loadedConfig.defaults?.provider);
                   const providerConfig = resolveProviderConfig(loadedConfig, resolvedProviderName, {
                     verbose: this.config.verbose,
                   });
@@ -504,8 +509,12 @@ export class OboraRuntime {
 
                   return {
                     adapter: await getAdapter(providerConfig),
-                    model: agentConfig.model ?? providerConfig.model,
-                    temperature: agentConfig.temperature ?? providerConfig.temperature,
+                    model: preferYamlAgent
+                      ? (yamlAgent?.model ?? providerConfig.model)
+                      : (configAgent?.model ?? providerConfig.model),
+                    temperature: preferYamlAgent
+                      ? (yamlAgent?.temperature ?? providerConfig.temperature)
+                      : (configAgent?.temperature ?? providerConfig.temperature),
                     maxTokens: providerConfig.maxTokens,
                   };
                 },

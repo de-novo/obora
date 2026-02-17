@@ -55,6 +55,15 @@ type ConfigWithMeta = OboraConfig & {
 
 const authResolver = createAuthResolver();
 
+const PROVIDER_ENV_KEY_MAP: Record<string, string> = {
+  anthropic: "ANTHROPIC_API_KEY",
+  openai: "OPENAI_API_KEY",
+  "openai-codex": "OPENAI_API_KEY",
+  zai: "ZAI_API_KEY",
+  google: "GOOGLE_API_KEY",
+  xai: "XAI_API_KEY",
+};
+
 function getYamlValueType(value: unknown): string {
   if (value === null) {
     return "null";
@@ -183,18 +192,28 @@ export function resolveProviderConfig(
   }
 
   const provider = config.providers?.[selectedProviderName];
-  if (!provider?.authRef) {
+  const authRef = provider?.authRef;
+
+  let apiKey: string | undefined;
+  if (authRef) {
+    apiKey = authResolver.resolveAuthRef(authRef, { verbose: options?.verbose });
+  } else {
+    const fallbackEnv = PROVIDER_ENV_KEY_MAP[selectedProviderName] ?? `${selectedProviderName.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_API_KEY`;
+    apiKey = process.env[fallbackEnv];
+
     if (options?.verbose) {
       const sources = (config as ConfigWithMeta)[CONFIG_META_KEY]?.sources ?? [];
       const sourceInfo = sources.length > 0 ? sources.join(", ") : "unknown source";
       console.warn(
-        `[obora] Provider config not found or missing authRef for '${selectedProviderName}'. Searched in: ${sourceInfo}`,
+        `[obora] Provider config missing authRef for '${selectedProviderName}'. Tried env fallback '${fallbackEnv}'. Searched in: ${sourceInfo}`,
       );
     }
+  }
+
+  if (!apiKey) {
     return undefined;
   }
 
-  const apiKey = authResolver.resolveAuthRef(provider.authRef, { verbose: options?.verbose });
   if (!apiKey) {
     return undefined;
   }
@@ -202,10 +221,10 @@ export function resolveProviderConfig(
   return {
     provider: selectedProviderName,
     apiKey,
-    model: provider.defaultModel ?? config.defaults?.model,
-    baseUrl: provider.baseUrl,
-    timeout: provider.timeout ?? config.defaults?.timeout,
-    maxTokens: provider.maxTokens ?? config.defaults?.maxTokens,
+    model: provider?.defaultModel ?? config.defaults?.model,
+    baseUrl: provider?.baseUrl,
+    timeout: provider?.timeout ?? config.defaults?.timeout,
+    maxTokens: provider?.maxTokens ?? config.defaults?.maxTokens,
     temperature: config.defaults?.temperature,
   };
 }
