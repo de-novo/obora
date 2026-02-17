@@ -120,7 +120,7 @@ Public npm publishing follows explicit control gates:
 ## Reporting Security Issues
 
 Please do **not** report security vulnerabilities in public issues.
-Use a private channel designated by maintainers if available.
+Use a private channel: **security@obora.dev**.
 
 ---
 

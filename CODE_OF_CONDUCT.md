@@ -59,7 +59,8 @@ representative at an online or offline event.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the community leaders through GitHub Issues in this repository.
+reported through a private channel at **security@obora.dev**.
+If that channel is unavailable, use GitHub Issues as a fallback.
 
 All complaints will be reviewed and investigated promptly and fairly.
 

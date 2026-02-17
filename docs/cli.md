@@ -51,7 +51,7 @@ Initialize a new Obora project.
 ### Usage
 
 ```bash
-obora init [options]
+obora init [name] [options]
 ```
 
 ### Options
@@ -60,6 +60,9 @@ obora init [options]
 - `-y, --yes` skip prompts and use defaults
 
 ### Behavior
+
+- If `name` is provided, creates that directory and initializes files there.
+- If `name` is omitted, initializes files in the current directory.
 
 Creates:
 

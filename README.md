@@ -91,7 +91,7 @@ Obora keeps the control plane deterministic while containing AI variability insi
 
 - [Getting Started](./docs/getting-started.md)
 - [API Reference](./docs/api/README.md)
-- [CLI Reference](./docs/cli/README.md)
+- [CLI Reference](./docs/cli.md)
 - [Tutorials](./docs/tutorials/README.md)
 - [Examples](./examples)
 

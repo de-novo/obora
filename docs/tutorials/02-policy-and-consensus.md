@@ -94,17 +94,17 @@ cat > policies/policy-consensus.yaml << 'EOF'
 version: "1.0"
 
 tools:
-  - name: file_read
-    effect: allow
-  - name: file_write
-    effect: allow
-  - name: web_search
-    effect: gate
+  file_read:
+    allowed: true
+  file_write:
+    allowed: true
+  web_search:
+    allowed: true
     gate:
       type: consensus
       timeout: "2m"
-  - name: shell_exec
-    effect: deny
+  shell_exec:
+    allowed: false
 
 sandbox:
   root: "./output"
@@ -153,12 +153,12 @@ cat > policies/policy-consensus-deny-write.yaml << 'EOF'
 version: "1.0"
 
 tools:
-  - name: file_read
-    effect: allow
-  - name: file_write
-    effect: deny
-  - name: shell_exec
-    effect: deny
+  file_read:
+    allowed: true
+  file_write:
+    allowed: false
+  shell_exec:
+    allowed: false
 
 sandbox:
   root: "./output"
