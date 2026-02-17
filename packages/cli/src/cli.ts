@@ -18,8 +18,7 @@ function createInspectCommand(): Command {
     .description("Inspect a run (alias for 'runs inspect')")
     .argument("<runId>", "Run ID to inspect")
     .option("--json", "Output as JSON")
-    .option("--cost", "Show cost breakdown per step")
-    .option("--steps", "Show detailed step info")
+    .option("--no-steps", "Hide step details")
     .action(async (runId: string, opts) => {
       const { OboraRuntime, loadConfig } = await import("@obora/sdk");
 
@@ -43,11 +42,13 @@ function createInspectCommand(): Command {
         process.exit(1);
       }
 
-      const steps = await runtime.getRunSteps(runId);
+      const steps = opts.steps !== false ? await runtime.getRunSteps(runId) : [];
       const artifacts = await runtime.getRunArtifacts(runId);
 
       if (opts.json) {
-        console.log(JSON.stringify({ run, steps, artifacts }, null, 2));
+        const payload: Record<string, unknown> = { run, artifacts };
+        if (opts.steps !== false) payload.steps = steps;
+        console.log(JSON.stringify(payload, null, 2));
         return;
       }
 
@@ -58,7 +59,7 @@ function createInspectCommand(): Command {
       if (run.completedAt) console.log(`  Completed: ${run.completedAt}`);
       if (run.metadata) console.log(`  Metadata: ${JSON.stringify(run.metadata)}`);
 
-      if (steps.length > 0) {
+      if (opts.steps !== false && steps.length > 0) {
         console.log(`\nSteps (${steps.length}):`);
         for (const step of steps) {
           const duration = step.durationMs ? ` (${step.durationMs}ms)` : "";
