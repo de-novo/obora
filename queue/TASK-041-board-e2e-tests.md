@@ -49,6 +49,7 @@ E2E 검증 자체는 즉시 필요하며 blackboard-first 기준에도 직접 �
 - 2026-02-17 19:42 KST cron 점검: 단일 E2E(`pnpm vitest run packages/blackboard/test/e2e/workflow-e2e.test.ts`) 재실행 5/5 통과(총 411ms), 작업 브랜치 HEAD(`main`, 96f33b1) 유지 및 기준 브랜치(`origin/main`, ef54166) 대비 blackboard-first 회귀선 안정 상태 재확인.
 - 2026-02-17 20:27 KST cron 점검: 기존 기준 테스트 경로(`packages/blackboard/test/e2e/workflow-e2e.test.ts`) 실행 시 `No test files found`로 실패(code 1). 현재 워크트리에서 `packages/blackboard`가 제거되고 runtime 중심 구조로 전환된 상태를 확인하여, blackboard-first 회귀 기준 재정의 전까지는 **BLOCKER 상태로 점검/정리만 수행**.
 - 2026-02-18 01:41 KST cron 점검: 동일 기준 검증(`pnpm vitest run packages/blackboard/test/e2e/workflow-e2e.test.ts`) 재실행 결과 `No test files found` 재현(code 1). **동일 유형 실패 누적 2회(20:27 → 01:41)**로 추가 구현 없이 BLOCKER 점검 모드 유지.
+- 2026-02-18 08:27 KST cron 점검: 런타임 구조 전환 반영 점검으로 E2E 대체 기준 1건 실행(`pnpm --filter @obora/runtime test -- src/__tests__/e2e/three-ai-consensus-e2e.test.ts`) 결과 ✅ `1 file / 4 tests passed`(315ms). 기존 blackboard 경로 기반 BLOCKER는 **구조 변경에 따른 기준 불일치**로 분류하고, 다음 실행부터 runtime E2E 기준으로 점검 지속.
 
 ## 목표
 agenda → voting → consensus → workflow 상태전이의 통합 흐름을 blackboard 기준으로 검증합니다.
