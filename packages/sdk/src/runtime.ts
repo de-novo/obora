@@ -1,4 +1,7 @@
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
+
+import { parse as parseYaml } from "yaml";
 
 import { Policy, type PolicyDefinition } from "./policy.js";
 import { PluginRegistry, type RegisterOptions } from "./plugin-registry.js";
@@ -12,6 +15,9 @@ import type {
   ReExecutionResult,
   StepReExecutionResult,
 } from "./replay.js";
+import { topologicalSort } from "./dependency-resolver.js";
+import { resolveLLMConfig, type LLMConfig } from "./llm-config.js";
+import { StepExecutor } from "./step-executor.js";
 import { Workflow } from "./workflow.js";
 import type { WorkflowDef } from "./workflow.js";
 
@@ -146,6 +152,9 @@ export interface OboraAuditConfig {
 export interface OboraRuntimeConfig {
   policyPath?: string;
   audit?: OboraAuditConfig;
+  llm?: LLMConfig;
+  agentsPath?: string;
+  verbose?: boolean;
 }
 
 export type AgentFactory = (...args: unknown[]) => unknown;
@@ -405,34 +414,110 @@ export class OboraRuntime {
       rejectWait = reject;
 
       queueMicrotask(async () => {
-        if (settled) {
-          return;
+        try {
+          if (settled) {
+            return;
+          }
+
+          status = "running";
+          execution.status = "running";
+          await this.emitEvent("execution_start", executionId, {
+            workflowName: name,
+            input,
+            variables,
+          });
+
+          if (settled) {
+            return;
+          }
+
+          const llmConfig = resolveLLMConfig(this.config.llm);
+          if (!llmConfig) {
+            status = "completed";
+            execution.status = "completed";
+            execution.endedAt = new Date();
+            settled = true;
+            await this.emitEvent("execution_end", executionId, {
+              workflowName: name,
+              status: "completed",
+            });
+            this.executions.set(executionId, structuredClone(execution));
+            resolve(structuredClone(execution));
+            return;
+          }
+
+          const llmAdapter = await this.createLLMAdapter(llmConfig);
+          const runtimeAgents = await this.loadAgentsFromYaml(this.config.agentsPath);
+          const allAgents = new Map<string, AgentFactory>([...runtimeAgents, ...this.agents]);
+          const stepExecutor = new StepExecutor(llmAdapter, allAgents, {
+            model: llmConfig.model,
+            verbose: this.config.verbose,
+            onEvent: async (eventType, data) => {
+              await this.emitEvent(eventType, executionId, data);
+            },
+          });
+
+          const stepOrder = topologicalSort(workflow.steps);
+          execution.stepOrder = stepOrder.map((step) => step.name);
+
+          for (const step of stepOrder) {
+            if (settled) {
+              return;
+            }
+
+            const stepStartedAt = Date.now();
+            await this.emitEvent("step_start", executionId, {
+              stepName: step.name,
+              agent: step.agent,
+            });
+
+            const result = await stepExecutor.executeStep(step, {
+              previousOutputs: execution.outputs,
+            });
+
+            execution.outputs[step.name] = result.output;
+            execution.stepRecords[step.name] = result;
+            execution.completedSteps.push(step.name);
+
+            await this.emitEvent("step_end", executionId, {
+              stepName: step.name,
+              status: "completed",
+              durationMs: Date.now() - stepStartedAt,
+              outputPreview:
+                typeof result.output === "string" ? result.output.slice(0, 200) : JSON.stringify(result.output).slice(0, 200),
+            });
+          }
+
+          status = "completed";
+          execution.status = "completed";
+          execution.endedAt = new Date();
+          settled = true;
+
+          await this.emitEvent("execution_end", executionId, {
+            workflowName: name,
+            status: "completed",
+          });
+
+          this.executions.set(executionId, structuredClone(execution));
+          resolve(structuredClone(execution));
+        } catch (error) {
+          status = "failed";
+          execution.status = "failed";
+          execution.error = error instanceof Error ? error.message : String(error);
+          execution.endedAt = new Date();
+          settled = true;
+
+          await this.emitEvent("error", executionId, {
+            message: execution.error,
+            code: OboraErrorCode.SDK_UNKNOWN_ERROR,
+          });
+          await this.emitEvent("execution_end", executionId, {
+            workflowName: name,
+            status: "failed",
+          });
+
+          reject(error);
         }
-
-        status = "running";
-        execution.status = "running";
-        await this.emitEvent("execution_start", executionId, {
-          workflowName: name,
-          input,
-          variables,
-        });
-
-        if (settled) {
-          return;
-        }
-
-        status = "completed";
-        execution.status = "completed";
-        execution.endedAt = new Date();
-        settled = true;
-
-        await this.emitEvent("execution_end", executionId, {
-          workflowName: name,
-          status: "completed",
-        });
-
-        this.executions.set(executionId, structuredClone(execution));
-        resolve(structuredClone(execution));
       });
     });
 
@@ -617,6 +702,56 @@ export class OboraRuntime {
     return iterator;
   }
 
+  private async createLLMAdapter(config: LLMConfig): Promise<{
+    chatCompletion: (params: {
+      model?: string;
+      messages: Array<{ role: "system" | "user" | "assistant" | "tool"; content: string }>;
+      temperature?: number;
+      maxTokens?: number;
+    }) => Promise<{ message: { role: "assistant"; content: string | null } }>;
+  }> {
+    const dynamicImport = new Function("moduleName", "return import(moduleName)") as (
+      moduleName: string,
+    ) => Promise<Record<string, unknown>>;
+    const adapters = await dynamicImport("@obora-kit/adapters");
+    const PiAIAdapterCtor = adapters.PiAIAdapter as new (cfg: {
+      provider: string;
+      apiKey: string;
+      model?: string;
+      baseUrl?: string;
+    }) => {
+      chatCompletion: (params: {
+        model?: string;
+        messages: Array<{ role: "system" | "user" | "assistant" | "tool"; content: string }>;
+        temperature?: number;
+        maxTokens?: number;
+      }) => Promise<{ message: { role: "assistant"; content: string | null } }>;
+    };
+
+    return new PiAIAdapterCtor({
+      provider: config.provider,
+      apiKey: config.apiKey,
+      model: config.model,
+      baseUrl: config.baseUrl,
+    });
+  }
+
+  private async loadAgentsFromYaml(path?: string): Promise<Map<string, AgentFactory>> {
+    if (!path) {
+      return new Map();
+    }
+
+    const content = await readFile(path, "utf-8");
+    const parsed = parseYaml(content) as { agents?: Record<string, { role?: string; description?: string }> };
+    const map = new Map<string, AgentFactory>();
+
+    for (const [name, info] of Object.entries(parsed.agents ?? {})) {
+      map.set(name, () => ({ role: info.role, description: info.description }));
+    }
+
+    return map;
+  }
+
   private createExecution(
     executionId: string,
     workflowName: string,
@@ -632,7 +767,7 @@ export class OboraRuntime {
       input,
       startedAt: new Date(),
       stepOrder,
-      completedSteps: [...stepOrder],
+      completedSteps: [],
       stepRecords: {},
       outputs: {},
     };

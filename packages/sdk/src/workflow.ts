@@ -6,9 +6,12 @@ import { OboraError, OboraErrorCode } from "./runtime.js";
 
 export interface WorkflowStep {
   name: string;
+  description?: string;
   agent?: string;
   tool?: string;
   pattern?: string;
+  participants?: string[];
+  input?: Record<string, unknown>;
   config?: Record<string, unknown>;
   depends_on?: string[];
   gate?: string | { type: string; [key: string]: unknown };

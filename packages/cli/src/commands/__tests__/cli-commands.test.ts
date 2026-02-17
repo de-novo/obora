@@ -44,7 +44,16 @@ describe("M3 CLI command IA", () => {
 
     const optionNames = (run?.options ?? []).map((option) => option.long);
     expect(optionNames).toEqual(
-      expect.arrayContaining(["--input", "--var", "--policy", "--dry-run", "--timeout"]),
+      expect.arrayContaining([
+        "--input",
+        "--var",
+        "--policy",
+        "--agents",
+        "--model",
+        "--output-dir",
+        "--dry-run",
+        "--timeout",
+      ]),
     );
   });
 

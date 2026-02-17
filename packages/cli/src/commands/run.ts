@@ -1,3 +1,6 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import { basename, join } from "node:path";
+
 import { Command } from "commander";
 
 import { OboraRuntime, Workflow } from "@obora/sdk";
@@ -22,8 +25,18 @@ function isVerboseOutput(options: Record<string, unknown>): boolean {
 
 export async function runRun(workflow: string, options: Record<string, unknown>): Promise<void> {
   const startedAt = Date.now();
+  const resolvedApiKey = process.env.ANTHROPIC_API_KEY ?? process.env.OPENAI_API_KEY;
   const runtime = new OboraRuntime({
     policyPath: options.policy as string | undefined,
+    agentsPath: options.agents as string | undefined,
+    llm: resolvedApiKey
+      ? {
+          provider: (options.provider as string | undefined) ?? process.env.OBORA_LLM_PROVIDER ?? "anthropic",
+          apiKey: resolvedApiKey,
+          model: options.model as string | undefined,
+        }
+      : undefined,
+    verbose: Boolean(options.verbose),
   });
 
   if (isVerboseOutput(options) && !isQuietOutput(options) && !isJsonOutput(options)) {
@@ -110,6 +123,15 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
   const result = await handle.wait();
   const elapsedMs = Date.now() - startedAt;
 
+  if (options.outputDir && typeof options.outputDir === "string") {
+    await mkdir(options.outputDir, { recursive: true });
+    const filePath = join(options.outputDir, `${basename(workflowName)}-${handle.executionId}.json`);
+    await writeFile(filePath, JSON.stringify(result, null, 2), "utf-8");
+    if (isVerboseOutput(options) && !isQuietOutput(options) && !isJsonOutput(options)) {
+      formatter.info(`Saved outputs to ${filePath}`);
+    }
+  }
+
   if (isJsonOutput(options)) {
     formatter.json({
       workflowName: result.workflowName,
@@ -131,6 +153,10 @@ export function createRunCommand(): Command {
     .option("-i, --input <json>", "Input data as JSON string")
     .option("-v, --var <key=value...>", "Variables (repeatable)")
     .option("--policy <path>", "Policy file path")
+    .option("--agents <path>", "agents.yaml path")
+    .option("--model <name>", "Default LLM model")
+    .option("--provider <name>", "LLM provider override")
+    .option("--output-dir <path>", "Write execution result JSON into directory")
     .option("--dry-run", "Validate without executing")
     .option("--timeout <ms>", "Execution timeout in milliseconds", parseInt)
     .action(async function (this: Command, workflow, options) {
