@@ -227,6 +227,16 @@ describe("CheckpointManager.resolveStepPolicies", () => {
     expect(policies[4]).toEqual({ stepName: "step-5", action: "skip" });
   });
 
+  it("throws on invalid fromStep", () => {
+    const steps: StepRecord[] = [
+      makeStep(runId, "step-1", "completed", { result: "ok" }),
+    ];
+
+    expect(() =>
+      mgr.resolveStepPolicies(steps, ["step-1"], allSteps, { fromStep: "nonexistent" }),
+    ).toThrow("Invalid fromStep: 'nonexistent'");
+  });
+
   it("supports fromStep override", () => {
     const steps: StepRecord[] = [
       makeStep(runId, "step-1", "completed", { result: "ok" }),

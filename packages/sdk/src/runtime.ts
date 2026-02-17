@@ -1003,8 +1003,9 @@ export class OboraRuntime {
       throw new OboraError(`No checkpoint found for run: ${runId}`, "SDK_CHECKPOINT_NOT_FOUND");
     }
 
-    // Detect drift (SDK-level uses empty policy config; real drift check happens at runtime)
-    const drift = mgr.detectDrift(checkpoint, {});
+    // Resolve current policy for drift detection (use loaded policy if available)
+    const currentPolicyConfig = this.policy ?? {};
+    const drift = mgr.detectDrift(checkpoint, currentPolicyConfig);
     const driftPolicy = options.driftPolicy ?? "warn";
     if (drift.drifted && driftPolicy === "reject") {
       throw new OboraError(
@@ -1013,27 +1014,117 @@ export class OboraRuntime {
       );
     }
 
+    // Use workflow definition for complete step names (not just saved steps)
+    const workflow = this.workflows.get(run.workflowName);
+    let allStepNames: string[];
+    if (workflow) {
+      allStepNames = workflow.steps.map((s) => s.name);
+    } else {
+      // Fallback: use saved steps + deduplicate
+      const savedSteps = await adapter.getSteps(runId);
+      const seen = new Set<string>();
+      allStepNames = [];
+      for (const s of savedSteps) {
+        if (!seen.has(s.stepName)) {
+          seen.add(s.stepName);
+          allStepNames.push(s.stepName);
+        }
+      }
+    }
+
+    // Validate fromStep
+    if (options.fromStep && !allStepNames.includes(options.fromStep)) {
+      throw new OboraError(
+        `Invalid fromStep: '${options.fromStep}' is not a valid step name. Available steps: ${allStepNames.join(", ")}`,
+        OboraErrorCode.ORCH_STEP_NOT_FOUND,
+      );
+    }
+
     // Determine step policies
     const steps = await adapter.getSteps(runId);
-    const allStepNames = steps.map((s) => s.stepName);
-    // Deduplicate while preserving order
-    const seen = new Set<string>();
-    const uniqueStepNames = allStepNames.filter((n) => {
-      if (seen.has(n)) return false;
-      seen.add(n);
-      return true;
-    });
+    const stepPolicies = mgr.resolveStepPolicies(steps, checkpoint.completedSteps, allStepNames, options);
 
-    const stepPolicies = mgr.resolveStepPolicies(steps, checkpoint.completedSteps, uniqueStepNames, options);
+    const restoredSteps = stepPolicies.filter((p: { action: string }) => p.action === "restore").map((p: { stepName: string }) => p.stepName);
+    const rerunSteps = stepPolicies.filter((p: { action: string }) => p.action === "rerun").map((p: { stepName: string }) => p.stepName);
 
-    const restoredSteps = stepPolicies.filter((p) => p.action === "restore").map((p) => p.stepName);
-    const rerunSteps = stepPolicies.filter((p) => p.action === "rerun").map((p) => p.stepName);
-
-    // Update run status
+    // Update run status and execute rerun steps
     await adapter.saveRun({ ...run, status: "running", completedAt: undefined });
 
+    // If we have a workflow definition, actually re-execute the rerun steps
+    if (workflow) {
+      await this.policyLoadPromise;
+      const executionId = runId;
+      const execution = this.createExecution(executionId, run.workflowName, run.input, workflow);
+
+      // Restore completed step outputs
+      for (const policy of stepPolicies) {
+        if (policy.action === "restore" && policy.output) {
+          execution.outputs[policy.stepName] = policy.output;
+          execution.completedSteps.push(policy.stepName);
+        }
+      }
+
+      // Execute rerun steps
+      const loadedConfig =
+        this.config.config !== undefined ? this.config.config : await loadConfig(this.config.configPath);
+      const llmConfig = resolveLLMConfig(this.config.llm, loadedConfig);
+
+      const runtimeAgents = await this.loadAgentsFromYaml(this.config.agentsPath);
+      const allAgents = new Map<string, AgentFactory>([...runtimeAgents, ...this.agents]);
+      const adapterCache = new Map<string, Awaited<ReturnType<OboraRuntime["createLLMAdapter"]>>>();
+      const getAdapter = async (cfg: LLMConfig) => {
+        const apiKeyHash = createHash("sha256").update(cfg.apiKey).digest("hex").slice(0, 16);
+        const cacheKey = `${cfg.provider}:${cfg.model ?? ""}:${cfg.baseUrl ?? ""}:${apiKeyHash}`;
+        const cached = adapterCache.get(cacheKey);
+        if (cached) return cached;
+        const a = await this.createLLMAdapter(cfg);
+        adapterCache.set(cacheKey, a);
+        return a;
+      };
+
+      const stepExecutor = llmConfig
+        ? new StepExecutor(await getAdapter(llmConfig), allAgents, {
+            model: llmConfig.model,
+            temperature: llmConfig.temperature,
+            maxTokens: llmConfig.maxTokens,
+            verbose: this.config.verbose,
+            onEvent: async (eventType, data) => {
+              await this.emitEvent(eventType, executionId, data);
+            },
+          })
+        : undefined;
+
+      // Get step definitions for rerun steps
+      const stepDefs = workflow.steps.filter((s) => rerunSteps.includes(s.name));
+      const sortedStepDefs = topologicalSort(workflow.steps).filter((s) => rerunSteps.includes(s.name));
+
+      for (const step of sortedStepDefs) {
+        await this.emitEvent("step_start", executionId, { stepName: step.name, agent: step.agent });
+        const stepStartedAt = Date.now();
+
+        const result = stepExecutor
+          ? await stepExecutor.executeStep(step, { previousOutputs: execution.outputs })
+          : { output: "[stub] No LLM configured", raw: { stub: true, reason: "No LLM configured" } };
+
+        execution.outputs[step.name] = result.output;
+        execution.completedSteps.push(step.name);
+
+        await this.emitEvent("step_end", executionId, {
+          stepName: step.name,
+          status: "completed",
+          durationMs: Date.now() - stepStartedAt,
+        });
+      }
+
+      // Update run as completed
+      execution.status = "completed";
+      execution.endedAt = new Date();
+      await adapter.saveRun({ ...run, status: "completed", completedAt: execution.endedAt.toISOString() });
+      this.executions.set(executionId, structuredClone(execution));
+    }
+
     return {
-      execution: { id: runId, status: "running" },
+      execution: { id: runId, status: workflow ? "completed" : "running" },
       restoredSteps,
       rerunSteps,
       driftDetected: drift.drifted,

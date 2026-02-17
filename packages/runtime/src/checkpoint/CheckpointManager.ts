@@ -87,6 +87,13 @@ export class CheckpointManager {
     const stepMap = new Map(steps.map((s) => [s.stepName, s]));
     const completedSet = new Set(completedSteps);
 
+    // Validate fromStep if specified
+    if (options.fromStep && !allStepNames.includes(options.fromStep)) {
+      throw new Error(
+        `Invalid fromStep: '${options.fromStep}' is not a valid step name. Available steps: ${allStepNames.join(", ")}`,
+      );
+    }
+
     // If fromStep is specified, everything before it that was completed is restored
     const fromStepIdx = options.fromStep
       ? allStepNames.indexOf(options.fromStep)

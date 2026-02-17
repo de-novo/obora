@@ -151,12 +151,15 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
     const driftPolicy = options.driftPolicy ?? "warn";
 
     if (drift.drifted) {
-      await this.recordAudit(runId, "snapshot_restore", {
+      await this.recordAudit(runId, "recovery_start", {
+        type: "policy_drift_detected",
         category: "recovery",
         action: "policy_drift_detected",
+        runId,
         oldHash: drift.oldHash,
         newHash: drift.newHash,
-        driftAction: driftPolicy,
+        driftPolicy,
+        timestamp: this.now().toISOString(),
       });
 
       if (driftPolicy === "reject") {
@@ -202,6 +205,23 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
       rerunSteps: stepPolicies.filter((p) => p.action === "rerun").map((p) => p.stepName),
     });
 
+    // 4b. Restore StateBinder state from checkpoint snapshot
+    if (this.dependencies.stateBinder && checkpoint.stateSnapshot) {
+      const snapshot = checkpoint.stateSnapshot as Record<string, unknown>;
+      // Re-bind outputs from checkpoint as state
+      // StateBinder operates through bind(), so we restore by writing snapshot entries
+      // as completed step outputs to maintain state consistency
+      for (const [key, value] of Object.entries(snapshot)) {
+        if (typeof value === "object" && value !== null) {
+          // Use stateBinder's bind to restore each entry as if it were a step result
+          await this.dependencies.stateBinder.bind(
+            { success: true, output: value, toolCalls: [], metrics: { durationMs: 0, tokenUsage: { input: 0, output: 0 }, retries: 0 } },
+            [{ source: "output", target: key }],
+          );
+        }
+      }
+    }
+
     // 5. Restore completed steps and execute remaining
     const completed = new Set<string>();
     const scheduled = new Set<string>();
@@ -233,14 +253,34 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
 
     await this.persistRun(execution);
 
-    // Execute remaining steps
-    const result = await this.executeLoop(execution, workflow, runRecord.input, completed, scheduled);
+    // Execute remaining steps, saving checkpoints under original runId
+    const originalCheckpointManager = this.checkpointManager;
+    if (originalCheckpointManager) {
+      // Wrap checkpoint saves to use original runId instead of new execution.id
+      const origSave = originalCheckpointManager.saveCheckpoint.bind(originalCheckpointManager);
+      this.checkpointManager = Object.create(originalCheckpointManager) as CheckpointManager;
+      this.checkpointManager.saveCheckpoint = async (
+        _execId: string,
+        stepName: string,
+        completedSteps: string[],
+        stateSnapshot: unknown,
+        policyConfig: PolicyHashInput,
+      ) => origSave(runId, stepName, completedSteps, stateSnapshot, policyConfig);
+    }
 
-    // Save final checkpoint
+    let result: Execution;
+    try {
+      result = await this.executeLoop(execution, workflow, runRecord.input, completed, scheduled);
+    } finally {
+      // Restore original checkpoint manager
+      this.checkpointManager = originalCheckpointManager;
+    }
+
+    // Save final checkpoint under original runId
     if (this.checkpointManager) {
       const lastStep = allStepNames[allStepNames.length - 1];
       await this.checkpointManager.saveCheckpoint(
-        execution.id,
+        runId,
         lastStep,
         [...completed],
         execution.outputs,
