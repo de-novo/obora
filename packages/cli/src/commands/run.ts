@@ -95,10 +95,6 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
   if (typeof options.timeout === "number" && Number.isFinite(options.timeout)) {
     timeoutHandle = setTimeout(() => {
       controller.abort();
-      if (timeoutHandle) {
-        clearTimeout(timeoutHandle);
-        timeoutHandle = undefined;
-      }
     }, options.timeout);
     timeoutHandle.unref?.();
     if (isVerboseOutput(options) && !isQuietOutput(options) && !isJsonOutput(options)) {

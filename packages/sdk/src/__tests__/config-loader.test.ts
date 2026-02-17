@@ -116,6 +116,25 @@ describe("config-loader", () => {
     });
   });
 
+  it.each([
+    ["null", "null", "null"],
+    ["scalar string", "just-a-string", "string"],
+    ["scalar number", "123", "number"],
+    ["array", "- item1\n- item2", "array"],
+  ])("throws OboraError when YAML root is %s", async (_label, content, typeName) => {
+    await withIsolatedDirs(async ({ projectDir }) => {
+      const explicit = join(projectDir, `invalid-${typeName}.yaml`);
+      await writeFile(explicit, content, "utf-8");
+
+      await expect(loadConfig(explicit)).rejects.toThrowError(
+        expect.objectContaining({
+          code: OboraErrorCode.SDK_INVALID_CONFIG,
+          message: `Config must be a YAML object (mapping), got: ${typeName}`,
+        }),
+      );
+    });
+  });
+
   it("throws OboraError when explicit --config path does not exist", async () => {
     await withIsolatedDirs(async ({ projectDir }) => {
       const explicit = join(projectDir, "missing.yaml");

@@ -164,6 +164,30 @@ describe("StepExecutor", () => {
     expect(aborted).toBe(true);
   });
 
+  it("combines parent signal with consensus timeout only once", async () => {
+    const parentController = new AbortController();
+    const addEventListenerSpy = vi.spyOn(parentController.signal, "addEventListener");
+
+    const chatCompletion = vi.fn<LLMAdapterLike["chatCompletion"]>().mockResolvedValue({
+      message: { role: "assistant", content: "APPROVE" },
+    });
+
+    const executor = new StepExecutor({ chatCompletion }, new Map(), {});
+
+    await executor.executeStep(
+      {
+        name: "review-signal-combine",
+        pattern: "consensus",
+        participants: ["r1", "r2", "r3"],
+        input: { task: "Review this" },
+      },
+      { previousOutputs: {}, signal: parentController.signal },
+    );
+
+    const parentAbortRegistrations = addEventListenerSpy.mock.calls.filter(([eventName]) => eventName === "abort");
+    expect(parentAbortRegistrations).toHaveLength(1);
+  });
+
   it("supports configurable consensus quorum", async () => {
     const chatCompletion = vi
       .fn<LLMAdapterLike["chatCompletion"]>()

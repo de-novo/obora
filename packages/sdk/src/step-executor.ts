@@ -91,14 +91,15 @@ export class StepExecutor {
 
     const runConsensus = async (_timeoutSignal: AbortSignal): Promise<StepResult> => {
       const votes: Array<{ participant: string; vote: "APPROVE" | "REJECT" | "REQUEST_CHANGES"; response: string }> = [];
-      for (const participant of participants) {
-        const consensusSignal = this.combineAbortSignals(context.signal, _timeoutSignal);
-        try {
+      const consensusSignal = this.combineAbortSignals(context.signal, _timeoutSignal);
+
+      try {
+        for (const participant of participants) {
           const response = await this.requestForStep(
             step,
             {
               ...context,
-              ...(consensusSignal?.signal ? { signal: consensusSignal.signal } : {}),
+              ...(consensusSignal?.signal ? { signal: consensusSignal.signal } : { signal: _timeoutSignal }),
             },
             participant,
           );
@@ -106,9 +107,9 @@ export class StepExecutor {
           const vote = parseVote(responseText);
           votes.push({ participant, vote, response: responseText });
           await this.config.onEvent?.("consensus_vote", { stepName: step.name, participant, vote, response: responseText });
-        } finally {
-          consensusSignal?.cleanup();
         }
+      } finally {
+        consensusSignal?.cleanup();
       }
 
       const approveCount = votes.filter((v) => v.vote === "APPROVE").length;

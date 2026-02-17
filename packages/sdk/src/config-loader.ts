@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 
 import type { LLMConfig } from "./llm-config.js";
-import { resolveAuthRef } from "./auth-resolver.js";
+import { createAuthResolver } from "./auth-resolver.js";
 import { OboraError, OboraErrorCode } from "./runtime.js";
 
 export interface OboraConfig {
@@ -52,6 +52,18 @@ const CONFIG_META_KEY = Symbol.for("obora.config.meta");
 type ConfigWithMeta = OboraConfig & {
   [CONFIG_META_KEY]?: ConfigSourceMeta;
 };
+
+const authResolver = createAuthResolver();
+
+function getYamlValueType(value: unknown): string {
+  if (value === null) {
+    return "null";
+  }
+  if (Array.isArray(value)) {
+    return "array";
+  }
+  return typeof value;
+}
 
 async function fileExists(path: string): Promise<boolean> {
   try {
@@ -101,9 +113,20 @@ async function readConfigFile(path: string): Promise<OboraConfig | undefined> {
 
   const content = await readFile(path, "utf-8");
   try {
-    const parsed = parseYaml(content) as OboraConfig;
-    return parsed;
+    const parsed = parseYaml(content);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new OboraError(
+        `Config must be a YAML object (mapping), got: ${getYamlValueType(parsed)}`,
+        OboraErrorCode.SDK_INVALID_CONFIG,
+      );
+    }
+
+    return parsed as OboraConfig;
   } catch (error) {
+    if (error instanceof OboraError) {
+      throw error;
+    }
+
     throw new OboraError(
       `Failed to parse config YAML: ${path}`,
       OboraErrorCode.SDK_INVALID_CONFIG,
@@ -171,7 +194,7 @@ export function resolveProviderConfig(
     return undefined;
   }
 
-  const apiKey = resolveAuthRef(provider.authRef, { verbose: options?.verbose });
+  const apiKey = authResolver.resolveAuthRef(provider.authRef, { verbose: options?.verbose });
   if (!apiKey) {
     return undefined;
   }
