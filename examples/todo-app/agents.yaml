@@ -1,0 +1,22 @@
+agents:
+  product-manager:
+    role: "Product Manager"
+    description: "제품 기획 및 요구사항 정의 전문가"
+  architect:
+    role: "Software Architect"
+    description: "시스템 설계 및 아키텍처 전문가"
+  designer:
+    role: "UI/UX Designer"
+    description: "사용자 인터페이스 디자인 전문가"
+  developer:
+    role: "Frontend Developer"
+    description: "React/TypeScript 프론트엔드 개발자"
+  reviewer-1:
+    role: "Senior Reviewer"
+    description: "코드 품질 및 아키텍처 리뷰어"
+  reviewer-2:
+    role: "Senior Reviewer"
+    description: "UX 및 접근성 리뷰어"
+  reviewer-3:
+    role: "Senior Reviewer"
+    description: "성능 및 확장성 리뷰어"

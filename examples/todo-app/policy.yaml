@@ -1,0 +1,12 @@
+version: "1.0"
+rules:
+  - name: time-limit
+    type: resource
+    config:
+      max_step_duration: 120
+      max_total_duration: 600
+  - name: tool-restriction
+    type: tool
+    config:
+      allowed: [generate, review, summarize]
+      denied: [shell, filesystem]

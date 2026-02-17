@@ -1,0 +1,100 @@
+name: todo-app-creation
+description: "AI Control Runtime으로 투두앱 전체 개발 — 기획→설계→디자인→구현→리뷰"
+
+steps:
+  - name: planning
+    description: "제품 기획 — 요구사항 정의, 핵심 기능, 사용자 스토리"
+    agent: product-manager
+    input:
+      task: |
+        투두앱 제품 기획서를 작성하세요.
+        포함 항목:
+        - 핵심 기능 목록 (CRUD, 필터, 우선순위, 마감일 등)
+        - 사용자 스토리 5개 이상
+        - 기술 요구사항 (프론트엔드: React, 상태관리, 스토리지)
+        - MVP 범위 정의
+        - 비기능 요구사항 (성능, 접근성)
+
+  - name: architecture
+    description: "시스템 설계 — 컴포넌트 구조, 데이터 모델, API 설계"
+    agent: architect
+    depends_on: [planning]
+    input:
+      task: |
+        기획서를 기반으로 시스템 설계 문서를 작성하세요.
+        포함 항목:
+        - 컴포넌트 아키텍처 (React 컴포넌트 트리)
+        - 데이터 모델 (Todo 타입, 상태 관리 구조)
+        - API/스토리지 설계 (localStorage 기반)
+        - 폴더 구조
+        - 기술 스택 확정
+
+  - name: design-review
+    description: "설계 합의 — 3 에이전트가 설계를 리뷰하고 합의"
+    pattern: consensus
+    depends_on: [architecture]
+    participants: [reviewer-1, reviewer-2, reviewer-3]
+    config:
+      consensus:
+        rule: majority
+        min_votes: 3
+        timeout: 60
+    input:
+      task: |
+        시스템 설계를 리뷰하세요.
+        평가 기준: 확장성, 유지보수성, MVP 적합성
+        APPROVE 또는 REJECT + 이유를 제출하세요.
+
+  - name: ui-design
+    description: "UI/UX 디자인 — 컴포넌트별 디자인 스펙"
+    agent: designer
+    depends_on: [design-review]
+    input:
+      task: |
+        승인된 설계를 기반으로 UI 디자인 스펙을 작성하세요.
+        포함 항목:
+        - 화면별 레이아웃 (메인 목록, 추가 폼, 필터)
+        - 컴포넌트별 스타일 가이드 (색상, 타이포그래피, 간격)
+        - 인터랙션 패턴 (추가, 완료 토글, 삭제, 필터)
+        - 반응형 디자인 브레이크포인트
+        - 접근성 고려사항
+
+  - name: implementation
+    description: "구현 — React 투두앱 코드 생성"
+    agent: developer
+    depends_on: [ui-design]
+    input:
+      task: |
+        설계와 디자인 스펙을 기반으로 React 투두앱을 구현하세요.
+        요구사항:
+        - React + TypeScript
+        - 컴포넌트: TodoApp, TodoList, TodoItem, AddTodo, FilterBar
+        - 기능: 추가, 완료 토글, 삭제, 필터 (전체/활성/완료), 우선순위
+        - 스토리지: localStorage 영속화
+        - 스타일: CSS modules 또는 인라인
+        - 하나의 완전한 실행 가능한 코드로 출력
+
+  - name: code-review
+    description: "코드 리뷰 — 구현 결과를 리뷰"
+    pattern: peer-review
+    depends_on: [implementation]
+    participants: [reviewer-1, reviewer-2]
+    config:
+      consensus:
+        rule: majority
+        min_votes: 2
+        timeout: 60
+    input:
+      task: |
+        구현된 코드를 리뷰하세요.
+        평가 기준: 코드 품질, 타입 안전성, 컴포넌트 분리, 접근성
+        APPROVE 또는 REQUEST_CHANGES + 상세 피드백을 제출하세요.
+
+  - name: final-summary
+    description: "최종 산출물 정리"
+    agent: product-manager
+    depends_on: [code-review]
+    input:
+      task: |
+        전체 개발 과정을 요약하세요.
+        포함: 기획 요약, 설계 결정, 디자인 특징, 구현 결과, 리뷰 피드백
