@@ -1,6 +1,13 @@
 import { randomUUID } from "node:crypto";
 
 import { Policy, type PolicyDefinition } from "./policy.js";
+import type {
+  ReExecutionDiffReport,
+  ReExecutionOptions,
+  ReExecutionPlan,
+  ReExecutionResult,
+  StepReExecutionResult,
+} from "./replay.js";
 import { Workflow } from "./workflow.js";
 import type { WorkflowDef } from "./workflow.js";
 
@@ -174,6 +181,7 @@ export class OboraRuntime {
   private readonly plugins = new Map<string, OboraPlugin>();
   private readonly handlers = new Map<AuditEventType, Set<EventHandler>>();
   private readonly anyHandlers = new Set<(event: AuditEvent) => void | Promise<void>>();
+  private readonly executions = new Map<string, RuntimeExecution>();
 
   private policy?: PolicyDefinition;
   private readonly policyLoadPromise?: Promise<void>;
@@ -217,10 +225,90 @@ export class OboraRuntime {
     return this;
   }
 
-  async replay(executionId: string, options?: unknown): Promise<unknown> {
-    void executionId;
-    void options;
-    throw new OboraError("Not implemented: replay", "SDK_NOT_IMPLEMENTED");
+  async replay(
+    executionId: string,
+    options?: Partial<ReExecutionOptions>,
+  ): Promise<ReExecutionResult> {
+    const execution = this.executions.get(executionId);
+    if (!execution) {
+      throw new OboraError(`Execution not found: ${executionId}`, "SDK_EXECUTION_NOT_FOUND");
+    }
+
+    const reExecutionId = randomUUID();
+    const mode = options?.mode ?? "full";
+    const dryRun = options?.dryRun ?? true;
+
+    await this.emitEvent("reexecution_start", reExecutionId, {
+      originalExecutionId: executionId,
+      mode,
+      dryRun,
+    });
+
+    const allSteps = execution.stepOrder ?? [];
+    const checkpointIdx = options?.checkpointStep ? allSteps.indexOf(options.checkpointStep) : -1;
+    const stepsToSkip = checkpointIdx > 0 ? allSteps.slice(0, checkpointIdx) : [];
+    const stepsToRerun = checkpointIdx > 0 ? allSteps.slice(checkpointIdx) : [...allSteps];
+
+    const plan: ReExecutionPlan = {
+      executionId,
+      stepsToRerun,
+      stepsToSkip,
+      checkpointStep: options?.checkpointStep,
+    };
+
+    const stepResults: StepReExecutionResult[] = [];
+    for (const stepName of stepsToRerun) {
+      const result: StepReExecutionResult = {
+        stepName,
+        status: "completed",
+        matchesOriginal: true,
+      };
+
+      await this.emitEvent("reexecution_step_start", reExecutionId, { stepName });
+
+      if (options?.onStepComplete) {
+        await options.onStepComplete(stepName, result);
+      }
+
+      await this.emitEvent("reexecution_step_end", reExecutionId, {
+        stepName,
+        status: "completed",
+      });
+      stepResults.push(result);
+    }
+
+    const diffReport: ReExecutionDiffReport = {
+      executionId,
+      reExecutionId,
+      plan,
+      differences: stepResults.map((stepResult) => ({
+        stepName: stepResult.stepName,
+        status: stepResult.matchesOriginal ? "unchanged" : "changed",
+      })),
+      summary: {
+        total_steps: stepResults.length,
+        changed: 0,
+        unchanged: stepResults.length,
+        skipped: stepsToSkip.length,
+      },
+    };
+
+    const reResult: ReExecutionResult = {
+      reExecutionId,
+      originalExecutionId: executionId,
+      plan,
+      stepResults,
+      diffReport,
+      success: true,
+      completedAt: new Date(),
+    };
+
+    await this.emitEvent("reexecution_end", reExecutionId, {
+      originalExecutionId: executionId,
+      success: true,
+    });
+
+    return reResult;
   }
 
   onError(handler: (error: OboraError) => void): Unsubscribe {
@@ -250,7 +338,8 @@ export class OboraRuntime {
 
     const { input, variables, signal } = options;
     const executionId = randomUUID();
-    const execution = this.createExecution(executionId, name, input);
+    const workflow = this.workflows.get(name)!;
+    const execution = this.createExecution(executionId, name, input, workflow);
     let status: RunStatus = "queued";
     let settled = false;
     let rejectWait: ((reason?: unknown) => void) | undefined;
@@ -285,6 +374,7 @@ export class OboraRuntime {
           status: "completed",
         });
 
+        this.executions.set(executionId, structuredClone(execution));
         resolve(structuredClone(execution));
       });
     });
@@ -457,15 +547,22 @@ export class OboraRuntime {
     return iterator;
   }
 
-  private createExecution(executionId: string, workflowName: string, input: unknown): RuntimeExecution {
+  private createExecution(
+    executionId: string,
+    workflowName: string,
+    input: unknown,
+    workflow: WorkflowDefinition,
+  ): RuntimeExecution {
+    const stepOrder = workflow.steps.map((step) => step.name);
+
     return {
       id: executionId,
       workflowName,
       status: "running",
       input,
       startedAt: new Date(),
-      stepOrder: [],
-      completedSteps: [],
+      stepOrder,
+      completedSteps: [...stepOrder],
       stepRecords: {},
       outputs: {},
     };

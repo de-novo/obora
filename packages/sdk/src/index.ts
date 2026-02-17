@@ -20,3 +20,11 @@ export type {
   AuditEvent,
 } from "./runtime.js";
 export type { WorkflowDef, WorkflowStep } from "./workflow.js";
+export type {
+  ReExecutionOptions,
+  ReExecutionResult,
+  ReExecutionPlan,
+  ReExecutionDiffReport,
+  StepReExecutionResult,
+  StepDiff,
+} from "./replay.js";
