@@ -81,28 +81,44 @@ export class StepExecutor {
       throw new Error(`Consensus step '${step.name}' requires participants`);
     }
 
-    const runConsensus = async (): Promise<StepResult> => {
+    const runConsensus = async (_timeoutSignal: AbortSignal): Promise<StepResult> => {
       const votes: Array<{ participant: string; vote: "APPROVE" | "REJECT" | "REQUEST_CHANGES"; response: string }> = [];
       for (const participant of participants) {
-        const response = await this.requestForStep(step, context, participant);
-        const responseText = response.message.content ?? "";
-        const vote = parseVote(responseText);
-        votes.push({ participant, vote, response: responseText });
-        await this.config.onEvent?.("consensus_vote", { stepName: step.name, participant, vote, response: responseText });
+        const consensusSignal = this.combineAbortSignals(context.signal, _timeoutSignal);
+        try {
+          const response = await this.requestForStep(
+            step,
+            {
+              ...context,
+              ...(consensusSignal?.signal ? { signal: consensusSignal.signal } : {}),
+            },
+            participant,
+          );
+          const responseText = response.message.content ?? "";
+          const vote = parseVote(responseText);
+          votes.push({ participant, vote, response: responseText });
+          await this.config.onEvent?.("consensus_vote", { stepName: step.name, participant, vote, response: responseText });
+        } finally {
+          consensusSignal?.cleanup();
+        }
       }
 
       const approveCount = votes.filter((v) => v.vote === "APPROVE").length;
-      const pass = approveCount > Math.floor(votes.length / 2);
+      const quorumRule = this.getConsensusQuorumRule(step, votes.length);
+      const pass = approveCount >= quorumRule.requiredApprovals;
       await this.config.onEvent?.("consensus_result", {
         stepName: step.name,
         pass,
         approveCount,
+        requiredApprovals: quorumRule.requiredApprovals,
         totalVotes: votes.length,
         votes,
       });
 
       if (!pass) {
-        throw new Error(`Consensus failed for step '${step.name}' (${approveCount}/${votes.length} approvals)`);
+        throw new Error(
+          `Consensus failed for step '${step.name}' (${approveCount}/${votes.length} approvals, requires ${quorumRule.description})`,
+        );
       }
 
       return {
@@ -132,17 +148,29 @@ export class StepExecutor {
     const timeoutMs = this.getStepTimeoutMs(step);
     const requestSignal = this.combineSignals(context.signal, timeoutMs, step.name);
 
-    const response = await this.llmAdapter.chatCompletion({ model: this.config.model, messages, ...(requestSignal ? { signal: requestSignal } : {}) });
-    await this.config.onEvent?.("llm_response", {
-      stepName: step.name,
-      agent: agentName ?? step.agent,
-      content: response.message.content,
-    });
+    try {
+      const response = await this.llmAdapter.chatCompletion({
+        model: this.config.model,
+        messages,
+        ...(requestSignal?.signal ? { signal: requestSignal.signal } : {}),
+      });
+      await this.config.onEvent?.("llm_response", {
+        stepName: step.name,
+        agent: agentName ?? step.agent,
+        content: response.message.content,
+      });
 
-    return response;
+      return response;
+    } finally {
+      requestSignal?.cleanup();
+    }
   }
 
-  private combineSignals(signal: AbortSignal | undefined, timeoutMs: number, stepName: string): AbortSignal | undefined {
+  private combineSignals(
+    signal: AbortSignal | undefined,
+    timeoutMs: number,
+    stepName: string,
+  ): { signal: AbortSignal; cleanup: () => void } | undefined {
     const hasSignal = signal !== undefined;
     const shouldUseTimeout = Number.isFinite(timeoutMs) && timeoutMs > 0;
 
@@ -154,7 +182,12 @@ export class StepExecutor {
     let timeout: ReturnType<typeof setTimeout> | undefined;
     let onAbort: (() => void) | undefined;
 
+    let cleanedUp = false;
     const cleanup = () => {
+      if (cleanedUp) {
+        return;
+      }
+      cleanedUp = true;
       if (timeout) {
         clearTimeout(timeout);
         timeout = undefined;
@@ -185,11 +218,11 @@ export class StepExecutor {
     }
 
     controller.signal.addEventListener("abort", cleanup, { once: true });
-    return controller.signal;
+    return { signal: controller.signal, cleanup };
   }
 
   private async withTimeout<T>(
-    task: () => Promise<T>,
+    task: (signal: AbortSignal) => Promise<T>,
     timeoutMs: number,
     timeoutMessage: string,
   ): Promise<T> {
@@ -200,7 +233,7 @@ export class StepExecutor {
 
     try {
       return await Promise.race([
-        task(),
+        task(timeoutController.signal),
         new Promise<never>((_, reject) => {
           timeoutController.signal.addEventListener(
             "abort",
@@ -213,6 +246,9 @@ export class StepExecutor {
       ]);
     } finally {
       clearTimeout(timeout);
+      if (!timeoutController.signal.aborted) {
+        timeoutController.abort(new Error("Timeout guard cleaned up"));
+      }
     }
   }
 
@@ -238,6 +274,89 @@ export class StepExecutor {
     }
 
     return perRequestTimeoutMs * participantCount * 2;
+  }
+
+  private getConsensusQuorumRule(
+    step: WorkflowStep,
+    totalVotes: number,
+  ): { requiredApprovals: number; description: string } {
+    const config = step.config;
+    const rawQuorum = config && typeof config === "object" ? (config as Record<string, unknown>).quorum : undefined;
+
+    if (typeof rawQuorum === "number" && Number.isFinite(rawQuorum) && rawQuorum > 0) {
+      if (rawQuorum <= 1) {
+        const requiredApprovals = Math.min(totalVotes, Math.max(1, Math.ceil(totalVotes * rawQuorum)));
+        return {
+          requiredApprovals,
+          description: `${requiredApprovals}/${totalVotes} approvals (quorum=${rawQuorum})`,
+        };
+      }
+
+      const requiredApprovals = Math.min(totalVotes, Math.max(1, Math.ceil(rawQuorum)));
+      return {
+        requiredApprovals,
+        description: `${requiredApprovals}/${totalVotes} approvals (quorum=${rawQuorum})`,
+      };
+    }
+
+    const requiredApprovals = Math.floor(totalVotes / 2) + 1;
+    return {
+      requiredApprovals,
+      description: `${requiredApprovals}/${totalVotes} approvals; requires strict majority (>50%)`,
+    };
+  }
+
+  private combineAbortSignals(
+    ...signals: Array<AbortSignal | undefined>
+  ): { signal: AbortSignal; cleanup: () => void } | undefined {
+    const activeSignals = signals.filter((value): value is AbortSignal => value !== undefined);
+    if (activeSignals.length === 0) {
+      return undefined;
+    }
+
+    if (activeSignals.length === 1) {
+      return {
+        signal: activeSignals[0],
+        cleanup: () => undefined,
+      };
+    }
+
+    const controller = new AbortController();
+    const removers: Array<() => void> = [];
+    let cleanedUp = false;
+
+    const cleanup = () => {
+      if (cleanedUp) {
+        return;
+      }
+      cleanedUp = true;
+      for (const remove of removers) {
+        remove();
+      }
+      removers.length = 0;
+    };
+
+    for (const source of activeSignals) {
+      if (source.aborted) {
+        cleanup();
+        controller.abort(source.reason ?? new Error("Execution aborted"));
+        return { signal: controller.signal, cleanup };
+      }
+
+      const onAbort = () => {
+        cleanup();
+        controller.abort(source.reason ?? new Error("Execution aborted"));
+      };
+      source.addEventListener("abort", onAbort, { once: true });
+      removers.push(() => source.removeEventListener("abort", onAbort));
+    }
+
+    controller.signal.addEventListener("abort", cleanup, { once: true });
+
+    return {
+      signal: controller.signal,
+      cleanup,
+    };
   }
 
   private buildSystemPrompt(agentName?: string): string {

@@ -575,6 +575,13 @@ export class OboraRuntime {
           return;
         }
 
+        if (runTimeout) {
+          clearTimeout(runTimeout);
+          runTimeout = undefined;
+        }
+        signalAbortListener?.();
+        signalAbortListener = undefined;
+
         status = "aborted";
         execution.status = "aborted";
         execution.error = reason ?? "Execution cancelled";

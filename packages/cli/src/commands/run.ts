@@ -3,7 +3,7 @@ import { basename, join } from "node:path";
 
 import { Command } from "commander";
 
-import { OboraRuntime, Workflow } from "@obora/sdk";
+import { detectLLMConfigFromEnv, OboraRuntime, Workflow } from "@obora/sdk";
 
 import { CLIError } from "../utils/cli-error.js";
 import { ExitCode } from "../utils/exit-codes.js";
@@ -25,15 +25,15 @@ function isVerboseOutput(options: Record<string, unknown>): boolean {
 
 export async function runRun(workflow: string, options: Record<string, unknown>): Promise<void> {
   const startedAt = Date.now();
-  const resolvedApiKey = process.env.ANTHROPIC_API_KEY ?? process.env.OPENAI_API_KEY;
+  const envLLMConfig = detectLLMConfigFromEnv(process.env);
   const runtime = new OboraRuntime({
     policyPath: options.policy as string | undefined,
     agentsPath: options.agents as string | undefined,
-    llm: resolvedApiKey
+    llm: envLLMConfig
       ? {
-          provider: (options.provider as string | undefined) ?? process.env.OBORA_LLM_PROVIDER ?? "anthropic",
-          apiKey: resolvedApiKey,
-          model: options.model as string | undefined,
+          ...envLLMConfig,
+          provider: (options.provider as string | undefined) ?? envLLMConfig.provider,
+          model: (options.model as string | undefined) ?? envLLMConfig.model,
         }
       : undefined,
     verbose: Boolean(options.verbose),

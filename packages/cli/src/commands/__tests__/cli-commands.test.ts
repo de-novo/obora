@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { OboraRuntime } from "@obora/sdk";
+import * as oboraSdk from "@obora/sdk";
 
 import { createCLI } from "../../cli.js";
 import { createPolicyCommand } from "../policy.js";
@@ -95,13 +95,48 @@ describe("M3 CLI command IA", () => {
     );
 
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
-    const runSpy = vi.spyOn(OboraRuntime.prototype, "run");
+    const runSpy = vi.spyOn(oboraSdk.OboraRuntime.prototype, "run");
 
     await runRun(workflowPath, { dryRun: true });
 
     expect(runSpy).not.toHaveBeenCalled();
     const output = log.mock.calls.map((args) => args.join(" ")).join("\n");
     expect(output).toContain('✅ Workflow "temp-workflow" validated successfully.');
+  });
+
+  it("runRun detects OBORA_LLM_* env via SDK helper", async () => {
+    const detectSpy = vi.spyOn(oboraSdk, "detectLLMConfigFromEnv").mockReturnValue({
+      provider: "custom-provider",
+      apiKey: "custom-key",
+      model: "custom-model",
+    });
+
+    const runSpy = vi.spyOn(oboraSdk.OboraRuntime.prototype, "run").mockResolvedValue({
+      executionId: "test-exec",
+      status: "completed",
+      wait: async () => ({
+        id: "test-exec",
+        workflowName: "inline-workflow",
+        status: "completed",
+        input: undefined,
+        startedAt: new Date(),
+        endedAt: new Date(),
+        stepOrder: [],
+        completedSteps: [],
+        stepRecords: {},
+        outputs: {},
+      }),
+      cancel: async () => undefined,
+    });
+
+    const workflow = "inline-workflow";
+    const runtimeDefineSpy = vi.spyOn(oboraSdk.OboraRuntime.prototype, "define");
+
+    await runRun(workflow, {});
+
+    expect(detectSpy).toHaveBeenCalled();
+    expect(runtimeDefineSpy).not.toHaveBeenCalled();
+    expect(runSpy).toHaveBeenCalledWith(workflow, expect.any(Object));
   });
 
   it("policy validate handles valid and invalid YAML", async () => {
