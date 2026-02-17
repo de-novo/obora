@@ -33,7 +33,7 @@ vi.mock('@obora/core', () => ({
   log: vi.fn(),
 }));
 
-vi.mock('@obora-kit/agents', () => ({
+vi.mock('@obora-kit/adapters', () => ({
   FileAuthManager: class MockFileAuthManager {
     listProviders = vi.fn().mockResolvedValue([]);
   },
@@ -45,7 +45,7 @@ vi.mock('@obora-kit/agents', () => ({
 import { existsSync } from 'node:fs';
 import fs from 'fs-extra';
 import { OboraDatabase } from '@obora/database';
-import { getProviderDefaultModel, pickPreferredProvider } from '@obora-kit/agents';
+import { getProviderDefaultModel, pickPreferredProvider } from '@obora-kit/adapters';
 import { createInitCommand, runInit } from '../init.js';
 
 describe.skip('init command', () => {

@@ -3,17 +3,19 @@
  */
 
 import type { Step } from "@obora/core";
-import type { AgentConfig } from "@obora-kit/agents";
-import { OboraError, type ErrorCode } from "@obora/core";
 import {
-  type BaseAgent,
-  type Task,
-  type TaskResult,
-  type AgentContext,
+  type AgentConfig,
   RetryExhaustedError,
   SkillLoader,
   SkillRegistry,
-} from "@obora-kit/agents";
+} from "@obora-kit/adapters";
+import { OboraError, type ErrorCode } from "@obora/core";
+import type {
+  BaseAgent,
+  Task,
+  TaskResult,
+  AgentContext,
+} from "@obora-kit/runtime";
 import type { StepErrorMetadata } from "./types.js";
 import { parseDuration } from "./utils.js";
 import { calculateDelay, waitWithAbort } from "./retry-policy.js";

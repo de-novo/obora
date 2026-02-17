@@ -46,8 +46,8 @@ import {
   MAX_HISTORY_LENGTH,
   type StepResultRecord,
 } from "../context-builder.js";
-import { MockLLMAdapter } from "@obora-kit/agents";
-import type { ChatMessage } from "@obora-kit/agents";
+import { MockLLMAdapter } from "@obora-kit/adapters";
+import type { ChatMessage } from "@obora-kit/adapters";
 import type { Step, Workflow, ErrorCode } from "@obora/core";
 
 // ---------------------------------------------------------------------------

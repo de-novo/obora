@@ -5,7 +5,7 @@ import {
   maskProviderAuth,
   type AuthType,
   type ProviderAuth,
-} from "@obora-kit/agents";
+} from "@obora-kit/adapters";
 
 interface AddOptions {
   type?: AuthType;

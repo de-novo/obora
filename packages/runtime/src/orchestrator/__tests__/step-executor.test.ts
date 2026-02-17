@@ -11,7 +11,7 @@ import {
   type StepResult,
 } from "../StepScheduler.js";
 import type { Step } from "@obora/core";
-import type { BaseAgent, Task, TaskResult, AgentContext } from "@obora-kit/agents";
+import type { BaseAgent, Task, TaskResult, AgentContext } from "@obora-kit/runtime";
 
 // ---------------------------------------------------------------------------
 // Helpers

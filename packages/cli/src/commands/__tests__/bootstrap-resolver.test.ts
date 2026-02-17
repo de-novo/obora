@@ -5,7 +5,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // Mock @obora-kit/agents
-vi.mock("@obora-kit/agents", () => {
+vi.mock("@obora-kit/adapters", () => {
   const MockLLMAdapter = class {
     readonly id = "mock-llm";
     supports() { return true; }
@@ -41,7 +41,7 @@ vi.mock("../../runtime/step-executor.js", () => ({
   executeStep: vi.fn(),
 }));
 
-import { createAdapter } from "@obora-kit/agents";
+import { createAdapter } from "@obora-kit/adapters";
 
 const setAgentResolver = vi.fn();
 const bootstrapAgentResolver = vi.fn(async () => ({

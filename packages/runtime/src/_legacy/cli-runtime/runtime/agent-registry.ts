@@ -10,14 +10,16 @@
 import { OboraError } from "@obora/core";
 import {
   type AgentConfig,
-  type BaseAgent,
-  AgentRole,
   createAdapter,
-  createAgent,
   type LLMAdapter,
   type LLMProvider,
   type ToolRegistry,
-} from "@obora-kit/agents";
+} from "@obora-kit/adapters";
+import {
+  type BaseAgent,
+  AgentRole,
+  createAgent,
+} from "../../agents/roles/index.js";
 
 import type { AgentResolver } from "./step-executor.js";
 

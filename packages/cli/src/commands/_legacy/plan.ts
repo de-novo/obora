@@ -8,7 +8,7 @@ import { dirname, join } from "node:path";
 import * as path from "node:path";
 
 import { log } from "@obora/core";
-import { AgentConfigResolver, createAdapter, type LLMProvider } from "@obora-kit/agents";
+import { AgentConfigResolver, createAdapter, type LLMProvider } from "@obora-kit/adapters";
 import { Command } from "commander";
 import fs from "fs-extra";
 import yaml from "yaml";

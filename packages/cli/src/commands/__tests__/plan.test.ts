@@ -31,7 +31,7 @@ const chatCompletionMock = vi.fn().mockResolvedValue({
   finishReason: 'stop',
 });
 
-vi.mock('@obora-kit/agents', () => ({
+vi.mock('@obora-kit/adapters', () => ({
   createAdapter: vi.fn(async () => ({
     id: 'mock-llm',
     chatCompletion: chatCompletionMock,

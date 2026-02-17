@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { SkillRegistry } from "@obora-kit/agents";
+import { SkillRegistry } from "@obora-kit/adapters";
 
 export function createSkillsCommand(): Command {
   const skills = new Command("skills").description("Manage obora skills");

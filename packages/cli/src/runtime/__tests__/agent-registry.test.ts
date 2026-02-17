@@ -4,7 +4,8 @@
 
 import { describe, it, expect } from "vitest";
 import { AgentRegistry } from "../agent-registry.js";
-import { AgentRole, MockLLMAdapter } from "@obora-kit/agents";
+import { MockLLMAdapter } from "@obora-kit/adapters";
+import { AgentRole } from "@obora-kit/runtime";
 import { OboraError } from "@obora/core";
 
 function makeRegistry() {

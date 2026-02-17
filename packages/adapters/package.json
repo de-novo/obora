@@ -73,6 +73,7 @@
   },
   "dependencies": {
     "@mariozechner/pi-ai": "^0.52.12",
-    "@mariozechner/pi-agent-core": "^0.52.12"
+    "@mariozechner/pi-agent-core": "^0.52.12",
+    "yaml": "^2.8.2"
   }
 }

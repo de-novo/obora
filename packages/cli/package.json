@@ -19,6 +19,8 @@
   },
   "dependencies": {
     "@obora/sdk": "workspace:^",
+    "@obora-kit/adapters": "workspace:*",
+    "@obora-kit/runtime": "workspace:*",
     "commander": "^14.0.3",
     "fs-extra": "^11.3.3",
     "open": "^10.2.0",
