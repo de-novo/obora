@@ -24,7 +24,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@obora/runtime": "^0.1.0",
+    "@obora/runtime": "workspace:*",
     "yaml": "^2.8.2"
   },
   "optionalDependencies": {
