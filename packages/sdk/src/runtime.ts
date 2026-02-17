@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
 
 import { Policy, type PolicyDefinition } from "./policy.js";
+import { PluginRegistry, type RegisterOptions } from "./plugin-registry.js";
+import type { LoadedPlugin } from "./plugin-types.js";
+import { resolvePluginType } from "./plugin-type-map.js";
 import type {
   NonDeterminismWarning,
   ReExecutionDiffReport,
@@ -189,7 +192,7 @@ export class OboraRuntime {
   private readonly agents = new Map<string, AgentFactory>();
   private readonly tools = new Map<string, ToolHandler>();
   private readonly patterns = new Map<string, PatternRegistration>();
-  private readonly plugins = new Map<string, OboraPlugin>();
+  private readonly pluginRegistry = new PluginRegistry();
   private readonly handlers = new Map<AuditEventType, Set<EventHandler>>();
   private readonly anyHandlers = new Set<(event: AuditEvent) => void | Promise<void>>();
   private readonly executions = new Map<string, RuntimeExecution>();
@@ -502,13 +505,26 @@ export class OboraRuntime {
     return this;
   }
 
-  registerPlugin(plugin: OboraPlugin): this {
-    this.plugins.set(plugin.name, plugin);
+  registerPlugin(plugin: LoadedPlugin, options?: RegisterOptions): this {
+    this.pluginRegistry.register(plugin, options);
+
+    const pluginName = plugin.descriptor.metadata.name;
+    const pluginType = plugin.descriptor.metadata.type;
+
     void this.emitEvent("plugin_load", "runtime", {
-      pluginName: plugin.name,
-      pluginType: plugin.type,
+      pluginName,
+      pluginType,
     });
     return this;
+  }
+
+  getPlugins(typeOrAlias?: string): LoadedPlugin[] {
+    if (!typeOrAlias) {
+      return this.pluginRegistry.getAll();
+    }
+
+    const type = resolvePluginType(typeOrAlias);
+    return this.pluginRegistry.getAll(type);
   }
 
   on<T extends AuditEventType>(event: T, handler: EventHandler<T>): Unsubscribe {

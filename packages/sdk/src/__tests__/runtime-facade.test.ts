@@ -1,6 +1,23 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { OboraError, OboraErrorCode, OboraRuntime } from "../runtime.js";
+import type { LoadedPlugin } from "../plugin-types.js";
+
+function makeLoadedPlugin(name: string, type: "tool" | "agent" = "tool"): LoadedPlugin {
+  return {
+    descriptor: {
+      packageName: `@test/${name}`,
+      version: "1.0.0",
+      packagePath: "/tmp",
+      metadata: {
+        type,
+        exports: "./dist/index.js",
+        name,
+      },
+    },
+    module: { name, type },
+  };
+}
 
 describe("OboraRuntime facade", () => {
   it("stores a workflow definition and runs it with a RunHandle", async () => {
@@ -47,11 +64,7 @@ describe("OboraRuntime facade", () => {
         name: "custom-pattern",
         execute: async () => ({ success: true, output: "ok" }),
       })
-      .registerPlugin({
-        name: "demo-plugin",
-        version: "0.1.0",
-        type: "tool",
-      });
+      .registerPlugin(makeLoadedPlugin("demo-plugin", "tool"));
 
     await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -59,11 +72,7 @@ describe("OboraRuntime facade", () => {
     expect(sink).toHaveBeenCalled();
 
     unsubscribe();
-    runtime.registerPlugin({
-      name: "demo-plugin-2",
-      version: "0.1.0",
-      type: "tool",
-    });
+    runtime.registerPlugin(makeLoadedPlugin("demo-plugin-2", "tool"));
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(onPluginLoad).toHaveBeenCalledTimes(1);
