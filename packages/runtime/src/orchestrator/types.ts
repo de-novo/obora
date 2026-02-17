@@ -1,4 +1,4 @@
-import type { Step, Workflow } from "@obora/core";
+import type { Step, Workflow } from "../_legacy/workflow/index.js";
 import type { CellResult } from "../cell/types.js";
 import type { ConsensusConfig, ConsensusVoteInput, GateConsensusResult } from "../consensus/ConsensusGate.js";
 import type { PolicyDecision } from "../policy/types.js";

@@ -48,7 +48,7 @@ import {
 } from "../ExecutionContextBuilder.js";
 import { MockLLMAdapter } from "../../../../adapters/src/llm/mock-adapter";
 import type { ChatMessage } from "@obora-kit/adapters";
-import type { Step, Workflow, ErrorCode } from "@obora/core";
+import type { Step, Workflow, ErrorCode } from "../../_legacy/workflow/index.js";
 
 // ---------------------------------------------------------------------------
 // Shared fixtures

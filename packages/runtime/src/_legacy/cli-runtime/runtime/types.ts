@@ -1,4 +1,4 @@
-import type { ErrorCode } from "@obora/core";
+import type { ErrorCode } from "../../../_legacy/workflow/index.js";
 
 export type UserFacingErrorCode =
   | "E4001"

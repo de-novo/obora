@@ -7,7 +7,7 @@
  * - create BaseAgent from fully-resolved config
  */
 
-import { OboraError } from "@obora/core";
+import { OboraError } from "../../../_legacy/workflow/index.js";
 import {
   type AgentConfig,
   createAdapter,

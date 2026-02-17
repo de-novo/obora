@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { generateExecutionPlan, getNextSteps, parseWorkflow, type Step, type Workflow } from "@obora/core";
+import { generateExecutionPlan, getNextSteps, parseWorkflow, type Step, type Workflow } from "../_legacy/workflow/index.js";
 import type { CellManager } from "../cell/CellManager.js";
 import type { Task } from "../cell/types.js";
 import type { AuditTrail } from "../audit/AuditTrail.js";
