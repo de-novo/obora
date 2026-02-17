@@ -163,6 +163,31 @@ describe("PluginLoader", () => {
     await expect(loader.load(badDescriptor)).rejects.toMatchObject({ code: "SDK_9002" });
   });
 
+  it("load() throws SDK_9002 when exports path escapes package root", async () => {
+    const loader = new PluginLoader({ searchPaths: [nodeModulesPath], cwd: testDir });
+    const descriptors = await loader.scan();
+    const target = descriptors.find((item) => item.packageName === "fake-plugin-tool");
+
+    expect(target).toBeDefined();
+    const badDescriptor: PluginDescriptor = {
+      ...(target as PluginDescriptor),
+      metadata: {
+        ...(target as PluginDescriptor).metadata,
+        exports: "../../etc/passwd",
+      },
+    };
+
+    await expect(loader.load(badDescriptor)).rejects.toMatchObject({ code: "SDK_9002" });
+  });
+
+  it("scan() rethrows non-ENOENT errors from search path readdir", async () => {
+    const notADirectory = join(testDir, "not-a-directory");
+    await writeFile(notADirectory, "file", "utf-8");
+
+    const loader = new PluginLoader({ searchPaths: [notADirectory], cwd: testDir });
+    await expect(loader.scan()).rejects.toMatchObject({ code: "ENOTDIR" });
+  });
+
   it("scanAndLoad() combines scan and load", async () => {
     const loader = new PluginLoader({ searchPaths: [nodeModulesPath], cwd: testDir });
 

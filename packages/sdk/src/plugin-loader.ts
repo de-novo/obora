@@ -12,6 +12,10 @@ export interface PluginLoaderOptions {
   cwd?: string;
 }
 
+function isErrnoCode(error: unknown, code: string): error is NodeJS.ErrnoException {
+  return error instanceof Error && "code" in error && (error as NodeJS.ErrnoException).code === code;
+}
+
 export class PluginLoader {
   private readonly searchPaths: string[];
   private readonly cwd: string;
@@ -34,20 +38,45 @@ export class PluginLoader {
         for (const entry of entries) {
           if (entry.startsWith("@")) {
             const scopePath = join(searchPath, entry);
-            const scopeEntries = await readdir(scopePath).catch(() => [] as string[]);
+            const scopeEntries = await readdir(scopePath).catch((error: unknown) => {
+              if (isErrnoCode(error, "ENOENT")) {
+                return [] as string[];
+              }
+
+              throw error;
+            });
             for (const scopeEntry of scopeEntries) {
               const pkgPath = join(scopePath, scopeEntry);
-              const descriptor = await this.tryReadPlugin(pkgPath, `${entry}/${scopeEntry}`);
+              const descriptor = await this.tryReadPlugin(pkgPath, `${entry}/${scopeEntry}`).catch(
+                (error: unknown) => {
+                  if (error instanceof OboraError) {
+                    return null;
+                  }
+
+                  throw error;
+                },
+              );
               if (descriptor) descriptors.push(descriptor);
             }
           } else {
             const pkgPath = join(searchPath, entry);
-            const descriptor = await this.tryReadPlugin(pkgPath, entry);
+            const descriptor = await this.tryReadPlugin(pkgPath, entry).catch((error: unknown) => {
+              if (error instanceof OboraError) {
+                return null;
+              }
+
+              throw error;
+            });
             if (descriptor) descriptors.push(descriptor);
           }
         }
-      } catch {
-        // Search path doesn't exist, skip
+      } catch (error: unknown) {
+        if (isErrnoCode(error, "ENOENT")) {
+          // Search path doesn't exist, skip
+          continue;
+        }
+
+        throw error;
       }
     }
 
@@ -59,6 +88,13 @@ export class PluginLoader {
    */
   async load(descriptor: PluginDescriptor): Promise<LoadedPlugin> {
     const modulePath = resolve(descriptor.packagePath, descriptor.metadata.exports);
+    if (!modulePath.startsWith(descriptor.packagePath + "/")) {
+      throw new OboraError(
+        `Plugin "${descriptor.metadata.name}": exports path escapes package root`,
+        OboraErrorCode.SDK_PLUGIN_LOAD_FAILED,
+      );
+    }
+
     try {
       const module = await import(modulePath);
       return { descriptor, module };
@@ -113,6 +149,11 @@ export class PluginLoader {
     } catch (error) {
       if (error instanceof OboraError) {
         throw error;
+      }
+
+      if (error instanceof SyntaxError) {
+        // Malformed package.json
+        return null;
       }
 
       return null;
