@@ -6,6 +6,7 @@ import { CLIError } from "../utils/cli-error.js";
 import { ExitCode } from "../utils/exit-codes.js";
 import { handleCommandAction } from "../utils/error-handler.js";
 import { formatter } from "../utils/formatter.js";
+import { getGlobalOpts } from "../utils/global-opts.js";
 
 export function createPolicyCommand(): Command {
   const cmd = new Command("policy").description("Policy management");
@@ -13,7 +14,7 @@ export function createPolicyCommand(): Command {
   cmd
     .command("validate <path>")
     .description("Validate policy/workflow YAML")
-    .action(async (path, options) => {
+    .action(async function (this: Command, path) {
       await handleCommandAction(async () => {
         if (!path.endsWith(".yaml") && !path.endsWith(".yml")) {
           throw new CLIError(`Unsupported file format: ${path}`, ExitCode.VALIDATION_ERROR);
@@ -27,9 +28,10 @@ export function createPolicyCommand(): Command {
           kind = "workflow";
         }
 
-        if (options.json) {
+        const globalOpts = getGlobalOpts(this);
+        if (globalOpts.json) {
           formatter.json({ path, valid: true, kind });
-        } else if (!options.quiet) {
+        } else if (!globalOpts.quiet) {
           if (kind === "policy") {
             formatter.success(`Policy "${path}" is valid.`);
           } else {

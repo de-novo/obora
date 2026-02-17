@@ -5,6 +5,7 @@ import { Command } from "commander";
 
 import { handleCommandAction } from "../utils/error-handler.js";
 import { formatter } from "../utils/formatter.js";
+import { getGlobalOpts } from "../utils/global-opts.js";
 
 export async function runInit(options: Record<string, unknown>): Promise<void> {
   const dir = process.cwd();
@@ -35,9 +36,10 @@ export function createInitCommand(): Command {
     .description("Initialize a new Obora project")
     .option("--template <name>", "Project template", "default")
     .option("-y, --yes", "Skip prompts, use defaults")
-    .action(async (options) => {
+    .action(async function (this: Command, options) {
       await handleCommandAction(async () => {
-        await runInit(options);
+        const mergedOptions = { ...getGlobalOpts(this), ...options };
+        await runInit(mergedOptions);
       });
     });
 }

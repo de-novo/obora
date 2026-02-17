@@ -6,6 +6,7 @@ import { CLIError } from "../utils/cli-error.js";
 import { ExitCode } from "../utils/exit-codes.js";
 import { handleCommandAction } from "../utils/error-handler.js";
 import { formatter } from "../utils/formatter.js";
+import { getGlobalOpts } from "../utils/global-opts.js";
 
 function isJsonOutput(options: Record<string, unknown>): boolean {
   return Boolean(options.json);
@@ -94,9 +95,10 @@ export function createRunCommand(): Command {
     .option("--policy <path>", "Policy file path")
     .option("--dry-run", "Validate without executing")
     .option("--timeout <ms>", "Execution timeout in milliseconds", parseInt)
-    .action(async (workflow, options) => {
+    .action(async function (this: Command, workflow, options) {
       await handleCommandAction(async () => {
-        await runRun(workflow, options);
+        const mergedOptions = { ...getGlobalOpts(this), ...options };
+        await runRun(workflow, mergedOptions);
       });
     });
 }

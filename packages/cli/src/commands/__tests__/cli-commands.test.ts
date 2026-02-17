@@ -64,6 +64,18 @@ describe("M3 CLI command IA", () => {
     expect(names).toEqual(expect.arrayContaining(["query", "tail", "replay"]));
   });
 
+  it("--json global option propagates to subcommands", async () => {
+    const cli = createCLI();
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await cli.parseAsync(["--json", "plugin", "install", "demo-plugin"], { from: "user" });
+
+    expect(log).toHaveBeenCalled();
+    const output = log.mock.calls.map((args) => args.join(" ")).join("\n");
+    expect(output).toContain('"command": "plugin install"');
+    expect(output).toContain('"name": "demo-plugin"');
+  });
+
   it("runRun executes workflow from YAML in dry-run mode", async () => {
     const dir = await mkdtemp(join(tmpdir(), "obora-cli-run-"));
     const workflowPath = join(dir, "workflow.yaml");
