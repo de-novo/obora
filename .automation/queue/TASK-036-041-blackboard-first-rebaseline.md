@@ -511,3 +511,14 @@ Board 단계 태스크를 blackboard 우선 구현 순서로 재배치하고, �
 - 실행: `pnpm --filter @obora-kit/board test`
 - 결과: ✅ `3 files / 31 tests passed` (413ms)
 - 판정: 블로커 없음, 다음 실행은 blackboard 전체 테스트 스위트 회귀 점검(`pnpm --filter @obora-kit/blackboard test`) 권장
+
+## 야간 자동 점검 로그 (2026-02-17 21:12 KST)
+- 기준 브랜치: `origin/main` (`959d269`)
+- 작업 브랜치(HEAD 유지): `main` (`959d269`)
+- 점검 단위: blackboard 전체 테스트 스위트 회귀 점검
+- 실행: `pnpm --filter @obora-kit/blackboard test`
+- 결과: ❌ `No projects matched the filters` (workspace 내 `@obora-kit/blackboard` 패키지 미존재)
+- 판정: **BLOCKER** (의존/구조 변경)
+  - 원인: 패키지 구성이 `@obora-kit/blackboard` 중심에서 `@obora-kit/runtime` 등으로 변경되어 기존 blackboard-first 점검 커맨드가 무효화됨
+  - 필요조치: blackboard-first 기준을 현재 패키지 구조 기준으로 재매핑(예: runtime 내 blackboard 관련 테스트 경로/명령 확정)
+  - 다음실행조건: 유효한 대체 점검 명령 1개 확정 후 재개 (블로커 상태에서는 무리한 재시도 금지)
