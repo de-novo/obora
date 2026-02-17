@@ -63,10 +63,11 @@ obora init [options]
 
 Creates:
 
-- `workflows/example.yaml`
-- `policies/default.yaml`
-- `tests/`
+- `workflow.yaml`
+- `policy.yaml`
+- `agents.yaml`
 - `obora.config.yaml`
+- `.gitignore`
 
 ### Example
 
@@ -98,10 +99,10 @@ obora run <workflow> [options]
 ### Examples
 
 ```bash
-obora run workflows/example.yaml
-obora run workflows/example.yaml --input '{"topic":"safety"}'
+obora run workflow.yaml
+obora run workflow.yaml --input '{"topic":"safety"}'
 obora run my-workflow --var env=prod --var region=ap-northeast-2
-obora run workflows/example.yaml --dry-run
+obora run workflow.yaml --dry-run
 ```
 
 ### Exit Codes

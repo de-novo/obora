@@ -1,11 +1,11 @@
 # Getting Started
 
-5분 안에 Obora를 실행해보세요.
+Run Obora in under 5 minutes.
 
 ## Prerequisites
 
 - Node.js 20+
-- npm 또는 pnpm
+- npm or pnpm
 
 ## Quick Start
 
@@ -13,16 +13,16 @@
 npm install -g @obora/cli
 obora init my-project
 cd my-project
-obora run
+obora run workflow.yaml
 ```
 
-샘플 워크플로우 실행:
+Run an additional sample workflow from the repository root:
 
 ```bash
-obora run --workflow examples/hello-obora.yaml
+obora run examples/hello-obora.yaml
 ```
 
-## 다음 단계
+## Next Steps
 
 - [CLI Reference](./cli/README.md)
 - [API Reference](./api/README.md)

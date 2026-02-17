@@ -32,13 +32,13 @@ Obora provides an operational backbone for AI-included systems:
 npm install -g @obora/cli
 obora init my-project
 cd my-project
-obora run
+obora run workflow.yaml
 ```
 
-Run your first workflow:
+Run an additional sample workflow from this repository:
 
 ```bash
-# run a sample workflow
+# from repository root
 obora run examples/hello-obora.yaml
 ```
 
