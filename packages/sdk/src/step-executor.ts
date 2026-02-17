@@ -171,16 +171,22 @@ export class StepExecutor {
     timeoutMs: number,
     stepName: string,
   ): { signal: AbortSignal; cleanup: () => void } | undefined {
-    const hasSignal = signal !== undefined;
     const shouldUseTimeout = Number.isFinite(timeoutMs) && timeoutMs > 0;
+    let timeoutController: AbortController | undefined;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
 
-    if (!hasSignal && !shouldUseTimeout) {
-      return undefined;
+    if (shouldUseTimeout) {
+      timeoutController = new AbortController();
+      timeout = setTimeout(() => {
+        timeoutController?.abort(new Error(`LLM request timed out for step '${stepName}' after ${timeoutMs}ms`));
+      }, timeoutMs);
     }
 
-    const controller = new AbortController();
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-    let onAbort: (() => void) | undefined;
+    const combined = this.combineAbortSignals(signal, timeoutController?.signal);
+
+    if (!combined) {
+      return undefined;
+    }
 
     let cleanedUp = false;
     const cleanup = () => {
@@ -192,33 +198,13 @@ export class StepExecutor {
         clearTimeout(timeout);
         timeout = undefined;
       }
-      onAbort?.();
-      onAbort = undefined;
+      combined.cleanup();
     };
 
-    if (shouldUseTimeout) {
-      timeout = setTimeout(() => {
-        cleanup();
-        controller.abort(new Error(`LLM request timed out for step '${stepName}' after ${timeoutMs}ms`));
-      }, timeoutMs);
-    }
-
-    if (signal) {
-      if (signal.aborted) {
-        cleanup();
-        controller.abort(signal.reason ?? new Error(`Execution aborted before LLM response for step '${stepName}'`));
-      } else {
-        const abortHandler = () => {
-          cleanup();
-          controller.abort(signal.reason ?? new Error(`Execution aborted during step '${stepName}'`));
-        };
-        signal.addEventListener("abort", abortHandler, { once: true });
-        onAbort = () => signal.removeEventListener("abort", abortHandler);
-      }
-    }
-
-    controller.signal.addEventListener("abort", cleanup, { once: true });
-    return { signal: controller.signal, cleanup };
+    return {
+      signal: combined.signal,
+      cleanup,
+    };
   }
 
   private async withTimeout<T>(

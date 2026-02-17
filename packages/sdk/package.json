@@ -27,6 +27,9 @@
     "@obora/runtime": "^0.1.0",
     "yaml": "^2.8.2"
   },
+  "optionalDependencies": {
+    "@obora-kit/adapters": "workspace:*"
+  },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "tsup": "^8.5.1",

@@ -87,8 +87,16 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
   }
 
   const controller = new AbortController();
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
   if (typeof options.timeout === "number" && Number.isFinite(options.timeout)) {
-    setTimeout(() => controller.abort(), options.timeout);
+    timeoutHandle = setTimeout(() => {
+      controller.abort();
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+        timeoutHandle = undefined;
+      }
+    }, options.timeout);
+    timeoutHandle.unref?.();
     if (isVerboseOutput(options) && !isQuietOutput(options) && !isJsonOutput(options)) {
       formatter.step(`Timeout configured: ${options.timeout}ms`);
     }
@@ -120,7 +128,16 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
     signal: controller.signal,
   });
 
-  const result = await handle.wait();
+  const result = await (async () => {
+    try {
+      return await handle.wait();
+    } finally {
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+        timeoutHandle = undefined;
+      }
+    }
+  })();
   const elapsedMs = Date.now() - startedAt;
 
   if (options.outputDir && typeof options.outputDir === "string") {

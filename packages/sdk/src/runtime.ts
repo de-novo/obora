@@ -506,6 +506,10 @@ export class OboraRuntime {
             execution.stepRecords[step.name] = result;
             execution.completedSteps.push(step.name);
 
+            if (settled) {
+              return;
+            }
+
             await this.emitEvent("step_end", executionId, {
               stepName: step.name,
               status: "completed",
