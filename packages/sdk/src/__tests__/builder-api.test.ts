@@ -27,6 +27,9 @@ describe("builder API", () => {
     } catch (error) {
       expect((error as OboraError).code).toBe("SDK_INVALID_POLICY");
     }
+
+    expect(() => Policy.create({ rules: "not-array" })).toThrowError(OboraError);
+    expect(() => Policy.create({ rules: "not-array" })).toThrowError("Policy rules must be an array");
   });
 
   it("Workflow.create validates valid/invalid inputs", () => {
@@ -52,6 +55,11 @@ describe("builder API", () => {
       expect((error as OboraError).code).toBe("SDK_INVALID_WORKFLOW");
       expect((error as OboraError).message).toBe("Workflow must have steps array");
     }
+
+    expect(() => Workflow.create({ name: "demo", steps: [{}] })).toThrowError(OboraError);
+    expect(() => Workflow.create({ name: "demo", steps: [{}] })).toThrowError(
+      "Each workflow step must have a string name",
+    );
   });
 
   it("Workflow.fromYaml loads workflow from YAML", async () => {

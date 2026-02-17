@@ -27,7 +27,13 @@ export class Policy {
     if (!input || typeof input !== "object") {
       throw new OboraError("Invalid policy definition", "SDK_INVALID_POLICY");
     }
-
+    const def = input as Record<string, unknown>;
+    if (def.rules !== undefined && !Array.isArray(def.rules)) {
+      throw new OboraError("Policy rules must be an array", "SDK_INVALID_POLICY");
+    }
+    if (def.tools !== undefined && (typeof def.tools !== "object" || Array.isArray(def.tools))) {
+      throw new OboraError("Policy tools must be an object", "SDK_INVALID_POLICY");
+    }
     return input as PolicyDefinition;
   }
 }

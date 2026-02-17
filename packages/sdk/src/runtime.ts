@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
 
 import { Policy, type PolicyDefinition } from "./policy.js";
-import { Workflow, type WorkflowDef } from "./workflow.js";
+import { Workflow } from "./workflow.js";
+import type { WorkflowDef } from "./workflow.js";
 
-export type WorkflowDefinition = WorkflowDef | unknown;
+export type WorkflowDefinition = WorkflowDef;
 
 export type AuditEventType = "execution_start" | "execution_end" | "plugin_load" | "error";
 
@@ -123,9 +124,9 @@ export class OboraRuntime {
     }
   }
 
-  define(name: string, workflow: WorkflowDef): this;
-  define(name: string, workflow: unknown): this;
-  define(name: string, workflow: unknown): this {
+  define(name: string, workflow: WorkflowDef): this {
+    // Validate through Workflow.create to fail fast
+    Workflow.create(workflow);
     this.workflows.set(name, workflow);
     return this;
   }
@@ -184,6 +185,8 @@ export class OboraRuntime {
 
         status = "running";
         execution.status = "running";
+        // TODO(M3-04+): Wire to RuntimeOrchestrator for actual step execution.
+        // Currently completes immediately as a façade stub.
         await this.emitEvent("execution_start", executionId, {
           workflowName: name,
           input,
@@ -337,7 +340,7 @@ export class OboraRuntime {
       return;
     }
 
-    await Promise.all(
+    await Promise.allSettled(
       [...handlers].map(async (handler) => {
         await handler(event);
       }),

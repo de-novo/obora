@@ -42,6 +42,17 @@ export class Workflow {
       throw new OboraError("Workflow must have steps array", "SDK_INVALID_WORKFLOW");
     }
 
+    const steps = def.steps as unknown[];
+    for (const step of steps) {
+      if (!step || typeof step !== "object") {
+        throw new OboraError("Each workflow step must be an object", "SDK_INVALID_WORKFLOW");
+      }
+      const s = step as Record<string, unknown>;
+      if (!s.name || typeof s.name !== "string") {
+        throw new OboraError("Each workflow step must have a string name", "SDK_INVALID_WORKFLOW");
+      }
+    }
+
     return input as WorkflowDef;
   }
 }

@@ -5,7 +5,7 @@ import { OboraError, OboraRuntime } from "../runtime.js";
 describe("OboraRuntime facade", () => {
   it("stores a workflow definition and runs it with a RunHandle", async () => {
     const runtime = new OboraRuntime({ policyPath: "./policy.yaml" });
-    runtime.define("demo", "name: demo\nsteps: []");
+    runtime.define("demo", { name: "demo", steps: [] });
 
     const handle = await runtime.run("demo", { input: { topic: "runtime facade" } });
 
@@ -17,6 +17,15 @@ describe("OboraRuntime facade", () => {
     expect(result.input).toEqual({ topic: "runtime facade" });
     expect(result.status).toBe("completed");
     expect(handle.status).toBe("completed");
+  });
+
+  it("throws OboraError when define receives invalid workflow", () => {
+    const runtime = new OboraRuntime();
+
+    expect(() => runtime.define("invalid", { steps: [] } as never)).toThrowError(OboraError);
+    expect(() => runtime.define("invalid", { steps: [] } as never)).toThrowError(
+      "Workflow must have a name",
+    );
   });
 
   it("supports agent/tool/pattern/plugin registration and event subscriptions", async () => {
@@ -62,7 +71,7 @@ describe("OboraRuntime facade", () => {
 
   it("cancels an execution via RunHandle.cancel", async () => {
     const runtime = new OboraRuntime();
-    runtime.define("cancel-me", "name: cancel-me\nsteps: []");
+    runtime.define("cancel-me", { name: "cancel-me", steps: [] });
 
     const handle = await runtime.run("cancel-me", { input: { value: 1 } });
     await handle.cancel("user abort");
@@ -80,7 +89,7 @@ describe("OboraRuntime facade", () => {
     const errors: OboraError[] = [];
 
     runtime.onError((err) => errors.push(err));
-    runtime.define("err-test", "name: err-test\nsteps: []");
+    runtime.define("err-test", { name: "err-test", steps: [] });
 
     const handle = await runtime.run("err-test");
     await handle.cancel("test abort");
@@ -108,7 +117,7 @@ describe("OboraRuntime facade", () => {
 
   it("supports abort signal cancellation", async () => {
     const runtime = new OboraRuntime();
-    runtime.define("signal-cancel", "name: signal-cancel\nsteps: []");
+    runtime.define("signal-cancel", { name: "signal-cancel", steps: [] });
 
     const controller = new AbortController();
     const handle = await runtime.run("signal-cancel", { signal: controller.signal });
