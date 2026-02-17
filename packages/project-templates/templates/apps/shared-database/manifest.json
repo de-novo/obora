@@ -1,8 +1,0 @@
-{
-  "name": "shared-database",
-  "description": "Shared database package with ORM configuration",
-  "type": "package",
-  "targetDir": "packages/database",
-  "features": ["Shared schema", "Type-safe queries", "Migrations"],
-  "slots": ["database"]
-}
