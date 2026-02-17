@@ -17,7 +17,8 @@ import { registerHealthRoute } from './routes/health.js';
 import { registerPolicyRoutes, type PolicyEngineAdapter } from './routes/policy.js';
 import { createWsBridge, type WsBridge } from './ws-bridge.js';
 import { NotificationEngine } from './notification/engine.js';
-import { ConsoleChannel } from './notification/console-channel.js';
+import { createChannel } from './notification/channel-factory.js';
+import { registerNotificationRoutes } from './routes/notification.js';
 
 export interface DashboardServerDependencies {
   auditStore?: AuditStore;
@@ -46,7 +47,8 @@ export const createDashboardServer = async (
       error: (message, meta) => app.log.error(meta ?? {}, message),
     },
   });
-  notificationEngine.registerChannel(new ConsoleChannel());
+  notificationEngine.registerChannel(createChannel('console'));
+  notificationEngine.registerChannel(createChannel('webhook'));
 
   const wsBridge = createWsBridge(app, {
     wsPath: config.wsPath,
@@ -62,6 +64,7 @@ export const createDashboardServer = async (
   registerHealthRoute(app, config.apiBasePath);
   registerAuditRoutes(app, config.apiBasePath, auditStore);
   registerPolicyRoutes(app, config.apiBasePath, policyStore, policyEngine);
+  registerNotificationRoutes(app, config.apiBasePath, notificationEngine);
 
   const indexPath = join(config.staticDir, 'index.html');
   if (existsSync(indexPath)) {
