@@ -245,15 +245,33 @@ export class SQLiteStorageAdapter implements StorageAdapter {
 
   // ── Row mappers ──
 
+  /**
+   * Safely parse a JSON string, returning a descriptive error on failure
+   * instead of crashing with a generic SyntaxError.
+   */
+  private safeJsonParse<T>(json: string, context: string): T {
+    try {
+      return JSON.parse(json) as T;
+    } catch (cause) {
+      const preview = json.length > 80 ? json.slice(0, 80) + "…" : json;
+      throw new Error(
+        `Corrupt JSON in ${context}: ${(cause as Error).message} (value: ${preview})`,
+        { cause },
+      );
+    }
+  }
+
   private toRunRecord(row: Record<string, unknown>): RunRecord {
     return {
       id: row.id as string,
       workflowName: row.workflow_name as string,
       status: row.status as RunRecord["status"],
-      input: JSON.parse(row.input as string),
+      input: this.safeJsonParse<Record<string, unknown>>(row.input as string, `runs.input [id=${row.id}]`),
       startedAt: row.started_at as string,
       completedAt: (row.completed_at as string) || undefined,
-      metadata: row.metadata ? JSON.parse(row.metadata as string) : undefined,
+      metadata: row.metadata
+        ? this.safeJsonParse<Record<string, unknown>>(row.metadata as string, `runs.metadata [id=${row.id}]`)
+        : undefined,
     };
   }
 
@@ -263,9 +281,15 @@ export class SQLiteStorageAdapter implements StorageAdapter {
       runId: row.run_id as string,
       stepName: row.step_name as string,
       status: row.status as StepRecord["status"],
-      input: row.input ? JSON.parse(row.input as string) : undefined,
-      output: row.output ? JSON.parse(row.output as string) : undefined,
-      error: row.error ? JSON.parse(row.error as string) : undefined,
+      input: row.input
+        ? this.safeJsonParse<Record<string, unknown>>(row.input as string, `steps.input [id=${row.id}]`)
+        : undefined,
+      output: row.output
+        ? this.safeJsonParse<Record<string, unknown>>(row.output as string, `steps.output [id=${row.id}]`)
+        : undefined,
+      error: row.error
+        ? this.safeJsonParse<{ code: string; message: string; stack?: string }>(row.error as string, `steps.error [id=${row.id}]`)
+        : undefined,
       startedAt: row.started_at as string,
       completedAt: (row.completed_at as string) || undefined,
       durationMs: row.duration_ms != null ? (row.duration_ms as number) : undefined,
