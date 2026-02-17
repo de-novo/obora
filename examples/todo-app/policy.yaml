@@ -3,8 +3,8 @@ rules:
   - name: time-limit
     type: resource
     config:
-      max_step_duration: 120
-      max_total_duration: 600
+      max_step_duration: 600
+      max_total_duration: 3600
   - name: tool-restriction
     type: tool
     config:
