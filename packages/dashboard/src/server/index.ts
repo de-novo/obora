@@ -16,17 +16,20 @@ import { registerAuditRoutes } from './routes/audit.js';
 import { registerHealthRoute } from './routes/health.js';
 import { registerPolicyRoutes, type PolicyEngineAdapter } from './routes/policy.js';
 import { createWsBridge, type WsBridge } from './ws-bridge.js';
+import { NotificationEngine } from './notification/engine.js';
+import { ConsoleChannel } from './notification/console-channel.js';
 
 export interface DashboardServerDependencies {
   auditStore?: AuditStore;
   policyStore?: PolicyStore;
   policyEngine?: PolicyEngineAdapter;
+  notificationEngine?: NotificationEngine;
 }
 
 export const createDashboardServer = async (
   overrides: Partial<DashboardConfig> = {},
   dependencies: DashboardServerDependencies = {},
-): Promise<{ app: FastifyInstance; config: DashboardConfig; wsBridge: WsBridge }> => {
+): Promise<{ app: FastifyInstance; config: DashboardConfig; wsBridge: WsBridge; notificationEngine: NotificationEngine }> => {
   const config = createDashboardConfig(overrides);
   const app = Fastify({
     logger: true,
@@ -37,8 +40,19 @@ export const createDashboardServer = async (
   });
 
   await app.register(fastifyWebsocket);
+
+  const notificationEngine = dependencies.notificationEngine ?? new NotificationEngine({
+    logger: {
+      error: (message, meta) => app.log.error(meta ?? {}, message),
+    },
+  });
+  notificationEngine.registerChannel(new ConsoleChannel());
+
   const wsBridge = createWsBridge(app, {
     wsPath: config.wsPath,
+    onEvent: async (event) => {
+      await notificationEngine.processEvent(event);
+    },
   });
 
   const auditStore = dependencies.auditStore ?? new InMemoryAuditStore();
@@ -68,7 +82,7 @@ export const createDashboardServer = async (
     return reply.type('text/html').sendFile('index.html');
   });
 
-  return { app, config, wsBridge };
+  return { app, config, wsBridge, notificationEngine };
 };
 
 const start = async (): Promise<void> => {

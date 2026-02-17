@@ -59,6 +59,19 @@ export interface PolicyValidationResult {
   errors: string[];
 }
 
+export interface NotificationRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  trigger: {
+    eventTypes: string[];
+    severities?: string[];
+    stepNames?: string[];
+  };
+  channel: string;
+  template?: string;
+}
+
 export interface ApiErrorPayload {
   code: string;
   message: string;

@@ -21,6 +21,7 @@ interface WsClientCommand {
 export interface WsBridgeOptions {
   wsPath: string;
   bufferSize?: number;
+  onEvent?: (event: ExecutionEvent) => void | Promise<void>;
 }
 
 export interface WsBridge {
@@ -114,6 +115,24 @@ export const createWsBridge = (server: FastifyInstance, options: WsBridgeOptions
   const sequenceByExecution = new Map<string, number>();
   const bufferSize = options.bufferSize ?? DEFAULT_BUFFER_SIZE;
 
+  const notifyEvent = (event: ExecutionEvent): void => {
+    if (!options.onEvent) {
+      return;
+    }
+
+    void Promise.resolve(options.onEvent(event)).catch((error) => {
+      server.log.error(
+        {
+          code: 'DASH_11002',
+          error: error instanceof Error ? error.message : String(error),
+          eventId: event.id,
+          eventType: event.type,
+        },
+        'Notification processing failed from ws bridge',
+      );
+    });
+  };
+
   const broadcast = (event: ExecutionEvent): void => {
     const payload: WsServerMessage = {
       type: 'event',
@@ -125,6 +144,8 @@ export const createWsBridge = (server: FastifyInstance, options: WsBridgeOptions
     for (const client of clients) {
       client.send(serialized);
     }
+
+    notifyEvent(event);
   };
 
   const pushToBuffer = (event: ExecutionEvent): void => {
