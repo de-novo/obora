@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { OboraRuntime } from "../runtime.js";
+import { OboraError, OboraRuntime } from "../runtime.js";
 
 describe("OboraRuntime facade", () => {
   it("stores a workflow definition and runs it with a RunHandle", async () => {
     const runtime = new OboraRuntime({ policyPath: "./policy.yaml" });
     runtime.define("demo", "name: demo\nsteps: []");
 
-    const handle = runtime.run("demo", { topic: "runtime facade" });
+    const handle = runtime.run("demo", { input: { topic: "runtime facade" } });
 
     expect(handle.executionId).toBeTypeOf("string");
     expect(handle.status === "queued" || handle.status === "running").toBe(true);
@@ -64,16 +64,42 @@ describe("OboraRuntime facade", () => {
     const runtime = new OboraRuntime();
     runtime.define("cancel-me", "name: cancel-me\nsteps: []");
 
-    const handle = runtime.run("cancel-me", { value: 1 });
+    const handle = runtime.run("cancel-me", { input: { value: 1 } });
     await handle.cancel("user abort");
 
     expect(handle.status).toBe("aborted");
-    await expect(handle.wait()).rejects.toThrow("user abort");
+    await expect(handle.wait()).rejects.toMatchObject({
+      name: "OboraError",
+      code: "SDK_EXECUTION_CANCELLED",
+      message: "user abort",
+    });
   });
 
-  it("throws for unknown workflows", () => {
+  it("throws OboraError for unknown workflows", () => {
     const runtime = new OboraRuntime();
 
     expect(() => runtime.run("unknown")).toThrow("Workflow is not defined: unknown");
+    try {
+      runtime.run("unknown");
+    } catch (error) {
+      expect(error).toBeInstanceOf(OboraError);
+      expect((error as OboraError).code).toBe("SDK_WORKFLOW_NOT_FOUND");
+    }
+  });
+
+  it("supports abort signal cancellation", async () => {
+    const runtime = new OboraRuntime();
+    runtime.define("signal-cancel", "name: signal-cancel\nsteps: []");
+
+    const controller = new AbortController();
+    const handle = runtime.run("signal-cancel", { signal: controller.signal });
+    controller.abort("signal abort");
+
+    expect(handle.status).toBe("aborted");
+    await expect(handle.wait()).rejects.toMatchObject({
+      name: "OboraError",
+      code: "SDK_EXECUTION_CANCELLED",
+      message: "signal abort",
+    });
   });
 });

@@ -1,15 +1,44 @@
 import { randomUUID } from "node:crypto";
-import type {
-  AuditEvent,
-  AuditEventType,
-  Execution,
-  OboraPlugin,
-  PatternPlugin,
-  RuntimeOrchestrator,
-} from "@obora-kit/runtime";
-import type { CustomPatternDefinition } from "@obora-kit/runtime";
 
-export type WorkflowDefinition = Parameters<RuntimeOrchestrator["define"]>[1];
+export type WorkflowDefinition = unknown;
+
+export type AuditEventType = "execution_start" | "execution_end" | "plugin_load" | "error";
+
+export interface AuditEvent<T extends AuditEventType = AuditEventType> {
+  id: string;
+  executionId: string;
+  timestamp: Date;
+  type: T;
+  data: unknown;
+}
+
+export interface Execution {
+  id: string;
+  workflowName: string;
+  status: "running" | "completed" | "failed" | "aborted";
+  input: unknown;
+  startedAt: Date;
+  endedAt?: Date;
+  error?: string;
+  stepOrder: string[];
+  completedSteps: string[];
+  stepRecords: Record<string, unknown>;
+  outputs: Record<string, unknown>;
+}
+
+export interface PatternPlugin {
+  name: string;
+}
+
+export interface CustomPatternDefinition {
+  name: string;
+}
+
+export interface OboraPlugin {
+  name: string;
+  version: string;
+  type: string;
+}
 
 export interface OboraAuditConfig {
   enabled?: boolean;
@@ -27,6 +56,12 @@ export type PatternRegistration = PatternPlugin | CustomPatternDefinition;
 
 export type RunStatus = "queued" | "running" | "waiting" | "completed" | "failed" | "aborted";
 
+export interface RunOptions {
+  input?: unknown;
+  variables?: Record<string, unknown>;
+  signal?: AbortSignal;
+}
+
 export interface RunHandle {
   executionId: string;
   readonly status: RunStatus;
@@ -35,9 +70,22 @@ export interface RunHandle {
 }
 
 export type EventHandler<T extends AuditEventType = AuditEventType> = (
-  event: Extract<AuditEvent, { type: T }> | AuditEvent
+  event: Extract<AuditEvent, { type: T }>
 ) => void | Promise<void>;
 export type Unsubscribe = () => void;
+
+export class OboraError extends Error {
+  constructor(
+    message: string,
+    public readonly code: string,
+    public readonly executionId?: string,
+    public readonly stepName?: string,
+    public override readonly cause?: unknown,
+  ) {
+    super(message);
+    this.name = 'OboraError';
+  }
+}
 
 export class OboraRuntime {
   private readonly workflows = new Map<string, WorkflowDefinition>();
@@ -54,11 +102,27 @@ export class OboraRuntime {
     return this;
   }
 
-  run(name: string, input?: unknown): RunHandle {
+  async loadWorkflow(path: string): Promise<this> {
+    void path;
+    throw new Error("Not implemented: loadWorkflow");
+  }
+
+  async replay(executionId: string, options?: unknown): Promise<unknown> {
+    void executionId;
+    void options;
+    throw new Error("Not implemented: replay");
+  }
+
+  onError(handler: (error: OboraError) => void): Unsubscribe {
+    return this.on("error", handler as unknown as EventHandler);
+  }
+
+  run(name: string, options: RunOptions = {}): RunHandle {
     if (!this.workflows.has(name)) {
-      throw new Error(`Workflow is not defined: ${name}`);
+      throw new OboraError(`Workflow is not defined: ${name}`, "SDK_WORKFLOW_NOT_FOUND");
     }
 
+    const { input, variables, signal } = options;
     const executionId = randomUUID();
     const execution = this.createExecution(executionId, name, input);
     let status: RunStatus = "queued";
@@ -78,6 +142,7 @@ export class OboraRuntime {
         await this.emitEvent("execution_start", executionId, {
           workflowName: name,
           input,
+          variables,
         });
 
         if (settled) {
@@ -110,22 +175,45 @@ export class OboraRuntime {
         }
 
         status = "aborted";
-        execution.status = "failed";
+        execution.status = "aborted";
         execution.error = reason ?? "Execution cancelled";
         execution.endedAt = new Date();
         settled = true;
 
+        const abortError = new OboraError(
+          execution.error,
+          "SDK_EXECUTION_CANCELLED",
+          executionId,
+          undefined,
+          reason,
+        );
+
         await this.emitEvent("error", executionId, {
-          message: execution.error,
+          message: abortError.message,
+          code: abortError.code,
         });
         await this.emitEvent("execution_end", executionId, {
           workflowName: name,
           status: "aborted",
         });
 
-        rejectWait?.(new Error(execution.error));
+        rejectWait?.(abortError);
       },
     };
+
+    if (signal) {
+      if (signal.aborted) {
+        void handle.cancel(typeof signal.reason === "string" ? signal.reason : undefined);
+      } else {
+        signal.addEventListener(
+          "abort",
+          () => {
+            void handle.cancel(typeof signal.reason === "string" ? signal.reason : undefined);
+          },
+          { once: true },
+        );
+      }
+    }
 
     return handle;
   }
@@ -156,7 +244,7 @@ export class OboraRuntime {
 
   on<T extends AuditEventType>(event: T, handler: EventHandler<T>): Unsubscribe {
     const bucket = this.handlers.get(event) ?? new Set<EventHandler>();
-    bucket.add(handler as EventHandler);
+    bucket.add(handler as unknown as EventHandler);
     this.handlers.set(event, bucket);
 
     return () => {
@@ -165,7 +253,7 @@ export class OboraRuntime {
         return;
       }
 
-      current.delete(handler as EventHandler);
+      current.delete(handler as unknown as EventHandler);
       if (current.size === 0) {
         this.handlers.delete(event);
       }
