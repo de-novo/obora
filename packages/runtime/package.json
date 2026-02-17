@@ -1,28 +1,24 @@
 {
   "name": "@obora-kit/runtime",
   "version": "0.1.0",
-  "description": "AI Control Runtime Core",
+  "description": "AI Control Runtime — deterministic orchestration for non-deterministic AI",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
-      },
-      "require": {
-        "types": "./dist/index.d.cts",
-        "default": "./dist/index.cjs"
-      }
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && tsc --emitDeclarationOnly --declaration --declarationMap false --outDir dist --noCheck",
     "dev": "tsup --watch",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
@@ -50,5 +46,26 @@
     "typescript": {
       "optional": true
     }
+  },
+  "keywords": [
+    "ai",
+    "runtime",
+    "control",
+    "orchestration",
+    "policy",
+    "audit",
+    "multi-agent"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/obora-labs/obora-kit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/obora-labs/obora-kit/issues"
+  },
+  "homepage": "https://github.com/obora-labs/obora-kit#readme",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
   }
 }

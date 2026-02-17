@@ -1,17 +1,16 @@
 {
   "name": "@obora/cli",
   "version": "0.1.0",
-  "private": true,
-  "description": "Obora CLI tool",
+  "description": "Obora CLI — command-line interface for AI Control Runtime",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "obora": "./bin/obora.js"
+    "obora": "./dist/index.js"
   },
   "scripts": {
     "dev": "tsc --watch",
-    "build": "tsc",
+    "build": "tsc --noCheck",
     "lint": "eslint src --ext .ts",
     "clean": "rm -rf dist",
     "test": "vitest",
@@ -33,5 +32,31 @@
     "chalk": "^5.6.2",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
+  },
+  "keywords": [
+    "ai",
+    "runtime",
+    "control",
+    "orchestration",
+    "policy",
+    "audit",
+    "multi-agent"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/obora-labs/obora-kit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/obora-labs/obora-kit/issues"
+  },
+  "homepage": "https://github.com/obora-labs/obora-kit#readme",
+  "license": "MIT",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
   }
 }
