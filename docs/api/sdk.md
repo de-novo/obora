@@ -9,6 +9,8 @@
   - [cancel (via RunHandle)](#cancel-via-runhandle)
   - [events](#events)
   - [registerPlugin](#registerplugin)
+  - [define](#define)
+  - [registerPattern](#registerpattern)
 - [Workflow Builder](#workflow-builder)
 - [Policy Builder](#policy-builder)
 - [Agent Builder](#agent-builder)
@@ -141,6 +143,22 @@ for (const plugin of loaded) {
   runtime.registerPlugin(plugin);
 }
 ```
+
+### define
+
+```ts
+define(name: string, workflow: WorkflowDef): void
+```
+
+Registers a workflow definition that can later be executed by `run(name, options)`.
+
+### registerPattern
+
+```ts
+registerPattern(name: string, handler: PatternHandler): void
+```
+
+Registers a reusable step pattern handler referenced by workflow `pattern` fields.
 
 ---
 

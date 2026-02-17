@@ -1,10 +1,12 @@
 version: "1.0"
 tools:
-  web_search:
+  file_read:
     allowed: true
-  exec:
+  file_write:
+    allowed: true
+  shell_exec:
     allowed: false
-  write:
+  web_search:
     allowed: true
 resources:
   timeout_ms: 30000

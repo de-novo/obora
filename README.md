@@ -38,8 +38,8 @@ obora run workflow.yaml
 Prerequisites:
 - Node.js 18+
 - At least one model provider API key configured in your environment (for real agent execution)
-- If you want a no-key smoke check first, run fixture-based test flow:
-  `obora test --fixture tests/happy-path.yaml`
+- For end-to-end onboarding verification in this repository, run:
+  `bash scripts/onboarding-e2e.sh`
 
 Run an additional sample workflow from this repository:
 
