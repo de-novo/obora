@@ -101,3 +101,11 @@
 - 실행 테스트(정상): `pnpm --filter @obora/runtime test -- src/cell/__tests__/__tests__/integration/blackboard.test.ts`
 - 결과: 통과 (1 file, 7 tests)
 - 메모: blackboard 관련 회귀는 runtime 통합 테스트 경로 기준으로 점검 지속 필요
+
+## 야간 점검 로그 (2026-02-18 05:27 KST)
+- 점검 단위: blackboard-first 라인 최소 회귀 점검 1건 (TASK-036 연계)
+- 기준 브랜치: `origin/main` (`40e3c43`)
+- 작업 브랜치: `main` (HEAD `8dc0754`, 유지)
+- 실행 테스트: `pnpm --filter @obora/runtime test -- src/cell/__tests__/__tests__/integration/blackboard.test.ts`
+- 결과: 통과 (1 file, 7 tests)
+- 메모: 블로커 없음. runtime 통합 경로를 기준 점검선으로 유지
