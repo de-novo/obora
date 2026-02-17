@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { OboraError, OboraRuntime } from "../runtime.js";
+import { OboraError, OboraErrorCode, OboraRuntime } from "../runtime.js";
 
 describe("M3-05 Replay/Re-execution SDK API", () => {
   it("throws OboraError with AUDIT_REPLAY_NOT_FOUND for unknown executionId", async () => {
@@ -8,7 +8,7 @@ describe("M3-05 Replay/Re-execution SDK API", () => {
 
     await expect(runtime.replay("missing-exec-id")).rejects.toMatchObject({
       name: "OboraError",
-      code: "AUDIT_6002",
+      code: OboraErrorCode.AUDIT_REPLAY_NOT_FOUND,
       message: "Execution not found: missing-exec-id",
     });
   });
@@ -49,6 +49,39 @@ describe("M3-05 Replay/Re-execution SDK API", () => {
     expect(replay.plan.createdAt).toBeInstanceOf(Date);
   });
 
+  it("populates restoredState from skipped steps in from_checkpoint mode", async () => {
+    const runtime = new OboraRuntime();
+    runtime.define("restore", {
+      name: "restore",
+      steps: [{ name: "a" }, { name: "b" }, { name: "c" }],
+    });
+
+    const handle = await runtime.run("restore");
+    const execution = await handle.wait();
+
+    const storedExecution = (runtime as unknown as {
+      executions: Map<string, { outputs: Record<string, unknown> }>;
+    }).executions.get(execution.id);
+
+    expect(storedExecution).toBeDefined();
+    storedExecution!.outputs = {
+      a: { value: "from-a" },
+      b: { value: "from-b" },
+      c: { value: "from-c" },
+    };
+
+    const replay = await runtime.replay(execution.id, {
+      mode: "from_checkpoint",
+      startFromStep: "c",
+    });
+
+    expect(replay.plan.stepsToSkip).toEqual(["a", "b"]);
+    expect(replay.plan.restoredState).toEqual({
+      a: { value: "from-a" },
+      b: { value: "from-b" },
+    });
+  });
+
   it("throws AUDIT_REPLAY_NOT_FOUND when checkpoint step is not found", async () => {
     const runtime = new OboraRuntime();
     runtime.define("cp-missing", {
@@ -66,7 +99,7 @@ describe("M3-05 Replay/Re-execution SDK API", () => {
       }),
     ).rejects.toMatchObject({
       name: "OboraError",
-      code: "AUDIT_6002",
+      code: OboraErrorCode.AUDIT_REPLAY_NOT_FOUND,
       message: "Checkpoint step not found: z",
     });
   });

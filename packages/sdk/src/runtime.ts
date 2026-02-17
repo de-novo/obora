@@ -264,6 +264,16 @@ export class OboraRuntime {
     const stepsToSkip = checkpointIdx > 0 ? allSteps.slice(0, checkpointIdx) : [];
     const stepsToRerun = checkpointIdx > 0 ? allSteps.slice(checkpointIdx) : [...allSteps];
 
+    const restoredState: Record<string, unknown> = {};
+    if (mode === "from_checkpoint" && options?.startFromStep) {
+      for (const skippedStep of stepsToSkip) {
+        const originalOutput = execution.outputs?.[skippedStep];
+        if (originalOutput !== undefined) {
+          restoredState[skippedStep] = originalOutput;
+        }
+      }
+    }
+
     const nonDeterminismWarnings: NonDeterminismWarning[] = [];
     if (options?.detectNonDeterminism) {
       const warning: NonDeterminismWarning = {
@@ -289,6 +299,7 @@ export class OboraRuntime {
       originalWorkflow: execution.workflowName,
       mode,
       startFromStep: options?.startFromStep,
+      restoredState: Object.keys(restoredState).length > 0 ? restoredState : undefined,
       stepsToRerun,
       stepsToSkip,
       nonDeterminismWarnings,
