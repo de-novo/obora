@@ -208,6 +208,42 @@ obora plugin inspect @example/obora-plugin-foo --json
 
 ---
 
+## `obora runs`
+
+Query persisted run records (requires persistence enabled).
+
+### Usage
+
+```bash
+obora runs <subcommand>
+```
+
+### Subcommands
+
+#### `obora runs list`
+
+```bash
+obora runs list [--status <status>] [--limit <n>] [--db <path>] [--json]
+```
+
+List persisted runs, optionally filtered by status.
+
+#### `obora runs inspect <runId>`
+
+```bash
+obora runs inspect <runId> [--db <path>] [--json]
+```
+
+Show run details including step records and artifacts.
+
+### Exit Codes
+
+- `0` success
+- `2` invalid args or run not found
+- `3` storage/runtime errors
+
+---
+
 ## `obora audit`
 
 Audit trail commands.

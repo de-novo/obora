@@ -411,6 +411,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
       record.status = "failed";
       record.error = decision.reason;
       record.endedAt = this.now();
+      await this.persistStep(execution, step.name);
       await this.recordAudit(execution.id, "policy_deny", {
         stepName: step.name,
         reason: decision.reason,
@@ -445,6 +446,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
             record.status = "failed";
             record.error = `Gate rejected: ${gateDecision.gateType}`;
             record.endedAt = this.now();
+            await this.persistStep(execution, step.name);
             await this.recordAudit(execution.id, "gate_resolve", {
               stepName: step.name,
               gateType: gateDecision.gateType,
@@ -467,6 +469,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
           record.error = `Gate required: ${gateDecision.gateType}`;
           record.endedAt = this.now();
           execution.waitingGate = gateWait;
+          await this.persistStep(execution, step.name);
           await this.gateWaitStateStore.save(gateWait);
           return { step, status: "waiting", error: record.error };
         }
@@ -608,13 +611,17 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
       record.recovery = recovery;
       if (recovery.status === "recovered") {
         record.status = "completed";
+        record.endedAt = this.now();
         execution.outputs[step.name] = { recovered: true, strategy: strategy.type };
+        await this.persistStep(execution, step.name);
         return { step, status: "completed" };
       }
     }
 
     record.status = "failed";
     record.error = error;
+    record.endedAt ??= this.now();
+    await this.persistStep(execution, step.name);
     return { step, status: "failed", error };
   }
 
