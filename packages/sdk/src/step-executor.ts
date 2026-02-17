@@ -33,7 +33,15 @@ export interface StepResult {
 
 export interface StepExecutorConfig {
   model?: string;
+  temperature?: number;
+  maxTokens?: number;
   verbose?: boolean;
+  resolveAgentLLM?: (
+    agentName?: string,
+  ) =>
+    | Promise<{ adapter: LLMAdapterLike; model?: string; temperature?: number; maxTokens?: number } | undefined>
+    | { adapter: LLMAdapterLike; model?: string; temperature?: number; maxTokens?: number }
+    | undefined;
   onEvent?: (event: "llm_request" | "llm_response" | "consensus_vote" | "consensus_result", data: unknown) => Promise<void> | void;
 }
 
@@ -147,10 +155,14 @@ export class StepExecutor {
 
     const timeoutMs = this.getStepTimeoutMs(step);
     const requestSignal = this.combineSignals(context.signal, timeoutMs, step.name);
+    const resolved = await this.config.resolveAgentLLM?.(agentName ?? step.agent);
+    const adapter = resolved?.adapter ?? this.llmAdapter;
 
     try {
-      const response = await this.llmAdapter.chatCompletion({
-        model: this.config.model,
+      const response = await adapter.chatCompletion({
+        model: resolved?.model ?? this.config.model,
+        temperature: resolved?.temperature ?? this.config.temperature,
+        maxTokens: resolved?.maxTokens ?? this.config.maxTokens,
         messages,
         ...(requestSignal?.signal ? { signal: requestSignal.signal } : {}),
       });

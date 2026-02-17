@@ -189,6 +189,46 @@ describe("StepExecutor", () => {
     expect(result.output).toContain("[r1] APPROVE");
   });
 
+  it("uses agent-specific resolver for model routing", async () => {
+    const defaultChat = vi.fn<LLMAdapterLike["chatCompletion"]>().mockResolvedValue({
+      message: { role: "assistant", content: "default" },
+    });
+    const routedChat = vi.fn<LLMAdapterLike["chatCompletion"]>().mockResolvedValue({
+      message: { role: "assistant", content: "routed" },
+    });
+
+    const executor = new StepExecutor(
+      { chatCompletion: defaultChat },
+      new Map(),
+      {
+        resolveAgentLLM: async (agentName) => {
+          if (agentName !== "reviewer") return undefined;
+          return {
+            adapter: { chatCompletion: routedChat },
+            model: "custom-model",
+            temperature: 0.1,
+            maxTokens: 512,
+          };
+        },
+      },
+    );
+
+    const result = await executor.executeStep(
+      {
+        name: "route-by-agent",
+        agent: "reviewer",
+        input: { task: "Review this" },
+      },
+      { previousOutputs: {} },
+    );
+
+    expect(result.output).toBe("routed");
+    expect(defaultChat).not.toHaveBeenCalled();
+    expect(routedChat).toHaveBeenCalledWith(
+      expect.objectContaining({ model: "custom-model", temperature: 0.1, maxTokens: 512 }),
+    );
+  });
+
   it("explains strict majority requirement on consensus failure", async () => {
     const chatCompletion = vi
       .fn<LLMAdapterLike["chatCompletion"]>()

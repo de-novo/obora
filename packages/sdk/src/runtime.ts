@@ -17,6 +17,7 @@ import type {
 } from "./replay.js";
 import { topologicalSort } from "./dependency-resolver.js";
 import { resolveLLMConfig, type LLMConfig } from "./llm-config.js";
+import { loadConfig, resolveProviderConfig, type OboraConfig } from "./config-loader.js";
 import { StepExecutor } from "./step-executor.js";
 import { Workflow } from "./workflow.js";
 import type { WorkflowDef } from "./workflow.js";
@@ -154,6 +155,8 @@ export interface OboraRuntimeConfig {
   policyPath?: string;
   audit?: OboraAuditConfig;
   llm?: LLMConfig;
+  config?: OboraConfig;
+  configPath?: string;
   agentsPath?: string;
   verbose?: boolean;
 }
@@ -446,16 +449,54 @@ export class OboraRuntime {
             return;
           }
 
-          const llmConfig = resolveLLMConfig(this.config.llm);
+          const loadedConfig = this.config.config ?? (await loadConfig(this.config.configPath));
+          const llmConfig = resolveLLMConfig(this.config.llm, loadedConfig);
           const stepOrder = topologicalSort(workflow.steps);
           execution.stepOrder = stepOrder.map((step) => step.name);
 
           const runtimeAgents = await this.loadAgentsFromYaml(this.config.agentsPath);
           const allAgents = new Map<string, AgentFactory>([...runtimeAgents, ...this.agents]);
+
+          const adapterCache = new Map<string, Awaited<ReturnType<OboraRuntime["createLLMAdapter"]>>>();
+          const getAdapter = async (cfg: LLMConfig) => {
+            const cacheKey = `${cfg.provider}:${cfg.apiKey}:${cfg.baseUrl ?? ""}`;
+            const cached = adapterCache.get(cacheKey);
+            if (cached) {
+              return cached;
+            }
+            const adapter = await this.createLLMAdapter(cfg);
+            adapterCache.set(cacheKey, adapter);
+            return adapter;
+          };
+
           const stepExecutor = llmConfig
-            ? new StepExecutor(await this.createLLMAdapter(llmConfig), allAgents, {
+            ? new StepExecutor(await getAdapter(llmConfig), allAgents, {
                 model: llmConfig.model,
+                temperature: llmConfig.temperature,
+                maxTokens: llmConfig.maxTokens,
                 verbose: this.config.verbose,
+                resolveAgentLLM: async (agentName?: string) => {
+                  if (!loadedConfig || !agentName) {
+                    return undefined;
+                  }
+
+                  const agentConfig = loadedConfig.agents?.[agentName];
+                  if (!agentConfig) {
+                    return undefined;
+                  }
+
+                  const providerConfig = resolveProviderConfig(loadedConfig, agentConfig.provider ?? loadedConfig.defaults?.provider);
+                  if (!providerConfig) {
+                    return undefined;
+                  }
+
+                  return {
+                    adapter: await getAdapter(providerConfig),
+                    model: agentConfig.model ?? providerConfig.model,
+                    temperature: agentConfig.temperature ?? providerConfig.temperature,
+                    maxTokens: providerConfig.maxTokens,
+                  };
+                },
                 onEvent: async (eventType, data) => {
                   await this.emitEvent(eventType, executionId, data);
                 },
@@ -811,11 +852,19 @@ export class OboraRuntime {
     }
 
     const content = await readFile(path, "utf-8");
-    const parsed = parseYaml(content) as { agents?: Record<string, { role?: string; description?: string }> };
+    const parsed = parseYaml(content) as {
+      agents?: Record<string, { role?: string; description?: string; provider?: string; model?: string; temperature?: number }>;
+    };
     const map = new Map<string, AgentFactory>();
 
     for (const [name, info] of Object.entries(parsed.agents ?? {})) {
-      map.set(name, () => ({ role: info.role, description: info.description }));
+      map.set(name, () => ({
+        role: info.role,
+        description: info.description,
+        provider: info.provider,
+        model: info.model,
+        temperature: info.temperature,
+      }));
     }
 
     return map;

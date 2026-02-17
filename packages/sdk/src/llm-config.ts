@@ -1,8 +1,13 @@
+import { resolveProviderConfig, type OboraConfig } from "./config-loader.js";
+
 export interface LLMConfig {
   provider: string;
   apiKey: string;
   model?: string;
   baseUrl?: string;
+  temperature?: number;
+  timeout?: number;
+  maxTokens?: number;
 }
 
 const PROVIDER_ENV_MAP: Array<{ provider: string; key: string; baseUrl?: string; model?: string }> = [
@@ -41,6 +46,17 @@ export function detectLLMConfigFromEnv(env: NodeJS.ProcessEnv = process.env): LL
   return undefined;
 }
 
-export function resolveLLMConfig(config?: LLMConfig): LLMConfig | undefined {
-  return config ?? detectLLMConfigFromEnv();
+export function resolveLLMConfig(explicit?: LLMConfig, config?: OboraConfig): LLMConfig | undefined {
+  if (explicit) {
+    return explicit;
+  }
+
+  if (config) {
+    const fromConfig = resolveProviderConfig(config);
+    if (fromConfig) {
+      return fromConfig;
+    }
+  }
+
+  return detectLLMConfigFromEnv();
 }

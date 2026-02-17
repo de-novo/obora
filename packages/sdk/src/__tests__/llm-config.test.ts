@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { detectLLMConfigFromEnv } from "../llm-config.js";
+import { detectLLMConfigFromEnv, resolveLLMConfig } from "../llm-config.js";
 
 describe("llm-config", () => {
   it("detects built-in providers first", () => {
@@ -32,5 +32,35 @@ describe("llm-config", () => {
       model: "my-model",
       baseUrl: "https://llm.example.com",
     });
+  });
+
+  it("resolveLLMConfig priority: explicit > config > env", () => {
+    process.env.ANTHROPIC_API_KEY = "env-key";
+
+    const fromExplicit = resolveLLMConfig(
+      { provider: "openai", apiKey: "explicit-key", model: "gpt-5" },
+      {
+        defaults: { provider: "anthropic" },
+        providers: {
+          anthropic: { authRef: "plain-config-key", defaultModel: "claude-opus-4-6" },
+        },
+      },
+    );
+    expect(fromExplicit?.provider).toBe("openai");
+
+    const fromConfig = resolveLLMConfig(undefined, {
+      defaults: { provider: "anthropic" },
+      providers: {
+        anthropic: { authRef: "plain-config-key", defaultModel: "claude-opus-4-6" },
+      },
+    });
+    expect(fromConfig?.provider).toBe("anthropic");
+    expect(fromConfig?.apiKey).toBe("plain-config-key");
+
+    const fromEnv = resolveLLMConfig();
+    expect(fromEnv?.provider).toBe("anthropic");
+    expect(fromEnv?.apiKey).toBe("env-key");
+
+    delete process.env.ANTHROPIC_API_KEY;
   });
 });

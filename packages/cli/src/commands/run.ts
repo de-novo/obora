@@ -3,7 +3,7 @@ import { basename, join } from "node:path";
 
 import { Command } from "commander";
 
-import { detectLLMConfigFromEnv, OboraRuntime, Workflow } from "@obora/sdk";
+import { loadConfig, OboraRuntime, resolveLLMConfig, Workflow } from "@obora/sdk";
 
 import { CLIError } from "../utils/cli-error.js";
 import { ExitCode } from "../utils/exit-codes.js";
@@ -25,15 +25,19 @@ function isVerboseOutput(options: Record<string, unknown>): boolean {
 
 export async function runRun(workflow: string, options: Record<string, unknown>): Promise<void> {
   const startedAt = Date.now();
-  const envLLMConfig = detectLLMConfigFromEnv(process.env);
+  const loadedConfig = await loadConfig(options.config as string | undefined);
+  const resolvedLLM = resolveLLMConfig(undefined, loadedConfig);
+
   const runtime = new OboraRuntime({
     policyPath: options.policy as string | undefined,
     agentsPath: options.agents as string | undefined,
-    llm: envLLMConfig
+    configPath: options.config as string | undefined,
+    config: loadedConfig,
+    llm: resolvedLLM
       ? {
-          ...envLLMConfig,
-          provider: (options.provider as string | undefined) ?? envLLMConfig.provider,
-          model: (options.model as string | undefined) ?? envLLMConfig.model,
+          ...resolvedLLM,
+          provider: (options.provider as string | undefined) ?? resolvedLLM.provider,
+          model: (options.model as string | undefined) ?? resolvedLLM.model,
         }
       : undefined,
     verbose: Boolean(options.verbose),
@@ -171,6 +175,7 @@ export function createRunCommand(): Command {
     .option("-v, --var <key=value...>", "Variables (repeatable)")
     .option("--policy <path>", "Policy file path")
     .option("--agents <path>", "agents.yaml path")
+    .option("--config <path>", "obora config.yaml path")
     .option("--model <name>", "Default LLM model")
     .option("--provider <name>", "LLM provider override")
     .option("--output-dir <path>", "Write execution result JSON into directory")
