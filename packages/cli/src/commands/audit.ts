@@ -18,10 +18,11 @@ export function createAuditCommand(): Command {
     .action(async function (this: Command, options) {
       await handleCommandAction(async () => {
         const globalOpts = getGlobalOpts(this);
+        const message = "audit query is not yet connected to an audit store.";
         if (globalOpts.json) {
-          formatter.json({ command: "audit query", options, stub: true });
+          formatter.json({ command: "audit query", options, connected: false, message });
         } else if (!globalOpts.quiet) {
-          formatter.info(`[stub] obora audit query ${JSON.stringify(options)}`);
+          formatter.warn(message);
         }
       });
     });
@@ -33,10 +34,11 @@ export function createAuditCommand(): Command {
     .action(async function (this: Command, options) {
       await handleCommandAction(async () => {
         const globalOpts = getGlobalOpts(this);
+        const message = "audit tail is not yet connected to an audit store.";
         if (globalOpts.json) {
-          formatter.json({ command: "audit tail", options, stub: true });
+          formatter.json({ command: "audit tail", options, connected: false, message });
         } else if (!globalOpts.quiet) {
-          formatter.info(`[stub] obora audit tail ${JSON.stringify(options)}`);
+          formatter.warn(message);
         }
       });
     });

@@ -68,12 +68,12 @@ describe("M3 CLI command IA", () => {
     const cli = createCLI();
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
 
-    await cli.parseAsync(["--json", "plugin", "install", "demo-plugin"], { from: "user" });
+    await cli.parseAsync(["--json", "plugin", "list"], { from: "user" });
 
     expect(log).toHaveBeenCalled();
     const output = log.mock.calls.map((args) => args.join(" ")).join("\n");
-    expect(output).toContain('"command": "plugin install"');
-    expect(output).toContain('"name": "demo-plugin"');
+    expect(output).toContain('"command": "plugin list"');
+    expect(output).toContain('"plugins"');
   });
 
   it("runRun executes workflow from YAML in dry-run mode", async () => {
