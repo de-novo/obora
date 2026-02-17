@@ -7,7 +7,7 @@
  * Actor와 상호작용하는 Blackboard 인터페이스 (스펙 기준: IBlackboard)
  *
  * Actor 시스템에서 필요한 Blackboard의 기능을 정의합니다.
- * 전체 구현은 @obora-kit/blackboard 패키지에서 제공됩니다.
+ * 전체 구현은 runtime 내부 blackboard 모듈에서 제공됩니다.
  *
  * 참고: [[spec/13-actor.md|13-actor.md]]
  */

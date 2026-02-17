@@ -11,13 +11,13 @@ vi.mock('node:fs', () => ({
   readdirSync: vi.fn(),
 }));
 
-// Mock @obora/core
-vi.mock('@obora/core', () => ({
+// Mock @obora-kit/runtime
+vi.mock('@obora-kit/runtime', () => ({
   parseAndValidate: vi.fn(),
 }));
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { parseAndValidate } from '@obora/core';
+import { parseAndValidate } from '@obora-kit/runtime';
 import { validateCommand } from '../validate.js';
 
 describe('validate command', () => {

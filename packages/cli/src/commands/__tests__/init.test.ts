@@ -28,8 +28,8 @@ vi.mock('@obora/database', () => {
   };
 });
 
-// Mock @obora/core
-vi.mock('@obora/core', () => ({
+// Mock @obora-kit/runtime
+vi.mock('@obora-kit/runtime', () => ({
   log: vi.fn(),
 }));
 

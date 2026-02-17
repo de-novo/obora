@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-// Mock @obora-kit/agents
+// Mock agent bootstrap dependencies
 vi.mock("@obora-kit/adapters", () => {
   const MockLLMAdapter = class {
     readonly id = "mock-llm";

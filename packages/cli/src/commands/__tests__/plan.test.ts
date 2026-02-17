@@ -17,12 +17,12 @@ vi.mock('fs-extra', () => ({
   },
 }));
 
-// Mock @obora/core
-vi.mock('@obora/core', () => ({
+// Mock @obora-kit/runtime
+vi.mock('@obora-kit/runtime', () => ({
   log: vi.fn(),
 }));
 
-// Mock @obora-kit/agents
+// Mock agent dependencies
 const chatCompletionMock = vi.fn().mockResolvedValue({
   id: 'mock-1',
   model: 'mock-model',
@@ -60,7 +60,7 @@ vi.mock('../../utils/status.js', () => ({
 
 import { existsSync, readFileSync } from 'node:fs';
 import fs from 'fs-extra';
-import { log } from '@obora/core';
+import { log } from '@obora-kit/runtime';
 import { validatePathComponent } from '../../utils/path-utils.js';
 import { readStatus } from '../../utils/status.js';
 import { createPlanCommand, runPlan } from '../plan.js';

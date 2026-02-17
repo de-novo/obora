@@ -9,4 +9,5 @@ export * from "./recovery/index.js";
 export * from "./orchestrator/index.js";
 export * from "./patterns/index.js";
 export * from "./plugins/index.js";
+export * from "./_legacy/workflow/index.js";
 export * from "./_legacy/agents/roles/index.js";

@@ -2,14 +2,14 @@
  * StepExecutor — bridges workflow Step to BaseAgent.execute()
  */
 
-import type { Step } from "@obora/core";
+import type { Step } from "@obora-kit/runtime";
 import {
   type AgentConfig,
   RetryExhaustedError,
   SkillLoader,
   SkillRegistry,
 } from "@obora-kit/adapters";
-import { OboraError, type ErrorCode } from "@obora/core";
+import { OboraError, type ErrorCode } from "@obora-kit/runtime";
 import type {
   BaseAgent,
   Task,

@@ -14,7 +14,7 @@
 import type { ChatMessage } from "@obora-kit/adapters";
 import type { AgentContext, Task } from "@obora-kit/runtime";
 import { Blackboard } from "./blackboard.js";
-import type { Step, Workflow } from "@obora/core";
+import type { Step, Workflow } from "@obora-kit/runtime";
 import type { StepResult } from "./step-executor.js";
 import { stepToTask } from "./step-executor.js";
 import type { StepErrorMetadata } from "./types.js";

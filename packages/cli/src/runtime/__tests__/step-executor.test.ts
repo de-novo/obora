@@ -10,7 +10,7 @@ import {
   type AgentResolver,
   type StepResult,
 } from "../step-executor.js";
-import type { Step } from "@obora/core";
+import type { Step } from "@obora-kit/runtime";
 import type { BaseAgent, Task, TaskResult, AgentContext } from "@obora-kit/runtime";
 
 // ---------------------------------------------------------------------------

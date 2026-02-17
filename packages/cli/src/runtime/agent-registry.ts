@@ -7,7 +7,7 @@
  * - create BaseAgent from fully-resolved config
  */
 
-import { OboraError } from "@obora/core";
+import { OboraError } from "@obora-kit/runtime";
 import {
   type AgentConfig,
   createAdapter,
