@@ -1,6 +1,12 @@
 name: Publish Packages
 
 on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag to publish (for traceability)"
+        required: true
+        type: string
   push:
     tags:
       - 'v*'
@@ -8,8 +14,12 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    environment: npm-publish
     permissions:
       contents: read
+    concurrency:
+      group: npm-publish
+      cancel-in-progress: false
 
     steps:
       - name: Checkout
@@ -36,8 +46,8 @@ jobs:
       - name: Test
         run: pnpm test
 
-      - name: Publish @obora-kit/runtime
-        run: pnpm --filter @obora-kit/runtime exec npm publish --access public
+      - name: Publish @obora/runtime
+        run: pnpm --filter @obora/runtime exec npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

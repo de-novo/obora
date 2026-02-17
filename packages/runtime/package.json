@@ -1,5 +1,5 @@
 {
-  "name": "@obora-kit/runtime",
+  "name": "@obora/runtime",
   "version": "0.1.0",
   "description": "AI Control Runtime — deterministic orchestration for non-deterministic AI",
   "type": "module",

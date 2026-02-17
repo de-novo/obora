@@ -1,28 +1,13 @@
 version: "1.0"
 
 tools:
-  - name: file_read
-    effect: allow
-  - name: file_write
-    effect: allow
-  - name: web_search
-    effect: gate
-    gate:
-      type: consensus
-      timeout: "2m"
-
-sandbox:
-  root: "./output"
-  deny_outside_root: true
+  file_read:
+    allowed: true
+  file_write:
+    allowed: true
+  web_search:
+    allowed: true
 
 resources:
   timeout_ms: 900000
-  max_tokens: 120000
   max_tool_calls: 60
-
-gates:
-  - step: voting
-    type: consensus
-    required: true
-    timeout: "5m"
-    fallback: escalate

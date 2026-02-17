@@ -6,7 +6,7 @@
 
 [![npm version](https://img.shields.io/npm/v/@obora/sdk)](https://www.npmjs.com/package/@obora/sdk)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-passing-brightgreen)](#)
+[![CI](https://github.com/obora-labs/obora-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/obora-labs/obora-kit/actions/workflows/ci.yml)
 
 ---
 
@@ -39,7 +39,7 @@ Run your first workflow:
 
 ```bash
 # run a sample workflow
-obora run --workflow examples/hello-obora.yaml
+obora run examples/hello-obora.yaml
 ```
 
 Expected outcome:
@@ -84,7 +84,6 @@ Obora keeps the control plane deterministic while containing AI variability insi
 - `@obora/runtime` — Core runtime
 - `@obora/sdk` — Programmatic API
 - `@obora/cli` — Command-line interface
-- `@obora/dashboard` — Operational dashboard
 
 ---
 

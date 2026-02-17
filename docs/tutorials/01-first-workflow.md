@@ -51,23 +51,22 @@ obora init --yes
 
 This creates a basic project structure, including:
 
-- `workflows/example.yaml`
-- `policies/default.yaml`
+- `workflow.yaml`
+- `policy.yaml`
+- `agents.yaml`
 - `obora.config.yaml`
 
 ---
 
 ## Step 3) Write your first workflow YAML
 
-Let's create a simple 3-step workflow.
-
-Create `workflows/first-workflow.yaml`:
+Let's update the generated `workflow.yaml` to a simple 3-step workflow.
 
 ```bash
-cat > workflows/first-workflow.yaml << 'EOF'
+cat > workflow.yaml << 'EOF'
 name: first-workflow
 version: "1.0.0"
-policy: "./../policies/default.yaml"
+policy: "./policy.yaml"
 
 steps:
   - name: generate
@@ -113,13 +112,13 @@ EOF
 Now let's execute it:
 
 ```bash
-obora run workflows/first-workflow.yaml
+obora run workflow.yaml
 ```
 
 You can also run in validation mode first:
 
 ```bash
-obora run workflows/first-workflow.yaml --dry-run
+obora run workflow.yaml --dry-run
 ```
 
 ---

@@ -5,9 +5,7 @@ tools:
     allowed: true
   file_write:
     allowed: true
-  message_send:
-    allowed: true
 
 resources:
-  timeout_ms: 900000
-  max_tool_calls: 50
+  timeout_ms: 600000
+  max_tool_calls: 30

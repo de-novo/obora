@@ -222,7 +222,7 @@ obora audit <subcommand>
 obora audit query [--execution <id>] [--type <type>] [--limit <n>]
 ```
 
-Current status: placeholder command (not connected to persistent audit store yet).
+Queries audit events from the execution log store.
 
 #### `obora audit tail`
 
@@ -230,7 +230,7 @@ Current status: placeholder command (not connected to persistent audit store yet
 obora audit tail [--execution <id>]
 ```
 
-Current status: placeholder command (not connected yet).
+Streams audit events for a running or completed execution.
 
 #### `obora audit replay <executionId>`
 

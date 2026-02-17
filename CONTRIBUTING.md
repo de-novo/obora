@@ -106,6 +106,17 @@ If you are contributing plugins/integrations:
 - Include tests for core plugin flows and failure paths
 - Prefer explicit contracts (types/interfaces) over implicit behavior
 
+## Release Approval & Recovery Contract
+
+Public npm publishing follows explicit control gates:
+
+1. Use `.github/workflows/publish.yml` with `environment: npm-publish` (manual approval via environment protection rules).
+2. Publish only from release tags (`v*`) after CI is green.
+3. If publish fails:
+   - If npm policy allows: unpublish immediately.
+   - If unpublish is not allowed: deprecate the broken version and republish with a bumped version.
+   - Never reuse an already published version.
+
 ## Reporting Security Issues
 
 Please do **not** report security vulnerabilities in public issues.
