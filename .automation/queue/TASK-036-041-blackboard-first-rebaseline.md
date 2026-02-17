@@ -547,3 +547,20 @@ Board 단계 태스크를 blackboard 우선 구현 순서로 재배치하고, �
 - 결과: ✅ `1 file / 22 tests passed` (2.37s)
 - 비고: blackboard direct write deprecated 경고(stderr) 반복 출력되나 테스트는 정상 통과
 - 판정: 블로커 없음, 다음 실행은 runtime event-bus integration 최소검증 1건(`pnpm --filter @obora-kit/runtime test -- src/events/__tests__/integration.test.ts`) 점검 권장
+
+## 야간 자동 점검 로그 (2026-02-18 00:12 KST)
+- 기준 브랜치: `origin/main` (`e4b760d`)
+- 작업 브랜치(HEAD 유지): `main` (`4acea9d`, local ahead 10)
+- 점검 단위: runtime event-bus integration 최소검증 1건
+- 1차 시도: `src/events/__tests__/integration.test.ts` → 파일 미존재 확인
+- 재선정 실행: `pnpm --filter @obora-kit/runtime test -- src/consensus/__tests__/ConsensusGate.test.ts`
+- 재선정 결과: ✅ `1 file / 3 tests passed` (257ms)
+- 판정: 블로커 없음, 다음 실행은 runtime blackboard integration 최소검증 1건(`pnpm --filter @obora-kit/runtime test -- src/cell/__tests__/__tests__/integration/blackboard.test.ts`) 점검 권장
+
+## 야간 자동 점검 로그 (2026-02-18 00:13 KST)
+- 기준 브랜치: `origin/main` (`e4b760d`)
+- 작업 브랜치(HEAD 유지): `main` (`4acea9d`, local ahead 10)
+- 점검 단위: runtime blackboard integration 최소검증 1건
+- 실행: `pnpm --filter @obora-kit/runtime test -- src/cell/__tests__/__tests__/integration/blackboard.test.ts`
+- 결과: ✅ `1 file / 7 tests passed` (483ms)
+- 판정: 블로커 없음, 다음 실행은 runtime orchestrator integration e2e 최소검증 1건(`pnpm --filter @obora-kit/runtime test -- src/orchestrator/__tests__/integration-e2e.test.ts`) 점검 권장
