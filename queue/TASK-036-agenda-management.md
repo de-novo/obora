@@ -92,3 +92,12 @@
 - 실행 테스트(정상): `pnpm --filter @obora-kit/blackboard test -- test/domains/agenda`
 - 결과: 통과 (1 file, 12 tests)
 - 메모: 블로커 없음, 명령 템플릿을 package-manager 특성에 맞게 유지 필요
+
+## 야간 점검 로그 (2026-02-18 02:27 KST)
+- 점검 단위: blackboard-first 라인 최소 회귀 점검 1건 (TASK-036 연계)
+- 기준 브랜치: `origin/main` (`5c123a9`)
+- 작업 브랜치: `main` (HEAD `88aa4fe`, 유지)
+- 1차 검증(실패): `pnpm --filter @obora-kit/blackboard test -- test/domains/agenda` → 현재 워크스페이스에 `@obora-kit/blackboard` 패키지 미존재
+- 실행 테스트(정상): `pnpm --filter @obora/runtime test -- src/cell/__tests__/__tests__/integration/blackboard.test.ts`
+- 결과: 통과 (1 file, 7 tests)
+- 메모: blackboard 관련 회귀는 runtime 통합 테스트 경로 기준으로 점검 지속 필요
