@@ -258,28 +258,10 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
 
     await this.persistRun(execution);
 
-    // Execute remaining steps, saving checkpoints under original runId
-    const originalCheckpointManager = this.checkpointManager;
-    if (originalCheckpointManager) {
-      // Wrap checkpoint saves to use original runId instead of new execution.id
-      const origSave = originalCheckpointManager.saveCheckpoint.bind(originalCheckpointManager);
-      this.checkpointManager = Object.create(originalCheckpointManager) as CheckpointManager;
-      this.checkpointManager.saveCheckpoint = async (
-        _execId: string,
-        stepName: string,
-        completedSteps: string[],
-        stateSnapshot: unknown,
-        policyConfig: PolicyHashInput,
-      ) => origSave(runId, stepName, completedSteps, stateSnapshot, policyConfig);
-    }
-
-    let result: Execution;
-    try {
-      result = await this.executeLoop(execution, workflow, runRecord.input, completed, scheduled);
-    } finally {
-      // Restore original checkpoint manager
-      this.checkpointManager = originalCheckpointManager;
-    }
+    // Execute remaining steps — execution.id is already set to runId above,
+    // so executeLoop's checkpoint saves naturally use the correct run identity.
+    // No need to wrap checkpointManager (which would be unsafe under concurrent resumes).
+    const result = await this.executeLoop(execution, workflow, runRecord.input, completed, scheduled);
 
     // Save final checkpoint under original runId
     if (this.checkpointManager) {
