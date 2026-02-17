@@ -61,4 +61,26 @@ describe("StepExecutor", () => {
     expect(result.output).toContain("[r1] APPROVE");
     expect(chatCompletion).toHaveBeenCalledTimes(3);
   });
+
+  it("uses REQUEST_CHANGES for ambiguous consensus vote text", async () => {
+    const chatCompletion = vi
+      .fn<LLMAdapterLike["chatCompletion"]>()
+      .mockResolvedValueOnce({ message: { role: "assistant", content: "looks fine" } })
+      .mockResolvedValueOnce({ message: { role: "assistant", content: "APPROVE" } })
+      .mockResolvedValueOnce({ message: { role: "assistant", content: "APPROVE" } });
+
+    const executor = new StepExecutor({ chatCompletion }, new Map(), {});
+
+    const result = await executor.executeStep(
+      {
+        name: "review-safe-default",
+        pattern: "consensus",
+        participants: ["r1", "r2", "r3"],
+        input: { task: "Review this" },
+      },
+      { previousOutputs: {} },
+    );
+
+    expect(result.votes?.[0]?.vote).toBe("REQUEST_CHANGES");
+  });
 });

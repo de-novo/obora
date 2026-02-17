@@ -23,6 +23,13 @@ describe("dependency-resolver", () => {
     expect(groups.map((group) => group.map((step) => step.name))).toEqual([["a", "b"], ["c"]]);
   });
 
+  it("throws on duplicate step names", () => {
+    expect(() => topologicalSort([
+      { name: "a" },
+      { name: "a" },
+    ])).toThrow("Duplicate workflow step name");
+  });
+
   it("throws on cycle", () => {
     expect(() => topologicalSort([
       { name: "a", depends_on: ["b"] },

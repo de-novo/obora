@@ -2,6 +2,17 @@ import { OboraError, OboraErrorCode } from "./runtime.js";
 import type { WorkflowStep } from "./workflow.js";
 
 export function topologicalSort(steps: WorkflowStep[]): WorkflowStep[] {
+  const seenStepNames = new Set<string>();
+  for (const step of steps) {
+    if (seenStepNames.has(step.name)) {
+      throw new OboraError(
+        `Duplicate workflow step name: ${step.name}`,
+        OboraErrorCode.SDK_INVALID_WORKFLOW,
+      );
+    }
+    seenStepNames.add(step.name);
+  }
+
   const map = new Map(steps.map((step) => [step.name, step]));
   const inDegree = new Map<string, number>(steps.map((step) => [step.name, 0]));
   const graph = new Map<string, string[]>();

@@ -21,6 +21,7 @@ export interface LLMAdapterLike {
 
 export interface StepContext {
   previousOutputs: Record<string, unknown>;
+  signal?: AbortSignal;
 }
 
 export interface StepResult {
@@ -50,7 +51,8 @@ function parseVote(text: string): "APPROVE" | "REJECT" | "REQUEST_CHANGES" {
   const normalized = text.toUpperCase();
   if (normalized.includes("REQUEST_CHANGES")) return "REQUEST_CHANGES";
   if (normalized.includes("REJECT")) return "REJECT";
-  return "APPROVE";
+  if (normalized.includes("APPROVE")) return "APPROVE";
+  return "REQUEST_CHANGES";
 }
 
 export class StepExecutor {
@@ -118,7 +120,34 @@ export class StepExecutor {
     ];
 
     await this.config.onEvent?.("llm_request", { stepName: step.name, agent: agentName ?? step.agent, messages });
-    const response = await this.llmAdapter.chatCompletion({ model: this.config.model, messages });
+
+    const timeoutMs = this.getStepTimeoutMs(step);
+    const llmRequest = this.llmAdapter.chatCompletion({ model: this.config.model, messages });
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      const timer = setTimeout(() => {
+        reject(new Error(`LLM request timed out for step '${step.name}' after ${timeoutMs}ms`));
+      }, timeoutMs);
+      void llmRequest.finally(() => clearTimeout(timer));
+    });
+
+    const abortPromise = context.signal
+      ? new Promise<never>((_, reject) => {
+          if (context.signal?.aborted) {
+            reject(new Error(`Execution aborted before LLM response for step '${step.name}'`));
+            return;
+          }
+
+          context.signal?.addEventListener(
+            "abort",
+            () => {
+              reject(new Error(`Execution aborted during step '${step.name}'`));
+            },
+            { once: true },
+          );
+        })
+      : undefined;
+
+    const response = (await Promise.race([llmRequest, timeoutPromise, ...(abortPromise ? [abortPromise] : [])])) as LLMChatResult;
     await this.config.onEvent?.("llm_response", {
       stepName: step.name,
       agent: agentName ?? step.agent,
@@ -126,6 +155,16 @@ export class StepExecutor {
     });
 
     return response;
+  }
+
+  private getStepTimeoutMs(step: WorkflowStep): number {
+    const config = (step.config ?? {}) as Record<string, unknown>;
+    const raw = config.llmTimeoutMs ?? config.timeoutMs;
+    if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) {
+      return raw;
+    }
+
+    return 30_000;
   }
 
   private buildSystemPrompt(agentName?: string): string {

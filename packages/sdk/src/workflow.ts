@@ -46,6 +46,7 @@ export class Workflow {
     }
 
     const steps = def.steps as unknown[];
+    const seenStepNames = new Set<string>();
     for (const step of steps) {
       if (!step || typeof step !== "object") {
         throw new OboraError("Each workflow step must be an object", OboraErrorCode.SDK_INVALID_WORKFLOW);
@@ -54,6 +55,14 @@ export class Workflow {
       if (!s.name || typeof s.name !== "string") {
         throw new OboraError("Each workflow step must have a string name", OboraErrorCode.SDK_INVALID_WORKFLOW);
       }
+
+      if (seenStepNames.has(s.name)) {
+        throw new OboraError(
+          `Duplicate workflow step name: ${s.name}`,
+          OboraErrorCode.SDK_INVALID_WORKFLOW,
+        );
+      }
+      seenStepNames.add(s.name);
     }
 
     return input as WorkflowDef;

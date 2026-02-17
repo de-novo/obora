@@ -58,6 +58,7 @@ export type AuditEventType =
   | "reexecution_step_start"
   | "reexecution_step_end"
   | "reexecution_end"
+  | "warning"
   | "error";
 
 export interface AuditEvent<T extends AuditEventType = AuditEventType> {
@@ -118,7 +119,7 @@ export const OboraErrorCode = {
 export interface RuntimeExecution {
   id: string;
   workflowName: string;
-  status: "running" | "completed" | "failed" | "waiting" | "suspended";
+  status: "running" | "completed" | "failed" | "waiting" | "suspended" | "aborted";
   input: unknown;
   startedAt: Date;
   endedAt?: Date;
@@ -299,7 +300,18 @@ export class OboraRuntime {
       };
       nonDeterminismWarnings.push(warning);
       for (const stepName of stepsToRerun) {
+        const output = execution.outputs?.[stepName];
         if (!(stepName in execution.outputs)) {
+          nonDeterminismWarnings.push({
+            type: "state_external",
+            description: `Potential non-determinism: no original output for step '${stepName}'`,
+            stepName,
+            severity: "warning",
+          });
+          continue;
+        }
+
+        if (typeof output === "string" && output.startsWith("[stub] No LLM configured")) {
           nonDeterminismWarnings.push({
             type: "state_external",
             description: `Potential non-determinism: no original output for step '${stepName}'`,
@@ -432,36 +444,35 @@ export class OboraRuntime {
           }
 
           const llmConfig = resolveLLMConfig(this.config.llm);
-          if (!llmConfig) {
-            status = "completed";
-            execution.status = "completed";
-            execution.endedAt = new Date();
-            settled = true;
-            await this.emitEvent("execution_end", executionId, {
-              workflowName: name,
-              status: "completed",
-            });
-            this.executions.set(executionId, structuredClone(execution));
-            resolve(structuredClone(execution));
-            return;
-          }
-
-          const llmAdapter = await this.createLLMAdapter(llmConfig);
-          const runtimeAgents = await this.loadAgentsFromYaml(this.config.agentsPath);
-          const allAgents = new Map<string, AgentFactory>([...runtimeAgents, ...this.agents]);
-          const stepExecutor = new StepExecutor(llmAdapter, allAgents, {
-            model: llmConfig.model,
-            verbose: this.config.verbose,
-            onEvent: async (eventType, data) => {
-              await this.emitEvent(eventType, executionId, data);
-            },
-          });
-
           const stepOrder = topologicalSort(workflow.steps);
           execution.stepOrder = stepOrder.map((step) => step.name);
 
+          const runtimeAgents = await this.loadAgentsFromYaml(this.config.agentsPath);
+          const allAgents = new Map<string, AgentFactory>([...runtimeAgents, ...this.agents]);
+          const stepExecutor = llmConfig
+            ? new StepExecutor(await this.createLLMAdapter(llmConfig), allAgents, {
+                model: llmConfig.model,
+                verbose: this.config.verbose,
+                onEvent: async (eventType, data) => {
+                  await this.emitEvent(eventType, executionId, data);
+                },
+              })
+            : undefined;
+
+          if (!llmConfig) {
+            await this.emitEvent("warning", executionId, {
+              message: "No LLM configured; workflow will run in stub mode.",
+              code: OboraErrorCode.ADAPTER_LLM_UNAVAILABLE,
+            });
+          }
+
           for (const step of stepOrder) {
             if (settled) {
+              return;
+            }
+
+            if (signal?.aborted) {
+              await handle.cancel(typeof signal.reason === "string" ? signal.reason : undefined);
               return;
             }
 
@@ -471,9 +482,18 @@ export class OboraRuntime {
               agent: step.agent,
             });
 
-            const result = await stepExecutor.executeStep(step, {
-              previousOutputs: execution.outputs,
-            });
+            const result = stepExecutor
+              ? await stepExecutor.executeStep(step, {
+                  previousOutputs: execution.outputs,
+                  signal,
+                })
+              : {
+                  output: "[stub] No LLM configured",
+                  raw: {
+                    stub: true,
+                    reason: "No LLM configured",
+                  },
+                };
 
             execution.outputs[step.name] = result.output;
             execution.stepRecords[step.name] = result;
@@ -507,9 +527,10 @@ export class OboraRuntime {
           execution.endedAt = new Date();
           settled = true;
 
+          const errorCode = error instanceof OboraError ? error.code : OboraErrorCode.SDK_UNKNOWN_ERROR;
           await this.emitEvent("error", executionId, {
             message: execution.error,
-            code: OboraErrorCode.SDK_UNKNOWN_ERROR,
+            code: errorCode,
           });
           await this.emitEvent("execution_end", executionId, {
             workflowName: name,
@@ -533,7 +554,7 @@ export class OboraRuntime {
         }
 
         status = "aborted";
-        execution.status = "failed";
+        execution.status = "aborted";
         execution.error = reason ?? "Execution cancelled";
         execution.endedAt = new Date();
         settled = true;
@@ -710,30 +731,38 @@ export class OboraRuntime {
       maxTokens?: number;
     }) => Promise<{ message: { role: "assistant"; content: string | null } }>;
   }> {
-    const dynamicImport = new Function("moduleName", "return import(moduleName)") as (
-      moduleName: string,
-    ) => Promise<Record<string, unknown>>;
-    const adapters = await dynamicImport("@obora-kit/adapters");
-    const PiAIAdapterCtor = adapters.PiAIAdapter as new (cfg: {
-      provider: string;
-      apiKey: string;
-      model?: string;
-      baseUrl?: string;
-    }) => {
-      chatCompletion: (params: {
+    try {
+      const adaptersModule = "@obora-kit/adapters";
+      const adapters = (await import(adaptersModule)) as Record<string, unknown>;
+      const PiAIAdapterCtor = adapters.PiAIAdapter as new (cfg: {
+        provider: string;
+        apiKey: string;
         model?: string;
-        messages: Array<{ role: "system" | "user" | "assistant" | "tool"; content: string }>;
-        temperature?: number;
-        maxTokens?: number;
-      }) => Promise<{ message: { role: "assistant"; content: string | null } }>;
-    };
+        baseUrl?: string;
+      }) => {
+        chatCompletion: (params: {
+          model?: string;
+          messages: Array<{ role: "system" | "user" | "assistant" | "tool"; content: string }>;
+          temperature?: number;
+          maxTokens?: number;
+        }) => Promise<{ message: { role: "assistant"; content: string | null } }>;
+      };
 
-    return new PiAIAdapterCtor({
-      provider: config.provider,
-      apiKey: config.apiKey,
-      model: config.model,
-      baseUrl: config.baseUrl,
-    });
+      return new PiAIAdapterCtor({
+        provider: config.provider,
+        apiKey: config.apiKey,
+        model: config.model,
+        baseUrl: config.baseUrl,
+      });
+    } catch (error) {
+      throw new OboraError(
+        "LLM adapter is unavailable",
+        OboraErrorCode.ADAPTER_LLM_UNAVAILABLE,
+        undefined,
+        undefined,
+        error,
+      );
+    }
   }
 
   private async loadAgentsFromYaml(path?: string): Promise<Map<string, AgentFactory>> {
