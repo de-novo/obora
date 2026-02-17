@@ -10,11 +10,19 @@ import {
   type DashboardConfig,
   DEFAULT_DASHBOARD_CONFIG,
 } from './config.js';
+import { InMemoryAuditStore, type AuditStore } from './audit/audit-store.js';
+import { registerAuditRoutes } from './routes/audit.js';
 import { registerHealthRoute } from './routes/health.js';
+import { createWsBridge, type WsBridge } from './ws-bridge.js';
+
+export interface DashboardServerDependencies {
+  auditStore?: AuditStore;
+}
 
 export const createDashboardServer = async (
   overrides: Partial<DashboardConfig> = {},
-): Promise<{ app: FastifyInstance; config: DashboardConfig }> => {
+  dependencies: DashboardServerDependencies = {},
+): Promise<{ app: FastifyInstance; config: DashboardConfig; wsBridge: WsBridge }> => {
   const config = createDashboardConfig(overrides);
   const app = Fastify({
     logger: true,
@@ -25,11 +33,13 @@ export const createDashboardServer = async (
   });
 
   await app.register(fastifyWebsocket);
-  app.get(config.wsPath, { websocket: true }, (connection) => {
-    connection.socket.send(JSON.stringify({ type: 'ack', message: 'connected' }));
+  const wsBridge = createWsBridge(app, {
+    wsPath: config.wsPath,
   });
 
+  const auditStore = dependencies.auditStore ?? new InMemoryAuditStore();
   registerHealthRoute(app, config.apiBasePath);
+  registerAuditRoutes(app, config.apiBasePath, auditStore);
 
   const indexPath = join(config.staticDir, 'index.html');
   if (existsSync(indexPath)) {
@@ -50,7 +60,7 @@ export const createDashboardServer = async (
     return reply.type('text/html').sendFile('index.html');
   });
 
-  return { app, config };
+  return { app, config, wsBridge };
 };
 
 const start = async (): Promise<void> => {
