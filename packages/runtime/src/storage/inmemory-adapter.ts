@@ -44,7 +44,7 @@ export class InMemoryStorageAdapter implements StorageAdapter {
     results.sort((a, b) => b.startedAt.localeCompare(a.startedAt));
 
     const offset = filter.offset ?? 0;
-    const limit = filter.limit ?? results.length;
+    const limit = filter.limit ?? 100;
     return results.slice(offset, offset + limit).map((r) => structuredClone(r));
   }
 

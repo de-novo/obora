@@ -7,6 +7,19 @@
 
 import { Command } from "commander";
 
+interface PersistenceConfig {
+  sqlite?: { path?: string };
+}
+
+function resolveDbPath(config: unknown): string {
+  const DEFAULT_DB_PATH = "./data/obora.db";
+  if (typeof config !== "object" || config === null) return DEFAULT_DB_PATH;
+  const persistence = (config as Record<string, unknown>).persistence;
+  if (typeof persistence !== "object" || persistence === null) return DEFAULT_DB_PATH;
+  const p = persistence as PersistenceConfig;
+  return p.sqlite?.path ?? DEFAULT_DB_PATH;
+}
+
 export function createRunsCommand(): Command {
   const runs = new Command("runs").description("Query persisted run records");
 
@@ -22,9 +35,7 @@ export function createRunsCommand(): Command {
       const { loadConfig } = await import("@obora/sdk");
 
       const config = await loadConfig();
-      const dbPath = (config as Record<string, unknown>)?.persistence
-        ? ((config as Record<string, Record<string, Record<string, string>>>).persistence?.sqlite?.path ?? "./data/obora.db")
-        : "./data/obora.db";
+      const dbPath = resolveDbPath(config);
 
       const adapter = new SQLiteStorageAdapter({ path: dbPath });
       try {
@@ -66,9 +77,7 @@ export function createRunsCommand(): Command {
       const { loadConfig } = await import("@obora/sdk");
 
       const config = await loadConfig();
-      const dbPath = (config as Record<string, unknown>)?.persistence
-        ? ((config as Record<string, Record<string, Record<string, string>>>).persistence?.sqlite?.path ?? "./data/obora.db")
-        : "./data/obora.db";
+      const dbPath = resolveDbPath(config);
 
       const adapter = new SQLiteStorageAdapter({ path: dbPath });
       try {

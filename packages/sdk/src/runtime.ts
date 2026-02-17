@@ -1016,4 +1016,33 @@ export class OboraRuntime {
     const adapter = await this.getStorageAdapter();
     return adapter.getArtifacts(runId, stepName);
   }
+
+  // ── run namespace (spec-aligned facade) ──
+
+  /** Spec-aligned run query API: `runtime.runs.get(id)`, `runtime.runs.steps(id)`, `runtime.runs.artifacts(stepId)` */
+  readonly runs = {
+    /** Get a run record by ID */
+    get: async (runId: string) => {
+      const adapter = await this.getStorageAdapter();
+      return adapter.getRun(runId);
+    },
+
+    /** List run records with optional filter */
+    list: async (filter: import("@obora/runtime").RunFilter = {}) => {
+      const adapter = await this.getStorageAdapter();
+      return adapter.listRuns(filter);
+    },
+
+    /** Get step records for a run */
+    steps: async (runId: string) => {
+      const adapter = await this.getStorageAdapter();
+      return adapter.getSteps(runId);
+    },
+
+    /** Get artifact records for a run, optionally filtered by step */
+    artifacts: async (runId: string, stepName?: string) => {
+      const adapter = await this.getStorageAdapter();
+      return adapter.getArtifacts(runId, stepName);
+    },
+  };
 }

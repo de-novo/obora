@@ -949,17 +949,31 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
 
   // ── Persistence hooks (opt-in) ──
 
+  private static mapExecutionStatusToRunStatus(status: Execution["status"]): RunRecord["status"] {
+    switch (status) {
+      case "running": return "running";
+      case "completed": return "completed";
+      case "failed": return "failed";
+      case "waiting":
+      case "suspended": return "suspended";
+      default: return "running";
+    }
+  }
+
   private async persistRun(execution: Execution): Promise<void> {
     const adapter = this.dependencies.storageAdapter;
     if (!adapter) return;
+    const input = (typeof execution.input === "object" && execution.input !== null && !Array.isArray(execution.input))
+      ? execution.input as Record<string, unknown>
+      : { value: execution.input };
     await adapter.saveRun({
       id: execution.id,
       workflowName: execution.workflowName,
-      status: execution.status as RunRecord["status"],
-      input: execution.input as Record<string, unknown>,
+      status: DefaultRuntimeOrchestrator.mapExecutionStatusToRunStatus(execution.status),
+      input,
       startedAt: execution.startedAt.toISOString(),
       completedAt: execution.endedAt?.toISOString(),
-      metadata: undefined,
+      metadata: execution.metadata,
     });
   }
 
@@ -975,13 +989,30 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
       status: rec.status === "pending" || rec.status === "waiting" ? "running" : rec.status as StepRecord["status"],
       input: undefined,
       output: rec.result ? (rec.result as unknown as Record<string, unknown>) : undefined,
-      error: rec.error ? { code: "STEP_ERROR", message: rec.error } : undefined,
+      error: rec.error ? this.toStepError(rec) : undefined,
       startedAt: rec.startedAt?.toISOString() ?? new Date().toISOString(),
       completedAt: rec.endedAt?.toISOString(),
       durationMs: rec.startedAt && rec.endedAt
         ? rec.endedAt.getTime() - rec.startedAt.getTime()
         : undefined,
     });
+  }
+
+  private toStepError(rec: { error?: string; recovery?: { error?: unknown } }): StepRecord["error"] {
+    // Try to extract structured error info from recovery context
+    const raw = rec.recovery?.error;
+    if (raw && typeof raw === "object" && raw !== null && "code" in raw && "message" in raw) {
+      const err = raw as { code: string; message: string; stack?: string };
+      return { code: err.code, message: err.message, stack: err.stack };
+    }
+    // For OboraError-like objects with code property
+    if (raw instanceof Error) {
+      const code = "code" in raw && typeof (raw as Record<string, unknown>).code === "string"
+        ? (raw as Record<string, unknown>).code as string
+        : "STEP_ERROR";
+      return { code, message: raw.message, stack: raw.stack };
+    }
+    return { code: "STEP_ERROR", message: rec.error ?? "Unknown error" };
   }
 
   private async recordAudit(

@@ -49,6 +49,7 @@ export interface Execution {
   outputs: Record<string, unknown>;
   waitingGate?: GateWaitState;
   error?: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface ExecutionFilter {
