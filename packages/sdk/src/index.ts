@@ -2,6 +2,8 @@ export { Agent } from "./agent.js";
 export { Policy } from "./policy.js";
 export { PLUGIN_TYPES } from "./plugin-types.js";
 export { PluginLoader } from "./plugin-loader.js";
+export { PluginRegistry } from "./plugin-registry.js";
+export { PLUGIN_TYPE_ALIASES, resolvePluginType } from "./plugin-type-map.js";
 export { validatePluginMetadata } from "./plugin-validator.js";
 export { OboraRuntime, OboraError, OboraErrorCode } from "./runtime.js";
 export { Workflow } from "./workflow.js";
@@ -10,6 +12,7 @@ export type { AgentContext, AgentResult } from "./agent.js";
 export type { PolicyDefinition } from "./policy.js";
 export type { PluginType, PluginMetadata, PluginDescriptor, LoadedPlugin } from "./plugin-types.js";
 export type { PluginLoaderOptions } from "./plugin-loader.js";
+export type { PluginRegistryOptions, RegisterOptions } from "./plugin-registry.js";
 export type {
   OboraRuntimeConfig,
   RunOptions,
