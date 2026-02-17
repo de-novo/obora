@@ -1,0 +1,25 @@
+name: gate-waiting
+workflow:
+  name: gate-workflow
+  steps:
+    - name: draft
+      agent: writer
+    - name: approval
+      gate: human-review
+      depends_on: [draft]
+    - name: publish
+      agent: publisher
+      depends_on: [approval]
+mocks:
+  agents:
+    - name: writer
+      responses:
+        draft: { text: "content" }
+    - name: publisher
+      responses:
+        publish: { url: "https://example.com" }
+expect:
+  status: waiting
+  events:
+    - type: gate_wait
+      contains: { stepName: approval }

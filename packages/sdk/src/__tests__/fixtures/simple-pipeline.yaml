@@ -1,0 +1,24 @@
+name: simple-pipeline
+workflow:
+  name: simple-pipeline
+  steps:
+    - name: draft
+      agent: writer
+    - name: review
+      agent: reviewer
+      depends_on: [draft]
+mocks:
+  agents:
+    - name: writer
+      responses:
+        draft: { text: "draft output" }
+    - name: reviewer
+      responses:
+        review: { approved: true }
+expect:
+  status: completed
+  events:
+    - type: step_end
+      contains: { stepName: draft, status: completed }
+    - type: step_end
+      contains: { stepName: review, status: completed }

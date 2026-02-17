@@ -1,0 +1,10 @@
+name: missing-agent-error
+workflow:
+  name: error-workflow
+  steps:
+    - name: draft
+      agent: nonexistent
+expect:
+  status: failed
+  errors:
+    - code: ORCH_5002

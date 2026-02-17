@@ -4,13 +4,14 @@ import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 
 import { OboraError, OboraErrorCode } from "../runtime.js";
+import type { WorkflowDef } from "../workflow.js";
 import { MockAgent } from "./mock-agent.js";
 import { MockTool } from "./mock-tool.js";
 import type { WorkflowTestCase } from "./test-runner.js";
 
 export interface YamlFixture {
   name: string;
-  workflow: string;
+  workflow: string | WorkflowDef;
   input?: unknown;
   mocks?: {
     agents?: Array<{ name: string; responses: Record<string, unknown> }>;
@@ -34,8 +35,12 @@ export function validateFixture(data: unknown): YamlFixture {
     throw fixtureError("Fixture 'name' is required and must be a non-empty string");
   }
 
-  if (typeof data.workflow !== "string" || data.workflow.trim().length === 0) {
-    throw fixtureError("Fixture 'workflow' is required and must be a non-empty string");
+  if (typeof data.workflow === "string") {
+    if (data.workflow.trim().length === 0) {
+      throw fixtureError("Fixture 'workflow' is required and must be a non-empty string or object");
+    }
+  } else if (!isWorkflowDef(data.workflow)) {
+    throw fixtureError("Fixture 'workflow' is required and must be a non-empty string or object");
   }
 
   if (!isRecord(data.expect)) {
@@ -160,6 +165,14 @@ function validateMockEntries(entries: unknown, kind: "agents" | "tools"): void {
       throw fixtureError(`Each item in 'mocks.${kind}' must include an object 'responses'`);
     }
   }
+}
+
+function isWorkflowDef(value: unknown): value is WorkflowDef {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return typeof value.name === "string" && Array.isArray(value.steps);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

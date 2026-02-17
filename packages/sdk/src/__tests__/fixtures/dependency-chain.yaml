@@ -1,0 +1,31 @@
+name: dependency-chain
+workflow:
+  name: dep-chain
+  steps:
+    - name: research
+      agent: researcher
+    - name: draft
+      agent: writer
+      depends_on: [research]
+    - name: edit
+      agent: editor
+      depends_on: [draft]
+    - name: review
+      agent: reviewer
+      depends_on: [edit]
+mocks:
+  agents:
+    - name: researcher
+      responses:
+        research: { data: "findings" }
+    - name: writer
+      responses:
+        draft: { text: "draft" }
+    - name: editor
+      responses:
+        edit: { text: "edited" }
+    - name: reviewer
+      responses:
+        review: { approved: true }
+expect:
+  status: completed

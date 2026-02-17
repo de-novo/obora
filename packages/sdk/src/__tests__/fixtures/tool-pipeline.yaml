@@ -1,0 +1,22 @@
+name: tool-pipeline
+workflow:
+  name: tool-pipeline
+  steps:
+    - name: fetch
+      tool: web-search
+      config:
+        input: { query: "obora runtime" }
+    - name: summarize
+      agent: summarizer
+      depends_on: [fetch]
+mocks:
+  agents:
+    - name: summarizer
+      responses:
+        summarize: { summary: "Obora is an AI control runtime" }
+  tools:
+    - name: web-search
+      responses:
+        fetch: { results: ["result1", "result2"] }
+expect:
+  status: completed

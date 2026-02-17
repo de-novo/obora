@@ -26,6 +26,19 @@ describe("fixture-loader", () => {
     expect(fixture.expect.status).toBe("completed");
   });
 
+  it("validateFixture accepts inline workflow object", () => {
+    const fixture = validateFixture({
+      name: "inline-workflow",
+      workflow: {
+        name: "inline",
+        steps: [{ name: "draft", agent: "writer" }],
+      },
+      expect: { status: "completed" },
+    });
+
+    expect(typeof fixture.workflow).toBe("object");
+  });
+
   it("validateFixture rejects missing name", () => {
     expect(() =>
       validateFixture({
