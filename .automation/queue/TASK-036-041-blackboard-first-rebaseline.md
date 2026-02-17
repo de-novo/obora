@@ -598,3 +598,17 @@ Board 단계 태스크를 blackboard 우선 구현 순서로 재배치하고, �
 - 결과: ✅ `1 file / 22 tests passed` (2.41s)
 - 비고: blackboard direct write deprecated 경고(stderr) 반복 출력되나 테스트 정상 통과
 - 판정: 블로커 없음, 다음 실행은 runtime consensus gate 최소검증 1건(`pnpm --filter @obora/runtime test -- src/consensus/__tests__/ConsensusGate.test.ts`) 점검 권장
+
+## 야간 자동 점검 로그 (2026-02-18 06:12 KST)
+- 기준 브랜치: `origin/main` (`40e3c43`)
+- 작업 브랜치(HEAD 유지): `main` (`894b2e9`)
+- 점검 단위: blackboard-first 라인 실행 가능성 확인(최소 검증 1건)
+- 실행 검증:
+  - `pnpm --filter @obora-kit/blackboard test -- test/snapshot/snapshot-manager.test.ts` → ❌ `No projects matched the filters`
+  - `test -d packages/blackboard` → ❌ `packages/blackboard missing`
+  - `pnpm -r list --depth -1` → 현재 워크스페이스 패키지에 `@obora-kit/blackboard` 없음 확인
+- 판정: ⚠️ **BLOCKER** (blackboard-first 대상 패키지 부재)
+- 필요 조치:
+  1. blackboard-first 대상 브랜치/커밋으로 checkout 또는 `packages/blackboard` 복구 여부 확인
+  2. 큐 문서(`queue/`, `.automation/queue/`)를 현재 모노레포 구조(adapters/runtime/sdk/cli/dashboard) 기준으로 재기준화
+- 다음 실행 조건: `@obora-kit/blackboard` 패키지가 워크스페이스에 복구되거나, blackboard-first 점검 기준이 신규 패키지 구조로 갱신될 것
