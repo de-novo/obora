@@ -100,6 +100,7 @@ export const OboraErrorCode = {
   SDK_INVALID_WORKFLOW: "SDK_8005",
   SDK_UNKNOWN_ERROR: "SDK_8006",
   SDK_EXECUTION_NOT_FOUND: "SDK_8007",
+  SDK_INVALID_PLUGIN: "SDK_9001",
 } as const;
 
 export interface RuntimeExecution {
