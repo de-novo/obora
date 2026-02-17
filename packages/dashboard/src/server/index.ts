@@ -11,12 +11,16 @@ import {
   DEFAULT_DASHBOARD_CONFIG,
 } from './config.js';
 import { InMemoryAuditStore, type AuditStore } from './audit/audit-store.js';
+import { InMemoryPolicyStore, type PolicyStore } from './policy/policy-store.js';
 import { registerAuditRoutes } from './routes/audit.js';
 import { registerHealthRoute } from './routes/health.js';
+import { registerPolicyRoutes, type PolicyEngineAdapter } from './routes/policy.js';
 import { createWsBridge, type WsBridge } from './ws-bridge.js';
 
 export interface DashboardServerDependencies {
   auditStore?: AuditStore;
+  policyStore?: PolicyStore;
+  policyEngine?: PolicyEngineAdapter;
 }
 
 export const createDashboardServer = async (
@@ -38,8 +42,12 @@ export const createDashboardServer = async (
   });
 
   const auditStore = dependencies.auditStore ?? new InMemoryAuditStore();
+  const policyStore = dependencies.policyStore ?? new InMemoryPolicyStore();
+  const policyEngine = dependencies.policyEngine;
+
   registerHealthRoute(app, config.apiBasePath);
   registerAuditRoutes(app, config.apiBasePath, auditStore);
+  registerPolicyRoutes(app, config.apiBasePath, policyStore, policyEngine);
 
   const indexPath = join(config.staticDir, 'index.html');
   if (existsSync(indexPath)) {

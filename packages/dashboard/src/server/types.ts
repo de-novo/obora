@@ -45,6 +45,20 @@ export interface AuditQueryResult {
   hasMore: boolean;
 }
 
+export interface PolicyDocument {
+  id: string;
+  name: string;
+  content: string;
+  revision: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PolicyValidationResult {
+  valid: boolean;
+  errors: string[];
+}
+
 export interface ApiErrorPayload {
   code: string;
   message: string;
