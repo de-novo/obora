@@ -30,6 +30,7 @@ export type { PluginLoaderOptions } from "./plugin-loader.js";
 export type { PluginRegistryOptions, RegisterOptions } from "./plugin-registry.js";
 export type { PluginManagerOptions } from "./plugin-manager.js";
 export type {
+  PersistenceConfig,
   OboraRuntimeConfig,
   RunOptions,
   RunHandle,

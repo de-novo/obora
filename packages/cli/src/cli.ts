@@ -6,6 +6,7 @@ import { createPluginCommand } from "./commands/plugin.js";
 import { createAuditCommand } from "./commands/audit.js";
 import { createPolicyCommand } from "./commands/policy.js";
 import { createInitCommand } from "./commands/init.js";
+import { createRunsCommand } from "./commands/runs.js";
 
 export function createCLI(): Command {
   const program = new Command("obora")
@@ -22,6 +23,7 @@ export function createCLI(): Command {
   program.addCommand(createPluginCommand());
   program.addCommand(createAuditCommand());
   program.addCommand(createPolicyCommand());
+  program.addCommand(createRunsCommand());
 
   return program;
 }

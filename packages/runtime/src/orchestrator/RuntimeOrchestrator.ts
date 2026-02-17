@@ -9,6 +9,7 @@ import type { PolicyEngine } from "../policy/PolicyEngine.js";
 import type { PolicyDecision } from "../policy/types.js";
 import type { RecoveryEngine } from "../recovery/types.js";
 import type { StateBinder, StateBinding } from "../state/StateBinder.js";
+import type { StorageAdapter, RunRecord, StepRecord } from "../storage/types.js";
 import { parseDuration } from "./utils.js";
 import type {
   Execution,
@@ -28,6 +29,7 @@ export interface RuntimeOrchestratorDependencies {
   consensusGate?: ConsensusGate;
   recoveryEngine?: RecoveryEngine;
   gateWaitStateStore?: GateWaitStateStore;
+  storageAdapter?: StorageAdapter;
 }
 
 interface WaitingContext {
@@ -100,6 +102,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
 
     const execution = this.createExecution(name, workflow, input, plan.executionOrder);
     this.executions.set(execution.id, execution);
+    await this.persistRun(execution);
 
     await this.recordAudit(execution.id, "execution_start", {
       workflowName: name,
@@ -386,6 +389,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
     const record = execution.stepRecords[step.name]!;
     record.status = "running";
     record.startedAt = this.now();
+    await this.persistStep(execution, step.name);
 
     await this.recordAudit(execution.id, "step_start", {
       stepName: step.name,
@@ -537,7 +541,9 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
       }
 
       record.status = "completed";
+      record.endedAt = this.now();
       execution.outputs[step.name] = result.output;
+      await this.persistStep(execution, step.name);
       await this.recordAudit(execution.id, "step_end", {
         stepName: step.name,
         status: "completed",
@@ -937,6 +943,44 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
       completedSteps: execution.completedSteps,
       error: execution.error,
       endedAt: execution.endedAt,
+    });
+    await this.persistRun(execution);
+  }
+
+  // ── Persistence hooks (opt-in) ──
+
+  private async persistRun(execution: Execution): Promise<void> {
+    const adapter = this.dependencies.storageAdapter;
+    if (!adapter) return;
+    await adapter.saveRun({
+      id: execution.id,
+      workflowName: execution.workflowName,
+      status: execution.status as RunRecord["status"],
+      input: execution.input as Record<string, unknown>,
+      startedAt: execution.startedAt.toISOString(),
+      completedAt: execution.endedAt?.toISOString(),
+      metadata: undefined,
+    });
+  }
+
+  private async persistStep(execution: Execution, stepName: string): Promise<void> {
+    const adapter = this.dependencies.storageAdapter;
+    if (!adapter) return;
+    const rec = execution.stepRecords[stepName];
+    if (!rec) return;
+    await adapter.saveStep({
+      id: `${execution.id}:${stepName}`,
+      runId: execution.id,
+      stepName,
+      status: rec.status === "pending" || rec.status === "waiting" ? "running" : rec.status as StepRecord["status"],
+      input: undefined,
+      output: rec.result ? (rec.result as unknown as Record<string, unknown>) : undefined,
+      error: rec.error ? { code: "STEP_ERROR", message: rec.error } : undefined,
+      startedAt: rec.startedAt?.toISOString() ?? new Date().toISOString(),
+      completedAt: rec.endedAt?.toISOString(),
+      durationMs: rec.startedAt && rec.endedAt
+        ? rec.endedAt.getTime() - rec.startedAt.getTime()
+        : undefined,
     });
   }
 

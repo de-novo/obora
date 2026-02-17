@@ -152,6 +152,13 @@ export interface OboraAuditConfig {
   sink?: (event: AuditEvent) => void | Promise<void>;
 }
 
+export interface PersistenceConfig {
+  enabled: boolean;
+  adapter: "sqlite" | "custom";
+  sqlite?: { path: string };
+  custom?: { instance: import("@obora/runtime").StorageAdapter };
+}
+
 export interface OboraRuntimeConfig {
   policyPath?: string;
   audit?: OboraAuditConfig;
@@ -160,6 +167,7 @@ export interface OboraRuntimeConfig {
   configPath?: string;
   agentsPath?: string;
   verbose?: boolean;
+  persistence?: PersistenceConfig;
 }
 
 export type AgentFactory = (...args: unknown[]) => unknown;
@@ -959,5 +967,53 @@ export class OboraRuntime {
         await callback(event);
       }),
     );
+  }
+
+  // ── Persistence Query API (M6-01) ──
+
+  private _storageAdapter?: import("@obora/runtime").StorageAdapter;
+
+  private async getStorageAdapter(): Promise<import("@obora/runtime").StorageAdapter> {
+    if (this._storageAdapter) return this._storageAdapter;
+
+    const p = this.config.persistence;
+    if (!p?.enabled) {
+      throw new OboraError("Persistence is not enabled", "SDK_PERSISTENCE_DISABLED");
+    }
+
+    if (p.adapter === "custom" && p.custom?.instance) {
+      this._storageAdapter = p.custom.instance;
+    } else if (p.adapter === "sqlite" && p.sqlite?.path) {
+      const { SQLiteStorageAdapter } = await import("@obora/runtime");
+      this._storageAdapter = new SQLiteStorageAdapter({ path: p.sqlite.path });
+    } else {
+      throw new OboraError("Invalid persistence configuration", "SDK_PERSISTENCE_CONFIG_ERROR");
+    }
+
+    return this._storageAdapter;
+  }
+
+  /** Get a run record by ID */
+  async getRunRecord(runId: string) {
+    const adapter = await this.getStorageAdapter();
+    return adapter.getRun(runId);
+  }
+
+  /** List run records with optional filter */
+  async listRunRecords(filter: import("@obora/runtime").RunFilter = {}) {
+    const adapter = await this.getStorageAdapter();
+    return adapter.listRuns(filter);
+  }
+
+  /** Get step records for a run */
+  async getRunSteps(runId: string) {
+    const adapter = await this.getStorageAdapter();
+    return adapter.getSteps(runId);
+  }
+
+  /** Get artifact records for a run, optionally filtered by step */
+  async getRunArtifacts(runId: string, stepName?: string) {
+    const adapter = await this.getStorageAdapter();
+    return adapter.getArtifacts(runId, stepName);
   }
 }
