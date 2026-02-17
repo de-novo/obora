@@ -83,9 +83,13 @@ describe('webhook channel', () => {
       'http://10.1.2.3/hook',
       'http://172.16.2.3/hook',
       'http://192.168.0.10/hook',
+      'http://169.254.10.20/hook',
       'http://0.0.0.0/hook',
       'http://[::1]/hook',
+      'http://[::ffff:127.0.0.1]/hook',
+      'http://[::]/hook',
       'http://localhost/hook',
+      'http://service.localhost/hook',
     ];
 
     for (const url of badUrls) {

@@ -22,6 +22,12 @@ export interface HotReloadAuditTrail {
 const DASH_8004 = 'DASH_8004';
 const DASH_8005 = 'DASH_8005';
 
+type HotReloadAuditEventType =
+  | 'policy.reload.success'
+  | 'policy.reload.failed'
+  | 'policy.reload.rollback'
+  | 'policy.reload.escalation';
+
 const asError = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
 export class HotReloadEngine {
@@ -45,9 +51,17 @@ export class HotReloadEngine {
       return { success: false, error: 'Policy not found' };
     }
 
-    const parsed = parsePolicyYaml(content);
-    if (!parsed.policySet) {
-      return this.handleFailure(policyId, `${DASH_8004}: ${parsed.errors[0] ?? 'Invalid YAML'}`, current, false);
+    const parsedNext = parsePolicyYaml(content);
+    if (!parsedNext.policySet) {
+      return this.handleFailure(policyId, `${DASH_8004}: ${parsedNext.errors[0] ?? 'Invalid YAML'}`, false);
+    }
+
+    const parsedCurrent = parsePolicyYaml(current.content);
+
+    try {
+      this.policyEngine?.loadInline(parsedNext.policySet, `dashboard-policy:${policyId}`);
+    } catch (error) {
+      return this.handleFailure(policyId, `${DASH_8004}: ${asError(error)}`, false);
     }
 
     const updated = await this.policyStore.update(policyId, {
@@ -57,60 +71,44 @@ export class HotReloadEngine {
     });
 
     if (updated === null) {
-      return { success: false, error: 'Policy not found' };
+      await this.rollbackRuntimePolicy(policyId, parsedCurrent.policySet);
+      return this.handleFailure(policyId, 'Policy not found', true);
     }
 
     if (updated === 'revision_conflict') {
-      return { success: false, error: 'Revision conflict' };
+      await this.rollbackRuntimePolicy(policyId, parsedCurrent.policySet);
+      return this.handleFailure(policyId, 'Revision conflict', true);
+    }
+
+    this.failureCountByPolicy.set(policyId, 0);
+    this.appendAuditEvent(policyId, 'policy.reload.success', {
+      policyId,
+      revision: updated.revision,
+    });
+    return { success: true, rollbackPerformed: false };
+  }
+
+  private async rollbackRuntimePolicy(policyId: string, previousPolicySet: unknown): Promise<boolean> {
+    if (!previousPolicySet) {
+      return false;
     }
 
     try {
-      this.policyEngine?.loadInline(parsed.policySet, `dashboard-policy:${policyId}`);
-      this.failureCountByPolicy.set(policyId, 0);
-      this.appendAuditEvent(policyId, 'policy_reload_success', {
+      this.policyEngine?.loadInline(previousPolicySet, `dashboard-policy:${policyId}:rollback`);
+      this.appendAuditEvent(policyId, 'policy.reload.rollback', {
         policyId,
-        revision: updated.revision,
       });
-      return { success: true, rollbackPerformed: false };
-    } catch (error) {
-      const failed = await this.handleFailure(policyId, `${DASH_8004}: ${asError(error)}`, current, true, updated.revision);
-      return failed;
+      return true;
+    } catch {
+      return false;
     }
   }
 
-  private async handleFailure(
-    policyId: string,
-    errorMessage: string,
-    previousPolicy: { name: string; content: string; revision: string },
-    shouldRollback: boolean,
-    failedRevision?: string,
-  ): Promise<HotReloadResult> {
+  private handleFailure(policyId: string, errorMessage: string, rollbackPerformed: boolean): HotReloadResult {
     const failures = (this.failureCountByPolicy.get(policyId) ?? 0) + 1;
     this.failureCountByPolicy.set(policyId, failures);
 
-    let rollbackPerformed = false;
-
-    if (shouldRollback) {
-      const rollbackUpdate = await this.policyStore.update(policyId, {
-        name: previousPolicy.name,
-        content: previousPolicy.content,
-        revision: failedRevision ?? previousPolicy.revision,
-      });
-
-      if (rollbackUpdate && rollbackUpdate !== 'revision_conflict') {
-        try {
-          const rollbackParsed = parsePolicyYaml(previousPolicy.content);
-          if (rollbackParsed.policySet) {
-            this.policyEngine?.loadInline(rollbackParsed.policySet, `dashboard-policy:${policyId}:rollback`);
-            rollbackPerformed = true;
-          }
-        } catch {
-          rollbackPerformed = false;
-        }
-      }
-    }
-
-    this.appendAuditEvent(policyId, 'policy_reload_failed', {
+    this.appendAuditEvent(policyId, 'policy.reload.failed', {
       policyId,
       error: errorMessage,
       rollbackPerformed,
@@ -119,7 +117,7 @@ export class HotReloadEngine {
 
     if (failures >= 3) {
       this.escalatedPolicies.add(policyId);
-      this.appendAuditEvent(policyId, 'policy_reload_escalated', {
+      this.appendAuditEvent(policyId, 'policy.reload.escalation', {
         policyId,
         errorCode: DASH_8005,
         failures,
@@ -139,7 +137,7 @@ export class HotReloadEngine {
     };
   }
 
-  private appendAuditEvent(policyId: string, type: AuditEvent['type'] | 'error', data: unknown): void {
+  private appendAuditEvent(policyId: string, type: HotReloadAuditEventType, data: unknown): void {
     if (!this.auditTrail) {
       return;
     }
@@ -148,11 +146,8 @@ export class HotReloadEngine {
       id: randomUUID(),
       executionId: `policy:${policyId}`,
       timestamp: new Date(),
-      type: 'error',
-      data: {
-        eventType: type,
-        ...((typeof data === 'object' && data !== null ? data : { data }) as Record<string, unknown>),
-      },
+      type: type as AuditEvent['type'],
+      data: (typeof data === 'object' && data !== null ? data : { data }) as Record<string, unknown>,
     });
   }
 }

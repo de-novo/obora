@@ -19,7 +19,7 @@ describe('hot-reload', () => {
     expect(updated?.content).toContain('v2');
   });
 
-  it('performs rollback on failure', async () => {
+  it('keeps persisted policy unchanged when apply fails', async () => {
     const store = new InMemoryPolicyStore();
     const created = await store.create({ name: 'p1', content: 'version: v1' });
 
@@ -31,7 +31,7 @@ describe('hot-reload', () => {
     const result = await engine.reload(created.id, 'version: v2', created.revision);
 
     expect(result.success).toBe(false);
-    expect(result.rollbackPerformed).toBe(true);
+    expect(result.rollbackPerformed).toBe(false);
     const restored = await store.get(created.id);
     expect(restored?.content).toContain('v1');
   });
@@ -59,10 +59,25 @@ describe('hot-reload', () => {
     revision = (await store.get(created.id))?.revision ?? revision;
     await engine.reload(created.id, 'version: v5', revision);
 
-    const eventTypes = addEvent.mock.calls.map((call) => call[0]?.data?.eventType);
-    expect(eventTypes).toContain('policy_reload_success');
-    expect(eventTypes).toContain('policy_reload_failed');
-    expect(eventTypes).toContain('policy_reload_escalated');
+    const eventTypes = addEvent.mock.calls.map((call) => call[0]?.type);
+    expect(eventTypes).toContain('policy.reload.success');
+    expect(eventTypes).toContain('policy.reload.failed');
+    expect(eventTypes).toContain('policy.reload.escalation');
+  });
+
+  it('rolls back runtime apply when persistence fails', async () => {
+    const store = new InMemoryPolicyStore();
+    const created = await store.create({ name: 'p1', content: 'version: v1' });
+
+    const loadInline = vi.fn();
+    const engine = new HotReloadEngine(store, { loadInline });
+
+    const result = await engine.reload(created.id, 'version: v2', 'stale-revision');
+
+    expect(result.success).toBe(false);
+    expect(result.rollbackPerformed).toBe(true);
+    expect(result.error).toBe('Revision conflict');
+    expect(loadInline).toHaveBeenCalledTimes(2);
   });
 
   it('triggers escalation after 3 consecutive failures', async () => {

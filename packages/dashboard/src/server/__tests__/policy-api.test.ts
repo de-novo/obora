@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createDashboardServer } from '../index.js';
 
@@ -181,6 +181,40 @@ describe('policy api', () => {
 
     expect(reloadResponse.statusCode).toBe(200);
     expect(reloadResponse.json().result.success).toBe(true);
+  });
+
+  it('keeps stored policy unchanged when reload persistence fails', async () => {
+    const loadInline = vi.fn();
+    const { app } = await createDashboardServer({}, { policyEngine: { loadInline } });
+    servers.push(app);
+
+    const createResponse = await app.inject({
+      method: 'POST',
+      url: '/api/policies',
+      payload: {
+        name: 'rollback-reload',
+        content: validPolicyYaml,
+      },
+    });
+
+    const created = createResponse.json().policy;
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/policies/${created.id}/reload`,
+      payload: {
+        content: validPolicyYaml.replace('deny', 'allow'),
+        revision: 'stale-revision',
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().details?.[0]).toContain('Revision conflict');
+
+    const persisted = await app.inject({ method: 'GET', url: `/api/policies/${created.id}` });
+    expect(persisted.statusCode).toBe(200);
+    expect(persisted.json().policy.content).toContain('deny');
+    expect(loadInline).toHaveBeenCalledTimes(3);
   });
 
   it('validates policy without saving', async () => {

@@ -9,7 +9,7 @@ import type {
 
 interface WsServerMessage {
   type: 'ack' | 'event' | 'error';
-  payload: Record<string, unknown>;
+  payload: Record<string, unknown> | ExecutionEvent;
 }
 
 interface WsClientCommand {
@@ -163,16 +163,20 @@ export const createWsBridge = (server: FastifyInstance, options: WsBridgeOptions
 
     const knownType = KNOWN_TYPE_BY_AUDIT_TYPE[auditEvent.type] ?? 'error';
     const severity = SEVERITY_BY_KNOWN_TYPE[knownType];
+    const data = (auditEvent.data as Record<string, unknown> | null) ?? {};
+    const status =
+      typeof data.status === 'string' && ['running', 'completed', 'failed', 'waiting', 'skipped'].includes(data.status)
+        ? (data.status as ExecutionEvent['status'])
+        : undefined;
 
     return {
       id: `${auditEvent.executionId}:${String(nextSequence).padStart(8, '0')}`,
       executionId: auditEvent.executionId,
       timestamp: toIsoTimestamp(auditEvent.timestamp),
       type: auditEvent.type,
-      stepName:
-        typeof (auditEvent.data as Record<string, unknown> | null)?.stepName === 'string'
-          ? ((auditEvent.data as Record<string, unknown>).stepName as string)
-          : undefined,
+      knownType,
+      stepName: typeof data.stepName === 'string' ? data.stepName : undefined,
+      status,
       severity,
       payload: {
         data: auditEvent.data,

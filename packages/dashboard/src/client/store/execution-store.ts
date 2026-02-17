@@ -1,17 +1,8 @@
 import { useSyncExternalStore } from 'react';
 
-export type StepStatus = 'pending' | 'running' | 'completed' | 'failed';
+import type { ExecutionEvent } from '../../server/types.js';
 
-export interface ExecutionEvent {
-  id: string;
-  executionId: string;
-  timestamp: string;
-  type: string;
-  knownType?: string;
-  stepName?: string;
-  status?: 'running' | 'completed' | 'failed' | 'waiting' | 'skipped';
-  payload?: Record<string, unknown>;
-}
+export type StepStatus = 'pending' | 'running' | 'completed' | 'failed';
 
 export interface StepErrorDetail {
   code?: string;

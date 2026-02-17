@@ -23,12 +23,61 @@ const isBlockedIPv4 = (host: string): boolean => {
     return true;
   }
 
+  if (host.startsWith('169.254.')) {
+    return true;
+  }
+
   const octets = host.split('.').map((part) => Number.parseInt(part, 10));
   if (octets.length === 4 && octets.every((part) => Number.isInteger(part) && part >= 0 && part <= 255)) {
     const second = octets[1] ?? -1;
     if (octets[0] === 172 && second >= 16 && second <= 31) {
       return true;
     }
+  }
+
+  return false;
+};
+
+const normalizeIpv6Host = (host: string): string => {
+  const noZone = host.split('%')[0] ?? host;
+  return noZone.toLowerCase();
+};
+
+const isBlockedIPv6 = (host: string): boolean => {
+  const normalized = normalizeIpv6Host(host);
+
+  if (normalized === '::1' || normalized === '::' || normalized === '0:0:0:0:0:0:0:1') {
+    return true;
+  }
+
+  if (normalized.startsWith('::ffff:')) {
+    const mapped = normalized.slice('::ffff:'.length);
+    if (isBlockedIPv4(mapped)) {
+      return true;
+    }
+
+    return true;
+  }
+
+  if (normalized.startsWith('fc') || normalized.startsWith('fd')) {
+    return true;
+  }
+
+  if (normalized.startsWith('fe8') || normalized.startsWith('fe9') || normalized.startsWith('fea') || normalized.startsWith('feb')) {
+    return true;
+  }
+
+  return false;
+};
+
+const isBlockedHostname = (host: string): boolean => {
+  const normalized = host.toLowerCase();
+  if (normalized === 'localhost' || normalized.endsWith('.localhost')) {
+    return true;
+  }
+
+  if (normalized === 'local' || normalized.endsWith('.local')) {
+    return true;
   }
 
   return false;
@@ -53,14 +102,18 @@ const normalizeHost = (urlString: string): { ok: true; url: string } | { ok: fal
 
   const host = parsed.hostname.toLowerCase();
   const normalizedHost = host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
-  if (normalizedHost === 'localhost' || normalizedHost === '::1') {
+
+  if (isBlockedHostname(normalizedHost)) {
     return { ok: false, error: 'Webhook URL host is not allowed' };
   }
 
-  if (isIP(normalizedHost)) {
-    if (isBlockedIPv4(normalizedHost) || normalizedHost === '::1') {
-      return { ok: false, error: 'Webhook URL host is not allowed' };
-    }
+  const ipVersion = isIP(normalizedHost);
+  if (ipVersion === 4 && isBlockedIPv4(normalizedHost)) {
+    return { ok: false, error: 'Webhook URL host is not allowed' };
+  }
+
+  if (ipVersion === 6 && isBlockedIPv6(normalizedHost)) {
+    return { ok: false, error: 'Webhook URL host is not allowed' };
   }
 
   return { ok: true, url: parsed.toString() };
