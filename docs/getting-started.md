@@ -25,6 +25,6 @@ obora run examples/hello-obora.yaml
 
 ## Next Steps
 
-- [CLI Reference](./cli/README.md)
+- [CLI Reference](./cli.md)
 - [API Reference](./api/README.md)
 - [Tutorials](./tutorials/README.md)

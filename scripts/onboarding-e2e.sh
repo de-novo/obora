@@ -109,7 +109,12 @@ main() {
   set -e
 
   if [ ! -f "$CLI_ENTRY" ]; then
-    echo "CLI entry not found: $CLI_ENTRY"
+    echo "CLI entry not found. Building @obora/cli..."
+    (cd "$REPO_ROOT" && pnpm --filter @obora/cli build)
+  fi
+
+  if [ ! -f "$CLI_ENTRY" ]; then
+    echo "CLI entry still missing after build: $CLI_ENTRY"
     exit 1
   fi
 
@@ -127,8 +132,8 @@ main() {
   run_step "Step 5: obora test --fixture tests/happy-path.yaml" "cd '$PROJECT_DIR' && node '$CLI_ENTRY' test --fixture tests/happy-path.yaml"
   run_step "Step 6: obora audit query" "cd '$PROJECT_DIR' && node '$CLI_ENTRY' audit query --limit 20"
   run_step "Step 7: obora policy validate policy.yaml" "cd '$PROJECT_DIR' && node '$CLI_ENTRY' policy validate policy.yaml"
-  run_step "Step 8: recovery config presence check" "cd '$REPO_ROOT' && grep -q '^recovery:' examples/01-simple-pipeline/workflow.yaml"
-  run_step "Step 9: consensus config presence check" "cd '$REPO_ROOT' && grep -q 'consensus:' examples/02-multi-agent-consensus/workflow.yaml"
+  run_step "Step 8: validate recovery workflow spec" "cd '$REPO_ROOT' && node '$CLI_ENTRY' policy validate examples/01-simple-pipeline/workflow.yaml"
+  run_step "Step 9: validate consensus workflow spec" "cd '$REPO_ROOT' && node '$CLI_ENTRY' policy validate examples/02-multi-agent-consensus/workflow.yaml"
 
   print_report | tee "$E2E_ROOT/report.txt"
 
