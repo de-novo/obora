@@ -3,6 +3,7 @@ import type { ExecutionStep } from '../store/execution-store';
 interface TimelineProps {
   executionId?: string;
   steps: ExecutionStep[];
+  selectedStepName?: string;
   onStepClick?: (step: ExecutionStep) => void;
 }
 
@@ -13,7 +14,7 @@ const statusStyles: Record<ExecutionStep['status'], { color: string; icon: strin
   failed: { color: '#dc2626', icon: '✕', label: '실패' },
 };
 
-export const Timeline = ({ executionId, steps, onStepClick }: TimelineProps): JSX.Element => {
+export const Timeline = ({ executionId, steps, selectedStepName, onStepClick }: TimelineProps): JSX.Element => {
   if (!executionId) {
     return <p style={{ margin: 0, color: '#6b7280' }}>좌측에서 실행을 선택하세요.</p>;
   }
@@ -28,6 +29,7 @@ export const Timeline = ({ executionId, steps, onStepClick }: TimelineProps): JS
       <ol style={{ listStyle: 'none', margin: 0, padding: 0 }}>
         {steps.map((step, index) => {
           const style = statusStyles[step.status];
+          const isSelected = selectedStepName === step.stepName;
           return (
             <li
               key={step.stepName}
@@ -54,9 +56,9 @@ export const Timeline = ({ executionId, steps, onStepClick }: TimelineProps): JS
                 onClick={() => onStepClick?.(step)}
                 style={{
                   textAlign: 'left',
-                  border: '1px solid #e5e7eb',
+                  border: isSelected ? '2px solid #1d4ed8' : '1px solid #e5e7eb',
                   borderLeft: `4px solid ${style.color}`,
-                  background: '#ffffff',
+                  background: isSelected ? '#eff6ff' : '#ffffff',
                   borderRadius: '8px',
                   padding: '10px 12px',
                   cursor: 'pointer',

@@ -13,6 +13,21 @@ export interface ExecutionEvent {
   payload?: Record<string, unknown>;
 }
 
+export interface StepErrorDetail {
+  code?: string;
+  message?: string;
+  stack?: string;
+  raw?: unknown;
+}
+
+export interface StepDetailData {
+  input?: unknown;
+  output?: unknown;
+  policy?: unknown;
+  error?: StepErrorDetail;
+  blackboard?: unknown;
+}
+
 export interface ExecutionStep {
   stepName: string;
   status: StepStatus;
@@ -26,6 +41,7 @@ export interface ExecutionRecord {
   lastEventId?: string;
   lastEventAt?: string;
   steps: Record<string, ExecutionStep>;
+  stepDetails: Record<string, StepDetailData>;
 }
 
 export interface ExecutionStoreState {
@@ -74,6 +90,106 @@ const toStepStatus = (event: ExecutionEvent): StepStatus | undefined => {
   return 'pending';
 };
 
+const asObject = (value: unknown): Record<string, unknown> | undefined => {
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return undefined;
+};
+
+const pick = (obj: Record<string, unknown>, keys: string[]): unknown => {
+  for (const key of keys) {
+    if (key in obj) {
+      return obj[key];
+    }
+  }
+  return undefined;
+};
+
+const extractErrorDetail = (event: ExecutionEvent, payload: Record<string, unknown>): StepErrorDetail | undefined => {
+  const eventError = asObject((event as unknown as Record<string, unknown>).error);
+  const payloadError = asObject(payload.error);
+  const source = eventError ?? payloadError;
+
+  if (source) {
+    return {
+      code: typeof source.code === 'string' ? source.code : undefined,
+      message: typeof source.message === 'string' ? source.message : undefined,
+      stack: typeof source.stack === 'string' ? source.stack : undefined,
+      raw: source,
+    };
+  }
+
+  const code = typeof payload.code === 'string' ? payload.code : undefined;
+  const message = typeof payload.message === 'string' ? payload.message : undefined;
+  const stack = typeof payload.stack === 'string' ? payload.stack : undefined;
+
+  if (code || message || stack || event.type === 'error' || event.knownType === 'error') {
+    return { code, message, stack, raw: payload };
+  }
+
+  return undefined;
+};
+
+export const extractStepDetailFromEvent = (event: ExecutionEvent, previous?: StepDetailData): StepDetailData | undefined => {
+  if (!event.stepName) {
+    return previous;
+  }
+
+  const payload = event.payload ?? {};
+
+  const input = pick(payload, ['input', 'inputs', 'request']);
+  const output = pick(payload, ['output', 'result', 'response']);
+  const policy = pick(payload, ['policy', 'policyCheck', 'policyResult']);
+  const blackboard = pick(payload, ['blackboard', 'blackboardSnapshot']);
+  const error = extractErrorDetail(event, payload);
+
+  const next: StepDetailData = {
+    input: input ?? previous?.input,
+    output: output ?? previous?.output,
+    policy: policy ?? previous?.policy,
+    blackboard: blackboard ?? previous?.blackboard,
+    error: error ?? previous?.error,
+  };
+
+  if (!next.input && !next.output && !next.policy && !next.error && !next.blackboard) {
+    return previous;
+  }
+
+  return next;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+};
+
+export const getBlackboardDiffPaths = (prev: unknown, next: unknown): string[] => {
+  const paths = new Set<string>();
+
+  const walk = (left: unknown, right: unknown, basePath: string): void => {
+    if (left === right) {
+      return;
+    }
+
+    if (!isRecord(left) || !isRecord(right)) {
+      if (basePath) {
+        paths.add(basePath);
+      }
+      return;
+    }
+
+    const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
+    for (const key of keys) {
+      const nextPath = basePath ? `${basePath}.${key}` : key;
+      walk(left[key], right[key], nextPath);
+    }
+  };
+
+  walk(prev, next, '');
+
+  return [...paths].sort();
+};
+
 const compareByTimeThenName = (a: ExecutionStep, b: ExecutionStep): number => {
   if (a.firstSeenAt === b.firstSeenAt) {
     return a.stepName.localeCompare(b.stepName);
@@ -88,11 +204,13 @@ export const applyExecutionEvent = (state: ExecutionStoreState, event: Execution
     ? {
         ...currentExecution,
         steps: { ...currentExecution.steps },
+        stepDetails: { ...currentExecution.stepDetails },
       }
     : {
         executionId: event.executionId,
         isActive: true,
         steps: {},
+        stepDetails: {},
       };
 
   const nextOrder = currentExecution ? state.executionOrder : [...state.executionOrder, event.executionId];
@@ -126,6 +244,11 @@ export const applyExecutionEvent = (state: ExecutionStoreState, event: Execution
         firstSeenAt: event.timestamp,
         lastUpdatedAt: event.timestamp,
       };
+    }
+
+    const nextDetail = extractStepDetailFromEvent(event, nextExecution.stepDetails[event.stepName]);
+    if (nextDetail) {
+      nextExecution.stepDetails[event.stepName] = nextDetail;
     }
   }
 

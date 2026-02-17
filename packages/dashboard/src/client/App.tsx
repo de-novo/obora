@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { ExecutionList } from './components/ExecutionList';
+import { StepDetail } from './components/StepDetail';
 import { Timeline } from './components/Timeline';
 import { useWebSocket } from './hooks/useWebSocket';
 import {
@@ -23,6 +24,7 @@ const resolveWsUrl = (): string => {
 
 export const App = (): JSX.Element => {
   const [selectedExecutionId, setSelectedExecutionId] = useState<string | undefined>(undefined);
+  const [selectedStepName, setSelectedStepName] = useState<string | undefined>(undefined);
 
   const summaries = useExecutionStore((state) => getExecutionSummaries(state));
   const selectedExecution = useExecutionStore((state) =>
@@ -30,6 +32,27 @@ export const App = (): JSX.Element => {
   );
 
   const steps = useMemo(() => getSortedSteps(selectedExecution), [selectedExecution]);
+
+  const selectedStep = useMemo(
+    () => steps.find((step) => step.stepName === selectedStepName),
+    [selectedStepName, steps],
+  );
+
+  const selectedDetail = selectedExecution && selectedStepName ? selectedExecution.stepDetails[selectedStepName] : undefined;
+
+  const previousBlackboard = useMemo(() => {
+    if (!selectedExecution || !selectedStepName) {
+      return undefined;
+    }
+
+    const index = steps.findIndex((step) => step.stepName === selectedStepName);
+    if (index <= 0) {
+      return undefined;
+    }
+
+    const previousStep = steps[index - 1];
+    return previousStep ? selectedExecution.stepDetails[previousStep.stepName]?.blackboard : undefined;
+  }, [selectedExecution, selectedStepName, steps]);
 
   useEffect(() => {
     if (!selectedExecutionId && summaries.length > 0) {
@@ -42,6 +65,22 @@ export const App = (): JSX.Element => {
     }
   }, [selectedExecutionId, summaries]);
 
+  useEffect(() => {
+    if (!selectedExecutionId) {
+      setSelectedStepName(undefined);
+      return;
+    }
+
+    if (!selectedStepName && steps.length > 0) {
+      setSelectedStepName(steps[0]?.stepName);
+      return;
+    }
+
+    if (selectedStepName && !steps.some((step) => step.stepName === selectedStepName)) {
+      setSelectedStepName(steps[0]?.stepName);
+    }
+  }, [selectedExecutionId, selectedStepName, steps]);
+
   const wsUrl = useMemo(() => resolveWsUrl(), []);
 
   const ws = useWebSocket({
@@ -52,9 +91,7 @@ export const App = (): JSX.Element => {
   });
 
   const handleStepClick = (step: ExecutionStep): void => {
-    // M4-04 상세 패널 연동 준비용 callback hook
-    // eslint-disable-next-line no-console
-    console.debug('[timeline:step-click]', { executionId: selectedExecutionId, stepName: step.stepName });
+    setSelectedStepName(step.stepName);
   };
 
   return (
@@ -70,20 +107,38 @@ export const App = (): JSX.Element => {
           borderRadius: '12px',
           minHeight: '420px',
           backgroundColor: '#fafafa',
-          display: 'flex',
+          display: 'grid',
+          gridTemplateColumns: '280px 1fr 1fr',
         }}
       >
         <ExecutionList
           executions={summaries.filter((summary) => summary.isActive || summary.executionId === selectedExecutionId)}
           selectedExecutionId={selectedExecutionId}
-          onSelectExecution={setSelectedExecutionId}
+          onSelectExecution={(executionId) => {
+            setSelectedExecutionId(executionId);
+            setSelectedStepName(undefined);
+          }}
         />
 
-        <div style={{ flex: 1, padding: '16px' }}>
-          <Timeline executionId={selectedExecutionId} steps={steps} onStepClick={handleStepClick} />
+        <div style={{ padding: '16px', borderRight: '1px solid #e5e7eb' }}>
+          <Timeline
+            executionId={selectedExecutionId}
+            steps={steps}
+            selectedStepName={selectedStepName}
+            onStepClick={handleStepClick}
+          />
           {ws.lastError ? (
             <p style={{ marginTop: '12px', color: '#dc2626', fontSize: '12px' }}>연결 상태: {ws.lastError}</p>
           ) : null}
+        </div>
+
+        <div style={{ padding: '16px' }}>
+          <StepDetail
+            executionId={selectedExecutionId}
+            step={selectedStep}
+            detail={selectedDetail}
+            previousBlackboard={previousBlackboard}
+          />
         </div>
       </section>
     </main>
