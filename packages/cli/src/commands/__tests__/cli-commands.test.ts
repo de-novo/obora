@@ -79,7 +79,7 @@ describe("M3 CLI command IA", () => {
     await runRun(workflowPath, { dryRun: true });
 
     expect(runSpy).not.toHaveBeenCalled();
-    expect(log).toHaveBeenCalledWith('Workflow "temp-workflow" validated successfully.');
+    expect(log).toHaveBeenCalledWith('✅ Workflow "temp-workflow" validated successfully.');
   });
 
   it("policy validate handles valid and invalid YAML", async () => {

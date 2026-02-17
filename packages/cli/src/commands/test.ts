@@ -1,7 +1,7 @@
 import { Command } from "commander";
 
-import { CLIError } from "../utils/cli-error.js";
-import { ExitCode } from "../utils/exit-codes.js";
+import { handleCommandAction } from "../utils/error-handler.js";
+import { formatter } from "../utils/formatter.js";
 
 export function createTestCommand(): Command {
   return new Command("test")
@@ -10,17 +10,20 @@ export function createTestCommand(): Command {
     .option("--fixture <path>", "YAML fixture file")
     .option("--filter <pattern>", "Filter test cases by name")
     .action(async (target, options) => {
-      try {
-        console.log(`[stub] obora test ${target ?? "all"}`, options);
-        process.exitCode = ExitCode.SUCCESS;
-      } catch (err: unknown) {
-        if (err instanceof CLIError) {
-          console.error(err.message);
-          process.exitCode = err.exitCode;
-        } else {
-          console.error("Unexpected error:", err);
-          process.exitCode = ExitCode.CLI_ERROR;
+      await handleCommandAction(async () => {
+        if (options.json) {
+          formatter.json({
+            command: "test",
+            target: target ?? "all",
+            options,
+            stub: true,
+          });
+          return;
         }
-      }
+
+        if (!options.quiet) {
+          formatter.info(`[stub] obora test ${target ?? "all"}`);
+        }
+      });
     });
 }

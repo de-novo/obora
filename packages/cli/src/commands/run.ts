@@ -1,73 +1,87 @@
 import { Command } from "commander";
 
-import { OboraError, OboraRuntime, Workflow } from "@obora/sdk";
+import { OboraRuntime, Workflow } from "@obora/sdk";
 
 import { CLIError } from "../utils/cli-error.js";
 import { ExitCode } from "../utils/exit-codes.js";
+import { handleCommandAction } from "../utils/error-handler.js";
+import { formatter } from "../utils/formatter.js";
+
+function isJsonOutput(options: Record<string, unknown>): boolean {
+  return Boolean(options.json);
+}
+
+function isQuietOutput(options: Record<string, unknown>): boolean {
+  return Boolean(options.quiet);
+}
 
 export async function runRun(workflow: string, options: Record<string, unknown>): Promise<void> {
-  try {
-    const runtime = new OboraRuntime({
-      policyPath: options.policy as string | undefined,
-    });
+  const runtime = new OboraRuntime({
+    policyPath: options.policy as string | undefined,
+  });
 
-    let workflowName = workflow;
-    if (workflow.endsWith(".yaml") || workflow.endsWith(".yml")) {
-      const loaded = await Workflow.fromYaml(workflow);
-      runtime.define(loaded.name, loaded);
-      workflowName = loaded.name;
-    }
+  let workflowName = workflow;
+  if (workflow.endsWith(".yaml") || workflow.endsWith(".yml")) {
+    const loaded = await Workflow.fromYaml(workflow);
+    runtime.define(loaded.name, loaded);
+    workflowName = loaded.name;
+  }
 
-    const variables: Record<string, unknown> = {};
-    if (Array.isArray(options.var)) {
-      for (const v of options.var) {
-        const [key, ...rest] = String(v).split("=");
-        if (!key) {
-          continue;
-        }
-        variables[key] = rest.join("=");
+  const variables: Record<string, unknown> = {};
+  if (Array.isArray(options.var)) {
+    for (const v of options.var) {
+      const [key, ...rest] = String(v).split("=");
+      if (!key) {
+        continue;
       }
+      variables[key] = rest.join("=");
     }
+  }
 
-    let input: unknown;
-    if (options.input) {
-      try {
-        input = JSON.parse(options.input as string);
-      } catch {
-        throw new CLIError("Invalid JSON input", ExitCode.VALIDATION_ERROR);
-      }
+  let input: unknown;
+  if (options.input) {
+    try {
+      input = JSON.parse(options.input as string);
+    } catch {
+      throw new CLIError("Invalid JSON input", ExitCode.VALIDATION_ERROR);
     }
+  }
 
-    if (options.dryRun) {
-      console.log(`Workflow "${workflowName}" validated successfully.`);
-      return;
+  if (options.dryRun) {
+    if (isJsonOutput(options)) {
+      formatter.json({ workflow: workflowName, validated: true });
+    } else if (!isQuietOutput(options)) {
+      formatter.success(`Workflow "${workflowName}" validated successfully.`);
     }
+    return;
+  }
 
-    const controller = new AbortController();
-    if (typeof options.timeout === "number" && Number.isFinite(options.timeout)) {
-      setTimeout(() => controller.abort(), options.timeout);
+  const controller = new AbortController();
+  if (typeof options.timeout === "number" && Number.isFinite(options.timeout)) {
+    setTimeout(() => controller.abort(), options.timeout);
+  }
+
+  runtime.on("step_start", (event) => {
+    const data = event.data as { stepName?: string } | undefined;
+    if (data?.stepName && !isQuietOutput(options) && !isJsonOutput(options)) {
+      formatter.step(data.stepName);
     }
+  });
 
-    runtime.on("step_start", (event) => {
-      const data = event.data as { stepName?: string } | undefined;
-      if (data?.stepName) {
-        console.log(`  → Step: ${data.stepName}`);
-      }
+  const handle = await runtime.run(workflowName, {
+    input,
+    variables,
+    signal: controller.signal,
+  });
+
+  const result = await handle.wait();
+  if (isJsonOutput(options)) {
+    formatter.json({
+      workflowName: result.workflowName,
+      status: "completed",
     });
-
-    const handle = await runtime.run(workflowName, {
-      input,
-      variables,
-      signal: controller.signal,
-    });
-
-    const result = await handle.wait();
-    console.log(`✅ Workflow "${result.workflowName}" completed.`);
-  } catch (err: unknown) {
-    if (err instanceof OboraError) {
-      throw CLIError.fromOboraError(err);
-    }
-    throw err;
+  } else if (!isQuietOutput(options)) {
+    formatter.success(`Workflow "${result.workflowName}" completed.`);
   }
 }
 
@@ -81,17 +95,8 @@ export function createRunCommand(): Command {
     .option("--dry-run", "Validate without executing")
     .option("--timeout <ms>", "Execution timeout in milliseconds", parseInt)
     .action(async (workflow, options) => {
-      try {
+      await handleCommandAction(async () => {
         await runRun(workflow, options);
-        process.exitCode = ExitCode.SUCCESS;
-      } catch (err: unknown) {
-        if (err instanceof CLIError) {
-          console.error(err.message);
-          process.exitCode = err.exitCode;
-        } else {
-          console.error("Unexpected error:", err);
-          process.exitCode = ExitCode.CLI_ERROR;
-        }
-      }
+      });
     });
 }

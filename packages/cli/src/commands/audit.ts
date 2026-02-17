@@ -1,31 +1,9 @@
 import { Command } from "commander";
 
-import { OboraError, OboraRuntime } from "@obora/sdk";
+import { OboraRuntime } from "@obora/sdk";
 
-import { CLIError } from "../utils/cli-error.js";
-import { ExitCode } from "../utils/exit-codes.js";
-
-async function handleStub(fn: () => void | Promise<void>): Promise<void> {
-  try {
-    await fn();
-    process.exitCode = ExitCode.SUCCESS;
-  } catch (err: unknown) {
-    if (err instanceof OboraError) {
-      const cliError = CLIError.fromOboraError(err);
-      console.error(cliError.message);
-      process.exitCode = cliError.exitCode;
-      return;
-    }
-
-    if (err instanceof CLIError) {
-      console.error(err.message);
-      process.exitCode = err.exitCode;
-    } else {
-      console.error("Unexpected error:", err);
-      process.exitCode = ExitCode.CLI_ERROR;
-    }
-  }
-}
+import { handleCommandAction } from "../utils/error-handler.js";
+import { formatter } from "../utils/formatter.js";
 
 export function createAuditCommand(): Command {
   const cmd = new Command("audit").description("Query and manage audit trail");
@@ -37,8 +15,12 @@ export function createAuditCommand(): Command {
     .option("--type <type>", "Filter by event type")
     .option("--limit <n>", "Max results", parseInt)
     .action(async (options) => {
-      await handleStub(async () => {
-        console.log("[stub] obora audit query", options);
+      await handleCommandAction(async () => {
+        if (options.json) {
+          formatter.json({ command: "audit query", options, stub: true });
+        } else if (!options.quiet) {
+          formatter.info(`[stub] obora audit query ${JSON.stringify(options)}`);
+        }
       });
     });
 
@@ -47,8 +29,12 @@ export function createAuditCommand(): Command {
     .description("Stream audit events in real-time")
     .option("--execution <id>", "Filter by execution ID")
     .action(async (options) => {
-      await handleStub(async () => {
-        console.log("[stub] obora audit tail", options);
+      await handleCommandAction(async () => {
+        if (options.json) {
+          formatter.json({ command: "audit tail", options, stub: true });
+        } else if (!options.quiet) {
+          formatter.info(`[stub] obora audit tail ${JSON.stringify(options)}`);
+        }
       });
     });
 
@@ -59,7 +45,7 @@ export function createAuditCommand(): Command {
     .option("--checkpoint <step>", "Checkpoint step name")
     .option("--dry-run", "Simulate without executing")
     .action(async (executionId, options) => {
-      await handleStub(async () => {
+      await handleCommandAction(async () => {
         const runtime = new OboraRuntime();
         const result = await runtime.replay(executionId, {
           mode: options.mode ?? "full",
@@ -68,11 +54,23 @@ export function createAuditCommand(): Command {
           detectNonDeterminism: true,
         });
 
-        console.log(`✅ Replay complete. Success: ${result.success}`);
-        console.log(`   Steps rerun: ${result.stepResults.length}`);
-        console.log(
-          `   Diff: ${result.diffReport.summary.changed} changed, ${result.diffReport.summary.unchanged} unchanged`,
-        );
+        if (options.json) {
+          formatter.json({
+            executionId,
+            success: result.success,
+            stepsRerun: result.stepResults.length,
+            diff: result.diffReport.summary,
+          });
+          return;
+        }
+
+        if (!options.quiet) {
+          formatter.success(`Replay complete. Success: ${result.success}`);
+          formatter.info(`Steps rerun: ${result.stepResults.length}`);
+          formatter.info(
+            `Diff: ${result.diffReport.summary.changed} changed, ${result.diffReport.summary.unchanged} unchanged`,
+          );
+        }
       });
     });
 

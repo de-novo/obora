@@ -10,7 +10,9 @@ import { createInitCommand } from "./commands/init.js";
 export function createCLI(): Command {
   const program = new Command("obora")
     .description("Obora AI Control Runtime CLI")
-    .version("0.1.0");
+    .version("0.1.0")
+    .option("--json", "Output in JSON format")
+    .option("-q, --quiet", "Suppress non-essential output");
 
   program.addCommand(createInitCommand());
   program.addCommand(createRunCommand());

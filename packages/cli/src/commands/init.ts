@@ -3,10 +3,10 @@ import { join } from "node:path";
 
 import { Command } from "commander";
 
-import { CLIError } from "../utils/cli-error.js";
-import { ExitCode } from "../utils/exit-codes.js";
+import { handleCommandAction } from "../utils/error-handler.js";
+import { formatter } from "../utils/formatter.js";
 
-export async function runInit(_options: Record<string, unknown>): Promise<void> {
+export async function runInit(options: Record<string, unknown>): Promise<void> {
   const dir = process.cwd();
 
   await mkdir(join(dir, "workflows"), { recursive: true });
@@ -23,7 +23,11 @@ export async function runInit(_options: Record<string, unknown>): Promise<void> 
     `version: "1.0"\nworkflows: ./workflows\npolicies: ./policies\ntests: ./tests\n`,
   );
 
-  console.log("✅ Obora project initialized.");
+  if (options.json) {
+    formatter.json({ initialized: true, path: dir });
+  } else if (!options.quiet) {
+    formatter.success("Obora project initialized.");
+  }
 }
 
 export function createInitCommand(): Command {
@@ -32,17 +36,8 @@ export function createInitCommand(): Command {
     .option("--template <name>", "Project template", "default")
     .option("-y, --yes", "Skip prompts, use defaults")
     .action(async (options) => {
-      try {
+      await handleCommandAction(async () => {
         await runInit(options);
-        process.exitCode = ExitCode.SUCCESS;
-      } catch (err: unknown) {
-        if (err instanceof CLIError) {
-          console.error(err.message);
-          process.exitCode = err.exitCode;
-        } else {
-          console.error("Unexpected error:", err);
-          process.exitCode = ExitCode.CLI_ERROR;
-        }
-      }
+      });
     });
 }

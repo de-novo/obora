@@ -1,9 +1,11 @@
 import { Command } from "commander";
 
-import { OboraError, Policy, Workflow } from "@obora/sdk";
+import { Policy, Workflow } from "@obora/sdk";
 
 import { CLIError } from "../utils/cli-error.js";
 import { ExitCode } from "../utils/exit-codes.js";
+import { handleCommandAction } from "../utils/error-handler.js";
+import { formatter } from "../utils/formatter.js";
 
 export function createPolicyCommand(): Command {
   const cmd = new Command("policy").description("Policy management");
@@ -11,38 +13,30 @@ export function createPolicyCommand(): Command {
   cmd
     .command("validate <path>")
     .description("Validate policy/workflow YAML")
-    .action(async (path) => {
-      try {
+    .action(async (path, options) => {
+      await handleCommandAction(async () => {
         if (!path.endsWith(".yaml") && !path.endsWith(".yml")) {
           throw new CLIError(`Unsupported file format: ${path}`, ExitCode.VALIDATION_ERROR);
         }
 
+        let kind: "policy" | "workflow" = "policy";
         try {
           await Policy.fromYaml(path);
-          console.log(`✅ Policy "${path}" is valid.`);
         } catch {
           await Workflow.fromYaml(path);
-          console.log(`✅ Workflow "${path}" is valid.`);
+          kind = "workflow";
         }
 
-        process.exitCode = ExitCode.SUCCESS;
-      } catch (err: unknown) {
-        if (err instanceof OboraError) {
-          const cliError = CLIError.fromOboraError(err);
-          console.error(cliError.message);
-          process.exitCode = cliError.exitCode;
-          return;
+        if (options.json) {
+          formatter.json({ path, valid: true, kind });
+        } else if (!options.quiet) {
+          if (kind === "policy") {
+            formatter.success(`Policy "${path}" is valid.`);
+          } else {
+            formatter.success(`Workflow "${path}" is valid.`);
+          }
         }
-
-        if (err instanceof CLIError) {
-          console.error(err.message);
-          process.exitCode = err.exitCode;
-          return;
-        }
-
-        console.error("Unexpected error:", err);
-        process.exitCode = ExitCode.CLI_ERROR;
-      }
+      });
     });
 
   return cmd;
