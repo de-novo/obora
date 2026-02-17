@@ -4,8 +4,9 @@ Run Obora in under 5 minutes.
 
 ## Prerequisites
 
-- Node.js 20+
+- Node.js 18+
 - npm or pnpm
+- For real agent execution: at least one model provider API key in environment
 
 ## Quick Start
 

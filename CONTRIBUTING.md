@@ -23,7 +23,7 @@ Example branch names:
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 18+
 - pnpm 9+
 
 ### Install

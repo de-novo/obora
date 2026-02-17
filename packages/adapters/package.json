@@ -3,6 +3,25 @@
   "version": "0.1.0",
   "description": "External integration adapters",
   "type": "module",
+  "keywords": [
+    "ai",
+    "adapters",
+    "integration",
+    "llm",
+    "tools"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/obora-labs/obora-kit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/obora-labs/obora-kit/issues"
+  },
+  "homepage": "https://github.com/obora-labs/obora-kit#readme",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
