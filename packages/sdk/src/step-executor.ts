@@ -266,10 +266,26 @@ export class StepExecutor {
     participantCount: number,
     perRequestTimeoutMs: number,
   ): number {
-    const config = step.config;
-    const raw = config && typeof config === "object" ? (config as Record<string, unknown>).consensusTimeoutMs : undefined;
-    if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) {
-      return raw;
+    const config = (step.config ?? {}) as Record<string, unknown>;
+
+    const topLevelTimeoutMs = config.consensusTimeoutMs;
+    if (typeof topLevelTimeoutMs === "number" && Number.isFinite(topLevelTimeoutMs) && topLevelTimeoutMs > 0) {
+      return topLevelTimeoutMs;
+    }
+
+    const consensusConfig =
+      config.consensus && typeof config.consensus === "object"
+        ? (config.consensus as Record<string, unknown>)
+        : undefined;
+
+    const nestedTimeoutMs = consensusConfig?.timeoutMs;
+    if (typeof nestedTimeoutMs === "number" && Number.isFinite(nestedTimeoutMs) && nestedTimeoutMs > 0) {
+      return nestedTimeoutMs;
+    }
+
+    const nestedTimeoutSec = consensusConfig?.timeout;
+    if (typeof nestedTimeoutSec === "number" && Number.isFinite(nestedTimeoutSec) && nestedTimeoutSec > 0) {
+      return nestedTimeoutSec * 1_000;
     }
 
     return perRequestTimeoutMs * participantCount * 2;

@@ -38,7 +38,7 @@ steps:
       consensus:
         rule: majority
         min_votes: 3
-        timeout: 60
+        timeout: 600
     input:
       task: |
         시스템 설계를 리뷰하세요.
@@ -83,7 +83,7 @@ steps:
       consensus:
         rule: majority
         min_votes: 2
-        timeout: 60
+        timeout: 600
     input:
       task: |
         구현된 코드를 리뷰하세요.
