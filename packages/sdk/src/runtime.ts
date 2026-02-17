@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { Policy, type PolicyDefinition } from "./policy.js";
 import type {
+  NonDeterminismWarning,
   ReExecutionDiffReport,
   ReExecutionOptions,
   ReExecutionPlan,
@@ -92,6 +93,13 @@ export const OboraErrorCode = {
   ADAPTER_LLM_UNAVAILABLE: "ADAPTER_7001",
   ADAPTER_AUTH_FAILED: "ADAPTER_7002",
   ADAPTER_TOOL_NOT_FOUND: "ADAPTER_7003",
+  SDK_WORKFLOW_NOT_FOUND: "SDK_8001",
+  SDK_EXECUTION_CANCELLED: "SDK_8002",
+  SDK_NOT_IMPLEMENTED: "SDK_8003",
+  SDK_INVALID_POLICY: "SDK_8004",
+  SDK_INVALID_WORKFLOW: "SDK_8005",
+  SDK_UNKNOWN_ERROR: "SDK_8006",
+  SDK_EXECUTION_NOT_FOUND: "SDK_8007",
 } as const;
 
 export interface RuntimeExecution {
@@ -245,29 +253,33 @@ export class OboraRuntime {
     });
 
     const allSteps = execution.stepOrder ?? [];
-    if (
-      mode === "from_checkpoint" &&
-      options?.checkpointStep &&
-      !allSteps.includes(options.checkpointStep)
-    ) {
+    if (mode === "from_checkpoint" && options?.startFromStep && !allSteps.includes(options.startFromStep)) {
       throw new OboraError(
-        `Checkpoint step not found: ${options.checkpointStep}`,
+        `Checkpoint step not found: ${options.startFromStep}`,
         OboraErrorCode.AUDIT_REPLAY_NOT_FOUND,
       );
     }
 
-    const checkpointIdx = options?.checkpointStep ? allSteps.indexOf(options.checkpointStep) : -1;
+    const checkpointIdx = options?.startFromStep ? allSteps.indexOf(options.startFromStep) : -1;
     const stepsToSkip = checkpointIdx > 0 ? allSteps.slice(0, checkpointIdx) : [];
     const stepsToRerun = checkpointIdx > 0 ? allSteps.slice(checkpointIdx) : [...allSteps];
 
-    const nonDeterminismWarnings: string[] = [];
+    const nonDeterminismWarnings: NonDeterminismWarning[] = [];
     if (options?.detectNonDeterminism) {
-      nonDeterminismWarnings.push("Non-determinism detection is limited in simulation mode");
+      const warning: NonDeterminismWarning = {
+        type: "state_external",
+        description: "Non-determinism detection is limited in simulation mode",
+        severity: "info",
+      };
+      nonDeterminismWarnings.push(warning);
       for (const stepName of stepsToRerun) {
         if (!(stepName in execution.outputs)) {
-          nonDeterminismWarnings.push(
-            `Potential non-determinism: no original output comparison for step '${stepName}'`,
-          );
+          nonDeterminismWarnings.push({
+            type: "state_external",
+            description: `Potential non-determinism: no original output for step '${stepName}'`,
+            stepName,
+            severity: "warning",
+          });
         }
       }
     }
@@ -276,10 +288,11 @@ export class OboraRuntime {
       executionId,
       originalWorkflow: execution.workflowName,
       mode,
+      startFromStep: options?.startFromStep,
       stepsToRerun,
       stepsToSkip,
-      checkpointStep: options?.checkpointStep,
-      nonDeterminismWarnings: nonDeterminismWarnings.length > 0 ? nonDeterminismWarnings : undefined,
+      nonDeterminismWarnings,
+      createdAt: new Date(),
     };
 
     const stepResults: StepReExecutionResult[] = [];
@@ -347,7 +360,7 @@ export class OboraRuntime {
       };
       const err = new OboraError(
         data.message ?? "Unknown error",
-        data.code ?? "SDK_UNKNOWN_ERROR",
+        data.code ?? OboraErrorCode.SDK_UNKNOWN_ERROR,
         event.executionId,
         data.stepName,
       );
@@ -359,7 +372,7 @@ export class OboraRuntime {
     await this.policyLoadPromise;
 
     if (!this.workflows.has(name)) {
-      throw new OboraError(`Workflow is not defined: ${name}`, "SDK_WORKFLOW_NOT_FOUND");
+      throw new OboraError(`Workflow is not defined: ${name}`, OboraErrorCode.SDK_WORKFLOW_NOT_FOUND);
     }
 
     const { input, variables, signal } = options;
@@ -424,7 +437,7 @@ export class OboraRuntime {
 
         const abortError = new OboraError(
           execution.error,
-          "SDK_EXECUTION_CANCELLED",
+          OboraErrorCode.SDK_EXECUTION_CANCELLED,
           executionId,
           undefined,
           reason,

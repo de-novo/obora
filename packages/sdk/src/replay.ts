@@ -1,7 +1,7 @@
 export interface ReExecutionOptions {
   executionId: string;
   mode: "full" | "from_checkpoint";
-  checkpointStep?: string;
+  startFromStep?: string;
   detectNonDeterminism?: boolean;
   dryRun?: boolean;
   onStepComplete?: (stepName: string, result: StepReExecutionResult) => void | Promise<void>;
@@ -13,6 +13,13 @@ export interface StepReExecutionResult {
   output?: unknown;
   matchesOriginal?: boolean;
   diff?: string;
+}
+
+export interface NonDeterminismWarning {
+  type: "model_change" | "time_drift" | "policy_change" | "state_external" | "tool_output";
+  description: string;
+  stepName?: string;
+  severity: "info" | "warning" | "critical";
 }
 
 export interface ReExecutionResult {
@@ -27,13 +34,14 @@ export interface ReExecutionResult {
 
 export interface ReExecutionPlan {
   executionId: string;
-  originalWorkflow?: string;
+  originalWorkflow: string;
   mode: "full" | "from_checkpoint";
+  startFromStep?: string;
+  restoredState?: Record<string, unknown>;
   stepsToRerun: string[];
   stepsToSkip: string[];
-  checkpointStep?: string;
-  estimatedDuration?: number;
-  nonDeterminismWarnings?: string[];
+  nonDeterminismWarnings: NonDeterminismWarning[];
+  createdAt: Date;
 }
 
 export interface ReExecutionDiffReport {

@@ -27,4 +27,5 @@ export type {
   ReExecutionDiffReport,
   StepReExecutionResult,
   StepDiff,
+  NonDeterminismWarning,
 } from "./replay.js";

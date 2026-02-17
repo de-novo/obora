@@ -79,7 +79,7 @@ describe("OboraRuntime facade", () => {
     expect(handle.status).toBe("aborted");
     await expect(handle.wait()).rejects.toMatchObject({
       name: "OboraError",
-      code: "SDK_EXECUTION_CANCELLED",
+      code: "SDK_8002",
       message: "user abort",
     });
   });
@@ -95,14 +95,14 @@ describe("OboraRuntime facade", () => {
     await handle.cancel("test abort");
     await expect(handle.wait()).rejects.toMatchObject({
       name: "OboraError",
-      code: "SDK_EXECUTION_CANCELLED",
+      code: "SDK_8002",
       message: "test abort",
     });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(errors).toHaveLength(1);
     expect(errors[0]).toBeInstanceOf(OboraError);
-    expect(errors[0].code).toBe("SDK_EXECUTION_CANCELLED");
+    expect(errors[0].code).toBe("SDK_8002");
   });
 
   it("throws OboraError for unknown workflows", async () => {
@@ -111,7 +111,7 @@ describe("OboraRuntime facade", () => {
     await expect(runtime.run("unknown")).rejects.toThrow("Workflow is not defined: unknown");
     await expect(runtime.run("unknown")).rejects.toMatchObject({
       name: "OboraError",
-      code: "SDK_WORKFLOW_NOT_FOUND",
+      code: "SDK_8001",
     });
   });
 
@@ -126,7 +126,7 @@ describe("OboraRuntime facade", () => {
     expect(handle.status).toBe("aborted");
     await expect(handle.wait()).rejects.toMatchObject({
       name: "OboraError",
-      code: "SDK_EXECUTION_CANCELLED",
+      code: "SDK_8002",
       message: "signal abort",
     });
   });

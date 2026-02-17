@@ -38,14 +38,15 @@ describe("M3-05 Replay/Re-execution SDK API", () => {
 
     const replay = await runtime.replay(execution.id, {
       mode: "from_checkpoint",
-      checkpointStep: "b",
+      startFromStep: "b",
     });
 
     expect(replay.plan.mode).toBe("from_checkpoint");
     expect(replay.plan.originalWorkflow).toBe("cp");
     expect(replay.plan.stepsToSkip).toEqual(["a"]);
     expect(replay.plan.stepsToRerun).toEqual(["b", "c"]);
-    expect(replay.plan.checkpointStep).toBe("b");
+    expect(replay.plan.startFromStep).toBe("b");
+    expect(replay.plan.createdAt).toBeInstanceOf(Date);
   });
 
   it("throws AUDIT_REPLAY_NOT_FOUND when checkpoint step is not found", async () => {
@@ -61,7 +62,7 @@ describe("M3-05 Replay/Re-execution SDK API", () => {
     await expect(
       runtime.replay(execution.id, {
         mode: "from_checkpoint",
-        checkpointStep: "z",
+        startFromStep: "z",
       }),
     ).rejects.toMatchObject({
       name: "OboraError",
@@ -82,15 +83,26 @@ describe("M3-05 Replay/Re-execution SDK API", () => {
 
     const replay = await runtime.replay(execution.id, { detectNonDeterminism: true });
 
-    expect(replay.plan.nonDeterminismWarnings).toBeDefined();
-    expect(replay.plan.nonDeterminismWarnings).toContain(
-      "Non-determinism detection is limited in simulation mode",
-    );
-    expect(replay.plan.nonDeterminismWarnings).toContain(
-      "Potential non-determinism: no original output comparison for step 's1'",
-    );
-    expect(replay.plan.nonDeterminismWarnings).toContain(
-      "Potential non-determinism: no original output comparison for step 's2'",
+    expect(replay.plan.nonDeterminismWarnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "state_external",
+          description: "Non-determinism detection is limited in simulation mode",
+          severity: "info",
+        }),
+        expect.objectContaining({
+          type: "state_external",
+          description: "Potential non-determinism: no original output for step 's1'",
+          stepName: "s1",
+          severity: "warning",
+        }),
+        expect.objectContaining({
+          type: "state_external",
+          description: "Potential non-determinism: no original output for step 's2'",
+          stepName: "s2",
+          severity: "warning",
+        }),
+      ]),
     );
   });
 

@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 
 import { parse as parseYaml } from "yaml";
 
-import { OboraError } from "./runtime.js";
+import { OboraError, OboraErrorCode } from "./runtime.js";
 
 export interface WorkflowStep {
   name: string;
@@ -30,26 +30,26 @@ export class Workflow {
 
   static create(input: unknown): WorkflowDef {
     if (!input || typeof input !== "object") {
-      throw new OboraError("Invalid workflow definition", "SDK_INVALID_WORKFLOW");
+      throw new OboraError("Invalid workflow definition", OboraErrorCode.SDK_INVALID_WORKFLOW);
     }
 
     const def = input as Record<string, unknown>;
     if (!def.name || typeof def.name !== "string") {
-      throw new OboraError("Workflow must have a name", "SDK_INVALID_WORKFLOW");
+      throw new OboraError("Workflow must have a name", OboraErrorCode.SDK_INVALID_WORKFLOW);
     }
 
     if (!Array.isArray(def.steps)) {
-      throw new OboraError("Workflow must have steps array", "SDK_INVALID_WORKFLOW");
+      throw new OboraError("Workflow must have steps array", OboraErrorCode.SDK_INVALID_WORKFLOW);
     }
 
     const steps = def.steps as unknown[];
     for (const step of steps) {
       if (!step || typeof step !== "object") {
-        throw new OboraError("Each workflow step must be an object", "SDK_INVALID_WORKFLOW");
+        throw new OboraError("Each workflow step must be an object", OboraErrorCode.SDK_INVALID_WORKFLOW);
       }
       const s = step as Record<string, unknown>;
       if (!s.name || typeof s.name !== "string") {
-        throw new OboraError("Each workflow step must have a string name", "SDK_INVALID_WORKFLOW");
+        throw new OboraError("Each workflow step must have a string name", OboraErrorCode.SDK_INVALID_WORKFLOW);
       }
     }
 

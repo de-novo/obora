@@ -25,7 +25,7 @@ describe("builder API", () => {
     try {
       Policy.create(null);
     } catch (error) {
-      expect((error as OboraError).code).toBe("SDK_INVALID_POLICY");
+      expect((error as OboraError).code).toBe("SDK_8004");
     }
 
     expect(() => Policy.create({ rules: "not-array" })).toThrowError(OboraError);
@@ -45,14 +45,14 @@ describe("builder API", () => {
     try {
       Workflow.create({ steps: [] });
     } catch (error) {
-      expect((error as OboraError).code).toBe("SDK_INVALID_WORKFLOW");
+      expect((error as OboraError).code).toBe("SDK_8005");
       expect((error as OboraError).message).toBe("Workflow must have a name");
     }
 
     try {
       Workflow.create({ name: "demo" });
     } catch (error) {
-      expect((error as OboraError).code).toBe("SDK_INVALID_WORKFLOW");
+      expect((error as OboraError).code).toBe("SDK_8005");
       expect((error as OboraError).message).toBe("Workflow must have steps array");
     }
 
@@ -141,7 +141,7 @@ describe("builder API", () => {
 
     await expect(new OboraRuntime().loadWorkflow(workflowPath)).rejects.toMatchObject({
       name: "OboraError",
-      code: "SDK_INVALID_WORKFLOW",
+      code: "SDK_8005",
     });
   });
 });
