@@ -29,8 +29,8 @@ export function createTestCommand(): Command {
     .option("--fixture <path>", "YAML fixture file")
     .option("--filter <pattern>", "Filter test cases by name")
     .action(async function (this: Command, target, options) {
+      const globalOpts = getGlobalOpts(this);
       await handleCommandAction(async () => {
-        const globalOpts = getGlobalOpts(this);
         const fixturePath = options.fixture ?? target ?? "./tests";
 
         const fixtureStat = await stat(fixturePath).catch(() => null);
@@ -38,10 +38,13 @@ export function createTestCommand(): Command {
         let fixtures;
         if (!fixtureStat) {
           if (fixturePath === "./tests") {
-            throw new CLIError("No test target provided and ./tests was not found.", ExitCode.VALIDATION_ERROR);
+            throw new CLIError(
+              "No test target provided and ./tests was not found. Use `obora test <path>` or `--fixture <path>`.",
+              ExitCode.VALIDATION_ERROR,
+            );
           }
 
-          throw new CLIError(`Test target not found: ${fixturePath}`, ExitCode.VALIDATION_ERROR);
+          throw new CLIError(`Test target not found: ${fixturePath}. Check the path and try again.`, ExitCode.VALIDATION_ERROR);
         }
 
         if (fixtureStat.isDirectory()) {
@@ -73,9 +76,19 @@ export function createTestCommand(): Command {
           return;
         }
 
-        const results = await Promise.all(
-          selected.map(async (fixture) => runWorkflowTest(fixtureToTestCase(fixture))),
-        );
+        const results = [];
+        for (const fixture of selected) {
+          if (globalOpts.verbose && !globalOpts.quiet && !globalOpts.json) {
+            formatter.step(`Running test fixture: ${fixture.name}`);
+          }
+
+          const result = await runWorkflowTest(fixtureToTestCase(fixture));
+          results.push(result);
+
+          if (globalOpts.verbose && !globalOpts.quiet && !globalOpts.json) {
+            formatter.step(`Finished: ${fixture.name} (${result.duration}ms)`);
+          }
+        }
 
         const failed = results.filter((result) => !result.passed);
 
@@ -107,8 +120,8 @@ export function createTestCommand(): Command {
         }
 
         if (failed.length > 0) {
-          throw new CLIError("Some tests failed.", ExitCode.EXECUTION_FAILED);
+          throw new CLIError("Some tests failed. Review failure messages above and rerun with --verbose for details.", ExitCode.EXECUTION_FAILED);
         }
-      });
+      }, { verbose: Boolean(globalOpts.verbose) });
     });
 }

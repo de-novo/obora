@@ -16,15 +16,15 @@ export function createAuditCommand(): Command {
     .option("--type <type>", "Filter by event type")
     .option("--limit <n>", "Max results", parseInt)
     .action(async function (this: Command, options) {
+      const globalOpts = getGlobalOpts(this);
       await handleCommandAction(async () => {
-        const globalOpts = getGlobalOpts(this);
         const message = "audit query is not yet connected to an audit store.";
         if (globalOpts.json) {
           formatter.json({ command: "audit query", options, connected: false, message });
         } else if (!globalOpts.quiet) {
           formatter.warn(message);
         }
-      });
+      }, { verbose: Boolean(globalOpts.verbose) });
     });
 
   cmd
@@ -32,15 +32,15 @@ export function createAuditCommand(): Command {
     .description("Stream audit events in real-time")
     .option("--execution <id>", "Filter by execution ID")
     .action(async function (this: Command, options) {
+      const globalOpts = getGlobalOpts(this);
       await handleCommandAction(async () => {
-        const globalOpts = getGlobalOpts(this);
         const message = "audit tail is not yet connected to an audit store.";
         if (globalOpts.json) {
           formatter.json({ command: "audit tail", options, connected: false, message });
         } else if (!globalOpts.quiet) {
           formatter.warn(message);
         }
-      });
+      }, { verbose: Boolean(globalOpts.verbose) });
     });
 
   cmd
@@ -50,6 +50,7 @@ export function createAuditCommand(): Command {
     .option("--checkpoint <step>", "Checkpoint step name")
     .option("--dry-run", "Simulate without executing")
     .action(async function (this: Command, executionId, options) {
+      const globalOpts = getGlobalOpts(this);
       await handleCommandAction(async () => {
         const runtime = new OboraRuntime();
         const result = await runtime.replay(executionId, {
@@ -59,7 +60,6 @@ export function createAuditCommand(): Command {
           detectNonDeterminism: true,
         });
 
-        const globalOpts = getGlobalOpts(this);
         if (globalOpts.json) {
           formatter.json({
             executionId,
@@ -77,7 +77,7 @@ export function createAuditCommand(): Command {
             `Diff: ${result.diffReport.summary.changed} changed, ${result.diffReport.summary.unchanged} unchanged`,
           );
         }
-      });
+      }, { verbose: Boolean(globalOpts.verbose) });
     });
 
   return cmd;

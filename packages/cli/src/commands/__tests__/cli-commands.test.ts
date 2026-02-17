@@ -91,7 +91,8 @@ describe("M3 CLI command IA", () => {
     await runRun(workflowPath, { dryRun: true });
 
     expect(runSpy).not.toHaveBeenCalled();
-    expect(log).toHaveBeenCalledWith('✅ Workflow "temp-workflow" validated successfully.');
+    const output = log.mock.calls.map((args) => args.join(" ")).join("\n");
+    expect(output).toContain('✅ Workflow "temp-workflow" validated successfully.');
   });
 
   it("policy validate handles valid and invalid YAML", async () => {
@@ -108,7 +109,8 @@ describe("M3 CLI command IA", () => {
 
     await command.parseAsync(["validate", validPolicyPath], { from: "user" });
     expect(process.exitCode).toBe(ExitCode.SUCCESS);
-    expect(log).toHaveBeenCalledWith(`✅ Policy "${validPolicyPath}" is valid.`);
+    const validOutput = log.mock.calls.map((args) => args.join(" ")).join("\n");
+    expect(validOutput).toContain(`✅ Policy "${validPolicyPath}" is valid.`);
 
     process.exitCode = undefined;
     await command.parseAsync(["validate", invalidPath], { from: "user" });
@@ -130,6 +132,7 @@ describe("M3 CLI command IA", () => {
 
     const config = await readFile(join(dir, "obora.config.yaml"), "utf-8");
     expect(config).toContain("workflows: ./workflows");
-    expect(log).toHaveBeenCalledWith("✅ Obora project initialized.");
+    const initOutput = log.mock.calls.map((args) => args.join(" ")).join("\n");
+    expect(initOutput).toContain("✅ Obora project initialized.");
   });
 });

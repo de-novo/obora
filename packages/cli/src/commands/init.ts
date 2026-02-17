@@ -37,9 +37,9 @@ export function createInitCommand(): Command {
     .option("--template <name>", "Project template", "default")
     .option("-y, --yes", "Skip prompts, use defaults")
     .action(async function (this: Command, options) {
+      const mergedOptions = { ...getGlobalOpts(this), ...options };
       await handleCommandAction(async () => {
-        const mergedOptions = { ...getGlobalOpts(this), ...options };
         await runInit(mergedOptions);
-      });
+      }, { verbose: Boolean(mergedOptions.verbose) });
     });
 }

@@ -12,7 +12,9 @@ export function createCLI(): Command {
     .description("Obora AI Control Runtime CLI")
     .version("0.1.0")
     .option("--json", "Output in JSON format")
-    .option("-q, --quiet", "Suppress non-essential output");
+    .option("-q, --quiet", "Suppress non-essential output")
+    .option("--verbose", "Show detailed progress and diagnostics")
+    .option("--no-color", "Disable ANSI colors in output");
 
   program.addCommand(createInitCommand());
   program.addCommand(createRunCommand());

@@ -35,8 +35,8 @@ export function createPluginCommand(): Command {
   const cmd = new Command("plugin").description("Manage plugins");
 
   cmd.command("list").description("List installed plugins").action(async function (this: Command) {
+    const globalOpts = getGlobalOpts(this);
     await handleCommandAction(async () => {
-      const globalOpts = getGlobalOpts(this);
       const { plugins } = await scanPlugins();
 
       const rows = plugins.map((plugin) => ({
@@ -61,13 +61,13 @@ export function createPluginCommand(): Command {
       if (!globalOpts.quiet) {
         formatter.table(rows);
       }
-    });
+    }, { verbose: Boolean(globalOpts.verbose) });
   });
 
   cmd.command("install <name>").description("Install a plugin").action(async function (this: Command, name: string) {
+    const globalOpts = getGlobalOpts(this);
     await handleCommandAction(async () => {
       await runNpmCommand(["install", name]);
-      const globalOpts = getGlobalOpts(this);
       const { plugins } = await scanPlugins();
       const installed = plugins.find((plugin) => plugin.packageName === name || plugin.metadata.name === name);
 
@@ -80,13 +80,13 @@ export function createPluginCommand(): Command {
       } else if (!globalOpts.quiet) {
         formatter.success(`Installed plugin: ${installed.metadata.name}`);
       }
-    });
+    }, { verbose: Boolean(globalOpts.verbose) });
   });
 
   cmd.command("remove <name>").description("Remove a plugin").action(async function (this: Command, name: string) {
+    const globalOpts = getGlobalOpts(this);
     await handleCommandAction(async () => {
       await runNpmCommand(["uninstall", name]);
-      const globalOpts = getGlobalOpts(this);
       const { plugins } = await scanPlugins();
       const remaining = plugins.find((plugin) => plugin.packageName === name || plugin.metadata.name === name);
 
@@ -99,12 +99,12 @@ export function createPluginCommand(): Command {
       } else if (!globalOpts.quiet) {
         formatter.success(`Removed plugin: ${name}`);
       }
-    });
+    }, { verbose: Boolean(globalOpts.verbose) });
   });
 
   cmd.command("inspect <name>").description("Inspect plugin details").action(async function (this: Command, name: string) {
+    const globalOpts = getGlobalOpts(this);
     await handleCommandAction(async () => {
-      const globalOpts = getGlobalOpts(this);
       const { manager, plugins } = await scanPlugins();
 
       const descriptor = plugins.find((plugin) => plugin.packageName === name || plugin.metadata.name === name);
@@ -126,7 +126,7 @@ export function createPluginCommand(): Command {
       } else if (!globalOpts.quiet) {
         formatter.json(detail);
       }
-    });
+    }, { verbose: Boolean(globalOpts.verbose) });
   });
 
   return cmd;

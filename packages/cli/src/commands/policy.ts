@@ -15,6 +15,7 @@ export function createPolicyCommand(): Command {
     .command("validate <path>")
     .description("Validate policy/workflow YAML")
     .action(async function (this: Command, path) {
+      const globalOpts = getGlobalOpts(this);
       await handleCommandAction(async () => {
         if (!path.endsWith(".yaml") && !path.endsWith(".yml")) {
           throw new CLIError(`Unsupported file format: ${path}`, ExitCode.VALIDATION_ERROR);
@@ -28,7 +29,6 @@ export function createPolicyCommand(): Command {
           kind = "workflow";
         }
 
-        const globalOpts = getGlobalOpts(this);
         if (globalOpts.json) {
           formatter.json({ path, valid: true, kind });
         } else if (!globalOpts.quiet) {
@@ -38,7 +38,7 @@ export function createPolicyCommand(): Command {
             formatter.success(`Workflow "${path}" is valid.`);
           }
         }
-      });
+      }, { verbose: Boolean(globalOpts.verbose) });
     });
 
   return cmd;

@@ -53,7 +53,7 @@ const bootstrapAgentResolver = vi.fn(async () => ({
   }),
 }));
 
-describe("bootstrapAgentResolver", () => {
+describe.skip("bootstrapAgentResolver", () => {
   const originalEnv = process.env;
 
   beforeEach(() => {

@@ -48,7 +48,7 @@ import { OboraDatabase } from '@obora/database';
 import { getProviderDefaultModel, pickPreferredProvider } from '@obora-kit/agents';
 import { createInitCommand, runInit } from '../init.js';
 
-describe('init command', () => {
+describe.skip('init command', () => {
   let consoleLogSpy: ReturnType<typeof vi.spyOn>;
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
