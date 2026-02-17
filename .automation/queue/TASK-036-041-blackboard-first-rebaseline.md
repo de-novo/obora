@@ -612,3 +612,11 @@ Board 단계 태스크를 blackboard 우선 구현 순서로 재배치하고, �
   1. blackboard-first 대상 브랜치/커밋으로 checkout 또는 `packages/blackboard` 복구 여부 확인
   2. 큐 문서(`queue/`, `.automation/queue/`)를 현재 모노레포 구조(adapters/runtime/sdk/cli/dashboard) 기준으로 재기준화
 - 다음 실행 조건: `@obora-kit/blackboard` 패키지가 워크스페이스에 복구되거나, blackboard-first 점검 기준이 신규 패키지 구조로 갱신될 것
+
+## 야간 자동 점검 로그 (2026-02-18 06:56 KST)
+- 기준 브랜치: `origin/main` (`40e3c43`)
+- 작업 브랜치(HEAD 유지): `main` (`ec38344`)
+- 점검 단위: blackboard-first 재기준화 라인 최소검증 1건 (runtime consensus gate)
+- 실행: `pnpm --filter @obora/runtime test -- src/consensus/__tests__/ConsensusGate.test.ts`
+- 결과: ✅ `1 file / 3 tests passed` (248ms)
+- 판정: 블로커 없음, 다음 실행은 runtime blackboard integration 최소검증 1건(`pnpm --filter @obora/runtime test -- src/cell/__tests__/__tests__/integration/blackboard.test.ts`) 점검 권장
