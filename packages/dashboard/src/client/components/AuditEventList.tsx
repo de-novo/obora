@@ -10,6 +10,7 @@ interface AuditEventListProps {
   total: number;
   onPrevPage: () => void;
   onNextPage: () => void;
+  onReplayExecution?: (executionId: string) => void;
 }
 
 const severityColor: Record<NonNullable<AuditEvent['severity']>, string> = {
@@ -26,6 +27,7 @@ export const AuditEventList = ({
   total,
   onPrevPage,
   onNextPage,
+  onReplayExecution,
 }: AuditEventListProps): JSX.Element => {
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
 
@@ -42,12 +44,13 @@ export const AuditEventList = ({
             <th style={{ textAlign: 'left', padding: '10px' }}>step</th>
             <th style={{ textAlign: 'left', padding: '10px' }}>severity</th>
             <th style={{ textAlign: 'left', padding: '10px' }}>요약</th>
+            <th style={{ textAlign: 'left', padding: '10px' }}>재생</th>
           </tr>
         </thead>
         <tbody>
           {loading ? (
             <tr>
-              <td colSpan={5} style={{ padding: '16px', textAlign: 'center' }}>
+              <td colSpan={6} style={{ padding: '16px', textAlign: 'center' }}>
                 로딩 중...
               </td>
             </tr>
@@ -55,7 +58,7 @@ export const AuditEventList = ({
 
           {!loading && events.length === 0 ? (
             <tr>
-              <td colSpan={5} style={{ padding: '16px', textAlign: 'center', color: '#6b7280' }}>
+              <td colSpan={6} style={{ padding: '16px', textAlign: 'center', color: '#6b7280' }}>
                 조회된 감사 이벤트가 없습니다.
               </td>
             </tr>
@@ -78,10 +81,21 @@ export const AuditEventList = ({
                         <span style={{ color: severityColor[severity], fontWeight: 600 }}>{severity}</span>
                       </td>
                       <td style={{ padding: '10px' }}>{event.summary ?? event.type}</td>
+                      <td style={{ padding: '10px' }}>
+                        <button
+                          type="button"
+                          onClick={(evt) => {
+                            evt.stopPropagation();
+                            onReplayExecution?.(event.executionId);
+                          }}
+                        >
+                          Replay
+                        </button>
+                      </td>
                     </tr>
                     {isExpanded ? (
                       <tr>
-                        <td colSpan={5} style={{ padding: '12px', background: '#f8fafc' }}>
+                        <td colSpan={6} style={{ padding: '12px', background: '#f8fafc' }}>
                           <pre style={{ margin: 0, fontSize: '12px', whiteSpace: 'pre-wrap' }}>
                             {JSON.stringify(event.payload ?? {}, null, 2)}
                           </pre>

@@ -6,7 +6,11 @@ import { AuditFilter } from '../components/AuditFilter';
 
 const PAGE_SIZE = 20;
 
-export const AuditViewer = (): JSX.Element => {
+interface AuditViewerProps {
+  onReplayExecution?: (executionId: string) => void;
+}
+
+export const AuditViewer = ({ onReplayExecution }: AuditViewerProps): JSX.Element => {
   const [filters, setFilters] = useState<AuditQueryParams>({});
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [offset, setOffset] = useState(0);
@@ -62,6 +66,7 @@ export const AuditViewer = (): JSX.Element => {
         total={total}
         onPrevPage={() => setOffset((current) => Math.max(0, current - PAGE_SIZE))}
         onNextPage={() => setOffset((current) => current + PAGE_SIZE)}
+        onReplayExecution={onReplayExecution}
       />
     </section>
   );

@@ -6,6 +6,7 @@ import { Timeline } from './components/Timeline';
 import { useWebSocket } from './hooks/useWebSocket';
 import { PolicyEditor } from './pages/PolicyEditor';
 import { AuditViewer } from './pages/AuditViewer';
+import { PlaybackView } from './pages/PlaybackView';
 import {
   executionStore,
   getExecutionSummaries,
@@ -139,7 +140,8 @@ const DashboardView = (): JSX.Element => {
 };
 
 export const App = (): JSX.Element => {
-  const [view, setView] = useState<'dashboard' | 'audit' | 'policy'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'audit' | 'playback' | 'policy'>('dashboard');
+  const [playbackExecutionId, setPlaybackExecutionId] = useState<string | undefined>(undefined);
 
   return (
     <main style={{ padding: '24px', fontFamily: 'Inter, system-ui, sans-serif' }}>
@@ -154,6 +156,9 @@ export const App = (): JSX.Element => {
           <button type="button" onClick={() => setView('audit')} disabled={view === 'audit'}>
             Audit
           </button>
+          <button type="button" onClick={() => setView('playback')} disabled={view === 'playback'}>
+            Playback
+          </button>
           <button type="button" onClick={() => setView('policy')} disabled={view === 'policy'}>
             Policy Editor
           </button>
@@ -161,7 +166,15 @@ export const App = (): JSX.Element => {
       </header>
 
       {view === 'dashboard' ? <DashboardView /> : null}
-      {view === 'audit' ? <AuditViewer /> : null}
+      {view === 'audit' ? (
+        <AuditViewer
+          onReplayExecution={(executionId) => {
+            setPlaybackExecutionId(executionId);
+            setView('playback');
+          }}
+        />
+      ) : null}
+      {view === 'playback' ? <PlaybackView initialExecutionId={playbackExecutionId} /> : null}
       {view === 'policy' ? <PolicyEditor /> : null}
     </main>
   );
