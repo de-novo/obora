@@ -4,17 +4,17 @@
  * Resumes a failed/suspended run from the last checkpoint.
  */
 
-import { Command } from "commander";
+import { Command, Option } from "commander";
 
 export function createResumeCommand(): Command {
   return new Command("resume")
     .description("Resume a failed or suspended run from its last checkpoint")
     .argument("<runId>", "Run ID to resume")
     .option("--from-step <stepName>", "Resume from a specific step (default: last failed)")
-    .option(
-      "--drift-policy <policy>",
-      "How to handle policy drift: reject | warn | ignore",
-      "warn",
+    .addOption(
+      new Option("--drift-policy <policy>", "How to handle policy drift")
+        .choices(["reject", "warn", "ignore"])
+        .default("warn"),
     )
     .option("--json", "Output as JSON")
     .action(async (runId: string, opts) => {

@@ -1098,29 +1098,37 @@ export class OboraRuntime {
       const stepDefs = workflow.steps.filter((s) => rerunSteps.includes(s.name));
       const sortedStepDefs = topologicalSort(workflow.steps).filter((s) => rerunSteps.includes(s.name));
 
-      for (const step of sortedStepDefs) {
-        await this.emitEvent("step_start", executionId, { stepName: step.name, agent: step.agent });
-        const stepStartedAt = Date.now();
+      try {
+        for (const step of sortedStepDefs) {
+          await this.emitEvent("step_start", executionId, { stepName: step.name, agent: step.agent });
+          const stepStartedAt = Date.now();
 
-        const result = stepExecutor
-          ? await stepExecutor.executeStep(step, { previousOutputs: execution.outputs })
-          : { output: "[stub] No LLM configured", raw: { stub: true, reason: "No LLM configured" } };
+          const result = stepExecutor
+            ? await stepExecutor.executeStep(step, { previousOutputs: execution.outputs })
+            : { output: "[stub] No LLM configured", raw: { stub: true, reason: "No LLM configured" } };
 
-        execution.outputs[step.name] = result.output;
-        execution.completedSteps.push(step.name);
+          execution.outputs[step.name] = result.output;
+          execution.completedSteps.push(step.name);
 
-        await this.emitEvent("step_end", executionId, {
-          stepName: step.name,
-          status: "completed",
-          durationMs: Date.now() - stepStartedAt,
-        });
+          await this.emitEvent("step_end", executionId, {
+            stepName: step.name,
+            status: "completed",
+            durationMs: Date.now() - stepStartedAt,
+          });
+        }
+
+        // Update run as completed
+        execution.status = "completed";
+        execution.endedAt = new Date();
+        await adapter.saveRun({ ...run, status: "completed", completedAt: execution.endedAt.toISOString() });
+        this.executions.set(executionId, structuredClone(execution));
+      } catch (err) {
+        execution.status = "failed";
+        execution.endedAt = new Date();
+        await adapter.saveRun({ ...run, status: "failed", completedAt: execution.endedAt.toISOString() });
+        this.executions.set(executionId, structuredClone(execution));
+        throw err;
       }
-
-      // Update run as completed
-      execution.status = "completed";
-      execution.endedAt = new Date();
-      await adapter.saveRun({ ...run, status: "completed", completedAt: execution.endedAt.toISOString() });
-      this.executions.set(executionId, structuredClone(execution));
     }
 
     return {

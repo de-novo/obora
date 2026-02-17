@@ -189,6 +189,9 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
       runRecord.input,
       allStepNames,
     );
+    // Override execution id with original runId so all persistence (runs, steps, checkpoints)
+    // stays under the same run identity
+    execution.id = runId;
     this.executions.set(execution.id, execution);
 
     // Update run record to link resumed execution
@@ -212,13 +215,12 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
       // StateBinder operates through bind(), so we restore by writing snapshot entries
       // as completed step outputs to maintain state consistency
       for (const [key, value] of Object.entries(snapshot)) {
-        if (typeof value === "object" && value !== null) {
-          // Use stateBinder's bind to restore each entry as if it were a step result
-          await this.dependencies.stateBinder.bind(
-            { success: true, output: value, toolCalls: [], metrics: { durationMs: 0, tokenUsage: { input: 0, output: 0 }, retries: 0 } },
-            [{ source: "output", target: key }],
-          );
-        }
+        // Skip non-serializable values (functions, symbols); restore all JSON-safe values including primitives
+        if (typeof value === "function" || typeof value === "symbol") continue;
+        await this.dependencies.stateBinder.bind(
+          { success: true, output: value, toolCalls: [], metrics: { durationMs: 0, tokenUsage: { input: 0, output: 0 }, retries: 0 } },
+          [{ source: "output", target: key }],
+        );
       }
     }
 
@@ -244,7 +246,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
         completed.add(policy.stepName);
         const record = execution.stepRecords[policy.stepName];
         if (record) {
-          record.status = "completed";
+          record.status = "skipped";
         }
       } else {
         rerunSteps.push(policy.stepName);

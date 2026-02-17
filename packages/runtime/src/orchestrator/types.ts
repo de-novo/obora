@@ -5,7 +5,7 @@ import type { PolicyDecision } from "../policy/types.js";
 import type { RecoveryResult, RecoveryStrategy } from "../recovery/types.js";
 
 export type ExecutionStatus = "running" | "completed" | "failed" | "waiting" | "suspended";
-export type ExecutionStepStatus = "pending" | "running" | "completed" | "failed" | "waiting";
+export type ExecutionStepStatus = "pending" | "running" | "completed" | "failed" | "waiting" | "skipped";
 
 export interface GateWaitState {
   executionId: string;
