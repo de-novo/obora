@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { createCLI } from "../../cli.js";
 
@@ -17,7 +17,6 @@ describe("M3 CLI command IA", () => {
 
   it("parses run command arguments", async () => {
     const cli = createCLI();
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
 
     await cli.parseAsync(["run", "my-workflow.yaml", "--dry-run", "--timeout", "5000"], {
       from: "user",
@@ -27,8 +26,6 @@ describe("M3 CLI command IA", () => {
     expect(run).toBeDefined();
     expect(run?.processedArgs).toEqual(["my-workflow.yaml"]);
     expect(run?.opts()).toMatchObject({ dryRun: true, timeout: 5000 });
-
-    exitSpy.mockRestore();
   });
 
   it("has plugin subcommands", () => {

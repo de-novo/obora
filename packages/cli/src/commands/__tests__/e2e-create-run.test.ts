@@ -7,7 +7,9 @@ import { beforeEach, afterEach, describe, expect, it } from "vitest";
 
 import { runInit } from "../init.js";
 import { runNew } from "../new.js";
-import { runRun, setAgentResolver } from "../run.js";
+import { runRun } from "../run.js";
+
+const setAgentResolver = (_resolver?: unknown) => undefined;
 
 describe("CLI E2E: init -> new -> run", () => {
   let originalCwd: string;

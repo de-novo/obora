@@ -1,16 +1,10 @@
 import { Command } from "commander";
 
+import { CLIError } from "../utils/cli-error.js";
+import { ExitCode } from "../utils/exit-codes.js";
+
 export async function runRun(workflow: string, options: Record<string, unknown>): Promise<void> {
   console.log(`[stub] obora run ${workflow}`, options);
-}
-
-export function setAgentResolver(_resolver: any): void {
-  // TODO: wire resolver lifecycle in SDK-backed runtime
-}
-
-export async function bootstrapAgentResolver(_cwd: string = process.cwd()): Promise<any> {
-  // TODO: wire resolver bootstrap in SDK-backed runtime
-  return null;
 }
 
 export function createRunCommand(): Command {
@@ -23,8 +17,18 @@ export function createRunCommand(): Command {
     .option("--dry-run", "Validate without executing")
     .option("--timeout <ms>", "Execution timeout in milliseconds", parseInt)
     .action(async (workflow, options) => {
-      // TODO: Wire to SDK OboraRuntime.run()
-      await runRun(workflow, options);
-      process.exit(0);
+      try {
+        // TODO: Wire to SDK OboraRuntime.run()
+        await runRun(workflow, options);
+        process.exitCode = ExitCode.SUCCESS;
+      } catch (err: unknown) {
+        if (err instanceof CLIError) {
+          console.error(err.message);
+          process.exitCode = err.exitCode;
+        } else {
+          console.error("Unexpected error:", err);
+          process.exitCode = ExitCode.CLI_ERROR;
+        }
+      }
     });
 }

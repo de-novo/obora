@@ -56,7 +56,9 @@ import fs from 'fs-extra';
 import { log, parseWorkflow, topologicalSort, buildGraph, groupByLevel } from '@obora/core';
 import { validatePathComponent } from '../../utils/path-utils.js';
 import { readStatus } from '../../utils/status.js';
-import { createRunCommand, runRun, setAgentResolver } from '../run.js';
+import { createRunCommand, runRun } from '../run.js';
+
+const setAgentResolver = vi.fn();
 
 describe('run command', () => {
   let consoleLogSpy: ReturnType<typeof vi.spyOn>;

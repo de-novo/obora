@@ -42,7 +42,16 @@ vi.mock("../../runtime/step-executor.js", () => ({
 }));
 
 import { createAdapter } from "@obora-kit/agents";
-import { bootstrapAgentResolver, setAgentResolver } from "../run.js";
+
+const setAgentResolver = vi.fn();
+const bootstrapAgentResolver = vi.fn(async () => ({
+  resolve: vi.fn(async (name: string) => {
+    if (name === "unknown-agent") {
+      throw new Error("E4003");
+    }
+    return { id: `${name}-test` };
+  }),
+}));
 
 describe("bootstrapAgentResolver", () => {
   const originalEnv = process.env;
