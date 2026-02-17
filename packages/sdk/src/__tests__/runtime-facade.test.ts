@@ -107,6 +107,82 @@ describe("OboraRuntime facade", () => {
     }
   });
 
+  it("emits warning when agent-specific provider is configured but cannot be resolved", async () => {
+    const prevAnthropic = process.env.TEST_ANTHROPIC_KEY;
+    const prevOpenAI = process.env.TEST_OPENAI_KEY;
+    process.env.TEST_ANTHROPIC_KEY = "anthropic-key";
+    delete process.env.TEST_OPENAI_KEY;
+
+    try {
+      const runtime = new OboraRuntime({
+        llm: { provider: "anthropic", apiKey: "anthropic-key", model: "claude-opus-4-6" },
+        config: {
+          defaults: { provider: "anthropic" },
+          providers: {
+            anthropic: { authRef: "env:TEST_ANTHROPIC_KEY", defaultModel: "claude-opus-4-6" },
+            openai: { authRef: "env:TEST_OPENAI_KEY", defaultModel: "gpt-5" },
+          },
+          agents: {
+            architect: { provider: "openai", model: "gpt-5" },
+          },
+        },
+      });
+
+      const warnings: string[] = [];
+      runtime.on("warning", (event) => {
+        const payload = event.data as { message?: string };
+        if (payload.message) warnings.push(payload.message);
+      });
+
+      const adapterMock = {
+        chatCompletion: vi.fn().mockResolvedValue({ message: { role: "assistant", content: "ok" } }),
+      };
+      vi.spyOn(runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> }, "createLLMAdapter").mockResolvedValue(
+        adapterMock,
+      );
+
+      runtime.define("agent-provider-fallback", {
+        name: "agent-provider-fallback",
+        steps: [{ name: "design", agent: "architect", input: { task: "Create architecture" } }],
+      });
+
+      const handle = await runtime.run("agent-provider-fallback");
+      const result = await handle.wait();
+
+      expect(result.status).toBe("completed");
+      expect(warnings).toContain(
+        "Agent 'architect' configured with provider 'openai' but API key not resolved. Falling back to default.",
+      );
+    } finally {
+      if (prevAnthropic === undefined) {
+        delete process.env.TEST_ANTHROPIC_KEY;
+      } else {
+        process.env.TEST_ANTHROPIC_KEY = prevAnthropic;
+      }
+
+      if (prevOpenAI === undefined) {
+        delete process.env.TEST_OPENAI_KEY;
+      } else {
+        process.env.TEST_OPENAI_KEY = prevOpenAI;
+      }
+    }
+  });
+
+  it("does not reload config when runtime config object is already provided", async () => {
+    const runtime = new OboraRuntime({
+      config: {
+        defaults: { provider: "anthropic" },
+      },
+      configPath: "/definitely/not/exist/config.yaml",
+    });
+
+    runtime.define("config-preloaded", { name: "config-preloaded", steps: [] });
+    const handle = await runtime.run("config-preloaded");
+    const result = await handle.wait();
+
+    expect(result.status).toBe("completed");
+  });
+
   it("supports agent/tool/pattern/plugin registration and event subscriptions", async () => {
     const sink = vi.fn();
     const runtime = new OboraRuntime({

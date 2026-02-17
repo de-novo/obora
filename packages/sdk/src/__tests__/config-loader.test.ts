@@ -109,7 +109,19 @@ describe("config-loader", () => {
 
       await expect(loadConfig(explicit)).rejects.toThrowError(
         expect.objectContaining({
-          code: OboraErrorCode.SDK_INVALID_WORKFLOW,
+          code: OboraErrorCode.SDK_INVALID_CONFIG,
+          message: expect.stringContaining(explicit),
+        }),
+      );
+    });
+  });
+
+  it("throws OboraError when explicit --config path does not exist", async () => {
+    await withIsolatedDirs(async ({ projectDir }) => {
+      const explicit = join(projectDir, "missing.yaml");
+      await expect(loadConfig(explicit)).rejects.toThrowError(
+        expect.objectContaining({
+          code: OboraErrorCode.SDK_INVALID_CONFIG,
           message: expect.stringContaining(explicit),
         }),
       );

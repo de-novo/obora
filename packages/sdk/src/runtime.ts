@@ -111,6 +111,7 @@ export const OboraErrorCode = {
   SDK_INVALID_WORKFLOW: "SDK_8005",
   SDK_UNKNOWN_ERROR: "SDK_8006",
   SDK_EXECUTION_NOT_FOUND: "SDK_8007",
+  SDK_INVALID_CONFIG: "SDK_8008",
   SDK_INVALID_PLUGIN: "SDK_9001",
   SDK_PLUGIN_LOAD_FAILED: "SDK_9002",
   SDK_PLUGIN_CONFLICT: "SDK_9003",
@@ -449,7 +450,8 @@ export class OboraRuntime {
             return;
           }
 
-          const loadedConfig = this.config.config ?? (await loadConfig(this.config.configPath));
+          const loadedConfig =
+            this.config.config !== undefined ? this.config.config : await loadConfig(this.config.configPath);
           const llmConfig = resolveLLMConfig(this.config.llm, loadedConfig);
           const stepOrder = topologicalSort(workflow.steps);
           execution.stepOrder = stepOrder.map((step) => step.name);
@@ -486,12 +488,17 @@ export class OboraRuntime {
                     return undefined;
                   }
 
-                  const providerConfig = resolveProviderConfig(
-                    loadedConfig,
-                    agentConfig.provider ?? loadedConfig.defaults?.provider,
-                    { verbose: this.config.verbose },
-                  );
+                  const resolvedProviderName = agentConfig.provider ?? loadedConfig.defaults?.provider;
+                  const providerConfig = resolveProviderConfig(loadedConfig, resolvedProviderName, {
+                    verbose: this.config.verbose,
+                  });
                   if (!providerConfig) {
+                    if (resolvedProviderName) {
+                      await this.emitEvent("warning", executionId, {
+                        message: `Agent '${agentName}' configured with provider '${resolvedProviderName}' but API key not resolved. Falling back to default.`,
+                        code: OboraErrorCode.ADAPTER_LLM_UNAVAILABLE,
+                      });
+                    }
                     return undefined;
                   }
 

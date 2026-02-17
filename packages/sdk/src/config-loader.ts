@@ -106,7 +106,7 @@ async function readConfigFile(path: string): Promise<OboraConfig | undefined> {
   } catch (error) {
     throw new OboraError(
       `Failed to parse config YAML: ${path}`,
-      OboraErrorCode.SDK_INVALID_WORKFLOW,
+      OboraErrorCode.SDK_INVALID_CONFIG,
       undefined,
       undefined,
       error,
@@ -118,9 +118,11 @@ export async function loadConfig(configPath?: string): Promise<OboraConfig | und
   if (configPath) {
     const explicitPath = resolve(configPath);
     const explicit = (await readConfigFile(explicitPath)) as ConfigWithMeta | undefined;
-    if (explicit) {
-      explicit[CONFIG_META_KEY] = { sources: [explicitPath] };
+    if (!explicit) {
+      throw new OboraError(`Config file not found: ${explicitPath}`, OboraErrorCode.SDK_INVALID_CONFIG);
     }
+
+    explicit[CONFIG_META_KEY] = { sources: [explicitPath] };
     return explicit;
   }
 
