@@ -253,6 +253,9 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
       }
     }
 
+    // Sync completedSteps so skip-only resumes report accurate state
+    execution.completedSteps = [...completed];
+
     await this.persistRun(execution);
 
     // Execute remaining steps, saving checkpoints under original runId
