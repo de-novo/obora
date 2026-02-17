@@ -1,0 +1,9 @@
+version: "1.0"
+default_model: anthropic/claude-opus-4-6
+agents:
+  generator:
+    role: Generate first draft output.
+    model: anthropic/claude-opus-4-6
+  reviewer:
+    role: Review draft output and suggest improvements.
+    model: anthropic/claude-opus-4-6

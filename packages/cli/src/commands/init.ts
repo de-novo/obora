@@ -1,5 +1,6 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { cp, mkdir } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { Command } from "commander";
 
@@ -7,39 +8,36 @@ import { handleCommandAction } from "../utils/error-handler.js";
 import { formatter } from "../utils/formatter.js";
 import { getGlobalOpts } from "../utils/global-opts.js";
 
-export async function runInit(options: Record<string, unknown>): Promise<void> {
-  const dir = process.cwd();
+function resolveTemplatePath(templateName: string): string {
+  const commandDir = dirname(fileURLToPath(import.meta.url));
+  return resolve(commandDir, "../../templates", templateName);
+}
 
-  await mkdir(join(dir, "workflows"), { recursive: true });
-  await mkdir(join(dir, "policies"), { recursive: true });
-  await mkdir(join(dir, "tests"), { recursive: true });
+export async function runInit(projectName: string, options: Record<string, unknown>): Promise<void> {
+  const templateName = String(options.template ?? "default");
+  const templatePath = resolveTemplatePath(templateName);
+  const targetDir = resolve(process.cwd(), projectName);
 
-  await writeFile(
-    join(dir, "workflows", "example.yaml"),
-    `name: example\nversion: "1.0"\nsteps:\n  - name: greet\n    agent: default\n`,
-  );
-  await writeFile(join(dir, "policies", "default.yaml"), `version: "1.0"\nrules: []\n`);
-  await writeFile(
-    join(dir, "obora.config.yaml"),
-    `version: "1.0"\nworkflows: ./workflows\npolicies: ./policies\ntests: ./tests\n`,
-  );
+  await mkdir(targetDir, { recursive: true });
+  await cp(templatePath, targetDir, { recursive: true });
 
   if (options.json) {
-    formatter.json({ initialized: true, path: dir });
+    formatter.json({ initialized: true, path: targetDir, template: templateName });
   } else if (!options.quiet) {
-    formatter.success("Obora project initialized.");
+    formatter.success(`Obora project initialized at ${targetDir}`);
   }
 }
 
 export function createInitCommand(): Command {
   return new Command("init")
     .description("Initialize a new Obora project")
+    .argument("[project-name]", "Project directory name", ".")
     .option("--template <name>", "Project template", "default")
     .option("-y, --yes", "Skip prompts, use defaults")
-    .action(async function (this: Command, options) {
+    .action(async function (this: Command, projectName, options) {
       const mergedOptions = { ...getGlobalOpts(this), ...options };
       await handleCommandAction(async () => {
-        await runInit(mergedOptions);
+        await runInit(projectName, mergedOptions);
       }, { verbose: Boolean(mergedOptions.verbose) });
     });
 }

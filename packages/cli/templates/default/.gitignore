@@ -1,0 +1,4 @@
+node_modules/
+.obora/
+*.log
+.DS_Store

@@ -1,0 +1,11 @@
+version: "1.0"
+tools:
+  web_search:
+    allowed: true
+  exec:
+    allowed: false
+  write:
+    allowed: true
+resources:
+  timeout_ms: 30000
+  max_tool_calls: 20
