@@ -50,7 +50,7 @@ export const createInitialExecutionStoreState = (): ExecutionStoreState => ({
 });
 
 const toStepStatus = (event: ExecutionEvent): StepStatus | undefined => {
-  const known = event.knownType ?? event.type;
+  const known = event.knownType ?? 'unknown';
 
   if (event.status === 'failed') {
     return 'failed';
@@ -211,7 +211,7 @@ export const applyExecutionEvent = (state: ExecutionStoreState, event: Execution
   nextExecution.lastEventAt = event.timestamp;
   nextExecution.lastEventId = event.id;
 
-  const known = event.knownType ?? event.type;
+  const known = event.knownType ?? 'unknown';
   if (known === 'execution_end') {
     nextExecution.isActive = false;
   }

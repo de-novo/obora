@@ -2,18 +2,27 @@ import type { AuditEvent } from '@obora-kit/runtime';
 
 export type RuntimeAuditEvent = AuditEvent;
 
-export type KnownExecutionEventType =
-  | 'execution_start'
-  | 'execution_end'
-  | 'step_start'
-  | 'step_end'
-  | 'policy_check'
-  | 'policy_deny'
-  | 'gate_wait'
-  | 'gate_resolve'
-  | 'recovery_start'
-  | 'recovery_end'
-  | 'error';
+export const KNOWN_EXECUTION_EVENT_TYPES = [
+  'execution_start',
+  'execution_end',
+  'step_start',
+  'step_end',
+  'policy_check',
+  'policy_deny',
+  'gate_wait',
+  'gate_resolve',
+  'recovery_start',
+  'recovery_end',
+  'error',
+] as const;
+
+export type KnownExecutionEventType = (typeof KNOWN_EXECUTION_EVENT_TYPES)[number];
+
+const KNOWN_EXECUTION_EVENT_TYPE_SET: ReadonlySet<string> = new Set(KNOWN_EXECUTION_EVENT_TYPES);
+
+export const isKnownExecutionEventType = (value: string): value is KnownExecutionEventType => {
+  return KNOWN_EXECUTION_EVENT_TYPE_SET.has(value);
+};
 
 export type ExecutionEventSeverity = 'info' | 'warning' | 'critical';
 

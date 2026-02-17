@@ -160,6 +160,21 @@ describe('ws bridge', () => {
     ws.close();
   });
 
+  it('maps unknown audit event type to knownType undefined', async () => {
+    const { wsBridge } = await startServer();
+
+    const event = wsBridge.pushEvent({
+      id: 'audit-unknown',
+      executionId: 'exec-unknown',
+      type: 'custom_audit_type',
+      timestamp: '2026-02-17T12:00:00.000Z',
+      data: { stepName: 'step-x' },
+    });
+
+    expect(event.type).toBe('custom_audit_type');
+    expect(event.knownType).toBeUndefined();
+  });
+
   it('keeps timestamp+id ordering when buffering and replaying events', async () => {
     const { url, wsBridge } = await startServer();
 

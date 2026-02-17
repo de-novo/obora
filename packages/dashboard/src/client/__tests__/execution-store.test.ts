@@ -12,6 +12,7 @@ const baseEvent = (overrides: Partial<ExecutionEvent>): ExecutionEvent => ({
   executionId: 'exec-1',
   timestamp: '2026-02-17T12:00:00.000Z',
   type: 'step_start',
+  knownType: 'step_start',
   stepName: 'step-a',
   ...overrides,
 });
@@ -37,6 +38,7 @@ describe('execution-store', () => {
       baseEvent({
         id: 'e2',
         type: 'step_end',
+        knownType: 'step_end',
         stepName: 'collect',
         timestamp: '2026-02-17T12:01:00.000Z',
       }),
@@ -49,6 +51,7 @@ describe('execution-store', () => {
       baseEvent({
         id: 'e3',
         type: 'error',
+        knownType: 'error',
         stepName: 'collect',
         timestamp: '2026-02-17T12:02:00.000Z',
       }),
@@ -74,6 +77,22 @@ describe('execution-store', () => {
     expect(state.executions['exec-a']?.steps['a-step']).toBeDefined();
     expect(state.executions['exec-a']?.steps['b-step']).toBeUndefined();
     expect(state.executions['exec-b']?.steps['b-step']).toBeDefined();
+  });
+
+  it('handles events without knownType safely', () => {
+    let state = createInitialExecutionStoreState();
+
+    state = applyExecutionEvent(
+      state,
+      baseEvent({
+        id: 'u1',
+        type: 'step_start',
+        knownType: undefined,
+        stepName: 'unknown-step',
+      }),
+    );
+
+    expect(state.executions['exec-1']?.steps['unknown-step']?.status).toBe('pending');
   });
 
   it('sorts timeline steps by first seen timestamp', () => {
