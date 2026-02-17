@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { fetchAuditEvents } from './api/audit-client';
 import { ExecutionList } from './components/ExecutionList';
 import { StepDetail } from './components/StepDetail';
 import { Timeline } from './components/Timeline';
@@ -22,7 +23,7 @@ const resolveWsUrl = (): string => {
   }
 
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${protocol}//${window.location.host}/ws/executions`;
+  return `${protocol}//${window.location.host}/ws`;
 };
 
 const DashboardView = (): JSX.Element => {
@@ -86,11 +87,39 @@ const DashboardView = (): JSX.Element => {
 
   const wsUrl = useMemo(() => resolveWsUrl(), []);
 
+  const handleFullSyncRequired = useCallback(async (): Promise<void> => {
+    executionStore.reset();
+
+    const pageSize = 500;
+    let offset = 0;
+
+    while (true) {
+      const result = await fetchAuditEvents({ limit: pageSize, offset });
+      for (const event of result.events) {
+        executionStore.receiveEvent({
+          id: event.id,
+          executionId: event.executionId,
+          timestamp: event.timestamp,
+          type: event.type,
+          knownType: event.type,
+          stepName: event.stepName,
+          payload: (event.payload ?? {}) as Record<string, unknown>,
+        });
+      }
+
+      if (!result.hasMore) {
+        break;
+      }
+      offset += pageSize;
+    }
+  }, []);
+
   const ws = useWebSocket({
     url: wsUrl,
     onEvent: (event) => {
       executionStore.receiveEvent(event);
     },
+    onFullSyncRequired: handleFullSyncRequired,
   });
 
   const handleStepClick = (step: ExecutionStep): void => {

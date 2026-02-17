@@ -61,9 +61,16 @@ export const createDashboardServer = async (
   const policyStore = dependencies.policyStore ?? new InMemoryPolicyStore();
   const policyEngine = dependencies.policyEngine;
 
+  const hotReloadAuditTrail =
+    'addEvent' in auditStore && typeof auditStore.addEvent === 'function'
+      ? {
+          addEvent: auditStore.addEvent.bind(auditStore),
+        }
+      : undefined;
+
   registerHealthRoute(app, config.apiBasePath);
   registerAuditRoutes(app, config.apiBasePath, auditStore);
-  registerPolicyRoutes(app, config.apiBasePath, policyStore, policyEngine);
+  registerPolicyRoutes(app, config.apiBasePath, policyStore, policyEngine, hotReloadAuditTrail);
   registerNotificationRoutes(app, config.apiBasePath, notificationEngine);
 
   const indexPath = join(config.staticDir, 'index.html');

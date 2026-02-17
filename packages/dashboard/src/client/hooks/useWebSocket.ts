@@ -7,11 +7,16 @@ interface WsServerMessage {
   payload?: unknown;
 }
 
+interface WsErrorPayload {
+  fullSyncRequired?: boolean;
+}
+
 export interface UseWebSocketOptions {
   url: string;
   enabled?: boolean;
   reconnectDelayMs?: number;
   onEvent: (event: ExecutionEvent) => void;
+  onFullSyncRequired?: () => void | Promise<void>;
 }
 
 export interface UseWebSocketResult {
@@ -40,6 +45,7 @@ export const useWebSocket = ({
   enabled = true,
   reconnectDelayMs = 1_000,
   onEvent,
+  onFullSyncRequired,
 }: UseWebSocketOptions): UseWebSocketResult => {
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
@@ -107,6 +113,15 @@ export const useWebSocket = ({
       try {
         const parsed = JSON.parse(String(message.data)) as WsServerMessage;
 
+        if (parsed.type === 'error') {
+          const payload = (parsed.payload ?? {}) as WsErrorPayload;
+          if (payload.fullSyncRequired) {
+            void onFullSyncRequired?.();
+            lastEventIdRef.current = undefined;
+          }
+          return;
+        }
+
         if (parsed.type !== 'event' || !isExecutionEvent(parsed.payload)) {
           return;
         }
@@ -135,7 +150,7 @@ export const useWebSocket = ({
         connect();
       }, reconnectDelayMs);
     };
-  }, [clearTimer, enabled, onEvent, reconnectDelayMs, url]);
+  }, [clearTimer, enabled, onEvent, onFullSyncRequired, reconnectDelayMs, url]);
 
   useEffect(() => {
     if (!enabled) {

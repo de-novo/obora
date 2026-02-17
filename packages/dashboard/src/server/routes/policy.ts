@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 
-import { HotReloadEngine } from '../policy/hot-reload.js';
+import { HotReloadEngine, type HotReloadAuditTrail } from '../policy/hot-reload.js';
 import type { PolicyStore } from '../policy/policy-store.js';
 import { diffYaml } from '../policy/yaml-diff.js';
 import { parsePolicyYaml, validatePolicyYaml } from '../policy/policy-validator.js';
@@ -75,8 +75,9 @@ export const registerPolicyRoutes = (
   apiBasePath: string,
   policyStore: PolicyStore,
   policyEngine?: PolicyEngineAdapter,
+  auditTrail?: HotReloadAuditTrail,
 ): void => {
-  const hotReloadEngine = new HotReloadEngine(policyStore, policyEngine);
+  const hotReloadEngine = new HotReloadEngine(policyStore, policyEngine, auditTrail);
 
   app.get(`${apiBasePath}/policies`, async () => {
     const policies = await policyStore.list();

@@ -72,6 +72,29 @@ describe('webhook channel', () => {
     expect(result.success).toBe(false);
     expect(result.error).toContain('timed out');
   });
+
+  it('rejects non-http protocols and internal hosts', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    const channel = new WebhookChannel({ fetchImpl: fetchImpl as unknown as typeof fetch });
+
+    const badUrls = [
+      'ftp://example.com/hook',
+      'http://127.0.0.1/hook',
+      'http://10.1.2.3/hook',
+      'http://172.16.2.3/hook',
+      'http://192.168.0.10/hook',
+      'http://0.0.0.0/hook',
+      'http://[::1]/hook',
+      'http://localhost/hook',
+    ];
+
+    for (const url of badUrls) {
+      const result = await channel.send(createEvent(), createRule({ channel: url }));
+      expect(result.success).toBe(false);
+    }
+
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
 });
 
 describe('notification channel factory', () => {

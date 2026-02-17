@@ -1,3 +1,5 @@
+import { isIP } from 'node:net';
+
 import type { ExecutionEvent, NotificationRule } from '../types.js';
 import type { NotificationChannel, NotificationResult } from './channel.js';
 
@@ -7,6 +9,62 @@ export interface WebhookChannelOptions {
 }
 
 const DEFAULT_TIMEOUT_MS = 5000;
+
+const isBlockedIPv4 = (host: string): boolean => {
+  if (host === '127.0.0.1' || host === '0.0.0.0') {
+    return true;
+  }
+
+  if (host.startsWith('10.')) {
+    return true;
+  }
+
+  if (host.startsWith('192.168.')) {
+    return true;
+  }
+
+  const octets = host.split('.').map((part) => Number.parseInt(part, 10));
+  if (octets.length === 4 && octets.every((part) => Number.isInteger(part) && part >= 0 && part <= 255)) {
+    const second = octets[1] ?? -1;
+    if (octets[0] === 172 && second >= 16 && second <= 31) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+const normalizeHost = (urlString: string): { ok: true; url: string } | { ok: false; error: string } => {
+  let parsed: URL;
+
+  try {
+    parsed = new URL(urlString);
+  } catch {
+    return { ok: false, error: 'Webhook URL is invalid' };
+  }
+
+  if (!parsed.hostname || parsed.hostname.trim().length === 0) {
+    return { ok: false, error: 'Webhook URL host is required' };
+  }
+
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return { ok: false, error: 'Webhook URL protocol must be http or https' };
+  }
+
+  const host = parsed.hostname.toLowerCase();
+  const normalizedHost = host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
+  if (normalizedHost === 'localhost' || normalizedHost === '::1') {
+    return { ok: false, error: 'Webhook URL host is not allowed' };
+  }
+
+  if (isIP(normalizedHost)) {
+    if (isBlockedIPv4(normalizedHost) || normalizedHost === '::1') {
+      return { ok: false, error: 'Webhook URL host is not allowed' };
+    }
+  }
+
+  return { ok: true, url: parsed.toString() };
+};
 
 export class WebhookChannel implements NotificationChannel {
   public readonly name = 'webhook';
@@ -21,11 +79,19 @@ export class WebhookChannel implements NotificationChannel {
   }
 
   public async send(event: ExecutionEvent, rule: NotificationRule): Promise<NotificationResult> {
-    const url = rule.channel === this.name ? rule.template : rule.channel;
-    if (!url) {
+    const rawUrl = rule.channel === this.name ? rule.template : rule.channel;
+    if (!rawUrl) {
       return {
         success: false,
         error: 'Webhook URL is missing in rule.channel or rule.template',
+      };
+    }
+
+    const normalized = normalizeHost(rawUrl);
+    if (!normalized.ok) {
+      return {
+        success: false,
+        error: normalized.error,
       };
     }
 
@@ -33,7 +99,7 @@ export class WebhookChannel implements NotificationChannel {
     const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
 
     try {
-      const response = await this.fetchImpl(url, {
+      const response = await this.fetchImpl(normalized.url, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
