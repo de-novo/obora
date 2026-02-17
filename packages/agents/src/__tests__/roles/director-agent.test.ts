@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { MockLLMAdapter } from "../../llm/mock-adapter";
 import { DirectorAgent, createDirectorAgent } from "../../roles/director-agent";
 import { AgentRole, DirectorOutput, AgentContext } from "../../roles/base-agent";
-import { Blackboard } from "@obora-kit/blackboard";
+import { Blackboard } from "@obora-kit/runtime";
 import { ChatMessage } from "../../llm/adapter";
 
 describe("DirectorAgent", () => {

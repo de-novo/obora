@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { MockLLMAdapter } from "../../llm/mock-adapter";
 import { AgentRole, AgentState, BaseAgent, Task, TaskResult } from "../../roles/base-agent";
-import { Blackboard } from "@obora-kit/blackboard";
+import { Blackboard } from "@obora-kit/runtime";
 import type { AgentContext } from "../../roles/base-agent";
 import type { ChatMessage } from "../../llm/adapter";
 

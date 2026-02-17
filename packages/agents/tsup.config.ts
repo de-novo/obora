@@ -23,5 +23,5 @@ export default defineConfig({
   splitting: false,
   treeshake: true,
   minify: false,
-  external: ["@obora-kit/blackboard"],
+  external: ["@obora-kit/runtime"],
 });

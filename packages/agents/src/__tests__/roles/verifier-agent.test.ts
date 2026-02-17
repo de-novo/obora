@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { MockLLMAdapter } from "../../llm/mock-adapter";
 import { VerifierAgent, createVerifierAgent } from "../../roles/verifier-agent";
 import { AgentRole, VerifierOutput, AgentContext } from "../../roles/base-agent";
-import { Blackboard } from "@obora-kit/blackboard";
+import { Blackboard } from "@obora-kit/runtime";
 import { ChatMessage } from "../../llm/adapter";
 
 describe("VerifierAgent", () => {

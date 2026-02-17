@@ -5,7 +5,7 @@ import { mkdir, open, readdir, stat, unlink, writeFile } from "node:fs/promises"
 import { dirname, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import { LLMAdapter, ChatMessage } from "../llm/adapter";
-import type { Blackboard } from "@obora-kit/blackboard";
+import type { Blackboard } from "../../blackboard/core/blackboard.js";
 import type { AgentId } from "../types";
 
 export type { AgentId };

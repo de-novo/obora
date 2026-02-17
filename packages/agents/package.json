@@ -75,7 +75,7 @@
   "dependencies": {
     "@mariozechner/pi-agent-core": "^0.52.12",
     "@mariozechner/pi-ai": "^0.52.12",
-    "@obora-kit/blackboard": "workspace:*",
+    "@obora-kit/runtime": "workspace:*",
     "yaml": "^2.8.2",
     "@obora-kit/adapters": "workspace:*"
   },
