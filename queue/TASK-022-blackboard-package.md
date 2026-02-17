@@ -17,3 +17,8 @@
 - `pnpm --filter @obora-kit/blackboard test` ✅ (470 passed)
 - `pnpm --filter @obora-kit/blackboard typecheck` ✅
 - `pnpm --filter @obora-kit/blackboard build` ✅
+
+## 추가 점검 로그 (2026-02-17 11:26 KST)
+- 기준선 확인: 작업 브랜치 `main`(HEAD 유지), 기준 브랜치 `origin/main`=`ef54166`, 현 HEAD=`2978e78`
+- 최소 단위 점검: TASK-022(패키지 타입체크) 재검증 수행
+- `pnpm --filter @obora-kit/blackboard typecheck` ✅
