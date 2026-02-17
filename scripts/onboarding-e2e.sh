@@ -116,6 +116,7 @@ main() {
   rm -rf "$E2E_ROOT"
   mkdir -p "$E2E_ROOT"
 
+  run_step "Step 0: README quickstart sanity" "cd '$REPO_ROOT' && grep -q 'obora init' README.md && grep -q 'obora run workflow.yaml' README.md"
   run_step "Step 1: npm install (local CLI package)" "cd '$E2E_ROOT' && npm init -y >/dev/null && npm install '$REPO_ROOT/packages/cli' --no-audit --no-fund"
   run_step "Step 2: obora init $PROJECT_NAME" "cd '$E2E_ROOT' && node '$CLI_ENTRY' init '$PROJECT_NAME' -y"
   run_step "Step 3: cd $PROJECT_NAME" "cd '$PROJECT_DIR'"
@@ -126,6 +127,8 @@ main() {
   run_step "Step 5: obora test --fixture tests/happy-path.yaml" "cd '$PROJECT_DIR' && node '$CLI_ENTRY' test --fixture tests/happy-path.yaml"
   run_step "Step 6: obora audit query" "cd '$PROJECT_DIR' && node '$CLI_ENTRY' audit query --limit 20"
   run_step "Step 7: obora policy validate policy.yaml" "cd '$PROJECT_DIR' && node '$CLI_ENTRY' policy validate policy.yaml"
+  run_step "Step 8: recovery config presence check" "cd '$REPO_ROOT' && grep -q '^recovery:' examples/01-simple-pipeline/workflow.yaml"
+  run_step "Step 9: consensus config presence check" "cd '$REPO_ROOT' && grep -q 'consensus:' examples/02-multi-agent-consensus/workflow.yaml"
 
   print_report | tee "$E2E_ROOT/report.txt"
 
