@@ -209,4 +209,36 @@ describe("OboraRuntime facade", () => {
       restoreEnv();
     }
   });
+
+  it("keeps aborted status when cancel races with step completion", async () => {
+    const runtime = new OboraRuntime({
+      llm: { provider: "test", apiKey: "test", model: "test" },
+    });
+
+    runtime.define("race-cancel", {
+      name: "race-cancel",
+      steps: [{ name: "s1", input: { task: "hello" } }],
+    });
+
+    runtime.registerAgent("writer", () => ({ role: "writer" }));
+
+    const adapterMock = {
+      chatCompletion: vi.fn().mockImplementation(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return { message: { role: "assistant", content: "done" } };
+      }),
+    };
+
+    vi.spyOn(runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> }, "createLLMAdapter").mockResolvedValue(adapterMock);
+
+    const handle = await runtime.run("race-cancel");
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await handle.cancel("manual abort");
+
+    await expect(handle.wait()).rejects.toMatchObject({
+      code: OboraErrorCode.SDK_EXECUTION_CANCELLED,
+      message: "manual abort",
+    });
+    expect(handle.status).toBe("aborted");
+  });
 });

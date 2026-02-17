@@ -27,6 +27,17 @@ export function detectLLMConfigFromEnv(env: NodeJS.ProcessEnv = process.env): LL
     };
   }
 
+  const customProvider = env.OBORA_LLM_PROVIDER;
+  const customApiKey = env.OBORA_LLM_API_KEY;
+  if (customProvider && customApiKey) {
+    return {
+      provider: customProvider,
+      apiKey: customApiKey,
+      model: env.OBORA_LLM_MODEL,
+      baseUrl: env.OBORA_LLM_BASE_URL,
+    };
+  }
+
   return undefined;
 }
 

@@ -83,4 +83,26 @@ describe("StepExecutor", () => {
 
     expect(result.votes?.[0]?.vote).toBe("REQUEST_CHANGES");
   });
+
+  it("applies consensus-wide timeout", async () => {
+    const chatCompletion = vi.fn<LLMAdapterLike["chatCompletion"]>().mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      return { message: { role: "assistant", content: "APPROVE" } };
+    });
+
+    const executor = new StepExecutor({ chatCompletion }, new Map(), {});
+
+    await expect(
+      executor.executeStep(
+        {
+          name: "review-timeout",
+          pattern: "consensus",
+          participants: ["r1", "r2", "r3"],
+          input: { task: "Review this" },
+          config: { llmTimeoutMs: 100, consensusTimeoutMs: 60 },
+        },
+        { previousOutputs: {} },
+      ),
+    ).rejects.toThrow("Consensus timed out");
+  });
 });

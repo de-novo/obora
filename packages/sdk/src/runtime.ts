@@ -204,7 +204,7 @@ export class OboraRuntime {
   private readonly tools = new Map<string, ToolHandler>();
   private readonly patterns = new Map<string, PatternRegistration>();
   private readonly pluginRegistry = new PluginRegistry();
-  private readonly handlers = new Map<AuditEventType, Set<EventHandler>>();
+  private readonly handlers = new Map<AuditEventType, Set<EventHandler<AuditEventType>>>();
   private readonly anyHandlers = new Set<(event: AuditEvent) => void | Promise<void>>();
   private readonly executions = new Map<string, RuntimeExecution>();
 
@@ -418,9 +418,12 @@ export class OboraRuntime {
     const executionId = randomUUID();
     const workflow = this.workflows.get(name)!;
     const execution = this.createExecution(executionId, name, input, workflow);
+    const runTimeoutMs = this.resolveExecutionTimeoutMs(workflow, variables);
     let status: RunStatus = "queued";
     let settled = false;
     let rejectWait: ((reason?: unknown) => void) | undefined;
+    let runTimeout: ReturnType<typeof setTimeout> | undefined;
+    let signalAbortListener: (() => void) | undefined;
 
     const waitPromise = new Promise<RuntimeExecution>((resolve, reject) => {
       rejectWait = reject;
@@ -495,6 +498,10 @@ export class OboraRuntime {
                   },
                 };
 
+            if (settled) {
+              return;
+            }
+
             execution.outputs[step.name] = result.output;
             execution.stepRecords[step.name] = result;
             execution.completedSteps.push(step.name);
@@ -506,6 +513,10 @@ export class OboraRuntime {
               outputPreview:
                 typeof result.output === "string" ? result.output.slice(0, 200) : JSON.stringify(result.output).slice(0, 200),
             });
+
+            if (settled) {
+              return;
+            }
           }
 
           status = "completed";
@@ -521,6 +532,10 @@ export class OboraRuntime {
           this.executions.set(executionId, structuredClone(execution));
           resolve(structuredClone(execution));
         } catch (error) {
+          if (settled) {
+            return;
+          }
+
           status = "failed";
           execution.status = "failed";
           execution.error = error instanceof Error ? error.message : String(error);
@@ -538,6 +553,13 @@ export class OboraRuntime {
           });
 
           reject(error);
+        } finally {
+          if (runTimeout) {
+            clearTimeout(runTimeout);
+            runTimeout = undefined;
+          }
+          signalAbortListener?.();
+          signalAbortListener = undefined;
         }
       });
     });
@@ -580,17 +602,21 @@ export class OboraRuntime {
       },
     };
 
+    if (runTimeoutMs !== undefined) {
+      runTimeout = setTimeout(() => {
+        void handle.cancel(`Execution timed out after ${runTimeoutMs}ms`);
+      }, runTimeoutMs);
+    }
+
     if (signal) {
       if (signal.aborted) {
         void handle.cancel(typeof signal.reason === "string" ? signal.reason : undefined);
       } else {
-        signal.addEventListener(
-          "abort",
-          () => {
-            void handle.cancel(typeof signal.reason === "string" ? signal.reason : undefined);
-          },
-          { once: true },
-        );
+        const onAbort = () => {
+          void handle.cancel(typeof signal.reason === "string" ? signal.reason : undefined);
+        };
+        signal.addEventListener("abort", onAbort, { once: true });
+        signalAbortListener = () => signal.removeEventListener("abort", onAbort);
       }
     }
 
@@ -635,8 +661,9 @@ export class OboraRuntime {
   }
 
   on<T extends AuditEventType>(event: T, handler: EventHandler<T>): Unsubscribe {
-    const bucket = this.handlers.get(event) ?? new Set<EventHandler>();
-    bucket.add(handler as unknown as EventHandler);
+    const bucket = this.handlers.get(event) ?? new Set<EventHandler<AuditEventType>>();
+    const normalizedHandler = handler as EventHandler<AuditEventType>;
+    bucket.add(normalizedHandler);
     this.handlers.set(event, bucket);
 
     return () => {
@@ -645,7 +672,7 @@ export class OboraRuntime {
         return;
       }
 
-      current.delete(handler as unknown as EventHandler);
+      current.delete(normalizedHandler);
       if (current.size === 0) {
         this.handlers.delete(event);
       }
@@ -729,6 +756,7 @@ export class OboraRuntime {
       messages: Array<{ role: "system" | "user" | "assistant" | "tool"; content: string }>;
       temperature?: number;
       maxTokens?: number;
+      signal?: AbortSignal;
     }) => Promise<{ message: { role: "assistant"; content: string | null } }>;
   }> {
     try {
@@ -745,6 +773,7 @@ export class OboraRuntime {
           messages: Array<{ role: "system" | "user" | "assistant" | "tool"; content: string }>;
           temperature?: number;
           maxTokens?: number;
+          signal?: AbortSignal;
         }) => Promise<{ message: { role: "assistant"; content: string | null } }>;
       };
 
@@ -779,6 +808,23 @@ export class OboraRuntime {
     }
 
     return map;
+  }
+
+  private resolveExecutionTimeoutMs(
+    workflow: WorkflowDefinition,
+    variables?: Record<string, unknown>,
+  ): number | undefined {
+    const fromOptions = variables?.executionTimeoutMs;
+    if (typeof fromOptions === "number" && Number.isFinite(fromOptions) && fromOptions > 0) {
+      return fromOptions;
+    }
+
+    const fromWorkflow = workflow.variables?.executionTimeoutMs;
+    if (typeof fromWorkflow === "number" && Number.isFinite(fromWorkflow) && fromWorkflow > 0) {
+      return fromWorkflow;
+    }
+
+    return undefined;
   }
 
   private createExecution(

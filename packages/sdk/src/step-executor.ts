@@ -16,6 +16,7 @@ export interface LLMAdapterLike {
     messages: LLMChatMessage[];
     temperature?: number;
     maxTokens?: number;
+    signal?: AbortSignal;
   }): Promise<LLMChatResult>;
 }
 
@@ -80,33 +81,40 @@ export class StepExecutor {
       throw new Error(`Consensus step '${step.name}' requires participants`);
     }
 
-    const votes: Array<{ participant: string; vote: "APPROVE" | "REJECT" | "REQUEST_CHANGES"; response: string }> = [];
-    for (const participant of participants) {
-      const response = await this.requestForStep(step, context, participant);
-      const responseText = response.message.content ?? "";
-      const vote = parseVote(responseText);
-      votes.push({ participant, vote, response: responseText });
-      await this.config.onEvent?.("consensus_vote", { stepName: step.name, participant, vote, response: responseText });
-    }
+    const runConsensus = async (): Promise<StepResult> => {
+      const votes: Array<{ participant: string; vote: "APPROVE" | "REJECT" | "REQUEST_CHANGES"; response: string }> = [];
+      for (const participant of participants) {
+        const response = await this.requestForStep(step, context, participant);
+        const responseText = response.message.content ?? "";
+        const vote = parseVote(responseText);
+        votes.push({ participant, vote, response: responseText });
+        await this.config.onEvent?.("consensus_vote", { stepName: step.name, participant, vote, response: responseText });
+      }
 
-    const approveCount = votes.filter((v) => v.vote === "APPROVE").length;
-    const pass = approveCount > Math.floor(votes.length / 2);
-    await this.config.onEvent?.("consensus_result", {
-      stepName: step.name,
-      pass,
-      approveCount,
-      totalVotes: votes.length,
-      votes,
-    });
+      const approveCount = votes.filter((v) => v.vote === "APPROVE").length;
+      const pass = approveCount > Math.floor(votes.length / 2);
+      await this.config.onEvent?.("consensus_result", {
+        stepName: step.name,
+        pass,
+        approveCount,
+        totalVotes: votes.length,
+        votes,
+      });
 
-    if (!pass) {
-      throw new Error(`Consensus failed for step '${step.name}' (${approveCount}/${votes.length} approvals)`);
-    }
+      if (!pass) {
+        throw new Error(`Consensus failed for step '${step.name}' (${approveCount}/${votes.length} approvals)`);
+      }
 
-    return {
-      output: votes.map((v) => `[${v.participant}] ${v.vote}: ${v.response}`).join("\n\n"),
-      votes,
+      return {
+        output: votes.map((v) => `[${v.participant}] ${v.vote}: ${v.response}`).join("\n\n"),
+        votes,
+      };
     };
+
+    const perRequestTimeoutMs = this.getStepTimeoutMs(step);
+    const consensusTimeoutMs = this.getConsensusTimeoutMs(step, participants.length, perRequestTimeoutMs);
+
+    return this.withTimeout(runConsensus, consensusTimeoutMs, `Consensus timed out for step '${step.name}' after ${consensusTimeoutMs}ms`);
   }
 
   private async requestForStep(step: WorkflowStep, context: StepContext, agentName?: string) {
@@ -122,32 +130,9 @@ export class StepExecutor {
     await this.config.onEvent?.("llm_request", { stepName: step.name, agent: agentName ?? step.agent, messages });
 
     const timeoutMs = this.getStepTimeoutMs(step);
-    const llmRequest = this.llmAdapter.chatCompletion({ model: this.config.model, messages });
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      const timer = setTimeout(() => {
-        reject(new Error(`LLM request timed out for step '${step.name}' after ${timeoutMs}ms`));
-      }, timeoutMs);
-      void llmRequest.finally(() => clearTimeout(timer));
-    });
+    const requestSignal = this.combineSignals(context.signal, timeoutMs, step.name);
 
-    const abortPromise = context.signal
-      ? new Promise<never>((_, reject) => {
-          if (context.signal?.aborted) {
-            reject(new Error(`Execution aborted before LLM response for step '${step.name}'`));
-            return;
-          }
-
-          context.signal?.addEventListener(
-            "abort",
-            () => {
-              reject(new Error(`Execution aborted during step '${step.name}'`));
-            },
-            { once: true },
-          );
-        })
-      : undefined;
-
-    const response = (await Promise.race([llmRequest, timeoutPromise, ...(abortPromise ? [abortPromise] : [])])) as LLMChatResult;
+    const response = await this.llmAdapter.chatCompletion({ model: this.config.model, messages, ...(requestSignal ? { signal: requestSignal } : {}) });
     await this.config.onEvent?.("llm_response", {
       stepName: step.name,
       agent: agentName ?? step.agent,
@@ -155,6 +140,80 @@ export class StepExecutor {
     });
 
     return response;
+  }
+
+  private combineSignals(signal: AbortSignal | undefined, timeoutMs: number, stepName: string): AbortSignal | undefined {
+    const hasSignal = signal !== undefined;
+    const shouldUseTimeout = Number.isFinite(timeoutMs) && timeoutMs > 0;
+
+    if (!hasSignal && !shouldUseTimeout) {
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    let onAbort: (() => void) | undefined;
+
+    const cleanup = () => {
+      if (timeout) {
+        clearTimeout(timeout);
+        timeout = undefined;
+      }
+      onAbort?.();
+      onAbort = undefined;
+    };
+
+    if (shouldUseTimeout) {
+      timeout = setTimeout(() => {
+        cleanup();
+        controller.abort(new Error(`LLM request timed out for step '${stepName}' after ${timeoutMs}ms`));
+      }, timeoutMs);
+    }
+
+    if (signal) {
+      if (signal.aborted) {
+        cleanup();
+        controller.abort(signal.reason ?? new Error(`Execution aborted before LLM response for step '${stepName}'`));
+      } else {
+        const abortHandler = () => {
+          cleanup();
+          controller.abort(signal.reason ?? new Error(`Execution aborted during step '${stepName}'`));
+        };
+        signal.addEventListener("abort", abortHandler, { once: true });
+        onAbort = () => signal.removeEventListener("abort", abortHandler);
+      }
+    }
+
+    controller.signal.addEventListener("abort", cleanup, { once: true });
+    return controller.signal;
+  }
+
+  private async withTimeout<T>(
+    task: () => Promise<T>,
+    timeoutMs: number,
+    timeoutMessage: string,
+  ): Promise<T> {
+    const timeoutController = new AbortController();
+    const timeout = setTimeout(() => {
+      timeoutController.abort(new Error(timeoutMessage));
+    }, timeoutMs);
+
+    try {
+      return await Promise.race([
+        task(),
+        new Promise<never>((_, reject) => {
+          timeoutController.signal.addEventListener(
+            "abort",
+            () => {
+              reject(timeoutController.signal.reason ?? new Error(timeoutMessage));
+            },
+            { once: true },
+          );
+        }),
+      ]);
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   private getStepTimeoutMs(step: WorkflowStep): number {
@@ -165,6 +224,20 @@ export class StepExecutor {
     }
 
     return 30_000;
+  }
+
+  private getConsensusTimeoutMs(
+    step: WorkflowStep,
+    participantCount: number,
+    perRequestTimeoutMs: number,
+  ): number {
+    const config = step.config;
+    const raw = config && typeof config === "object" ? (config as Record<string, unknown>).consensusTimeoutMs : undefined;
+    if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) {
+      return raw;
+    }
+
+    return perRequestTimeoutMs * participantCount * 2;
   }
 
   private buildSystemPrompt(agentName?: string): string {
