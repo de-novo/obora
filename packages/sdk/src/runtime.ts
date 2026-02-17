@@ -231,7 +231,7 @@ export class OboraRuntime {
   ): Promise<ReExecutionResult> {
     const execution = this.executions.get(executionId);
     if (!execution) {
-      throw new OboraError(`Execution not found: ${executionId}`, "SDK_EXECUTION_NOT_FOUND");
+      throw new OboraError(`Execution not found: ${executionId}`, OboraErrorCode.AUDIT_REPLAY_NOT_FOUND);
     }
 
     const reExecutionId = randomUUID();
@@ -245,15 +245,41 @@ export class OboraRuntime {
     });
 
     const allSteps = execution.stepOrder ?? [];
+    if (
+      mode === "from_checkpoint" &&
+      options?.checkpointStep &&
+      !allSteps.includes(options.checkpointStep)
+    ) {
+      throw new OboraError(
+        `Checkpoint step not found: ${options.checkpointStep}`,
+        OboraErrorCode.AUDIT_REPLAY_NOT_FOUND,
+      );
+    }
+
     const checkpointIdx = options?.checkpointStep ? allSteps.indexOf(options.checkpointStep) : -1;
     const stepsToSkip = checkpointIdx > 0 ? allSteps.slice(0, checkpointIdx) : [];
     const stepsToRerun = checkpointIdx > 0 ? allSteps.slice(checkpointIdx) : [...allSteps];
 
+    const nonDeterminismWarnings: string[] = [];
+    if (options?.detectNonDeterminism) {
+      nonDeterminismWarnings.push("Non-determinism detection is limited in simulation mode");
+      for (const stepName of stepsToRerun) {
+        if (!(stepName in execution.outputs)) {
+          nonDeterminismWarnings.push(
+            `Potential non-determinism: no original output comparison for step '${stepName}'`,
+          );
+        }
+      }
+    }
+
     const plan: ReExecutionPlan = {
       executionId,
+      originalWorkflow: execution.workflowName,
+      mode,
       stepsToRerun,
       stepsToSkip,
       checkpointStep: options?.checkpointStep,
+      nonDeterminismWarnings: nonDeterminismWarnings.length > 0 ? nonDeterminismWarnings : undefined,
     };
 
     const stepResults: StepReExecutionResult[] = [];

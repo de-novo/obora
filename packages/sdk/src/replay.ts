@@ -27,10 +27,13 @@ export interface ReExecutionResult {
 
 export interface ReExecutionPlan {
   executionId: string;
+  originalWorkflow?: string;
+  mode: "full" | "from_checkpoint";
   stepsToRerun: string[];
   stepsToSkip: string[];
   checkpointStep?: string;
   estimatedDuration?: number;
+  nonDeterminismWarnings?: string[];
 }
 
 export interface ReExecutionDiffReport {

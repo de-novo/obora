@@ -3,12 +3,12 @@ import { describe, expect, it, vi } from "vitest";
 import { OboraError, OboraRuntime } from "../runtime.js";
 
 describe("M3-05 Replay/Re-execution SDK API", () => {
-  it("throws OboraError with SDK_EXECUTION_NOT_FOUND for unknown executionId", async () => {
+  it("throws OboraError with AUDIT_REPLAY_NOT_FOUND for unknown executionId", async () => {
     const runtime = new OboraRuntime();
 
     await expect(runtime.replay("missing-exec-id")).rejects.toMatchObject({
       name: "OboraError",
-      code: "SDK_EXECUTION_NOT_FOUND",
+      code: "AUDIT_6002",
       message: "Execution not found: missing-exec-id",
     });
   });
@@ -41,9 +41,57 @@ describe("M3-05 Replay/Re-execution SDK API", () => {
       checkpointStep: "b",
     });
 
+    expect(replay.plan.mode).toBe("from_checkpoint");
+    expect(replay.plan.originalWorkflow).toBe("cp");
     expect(replay.plan.stepsToSkip).toEqual(["a"]);
     expect(replay.plan.stepsToRerun).toEqual(["b", "c"]);
     expect(replay.plan.checkpointStep).toBe("b");
+  });
+
+  it("throws AUDIT_REPLAY_NOT_FOUND when checkpoint step is not found", async () => {
+    const runtime = new OboraRuntime();
+    runtime.define("cp-missing", {
+      name: "cp-missing",
+      steps: [{ name: "a" }, { name: "b" }],
+    });
+
+    const handle = await runtime.run("cp-missing");
+    const execution = await handle.wait();
+
+    await expect(
+      runtime.replay(execution.id, {
+        mode: "from_checkpoint",
+        checkpointStep: "z",
+      }),
+    ).rejects.toMatchObject({
+      name: "OboraError",
+      code: "AUDIT_6002",
+      message: "Checkpoint step not found: z",
+    });
+  });
+
+  it("adds non-determinism warnings to plan when detectNonDeterminism=true", async () => {
+    const runtime = new OboraRuntime();
+    runtime.define("nd", {
+      name: "nd",
+      steps: [{ name: "s1" }, { name: "s2" }],
+    });
+
+    const handle = await runtime.run("nd");
+    const execution = await handle.wait();
+
+    const replay = await runtime.replay(execution.id, { detectNonDeterminism: true });
+
+    expect(replay.plan.nonDeterminismWarnings).toBeDefined();
+    expect(replay.plan.nonDeterminismWarnings).toContain(
+      "Non-determinism detection is limited in simulation mode",
+    );
+    expect(replay.plan.nonDeterminismWarnings).toContain(
+      "Potential non-determinism: no original output comparison for step 's1'",
+    );
+    expect(replay.plan.nonDeterminismWarnings).toContain(
+      "Potential non-determinism: no original output comparison for step 's2'",
+    );
   });
 
   it("emits reexecution lifecycle events", async () => {
