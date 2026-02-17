@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
 
-export type WorkflowDefinition = unknown;
+import { Policy, type PolicyDefinition } from "./policy.js";
+import { Workflow, type WorkflowDef } from "./workflow.js";
+
+export type WorkflowDefinition = WorkflowDef | unknown;
 
 export type AuditEventType = "execution_start" | "execution_end" | "plugin_load" | "error";
 
@@ -96,16 +99,41 @@ export class OboraRuntime {
   private readonly plugins = new Map<string, OboraPlugin>();
   private readonly handlers = new Map<AuditEventType, Set<EventHandler>>();
 
-  constructor(private readonly config: OboraRuntimeConfig = {}) {}
+  private policy?: PolicyDefinition;
+  private readonly policyLoadPromise?: Promise<void>;
 
-  define(name: string, workflow: WorkflowDefinition): this {
+  constructor(private readonly config: OboraRuntimeConfig = {}) {
+    if (config.policyPath) {
+      this.policyLoadPromise = Policy.fromYaml(config.policyPath)
+        .then((policy) => {
+          this.policy = policy;
+        })
+        .catch((error: unknown) => {
+          const err = error as NodeJS.ErrnoException;
+          if (err?.code === "ENOENT") {
+            return;
+          }
+
+          if (error instanceof OboraError) {
+            throw error;
+          }
+
+          throw new OboraError("Failed to load policy", "SDK_INVALID_POLICY", undefined, undefined, error);
+        });
+    }
+  }
+
+  define(name: string, workflow: WorkflowDef): this;
+  define(name: string, workflow: unknown): this;
+  define(name: string, workflow: unknown): this {
     this.workflows.set(name, workflow);
     return this;
   }
 
   async loadWorkflow(path: string): Promise<this> {
-    void path;
-    throw new OboraError("Not implemented: loadWorkflow", "SDK_NOT_IMPLEMENTED");
+    const workflow = await Workflow.fromYaml(path);
+    this.define(workflow.name, workflow);
+    return this;
   }
 
   async replay(executionId: string, options?: unknown): Promise<unknown> {
@@ -133,6 +161,8 @@ export class OboraRuntime {
   }
 
   async run(name: string, options: RunOptions = {}): Promise<RunHandle> {
+    await this.policyLoadPromise;
+
     if (!this.workflows.has(name)) {
       throw new OboraError(`Workflow is not defined: ${name}`, "SDK_WORKFLOW_NOT_FOUND");
     }

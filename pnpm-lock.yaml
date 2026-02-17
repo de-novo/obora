@@ -439,6 +439,9 @@ importers:
       '@obora-kit/runtime':
         specifier: workspace:*
         version: link:../runtime
+      yaml:
+        specifier: ^2.8.2
+        version: 2.8.2
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
