@@ -32,6 +32,7 @@ export interface PatternPlugin {
 
 export interface CustomPatternDefinition {
   name: string;
+  execute?: (...args: unknown[]) => unknown;
 }
 
 export interface OboraPlugin {
@@ -70,7 +71,7 @@ export interface RunHandle {
 }
 
 export type EventHandler<T extends AuditEventType = AuditEventType> = (
-  event: Extract<AuditEvent, { type: T }>
+  event: AuditEvent<T>
 ) => void | Promise<void>;
 export type Unsubscribe = () => void;
 
@@ -83,7 +84,7 @@ export class OboraError extends Error {
     public override readonly cause?: unknown,
   ) {
     super(message);
-    this.name = 'OboraError';
+    this.name = "OboraError";
   }
 }
 
@@ -104,20 +105,34 @@ export class OboraRuntime {
 
   async loadWorkflow(path: string): Promise<this> {
     void path;
-    throw new Error("Not implemented: loadWorkflow");
+    throw new OboraError("Not implemented: loadWorkflow", "SDK_NOT_IMPLEMENTED");
   }
 
   async replay(executionId: string, options?: unknown): Promise<unknown> {
     void executionId;
     void options;
-    throw new Error("Not implemented: replay");
+    throw new OboraError("Not implemented: replay", "SDK_NOT_IMPLEMENTED");
   }
 
   onError(handler: (error: OboraError) => void): Unsubscribe {
-    return this.on("error", handler as unknown as EventHandler);
+    return this.on("error", (event) => {
+      const data = event.data as {
+        message?: string;
+        code?: string;
+        executionId?: string;
+        stepName?: string;
+      };
+      const err = new OboraError(
+        data.message ?? "Unknown error",
+        data.code ?? "SDK_UNKNOWN_ERROR",
+        event.executionId,
+        data.stepName,
+      );
+      handler(err);
+    });
   }
 
-  run(name: string, options: RunOptions = {}): RunHandle {
+  async run(name: string, options: RunOptions = {}): Promise<RunHandle> {
     if (!this.workflows.has(name)) {
       throw new OboraError(`Workflow is not defined: ${name}`, "SDK_WORKFLOW_NOT_FOUND");
     }
@@ -295,7 +310,7 @@ export class OboraRuntime {
     await Promise.all(
       [...handlers].map(async (handler) => {
         await handler(event);
-      })
+      }),
     );
   }
 }

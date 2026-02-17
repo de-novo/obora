@@ -7,7 +7,7 @@ describe("OboraRuntime facade", () => {
     const runtime = new OboraRuntime({ policyPath: "./policy.yaml" });
     runtime.define("demo", "name: demo\nsteps: []");
 
-    const handle = runtime.run("demo", { input: { topic: "runtime facade" } });
+    const handle = await runtime.run("demo", { input: { topic: "runtime facade" } });
 
     expect(handle.executionId).toBeTypeOf("string");
     expect(handle.status === "queued" || handle.status === "running").toBe(true);
@@ -64,7 +64,7 @@ describe("OboraRuntime facade", () => {
     const runtime = new OboraRuntime();
     runtime.define("cancel-me", "name: cancel-me\nsteps: []");
 
-    const handle = runtime.run("cancel-me", { input: { value: 1 } });
+    const handle = await runtime.run("cancel-me", { input: { value: 1 } });
     await handle.cancel("user abort");
 
     expect(handle.status).toBe("aborted");
@@ -75,16 +75,35 @@ describe("OboraRuntime facade", () => {
     });
   });
 
-  it("throws OboraError for unknown workflows", () => {
+  it("onError receives OboraError on execution cancel", async () => {
+    const runtime = new OboraRuntime();
+    const errors: OboraError[] = [];
+
+    runtime.onError((err) => errors.push(err));
+    runtime.define("err-test", "name: err-test\nsteps: []");
+
+    const handle = await runtime.run("err-test");
+    await handle.cancel("test abort");
+    await expect(handle.wait()).rejects.toMatchObject({
+      name: "OboraError",
+      code: "SDK_EXECUTION_CANCELLED",
+      message: "test abort",
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toBeInstanceOf(OboraError);
+    expect(errors[0].code).toBe("SDK_EXECUTION_CANCELLED");
+  });
+
+  it("throws OboraError for unknown workflows", async () => {
     const runtime = new OboraRuntime();
 
-    expect(() => runtime.run("unknown")).toThrow("Workflow is not defined: unknown");
-    try {
-      runtime.run("unknown");
-    } catch (error) {
-      expect(error).toBeInstanceOf(OboraError);
-      expect((error as OboraError).code).toBe("SDK_WORKFLOW_NOT_FOUND");
-    }
+    await expect(runtime.run("unknown")).rejects.toThrow("Workflow is not defined: unknown");
+    await expect(runtime.run("unknown")).rejects.toMatchObject({
+      name: "OboraError",
+      code: "SDK_WORKFLOW_NOT_FOUND",
+    });
   });
 
   it("supports abort signal cancellation", async () => {
@@ -92,7 +111,7 @@ describe("OboraRuntime facade", () => {
     runtime.define("signal-cancel", "name: signal-cancel\nsteps: []");
 
     const controller = new AbortController();
-    const handle = runtime.run("signal-cancel", { signal: controller.signal });
+    const handle = await runtime.run("signal-cancel", { signal: controller.signal });
     controller.abort("signal abort");
 
     expect(handle.status).toBe("aborted");
