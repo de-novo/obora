@@ -6,17 +6,34 @@ import { PlaybackTimeline } from '../components/PlaybackTimeline';
 import { Timeline } from '../components/Timeline';
 import { usePlayback } from '../hooks/usePlayback';
 import { applyExecutionEvent, createInitialExecutionStoreState, getSortedSteps, type ExecutionRecord } from '../store/execution-store';
+import type { ExecutionEvent, KnownExecutionEventType } from '../../server/types.js';
 
 interface PlaybackViewProps {
   initialExecutionId?: string;
 }
 
-const toExecutionEvent = (event: AuditEvent) => ({
+const KNOWN_EVENT_TYPES: ReadonlySet<KnownExecutionEventType> = new Set([
+  'execution_start',
+  'execution_end',
+  'step_start',
+  'step_end',
+  'policy_check',
+  'policy_deny',
+  'gate_wait',
+  'gate_resolve',
+  'recovery_start',
+  'recovery_end',
+  'error',
+]);
+
+const toExecutionEvent = (event: AuditEvent): ExecutionEvent => ({
   id: event.id,
   executionId: event.executionId,
   timestamp: event.timestamp,
   type: event.type,
-  knownType: event.type,
+  knownType: KNOWN_EVENT_TYPES.has(event.type as KnownExecutionEventType)
+    ? (event.type as KnownExecutionEventType)
+    : undefined,
   stepName: event.stepName,
   payload: (event.payload ?? {}) as Record<string, unknown>,
 });

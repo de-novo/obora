@@ -71,13 +71,13 @@ export class HotReloadEngine {
     });
 
     if (updated === null) {
-      await this.rollbackRuntimePolicy(policyId, parsedCurrent.policySet);
-      return this.handleFailure(policyId, 'Policy not found', true);
+      const rollbackPerformed = await this.rollbackRuntimePolicy(policyId, parsedCurrent.policySet);
+      return this.handleFailure(policyId, 'Policy not found', rollbackPerformed);
     }
 
     if (updated === 'revision_conflict') {
-      await this.rollbackRuntimePolicy(policyId, parsedCurrent.policySet);
-      return this.handleFailure(policyId, 'Revision conflict', true);
+      const rollbackPerformed = await this.rollbackRuntimePolicy(policyId, parsedCurrent.policySet);
+      return this.handleFailure(policyId, 'Revision conflict', rollbackPerformed);
     }
 
     this.failureCountByPolicy.set(policyId, 0);

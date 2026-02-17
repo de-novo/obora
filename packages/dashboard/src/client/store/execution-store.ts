@@ -2,6 +2,8 @@ import { useSyncExternalStore } from 'react';
 
 import type { ExecutionEvent } from '../../server/types.js';
 
+export type { ExecutionEvent } from '../../server/types.js';
+
 export type StepStatus = 'pending' | 'running' | 'completed' | 'failed';
 
 export interface StepErrorDetail {

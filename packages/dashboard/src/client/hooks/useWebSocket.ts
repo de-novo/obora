@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { ExecutionEvent } from '../store/execution-store';
+import type { ExecutionEvent } from '../../server/types.js';
 
 interface WsServerMessage {
   type?: 'ack' | 'event' | 'error';

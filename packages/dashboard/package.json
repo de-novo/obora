@@ -4,6 +4,18 @@
   "private": true,
   "description": "Obora M4 dashboard web server scaffold",
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./server/types": {
+      "types": "./dist/server/types.d.ts",
+      "default": "./dist/server/types.js"
+    }
+  },
   "scripts": {
     "dev": "concurrently \"vite --config vite.config.ts\" \"tsx src/server/index.ts\"",
     "build": "vite build && tsc -p tsconfig.json",
