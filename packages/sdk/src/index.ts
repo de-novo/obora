@@ -1,6 +1,6 @@
 export { Agent } from "./agent.js";
 export { Policy } from "./policy.js";
-export { OboraRuntime, OboraError } from "./runtime.js";
+export { OboraRuntime, OboraError, OboraErrorCode } from "./runtime.js";
 export { Workflow } from "./workflow.js";
 
 export type { AgentContext, AgentResult } from "./agent.js";
@@ -16,5 +16,7 @@ export type {
   ToolHandler,
   PatternRegistration,
   OboraAuditConfig,
+  AuditEventType,
+  AuditEvent,
 } from "./runtime.js";
 export type { WorkflowDef, WorkflowStep } from "./workflow.js";

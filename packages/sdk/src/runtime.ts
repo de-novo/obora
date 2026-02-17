@@ -6,20 +6,91 @@ import type { WorkflowDef } from "./workflow.js";
 
 export type WorkflowDefinition = WorkflowDef;
 
-export type AuditEventType = "execution_start" | "execution_end" | "plugin_load" | "error";
+// Mirrors @obora-kit/runtime AuditEventType
+export type AuditEventType =
+  | "execution_start"
+  | "execution_end"
+  | "step_start"
+  | "step_end"
+  | "cell_start"
+  | "cell_end"
+  | "tool_call"
+  | "tool_result"
+  | "llm_request"
+  | "llm_response"
+  | "policy_check"
+  | "policy_deny"
+  | "state_change"
+  | "consensus_vote"
+  | "consensus_result"
+  | "gate_wait"
+  | "gate_resolve"
+  | "gate_assignment_created"
+  | "gate_assignment_reassigned"
+  | "gate_assignment_expired"
+  | "gate_approval_decision"
+  | "gate_sla_warning"
+  | "gate_sla_expired"
+  | "recovery_start"
+  | "recovery_end"
+  | "snapshot_create"
+  | "snapshot_restore"
+  | "plugin_load"
+  | "plugin_unload"
+  | "reexecution_start"
+  | "reexecution_step_start"
+  | "reexecution_step_end"
+  | "reexecution_end"
+  | "error";
 
 export interface AuditEvent<T extends AuditEventType = AuditEventType> {
   id: string;
   executionId: string;
+  cellId?: string;
   timestamp: Date;
   type: T;
   data: unknown;
+  metadata?: {
+    model?: string;
+    tokens?: number;
+    durationMs?: number;
+    costUsd?: number;
+  };
 }
 
-export interface Execution {
+export const OboraErrorCode = {
+  CELL_TIMEOUT: "CELL_1001",
+  CELL_TOOL_DENIED: "CELL_1002",
+  CELL_LLM_ERROR: "CELL_1003",
+  CELL_ABORTED: "CELL_1004",
+  POLICY_DENY: "POLICY_2001",
+  POLICY_GATE_REQUIRED: "POLICY_2002",
+  POLICY_GATE_TIMEOUT: "POLICY_2003",
+  POLICY_GATE_REJECTED: "POLICY_2004",
+  POLICY_SANDBOX_VIOLATION: "POLICY_2005",
+  POLICY_RESOURCE_EXCEEDED: "POLICY_2006",
+  POLICY_LOAD_FAILED: "POLICY_2007",
+  CONSENSUS_FAIL: "CONSENSUS_3001",
+  CONSENSUS_TIMEOUT: "CONSENSUS_3002",
+  CONSENSUS_QUORUM_NOT_MET: "CONSENSUS_3003",
+  RECOVERY_RETRY_EXHAUSTED: "RECOVERY_4001",
+  RECOVERY_ROLLBACK_FAILED: "RECOVERY_4002",
+  RECOVERY_ESCALATION_TIMEOUT: "RECOVERY_4003",
+  ORCH_WORKFLOW_NOT_FOUND: "ORCH_5001",
+  ORCH_STEP_NOT_FOUND: "ORCH_5002",
+  ORCH_DEPENDENCY_FAILED: "ORCH_5003",
+  ORCH_EXECUTION_TIMEOUT: "ORCH_5004",
+  AUDIT_STORE_ERROR: "AUDIT_6001",
+  AUDIT_REPLAY_NOT_FOUND: "AUDIT_6002",
+  ADAPTER_LLM_UNAVAILABLE: "ADAPTER_7001",
+  ADAPTER_AUTH_FAILED: "ADAPTER_7002",
+  ADAPTER_TOOL_NOT_FOUND: "ADAPTER_7003",
+} as const;
+
+export interface RuntimeExecution {
   id: string;
   workflowName: string;
-  status: "running" | "completed" | "failed" | "aborted";
+  status: "running" | "completed" | "failed" | "waiting" | "suspended";
   input: unknown;
   startedAt: Date;
   endedAt?: Date;
@@ -70,18 +141,21 @@ export interface RunOptions {
 export interface RunHandle {
   executionId: string;
   readonly status: RunStatus;
-  wait(): Promise<Execution>;
+  wait(): Promise<RuntimeExecution>;
   cancel(reason?: string): Promise<void>;
 }
 
 export type EventHandler<T extends AuditEventType = AuditEventType> = (
-  event: AuditEvent<T>
+  event: AuditEvent & { type: T }
 ) => void | Promise<void>;
 export type Unsubscribe = () => void;
 
 export class OboraError extends Error {
   constructor(
     message: string,
+    /**
+     * Runtime codes (OboraErrorCode) + SDK facade codes (e.g., SDK_*).
+     */
     public readonly code: string,
     public readonly executionId?: string,
     public readonly stepName?: string,
@@ -99,6 +173,7 @@ export class OboraRuntime {
   private readonly patterns = new Map<string, PatternRegistration>();
   private readonly plugins = new Map<string, OboraPlugin>();
   private readonly handlers = new Map<AuditEventType, Set<EventHandler>>();
+  private readonly anyHandlers = new Set<(event: AuditEvent) => void | Promise<void>>();
 
   private policy?: PolicyDefinition;
   private readonly policyLoadPromise?: Promise<void>;
@@ -119,13 +194,18 @@ export class OboraRuntime {
             throw error;
           }
 
-          throw new OboraError("Failed to load policy", "SDK_INVALID_POLICY", undefined, undefined, error);
+          throw new OboraError(
+            "Failed to load policy",
+            OboraErrorCode.POLICY_LOAD_FAILED,
+            undefined,
+            undefined,
+            error,
+          );
         });
     }
   }
 
   define(name: string, workflow: WorkflowDef): this {
-    // Validate through Workflow.create to fail fast
     Workflow.create(workflow);
     this.workflows.set(name, workflow);
     return this;
@@ -175,7 +255,7 @@ export class OboraRuntime {
     let settled = false;
     let rejectWait: ((reason?: unknown) => void) | undefined;
 
-    const waitPromise = new Promise<Execution>((resolve, reject) => {
+    const waitPromise = new Promise<RuntimeExecution>((resolve, reject) => {
       rejectWait = reject;
 
       queueMicrotask(async () => {
@@ -185,8 +265,6 @@ export class OboraRuntime {
 
         status = "running";
         execution.status = "running";
-        // TODO(M3-04+): Wire to RuntimeOrchestrator for actual step execution.
-        // Currently completes immediately as a façade stub.
         await this.emitEvent("execution_start", executionId, {
           workflowName: name,
           input,
@@ -223,7 +301,7 @@ export class OboraRuntime {
         }
 
         status = "aborted";
-        execution.status = "aborted";
+        execution.status = "failed";
         execution.error = reason ?? "Execution cancelled";
         execution.endedAt = new Date();
         settled = true;
@@ -308,7 +386,78 @@ export class OboraRuntime {
     };
   }
 
-  private createExecution(executionId: string, workflowName: string, input: unknown): Execution {
+  events(filter?: {
+    executionId?: string;
+    type?: AuditEventType | AuditEventType[];
+  }): AsyncIterableIterator<AuditEvent> {
+    const queue: AuditEvent[] = [];
+    let resolve: ((value: IteratorResult<AuditEvent>) => void) | null = null;
+    let done = false;
+
+    const handler = (event: AuditEvent) => {
+      if (done) {
+        return;
+      }
+
+      if (filter?.executionId && event.executionId !== filter.executionId) {
+        return;
+      }
+
+      if (filter?.type) {
+        const types = Array.isArray(filter.type) ? filter.type : [filter.type];
+        if (!types.includes(event.type)) {
+          return;
+        }
+      }
+
+      if (resolve) {
+        const pending = resolve;
+        resolve = null;
+        pending({ value: event, done: false });
+      } else {
+        queue.push(event);
+      }
+    };
+
+    this.anyHandlers.add(handler);
+
+    const close = () => {
+      done = true;
+      this.anyHandlers.delete(handler);
+      if (resolve) {
+        const pending = resolve;
+        resolve = null;
+        pending({ value: undefined, done: true });
+      }
+    };
+
+    const iterator: AsyncIterableIterator<AuditEvent> = {
+      [Symbol.asyncIterator]() {
+        return iterator;
+      },
+      async next() {
+        if (queue.length > 0) {
+          return { value: queue.shift()!, done: false };
+        }
+
+        if (done) {
+          return { value: undefined, done: true };
+        }
+
+        return await new Promise<IteratorResult<AuditEvent>>((nextResolve) => {
+          resolve = nextResolve;
+        });
+      },
+      async return() {
+        close();
+        return { value: undefined, done: true };
+      },
+    };
+
+    return iterator;
+  }
+
+  private createExecution(executionId: string, workflowName: string, input: unknown): RuntimeExecution {
     return {
       id: executionId,
       workflowName,
@@ -322,13 +471,19 @@ export class OboraRuntime {
     };
   }
 
-  private async emitEvent(type: AuditEventType, executionId: string, data: unknown): Promise<void> {
+  private async emitEvent(
+    type: AuditEventType,
+    executionId: string,
+    data: unknown,
+    metadata?: AuditEvent["metadata"],
+  ): Promise<void> {
     const event: AuditEvent = {
       id: randomUUID(),
       executionId,
       timestamp: new Date(),
       type,
       data,
+      ...(metadata ? { metadata } : {}),
     };
 
     if (this.config.audit?.enabled !== false) {
@@ -336,13 +491,14 @@ export class OboraRuntime {
     }
 
     const handlers = this.handlers.get(type);
-    if (!handlers || handlers.size === 0) {
+    const callbacks = [...(handlers ?? []), ...this.anyHandlers];
+    if (callbacks.length === 0) {
       return;
     }
 
     await Promise.allSettled(
-      [...handlers].map(async (handler) => {
-        await handler(event);
+      callbacks.map(async (callback) => {
+        await callback(event);
       }),
     );
   }
