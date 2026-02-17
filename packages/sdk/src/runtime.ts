@@ -106,6 +106,7 @@ export const OboraErrorCode = {
   SDK_INVALID_PLUGIN: "SDK_9001",
   SDK_PLUGIN_LOAD_FAILED: "SDK_9002",
   SDK_PLUGIN_CONFLICT: "SDK_9003",
+  SDK_FIXTURE_INVALID: "SDK_9004",
 } as const;
 
 export interface RuntimeExecution {

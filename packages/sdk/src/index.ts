@@ -8,7 +8,15 @@ export { PLUGIN_TYPE_ALIASES, resolvePluginType } from "./plugin-type-map.js";
 export { validatePluginMetadata } from "./plugin-validator.js";
 export { OboraRuntime, OboraError, OboraErrorCode } from "./runtime.js";
 export { Workflow } from "./workflow.js";
-export { MockAgent, MockTool, runWorkflowTest } from "./testing/index.js";
+export {
+  MockAgent,
+  MockTool,
+  runWorkflowTest,
+  validateFixture,
+  loadFixture,
+  loadFixtures,
+  fixtureToTestCase,
+} from "./testing/index.js";
 
 export type { AgentContext, AgentResult } from "./agent.js";
 export type { PolicyDefinition } from "./policy.js";
@@ -38,6 +46,7 @@ export type {
   WorkflowTestCase,
   TestResult,
   TestFailure,
+  YamlFixture,
 } from "./testing/index.js";
 export type {
   ReExecutionOptions,
