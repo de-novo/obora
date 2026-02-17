@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
 import { parse as parseYaml } from "yaml";
@@ -459,7 +459,8 @@ export class OboraRuntime {
 
           const adapterCache = new Map<string, Awaited<ReturnType<OboraRuntime["createLLMAdapter"]>>>();
           const getAdapter = async (cfg: LLMConfig) => {
-            const cacheKey = `${cfg.provider}:${cfg.apiKey}:${cfg.baseUrl ?? ""}`;
+            const apiKeyHash = createHash("sha256").update(cfg.apiKey).digest("hex").slice(0, 16);
+            const cacheKey = `${cfg.provider}:${cfg.model ?? ""}:${cfg.baseUrl ?? ""}:${apiKeyHash}`;
             const cached = adapterCache.get(cacheKey);
             if (cached) {
               return cached;
@@ -485,7 +486,11 @@ export class OboraRuntime {
                     return undefined;
                   }
 
-                  const providerConfig = resolveProviderConfig(loadedConfig, agentConfig.provider ?? loadedConfig.defaults?.provider);
+                  const providerConfig = resolveProviderConfig(
+                    loadedConfig,
+                    agentConfig.provider ?? loadedConfig.defaults?.provider,
+                    { verbose: this.config.verbose },
+                  );
                   if (!providerConfig) {
                     return undefined;
                   }

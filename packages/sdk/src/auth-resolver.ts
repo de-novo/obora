@@ -1,4 +1,8 @@
-export function resolveAuthRef(authRef: string): string | undefined {
+import { OboraError, OboraErrorCode } from "./runtime.js";
+
+let plainTextAuthRefWarned = false;
+
+export function resolveAuthRef(authRef: string, options?: { verbose?: boolean }): string | undefined {
   if (!authRef) {
     return undefined;
   }
@@ -12,12 +16,16 @@ export function resolveAuthRef(authRef: string): string | undefined {
   }
 
   if (authRef.startsWith("obora-auth:")) {
-    console.warn(
-      `[obora] authRef '${authRef}' uses obora-auth profile resolution, which is not implemented yet. Falling back to undefined.`,
+    throw new OboraError(
+      "obora-auth: protocol is not yet supported. Use env:VAR_NAME instead.",
+      OboraErrorCode.SDK_NOT_IMPLEMENTED,
     );
-    return undefined;
   }
 
-  console.warn("[obora] Plain text authRef detected in config. This is supported but not recommended.");
+  if (options?.verbose && !plainTextAuthRefWarned) {
+    plainTextAuthRefWarned = true;
+    console.warn("[obora] Plain text authRef detected in config. This is supported but not recommended.");
+  }
+
   return authRef;
 }
