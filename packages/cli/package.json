@@ -53,6 +53,9 @@
   "license": "MIT",
   "files": [
     "dist",
+    "!dist/**/__tests__/**",
+    "!dist/**/*.test.*",
+    "!dist/**/*-e2e.test.*",
     "README.md",
     "LICENSE"
   ],
