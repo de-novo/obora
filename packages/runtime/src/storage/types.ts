@@ -50,7 +50,35 @@ export interface RunFilter {
   offset?: number;
 }
 
-// ── StorageAdapter interface (T1 scope) ──
+// ── Checkpoint types (T2 scope) ──
+
+export interface CheckpointRecord {
+  id: string;
+  runId: string;
+  stepName: string;
+  stateSnapshot: unknown;
+  completedSteps: string[];
+  policyHash: string;
+  createdAt: string;
+}
+
+// ── Checkpointable interface ──
+
+export interface Checkpointable {
+  readonly schemaVersion: number;
+  toCheckpoint(): Record<string, unknown> & { schemaVersion: number };
+}
+
+export interface CheckpointableFactory<T> {
+  fromCheckpoint(snapshot: Record<string, unknown>): T;
+}
+
+export interface ResumeOptions {
+  fromStep?: string;
+  driftPolicy?: "reject" | "warn" | "ignore";
+}
+
+// ── StorageAdapter interface (T1 + T2 scope) ──
 
 export interface StorageAdapter {
   saveRun(record: RunRecord): Promise<void>;
@@ -63,4 +91,8 @@ export interface StorageAdapter {
   saveArtifact(record: ArtifactRecord): Promise<ArtifactRecord>;
   getArtifacts(runId: string, stepName?: string): Promise<ArtifactRecord[]>;
   deleteArtifact(artifactId: string): Promise<void>;
+
+  // ── Checkpoint (T2) ──
+  saveCheckpoint(record: CheckpointRecord): Promise<void>;
+  getLatestCheckpoint(runId: string): Promise<CheckpointRecord | null>;
 }

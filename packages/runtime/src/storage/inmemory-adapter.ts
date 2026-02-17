@@ -8,12 +8,14 @@ import type {
   StepRecord,
   ArtifactRecord,
   RunFilter,
+  CheckpointRecord,
 } from "./types.js";
 
 export class InMemoryStorageAdapter implements StorageAdapter {
   private readonly runs = new Map<string, RunRecord>();
   private readonly steps: StepRecord[] = [];
   private readonly artifacts = new Map<string, ArtifactRecord>();
+  private readonly checkpoints: CheckpointRecord[] = [];
 
   async saveRun(record: RunRecord): Promise<void> {
     this.runs.set(record.id, structuredClone(record));
@@ -81,5 +83,16 @@ export class InMemoryStorageAdapter implements StorageAdapter {
     if (a) {
       a.deletedAt = new Date().toISOString();
     }
+  }
+
+  async saveCheckpoint(record: CheckpointRecord): Promise<void> {
+    this.checkpoints.push(structuredClone(record));
+  }
+
+  async getLatestCheckpoint(runId: string): Promise<CheckpointRecord | null> {
+    const matching = this.checkpoints
+      .filter((c) => c.runId === runId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return matching.length > 0 ? structuredClone(matching[0]) : null;
   }
 }

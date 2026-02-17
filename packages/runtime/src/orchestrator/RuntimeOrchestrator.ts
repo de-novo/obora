@@ -9,7 +9,9 @@ import type { PolicyEngine } from "../policy/PolicyEngine.js";
 import type { PolicyDecision } from "../policy/types.js";
 import type { RecoveryEngine } from "../recovery/types.js";
 import type { StateBinder, StateBinding } from "../state/StateBinder.js";
-import type { StorageAdapter, RunRecord, StepRecord } from "../storage/types.js";
+import type { StorageAdapter, RunRecord, StepRecord, ResumeOptions } from "../storage/types.js";
+import { CheckpointManager, PolicyDriftError } from "../checkpoint/CheckpointManager.js";
+import type { PolicyHashInput } from "../checkpoint/policy-hash.js";
 import { parseDuration } from "./utils.js";
 import type {
   Execution,
@@ -17,6 +19,7 @@ import type {
   ExecutionStepStatus,
   GateWaitState,
   GateWaitStateStore,
+  ResumeResult,
   RuntimeOrchestrator as RuntimeOrchestratorContract,
   RuntimeOrchestratorOptions,
 } from "./types.js";
@@ -75,6 +78,9 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
   private readonly now: () => Date;
   private readonly gateWaitStateStore: GateWaitStateStore;
 
+  private policyConfig: PolicyHashInput = {};
+  private checkpointManager?: CheckpointManager;
+
   constructor(
     private readonly dependencies: RuntimeOrchestratorDependencies,
     private readonly options: RuntimeOrchestratorOptions = {}
@@ -82,6 +88,14 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
     this.createExecutionId = options.createExecutionId ?? (() => randomUUID());
     this.now = options.now ?? (() => new Date());
     this.gateWaitStateStore = dependencies.gateWaitStateStore ?? inMemoryGateStateStore();
+    if (dependencies.storageAdapter) {
+      this.checkpointManager = new CheckpointManager(dependencies.storageAdapter);
+    }
+  }
+
+  /** Set the policy config used for checkpoint drift detection */
+  setPolicyConfig(config: PolicyHashInput): void {
+    this.policyConfig = config;
   }
 
   define(name: string, workflow: Workflow | string): void {
@@ -113,6 +127,133 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
     const completed = new Set<string>();
     const scheduled = new Set<string>();
     return this.executeLoop(execution, workflow, input, completed, scheduled);
+  }
+
+  async resume(runId: string, options: ResumeOptions = {}): Promise<ResumeResult> {
+    const adapter = this.dependencies.storageAdapter;
+    if (!adapter || !this.checkpointManager) {
+      throw new Error("StorageAdapter is required for resume");
+    }
+
+    // 1. Load run and checkpoint
+    const runRecord = await adapter.getRun(runId);
+    if (!runRecord) {
+      throw new Error(`Run not found: ${runId}`);
+    }
+
+    const checkpoint = await this.checkpointManager.getLatestCheckpoint(runId);
+    if (!checkpoint) {
+      throw new Error(`No checkpoint found for run: ${runId}`);
+    }
+
+    // 2. Detect policy drift
+    const drift = this.checkpointManager.detectDrift(checkpoint, this.policyConfig);
+    const driftPolicy = options.driftPolicy ?? "warn";
+
+    if (drift.drifted) {
+      await this.recordAudit(runId, "snapshot_restore", {
+        category: "recovery",
+        action: "policy_drift_detected",
+        oldHash: drift.oldHash,
+        newHash: drift.newHash,
+        driftAction: driftPolicy,
+      });
+
+      if (driftPolicy === "reject") {
+        throw new PolicyDriftError(drift.oldHash, drift.newHash);
+      }
+    }
+
+    // 3. Load steps and determine restoration policy
+    const steps = await adapter.getSteps(runId);
+    const workflow = this.workflows.get(runRecord.workflowName);
+    if (!workflow) {
+      throw new Error(`Workflow is not defined: ${runRecord.workflowName}`);
+    }
+
+    const allStepNames = workflow.steps.map((s) => s.name);
+    const stepPolicies = this.checkpointManager.resolveStepPolicies(
+      steps,
+      checkpoint.completedSteps,
+      allStepNames,
+      options,
+    );
+
+    // 4. Create new execution with restored state
+    const execution = this.createExecution(
+      runRecord.workflowName,
+      workflow,
+      runRecord.input,
+      allStepNames,
+    );
+    this.executions.set(execution.id, execution);
+
+    // Update run record to link resumed execution
+    await adapter.saveRun({
+      ...runRecord,
+      status: "running",
+      completedAt: undefined,
+    });
+
+    await this.recordAudit(execution.id, "snapshot_restore", {
+      originalRunId: runId,
+      checkpointId: checkpoint.id,
+      restoredSteps: stepPolicies.filter((p) => p.action === "restore").map((p) => p.stepName),
+      rerunSteps: stepPolicies.filter((p) => p.action === "rerun").map((p) => p.stepName),
+    });
+
+    // 5. Restore completed steps and execute remaining
+    const completed = new Set<string>();
+    const scheduled = new Set<string>();
+    const restoredSteps: string[] = [];
+    const rerunSteps: string[] = [];
+
+    for (const policy of stepPolicies) {
+      if (policy.action === "restore") {
+        completed.add(policy.stepName);
+        execution.completedSteps = [...completed];
+        execution.outputs[policy.stepName] = policy.output ?? {};
+        const record = execution.stepRecords[policy.stepName];
+        if (record) {
+          record.status = "completed";
+          record.startedAt = this.now();
+          record.endedAt = this.now();
+        }
+        restoredSteps.push(policy.stepName);
+      } else if (policy.action === "skip") {
+        completed.add(policy.stepName);
+        const record = execution.stepRecords[policy.stepName];
+        if (record) {
+          record.status = "completed";
+        }
+      } else {
+        rerunSteps.push(policy.stepName);
+      }
+    }
+
+    await this.persistRun(execution);
+
+    // Execute remaining steps
+    const result = await this.executeLoop(execution, workflow, runRecord.input, completed, scheduled);
+
+    // Save final checkpoint
+    if (this.checkpointManager) {
+      const lastStep = allStepNames[allStepNames.length - 1];
+      await this.checkpointManager.saveCheckpoint(
+        execution.id,
+        lastStep,
+        [...completed],
+        execution.outputs,
+        this.policyConfig,
+      );
+    }
+
+    return {
+      execution: result,
+      restoredSteps,
+      rerunSteps,
+      driftDetected: drift.drifted,
+    };
   }
 
   async approve(executionId: string): Promise<Execution> {
@@ -328,6 +469,18 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
         if (result.status === "completed") {
           completed.add(result.step.name);
           execution.completedSteps = [...completed];
+
+          // Save checkpoint after each step completion
+          if (this.checkpointManager) {
+            await this.checkpointManager.saveCheckpoint(
+              execution.id,
+              result.step.name,
+              [...completed],
+              execution.outputs,
+              this.policyConfig,
+            );
+          }
+
           continue;
         }
 
@@ -342,6 +495,17 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
             input,
           });
           return this.cloneExecution(execution);
+        }
+
+        // Save checkpoint on failure so resume can pick up from here
+        if (this.checkpointManager) {
+          await this.checkpointManager.saveCheckpoint(
+            execution.id,
+            result.step.name,
+            [...completed],
+            execution.outputs,
+            this.policyConfig,
+          );
         }
 
         execution.status = "failed";

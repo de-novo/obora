@@ -8,6 +8,7 @@ import type {
   StepRecord,
   ArtifactRecord,
   RunFilter,
+  CheckpointRecord,
 } from "./types.js";
 
 // Lazy import to keep better-sqlite3 optional at runtime
@@ -80,10 +81,22 @@ export class SQLiteStorageAdapter implements StorageAdapter {
         FOREIGN KEY (run_id) REFERENCES runs(id)
       );
 
+      CREATE TABLE IF NOT EXISTS checkpoints (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL,
+        step_name TEXT NOT NULL,
+        state_snapshot TEXT NOT NULL,
+        completed_steps TEXT NOT NULL,
+        policy_hash TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (run_id) REFERENCES runs(id)
+      );
+
       CREATE INDEX IF NOT EXISTS idx_steps_run_id ON steps(run_id);
       CREATE INDEX IF NOT EXISTS idx_artifacts_run_id ON artifacts(run_id);
       CREATE INDEX IF NOT EXISTS idx_runs_status ON runs(status);
       CREATE INDEX IF NOT EXISTS idx_runs_workflow ON runs(workflow_name);
+      CREATE INDEX IF NOT EXISTS idx_checkpoints_run_id ON checkpoints(run_id);
     `);
   }
 
@@ -233,6 +246,48 @@ export class SQLiteStorageAdapter implements StorageAdapter {
     this.db
       .prepare("UPDATE artifacts SET deleted_at = ? WHERE id = ?")
       .run(new Date().toISOString(), artifactId);
+  }
+
+  async saveCheckpoint(record: CheckpointRecord): Promise<void> {
+    await this.ensureInitialized();
+    this.db
+      .prepare(
+        `INSERT INTO checkpoints (id, run_id, step_name, state_snapshot, completed_steps, policy_hash, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           state_snapshot = excluded.state_snapshot,
+           completed_steps = excluded.completed_steps,
+           policy_hash = excluded.policy_hash`
+      )
+      .run(
+        record.id,
+        record.runId,
+        record.stepName,
+        JSON.stringify(record.stateSnapshot),
+        JSON.stringify(record.completedSteps),
+        record.policyHash,
+        record.createdAt
+      );
+  }
+
+  async getLatestCheckpoint(runId: string): Promise<CheckpointRecord | null> {
+    await this.ensureInitialized();
+    const row = this.db
+      .prepare("SELECT * FROM checkpoints WHERE run_id = ? ORDER BY created_at DESC LIMIT 1")
+      .get(runId) as Record<string, unknown> | undefined;
+    return row ? this.toCheckpointRecord(row) : null;
+  }
+
+  private toCheckpointRecord(row: Record<string, unknown>): CheckpointRecord {
+    return {
+      id: row.id as string,
+      runId: row.run_id as string,
+      stepName: row.step_name as string,
+      stateSnapshot: this.safeJsonParse<unknown>(row.state_snapshot as string, `checkpoints.state_snapshot [id=${row.id}]`),
+      completedSteps: this.safeJsonParse<string[]>(row.completed_steps as string, `checkpoints.completed_steps [id=${row.id}]`),
+      policyHash: row.policy_hash as string,
+      createdAt: row.created_at as string,
+    };
   }
 
   /** Close the database connection */

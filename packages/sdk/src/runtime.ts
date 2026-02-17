@@ -969,6 +969,77 @@ export class OboraRuntime {
     );
   }
 
+  // ── Resume API (M6-02) ──
+
+  /**
+   * Resume a failed/suspended run from its last checkpoint.
+   *
+   * SDK-level resume delegates to the storage adapter for checkpoint loading
+   * and returns the resume result with restored/rerun step information.
+   */
+  async resume(
+    runId: string,
+    options: { fromStep?: string; driftPolicy?: "reject" | "warn" | "ignore" } = {},
+  ): Promise<{
+    execution: { id: string; status: string };
+    restoredSteps: string[];
+    rerunSteps: string[];
+    driftDetected: boolean;
+  }> {
+    const adapter = await this.getStorageAdapter();
+    const {
+      CheckpointManager,
+      PolicyDriftError,
+    } = await import("@obora/runtime");
+
+    const mgr = new CheckpointManager(adapter);
+    const run = await adapter.getRun(runId);
+    if (!run) {
+      throw new OboraError(`Run not found: ${runId}`, OboraErrorCode.SDK_EXECUTION_NOT_FOUND);
+    }
+
+    const checkpoint = await mgr.getLatestCheckpoint(runId);
+    if (!checkpoint) {
+      throw new OboraError(`No checkpoint found for run: ${runId}`, "SDK_CHECKPOINT_NOT_FOUND");
+    }
+
+    // Detect drift (SDK-level uses empty policy config; real drift check happens at runtime)
+    const drift = mgr.detectDrift(checkpoint, {});
+    const driftPolicy = options.driftPolicy ?? "warn";
+    if (drift.drifted && driftPolicy === "reject") {
+      throw new OboraError(
+        `Policy drift detected: ${drift.oldHash} → ${drift.newHash}`,
+        "SDK_POLICY_DRIFT",
+      );
+    }
+
+    // Determine step policies
+    const steps = await adapter.getSteps(runId);
+    const allStepNames = steps.map((s) => s.stepName);
+    // Deduplicate while preserving order
+    const seen = new Set<string>();
+    const uniqueStepNames = allStepNames.filter((n) => {
+      if (seen.has(n)) return false;
+      seen.add(n);
+      return true;
+    });
+
+    const stepPolicies = mgr.resolveStepPolicies(steps, checkpoint.completedSteps, uniqueStepNames, options);
+
+    const restoredSteps = stepPolicies.filter((p) => p.action === "restore").map((p) => p.stepName);
+    const rerunSteps = stepPolicies.filter((p) => p.action === "rerun").map((p) => p.stepName);
+
+    // Update run status
+    await adapter.saveRun({ ...run, status: "running", completedAt: undefined });
+
+    return {
+      execution: { id: runId, status: "running" },
+      restoredSteps,
+      rerunSteps,
+      driftDetected: drift.drifted,
+    };
+  }
+
   // ── Persistence Query API (M6-01) ──
 
   private _storageAdapter?: import("@obora/runtime").StorageAdapter;

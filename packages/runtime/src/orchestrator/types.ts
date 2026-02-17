@@ -57,9 +57,17 @@ export interface ExecutionFilter {
   workflowName?: string;
 }
 
+export interface ResumeResult {
+  execution: Execution;
+  restoredSteps: string[];
+  rerunSteps: string[];
+  driftDetected: boolean;
+}
+
 export interface RuntimeOrchestrator {
   define(name: string, workflow: Workflow | string): void;
   run(name: string, input: unknown): Promise<Execution>;
+  resume(runId: string, options?: import("../storage/types.js").ResumeOptions): Promise<ResumeResult>;
   approve(executionId: string): Promise<Execution>;
   reject(executionId: string, reason?: string): Promise<Execution>;
   onGateTimeout(executionId: string): Promise<Execution>;
