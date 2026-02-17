@@ -1,5 +1,7 @@
 import { Command } from "commander";
 
+import { OboraError, OboraRuntime } from "@obora/sdk";
+
 import { CLIError } from "../utils/cli-error.js";
 import { ExitCode } from "../utils/exit-codes.js";
 
@@ -8,6 +10,13 @@ async function handleStub(fn: () => void | Promise<void>): Promise<void> {
     await fn();
     process.exitCode = ExitCode.SUCCESS;
   } catch (err: unknown) {
+    if (err instanceof OboraError) {
+      const cliError = CLIError.fromOboraError(err);
+      console.error(cliError.message);
+      process.exitCode = cliError.exitCode;
+      return;
+    }
+
     if (err instanceof CLIError) {
       console.error(err.message);
       process.exitCode = err.exitCode;
@@ -51,7 +60,19 @@ export function createAuditCommand(): Command {
     .option("--dry-run", "Simulate without executing")
     .action(async (executionId, options) => {
       await handleStub(async () => {
-        console.log(`[stub] obora audit replay ${executionId}`, options);
+        const runtime = new OboraRuntime();
+        const result = await runtime.replay(executionId, {
+          mode: options.mode ?? "full",
+          startFromStep: options.checkpoint,
+          dryRun: options.dryRun ?? true,
+          detectNonDeterminism: true,
+        });
+
+        console.log(`✅ Replay complete. Success: ${result.success}`);
+        console.log(`   Steps rerun: ${result.stepResults.length}`);
+        console.log(
+          `   Diff: ${result.diffReport.summary.changed} changed, ${result.diffReport.summary.unchanged} unchanged`,
+        );
       });
     });
 

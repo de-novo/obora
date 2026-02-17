@@ -1,10 +1,29 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+
 import { Command } from "commander";
 
 import { CLIError } from "../utils/cli-error.js";
 import { ExitCode } from "../utils/exit-codes.js";
 
-export async function runInit(options: Record<string, unknown>): Promise<void> {
-  console.log("[stub] obora init", options);
+export async function runInit(_options: Record<string, unknown>): Promise<void> {
+  const dir = process.cwd();
+
+  await mkdir(join(dir, "workflows"), { recursive: true });
+  await mkdir(join(dir, "policies"), { recursive: true });
+  await mkdir(join(dir, "tests"), { recursive: true });
+
+  await writeFile(
+    join(dir, "workflows", "example.yaml"),
+    `name: example\nversion: "1.0"\nsteps:\n  - name: greet\n    agent: default\n`,
+  );
+  await writeFile(join(dir, "policies", "default.yaml"), `version: "1.0"\nrules: []\n`);
+  await writeFile(
+    join(dir, "obora.config.yaml"),
+    `version: "1.0"\nworkflows: ./workflows\npolicies: ./policies\ntests: ./tests\n`,
+  );
+
+  console.log("✅ Obora project initialized.");
 }
 
 export function createInitCommand(): Command {

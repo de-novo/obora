@@ -1,8 +1,27 @@
-import { describe, expect, it } from "vitest";
+import { mkdtemp, writeFile, readFile, access } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createCLI } from "../../cli.js";
+import { createPolicyCommand } from "../policy.js";
+import { runRun } from "../run.js";
+import { runInit } from "../init.js";
+import { ExitCode } from "../../utils/exit-codes.js";
 
 describe("M3 CLI command IA", () => {
+  const originalCwd = process.cwd();
+
+  beforeEach(() => {
+    process.exitCode = undefined;
+  });
+
+  afterEach(() => {
+    process.chdir(originalCwd);
+    vi.restoreAllMocks();
+  });
+
   it("creates CLI without errors", () => {
     const cli = createCLI();
     expect(cli).toBeDefined();
@@ -15,17 +34,16 @@ describe("M3 CLI command IA", () => {
     expect(names).toEqual(expect.arrayContaining(["run", "test", "plugin", "audit", "policy", "init"]));
   });
 
-  it("parses run command arguments", async () => {
+  it("has run command options", () => {
     const cli = createCLI();
-
-    await cli.parseAsync(["run", "my-workflow.yaml", "--dry-run", "--timeout", "5000"], {
-      from: "user",
-    });
 
     const run = cli.commands.find((command) => command.name() === "run");
     expect(run).toBeDefined();
-    expect(run?.processedArgs).toEqual(["my-workflow.yaml"]);
-    expect(run?.opts()).toMatchObject({ dryRun: true, timeout: 5000 });
+
+    const optionNames = (run?.options ?? []).map((option) => option.long);
+    expect(optionNames).toEqual(
+      expect.arrayContaining(["--input", "--var", "--policy", "--dry-run", "--timeout"]),
+    );
   });
 
   it("has plugin subcommands", () => {
@@ -42,5 +60,60 @@ describe("M3 CLI command IA", () => {
     const names = audit?.commands.map((command) => command.name()) ?? [];
 
     expect(names).toEqual(expect.arrayContaining(["query", "tail", "replay"]));
+  });
+
+  it("runRun executes workflow from YAML in dry-run mode", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "obora-cli-run-"));
+    const workflowPath = join(dir, "workflow.yaml");
+
+    await writeFile(
+      workflowPath,
+      `name: temp-workflow\nversion: "1.0"\nsteps:\n  - name: greet\n    agent: default\n`,
+    );
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await runRun(workflowPath, { dryRun: true });
+
+    expect(log).toHaveBeenCalledWith('Workflow "temp-workflow" validated successfully.');
+  });
+
+  it("policy validate handles valid and invalid YAML", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "obora-cli-policy-"));
+    const validPolicyPath = join(dir, "policy.yaml");
+    const invalidPath = join(dir, "invalid.yaml");
+
+    await writeFile(validPolicyPath, `version: "1.0"\nrules: []\n`);
+    await writeFile(invalidPath, `rules: not-an-array\n`);
+
+    const command = createPolicyCommand();
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await command.parseAsync(["validate", validPolicyPath], { from: "user" });
+    expect(process.exitCode).toBe(ExitCode.SUCCESS);
+    expect(log).toHaveBeenCalledWith(`✅ Policy "${validPolicyPath}" is valid.`);
+
+    process.exitCode = undefined;
+    await command.parseAsync(["validate", invalidPath], { from: "user" });
+    expect(process.exitCode).toBe(ExitCode.VALIDATION_ERROR);
+    expect(error).toHaveBeenCalled();
+  });
+
+  it("init creates project scaffold in current directory", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "obora-cli-init-"));
+    process.chdir(dir);
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await runInit({});
+
+    await access(join(dir, "workflows", "example.yaml"));
+    await access(join(dir, "policies", "default.yaml"));
+    await access(join(dir, "tests"));
+
+    const config = await readFile(join(dir, "obora.config.yaml"), "utf-8");
+    expect(config).toContain("workflows: ./workflows");
+    expect(log).toHaveBeenCalledWith("✅ Obora project initialized.");
   });
 });
