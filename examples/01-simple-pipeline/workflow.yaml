@@ -1,0 +1,39 @@
+name: simple-pipeline
+version: "1.0.0"
+policy: "./policy.yaml"
+
+steps:
+  - name: generate
+    agent: writer
+    description: "Generate a first draft"
+    tools: [file_write]
+    timeout: "5m"
+
+  - name: review
+    agent: reviewer
+    description: "Review draft quality and risks"
+    depends_on: [generate]
+    tools: [file_read]
+    timeout: "5m"
+
+  - name: format
+    agent: formatter
+    description: "Format final output for delivery"
+    depends_on: [review]
+    tools: [file_read, file_write]
+    timeout: "3m"
+
+recovery:
+  review:
+    on_fail: retry
+    max_retries: 1
+    backoff: linear
+    backoff_base: "1s"
+  format:
+    on_fail: escalate
+    to: "content-lead"
+
+audit:
+  store: duckdb
+  path: "./.obora/audit/simple-pipeline.duckdb"
+  retention: "30d"

@@ -1,0 +1,37 @@
+name: policy-gate-workflow
+version: "1.0.0"
+policy: "./policy.yaml"
+
+steps:
+  - name: draft
+    agent: author
+    description: "Prepare change proposal"
+    timeout: "5m"
+
+  - name: risk-check
+    agent: reviewer
+    depends_on: [draft]
+    description: "Assess risk before approval"
+    timeout: "5m"
+
+  - name: approval-gate
+    agent: approver
+    depends_on: [risk-check]
+    gate: human-approval
+    gate_config:
+      timeout: "24h"
+      fallback: escalate
+      escalation_to: "release-manager"
+
+  - name: publish
+    agent: publisher
+    depends_on: [approval-gate]
+    description: "Publish only after approval"
+    timeout: "3m"
+
+recovery:
+  approval-gate:
+    on_fail: escalate
+    to: "release-manager"
+  publish:
+    on_fail: rollback

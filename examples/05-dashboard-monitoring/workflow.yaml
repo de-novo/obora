@@ -1,0 +1,32 @@
+name: dashboard-monitoring-workflow
+version: "1.0.0"
+policy: "./policy.yaml"
+
+steps:
+  - name: ingest
+    agent: collector
+    description: "Ingest input data"
+
+  - name: analyze
+    agent: analyst
+    depends_on: [ingest]
+    description: "Run analysis and score anomalies"
+
+  - name: alert
+    agent: notifier
+    depends_on: [analyze]
+    gate: external
+    gate_config:
+      timeout: "10m"
+      fallback: escalate
+      escalation_to: "oncall"
+
+audit:
+  store: duckdb
+  path: "./.obora/audit/dashboard-monitoring.duckdb"
+  retention: "90d"
+
+recovery:
+  alert:
+    on_fail: escalate
+    to: "oncall"

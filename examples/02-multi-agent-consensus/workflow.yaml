@@ -1,0 +1,48 @@
+name: multi-agent-consensus
+version: "1.0.0"
+policy: "./policy.yaml"
+
+steps:
+  - name: brainstorm
+    agent: facilitator
+    description: "Collect initial options"
+    timeout: "5m"
+
+  - name: discussion
+    agent: facilitator
+    pattern: discussion
+    depends_on: [brainstorm]
+    participants:
+      agent-a: opus
+      agent-b: codex
+      agent-c: glm
+    discussion:
+      max_rounds: 3
+      convergence: majority
+      on_deadlock: escalate
+    timeout: "10m"
+
+  - name: voting
+    agent: facilitator
+    pattern: consensus
+    depends_on: [discussion]
+    participants:
+      agent-a: opus
+      agent-b: codex
+      agent-c: glm
+    consensus:
+      rule: majority
+      min: 2
+      of: 3
+      timeout: "5m"
+      best_effort: [glm]
+
+recovery:
+  discussion:
+    on_fail: escalate
+    to: "human-moderator"
+  voting:
+    on_fail: retry
+    max_retries: 1
+    backoff: linear
+    backoff_base: "2s"

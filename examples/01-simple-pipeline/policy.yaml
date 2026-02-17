@@ -1,0 +1,24 @@
+version: "1.0"
+
+tools:
+  - name: file_read
+    effect: allow
+  - name: file_write
+    effect: allow
+  - name: shell_exec
+    effect: deny
+
+sandbox:
+  root: "./output"
+  deny_outside_root: true
+  deny_patterns: ["**/.env", "**/secrets/**"]
+  max_file_size: "2mb"
+
+resources:
+  timeout_ms: 600000
+  max_tokens: 80000
+  max_tool_calls: 30
+  max_output_size: "1mb"
+
+network:
+  allow_outbound: false

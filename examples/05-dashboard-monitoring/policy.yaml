@@ -1,0 +1,32 @@
+version: "1.0"
+
+tools:
+  - name: file_read
+    effect: allow
+  - name: file_write
+    effect: allow
+  - name: message_send
+    effect: gate
+    gate:
+      type: external
+      timeout: "5m"
+
+sandbox:
+  root: "./output"
+  deny_outside_root: true
+
+resources:
+  timeout_ms: 900000
+  max_tokens: 90000
+  max_tool_calls: 50
+
+gates:
+  - step: alert
+    type: external
+    required: true
+    timeout: "10m"
+    fallback: escalate
+
+network:
+  allow_outbound: true
+  allow_hosts: ["localhost", "127.0.0.1"]

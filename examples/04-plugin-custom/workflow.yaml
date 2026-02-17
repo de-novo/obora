@@ -1,0 +1,28 @@
+name: custom-plugin-workflow
+version: "1.0.0"
+
+steps:
+  - name: collect
+    agent: collector
+    description: "Collect raw notes"
+
+  - name: summarize-with-plugin
+    agent: processor
+    pattern: custom-summary
+    depends_on: [collect]
+    config:
+      style: concise
+      max_points: 5
+
+  - name: finalize
+    agent: writer
+    depends_on: [summarize-with-plugin]
+    description: "Create final deliverable"
+
+recovery:
+  summarize-with-plugin:
+    on_fail: alternative
+    fallback:
+      name: summarize-fallback
+      agent: processor
+      description: "Fallback summary without plugin pattern"

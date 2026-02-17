@@ -1,0 +1,27 @@
+version: "1.0"
+
+tools:
+  - name: file_read
+    effect: allow
+  - name: file_write
+    effect: allow
+  - name: shell_exec
+    effect: gate
+    gate:
+      type: human-approval
+      timeout: "10m"
+
+sandbox:
+  root: "./output"
+  deny_outside_root: true
+
+resources:
+  timeout_ms: 1200000
+  max_tokens: 100000
+
+gates:
+  - step: approval-gate
+    type: human-approval
+    required: true
+    timeout: "24h"
+    fallback: escalate
