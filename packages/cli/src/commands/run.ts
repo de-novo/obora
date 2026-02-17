@@ -38,6 +38,11 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
       }
     }
 
+    if (options.dryRun) {
+      console.log(`Workflow "${workflowName}" validated successfully.`);
+      return;
+    }
+
     const controller = new AbortController();
     if (typeof options.timeout === "number" && Number.isFinite(options.timeout)) {
       setTimeout(() => controller.abort(), options.timeout);
@@ -55,11 +60,6 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
       variables,
       signal: controller.signal,
     });
-
-    if (options.dryRun) {
-      console.log(`Workflow "${workflowName}" validated successfully.`);
-      return;
-    }
 
     const result = await handle.wait();
     console.log(`✅ Workflow "${result.workflowName}" completed.`);

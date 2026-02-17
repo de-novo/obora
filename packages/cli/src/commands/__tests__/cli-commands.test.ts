@@ -4,6 +4,8 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { OboraRuntime } from "@obora/sdk";
+
 import { createCLI } from "../../cli.js";
 import { createPolicyCommand } from "../policy.js";
 import { runRun } from "../run.js";
@@ -72,9 +74,11 @@ describe("M3 CLI command IA", () => {
     );
 
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const runSpy = vi.spyOn(OboraRuntime.prototype, "run");
 
     await runRun(workflowPath, { dryRun: true });
 
+    expect(runSpy).not.toHaveBeenCalled();
     expect(log).toHaveBeenCalledWith('Workflow "temp-workflow" validated successfully.');
   });
 
