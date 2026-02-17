@@ -1,7 +1,9 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 
-import { parsePolicyYaml, validatePolicyYaml } from '../policy/policy-validator.js';
+import { HotReloadEngine } from '../policy/hot-reload.js';
 import type { PolicyStore } from '../policy/policy-store.js';
+import { diffYaml } from '../policy/yaml-diff.js';
+import { parsePolicyYaml, validatePolicyYaml } from '../policy/policy-validator.js';
 import type { ApiErrorPayload } from '../types.js';
 
 export interface PolicyEngineAdapter {
@@ -21,6 +23,15 @@ interface UpdatePolicyBody {
 
 interface ValidatePolicyBody {
   content: string;
+}
+
+interface DiffPolicyBody {
+  content: string;
+}
+
+interface ReloadPolicyBody {
+  content: string;
+  revision: string;
 }
 
 const DASH_8001 = 'DASH_8001';
@@ -65,6 +76,8 @@ export const registerPolicyRoutes = (
   policyStore: PolicyStore,
   policyEngine?: PolicyEngineAdapter,
 ): void => {
+  const hotReloadEngine = new HotReloadEngine(policyStore, policyEngine);
+
   app.get(`${apiBasePath}/policies`, async () => {
     const policies = await policyStore.list();
     return { policies };
@@ -135,6 +148,47 @@ export const registerPolicyRoutes = (
       }
 
       return { policy: updated };
+    },
+  );
+
+  app.post<{ Params: { policyId: string }; Body: DiffPolicyBody }>(
+    `${apiBasePath}/policies/:policyId/diff`,
+    async (request, reply) => {
+      if (!request.body?.content) {
+        return sendError(reply, 400, DASH_8001, 'Policy validation failed', ['content is required']);
+      }
+
+      const current = await policyStore.get(request.params.policyId);
+      if (!current) {
+        return sendError(reply, 404, DASH_8002, 'Policy not found');
+      }
+
+      const result = diffYaml(current.content, request.body.content);
+      return { diff: result, currentRevision: current.revision };
+    },
+  );
+
+  app.post<{ Params: { policyId: string }; Body: ReloadPolicyBody }>(
+    `${apiBasePath}/policies/:policyId/reload`,
+    async (request, reply) => {
+      if (!request.body?.content || !request.body?.revision) {
+        return sendError(reply, 400, DASH_8001, 'Policy validation failed', ['content and revision are required']);
+      }
+
+      const result = await hotReloadEngine.reload(request.params.policyId, request.body.content, request.body.revision);
+      if (!result.success) {
+        const isEscalated = result.error?.startsWith('DASH_8005') ?? false;
+        return sendError(
+          reply,
+          400,
+          isEscalated ? 'DASH_8005' : 'DASH_8004',
+          isEscalated ? 'Escalation triggered (3 consecutive failures)' : 'Hot-reload failed',
+          result.error ? [result.error] : undefined,
+        );
+      }
+
+      const updated = await policyStore.get(request.params.policyId);
+      return { result, policy: updated };
     },
   );
 

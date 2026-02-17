@@ -12,6 +12,24 @@ export interface PolicyValidationResult {
   errors: string[];
 }
 
+export interface DiffChange {
+  path: string;
+  type: 'added' | 'removed' | 'modified';
+  oldValue?: unknown;
+  newValue?: unknown;
+}
+
+export interface DiffResult {
+  changes: DiffChange[];
+  summary: string;
+}
+
+export interface HotReloadResult {
+  success: boolean;
+  error?: string;
+  rollbackPerformed?: boolean;
+}
+
 interface ApiErrorBody {
   code?: string;
   message?: string;
@@ -24,6 +42,16 @@ interface PolicyResponse {
 
 interface PolicyListResponse {
   policies: PolicyDocument[];
+}
+
+interface DiffResponse {
+  diff: DiffResult;
+  currentRevision: string;
+}
+
+interface ReloadResponse {
+  result: HotReloadResult;
+  policy?: PolicyDocument;
 }
 
 export class PolicyApiError extends Error {
@@ -149,3 +177,18 @@ export const validatePolicy = async (content: string): Promise<PolicyValidationR
     throw error;
   }
 };
+
+export const diffPolicy = async (policyId: string, content: string): Promise<DiffResponse> =>
+  request<DiffResponse>(`/policies/${encodeURIComponent(policyId)}/diff`, {
+    method: 'POST',
+    body: JSON.stringify({ content }),
+  });
+
+export const reloadPolicy = async (
+  policyId: string,
+  data: { content: string; revision: string },
+): Promise<ReloadResponse> =>
+  request<ReloadResponse>(`/policies/${encodeURIComponent(policyId)}/reload`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });

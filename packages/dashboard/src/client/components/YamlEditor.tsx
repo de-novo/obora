@@ -2,12 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 
 import {
   createPolicy,
+  diffPolicy,
+  type DiffResult,
   type PolicyDocument,
   PolicyApiError,
   type PolicyValidationResult,
+  reloadPolicy,
   updatePolicy,
   validatePolicy,
 } from '../api/policy-client';
+import { PolicyDiff } from './PolicyDiff';
 
 interface YamlEditorProps {
   policy?: PolicyDocument;
@@ -24,7 +28,9 @@ export const YamlEditor = ({ policy, onSaved }: YamlEditorProps): JSX.Element =>
   const [validation, setValidation] = useState<PolicyValidationResult>(EMPTY_VALIDATION);
   const [isValidating, setIsValidating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPreviewing, setIsPreviewing] = useState(false);
   const [saveError, setSaveError] = useState<string | undefined>(undefined);
+  const [diffResult, setDiffResult] = useState<DiffResult | undefined>(undefined);
 
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -34,6 +40,7 @@ export const YamlEditor = ({ policy, onSaved }: YamlEditorProps): JSX.Element =>
     setBaseRevision(policy?.revision);
     setValidation(EMPTY_VALIDATION);
     setSaveError(undefined);
+    setDiffResult(undefined);
   }, [policy]);
 
   useEffect(() => {
@@ -67,6 +74,50 @@ export const YamlEditor = ({ policy, onSaved }: YamlEditorProps): JSX.Element =>
       }
     };
   }, [content]);
+
+  const handlePreview = async (): Promise<void> => {
+    if (!policy) {
+      return;
+    }
+
+    setIsPreviewing(true);
+    setSaveError(undefined);
+
+    try {
+      const response = await diffPolicy(policy.id, content);
+      setDiffResult(response.diff);
+    } catch (error: unknown) {
+      setSaveError(error instanceof Error ? error.message : 'diff 조회 중 오류가 발생했습니다.');
+    } finally {
+      setIsPreviewing(false);
+    }
+  };
+
+  const handleApply = async (): Promise<void> => {
+    if (!policy || !baseRevision) {
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveError(undefined);
+
+    try {
+      const response = await reloadPolicy(policy.id, {
+        content,
+        revision: baseRevision,
+      });
+
+      if (response.policy) {
+        setBaseRevision(response.policy.revision);
+        setDiffResult(undefined);
+        onSaved(response.policy, 'update');
+      }
+    } catch (error: unknown) {
+      setSaveError(error instanceof Error ? error.message : 'hot-reload 중 오류가 발생했습니다.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleSave = async (): Promise<void> => {
     setIsSaving(true);
@@ -121,21 +172,42 @@ export const YamlEditor = ({ policy, onSaved }: YamlEditorProps): JSX.Element =>
           placeholder="policy name"
           style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
         />
-        <button
-          type="button"
-          onClick={() => void handleSave()}
-          disabled={isSaving || !content.trim()}
-          style={{
-            padding: '8px 12px',
-            borderRadius: '8px',
-            border: '1px solid #2563eb',
-            backgroundColor: '#2563eb',
-            color: '#fff',
-            cursor: isSaving ? 'wait' : 'pointer',
-          }}
-        >
-          {isSaving ? '저장 중...' : '저장'}
-        </button>
+        {policy ? (
+          <>
+            <button
+              type="button"
+              onClick={() => void handlePreview()}
+              disabled={isPreviewing || !content.trim()}
+              style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #0f766e', backgroundColor: '#0f766e', color: '#fff' }}
+            >
+              {isPreviewing ? '미리보기 중...' : 'Preview Changes'}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleApply()}
+              disabled={isSaving || !baseRevision || !diffResult}
+              style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #7c3aed', backgroundColor: '#7c3aed', color: '#fff' }}
+            >
+              {isSaving ? '적용 중...' : 'Apply'}
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => void handleSave()}
+            disabled={isSaving || !content.trim()}
+            style={{
+              padding: '8px 12px',
+              borderRadius: '8px',
+              border: '1px solid #2563eb',
+              backgroundColor: '#2563eb',
+              color: '#fff',
+              cursor: isSaving ? 'wait' : 'pointer',
+            }}
+          >
+            {isSaving ? '저장 중...' : '저장'}
+          </button>
+        )}
       </div>
 
       <textarea
@@ -156,6 +228,8 @@ export const YamlEditor = ({ policy, onSaved }: YamlEditorProps): JSX.Element =>
           backgroundColor: '#fff',
         }}
       />
+
+      {diffResult ? <PolicyDiff diff={diffResult} /> : null}
 
       <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px 10px', backgroundColor: '#f8fafc' }}>
         <p style={{ margin: 0, color: validationColor, fontWeight: 600 }}>

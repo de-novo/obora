@@ -144,6 +144,45 @@ describe('policy api', () => {
     expect(getResponse.json().code).toBe('DASH_8002');
   });
 
+  it('supports diff and reload endpoints', async () => {
+    const { app } = await createDashboardServer();
+    servers.push(app);
+
+    const createResponse = await app.inject({
+      method: 'POST',
+      url: '/api/policies',
+      payload: {
+        name: 'diff-reload',
+        content: validPolicyYaml,
+      },
+    });
+
+    const created = createResponse.json().policy;
+
+    const diffResponse = await app.inject({
+      method: 'POST',
+      url: `/api/policies/${created.id}/diff`,
+      payload: {
+        content: validPolicyYaml.replace('deny', 'allow'),
+      },
+    });
+
+    expect(diffResponse.statusCode).toBe(200);
+    expect(diffResponse.json().diff.changes.length).toBeGreaterThan(0);
+
+    const reloadResponse = await app.inject({
+      method: 'POST',
+      url: `/api/policies/${created.id}/reload`,
+      payload: {
+        content: validPolicyYaml.replace('deny', 'allow'),
+        revision: created.revision,
+      },
+    });
+
+    expect(reloadResponse.statusCode).toBe(200);
+    expect(reloadResponse.json().result.success).toBe(true);
+  });
+
   it('validates policy without saving', async () => {
     const { app } = await createDashboardServer();
     servers.push(app);
