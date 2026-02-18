@@ -62,6 +62,28 @@ export interface CheckpointRecord {
   createdAt: string;
 }
 
+// ── Cost types (T3 scope) ──
+
+export interface CostRecord {
+  id: string;
+  runId: string;
+  stepName: string;
+  model: string;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  costUsd: number;
+  latencyMs: number;
+  createdAt: string;
+}
+
+export interface CostSummary {
+  totalTokens: number;
+  totalCostUsd: number;
+  byStep: Array<{ stepName: string; tokens: number; costUsd: number }>;
+  byModel: Array<{ model: string; tokens: number; costUsd: number }>;
+}
+
 // ── Checkpointable interface ──
 
 export interface Checkpointable {
@@ -95,4 +117,9 @@ export interface StorageAdapter {
   // ── Checkpoint (T2) ──
   saveCheckpoint(record: CheckpointRecord): Promise<void>;
   getLatestCheckpoint(runId: string): Promise<CheckpointRecord | null>;
+
+  // ── Cost (T3) ──
+  saveCost(record: CostRecord): Promise<void>;
+  getCosts(runId: string, stepName?: string): Promise<CostRecord[]>;
+  getRunCostSummary(runId: string): Promise<CostSummary>;
 }

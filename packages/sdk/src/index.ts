@@ -10,6 +10,7 @@ export { OboraRuntime, OboraError, OboraErrorCode } from "./runtime.js";
 export { Workflow } from "./workflow.js";
 export { detectLLMConfigFromEnv, resolveLLMConfig } from "./llm-config.js";
 export { loadConfig, resolveProviderConfig } from "./config-loader.js";
+export { CostTracker, BudgetExceededError } from "./cost-tracker.js";
 export { createAuthResolver, resolveAuthRef } from "./auth-resolver.js";
 export { StepExecutor } from "./step-executor.js";
 export { topologicalSort, groupByParallelizableLevels } from "./dependency-resolver.js";
@@ -46,7 +47,7 @@ export type {
 } from "./runtime.js";
 export type { WorkflowDef, WorkflowStep } from "./workflow.js";
 export type { LLMConfig } from "./llm-config.js";
-export type { OboraConfig, ResolvedProviderConfig } from "./config-loader.js";
+export type { OboraConfig, ResolvedProviderConfig, ModelPricing } from "./config-loader.js";
 export type { StepContext, StepExecutorConfig, StepResult, LLMAdapterLike } from "./step-executor.js";
 export type {
   StepHandler,

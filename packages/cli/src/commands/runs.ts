@@ -71,6 +71,7 @@ export function createRunsCommand(): Command {
     .command("inspect <runId>")
     .description("Inspect a run with step details")
     .option("--json", "Output as JSON")
+    .option("--cost", "Include detailed cost summary")
     .action(async (runId: string, opts) => {
       const runtime = await createRuntime();
       const run = await runtime.getRunRecord(runId);
@@ -81,9 +82,10 @@ export function createRunsCommand(): Command {
 
       const steps = await runtime.getRunSteps(runId);
       const artifacts = await runtime.getRunArtifacts(runId);
+      const costSummary = opts.cost ? await runtime.getRunCostSummary(runId) : undefined;
 
       if (opts.json) {
-        console.log(JSON.stringify({ run, steps, artifacts }, null, 2));
+        console.log(JSON.stringify({ run, steps, artifacts, ...(costSummary ? { costSummary } : {}) }, null, 2));
         return;
       }
 
@@ -109,6 +111,24 @@ export function createRunsCommand(): Command {
         console.log(`\nArtifacts (${artifacts.length}):`);
         for (const a of artifacts) {
           console.log(`  ${a.stepName}/${a.name} (${a.mimeType}, ${a.sizeBytes} bytes)`);
+        }
+      }
+
+      if (costSummary) {
+        console.log(`\nCost Summary:`);
+        console.log(`  Total Tokens: ${costSummary.totalTokens}`);
+        console.log(`  Total Cost:   $${costSummary.totalCostUsd.toFixed(6)}`);
+        if (costSummary.byStep.length > 0) {
+          console.log("  By Step:");
+          for (const item of costSummary.byStep) {
+            console.log(`    - ${item.stepName}: ${item.tokens} tokens, $${item.costUsd.toFixed(6)}`);
+          }
+        }
+        if (costSummary.byModel.length > 0) {
+          console.log("  By Model:");
+          for (const item of costSummary.byModel) {
+            console.log(`    - ${item.model}: ${item.tokens} tokens, $${item.costUsd.toFixed(6)}`);
+          }
         }
       }
     });

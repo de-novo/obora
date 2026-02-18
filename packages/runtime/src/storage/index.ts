@@ -5,6 +5,8 @@ export type {
   ArtifactRecord,
   RunFilter,
   CheckpointRecord,
+  CostRecord,
+  CostSummary,
   Checkpointable,
   CheckpointableFactory,
   ResumeOptions,

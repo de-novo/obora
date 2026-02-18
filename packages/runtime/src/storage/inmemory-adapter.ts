@@ -9,6 +9,8 @@ import type {
   ArtifactRecord,
   RunFilter,
   CheckpointRecord,
+  CostRecord,
+  CostSummary,
 } from "./types.js";
 
 export class InMemoryStorageAdapter implements StorageAdapter {
@@ -16,6 +18,7 @@ export class InMemoryStorageAdapter implements StorageAdapter {
   private readonly steps: StepRecord[] = [];
   private readonly artifacts = new Map<string, ArtifactRecord>();
   private readonly checkpoints: CheckpointRecord[] = [];
+  private readonly costs: CostRecord[] = [];
 
   async saveRun(record: RunRecord): Promise<void> {
     this.runs.set(record.id, structuredClone(record));
@@ -94,5 +97,48 @@ export class InMemoryStorageAdapter implements StorageAdapter {
       .filter((c) => c.runId === runId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     return matching.length > 0 ? structuredClone(matching[0]) : null;
+  }
+
+  async saveCost(record: CostRecord): Promise<void> {
+    this.costs.push(structuredClone(record));
+  }
+
+  async getCosts(runId: string, stepName?: string): Promise<CostRecord[]> {
+    return this.costs
+      .filter((c) => c.runId === runId)
+      .filter((c) => (stepName ? c.stepName === stepName : true))
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .map((c) => structuredClone(c));
+  }
+
+  async getRunCostSummary(runId: string): Promise<CostSummary> {
+    const costs = await this.getCosts(runId);
+    const byStep = new Map<string, { stepName: string; tokens: number; costUsd: number }>();
+    const byModel = new Map<string, { model: string; tokens: number; costUsd: number }>();
+
+    let totalTokens = 0;
+    let totalCostUsd = 0;
+
+    for (const c of costs) {
+      totalTokens += c.totalTokens;
+      totalCostUsd += c.costUsd;
+
+      const step = byStep.get(c.stepName) ?? { stepName: c.stepName, tokens: 0, costUsd: 0 };
+      step.tokens += c.totalTokens;
+      step.costUsd += c.costUsd;
+      byStep.set(c.stepName, step);
+
+      const model = byModel.get(c.model) ?? { model: c.model, tokens: 0, costUsd: 0 };
+      model.tokens += c.totalTokens;
+      model.costUsd += c.costUsd;
+      byModel.set(c.model, model);
+    }
+
+    return {
+      totalTokens,
+      totalCostUsd,
+      byStep: Array.from(byStep.values()),
+      byModel: Array.from(byModel.values()),
+    };
   }
 }

@@ -7,7 +7,13 @@ interface LLMChatMessage {
 }
 
 interface LLMChatResult {
+  model?: string;
   message: { role: "assistant"; content: string | null };
+  usage?: {
+    promptTokens?: number;
+    completionTokens?: number;
+    totalTokens?: number;
+  };
 }
 
 export interface LLMAdapterLike {
@@ -159,6 +165,7 @@ export class StepExecutor {
     const resolved = await this.config.resolveAgentLLM?.(agentName ?? step.agent);
     const adapter = resolved?.adapter ?? this.llmAdapter;
 
+    const startedAt = Date.now();
     try {
       const response = await adapter.chatCompletion({
         model: resolved?.model ?? this.config.model,
@@ -170,7 +177,10 @@ export class StepExecutor {
       await this.config.onEvent?.("llm_response", {
         stepName: step.name,
         agent: agentName ?? step.agent,
+        model: response.model ?? resolved?.model ?? this.config.model,
         content: response.message.content,
+        usage: response.usage,
+        latencyMs: Date.now() - startedAt,
       });
 
       return response;

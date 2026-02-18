@@ -317,4 +317,101 @@ describe("OboraRuntime facade", () => {
     });
     expect(handle.status).toBe("aborted");
   });
+
+  it("marks run handle as suspended on budget exceed", async () => {
+    const costs: any[] = [];
+    const storage = {
+      async saveRun() {}, async getRun() { return null; }, async listRuns() { return []; },
+      async saveStep() {}, async getSteps() { return []; },
+      async saveArtifact(record: any) { return record; }, async getArtifacts() { return []; }, async deleteArtifact() {},
+      async saveCheckpoint() {}, async getLatestCheckpoint() { return null; },
+      async saveCost(record: any) { costs.push(record); },
+      async getCosts(runId: string, stepName?: string) { return costs.filter((c) => c.runId === runId && (!stepName || c.stepName === stepName)); },
+      async getRunCostSummary(runId: string) {
+        const rows = costs.filter((c) => c.runId === runId);
+        return { totalTokens: rows.reduce((s, r) => s + r.totalTokens, 0), totalCostUsd: rows.reduce((s, r) => s + r.costUsd, 0), byStep: [], byModel: [] };
+      },
+    };
+
+    const runtime = new OboraRuntime({
+      llm: { provider: "test", apiKey: "test", model: "gpt-4o" },
+      persistence: { enabled: true, adapter: "custom", custom: { instance: storage as any } },
+      config: {
+        defaults: { provider: "test" },
+        resources: {
+          maxCostPerRun: 0.000001,
+          onBudgetExceed: "block",
+          pricing: [{ model: "gpt-4o", promptPer1kTokens: 1, completionPer1kTokens: 1 }],
+        },
+      },
+    });
+    runtime.define("budget-stop", { name: "budget-stop", steps: [{ name: "s1" }] });
+
+    const adapterMock = {
+      chatCompletion: vi.fn().mockResolvedValue({
+        model: "gpt-4o",
+        message: { role: "assistant", content: "ok" },
+        usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+      }),
+    };
+    vi.spyOn(runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> }, "createLLMAdapter").mockResolvedValue(adapterMock);
+
+    const handle = await runtime.run("budget-stop");
+    await expect(handle.wait()).rejects.toMatchObject({ code: OboraErrorCode.POLICY_RESOURCE_EXCEEDED });
+    expect(handle.status).toBe("suspended");
+  });
+
+  it("provides run.cost() and step.cost() query APIs", async () => {
+    const costs = [
+      {
+        id: "c1",
+        runId: "run-cost-api",
+        stepName: "draft",
+        model: "gpt-4o",
+        promptTokens: 10,
+        completionTokens: 20,
+        totalTokens: 30,
+        costUsd: 0.03,
+        latencyMs: 10,
+        createdAt: new Date().toISOString(),
+      },
+    ];
+
+    const storage = {
+      async getRun() { return null; },
+      async listRuns() { return []; },
+      async saveRun() { return; },
+      async saveStep() { return; },
+      async getSteps() { return []; },
+      async saveArtifact(record: any) { return record; },
+      async getArtifacts() { return []; },
+      async deleteArtifact() { return; },
+      async saveCheckpoint() { return; },
+      async getLatestCheckpoint() { return null; },
+      async saveCost() { return; },
+      async getCosts(runId: string, stepName?: string) {
+        return costs.filter((c) => c.runId === runId && (!stepName || c.stepName === stepName));
+      },
+      async getRunCostSummary(runId: string) {
+        const rows = costs.filter((c) => c.runId === runId);
+        return {
+          totalTokens: rows.reduce((sum, r) => sum + r.totalTokens, 0),
+          totalCostUsd: rows.reduce((sum, r) => sum + r.costUsd, 0),
+          byStep: [{ stepName: "draft", tokens: 30, costUsd: 0.03 }],
+          byModel: [{ model: "gpt-4o", tokens: 30, costUsd: 0.03 }],
+        };
+      },
+    };
+
+    const runtime = new OboraRuntime({
+      persistence: { enabled: true, adapter: "custom", custom: { instance: storage as any } },
+    });
+
+    const runCost = await runtime.runs.cost("run-cost-api");
+    const stepCost = await runtime.step.cost("run-cost-api", "draft");
+
+    expect(runCost.totalTokens).toBe(30);
+    expect(stepCost.tokens).toBe(30);
+    expect(stepCost.records).toHaveLength(1);
+  });
 });

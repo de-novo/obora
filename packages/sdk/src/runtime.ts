@@ -20,6 +20,7 @@ import { resolveLLMConfig, type LLMConfig } from "./llm-config.js";
 import { loadConfig, resolveProviderConfig, type OboraConfig } from "./config-loader.js";
 import { StepExecutor } from "./step-executor.js";
 import { Workflow } from "./workflow.js";
+import { BudgetExceededError, CostTracker } from "./cost-tracker.js";
 import type { WorkflowDef } from "./workflow.js";
 
 export type WorkflowDefinition = WorkflowDef;
@@ -174,7 +175,7 @@ export type AgentFactory = (...args: unknown[]) => unknown;
 export type ToolHandler = (params: unknown, context?: unknown) => unknown | Promise<unknown>;
 export type PatternRegistration = PatternPlugin | CustomPatternDefinition;
 
-export type RunStatus = "queued" | "running" | "waiting" | "completed" | "failed" | "aborted";
+export type RunStatus = "queued" | "running" | "waiting" | "suspended" | "completed" | "failed" | "aborted";
 
 export interface RunOptions {
   input?: unknown;
@@ -462,6 +463,12 @@ export class OboraRuntime {
             this.config.config !== undefined ? this.config.config : await loadConfig(this.config.configPath);
           const llmConfig = resolveLLMConfig(this.config.llm, loadedConfig);
           const stepOrder = topologicalSort(workflow.steps);
+
+          const resourcesConfig = loadedConfig?.resources;
+          const shouldTrackCost = Boolean(resourcesConfig);
+          const costTracker = shouldTrackCost
+            ? new CostTracker(await this.getCostTrackingAdapter(), executionId, loadedConfig)
+            : undefined;
           execution.stepOrder = stepOrder.map((step) => step.name);
 
           const runtimeAgents = await this.loadAgentsFromYaml(this.config.agentsPath);
@@ -527,6 +534,24 @@ export class OboraRuntime {
                   };
                 },
                 onEvent: async (eventType, data) => {
+                  if (eventType === "llm_response" && costTracker) {
+                    const payload = data as {
+                      stepName?: string;
+                      model?: string;
+                      usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number };
+                      latencyMs?: number;
+                    };
+                    if (payload.stepName) {
+                      await costTracker.recordCall({
+                        stepName: payload.stepName,
+                        model: payload.model,
+                        promptTokens: payload.usage?.promptTokens,
+                        completionTokens: payload.usage?.completionTokens,
+                        totalTokens: payload.usage?.totalTokens,
+                        latencyMs: payload.latencyMs,
+                      });
+                    }
+                  }
                   await this.emitEvent(eventType, executionId, data);
                 },
               })
@@ -547,6 +572,10 @@ export class OboraRuntime {
             if (signal?.aborted) {
               await handle.cancel(typeof signal.reason === "string" ? signal.reason : undefined);
               return;
+            }
+
+            if (costTracker) {
+              await costTracker.preStepGate(step.name);
             }
 
             const stepStartedAt = Date.now();
@@ -610,23 +639,32 @@ export class OboraRuntime {
             return;
           }
 
-          status = "failed";
-          execution.status = "failed";
+          const budgetExceeded = error instanceof BudgetExceededError;
+          status = budgetExceeded ? "suspended" : "failed";
+          execution.status = budgetExceeded ? "suspended" : "failed";
           execution.error = error instanceof Error ? error.message : String(error);
           execution.endedAt = new Date();
           settled = true;
 
-          const errorCode = error instanceof OboraError ? error.code : OboraErrorCode.SDK_UNKNOWN_ERROR;
+          const errorCode = budgetExceeded
+            ? OboraErrorCode.POLICY_RESOURCE_EXCEEDED
+            : error instanceof OboraError
+              ? error.code
+              : OboraErrorCode.SDK_UNKNOWN_ERROR;
           await this.emitEvent("error", executionId, {
             message: execution.error,
             code: errorCode,
           });
           await this.emitEvent("execution_end", executionId, {
             workflowName: name,
-            status: "failed",
+            status: budgetExceeded ? "suspended" : "failed",
           });
 
-          reject(error);
+          reject(
+            budgetExceeded
+              ? new OboraError(execution.error, OboraErrorCode.POLICY_RESOURCE_EXCEEDED, executionId)
+              : error,
+          );
         } finally {
           if (runTimeout) {
             clearTimeout(runTimeout);
@@ -1099,6 +1137,9 @@ export class OboraRuntime {
       const loadedConfig =
         this.config.config !== undefined ? this.config.config : await loadConfig(this.config.configPath);
       const llmConfig = resolveLLMConfig(this.config.llm, loadedConfig);
+      const costTracker = this.config.persistence?.enabled
+        ? new CostTracker(adapter, runId, loadedConfig)
+        : undefined;
 
       const runtimeAgents = await this.loadAgentsFromYaml(this.config.agentsPath);
       const allAgents = new Map<string, AgentFactory>([...runtimeAgents, ...this.agents]);
@@ -1160,6 +1201,24 @@ export class OboraRuntime {
               };
             },
             onEvent: async (eventType, data) => {
+              if (eventType === "llm_response" && costTracker) {
+                const payload = data as {
+                  stepName?: string;
+                  model?: string;
+                  usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number };
+                  latencyMs?: number;
+                };
+                if (payload.stepName) {
+                  await costTracker.recordCall({
+                    stepName: payload.stepName,
+                    model: payload.model,
+                    promptTokens: payload.usage?.promptTokens,
+                    completionTokens: payload.usage?.completionTokens,
+                    totalTokens: payload.usage?.totalTokens,
+                    latencyMs: payload.latencyMs,
+                  });
+                }
+              }
               await this.emitEvent(eventType, executionId, data);
             },
           })
@@ -1183,6 +1242,9 @@ export class OboraRuntime {
 
       try {
         for (const step of sortedStepDefs) {
+          if (costTracker) {
+            await costTracker.preStepGate(step.name);
+          }
           await this.emitEvent("step_start", executionId, { stepName: step.name, agent: step.agent });
           const stepStartedAt = Date.now();
           const startedAtIso = new Date(stepStartedAt).toISOString();
@@ -1240,7 +1302,11 @@ export class OboraRuntime {
               stepName: step.name,
               status: "failed",
               error: {
-                code: stepErr instanceof OboraError ? stepErr.code : OboraErrorCode.SDK_UNKNOWN_ERROR,
+                code: stepErr instanceof BudgetExceededError
+                  ? OboraErrorCode.POLICY_RESOURCE_EXCEEDED
+                  : stepErr instanceof OboraError
+                    ? stepErr.code
+                    : OboraErrorCode.SDK_UNKNOWN_ERROR,
                 message: stepErr instanceof Error ? stepErr.message : String(stepErr),
                 stack: stepErr instanceof Error ? stepErr.stack : undefined,
               },
@@ -1272,14 +1338,21 @@ export class OboraRuntime {
         await adapter.saveRun({ ...run, status: "completed", completedAt: execution.endedAt.toISOString() });
         this.executions.set(executionId, structuredClone(execution));
       } catch (err) {
-        execution.status = "failed";
+        const budgetExceeded = err instanceof BudgetExceededError
+          || (err instanceof OboraError && err.code === OboraErrorCode.POLICY_RESOURCE_EXCEEDED);
+
+        execution.status = budgetExceeded ? "suspended" : "failed";
         execution.endedAt = new Date();
         await this.emitEvent("execution_end", executionId, {
           workflowName: run.workflowName,
-          status: "failed",
+          status: budgetExceeded ? "suspended" : "failed",
           resume: true,
         });
-        await adapter.saveRun({ ...run, status: "failed", completedAt: execution.endedAt.toISOString() });
+        await adapter.saveRun({
+          ...run,
+          status: budgetExceeded ? "suspended" : "failed",
+          completedAt: execution.endedAt.toISOString(),
+        });
         this.executions.set(executionId, structuredClone(execution));
         throw err;
       }
@@ -1296,6 +1369,15 @@ export class OboraRuntime {
   // ── Persistence Query API (M6-01) ──
 
   private _storageAdapter?: import("@obora/runtime").StorageAdapter;
+
+  private async getCostTrackingAdapter(): Promise<import("@obora/runtime").StorageAdapter> {
+    if (this.config.persistence?.enabled) {
+      return this.getStorageAdapter();
+    }
+
+    const { InMemoryStorageAdapter } = await import("@obora/runtime");
+    return new InMemoryStorageAdapter() as import("@obora/runtime").StorageAdapter;
+  }
 
   private async getStorageAdapter(): Promise<import("@obora/runtime").StorageAdapter> {
     if (this._storageAdapter) return this._storageAdapter;
@@ -1341,6 +1423,18 @@ export class OboraRuntime {
     return adapter.getArtifacts(runId, stepName);
   }
 
+  /** Get cost records for a run, optionally filtered by step */
+  async getRunCosts(runId: string, stepName?: string) {
+    const adapter = await this.getStorageAdapter();
+    return adapter.getCosts(runId, stepName);
+  }
+
+  /** Get aggregated run cost summary */
+  async getRunCostSummary(runId: string) {
+    const adapter = await this.getStorageAdapter();
+    return adapter.getRunCostSummary(runId);
+  }
+
   // ── run namespace (spec-aligned facade) ──
 
   /** Spec-aligned run query API: `runtime.runs.get(id)`, `runtime.runs.steps(id)`, `runtime.runs.artifacts(stepId)` */
@@ -1367,6 +1461,23 @@ export class OboraRuntime {
     artifacts: async (runId: string, stepName?: string) => {
       const adapter = await this.getStorageAdapter();
       return adapter.getArtifacts(runId, stepName);
+    },
+
+    /** Spec-aligned: run.cost() equivalent facade */
+    cost: async (runId: string) => {
+      const adapter = await this.getStorageAdapter();
+      return adapter.getRunCostSummary(runId);
+    },
+  };
+
+  /** Spec-aligned: step.cost() equivalent facade */
+  readonly step = {
+    cost: async (runId: string, stepName: string) => {
+      const adapter = await this.getStorageAdapter();
+      const records = await adapter.getCosts(runId, stepName);
+      const tokens = records.reduce((sum, r) => sum + r.totalTokens, 0);
+      const costUsd = records.reduce((sum, r) => sum + r.costUsd, 0);
+      return { stepName, tokens, costUsd, records };
     },
   };
 }

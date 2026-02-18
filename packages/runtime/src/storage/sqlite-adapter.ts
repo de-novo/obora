@@ -9,6 +9,8 @@ import type {
   ArtifactRecord,
   RunFilter,
   CheckpointRecord,
+  CostRecord,
+  CostSummary,
 } from "./types.js";
 
 // Lazy import to keep better-sqlite3 optional at runtime
@@ -92,11 +94,27 @@ export class SQLiteStorageAdapter implements StorageAdapter {
         FOREIGN KEY (run_id) REFERENCES runs(id)
       );
 
+      CREATE TABLE IF NOT EXISTS costs (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL,
+        step_name TEXT NOT NULL,
+        model TEXT NOT NULL,
+        prompt_tokens INTEGER NOT NULL,
+        completion_tokens INTEGER NOT NULL,
+        total_tokens INTEGER NOT NULL,
+        cost_usd REAL NOT NULL,
+        latency_ms INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (run_id) REFERENCES runs(id)
+      );
+
       CREATE INDEX IF NOT EXISTS idx_steps_run_id ON steps(run_id);
       CREATE INDEX IF NOT EXISTS idx_artifacts_run_id ON artifacts(run_id);
       CREATE INDEX IF NOT EXISTS idx_runs_status ON runs(status);
       CREATE INDEX IF NOT EXISTS idx_runs_workflow ON runs(workflow_name);
       CREATE INDEX IF NOT EXISTS idx_checkpoints_run_id ON checkpoints(run_id);
+      CREATE INDEX IF NOT EXISTS idx_costs_run_id ON costs(run_id);
+      CREATE INDEX IF NOT EXISTS idx_costs_run_step ON costs(run_id, step_name);
     `);
   }
 
@@ -278,6 +296,66 @@ export class SQLiteStorageAdapter implements StorageAdapter {
     return row ? this.toCheckpointRecord(row) : null;
   }
 
+  async saveCost(record: CostRecord): Promise<void> {
+    await this.ensureInitialized();
+    this.db
+      .prepare(
+        `INSERT INTO costs (id, run_id, step_name, model, prompt_tokens, completion_tokens, total_tokens, cost_usd, latency_ms, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        record.id,
+        record.runId,
+        record.stepName,
+        record.model,
+        record.promptTokens,
+        record.completionTokens,
+        record.totalTokens,
+        record.costUsd,
+        record.latencyMs,
+        record.createdAt,
+      );
+  }
+
+  async getCosts(runId: string, stepName?: string): Promise<CostRecord[]> {
+    await this.ensureInitialized();
+    const rows = stepName
+      ? (this.db
+          .prepare("SELECT * FROM costs WHERE run_id = ? AND step_name = ? ORDER BY created_at ASC")
+          .all(runId, stepName) as Record<string, unknown>[])
+      : (this.db
+          .prepare("SELECT * FROM costs WHERE run_id = ? ORDER BY created_at ASC")
+          .all(runId) as Record<string, unknown>[]);
+    return rows.map((r) => this.toCostRecord(r));
+  }
+
+  async getRunCostSummary(runId: string): Promise<CostSummary> {
+    await this.ensureInitialized();
+
+    const total = this.db
+      .prepare("SELECT COALESCE(SUM(total_tokens), 0) AS tokens, COALESCE(SUM(cost_usd), 0) AS cost FROM costs WHERE run_id = ?")
+      .get(runId) as { tokens: number; cost: number };
+
+    const byStep = this.db
+      .prepare(
+        "SELECT step_name, SUM(total_tokens) AS tokens, SUM(cost_usd) AS cost_usd FROM costs WHERE run_id = ? GROUP BY step_name ORDER BY step_name ASC"
+      )
+      .all(runId) as Array<{ step_name: string; tokens: number; cost_usd: number }>;
+
+    const byModel = this.db
+      .prepare(
+        "SELECT model, SUM(total_tokens) AS tokens, SUM(cost_usd) AS cost_usd FROM costs WHERE run_id = ? GROUP BY model ORDER BY model ASC"
+      )
+      .all(runId) as Array<{ model: string; tokens: number; cost_usd: number }>;
+
+    return {
+      totalTokens: total.tokens,
+      totalCostUsd: total.cost,
+      byStep: byStep.map((r) => ({ stepName: r.step_name, tokens: r.tokens, costUsd: r.cost_usd })),
+      byModel: byModel.map((r) => ({ model: r.model, tokens: r.tokens, costUsd: r.cost_usd })),
+    };
+  }
+
   private toCheckpointRecord(row: Record<string, unknown>): CheckpointRecord {
     return {
       id: row.id as string,
@@ -362,6 +440,21 @@ export class SQLiteStorageAdapter implements StorageAdapter {
       storageRef: row.storage_ref as string,
       createdAt: row.created_at as string,
       deletedAt: (row.deleted_at as string) || undefined,
+    };
+  }
+
+  private toCostRecord(row: Record<string, unknown>): CostRecord {
+    return {
+      id: row.id as string,
+      runId: row.run_id as string,
+      stepName: row.step_name as string,
+      model: row.model as string,
+      promptTokens: row.prompt_tokens as number,
+      completionTokens: row.completion_tokens as number,
+      totalTokens: row.total_tokens as number,
+      costUsd: row.cost_usd as number,
+      latencyMs: row.latency_ms as number,
+      createdAt: row.created_at as string,
     };
   }
 }

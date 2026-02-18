@@ -20,6 +20,7 @@ function createInspectCommand(): Command {
     .argument("<runId>", "Run ID to inspect")
     .option("--json", "Output as JSON")
     .option("--no-steps", "Hide step details")
+    .option("--cost", "Include detailed cost summary")
     .action(async (runId: string, opts) => {
       const { OboraRuntime, loadConfig } = await import("@obora/sdk");
 
@@ -45,9 +46,10 @@ function createInspectCommand(): Command {
 
       const steps = opts.steps !== false ? await runtime.getRunSteps(runId) : [];
       const artifacts = await runtime.getRunArtifacts(runId);
+      const costSummary = opts.cost ? await runtime.getRunCostSummary(runId) : undefined;
 
       if (opts.json) {
-        const payload: Record<string, unknown> = { run, artifacts };
+        const payload: Record<string, unknown> = { run, artifacts, ...(costSummary ? { costSummary } : {}) };
         if (opts.steps !== false) payload.steps = steps;
         console.log(JSON.stringify(payload, null, 2));
         return;
@@ -75,6 +77,24 @@ function createInspectCommand(): Command {
         console.log(`\nArtifacts (${artifacts.length}):`);
         for (const a of artifacts) {
           console.log(`  ${a.stepName}/${a.name} (${a.mimeType}, ${a.sizeBytes} bytes)`);
+        }
+      }
+
+      if (costSummary) {
+        console.log(`\nCost Summary:`);
+        console.log(`  Total Tokens: ${costSummary.totalTokens}`);
+        console.log(`  Total Cost:   $${costSummary.totalCostUsd.toFixed(6)}`);
+        if (costSummary.byStep.length > 0) {
+          console.log("  By Step:");
+          for (const item of costSummary.byStep) {
+            console.log(`    - ${item.stepName}: ${item.tokens} tokens, $${item.costUsd.toFixed(6)}`);
+          }
+        }
+        if (costSummary.byModel.length > 0) {
+          console.log("  By Model:");
+          for (const item of costSummary.byModel) {
+            console.log(`    - ${item.model}: ${item.tokens} tokens, $${item.costUsd.toFixed(6)}`);
+          }
         }
       }
     });

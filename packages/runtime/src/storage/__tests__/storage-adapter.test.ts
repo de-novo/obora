@@ -11,7 +11,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import type { StorageAdapter, RunRecord, StepRecord, ArtifactRecord } from "../types.js";
+import type { StorageAdapter, RunRecord, StepRecord, ArtifactRecord, CostRecord } from "../types.js";
 import { InMemoryStorageAdapter } from "../inmemory-adapter.js";
 import { SQLiteStorageAdapter } from "../sqlite-adapter.js";
 
@@ -46,6 +46,22 @@ function makeArtifact(runId: string, overrides: Partial<ArtifactRecord> = {}): A
     mimeType: "application/json",
     sizeBytes: 1024,
     storageRef: "/data/artifacts/test",
+    createdAt: new Date().toISOString(),
+    ...overrides,
+  };
+}
+
+function makeCost(runId: string, overrides: Partial<CostRecord> = {}): CostRecord {
+  return {
+    id: randomUUID(),
+    runId,
+    stepName: "step-1",
+    model: "gpt-4o",
+    promptTokens: 120,
+    completionTokens: 80,
+    totalTokens: 200,
+    costUsd: 0.0012,
+    latencyMs: 345,
     createdAt: new Date().toISOString(),
     ...overrides,
   };
@@ -230,6 +246,44 @@ function runContractTests(name: string, factory: () => { adapter: StorageAdapter
       await adapter.saveRun(run);
       const loaded = await adapter.getRun(run.id);
       expect(loaded?.metadata).toBeUndefined();
+    });
+
+    // ── Cost tests ──
+
+    it("saveCost + getCosts round-trip", async () => {
+      const run = makeRun();
+      await adapter.saveRun(run);
+      const cost = makeCost(run.id);
+      await adapter.saveCost(cost);
+
+      const costs = await adapter.getCosts(run.id);
+      expect(costs).toHaveLength(1);
+      expect(costs[0]).toEqual(cost);
+    });
+
+    it("getCosts filters by stepName", async () => {
+      const run = makeRun();
+      await adapter.saveRun(run);
+      await adapter.saveCost(makeCost(run.id, { stepName: "step-a" }));
+      await adapter.saveCost(makeCost(run.id, { stepName: "step-b" }));
+
+      const costs = await adapter.getCosts(run.id, "step-a");
+      expect(costs).toHaveLength(1);
+      expect(costs[0]?.stepName).toBe("step-a");
+    });
+
+    it("getRunCostSummary aggregates by step/model", async () => {
+      const run = makeRun();
+      await adapter.saveRun(run);
+      await adapter.saveCost(makeCost(run.id, { stepName: "draft", model: "gpt-4o", totalTokens: 100, costUsd: 0.1 }));
+      await adapter.saveCost(makeCost(run.id, { stepName: "draft", model: "gpt-4o", totalTokens: 50, costUsd: 0.05 }));
+      await adapter.saveCost(makeCost(run.id, { stepName: "review", model: "claude-sonnet-4", totalTokens: 30, costUsd: 0.02 }));
+
+      const summary = await adapter.getRunCostSummary(run.id);
+      expect(summary.totalTokens).toBe(180);
+      expect(summary.totalCostUsd).toBeCloseTo(0.17);
+      expect(summary.byStep.find((s) => s.stepName === "draft")?.tokens).toBe(150);
+      expect(summary.byModel.find((m) => m.model === "gpt-4o")?.costUsd).toBeCloseTo(0.15);
     });
   });
 }

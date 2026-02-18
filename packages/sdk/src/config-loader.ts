@@ -8,6 +8,12 @@ import type { LLMConfig } from "./llm-config.js";
 import { createAuthResolver } from "./auth-resolver.js";
 import { OboraError, OboraErrorCode } from "./runtime.js";
 
+export interface ModelPricing {
+  model: string;
+  promptPer1kTokens: number;
+  completionPer1kTokens: number;
+}
+
 export interface OboraConfig {
   defaults?: {
     provider?: string;
@@ -35,6 +41,22 @@ export interface OboraConfig {
       temperature?: number;
     }
   >;
+  resources?: {
+    maxCostPerRun?: number;
+    maxTokensPerStep?: number;
+    maxCostPerStep?: number;
+    onBudgetExceed?: "block" | "warn";
+    // Preferred: pricing as model array + unknownModel/fallback as sibling keys.
+    pricing?:
+      | ModelPricing[]
+      | {
+          models: ModelPricing[];
+          unknownModel?: "warn" | "block" | "estimate";
+          fallbackPer1kTokens?: { prompt: number; completion: number };
+        };
+    unknownModel?: "warn" | "block" | "estimate";
+    fallbackPer1kTokens?: { prompt: number; completion: number };
+  };
 }
 
 export interface ResolvedProviderConfig extends LLMConfig {
@@ -112,6 +134,10 @@ function mergeConfig(base: OboraConfig | undefined, override: OboraConfig | unde
     defaults: { ...(base?.defaults ?? {}), ...(override?.defaults ?? {}) },
     providers: mergedProviders,
     agents: mergedAgents,
+    resources: {
+      ...(base?.resources ?? {}),
+      ...(override?.resources ?? {}),
+    },
   };
 }
 
