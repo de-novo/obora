@@ -18,8 +18,8 @@ vi.mock('fs-extra', () => ({
   },
 }));
 
-// Mock @obora-kit/runtime
-vi.mock('@obora-kit/runtime', () => ({
+// Mock @obora/runtime
+vi.mock('@obora/runtime', () => ({
   log: vi.fn(),
   parseWorkflow: vi.fn(),
   topologicalSort: vi.fn(),
@@ -53,7 +53,7 @@ vi.mock('../../utils/status.js', () => ({
 
 import { existsSync, readFileSync } from 'node:fs';
 import fs from 'fs-extra';
-import { log, parseWorkflow, topologicalSort, buildGraph, groupByLevel } from '@obora-kit/runtime';
+import { log, parseWorkflow, topologicalSort, buildGraph, groupByLevel } from '@obora/runtime';
 import { validatePathComponent } from '../../utils/path-utils.js';
 import { readStatus } from '../../utils/status.js';
 import { createRunCommand, runRun } from '../run.js';

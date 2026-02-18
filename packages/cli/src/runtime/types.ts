@@ -1,4 +1,4 @@
-import type { ErrorCode } from "@obora-kit/runtime";
+import type { ErrorCode } from "@obora/runtime";
 
 export type UserFacingErrorCode =
   | "E4001"

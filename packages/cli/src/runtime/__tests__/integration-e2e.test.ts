@@ -48,7 +48,7 @@ import {
 } from "../context-builder.js";
 import { MockLLMAdapter } from "@obora-kit/adapters";
 import type { ChatMessage } from "@obora-kit/adapters";
-import type { Step, Workflow, ErrorCode } from "@obora-kit/runtime";
+import type { Step, Workflow, ErrorCode } from "@obora/runtime";
 
 // ---------------------------------------------------------------------------
 // Shared fixtures

@@ -7,7 +7,7 @@
  * - create BaseAgent from fully-resolved config
  */
 
-import { OboraError } from "@obora-kit/runtime";
+import { OboraError } from "@obora/runtime";
 import {
   type AgentConfig,
   createAdapter,
@@ -19,7 +19,7 @@ import {
   type BaseAgent,
   AgentRole,
   createAgent,
-} from "@obora-kit/runtime";
+} from "@obora/runtime";
 
 import type { AgentResolver } from "./step-executor.js";
 

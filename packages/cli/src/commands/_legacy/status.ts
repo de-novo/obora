@@ -6,7 +6,7 @@
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
-import { log, getAllDiagnoses, formatDiagnosis, getDiagnosis } from "@obora/core";
+import { log, getAllDiagnoses, formatDiagnosis, getDiagnosis } from "@obora/runtime";
 import { Command } from "commander";
 
 import { CLIError } from "../../errors.js";

@@ -6,7 +6,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { parseAndValidate, type ValidationResult, type ValidationError } from "@obora-kit/runtime";
+import { parseAndValidate, type ValidationResult, type ValidationError } from "@obora/runtime";
 import chalk from "chalk";
 import { Command } from "commander";
 

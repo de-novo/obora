@@ -19,8 +19,8 @@ vi.mock('fs-extra', () => ({
   },
 }));
 
-// Mock @obora-kit/runtime
-vi.mock('@obora-kit/runtime', () => ({
+// Mock @obora/runtime
+vi.mock('@obora/runtime', () => ({
   log: vi.fn(),
 }));
 
@@ -36,7 +36,7 @@ vi.mock('../../utils/status.js', () => ({
 
 import { existsSync, readFileSync } from 'node:fs';
 import fs from 'fs-extra';
-import { log } from '@obora-kit/runtime';
+import { log } from '@obora/runtime';
 import { validatePathComponent } from '../../utils/path-utils.js';
 import { readStatus } from '../../utils/status.js';
 import { createDoneCommand, runDone } from '../done.js';

@@ -11,8 +11,8 @@ vi.mock('node:fs', () => ({
   readdirSync: vi.fn(),
 }));
 
-// Mock @obora-kit/runtime
-vi.mock('@obora-kit/runtime', () => ({
+// Mock @obora/runtime
+vi.mock('@obora/runtime', () => ({
   log: vi.fn(),
   getAllDiagnoses: vi.fn(() => [
     { code: 'E4004', title: 'Lock acquisition failed', hypothesis: 'h', evidence: 'e', commands: ['cmd'], rollback: 'r' },
@@ -43,7 +43,7 @@ vi.mock('../../utils/status.js', () => ({
 }));
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { log } from '@obora-kit/runtime';
+import { log } from '@obora/runtime';
 import { validatePathComponent } from '../../utils/path-utils.js';
 import { readStatus } from '../../utils/status.js';
 import { createStatusCommand, runStatus } from '../status.js';

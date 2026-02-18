@@ -7,7 +7,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import * as path from "node:path";
 
-import { log } from "@obora/core";
+import { log } from "@obora/runtime";
 import { Command } from "commander";
 import fs from "fs-extra";
 import yaml from "yaml";

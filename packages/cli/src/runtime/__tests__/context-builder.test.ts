@@ -14,7 +14,7 @@ import {
   MAX_HISTORY_LENGTH,
 } from "../context-builder.js";
 import type { ChatMessage } from "@obora-kit/adapters";
-import type { Step, Workflow } from "@obora-kit/runtime";
+import type { Step, Workflow } from "@obora/runtime";
 
 // ---------------------------------------------------------------------------
 // Fixtures
