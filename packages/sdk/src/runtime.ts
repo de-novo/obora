@@ -1000,6 +1000,14 @@ export class OboraRuntime {
       throw new OboraError(`No checkpoint found for run: ${runId}`, "SDK_CHECKPOINT_NOT_FOUND");
     }
 
+    if (run.status !== "failed" && run.status !== "suspended") {
+      throw new OboraError(
+        `Run ${runId} is not resumable (status: ${run.status})`,
+        "SDK_RESUME_INVALID_STATUS",
+        runId,
+      );
+    }
+
     // Resolve current policy for drift detection (use loaded policy if available)
     const currentPolicyConfig = this.policy ?? {};
     const drift = mgr.detectDrift(checkpoint, currentPolicyConfig);
@@ -1052,6 +1060,16 @@ export class OboraRuntime {
       );
     }
 
+    if (rerunSteps.length === 0) {
+      await adapter.saveRun({ ...run, status: "completed", completedAt: new Date().toISOString() });
+      return {
+        execution: { id: runId, status: "completed" },
+        restoredSteps,
+        rerunSteps,
+        driftDetected: drift.drifted,
+      };
+    }
+
     // Update run status and execute rerun steps
     await adapter.saveRun({ ...run, status: "running", completedAt: undefined });
 
@@ -1101,13 +1119,67 @@ export class OboraRuntime {
             temperature: llmConfig.temperature,
             maxTokens: llmConfig.maxTokens,
             verbose: this.config.verbose,
+            resolveAgentLLM: async (agentName?: string) => {
+              if (!loadedConfig || !agentName) {
+                return undefined;
+              }
+
+              const yamlAgentRaw = runtimeAgents.get(agentName)?.();
+              const yamlAgent =
+                yamlAgentRaw && typeof yamlAgentRaw === "object"
+                  ? (yamlAgentRaw as { provider?: string; model?: string; temperature?: number })
+                  : undefined;
+              const configAgent = loadedConfig.agents?.[agentName];
+              const preferYamlAgent = Boolean(yamlAgent);
+
+              const resolvedProviderName = preferYamlAgent
+                ? (yamlAgent?.provider ?? loadedConfig.defaults?.provider)
+                : (configAgent?.provider ?? loadedConfig.defaults?.provider);
+              const providerConfig = resolveProviderConfig(loadedConfig, resolvedProviderName, {
+                verbose: this.config.verbose,
+              });
+              if (!providerConfig) {
+                if (resolvedProviderName) {
+                  await this.emitEvent("warning", executionId, {
+                    message: `Agent '${agentName}' configured with provider '${resolvedProviderName}' but API key not resolved. Falling back to default.`,
+                    code: OboraErrorCode.ADAPTER_LLM_UNAVAILABLE,
+                  });
+                }
+                return undefined;
+              }
+
+              return {
+                adapter: await getAdapter(providerConfig),
+                model: preferYamlAgent
+                  ? (yamlAgent?.model ?? providerConfig.model)
+                  : (configAgent?.model ?? providerConfig.model),
+                temperature: preferYamlAgent
+                  ? (yamlAgent?.temperature ?? providerConfig.temperature)
+                  : (configAgent?.temperature ?? providerConfig.temperature),
+                maxTokens: providerConfig.maxTokens,
+              };
+            },
             onEvent: async (eventType, data) => {
               await this.emitEvent(eventType, executionId, data);
             },
           })
         : undefined;
 
+      if (!llmConfig) {
+        await this.emitEvent("warning", executionId, {
+          message: "No LLM configured; workflow will run in stub mode.",
+          code: OboraErrorCode.ADAPTER_LLM_UNAVAILABLE,
+        });
+      }
+
       const sortedStepDefs = topologicalSort(workflow.steps).filter((s) => rerunSteps.includes(s.name));
+
+      await this.emitEvent("execution_start", executionId, {
+        workflowName: run.workflowName,
+        input: run.input,
+        resume: true,
+        rerunSteps,
+      });
 
       try {
         for (const step of sortedStepDefs) {
@@ -1138,7 +1210,10 @@ export class OboraRuntime {
               runId,
               stepName: step.name,
               status: "completed",
-              output: result.raw as Record<string, unknown>,
+              output:
+                result.output && typeof result.output === "object"
+                  ? (result.output as Record<string, unknown>)
+                  : ({ value: result.output } as Record<string, unknown>),
               startedAt: startedAtIso,
               completedAt: completedAtIso,
               durationMs: Date.now() - stepStartedAt,
@@ -1189,11 +1264,21 @@ export class OboraRuntime {
         // Update run as completed
         execution.status = "completed";
         execution.endedAt = new Date();
+        await this.emitEvent("execution_end", executionId, {
+          workflowName: run.workflowName,
+          status: "completed",
+          resume: true,
+        });
         await adapter.saveRun({ ...run, status: "completed", completedAt: execution.endedAt.toISOString() });
         this.executions.set(executionId, structuredClone(execution));
       } catch (err) {
         execution.status = "failed";
         execution.endedAt = new Date();
+        await this.emitEvent("execution_end", executionId, {
+          workflowName: run.workflowName,
+          status: "failed",
+          resume: true,
+        });
         await adapter.saveRun({ ...run, status: "failed", completedAt: execution.endedAt.toISOString() });
         this.executions.set(executionId, structuredClone(execution));
         throw err;

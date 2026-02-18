@@ -54,14 +54,21 @@ export function createResumeCommand(): Command {
           `.obora/workflows/${workflowName}.yml`,
         ].map((candidate) => resolve(process.cwd(), candidate));
 
+        let workflowLoaded = false;
         for (const candidate of workflowCandidates) {
           try {
             await access(candidate);
-            await runtime.loadWorkflow(candidate);
-            break;
           } catch {
-            // try next candidate
+            continue;
           }
+
+          await runtime.loadWorkflow(candidate);
+          workflowLoaded = true;
+          break;
+        }
+
+        if (!workflowLoaded) {
+          console.warn(`⚠️  Workflow file not found for '${workflowName}'. Resume may fail if rerun steps are required.`);
         }
 
         const result = await runtime.resume(runId, {
