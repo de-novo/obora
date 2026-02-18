@@ -1408,6 +1408,12 @@ export class OboraRuntime {
     return this._storageAdapter;
   }
 
+  /**
+   * Resolve artifact store from SDK options or loaded config.
+   *
+   * Custom store usage:
+   * new OboraRuntime({ artifacts: { enabled: true, store: "custom", custom: { instance: myArtifactStore } } })
+   */
   private async getArtifactStore(config?: OboraConfig): Promise<import("@obora/runtime").ArtifactStore | undefined> {
     if (this._artifactStore) return this._artifactStore;
 
@@ -1507,7 +1513,11 @@ export class OboraRuntime {
   async getArtifact(runId: string, stepName: string, name: string) {
     const artifacts = await this.getRunArtifacts(runId, stepName);
     const matched = artifacts.filter((a) => a.name === name);
-    return matched.length > 0 ? matched[matched.length - 1] ?? null : null;
+    const target = matched.length > 0 ? matched[matched.length - 1] : undefined;
+    if (!target) {
+      throw new OboraError(`Artifact not found: ${runId}/${stepName}/${name}`, "SDK_ARTIFACT_NOT_FOUND");
+    }
+    return target;
   }
 
   async deleteArtifact(runId: string, stepName: string, name: string): Promise<void> {

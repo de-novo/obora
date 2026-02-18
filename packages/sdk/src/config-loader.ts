@@ -51,7 +51,7 @@ export interface OboraConfig {
     enabled?: boolean;
     store?: "local" | "custom";
     local?: { basePath?: string };
-    custom?: { instance?: unknown };
+    custom?: { instance?: import("@obora/runtime").ArtifactStore };
   };
   resources?: {
     maxCostPerRun?: number;

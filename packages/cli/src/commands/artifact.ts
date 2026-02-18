@@ -42,13 +42,27 @@ export function createArtifactCommand(): Command {
       const config = await loadConfig();
       const runtime = new OboraRuntime(runtimeFromConfig(config ?? {}));
 
-      const artifact = await runtime.getArtifact(runId, stepName, name);
-      if (!artifact) {
-        console.error(`Artifact not found: ${runId}/${stepName}/${name}`);
+      let artifact;
+      try {
+        artifact = await runtime.getArtifact(runId, stepName, name);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        if (msg.includes("SDK_ARTIFACT_NOT_FOUND") || msg.includes("Artifact not found")) {
+          console.error(`Artifact not found: ${runId}/${stepName}/${name}`);
+        } else {
+          console.error(`Failed to resolve artifact: ${msg}`);
+        }
         process.exit(1);
       }
 
-      const { data } = await artifact.download();
+      let data: Buffer;
+      try {
+        ({ data } = await artifact.download());
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        console.error(`Artifact download failed: ${msg}`);
+        process.exit(1);
+      }
       if (opts.output) {
         await writeFile(opts.output, data);
         console.log(opts.output);
