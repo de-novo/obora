@@ -195,3 +195,16 @@
 - 원인: blackboard-first 관련 TASK 다수에서 현재 미존재 패키지/필터 참조가 유지되어 실행 경로가 성립하지 않음.
 - 필요조치: 참조 건수가 높은 TASK부터(예: TASK-023/040) 현 구조 기준으로 검증 명령 1개를 우선 재정의.
 - 다음실행조건: 재정의된 명령이 실제 패키지에서 실행 가능하고 결과를 기록할 수 있을 것.
+
+## 야간 점검 로그 (2026-02-19 03:11 KST)
+- 점검 단위: blackboard-first 기준 TASK-040 BLOCKER 하 단일 문서 우선점검 1건(TASK-023)
+- 기준 브랜치: `origin/main` (`40e3c43`)
+- 작업 브랜치: `main` (HEAD 유지, `f563a6d`)
+- 실행 검증: `rg -n "packages/(blackboard|board)|@obora-kit/(blackboard|board)" queue/TASK-023-blackboard-tests.md | head -n 5`
+- 결과: TASK-023 상단 근거 경로가 `packages/blackboard/*` 기준으로 고정되어 있음을 재확인
+- 메모: 블로커 모드 유지(동일 유형 3회+), 구현/테스트 강행 없이 SSOT 재매핑 대상 문서 우선순위 점검만 수행.
+
+### BLOCKER (2026-02-19 03:11 KST)
+- 원인: 우선 정리 대상인 TASK-023이 현재 저장소에 없는 `packages/blackboard` 경로를 근거/검증 기준으로 사용 중.
+- 필요조치: TASK-023부터 현 패키지 집합 기준의 검증 명령 1개를 재정의하고, 이후 연쇄 문서에 동일 규칙 반영.
+- 다음실행조건: TASK-023에 실제 실행 가능한 검증 명령 1개가 명시되고 실행 결과를 남길 수 있을 것.
