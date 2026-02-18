@@ -7,6 +7,7 @@ export type {
   CheckpointRecord,
   CostRecord,
   CostSummary,
+  StructuredAuditEvent,
   Checkpointable,
   CheckpointableFactory,
   ResumeOptions,

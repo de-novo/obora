@@ -4,6 +4,7 @@ import type { CellManager } from "../cell/CellManager.js";
 import type { Task } from "../cell/types.js";
 import type { AuditTrail } from "../audit/AuditTrail.js";
 import type { AuditEventType } from "../audit/types.js";
+import { persistStructuredAuditEvent } from "../audit/AuditReplay.js";
 import type { ConsensusGate } from "../consensus/ConsensusGate.js";
 import type { PolicyEngine } from "../policy/PolicyEngine.js";
 import type { PolicyDecision } from "../policy/types.js";
@@ -1219,11 +1220,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
     data: unknown,
     options: { cellId?: string; durationMs?: number } = {}
   ): Promise<void> {
-    if (!this.dependencies.auditTrail) {
-      return;
-    }
-
-    await this.dependencies.auditTrail.record({
+    const event = {
       id: randomUUID(),
       executionId,
       cellId: options.cellId,
@@ -1231,7 +1228,13 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
       type,
       data,
       metadata: options.durationMs !== undefined ? { durationMs: options.durationMs } : undefined,
-    });
+    };
+
+    if (this.dependencies.auditTrail) {
+      await this.dependencies.auditTrail.record(event);
+    }
+
+    await persistStructuredAuditEvent(this.dependencies.storageAdapter, executionId, event);
   }
 
   private extractError(output: unknown): string {

@@ -402,6 +402,21 @@ console.log(replay.plan.stepsToRerun);
 console.log(replay.diffReport.summary);
 ```
 
+### Structured Audit Replay (M6)
+
+```ts
+const run = await runtime.getRun("run-123");
+const timeline = await run?.auditReplay();
+const reviewOnly = await run?.auditReplay("review");
+```
+
+For low-level access you can also call:
+
+```ts
+await runtime.getRunAuditTimeline("run-123", "review");
+await runtime.runs.auditReplay("run-123", "review");
+```
+
 ---
 
 ## Error Codes

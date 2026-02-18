@@ -1435,6 +1435,27 @@ export class OboraRuntime {
     return adapter.getRunCostSummary(runId);
   }
 
+  /** Get structured audit timeline for a run */
+  async getRunAuditTimeline(runId: string, stepName?: string) {
+    const adapter = await this.getStorageAdapter();
+    return adapter.getAuditTimeline(runId, stepName);
+  }
+
+  /** SDK ergonomic run handle with run.auditReplay(stepName?) */
+  async getRun(runId: string) {
+    const adapter = await this.getStorageAdapter();
+    const run = await adapter.getRun(runId);
+    if (!run) return null;
+
+    return {
+      ...run,
+      steps: async () => adapter.getSteps(runId),
+      artifacts: async (stepName?: string) => adapter.getArtifacts(runId, stepName),
+      cost: async () => adapter.getRunCostSummary(runId),
+      auditReplay: async (stepName?: string) => adapter.getAuditTimeline(runId, stepName),
+    };
+  }
+
   // ── run namespace (spec-aligned facade) ──
 
   /** Spec-aligned run query API: `runtime.runs.get(id)`, `runtime.runs.steps(id)`, `runtime.runs.artifacts(stepId)` */
@@ -1467,6 +1488,12 @@ export class OboraRuntime {
     cost: async (runId: string) => {
       const adapter = await this.getStorageAdapter();
       return adapter.getRunCostSummary(runId);
+    },
+
+    /** Spec-aligned: run.auditReplay(stepName?) facade */
+    auditReplay: async (runId: string, stepName?: string) => {
+      const adapter = await this.getStorageAdapter();
+      return adapter.getAuditTimeline(runId, stepName);
     },
   };
 

@@ -331,6 +331,8 @@ describe("OboraRuntime facade", () => {
         const rows = costs.filter((c) => c.runId === runId);
         return { totalTokens: rows.reduce((s, r) => s + r.totalTokens, 0), totalCostUsd: rows.reduce((s, r) => s + r.costUsd, 0), byStep: [], byModel: [] };
       },
+      async saveAuditEvent() { return; },
+      async getAuditTimeline() { return []; },
     };
 
     const runtime = new OboraRuntime({
@@ -401,6 +403,8 @@ describe("OboraRuntime facade", () => {
           byModel: [{ model: "gpt-4o", tokens: 30, costUsd: 0.03 }],
         };
       },
+      async saveAuditEvent() { return; },
+      async getAuditTimeline() { return []; },
     };
 
     const runtime = new OboraRuntime({
@@ -413,5 +417,35 @@ describe("OboraRuntime facade", () => {
     expect(runCost.totalTokens).toBe(30);
     expect(stepCost.tokens).toBe(30);
     expect(stepCost.records).toHaveLength(1);
+  });
+
+  it("provides run.auditReplay(step?) API", async () => {
+    const timeline = [{ id: "a1", runId: "run-a", stepName: "review", timestamp: new Date().toISOString(), category: "consensus", action: "consensus_vote", actor: "agent-a", detail: {} }];
+
+    const storage = {
+      async getRun(runId: string) { return runId === "run-a" ? { id: runId, workflowName: "wf", status: "completed", input: {}, startedAt: new Date().toISOString() } : null; },
+      async listRuns() { return []; },
+      async saveRun() { return; },
+      async saveStep() { return; },
+      async getSteps() { return []; },
+      async saveArtifact(record: any) { return record; },
+      async getArtifacts() { return []; },
+      async deleteArtifact() { return; },
+      async saveCheckpoint() { return; },
+      async getLatestCheckpoint() { return null; },
+      async saveCost() { return; },
+      async getCosts() { return []; },
+      async getRunCostSummary() { return { totalTokens: 0, totalCostUsd: 0, byStep: [], byModel: [] }; },
+      async saveAuditEvent() { return; },
+      async getAuditTimeline(runId: string, stepName?: string) { return timeline.filter((e) => e.runId === runId && (!stepName || e.stepName === stepName)); },
+    };
+
+    const runtime = new OboraRuntime({ persistence: { enabled: true, adapter: "custom", custom: { instance: storage as any } } });
+    const run = await runtime.getRun("run-a");
+    const events = await run?.auditReplay("review");
+    const events2 = await runtime.runs.auditReplay("run-a", "review");
+
+    expect(events).toHaveLength(1);
+    expect(events2).toHaveLength(1);
   });
 });

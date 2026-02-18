@@ -272,20 +272,19 @@ obora audit tail [--execution <id>]
 
 Streams audit events for a running or completed execution.
 
-#### `obora audit replay <executionId>`
+#### `obora audit replay <runId>`
 
-Replay an execution using SDK `runtime.replay(...)`.
+Show structured audit replay timeline for a persisted run.
 
 Options:
 
-- `--mode <mode>` `full` or `from_checkpoint` (default: `full`)
-- `--checkpoint <step>` checkpoint step name
-- `--dry-run` simulate without applying changes
+- `--step <stepName>` filter timeline by step name
 
 Example:
 
 ```bash
-obora audit replay exec-123 --mode from_checkpoint --checkpoint review --dry-run
+obora audit replay run-123
+obora audit replay run-123 --step review
 ```
 
 ### Exit Codes

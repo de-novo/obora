@@ -11,6 +11,7 @@ import type {
   CheckpointRecord,
   CostRecord,
   CostSummary,
+  StructuredAuditEvent,
 } from "./types.js";
 
 export class InMemoryStorageAdapter implements StorageAdapter {
@@ -19,6 +20,7 @@ export class InMemoryStorageAdapter implements StorageAdapter {
   private readonly artifacts = new Map<string, ArtifactRecord>();
   private readonly checkpoints: CheckpointRecord[] = [];
   private readonly costs: CostRecord[] = [];
+  private readonly auditEvents: StructuredAuditEvent[] = [];
 
   async saveRun(record: RunRecord): Promise<void> {
     this.runs.set(record.id, structuredClone(record));
@@ -140,5 +142,17 @@ export class InMemoryStorageAdapter implements StorageAdapter {
       byStep: Array.from(byStep.values()),
       byModel: Array.from(byModel.values()),
     };
+  }
+
+  async saveAuditEvent(event: StructuredAuditEvent): Promise<void> {
+    this.auditEvents.push(structuredClone(event));
+  }
+
+  async getAuditTimeline(runId: string, stepName?: string): Promise<StructuredAuditEvent[]> {
+    return this.auditEvents
+      .filter((e) => e.runId === runId)
+      .filter((e) => (stepName ? e.stepName === stepName : true))
+      .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
+      .map((e) => structuredClone(e));
   }
 }

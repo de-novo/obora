@@ -8,6 +8,7 @@ import { InMemoryAuditStore } from "../../audit/InMemoryAuditStore.js";
 import { RecoveryEngine } from "../../recovery/RecoveryEngine.js";
 import { DefaultStateBinder } from "../../state/StateBinder.js";
 import { StateManager } from "../../state/StateManager.js";
+import type { StorageAdapter } from "../../storage/types.js";
 import { DefaultRuntimeOrchestrator } from "../RuntimeOrchestrator.js";
 
 function createPolicyEngine(
@@ -475,4 +476,46 @@ steps:
       status: "completed",
     });
   });
+
+  it("persists structured audit events in parallel with AuditTrail", async () => {
+    const auditTrail = new InMemoryAuditStore();
+    const saveAuditEvent = vi.fn(async () => undefined);
+    const storageAdapter: StorageAdapter = {
+      saveRun: async () => undefined,
+      getRun: async () => null,
+      listRuns: async () => [],
+      saveStep: async () => undefined,
+      getSteps: async () => [],
+      saveArtifact: async (record) => record,
+      getArtifacts: async () => [],
+      deleteArtifact: async () => undefined,
+      saveCheckpoint: async () => undefined,
+      getLatestCheckpoint: async () => null,
+      saveCost: async () => undefined,
+      getCosts: async () => [],
+      getRunCostSummary: async () => ({ totalTokens: 0, totalCostUsd: 0, byStep: [], byModel: [] }),
+      saveAuditEvent,
+      getAuditTimeline: async () => [],
+    };
+
+    const orchestrator = new DefaultRuntimeOrchestrator({
+      cellManager: createCellManager([]),
+      policyEngine: createPolicyEngine(),
+      auditTrail,
+      storageAdapter,
+    });
+
+    orchestrator.define("audit-parallel-case", {
+      name: "audit-parallel-case",
+      steps: [{ name: "generate", agent: "analyst" }],
+    });
+
+    const execution = await orchestrator.run("audit-parallel-case", {});
+    expect(execution.status).toBe("completed");
+    expect(saveAuditEvent).toHaveBeenCalled();
+
+    const events = await auditTrail.query({ executionId: execution.id });
+    expect(events.length).toBeGreaterThan(0);
+  });
+
 });

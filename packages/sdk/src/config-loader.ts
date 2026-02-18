@@ -41,6 +41,12 @@ export interface OboraConfig {
       temperature?: number;
     }
   >;
+  persistence?: {
+    enabled?: boolean;
+    adapter?: "sqlite" | "custom";
+    sqlite?: { path?: string };
+    custom?: unknown;
+  };
   resources?: {
     maxCostPerRun?: number;
     maxTokensPerStep?: number;
@@ -134,6 +140,15 @@ function mergeConfig(base: OboraConfig | undefined, override: OboraConfig | unde
     defaults: { ...(base?.defaults ?? {}), ...(override?.defaults ?? {}) },
     providers: mergedProviders,
     agents: mergedAgents,
+    persistence: {
+      ...(base?.persistence ?? {}),
+      ...(override?.persistence ?? {}),
+      sqlite: {
+        ...(base?.persistence?.sqlite ?? {}),
+        ...(override?.persistence?.sqlite ?? {}),
+      },
+      custom: override?.persistence?.custom ?? base?.persistence?.custom,
+    },
     resources: {
       ...(base?.resources ?? {}),
       ...(override?.resources ?? {}),

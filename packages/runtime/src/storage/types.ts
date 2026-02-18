@@ -84,6 +84,24 @@ export interface CostSummary {
   byModel: Array<{ model: string; tokens: number; costUsd: number }>;
 }
 
+// ── Audit replay types (T4 scope) ──
+
+export interface StructuredAuditEvent {
+  id: string;
+  runId: string;
+  stepName: string;
+  timestamp: string;
+  category: "consensus" | "policy" | "execution" | "recovery";
+  action: string;
+  actor: string;
+  detail: Record<string, unknown>;
+  vote?: {
+    decision: "approve" | "reject" | "abstain";
+    confidence?: number;
+    reasoning?: string;
+  };
+}
+
 // ── Checkpointable interface ──
 
 export interface Checkpointable {
@@ -122,4 +140,8 @@ export interface StorageAdapter {
   saveCost(record: CostRecord): Promise<void>;
   getCosts(runId: string, stepName?: string): Promise<CostRecord[]>;
   getRunCostSummary(runId: string): Promise<CostSummary>;
+
+  // ── Audit (T4) ──
+  saveAuditEvent(event: StructuredAuditEvent): Promise<void>;
+  getAuditTimeline(runId: string, stepName?: string): Promise<StructuredAuditEvent[]>;
 }

@@ -11,7 +11,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import type { StorageAdapter, RunRecord, StepRecord, ArtifactRecord, CostRecord } from "../types.js";
+import type { StorageAdapter, RunRecord, StepRecord, ArtifactRecord, CostRecord, StructuredAuditEvent } from "../types.js";
 import { InMemoryStorageAdapter } from "../inmemory-adapter.js";
 import { SQLiteStorageAdapter } from "../sqlite-adapter.js";
 
@@ -63,6 +63,20 @@ function makeCost(runId: string, overrides: Partial<CostRecord> = {}): CostRecor
     costUsd: 0.0012,
     latencyMs: 345,
     createdAt: new Date().toISOString(),
+    ...overrides,
+  };
+}
+
+function makeAuditEvent(runId: string, overrides: Partial<StructuredAuditEvent> = {}): StructuredAuditEvent {
+  return {
+    id: randomUUID(),
+    runId,
+    stepName: "step-1",
+    timestamp: new Date().toISOString(),
+    category: "execution",
+    action: "step_start",
+    actor: "system",
+    detail: { ok: true },
     ...overrides,
   };
 }
@@ -284,6 +298,31 @@ function runContractTests(name: string, factory: () => { adapter: StorageAdapter
       expect(summary.totalCostUsd).toBeCloseTo(0.17);
       expect(summary.byStep.find((s) => s.stepName === "draft")?.tokens).toBe(150);
       expect(summary.byModel.find((m) => m.model === "gpt-4o")?.costUsd).toBeCloseTo(0.15);
+    });
+
+    it("saveAuditEvent + getAuditTimeline round-trip", async () => {
+      const run = makeRun();
+      await adapter.saveRun(run);
+      const e1 = makeAuditEvent(run.id, { timestamp: "2026-02-18T01:00:00.000Z", stepName: "a" });
+      const e2 = makeAuditEvent(run.id, { timestamp: "2026-02-18T01:00:01.000Z", stepName: "b", category: "consensus" });
+      await adapter.saveAuditEvent(e2);
+      await adapter.saveAuditEvent(e1);
+
+      const timeline = await adapter.getAuditTimeline(run.id);
+      expect(timeline).toHaveLength(2);
+      expect(timeline[0]?.id).toBe(e1.id);
+      expect(timeline[1]?.id).toBe(e2.id);
+    });
+
+    it("getAuditTimeline filters by stepName", async () => {
+      const run = makeRun();
+      await adapter.saveRun(run);
+      await adapter.saveAuditEvent(makeAuditEvent(run.id, { stepName: "alpha" }));
+      await adapter.saveAuditEvent(makeAuditEvent(run.id, { stepName: "beta" }));
+
+      const timeline = await adapter.getAuditTimeline(run.id, "alpha");
+      expect(timeline).toHaveLength(1);
+      expect(timeline[0]?.stepName).toBe("alpha");
     });
   });
 }

@@ -11,6 +11,7 @@ import type {
   CheckpointRecord,
   CostRecord,
   CostSummary,
+  StructuredAuditEvent,
 } from "./types.js";
 
 // Lazy import to keep better-sqlite3 optional at runtime
@@ -108,6 +109,19 @@ export class SQLiteStorageAdapter implements StorageAdapter {
         FOREIGN KEY (run_id) REFERENCES runs(id)
       );
 
+      CREATE TABLE IF NOT EXISTS audit_events (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL,
+        step_name TEXT NOT NULL,
+        timestamp TEXT NOT NULL,
+        category TEXT NOT NULL,
+        action TEXT NOT NULL,
+        actor TEXT NOT NULL,
+        detail TEXT NOT NULL,
+        vote TEXT,
+        FOREIGN KEY (run_id) REFERENCES runs(id)
+      );
+
       CREATE INDEX IF NOT EXISTS idx_steps_run_id ON steps(run_id);
       CREATE INDEX IF NOT EXISTS idx_artifacts_run_id ON artifacts(run_id);
       CREATE INDEX IF NOT EXISTS idx_runs_status ON runs(status);
@@ -115,6 +129,9 @@ export class SQLiteStorageAdapter implements StorageAdapter {
       CREATE INDEX IF NOT EXISTS idx_checkpoints_run_id ON checkpoints(run_id);
       CREATE INDEX IF NOT EXISTS idx_costs_run_id ON costs(run_id);
       CREATE INDEX IF NOT EXISTS idx_costs_run_step ON costs(run_id, step_name);
+      CREATE INDEX IF NOT EXISTS idx_audit_events_run_id ON audit_events(run_id);
+      CREATE INDEX IF NOT EXISTS idx_audit_events_run_step ON audit_events(run_id, step_name);
+      CREATE INDEX IF NOT EXISTS idx_audit_events_run_ts ON audit_events(run_id, timestamp);
     `);
   }
 
@@ -356,6 +373,46 @@ export class SQLiteStorageAdapter implements StorageAdapter {
     };
   }
 
+  async saveAuditEvent(event: StructuredAuditEvent): Promise<void> {
+    await this.ensureInitialized();
+    this.db
+      .prepare(
+        `INSERT INTO audit_events (id, run_id, step_name, timestamp, category, action, actor, detail, vote)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           timestamp = excluded.timestamp,
+           category = excluded.category,
+           action = excluded.action,
+           actor = excluded.actor,
+           detail = excluded.detail,
+           vote = excluded.vote`
+      )
+      .run(
+        event.id,
+        event.runId,
+        event.stepName,
+        event.timestamp,
+        event.category,
+        event.action,
+        event.actor,
+        JSON.stringify(event.detail),
+        event.vote ? JSON.stringify(event.vote) : null,
+      );
+  }
+
+  async getAuditTimeline(runId: string, stepName?: string): Promise<StructuredAuditEvent[]> {
+    await this.ensureInitialized();
+    const rows = stepName
+      ? (this.db
+          .prepare("SELECT * FROM audit_events WHERE run_id = ? AND step_name = ? ORDER BY timestamp ASC")
+          .all(runId, stepName) as Record<string, unknown>[])
+      : (this.db
+          .prepare("SELECT * FROM audit_events WHERE run_id = ? ORDER BY timestamp ASC")
+          .all(runId) as Record<string, unknown>[]);
+
+    return rows.map((r) => this.toStructuredAuditEvent(r));
+  }
+
   private toCheckpointRecord(row: Record<string, unknown>): CheckpointRecord {
     return {
       id: row.id as string,
@@ -455,6 +512,22 @@ export class SQLiteStorageAdapter implements StorageAdapter {
       costUsd: row.cost_usd as number,
       latencyMs: row.latency_ms as number,
       createdAt: row.created_at as string,
+    };
+  }
+
+  private toStructuredAuditEvent(row: Record<string, unknown>): StructuredAuditEvent {
+    return {
+      id: row.id as string,
+      runId: row.run_id as string,
+      stepName: row.step_name as string,
+      timestamp: row.timestamp as string,
+      category: row.category as StructuredAuditEvent["category"],
+      action: row.action as string,
+      actor: row.actor as string,
+      detail: this.safeJsonParse<Record<string, unknown>>(row.detail as string, `audit_events.detail [id=${row.id}]`),
+      vote: row.vote
+        ? this.safeJsonParse<StructuredAuditEvent["vote"]>(row.vote as string, `audit_events.vote [id=${row.id}]`)
+        : undefined,
     };
   }
 }
