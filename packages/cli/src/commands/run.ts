@@ -3,7 +3,7 @@ import { basename, join } from "node:path";
 
 import { Command } from "commander";
 
-import { loadConfig, OboraRuntime, resolveLLMConfig, Workflow } from "@obora/sdk";
+import { detectLLMConfigFromEnv, loadConfig, OboraRuntime, resolveLLMConfig, Workflow } from "@obora/sdk";
 
 import { CLIError } from "../utils/cli-error.js";
 import { ExitCode } from "../utils/exit-codes.js";
@@ -26,7 +26,8 @@ function isVerboseOutput(options: Record<string, unknown>): boolean {
 export async function runRun(workflow: string, options: Record<string, unknown>): Promise<void> {
   const startedAt = Date.now();
   const loadedConfig = await loadConfig(options.config as string | undefined);
-  const resolvedLLM = resolveLLMConfig(undefined, loadedConfig);
+  const envLLM = detectLLMConfigFromEnv();
+  const resolvedLLM = resolveLLMConfig(envLLM, loadedConfig);
 
   const runtime = new OboraRuntime({
     policyPath: options.policy as string | undefined,

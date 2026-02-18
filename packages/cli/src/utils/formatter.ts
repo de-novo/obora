@@ -8,7 +8,9 @@ const ANSI = {
 } as const;
 
 function shouldUseColorByDefault(): boolean {
-  return process.env.NO_COLOR === undefined;
+  if (process.env.NO_COLOR !== undefined) return false;
+  if (process.env.VITEST || process.env.NODE_ENV === "test") return false;
+  return Boolean(process.stdout.isTTY && process.stderr.isTTY);
 }
 
 let colorEnabled = shouldUseColorByDefault();
