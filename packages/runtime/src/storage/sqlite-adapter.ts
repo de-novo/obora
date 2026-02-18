@@ -2,6 +2,9 @@
  * M6-01: SQLiteStorageAdapter — Default persistence adapter using better-sqlite3
  */
 
+import { mkdir } from "node:fs/promises";
+import { dirname } from "node:path";
+
 import type {
   StorageAdapter,
   RunRecord,
@@ -37,6 +40,7 @@ export class SQLiteStorageAdapter implements StorageAdapter {
 
   private async ensureInitialized(): Promise<void> {
     if (this.initialized) return;
+    await mkdir(dirname(this.options.path), { recursive: true });
     const Ctor = await loadDatabase();
     this.db = new Ctor(this.options.path);
     this.db.pragma("journal_mode = WAL");
