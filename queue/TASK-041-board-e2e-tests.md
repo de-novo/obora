@@ -52,6 +52,7 @@ E2E 검증 자체는 즉시 필요하며 blackboard-first 기준에도 직접 �
 - 2026-02-18 08:27 KST cron 점검: 런타임 구조 전환 반영 점검으로 E2E 대체 기준 1건 실행(`pnpm --filter @obora/runtime test -- src/__tests__/e2e/three-ai-consensus-e2e.test.ts`) 결과 ✅ `1 file / 4 tests passed`(315ms). 기존 blackboard 경로 기반 BLOCKER는 **구조 변경에 따른 기준 불일치**로 분류하고, 다음 실행부터 runtime E2E 기준으로 점검 지속.
 - 2026-02-18 09:57 KST cron 점검: runtime E2E 기준 1건 재실행(`pnpm --filter @obora/runtime test -- src/__tests__/e2e/three-ai-consensus-e2e.test.ts`) 결과 ✅ `1 file / 4 tests passed`(325ms). 작업 브랜치 HEAD(`main`) 유지, 기준 브랜치(`origin/main`, `40e3c43`) 대비 blackboard-first 점검선 정상 유지.
 - 2026-02-18 10:42 KST cron 점검: runtime E2E 기준 1건 재실행(`pnpm --filter @obora/runtime test -- src/__tests__/e2e/three-ai-consensus-e2e.test.ts`) 결과 ✅ `1 file / 4 tests passed`(348ms). 작업 브랜치 HEAD(`main`, `6c3f801`) 유지, 기준 브랜치(`origin/main`, `40e3c43`) 대비 blackboard-first 점검선 정상 유지.
+- 2026-02-18 12:11 KST night 점검: 최소 단위 1건(TASK-041 runtime E2E 기준 재검증) 수행. `pnpm --filter @obora/runtime test -- src/__tests__/e2e/three-ai-consensus-e2e.test.ts` 결과 ✅ `1 file / 4 tests passed`(347ms). 작업 브랜치 HEAD(`main`, `b32e569`) 유지, 기준 브랜치(`origin/main`, `40e3c43`) 대비 점검선 정상 유지.
 
 ## 목표
 agenda → voting → consensus → workflow 상태전이의 통합 흐름을 blackboard 기준으로 검증합니다.
