@@ -105,7 +105,7 @@ export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
       {showDriftModal ? (
         <div style={{ border: '1px solid #f59e0b', borderRadius: '8px', background: '#fffbeb', padding: '12px', marginBottom: '12px' }}>
           <strong>Policy drift warning</strong>
-          <p style={{ marginTop: '8px' }}>Checkpoint 정책과 현재 정책이 다를 수 있습니다. 계속 Resume 하시겠습니까?</p>
+          <p style={{ marginTop: '8px' }}>The checkpoint policy may differ from the current policy. Do you want to continue resuming?</p>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button type="button" onClick={() => { void resume().finally(() => setShowDriftModal(false)); }}>Yes, resume</button>
             <button type="button" onClick={() => setShowDriftModal(false)}>Cancel</button>

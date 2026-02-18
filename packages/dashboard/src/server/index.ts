@@ -67,7 +67,16 @@ const createDefaultHistoryStore = async (): Promise<HistoryStore> => {
           return { ok: false, reason: 'Resume command is not configured (OBORA_RESUME_COMMAND)' };
         }
 
-        const [binary, ...args] = command.split(' ').filter(Boolean);
+        const parts = command.split(' ').filter(Boolean);
+        const binary = parts[0];
+        const args = parts.slice(1);
+        if (!binary) {
+          return { ok: false, reason: 'OBORA_RESUME_COMMAND is empty after parsing' };
+        }
+        // Validate runId to prevent argument injection (alphanumeric, hyphens, underscores, colons, dots only)
+        if (!/^[\w.:@#%+-]+$/.test(runId)) {
+          return { ok: false, reason: 'Invalid runId format' };
+        }
         try {
           await execFileAsync(binary, [...args, runId], { cwd: process.cwd() });
           return { ok: true };

@@ -1471,7 +1471,22 @@ export class OboraRuntime {
             // fallback to storageRef path when store backend differs or index is unavailable
           }
         }
-        const data = await readFile(record.storageRef);
+        // If no artifact store is available, try reading directly from storageRef
+        if (!record.storageRef) {
+          throw new OboraError(
+            'Artifact backend unavailable and no storageRef found',
+            'SDK_ARTIFACT_BACKEND_UNAVAILABLE',
+          );
+        }
+        let data: Buffer;
+        try {
+          data = await readFile(record.storageRef);
+        } catch (err) {
+          throw new OboraError(
+            `Artifact read failed: ${err instanceof Error ? err.message : String(err)}`,
+            'SDK_ARTIFACT_READ_ERROR',
+          );
+        }
         return {
           record: {
             id: record.id,

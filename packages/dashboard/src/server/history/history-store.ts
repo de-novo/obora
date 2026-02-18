@@ -41,10 +41,11 @@ export class AdapterHistoryStore implements HistoryStore {
 
   async listRuns(query: HistoryRunsQuery): Promise<ListRunsResult> {
     const pageSize = 200;
+    const maxTotalRuns = 10_000;
     const rawRuns: RunRecord[] = [];
     let fetchOffset = 0;
 
-    while (true) {
+    while (rawRuns.length < maxTotalRuns) {
       const page = await this.adapter.listRuns({
         status: query.status,
         workflowName: query.workflowName,
