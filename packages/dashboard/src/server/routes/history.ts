@@ -35,8 +35,10 @@ const sendValidationError = (reply: FastifyReply, message: string): FastifyReply
 
 const parseIntParam = (value: string | undefined, fallback: number): number => {
   if (!value) return fallback;
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed)) throw new Error('Expected integer');
+  const trimmed = value.trim();
+  if (!/^-?\d+$/.test(trimmed)) throw new Error('Expected integer');
+  const parsed = Number(trimmed);
+  if (!Number.isSafeInteger(parsed)) throw new Error('Expected integer');
   return parsed;
 };
 

@@ -222,7 +222,7 @@ export const App = (): JSX.Element => {
         ) : null}
       </header>
 
-      {pathname === '/history/runs' ? <HistoryRunsPage onOpenRun={(runId) => pushPath(`/history/runs/${runId}`)} /> : null}
+      {pathname === '/history/runs' ? <HistoryRunsPage onOpenRun={(runId) => pushPath(`/history/runs/${encodeURIComponent(runId)}`)} /> : null}
       {historyMatch ? <HistoryRunDetailPage runId={decodeURIComponent(historyMatch[1] ?? '')} onBack={() => pushPath('/history/runs')} /> : null}
 
       {!pathname.startsWith('/history/runs') ? (

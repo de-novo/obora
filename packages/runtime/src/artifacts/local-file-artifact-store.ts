@@ -155,7 +155,11 @@ export class LocalFileArtifactStore implements ArtifactStore {
     try {
       const entries = await readdir(path);
       if (entries.length === 0) {
-        await rm(path, { recursive: true, force: true });
+        try {
+          await rm(path, { recursive: true, force: true });
+        } catch {
+          // best-effort in concurrent delete scenarios
+        }
       }
     } catch {
       // ignore
