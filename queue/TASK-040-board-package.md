@@ -91,3 +91,16 @@
 - 실행 검증: `pnpm --filter @obora-kit/board test -- test/BoardFacade.test.ts`
 - 결과: 실패 — `No projects matched the filters`
 - 메모: 현재 저장소에 `packages/board` 및 blackboard 관련 패키지가 확인되지 않아 기존 회귀 경로로 검증 불가. BLOCKER 상태로 전환.
+
+## 야간 점검 로그 (2026-02-18 19:41 KST)
+- 점검 단위: blackboard-first 기준 TASK-040 BLOCKER 재확인 1건(무리한 재시도 없이 점검/정리)
+- 기준 브랜치: `origin/main` (`40e3c43`)
+- 작업 브랜치: `main` (HEAD 유지, `24526b5`)
+- 실행 검증: `test -d packages/board && test -d packages/blackboard`
+- 결과: 실패 (`packages/board`, `packages/blackboard` 모두 미존재)
+- 메모: 기존 테스트 경로를 다시 때리지 않고 저장소 구조 존재 여부만 검증. BLOCKER 지속.
+
+### BLOCKER (2026-02-18 19:41 KST)
+- 원인: blackboard-first queue(TASK-018~023, 040)가 참조하는 패키지 경로(`packages/board`, `packages/blackboard`)가 현재 HEAD 기준 저장소에 없음.
+- 필요조치: (1) 해당 패키지 이관/삭제 이력 확인, (2) queue의 SSOT를 현재 모노레포 구조(`packages/runtime|sdk|dashboard|cli|adapters`)에 맞게 재매핑.
+- 다음실행조건: 유효한 blackboard-first 대상 경로/테스트 커맨드가 확정될 것.
