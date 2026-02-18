@@ -130,3 +130,16 @@
 - 원인: blackboard-first queue가 참조하는 대상 패키지(`packages/blackboard`, `packages/board`)가 현재 저장소 구조에 존재하지 않음.
 - 필요조치: queue SSOT를 현 구조 기준으로 재매핑하거나, 누락 패키지의 이관/복원 근거를 먼저 확정.
 - 다음실행조건: 유효한 대상 경로와 테스트 명령이 확정되어 최소 1개 검증 커맨드가 실제 프로젝트에 매칭될 것.
+
+## 야간 점검 로그 (2026-02-18 23:26 KST)
+- 점검 단위: blackboard-first 기준 TASK-040 BLOCKER 정리 점검 1건(구조/문서 정합성 확인)
+- 기준 브랜치: `origin/main` (`40e3c43`)
+- 작업 브랜치: `main` (HEAD 유지, `2b5bc11`)
+- 실행 검증: `rg -n "packages/(blackboard|board)|@obora-kit/(blackboard|board)" queue/TASK-0{18,19,20,21,22,23,40}*.md`
+- 결과: blackboard-first 관련 TASK 문서 전반에서 현재 미존재 대상 경로/필터 참조 다수 확인
+- 메모: 동일 유형 실패 3회 연속 상태 유지에 따라 구현/테스트 강행 없이 문서 정리 관점 점검만 수행.
+
+### BLOCKER (2026-02-18 23:26 KST)
+- 원인: 실행 대상(패키지/테스트 경로)보다 queue SSOT가 과거 `blackboard/board` 구조를 기준으로 남아 있어 현재 저장소에서 검증 경로가 성립하지 않음.
+- 필요조치: TASK-018~023, 040 기준선 문서를 현 모노레포 구조에 맞게 재매핑(또는 blackboard/board 복원 계획 확정)하여 실행 가능한 단일 검증 경로를 지정.
+- 다음실행조건: 재매핑 완료 후 실제 매칭되는 테스트 명령 1개를 선정해 PASS/FAIL을 기록할 것.
