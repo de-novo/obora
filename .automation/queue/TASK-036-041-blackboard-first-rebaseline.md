@@ -645,3 +645,12 @@ Board 단계 태스크를 blackboard 우선 구현 순서로 재배치하고, �
 - 결과: ✅ `1 file / 22 tests passed` (2.26s)
 - 비고: blackboard direct write deprecated 경고(stderr) 반복 출력되나 테스트 정상 통과
 - 판정: 블로커 없음, 다음 실행은 runtime consensus gate 최소검증 1건(`pnpm --filter @obora/runtime test -- src/consensus/__tests__/ConsensusGate.test.ts`) 점검 권장
+
+## 야간 자동 점검 로그 (2026-02-18 12:57 KST)
+- 기준 브랜치: \'origin/main\' (`40e3c43`)
+- 작업 브랜치(HEAD 유지): `main` (`84add38`)
+- 점검 단위: blackboard-first 라인 매핑 검증 1건 (runtime pattern contracts)
+- 실행: `pnpm --filter @obora/runtime test -- src/patterns/__tests__/PatternRuntimeContracts.test.ts`
+- 결과: ✅ `1 file / 12 tests passed`
+- 비고: 기존 `@obora-kit/blackboard` 필터는 현재 워크스페이스 패키지명과 불일치하여 `@obora/runtime` 기준으로 점검 수행
+- 판정: 블로커 없음, 다음 실행은 blackboard consensus 경로 최소검증 1건(`src/consensus/__tests__/ConsensusGate.test.ts`) 점검 권장
