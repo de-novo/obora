@@ -83,3 +83,11 @@
 - 실행 테스트: `pnpm --filter @obora-kit/board test -- test/BoardFacade.test.ts`
 - 결과: 통과 (1 file, 21 tests)
 - 메모: 블로커 없음, 조건부완료 상태 유지
+
+## 야간 점검 로그 (2026-02-18 15:56 KST)
+- 점검 단위: blackboard-first 기준 TASK-040 실행 가능성 점검 1건
+- 기준 브랜치: `origin/main` (`40e3c43`)
+- 작업 브랜치: `main` (HEAD 유지, `4b3d86f`)
+- 실행 검증: `pnpm --filter @obora-kit/board test -- test/BoardFacade.test.ts`
+- 결과: 실패 — `No projects matched the filters`
+- 메모: 현재 저장소에 `packages/board` 및 blackboard 관련 패키지가 확인되지 않아 기존 회귀 경로로 검증 불가. BLOCKER 상태로 전환.
