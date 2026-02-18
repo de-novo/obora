@@ -987,10 +987,7 @@ export class OboraRuntime {
     driftDetected: boolean;
   }> {
     const adapter = await this.getStorageAdapter();
-    const {
-      CheckpointManager,
-      PolicyDriftError,
-    } = await import("@obora/runtime");
+    const { CheckpointManager } = await import("@obora/runtime");
 
     const mgr = new CheckpointManager(adapter);
     const run = await adapter.getRun(runId);
@@ -1016,12 +1013,13 @@ export class OboraRuntime {
 
     // Use workflow definition for complete step names (not just saved steps)
     const workflow = this.workflows.get(run.workflowName);
+    const savedSteps = await adapter.getSteps(runId);
+
     let allStepNames: string[];
     if (workflow) {
       allStepNames = workflow.steps.map((s) => s.name);
     } else {
-      // Fallback: use saved steps + deduplicate
-      const savedSteps = await adapter.getSteps(runId);
+      // Fallback: use saved steps + deduplicate for validation/reporting only
       const seen = new Set<string>();
       allStepNames = [];
       for (const s of savedSteps) {
@@ -1041,11 +1039,18 @@ export class OboraRuntime {
     }
 
     // Determine step policies
-    const steps = await adapter.getSteps(runId);
-    const stepPolicies = mgr.resolveStepPolicies(steps, checkpoint.completedSteps, allStepNames, options);
+    const stepPolicies = mgr.resolveStepPolicies(savedSteps, checkpoint.completedSteps, allStepNames, options);
 
     const restoredSteps = stepPolicies.filter((p: { action: string }) => p.action === "restore").map((p: { stepName: string }) => p.stepName);
     const rerunSteps = stepPolicies.filter((p: { action: string }) => p.action === "rerun").map((p: { stepName: string }) => p.stepName);
+
+    if (!workflow && rerunSteps.length > 0) {
+      throw new OboraError(
+        `Workflow '${run.workflowName}' is not loaded. Load the workflow definition before resume to execute rerun steps.`,
+        OboraErrorCode.SDK_WORKFLOW_NOT_FOUND,
+        runId,
+      );
+    }
 
     // Update run status and execute rerun steps
     await adapter.saveRun({ ...run, status: "running", completedAt: undefined });
@@ -1056,11 +1061,19 @@ export class OboraRuntime {
       const executionId = runId;
       const execution = this.createExecution(executionId, run.workflowName, run.input, workflow);
 
+      const completedStepsSet = new Set<string>();
+
       // Restore completed step outputs
       for (const policy of stepPolicies) {
-        if (policy.action === "restore" && policy.output) {
-          execution.outputs[policy.stepName] = policy.output;
-          execution.completedSteps.push(policy.stepName);
+        if (policy.action === "restore") {
+          if (policy.output !== undefined) {
+            execution.outputs[policy.stepName] = policy.output;
+          }
+          completedStepsSet.add(policy.stepName);
+          execution.completedSteps = [...completedStepsSet];
+        } else if (policy.action === "skip") {
+          completedStepsSet.add(policy.stepName);
+          execution.completedSteps = [...completedStepsSet];
         }
       }
 
@@ -1094,27 +1107,83 @@ export class OboraRuntime {
           })
         : undefined;
 
-      // Get step definitions for rerun steps
-      const stepDefs = workflow.steps.filter((s) => rerunSteps.includes(s.name));
       const sortedStepDefs = topologicalSort(workflow.steps).filter((s) => rerunSteps.includes(s.name));
 
       try {
         for (const step of sortedStepDefs) {
           await this.emitEvent("step_start", executionId, { stepName: step.name, agent: step.agent });
           const stepStartedAt = Date.now();
+          const startedAtIso = new Date(stepStartedAt).toISOString();
 
-          const result = stepExecutor
-            ? await stepExecutor.executeStep(step, { previousOutputs: execution.outputs })
-            : { output: "[stub] No LLM configured", raw: { stub: true, reason: "No LLM configured" } };
-
-          execution.outputs[step.name] = result.output;
-          execution.completedSteps.push(step.name);
-
-          await this.emitEvent("step_end", executionId, {
+          await adapter.saveStep({
+            id: `${runId}:${step.name}`,
+            runId,
             stepName: step.name,
-            status: "completed",
-            durationMs: Date.now() - stepStartedAt,
+            status: "running",
+            startedAt: startedAtIso,
           });
+
+          try {
+            const result = stepExecutor
+              ? await stepExecutor.executeStep(step, { previousOutputs: execution.outputs })
+              : { output: "[stub] No LLM configured", raw: { stub: true, reason: "No LLM configured" } };
+
+            execution.outputs[step.name] = result.output;
+            completedStepsSet.add(step.name);
+            execution.completedSteps = [...completedStepsSet];
+
+            const completedAtIso = new Date().toISOString();
+            await adapter.saveStep({
+              id: `${runId}:${step.name}`,
+              runId,
+              stepName: step.name,
+              status: "completed",
+              output: result.raw as Record<string, unknown>,
+              startedAt: startedAtIso,
+              completedAt: completedAtIso,
+              durationMs: Date.now() - stepStartedAt,
+            });
+
+            await mgr.saveCheckpoint(
+              runId,
+              step.name,
+              execution.completedSteps,
+              execution.outputs,
+              currentPolicyConfig,
+            );
+
+            await this.emitEvent("step_end", executionId, {
+              stepName: step.name,
+              status: "completed",
+              durationMs: Date.now() - stepStartedAt,
+            });
+          } catch (stepErr) {
+            const completedAtIso = new Date().toISOString();
+            await adapter.saveStep({
+              id: `${runId}:${step.name}`,
+              runId,
+              stepName: step.name,
+              status: "failed",
+              error: {
+                code: stepErr instanceof OboraError ? stepErr.code : OboraErrorCode.SDK_UNKNOWN_ERROR,
+                message: stepErr instanceof Error ? stepErr.message : String(stepErr),
+                stack: stepErr instanceof Error ? stepErr.stack : undefined,
+              },
+              startedAt: startedAtIso,
+              completedAt: completedAtIso,
+              durationMs: Date.now() - stepStartedAt,
+            });
+
+            await mgr.saveCheckpoint(
+              runId,
+              step.name,
+              execution.completedSteps,
+              execution.outputs,
+              currentPolicyConfig,
+            );
+
+            throw stepErr;
+          }
         }
 
         // Update run as completed
@@ -1132,7 +1201,7 @@ export class OboraRuntime {
     }
 
     return {
-      execution: { id: runId, status: workflow ? "completed" : "running" },
+      execution: { id: runId, status: "completed" },
       restoredSteps,
       rerunSteps,
       driftDetected: drift.drifted,
