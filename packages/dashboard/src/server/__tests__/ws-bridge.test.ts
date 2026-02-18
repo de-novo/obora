@@ -21,7 +21,7 @@ const createMessageReader = (socket: WebSocket) => {
   const queue: Array<Record<string, unknown>> = [];
   const waiting: Array<(value: Record<string, unknown>) => void> = [];
 
-  socket.on('message', (data) => {
+  socket.on('message', (data: WebSocket.RawData) => {
     const parsed = JSON.parse(String(data)) as Record<string, unknown>;
     const consumer = waiting.shift();
     if (consumer) {
@@ -166,8 +166,8 @@ describe('ws bridge', () => {
     const event = wsBridge.pushEvent({
       id: 'audit-unknown',
       executionId: 'exec-unknown',
-      type: 'custom_audit_type',
-      timestamp: '2026-02-17T12:00:00.000Z',
+      type: 'custom_audit_type' as never,
+      timestamp: new Date('2026-02-17T12:00:00.000Z'),
       data: { stepName: 'step-x' },
     });
 

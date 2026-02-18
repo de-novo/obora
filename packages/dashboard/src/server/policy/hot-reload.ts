@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import type { AuditEvent } from '@obora-kit/runtime';
+import type { AuditEvent } from '@obora/runtime';
 
 import type { PolicyStore } from './policy-store.js';
 import { parsePolicyYaml } from './policy-validator.js';

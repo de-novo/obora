@@ -47,6 +47,12 @@ export interface OboraConfig {
     sqlite?: { path?: string };
     custom?: unknown;
   };
+  artifacts?: {
+    enabled?: boolean;
+    store?: "local" | "custom";
+    local?: { basePath?: string };
+    custom?: { instance?: unknown };
+  };
   resources?: {
     maxCostPerRun?: number;
     maxTokensPerStep?: number;
@@ -149,6 +155,15 @@ function mergeConfig(base: OboraConfig | undefined, override: OboraConfig | unde
       },
       custom: override?.persistence?.custom ?? base?.persistence?.custom,
     },
+    artifacts: {
+      ...(base?.artifacts ?? {}),
+      ...(override?.artifacts ?? {}),
+      local: {
+        ...(base?.artifacts?.local ?? {}),
+        ...(override?.artifacts?.local ?? {}),
+      },
+      custom: override?.artifacts?.custom ?? base?.artifacts?.custom,
+    },
     resources: {
       ...(base?.resources ?? {}),
       ...(override?.resources ?? {}),
@@ -249,10 +264,6 @@ export function resolveProviderConfig(
         `[obora] Provider config missing authRef for '${selectedProviderName}'. Tried env fallback '${fallbackEnv}'. Searched in: ${sourceInfo}`,
       );
     }
-  }
-
-  if (!apiKey) {
-    return undefined;
   }
 
   if (!apiKey) {

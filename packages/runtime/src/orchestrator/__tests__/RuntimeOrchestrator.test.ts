@@ -517,5 +517,173 @@ steps:
     const events = await auditTrail.query({ executionId: execution.id });
     expect(events.length).toBeGreaterThan(0);
   });
+  it("auto-stores artifacts from tagged output and file_write calls", async () => {
+    const saveArtifact = vi.fn(async (record) => record);
+    const storage: StorageAdapter = {
+      saveRun: async () => undefined,
+      getRun: async () => null,
+      listRuns: async () => [],
+      saveStep: async () => undefined,
+      getSteps: async () => [],
+      saveArtifact,
+      getArtifacts: async () => [],
+      deleteArtifact: async () => undefined,
+      saveCheckpoint: async () => undefined,
+      getLatestCheckpoint: async () => null,
+      saveCost: async () => undefined,
+      getCosts: async () => [],
+      getRunCostSummary: async () => ({ totalTokens: 0, totalCostUsd: 0, byStep: [], byModel: [] }),
+      saveAuditEvent: async () => undefined,
+      getAuditTimeline: async () => [],
+    };
+
+    const artifactStore = {
+      save: vi.fn(async (runId: string, stepName: string, name: string, data: Buffer, mime: string) => ({
+        id: `${runId}:${stepName}:${name}`,
+        runId,
+        stepName,
+        name,
+        mime,
+        size: data.byteLength,
+        path: `/tmp/${name}`,
+        createdAt: new Date().toISOString(),
+      })),
+      get: vi.fn(),
+      list: vi.fn(),
+      delete: vi.fn(),
+    };
+
+    const cellManager = new CellManager({
+      createCellContext: () => ({
+        cellId: "artifact-cell",
+        blackboard: { read: () => undefined, write: () => {} },
+        tools: { invoke: async () => ({ ok: true }) },
+        audit: { record: () => {} },
+        config: {},
+      }),
+      createCell: ({ id }) => ({
+        id,
+        status: "idle",
+        execute: async () => ({
+          success: true,
+          output: {
+            artifacts: [{ name: "tagged.txt", mime: "text/plain", data: "hello" }],
+            answer: "ok",
+          },
+          stateChanges: [],
+          toolCalls: [
+            {
+              id: "tc1",
+              toolName: "file_write",
+              params: { path: "./out/generated.ts", content: "export const ok = true;" },
+              status: "success",
+              startedAt: new Date(),
+              endedAt: new Date(),
+              durationMs: 1,
+            },
+          ],
+          metrics: { startTime: new Date(), endTime: new Date(), durationMs: 1, toolCallCount: 1 },
+        }),
+        suspend: async () => {},
+        resume: async () => {},
+        abort: async () => {},
+      }),
+    });
+
+    const orchestrator = new DefaultRuntimeOrchestrator({
+      cellManager,
+      policyEngine: createPolicyEngine(),
+      storageAdapter: storage,
+      artifactStore: artifactStore as unknown as import("../../artifacts/types.js").ArtifactStore,
+    });
+
+    orchestrator.define("artifact-auto", {
+      name: "artifact-auto",
+      steps: [{ name: "generate", agent: "writer" }],
+    });
+
+    const execution = await orchestrator.run("artifact-auto", {});
+    expect(execution.status).toBe("completed");
+    expect(artifactStore.save).toHaveBeenCalledTimes(2);
+    expect(saveArtifact).toHaveBeenCalledTimes(2);
+  });
+
+  it("stores structured JSON output as fallback artifact", async () => {
+    const saveArtifact = vi.fn(async (record) => record);
+    const storage: StorageAdapter = {
+      saveRun: async () => undefined,
+      getRun: async () => null,
+      listRuns: async () => [],
+      saveStep: async () => undefined,
+      getSteps: async () => [],
+      saveArtifact,
+      getArtifacts: async () => [],
+      deleteArtifact: async () => undefined,
+      saveCheckpoint: async () => undefined,
+      getLatestCheckpoint: async () => null,
+      saveCost: async () => undefined,
+      getCosts: async () => [],
+      getRunCostSummary: async () => ({ totalTokens: 0, totalCostUsd: 0, byStep: [], byModel: [] }),
+      saveAuditEvent: async () => undefined,
+      getAuditTimeline: async () => [],
+    };
+
+    const artifactStore = {
+      save: vi.fn(async (runId: string, stepName: string, name: string, data: Buffer, mime: string) => ({
+        id: `${runId}:${stepName}:${name}`,
+        runId,
+        stepName,
+        name,
+        mime,
+        size: data.byteLength,
+        path: `/tmp/${name}`,
+        createdAt: new Date().toISOString(),
+      })),
+      get: vi.fn(),
+      list: vi.fn(),
+      delete: vi.fn(),
+    };
+
+    const cellManager = new CellManager({
+      createCellContext: () => ({
+        cellId: "artifact-cell-2",
+        blackboard: { read: () => undefined, write: () => {} },
+        tools: { invoke: async () => ({ ok: true }) },
+        audit: { record: () => {} },
+        config: {},
+      }),
+      createCell: ({ id }) => ({
+        id,
+        status: "idle",
+        execute: async () => ({
+          success: true,
+          output: { answer: "ok", value: 1 },
+          stateChanges: [],
+          toolCalls: [],
+          metrics: { startTime: new Date(), endTime: new Date(), durationMs: 1, toolCallCount: 0 },
+        }),
+        suspend: async () => {},
+        resume: async () => {},
+        abort: async () => {},
+      }),
+    });
+
+    const orchestrator = new DefaultRuntimeOrchestrator({
+      cellManager,
+      policyEngine: createPolicyEngine(),
+      storageAdapter: storage,
+      artifactStore: artifactStore as unknown as import("../../artifacts/types.js").ArtifactStore,
+    });
+
+    orchestrator.define("artifact-auto-json", {
+      name: "artifact-auto-json",
+      steps: [{ name: "generate", agent: "writer" }],
+    });
+
+    const execution = await orchestrator.run("artifact-auto-json", {});
+    expect(execution.status).toBe("completed");
+    expect(artifactStore.save).toHaveBeenCalledTimes(1);
+    expect(saveArtifact).toHaveBeenCalledTimes(1);
+  });
 
 });

@@ -1,5 +1,5 @@
 import { WebSocket } from 'ws';
-import type { AuditEvent } from '@obora-kit/runtime';
+import type { AuditEvent } from '@obora/runtime';
 
 import { InMemoryAuditStore } from '../server/audit/audit-store.js';
 import { createDashboardServer } from '../server/index.js';

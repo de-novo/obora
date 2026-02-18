@@ -61,7 +61,7 @@ const toStepStatus = (event: ExecutionEvent): StepStatus | undefined => {
   }
 
   if (known === 'step_end') {
-    return event.status === 'failed' ? 'failed' : 'completed';
+    return 'completed';
   }
 
   if (known === 'error' && event.stepName) {

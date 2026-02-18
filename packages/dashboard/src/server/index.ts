@@ -4,6 +4,8 @@ import fastifyStatic from '@fastify/static';
 import fastifyWebsocket from '@fastify/websocket';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 
 import {
   createDashboardConfig,
@@ -19,13 +21,68 @@ import { createWsBridge, type WsBridge } from './ws-bridge.js';
 import { NotificationEngine } from './notification/engine.js';
 import { createChannel } from './notification/channel-factory.js';
 import { registerNotificationRoutes } from './routes/notification.js';
+import { AdapterHistoryStore, InMemoryHistoryStore, type HistoryStore } from './history/history-store.js';
+import { registerHistoryRoutes } from './routes/history.js';
 
 export interface DashboardServerDependencies {
   auditStore?: AuditStore;
   policyStore?: PolicyStore;
   policyEngine?: PolicyEngineAdapter;
   notificationEngine?: NotificationEngine;
+  historyStore?: HistoryStore;
 }
+
+const execFileAsync = promisify(execFile);
+
+const createDefaultHistoryStore = async (): Promise<HistoryStore> => {
+  const sqlitePath = process.env.OBORA_HISTORY_DB_PATH;
+  if (!sqlitePath) {
+    return new InMemoryHistoryStore();
+  }
+
+  try {
+    const runtime = await import('@obora/runtime');
+    const adapter = new runtime.SQLiteStorageAdapter({ path: sqlitePath }) as unknown as Record<string, unknown>;
+
+    const requiredMethods = [
+      'listRuns',
+      'getRun',
+      'getSteps',
+      'getRunCostSummary',
+      'getAuditTimeline',
+      'getLatestCheckpoint',
+      'saveRun',
+    ] as const;
+
+    const hasAllMethods = requiredMethods.every((method) => typeof adapter[method] === 'function');
+    if (!hasAllMethods) {
+      return new InMemoryHistoryStore();
+    }
+
+    return new AdapterHistoryStore(
+      adapter as never,
+      async (runId) => {
+        const command = process.env.OBORA_RESUME_COMMAND;
+        if (!command) {
+          return { ok: false, reason: 'Resume command is not configured (OBORA_RESUME_COMMAND)' };
+        }
+
+        const [binary, ...args] = command.split(' ').filter(Boolean);
+        try {
+          await execFileAsync(binary, [...args, runId], { cwd: process.cwd() });
+          return { ok: true };
+        } catch (error) {
+          return {
+            ok: false,
+            reason: error instanceof Error ? error.message : 'Resume command failed',
+          };
+        }
+      },
+    );
+  } catch {
+    return new InMemoryHistoryStore();
+  }
+};
 
 export const createDashboardServer = async (
   overrides: Partial<DashboardConfig> = {},
@@ -60,6 +117,7 @@ export const createDashboardServer = async (
   const auditStore = dependencies.auditStore ?? new InMemoryAuditStore();
   const policyStore = dependencies.policyStore ?? new InMemoryPolicyStore();
   const policyEngine = dependencies.policyEngine;
+  const historyStore = dependencies.historyStore ?? (await createDefaultHistoryStore());
 
   const hotReloadAuditTrail =
     'addEvent' in auditStore && typeof auditStore.addEvent === 'function'
@@ -72,6 +130,7 @@ export const createDashboardServer = async (
   registerAuditRoutes(app, config.apiBasePath, auditStore);
   registerPolicyRoutes(app, config.apiBasePath, policyStore, policyEngine, hotReloadAuditTrail);
   registerNotificationRoutes(app, config.apiBasePath, notificationEngine);
+  registerHistoryRoutes(app, config.apiBasePath, historyStore);
 
   const indexPath = join(config.staticDir, 'index.html');
   if (existsSync(indexPath)) {

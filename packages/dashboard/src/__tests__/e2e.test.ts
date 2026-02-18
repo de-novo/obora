@@ -40,7 +40,7 @@ describe('dashboard e2e', () => {
     const ws = await connectWsClient(server.wsUrl);
 
     const eventPromise = new Promise<Record<string, unknown>>((resolve) => {
-      ws.on('message', (raw) => {
+      ws.on('message', (raw: unknown) => {
         const message = JSON.parse(String(raw)) as { type: string; payload: Record<string, unknown> };
         if (message.type === 'event') {
           resolve(message.payload);

@@ -1,0 +1,228 @@
+import { useEffect, useMemo, useState } from 'react';
+
+import { fetchHistoryRunDetail, resumeHistoryRun, type RunDetailResponse } from '../api/history-client';
+import { filterAuditEvents, toPrettyJson } from '../components/history-utils';
+
+interface Props {
+  runId: string;
+  onBack: () => void;
+}
+
+export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
+  const [data, setData] = useState<RunDetailResponse | undefined>(undefined);
+  const [selectedStepId, setSelectedStepId] = useState<string | undefined>(undefined);
+  const [auditCategory, setAuditCategory] = useState<'all' | 'consensus' | 'policy' | 'execution' | 'recovery'>('all');
+  const [auditActor, setAuditActor] = useState('');
+  const [error, setError] = useState<string | undefined>(undefined);
+  const [showDriftModal, setShowDriftModal] = useState(false);
+  const [auditOffset, setAuditOffset] = useState(0);
+  const auditLimit = 100;
+
+  useEffect(() => {
+    let active = true;
+    void fetchHistoryRunDetail(runId, { auditLimit, auditOffset })
+      .then((result) => {
+        if (!active) return;
+        setData(result);
+        setError(undefined);
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        setError(err instanceof Error ? err.message : 'Failed to load run detail');
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [auditLimit, auditOffset, runId]);
+
+  useEffect(() => {
+    setAuditOffset(0);
+    setSelectedStepId(undefined);
+  }, [runId]);
+
+  useEffect(() => {
+    if (!data) return;
+    if (selectedStepId && data.steps.some((step) => step.id === selectedStepId)) return;
+    setSelectedStepId(data.steps[0]?.id);
+  }, [data, selectedStepId]);
+
+  const selectedStep = useMemo(() => data?.steps.find((step) => step.id === selectedStepId), [data?.steps, selectedStepId]);
+
+  const filteredAudit = useMemo(() => {
+    if (!data) return [];
+    return filterAuditEvents(data.auditTimeline, {
+      category: auditCategory,
+      actor: auditActor,
+    });
+  }, [auditActor, auditCategory, data]);
+
+  const resume = async (): Promise<void> => {
+    try {
+      await resumeHistoryRun(runId);
+      const latest = await fetchHistoryRunDetail(runId, { auditLimit, auditOffset });
+      setData(latest);
+      setError(undefined);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to resume run');
+    }
+  };
+
+  if (error) {
+    return (
+      <section>
+        <button type="button" onClick={onBack}>← Back</button>
+        <p style={{ color: '#b91c1c' }}>{error}</p>
+      </section>
+    );
+  }
+
+  if (!data) {
+    return <p>Loading run detail...</p>;
+  }
+
+  const run = data.run;
+
+  return (
+    <section>
+      <button type="button" onClick={onBack}>← Back</button>
+      <h2 style={{ marginBottom: '6px' }}>Run Detail / {run.id}</h2>
+      <p style={{ color: '#6b7280', marginTop: 0 }}>{run.workflowName} · {run.status}</p>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '8px', marginBottom: '12px' }}>
+        <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px' }}>Started<br />{new Date(run.startedAt).toLocaleString()}</div>
+        <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px' }}>Completed<br />{run.completedAt ? new Date(run.completedAt).toLocaleString() : '-'}</div>
+        <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px' }}>Total Cost<br />${data.costSummary.totalCostUsd.toFixed(4)}</div>
+        <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px' }}>Total Tokens<br />{data.costSummary.totalTokens.toLocaleString()}</div>
+      </div>
+
+      {run.status === 'suspended' ? (
+        <div style={{ marginBottom: '12px' }}>
+          <button type="button" onClick={() => setShowDriftModal(true)}>Resume run</button>
+        </div>
+      ) : null}
+
+      {showDriftModal ? (
+        <div style={{ border: '1px solid #f59e0b', borderRadius: '8px', background: '#fffbeb', padding: '12px', marginBottom: '12px' }}>
+          <strong>Policy drift warning</strong>
+          <p style={{ marginTop: '8px' }}>Checkpoint 정책과 현재 정책이 다를 수 있습니다. 계속 Resume 하시겠습니까?</p>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button type="button" onClick={() => { void resume().finally(() => setShowDriftModal(false)); }}>Yes, resume</button>
+            <button type="button" onClick={() => setShowDriftModal(false)}>Cancel</button>
+          </div>
+        </div>
+      ) : null}
+
+      <div style={{ marginBottom: '16px' }}>
+        <h3 style={{ marginBottom: '8px' }}>Step Timeline</h3>
+        <div style={{ display: 'flex', gap: '6px', overflowX: 'auto' }}>
+          {data.steps.map((step) => (
+            <button
+              key={step.id}
+              type="button"
+              onClick={() => setSelectedStepId(step.id)}
+              style={{
+                minWidth: '140px',
+                padding: '8px',
+                borderRadius: '8px',
+                border: step.id === selectedStepId ? '2px solid #2563eb' : '1px solid #d1d5db',
+                background: '#fff',
+                textAlign: 'left',
+              }}
+            >
+              <div style={{ fontWeight: 600 }}>{step.stepName}</div>
+              <div style={{ fontSize: '12px', color: '#6b7280' }}>{step.status}</div>
+              <div style={{ fontSize: '11px', color: '#6b7280' }}>{step.durationMs ? `${step.durationMs}ms` : '-'}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {selectedStep ? (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '12px' }}>
+          <div>
+            <h3>Step Drilldown</h3>
+            <p style={{ marginBottom: '6px' }}>Input</p>
+            <pre style={{ background: '#111827', color: '#f9fafb', padding: '10px', borderRadius: '8px', overflowX: 'auto' }}>{toPrettyJson(selectedStep.input)}</pre>
+            <p style={{ marginBottom: '6px' }}>Output</p>
+            <pre style={{ background: '#111827', color: '#f9fafb', padding: '10px', borderRadius: '8px', overflowX: 'auto' }}>{toPrettyJson(selectedStep.output)}</pre>
+            {selectedStep.error ? (
+              <div style={{ border: '1px solid #fecaca', background: '#fef2f2', color: '#991b1b', borderRadius: '8px', padding: '10px', marginTop: '8px' }}>
+                <strong>{selectedStep.error.code}</strong>
+                <div>{selectedStep.error.message}</div>
+              </div>
+            ) : null}
+          </div>
+          <aside>
+            <h3>Cost</h3>
+            <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '10px' }}>
+              {data.costSummary.byStep
+                .filter((item) => item.stepName === selectedStep.stepName)
+                .map((item) => (
+                  <div key={item.stepName}>
+                    <div>Tokens: {item.tokens.toLocaleString()}</div>
+                    <div>Cost: ${item.costUsd.toFixed(4)}</div>
+                  </div>
+                ))}
+            </div>
+            <h3>Checkpoints</h3>
+            <ul>
+              {data.checkpoints.map((cp) => (
+                <li key={cp.id}>{cp.stepName} · {new Date(cp.createdAt).toLocaleString()}</li>
+              ))}
+            </ul>
+          </aside>
+        </div>
+      ) : null}
+
+      <div style={{ marginTop: '18px' }}>
+        <h3>Audit Replay</h3>
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+          <select value={auditCategory} onChange={(event) => setAuditCategory(event.target.value as typeof auditCategory)}>
+            <option value="all">all</option>
+            <option value="consensus">consensus</option>
+            <option value="policy">policy</option>
+            <option value="execution">execution</option>
+            <option value="recovery">recovery</option>
+          </select>
+          <input value={auditActor} placeholder="actor" onChange={(event) => setAuditActor(event.target.value)} />
+        </div>
+
+        <div style={{ display: 'grid', gap: '6px' }}>
+          {filteredAudit.length === 0 ? (
+            <p style={{ margin: 0, color: '#6b7280' }}>No audit events</p>
+          ) : null}
+          {filteredAudit.map((event) => (
+            <article key={event.id} style={{ borderLeft: `4px solid ${event.category === 'consensus' ? '#2563eb' : event.category === 'policy' ? '#eab308' : event.category === 'recovery' ? '#dc2626' : '#6b7280'}`, background: '#f9fafb', padding: '8px 10px' }}>
+              <div style={{ fontSize: '12px', color: '#6b7280' }}>{new Date(event.timestamp).toLocaleString()} · {event.category} · {event.actor}</div>
+              <div style={{ fontWeight: 600 }}>{event.action}</div>
+              {event.vote ? (
+                <div style={{ fontSize: '12px', marginTop: '4px' }}>
+                  vote: {event.vote.decision}
+                  {typeof event.vote.confidence === 'number' ? ` (${Math.round(event.vote.confidence * 100)}%)` : ''}
+                </div>
+              ) : null}
+              <pre style={{ margin: '6px 0 0', fontSize: '12px', whiteSpace: 'pre-wrap' }}>{toPrettyJson(event.detail)}</pre>
+            </article>
+          ))}
+        </div>
+
+        {data.pagination ? (
+          <div style={{ marginTop: '8px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button type="button" disabled={auditOffset === 0} onClick={() => setAuditOffset((prev) => Math.max(0, prev - auditLimit))}>Prev audit</button>
+            <button
+              type="button"
+              disabled={auditOffset + auditLimit >= data.pagination.auditTotal}
+              onClick={() => setAuditOffset((prev) => prev + auditLimit)}
+            >
+              Next audit
+            </button>
+            <span style={{ color: '#6b7280', fontSize: '12px' }}>
+              {auditOffset + 1}-{Math.min(auditOffset + auditLimit, data.pagination.auditTotal)} / {data.pagination.auditTotal}
+            </span>
+          </div>
+        ) : null}
+      </div>
+    </section>
+  );
+};

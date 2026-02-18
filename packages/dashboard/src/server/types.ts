@@ -1,4 +1,4 @@
-import type { AuditEvent } from '@obora-kit/runtime';
+import type { AuditEvent } from '@obora/runtime';
 
 export type RuntimeAuditEvent = AuditEvent;
 

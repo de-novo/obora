@@ -108,7 +108,7 @@ describe('audit-client', () => {
 
     vi.stubGlobal('fetch', apiFailure);
 
-    await expect(fetchAuditEvents()).rejects.toMatchObject<Partial<AuditClientError>>({
+    await expect(fetchAuditEvents()).rejects.toMatchObject({
       code: 'DASH_5001',
       status: 400,
       message: 'bad request',
@@ -117,7 +117,7 @@ describe('audit-client', () => {
     const networkFailure = vi.fn().mockRejectedValue(new Error('offline'));
     vi.stubGlobal('fetch', networkFailure);
 
-    await expect(fetchAuditEvents()).rejects.toMatchObject<Partial<AuditClientError>>({
+    await expect(fetchAuditEvents()).rejects.toMatchObject({
       code: 'DASH_AUDIT_NETWORK_ERROR',
     });
   });

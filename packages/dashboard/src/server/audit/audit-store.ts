@@ -1,4 +1,4 @@
-import type { AuditEvent } from '@obora-kit/runtime';
+import type { AuditEvent } from '@obora/runtime';
 
 import type { AuditQueryParams, AuditQueryResult } from '../types.js';
 

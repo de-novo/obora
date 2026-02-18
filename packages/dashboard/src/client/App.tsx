@@ -8,6 +8,8 @@ import { useWebSocket } from './hooks/useWebSocket';
 import { PolicyEditor } from './pages/PolicyEditor';
 import { AuditViewer } from './pages/AuditViewer';
 import { PlaybackView } from './pages/PlaybackView';
+import { HistoryRunsPage } from './pages/HistoryRunsPage';
+import { HistoryRunDetailPage } from './pages/HistoryRunDetailPage';
 import {
   executionStore,
   getExecutionSummaries,
@@ -169,9 +171,23 @@ const DashboardView = (): JSX.Element => {
   );
 };
 
+const pushPath = (path: string): void => {
+  window.history.pushState({}, '', path);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+};
+
 export const App = (): JSX.Element => {
   const [view, setView] = useState<'dashboard' | 'audit' | 'playback' | 'policy'>('dashboard');
   const [playbackExecutionId, setPlaybackExecutionId] = useState<string | undefined>(undefined);
+  const [pathname, setPathname] = useState(() => window.location.pathname);
+
+  useEffect(() => {
+    const onPop = (): void => setPathname(window.location.pathname);
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  const historyMatch = pathname.match(/^\/history\/runs\/([^/]+)$/);
 
   return (
     <main style={{ padding: '24px', fontFamily: 'Inter, system-ui, sans-serif' }}>
@@ -180,32 +196,50 @@ export const App = (): JSX.Element => {
         <p style={{ marginTop: '8px', color: '#666' }}>Observability Console</p>
 
         <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-          <button type="button" onClick={() => setView('dashboard')} disabled={view === 'dashboard'}>
-            Dashboard
+          <button type="button" onClick={() => pushPath('/history/runs')} disabled={pathname.startsWith('/history/runs')}>
+            History
           </button>
-          <button type="button" onClick={() => setView('audit')} disabled={view === 'audit'}>
-            Audit
-          </button>
-          <button type="button" onClick={() => setView('playback')} disabled={view === 'playback'}>
-            Playback
-          </button>
-          <button type="button" onClick={() => setView('policy')} disabled={view === 'policy'}>
-            Policy Editor
+          <button type="button" onClick={() => pushPath('/')} disabled={!pathname.startsWith('/history/runs')}>
+            Realtime
           </button>
         </div>
+
+        {!pathname.startsWith('/history/runs') ? (
+          <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+            <button type="button" onClick={() => setView('dashboard')} disabled={view === 'dashboard'}>
+              Dashboard
+            </button>
+            <button type="button" onClick={() => setView('audit')} disabled={view === 'audit'}>
+              Audit
+            </button>
+            <button type="button" onClick={() => setView('playback')} disabled={view === 'playback'}>
+              Playback
+            </button>
+            <button type="button" onClick={() => setView('policy')} disabled={view === 'policy'}>
+              Policy Editor
+            </button>
+          </div>
+        ) : null}
       </header>
 
-      {view === 'dashboard' ? <DashboardView /> : null}
-      {view === 'audit' ? (
-        <AuditViewer
-          onReplayExecution={(executionId) => {
-            setPlaybackExecutionId(executionId);
-            setView('playback');
-          }}
-        />
+      {pathname === '/history/runs' ? <HistoryRunsPage onOpenRun={(runId) => pushPath(`/history/runs/${runId}`)} /> : null}
+      {historyMatch ? <HistoryRunDetailPage runId={decodeURIComponent(historyMatch[1] ?? '')} onBack={() => pushPath('/history/runs')} /> : null}
+
+      {!pathname.startsWith('/history/runs') ? (
+        <>
+          {view === 'dashboard' ? <DashboardView /> : null}
+          {view === 'audit' ? (
+            <AuditViewer
+              onReplayExecution={(executionId) => {
+                setPlaybackExecutionId(executionId);
+                setView('playback');
+              }}
+            />
+          ) : null}
+          {view === 'playback' ? <PlaybackView initialExecutionId={playbackExecutionId} /> : null}
+          {view === 'policy' ? <PolicyEditor /> : null}
+        </>
       ) : null}
-      {view === 'playback' ? <PlaybackView initialExecutionId={playbackExecutionId} /> : null}
-      {view === 'policy' ? <PolicyEditor /> : null}
     </main>
   );
 };

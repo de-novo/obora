@@ -8,6 +8,7 @@ import { createPolicyCommand } from "./commands/policy.js";
 import { createInitCommand } from "./commands/init.js";
 import { createRunsCommand } from "./commands/runs.js";
 import { createResumeCommand } from "./commands/resume.js";
+import { createArtifactCommand } from "./commands/artifact.js";
 
 /**
  * Create top-level `obora inspect <runId>` alias.
@@ -118,6 +119,7 @@ export function createCLI(): Command {
   program.addCommand(createRunsCommand());
   program.addCommand(createResumeCommand());
   program.addCommand(createInspectCommand());
+  program.addCommand(createArtifactCommand());
 
   return program;
 }

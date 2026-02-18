@@ -11,6 +11,7 @@ import type { PolicyDecision } from "../policy/types.js";
 import type { RecoveryEngine } from "../recovery/types.js";
 import type { StateBinder, StateBinding } from "../state/StateBinder.js";
 import type { StorageAdapter, RunRecord, StepRecord, ResumeOptions } from "../storage/types.js";
+import type { ArtifactStore } from "../artifacts/types.js";
 import { CheckpointManager, PolicyDriftError } from "../checkpoint/CheckpointManager.js";
 import type { PolicyHashInput } from "../checkpoint/policy-hash.js";
 import { parseDuration } from "./utils.js";
@@ -34,6 +35,7 @@ export interface RuntimeOrchestratorDependencies {
   recoveryEngine?: RecoveryEngine;
   gateWaitStateStore?: GateWaitStateStore;
   storageAdapter?: StorageAdapter;
+  artifactStore?: ArtifactStore;
 }
 
 interface WaitingContext {
@@ -738,6 +740,15 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
       record.status = "completed";
       record.endedAt = this.now();
       execution.outputs[step.name] = result.output;
+      try {
+        await this.captureArtifacts(execution.id, step.name, result.output, result.toolCalls);
+      } catch (artifactError) {
+        await this.recordAudit(execution.id, "warning", {
+          stepName: step.name,
+          message: "Artifact capture failed",
+          error: artifactError instanceof Error ? artifactError.message : String(artifactError),
+        }, { cellId });
+      }
       await this.persistStep(execution, step.name);
       await this.recordAudit(execution.id, "step_end", {
         stepName: step.name,
@@ -1212,6 +1223,74 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
       return { code, message: raw.message, stack: raw.stack };
     }
     return { code: "STEP_ERROR", message: rec.error ?? "Unknown error" };
+  }
+
+  private async captureArtifacts(
+    runId: string,
+    stepName: string,
+    output: unknown,
+    toolCalls: Array<{ toolName?: string; params?: unknown; status?: string }>,
+  ): Promise<void> {
+    const store = this.dependencies.artifactStore;
+    const adapter = this.dependencies.storageAdapter;
+    if (!store || !adapter) return;
+
+    const candidates: Array<{ name: string; mime: string; data: Buffer }> = [];
+
+    // Rule 1) explicit artifacts tag in step output
+    if (output && typeof output === "object" && "artifacts" in (output as Record<string, unknown>)) {
+      const tagged = (output as Record<string, unknown>).artifacts;
+      const list = Array.isArray(tagged) ? tagged : [tagged];
+      for (const item of list) {
+        if (!item || typeof item !== "object") continue;
+        const rec = item as Record<string, unknown>;
+        const name = typeof rec.name === "string" ? rec.name : undefined;
+        const mime = typeof rec.mime === "string" ? rec.mime : "application/octet-stream";
+        const data = rec.data;
+        if (!name || data === undefined || data === null) continue;
+        const buf = Buffer.isBuffer(data) ? data : Buffer.from(typeof data === "string" ? data : JSON.stringify(data), "utf-8");
+        candidates.push({ name, mime, data: buf });
+      }
+    }
+
+    // Rule 2) file_write tool calls
+    for (const tool of toolCalls) {
+      if (tool.toolName !== "file_write" || tool.status !== "success") continue;
+      const params = tool.params as Record<string, unknown> | undefined;
+      if (!params) continue;
+      const path = typeof params.path === "string" ? params.path : undefined;
+      const content = typeof params.content === "string" ? params.content : undefined;
+      if (!path || content === undefined) continue;
+      const parts = path.split(/[\\/]/);
+      const name = parts[parts.length - 1] ?? `${stepName}.txt`;
+      candidates.push({ name, mime: "text/plain", data: Buffer.from(content, "utf-8") });
+    }
+
+    // Rule 3) structured JSON output fallback (only when no explicit artifacts were detected)
+    if (candidates.length === 0 && output && typeof output === "object" && !Array.isArray(output)) {
+      candidates.push({
+        name: `${stepName}.json`,
+        mime: "application/json",
+        data: Buffer.from(JSON.stringify(output, null, 2), "utf-8"),
+      });
+    }
+
+    const seen = new Set<string>();
+    for (const c of candidates) {
+      if (seen.has(c.name)) continue;
+      seen.add(c.name);
+      const saved = await store.save(runId, stepName, c.name, c.data, c.mime);
+      await adapter.saveArtifact({
+        id: saved.id,
+        runId: saved.runId,
+        stepName: saved.stepName,
+        name: saved.name,
+        mimeType: saved.mime,
+        sizeBytes: saved.size,
+        storageRef: saved.path,
+        createdAt: saved.createdAt,
+      });
+    }
   }
 
   private async recordAudit(

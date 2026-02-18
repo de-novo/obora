@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import type { AuditEvent } from '@obora-kit/runtime';
+import type { AuditEvent } from '@obora/runtime';
 
 import { InMemoryAuditStore } from '../audit/audit-store.js';
 import { createDashboardServer } from '../index.js';

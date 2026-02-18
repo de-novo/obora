@@ -120,7 +120,7 @@ describe('policy-client', () => {
         content: 'allow: true',
         revision: '1',
       }),
-    ).rejects.toMatchObject<Partial<PolicyApiError>>({
+    ).rejects.toMatchObject({
       status: 409,
       message: 'Revision conflict',
       code: 'DASH_8003',

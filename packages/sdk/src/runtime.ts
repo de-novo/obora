@@ -160,6 +160,13 @@ export interface PersistenceConfig {
   custom?: { instance: import("@obora/runtime").StorageAdapter };
 }
 
+export interface ArtifactsConfig {
+  enabled?: boolean;
+  store?: "local" | "custom";
+  local?: { basePath?: string };
+  custom?: { instance: import("@obora/runtime").ArtifactStore };
+}
+
 export interface OboraRuntimeConfig {
   policyPath?: string;
   audit?: OboraAuditConfig;
@@ -169,6 +176,7 @@ export interface OboraRuntimeConfig {
   agentsPath?: string;
   verbose?: boolean;
   persistence?: PersistenceConfig;
+  artifacts?: ArtifactsConfig;
 }
 
 export type AgentFactory = (...args: unknown[]) => unknown;
@@ -1369,6 +1377,7 @@ export class OboraRuntime {
   // ── Persistence Query API (M6-01) ──
 
   private _storageAdapter?: import("@obora/runtime").StorageAdapter;
+  private _artifactStore?: import("@obora/runtime").ArtifactStore;
 
   private async getCostTrackingAdapter(): Promise<import("@obora/runtime").StorageAdapter> {
     if (this.config.persistence?.enabled) {
@@ -1399,6 +1408,36 @@ export class OboraRuntime {
     return this._storageAdapter;
   }
 
+  private async getArtifactStore(config?: OboraConfig): Promise<import("@obora/runtime").ArtifactStore | undefined> {
+    if (this._artifactStore) return this._artifactStore;
+
+    const effectiveConfig = config ?? this.config.config ?? await loadConfig(this.config.configPath);
+    const artifactsConfig = this.config.artifacts ?? {
+      enabled: effectiveConfig?.artifacts?.enabled ?? true,
+      store: effectiveConfig?.artifacts?.store ?? "local",
+      local: { basePath: effectiveConfig?.artifacts?.local?.basePath ?? "./data/artifacts" },
+      custom: effectiveConfig?.artifacts?.custom?.instance
+        ? { instance: effectiveConfig.artifacts.custom.instance as import("@obora/runtime").ArtifactStore }
+        : undefined,
+    };
+
+    if (artifactsConfig.enabled === false) {
+      return undefined;
+    }
+
+    if (artifactsConfig.store === "custom") {
+      if (!artifactsConfig.custom?.instance) {
+        throw new OboraError("Invalid artifacts configuration: custom store requires instance", "SDK_ARTIFACT_CONFIG_ERROR");
+      }
+      this._artifactStore = artifactsConfig.custom.instance;
+      return this._artifactStore;
+    }
+
+    const { LocalFileArtifactStore } = await import("@obora/runtime");
+    this._artifactStore = new LocalFileArtifactStore({ basePath: artifactsConfig.local?.basePath ?? "./data/artifacts" });
+    return this._artifactStore;
+  }
+
   /** Get a run record by ID */
   async getRunRecord(runId: string) {
     const adapter = await this.getStorageAdapter();
@@ -1420,7 +1459,56 @@ export class OboraRuntime {
   /** Get artifact records for a run, optionally filtered by step */
   async getRunArtifacts(runId: string, stepName?: string) {
     const adapter = await this.getStorageAdapter();
-    return adapter.getArtifacts(runId, stepName);
+    const records = await adapter.getArtifacts(runId, stepName);
+    return records.map((record) => ({
+      ...record,
+      download: async () => {
+        const store = await this.getArtifactStore();
+        if (store) {
+          try {
+            return await store.get(record.id);
+          } catch {
+            // fallback to storageRef path when store backend differs or index is unavailable
+          }
+        }
+        const data = await readFile(record.storageRef);
+        return {
+          record: {
+            id: record.id,
+            runId: record.runId,
+            stepName: record.stepName,
+            name: record.name,
+            mime: record.mimeType,
+            size: record.sizeBytes,
+            path: record.storageRef,
+            createdAt: record.createdAt,
+          },
+          data,
+        };
+      },
+    }));
+  }
+
+  async getArtifact(runId: string, stepName: string, name: string) {
+    const artifacts = await this.getRunArtifacts(runId, stepName);
+    const matched = artifacts.filter((a) => a.name === name);
+    return matched.length > 0 ? matched[matched.length - 1] ?? null : null;
+  }
+
+  async deleteArtifact(runId: string, stepName: string, name: string): Promise<void> {
+    const adapter = await this.getStorageAdapter();
+    const store = await this.getArtifactStore();
+    const artifacts = await adapter.getArtifacts(runId, stepName);
+    const matched = artifacts.filter((a) => a.name === name);
+    const target = matched.length > 0 ? matched[matched.length - 1] : undefined;
+    if (!target) {
+      throw new OboraError(`Artifact not found: ${runId}/${stepName}/${name}`, "SDK_ARTIFACT_NOT_FOUND");
+    }
+
+    if (store) {
+      await store.delete(target.id);
+    }
+    await adapter.deleteArtifact(target.id);
   }
 
   /** Get cost records for a run, optionally filtered by step */
@@ -1450,9 +1538,10 @@ export class OboraRuntime {
     return {
       ...run,
       steps: async () => adapter.getSteps(runId),
-      artifacts: async (stepName?: string) => adapter.getArtifacts(runId, stepName),
+      artifacts: async (stepName?: string) => this.getRunArtifacts(runId, stepName),
       cost: async () => adapter.getRunCostSummary(runId),
       auditReplay: async (stepName?: string) => adapter.getAuditTimeline(runId, stepName),
+      artifact: async (stepName: string, name: string) => this.getArtifact(runId, stepName, name),
     };
   }
 
@@ -1479,10 +1568,7 @@ export class OboraRuntime {
     },
 
     /** Get artifact records for a run, optionally filtered by step */
-    artifacts: async (runId: string, stepName?: string) => {
-      const adapter = await this.getStorageAdapter();
-      return adapter.getArtifacts(runId, stepName);
-    },
+    artifacts: async (runId: string, stepName?: string) => this.getRunArtifacts(runId, stepName),
 
     /** Spec-aligned: run.cost() equivalent facade */
     cost: async (runId: string) => {
@@ -1497,7 +1583,7 @@ export class OboraRuntime {
     },
   };
 
-  /** Spec-aligned: step.cost() equivalent facade */
+  /** Spec-aligned: step-level facade (`step.cost()`, `step.artifacts()`) */
   readonly step = {
     cost: async (runId: string, stepName: string) => {
       const adapter = await this.getStorageAdapter();
@@ -1506,5 +1592,9 @@ export class OboraRuntime {
       const costUsd = records.reduce((sum, r) => sum + r.costUsd, 0);
       return { stepName, tokens, costUsd, records };
     },
+
+    artifacts: async (runId: string, stepName: string) => this.getRunArtifacts(runId, stepName),
+
+    artifact: async (runId: string, stepName: string, name: string) => this.getArtifact(runId, stepName, name),
   };
 }

@@ -2,3 +2,15 @@ version: "1.0"
 workflows: .
 policies: .
 tests: ./tests
+
+persistence:
+  enabled: true
+  adapter: sqlite
+  sqlite:
+    path: ./data/obora.db
+
+artifacts:
+  enabled: true
+  store: local
+  local:
+    basePath: ./data/artifacts

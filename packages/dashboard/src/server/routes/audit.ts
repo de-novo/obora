@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 
-import type { AuditEvent } from '@obora-kit/runtime';
+import type { AuditEvent } from '@obora/runtime';
 
 import type { AuditStore } from '../audit/audit-store.js';
 import type { ApiErrorPayload, AuditQueryParams } from '../types.js';

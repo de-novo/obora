@@ -10,6 +10,7 @@ export * from "./orchestrator/index.js";
 export * from "./patterns/index.js";
 export * from "./plugins/index.js";
 export * from "./storage/index.js";
+export * from "./artifacts/index.js";
 export * from "./checkpoint/index.js";
 export * from "./_legacy/workflow/index.js";
 export * from "./_legacy/agents/roles/index.js";
