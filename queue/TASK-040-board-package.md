@@ -104,3 +104,16 @@
 - 원인: blackboard-first queue(TASK-018~023, 040)가 참조하는 패키지 경로(`packages/board`, `packages/blackboard`)가 현재 HEAD 기준 저장소에 없음.
 - 필요조치: (1) 해당 패키지 이관/삭제 이력 확인, (2) queue의 SSOT를 현재 모노레포 구조(`packages/runtime|sdk|dashboard|cli|adapters`)에 맞게 재매핑.
 - 다음실행조건: 유효한 blackboard-first 대상 경로/테스트 커맨드가 확정될 것.
+
+## 야간 점검 로그 (2026-02-18 21:56 KST)
+- 점검 단위: blackboard-first 기준 TASK-040 BLOCKER 재확인 1건(무리한 재시도 없이 점검/정리)
+- 기준 브랜치: `origin/main` (`40e3c43`)
+- 작업 브랜치: `main` (HEAD 유지, `0e745f6`)
+- 실행 검증: `pnpm --filter @obora-kit/blackboard test -- test/core/accessors/state-accessor.test.ts`
+- 결과: 실패 — `No projects matched the filters in "/Users/denovo/workspace/github/obora-kit"`
+- 메모: blackboard 패키지 필터가 현재 모노레포에서 해석되지 않음을 재확인. 동일 유형 실패 누적 2회(15:56, 21:56)로 추가 구현/재시도 중단하고 BLOCKER 유지.
+
+### BLOCKER (2026-02-18 21:56 KST)
+- 원인: 현재 저장소에 blackboard/board 패키지 경로가 없어 blackboard-first 테스트 명령 자체가 실행 대상과 매칭되지 않음.
+- 필요조치: blackboard-first SSOT(대상 패키지/테스트 경로) 최신화 또는 관련 패키지 복원/이관 근거 확정.
+- 다음실행조건: 유효한 대상 패키지명과 테스트 커맨드가 확정되어 `pnpm --filter ... test`가 실제 프로젝트를 찾을 것.
