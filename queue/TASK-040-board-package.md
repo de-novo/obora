@@ -117,3 +117,16 @@
 - 원인: 현재 저장소에 blackboard/board 패키지 경로가 없어 blackboard-first 테스트 명령 자체가 실행 대상과 매칭되지 않음.
 - 필요조치: blackboard-first SSOT(대상 패키지/테스트 경로) 최신화 또는 관련 패키지 복원/이관 근거 확정.
 - 다음실행조건: 유효한 대상 패키지명과 테스트 커맨드가 확정되어 `pnpm --filter ... test`가 실제 프로젝트를 찾을 것.
+
+## 야간 점검 로그 (2026-02-18 22:41 KST)
+- 점검 단위: blackboard-first 기준 TASK-040 BLOCKER 정리 점검 1건(블로커 상태, 무리한 재시도 금지)
+- 기준 브랜치: `origin/main` (`40e3c43`)
+- 작업 브랜치: `main` (HEAD 유지, `fb08808`)
+- 실행 검증: `find packages -maxdepth 2 -type d | grep -E 'packages/(blackboard|board)$'`
+- 결과: 미검출(출력 없음)
+- 메모: 대상 디렉터리 부재를 구조 점검으로 재확인. 동일 유형 실패(blackboard/board 대상 부재) 3회 연속 충족으로 추가 구현/테스트 재시도 중단 유지.
+
+### BLOCKER (2026-02-18 22:41 KST)
+- 원인: blackboard-first queue가 참조하는 대상 패키지(`packages/blackboard`, `packages/board`)가 현재 저장소 구조에 존재하지 않음.
+- 필요조치: queue SSOT를 현 구조 기준으로 재매핑하거나, 누락 패키지의 이관/복원 근거를 먼저 확정.
+- 다음실행조건: 유효한 대상 경로와 테스트 명령이 확정되어 최소 1개 검증 커맨드가 실제 프로젝트에 매칭될 것.
