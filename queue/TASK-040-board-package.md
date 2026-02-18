@@ -143,3 +143,16 @@
 - 원인: 실행 대상(패키지/테스트 경로)보다 queue SSOT가 과거 `blackboard/board` 구조를 기준으로 남아 있어 현재 저장소에서 검증 경로가 성립하지 않음.
 - 필요조치: TASK-018~023, 040 기준선 문서를 현 모노레포 구조에 맞게 재매핑(또는 blackboard/board 복원 계획 확정)하여 실행 가능한 단일 검증 경로를 지정.
 - 다음실행조건: 재매핑 완료 후 실제 매칭되는 테스트 명령 1개를 선정해 PASS/FAIL을 기록할 것.
+
+## 야간 점검 로그 (2026-02-19 00:11 KST)
+- 점검 단위: blackboard-first 기준 TASK-040 BLOCKER 상태 점검 1건(재시도 금지 원칙 적용)
+- 기준 브랜치: `origin/main` (`40e3c43`)
+- 작업 브랜치: `main` (HEAD 유지, `0f23859`)
+- 실행 검증: `find packages -mindepth 1 -maxdepth 1 -type d -exec basename {} \\; | sort`
+- 결과: `adapters`, `cli`, `dashboard`, `runtime`, `sdk`만 존재 확인
+- 메모: 동일 유형 실패 3회 연속 이후 정책에 따라 blackboard/board 대상 테스트 재시도 없이 구조 점검만 수행.
+
+### BLOCKER (2026-02-19 00:11 KST)
+- 원인: blackboard-first queue 기준 대상(`blackboard/board`)과 실제 저장소 패키지 목록이 불일치.
+- 필요조치: blackboard-first SSOT를 현재 패키지 집합으로 재정의하거나, 누락 대상 복원 계획을 선확정.
+- 다음실행조건: 재정의된 단일 대상에 대해 실제 매칭되는 검증 명령 1개가 지정될 것.
