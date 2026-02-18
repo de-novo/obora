@@ -176,6 +176,14 @@ const pushPath = (path: string): void => {
   window.dispatchEvent(new PopStateEvent('popstate'));
 };
 
+const safeDecodePathSegment = (value: string): string | undefined => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return undefined;
+  }
+};
+
 export const App = (): JSX.Element => {
   const [view, setView] = useState<'dashboard' | 'audit' | 'playback' | 'policy'>('dashboard');
   const [playbackExecutionId, setPlaybackExecutionId] = useState<string | undefined>(undefined);
@@ -188,6 +196,7 @@ export const App = (): JSX.Element => {
   }, []);
 
   const historyMatch = pathname.match(/^\/history\/runs\/([^/]+)$/);
+  const historyRunId = historyMatch?.[1] ? safeDecodePathSegment(historyMatch[1]) : undefined;
 
   return (
     <main style={{ padding: '24px', fontFamily: 'Inter, system-ui, sans-serif' }}>
@@ -223,7 +232,13 @@ export const App = (): JSX.Element => {
       </header>
 
       {pathname === '/history/runs' ? <HistoryRunsPage onOpenRun={(runId) => pushPath(`/history/runs/${encodeURIComponent(runId)}`)} /> : null}
-      {historyMatch ? <HistoryRunDetailPage runId={decodeURIComponent(historyMatch[1] ?? '')} onBack={() => pushPath('/history/runs')} /> : null}
+      {historyMatch && historyRunId ? <HistoryRunDetailPage runId={historyRunId} onBack={() => pushPath('/history/runs')} /> : null}
+      {historyMatch && !historyRunId ? (
+        <section>
+          <button type="button" onClick={() => pushPath('/history/runs')}>← Back</button>
+          <p style={{ color: '#b91c1c' }}>Invalid run id format.</p>
+        </section>
+      ) : null}
 
       {!pathname.startsWith('/history/runs') ? (
         <>

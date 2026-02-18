@@ -76,36 +76,40 @@ const parseListQuery = (query: ListQuery): HistoryRunsQuery => {
 
 export const registerHistoryRoutes = (app: FastifyInstance, apiBasePath: string, store: HistoryStore): void => {
   app.get<{ Querystring: ListQuery }>(`${apiBasePath}/history/runs`, async (request, reply) => {
+    let parsed: HistoryRunsQuery;
     try {
-      const parsed = parseListQuery(request.query);
-      const result = await store.listRuns(parsed);
-      return reply.send(result);
+      parsed = parseListQuery(request.query);
     } catch (error) {
       return sendValidationError(reply, error instanceof Error ? error.message : 'Invalid query');
     }
+
+    const result = await store.listRuns(parsed);
+    return reply.send(result);
   });
 
   app.get<{ Params: { runId: string }; Querystring: DetailQuery }>(`${apiBasePath}/history/runs/:runId`, async (request, reply) => {
+    let auditLimit: number;
+    let auditOffset: number;
     try {
-      const auditLimit = parseIntParam(request.query.auditLimit, DEFAULT_AUDIT_LIMIT);
-      const auditOffset = parseIntParam(request.query.auditOffset, DEFAULT_OFFSET);
-
-      if (auditLimit < 1 || auditLimit > MAX_AUDIT_LIMIT) {
-        return sendValidationError(reply, `auditLimit must be between 1 and ${MAX_AUDIT_LIMIT}`);
-      }
-      if (auditOffset < 0) {
-        return sendValidationError(reply, 'auditOffset must be greater than or equal to 0');
-      }
-
-      const result = await store.getRunDetail(request.params.runId, { auditLimit, auditOffset });
-      if (!result) {
-        return reply.code(404).send({ code: 'DASH_7002', message: 'Run not found' } satisfies ApiErrorPayload);
-      }
-
-      return reply.send(result);
+      auditLimit = parseIntParam(request.query.auditLimit, DEFAULT_AUDIT_LIMIT);
+      auditOffset = parseIntParam(request.query.auditOffset, DEFAULT_OFFSET);
     } catch (error) {
       return sendValidationError(reply, error instanceof Error ? error.message : 'Invalid query');
     }
+
+    if (auditLimit < 1 || auditLimit > MAX_AUDIT_LIMIT) {
+      return sendValidationError(reply, `auditLimit must be between 1 and ${MAX_AUDIT_LIMIT}`);
+    }
+    if (auditOffset < 0) {
+      return sendValidationError(reply, 'auditOffset must be greater than or equal to 0');
+    }
+
+    const result = await store.getRunDetail(request.params.runId, { auditLimit, auditOffset });
+    if (!result) {
+      return reply.code(404).send({ code: 'DASH_7002', message: 'Run not found' } satisfies ApiErrorPayload);
+    }
+
+    return reply.send(result);
   });
 
   app.post<{ Params: { runId: string } }>(`${apiBasePath}/history/runs/:runId/resume`, async (request, reply) => {

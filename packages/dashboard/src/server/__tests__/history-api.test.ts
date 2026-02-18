@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createDashboardServer } from '../index.js';
 import { InMemoryHistoryStore } from '../history/history-store.js';
@@ -147,5 +147,27 @@ describe('history routes', () => {
 
     const response = await app.inject({ method: 'POST', url: '/api/history/runs/missing-run/resume' });
     expect(response.statusCode).toBe(404);
+  });
+
+  it('returns 500 when history store throws during list', async () => {
+    const throwingStore: InMemoryHistoryStore = new InMemoryHistoryStore();
+    const listRunsSpy = vi.spyOn(throwingStore, 'listRuns').mockRejectedValue(new Error('db down'));
+    const { app } = await createDashboardServer({}, { historyStore: throwingStore });
+    servers.push(app);
+
+    const response = await app.inject({ method: 'GET', url: '/api/history/runs' });
+    expect(response.statusCode).toBe(500);
+    listRunsSpy.mockRestore();
+  });
+
+  it('returns 500 when history store throws during detail', async () => {
+    const throwingStore: InMemoryHistoryStore = new InMemoryHistoryStore();
+    const detailSpy = vi.spyOn(throwingStore, 'getRunDetail').mockRejectedValue(new Error('db down'));
+    const { app } = await createDashboardServer({}, { historyStore: throwingStore });
+    servers.push(app);
+
+    const response = await app.inject({ method: 'GET', url: '/api/history/runs/run-1' });
+    expect(response.statusCode).toBe(500);
+    detailSpy.mockRestore();
   });
 });
