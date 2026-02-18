@@ -117,3 +117,12 @@
 - 실행 테스트: `pnpm --filter @obora/runtime test -- src/cell/__tests__/__tests__/integration/blackboard.test.ts`
 - 결과: 통과 (1 file, 7 tests)
 - 메모: 블로커 없음. runtime 통합 경로 기준 회귀선 정상 유지
+
+## 야간 점검 로그 (2026-02-18 12:11 KST)
+- 점검 단위: blackboard-first 라인 최소 회귀 점검 1건 (TASK-036 연계)
+- 기준 브랜치: `origin/main` (`40e3c43`)
+- 작업 브랜치: `main` (HEAD `b32e569`, 유지)
+- 1차 검증(실패): `pnpm --filter @obora/runtime test -- --runInBand` → vitest 옵션 불일치(`Unknown option --runInBand`)
+- 실행 테스트(정상): `pnpm --filter @obora/runtime test`
+- 결과: 통과 (80 files, 1280 tests)
+- 메모: blackboard 관련 경고(stderr)는 기존 deprecation 로그이며 테스트는 정상 통과
