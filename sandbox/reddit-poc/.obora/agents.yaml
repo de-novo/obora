@@ -1,19 +1,19 @@
 version: "1.0"
-default_model: claude-opus-4-6
+default_model: glm-4.7
 
 agents:
   data-loader:
     role: "Load seed data (posts, comments, votes) from JSON files"
-    model: claude-opus-4-6
+    model: glm-4.7
 
   aggregator:
     role: "Aggregate votes and calculate tallies per post"
-    model: claude-opus-4-6
+    model: glm-4.7
 
   ranker:
     role: "Compute hot ranking score using Reddit algorithm"
-    model: claude-opus-4-6
+    model: glm-4.7
 
   renderer:
     role: "Render final ranked feed as formatted markdown table"
-    model: claude-opus-4-6
+    model: glm-4.7

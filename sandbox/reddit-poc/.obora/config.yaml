@@ -6,10 +6,10 @@ project:
   version: "1.0.0"
 
 defaults:
-  provider: anthropic
-  model: claude-opus-4-6
+  provider: zai
+  model: glm-4.7
 
 providers:
-  anthropic:
-    authRef: env:ANTHROPIC_API_KEY
-    defaultModel: claude-opus-4-6
+  zai:
+    authRef: env:ZAI_API_KEY
+    defaultModel: glm-4.7
