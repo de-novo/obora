@@ -449,6 +449,8 @@ export class OboraRuntime {
     const waitPromise = new Promise<RuntimeExecution>((resolve, reject) => {
       rejectWait = reject;
 
+      let persistenceEnabled = false;
+
       queueMicrotask(async () => {
         try {
           if (settled) {
@@ -463,8 +465,18 @@ export class OboraRuntime {
             variables,
           });
 
-          // Persistence: Save run record at start
-          if (this.config.persistence?.enabled) {
+          if (settled) {
+            return;
+          }
+
+          const loadedConfig =
+            this.config.config !== undefined ? this.config.config : await loadConfig(this.config.configPath);
+          const llmConfig = resolveLLMConfig(this.config.llm, loadedConfig);
+          const stepOrder = topologicalSort(workflow.steps);
+
+          // Persistence: Save run record at start (after config loaded)
+          persistenceEnabled = loadedConfig?.persistence?.enabled ?? this.config.persistence?.enabled ?? false;
+          if (persistenceEnabled) {
             try {
               const adapter = await this.getStorageAdapter();
               await adapter.saveRun({
@@ -481,15 +493,6 @@ export class OboraRuntime {
               }
             }
           }
-
-          if (settled) {
-            return;
-          }
-
-          const loadedConfig =
-            this.config.config !== undefined ? this.config.config : await loadConfig(this.config.configPath);
-          const llmConfig = resolveLLMConfig(this.config.llm, loadedConfig);
-          const stepOrder = topologicalSort(workflow.steps);
 
           const resourcesConfig = loadedConfig?.resources;
           const shouldTrackCost = Boolean(resourcesConfig);
@@ -633,7 +636,7 @@ export class OboraRuntime {
             execution.completedSteps.push(step.name);
 
             // Persistence: Save step record after completion
-            if (this.config.persistence?.enabled) {
+            if (persistenceEnabled) {
               try {
                 const adapter = await this.getStorageAdapter();
                 const outputValue =
@@ -680,7 +683,7 @@ export class OboraRuntime {
           settled = true;
 
           // Persistence: Update run record on completion
-          if (this.config.persistence?.enabled) {
+          if (persistenceEnabled) {
             try {
               const adapter = await this.getStorageAdapter();
               await adapter.saveRun({
@@ -725,7 +728,7 @@ export class OboraRuntime {
               : OboraErrorCode.SDK_UNKNOWN_ERROR;
 
           // Persistence: Update run record on failure
-          if (this.config.persistence?.enabled) {
+          if (persistenceEnabled) {
             try {
               const adapter = await this.getStorageAdapter();
               await adapter.saveRun({
