@@ -463,6 +463,25 @@ export class OboraRuntime {
             variables,
           });
 
+          // Persistence: Save run record at start
+          if (this.config.persistence?.enabled) {
+            try {
+              const adapter = await this.getStorageAdapter();
+              await adapter.saveRun({
+                id: executionId,
+                workflowName: name,
+                status: "running",
+                input: { value: input ?? null },
+                startedAt: execution.startedAt.toISOString(),
+                metadata: { variables },
+              });
+            } catch (err) {
+              if (this.config.verbose) {
+                console.warn("[persistence] Failed to save run at start:", err);
+              }
+            }
+          }
+
           if (settled) {
             return;
           }
@@ -613,6 +632,31 @@ export class OboraRuntime {
             execution.stepRecords[step.name] = result;
             execution.completedSteps.push(step.name);
 
+            // Persistence: Save step record after completion
+            if (this.config.persistence?.enabled) {
+              try {
+                const adapter = await this.getStorageAdapter();
+                const outputValue =
+                  typeof result.output === "object" && result.output !== null
+                    ? (result.output as Record<string, unknown>)
+                    : { value: result.output };
+                await adapter.saveStep({
+                  id: `${executionId}:${step.name}`,
+                  runId: executionId,
+                  stepName: step.name,
+                  status: "completed",
+                  output: outputValue,
+                  startedAt: new Date(stepStartedAt).toISOString(),
+                  completedAt: new Date().toISOString(),
+                  durationMs: Date.now() - stepStartedAt,
+                });
+              } catch (err) {
+                if (this.config.verbose) {
+                  console.warn("[persistence] Failed to save step:", err);
+                }
+              }
+            }
+
             if (settled) {
               return;
             }
@@ -634,6 +678,26 @@ export class OboraRuntime {
           execution.status = "completed";
           execution.endedAt = new Date();
           settled = true;
+
+          // Persistence: Update run record on completion
+          if (this.config.persistence?.enabled) {
+            try {
+              const adapter = await this.getStorageAdapter();
+              await adapter.saveRun({
+                id: executionId,
+                workflowName: name,
+                status: "completed",
+                input: { value: input ?? null },
+                startedAt: execution.startedAt.toISOString(),
+                completedAt: execution.endedAt.toISOString(),
+                metadata: { variables, stepOrder: execution.stepOrder },
+              });
+            } catch (err) {
+              if (this.config.verbose) {
+                console.warn("[persistence] Failed to save run on completion:", err);
+              }
+            }
+          }
 
           await this.emitEvent("execution_end", executionId, {
             workflowName: name,
@@ -659,6 +723,27 @@ export class OboraRuntime {
             : error instanceof OboraError
               ? error.code
               : OboraErrorCode.SDK_UNKNOWN_ERROR;
+
+          // Persistence: Update run record on failure
+          if (this.config.persistence?.enabled) {
+            try {
+              const adapter = await this.getStorageAdapter();
+              await adapter.saveRun({
+                id: executionId,
+                workflowName: name,
+                status: budgetExceeded ? "suspended" : "failed",
+                input: { value: input ?? null },
+                startedAt: execution.startedAt.toISOString(),
+                completedAt: execution.endedAt?.toISOString(),
+                metadata: { variables, error: execution.error, errorCode },
+              });
+            } catch (err) {
+              if (this.config.verbose) {
+                console.warn("[persistence] Failed to save run on error:", err);
+              }
+            }
+          }
+
           await this.emitEvent("error", executionId, {
             message: execution.error,
             code: errorCode,
