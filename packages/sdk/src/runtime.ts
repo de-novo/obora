@@ -478,7 +478,7 @@ export class OboraRuntime {
           persistenceEnabled = loadedConfig?.persistence?.enabled ?? this.config.persistence?.enabled ?? false;
           if (persistenceEnabled) {
             try {
-              const adapter = await this.getStorageAdapter();
+              const adapter = await this.getStorageAdapter(persistenceEnabled);
               await adapter.saveRun({
                 id: executionId,
                 workflowName: name,
@@ -638,7 +638,7 @@ export class OboraRuntime {
             // Persistence: Save step record after completion
             if (persistenceEnabled) {
               try {
-                const adapter = await this.getStorageAdapter();
+                const adapter = await this.getStorageAdapter(persistenceEnabled);
                 const outputValue =
                   typeof result.output === "object" && result.output !== null
                     ? (result.output as Record<string, unknown>)
@@ -685,7 +685,7 @@ export class OboraRuntime {
           // Persistence: Update run record on completion
           if (persistenceEnabled) {
             try {
-              const adapter = await this.getStorageAdapter();
+              const adapter = await this.getStorageAdapter(persistenceEnabled);
               await adapter.saveRun({
                 id: executionId,
                 workflowName: name,
@@ -730,7 +730,7 @@ export class OboraRuntime {
           // Persistence: Update run record on failure
           if (persistenceEnabled) {
             try {
-              const adapter = await this.getStorageAdapter();
+              const adapter = await this.getStorageAdapter(persistenceEnabled);
               await adapter.saveRun({
                 id: executionId,
                 workflowName: name,
@@ -1476,17 +1476,18 @@ export class OboraRuntime {
     return new InMemoryStorageAdapter() as import("@obora/runtime").StorageAdapter;
   }
 
-  private async getStorageAdapter(): Promise<import("@obora/runtime").StorageAdapter> {
+  private async getStorageAdapter(persistenceEnabled?: boolean): Promise<import("@obora/runtime").StorageAdapter> {
     if (this._storageAdapter) return this._storageAdapter;
 
-    const p = this.config.persistence;
-    if (!p?.enabled) {
+    const enabled = persistenceEnabled ?? this.config.persistence?.enabled ?? false;
+    if (!enabled) {
       throw new OboraError("Persistence is not enabled", "SDK_PERSISTENCE_DISABLED");
     }
 
-    if (p.adapter === "custom" && p.custom?.instance) {
+    const p = this.config.persistence;
+    if (p?.adapter === "custom" && p.custom?.instance) {
       this._storageAdapter = p.custom.instance;
-    } else if (p.adapter === "sqlite" && p.sqlite?.path) {
+    } else if (p?.adapter === "sqlite" && p.sqlite?.path) {
       const { SQLiteStorageAdapter } = await import("@obora/runtime");
       this._storageAdapter = new SQLiteStorageAdapter({ path: p.sqlite.path });
     } else {
