@@ -7,7 +7,7 @@ project:
 
 defaults:
   provider: anthropic
-  model: anthropic/claude-opus-4-6
+  model: claude-opus-4-6
 
 providers:
   anthropic:
