@@ -450,6 +450,7 @@ export class OboraRuntime {
       rejectWait = reject;
 
       let persistenceEnabled = false;
+      let persistenceConfig: OboraConfig["persistence"] | undefined;
 
       queueMicrotask(async () => {
         try {
@@ -475,10 +476,11 @@ export class OboraRuntime {
           const stepOrder = topologicalSort(workflow.steps);
 
           // Persistence: Save run record at start (after config loaded)
-          persistenceEnabled = loadedConfig?.persistence?.enabled ?? this.config.persistence?.enabled ?? false;
+          persistenceConfig = loadedConfig?.persistence ?? this.config.persistence;
+          persistenceEnabled = persistenceConfig?.enabled ?? false;
           if (persistenceEnabled) {
             try {
-              const adapter = await this.getStorageAdapter(persistenceEnabled);
+              const adapter = await this.getStorageAdapter(persistenceEnabled, persistenceConfig);
               await adapter.saveRun({
                 id: executionId,
                 workflowName: name,
@@ -638,7 +640,7 @@ export class OboraRuntime {
             // Persistence: Save step record after completion
             if (persistenceEnabled) {
               try {
-                const adapter = await this.getStorageAdapter(persistenceEnabled);
+                const adapter = await this.getStorageAdapter(persistenceEnabled, persistenceConfig);
                 const outputValue =
                   typeof result.output === "object" && result.output !== null
                     ? (result.output as Record<string, unknown>)
@@ -685,7 +687,7 @@ export class OboraRuntime {
           // Persistence: Update run record on completion
           if (persistenceEnabled) {
             try {
-              const adapter = await this.getStorageAdapter(persistenceEnabled);
+              const adapter = await this.getStorageAdapter(persistenceEnabled, persistenceConfig);
               await adapter.saveRun({
                 id: executionId,
                 workflowName: name,
@@ -730,7 +732,7 @@ export class OboraRuntime {
           // Persistence: Update run record on failure
           if (persistenceEnabled) {
             try {
-              const adapter = await this.getStorageAdapter(persistenceEnabled);
+              const adapter = await this.getStorageAdapter(persistenceEnabled, persistenceConfig);
               await adapter.saveRun({
                 id: executionId,
                 workflowName: name,
@@ -1476,7 +1478,10 @@ export class OboraRuntime {
     return new InMemoryStorageAdapter() as import("@obora/runtime").StorageAdapter;
   }
 
-  private async getStorageAdapter(persistenceEnabled?: boolean): Promise<import("@obora/runtime").StorageAdapter> {
+  private async getStorageAdapter(
+    persistenceEnabled?: boolean,
+    persistenceConfig?: OboraConfig["persistence"]
+  ): Promise<import("@obora/runtime").StorageAdapter> {
     if (this._storageAdapter) return this._storageAdapter;
 
     const enabled = persistenceEnabled ?? this.config.persistence?.enabled ?? false;
@@ -1484,9 +1489,9 @@ export class OboraRuntime {
       throw new OboraError("Persistence is not enabled", "SDK_PERSISTENCE_DISABLED");
     }
 
-    const p = this.config.persistence;
-    if (p?.adapter === "custom" && p.custom?.instance) {
-      this._storageAdapter = p.custom.instance;
+    const p = persistenceConfig ?? this.config.persistence;
+    if (p?.adapter === "custom" && (p.custom as { instance?: import("@obora/runtime").StorageAdapter })?.instance) {
+      this._storageAdapter = (p.custom as { instance: import("@obora/runtime").StorageAdapter }).instance;
     } else if (p?.adapter === "sqlite" && p.sqlite?.path) {
       const { SQLiteStorageAdapter } = await import("@obora/runtime");
       this._storageAdapter = new SQLiteStorageAdapter({ path: p.sqlite.path });
