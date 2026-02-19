@@ -1,0 +1,19 @@
+version: "1.0"
+default_model: anthropic/claude-opus-4-6
+
+agents:
+  data-loader:
+    role: "Load seed data (posts, comments, votes) from JSON files"
+    model: anthropic/claude-opus-4-6
+
+  aggregator:
+    role: "Aggregate votes and calculate tallies per post"
+    model: anthropic/claude-opus-4-6
+
+  ranker:
+    role: "Compute hot ranking score using Reddit algorithm"
+    model: anthropic/claude-opus-4-6
+
+  renderer:
+    role: "Render final ranked feed as formatted markdown table"
+    model: anthropic/claude-opus-4-6

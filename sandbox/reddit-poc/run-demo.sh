@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Reddit-like PoC Demo — Obora-only
+# Reddit-like PoC Demo — Obora-only (CLI v1)
 # Usage: bash run-demo.sh
 set -euo pipefail
 
@@ -12,35 +12,18 @@ echo "  Obora Reddit-like PoC"
 echo "═══════════════════════════════════════════"
 echo ""
 
-# ─── 1. Status check ───
-echo "▶ Step 1: obora status"
-$OBORA status 2>&1 || true
+# ─── 1. Validate workflow (dry-run) ───
+echo "▶ Step 1: Validate workflow (dry-run)"
+$OBORA run .obora/workflows/reddit-basic.yaml --config .obora/config.yaml --agents .obora/agents.yaml --dry-run 2>&1 || true
 echo ""
 
-# ─── 2. Create feature (skip if exists) ───
-FEATURE="reddit-feed"
-if [ ! -d ".obora/features/$FEATURE" ]; then
-  echo "▶ Step 2: Creating feature '$FEATURE'"
-  $OBORA new "$FEATURE" --workflow simple 2>&1
-  # Patch workflow to reddit-basic
-  sed -i '' 's/workflow: "simple"/workflow: "reddit-basic"/' ".obora/features/$FEATURE/status.yaml"
-else
-  echo "▶ Step 2: Feature '$FEATURE' already exists, skipping"
-fi
+# ─── 2. Run workflow ───
+echo "▶ Step 2: Run workflow"
+$OBORA run .obora/workflows/reddit-basic.yaml --config .obora/config.yaml --agents .obora/agents.yaml --verbose 2>&1 || true
 echo ""
 
-# ─── 3. Validate workflow ───
-echo "▶ Step 3: Validate workflow"
-$OBORA validate 2>&1 || true
-echo ""
-
-# ─── 4. Run workflow ───
-echo "▶ Step 4: Run workflow"
-$OBORA run --feature "$FEATURE" 2>&1
-echo ""
-
-# ─── 5. Compute ranking locally (pure Node.js, no external deps) ───
-echo "▶ Step 5: Compute Hot Ranking (local)"
+# ─── 3. Compute ranking locally (pure Node.js, no external deps) ───
+echo "▶ Step 3: Compute Hot Ranking (local)"
 echo ""
 node --input-type=module <<'RANK_SCRIPT'
 import { readFileSync } from "node:fs";
@@ -49,20 +32,15 @@ const posts    = JSON.parse(readFileSync("seeds/posts.json",    "utf-8"));
 const comments = JSON.parse(readFileSync("seeds/comments.json", "utf-8"));
 const votes    = JSON.parse(readFileSync("seeds/votes.json",    "utf-8"));
 
-// tally votes
 const tally = {};
 for (const v of votes) {
   if (!tally[v.post_id]) tally[v.post_id] = { up: 0, down: 0 };
   tally[v.post_id][v.type]++;
 }
 
-// count comments per post
 const commentCount = {};
-for (const c of comments) {
-  commentCount[c.post_id] = (commentCount[c.post_id] || 0) + 1;
-}
+for (const c of comments) commentCount[c.post_id] = (commentCount[c.post_id] || 0) + 1;
 
-// simplified hot score: score = (up - down) + commentCount * 0.5 - ageHours * 0.1
 const now = new Date("2026-02-14T14:00:00Z");
 const ranked = posts.map(p => {
   const t = tally[p.id] || { up: 0, down: 0 };
@@ -77,11 +55,11 @@ console.log("│ Rank│ Title                                      │ ▲  │
 console.log("├─────┼────────────────────────────────────────────┼────┼────┼─────┼────────┤");
 ranked.forEach((p, i) => {
   const title = p.title.padEnd(42).slice(0, 42);
-  const up   = String(p.up).padStart(2);
+  const up = String(p.up).padStart(2);
   const down = String(p.down).padStart(2);
-  const cc   = String(p.comments).padStart(3);
-  const sc   = String(p.score).padStart(6);
-  console.log(`│  ${i+1}  │ ${title} │ ${up} │ ${down} │ ${cc} │ ${sc} │`);
+  const cc = String(p.comments).padStart(3);
+  const sc = String(p.score).padStart(6);
+  console.log(`│  ${i + 1}  │ ${title} │ ${up} │ ${down} │ ${cc} │ ${sc} │`);
 });
 console.log("└─────┴────────────────────────────────────────────┴────┴────┴─────┴────────┘");
 RANK_SCRIPT
