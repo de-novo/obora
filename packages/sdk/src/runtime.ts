@@ -572,6 +572,38 @@ export class OboraRuntime {
                   minConfidence: knowledgeContext?.minConfidence ?? 0.8,
                   maxTokens,
                 });
+
+                // Persist knowledge attach event so knowledge can accumulate across runs (M7 writer path)
+                if (persistenceEnabled) {
+                  try {
+                    const adapter = await this.getStorageAdapter(persistenceEnabled, persistenceConfig);
+                    await adapter.saveAuditEvent({
+                      id: randomUUID(),
+                      runId: executionId,
+                      stepName: "__knowledge__",
+                      timestamp: new Date().toISOString(),
+                      category: "execution",
+                      action: "knowledge.context_attached",
+                      actor: "sdk-runtime",
+                      detail: {
+                        count: ranked.length,
+                        maxTokens,
+                        tags: knowledgeContext?.tags ?? [],
+                        items: ranked.map((k) => ({
+                          id: k.id,
+                          title: k.title,
+                          tags: k.tags,
+                          confidence: k.confidence,
+                          source: k.source,
+                        })),
+                      },
+                    });
+                  } catch (error) {
+                    if (this.config.verbose) {
+                      console.warn("[knowledge] failed to persist knowledge audit event:", error);
+                    }
+                  }
+                }
               }
             } catch (error) {
               if (this.config.verbose) {
@@ -773,6 +805,22 @@ export class OboraRuntime {
                 startedAt: execution.startedAt.toISOString(),
                 completedAt: execution.endedAt.toISOString(),
                 metadata: { variables, stepOrder: execution.stepOrder },
+              });
+
+              // Persist run summary as knowledge event so knowledge can accumulate even without prior context hits
+              await adapter.saveAuditEvent({
+                id: randomUUID(),
+                runId: executionId,
+                stepName: "__knowledge__",
+                timestamp: new Date().toISOString(),
+                category: "execution",
+                action: "knowledge.run_summary",
+                actor: "sdk-runtime",
+                detail: {
+                  workflowName: name,
+                  stepOrder: execution.stepOrder,
+                  outputKeys: Object.keys(execution.outputs),
+                },
               });
             } catch (err) {
               if (this.config.verbose) {
