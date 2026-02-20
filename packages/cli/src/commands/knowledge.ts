@@ -176,7 +176,8 @@ export function createKnowledgeCommand(): Command {
     .action(async (opts: { json?: boolean }) => {
       const schemaPath = resolve(process.cwd(), ".obora/knowledge-schema.yaml");
       const raw = await readFile(schemaPath, "utf-8");
-      if (opts.json) {
+      const forceJson = opts.json || process.argv.includes("--json");
+      if (forceJson) {
         const { parseKnowledgeSchema } = await import("@obora/sdk");
         console.log(JSON.stringify(parseKnowledgeSchema(raw), null, 2));
       } else {
