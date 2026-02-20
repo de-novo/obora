@@ -64,39 +64,94 @@ export function validateAndSuggestTag(inputTag: string, pattern: RegExp, example
   };
 }
 
+export type ConflictReasonCode = "depth_short" | "depth_long" | "pattern_mismatch" | "domain_not_allowed" | "low_confidence";
+
+export interface TagMergeConflict {
+  input: string;
+  reason: string;
+  reasonCode: ConflictReasonCode;
+  suggestions: string[];
+}
+
 export interface TagMergeResult {
   merged: string[];
-  conflicts: Array<{ input: string; reason: string; suggestions: string[] }>;
+  conflicts: TagMergeConflict[];
+}
+
+export interface TagMergeOptions {
+  allowedDomains?: string[];
+  autoMergeThreshold?: number;
+  maxSuggestions?: number;
 }
 
 /**
- * SchemaAI v2: normalize + validate + conflict reporting
+ * SchemaAI v3: normalize + validate + policy-based conflict resolution
  */
 export function mergeTagsWithConflictResolution(
   inputTags: string[],
   pattern: RegExp,
   examples: string[],
+  options: TagMergeOptions = {},
 ): TagMergeResult {
   const mergedSet = new Set<string>();
-  const conflicts: Array<{ input: string; reason: string; suggestions: string[] }> = [];
+  const conflicts: TagMergeConflict[] = [];
+
+  const allowed = new Set((options.allowedDomains ?? []).map((d) => d.toLowerCase()));
+  const threshold = options.autoMergeThreshold ?? 0.75;
+  const maxSuggestions = options.maxSuggestions ?? 3;
 
   for (const raw of inputTags) {
     const check = validateAndSuggestTag(raw, pattern, examples);
-    if (check.valid && check.normalized) {
-      mergedSet.add(check.normalized);
+    const normalized = check.normalized ?? normalizeTag(raw);
+    const domain = normalized.split(".")[0]?.toLowerCase() ?? "";
+
+    if (check.valid && normalized) {
+      if (allowed.size > 0 && !allowed.has(domain)) {
+        conflicts.push({
+          input: raw,
+          reason: "허용되지 않은 도메인",
+          reasonCode: "domain_not_allowed",
+          suggestions: [],
+        });
+        continue;
+      }
+      mergedSet.add(normalized);
       continue;
     }
 
-    conflicts.push({
+    const scored = suggestTags(normalized, examples, maxSuggestions).map((tag) => ({
+      tag,
+      score: scoreSimilarity(normalized, tag),
+    }));
+
+    const reasonCode: ConflictReasonCode = check.reason?.includes("부족")
+      ? "depth_short"
+      : check.reason?.includes("초과")
+        ? "depth_long"
+        : "pattern_mismatch";
+
+    const conflict: TagMergeConflict = {
       input: raw,
       reason: check.reason ?? "invalid",
-      suggestions: check.suggestions,
-    });
+      reasonCode,
+      suggestions: scored.map((s) => s.tag),
+    };
 
-    // auto-merge first high-confidence suggestion when available
-    if (check.suggestions[0]) {
-      mergedSet.add(check.suggestions[0]);
+    const best = scored[0];
+    if (best && best.score >= threshold) {
+      const bestDomain = best.tag.split(".")[0]?.toLowerCase() ?? "";
+      if (allowed.size === 0 || allowed.has(bestDomain)) {
+        mergedSet.add(best.tag);
+      } else {
+        conflict.reason = "허용되지 않은 도메인";
+        conflict.reasonCode = "domain_not_allowed";
+      }
+    } else if (best) {
+      conflict.reason = "자동 병합 임계치 미달";
+      conflict.reasonCode = "low_confidence";
     }
+
+    conflicts.push(conflict);
   }
 
   return {

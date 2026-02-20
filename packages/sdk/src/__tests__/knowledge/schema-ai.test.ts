@@ -42,10 +42,34 @@ describe("schema-ai", () => {
       ["auth.oauth.kakao", "Auth.oauth", "Review.security.xss"],
       pattern,
       examples,
+      { autoMergeThreshold: 0.7 },
     );
 
     expect(result.merged).toContain("Auth.oauth.kakao");
     expect(result.merged).toContain("Review.security.xss");
     expect(result.conflicts.length).toBeGreaterThan(0);
+  });
+
+  it("enforces allowed domain policy", () => {
+    const result = mergeTagsWithConflictResolution(
+      ["Billing.invoice.retry", "Auth.oauth.kakao"],
+      pattern,
+      examples,
+      { allowedDomains: ["Auth"] },
+    );
+
+    expect(result.merged).toContain("Auth.oauth.kakao");
+    expect(result.merged).not.toContain("Billing.invoice.retry");
+    expect(result.conflicts.some((c) => c.reasonCode === "domain_not_allowed")).toBe(true);
+  });
+
+  it("marks low confidence when under threshold", () => {
+    const result = mergeTagsWithConflictResolution(
+      ["Auth.oauth"],
+      pattern,
+      examples,
+      { autoMergeThreshold: 1.1 },
+    );
+    expect(result.conflicts.some((c) => c.reasonCode === "low_confidence")).toBe(true);
   });
 });
