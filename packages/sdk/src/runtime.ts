@@ -514,6 +514,27 @@ export class OboraRuntime {
             : undefined;
           execution.stepOrder = stepOrder.map((step) => step.name);
 
+          // Resolve step inputs from depends_on outputs (CEO issue fix)
+          const resolveStepInput = (step: { name: string; input?: unknown; depends_on?: string[] }): unknown => {
+            const baseInput = step.input ?? {};
+            const deps = step.depends_on ?? [];
+            if (deps.length === 0) return baseInput;
+
+            const merged: Record<string, unknown> =
+              typeof baseInput === "object" && baseInput !== null ? { ...baseInput as Record<string, unknown> } : { value: baseInput };
+
+            for (const depName of deps) {
+              const depOutput = execution.outputs[depName];
+              if (depOutput !== undefined) {
+                merged[`${depName}_output`] = depOutput;
+                if (typeof depOutput === "object" && depOutput !== null) {
+                  Object.assign(merged, depOutput as Record<string, unknown>);
+                }
+              }
+            }
+            return merged;
+          };
+
           // Knowledge context auto-attach (P1-3)
           const knowledgeEnabled = knowledgeContext?.enabled ?? true;
           if (knowledgeEnabled) {
