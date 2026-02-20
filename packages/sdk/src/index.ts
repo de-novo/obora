@@ -21,6 +21,7 @@ export {
   queryKnowledge,
   configureKnowledgeProvider,
   configureKnowledgeProviderFromBlackboard,
+  configureKnowledgeProviderFromSqlite,
   mapBlackboardToKnowledgeResults,
 } from "./knowledge/queryKnowledge.js";
 export { normalizeTag, suggestTags, validateAndSuggestTag } from "./knowledge/schema-ai.js";

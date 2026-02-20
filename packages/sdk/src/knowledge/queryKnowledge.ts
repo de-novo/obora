@@ -110,6 +110,68 @@ export function configureKnowledgeProviderFromBlackboard(snapshot: BlackboardKno
   knowledgeProvider = async () => entries;
 }
 
+export interface SqliteKnowledgeBridgeOptions {
+  runId?: string;
+  limit?: number;
+}
+
+/**
+ * P1-6: SQLite direct bridge (audit_events 기반)
+ * - category='knowledge' 또는 action prefix 'knowledge.' 이벤트를 읽어 KnowledgeResult로 매핑
+ */
+export async function configureKnowledgeProviderFromSqlite(
+  dbPath: string,
+  options: SqliteKnowledgeBridgeOptions = {},
+): Promise<void> {
+  const BetterSqlite3 = (await import("better-sqlite3")).default as unknown as new (path: string) => {
+    prepare: (sql: string) => { all: (...args: unknown[]) => Array<Record<string, unknown>> };
+    close: () => void;
+  };
+
+  const db = new BetterSqlite3(dbPath);
+  try {
+    const where = options.runId ? "AND run_id = ?" : "";
+    const rows = db
+      .prepare(
+        `SELECT id, run_id, timestamp, category, action, detail
+         FROM audit_events
+         WHERE (category = 'knowledge' OR action LIKE 'knowledge.%') ${where}
+         ORDER BY timestamp DESC
+         LIMIT ?`,
+      )
+      .all(...(options.runId ? [options.runId] : []), options.limit ?? 200);
+
+    const entries: KnowledgeResult[] = rows.map((row) => {
+      let detailObj: Record<string, unknown> = {};
+      try {
+        const parsed = JSON.parse(String(row.detail ?? "{}")) as unknown;
+        if (parsed && typeof parsed === "object") detailObj = parsed as Record<string, unknown>;
+      } catch {
+        // ignore parse failure
+      }
+
+      const tags = Array.isArray(detailObj.tags)
+        ? detailObj.tags.filter((x): x is string => typeof x === "string")
+        : [String(row.action ?? "knowledge.unknown").replace(/^knowledge\./, "Knowledge.")];
+
+      return {
+        id: String(row.id),
+        title: String(detailObj.title ?? row.action ?? "knowledge"),
+        body: String(detailObj.body ?? detailObj.message ?? row.detail ?? ""),
+        tags,
+        source: String(detailObj.source ?? "audit_events"),
+        confidence: typeof detailObj.confidence === "number" ? detailObj.confidence : 0.7,
+        createdAt: String(row.timestamp ?? new Date(0).toISOString()),
+        projectId: typeof detailObj.projectId === "string" ? detailObj.projectId : undefined,
+      };
+    });
+
+    knowledgeProvider = async () => entries;
+  } finally {
+    db.close();
+  }
+}
+
 export async function queryKnowledge(params: QueryKnowledgeParams): Promise<KnowledgeResult[]> {
   const entries = await knowledgeProvider();
   const normalizedText = params.textQuery?.toLowerCase().trim();
