@@ -11,6 +11,12 @@ export { Workflow } from "./workflow.js";
 export { detectLLMConfigFromEnv, resolveLLMConfig } from "./llm-config.js";
 export { loadConfig, resolveProviderConfig } from "./config-loader.js";
 export { CostTracker, BudgetExceededError } from "./cost-tracker.js";
+export {
+  validateKnowledgeSchema,
+  validateKnowledgeSchemaContent,
+  validateKnowledgeTag,
+  parseKnowledgeSchema,
+} from "./knowledge/schema-validator.js";
 export { createAuthResolver, resolveAuthRef } from "./auth-resolver.js";
 export { StepExecutor } from "./step-executor.js";
 export { topologicalSort, groupByParallelizableLevels } from "./dependency-resolver.js";

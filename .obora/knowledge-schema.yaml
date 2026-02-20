@@ -1,0 +1,33 @@
+version: "2.0"
+name: "knowledge-schema-v2"
+description: "3-depth taxonomy schema for Obora Knowledge v2"
+
+tagRules:
+  depth: 3
+  separator: "."
+  pattern: "^[A-Z][A-Za-z0-9]+\\.[a-z][a-z0-9-]+\\.[a-z][a-z0-9-]+$"
+  examples:
+    - "Auth.oauth.kakao"
+    - "Billing.invoice.retry"
+
+fields:
+  required:
+    - id
+    - title
+    - body
+    - tags
+    - source
+    - createdAt
+  optional:
+    - updatedAt
+    - confidence
+    - links
+
+limits:
+  maxTagsPerEntry: 8
+  maxBodyChars: 12000
+  maxTitleChars: 180
+
+validation:
+  rejectUnknownTopLevel: false
+  requireUniqueTags: true
