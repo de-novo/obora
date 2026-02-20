@@ -1,57 +1,55 @@
-# Reddit-like PoC Workflow
-# Obora-only: no external server, pure workflow execution
-
 name: reddit-basic
 version: "1.0"
-description: "Minimal Reddit-like service - posts, comments, votes, hot ranking"
-
-config:
-  continue_on_error: false
+description: "Reddit-like ranking workflow"
 
 steps:
-  - name: ingest-posts
-    agent: data-loader
-    description: "Load seed posts into the system"
-    outputs:
-      - posts.json
+  - name: load-data
+    agent: loader
+    description: "Load posts and votes data from seeds"
+    input:
+      task: |
+        Read these JSON files and summarize:
+        
+        posts.json:
+        [{"id": "p1", "title": "Obora-kit v0.1 Released!", "author": "denovo"},
+         {"id": "p2", "title": "AI Agent coordination patterns", "author": "alice"},
+         {"id": "p3", "title": "Show HN: Built a Reddit clone with YAML", "author": "bob"},
+         {"id": "p4", "title": "Monorepo tooling in 2026", "author": "charlie"}]
+        
+        votes.json:
+        [{"post_id": "p1", "type": "upvote"}, {"post_id": "p1", "type": "upvote"}, 
+         {"post_id": "p1", "type": "upvote"}, {"post_id": "p1", "type": "upvote"},
+         {"post_id": "p1", "type": "downvote"},
+         {"post_id": "p2", "type": "upvote"}, {"post_id": "p2", "type": "upvote"},
+         {"post_id": "p2", "type": "downvote"},
+         {"post_id": "p3", "type": "upvote"} x6,
+         {"post_id": "p4", "type": "upvote"}, {"post_id": "p4", "type": "downvote"} x2]
+        
+        Output: JSON with posts and vote counts
 
-  - name: ingest-comments
-    agent: data-loader
-    description: "Load seed comments and attach to posts"
-    depends_on:
-      - ingest-posts
-    outputs:
-      - comments.json
-
-  - name: ingest-votes
-    agent: data-loader
-    description: "Load seed votes (upvote/downvote) for posts"
-    depends_on:
-      - ingest-posts
-    outputs:
-      - votes.json
-
-  - name: tally-votes
+  - name: calculate-scores
     agent: aggregator
-    description: "Aggregate upvotes and downvotes per post"
+    description: "Calculate net score for each post"
     depends_on:
-      - ingest-votes
-    outputs:
-      - vote-tallies.json
+      - load-data
+    input:
+      task: |
+        Based on previous step data, calculate for each post:
+        - upvotes count
+        - downvotes count
+        - net_score = upvotes - downvotes
+        
+        Output: JSON array sorted by net_score descending
 
-  - name: compute-hot-score
-    agent: ranker
-    description: "Compute hot score using simplified Reddit algorithm (score + time decay)"
-    depends_on:
-      - tally-votes
-      - ingest-comments
-    outputs:
-      - hot-ranking.json
-
-  - name: render-feed
+  - name: render-table
     agent: renderer
-    description: "Render the final ranked feed as markdown"
+    description: "Render final ranking table"
     depends_on:
-      - compute-hot-score
-    outputs:
-      - feed.md
+      - calculate-scores
+    input:
+      task: |
+        Render the ranked posts as a markdown table.
+        
+        Columns: | Rank | Title | Up | Down | Score |
+        
+        Output: ONLY the markdown table, nothing else.

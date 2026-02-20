@@ -1,9 +1,5 @@
 # obora-kit Configuration
-# Reddit PoC with LLM integration
-
-project:
-  name: "reddit-poc"
-  version: "1.0.0"
+# Reddit PoC with GLM 4.7 + Persistence
 
 defaults:
   provider: zai
@@ -13,3 +9,15 @@ providers:
   zai:
     authRef: env:ZAI_API_KEY
     defaultModel: glm-4.7
+
+persistence:
+  enabled: true
+  adapter: sqlite
+  sqlite:
+    path: .obora/data.db
+
+artifacts:
+  enabled: true
+  store: local
+  local:
+    basePath: .obora/artifacts
