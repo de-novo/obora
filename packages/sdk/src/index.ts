@@ -24,7 +24,12 @@ export {
   configureKnowledgeProviderFromSqlite,
   mapBlackboardToKnowledgeResults,
 } from "./knowledge/queryKnowledge.js";
-export { normalizeTag, suggestTags, validateAndSuggestTag } from "./knowledge/schema-ai.js";
+export {
+  normalizeTag,
+  suggestTags,
+  validateAndSuggestTag,
+  mergeTagsWithConflictResolution,
+} from "./knowledge/schema-ai.js";
 export { createAuthResolver, resolveAuthRef } from "./auth-resolver.js";
 export { StepExecutor } from "./step-executor.js";
 export { topologicalSort, groupByParallelizableLevels } from "./dependency-resolver.js";

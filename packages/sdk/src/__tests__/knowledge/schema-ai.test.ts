@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeTag, suggestTags, validateAndSuggestTag } from "../../knowledge/schema-ai.js";
+import {
+  mergeTagsWithConflictResolution,
+  normalizeTag,
+  suggestTags,
+  validateAndSuggestTag,
+} from "../../knowledge/schema-ai.js";
 
 describe("schema-ai", () => {
   const examples = ["Auth.oauth.kakao", "Billing.invoice.retry", "Review.security.xss"];
@@ -30,5 +35,17 @@ describe("schema-ai", () => {
     const r = validateAndSuggestTag("Auth.oauth.kakao.extra", pattern, examples);
     expect(r.valid).toBe(false);
     expect(r.reason).toContain("초과");
+  });
+
+  it("merges tags and reports conflicts", () => {
+    const result = mergeTagsWithConflictResolution(
+      ["auth.oauth.kakao", "Auth.oauth", "Review.security.xss"],
+      pattern,
+      examples,
+    );
+
+    expect(result.merged).toContain("Auth.oauth.kakao");
+    expect(result.merged).toContain("Review.security.xss");
+    expect(result.conflicts.length).toBeGreaterThan(0);
   });
 });

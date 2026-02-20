@@ -63,3 +63,44 @@ export function validateAndSuggestTag(inputTag: string, pattern: RegExp, example
     suggestions,
   };
 }
+
+export interface TagMergeResult {
+  merged: string[];
+  conflicts: Array<{ input: string; reason: string; suggestions: string[] }>;
+}
+
+/**
+ * SchemaAI v2: normalize + validate + conflict reporting
+ */
+export function mergeTagsWithConflictResolution(
+  inputTags: string[],
+  pattern: RegExp,
+  examples: string[],
+): TagMergeResult {
+  const mergedSet = new Set<string>();
+  const conflicts: Array<{ input: string; reason: string; suggestions: string[] }> = [];
+
+  for (const raw of inputTags) {
+    const check = validateAndSuggestTag(raw, pattern, examples);
+    if (check.valid && check.normalized) {
+      mergedSet.add(check.normalized);
+      continue;
+    }
+
+    conflicts.push({
+      input: raw,
+      reason: check.reason ?? "invalid",
+      suggestions: check.suggestions,
+    });
+
+    // auto-merge first high-confidence suggestion when available
+    if (check.suggestions[0]) {
+      mergedSet.add(check.suggestions[0]);
+    }
+  }
+
+  return {
+    merged: Array.from(mergedSet),
+    conflicts,
+  };
+}
