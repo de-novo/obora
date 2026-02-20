@@ -17,7 +17,12 @@ export {
   validateKnowledgeTag,
   parseKnowledgeSchema,
 } from "./knowledge/schema-validator.js";
-export { queryKnowledge, configureKnowledgeProvider } from "./knowledge/queryKnowledge.js";
+export {
+  queryKnowledge,
+  configureKnowledgeProvider,
+  configureKnowledgeProviderFromBlackboard,
+  mapBlackboardToKnowledgeResults,
+} from "./knowledge/queryKnowledge.js";
 export { normalizeTag, suggestTags, validateAndSuggestTag } from "./knowledge/schema-ai.js";
 export { createAuthResolver, resolveAuthRef } from "./auth-resolver.js";
 export { StepExecutor } from "./step-executor.js";
