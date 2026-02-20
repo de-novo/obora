@@ -198,6 +198,7 @@ export interface RunOptions {
     minConfidence?: number;
     limit?: number;
     projectId?: string;
+    maxTokens?: number;
   };
 }
 
@@ -522,24 +523,54 @@ export class OboraRuntime {
                 `${name}\n${JSON.stringify(input ?? "")}\n${execution.stepOrder.join(" ")}`;
               const knowledgeItems = await queryKnowledge({
                 tags: knowledgeContext?.tags,
-                textQuery: inferredText,
+                textQuery: knowledgeContext?.textQuery,
                 minConfidence: knowledgeContext?.minConfidence ?? 0.8,
-                limit: knowledgeContext?.limit ?? 3,
+                limit: Math.max(1, knowledgeContext?.limit ?? 5),
                 projectId: knowledgeContext?.projectId,
               });
 
               if (knowledgeItems.length > 0) {
-                const contextMd = [
+                const normalizedQuery = inferredText.toLowerCase();
+                const deduped = Array.from(new Map(knowledgeItems.map((k) => [k.id, k])).values());
+                const ranked = deduped
+                  .map((k) => {
+                    const text = `${k.title}\n${k.body}`.toLowerCase();
+                    const textHit = normalizedQuery.length > 0 && text.includes(normalizedQuery) ? 0.4 : 0;
+                    const tagHits = (knowledgeContext?.tags ?? []).filter((t) => k.tags.includes(t)).length;
+                    const tagScore = Math.min(0.3, tagHits * 0.1);
+                    const score = k.confidence + textHit + tagScore;
+                    return { k, score };
+                  })
+                  .sort((a, b) => b.score - a.score)
+                  .map((x) => x.k);
+
+                const contextLines = [
                   "## Relevant Prior Knowledge",
-                  ...knowledgeItems.map(
+                  ...ranked.map(
                     (k, idx) =>
                       `${idx + 1}) [${k.tags.join(", ")}] ${k.title}\n   - confidence: ${k.confidence.toFixed(2)}`,
                   ),
-                ].join("\n");
+                ];
+                let contextMd = contextLines.join("\n");
+
+                const maxTokens = Math.max(100, knowledgeContext?.maxTokens ?? 800);
+                const approxTokens = Math.ceil(contextMd.length / 4);
+                if (approxTokens > maxTokens) {
+                  const maxChars = maxTokens * 4;
+                  contextMd = `${contextMd.slice(0, maxChars)}\n\n... [truncated]`;
+                  await this.emitEvent("warning", executionId, {
+                    message: "Knowledge context truncated by token cap",
+                    code: "SDK_KNOWLEDGE_CONTEXT_TRUNCATED",
+                    maxTokens,
+                    approxTokens,
+                  });
+                }
+
                 execution.outputs.__knowledge_context = contextMd;
                 await this.emitEvent("knowledge_context_attached", executionId, {
-                  count: knowledgeItems.length,
+                  count: ranked.length,
                   minConfidence: knowledgeContext?.minConfidence ?? 0.8,
+                  maxTokens,
                 });
               }
             } catch (error) {

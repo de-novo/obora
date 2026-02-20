@@ -59,4 +59,35 @@ describe("knowledge context auto-attach", () => {
 
     expect(result.outputs.__knowledge_context).toBeUndefined();
   });
+
+  it("applies maxTokens cap and emits warning", async () => {
+    configureKnowledgeProvider(async () => [
+      {
+        id: "k1",
+        title: `Very long knowledge ${"x".repeat(3000)}`, 
+        body: "x".repeat(5000),
+        tags: ["Auth.oauth.kakao"],
+        source: "review-bot",
+        confidence: 0.95,
+        createdAt: "2026-02-20T00:00:00.000Z",
+      },
+    ]);
+
+    const runtime = new OboraRuntime();
+    runtime.define("demo-truncate", { name: "demo-truncate", steps: [] });
+
+    let warned = false;
+    runtime.on("warning", (event) => {
+      const data = event.data as { code?: string };
+      if (data.code === "SDK_KNOWLEDGE_CONTEXT_TRUNCATED") warned = true;
+    });
+
+    const handle = await runtime.run("demo-truncate", {
+      knowledgeContext: { enabled: true, maxTokens: 120, tags: ["Auth.oauth.kakao"] },
+    });
+    const result = await handle.wait();
+
+    expect(String(result.outputs.__knowledge_context ?? "")).toContain("[truncated]");
+    expect(warned).toBe(true);
+  });
 });
