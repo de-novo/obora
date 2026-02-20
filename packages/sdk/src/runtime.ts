@@ -21,6 +21,7 @@ import { loadConfig, resolveProviderConfig, type OboraConfig } from "./config-lo
 import { StepExecutor } from "./step-executor.js";
 import { Workflow } from "./workflow.js";
 import { BudgetExceededError, CostTracker } from "./cost-tracker.js";
+import { queryKnowledge } from "./knowledge/queryKnowledge.js";
 import type { WorkflowDef } from "./workflow.js";
 
 export type WorkflowDefinition = WorkflowDef;
@@ -61,7 +62,8 @@ export type AuditEventType =
   | "reexecution_step_end"
   | "reexecution_end"
   | "warning"
-  | "error";
+  | "error"
+  | "knowledge_context_attached";
 
 export interface AuditEvent<T extends AuditEventType = AuditEventType> {
   id: string;
@@ -189,6 +191,14 @@ export interface RunOptions {
   input?: unknown;
   variables?: Record<string, unknown>;
   signal?: AbortSignal;
+  knowledgeContext?: {
+    enabled?: boolean;
+    tags?: string[];
+    textQuery?: string;
+    minConfidence?: number;
+    limit?: number;
+    projectId?: string;
+  };
 }
 
 export interface RunHandle {
@@ -435,7 +445,7 @@ export class OboraRuntime {
       throw new OboraError(`Workflow is not defined: ${name}`, OboraErrorCode.SDK_WORKFLOW_NOT_FOUND);
     }
 
-    const { input, variables, signal } = options;
+    const { input, variables, signal, knowledgeContext } = options;
     const executionId = randomUUID();
     const workflow = this.workflows.get(name)!;
     const execution = this.createExecution(executionId, name, input, workflow);
@@ -502,6 +512,42 @@ export class OboraRuntime {
             ? new CostTracker(await this.getCostTrackingAdapter(), executionId, loadedConfig)
             : undefined;
           execution.stepOrder = stepOrder.map((step) => step.name);
+
+          // Knowledge context auto-attach (P1-3)
+          const knowledgeEnabled = knowledgeContext?.enabled ?? true;
+          if (knowledgeEnabled) {
+            try {
+              const inferredText =
+                knowledgeContext?.textQuery ??
+                `${name}\n${JSON.stringify(input ?? "")}\n${execution.stepOrder.join(" ")}`;
+              const knowledgeItems = await queryKnowledge({
+                tags: knowledgeContext?.tags,
+                textQuery: inferredText,
+                minConfidence: knowledgeContext?.minConfidence ?? 0.8,
+                limit: knowledgeContext?.limit ?? 3,
+                projectId: knowledgeContext?.projectId,
+              });
+
+              if (knowledgeItems.length > 0) {
+                const contextMd = [
+                  "## Relevant Prior Knowledge",
+                  ...knowledgeItems.map(
+                    (k, idx) =>
+                      `${idx + 1}) [${k.tags.join(", ")}] ${k.title}\n   - confidence: ${k.confidence.toFixed(2)}`,
+                  ),
+                ].join("\n");
+                execution.outputs.__knowledge_context = contextMd;
+                await this.emitEvent("knowledge_context_attached", executionId, {
+                  count: knowledgeItems.length,
+                  minConfidence: knowledgeContext?.minConfidence ?? 0.8,
+                });
+              }
+            } catch (error) {
+              if (this.config.verbose) {
+                console.warn("[knowledge] failed to attach context:", error);
+              }
+            }
+          }
 
           const runtimeAgents = await this.loadAgentsFromYaml(this.config.agentsPath);
           const allAgents = new Map<string, AgentFactory>([...runtimeAgents, ...this.agents]);
