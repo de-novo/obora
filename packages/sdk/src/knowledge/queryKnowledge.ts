@@ -172,7 +172,12 @@ export async function configureKnowledgeProviderFromSqlite(
   }
 }
 
+import { getCachedKnowledge, setCachedKnowledge } from "./queryKnowledge-cache.js";
+
 export async function queryKnowledge(params: QueryKnowledgeParams): Promise<KnowledgeResult[]> {
+  const cached = getCachedKnowledge(params);
+  if (cached) return cached;
+
   const entries = await knowledgeProvider();
   const normalizedText = params.textQuery?.toLowerCase().trim();
 
@@ -200,5 +205,7 @@ export async function queryKnowledge(params: QueryKnowledgeParams): Promise<Know
   });
 
   const limit = params.limit ?? 20;
-  return filtered.slice(0, Math.max(0, limit));
+  const result = filtered.slice(0, Math.max(0, limit));
+  setCachedKnowledge(params, result);
+  return result;
 }

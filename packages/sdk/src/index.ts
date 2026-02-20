@@ -24,6 +24,7 @@ export {
   configureKnowledgeProviderFromSqlite,
   mapBlackboardToKnowledgeResults,
 } from "./knowledge/queryKnowledge.js";
+export { clearKnowledgeCache } from "./knowledge/queryKnowledge-cache.js";
 export {
   normalizeTag,
   suggestTags,
