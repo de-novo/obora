@@ -180,6 +180,11 @@ async function moveToArchive(
   }
 }
 
+interface MutableDoneStatusYaml {
+  status?: string;
+  [key: string]: unknown;
+}
+
 /**
  * Update status to done using YAML
  */
@@ -188,7 +193,7 @@ async function updateStatusToDone(featurePath: string): Promise<void> {
   const content = readFileSync(statusPath, "utf-8");
 
   try {
-    const parsed = yaml.parse(content) as Record<string, unknown>;
+    const parsed = (yaml.parse(content) ?? {}) as MutableDoneStatusYaml;
     parsed.status = "completed";
     await fs.writeFile(statusPath, yaml.stringify(parsed), "utf-8");
   } catch {

@@ -73,6 +73,16 @@ function findProjectRoot(startDir: string): string | null {
   }
 }
 
+interface MutableStatusYaml {
+  status?: string;
+  metadata?: {
+    last_updated?: string;
+    notes?: string;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
 /**
  * Update status.yaml using YAML
  */
@@ -81,7 +91,7 @@ async function updateStatus(featurePath: string, updates: Partial<StatusFile>): 
   const content = readFileSync(statusPath, "utf-8");
 
   try {
-    const parsed = yaml.parse(content) as Record<string, unknown>;
+    const parsed = (yaml.parse(content) ?? {}) as MutableStatusYaml;
 
     if (updates.status !== undefined) {
       parsed.status = updates.status;

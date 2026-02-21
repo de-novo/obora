@@ -8,6 +8,14 @@ import { join } from "node:path";
 
 import yaml from "yaml";
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+}
+
+function asString(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
+}
+
 /**
  * Status file structure
  */
@@ -41,25 +49,30 @@ export function readStatus(featurePath: string): StatusFile | null {
 
   try {
     const content = readFileSync(statusPath, "utf-8");
-    const parsed = yaml.parse(content) as Record<string, unknown>;
+    const parsed = asRecord(yaml.parse(content));
+    const feature = asRecord(parsed.feature);
+    const progress = asRecord(parsed.progress);
+    const metadata = asRecord(parsed.metadata);
+    const completedStages = progress.completed_stages;
 
     return {
       feature: {
-        name: parsed.feature?.name || "",
-        created_at: parsed.feature?.created_at || "",
-        workflow: parsed.feature?.workflow || "",
+        name: asString(feature.name),
+        created_at: asString(feature.created_at),
+        workflow: asString(feature.workflow),
       },
-      status: parsed.status || "pending",
+      status: asString(parsed.status, "pending"),
       progress: {
-        current_stage: parsed.progress?.current_stage || "planning",
-        completed_stages: Array.isArray(parsed.progress?.completed_stages)
-          ? parsed.progress.completed_stages
+        current_stage: asString(progress.current_stage, "planning"),
+        completed_stages: Array.isArray(completedStages)
+          ? completedStages.filter((s): s is string => typeof s === "string")
           : [],
       },
       metadata: {
-        last_updated: parsed.metadata?.last_updated || "",
-        notes: parsed.metadata?.notes || "",
-        last_error_code: parsed.metadata?.last_error_code || undefined,
+        last_updated: asString(metadata.last_updated),
+        notes: asString(metadata.notes),
+        last_error_code:
+          typeof metadata.last_error_code === "string" ? metadata.last_error_code : undefined,
       },
     };
   } catch {
