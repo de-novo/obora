@@ -21,7 +21,7 @@ SELFTEST_CMD="${SELFTEST_CMD:-}"
 
 DEPRECATED_GREP="${DEPRECATED_GREP:-cocoa\\s*=|ReactDOM\\.render|findDOMNode\\(|@deprecated}"
 BAN_GREP="${BAN_GREP:-\\bas any\\b|@ts-ignore}"
-SCAN_PATHS="${SCAN_PATHS:-packages}"
+SCAN_PATHS="${SCAN_PATHS:-packages,apps}"
 
 run_step() {
   local label="$1"
@@ -41,6 +41,16 @@ collect_existing_paths() {
       out+=("$p")
     fi
   done
+
+  # Monorepo auto-discovery fallback: include common workspace roots when present
+  if [[ ${#out[@]} -eq 0 ]]; then
+    for d in packages apps services; do
+      if [[ -d "$d" ]]; then
+        out+=("$d")
+      fi
+    done
+  fi
+
   if [[ ${#out[@]} -eq 0 ]]; then
     out+=(".")
   fi
