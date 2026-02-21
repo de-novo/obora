@@ -7,7 +7,9 @@ describe("getGlobalOpts", () => {
   it("reads global flags from root command", async () => {
     const cli = createCLI();
 
-    await cli.parseAsync(["--json", "--quiet", "--verbose", "--no-color", "plugin", "list"], { from: "user" });
+    await cli.parseAsync(["--json", "--quiet", "--verbose", "--no-color", "plugin", "list"], {
+      from: "user",
+    });
 
     const plugin = cli.commands.find((command) => command.name() === "plugin");
     expect(plugin).toBeDefined();

@@ -181,7 +181,7 @@ export function validateCommand(): Command {
         const resolvedPath = path.resolve(options.file);
         try {
           validatePath(options.file, process.cwd());
-        } catch (err) {
+        } catch {
           console.error(`${SYMBOLS.error} Invalid file path: ${chalk.red(options.file)}`);
           throw new CLIError(`Invalid file path: ${options.file}`, 1);
         }

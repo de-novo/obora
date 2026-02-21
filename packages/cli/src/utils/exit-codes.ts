@@ -20,11 +20,7 @@ export function mapErrorToExitCode(code: string): ExitCodeValue {
   }
 
   // Validation/policy errors → 2
-  if (
-    code.startsWith("POLICY_") ||
-    code.startsWith("SDK_8004") ||
-    code.startsWith("SDK_8005")
-  ) {
+  if (code.startsWith("POLICY_") || code.startsWith("SDK_8004") || code.startsWith("SDK_8005")) {
     return ExitCode.VALIDATION_ERROR;
   }
 

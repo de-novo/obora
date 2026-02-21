@@ -1,5 +1,5 @@
-import { deepFreeze } from "./utils.js";
 import type { StepErrorMetadata } from "./types.js";
+import { deepFreeze } from "./utils.js";
 
 export interface StepRuntimeRecord {
   success: boolean;
@@ -97,7 +97,6 @@ export class Blackboard {
     return this.read(path, { strict: false }) !== undefined;
   }
 
-
   on(_event: string, _listener: (...args: unknown[]) => void): this {
     return this;
   }
@@ -127,7 +126,7 @@ export class Blackboard {
 
   recordStepError(
     name: string,
-    error: Omit<StepErrorMetadata, "code"> & { code?: StepErrorMetadata["code"] },
+    error: Omit<StepErrorMetadata, "code"> & { code?: StepErrorMetadata["code"] }
   ): void {
     this.#write(`state.context.steps.${name}`, {
       success: false,

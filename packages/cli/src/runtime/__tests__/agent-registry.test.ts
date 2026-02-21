@@ -2,11 +2,12 @@
  * AgentRegistry unit tests
  */
 
-import { describe, it, expect } from "vitest";
-import { AgentRegistry } from "../agent-registry.js";
-import { MockLLMAdapter } from "@obora-kit/adapters";
 import { AgentRole } from "@obora/runtime";
 import { OboraError } from "@obora/runtime";
+import { MockLLMAdapter } from "@obora-kit/adapters";
+import { describe, it, expect } from "vitest";
+
+import { AgentRegistry } from "../agent-registry.js";
 
 function makeRegistry() {
   return new AgentRegistry({ llm: new MockLLMAdapter() });

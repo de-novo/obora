@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import { OboraErrorCode } from "@obora/sdk";
+import { describe, expect, it } from "vitest";
 
 import { CLIError } from "../cli-error.js";
 import { ExitCode, mapErrorToExitCode } from "../exit-codes.js";

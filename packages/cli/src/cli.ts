@@ -1,15 +1,15 @@
 import { Command } from "commander";
 
-import { createRunCommand } from "./commands/run.js";
-import { createTestCommand } from "./commands/test.js";
-import { createPluginCommand } from "./commands/plugin.js";
-import { createAuditCommand } from "./commands/audit.js";
-import { createPolicyCommand } from "./commands/policy.js";
-import { createInitCommand } from "./commands/init.js";
-import { createRunsCommand } from "./commands/runs.js";
-import { createResumeCommand } from "./commands/resume.js";
 import { createArtifactCommand } from "./commands/artifact.js";
+import { createAuditCommand } from "./commands/audit.js";
+import { createInitCommand } from "./commands/init.js";
 import { createKnowledgeCommand } from "./commands/knowledge.js";
+import { createPluginCommand } from "./commands/plugin.js";
+import { createPolicyCommand } from "./commands/policy.js";
+import { createResumeCommand } from "./commands/resume.js";
+import { createRunCommand } from "./commands/run.js";
+import { createRunsCommand } from "./commands/runs.js";
+import { createTestCommand } from "./commands/test.js";
 
 /**
  * Create top-level `obora inspect <runId>` alias.
@@ -36,7 +36,11 @@ function createInspectCommand(): Command {
           enabled: persistence?.enabled ?? true,
           adapter: (persistence?.adapter as "sqlite" | "custom") ?? "sqlite",
           sqlite: { path: persistence?.sqlite?.path ?? "./data/obora.db" },
-          ...(persistence?.custom ? { custom: persistence.custom as { instance: import("@obora/runtime").StorageAdapter } } : {}),
+          ...(persistence?.custom
+            ? {
+                custom: persistence.custom as { instance: import("@obora/runtime").StorageAdapter },
+              }
+            : {}),
         },
       });
 
@@ -51,7 +55,11 @@ function createInspectCommand(): Command {
       const costSummary = opts.cost ? await runtime.getRunCostSummary(runId) : undefined;
 
       if (opts.json) {
-        const payload: Record<string, unknown> = { run, artifacts, ...(costSummary ? { costSummary } : {}) };
+        const payload: Record<string, unknown> = {
+          run,
+          artifacts,
+          ...(costSummary ? { costSummary } : {}),
+        };
         if (opts.steps !== false) payload.steps = steps;
         console.log(JSON.stringify(payload, null, 2));
         return;
@@ -89,7 +97,9 @@ function createInspectCommand(): Command {
         if (costSummary.byStep.length > 0) {
           console.log("  By Step:");
           for (const item of costSummary.byStep) {
-            console.log(`    - ${item.stepName}: ${item.tokens} tokens, $${item.costUsd.toFixed(6)}`);
+            console.log(
+              `    - ${item.stepName}: ${item.tokens} tokens, $${item.costUsd.toFixed(6)}`
+            );
           }
         }
         if (costSummary.byModel.length > 0) {

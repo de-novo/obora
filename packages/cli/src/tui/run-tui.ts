@@ -20,7 +20,15 @@ export interface RunTuiSnapshot {
 
 export type RunTuiEvent =
   | { type: "workflow-start"; featureName: string; workflowName: string; totalSteps: number }
-  | { type: "step-start"; stepName: string; stepIndex: number; totalSteps: number; agentName: string; modelName?: string; thinkingLevel?: string }
+  | {
+      type: "step-start";
+      stepName: string;
+      stepIndex: number;
+      totalSteps: number;
+      agentName: string;
+      modelName?: string;
+      thinkingLevel?: string;
+    }
   | { type: "stream"; chunk: string }
   | { type: "usage"; promptTokens?: number; completionTokens?: number; totalTokens?: number }
   | { type: "step-complete"; stepName: string }

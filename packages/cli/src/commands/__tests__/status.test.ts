@@ -1,78 +1,137 @@
+/* eslint-disable import/order */
 /**
  * status command tests
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // Mock node:fs module
-vi.mock('node:fs', () => ({
+vi.mock("node:fs", () => ({
   existsSync: vi.fn(),
   readFileSync: vi.fn(),
   readdirSync: vi.fn(),
 }));
 
 // Mock @obora/runtime
-vi.mock('@obora/runtime', () => ({
+vi.mock("@obora/runtime", () => ({
   log: vi.fn(),
   getAllDiagnoses: vi.fn(() => [
-    { code: 'E4004', title: 'Lock acquisition failed', hypothesis: 'h', evidence: 'e', commands: ['cmd'], rollback: 'r' },
-    { code: 'E4005', title: 'Step failed', hypothesis: 'h', evidence: 'e', commands: ['cmd'], rollback: 'r' },
-    { code: 'E4006', title: 'Spec validation failed', hypothesis: 'h', evidence: 'e', commands: ['cmd'], rollback: 'r' },
-    { code: 'E6003', title: 'OpenClaw connection failed', hypothesis: 'h', evidence: 'e', commands: ['cmd'], rollback: 'r' },
+    {
+      code: "E4004",
+      title: "Lock acquisition failed",
+      hypothesis: "h",
+      evidence: "e",
+      commands: ["cmd"],
+      rollback: "r",
+    },
+    {
+      code: "E4005",
+      title: "Step failed",
+      hypothesis: "h",
+      evidence: "e",
+      commands: ["cmd"],
+      rollback: "r",
+    },
+    {
+      code: "E4006",
+      title: "Spec validation failed",
+      hypothesis: "h",
+      evidence: "e",
+      commands: ["cmd"],
+      rollback: "r",
+    },
+    {
+      code: "E6003",
+      title: "OpenClaw connection failed",
+      hypothesis: "h",
+      evidence: "e",
+      commands: ["cmd"],
+      rollback: "r",
+    },
   ]),
-  formatDiagnosis: vi.fn((d: any) => `\n💊 Diagnosis for ${d.code}: ${d.title}\n`),
+  formatDiagnosis: vi.fn(
+    (d: { code: string; title?: string }) => `\n💊 Diagnosis for ${d.code}: ${d.title}\n`
+  ),
   getDiagnosis: vi.fn((code: string) => {
-    const map: Record<string, any> = {
-      E4004: { code: 'E4004', title: 'Lock acquisition failed', hypothesis: 'h', evidence: 'e', commands: ['cmd'], rollback: 'r' },
-      E4005: { code: 'E4005', title: 'Step failed', hypothesis: 'h', evidence: 'e', commands: ['cmd'], rollback: 'r' },
-      E4006: { code: 'E4006', title: 'Spec validation failed', hypothesis: 'h', evidence: 'e', commands: ['cmd'], rollback: 'r' },
-      E6003: { code: 'E6003', title: 'OpenClaw connection failed', hypothesis: 'h', evidence: 'e', commands: ['cmd'], rollback: 'r' },
+    const map: Record<string, unknown> = {
+      E4004: {
+        code: "E4004",
+        title: "Lock acquisition failed",
+        hypothesis: "h",
+        evidence: "e",
+        commands: ["cmd"],
+        rollback: "r",
+      },
+      E4005: {
+        code: "E4005",
+        title: "Step failed",
+        hypothesis: "h",
+        evidence: "e",
+        commands: ["cmd"],
+        rollback: "r",
+      },
+      E4006: {
+        code: "E4006",
+        title: "Spec validation failed",
+        hypothesis: "h",
+        evidence: "e",
+        commands: ["cmd"],
+        rollback: "r",
+      },
+      E6003: {
+        code: "E6003",
+        title: "OpenClaw connection failed",
+        hypothesis: "h",
+        evidence: "e",
+        commands: ["cmd"],
+        rollback: "r",
+      },
     };
     return map[code];
   }),
 }));
 
 // Mock path-utils
-vi.mock('../../utils/path-utils.js', () => ({
+vi.mock("../../utils/path-utils.js", () => ({
   validatePathComponent: vi.fn(),
 }));
 
 // Mock status utils
-vi.mock('../../utils/status.js', () => ({
+vi.mock("../../utils/status.js", () => ({
   readStatus: vi.fn(),
 }));
 
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { log } from '@obora/runtime';
-import { validatePathComponent } from '../../utils/path-utils.js';
-import { readStatus } from '../../utils/status.js';
-import { createStatusCommand, runStatus } from '../status.js';
+import { existsSync, readdirSync } from "node:fs";
 
-describe('status command', () => {
+import { validatePathComponent } from "../../utils/path-utils.js";
+import { readStatus } from "../../utils/status.js";
+import { createStatusCommand } from "../status.js";
+
+describe("status command", () => {
   let consoleLogSpy: ReturnType<typeof vi.spyOn>;
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
   const mockStatus = {
     feature: {
-      name: 'test-feature',
-      created_at: '2026-02-04T00:00:00Z',
-      workflow: 'simple',
+      name: "test-feature",
+      created_at: "2026-02-04T00:00:00Z",
+      workflow: "simple",
     },
-    status: 'pending',
+    status: "pending",
     progress: {
-      current_stage: 'planning',
+      current_stage: "planning",
       completed_stages: [],
     },
     metadata: {
-      last_updated: '2026-02-04T00:00:00Z',
-      notes: '',
+      last_updated: "2026-02-04T00:00:00Z",
+      notes: "",
     },
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
-    consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(validatePathComponent).mockImplementation(() => undefined);
   });
 
@@ -81,145 +140,147 @@ describe('status command', () => {
     consoleErrorSpy.mockRestore();
   });
 
-  describe('command creation', () => {
-    it('should create status command with correct options', () => {
+  describe("command creation", () => {
+    it("should create status command with correct options", () => {
       const cmd = createStatusCommand();
-      expect(cmd.name()).toBe('status');
-      expect(cmd.description()).toBe('Show workflow status');
+      expect(cmd.name()).toBe("status");
+      expect(cmd.description()).toBe("Show workflow status");
     });
 
     it('should have --format option with default "default"', () => {
       const cmd = createStatusCommand();
-      const formatOption = cmd.options.find((opt) => opt.long === '--format');
+      const formatOption = cmd.options.find((opt) => opt.long === "--format");
       expect(formatOption).toBeDefined();
-      expect(formatOption?.defaultValue).toBe('default');
+      expect(formatOption?.defaultValue).toBe("default");
     });
 
-    it('should have --feature option', () => {
+    it("should have --feature option", () => {
       const cmd = createStatusCommand();
-      const featureOption = cmd.options.find((opt) => opt.long === '--feature');
+      const featureOption = cmd.options.find((opt) => opt.long === "--feature");
       expect(featureOption).toBeDefined();
     });
 
-    it('should have --verbose option', () => {
+    it("should have --verbose option", () => {
       const cmd = createStatusCommand();
-      const verboseOption = cmd.options.find((opt) => opt.long === '--verbose');
+      const verboseOption = cmd.options.find((opt) => opt.long === "--verbose");
       expect(verboseOption).toBeDefined();
     });
   });
 
-  describe('status display - default format', () => {
-    it('should display status for a specific feature', async () => {
+  describe("status display - default format", () => {
+    it("should display status for a specific feature", async () => {
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readStatus).mockReturnValue(mockStatus);
 
       const cmd = createStatusCommand();
       cmd.exitOverride();
-      await cmd.parseAsync(['--feature', 'test-feature'], { from: 'user' });
+      await cmd.parseAsync(["--feature", "test-feature"], { from: "user" });
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Feature: test-feature'));
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Status:'));
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("Feature: test-feature"));
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("Status:"));
     });
 
-    it('should show current stage', async () => {
+    it("should show current stage", async () => {
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readStatus).mockReturnValue({
         ...mockStatus,
-        status: 'running',
+        status: "running",
         progress: {
-          current_stage: 'implementation',
-          completed_stages: ['planning', 'design'],
+          current_stage: "implementation",
+          completed_stages: ["planning", "design"],
         },
       });
 
       const cmd = createStatusCommand();
       cmd.exitOverride();
-      await cmd.parseAsync(['--feature', 'test-feature'], { from: 'user' });
+      await cmd.parseAsync(["--feature", "test-feature"], { from: "user" });
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Current Stage: implementation'));
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Current Stage: implementation")
+      );
     });
   });
 
-  describe('--format json', () => {
-    it('should output JSON format', async () => {
+  describe("--format json", () => {
+    it("should output JSON format", async () => {
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readStatus).mockReturnValue({
         ...mockStatus,
-        status: 'completed',
+        status: "completed",
       });
 
       const cmd = createStatusCommand();
       cmd.exitOverride();
-      await cmd.parseAsync(['--feature', 'test-feature', '--format', 'json'], {
-        from: 'user',
+      await cmd.parseAsync(["--feature", "test-feature", "--format", "json"], {
+        from: "user",
       });
 
       const logCalls = consoleLogSpy.mock.calls.flat();
-      const jsonOutput = logCalls.join(' ');
+      const jsonOutput = logCalls.join(" ");
       expect(jsonOutput).toContain('"status"');
       expect(jsonOutput).toContain('"feature"');
     });
   });
 
-  describe('--format minimal', () => {
-    it('should display minimal format', async () => {
+  describe("--format minimal", () => {
+    it("should display minimal format", async () => {
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readStatus).mockReturnValue({
         ...mockStatus,
-        status: 'planned',
+        status: "planned",
       });
 
       const cmd = createStatusCommand();
       cmd.exitOverride();
-      await cmd.parseAsync(['--feature', 'test-feature', '--format', 'minimal'], {
-        from: 'user',
+      await cmd.parseAsync(["--feature", "test-feature", "--format", "minimal"], {
+        from: "user",
       });
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('📋 planned'));
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("📋 planned"));
     });
   });
 
-  describe('--verbose option', () => {
-    it('should show step details with --verbose', async () => {
+  describe("--verbose option", () => {
+    it("should show step details with --verbose", async () => {
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readStatus).mockReturnValue({
         ...mockStatus,
-        status: 'running',
+        status: "running",
       });
 
       const cmd = createStatusCommand();
       cmd.exitOverride();
-      await cmd.parseAsync(['--feature', 'test-feature', '--verbose'], { from: 'user' });
+      await cmd.parseAsync(["--feature", "test-feature", "--verbose"], { from: "user" });
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Steps:'));
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("Steps:"));
     });
   });
 
-  describe('all features status', () => {
-    it('should display all features when no feature specified', async () => {
+  describe("all features status", () => {
+    it("should display all features when no feature specified", async () => {
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readdirSync).mockReturnValue([
-        { name: 'feature1', isDirectory: () => true },
-        { name: 'feature2', isDirectory: () => true },
-      ] as any);
+        { name: "feature1", isDirectory: () => true },
+        { name: "feature2", isDirectory: () => true },
+      ] as unknown);
       vi.mocked(readStatus)
         .mockReturnValueOnce({
           ...mockStatus,
-          feature: { ...mockStatus.feature, name: 'feature1' },
+          feature: { ...mockStatus.feature, name: "feature1" },
         })
         .mockReturnValueOnce({
           ...mockStatus,
-          feature: { ...mockStatus.feature, name: 'feature2' },
-          status: 'running',
+          feature: { ...mockStatus.feature, name: "feature2" },
+          status: "running",
         });
 
       const cmd = createStatusCommand();
       cmd.exitOverride();
-      await cmd.parseAsync([], { from: 'user' });
+      await cmd.parseAsync([], { from: "user" });
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Features:'));
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('feature1'));
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('feature2'));
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("Features:"));
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("feature1"));
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("feature2"));
     });
 
     it('should show "No features found" when features directory is empty', async () => {
@@ -228,167 +289,172 @@ describe('status command', () => {
 
       const cmd = createStatusCommand();
       cmd.exitOverride();
-      await cmd.parseAsync([], { from: 'user' });
+      await cmd.parseAsync([], { from: "user" });
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('No features found'));
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("No features found"));
     });
   });
 
-  describe('error handling', () => {
-    it('should throw error when .obora does not exist', async () => {
+  describe("error handling", () => {
+    it("should throw error when .obora does not exist", async () => {
       vi.mocked(existsSync).mockReturnValue(false);
 
       const cmd = createStatusCommand();
       cmd.exitOverride();
       await expect(
-        cmd.parseAsync(['--feature', 'test-feature'], { from: 'user' })
+        cmd.parseAsync(["--feature", "test-feature"], { from: "user" })
       ).rejects.toThrow();
     });
 
-    it('should throw error when feature not found', async () => {
+    it("should throw error when feature not found", async () => {
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readStatus).mockReturnValue(null);
 
       const cmd = createStatusCommand();
       cmd.exitOverride();
       await expect(
-        cmd.parseAsync(['--feature', 'nonexistent-feature'], { from: 'user' })
+        cmd.parseAsync(["--feature", "nonexistent-feature"], { from: "user" })
       ).rejects.toThrow();
     });
 
-    it('should throw error when features directory does not exist', async () => {
-      vi.mocked(existsSync)
-        .mockImplementation((path) => {
-          const strPath = String(path);
-          return strPath.includes('.obora') && !strPath.includes('features');
-        });
+    it("should throw error when features directory does not exist", async () => {
+      vi.mocked(existsSync).mockImplementation((path) => {
+        const strPath = String(path);
+        return strPath.includes(".obora") && !strPath.includes("features");
+      });
 
       const cmd = createStatusCommand();
       cmd.exitOverride();
-      await expect(cmd.parseAsync([], { from: 'user' })).rejects.toThrow();
+      await expect(cmd.parseAsync([], { from: "user" })).rejects.toThrow();
     });
   });
 
-  describe('--diagnose option', () => {
-    it('should have --diagnose option', () => {
+  describe("--diagnose option", () => {
+    it("should have --diagnose option", () => {
       const cmd = createStatusCommand();
-      const diagnoseOption = cmd.options.find((opt) => opt.long === '--diagnose');
+      const diagnoseOption = cmd.options.find((opt) => opt.long === "--diagnose");
       expect(diagnoseOption).toBeDefined();
     });
 
-    it('should show all diagnosis guides without feature', async () => {
+    it("should show all diagnosis guides without feature", async () => {
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readdirSync).mockReturnValue([]);
 
       const cmd = createStatusCommand();
       cmd.exitOverride();
-      await cmd.parseAsync(['--diagnose'], { from: 'user' });
+      await cmd.parseAsync(["--diagnose"], { from: "user" });
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Available diagnosis guides'));
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Available diagnosis guides")
+      );
     });
 
-    it('should show diagnosis for failed feature', async () => {
+    it("should show diagnosis for failed feature", async () => {
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readStatus).mockReturnValue({
         ...mockStatus,
-        status: 'failed',
+        status: "failed",
       });
 
       const cmd = createStatusCommand();
       cmd.exitOverride();
-      await cmd.parseAsync(['--feature', 'test-feature', '--diagnose'], { from: 'user' });
+      await cmd.parseAsync(["--feature", "test-feature", "--diagnose"], { from: "user" });
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Diagnosis guides for failed feature'));
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Diagnosis guides for failed feature")
+      );
     });
 
-    it('should show specific diagnosis when last_error_code is present', async () => {
+    it("should show specific diagnosis when last_error_code is present", async () => {
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readStatus).mockReturnValue({
         ...mockStatus,
-        status: 'failed',
-        metadata: { ...mockStatus.metadata, last_error_code: 'E4005' },
+        status: "failed",
+        metadata: { ...mockStatus.metadata, last_error_code: "E4005" },
       });
 
       const cmd = createStatusCommand();
       cmd.exitOverride();
-      await cmd.parseAsync(['--feature', 'test-feature', '--diagnose'], { from: 'user' });
+      await cmd.parseAsync(["--feature", "test-feature", "--diagnose"], { from: "user" });
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Diagnosis for failed feature'));
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('E4005'));
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Diagnosis for failed feature")
+      );
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("E4005"));
     });
 
-    it('should show not-failed message for non-failed feature', async () => {
+    it("should show not-failed message for non-failed feature", async () => {
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readStatus).mockReturnValue({
         ...mockStatus,
-        status: 'running',
+        status: "running",
       });
 
       const cmd = createStatusCommand();
       cmd.exitOverride();
-      await cmd.parseAsync(['--feature', 'test-feature', '--diagnose'], { from: 'user' });
+      await cmd.parseAsync(["--feature", "test-feature", "--diagnose"], { from: "user" });
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('not in failed state'));
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("not in failed state"));
     });
   });
 
-  describe('path validation', () => {
-    it('should call validatePathComponent for feature name', async () => {
+  describe("path validation", () => {
+    it("should call validatePathComponent for feature name", async () => {
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readStatus).mockReturnValue(mockStatus);
 
       const cmd = createStatusCommand();
       cmd.exitOverride();
-      await cmd.parseAsync(['--feature', 'test-feature'], { from: 'user' });
+      await cmd.parseAsync(["--feature", "test-feature"], { from: "user" });
 
-      expect(validatePathComponent).toHaveBeenCalledWith('test-feature');
+      expect(validatePathComponent).toHaveBeenCalledWith("test-feature");
     });
   });
 
-  describe('status formatting', () => {
-    it('should format pending status correctly', async () => {
+  describe("status formatting", () => {
+    it("should format pending status correctly", async () => {
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readStatus).mockReturnValue({
         ...mockStatus,
-        status: 'pending',
+        status: "pending",
       });
 
       const cmd = createStatusCommand();
       cmd.exitOverride();
-      await cmd.parseAsync(['--feature', 'test-feature'], { from: 'user' });
+      await cmd.parseAsync(["--feature", "test-feature"], { from: "user" });
 
       const logCalls = consoleLogSpy.mock.calls.flat();
-      expect(logCalls.join(' ')).toContain('⏳');
+      expect(logCalls.join(" ")).toContain("⏳");
     });
 
-    it('should format running status correctly', async () => {
+    it("should format running status correctly", async () => {
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readStatus).mockReturnValue({
         ...mockStatus,
-        status: 'running',
+        status: "running",
       });
 
       const cmd = createStatusCommand();
       cmd.exitOverride();
-      await cmd.parseAsync(['--feature', 'test-feature'], { from: 'user' });
+      await cmd.parseAsync(["--feature", "test-feature"], { from: "user" });
 
       const logCalls = consoleLogSpy.mock.calls.flat();
-      expect(logCalls.join(' ')).toContain('🔄');
+      expect(logCalls.join(" ")).toContain("🔄");
     });
 
-    it('should format completed status correctly', async () => {
+    it("should format completed status correctly", async () => {
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readStatus).mockReturnValue({
         ...mockStatus,
-        status: 'completed',
+        status: "completed",
       });
 
       const cmd = createStatusCommand();
       cmd.exitOverride();
-      await cmd.parseAsync(['--feature', 'test-feature'], { from: 'user' });
+      await cmd.parseAsync(["--feature", "test-feature"], { from: "user" });
 
       const logCalls = consoleLogSpy.mock.calls.flat();
-      expect(logCalls.join(' ')).toContain('✅');
+      expect(logCalls.join(" ")).toContain("✅");
     });
   });
 });

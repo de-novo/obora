@@ -1,11 +1,10 @@
-import { Command } from "commander";
-
 import {
   FileAuthManager,
   maskProviderAuth,
   type AuthType,
   type ProviderAuth,
 } from "@obora-kit/adapters";
+import { Command } from "commander";
 
 interface AddOptions {
   type?: AuthType;

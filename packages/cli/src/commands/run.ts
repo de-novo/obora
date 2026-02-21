@@ -1,13 +1,18 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 
+import {
+  detectLLMConfigFromEnv,
+  loadConfig,
+  OboraRuntime,
+  resolveLLMConfig,
+  Workflow,
+} from "@obora/sdk";
 import { Command } from "commander";
 
-import { detectLLMConfigFromEnv, loadConfig, OboraRuntime, resolveLLMConfig, Workflow } from "@obora/sdk";
-
 import { CLIError } from "../utils/cli-error.js";
-import { ExitCode } from "../utils/exit-codes.js";
 import { handleCommandAction } from "../utils/error-handler.js";
+import { ExitCode } from "../utils/exit-codes.js";
 import { formatter } from "../utils/formatter.js";
 import { getGlobalOpts } from "../utils/global-opts.js";
 
@@ -75,13 +80,20 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
     try {
       input = JSON.parse(options.input as string);
     } catch {
-      throw new CLIError("Invalid JSON input. Please provide a valid JSON string to --input.", ExitCode.VALIDATION_ERROR);
+      throw new CLIError(
+        "Invalid JSON input. Please provide a valid JSON string to --input.",
+        ExitCode.VALIDATION_ERROR
+      );
     }
   }
 
   if (options.dryRun) {
     if (isJsonOutput(options)) {
-      formatter.json({ workflow: workflowName, validated: true, elapsedMs: Date.now() - startedAt });
+      formatter.json({
+        workflow: workflowName,
+        validated: true,
+        elapsedMs: Date.now() - startedAt,
+      });
     } else if (!isQuietOutput(options)) {
       formatter.success(`Workflow "${workflowName}" validated successfully.`);
       if (isVerboseOutput(options)) {
@@ -112,12 +124,14 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
 
   if (isVerboseOutput(options) && !isJsonOutput(options)) {
     runtime.on("step_end", (event) => {
-      const data = event.data as { stepName?: string; status?: string; durationMs?: number } | undefined;
+      const data = event.data as
+        | { stepName?: string; status?: string; durationMs?: number }
+        | undefined;
       if (data?.stepName && !isQuietOutput(options)) {
         formatter.step(
           `step_end: ${data.stepName}${data.status ? ` (${data.status})` : ""}${
             typeof data.durationMs === "number" ? ` - ${data.durationMs}ms` : ""
-          }`,
+          }`
         );
       }
     });
@@ -143,7 +157,10 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
 
   if (options.outputDir && typeof options.outputDir === "string") {
     await mkdir(options.outputDir, { recursive: true });
-    const filePath = join(options.outputDir, `${basename(workflowName)}-${handle.executionId}.json`);
+    const filePath = join(
+      options.outputDir,
+      `${basename(workflowName)}-${handle.executionId}.json`
+    );
     await writeFile(filePath, JSON.stringify(result, null, 2), "utf-8");
     if (isVerboseOutput(options) && !isQuietOutput(options) && !isJsonOutput(options)) {
       formatter.info(`Saved outputs to ${filePath}`);
@@ -180,8 +197,11 @@ export function createRunCommand(): Command {
     .option("--timeout <ms>", "Execution timeout in milliseconds", parseInt)
     .action(async function (this: Command, workflow, options) {
       const mergedOptions = { ...getGlobalOpts(this), ...options };
-      await handleCommandAction(async () => {
-        await runRun(workflow, mergedOptions);
-      }, { verbose: Boolean(mergedOptions.verbose) });
+      await handleCommandAction(
+        async () => {
+          await runRun(workflow, mergedOptions);
+        },
+        { verbose: Boolean(mergedOptions.verbose) }
+      );
     });
 }

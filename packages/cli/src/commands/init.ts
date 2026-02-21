@@ -15,10 +15,11 @@ function resolveTemplatePath(templateName: string): string {
 
 export async function runInit(
   projectNameOrOptions: string | Record<string, unknown>,
-  maybeOptions?: Record<string, unknown>,
+  maybeOptions?: Record<string, unknown>
 ): Promise<void> {
   const projectName = typeof projectNameOrOptions === "string" ? projectNameOrOptions : ".";
-  const options = (typeof projectNameOrOptions === "string" ? maybeOptions : projectNameOrOptions) ?? {};
+  const options =
+    (typeof projectNameOrOptions === "string" ? maybeOptions : projectNameOrOptions) ?? {};
 
   const templateName = String(options.template ?? "default");
   const templatePath = resolveTemplatePath(templateName);
@@ -86,8 +87,11 @@ export function createInitCommand(): Command {
     .option("-y, --yes", "Skip prompts, use defaults")
     .action(async function (this: Command, projectName, options) {
       const mergedOptions = { ...getGlobalOpts(this), ...options };
-      await handleCommandAction(async () => {
-        await runInit(projectName, mergedOptions);
-      }, { verbose: Boolean(mergedOptions.verbose) });
+      await handleCommandAction(
+        async () => {
+          await runInit(projectName, mergedOptions);
+        },
+        { verbose: Boolean(mergedOptions.verbose) }
+      );
     });
 }

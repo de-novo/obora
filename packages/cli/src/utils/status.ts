@@ -41,7 +41,7 @@ export function readStatus(featurePath: string): StatusFile | null {
 
   try {
     const content = readFileSync(statusPath, "utf-8");
-    const parsed = yaml.parse(content) as Record<string, any>;
+    const parsed = yaml.parse(content) as Record<string, unknown>;
 
     return {
       feature: {
@@ -62,7 +62,7 @@ export function readStatus(featurePath: string): StatusFile | null {
         last_error_code: parsed.metadata?.last_error_code || undefined,
       },
     };
-  } catch (error) {
+  } catch {
     // If YAML parsing fails, return null
     return null;
   }

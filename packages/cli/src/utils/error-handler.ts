@@ -14,7 +14,7 @@ function isVerboseEnabled(verbose?: boolean): boolean {
 
 export async function handleCommandAction(
   action: () => Promise<void>,
-  options?: { verbose?: boolean },
+  options?: { verbose?: boolean }
 ): Promise<void> {
   try {
     await action();

@@ -11,10 +11,11 @@
  * @module @obora/cli/runtime/context-builder
  */
 
-import type { ChatMessage } from "@obora-kit/adapters";
-import type { AgentContext, Task } from "@obora/runtime";
-import { Blackboard } from "./blackboard.js";
+import type { AgentContext } from "@obora/runtime";
 import type { Step, Workflow } from "@obora/runtime";
+import type { ChatMessage } from "@obora-kit/adapters";
+
+import { Blackboard } from "./blackboard.js";
 import type { StepResult } from "./step-executor.js";
 import { stepToTask } from "./step-executor.js";
 import type { StepErrorMetadata } from "./types.js";
@@ -73,7 +74,7 @@ export function setClock(clock: Clock | null): void {
 export function createWorkflowBlackboard(
   sessionId: string,
   workflow: Workflow,
-  featureName: string,
+  featureName: string
 ): Blackboard {
   const meta: WorkflowMeta = {
     workflowName: workflow.name,
@@ -95,17 +96,21 @@ export function createWorkflowBlackboard(
   // Compatibility shim for agents expecting board.write().
   // Deprecated no-op to avoid crashing legacy agents while preserving
   // runtime single-writer policy via recordStepResult/recordStepError.
-  Object.defineProperty(board as unknown as { write?: (path: string, value: unknown) => void }, "write", {
-    value: (path: string, _value: unknown) => {
-      console.warn(
-        `[Blackboard] Deprecated: direct write("${path}") is a no-op. Use recordStepResult/recordStepError.`,
-      );
-      // no-op: single-writer policy — mutation only via recordStepResult/recordStepError
-    },
-    configurable: false,
-    enumerable: false,
-    writable: false,
-  });
+  Object.defineProperty(
+    board as unknown as { write?: (path: string, value: unknown) => void },
+    "write",
+    {
+      value: (path: string, _value: unknown) => {
+        console.warn(
+          `[Blackboard] Deprecated: direct write("${path}") is a no-op. Use recordStepResult/recordStepError.`
+        );
+        // no-op: single-writer policy — mutation only via recordStepResult/recordStepError
+      },
+      configurable: false,
+      enumerable: false,
+      writable: false,
+    }
+  );
 
   return board;
 }
@@ -126,7 +131,7 @@ export function buildAgentContext(
   sessionId: string,
   board: Blackboard | AgentContext["board"],
   step: Step,
-  history: ChatMessage[] = [],
+  history: ChatMessage[] = []
 ): AgentContext {
   const task = stepToTask(step);
 
@@ -149,7 +154,7 @@ export function buildAgentContext(
 export function recordStepResult(
   board: Blackboard | AgentContext["board"],
   stepName: string,
-  result: StepResult,
+  result: StepResult
 ): void {
   const record: StepResultRecord = {
     success: result.success,
@@ -170,7 +175,7 @@ export function recordStepResult(
 export function recordStepError(
   board: Blackboard | AgentContext["board"],
   stepName: string,
-  result: StepResult,
+  result: StepResult
 ): void {
   const record: StepResultRecord = {
     success: false,
@@ -201,12 +206,11 @@ export function recordStepError(
  */
 export function readStepResult(
   board: Blackboard | AgentContext["board"],
-  stepName: string,
+  stepName: string
 ): StepResultRecord | null {
-  const value = board.read<StepResultRecord | undefined>(
-    `state.context.steps.${stepName}`,
-    { strict: false },
-  );
+  const value = board.read<StepResultRecord | undefined>(`state.context.steps.${stepName}`, {
+    strict: false,
+  });
   return value ?? null;
 }
 
@@ -228,10 +232,7 @@ export const MAX_HISTORY_LENGTH = 200;
  * **Note:** Mutates the input array in-place for performance. Callers
  * sharing the array reference should be aware of this contract.
  */
-export function appendHistory(
-  history: ChatMessage[],
-  message: ChatMessage,
-): void {
+export function appendHistory(history: ChatMessage[], message: ChatMessage): void {
   history.push(message);
   if (history.length > MAX_HISTORY_LENGTH) {
     // Remove oldest entries to stay within budget

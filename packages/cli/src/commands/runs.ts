@@ -24,7 +24,9 @@ async function createRuntime() {
       enabled: persistence?.enabled ?? true,
       adapter: (persistence?.adapter as "sqlite" | "custom") ?? "sqlite",
       sqlite: { path: persistence?.sqlite?.path ?? "./data/obora.db" },
-      ...(persistence?.custom ? { custom: persistence.custom as { instance: import("@obora/runtime").StorageAdapter } } : {}),
+      ...(persistence?.custom
+        ? { custom: persistence.custom as { instance: import("@obora/runtime").StorageAdapter } }
+        : {}),
     },
   });
 }
@@ -85,7 +87,13 @@ export function createRunsCommand(): Command {
       const costSummary = opts.cost ? await runtime.getRunCostSummary(runId) : undefined;
 
       if (opts.json) {
-        console.log(JSON.stringify({ run, steps, artifacts, ...(costSummary ? { costSummary } : {}) }, null, 2));
+        console.log(
+          JSON.stringify(
+            { run, steps, artifacts, ...(costSummary ? { costSummary } : {}) },
+            null,
+            2
+          )
+        );
         return;
       }
 
@@ -121,7 +129,9 @@ export function createRunsCommand(): Command {
         if (costSummary.byStep.length > 0) {
           console.log("  By Step:");
           for (const item of costSummary.byStep) {
-            console.log(`    - ${item.stepName}: ${item.tokens} tokens, $${item.costUsd.toFixed(6)}`);
+            console.log(
+              `    - ${item.stepName}: ${item.tokens} tokens, $${item.costUsd.toFixed(6)}`
+            );
           }
         }
         if (costSummary.byModel.length > 0) {

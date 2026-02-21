@@ -2,23 +2,19 @@
  * StepExecutor — bridges workflow Step to BaseAgent.execute()
  */
 
+import { OboraError, type ErrorCode } from "@obora/runtime";
 import type { Step } from "@obora/runtime";
+import type { BaseAgent, Task, TaskResult, AgentContext } from "@obora/runtime";
 import {
   type AgentConfig,
   RetryExhaustedError,
   SkillLoader,
   SkillRegistry,
 } from "@obora-kit/adapters";
-import { OboraError, type ErrorCode } from "@obora/runtime";
-import type {
-  BaseAgent,
-  Task,
-  TaskResult,
-  AgentContext,
-} from "@obora/runtime";
+
+import { calculateDelay, waitWithAbort } from "./retry-policy.js";
 import type { StepErrorMetadata } from "./types.js";
 import { parseDuration } from "./utils.js";
-import { calculateDelay, waitWithAbort } from "./retry-policy.js";
 
 export interface StepResult {
   success: boolean;
@@ -30,7 +26,11 @@ export interface StepResult {
 
 export interface AgentResolver {
   resolve(agentName: string): BaseAgent | Promise<BaseAgent>;
-  resolve(query: { agent?: string; type?: string; config?: AgentConfig }): BaseAgent | Promise<BaseAgent>;
+  resolve(query: {
+    agent?: string;
+    type?: string;
+    config?: AgentConfig;
+  }): BaseAgent | Promise<BaseAgent>;
 }
 
 export { parseDuration } from "./utils.js";
@@ -75,13 +75,13 @@ function buildStepErrorMetadata(error: Error, diagnosisCode: ErrorCode): StepErr
       lastError?: { lastErrorCode?: string };
     };
 
-    const lastErrorCode =
-      retryError.getLastErrorCode?.() ?? retryError.lastError?.lastErrorCode;
+    const lastErrorCode = retryError.getLastErrorCode?.() ?? retryError.lastError?.lastErrorCode;
     if (lastErrorCode?.startsWith("E4")) {
       return lastErrorCode as ErrorCode;
     }
 
-    const rootCause = retryError.getRootCause?.() ?? retryError.originalError ?? retryError.lastError;
+    const rootCause =
+      retryError.getRootCause?.() ?? retryError.originalError ?? retryError.lastError;
     return mapErrorToDiagnosis(rootCause);
   })();
 
@@ -148,7 +148,7 @@ async function executeOnce(
   context: AgentContext,
   timeoutMs: number,
   externalSignal?: AbortSignal,
-  onEvent?: (event: unknown) => void,
+  onEvent?: (event: unknown) => void
 ): Promise<StepResult> {
   const timeoutCtrl = new AbortController();
 
@@ -178,7 +178,9 @@ async function executeOnce(
   let unsubscribe: (() => void) | undefined;
 
   try {
-    const subscribable = agent as BaseAgent & { subscribe?: (listener: (event: unknown) => void) => () => void };
+    const subscribable = agent as BaseAgent & {
+      subscribe?: (listener: (event: unknown) => void) => () => void;
+    };
     if (typeof subscribable.subscribe === "function") {
       unsubscribe = subscribable.subscribe((event) => {
         onEvent?.(event);
@@ -211,9 +213,7 @@ async function executeOnce(
         output: formatOutput(result),
         error: result.error?.message,
         diagnosisCode,
-        ...(result.error
-          ? { errorMeta: buildStepErrorMetadata(result.error, diagnosisCode) }
-          : {}),
+        ...(result.error ? { errorMeta: buildStepErrorMetadata(result.error, diagnosisCode) } : {}),
       };
     }
 
@@ -258,7 +258,7 @@ export async function executeStep(
   step: Step,
   resolver: AgentResolver,
   context: AgentContext,
-  options?: ExecuteStepOptions,
+  options?: ExecuteStepOptions
 ): Promise<StepResult> {
   let agent: BaseAgent;
   try {
@@ -286,7 +286,10 @@ export async function executeStep(
     });
 
     const configurable = agent as BaseAgent & {
-      configureRuntimeExtensions?: (input: { tools?: unknown[]; systemPromptAppend?: string }) => void;
+      configureRuntimeExtensions?: (input: {
+        tools?: unknown[];
+        systemPromptAppend?: string;
+      }) => void;
     };
 
     configurable.configureRuntimeExtensions?.({
@@ -311,7 +314,14 @@ export async function executeStep(
   try {
     const maxAttempts = Math.max(1, (options?.retryAttempts ?? 0) + 1);
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      const result = await executeOnce(step, agent, context, timeoutMs, options?.signal, options?.onEvent);
+      const result = await executeOnce(
+        step,
+        agent,
+        context,
+        timeoutMs,
+        options?.signal,
+        options?.onEvent
+      );
       if (result.success) return result;
 
       const retryable = result.diagnosisCode === "E4001";

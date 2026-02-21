@@ -1,10 +1,9 @@
+import { OboraError, OboraErrorCode } from "@obora/sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { OboraError, OboraErrorCode } from "@obora/sdk";
-
 import { CLIError } from "../cli-error.js";
-import { ExitCode } from "../exit-codes.js";
 import { handleCommandAction } from "../error-handler.js";
+import { ExitCode } from "../exit-codes.js";
 import { formatter } from "../formatter.js";
 
 describe("error handler and formatter", () => {
@@ -38,7 +37,9 @@ describe("error handler and formatter", () => {
     });
 
     expect(process.exitCode).toBe(ExitCode.GATE_TIMEOUT);
-    expect(errorSpy).toHaveBeenCalledWith(`❌ [${OboraErrorCode.POLICY_GATE_TIMEOUT}] gate timed out`);
+    expect(errorSpy).toHaveBeenCalledWith(
+      `❌ [${OboraErrorCode.POLICY_GATE_TIMEOUT}] gate timed out`
+    );
   });
 
   it("sets CLI_ERROR for unknown error", async () => {

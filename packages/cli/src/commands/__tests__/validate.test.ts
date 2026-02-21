@@ -1,33 +1,36 @@
+/* eslint-disable import/order */
 /**
  * validate command tests
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // Mock node:fs module
-vi.mock('node:fs', () => ({
+vi.mock("node:fs", () => ({
   existsSync: vi.fn(),
   readFileSync: vi.fn(),
   readdirSync: vi.fn(),
 }));
 
 // Mock @obora/runtime
-vi.mock('@obora/runtime', () => ({
+vi.mock("@obora/runtime", () => ({
   parseAndValidate: vi.fn(),
 }));
 
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { parseAndValidate } from '@obora/runtime';
-import { validateCommand } from '../validate.js';
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 
-describe('validate command', () => {
+import { parseAndValidate } from "@obora/runtime";
+
+import { validateCommand } from "../validate.js";
+
+describe("validate command", () => {
   let consoleLogSpy: ReturnType<typeof vi.spyOn>;
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -35,49 +38,49 @@ describe('validate command', () => {
     consoleErrorSpy.mockRestore();
   });
 
-  describe('command creation', () => {
-    it('should create validate command with correct options', () => {
+  describe("command creation", () => {
+    it("should create validate command with correct options", () => {
       const cmd = validateCommand();
-      expect(cmd.name()).toBe('validate');
-      expect(cmd.description()).toBe('Validate workflow YAML files');
+      expect(cmd.name()).toBe("validate");
+      expect(cmd.description()).toBe("Validate workflow YAML files");
     });
 
-    it('should have --all option', () => {
+    it("should have --all option", () => {
       const cmd = validateCommand();
-      const allOption = cmd.options.find((opt) => opt.long === '--all');
+      const allOption = cmd.options.find((opt) => opt.long === "--all");
       expect(allOption).toBeDefined();
     });
 
-    it('should have --file option', () => {
+    it("should have --file option", () => {
       const cmd = validateCommand();
-      const fileOption = cmd.options.find((opt) => opt.long === '--file');
+      const fileOption = cmd.options.find((opt) => opt.long === "--file");
       expect(fileOption).toBeDefined();
     });
 
-    it('should have --strict option', () => {
+    it("should have --strict option", () => {
       const cmd = validateCommand();
-      const strictOption = cmd.options.find((opt) => opt.long === '--strict');
+      const strictOption = cmd.options.find((opt) => opt.long === "--strict");
       expect(strictOption).toBeDefined();
     });
 
     it('should have --format option with default "default"', () => {
       const cmd = validateCommand();
-      const formatOption = cmd.options.find((opt) => opt.long === '--format');
+      const formatOption = cmd.options.find((opt) => opt.long === "--format");
       expect(formatOption).toBeDefined();
-      expect(formatOption?.defaultValue).toBe('default');
+      expect(formatOption?.defaultValue).toBe("default");
     });
 
-    it('should have --verbose option', () => {
+    it("should have --verbose option", () => {
       const cmd = validateCommand();
-      const verboseOption = cmd.options.find((opt) => opt.long === '--verbose');
+      const verboseOption = cmd.options.find((opt) => opt.long === "--verbose");
       expect(verboseOption).toBeDefined();
     });
   });
 
-  describe('file validation', () => {
-    it('should validate a specific file successfully', async () => {
+  describe("file validation", () => {
+    it("should validate a specific file successfully", async () => {
       vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readFileSync).mockReturnValue('name: test\nsteps: []');
+      vi.mocked(readFileSync).mockReturnValue("name: test\nsteps: []");
       vi.mocked(parseAndValidate).mockReturnValue({
         isValid: true,
         errors: [],
@@ -86,33 +89,33 @@ describe('validate command', () => {
 
       const cmd = validateCommand();
       cmd.exitOverride();
-      await cmd.parseAsync(['--file', 'workflow.yaml'], { from: 'user' });
+      await cmd.parseAsync(["--file", "workflow.yaml"], { from: "user" });
 
-      expect(parseAndValidate).toHaveBeenCalledWith('name: test\nsteps: []');
+      expect(parseAndValidate).toHaveBeenCalledWith("name: test\nsteps: []");
     });
 
-    it('should throw error for non-existent file', async () => {
+    it("should throw error for non-existent file", async () => {
       vi.mocked(existsSync).mockReturnValue(false);
 
       const cmd = validateCommand();
       cmd.exitOverride();
-      
+
       await expect(
-        cmd.parseAsync(['--file', 'nonexistent.yaml'], { from: 'user' })
+        cmd.parseAsync(["--file", "nonexistent.yaml"], { from: "user" })
       ).rejects.toThrow();
     });
 
-    it('should show validation errors', async () => {
+    it("should show validation errors", async () => {
       vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readFileSync).mockReturnValue('name: test\nsteps: []');
+      vi.mocked(readFileSync).mockReturnValue("name: test\nsteps: []");
       vi.mocked(parseAndValidate).mockReturnValue({
         isValid: false,
         errors: [
           {
-            code: 'MISSING_FIELD',
-            message: 'Missing required field: version',
-            path: '/workflow',
-            suggestion: 'Add version field',
+            code: "MISSING_FIELD",
+            message: "Missing required field: version",
+            path: "/workflow",
+            suggestion: "Add version field",
           },
         ],
         warnings: [],
@@ -120,23 +123,21 @@ describe('validate command', () => {
 
       const cmd = validateCommand();
       cmd.exitOverride();
-      
-      await expect(
-        cmd.parseAsync(['--file', 'workflow.yaml'], { from: 'user' })
-      ).rejects.toThrow();
+
+      await expect(cmd.parseAsync(["--file", "workflow.yaml"], { from: "user" })).rejects.toThrow();
     });
 
-    it('should show validation warnings', async () => {
+    it("should show validation warnings", async () => {
       vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readFileSync).mockReturnValue('name: test\nsteps: []');
+      vi.mocked(readFileSync).mockReturnValue("name: test\nsteps: []");
       vi.mocked(parseAndValidate).mockReturnValue({
         isValid: true,
         errors: [],
         warnings: [
           {
-            code: 'DEPRECATED_FIELD',
+            code: "DEPRECATED_FIELD",
             message: 'Field "old_field" is deprecated',
-            path: '/workflow',
+            path: "/workflow",
             suggestion: 'Use "new_field" instead',
           },
         ],
@@ -144,18 +145,18 @@ describe('validate command', () => {
 
       const cmd = validateCommand();
       cmd.exitOverride();
-      await cmd.parseAsync(['--file', 'workflow.yaml'], { from: 'user' });
+      await cmd.parseAsync(["--file", "workflow.yaml"], { from: "user" });
 
       // Check warning was printed
-      const calls = consoleLogSpy.mock.calls.flat().join(' ');
-      expect(calls).toContain('warning');
+      const calls = consoleLogSpy.mock.calls.flat().join(" ");
+      expect(calls).toContain("warning");
     });
   });
 
-  describe('--format json', () => {
-    it('should output JSON format when specified', async () => {
+  describe("--format json", () => {
+    it("should output JSON format when specified", async () => {
       vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readFileSync).mockReturnValue('name: test\nsteps: []');
+      vi.mocked(readFileSync).mockReturnValue("name: test\nsteps: []");
       vi.mocked(parseAndValidate).mockReturnValue({
         isValid: true,
         errors: [],
@@ -164,24 +165,24 @@ describe('validate command', () => {
 
       const cmd = validateCommand();
       cmd.exitOverride();
-      await cmd.parseAsync(['--file', 'workflow.yaml', '--format', 'json'], { from: 'user' });
+      await cmd.parseAsync(["--file", "workflow.yaml", "--format", "json"], { from: "user" });
 
       const logCalls = consoleLogSpy.mock.calls.flat();
-      const jsonOutput = logCalls.join(' ');
+      const jsonOutput = logCalls.join(" ");
       expect(jsonOutput).toContain('"valid"');
-      expect(jsonOutput).toContain('true');
+      expect(jsonOutput).toContain("true");
     });
 
-    it('should include errors in JSON output', async () => {
+    it("should include errors in JSON output", async () => {
       vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readFileSync).mockReturnValue('name: test\nsteps: []');
+      vi.mocked(readFileSync).mockReturnValue("name: test\nsteps: []");
       vi.mocked(parseAndValidate).mockReturnValue({
         isValid: false,
         errors: [
           {
-            code: 'ERR001',
-            message: 'Invalid field',
-            path: '',
+            code: "ERR001",
+            message: "Invalid field",
+            path: "",
           },
         ],
         warnings: [],
@@ -189,49 +190,49 @@ describe('validate command', () => {
 
       const cmd = validateCommand();
       cmd.exitOverride();
-      
+
       // JSON format should be printed before throwing
       try {
-        await cmd.parseAsync(['--file', 'workflow.yaml', '--format', 'json'], { from: 'user' });
-      } catch (e) {
+        await cmd.parseAsync(["--file", "workflow.yaml", "--format", "json"], { from: "user" });
+      } catch {
         // Expected to throw
       }
 
       const logCalls = consoleLogSpy.mock.calls.flat();
-      const jsonOutput = logCalls.join(' ');
+      const jsonOutput = logCalls.join(" ");
       expect(jsonOutput).toContain('"valid"');
-      expect(jsonOutput).toContain('false');
+      expect(jsonOutput).toContain("false");
       expect(jsonOutput).toContain('"errors"');
     });
   });
 
-  describe('--strict mode', () => {
-    it('should treat warnings as errors in strict mode', async () => {
+  describe("--strict mode", () => {
+    it("should treat warnings as errors in strict mode", async () => {
       vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readFileSync).mockReturnValue('name: test\nsteps: []');
+      vi.mocked(readFileSync).mockReturnValue("name: test\nsteps: []");
       vi.mocked(parseAndValidate).mockReturnValue({
         isValid: true,
         errors: [],
         warnings: [
           {
-            code: 'WARN001',
-            message: 'Test warning',
-            path: '',
+            code: "WARN001",
+            message: "Test warning",
+            path: "",
           },
         ],
       });
 
       const cmd = validateCommand();
       cmd.exitOverride();
-      
+
       await expect(
-        cmd.parseAsync(['--file', 'workflow.yaml', '--strict'], { from: 'user' })
+        cmd.parseAsync(["--file", "workflow.yaml", "--strict"], { from: "user" })
       ).rejects.toThrow();
     });
 
-    it('should pass with no warnings in strict mode', async () => {
+    it("should pass with no warnings in strict mode", async () => {
       vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readFileSync).mockReturnValue('name: test\nsteps: []');
+      vi.mocked(readFileSync).mockReturnValue("name: test\nsteps: []");
       vi.mocked(parseAndValidate).mockReturnValue({
         isValid: true,
         errors: [],
@@ -240,21 +241,21 @@ describe('validate command', () => {
 
       const cmd = validateCommand();
       cmd.exitOverride();
-      
+
       await expect(
-        cmd.parseAsync(['--file', 'workflow.yaml', '--strict'], { from: 'user' })
+        cmd.parseAsync(["--file", "workflow.yaml", "--strict"], { from: "user" })
       ).resolves.not.toThrow();
     });
   });
 
-  describe('--all option', () => {
-    it('should validate all workflow files in directories', async () => {
+  describe("--all option", () => {
+    it("should validate all workflow files in directories", async () => {
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readdirSync).mockReturnValue([
-        { name: 'simple.yaml', isDirectory: () => false },
-        { name: 'standard.yaml', isDirectory: () => false },
-      ] as any);
-      vi.mocked(readFileSync).mockReturnValue('name: test\nsteps: []');
+        { name: "simple.yaml", isDirectory: () => false },
+        { name: "standard.yaml", isDirectory: () => false },
+      ] as unknown);
+      vi.mocked(readFileSync).mockReturnValue("name: test\nsteps: []");
       vi.mocked(parseAndValidate).mockReturnValue({
         isValid: true,
         errors: [],
@@ -263,66 +264,66 @@ describe('validate command', () => {
 
       const cmd = validateCommand();
       cmd.exitOverride();
-      await cmd.parseAsync(['--all'], { from: 'user' });
+      await cmd.parseAsync(["--all"], { from: "user" });
 
       expect(parseAndValidate).toHaveBeenCalled();
     });
 
-    it('should show warning when no workflow files found', async () => {
+    it("should show warning when no workflow files found", async () => {
       vi.mocked(existsSync).mockReturnValue(false);
       vi.mocked(readdirSync).mockReturnValue([]);
 
       const cmd = validateCommand();
       cmd.exitOverride();
-      await cmd.parseAsync(['--all'], { from: 'user' });
+      await cmd.parseAsync(["--all"], { from: "user" });
 
       expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('No workflow files found')
+        expect.stringContaining("No workflow files found")
       );
     });
   });
 
-  describe('--verbose option', () => {
-    it('should show detailed output with --verbose', async () => {
+  describe("--verbose option", () => {
+    it("should show detailed output with --verbose", async () => {
       vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readFileSync).mockReturnValue('name: test\nsteps: []');
+      vi.mocked(readFileSync).mockReturnValue("name: test\nsteps: []");
       vi.mocked(parseAndValidate).mockReturnValue({
         isValid: true,
         errors: [],
         warnings: [
           {
-            code: 'WARN001',
-            message: 'Test warning',
-            path: '',
+            code: "WARN001",
+            message: "Test warning",
+            path: "",
           },
         ],
       });
 
       const cmd = validateCommand();
       cmd.exitOverride();
-      await cmd.parseAsync(['--file', 'workflow.yaml', '--verbose'], { from: 'user' });
+      await cmd.parseAsync(["--file", "workflow.yaml", "--verbose"], { from: "user" });
 
       expect(consoleLogSpy).toHaveBeenCalled();
     });
   });
 
-  describe('path validation', () => {
-    it('should reject path traversal attempts', async () => {
+  describe("path validation", () => {
+    it("should reject path traversal attempts", async () => {
       vi.mocked(existsSync).mockReturnValue(true);
 
       const cmd = validateCommand();
       cmd.exitOverride();
-      
+
       await expect(
-        cmd.parseAsync(['--file', '../../../etc/passwd'], { from: 'user' })
+        cmd.parseAsync(["--file", "../../../etc/passwd"], { from: "user" })
       ).rejects.toThrow();
     });
   });
 
-  describe('summary output', () => {
-    it('should print summary with passed and failed counts', async () => {
+  describe("summary output", () => {
+    it("should print summary with passed and failed counts", async () => {
       vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readFileSync).mockReturnValue('name: test\nsteps: []');
+      vi.mocked(readFileSync).mockReturnValue("name: test\nsteps: []");
       vi.mocked(parseAndValidate).mockReturnValue({
         isValid: true,
         errors: [],
@@ -331,32 +332,32 @@ describe('validate command', () => {
 
       const cmd = validateCommand();
       cmd.exitOverride();
-      await cmd.parseAsync(['--file', 'workflow.yaml'], { from: 'user' });
+      await cmd.parseAsync(["--file", "workflow.yaml"], { from: "user" });
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Results:'));
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("Results:"));
     });
 
-    it('should show warning count in summary', async () => {
+    it("should show warning count in summary", async () => {
       vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readFileSync).mockReturnValue('name: test\nsteps: []');
+      vi.mocked(readFileSync).mockReturnValue("name: test\nsteps: []");
       vi.mocked(parseAndValidate).mockReturnValue({
         isValid: true,
         errors: [],
         warnings: [
           {
-            code: 'WARN001',
-            message: 'Warning',
-            path: '',
+            code: "WARN001",
+            message: "Warning",
+            path: "",
           },
         ],
       });
 
       const cmd = validateCommand();
       cmd.exitOverride();
-      await cmd.parseAsync(['--file', 'workflow.yaml'], { from: 'user' });
+      await cmd.parseAsync(["--file", "workflow.yaml"], { from: "user" });
 
-      const calls = consoleLogSpy.mock.calls.flat().join(' ');
-      expect(calls).toContain('warning');
+      const calls = consoleLogSpy.mock.calls.flat().join(" ");
+      expect(calls).toContain("warning");
     });
   });
 });

@@ -155,12 +155,7 @@ const TASKS_TEMPLATE = (name: string, date: string) => `# ${name} - 작업 목�
 - [ ] 문서 업데이트 완료
 `;
 
-const STATUS_TEMPLATE = (
-  name: string,
-  date: string,
-  workflow: string,
-  description: string
-) => {
+const STATUS_TEMPLATE = (name: string, date: string, workflow: string, description: string) => {
   const status = {
     feature: {
       name,

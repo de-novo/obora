@@ -1,3 +1,4 @@
+/* eslint-disable import/order */
 /**
  * Integration tests for bootstrapAgentResolver
  */
@@ -8,14 +9,21 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 vi.mock("@obora-kit/adapters", () => {
   const MockLLMAdapter = class {
     readonly id = "mock-llm";
-    supports() { return true; }
+    supports() {
+      return true;
+    }
     async chatCompletion() {
       return {
-        id: "m1", model: "mock", message: { role: "assistant", content: "ok" },
-        usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 }, finishReason: "stop",
+        id: "m1",
+        model: "mock",
+        message: { role: "assistant", content: "ok" },
+        usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+        finishReason: "stop",
       };
     }
-    async streamChatCompletion() { return this.chatCompletion(); }
+    async streamChatCompletion() {
+      return this.chatCompletion();
+    }
   };
 
   return {
@@ -26,8 +34,13 @@ vi.mock("@obora-kit/adapters", () => {
         resolveForStep: vi.fn(() => ({ provider: "mock", model: "mock" })),
       })),
     },
-    AgentRole: { ANALYST: "analyst", EXECUTOR: "executor", VERIFIER: "verifier", DIRECTOR: "director" },
-    createAgent: vi.fn(({ role }: any) => ({
+    AgentRole: {
+      ANALYST: "analyst",
+      EXECUTOR: "executor",
+      VERIFIER: "verifier",
+      DIRECTOR: "director",
+    },
+    createAgent: vi.fn(({ role }: { role: string }) => ({
       id: `${role}-test`,
       role,
       execute: vi.fn(async () => ({ success: true, output: "test" })),

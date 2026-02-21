@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url";
 
-import { CLIError } from "./errors.js";
 import { createCLI } from "./cli.js";
+import { CLIError } from "./errors.js";
 
 export async function main() {
   const program = createCLI();

@@ -1,9 +1,9 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 import { createCLI } from "../../cli.js";
-import { ExitCode } from "../../utils/exit-codes.js";
-import { handleCommandAction } from "../../utils/error-handler.js";
 import { CLIError } from "../../utils/cli-error.js";
+import { handleCommandAction } from "../../utils/error-handler.js";
+import { ExitCode } from "../../utils/exit-codes.js";
 import { formatter } from "../../utils/formatter.js";
 
 describe("M3-08 UX standardization", () => {
@@ -46,6 +46,6 @@ describe("M3-08 UX standardization", () => {
 
     const output = logSpy.mock.calls.map((args) => args.join(" ")).join("\n");
     expect(output).toContain('✅ Workflow "example" validated successfully.');
-    expect(output).not.toMatch(/\u001b\[[0-9;]*m/);
+    expect(output).not.toContain("\u001b[");
   });
 });

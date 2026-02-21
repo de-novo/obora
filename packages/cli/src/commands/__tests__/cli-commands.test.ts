@@ -2,15 +2,14 @@ import { mkdtemp, writeFile, readFile, access } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import * as oboraSdk from "@obora/sdk";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import * as oboraSdk from "@obora/sdk";
-
 import { createCLI } from "../../cli.js";
+import { ExitCode } from "../../utils/exit-codes.js";
+import { runInit } from "../init.js";
 import { createPolicyCommand } from "../policy.js";
 import { runRun } from "../run.js";
-import { runInit } from "../init.js";
-import { ExitCode } from "../../utils/exit-codes.js";
 
 describe("M3 CLI command IA", () => {
   const originalCwd = process.cwd();
@@ -33,7 +32,9 @@ describe("M3 CLI command IA", () => {
     const cli = createCLI();
     const names = cli.commands.map((command) => command.name());
 
-    expect(names).toEqual(expect.arrayContaining(["run", "test", "plugin", "audit", "policy", "init"]));
+    expect(names).toEqual(
+      expect.arrayContaining(["run", "test", "plugin", "audit", "policy", "init"])
+    );
   });
 
   it("has run command options", () => {
@@ -53,7 +54,7 @@ describe("M3 CLI command IA", () => {
         "--output-dir",
         "--dry-run",
         "--timeout",
-      ]),
+      ])
     );
   });
 
@@ -91,7 +92,7 @@ describe("M3 CLI command IA", () => {
 
     await writeFile(
       workflowPath,
-      `name: temp-workflow\nversion: "1.0"\nsteps:\n  - name: greet\n    agent: default\n`,
+      `name: temp-workflow\nversion: "1.0"\nsteps:\n  - name: greet\n    agent: default\n`
     );
 
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);

@@ -377,7 +377,9 @@ async function runStatus(options: StatusOptions): Promise<void> {
           }
         }
       } else {
-        console.log(`Feature '${options.feature}' is not in failed state (status: ${status?.status || "unknown"}).`);
+        console.log(
+          `Feature '${options.feature}' is not in failed state (status: ${status?.status || "unknown"}).`
+        );
       }
     } else {
       // Show all diagnosis templates

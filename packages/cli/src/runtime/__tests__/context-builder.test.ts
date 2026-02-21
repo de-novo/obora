@@ -2,7 +2,10 @@
  * ContextBuilder unit tests
  */
 
+import type { Step, Workflow } from "@obora/runtime";
+import type { ChatMessage } from "@obora-kit/adapters";
 import { describe, it, expect } from "vitest";
+
 import {
   createWorkflowBlackboard,
   buildAgentContext,
@@ -13,8 +16,6 @@ import {
   appendHistory,
   MAX_HISTORY_LENGTH,
 } from "../context-builder.js";
-import type { ChatMessage } from "@obora-kit/adapters";
-import type { Step, Workflow } from "@obora/runtime";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -28,14 +29,14 @@ const WORKFLOW: Workflow = {
     { name: "plan", agent: "analyst" },
     { name: "implement", agent: "executor", depends_on: ["plan"] },
   ],
-} as any;
+} as unknown;
 
-const STEP_PLAN: Step = { name: "plan", agent: "analyst", description: "Plan the work" } as any;
-const STEP_IMPL: Step = {
+const STEP_PLAN: Step = { name: "plan", agent: "analyst", description: "Plan the work" } as unknown;
+const _STEP_IMPL: Step = {
   name: "implement",
   agent: "executor",
   depends_on: ["plan"],
-} as any;
+} as unknown;
 
 const SESSION = "session-test-001";
 
@@ -243,11 +244,7 @@ describe("single-writer policy (structural)", () => {
     // Verify the step-executor source doesn't call board.write
     const fs = await import("node:fs");
     const path = await import("node:path");
-    const executorPath = path.join(
-      import.meta.dirname ?? ".",
-      "..",
-      "step-executor.ts",
-    );
+    const executorPath = path.join(import.meta.dirname ?? ".", "..", "step-executor.ts");
     if (fs.existsSync(executorPath)) {
       const source = fs.readFileSync(executorPath, "utf-8");
       expect(source).not.toMatch(/board\.write\s*\(/);

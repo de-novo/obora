@@ -17,7 +17,7 @@ export function createResumeCommand(): Command {
     .addOption(
       new Option("--drift-policy <policy>", "How to handle policy drift")
         .choices(["reject", "warn", "ignore"])
-        .default("warn"),
+        .default("warn")
     )
     .option("--json", "Output as JSON")
     .action(async (runId: string, opts) => {
@@ -34,7 +34,9 @@ export function createResumeCommand(): Command {
           adapter: (persistence?.adapter as "sqlite" | "custom") ?? "sqlite",
           sqlite: { path: persistence?.sqlite?.path ?? "./data/obora.db" },
           ...(persistence?.custom
-            ? { custom: persistence.custom as { instance: import("@obora/runtime").StorageAdapter } }
+            ? {
+                custom: persistence.custom as { instance: import("@obora/runtime").StorageAdapter },
+              }
             : {}),
         },
       });
@@ -68,7 +70,9 @@ export function createResumeCommand(): Command {
         }
 
         if (!workflowLoaded) {
-          console.warn(`⚠️  Workflow file not found for '${workflowName}'. Resume may fail if rerun steps are required.`);
+          console.warn(
+            `⚠️  Workflow file not found for '${workflowName}'. Resume may fail if rerun steps are required.`
+          );
         }
 
         const result = await runtime.resume(runId, {

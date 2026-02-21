@@ -8,6 +8,7 @@
  */
 
 import { OboraError } from "@obora/runtime";
+import { type BaseAgent, AgentRole, createAgent } from "@obora/runtime";
 import {
   type AgentConfig,
   createAdapter,
@@ -15,11 +16,6 @@ import {
   type LLMProvider,
   type ToolRegistry,
 } from "@obora-kit/adapters";
-import {
-  type BaseAgent,
-  AgentRole,
-  createAgent,
-} from "@obora/runtime";
 
 import type { AgentResolver } from "./step-executor.js";
 
@@ -59,11 +55,11 @@ export class AgentRegistry implements AgentResolver {
 
   resolve(agentName: string): Promise<BaseAgent>;
   resolve(query: { agent?: string; type?: string; config?: AgentConfig }): Promise<BaseAgent>;
-  async resolve(queryOrName: string | { agent?: string; type?: string; config?: AgentConfig }): Promise<BaseAgent> {
+  async resolve(
+    queryOrName: string | { agent?: string; type?: string; config?: AgentConfig }
+  ): Promise<BaseAgent> {
     const normalized =
-      typeof queryOrName === "string"
-        ? queryOrName
-        : queryOrName.agent ?? queryOrName.type;
+      typeof queryOrName === "string" ? queryOrName : (queryOrName.agent ?? queryOrName.type);
 
     if (!normalized) {
       throw new OboraError("E4003", "Agent resolution failed: missing agent/type query");
@@ -87,7 +83,9 @@ export class AgentRegistry implements AgentResolver {
       ...(resolvedConfig?.systemPrompt ? { systemPrompt: resolvedConfig.systemPrompt } : {}),
       ...(resolvedConfig?.provider ? { provider: resolvedConfig.provider } : {}),
       ...(resolvedConfig?.model ? { model: resolvedConfig.model } : {}),
-      enablePiRuntime: Boolean(resolvedConfig?.provider && resolvedConfig?.model && llm.id !== "mock-llm"),
+      enablePiRuntime: Boolean(
+        resolvedConfig?.provider && resolvedConfig?.model && llm.id !== "mock-llm"
+      ),
     });
   }
 

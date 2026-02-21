@@ -108,7 +108,7 @@ export function createKnowledgeCommand(): Command {
         }
 
         for (const entry of results) console.log(formatEntry(entry));
-      },
+      }
     );
 
   cmd

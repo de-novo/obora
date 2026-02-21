@@ -28,13 +28,12 @@
  * Scenario G: appendHistory MAX_HISTORY_LENGTH boundary trimming
  */
 
+import type { Step, Workflow, ErrorCode } from "@obora/runtime";
+import { MockLLMAdapter } from "@obora-kit/adapters";
+import type { ChatMessage } from "@obora-kit/adapters";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+
 import { AgentRegistry } from "../agent-registry.js";
-import {
-  executeStep,
-  stepToTask,
-  type AgentResolver,
-} from "../step-executor.js";
 import {
   createWorkflowBlackboard,
   buildAgentContext,
@@ -46,9 +45,7 @@ import {
   MAX_HISTORY_LENGTH,
   type StepResultRecord,
 } from "../context-builder.js";
-import { MockLLMAdapter } from "@obora-kit/adapters";
-import type { ChatMessage } from "@obora-kit/adapters";
-import type { Step, Workflow, ErrorCode } from "@obora/runtime";
+import { executeStep, type AgentResolver } from "../step-executor.js";
 
 // ---------------------------------------------------------------------------
 // Shared fixtures
@@ -228,11 +225,7 @@ describe("E2E Scenario B: failure-recovery workflow", () => {
   beforeEach(() => {
     setClock(() => FIXED_TIME);
     registry = new AgentRegistry({ llm: new MockLLMAdapter() });
-    board = createWorkflowBlackboard(
-      SESSION_ID,
-      FAILURE_WORKFLOW,
-      "failure-feature",
-    );
+    board = createWorkflowBlackboard(SESSION_ID, FAILURE_WORKFLOW, "failure-feature");
     history = [];
   });
 
@@ -368,10 +361,11 @@ describe("E2E Scenario C: timeout failure with blackboard recording", () => {
     const board = createWorkflowBlackboard(SESSION_ID, WORKFLOW, "feat");
 
     const slowResolver: AgentResolver = {
-      resolve: () => ({
-        execute: () => new Promise<never>(() => {}), // never resolves
-        role: "executor",
-      }) as any,
+      resolve: () =>
+        ({
+          execute: () => new Promise<never>(() => {}), // never resolves
+          role: "executor",
+        }) as unknown,
     };
 
     const step: Step = { name: "slow-step", agent: "executor", timeout: "1s" } as Step;

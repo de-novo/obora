@@ -81,7 +81,7 @@ async function updateStatus(featurePath: string, updates: Partial<StatusFile>): 
   const content = readFileSync(statusPath, "utf-8");
 
   try {
-    const parsed = yaml.parse(content) as Record<string, any>;
+    const parsed = yaml.parse(content) as Record<string, unknown>;
 
     if (updates.status !== undefined) {
       parsed.status = updates.status;
@@ -96,7 +96,7 @@ async function updateStatus(featurePath: string, updates: Partial<StatusFile>): 
     }
 
     await fs.writeFile(statusPath, yaml.stringify(parsed), "utf-8");
-  } catch (error) {
+  } catch {
     // If YAML parsing fails, try regex-based update as fallback
     let newContent = content;
     if (updates.status !== undefined) {
@@ -168,9 +168,9 @@ async function generatePlanWithAI(
 
   const systemPrompt =
     resolved.systemPrompt ||
-    ("You are an expert software architect and project planner. " +
+    "You are an expert software architect and project planner. " +
       "Given a feature proposal and design document, generate a detailed implementation plan " +
-      "with phases, tasks, dependencies, and estimates. Output in Markdown format.");
+      "with phases, tasks, dependencies, and estimates. Output in Markdown format.";
 
   const userPrompt = [
     `## Feature: ${context.featureName}`,
@@ -205,7 +205,12 @@ async function generatePlanWithAI(
       throw new CLIError("[E5102] LLM returned empty plan content.", 1);
     }
 
-    return normalizePlanMarkdown(generated, response.model || resolved.model, agent, context.featureName);
+    return normalizePlanMarkdown(
+      generated,
+      response.model || resolved.model,
+      agent,
+      context.featureName
+    );
   } catch (error) {
     if (error instanceof CLIError) {
       throw error;

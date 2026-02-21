@@ -1,7 +1,6 @@
+import { createDashboardServer } from "@obora/dashboard";
 import { Command } from "commander";
 import open from "open";
-
-import { createDashboardServer } from "@obora/dashboard";
 
 interface DashboardOptions {
   port?: string;

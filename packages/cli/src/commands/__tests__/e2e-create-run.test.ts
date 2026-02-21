@@ -33,21 +33,19 @@ describe.skip("CLI E2E: init -> new -> run", () => {
     delete process.env.OBORA_LLM_PROVIDER;
   });
 
-  it(
-    "creates project/feature and executes workflow without real API key",
-    async () => {
-      const featureName = "task-047-e2e";
+  it("creates project/feature and executes workflow without real API key", async () => {
+    const featureName = "task-047-e2e";
 
-      await runInit({ workflow: "simple" });
-      expect(existsSync(join(workDir, ".obora", "config.yaml"))).toBe(true);
-      expect(existsSync(join(workDir, ".obora", "workflows", "simple.yaml"))).toBe(true);
+    await runInit({ workflow: "simple" });
+    expect(existsSync(join(workDir, ".obora", "config.yaml"))).toBe(true);
+    expect(existsSync(join(workDir, ".obora", "workflows", "simple.yaml"))).toBe(true);
 
-      await runNew(featureName, { workflow: "simple" });
-      const featureDir = join(workDir, ".obora", "features", featureName);
-      expect(existsSync(join(featureDir, "proposal.md"))).toBe(true);
-      expect(existsSync(join(featureDir, "status.yaml"))).toBe(true);
+    await runNew(featureName, { workflow: "simple" });
+    const featureDir = join(workDir, ".obora", "features", featureName);
+    expect(existsSync(join(featureDir, "proposal.md"))).toBe(true);
+    expect(existsSync(join(featureDir, "status.yaml"))).toBe(true);
 
-      const e2eWorkflow = `name: simple
+    const e2eWorkflow = `name: simple
 version: "1.0"
 mode: auto
 steps:
@@ -62,21 +60,19 @@ steps:
     depends_on:
       - execute
 `;
-      await writeFile(join(workDir, ".obora", "workflows", "simple.yaml"), e2eWorkflow, "utf-8");
+    await writeFile(join(workDir, ".obora", "workflows", "simple.yaml"), e2eWorkflow, "utf-8");
 
-      await runRun(featureName, {});
+    await runRun(featureName, {});
 
-      const statusYaml = readFileSync(join(featureDir, "status.yaml"), "utf-8");
-      expect(statusYaml).toContain("status: completed");
+    const statusYaml = readFileSync(join(featureDir, "status.yaml"), "utf-8");
+    expect(statusYaml).toContain("status: completed");
 
-      const outputDir = join(featureDir, ".obora", "outputs");
-      expect(existsSync(outputDir)).toBe(true);
-      expect(existsSync(join(outputDir, "analyze.md"))).toBe(true);
-      expect(existsSync(join(outputDir, "execute.md"))).toBe(true);
-      expect(existsSync(join(outputDir, "verify.md"))).toBe(true);
+    const outputDir = join(featureDir, ".obora", "outputs");
+    expect(existsSync(outputDir)).toBe(true);
+    expect(existsSync(join(outputDir, "analyze.md"))).toBe(true);
+    expect(existsSync(join(outputDir, "execute.md"))).toBe(true);
+    expect(existsSync(join(outputDir, "verify.md"))).toBe(true);
 
-      expect(existsSync(join(featureDir, ".obora", "obora.db"))).toBe(true);
-    },
-    20_000
-  );
+    expect(existsSync(join(featureDir, ".obora", "obora.db"))).toBe(true);
+  }, 20_000);
 });

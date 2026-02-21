@@ -188,10 +188,10 @@ async function updateStatusToDone(featurePath: string): Promise<void> {
   const content = readFileSync(statusPath, "utf-8");
 
   try {
-    const parsed = yaml.parse(content) as Record<string, any>;
+    const parsed = yaml.parse(content) as Record<string, unknown>;
     parsed.status = "completed";
     await fs.writeFile(statusPath, yaml.stringify(parsed), "utf-8");
-  } catch (error) {
+  } catch {
     // If YAML parsing fails, try regex-based update as fallback
     const newContent = content.replace(/^status:.*$/m, `status: completed`);
     await fs.writeFile(statusPath, newContent, "utf-8");
