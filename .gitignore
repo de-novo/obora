@@ -44,5 +44,8 @@ coverage/
 # TypeScript build cache
 tsconfig.tsbuildinfo
 
+# Review gate artifacts
+.review-gate/
+
 # Next.js auto-generated
 next-env.d.ts
