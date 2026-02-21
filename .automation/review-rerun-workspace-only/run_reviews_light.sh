@@ -9,6 +9,7 @@ run_review(){
   local task="$1" file="$2" modelk="$3" modelid="$4" tout="$5" retry="$6"
   local prompt="$BASE/prompts/prompt-${task}-${modelk}.md"
   local out="$BASE/results/result-${task}-${modelk}.md"
+  local raw="$BASE/results/result-${task}-${modelk}.jsonl"
   local log="$BASE/logs/log-${task}-${modelk}.txt"
 
   {
@@ -31,7 +32,12 @@ run_review(){
   while ((a<max)); do
     a=$((a+1))
     echo "RUN $task $modelk attempt=$a" | tee -a "$log"
-    if timeout "$tout" "$OPENCODE" run -m "$modelid" < "$prompt" > "$out" 2>> "$log"; then
+    if timeout "$tout" "$OPENCODE" run --format json -m "$modelid" < "$prompt" > "$raw" 2>> "$log"; then
+      if jq -r 'select(.type=="text") | (.part.text // empty)' "$raw" > "$out"; then
+        :
+      else
+        cp "$raw" "$out"
+      fi
       if grep -qE '^SCORE:[[:space:]]*[0-9]+(\.[0-9]+)?/10' "$out" && grep -qE '^P0:[[:space:]]*[0-9]+' "$out" && grep -qE '^P1:[[:space:]]*[0-9]+' "$out"; then
         echo "OK $task $modelk" | tee -a "$log"; return 0
       fi

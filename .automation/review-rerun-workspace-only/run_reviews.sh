@@ -54,6 +54,7 @@ run_one() {
   local task_id="$1" task_file="$2" model_key="$3" model_id="$4" timeout_sec="$5" retry="$6"
   local prompt="$BASE/prompts/prompt-${task_id}-${model_key}.md"
   local result="$BASE/results/result-${task_id}-${model_key}.md"
+  local raw="$BASE/results/result-${task_id}-${model_key}.jsonl"
   local log="$BASE/logs/log-${task_id}-${model_key}.txt"
 
   make_prompt "$task_id" "$task_file" "$prompt"
@@ -65,7 +66,13 @@ run_one() {
     attempt=$((attempt + 1))
     echo "[$(date '+%F %T')] RUN $task_id $model_key attempt=$attempt" | tee -a "$log"
 
-    if timeout "$timeout_sec" "$OPENCODE" run -m "$model_id" < "$prompt" > "$result" 2>> "$log"; then
+    if timeout "$timeout_sec" "$OPENCODE" run --format json -m "$model_id" < "$prompt" > "$raw" 2>> "$log"; then
+      if jq -r 'select(.type=="text") | (.part.text // empty)' "$raw" > "$result"; then
+        :
+      else
+        cp "$raw" "$result"
+      fi
+
       if grep -qE '^SCORE:[[:space:]]*[0-9]+(\.[0-9]+)?/10' "$result" \
          && grep -qE '^P0:[[:space:]]*[0-9]+' "$result" \
          && grep -qE '^P1:[[:space:]]*[0-9]+' "$result"; then

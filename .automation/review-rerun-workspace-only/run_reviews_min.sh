@@ -7,7 +7,7 @@ mkdir -p "$BASE/prompts" "$BASE/results" "$BASE/logs"
 
 run(){
   local task="$1" file="$2" mk="$3" mid="$4" to="$5" retry="$6"
-  local p="$BASE/prompts/prompt-${task}-${mk}.md" r="$BASE/results/result-${task}-${mk}.md" l="$BASE/logs/log-${task}-${mk}.txt"
+  local p="$BASE/prompts/prompt-${task}-${mk}.md" r="$BASE/results/result-${task}-${mk}.md" raw="$BASE/results/result-${task}-${mk}.jsonl" l="$BASE/logs/log-${task}-${mk}.txt"
   {
     echo "No tool use. Review this task doc only and output compactly."
     echo "Must include exact lines:"
@@ -23,7 +23,12 @@ run(){
   local a=0 max=$((retry+1))
   while ((a<max)); do
     a=$((a+1)); echo "RUN $task $mk attempt=$a" | tee -a "$l"
-    if timeout "$to" "$OPENCODE" run -m "$mid" < "$p" > "$r" 2>> "$l"; then
+    if timeout "$to" "$OPENCODE" run --format json -m "$mid" < "$p" > "$raw" 2>> "$l"; then
+      if jq -r 'select(.type=="text") | (.part.text // empty)' "$raw" > "$r"; then
+        :
+      else
+        cp "$raw" "$r"
+      fi
       if grep -qE '^SCORE:[[:space:]]*[0-9]+(\.[0-9]+)?/10' "$r" && grep -qE '^P0:[[:space:]]*[0-9]+' "$r" && grep -qE '^P1:[[:space:]]*[0-9]+' "$r"; then echo "OK $task $mk"|tee -a "$l"; return 0; fi
       echo "BAD_FORMAT $task $mk"|tee -a "$l"
     else
