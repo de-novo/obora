@@ -64,17 +64,10 @@ export function createAuthResolver(): AuthResolver {
       }
 
       if (authRef.startsWith("obora-auth:")) {
-        const protocolValue = authRef.slice("obora-auth:".length).trim();
-        const provider = protocolValue.split(/[/:]/)[0]?.toLowerCase();
-        if (!provider) {
-          throw new OboraError(
-            "Invalid obora-auth reference. Use obora-auth:<provider>.",
-            OboraErrorCode.SDK_CONFIG_ERROR,
-          );
-        }
-
-        const map = loadGlobalAuth();
-        return map[provider];
+        throw new OboraError(
+          "obora-auth: protocol is not yet supported. Use env:VAR_NAME instead.",
+          OboraErrorCode.SDK_NOT_IMPLEMENTED,
+        );
       }
 
       if (options?.verbose && !plainTextAuthRefWarned) {

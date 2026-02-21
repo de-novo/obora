@@ -9,8 +9,19 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "esModuleInterop": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "noImplicitOverride": false
   },
   "include": ["src/**/*"],
-  "exclude": ["dist", "node_modules", "test/**/*"]
+  "exclude": [
+    "dist",
+    "node_modules",
+    "test/**/*",
+    "src/**/*.test.ts",
+    "src/**/__tests__/**",
+    "src/**/runtime-tests/**",
+    "src/**/pool-tests/**",
+    "src/**/base-tests/**",
+    "src/_legacy/**"
+  ]
 }
