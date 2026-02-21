@@ -1,10 +1,10 @@
 # obora-kit 개발 워크플로우
 
-> 2026-02-13 재정비 (Codex 5.3 + GLM 5 2모델로 통일)
+> 2026-02-21 업데이트: LLM limit 해제 → 4모델 리뷰게이트로 확장
 
 ## 핵심 원칙
 
-**"태스크 완료 = 구현 + 2모델 리뷰(9+) + 커밋"**
+**"태스크 완료 = 구현 + 4모델 리뷰(전원 9+) + P0/P1 없음 + 커밋"**
 
 리뷰 없이 커밋하지 않는다. 9+ 미달 시 다음 태스크로 넘어가지 않는다.
 
@@ -15,166 +15,97 @@
 1. ✅ 코드 구현 완료
 2. ✅ `pnpm build` 성공
 3. ✅ `pnpm lint` 통과
-4. ✅ **2모델 리뷰 통과** (모든 모델 9+/10 필수 + P0/P1 없음)
+4. ✅ **4모델 리뷰 통과** (모든 모델 개별 9+/10 필수 + P0/P1 없음)
 5. ✅ 리뷰 피드백 반영 완료
 6. ✅ Git 커밋 & 푸시
 
 ---
 
-## 2모델 리뷰 구성
+## 4모델 리뷰 구성
 
-> **중요**: 모든 모델이 동일한 전반적 검토를 수행한다. 역할을 제한하지 않는다.
-> 서로 다른 관점에서 같은 항목을 검토하여 놓치는 부분을 잡는다.
+> **중요**: 4모델 전부 동일한 역할. 모든 모델이 동일한 전체 검토를 수행한다.
+> 역할을 제한하지 않는다. 서로 다른 provider의 독립 관점에서 같은 항목을 전체 검토하여 놓치는 부분을 잡는다.
 
-### 리뷰 모델 (모두 OpenCode CLI 기반)
+### 리뷰 모델
 
-| 모델 | 도구 | 모델명 | 목표 |
-|------|------|--------|------|
-| **GLM 5** | OpenCode CLI | `zai-coding-plan/glm-5` | 9+/10 |
-| **Codex 5.3** | OpenCode CLI | `openai/gpt-5.3-codex` | 9+/10 |
+| 모델 | 모델명 | 통과 기준 |
+|------|--------|----------|
+| **Opus 4** | `anthropic/claude-opus-4-6` | 9+/10, P0=0, P1=0 |
+| **Sonnet 4.6** | `anthropic/claude-sonnet-4-6` | 9+/10, P0=0, P1=0 |
+| **Codex 5.3** | `openai/gpt-5.3-codex` | 9+/10, P0=0, P1=0 |
+| **GLM 5** | `zai-coding-plan/glm-5` | 9+/10, P0=0, P1=0 |
 
 > ⚠️ **통과 기준**: **각 모델이 개별 9점 이상** (평균 아님!) + **P0/P1 이슈 없음**
 
-### 모든 모델이 검토하는 항목 (공통)
+### 모든 모델이 검토하는 항목 (전원 동일, 전체 검토)
 
-1. **스펙 일치도** - 문서와 구현 일치
-2. **코드 품질** - 타입 안전성, 에러 처리, 중복, 가독성
-3. **보안** - 입력 검증, 경로 조작, 정보 노출
-4. **실용성** - 실행 가능성, 엣지 케이스, 에러 메시지
-5. **아키텍처** - 모듈 분리, 의존성, 확장성
-
----
-
-## 📋 모델별 리뷰 실행 방법
-
-### 1. GLM 5 (OpenCode)
-
-**명령어**:
-```bash
-cd /path/to/project
-opencode run -m zai-coding-plan/glm-5 "<프롬프트>" > /tmp/review-glm.txt 2>&1
-```
-
-**프롬프트 예시**:
-```markdown
-## 전체 코드 리뷰
-
-### 리뷰 대상 파일
-- packages/cli/src/commands/*.ts
-- packages/core/src/parser/*.ts
-
-### 검토 항목 (모두 검토)
-1. 스펙 일치도
-2. 코드 품질 (타입, 에러 처리, 중복, 가독성)
-3. 보안 (입력 검증, 경로 조작)
-4. 실용성 (실행 가능성, 엣지 케이스)
-5. 아키텍처 (모듈 분리, 의존성)
-
-### 출력
-- 파일별 점수 (10점 만점)
-- 이슈 목록 (P0/P1/P2)
-```
+1. **스펙 일치도** — 문서와 구현 일치, doc-code 불일치 여부
+2. **일관성** — 기존 코드베이스 컨벤션(네이밍, 구조, 패턴) 준수
+3. **코드 품질** — 타입 안전성(`any` 절대 금지), 에러 처리, 중복, 가독성
+4. **기존 코드 호환성** — 기존 모듈 인터페이스 정합, 기존 테스트 깨짐 여부, import 경로 정합
+5. **확장성** — 향후 변경 범위 최소화, 모듈 분리, 의존성 방향
+6. **리스크** — 런타임 장애, 메모리 누수, 무한 루프, 비동기 에러 미처리
+7. **보안** — 입력 검증, 토큰/시크릿 노출, 경로 조작
+8. **실용성** — 실행 가능성, 엣지 케이스, 에러 메시지 품질
+9. **테스트** — 커버리지 충분 여부, 경계값/실패 케이스 포함 여부
 
 ---
 
-### 2. Codex 5.3 (OpenCode)
+## 📋 리뷰 실행 방법
 
-**명령어**:
-```bash
-cd /path/to/project
-opencode run -m openai/gpt-5.3-codex "<프롬프트>" > /tmp/review-codex.txt 2>&1
-```
-
-**프롬프트 예시**:
-```markdown
-## Code Review
-
-### Review Target
-- packages/cli/src/commands/*.ts
-- packages/core/src/parser/*.ts
-
-### Review Criteria (All)
-1. Spec compliance
-2. Code quality (types, errors, duplication)
-3. Security (validation, path issues)
-4. Practicality (runs? edge cases?)
-5. Architecture (modules, deps)
-
-### Output
-- Score per file (/10)
-- Issues list (P0/P1/P2)
-```
-
-**주의사항**:
-- `opencode run` 사용 (pty: true 필수)
-- 프로젝트 디렉토리에서 실행
-- 결과는 `/tmp/`에 저장
-
----
-
-## 🔄 전체 리뷰 실행 순서
-
-### Step 1: 2개 모델 병렬 실행
+### 4모델 병렬 실행
 
 ```bash
-# 터미널 1: GLM 5 (OpenCode)
 cd /path/to/project
-opencode run -m zai-coding-plan/glm-5 "전체 코드 리뷰..."
+OPENCODE="/Users/denovo/.asdf/installs/nodejs/lts/bin/opencode"
 
-# 터미널 2: Codex 5.3 (OpenCode)
-cd /path/to/project
-opencode run -m openai/gpt-5.3-codex "Review code..."
+# 4개 모두 같은 프롬프트로 실행
+$OPENCODE run --format json -m anthropic/claude-opus-4-6 < prompt.md > /tmp/review-opus.jsonl 2>&1
+$OPENCODE run --format json -m anthropic/claude-sonnet-4-6 < prompt.md > /tmp/review-sonnet.jsonl 2>&1
+$OPENCODE run --format json -m openai/gpt-5.3-codex < prompt.md > /tmp/review-codex.jsonl 2>&1
+$OPENCODE run --format json -m zai-coding-plan/glm-5 < prompt.md > /tmp/review-glm.jsonl 2>&1
 ```
 
-### Step 2: 결과 수집
+### 결과 추출
 
-- 두 모델 모두 터미널 출력 확인
-- 결과 파일: `/tmp/review-glm.txt`, `/tmp/review-codex.txt`
+```bash
+for f in opus sonnet codex glm; do
+  jq -r 'select(.type=="text") | (.part.text // empty)' /tmp/review-${f}.jsonl > /tmp/review-${f}.md
+done
+```
 
-### Step 3: 이슈 통합 & 피드백 반영
+### 이슈 통합 & 피드백 반영
 
-2개 모델의 피드백 합쳐서:
+4개 모델의 피드백 합쳐서:
 1. 중복 제거
 2. 우선순위 정렬 (P0 > P1 > P2)
 3. 수정 계획 수립
 4. 피드백 반영
 
-### Step 4: 재리뷰 (필요시)
+### 재리뷰
 
-9+ 미달 모델만 재리뷰
-
----
-
-## ⚠️ 자주 하는 실수와 해결책
-
-| 실수 | 해결책 |
-|------|--------|
-| sessions_spawn 사용 | `opencode run -m <model>` 사용 |
-| 모델명 오타 | 정확히: `openai/gpt-5.3-codex`, `zai-coding-plan/glm-5` |
-| PTY 모드 미설정 | `pty: true` 필수 |
-| 한 모델만 리뷰 | 2개 모두 필수 |
-| 역할 제한 | "전체 검토" 명시 |
-| 프로젝트 디렉토리 안 감 | `cd /path/to/project` 먼저 실행 |
+- 9 미만 모델만 재리뷰 (전체 재실행 불필요)
+- P0 발견 시 → 수정 후 4모델 전체 재리뷰
+- P1 발견 시 → 수정 후 해당 모델만 재리뷰
 
 ---
 
-## 왜 2개 모델인가?
+## 왜 4모델인가?
 
 ```
-같은 코드 → GLM / Codex
-             ↓       ↓
-          관점A   관점B
-             └───┴───┘
-                 ↓
-          놓치는 부분 최소화
+동일 코드 → Opus / Sonnet / Codex / GLM
+              ↓       ↓        ↓       ↓
+           전체검토  전체검토  전체검토  전체검토
+              └───────┴────────┴───────┘
+                          ↓
+            4개 독립 관점 교차검증 → 놓치는 부분 최소화
 ```
 
-- 한 모델이 놓친 이슈를 다른 모델이 잡음
-- 서로 다른 관점 → 더 높은 품질
-- 합의된 점수 → 신뢰할 수 있는 평가
-- 효율적인 리뷰 품질 관리 (2개 모델로 최적화)
+- **역할 동일, 관점 다양** — 한 모델이 놓친 이슈를 다른 모델이 잡음
+- provider 다양성 (Anthropic × 2 + OpenAI + ZAI) → 편향 제거
+- LLM limit 해제로 비용 제약 없음 → 품질 극대화
 
 ---
 
 *이 워크플로우는 obora-kit v3 MVP 개발 과정에서 정립됨 (2026-02-04)*
-*2모델로 통일 완료 (2026-02-13)*
+*2모델 → 4모델 확장 (2026-02-21, LLM limit 해제)*
