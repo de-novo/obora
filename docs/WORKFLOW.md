@@ -51,42 +51,33 @@
 
 ---
 
-## 📋 리뷰 실행 방법
+## 📋 리뷰 실행 방법: `sessions_spawn` 병렬 실행
 
-### 4모델 병렬 실행
+> opencode CLI 대신, CTO 에이전트가 `sessions_spawn`으로 4개 서브에이전트를 **병렬 spawn**한다.
 
-```bash
-cd /path/to/project
-OPENCODE="/Users/denovo/.asdf/installs/nodejs/lts/bin/opencode"
+### 실행 흐름
 
-# 4개 모두 같은 프롬프트로 실행
-$OPENCODE run --format json -m anthropic/claude-opus-4-6 < prompt.md > /tmp/review-opus.jsonl 2>&1
-$OPENCODE run --format json -m anthropic/claude-sonnet-4-6 < prompt.md > /tmp/review-sonnet.jsonl 2>&1
-$OPENCODE run --format json -m openai/gpt-5.3-codex < prompt.md > /tmp/review-codex.jsonl 2>&1
-$OPENCODE run --format json -m zai-coding-plan/glm-5 < prompt.md > /tmp/review-glm.jsonl 2>&1
+```
+CTO (본체)
+  ├─ sessions_spawn(model=opus, task="리뷰")
+  ├─ sessions_spawn(model=sonnet, task="리뷰")
+  ├─ sessions_spawn(model=codex, task="리뷰")
+  └─ sessions_spawn(model=glm, task="리뷰")
+       (4개 병렬, 각각 read 도구로 코드 직접 읽고 리뷰)
+  ← 완료 시 자동 결과 보고
+  CTO: 4개 결과 종합 → PASS/FAIL 판정
 ```
 
-### 결과 추출
-
-```bash
-for f in opus sonnet codex glm; do
-  jq -r 'select(.type=="text") | (.part.text // empty)' /tmp/review-${f}.jsonl > /tmp/review-${f}.md
-done
-```
-
-### 이슈 통합 & 피드백 반영
-
-4개 모델의 피드백 합쳐서:
-1. 중복 제거
-2. 우선순위 정렬 (P0 > P1 > P2)
-3. 수정 계획 수립
-4. 피드백 반영
+### 장점
+- 병렬 실행으로 대기 시간 최소화
+- 서브에이전트가 `read` 도구로 코드/테스트/티켓 직접 접근
+- 프롬프트에 코드 복사 불필요
+- 결과 자동 보고
 
 ### 재리뷰
-
-- 9 미만 모델만 재리뷰 (전체 재실행 불필요)
-- P0 발견 시 → 수정 후 4모델 전체 재리뷰
-- P1 발견 시 → 수정 후 해당 모델만 재리뷰
+- 9 미만 모델만 재spawn
+- P0 발견 → 수정 후 4모델 전체 재spawn
+- P1 발견 → 수정 후 해당 모델만 재spawn
 
 ---
 
