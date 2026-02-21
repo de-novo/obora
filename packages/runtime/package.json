@@ -24,7 +24,7 @@
     "build": "tsup && tsc --emitDeclarationOnly --declaration --declarationMap false --outDir dist --noCheck",
     "dev": "tsup --watch",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit --noCheck"
+    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json"
   },
   "dependencies": {
     "@mariozechner/pi-agent-core": "^0.52.12",
@@ -39,6 +39,7 @@
     "@obora-kit/adapters": "workspace:*",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.0.0",
+    "@types/pako": "^2.0.4",
     "better-sqlite3": "^12.6.2",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",

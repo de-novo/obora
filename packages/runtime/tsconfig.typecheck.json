@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [],
+  "files": [
+    "src/errors/index.ts",
+    "src/gates/index.ts",
+    "src/state/index.ts",
+    "src/artifacts/index.ts",
+    "src/checkpoint/index.ts"
+  ]
+}
