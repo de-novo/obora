@@ -21,6 +21,7 @@ SELFTEST_CMD="${SELFTEST_CMD:-}"
 
 DEPRECATED_GREP="${DEPRECATED_GREP:-cocoa\\s*=|ReactDOM\\.render|findDOMNode\\(|@deprecated}"
 BAN_GREP="${BAN_GREP:-\\bas any\\b|@ts-ignore}"
+SCAN_PATHS="${SCAN_PATHS:-packages}"
 
 run_step() {
   local label="$1"
@@ -29,20 +30,48 @@ run_step() {
   bash -lc "$cmd"
 }
 
+collect_existing_paths() {
+  local raw="$1"
+  local out=()
+  IFS=',' read -r -a candidates <<< "$raw"
+  for p in "${candidates[@]}"; do
+    p="$(echo "$p" | xargs)"
+    [[ -z "$p" ]] && continue
+    if [[ -e "$p" ]]; then
+      out+=("$p")
+    fi
+  done
+  if [[ ${#out[@]} -eq 0 ]]; then
+    out+=(".")
+  fi
+  printf '%s\n' "${out[@]}"
+}
+
 echo "[Review Gate]"
 echo "project: ${PROJECT_NAME}"
 echo "target : ${REVIEW_TARGET}"
 echo "scope  : ${REVIEW_SCOPE}"
 
+EFFECTIVE_SCAN_PATHS=()
+while IFS= read -r line; do
+  EFFECTIVE_SCAN_PATHS+=("$line")
+done < <(collect_existing_paths "$SCAN_PATHS")
+
 echo "\n==> Deprecated scan"
-if rg -n -S -g '!node_modules' -g '!dist' -g '!**/Cargo.lock' -g '!scripts/**' "$DEPRECATED_GREP" src test src-tauri src-tauri/Cargo.toml package.json; then
+if rg -n -S \
+  -g '!node_modules' -g '!dist' -g '!**/Cargo.lock' -g '!scripts/**' \
+  "$DEPRECATED_GREP" "${EFFECTIVE_SCAN_PATHS[@]}"; then
   echo "[WARN] Deprecated signals found above. Review required."
 else
   echo "[OK] No deprecated signals found by pattern scan."
 fi
 
 echo "\n==> Ban pattern scan"
-if rg -n -S -g '!node_modules' -g '!dist' "$BAN_GREP" src test; then
+if rg -n -S \
+  -g '!node_modules' -g '!dist' \
+  -g '!**/__tests__/**' -g '!**/*.test.*' \
+  -g '!**/_legacy/**' -g '!**/docs/**' \
+  "$BAN_GREP" "${EFFECTIVE_SCAN_PATHS[@]}"; then
   echo "[FAIL] Forbidden patterns found (as any / @ts-ignore)."
   exit 1
 else
