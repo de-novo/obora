@@ -65,7 +65,7 @@ export type {
   AuditEventType,
   AuditEvent,
 } from "./runtime.js";
-export type { WorkflowDef, WorkflowStep } from "./workflow.js";
+export type { AddStepOptions, OnFailConfig, WorkflowDef, WorkflowStep } from "./workflow.js";
 export type { LLMConfig } from "./llm-config.js";
 export type { OboraConfig, ResolvedProviderConfig, ModelPricing } from "./config-loader.js";
 export type { StepContext, StepExecutorConfig, StepResult, LLMAdapterLike } from "./step-executor.js";

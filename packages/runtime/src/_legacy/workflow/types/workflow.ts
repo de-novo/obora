@@ -68,6 +68,21 @@ export interface PolicyOverride {
   tools_override?: ToolPolicyOverride[];
 }
 
+export type BackEdgeEscalation = "human" | "dlq" | "fail";
+
+export interface StepOnFailConfig {
+  goto: string;
+  max_iterations: number;
+  escalate_on_exhaust: BackEdgeEscalation;
+  cooldown_ms: number;
+  reset_state: boolean;
+  max_cost: number | null;
+  /**
+   * null means inherit `escalate_on_exhaust`.
+   */
+  max_cost_escalation: BackEdgeEscalation | null;
+}
+
 export interface Step {
   /** Unique name for the step */
   name: string;
@@ -105,6 +120,8 @@ export interface Step {
   participants?: Record<string, string>;
   /** Step policy override */
   policy?: PolicyOverride;
+  /** Conditional back-edge on failure */
+  on_fail?: StepOnFailConfig;
   /** Step-specific configuration (legacy/backward compatibility) */
   config?: Record<string, unknown>;
 }

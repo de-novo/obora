@@ -78,6 +78,8 @@ export interface RuntimeOrchestrator {
 export interface RuntimeOrchestratorOptions {
   createExecutionId?: () => string;
   now?: () => Date;
+  wait?: (ms: number) => Promise<void>;
+  starvationTimeoutMs?: number;
   onGate?: (execution: Execution, step: Step, decision: Extract<PolicyDecision, { type: "gate" }>) => Promise<"approved" | "rejected"> | "approved" | "rejected";
   consensusVoteProvider?: (step: Step, execution: Execution, config: ConsensusConfig) => Promise<ConsensusVoteInput[]> | ConsensusVoteInput[];
   defaultRecoveryStrategy?: RecoveryStrategy;

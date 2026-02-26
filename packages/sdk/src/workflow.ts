@@ -15,6 +15,15 @@ export interface WorkflowStep {
   config?: Record<string, unknown>;
   depends_on?: string[];
   gate?: string | { type: string; [key: string]: unknown };
+  on_fail?: {
+    goto: string;
+    max_iterations: number;
+    escalate_on_exhaust?: "human" | "dlq" | "fail";
+    cooldown_ms?: number;
+    reset_state?: boolean;
+    max_cost?: number | null;
+    max_cost_escalation?: "human" | "dlq" | "fail" | null;
+  };
 }
 
 export interface WorkflowDef {
@@ -24,7 +33,74 @@ export interface WorkflowDef {
   variables?: Record<string, unknown>;
 }
 
+export interface OnFailConfig {
+  goto: string;
+  maxIterations: number;
+  escalateOnExhaust?: "human" | "dlq" | "fail";
+  cooldownMs?: number;
+  resetState?: boolean;
+  maxCost?: number | null;
+  maxCostEscalation?: "human" | "dlq" | "fail" | null;
+}
+
+export interface AddStepOptions {
+  id: string;
+  description?: string;
+  actor?: string;
+  agent?: string;
+  tool?: string;
+  pattern?: string;
+  participants?: string[];
+  input?: Record<string, unknown>;
+  config?: Record<string, unknown>;
+  depends?: string[];
+  dependsOn?: string[];
+  gate?: string | { type: string; [key: string]: unknown };
+  onFail?: OnFailConfig;
+}
+
 export class Workflow {
+  private readonly def: WorkflowDef;
+
+  constructor(name: string, version?: string) {
+    this.def = { name, version, steps: [] };
+  }
+
+  addStep(options: AddStepOptions): this {
+    const onFail = options.onFail
+      ? {
+        goto: options.onFail.goto,
+        max_iterations: options.onFail.maxIterations,
+        escalate_on_exhaust: options.onFail.escalateOnExhaust,
+        cooldown_ms: options.onFail.cooldownMs,
+        reset_state: options.onFail.resetState,
+        max_cost: options.onFail.maxCost,
+        max_cost_escalation: options.onFail.maxCostEscalation ?? null,
+      }
+      : undefined;
+
+    const step: WorkflowStep = {
+      name: options.id,
+      description: options.description,
+      agent: options.agent ?? options.actor,
+      tool: options.tool,
+      pattern: options.pattern,
+      participants: options.participants,
+      input: options.input,
+      config: options.config,
+      depends_on: options.dependsOn ?? options.depends,
+      gate: options.gate,
+      on_fail: onFail,
+    };
+
+    this.def.steps.push(step);
+    return this;
+  }
+
+  toDefinition(): WorkflowDef {
+    return Workflow.create(this.def);
+  }
+
   static async fromYaml(path: string): Promise<WorkflowDef> {
     const content = await readFile(path, "utf-8");
     const parsed = parseYaml(content);

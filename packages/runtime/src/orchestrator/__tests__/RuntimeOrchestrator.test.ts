@@ -35,7 +35,15 @@ function createPolicyEngine(
   };
 }
 
-function createCellManager(executedSteps: string[], failStep?: string): CellManager {
+function createCellManager(
+  executedSteps: string[],
+  failStep?: string,
+  options?: {
+    failCounts?: Record<string, number>;
+    costByStep?: Record<string, number>;
+  },
+): CellManager {
+  const attempts = new Map<string, number>();
   return new CellManager({
     createCellContext: (cellId) => ({
       cellId,
@@ -57,7 +65,10 @@ function createCellManager(executedSteps: string[], failStep?: string): CellMana
       execute: async (task) => {
         const stepName = String(task.metadata?.stepName ?? "");
         executedSteps.push(stepName);
-        if (failStep && stepName === failStep) {
+        const currentAttempts = (attempts.get(stepName) ?? 0) + 1;
+        attempts.set(stepName, currentAttempts);
+        const shouldFailByCount = (options?.failCounts?.[stepName] ?? 0) >= currentAttempts;
+        if ((failStep && stepName === failStep) || shouldFailByCount) {
           return {
             success: false,
             output: { error: `${stepName} failed` },
@@ -68,6 +79,7 @@ function createCellManager(executedSteps: string[], failStep?: string): CellMana
               endTime: new Date(),
               durationMs: 0,
               toolCallCount: 0,
+              costUsd: options?.costByStep?.[stepName],
             },
           };
         }
@@ -83,6 +95,7 @@ function createCellManager(executedSteps: string[], failStep?: string): CellMana
             endTime: new Date(),
             durationMs: 0,
             toolCallCount: 0,
+            costUsd: options?.costByStep?.[stepName],
           },
         };
       },
@@ -425,6 +438,156 @@ steps:
     expect(execution.status).toBe("failed");
     expect(execution.stepRecords.unstable.recovery?.strategy).toBe("custom");
     expect(execution.stepRecords.unstable.recovery?.error?.message).toContain("unsupported recovery strategy");
+  });
+
+  it("executes conditional back-edge and completes after verify feedback loop", async () => {
+    const executed: string[] = [];
+    const auditTrail = new InMemoryAuditStore();
+    const orchestrator = new DefaultRuntimeOrchestrator({
+      cellManager: createCellManager(executed, undefined, { failCounts: { verify: 1 } }),
+      policyEngine: createPolicyEngine(),
+      auditTrail,
+    });
+
+    orchestrator.define("back-edge-happy", {
+      name: "back-edge-happy",
+      steps: [
+        { name: "implement", agent: "coder" },
+        {
+          name: "verify",
+          agent: "verifier",
+          depends_on: ["implement"],
+          on_fail: {
+            goto: "implement",
+            max_iterations: 3,
+            escalate_on_exhaust: "fail",
+            cooldown_ms: 0,
+            reset_state: false,
+            max_cost: null,
+            max_cost_escalation: null,
+          },
+        },
+      ],
+    });
+
+    const execution = await orchestrator.run("back-edge-happy", {});
+    expect(execution.status).toBe("completed");
+    expect(executed).toEqual(["implement", "verify", "implement", "verify"]);
+
+    const events = await auditTrail.query({ executionId: execution.id });
+    expect(events.some((event) => event.type === "workflow.back_edge_triggered")).toBe(true);
+  });
+
+  it("escalates when max_iterations is exhausted", async () => {
+    const recoveryEngine = new RecoveryEngine({
+      escalationNotifier: { notify: vi.fn(async () => undefined) },
+    });
+    const recoverSpy = vi.spyOn(recoveryEngine, "handle");
+    const orchestrator = new DefaultRuntimeOrchestrator({
+      cellManager: createCellManager([], undefined, { failCounts: { verify: 5 } }),
+      policyEngine: createPolicyEngine(),
+      recoveryEngine,
+    });
+
+    orchestrator.define("back-edge-exhausted", {
+      name: "back-edge-exhausted",
+      steps: [
+        { name: "implement", agent: "coder" },
+        {
+          name: "verify",
+          agent: "verifier",
+          depends_on: ["implement"],
+          on_fail: {
+            goto: "implement",
+            max_iterations: 2,
+            escalate_on_exhaust: "human",
+            cooldown_ms: 0,
+            reset_state: false,
+            max_cost: null,
+            max_cost_escalation: null,
+          },
+        },
+      ],
+    });
+
+    const execution = await orchestrator.run("back-edge-exhausted", {});
+    expect(execution.status).toBe("failed");
+    expect(recoverSpy).toHaveBeenCalled();
+    expect(execution.stepRecords.verify.recovery?.strategy).toBe("escalate");
+  });
+
+  it("supports cooldown_ms between back-edge iterations", async () => {
+    const wait = vi.fn(async () => undefined);
+    const orchestrator = new DefaultRuntimeOrchestrator({
+      cellManager: createCellManager([], undefined, { failCounts: { verify: 1 } }),
+      policyEngine: createPolicyEngine(),
+    }, { wait });
+
+    orchestrator.define("back-edge-cooldown", {
+      name: "back-edge-cooldown",
+      steps: [
+        { name: "implement", agent: "coder" },
+        {
+          name: "verify",
+          agent: "verifier",
+          depends_on: ["implement"],
+          on_fail: {
+            goto: "implement",
+            max_iterations: 3,
+            escalate_on_exhaust: "fail",
+            cooldown_ms: 250,
+            reset_state: false,
+            max_cost: null,
+            max_cost_escalation: null,
+          },
+        },
+      ],
+    });
+
+    const execution = await orchestrator.run("back-edge-cooldown", {});
+    expect(execution.status).toBe("completed");
+    expect(wait).toHaveBeenCalledWith(250);
+  });
+
+  it("enforces max_cost with strict greater-than and emits cost exceeded audit", async () => {
+    const auditTrail = new InMemoryAuditStore();
+    const orchestrator = new DefaultRuntimeOrchestrator({
+      cellManager: createCellManager([], undefined, { failCounts: { verify: 2 }, costByStep: { implement: 0.02, verify: 0.02 } }),
+      policyEngine: createPolicyEngine(),
+      auditTrail,
+    });
+
+    orchestrator.define("back-edge-max-cost", {
+      name: "back-edge-max-cost",
+      steps: [
+        { name: "implement", agent: "coder" },
+        {
+          name: "verify",
+          agent: "verifier",
+          depends_on: ["implement"],
+          on_fail: {
+            goto: "implement",
+            max_iterations: 5,
+            escalate_on_exhaust: "fail",
+            cooldown_ms: 0,
+            reset_state: false,
+            max_cost: 0.03,
+            max_cost_escalation: "fail",
+          },
+        },
+      ],
+    });
+
+    const execution = await orchestrator.run("back-edge-max-cost", {});
+    expect(execution.status).toBe("failed");
+    const events = await auditTrail.query({ executionId: execution.id });
+    const costExceeded = events.find((event) => event.type === "workflow.back_edge_cost_exceeded");
+    expect(costExceeded).toBeDefined();
+    expect(costExceeded?.data).toMatchObject({
+      source_step: "verify",
+      target_step: "implement",
+      max_cost_usd: 0.03,
+    });
   });
 
   it("runs state binding after step completion and records end-to-end audit events", async () => {

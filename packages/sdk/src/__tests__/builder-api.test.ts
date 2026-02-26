@@ -72,6 +72,56 @@ describe("builder API", () => {
     expect(workflow.steps).toEqual([{ name: "first" }]);
   });
 
+  it("Workflow builder addStep supports onFail config", () => {
+    const workflow = new Workflow("sdk-back-edge")
+      .addStep({ id: "implement", actor: "coder" })
+      .addStep({
+        id: "verify",
+        actor: "verifier",
+        depends: ["implement"],
+        onFail: {
+          goto: "implement",
+          maxIterations: 3,
+          escalateOnExhaust: "human",
+          cooldownMs: 25,
+          resetState: true,
+          maxCost: 0.1,
+          maxCostEscalation: null,
+        },
+      })
+      .toDefinition();
+
+    expect(workflow.steps[1].on_fail).toEqual({
+      goto: "implement",
+      max_iterations: 3,
+      escalate_on_exhaust: "human",
+      cooldown_ms: 25,
+      reset_state: true,
+      max_cost: 0.1,
+      max_cost_escalation: null,
+    });
+  });
+
+  it("Workflow builder omits maxCostEscalation as null (inherit escalateOnExhaust)", () => {
+    const workflow = new Workflow("sdk-back-edge-inherit")
+      .addStep({ id: "implement", actor: "coder" })
+      .addStep({
+        id: "verify",
+        actor: "verifier",
+        depends: ["implement"],
+        onFail: {
+          goto: "implement",
+          maxIterations: 2,
+          escalateOnExhaust: "dlq",
+          maxCost: 0.05,
+        },
+      })
+      .toDefinition();
+
+    expect(workflow.steps[1].on_fail?.max_cost_escalation).toBeNull();
+    expect(workflow.steps[1].on_fail?.escalate_on_exhaust).toBe("dlq");
+  });
+
   it("Policy.fromYaml loads policy from YAML", async () => {
     const dir = await mkdtemp(join(tmpdir(), "obora-sdk-policy-"));
     const path = join(dir, "policy.yaml");
