@@ -277,7 +277,7 @@ describe('dependency-resolver', () => {
       expect(plan.warnings.some((warning) => warning.includes("Multiple back-edges point to 'a'"))).toBe(true);
     });
 
-    it("throws when three back-edges point to the same target", () => {
+    it("returns warning when three back-edges point to the same target", () => {
       const workflow: Workflow = {
         name: "back-edge-error",
         steps: [
@@ -287,7 +287,9 @@ describe('dependency-resolver', () => {
           { name: "d", agent: "x", depends_on: ["a"], on_fail: { goto: "a", max_iterations: 2, escalate_on_exhaust: "fail", cooldown_ms: 0, reset_state: false, max_cost: null, max_cost_escalation: null } },
         ],
       };
-      expect(() => generateExecutionPlan(workflow)).toThrow(/Too many back-edges/);
+      const plan = generateExecutionPlan(workflow);
+      expect(plan.isValid).toBe(true);
+      expect(plan.warnings.some((warning) => warning.includes("Multiple back-edges point to 'a'"))).toBe(true);
     });
   });
 

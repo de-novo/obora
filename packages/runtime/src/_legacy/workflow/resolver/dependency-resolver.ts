@@ -11,7 +11,6 @@ import {
   groupByLevel,
   topologicalSort as graphTopologicalSort,
 } from "../graph/index.js";
-import { DependencyError } from "../errors/index.js";
 import type { Step, Workflow } from "../types/workflow.js";
 
 /**
@@ -101,9 +100,6 @@ function analyzeBackEdges(steps: Step[]): { backEdges: Array<{ source: string; t
   }
 
   for (const [target, sources] of byTarget) {
-    if (sources.length >= 3) {
-      throw new DependencyError("E3001", `Too many back-edges point to '${target}': ${sources.length} (maximum: 2)`);
-    }
     if (sources.length >= 2) {
       warnings.push(`Multiple back-edges point to '${target}': ${sources.join(", ")}`);
     }

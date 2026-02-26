@@ -435,7 +435,7 @@ steps:
       expect(() => parseWorkflow(yaml)).toThrow(error);
     });
 
-    it("treats omitted max_cost_escalation as null", () => {
+    it("inherits max_cost_escalation from escalate_on_exhaust when omitted", () => {
       const yaml = `
 name: omitted-max-cost-escalation
 steps:
@@ -450,8 +450,36 @@ steps:
       escalate_on_exhaust: human
 `;
       const workflow = parseWorkflow(yaml);
-      expect(workflow.steps[1].on_fail?.max_cost_escalation).toBeNull();
+      expect(workflow.steps[1].on_fail?.max_cost_escalation).toBe("human");
       expect(workflow.steps[1].on_fail?.escalate_on_exhaust).toBe("human");
+    });
+
+    it("rejects when three back-edges point to the same target", () => {
+      const yaml = `
+name: too-many-back-edges
+steps:
+  - name: implement
+    agent: coder
+  - name: verify-a
+    agent: verifier
+    depends_on: [implement]
+    on_fail:
+      goto: implement
+      max_iterations: 2
+  - name: verify-b
+    agent: verifier
+    depends_on: [implement]
+    on_fail:
+      goto: implement
+      max_iterations: 2
+  - name: verify-c
+    agent: verifier
+    depends_on: [implement]
+    on_fail:
+      goto: implement
+      max_iterations: 2
+`;
+      expect(() => parseWorkflow(yaml)).toThrow(/Too many back-edges point/);
     });
   });
 

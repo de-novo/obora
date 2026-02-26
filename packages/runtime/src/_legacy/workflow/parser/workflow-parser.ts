@@ -229,7 +229,7 @@ function parseOnFail(raw: unknown, stepName: string): StepOnFailConfig | undefin
     }
   }
 
-  const maxCostEscalationRaw = config.max_cost_escalation ?? null;
+  const maxCostEscalationRaw = config.max_cost_escalation ?? escalation;
   if (maxCostEscalationRaw !== null && maxCostEscalationRaw !== "human" && maxCostEscalationRaw !== "dlq" && maxCostEscalationRaw !== "fail") {
     throw new ParseError("E2003", `unknown escalation: ${String(maxCostEscalationRaw)}`);
   }
@@ -582,6 +582,7 @@ function checkOnFailMutualExclusion(
 
 function checkOnFailBackEdges(steps: Step[]): void {
   const stepNames = new Set(steps.map((s) => s.name));
+  const byTarget = new Map<string, string[]>();
   const graph = buildGraph(steps);
   const topo = topologicalSort(graph);
 
@@ -627,6 +628,16 @@ function checkOnFailBackEdges(steps: Step[]): void {
         "E2003",
         `back-edge target '${backEdge.goto}' must precede source '${step.name}' in dependency graph`,
       );
+    }
+
+    const sources = byTarget.get(backEdge.goto) ?? [];
+    sources.push(step.name);
+    byTarget.set(backEdge.goto, sources);
+  }
+
+  for (const [target, sources] of byTarget) {
+    if (sources.length >= 3) {
+      throw new ParseError("E2003", `Too many back-edges point to '${target}': ${sources.length} (maximum: 2)`);
     }
   }
 }

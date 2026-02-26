@@ -550,7 +550,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
         }
 
         if (result.status === "back_edge") {
-          this.pruneForBackEdge(workflow, completed, scheduled, result.targetStep);
+          this.pruneForBackEdge(execution, workflow, completed, scheduled, result.targetStep);
           execution.completedSteps = [...completed];
           if (this.checkpointManager) {
             await this.checkpointManager.saveCheckpoint(
@@ -768,7 +768,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
         const failure = await this.handleStepFailure(execution, workflow, step, cellId, result.output, result.metrics.costUsd);
         await this.recordAudit(execution.id, "step_end", {
           stepName: step.name,
-          status: failure.status === "back_edge" ? "failed" : "failed",
+          status: failure.status === "back_edge" ? "back_edge" : "failed",
           error: failure.error,
         }, { cellId });
         return failure;
@@ -952,6 +952,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
     this.setBackEdgeState(execution, nextState);
 
     if (onFail.reset_state) {
+      // reset_state clears only the target step output key in the execution output map.
       delete execution.outputs[onFail.goto];
     }
 
@@ -997,12 +998,26 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
     execution.outputs[this.loopStateKey(state.source, "target")] = state.target;
   }
 
+  private getCachedGraph(execution: Execution, workflow: Workflow) {
+    const metadata = (execution.metadata ??= {});
+    const cached = metadata.__oboraWorkflowGraph as { key?: string; graph?: ReturnType<typeof buildGraph> } | undefined;
+    const graphKey = workflow.steps.map((step) => step.name).join("|");
+
+    if (cached?.graph && cached.key === graphKey) {
+      return cached.graph;
+    }
+
+    const graph = buildGraph(workflow.steps);
+    metadata.__oboraWorkflowGraph = { key: graphKey, graph };
+    return graph;
+  }
+
   private trackLoopCost(execution: Execution, workflow: Workflow, stepName: string, costUsd: number | undefined): void {
     if (typeof costUsd !== "number" || !Number.isFinite(costUsd) || costUsd <= 0) {
       return;
     }
 
-    const graph = buildGraph(workflow.steps);
+    const graph = this.getCachedGraph(execution, workflow);
     for (const sourceStep of workflow.steps) {
       const target = sourceStep.on_fail?.goto;
       if (!target) {
@@ -1049,8 +1064,14 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
     return reachable(chainTarget, stepName) && reachable(stepName, chainSource);
   }
 
-  private pruneForBackEdge(workflow: Workflow, completed: Set<string>, scheduled: Set<string>, targetStep: string): void {
-    const graph = buildGraph(workflow.steps);
+  private pruneForBackEdge(
+    execution: Execution,
+    workflow: Workflow,
+    completed: Set<string>,
+    scheduled: Set<string>,
+    targetStep: string,
+  ): void {
+    const graph = this.getCachedGraph(execution, workflow);
     const queue = [targetStep];
     const visited = new Set<string>();
     while (queue.length > 0) {
@@ -1131,7 +1152,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
       ? workflow.config.max_parallel
       : 1;
     const ready = getNextSteps(workflow, new Set(execution.completedSteps)).filter((step) => step.name !== targetStep);
-    if (ready.length === 0 || maxParallel > 1) {
+    if (ready.length === 0 || maxParallel <= 1) {
       return;
     }
 
