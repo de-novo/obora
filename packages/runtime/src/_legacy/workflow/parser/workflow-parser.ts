@@ -6,7 +6,9 @@
 import { parse as parseYaml, YAMLParseError } from "yaml";
 
 import { DependencyError, ParseError } from "../errors/index.js";
+import { buildGraph, topologicalSort } from "../graph/index.js";
 import type {
+  BackEdgeEscalation,
   ConsensusConfig,
   DependencyMap,
   GateConfig,
@@ -16,6 +18,7 @@ import type {
   RecoveryStrategyConfig,
   StateBinding,
   Step,
+  StepOnFailConfig,
   Workflow,
   WorkflowConfig,
   WorkflowMode,
@@ -44,6 +47,7 @@ const KNOWN_STEP_FIELDS = [
   "pattern",
   "participants",
   "policy",
+  "on_fail",
   "config",
 ];
 
@@ -188,6 +192,60 @@ function parsePolicyOverride(raw: unknown, stepName: string): PolicyOverride | u
   };
 }
 
+function parseOnFail(raw: unknown, stepName: string): StepOnFailConfig | undefined {
+  if (raw === undefined) {
+    return undefined;
+  }
+
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw new ParseError("E2003", `Step '${stepName}': 'on_fail' must be an object`);
+  }
+
+  const config = raw as Record<string, unknown>;
+  if (typeof config.goto !== "string" || config.goto.length === 0) {
+    throw new ParseError("E2003", `Step '${stepName}': 'on_fail.goto' must be a non-empty string`);
+  }
+
+  if (config.max_iterations === undefined || typeof config.max_iterations !== "number" || !Number.isInteger(config.max_iterations)) {
+    throw new ParseError("E2003", `Step '${stepName}': 'max_iterations' is required and must be an integer`);
+  }
+  if (config.max_iterations < 1) {
+    throw new ParseError("E2003", `max_iterations must be \u2265 1, got ${config.max_iterations}`);
+  }
+
+  const escalation = config.escalate_on_exhaust ?? "fail";
+  if (escalation !== "human" && escalation !== "dlq" && escalation !== "fail") {
+    throw new ParseError("E2003", `unknown escalation: ${String(escalation)}`);
+  }
+
+  const cooldownMs = config.cooldown_ms ?? 0;
+  if (typeof cooldownMs !== "number" || !Number.isInteger(cooldownMs) || cooldownMs < 0 || cooldownMs > 300000) {
+    throw new ParseError("E2003", `cooldown_ms must be 0~300000ms, got ${String(cooldownMs)}`);
+  }
+
+  if (config.max_cost !== undefined && config.max_cost !== null) {
+    if (typeof config.max_cost !== "number" || config.max_cost <= 0) {
+      throw new ParseError("E2003", `max_cost must be positive, got ${String(config.max_cost)}`);
+    }
+  }
+
+  // Spec: omitted max_cost_escalation = null at parser level. Inheritance from escalate_on_exhaust happens at runtime.
+  const maxCostEscalationRaw = config.max_cost_escalation ?? null;
+  if (maxCostEscalationRaw !== null && maxCostEscalationRaw !== "human" && maxCostEscalationRaw !== "dlq" && maxCostEscalationRaw !== "fail") {
+    throw new ParseError("E2003", `unknown escalation: ${String(maxCostEscalationRaw)}`);
+  }
+
+  return {
+    goto: config.goto,
+    max_iterations: config.max_iterations,
+    escalate_on_exhaust: escalation as BackEdgeEscalation,
+    cooldown_ms: cooldownMs,
+    reset_state: Boolean(config.reset_state ?? false),
+    max_cost: config.max_cost === undefined ? null : config.max_cost as number | null,
+    max_cost_escalation: maxCostEscalationRaw as BackEdgeEscalation | null,
+  };
+}
+
 function parseStep(raw: unknown, index: number, options: ParserOptions): Step {
   if (typeof raw !== "object" || raw === null) {
     throw new ParseError("E2003", `Step at index ${index} must be an object`);
@@ -310,6 +368,7 @@ function parseStep(raw: unknown, index: number, options: ParserOptions): Step {
     pattern: obj.pattern as string | undefined,
     participants: obj.participants as Record<string, string> | undefined,
     policy: parsePolicyOverride(obj.policy, obj.name),
+    on_fail: parseOnFail(obj.on_fail, obj.name),
     config: obj.config as Record<string, unknown> | undefined,
   };
 }
@@ -499,6 +558,91 @@ function checkCircularDependencies(steps: Step[]): void {
   }
 }
 
+function checkOnFailMutualExclusion(
+  steps: Step[],
+  recovery: Record<string, RecoveryStrategyConfig> | undefined,
+): void {
+  for (const step of steps) {
+    if (!step.on_fail?.goto) {
+      continue;
+    }
+
+    const workflowRecovery = recovery?.[step.name];
+    const legacyRecovery = (step.config as Record<string, unknown> | undefined)?.recovery as Record<string, unknown> | undefined;
+    const hasLegacyOnFail = typeof legacyRecovery?.on_fail === "string";
+    const hasWorkflowOnFail = typeof workflowRecovery?.on_fail === "string";
+
+    if (hasLegacyOnFail || hasWorkflowOnFail) {
+      throw new ParseError(
+        "E2003",
+        `Step '${step.name}': 'on_fail.goto' and 'recovery.on_fail' are mutually exclusive`,
+      );
+    }
+  }
+}
+
+function checkOnFailBackEdges(steps: Step[]): void {
+  const stepNames = new Set(steps.map((s) => s.name));
+  const byTarget = new Map<string, string[]>();
+  const graph = buildGraph(steps);
+  const topo = topologicalSort(graph);
+
+  if (!topo.success) {
+    return;
+  }
+
+  const canReachDependency = (from: string, target: string): boolean => {
+    const visited = new Set<string>();
+    const queue = [from];
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      const deps = graph.reverseEdges.get(current) ?? new Set<string>();
+      for (const dep of deps) {
+        if (dep === target) {
+          return true;
+        }
+        if (!visited.has(dep)) {
+          visited.add(dep);
+          queue.push(dep);
+        }
+      }
+    }
+    return false;
+  };
+
+  for (const step of steps) {
+    const backEdge = step.on_fail;
+    if (!backEdge) {
+      continue;
+    }
+
+    if (backEdge.goto === step.name) {
+      throw new ParseError("E2003", `Step '${step.name}': self-loop is not allowed for on_fail.goto`);
+    }
+
+    if (!stepNames.has(backEdge.goto)) {
+      throw new DependencyError("E3002", `Step '${step.name}' on_fail.goto references non-existent step '${backEdge.goto}'`);
+    }
+
+    if (!canReachDependency(step.name, backEdge.goto)) {
+      throw new ParseError(
+        "E2003",
+        `back-edge target '${backEdge.goto}' must precede source '${step.name}' in dependency graph`,
+      );
+    }
+
+    const sources = byTarget.get(backEdge.goto) ?? [];
+    sources.push(step.name);
+    byTarget.set(backEdge.goto, sources);
+  }
+
+  for (const [target, sources] of byTarget) {
+    if (sources.length >= 3) {
+      throw new ParseError("E2003", `Too many back-edges point to '${target}': ${sources.length} (maximum: 2)`);
+    }
+  }
+}
+
 /**
  * Check for unresolved input files
  */
@@ -603,12 +747,15 @@ export function parseWorkflow(yamlContent: string, options: ParserOptions = {}):
 
   // Parse steps
   const steps = obj.steps.map((s, i) => parseStep(s, i, options));
+  const recovery = parseRecovery(obj.recovery);
 
   // Validate steps
   checkDuplicateSteps(steps);
   checkSelfDependencies(steps);
   checkMissingDependencies(steps);
   checkCircularDependencies(steps);
+  checkOnFailMutualExclusion(steps, recovery);
+  checkOnFailBackEdges(steps);
   checkUnresolvedInputs(steps, options);
 
   return {
@@ -619,7 +766,7 @@ export function parseWorkflow(yamlContent: string, options: ParserOptions = {}):
     config: parseConfig(obj.config, options),
     policy: obj.policy as string | undefined,
     steps,
-    recovery: parseRecovery(obj.recovery),
+    recovery,
     audit: parseAudit(obj.audit),
   };
 }

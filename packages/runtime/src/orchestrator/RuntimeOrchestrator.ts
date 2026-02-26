@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { generateExecutionPlan, getNextSteps, parseWorkflow, type Step, type Workflow } from "../_legacy/workflow/index.js";
+import { buildGraph, generateExecutionPlan, getNextSteps, parseWorkflow, type Step, type Workflow } from "../_legacy/workflow/index.js";
 import type { CellManager } from "../cell/CellManager.js";
 import type { Task } from "../cell/types.js";
 import type { AuditTrail } from "../audit/AuditTrail.js";
@@ -8,7 +8,7 @@ import { persistStructuredAuditEvent } from "../audit/AuditReplay.js";
 import type { ConsensusGate } from "../consensus/ConsensusGate.js";
 import type { PolicyEngine } from "../policy/PolicyEngine.js";
 import type { PolicyDecision } from "../policy/types.js";
-import type { RecoveryEngine } from "../recovery/types.js";
+import type { RecoveryEngine, RecoveryStrategy } from "../recovery/types.js";
 import type { StateBinder, StateBinding } from "../state/StateBinder.js";
 import type { StorageAdapter, RunRecord, StepRecord, ResumeOptions } from "../storage/types.js";
 import type { ArtifactStore } from "../artifacts/types.js";
@@ -56,6 +56,28 @@ interface RuntimeGateDecision extends Extract<PolicyDecision, { type: "gate" }> 
   config?: { timeout?: string; fallback?: "fail" | "escalate" | "auto-approve" };
 }
 
+interface BackEdgeState {
+  source: string;
+  target: string;
+  iterationCount: number;
+  costUsd: number;
+}
+
+interface BackEdgeTriggerResult {
+  step: Step;
+  status: "back_edge";
+  targetStep: string;
+}
+
+const LOOP_KEY_PREFIX = "__obora.loop.";
+const STARVATION_TIMEOUT_MS_DEFAULT = 60000;
+const defaultWait = async (ms: number): Promise<void> => {
+  if (ms <= 0) {
+    return;
+  }
+  await new Promise((resolve) => setTimeout(resolve, ms));
+};
+
 const inMemoryGateStateStore = (): GateWaitStateStore => {
   const states = new Map<string, GateWaitState>();
   return {
@@ -79,6 +101,8 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
   private readonly approvedGateSteps = new Set<string>();
   private readonly createExecutionId: () => string;
   private readonly now: () => Date;
+  private readonly wait: (ms: number) => Promise<void>;
+  private readonly starvationTimeoutMs: number;
   private readonly gateWaitStateStore: GateWaitStateStore;
 
   private policyConfig: PolicyHashInput = {};
@@ -90,6 +114,8 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
   ) {
     this.createExecutionId = options.createExecutionId ?? (() => randomUUID());
     this.now = options.now ?? (() => new Date());
+    this.wait = options.wait ?? defaultWait;
+    this.starvationTimeoutMs = options.starvationTimeoutMs ?? STARVATION_TIMEOUT_MS_DEFAULT;
     this.gateWaitStateStore = dependencies.gateWaitStateStore ?? inMemoryGateStateStore();
     if (dependencies.storageAdapter) {
       this.checkpointManager = new CheckpointManager(dependencies.storageAdapter);
@@ -224,6 +250,15 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
           { success: true, output: value, toolCalls: [], metrics: { durationMs: 0, tokenUsage: { input: 0, output: 0 }, retries: 0 } },
           [{ source: "output", target: key }],
         );
+      }
+    }
+
+    if (checkpoint.stateSnapshot && typeof checkpoint.stateSnapshot === "object") {
+      const snapshot = checkpoint.stateSnapshot as Record<string, unknown>;
+      for (const [key, value] of Object.entries(snapshot)) {
+        if (key.startsWith(LOOP_KEY_PREFIX)) {
+          execution.outputs[key] = value;
+        }
       }
     }
 
@@ -493,7 +528,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
       const runnable = candidates.slice(0, maxParallel);
       runnable.forEach((step) => scheduled.add(step.name));
 
-      const batchResults = await Promise.all(runnable.map((step) => this.runStep(execution, step, input)));
+      const batchResults = await Promise.all(runnable.map((step) => this.runStep(execution, workflow, step, input, completed)));
 
       for (const result of batchResults) {
         if (result.status === "completed") {
@@ -511,6 +546,21 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
             );
           }
 
+          continue;
+        }
+
+        if (result.status === "back_edge") {
+          this.pruneForBackEdge(execution, workflow, completed, scheduled, result.targetStep);
+          execution.completedSteps = [...completed];
+          if (this.checkpointManager) {
+            await this.checkpointManager.saveCheckpoint(
+              execution.id,
+              result.step.name,
+              [...completed],
+              execution.outputs,
+              this.policyConfig,
+            );
+          }
           continue;
         }
 
@@ -575,9 +625,16 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
     };
   }
 
-  private async runStep(execution: Execution, step: Step, workflowInput: unknown): Promise<{
+  private async runStep(
+    execution: Execution,
+    workflow: Workflow,
+    step: Step,
+    workflowInput: unknown,
+    completed: Set<string>,
+  ): Promise<{
     step: Step;
-    status: "completed" | "failed" | "waiting";
+    status: "completed" | "failed" | "waiting" | "back_edge";
+    targetStep?: string;
     error?: string;
   }> {
     const record = execution.stepRecords[step.name]!;
@@ -684,6 +741,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
       const result = await this.dependencies.cellManager.execute(cellId, this.stepToTask(step, workflowInput));
       record.result = result;
       record.endedAt = this.now();
+      this.trackLoopCost(execution, workflow, step.name, result.metrics.costUsd);
 
       await this.recordAudit(execution.id, "cell_end", {
         stepName: step.name,
@@ -707,10 +765,10 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
       }
 
       if (!result.success) {
-        const failure = await this.handleStepFailure(execution, step, cellId, result.output);
+        const failure = await this.handleStepFailure(execution, workflow, step, cellId, result.output, result.metrics.costUsd);
         await this.recordAudit(execution.id, "step_end", {
           stepName: step.name,
-          status: "failed",
+          status: failure.status === "back_edge" ? "back_edge" : "failed",
           error: failure.error,
         }, { cellId });
         return failure;
@@ -727,7 +785,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
         });
         if (consensusResult.status !== "pass") {
           const reason = consensusResult.status === "fail" ? consensusResult.reason : `consensus ${consensusResult.status}`;
-          const failure = await this.handleStepFailure(execution, step, cellId, { error: reason });
+          const failure = await this.handleStepFailure(execution, workflow, step, cellId, { error: reason }, result.metrics.costUsd);
           await this.recordAudit(execution.id, "step_end", {
             stepName: step.name,
             status: "failed",
@@ -782,12 +840,19 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
 
   private async handleStepFailure(
     execution: Execution,
+    workflow: Workflow,
     step: Step,
     cellId: string,
-    output: unknown
-  ): Promise<{ step: Step; status: "failed" | "completed"; error?: string }> {
+    output: unknown,
+    cellCostUsd?: number,
+  ): Promise<{ step: Step; status: "failed" | "completed" | "back_edge"; targetStep?: string; error?: string }> {
     const record = execution.stepRecords[step.name]!;
     const error = this.extractError(output);
+
+    const backEdgeResult = await this.tryHandleBackEdge(execution, workflow, step, error, cellId, cellCostUsd);
+    if (backEdgeResult) {
+      return backEdgeResult;
+    }
 
     const strategy = this.extractRecoveryStrategy(step, execution) ?? this.options.defaultRecoveryStrategy;
     if (strategy && this.dependencies.recoveryEngine) {
@@ -826,6 +891,316 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
     record.endedAt ??= this.now();
     await this.persistStep(execution, step.name);
     return { step, status: "failed", error };
+  }
+
+  private async tryHandleBackEdge(
+    execution: Execution,
+    workflow: Workflow,
+    step: Step,
+    error: string,
+    cellId: string,
+    _cellCostUsd?: number,
+  ): Promise<BackEdgeTriggerResult | undefined> {
+    const onFail = step.on_fail;
+    if (!onFail?.goto) {
+      return undefined;
+    }
+
+    const state = this.getBackEdgeState(execution, step.name, onFail.goto);
+    const maxCostEscalation = onFail.max_cost_escalation ?? onFail.escalate_on_exhaust;
+    const exhausted = state.iterationCount >= onFail.max_iterations;
+    const costExceeded = onFail.max_cost !== null && state.costUsd > onFail.max_cost;
+
+    if (costExceeded || exhausted) {
+      const escalation = costExceeded ? maxCostEscalation : onFail.escalate_on_exhaust;
+      const escalationStrategy = this.toBackEdgeEscalationStrategy(escalation, step.name, onFail.goto, error);
+      const recovery = await this.runRecovery(execution, step, cellId, error, escalationStrategy);
+      execution.stepRecords[step.name]!.recovery = recovery;
+      execution.stepRecords[step.name]!.status = "failed";
+      execution.stepRecords[step.name]!.error = error;
+      execution.stepRecords[step.name]!.endedAt = this.now();
+      await this.persistStep(execution, step.name);
+
+      if (costExceeded) {
+        await this.recordAudit(execution.id, "workflow.back_edge_cost_exceeded", {
+          source_step: step.name,
+          target_step: onFail.goto,
+          iteration: state.iterationCount,
+          max_cost_usd: onFail.max_cost,
+          actual_cost_usd: state.costUsd,
+          escalation_action: escalation,
+          timestamp: this.now().toISOString(),
+        }, { cellId });
+      } else {
+        await this.recordAudit(execution.id, "workflow.back_edge_exhausted", {
+          source_step: step.name,
+          target_step: onFail.goto,
+          total_iterations: state.iterationCount,
+          escalation_action: escalation,
+          total_cost_usd: state.costUsd,
+          timestamp: this.now().toISOString(),
+        }, { cellId });
+      }
+
+      return { step, status: "failed", error };
+    }
+
+    const nextState: BackEdgeState = {
+      ...state,
+      iterationCount: state.iterationCount + 1,
+    };
+    this.setBackEdgeState(execution, nextState);
+
+    if (onFail.reset_state) {
+      // reset_state clears only the target step output key in the execution output map.
+      delete execution.outputs[onFail.goto];
+    }
+
+    await this.recordAudit(execution.id, "workflow.back_edge_triggered", {
+      source_step: step.name,
+      target_step: onFail.goto,
+      iteration: nextState.iterationCount,
+      reason: "FAIL",
+      cost_so_far_usd: nextState.costUsd,
+      timestamp: this.now().toISOString(),
+    }, { cellId });
+
+    await this.handleStarvation(execution, workflow, step.name, onFail.goto);
+    await this.wait(onFail.cooldown_ms);
+
+    const record = execution.stepRecords[step.name]!;
+    record.status = "failed";
+    record.error = error;
+    record.endedAt = this.now();
+    await this.persistStep(execution, step.name);
+    return { step, status: "back_edge", targetStep: onFail.goto };
+  }
+
+  private loopStateKey(stepId: string, field: "iteration_count" | "cost_usd" | "target"): string {
+    return `${LOOP_KEY_PREFIX}${stepId}.${field}`;
+  }
+
+  private getBackEdgeState(execution: Execution, source: string, target: string): BackEdgeState {
+    const iterationRaw = execution.outputs[this.loopStateKey(source, "iteration_count")];
+    const costRaw = execution.outputs[this.loopStateKey(source, "cost_usd")];
+    const targetRaw = execution.outputs[this.loopStateKey(source, "target")];
+
+    const iterationCount = typeof iterationRaw === "number" && Number.isFinite(iterationRaw) ? iterationRaw : 1;
+    const costUsd = typeof costRaw === "number" && Number.isFinite(costRaw) ? costRaw : 0;
+    const currentTarget = typeof targetRaw === "string" ? targetRaw : target;
+
+    return { source, target: currentTarget, iterationCount, costUsd };
+  }
+
+  private setBackEdgeState(execution: Execution, state: BackEdgeState): void {
+    execution.outputs[this.loopStateKey(state.source, "iteration_count")] = state.iterationCount;
+    execution.outputs[this.loopStateKey(state.source, "cost_usd")] = state.costUsd;
+    execution.outputs[this.loopStateKey(state.source, "target")] = state.target;
+  }
+
+  private getCachedGraph(execution: Execution, workflow: Workflow) {
+    const metadata = (execution.metadata ??= {});
+    const cached = metadata.__oboraWorkflowGraph as { key?: string; graph?: ReturnType<typeof buildGraph> } | undefined;
+    const graphKey = workflow.steps.map((step) => {
+      const deps = step.depends_on?.join(",") ?? "";
+      const backEdge = step.on_fail?.goto ?? "";
+      return `${step.name}:${deps}:${backEdge}`;
+    }).join("|");
+
+    if (cached?.graph && cached.key === graphKey) {
+      return cached.graph;
+    }
+
+    const graph = buildGraph(workflow.steps);
+    metadata.__oboraWorkflowGraph = { key: graphKey, graph };
+    return graph;
+  }
+
+  private trackLoopCost(execution: Execution, workflow: Workflow, stepName: string, costUsd: number | undefined): void {
+    if (typeof costUsd !== "number" || !Number.isFinite(costUsd) || costUsd <= 0) {
+      return;
+    }
+
+    const graph = this.getCachedGraph(execution, workflow);
+    for (const sourceStep of workflow.steps) {
+      const target = sourceStep.on_fail?.goto;
+      if (!target) {
+        continue;
+      }
+      if (!this.isStepInBackEdgeChain(graph.edges, target, sourceStep.name, stepName)) {
+        continue;
+      }
+
+      const state = this.getBackEdgeState(execution, sourceStep.name, target);
+      state.costUsd += costUsd;
+      this.setBackEdgeState(execution, state);
+    }
+  }
+
+  private isStepInBackEdgeChain(
+    edges: Map<string, Set<string>>,
+    chainTarget: string,
+    chainSource: string,
+    stepName: string,
+  ): boolean {
+    const reachable = (from: string, to: string): boolean => {
+      if (from === to) {
+        return true;
+      }
+      const visited = new Set<string>();
+      const queue = [from];
+      while (queue.length > 0) {
+        const node = queue.shift()!;
+        const deps = edges.get(node) ?? new Set<string>();
+        for (const dep of deps) {
+          if (dep === to) {
+            return true;
+          }
+          if (!visited.has(dep)) {
+            visited.add(dep);
+            queue.push(dep);
+          }
+        }
+      }
+      return false;
+    };
+
+    return reachable(chainTarget, stepName) && reachable(stepName, chainSource);
+  }
+
+  private pruneForBackEdge(
+    execution: Execution,
+    workflow: Workflow,
+    completed: Set<string>,
+    scheduled: Set<string>,
+    targetStep: string,
+  ): void {
+    const graph = this.getCachedGraph(execution, workflow);
+    const queue = [targetStep];
+    const visited = new Set<string>();
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      if (visited.has(current)) {
+        continue;
+      }
+      visited.add(current);
+      completed.delete(current);
+      scheduled.delete(current);
+
+      const dependents = graph.edges.get(current) ?? new Set<string>();
+      for (const dependent of dependents) {
+        queue.push(dependent);
+      }
+    }
+  }
+
+  private async runRecovery(
+    execution: Execution,
+    step: Step,
+    cellId: string,
+    error: string,
+    strategy: RecoveryStrategy | undefined,
+  ) {
+    if (!strategy || !this.dependencies.recoveryEngine) {
+      return undefined;
+    }
+
+    await this.recordAudit(execution.id, "recovery_start", {
+      stepName: step.name,
+      strategy,
+      error,
+    }, { cellId });
+    const recovery = await this.dependencies.recoveryEngine.handle(
+      {
+        executionId: execution.id,
+        cellId,
+        stepName: step.name,
+        attempt: 1,
+        error: new Error(error),
+      },
+      strategy,
+    );
+    await this.recordAudit(execution.id, "recovery_end", {
+      stepName: step.name,
+      strategy,
+      recovery,
+    }, { cellId });
+    return recovery;
+  }
+
+  private toBackEdgeEscalationStrategy(
+    escalation: "human" | "dlq" | "fail",
+    source: string,
+    target: string,
+    error: string,
+  ): RecoveryStrategy | undefined {
+    if (escalation === "fail") {
+      return undefined;
+    }
+    const channel = escalation === "human" ? "human" : "dlq";
+    return {
+      type: "escalate",
+      severity: "high",
+      channel,
+      summary: `back-edge exhausted for ${source} -> ${target}: ${error}`,
+    };
+  }
+
+  private async handleStarvation(
+    execution: Execution,
+    workflow: Workflow,
+    sourceStep: string,
+    targetStep: string,
+  ): Promise<void> {
+    const maxParallel = workflow.config?.max_parallel && workflow.config.max_parallel > 0
+      ? workflow.config.max_parallel
+      : 1;
+    const ready = getNextSteps(workflow, new Set(execution.completedSteps)).filter((step) => step.name !== targetStep);
+    if (ready.length === 0 || maxParallel <= 1) {
+      return;
+    }
+
+    const starvationRoot = (execution.metadata ??= {});
+    const starvationMap = ((starvationRoot.__oboraStarvation as Record<string, string> | undefined) ??= {});
+    const nowIso = this.now().toISOString();
+
+    for (const blocked of ready) {
+      const startedAt = starvationMap[blocked.name] ?? nowIso;
+      starvationMap[blocked.name] = startedAt;
+      const waitDurationMs = this.now().getTime() - new Date(startedAt).getTime();
+      const timedOut = waitDurationMs > this.starvationTimeoutMs;
+
+      await this.recordAudit(execution.id, "workflow.step_starvation_warning", {
+        blocked_step: blocked.name,
+        blocking_loop: { source: sourceStep, target: targetStep },
+        wait_duration_ms: waitDurationMs,
+        action: timedOut ? "timeout" : "continue",
+        timestamp: this.now().toISOString(),
+      });
+
+      if (!timedOut) {
+        continue;
+      }
+
+      const blockedRecord = execution.stepRecords[blocked.name];
+      if (blockedRecord) {
+        blockedRecord.status = "failed";
+        blockedRecord.error = "starvation_timeout";
+        blockedRecord.endedAt = this.now();
+      }
+      const recoveryStrategy = this.extractRecoveryStrategy(blocked, execution) ?? this.options.defaultRecoveryStrategy;
+      const recovery = await this.runRecovery(
+        execution,
+        blocked,
+        `starvation:${blocked.name}`,
+        "starvation_timeout",
+        recoveryStrategy,
+      );
+      if (blockedRecord) {
+        blockedRecord.recovery = recovery;
+      }
+      await this.persistStep(execution, blocked.name);
+    }
   }
 
   private extractGateConfig(step: Step): StepGateDecision | undefined {

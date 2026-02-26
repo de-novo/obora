@@ -283,6 +283,204 @@ recovery:
       expect(workflow.recovery?.review?.on_fail).toBe('retry');
       expect(workflow.recovery?.review?.backoff_base).toBe('5s');
     });
+
+    it("parses step.on_fail and normalizes defaults", () => {
+      const yaml = `
+name: back-edge-parse
+steps:
+  - name: implement
+    agent: coder
+  - name: verify
+    agent: verifier
+    depends_on: [implement]
+    on_fail:
+      goto: implement
+      max_iterations: 3
+`;
+      const workflow = parseWorkflow(yaml);
+      expect(workflow.steps[1].on_fail).toEqual({
+        goto: "implement",
+        max_iterations: 3,
+        escalate_on_exhaust: "fail",
+        cooldown_ms: 0,
+        reset_state: false,
+        max_cost: null,
+        max_cost_escalation: null,
+      });
+    });
+
+    it("rejects on_fail + recovery.on_fail coexistence", () => {
+      const yaml = `
+name: back-edge-mutual-exclusion
+steps:
+  - name: implement
+    agent: coder
+  - name: verify
+    agent: verifier
+    depends_on: [implement]
+    on_fail:
+      goto: implement
+      max_iterations: 2
+recovery:
+  verify:
+    on_fail: retry
+`;
+      expect(() => parseWorkflow(yaml)).toThrow(/mutually exclusive/);
+    });
+
+    it("rejects on_fail self-loop", () => {
+      const yaml = `
+name: back-edge-self-loop
+steps:
+  - name: verify
+    agent: verifier
+    on_fail:
+      goto: verify
+      max_iterations: 2
+`;
+      expect(() => parseWorkflow(yaml)).toThrow(/self-loop/);
+    });
+
+    it("rejects on_fail target that is not a dependency ancestor", () => {
+      const yaml = `
+name: back-edge-invalid-target
+steps:
+  - name: bootstrap
+    agent: init
+  - name: setup
+    agent: setup
+    depends_on: [bootstrap]
+  - name: implement
+    agent: coder
+    depends_on: [bootstrap]
+  - name: verify
+    agent: verifier
+    depends_on: [implement]
+    on_fail:
+      goto: setup
+      max_iterations: 2
+`;
+      expect(() => parseWorkflow(yaml)).toThrow(/must precede source/);
+    });
+
+    it.each([
+      {
+        title: "max_iterations < 1",
+        yaml: `
+name: invalid-mi
+steps:
+  - name: implement
+    agent: coder
+  - name: verify
+    agent: verifier
+    depends_on: [implement]
+    on_fail:
+      goto: implement
+      max_iterations: 0
+`,
+        error: /max_iterations must be/,
+      },
+      {
+        title: "cooldown_ms < 0",
+        yaml: `
+name: invalid-cooldown-low
+steps:
+  - name: implement
+    agent: coder
+  - name: verify
+    agent: verifier
+    depends_on: [implement]
+    on_fail:
+      goto: implement
+      max_iterations: 2
+      cooldown_ms: -1
+`,
+        error: /cooldown_ms must be 0~300000ms/,
+      },
+      {
+        title: "cooldown_ms > 300000",
+        yaml: `
+name: invalid-cooldown-high
+steps:
+  - name: implement
+    agent: coder
+  - name: verify
+    agent: verifier
+    depends_on: [implement]
+    on_fail:
+      goto: implement
+      max_iterations: 2
+      cooldown_ms: 999999
+`,
+        error: /cooldown_ms must be 0~300000ms/,
+      },
+      {
+        title: "max_cost <= 0",
+        yaml: `
+name: invalid-max-cost
+steps:
+  - name: implement
+    agent: coder
+  - name: verify
+    agent: verifier
+    depends_on: [implement]
+    on_fail:
+      goto: implement
+      max_iterations: 2
+      max_cost: -5
+`,
+        error: /max_cost must be positive/,
+      },
+    ])("validates on_fail input: $title", ({ yaml, error }) => {
+      expect(() => parseWorkflow(yaml)).toThrow(error);
+    });
+
+    it("normalizes omitted max_cost_escalation to null (inheritance happens at runtime)", () => {
+      const yaml = `
+name: omitted-max-cost-escalation
+steps:
+  - name: implement
+    agent: coder
+  - name: verify
+    agent: verifier
+    depends_on: [implement]
+    on_fail:
+      goto: implement
+      max_iterations: 2
+      escalate_on_exhaust: human
+`;
+      const workflow = parseWorkflow(yaml);
+      expect(workflow.steps[1].on_fail?.max_cost_escalation).toBeNull();
+      expect(workflow.steps[1].on_fail?.escalate_on_exhaust).toBe("human");
+    });
+
+    it("rejects when three back-edges point to the same target", () => {
+      const yaml = `
+name: too-many-back-edges
+steps:
+  - name: implement
+    agent: coder
+  - name: verify-a
+    agent: verifier
+    depends_on: [implement]
+    on_fail:
+      goto: implement
+      max_iterations: 2
+  - name: verify-b
+    agent: verifier
+    depends_on: [implement]
+    on_fail:
+      goto: implement
+      max_iterations: 2
+  - name: verify-c
+    agent: verifier
+    depends_on: [implement]
+    on_fail:
+      goto: implement
+      max_iterations: 2
+`;
+      expect(() => parseWorkflow(yaml)).toThrow(/Too many back-edges point/);
+    });
   });
 
   describe('parseWorkflow - strict mode', () => {

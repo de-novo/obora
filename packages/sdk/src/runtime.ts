@@ -61,6 +61,10 @@ export type AuditEventType =
   | "reexecution_step_start"
   | "reexecution_step_end"
   | "reexecution_end"
+  | "workflow.back_edge_triggered"
+  | "workflow.back_edge_exhausted"
+  | "workflow.back_edge_cost_exceeded"
+  | "workflow.step_starvation_warning"
   | "warning"
   | "error"
   | "knowledge_context_attached";

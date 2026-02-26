@@ -37,6 +37,10 @@ export interface ExecutionPlan {
   cyclicPath?: string[];
   /** Steps grouped by execution level */
   stepGroups: StepGroup[];
+  /** Conditional back-edges (source -> target) */
+  backEdges: Array<{ source: string; target: string }>;
+  /** Non-fatal planning warnings */
+  warnings: string[];
 }
 
 /**
@@ -47,6 +51,8 @@ export interface DependencyGraph {
   nodes: Map<string, Step>;
   /** Map of step name to list of dependency step names */
   edges: Map<string, string[]>;
+  /** Conditional back-edges (source -> target) */
+  backEdges: Map<string, string>;
 }
 
 /**
@@ -66,10 +72,40 @@ export function buildDependencyGraph(steps: Step[]): DependencyGraph {
     edges.set(node, Array.from(deps));
   }
 
+  const backEdges = new Map<string, string>();
+  for (const step of steps) {
+    if (step.on_fail?.goto) {
+      backEdges.set(step.name, step.on_fail.goto);
+    }
+  }
+
   return {
     nodes: stepMap,
     edges,
+    backEdges,
   };
+}
+
+function analyzeBackEdges(steps: Step[]): { backEdges: Array<{ source: string; target: string }>; warnings: string[] } {
+  const backEdges = steps
+    .filter((step) => typeof step.on_fail?.goto === "string")
+    .map((step) => ({ source: step.name, target: step.on_fail!.goto }));
+
+  const warnings: string[] = [];
+  const byTarget = new Map<string, string[]>();
+  for (const edge of backEdges) {
+    const sources = byTarget.get(edge.target) ?? [];
+    sources.push(edge.source);
+    byTarget.set(edge.target, sources);
+  }
+
+  for (const [target, sources] of byTarget) {
+    if (sources.length >= 2) {
+      warnings.push(`Multiple back-edges point to '${target}': ${sources.join(", ")}`);
+    }
+  }
+
+  return { backEdges, warnings };
 }
 
 /**
@@ -127,6 +163,8 @@ export function groupStepsByLevel(steps: Step[]): StepGroup[] {
  * Generate full execution plan
  */
 export function generateExecutionPlan(workflow: Workflow): ExecutionPlan {
+  const backEdgeAnalysis = analyzeBackEdges(workflow.steps);
+
   // Check for cycles
   const cycleCheck = detectCyclesDFS(workflow.steps);
 
@@ -136,6 +174,8 @@ export function generateExecutionPlan(workflow: Workflow): ExecutionPlan {
       executionOrder: [],
       cyclicPath: cycleCheck.cyclePath,
       stepGroups: [],
+      backEdges: backEdgeAnalysis.backEdges,
+      warnings: backEdgeAnalysis.warnings,
     };
   }
 
@@ -149,6 +189,8 @@ export function generateExecutionPlan(workflow: Workflow): ExecutionPlan {
     isValid: true,
     executionOrder,
     stepGroups,
+    backEdges: backEdgeAnalysis.backEdges,
+    warnings: backEdgeAnalysis.warnings,
   };
 }
 

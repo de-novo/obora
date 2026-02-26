@@ -73,6 +73,22 @@ describe('dependency-resolver', () => {
 
       expect(graph.nodes.size).toBe(0);
       expect(graph.edges.size).toBe(0);
+      expect(graph.backEdges.size).toBe(0);
+    });
+
+    it("collects back-edge annotations separately from DAG edges", () => {
+      const steps: Step[] = [
+        { name: "implement", agent: "coder" },
+        {
+          name: "verify",
+          agent: "verifier",
+          depends_on: ["implement"],
+          on_fail: { goto: "implement", max_iterations: 3, escalate_on_exhaust: "fail", cooldown_ms: 0, reset_state: false, max_cost: null, max_cost_escalation: null },
+        },
+      ];
+      const graph = buildDependencyGraph(steps);
+      expect(graph.edges.get("verify")).toEqual(["implement"]);
+      expect(graph.backEdges.get("verify")).toBe("implement");
     });
   });
 
@@ -244,6 +260,36 @@ describe('dependency-resolver', () => {
       expect(level1).toBeDefined();
       expect(level1!.steps.length).toBe(2);
       expect(level1!.parallelizable).toBe(true);
+    });
+
+    it("returns warnings when two back-edges point to the same target", () => {
+      const workflow: Workflow = {
+        name: "back-edge-warn",
+        steps: [
+          { name: "a", agent: "x" },
+          { name: "b", agent: "x", depends_on: ["a"], on_fail: { goto: "a", max_iterations: 2, escalate_on_exhaust: "fail", cooldown_ms: 0, reset_state: false, max_cost: null, max_cost_escalation: null } },
+          { name: "c", agent: "x", depends_on: ["a"], on_fail: { goto: "a", max_iterations: 2, escalate_on_exhaust: "fail", cooldown_ms: 0, reset_state: false, max_cost: null, max_cost_escalation: null } },
+        ],
+      };
+      const plan = generateExecutionPlan(workflow);
+      expect(plan.isValid).toBe(true);
+      expect(plan.backEdges).toHaveLength(2);
+      expect(plan.warnings.some((warning) => warning.includes("Multiple back-edges point to 'a'"))).toBe(true);
+    });
+
+    it("returns warning when three back-edges point to the same target", () => {
+      const workflow: Workflow = {
+        name: "back-edge-error",
+        steps: [
+          { name: "a", agent: "x" },
+          { name: "b", agent: "x", depends_on: ["a"], on_fail: { goto: "a", max_iterations: 2, escalate_on_exhaust: "fail", cooldown_ms: 0, reset_state: false, max_cost: null, max_cost_escalation: null } },
+          { name: "c", agent: "x", depends_on: ["a"], on_fail: { goto: "a", max_iterations: 2, escalate_on_exhaust: "fail", cooldown_ms: 0, reset_state: false, max_cost: null, max_cost_escalation: null } },
+          { name: "d", agent: "x", depends_on: ["a"], on_fail: { goto: "a", max_iterations: 2, escalate_on_exhaust: "fail", cooldown_ms: 0, reset_state: false, max_cost: null, max_cost_escalation: null } },
+        ],
+      };
+      const plan = generateExecutionPlan(workflow);
+      expect(plan.isValid).toBe(true);
+      expect(plan.warnings.some((warning) => warning.includes("Multiple back-edges point to 'a'"))).toBe(true);
     });
   });
 
