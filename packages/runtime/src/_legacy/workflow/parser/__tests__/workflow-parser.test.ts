@@ -435,7 +435,7 @@ steps:
       expect(() => parseWorkflow(yaml)).toThrow(error);
     });
 
-    it("inherits max_cost_escalation from escalate_on_exhaust when omitted", () => {
+    it("normalizes omitted max_cost_escalation to null (inheritance happens at runtime)", () => {
       const yaml = `
 name: omitted-max-cost-escalation
 steps:
@@ -450,7 +450,7 @@ steps:
       escalate_on_exhaust: human
 `;
       const workflow = parseWorkflow(yaml);
-      expect(workflow.steps[1].on_fail?.max_cost_escalation).toBe("human");
+      expect(workflow.steps[1].on_fail?.max_cost_escalation).toBeNull();
       expect(workflow.steps[1].on_fail?.escalate_on_exhaust).toBe("human");
     });
 

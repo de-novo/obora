@@ -229,7 +229,8 @@ function parseOnFail(raw: unknown, stepName: string): StepOnFailConfig | undefin
     }
   }
 
-  const maxCostEscalationRaw = config.max_cost_escalation ?? escalation;
+  // Spec: omitted max_cost_escalation = null at parser level. Inheritance from escalate_on_exhaust happens at runtime.
+  const maxCostEscalationRaw = config.max_cost_escalation ?? null;
   if (maxCostEscalationRaw !== null && maxCostEscalationRaw !== "human" && maxCostEscalationRaw !== "dlq" && maxCostEscalationRaw !== "fail") {
     throw new ParseError("E2003", `unknown escalation: ${String(maxCostEscalationRaw)}`);
   }
