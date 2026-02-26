@@ -1,0 +1,44 @@
+name: todo-dev-10
+version: "1.0"
+description: "TodoApp development workflow - 10 steps"
+
+steps:
+  - name: d1-repo-ci
+    agent: engineer
+    input: { task: "Initialize repo/branch/CI checks for TodoApp MVP." }
+  - name: d2-schema
+    agent: engineer
+    depends_on: [d1-repo-ci]
+    input: { task: "Implement DB schema and migrations for Task/Project/Tag." }
+  - name: d3-api-crud
+    agent: engineer
+    depends_on: [d2-schema]
+    input: { task: "Implement CRUD APIs with validation and errors." }
+  - name: d4-domain-rules
+    agent: architect
+    depends_on: [d3-api-crud]
+    input: { task: "Implement status transitions, priority, reminders rules." }
+  - name: d5-ui-shell
+    agent: engineer
+    depends_on: [d4-domain-rules]
+    input: { task: "Build Inbox/Today/Upcoming/Done screen shell." }
+  - name: d6-interaction
+    agent: engineer
+    depends_on: [d5-ui-shell]
+    input: { task: "Add quick-add, filters, sort, keyboard shortcuts." }
+  - name: d7-reminders
+    agent: engineer
+    depends_on: [d6-interaction]
+    input: { task: "Add local reminders and snooze policy." }
+  - name: d8-obora-knowledge
+    agent: architect
+    depends_on: [d7-reminders]
+    input: { task: "Integrate Obora knowledge query/context into workflow." }
+  - name: d9-test-gate
+    agent: qa
+    depends_on: [d8-obora-knowledge]
+    input: { task: "Run unit/integration/e2e gate and report P0/P1." }
+  - name: d10-release-package
+    agent: qa
+    depends_on: [d9-test-gate]
+    input: { task: "Prepare release package, changelog, go/no-go decision." }

@@ -1001,7 +1001,11 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
   private getCachedGraph(execution: Execution, workflow: Workflow) {
     const metadata = (execution.metadata ??= {});
     const cached = metadata.__oboraWorkflowGraph as { key?: string; graph?: ReturnType<typeof buildGraph> } | undefined;
-    const graphKey = workflow.steps.map((step) => step.name).join("|");
+    const graphKey = workflow.steps.map((step) => {
+      const deps = step.depends_on?.join(",") ?? "";
+      const backEdge = step.on_fail?.goto ?? "";
+      return `${step.name}:${deps}:${backEdge}`;
+    }).join("|");
 
     if (cached?.graph && cached.key === graphKey) {
       return cached.graph;

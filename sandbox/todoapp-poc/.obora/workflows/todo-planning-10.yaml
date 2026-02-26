@@ -1,0 +1,44 @@
+name: todo-planning-10
+version: "1.0"
+description: "TodoApp planning workflow - 10 steps"
+
+steps:
+  - name: p1-problem
+    agent: planner
+    input: { task: "Define the top 2 problems TodoApp solves." }
+  - name: p2-users
+    agent: planner
+    depends_on: [p1-problem]
+    input: { task: "Define primary users and contexts." }
+  - name: p3-jtbd
+    agent: planner
+    depends_on: [p2-users]
+    input: { task: "Write 3 JTBD statements." }
+  - name: p4-mvp-scope
+    agent: planner
+    depends_on: [p3-jtbd]
+    input: { task: "Split features into Must/Should/Could." }
+  - name: p5-domain-model
+    agent: architect
+    depends_on: [p4-mvp-scope]
+    input: { task: "Design entities: Task/Project/Tag/Reminder/Status." }
+  - name: p6-user-flow
+    agent: architect
+    depends_on: [p5-domain-model]
+    input: { task: "Define create-edit-complete-review user flow." }
+  - name: p7-kpi
+    agent: planner
+    depends_on: [p6-user-flow]
+    input: { task: "Set KPI and thresholds for v1.0." }
+  - name: p8-nfr
+    agent: architect
+    depends_on: [p7-kpi]
+    input: { task: "Define NFR for performance/offline/sync/security." }
+  - name: p9-release-strategy
+    agent: qa
+    depends_on: [p8-nfr]
+    input: { task: "Define alpha-beta-v1 release gates." }
+  - name: p10-prd-finalize
+    agent: planner
+    depends_on: [p9-release-strategy]
+    input: { task: "Produce PRD v1 acceptance checklist and open issues." }
