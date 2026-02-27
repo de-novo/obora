@@ -1,0 +1,20 @@
+workflow: release
+runId: run-release-001
+results:
+  - model: gpt-4
+    score: 95
+    judgmentStatus: pass
+    runState: done
+    issues: []
+  - model: claude-3
+    score: 93
+    judgmentStatus: pass
+    runState: done
+    issues: []
+  - model: gemini-pro
+    score: 90
+    judgmentStatus: pass
+    runState: done
+    issues: []
+runState: done
+decisionReason: "security_blocker=0, approval>=2"

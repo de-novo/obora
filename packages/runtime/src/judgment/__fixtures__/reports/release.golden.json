@@ -1,0 +1,34 @@
+{
+  "runId": "run-release-001",
+  "workflow": "release",
+  "responses": 3,
+  "avgScore": 92.67,
+  "p0Count": 0,
+  "p1Count": 0,
+  "runState": "done",
+  "finalPass": true,
+  "decisionReason": "security_blocker=0, approval>=2",
+  "results": [
+    {
+      "model": "gpt-4",
+      "score": 95,
+      "judgmentStatus": "pass",
+      "runState": "done",
+      "issues": []
+    },
+    {
+      "model": "claude-3",
+      "score": 93,
+      "judgmentStatus": "pass",
+      "runState": "done",
+      "issues": []
+    },
+    {
+      "model": "gemini-pro",
+      "score": 90,
+      "judgmentStatus": "pass",
+      "runState": "done",
+      "issues": []
+    }
+  ]
+}

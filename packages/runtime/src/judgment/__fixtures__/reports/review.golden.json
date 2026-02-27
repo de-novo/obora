@@ -1,0 +1,41 @@
+{
+  "runId": "run-review-001",
+  "workflow": "review",
+  "responses": 4,
+  "avgScore": 92,
+  "p0Count": 0,
+  "p1Count": 0,
+  "runState": "done",
+  "finalPass": true,
+  "decisionReason": "avg>=90, P0/P1=0, responses>=4",
+  "results": [
+    {
+      "model": "gpt-4",
+      "score": 95,
+      "judgmentStatus": "pass",
+      "runState": "done",
+      "issues": []
+    },
+    {
+      "model": "claude-3",
+      "score": 92,
+      "judgmentStatus": "pass",
+      "runState": "done",
+      "issues": []
+    },
+    {
+      "model": "gemini-pro",
+      "score": 91,
+      "judgmentStatus": "pass",
+      "runState": "done",
+      "issues": []
+    },
+    {
+      "model": "llama-3",
+      "score": 90,
+      "judgmentStatus": "pass",
+      "runState": "done",
+      "issues": []
+    }
+  ]
+}

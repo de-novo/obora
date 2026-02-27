@@ -1,0 +1,27 @@
+{
+  "runId": "run-qa-001",
+  "workflow": "qa",
+  "responses": 2,
+  "avgScore": 86.5,
+  "p0Count": 0,
+  "p1Count": 0,
+  "runState": "done",
+  "finalPass": true,
+  "decisionReason": "critical_test_fail=0, coverage>=80",
+  "results": [
+    {
+      "model": "gpt-4",
+      "score": 88,
+      "judgmentStatus": "pass",
+      "runState": "done",
+      "issues": []
+    },
+    {
+      "model": "claude-3",
+      "score": 85,
+      "judgmentStatus": "pass",
+      "runState": "done",
+      "issues": []
+    }
+  ]
+}
