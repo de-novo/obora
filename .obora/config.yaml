@@ -11,14 +11,14 @@ defaults:
 providers:
   anthropic:
     authMode: token
-    authRef: env:ANTHROPIC_API_KEY
+    authRef: global:anthropic
     defaultModel: claude-opus-4-6
     timeout: 300
     maxTokens: 8192
 
   zai:
     authMode: api_key
-    authRef: env:ZAI_API_KEY
+    authRef: global:zai
     defaultModel: glm-4.7
     timeout: 300
     maxTokens: 8192

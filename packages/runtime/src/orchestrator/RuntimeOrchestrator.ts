@@ -129,6 +129,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
 
   define(name: string, workflow: Workflow | string): void {
     const parsed = typeof workflow === "string" ? parseWorkflow(workflow) : workflow;
+    this.validateBackEdgeIntegrity(parsed);
     this.workflows.set(name, structuredClone(parsed));
   }
 
@@ -508,8 +509,18 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
     completed: Set<string>,
     scheduled: Set<string>
   ): Promise<Execution> {
-    while (completed.size < workflow.steps.length) {
-      const candidates = getNextSteps(workflow, completed)
+    while (true) {
+      const starvationTimedOut = new Set(
+        Object.entries(execution.stepRecords)
+          .filter(([, rec]) => rec.status === "failed" && rec.error === "starvation_timeout")
+          .map(([name]) => name),
+      );
+      const schedulableCompleted = new Set<string>([...completed, ...starvationTimedOut]);
+      if (schedulableCompleted.size >= workflow.steps.length) {
+        break;
+      }
+
+      const candidates = getNextSteps(workflow, schedulableCompleted)
         .filter((step) => !scheduled.has(step.name))
         .sort((a, b) => execution.stepOrder.indexOf(a.name) - execution.stepOrder.indexOf(b.name));
 
@@ -741,7 +752,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
       const result = await this.dependencies.cellManager.execute(cellId, this.stepToTask(step, workflowInput));
       record.result = result;
       record.endedAt = this.now();
-      this.trackLoopCost(execution, workflow, step.name, result.metrics.costUsd);
+      this.trackLoopCost(execution, workflow, step.name, result.metrics.costUsd, completed);
 
       await this.recordAudit(execution.id, "cell_end", {
         stepName: step.name,
@@ -765,7 +776,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
       }
 
       if (!result.success) {
-        const failure = await this.handleStepFailure(execution, workflow, step, cellId, result.output, result.metrics.costUsd);
+        const failure = await this.handleStepFailure(execution, workflow, step, cellId, result.output, result.metrics.costUsd, completed);
         await this.recordAudit(execution.id, "step_end", {
           stepName: step.name,
           status: failure.status === "back_edge" ? "back_edge" : "failed",
@@ -785,7 +796,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
         });
         if (consensusResult.status !== "pass") {
           const reason = consensusResult.status === "fail" ? consensusResult.reason : `consensus ${consensusResult.status}`;
-          const failure = await this.handleStepFailure(execution, workflow, step, cellId, { error: reason }, result.metrics.costUsd);
+          const failure = await this.handleStepFailure(execution, workflow, step, cellId, { error: reason }, result.metrics.costUsd, completed);
           await this.recordAudit(execution.id, "step_end", {
             stepName: step.name,
             status: "failed",
@@ -844,12 +855,13 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
     step: Step,
     cellId: string,
     output: unknown,
-    cellCostUsd?: number,
+    cellCostUsd: number | undefined,
+    completed: Set<string>,
   ): Promise<{ step: Step; status: "failed" | "completed" | "back_edge"; targetStep?: string; error?: string }> {
     const record = execution.stepRecords[step.name]!;
     const error = this.extractError(output);
 
-    const backEdgeResult = await this.tryHandleBackEdge(execution, workflow, step, error, cellId, cellCostUsd);
+    const backEdgeResult = await this.tryHandleBackEdge(execution, workflow, step, error, cellId, cellCostUsd, completed);
     if (backEdgeResult) {
       return backEdgeResult;
     }
@@ -899,7 +911,8 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
     step: Step,
     error: string,
     cellId: string,
-    _cellCostUsd?: number,
+    _unusedCellCost: number | undefined,
+    completed: Set<string>,
   ): Promise<BackEdgeTriggerResult | undefined> {
     const onFail = step.on_fail;
     if (!onFail?.goto) {
@@ -965,7 +978,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
       timestamp: this.now().toISOString(),
     }, { cellId });
 
-    await this.handleStarvation(execution, workflow, step.name, onFail.goto);
+    await this.handleStarvation(execution, workflow, step.name, onFail.goto, completed);
     await this.wait(onFail.cooldown_ms);
 
     const record = execution.stepRecords[step.name]!;
@@ -978,6 +991,42 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
 
   private loopStateKey(stepId: string, field: "iteration_count" | "cost_usd" | "target"): string {
     return `${LOOP_KEY_PREFIX}${stepId}.${field}`;
+  }
+
+  private validateBackEdgeIntegrity(workflow: Workflow): void {
+    const steps = workflow.steps ?? [];
+    const stepNames = new Set(steps.map((s) => s.name));
+    const deps = new Map<string, string[]>();
+    for (const step of steps) {
+      deps.set(step.name, step.depends_on ?? []);
+    }
+
+    const canReachDependency = (source: string, target: string): boolean => {
+      const visited = new Set<string>();
+      const stack = [...(deps.get(source) ?? [])];
+      while (stack.length > 0) {
+        const current = stack.pop()!;
+        if (current === target) return true;
+        if (visited.has(current)) continue;
+        visited.add(current);
+        for (const parent of deps.get(current) ?? []) stack.push(parent);
+      }
+      return false;
+    };
+
+    for (const step of steps) {
+      const goto = step.on_fail?.goto;
+      if (!goto) continue;
+      if (!stepNames.has(goto)) {
+        throw new Error(`Step '${step.name}' on_fail.goto references non-existent step '${goto}'`);
+      }
+      if (goto === step.name) {
+        throw new Error(`Step '${step.name}': self-loop is not allowed for on_fail.goto`);
+      }
+      if (!canReachDependency(step.name, goto)) {
+        throw new Error(`Step '${step.name}': back-edge target '${goto}' must precede source '${step.name}' in dependency graph`);
+      }
+    }
   }
 
   private getBackEdgeState(execution: Execution, source: string, target: string): BackEdgeState {
@@ -1151,6 +1200,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
     workflow: Workflow,
     sourceStep: string,
     targetStep: string,
+    completed: Set<string>,
   ): Promise<void> {
     const maxParallel = workflow.config?.max_parallel && workflow.config.max_parallel > 0
       ? workflow.config.max_parallel
