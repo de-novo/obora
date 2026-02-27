@@ -4,6 +4,8 @@ import {
   CollaborationPatternBase,
   type BuiltinPatternKind,
   type ConsensusPatternConfig,
+  type EscalationTrigger,
+  type VoterRole,
   PATTERN_BLACKBOARD_DOMAIN_MAP,
   type PatternPayloadResult,
   type PatternRuntimeContext,
@@ -22,6 +24,7 @@ interface NormalizedVote {
   approved: boolean;
   score?: number;
   reason?: string;
+  role?: VoterRole;
 }
 
 interface CustomEvaluationContext {
@@ -89,6 +92,33 @@ export class ConsensusPattern extends CollaborationPatternBase {
         throw new Error("consensus.custom_evaluate must be a function when provided");
       }
     }
+
+    if (config.voter_roles !== undefined) {
+      if (!Array.isArray(config.voter_roles)) {
+        throw new Error("consensus.voter_roles must be an array of VoterRoleConfig");
+      }
+      const validRoles = new Set(["ai", "human", "service"]);
+      for (const rc of config.voter_roles) {
+        if (!validRoles.has(rc.role)) {
+          throw new Error(`consensus.voter_roles[].role must be one of: ai, human, service (got "${rc.role}")`);
+        }
+        if (!Array.isArray(rc.voters) || rc.voters.length === 0) {
+          throw new Error("consensus.voter_roles[].voters must be a non-empty string[]");
+        }
+      }
+    }
+
+    if (config.escalation !== undefined) {
+      const validTriggers = new Set(["timeout", "quorum_not_met"]);
+      if (!Array.isArray(config.escalation.triggers) || config.escalation.triggers.length === 0) {
+        throw new Error("consensus.escalation.triggers must be a non-empty array");
+      }
+      for (const t of config.escalation.triggers) {
+        if (!validTriggers.has(t)) {
+          throw new Error(`consensus.escalation.triggers must be one of: timeout, quorum_not_met (got "${t}")`);
+        }
+      }
+    }
   }
 
   protected async onExecute(context: PatternRuntimeContext): Promise<PatternPayloadResult> {
@@ -102,8 +132,11 @@ export class ConsensusPattern extends CollaborationPatternBase {
     const bestEffort = new Set(config.best_effort ?? []);
     const requiredParticipants = participants.filter((participant) => !bestEffort.has(participant));
 
+    // Build voter role map from config
+    const voterRoleMap = this.buildVoterRoleMap(config, participants);
+
     const input = this.getConsensusInput(context);
-    const votes = this.collectVotes(participants, input.votes);
+    const votes = this.collectVotes(participants, input.votes, voterRoleMap);
 
     await context.emit?.({
       type: "consensus_vote_start",
@@ -112,9 +145,11 @@ export class ConsensusPattern extends CollaborationPatternBase {
         participants,
         required: requiredParticipants,
         best_effort: [...bestEffort],
+        voter_roles: Object.fromEntries(voterRoleMap),
       },
     });
 
+    // VotingSessionStore integration: create, record, close, and use tally for cross-validation
     const votingSessionStore = new VotingSessionStore();
     const votingSession = votingSessionStore.create({
       agendaId: `consensus:${context.executionId ?? context.stepName ?? "session"}`,
@@ -139,6 +174,7 @@ export class ConsensusPattern extends CollaborationPatternBase {
           approved: vote.approved,
           score: vote.score,
           reason: vote.reason,
+          role: vote.role,
         },
       });
     }
@@ -147,6 +183,23 @@ export class ConsensusPattern extends CollaborationPatternBase {
     if (requiredVoteCount < requiredParticipants.length) {
       const timeoutMs = parseTimeoutToMs(config.timeout);
       if (timeoutMs !== undefined && this.hasTimedOut(timeoutMs, input.startedAt, context)) {
+        // Close store session before escalation/throw
+        votingSessionStore.close(votingSession.id);
+
+        if (this.shouldEscalate("timeout", config)) {
+          return this.buildEscalationResult(
+            "timeout",
+            config,
+            participants,
+            votes,
+            rule,
+            requiredParticipants,
+            bestEffort,
+            votingSessionStore.getTally(votingSession.id),
+            context,
+          );
+        }
+
         const timeoutError = Object.assign(new Error("consensus voting timed out"), {
           code: OboraErrorCode.CONSENSUS_TIMEOUT,
         });
@@ -162,6 +215,23 @@ export class ConsensusPattern extends CollaborationPatternBase {
         });
 
         throw timeoutError;
+      }
+
+      // Close store session before quorum failure
+      votingSessionStore.close(votingSession.id);
+
+      if (this.shouldEscalate("quorum_not_met", config)) {
+        return this.buildEscalationResult(
+          "quorum_not_met",
+          config,
+          participants,
+          votes,
+          rule,
+          requiredParticipants,
+          bestEffort,
+          votingSessionStore.getTally(votingSession.id),
+          context,
+        );
       }
 
       await context.emit?.({
@@ -191,6 +261,10 @@ export class ConsensusPattern extends CollaborationPatternBase {
       };
     }
 
+    // Close store session and get tally for cross-validation
+    votingSessionStore.close(votingSession.id);
+    const tally = votingSessionStore.getTally(votingSession.id);
+
     const verdict = this.evaluateRule(rule, votes, participants, requiredParticipants, config, context);
 
     await context.emit?.({
@@ -217,6 +291,70 @@ export class ConsensusPattern extends CollaborationPatternBase {
         blackboard_domains: PATTERN_BLACKBOARD_DOMAIN_MAP["consensus"],
         required_participants: requiredParticipants,
         best_effort: [...bestEffort],
+        store_tally: tally ?? undefined,
+      },
+    };
+  }
+
+  private buildVoterRoleMap(config: ConsensusPatternConfig, participants: string[]): Map<string, VoterRole> {
+    const map = new Map<string, VoterRole>();
+    // Default all to "ai"
+    for (const p of participants) {
+      map.set(p, "ai");
+    }
+    // Override from config
+    if (config.voter_roles) {
+      for (const rc of config.voter_roles) {
+        for (const v of rc.voters) {
+          map.set(v, rc.role);
+        }
+      }
+    }
+    return map;
+  }
+
+  private shouldEscalate(trigger: EscalationTrigger, config: ConsensusPatternConfig): boolean {
+    return config.escalation?.triggers?.includes(trigger) === true;
+  }
+
+  private async buildEscalationResult(
+    trigger: EscalationTrigger,
+    config: ConsensusPatternConfig,
+    participants: string[],
+    votes: NormalizedVote[],
+    rule: string,
+    requiredParticipants: string[],
+    bestEffort: Set<string>,
+    tally: unknown,
+    context: PatternRuntimeContext,
+  ): Promise<PatternPayloadResult> {
+    await context.emit?.({
+      type: "consensus_escalation",
+      payload: {
+        trigger,
+        escalation_target: config.escalation?.target,
+        participants,
+        votes,
+        rule,
+      },
+    });
+
+    return {
+      success: false,
+      output: {
+        status: "escalated",
+        trigger,
+        escalation_target: config.escalation?.target,
+        reason: OboraErrorCode.RECOVERY_ESCALATION_TIMEOUT,
+        participants,
+        votes,
+      },
+      metadata: {
+        rule,
+        blackboard_domains: PATTERN_BLACKBOARD_DOMAIN_MAP["consensus"],
+        required_participants: requiredParticipants,
+        best_effort: [...bestEffort],
+        store_tally: tally ?? undefined,
       },
     };
   }
@@ -230,7 +368,7 @@ export class ConsensusPattern extends CollaborationPatternBase {
     return input as ConsensusInputShape;
   }
 
-  private collectVotes(participants: string[], rawVotes: Record<string, VoteValue> | undefined): NormalizedVote[] {
+  private collectVotes(participants: string[], rawVotes: Record<string, VoteValue> | undefined, roleMap: Map<string, VoterRole>): NormalizedVote[] {
     if (!rawVotes) {
       return [];
     }
@@ -241,7 +379,9 @@ export class ConsensusPattern extends CollaborationPatternBase {
         continue;
       }
 
-      votes.push(this.normalizeVote(participant, rawVotes[participant]));
+      const vote = this.normalizeVote(participant, rawVotes[participant]);
+      vote.role = roleMap.get(participant) ?? "ai";
+      votes.push(vote);
     }
 
     return votes;
@@ -341,12 +481,17 @@ export class ConsensusPattern extends CollaborationPatternBase {
       };
     }
 
-    const approvedCount = votes.filter((vote) => vote.approved).length;
+    // majority: only required participants influence decision/score.
+    // best_effort voters contribute telemetry but must not overturn required-majority verdict.
+    const requiredApprovedCount = votes.filter(
+      (vote) => requiredParticipants.includes(vote.voterId) && vote.approved
+    ).length;
     const required = Math.floor(requiredParticipants.length / 2) + 1;
+    const approved = requiredApprovedCount >= required;
     return {
-      approved: approvedCount >= required,
-      reason: approvedCount >= required ? "majority reached" : "majority not reached",
-      score: requiredParticipants.length === 0 ? 0 : approvedCount / requiredParticipants.length,
+      approved,
+      reason: approved ? "majority reached" : "majority not reached",
+      score: requiredParticipants.length === 0 ? 0 : requiredApprovedCount / requiredParticipants.length,
     };
   }
 

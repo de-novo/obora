@@ -62,6 +62,60 @@ describe("ConsensusPattern", () => {
     });
   });
 
+  it("majority score stays in [0, 1] range", async () => {
+    const pattern = new ConsensusPattern();
+
+    const result = await pattern.execute({
+      pattern: "consensus",
+      participants: {
+        a: "agent-a",
+        b: "agent-b",
+        c: "agent-c",
+      },
+      config: { rule: "majority" },
+      input: {
+        votes: { a: true, b: true, c: true },
+      },
+    });
+
+    expect(result.success).toBe(true);
+    const output = result.output as Record<string, unknown>;
+    expect(output.score).toBe(1);
+    expect(output.score).toBeLessThanOrEqual(1);
+    expect(output.score).toBeGreaterThanOrEqual(0);
+  });
+
+
+  it("majority uses required voters only (best_effort cannot flip verdict)", async () => {
+    const pattern = new ConsensusPattern();
+
+    const result = await pattern.execute({
+      pattern: "consensus",
+      participants: {
+        reqA: "agent-a",
+        reqB: "agent-b",
+        optC: "agent-c",
+      },
+      config: {
+        rule: "majority",
+        best_effort: ["optC"],
+      },
+      input: {
+        votes: {
+          reqA: true,
+          reqB: false,
+          optC: true,
+        },
+      },
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.output).toMatchObject({ reason: "majority not reached" });
+    const output = result.output as Record<string, unknown>;
+    expect(output.score).toBe(0.5);
+    expect(output.score).toBeLessThanOrEqual(1);
+  });
+
   it("passes unanimous only when everyone approves", async () => {
     const pattern = new ConsensusPattern();
 
@@ -287,5 +341,272 @@ describe("ConsensusPattern", () => {
     expect(() => pattern.validateConfig({ rule: "custom", custom_evaluate: "nope" as never })).toThrow(
       "consensus.custom_evaluate must be a function when provided"
     );
+  });
+
+  // ===== NEW TESTS: voter roles =====
+
+  it("assigns voter roles from config and includes them in votes", async () => {
+    const pattern = new ConsensusPattern();
+    const emit = vi.fn();
+
+    const result = await pattern.execute({
+      pattern: "consensus",
+      participants: {
+        humanReviewer: "agent-h",
+        aiAgent: "agent-ai",
+        svcBot: "agent-svc",
+      },
+      config: {
+        rule: "majority",
+        voter_roles: [
+          { role: "human", voters: ["humanReviewer"] },
+          { role: "service", voters: ["svcBot"] },
+        ],
+      },
+      input: {
+        votes: {
+          humanReviewer: true,
+          aiAgent: true,
+          svcBot: false,
+        },
+      },
+      emit,
+    });
+
+    expect(result.success).toBe(true);
+
+    // Check emitted vote_cast events include role
+    const castEvents = emit.mock.calls
+      .map((c) => c[0])
+      .filter((e: { type: string }) => e.type === "consensus_vote_cast");
+    expect(castEvents).toHaveLength(3);
+    expect(castEvents.find((e: { payload: { voterId: string } }) => e.payload.voterId === "humanReviewer").payload.role).toBe("human");
+    expect(castEvents.find((e: { payload: { voterId: string } }) => e.payload.voterId === "aiAgent").payload.role).toBe("ai");
+    expect(castEvents.find((e: { payload: { voterId: string } }) => e.payload.voterId === "svcBot").payload.role).toBe("service");
+
+    // Votes in output also have roles
+    const votes = (result.output as { votes: Array<{ voterId: string; role: string }> }).votes;
+    expect(votes.find((v) => v.voterId === "humanReviewer")?.role).toBe("human");
+  });
+
+  it("best_effort works correctly with voter roles", async () => {
+    const pattern = new ConsensusPattern();
+
+    const result = await pattern.execute({
+      pattern: "consensus",
+      participants: {
+        human: "agent-h",
+        svc: "agent-svc",
+      },
+      config: {
+        rule: "majority",
+        best_effort: ["svc"],
+        voter_roles: [
+          { role: "human", voters: ["human"] },
+          { role: "service", voters: ["svc"] },
+        ],
+      },
+      input: {
+        votes: {
+          human: true,
+          // svc did not vote
+        },
+      },
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("validates voter_roles config", () => {
+    const pattern = new ConsensusPattern();
+
+    expect(() =>
+      pattern.validateConfig({
+        voter_roles: [{ role: "human", voters: ["a"] }],
+      })
+    ).not.toThrow();
+
+    expect(() =>
+      pattern.validateConfig({
+        voter_roles: [{ role: "alien" as never, voters: ["a"] }],
+      })
+    ).toThrow('consensus.voter_roles[].role must be one of: ai, human, service');
+
+    expect(() =>
+      pattern.validateConfig({
+        voter_roles: [{ role: "ai", voters: [] }],
+      })
+    ).toThrow('consensus.voter_roles[].voters must be a non-empty string[]');
+  });
+
+  // ===== NEW TESTS: escalation =====
+
+  it("returns escalation result on quorum_not_met when escalation configured", async () => {
+    const pattern = new ConsensusPattern();
+    const emit = vi.fn();
+
+    const result = await pattern.execute({
+      pattern: "consensus",
+      participants: {
+        requiredA: "agent-a",
+        requiredB: "agent-b",
+      },
+      config: {
+        rule: "majority",
+        escalation: {
+          triggers: ["quorum_not_met"],
+          target: "supervisor:fallback",
+        },
+      },
+      input: {
+        votes: {
+          requiredA: true,
+        },
+      },
+      emit,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.output).toMatchObject({
+      status: "escalated",
+      trigger: "quorum_not_met",
+      escalation_target: "supervisor:fallback",
+    });
+
+    // Should emit consensus_escalation event
+    const escalationEvent = emit.mock.calls.find((c) => c[0].type === "consensus_escalation");
+    expect(escalationEvent).toBeDefined();
+    expect(escalationEvent![0].payload).toMatchObject({
+      trigger: "quorum_not_met",
+      escalation_target: "supervisor:fallback",
+    });
+  });
+
+  it("returns escalation result on timeout when escalation configured", async () => {
+    const pattern = new ConsensusPattern();
+    const emit = vi.fn();
+
+    const result = await pattern.execute({
+      pattern: "consensus",
+      participants: {
+        requiredA: "agent-a",
+        requiredB: "agent-b",
+      },
+      config: {
+        rule: "majority",
+        timeout: "1s",
+        escalation: {
+          triggers: ["timeout"],
+          target: "supervisor:timeout-handler",
+        },
+      },
+      input: {
+        startedAt: "2026-02-15T23:59:00.000Z",
+        votes: {
+          requiredA: true,
+        },
+      },
+      now: () => new Date("2026-02-16T00:00:10.000Z"),
+      emit,
+    } as never);
+
+    // Should NOT throw - escalation returns a result instead
+    expect(result.success).toBe(false);
+    expect(result.output).toMatchObject({
+      status: "escalated",
+      trigger: "timeout",
+      escalation_target: "supervisor:timeout-handler",
+    });
+  });
+
+  it("validates escalation config", () => {
+    const pattern = new ConsensusPattern();
+
+    expect(() =>
+      pattern.validateConfig({
+        escalation: { triggers: ["timeout"] },
+      })
+    ).not.toThrow();
+
+    expect(() =>
+      pattern.validateConfig({
+        escalation: { triggers: [] },
+      })
+    ).toThrow("consensus.escalation.triggers must be a non-empty array");
+
+    expect(() =>
+      pattern.validateConfig({
+        escalation: { triggers: ["invalid" as never] },
+      })
+    ).toThrow("consensus.escalation.triggers must be one of: timeout, quorum_not_met");
+  });
+
+  // ===== NEW TEST: custom rule execution =====
+
+  it("executes custom_evaluate with full context including roles", async () => {
+    const pattern = new ConsensusPattern();
+    const customEval = vi.fn().mockReturnValue({
+      approved: true,
+      reason: "custom logic passed",
+      score: 0.95,
+    });
+
+    const result = await pattern.execute({
+      pattern: "consensus",
+      participants: {
+        human: "agent-h",
+        ai: "agent-ai",
+      },
+      config: {
+        rule: "custom",
+        custom_evaluate: customEval,
+        voter_roles: [{ role: "human", voters: ["human"] }],
+      },
+      input: {
+        votes: {
+          human: { approved: true, score: 0.9 },
+          ai: { approved: true, score: 1.0 },
+        },
+      },
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.output).toMatchObject({
+      status: "consensus-reached",
+      reason: "custom logic passed",
+      score: 0.95,
+    });
+
+    // Verify the evaluator received votes with roles
+    expect(customEval).toHaveBeenCalledTimes(1);
+    const evalContext = customEval.mock.calls[0][0];
+    expect(evalContext.votes.find((v: { voterId: string }) => v.voterId === "human").role).toBe("human");
+    expect(evalContext.votes.find((v: { voterId: string }) => v.voterId === "ai").role).toBe("ai");
+  });
+
+  // ===== NEW TEST: VotingSessionStore tally in metadata =====
+
+  it("includes store_tally in metadata for successful verdict", async () => {
+    const pattern = new ConsensusPattern();
+
+    const result = await pattern.execute({
+      pattern: "consensus",
+      participants: {
+        a: "agent-a",
+        b: "agent-b",
+      },
+      config: { rule: "majority" },
+      input: {
+        votes: { a: true, b: true },
+      },
+    });
+
+    expect(result.success).toBe(true);
+    const meta = result.metadata as Record<string, unknown>;
+    expect(meta.store_tally).toBeDefined();
+    const tally = meta.store_tally as { totalVotes: number; approves: number; quorumMet: boolean };
+    expect(tally.totalVotes).toBe(2);
+    expect(tally.approves).toBe(2);
+    expect(tally.quorumMet).toBe(true);
   });
 });

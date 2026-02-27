@@ -88,8 +88,26 @@ export type CustomConvergenceFn = (context: {
   participants: string[];
 }) => boolean;
 
+export type VoterRole = "ai" | "human" | "service";
+
+export interface VoterRoleConfig {
+  /** Role of this voter. Default: "ai". */
+  role: VoterRole;
+  /** Voter ids assigned this role. */
+  voters: string[];
+}
+
+export type EscalationTrigger = "timeout" | "quorum_not_met";
+
+export interface EscalationConfig {
+  /** Which failure conditions trigger escalation instead of plain failure/throw. */
+  triggers: EscalationTrigger[];
+  /** Opaque target identifier for the escalation handler. */
+  target?: string;
+}
+
 export type CustomEvaluator = (context: {
-  votes: Array<{ voterId: string; approved: boolean; score?: number; reason?: string }>;
+  votes: Array<{ voterId: string; approved: boolean; score?: number; reason?: string; role?: VoterRole }>;
   participants: string[];
   requiredParticipants: string[];
   config: ConsensusPatternConfig;
@@ -117,6 +135,10 @@ export interface ConsensusPatternConfig {
   timeout?: string;
   best_effort?: string[];
   custom_evaluate?: CustomEvaluator;
+  /** Voter role assignments. Voters not listed default to "ai". */
+  voter_roles?: VoterRoleConfig[];
+  /** Escalation integration point for timeout/quorum failures. */
+  escalation?: EscalationConfig;
 }
 
 export interface BrainstormingPatternConfig {
