@@ -1,0 +1,57 @@
+# Judgment Module CI Gate — TASK-M1-28
+# Mirrors the checkset in scripts/ci/judgment-gate.sh
+name: Judgment Gate
+
+on:
+  push:
+    branches: [main, develop, 'feature/**']
+    paths:
+      - 'packages/runtime/src/judgment/**'
+      - 'scripts/ci/judgment-gate.sh'
+      - '.github/workflows/judgment-gate.yml'
+  pull_request:
+    paths:
+      - 'packages/runtime/src/judgment/**'
+      - 'scripts/ci/judgment-gate.sh'
+      - '.github/workflows/judgment-gate.yml'
+
+jobs:
+  judgment-gate:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18, 20]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Same 3 checks as scripts/ci/judgment-gate.sh
+      - name: TypeScript type-check
+        run: pnpm --filter @obora/runtime exec tsc --noEmit
+
+      - name: Judgment tests
+        run: pnpm --filter @obora/runtime exec vitest run --reporter=verbose src/judgment/
+
+      - name: Build
+        run: pnpm --filter @obora/runtime build
+
+      - name: Gate summary
+        if: failure()
+        run: |
+          echo "::error::Judgment gate FAILED — check the logs above for details."
+          echo "Tip: run locally with ./scripts/ci/judgment-gate.sh"
