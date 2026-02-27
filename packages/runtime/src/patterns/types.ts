@@ -105,6 +105,8 @@ export interface DiscussionPatternConfig {
   max_rounds?: number;
   convergence?: "no_disagreements" | "majority" | "unanimous" | "custom";
   on_deadlock?: "escalate" | "retry" | "fail";
+  /** Number of extra retry rounds when on_deadlock='retry'. Default 1. Must be >= 1. */
+  retry_budget?: number;
   custom_convergence?: CustomConvergenceFn;
 }
 

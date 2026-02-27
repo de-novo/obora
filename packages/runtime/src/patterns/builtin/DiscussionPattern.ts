@@ -62,8 +62,25 @@ export class DiscussionPattern extends CollaborationPatternBase {
         throw new Error("discussion.on_deadlock must be one of: escalate, retry, fail");
       }
     }
-  }
 
+    if (config.retry_budget !== undefined) {
+      if (!Number.isInteger(config.retry_budget) || config.retry_budget < 1) {
+        throw new Error("discussion.retry_budget must be an integer >= 1");
+      }
+      if (config.on_deadlock !== "retry") {
+        throw new Error("discussion.retry_budget is only valid when on_deadlock=\"retry\"");
+      }
+    }
+
+    if (config.convergence === "custom") {
+      if (config.custom_convergence === undefined) {
+        throw new Error("discussion.convergence='custom' requires custom_convergence function");
+      }
+      if (typeof config.custom_convergence !== "function") {
+        throw new Error("discussion.custom_convergence must be a function");
+      }
+    }
+  }
   protected async onExecute(context: PatternRuntimeContext): Promise<PatternPayloadResult> {
     const participants = Object.keys(context.participants ?? {});
     if (participants.length === 0) {
@@ -93,7 +110,8 @@ export class DiscussionPattern extends CollaborationPatternBase {
     let decision: string | undefined;
     let converged = false;
 
-    const roundLimit = onDeadlock === "retry" ? maxRounds + 1 : maxRounds;
+    const retryBudget = config.retry_budget ?? 1;
+    const roundLimit = onDeadlock === "retry" ? maxRounds + retryBudget : maxRounds;
 
     for (let round = 1; round <= roundLimit; round++) {
       await context.emit?.({
@@ -192,6 +210,7 @@ export class DiscussionPattern extends CollaborationPatternBase {
         converged: false,
         convergence,
         on_deadlock: onDeadlock,
+        ...(onDeadlock === "retry" && { retry_budget: config.retry_budget ?? 1, retry_rounds_used: rounds.length - maxRounds }),
         blackboard_domains: PATTERN_BLACKBOARD_DOMAIN_MAP["discussion"],
         meeting_state: meetingStateMachine.getState(),
       },
@@ -294,13 +313,13 @@ export class DiscussionPattern extends CollaborationPatternBase {
   private handleDeadlock(
     action: NonNullable<DiscussionPatternConfig["on_deadlock"]>,
     rounds: number
-  ): { status: "failed" | "escalated" | "retried"; rounds: number } {
+  ): { status: "failed" | "escalated"; rounds: number } {
     if (action === "escalate") {
       return { status: "escalated", rounds };
     }
 
     if (action === "retry") {
-      return { status: "retried", rounds };
+      return { status: "failed", rounds };
     }
 
     return { status: "failed", rounds };

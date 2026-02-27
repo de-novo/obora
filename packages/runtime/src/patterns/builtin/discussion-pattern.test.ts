@@ -116,7 +116,7 @@ describe("DiscussionPattern", () => {
     );
   });
 
-  it("supports custom convergence function", async () => {
+  it("supports custom convergence function (typed)", async () => {
     const pattern = new DiscussionPattern();
     const customConvergence = vi.fn(() => true);
 
@@ -130,13 +130,180 @@ describe("DiscussionPattern", () => {
         max_rounds: 2,
         convergence: "custom",
         custom_convergence: customConvergence,
-      } as never,
+      },
       input: {
         rounds: [{ a: "x", b: "y" }],
       },
     });
 
     expect(customConvergence).toHaveBeenCalledTimes(1);
+    expect(customConvergence).toHaveBeenCalledWith({
+      round: 1,
+      opinions: { a: "x", b: "y" },
+      participants: ["a", "b"],
+    });
     expect(result.success).toBe(true);
+  });
+
+  // --- retry path tests ---
+
+  it("on_deadlock=retry runs extra retry rounds (default budget=1)", async () => {
+    const pattern = new DiscussionPattern();
+    const emit = vi.fn();
+
+    const result = await pattern.execute({
+      pattern: "discussion",
+      participants: { a: "agent-a", b: "agent-b" },
+      config: {
+        max_rounds: 2,
+        convergence: "unanimous",
+        on_deadlock: "retry",
+      },
+      input: {
+        rounds: [
+          { a: "x", b: "y" },
+          { a: "x", b: "y" },
+          { a: "x", b: "y" }, // retry round
+        ],
+      },
+      emit,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.output).toMatchObject({
+      status: "failed",
+      reason: "max_rounds_reached",
+    });
+    // 2 base + 1 retry = 3 total rounds
+    expect(result.metadata?.rounds).toBe(3);
+    expect(result.metadata?.retry_budget).toBe(1);
+    expect(result.metadata?.retry_rounds_used).toBe(1);
+  });
+
+  it("on_deadlock=retry converges during retry round", async () => {
+    const pattern = new DiscussionPattern();
+
+    const result = await pattern.execute({
+      pattern: "discussion",
+      participants: { a: "agent-a", b: "agent-b" },
+      config: {
+        max_rounds: 1,
+        convergence: "unanimous",
+        on_deadlock: "retry",
+      },
+      input: {
+        rounds: [
+          { a: "x", b: "y" }, // base round - no convergence
+          { a: "x", b: "x" }, // retry round - converges
+        ],
+      },
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.output).toMatchObject({
+      status: "consensus-reached",
+      decision: "x",
+    });
+    expect(result.metadata?.rounds).toBe(2);
+  });
+
+  it("on_deadlock=retry with custom retry_budget", async () => {
+    const pattern = new DiscussionPattern();
+
+    const result = await pattern.execute({
+      pattern: "discussion",
+      participants: { a: "agent-a", b: "agent-b" },
+      config: {
+        max_rounds: 1,
+        convergence: "unanimous",
+        on_deadlock: "retry",
+        retry_budget: 3,
+      },
+      input: {
+        rounds: [
+          { a: "x", b: "y" },
+          { a: "x", b: "y" },
+          { a: "x", b: "y" },
+          { a: "x", b: "y" }, // all 4 rounds exhausted
+        ],
+      },
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.metadata?.rounds).toBe(4); // 1 base + 3 retry
+    expect(result.metadata?.retry_budget).toBe(3);
+    expect(result.metadata?.retry_rounds_used).toBe(3);
+  });
+
+  // --- config validation edge cases ---
+
+  it("validates max_rounds rejects non-integer", () => {
+    const pattern = new DiscussionPattern();
+    expect(() => pattern.validateConfig({ max_rounds: 1.5 })).toThrow("discussion.max_rounds must be an integer >= 1");
+    expect(() => pattern.validateConfig({ max_rounds: -1 })).toThrow("discussion.max_rounds must be an integer >= 1");
+  });
+
+  it("validates retry_budget", () => {
+    const pattern = new DiscussionPattern();
+    expect(() => pattern.validateConfig({ retry_budget: 0 })).toThrow("discussion.retry_budget must be an integer >= 1");
+    expect(() => pattern.validateConfig({ retry_budget: 1.5 })).toThrow("discussion.retry_budget must be an integer >= 1");
+    expect(() => pattern.validateConfig({ retry_budget: 2, on_deadlock: "fail" })).toThrow(
+      'discussion.retry_budget is only valid when on_deadlock="retry"'
+    );
+    // valid: retry_budget with on_deadlock=retry
+    expect(() => pattern.validateConfig({ retry_budget: 2, on_deadlock: "retry" })).not.toThrow();
+    // retry_budget without on_deadlock="retry" must fail
+    expect(() => pattern.validateConfig({ retry_budget: 2 })).toThrow(
+      'discussion.retry_budget is only valid when on_deadlock="retry"'
+    );
+  });
+
+  it("validates on_deadlock rejects unknown values", () => {
+    const pattern = new DiscussionPattern();
+    expect(() => pattern.validateConfig({ on_deadlock: "unknown" as never })).toThrow(
+      "discussion.on_deadlock must be one of: escalate, retry, fail"
+    );
+  });
+
+  it("validates custom_convergence must be a function when convergence=custom", () => {
+    const pattern = new DiscussionPattern();
+    expect(() =>
+      pattern.validateConfig({
+        convergence: "custom",
+        custom_convergence: "not-a-function" as never,
+      })
+    ).toThrow("discussion.custom_convergence must be a function");
+
+    // convergence=custom without custom_convergence must fail at validation
+    expect(() =>
+      pattern.validateConfig({
+        convergence: "custom",
+      })
+    ).toThrow("discussion.convergence='custom' requires custom_convergence function");  });
+
+  it("throws at runtime when convergence=custom but no function provided", async () => {
+    const pattern = new DiscussionPattern();
+
+    await expect(
+      pattern.execute({
+        pattern: "discussion",
+        participants: { a: "agent-a" },
+        config: {
+          convergence: "custom",
+        },
+      })
+    ).rejects.toThrow("discussion.convergence='custom' requires custom_convergence function");
+  });
+
+  it("throws when no participants provided", async () => {
+    const pattern = new DiscussionPattern();
+
+    await expect(
+      pattern.execute({
+        pattern: "discussion",
+        participants: {},
+        config: {},
+      })
+    ).rejects.toThrow("discussion pattern requires at least one participant");
   });
 });
