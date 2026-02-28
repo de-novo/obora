@@ -144,6 +144,9 @@ export class PeerReviewPattern extends CollaborationPatternBase {
 
         throw Object.assign(new Error("peer-review timed out"), {
           code: OboraErrorCode.CONSENSUS_TIMEOUT,
+          errorCode: OboraErrorCode.CONSENSUS_TIMEOUT,
+          runState: "timeout" as const,
+          finalPass: false,
         });
       }
 
@@ -251,6 +254,10 @@ export class PeerReviewPattern extends CollaborationPatternBase {
       success: true,
       output: {
         status: "pass",
+        // Canonical contract fields (M2-05)
+        runState: "done" as const,
+        finalPass: true,
+        decisionReason: "criteria_satisfied",
         subject: input.subject,
         review: {
           rounds: roundSummaries,
@@ -306,6 +313,11 @@ export class PeerReviewPattern extends CollaborationPatternBase {
         status: "fail",
         reason,
         error_codes: [OboraErrorCode.CONSENSUS_FAIL],
+        // Canonical contract fields (M2-05)
+        runState: "failed" as const,
+        finalPass: false,
+        decisionReason: reason,
+        errorCode: OboraErrorCode.CONSENSUS_FAIL,
         subject: input.subject,
         review: {
           rounds: roundSummaries,

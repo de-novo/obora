@@ -278,4 +278,84 @@ describe("PeerReviewPattern", () => {
       "peer-review.best_effort must contain non-empty reviewer ids"
     );
   });
+
+  // === M2-05 Canonical contract regression tests ===
+
+  it("includes canonical runState/finalPass/decisionReason on pass output", async () => {
+    const pattern = new PeerReviewPattern();
+    const result = await pattern.execute({
+      pattern: "peer-review",
+      participants: { r: "agent-a" },
+      config: { min_score: 0 },
+      input: { reviews: { r: { score: 1, issues: [] } } },
+    });
+
+    expect(result.success).toBe(true);
+    const out = result.output as Record<string, unknown>;
+    expect(out.runState).toBe("done");
+    expect(out.finalPass).toBe(true);
+    expect(out.decisionReason).toBe("criteria_satisfied");
+    // pass output should not have errorCode
+    expect(out.errorCode).toBeUndefined();
+  });
+
+  it("includes canonical runState/finalPass/decisionReason/errorCode on fail output", async () => {
+    const pattern = new PeerReviewPattern();
+    const result = await pattern.execute({
+      pattern: "peer-review",
+      participants: { r: "agent-a" },
+      config: { min_score: 0.9 },
+      input: { reviews: { r: { score: 0.5, issues: [] } } },
+    });
+
+    expect(result.success).toBe(false);
+    const out = result.output as Record<string, unknown>;
+    expect(out.runState).toBe("failed");
+    expect(out.finalPass).toBe(false);
+    expect(out.decisionReason).toBe("score_below_threshold");
+    // Single errorCode (not just array)
+    expect(out.errorCode).toBe(OboraErrorCode.CONSENSUS_FAIL);
+    // Backward compat: error_codes array still present
+    expect(out.error_codes).toEqual([OboraErrorCode.CONSENSUS_FAIL]);
+  });
+
+  it("includes canonical errorCode on timeout error object", async () => {
+    const pattern = new PeerReviewPattern();
+    try {
+      await pattern.execute({
+        pattern: "peer-review",
+        participants: { r: "agent-a" },
+        config: { max_rounds: 1, timeout: "1s" } as never,
+        input: {
+          startedAt: "2026-02-16T00:00:00.000Z",
+          reviews: { r: { score: 1, issues: [] } },
+        },
+        now: () => new Date("2026-02-16T00:01:00.000Z"),
+      } as never);
+      expect.unreachable("should have thrown");
+    } catch (err: unknown) {
+      const e = err as Record<string, unknown>;
+      expect(e.code).toBe(OboraErrorCode.CONSENSUS_TIMEOUT);
+      expect(e.errorCode).toBe(OboraErrorCode.CONSENSUS_TIMEOUT);
+      expect(e.runState).toBe("timeout");
+      expect(e.finalPass).toBe(false);
+    }
+  });
+
+  it("quorum_not_met failure includes canonical fields", async () => {
+    const pattern = new PeerReviewPattern();
+    const result = await pattern.execute({
+      pattern: "peer-review",
+      participants: { a: "agent-a", b: "agent-b" },
+      config: { max_rounds: 1 },
+      input: { rounds: [{ reviews: { a: { score: 1, issues: [] } } }] },
+    });
+
+    expect(result.success).toBe(false);
+    const out = result.output as Record<string, unknown>;
+    expect(out.runState).toBe("failed");
+    expect(out.finalPass).toBe(false);
+    expect(out.decisionReason).toBe("quorum_not_met");
+    expect(out.errorCode).toBe(OboraErrorCode.CONSENSUS_FAIL);
+  });
 });
