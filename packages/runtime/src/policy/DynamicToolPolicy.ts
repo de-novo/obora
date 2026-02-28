@@ -2,6 +2,9 @@ import { evaluateExpression, type ExpressionContext } from "./expressions/Expres
 import { parseExpression, type ExpressionAST } from "./expressions/ExpressionParser.js";
 import type { DynamicToolRule, PolicyAction, PolicyContext, PolicyDecision } from "./types.js";
 
+// Module-level expression AST cache shared across all resolveDynamicToolRule calls.
+// Uses FIFO eviction at MAX_CACHE_SIZE. For multi-engine isolation, consider
+// injecting cache via options in the future.
 const MAX_CACHE_SIZE = 1000;
 const expressionCache = new Map<string, ExpressionAST>();
 
@@ -22,7 +25,12 @@ function getExpressionAst(expression: string): ExpressionAST {
   return ast;
 }
 
-function compareDynamicRules(a: DynamicToolRule, b: DynamicToolRule): number {
+interface IndexedDynamicToolRule extends DynamicToolRule {
+  /** Original array index, used for deterministic tie-breaking */
+  _index: number;
+}
+
+function compareDynamicRules(a: IndexedDynamicToolRule, b: IndexedDynamicToolRule): number {
   const priorityDiff = (b.priority ?? 0) - (a.priority ?? 0);
   if (priorityDiff !== 0) {
     return priorityDiff;
@@ -35,7 +43,8 @@ function compareDynamicRules(a: DynamicToolRule, b: DynamicToolRule): number {
     return 1;
   }
 
-  return 0;
+  // Stable tie-break: preserve original declaration order
+  return a._index - b._index;
 }
 
 export interface DynamicToolRuleResolution {
@@ -52,9 +61,10 @@ export function resolveDynamicToolRule(
     return {};
   }
 
-  const candidates: DynamicToolRule[] = [];
+  const candidates: IndexedDynamicToolRule[] = [];
 
-  for (const rule of rules) {
+  for (let i = 0; i < rules.length; i++) {
+    const rule = rules[i];
     if (rule.name !== action.name) {
       continue;
     }
@@ -73,7 +83,7 @@ export function resolveDynamicToolRule(
       };
 
       if (evaluateExpression(ast, evalContext)) {
-        candidates.push(rule);
+        candidates.push({ ...rule, _index: i });
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

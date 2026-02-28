@@ -176,7 +176,27 @@ function normalizeDynamicToolRule(input: unknown, index: number): DynamicToolRul
     throw new Error(`Invalid dynamicToolRules[${index}].priority: expected number`);
   }
 
-  return { name, condition, effect, priority };
+  const transformFn = input.transformFn;
+  if (transformFn !== undefined && (typeof transformFn !== "string" || transformFn.length === 0)) {
+    throw new Error(`Invalid dynamicToolRules[${index}].transformFn: expected non-empty string`);
+  }
+
+  const gate = input.gate;
+  let normalizedGate: DynamicToolRule["gate"];
+  if (gate !== undefined) {
+    if (!isObject(gate)) {
+      throw new Error(`Invalid dynamicToolRules[${index}].gate: expected object`);
+    }
+    if (gate.type !== "human-approval" && gate.type !== "consensus" && gate.type !== "external") {
+      throw new Error(`Invalid dynamicToolRules[${index}].gate.type: ${String(gate.type)}`);
+    }
+    if (gate.timeout !== undefined && typeof gate.timeout !== "string") {
+      throw new Error(`Invalid dynamicToolRules[${index}].gate.timeout: expected string`);
+    }
+    normalizedGate = { type: gate.type, timeout: gate.timeout };
+  }
+
+  return { name, condition, effect, priority, transformFn, gate: normalizedGate };
 }
 
 function normalizeDynamicQuota(input: unknown): DynamicQuotaConfig | undefined {

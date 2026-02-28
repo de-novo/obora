@@ -290,3 +290,291 @@ describe("Dynamic policy", () => {
     expect(engine.getPinnedSnapshot("exec-1")).toBeUndefined();
   });
 });
+
+describe("Dynamic policy - P2 補強", () => {
+  const baseDynamicVars = {
+    execution: {
+      id: "exec-1",
+      workflowName: "wf",
+      startedAt: new Date(),
+      elapsedMs: 100,
+      totalTokens: 0,
+      totalCost: 10,
+      totalToolCalls: 0,
+      completedSteps: [],
+    },
+    step: { name: "deploy", agent: "agent", index: 1 },
+    actor: { id: "cell" },
+    state: {},
+    metrics: { errorCount: 0, retryCount: 0, avgStepDurationMs: 0, maxStepDurationMs: 0 },
+    previousResults: {},
+  };
+
+  it("warn action returns allow with warning metadata (not gate)", () => {
+    const engine = new DefaultPolicyEngine();
+    engine.loadInline({
+      resources: {
+        dynamicQuota: {
+          limits: [
+            {
+              field: "cost",
+              condition: "execution.totalCost > 5",
+              limit: 6,
+              action: "warn",
+            },
+          ],
+        },
+      },
+    });
+
+    const decision = engine.enforce(
+      { type: "resource_use", name: "runtime" },
+      { currentCost: 10, dynamicVars: baseDynamicVars },
+    );
+
+    expect(decision.type).toBe("allow");
+    expect((decision as { warning?: unknown }).warning).toMatchObject({
+      reason: expect.stringContaining("Cost limit exceeded"),
+      rule: "resources.dynamic.cost",
+      field: "cost",
+      limit: 6,
+      current: 10,
+    });
+  });
+
+  it("gate action still returns gate decision", () => {
+    const engine = new DefaultPolicyEngine();
+    engine.loadInline({
+      resources: {
+        dynamicQuota: {
+          limits: [
+            {
+              field: "cost",
+              condition: "execution.totalCost > 5",
+              limit: 6,
+              action: "gate",
+            },
+          ],
+        },
+      },
+    });
+
+    const decision = engine.enforce(
+      { type: "resource_use", name: "runtime" },
+      { currentCost: 10, dynamicVars: baseDynamicVars },
+    );
+
+    expect(decision.type).toBe("gate");
+  });
+
+  it("dynamic tool rule with gate config uses rule.gate fields", () => {
+    const engine = new DefaultPolicyEngine();
+    engine.loadInline({
+      dynamicToolRules: [
+        {
+          name: "shell_exec",
+          condition: "execution.totalCost > 0",
+          effect: "gate" as const,
+          priority: 10,
+          gate: { type: "consensus" as const, timeout: "30s" },
+        },
+      ],
+      tools: [{ name: "shell_exec", effect: "allow" }],
+    });
+
+    const decision = engine.enforce(
+      { type: "tool_call", name: "shell_exec", params: {} },
+      { dynamicVars: baseDynamicVars },
+    );
+
+    expect(decision).toMatchObject({
+      type: "gate",
+      gateType: "consensus",
+      config: { timeout: "30s" },
+    });
+  });
+
+  it("dynamic tool rule with transform config uses rule.transformFn", () => {
+    const engine = new DefaultPolicyEngine();
+    engine.loadInline({
+      dynamicToolRules: [
+        {
+          name: "shell_exec",
+          condition: "execution.totalCost > 0",
+          effect: "transform" as const,
+          priority: 10,
+          transformFn: "sanitize_command",
+        },
+      ],
+      tools: [{ name: "shell_exec", effect: "allow" }],
+    });
+
+    const decision = engine.enforce(
+      { type: "tool_call", name: "shell_exec", params: { cmd: "ls" } },
+      { dynamicVars: baseDynamicVars },
+    );
+
+    expect(decision).toMatchObject({
+      type: "transform",
+      transformFn: "sanitize_command",
+    });
+  });
+
+  it("compareDynamicRules returns stable order for equal priority and effect", () => {
+    const engine = new DefaultPolicyEngine();
+    // Two allow rules with same priority - first declared should win
+    engine.loadInline({
+      dynamicToolRules: [
+        { name: "shell_exec", condition: "execution.totalCost >= 0", effect: "allow", priority: 5 },
+        { name: "shell_exec", condition: "execution.totalCost >= 0", effect: "deny", priority: 10 },
+        { name: "shell_exec", condition: "execution.totalCost >= 0", effect: "allow", priority: 5 },
+      ],
+      tools: [{ name: "shell_exec", effect: "allow" }],
+    });
+
+    // Higher priority deny (10) wins
+    const decision = engine.enforce(
+      { type: "tool_call", name: "shell_exec", params: {} },
+      { dynamicVars: baseDynamicVars },
+    );
+    expect(decision.type).toBe("deny");
+  });
+
+  it("stable tie-break: same priority same effect preserves declaration order", () => {
+    // Use transformFn to distinguish otherwise-identical rules
+    const result = resolveDynamicToolRule(
+      { type: "tool_call", name: "t", params: {} },
+      { dynamicVars: baseDynamicVars },
+      [
+        { name: "t", condition: "execution.totalCost >= 0", effect: "transform" as const, priority: 5, transformFn: "first_declared" },
+        { name: "t", condition: "execution.totalCost >= 0", effect: "transform" as const, priority: 5, transformFn: "second_declared" },
+      ],
+    );
+
+    // The first rule (index 0) should win due to stable tie-break
+    expect(result.matchedRule).toBeDefined();
+    expect(result.matchedRule!.effect).toBe("transform");
+    expect(result.matchedRule!.transformFn).toBe("first_declared");
+  });
+});
+
+// --- Loader normalization regression tests (M2-12) ---
+import { normalizePolicySet } from "../PolicyLoader.js";
+
+describe("PolicyLoader.normalizeDynamicToolRule preserves all fields", () => {
+  it("preserves transformFn through normalization", () => {
+    const policy = normalizePolicySet({
+      dynamicToolRules: [
+        { name: "shell_exec", condition: "execution.totalCost > 5", effect: "transform", priority: 10, transformFn: "sanitize_command" },
+      ],
+    });
+
+    expect(policy.dynamicToolRules).toHaveLength(1);
+    expect(policy.dynamicToolRules![0].transformFn).toBe("sanitize_command");
+    expect(policy.dynamicToolRules![0].effect).toBe("transform");
+    expect(policy.dynamicToolRules![0].priority).toBe(10);
+  });
+
+  it("preserves gate.type and gate.timeout through normalization", () => {
+    const policy = normalizePolicySet({
+      dynamicToolRules: [
+        { name: "deploy", condition: "step.name == 'deploy'", effect: "gate", gate: { type: "consensus", timeout: "30s" } },
+      ],
+    });
+
+    expect(policy.dynamicToolRules).toHaveLength(1);
+    expect(policy.dynamicToolRules![0].gate).toEqual({ type: "consensus", timeout: "30s" });
+  });
+
+  it("preserves gate without timeout", () => {
+    const policy = normalizePolicySet({
+      dynamicToolRules: [
+        { name: "x", condition: "true", effect: "gate", gate: { type: "human-approval" } },
+      ],
+    });
+
+    expect(policy.dynamicToolRules![0].gate).toEqual({ type: "human-approval", timeout: undefined });
+  });
+
+  it("rejects invalid transformFn type", () => {
+    expect(() => normalizePolicySet({
+      dynamicToolRules: [
+        { name: "x", condition: "true", effect: "transform", transformFn: 123 },
+      ],
+    })).toThrow("transformFn: expected non-empty string");
+  });
+
+  it("rejects invalid gate.type", () => {
+    expect(() => normalizePolicySet({
+      dynamicToolRules: [
+        { name: "x", condition: "true", effect: "gate", gate: { type: "invalid" } },
+      ],
+    })).toThrow("gate.type");
+  });
+
+  it("rejects non-object gate", () => {
+    expect(() => normalizePolicySet({
+      dynamicToolRules: [
+        { name: "x", condition: "true", effect: "gate", gate: "string" },
+      ],
+    })).toThrow("gate: expected object");
+  });
+
+  it("loader-created rules carry fields to runtime enforcement", () => {
+    const policy = normalizePolicySet({
+      tools: [{ name: "shell_exec", effect: "allow" }],
+      dynamicToolRules: [
+        { name: "shell_exec", condition: "execution.totalCost > 0", effect: "gate", priority: 10, gate: { type: "consensus", timeout: "30s" } },
+      ],
+    });
+
+    const engine = new DefaultPolicyEngine();
+    engine.loadInline(policy);
+
+    const decision = engine.enforce(
+      { type: "tool_call", name: "shell_exec", params: {} },
+      { dynamicVars: {
+        execution: { id: "e", workflowName: "w", startedAt: new Date(), elapsedMs: 0, totalTokens: 0, totalCost: 10, totalToolCalls: 0, completedSteps: [] },
+        step: { name: "s", agent: "a", index: 0 },
+        actor: { id: "c" },
+        state: {},
+        metrics: { errorCount: 0, retryCount: 0, avgStepDurationMs: 0, maxStepDurationMs: 0 },
+        previousResults: {},
+      }},
+    );
+
+    expect(decision).toMatchObject({ type: "gate", gateType: "consensus", config: { timeout: "30s" } });
+  });
+});
+
+// --- Loader-path transform E2E regression (M2-12 closure) ---
+describe("PolicyLoader transform E2E regression", () => {
+  it("normalizePolicySet -> loadInline -> enforce preserves transformFn in final decision", () => {
+    const policy = normalizePolicySet({
+      tools: [{ name: "shell_exec", effect: "allow" }],
+      dynamicToolRules: [
+        { name: "shell_exec", condition: "execution.totalCost > 0", effect: "transform", priority: 10, transformFn: "sanitize_command" },
+      ],
+    });
+
+    // Verify normalization kept transformFn
+    expect(policy.dynamicToolRules![0].transformFn).toBe("sanitize_command");
+
+    const engine = new DefaultPolicyEngine();
+    engine.loadInline(policy);
+
+    const decision = engine.enforce(
+      { type: "tool_call", name: "shell_exec", params: { cmd: "rm -rf /" } },
+      { dynamicVars: {
+        execution: { id: "e", workflowName: "w", startedAt: new Date(), elapsedMs: 0, totalTokens: 0, totalCost: 10, totalToolCalls: 0, completedSteps: [] },
+        step: { name: "s", agent: "a", index: 0 },
+        actor: { id: "c" },
+        state: {},
+        metrics: { errorCount: 0, retryCount: 0, avgStepDurationMs: 0, maxStepDurationMs: 0 },
+        previousResults: {},
+      }},
+    );
+
+    expect(decision).toMatchObject({ type: "transform", transformFn: "sanitize_command" });
+  });
+});

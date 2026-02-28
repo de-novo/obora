@@ -1,9 +1,16 @@
 export type PolicyDecision =
-  | { type: "allow" }
+  | { type: "allow"; warning?: PolicyWarning }
   | { type: "deny"; reason: string; rule: string }
   | { type: "gate"; gateType: string; config: unknown }
   | { type: "transform"; original: unknown; transformed: unknown; rule: string; transformFn?: string };
 
+export interface PolicyWarning {
+  reason: string;
+  rule: string;
+  field?: string;
+  limit?: number;
+  current?: number;
+}
 export interface PolicyRulePlugin {
   name: string;
   version: string;
@@ -65,6 +72,13 @@ export interface DynamicToolRule {
   condition: string;
   effect: "allow" | "deny" | "transform" | "gate";
   priority?: number;
+  /** Required when effect is "transform". The transform function identifier. */
+  transformFn?: string;
+  /** Required when effect is "gate". Gate type and optional timeout. */
+  gate?: {
+    type: "human-approval" | "consensus" | "external";
+    timeout?: string;
+  };
 }
 
 export interface SandboxPolicy {

@@ -192,23 +192,25 @@ export class ToolRule implements PolicyRulePlugin {
     if (rule.effect === "gate") {
       return {
         type: "gate",
-        gateType: "human-approval",
+        gateType: rule.gate?.type ?? "human-approval",
         config: {
           tool: action.name,
+          timeout: rule.gate?.timeout,
           rule: `dynamicTools.${rule.name}`,
         },
       };
     }
 
+    // effect === "transform"
     return {
       type: "transform",
       original: action.params,
       transformed: {
         params: action.params,
-        transform: "dynamic",
+        transform: rule.transformFn ?? "dynamic",
       },
       rule: `dynamicTools.${rule.name}`,
-      transformFn: "dynamic",
+      transformFn: rule.transformFn ?? "dynamic",
     };
   }
 
