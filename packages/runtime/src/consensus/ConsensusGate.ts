@@ -81,6 +81,9 @@ const parseTimeoutToMs = (timeout?: string): number | undefined => {
   return value * 3_600_000;
 };
 
+/** Clamp a score value to [0, 1]. Undefined scores pass through unchanged. */
+const clampScore = (score: number | undefined): number | undefined =>
+  score === undefined ? undefined : Math.max(0, Math.min(1, score));
 const cloneVotes = (votes: Iterable<ConsensusVote>): ConsensusVote[] =>
   Array.from(votes).map((vote) => ({ ...vote, timestamp: new Date(vote.timestamp) }));
 
@@ -146,7 +149,7 @@ export class DefaultConsensusGate implements ConsensusGate {
     const timestamp = vote.timestamp ?? (this.options.now?.() ?? new Date());
     const resolvedVote: ConsensusVote = {
       voterId: vote.voterId,
-      score: vote.score,
+      score: clampScore(vote.score),
       approved: vote.approved,
       issues: vote.issues,
       timestamp,

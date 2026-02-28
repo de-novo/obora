@@ -62,8 +62,8 @@ export class ConsensusPattern extends CollaborationPatternBase {
       }
     }
 
-    if (config.threshold !== undefined && (!Number.isFinite(config.threshold) || config.threshold < 0)) {
-      throw new Error("consensus.threshold must be a finite number >= 0");
+    if (config.threshold !== undefined && (!Number.isFinite(config.threshold) || config.threshold < 0 || config.threshold > 1)) {
+      throw new Error("consensus.threshold must be a finite number in [0, 1]");
     }
 
     if (config.best_effort !== undefined && !Array.isArray(config.best_effort)) {
@@ -393,12 +393,12 @@ export class ConsensusPattern extends CollaborationPatternBase {
     }
 
     if (typeof vote === "number") {
-      return { voterId, approved: vote > 0, score: vote };
+      return { voterId, approved: vote > 0, score: clampScore(vote) };
     }
 
     if (vote && typeof vote === "object") {
       const approved = typeof vote.approved === "boolean" ? vote.approved : Boolean(vote.score && Number(vote.score) > 0);
-      const score = typeof vote.score === "number" ? vote.score : undefined;
+      const score = typeof vote.score === "number" ? clampScore(vote.score) : undefined;
       const reason = typeof vote.reason === "string" ? vote.reason : undefined;
       return { voterId, approved, score, reason };
     }
@@ -545,4 +545,11 @@ function resolveStartTime(startedAt: Date | string | undefined, fallback: Date):
   }
 
   return fallback;
+}
+
+/** Clamp a score value to [0, 1]. Undefined input returns undefined. */
+function clampScore(score: number): number;
+function clampScore(score: number | undefined): number | undefined;
+function clampScore(score: number | undefined): number | undefined {
+  return score === undefined ? undefined : Math.max(0, Math.min(1, score));
 }

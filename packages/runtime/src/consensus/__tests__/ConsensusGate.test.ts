@@ -160,3 +160,67 @@ describe("DefaultConsensusGate", () => {
     expect(result.status).toBe("fail");
   });
 });
+
+describe("M2-03B: score clamp policy", () => {
+  it("clamps score > 1 to 1", () => {
+    const gate = new DefaultConsensusGate({
+      executionId: "exec-m2-03b-1",
+      sessionIdFactory: () => "session-clamp-hi",
+    });
+
+    const session = gate.setup({
+      type: "score-threshold",
+      voters: [{ id: "v1" }],
+      minRequired: 1,
+      threshold: 0.5,
+    });
+
+    gate.registerVote(session.id, { voterId: "v1", approved: true, score: 5.0 });
+    const result = gate.evaluate(session.id);
+    expect(result.status).toBe("pass");
+    if (result.status === "pass") {
+      expect(result.votes[0].score).toBe(1);
+    }
+  });
+
+  it("clamps score < 0 to 0", () => {
+    const gate = new DefaultConsensusGate({
+      executionId: "exec-m2-03b-2",
+      sessionIdFactory: () => "session-clamp-lo",
+    });
+
+    const session = gate.setup({
+      type: "score-threshold",
+      voters: [{ id: "v1" }],
+      minRequired: 1,
+      threshold: 0.5,
+    });
+
+    gate.registerVote(session.id, { voterId: "v1", approved: true, score: -3.0 });
+    const result = gate.evaluate(session.id);
+    expect(result.status).toBe("fail");
+    if (result.status === "fail") {
+      expect(result.votes[0].score).toBe(0);
+    }
+  });
+
+  it("passes through undefined score unchanged", () => {
+    const gate = new DefaultConsensusGate({
+      executionId: "exec-m2-03b-3",
+      sessionIdFactory: () => "session-clamp-undef",
+    });
+
+    const session = gate.setup({
+      type: "majority",
+      voters: [{ id: "v1" }],
+      minRequired: 1,
+    });
+
+    gate.registerVote(session.id, { voterId: "v1", approved: true });
+    const result = gate.evaluate(session.id);
+    expect(result.status).toBe("pass");
+    if (result.status === "pass") {
+      expect(result.votes[0].score).toBeUndefined();
+    }
+  });
+});

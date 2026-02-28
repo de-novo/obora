@@ -698,3 +698,56 @@ describe("ConsensusPattern", () => {
     expect(tally.quorumMet).toBe(true);
   });
 });
+
+describe("M2-03B: score clamp policy", () => {
+  const pattern = new ConsensusPattern();
+
+  it("clamps out-of-range scores in score-threshold", async () => {
+    const events: unknown[] = [];
+    const result = await pattern.execute({
+      stepName: "clamp-test",
+      participants: { v1: {}, v2: {} },
+      config: {
+        rule: "score-threshold",
+        threshold: 0.5,
+      },
+      input: {
+        votes: { v1: { score: 5.0, approved: true }, v2: { score: -2.0, approved: false } },
+      },
+      emit: async (event: unknown) => { events.push(event); },
+    });
+
+    // Average of clamped scores: (1.0 + 0.0) / 2 = 0.5 >= 0.5 → pass
+    expect(result.success).toBe(true);
+    expect(result.output.score).toBe(0.5);
+  });
+
+  it("rejects threshold > 1 in validateConfig", () => {
+    expect(() => pattern.validateConfig({ threshold: 1.5 })).toThrow(
+      "consensus.threshold must be a finite number in [0, 1]"
+    );
+  });
+
+  it("accepts threshold = 1 in validateConfig", () => {
+    expect(() => pattern.validateConfig({ threshold: 1.0 })).not.toThrow();
+  });
+
+  it("clamps numeric vote value", async () => {
+    const result = await pattern.execute({
+      stepName: "clamp-numeric",
+      participants: { v1: {} },
+      config: {
+        rule: "score-threshold",
+        threshold: 0.8,
+      },
+      input: {
+        votes: { v1: 999 },
+      },
+      emit: async () => {},
+    });
+
+    // Clamped to 1.0 >= 0.8 → pass
+    expect(result.success).toBe(true);
+    expect(result.output.score).toBe(1);
+  });
+});
