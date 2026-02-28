@@ -25,6 +25,7 @@ async function seedExecution(store: InMemoryAuditStore, executionId = "exec-1") 
       type: "execution_start",
       data: {
         workflowName: "wf.review",
+        workflowVersion: "1.2.0",
         input: { pr: 42 },
         stepOrder: ["analyze", "review", "finalize"],
         policyVersion: "policy-v1",
@@ -224,6 +225,37 @@ describe("ReExecutionPlanner", () => {
       planner.createPlan("exec-1", { mode: "from_checkpoint", checkpointStep: "unknown" })
     ).rejects.toThrow("Checkpoint step not found");
   });
+  it("includes workflowVersion from execution_start data", async () => {
+    const store = new InMemoryAuditStore();
+    await seedExecution(store);
+    const planner = new ReExecutionPlanner(store);
+
+    const plan = await planner.createPlan("exec-1", { mode: "full", detectNonDeterminism: false });
+
+    expect(plan.workflowVersion).toBe("1.2.0");
+  });
+
+  it("includes snapshotRef when snapshot events exist", async () => {
+    const store = new InMemoryAuditStore();
+    await seedExecution(store);
+    // Add a snapshot_create event
+    await store.record(
+      makeEvent({
+        executionId: "exec-1",
+        type: "snapshot_create",
+        data: { snapshotId: "snap-abc123", reason: "checkpoint" },
+      })
+    );
+    const planner = new ReExecutionPlanner(store);
+
+    const plan = await planner.createPlan("exec-1", {
+      mode: "from_checkpoint",
+      checkpointStep: "review",
+      detectNonDeterminism: false,
+    });
+
+    expect(plan.snapshotRef).toBe("snap-abc123");
+  });
 });
 
 describe("createDiffReport", () => {
@@ -266,5 +298,45 @@ describe("createDiffReport", () => {
     expect(report.summary.changed).toBe(1);
     expect(report.summary.unchanged).toBe(1);
     expect(report.summary.skipped).toBe(1);
+  });
+
+  it("counts new and removed steps in summary", async () => {
+    const store = new InMemoryAuditStore();
+    await seedExecution(store);
+    const planner = new ReExecutionPlanner(store);
+    const plan = await planner.createPlan("exec-1", {
+      mode: "full",
+      detectNonDeterminism: false,
+    });
+
+    const originalEvents = await store.query({ executionId: "exec-1" });
+    // Re-execution has an extra step and missing one
+    const reExecutionEvents: AuditEvent[] = [
+      makeEvent({
+        executionId: "exec-3",
+        type: "execution_start",
+        data: { workflowName: "wf.review" },
+      }),
+      makeEvent({
+        executionId: "exec-3",
+        type: "cell_end",
+        data: { stepName: "analyze", output: { summary: "ok" } },
+      }),
+      makeEvent({
+        executionId: "exec-3",
+        type: "cell_end",
+        data: { stepName: "review", output: { summary: "original" } },
+      }),
+      // finalize is missing (removed), extra_step is new
+      makeEvent({
+        executionId: "exec-3",
+        type: "cell_end",
+        data: { stepName: "extra_step", output: { data: "new" } },
+      }),
+    ];
+
+    const report = createDiffReport(plan, originalEvents, reExecutionEvents);
+    expect(report.summary.new).toBeGreaterThanOrEqual(1);
+    expect(report.summary.removed).toBeGreaterThanOrEqual(1);
   });
 });

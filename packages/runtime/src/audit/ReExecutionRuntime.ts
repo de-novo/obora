@@ -14,7 +14,7 @@ export interface ReExecutionOptions {
 
 export interface StepReExecutionResult {
   stepName: string;
-  status: "completed" | "failed" | "skipped";
+  status: "done" | "failed" | "skipped";
   output?: unknown;
   matchesOriginal?: boolean;
   diff?: string;
@@ -23,6 +23,8 @@ export interface StepReExecutionResult {
 export interface ReExecutionResult {
   reExecutionId: string;
   originalExecutionId: string;
+  workflowVersion?: string;
+  snapshotRef?: string;
   plan: ReExecutionPlan;
   stepResults: StepReExecutionResult[];
   diffReport: ReExecutionDiffReport;
@@ -126,6 +128,8 @@ export class ReExecutionRuntime {
       return {
         reExecutionId,
         originalExecutionId: options.executionId,
+        ...(plan.workflowVersion ? { workflowVersion: plan.workflowVersion } : {}),
+        ...(plan.snapshotRef ? { snapshotRef: plan.snapshotRef } : {}),
         plan,
         stepResults: [],
         diffReport,
@@ -141,6 +145,7 @@ export class ReExecutionRuntime {
       type: "execution_start",
       data: {
         workflowName: plan.originalWorkflow,
+        ...(plan.workflowVersion ? { workflowVersion: plan.workflowVersion } : {}),
         originalExecutionId: options.executionId,
         mode: "reexecution",
         simulation: true,
@@ -157,6 +162,7 @@ export class ReExecutionRuntime {
           reason: "from_checkpoint",
           checkpointStep: plan.startFromStep,
           restoredState: plan.restoredState ?? {},
+          ...(plan.snapshotRef ? { snapshotRef: plan.snapshotRef } : {}),
           simulation: true,
         },
       });
@@ -271,7 +277,7 @@ export class ReExecutionRuntime {
       const matchesOriginal = true;
       const completed: StepReExecutionResult = {
         stepName,
-        status: "completed",
+        status: "done",
         output: originalOutput,
         matchesOriginal,
       };
@@ -283,7 +289,7 @@ export class ReExecutionRuntime {
         executionId: reExecutionId,
         timestamp: now(),
         type: "step_end",
-        data: { stepName, status: "completed", simulation: true },
+        data: { stepName, status: "done", simulation: true },
       });
 
       await this.auditTrail.record({
@@ -309,7 +315,7 @@ export class ReExecutionRuntime {
       timestamp: now(),
       type: "execution_end",
       data: {
-        status: stepResults.some((result) => result.status === "failed") ? "failed" : "completed",
+        status: stepResults.some((result) => result.status === "failed") ? "failed" : "done",
         simulation: true,
       },
     });
@@ -317,7 +323,10 @@ export class ReExecutionRuntime {
     const reExecutionEvents = await this.auditTrail.query({ executionId: reExecutionId });
     const diffReport = createDiffReport(plan, originalEvents, reExecutionEvents);
     const success =
-      !stepResults.some((result) => result.status === "failed") && diffReport.summary.changed === 0;
+      !stepResults.some((result) => result.status === "failed") &&
+      diffReport.summary.changed === 0 &&
+      diffReport.summary.new === 0 &&
+      diffReport.summary.removed === 0;
 
     await this.auditTrail.record({
       id: crypto.randomUUID(),
@@ -335,6 +344,8 @@ export class ReExecutionRuntime {
     return {
       reExecutionId,
       originalExecutionId: options.executionId,
+      ...(plan.workflowVersion ? { workflowVersion: plan.workflowVersion } : {}),
+      ...(plan.snapshotRef ? { snapshotRef: plan.snapshotRef } : {}),
       plan,
       stepResults,
       diffReport,

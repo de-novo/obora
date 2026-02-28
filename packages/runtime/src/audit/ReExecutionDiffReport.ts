@@ -6,7 +6,7 @@ export interface ReExecutionDiffReport {
   reExecutionId?: string;
   plan: ReExecutionPlan;
   differences: StepDiff[];
-  summary: { total_steps: number; changed: number; unchanged: number; skipped: number };
+  summary: { total_steps: number; changed: number; unchanged: number; skipped: number; new: number; removed: number };
 }
 
 export interface StepDiff {
@@ -144,9 +144,15 @@ export function createDiffReport(
       if (diff.status === "skipped") {
         acc.skipped += 1;
       }
+      if (diff.status === "new") {
+        acc.new += 1;
+      }
+      if (diff.status === "removed") {
+        acc.removed += 1;
+      }
       return acc;
     },
-    { total_steps: differences.length, changed: 0, unchanged: 0, skipped: 0 }
+    { total_steps: differences.length, changed: 0, unchanged: 0, skipped: 0, new: 0, removed: 0 }
   );
 
   const reExecutionId = reExecutionEvents?.find((event) => event.type === "execution_start")?.executionId;

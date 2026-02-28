@@ -4,6 +4,8 @@ import type { AuditEvent } from "./types.js";
 export interface ReExecutionPlan {
   executionId: string;
   originalWorkflow: string;
+  workflowVersion?: string;
+  snapshotRef?: string;
   mode: "full" | "from_checkpoint";
   startFromStep?: string;
   restoredState?: Record<string, unknown>;
@@ -50,6 +52,32 @@ function getWorkflowName(events: AuditEvent[]): string {
 
   const workflowName = asString(executionStart.data.workflowName);
   return workflowName ?? "unknown";
+}
+
+function getWorkflowVersion(events: AuditEvent[]): string | undefined {
+  const executionStart = events.find((event) => event.type === "execution_start");
+  if (!executionStart || !isObject(executionStart.data)) {
+    return undefined;
+  }
+  return asString(executionStart.data.workflowVersion) ?? asString(executionStart.data.contractVersion);
+}
+
+function getSnapshotRef(events: AuditEvent[], mode: "full" | "from_checkpoint", checkpointStep?: string): string | undefined {
+  if (mode === "from_checkpoint") {
+    // Look for snapshot_create/snapshot_restore events related to the checkpoint
+    for (const event of events) {
+      if ((event.type === "snapshot_create" || event.type === "snapshot_restore") && isObject(event.data)) {
+        const ref = asString(event.data.snapshotId) ?? asString(event.data.snapshotRef);
+        if (ref) return ref;
+      }
+    }
+  }
+  // Fallback: check execution_start for a snapshotRef
+  const executionStart = events.find((event) => event.type === "execution_start");
+  if (executionStart && isObject(executionStart.data)) {
+    return asString(executionStart.data.snapshotRef) ?? asString(executionStart.data.snapshotId);
+  }
+  return undefined;
 }
 
 function getStepOrder(events: AuditEvent[]): string[] {
@@ -218,10 +246,15 @@ export class ReExecutionPlanner {
 
     const detectNonDeterminism = options.detectNonDeterminism ?? true;
 
+    const workflowVersion = getWorkflowVersion(events);
+    const snapshotRef = getSnapshotRef(events, options.mode, options.checkpointStep);
+
     if (options.mode === "full") {
       return {
         executionId,
         originalWorkflow,
+        ...(workflowVersion ? { workflowVersion } : {}),
+        ...(snapshotRef ? { snapshotRef } : {}),
         mode: "full",
         stepsToRerun: stepOrder,
         stepsToSkip: [],
@@ -246,6 +279,8 @@ export class ReExecutionPlanner {
     return {
       executionId,
       originalWorkflow,
+      ...(workflowVersion ? { workflowVersion } : {}),
+      ...(snapshotRef ? { snapshotRef } : {}),
       mode: "from_checkpoint",
       startFromStep: options.checkpointStep,
       restoredState,

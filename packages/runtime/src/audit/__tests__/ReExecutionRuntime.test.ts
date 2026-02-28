@@ -119,7 +119,7 @@ describe("ReExecutionRuntime", () => {
 
     expect(result.plan.mode).toBe("full");
     expect(result.stepResults).toHaveLength(3);
-    expect(result.stepResults.every((step) => step.status === "completed")).toBe(true);
+    expect(result.stepResults.every((step) => step.status === "done")).toBe(true);
     expect(result.diffReport.summary.changed).toBe(0);
     expect(result.success).toBe(true);
 
@@ -146,7 +146,7 @@ describe("ReExecutionRuntime", () => {
     expect(result.plan.stepsToRerun).toEqual(["review", "finalize"]);
 
     expect(result.stepResults.find((step) => step.stepName === "analyze")?.status).toBe("skipped");
-    expect(result.stepResults.find((step) => step.stepName === "review")?.status).toBe("completed");
+    expect(result.stepResults.find((step) => step.stepName === "review")?.status).toBe("done");
     expect(result.diffReport.summary.skipped).toBe(1);
   });
 
