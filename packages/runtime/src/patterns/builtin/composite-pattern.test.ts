@@ -378,7 +378,7 @@ describe("CompositePattern", () => {
     ).rejects.toThrow("composite stage 's2' references unknown input_from stage 'missing'");
   });
 
-  it("escalates thrown stage errors", async () => {
+  it("escalates thrown stage errors with normalized error contract", async () => {
     const registry = createRegistry();
     const pattern = new CompositePattern(registry);
 
@@ -390,6 +390,87 @@ describe("CompositePattern", () => {
           stages: [{ name: "bad", pattern: "thrower" }],
         },
       })
-    ).rejects.toThrow("boom");
+    ).rejects.toMatchObject({
+      message: 'composite stage "bad" (pattern: thrower) failed and escalation requested',
+      code: OboraErrorCode.RECOVERY_ESCALATION_TIMEOUT,
+      stageResult: {
+        success: false,
+        output: { error: "boom" },
+      },
+    });
   });
+
+  it("escalate+throw path produces same error contract as escalate+non-throw path (P1)", async () => {
+    const registry = createRegistry();
+    const pattern = new CompositePattern(registry);
+
+    // Throw path (thrower pattern throws an Error)
+    const throwErr = await pattern.execute({
+      pattern: "composite",
+      config: {
+        on_stage_failure: "escalate",
+        stages: [{ name: "bad", pattern: "thrower" }],
+      },
+    }).catch((e: unknown) => e);
+
+    // Non-throw path (failer pattern returns success:false)
+    const nonThrowErr = await pattern.execute({
+      pattern: "composite",
+      config: {
+        on_stage_failure: "escalate",
+        stages: [{ name: "bad", pattern: "failer" }],
+      },
+    }).catch((e: unknown) => e);
+
+    // Both must have the same structural contract
+    expect(throwErr).toMatchObject({
+      code: OboraErrorCode.RECOVERY_ESCALATION_TIMEOUT,
+      stageResult: { success: false },
+    });
+    expect(nonThrowErr).toMatchObject({
+      code: OboraErrorCode.RECOVERY_ESCALATION_TIMEOUT,
+      stageResult: { success: false },
+    });
+
+    // Both messages follow the canonical format
+    expect((throwErr as Error).message).toMatch(/composite stage .* failed and escalation requested/);
+    expect((nonThrowErr as Error).message).toMatch(/composite stage .* failed and escalation requested/);
+  });
+
+  it("skip+throw path persists fallback output into outputsByStageName for downstream input_from (P2)", async () => {
+    const registry = createRegistry();
+    const pattern = new CompositePattern(registry);
+
+    const result = await pattern.execute({
+      pattern: "composite",
+      input: "start",
+      config: {
+        on_stage_failure: "skip",
+        stages: [
+          { name: "ok", pattern: "append", config: { suffix: "-ok" } },
+          { name: "throws", pattern: "thrower" },
+          { name: "uses-thrown", pattern: "echo", input_from: "throws" },
+        ],
+      },
+    });
+
+    expect(result.success).toBe(true);
+    const stages = (result.output as { stages: Array<{ name: string; success: boolean; output: unknown }> }).stages;
+    expect(stages).toHaveLength(3);
+
+    // The thrown stage should have a fallback output with error field
+    expect(stages[1]).toMatchObject({
+      name: "throws",
+      success: false,
+      output: { error: "boom" },
+    });
+
+    // The downstream stage using input_from: "throws" should receive the fallback output
+    expect(stages[2]).toMatchObject({
+      name: "uses-thrown",
+      success: true,
+      output: { error: "boom" },
+    });
+  });
+
 });

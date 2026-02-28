@@ -181,19 +181,38 @@ export class CompositePattern extends CollaborationPatternBase {
         });
 
         if (onStageFailure === "skip") {
+          const fallbackOutput = {
+            error: error instanceof Error ? error.message : String(error),
+          };
           results.push({
             name: stage.name,
             pattern: stage.pattern,
             success: false,
-            output: {
-              error: error instanceof Error ? error.message : String(error),
-            },
+            output: fallbackOutput,
           });
+          outputsByStageName.set(stage.name, fallbackOutput);
           continue;
         }
 
         if (onStageFailure === "escalate") {
-          throw error;
+          // If already normalized (from non-throw escalate path caught by this catch), re-throw as-is
+          const existingCode =
+            error && typeof error === "object" && "code" in error
+              ? Reflect.get(error, "code")
+              : undefined;
+          if (existingCode === OboraErrorCode.RECOVERY_ESCALATION_TIMEOUT) {
+            throw error;
+          }
+          throw Object.assign(
+            new Error(`composite stage "${stage.name}" (pattern: ${stage.pattern}) failed and escalation requested`),
+            {
+              code: OboraErrorCode.RECOVERY_ESCALATION_TIMEOUT,
+              stageResult: {
+                success: false,
+                output: { error: error instanceof Error ? error.message : String(error) },
+              },
+            }
+          );
         }
 
         await context.emit?.({

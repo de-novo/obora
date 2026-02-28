@@ -122,4 +122,13 @@ describe("Pattern runtime contracts", () => {
     expect(patternPlugin?.version).toBe("1.0.0");
     expect(isBuiltinPatternKind(patternPlugin!.name)).toBe(true);
   });
+
+  it("maps failure/timeout/escalation codes for composite meta-pattern", () => {
+    const mapping = PATTERN_ERROR_CODE_MAP.composite;
+    expect(mapping).toBeDefined();
+    expect(mapping.failure).toBe(OboraErrorCode.ORCH_DEPENDENCY_FAILED);
+    expect(mapping.timeout).toBe(OboraErrorCode.ORCH_EXECUTION_TIMEOUT);
+    expect(mapping.escalation).toBe(OboraErrorCode.RECOVERY_ESCALATION_TIMEOUT);
+  });
+
 });
