@@ -234,8 +234,15 @@ export class DefaultConsensusGate implements ConsensusGate {
       return state.session.config.customEvaluate(votes);
     }
 
-    const rejectVote = votes.find((vote) => vote.approved === false);
-    const approvalCount = votes.filter((vote) => vote.approved).length;
+    // M2-03A: only required voters (not best_effort-marked) influence pass/fail verdict
+    const bestEffortSet = new Set([
+      ...(state.session.config.bestEffort ?? []),
+      ...state.session.bestEffortMarked,
+    ]);
+    const requiredVotes = votes.filter((vote) => !bestEffortSet.has(vote.voterId));
+
+    const rejectVote = requiredVotes.find((vote) => vote.approved === false);
+    const approvalCount = requiredVotes.filter((vote) => vote.approved).length;
 
     if (state.session.config.type === "unanimous") {
       if (rejectVote) {
@@ -246,7 +253,7 @@ export class DefaultConsensusGate implements ConsensusGate {
 
     if (state.session.config.type === "score-threshold") {
       const threshold = state.session.config.threshold ?? 0;
-      const scoredVotes = votes.filter((vote) => typeof vote.score === "number");
+      const scoredVotes = requiredVotes.filter((vote) => typeof vote.score === "number");
       if (scoredVotes.length === 0) {
         return { status: "fail", reason: "no scored votes provided", votes };
       }
@@ -259,10 +266,10 @@ export class DefaultConsensusGate implements ConsensusGate {
     }
 
     if (state.session.config.type === "weighted") {
-      const approveWeight = votes
+      const approveWeight = requiredVotes
         .filter((vote) => vote.approved)
         .reduce((sum, vote) => sum + (this.findWeight(state, vote.voterId) ?? 1), 0);
-      const totalWeight = votes.reduce(
+      const totalWeight = requiredVotes.reduce(
         (sum, vote) => sum + (this.findWeight(state, vote.voterId) ?? 1),
         0,
       );
@@ -275,7 +282,7 @@ export class DefaultConsensusGate implements ConsensusGate {
       return { status: "fail", reason: "weighted majority not reached", votes };
     }
 
-    if (approvalCount > votes.length / 2) {
+    if (approvalCount > requiredVotes.length / 2) {
       return { status: "pass", votes };
     }
 

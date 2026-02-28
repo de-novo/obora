@@ -389,6 +389,94 @@ describe("ConsensusPattern", () => {
     expect(votes.find((v) => v.voterId === "humanReviewer")?.role).toBe("human");
   });
 
+
+  it("M2-03A: weighted excludes best_effort voters from verdict", async () => {
+    const pattern = new ConsensusPattern();
+
+    const result = await pattern.execute({
+      pattern: "consensus",
+      participants: {
+        reqA: "agent-a",
+        reqB: "agent-b",
+        optC: "agent-c",
+      },
+      config: {
+        rule: "weighted",
+        best_effort: ["optC"],
+        weights: { reqA: 2, reqB: 1, optC: 10 },
+        threshold: 0.5,
+      },
+      input: {
+        votes: {
+          reqA: false,
+          reqB: false,
+          optC: true,
+        },
+      },
+    });
+
+    // optC's weight=10 approve must NOT flip the required-voters' reject
+    expect(result.success).toBe(false);
+    expect(result.output).toMatchObject({ reason: "weighted threshold not met" });
+  });
+
+  it("M2-03A: score-threshold excludes best_effort voters from average", async () => {
+    const pattern = new ConsensusPattern();
+
+    const result = await pattern.execute({
+      pattern: "consensus",
+      participants: {
+        reqA: "agent-a",
+        reqB: "agent-b",
+        optC: "agent-c",
+      },
+      config: {
+        rule: "score-threshold",
+        best_effort: ["optC"],
+        threshold: 0.7,
+      },
+      input: {
+        votes: {
+          reqA: { score: 0.3, approved: false },
+          reqB: { score: 0.4, approved: false },
+          optC: { score: 1.0, approved: true },
+        },
+      },
+    });
+
+    // optC's score=1.0 must NOT inflate the average above threshold
+    expect(result.success).toBe(false);
+    expect(result.output).toMatchObject({ reason: "score threshold not met" });
+  });
+
+  it("M2-03A: unanimous ignores best_effort rejection", async () => {
+    const pattern = new ConsensusPattern();
+
+    const result = await pattern.execute({
+      pattern: "consensus",
+      participants: {
+        reqA: "agent-a",
+        reqB: "agent-b",
+        optC: "agent-c",
+      },
+      config: {
+        rule: "unanimous",
+        best_effort: ["optC"],
+      },
+      input: {
+        votes: {
+          reqA: true,
+          reqB: true,
+          optC: false,
+        },
+      },
+    });
+
+    // optC's rejection must NOT block unanimous among required voters
+    expect(result.success).toBe(true);
+    expect(result.output).toMatchObject({ reason: "unanimous consensus reached" });
+  });
+
   it("best_effort works correctly with voter roles", async () => {
     const pattern = new ConsensusPattern();
 

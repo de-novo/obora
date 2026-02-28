@@ -441,8 +441,10 @@ export class ConsensusPattern extends CollaborationPatternBase {
 
     if (rule === "weighted") {
       const threshold = config.threshold ?? DEFAULT_THRESHOLD_BY_RULE.weighted;
-      const totalWeight = votes.reduce((sum, vote) => sum + (config.weights?.[vote.voterId] ?? 1), 0);
-      const approvedWeight = votes
+      // M2-03A: only required participants influence weighted verdict
+      const requiredVotes = votes.filter((vote) => requiredParticipants.includes(vote.voterId));
+      const totalWeight = requiredVotes.reduce((sum, vote) => sum + (config.weights?.[vote.voterId] ?? 1), 0);
+      const approvedWeight = requiredVotes
         .filter((vote) => vote.approved)
         .reduce((sum, vote) => sum + (config.weights?.[vote.voterId] ?? 1), 0);
       const ratio = totalWeight <= 0 ? 0 : approvedWeight / totalWeight;
@@ -455,7 +457,9 @@ export class ConsensusPattern extends CollaborationPatternBase {
 
     if (rule === "score-threshold") {
       const threshold = config.threshold ?? DEFAULT_THRESHOLD_BY_RULE["score-threshold"];
-      const scoredVotes = votes.filter((vote) => typeof vote.score === "number");
+      // M2-03A: only required participants influence score-threshold verdict
+      const requiredVotes = votes.filter((vote) => requiredParticipants.includes(vote.voterId));
+      const scoredVotes = requiredVotes.filter((vote) => typeof vote.score === "number");
       const average = scoredVotes.length === 0 ? 0 : scoredVotes.reduce((sum, vote) => sum + (vote.score ?? 0), 0) / scoredVotes.length;
       return {
         approved: average >= threshold,

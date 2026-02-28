@@ -74,4 +74,89 @@ describe("DefaultConsensusGate", () => {
     const timeoutResult = gate.onTimeout(session.id);
     expect(timeoutResult.status).toBe("timeout");
   });
+
+  it("M2-03A: majority excludes best_effort votes from verdict", () => {
+    const gate = new DefaultConsensusGate({
+      executionId: "exec-m2-03a-1",
+      sessionIdFactory: () => "session-be-majority",
+    });
+
+    const session = gate.setup({
+      type: "majority",
+      voters: [{ id: "reqA" }, { id: "reqB" }, { id: "optC" }],
+      minRequired: 2,
+      bestEffort: ["optC"],
+    });
+
+    gate.registerVote(session.id, { voterId: "reqA", approved: false });
+    gate.registerVote(session.id, { voterId: "reqB", approved: false });
+    gate.registerVote(session.id, { voterId: "optC", approved: true });
+
+    const result = gate.evaluate(session.id);
+    expect(result.status).toBe("fail");
+  });
+
+  it("M2-03A: unanimous ignores best_effort rejection", () => {
+    const gate = new DefaultConsensusGate({
+      executionId: "exec-m2-03a-2",
+      sessionIdFactory: () => "session-be-unanimous",
+    });
+
+    const session = gate.setup({
+      type: "unanimous",
+      voters: [{ id: "reqA" }, { id: "reqB" }, { id: "optC" }],
+      minRequired: 2,
+      bestEffort: ["optC"],
+    });
+
+    gate.registerVote(session.id, { voterId: "reqA", approved: true });
+    gate.registerVote(session.id, { voterId: "reqB", approved: true });
+    gate.registerVote(session.id, { voterId: "optC", approved: false });
+
+    const result = gate.evaluate(session.id);
+    expect(result.status).toBe("pass");
+  });
+
+  it("M2-03A: weighted excludes best_effort weight from verdict", () => {
+    const gate = new DefaultConsensusGate({
+      executionId: "exec-m2-03a-3",
+      sessionIdFactory: () => "session-be-weighted",
+    });
+
+    const session = gate.setup({
+      type: "weighted",
+      voters: [{ id: "reqA", weight: 1 }, { id: "reqB", weight: 1 }, { id: "optC", weight: 100 }],
+      minRequired: 2,
+      bestEffort: ["optC"],
+    });
+
+    gate.registerVote(session.id, { voterId: "reqA", approved: false });
+    gate.registerVote(session.id, { voterId: "reqB", approved: false });
+    gate.registerVote(session.id, { voterId: "optC", approved: true });
+
+    const result = gate.evaluate(session.id);
+    expect(result.status).toBe("fail");
+  });
+
+  it("M2-03A: score-threshold excludes best_effort from average", () => {
+    const gate = new DefaultConsensusGate({
+      executionId: "exec-m2-03a-4",
+      sessionIdFactory: () => "session-be-score",
+    });
+
+    const session = gate.setup({
+      type: "score-threshold",
+      voters: [{ id: "reqA" }, { id: "reqB" }, { id: "optC" }],
+      minRequired: 2,
+      threshold: 0.7,
+      bestEffort: ["optC"],
+    });
+
+    gate.registerVote(session.id, { voterId: "reqA", approved: false, score: 0.3 });
+    gate.registerVote(session.id, { voterId: "reqB", approved: false, score: 0.4 });
+    gate.registerVote(session.id, { voterId: "optC", approved: true, score: 1.0 });
+
+    const result = gate.evaluate(session.id);
+    expect(result.status).toBe("fail");
+  });
 });
