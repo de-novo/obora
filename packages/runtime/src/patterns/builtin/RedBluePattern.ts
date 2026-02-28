@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { OboraErrorCode } from "../../errors/OboraErrorCode.js";
 import {
   CollaborationPatternBase,
@@ -19,6 +20,8 @@ interface RedBlueInputShape {
 }
 
 interface RoundSummary {
+  /** Stable artifact identifier for this round output. */
+  round_id: string;
   round: number;
   red_team: string[];
   blue_team: string[];
@@ -45,6 +48,10 @@ export class RedBluePattern extends CollaborationPatternBase {
       config.convergence !== "custom"
     ) {
       throw new Error("red-blue.convergence must be one of: red_finds_nothing, max_rounds, custom");
+    }
+
+    if (config.convergence === "custom" && typeof config.custom_convergence !== "function") {
+      throw new Error("red-blue: convergence='custom' requires a custom_convergence function");
     }
   }
 
@@ -82,6 +89,7 @@ export class RedBluePattern extends CollaborationPatternBase {
       });
 
       const summary: RoundSummary = {
+        round_id: randomUUID(),
         round: roundNumber,
         red_team: redTeam,
         blue_team: blueTeam,
@@ -118,6 +126,22 @@ export class RedBluePattern extends CollaborationPatternBase {
     }
 
     if (!converged && convergence === "red_finds_nothing") {
+      const escalation = config.escalation;
+      const shouldEscalate = escalation?.triggers?.includes("max_rounds_exhausted");
+
+      if (shouldEscalate) {
+        await context.emit?.({
+          type: "red_blue_escalation",
+          payload: {
+            trigger: "max_rounds_exhausted",
+            target: escalation?.target,
+            rounds_completed: rounds.length,
+            max_rounds: maxRounds,
+            round_ids: rounds.map((r) => r.round_id),
+          },
+        });
+      }
+
       return {
         success: false,
         output: {
@@ -125,6 +149,7 @@ export class RedBluePattern extends CollaborationPatternBase {
           error_codes: [OboraErrorCode.ORCH_DEPENDENCY_FAILED],
           rounds,
           converged: false,
+          ...(shouldEscalate ? { escalated: true, escalation_target: escalation?.target } : {}),
         },
         metadata: {
           blackboard_domains: PATTERN_BLACKBOARD_DOMAIN_MAP["red-blue"],
@@ -133,6 +158,8 @@ export class RedBluePattern extends CollaborationPatternBase {
           convergence,
           red_team: redTeam,
           blue_team: blueTeam,
+          round_ids: rounds.map((r) => r.round_id),
+          ...(shouldEscalate ? { escalated: true, escalation_target: escalation?.target } : {}),
         },
       };
     }
@@ -156,6 +183,7 @@ export class RedBluePattern extends CollaborationPatternBase {
         convergence,
         red_team: redTeam,
         blue_team: blueTeam,
+        round_ids: rounds.map((r) => r.round_id),
       },
     };
   }
@@ -244,29 +272,25 @@ export class RedBluePattern extends CollaborationPatternBase {
     }
 
     if (mode === "custom") {
-      const customConvergence = (context as PatternRuntimeContext & {
-        redBlueConvergenceFn?: (payload: {
-          round: number;
-          rounds: RoundSummary[];
-          current_round: RoundSummary;
-          subject: unknown;
-          red_team: string[];
-          blue_team: string[];
-        }) => boolean;
+      const config = (context.config ?? {}) as RedBluePatternConfig;
+      // Also support legacy context-level fn for backward compat
+      const customConvergence = config.custom_convergence ?? (context as PatternRuntimeContext & {
+        redBlueConvergenceFn?: typeof config.custom_convergence;
       }).redBlueConvergenceFn;
 
-      if (typeof customConvergence === "function") {
-        return customConvergence({
-          round: roundNumber,
-          rounds,
-          current_round: currentRound,
-          subject: input.subject,
-          red_team: redTeam,
-          blue_team: blueTeam,
-        });
+      if (typeof customConvergence !== "function") {
+        // Should not reach here due to validateConfig, but guard anyway
+        throw new Error("red-blue: convergence='custom' requires a custom_convergence function");
       }
 
-      return false;
+      return customConvergence({
+        round: roundNumber,
+        rounds,
+        current_round: currentRound,
+        subject: input.subject,
+        red_team: redTeam,
+        blue_team: blueTeam,
+      });
     }
 
     return false;

@@ -155,11 +155,31 @@ export interface PeerReviewPatternConfig {
   best_effort?: string[];
 }
 
+export type RedBlueEscalationTrigger = "max_rounds_exhausted";
+
+export interface RedBlueEscalationConfig {
+  /** Which failure conditions trigger escalation instead of plain failure. */
+  triggers: RedBlueEscalationTrigger[];
+  /** Opaque target identifier for the escalation handler. */
+  target?: string;
+}
+
 export interface RedBluePatternConfig {
   red_team?: string[];
   blue_team?: string[];
   max_rounds?: number;
   convergence?: "red_finds_nothing" | "max_rounds" | "custom";
+  /** Required when convergence='custom'. */
+  custom_convergence?: (payload: {
+    round: number;
+    rounds: Array<{ round: number; red_findings: Record<string, unknown>; blue_responses: Record<string, unknown> }>;
+    current_round: { round: number; red_findings: Record<string, unknown>; blue_responses: Record<string, unknown> };
+    subject: unknown;
+    red_team: string[];
+    blue_team: string[];
+  }) => boolean;
+  /** Escalation integration point for failure paths. */
+  escalation?: RedBlueEscalationConfig;
 }
 
 export interface PipelinePatternConfig {

@@ -120,12 +120,12 @@ describe("RedBluePattern", () => {
         blue_team: ["blue1"],
         max_rounds: 3,
         convergence: "custom",
+        custom_convergence: ({ round }: { round: number }) => round >= 2,
       },
       input: {
         rounds: [{ red_findings: { a: 1 } }, { red_findings: { b: 2 } }, { red_findings: { c: 3 } }],
       },
-      redBlueConvergenceFn: ({ round }: { round: number }) => round >= 2,
-    } as never);
+    });
 
     expect(result.success).toBe(true);
     expect(result.output).toMatchObject({
@@ -170,6 +170,12 @@ describe("RedBluePattern", () => {
     expect(() => pattern.validateConfig({ convergence: "invalid" as never })).toThrow(
       "red-blue.convergence must be one of: red_finds_nothing, max_rounds, custom"
     );
+    expect(() => pattern.validateConfig({ convergence: "custom" })).toThrow(
+      "red-blue: convergence='custom' requires a custom_convergence function"
+    );
+    expect(() =>
+      pattern.validateConfig({ convergence: "custom", custom_convergence: () => true })
+    ).not.toThrow();
   });
 
   it("throws when participants are empty", async () => {
@@ -254,5 +260,124 @@ describe("RedBluePattern", () => {
         },
       })
     ).rejects.toThrow("red-blue: participants cannot be on both teams: p2");
+  });
+
+  it("throws when convergence='custom' but no custom_convergence fn provided", async () => {
+    const pattern = new RedBluePattern();
+
+    await expect(
+      pattern.execute({
+        pattern: "red-blue",
+        participants: { red1: "a", blue1: "b" },
+        config: {
+          red_team: ["red1"],
+          blue_team: ["blue1"],
+          convergence: "custom",
+        },
+      })
+    ).rejects.toThrow("red-blue: convergence='custom' requires a custom_convergence function");
+  });
+
+  it("round outputs include stable round_id artifact identifiers", async () => {
+    const pattern = new RedBluePattern();
+
+    const result = await pattern.execute({
+      pattern: "red-blue",
+      participants: { red1: "a", blue1: "b" },
+      config: {
+        red_team: ["red1"],
+        blue_team: ["blue1"],
+        max_rounds: 2,
+        convergence: "max_rounds",
+      },
+      input: {
+        rounds: [{ red_findings: { a: 1 } }, { red_findings: { b: 2 } }],
+      },
+    });
+
+    expect(result.success).toBe(true);
+    const rounds = (result.output as { rounds: Array<{ round_id: string }> }).rounds;
+    expect(rounds).toHaveLength(2);
+    // Each round has a UUID round_id
+    for (const r of rounds) {
+      expect(r.round_id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    }
+    // round_ids are unique
+    expect(new Set(rounds.map((r) => r.round_id)).size).toBe(2);
+    // metadata also includes round_ids
+    const meta = result.metadata as { round_ids: string[] };
+    expect(meta.round_ids).toEqual(rounds.map((r) => r.round_id));
+  });
+
+  it("emits escalation event when max_rounds exhausted with escalation config", async () => {
+    const pattern = new RedBluePattern();
+    const emit = vi.fn();
+
+    const result = await pattern.execute({
+      pattern: "red-blue",
+      participants: { red1: "a", blue1: "b" },
+      config: {
+        red_team: ["red1"],
+        blue_team: ["blue1"],
+        max_rounds: 2,
+        convergence: "red_finds_nothing",
+        escalation: {
+          triggers: ["max_rounds_exhausted"],
+          target: "supervisor-agent",
+        },
+      },
+      input: {
+        rounds: [{ red_findings: { a: 1 } }, { red_findings: { b: 2 } }],
+      },
+      emit,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.output).toMatchObject({
+      reason: "convergence_not_reached",
+      escalated: true,
+      escalation_target: "supervisor-agent",
+    });
+    expect(result.metadata).toMatchObject({
+      escalated: true,
+      escalation_target: "supervisor-agent",
+    });
+
+    // Escalation event emitted
+    const escalationEvent = emit.mock.calls.find((c) => c[0].type === "red_blue_escalation");
+    expect(escalationEvent).toBeDefined();
+    expect(escalationEvent![0].payload).toMatchObject({
+      trigger: "max_rounds_exhausted",
+      target: "supervisor-agent",
+      rounds_completed: 2,
+      max_rounds: 2,
+    });
+    // round_ids in escalation payload
+    expect(escalationEvent![0].payload.round_ids).toHaveLength(2);
+  });
+
+  it("does not escalate when no escalation config present on failure", async () => {
+    const pattern = new RedBluePattern();
+    const emit = vi.fn();
+
+    const result = await pattern.execute({
+      pattern: "red-blue",
+      participants: { red1: "a", blue1: "b" },
+      config: {
+        red_team: ["red1"],
+        blue_team: ["blue1"],
+        max_rounds: 1,
+        convergence: "red_finds_nothing",
+      },
+      input: {
+        rounds: [{ red_findings: { a: 1 } }],
+      },
+      emit,
+    });
+
+    expect(result.success).toBe(false);
+    expect((result.output as Record<string, unknown>).escalated).toBeUndefined();
+    const escalationEvent = emit.mock.calls.find((c) => c[0].type === "red_blue_escalation");
+    expect(escalationEvent).toBeUndefined();
   });
 });
