@@ -34,6 +34,49 @@ export interface MultiStageApprovalResult {
     decisions: ApprovalDecision[];
   }>;
   reason?: string;
+  /**
+   * Signals the distinct on_reject action the caller should take:
+   * - "fail": terminal rejection, no retry.
+   * - "restart": caller should reset all stages and re-collect decisions from stage 0.
+   * - "reassign": caller should reassign the rejecting stage to a different approver.
+   * Only set when a rejection occurs.
+   */
+  action?: "fail" | "restart" | "reassign";
+  /** When action="reassign", identifies the stage index to reassign. */
+  reassignStageIndex?: number;
+}
+
+/**
+ * Stage-level timeout/fallback/escalation_to mapping to SLAManager:
+ *
+ * Each ApprovalStage may declare `timeout`, `fallback`, and `escalation_to`.
+ * These fields map to SLAManager.checkSLA() as follows:
+ *   - stage.timeout   → SLAConfig.timeout
+ *   - stage.fallback   → SLAConfig.fallback (defaults to "fail")
+ *   - stage.escalation_to → SLAConfig.escalation_chain[0]
+ *
+ * The caller is responsible for constructing an SLAConfig from stage fields
+ * and invoking SLAManager.checkSLA() with the relevant GateAssignment.
+ * Use `buildSLAConfigFromStage()` below for the canonical mapping.
+ */
+
+export interface StageSLAConfig {
+  timeout: string;
+  fallback: GateFallback;
+  escalation_chain?: string[];
+}
+
+/**
+ * Build an SLAConfig from stage-level timeout/fallback/escalation_to fields.
+ * Returns undefined if the stage has no timeout configured.
+ */
+export function buildSLAConfigFromStage(stage: ApprovalStage): StageSLAConfig | undefined {
+  if (!stage.timeout) return undefined;
+  return {
+    timeout: stage.timeout,
+    fallback: stage.fallback ?? "fail",
+    escalation_chain: stage.escalation_to ? [stage.escalation_to] : undefined,
+  };
 }
 
 export class MultiStageApprovalGate {
@@ -46,6 +89,7 @@ export class MultiStageApprovalGate {
     const normalized = this.normalizeDecisions(decisions);
     const stageResults: MultiStageApprovalResult["stages"] = [];
     const trackHistory = this.config.track_history ?? true;
+    const onReject = this.config.on_reject ?? "fail";
 
     for (let stageIndex = 0; stageIndex < this.config.stages.length; stageIndex += 1) {
       const stage = this.config.stages[stageIndex]!;
@@ -67,6 +111,7 @@ export class MultiStageApprovalGate {
           approved: false,
           stages: stageResults,
           reason: `condition_evaluation_error: ${message}`,
+          action: "fail",
         };
       }
 
@@ -100,11 +145,19 @@ export class MultiStageApprovalGate {
           decisions: trackHistory ? stageDecisions : [],
         });
 
-        return {
+        const result: MultiStageApprovalResult = {
           approved: false,
           stages: stageResults,
-          reason: `Rejected at stage '${stage.name}' (${this.config.on_reject ?? "fail"})`,
+          reason: `Rejected at stage '${stage.name}' (${onReject})`,
+          action: onReject,
         };
+
+        // For "reassign", indicate which stage needs reassignment
+        if (onReject === "reassign") {
+          result.reassignStageIndex = stageIndex;
+        }
+
+        return result;
       }
 
       for (const stageDecision of stageDecisions) {

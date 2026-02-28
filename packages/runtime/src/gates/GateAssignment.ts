@@ -43,7 +43,13 @@ export class GateAssignmentManager {
     return structuredClone(assignment);
   }
 
-  reassign(gateId: string, newAssignee: string, reason: string): GateAssignment {
+  /**
+   * Reassign a gate to a new assignee. The expiresAt is refreshed:
+   * - If an explicit `timeout` is provided, use it from now.
+   * - Otherwise, preserve the original timeout duration relative to new assignedAt.
+   * - If the original had no timeout, expiresAt remains undefined.
+   */
+  reassign(gateId: string, newAssignee: string, reason: string, timeout?: string): GateAssignment {
     const current = this.assignments.get(gateId);
     if (!current) {
       throw new Error(`Gate assignment not found: ${gateId}`);
@@ -52,10 +58,23 @@ export class GateAssignmentManager {
     current.status = "reassigned";
     this.assignments.set(gateId, current);
 
+    const reassignedAt = this.now();
+
+    // Refresh expiresAt
+    let newExpiresAt: Date | undefined;
+    if (timeout) {
+      const timeoutMs = parseDurationToMs(timeout);
+      newExpiresAt = timeoutMs !== undefined ? new Date(reassignedAt.getTime() + timeoutMs) : undefined;
+    } else if (current.expiresAt && current.assignedAt) {
+      const originalDurationMs = current.expiresAt.getTime() - current.assignedAt.getTime();
+      newExpiresAt = new Date(reassignedAt.getTime() + originalDurationMs);
+    }
+
     const reassigned: GateAssignment = {
       ...current,
       assignedTo: newAssignee,
-      assignedAt: this.now(),
+      assignedAt: reassignedAt,
+      expiresAt: newExpiresAt,
       status: "pending",
       reassignedFrom: current.assignedTo,
       reassignmentReason: reason,
@@ -70,6 +89,7 @@ export class GateAssignmentManager {
         from: reassigned.reassignedFrom,
         to: newAssignee,
         reason,
+        expiresAt: reassigned.expiresAt?.toISOString(),
       },
     });
 
