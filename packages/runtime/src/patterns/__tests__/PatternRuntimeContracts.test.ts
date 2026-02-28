@@ -114,4 +114,12 @@ describe("Pattern runtime contracts", () => {
     expect(patternPlugin?.version).toBe("1.0.0");
     expect(isBuiltinPatternKind(patternPlugin!.name)).toBe(true);
   });
+
+  it("registers supervisor built-in as pattern plugin wrapper", () => {
+    const patternPlugin = createBuiltinPlugins().find((plugin) => plugin.type === "pattern" && plugin.name === "supervisor");
+    expect(patternPlugin).toBeDefined();
+    expect(patternPlugin?.name).toBe("supervisor");
+    expect(patternPlugin?.version).toBe("1.0.0");
+    expect(isBuiltinPatternKind(patternPlugin!.name)).toBe(true);
+  });
 });

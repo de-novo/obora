@@ -296,4 +296,145 @@ describe("SupervisorPattern", () => {
       },
     });
   });
+
+  // --- Regression tests for P2 observations ---
+
+  it("maxRestarts=0 immediately fails without any restart (one_for_one)", async () => {
+    const pattern = new SupervisorPattern();
+    const emit = vi.fn();
+
+    const result = await pattern.execute({
+      pattern: "supervisor",
+      participants: { workerA: "agent-a" },
+      config: { strategy: "one_for_one", max_restarts: 0 },
+      input: {
+        results: { workerA: { success: false, error: "boom" } },
+        tasks: { workerA: { attempts: [{ success: true, output: "never reached" }] } },
+      },
+      emit,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.output).toMatchObject({
+      reason: "max_restarts_exceeded",
+      total_restarts: 0,
+      workers: { workerA: { status: "failed", restarts: 0 } },
+    });
+    // No worker_restart events should have been emitted
+    const restartEvents = emit.mock.calls.filter((c) => c[0].type === "worker_restart");
+    expect(restartEvents).toHaveLength(0);
+  });
+
+  it("maxRestarts=0 immediately fails without any restart (one_for_all)", async () => {
+    const pattern = new SupervisorPattern();
+
+    const result = await pattern.execute({
+      pattern: "supervisor",
+      participants: { workerA: "agent-a", workerB: "agent-b" },
+      config: { strategy: "one_for_all", max_restarts: 0 },
+      input: {
+        results: {
+          workerA: { success: false, error: "fail" },
+          workerB: { success: true, output: "ok" },
+        },
+      },
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.output).toMatchObject({
+      reason: "max_restarts_exceeded",
+      total_restarts: 0,
+      strategy: "one_for_all",
+    });
+  });
+
+  it("maxRestarts=1 boundary: allows exactly 1 restart then fails on next failure (one_for_one)", async () => {
+    const pattern = new SupervisorPattern();
+
+    const result = await pattern.execute({
+      pattern: "supervisor",
+      participants: { workerA: "agent-a" },
+      config: { strategy: "one_for_one", max_restarts: 1 },
+      input: {
+        results: { workerA: { success: false } },
+        tasks: { workerA: { attempts: [{ success: false, error: "still bad" }] } },
+      },
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.output).toMatchObject({
+      total_restarts: 1,
+      workers: { workerA: { restarts: 1, status: "failed" } },
+    });
+  });
+
+
+  it("maxRestarts=1 boundary: allows exactly 1 restart then fails on next failure (one_for_all)", async () => {
+    const pattern = new SupervisorPattern();
+
+    const result = await pattern.execute({
+      pattern: "supervisor",
+      participants: { workerA: "agent-a", workerB: "agent-b" },
+      config: { strategy: "one_for_all", max_restarts: 1 },
+      input: {
+        results: {
+          workerA: { success: false, error: "boom" },
+          workerB: { success: true, output: "old" },
+        },
+        tasks: {
+          workerA: { attempts: [{ success: false, error: "still bad" }] },
+          workerB: { attempts: [{ success: true, output: "new" }] },
+        },
+      },
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.output).toMatchObject({
+      reason: "max_restarts_exceeded",
+      strategy: "one_for_all",
+      total_restarts: 1,
+      workers: {
+        workerA: { restarts: 1, status: "failed" },
+        workerB: { restarts: 1, status: "completed" },
+      },
+    });
+  });
+
+  it("metadata includes audit_emit_only flag", async () => {
+    const pattern = new SupervisorPattern();
+
+    const success = await pattern.execute({
+      pattern: "supervisor",
+      participants: { workerA: "agent-a" },
+      input: { results: { workerA: { success: true, output: "ok" } } },
+    });
+    expect(success.metadata).toHaveProperty("audit_emit_only", true);
+
+    const failure = await pattern.execute({
+      pattern: "supervisor",
+      participants: { workerA: "agent-a" },
+      config: { max_restarts: 0 },
+      input: { results: { workerA: { success: false } } },
+    });
+    expect(failure.metadata).toHaveProperty("audit_emit_only", true);
+  });
+
+  it("all workers succeed on first try returns total_restarts=0 with no restart events", async () => {
+    const pattern = new SupervisorPattern();
+    const emit = vi.fn();
+
+    await pattern.execute({
+      pattern: "supervisor",
+      participants: { a: "a1", b: "b1" },
+      config: { strategy: "one_for_all" },
+      input: {
+        results: { a: { success: true }, b: { success: true } },
+      },
+      emit,
+    });
+
+    const restartEvents = emit.mock.calls.filter((c) => c[0].type === "worker_restart");
+    expect(restartEvents).toHaveLength(0);
+  });
+
 });

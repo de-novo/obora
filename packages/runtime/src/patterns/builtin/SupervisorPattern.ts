@@ -40,6 +40,17 @@ const DEFAULT_STRATEGY: SupervisorStrategy = "one_for_one";
 const DEFAULT_MAX_RESTARTS = 3;
 const DEFAULT_BACKOFF: BackoffType = "linear";
 
+/**
+ * Internal safety guard to prevent infinite loops in the restart cycle.
+ * This is NOT a user-facing config — it caps the total number of loop iterations
+ * to protect against bugs in attempt-queue logic. In normal operation the loop
+ * terminates via maxRestarts well before this limit.
+ *
+ * Rationale: maxRestarts × workers should always be << GUARD_LOOP_LIMIT.
+ * If you hit this, it indicates a logic bug, not a config problem.
+ */
+const GUARD_LOOP_LIMIT = 10_000;
+
 export class SupervisorPattern extends CollaborationPatternBase {
   readonly name = "supervisor";
   readonly kind: BuiltinPatternKind = "supervisor";
@@ -107,7 +118,7 @@ export class SupervisorPattern extends CollaborationPatternBase {
     });
 
     let guard = 0;
-    while (guard < 10_000) {
+    while (guard < GUARD_LOOP_LIMIT) {
       guard += 1;
 
       for (const worker of workers) {
@@ -138,6 +149,8 @@ export class SupervisorPattern extends CollaborationPatternBase {
             decision: "PASS",
             backoff,
             backoff_schedule: backoffByWorker,
+            /** Audit integration: events are emit-only; no external audit sink is wired by default. */
+            audit_emit_only: true,
           },
         };
       }
@@ -171,6 +184,8 @@ export class SupervisorPattern extends CollaborationPatternBase {
                 decision: "FAIL",
                 backoff,
                 backoff_schedule: backoffByWorker,
+                /** Audit integration: events are emit-only; no external audit sink is wired by default. */
+                audit_emit_only: true,
               },
             };
           }
@@ -236,6 +251,8 @@ export class SupervisorPattern extends CollaborationPatternBase {
             decision: "FAIL",
             backoff,
             backoff_schedule: backoffByWorker,
+            /** Audit integration: events are emit-only; no external audit sink is wired by default. */
+            audit_emit_only: true,
           },
         };
       }
