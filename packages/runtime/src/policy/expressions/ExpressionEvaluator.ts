@@ -34,7 +34,7 @@ export interface ExpressionContext {
   previousResults?: Record<string, { success: boolean; output?: unknown }>;
 }
 
-const BLOCKED_FIELD_NAMES = new Set(["__proto__", "prototype", "constructor"]);
+import { BLOCKED_FIELD_NAMES, MAX_REGEX_PATTERN_LENGTH } from "./constants.js";
 
 class ExpressionEvaluationError extends Error {
   readonly code = OboraErrorCode.POLICY_DENY;
@@ -124,7 +124,9 @@ function evaluateFunctionCall(ast: FunctionCallExpression, ctx: ExpressionContex
       ensureArgCount(ast, 2);
       const [value, regexPattern] = evaluatedArgs;
       try {
-        const regex = new RegExp(String(regexPattern ?? ""));
+        const pattern = String(regexPattern ?? "");
+        validateRegexPattern(pattern);
+        const regex = new RegExp(pattern);
         return regex.test(String(value ?? ""));
       } catch (error) {
         throw new ExpressionEvaluationError(
@@ -142,6 +144,18 @@ function evaluateFunctionCall(ast: FunctionCallExpression, ctx: ExpressionContex
     }
     default:
       return assertNever(ast.name);
+  }
+}
+
+
+function validateRegexPattern(pattern: string): void {
+  if (pattern.length > MAX_REGEX_PATTERN_LENGTH) {
+    throw new Error(`regex pattern exceeds maximum length (${MAX_REGEX_PATTERN_LENGTH})`);
+  }
+
+  // Basic ReDoS guard: block obvious nested quantifiers like (a+)+, (.*)+, (.+)*
+  if (/\((?:[^()]*[+*][^()]*)\)[+*{]/.test(pattern)) {
+    throw new Error("potentially unsafe regex pattern (nested quantifier) is not allowed");
   }
 }
 

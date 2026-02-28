@@ -49,10 +49,12 @@ export interface ArrayLiteralExpression {
   items: ExpressionAST[];
 }
 
-const MAX_DEPTH = 50;
-const ALLOWED_ROOTS = new Set(["action", "context", "state", "step", "execution", "actor", "metrics", "previousResults"]);
-const BLOCKED_FIELD_NAMES = new Set(["__proto__", "prototype", "constructor"]);
-const ALLOWED_FUNCTIONS = new Set(["contains", "matches", "startsWith", "endsWith", "in"]);
+import {
+  ALLOWED_EXPRESSION_FUNCTIONS,
+  ALLOWED_EXPRESSION_ROOTS,
+  BLOCKED_FIELD_NAMES,
+  MAX_EXPRESSION_DEPTH,
+} from "./constants.js";
 
 type TokenType =
   | "identifier"
@@ -244,8 +246,8 @@ class Parser {
 
   private enterDepth(): void {
     this.depth += 1;
-    if (this.depth > MAX_DEPTH) {
-      throw new ExpressionParseError(`Expression nesting depth exceeds maximum (${MAX_DEPTH})`);
+    if (this.depth > MAX_EXPRESSION_DEPTH) {
+      throw new ExpressionParseError(`Expression nesting depth exceeds maximum (${MAX_EXPRESSION_DEPTH})`);
     }
   }
 
@@ -398,7 +400,7 @@ class Parser {
   }
 
   private parseFunctionCall(name: string, index: number): FunctionCallExpression {
-    if (!ALLOWED_FUNCTIONS.has(name)) {
+    if (!ALLOWED_EXPRESSION_FUNCTIONS.has(name)) {
       throw new ExpressionParseError(`Unsupported function '${name}' at position ${index}`);
     }
 
@@ -426,7 +428,7 @@ class Parser {
   private parseFieldRef(identifier: string, index: number): FieldRefExpression {
     const path = identifier.split(".");
 
-    if (path.length === 0 || !ALLOWED_ROOTS.has(path[0])) {
+    if (path.length === 0 || !ALLOWED_EXPRESSION_ROOTS.has(path[0])) {
       throw new ExpressionParseError(
         `Field reference '${identifier}' must start with action/context/state/step/execution/actor/metrics/previousResults at ${index}`,
       );

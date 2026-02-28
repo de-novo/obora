@@ -211,4 +211,43 @@ describe("Expression DSL policy integration", () => {
     });
     expect((decision as { reason: string }).reason).toContain("POLICY_2001");
   });
+
+  it("denies potentially unsafe nested-quantifier regex in matches()", () => {
+    const engine = new DefaultPolicyEngine();
+    engine.loadInline({
+      tools: [
+        {
+          name: "shell_exec",
+          effect: "deny",
+          when: {
+            condition: 'matches(action.name, "(a+)+$")',
+          },
+        },
+      ],
+    });
+
+    const decision = engine.enforce({ type: "tool_call", name: "shell_exec", params: {} }, {});
+    expect(decision).toMatchObject({ type: "deny", rule: "tools.shell_exec" });
+    expect((decision as { reason: string }).reason).toContain("POLICY_2001");
+  });
+
+  it("denies overlong regex patterns in matches()", () => {
+    const long = "a".repeat(300);
+    const engine = new DefaultPolicyEngine();
+    engine.loadInline({
+      tools: [
+        {
+          name: "shell_exec",
+          effect: "deny",
+          when: {
+            condition: `matches(action.name, "${long}")`,
+          },
+        },
+      ],
+    });
+
+    const decision = engine.enforce({ type: "tool_call", name: "shell_exec", params: {} }, {});
+    expect(decision).toMatchObject({ type: "deny", rule: "tools.shell_exec" });
+    expect((decision as { reason: string }).reason).toContain("POLICY_2001");
+  });
 });
