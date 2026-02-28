@@ -72,7 +72,7 @@ export function registerCustomPatternFromConfig(
   registerCustomPattern(registry, new ConfigBackedCustomPattern(config), options);
 }
 
-function validatePatternContract(pattern: CollaborationPattern): void {
+export function validatePatternContract(pattern: CollaborationPattern): void {
   if (!pattern || typeof pattern !== "object") {
     throw new Error("Custom pattern must be an object");
   }

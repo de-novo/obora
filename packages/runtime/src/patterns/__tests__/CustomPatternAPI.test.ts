@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeAll, afterAll } from "vitest";
 
 import { PatternRegistry } from "../PatternRegistry.js";
 import {
@@ -196,14 +196,226 @@ describe("CustomPatternAPI", () => {
     expect(warn.mock.calls[0]?.[0]).toContain("same version");
   });
 
-  it("supports file-path pattern resolution via stubbed loader", () => {
+
+
+  // === File-path resolution tests ===
+
+  describe("resolveCustomPattern file-path loading", () => {
+    it("loads pattern via custom loadFromFile and validates contract", () => {
+      const registry = new PatternRegistry();
+      const pattern = new EchoCustomPattern();
+      const loadFromFile = vi.fn().mockReturnValue(pattern);
+
+      const resolved = resolveCustomPattern(registry, "./patterns/custom.ts", { loadFromFile });
+
+      expect(loadFromFile).toHaveBeenCalledTimes(1);
+      const calledPath = loadFromFile.mock.calls[0]![0] as string;
+      expect(calledPath).toMatch(/patterns[/\\]custom\.ts$/);
+      expect(require("node:path").isAbsolute(calledPath)).toBe(true);
+      expect(resolved.name).toBe("echo-custom");
+    });
+
+    it("passes cwd to loadFromFile", () => {
+      const registry = new PatternRegistry();
+      const pattern = new EchoCustomPattern();
+      const loadFromFile = vi.fn().mockReturnValue(pattern);
+
+      resolveCustomPattern(registry, "./custom.ts", { loadFromFile, cwd: "/my/project" });
+
+      expect(loadFromFile).toHaveBeenCalledWith("/my/project/custom.ts", { cwd: "/my/project" });
+    });
+
+    it("rejects loader returning object missing 'name'", () => {
+      const registry = new PatternRegistry();
+      const loadFromFile = vi.fn().mockReturnValue({ kind: "x", run: vi.fn(), execute: vi.fn() });
+
+      expect(() =>
+        resolveCustomPattern(registry, "./bad.js", { loadFromFile })
+      ).toThrow(/contract validation/);
+    });
+
+    it("rejects loader returning object missing 'run'", () => {
+      const registry = new PatternRegistry();
+      const loadFromFile = vi.fn().mockReturnValue({ name: "x", kind: "x", execute: vi.fn() });
+
+      expect(() =>
+        resolveCustomPattern(registry, "./bad.js", { loadFromFile })
+      ).toThrow(/contract validation/);
+    });
+
+    it("rejects loader returning object missing 'execute'", () => {
+      const registry = new PatternRegistry();
+      const loadFromFile = vi.fn().mockReturnValue({ name: "x", kind: "x", run: vi.fn() });
+
+      expect(() =>
+        resolveCustomPattern(registry, "./bad.js", { loadFromFile })
+      ).toThrow(/contract validation/);
+    });
+
+    it("rejects loader returning null", () => {
+      const registry = new PatternRegistry();
+      const loadFromFile = vi.fn().mockReturnValue(null);
+
+      expect(() =>
+        resolveCustomPattern(registry, "./null.js", { loadFromFile })
+      ).toThrow(/contract validation/);
+    });
+
+    it("rejects loader returning a Promise (async) from sync resolve", () => {
+      const registry = new PatternRegistry();
+      const loadFromFile = vi.fn().mockReturnValue(Promise.resolve(new EchoCustomPattern()));
+
+      expect(() =>
+        resolveCustomPattern(registry, "./async.mjs", { loadFromFile })
+      ).toThrow(/Promise/);
+    });
+
+    it("default loader throws helpful error for missing file", () => {
+      const registry = new PatternRegistry();
+
+      expect(() =>
+        resolveCustomPattern(registry, "./nonexistent-pattern.js")
+      ).toThrow(/Failed to load custom pattern/);
+    });
+  });
+
+  describe("resolveCustomPatternAsync", () => {
+    it("resolves async loader and validates contract", async () => {
+      const { resolveCustomPatternAsync } = await import("../resolveCustomPattern.js");
+      const registry = new PatternRegistry();
+      const pattern = new EchoCustomPattern();
+      const loadFromFile = vi.fn().mockResolvedValue(pattern);
+
+      const resolved = await resolveCustomPatternAsync(registry, "./patterns/custom.ts", { loadFromFile });
+
+      expect(resolved.name).toBe("echo-custom");
+    });
+
+    it("rejects async loader returning invalid contract", async () => {
+      const { resolveCustomPatternAsync } = await import("../resolveCustomPattern.js");
+      const registry = new PatternRegistry();
+      const loadFromFile = vi.fn().mockResolvedValue({ name: "x" });
+
+      await expect(
+        resolveCustomPatternAsync(registry, "./bad.js", { loadFromFile })
+      ).rejects.toThrow(/contract validation/);
+    });
+  });
+
+});
+
+// === M2-09: YAML file-path resolution tests ===
+
+import { resolveCustomPatternAsync, loadPatternFromYamlFile } from "../resolveCustomPattern.js";
+import * as fs from "node:fs";
+import * as nodePath from "node:path";
+
+describe("M2-09: YAML file-path resolution", () => {
+  const tmpDir = nodePath.join(process.cwd(), "__test_tmp_m2_09__");
+
+  beforeAll(() => {
+    fs.mkdirSync(tmpDir, { recursive: true });
+  });
+
+  afterAll(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  function writeYaml(name: string, content: string): string {
+    const p = nodePath.join(tmpDir, name);
+    fs.writeFileSync(p, content, "utf-8");
+    return p;
+  }
+
+  it("looksLikeFilePath recognizes .yaml extension", () => {
+    const registry = new PatternRegistry();
+    // .yaml should be treated as file path → triggers file loading (which will fail for missing file)
+    expect(() => resolveCustomPattern(registry, "my-pattern.yaml")).toThrow(/Failed to load custom pattern from YAML/);
+  });
+
+  it("looksLikeFilePath recognizes .yml extension", () => {
+    const registry = new PatternRegistry();
+    expect(() => resolveCustomPattern(registry, "my-pattern.yml")).toThrow(/Failed to load custom pattern from YAML/);
+  });
+
+  it("YAML file ref resolves with valid contract (via custom loader)", () => {
     const registry = new PatternRegistry();
     const pattern = new EchoCustomPattern();
     const loadFromFile = vi.fn().mockReturnValue(pattern);
 
-    const resolved = resolveCustomPattern(registry, "./patterns/custom.ts", { loadFromFile });
-
-    expect(loadFromFile).toHaveBeenCalledOnce();
+    const resolved = resolveCustomPattern(registry, "./patterns/custom.yaml", { loadFromFile });
     expect(resolved.name).toBe("echo-custom");
+    // Note: with custom loader, the resolved absolute path is passed
+    expect(loadFromFile).toHaveBeenCalledTimes(1);
+  });
+
+  it("YAML file with invalid contract fails validation", () => {
+    const yamlPath = writeYaml("bad-contract.yaml", `
+name: "test-pattern"
+kind: "test"
+# missing run and execute → contract fail
+`);
+
+    const registry = new PatternRegistry();
+    expect(() => resolveCustomPattern(registry, yamlPath)).toThrow(/contract validation/);
+  });
+
+  it("YAML file with missing/empty content fails", () => {
+    const yamlPath = writeYaml("empty.yaml", "");
+
+    const registry = new PatternRegistry();
+    expect(() => resolveCustomPattern(registry, yamlPath)).toThrow(/Failed to load custom pattern from YAML/);
+  });
+
+  it("cwd + relative path normalization resolves correctly", () => {
+    const yamlPath = writeYaml("relative-test.yaml", `
+name: "rel-pattern"
+kind: "rel"
+`);
+
+    const registry = new PatternRegistry();
+    // Use cwd=tmpDir with relative filename → should resolve to same file
+    // Will fail contract validation (no run/execute) but proves path resolution works
+    expect(() => resolveCustomPattern(registry, "relative-test.yaml", { cwd: tmpDir })).toThrow(/contract validation/);
+  });
+
+  it("cwd + ../relative path normalization", () => {
+    const subDir = nodePath.join(tmpDir, "sub");
+    fs.mkdirSync(subDir, { recursive: true });
+    writeYaml("parent-test.yaml", `
+name: "parent"
+kind: "parent"
+`);
+
+    const registry = new PatternRegistry();
+    // From sub/ go up with ../parent-test.yaml
+    expect(() => resolveCustomPattern(registry, "../parent-test.yaml", { cwd: subDir })).toThrow(/contract validation/);
+  });
+
+  it("async resolveCustomPatternAsync handles YAML path", async () => {
+    const yamlPath = writeYaml("async-test.yaml", `
+name: "async-yaml"
+kind: "async"
+`);
+
+    const registry = new PatternRegistry();
+    // Should fail contract (no run/execute) but go through YAML load path
+    await expect(resolveCustomPatternAsync(registry, yamlPath)).rejects.toThrow(/contract validation/);
+  });
+
+  it("nonexistent YAML file gives clear error", () => {
+    const registry = new PatternRegistry();
+    expect(() => resolveCustomPattern(registry, "/nonexistent/path/pattern.yaml")).toThrow(/Failed to load custom pattern from YAML/);
+  });
+
+  it("loadPatternFromYamlFile directly loads valid YAML", () => {
+    const yamlPath = writeYaml("direct-load.yaml", `
+name: "direct"
+kind: "direct-kind"
+version: "1.0.0"
+`);
+
+    const result = loadPatternFromYamlFile(yamlPath);
+    expect(result).toMatchObject({ name: "direct", kind: "direct-kind", version: "1.0.0" });
   });
 });
