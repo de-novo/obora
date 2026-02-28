@@ -86,6 +86,33 @@ describe("FanOutFanInPattern", () => {
     expect((result.output as { merged: unknown }).merged).toBe("approve");
   });
 
+  it("vote merge tie-breaker: first-seen value wins on equal count", async () => {
+    const pattern = new FanOutFanInPattern();
+
+    const result = await pattern.execute({
+      pattern: "fan-out-fan-in",
+      participants: {
+        a: "agent-a",
+        b: "agent-b",
+        c: "agent-c",
+        d: "agent-d",
+      },
+      config: { merge: "vote" },
+      input: {
+        responses: {
+          a: "alpha",
+          b: "beta",
+          c: "beta",
+          d: "alpha",
+        },
+      },
+    });
+
+    // alpha and beta both have count=2; alpha appeared first (index 0) so wins
+    expect(result.success).toBe(true);
+    expect((result.output as { merged: unknown }).merged).toBe("alpha");
+  });
+
   it("uses custom merge function when strategy is custom", async () => {
     const pattern = new FanOutFanInPattern();
     const customMerge = vi.fn((outputs: unknown[]) => ({
@@ -116,6 +143,21 @@ describe("FanOutFanInPattern", () => {
       count: 2,
       outputs: ["x", "y"],
     });
+  });
+
+  it("custom merge fallback: concatenates when no merge fn provided", async () => {
+    const pattern = new FanOutFanInPattern();
+
+    const result = await pattern.execute({
+      pattern: "fan-out-fan-in",
+      participants: { a: "agent-a", b: "agent-b" },
+      config: { merge: "custom" },
+      input: { responses: { a: 1, b: 2 } },
+    });
+
+    // Falls back to concatenate; merge_strategy in output still says "custom" via the overall output
+    expect(result.success).toBe(true);
+    expect((result.output as { merged: unknown }).merged).toEqual([1, 2]);
   });
 
   it("handles partial failure and still succeeds when at least one participant responds", async () => {
@@ -230,5 +272,145 @@ describe("FanOutFanInPattern", () => {
 
     expect(result.success).toBe(true);
     expect((result.output as { merged: Array<{ text: string }> }).merged).toEqual([{ score: 1, text: "only" }]);
+  });
+
+  // --- failure_policy tests ---
+
+  describe("failure_policy: best_effort (default)", () => {
+    it("succeeds with partial failures when no failure_policy specified (backward compat)", async () => {
+      const pattern = new FanOutFanInPattern();
+
+      const result = await pattern.execute({
+        pattern: "fan-out-fan-in",
+        participants: { a: "a", b: "b", c: "c" },
+        input: { responses: { a: "ok" } },
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.metadata?.responded_participants).toBe(1);
+      expect(result.metadata?.missing_participants).toBe(2);
+    });
+
+    it("succeeds with partial failures when failure_policy is explicitly best_effort", async () => {
+      const pattern = new FanOutFanInPattern();
+
+      const result = await pattern.execute({
+        pattern: "fan-out-fan-in",
+        participants: { a: "a", b: "b", c: "c" },
+        config: { failure_policy: "best_effort" },
+        input: { responses: { a: "ok" } },
+      });
+
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe("failure_policy: required", () => {
+    it("succeeds when all participants succeed (required, no min_success)", async () => {
+      const pattern = new FanOutFanInPattern();
+
+      const result = await pattern.execute({
+        pattern: "fan-out-fan-in",
+        participants: { a: "a", b: "b" },
+        config: { failure_policy: "required" },
+        input: { responses: { a: "ok", b: "ok" } },
+      });
+
+      expect(result.success).toBe(true);
+    });
+
+    it("fails when not all participants succeed (required, no min_success)", async () => {
+      const pattern = new FanOutFanInPattern();
+
+      const result = await pattern.execute({
+        pattern: "fan-out-fan-in",
+        participants: { a: "a", b: "b", c: "c" },
+        config: { failure_policy: "required" },
+        input: { responses: { a: "ok", b: "ok" } },
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.output).toMatchObject({
+        reason: "min_success_not_met",
+        failure_policy: "required",
+        min_success: 3,
+        actual_success: 2,
+      });
+    });
+
+    it("succeeds at exact min_success boundary", async () => {
+      const pattern = new FanOutFanInPattern();
+
+      const result = await pattern.execute({
+        pattern: "fan-out-fan-in",
+        participants: { a: "a", b: "b", c: "c" },
+        config: { failure_policy: "required", min_success: 2 },
+        input: { responses: { a: "ok", b: "ok" } },
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.metadata?.responded_participants).toBe(2);
+    });
+
+    it("fails just below min_success boundary", async () => {
+      const pattern = new FanOutFanInPattern();
+
+      const result = await pattern.execute({
+        pattern: "fan-out-fan-in",
+        participants: { a: "a", b: "b", c: "c" },
+        config: { failure_policy: "required", min_success: 2 },
+        input: { responses: { a: "ok" } },
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.output).toMatchObject({
+        reason: "min_success_not_met",
+        min_success: 2,
+        actual_success: 1,
+      });
+    });
+
+    it("throws when min_success exceeds participant count", async () => {
+      const pattern = new FanOutFanInPattern();
+
+      await expect(
+        pattern.execute({
+          pattern: "fan-out-fan-in",
+          participants: { a: "a", b: "b" },
+          config: { failure_policy: "required", min_success: 5 },
+          input: { responses: { a: "ok", b: "ok" } },
+        })
+      ).rejects.toThrow("fan-out-fan-in.min_success (5) exceeds participant count (2)");
+    });
+  });
+
+  describe("failure_policy config validation", () => {
+    it("rejects invalid failure_policy", () => {
+      const pattern = new FanOutFanInPattern();
+      expect(() => pattern.validateConfig({ failure_policy: "invalid" as never })).toThrow(
+        "fan-out-fan-in.failure_policy must be one of: best_effort, required"
+      );
+    });
+
+    it("rejects min_success < 1", () => {
+      const pattern = new FanOutFanInPattern();
+      expect(() => pattern.validateConfig({ min_success: 0 })).toThrow(
+        "fan-out-fan-in.min_success must be an integer >= 1"
+      );
+    });
+
+    it("rejects non-integer min_success", () => {
+      const pattern = new FanOutFanInPattern();
+      expect(() => pattern.validateConfig({ min_success: 1.5 })).toThrow(
+        "fan-out-fan-in.min_success must be an integer >= 1"
+      );
+    });
+
+    it("accepts valid failure_policy + min_success", () => {
+      const pattern = new FanOutFanInPattern();
+      expect(() => pattern.validateConfig({ failure_policy: "required", min_success: 2 })).not.toThrow();
+      expect(() => pattern.validateConfig({ failure_policy: "best_effort" })).not.toThrow();
+      expect(() => pattern.validateConfig({})).not.toThrow();
+    });
   });
 });

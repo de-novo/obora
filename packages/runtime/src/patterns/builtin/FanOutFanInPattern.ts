@@ -32,6 +32,7 @@ type FanOutMergeFn = (
 ) => Promise<unknown> | unknown;
 
 const VALID_MERGE = new Set<NonNullable<FanOutFanInPatternConfig["merge"]>>(["concatenate", "rank", "vote", "custom"]);
+const VALID_FAILURE_POLICY = new Set<NonNullable<FanOutFanInPatternConfig["failure_policy"]>>(["best_effort", "required"]);
 
 export class FanOutFanInPattern extends CollaborationPatternBase {
   readonly name = "fan-out-fan-in";
@@ -40,6 +41,14 @@ export class FanOutFanInPattern extends CollaborationPatternBase {
   validateConfig(config: FanOutFanInPatternConfig): void {
     if (config.merge !== undefined && !VALID_MERGE.has(config.merge)) {
       throw new Error("fan-out-fan-in.merge must be one of: concatenate, rank, vote, custom");
+    }
+    if (config.failure_policy !== undefined && !VALID_FAILURE_POLICY.has(config.failure_policy)) {
+      throw new Error("fan-out-fan-in.failure_policy must be one of: best_effort, required");
+    }
+    if (config.min_success !== undefined) {
+      if (!Number.isInteger(config.min_success) || config.min_success < 1) {
+        throw new Error("fan-out-fan-in.min_success must be an integer >= 1");
+      }
     }
   }
 
@@ -52,12 +61,23 @@ export class FanOutFanInPattern extends CollaborationPatternBase {
     const config = (context.config ?? {}) as FanOutFanInPatternConfig;
     const input = this.getInput(context);
     const mergeStrategy = config.merge ?? "concatenate";
+    const failurePolicy = config.failure_policy ?? "best_effort";
+    const minSuccess = failurePolicy === "required" ? (config.min_success ?? participants.length) : 1;
+
+    // Validate min_success against actual participant count
+    if (failurePolicy === "required" && config.min_success !== undefined && config.min_success > participants.length) {
+      throw new Error(
+        `fan-out-fan-in.min_success (${config.min_success}) exceeds participant count (${participants.length})`
+      );
+    }
 
     await context.emit?.({
       type: "fanout_start",
       payload: {
         participants,
         merge: mergeStrategy,
+        failure_policy: failurePolicy,
+        min_success: minSuccess,
         has_task: input.task !== undefined,
         items_count: Array.isArray(input.items) ? input.items.length : 0,
       },
@@ -85,6 +105,8 @@ export class FanOutFanInPattern extends CollaborationPatternBase {
     );
 
     const successful = results.filter((result) => result.success);
+
+    // Check failure threshold based on policy
     if (successful.length === 0) {
       return {
         success: false,
@@ -94,11 +116,33 @@ export class FanOutFanInPattern extends CollaborationPatternBase {
           merged: [],
           participant_results: participantResults,
           merge_strategy: mergeStrategy,
+          failure_policy: failurePolicy,
         },
         metadata: {
           blackboard_domains: PATTERN_BLACKBOARD_DOMAIN_MAP["fan-out-fan-in"],
           responded_participants: 0,
           missing_participants: participants.length,
+        },
+      };
+    }
+
+    if (failurePolicy === "required" && successful.length < minSuccess) {
+      return {
+        success: false,
+        output: {
+          reason: "min_success_not_met",
+          error_codes: [OboraErrorCode.ORCH_DEPENDENCY_FAILED],
+          merged: [],
+          participant_results: participantResults,
+          merge_strategy: mergeStrategy,
+          failure_policy: failurePolicy,
+          min_success: minSuccess,
+          actual_success: successful.length,
+        },
+        metadata: {
+          blackboard_domains: PATTERN_BLACKBOARD_DOMAIN_MAP["fan-out-fan-in"],
+          responded_participants: successful.length,
+          missing_participants: participants.length - successful.length,
         },
       };
     }
@@ -110,6 +154,7 @@ export class FanOutFanInPattern extends CollaborationPatternBase {
       type: "fanin_merge",
       payload: {
         merge_strategy: mergeStrategy,
+        failure_policy: failurePolicy,
         responded_participants: successful.length,
         missing_participants: participants.length - successful.length,
       },
@@ -195,6 +240,10 @@ export class FanOutFanInPattern extends CollaborationPatternBase {
         if (typeof customMerge === "function") {
           return customMerge(outputs, participantResults, context);
         }
+        // Fallback: when merge="custom" but no fanOutFanInMergeFn is provided,
+        // fall back to concatenate. This is intentional for forward-compatibility
+        // (e.g., declarative configs where the merge fn is resolved later).
+        // The fanin_merge event's merge_strategy still reports "custom".
         return outputs;
       }
       default:
@@ -213,6 +262,12 @@ export class FanOutFanInPattern extends CollaborationPatternBase {
     return normalized.map((item) => item.output);
   }
 
+  /**
+   * Vote merge: tallies outputs by serialized key, returns the value with the highest count.
+   * Tie-breaker rule: when two or more values have the same vote count,
+   * the value that appeared first (lowest participant index) wins.
+   * This is deterministic and stable across runs with the same input order.
+   */
   private voteMerge(outputs: unknown[]): unknown {
     const tally = new Map<string, { count: number; value: unknown; firstIndex: number }>();
 
@@ -231,6 +286,7 @@ export class FanOutFanInPattern extends CollaborationPatternBase {
       });
     });
 
+    // Sort: highest count wins; on tie, lowest firstIndex wins (first-seen)
     const winner = [...tally.values()].sort((a, b) => b.count - a.count || a.firstIndex - b.firstIndex)[0];
     return winner?.value;
   }

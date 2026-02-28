@@ -186,10 +186,21 @@ export interface PipelinePatternConfig {
   stages?: string[];
 }
 
+/**
+ * failure_policy controls how partial participant failures are handled:
+ * - "best_effort" (default): succeed if at least 1 participant succeeds.
+ * - "required": succeed only if >= min_success participants succeed.
+ *   When min_success is omitted under "required", ALL participants must succeed.
+ *
+ * min_success: minimum number of successful participants for "required" mode.
+ *   Must be >= 1 and <= participant count. Ignored under "best_effort".
+ */
 export interface FanOutFanInPatternConfig {
   merge?: "concatenate" | "rank" | "vote" | "custom";
+  failure_policy?: "best_effort" | "required";
+  /** Minimum successful participants for "required" mode. Defaults to total participant count. */
+  min_success?: number;
 }
-
 export interface SupervisorPatternConfig {
   strategy?: "one_for_one" | "one_for_all";
   max_restarts?: number;
