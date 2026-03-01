@@ -108,6 +108,8 @@ export class ReExecutionRuntime {
           changed: 0,
           unchanged: 0,
           skipped: plan.stepsToSkip.length,
+          new: 0,
+          removed: 0,
         },
       };
 
@@ -327,6 +329,19 @@ export class ReExecutionRuntime {
       diffReport.summary.changed === 0 &&
       diffReport.summary.new === 0 &&
       diffReport.summary.removed === 0;
+
+    await this.auditTrail.record({
+      id: crypto.randomUUID(),
+      executionId: reExecutionId,
+      timestamp: now(),
+      type: "reexecution_diff",
+      data: {
+        reExecutionId,
+        originalExecutionId: options.executionId,
+        diffReport,
+        simulation: true,
+      },
+    });
 
     await this.auditTrail.record({
       id: crypto.randomUUID(),

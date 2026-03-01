@@ -340,3 +340,89 @@ describe("createDiffReport", () => {
     expect(report.summary.removed).toBeGreaterThanOrEqual(1);
   });
 });
+
+describe("ReExecutionPlanner – checkpoint-relevant snapshotRef (M2-15)", () => {
+  it("picks snapshot matching checkpointStep over first global snapshot", async () => {
+    const store = new InMemoryAuditStore();
+    await seedExecution(store);
+
+    // Add two snapshot_create events: one for 'analyze', one for 'review'
+    await store.record(
+      makeEvent({
+        executionId: "exec-1",
+        type: "snapshot_create",
+        data: { snapshotId: "snap-analyze", stepName: "analyze", reason: "checkpoint" },
+      })
+    );
+    await store.record(
+      makeEvent({
+        executionId: "exec-1",
+        type: "snapshot_create",
+        data: { snapshotId: "snap-review", stepName: "review", reason: "checkpoint" },
+      })
+    );
+
+    const planner = new ReExecutionPlanner(store);
+
+    const plan = await planner.createPlan("exec-1", {
+      mode: "from_checkpoint",
+      checkpointStep: "review",
+      detectNonDeterminism: false,
+    });
+
+    expect(plan.snapshotRef).toBe("snap-review");
+  });
+
+  it("falls back to first snapshot if none match checkpointStep", async () => {
+    const store = new InMemoryAuditStore();
+    await seedExecution(store);
+
+    await store.record(
+      makeEvent({
+        executionId: "exec-1",
+        type: "snapshot_create",
+        data: { snapshotId: "snap-other", stepName: "other_step", reason: "checkpoint" },
+      })
+    );
+
+    const planner = new ReExecutionPlanner(store);
+
+    const plan = await planner.createPlan("exec-1", {
+      mode: "from_checkpoint",
+      checkpointStep: "review",
+      detectNonDeterminism: false,
+    });
+
+    expect(plan.snapshotRef).toBe("snap-other");
+  });
+
+  it("uses checkpointStep field in snapshot data for matching", async () => {
+    const store = new InMemoryAuditStore();
+    await seedExecution(store);
+
+    await store.record(
+      makeEvent({
+        executionId: "exec-1",
+        type: "snapshot_create",
+        data: { snapshotId: "snap-first", reason: "auto" },
+      })
+    );
+    await store.record(
+      makeEvent({
+        executionId: "exec-1",
+        type: "snapshot_restore",
+        data: { snapshotRef: "snap-cp-review", checkpointStep: "review" },
+      })
+    );
+
+    const planner = new ReExecutionPlanner(store);
+
+    const plan = await planner.createPlan("exec-1", {
+      mode: "from_checkpoint",
+      checkpointStep: "review",
+      detectNonDeterminism: false,
+    });
+
+    expect(plan.snapshotRef).toBe("snap-cp-review");
+  });
+});

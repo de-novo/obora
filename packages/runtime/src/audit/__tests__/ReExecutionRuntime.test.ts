@@ -213,3 +213,94 @@ describe("ReExecutionRuntime", () => {
     expect(completedSteps).toEqual(["analyze", "review", "finalize"]);
   });
 });
+
+describe("ReExecutionRuntime – reexecution_diff audit event (M2-15)", () => {
+  it("emits reexecution_diff event with diffReport in full mode", async () => {
+    const store = new InMemoryAuditStore();
+    await seedExecution(store);
+
+    const planner = new ReExecutionPlanner(store);
+    const runtime = new ReExecutionRuntime(store, planner);
+
+    const result = await runtime.reexecute({ executionId: "exec-1", mode: "full" });
+
+    const reexecEvents = await store.query({ executionId: result.reExecutionId });
+    const diffEvent = reexecEvents.find((e) => e.type === "reexecution_diff");
+
+    expect(diffEvent).toBeDefined();
+    expect((diffEvent!.data as Record<string, unknown>).reExecutionId).toBe(result.reExecutionId);
+    expect((diffEvent!.data as Record<string, unknown>).originalExecutionId).toBe("exec-1");
+    expect((diffEvent!.data as Record<string, unknown>).diffReport).toBeDefined();
+    expect((diffEvent!.data as Record<string, unknown>).simulation).toBe(true);
+  });
+
+  it("does NOT emit reexecution_diff in dry run mode", async () => {
+    const store = new InMemoryAuditStore();
+    await seedExecution(store);
+
+    const planner = new ReExecutionPlanner(store);
+    const runtime = new ReExecutionRuntime(store, planner);
+
+    const result = await runtime.reexecute({ executionId: "exec-1", mode: "full", dryRun: true });
+
+    const reexecEvents = await store.query({ executionId: result.reExecutionId });
+    const diffEvent = reexecEvents.find((e) => e.type === "reexecution_diff");
+
+    expect(diffEvent).toBeUndefined();
+  });
+});
+
+describe("ReExecutionRuntime – dryRun summary schema (M2-15)", () => {
+  it("dryRun summary includes new=0 and removed=0", async () => {
+    const store = new InMemoryAuditStore();
+    await seedExecution(store);
+
+    const planner = new ReExecutionPlanner(store);
+    const runtime = new ReExecutionRuntime(store, planner);
+
+    const result = await runtime.reexecute({ executionId: "exec-1", mode: "full", dryRun: true });
+
+    expect(result.diffReport.summary).toHaveProperty("new", 0);
+    expect(result.diffReport.summary).toHaveProperty("removed", 0);
+    expect(result.diffReport.summary).toHaveProperty("changed", 0);
+    expect(result.diffReport.summary).toHaveProperty("unchanged", 0);
+    expect(result.diffReport.summary).toHaveProperty("skipped", 0);
+    expect(result.diffReport.summary).toHaveProperty("total_steps", 3);
+  });
+});
+
+describe("ReExecutionRuntime – success=false when new or removed > 0 (M2-15)", () => {
+  it("success is false when diffReport has new steps", async () => {
+    const store = new MutatingReExecutionStore();
+    await seedExecution(store);
+    // Add an extra step output only in re-execution by making the mutating store also add a new step
+    const origRecord = store.record.bind(store);
+    let injected = false;
+    store.record = async (event: AuditEvent) => {
+      await origRecord(event);
+      // After execution_start of reexec, inject an extra cell_end for a "bonus" step
+      if (
+        !injected &&
+        event.type === "execution_start" &&
+        String(event.executionId).startsWith("reexec-")
+      ) {
+        injected = true;
+        await origRecord({
+          id: crypto.randomUUID(),
+          executionId: event.executionId,
+          timestamp: new Date(),
+          type: "cell_end",
+          data: { stepName: "bonus_step", output: { extra: true } },
+        });
+      }
+    };
+
+    const planner = new ReExecutionPlanner(store);
+    const runtime = new ReExecutionRuntime(store, planner);
+
+    const result = await runtime.reexecute({ executionId: "exec-1", mode: "full" });
+
+    expect(result.diffReport.summary.new).toBeGreaterThanOrEqual(1);
+    expect(result.success).toBe(false);
+  });
+});

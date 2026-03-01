@@ -63,8 +63,21 @@ function getWorkflowVersion(events: AuditEvent[]): string | undefined {
 }
 
 function getSnapshotRef(events: AuditEvent[], mode: "full" | "from_checkpoint", checkpointStep?: string): string | undefined {
-  if (mode === "from_checkpoint") {
-    // Look for snapshot_create/snapshot_restore events related to the checkpoint
+  if (mode === "from_checkpoint" && checkpointStep) {
+    // Prefer snapshot events whose stepName or checkpointStep matches the checkpoint
+    let fallbackRef: string | undefined;
+    for (const event of events) {
+      if ((event.type === "snapshot_create" || event.type === "snapshot_restore") && isObject(event.data)) {
+        const ref = asString(event.data.snapshotId) ?? asString(event.data.snapshotRef);
+        if (!ref) continue;
+        const eventStep = asString(event.data.stepName) ?? asString(event.data.checkpointStep);
+        if (eventStep === checkpointStep) return ref;
+        if (!fallbackRef) fallbackRef = ref;
+      }
+    }
+    if (fallbackRef) return fallbackRef;
+  } else if (mode === "from_checkpoint") {
+    // No checkpointStep specified, pick first snapshot
     for (const event of events) {
       if ((event.type === "snapshot_create" || event.type === "snapshot_restore") && isObject(event.data)) {
         const ref = asString(event.data.snapshotId) ?? asString(event.data.snapshotRef);

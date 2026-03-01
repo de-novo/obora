@@ -31,6 +31,7 @@ export type AuditEventType =
   | "reexecution_start"
   | "reexecution_step_start"
   | "reexecution_step_end"
+  | "reexecution_diff"
   | "reexecution_end"
   | "workflow.back_edge_triggered"
   | "workflow.back_edge_exhausted"
