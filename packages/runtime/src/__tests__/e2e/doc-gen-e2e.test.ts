@@ -54,9 +54,14 @@ interface RunOptions {
   triggerDeniedTool?: boolean;
 }
 
+type RunStatus = "completed" | "failed" | "escalated" | "rejected";
+
 interface RunResult {
   executionId: string;
-  status: "completed" | "failed" | "escalated";
+  status: RunStatus;
+  runState: "finished" | "error" | "pending_escalation" | "rejected";
+  finalPass: boolean;
+  decisionReason: string;
   brainstormSelected: string[];
   draft: string;
   reviewPassed: boolean;
@@ -150,7 +155,7 @@ class DocGenE2ERunner {
     });
 
     await this.record(options.executionId, "step_start", { stepName: draftStep.name });
-    const allowWrite = this.checkTool(options.executionId, draftStep.name, "file_write");
+    const allowWrite = await this.checkTool(options.executionId, draftStep.name, "file_write");
     policyDecisions.push(allowWrite);
     const draft = `# Document Draft\n\n${selected.map((idea, index) => `${index + 1}. ${idea}`).join("\n")}`;
     await this.record(options.executionId, "step_end", {
@@ -160,7 +165,7 @@ class DocGenE2ERunner {
     });
 
     if (options.triggerDeniedTool) {
-      const denied = this.checkTool(options.executionId, draftStep.name, "shell_exec");
+      const denied = await this.checkTool(options.executionId, draftStep.name, "shell_exec");
       policyDecisions.push(denied);
     }
 
@@ -236,6 +241,9 @@ class DocGenE2ERunner {
       return {
         executionId: options.executionId,
         status: "failed",
+        runState: "error",
+        finalPass: false,
+        decisionReason: "peer-review failed after all retries",
         brainstormSelected: selected,
         draft,
         reviewPassed,
@@ -271,6 +279,9 @@ class DocGenE2ERunner {
       return {
         executionId: options.executionId,
         status: "escalated",
+        runState: "pending_escalation",
+        finalPass: false,
+        decisionReason: `escalated to ${String(approvalStep.gate_config?.escalation_to ?? "unknown")}`,
         brainstormSelected: selected,
         draft,
         reviewPassed,
@@ -291,12 +302,20 @@ class DocGenE2ERunner {
       success: approvalSuccess,
     });
     await this.record(options.executionId, "execution_end", {
-      status: approvalSuccess ? "completed" : "failed",
+      status: approvalSuccess ? "completed" : "rejected",
+      runState: approvalSuccess ? "finished" : "rejected",
+      finalPass: approvalSuccess,
     });
 
+    const finalStatus: RunStatus = approvalSuccess ? "completed" : "rejected";
     return {
       executionId: options.executionId,
-      status: approvalSuccess ? "completed" : "failed",
+      status: finalStatus,
+      runState: approvalSuccess ? "finished" : "rejected",
+      finalPass: approvalSuccess,
+      decisionReason: approvalSuccess
+        ? "all steps passed and gate approved"
+        : `gate rejected${options.gateComment ? `: ${options.gateComment}` : ""}`,
       brainstormSelected: selected,
       draft,
       reviewPassed,
@@ -307,8 +326,8 @@ class DocGenE2ERunner {
 
   async verifyPolicy(): Promise<PolicyCheckResult> {
     const executionId = "policy-check";
-    const allow = this.checkTool(executionId, "draft", "file_write");
-    const deny = this.checkTool(executionId, "draft", "shell_exec");
+    const allow = await this.checkTool(executionId, "draft", "file_write");
+    const deny = await this.checkTool(executionId, "draft", "shell_exec");
     return { allow, deny };
   }
 
@@ -339,20 +358,20 @@ class DocGenE2ERunner {
       .filter((text) => text.length > 0);
   }
 
-  private checkTool(executionId: string, stepName: string, toolName: string): PolicyDecision {
+  private async checkTool(executionId: string, stepName: string, toolName: string): Promise<PolicyDecision> {
     const decision = this.policy.enforce(
       { type: "tool_call", name: toolName },
       { executionId, stepName }
     );
 
-    void this.record(executionId, "policy_check", {
+    await this.record(executionId, "policy_check", {
       stepName,
       toolName,
       decision: decision.type,
     });
 
     if (decision.type === "deny") {
-      void this.record(executionId, "policy_deny", {
+      await this.record(executionId, "policy_deny", {
         stepName,
         toolName,
         reason: decision.reason,
@@ -520,3 +539,158 @@ describe("M2-16 Scenario 2: Document generation E2E", () => {
     }
   });
 });
+
+  it("gate reject returns rejected status with decisionReason", async () => {
+    const { workflow, policyPath } = await loadFixtures();
+    const policySet = await loadPolicyFromYaml(policyPath);
+    const runner = new DocGenE2ERunner(workflow, policySet);
+
+    const result = await runner.run({
+      executionId: "doc-gen-reject",
+      gateOutcome: "reject",
+      gateComment: "insufficient detail in section 3",
+      reviewAttempts: [
+        {
+          reviews: {
+            "reviewer-a": { score: 8, issues: [] },
+            "reviewer-b": { score: 8, issues: [] },
+            "reviewer-c": { score: 8, issues: [] },
+          },
+        },
+      ],
+    });
+
+    expect(result.status).toBe("rejected");
+    expect(result.runState).toBe("rejected");
+    expect(result.finalPass).toBe(false);
+    expect(result.decisionReason).toContain("gate rejected");
+    expect(result.decisionReason).toContain("insufficient detail");
+    expect(result.reviewPassed).toBe(true);
+
+    const events = await runner.getEvents("doc-gen-reject");
+    const gateResolve = events.find((e) => e.type === "gate_resolve");
+    expect(gateResolve?.data).toMatchObject({ status: "reject" });
+  });
+
+  it("retry exhaustion returns failed with correct runState", async () => {
+    const { workflow, policyPath } = await loadFixtures();
+    const policySet = await loadPolicyFromYaml(policyPath);
+    const runner = new DocGenE2ERunner(workflow, policySet);
+
+    const failingReview = {
+      reviews: {
+        "reviewer-a": { score: 3, issues: [{ severity: "P0", description: "Critical flaw" }] },
+        "reviewer-b": { score: 4, issues: [{ severity: "P1", description: "Major issue" }] },
+        "reviewer-c": { score: 3, issues: [{ severity: "P0", description: "Broken logic" }] },
+      },
+    };
+
+    const result = await runner.run({
+      executionId: "doc-gen-exhaust",
+      gateOutcome: "approve",
+      reviewAttempts: [failingReview, failingReview],
+    });
+
+    expect(result.status).toBe("failed");
+    expect(result.runState).toBe("error");
+    expect(result.finalPass).toBe(false);
+    expect(result.decisionReason).toContain("peer-review failed");
+    expect(result.reviewPassed).toBe(false);
+    expect(result.peerReviewAttemptsUsed).toBe(2);
+
+    const events = await runner.getEvents("doc-gen-exhaust");
+    const execEnd = events.find((e) => e.type === "execution_end");
+    expect(execEnd?.data).toMatchObject({ status: "failed", reason: "peer-review failed" });
+  });
+
+  it("policy enforces sandbox/resources rules from fixture", async () => {
+    const { workflow, policyPath } = await loadFixtures();
+    const policySet = await loadPolicyFromYaml(policyPath);
+    const runner = new DocGenE2ERunner(workflow, policySet);
+
+    const policyResult = await runner.verifyPolicy();
+
+    // file_write allowed
+    expect(policyResult.allow.type).toBe("allow");
+
+    // shell_exec denied with rule name
+    expect(policyResult.deny.type).toBe("deny");
+    if (policyResult.deny.type === "deny") {
+      expect(policyResult.deny.rule).toBe("tools.shell_exec");
+      expect(typeof policyResult.deny.reason).toBe("string");
+      expect(policyResult.deny.reason.length).toBeGreaterThan(0);
+    }
+
+    // Verify audit trail for policy checks is deterministic (no fire-and-forget)
+    const events = await runner.getEvents("policy-check");
+    const policyChecks = events.filter((e) => e.type === "policy_check");
+    const policyDenies = events.filter((e) => e.type === "policy_deny");
+    expect(policyChecks).toHaveLength(2);
+    expect(policyDenies).toHaveLength(1);
+  });
+
+  it("happy path result includes contract-aligned fields", async () => {
+    const { workflow, policyPath } = await loadFixtures();
+    const policySet = await loadPolicyFromYaml(policyPath);
+    const runner = new DocGenE2ERunner(workflow, policySet);
+
+    const result = await runner.run({
+      executionId: "doc-gen-contract",
+      gateOutcome: "approve",
+      reviewAttempts: [
+        {
+          reviews: {
+            "reviewer-a": { score: 8, issues: [] },
+            "reviewer-b": { score: 9, issues: [] },
+            "reviewer-c": { score: 8, issues: [] },
+          },
+        },
+      ],
+    });
+
+    // Contract fields
+    expect(result.runState).toBe("finished");
+    expect(result.finalPass).toBe(true);
+    expect(result.decisionReason).toBe("all steps passed and gate approved");
+    expect(result.status).toBe("completed");
+  });
+
+  it("min_score uses integer 10-point scale consistently", async () => {
+    const { workflow, policyPath } = await loadFixtures();
+    const policySet = await loadPolicyFromYaml(policyPath);
+    const runner = new DocGenE2ERunner(workflow, policySet);
+
+    // min_score=7 in fixture, score=7 should pass (boundary)
+    const boundaryResult = await runner.run({
+      executionId: "doc-gen-boundary",
+      gateOutcome: "approve",
+      reviewAttempts: [
+        {
+          reviews: {
+            "reviewer-a": { score: 7, issues: [] },
+            "reviewer-b": { score: 7, issues: [] },
+            "reviewer-c": { score: 7, issues: [] },
+          },
+        },
+      ],
+    });
+    expect(boundaryResult.status).toBe("completed");
+    expect(boundaryResult.reviewPassed).toBe(true);
+
+    // score=6 should fail (below min_score=7)
+    const belowResult = await runner.run({
+      executionId: "doc-gen-below",
+      gateOutcome: "approve",
+      reviewAttempts: [
+        {
+          reviews: {
+            "reviewer-a": { score: 6, issues: [] },
+            "reviewer-b": { score: 6, issues: [] },
+            "reviewer-c": { score: 6, issues: [] },
+          },
+        },
+      ],
+    });
+    expect(belowResult.status).toBe("failed");
+    expect(belowResult.reviewPassed).toBe(false);
+  });
