@@ -11,23 +11,21 @@ echo "=== Test 08: Multi-Provider ==="
 echo "Testing multiple LLM providers in one workflow..."
 echo ""
 
-if [ -z "${ZAI_API_KEY:-}" ]; then
-    echo "⚠️  ZAI_API_KEY not set"
+if ! provider_auth_available zai; then
+    echo "⚠️  ZAI auth not set"
     echo ""
-    echo "Skipping execution - set both API keys to run this test:"
-    echo "  export ZAI_API_KEY='your-key'"
-    echo "  export OPENAI_API_KEY='your-key'"
+    echo "Skipping execution - configure both providers to run this test:"
+    echo "  ~/.obora/global-auth.json (zai/openai) or matching env vars"
     echo ""
     echo "=== Test Complete ==="
     exit 0
 fi
 
-if [ -z "${OPENAI_API_KEY:-}" ]; then
-    echo "⚠️  OPENAI_API_KEY not set"
+if ! provider_auth_available openai; then
+    echo "⚠️  OpenAI auth not set"
     echo ""
-    echo "Skipping execution - set both API keys to run this test:"
-    echo "  export ZAI_API_KEY='your-key'"
-    echo "  export OPENAI_API_KEY='your-key'"
+    echo "Skipping execution - configure both providers to run this test:"
+    echo "  ~/.obora/global-auth.json (zai/openai) or matching env vars"
     echo ""
     echo "=== Test Complete ==="
     exit 0

@@ -16,7 +16,7 @@ defaults:
 providers:
   zai:
     authMode: token
-    authRef: env:ZAI_API_KEY
+    authRef: global:zai
 ```
 
 각 테스트 케이스의 `agents.yaml`은 이 기본값을 상속받아 필요한 속성만 오버라이드합니다.
@@ -62,16 +62,20 @@ providers:
    pnpm --filter @obora/cli build
    ```
 
-2. **API 키 환경변수**
+2. **글로벌 인증 또는 환경변수**
+   - 기본 권장: `~/.obora/global-auth.json`에 provider 키 저장
+   - 대안: 셸 환경변수 사용
+
    ```bash
-   # 필수 - 01~06 샌드박스 워크플로우 실행용
+   # 권장: 글로벌 인증 사용 (예시 구조)
+   cat ~/.obora/global-auth.json
+
+   # 대안: 환경변수 사용
    export ZAI_API_KEY="your-zai-api-key"
-   
-   # 선택 - 08-multi-provider 테스트용
-   export OPENAI_API_KEY="your-openai-api-key"
+   export OPENAI_API_KEY="your-openai-api-key"  # 08 테스트용
    ```
 
-> `ZAI_API_KEY`가 없으면 샌드박스 실행 스크립트는 stub mode로 통과시키지 않고 즉시 실패(fail fast)합니다.
+> 샌드박스 실행 스크립트는 `~/.obora/global-auth.json`의 `zai` 값을 우선 활용할 수 있고, 없으면 `ZAI_API_KEY`를 사용합니다. 둘 다 없으면 stub mode로 통과시키지 않고 즉시 실패(fail fast)합니다.
 
 ## 디렉토리 구조
 

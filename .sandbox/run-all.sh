@@ -10,11 +10,12 @@ echo "  Obora Sandbox Test Suite"
 echo "======================================"
 echo ""
 
-# Check for API key (ZAI for all tests except docs-only examples)
-if [ -z "${ZAI_API_KEY:-}" ]; then
-    echo "⚠️  WARNING: ZAI_API_KEY not set"
-    echo "   Sandbox workflows that execute LLM steps will fail fast"
-    echo "   export ZAI_API_KEY='your-key'"
+source "$SCRIPT_DIR/common.sh"
+
+# Check for auth (ZAI for all tests except docs-only examples)
+if ! provider_auth_available zai; then
+    echo "⚠️  WARNING: ZAI auth not found"
+    echo "   Configure ~/.obora/global-auth.json or export ZAI_API_KEY"
     echo ""
 fi
 

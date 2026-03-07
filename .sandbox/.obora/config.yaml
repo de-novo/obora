@@ -10,7 +10,7 @@ defaults:
 providers:
   zai:
     authMode: token
-    authRef: env:ZAI_API_KEY
+    authRef: global:zai
     defaultModel: glm-4.7
 
 # Common agents used across tests
