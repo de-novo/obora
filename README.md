@@ -6,7 +6,6 @@
 
 [![npm version](https://img.shields.io/npm/v/@obora/sdk)](https://www.npmjs.com/package/@obora/sdk)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![CI](https://github.com/obora-labs/obora-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/obora-labs/obora-kit/actions/workflows/ci.yml)
 
 ---
 
@@ -14,7 +13,7 @@
 
 AI outputs are non-deterministic. Production systems are not allowed to be.
 
-Most frameworks optimize for **"making AI easy."**  
+Most frameworks optimize for **"making AI easy."**
 Obora is built for **"making AI operable."**
 
 Obora provides an operational backbone for AI-included systems:
@@ -26,86 +25,134 @@ Obora provides an operational backbone for AI-included systems:
 
 ---
 
-## ⚡ Quick Start (5 minutes)
+## ⚡ Quick Start
 
 ```bash
+# Install CLI
 npm install -g @obora/cli
+
+# Initialize a new project
 obora init my-project
 cd my-project
+
+# Run a workflow
 obora run workflow.yaml
 ```
 
 Prerequisites:
 - Node.js 18+
-- At least one model provider API key configured in your environment (for real agent execution)
-- For end-to-end onboarding verification in this repository, run:
-  `bash scripts/onboarding-e2e.sh`
-
-Run an additional sample workflow from this repository:
-
-```bash
-# from repository root
-obora run examples/hello-obora.yaml
-```
-
-Expected outcome:
-
-- A workflow starts inside controlled execution boundaries
-- Policies are evaluated per step
-- Execution events are recorded for auditing and replay
+- At least one LLM provider API key (ZAI, OpenAI, Anthropic, etc.)
 
 ---
 
 ## 🧩 Core Concepts
 
-- **Execution Cell** — Isolated runtime boundary where AI executes
-- **Policy Engine** — Rule-based control for tools, actions, and access
-- **Audit Trail** — Full trace of inputs, decisions, state transitions, and outputs
-- **Recovery Engine** — Retry / rollback / escalate strategies for failures
-- **Consensus** — Multi-agent agreement gates for critical decisions
+| Concept | Description |
+|---------|-------------|
+| **Execution Cell** | Isolated runtime boundary where AI executes |
+| **Policy Engine** | Rule-based control for tools, actions, and access |
+| **Audit Trail** | Full trace of inputs, decisions, state transitions, outputs |
+| **Recovery Engine** | Retry / rollback / escalate strategies for failures |
+| **Consensus** | Multi-agent agreement gates for critical decisions |
 
 ---
 
-## 🏗️ Architecture Overview
+## 🏗️ Architecture
 
-```text
-[Workflow Spec]
-      |
-      v
-[Orchestrator] ---> [Policy Engine]
-      |                    |
-      v                    v
-[Execution Cells] ---> [Audit Trail]
-      |
-      v
-[Recovery Engine] ---> [Consensus Gate] ---> [Final Outcome]
 ```
-
-Obora keeps the control plane deterministic while containing AI variability inside isolated execution cells.
+┌─────────────────────────────────────────────────────────────┐
+│                        OboraRuntime                         │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
+│  │  Workflow   │  │   Agent     │  │   Plugin Registry   │  │
+│  │  Definition │  │  Registry   │  │  (tools, patterns)  │  │
+│  └──────┬──────┘  └──────┬──────┘  └──────────┬──────────┘  │
+│         │                │                     │            │
+│         ▼                ▼                     ▼            │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │                  WorkflowRunner                       │   │
+│  │   (run / resume / step execution / knowledge inject) │   │
+│  └──────────────────────────┬───────────────────────────┘   │
+│                             │                               │
+│         ┌───────────────────┼───────────────────┐           │
+│         ▼                   ▼                   ▼           │
+│  ┌────────────┐      ┌────────────┐      ┌────────────┐    │
+│  │   Policy   │      │   Audit    │      │  Recovery  │    │
+│  │   Engine   │      │   Trail    │      │   Engine   │    │
+│  └────────────┘      └────────────┘      └────────────┘    │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ---
 
 ## 📦 Packages
 
-- `@obora/runtime` — Core runtime
-- `@obora/sdk` — Programmatic API
-- `@obora/cli` — Command-line interface
+| Package | Description |
+|---------|-------------|
+| [`@obora/sdk`](./packages/sdk) | Programmatic API for building workflows |
+| [`@obora/runtime`](./packages/runtime) | Core execution engine, policies, audit |
+| [`@obora/cli`](./packages/cli) | Command-line interface |
+| [`@obora/adapters`](./packages/adapters) | LLM provider adapters (ZAI, OpenAI, etc.) |
+| [`@obora/dashboard`](./packages/dashboard) | Web UI for monitoring |
+
+---
+
+## 🔧 SDK Example
+
+```typescript
+import { OboraRuntime, Workflow } from "@obora/sdk";
+
+const runtime = new OboraRuntime({
+  llm: { provider: "zai", model: "glm-4.7" }
+});
+
+// Define a workflow
+runtime.define("my-workflow", {
+  name: "my-workflow",
+  version: "1.0",
+  steps: [
+    { name: "plan", agent: "architect", input: { task: "Design the API" } },
+    { name: "implement", agent: "coder", depends_on: ["plan"] },
+    { name: "review", agent: "reviewer", depends_on: ["implement"], pattern: "peer-review" }
+  ]
+});
+
+// Register agents
+runtime.registerAgent("architect", () => ({ role: "Software Architect" }));
+runtime.registerAgent("coder", () => ({ role: "Software Developer" }));
+runtime.registerAgent("reviewer", () => ({ role: "Code Reviewer" }));
+
+// Execute
+const handle = await runtime.run("my-workflow");
+const result = await handle.wait();
+
+console.log(result.outputs);
+```
+
+---
+
+## 🧪 Testing
+
+```bash
+# Unit tests (no API key required)
+pnpm test
+
+# E2E tests with real LLM (requires ZAI_API_KEY)
+ZAI_API_KEY=xxx pnpm test:e2e
+```
 
 ---
 
 ## 📚 Documentation
 
-- [Getting Started](./docs/getting-started.md)
-- [API Reference](./docs/api/README.md)
-- [CLI Reference](./docs/cli.md)
-- [Tutorials](./docs/tutorials/README.md)
-- [Examples](./examples)
+- [Examples](./examples) - Sample workflows and use cases
+- [API Reference](./docs/api/README.md) - Detailed API docs
+- [CLI Reference](./docs/cli/README.md) - Command documentation
 
 ---
 
 ## 🤝 Contributing
 
-Contributions are welcome! See [CONTRIBUTING.md](./CONTRIBUTING.md).
+Contributions welcome! See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ---
 

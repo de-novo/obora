@@ -1,50 +1,183 @@
-# @obora-kit/runtime
+# @obora/runtime
 
-M1 Runtime Core package.
+Core execution engine for Obora AI Control Runtime.
 
-## Plugin System (M1-21)
+## Installation
 
-런타임 확장 지점은 모두 플러그인으로 등록됩니다.
+```bash
+npm install @obora/runtime
+```
 
-지원 타입 (8종):
-- `agent`
-- `tool`
-- `pattern`
-- `policy-rule`
-- `recovery-strategy`
-- `consensus-rule`
-- `audit-store`
-- `state-transform`
+## Overview
 
-### 기본 사용
+The runtime package provides:
 
-```ts
+- **Execution Cells** — Isolated AI execution boundaries
+- **Policy Engine** — Rule-based control for tools and actions
+- **Audit Trail** — Full event trace for compliance
+- **Recovery Engine** — Failure handling strategies
+- **Consensus System** — Multi-agent agreement gates
+- **Plugin System** — Extensible architecture
+
+## Architecture
+
+```
+@obora/runtime
+├── cell/              # Execution cells (actor-based)
+│   ├── ExecutionCell
+│   ├── CellManager
+│   └── AgentPool
+├── policy/            # Policy engine
+│   ├── PolicyEngine
+│   ├── PolicyEvaluator
+│   └── expressions/
+├── audit/             # Audit trail
+│   ├── InMemoryAuditStore
+│   ├── AuditTrail
+│   └── events/
+├── recovery/          # Recovery engine
+│   ├── RecoveryEngine
+│   ├── RetryStrategy
+│   └── SupervisionTree
+├── consensus/         # Consensus system
+│   ├── ConsensusRuleEngine
+│   ├── VotingSessionStore
+│   └── AgendaStore
+├── patterns/          # Built-in patterns
+│   ├── PipelinePattern
+│   ├── ConsensusPattern
+│   ├── PeerReviewPattern
+│   ├── SupervisorPattern
+│   └── ...
+├── state/             # State management
+│   ├── snapshot/
+│   └── types/
+└── plugins/           # Plugin system
+    ├── PluginRegistry
+    ├── PluginLoader
+    └── builtins
+```
+
+## Key Exports
+
+### Policy Engine
+
+```typescript
+import { PolicyEngine, PolicyEvaluator } from "@obora/runtime";
+
+const engine = new PolicyEngine();
+engine.register({
+  name: "no-destructive-ops",
+  condition: "tool.name matches 'delete*'",
+  effect: "deny",
+  message: "Destructive operations not allowed"
+});
+
+const result = engine.evaluate({ tool: { name: "delete_file" } });
+// { allowed: false, reason: "Destructive operations not allowed" }
+```
+
+### Audit Trail
+
+```typescript
+import { InMemoryAuditStore } from "@obora/runtime";
+
+const store = new InMemoryAuditStore();
+await store.record({
+  type: "step_start",
+  executionId: "exec-1",
+  stepName: "plan",
+  timestamp: new Date()
+});
+
+const events = await store.query({ executionId: "exec-1" });
+```
+
+### Recovery Engine
+
+```typescript
+import { RecoveryEngine, RetryStrategy } from "@obora/runtime";
+
+const engine = new RecoveryEngine({
+  strategies: [
+    new RetryStrategy({ maxRetries: 3, backoff: "exponential" })
+  ]
+});
+
+const result = await engine.executeWithRecovery(async () => {
+  // risky operation
+});
+```
+
+### Consensus
+
+```typescript
+import { ConsensusRuleEngine, VotingSessionStore } from "@obora/runtime";
+
+const engine = new ConsensusRuleEngine();
+const result = await engine.evaluate({
+  votes: [
+    { participant: "r1", vote: "APPROVE" },
+    { participant: "r2", vote: "APPROVE" },
+    { participant: "r3", vote: "REJECT" }
+  ],
+  rule: "majority"
+});
+// { approved: true, ratio: 0.67 }
+```
+
+### Patterns
+
+```typescript
 import {
-  PluginRegistry,
-  PluginLoader,
-  registerBuiltinPlugins,
-} from "@obora-kit/runtime";
+  PipelinePattern,
+  ConsensusPattern,
+  PeerReviewPattern,
+  SupervisorPattern,
+  FanOutFanInPattern
+} from "@obora/runtime";
+```
+
+### Plugin System
+
+```typescript
+import { PluginRegistry, registerBuiltinPlugins } from "@obora/runtime";
 
 const registry = new PluginRegistry();
 await registerBuiltinPlugins(registry);
 
-const loader = new PluginLoader(registry);
-await loader.load(customPlugin, { replace: true });
-await loader.unload(customPlugin.name);
+// Register custom plugin
+registry.register({
+  name: "my-tool",
+  version: "1.0.0",
+  type: "tool",
+  schema: { ... },
+  execute: async (params) => { ... }
+});
 ```
 
-### 검증 규칙
+## Plugin Types
 
-`validatePlugin`/`assertValidPlugin`은 다음을 검증합니다.
-- 필수 공통 필드: `name`, `version`, `type`
-- 타입별 인터페이스 메서드 존재 여부
-  - 예: `tool` → `schema`, `execute`
-  - 예: `audit-store` → `record`, `query`
+| Type | Interface | Description |
+|------|-----------|-------------|
+| `agent` | `AgentPlugin` | Custom agent implementations |
+| `tool` | `ToolPlugin` | External tool integrations |
+| `pattern` | `PatternPlugin` | Workflow patterns |
+| `policy-rule` | `PolicyRulePlugin` | Custom policy rules |
+| `recovery-strategy` | `RecoveryStrategyPlugin` | Failure recovery |
+| `consensus-rule` | `ConsensusRulePlugin` | Consensus rules |
+| `audit-store` | `AuditStorePlugin` | Audit persistence |
+| `state-transform` | `StateTransformPlugin` | State transformations |
 
-### Built-in 정책
+## Storage
 
-Built-in 또한 특권 하드코딩이 아닌 기본 플러그인으로 등록됩니다.
-- `pipeline` pattern
-- `file-write` tool
-- `duckdb-audit-store` audit store
-- 기타 policy/recovery/consensus/state-transform 기본 플러그인
+```typescript
+import { SQLiteStorageAdapter } from "@obora/runtime/storage";
+
+const storage = new SQLiteStorageAdapter({ path: "./data.db" });
+await storage.initialize();
+```
+
+## License
+
+MIT
