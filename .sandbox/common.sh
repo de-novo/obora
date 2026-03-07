@@ -49,8 +49,11 @@ provider_auth_available() {
         zai)
             [ -n "${ZAI_API_KEY:-}" ] || has_global_auth zai
             ;;
-        openai|openai-codex)
+        openai)
             [ -n "${OPENAI_API_KEY:-}" ] || has_global_auth openai
+            ;;
+        openai-codex)
+            [ -n "${OPENAI_CODEX_API_KEY:-}" ] || has_global_auth openai-codex
             ;;
         anthropic)
             [ -n "${ANTHROPIC_API_KEY:-}" ] || has_global_auth anthropic

@@ -21,11 +21,11 @@ if ! provider_auth_available zai; then
     exit 0
 fi
 
-if ! provider_auth_available openai; then
-    echo "⚠️  OpenAI auth not set"
+if ! provider_auth_available openai-codex; then
+    echo "⚠️  OpenAI Codex auth not set"
     echo ""
     echo "Skipping execution - configure both providers to run this test:"
-    echo "  ~/.obora/global-auth.json (zai/openai) or matching env vars"
+    echo "  ~/.obora/global-auth.json (zai/openai-codex) or matching env vars"
     echo ""
     echo "=== Test Complete ==="
     exit 0

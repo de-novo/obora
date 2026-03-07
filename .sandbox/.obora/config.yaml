@@ -4,7 +4,6 @@
 defaults:
   provider: zai
   model: glm-4.7
-  temperature: 0.3
   timeout: 120
 
 providers:
@@ -13,10 +12,11 @@ providers:
     authRef: global:zai
     defaultModel: glm-4.7
 
-  openai:
+  openai-codex:
     authMode: token
-    authRef: global:openai
-    defaultModel: gpt-4o-mini
+    authRef: global:openai-codex
+    defaultModel: gpt-5.3-codex
+    baseUrl: https://chatgpt.com/backend-api
 
 # Common agents used across tests
 agents:

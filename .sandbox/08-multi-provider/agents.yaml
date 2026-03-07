@@ -11,11 +11,10 @@ agents:
     temperature: 0.7
 
   openai_agent:
-    role: OpenAI Assistant
-    description: Uses OpenAI GPT model
-    provider: openai
-    model: gpt-4o-mini
-    temperature: 0.7
+    role: OpenAI Codex Assistant
+    description: Uses OpenClaw's OpenAI Codex auth/model path
+    provider: openai-codex
+    model: gpt-5.3-codex
 
   comparer:
     role: Comparer
