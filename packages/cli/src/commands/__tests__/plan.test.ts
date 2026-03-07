@@ -1,6 +1,13 @@
 /* eslint-disable import/order */
 /**
  * plan command tests
+ *
+ * NOTE (skip maintained): plan.ts re-exports _legacy/plan.ts which still
+ * uses @obora/runtime + fs-extra.  The tests below were written against the
+ * legacy implementation but the `updateTasks` behaviour diverges from what
+ * several tests expect (e.g. "append plan to existing tasks.md" assumes the
+ * old regex-based merge logic, not a full overwrite).  These tests should be
+ * updated once the legacy plan command is migrated to the current SDK pattern.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";

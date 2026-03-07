@@ -1,443 +1,461 @@
 /* eslint-disable import/order */
 /**
  * run command tests
+ *
+ * Rewritten to match current implementation:
+ * - Uses @obora/sdk (OboraRuntime, Workflow, loadConfig, detectLLMConfigFromEnv, resolveLLMConfig)
+ * - Takes (workflow: string, options) where workflow is a name or YAML path
+ * - No longer uses @obora/runtime (parseWorkflow, buildGraph, etc.) or feature-centric API
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock node:fs module
-vi.mock("node:fs", () => ({
-  existsSync: vi.fn(),
-  readFileSync: vi.fn(),
-}));
+// ─── hoisted mocks (resolved before import hoisting) ─────────────────────────
+const { mockHandle, mockRuntimeInstance, MockOboraRuntime } = vi.hoisted(() => {
+  const mockHandle = {
+    executionId: "exec-test-123",
+    wait: vi.fn(),
+  };
+  const mockRuntimeInstance = {
+    on: vi.fn(),
+    run: vi.fn(),
+    define: vi.fn(),
+  };
+  // Must be a regular function (not an arrow fn) so it can be used as a class constructor
+  const MockOboraRuntime = vi.fn(function MockOboraRuntimeImpl(
+    this: unknown,
+    _opts: unknown
+  ): typeof mockRuntimeInstance {
+    return mockRuntimeInstance;
+  });
+  return { mockHandle, mockRuntimeInstance, MockOboraRuntime };
+});
 
-// Mock fs-extra
-vi.mock("fs-extra", () => ({
-  default: {
-    ensureDir: vi.fn(),
-    writeFile: vi.fn(),
+// Mock @obora/sdk
+vi.mock("@obora/sdk", () => ({
+  loadConfig: vi.fn(),
+  detectLLMConfigFromEnv: vi.fn(),
+  resolveLLMConfig: vi.fn(),
+  OboraRuntime: MockOboraRuntime,
+  Workflow: {
+    fromYaml: vi.fn(),
   },
 }));
 
-// Mock @obora/runtime
-vi.mock("@obora/runtime", () => ({
-  log: vi.fn(),
-  parseWorkflow: vi.fn(),
-  topologicalSort: vi.fn(),
-  buildGraph: vi.fn(),
-  groupByLevel: vi.fn(),
-  OboraError: class extends Error {
-    code: string;
-    constructor(code: string, msg?: string) {
-      super(`${code}: ${msg || ""}`);
-      this.code = code;
-    }
+// Mock node:fs/promises (mkdir, writeFile used for --output-dir)
+vi.mock("node:fs/promises", () => ({
+  mkdir: vi.fn(),
+  writeFile: vi.fn(),
+}));
+
+// Mock formatter
+vi.mock("../../utils/formatter.js", () => ({
+  formatter: {
+    success: vi.fn(),
+    json: vi.fn(),
+    info: vi.fn(),
+    error: vi.fn(),
+    step: vi.fn(),
   },
-  getDiagnosis: vi.fn((code: string) => {
-    if (["E4004", "E4005", "E4006", "E6003"].includes(code)) {
-      return {
-        code,
-        title: "test",
-        hypothesis: "h",
-        evidence: "e",
-        commands: ["cmd"],
-        rollback: "r",
-      };
-    }
-    return undefined;
+}));
+
+// Mock error-handler to pass through the action fn directly
+vi.mock("../../utils/error-handler.js", () => ({
+  handleCommandAction: vi.fn(async (fn: () => Promise<void>) => {
+    await fn();
   }),
-  formatDiagnosis: vi.fn((d: { code: string; title?: string }) => `\n💊 Diagnosis for ${d.code}\n`),
 }));
 
-// Mock path-utils
-vi.mock("../../utils/path-utils.js", () => ({
-  validatePathComponent: vi.fn(),
+// Mock global-opts
+vi.mock("../../utils/global-opts.js", () => ({
+  getGlobalOpts: vi.fn(() => ({})),
 }));
 
-// Mock status utils
-vi.mock("../../utils/status.js", () => ({
-  readStatus: vi.fn(),
-}));
+import { mkdir, writeFile } from "node:fs/promises";
+import {
+  loadConfig,
+  detectLLMConfigFromEnv,
+  resolveLLMConfig,
+  Workflow,
+} from "@obora/sdk";
 
-import { existsSync, readFileSync } from "node:fs";
-
-import { parseWorkflow, topologicalSort, buildGraph, groupByLevel } from "@obora/runtime";
-import fs from "fs-extra";
-
-import { validatePathComponent } from "../../utils/path-utils.js";
-import { readStatus } from "../../utils/status.js";
+import { formatter } from "../../utils/formatter.js";
 import { createRunCommand, runRun } from "../run.js";
 
-const setAgentResolver = vi.fn();
+// ─── helpers ──────────────────────────────────────────────────────────────────
 
-describe.skip("run command", () => {
-  let consoleLogSpy: ReturnType<typeof vi.spyOn>;
-  let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
+const DEFAULT_RESULT = { workflowName: "my-workflow", status: "completed" };
 
-  const mockStatus = {
-    feature: {
-      name: "test-feature",
-      created_at: "2026-02-04T00:00:00Z",
-      workflow: "simple",
-    },
-    status: "pending",
-    progress: {
-      current_stage: "planning",
-      completed_stages: [],
-    },
-    metadata: {
-      last_updated: "2026-02-04T00:00:00Z",
-      notes: "",
-    },
-  };
-
-  const mockWorkflow = {
-    name: "simple",
-    version: "1.0",
-    mode: "auto",
-    steps: [
-      { name: "plan", agent: "architect" },
-      { name: "implement", agent: "coder", depends_on: ["plan"] },
-      { name: "test", agent: "tester", depends_on: ["implement"] },
-    ],
-  };
-
-  const mockWorkflowYaml = `
-name: simple
-version: "1.0"
-mode: auto
-steps:
-  - name: plan
-    agent: architect
-  - name: implement
-    agent: coder
-    depends_on:
-      - plan
-  - name: test
-    agent: tester
-    depends_on:
-      - implement
-`;
-
+describe("run command", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    vi.mocked(readStatus).mockReturnValue(mockStatus);
-    vi.mocked(parseWorkflow).mockReturnValue(mockWorkflow as unknown);
-    vi.mocked(buildGraph).mockReturnValue({
-      nodes: new Set(["plan", "implement", "test"]),
-      edges: new Map([
-        ["implement", new Set(["plan"])],
-        ["test", new Set(["implement"])],
-      ]),
-      reverseEdges: new Map([
-        ["plan", new Set(["implement"])],
-        ["implement", new Set(["test"])],
-      ]),
-    } as unknown);
-    vi.mocked(topologicalSort).mockReturnValue({
-      success: true,
-      order: ["plan", "implement", "test"],
-    });
-    vi.mocked(groupByLevel).mockReturnValue(new Map());
-    vi.mocked(validatePathComponent).mockImplementation(() => undefined);
-    setAgentResolver({
-      resolve: vi.fn(() => ({
-        execute: vi.fn(async () => ({
-          taskId: "task",
-          success: true,
-          output: "ok",
-          duration: 1,
-          tokensUsed: { prompt: 0, completion: 0, total: 0 },
-        })),
-      })),
-    } as unknown);
+
+    // SDK defaults
+    vi.mocked(loadConfig).mockResolvedValue(
+      {} as Awaited<ReturnType<typeof loadConfig>>
+    );
+    vi.mocked(detectLLMConfigFromEnv).mockReturnValue(null);
+    vi.mocked(resolveLLMConfig).mockReturnValue(null);
+
+    // Runtime defaults
+    mockHandle.wait.mockResolvedValue(DEFAULT_RESULT);
+    mockRuntimeInstance.run.mockResolvedValue(mockHandle);
+    mockRuntimeInstance.on.mockReturnValue(mockRuntimeInstance);
+    mockRuntimeInstance.define.mockReturnValue(undefined);
+
+    // FS defaults
+    vi.mocked(mkdir).mockResolvedValue(undefined);
+    vi.mocked(writeFile).mockResolvedValue(undefined);
   });
 
-  afterEach(() => {
-    setAgentResolver(null);
-    consoleLogSpy.mockRestore();
-    consoleErrorSpy.mockRestore();
-  });
+  // ─── command creation ────────────────────────────────────────────────────
 
   describe("command creation", () => {
-    it("should create run command with correct options", () => {
+    it("should create run command with correct name", () => {
       const cmd = createRunCommand();
       expect(cmd.name()).toBe("run");
-      expect(cmd.description()).toBe("Execute workflow");
     });
 
-    it("should have --feature option", () => {
+    it("should have description mentioning workflow", () => {
       const cmd = createRunCommand();
-      const featureOption = cmd.options.find((opt) => opt.long === "--feature");
-      expect(featureOption).toBeDefined();
+      expect(cmd.description().toLowerCase()).toContain("workflow");
     });
 
-    it('should have --mode option with default "auto"', () => {
+    it("should require a <workflow> argument", () => {
       const cmd = createRunCommand();
-      const modeOption = cmd.options.find((opt) => opt.long === "--mode");
-      expect(modeOption).toBeDefined();
-      expect(modeOption?.defaultValue).toBe("auto");
+      expect(cmd.registeredArguments.length).toBeGreaterThanOrEqual(1);
+      expect(cmd.registeredArguments[0].name()).toBe("workflow");
+    });
+
+    it("should have --input / -i option", () => {
+      const cmd = createRunCommand();
+      expect(cmd.options.find((o) => o.long === "--input")).toBeDefined();
+    });
+
+    it("should have --var / -v option", () => {
+      const cmd = createRunCommand();
+      expect(cmd.options.find((o) => o.long === "--var")).toBeDefined();
+    });
+
+    it("should have --policy option", () => {
+      const cmd = createRunCommand();
+      expect(cmd.options.find((o) => o.long === "--policy")).toBeDefined();
+    });
+
+    it("should have --agents option", () => {
+      const cmd = createRunCommand();
+      expect(cmd.options.find((o) => o.long === "--agents")).toBeDefined();
+    });
+
+    it("should have --config option", () => {
+      const cmd = createRunCommand();
+      expect(cmd.options.find((o) => o.long === "--config")).toBeDefined();
+    });
+
+    it("should have --model option", () => {
+      const cmd = createRunCommand();
+      expect(cmd.options.find((o) => o.long === "--model")).toBeDefined();
+    });
+
+    it("should have --provider option", () => {
+      const cmd = createRunCommand();
+      expect(cmd.options.find((o) => o.long === "--provider")).toBeDefined();
+    });
+
+    it("should have --output-dir option", () => {
+      const cmd = createRunCommand();
+      expect(cmd.options.find((o) => o.long === "--output-dir")).toBeDefined();
     });
 
     it("should have --dry-run option", () => {
       const cmd = createRunCommand();
-      const dryRunOption = cmd.options.find((opt) => opt.long === "--dry-run");
-      expect(dryRunOption).toBeDefined();
+      expect(cmd.options.find((o) => o.long === "--dry-run")).toBeDefined();
     });
 
-    it("should have --from-step option", () => {
+    it("should have --timeout option", () => {
       const cmd = createRunCommand();
-      const fromStepOption = cmd.options.find((opt) => opt.long === "--from-step");
-      expect(fromStepOption).toBeDefined();
-    });
-
-    it("should have --verbose option", () => {
-      const cmd = createRunCommand();
-      const verboseOption = cmd.options.find((opt) => opt.long === "--verbose");
-      expect(verboseOption).toBeDefined();
-    });
-
-    it("should have --continue-on-error option", () => {
-      const cmd = createRunCommand();
-      const continueOnErrorOption = cmd.options.find((opt) => opt.long === "--continue-on-error");
-      expect(continueOnErrorOption).toBeDefined();
+      expect(cmd.options.find((o) => o.long === "--timeout")).toBeDefined();
     });
   });
+
+  // ─── workflow execution ──────────────────────────────────────────────────
 
   describe("workflow execution", () => {
-    it("should execute workflow successfully", async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readFileSync).mockReturnValue(mockWorkflowYaml);
-      vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
-      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+    it("should instantiate OboraRuntime", async () => {
+      await runRun("my-workflow", {});
 
-      await runRun("test-feature", {});
-
-      expect(parseWorkflow).toHaveBeenCalledWith(mockWorkflowYaml);
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("Running workflow"));
+      expect(MockOboraRuntime).toHaveBeenCalledTimes(1);
     });
 
-    it("should create .obora/outputs directory", async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readFileSync).mockReturnValue(mockWorkflowYaml);
-      vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
-      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+    it("should call runtime.run with the workflow name", async () => {
+      await runRun("my-workflow", {});
 
-      await runRun("test-feature", {});
-
-      expect(fs.ensureDir).toHaveBeenCalled();
-    });
-
-    it("should update status to running", async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readFileSync).mockReturnValue(mockWorkflowYaml);
-      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
-
-      await runRun("test-feature", {});
-
-      const writeFileCalls = vi.mocked(fs.writeFile).mock.calls;
-      const statusCalls = writeFileCalls.filter((call) => String(call[0]).includes("status.yaml"));
-
-      expect(statusCalls.length).toBeGreaterThan(0);
-    });
-
-    it("should save step outputs", async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readFileSync).mockReturnValue(mockWorkflowYaml);
-      vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
-      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
-
-      await runRun("test-feature", {});
-
-      const writeFileCalls = vi.mocked(fs.writeFile).mock.calls;
-      const outputCalls = writeFileCalls.filter((call) => String(call[0]).includes("outputs"));
-
-      expect(outputCalls.length).toBeGreaterThan(0);
-    });
-  });
-
-  describe("--dry-run option", () => {
-    it("should show execution plan without running", async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readFileSync).mockReturnValue(mockWorkflowYaml);
-
-      await runRun("test-feature", { dryRun: true });
-
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("Dry-run mode"));
-      expect(fs.writeFile).not.toHaveBeenCalled();
-    });
-  });
-
-  describe("--from-step option", () => {
-    it("should start execution from specified step", async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readFileSync).mockReturnValue(mockWorkflowYaml);
-      vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
-      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
-
-      await runRun("test-feature", { fromStep: "implement" });
-
-      const logCalls = consoleLogSpy.mock.calls.flat();
-      expect(logCalls.some((call: unknown) => String(call).includes("implement"))).toBe(true);
-    });
-  });
-
-  describe("--continue-on-error option", () => {
-    it("should continue execution when step fails with --continue-on-error", async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readFileSync).mockReturnValue(mockWorkflowYaml);
-      vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
-      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
-
-      await runRun("test-feature", { continueOnError: true });
-
-      expect(consoleLogSpy).toHaveBeenCalled();
-    });
-  });
-
-  describe("error handling", () => {
-    it("should throw error when not in obora project", async () => {
-      vi.mocked(existsSync).mockReturnValue(false);
-
-      await expect(runRun("test-feature", {})).rejects.toThrow("Not in an obora project");
-    });
-
-    it("should throw error when feature not found", async () => {
-      vi.mocked(existsSync).mockImplementation((path) => {
-        const strPath = String(path);
-        return !strPath.includes("features/nonexistent-feature");
-      });
-
-      await expect(runRun("nonexistent-feature", {})).rejects.toThrow("not found");
-    });
-
-    it("should throw error when status file not found", async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readStatus).mockReturnValue(null);
-
-      await expect(runRun("test-feature", {})).rejects.toThrow("Status file not found");
-    });
-
-    it("should throw error when workflow file not found", async () => {
-      vi.mocked(existsSync).mockImplementation((path) => {
-        const strPath = String(path);
-        return !strPath.includes("workflows");
-      });
-
-      await expect(runRun("test-feature", {})).rejects.toThrow("Workflow file not found");
-    });
-
-    it("should throw error for circular dependency", async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readFileSync).mockReturnValue(mockWorkflowYaml);
-      vi.mocked(topologicalSort).mockReturnValue({
-        success: false,
-        order: [],
-        cyclePath: ["plan", "implement", "plan"],
-      });
-
-      await expect(runRun("test-feature", {})).rejects.toThrow("Circular dependency");
-    });
-
-    it("should handle path traversal attack", async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(validatePathComponent).mockImplementation(() => {
-        throw new Error("Invalid path");
-      });
-
-      await expect(runRun("../../../etc/passwd", {})).rejects.toThrow("Invalid path");
-    });
-  });
-
-  describe("failure exit code", () => {
-    it("should throw CLIError with exit code 1 on workflow failure", async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readFileSync).mockReturnValue(mockWorkflowYaml);
-      vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
-      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
-
-      // Make topological sort return a step that doesn't exist in stepMap
-      // to trigger a failure path — instead, mock executeStep to fail
-      // We test via the CLIError properties
-      vi.mocked(topologicalSort).mockReturnValue({
-        success: true,
-        order: ["plan", "implement", "test", "nonexistent"],
-      });
-
-      // nonexistent step will be skipped (warning), not failed.
-      // Instead, let's verify the exit code is 1 by checking CLIError import
-      const { CLIError } = await import("../../errors.js");
-      const err = new CLIError("test", 1);
-      expect(err.exitCode).toBe(1);
-    });
-  });
-
-  describe("success output", () => {
-    it("should show success message", async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readFileSync).mockReturnValue(mockWorkflowYaml);
-      vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
-      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
-
-      await runRun("test-feature", {});
-
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining("Workflow completed successfully")
+      expect(mockRuntimeInstance.run).toHaveBeenCalledWith(
+        "my-workflow",
+        expect.objectContaining({ input: undefined })
       );
     });
 
-    it("should show next steps", async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readFileSync).mockReturnValue(mockWorkflowYaml);
-      vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
-      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+    it("should await handle.wait() for the execution result", async () => {
+      await runRun("my-workflow", {});
 
-      await runRun("test-feature", {});
+      expect(mockHandle.wait).toHaveBeenCalled();
+    });
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("Next steps:"));
+    it("should call loadConfig to read project configuration", async () => {
+      await runRun("my-workflow", {});
+
+      expect(loadConfig).toHaveBeenCalled();
+    });
+
+    it("should detect LLM config from environment", async () => {
+      await runRun("my-workflow", {});
+
+      expect(detectLLMConfigFromEnv).toHaveBeenCalled();
+    });
+
+    it("should show a success message upon completion", async () => {
+      await runRun("my-workflow", {});
+
+      expect(formatter.success).toHaveBeenCalledWith(
+        expect.stringContaining("my-workflow")
+      );
+    });
+
+    it("should pass model/provider overrides to runtime when LLM config is resolved", async () => {
+      vi.mocked(resolveLLMConfig).mockReturnValue({
+        provider: "openai",
+        model: "gpt-4",
+      } as ReturnType<typeof resolveLLMConfig>);
+
+      await runRun("my-workflow", { model: "gpt-4o", provider: "openai" });
+
+      expect(MockOboraRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({
+          llm: expect.objectContaining({
+            model: "gpt-4o",
+            provider: "openai",
+          }),
+        })
+      );
+    });
+
+    it("should pass llm:undefined when no LLM config is resolved", async () => {
+      vi.mocked(resolveLLMConfig).mockReturnValue(null);
+
+      await runRun("my-workflow", {});
+
+      expect(MockOboraRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({ llm: undefined })
+      );
     });
   });
 
-  describe("path validation", () => {
-    it("should call validatePathComponent", async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readFileSync).mockReturnValue(mockWorkflowYaml);
-      vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
-      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+  // ─── YAML workflow file loading ───────────────────────────────────────────
 
-      await runRun("test-feature", {});
+  describe("YAML workflow file loading", () => {
+    it("should load workflow from a .yaml path and define it on runtime", async () => {
+      const mockWorkflow = { name: "loaded-workflow" };
+      vi.mocked(Workflow.fromYaml).mockResolvedValue(
+        mockWorkflow as Awaited<ReturnType<typeof Workflow.fromYaml>>
+      );
 
-      expect(validatePathComponent).toHaveBeenCalledWith("test-feature");
+      await runRun("my-workflow.yaml", {});
+
+      expect(Workflow.fromYaml).toHaveBeenCalledWith("my-workflow.yaml");
+      expect(mockRuntimeInstance.define).toHaveBeenCalledWith("loaded-workflow", mockWorkflow);
+    });
+
+    it("should load workflow from a .yml path", async () => {
+      const mockWorkflow = { name: "yml-workflow" };
+      vi.mocked(Workflow.fromYaml).mockResolvedValue(
+        mockWorkflow as Awaited<ReturnType<typeof Workflow.fromYaml>>
+      );
+
+      await runRun("my-workflow.yml", {});
+
+      expect(Workflow.fromYaml).toHaveBeenCalledWith("my-workflow.yml");
+    });
+
+    it("should NOT call Workflow.fromYaml for bare workflow names", async () => {
+      await runRun("my-workflow", {});
+
+      expect(Workflow.fromYaml).not.toHaveBeenCalled();
     });
   });
 
-  describe("workflow parsing", () => {
-    it("should parse workflow YAML", async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readFileSync).mockReturnValue(mockWorkflowYaml);
-      vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
-      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+  // ─── --dry-run option ─────────────────────────────────────────────────────
 
-      await runRun("test-feature", {});
+  describe("--dry-run option", () => {
+    it("should skip runtime.run in dry-run mode", async () => {
+      await runRun("my-workflow", { dryRun: true });
 
-      expect(parseWorkflow).toHaveBeenCalledWith(mockWorkflowYaml);
+      expect(mockRuntimeInstance.run).not.toHaveBeenCalled();
+    });
+
+    it("should show a validation success message in dry-run mode", async () => {
+      await runRun("my-workflow", { dryRun: true });
+
+      expect(formatter.success).toHaveBeenCalledWith(expect.stringContaining("validated"));
+    });
+
+    it("should emit JSON with validated:true in dry-run + json mode", async () => {
+      await runRun("my-workflow", { dryRun: true, json: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({ validated: true })
+      );
     });
   });
+
+  // ─── --input option ───────────────────────────────────────────────────────
+
+  describe("--input option", () => {
+    it("should parse valid JSON and pass it as input to the workflow", async () => {
+      await runRun("my-workflow", { input: '{"key":"value"}' });
+
+      expect(mockRuntimeInstance.run).toHaveBeenCalledWith(
+        "my-workflow",
+        expect.objectContaining({ input: { key: "value" } })
+      );
+    });
+
+    it("should throw CLIError for invalid JSON input", async () => {
+      await expect(runRun("my-workflow", { input: "not-valid-json" })).rejects.toThrow();
+    });
+  });
+
+  // ─── --var option ─────────────────────────────────────────────────────────
+
+  describe("--var option", () => {
+    it("should parse key=value pairs and pass them as variables", async () => {
+      await runRun("my-workflow", { var: ["foo=bar", "baz=qux"] });
+
+      expect(mockRuntimeInstance.run).toHaveBeenCalledWith(
+        "my-workflow",
+        expect.objectContaining({
+          variables: expect.objectContaining({ foo: "bar", baz: "qux" }),
+        })
+      );
+    });
+
+    it("should handle values containing '='", async () => {
+      await runRun("my-workflow", { var: ["url=http://example.com/a=b"] });
+
+      expect(mockRuntimeInstance.run).toHaveBeenCalledWith(
+        "my-workflow",
+        expect.objectContaining({
+          variables: expect.objectContaining({ url: "http://example.com/a=b" }),
+        })
+      );
+    });
+  });
+
+  // ─── --output-dir option ──────────────────────────────────────────────────
+
+  describe("--output-dir option", () => {
+    it("should create the output directory", async () => {
+      await runRun("my-workflow", { outputDir: "/tmp/obora-out" });
+
+      expect(mkdir).toHaveBeenCalledWith("/tmp/obora-out", { recursive: true });
+    });
+
+    it("should write a result JSON file in the output directory", async () => {
+      await runRun("my-workflow", { outputDir: "/tmp/obora-out" });
+
+      expect(writeFile).toHaveBeenCalledWith(
+        expect.stringContaining("/tmp/obora-out"),
+        expect.stringContaining("my-workflow"),
+        "utf-8"
+      );
+    });
+
+    it("should include the execution ID in the output file name", async () => {
+      await runRun("my-workflow", { outputDir: "/tmp/obora-out" });
+
+      const [filePath] = vi.mocked(writeFile).mock.calls[0];
+      expect(String(filePath)).toContain("exec-test-123");
+    });
+  });
+
+  // ─── --json option ────────────────────────────────────────────────────────
+
+  describe("--json option", () => {
+    it("should emit JSON output and suppress success message", async () => {
+      await runRun("my-workflow", { json: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({ workflowName: "my-workflow", status: "completed" })
+      );
+      expect(formatter.success).not.toHaveBeenCalled();
+    });
+
+    it("should include elapsed time in JSON output", async () => {
+      await runRun("my-workflow", { json: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({ elapsedMs: expect.any(Number) })
+      );
+    });
+  });
+
+  // ─── --quiet option ───────────────────────────────────────────────────────
+
+  describe("--quiet option", () => {
+    it("should suppress the success message in quiet mode", async () => {
+      await runRun("my-workflow", { quiet: true });
+
+      expect(formatter.success).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── --verbose option ─────────────────────────────────────────────────────
+
+  describe("--verbose option", () => {
+    it("should log start info in verbose mode", async () => {
+      await runRun("my-workflow", { verbose: true });
+
+      expect(formatter.info).toHaveBeenCalled();
+    });
+  });
+
+  // ─── commander integration ────────────────────────────────────────────────
 
   describe("commander integration", () => {
-    it("should parse command options correctly", async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readFileSync).mockReturnValue(mockWorkflowYaml);
-      vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
-      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+    it("should execute the workflow when parsed with a name argument", async () => {
+      const cmd = createRunCommand();
+      cmd.exitOverride();
+
+      await cmd.parseAsync(["my-workflow"], { from: "user" });
+
+      expect(mockRuntimeInstance.run).toHaveBeenCalled();
+    });
+
+    it("should skip execution when --dry-run is passed", async () => {
+      const cmd = createRunCommand();
+      cmd.exitOverride();
+
+      await cmd.parseAsync(["my-workflow", "--dry-run"], { from: "user" });
+
+      expect(mockRuntimeInstance.run).not.toHaveBeenCalled();
+    });
+
+    it("should forward --model to OboraRuntime when LLM config is present", async () => {
+      vi.mocked(resolveLLMConfig).mockReturnValue({
+        provider: "anthropic",
+        model: "claude-3-5-sonnet",
+      } as ReturnType<typeof resolveLLMConfig>);
 
       const cmd = createRunCommand();
       cmd.exitOverride();
-      await cmd.parseAsync(["--feature", "test-feature"], { from: "user" });
 
-      expect(consoleLogSpy).toHaveBeenCalled();
+      await cmd.parseAsync(["my-workflow", "--model", "claude-opus-4-1"], { from: "user" });
+
+      expect(MockOboraRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({
+          llm: expect.objectContaining({ model: "claude-opus-4-1" }),
+        })
+      );
     });
   });
 });

@@ -1,6 +1,13 @@
 /* eslint-disable import/order */
 /**
  * Integration tests for bootstrapAgentResolver
+ *
+ * NOTE (skip maintained): `bootstrapAgentResolver` no longer exists as a
+ * real exported function in the codebase.  The function being "tested" here
+ * is itself a vi.fn() local mock — it does not exercise any production code.
+ * These tests should be rewritten once a real bootstrapAgentResolver is
+ * introduced (e.g. wrapping OboraRuntime setup) or removed if the abstraction
+ * is no longer needed.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";

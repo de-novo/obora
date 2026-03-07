@@ -1,342 +1,298 @@
 /* eslint-disable import/order */
 /**
  * init command tests
+ *
+ * Rewritten to match current implementation:
+ * - Uses node:fs/promises (access, copyFile, cp, mkdir, readFile, writeFile)
+ * - Template-based project scaffolding (--template option)
+ * - No longer uses @obora/database, fs-extra, or @obora/runtime
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock node:fs module (used for existsSync)
-vi.mock("node:fs", () => ({
-  existsSync: vi.fn(),
+// Mock node:fs/promises (used in init.ts)
+vi.mock("node:fs/promises", () => ({
+  access: vi.fn(),
+  copyFile: vi.fn(),
+  cp: vi.fn(),
+  mkdir: vi.fn(),
+  readFile: vi.fn(),
+  writeFile: vi.fn(),
 }));
 
-// Mock fs-extra module (used for writeFile, remove, ensureDir)
-vi.mock("fs-extra", () => ({
-  default: {
-    remove: vi.fn(),
-    ensureDir: vi.fn(),
-    writeFile: vi.fn(),
+// Mock formatter
+vi.mock("../../utils/formatter.js", () => ({
+  formatter: {
+    success: vi.fn(),
+    json: vi.fn(),
+    info: vi.fn(),
+    error: vi.fn(),
+    step: vi.fn(),
   },
 }));
 
-// Mock @obora/database
-vi.mock("@obora/database", () => {
-  return {
-    OboraDatabase: class MockOboraDatabase {
-      initialize = vi.fn().mockResolvedValue(undefined);
-      close = vi.fn();
-    },
-  };
-});
-
-// Mock @obora/runtime
-vi.mock("@obora/runtime", () => ({
-  log: vi.fn(),
+// Mock error-handler to pass through the action fn directly
+vi.mock("../../utils/error-handler.js", () => ({
+  handleCommandAction: vi.fn(async (fn: () => Promise<void>) => {
+    await fn();
+  }),
 }));
 
-vi.mock("@obora-kit/adapters", () => ({
-  FileAuthManager: class MockFileAuthManager {
-    listProviders = vi.fn().mockResolvedValue([]);
-  },
-  pickPreferredProvider: vi.fn(() => undefined),
-  getProviderDefaultModel: vi.fn(() => undefined),
-  isSupportedProvider: vi.fn(() => true),
+// Mock global-opts
+vi.mock("../../utils/global-opts.js", () => ({
+  getGlobalOpts: vi.fn(() => ({})),
 }));
 
-import { existsSync } from "node:fs";
+import { access, copyFile, cp, mkdir, readFile, writeFile } from "node:fs/promises";
 
-import { getProviderDefaultModel, pickPreferredProvider } from "@obora-kit/adapters";
-import fs from "fs-extra";
-
+import { formatter } from "../../utils/formatter.js";
 import { createInitCommand, runInit } from "../init.js";
 
-describe.skip("init command", () => {
-  let consoleLogSpy: ReturnType<typeof vi.spyOn>;
-  let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
-
+describe("init command", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(pickPreferredProvider).mockReturnValue(undefined);
-    vi.mocked(getProviderDefaultModel).mockReturnValue(undefined);
-    consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(mkdir).mockResolvedValue(undefined);
+    vi.mocked(cp).mockResolvedValue(undefined);
+    vi.mocked(copyFile).mockResolvedValue(undefined);
+    // Default: target files do not exist → access rejects → copyFile is attempted
+    vi.mocked(access).mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
+    // Default: no config file → readFile rejects → config normalization skipped
+    vi.mocked(readFile).mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
+    vi.mocked(writeFile).mockResolvedValue(undefined);
   });
 
-  afterEach(() => {
-    consoleLogSpy.mockRestore();
-    consoleErrorSpy.mockRestore();
-  });
+  // ─── command creation ──────────────────────────────────────────────────────
 
   describe("command creation", () => {
-    it("should create init command with correct options", () => {
+    it("should create init command with correct name", () => {
       const cmd = createInitCommand();
       expect(cmd.name()).toBe("init");
-      expect(cmd.description()).toBe("Initialize obora project");
-      expect(cmd.options.length).toBeGreaterThanOrEqual(2);
     });
 
-    it("should have --force option", () => {
+    it("should have a description mentioning initialization", () => {
       const cmd = createInitCommand();
-      const forceOption = cmd.options.find((opt) => opt.long === "--force");
-      expect(forceOption).toBeDefined();
+      expect(cmd.description().toLowerCase()).toMatch(/init/);
     });
 
-    it("should have --workflow option", () => {
+    it("should accept optional project-name argument", () => {
       const cmd = createInitCommand();
-      const workflowOption = cmd.options.find((opt) => opt.long === "--workflow");
-      expect(workflowOption).toBeDefined();
-      expect(workflowOption?.defaultValue).toBe("simple");
+      expect(cmd.registeredArguments.length).toBeGreaterThanOrEqual(1);
+      expect(cmd.registeredArguments[0].name()).toBe("project-name");
     });
 
-    it("should have --minimal option", () => {
+    it("should have --template option", () => {
       const cmd = createInitCommand();
-      const minimalOption = cmd.options.find((opt) => opt.long === "--minimal");
-      expect(minimalOption).toBeDefined();
+      const opt = cmd.options.find((o) => o.long === "--template");
+      expect(opt).toBeDefined();
+    });
+
+    it("should have --yes / -y option", () => {
+      const cmd = createInitCommand();
+      const opt = cmd.options.find((o) => o.long === "--yes");
+      expect(opt).toBeDefined();
     });
   });
+
+  // ─── project initialization ────────────────────────────────────────────────
 
   describe("project initialization", () => {
-    it("should initialize new project successfully", async () => {
-      vi.mocked(existsSync).mockReturnValue(false);
-      vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
-      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+    it("should call mkdir for the target directory", async () => {
+      await runInit("my-project", {});
 
-      await runInit({});
-
-      expect(consoleLogSpy).toHaveBeenCalledWith("Initializing obora project...");
-      expect(fs.ensureDir).toHaveBeenCalledTimes(5); // oboraDir + 4 subdirs
-      expect(fs.writeFile).toHaveBeenCalled();
-    });
-
-    it("should create all required directories", async () => {
-      vi.mocked(existsSync).mockReturnValue(false);
-      vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
-      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
-
-      await runInit({});
-
-      const ensureDirCalls = vi.mocked(fs.ensureDir).mock.calls;
-      const paths = ensureDirCalls.map((call) => call[0]);
-      expect(paths.some((p) => String(p).includes(".obora"))).toBe(true);
-      expect(paths.some((p) => String(p).includes("workflows"))).toBe(true);
-      expect(paths.some((p) => String(p).includes("features"))).toBe(true);
-      expect(paths.some((p) => String(p).includes("archive"))).toBe(true);
-      expect(paths.some((p) => String(p).includes("agents"))).toBe(true);
-    });
-
-    it("should create config.yaml", async () => {
-      vi.mocked(existsSync).mockReturnValue(false);
-      vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
-      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
-
-      await runInit({});
-
-      const writeFileCalls = vi.mocked(fs.writeFile).mock.calls;
-      const configCall = writeFileCalls.find((call) => String(call[0]).includes("config.yaml"));
-      expect(configCall).toBeDefined();
-      expect(typeof configCall?.[1]).toBe("string");
-      expect(String(configCall?.[1])).toContain("project:");
-      expect(String(configCall?.[1])).toContain("settings:");
-    });
-
-    it("should create workflow file", async () => {
-      vi.mocked(existsSync).mockReturnValue(false);
-      vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
-      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
-
-      await runInit({});
-
-      const writeFileCalls = vi.mocked(fs.writeFile).mock.calls;
-      const workflowCall = writeFileCalls.find((call) =>
-        String(call[0]).includes("workflows/simple.yaml")
+      expect(mkdir).toHaveBeenCalledWith(
+        expect.stringContaining("my-project"),
+        expect.objectContaining({ recursive: true })
       );
-      expect(workflowCall).toBeDefined();
-      expect(String(workflowCall?.[1])).toContain("name: simple");
-      expect(String(workflowCall?.[1])).toContain("steps:");
     });
 
-    it("should include defaults section when auth provider is available", async () => {
-      vi.mocked(existsSync).mockReturnValue(false);
-      vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
-      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
-      vi.mocked(pickPreferredProvider).mockReturnValue("anthropic");
-      vi.mocked(getProviderDefaultModel).mockReturnValue("claude-opus-4-1-20250805");
+    it("should copy the template into the target directory", async () => {
+      await runInit("my-project", {});
 
-      await runInit({});
-
-      const writeFileCalls = vi.mocked(fs.writeFile).mock.calls;
-      const configCall = writeFileCalls.find((call) => String(call[0]).includes("config.yaml"));
-      expect(String(configCall?.[1])).toContain("defaults:");
-      expect(String(configCall?.[1])).toContain("provider: anthropic");
-      expect(String(configCall?.[1])).toContain("model: claude-opus-4-1-20250805");
+      expect(cp).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.stringContaining("my-project"),
+        expect.objectContaining({ recursive: true })
+      );
     });
 
-    it("should initialize DuckDB database", async () => {
-      vi.mocked(existsSync).mockReturnValue(false);
-      vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
-      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+    it("should create workflows, policies, and tests sub-directories", async () => {
+      await runInit("my-project", {});
 
-      await runInit({});
-
-      // OboraDatabase is instantiated with path containing 'obora.db'
-      // The mock class is used internally - we verify by console output
-      expect(consoleLogSpy).toHaveBeenCalledWith("  Created: .obora/obora.db");
+      const mkdirPaths = vi.mocked(mkdir).mock.calls.map((c) => String(c[0]));
+      expect(mkdirPaths.some((p) => p.includes("workflows"))).toBe(true);
+      expect(mkdirPaths.some((p) => p.includes("policies"))).toBe(true);
+      expect(mkdirPaths.some((p) => p.includes("tests"))).toBe(true);
     });
 
-    it("should create .gitkeep files", async () => {
-      vi.mocked(existsSync).mockReturnValue(false);
-      vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
-      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+    it("should use the 'default' template when no --template is given", async () => {
+      await runInit("my-project", {});
 
+      expect(cp).toHaveBeenCalledWith(
+        expect.stringContaining("default"),
+        expect.any(String),
+        expect.any(Object)
+      );
+    });
+
+    it("should use a custom template when --template is specified", async () => {
+      await runInit("my-project", { template: "advanced" });
+
+      expect(cp).toHaveBeenCalledWith(
+        expect.stringContaining("advanced"),
+        expect.any(String),
+        expect.any(Object)
+      );
+    });
+
+    it("should show a success message by default", async () => {
+      await runInit("my-project", {});
+
+      expect(formatter.success).toHaveBeenCalledWith(expect.stringContaining("initialized"));
+    });
+
+    it("should output JSON when --json flag is set", async () => {
+      await runInit("my-project", { json: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({ initialized: true })
+      );
+      expect(formatter.success).not.toHaveBeenCalled();
+    });
+
+    it("should not show success message in --quiet mode", async () => {
+      await runInit("my-project", { quiet: true });
+
+      expect(formatter.success).not.toHaveBeenCalled();
+    });
+
+    it("should default to current directory when no project name is given", async () => {
       await runInit({});
 
-      const writeFileCalls = vi.mocked(fs.writeFile).mock.calls;
-      const gitkeepCalls = writeFileCalls.filter((call) => String(call[0]).includes(".gitkeep"));
-      expect(gitkeepCalls.length).toBeGreaterThanOrEqual(3);
+      // mkdir should be called with the resolved cwd-based path
+      expect(mkdir).toHaveBeenCalledWith(
+        expect.stringContaining(process.cwd()),
+        expect.objectContaining({ recursive: true })
+      );
+    });
+
+    it("should include the target path in JSON output", async () => {
+      await runInit("my-project", { json: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({ path: expect.stringContaining("my-project") })
+      );
     });
   });
 
-  describe("--force option", () => {
-    it("should throw error when .obora exists without --force", async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
+  // ─── workflow / policy YAML copy ──────────────────────────────────────────
 
-      await expect(runInit({})).rejects.toThrow("already exists");
+  describe("workflow YAML copy (best-effort)", () => {
+    it("should copy workflow.yaml → workflows/example.yaml when the target does not exist", async () => {
+      vi.mocked(access).mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
+
+      await runInit("my-project", {});
+
+      const copies = vi.mocked(copyFile).mock.calls;
+      const workflowCopy = copies.find(
+        (c) => String(c[1]).includes("workflows") && String(c[1]).includes("example.yaml")
+      );
+      expect(workflowCopy).toBeDefined();
     });
 
-    it("should overwrite existing .obora with --force", async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(fs.remove).mockResolvedValue(undefined);
-      vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
-      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+    it("should NOT overwrite workflows/example.yaml when it already exists", async () => {
+      vi.mocked(access).mockResolvedValue(undefined); // file exists
 
-      await runInit({ force: true });
+      await runInit("my-project", {});
 
-      expect(fs.remove).toHaveBeenCalled();
-      expect(consoleLogSpy).toHaveBeenCalledWith("Removing existing .obora/ directory...");
+      const copies = vi.mocked(copyFile).mock.calls;
+      const workflowCopy = copies.find(
+        (c) => String(c[1]).includes("workflows") && String(c[1]).includes("example.yaml")
+      );
+      expect(workflowCopy).toBeUndefined();
     });
   });
 
-  describe("--workflow option", () => {
-    it("should use simple workflow by default", async () => {
-      vi.mocked(existsSync).mockReturnValue(false);
-      vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
-      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+  // ─── config normalization ──────────────────────────────────────────────────
 
-      await runInit({});
+  describe("obora.config.yaml normalization", () => {
+    it("should normalize 'workflows: .' → 'workflows: ./workflows' in config", async () => {
+      const rawConfig = "workflows: .\npolicies: .\n";
+      vi.mocked(readFile).mockResolvedValue(rawConfig as unknown as string);
 
-      const writeFileCalls = vi.mocked(fs.writeFile).mock.calls;
-      const workflowCall = writeFileCalls.find((call) =>
-        String(call[0]).includes("workflows/simple.yaml")
+      await runInit("my-project", {});
+
+      expect(writeFile).toHaveBeenCalledWith(
+        expect.stringContaining("obora.config.yaml"),
+        expect.stringContaining("./workflows"),
+        "utf-8"
       );
-      expect(workflowCall).toBeDefined();
     });
 
-    it("should create standard workflow with --workflow standard", async () => {
-      vi.mocked(existsSync).mockReturnValue(false);
-      vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
-      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+    it("should normalize 'policies: .' → 'policies: ./policies' in config", async () => {
+      const rawConfig = "workflows: .\npolicies: .\n";
+      vi.mocked(readFile).mockResolvedValue(rawConfig as unknown as string);
 
-      await runInit({ workflow: "standard" });
+      await runInit("my-project", {});
 
-      const writeFileCalls = vi.mocked(fs.writeFile).mock.calls;
-      const workflowCall = writeFileCalls.find((call) =>
-        String(call[0]).includes("workflows/standard.yaml")
+      expect(writeFile).toHaveBeenCalledWith(
+        expect.stringContaining("obora.config.yaml"),
+        expect.stringContaining("./policies"),
+        "utf-8"
       );
-      expect(workflowCall).toBeDefined();
-      expect(String(workflowCall?.[1])).toContain("name: standard");
     });
 
-    it("should reject invalid workflow type", async () => {
-      vi.mocked(existsSync).mockReturnValue(false);
+    it("should NOT write config when no normalization is needed", async () => {
+      const rawConfig = "workflows: ./workflows\npolicies: ./policies\n";
+      vi.mocked(readFile).mockResolvedValue(rawConfig as unknown as string);
 
-      await expect(runInit({ workflow: "invalid" })).rejects.toThrow("Invalid workflow type");
+      await runInit("my-project", {});
+
+      const configWrites = vi.mocked(writeFile).mock.calls.filter((c) =>
+        String(c[0]).includes("obora.config.yaml")
+      );
+      expect(configWrites).toHaveLength(0);
     });
 
-    it("should use standard config template with --workflow standard", async () => {
-      vi.mocked(existsSync).mockReturnValue(false);
-      vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
-      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+    it("should silently skip config normalization when config file does not exist", async () => {
+      vi.mocked(readFile).mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
 
-      await runInit({ workflow: "standard" });
-
-      const writeFileCalls = vi.mocked(fs.writeFile).mock.calls;
-      const configCall = writeFileCalls.find((call) => String(call[0]).includes("config.yaml"));
-      expect(String(configCall?.[1])).toContain('workflow: "standard"');
+      await expect(runInit("my-project", {})).resolves.toBeUndefined();
     });
   });
 
-  describe("--minimal option", () => {
-    it("should create minimal config with --minimal", async () => {
-      vi.mocked(existsSync).mockReturnValue(false);
-      vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
-      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
-
-      await runInit({ minimal: true });
-
-      const writeFileCalls = vi.mocked(fs.writeFile).mock.calls;
-      const configCall = writeFileCalls.find((call) => String(call[0]).includes("config.yaml"));
-      expect(String(configCall?.[1])).toContain('workflow: "simple"');
-      expect(String(configCall?.[1])).toContain('name: "my-project"');
-    });
-
-    it("should respect workflow choice even with --minimal", async () => {
-      vi.mocked(existsSync).mockReturnValue(false);
-      vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
-      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
-
-      await runInit({ minimal: true, workflow: "standard" });
-
-      const writeFileCalls = vi.mocked(fs.writeFile).mock.calls;
-      const configCall = writeFileCalls.find((call) => String(call[0]).includes("config.yaml"));
-      expect(String(configCall?.[1])).toContain('workflow: "standard"');
-
-      const workflowCall = writeFileCalls.find((call) =>
-        String(call[0]).includes("workflows/standard.yaml")
-      );
-      expect(workflowCall).toBeDefined();
-    });
-  });
-
-  describe("combined options", () => {
-    it("should work with --force and --minimal together", async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(fs.remove).mockResolvedValue(undefined);
-      vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
-      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
-
-      await runInit({ force: true, minimal: true });
-
-      expect(fs.remove).toHaveBeenCalled();
-      expect(fs.ensureDir).toHaveBeenCalled();
-    });
-
-    it("should work with --force and --workflow standard", async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(fs.remove).mockResolvedValue(undefined);
-      vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
-      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
-
-      await runInit({ force: true, workflow: "standard" });
-
-      const writeFileCalls = vi.mocked(fs.writeFile).mock.calls;
-      const workflowCall = writeFileCalls.find((call) =>
-        String(call[0]).includes("workflows/standard.yaml")
-      );
-      expect(workflowCall).toBeDefined();
-    });
-  });
+  // ─── commander integration ─────────────────────────────────────────────────
 
   describe("commander integration", () => {
-    it("should parse command options correctly", async () => {
-      vi.mocked(existsSync).mockReturnValue(false);
-      vi.mocked(fs.ensureDir).mockResolvedValue(undefined);
-      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
-
+    it("should run init when parsed with a project name", async () => {
       const cmd = createInitCommand();
       cmd.exitOverride();
-      await cmd.parseAsync(["--workflow", "simple", "--minimal"], { from: "user" });
 
-      expect(consoleLogSpy).toHaveBeenCalledWith("Initializing obora project...");
+      await cmd.parseAsync(["test-project"], { from: "user" });
+
+      expect(mkdir).toHaveBeenCalled();
+      expect(cp).toHaveBeenCalled();
+    });
+
+    it("should use the specified --template", async () => {
+      const cmd = createInitCommand();
+      cmd.exitOverride();
+
+      await cmd.parseAsync(["--template", "custom", "test-project"], { from: "user" });
+
+      expect(cp).toHaveBeenCalledWith(
+        expect.stringContaining("custom"),
+        expect.any(String),
+        expect.any(Object)
+      );
+    });
+
+    it("should run without a project name (defaults to '.')", async () => {
+      const cmd = createInitCommand();
+      cmd.exitOverride();
+
+      await cmd.parseAsync([], { from: "user" });
+
+      expect(mkdir).toHaveBeenCalled();
     });
   });
 });

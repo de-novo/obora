@@ -1,3 +1,20 @@
+/**
+ * CLI E2E tests: init → new → run
+ *
+ * NOTE (skip maintained): This test was written against the legacy API where:
+ *   - runInit({ workflow: "simple" }) created an .obora/ directory with a
+ *     workflow-based layout (config.yaml, workflows/simple.yaml, etc.)
+ *   - runRun(featureName, {}) executed a feature workflow using @obora/runtime
+ *
+ * The current implementations have changed significantly:
+ *   - runInit() uses template-based scaffolding (--template, node:fs/promises)
+ *     and outputs obora.config.yaml (not .obora/config.yaml)
+ *   - runRun(workflow, options) takes a workflow name/path (not a feature name)
+ *     and delegates to @obora/sdk OboraRuntime
+ *
+ * These tests should be rewritten against the current API once the E2E
+ * integration path is stabilised.
+ */
 import { existsSync, readFileSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
