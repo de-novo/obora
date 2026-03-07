@@ -177,9 +177,9 @@ export class MajorityConsensusRulePlugin implements ConsensusRulePlugin {
   }
 }
 
-export class DuckDBAuditStorePlugin implements AuditStorePlugin {
+export class InMemoryAuditStorePlugin implements AuditStorePlugin {
   readonly type = "audit-store" as const;
-  readonly name = "duckdb-audit-store";
+  readonly name = "in-memory-audit-store";
   readonly version = "1.0.0";
 
   private readonly store = new InMemoryAuditStore();
@@ -221,7 +221,7 @@ export function createBuiltinPlugins(options: { sandboxRoot?: string; patternReg
     new AllowAllPolicyRulePlugin(),
     new RetryRecoveryStrategyPlugin(),
     new MajorityConsensusRulePlugin(),
-    new DuckDBAuditStorePlugin(),
+    new InMemoryAuditStorePlugin(),
     new IdentityStateTransformPlugin(),
   ];
 }
