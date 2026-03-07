@@ -1,0 +1,19 @@
+name: todo-app-planning-03-solution-discussion
+version: "1.0"
+description: "대안 토론 단계"
+policy: ../../policy.yaml
+
+steps:
+  - name: discuss-solution-options
+    pattern: discussion
+    participants: [product-manager, architect, designer]
+    input:
+      analysis_doc: "{{input.analysis_doc}}"
+      task: |
+        analysis_doc를 바탕으로 대안 2~3개를 토론하세요.
+        각 대안별:
+        - 장점/단점
+        - 구현 난이도
+        - 일정 영향
+        - 사용자 가치
+        마지막에 권장안 1개를 제시하세요.

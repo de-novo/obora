@@ -1,29 +1,32 @@
+import type { ChatMessage, ChatCompletionResult, ToolCall, ToolDefinition } from "@obora/adapters";
 import type { AgentFactory } from "./runtime.js";
 import type { WorkflowStep } from "./workflow.js";
+import { existsSync, realpathSync } from "node:fs";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { dirname, resolve, sep } from "node:path";
 
-interface LLMChatMessage {
-  role: "system" | "user" | "assistant" | "tool";
-  content: string;
-}
-
-interface LLMChatResult {
-  model?: string;
-  message: { role: "assistant"; content: string | null };
-  usage?: {
-    promptTokens?: number;
-    completionTokens?: number;
-    totalTokens?: number;
-  };
-}
-
+/**
+ * Minimal LLM adapter interface for StepExecutor.
+ * Compatible with the full LLMAdapter from @obora/adapters.
+ */
 export interface LLMAdapterLike {
   chatCompletion(params: {
     model?: string;
-    messages: LLMChatMessage[];
+    messages: ChatMessage[];
     temperature?: number;
     maxTokens?: number;
     signal?: AbortSignal;
-  }): Promise<LLMChatResult>;
+    tools?: ToolDefinition[];
+    toolChoice?: "auto" | "none" | "required" | { type: "function"; name: string };
+  }): Promise<{
+    model?: string;
+    message: { role: "assistant"; content: string | null; toolCalls?: ToolCall[] };
+    usage?: {
+      promptTokens?: number;
+      completionTokens?: number;
+      totalTokens?: number;
+    };
+  }>;
 }
 
 export interface StepContext {
@@ -36,6 +39,71 @@ export interface StepResult {
   raw?: unknown;
   votes?: Array<{ participant: string; vote: "APPROVE" | "REJECT" | "REQUEST_CHANGES"; response: string }>;
 }
+
+const BUILTIN_TOOLS: ToolDefinition[] = [
+  {
+    type: "function",
+    function: {
+      name: "file_write",
+      description: "Create or overwrite a file in the project directory",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "Relative path from project root" },
+          content: { type: "string", description: "File content" },
+        },
+        required: ["path", "content"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "file_read",
+      description: "Read a file from the project directory",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "Relative path from project root" },
+        },
+        required: ["path"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "file_list",
+      description: "List files and directories at a path in the project directory",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "Relative directory path from project root" },
+        },
+        required: ["path"],
+      },
+    },
+  },
+];
+
+const MAX_TOOL_ROUNDS = 24;
+
+const OBR_GLOBAL_SYSTEM_PROMPT_LINES = [
+  "You are an Obora workflow execution agent.",
+  "",
+  "[Obora Architecture Context]",
+  "- Obora executes deterministic step pipelines with explicit dependencies.",
+  "- Each step must produce artifacts that are directly usable by the next step.",
+  "- Tool-call first: use structured tool calls (file_write/file_read/file_list) instead of claiming work in prose.",
+  "- Prior artifacts are mandatory context. Resolve inconsistencies explicitly.",
+  "- If review/consensus fails, improve the artifact using concrete issues and retry within policy limits.",
+  "",
+  "[Non-negotiable Rules]",
+  "- Stay inside the requested project domain.",
+  "- No placeholders in final artifacts (e.g., YYYY-XX-XX, TBD).",
+  "- Keep outputs concise, verifiable, and implementation-ready.",
+];
+
 
 export interface StepExecutorConfig {
   model?: string;
@@ -153,7 +221,7 @@ export class StepExecutor {
     const systemPrompt = this.buildSystemPrompt(agentName ?? step.agent);
     const userPrompt = this.buildUserPrompt(step, task, context);
 
-    const messages: LLMChatMessage[] = [
+    const messages: ChatMessage[] = [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ];
@@ -167,26 +235,131 @@ export class StepExecutor {
 
     const startedAt = Date.now();
     try {
-      const response = await adapter.chatCompletion({
-        model: resolved?.model ?? this.config.model,
-        temperature: resolved?.temperature ?? this.config.temperature,
-        maxTokens: resolved?.maxTokens ?? this.config.maxTokens,
-        messages,
-        ...(requestSignal?.signal ? { signal: requestSignal.signal } : {}),
-      });
-      await this.config.onEvent?.("llm_response", {
-        stepName: step.name,
-        agent: agentName ?? step.agent,
-        model: response.model ?? resolved?.model ?? this.config.model,
-        content: response.message.content,
-        usage: response.usage,
-        latencyMs: Date.now() - startedAt,
-      });
+      let response: Awaited<ReturnType<LLMAdapterLike["chatCompletion"]>> | undefined;
+      for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+        response = await adapter.chatCompletion({
+          model: resolved?.model ?? this.config.model,
+          temperature: resolved?.temperature ?? this.config.temperature,
+          maxTokens: resolved?.maxTokens ?? this.config.maxTokens,
+          messages,
+          tools: BUILTIN_TOOLS,
+          toolChoice: "auto",
+          ...(requestSignal?.signal ? { signal: requestSignal.signal } : {}),
+        });
 
-      return response;
+        await this.config.onEvent?.("llm_response", {
+          stepName: step.name,
+          agent: agentName ?? step.agent,
+          model: response.model ?? resolved?.model ?? this.config.model,
+          content: response.message.content,
+          usage: response.usage,
+          latencyMs: Date.now() - startedAt,
+        });
+
+        const toolCalls = response.message.toolCalls ?? [];
+        if (toolCalls.length === 0) {
+          return response;
+        }
+
+        messages.push({
+          role: "assistant",
+          content: response.message.content ?? "",
+          toolCalls,
+        });
+
+        for (const toolCall of toolCalls) {
+          const toolResult = await this.executeToolCall(toolCall);
+          messages.push({
+            role: "tool",
+            toolCallId: toolCall.id,
+            content: toolResult,
+          });
+        }
+      }
+
+      throw new Error(`Tool-call iteration limit exceeded for step '${step.name}'`);
     } finally {
       requestSignal?.cleanup();
     }
+  }
+
+  private async executeToolCall(toolCall: ToolCall): Promise<string> {
+    const args = this.parseToolArgs(toolCall.function.arguments);
+
+    try {
+      switch (toolCall.function.name) {
+        case "file_write": {
+          if (typeof args.path !== "string" || typeof args.content !== "string") {
+            return "Error: file_write requires string path and content";
+          }
+          const filePath = this.resolveProjectPath(args.path, { allowNonExistentTarget: true });
+          await mkdir(dirname(filePath), { recursive: true });
+          await writeFile(filePath, args.content, "utf-8");
+          return `Written: ${args.path}`;
+        }
+        case "file_read": {
+          if (typeof args.path !== "string") {
+            return "Error: file_read requires string path";
+          }
+          const filePath = this.resolveProjectPath(args.path);
+          return await readFile(filePath, "utf-8");
+        }
+        case "file_list": {
+          if (typeof args.path !== "string") {
+            return "Error: file_list requires string path";
+          }
+          const dirPath = this.resolveProjectPath(args.path);
+          const entries = await readdir(dirPath, { withFileTypes: true });
+          return entries.map((entry) => `${entry.isDirectory() ? "d" : "f"} ${entry.name}`).join("\n");
+        }
+        default:
+          return `Error: Unsupported tool '${toolCall.function.name}'`;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return `Error: ${message}`;
+    }
+  }
+
+  private parseToolArgs(raw: string): Record<string, unknown> {
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+      return {};
+    } catch {
+      return {};
+    }
+  }
+
+  private resolveProjectPath(relativePath: string, options?: { allowNonExistentTarget?: boolean }): string {
+    const projectRoot = realpathSync(process.cwd());
+    const resolvedPath = resolve(projectRoot, relativePath);
+
+    if (!options?.allowNonExistentTarget || existsSync(resolvedPath)) {
+      const realTarget = realpathSync(resolvedPath);
+      if (realTarget === projectRoot || realTarget.startsWith(`${projectRoot}${sep}`)) {
+        return realTarget;
+      }
+      throw new Error("Path validation failed: target escapes project directory");
+    }
+
+    let nearestExistingAncestor = dirname(resolvedPath);
+    while (!existsSync(nearestExistingAncestor)) {
+      const parent = dirname(nearestExistingAncestor);
+      if (parent === nearestExistingAncestor) {
+        throw new Error("Path validation failed: no existing parent directory found");
+      }
+      nearestExistingAncestor = parent;
+    }
+
+    const realAncestor = realpathSync(nearestExistingAncestor);
+    if (realAncestor === projectRoot || realAncestor.startsWith(`${projectRoot}${sep}`)) {
+      return resolvedPath;
+    }
+
+    throw new Error("Path validation failed: parent escapes project directory");
   }
 
   private combineSignals(
@@ -385,14 +558,21 @@ export class StepExecutor {
   }
 
   private buildSystemPrompt(agentName?: string): string {
-    if (!agentName) {
-      return "You are a helpful AI assistant executing workflow steps.";
-    }
+    const identity = (() => {
+      if (!agentName) {
+        return "You are a helpful AI assistant executing workflow steps.";
+      }
 
-    const info = normalizeAgentInfo(this.agents.get(agentName));
-    const role = info.role ?? agentName;
-    const description = info.description ?? "";
-    return `You are ${role}.${description ? ` ${description}` : ""}`.trim();
+      const info = normalizeAgentInfo(this.agents.get(agentName));
+      const role = info.role ?? agentName;
+      const description = info.description ?? "";
+      return `You are ${role}.${description ? ` ${description}` : ""}`.trim();
+    })();
+
+    const now = new Date();
+    const currentDateLine = `Current date (ISO): ${now.toISOString().slice(0, 10)}`;
+
+    return [...OBR_GLOBAL_SYSTEM_PROMPT_LINES, currentDateLine, "", identity].join("\n").trim();
   }
 
   private buildUserPrompt(step: WorkflowStep, task: string, context: StepContext): string {

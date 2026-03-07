@@ -1,0 +1,20 @@
+name: todo-app-planning-04-review
+version: "1.0"
+description: "기획 리뷰/합의 단계 (동일 모델 3인 리뷰)"
+policy: ../../policy.yaml
+
+steps:
+  - name: planning-review
+    pattern: consensus
+    participants: [reviewer-1, reviewer-2, reviewer-3]
+    config:
+      consensus:
+        rule: majority
+        min_votes: 3
+        timeout: 600
+    input:
+      discussion_doc: "{{input.discussion_doc}}"
+      task: |
+        discussion_doc를 리뷰하세요.
+        평가 기준: 명확성, 실행가능성, MVP 적합성, 리스크 대응성
+        결과: APPROVE 또는 REJECT + 개선사항

@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+import { access, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { OboraError, OboraErrorCode, OboraRuntime } from "../runtime.js";
 import type { LoadedPlugin } from "../plugin-types.js";
@@ -104,6 +107,83 @@ describe("OboraRuntime facade", () => {
       expect(warnings[0]).toContain("No LLM configured");
     } finally {
       restoreEnv();
+    }
+  });
+
+  it("smoke: runtime.run executes file_write tool call and creates docs/tool-smoke.md", async () => {
+    const cwdBefore = process.cwd();
+    const workspace = await mkdtemp(join(tmpdir(), "obora-runtime-tool-smoke-"));
+    process.chdir(workspace);
+
+    try {
+      const runtime = new OboraRuntime({
+        llm: { provider: "openai", apiKey: "test-key", model: "gpt-5" },
+      });
+
+      const adapterMock = {
+        chatCompletion: vi.fn().mockImplementation(async ({ messages }) => {
+          const toolResultMessage = messages.find(
+            (message: { role: string }) => message.role === "tool",
+          );
+          if (!toolResultMessage) {
+            return {
+              model: "gpt-5",
+              message: {
+                role: "assistant",
+                content: null,
+                toolCalls: [
+                  {
+                    id: "tool-1",
+                    type: "function",
+                    function: {
+                      name: "file_write",
+                      arguments: JSON.stringify({
+                        path: "docs/tool-smoke.md",
+                        content: "# tool smoke\n",
+                      }),
+                    },
+                  },
+                ],
+              },
+              usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+            };
+          }
+
+          return {
+            model: "gpt-5",
+            message: { role: "assistant", content: "created" },
+            usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+          };
+        }),
+      };
+
+      vi.spyOn(
+        runtime as unknown as {
+          createLLMAdapter: () => Promise<typeof adapterMock>;
+        },
+        "createLLMAdapter",
+      ).mockResolvedValue(adapterMock);
+
+      runtime.define("tool-smoke", {
+        name: "tool-smoke",
+        steps: [
+          {
+            name: "create-doc",
+            agent: "writer",
+            input: { task: "Create docs/tool-smoke.md using tool call" },
+          },
+        ],
+      });
+
+      const handle = await runtime.run("tool-smoke");
+      const result = await handle.wait();
+
+      expect(result.status).toBe("completed");
+      expect(result.outputs["create-doc"]).toBe("created");
+      expect(await readFile(join(workspace, "docs/tool-smoke.md"), "utf-8")).toBe("# tool smoke\n");
+      expect(adapterMock.chatCompletion).toHaveBeenCalledTimes(2);
+    } finally {
+      process.chdir(cwdBefore);
     }
   });
 

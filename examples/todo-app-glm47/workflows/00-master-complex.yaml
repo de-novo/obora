@@ -1,0 +1,38 @@
+name: todo-app-master-complex
+version: "1.0"
+description: "초복잡 마스터 플로우(기획→설계→디자인→개발→검증)"
+policy: ../policy.yaml
+
+steps:
+  - name: planning-pipeline
+    agent: product-manager
+    input:
+      task: "planning 세부 파이프라인을 실행하기 위한 입력을 구성하세요."
+
+  - name: architecture-pipeline
+    agent: architect
+    depends_on: [planning-pipeline]
+    input:
+      planning_output: "{{steps.planning-pipeline.output}}"
+      task: "아키텍처 복잡 파이프라인 입력을 구성하세요."
+
+  - name: design-pipeline
+    agent: designer
+    depends_on: [architecture-pipeline]
+    input:
+      architecture_output: "{{steps.architecture-pipeline.output}}"
+      task: "디자인 복잡 파이프라인 입력을 구성하세요."
+
+  - name: development-pipeline
+    agent: developer
+    depends_on: [design-pipeline]
+    input:
+      design_output: "{{steps.design-pipeline.output}}"
+      task: "개발 복잡 파이프라인 입력을 구성하세요."
+
+  - name: validation-pipeline
+    agent: reviewer-1
+    depends_on: [development-pipeline]
+    input:
+      development_output: "{{steps.development-pipeline.output}}"
+      task: "검증 복잡 파이프라인 입력을 구성하세요."

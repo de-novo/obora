@@ -11,7 +11,7 @@
  * @module @obora/cli/runtime/context-builder
  */
 
-import type { ChatMessage } from "@obora-kit/adapters";
+import type { ChatMessage } from "@obora/adapters";
 import type { AgentContext, Task } from "../../agents/roles/index.js";
 import { Blackboard } from "./blackboard.js";
 import type { Step, Workflow } from "../../../_legacy/workflow/index.js";

@@ -1,0 +1,21 @@
+name: todo-app-07-final-summary
+version: "1.0"
+description: "최종 요약 단계"
+policy: ../policy.yaml
+
+steps:
+  - name: final-summary
+    agent: product-manager
+    input:
+      planning_doc: "{{input.planning_doc}}"
+      architecture_doc: "{{input.architecture_doc}}"
+      ui_spec: "{{input.ui_spec}}"
+      implementation_output: "{{input.implementation_output}}"
+      review_result: "{{input.review_result}}"
+      task: |
+        전체 프로젝트 결과를 요약하세요.
+        - 기획 요약
+        - 설계 핵심 결정
+        - 디자인 포인트
+        - 구현 결과
+        - 리뷰 결과 및 후속 개선안

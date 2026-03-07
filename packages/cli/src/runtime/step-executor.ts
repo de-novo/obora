@@ -10,7 +10,7 @@ import {
   RetryExhaustedError,
   SkillLoader,
   SkillRegistry,
-} from "@obora-kit/adapters";
+} from "@obora/adapters";
 
 import { calculateDelay, waitWithAbort } from "./retry-policy.js";
 import type { StepErrorMetadata } from "./types.js";

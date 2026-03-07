@@ -1,64 +1,53 @@
-name: doc-review-pipeline
-version: "1.0"
-description: Brainstorm -> peer review -> consensus -> human approval
+name: doc-generation-pipeline
+version: "1.0.1"
+policy: "./doc-gen-policy.yaml"
+# examples-only: this file mirrors fixture defaults for docs discoverability
 
 steps:
-  - name: brainstorm-outline
+  - name: brainstorm
+    agent: ideator
     pattern: brainstorming
     participants:
-      ideatorA: writer-a
-      ideatorB: writer-b
-      ideatorC: writer-c
+      alice: ideator-1
+      bob: ideator-2
+      carol: ideator-3
     config:
       phase_1: generate
       phase_2: evaluate
       top_n: 5
-      dedup: semantic
-    input:
-      topic: "M2 Runtime release note"
+      dedup: exact
 
-  - name: peer-review-draft
+  - name: draft
+    agent: writer
+    depends_on: [brainstorm]
+    description: "Generate document from top ideas"
+
+  - name: peer-review
+    agent: reviewer
     pattern: peer-review
-    depends_on: [brainstorm-outline]
+    depends_on: [draft]
     participants:
-      reviewer1: review-opus
-      reviewer2: review-codex
-      reviewer3: review-glm
+      reviewer-a: opus
+      reviewer-b: codex
+      reviewer-c: glm
     config:
-      min_score: 0.85
+      min_score: 7
       p0_allowed: 0
       max_rounds: 2
 
-  - name: consensus-signoff
-    pattern: consensus
-    depends_on: [peer-review-draft]
-    participants:
-      lead: tech-lead
-      qa: qa-lead
-      writer: docs-owner
-    consensus:
-      rule: weighted
-      threshold: 0.7
-      voters:
-        - id: lead
-          weight: 0.4
-        - id: qa
-          weight: 0.3
-        - id: writer
-          weight: 0.3
-
-  - name: human-approval
+  - name: approval
+    agent: approver
+    depends_on: [peer-review]
     gate: human-approval
-    depends_on: [consensus-signoff]
     gate_config:
-      stages:
-        - name: security
-          approvers: [security-owner]
-          required: 1
-        - name: release
-          approvers: [release-manager]
-          required: 1
-      on_reject: fail
-      timeout: 24h
+      timeout: "24h"
       fallback: escalate
-      escalation_to: engineering-director
+      escalation_to: "team-lead"
+
+recovery:
+  peer-review:
+    on_fail: retry
+    max_retries: 1
+  approval:
+    on_fail: escalate
+    to: "team-lead"

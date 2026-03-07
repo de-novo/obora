@@ -1,5 +1,5 @@
 {
-  "name": "@obora-kit/adapters",
+  "name": "@obora/adapters",
   "version": "0.1.0",
   "description": "External integration adapters",
   "type": "module",

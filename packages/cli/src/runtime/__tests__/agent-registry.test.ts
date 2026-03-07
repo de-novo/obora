@@ -4,7 +4,7 @@
 
 import { AgentRole } from "@obora/runtime";
 import { OboraError } from "@obora/runtime";
-import { MockLLMAdapter } from "@obora-kit/adapters";
+import { MockLLMAdapter } from "@obora/adapters";
 import { describe, it, expect } from "vitest";
 
 import { AgentRegistry } from "../agent-registry.js";

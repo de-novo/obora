@@ -8,7 +8,7 @@
  * 4. Error handling (invalid model, bad request)
  *
  * Requires ZAI_API_KEY environment variable.
- * Run: pnpm --filter @obora-kit/adapters test:e2e
+ * Run: pnpm --filter @obora/adapters test:e2e
  */
 import { describe, expect, it, beforeAll } from "vitest";
 

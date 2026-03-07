@@ -7,7 +7,7 @@ import {
   type AgentConfig,
   SkillLoader,
   SkillRegistry,
-} from "@obora-kit/adapters";
+} from "@obora/adapters";
 import { OboraError, type ErrorCode } from "../../../_legacy/workflow/index.js";
 import type {
   BaseAgent,

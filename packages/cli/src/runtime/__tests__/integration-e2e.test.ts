@@ -29,8 +29,8 @@
  */
 
 import type { Step, Workflow, ErrorCode } from "@obora/runtime";
-import { MockLLMAdapter } from "@obora-kit/adapters";
-import type { ChatMessage } from "@obora-kit/adapters";
+import { MockLLMAdapter } from "@obora/adapters";
+import type { ChatMessage } from "@obora/adapters";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 import { AgentRegistry } from "../agent-registry.js";

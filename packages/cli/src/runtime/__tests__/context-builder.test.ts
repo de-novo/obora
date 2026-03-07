@@ -3,7 +3,7 @@
  */
 
 import type { Step, Workflow } from "@obora/runtime";
-import type { ChatMessage } from "@obora-kit/adapters";
+import type { ChatMessage } from "@obora/adapters";
 import { describe, it, expect } from "vitest";
 
 import {

@@ -1,0 +1,62 @@
+name: todo-app-01-planning-pipeline
+version: "2.1"
+description: "Tool-call first planning pipeline (simplified for test)"
+policy: ../policy.yaml
+
+steps:
+  - name: requirements-collection
+    agent: product-manager
+    tools: [file_write, file_read, file_list, generate]
+    input:
+      task: |
+        You MUST use file_write to create docs/01-requirements.md.
+        Domain lock: MUST be a TODO APP only. If you mention project-management, CRM, ERP, or generic collaboration suite, treat as FAIL and regenerate.
+        Do not return long prose as final output.
+        Write Korean markdown with: 페르소나, 목표, 기능요구(MUST/SHOULD/COULD), 제약사항, KPI.
+        Mandatory MVP scope: Todo CRUD, complete toggle, delete, filter(all/active/completed), localStorage.
+        Mandatory component names: TodoApp, TodoList, TodoItem, AddTodo, FilterBar.
+
+  - name: requirements-analysis
+    agent: architect
+    tools: [file_write, file_read, file_list, generate]
+    depends_on: [requirements-collection]
+    input:
+      task: |
+        Read docs/01-requirements.md, then file_write docs/02-analysis.md.
+        Domain lock: TODO APP only.
+        Include: 기능분해, 의존성, 리스크, MVP 범위, 기술 선택 근거.
+        Must include exact components: TodoApp, TodoList, TodoItem, AddTodo, FilterBar.
+
+  - name: solution-discussion
+    agent: product-manager
+    tools: [file_write, file_read, file_list, generate]
+    depends_on: [requirements-analysis]
+    input:
+      task: |
+        Read docs/01-requirements.md and docs/02-analysis.md.
+        Domain lock: TODO APP only.
+        Decide solution approach and file_write docs/03-discussion.md.
+        If out-of-domain content appears, regenerate before final.
+
+  - name: planning-review
+    agent: reviewer-1
+    tools: [file_write, file_read, file_list, review]
+    depends_on: [solution-discussion]
+    input:
+      task: |
+        Review docs/01~03 and file_write docs/04-review.md.
+        Output: PASS/FAIL, issues(P0/P1/P2), actions.
+        Auto-FAIL rules:
+        - content is not TODO APP domain
+        - missing mandatory MVP scope
+        - missing required component names
+
+  - name: planning-validation
+    agent: reviewer-1
+    tools: [file_write, file_read, file_list, review]
+    depends_on: [planning-review]
+    input:
+      task: |
+        Validate docs/01~04 and file_write docs/05-validation.md.
+        Output: 최종판정(PASS/FAIL), 다음 단계 입력 체크리스트.
+        Must explicitly confirm TODO domain + required components + MVP scope.

@@ -1,0 +1,10 @@
+name: starter
+version: "1.0"
+policy: ./policy.yaml
+steps:
+  - name: generate
+    agent: generator
+  - name: review
+    agent: reviewer
+    depends_on:
+      - generate

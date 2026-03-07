@@ -13,7 +13,7 @@ import {
   appendHistory,
   MAX_HISTORY_LENGTH,
 } from "../ExecutionContextBuilder.js";
-import type { ChatMessage } from "@obora-kit/adapters";
+import type { ChatMessage } from "@obora/adapters";
 import type { Step, Workflow } from "../../_legacy/workflow/index.js";
 
 // ---------------------------------------------------------------------------

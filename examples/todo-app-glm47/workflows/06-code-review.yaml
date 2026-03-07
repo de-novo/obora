@@ -1,0 +1,20 @@
+name: todo-app-06-code-review
+version: "1.0"
+description: "코드 리뷰 단계 (3명 리뷰, 모두 GLM-4.7)"
+policy: ../policy.yaml
+
+steps:
+  - name: code-review
+    pattern: peer-review
+    participants: [reviewer-1, reviewer-2, reviewer-3]
+    config:
+      consensus:
+        rule: majority
+        min_votes: 2
+        timeout: 600
+    input:
+      implementation_output: "{{input.implementation_output}}"
+      task: |
+        implementation_output을 리뷰하세요.
+        기준: 타입 안전성, 가독성, 컴포넌트 분리, 접근성, 결함 여부
+        결과: APPROVE 또는 REQUEST_CHANGES + 수정 포인트

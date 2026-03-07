@@ -1,0 +1,10 @@
+name: filewrite-smoke
+version: "1.1"
+policy: ../policy.yaml
+steps:
+  - name: write-smoke
+    agent: executor
+    input:
+      task: |
+        Create file docs/tool-smoke.md using file_write tool with exact content: tool smoke ok
+        Then return DONE.

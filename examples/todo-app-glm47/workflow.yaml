@@ -1,0 +1,104 @@
+name: todo-app-glm47
+version: "1.0"
+description: "GLM-4.7 단일 모델로 기획→설계→디자인→개발→리뷰까지 수행"
+policy: ./policy.yaml
+
+steps:
+  - name: planning
+    description: "제품 기획 — 요구사항 정의, 핵심 기능, 사용자 스토리"
+    agent: product-manager
+    input:
+      task: |
+        투두앱 제품 기획서를 작성하세요.
+        포함 항목:
+        - 핵심 기능 목록 (CRUD, 필터, 우선순위, 마감일)
+        - 사용자 스토리 7개 이상
+        - 기술 요구사항 (React, 상태관리, 저장 방식)
+        - MVP 범위 정의
+        - 비기능 요구사항 (성능, 접근성, 보안)
+
+  - name: architecture
+    description: "시스템 설계 — 컴포넌트 구조, 데이터 모델, 저장 전략"
+    agent: architect
+    depends_on: [planning]
+    input:
+      task: |
+        planning 산출물을 기반으로 아키텍처 문서를 작성하세요.
+        포함 항목:
+        - 컴포넌트 구조도 (TodoApp/TodoList/TodoItem/AddTodo/FilterBar)
+        - 데이터 모델 (Todo 타입, 상태 전이)
+        - 저장 전략(localStorage + 동기화 시점)
+        - 폴더 구조 제안
+
+  - name: design-review
+    description: "설계 리뷰 — N명 리뷰(동일 모델)"
+    pattern: consensus
+    depends_on: [architecture]
+    participants: [reviewer-1, reviewer-2, reviewer-3]
+    config:
+      consensus:
+        rule: majority
+        min_votes: 3
+        timeout: 600
+    input:
+      task: |
+        architecture 산출물을 리뷰하세요.
+        기준: 확장성, 유지보수성, MVP 적합성
+        결과: APPROVE 또는 REJECT + 이유
+
+  - name: ui-design
+    description: "UI/UX 디자인 — 화면/컴포넌트/인터랙션 스펙"
+    agent: designer
+    depends_on: [design-review]
+    input:
+      task: |
+        승인된 설계를 기반으로 UI 디자인 스펙을 작성하세요.
+        포함 항목:
+        - 화면 레이아웃 (목록/입력/필터)
+        - 컴포넌트 스타일 가이드
+        - 인터랙션 패턴 (추가/토글/삭제/필터)
+        - 반응형/접근성 고려사항
+
+  - name: implementation
+    description: "개발 — React + TypeScript 코드 생성"
+    agent: developer
+    depends_on: [ui-design]
+    input:
+      task: |
+        architecture + ui-design 문서를 기반으로 Todo App 코드를 작성하세요.
+        요구사항:
+        - React + TypeScript
+        - 핵심 컴포넌트 5종 구현
+        - 기능: 추가/완료토글/삭제/필터/우선순위
+        - localStorage 영속화
+        - 실행 가능한 코드 형태로 출력
+
+  - name: code-review
+    description: "코드 리뷰 — N명 리뷰(동일 모델)"
+    pattern: peer-review
+    depends_on: [implementation]
+    participants: [reviewer-1, reviewer-2, reviewer-3]
+    config:
+      consensus:
+        rule: majority
+        min_votes: 2
+        timeout: 600
+    input:
+      task: |
+        구현 코드를 리뷰하세요.
+        기준: 타입 안전성, 가독성, 컴포넌트 분리, 접근성, 결함 여부
+        결과: APPROVE 또는 REQUEST_CHANGES + 수정 포인트
+
+  - name: final-summary
+    description: "최종 산출물 정리"
+    agent: product-manager
+    depends_on: [code-review]
+    input:
+      task: |
+        전체 프로젝트 결과를 요약하세요.
+        포함 항목:
+        - 기획 요약
+        - 설계 핵심 결정
+        - 디자인 포인트
+        - 구현 결과
+        - 리뷰 결과 및 후속 개선안

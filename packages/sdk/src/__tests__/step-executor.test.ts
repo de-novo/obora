@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+import { mkdtemp, readFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { StepExecutor, type LLMAdapterLike } from "../step-executor.js";
 
@@ -272,5 +275,58 @@ describe("StepExecutor", () => {
         { previousOutputs: {} },
       ),
     ).rejects.toThrow("strict majority (>50%)");
+  });
+
+  it("executes file tools when model returns structured tool calls", async () => {
+    const cwdBefore = process.cwd();
+    const workspace = await mkdtemp(join(tmpdir(), "obora-step-tools-"));
+    process.chdir(workspace);
+
+    try {
+      const chatCompletion = vi.fn<LLMAdapterLike["chatCompletion"]>().mockImplementation(async ({ messages }) => {
+        const toolResultMessage = messages.find((message) => message.role === "tool");
+        if (!toolResultMessage) {
+          return {
+            message: {
+              role: "assistant",
+              content: null,
+              toolCalls: [
+                {
+                  id: "tc-1",
+                  type: "function",
+                  function: {
+                    name: "file_write",
+                    arguments: JSON.stringify({
+                      path: "docs/tool-smoke.md",
+                      content: "tool smoke",
+                    }),
+                  },
+                },
+              ],
+            },
+          };
+        }
+
+        return {
+          message: { role: "assistant", content: "done" },
+        };
+      });
+
+      const executor = new StepExecutor({ chatCompletion }, new Map(), {});
+      const result = await executor.executeStep(
+        {
+          name: "tool-smoke",
+          agent: "writer",
+          input: { task: "Create docs/tool-smoke.md via tool call" },
+        },
+        { previousOutputs: {} },
+      );
+
+      expect(result.output).toBe("done");
+      expect(chatCompletion).toHaveBeenCalledTimes(2);
+      expect(await readFile(join(workspace, "docs/tool-smoke.md"), "utf-8")).toBe("tool smoke");
+    } finally {
+      process.chdir(cwdBefore);
+    }
   });
 });

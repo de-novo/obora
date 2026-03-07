@@ -1,4 +1,4 @@
-// @obora-kit/adapters
+// @obora/adapters
 export * from "./llm";
 export * from "./tools";
 export * from "./auth";

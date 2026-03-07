@@ -1,0 +1,17 @@
+name: todo-app-01-planning
+version: "1.0"
+description: "Todo App 기획 단계 (GLM-4.7 전용)"
+policy: ../policy.yaml
+
+steps:
+  - name: planning
+    agent: product-manager
+    input:
+      task: |
+        투두앱 제품 기획서를 작성하세요.
+        포함 항목:
+        - 핵심 기능 목록 (CRUD, 필터, 우선순위, 마감일)
+        - 사용자 스토리 7개 이상
+        - MVP 범위
+        - 비기능 요구사항 (성능, 접근성, 안정성)
+        출력은 마크다운 문서 형식으로 작성하세요.

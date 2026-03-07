@@ -1,4 +1,4 @@
-import { SkillRegistry } from "@obora-kit/adapters";
+import { SkillRegistry } from "@obora/adapters";
 import { Command } from "commander";
 
 export function createSkillsCommand(): Command {

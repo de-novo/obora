@@ -247,7 +247,7 @@ export class OboraRuntime {
    */
   private async createLLMAdapter(config: LLMConfig): Promise<LLMAdapterLike> {
     try {
-      const adaptersModule = "@obora-kit/adapters";
+      const adaptersModule = "@obora/adapters";
       const adapters = (await import(adaptersModule)) as Record<string, unknown>;
       const PiAIAdapterCtor = adapters.PiAIAdapter as new (cfg: {
         provider: string;

@@ -1,0 +1,13 @@
+version: "1.0"
+rules:
+  - name: time-limit
+    type: resource
+    config:
+      max_step_duration: 900
+      max_total_duration: 7200
+
+  - name: tool-restriction
+    type: tool
+    config:
+      allowed: [generate, review, summarize, file_read, file_write, file_list, artifact_write, markdown_emit, json_emit]
+      denied: [shell]

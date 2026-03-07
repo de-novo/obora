@@ -3,7 +3,7 @@ import {
   maskProviderAuth,
   type AuthType,
   type ProviderAuth,
-} from "@obora-kit/adapters";
+} from "@obora/adapters";
 import { Command } from "commander";
 
 interface AddOptions {

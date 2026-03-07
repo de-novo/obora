@@ -1,0 +1,20 @@
+name: todo-app-03-design-review
+version: "1.0"
+description: "아키텍처 리뷰/합의 단계 (3명 리뷰, 모두 GLM-4.7)"
+policy: ../policy.yaml
+
+steps:
+  - name: design-review
+    pattern: consensus
+    participants: [reviewer-1, reviewer-2, reviewer-3]
+    config:
+      consensus:
+        rule: majority
+        min_votes: 3
+        timeout: 600
+    input:
+      architecture_doc: "{{input.architecture_doc}}"
+      task: |
+        architecture_doc를 리뷰하세요.
+        기준: 확장성, 유지보수성, MVP 적합성
+        결과: APPROVE 또는 REJECT + 이유

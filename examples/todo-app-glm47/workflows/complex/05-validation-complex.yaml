@@ -1,0 +1,54 @@
+name: todo-app-05-validation-complex
+version: "2.1"
+description: "Validation/release pipeline with back-edge quality loop"
+policy: ../../policy.yaml
+
+steps:
+  - name: test-plan
+    agent: reviewer-1
+    tools: [file_write, file_read, file_list, review]
+    input:
+      task: |
+        Read src/** and docs/**.
+        Write docs/40-test-plan.md with functional/regression/a11y/perf checks.
+
+  - name: quality-remediation
+    agent: reviewer-1
+    tools: [file_write, file_read, file_list, review]
+    depends_on: [test-plan]
+    input:
+      task: |
+        Read docs/41-quality-review.md if exists.
+        Apply/update risk mitigations and checklist in docs/40-test-plan.md.
+        Write docs/41a-quality-remediation-log.md.
+
+  - name: quality-review
+    pattern: peer-review
+    tools: [file_write, file_read, file_list, review]
+    depends_on: [quality-remediation]
+    participants: [reviewer-1]
+    config:
+      min_score: 7
+      p0_allowed: 0
+      max_rounds: 1
+      consensus:
+        rule: majority
+        min_votes: 1
+        timeout: 300
+    input:
+      task: |
+        Evaluate readiness from docs/40 and docs/41a.
+        Write docs/41-quality-review.md with risk levels.
+        APPROVE only when no unresolved P0/P1 release blockers.
+    on_fail:
+      goto: quality-remediation
+      max_iterations: 3
+      escalate_on_exhaust: fail
+
+  - name: release-summary
+    agent: product-manager
+    tools: [file_write, file_read, file_list, summarize]
+    depends_on: [quality-review]
+    input:
+      task: |
+        Write docs/42-release-decision.md (GO) and docs/43-release-summary.md and docs/44-next-actions.md.

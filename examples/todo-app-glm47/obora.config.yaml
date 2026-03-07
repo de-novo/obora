@@ -1,0 +1,33 @@
+version: "1.0"
+workflows: ./workflows
+policies: ./policies
+tests: ./tests
+
+# Runtime persistence
+persistence:
+  enabled: true
+  adapter: sqlite
+  sqlite:
+    path: ./data/obora.db
+
+artifacts:
+  enabled: true
+  store: local
+  local:
+    basePath: ./data/artifacts
+
+# LLM config (GLM-4.7 only)
+defaults:
+  provider: zai
+  model: glm-4.7
+  temperature: 0.2
+  timeout: 180
+  maxTokens: 8192
+
+providers:
+  zai:
+    authMode: api_key
+    authRef: env:ZAI_API_KEY
+    defaultModel: glm-4.7
+    timeout: 180
+    maxTokens: 8192

@@ -15,7 +15,7 @@ import {
   type LLMAdapter,
   type LLMProvider,
   type ToolRegistry,
-} from "@obora-kit/adapters";
+} from "@obora/adapters";
 
 import type { AgentResolver } from "./step-executor.js";
 

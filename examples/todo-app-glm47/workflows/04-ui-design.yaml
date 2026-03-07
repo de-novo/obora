@@ -1,0 +1,18 @@
+name: todo-app-04-ui-design
+version: "1.0"
+description: "UI/UX 설계 단계"
+policy: ../policy.yaml
+
+steps:
+  - name: ui-design
+    agent: designer
+    input:
+      architecture_doc: "{{input.architecture_doc}}"
+      review_result: "{{input.review_result}}"
+      task: |
+        architecture_doc와 review_result를 반영해 UI/UX 스펙을 작성하세요.
+        포함 항목:
+        - 화면 레이아웃
+        - 컴포넌트 스타일 가이드
+        - 인터랙션 패턴
+        - 반응형/접근성 고려사항

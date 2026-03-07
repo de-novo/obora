@@ -1,0 +1,18 @@
+name: todo-app-planning-01-requirements-collection
+version: "1.0"
+description: "요구사항 수집 단계"
+policy: ../../policy.yaml
+
+steps:
+  - name: collect-requirements
+    agent: product-manager
+    input:
+      task: |
+        Todo App 요구사항 수집 문서를 작성하세요.
+        반드시 포함:
+        1) 사용자 페르소나 2종
+        2) 문제 정의/목표
+        3) 기능 요구사항 (MUST/SHOULD/COULD)
+        4) 제약사항(기술/일정/리소스)
+        5) 성공지표(KPI)
+        출력 형식: Markdown

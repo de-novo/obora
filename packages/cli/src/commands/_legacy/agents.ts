@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { AgentConfigResolver } from "@obora-kit/adapters";
+import { AgentConfigResolver } from "@obora/adapters";
 import { Command } from "commander";
 import YAML from "yaml";
 

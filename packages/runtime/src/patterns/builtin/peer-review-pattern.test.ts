@@ -14,18 +14,18 @@ describe("PeerReviewPattern", () => {
         reviewerB: "agent-b",
       },
       config: {
-        min_score: 0.8,
+        min_score: 8,
         p0_allowed: 0,
       },
       input: {
         subject: "PR#123",
         reviews: {
           reviewerA: {
-            score: 0.9,
+            score: 9,
             issues: [{ severity: "P1", description: "naming" }],
           },
           reviewerB: {
-            score: 0.8,
+            score: 8,
             issues: [{ severity: "P2", description: "comment" }],
           },
         },
@@ -42,7 +42,7 @@ describe("PeerReviewPattern", () => {
       },
     });
     const averageScore = (result.output as { review: { report: { average_score: number } } }).review.report.average_score;
-    expect(averageScore).toBeCloseTo(0.85, 10);
+    expect(averageScore).toBeCloseTo(8.5, 10);
     expect(result.metadata?.blackboard_domains).toEqual(["decision", "consensus-rule-engine"]);
   });
 
@@ -56,16 +56,16 @@ describe("PeerReviewPattern", () => {
         reviewerB: "agent-b",
       },
       config: {
-        min_score: 0.9,
+        min_score: 9,
       },
       input: {
         reviews: {
           reviewerA: {
-            score: 0.7,
+            score: 7,
             issues: [],
           },
           reviewerB: {
-            score: 0.8,
+            score: 8,
             issues: [],
           },
         },
@@ -133,13 +133,13 @@ describe("PeerReviewPattern", () => {
         rounds: [
           {
             reviews: {
-              optional: { score: 0.4, issues: [] },
+              optional: { score: 4, issues: [] },
             },
           },
           {
             reviews: {
-              required: { score: 0.9, issues: [] },
-              optional: { score: 0.8, issues: [] },
+              required: { score: 9, issues: [] },
+              optional: { score: 8, issues: [] },
             },
           },
         ],
@@ -153,7 +153,7 @@ describe("PeerReviewPattern", () => {
       },
     });
     const averageScore = (result.output as { review: { report: { average_score: number } } }).review.report.average_score;
-    expect(averageScore).toBeCloseTo(0.85, 10);
+    expect(averageScore).toBeCloseTo(8.5, 10);
   });
 
   it("allows best_effort reviewers to be missing", async () => {
@@ -167,11 +167,11 @@ describe("PeerReviewPattern", () => {
       },
       config: {
         best_effort: ["bestEffort"],
-        min_score: 0.5,
+        min_score: 5,
       },
       input: {
         reviews: {
-          required: { score: 0.7, issues: [] },
+          required: { score: 7, issues: [] },
         },
       },
     });
@@ -198,12 +198,12 @@ describe("PeerReviewPattern", () => {
         rounds: [
           {
             reviews: {
-              requiredA: { score: 0.8, issues: [] },
+              requiredA: { score: 8, issues: [] },
             },
           },
           {
             reviews: {
-              requiredA: { score: 0.9, issues: [] },
+              requiredA: { score: 9, issues: [] },
             },
           },
         ],
@@ -259,7 +259,7 @@ describe("PeerReviewPattern", () => {
         input: {
           startedAt: "2026-02-16T23:59:00.000Z",
           reviews: {
-            requiredA: { score: 0.8, issues: [] },
+            requiredA: { score: 8, issues: [] },
           },
         },
         now: () => new Date("2026-02-17T00:00:10.000Z"),
@@ -304,8 +304,8 @@ describe("PeerReviewPattern", () => {
     const result = await pattern.execute({
       pattern: "peer-review",
       participants: { r: "agent-a" },
-      config: { min_score: 0.9 },
-      input: { reviews: { r: { score: 0.5, issues: [] } } },
+      config: { min_score: 9 },
+      input: { reviews: { r: { score: 5, issues: [] } } },
     });
 
     expect(result.success).toBe(false);

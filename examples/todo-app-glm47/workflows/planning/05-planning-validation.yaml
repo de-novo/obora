@@ -1,0 +1,23 @@
+name: todo-app-planning-05-validation
+version: "1.0"
+description: "기획 검증/종료 게이트 단계"
+policy: ../../policy.yaml
+
+steps:
+  - name: validate-planning
+    agent: reviewer-1
+    input:
+      requirements_doc: "{{input.requirements_doc}}"
+      analysis_doc: "{{input.analysis_doc}}"
+      discussion_doc: "{{input.discussion_doc}}"
+      review_result: "{{input.review_result}}"
+      task: |
+        기획 산출물 묶음(requirements/analysis/discussion/review)을 최종 검증하세요.
+        체크리스트:
+        - 요구사항 누락 여부
+        - 우선순위 일관성
+        - MVP 범위 과다/과소 여부
+        - 다음 단계(아키텍처) 전달 가능성
+        출력:
+        - PASS 또는 FAIL
+        - FAIL 시 수정 액션 3개

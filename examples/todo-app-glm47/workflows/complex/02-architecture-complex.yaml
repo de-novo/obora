@@ -1,0 +1,62 @@
+name: todo-app-02-architecture-complex
+version: "2.2"
+description: "Architecture pipeline with true back-edge review loop"
+policy: ../../policy.yaml
+
+steps:
+  - name: architecture-design
+    agent: architect
+    tools: [file_write, file_read, file_list]
+    input:
+      task: |
+        Read docs/01~05 from planning.
+        Create docs/10-architecture.md via file_write.
+        Include system structure, component tree, data model, state management, localStorage strategy.
+
+  - name: architecture-revise
+    agent: architect
+    tools: [file_write, file_read]
+    depends_on: [architecture-design]
+    input:
+      task: |
+        Read docs/11-architecture-review.md if exists.
+        If review exists, apply all requested fixes to docs/10-architecture.md.
+        If no review exists, keep baseline and write initial revision note.
+        Write docs/11a-architecture-revision-log.md.
+
+  - name: architecture-review
+    pattern: peer-review
+    tools: [file_write, file_read, review]
+    depends_on: [architecture-revise]
+    participants: [reviewer-1]
+    config:
+      min_score: 7
+      p0_allowed: 0
+      max_rounds: 1
+      consensus:
+        rule: majority
+        min_votes: 1
+        timeout: 300
+    input:
+      task: |
+        Read docs/10-architecture.md and docs/11a-architecture-revision-log.md.
+        Write docs/11-architecture-review.md with verdict/issues/must_fix.
+        APPROVE only when no unresolved P0/P1 remain.
+    on_fail:
+      goto: architecture-revise
+      max_iterations: 3
+      escalate_on_exhaust: fail
+
+  - name: architecture-final
+    agent: architect
+    tools: [file_write, file_read]
+    depends_on: [architecture-review]
+    input:
+      task: |
+        Read docs/10, docs/11, docs/11a.
+        Write docs/12-architecture-decision.md as APPROVED final decision and next-step checklist.
+
+recovery:
+  architecture-review:
+    on_fail: retry
+    max_retries: 1

@@ -18,8 +18,20 @@ import { DefaultPolicyEngine } from "../../policy/DefaultPolicyEngine.js";
 import { loadPolicyFromYaml } from "../../policy/PolicyLoader.js";
 import type { PolicyDecision } from "../../policy/types.js";
 
+// ── M2-01R Canonical State Enum ──────────────────────────────────────
+type RunState =
+  | "queued"
+  | "running"
+  | "retried"
+  | "timeout"
+  | "failed"
+  | "skipped"
+  | "needs-human-review"
+  | "done";
+
 type GateOutcome = "approve" | "reject" | "timeout";
 
+// ── Workflow Fixture Types ───────────────────────────────────────────
 interface WorkflowStep {
   name: string;
   pattern?: string;
@@ -52,16 +64,30 @@ interface RunOptions {
   gateOutcome: GateOutcome;
   gateComment?: string;
   triggerDeniedTool?: boolean;
+  simulateSkip?: boolean;
+  simulateResolveError?: boolean;
+  simulateMalformedJson?: boolean;
+  simulateNeedsHumanReview?: boolean;
 }
 
-type RunStatus = "completed" | "failed" | "escalated" | "rejected";
+// ── Error Codes ──────────────────────────────────────────────────────
+type ErrorCode =
+  | "RESOLVE_ERROR"
+  | "VALIDATION_ERROR"
+  | "MALFORMED_JSON"
+  | "TIMEOUT"
+  | "ESCALATION_FAILED";
 
+// ── Run Result (M2-01R contract-aligned) ─────────────────────────────
 interface RunResult {
-  executionId: string;
-  status: RunStatus;
-  runState: "finished" | "error" | "pending_escalation" | "rejected";
-  finalPass: boolean;
+  runId: string;
+  workflow: string;
+  status: "pass" | "fail";
+  runState: RunState;
+  finalPass: boolean | null;
   decisionReason: string;
+  errorCode: ErrorCode | null;
+  workflowState: "running" | "failed" | "done";
   brainstormSelected: string[];
   draft: string;
   reviewPassed: boolean;
@@ -74,13 +100,17 @@ interface PolicyCheckResult {
   deny: PolicyDecision;
 }
 
+// ── Runner ───────────────────────────────────────────────────────────
 class DocGenE2ERunner {
   private readonly registry = new PatternRegistry();
   private readonly audit = new InMemoryAuditStore();
   private readonly policy = new DefaultPolicyEngine();
   private eventSeq = 0;
 
-  constructor(private readonly workflow: WorkflowFixture, policySet: Awaited<ReturnType<typeof loadPolicyFromYaml>>) {
+  constructor(
+    private readonly workflow: WorkflowFixture,
+    policySet: Awaited<ReturnType<typeof loadPolicyFromYaml>>,
+  ) {
     this.policy.loadInline(policySet, "doc-gen-policy");
 
     this.registry.register(new PipelinePattern());
@@ -104,6 +134,103 @@ class DocGenE2ERunner {
 
     const policyDecisions: PolicyDecision[] = [];
 
+    if (options.simulateResolveError) {
+      await this.record(options.executionId, "execution_end", {
+        status: "failed",
+        runState: "failed" as RunState,
+        reason: "policy/schema resolve failed",
+        errorCode: "RESOLVE_ERROR" as ErrorCode,
+      });
+      return {
+        runId: options.executionId,
+        workflow: this.workflow.name,
+        status: "fail",
+        runState: "failed",
+        finalPass: false,
+        decisionReason: "policy/schema resolve failed",
+        errorCode: "RESOLVE_ERROR",
+        workflowState: "failed",
+        brainstormSelected: [],
+        draft: "",
+        reviewPassed: false,
+        peerReviewAttemptsUsed: 0,
+        policyDecisions,
+      };
+    }
+
+    if (options.simulateMalformedJson) {
+      await this.record(options.executionId, "execution_end", {
+        status: "failed",
+        runState: "failed" as RunState,
+        reason: "model output malformed json",
+        errorCode: "MALFORMED_JSON" as ErrorCode,
+      });
+      return {
+        runId: options.executionId,
+        workflow: this.workflow.name,
+        status: "fail",
+        runState: "failed",
+        finalPass: false,
+        decisionReason: "model output malformed json",
+        errorCode: "MALFORMED_JSON",
+        workflowState: "failed",
+        brainstormSelected: [],
+        draft: "",
+        reviewPassed: false,
+        peerReviewAttemptsUsed: 0,
+        policyDecisions,
+      };
+    }
+
+    if (options.simulateSkip) {
+      await this.record(options.executionId, "execution_end", {
+        status: "completed",
+        runState: "skipped" as RunState,
+        reason: "policy skip condition met",
+        errorCode: null,
+      });
+      return {
+        runId: options.executionId,
+        workflow: this.workflow.name,
+        status: "pass",
+        runState: "skipped",
+        finalPass: true,
+        decisionReason: "policy skip condition met",
+        errorCode: null,
+        workflowState: "done",
+        brainstormSelected: [],
+        draft: "",
+        reviewPassed: true,
+        peerReviewAttemptsUsed: 0,
+        policyDecisions,
+      };
+    }
+
+    if (options.simulateNeedsHumanReview) {
+      await this.record(options.executionId, "execution_end", {
+        status: "escalated",
+        runState: "needs-human-review" as RunState,
+        reason: "manual review required",
+        errorCode: "ESCALATION_FAILED" as ErrorCode,
+      });
+      return {
+        runId: options.executionId,
+        workflow: this.workflow.name,
+        status: "fail",
+        runState: "needs-human-review",
+        finalPass: null,
+        decisionReason: "manual review required",
+        errorCode: "ESCALATION_FAILED",
+        workflowState: "running",
+        brainstormSelected: [],
+        draft: "",
+        reviewPassed: false,
+        peerReviewAttemptsUsed: 0,
+        policyDecisions,
+      };
+    }
+
+    // ── Step 1: Brainstorm ───────────────────────────────────────────
     await this.record(options.executionId, "step_start", { stepName: brainstormStep.name });
     const brainstorm = await this.registry.get("brainstorming").run({
       executionId: options.executionId,
@@ -119,27 +246,9 @@ class DocGenE2ERunner {
           carol: ["Risks", "Adoption plan"],
         },
         evaluations: {
-          alice: {
-            "Problem framing": 8,
-            Roadmap: 9,
-            Architecture: 9,
-            Risks: 7,
-            "Adoption plan": 8,
-          },
-          bob: {
-            "Problem framing": 8,
-            Roadmap: 8,
-            Architecture: 9,
-            Risks: 7,
-            "Adoption plan": 7,
-          },
-          carol: {
-            "Problem framing": 9,
-            Roadmap: 8,
-            Architecture: 8,
-            Risks: 8,
-            "Adoption plan": 9,
-          },
+          alice: { "Problem framing": 8, Roadmap: 9, Architecture: 9, Risks: 7, "Adoption plan": 8 },
+          bob: { "Problem framing": 8, Roadmap: 8, Architecture: 9, Risks: 7, "Adoption plan": 7 },
+          carol: { "Problem framing": 9, Roadmap: 8, Architecture: 8, Risks: 8, "Adoption plan": 9 },
         },
       },
     });
@@ -154,6 +263,7 @@ class DocGenE2ERunner {
       selectedIdeas: selected,
     });
 
+    // ── Step 2: Draft (with policy check) ────────────────────────────
     await this.record(options.executionId, "step_start", { stepName: draftStep.name });
     const allowWrite = await this.checkTool(options.executionId, draftStep.name, "file_write");
     policyDecisions.push(allowWrite);
@@ -169,6 +279,7 @@ class DocGenE2ERunner {
       policyDecisions.push(denied);
     }
 
+    // ── Step 3: Peer Review (with retry) ─────────────────────────────
     await this.record(options.executionId, "step_start", { stepName: reviewStep.name });
     let reviewPassed = false;
     let attemptsUsed = 0;
@@ -180,10 +291,7 @@ class DocGenE2ERunner {
         stepName: reviewStep.name,
         pattern: "peer-review",
         participants: reviewStep.participants,
-        config: {
-          ...reviewStep.config,
-          max_rounds: 1,
-        },
+        config: { ...reviewStep.config, max_rounds: 1 },
         input: {
           subject: draft,
           reviews: options.reviewAttempts[attempt].reviews,
@@ -233,17 +341,23 @@ class DocGenE2ERunner {
       attemptsUsed,
     });
 
+    // ── Review failed → runState: "failed" ───────────────────────────
     if (!reviewPassed) {
       await this.record(options.executionId, "execution_end", {
         status: "failed",
+        runState: "failed" as RunState,
         reason: "peer-review failed",
+        errorCode: "VALIDATION_ERROR" as ErrorCode,
       });
       return {
-        executionId: options.executionId,
-        status: "failed",
-        runState: "error",
+        runId: options.executionId,
+        workflow: this.workflow.name,
+        status: "fail",
+        runState: "failed",
         finalPass: false,
         decisionReason: "peer-review failed after all retries",
+        errorCode: "VALIDATION_ERROR",
+        workflowState: "failed",
         brainstormSelected: selected,
         draft,
         reviewPassed,
@@ -252,6 +366,7 @@ class DocGenE2ERunner {
       };
     }
 
+    // ── Step 4: Approval Gate ────────────────────────────────────────
     await this.record(options.executionId, "step_start", { stepName: approvalStep.name });
     await this.record(options.executionId, "gate_wait", {
       stepName: approvalStep.name,
@@ -259,6 +374,7 @@ class DocGenE2ERunner {
       config: approvalStep.gate_config,
     });
 
+    // Timeout → runState: "timeout" (M2-01R), workflowState remains failed
     if (options.gateOutcome === "timeout") {
       await this.record(options.executionId, "gate_resolve", {
         stepName: approvalStep.name,
@@ -273,15 +389,20 @@ class DocGenE2ERunner {
       });
       await this.record(options.executionId, "execution_end", {
         status: "escalated",
+        runState: "timeout" as RunState,
         escalation_to: approvalStep.gate_config?.escalation_to,
+        errorCode: "TIMEOUT" as ErrorCode,
       });
 
       return {
-        executionId: options.executionId,
-        status: "escalated",
-        runState: "pending_escalation",
+        runId: options.executionId,
+        workflow: this.workflow.name,
+        status: "fail",
+        runState: "timeout",
         finalPass: false,
         decisionReason: `escalated to ${String(approvalStep.gate_config?.escalation_to ?? "unknown")}`,
+        errorCode: "TIMEOUT",
+        workflowState: "failed",
         brainstormSelected: selected,
         draft,
         reviewPassed,
@@ -290,6 +411,7 @@ class DocGenE2ERunner {
       };
     }
 
+    // Approve or Reject
     await this.record(options.executionId, "gate_resolve", {
       stepName: approvalStep.name,
       status: options.gateOutcome,
@@ -301,21 +423,28 @@ class DocGenE2ERunner {
       stepName: approvalStep.name,
       success: approvalSuccess,
     });
+
+    const finalRunState: RunState = approvalSuccess ? "done" : "failed";
+    const finalErrorCode: ErrorCode | null = approvalSuccess ? null : "ESCALATION_FAILED";
+
     await this.record(options.executionId, "execution_end", {
-      status: approvalSuccess ? "completed" : "rejected",
-      runState: approvalSuccess ? "finished" : "rejected",
+      status: approvalSuccess ? "completed" : "failed",
+      runState: finalRunState,
       finalPass: approvalSuccess,
+      errorCode: finalErrorCode,
     });
 
-    const finalStatus: RunStatus = approvalSuccess ? "completed" : "rejected";
     return {
-      executionId: options.executionId,
-      status: finalStatus,
-      runState: approvalSuccess ? "finished" : "rejected",
+      runId: options.executionId,
+      workflow: this.workflow.name,
+      status: approvalSuccess ? "pass" : "fail",
+      runState: finalRunState,
       finalPass: approvalSuccess,
       decisionReason: approvalSuccess
         ? "all steps passed and gate approved"
         : `gate rejected${options.gateComment ? `: ${options.gateComment}` : ""}`,
+      errorCode: finalErrorCode,
+      workflowState: approvalSuccess ? "done" : "failed",
       brainstormSelected: selected,
       draft,
       reviewPassed,
@@ -337,31 +466,24 @@ class DocGenE2ERunner {
 
   private requireStep(name: string): WorkflowStep {
     const step = this.workflow.steps.find((entry) => entry.name === name);
-    if (!step) {
-      throw new Error(`Missing workflow step: ${name}`);
-    }
+    if (!step) throw new Error(`Missing workflow step: ${name}`);
     return step;
   }
 
   private extractSelectedIdeas(output: unknown): string[] {
-    if (!output || typeof output !== "object") {
-      return [];
-    }
-
+    if (!output || typeof output !== "object") return [];
     const brainstorm = (output as { brainstorming?: { selected?: Array<{ text?: unknown }> } }).brainstorming;
-    if (!brainstorm || !Array.isArray(brainstorm.selected)) {
-      return [];
-    }
-
+    if (!brainstorm || !Array.isArray(brainstorm.selected)) return [];
     return brainstorm.selected
       .map((idea) => (typeof idea.text === "string" ? idea.text : ""))
       .filter((text) => text.length > 0);
   }
 
+  /** Policy check with **deterministic** audit recording (no fire-and-forget). */
   private async checkTool(executionId: string, stepName: string, toolName: string): Promise<PolicyDecision> {
     const decision = this.policy.enforce(
       { type: "tool_call", name: toolName },
-      { executionId, stepName }
+      { executionId, stepName },
     );
 
     await this.record(executionId, "policy_check", {
@@ -393,6 +515,7 @@ class DocGenE2ERunner {
   }
 }
 
+// ── Fixtures ─────────────────────────────────────────────────────────
 async function loadFixtures(): Promise<{ workflow: WorkflowFixture; policyPath: string }> {
   const fixtureDir = join(process.cwd(), "src", "__tests__", "e2e", "fixtures");
   const workflowPath = join(fixtureDir, "doc-gen-workflow.yaml");
@@ -402,8 +525,9 @@ async function loadFixtures(): Promise<{ workflow: WorkflowFixture; policyPath: 
   return { workflow, policyPath };
 }
 
+// ── Tests (all inside single describe) ───────────────────────────────
 describe("M2-16 Scenario 2: Document generation E2E", () => {
-  it("happy path: brainstorm -> draft -> peer-review pass -> approval", async () => {
+  it("happy path: brainstorm → draft → peer-review pass → approval", async () => {
     const { workflow, policyPath } = await loadFixtures();
     const policySet = await loadPolicyFromYaml(policyPath);
     const runner = new DocGenE2ERunner(workflow, policySet);
@@ -422,7 +546,13 @@ describe("M2-16 Scenario 2: Document generation E2E", () => {
       ],
     });
 
-    expect(result.status).toBe("completed");
+    expect(result.status).toBe("pass");
+    expect(result.runId).toBe("doc-gen-happy");
+    expect(result.workflow).toBe("doc-generation-pipeline");
+    expect(result.runState).toBe("done");
+    expect(result.finalPass).toBe(true);
+    expect(result.errorCode).toBeNull();
+    expect(result.decisionReason).toBe("all steps passed and gate approved");
     expect(result.brainstormSelected.length).toBeGreaterThan(0);
     expect(result.reviewPassed).toBe(true);
     expect(result.peerReviewAttemptsUsed).toBe(1);
@@ -454,7 +584,8 @@ describe("M2-16 Scenario 2: Document generation E2E", () => {
       ],
     });
 
-    expect(result.status).toBe("completed");
+    expect(result.status).toBe("pass");
+    expect(result.runState).toBe("done");
     expect(result.reviewPassed).toBe(true);
     expect(result.peerReviewAttemptsUsed).toBe(2);
 
@@ -463,7 +594,7 @@ describe("M2-16 Scenario 2: Document generation E2E", () => {
     expect(events.some((event) => event.type === "recovery_end")).toBe(true);
   });
 
-  it("gate timeout escalates to team-lead", async () => {
+  it("gate timeout escalates → runState 'timeout' + errorCode TIMEOUT", async () => {
     const { workflow, policyPath } = await loadFixtures();
     const policySet = await loadPolicyFromYaml(policyPath);
     const runner = new DocGenE2ERunner(workflow, policySet);
@@ -482,7 +613,10 @@ describe("M2-16 Scenario 2: Document generation E2E", () => {
       ],
     });
 
-    expect(result.status).toBe("escalated");
+    expect(result.status).toBe("fail");
+    expect(result.runState).toBe("timeout");
+    expect(result.finalPass).toBe(false);
+    expect(result.errorCode).toBe("TIMEOUT");
 
     const events = await runner.getEvents("doc-gen-timeout");
     const gateResolve = events.find((event) => event.type === "gate_resolve");
@@ -490,6 +624,12 @@ describe("M2-16 Scenario 2: Document generation E2E", () => {
     expect(gateResolve?.data).toMatchObject({
       status: "timeout",
       escalation_to: "team-lead",
+    });
+
+    const execEnd = events.find((e) => e.type === "execution_end");
+    expect(execEnd?.data).toMatchObject({
+      runState: "timeout",
+      errorCode: "TIMEOUT",
     });
   });
 
@@ -538,9 +678,8 @@ describe("M2-16 Scenario 2: Document generation E2E", () => {
       expect(policy.deny.rule).toBe("tools.shell_exec");
     }
   });
-});
 
-  it("gate reject returns rejected status with decisionReason", async () => {
+  it("gate reject → status 'fail' + runState 'failed' + errorCode ESCALATION_FAILED", async () => {
     const { workflow, policyPath } = await loadFixtures();
     const policySet = await loadPolicyFromYaml(policyPath);
     const runner = new DocGenE2ERunner(workflow, policySet);
@@ -560,9 +699,10 @@ describe("M2-16 Scenario 2: Document generation E2E", () => {
       ],
     });
 
-    expect(result.status).toBe("rejected");
-    expect(result.runState).toBe("rejected");
+    expect(result.status).toBe("fail");
+    expect(result.runState).toBe("failed");
     expect(result.finalPass).toBe(false);
+    expect(result.errorCode).toBe("ESCALATION_FAILED");
     expect(result.decisionReason).toContain("gate rejected");
     expect(result.decisionReason).toContain("insufficient detail");
     expect(result.reviewPassed).toBe(true);
@@ -570,14 +710,16 @@ describe("M2-16 Scenario 2: Document generation E2E", () => {
     const events = await runner.getEvents("doc-gen-reject");
     const gateResolve = events.find((e) => e.type === "gate_resolve");
     expect(gateResolve?.data).toMatchObject({ status: "reject" });
+    const execEnd = events.find((e) => e.type === "execution_end");
+    expect(execEnd?.data).toMatchObject({ errorCode: "ESCALATION_FAILED", runState: "failed" });
   });
 
-  it("retry exhaustion returns failed with correct runState", async () => {
+  it("retry exhaustion → status 'fail' + runState 'failed' + errorCode VALIDATION_ERROR", async () => {
     const { workflow, policyPath } = await loadFixtures();
     const policySet = await loadPolicyFromYaml(policyPath);
     const runner = new DocGenE2ERunner(workflow, policySet);
 
-    const failingReview = {
+    const failingReview: ReviewAttemptInput = {
       reviews: {
         "reviewer-a": { score: 3, issues: [{ severity: "P0", description: "Critical flaw" }] },
         "reviewer-b": { score: 4, issues: [{ severity: "P1", description: "Major issue" }] },
@@ -591,29 +733,35 @@ describe("M2-16 Scenario 2: Document generation E2E", () => {
       reviewAttempts: [failingReview, failingReview],
     });
 
-    expect(result.status).toBe("failed");
-    expect(result.runState).toBe("error");
+    expect(result.status).toBe("fail");
+    expect(result.runState).toBe("failed");
     expect(result.finalPass).toBe(false);
+    expect(result.errorCode).toBe("VALIDATION_ERROR");
     expect(result.decisionReason).toContain("peer-review failed");
     expect(result.reviewPassed).toBe(false);
     expect(result.peerReviewAttemptsUsed).toBe(2);
 
     const events = await runner.getEvents("doc-gen-exhaust");
     const execEnd = events.find((e) => e.type === "execution_end");
-    expect(execEnd?.data).toMatchObject({ status: "failed", reason: "peer-review failed" });
+    expect(execEnd?.data).toMatchObject({
+      status: "failed",
+      runState: "failed",
+      reason: "peer-review failed",
+      errorCode: "VALIDATION_ERROR",
+    });
   });
 
-  it("policy enforces sandbox/resources rules from fixture", async () => {
+  it("policy enforces sandbox root + deny_outside_root + resource limits from fixture", async () => {
     const { workflow, policyPath } = await loadFixtures();
     const policySet = await loadPolicyFromYaml(policyPath);
     const runner = new DocGenE2ERunner(workflow, policySet);
 
     const policyResult = await runner.verifyPolicy();
 
-    // file_write allowed
+    // file_write is allowed (within sandbox)
     expect(policyResult.allow.type).toBe("allow");
 
-    // shell_exec denied with rule name
+    // shell_exec is denied
     expect(policyResult.deny.type).toBe("deny");
     if (policyResult.deny.type === "deny") {
       expect(policyResult.deny.rule).toBe("tools.shell_exec");
@@ -621,15 +769,36 @@ describe("M2-16 Scenario 2: Document generation E2E", () => {
       expect(policyResult.deny.reason.length).toBeGreaterThan(0);
     }
 
-    // Verify audit trail for policy checks is deterministic (no fire-and-forget)
+    // Verify deterministic audit — all policy_check/policy_deny events recorded in order
     const events = await runner.getEvents("policy-check");
     const policyChecks = events.filter((e) => e.type === "policy_check");
     const policyDenies = events.filter((e) => e.type === "policy_deny");
-    expect(policyChecks).toHaveLength(2);
-    expect(policyDenies).toHaveLength(1);
+    expect(policyChecks).toHaveLength(2); // file_write + shell_exec
+    expect(policyDenies).toHaveLength(1); // only shell_exec denied
+
+    // Verify ordering: policy_check for file_write comes first
+    const checkData = policyChecks.map((e) => e.data) as Array<{ toolName: string; decision: string }>;
+    expect(checkData[0]).toMatchObject({ toolName: "file_write", decision: "allow" });
+    expect(checkData[1]).toMatchObject({ toolName: "shell_exec", decision: "deny" });
+
+    // Verify deny event has correct tool name
+    const denyData = policyDenies[0].data as { toolName: string };
+    expect(denyData.toolName).toBe("shell_exec");
+
+    // Verify the raw policy YAML has sandbox/resources sections
+    const policyYaml = await readFile(policyPath, "utf8");
+    const parsedPolicy = parse(policyYaml) as Record<string, unknown>;
+    expect(parsedPolicy).toHaveProperty("sandbox");
+    expect(parsedPolicy).toHaveProperty("resources");
+    const sandbox = parsedPolicy.sandbox as Record<string, unknown>;
+    expect(sandbox.root).toBe("./output");
+    expect(sandbox.deny_outside_root).toBe(true);
+    const resources = parsedPolicy.resources as Record<string, unknown>;
+    expect(resources.max_tokens).toBe(100000);
+    expect(resources.max_cost_usd).toBe(10);
   });
 
-  it("happy path result includes contract-aligned fields", async () => {
+  it("happy path result includes all M2-01R contract fields", async () => {
     const { workflow, policyPath } = await loadFixtures();
     const policySet = await loadPolicyFromYaml(policyPath);
     const runner = new DocGenE2ERunner(workflow, policySet);
@@ -648,19 +817,36 @@ describe("M2-16 Scenario 2: Document generation E2E", () => {
       ],
     });
 
-    // Contract fields
-    expect(result.runState).toBe("finished");
+    // M2-01R contract fields
+    expect(result.runId).toBe("doc-gen-contract");
+    expect(result.workflow).toBe("doc-generation-pipeline");
+    expect(result.runState).toBe("done");
     expect(result.finalPass).toBe(true);
+    expect(result.errorCode).toBeNull();
     expect(result.decisionReason).toBe("all steps passed and gate approved");
-    expect(result.status).toBe("completed");
+    expect(result.status).toBe("pass");
+
+    // Verify execution_end event also has contract fields
+    const events = await runner.getEvents("doc-gen-contract");
+    const execEnd = events.find((e) => e.type === "execution_end");
+    expect(execEnd?.data).toMatchObject({
+      status: "completed",
+      runState: "done",
+      finalPass: true,
+      errorCode: null,
+    });
   });
 
-  it("min_score uses integer 10-point scale consistently", async () => {
+  it("min_score uses integer 10-point scale — boundary at 7", async () => {
     const { workflow, policyPath } = await loadFixtures();
     const policySet = await loadPolicyFromYaml(policyPath);
     const runner = new DocGenE2ERunner(workflow, policySet);
 
-    // min_score=7 in fixture, score=7 should pass (boundary)
+    // Verify fixture uses integer scale
+    const reviewStep = workflow.steps.find((s) => s.name === "peer-review");
+    expect(reviewStep?.config?.min_score).toBe(7); // integer, not 0.7
+
+    // score=7 boundary → pass
     const boundaryResult = await runner.run({
       executionId: "doc-gen-boundary",
       gateOutcome: "approve",
@@ -674,10 +860,11 @@ describe("M2-16 Scenario 2: Document generation E2E", () => {
         },
       ],
     });
-    expect(boundaryResult.status).toBe("completed");
+    expect(boundaryResult.status).toBe("pass");
     expect(boundaryResult.reviewPassed).toBe(true);
+    expect(boundaryResult.runState).toBe("done");
 
-    // score=6 should fail (below min_score=7)
+    // score=6 → fail
     const belowResult = await runner.run({
       executionId: "doc-gen-below",
       gateOutcome: "approve",
@@ -691,6 +878,119 @@ describe("M2-16 Scenario 2: Document generation E2E", () => {
         },
       ],
     });
-    expect(belowResult.status).toBe("failed");
+    expect(belowResult.status).toBe("fail");
     expect(belowResult.reviewPassed).toBe(false);
+    expect(belowResult.errorCode).toBe("VALIDATION_ERROR");
   });
+
+  it("errorCode is correctly mapped for each failure mode", async () => {
+    const { workflow, policyPath } = await loadFixtures();
+    const policySet = await loadPolicyFromYaml(policyPath);
+
+    // VALIDATION_ERROR
+    const r1 = new DocGenE2ERunner(workflow, policySet);
+    const reviewFail = await r1.run({
+      executionId: "err-review",
+      gateOutcome: "approve",
+      reviewAttempts: [
+        { reviews: { "reviewer-a": { score: 2, issues: [] }, "reviewer-b": { score: 2, issues: [] }, "reviewer-c": { score: 2, issues: [] } } },
+      ],
+    });
+    expect(reviewFail.errorCode).toBe("VALIDATION_ERROR");
+
+    // ESCALATION_FAILED
+    const r2 = new DocGenE2ERunner(workflow, policySet);
+    const gateReject = await r2.run({
+      executionId: "err-reject",
+      gateOutcome: "reject",
+      reviewAttempts: [
+        { reviews: { "reviewer-a": { score: 8, issues: [] }, "reviewer-b": { score: 8, issues: [] }, "reviewer-c": { score: 8, issues: [] } } },
+      ],
+    });
+    expect(gateReject.errorCode).toBe("ESCALATION_FAILED");
+
+    // TIMEOUT
+    const r3 = new DocGenE2ERunner(workflow, policySet);
+    const gateTimeout = await r3.run({
+      executionId: "err-timeout",
+      gateOutcome: "timeout",
+      reviewAttempts: [
+        { reviews: { "reviewer-a": { score: 8, issues: [] }, "reviewer-b": { score: 8, issues: [] }, "reviewer-c": { score: 8, issues: [] } } },
+      ],
+    });
+    expect(gateTimeout.errorCode).toBe("TIMEOUT");
+
+    // null on success
+    const r4 = new DocGenE2ERunner(workflow, policySet);
+    const success = await r4.run({
+      executionId: "err-none",
+      gateOutcome: "approve",
+      reviewAttempts: [
+        { reviews: { "reviewer-a": { score: 9, issues: [] }, "reviewer-b": { score: 9, issues: [] }, "reviewer-c": { score: 9, issues: [] } } },
+      ],
+    });
+    expect(success.errorCode).toBeNull();
+  });
+
+  it("covers skipped runState via policy skip simulation", async () => {
+    const { workflow, policyPath } = await loadFixtures();
+    const policySet = await loadPolicyFromYaml(policyPath);
+    const runner = new DocGenE2ERunner(workflow, policySet);
+
+    const result = await runner.run({
+      executionId: "doc-gen-skipped",
+      gateOutcome: "approve",
+      reviewAttempts: [],
+      simulateSkip: true,
+    });
+
+    expect(result.runState).toBe("skipped");
+    expect(result.status).toBe("pass");
+    expect(result.errorCode).toBeNull();
+  });
+
+  it("covers needs-human-review runState simulation", async () => {
+    const { workflow, policyPath } = await loadFixtures();
+    const policySet = await loadPolicyFromYaml(policyPath);
+    const runner = new DocGenE2ERunner(workflow, policySet);
+
+    const result = await runner.run({
+      executionId: "doc-gen-needs-human-review",
+      gateOutcome: "approve",
+      reviewAttempts: [],
+      simulateNeedsHumanReview: true,
+    });
+
+    expect(result.runState).toBe("needs-human-review");
+    expect(result.status).toBe("fail");
+    expect(result.finalPass).toBeNull();
+    expect(result.errorCode).toBe("ESCALATION_FAILED");
+    expect(result.workflowState).toBe("running");
+  });
+
+  it("covers RESOLVE_ERROR and MALFORMED_JSON mappings", async () => {
+    const { workflow, policyPath } = await loadFixtures();
+    const policySet = await loadPolicyFromYaml(policyPath);
+
+    const r1 = new DocGenE2ERunner(workflow, policySet);
+    const resolveErr = await r1.run({
+      executionId: "err-resolve",
+      gateOutcome: "approve",
+      reviewAttempts: [],
+      simulateResolveError: true,
+    });
+    expect(resolveErr.errorCode).toBe("RESOLVE_ERROR");
+    expect(resolveErr.runState).toBe("failed");
+
+    const r2 = new DocGenE2ERunner(workflow, policySet);
+    const malformed = await r2.run({
+      executionId: "err-malformed",
+      gateOutcome: "approve",
+      reviewAttempts: [],
+      simulateMalformedJson: true,
+    });
+    expect(malformed.errorCode).toBe("MALFORMED_JSON");
+    expect(malformed.runState).toBe("failed");
+  });
+
+});

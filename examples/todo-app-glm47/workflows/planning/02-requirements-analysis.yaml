@@ -1,0 +1,18 @@
+name: todo-app-planning-02-requirements-analysis
+version: "1.0"
+description: "요구사항 분석/우선순위 단계"
+policy: ../../policy.yaml
+
+steps:
+  - name: analyze-requirements
+    agent: architect
+    input:
+      requirements_doc: "{{input.requirements_doc}}"
+      task: |
+        requirements_doc를 분석해 아래를 작성하세요.
+        1) 기능 분해(에픽/유저스토리)
+        2) 의존성 맵
+        3) 리스크/가정(Assumption)
+        4) 우선순위(MoSCoW)
+        5) MVP 후보안
+        출력 형식: Markdown

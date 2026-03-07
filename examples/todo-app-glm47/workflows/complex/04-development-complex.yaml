@@ -1,0 +1,78 @@
+name: todo-app-04-development-complex
+version: "2.2"
+description: "Development pipeline with back-edge judgment loop (split implementation to avoid tool-call round limits)"
+policy: ../../policy.yaml
+
+steps:
+  - name: implement-foundation
+    agent: developer
+    tools: [file_write, file_read, file_list, generate]
+    input:
+      task: |
+        Read docs/10~12 and docs/20~23.
+        Create only foundation files via file_write:
+        - src/types/todo.ts
+        - src/store/todoStore.ts
+
+  - name: implement-components-a
+    agent: developer
+    tools: [file_write, file_read, file_list, generate]
+    depends_on: [implement-foundation]
+    input:
+      task: |
+        Create core component files via file_write:
+        - src/components/TodoApp.tsx
+        - src/components/TodoList.tsx
+
+  - name: implement-components-b
+    agent: developer
+    tools: [file_write, file_read, file_list, generate]
+    depends_on: [implement-components-a]
+    input:
+      task: |
+        Create remaining component files via file_write:
+        - src/components/TodoItem.tsx
+        - src/components/AddTodo.tsx
+        - src/components/FilterBar.tsx
+
+  - name: remediation
+    agent: developer
+    tools: [file_write, file_read, file_list, generate]
+    depends_on: [implement-components-b]
+    input:
+      task: |
+        Read docs/30-judgment-review.md if exists.
+        If review exists, patch src/** for all requested fixes.
+        If none, keep baseline.
+        Write docs/31-remediation-log.md.
+
+  - name: judgment-review
+    pattern: peer-review
+    tools: [file_write, file_read, file_list, review]
+    depends_on: [remediation]
+    participants: [reviewer-1]
+    config:
+      min_score: 7
+      p0_allowed: 0
+      max_rounds: 1
+      consensus:
+        rule: majority
+        min_votes: 1
+        timeout: 300
+    input:
+      task: |
+        Review src/** and docs/31-remediation-log.md.
+        Write docs/30-judgment-review.md with score/pass/issues severity.
+        APPROVE only when no unresolved P0/P1.
+    on_fail:
+      goto: remediation
+      max_iterations: 3
+      escalate_on_exhaust: fail
+
+  - name: regression-review
+    agent: reviewer
+    tools: [file_write, file_read, file_list, review]
+    depends_on: [judgment-review]
+    input:
+      task: |
+        Re-check accepted src/** and write docs/32-regression-review.md with release readiness.

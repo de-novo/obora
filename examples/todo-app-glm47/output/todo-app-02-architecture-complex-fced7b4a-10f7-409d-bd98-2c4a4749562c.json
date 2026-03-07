@@ -1,0 +1,95 @@
+{
+  "id": "fced7b4a-10f7-409d-bd98-2c4a4749562c",
+  "workflowName": "todo-app-02-architecture-complex",
+  "status": "completed",
+  "startedAt": "2026-03-02T15:29:47.565Z",
+  "stepOrder": [
+    "architecture-design",
+    "architecture-review",
+    "architecture-revise",
+    "architecture-final"
+  ],
+  "completedSteps": [
+    "architecture-design",
+    "architecture-review",
+    "architecture-revise",
+    "architecture-final"
+  ],
+  "stepRecords": {
+    "architecture-design": {
+      "output": "`docs/10-architecture.md` 파일을 생성했습니다.\n\n## 생성 내용 요약\n\n### 1. 시스템 구조\n- 이벤트 기반 중앙 집중식 상태 관리 패턴\n- 단방향 데이터 흐름: User Action → Event → Handler → State Update → localStorage Save → Re-render\n- 기술 스택: 순수 JavaScript(ES6+), localStorage, Flexbox, CSS Variables\n\n### 2. 컴포넌트 트리 (5개 필수 컴포넌트)\n```\nTodoApp (루트)\n├── TodoList\n│   └── TodoItem[] (동적 생성)\n├── AddTodo\n└── FilterBar\n```\n\n**컴포넌트별 책임:**\n| 컴포넌트 | 책임 |\n|----------|------|\n| TodoApp | 상태 관리, 이벤트 버스, localStorage I/O |\n| TodoList | 필터링된 태스크 목록 렌더링 |\n| TodoItem | 완료 토글, 삭제 버튼, 시각적 상태 |\n| AddTodo | 텍스트 입력, 유효성 검증 |\n| FilterBar | All/Active/Completed 필터 버튼 |\n\n### 3. 데이터 모델\n```javascript\n{\n  todos: [\n    { id: Number, text: String, completed: Boolean }\n  ],\n  filter: 'all' | 'active' | 'completed'\n}\n```\n\n### 4. 상태 관리\n- Flux-스타일 단순화 패턴\n- 4개 액션 타입: `ADD_TODO`, `TOGGLE_TODO`, `DELETE_TODO`, `SET_FILTER`\n- 불변성 원칙 적용 (스프레드 연산자, map, filter)\n\n### 5. localStorage 저장 전략\n- 저장소 키: `todo-app-state`\n- 100ms 디바운스 적용으로 I/O 최적화\n- 저장소 쿼터 초과, JSON 파싱 실패 시 초기 상태 복구\n- 선택적 다중 탭 동기화 (`storage` 이벤트 리스너)\n\n### 6. 이벤트 버스 & 이벤트 위임\n- CustomEvent 기반 컴포넌트 통신\n- 동적 TodoItem 이벤트 부모(TodoList)에서 위임 처리\n\n### 7. 보안 및 접근성\n- XSS 방어: `textContent` 사용, `innerHTML` 금지\n- ARIA 속성, 키보드 탐색, 시맨틱 HTML\n\n모든 설계는 TODO APP 도메인에 국한되며, planning 단계(docs/01~05)의 요구사항과 완전히 일치합니다.",
+      "raw": {
+        "id": "zai-glm-4.7-1772465477897",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "`docs/10-architecture.md` 파일을 생성했습니다.\n\n## 생성 내용 요약\n\n### 1. 시스템 구조\n- 이벤트 기반 중앙 집중식 상태 관리 패턴\n- 단방향 데이터 흐름: User Action → Event → Handler → State Update → localStorage Save → Re-render\n- 기술 스택: 순수 JavaScript(ES6+), localStorage, Flexbox, CSS Variables\n\n### 2. 컴포넌트 트리 (5개 필수 컴포넌트)\n```\nTodoApp (루트)\n├── TodoList\n│   └── TodoItem[] (동적 생성)\n├── AddTodo\n└── FilterBar\n```\n\n**컴포넌트별 책임:**\n| 컴포넌트 | 책임 |\n|----------|------|\n| TodoApp | 상태 관리, 이벤트 버스, localStorage I/O |\n| TodoList | 필터링된 태스크 목록 렌더링 |\n| TodoItem | 완료 토글, 삭제 버튼, 시각적 상태 |\n| AddTodo | 텍스트 입력, 유효성 검증 |\n| FilterBar | All/Active/Completed 필터 버튼 |\n\n### 3. 데이터 모델\n```javascript\n{\n  todos: [\n    { id: Number, text: String, completed: Boolean }\n  ],\n  filter: 'all' | 'active' | 'completed'\n}\n```\n\n### 4. 상태 관리\n- Flux-스타일 단순화 패턴\n- 4개 액션 타입: `ADD_TODO`, `TOGGLE_TODO`, `DELETE_TODO`, `SET_FILTER`\n- 불변성 원칙 적용 (스프레드 연산자, map, filter)\n\n### 5. localStorage 저장 전략\n- 저장소 키: `todo-app-state`\n- 100ms 디바운스 적용으로 I/O 최적화\n- 저장소 쿼터 초과, JSON 파싱 실패 시 초기 상태 복구\n- 선택적 다중 탭 동기화 (`storage` 이벤트 리스너)\n\n### 6. 이벤트 버스 & 이벤트 위임\n- CustomEvent 기반 컴포넌트 통신\n- 동적 TodoItem 이벤트 부모(TodoList)에서 위임 처리\n\n### 7. 보안 및 접근성\n- XSS 방어: `textContent` 사용, `innerHTML` 금지\n- ARIA 속성, 키보드 탐색, 시맨틱 HTML\n\n모든 설계는 TODO APP 도메인에 국한되며, planning 단계(docs/01~05)의 요구사항과 완전히 일치합니다."
+        },
+        "usage": {
+          "promptTokens": 14,
+          "completionTokens": 644,
+          "totalTokens": 20214
+        },
+        "finishReason": "stop"
+      }
+    },
+    "architecture-review": {
+      "output": "검토가 완료되었습니다.\n\n## 검토 결과 요약\n\n**verdict: PASS**\n\n| 평가 항목 | 결과 |\n|-----------|------|\n| 1. TODO 앱 도메인 일관성 | ✅ 통과 |\n| 2. 필수 컴포넌트 포함 여부 | ✅ 통과 (TodoApp, TodoList, TodoItem, AddTodo, FilterBar 전체 포함) |\n| 3. 구현 가능성 | ✅ 통과 (순수 JavaScript, 표준 웹 기술로 실현 가능) |\n| 4. 리스크 식별 및 완화책 | ✅ 통과 (주요 리스크 식별 및 완화책 포함) |\n\n## 이슈 목록\n\n| ID | 심각도 | 설명 |\n|----|--------|------|\n| P2-1 | P2 (경미) | 다중 탭 동기화가 \"선택적\"으로 명시되어 구현 범위 모호 |\n| P2-2 | P2 (경미) | Date.now() 기반 ID 생성의 충돌 가능성 명시 부족 |\n\nP0/P1 이슈가 없으므로 **PASS**로 판정했습니다. 검토 문서는 `docs/11-architecture-review.md`에 작성되었습니다.",
+      "raw": {
+        "id": "zai-glm-4.7-1772465535709",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "검토가 완료되었습니다.\n\n## 검토 결과 요약\n\n**verdict: PASS**\n\n| 평가 항목 | 결과 |\n|-----------|------|\n| 1. TODO 앱 도메인 일관성 | ✅ 통과 |\n| 2. 필수 컴포넌트 포함 여부 | ✅ 통과 (TodoApp, TodoList, TodoItem, AddTodo, FilterBar 전체 포함) |\n| 3. 구현 가능성 | ✅ 통과 (순수 JavaScript, 표준 웹 기술로 실현 가능) |\n| 4. 리스크 식별 및 완화책 | ✅ 통과 (주요 리스크 식별 및 완화책 포함) |\n\n## 이슈 목록\n\n| ID | 심각도 | 설명 |\n|----|--------|------|\n| P2-1 | P2 (경미) | 다중 탭 동기화가 \"선택적\"으로 명시되어 구현 범위 모호 |\n| P2-2 | P2 (경미) | Date.now() 기반 ID 생성의 충돌 가능성 명시 부족 |\n\nP0/P1 이슈가 없으므로 **PASS**로 판정했습니다. 검토 문서는 `docs/11-architecture-review.md`에 작성되었습니다."
+        },
+        "usage": {
+          "promptTokens": 15,
+          "completionTokens": 310,
+          "totalTokens": 9330
+        },
+        "finishReason": "stop"
+      }
+    },
+    "architecture-revise": {
+      "output": "수정 완료. 적용한 변경사항:\n\n**수정 내역**\n\n| ID | 수정 위치 | 변경 내용 |\n|----|-----------|----------|\n| P2-1 | 섹션 5.4 제목 | \"다중 탭 동기화 (선택적)\" → \"다중 탭 동기화\" 및 설명에 필수 기능임 명시 |\n| P2-1 | 섹션 5.3 표 | \"(선택적)\" 제거 |\n| P2-2 | 섹션 3.2 스키마 | `id` 필드 타입 `Number` → `String`, 설명에 `Date.now() + 랜덤 접미사` 추가 |\n| P2-2 | 섹션 3.1 상태 예시 | `id` 값 예시를 `\"1712345678901abc12345\"`로 수정 |\n| P2-2 | 섹션 4.2 액션 타입 | 페이로드의 `id: Number` → `id: String` |\n| P2-2 | 섹션 4.3 액션 핸들러 | `addTodo`에서 ID 생성 방식을 `Date.now().toString() + Math.random().toString(36).substr(2, 9)`로 수정 |\n| P2-2 | 섹션 2.2.1 상태 구조 | `id` 예시를 문자열로 수정 |\n| P2-2 | 섹션 2.2.3 TodoItem Props | `id: Number` → `id: String` |\n| P2-2 | 섹션 9 리스크 테이블 | \"ID 충돌 가능성\" 리스크 추가 및 완화 전략 명시 |\n| 버전 | 문서 헤더 | 1.0 → 1.1 |\n\n모든 P0/P1 이슈가 없으며, P2 이슈 2건을 해결하여 문서를 개선했습니다.",
+      "raw": {
+        "id": "zai-glm-4.7-1772465614848",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "수정 완료. 적용한 변경사항:\n\n**수정 내역**\n\n| ID | 수정 위치 | 변경 내용 |\n|----|-----------|----------|\n| P2-1 | 섹션 5.4 제목 | \"다중 탭 동기화 (선택적)\" → \"다중 탭 동기화\" 및 설명에 필수 기능임 명시 |\n| P2-1 | 섹션 5.3 표 | \"(선택적)\" 제거 |\n| P2-2 | 섹션 3.2 스키마 | `id` 필드 타입 `Number` → `String`, 설명에 `Date.now() + 랜덤 접미사` 추가 |\n| P2-2 | 섹션 3.1 상태 예시 | `id` 값 예시를 `\"1712345678901abc12345\"`로 수정 |\n| P2-2 | 섹션 4.2 액션 타입 | 페이로드의 `id: Number` → `id: String` |\n| P2-2 | 섹션 4.3 액션 핸들러 | `addTodo`에서 ID 생성 방식을 `Date.now().toString() + Math.random().toString(36).substr(2, 9)`로 수정 |\n| P2-2 | 섹션 2.2.1 상태 구조 | `id` 예시를 문자열로 수정 |\n| P2-2 | 섹션 2.2.3 TodoItem Props | `id: Number` → `id: String` |\n| P2-2 | 섹션 9 리스크 테이블 | \"ID 충돌 가능성\" 리스크 추가 및 완화 전략 명시 |\n| 버전 | 문서 헤더 | 1.0 → 1.1 |\n\n모든 P0/P1 이슈가 없으며, P2 이슈 2건을 해결하여 문서를 개선했습니다."
+        },
+        "usage": {
+          "promptTokens": 14,
+          "completionTokens": 457,
+          "totalTokens": 14596
+        },
+        "finishReason": "stop"
+      }
+    },
+    "architecture-final": {
+      "output": "아키텍처 의사결정서를 작성했습니다.\n\n## 작성 완료: docs/12-architecture-decision.md\n\n### 주요 내용\n\n**최종 결정 (final_verdict)**\n- ✅ **APPROVED** - 아키텍처 설계 승인 완료\n\n**아키텍처 결정 요약**\n| 카테고리 | 채택 결정 |\n|----------|-----------|\n| 시스템 구조 | 이벤트 기반 중앙 집중식 상태 관리, 단방향 데이터 흐름 |\n| 컴포넌트 구조 | TodoApp, TodoList, TodoItem[], AddTodo, FilterBar |\n| 데이터 모델 | `{ id, text, completed }`, 불변성 원칙 |\n| 기술 스택 | 순수 JavaScript(ES6+), localStorage, CSS Variables |\n| 저장 전략 | JSON 직렬화, 100ms 디바운스, 다중 탭 동기화(필수) |\n| 보안/접근성 | `textContent` XSS 방어, ARIA 속성, 키보드 탐색 |\n\n**검토 결과 반영**\n- P2-1: 다중 탭 동기화를 필수 기능으로 명확화\n- P2-2: ID 생성에 타임스탬프 + 랜덤 접미사 조합 적용\n\n**다음 단계 체크리스트 (Design Phase)**\n- UI/UX 설계 (와이어프레임, 레이아웃)\n- 스타일 가이드 (컬러, 타이포그래피, 버튼)\n- 상태 디자인 (정상, 빈 상태, 에러)\n- 인터랙션 디자인 (애니메이션, 트랜지션)\n- 반응형 디자인 (모바일/태블릿/데스크톱)\n- 접근성 디자인 (WCAG AA 준수)\n\n아키텍처 단계가 완료되었으며, **Design Phase**로 진행할 준비가 되었습니다.",
+      "raw": {
+        "id": "zai-glm-4.7-1772465650451",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "아키텍처 의사결정서를 작성했습니다.\n\n## 작성 완료: docs/12-architecture-decision.md\n\n### 주요 내용\n\n**최종 결정 (final_verdict)**\n- ✅ **APPROVED** - 아키텍처 설계 승인 완료\n\n**아키텍처 결정 요약**\n| 카테고리 | 채택 결정 |\n|----------|-----------|\n| 시스템 구조 | 이벤트 기반 중앙 집중식 상태 관리, 단방향 데이터 흐름 |\n| 컴포넌트 구조 | TodoApp, TodoList, TodoItem[], AddTodo, FilterBar |\n| 데이터 모델 | `{ id, text, completed }`, 불변성 원칙 |\n| 기술 스택 | 순수 JavaScript(ES6+), localStorage, CSS Variables |\n| 저장 전략 | JSON 직렬화, 100ms 디바운스, 다중 탭 동기화(필수) |\n| 보안/접근성 | `textContent` XSS 방어, ARIA 속성, 키보드 탐색 |\n\n**검토 결과 반영**\n- P2-1: 다중 탭 동기화를 필수 기능으로 명확화\n- P2-2: ID 생성에 타임스탬프 + 랜덤 접미사 조합 적용\n\n**다음 단계 체크리스트 (Design Phase)**\n- UI/UX 설계 (와이어프레임, 레이아웃)\n- 스타일 가이드 (컬러, 타이포그래피, 버튼)\n- 상태 디자인 (정상, 빈 상태, 에러)\n- 인터랙션 디자인 (애니메이션, 트랜지션)\n- 반응형 디자인 (모바일/태블릿/데스크톱)\n- 접근성 디자인 (WCAG AA 준수)\n\n아키텍처 단계가 완료되었으며, **Design Phase**로 진행할 준비가 되었습니다."
+        },
+        "usage": {
+          "promptTokens": 16,
+          "completionTokens": 511,
+          "totalTokens": 12210
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "architecture-design": "`docs/10-architecture.md` 파일을 생성했습니다.\n\n## 생성 내용 요약\n\n### 1. 시스템 구조\n- 이벤트 기반 중앙 집중식 상태 관리 패턴\n- 단방향 데이터 흐름: User Action → Event → Handler → State Update → localStorage Save → Re-render\n- 기술 스택: 순수 JavaScript(ES6+), localStorage, Flexbox, CSS Variables\n\n### 2. 컴포넌트 트리 (5개 필수 컴포넌트)\n```\nTodoApp (루트)\n├── TodoList\n│   └── TodoItem[] (동적 생성)\n├── AddTodo\n└── FilterBar\n```\n\n**컴포넌트별 책임:**\n| 컴포넌트 | 책임 |\n|----------|------|\n| TodoApp | 상태 관리, 이벤트 버스, localStorage I/O |\n| TodoList | 필터링된 태스크 목록 렌더링 |\n| TodoItem | 완료 토글, 삭제 버튼, 시각적 상태 |\n| AddTodo | 텍스트 입력, 유효성 검증 |\n| FilterBar | All/Active/Completed 필터 버튼 |\n\n### 3. 데이터 모델\n```javascript\n{\n  todos: [\n    { id: Number, text: String, completed: Boolean }\n  ],\n  filter: 'all' | 'active' | 'completed'\n}\n```\n\n### 4. 상태 관리\n- Flux-스타일 단순화 패턴\n- 4개 액션 타입: `ADD_TODO`, `TOGGLE_TODO`, `DELETE_TODO`, `SET_FILTER`\n- 불변성 원칙 적용 (스프레드 연산자, map, filter)\n\n### 5. localStorage 저장 전략\n- 저장소 키: `todo-app-state`\n- 100ms 디바운스 적용으로 I/O 최적화\n- 저장소 쿼터 초과, JSON 파싱 실패 시 초기 상태 복구\n- 선택적 다중 탭 동기화 (`storage` 이벤트 리스너)\n\n### 6. 이벤트 버스 & 이벤트 위임\n- CustomEvent 기반 컴포넌트 통신\n- 동적 TodoItem 이벤트 부모(TodoList)에서 위임 처리\n\n### 7. 보안 및 접근성\n- XSS 방어: `textContent` 사용, `innerHTML` 금지\n- ARIA 속성, 키보드 탐색, 시맨틱 HTML\n\n모든 설계는 TODO APP 도메인에 국한되며, planning 단계(docs/01~05)의 요구사항과 완전히 일치합니다.",
+    "architecture-review": "검토가 완료되었습니다.\n\n## 검토 결과 요약\n\n**verdict: PASS**\n\n| 평가 항목 | 결과 |\n|-----------|------|\n| 1. TODO 앱 도메인 일관성 | ✅ 통과 |\n| 2. 필수 컴포넌트 포함 여부 | ✅ 통과 (TodoApp, TodoList, TodoItem, AddTodo, FilterBar 전체 포함) |\n| 3. 구현 가능성 | ✅ 통과 (순수 JavaScript, 표준 웹 기술로 실현 가능) |\n| 4. 리스크 식별 및 완화책 | ✅ 통과 (주요 리스크 식별 및 완화책 포함) |\n\n## 이슈 목록\n\n| ID | 심각도 | 설명 |\n|----|--------|------|\n| P2-1 | P2 (경미) | 다중 탭 동기화가 \"선택적\"으로 명시되어 구현 범위 모호 |\n| P2-2 | P2 (경미) | Date.now() 기반 ID 생성의 충돌 가능성 명시 부족 |\n\nP0/P1 이슈가 없으므로 **PASS**로 판정했습니다. 검토 문서는 `docs/11-architecture-review.md`에 작성되었습니다.",
+    "architecture-revise": "수정 완료. 적용한 변경사항:\n\n**수정 내역**\n\n| ID | 수정 위치 | 변경 내용 |\n|----|-----------|----------|\n| P2-1 | 섹션 5.4 제목 | \"다중 탭 동기화 (선택적)\" → \"다중 탭 동기화\" 및 설명에 필수 기능임 명시 |\n| P2-1 | 섹션 5.3 표 | \"(선택적)\" 제거 |\n| P2-2 | 섹션 3.2 스키마 | `id` 필드 타입 `Number` → `String`, 설명에 `Date.now() + 랜덤 접미사` 추가 |\n| P2-2 | 섹션 3.1 상태 예시 | `id` 값 예시를 `\"1712345678901abc12345\"`로 수정 |\n| P2-2 | 섹션 4.2 액션 타입 | 페이로드의 `id: Number` → `id: String` |\n| P2-2 | 섹션 4.3 액션 핸들러 | `addTodo`에서 ID 생성 방식을 `Date.now().toString() + Math.random().toString(36).substr(2, 9)`로 수정 |\n| P2-2 | 섹션 2.2.1 상태 구조 | `id` 예시를 문자열로 수정 |\n| P2-2 | 섹션 2.2.3 TodoItem Props | `id: Number` → `id: String` |\n| P2-2 | 섹션 9 리스크 테이블 | \"ID 충돌 가능성\" 리스크 추가 및 완화 전략 명시 |\n| 버전 | 문서 헤더 | 1.0 → 1.1 |\n\n모든 P0/P1 이슈가 없으며, P2 이슈 2건을 해결하여 문서를 개선했습니다.",
+    "architecture-final": "아키텍처 의사결정서를 작성했습니다.\n\n## 작성 완료: docs/12-architecture-decision.md\n\n### 주요 내용\n\n**최종 결정 (final_verdict)**\n- ✅ **APPROVED** - 아키텍처 설계 승인 완료\n\n**아키텍처 결정 요약**\n| 카테고리 | 채택 결정 |\n|----------|-----------|\n| 시스템 구조 | 이벤트 기반 중앙 집중식 상태 관리, 단방향 데이터 흐름 |\n| 컴포넌트 구조 | TodoApp, TodoList, TodoItem[], AddTodo, FilterBar |\n| 데이터 모델 | `{ id, text, completed }`, 불변성 원칙 |\n| 기술 스택 | 순수 JavaScript(ES6+), localStorage, CSS Variables |\n| 저장 전략 | JSON 직렬화, 100ms 디바운스, 다중 탭 동기화(필수) |\n| 보안/접근성 | `textContent` XSS 방어, ARIA 속성, 키보드 탐색 |\n\n**검토 결과 반영**\n- P2-1: 다중 탭 동기화를 필수 기능으로 명확화\n- P2-2: ID 생성에 타임스탬프 + 랜덤 접미사 조합 적용\n\n**다음 단계 체크리스트 (Design Phase)**\n- UI/UX 설계 (와이어프레임, 레이아웃)\n- 스타일 가이드 (컬러, 타이포그래피, 버튼)\n- 상태 디자인 (정상, 빈 상태, 에러)\n- 인터랙션 디자인 (애니메이션, 트랜지션)\n- 반응형 디자인 (모바일/태블릿/데스크톱)\n- 접근성 디자인 (WCAG AA 준수)\n\n아키텍처 단계가 완료되었으며, **Design Phase**로 진행할 준비가 되었습니다."
+  },
+  "endedAt": "2026-03-02T15:34:16.493Z"
+}

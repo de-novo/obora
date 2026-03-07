@@ -1,0 +1,85 @@
+name: todo-app-03-design-complex
+version: "1.5"
+description: "디자인 파이프라인(백엣지 루프): UX→Wireframe→Interaction→Revise→Review(판정)↺→Finalize"
+policy: ../../policy.yaml
+
+steps:
+  - name: ux-strategy
+    agent: designer
+    tools: [file_write, file_read, file_list]
+    input:
+      task: |
+        Read docs/10~12 architecture outputs.
+        Create docs/20-ux-strategy.md via file_write.
+        Include user journey, IA, TODO-domain constraints.
+
+  - name: ui-wireframe
+    agent: designer
+    tools: [file_write, file_read]
+    depends_on: [ux-strategy]
+    input:
+      task: |
+        Read docs/20-ux-strategy.md.
+        Create docs/21-ui-wireframe.md via file_write.
+        Include list/input/filter/empty/error states.
+
+  - name: interaction-spec
+    agent: designer
+    tools: [file_write, file_read]
+    depends_on: [ui-wireframe]
+    input:
+      task: |
+        Read docs/21-ui-wireframe.md.
+        Create docs/22-interaction-spec.md via file_write.
+        Include state transitions, loading/error/empty states, keyboard flow.
+
+  - name: design-revise
+    agent: designer
+    tools: [file_write, file_read]
+    depends_on: [interaction-spec]
+    input:
+      task: |
+        Read docs/23-accessibility-review.md if exists.
+        - If no previous review exists, keep docs/20~22 as baseline and write docs/25-design-revision-log.md with "initial baseline".
+        - If review exists, apply all requested fixes to docs/20~22 and log concrete changes in docs/25-design-revision-log.md.
+
+  - name: accessibility-review
+    pattern: peer-review
+    tools: [file_write, file_read, review]
+    depends_on: [design-revise]
+    participants: [reviewer-1]
+    config:
+      min_score: 7
+      p0_allowed: 0
+      max_rounds: 1
+      consensus:
+        rule: majority
+        min_votes: 1
+        timeout: 300
+    input:
+      task: |
+        Read docs/20~22 and docs/25-design-revision-log.md.
+        Write docs/23-accessibility-review.md with verdict/issues/must_fix.
+        Vote APPROVE only if:
+        - no unresolved P0/P1 accessibility issues
+        - WCAG AA critical criteria satisfied
+        Otherwise vote REJECT or REQUEST_CHANGES with explicit fixes.
+    on_fail:
+      goto: design-revise
+      max_iterations: 3
+      escalate_on_exhaust: fail
+
+  - name: design-finalize
+    agent: designer
+    tools: [file_write, file_read]
+    depends_on: [accessibility-review]
+    input:
+      task: |
+        Read docs/20~23 and docs/25.
+        Create docs/26-design-final.md via file_write as FINAL handoff.
+        Include accepted accessibility outcomes and dev checklist.
+
+recovery:
+  accessibility-review:
+    on_fail: retry
+    max_retries: 1

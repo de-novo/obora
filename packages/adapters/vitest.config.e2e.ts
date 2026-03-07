@@ -4,7 +4,7 @@
  * Requires ZAI_API_KEY in the environment.
  *
  * Usage:
- *   pnpm --filter @obora-kit/adapters test:e2e
+ *   pnpm --filter @obora/adapters test:e2e
  */
 import { defineConfig } from "vitest/config";
 
