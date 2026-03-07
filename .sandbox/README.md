@@ -42,51 +42,43 @@ providers:
 # 전체 테스트 실행
 ./run-all.sh
 
-# 특정 테스트만 실행
+# 특정 테스트만 실행 (숫자 shorthand 지원)
+./run.sh 01
 ./run.sh 01-hello-world
 ./run.sh 02-linear-pipeline
 ```
 
 ## 사전 요구사항
 
-1. **obora CLI 설치**
+1. **CLI 준비**
+   - 저장소 안에서 실행하면 `.sandbox/run.sh`가 로컬 빌드된 CLI(`packages/cli/dist/index.js`)를 자동으로 사용합니다.
+   - 전역 설치가 되어 있으면 `obora` 커맨드를 우선 사용합니다.
+
    ```bash
+   # 전역 설치(선택)
    npm install -g @obora/cli
+
+   # 로컬 CLI가 필요하면 먼저 빌드
+   pnpm --filter @obora/cli build
    ```
 
-2. **글로벌 설정** (`~/.obora/config.yaml`)
+2. **API 키 환경변수**
    ```bash
-   # 글로벌 설정 확인
-   obora config list --global
-
-   # 또는 직접 생성
-   mkdir -p ~/.obora
-   cat > ~/.obora/config.yaml << EOF
-   defaults:
-     provider: anthropic
-     model: claude-opus-4-6
-
-   providers:
-     anthropic:
-       authMode: token
-       authRef: env:ANTHROPIC_API_KEY
-   EOF
-   ```
-
-3. **API 키 환경변수**
-   ```bash
-   # 필수 - 샌드박스 테스트용
+   # 필수 - 01~06 샌드박스 워크플로우 실행용
    export ZAI_API_KEY="your-zai-api-key"
    
    # 선택 - 08-multi-provider 테스트용
    export OPENAI_API_KEY="your-openai-api-key"
    ```
 
+> `ZAI_API_KEY`가 없으면 샌드박스 실행 스크립트는 stub mode로 통과시키지 않고 즉시 실패(fail fast)합니다.
+
 ## 디렉토리 구조
 
 ```
 .sandbox/
 ├── README.md           # 이 파일
+├── common.sh           # 공통 실행 헬퍼
 ├── run-all.sh          # 전체 실행 스크립트
 ├── run.sh              # 개별 실행 스크립트
 ├── 01-hello-world/

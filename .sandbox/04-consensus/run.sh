@@ -2,12 +2,15 @@
 # Test 04: Consensus
 # Expected: Multiple agents vote, majority decides
 
-cd "$(dirname "$0")"
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/../common.sh"
 
 echo "=== Test 04: Consensus ==="
 echo "Testing multi-agent consensus pattern..."
 
-obora run workflow.yaml --verbose
+run_sandbox_workflow "$SCRIPT_DIR" "$@"
 
 echo ""
 echo "=== Test Complete ==="

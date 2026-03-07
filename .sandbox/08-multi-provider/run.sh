@@ -2,34 +2,38 @@
 # Test 08: Multi-Provider
 # Expected: Different LLM providers used in same workflow
 
-cd "$(dirname "$0")"
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/../common.sh"
 
 echo "=== Test 08: Multi-Provider ==="
 echo "Testing multiple LLM providers in one workflow..."
 echo ""
 
-# Check for required API keys
-MISSING=0
-if [ -z "$ZAI_API_KEY" ]; then
+if [ -z "${ZAI_API_KEY:-}" ]; then
     echo "⚠️  ZAI_API_KEY not set"
-    MISSING=1
-fi
-
-if [ -z "$OPENAI_API_KEY" ]; then
-    echo "⚠️  OPENAI_API_KEY not set"
-    MISSING=1
-fi
-
-if [ $MISSING -eq 1 ]; then
     echo ""
     echo "Skipping execution - set both API keys to run this test:"
     echo "  export ZAI_API_KEY='your-key'"
     echo "  export OPENAI_API_KEY='your-key'"
     echo ""
-    echo "Other tests work with global config defaults."
-else
-    obora run workflow.yaml --verbose
+    echo "=== Test Complete ==="
+    exit 0
 fi
+
+if [ -z "${OPENAI_API_KEY:-}" ]; then
+    echo "⚠️  OPENAI_API_KEY not set"
+    echo ""
+    echo "Skipping execution - set both API keys to run this test:"
+    echo "  export ZAI_API_KEY='your-key'"
+    echo "  export OPENAI_API_KEY='your-key'"
+    echo ""
+    echo "=== Test Complete ==="
+    exit 0
+fi
+
+run_sandbox_workflow "$SCRIPT_DIR" "$@"
 
 echo ""
 echo "=== Test Complete ==="

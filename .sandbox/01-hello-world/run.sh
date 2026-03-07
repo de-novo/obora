@@ -2,12 +2,15 @@
 # Test 01: Hello World
 # Expected: Single step execution, output contains greeting
 
-cd "$(dirname "$0")"
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/../common.sh"
 
 echo "=== Test 01: Hello World ==="
 echo "Running simplest workflow..."
 
-obora run workflow.yaml --verbose
+run_sandbox_workflow "$SCRIPT_DIR" "$@"
 
 echo ""
 echo "=== Test Complete ==="

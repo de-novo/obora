@@ -31,6 +31,7 @@ async function withIsolatedDirs(testFn: (ctx: { homeDir: string; projectDir: str
 describe("config-loader", () => {
   afterEach(() => {
     delete process.env.TEST_ANTHROPIC_KEY;
+    delete process.env.TEST_ZAI_KEY;
   });
 
   it("loads explicit --config path", async () => {
@@ -159,6 +160,38 @@ describe("config-loader", () => {
       expect(warn).toHaveBeenCalledWith(expect.stringContaining("missing"));
       expect(warn).toHaveBeenCalledWith(expect.stringContaining(explicit));
       warn.mockRestore();
+    });
+  });
+
+  it("loads nearest parent .obora/config.yaml when running from a nested directory", async () => {
+    await withIsolatedDirs(async ({ projectDir }) => {
+      await mkdir(join(projectDir, ".obora"), { recursive: true });
+      await writeFile(
+        join(projectDir, ".obora", "config.yaml"),
+        [
+          "defaults:",
+          "  provider: zai",
+          "  model: glm-4.7",
+          "providers:",
+          "  zai:",
+          "    authRef: env:TEST_ZAI_KEY",
+          "    defaultModel: glm-4.7",
+        ].join("\n"),
+        "utf-8",
+      );
+
+      const nestedDir = join(projectDir, ".sandbox", "01-hello-world");
+      await mkdir(nestedDir, { recursive: true });
+      process.chdir(nestedDir);
+      process.env.TEST_ZAI_KEY = "zai-key";
+
+      const loaded = await loadConfig();
+      expect(loaded?.defaults?.provider).toBe("zai");
+      expect(loaded?.defaults?.model).toBe("glm-4.7");
+
+      const provider = loaded ? resolveProviderConfig(loaded) : undefined;
+      expect(provider?.apiKey).toBe("zai-key");
+      expect(provider?.model).toBe("glm-4.7");
     });
   });
 

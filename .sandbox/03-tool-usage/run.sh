@@ -2,27 +2,30 @@
 # Test 03: Tool Usage
 # Expected: Files created, read, and listed via tool calls
 
-cd "$(dirname "$0")"
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/../common.sh"
 
 echo "=== Test 03: Tool Usage ==="
 echo "Testing file_write, file_read, file_list tools..."
 
-# Clean up before
-rm -f notes.txt output/
+rm -rf "$SCRIPT_DIR/output" "$SCRIPT_DIR/notes.txt"
 
-obora run workflow.yaml --verbose --output-dir ./output
+run_sandbox_workflow "$SCRIPT_DIR" --output-dir "$SCRIPT_DIR/output" "$@"
 
 echo ""
 echo "=== Checking results ==="
-if [ -f "notes.txt" ]; then
+if [ -f "$SCRIPT_DIR/notes.txt" ]; then
     echo "✓ notes.txt was created"
-    cat notes.txt
+    cat "$SCRIPT_DIR/notes.txt"
 else
     echo "✗ notes.txt was NOT created"
+    exit 1
 fi
 
 echo ""
 echo "=== Cleanup ==="
-rm -f notes.txt
+rm -f "$SCRIPT_DIR/notes.txt"
 
 echo "=== Test Complete ==="
