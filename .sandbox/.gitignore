@@ -1,0 +1,12 @@
+# Sandbox gitignore - ignore generated files
+
+# Obora runtime files
+.obora/
+
+# Generated outputs
+output/
+
+# Test artifacts
+*.txt
+*.json
+!.gitkeep

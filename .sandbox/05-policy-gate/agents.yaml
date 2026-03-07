@@ -1,0 +1,16 @@
+# Agents for policy-gate-test
+
+agents:
+  analyst:
+    role: Cost Analyst
+    description: Analyzes cost-benefit tradeoffs
+    provider: zai
+    model: glm-4.7
+    temperature: 0.3
+
+  executor:
+    role: Executor
+    description: Executes approved actions
+    provider: zai
+    model: glm-4.7
+    temperature: 0

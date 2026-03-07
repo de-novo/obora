@@ -1,0 +1,33 @@
+# Test Case 02: Linear Pipeline
+# 의존성이 있는 3단계 파이프라인
+
+name: linear-pipeline
+version: "1.0"
+
+steps:
+  - name: brainstorm
+    agent: creative
+    input:
+      task: |
+        Generate 3 creative names for a coffee shop.
+        Output only the names, one per line, numbered.
+
+  - name: evaluate
+    agent: critic
+    depends_on: [brainstorm]
+    input:
+      task: |
+        Review these coffee shop names from the previous step:
+        {{brainstorm}}
+
+        Pick the best one and explain why in one sentence.
+
+  - name: finalize
+    agent: manager
+    depends_on: [evaluate]
+    input:
+      task: |
+        Based on the evaluation:
+        {{evaluate}}
+
+        Output the final chosen name as: "FINAL: [name]"

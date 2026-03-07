@@ -1,0 +1,36 @@
+# Test Case 05: Policy Gate
+# 정책 게이트로 특정 조건에서 승인 요구
+
+name: policy-gate-test
+version: "1.0"
+
+steps:
+  - name: analyze
+    agent: analyst
+    input:
+      task: |
+        Analyze whether we should use a premium or free LLM model.
+        Consider: cost, quality, speed.
+        Output your recommendation.
+
+  - name: gate
+    pattern: policy-gate
+    depends_on: [analyze]
+    policy:
+      rules:
+        - name: premium-requires-approval
+          condition: "output contains 'premium'"
+          effect: require_approval
+          message: "Premium model usage requires approval"
+    input:
+      task: "Check the analysis for policy compliance."
+
+  - name: execute
+    agent: executor
+    depends_on: [gate]
+    input:
+      task: |
+        Based on the approved analysis:
+        {{analyze}}
+
+        Proceed with the recommended action.

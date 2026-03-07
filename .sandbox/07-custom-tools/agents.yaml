@@ -1,0 +1,16 @@
+# Agents for custom-tools-test
+
+agents:
+  tool_user:
+    role: Tool User
+    description: Uses custom tools
+    provider: zai
+    model: glm-4.7
+    temperature: 0
+
+  verifier:
+    role: Verifier
+    description: Verifies results
+    provider: zai
+    model: glm-4.7
+    temperature: 0

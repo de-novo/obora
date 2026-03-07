@@ -1,0 +1,30 @@
+# Test Case 08: Multi-Provider
+# 여러 LLM 프로바이더 사용 테스트
+
+name: multi-provider-test
+version: "1.0"
+
+steps:
+  - name: ask_zai
+    agent: zai_agent
+    input:
+      task: "In exactly 5 words, what is AI?"
+
+  - name: ask_openai
+    agent: openai_agent
+    depends_on: [ask_zai]
+    input:
+      task: |
+        Another AI said: "{{ask_zai}}"
+        Now you answer: In exactly 5 words, what is AI?
+
+  - name: compare
+    agent: comparer
+    depends_on: [ask_zai, ask_openai]
+    input:
+      task: |
+        Compare these two answers:
+        ZAI: {{ask_zai}}
+        OpenAI: {{ask_openai}}
+
+        Which answer do you prefer and why? Answer in one sentence.

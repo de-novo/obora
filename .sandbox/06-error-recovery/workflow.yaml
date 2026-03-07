@@ -1,0 +1,29 @@
+# Test Case 06: Error Recovery
+# 에러 발생 시 복구 전략 테스트
+
+name: error-recovery-test
+version: "1.0"
+
+steps:
+  - name: risky_operation
+    agent: worker
+    retry:
+      max_retries: 3
+      backoff: exponential
+    input:
+      task: |
+        You are a worker that sometimes fails.
+        Flip a mental coin: if heads, output "SUCCESS: Task completed".
+        If tails, output "ERROR: Something went wrong".
+        Be honest about your coin flip.
+
+  - name: verify
+    agent: verifier
+    depends_on: [risky_operation]
+    input:
+      task: |
+        Check the result of the previous step:
+        {{risky_operation}}
+
+        If it contains "SUCCESS", output "VERIFIED: All good".
+        If it contains "ERROR", output "FAILED: Recovery needed".

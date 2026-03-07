@@ -1,0 +1,9 @@
+# Agents for hello-world
+
+agents:
+  assistant:
+    role: Friendly Assistant
+    description: A simple greeting assistant
+    provider: zai
+    model: glm-4.7
+    temperature: 0

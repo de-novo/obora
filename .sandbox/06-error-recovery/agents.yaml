@@ -1,0 +1,16 @@
+# Agents for error-recovery-test
+
+agents:
+  worker:
+    role: Worker
+    description: Performs tasks that may fail
+    provider: zai
+    model: glm-4.7
+    temperature: 0.5
+
+  verifier:
+    role: Verifier
+    description: Verifies task completion
+    provider: zai
+    model: glm-4.7
+    temperature: 0

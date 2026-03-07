@@ -1,0 +1,32 @@
+# Test Case 03: Tool Usage
+# 내장 도구(file_write, file_read, file_list) 사용 테스트
+
+name: tool-usage
+version: "1.0"
+
+steps:
+  - name: create_file
+    agent: writer
+    input:
+      task: |
+        Create a file called 'notes.txt' with the following content:
+        "This is a test note created by Obora."
+        Use the file_write tool.
+
+  - name: read_file
+    agent: reader
+    depends_on: [create_file]
+    input:
+      task: |
+        Read the file 'notes.txt' that was created in the previous step.
+        Use the file_read tool.
+        Output the content you read.
+
+  - name: list_files
+    agent: reader
+    depends_on: [read_file]
+    input:
+      task: |
+        List files in the current directory.
+        Use the file_list tool.
+        Confirm that 'notes.txt' exists.

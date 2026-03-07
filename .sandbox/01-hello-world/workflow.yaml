@@ -1,0 +1,11 @@
+# Test Case 01: Hello World
+# 가장 기본적인 단일 스텝 워크플로우
+
+name: hello-world
+version: "1.0"
+
+steps:
+  - name: greet
+    agent: assistant
+    input:
+      task: "Say 'Hello, Obora!' and nothing else."

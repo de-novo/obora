@@ -1,0 +1,37 @@
+# Agents for consensus-test
+
+agents:
+  proposer:
+    role: Name Proposer
+    description: Proposes creative names
+    provider: zai
+    model: glm-4.7
+    temperature: 0.8
+
+  reviewer1:
+    role: Brand Reviewer
+    description: Reviews for brand alignment
+    provider: zai
+    model: glm-4.7
+    temperature: 0.3
+
+  reviewer2:
+    role: UX Reviewer
+    description: Reviews for user experience
+    provider: zai
+    model: glm-4.7
+    temperature: 0.3
+
+  reviewer3:
+    role: Legal Reviewer
+    description: Reviews for trademark issues
+    provider: zai
+    model: glm-4.7
+    temperature: 0.3
+
+  decider:
+    role: Final Decider
+    description: Makes final announcements
+    provider: zai
+    model: glm-4.7
+    temperature: 0
