@@ -40,7 +40,16 @@ export interface StepResult {
   votes?: Array<{ participant: string; vote: "APPROVE" | "REJECT" | "REQUEST_CHANGES"; response: string }>;
 }
 
-const BUILTIN_TOOLS: ToolDefinition[] = [
+/**
+ * A handler that pairs a tool definition with its execution logic.
+ * Pass instances via StepExecutorConfig.tools to inject custom tools.
+ */
+export interface ToolHandler {
+  definition: ToolDefinition;
+  execute: (args: Record<string, unknown>) => Promise<string>;
+}
+
+export const BUILTIN_TOOLS: ToolDefinition[] = [
   {
     type: "function",
     function: {
@@ -117,6 +126,17 @@ export interface StepExecutorConfig {
     | { adapter: LLMAdapterLike; model?: string; temperature?: number; maxTokens?: number }
     | undefined;
   onEvent?: (event: "llm_request" | "llm_response" | "consensus_vote" | "consensus_result", data: unknown) => Promise<void> | void;
+  /**
+   * Custom tool handlers to inject into the executor.
+   * By default, built-in tools (file_write, file_read, file_list) are merged with these.
+   * Use disableBuiltinTools to suppress the built-ins entirely.
+   */
+  tools?: ToolHandler[];
+  /**
+   * When true, only the custom tools provided via `tools` are available.
+   * Built-in file tools are disabled.
+   */
+  disableBuiltinTools?: boolean;
 }
 
 function normalizeAgentInfo(factory?: AgentFactory): { role?: string; description?: string } {
@@ -138,12 +158,85 @@ function parseVote(text: string): "APPROVE" | "REJECT" | "REQUEST_CHANGES" {
   return "REQUEST_CHANGES";
 }
 
+/**
+ * Build a Map of name → ToolHandler for the builtin file tools.
+ * Kept as a factory so each StepExecutor gets its own bound handlers.
+ */
+function createBuiltinToolHandlers(resolveProjectPath: (path: string, opts?: { allowNonExistentTarget?: boolean }) => string): Map<string, ToolHandler> {
+  const handlers = new Map<string, ToolHandler>();
+
+  handlers.set("file_write", {
+    definition: BUILTIN_TOOLS[0]!,
+    execute: async (args) => {
+      if (typeof args.path !== "string" || typeof args.content !== "string") {
+        return "Error: file_write requires string path and content";
+      }
+      const filePath = resolveProjectPath(args.path, { allowNonExistentTarget: true });
+      await mkdir(dirname(filePath), { recursive: true });
+      await writeFile(filePath, args.content, "utf-8");
+      return `Written: ${args.path}`;
+    },
+  });
+
+  handlers.set("file_read", {
+    definition: BUILTIN_TOOLS[1]!,
+    execute: async (args) => {
+      if (typeof args.path !== "string") {
+        return "Error: file_read requires string path";
+      }
+      const filePath = resolveProjectPath(args.path);
+      return await readFile(filePath, "utf-8");
+    },
+  });
+
+  handlers.set("file_list", {
+    definition: BUILTIN_TOOLS[2]!,
+    execute: async (args) => {
+      if (typeof args.path !== "string") {
+        return "Error: file_list requires string path";
+      }
+      const dirPath = resolveProjectPath(args.path);
+      const entries = await readdir(dirPath, { withFileTypes: true });
+      return entries.map((entry) => `${entry.isDirectory() ? "d" : "f"} ${entry.name}`).join("\n");
+    },
+  });
+
+  return handlers;
+}
+
 export class StepExecutor {
+  private readonly toolRegistry: Map<string, ToolHandler>;
+
   constructor(
     private readonly llmAdapter: LLMAdapterLike,
     private readonly agents: Map<string, AgentFactory>,
     private readonly config: StepExecutorConfig = {},
-  ) {}
+  ) {
+    this.toolRegistry = this.buildToolRegistry();
+  }
+
+  private buildToolRegistry(): Map<string, ToolHandler> {
+    const registry = new Map<string, ToolHandler>();
+
+    if (!this.config.disableBuiltinTools) {
+      const builtins = createBuiltinToolHandlers(this.resolveProjectPath.bind(this));
+      for (const [name, handler] of builtins) {
+        registry.set(name, handler);
+      }
+    }
+
+    if (this.config.tools) {
+      for (const handler of this.config.tools) {
+        registry.set(handler.definition.function.name, handler);
+      }
+    }
+
+    return registry;
+  }
+
+  private getActiveToolDefinitions(): ToolDefinition[] {
+    return Array.from(this.toolRegistry.values()).map((h) => h.definition);
+  }
 
   async executeStep(step: WorkflowStep, context: StepContext): Promise<StepResult> {
     if (step.pattern === "consensus" || step.pattern === "peer-review") {
@@ -233,6 +326,8 @@ export class StepExecutor {
     const resolved = await this.config.resolveAgentLLM?.(agentName ?? step.agent);
     const adapter = resolved?.adapter ?? this.llmAdapter;
 
+    const activeTools = this.getActiveToolDefinitions();
+
     const startedAt = Date.now();
     try {
       let response: Awaited<ReturnType<LLMAdapterLike["chatCompletion"]>> | undefined;
@@ -242,7 +337,7 @@ export class StepExecutor {
           temperature: resolved?.temperature ?? this.config.temperature,
           maxTokens: resolved?.maxTokens ?? this.config.maxTokens,
           messages,
-          tools: BUILTIN_TOOLS,
+          tools: activeTools,
           toolChoice: "auto",
           ...(requestSignal?.signal ? { signal: requestSignal.signal } : {}),
         });
@@ -285,36 +380,14 @@ export class StepExecutor {
 
   private async executeToolCall(toolCall: ToolCall): Promise<string> {
     const args = this.parseToolArgs(toolCall.function.arguments);
+    const handler = this.toolRegistry.get(toolCall.function.name);
+
+    if (!handler) {
+      return `Error: Unsupported tool '${toolCall.function.name}'`;
+    }
 
     try {
-      switch (toolCall.function.name) {
-        case "file_write": {
-          if (typeof args.path !== "string" || typeof args.content !== "string") {
-            return "Error: file_write requires string path and content";
-          }
-          const filePath = this.resolveProjectPath(args.path, { allowNonExistentTarget: true });
-          await mkdir(dirname(filePath), { recursive: true });
-          await writeFile(filePath, args.content, "utf-8");
-          return `Written: ${args.path}`;
-        }
-        case "file_read": {
-          if (typeof args.path !== "string") {
-            return "Error: file_read requires string path";
-          }
-          const filePath = this.resolveProjectPath(args.path);
-          return await readFile(filePath, "utf-8");
-        }
-        case "file_list": {
-          if (typeof args.path !== "string") {
-            return "Error: file_list requires string path";
-          }
-          const dirPath = this.resolveProjectPath(args.path);
-          const entries = await readdir(dirPath, { withFileTypes: true });
-          return entries.map((entry) => `${entry.isDirectory() ? "d" : "f"} ${entry.name}`).join("\n");
-        }
-        default:
-          return `Error: Unsupported tool '${toolCall.function.name}'`;
-      }
+      return await handler.execute(args);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return `Error: ${message}`;

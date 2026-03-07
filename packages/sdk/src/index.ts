@@ -68,7 +68,8 @@ export type {
 export type { AddStepOptions, OnFailConfig, WorkflowDef, WorkflowStep } from "./workflow.js";
 export type { LLMConfig } from "./llm-config.js";
 export type { OboraConfig, ResolvedProviderConfig, ModelPricing } from "./config-loader.js";
-export type { StepContext, StepExecutorConfig, StepResult, LLMAdapterLike } from "./step-executor.js";
+export type { StepContext, StepExecutorConfig, StepResult, LLMAdapterLike, ToolHandler as StepToolHandler } from "./step-executor.js";
+export { BUILTIN_TOOLS } from "./step-executor.js";
 export type {
   StepHandler,
   ToolContext,
