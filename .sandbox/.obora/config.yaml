@@ -1,0 +1,28 @@
+# Sandbox-wide configuration
+# All tests use ZAI GLM-4.7 for cost efficiency
+
+defaults:
+  provider: zai
+  model: glm-4.7
+  temperature: 0.3
+  timeout: 120
+
+providers:
+  zai:
+    authMode: token
+    authRef: env:ZAI_API_KEY
+    defaultModel: glm-4.7
+
+# Common agents used across tests
+agents:
+  assistant:
+    role: Assistant
+    temperature: 0.3
+
+  reviewer:
+    role: Reviewer
+    temperature: 0.2
+
+  creative:
+    role: Creative Agent
+    temperature: 0.8

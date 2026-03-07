@@ -1,7 +1,8 @@
 # Sandbox gitignore - ignore generated files
 
-# Obora runtime files
-.obora/
+# Obora runtime files (except config)
+.obora/*
+!.obora/config.yaml
 
 # Generated outputs
 output/

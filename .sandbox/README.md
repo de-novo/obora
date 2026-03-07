@@ -4,22 +4,24 @@
 
 ## 글로벌 설정
 
-테스트들은 `~/.obora/config.yaml`의 글로벌 설정을 기본으로 사용합니다.
+샌드박스는 **zai/glm-4.7**을 기본으로 사용합니다 (비용 효율성).
 
 ```yaml
-# ~/.obora/config.yaml 예시
+# .sandbox/.obora/config.yaml
 defaults:
-  provider: anthropic
-  model: claude-opus-4-6
-  temperature: 0.2
+  provider: zai
+  model: glm-4.7
+  temperature: 0.3
 
 providers:
-  anthropic:
+  zai:
     authMode: token
-    authRef: env:ANTHROPIC_API_KEY
+    authRef: env:ZAI_API_KEY
 ```
 
-각 테스트 케이스의 `agents.yaml`은 글로벌 기본값을 상속받아 필요한 속성만 오버라이드합니다.
+각 테스트 케이스의 `agents.yaml`은 이 기본값을 상속받아 필요한 속성만 오버라이드합니다.
+
+> **참고**: `~/.obora/config.yaml` 글로벌 설정이 있어도 샌드박스 내의 `.obora/config.yaml`이 우선합니다.
 
 ## 테스트 케이스
 
@@ -73,9 +75,11 @@ providers:
 
 3. **API 키 환경변수**
    ```bash
-   export ANTHROPIC_API_KEY="your-key"  # 글로벌 기본값용
-   export ZAI_API_KEY="your-key"        # 08-multi-provider용 (선택)
-   export OPENAI_API_KEY="your-key"     # 08-multi-provider용 (선택)
+   # 필수 - 샌드박스 테스트용
+   export ZAI_API_KEY="your-zai-api-key"
+   
+   # 선택 - 08-multi-provider 테스트용
+   export OPENAI_API_KEY="your-openai-api-key"
    ```
 
 ## 디렉토리 구조
