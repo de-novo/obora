@@ -1,6 +1,21 @@
 /**
  * StepExecutor — bridges workflow Step to BaseAgent.execute()
+ *
+ * Re-exports the SDK's StepExecutor class so CLI consumers have a single
+ * import path for both the LLM-direct executor and the agent-based runner.
  */
+
+// Re-export SDK StepExecutor and related types
+export {
+  StepExecutor,
+  BUILTIN_TOOLS,
+} from "@obora/sdk";
+export type {
+  StepToolHandler as ToolHandler,
+  StepContext,
+  StepExecutorConfig,
+  LLMAdapterLike,
+} from "@obora/sdk";
 
 import { OboraError, type ErrorCode } from "@obora/runtime";
 import type { Step } from "@obora/runtime";
