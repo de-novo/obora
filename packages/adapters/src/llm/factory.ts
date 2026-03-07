@@ -92,7 +92,7 @@ const PROVIDER_DEFINITIONS: Record<LLMProvider, ProviderDefinition> = {
     envApiKey: "ZAI_API_KEY",
     envBaseUrl: "ZAI_BASE_URL",
     defaultBaseUrl: "https://api.z.ai/v1",
-    defaultModel: "glm-4.6",
+    defaultModel: "glm-4.7",
     provider: "zai",
   },
   "amazon-bedrock": {
