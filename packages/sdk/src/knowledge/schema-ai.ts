@@ -10,6 +10,7 @@ export function normalizeTag(tag: string): string {
   const parts = tag.split(".").map((p) => p.trim()).filter(Boolean);
   if (parts.length === 0) return tag;
   const [domain, ...rest] = parts;
+  if (domain === undefined) return tag;
   const normalizedDomain = domain.length > 0 ? domain[0]!.toUpperCase() + domain.slice(1).toLowerCase() : domain;
   const normalizedRest = rest.map((p) => p.toLowerCase());
   return [normalizedDomain, ...normalizedRest].join(".");

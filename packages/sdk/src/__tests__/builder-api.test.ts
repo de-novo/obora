@@ -91,7 +91,7 @@ describe("builder API", () => {
       })
       .toDefinition();
 
-    expect(workflow.steps[1].on_fail).toEqual({
+    expect(workflow.steps[1]!.on_fail).toEqual({
       goto: "implement",
       max_iterations: 3,
       escalate_on_exhaust: "human",
@@ -118,8 +118,8 @@ describe("builder API", () => {
       })
       .toDefinition();
 
-    expect(workflow.steps[1].on_fail?.max_cost_escalation).toBeNull();
-    expect(workflow.steps[1].on_fail?.escalate_on_exhaust).toBe("dlq");
+    expect(workflow.steps[1]!.on_fail?.max_cost_escalation).toBeNull();
+    expect(workflow.steps[1]!.on_fail?.escalate_on_exhaust).toBe("dlq");
   });
 
   it("Policy.fromYaml loads policy from YAML", async () => {
@@ -129,7 +129,7 @@ describe("builder API", () => {
 
     const policy = await Policy.fromYaml(path);
     expect(policy.version).toBe("v1");
-    expect(policy.tools?.web_search.allowed).toBe(true);
+    expect(policy.tools?.web_search?.allowed).toBe(true);
   });
 
   it("Agent subclass can be instantiated and execute", async () => {

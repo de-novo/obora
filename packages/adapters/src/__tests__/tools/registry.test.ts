@@ -178,8 +178,8 @@ describe("ToolRegistry", () => {
       });
       const defs = registry.toToolDefinitions();
       expect(defs).toHaveLength(1);
-      expect(defs[0].type).toBe("function");
-      expect(defs[0].function.name).toBe("test");
+      expect(defs[0]!.type).toBe("function");
+      expect(defs[0]!.function.name).toBe("test");
     });
   });
 

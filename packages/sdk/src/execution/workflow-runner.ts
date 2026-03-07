@@ -650,7 +650,7 @@ export class WorkflowRunner {
       await adapter.saveRun({
         id: executionId,
         workflowName,
-        status: execution.status as string,
+        status: execution.status as "completed" | "failed" | "running" | "suspended",
         input: { value: execution.input ?? null },
         startedAt: execution.startedAt.toISOString(),
         completedAt: execution.endedAt?.toISOString(),

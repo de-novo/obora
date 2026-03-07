@@ -586,8 +586,10 @@ export class StepExecutor {
     }
 
     if (activeSignals.length === 1) {
+      const signal = activeSignals[0];
+      if (signal === undefined) return undefined;
       return {
-        signal: activeSignals[0],
+        signal,
         cleanup: () => undefined,
       };
     }

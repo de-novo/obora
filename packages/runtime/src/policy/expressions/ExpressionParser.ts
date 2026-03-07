@@ -103,6 +103,7 @@ class Tokenizer {
       }
 
       const char = this.input[this.index];
+      if (char === undefined) break;
       const next = this.input[this.index + 1] ?? "";
 
       if (char === "(") {
@@ -171,7 +172,7 @@ class Tokenizer {
   }
 
   private skipWhitespace(): void {
-    while (this.index < this.input.length && /\s/.test(this.input[this.index])) {
+    while (this.index < this.input.length && /\s/.test(this.input[this.index] ?? "")) {
       this.index += 1;
     }
   }
@@ -183,6 +184,7 @@ class Tokenizer {
 
     while (this.index < this.input.length) {
       const ch = this.input[this.index];
+      if (ch === undefined) break;
       if (ch === "\\") {
         const escaped = this.input[this.index + 1];
         if (escaped === undefined) {
@@ -205,7 +207,7 @@ class Tokenizer {
 
   private readNumber(): Token {
     const start = this.index;
-    while (this.index < this.input.length && /[0-9.]/.test(this.input[this.index])) {
+    while (this.index < this.input.length && /[0-9.]/.test(this.input[this.index] ?? "")) {
       this.index += 1;
     }
 
@@ -219,7 +221,7 @@ class Tokenizer {
 
   private readIdentifier(): Token {
     const start = this.index;
-    while (this.index < this.input.length && /[A-Za-z0-9_.]/.test(this.input[this.index])) {
+    while (this.index < this.input.length && /[A-Za-z0-9_.]/.test(this.input[this.index] ?? "")) {
       this.index += 1;
     }
 
@@ -428,7 +430,8 @@ class Parser {
   private parseFieldRef(identifier: string, index: number): FieldRefExpression {
     const path = identifier.split(".");
 
-    if (path.length === 0 || !ALLOWED_EXPRESSION_ROOTS.has(path[0])) {
+    const root = path[0];
+    if (path.length === 0 || root === undefined || !ALLOWED_EXPRESSION_ROOTS.has(root)) {
       throw new ExpressionParseError(
         `Field reference '${identifier}' must start with action/context/state/step/execution/actor/metrics/previousResults at ${index}`,
       );
@@ -469,7 +472,11 @@ class Parser {
   }
 
   private peek(): Token {
-    return this.tokens[this.index] ?? this.tokens[this.tokens.length - 1];
+    const token = this.tokens[this.index] ?? this.tokens[this.tokens.length - 1];
+    if (token === undefined) {
+      throw new ExpressionParseError("Unexpected end of expression");
+    }
+    return token;
   }
 }
 

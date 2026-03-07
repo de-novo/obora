@@ -17,7 +17,8 @@ export const PLUGIN_TYPE_ALIASES: Record<string, PluginType> = {
 
 export function resolvePluginType(typeOrAlias: string): PluginType {
   if (typeOrAlias in PLUGIN_TYPE_ALIASES) {
-    return PLUGIN_TYPE_ALIASES[typeOrAlias];
+    const alias = PLUGIN_TYPE_ALIASES[typeOrAlias];
+    if (alias !== undefined) return alias;
   }
 
   if (PLUGIN_TYPES.includes(typeOrAlias as PluginType)) {

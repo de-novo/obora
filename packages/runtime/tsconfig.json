@@ -10,7 +10,8 @@
     "rootDir": "./src",
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "noImplicitOverride": false
+    "noImplicitOverride": false,
+    "noUncheckedIndexedAccess": false
   },
   "include": ["src/**/*"],
   "exclude": [

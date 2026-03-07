@@ -33,7 +33,7 @@ describeE2E("LLM Adapter E2E (zai/glm-4.7)", () => {
           { role: "system", content: "You are a helpful assistant. Reply concisely." },
           { role: "user", content: "What is 2 + 2? Reply with just the number." },
         ],
-        model: config.model,
+        model: config!.model,
         temperature: 0,
         maxTokens: 50,
       });
@@ -52,7 +52,7 @@ describeE2E("LLM Adapter E2E (zai/glm-4.7)", () => {
         messages: [
           { role: "user", content: "Write a very long essay about the history of computing." },
         ],
-        model: config.model,
+        model: config!.model,
         temperature: 0,
         maxTokens: 20,
       });
@@ -70,7 +70,7 @@ describeE2E("LLM Adapter E2E (zai/glm-4.7)", () => {
           { role: "assistant", content: "Hello Alice!" },
           { role: "user", content: "What is my name? Reply with just the name." },
         ],
-        model: config.model,
+        model: config!.model,
         temperature: 0,
         maxTokens: 50,
       });
@@ -89,7 +89,7 @@ describeE2E("LLM Adapter E2E (zai/glm-4.7)", () => {
           messages: [
             { role: "user", content: "Count from 1 to 5 separated by commas." },
           ],
-          model: config.model,
+          model: config!.model,
           temperature: 0,
           maxTokens: 50,
         },
@@ -119,7 +119,7 @@ describeE2E("LLM Adapter E2E (zai/glm-4.7)", () => {
             content: "Get the current weather in Seoul. You must call the get_weather tool.",
           },
         ],
-        model: config.model,
+        model: config!.model,
         temperature: 0,
         maxTokens: 200,
         tools: [
@@ -169,7 +169,7 @@ describeE2E("LLM Adapter E2E (zai/glm-4.7)", () => {
         adapter.chatCompletion(
           {
             messages: [{ role: "user", content: "Hello" }],
-            model: config.model,
+            model: config!.model,
           },
           { signal: controller.signal },
         ),

@@ -131,6 +131,9 @@ export class LocalFileArtifactStore implements ArtifactStore {
     }
 
     const [segment] = parts;
+    if (segment === undefined) {
+      throw new Error(`Invalid artifact ${field}: empty path segment`);
+    }
     if (!options.allowDots && segment.includes(".")) {
       throw new Error(`Invalid artifact ${field}: dots are not allowed`);
     }

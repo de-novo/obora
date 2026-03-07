@@ -11,7 +11,7 @@ describe("M3-04 Error/Event API alignment", () => {
     await (runtime as any).emitEvent("step_start", "exec-1", { stepName: "draft" });
 
     expect(handler).toHaveBeenCalledTimes(1);
-    expect(handler.mock.calls[0][0].type).toBe("step_start");
+    expect(handler.mock.calls[0]![0]!.type).toBe("step_start");
   });
 
   it('supports policy catalog events like on("policy_deny")', async () => {
@@ -22,7 +22,7 @@ describe("M3-04 Error/Event API alignment", () => {
     await (runtime as any).emitEvent("policy_deny", "exec-2", { reason: "blocked" });
 
     expect(handler).toHaveBeenCalledTimes(1);
-    expect(handler.mock.calls[0][0].type).toBe("policy_deny");
+    expect(handler.mock.calls[0]![0]!.type).toBe("policy_deny");
   });
 
   it("supports events() async iterator with filtering", async () => {
@@ -69,7 +69,7 @@ describe("M3-04 Error/Event API alignment", () => {
     );
 
     expect(sink).toHaveBeenCalledTimes(1);
-    const event = sink.mock.calls[0][0];
+    const event = sink.mock.calls[0]![0]!;
     expect(event.metadata).toEqual({
       model: "gpt-5",
       tokens: 123,

@@ -55,7 +55,7 @@ describe("MockLLMAdapter", () => {
 
     it("should call response function", async () => {
       const responseFn = vi.fn((params: ChatCompletionParams) => {
-        return `Response to: ${params.messages[0].content}`;
+        return `Response to: ${params.messages[0]!.content}`;
       });
       adapter.setResponse("Test", responseFn);
       const params: ChatCompletionParams = {
@@ -124,7 +124,7 @@ describe("MockLLMAdapter", () => {
   describe("setResponse", () => {
     it("should set custom response", () => {
       adapter.setResponse("key", "value");
-      adapter.setResponse("key2", (params) => `custom: ${params.messages[0].content}`);
+      adapter.setResponse("key2", (params) => `custom: ${params.messages[0]!.content}`);
 
       expect(() => adapter.setResponse("key", "value")).not.toThrow();
     });

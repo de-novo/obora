@@ -46,10 +46,10 @@ describe("ToolExecutor", () => {
       { id: "1", result: '{"ok":true}' },
       { id: "2", result: "", error: "Boom" },
     ]);
-    expect(messages[0].role).toBe("tool");
-    expect(messages[0].toolCallId).toBe("1");
-    expect(messages[0].content).toBe('{"ok":true}');
-    expect(messages[1].content).toBe("Error: Boom");
+    expect(messages[0]!.role).toBe("tool");
+    expect(messages[0]!.toolCallId).toBe("1");
+    expect(messages[0]!.content).toBe('{"ok":true}');
+    expect(messages[1]!.content).toBe("Error: Boom");
   });
 
   it("should handle multiple function calls", async () => {
@@ -71,8 +71,8 @@ describe("ToolExecutor", () => {
       context
     );
     expect(responses).toHaveLength(2);
-    expect(responses[0].result).toBe(JSON.stringify({ a: 1 }));
-    expect(responses[1].result).toBe(JSON.stringify({ b: 2 }));
+    expect(responses[0]!.result).toBe(JSON.stringify({ a: 1 }));
+    expect(responses[1]!.result).toBe(JSON.stringify({ b: 2 }));
   });
 
   it("should handle tool that returns undefined", async () => {
@@ -127,10 +127,10 @@ describe("ToolExecutionChain", () => {
     const results = await chain.then("greet", {}).then("echo", {}).execute(context);
 
     expect(results).toHaveLength(2);
-    expect(results[0].success).toBe(true);
-    expect(results[0].data).toEqual({ message: "hello" });
-    expect(results[1].success).toBe(true);
-    expect(results[1].data).toBe("plain text");
+    expect(results[0]!.success).toBe(true);
+    expect(results[0]!.data).toEqual({ message: "hello" });
+    expect(results[1]!.success).toBe(true);
+    expect(results[1]!.data).toBe("plain text");
   });
 
   it("should handle empty result string", async () => {
@@ -150,8 +150,8 @@ describe("ToolExecutionChain", () => {
     const results = await chain.then("empty", {}).execute(context);
 
     expect(results).toHaveLength(1);
-    expect(results[0].success).toBe(true);
-    expect(results[0].data).toBe("");
+    expect(results[0]!.success).toBe(true);
+    expect(results[0]!.data).toBe("");
   });
 
   it("should handle tool that returns null", async () => {
@@ -171,7 +171,7 @@ describe("ToolExecutionChain", () => {
     const results = await chain.then("null_tool", {}).execute(context);
 
     expect(results).toHaveLength(1);
-    expect(results[0].success).toBe(true);
-    expect(results[0].data).toBe(null);
+    expect(results[0]!.success).toBe(true);
+    expect(results[0]!.data).toBe(null);
   });
 });

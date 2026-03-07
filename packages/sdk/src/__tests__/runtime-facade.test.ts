@@ -328,8 +328,8 @@ describe("OboraRuntime facade", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(errors).toHaveLength(1);
-    expect(errors[0]).toBeInstanceOf(OboraError);
-    expect(errors[0].code).toBe(OboraErrorCode.SDK_EXECUTION_CANCELLED);
+    expect(errors[0]!).toBeInstanceOf(OboraError);
+    expect(errors[0]!.code).toBe(OboraErrorCode.SDK_EXECUTION_CANCELLED);
   });
 
   it("throws OboraError for unknown workflows", async () => {

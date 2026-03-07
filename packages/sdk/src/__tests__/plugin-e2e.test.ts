@@ -148,7 +148,7 @@ describe("PluginManager E2E", () => {
 
     const policies = manager.getByType("policy");
     expect(policies).toHaveLength(1);
-    expect(policies[0].descriptor.metadata.type).toBe("policy-rule");
+    expect(policies[0]!.descriptor.metadata.type).toBe("policy-rule");
   });
 
   it("unregister E2E", async () => {
