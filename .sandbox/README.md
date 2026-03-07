@@ -135,8 +135,8 @@ providers:
 
 ### 08-multi-provider
 여러 LLM 프로바이더:
-- ZAI GLM-4.7
-- OpenAI GPT-4o-mini
+- ZAI GLM-4.7 (`global:zai` 또는 `ZAI_API_KEY`)
+- OpenAI GPT-4o-mini (`global:openai` 또는 `OPENAI_API_KEY`)
 
 ## 결과 확인
 

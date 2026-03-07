@@ -13,6 +13,11 @@ providers:
     authRef: global:zai
     defaultModel: glm-4.7
 
+  openai:
+    authMode: token
+    authRef: global:openai
+    defaultModel: gpt-4o-mini
+
 # Common agents used across tests
 agents:
   assistant:
