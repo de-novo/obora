@@ -1,5 +1,6 @@
 # Agents for multi-provider-test
-# Note: Requires both ZAI_API_KEY and OPENAI_API_KEY
+# Demonstrates using different providers in same workflow
+# Requires both ZAI_API_KEY and OPENAI_API_KEY in environment
 
 agents:
   zai_agent:
@@ -19,6 +20,4 @@ agents:
   comparer:
     role: Comparer
     description: Compares responses
-    provider: zai
-    model: glm-4.7
-    temperature: 0
+    # Uses global default

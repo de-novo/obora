@@ -2,6 +2,25 @@
 
 다양한 워크플로우 시나리오를 테스트하기 위한 샌드박스입니다.
 
+## 글로벌 설정
+
+테스트들은 `~/.obora/config.yaml`의 글로벌 설정을 기본으로 사용합니다.
+
+```yaml
+# ~/.obora/config.yaml 예시
+defaults:
+  provider: anthropic
+  model: claude-opus-4-6
+  temperature: 0.2
+
+providers:
+  anthropic:
+    authMode: token
+    authRef: env:ANTHROPIC_API_KEY
+```
+
+각 테스트 케이스의 `agents.yaml`은 글로벌 기본값을 상속받아 필요한 속성만 오버라이드합니다.
+
 ## 테스트 케이스
 
 | # | 이름 | 설명 | 실행 |
@@ -33,10 +52,30 @@
    npm install -g @obora/cli
    ```
 
-2. **API 키 설정**
+2. **글로벌 설정** (`~/.obora/config.yaml`)
    ```bash
-   export ZAI_API_KEY="your-zai-api-key"
-   export OPENAI_API_KEY="your-openai-api-key"  # multi-provider 테스트용
+   # 글로벌 설정 확인
+   obora config list --global
+
+   # 또는 직접 생성
+   mkdir -p ~/.obora
+   cat > ~/.obora/config.yaml << EOF
+   defaults:
+     provider: anthropic
+     model: claude-opus-4-6
+
+   providers:
+     anthropic:
+       authMode: token
+       authRef: env:ANTHROPIC_API_KEY
+   EOF
+   ```
+
+3. **API 키 환경변수**
+   ```bash
+   export ANTHROPIC_API_KEY="your-key"  # 글로벌 기본값용
+   export ZAI_API_KEY="your-key"        # 08-multi-provider용 (선택)
+   export OPENAI_API_KEY="your-key"     # 08-multi-provider용 (선택)
    ```
 
 ## 디렉토리 구조

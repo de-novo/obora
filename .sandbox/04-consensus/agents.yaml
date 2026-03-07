@@ -1,37 +1,23 @@
 # Agents for consensus-test
+# Uses global config defaults (~/.obora/config.yaml)
+# Also uses pre-defined reviewer agents from global config
 
 agents:
   proposer:
     role: Name Proposer
     description: Proposes creative names
-    provider: zai
-    model: glm-4.7
     temperature: 0.8
 
+  # Uses reviewers from global config
   reviewer1:
-    role: Brand Reviewer
-    description: Reviews for brand alignment
-    provider: zai
-    model: glm-4.7
-    temperature: 0.3
+    ref: reviewer-1
 
   reviewer2:
-    role: UX Reviewer
-    description: Reviews for user experience
-    provider: zai
-    model: glm-4.7
-    temperature: 0.3
+    ref: reviewer-2
 
   reviewer3:
-    role: Legal Reviewer
-    description: Reviews for trademark issues
-    provider: zai
-    model: glm-4.7
-    temperature: 0.3
+    ref: reviewer-3
 
   decider:
     role: Final Decider
     description: Makes final announcements
-    provider: zai
-    model: glm-4.7
-    temperature: 0

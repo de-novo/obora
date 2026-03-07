@@ -1,23 +1,18 @@
 # Agents for linear-pipeline
+# Uses global config defaults (~/.obora/config.yaml)
 
 agents:
   creative:
     role: Creative Director
     description: Generates creative ideas
-    provider: zai
-    model: glm-4.7
     temperature: 0.9
 
   critic:
     role: Brand Critic
     description: Evaluates and critiques ideas
-    provider: zai
-    model: glm-4.7
     temperature: 0.3
 
   manager:
     role: Project Manager
     description: Makes final decisions
-    provider: zai
-    model: glm-4.7
     temperature: 0

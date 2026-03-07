@@ -1,9 +1,8 @@
 # Agents for hello-world
+# Uses global config defaults (~/.obora/config.yaml)
 
 agents:
   assistant:
     role: Friendly Assistant
     description: A simple greeting assistant
-    provider: zai
-    model: glm-4.7
-    temperature: 0
+    # Inherits provider/model from global config defaults

@@ -8,10 +8,11 @@ echo "  Obora Sandbox Test Suite"
 echo "======================================"
 echo ""
 
-# Check for API key
-if [ -z "$ZAI_API_KEY" ]; then
-    echo "⚠️  WARNING: ZAI_API_KEY not set"
-    echo "   Some tests will fail without an API key"
+# Check for global config
+GLOBAL_CONFIG="$HOME/.obora/config.yaml"
+if [ ! -f "$GLOBAL_CONFIG" ]; then
+    echo "⚠️  WARNING: Global config not found at $GLOBAL_CONFIG"
+    echo "   Run: obora config init --global"
     echo ""
 fi
 

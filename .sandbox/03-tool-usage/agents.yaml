@@ -1,16 +1,11 @@
 # Agents for tool-usage
+# Uses global config defaults (~/.obora/config.yaml)
 
 agents:
   writer:
     role: File Writer
     description: Creates and writes files
-    provider: zai
-    model: glm-4.7
-    temperature: 0
 
   reader:
     role: File Reader
     description: Reads and lists files
-    provider: zai
-    model: glm-4.7
-    temperature: 0
