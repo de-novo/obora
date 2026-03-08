@@ -84,6 +84,15 @@ export async function fetchHistoryArtifactPreview(
   return parseJsonOrThrow<ArtifactPreviewResponse>(response);
 }
 
+export function getHistoryArtifactRawUrl(
+  runId: string,
+  artifactId: string,
+  options?: { download?: boolean },
+): string {
+  const query = options?.download ? '?download=1' : '';
+  return `${HISTORY_API_BASE}/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(artifactId)}/raw${query}`;
+}
+
 export async function resumeHistoryRun(runId: string): Promise<{ ok: true }> {
   const response = await fetch(`${HISTORY_API_BASE}/runs/${encodeURIComponent(runId)}/resume`, {
     method: 'POST',

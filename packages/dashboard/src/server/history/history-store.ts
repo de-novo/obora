@@ -19,6 +19,7 @@ export type ListRunsResult = HistoryRunsResponse;
 export interface HistoryStore {
   listRuns(query: HistoryRunsQuery): Promise<ListRunsResult>;
   getRunDetail(runId: string, options?: { auditLimit?: number; auditOffset?: number }): Promise<RunDetailResponse | null>;
+  getArtifact(runId: string, artifactId: string): Promise<ArtifactRecord | null>;
   getArtifactPreview(runId: string, artifactId: string): Promise<ArtifactPreviewResponse | null>;
   resumeRun(runId: string): Promise<{ ok: true } | { ok: false; reason: string }>;
 }
@@ -156,9 +157,13 @@ export class AdapterHistoryStore implements HistoryStore {
     };
   }
 
-  async getArtifactPreview(runId: string, artifactId: string): Promise<ArtifactPreviewResponse | null> {
+  async getArtifact(runId: string, artifactId: string): Promise<ArtifactRecord | null> {
     const artifacts = await this.adapter.getArtifacts(runId);
-    const artifact = artifacts.find((item) => item.id === artifactId);
+    return artifacts.find((item) => item.id === artifactId) ?? null;
+  }
+
+  async getArtifactPreview(runId: string, artifactId: string): Promise<ArtifactPreviewResponse | null> {
+    const artifact = await this.getArtifact(runId, artifactId);
     if (!artifact) return null;
     if (!isPreviewableArtifact(artifact)) {
       return buildUnsupportedPreview(artifact, 'Preview is only supported for text-like artifacts');
@@ -309,10 +314,14 @@ export class InMemoryHistoryStore implements HistoryStore {
     };
   }
 
-  async getArtifactPreview(runId: string, artifactId: string): Promise<ArtifactPreviewResponse | null> {
+  async getArtifact(runId: string, artifactId: string): Promise<ArtifactRecord | null> {
     const run = this.runs.get(runId);
     if (!run) return null;
-    const artifact = (this.artifacts.get(runId) ?? []).find((item) => item.id === artifactId);
+    return structuredClone((this.artifacts.get(runId) ?? []).find((item) => item.id === artifactId) ?? null);
+  }
+
+  async getArtifactPreview(runId: string, artifactId: string): Promise<ArtifactPreviewResponse | null> {
+    const artifact = await this.getArtifact(runId, artifactId);
     if (!artifact) return null;
     if (!isPreviewableArtifact(artifact)) {
       return buildUnsupportedPreview(structuredClone(artifact), 'Preview is only supported for text-like artifacts');

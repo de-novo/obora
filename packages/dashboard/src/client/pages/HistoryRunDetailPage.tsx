@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   fetchHistoryArtifactPreview,
   fetchHistoryRunDetail,
+  getHistoryArtifactRawUrl,
   resumeHistoryRun,
   type ArtifactPreviewResponse,
   type ArtifactRecord,
@@ -290,6 +291,12 @@ export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
                   <button type="button" onClick={() => void openArtifactPreview(artifact)} style={{ fontSize: '12px', cursor: 'pointer' }}>
                     {artifactPreviewLoadingId === artifact.id ? 'Loading preview…' : 'Preview'}
                   </button>
+                  <a href={getHistoryArtifactRawUrl(run.id, artifact.id)} target="_blank" rel="noreferrer" style={{ fontSize: '12px' }}>
+                    Open raw
+                  </a>
+                  <a href={getHistoryArtifactRawUrl(run.id, artifact.id, { download: true })} style={{ fontSize: '12px' }}>
+                    Download
+                  </a>
                   <span style={{ fontSize: '12px', color: '#6b7280', wordBreak: 'break-all' }}>
                     storage: {artifact.storageRef}
                   </span>
@@ -361,9 +368,17 @@ export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
                   {artifactPreview.artifact.stepName} · {artifactPreview.artifact.mimeType} · {artifactPreview.artifact.sizeBytes} bytes
                 </p>
               </div>
-              <button type="button" onClick={() => setArtifactPreview(null)} style={{ cursor: 'pointer' }}>
-                Close
-              </button>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <a href={getHistoryArtifactRawUrl(run.id, artifactPreview.artifact.id)} target="_blank" rel="noreferrer" style={{ fontSize: '12px' }}>
+                  Open raw
+                </a>
+                <a href={getHistoryArtifactRawUrl(run.id, artifactPreview.artifact.id, { download: true })} style={{ fontSize: '12px' }}>
+                  Download
+                </a>
+                <button type="button" onClick={() => setArtifactPreview(null)} style={{ cursor: 'pointer' }}>
+                  Close
+                </button>
+              </div>
             </div>
 
             {artifactPreview.supported ? (

@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+
 import type { FastifyInstance, FastifyReply } from 'fastify';
 
 import type { ApiErrorPayload } from '../types.js';
@@ -95,6 +97,29 @@ export const registerHistoryRoutes = (app: FastifyInstance, apiBasePath: string,
       return reply.code(404).send({ code: 'DASH_7004', message: 'Artifact not found' } satisfies ApiErrorPayload);
     }
     return reply.send(result);
+  });
+
+  app.get<{ Params: { runId: string; artifactId: string }; Querystring: { download?: string } }>(`${apiBasePath}/history/runs/:runId/artifacts/:artifactId/raw`, async (request, reply) => {
+    const artifact = await store.getArtifact(request.params.runId, request.params.artifactId);
+    if (!artifact) {
+      return reply.code(404).send({ code: 'DASH_7004', message: 'Artifact not found' } satisfies ApiErrorPayload);
+    }
+
+    try {
+      const data = await readFile(artifact.storageRef);
+      reply.header('content-type', artifact.mimeType || 'application/octet-stream');
+      if (request.query.download === '1') {
+        reply.header('content-disposition', `attachment; filename="${artifact.name}"`);
+      } else {
+        reply.header('content-disposition', `inline; filename="${artifact.name}"`);
+      }
+      return reply.send(data);
+    } catch (error) {
+      return reply.code(404).send({
+        code: 'DASH_7005',
+        message: error instanceof Error ? `Artifact read failed: ${error.message}` : 'Artifact read failed',
+      } satisfies ApiErrorPayload);
+    }
   });
 
   app.get<{ Params: { runId: string }; Querystring: DetailQuery }>(`${apiBasePath}/history/runs/:runId`, async (request, reply) => {
