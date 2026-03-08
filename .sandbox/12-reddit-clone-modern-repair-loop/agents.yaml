@@ -1,0 +1,19 @@
+# Agents for reddit-clone-modern-repair-loop sandbox
+# Uses sandbox config defaults (.sandbox/.obora/config.yaml)
+
+agents:
+  researcher:
+    role: Frontend Stack Researcher
+    description: Uses live references to verify the current React/TypeScript/Vite ecosystem before generation
+
+  architect:
+    role: Frontend Architect
+    description: Designs a realistic and maintainable modern SPA structure based on verified references
+
+  builder:
+    role: Senior Frontend Engineer
+    description: Generates and repairs a modern React+TypeScript+Vite app using file tools and validation feedback
+
+  reviewer:
+    role: Technical Reviewer
+    description: Summarizes what was fixed, why, and the final system quality after validation loops

@@ -1,0 +1,153 @@
+name: reddit-clone-modern-repair-loop
+version: "1.0"
+description: "Obora generates a modern React/TS/Vite app, validates it, repairs from logs, and re-validates"
+
+steps:
+  - name: live_stack_research
+    description: Research live package and template references
+    agent: researcher
+    input:
+      task: |
+        Use the custom tools before writing anything.
+
+        Required research actions:
+        1. Use `npm_package_info` for:
+           - react
+           - react-dom
+           - typescript
+           - vite
+           - @vitejs/plugin-react
+        2. Use `fetch_url` for these official Vite template files:
+           - https://raw.githubusercontent.com/vitejs/vite/main/packages/create-vite/template-react-ts/package.json
+           - https://raw.githubusercontent.com/vitejs/vite/main/packages/create-vite/template-react-ts/tsconfig.json
+           - https://raw.githubusercontent.com/vitejs/vite/main/packages/create-vite/template-react-ts/tsconfig.app.json
+           - https://raw.githubusercontent.com/vitejs/vite/main/packages/create-vite/template-react-ts/tsconfig.node.json
+           - https://raw.githubusercontent.com/vitejs/vite/main/packages/create-vite/template-react-ts/src/main.tsx
+
+        Create `artifacts/LIVE-STACK-RESEARCH.md` using file_write.
+        Include:
+        - current package versions
+        - official template conventions
+        - compatibility rules
+        - implementation rules that the builder must follow
+
+        Then self-check the artifact with file_read.
+
+  - name: architecture
+    description: Design the app architecture
+    agent: architect
+    depends_on: [live_stack_research]
+    input:
+      task: |
+        Create `artifacts/ARCHITECTURE.md` using file_write.
+
+        Design a modern small-SPA architecture for a Reddit-style mini app.
+        Include:
+        - view structure
+        - file structure
+        - component breakdown
+        - state flow
+        - interaction model for filtering, voting, and create-post modal
+        - what is simplified vs production-grade
+
+        Then self-check the artifact with file_read.
+
+  - name: implementation
+    description: Generate the initial app
+    agent: builder
+    depends_on: [architecture]
+    input:
+      task: |
+        Build a complete runnable React + TypeScript + Vite app in `app/`.
+
+        This is the initial generation pass.
+
+        Requirements:
+        - Vite React project, not Next.js
+        - use live stack research and architecture artifacts as source of truth
+        - multi-file source structure
+        - no unnecessary dependencies
+        - styling in normal CSS files
+        - strict TypeScript compatibility
+
+        Required files at minimum:
+        - app/package.json
+        - app/tsconfig.json
+        - app/tsconfig.app.json
+        - app/tsconfig.node.json
+        - app/vite.config.ts
+        - app/index.html
+        - app/src/main.tsx
+        - app/src/App.tsx
+        - app/src/vite-env.d.ts
+        - app/src/types.ts
+        - app/src/data/seed.ts
+        - app/src/components/Sidebar.tsx
+        - app/src/components/PostCard.tsx
+        - app/src/components/Feed.tsx
+        - app/src/components/RightRail.tsx
+        - app/src/components/CreatePostModal.tsx
+        - app/src/styles.css
+
+        Functional requirements:
+        - exactly these communities: All, r/designcrit, r/startups, r/webdev, r/sideproject
+        - exactly one seeded post in r/startups
+        - at least four seeded posts total
+        - community filter pills
+        - create post modal
+        - new posts inserted at top of the feed
+        - upvote/downvote score updates
+        - stable selectors:
+          - data-testid="community-pill" and data-community="..."
+          - data-testid="posts-feed"
+          - data-testid="post-card"
+          - data-testid="create-post-button"
+          - data-testid="create-post-modal"
+          - data-testid="post-community-select"
+          - data-testid="post-title-input"
+          - data-testid="post-body-input"
+          - data-testid="submit-post-button"
+          - data-testid="vote-score"
+          - data-testid="upvote-button"
+          - data-testid="downvote-button"
+
+        After writing files, self-check the generated structure with file_list and file_read.
+
+  - name: repair_from_validation
+    description: Repair the generated app using the latest validation log
+    agent: builder
+    depends_on: [implementation]
+    input:
+      task: |
+        Read the latest validation failure log and repair only what is necessary.
+
+        Repair rules:
+        - first read `artifacts/LIVE-STACK-RESEARCH.md`
+        - then read `artifacts/ARCHITECTURE.md`
+        - then read the validation log path provided at runtime
+        - identify the exact failing files and root cause
+        - modify only the necessary files
+        - preserve working structure and styling where possible
+        - after changes, self-check the modified files with file_read
+        - create `artifacts/REPAIR-NOTES.md` summarizing:
+          - root cause
+          - files changed
+          - why those changes address the validation failure
+
+  - name: final_report
+    description: Summarize the complete loop outcome
+    agent: reviewer
+    depends_on: [repair_from_validation]
+    input:
+      task: |
+        Create `artifacts/FINAL-REPORT.md`.
+
+        Summarize:
+        - what was researched
+        - what was generated initially
+        - what failures happened during validation
+        - what repairs were applied across attempts
+        - whether the final result passed validation
+        - what should be improved next
+
+        Use file_read to inspect the final artifacts before writing the report.
