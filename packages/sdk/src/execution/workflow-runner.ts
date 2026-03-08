@@ -49,6 +49,36 @@ interface RepairLoopRuntimeState {
   lastSignature?: string;
 }
 
+interface PersistedValidationFailureDetail {
+  stepName?: string;
+  summary?: string;
+  errorCode?: string;
+  logPath?: string;
+  failedChecks: Array<{
+    name?: string;
+    message?: string;
+    severity?: string;
+    file?: string;
+  }>;
+}
+
+interface PersistedRepairLoopSummary {
+  validationFailed: number;
+  validationPassed: number;
+  repairStarted: number;
+  repairCompleted: number;
+  repairNoProgress: number;
+  backEdgeTriggered: number;
+  backEdgeExhausted: number;
+  lastValidationSummary?: string;
+  lastValidationStep?: string;
+  lastRepairStep?: string;
+  lastAttempt?: number;
+  lastNoProgressReason?: string;
+  lastExhaustReason?: string;
+  recentValidationFailures: PersistedValidationFailureDetail[];
+}
+
 // ── WorkflowRunner ─────────────────────────────────────────────────────────
 
 export interface WorkflowRunnerDeps {
@@ -72,6 +102,8 @@ export interface WorkflowRunnerDeps {
  *  - Knowledge context injection
  */
 export class WorkflowRunner {
+  private readonly repairLoopSummaries = new Map<string, PersistedRepairLoopSummary>();
+
   constructor(private readonly deps: WorkflowRunnerDeps) {}
 
   // ── Agent YAML loader ────────────────────────────────────────────────────
@@ -351,6 +383,110 @@ export class WorkflowRunner {
     }
   }
 
+  private ensureRepairLoopSummary(executionId: string): PersistedRepairLoopSummary {
+    const existing = this.repairLoopSummaries.get(executionId);
+    if (existing) return existing;
+
+    const created: PersistedRepairLoopSummary = {
+      validationFailed: 0,
+      validationPassed: 0,
+      repairStarted: 0,
+      repairCompleted: 0,
+      repairNoProgress: 0,
+      backEdgeTriggered: 0,
+      backEdgeExhausted: 0,
+      recentValidationFailures: [],
+    };
+    this.repairLoopSummaries.set(executionId, created);
+    return created;
+  }
+
+  private getPersistedRepairLoopSummary(executionId: string): PersistedRepairLoopSummary | undefined {
+    const summary = this.repairLoopSummaries.get(executionId);
+    if (!summary) return undefined;
+    const hasActivity =
+      summary.validationFailed > 0 ||
+      summary.validationPassed > 0 ||
+      summary.repairStarted > 0 ||
+      summary.repairCompleted > 0 ||
+      summary.repairNoProgress > 0 ||
+      summary.backEdgeTriggered > 0 ||
+      summary.backEdgeExhausted > 0;
+    return hasActivity ? structuredClone(summary) : undefined;
+  }
+
+  private clearPersistedRepairLoopSummary(executionId: string): void {
+    this.repairLoopSummaries.delete(executionId);
+  }
+
+  private recordValidationFailure(
+    executionId: string,
+    stepName: string,
+    validationResult: ValidationResult,
+  ): void {
+    const summary = this.ensureRepairLoopSummary(executionId);
+    summary.validationFailed += 1;
+    summary.lastValidationStep = stepName;
+    summary.lastValidationSummary = validationResult.summary;
+    summary.recentValidationFailures.push({
+      stepName,
+      summary: validationResult.summary,
+      ...(validationResult.errorCode ? { errorCode: validationResult.errorCode } : {}),
+      ...(validationResult.logPath ? { logPath: validationResult.logPath } : {}),
+      failedChecks: validationResult.failedChecks.map((check) => ({
+        ...(check.name ? { name: check.name } : {}),
+        ...(check.message ? { message: check.message } : {}),
+        ...(check.severity ? { severity: check.severity } : {}),
+        ...(check.file ? { file: check.file } : {}),
+      })),
+    });
+    if (summary.recentValidationFailures.length > 5) {
+      summary.recentValidationFailures.shift();
+    }
+  }
+
+  private recordValidationPass(
+    executionId: string,
+    stepName: string,
+    validationResult: ValidationResult,
+  ): void {
+    const summary = this.ensureRepairLoopSummary(executionId);
+    summary.validationPassed += 1;
+    summary.lastValidationStep = stepName;
+    summary.lastValidationSummary = validationResult.summary;
+  }
+
+  private recordRepairStarted(executionId: string, stepName: string, attempt?: number): void {
+    const summary = this.ensureRepairLoopSummary(executionId);
+    summary.repairStarted += 1;
+    summary.lastRepairStep = stepName;
+    if (attempt !== undefined) summary.lastAttempt = attempt;
+  }
+
+  private recordRepairCompleted(executionId: string, stepName: string, attempt?: number): void {
+    const summary = this.ensureRepairLoopSummary(executionId);
+    summary.repairCompleted += 1;
+    summary.lastRepairStep = stepName;
+    if (attempt !== undefined) summary.lastAttempt = attempt;
+  }
+
+  private recordRepairNoProgress(executionId: string, reason: string): void {
+    const summary = this.ensureRepairLoopSummary(executionId);
+    summary.repairNoProgress += 1;
+    summary.lastNoProgressReason = reason;
+  }
+
+  private recordBackEdgeTriggered(executionId: string): void {
+    const summary = this.ensureRepairLoopSummary(executionId);
+    summary.backEdgeTriggered += 1;
+  }
+
+  private recordBackEdgeExhausted(executionId: string, reason: string): void {
+    const summary = this.ensureRepairLoopSummary(executionId);
+    summary.backEdgeExhausted += 1;
+    summary.lastExhaustReason = reason;
+  }
+
   private buildRepairContext(
     step: WorkflowStep,
     repairLoopStates: Map<string, RepairLoopRuntimeState>,
@@ -452,6 +588,7 @@ export class WorkflowRunner {
       backEdgeIterations.set(key, nextIteration);
 
       if (overrides?.noProgress) {
+        this.recordRepairNoProgress(executionId, reason);
         await eventBus.emit("workflow.repair_no_progress", executionId, {
           sourceStep: step.name,
           targetStep: onFail.goto,
@@ -461,6 +598,7 @@ export class WorkflowRunner {
       }
 
       if (nextIteration > maxIterations || overrides?.noProgress) {
+        this.recordBackEdgeExhausted(executionId, reason);
         await eventBus.emit("workflow.back_edge_exhausted", executionId, {
           sourceStep: step.name,
           targetStep: onFail.goto,
@@ -482,6 +620,7 @@ export class WorkflowRunner {
         delete execution.stepRecords[name];
       }
 
+      this.recordBackEdgeTriggered(executionId);
       await eventBus.emit("workflow.back_edge_triggered", executionId, {
         sourceStep: step.name,
         targetStep: onFail.goto,
@@ -506,6 +645,7 @@ export class WorkflowRunner {
 
       const repairContext = this.buildRepairContext(step, repairLoopStates);
       if (repairContext?.mode === "repair") {
+        this.recordRepairStarted(executionId, step.name, repairContext.attempt);
         await eventBus.emit("workflow.repair_started", executionId, {
           stepName: step.name,
           attempt: repairContext.attempt,
@@ -540,12 +680,14 @@ export class WorkflowRunner {
       const validationResult = this.resolveValidationResult(step, result.output);
       if (validationResult) {
         if (validationResult.passed) {
+          this.recordValidationPass(executionId, step.name, validationResult);
           await eventBus.emit("workflow.validation_passed", executionId, {
             stepName: step.name,
             summary: validationResult.summary,
             signature: validationResult.signature,
           });
         } else {
+          this.recordValidationFailure(executionId, step.name, validationResult);
           await eventBus.emit("workflow.validation_failed", executionId, {
             stepName: step.name,
             summary: validationResult.summary,
@@ -596,6 +738,7 @@ export class WorkflowRunner {
       execution.completedSteps.push(step.name);
 
       if (repairContext?.mode === "repair") {
+        this.recordRepairCompleted(executionId, step.name, repairContext.attempt);
         await eventBus.emit("workflow.repair_completed", executionId, {
           stepName: step.name,
           attempt: repairContext.attempt,
@@ -671,7 +814,7 @@ export class WorkflowRunner {
     const loadedConfig =
       config.config !== undefined ? config.config : await loadConfig(config.configPath);
 
-    const persistenceConfig = loadedConfig?.persistence ?? config.persistence;
+    const persistenceConfig = config.persistence ?? loadedConfig?.persistence;
     const persistenceEnabled = persistenceConfig?.enabled ?? false;
 
     // Persistence: save run at start
@@ -741,6 +884,9 @@ export class WorkflowRunner {
 
     if (isSettledFn()) return;
 
+    execution.status = "completed";
+    execution.endedAt = new Date();
+
     // Persistence: update on completion
     if (persistenceEnabled && persistenceAdapter) {
       try {
@@ -751,7 +897,13 @@ export class WorkflowRunner {
           input: { value: input ?? null },
           startedAt: execution.startedAt.toISOString(),
           completedAt: execution.endedAt!.toISOString(),
-          metadata: { variables, stepOrder: execution.stepOrder },
+          metadata: {
+            variables,
+            stepOrder: execution.stepOrder,
+            ...(this.getPersistedRepairLoopSummary(executionId)
+              ? { repairLoop: this.getPersistedRepairLoopSummary(executionId) }
+              : {}),
+          },
         });
 
         await persistenceAdapter.saveAuditEvent({
@@ -774,6 +926,8 @@ export class WorkflowRunner {
         }
       }
     }
+
+    this.clearPersistedRepairLoopSummary(executionId);
 
     await eventBus.emit("execution_end", executionId, {
       workflowName,
@@ -807,12 +961,21 @@ export class WorkflowRunner {
         input: { value: execution.input ?? null },
         startedAt: execution.startedAt.toISOString(),
         completedAt: execution.endedAt?.toISOString(),
-        metadata: { variables, error: execution.error, errorCode },
+        metadata: {
+          variables,
+          error: execution.error,
+          errorCode,
+          ...(this.getPersistedRepairLoopSummary(executionId)
+            ? { repairLoop: this.getPersistedRepairLoopSummary(executionId) }
+            : {}),
+        },
       });
     } catch (err) {
       if (config.verbose) {
         console.warn("[persistence] Failed to save run on error:", err);
       }
+    } finally {
+      this.clearPersistedRepairLoopSummary(executionId);
     }
   }
 
@@ -988,7 +1151,12 @@ export class WorkflowRunner {
       input: { value: runInput ?? null },
       startedAt: execution.startedAt.toISOString(),
       completedAt: execution.endedAt.toISOString(),
+      ...(this.getPersistedRepairLoopSummary(executionId)
+        ? { metadata: { repairLoop: this.getPersistedRepairLoopSummary(executionId) } }
+        : {}),
     });
+
+    this.clearPersistedRepairLoopSummary(executionId);
 
     return execution;
   }

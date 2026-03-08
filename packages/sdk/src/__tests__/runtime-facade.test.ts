@@ -268,10 +268,30 @@ describe("OboraRuntime facade", () => {
     }
   });
 
-  it("runs validation-repair loop with structured validation feedback", async () => {
+  it("persists repair-loop summary into run metadata", async () => {
+    const savedRuns: any[] = [];
+    const storage = {
+      async saveRun(record: any) { savedRuns.push(structuredClone(record)); },
+      async getRun() { return null; },
+      async listRuns() { return []; },
+      async saveStep() { return; },
+      async getSteps() { return []; },
+      async saveArtifact(record: any) { return record; },
+      async getArtifacts() { return []; },
+      async deleteArtifact() { return; },
+      async saveCheckpoint() { return; },
+      async getLatestCheckpoint() { return null; },
+      async saveCost() { return; },
+      async getCosts() { return []; },
+      async getRunCostSummary() { return { totalTokens: 0, totalCostUsd: 0, byStep: [], byModel: [] }; },
+      async saveAuditEvent() { return; },
+      async getAuditTimeline() { return []; },
+    };
+
     const runtime = new OboraRuntime({
       llm: { provider: "openai", apiKey: "test-key", model: "gpt-5" },
       audit: { enabled: true },
+      persistence: { enabled: true, adapter: "custom", custom: { instance: storage as any } },
     });
 
     const auditTypes: string[] = [];
@@ -365,6 +385,22 @@ describe("OboraRuntime facade", () => {
     expect(auditTypes).toContain("workflow.validation_passed");
     expect(auditTypes).toContain("workflow.repair_started");
     expect(auditTypes).toContain("workflow.repair_completed");
+
+    const finalRun = savedRuns.at(-1);
+    expect(finalRun?.metadata?.repairLoop).toMatchObject({
+      validationFailed: 1,
+      validationPassed: 1,
+      repairStarted: 1,
+      repairCompleted: 1,
+      lastValidationSummary: "Validation passed",
+      lastRepairStep: "build_or_repair",
+      recentValidationFailures: [
+        expect.objectContaining({
+          stepName: "validate",
+          summary: "Fix TS1484 import type usage",
+        }),
+      ],
+    });
   });
 
   it("stops repair loop on repeated no-progress validation signatures", async () => {

@@ -124,6 +124,61 @@ describe("runs inspect repair-loop summary", () => {
     expect(output).toContain("artifacts/release-note.md");
   });
 
+  it("prefers persisted repairLoop metadata over audit replay", async () => {
+    const getRunAuditTimeline = vi.fn(async () => {
+      throw new Error("should not load audit timeline when persisted metadata exists");
+    });
+
+    const runtime = {
+      async getRunRecord() {
+        return {
+          id: "run-1",
+          workflowName: "validation-repair-loop-example",
+          status: "completed",
+          startedAt: "2026-03-08T10:00:00.000Z",
+          metadata: {
+            repairLoop: {
+              validationFailed: 1,
+              validationPassed: 1,
+              repairStarted: 1,
+              repairCompleted: 1,
+              repairNoProgress: 0,
+              backEdgeTriggered: 1,
+              backEdgeExhausted: 0,
+              lastValidationSummary: "Validation passed",
+              lastValidationStep: "validate",
+              lastRepairStep: "build_or_repair",
+              lastAttempt: 2,
+              recentValidationFailures: [
+                {
+                  stepName: "validate",
+                  summary: "Missing READY marker",
+                  errorCode: "VALIDATION_ERROR",
+                  logPath: "artifacts/VALIDATION-ATTEMPT-01.log",
+                  failedChecks: [
+                    { name: "marker", message: "Missing READY marker", file: "artifacts/release-note.md" },
+                  ],
+                },
+              ],
+            },
+          },
+        };
+      },
+      async getRunSteps() { return []; },
+      async getRunArtifacts() { return []; },
+      async getRunCostSummary() { return { totalTokens: 0, totalCostUsd: 0, byStep: [], byModel: [] }; },
+      getRunAuditTimeline,
+    };
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await inspectPersistedRun(runtime, "run-1", { json: true, cost: false, steps: false });
+
+    expect(getRunAuditTimeline).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('"repairLoop"'));
+    expect(log).toHaveBeenCalledWith(expect.not.stringContaining('"auditTimeline"'));
+  });
+
   it("includes repairLoop summary in JSON inspect output", async () => {
     const runtime = {
       async getRunRecord() {

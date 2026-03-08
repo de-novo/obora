@@ -157,6 +157,14 @@ export function summarizeRepairLoopTimeline(
   return hasActivity ? summary : undefined;
 }
 
+function extractPersistedRepairLoopSummary(run: { metadata?: Record<string, unknown> } | null | undefined): RepairLoopInspectSummary | undefined {
+  const metadata = run?.metadata;
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return undefined;
+  const repairLoop = metadata.repairLoop;
+  if (!repairLoop || typeof repairLoop !== "object" || Array.isArray(repairLoop)) return undefined;
+  return repairLoop as RepairLoopInspectSummary;
+}
+
 export async function inspectPersistedRun(
   runtime: {
     getRunRecord(runId: string): Promise<any>;
@@ -177,14 +185,15 @@ export async function inspectPersistedRun(
   const steps = opts.steps !== false ? await runtime.getRunSteps(runId) : [];
   const artifacts = await runtime.getRunArtifacts(runId);
   const costSummary = opts.cost ? await runtime.getRunCostSummary(runId) : undefined;
-  const auditTimeline = await runtime.getRunAuditTimeline(runId);
-  const repairLoop = summarizeRepairLoopTimeline(auditTimeline);
+  const persistedRepairLoop = extractPersistedRepairLoopSummary(run);
+  const auditTimeline = persistedRepairLoop ? undefined : await runtime.getRunAuditTimeline(runId);
+  const repairLoop = persistedRepairLoop ?? summarizeRepairLoopTimeline(auditTimeline ?? []);
 
   if (opts.json) {
     const payload: Record<string, unknown> = {
       run,
       artifacts,
-      auditTimeline,
+      ...(auditTimeline ? { auditTimeline } : {}),
       ...(repairLoop ? { repairLoop } : {}),
       ...(costSummary ? { costSummary } : {}),
     };
