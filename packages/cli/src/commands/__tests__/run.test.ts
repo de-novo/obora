@@ -54,6 +54,7 @@ vi.mock("../../utils/formatter.js", () => ({
     success: vi.fn(),
     json: vi.fn(),
     info: vi.fn(),
+    warn: vi.fn(),
     error: vi.fn(),
     step: vi.fn(),
   },
@@ -410,6 +411,103 @@ describe("run command", () => {
   });
 
   // ─── --verbose option ─────────────────────────────────────────────────────
+
+  describe("repair-loop progress UX", () => {
+    it("should print validation and repair progress events in non-json mode", async () => {
+      mockHandle.wait.mockImplementationOnce(async () => {
+        const handlers = new Map(
+          mockRuntimeInstance.on.mock.calls.map((call) => [call[0], call[1]])
+        );
+
+        handlers.get("workflow.validation_failed")?.({
+          data: {
+            stepName: "validate",
+            summary: "Missing READY marker",
+            failedChecks: [{ name: "marker" }],
+          },
+        });
+        handlers.get("workflow.repair_started")?.({
+          data: {
+            stepName: "build_or_repair",
+            attempt: 2,
+          },
+        });
+        handlers.get("workflow.validation_passed")?.({
+          data: {
+            stepName: "validate",
+            summary: "Validation passed",
+          },
+        });
+
+        return DEFAULT_RESULT;
+      });
+
+      await runRun("my-workflow", {});
+
+      expect(formatter.warn).toHaveBeenCalledWith(
+        expect.stringContaining("validation failed [validate]: Missing READY marker")
+      );
+      expect(formatter.info).toHaveBeenCalledWith(
+        expect.stringContaining("repair attempt 2 → build_or_repair")
+      );
+      expect(formatter.success).toHaveBeenCalledWith(
+        expect.stringContaining("validation passed [validate]: Validation passed")
+      );
+      expect(formatter.info).toHaveBeenCalledWith(
+        expect.stringContaining("repair loop summary: validation failed=1, validation passed=1, repairs started=1, repairs completed=0")
+      );
+    });
+
+    it("should include repairLoop summary in JSON output", async () => {
+      mockHandle.wait.mockImplementationOnce(async () => {
+        const handlers = new Map(
+          mockRuntimeInstance.on.mock.calls.map((call) => [call[0], call[1]])
+        );
+
+        handlers.get("workflow.validation_failed")?.({
+          data: {
+            stepName: "validate",
+            summary: "Missing READY marker",
+            failedChecks: [{ name: "marker" }],
+          },
+        });
+        handlers.get("workflow.repair_started")?.({
+          data: {
+            stepName: "build_or_repair",
+            attempt: 2,
+          },
+        });
+        handlers.get("workflow.repair_completed")?.({
+          data: {
+            stepName: "build_or_repair",
+            attempt: 2,
+          },
+        });
+        handlers.get("workflow.validation_passed")?.({
+          data: {
+            stepName: "validate",
+            summary: "Validation passed",
+          },
+        });
+
+        return DEFAULT_RESULT;
+      });
+
+      await runRun("my-workflow", { json: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          repairLoop: expect.objectContaining({
+            validationFailed: 1,
+            validationPassed: 1,
+            repairStarted: 1,
+            repairCompleted: 1,
+            lastValidationSummary: "Validation passed",
+          }),
+        })
+      );
+    });
+  });
 
   describe("--verbose option", () => {
     it("should log start info in verbose mode", async () => {

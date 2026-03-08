@@ -30,6 +30,17 @@ function isVerboseOutput(options: Record<string, unknown>): boolean {
 
 export async function runRun(workflow: string, options: Record<string, unknown>): Promise<void> {
   const startedAt = Date.now();
+  const repairLoopSummary = {
+    validationFailed: 0,
+    validationPassed: 0,
+    repairStarted: 0,
+    repairCompleted: 0,
+    repairNoProgress: 0,
+    lastValidationSummary: undefined as string | undefined,
+    lastValidationStep: undefined as string | undefined,
+    lastRepairStep: undefined as string | undefined,
+    lastAttempt: undefined as number | undefined,
+  };
   const loadedConfig = await loadConfig(options.config as string | undefined);
   const envLLM = detectLLMConfigFromEnv();
   const resolvedLLM = resolveLLMConfig(envLLM, loadedConfig);
@@ -122,6 +133,74 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
     }
   });
 
+  runtime.on("workflow.validation_failed", (event) => {
+    const data = event.data as
+      | { stepName?: string; summary?: string; failedChecks?: Array<unknown> }
+      | undefined;
+    repairLoopSummary.validationFailed += 1;
+    repairLoopSummary.lastValidationStep = data?.stepName;
+    repairLoopSummary.lastValidationSummary = data?.summary;
+
+    if (!isQuietOutput(options) && !isJsonOutput(options)) {
+      const failedChecksCount = Array.isArray(data?.failedChecks) ? data!.failedChecks.length : undefined;
+      formatter.warn(
+        `validation failed${data?.stepName ? ` [${data.stepName}]` : ""}: ${data?.summary ?? "unknown reason"}${
+          typeof failedChecksCount === "number" ? ` (${failedChecksCount} check${failedChecksCount === 1 ? "" : "s"})` : ""
+        }`
+      );
+    }
+  });
+
+  runtime.on("workflow.validation_passed", (event) => {
+    const data = event.data as { stepName?: string; summary?: string } | undefined;
+    repairLoopSummary.validationPassed += 1;
+    repairLoopSummary.lastValidationStep = data?.stepName;
+    repairLoopSummary.lastValidationSummary = data?.summary;
+
+    if (!isQuietOutput(options) && !isJsonOutput(options)) {
+      formatter.success(
+        `validation passed${data?.stepName ? ` [${data.stepName}]` : ""}${data?.summary ? `: ${data.summary}` : ""}`
+      );
+    }
+  });
+
+  runtime.on("workflow.repair_started", (event) => {
+    const data = event.data as { stepName?: string; attempt?: number } | undefined;
+    repairLoopSummary.repairStarted += 1;
+    repairLoopSummary.lastRepairStep = data?.stepName;
+    repairLoopSummary.lastAttempt = data?.attempt;
+
+    if (!isQuietOutput(options) && !isJsonOutput(options)) {
+      formatter.info(
+        `repair attempt ${data?.attempt ?? repairLoopSummary.repairStarted}${data?.stepName ? ` → ${data.stepName}` : ""}`
+      );
+    }
+  });
+
+  runtime.on("workflow.repair_completed", (event) => {
+    const data = event.data as { stepName?: string; attempt?: number } | undefined;
+    repairLoopSummary.repairCompleted += 1;
+    repairLoopSummary.lastRepairStep = data?.stepName;
+    repairLoopSummary.lastAttempt = data?.attempt;
+
+    if (isVerboseOutput(options) && !isQuietOutput(options) && !isJsonOutput(options)) {
+      formatter.info(
+        `repair completed${data?.stepName ? ` [${data.stepName}]` : ""}${data?.attempt ? ` (attempt ${data.attempt})` : ""}`
+      );
+    }
+  });
+
+  runtime.on("workflow.repair_no_progress", (event) => {
+    const data = event.data as { sourceStep?: string; reason?: string } | undefined;
+    repairLoopSummary.repairNoProgress += 1;
+
+    if (!isQuietOutput(options) && !isJsonOutput(options)) {
+      formatter.warn(
+        `repair loop made no progress${data?.sourceStep ? ` [${data.sourceStep}]` : ""}: ${data?.reason ?? "unknown reason"}`
+      );
+    }
+  });
+
   if (isVerboseOutput(options) && !isJsonOutput(options)) {
     runtime.on("step_end", (event) => {
       const data = event.data as
@@ -167,14 +246,33 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
     }
   }
 
+  const hasRepairLoopActivity =
+    repairLoopSummary.validationFailed > 0 ||
+    repairLoopSummary.validationPassed > 0 ||
+    repairLoopSummary.repairStarted > 0 ||
+    repairLoopSummary.repairCompleted > 0 ||
+    repairLoopSummary.repairNoProgress > 0;
+
   if (isJsonOutput(options)) {
     formatter.json({
       workflowName: result.workflowName,
       status: "completed",
       elapsedMs,
+      ...(hasRepairLoopActivity
+        ? {
+            repairLoop: {
+              ...repairLoopSummary,
+            },
+          }
+        : {}),
     });
   } else if (!isQuietOutput(options)) {
     formatter.success(`Workflow "${result.workflowName}" completed.`);
+    if (hasRepairLoopActivity) {
+      formatter.info(
+        `repair loop summary: validation failed=${repairLoopSummary.validationFailed}, validation passed=${repairLoopSummary.validationPassed}, repairs started=${repairLoopSummary.repairStarted}, repairs completed=${repairLoopSummary.repairCompleted}${repairLoopSummary.lastValidationSummary ? `, last validation="${repairLoopSummary.lastValidationSummary}"` : ""}`
+      );
+    }
     if (isVerboseOutput(options)) {
       formatter.info(`Total execution time: ${elapsedMs}ms`);
     }
