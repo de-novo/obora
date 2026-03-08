@@ -228,6 +228,17 @@ Without this summary, consumers must replay all audit events to answer simple qu
 
 Persisting the summary in run metadata makes these reads cheaper and simpler, while audit replay remains the fallback source of truth.
 
+### Artifact access endpoints
+
+Dashboard history APIs also expose artifact access paths for repair-loop diagnosis:
+
+- `GET /api/history/runs/:runId/artifacts/:artifactId/preview`
+- `GET /api/history/runs/:runId/artifacts/:artifactId/raw`
+- `GET /api/history/runs/:runId/artifacts/:artifactId/raw?download=1`
+
+Use preview for fast text inspection and raw/download for original payload access.
+See [`../artifact-api-update.md`](../artifact-api-update.md) for the consumer-oriented summary.
+
 ---
 
 ## Consensus

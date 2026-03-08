@@ -168,6 +168,7 @@ Reference example: [`.sandbox/12-reddit-clone-modern-repair-loop`](./.sandbox/12
 Persisted runs may also include a precomputed `run.metadata.repairLoop` summary for cheap post-run inspection surfaces such as `obora inspect`, dashboards, and analysis scripts.
 
 Feature summary: [`docs/validation-repair-loop-update.md`](./docs/validation-repair-loop-update.md)
+Artifact access update: [`docs/artifact-api-update.md`](./docs/artifact-api-update.md)
 
 ---
 

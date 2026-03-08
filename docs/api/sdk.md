@@ -166,6 +166,16 @@ interface PersistedRepairLoopSummary {
 
 If `metadata.repairLoop` is absent, consumers can fall back to `runtime.getRunAuditTimeline(runId)` / `runtime.runs.auditReplay(runId)` and reconstruct the summary from raw events.
 
+### Artifact diagnosis endpoints
+
+When using the dashboard history surface, related artifact access is available through:
+
+- preview: `GET /api/history/runs/:runId/artifacts/:artifactId/preview`
+- raw: `GET /api/history/runs/:runId/artifacts/:artifactId/raw`
+- download: `GET /api/history/runs/:runId/artifacts/:artifactId/raw?download=1`
+
+See [`../artifact-api-update.md`](../artifact-api-update.md) for the higher-level feature summary.
+
 ### cancel (via RunHandle)
 
 ```ts
