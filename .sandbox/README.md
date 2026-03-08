@@ -11,12 +11,15 @@
 defaults:
   provider: zai
   model: glm-4.7
-  temperature: 0.3
 
 providers:
   zai:
     authMode: token
     authRef: global:zai
+  openai-codex:
+    authMode: token
+    authRef: global:openai-codex
+    baseUrl: https://chatgpt.com/backend-api
 ```
 
 각 테스트 케이스의 `agents.yaml`은 이 기본값을 상속받아 필요한 속성만 오버라이드합니다.
@@ -72,10 +75,13 @@ providers:
 
    # 대안: 환경변수 사용
    export ZAI_API_KEY="your-zai-api-key"
-   export OPENAI_API_KEY="your-openai-api-key"  # 08 테스트용
+   export OPENAI_CODEX_API_KEY="your-openai-codex-token"  # 08 테스트용
    ```
 
-> 샌드박스 실행 스크립트는 `~/.obora/global-auth.json`의 `zai` 값을 우선 활용할 수 있고, 없으면 `ZAI_API_KEY`를 사용합니다. 둘 다 없으면 stub mode로 통과시키지 않고 즉시 실패(fail fast)합니다.
+> 샌드박스 실행 스크립트는 `~/.obora/global-auth.json`의 provider 값을 우선 활용합니다.
+> - `zai` → 01~07 기본 실행
+> - `openai-codex` → 08 multi-provider 실행
+> 글로벌 인증이 없으면 대응하는 환경변수를 사용합니다. 둘 다 없으면 stub mode로 통과시키지 않고 즉시 실패(fail fast)합니다.
 
 ## 디렉토리 구조
 
@@ -117,6 +123,7 @@ providers:
 다중 에이전트 합의:
 - 1명의 제안자
 - 3명의 리뷰어 (다수결)
+- sandbox 회귀 테스트용으로 self-contained + deterministic하게 구성
 
 ### 05-policy-gate
 정책 기반 승인:
@@ -132,6 +139,7 @@ providers:
 커스텀 도구:
 - `calculate` - 수학 계산
 - `get_current_time` - 현재 시간
+- `run.mjs`가 실제로 custom tool을 주입하고, `calculate` 호출 횟수까지 검증
 
 ### 08-multi-provider
 여러 LLM 프로바이더:

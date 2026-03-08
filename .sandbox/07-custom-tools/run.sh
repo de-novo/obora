@@ -1,34 +1,20 @@
 #!/bin/bash
 # Test 07: Custom Tools
-# Expected: Custom tools injected and used
+# Expected: Custom tools are injected, called, and verified end-to-end
 
-cd "$(dirname "$0")"
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/../common.sh"
+
+require_provider_auth zai
 
 echo "=== Test 07: Custom Tools ==="
-echo "Testing custom tool injection..."
+echo "Testing runnable custom tool injection..."
 
-echo ""
-echo "Note: This test requires programmatic execution with custom tools."
-echo "See custom-tools.ts for tool definitions."
-echo ""
-echo "Example code:"
-echo ""
-cat << 'EOF'
-import { OboraRuntime, StepExecutor } from "@obora/sdk";
-import { customTools } from "./custom-tools.js";
+rm -rf "$SCRIPT_DIR/output"
 
-const runtime = new OboraRuntime({
-  llm: { provider: "zai", model: "glm-4.7" }
-});
-
-// Register agent with custom tools
-runtime.registerAgent("tool_user", () => ({
-  role: "Tool User",
-  getExecutor: () => new StepExecutor(adapter, agents, { tools: customTools })
-}));
-
-const result = await runtime.run("custom-tools-test");
-EOF
+node "$SCRIPT_DIR/run.mjs"
 
 echo ""
 echo "=== Test Complete ==="

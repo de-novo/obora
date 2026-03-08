@@ -1,5 +1,5 @@
 # Test Case 04: Consensus
-# 다중 에이전트 투표/합의 패턴 테스트
+# Deterministic consensus pattern test
 
 name: consensus-test
 version: "1.0"
@@ -9,8 +9,8 @@ steps:
     agent: proposer
     input:
       task: |
-        Propose a name for a new AI assistant.
-        Output only the name, nothing else.
+        Output exactly this AI assistant name and nothing else:
+        Aether
 
   - name: vote
     pattern: consensus
@@ -20,13 +20,13 @@ steps:
     input:
       proposal: "{{propose}}"
       task: |
-        Review this proposed AI assistant name: {{propose}}
+        Validate this proposed AI assistant name: {{propose}}
 
-        Vote APPROVE if you think it's good.
-        Vote REJECT if you think it's bad.
-        Vote REQUEST_CHANGES if you have suggestions.
-
-        Provide a brief reason for your vote.
+        Sandbox acceptance rule:
+        - APPROVE only if the proposal is exactly "Aether"
+        - REJECT otherwise
+        - Start your response with APPROVE or REJECT
+        - Then give one short reason
 
   - name: decide
     agent: decider
@@ -35,5 +35,4 @@ steps:
       task: |
         The consensus result was: {{vote}}
 
-        If approved, announce the final name.
-        If rejected, propose a new name.
+        Announce the final approved name in one short sentence.

@@ -1,5 +1,5 @@
 # Test Case 07: Custom Tools
-# 커스텀 도구 주입 테스트
+# Runnable custom tool injection test
 
 name: custom-tools-test
 version: "1.0"
@@ -9,14 +9,16 @@ steps:
     agent: tool_user
     input:
       task: |
-        Use the 'calculate' tool to compute 42 * 17.
-        Then output the result.
+        You MUST call the `calculate` tool exactly once with expression `42 * 17`.
+        Do not compute mentally.
+        After the tool returns, output only: 714
 
   - name: verify_result
     agent: verifier
     depends_on: [use_custom_tool]
     input:
       task: |
-        Verify the calculation result from the previous step.
-        The correct answer is 714.
-        Confirm if the result matches.
+        Verify the previous step result.
+        Expected value: 714
+        If it matches, reply exactly: VERIFIED: 714
+        Otherwise reply exactly: FAILED
