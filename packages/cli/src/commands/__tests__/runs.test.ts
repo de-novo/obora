@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 
-import { inspectPersistedRun, listRunsForCli, sortRunsForCli, summarizeRepairLoopTimeline } from "../runs.js";
+import { getCliRepairLoopState, inspectPersistedRun, listRunsForCli, sortRunsForCli, summarizeRepairLoopTimeline } from "../runs.js";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -27,6 +27,40 @@ describe("runs list triage sorting", () => {
 
     const sorted = sortRunsForCli(runs, "repairStarted", "asc");
     expect(sorted.map((run) => run.id)).toEqual(["run-c", "run-b", "run-a"]);
+  });
+
+  it("derives compact CLI repair-loop states", () => {
+    expect(getCliRepairLoopState(undefined)).toBe("-");
+    expect(getCliRepairLoopState({
+      validationFailed: 1,
+      validationPassed: 0,
+      repairStarted: 1,
+      repairCompleted: 0,
+      repairNoProgress: 0,
+      backEdgeTriggered: 1,
+      backEdgeExhausted: 1,
+      recentValidationFailures: [],
+    } as any)).toBe("EXHAUSTED");
+    expect(getCliRepairLoopState({
+      validationFailed: 2,
+      validationPassed: 0,
+      repairStarted: 2,
+      repairCompleted: 1,
+      repairNoProgress: 1,
+      backEdgeTriggered: 2,
+      backEdgeExhausted: 0,
+      recentValidationFailures: [],
+    } as any)).toBe("STALLED");
+    expect(getCliRepairLoopState({
+      validationFailed: 1,
+      validationPassed: 1,
+      repairStarted: 1,
+      repairCompleted: 1,
+      repairNoProgress: 0,
+      backEdgeTriggered: 1,
+      backEdgeExhausted: 0,
+      recentValidationFailures: [],
+    } as any)).toBe("CONVERGED");
   });
 
   it("filters and sorts post-processed runs for CLI list", async () => {

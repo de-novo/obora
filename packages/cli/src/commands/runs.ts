@@ -251,6 +251,15 @@ export async function listRunsForCli(
   return sorted.slice(0, opts.limit ?? 20);
 }
 
+export function getCliRepairLoopState(summary: RepairLoopInspectSummary | undefined): string {
+  if (!summary) return "-";
+  if (summary.backEdgeExhausted > 0) return "EXHAUSTED";
+  if (summary.repairNoProgress > 0) return "STALLED";
+  if (summary.validationFailed > 0 && summary.validationPassed > 0) return "CONVERGED";
+  if (summary.repairStarted > 0 || summary.repairCompleted > 0) return "REPAIRED";
+  return "PASSED";
+}
+
 function formatRepairLoopListSummary(summary: RepairLoopInspectSummary | undefined): string {
   if (!summary) return "-";
   const parts: string[] = [];
@@ -422,13 +431,14 @@ export function createRunsCommand(): Command {
         return;
       }
 
-      console.log(`${"ID".padEnd(38)} ${"Workflow".padEnd(20)} ${"Status".padEnd(12)} ${"Repair Loop".padEnd(40)} Started At`);
-      console.log("-".repeat(132));
+      console.log(`${"ID".padEnd(38)} ${"Workflow".padEnd(20)} ${"Status".padEnd(12)} ${"Loop State".padEnd(12)} ${"Repair Loop".padEnd(40)} Started At`);
+      console.log("-".repeat(145));
       for (const run of runRecords) {
         const repairLoop = extractPersistedRepairLoopSummary(run);
+        const repairState = getCliRepairLoopState(repairLoop);
         const repairSummary = formatRepairLoopListSummary(repairLoop);
         console.log(
-          `${run.id.padEnd(38)} ${run.workflowName.padEnd(20)} ${run.status.padEnd(12)} ${repairSummary.padEnd(40)} ${run.startedAt}`
+          `${run.id.padEnd(38)} ${run.workflowName.padEnd(20)} ${run.status.padEnd(12)} ${repairState.padEnd(12)} ${repairSummary.padEnd(40)} ${run.startedAt}`
         );
       }
       console.log(`\n${runRecords.length} run(s)`);
