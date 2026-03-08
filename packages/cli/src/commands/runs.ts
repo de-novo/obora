@@ -173,11 +173,52 @@ function matchesRepairLoopFilter(summary: RepairLoopInspectSummary | undefined, 
   }
 }
 
-async function listRunsForCli(
+function getCliSortValue(
+  run: { startedAt?: string; metadata?: Record<string, unknown> },
+  sortBy: "startedAt" | "validationFailed" | "repairStarted",
+): number | string {
+  const repairLoop = extractPersistedRepairLoopSummary(run);
+  switch (sortBy) {
+    case "validationFailed":
+      return repairLoop?.validationFailed ?? -1;
+    case "repairStarted":
+      return repairLoop?.repairStarted ?? -1;
+    case "startedAt":
+    default:
+      return run.startedAt ?? "";
+  }
+}
+
+export function sortRunsForCli(
+  runs: any[],
+  sortBy: "startedAt" | "validationFailed" | "repairStarted" = "startedAt",
+  order: "asc" | "desc" = "desc",
+): any[] {
+  const sign = order === "asc" ? 1 : -1;
+  return [...runs].sort((a, b) => {
+    const aValue = getCliSortValue(a, sortBy);
+    const bValue = getCliSortValue(b, sortBy);
+    if (typeof aValue === "number" && typeof bValue === "number") {
+      return (aValue - bValue) * sign;
+    }
+    return String(aValue).localeCompare(String(bValue)) * sign;
+  });
+}
+
+export async function listRunsForCli(
   runtime: { listRunRecords(query: Record<string, unknown>): Promise<any[]> },
-  opts: { status?: string; workflow?: string; limit?: number; repairLoop?: string },
+  opts: {
+    status?: string;
+    workflow?: string;
+    limit?: number;
+    repairLoop?: string;
+    sortBy?: "startedAt" | "validationFailed" | "repairStarted";
+    order?: "asc" | "desc";
+  },
 ): Promise<any[]> {
-  if (!opts.repairLoop) {
+  const needsPostProcessing = Boolean(opts.repairLoop) || (opts.sortBy && opts.sortBy !== "startedAt") || opts.order === "asc";
+
+  if (!needsPostProcessing) {
     return runtime.listRunRecords({
       status: opts.status,
       workflowName: opts.workflow,
@@ -206,7 +247,8 @@ async function listRunsForCli(
     matchesRepairLoopFilter(extractPersistedRepairLoopSummary(run), opts.repairLoop),
   );
 
-  return filtered.slice(0, opts.limit ?? 20);
+  const sorted = sortRunsForCli(filtered, opts.sortBy ?? "startedAt", opts.order ?? "desc");
+  return sorted.slice(0, opts.limit ?? 20);
 }
 
 function formatRepairLoopListSummary(summary: RepairLoopInspectSummary | undefined): string {
@@ -355,6 +397,8 @@ export function createRunsCommand(): Command {
     .option("--status <status>", "Filter by status (running|completed|failed|suspended)")
     .option("--workflow <name>", "Filter by workflow name")
     .option("--repair-loop <mode>", "Filter by repair-loop state (with|without|stalled|exhausted)")
+    .option("--sort <field>", "Sort by startedAt|validationFailed|repairStarted", "startedAt")
+    .option("--order <dir>", "Sort order asc|desc", "desc")
     .option("--limit <n>", "Max results", "20")
     .option("--json", "Output as JSON")
     .action(async (opts) => {
@@ -363,6 +407,8 @@ export function createRunsCommand(): Command {
         status: opts.status,
         workflow: opts.workflow,
         repairLoop: opts.repairLoop,
+        sortBy: opts.sort,
+        order: opts.order,
         limit: Number(opts.limit),
       });
 

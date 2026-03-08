@@ -1,9 +1,55 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 
-import { inspectPersistedRun, summarizeRepairLoopTimeline } from "../runs.js";
+import { inspectPersistedRun, listRunsForCli, sortRunsForCli, summarizeRepairLoopTimeline } from "../runs.js";
 
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+describe("runs list triage sorting", () => {
+  it("sorts runs by validationFailed descending using persisted repairLoop metadata", () => {
+    const runs = [
+      { id: "run-a", startedAt: "2026-03-08T10:00:00.000Z", metadata: { repairLoop: { validationFailed: 1, repairStarted: 1 } } },
+      { id: "run-b", startedAt: "2026-03-08T11:00:00.000Z", metadata: { repairLoop: { validationFailed: 3, repairStarted: 2 } } },
+      { id: "run-c", startedAt: "2026-03-08T12:00:00.000Z" },
+    ];
+
+    const sorted = sortRunsForCli(runs, "validationFailed", "desc");
+    expect(sorted.map((run) => run.id)).toEqual(["run-b", "run-a", "run-c"]);
+  });
+
+  it("sorts runs by repairStarted ascending", () => {
+    const runs = [
+      { id: "run-a", startedAt: "2026-03-08T10:00:00.000Z", metadata: { repairLoop: { validationFailed: 1, repairStarted: 4 } } },
+      { id: "run-b", startedAt: "2026-03-08T11:00:00.000Z", metadata: { repairLoop: { validationFailed: 3, repairStarted: 2 } } },
+      { id: "run-c", startedAt: "2026-03-08T12:00:00.000Z" },
+    ];
+
+    const sorted = sortRunsForCli(runs, "repairStarted", "asc");
+    expect(sorted.map((run) => run.id)).toEqual(["run-c", "run-b", "run-a"]);
+  });
+
+  it("filters and sorts post-processed runs for CLI list", async () => {
+    const runtime = {
+      async listRunRecords() {
+        return [
+          { id: "run-a", startedAt: "2026-03-08T10:00:00.000Z", metadata: { repairLoop: { validationFailed: 1, repairStarted: 1, repairNoProgress: 0, backEdgeExhausted: 0 } } },
+          { id: "run-b", startedAt: "2026-03-08T11:00:00.000Z", metadata: { repairLoop: { validationFailed: 3, repairStarted: 2, repairNoProgress: 1, backEdgeExhausted: 0 } } },
+          { id: "run-c", startedAt: "2026-03-08T12:00:00.000Z", metadata: { repairLoop: { validationFailed: 2, repairStarted: 2, repairNoProgress: 0, backEdgeExhausted: 1 } } },
+          { id: "run-d", startedAt: "2026-03-08T13:00:00.000Z" },
+        ];
+      },
+    };
+
+    const runs = await listRunsForCli(runtime, {
+      repairLoop: "stalled",
+      sortBy: "validationFailed",
+      order: "desc",
+      limit: 10,
+    });
+
+    expect(runs.map((run) => run.id)).toEqual(["run-b"]);
+  });
 });
 
 describe("runs inspect repair-loop summary", () => {
