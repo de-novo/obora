@@ -102,7 +102,10 @@ describe('history routes', () => {
     });
     expect(withRepairLoop.statusCode).toBe(200);
     const withBody = withRepairLoop.json() as {
-      items: Array<{ run: { id: string } }>;
+      items: Array<{
+        run: { id: string };
+        repairLoop?: { validationFailed?: number; repairNoProgress?: number };
+      }>;
       total: number;
       repairLoopCounts?: { all: number; with: number; without: number; stalled: number; exhausted: number };
     };
