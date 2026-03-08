@@ -113,6 +113,8 @@ precomputed summary를 저장한다.
 - `--repair-loop with|without|stalled|exhausted`
 - `--sort startedAt|validationFailed|repairStarted`
 - `--order asc|desc`
+- compact `Loop State` column (`EXHAUSTED`, `STALLED`, `CONVERGED`, `REPAIRED`, `PASSED`)
+- compact repair summary (`F/R/P/N/X` counts + latest validation summary)
 
 ---
 
@@ -182,6 +184,7 @@ Dashboard는 이제 repair-loop runs를 실제 운영 관점에서 다룰 수 �
 
 3. **운영자 관찰성이 좋아짐**
    - run 중 / run 후 / 목록 / 상세에서 repair-loop 상태가 다 보인다.
+   - 특히 CLI `runs list`와 dashboard 목록에서 triage가 빨라졌다.
 
 4. **외부 도구 연동이 쉬워짐**
    - `run.metadata.repairLoop` persisted schema로 dashboard/analytics가 간단해진다.

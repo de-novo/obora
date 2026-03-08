@@ -235,6 +235,23 @@ obora runs list \
 
 List persisted runs with optional workflow / repair-loop filtering and triage-oriented sorting.
 
+Text output includes:
+- `Loop State` column (`EXHAUSTED`, `STALLED`, `CONVERGED`, `REPAIRED`, `PASSED`, `-`)
+- compact repair-loop summary (`F/R/P/N/X` style counts + latest validation summary when available)
+
+Examples:
+
+```bash
+# most recent exhausted runs
+obora runs list --repair-loop exhausted --sort startedAt --order desc
+
+# runs with the most validation failures first
+obora runs list --repair-loop with --sort validationFailed --order desc
+
+# runs with the fewest repair attempts first
+obora runs list --repair-loop with --sort repairStarted --order asc
+```
+
 #### `obora runs inspect <runId>`
 
 ```bash
