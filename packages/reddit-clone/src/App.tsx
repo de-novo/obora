@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 
 type SortMode = "Hot" | "New" | "Rising";
+type VoteValue = -1 | 0 | 1;
 
 type Comment = {
   id: string;
@@ -29,16 +30,24 @@ type Post = {
   commentsThread: Comment[];
 };
 
-const communities = [
-  "All",
-  "r/designcrit",
-  "r/startups",
-  "r/webdev",
-  "r/sideproject",
-  "r/typography",
+type CommunityDefinition = {
+  name: string;
+  accent: string;
+};
+
+const communityDefinitions: CommunityDefinition[] = [
+  { name: "r/designcrit", accent: "#ff6b3d" },
+  { name: "r/startups", accent: "#89ffb8" },
+  { name: "r/webdev", accent: "#72a9ff" },
+  { name: "r/sideproject", accent: "#ffd166" },
+  { name: "r/typography", accent: "#f59cff" },
 ];
 
-const posts: Post[] = [
+const communityOptions = communityDefinitions.map((community) => community.name);
+const communities = ["All", ...communityOptions];
+const communityAccentByName = new Map(communityDefinitions.map((community) => [community.name, community.accent]));
+
+const initialPosts: Post[] = [
   {
     id: "post-1",
     community: "r/designcrit",
@@ -189,23 +198,41 @@ const trendingTopics = [
 ];
 
 function formatVotes(value: number) {
-  if (value >= 1000) {
-    return `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}k`;
+  const absolute = Math.abs(value);
+  if (absolute >= 1000) {
+    const compact = `${(absolute / 1000).toFixed(absolute >= 10000 ? 0 : 1)}k`;
+    return value < 0 ? `-${compact}` : compact;
   }
 
   return `${value}`;
 }
 
-function sortPosts(items: Post[], mode: SortMode) {
+function getVoteNextValue(current: VoteValue, direction: VoteValue) {
+  if (current === direction) return 0;
+  return direction;
+}
+
+function buildPreview(body: string) {
+  const normalized = body.replace(/\s+/g, " ").trim();
+  if (normalized.length <= 120) return normalized;
+  return `${normalized.slice(0, 117)}...`;
+}
+
+function sortPosts(items: Post[], mode: SortMode, voteState: Map<string, VoteValue>) {
   const cloned = [...items];
+
   switch (mode) {
     case "New":
-      return cloned.reverse();
+      return cloned;
     case "Rising":
       return cloned.sort((a, b) => b.trend - a.trend);
     case "Hot":
     default:
-      return cloned.sort((a, b) => b.votes + b.comments - (a.votes + a.comments));
+      return cloned.sort((a, b) => {
+        const aScore = a.votes + (voteState.get(a.id) ?? 0) + a.comments;
+        const bScore = b.votes + (voteState.get(b.id) ?? 0) + b.comments;
+        return bScore - aScore;
+      });
   }
 }
 
@@ -223,23 +250,325 @@ function IconArrow({ direction }: { direction: "up" | "down" }) {
   return <span className={`vote-arrow vote-arrow--${direction}`} aria-hidden="true" />;
 }
 
+type VoteControlProps = {
+  entityId: string;
+  score: number;
+  voteValue: VoteValue;
+  onVote: (entityId: string, direction: VoteValue) => void;
+  compact?: boolean;
+};
+
+function VoteControl({ entityId, score, voteValue, onVote, compact = false }: VoteControlProps) {
+  return (
+    <div className={compact ? "vote-column vote-column--compact" : "vote-column"}>
+      <button
+        type="button"
+        className={voteValue === 1 ? "vote-button is-active-up" : "vote-button"}
+        aria-label="Upvote"
+        aria-pressed={voteValue === 1}
+        onClick={(event) => {
+          event.stopPropagation();
+          onVote(entityId, 1);
+        }}
+      >
+        <IconArrow direction="up" />
+      </button>
+      <strong className={voteValue !== 0 ? "vote-score is-active" : "vote-score"}>{formatVotes(score)}</strong>
+      <button
+        type="button"
+        className={voteValue === -1 ? "vote-button is-active-down" : "vote-button"}
+        aria-label="Downvote"
+        aria-pressed={voteValue === -1}
+        onClick={(event) => {
+          event.stopPropagation();
+          onVote(entityId, -1);
+        }}
+      >
+        <IconArrow direction="down" />
+      </button>
+    </div>
+  );
+}
+
+type CommentComposerProps = {
+  postId: string;
+  postTitle: string;
+  onSubmit: (postId: string, body: string) => void;
+};
+
+function CommentComposer({ postId, postTitle, onSubmit }: CommentComposerProps) {
+  const [body, setBody] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  return (
+    <form
+      key={postId}
+      className="comment-composer"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const trimmed = body.trim();
+
+        if (trimmed.length === 0) {
+          setError("댓글 내용을 입력해주세요.");
+          return;
+        }
+
+        if (trimmed.length > 10000) {
+          setError("댓글은 10,000자 이하로 작성해주세요.");
+          return;
+        }
+
+        setError(null);
+        setIsSubmitting(true);
+        onSubmit(postId, trimmed);
+        setBody("");
+        setIsSubmitting(false);
+      }}
+    >
+      <label className="comment-composer__label" htmlFor={`comment-input-${postId}`}>
+        Reply to <span>{postTitle}</span>
+      </label>
+      <textarea
+        id={`comment-input-${postId}`}
+        key={postId}
+        className="comment-composer__textarea"
+        placeholder="Add a thoughtful reply, a teardown note, or a product insight..."
+        value={body}
+        autoFocus
+        maxLength={10000}
+        onChange={(event) => setBody(event.target.value)}
+      />
+      <div className="comment-composer__footer">
+        <span>{body.trim().length}/10000</span>
+        <button type="submit" className="solid-button solid-button--small" disabled={isSubmitting}>
+          {isSubmitting ? "Posting..." : "Post reply"}
+        </button>
+      </div>
+      {error ? <p className="form-error">{error}</p> : null}
+    </form>
+  );
+}
+
+type CreatePostModalProps = {
+  communities: string[];
+  onClose: () => void;
+  onCreate: (payload: { title: string; body: string; community: string; tags: string[] }) => void;
+};
+
+function CreatePostModal({ communities: options, onClose, onCreate }: CreatePostModalProps) {
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [community, setCommunity] = useState(options[0] ?? "r/designcrit");
+  const [tags, setTags] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  return (
+    <div className="modal-overlay" role="presentation" onClick={onClose}>
+      <div
+        className="modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-post-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="modal-card__header">
+          <div>
+            <p className="panel-label">Create a new thread</p>
+            <h2 id="create-post-title">Publish a build log or community note</h2>
+          </div>
+          <button type="button" className="ghost-button ghost-button--small" onClick={onClose}>
+            Close
+          </button>
+        </div>
+
+        <form
+          className="modal-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+
+            const trimmedTitle = title.trim();
+            const trimmedBody = body.trim();
+            const parsedTags = tags
+              .split(",")
+              .map((item) => item.trim())
+              .filter(Boolean)
+              .slice(0, 4);
+
+            if (!options.includes(community)) {
+              setError("유효한 커뮤니티를 선택해주세요.");
+              return;
+            }
+
+            if (trimmedTitle.length < 8) {
+              setError("제목은 8자 이상 입력해주세요.");
+              return;
+            }
+
+            if (trimmedBody.length < 24) {
+              setError("본문은 최소 24자 이상 입력해주세요.");
+              return;
+            }
+
+            setError(null);
+            setIsSubmitting(true);
+            onCreate({
+              title: trimmedTitle,
+              body: trimmedBody,
+              community,
+              tags: parsedTags.length > 0 ? parsedTags : ["Fresh Thread"],
+            });
+            setIsSubmitting(false);
+            onClose();
+          }}
+        >
+          <label className="field-shell">
+            <span>Community</span>
+            <select value={community} onChange={(event) => setCommunity(event.target.value)}>
+              {options.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="field-shell">
+            <span>Title</span>
+            <input
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="What are you building, testing, or debating?"
+              maxLength={160}
+            />
+          </label>
+
+          <label className="field-shell field-shell--full">
+            <span>Body</span>
+            <textarea
+              value={body}
+              onChange={(event) => setBody(event.target.value)}
+              placeholder="Share context, tradeoffs, results, or the exact thing you want feedback on..."
+              maxLength={6000}
+            />
+          </label>
+
+          <label className="field-shell field-shell--full">
+            <span>Tags</span>
+            <input
+              value={tags}
+              onChange={(event) => setTags(event.target.value)}
+              placeholder="React, Teardown, Launch Notes"
+            />
+          </label>
+
+          <div className="modal-form__footer">
+            <p className="muted-copy">New posts are inserted at the top and surfaced in New mode immediately.</p>
+            <button type="submit" className="solid-button" disabled={isSubmitting}>
+              {isSubmitting ? "Publishing..." : "Publish thread"}
+            </button>
+          </div>
+
+          {error ? <p className="form-error">{error}</p> : null}
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [activeCommunity, setActiveCommunity] = useState<string>("All");
   const [sortMode, setSortMode] = useState<SortMode>("Hot");
-  const [selectedPostId, setSelectedPostId] = useState<string>(posts[0]?.id ?? "");
+  const [postItems, setPostItems] = useState<Post[]>(initialPosts);
+  const [selectedPostId, setSelectedPostId] = useState<string>(initialPosts[0]?.id ?? "");
+  const [voteState, setVoteState] = useState<Map<string, VoteValue>>(() => new Map());
+  const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
 
   const filteredPosts = useMemo(() => {
     const base = activeCommunity === "All"
-      ? posts
-      : posts.filter((post) => post.community === activeCommunity);
+      ? postItems
+      : postItems.filter((post) => post.community === activeCommunity);
 
-    return sortPosts(base, sortMode);
-  }, [activeCommunity, sortMode]);
+    return sortPosts(base, sortMode, voteState);
+  }, [activeCommunity, postItems, sortMode, voteState]);
 
   const selectedPost = filteredPosts.find((post) => post.id === selectedPostId)
-    ?? posts.find((post) => post.id === selectedPostId)
+    ?? postItems.find((post) => post.id === selectedPostId)
     ?? filteredPosts[0]
-    ?? posts[0];
+    ?? postItems[0];
+
+  const activeReaders = useMemo(() => {
+    const totalVotes = postItems.reduce((sum, post) => sum + post.votes, 0);
+    return `${Math.round(totalVotes / 59)}k`;
+  }, [postItems]);
+
+  const totalFreshPosts = `${postItems.length}`;
+  const totalLiveLounges = `${liveRooms.length}`;
+
+  const getDisplayScore = (entityId: string, baseScore: number) => baseScore + (voteState.get(entityId) ?? 0);
+
+  const handleVote = (entityId: string, direction: VoteValue) => {
+    setVoteState((current) => {
+      const next = new Map(current);
+      const previousValue = next.get(entityId) ?? 0;
+      const nextValue = getVoteNextValue(previousValue as VoteValue, direction);
+
+      if (nextValue === 0) {
+        next.delete(entityId);
+      } else {
+        next.set(entityId, nextValue);
+      }
+
+      return next;
+    });
+  };
+
+  const handleCommentSubmit = (postId: string, body: string) => {
+    const nextComment: Comment = {
+      id: crypto.randomUUID(),
+      author: "u/threaded-builder",
+      flair: "Iteration 1",
+      score: 1,
+      time: "just now",
+      body,
+    };
+
+    setPostItems((current) => current.map((post) => {
+      if (post.id !== postId) return post;
+
+      return {
+        ...post,
+        comments: post.comments + 1,
+        commentsThread: [nextComment, ...post.commentsThread],
+      };
+    }));
+  };
+
+  const handleCreatePost = (payload: { title: string; body: string; community: string; tags: string[] }) => {
+    const nextPost: Post = {
+      id: crypto.randomUUID(),
+      community: payload.community,
+      accent: communityAccentByName.get(payload.community) ?? "#ff6b3d",
+      author: "u/threaded-builder",
+      time: "just now",
+      title: payload.title,
+      body: payload.body,
+      tags: payload.tags,
+      votes: 1,
+      comments: 0,
+      awards: 0,
+      preview: buildPreview(payload.body),
+      trend: 100,
+      commentsThread: [],
+      featured: false,
+    };
+
+    setPostItems((current) => [nextPost, ...current]);
+    setActiveCommunity(payload.community);
+    setSortMode("New");
+    setSelectedPostId(nextPost.id);
+  };
 
   return (
     <div className="threaded-app">
@@ -261,8 +590,10 @@ function App() {
         </label>
 
         <div className="topbar-actions">
-          <button className="ghost-button">Create post</button>
-          <button className="solid-button">Join lounge</button>
+          <button type="button" className="ghost-button" onClick={() => setIsCreatePostOpen(true)}>
+            Create post
+          </button>
+          <button type="button" className="solid-button">Join lounge</button>
         </div>
       </header>
 
@@ -277,15 +608,15 @@ function App() {
         </div>
         <div className="hero-stats">
           <div>
-            <strong>128k</strong>
+            <strong>{activeReaders}</strong>
             <span>active readers</span>
           </div>
           <div>
-            <strong>412</strong>
-            <span>fresh posts</span>
+            <strong>{totalFreshPosts}</strong>
+            <span>threads in this session</span>
           </div>
           <div>
-            <strong>18</strong>
+            <strong>{totalLiveLounges}</strong>
             <span>live lounges</span>
           </div>
         </div>
@@ -299,6 +630,7 @@ function App() {
               {communities.map((community) => (
                 <button
                   key={community}
+                  type="button"
                   className={community === activeCommunity ? "community-pill is-active" : "community-pill"}
                   onClick={() => setActiveCommunity(community)}
                 >
@@ -338,12 +670,14 @@ function App() {
           <div className="composer card-panel">
             <div className="composer-avatar">T</div>
             <div className="composer-body">
-              <button className="composer-input">Share a build log, teardown, or launch note…</button>
+              <button type="button" className="composer-input" onClick={() => setIsCreatePostOpen(true)}>
+                Share a build log, teardown, or launch note…
+              </button>
               <div className="composer-actions">
-                <button>Image</button>
-                <button>Poll</button>
-                <button>Link</button>
-                <button>AMA</button>
+                <button type="button">Image</button>
+                <button type="button">Poll</button>
+                <button type="button">Link</button>
+                <button type="button">AMA</button>
               </div>
             </div>
           </div>
@@ -353,6 +687,7 @@ function App() {
               {(["Hot", "New", "Rising"] as const).map((option) => (
                 <button
                   key={option}
+                  type="button"
                   className={sortMode === option ? "sort-chip is-active" : "sort-chip"}
                   onClick={() => setSortMode(option)}
                 >
@@ -370,15 +705,12 @@ function App() {
                 className={selectedPost?.id === post.id ? "post-card is-selected" : "post-card"}
                 onClick={() => setSelectedPostId(post.id)}
               >
-                <div className="vote-column">
-                  <button className="vote-button" aria-label="Upvote">
-                    <IconArrow direction="up" />
-                  </button>
-                  <strong>{formatVotes(post.votes)}</strong>
-                  <button className="vote-button" aria-label="Downvote">
-                    <IconArrow direction="down" />
-                  </button>
-                </div>
+                <VoteControl
+                  entityId={post.id}
+                  score={getDisplayScore(post.id, post.votes)}
+                  voteValue={voteState.get(post.id) ?? 0}
+                  onVote={handleVote}
+                />
 
                 <div className="post-body">
                   <div className="post-meta">
@@ -406,10 +738,10 @@ function App() {
                   </div>
 
                   <div className="post-actions">
-                    <button>{formatVotes(post.comments)} comments</button>
-                    <button>{post.awards} awards</button>
-                    <button>Share</button>
-                    <button>Save</button>
+                    <button type="button">{formatVotes(post.comments)} comments</button>
+                    <button type="button">{post.awards} awards</button>
+                    <button type="button">Share</button>
+                    <button type="button">Save</button>
                   </div>
                 </div>
               </article>
@@ -448,25 +780,69 @@ function App() {
                 <p className="panel-label">Comment thread</p>
                 <h3>{selectedPost?.title}</h3>
               </div>
-              <button className="ghost-button ghost-button--small">Reply</button>
+              <button
+                type="button"
+                className="ghost-button ghost-button--small"
+                onClick={() => {
+                  if (!selectedPost) return;
+                  document.getElementById(`comment-input-${selectedPost.id}`)?.focus();
+                }}
+              >
+                Reply
+              </button>
             </div>
 
+            {selectedPost ? (
+              <CommentComposer
+                key={selectedPost.id}
+                postId={selectedPost.id}
+                postTitle={selectedPost.title}
+                onSubmit={handleCommentSubmit}
+              />
+            ) : null}
+
             <div className="comment-list">
-              {selectedPost?.commentsThread.map((comment) => (
-                <article key={comment.id} className="comment-card">
-                  <div className="comment-meta">
-                    <strong>{comment.author}</strong>
-                    {comment.flair ? <span className="comment-flair">{comment.flair}</span> : null}
-                    <span>{comment.time}</span>
-                    <span>{formatVotes(comment.score)} pts</span>
-                  </div>
-                  <p>{comment.body}</p>
-                </article>
-              ))}
+              {selectedPost?.commentsThread.length ? (
+                selectedPost.commentsThread.map((comment) => (
+                  <article key={comment.id} className="comment-card">
+                    <div className="comment-card__vote">
+                      <VoteControl
+                        entityId={comment.id}
+                        score={getDisplayScore(comment.id, comment.score)}
+                        voteValue={voteState.get(comment.id) ?? 0}
+                        onVote={handleVote}
+                        compact
+                      />
+                    </div>
+                    <div className="comment-card__body">
+                      <div className="comment-meta">
+                        <strong>{comment.author}</strong>
+                        {comment.flair ? <span className="comment-flair">{comment.flair}</span> : null}
+                        <span>{comment.time}</span>
+                        <span>{formatVotes(getDisplayScore(comment.id, comment.score))} pts</span>
+                      </div>
+                      <p>{comment.body}</p>
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <div className="empty-comments">
+                  <strong>No comments yet</strong>
+                  <p>Be the first person to add context, a counterpoint, or a build note.</p>
+                </div>
+              )}
             </div>
           </section>
         </aside>
       </main>
+
+      {isCreatePostOpen ? (
+        <CreatePostModal
+          communities={communityOptions}
+          onClose={() => setIsCreatePostOpen(false)}
+          onCreate={handleCreatePost}
+        />
+      ) : null}
     </div>
   );
 }
