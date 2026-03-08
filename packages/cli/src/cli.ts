@@ -8,7 +8,7 @@ import { createPluginCommand } from "./commands/plugin.js";
 import { createPolicyCommand } from "./commands/policy.js";
 import { createResumeCommand } from "./commands/resume.js";
 import { createRunCommand } from "./commands/run.js";
-import { createRunsCommand } from "./commands/runs.js";
+import { createRunsCommand, createRuntime as createRunsRuntime, inspectPersistedRun } from "./commands/runs.js";
 import { createTestCommand } from "./commands/test.js";
 
 /**
@@ -24,91 +24,12 @@ function createInspectCommand(): Command {
     .option("--no-steps", "Hide step details")
     .option("--cost", "Include detailed cost summary")
     .action(async (runId: string, opts) => {
-      const { OboraRuntime, loadConfig } = await import("@obora/sdk");
-
-      const config = await loadConfig();
-      const persistence = (config as Record<string, unknown>).persistence as
-        | { enabled?: boolean; adapter?: string; sqlite?: { path?: string }; custom?: unknown }
-        | undefined;
-
-      const runtime = new OboraRuntime({
-        persistence: {
-          enabled: persistence?.enabled ?? true,
-          adapter: (persistence?.adapter as "sqlite" | "custom") ?? "sqlite",
-          sqlite: { path: persistence?.sqlite?.path ?? "./data/obora.db" },
-          ...(persistence?.custom
-            ? {
-                custom: persistence.custom as { instance: import("@obora/runtime").StorageAdapter },
-              }
-            : {}),
-        },
+      const runtime = await createRunsRuntime();
+      await inspectPersistedRun(runtime, runId, {
+        json: opts.json,
+        cost: opts.cost,
+        steps: opts.steps !== false,
       });
-
-      const run = await runtime.getRunRecord(runId);
-      if (!run) {
-        console.error(`Run not found: ${runId}`);
-        process.exit(1);
-      }
-
-      const steps = opts.steps !== false ? await runtime.getRunSteps(runId) : [];
-      const artifacts = await runtime.getRunArtifacts(runId);
-      const costSummary = opts.cost ? await runtime.getRunCostSummary(runId) : undefined;
-
-      if (opts.json) {
-        const payload: Record<string, unknown> = {
-          run,
-          artifacts,
-          ...(costSummary ? { costSummary } : {}),
-        };
-        if (opts.steps !== false) payload.steps = steps;
-        console.log(JSON.stringify(payload, null, 2));
-        return;
-      }
-
-      console.log(`\nRun: ${run.id}`);
-      console.log(`  Workflow: ${run.workflowName}`);
-      console.log(`  Status:   ${run.status}`);
-      console.log(`  Started:  ${run.startedAt}`);
-      if (run.completedAt) console.log(`  Completed: ${run.completedAt}`);
-      if (run.metadata) console.log(`  Metadata: ${JSON.stringify(run.metadata)}`);
-
-      if (opts.steps !== false && steps.length > 0) {
-        console.log(`\nSteps (${steps.length}):`);
-        for (const step of steps) {
-          const duration = step.durationMs ? ` (${step.durationMs}ms)` : "";
-          console.log(`  ${step.stepName.padEnd(20)} ${step.status.padEnd(12)}${duration}`);
-          if (step.error) {
-            console.log(`    Error: [${step.error.code}] ${step.error.message}`);
-          }
-        }
-      }
-
-      if (artifacts.length > 0) {
-        console.log(`\nArtifacts (${artifacts.length}):`);
-        for (const a of artifacts) {
-          console.log(`  ${a.stepName}/${a.name} (${a.mimeType}, ${a.sizeBytes} bytes)`);
-        }
-      }
-
-      if (costSummary) {
-        console.log(`\nCost Summary:`);
-        console.log(`  Total Tokens: ${costSummary.totalTokens}`);
-        console.log(`  Total Cost:   $${costSummary.totalCostUsd.toFixed(6)}`);
-        if (costSummary.byStep.length > 0) {
-          console.log("  By Step:");
-          for (const item of costSummary.byStep) {
-            console.log(
-              `    - ${item.stepName}: ${item.tokens} tokens, $${item.costUsd.toFixed(6)}`
-            );
-          }
-        }
-        if (costSummary.byModel.length > 0) {
-          console.log("  By Model:");
-          for (const item of costSummary.byModel) {
-            console.log(`    - ${item.model}: ${item.tokens} tokens, $${item.costUsd.toFixed(6)}`);
-          }
-        }
-      }
     });
 }
 
