@@ -30,11 +30,12 @@ const badgeColor = (status: string): string => {
 export const HistoryRunsPage = ({ onOpenRun }: Props): JSX.Element => {
   const [status, setStatus] = useState('');
   const [workflowName, setWorkflowName] = useState('');
+  const [repairLoop, setRepairLoop] = useState<'all' | 'with' | 'without' | 'stalled' | 'exhausted'>('all');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [costMin, setCostMin] = useState('');
   const [costMax, setCostMax] = useState('');
-  const [sortBy, setSortBy] = useState<'startedAt' | 'completedAt' | 'totalCostUsd'>('startedAt');
+  const [sortBy, setSortBy] = useState<'startedAt' | 'completedAt' | 'totalCostUsd' | 'validationFailed'>('startedAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [offset, setOffset] = useState(0);
   const [data, setData] = useState<HistoryRunsResponse>(defaultResponse);
@@ -44,6 +45,7 @@ export const HistoryRunsPage = ({ onOpenRun }: Props): JSX.Element => {
     () => ({
       status: status || undefined,
       workflowName: workflowName || undefined,
+      repairLoop: repairLoop === 'all' ? undefined : repairLoop,
       from: from || undefined,
       to: to || undefined,
       costMin: costMin ? Number(costMin) : undefined,
@@ -53,7 +55,7 @@ export const HistoryRunsPage = ({ onOpenRun }: Props): JSX.Element => {
       limit: data.limit,
       offset,
     }),
-    [costMax, costMin, data.limit, from, offset, sortBy, sortOrder, status, to, workflowName],
+    [costMax, costMin, data.limit, from, offset, repairLoop, sortBy, sortOrder, status, to, workflowName],
   );
 
   useEffect(() => {
@@ -83,7 +85,7 @@ export const HistoryRunsPage = ({ onOpenRun }: Props): JSX.Element => {
     <section>
       <h2 style={{ margin: '0 0 12px' }}>History / Runs</h2>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: '8px', marginBottom: '12px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, minmax(0, 1fr))', gap: '8px', marginBottom: '12px' }}>
         <select value={status} onChange={(event) => { setStatus(event.target.value); setOffset(0); }}>
           <option value="">All status</option>
           <option value="running">running</option>
@@ -92,15 +94,23 @@ export const HistoryRunsPage = ({ onOpenRun }: Props): JSX.Element => {
           <option value="suspended">suspended</option>
         </select>
         <input placeholder="workflow name" value={workflowName} onChange={(event) => { setWorkflowName(event.target.value); setOffset(0); }} />
+        <select value={repairLoop} onChange={(event) => { setRepairLoop(event.target.value as typeof repairLoop); setOffset(0); }}>
+          <option value="all">all repair loops</option>
+          <option value="with">with repair loop</option>
+          <option value="without">without repair loop</option>
+          <option value="stalled">stalled</option>
+          <option value="exhausted">exhausted</option>
+        </select>
         <input type="date" value={from} onChange={(event) => { setFrom(event.target.value); setOffset(0); }} />
         <input type="date" value={to} onChange={(event) => { setTo(event.target.value); setOffset(0); }} />
         <input placeholder="cost min" value={costMin} onChange={(event) => { setCostMin(event.target.value); setOffset(0); }} />
         <input placeholder="cost max" value={costMax} onChange={(event) => { setCostMax(event.target.value); setOffset(0); }} />
         <div style={{ display: 'flex', gap: '8px' }}>
-          <select value={sortBy} onChange={(event) => setSortBy(event.target.value as 'startedAt' | 'completedAt' | 'totalCostUsd')}>
+          <select value={sortBy} onChange={(event) => setSortBy(event.target.value as 'startedAt' | 'completedAt' | 'totalCostUsd' | 'validationFailed')}>
             <option value="startedAt">startedAt</option>
             <option value="completedAt">completedAt</option>
             <option value="totalCostUsd">totalCostUsd</option>
+            <option value="validationFailed">validationFailed</option>
           </select>
           <select value={sortOrder} onChange={(event) => setSortOrder(event.target.value as 'asc' | 'desc')}>
             <option value="desc">desc</option>

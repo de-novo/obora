@@ -157,6 +157,58 @@ export function summarizeRepairLoopTimeline(
   return hasActivity ? summary : undefined;
 }
 
+function matchesRepairLoopFilter(summary: RepairLoopInspectSummary | undefined, filter: string | undefined): boolean {
+  if (!filter) return true;
+  switch (filter) {
+    case "with":
+      return Boolean(summary);
+    case "without":
+      return !summary;
+    case "stalled":
+      return (summary?.repairNoProgress ?? 0) > 0;
+    case "exhausted":
+      return (summary?.backEdgeExhausted ?? 0) > 0;
+    default:
+      return true;
+  }
+}
+
+async function listRunsForCli(
+  runtime: { listRunRecords(query: Record<string, unknown>): Promise<any[]> },
+  opts: { status?: string; workflow?: string; limit?: number; repairLoop?: string },
+): Promise<any[]> {
+  if (!opts.repairLoop) {
+    return runtime.listRunRecords({
+      status: opts.status,
+      workflowName: opts.workflow,
+      limit: opts.limit,
+    });
+  }
+
+  const pageSize = 200;
+  const maxTotalRuns = 10_000;
+  const allRuns: any[] = [];
+  let offset = 0;
+
+  while (allRuns.length < maxTotalRuns) {
+    const page = await runtime.listRunRecords({
+      status: opts.status,
+      workflowName: opts.workflow,
+      limit: pageSize,
+      offset,
+    });
+    allRuns.push(...page);
+    if (page.length < pageSize) break;
+    offset += pageSize;
+  }
+
+  const filtered = allRuns.filter((run) =>
+    matchesRepairLoopFilter(extractPersistedRepairLoopSummary(run), opts.repairLoop),
+  );
+
+  return filtered.slice(0, opts.limit ?? 20);
+}
+
 function formatRepairLoopListSummary(summary: RepairLoopInspectSummary | undefined): string {
   if (!summary) return "-";
   const parts: string[] = [];
@@ -302,13 +354,15 @@ export function createRunsCommand(): Command {
     .description("List persisted runs")
     .option("--status <status>", "Filter by status (running|completed|failed|suspended)")
     .option("--workflow <name>", "Filter by workflow name")
+    .option("--repair-loop <mode>", "Filter by repair-loop state (with|without|stalled|exhausted)")
     .option("--limit <n>", "Max results", "20")
     .option("--json", "Output as JSON")
     .action(async (opts) => {
       const runtime = await createRuntime();
-      const runRecords = await runtime.listRunRecords({
+      const runRecords = await listRunsForCli(runtime, {
         status: opts.status,
-        workflowName: opts.workflow,
+        workflow: opts.workflow,
+        repairLoop: opts.repairLoop,
         limit: Number(opts.limit),
       });
 

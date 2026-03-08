@@ -36,6 +36,7 @@ export const fetchHistoryRuns = async (query: HistoryRunsQuery = {}): Promise<Hi
     withQuery('/api/history/runs', {
       status: query.status,
       workflowName: query.workflowName,
+      repairLoop: query.repairLoop,
       from: query.from,
       to: query.to,
       costMin: query.costMin,

@@ -25,6 +25,39 @@ const toIsoBoundary = (value: string, boundary: 'start' | 'end'): string => {
   return value;
 };
 
+interface RepairLoopLike {
+  validationFailed?: number;
+  repairNoProgress?: number;
+  backEdgeExhausted?: number;
+}
+
+const getRepairLoopSummary = (run: RunRecord): RepairLoopLike | undefined => {
+  const metadata = run.metadata;
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return undefined;
+  const repairLoop = (metadata as Record<string, unknown>).repairLoop;
+  if (!repairLoop || typeof repairLoop !== 'object' || Array.isArray(repairLoop)) return undefined;
+  return repairLoop as RepairLoopLike;
+};
+
+const matchesRepairLoopFilter = (run: RunRecord, filter: HistoryRunsQuery['repairLoop']): boolean => {
+  if (!filter) return true;
+  const summary = getRepairLoopSummary(run);
+  switch (filter) {
+    case 'with':
+      return Boolean(summary);
+    case 'without':
+      return !summary;
+    case 'stalled':
+      return (summary?.repairNoProgress ?? 0) > 0;
+    case 'exhausted':
+      return (summary?.backEdgeExhausted ?? 0) > 0;
+    default:
+      return true;
+  }
+};
+
+const getValidationFailedCount = (run: RunRecord): number => getRepairLoopSummary(run)?.validationFailed ?? 0;
+
 export class AdapterHistoryStore implements HistoryStore {
   constructor(
     private readonly adapter: {
@@ -70,6 +103,7 @@ export class AdapterHistoryStore implements HistoryStore {
     );
 
     const filtered = rows
+      .filter((row) => matchesRepairLoopFilter(row.run, query.repairLoop))
       .filter((row) => (query.costMin === undefined ? true : row.costSummary.totalCostUsd >= query.costMin))
       .filter((row) => (query.costMax === undefined ? true : row.costSummary.totalCostUsd <= query.costMax));
 
@@ -77,6 +111,7 @@ export class AdapterHistoryStore implements HistoryStore {
     const sign = query.sortOrder === 'asc' ? 1 : -1;
     filtered.sort((a, b) => {
       if (sortBy === 'totalCostUsd') return (a.costSummary.totalCostUsd - b.costSummary.totalCostUsd) * sign;
+      if (sortBy === 'validationFailed') return (getValidationFailedCount(a.run) - getValidationFailedCount(b.run)) * sign;
       const aValue = (sortBy === 'completedAt' ? a.run.completedAt : a.run.startedAt) ?? '';
       const bValue = (sortBy === 'completedAt' ? b.run.completedAt : b.run.startedAt) ?? '';
       return aValue.localeCompare(bValue) * sign;
@@ -174,6 +209,7 @@ export class InMemoryHistoryStore implements HistoryStore {
 
     if (query.status) rows = rows.filter((row) => row.run.status === query.status);
     if (query.workflowName) rows = rows.filter((row) => row.run.workflowName === query.workflowName);
+    if (query.repairLoop) rows = rows.filter((row) => matchesRepairLoopFilter(row.run, query.repairLoop));
     if (query.from) rows = rows.filter((row) => row.run.startedAt >= toIsoBoundary(query.from!, 'start'));
     if (query.to) rows = rows.filter((row) => row.run.startedAt <= toIsoBoundary(query.to!, 'end'));
     if (query.costMin !== undefined) rows = rows.filter((row) => row.costSummary.totalCostUsd >= query.costMin!);
@@ -184,6 +220,9 @@ export class InMemoryHistoryStore implements HistoryStore {
     rows.sort((a, b) => {
       if (sortBy === 'totalCostUsd') {
         return (a.costSummary.totalCostUsd - b.costSummary.totalCostUsd) * sign;
+      }
+      if (sortBy === 'validationFailed') {
+        return (getValidationFailedCount(a.run) - getValidationFailedCount(b.run)) * sign;
       }
       const aValue = (sortBy === 'completedAt' ? a.run.completedAt : a.run.startedAt) ?? '';
       const bValue = (sortBy === 'completedAt' ? b.run.completedAt : b.run.startedAt) ?? '';

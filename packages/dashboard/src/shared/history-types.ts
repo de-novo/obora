@@ -80,15 +80,18 @@ export interface RunDetailResponse {
   };
 }
 
+export type RepairLoopFilter = 'with' | 'without' | 'stalled' | 'exhausted';
+
 export interface HistoryRunsQuery {
   status?: string;
   workflowName?: string;
+  repairLoop?: RepairLoopFilter;
   from?: string;
   to?: string;
   costMin?: number;
   costMax?: number;
   limit?: number;
   offset?: number;
-  sortBy?: 'startedAt' | 'completedAt' | 'totalCostUsd';
+  sortBy?: 'startedAt' | 'completedAt' | 'totalCostUsd' | 'validationFailed';
   sortOrder?: 'asc' | 'desc';
 }

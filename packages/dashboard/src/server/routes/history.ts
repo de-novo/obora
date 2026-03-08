@@ -12,13 +12,14 @@ const MAX_AUDIT_LIMIT = 500;
 interface ListQuery {
   status?: 'running' | 'completed' | 'failed' | 'suspended';
   workflowName?: string;
+  repairLoop?: 'with' | 'without' | 'stalled' | 'exhausted';
   from?: string;
   to?: string;
   costMin?: string;
   costMax?: string;
   limit?: string;
   offset?: string;
-  sortBy?: 'startedAt' | 'completedAt' | 'totalCostUsd';
+  sortBy?: 'startedAt' | 'completedAt' | 'totalCostUsd' | 'validationFailed';
   sortOrder?: 'asc' | 'desc';
 }
 
@@ -63,6 +64,7 @@ const parseListQuery = (query: ListQuery): HistoryRunsQuery => {
   return {
     status: query.status,
     workflowName: query.workflowName,
+    repairLoop: query.repairLoop,
     from: query.from,
     to: query.to,
     costMin: parseNumberParam(query.costMin),

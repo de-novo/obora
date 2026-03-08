@@ -38,6 +38,84 @@ describe('history routes', () => {
     expect(body.items[0]?.run.id).toBe('run-2');
   });
 
+  it('filters and sorts runs by repair-loop metadata', async () => {
+    const historyStore = new InMemoryHistoryStore();
+    historyStore.seed({
+      runs: [
+        {
+          id: 'run-1',
+          workflowName: 'wf-a',
+          status: 'completed',
+          input: {},
+          startedAt: '2026-02-18T00:00:00.000Z',
+          metadata: {
+            repairLoop: {
+              validationFailed: 3,
+              validationPassed: 1,
+              repairStarted: 3,
+              repairCompleted: 3,
+              repairNoProgress: 0,
+              backEdgeTriggered: 3,
+              backEdgeExhausted: 0,
+              recentValidationFailures: [],
+            },
+          },
+        },
+        {
+          id: 'run-2',
+          workflowName: 'wf-b',
+          status: 'completed',
+          input: {},
+          startedAt: '2026-02-17T00:00:00.000Z',
+          metadata: {
+            repairLoop: {
+              validationFailed: 1,
+              validationPassed: 1,
+              repairStarted: 1,
+              repairCompleted: 1,
+              repairNoProgress: 1,
+              backEdgeTriggered: 1,
+              backEdgeExhausted: 0,
+              recentValidationFailures: [],
+            },
+          },
+        },
+        { id: 'run-3', workflowName: 'wf-c', status: 'completed', input: {}, startedAt: '2026-02-16T00:00:00.000Z' },
+      ],
+    });
+
+    const { app } = await createDashboardServer({}, { historyStore });
+    servers.push(app);
+
+    const stalled = await app.inject({
+      method: 'GET',
+      url: '/api/history/runs?repairLoop=stalled&sortBy=validationFailed&sortOrder=desc',
+    });
+    expect(stalled.statusCode).toBe(200);
+    const stalledBody = stalled.json() as { items: Array<{ run: { id: string } }>; total: number };
+    expect(stalledBody.total).toBe(1);
+    expect(stalledBody.items[0]?.run.id).toBe('run-2');
+
+    const withRepairLoop = await app.inject({
+      method: 'GET',
+      url: '/api/history/runs?repairLoop=with&sortBy=validationFailed&sortOrder=desc',
+    });
+    expect(withRepairLoop.statusCode).toBe(200);
+    const withBody = withRepairLoop.json() as { items: Array<{ run: { id: string } }>; total: number };
+    expect(withBody.total).toBe(2);
+    expect(withBody.items[0]?.run.id).toBe('run-1');
+    expect(withBody.items[1]?.run.id).toBe('run-2');
+    
+    const withoutRepairLoop = await app.inject({
+      method: 'GET',
+      url: '/api/history/runs?repairLoop=without',
+    });
+    expect(withoutRepairLoop.statusCode).toBe(200);
+    const withoutBody = withoutRepairLoop.json() as { items: Array<{ run: { id: string } }>; total: number };
+    expect(withoutBody.total).toBe(1);
+    expect(withoutBody.items[0]?.run.id).toBe('run-3');
+  });
+
   it('returns 400 when costMin or costMax is not a finite number', async () => {
     const { app } = await createDashboardServer({}, { historyStore: new InMemoryHistoryStore() });
     servers.push(app);
