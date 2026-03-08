@@ -1,0 +1,11 @@
+# Agents for reddit-clone-mini sandbox
+# Uses sandbox config defaults (.sandbox/.obora/config.yaml)
+
+agents:
+  builder:
+    role: Frontend Prototyper
+    description: Builds a distinctive, production-grade Reddit-style mini app using file tools only
+
+  reviewer:
+    role: Technical Reviewer
+    description: Summarizes what was generated and checks whether the requested files and interactions were implemented

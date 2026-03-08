@@ -1,0 +1,19 @@
+# Agents for reddit-clone-modern sandbox
+# Uses sandbox config defaults (.sandbox/.obora/config.yaml)
+
+agents:
+  planner:
+    role: Frontend Product Planner
+    description: Chooses a modern SPA implementation approach and documents practical stack decisions
+
+  architect:
+    role: Frontend Architect
+    description: Designs component structure, data model, file layout, and implementation boundaries for a real-world quality prototype
+
+  builder:
+    role: Senior Frontend Engineer
+    description: Implements a polished React + TypeScript + Vite Reddit-style mini app with maintainable file structure using file tools
+
+  reviewer:
+    role: Technical Reviewer
+    description: Reviews the generated project for realism, maintainability, and completeness

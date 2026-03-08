@@ -38,6 +38,10 @@ providers:
 | 06 | error-recovery | 재시도/복구 메커니즘 | `./run.sh 06` |
 | 07 | custom-tools | 커스텀 도구 주입 | `./run.sh 07` |
 | 08 | multi-provider | 여러 LLM 프로바이더 | `./run.sh 08` |
+| 09 | reddit-clone-mini | Obora가 직접 생성하는 Reddit 스타일 미니 프로젝트 | `./run.sh 09` |
+| 10 | reddit-clone-modern | Obora가 직접 생성하는 현대형 React/TS/Vite Reddit 프로젝트 | `./run.sh 10` |
+| 11 | reddit-clone-modern-live | live reference tool을 사용해 생성하는 현대형 React/TS/Vite Reddit 프로젝트 | `./run.sh 11` |
+| 12 | reddit-clone-modern-repair-loop | 생성→검증→수정→재검증 피드백 루프형 현대 React/TS/Vite Reddit 프로젝트 | `./run.sh 12` |
 
 ## 전체 실행
 
@@ -145,6 +149,34 @@ providers:
 여러 LLM 프로바이더:
 - ZAI GLM-4.7 (`global:zai` 또는 `ZAI_API_KEY`)
 - OpenAI Codex GPT-5.3 (`global:openai-codex` 또는 `OPENAI_CODEX_API_KEY`)
+
+### 09-reddit-clone-mini
+Obora가 샌드박스 안에서 직접 파일을 생성하는 프로젝트성 검증:
+- `file_write` / `file_list` / `file_read`를 사용해 `app/` 아래 미니 프로젝트 생성
+- zero-dependency Node static server 포함
+- 생성 후 shell + Playwright로 실제 실행/필터/생성/추천 동작 검증
+
+### 10-reddit-clone-modern
+Obora의 현대형 프론트엔드 프로젝트 생성 능력 검증:
+- React + TypeScript + Vite 기반 프로젝트 직접 생성
+- stack decision / architecture / review 문서 아티팩트 생성
+- `src/components` 다중 파일 구조 요구
+- npm install → typecheck → build → preview → Playwright smoke까지 자동 검증
+
+### 11-reddit-clone-modern-live
+live reference 기반 정확도 보강 검증:
+- custom tool로 npm registry / official raw template fetch 수행
+- 최신 패키지/템플릿 정보를 본 뒤 React + TypeScript + Vite 프로젝트 생성
+- live research artifact 생성 후 실제 app 생성
+- npm install → typecheck → build → preview → Playwright smoke까지 자동 검증
+
+### 12-reddit-clone-modern-repair-loop
+feedback-driven self-repair loop 검증:
+- live research 후 초기 프로젝트 생성
+- shell validator가 install / typecheck / build / Playwright smoke 실행
+- 실패 시 validation log를 다시 입력으로 넣어 repair step 수행
+- `1 -> 2 -> 3 -> 4 -> 3 -> 4 -> 3 -> 6` 형태로 반복
+- 최종적으로 `FINAL-REPORT.md`에 생성/실패/수정/최종상태 요약
 
 ## 결과 확인
 

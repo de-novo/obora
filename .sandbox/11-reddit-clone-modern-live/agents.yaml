@@ -1,0 +1,19 @@
+# Agents for reddit-clone-modern-live sandbox
+# Uses sandbox config defaults (.sandbox/.obora/config.yaml)
+
+agents:
+  researcher:
+    role: Frontend Stack Researcher
+    description: Verifies modern frontend package versions and template references using live fetch tools before implementation
+
+  architect:
+    role: Frontend Architect
+    description: Converts live reference findings into a realistic React/TypeScript/Vite architecture plan
+
+  builder:
+    role: Senior Frontend Engineer
+    description: Implements a modern Reddit-style React app aligned with live package and template references using file tools
+
+  reviewer:
+    role: Technical Reviewer
+    description: Reviews whether the generated project aligns with live references and remains maintainable

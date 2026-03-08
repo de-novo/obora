@@ -1,0 +1,152 @@
+name: reddit-clone-modern
+version: "1.0"
+description: "Obora generates a modern React/TypeScript Reddit-style mini app with architecture artifacts"
+
+steps:
+  - name: stack_decision
+    description: Decide the modern frontend stack and rationale
+    agent: planner
+    input:
+      task: |
+        Create `artifacts/STACK-DECISION.md` using file_write.
+
+        Goal:
+        Define a realistic modern frontend approach for a small but service-quality Reddit-style mini app.
+
+        Constraints:
+        - The implementation MUST use React + TypeScript + Vite.
+        - You may decide the state strategy and styling approach, but keep it natural for this project size.
+        - Avoid unnecessary dependencies.
+        - Prefer maintainability and realistic project structure over flashy complexity.
+
+        The markdown must include:
+        - selected stack
+        - why the stack is appropriate
+        - state management choice and rationale
+        - styling approach and rationale
+        - file structure overview
+        - why this is a good modern baseline for a real service prototype
+
+        After writing the file, self-check it with file_read.
+
+  - name: architecture
+    description: Design the app architecture and file plan
+    agent: architect
+    depends_on: [stack_decision]
+    input:
+      task: |
+        Create `artifacts/ARCHITECTURE.md` using file_write.
+
+        Design a maintainable architecture for the app that the implementation step will follow.
+
+        The markdown must include:
+        - route/view strategy
+        - data model for posts and communities
+        - component breakdown
+        - state flow
+        - file-by-file plan
+        - interaction model for community filtering, vote state, and create-post modal
+        - notes about what is intentionally simplified versus a full production system
+
+        The implementation should naturally decompose into multiple source files.
+        After writing the file, self-check it with file_read.
+
+  - name: implementation
+    description: Generate the React TypeScript Vite app with multiple files
+    agent: builder
+    depends_on: [architecture]
+    input:
+      task: |
+        Build a complete runnable modern frontend project in the relative folder `app/`.
+
+        CRITICAL execution rules:
+        - Use file_write / file_read / file_list to create and verify files.
+        - Do NOT print code as plain text in your answer.
+        - Follow the architecture plan naturally.
+        - The project must be installable and buildable with npm.
+        - Use a maintainable multi-file structure.
+
+        Required project baseline:
+        - React + TypeScript + Vite
+        - npm scripts: dev, build, preview, typecheck
+        - Multi-file source layout under `app/src/`
+        - Separate components directory with at least 4 component files
+        - A dedicated seed/mock data file
+        - A dedicated shared types file
+
+        Non-negotiable compatibility rules:
+        - This project is Vite React, NOT Next.js.
+        - Do NOT use `<style jsx>`, `styled-jsx`, `next/*`, or any Next.js-only patterns.
+        - Put styling in normal CSS files, especially `app/src/styles.css`.
+        - `app/tsconfig.json` must include Vite client types so CSS imports typecheck correctly.
+        - Do not add a default `React` import in TSX files unless you actually use that symbol.
+        - All generated code must pass strict TypeScript typecheck under Vite.
+
+        Required files at minimum:
+        - app/package.json
+        - app/tsconfig.json
+        - app/vite.config.ts
+        - app/index.html
+        - app/src/main.tsx
+        - app/src/App.tsx
+        - app/src/types.ts
+        - app/src/data/seed.ts
+        - app/src/components/Sidebar.tsx
+        - app/src/components/PostCard.tsx
+        - app/src/components/Feed.tsx
+        - app/src/components/RightRail.tsx
+        - app/src/components/CreatePostModal.tsx
+        - app/src/styles.css
+
+        UI requirements:
+        - dark-mode Reddit-inspired editorial feed
+        - left community rail
+        - center post feed
+        - right insight/trending rail
+        - polished but maintainable styling
+        - avoid generic bland output
+
+        Functional requirements:
+        - at least 4 seeded posts
+        - exactly these filter communities: All, r/designcrit, r/startups, r/webdev, r/sideproject
+        - exactly one seeded post for r/startups
+        - clicking a community pill filters the feed
+        - create-post modal adds a new post to the top of the feed
+        - each post has upvote/downvote and visible score updates
+
+        Stable selectors are REQUIRED:
+        - Community pills: data-testid="community-pill" and data-community="..."
+        - Feed root: data-testid="posts-feed"
+        - Each post card: data-testid="post-card"
+        - Create post button: data-testid="create-post-button"
+        - Modal root: data-testid="create-post-modal"
+        - Community select: data-testid="post-community-select"
+        - Title input: data-testid="post-title-input"
+        - Body textarea: data-testid="post-body-input"
+        - Submit button: data-testid="submit-post-button"
+        - Vote score text: data-testid="vote-score"
+        - Upvote button: data-testid="upvote-button"
+        - Downvote button: data-testid="downvote-button"
+
+        After writing files, use file_list and file_read to self-verify the app structure.
+        Specifically self-check:
+        - `app/tsconfig.json` includes Vite client typing support
+        - no generated TSX file contains `<style jsx>`
+        - CSS is loaded from normal stylesheet imports
+
+  - name: review
+    description: Review the generated modern project
+    agent: reviewer
+    depends_on: [implementation]
+    input:
+      task: |
+        Create `artifacts/REVIEW.md` using file_write.
+
+        Review the generated project.
+        Include:
+        - what feels modern and realistic
+        - what architectural choices were good
+        - what is still simplified
+        - what should be built next if this prototype were extended
+
+        After writing the file, self-check it with file_read.

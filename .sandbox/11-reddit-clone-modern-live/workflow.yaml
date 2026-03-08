@@ -1,0 +1,215 @@
+name: reddit-clone-modern-live
+version: "1.0"
+description: "Obora generates a modern React/TS/Vite app using live reference tools"
+
+steps:
+  - name: live_stack_research
+    description: Verify current package versions and template references
+    agent: researcher
+    input:
+      task: |
+        Use the custom tools before writing anything.
+
+        Required research actions:
+        1. Use `npm_package_info` for:
+           - react
+           - react-dom
+           - typescript
+           - vite
+           - @vitejs/plugin-react
+        2. Use `fetch_url` for:
+           - https://raw.githubusercontent.com/vitejs/vite/main/packages/create-vite/template-react-ts/package.json
+           - https://raw.githubusercontent.com/vitejs/vite/main/packages/create-vite/template-react-ts/tsconfig.json
+           - https://raw.githubusercontent.com/vitejs/vite/main/packages/create-vite/template-react-ts/tsconfig.app.json
+           - https://raw.githubusercontent.com/vitejs/vite/main/packages/create-vite/template-react-ts/tsconfig.node.json
+           - https://raw.githubusercontent.com/vitejs/vite/main/packages/create-vite/template-react-ts/src/main.tsx
+
+        Create `artifacts/LIVE-STACK-RESEARCH.md` with:
+        - current package versions
+        - official Vite React TS template details
+        - compatibility notes
+        - concrete implementation rules
+
+        Save with file_write, then self-check with file_read.
+
+  - name: architecture
+    description: Design the app based on the live research
+    agent: architect
+    depends_on: [live_stack_research]
+    input:
+      task: |
+        Create `artifacts/ARCHITECTURE.md` using file_write.
+
+        Include:
+        - app structure
+        - component breakdown
+        - state model for filters, votes, and create-post modal
+        - file-by-file plan
+        - what is simplified vs production-grade
+
+        Save with file_write, then self-check with file_read.
+
+  - name: implementation_scaffold
+    description: Create the Vite scaffold and shared foundations
+    agent: builder
+    depends_on: [architecture]
+    input:
+      task: |
+        Build the project scaffold in `app/`.
+
+        Rules:
+        - This is a Vite React project, not Next.js.
+        - Read `artifacts/LIVE-STACK-RESEARCH.md` and `artifacts/ARCHITECTURE.md` first.
+        - Follow the official Vite TS config structure.
+        - Use the researched package versions; do not downgrade them.
+        - Use exactly one shared stylesheet file: `app/src/styles.css`.
+        - Import `./styles.css` from `src/main.tsx` only.
+        - Export `App` as the default export from `app/src/App.tsx`.
+
+        Create only:
+        - app/package.json
+        - app/tsconfig.json
+        - app/tsconfig.app.json
+        - app/tsconfig.node.json
+        - app/vite.config.ts
+        - app/index.html
+        - app/src/main.tsx
+        - app/src/App.tsx
+        - app/src/vite-env.d.ts
+        - app/src/types.ts
+        - app/src/styles.css
+
+        Keep the scaffold syntactically valid.
+        Self-check only these files with file_read:
+        - app/src/main.tsx
+        - app/src/App.tsx
+        - app/tsconfig.app.json
+
+  - name: implementation_data
+    description: Create the shared data layer and community model
+    agent: builder
+    depends_on: [implementation_scaffold]
+    input:
+      task: |
+        Create the data layer for the app.
+
+        Rules:
+        - Read `artifacts/LIVE-STACK-RESEARCH.md`, `artifacts/ARCHITECTURE.md`, `app/src/types.ts`, and `app/src/App.tsx` first.
+        - Because `verbatimModuleSyntax` is enabled, use `import type` for type-only imports.
+        - Do not leave unused imports or variables.
+        - Use the exact community values consistently: `All`, `r/designcrit`, `r/startups`, `r/webdev`, `r/sideproject`.
+        - Do not introduce any additional CSS imports.
+
+        Create/update only:
+        - app/src/types.ts
+        - app/src/data/seed.ts
+        - app/src/App.tsx
+
+        Data requirements:
+        - exactly one seeded post in `r/startups`
+        - at least four seeded posts total
+        - filtering state uses the exact community values above, not slug variants
+
+        Self-check only:
+        - app/src/types.ts
+        - app/src/data/seed.ts
+        - app/src/App.tsx
+
+  - name: implementation_ui
+    description: Add components and interactive UI behavior
+    agent: builder
+    depends_on: [implementation_data]
+    input:
+      task: |
+        Complete the UI by creating the components and wiring interactions.
+
+        Rules:
+        - Read `artifacts/ARCHITECTURE.md`, `app/src/App.tsx`, `app/src/types.ts`, and `app/src/data/seed.ts` first.
+        - Because `verbatimModuleSyntax` is enabled, use `import type` for type-only imports.
+        - Because `noUnusedLocals` is enabled, do not leave unused imports or variables.
+        - Do not import any CSS files except `./styles.css` in `src/main.tsx`.
+        - No Next.js-only patterns.
+        - Keep `App` as the default export.
+
+        Create/update:
+        - app/src/App.tsx
+        - app/src/components/Sidebar.tsx
+        - app/src/components/PostCard.tsx
+        - app/src/components/Feed.tsx
+        - app/src/components/RightRail.tsx
+        - app/src/components/CreatePostModal.tsx
+
+        Required behavior:
+        - community filter pills with exact selector contract:
+          - `data-testid="community-pill"`
+          - `data-community` exactly one of: `All`, `r/designcrit`, `r/startups`, `r/webdev`, `r/sideproject`
+        - `data-testid="posts-feed"`
+        - `data-testid="post-card"`
+        - `data-testid="create-post-button"`
+        - `data-testid="create-post-modal"`
+        - `data-testid="post-community-select"`
+        - `data-testid="post-title-input"`
+        - `data-testid="post-body-input"`
+        - `data-testid="submit-post-button"`
+        - `data-testid="vote-score"`
+        - `data-testid="upvote-button"`
+        - `data-testid="downvote-button"`
+        - create-post modal adds a new post to the top of the feed
+        - upvote/downvote visibly updates score
+
+        Self-check only:
+        - app/src/App.tsx
+        - app/src/components/Sidebar.tsx
+        - app/src/components/PostCard.tsx
+        - app/src/components/CreatePostModal.tsx
+
+  - name: compatibility_audit
+    description: Audit and fix compatibility against live references and strict TypeScript rules
+    agent: reviewer
+    depends_on: [implementation_ui]
+    input:
+      task: |
+        Audit the generated app and fix mismatches using file tools.
+
+        Read first:
+        - `artifacts/LIVE-STACK-RESEARCH.md`
+        - `app/tsconfig.app.json`
+        - `app/src/main.tsx`
+        - `app/src/App.tsx`
+        - `app/src/components/Feed.tsx`
+        - `app/src/components/CreatePostModal.tsx`
+        - `app/src/data/seed.ts`
+
+        Ensure all of these are true:
+        - `app/tsconfig.app.json` includes `types: ["vite/client"]`
+        - `app/src/App.tsx` default export matches `main.tsx`
+        - all type-only imports use `import type`
+        - there are no unused imports or local variables under `noUnusedLocals`
+        - only `app/src/main.tsx` imports `./styles.css`
+        - no Next.js-only patterns exist
+        - community selector values are exactly: `All`, `r/designcrit`, `r/startups`, `r/webdev`, `r/sideproject`
+        - filter state and `data-community` attributes use those same exact values
+
+        Fix files with file_write as needed.
+        Self-check only:
+        - app/tsconfig.app.json
+        - app/src/main.tsx
+        - app/src/App.tsx
+        - app/src/components/Feed.tsx
+        - app/src/components/CreatePostModal.tsx
+
+  - name: review
+    description: Review the generated project against live references
+    agent: reviewer
+    depends_on: [compatibility_audit]
+    input:
+      task: |
+        Create `artifacts/REVIEW.md` using file_write.
+
+        Review the generated app and answer:
+        - Did it follow the live reference guidance?
+        - Which architectural choices feel realistic for a modern service prototype?
+        - What is still simplified?
+        - What should be the next extension if this grows into a real product?
+
+        Save with file_write, then self-check with file_read.

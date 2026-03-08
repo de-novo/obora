@@ -1,0 +1,83 @@
+name: reddit-clone-mini
+version: "1.0"
+description: "Obora generates a runnable Reddit-style mini project inside the sandbox"
+
+steps:
+  - name: build_app
+    description: Build the runnable mini project using file tools
+    agent: builder
+    input:
+      task: |
+        Build a complete runnable mini Reddit-style frontend project in the relative folder `app/`.
+
+        IMPORTANT execution rules:
+        - Do NOT print code as plain text in the answer.
+        - Use the built-in file tools to create the files.
+        - After writing files, use file_list and file_read to self-check your work.
+        - The project must run with plain Node.js only. Do not rely on npm install or external dependencies.
+        - Use exactly these files:
+          - app/package.json
+          - app/server.js
+          - app/index.html
+          - app/styles.css
+          - app/app.js
+
+        Project requirements:
+        - Package name: reddit-clone-mini
+        - package.json must include a start script that runs `node server.js`
+        - server.js must serve the static app with Node's built-in `http`, `fs`, and `path` modules only
+        - server.js must respect `process.env.PORT` and default to 4319
+        - index.html must load styles.css and app.js
+        - The UI should feel like a polished Reddit-inspired editorial front page in dark mode
+        - Avoid generic bland styling; make it feel intentional and distinctive
+
+        Functional requirements:
+        - Left rail with community filter pills
+        - Center feed with at least 4 seeded posts
+        - Right rail with trending topics or stats
+        - Each post must have:
+          - title
+          - community
+          - author
+          - score
+          - comment count
+          - upvote and downvote buttons
+        - Clicking a community pill must re-render the feed to only show posts from that community
+        - Include an All filter that shows all posts
+        - Upvote/downvote must update the visible score in the UI
+        - Include a create-post button that opens a modal
+        - The modal must allow creating a new post with:
+          - community select
+          - title input
+          - body textarea
+        - Submitting the modal must add the new post to the top of the feed
+
+        Stable test selectors are REQUIRED:
+        - Community pills: data-testid="community-pill" and data-community="..."
+        - Each post card: data-testid="post-card"
+        - Create post button: data-testid="create-post-button"
+        - Modal root: data-testid="create-post-modal"
+        - Community select: data-testid="post-community-select"
+        - Title input: data-testid="post-title-input"
+        - Body textarea: data-testid="post-body-input"
+        - Submit button: data-testid="submit-post-button"
+        - Vote score text: data-testid="vote-score"
+        - Upvote button: data-testid="upvote-button"
+        - Downvote button: data-testid="downvote-button"
+
+        Seed data requirements:
+        - Include exactly these communities in the filter rail: All, r/designcrit, r/startups, r/webdev, r/sideproject
+        - Include at least one seeded post for each non-All community
+        - Make r/startups contain exactly one seeded post so it can be used for filtering validation
+
+  - name: summarize
+    description: Summarize the generated project
+    agent: reviewer
+    depends_on: [build_app]
+    input:
+      task: |
+        Summarize what was created.
+        Include:
+        - file list
+        - implemented interactions
+        - any limitations or simplifications
