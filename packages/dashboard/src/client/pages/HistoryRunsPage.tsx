@@ -119,6 +119,38 @@ export const HistoryRunsPage = ({ onOpenRun }: Props): JSX.Element => {
         </div>
       </div>
 
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
+        {[
+          { value: 'all', label: 'All runs', tone: { text: '#374151', background: '#f9fafb', border: '#d1d5db' } },
+          { value: 'with', label: 'Repair loops', tone: { text: '#1d4ed8', background: '#eff6ff', border: '#93c5fd' } },
+          { value: 'stalled', label: 'Stalled', tone: { text: '#92400e', background: '#fffbeb', border: '#fcd34d' } },
+          { value: 'exhausted', label: 'Exhausted', tone: { text: '#991b1b', background: '#fef2f2', border: '#fecaca' } },
+          { value: 'without', label: 'No repair loop', tone: { text: '#4b5563', background: '#f3f4f6', border: '#d1d5db' } },
+        ].map((chip) => {
+          const active = repairLoop === chip.value;
+          return (
+            <button
+              key={chip.value}
+              type="button"
+              onClick={() => { setRepairLoop(chip.value as typeof repairLoop); setOffset(0); }}
+              style={{
+                borderRadius: '999px',
+                border: `1px solid ${chip.tone.border}`,
+                background: active ? chip.tone.background : '#fff',
+                color: chip.tone.text,
+                padding: '6px 12px',
+                fontSize: '12px',
+                fontWeight: active ? 700 : 600,
+                cursor: 'pointer',
+                boxShadow: active ? `0 0 0 2px ${chip.tone.background}` : 'none',
+              }}
+            >
+              {chip.label}
+            </button>
+          );
+        })}
+      </div>
+
       {error ? <p style={{ color: '#b91c1c' }}>{error}</p> : null}
 
       <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff', border: '1px solid #e5e7eb' }}>

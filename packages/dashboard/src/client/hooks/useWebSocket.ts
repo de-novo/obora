@@ -51,9 +51,19 @@ export const useWebSocket = ({
   const reconnectTimerRef = useRef<number | null>(null);
   const manualCloseRef = useRef(false);
   const lastEventIdRef = useRef<string | undefined>(undefined);
+  const onEventRef = useRef(onEvent);
+  const onFullSyncRequiredRef = useRef(onFullSyncRequired);
 
   const [status, setStatus] = useState<UseWebSocketResult['status']>('idle');
   const [lastError, setLastError] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    onEventRef.current = onEvent;
+  }, [onEvent]);
+
+  useEffect(() => {
+    onFullSyncRequiredRef.current = onFullSyncRequired;
+  }, [onFullSyncRequired]);
 
   const clearTimer = useCallback(() => {
     if (reconnectTimerRef.current !== null) {
@@ -116,7 +126,7 @@ export const useWebSocket = ({
         if (parsed.type === 'error') {
           const payload = (parsed.payload ?? {}) as WsErrorPayload;
           if (payload.fullSyncRequired) {
-            void onFullSyncRequired?.();
+            void onFullSyncRequiredRef.current?.();
             lastEventIdRef.current = undefined;
           }
           return;
@@ -127,7 +137,7 @@ export const useWebSocket = ({
         }
 
         lastEventIdRef.current = parsed.payload.id;
-        onEvent(parsed.payload);
+        onEventRef.current(parsed.payload);
       } catch {
         // noop
       }
@@ -150,7 +160,7 @@ export const useWebSocket = ({
         connect();
       }, reconnectDelayMs);
     };
-  }, [clearTimer, enabled, onEvent, onFullSyncRequired, reconnectDelayMs, url]);
+  }, [clearTimer, enabled, reconnectDelayMs, url]);
 
   useEffect(() => {
     if (!enabled) {
