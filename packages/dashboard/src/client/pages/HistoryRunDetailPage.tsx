@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import { fetchHistoryRunDetail, resumeHistoryRun, type RunDetailResponse } from '../api/history-client';
+import { fetchHistoryRunDetail, resumeHistoryRun, type ArtifactRecord, type RunDetailResponse } from '../api/history-client';
 import { filterAuditEvents, toPrettyJson } from '../components/history-utils';
 import { formatRepairLoopBadge, getRepairLoopSummary, getRepairLoopTone } from '../components/repair-loop-utils';
 
@@ -17,6 +17,7 @@ export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
   const [error, setError] = useState<string | undefined>(undefined);
   const [showDriftModal, setShowDriftModal] = useState(false);
   const [auditOffset, setAuditOffset] = useState(0);
+  const [artifactStepFilter, setArtifactStepFilter] = useState<string | null>(null);
   const auditLimit = 100;
 
   useEffect(() => {
@@ -86,6 +87,26 @@ export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
   const repairLoop = getRepairLoopSummary(run);
   const repairBadge = formatRepairLoopBadge(repairLoop);
   const repairTone = getRepairLoopTone(repairLoop);
+  const filteredArtifacts = artifactStepFilter
+    ? data.artifacts.filter((artifact) => artifact.stepName === artifactStepFilter)
+    : data.artifacts;
+
+  const jumpToArtifactSection = (stepName?: string) => {
+    setArtifactStepFilter(stepName ?? null);
+    requestAnimationFrame(() => {
+      document.getElementById('artifacts-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
+  const jumpToStep = (stepName?: string) => {
+    if (!stepName) return;
+    const target = data.steps.find((step) => step.stepName === stepName);
+    if (!target) return;
+    setSelectedStepId(target.id);
+    requestAnimationFrame(() => {
+      document.getElementById('step-drilldown-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
 
   return (
     <section>
@@ -157,6 +178,18 @@ export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
                 {repairLoop.recentValidationFailures.map((failure, index) => (
                   <div key={`${failure.stepName ?? 'validate'}-${index}`} style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px', background: '#fff' }}>
                     <div style={{ fontWeight: 600 }}>{failure.stepName ?? 'validate'}{failure.summary ? ` — ${failure.summary}` : ''}</div>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '6px' }}>
+                      {failure.stepName ? (
+                        <button type="button" onClick={() => jumpToStep(failure.stepName)} style={{ fontSize: '12px', cursor: 'pointer' }}>
+                          Jump to step
+                        </button>
+                      ) : null}
+                      {failure.stepName ? (
+                        <button type="button" onClick={() => jumpToArtifactSection(failure.stepName)} style={{ fontSize: '12px', cursor: 'pointer' }}>
+                          Show artifacts
+                        </button>
+                      ) : null}
+                    </div>
                     {failure.logPath ? <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>log: {failure.logPath}</div> : null}
                     {failure.failedChecks.length > 0 ? (
                       <ul style={{ margin: '8px 0 0', paddingLeft: '18px' }}>
@@ -192,6 +225,45 @@ export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
         </div>
       ) : null}
 
+      <div id="artifacts-section" style={{ border: '1px solid #e5e7eb', borderRadius: '10px', padding: '12px', marginBottom: '12px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
+          <div>
+            <h3 style={{ margin: 0 }}>Artifacts</h3>
+            <p style={{ margin: '4px 0 0', color: '#6b7280', fontSize: '13px' }}>
+              {artifactStepFilter ? `Showing artifacts for step: ${artifactStepFilter}` : 'Showing all persisted artifacts for this run'}
+            </p>
+          </div>
+          {artifactStepFilter ? (
+            <button type="button" onClick={() => setArtifactStepFilter(null)} style={{ fontSize: '12px', cursor: 'pointer' }}>
+              Clear filter
+            </button>
+          ) : null}
+        </div>
+
+        {filteredArtifacts.length === 0 ? (
+          <p style={{ color: '#6b7280', margin: 0 }}>No artifacts found for the current selection.</p>
+        ) : (
+          <div style={{ display: 'grid', gap: '8px' }}>
+            {filteredArtifacts.map((artifact: ArtifactRecord) => (
+              <div key={artifact.id} style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px', background: '#fff' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '12px' }}>
+                  <div>
+                    <div style={{ fontWeight: 600 }}>{artifact.name}</div>
+                    <div style={{ fontSize: '12px', color: '#6b7280' }}>{artifact.stepName} · {artifact.mimeType} · {artifact.sizeBytes} bytes</div>
+                  </div>
+                  <button type="button" onClick={() => jumpToStep(artifact.stepName)} style={{ fontSize: '12px', cursor: 'pointer' }}>
+                    Jump to step
+                  </button>
+                </div>
+                <div style={{ marginTop: '6px', fontSize: '12px', color: '#6b7280', wordBreak: 'break-all' }}>
+                  storage: {artifact.storageRef}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div style={{ marginBottom: '16px' }}>
         <h3 style={{ marginBottom: '8px' }}>Step Timeline</h3>
         <div style={{ display: 'flex', gap: '6px', overflowX: 'auto' }}>
@@ -218,7 +290,7 @@ export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
       </div>
 
       {selectedStep ? (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '12px' }}>
+        <div id="step-drilldown-section" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '12px' }}>
           <div>
             <h3>Step Drilldown</h3>
             <p style={{ marginBottom: '6px' }}>Input</p>

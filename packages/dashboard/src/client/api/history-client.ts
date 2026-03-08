@@ -1,4 +1,5 @@
 import type {
+  ArtifactRecord,
   CheckpointRecord,
   CostSummary,
   HistoryRunSummaryItem,
@@ -11,6 +12,7 @@ import type {
 } from '../../shared/history-types.js';
 
 export type {
+  ArtifactRecord,
   CheckpointRecord,
   CostSummary,
   HistoryRunSummaryItem,

@@ -44,6 +44,18 @@ export interface StructuredAuditEvent {
   };
 }
 
+export interface ArtifactRecord {
+  id: string;
+  runId: string;
+  stepName: string;
+  name: string;
+  mimeType: string;
+  sizeBytes: number;
+  storageRef: string;
+  createdAt: string;
+  deletedAt?: string;
+}
+
 export interface CheckpointRecord {
   id: string;
   runId: string;
@@ -77,6 +89,7 @@ export interface HistoryRunsResponse {
 export interface RunDetailResponse {
   run: RunRecord;
   steps: StepRecord[];
+  artifacts: ArtifactRecord[];
   costSummary: CostSummary;
   auditTimeline: StructuredAuditEvent[];
   checkpoints: CheckpointRecord[];

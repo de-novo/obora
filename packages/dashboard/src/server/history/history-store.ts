@@ -1,4 +1,5 @@
 import type {
+  ArtifactRecord,
   CheckpointRecord,
   CostSummary,
   HistoryRunsQuery,
@@ -9,7 +10,7 @@ import type {
   StructuredAuditEvent,
 } from '../../shared/history-types.js';
 
-export type { HistoryRunsQuery, RunDetailResponse, RunRecord, StepRecord, CostSummary, StructuredAuditEvent, CheckpointRecord };
+export type { ArtifactRecord, HistoryRunsQuery, RunDetailResponse, RunRecord, StepRecord, CostSummary, StructuredAuditEvent, CheckpointRecord };
 export type ListRunsResult = HistoryRunsResponse;
 
 export interface HistoryStore {
@@ -72,6 +73,7 @@ export class AdapterHistoryStore implements HistoryStore {
       listRuns: (query: Record<string, unknown>) => Promise<RunRecord[]>;
       getRun: (runId: string) => Promise<RunRecord | null>;
       getSteps: (runId: string) => Promise<StepRecord[]>;
+      getArtifacts: (runId: string) => Promise<ArtifactRecord[]>;
       getRunCostSummary: (runId: string) => Promise<CostSummary>;
       getAuditTimeline: (runId: string) => Promise<StructuredAuditEvent[]>;
       getLatestCheckpoint: (runId: string) => Promise<CheckpointRecord | null>;
@@ -143,8 +145,9 @@ export class AdapterHistoryStore implements HistoryStore {
     const run = await this.adapter.getRun(runId);
     if (!run) return null;
 
-    const [steps, costSummary, audits, checkpoint] = await Promise.all([
+    const [steps, artifacts, costSummary, audits, checkpoint] = await Promise.all([
       this.adapter.getSteps(runId),
+      this.adapter.getArtifacts(runId),
       this.adapter.getRunCostSummary(runId),
       this.adapter.getAuditTimeline(runId),
       this.adapter.getLatestCheckpoint(runId),
@@ -158,6 +161,7 @@ export class AdapterHistoryStore implements HistoryStore {
     return {
       run,
       steps,
+      artifacts,
       costSummary,
       auditTimeline: sortedAudits.slice(auditOffset, auditOffset + auditLimit),
       checkpoints: checkpoint ? [checkpoint] : [],
@@ -184,6 +188,7 @@ export class AdapterHistoryStore implements HistoryStore {
 export class InMemoryHistoryStore implements HistoryStore {
   private readonly runs = new Map<string, RunRecord>();
   private readonly steps = new Map<string, StepRecord[]>();
+  private readonly artifacts = new Map<string, import('../../shared/history-types.js').ArtifactRecord[]>();
   private readonly costs = new Map<string, CostSummary>();
   private readonly audits = new Map<string, StructuredAuditEvent[]>();
   private readonly checkpoints = new Map<string, CheckpointRecord[]>();
@@ -191,6 +196,7 @@ export class InMemoryHistoryStore implements HistoryStore {
   seed(params: {
     runs?: RunRecord[];
     steps?: StepRecord[];
+    artifacts?: import('../../shared/history-types.js').ArtifactRecord[];
     costs?: Array<{ runId: string; summary: CostSummary }>;
     audits?: StructuredAuditEvent[];
     checkpoints?: CheckpointRecord[];
@@ -200,6 +206,11 @@ export class InMemoryHistoryStore implements HistoryStore {
       const list = this.steps.get(step.runId) ?? [];
       list.push(structuredClone(step));
       this.steps.set(step.runId, list);
+    });
+    params.artifacts?.forEach((artifact) => {
+      const list = this.artifacts.get(artifact.runId) ?? [];
+      list.push(structuredClone(artifact));
+      this.artifacts.set(artifact.runId, list);
     });
     params.costs?.forEach((cost) => this.costs.set(cost.runId, structuredClone(cost.summary)));
     params.audits?.forEach((event) => {
@@ -268,6 +279,7 @@ export class InMemoryHistoryStore implements HistoryStore {
     return {
       run: structuredClone(run),
       steps: [...(this.steps.get(runId) ?? [])].sort((a, b) => a.startedAt.localeCompare(b.startedAt)).map((s) => structuredClone(s)),
+      artifacts: [...(this.artifacts.get(runId) ?? [])].sort((a, b) => a.createdAt.localeCompare(b.createdAt)).map((artifact) => structuredClone(artifact)),
       costSummary: structuredClone(this.costs.get(runId) ?? { totalTokens: 0, totalCostUsd: 0, byStep: [], byModel: [] }),
       auditTimeline: allAudit.slice(auditOffset, auditOffset + auditLimit).map((e) => structuredClone(e)),
       checkpoints: [...(this.checkpoints.get(runId) ?? [])]
