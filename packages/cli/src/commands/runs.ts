@@ -157,6 +157,23 @@ export function summarizeRepairLoopTimeline(
   return hasActivity ? summary : undefined;
 }
 
+function formatRepairLoopListSummary(summary: RepairLoopInspectSummary | undefined): string {
+  if (!summary) return "-";
+  const parts: string[] = [];
+  if (summary.validationFailed > 0) parts.push(`F${summary.validationFailed}`);
+  if (summary.repairStarted > 0) parts.push(`R${summary.repairStarted}`);
+  if (summary.validationPassed > 0) parts.push(`P${summary.validationPassed}`);
+  if (summary.repairNoProgress > 0) parts.push(`N${summary.repairNoProgress}`);
+  if (summary.backEdgeExhausted > 0) parts.push(`X${summary.backEdgeExhausted}`);
+  const prefix = parts.length > 0 ? parts.join("/") : "loop";
+  const last = summary.lastValidationSummary
+    ? summary.lastValidationSummary.length > 28
+      ? `${summary.lastValidationSummary.slice(0, 27)}…`
+      : summary.lastValidationSummary
+    : undefined;
+  return last ? `${prefix} ${last}` : prefix;
+}
+
 function extractPersistedRepairLoopSummary(run: { metadata?: Record<string, unknown> } | null | undefined): RepairLoopInspectSummary | undefined {
   const metadata = run?.metadata;
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return undefined;
@@ -305,11 +322,13 @@ export function createRunsCommand(): Command {
         return;
       }
 
-      console.log(`${"ID".padEnd(38)} ${"Workflow".padEnd(20)} ${"Status".padEnd(12)} Started At`);
-      console.log("-".repeat(90));
+      console.log(`${"ID".padEnd(38)} ${"Workflow".padEnd(20)} ${"Status".padEnd(12)} ${"Repair Loop".padEnd(40)} Started At`);
+      console.log("-".repeat(132));
       for (const run of runRecords) {
+        const repairLoop = extractPersistedRepairLoopSummary(run);
+        const repairSummary = formatRepairLoopListSummary(repairLoop);
         console.log(
-          `${run.id.padEnd(38)} ${run.workflowName.padEnd(20)} ${run.status.padEnd(12)} ${run.startedAt}`
+          `${run.id.padEnd(38)} ${run.workflowName.padEnd(20)} ${run.status.padEnd(12)} ${repairSummary.padEnd(40)} ${run.startedAt}`
         );
       }
       console.log(`\n${runRecords.length} run(s)`);

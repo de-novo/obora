@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { fetchHistoryRuns, type HistoryRunsResponse } from '../api/history-client';
+import { formatRepairLoopBadge, getRepairLoopSummary, truncateValidationSummary } from '../components/repair-loop-utils';
 
 interface Props {
   onOpenRun: (runId: string) => void;
@@ -117,12 +118,18 @@ export const HistoryRunsPage = ({ onOpenRun }: Props): JSX.Element => {
             <th style={{ padding: '8px' }}>Workflow</th>
             <th style={{ padding: '8px' }}>Status</th>
             <th style={{ padding: '8px' }}>Started</th>
+            <th style={{ padding: '8px' }}>Repair Loop</th>
             <th style={{ padding: '8px' }}>Cost(USD)</th>
             <th style={{ padding: '8px' }}>Steps</th>
           </tr>
         </thead>
         <tbody>
-          {data.items.map((item) => (
+          {data.items.map((item) => {
+            const repairLoop = getRepairLoopSummary(item.run);
+            const repairBadge = formatRepairLoopBadge(repairLoop);
+            const lastValidation = truncateValidationSummary(repairLoop?.lastValidationSummary, 56);
+
+            return (
             <tr
               key={item.run.id}
               style={{ cursor: 'pointer', borderBottom: '1px solid #f3f4f6' }}
@@ -136,10 +143,25 @@ export const HistoryRunsPage = ({ onOpenRun }: Props): JSX.Element => {
                 </span>
               </td>
               <td style={{ padding: '8px' }}>{new Date(item.run.startedAt).toLocaleString()}</td>
+              <td style={{ padding: '8px', minWidth: '220px' }}>
+                {repairLoop ? (
+                  <div style={{ display: 'grid', gap: '4px' }}>
+                    {repairBadge ? (
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: '#7c3aed' }}>{repairBadge}</span>
+                    ) : null}
+                    {lastValidation ? (
+                      <span style={{ fontSize: '12px', color: '#6b7280' }}>{lastValidation}</span>
+                    ) : null}
+                  </div>
+                ) : (
+                  <span style={{ color: '#9ca3af', fontSize: '12px' }}>—</span>
+                )}
+              </td>
               <td style={{ padding: '8px' }}>{item.costSummary.totalCostUsd.toFixed(4)}</td>
               <td style={{ padding: '8px' }}>{item.stepCount}</td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
 

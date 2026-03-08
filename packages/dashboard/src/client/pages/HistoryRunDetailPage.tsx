@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { fetchHistoryRunDetail, resumeHistoryRun, type RunDetailResponse } from '../api/history-client';
 import { filterAuditEvents, toPrettyJson } from '../components/history-utils';
+import { formatRepairLoopBadge, getRepairLoopSummary } from '../components/repair-loop-utils';
 
 interface Props {
   runId: string;
@@ -82,6 +83,8 @@ export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
   }
 
   const run = data.run;
+  const repairLoop = getRepairLoopSummary(run);
+  const repairBadge = formatRepairLoopBadge(repairLoop);
 
   return (
     <section>
@@ -95,6 +98,62 @@ export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
         <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px' }}>Total Cost<br />${data.costSummary.totalCostUsd.toFixed(4)}</div>
         <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px' }}>Total Tokens<br />{data.costSummary.totalTokens.toLocaleString()}</div>
       </div>
+
+      {repairLoop ? (
+        <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', padding: '12px', marginBottom: '12px', background: '#fafafa' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
+            <div>
+              <h3 style={{ margin: 0 }}>Repair Loop</h3>
+              <p style={{ margin: '4px 0 0', color: '#6b7280', fontSize: '13px' }}>
+                {repairBadge ?? 'validation-repair activity recorded'}
+              </p>
+            </div>
+            {repairLoop.lastValidationSummary ? (
+              <span style={{ fontSize: '12px', color: '#6b7280', maxWidth: '420px', textAlign: 'right' }}>
+                {repairLoop.lastValidationSummary}
+              </span>
+            ) : null}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '8px' }}>
+            <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px', background: '#fff' }}>Validation Failed<br />{repairLoop.validationFailed}</div>
+            <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px', background: '#fff' }}>Validation Passed<br />{repairLoop.validationPassed}</div>
+            <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px', background: '#fff' }}>Repair Started<br />{repairLoop.repairStarted}</div>
+            <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px', background: '#fff' }}>Repair Completed<br />{repairLoop.repairCompleted}</div>
+          </div>
+
+          <div style={{ marginTop: '10px', display: 'grid', gap: '4px', fontSize: '13px', color: '#374151' }}>
+            {repairLoop.lastAttempt !== undefined ? <div>Last attempt: {repairLoop.lastAttempt}</div> : null}
+            {repairLoop.lastValidationStep ? <div>Last validator: {repairLoop.lastValidationStep}</div> : null}
+            {repairLoop.lastRepairStep ? <div>Last repair step: {repairLoop.lastRepairStep}</div> : null}
+            {repairLoop.lastNoProgressReason ? <div>No-progress reason: {repairLoop.lastNoProgressReason}</div> : null}
+            {repairLoop.lastExhaustReason ? <div>Exhaust reason: {repairLoop.lastExhaustReason}</div> : null}
+          </div>
+
+          {repairLoop.recentValidationFailures.length > 0 ? (
+            <div style={{ marginTop: '12px' }}>
+              <h4 style={{ margin: '0 0 8px' }}>Recent Validation Failures</h4>
+              <div style={{ display: 'grid', gap: '8px' }}>
+                {repairLoop.recentValidationFailures.map((failure, index) => (
+                  <div key={`${failure.stepName ?? 'validate'}-${index}`} style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px', background: '#fff' }}>
+                    <div style={{ fontWeight: 600 }}>{failure.stepName ?? 'validate'}{failure.summary ? ` — ${failure.summary}` : ''}</div>
+                    {failure.logPath ? <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>log: {failure.logPath}</div> : null}
+                    {failure.failedChecks.length > 0 ? (
+                      <ul style={{ margin: '8px 0 0', paddingLeft: '18px' }}>
+                        {failure.failedChecks.slice(0, 3).map((check, checkIndex) => (
+                          <li key={`${failure.stepName ?? 'validate'}-${index}-${checkIndex}`} style={{ fontSize: '13px' }}>
+                            {check.name ?? 'check'}{check.file ? ` [${check.file}]` : ''}{check.message ? `: ${check.message}` : ''}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {run.status === 'suspended' ? (
         <div style={{ marginBottom: '12px' }}>
