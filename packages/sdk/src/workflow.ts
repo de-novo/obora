@@ -3,6 +3,12 @@ import { readFile } from "node:fs/promises";
 import { parse as parseYaml } from "yaml";
 
 import { OboraError, OboraErrorCode } from "./runtime.js";
+import type { RepairLoopConfig, ValidationStepConfig } from "./validation-repair.js";
+
+export interface WorkflowStepConfig extends Record<string, unknown> {
+  validation?: ValidationStepConfig;
+  repair_loop?: RepairLoopConfig;
+}
 
 export interface WorkflowStep {
   name: string;
@@ -12,7 +18,7 @@ export interface WorkflowStep {
   pattern?: string;
   participants?: string[];
   input?: Record<string, unknown>;
-  config?: Record<string, unknown>;
+  config?: WorkflowStepConfig;
   depends_on?: string[];
   gate?: string | { type: string; [key: string]: unknown };
   on_fail?: {
@@ -52,7 +58,7 @@ export interface AddStepOptions {
   pattern?: string;
   participants?: string[];
   input?: Record<string, unknown>;
-  config?: Record<string, unknown>;
+  config?: WorkflowStepConfig;
   depends?: string[];
   dependsOn?: string[];
   gate?: string | { type: string; [key: string]: unknown };

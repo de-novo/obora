@@ -1,6 +1,11 @@
 import type { ChatMessage, ChatCompletionResult, ToolCall, ToolDefinition } from "@obora/adapters";
 import type { AgentFactory } from "./runtime.js";
 import type { WorkflowStep } from "./workflow.js";
+import {
+  getValidationStepConfig,
+  normalizeValidationResult,
+  type RepairContext,
+} from "./validation-repair.js";
 import { existsSync, realpathSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve, sep } from "node:path";
@@ -32,10 +37,11 @@ export interface LLMAdapterLike {
 export interface StepContext {
   previousOutputs: Record<string, unknown>;
   signal?: AbortSignal;
+  repairContext?: RepairContext;
 }
 
 export interface StepResult {
-  output: string;
+  output: unknown;
   raw?: unknown;
   votes?: Array<{ participant: string; vote: "APPROVE" | "REJECT" | "REQUEST_CHANGES"; response: string }>;
 }
@@ -245,7 +251,7 @@ export class StepExecutor {
 
     const response = await this.requestForStep(step, context, step.agent);
     return {
-      output: response.message.content ?? "",
+      output: this.parseStructuredStepOutput(step, response.message.content ?? ""),
       raw: response,
     };
   }
@@ -655,17 +661,70 @@ export class StepExecutor {
       .map((name) => ({ step: name, output: context.previousOutputs[name] }))
       .filter((entry) => entry.output !== undefined);
 
+    const shouldIncludeRepairContext = Boolean(
+      context.repairContext &&
+      (context.repairContext.mode === "repair" || context.repairContext.latestValidation),
+    );
+
+    const repairContextLines = shouldIncludeRepairContext && context.repairContext
+      ? [
+          "",
+          "Repair context:",
+          `Mode: ${context.repairContext.mode}`,
+          `Attempt: ${context.repairContext.attempt}`,
+          context.repairContext.latestValidation
+            ? `Latest validation result:\n${JSON.stringify(context.repairContext.latestValidation, null, 2)}`
+            : "Latest validation result: none",
+          context.repairContext.previousValidationResults && context.repairContext.previousValidationResults.length > 0
+            ? `Previous validation history:\n${JSON.stringify(context.repairContext.previousValidationResults, null, 2)}`
+            : undefined,
+        ]
+      : [];
+
     return [
       `Step: ${step.name}`,
       step.description ? `Description: ${step.description}` : undefined,
       "",
       "Task:",
       task,
+      ...repairContextLines,
       "",
       dependencyContext.length > 0 ? `Previous outputs:\n${JSON.stringify(dependencyContext, null, 2)}` : "Previous outputs: none",
     ]
       .filter(Boolean)
       .join("\n");
+  }
+
+  private parseStructuredStepOutput(step: WorkflowStep, rawContent: string): unknown {
+    const validationConfig = getValidationStepConfig(step.config);
+    if (!validationConfig?.enabled) {
+      return rawContent;
+    }
+
+    const parsed = this.tryParseStructuredContent(rawContent);
+    const normalized = normalizeValidationResult(parsed);
+    if (normalized) {
+      return normalized;
+    }
+
+    if (validationConfig.emit_structured_result) {
+      throw new Error(`Validation step '${step.name}' is configured for structured output but did not return a valid ValidationResult JSON payload`);
+    }
+
+    return rawContent;
+  }
+
+  private tryParseStructuredContent(rawContent: string): unknown {
+    const trimmed = rawContent.trim();
+    const normalized = trimmed.startsWith("```")
+      ? trimmed.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "")
+      : trimmed;
+
+    try {
+      return JSON.parse(normalized);
+    } catch {
+      return undefined;
+    }
   }
 
   private extractTask(step: WorkflowStep): string {

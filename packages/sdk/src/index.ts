@@ -35,6 +35,12 @@ export { createAuthResolver, resolveAuthRef } from "./auth-resolver.js";
 export { StepExecutor } from "./step-executor.js";
 export { topologicalSort, groupByParallelizableLevels } from "./dependency-resolver.js";
 export {
+  buildValidationSignature,
+  getRepairLoopConfig,
+  getValidationStepConfig,
+  normalizeValidationResult,
+} from "./validation-repair.js";
+export {
   MockAgent,
   MockTool,
   runWorkflowTest,
@@ -65,10 +71,17 @@ export type {
   AuditEventType,
   AuditEvent,
 } from "./runtime.js";
-export type { AddStepOptions, OnFailConfig, WorkflowDef, WorkflowStep } from "./workflow.js";
+export type { AddStepOptions, OnFailConfig, WorkflowDef, WorkflowStep, WorkflowStepConfig } from "./workflow.js";
 export type { LLMConfig } from "./llm-config.js";
 export type { OboraConfig, ResolvedProviderConfig, ModelPricing } from "./config-loader.js";
 export type { StepContext, StepExecutorConfig, StepResult, LLMAdapterLike, ToolHandler as StepToolHandler } from "./step-executor.js";
+export type {
+  RepairContext,
+  RepairLoopConfig,
+  ValidationFailureCheck,
+  ValidationResult,
+  ValidationStepConfig,
+} from "./validation-repair.js";
 export { BUILTIN_TOOLS } from "./step-executor.js";
 export type {
   StepHandler,

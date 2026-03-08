@@ -22,6 +22,13 @@ import type {
 import type { EventBus } from "../events/event-bus.js";
 import type { PersistenceManager } from "../persistence/persistence-manager.js";
 import { AdapterResolver } from "./adapter-resolver.js";
+import {
+  getRepairLoopConfig,
+  getValidationStepConfig,
+  normalizeValidationResult,
+  type RepairContext,
+  type ValidationResult,
+} from "../validation-repair.js";
 
 // ── Internal shared-setup result ───────────────────────────────────────────
 
@@ -32,6 +39,14 @@ interface ExecutionEngine {
   llmConfig: LLMConfig | undefined;
   runtimeAgents: Map<string, AgentFactory>;
   resolver: AdapterResolver;
+}
+
+interface RepairLoopRuntimeState {
+  latestValidation?: ValidationResult;
+  history: ValidationResult[];
+  attempt: number;
+  repeatedSignatureCount: number;
+  lastSignature?: string;
 }
 
 // ── WorkflowRunner ─────────────────────────────────────────────────────────
@@ -335,6 +350,49 @@ export class WorkflowRunner {
     }
   }
 
+  private buildRepairContext(
+    step: WorkflowStep,
+    repairLoopStates: Map<string, RepairLoopRuntimeState>,
+  ): RepairContext | undefined {
+    const repairConfig = getRepairLoopConfig(step.config);
+    if (!repairConfig?.enabled) {
+      return undefined;
+    }
+
+    const state = repairLoopStates.get(step.name);
+    if (!state) {
+      return {
+        mode: "initial_build",
+        attempt: 1,
+      };
+    }
+
+    return {
+      mode: "repair",
+      attempt: state.attempt,
+      latestValidation: state.latestValidation,
+      previousValidationResults: state.history,
+    };
+  }
+
+  private resolveValidationResult(step: WorkflowStep, output: unknown): ValidationResult | undefined {
+    const validationConfig = getValidationStepConfig(step.config);
+    if (!validationConfig?.enabled) {
+      return undefined;
+    }
+
+    const normalized = normalizeValidationResult(output);
+    if (normalized) {
+      return normalized;
+    }
+
+    if (validationConfig.emit_structured_result) {
+      throw new Error(`Validation step '${step.name}' must emit a structured ValidationResult`);
+    }
+
+    return undefined;
+  }
+
   // ── Core step-execution loop ─────────────────────────────────────────────
 
   /**
@@ -359,7 +417,80 @@ export class WorkflowRunner {
 
     const stepIndexByName = new Map(sortedSteps.map((step, idx) => [step.name, idx]));
     const backEdgeIterations = new Map<string, number>();
+    const repairLoopStates = new Map<string, RepairLoopRuntimeState>();
     let cursor = 0;
+
+    const triggerBackEdge = async (
+      step: WorkflowStep,
+      reason: string,
+      overrides?: { noProgress?: boolean },
+    ): Promise<number> => {
+      const onFail = (
+        step as unknown as {
+          on_fail?: { goto?: string; max_iterations?: number; escalate_on_exhaust?: string };
+        }
+      ).on_fail;
+
+      if (!onFail?.goto) {
+        throw new Error(reason);
+      }
+
+      const targetIndex = stepIndexByName.get(onFail.goto);
+      if (targetIndex === undefined) {
+        throw new Error(reason);
+      }
+
+      const maxIterations =
+        typeof onFail.max_iterations === "number" &&
+        Number.isFinite(onFail.max_iterations) &&
+        onFail.max_iterations > 0
+          ? onFail.max_iterations
+          : 1;
+      const key = `${step.name}->${onFail.goto}`;
+      const nextIteration = (backEdgeIterations.get(key) ?? 0) + 1;
+      backEdgeIterations.set(key, nextIteration);
+
+      if (overrides?.noProgress) {
+        await eventBus.emit("workflow.repair_no_progress", executionId, {
+          sourceStep: step.name,
+          targetStep: onFail.goto,
+          iteration: nextIteration,
+          reason,
+        });
+      }
+
+      if (nextIteration > maxIterations || overrides?.noProgress) {
+        await eventBus.emit("workflow.back_edge_exhausted", executionId, {
+          sourceStep: step.name,
+          targetStep: onFail.goto,
+          iteration: nextIteration,
+          maxIterations,
+          escalation: onFail.escalate_on_exhaust ?? "fail",
+          reason,
+        });
+        throw new Error(reason);
+      }
+
+      const invalidated = sortedSteps.slice(targetIndex).map((s) => s.name);
+      const invalidatedSet = new Set(invalidated);
+      execution.completedSteps = execution.completedSteps.filter(
+        (name) => !invalidatedSet.has(name),
+      );
+      for (const name of invalidated) {
+        delete execution.outputs[name];
+        delete execution.stepRecords[name];
+      }
+
+      await eventBus.emit("workflow.back_edge_triggered", executionId, {
+        sourceStep: step.name,
+        targetStep: onFail.goto,
+        iteration: nextIteration,
+        maxIterations,
+        reason,
+      });
+
+      return targetIndex;
+    };
 
     while (cursor < sortedSteps.length) {
       const step = sortedSteps[cursor]!;
@@ -370,6 +501,15 @@ export class WorkflowRunner {
 
       if (costTracker) {
         await costTracker.preStepGate(step.name);
+      }
+
+      const repairContext = this.buildRepairContext(step, repairLoopStates);
+      if (repairContext?.mode === "repair") {
+        await eventBus.emit("workflow.repair_started", executionId, {
+          stepName: step.name,
+          attempt: repairContext.attempt,
+          latestValidation: repairContext.latestValidation,
+        });
       }
 
       const stepStartedAt = Date.now();
@@ -385,69 +525,81 @@ export class WorkflowRunner {
           ? await stepExecutor.executeStep(step, {
               previousOutputs: execution.outputs,
               signal,
+              ...(repairContext ? { repairContext } : {}),
             })
           : { output: "[stub] No LLM configured", raw: { stub: true, reason: "No LLM configured" } };
       } catch (error) {
-        const onFail = (
-          step as unknown as {
-            on_fail?: { goto?: string; max_iterations?: number; escalate_on_exhaust?: string };
-          }
-        ).on_fail;
-
-        if (!onFail?.goto) throw error;
-
-        const targetIndex = stepIndexByName.get(onFail.goto);
-        if (targetIndex === undefined) throw error;
-
-        const maxIterations =
-          typeof onFail.max_iterations === "number" &&
-          Number.isFinite(onFail.max_iterations) &&
-          onFail.max_iterations > 0
-            ? onFail.max_iterations
-            : 1;
-        const key = `${step.name}->${onFail.goto}`;
-        const nextIteration = (backEdgeIterations.get(key) ?? 0) + 1;
-        backEdgeIterations.set(key, nextIteration);
-
-        if (nextIteration > maxIterations) {
-          await eventBus.emit("workflow.back_edge_exhausted", executionId, {
-            sourceStep: step.name,
-            targetStep: onFail.goto,
-            iteration: nextIteration,
-            maxIterations,
-            escalation: onFail.escalate_on_exhaust ?? "fail",
-            reason: error instanceof Error ? error.message : String(error),
-          });
-          throw error;
-        }
-
-        const invalidated = sortedSteps.slice(targetIndex).map((s) => s.name);
-        const invalidatedSet = new Set(invalidated);
-        execution.completedSteps = execution.completedSteps.filter(
-          (name) => !invalidatedSet.has(name),
-        );
-        for (const name of invalidated) {
-          delete execution.outputs[name];
-          delete execution.stepRecords[name];
-        }
-
-        await eventBus.emit("workflow.back_edge_triggered", executionId, {
-          sourceStep: step.name,
-          targetStep: onFail.goto,
-          iteration: nextIteration,
-          maxIterations,
-          reason: error instanceof Error ? error.message : String(error),
-        });
-
-        cursor = targetIndex;
+        const reason = error instanceof Error ? error.message : String(error);
+        cursor = await triggerBackEdge(step, reason);
         continue;
       }
 
       if (isSettledFn?.() || !result) return;
 
+      const validationResult = this.resolveValidationResult(step, result.output);
+      if (validationResult) {
+        if (validationResult.passed) {
+          await eventBus.emit("workflow.validation_passed", executionId, {
+            stepName: step.name,
+            summary: validationResult.summary,
+            signature: validationResult.signature,
+          });
+        } else {
+          await eventBus.emit("workflow.validation_failed", executionId, {
+            stepName: step.name,
+            summary: validationResult.summary,
+            errorCode: validationResult.errorCode,
+            failedChecks: validationResult.failedChecks,
+            signature: validationResult.signature,
+            logPath: validationResult.logPath,
+          });
+
+          const targetStepName = step.on_fail?.goto;
+          if (targetStepName) {
+            const previousState = repairLoopStates.get(targetStepName);
+            const repeatedSignatureCount =
+              previousState?.lastSignature && previousState.lastSignature === validationResult.signature
+                ? previousState.repeatedSignatureCount + 1
+                : 1;
+            const nextState: RepairLoopRuntimeState = {
+              latestValidation: validationResult,
+              history: [...(previousState?.history ?? []), validationResult],
+              attempt: (previousState?.attempt ?? 1) + 1,
+              repeatedSignatureCount,
+              lastSignature: validationResult.signature,
+            };
+            repairLoopStates.set(targetStepName, nextState);
+
+            const repairConfig = getRepairLoopConfig(sortedSteps.find((candidate) => candidate.name === targetStepName)?.config);
+            const noProgressLimit = repairConfig?.max_no_progress_iterations;
+            if (noProgressLimit !== undefined && repeatedSignatureCount > noProgressLimit) {
+              cursor = await triggerBackEdge(
+                step,
+                `Validation for step '${step.name}' made no progress after ${repeatedSignatureCount} repeated failure signature(s): ${validationResult.summary}`,
+                { noProgress: true },
+              );
+              continue;
+            }
+          }
+
+          cursor = await triggerBackEdge(
+            step,
+            `Validation failed for step '${step.name}': ${validationResult.summary}`,
+          );
+          continue;
+        }
+      }
+
       execution.outputs[step.name] = result.output;
       execution.stepRecords[step.name] = result;
       execution.completedSteps.push(step.name);
+
+      if (repairContext?.mode === "repair") {
+        await eventBus.emit("workflow.repair_completed", executionId, {
+          stepName: step.name,
+          attempt: repairContext.attempt,
+        });
+      }
 
       if (persistenceEnabled && persistenceAdapter) {
         try {

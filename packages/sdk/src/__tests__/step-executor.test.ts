@@ -277,6 +277,73 @@ describe("StepExecutor", () => {
     ).rejects.toThrow("strict majority (>50%)");
   });
 
+  it("parses structured validation JSON when validation config is enabled", async () => {
+    const chatCompletion = vi.fn<LLMAdapterLike["chatCompletion"]>().mockResolvedValue({
+      message: {
+        role: "assistant",
+        content: "```json\n{\n  \"passed\": false,\n  \"summary\": \"Fix TS1484 import type errors\",\n  \"failedChecks\": [{ \"name\": \"typescript\", \"message\": \"TS1484\" }]\n}\n```",
+      },
+    });
+
+    const executor = new StepExecutor({ chatCompletion }, new Map(), {});
+    const result = await executor.executeStep(
+      {
+        name: "validate",
+        agent: "validator",
+        input: { task: "Validate the generated app" },
+        config: { validation: { enabled: true, emit_structured_result: true } },
+      },
+      { previousOutputs: {} },
+    );
+
+    expect(result.output).toMatchObject({
+      passed: false,
+      summary: "Fix TS1484 import type errors",
+      failedChecks: [{ name: "typescript", message: "TS1484" }],
+    });
+  });
+
+  it("injects repair context into the user prompt", async () => {
+    const chatCompletion = vi.fn<LLMAdapterLike["chatCompletion"]>().mockResolvedValue({
+      message: { role: "assistant", content: "done" },
+    });
+
+    const executor = new StepExecutor({ chatCompletion }, new Map(), {});
+    await executor.executeStep(
+      {
+        name: "build_or_repair",
+        agent: "builder",
+        input: { task: "Repair the generated app" },
+      },
+      {
+        previousOutputs: {},
+        repairContext: {
+          mode: "repair",
+          attempt: 2,
+          latestValidation: {
+            passed: false,
+            summary: "Fix CSS import issues",
+            failedChecks: [{ name: "css", message: "Unexpected CSS import" }],
+            signature: "css-import",
+          },
+          previousValidationResults: [
+            {
+              passed: false,
+              summary: "Fix CSS import issues",
+              failedChecks: [{ name: "css", message: "Unexpected CSS import" }],
+              signature: "css-import",
+            },
+          ],
+        },
+      },
+    );
+
+    const call = chatCompletion.mock.calls[0]?.[0];
+    expect(call?.messages[1]?.content).toContain("Repair context:");
+    expect(call?.messages[1]?.content).toContain("Fix CSS import issues");
+    expect(call?.messages[1]?.content).toContain("Attempt: 2");
+  });
+
   it("executes file tools when model returns structured tool calls", async () => {
     const cwdBefore = process.cwd();
     const workspace = await mkdtemp(join(tmpdir(), "obora-step-tools-"));

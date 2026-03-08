@@ -187,6 +187,165 @@ describe("OboraRuntime facade", () => {
     }
   });
 
+  it("runs validation-repair loop with structured validation feedback", async () => {
+    const runtime = new OboraRuntime({
+      llm: { provider: "openai", apiKey: "test-key", model: "gpt-5" },
+      audit: { enabled: true },
+    });
+
+    const auditTypes: string[] = [];
+    runtime.on("workflow.validation_failed", (event) => {
+      auditTypes.push(event.type);
+    });
+    runtime.on("workflow.validation_passed", (event) => {
+      auditTypes.push(event.type);
+    });
+    runtime.on("workflow.repair_started", (event) => {
+      auditTypes.push(event.type);
+    });
+    runtime.on("workflow.repair_completed", (event) => {
+      auditTypes.push(event.type);
+    });
+
+    let callIndex = 0;
+    const adapterMock = {
+      chatCompletion: vi.fn().mockImplementation(async ({ messages }) => {
+        callIndex += 1;
+        const userPrompt = String(messages[1]?.content ?? "");
+
+        if (callIndex === 1) {
+          expect(userPrompt).not.toContain("Repair context:");
+          return { message: { role: "assistant", content: "initial draft" } };
+        }
+        if (callIndex === 2) {
+          return {
+            message: {
+              role: "assistant",
+              content: JSON.stringify({
+                passed: false,
+                summary: "Fix TS1484 import type usage",
+                failedChecks: [{ name: "typescript", message: "TS1484" }],
+                signature: "ts1484",
+              }),
+            },
+          };
+        }
+        if (callIndex === 3) {
+          expect(userPrompt).toContain("Repair context:");
+          expect(userPrompt).toContain("Fix TS1484 import type usage");
+          return { message: { role: "assistant", content: "repaired draft" } };
+        }
+        return {
+          message: {
+            role: "assistant",
+            content: JSON.stringify({
+              passed: true,
+              summary: "Validation passed",
+              failedChecks: [],
+              signature: "pass",
+            }),
+          },
+        };
+      }),
+    };
+
+    vi.spyOn(runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> }, "createLLMAdapter").mockResolvedValue(
+      adapterMock,
+    );
+
+    runtime.define("validation-repair-loop", {
+      name: "validation-repair-loop",
+      steps: [
+        {
+          name: "build_or_repair",
+          agent: "builder",
+          config: { repair_loop: { enabled: true, validation_step: "validate", max_no_progress_iterations: 2 } },
+          input: { task: "Build or repair the app" },
+        },
+        {
+          name: "validate",
+          agent: "validator",
+          depends_on: ["build_or_repair"],
+          config: { validation: { enabled: true, emit_structured_result: true } },
+          on_fail: { goto: "build_or_repair", max_iterations: 3 },
+          input: { task: "Validate the app and return structured JSON" },
+        },
+      ],
+    });
+
+    const handle = await runtime.run("validation-repair-loop");
+    const result = await handle.wait();
+
+    expect(result.status).toBe("completed");
+    expect(result.outputs["build_or_repair"]).toBe("repaired draft");
+    expect(result.outputs["validate"]).toMatchObject({ passed: true, summary: "Validation passed" });
+    expect(adapterMock.chatCompletion).toHaveBeenCalledTimes(4);
+    expect(auditTypes).toContain("workflow.validation_failed");
+    expect(auditTypes).toContain("workflow.validation_passed");
+    expect(auditTypes).toContain("workflow.repair_started");
+    expect(auditTypes).toContain("workflow.repair_completed");
+  });
+
+  it("stops repair loop on repeated no-progress validation signatures", async () => {
+    const runtime = new OboraRuntime({
+      llm: { provider: "openai", apiKey: "test-key", model: "gpt-5" },
+      audit: { enabled: true },
+    });
+
+    const auditTypes: string[] = [];
+    runtime.on("workflow.repair_no_progress", (event) => {
+      auditTypes.push(event.type);
+    });
+
+    const adapterMock = {
+      chatCompletion: vi.fn().mockImplementation(async () => {
+        const callIndex = adapterMock.chatCompletion.mock.calls.length;
+        if (callIndex % 2 === 1) {
+          return { message: { role: "assistant", content: `draft-${callIndex}` } };
+        }
+        return {
+          message: {
+            role: "assistant",
+            content: JSON.stringify({
+              passed: false,
+              summary: "Still failing TS1484",
+              failedChecks: [{ name: "typescript", message: "TS1484" }],
+              signature: "same-ts1484",
+            }),
+          },
+        };
+      }),
+    };
+
+    vi.spyOn(runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> }, "createLLMAdapter").mockResolvedValue(
+      adapterMock,
+    );
+
+    runtime.define("validation-no-progress", {
+      name: "validation-no-progress",
+      steps: [
+        {
+          name: "build_or_repair",
+          agent: "builder",
+          config: { repair_loop: { enabled: true, max_no_progress_iterations: 1 } },
+          input: { task: "Build or repair the app" },
+        },
+        {
+          name: "validate",
+          agent: "validator",
+          depends_on: ["build_or_repair"],
+          config: { validation: { enabled: true, emit_structured_result: true } },
+          on_fail: { goto: "build_or_repair", max_iterations: 5 },
+          input: { task: "Validate the app and return structured JSON" },
+        },
+      ],
+    });
+
+    const handle = await runtime.run("validation-no-progress");
+    await expect(handle.wait()).rejects.toThrow(/no progress/i);
+    expect(auditTypes).toContain("workflow.repair_no_progress");
+  });
+
   it("emits warning when agent-specific provider is configured but cannot be resolved", async () => {
     const prevAnthropic = process.env.TEST_ANTHROPIC_KEY;
     const prevOpenAI = process.env.TEST_OPENAI_KEY;
