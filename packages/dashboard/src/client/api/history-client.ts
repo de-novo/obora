@@ -1,4 +1,5 @@
 import type {
+  ArtifactPreviewResponse,
   ArtifactRecord,
   CheckpointRecord,
   CostSummary,
@@ -12,6 +13,7 @@ import type {
 } from '../../shared/history-types.js';
 
 export type {
+  ArtifactPreviewResponse,
   ArtifactRecord,
   CheckpointRecord,
   CostSummary,
@@ -24,66 +26,67 @@ export type {
   StructuredAuditEvent,
 };
 
-const withQuery = (path: string, query: Record<string, string | number | undefined>): string => {
+const HISTORY_API_BASE = '/api/history';
+
+const buildQuery = (query: Record<string, string | number | undefined>): string => {
   const params = new URLSearchParams();
   Object.entries(query).forEach(([key, value]) => {
-    if (value !== undefined && value !== '') params.set(key, String(value));
+    if (value === undefined || value === '') return;
+    params.set(key, String(value));
   });
-  const queryString = params.toString();
-  return queryString.length > 0 ? `${path}?${queryString}` : path;
+  const encoded = params.toString();
+  return encoded ? `?${encoded}` : '';
 };
 
-export const fetchHistoryRuns = async (query: HistoryRunsQuery = {}): Promise<HistoryRunsResponse> => {
-  const response = await fetch(
-    withQuery('/api/history/runs', {
-      status: query.status,
-      workflowName: query.workflowName,
-      repairLoop: query.repairLoop,
-      from: query.from,
-      to: query.to,
-      costMin: query.costMin,
-      costMax: query.costMax,
-      limit: query.limit,
-      offset: query.offset,
-      sortBy: query.sortBy,
-      sortOrder: query.sortOrder,
-    }),
-  );
+async function parseJsonOrThrow<T>(response: Response): Promise<T> {
+  if (response.ok) return (await response.json()) as T;
+  const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+  throw new Error(payload?.message ?? `Request failed with ${response.status}`);
+}
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch history runs (${response.status})`);
-  }
+export async function fetchHistoryRuns(query: HistoryRunsQuery): Promise<HistoryRunsResponse> {
+  const queryString = buildQuery({
+    status: query.status,
+    workflowName: query.workflowName,
+    repairLoop: query.repairLoop,
+    from: query.from,
+    to: query.to,
+    costMin: query.costMin,
+    costMax: query.costMax,
+    limit: query.limit,
+    offset: query.offset,
+    sortBy: query.sortBy,
+    sortOrder: query.sortOrder,
+  });
+  const response = await fetch(`${HISTORY_API_BASE}/runs${queryString}`);
+  return parseJsonOrThrow<HistoryRunsResponse>(response);
+}
 
-  return (await response.json()) as HistoryRunsResponse;
-};
-
-export const fetchHistoryRunDetail = async (
+export async function fetchHistoryRunDetail(
   runId: string,
-  options: { auditLimit?: number; auditOffset?: number } = {},
-): Promise<RunDetailResponse> => {
+  options?: { auditLimit?: number; auditOffset?: number },
+): Promise<RunDetailResponse> {
+  const queryString = buildQuery({
+    auditLimit: options?.auditLimit,
+    auditOffset: options?.auditOffset,
+  });
+  const response = await fetch(`${HISTORY_API_BASE}/runs/${encodeURIComponent(runId)}${queryString}`);
+  return parseJsonOrThrow<RunDetailResponse>(response);
+}
+
+export async function fetchHistoryArtifactPreview(
+  runId: string,
+  artifactId: string,
+): Promise<ArtifactPreviewResponse> {
   const response = await fetch(
-    withQuery(`/api/history/runs/${encodeURIComponent(runId)}`, {
-      auditLimit: options.auditLimit,
-      auditOffset: options.auditOffset,
-    }),
+    `${HISTORY_API_BASE}/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(artifactId)}/preview`,
   );
+  return parseJsonOrThrow<ArtifactPreviewResponse>(response);
+}
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch run detail (${response.status})`);
-  }
-
-  return (await response.json()) as RunDetailResponse;
-};
-
-export const resumeHistoryRun = async (runId: string): Promise<void> => {
-  const response = await fetch(`/api/history/runs/${encodeURIComponent(runId)}/resume`, {
+export async function resumeHistoryRun(runId: string): Promise<{ ok: true }> {
+  const response = await fetch(`${HISTORY_API_BASE}/runs/${encodeURIComponent(runId)}/resume`, {
     method: 'POST',
   });
-
-  if (!response.ok) {
-    const body = (await response.json().catch(() => ({}))) as { message?: string };
-    throw new Error(body.message ?? `Failed to resume run (${response.status})`);
-  }
-};
-
-export { withQuery };
+  return parseJsonOrThrow<{ ok: true }>(response);
+}

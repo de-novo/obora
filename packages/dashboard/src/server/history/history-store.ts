@@ -1,4 +1,7 @@
+import { readFile } from 'node:fs/promises';
+
 import type {
+  ArtifactPreviewResponse,
   ArtifactRecord,
   CheckpointRecord,
   CostSummary,
@@ -10,12 +13,13 @@ import type {
   StructuredAuditEvent,
 } from '../../shared/history-types.js';
 
-export type { ArtifactRecord, HistoryRunsQuery, RunDetailResponse, RunRecord, StepRecord, CostSummary, StructuredAuditEvent, CheckpointRecord };
+export type { ArtifactPreviewResponse, ArtifactRecord, HistoryRunsQuery, RunDetailResponse, RunRecord, StepRecord, CostSummary, StructuredAuditEvent, CheckpointRecord };
 export type ListRunsResult = HistoryRunsResponse;
 
 export interface HistoryStore {
   listRuns(query: HistoryRunsQuery): Promise<ListRunsResult>;
   getRunDetail(runId: string, options?: { auditLimit?: number; auditOffset?: number }): Promise<RunDetailResponse | null>;
+  getArtifactPreview(runId: string, artifactId: string): Promise<ArtifactPreviewResponse | null>;
   resumeRun(runId: string): Promise<{ ok: true } | { ok: false; reason: string }>;
 }
 
@@ -58,6 +62,17 @@ const matchesRepairLoopFilter = (run: RunRecord, filter: HistoryRunsQuery['repai
 };
 
 const getValidationFailedCount = (run: RunRecord): number => getRepairLoopSummary(run)?.validationFailed ?? 0;
+
+const isPreviewableArtifact = (artifact: ArtifactRecord): boolean =>
+  artifact.mimeType.startsWith('text/') ||
+  artifact.mimeType === 'application/json' ||
+  /\.(log|md|txt|json|yaml|yml)$/i.test(artifact.name);
+
+const buildUnsupportedPreview = (artifact: ArtifactRecord, reason: string): ArtifactPreviewResponse => ({
+  artifact,
+  supported: false,
+  reason,
+});
 
 const buildRepairLoopCounts = (rows: Array<{ run: RunRecord }>): NonNullable<HistoryRunsResponse['repairLoopCounts']> => ({
   all: rows.length,
@@ -139,6 +154,32 @@ export class AdapterHistoryStore implements HistoryStore {
       offset,
       repairLoopCounts,
     };
+  }
+
+  async getArtifactPreview(runId: string, artifactId: string): Promise<ArtifactPreviewResponse | null> {
+    const artifacts = await this.adapter.getArtifacts(runId);
+    const artifact = artifacts.find((item) => item.id === artifactId);
+    if (!artifact) return null;
+    if (!isPreviewableArtifact(artifact)) {
+      return buildUnsupportedPreview(artifact, 'Preview is only supported for text-like artifacts');
+    }
+
+    try {
+      const data = await readFile(artifact.storageRef, 'utf8');
+      const maxChars = 20000;
+      return {
+        artifact,
+        supported: true,
+        contentType: artifact.mimeType,
+        text: data.length > maxChars ? `${data.slice(0, maxChars)}\n...[truncated]` : data,
+        truncated: data.length > maxChars,
+      };
+    } catch (error) {
+      return buildUnsupportedPreview(
+        artifact,
+        error instanceof Error ? `Artifact read failed: ${error.message}` : 'Artifact read failed',
+      );
+    }
   }
 
   async getRunDetail(runId: string, options?: { auditLimit?: number; auditOffset?: number }): Promise<RunDetailResponse | null> {
@@ -266,6 +307,33 @@ export class InMemoryHistoryStore implements HistoryStore {
       offset,
       repairLoopCounts,
     };
+  }
+
+  async getArtifactPreview(runId: string, artifactId: string): Promise<ArtifactPreviewResponse | null> {
+    const run = this.runs.get(runId);
+    if (!run) return null;
+    const artifact = (this.artifacts.get(runId) ?? []).find((item) => item.id === artifactId);
+    if (!artifact) return null;
+    if (!isPreviewableArtifact(artifact)) {
+      return buildUnsupportedPreview(structuredClone(artifact), 'Preview is only supported for text-like artifacts');
+    }
+
+    try {
+      const data = await readFile(artifact.storageRef, 'utf8');
+      const maxChars = 20000;
+      return {
+        artifact: structuredClone(artifact),
+        supported: true,
+        contentType: artifact.mimeType,
+        text: data.length > maxChars ? `${data.slice(0, maxChars)}\n...[truncated]` : data,
+        truncated: data.length > maxChars,
+      };
+    } catch (error) {
+      return buildUnsupportedPreview(
+        structuredClone(artifact),
+        error instanceof Error ? `Artifact read failed: ${error.message}` : 'Artifact read failed',
+      );
+    }
   }
 
   async getRunDetail(runId: string, options?: { auditLimit?: number; auditOffset?: number }): Promise<RunDetailResponse | null> {

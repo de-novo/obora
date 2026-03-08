@@ -89,6 +89,14 @@ export const registerHistoryRoutes = (app: FastifyInstance, apiBasePath: string,
     return reply.send(result);
   });
 
+  app.get<{ Params: { runId: string; artifactId: string } }>(`${apiBasePath}/history/runs/:runId/artifacts/:artifactId/preview`, async (request, reply) => {
+    const result = await store.getArtifactPreview(request.params.runId, request.params.artifactId);
+    if (!result) {
+      return reply.code(404).send({ code: 'DASH_7004', message: 'Artifact not found' } satisfies ApiErrorPayload);
+    }
+    return reply.send(result);
+  });
+
   app.get<{ Params: { runId: string }; Querystring: DetailQuery }>(`${apiBasePath}/history/runs/:runId`, async (request, reply) => {
     let auditLimit: number;
     let auditOffset: number;

@@ -56,6 +56,15 @@ export interface ArtifactRecord {
   deletedAt?: string;
 }
 
+export interface ArtifactPreviewResponse {
+  artifact: ArtifactRecord;
+  supported: boolean;
+  contentType?: string;
+  text?: string;
+  truncated?: boolean;
+  reason?: string;
+}
+
 export interface CheckpointRecord {
   id: string;
   runId: string;

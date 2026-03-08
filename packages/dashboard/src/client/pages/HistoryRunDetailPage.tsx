@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import { fetchHistoryRunDetail, resumeHistoryRun, type ArtifactRecord, type RunDetailResponse } from '../api/history-client';
+import {
+  fetchHistoryArtifactPreview,
+  fetchHistoryRunDetail,
+  resumeHistoryRun,
+  type ArtifactPreviewResponse,
+  type ArtifactRecord,
+  type RunDetailResponse,
+} from '../api/history-client';
 import { filterAuditEvents, toPrettyJson } from '../components/history-utils';
 import { formatRepairLoopBadge, getRepairLoopSummary, getRepairLoopTone } from '../components/repair-loop-utils';
 
@@ -18,6 +25,8 @@ export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
   const [showDriftModal, setShowDriftModal] = useState(false);
   const [auditOffset, setAuditOffset] = useState(0);
   const [artifactStepFilter, setArtifactStepFilter] = useState<string | null>(null);
+  const [artifactPreview, setArtifactPreview] = useState<ArtifactPreviewResponse | null>(null);
+  const [artifactPreviewLoadingId, setArtifactPreviewLoadingId] = useState<string | null>(null);
   const auditLimit = 100;
 
   useEffect(() => {
@@ -96,6 +105,22 @@ export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
     requestAnimationFrame(() => {
       document.getElementById('artifacts-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
+  };
+
+  const openArtifactPreview = async (artifact: ArtifactRecord) => {
+    setArtifactPreviewLoadingId(artifact.id);
+    try {
+      const preview = await fetchHistoryArtifactPreview(run.id, artifact.id);
+      setArtifactPreview(preview);
+    } catch (previewError) {
+      setArtifactPreview({
+        artifact,
+        supported: false,
+        reason: previewError instanceof Error ? previewError.message : 'Preview failed',
+      });
+    } finally {
+      setArtifactPreviewLoadingId(null);
+    }
   };
 
   const jumpToStep = (stepName?: string) => {
@@ -248,15 +273,26 @@ export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
               <div key={artifact.id} style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px', background: '#fff' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '12px' }}>
                   <div>
-                    <div style={{ fontWeight: 600 }}>{artifact.name}</div>
+                    <button
+                      type="button"
+                      onClick={() => void openArtifactPreview(artifact)}
+                      style={{ fontWeight: 600, background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', color: '#1d4ed8' }}
+                    >
+                      {artifact.name}
+                    </button>
                     <div style={{ fontSize: '12px', color: '#6b7280' }}>{artifact.stepName} · {artifact.mimeType} · {artifact.sizeBytes} bytes</div>
                   </div>
                   <button type="button" onClick={() => jumpToStep(artifact.stepName)} style={{ fontSize: '12px', cursor: 'pointer' }}>
                     Jump to step
                   </button>
                 </div>
-                <div style={{ marginTop: '6px', fontSize: '12px', color: '#6b7280', wordBreak: 'break-all' }}>
-                  storage: {artifact.storageRef}
+                <div style={{ marginTop: '6px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <button type="button" onClick={() => void openArtifactPreview(artifact)} style={{ fontSize: '12px', cursor: 'pointer' }}>
+                    {artifactPreviewLoadingId === artifact.id ? 'Loading preview…' : 'Preview'}
+                  </button>
+                  <span style={{ fontSize: '12px', color: '#6b7280', wordBreak: 'break-all' }}>
+                    storage: {artifact.storageRef}
+                  </span>
                 </div>
               </div>
             ))}
@@ -288,6 +324,70 @@ export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
           ))}
         </div>
       </div>
+
+      {artifactPreview ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(17, 24, 39, 0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '24px',
+            zIndex: 50,
+          }}
+          onClick={() => setArtifactPreview(null)}
+        >
+          <div
+            style={{
+              width: 'min(1000px, 92vw)',
+              maxHeight: '80vh',
+              overflow: 'auto',
+              background: '#fff',
+              borderRadius: '12px',
+              border: '1px solid #e5e7eb',
+              boxShadow: '0 20px 50px rgba(0,0,0,0.18)',
+              padding: '16px',
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '12px' }}>
+              <div>
+                <h3 style={{ margin: 0 }}>{artifactPreview.artifact.name}</h3>
+                <p style={{ margin: '4px 0 0', color: '#6b7280', fontSize: '13px' }}>
+                  {artifactPreview.artifact.stepName} · {artifactPreview.artifact.mimeType} · {artifactPreview.artifact.sizeBytes} bytes
+                </p>
+              </div>
+              <button type="button" onClick={() => setArtifactPreview(null)} style={{ cursor: 'pointer' }}>
+                Close
+              </button>
+            </div>
+
+            {artifactPreview.supported ? (
+              <>
+                <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0, padding: '12px', background: '#0b1020', color: '#e5eefb', borderRadius: '8px', fontSize: '12px', lineHeight: 1.5 }}>
+                  {artifactPreview.text}
+                </pre>
+                {artifactPreview.truncated ? (
+                  <p style={{ margin: '8px 0 0', color: '#92400e', fontSize: '12px' }}>
+                    Preview truncated for readability.
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px', background: '#fafafa' }}>
+                <p style={{ margin: 0, color: '#6b7280' }}>{artifactPreview.reason ?? 'Preview unavailable'}</p>
+                <p style={{ margin: '8px 0 0', fontSize: '12px', color: '#6b7280', wordBreak: 'break-all' }}>
+                  storage: {artifactPreview.artifact.storageRef}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
 
       {selectedStep ? (
         <div id="step-drilldown-section" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '12px' }}>
