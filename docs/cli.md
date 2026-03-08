@@ -223,18 +223,26 @@ obora runs <subcommand>
 #### `obora runs list`
 
 ```bash
-obora runs list [--status <status>] [--limit <n>] [--db <path>] [--json]
+obora runs list \
+  [--status <status>] \
+  [--workflow <name>] \
+  [--repair-loop <with|without|stalled|exhausted>] \
+  [--sort <startedAt|validationFailed|repairStarted>] \
+  [--order <asc|desc>] \
+  [--limit <n>] \
+  [--json]
 ```
 
-List persisted runs, optionally filtered by status.
+List persisted runs with optional workflow / repair-loop filtering and triage-oriented sorting.
 
 #### `obora runs inspect <runId>`
 
 ```bash
-obora runs inspect <runId> [--db <path>] [--json]
+obora runs inspect <runId> [--json] [--cost]
 ```
 
-Show run details including step records and artifacts.
+Show run details including step records, artifacts, and repair-loop inspection summaries.
+If persisted `run.metadata.repairLoop` is present, CLI uses it first and falls back to audit replay only when needed.
 
 ### Exit Codes
 
