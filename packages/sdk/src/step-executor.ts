@@ -101,7 +101,7 @@ export const BUILTIN_TOOLS: ToolDefinition[] = [
   },
 ];
 
-const MAX_TOOL_ROUNDS = 24;
+const DEFAULT_MAX_TOOL_ROUNDS = 128;
 
 const OBR_GLOBAL_SYSTEM_PROMPT_LINES = [
   "You are an Obora workflow execution agent.",
@@ -143,6 +143,24 @@ export interface StepExecutorConfig {
    * Built-in file tools are disabled.
    */
   disableBuiltinTools?: boolean;
+  /**
+   * Maximum number of tool-call rounds (LLM ↔ tool exchanges) per step.
+   * Steps can override this via `config.maxToolRounds`.
+   * Default: 128.
+   */
+  maxToolRounds?: number;
+  /**
+   * Per-tool call count limits.
+   * Key = tool name, value = max allowed calls.
+   * Tools not listed here are unlimited.
+   * Steps can override this via `config.toolLimits`.
+   *
+   * Example: `{ run_validation: 1, fetch_url: 10 }`
+   *
+   * Built-in file tools (file_read, file_write, file_list) are unlimited
+   * by default unless explicitly limited here.
+   */
+  toolLimits?: Record<string, number>;
 }
 
 function normalizeAgentInfo(factory?: AgentFactory): { role?: string; description?: string } {
@@ -337,7 +355,11 @@ export class StepExecutor {
     const startedAt = Date.now();
     try {
       let response: Awaited<ReturnType<LLMAdapterLike["chatCompletion"]>> | undefined;
-      for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+      const maxToolRounds = this.getMaxToolRounds(step);
+      const toolLimits = this.getToolLimits(step);
+      const toolCallCounts = new Map<string, number>();
+
+      for (let round = 0; round < maxToolRounds; round++) {
         response = await adapter.chatCompletion({
           model: resolved?.model ?? this.config.model,
           temperature: resolved?.temperature ?? this.config.temperature,
@@ -369,6 +391,20 @@ export class StepExecutor {
         });
 
         for (const toolCall of toolCalls) {
+          const toolName = toolCall.function.name;
+          const currentCount = (toolCallCounts.get(toolName) ?? 0) + 1;
+          toolCallCounts.set(toolName, currentCount);
+
+          const limit = toolLimits.get(toolName);
+          if (limit !== undefined && currentCount > limit) {
+            messages.push({
+              role: "tool",
+              toolCallId: toolCall.id,
+              content: `Error: Tool '${toolName}' call limit exceeded (${limit} calls allowed, attempt ${currentCount}). Do not call this tool again.`,
+            });
+            continue;
+          }
+
           const toolResult = await this.executeToolCall(toolCall);
           messages.push({
             role: "tool",
@@ -378,7 +414,7 @@ export class StepExecutor {
         }
       }
 
-      throw new Error(`Tool-call iteration limit exceeded for step '${step.name}'`);
+      throw new Error(`Tool-call iteration limit (${maxToolRounds}) exceeded for step '${step.name}'`);
     } finally {
       requestSignal?.cleanup();
     }
@@ -511,6 +547,39 @@ export class StepExecutor {
         timeoutController.abort(new Error("Timeout guard cleaned up"));
       }
     }
+  }
+
+  private getToolLimits(step: WorkflowStep): Map<string, number> {
+    const limits = new Map<string, number>();
+
+    if (this.config.toolLimits) {
+      for (const [name, limit] of Object.entries(this.config.toolLimits)) {
+        if (typeof limit === "number" && Number.isFinite(limit) && limit >= 0) {
+          limits.set(name, Math.floor(limit));
+        }
+      }
+    }
+
+    const config = (step.config ?? {}) as Record<string, unknown>;
+    const stepToolLimits = config.toolLimits;
+    if (stepToolLimits && typeof stepToolLimits === "object" && !Array.isArray(stepToolLimits)) {
+      for (const [name, limit] of Object.entries(stepToolLimits as Record<string, unknown>)) {
+        if (typeof limit === "number" && Number.isFinite(limit) && limit >= 0) {
+          limits.set(name, Math.floor(limit));
+        }
+      }
+    }
+
+    return limits;
+  }
+
+  private getMaxToolRounds(step: WorkflowStep): number {
+    const config = (step.config ?? {}) as Record<string, unknown>;
+    const raw = config.maxToolRounds;
+    if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) {
+      return Math.floor(raw);
+    }
+    return this.config.maxToolRounds ?? DEFAULT_MAX_TOOL_ROUNDS;
   }
 
   private getStepTimeoutMs(step: WorkflowStep): number {

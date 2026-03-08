@@ -1,6 +1,6 @@
 name: reddit-clone-modern-repair-loop
 version: "1.0"
-description: "Obora generates a modern React/TS/Vite app, validates it, repairs from logs, and re-validates"
+description: "Obora generates a modern React/TS/Vite app, validates it with a real validator tool, repairs from structured failures, and re-validates using runtime back-edge loops"
 
 steps:
   - name: live_stack_research
@@ -52,23 +52,38 @@ steps:
 
         Then self-check the artifact with file_read.
 
-  - name: implementation
-    description: Generate the initial app
+  - name: build_or_repair
+    description: Generate the app initially, then repair it when validation fails
     agent: builder
     depends_on: [architecture]
+    config:
+      toolLimits:
+        run_validation: 3
+        fetch_url: 10
+        npm_package_info: 10
+      repair_loop:
+        enabled: true
+        validation_step: validate
+        max_no_progress_iterations: 2
     input:
       task: |
         Build a complete runnable React + TypeScript + Vite app in `app/`.
 
-        This is the initial generation pass.
+        This step is used for both the initial build and later repair passes.
+        Obora may inject repair context automatically on repair attempts.
+        If repair context is present and includes a validation log path, read that log first with file_read before editing files.
 
-        Requirements:
+        Always read these artifacts before writing or repairing code:
+        - `artifacts/LIVE-STACK-RESEARCH.md`
+        - `artifacts/ARCHITECTURE.md`
+
+        Core requirements:
         - Vite React project, not Next.js
-        - use live stack research and architecture artifacts as source of truth
         - multi-file source structure
         - no unnecessary dependencies
         - styling in normal CSS files
         - strict TypeScript compatibility
+        - if repairing, modify only the necessary files
 
         Required files at minimum:
         - app/package.json
@@ -111,33 +126,57 @@ steps:
           - data-testid="upvote-button"
           - data-testid="downvote-button"
 
-        After writing files, self-check the generated structure with file_list and file_read.
-
-  - name: repair_from_validation
-    description: Repair the generated app using the latest validation log
-    agent: builder
-    depends_on: [implementation]
-    input:
-      task: |
-        Read the latest validation failure log and repair only what is necessary.
-
-        Repair rules:
-        - first read `artifacts/LIVE-STACK-RESEARCH.md`
-        - then read `artifacts/ARCHITECTURE.md`
-        - then read the validation log path provided at runtime
-        - identify the exact failing files and root cause
-        - modify only the necessary files
+        During repair attempts:
+        - identify the exact failing files and root cause from validation evidence
         - preserve working structure and styling where possible
-        - after changes, self-check the modified files with file_read
-        - create `artifacts/REPAIR-NOTES.md` summarizing:
+        - after changes, self-check modified files with file_read
+        - update `artifacts/REPAIR-NOTES.md` with:
+          - attempt summary
           - root cause
           - files changed
-          - why those changes address the validation failure
+          - why the fix should address the failure
+
+        After writing files, self-check the generated structure with file_list and file_read.
+
+  - name: validate
+    description: Run real validation and return strict structured JSON
+    agent: validator
+    depends_on: [build_or_repair]
+    config:
+      toolLimits:
+        run_validation: 1
+      validation:
+        enabled: true
+        emit_structured_result: true
+    on_fail:
+      goto: build_or_repair
+      max_iterations: 3
+      escalate_on_exhaust: fail
+    input:
+      task: |
+        You are the validation step.
+
+        First, use the `run_validation` tool exactly once.
+        The tool performs the real checks:
+        - file presence / static guard checks
+        - npm install
+        - typecheck
+        - build
+        - preview
+        - Playwright smoke validation
+
+        The tool returns the source-of-truth validation result as JSON.
+
+        After the tool returns:
+        - do not add prose
+        - do not summarize in natural language
+        - do not wrap in markdown unless needed
+        - return ONLY the final ValidationResult JSON payload based on the tool result
 
   - name: final_report
     description: Summarize the complete loop outcome
     agent: reviewer
-    depends_on: [repair_from_validation]
+    depends_on: [validate]
     input:
       task: |
         Create `artifacts/FINAL-REPORT.md`.
@@ -150,4 +189,8 @@ steps:
         - whether the final result passed validation
         - what should be improved next
 
-        Use file_read to inspect the final artifacts before writing the report.
+        Before writing, inspect these artifacts with file_read when available:
+        - `artifacts/LIVE-STACK-RESEARCH.md`
+        - `artifacts/ARCHITECTURE.md`
+        - `artifacts/VALIDATION-HISTORY.json`
+        - `artifacts/REPAIR-NOTES.md`

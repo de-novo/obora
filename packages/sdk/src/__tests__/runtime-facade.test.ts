@@ -110,6 +110,87 @@ describe("OboraRuntime facade", () => {
     }
   });
 
+  it("passes custom step tools from runtime config into StepExecutor", async () => {
+    const runtime = new OboraRuntime({
+      llm: { provider: "openai", apiKey: "test-key", model: "gpt-5" },
+      stepTools: [
+        {
+          definition: {
+            type: "function",
+            function: {
+              name: "echo_tool",
+              description: "Echoes a provided value",
+              parameters: {
+                type: "object",
+                properties: {
+                  value: { type: "string" },
+                },
+                required: ["value"],
+              },
+            },
+          },
+          execute: async (args) => JSON.stringify({ echoed: args.value ?? null }),
+        },
+      ],
+    });
+
+    const adapterMock = {
+      chatCompletion: vi.fn().mockImplementation(async ({ messages }) => {
+        const toolResultMessage = messages.find(
+          (message: { role: string }) => message.role === "tool",
+        );
+        if (!toolResultMessage) {
+          return {
+            model: "gpt-5",
+            message: {
+              role: "assistant",
+              content: null,
+              toolCalls: [
+                {
+                  id: "tool-echo-1",
+                  type: "function",
+                  function: {
+                    name: "echo_tool",
+                    arguments: JSON.stringify({ value: "hello-loop" }),
+                  },
+                },
+              ],
+            },
+          };
+        }
+
+        return {
+          model: "gpt-5",
+          message: { role: "assistant", content: String(toolResultMessage.content) },
+        };
+      }),
+    };
+
+    vi.spyOn(
+      runtime as unknown as {
+        createLLMAdapter: () => Promise<typeof adapterMock>;
+      },
+      "createLLMAdapter",
+    ).mockResolvedValue(adapterMock);
+
+    runtime.define("custom-step-tool", {
+      name: "custom-step-tool",
+      steps: [
+        {
+          name: "run-tool",
+          agent: "writer",
+          input: { task: "Use echo_tool with the value hello-loop and return the tool result." },
+        },
+      ],
+    });
+
+    const handle = await runtime.run("custom-step-tool");
+    const result = await handle.wait();
+
+    expect(result.status).toBe("completed");
+    expect(result.outputs["run-tool"]).toBe('{"echoed":"hello-loop"}');
+  });
+
   it("smoke: runtime.run executes file_write tool call and creates docs/tool-smoke.md", async () => {
     const cwdBefore = process.cwd();
     const workspace = await mkdtemp(join(tmpdir(), "obora-runtime-tool-smoke-"));

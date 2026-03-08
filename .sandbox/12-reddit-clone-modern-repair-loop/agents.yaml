@@ -14,6 +14,10 @@ agents:
     role: Senior Frontend Engineer
     description: Generates and repairs a modern React+TypeScript+Vite app using file tools and validation feedback
 
+  validator:
+    role: Frontend Validation Engineer
+    description: Runs real install, typecheck, build, and Playwright validation via the validation tool and returns strict structured JSON
+
   reviewer:
     role: Technical Reviewer
     description: Summarizes what was fixed, why, and the final system quality after validation loops

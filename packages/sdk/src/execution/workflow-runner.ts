@@ -145,6 +145,7 @@ export class WorkflowRunner {
           temperature: llmConfig.temperature,
           maxTokens: llmConfig.maxTokens,
           verbose: config.verbose,
+          tools: config.stepTools,
           resolveAgentLLM: this.buildResolveAgentLLM(
             executionId,
             loadedConfig,

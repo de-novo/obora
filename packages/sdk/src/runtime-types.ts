@@ -223,6 +223,7 @@ export interface OboraRuntimeConfig {
   configPath?: string;
   agentsPath?: string;
   verbose?: boolean;
+  stepTools?: import("./step-executor.js").ToolHandler[];
   persistence?: PersistenceConfig;
   artifacts?: ArtifactsConfig;
 }
