@@ -170,6 +170,64 @@ The validator should emit a structured `ValidationResult` payload. On failure, O
 - `workflow.repair_completed`
 - `workflow.repair_no_progress`
 
+### Persisted Run Metadata: `run.metadata.repairLoop`
+
+When persistence is enabled, Obora now stores a precomputed repair-loop summary in the persisted run record.
+This allows CLI / dashboard / external tooling to inspect repair-loop state without replaying the full audit timeline.
+
+#### Shape
+
+```ts
+interface PersistedRepairLoopSummary {
+  validationFailed: number;
+  validationPassed: number;
+  repairStarted: number;
+  repairCompleted: number;
+  repairNoProgress: number;
+  backEdgeTriggered: number;
+  backEdgeExhausted: number;
+  lastValidationSummary?: string;
+  lastValidationStep?: string;
+  lastRepairStep?: string;
+  lastAttempt?: number;
+  lastNoProgressReason?: string;
+  lastExhaustReason?: string;
+  recentValidationFailures: Array<{
+    stepName?: string;
+    summary?: string;
+    errorCode?: string;
+    logPath?: string;
+    failedChecks: Array<{
+      name?: string;
+      message?: string;
+      severity?: string;
+      file?: string;
+    }>;
+  }>;
+}
+```
+
+#### Semantics
+
+- `validationFailed` / `validationPassed` — number of validator outcomes recorded in the loop.
+- `repairStarted` / `repairCompleted` — number of repair step re-entries and completions.
+- `repairNoProgress` — number of times repeated failure signatures triggered no-progress handling.
+- `backEdgeTriggered` / `backEdgeExhausted` — number of back-edge loop transitions and exhaustion events.
+- `lastValidationSummary` — latest human-readable validation summary.
+- `lastValidationStep` — latest validator step name.
+- `lastRepairStep` — latest repair-aware worker step name.
+- `lastAttempt` — latest repair attempt number recorded by runtime.
+- `recentValidationFailures` — capped rolling window (currently last 5) of recent structured validation failures.
+
+#### Why this exists
+
+Without this summary, consumers must replay all audit events to answer simple questions such as:
+- How many times did validation fail?
+- What was the last failure?
+- Did the loop converge or exhaust?
+
+Persisting the summary in run metadata makes these reads cheaper and simpler, while audit replay remains the fallback source of truth.
+
 ---
 
 ## Consensus

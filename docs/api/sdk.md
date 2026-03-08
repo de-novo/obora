@@ -97,6 +97,75 @@ const execution = await handle.wait();
 console.log(execution.status); // "completed"
 ```
 
+### persisted run queries
+
+`OboraRuntime` also exposes persisted run query helpers when persistence is enabled.
+
+```ts
+const run = await runtime.getRunRecord(runId);
+const steps = await runtime.getRunSteps(runId);
+const artifacts = await runtime.getRunArtifacts(runId);
+const auditTimeline = await runtime.getRunAuditTimeline(runId);
+```
+
+The richer namespace aliases are also available:
+
+```ts
+const run = await runtime.runs.get(runId);
+const steps = await runtime.runs.steps(runId);
+const cost = await runtime.runs.cost(runId);
+const audit = await runtime.runs.auditReplay(runId);
+```
+
+#### `run.metadata.repairLoop`
+
+For validation-repair workflows, persisted runs may include a precomputed summary at:
+
+```ts
+const run = await runtime.getRunRecord(runId);
+const repairLoop = run?.metadata?.repairLoop;
+```
+
+This summary is intended for cheap inspection surfaces such as:
+- CLI inspect views
+- dashboards
+- post-run analysis scripts
+- automated reporting
+
+A representative shape is:
+
+```ts
+interface PersistedRepairLoopSummary {
+  validationFailed: number;
+  validationPassed: number;
+  repairStarted: number;
+  repairCompleted: number;
+  repairNoProgress: number;
+  backEdgeTriggered: number;
+  backEdgeExhausted: number;
+  lastValidationSummary?: string;
+  lastValidationStep?: string;
+  lastRepairStep?: string;
+  lastAttempt?: number;
+  lastNoProgressReason?: string;
+  lastExhaustReason?: string;
+  recentValidationFailures: Array<{
+    stepName?: string;
+    summary?: string;
+    errorCode?: string;
+    logPath?: string;
+    failedChecks: Array<{
+      name?: string;
+      message?: string;
+      severity?: string;
+      file?: string;
+    }>;
+  }>;
+}
+```
+
+If `metadata.repairLoop` is absent, consumers can fall back to `runtime.getRunAuditTimeline(runId)` / `runtime.runs.auditReplay(runId)` and reconstruct the summary from raw events.
+
 ### cancel (via RunHandle)
 
 ```ts
