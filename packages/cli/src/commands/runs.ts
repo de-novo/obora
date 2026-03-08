@@ -11,6 +11,19 @@
 
 import { Command } from "commander";
 
+interface ValidationFailureDetail {
+  stepName?: string;
+  summary?: string;
+  errorCode?: string;
+  logPath?: string;
+  failedChecks: Array<{
+    name?: string;
+    message?: string;
+    severity?: string;
+    file?: string;
+  }>;
+}
+
 interface RepairLoopInspectSummary {
   validationFailed: number;
   validationPassed: number;
@@ -25,6 +38,7 @@ interface RepairLoopInspectSummary {
   lastAttempt?: number;
   lastNoProgressReason?: string;
   lastExhaustReason?: string;
+  recentValidationFailures: ValidationFailureDetail[];
 }
 
 interface StructuredAuditEventLike {
@@ -53,6 +67,27 @@ export async function createRuntime() {
   });
 }
 
+function toValidationFailureDetail(event: StructuredAuditEventLike): ValidationFailureDetail {
+  const detail = event.detail ?? {};
+  const rawChecks = Array.isArray(detail.failedChecks) ? detail.failedChecks : [];
+  const failedChecks = rawChecks
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object" && !Array.isArray(entry))
+    .map((entry) => ({
+      ...(typeof entry.name === "string" ? { name: entry.name } : {}),
+      ...(typeof entry.message === "string" ? { message: entry.message } : {}),
+      ...(typeof entry.severity === "string" ? { severity: entry.severity } : {}),
+      ...(typeof entry.file === "string" ? { file: entry.file } : {}),
+    }));
+
+  return {
+    ...(event.stepName ? { stepName: event.stepName } : {}),
+    ...(typeof detail.summary === "string" ? { summary: detail.summary } : {}),
+    ...(typeof detail.errorCode === "string" ? { errorCode: detail.errorCode } : {}),
+    ...(typeof detail.logPath === "string" ? { logPath: detail.logPath } : {}),
+    failedChecks,
+  };
+}
+
 export function summarizeRepairLoopTimeline(
   timeline: StructuredAuditEventLike[],
 ): RepairLoopInspectSummary | undefined {
@@ -64,6 +99,7 @@ export function summarizeRepairLoopTimeline(
     repairNoProgress: 0,
     backEdgeTriggered: 0,
     backEdgeExhausted: 0,
+    recentValidationFailures: [],
   };
 
   for (const event of timeline) {
@@ -73,6 +109,10 @@ export function summarizeRepairLoopTimeline(
         summary.validationFailed += 1;
         summary.lastValidationStep = event.stepName;
         summary.lastValidationSummary = typeof detail.summary === "string" ? detail.summary : summary.lastValidationSummary;
+        summary.recentValidationFailures.push(toValidationFailureDetail(event));
+        if (summary.recentValidationFailures.length > 5) {
+          summary.recentValidationFailures.shift();
+        }
         break;
       case "workflow.validation_passed":
         summary.validationPassed += 1;
@@ -175,6 +215,20 @@ export async function inspectPersistedRun(
     if (repairLoop.lastValidationSummary) console.log(`  Last Validation:     ${repairLoop.lastValidationSummary}`);
     if (repairLoop.lastNoProgressReason) console.log(`  Last No-Progress:    ${repairLoop.lastNoProgressReason}`);
     if (repairLoop.lastExhaustReason) console.log(`  Last Exhaust Reason: ${repairLoop.lastExhaustReason}`);
+
+    if (repairLoop.recentValidationFailures.length > 0) {
+      console.log(`\nRecent Validation Failures (${repairLoop.recentValidationFailures.length}):`);
+      repairLoop.recentValidationFailures.forEach((failure, index) => {
+        console.log(`  ${index + 1}. ${failure.stepName ?? "validate"}${failure.summary ? ` — ${failure.summary}` : ""}`);
+        if (failure.errorCode) console.log(`     Code: ${failure.errorCode}`);
+        if (failure.logPath) console.log(`     Log:  ${failure.logPath}`);
+        for (const check of failure.failedChecks.slice(0, 3)) {
+          console.log(
+            `     - ${check.name ?? "check"}${check.file ? ` [${check.file}]` : ""}${check.message ? `: ${check.message}` : ""}`,
+          );
+        }
+      });
+    }
   }
 
   if (opts.steps !== false && steps.length > 0) {

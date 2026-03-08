@@ -12,7 +12,14 @@ describe("runs inspect repair-loop summary", () => {
       {
         action: "workflow.validation_failed",
         stepName: "validate",
-        detail: { summary: "Missing READY marker" },
+        detail: {
+          summary: "Missing READY marker",
+          errorCode: "VALIDATION_ERROR",
+          logPath: "artifacts/VALIDATION-ATTEMPT-01.log",
+          failedChecks: [
+            { name: "marker", message: "Missing READY marker", file: "artifacts/release-note.md" },
+          ],
+        },
       },
       {
         action: "workflow.repair_started",
@@ -41,6 +48,12 @@ describe("runs inspect repair-loop summary", () => {
         lastValidationStep: "validate",
         lastRepairStep: "build_or_repair",
         lastAttempt: 2,
+        recentValidationFailures: [
+          expect.objectContaining({
+            stepName: "validate",
+            summary: "Missing READY marker",
+          }),
+        ],
       }),
     );
   });
@@ -73,7 +86,14 @@ describe("runs inspect repair-loop summary", () => {
           {
             action: "workflow.validation_failed",
             stepName: "validate",
-            detail: { summary: "Missing READY marker" },
+            detail: {
+              summary: "Missing READY marker",
+              errorCode: "VALIDATION_ERROR",
+              logPath: "artifacts/VALIDATION-ATTEMPT-01.log",
+              failedChecks: [
+                { name: "marker", message: "Missing READY marker", file: "artifacts/release-note.md" },
+              ],
+            },
           },
           {
             action: "workflow.repair_started",
@@ -99,6 +119,9 @@ describe("runs inspect repair-loop summary", () => {
     expect(output).toContain("Validation Passed:   1");
     expect(output).toContain("Repair Started:      1");
     expect(output).toContain("Last Validation:     Validation passed");
+    expect(output).toContain("Recent Validation Failures (1):");
+    expect(output).toContain("artifacts/VALIDATION-ATTEMPT-01.log");
+    expect(output).toContain("artifacts/release-note.md");
   });
 
   it("includes repairLoop summary in JSON inspect output", async () => {
@@ -125,7 +148,14 @@ describe("runs inspect repair-loop summary", () => {
           {
             action: "workflow.validation_failed",
             stepName: "validate",
-            detail: { summary: "Missing READY marker" },
+            detail: {
+              summary: "Missing READY marker",
+              errorCode: "VALIDATION_ERROR",
+              logPath: "artifacts/VALIDATION-ATTEMPT-01.log",
+              failedChecks: [
+                { name: "marker", message: "Missing READY marker", file: "artifacts/release-note.md" },
+              ],
+            },
           },
           {
             action: "workflow.repair_started",
@@ -145,6 +175,12 @@ describe("runs inspect repair-loop summary", () => {
     );
     expect(log).toHaveBeenCalledWith(
       expect.stringContaining('"validationFailed": 1'),
+    );
+    expect(log).toHaveBeenCalledWith(
+      expect.stringContaining('"recentValidationFailures"'),
+    );
+    expect(log).toHaveBeenCalledWith(
+      expect.stringContaining('"logPath": "artifacts/VALIDATION-ATTEMPT-01.log"'),
     );
   });
 });
