@@ -9,6 +9,7 @@ import {
   type ArtifactRecord,
   type RunDetailResponse,
 } from '../api/history-client';
+import { formatArtifactPreview } from '../components/artifact-preview-utils';
 import { filterAuditEvents, toPrettyJson } from '../components/history-utils';
 import { formatRepairLoopBadge, getRepairLoopSummary, getRepairLoopTone } from '../components/repair-loop-utils';
 
@@ -28,6 +29,7 @@ export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
   const [artifactStepFilter, setArtifactStepFilter] = useState<string | null>(null);
   const [artifactPreview, setArtifactPreview] = useState<ArtifactPreviewResponse | null>(null);
   const [artifactPreviewLoadingId, setArtifactPreviewLoadingId] = useState<string | null>(null);
+  const [wrapArtifactPreview, setWrapArtifactPreview] = useState(true);
   const auditLimit = 100;
 
   useEffect(() => {
@@ -100,6 +102,7 @@ export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
   const filteredArtifacts = artifactStepFilter
     ? data.artifacts.filter((artifact) => artifact.stepName === artifactStepFilter)
     : data.artifacts;
+  const formattedArtifactPreview = artifactPreview?.supported ? formatArtifactPreview(artifactPreview) : null;
 
   const jumpToArtifactSection = (stepName?: string) => {
     setArtifactStepFilter(stepName ?? null);
@@ -112,6 +115,7 @@ export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
     setArtifactPreviewLoadingId(artifact.id);
     try {
       const preview = await fetchHistoryArtifactPreview(run.id, artifact.id);
+      setWrapArtifactPreview(true);
       setArtifactPreview(preview);
     } catch (previewError) {
       setArtifactPreview({
@@ -381,11 +385,29 @@ export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
               </div>
             </div>
 
-            {artifactPreview.supported ? (
+            {artifactPreview.supported && formattedArtifactPreview ? (
               <>
-                <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0, padding: '12px', background: '#0b1020', color: '#e5eefb', borderRadius: '8px', fontSize: '12px', lineHeight: 1.5 }}>
-                  {artifactPreview.text}
-                </pre>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '10px' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: formattedArtifactPreview.mode === 'json' ? '#1d4ed8' : '#374151', background: formattedArtifactPreview.mode === 'json' ? '#eff6ff' : '#f3f4f6', border: `1px solid ${formattedArtifactPreview.mode === 'json' ? '#93c5fd' : '#d1d5db'}`, borderRadius: '999px', padding: '2px 8px', textTransform: 'uppercase' }}>
+                    {formattedArtifactPreview.mode}
+                  </span>
+                  <span style={{ fontSize: '12px', color: '#6b7280' }}>{formattedArtifactPreview.lineCount} lines</span>
+                  <button type="button" onClick={() => setWrapArtifactPreview((current) => !current)} style={{ fontSize: '12px', cursor: 'pointer' }}>
+                    {wrapArtifactPreview ? 'Disable wrap' : 'Enable wrap'}
+                  </button>
+                </div>
+                <div style={{ border: '1px solid #1f2937', borderRadius: '8px', overflow: 'hidden', background: '#0b1020' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '56px 1fr', alignItems: 'stretch' }}>
+                    <div style={{ background: '#111827', color: '#94a3b8', fontSize: '12px', padding: '12px 8px', textAlign: 'right', userSelect: 'none' }}>
+                      {formattedArtifactPreview.lines.map((_, index) => (
+                        <div key={index} style={{ lineHeight: 1.5 }}>{index + 1}</div>
+                      ))}
+                    </div>
+                    <pre style={{ whiteSpace: wrapArtifactPreview ? 'pre-wrap' : 'pre', overflowX: 'auto', wordBreak: wrapArtifactPreview ? 'break-word' : 'normal', margin: 0, padding: '12px', color: '#e5eefb', fontSize: '12px', lineHeight: 1.5 }}>
+                      {formattedArtifactPreview.displayText}
+                    </pre>
+                  </div>
+                </div>
                 {artifactPreview.truncated ? (
                   <p style={{ margin: '8px 0 0', color: '#92400e', fontSize: '12px' }}>
                     Preview truncated for readability.
