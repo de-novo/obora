@@ -169,6 +169,7 @@ Persisted runs may also include a precomputed `run.metadata.repairLoop` summary 
 
 Feature summary: [`docs/validation-repair-loop-update.md`](./docs/validation-repair-loop-update.md)
 Artifact access update: [`docs/artifact-api-update.md`](./docs/artifact-api-update.md)
+History API reference: [`docs/api/history-api.md`](./docs/api/history-api.md)
 
 ---
 

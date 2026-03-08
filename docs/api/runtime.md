@@ -237,7 +237,9 @@ Dashboard history APIs also expose artifact access paths for repair-loop diagnos
 - `GET /api/history/runs/:runId/artifacts/:artifactId/raw?download=1`
 
 Use preview for fast text inspection and raw/download for original payload access.
-See [`../artifact-api-update.md`](../artifact-api-update.md) for the consumer-oriented summary.
+See:
+- [`./history-api.md`](./history-api.md) for the formal endpoint reference
+- [`../artifact-api-update.md`](../artifact-api-update.md) for the consumer-oriented summary
 
 ---
 

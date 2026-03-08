@@ -174,7 +174,9 @@ When using the dashboard history surface, related artifact access is available t
 - raw: `GET /api/history/runs/:runId/artifacts/:artifactId/raw`
 - download: `GET /api/history/runs/:runId/artifacts/:artifactId/raw?download=1`
 
-See [`../artifact-api-update.md`](../artifact-api-update.md) for the higher-level feature summary.
+See:
+- [`./history-api.md`](./history-api.md) for the formal endpoint reference
+- [`../artifact-api-update.md`](../artifact-api-update.md) for the higher-level feature summary
 
 ### cancel (via RunHandle)
 
