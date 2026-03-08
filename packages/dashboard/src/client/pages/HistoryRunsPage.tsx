@@ -121,11 +121,11 @@ export const HistoryRunsPage = ({ onOpenRun }: Props): JSX.Element => {
 
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
         {[
-          { value: 'all', label: 'All runs', tone: { text: '#374151', background: '#f9fafb', border: '#d1d5db' } },
-          { value: 'with', label: 'Repair loops', tone: { text: '#1d4ed8', background: '#eff6ff', border: '#93c5fd' } },
-          { value: 'stalled', label: 'Stalled', tone: { text: '#92400e', background: '#fffbeb', border: '#fcd34d' } },
-          { value: 'exhausted', label: 'Exhausted', tone: { text: '#991b1b', background: '#fef2f2', border: '#fecaca' } },
-          { value: 'without', label: 'No repair loop', tone: { text: '#4b5563', background: '#f3f4f6', border: '#d1d5db' } },
+          { value: 'all', label: 'All runs', count: data.repairLoopCounts?.all ?? data.total, tone: { text: '#374151', background: '#f9fafb', border: '#d1d5db' } },
+          { value: 'with', label: 'Repair loops', count: data.repairLoopCounts?.with ?? 0, tone: { text: '#1d4ed8', background: '#eff6ff', border: '#93c5fd' } },
+          { value: 'stalled', label: 'Stalled', count: data.repairLoopCounts?.stalled ?? 0, tone: { text: '#92400e', background: '#fffbeb', border: '#fcd34d' } },
+          { value: 'exhausted', label: 'Exhausted', count: data.repairLoopCounts?.exhausted ?? 0, tone: { text: '#991b1b', background: '#fef2f2', border: '#fecaca' } },
+          { value: 'without', label: 'No repair loop', count: data.repairLoopCounts?.without ?? 0, tone: { text: '#4b5563', background: '#f3f4f6', border: '#d1d5db' } },
         ].map((chip) => {
           const active = repairLoop === chip.value;
           return (
@@ -145,7 +145,7 @@ export const HistoryRunsPage = ({ onOpenRun }: Props): JSX.Element => {
                 boxShadow: active ? `0 0 0 2px ${chip.tone.background}` : 'none',
               }}
             >
-              {chip.label}
+              {chip.label} ({chip.count})
             </button>
           );
         })}

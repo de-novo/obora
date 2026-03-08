@@ -65,6 +65,13 @@ export interface HistoryRunsResponse {
   total: number;
   limit: number;
   offset: number;
+  repairLoopCounts?: {
+    all: number;
+    with: number;
+    without: number;
+    stalled: number;
+    exhausted: number;
+  };
 }
 
 export interface RunDetailResponse {

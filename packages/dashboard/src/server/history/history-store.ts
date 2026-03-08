@@ -58,6 +58,14 @@ const matchesRepairLoopFilter = (run: RunRecord, filter: HistoryRunsQuery['repai
 
 const getValidationFailedCount = (run: RunRecord): number => getRepairLoopSummary(run)?.validationFailed ?? 0;
 
+const buildRepairLoopCounts = (rows: Array<{ run: RunRecord }>): NonNullable<HistoryRunsResponse['repairLoopCounts']> => ({
+  all: rows.length,
+  with: rows.filter((row) => matchesRepairLoopFilter(row.run, 'with')).length,
+  without: rows.filter((row) => matchesRepairLoopFilter(row.run, 'without')).length,
+  stalled: rows.filter((row) => matchesRepairLoopFilter(row.run, 'stalled')).length,
+  exhausted: rows.filter((row) => matchesRepairLoopFilter(row.run, 'exhausted')).length,
+});
+
 export class AdapterHistoryStore implements HistoryStore {
   constructor(
     private readonly adapter: {
@@ -102,10 +110,13 @@ export class AdapterHistoryStore implements HistoryStore {
       }),
     );
 
-    const filtered = rows
-      .filter((row) => matchesRepairLoopFilter(row.run, query.repairLoop))
+    const baseFiltered = rows
       .filter((row) => (query.costMin === undefined ? true : row.costSummary.totalCostUsd >= query.costMin))
       .filter((row) => (query.costMax === undefined ? true : row.costSummary.totalCostUsd <= query.costMax));
+
+    const repairLoopCounts = buildRepairLoopCounts(baseFiltered);
+
+    const filtered = baseFiltered.filter((row) => matchesRepairLoopFilter(row.run, query.repairLoop));
 
     const sortBy = query.sortBy ?? 'startedAt';
     const sign = query.sortOrder === 'asc' ? 1 : -1;
@@ -119,7 +130,13 @@ export class AdapterHistoryStore implements HistoryStore {
 
     const limit = query.limit ?? 20;
     const offset = query.offset ?? 0;
-    return { items: filtered.slice(offset, offset + limit), total: filtered.length, limit, offset };
+    return {
+      items: filtered.slice(offset, offset + limit),
+      total: filtered.length,
+      limit,
+      offset,
+      repairLoopCounts,
+    };
   }
 
   async getRunDetail(runId: string, options?: { auditLimit?: number; auditOffset?: number }): Promise<RunDetailResponse | null> {
@@ -209,11 +226,13 @@ export class InMemoryHistoryStore implements HistoryStore {
 
     if (query.status) rows = rows.filter((row) => row.run.status === query.status);
     if (query.workflowName) rows = rows.filter((row) => row.run.workflowName === query.workflowName);
-    if (query.repairLoop) rows = rows.filter((row) => matchesRepairLoopFilter(row.run, query.repairLoop));
     if (query.from) rows = rows.filter((row) => row.run.startedAt >= toIsoBoundary(query.from!, 'start'));
     if (query.to) rows = rows.filter((row) => row.run.startedAt <= toIsoBoundary(query.to!, 'end'));
     if (query.costMin !== undefined) rows = rows.filter((row) => row.costSummary.totalCostUsd >= query.costMin!);
     if (query.costMax !== undefined) rows = rows.filter((row) => row.costSummary.totalCostUsd <= query.costMax!);
+
+    const repairLoopCounts = buildRepairLoopCounts(rows);
+    if (query.repairLoop) rows = rows.filter((row) => matchesRepairLoopFilter(row.run, query.repairLoop));
 
     const sortBy = query.sortBy ?? 'startedAt';
     const sign = query.sortOrder === 'asc' ? 1 : -1;
@@ -234,6 +253,7 @@ export class InMemoryHistoryStore implements HistoryStore {
       total: rows.length,
       limit,
       offset,
+      repairLoopCounts,
     };
   }
 

@@ -101,10 +101,21 @@ describe('history routes', () => {
       url: '/api/history/runs?repairLoop=with&sortBy=validationFailed&sortOrder=desc',
     });
     expect(withRepairLoop.statusCode).toBe(200);
-    const withBody = withRepairLoop.json() as { items: Array<{ run: { id: string } }>; total: number };
+    const withBody = withRepairLoop.json() as {
+      items: Array<{ run: { id: string } }>;
+      total: number;
+      repairLoopCounts?: { all: number; with: number; without: number; stalled: number; exhausted: number };
+    };
     expect(withBody.total).toBe(2);
     expect(withBody.items[0]?.run.id).toBe('run-1');
     expect(withBody.items[1]?.run.id).toBe('run-2');
+    expect(withBody.repairLoopCounts).toEqual({
+      all: 3,
+      with: 2,
+      without: 1,
+      stalled: 1,
+      exhausted: 0,
+    });
     
     const withoutRepairLoop = await app.inject({
       method: 'GET',
