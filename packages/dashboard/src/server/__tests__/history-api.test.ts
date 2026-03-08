@@ -109,6 +109,8 @@ describe('history routes', () => {
     expect(withBody.total).toBe(2);
     expect(withBody.items[0]?.run.id).toBe('run-1');
     expect(withBody.items[1]?.run.id).toBe('run-2');
+    expect(withBody.items[0]?.repairLoop?.validationFailed).toBe(3);
+    expect(withBody.items[1]?.repairLoop?.repairNoProgress).toBe(1);
     expect(withBody.repairLoopCounts).toEqual({
       all: 3,
       with: 2,

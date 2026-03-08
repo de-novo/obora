@@ -31,11 +31,7 @@ const toIsoBoundary = (value: string, boundary: 'start' | 'end'): string => {
   return value;
 };
 
-interface RepairLoopLike {
-  validationFailed?: number;
-  repairNoProgress?: number;
-  backEdgeExhausted?: number;
-}
+type RepairLoopLike = import('../../shared/history-types.js').PersistedRepairLoopSummary;
 
 const getRepairLoopSummary = (run: RunRecord): RepairLoopLike | undefined => {
   const metadata = run.metadata;
@@ -149,7 +145,10 @@ export class AdapterHistoryStore implements HistoryStore {
     const limit = query.limit ?? 20;
     const offset = query.offset ?? 0;
     return {
-      items: filtered.slice(offset, offset + limit),
+      items: filtered.slice(offset, offset + limit).map((item) => ({
+        ...item,
+        repairLoop: getRepairLoopSummary(item.run),
+      })),
       total: filtered.length,
       limit,
       offset,
@@ -306,7 +305,10 @@ export class InMemoryHistoryStore implements HistoryStore {
     });
 
     return {
-      items: rows.slice(offset, offset + limit).map((row) => structuredClone(row)),
+      items: rows.slice(offset, offset + limit).map((row) => ({
+        ...structuredClone(row),
+        repairLoop: getRepairLoopSummary(row.run),
+      })),
       total: rows.length,
       limit,
       offset,
@@ -355,6 +357,7 @@ export class InMemoryHistoryStore implements HistoryStore {
 
     return {
       run: structuredClone(run),
+      repairLoop: getRepairLoopSummary(run),
       steps: [...(this.steps.get(runId) ?? [])].sort((a, b) => a.startedAt.localeCompare(b.startedAt)).map((s) => structuredClone(s)),
       artifacts: [...(this.artifacts.get(runId) ?? [])].sort((a, b) => a.createdAt.localeCompare(b.createdAt)).map((artifact) => structuredClone(artifact)),
       costSummary: structuredClone(this.costs.get(runId) ?? { totalTokens: 0, totalCostUsd: 0, byStep: [], byModel: [] }),

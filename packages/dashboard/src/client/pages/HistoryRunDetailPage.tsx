@@ -94,7 +94,7 @@ export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
   }
 
   const run = data.run;
-  const repairLoop = getRepairLoopSummary(run);
+  const repairLoop = getRepairLoopSummary({ ...run, repairLoop: data.repairLoop });
   const repairBadge = formatRepairLoopBadge(repairLoop);
   const repairTone = getRepairLoopTone(repairLoop);
   const filteredArtifacts = artifactStepFilter

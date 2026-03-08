@@ -1,34 +1,4 @@
-import type { RunRecord } from '../../shared/history-types';
-
-export interface ValidationFailureDetail {
-  stepName?: string;
-  summary?: string;
-  errorCode?: string;
-  logPath?: string;
-  failedChecks: Array<{
-    name?: string;
-    message?: string;
-    severity?: string;
-    file?: string;
-  }>;
-}
-
-export interface PersistedRepairLoopSummary {
-  validationFailed: number;
-  validationPassed: number;
-  repairStarted: number;
-  repairCompleted: number;
-  repairNoProgress: number;
-  backEdgeTriggered: number;
-  backEdgeExhausted: number;
-  lastValidationSummary?: string;
-  lastValidationStep?: string;
-  lastRepairStep?: string;
-  lastAttempt?: number;
-  lastNoProgressReason?: string;
-  lastExhaustReason?: string;
-  recentValidationFailures: ValidationFailureDetail[];
-}
+import type { PersistedRepairLoopSummary, RunRecord } from '../../shared/history-types';
 
 export type RepairLoopState = 'exhausted' | 'stalled' | 'converged' | 'repaired' | 'passed';
 
@@ -39,8 +9,11 @@ export interface RepairLoopTone {
   border: string;
 }
 
-export function getRepairLoopSummary(run: Pick<RunRecord, 'metadata'>): PersistedRepairLoopSummary | undefined {
-  const metadata = run.metadata;
+export function getRepairLoopSummary(
+  source: Pick<RunRecord, 'metadata'> & { repairLoop?: PersistedRepairLoopSummary },
+): PersistedRepairLoopSummary | undefined {
+  if (source.repairLoop) return source.repairLoop;
+  const metadata = source.metadata;
   if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return undefined;
   const repairLoop = (metadata as Record<string, unknown>).repairLoop;
   if (!repairLoop || typeof repairLoop !== 'object' || Array.isArray(repairLoop)) return undefined;

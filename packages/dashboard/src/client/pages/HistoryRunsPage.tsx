@@ -167,7 +167,7 @@ export const HistoryRunsPage = ({ onOpenRun }: Props): JSX.Element => {
         </thead>
         <tbody>
           {data.items.map((item) => {
-            const repairLoop = getRepairLoopSummary(item.run);
+            const repairLoop = getRepairLoopSummary({ ...item.run, repairLoop: item.repairLoop });
             const repairBadge = formatRepairLoopBadge(repairLoop);
             const repairTone = getRepairLoopTone(repairLoop);
             const lastValidation = truncateValidationSummary(repairLoop?.lastValidationSummary, 56);

@@ -65,6 +65,36 @@ export interface ArtifactPreviewResponse {
   reason?: string;
 }
 
+export interface RepairLoopValidationFailureDetail {
+  stepName?: string;
+  summary?: string;
+  errorCode?: string;
+  logPath?: string;
+  failedChecks: Array<{
+    name?: string;
+    message?: string;
+    severity?: string;
+    file?: string;
+  }>;
+}
+
+export interface PersistedRepairLoopSummary {
+  validationFailed: number;
+  validationPassed: number;
+  repairStarted: number;
+  repairCompleted: number;
+  repairNoProgress: number;
+  backEdgeTriggered: number;
+  backEdgeExhausted: number;
+  lastValidationSummary?: string;
+  lastValidationStep?: string;
+  lastRepairStep?: string;
+  lastAttempt?: number;
+  lastNoProgressReason?: string;
+  lastExhaustReason?: string;
+  recentValidationFailures: RepairLoopValidationFailureDetail[];
+}
+
 export interface CheckpointRecord {
   id: string;
   runId: string;
@@ -77,6 +107,7 @@ export interface CheckpointRecord {
 
 export interface HistoryRunSummaryItem {
   run: RunRecord;
+  repairLoop?: PersistedRepairLoopSummary;
   stepCount: number;
   costSummary: CostSummary;
 }
@@ -97,6 +128,7 @@ export interface HistoryRunsResponse {
 
 export interface RunDetailResponse {
   run: RunRecord;
+  repairLoop?: PersistedRepairLoopSummary;
   steps: StepRecord[];
   artifacts: ArtifactRecord[];
   costSummary: CostSummary;
