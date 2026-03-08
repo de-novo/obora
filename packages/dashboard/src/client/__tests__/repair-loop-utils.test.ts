@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatRepairLoopBadge, getRepairLoopSummary, truncateValidationSummary } from '../components/repair-loop-utils';
+import { formatRepairLoopBadge, getRepairLoopState, getRepairLoopSummary, getRepairLoopTone, truncateValidationSummary } from '../components/repair-loop-utils';
 
 describe('repair-loop-utils', () => {
   it('extracts persisted repairLoop metadata from a run record', () => {
@@ -42,6 +42,47 @@ describe('repair-loop-utils', () => {
     });
 
     expect(badge).toBe('fail 2 · repair 2 · pass 1 · stalled 1');
+  });
+
+  it('derives state and tone for stalled / exhausted / converged flows', () => {
+    expect(
+      getRepairLoopState({
+        validationFailed: 2,
+        validationPassed: 0,
+        repairStarted: 2,
+        repairCompleted: 1,
+        repairNoProgress: 1,
+        backEdgeTriggered: 2,
+        backEdgeExhausted: 0,
+        recentValidationFailures: [],
+      }),
+    ).toBe('stalled');
+
+    expect(
+      getRepairLoopTone({
+        validationFailed: 3,
+        validationPassed: 1,
+        repairStarted: 3,
+        repairCompleted: 3,
+        repairNoProgress: 0,
+        backEdgeTriggered: 3,
+        backEdgeExhausted: 1,
+        recentValidationFailures: [],
+      })?.label,
+    ).toBe('exhausted');
+
+    expect(
+      getRepairLoopState({
+        validationFailed: 2,
+        validationPassed: 1,
+        repairStarted: 2,
+        repairCompleted: 2,
+        repairNoProgress: 0,
+        backEdgeTriggered: 2,
+        backEdgeExhausted: 0,
+        recentValidationFailures: [],
+      }),
+    ).toBe('converged');
   });
 
   it('truncates long validation summaries', () => {

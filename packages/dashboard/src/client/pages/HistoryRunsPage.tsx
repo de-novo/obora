@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { fetchHistoryRuns, type HistoryRunsResponse } from '../api/history-client';
-import { formatRepairLoopBadge, getRepairLoopSummary, truncateValidationSummary } from '../components/repair-loop-utils';
+import { formatRepairLoopBadge, getRepairLoopSummary, getRepairLoopTone, truncateValidationSummary } from '../components/repair-loop-utils';
 
 interface Props {
   onOpenRun: (runId: string) => void;
@@ -137,6 +137,7 @@ export const HistoryRunsPage = ({ onOpenRun }: Props): JSX.Element => {
           {data.items.map((item) => {
             const repairLoop = getRepairLoopSummary(item.run);
             const repairBadge = formatRepairLoopBadge(repairLoop);
+            const repairTone = getRepairLoopTone(repairLoop);
             const lastValidation = truncateValidationSummary(repairLoop?.lastValidationSummary, 56);
 
             return (
@@ -156,8 +157,27 @@ export const HistoryRunsPage = ({ onOpenRun }: Props): JSX.Element => {
               <td style={{ padding: '8px', minWidth: '220px' }}>
                 {repairLoop ? (
                   <div style={{ display: 'grid', gap: '4px' }}>
-                    {repairBadge ? (
-                      <span style={{ fontSize: '12px', fontWeight: 600, color: '#7c3aed' }}>{repairBadge}</span>
+                    {repairTone ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            color: repairTone.text,
+                            background: repairTone.background,
+                            border: `1px solid ${repairTone.border}`,
+                            borderRadius: '999px',
+                            padding: '2px 8px',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.02em',
+                          }}
+                        >
+                          {repairTone.label}
+                        </span>
+                        {repairBadge ? (
+                          <span style={{ fontSize: '12px', fontWeight: 600, color: repairTone.text }}>{repairBadge}</span>
+                        ) : null}
+                      </div>
                     ) : null}
                     {lastValidation ? (
                       <span style={{ fontSize: '12px', color: '#6b7280' }}>{lastValidation}</span>

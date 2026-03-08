@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { fetchHistoryRunDetail, resumeHistoryRun, type RunDetailResponse } from '../api/history-client';
 import { filterAuditEvents, toPrettyJson } from '../components/history-utils';
-import { formatRepairLoopBadge, getRepairLoopSummary } from '../components/repair-loop-utils';
+import { formatRepairLoopBadge, getRepairLoopSummary, getRepairLoopTone } from '../components/repair-loop-utils';
 
 interface Props {
   runId: string;
@@ -85,6 +85,7 @@ export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
   const run = data.run;
   const repairLoop = getRepairLoopSummary(run);
   const repairBadge = formatRepairLoopBadge(repairLoop);
+  const repairTone = getRepairLoopTone(repairLoop);
 
   return (
     <section>
@@ -100,11 +101,30 @@ export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
       </div>
 
       {repairLoop ? (
-        <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', padding: '12px', marginBottom: '12px', background: '#fafafa' }}>
+        <div style={{ border: `1px solid ${repairTone?.border ?? '#e5e7eb'}`, borderRadius: '10px', padding: '12px', marginBottom: '12px', background: repairTone?.background ?? '#fafafa' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
             <div>
-              <h3 style={{ margin: 0 }}>Repair Loop</h3>
-              <p style={{ margin: '4px 0 0', color: '#6b7280', fontSize: '13px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <h3 style={{ margin: 0 }}>Repair Loop</h3>
+                {repairTone ? (
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      color: repairTone.text,
+                      background: '#fff',
+                      border: `1px solid ${repairTone.border}`,
+                      borderRadius: '999px',
+                      padding: '2px 8px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.02em',
+                    }}
+                  >
+                    {repairTone.label}
+                  </span>
+                ) : null}
+              </div>
+              <p style={{ margin: '4px 0 0', color: repairTone?.text ?? '#6b7280', fontSize: '13px', fontWeight: 600 }}>
                 {repairBadge ?? 'validation-repair activity recorded'}
               </p>
             </div>
