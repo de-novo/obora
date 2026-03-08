@@ -1,0 +1,43 @@
+name: validation-repair-loop-example
+version: "1.0"
+description: "Minimal runtime-native validation repair loop example"
+
+steps:
+  - name: build_or_repair
+    agent: builder
+    config:
+      repair_loop:
+        enabled: true
+        validation_step: validate
+        max_no_progress_iterations: 2
+      toolLimits:
+        validate_release_note: 3
+    input:
+      task: |
+        Create or repair `artifacts/release-note.md` using file tools.
+
+        Rules:
+        - Always use file_write / file_read / file_list as needed.
+        - If repair context is present, read the latest validation result carefully before editing.
+        - Keep the file short and clear.
+        - The file should look like a small release note for version 0.1.0.
+        - Include a title and 2-4 bullet points.
+        - On repair attempts, modify only what is necessary to satisfy validation.
+
+  - name: validate
+    agent: validator
+    depends_on: [build_or_repair]
+    config:
+      validation:
+        enabled: true
+        emit_structured_result: true
+      toolLimits:
+        validate_release_note: 1
+    on_fail:
+      goto: build_or_repair
+      max_iterations: 3
+      escalate_on_exhaust: fail
+    input:
+      task: |
+        Call `validate_release_note` exactly once.
+        Then return only the exact JSON ValidationResult produced by the tool.

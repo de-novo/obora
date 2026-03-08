@@ -1,0 +1,8 @@
+agents:
+  builder:
+    role: Release Note Builder
+    description: Creates and repairs a small release note artifact using file tools.
+
+  validator:
+    role: Release Note Validator
+    description: Calls the validator tool and returns only a structured ValidationResult JSON payload.

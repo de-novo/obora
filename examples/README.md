@@ -11,6 +11,7 @@ Sample workflows and use cases for Obora AI Control Runtime.
 | [03-policy-gate](./03-policy-gate) | Policy enforcement |
 | [04-plugin-custom](./04-plugin-custom) | Custom plugin integration |
 | [05-dashboard-monitoring](./05-dashboard-monitoring) | Web dashboard monitoring |
+| [06-validation-repair-loop](./06-validation-repair-loop) | Runtime-native validation / repair / re-validation loop |
 | [todo-app](./todo-app) | Todo app generator workflow |
 
 ## Quick Start
@@ -22,6 +23,9 @@ obora run hello-obora.yaml
 # Run a specific example
 cd examples/01-simple-pipeline
 obora run workflow.yaml
+
+# Run the validation-repair loop example (runtime + custom step tools)
+node examples/06-validation-repair-loop/run.mjs
 ```
 
 ## Workflow Basics
