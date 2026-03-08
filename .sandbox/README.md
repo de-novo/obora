@@ -171,12 +171,13 @@ live reference 기반 정확도 보강 검증:
 - npm install → typecheck → build → preview → Playwright smoke까지 자동 검증
 
 ### 12-reddit-clone-modern-repair-loop
-feedback-driven self-repair loop 검증:
+runtime-native validation-repair loop 검증:
 - live research 후 초기 프로젝트 생성
-- shell validator가 install / typecheck / build / Playwright smoke 실행
-- 실패 시 validation log를 다시 입력으로 넣어 repair step 수행
-- `1 -> 2 -> 3 -> 4 -> 3 -> 4 -> 3 -> 6` 형태로 반복
-- 최종적으로 `FINAL-REPORT.md`에 생성/실패/수정/최종상태 요약
+- `validate` step이 `ValidationResult`를 구조화해 반환
+- `on_fail.goto` + `repair_loop` config로 runtime 내부 back-edge 재진입 수행
+- `build_or_repair -> validate -> build_or_repair -> validate` 형태로 수렴
+- `toolLimits`로 `run_validation` 같은 비싼 tool만 제한하고, file tools는 사실상 제한 없이 사용
+- 최종적으로 `FINAL-REPORT.md`, `VALIDATION-HISTORY.json`, `REPAIR-NOTES.md` 생성
 
 ## 결과 확인
 

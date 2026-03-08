@@ -58,6 +58,9 @@ Creates an SDK runtime facade.
 
 - `policyPath?: string` — optional path to YAML policy loaded at startup.
 - `audit?: { enabled?: boolean; sink?: (event) => void | Promise<void> }` — audit event sink.
+- `llm?: LLMConfig` — explicit provider/model/api key configuration.
+- `agentsPath?: string` — optional YAML file for agent role/description definitions.
+- `stepTools?: ToolHandler[]` — custom step tools injected into `StepExecutor` for runtime workflows.
 
 ```ts
 const runtime = new OboraRuntime({
@@ -172,6 +175,48 @@ Registers a reusable step pattern handler referenced by workflow `pattern` field
 Workflow.create(input: unknown): WorkflowDef
 Workflow.fromYaml(path: string): Promise<WorkflowDef>
 ```
+
+### Validation / Repair Config
+
+`WorkflowStep.config` now supports runtime-oriented repair-loop controls:
+
+```yaml
+steps:
+  - name: build_or_repair
+    agent: builder
+    config:
+      repair_loop:
+        enabled: true
+        validation_step: validate
+        max_no_progress_iterations: 2
+      toolLimits:
+        run_validation: 3
+        fetch_url: 10
+
+  - name: validate
+    agent: validator
+    depends_on: [build_or_repair]
+    config:
+      validation:
+        enabled: true
+        emit_structured_result: true
+      toolLimits:
+        run_validation: 1
+    on_fail:
+      goto: build_or_repair
+      max_iterations: 3
+      escalate_on_exhaust: fail
+```
+
+#### Supported config keys
+
+- `config.validation.enabled` — mark the step output as a validation result candidate.
+- `config.validation.emit_structured_result` — require the step to return valid `ValidationResult` JSON.
+- `config.repair_loop.enabled` — mark a step as repair-aware; Obora injects repair context on re-entry.
+- `config.repair_loop.validation_step` — logical validator step paired with the repair step.
+- `config.repair_loop.max_no_progress_iterations` — stop when the same validation signature repeats too many times.
+- `config.toolLimits` — per-tool call limits for expensive tools; tools not listed are unlimited.
+- `config.maxToolRounds` — optional total LLM↔tool exchange ceiling for the step.
 
 ### Example
 
@@ -442,11 +487,12 @@ await runtime.runs.auditReplay("run-123", "review");
 
 ## Key Types
 
-- `OboraRuntimeConfig` — runtime configuration (policy + audit).
+- `OboraRuntimeConfig` — runtime configuration (policy, audit, llm, agentsPath, stepTools).
 - `RunOptions` — runtime run input/variables/abort signal.
 - `RuntimeExecution` — normalized execution summary.
 - `AuditEvent`, `AuditEventType` — runtime event stream objects.
 - `WorkflowDef`, `WorkflowStep` — workflow schema.
+- `ValidationResult`, `RepairContext`, `ValidationStepConfig`, `RepairLoopConfig` — validation/repair loop contracts.
 - `PolicyDefinition` — policy schema.
 - `PluginMetadata`, `PluginDescriptor`, `LoadedPlugin`, `PluginType` — plugin system.
 - `WorkflowTestCase`, `TestResult`, `TestFailure`, `YamlFixture` — testing contract.

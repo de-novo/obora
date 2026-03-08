@@ -22,6 +22,7 @@ Obora provides an operational backbone for AI-included systems:
 - **Policy enforcement** to control tools, permissions, and boundaries
 - **Audit trail** to explain what happened and why
 - **Recovery engine** to recover from failures safely
+- **Validation-repair loops** to validate outputs, feed failures back into repair steps, and converge safely
 
 ---
 
@@ -127,6 +128,42 @@ const result = await handle.wait();
 
 console.log(result.outputs);
 ```
+
+### Validation-Repair Loop Example
+
+Obora can also run a structured validation → repair → re-validation loop inside the runtime.
+
+```yaml
+steps:
+  - name: build_or_repair
+    agent: builder
+    config:
+      repair_loop:
+        enabled: true
+        validation_step: validate
+        max_no_progress_iterations: 2
+      toolLimits:
+        run_validation: 3
+        fetch_url: 10
+
+  - name: validate
+    agent: validator
+    depends_on: [build_or_repair]
+    config:
+      validation:
+        enabled: true
+        emit_structured_result: true
+      toolLimits:
+        run_validation: 1
+    on_fail:
+      goto: build_or_repair
+      max_iterations: 3
+      escalate_on_exhaust: fail
+```
+
+Use `toolLimits` for expensive or external tools (API calls, validators, network fetches). Built-in file tools (`file_read`, `file_write`, `file_list`) can remain effectively unlimited for large generation steps.
+
+Reference example: [`.sandbox/12-reddit-clone-modern-repair-loop`](./.sandbox/12-reddit-clone-modern-repair-loop)
 
 ---
 

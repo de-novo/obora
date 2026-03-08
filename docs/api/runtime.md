@@ -104,7 +104,7 @@ audit:
 
 ## Recovery Engine
 
-The **Recovery Engine** detects failures and applies strategies such as retry, rollback, and escalation.
+The **Recovery Engine** detects failures and applies strategies such as retry, rollback, escalation, and validation-driven repair loops.
 
 Related runtime modules:
 - `recovery/RecoveryEngine.ts`
@@ -131,6 +131,44 @@ steps:
 
 - [`OboraErrorCode.RECOVERY_*`](./sdk.md#error-codes)
 - [`runWorkflowTest`](./sdk.md#testing-api) for failure simulation
+- [`ValidationResult` / `RepairLoopConfig`](./sdk.md#workflow-builder)
+
+### Validation-Repair Loop Pattern
+
+Runtime back-edge control can be used to implement an engineering repair loop:
+
+```yaml
+steps:
+  - name: build_or_repair
+    agent: builder
+    config:
+      repair_loop:
+        enabled: true
+        validation_step: validate
+        max_no_progress_iterations: 2
+
+  - name: validate
+    agent: validator
+    depends_on: [build_or_repair]
+    config:
+      validation:
+        enabled: true
+        emit_structured_result: true
+      toolLimits:
+        run_validation: 1
+    on_fail:
+      goto: build_or_repair
+      max_iterations: 3
+      escalate_on_exhaust: fail
+```
+
+The validator should emit a structured `ValidationResult` payload. On failure, Obora re-enters the paired repair step with injected repair context and emits audit events such as:
+
+- `workflow.validation_failed`
+- `workflow.validation_passed`
+- `workflow.repair_started`
+- `workflow.repair_completed`
+- `workflow.repair_no_progress`
 
 ---
 
