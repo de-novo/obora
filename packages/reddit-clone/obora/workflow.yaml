@@ -1,0 +1,88 @@
+name: reddit-clone-expansion-plan
+version: "1.0"
+description: "Analyze the current reddit-clone package and generate the next product/design/implementation plan"
+
+steps:
+  - name: current-state-audit
+    description: Audit the current reddit-clone package
+    agent: planner
+    input:
+      task: |
+        Audit the current Reddit-style app package.
+
+        Produce a concise markdown document with:
+        - What already exists
+        - What is missing compared with a useful mini Reddit clone
+        - What should be built next in the smallest meaningful iteration
+        - Risks and constraints
+
+  - name: product-direction
+    description: Define the next iteration product scope
+    agent: planner
+    depends_on: [current-state-audit]
+    input:
+      task: |
+        Using the audit, define the next iteration for this app.
+
+        Output a markdown mini-PRD with:
+        - Goal
+        - Target user behavior
+        - Scope in / out of scope
+        - MVP feature list
+        - Acceptance criteria
+
+  - name: architecture-plan
+    description: Turn the product direction into an implementation structure
+    agent: architect
+    depends_on: [product-direction]
+    input:
+      task: |
+        Turn the approved product direction into a concrete implementation plan.
+
+        Output markdown with:
+        - Route structure
+        - State model
+        - Component breakdown
+        - File-by-file change plan
+        - Local data model for posts, comments, votes, and composer state
+
+  - name: implementation-backlog
+    description: Create an execution backlog for the next coding pass
+    agent: developer
+    depends_on: [architecture-plan]
+    input:
+      task: |
+        Create a practical implementation backlog for the reddit-clone package.
+
+        Output markdown with:
+        - Ordered tasks
+        - Suggested commit boundaries
+        - Testing checklist
+        - UI risks and edge cases
+
+  - name: review
+    description: Review the plan for realism and maintainability
+    agent: reviewer
+    depends_on: [implementation-backlog]
+    input:
+      task: |
+        Review the proposed plan.
+
+        Output markdown with:
+        - What is strong
+        - What is over-scoped
+        - What should be simplified
+        - Final recommendation for the next build step
+
+  - name: final-summary
+    description: Summarize the complete plan pack
+    agent: planner
+    depends_on: [review]
+    input:
+      task: |
+        Summarize the approved next-step plan for the reddit-clone package.
+
+        Output markdown with:
+        - Recommended next implementation target
+        - Why this sequence is correct
+        - Immediate next action list

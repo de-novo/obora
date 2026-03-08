@@ -16,3 +16,12 @@ pnpm --filter @obora/reddit-clone dev
 ```bash
 pnpm --filter @obora/reddit-clone build
 ```
+
+## Obora workflow 연결
+현재 앱 상태를 분석해서 다음 구현 iteration 문서를 생성할 수 있습니다.
+
+```bash
+pnpm --filter @obora/reddit-clone workflow:plan
+```
+
+생성 결과는 `packages/reddit-clone/generated/` 아래에 저장됩니다.

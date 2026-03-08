@@ -1,0 +1,13 @@
+defaults:
+  provider: zai
+  model: glm-4.7
+  timeout: 300
+  maxTokens: 8192
+
+providers:
+  zai:
+    authMode: token
+    authRef: global:zai
+    defaultModel: glm-4.7
+    timeout: 300
+    maxTokens: 8192
