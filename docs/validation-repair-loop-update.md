@@ -116,6 +116,12 @@ precomputed summary를 저장한다.
 - compact `Loop State` column (`EXHAUSTED`, `STALLED`, `CONVERGED`, `REPAIRED`, `PASSED`)
 - compact repair summary (`F/R/P/N/X` counts + latest validation summary)
 
+즉 CLI에서도 이제:
+- 무엇이 가장 많이 실패했는지
+- 무엇이 수렴했는지
+- 무엇이 stalled / exhausted 상태인지
+를 목록에서 바로 triage할 수 있다.
+
 ---
 
 ### 6. Dashboard observability

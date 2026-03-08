@@ -239,6 +239,14 @@ Text output includes:
 - `Loop State` column (`EXHAUSTED`, `STALLED`, `CONVERGED`, `REPAIRED`, `PASSED`, `-`)
 - compact repair-loop summary (`F/R/P/N/X` style counts + latest validation summary when available)
 
+Loop state precedence:
+1. `EXHAUSTED` — `backEdgeExhausted > 0`
+2. `STALLED` — `repairNoProgress > 0`
+3. `CONVERGED` — both validation failures and passes recorded
+4. `REPAIRED` — repair activity recorded without a convergence signal yet
+5. `PASSED` — persisted repair-loop metadata exists but no repair/failure signal is present
+6. `-` — no persisted repair-loop metadata
+
 Examples:
 
 ```bash
