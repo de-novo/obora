@@ -85,16 +85,24 @@ output:
 ```
 
 ## 디버깅 / 확인
-YAML이 내부에서 어떻게 확장되는지 보려면:
+가장 직접적인 방법은 `expand` 명령입니다.
 
 ```bash
-obora run my-workflow.yaml --dry-run --json --dump-expanded-workflow --show-stop-semantics
+obora expand my-workflow.yaml --json
 ```
 
 이 명령은 다음을 보여줍니다.
 - expanded internal workflow
 - derived stop semantics
-- thresholds and mode metadata
+- mode metadata
+
+기존 `run --dry-run` 경로도 계속 사용할 수 있습니다.
+
+```bash
+obora run my-workflow.yaml --dry-run --json --dump-expanded-workflow --show-stop-semantics
+```
+
+이 경로는 실행 직전 validation과 함께 내부 확장 결과를 확인할 때 유용합니다.
 
 ## Validation Contract (현재 지원)
 

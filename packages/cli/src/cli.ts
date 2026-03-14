@@ -2,6 +2,7 @@ import { Command } from "commander";
 
 import { createArtifactCommand } from "./commands/artifact.js";
 import { createAuditCommand } from "./commands/audit.js";
+import { createExpandCommand } from "./commands/expand.js";
 import { createInitCommand } from "./commands/init.js";
 import { createKnowledgeCommand } from "./commands/knowledge.js";
 import { createPluginCommand } from "./commands/plugin.js";
@@ -43,6 +44,7 @@ export function createCLI(): Command {
     .option("--no-color", "Disable ANSI colors in output");
 
   program.addCommand(createInitCommand());
+  program.addCommand(createExpandCommand());
   program.addCommand(createRunCommand());
   program.addCommand(createTestCommand());
   program.addCommand(createPluginCommand());

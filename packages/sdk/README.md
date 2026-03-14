@@ -231,6 +231,12 @@ loop:
 You can inspect how a one-file YAML expands internally:
 
 ```bash
+obora expand my-workflow.yaml --json
+```
+
+For dry-run validation with the same information:
+
+```bash
 obora run my-workflow.yaml --dry-run --json --dump-expanded-workflow --show-stop-semantics
 ```
 
