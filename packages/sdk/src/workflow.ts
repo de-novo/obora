@@ -4,6 +4,7 @@ import { parse as parseYaml } from "yaml";
 
 import { OboraError, OboraErrorCode } from "./runtime.js";
 import type { RepairLoopConfig, ValidationStepConfig } from "./validation-repair.js";
+import { expandOneFileWorkflow, getOneFileStopSemantics } from "./one-file-modes.js";
 
 export interface WorkflowStepConfig extends Record<string, unknown> {
   validation?: ValidationStepConfig;
@@ -38,6 +39,7 @@ export interface WorkflowDef {
   steps: WorkflowStep[];
   variables?: Record<string, unknown>;
 }
+
 
 export interface OnFailConfig {
   goto: string;
@@ -113,12 +115,17 @@ export class Workflow {
     return Workflow.create(parsed);
   }
 
+  static getStopSemantics(input: unknown): Record<string, unknown> | undefined {
+    return getOneFileStopSemantics(input);
+  }
+
   static create(input: unknown): WorkflowDef {
     if (!input || typeof input !== "object") {
       throw new OboraError("Invalid workflow definition", OboraErrorCode.SDK_INVALID_WORKFLOW);
     }
 
-    const def = input as Record<string, unknown>;
+    const compiled = Workflow.expandOneFileMode(input);
+    const def = compiled as Record<string, unknown>;
     if (!def.name || typeof def.name !== "string") {
       throw new OboraError("Workflow must have a name", OboraErrorCode.SDK_INVALID_WORKFLOW);
     }
@@ -147,6 +154,10 @@ export class Workflow {
       seenStepNames.add(s.name);
     }
 
-    return input as WorkflowDef;
+    return compiled as WorkflowDef;
+  }
+
+  private static expandOneFileMode(input: unknown): unknown {
+    return expandOneFileWorkflow(input) ?? input;
   }
 }

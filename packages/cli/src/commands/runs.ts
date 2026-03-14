@@ -342,6 +342,9 @@ export async function inspectPersistedRun(
     if (repairLoop.lastValidationStep) console.log(`  Last Validator:      ${repairLoop.lastValidationStep}`);
     if (repairLoop.lastRepairStep) console.log(`  Last Repair Step:    ${repairLoop.lastRepairStep}`);
     if (repairLoop.lastValidationSummary) console.log(`  Last Validation:     ${repairLoop.lastValidationSummary}`);
+    if ((repairLoop as { lastStopCategory?: string }).lastStopCategory) {
+      console.log(`  Last Stop Category:  ${(repairLoop as { lastStopCategory?: string }).lastStopCategory}`);
+    }
     if (repairLoop.lastNoProgressReason) console.log(`  Last No-Progress:    ${repairLoop.lastNoProgressReason}`);
     if (repairLoop.lastExhaustReason) console.log(`  Last Exhaust Reason: ${repairLoop.lastExhaustReason}`);
 

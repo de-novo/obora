@@ -360,7 +360,7 @@ describe("OboraRuntime facade", () => {
         {
           name: "build_or_repair",
           agent: "builder",
-          config: { repair_loop: { enabled: true, validation_step: "validate", max_no_progress_iterations: 2 } },
+          config: { repair_loop: { enabled: true, validation_step: "validate", max_no_progress_iterations: 2, repeated_critical_issue_ceiling: 2 } },
           input: { task: "Build or repair the app" },
         },
         {
@@ -461,6 +461,85 @@ describe("OboraRuntime facade", () => {
     const handle = await runtime.run("validation-no-progress");
     await expect(handle.wait()).rejects.toThrow(/no progress/i);
     expect(auditTypes).toContain("workflow.repair_no_progress");
+  });
+
+  it("stops repair loop on repeated critical issue ceiling", async () => {
+    const savedRuns: any[] = [];
+    const storage = {
+      async saveRun(record: any) { savedRuns.push(structuredClone(record)); },
+      async getRun() { return null; },
+      async listRuns() { return []; },
+      async saveStep() { return; },
+      async getSteps() { return []; },
+      async saveArtifact(record: any) { return record; },
+      async getArtifacts() { return []; },
+      async deleteArtifact() { return; },
+      async saveCheckpoint() { return; },
+      async getLatestCheckpoint() { return null; },
+      async saveCost() { return; },
+      async getCosts() { return []; },
+      async getRunCostSummary() { return { totalTokens: 0, totalCostUsd: 0, byStep: [], byModel: [] }; },
+      async saveAuditEvent() { return; },
+      async getAuditTimeline() { return []; },
+    };
+
+    const runtime = new OboraRuntime({
+      llm: { provider: "openai", apiKey: "test-key", model: "gpt-5" },
+      audit: { enabled: true },
+      persistence: { enabled: true, adapter: "custom", custom: { instance: storage as any } },
+    });
+
+    const adapterMock = {
+      chatCompletion: vi.fn().mockImplementation(async () => {
+        const callIndex = adapterMock.chatCompletion.mock.calls.length;
+        if (callIndex % 2 === 1) {
+          return { message: { role: "assistant", content: `draft-${callIndex}` } };
+        }
+        return {
+          message: {
+            role: "assistant",
+            content: JSON.stringify({
+              passed: false,
+              summary: "Critical issue repeats",
+              failedChecks: [{ name: "critical", message: "same blocker" }],
+              signature: "same-critical-issue",
+            }),
+          },
+        };
+      }),
+    };
+
+    vi.spyOn(runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> }, "createLLMAdapter").mockResolvedValue(
+      adapterMock,
+    );
+
+    runtime.define("validation-repeated-critical", {
+      name: "validation-repeated-critical",
+      steps: [
+        {
+          name: "build_or_repair",
+          agent: "builder",
+          config: { repair_loop: { enabled: true, repeated_critical_issue_ceiling: 1 } },
+          input: { task: "Build or repair the app" },
+        },
+        {
+          name: "validate",
+          agent: "validator",
+          depends_on: ["build_or_repair"],
+          config: { validation: { enabled: true, emit_structured_result: true } },
+          on_fail: { goto: "build_or_repair", max_iterations: 5 },
+          input: { task: "Validate the app and return structured JSON" },
+        },
+      ],
+    });
+
+    const handle = await runtime.run("validation-repeated-critical");
+    await expect(handle.wait()).rejects.toThrow(/repeated critical issue ceiling/i);
+    const finalRun = savedRuns.at(-1);
+    expect(finalRun?.metadata?.repairLoop).toMatchObject({
+      repairNoProgress: 1,
+      lastStopCategory: "repeated_critical_issue",
+    });
   });
 
   it("emits warning when agent-specific provider is configured but cannot be resolved", async () => {
@@ -587,6 +666,44 @@ describe("OboraRuntime facade", () => {
     });
   });
 
+  it("persists aborted status when execution is cancelled", async () => {
+    const savedRuns: any[] = [];
+    const storage = {
+      async saveRun(record: any) { savedRuns.push(structuredClone(record)); },
+      async getRun() { return null; },
+      async listRuns() { return []; },
+      async saveStep() { return; },
+      async getSteps() { return []; },
+      async saveArtifact(record: any) { return record; },
+      async getArtifacts() { return []; },
+      async deleteArtifact() { return; },
+      async saveCheckpoint() { return; },
+      async getLatestCheckpoint() { return null; },
+      async saveCost() { return; },
+      async getCosts() { return []; },
+      async getRunCostSummary() { return { totalTokens: 0, totalCostUsd: 0, byStep: [], byModel: [] }; },
+      async saveAuditEvent() { return; },
+      async getAuditTimeline() { return []; },
+    };
+
+    const runtime = new OboraRuntime({
+      persistence: { enabled: true, adapter: "custom", custom: { instance: storage as any } },
+    });
+    runtime.define("cancel-persist", { name: "cancel-persist", steps: [] });
+
+    const handle = await runtime.run("cancel-persist", { input: { value: 1 } });
+    await handle.cancel("user abort");
+    await expect(handle.wait()).rejects.toMatchObject({
+      code: OboraErrorCode.SDK_EXECUTION_CANCELLED,
+      message: "user abort",
+    });
+
+    const finalRun = savedRuns.at(-1);
+    expect(finalRun?.status).toBe("aborted");
+    expect(finalRun?.completedAt).toBeTruthy();
+    expect(finalRun?.metadata?.errorCode).toBe(OboraErrorCode.SDK_EXECUTION_CANCELLED);
+  });
+
   it("onError receives OboraError on execution cancel", async () => {
     const runtime = new OboraRuntime();
     const errors: OboraError[] = [];
@@ -643,8 +760,28 @@ describe("OboraRuntime facade", () => {
   });
 
   it("keeps aborted status when cancel races with step completion", async () => {
+    const savedRuns: any[] = [];
+    const storage = {
+      async saveRun(record: any) { savedRuns.push(structuredClone(record)); },
+      async getRun() { return null; },
+      async listRuns() { return []; },
+      async saveStep() { return; },
+      async getSteps() { return []; },
+      async saveArtifact(record: any) { return record; },
+      async getArtifacts() { return []; },
+      async deleteArtifact() { return; },
+      async saveCheckpoint() { return; },
+      async getLatestCheckpoint() { return null; },
+      async saveCost() { return; },
+      async getCosts() { return []; },
+      async getRunCostSummary() { return { totalTokens: 0, totalCostUsd: 0, byStep: [], byModel: [] }; },
+      async saveAuditEvent() { return; },
+      async getAuditTimeline() { return []; },
+    };
+
     const runtime = new OboraRuntime({
       llm: { provider: "test", apiKey: "test", model: "test" },
+      persistence: { enabled: true, adapter: "custom", custom: { instance: storage as any } },
     });
 
     runtime.define("race-cancel", {
@@ -672,6 +809,11 @@ describe("OboraRuntime facade", () => {
       message: "manual abort",
     });
     expect(handle.status).toBe("aborted");
+
+    const finalRun = savedRuns.at(-1);
+    expect(finalRun?.status).toBe("aborted");
+    expect(finalRun?.completedAt).toBeTruthy();
+    expect(finalRun?.metadata?.errorCode).toBe(OboraErrorCode.SDK_EXECUTION_CANCELLED);
   });
 
   it("marks run handle as suspended on budget exceed", async () => {

@@ -1,0 +1,16 @@
+name: one-file-proof-loop
+mode: proof-loop
+problem:
+  statement: Prove that the sum of the first n cubes equals the square of the nth triangular number.
+  domain: positive integers
+  goal: Produce a bounded proof-search conclusion.
+agents:
+  framer: framer
+  prover: prover
+  reviewer: reviewer
+loop:
+  max_iterations: 3
+archive:
+  enabled: true
+output:
+  root: ./proof-output

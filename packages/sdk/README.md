@@ -155,6 +155,94 @@ try {
 }
 ```
 
+## Validation-Repair Loop
+
+The SDK supports validator → repair back-edge loops for iterative generation and correction.
+
+```yaml
+name: validation-repair-loop
+version: "1.0"
+steps:
+  - name: build_or_repair
+    agent: builder
+    config:
+      repair_loop:
+        enabled: true
+        validation_step: validate
+        max_no_progress_iterations: 2
+        repeated_critical_issue_ceiling: 2
+    input:
+      task: Build or repair the app.
+
+  - name: validate
+    agent: validator
+    depends_on: [build_or_repair]
+    config:
+      validation:
+        enabled: true
+        emit_structured_result: true
+    on_fail:
+      goto: build_or_repair
+      max_iterations: 3
+    input:
+      task: Validate the app and return structured JSON.
+```
+
+When the validator emits a structured `ValidationResult`, the repair step receives a `RepairContext` including:
+- latest validation result
+- previous validation history
+- current repair attempt
+- repeated signature count
+- no-progress ceiling
+- repeated critical issue ceiling
+
+See `docs/tutorials/validation-repair-loop.md` for a fuller walkthrough.
+
+Related files:
+- `packages/sdk/examples/validation-repair-loop.yaml`
+- `docs/tutorials/validation-repair-loop-migration.md`
+- `docs/tutorials/validation-repair-loop-troubleshooting.md`
+
+## One-File Workflows
+
+The SDK also supports one-file declarative workflow authoring for selected high-level modes.
+Currently available modes:
+- `validation-repair`
+- `research-loop`
+- `proof-loop`
+
+Example:
+
+```yaml
+name: fix-app
+mode: validation-repair
+agents:
+  repair: builder
+  validator: validator
+prompts:
+  repair: Repair the artifact.
+  validate: Validate and emit structured result.
+loop:
+  max_iterations: 4
+  no_progress_ceiling: 2
+  repeated_critical_issue_ceiling: 2
+```
+
+You can inspect how a one-file YAML expands internally:
+
+```bash
+obora run my-workflow.yaml --dry-run --json --dump-expanded-workflow --show-stop-semantics
+```
+
+See `docs/tutorials/one-file-workflows.md` for mode examples, validation contract, and current limitations.
+
+Current validation includes:
+- required field checks
+- unknown key detection
+- nested key validation
+- type mismatch detection
+- allowed-key hints in error messages
+
 ## License
 
 MIT

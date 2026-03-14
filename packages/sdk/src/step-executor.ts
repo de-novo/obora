@@ -741,6 +741,18 @@ export class StepExecutor {
           "Repair context:",
           `Mode: ${context.repairContext.mode}`,
           `Attempt: ${context.repairContext.attempt}`,
+          context.repairContext.validationStep
+            ? `Validation step: ${context.repairContext.validationStep}`
+            : undefined,
+          typeof context.repairContext.repeatedSignatureCount === "number"
+            ? `Repeated signature count: ${context.repairContext.repeatedSignatureCount}`
+            : undefined,
+          typeof context.repairContext.maxNoProgressIterations === "number"
+            ? `No-progress ceiling: ${context.repairContext.maxNoProgressIterations}`
+            : undefined,
+          typeof context.repairContext.repeatedCriticalIssueCeiling === "number"
+            ? `Repeated critical issue ceiling: ${context.repairContext.repeatedCriticalIssueCeiling}`
+            : undefined,
           context.repairContext.latestValidation
             ? `Latest validation result:\n${JSON.stringify(context.repairContext.latestValidation, null, 2)}`
             : "Latest validation result: none",

@@ -39,13 +39,15 @@ vi.mock("@obora/sdk", () => ({
   OboraRuntime: MockOboraRuntime,
   Workflow: {
     fromYaml: vi.fn(),
+    getStopSemantics: vi.fn(),
   },
 }));
 
-// Mock node:fs/promises (mkdir, writeFile used for --output-dir)
+// Mock node:fs/promises (mkdir, writeFile used for --output-dir; readFile for YAML inspection)
 vi.mock("node:fs/promises", () => ({
   mkdir: vi.fn(),
   writeFile: vi.fn(),
+  readFile: vi.fn(),
 }));
 
 // Mock formatter
@@ -72,7 +74,7 @@ vi.mock("../../utils/global-opts.js", () => ({
   getGlobalOpts: vi.fn(() => ({})),
 }));
 
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, readFile } from "node:fs/promises";
 import {
   loadConfig,
   detectLLMConfigFromEnv,
@@ -107,6 +109,7 @@ describe("run command", () => {
     // FS defaults
     vi.mocked(mkdir).mockResolvedValue(undefined);
     vi.mocked(writeFile).mockResolvedValue(undefined);
+    vi.mocked(readFile).mockResolvedValue("name: loaded-workflow\nmode: validation-repair\n" as never);
   });
 
   // ─── command creation ────────────────────────────────────────────────────
@@ -307,6 +310,55 @@ describe("run command", () => {
         expect.objectContaining({ validated: true })
       );
     });
+
+    it("should include expanded workflow in dry-run JSON when dump flag is set", async () => {
+      const mockWorkflow = {
+        name: "loaded-workflow",
+        steps: [{ name: "build_or_repair" }, { name: "validate" }],
+        variables: { output_root: "./tmp-output", archive_enabled: true },
+      };
+      vi.mocked(Workflow.fromYaml).mockResolvedValue(
+        mockWorkflow as Awaited<ReturnType<typeof Workflow.fromYaml>>
+      );
+
+      await runRun("my-workflow.yaml", { dryRun: true, json: true, dumpExpandedWorkflow: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workflow: "loaded-workflow",
+          validated: true,
+          expandedWorkflow: mockWorkflow,
+        })
+      );
+    });
+
+    it("should include stop semantics in dry-run JSON when flag is set", async () => {
+      const mockWorkflow = {
+        name: "loaded-workflow",
+        steps: [{ name: "build_or_repair" }, { name: "validate" }],
+        variables: { output_root: "./tmp-output", archive_enabled: true },
+      };
+      const mockStopSemantics = {
+        mode: "validation-repair",
+        outcomes: ["continue", "success"],
+        output: { root: "./tmp-output" },
+        archive: { enabled: true },
+      };
+      vi.mocked(Workflow.fromYaml).mockResolvedValue(
+        mockWorkflow as Awaited<ReturnType<typeof Workflow.fromYaml>>
+      );
+      vi.mocked(Workflow.getStopSemantics).mockReturnValue(mockStopSemantics as ReturnType<typeof Workflow.getStopSemantics>);
+
+      await runRun("my-workflow.yaml", { dryRun: true, json: true, showStopSemantics: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workflow: "loaded-workflow",
+          validated: true,
+          stopSemantics: mockStopSemantics,
+        })
+      );
+    });
   });
 
   // ─── --input option ───────────────────────────────────────────────────────
@@ -371,6 +423,34 @@ describe("run command", () => {
       );
     });
 
+    it("should use one-file output_root as default output directory when outputDir is absent", async () => {
+      const mockWorkflow = {
+        name: "loaded-workflow",
+        steps: [{ name: "build_or_repair" }, { name: "validate" }],
+        variables: { output_root: "./tmp-output", archive_enabled: true },
+      };
+      vi.mocked(Workflow.fromYaml).mockResolvedValue(
+        mockWorkflow as Awaited<ReturnType<typeof Workflow.fromYaml>>
+      );
+
+      await runRun("my-workflow.yaml", {});
+
+      expect(mkdir).toHaveBeenCalledWith("./tmp-output", { recursive: true });
+      expect(vi.mocked(writeFile).mock.calls[0]).toEqual([
+        expect.stringContaining("tmp-output/loaded-workflow"),
+        expect.stringContaining("\"workflowName\": \"my-workflow\""),
+        "utf-8",
+      ]);
+      expect(vi.mocked(writeFile).mock.calls[1]).toEqual([
+        expect.stringContaining("tmp-output/loaded-workflow"),
+        expect.stringContaining("\"archiveEnabled\": true"),
+        "utf-8",
+      ]);
+      expect(vi.mocked(writeFile).mock.calls[2]?.[0]).toEqual(expect.stringContaining(".archive/README.md"));
+      expect(vi.mocked(writeFile).mock.calls[3]?.[0]).toEqual(expect.stringContaining(".archive/SUMMARY.md"));
+      expect(vi.mocked(writeFile).mock.calls[4]?.[0]).toEqual(expect.stringContaining(".archive/NEXT_STEPS.md"));
+    });
+
     it("should include the execution ID in the output file name", async () => {
       await runRun("my-workflow", { outputDir: "/tmp/obora-out" });
 
@@ -397,6 +477,98 @@ describe("run command", () => {
       expect(formatter.json).toHaveBeenCalledWith(
         expect.objectContaining({ elapsedMs: expect.any(Number) })
       );
+    });
+
+    it("should include derived output/archive metadata in JSON output for one-file workflows", async () => {
+      const mockWorkflow = {
+        name: "loaded-workflow",
+        steps: [{ name: "build_or_repair" }, { name: "validate" }],
+        variables: { output_root: "./tmp-output", archive_enabled: true },
+      };
+      vi.mocked(Workflow.fromYaml).mockResolvedValue(
+        mockWorkflow as Awaited<ReturnType<typeof Workflow.fromYaml>>
+      );
+
+      await runRun("my-workflow.yaml", { json: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          outputRoot: "./tmp-output",
+          archiveEnabled: true,
+        })
+      );
+    });
+
+    it("should write archive intent sidecar when archive is enabled", async () => {
+      const mockWorkflow = {
+        name: "loaded-workflow",
+        steps: [{ name: "build_or_repair" }, { name: "validate" }],
+        variables: { output_root: "./tmp-output", archive_enabled: true },
+      };
+      vi.mocked(Workflow.fromYaml).mockResolvedValue(
+        mockWorkflow as Awaited<ReturnType<typeof Workflow.fromYaml>>
+      );
+
+      await runRun("my-workflow.yaml", {});
+
+      const secondCall = vi.mocked(writeFile).mock.calls[1];
+      expect(secondCall?.[0]).toEqual(expect.stringContaining("archive-intent.json"));
+      expect(secondCall?.[1]).toEqual(expect.stringContaining("\"archiveEnabled\": true"));
+    });
+
+    it("should create archive scaffold files when archive is enabled", async () => {
+      const mockWorkflow = {
+        name: "loaded-workflow",
+        steps: [{ name: "build_or_repair" }, { name: "validate" }],
+        variables: { output_root: "./tmp-output", archive_enabled: true },
+      };
+      vi.mocked(Workflow.fromYaml).mockResolvedValue(
+        mockWorkflow as Awaited<ReturnType<typeof Workflow.fromYaml>>
+      );
+      vi.mocked(Workflow.getStopSemantics).mockReturnValue({ mode: "validation-repair" } as any);
+
+      await runRun("my-workflow.yaml", {});
+
+      expect(mkdir).toHaveBeenCalledWith(expect.stringContaining(".archive"), { recursive: true });
+      expect(vi.mocked(writeFile).mock.calls[2]?.[1]).toEqual(expect.stringContaining("mode: validation-repair"));
+      expect(vi.mocked(writeFile).mock.calls[3]?.[1]).toEqual(expect.stringContaining("validation failures, repair attempts"));
+      expect(vi.mocked(writeFile).mock.calls[4]?.[1]).toEqual(expect.stringContaining("another repair loop"));
+      expect(vi.mocked(writeFile).mock.calls[5]?.[0]).toEqual(expect.stringContaining("REPAIR_LOG.md"));
+      expect(vi.mocked(writeFile).mock.calls[5]?.[1]).toEqual(expect.stringContaining("# Repair Log"));
+    });
+
+    it("should create mode-specific proof archive scaffold file", async () => {
+      const mockWorkflow = {
+        name: "loaded-proof",
+        steps: [{ name: "problem_frame" }, { name: "known_results_audit" }, { name: "proof_attempt" }, { name: "review" }],
+        variables: { output_root: "./tmp-output", archive_enabled: true },
+      };
+      vi.mocked(Workflow.fromYaml).mockResolvedValue(
+        mockWorkflow as Awaited<ReturnType<typeof Workflow.fromYaml>>
+      );
+      vi.mocked(Workflow.getStopSemantics).mockReturnValue({ mode: "proof-loop" } as any);
+
+      await runRun("proof.yaml", {});
+
+      expect(vi.mocked(writeFile).mock.calls[5]?.[0]).toEqual(expect.stringContaining("PROOF_GAPS.md"));
+      expect(vi.mocked(writeFile).mock.calls[5]?.[1]).toEqual(expect.stringContaining("# Proof Gaps"));
+    });
+
+    it("should create mode-specific research archive scaffold file", async () => {
+      const mockWorkflow = {
+        name: "loaded-research",
+        steps: [{ name: "problem_frame" }, { name: "research" }, { name: "review" }],
+        variables: { output_root: "./tmp-output", archive_enabled: true },
+      };
+      vi.mocked(Workflow.fromYaml).mockResolvedValue(
+        mockWorkflow as Awaited<ReturnType<typeof Workflow.fromYaml>>
+      );
+      vi.mocked(Workflow.getStopSemantics).mockReturnValue({ mode: "research-loop" } as any);
+
+      await runRun("research.yaml", {});
+
+      expect(vi.mocked(writeFile).mock.calls[5]?.[0]).toEqual(expect.stringContaining("FINDINGS.md"));
+      expect(vi.mocked(writeFile).mock.calls[5]?.[1]).toEqual(expect.stringContaining("# Findings"));
     });
   });
 

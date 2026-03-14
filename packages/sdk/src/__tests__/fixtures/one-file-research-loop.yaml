@@ -1,0 +1,14 @@
+name: one-file-research-loop
+mode: research-loop
+problem:
+  statement: Evaluate whether one-file workflow UX is viable.
+  goal: Produce a bounded research conclusion.
+agents:
+  researcher: researcher
+  reviewer: reviewer
+loop:
+  max_iterations: 3
+archive:
+  enabled: true
+output:
+  root: ./research-output

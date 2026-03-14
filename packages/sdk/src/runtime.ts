@@ -437,6 +437,20 @@ export class OboraRuntime {
           message: abortError.message,
           code: abortError.code,
         });
+        const persistenceConfig =
+          this.config.config?.persistence ?? this.config.persistence;
+        const persistenceEnabled = persistenceConfig?.enabled ?? false;
+
+        await this.runner.saveRunOnError(
+          executionId,
+          name,
+          execution,
+          variables,
+          OboraErrorCode.SDK_EXECUTION_CANCELLED,
+          persistenceEnabled,
+          persistenceConfig,
+        );
+
         await this.eventBus.emit("execution_end", executionId, {
           workflowName: name,
           status: "aborted",

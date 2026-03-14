@@ -21,6 +21,10 @@ export interface RepairContext {
   attempt: number;
   latestValidation?: ValidationResult;
   previousValidationResults?: ValidationResult[];
+  validationStep?: string;
+  repeatedSignatureCount?: number;
+  maxNoProgressIterations?: number;
+  repeatedCriticalIssueCeiling?: number;
 }
 
 export interface ValidationStepConfig {
@@ -32,6 +36,7 @@ export interface RepairLoopConfig {
   enabled?: boolean;
   validation_step?: string;
   max_no_progress_iterations?: number;
+  repeated_critical_issue_ceiling?: number;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -174,6 +179,10 @@ export function getRepairLoopConfig(config: unknown): RepairLoopConfig | undefin
     max_no_progress_iterations:
       typeof repairLoop.max_no_progress_iterations === "number" && Number.isFinite(repairLoop.max_no_progress_iterations)
         ? Math.max(1, Math.floor(repairLoop.max_no_progress_iterations))
+        : undefined,
+    repeated_critical_issue_ceiling:
+      typeof repairLoop.repeated_critical_issue_ceiling === "number" && Number.isFinite(repairLoop.repeated_critical_issue_ceiling)
+        ? Math.max(1, Math.floor(repairLoop.repeated_critical_issue_ceiling))
         : undefined,
   };
 }

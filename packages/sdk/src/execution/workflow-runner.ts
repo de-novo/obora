@@ -76,6 +76,7 @@ interface PersistedRepairLoopSummary {
   lastAttempt?: number;
   lastNoProgressReason?: string;
   lastExhaustReason?: string;
+  lastStopCategory?: "no_progress" | "repeated_critical_issue" | "exhausted";
   recentValidationFailures: PersistedValidationFailureDetail[];
 }
 
@@ -470,10 +471,15 @@ export class WorkflowRunner {
     if (attempt !== undefined) summary.lastAttempt = attempt;
   }
 
-  private recordRepairNoProgress(executionId: string, reason: string): void {
+  private recordRepairNoProgress(
+    executionId: string,
+    reason: string,
+    category: "no_progress" | "repeated_critical_issue" = "no_progress",
+  ): void {
     const summary = this.ensureRepairLoopSummary(executionId);
     summary.repairNoProgress += 1;
     summary.lastNoProgressReason = reason;
+    summary.lastStopCategory = category;
   }
 
   private recordBackEdgeTriggered(executionId: string): void {
@@ -485,6 +491,7 @@ export class WorkflowRunner {
     const summary = this.ensureRepairLoopSummary(executionId);
     summary.backEdgeExhausted += 1;
     summary.lastExhaustReason = reason;
+    summary.lastStopCategory ??= "exhausted";
   }
 
   private buildRepairContext(
@@ -501,6 +508,9 @@ export class WorkflowRunner {
       return {
         mode: "initial_build",
         attempt: 1,
+        validationStep: repairConfig.validation_step,
+        maxNoProgressIterations: repairConfig.max_no_progress_iterations,
+        repeatedCriticalIssueCeiling: repairConfig.repeated_critical_issue_ceiling,
       };
     }
 
@@ -509,6 +519,10 @@ export class WorkflowRunner {
       attempt: state.attempt,
       latestValidation: state.latestValidation,
       previousValidationResults: state.history,
+      validationStep: repairConfig.validation_step,
+      repeatedSignatureCount: state.repeatedSignatureCount,
+      maxNoProgressIterations: repairConfig.max_no_progress_iterations,
+      repeatedCriticalIssueCeiling: repairConfig.repeated_critical_issue_ceiling,
     };
   }
 
@@ -560,7 +574,7 @@ export class WorkflowRunner {
     const triggerBackEdge = async (
       step: WorkflowStep,
       reason: string,
-      overrides?: { noProgress?: boolean },
+      overrides?: { noProgress?: boolean; category?: "no_progress" | "repeated_critical_issue" },
     ): Promise<number> => {
       const onFail = (
         step as unknown as {
@@ -588,12 +602,13 @@ export class WorkflowRunner {
       backEdgeIterations.set(key, nextIteration);
 
       if (overrides?.noProgress) {
-        this.recordRepairNoProgress(executionId, reason);
+        this.recordRepairNoProgress(executionId, reason, overrides.category ?? "no_progress");
         await eventBus.emit("workflow.repair_no_progress", executionId, {
           sourceStep: step.name,
           targetStep: onFail.goto,
           iteration: nextIteration,
           reason,
+          category: overrides.category ?? "no_progress",
         });
       }
 
@@ -715,11 +730,23 @@ export class WorkflowRunner {
 
             const repairConfig = getRepairLoopConfig(sortedSteps.find((candidate) => candidate.name === targetStepName)?.config);
             const noProgressLimit = repairConfig?.max_no_progress_iterations;
+            const repeatedCriticalIssueCeiling = repairConfig?.repeated_critical_issue_ceiling;
             if (noProgressLimit !== undefined && repeatedSignatureCount > noProgressLimit) {
               cursor = await triggerBackEdge(
                 step,
                 `Validation for step '${step.name}' made no progress after ${repeatedSignatureCount} repeated failure signature(s): ${validationResult.summary}`,
-                { noProgress: true },
+                { noProgress: true, category: "no_progress" },
+              );
+              continue;
+            }
+            if (
+              repeatedCriticalIssueCeiling !== undefined &&
+              repeatedSignatureCount > repeatedCriticalIssueCeiling
+            ) {
+              cursor = await triggerBackEdge(
+                step,
+                `Validation for step '${step.name}' exceeded repeated critical issue ceiling after ${repeatedSignatureCount} repeated failure signature(s): ${validationResult.summary}`,
+                { noProgress: true, category: "repeated_critical_issue" },
               );
               continue;
             }
@@ -957,7 +984,7 @@ export class WorkflowRunner {
       await adapter.saveRun({
         id: executionId,
         workflowName,
-        status: execution.status as "completed" | "failed" | "running" | "suspended",
+        status: execution.status as "completed" | "failed" | "running" | "suspended" | "aborted",
         input: { value: execution.input ?? null },
         startedAt: execution.startedAt.toISOString(),
         completedAt: execution.endedAt?.toISOString(),

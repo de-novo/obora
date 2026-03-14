@@ -1,0 +1,30 @@
+name: validation-repair-loop
+workflow:
+  name: validation-repair-loop
+  version: "1.0"
+  steps:
+    - name: build_or_repair
+      agent: builder
+      config:
+        repair_loop:
+          enabled: true
+          validation_step: validate
+          max_no_progress_iterations: 2
+          repeated_critical_issue_ceiling: 2
+      input:
+        task: Build or repair the app.
+
+    - name: validate
+      agent: validator
+      depends_on: [build_or_repair]
+      config:
+        validation:
+          enabled: true
+          emit_structured_result: true
+      on_fail:
+        goto: build_or_repair
+        max_iterations: 3
+      input:
+        task: Validate the app and return structured ValidationResult JSON.
+expect:
+  status: completed

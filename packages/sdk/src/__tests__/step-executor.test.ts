@@ -320,6 +320,10 @@ describe("StepExecutor", () => {
         repairContext: {
           mode: "repair",
           attempt: 2,
+          validationStep: "validate",
+          repeatedSignatureCount: 2,
+          maxNoProgressIterations: 3,
+          repeatedCriticalIssueCeiling: 2,
           latestValidation: {
             passed: false,
             summary: "Fix CSS import issues",
@@ -342,6 +346,10 @@ describe("StepExecutor", () => {
     expect(call?.messages[1]?.content).toContain("Repair context:");
     expect(call?.messages[1]?.content).toContain("Fix CSS import issues");
     expect(call?.messages[1]?.content).toContain("Attempt: 2");
+    expect(call?.messages[1]?.content).toContain("Validation step: validate");
+    expect(call?.messages[1]?.content).toContain("Repeated signature count: 2");
+    expect(call?.messages[1]?.content).toContain("No-progress ceiling: 3");
+    expect(call?.messages[1]?.content).toContain("Repeated critical issue ceiling: 2");
   });
 
   it("executes file tools when model returns structured tool calls", async () => {

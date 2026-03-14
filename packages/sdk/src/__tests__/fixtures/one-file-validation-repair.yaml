@@ -1,0 +1,21 @@
+name: one-file-validation-repair
+mode: validation-repair
+agents:
+  repair: builder
+  validator: validator
+prompts:
+  repair: Repair the artifact.
+  validate: Validate and emit structured result.
+loop:
+  max_iterations: 4
+  no_progress_ceiling: 2
+  repeated_critical_issue_ceiling: 2
+archive:
+  enabled: true
+output:
+  root: ./tmp-output
+overrides:
+  build_or_repair:
+    prompt_suffix: Prefer minimal edits first.
+  validate:
+    prompt_suffix: Return only strict structured JSON.

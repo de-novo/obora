@@ -65,10 +65,23 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
   }
 
   let workflowName = workflow;
+  let expandedWorkflow: unknown;
+  let stopSemantics: unknown;
+  let derivedOutputRoot: string | undefined;
+  let derivedArchiveEnabled = false;
   if (workflow.endsWith(".yaml") || workflow.endsWith(".yml")) {
+    const loadedConfigRaw = await import("node:fs/promises").then((m) => m.readFile(workflow, "utf-8"));
+    const parsedRaw = await import("yaml").then((m) => m.parse(loadedConfigRaw));
     const loaded = await Workflow.fromYaml(workflow);
     runtime.define(loaded.name, loaded);
     workflowName = loaded.name;
+    expandedWorkflow = loaded;
+    stopSemantics = Workflow.getStopSemantics(parsedRaw);
+    const workflowVariables = (loaded.variables && typeof loaded.variables === "object")
+      ? (loaded.variables as Record<string, unknown>)
+      : {};
+    derivedOutputRoot = typeof workflowVariables.output_root === "string" ? workflowVariables.output_root : undefined;
+    derivedArchiveEnabled = workflowVariables.archive_enabled === true;
 
     if (isVerboseOutput(options) && !isQuietOutput(options) && !isJsonOutput(options)) {
       formatter.step(`Loaded workflow YAML: ${workflow} -> ${workflowName}`);
@@ -103,10 +116,20 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
       formatter.json({
         workflow: workflowName,
         validated: true,
+        ...(options.dumpExpandedWorkflow ? { expandedWorkflow } : {}),
+        ...(options.showStopSemantics ? { stopSemantics } : {}),
         elapsedMs: Date.now() - startedAt,
       });
     } else if (!isQuietOutput(options)) {
       formatter.success(`Workflow "${workflowName}" validated successfully.`);
+      if (options.dumpExpandedWorkflow && expandedWorkflow) {
+        formatter.info("Expanded workflow:");
+        formatter.json(expandedWorkflow);
+      }
+      if (options.showStopSemantics && stopSemantics) {
+        formatter.info("Stop semantics:");
+        formatter.json(stopSemantics);
+      }
       if (isVerboseOutput(options)) {
         formatter.info(`Validation completed in ${Date.now() - startedAt}ms`);
       }
@@ -191,12 +214,13 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
   });
 
   runtime.on("workflow.repair_no_progress", (event) => {
-    const data = event.data as { sourceStep?: string; reason?: string } | undefined;
+    const data = event.data as { sourceStep?: string; reason?: string; category?: string } | undefined;
     repairLoopSummary.repairNoProgress += 1;
 
     if (!isQuietOutput(options) && !isJsonOutput(options)) {
+      const categorySuffix = data?.category ? ` (${data.category})` : "";
       formatter.warn(
-        `repair loop made no progress${data?.sourceStep ? ` [${data.sourceStep}]` : ""}: ${data?.reason ?? "unknown reason"}`
+        `repair loop made no progress${data?.sourceStep ? ` [${data.sourceStep}]` : ""}${categorySuffix}: ${data?.reason ?? "unknown reason"}`
       );
     }
   });
@@ -234,13 +258,105 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
   })();
   const elapsedMs = Date.now() - startedAt;
 
-  if (options.outputDir && typeof options.outputDir === "string") {
-    await mkdir(options.outputDir, { recursive: true });
+  const effectiveOutputDir =
+    typeof options.outputDir === "string" && options.outputDir.length > 0
+      ? options.outputDir
+      : derivedOutputRoot;
+
+  const derivedMode =
+    stopSemantics && typeof stopSemantics === "object" && typeof (stopSemantics as Record<string, unknown>).mode === "string"
+      ? ((stopSemantics as Record<string, unknown>).mode as string)
+      : undefined;
+
+  if (effectiveOutputDir) {
+    await mkdir(effectiveOutputDir, { recursive: true });
     const filePath = join(
-      options.outputDir,
+      effectiveOutputDir,
       `${basename(workflowName)}-${handle.executionId}.json`
     );
     await writeFile(filePath, JSON.stringify(result, null, 2), "utf-8");
+
+    if (derivedArchiveEnabled) {
+      const archiveIntentPath = join(
+        effectiveOutputDir,
+        `${basename(workflowName)}-${handle.executionId}.archive-intent.json`
+      );
+      await writeFile(
+        archiveIntentPath,
+        JSON.stringify(
+          {
+            workflowName: result.workflowName,
+            executionId: handle.executionId,
+            archiveEnabled: true,
+            outputRoot: derivedOutputRoot,
+            sourceResultPath: filePath,
+          },
+          null,
+          2,
+        ),
+        "utf-8",
+      );
+
+      const archiveDir = join(effectiveOutputDir, `${basename(workflowName)}-${handle.executionId}.archive`);
+      await mkdir(archiveDir, { recursive: true });
+      const readmeBody =
+        derivedMode === "validation-repair"
+          ? `# Archive Scaffold\n\n- mode: validation-repair\n- workflow: ${result.workflowName}\n- executionId: ${handle.executionId}\n- source result: ${basename(filePath)}\n\n## Focus\n- validation summary\n- repair loop outcome\n- stop category\n`
+          : derivedMode === "research-loop"
+            ? `# Archive Scaffold\n\n- mode: research-loop\n- workflow: ${result.workflowName}\n- executionId: ${handle.executionId}\n- source result: ${basename(filePath)}\n\n## Focus\n- problem framing\n- research findings\n- bounded conclusion\n`
+            : derivedMode === "proof-loop"
+              ? `# Archive Scaffold\n\n- mode: proof-loop\n- workflow: ${result.workflowName}\n- executionId: ${handle.executionId}\n- source result: ${basename(filePath)}\n\n## Focus\n- statement and domain\n- proof attempt\n- proof gaps / refutation risk\n`
+              : `# Archive Scaffold\n\n- workflow: ${result.workflowName}\n- executionId: ${handle.executionId}\n- source result: ${basename(filePath)}\n`;
+      const summaryBody =
+        derivedMode === "validation-repair"
+          ? "# Summary\n\nSummarize validation failures, repair attempts, and final repair outcome.\n"
+          : derivedMode === "research-loop"
+            ? "# Summary\n\nSummarize the research question, main findings, and bounded conclusion.\n"
+            : derivedMode === "proof-loop"
+              ? "# Summary\n\nSummarize the proof status, key lemmas, and unresolved proof gaps.\n"
+              : `# Summary\n\nFill in the final summary for workflow \`${result.workflowName}\`.\n`;
+      const nextStepsBody =
+        derivedMode === "validation-repair"
+          ? "# Next Steps\n\n- Review remaining validation gaps\n- Decide whether another repair loop is needed\n- Curate final artifact\n"
+          : derivedMode === "research-loop"
+            ? "# Next Steps\n\n- Capture final conclusions\n- Curate research artifacts\n- Decide whether to continue or archive\n"
+            : derivedMode === "proof-loop"
+              ? "# Next Steps\n\n- Record unresolved proof gaps\n- Check counterexample risk\n- Decide whether to continue proof search or bounded-stop\n"
+              : "# Next Steps\n\n- Capture final conclusions\n- Curate artifacts\n- Decide whether to publish or continue\n";
+      await writeFile(join(archiveDir, "README.md"), readmeBody, "utf-8");
+      await writeFile(join(archiveDir, "SUMMARY.md"), summaryBody, "utf-8");
+      await writeFile(join(archiveDir, "NEXT_STEPS.md"), nextStepsBody, "utf-8");
+
+      if (derivedMode === "validation-repair") {
+        await writeFile(
+          join(archiveDir, "REPAIR_LOG.md"),
+          "# Repair Log\n\n- validation failures\n- repair attempts\n- stop category\n",
+          "utf-8",
+        );
+      }
+
+      if (derivedMode === "research-loop") {
+        await writeFile(
+          join(archiveDir, "FINDINGS.md"),
+          "# Findings\n\n- problem framing\n- main findings\n- bounded conclusion\n",
+          "utf-8",
+        );
+      }
+
+      if (derivedMode === "proof-loop") {
+        await writeFile(
+          join(archiveDir, "PROOF_GAPS.md"),
+          "# Proof Gaps\n\n- unresolved lemmas\n- hidden assumptions\n- refutation risk\n",
+          "utf-8",
+        );
+      }
+
+      if (isVerboseOutput(options) && !isQuietOutput(options) && !isJsonOutput(options)) {
+        formatter.info(`Saved archive intent metadata to ${archiveIntentPath}`);
+        formatter.info(`Created archive scaffold at ${archiveDir}`);
+      }
+    }
+
     if (isVerboseOutput(options) && !isQuietOutput(options) && !isJsonOutput(options)) {
       formatter.info(`Saved outputs to ${filePath}`);
     }
@@ -258,6 +374,8 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
       workflowName: result.workflowName,
       status: "completed",
       elapsedMs,
+      ...(derivedOutputRoot ? { outputRoot: derivedOutputRoot } : {}),
+      ...(derivedArchiveEnabled ? { archiveEnabled: true } : {}),
       ...(hasRepairLoopActivity
         ? {
             repairLoop: {
@@ -273,6 +391,9 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
         `repair loop summary: validation failed=${repairLoopSummary.validationFailed}, validation passed=${repairLoopSummary.validationPassed}, repairs started=${repairLoopSummary.repairStarted}, repairs completed=${repairLoopSummary.repairCompleted}${repairLoopSummary.lastValidationSummary ? `, last validation="${repairLoopSummary.lastValidationSummary}"` : ""}`
       );
     }
+    if (derivedArchiveEnabled && isVerboseOutput(options)) {
+      formatter.info("Archive intent enabled for this workflow.");
+    }
     if (isVerboseOutput(options)) {
       formatter.info(`Total execution time: ${elapsedMs}ms`);
     }
@@ -281,7 +402,7 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
 
 export function createRunCommand(): Command {
   return new Command("run")
-    .description("Execute a workflow")
+    .description("Execute a workflow (named workflow or one-file YAML mode)")
     .argument("<workflow>", "Workflow name or YAML path")
     .option("-i, --input <json>", "Input data as JSON string")
     .option("-v, --var <key=value...>", "Variables (repeatable)")
@@ -292,6 +413,8 @@ export function createRunCommand(): Command {
     .option("--provider <name>", "LLM provider override")
     .option("--output-dir <path>", "Write execution result JSON into directory")
     .option("--dry-run", "Validate without executing")
+    .option("--dump-expanded-workflow", "Print the expanded internal workflow when loading YAML")
+    .option("--show-stop-semantics", "Print derived stop semantics when available")
     .option("--timeout <ms>", "Execution timeout in milliseconds", parseInt)
     .action(async function (this: Command, workflow, options) {
       const mergedOptions = { ...getGlobalOpts(this), ...options };

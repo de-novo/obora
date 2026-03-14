@@ -9,7 +9,7 @@
 export interface RunRecord {
   id: string;
   workflowName: string;
-  status: "running" | "completed" | "failed" | "suspended";
+  status: "running" | "completed" | "failed" | "suspended" | "aborted";
   input: Record<string, unknown>;
   startedAt: string;
   completedAt?: string;

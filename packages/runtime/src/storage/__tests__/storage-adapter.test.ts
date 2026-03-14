@@ -139,6 +139,14 @@ function runContractTests(name: string, factory: () => { adapter: StorageAdapter
       expect(list[0]!.status).toBe("completed");
     });
 
+    it("saveRun supports aborted status", async () => {
+      const run = makeRun({ status: "aborted", completedAt: new Date().toISOString() });
+      await adapter.saveRun(run);
+      const loaded = await adapter.getRun(run.id);
+      expect(loaded?.status).toBe("aborted");
+      expect(loaded?.completedAt).toBe(run.completedAt);
+    });
+
     it("listRuns filters by workflowName", async () => {
       await adapter.saveRun(makeRun({ workflowName: "wf-a" }));
       await adapter.saveRun(makeRun({ workflowName: "wf-b" }));
