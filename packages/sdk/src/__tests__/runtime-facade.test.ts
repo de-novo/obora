@@ -29,6 +29,10 @@ describe("OboraRuntime facade", () => {
       "ANTHROPIC_API_KEY",
       "GOOGLE_API_KEY",
       "XAI_API_KEY",
+      "OBORA_LLM_PROVIDER",
+      "OBORA_LLM_API_KEY",
+      "OBORA_LLM_MODEL",
+      "OBORA_LLM_BASE_URL",
     ] as const;
     const backup = new Map<string, string | undefined>();
     for (const key of keys) {
@@ -85,7 +89,7 @@ describe("OboraRuntime facade", () => {
   it("runs steps in stub mode and emits warning when LLM is not configured", async () => {
     const restoreEnv = withNoLLMEnv();
     try {
-      const runtime = new OboraRuntime();
+      const runtime = new OboraRuntime({ config: {} });
       const warnings: string[] = [];
       runtime.on("warning", (event) => {
         const payload = event.data as { message?: string };

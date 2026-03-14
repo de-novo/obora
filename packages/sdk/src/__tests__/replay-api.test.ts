@@ -2,9 +2,13 @@ import { describe, expect, it, vi } from "vitest";
 
 import { OboraError, OboraErrorCode, OboraRuntime } from "../runtime.js";
 
+function makeIsolatedRuntime() {
+  return new OboraRuntime({ config: {} });
+}
+
 describe("M3-05 Replay/Re-execution SDK API", () => {
   it("throws OboraError with AUDIT_REPLAY_NOT_FOUND for unknown executionId", async () => {
-    const runtime = new OboraRuntime();
+    const runtime = makeIsolatedRuntime();
 
     await expect(runtime.replay("missing-exec-id")).rejects.toMatchObject({
       name: "OboraError",
@@ -14,7 +18,7 @@ describe("M3-05 Replay/Re-execution SDK API", () => {
   });
 
   it("returns ReExecutionResult with success=true for completed execution", async () => {
-    const runtime = new OboraRuntime();
+    const runtime = makeIsolatedRuntime();
     runtime.define("demo", { name: "demo", steps: [{ name: "s1" }, { name: "s2" }] });
 
     const handle = await runtime.run("demo");
@@ -27,7 +31,7 @@ describe("M3-05 Replay/Re-execution SDK API", () => {
   });
 
   it("supports mode=from_checkpoint and splits steps correctly", async () => {
-    const runtime = new OboraRuntime();
+    const runtime = makeIsolatedRuntime();
     runtime.define("cp", {
       name: "cp",
       steps: [{ name: "a" }, { name: "b" }, { name: "c" }],
@@ -50,7 +54,7 @@ describe("M3-05 Replay/Re-execution SDK API", () => {
   });
 
   it("populates restoredState from skipped steps in from_checkpoint mode", async () => {
-    const runtime = new OboraRuntime();
+    const runtime = makeIsolatedRuntime();
     runtime.define("restore", {
       name: "restore",
       steps: [{ name: "a" }, { name: "b" }, { name: "c" }],
@@ -83,7 +87,7 @@ describe("M3-05 Replay/Re-execution SDK API", () => {
   });
 
   it("throws AUDIT_REPLAY_NOT_FOUND when checkpoint step is not found", async () => {
-    const runtime = new OboraRuntime();
+    const runtime = makeIsolatedRuntime();
     runtime.define("cp-missing", {
       name: "cp-missing",
       steps: [{ name: "a" }, { name: "b" }],
@@ -105,7 +109,7 @@ describe("M3-05 Replay/Re-execution SDK API", () => {
   });
 
   it("adds non-determinism warnings to plan when detectNonDeterminism=true", async () => {
-    const runtime = new OboraRuntime();
+    const runtime = makeIsolatedRuntime();
     runtime.define("nd", {
       name: "nd",
       steps: [{ name: "s1" }, { name: "s2" }],
@@ -140,7 +144,7 @@ describe("M3-05 Replay/Re-execution SDK API", () => {
   });
 
   it("emits reexecution lifecycle events", async () => {
-    const runtime = new OboraRuntime();
+    const runtime = makeIsolatedRuntime();
     runtime.define("events", { name: "events", steps: [{ name: "x" }, { name: "y" }] });
 
     const start = vi.fn();
@@ -164,7 +168,7 @@ describe("M3-05 Replay/Re-execution SDK API", () => {
   });
 
   it("calls onStepComplete for each replayed step", async () => {
-    const runtime = new OboraRuntime();
+    const runtime = makeIsolatedRuntime();
     runtime.define("callback", {
       name: "callback",
       steps: [{ name: "step-1" }, { name: "step-2" }, { name: "step-3" }],
@@ -186,7 +190,7 @@ describe("M3-05 Replay/Re-execution SDK API", () => {
 
   it("uses dryRun=true by default", async () => {
     const sink = vi.fn();
-    const runtime = new OboraRuntime({ audit: { enabled: true, sink } });
+    const runtime = new OboraRuntime({ audit: { enabled: true, sink }, config: {} });
     runtime.define("dry", { name: "dry", steps: [{ name: "s1" }] });
 
     const handle = await runtime.run("dry");
@@ -205,7 +209,7 @@ describe("M3-05 Replay/Re-execution SDK API", () => {
   });
 
   it("throws OboraError instance for unknown executionId", async () => {
-    const runtime = new OboraRuntime();
+    const runtime = makeIsolatedRuntime();
 
     await expect(runtime.replay("unknown")).rejects.toBeInstanceOf(OboraError);
   });

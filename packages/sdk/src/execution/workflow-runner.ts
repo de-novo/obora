@@ -574,7 +574,11 @@ export class WorkflowRunner {
     const triggerBackEdge = async (
       step: WorkflowStep,
       reason: string,
-      overrides?: { noProgress?: boolean; category?: "no_progress" | "repeated_critical_issue" },
+      overrides?: {
+        noProgress?: boolean;
+        category?: "no_progress" | "repeated_critical_issue";
+        cause?: unknown;
+      },
     ): Promise<number> => {
       const onFail = (
         step as unknown as {
@@ -583,12 +587,12 @@ export class WorkflowRunner {
       ).on_fail;
 
       if (!onFail?.goto) {
-        throw new Error(reason);
+        throw (overrides?.cause ?? new Error(reason));
       }
 
       const targetIndex = stepIndexByName.get(onFail.goto);
       if (targetIndex === undefined) {
-        throw new Error(reason);
+        throw (overrides?.cause ?? new Error(reason));
       }
 
       const maxIterations =
@@ -622,7 +626,7 @@ export class WorkflowRunner {
           escalation: onFail.escalate_on_exhaust ?? "fail",
           reason,
         });
-        throw new Error(reason);
+        throw (overrides?.cause ?? new Error(reason));
       }
 
       const invalidated = sortedSteps.slice(targetIndex).map((s) => s.name);
@@ -686,7 +690,7 @@ export class WorkflowRunner {
           : { output: "[stub] No LLM configured", raw: { stub: true, reason: "No LLM configured" } };
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
-        cursor = await triggerBackEdge(step, reason);
+        cursor = await triggerBackEdge(step, reason, { cause: error });
         continue;
       }
 
