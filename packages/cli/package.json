@@ -13,7 +13,7 @@
     "build": "tsc --noCheck",
     "lint": "eslint src --ext .ts",
     "clean": "rm -rf dist",
-    "test": "vitest",
+    "test": "vitest run",
     "test:coverage": "vitest --coverage"
   },
   "dependencies": {
