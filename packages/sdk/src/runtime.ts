@@ -221,12 +221,12 @@ export class OboraRuntime {
     });
   }
 
-  // ── emitEvent (kept here so tests can access via `as any`) ──────────────
+  // ── emitEvent (kept here so tests can access via loose casting) ─────────
 
   /**
    * @internal
    * Delegate to EventBus. Kept as a named private method so existing tests
-   * that call `(runtime as any).emitEvent(...)` continue to work.
+   * that call `emitEvent(...)` through a loose cast continue to work.
    */
   private async emitEvent(
     type: AuditEventType,
