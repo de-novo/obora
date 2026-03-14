@@ -1,0 +1,24 @@
+version: "1.0"
+default_model: glm-4.7
+agents:
+  framer:
+    role: 수학 문제를 정확히 재정의하고 전제를 분리합니다.
+    model: glm-4.7
+  auditor:
+    role: known results, assumptions, constraints를 감사하듯 정리합니다.
+    model: glm-4.7
+  prover:
+    role: lemma 후보와 proof attempt를 제시합니다.
+    model: glm-4.7
+  skeptic:
+    role: 반례, 모순, 숨은 가정, proof gap을 공격적으로 찾습니다.
+    model: glm-4.7
+  reviewer-1:
+    role: 논리 구조와 증명 공백을 리뷰합니다.
+    model: glm-4.7
+  reviewer-2:
+    role: 반례 가능성과 일관성을 리뷰합니다.
+    model: glm-4.7
+  archivist:
+    role: 탐색 결과를 재사용 가능한 문서 패키지로 정리합니다.
+    model: glm-4.7
