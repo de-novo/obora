@@ -1,0 +1,7 @@
+{
+  "workflowName": "one-file-research-demo",
+  "executionId": "d0792ca5-6fb6-40cf-94cd-c16235e3d302",
+  "archiveEnabled": true,
+  "outputRoot": "./output/one-file-research-demo",
+  "sourceResultPath": "output/one-file-research-demo/one-file-research-demo-d0792ca5-6fb6-40cf-94cd-c16235e3d302.json"
+}
