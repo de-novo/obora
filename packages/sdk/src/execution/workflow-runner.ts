@@ -11,7 +11,7 @@ import type { LLMAdapterLike } from "../step-executor.js";
 import { BudgetExceededError, CostTracker } from "../cost-tracker.js";
 import { queryKnowledge } from "../knowledge/queryKnowledge.js";
 import type { WorkflowDef, WorkflowStep } from "../workflow.js";
-import type { StorageAdapter, PolicyHashInput } from "@obora/runtime";
+import type { StorageAdapter, PolicyHashInput, RunRecord } from "@obora/runtime";
 
 import { OboraError, OboraErrorCode } from "../runtime-types.js";
 import type {
@@ -984,7 +984,7 @@ export class WorkflowRunner {
       await adapter.saveRun({
         id: executionId,
         workflowName,
-        status: execution.status as "completed" | "failed" | "running" | "suspended" | "aborted",
+        status: execution.status as RunRecord["status"],
         input: { value: execution.input ?? null },
         startedAt: execution.startedAt.toISOString(),
         completedAt: execution.endedAt?.toISOString(),
