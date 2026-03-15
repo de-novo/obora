@@ -97,9 +97,12 @@ export function createWorkflowBlackboard(
   // runtime single-writer policy via recordStepResult/recordStepError.
   Object.defineProperty(board as unknown as { write?: (path: string, value: unknown) => void }, "write", {
     value: (path: string, _value: unknown) => {
-      console.warn(
-        `[Blackboard] Deprecated: direct write("${path}") is a no-op. Use recordStepResult/recordStepError.`,
-      );
+      if (!warnedDeprecatedDirectWrite && process.env.NODE_ENV !== "test") {
+        warnedDeprecatedDirectWrite = true;
+        console.warn(
+          `[Blackboard] Deprecated: direct write("${path}") is a no-op. Use recordStepResult/recordStepError.`,
+        );
+      }
       // no-op: single-writer policy — mutation only via recordStepResult/recordStepError
     },
     configurable: false,

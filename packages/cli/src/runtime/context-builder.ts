@@ -55,6 +55,7 @@ const defaultClock: Clock = () => new Date().toISOString();
 
 /** Module-level clock; override via `setClock()` for testing. */
 let activeClock: Clock = defaultClock;
+let warnedDeprecatedDirectWrite = false;
 
 /** Override the clock used by record* functions. Pass `null` to reset. */
 export function setClock(clock: Clock | null): void {
@@ -101,9 +102,12 @@ export function createWorkflowBlackboard(
     "write",
     {
       value: (path: string, _value: unknown) => {
-        console.warn(
-          `[Blackboard] Deprecated: direct write("${path}") is a no-op. Use recordStepResult/recordStepError.`
-        );
+        if (!warnedDeprecatedDirectWrite && process.env.NODE_ENV !== "test") {
+          warnedDeprecatedDirectWrite = true;
+          console.warn(
+            `[Blackboard] Deprecated: direct write("${path}") is a no-op. Use recordStepResult/recordStepError.`
+          );
+        }
         // no-op: single-writer policy — mutation only via recordStepResult/recordStepError
       },
       configurable: false,

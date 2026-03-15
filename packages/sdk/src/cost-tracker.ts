@@ -18,6 +18,8 @@ export class BudgetExceededError extends Error {
 }
 
 export class CostTracker {
+  private readonly warnedUnknownModels = new Set<string>();
+
   constructor(
     private readonly storage: StorageAdapter,
     private readonly runId: string,
@@ -37,14 +39,25 @@ export class CostTracker {
     models: ModelPricing[];
     unknownModel: "warn" | "block" | "estimate";
     fallback?: { prompt: number; completion: number };
+    configured: boolean;
   } {
     const resources = this.config?.resources;
     const pricing = resources?.pricing;
+    const configured = Boolean(
+      resources
+        && (
+          Object.prototype.hasOwnProperty.call(resources, "pricing")
+          || Object.prototype.hasOwnProperty.call(resources, "unknownModel")
+          || Object.prototype.hasOwnProperty.call(resources, "fallbackPer1kTokens")
+        )
+    );
+
     if (Array.isArray(pricing)) {
       return {
         models: pricing,
         unknownModel: resources?.unknownModel ?? "warn",
         fallback: resources?.fallbackPer1kTokens,
+        configured,
       };
     }
 
@@ -58,6 +71,7 @@ export class CostTracker {
         models: obj.models ?? [],
         unknownModel: obj.unknownModel ?? resources?.unknownModel ?? "warn",
         fallback: obj.fallbackPer1kTokens ?? resources?.fallbackPer1kTokens,
+        configured,
       };
     }
 
@@ -65,6 +79,7 @@ export class CostTracker {
       models: [],
       unknownModel: resources?.unknownModel ?? "warn",
       fallback: resources?.fallbackPer1kTokens,
+      configured,
     };
   }
 
@@ -112,7 +127,8 @@ export class CostTracker {
       if (mode === "estimate" && pricingConfig.fallback) {
         costUsd = (promptTokens / 1000) * pricingConfig.fallback.prompt
           + (completionTokens / 1000) * pricingConfig.fallback.completion;
-      } else {
+      } else if (pricingConfig.configured && !this.warnedUnknownModels.has(model)) {
+        this.warnedUnknownModels.add(model);
         console.warn(`[budget] Unknown model pricing for '${model}', cost recorded as 0 (unknownModel=warn)`);
       }
     }
