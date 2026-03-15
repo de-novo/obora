@@ -1,0 +1,9 @@
+version: "1.0"
+default_model: glm-5
+agents:
+  writer:
+    role: Create a concise structured draft from a short brief.
+    model: glm-5
+  validator:
+    role: Validate the draft against explicit checklist criteria and write a validation report.
+    model: glm-5

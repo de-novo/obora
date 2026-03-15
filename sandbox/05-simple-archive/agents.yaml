@@ -1,0 +1,9 @@
+version: "1.0"
+default_model: glm-5
+agents:
+  writer:
+    role: Create a concise structured summary from a short brief.
+    model: glm-5
+  archivist:
+    role: Read the final result and create a reusable archive note.
+    model: glm-5

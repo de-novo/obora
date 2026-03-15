@@ -1,0 +1,40 @@
+name: draft-review
+version: "1.0"
+steps:
+  - name: draft-summary
+    agent: writer
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/02-simple-review/input/brief.md.
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/02-simple-review/output/final/01-draft.md.
+
+        Requirements:
+        - The draft must contain exactly these top-level sections:
+          1. Draft Summary
+          2. Key Points
+          3. Open Questions
+        - Keep it concise and practical.
+
+  - name: review-summary
+    agent: reviewer
+    depends_on: [draft-summary]
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/02-simple-review/input/brief.md and /Users/denovo/workspace/github/obora-kit/sandbox/02-simple-review/output/final/01-draft.md.
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/02-simple-review/output/final/02-review.md and /Users/denovo/workspace/github/obora-kit/sandbox/02-simple-review/output/final/03-final.md.
+
+        Requirements for 02-review.md:
+        - Include exactly these top-level sections:
+          1. Strengths
+          2. Issues
+          3. Suggested Revisions
+
+        Requirements for 03-final.md:
+        - Include exactly these top-level sections:
+          1. Final Summary
+          2. Key Points
+          3. Changes Applied
+          4. Next Action
+        - Reflect at least one improvement compared with the draft.

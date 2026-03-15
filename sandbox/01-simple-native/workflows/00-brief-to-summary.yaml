@@ -1,0 +1,19 @@
+name: brief-to-summary
+version: "1.0"
+steps:
+  - name: create-summary
+    agent: summarizer
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/01-simple-native/input/brief.md.
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/01-simple-native/output/final/01-summary.md.
+
+        Requirements:
+        - The document must contain exactly these top-level sections:
+          1. Summary
+          2. Key Points
+          3. Uncertainties
+          4. Next Action
+        - Keep it concise and practical.
+        - Do not create extra files.

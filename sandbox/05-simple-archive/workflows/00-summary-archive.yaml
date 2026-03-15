@@ -1,0 +1,33 @@
+name: summary-archive
+version: "1.0"
+steps:
+  - name: create-summary
+    agent: writer
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/05-simple-archive/input/brief.md.
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/05-simple-archive/output/final/01-summary.md.
+
+        Requirements:
+        - The document must contain exactly these top-level sections:
+          1. Summary
+          2. Key Points
+          3. Next Action
+        - Keep it concise and practical.
+
+  - name: archive-summary
+    agent: archivist
+    depends_on: [create-summary]
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/05-simple-archive/output/final/01-summary.md.
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/05-simple-archive/output/archive/40-archive-note.md.
+
+        Requirements:
+        - The archive note must contain exactly these top-level sections:
+          1. Summary of Result
+          2. Why Archived
+          3. Reuse Notes
+        - Explain briefly why this output is worth preserving.

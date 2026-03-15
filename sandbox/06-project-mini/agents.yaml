@@ -1,0 +1,15 @@
+version: "1.0"
+default_model: glm-5
+agents:
+  writer:
+    role: Create a concise project draft from a short brief.
+    model: glm-5
+  reviewer:
+    role: Review the draft, identify improvements, and produce a better final version.
+    model: glm-5
+  validator:
+    role: Validate the final document against explicit checklist criteria.
+    model: glm-5
+  archivist:
+    role: Preserve the final result and validation outcome as a reusable archive note.
+    model: glm-5

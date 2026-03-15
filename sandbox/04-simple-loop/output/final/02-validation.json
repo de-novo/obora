@@ -1,0 +1,11 @@
+{
+  "passed": false,
+  "summary": "Validation failed: the draft is missing the required 'Next Action' section. The draft contains Summary and Key Points sections but does not meet all checklist requirements.",
+  "failedChecks": [
+    {
+      "name": "contains Next Action",
+      "message": "The draft does not contain a 'Next Action' section. This section is required per the validation checklist."
+    }
+  ],
+  "signature": "validate-failed-missing-next-action-2026-03-15-v1"
+}

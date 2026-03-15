@@ -1,0 +1,6 @@
+version: "1.0"
+default_model: glm-5
+agents:
+  summarizer:
+    role: Read a short brief and write one concise structured summary document.
+    model: glm-5

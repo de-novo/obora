@@ -1,0 +1,41 @@
+name: draft-validate
+version: "1.0"
+steps:
+  - name: draft-summary
+    agent: writer
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/03-simple-validation/input/brief.md.
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/03-simple-validation/output/final/01-draft.md.
+
+        Requirements:
+        - The draft must contain exactly these top-level sections:
+          1. Summary
+          2. Key Points
+          3. Next Action
+        - Keep it concise and practical.
+
+  - name: validate-summary
+    agent: validator
+    depends_on: [draft-summary]
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/03-simple-validation/input/brief.md and /Users/denovo/workspace/github/obora-kit/sandbox/03-simple-validation/output/final/01-draft.md.
+        Validate the draft against this checklist:
+        - it exists
+        - it contains Summary
+        - it contains Key Points
+        - it contains Next Action
+        - it is concise and coherent
+
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/03-simple-validation/output/final/02-validation.md.
+
+        Requirements for 02-validation.md:
+        - Include exactly these top-level sections:
+          1. Verdict
+          2. Passed Checks
+          3. Failed Checks
+          4. Next Action
+        - Verdict must clearly say PASS or FAIL.

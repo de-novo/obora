@@ -1,0 +1,55 @@
+{
+  "id": "8c581952-1495-4702-a2fd-feaacdcf0977",
+  "workflowName": "summary-archive",
+  "status": "completed",
+  "startedAt": "2026-03-15T13:54:50.132Z",
+  "stepOrder": [
+    "create-summary",
+    "archive-summary"
+  ],
+  "completedSteps": [
+    "create-summary",
+    "archive-summary"
+  ],
+  "stepRecords": {
+    "create-summary": {
+      "output": "Done. I've created the summary document at `/Users/denovo/workspace/github/obora-kit/sandbox/05-simple-archive/output/final/01-summary.md` with the three required sections:\n\n1. **Summary**: Overview of the fifth canonical sandbox project\n2. **Key Points**: Three main requirements (brief-based output, archive note creation, output separation)\n3. **Next Action**: Clear next step to draft results and organize into archive format\n\nThe document is concise, practical, and contains no placeholders.",
+      "raw": {
+        "id": "zai-glm-5-1773582901542",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "Done. I've created the summary document at `/Users/denovo/workspace/github/obora-kit/sandbox/05-simple-archive/output/final/01-summary.md` with the three required sections:\n\n1. **Summary**: Overview of the fifth canonical sandbox project\n2. **Key Points**: Three main requirements (brief-based output, archive note creation, output separation)\n3. **Next Action**: Clear next step to draft results and organize into archive format\n\nThe document is concise, practical, and contains no placeholders."
+        },
+        "usage": {
+          "promptTokens": 285,
+          "completionTokens": 105,
+          "totalTokens": 1030
+        },
+        "finishReason": "stop"
+      }
+    },
+    "archive-summary": {
+      "output": "Done. I've created the archive note at `/Users/denovo/workspace/github/obora-kit/sandbox/05-simple-archive/output/archive/40-archive-note.md` with the three required sections:\n\n1. **Summary of Result**: Documents the successful completion of the brief-to-archive workflow and output generation\n2. **Why Archived**: Explains preservation value including pattern reference, structure template, workflow validation, and Korean documentation example\n3. **Reuse Notes**: Provides practical guidance on when to reuse, how to adapt, and key artifacts for future projects\n\nThe archive note captures the essential outcomes and makes them reusable for similar Obora workflow implementations.",
+      "raw": {
+        "id": "zai-glm-5-1773582925948",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "Done. I've created the archive note at `/Users/denovo/workspace/github/obora-kit/sandbox/05-simple-archive/output/archive/40-archive-note.md` with the three required sections:\n\n1. **Summary of Result**: Documents the successful completion of the brief-to-archive workflow and output generation\n2. **Why Archived**: Explains preservation value including pattern reference, structure template, workflow validation, and Korean documentation example\n3. **Reuse Notes**: Provides practical guidance on when to reuse, how to adapt, and key artifacts for future projects\n\nThe archive note captures the essential outcomes and makes them reusable for similar Obora workflow implementations."
+        },
+        "usage": {
+          "promptTokens": 450,
+          "completionTokens": 130,
+          "totalTokens": 1476
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "create-summary": "Done. I've created the summary document at `/Users/denovo/workspace/github/obora-kit/sandbox/05-simple-archive/output/final/01-summary.md` with the three required sections:\n\n1. **Summary**: Overview of the fifth canonical sandbox project\n2. **Key Points**: Three main requirements (brief-based output, archive note creation, output separation)\n3. **Next Action**: Clear next step to draft results and organize into archive format\n\nThe document is concise, practical, and contains no placeholders.",
+    "archive-summary": "Done. I've created the archive note at `/Users/denovo/workspace/github/obora-kit/sandbox/05-simple-archive/output/archive/40-archive-note.md` with the three required sections:\n\n1. **Summary of Result**: Documents the successful completion of the brief-to-archive workflow and output generation\n2. **Why Archived**: Explains preservation value including pattern reference, structure template, workflow validation, and Korean documentation example\n3. **Reuse Notes**: Provides practical guidance on when to reuse, how to adapt, and key artifacts for future projects\n\nThe archive note captures the essential outcomes and makes them reusable for similar Obora workflow implementations."
+  },
+  "endedAt": "2026-03-15T13:55:30.518Z"
+}

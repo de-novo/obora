@@ -1,0 +1,62 @@
+name: draft-repair-loop
+version: "1.0"
+steps:
+  - name: build_or_repair
+    agent: writer
+    config:
+      repair_loop:
+        enabled: true
+        validation_step: validate
+        max_no_progress_iterations: 1
+        repeated_critical_issue_ceiling: 1
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/04-simple-loop/input/brief.md.
+
+        If this is the first attempt, write /Users/denovo/workspace/github/obora-kit/sandbox/04-simple-loop/output/final/01-draft.md with exactly these top-level sections:
+        1. Summary
+        2. Key Points
+
+        Intentionally omit Next Action on the first attempt.
+
+        If this is a repair attempt after validation failure, update /Users/denovo/workspace/github/obora-kit/sandbox/04-simple-loop/output/final/03-repaired.md so that it contains exactly these top-level sections:
+        1. Summary
+        2. Key Points
+        3. Next Action
+
+  - name: validate
+    agent: validator
+    depends_on: [build_or_repair]
+    config:
+      validation:
+        enabled: true
+        emit_structured_result: true
+    on_fail:
+      goto: build_or_repair
+      max_iterations: 1
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/04-simple-loop/input/brief.md.
+        Read whichever exists first:
+        - /Users/denovo/workspace/github/obora-kit/sandbox/04-simple-loop/output/final/03-repaired.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/04-simple-loop/output/final/01-draft.md
+
+        Validate against this checklist:
+        - file exists
+        - contains Summary
+        - contains Key Points
+        - contains Next Action
+
+        Also write a human-readable report:
+        - if validating the first attempt, write /Users/denovo/workspace/github/obora-kit/sandbox/04-simple-loop/output/final/02-validation.json
+        - if validating the repaired attempt, write /Users/denovo/workspace/github/obora-kit/sandbox/04-simple-loop/output/final/04-final-validation.md
+
+        Return a structured ValidationResult JSON payload using this format:
+        {
+          "passed": boolean,
+          "summary": "string",
+          "failedChecks": [{ "name": "string", "message": "string" }],
+          "signature": "stable-signature"
+        }

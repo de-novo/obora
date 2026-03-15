@@ -1,0 +1,9 @@
+version: "1.0"
+default_model: glm-5
+agents:
+  writer:
+    role: Create a concise first draft from a short brief.
+    model: glm-5
+  reviewer:
+    role: Review the draft, identify issues, and produce an improved final version.
+    model: glm-5

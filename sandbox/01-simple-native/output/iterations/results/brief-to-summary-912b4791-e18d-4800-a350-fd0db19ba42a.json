@@ -1,0 +1,35 @@
+{
+  "id": "912b4791-e18d-4800-a350-fd0db19ba42a",
+  "workflowName": "brief-to-summary",
+  "status": "completed",
+  "startedAt": "2026-03-15T13:10:54.409Z",
+  "stepOrder": [
+    "create-summary"
+  ],
+  "completedSteps": [
+    "create-summary"
+  ],
+  "stepRecords": {
+    "create-summary": {
+      "output": "Summary document created successfully at `/Users/denovo/workspace/github/obora-kit/sandbox/01-simple-native/output/final/01-summary.md` with all required sections:\n\n1. **Summary** - Overview of the canonical example purpose\n2. **Key Points** - Four key requirements extracted from the brief\n3. **Uncertainties** - None identified\n4. **Next Action** - Task marked as complete",
+      "raw": {
+        "id": "zai-glm-5-1773580262001",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "Summary document created successfully at `/Users/denovo/workspace/github/obora-kit/sandbox/01-simple-native/output/final/01-summary.md` with all required sections:\n\n1. **Summary** - Overview of the canonical example purpose\n2. **Key Points** - Four key requirements extracted from the brief\n3. **Uncertainties** - None identified\n4. **Next Action** - Task marked as complete"
+        },
+        "usage": {
+          "promptTokens": 170,
+          "completionTokens": 86,
+          "totalTokens": 960
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "create-summary": "Summary document created successfully at `/Users/denovo/workspace/github/obora-kit/sandbox/01-simple-native/output/final/01-summary.md` with all required sections:\n\n1. **Summary** - Overview of the canonical example purpose\n2. **Key Points** - Four key requirements extracted from the brief\n3. **Uncertainties** - None identified\n4. **Next Action** - Task marked as complete"
+  },
+  "endedAt": "2026-03-15T13:11:05.720Z"
+}

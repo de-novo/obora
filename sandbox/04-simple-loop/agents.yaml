@@ -1,0 +1,9 @@
+version: "1.0"
+default_model: glm-5
+agents:
+  writer:
+    role: Create a deliberately incomplete first draft, then repair it when validation fails.
+    model: glm-5
+  validator:
+    role: Validate the draft against explicit checklist rules and return structured JSON.
+    model: glm-5
