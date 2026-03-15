@@ -12,5 +12,5 @@ node bin/obora.js run "$WORKFLOW" \
   --config "$CONFIG" \
   --agents "$AGENTS" \
   --output-dir output/iterations/results \
-  --timeout "${OBORA_TIMEOUT_MS:-900000}" \
+  --timeout "${OBORA_TIMEOUT_MS:-1500000}" \
   --verbose --no-color

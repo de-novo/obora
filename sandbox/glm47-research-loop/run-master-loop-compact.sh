@@ -13,7 +13,7 @@ RESULT_DIR="$ROOT/output/iterations/results"
 mkdir -p "$LOG_DIR" "$RESULT_DIR"
 
 MAX_ITERATIONS="${MAX_ITERATIONS:-4}"
-OBORA_TIMEOUT_MS="${OBORA_TIMEOUT_MS:-180000}"
+OBORA_TIMEOUT_MS="${OBORA_TIMEOUT_MS:-900000}"
 MAX_RUN_RETRIES="${MAX_RUN_RETRIES:-6}"
 INITIAL_RETRY_DELAY_SEC="${INITIAL_RETRY_DELAY_SEC:-30}"
 
@@ -37,15 +37,36 @@ update_state() {
 EOF
 }
 
-extract_decision() {
-  local file="$1"
-  [[ -f "$file" ]] || { echo "MISSING"; return 0; }
+extract_decision_from_text() {
+  local text="$1"
   local decision
-  decision="$(grep -Eio 'decision\s*:\s*(CONTINUE|STOP)' "$file" | head -n1 | sed -E 's/.*:\s*//I' | tr '[:lower:]' '[:upper:]' || true)"
+  decision="$(printf '%s' "$text" | grep -Eio 'decision\s*:\s*(CONTINUE|STOP)' | head -n1 | sed -E 's/.*:\s*//I' | tr '[:lower:]' '[:upper:]' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' || true)"
   if [[ -z "$decision" ]]; then
-    decision="$(grep -Eio '\b(CONTINUE|STOP)\b' "$file" | head -n1 | tr '[:lower:]' '[:upper:]' || true)"
+    decision="$(printf '%s' "$text" | grep -Eio '\b(CONTINUE|STOP)\b' | head -n1 | tr '[:lower:]' '[:upper:]' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' || true)"
   fi
   [[ -n "$decision" ]] && echo "$decision" || echo "UNKNOWN"
+}
+
+extract_decision() {
+  local file="$1"
+  if [[ -f "$file" ]]; then
+    extract_decision_from_text "$(cat "$file")"
+    return 0
+  fi
+  if [[ -n "${LAST_RESULT_JSON:-}" && -f "$LAST_RESULT_JSON" ]]; then
+    local extracted
+    extracted="$(python3 - <<'PY' "$LAST_RESULT_JSON"
+import json, sys
+p = sys.argv[1]
+obj = json.load(open(p))
+text = obj.get('outputs', {}).get('review-and-finalize', '')
+print(text)
+PY
+)"
+    extract_decision_from_text "$extracted"
+    return 0
+  fi
+  echo "MISSING"
 }
 
 is_retryable_429() {
@@ -81,6 +102,7 @@ while (( iteration <= MAX_ITERATIONS )); do
     run_exit=${PIPESTATUS[0]}
     set -e
     tail -n 200 "$run_log" > "$run_json" || true
+    LAST_RESULT_JSON="$(ls -1t "$RESULT_DIR"/glm47-master-research-loop-compact-*.json 2>/dev/null | head -n1 || true)"
 
     [[ $run_exit -eq 0 ]] && break
 

@@ -1,24 +1,24 @@
 version: "1.0"
-default_model: glm-4.7
+default_model: glm-5
 agents:
   researcher:
     role: 연구 질문을 구조화하고 자료성 노트를 정리합니다.
-    model: glm-4.7
+    model: glm-5
   analyst:
     role: 연구 노트를 분석하여 패턴, 리스크, 가설을 정리합니다.
-    model: glm-4.7
+    model: glm-5
   synthesizer:
     role: 중간 결과를 통합해 결론 후보를 도출합니다.
-    model: glm-4.7
+    model: glm-5
   archivist:
     role: 최종 결과를 아카이브용 문서 패키지로 정리합니다.
-    model: glm-4.7
+    model: glm-5
   reviewer-1:
     role: 컨텍스트 계승과 논리 일관성을 리뷰합니다.
-    model: glm-4.7
+    model: glm-5
   reviewer-2:
     role: 구조적 완결성과 문서 패키지 적합성을 리뷰합니다.
-    model: glm-4.7
+    model: glm-5
   reviewer-3:
     role: 실험 설계와 반복 가능성을 리뷰합니다.
-    model: glm-4.7
+    model: glm-5

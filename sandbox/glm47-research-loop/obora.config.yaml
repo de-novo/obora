@@ -15,7 +15,7 @@ artifacts:
 
 defaults:
   provider: zai
-  model: glm-4.7
+  model: glm-5
   temperature: 0.2
   timeout: 180
   maxTokens: 8192
@@ -24,6 +24,6 @@ providers:
   zai:
     authMode: global
     authRef: global:zai
-    defaultModel: glm-4.7
+    defaultModel: glm-5
     timeout: 180
     maxTokens: 8192
