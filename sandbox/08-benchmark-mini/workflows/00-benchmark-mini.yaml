@@ -1,0 +1,52 @@
+name: benchmark-mini
+version: "1.0"
+steps:
+  - name: solve-problem
+    agent: solver
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/08-benchmark-mini/input/problem.md.
+        Do not read any reference or answer key.
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/08-benchmark-mini/output/final/01-attempt.md.
+
+        Requirements:
+        - Include exactly these top-level sections:
+          1. Answer
+          2. Reasoning
+
+  - name: judge-attempt
+    agent: judge
+    depends_on: [solve-problem]
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/08-benchmark-mini/input/problem.md,
+        /Users/denovo/workspace/github/obora-kit/sandbox/08-benchmark-mini/input/reference-answer.md,
+        and /Users/denovo/workspace/github/obora-kit/sandbox/08-benchmark-mini/output/final/01-attempt.md.
+
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/08-benchmark-mini/output/final/02-verdict.md.
+
+        Requirements:
+        - Include exactly these top-level sections:
+          1. Verdict
+          2. Score
+          3. Correctness
+          4. Feedback
+        - Verdict should say PASS or FAIL.
+        - Score should be a simple score out of 10.
+
+  - name: archive-benchmark
+    agent: archivist
+    depends_on: [judge-attempt]
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/08-benchmark-mini/output/final/01-attempt.md and /Users/denovo/workspace/github/obora-kit/sandbox/08-benchmark-mini/output/final/02-verdict.md.
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/08-benchmark-mini/output/archive/40-benchmark-archive-note.md.
+
+        Requirements:
+        - Include exactly these top-level sections:
+          1. Summary of Attempt
+          2. Benchmark Result
+          3. Reuse Notes
