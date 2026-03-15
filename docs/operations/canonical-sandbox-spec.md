@@ -1,0 +1,114 @@
+# Canonical Sandbox Spec
+
+> Last updated: 2026-03-15
+
+이 문서는 `sandbox/01~06` active canonical sandbox들이 공통으로 따라야 하는 최소 규격을 정의한다.
+
+## 목적
+
+canonical sandbox는 레거시 실험 자산이 아니라,
+**Obora의 재현 가능한 학습 사다리**를 구성하는 기준 예제여야 한다.
+
+즉 각 sandbox는 다음 중 하나의 새로운 primitive를 검증해야 한다.
+
+- native execution
+- review handoff
+- validation
+- repair loop
+- archive
+- small project lifecycle
+
+---
+
+## 공통 규칙
+
+### 1. 위치
+- 활성 sandbox는 `sandbox/` 바로 아래에 둔다.
+- 이름은 숫자 prefix를 가진다.
+  - 예: `01-simple-native`
+  - 예: `02-simple-review`
+
+### 2. 최소 구조
+각 sandbox는 최소한 아래 구조를 가진다.
+
+```text
+sandbox/<name>/
+├── README.md
+├── agents.yaml
+├── obora.config.yaml
+├── input/
+├── output/
+│   ├── final/
+│   ├── iterations/
+│   │   └── results/
+│   └── archive/   # 필요 시
+├── workflows/
+└── run.sh
+```
+
+### 3. 입력/출력 경로
+- workflow는 sandbox-local absolute path를 사용한다.
+- repo top-level `output/`에 쓰면 안 된다.
+- active canonical sandbox는 서로의 output을 참조하지 않는다.
+
+### 4. 실행 방식
+모든 canonical sandbox는 아래 두 방식 중 적어도 하나를 문서화한다.
+
+1. 직접 실행
+```bash
+node bin/obora.js run ...
+```
+
+2. wrapper 실행
+```bash
+sandbox/<name>/run.sh
+```
+
+### 5. 성공 기준
+README에는 반드시 아래가 있어야 한다.
+- 목적
+- 입력
+- 출력
+- 실행 명령
+- 성공 기준
+
+### 6. 검증 원칙
+- sandbox는 실제 **Obora native run**으로 검증되어야 한다.
+- fallback demo는 canonical sandbox로 분류하지 않는다.
+- 각 sandbox는 이전 단계보다 정확히 하나의 새로운 primitive만 추가하는 것이 바람직하다.
+
+---
+
+## 현재 canonical ladder
+
+### 01 — simple native
+- primitive: 단일 native step
+
+### 02 — simple review
+- primitive: draft → review handoff
+
+### 03 — simple validation
+- primitive: draft → validation report
+
+### 04 — simple loop
+- primitive: validation fail → repair → pass
+
+### 05 — simple archive
+- primitive: final → archive
+
+### 06 — project mini
+- primitive: draft → review → final → validation → archive 조합
+
+---
+
+## 다음 단계 설계 원칙
+
+`07+`부터는 primitive를 하나 더 추가하기보다,
+이미 검증된 01~06 조합을 더 현실적인 제품/연구 흐름으로 확장한다.
+
+즉 다음 단계 sandbox는 아래 중 하나여야 한다.
+- project-oriented extension
+- benchmark-oriented extension
+- long-running extension
+
+단, 01~06의 공통 계약을 깨면 안 된다.
