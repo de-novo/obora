@@ -9,11 +9,11 @@ steps:
     input:
       task: |
         Read the following files:
-        - /Users/denovo/workspace/github/obora-kit/output/final/20-review-report.md
-        - /Users/denovo/workspace/github/obora-kit/output/final/21-remediation-plan.md
-        - /Users/denovo/workspace/github/obora-kit/output/final/22-final-conclusion.md
-        - /Users/denovo/workspace/github/obora-kit/output/final/23-loop-decision.md
-        Write /Users/denovo/workspace/github/obora-kit/output/final/24-p0-analysis.md.
+        - /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/20-review-report.md
+        - /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/21-remediation-plan.md
+        - /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/22-final-conclusion.md
+        - /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/23-loop-decision.md
+        Write /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/24-p0-analysis.md.
         In Korean markdown, identify exactly:
         - P0-001 quantitative criteria gap
         - P0-002 counter reset rule gap
@@ -28,9 +28,9 @@ steps:
     input:
       task: |
         Read:
-        - /Users/denovo/workspace/github/obora-kit/output/final/24-p0-analysis.md
-        - /Users/denovo/workspace/github/obora-kit/output/final/02-success-criteria.md
-        Write /Users/denovo/workspace/github/obora-kit/output/final/25-quantitative-criteria.md.
+        - /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/24-p0-analysis.md
+        - /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/02-success-criteria.md
+        Write /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/25-quantitative-criteria.md.
         In Korean markdown, define measurable criteria for:
         - P0/P1 classification
         - PASS/FAIL threshold
@@ -45,9 +45,9 @@ steps:
     input:
       task: |
         Read:
-        - /Users/denovo/workspace/github/obora-kit/output/final/24-p0-analysis.md
-        - /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/input/loop-policy.md
-        Write /Users/denovo/workspace/github/obora-kit/output/final/26-loop-rules.md.
+        - /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/24-p0-analysis.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/input/loop-policy.md
+        Write /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/26-loop-rules.md.
         In Korean markdown, define:
         - counter reset conditions
         - no-progress detection rules
@@ -63,11 +63,11 @@ steps:
     input:
       task: |
         Read:
-        - /Users/denovo/workspace/github/obora-kit/output/iterations/13-interim-conclusion.md
-        - /Users/denovo/workspace/github/obora-kit/output/final/24-p0-analysis.md
-        - /Users/denovo/workspace/github/obora-kit/output/final/25-quantitative-criteria.md
-        - /Users/denovo/workspace/github/obora-kit/output/final/26-loop-rules.md
-        Write /Users/denovo/workspace/github/obora-kit/output/final/27-hypothesis-verification.md.
+        - /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/iterations/13-interim-conclusion.md
+        - /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/24-p0-analysis.md
+        - /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/25-quantitative-criteria.md
+        - /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/26-loop-rules.md
+        Write /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/27-hypothesis-verification.md.
         In Korean markdown, explicitly resolve H-002 and H-003 with one of:
         - 지지
         - 기각
@@ -82,13 +82,13 @@ steps:
     input:
       task: |
         Read:
-        - /Users/denovo/workspace/github/obora-kit/output/final/24-p0-analysis.md
-        - /Users/denovo/workspace/github/obora-kit/output/final/25-quantitative-criteria.md
-        - /Users/denovo/workspace/github/obora-kit/output/final/26-loop-rules.md
-        - /Users/denovo/workspace/github/obora-kit/output/final/27-hypothesis-verification.md
+        - /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/24-p0-analysis.md
+        - /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/25-quantitative-criteria.md
+        - /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/26-loop-rules.md
+        - /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/27-hypothesis-verification.md
         Write/update:
-        - /Users/denovo/workspace/github/obora-kit/output/final/28-remediation-review.md
-        - /Users/denovo/workspace/github/obora-kit/output/final/29-remediation-decision.md
+        - /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/28-remediation-review.md
+        - /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/29-remediation-decision.md
         Requirements:
         - review must state whether P0-001~P0-004 are resolved
         - if any P0 remains unresolved, decision must be CONTINUE

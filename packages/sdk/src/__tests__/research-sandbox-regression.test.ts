@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFile as execFileCb } from "node:child_process";
@@ -16,9 +16,17 @@ const GLM_WORKFLOW = join(
   REPO_ROOT,
   "sandbox/glm47-research-loop/workflows/00-master-research-loop-compact.yaml",
 );
+const GLM_WORKFLOW_DIR = join(
+  REPO_ROOT,
+  "sandbox/glm47-research-loop/workflows",
+);
 const GLM_RUNNER = join(
   REPO_ROOT,
   "sandbox/glm47-research-loop/run-master-loop-compact.sh",
+);
+const GLM_RUNNER_DIR = join(
+  REPO_ROOT,
+  "sandbox/glm47-research-loop",
 );
 const MATH_WORKFLOW = join(
   REPO_ROOT,
@@ -71,8 +79,11 @@ describe("research sandbox regressions", () => {
     expect(stdout.trim()).toBe("STOP");
   });
 
-  it("glm workflow keeps read/write paths confined to sandbox-local locations", async () => {
+  it("glm workflows keep read/write paths confined to sandbox-local locations", async () => {
     const workflow = await readFile(GLM_WORKFLOW, "utf8");
+    const workflowFiles = (await readdir(GLM_WORKFLOW_DIR))
+      .filter((name) => name.endsWith(".yaml"))
+      .sort();
 
     expect(workflow).toContain(
       "/Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/input/research-brief.md",
@@ -88,6 +99,15 @@ describe("research sandbox regressions", () => {
     expect(workflow).not.toContain(" and input/loop-policy.md.");
     expect(workflow).not.toMatch(/^[\t ]*- output\/final\/23-loop-decision\.md$/m);
     expect(workflow).not.toMatch(/^[\t ]*- output\/archive\/34-archive-bundle-index\.md$/m);
+
+    for (const file of workflowFiles) {
+      const text = await readFile(join(GLM_WORKFLOW_DIR, file), "utf8");
+      expect(text, file).not.toContain("/Users/denovo/workspace/github/obora-kit/output/");
+      expect(text, file).not.toContain("Read input/");
+      expect(text, file).not.toContain("Write output/");
+      expect(text, file).not.toContain("Write/update output/");
+      expect(text, file).not.toContain("Read output/");
+    }
   });
 
   it("math proof workflow writes only to sandbox-local output paths", async () => {
@@ -105,9 +125,12 @@ describe("research sandbox regressions", () => {
     expect(workflow).not.toContain("/Users/denovo/workspace/github/obora-kit/output/archive/");
   });
 
-  it("active research runners use idle watchdogs with large safety ceilings", async () => {
+  it("research runners use idle watchdogs with large safety ceilings", async () => {
     const glmRunner = await readFile(GLM_RUNNER, "utf8");
     const mathRunner = await readFile(MATH_RUNNER, "utf8");
+    const glmRunnerFiles = (await readdir(GLM_RUNNER_DIR))
+      .filter((name) => name.endsWith(".sh"))
+      .sort();
 
     expect(glmRunner).toContain('RUN_HELPER="$REPO_ROOT/sandbox/_lib/run-obora-with-watchdog.sh"');
     expect(glmRunner).toContain('OBORA_TIMEOUT_MS="${OBORA_TIMEOUT_MS:-86400000}"');
@@ -119,5 +142,13 @@ describe("research sandbox regressions", () => {
     expect(mathRunner).toContain('OBORA_IDLE_TIMEOUT_SEC="${OBORA_IDLE_TIMEOUT_SEC:-900}"');
     expect(mathRunner).toContain('OBORA_SAFETY_TIMEOUT_SEC="${OBORA_SAFETY_TIMEOUT_SEC:-43200}"');
     expect(mathRunner).toContain('--output-dir "$RESULT_DIR"');
+
+    for (const file of glmRunnerFiles) {
+      const text = await readFile(join(GLM_RUNNER_DIR, file), "utf8");
+      expect(text, file).toContain('RUN_HELPER="$REPO_ROOT/sandbox/_lib/run-obora-with-watchdog.sh"');
+      expect(text, file).toContain('OBORA_IDLE_TIMEOUT_SEC="${OBORA_IDLE_TIMEOUT_SEC:-900}"');
+      expect(text, file).toContain('OBORA_SAFETY_TIMEOUT_SEC="${OBORA_SAFETY_TIMEOUT_SEC:-43200}"');
+      expect(text, file).not.toContain('$REPO_ROOT/output/');
+    }
   });
 });

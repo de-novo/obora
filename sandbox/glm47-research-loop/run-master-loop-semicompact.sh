@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$ROOT/../.." && pwd)"
+RUN_HELPER="$REPO_ROOT/sandbox/_lib/run-obora-with-watchdog.sh"
 WORKFLOW="$ROOT/workflows/00-master-research-loop-semicompact.yaml"
 CONFIG="$ROOT/obora.config.yaml"
 AGENTS="$ROOT/agents.yaml"
@@ -13,7 +14,10 @@ RESULT_DIR="$ROOT/output/iterations/results"
 mkdir -p "$LOG_DIR" "$RESULT_DIR"
 
 MAX_ITERATIONS="${MAX_ITERATIONS:-4}"
-OBORA_TIMEOUT_MS="${OBORA_TIMEOUT_MS:-240000}"
+OBORA_TIMEOUT_MS="${OBORA_TIMEOUT_MS:-86400000}"
+OBORA_IDLE_TIMEOUT_SEC="${OBORA_IDLE_TIMEOUT_SEC:-900}"
+OBORA_SAFETY_TIMEOUT_SEC="${OBORA_SAFETY_TIMEOUT_SEC:-43200}"
+OBORA_WATCHDOG_POLL_SEC="${OBORA_WATCHDOG_POLL_SEC:-5}"
 MAX_RUN_RETRIES="${MAX_RUN_RETRIES:-6}"
 INITIAL_RETRY_DELAY_SEC="${INITIAL_RETRY_DELAY_SEC:-30}"
 
@@ -33,19 +37,40 @@ update_state() {
 
 ## Notes
 - Updated by run-master-loop-semicompact.sh
-- Semi-compact workflow optimized for provider instability and step timeout balance.
+- Runner uses idle watchdog + large safety ceiling instead of a short wall-clock timeout.
 EOF
+}
+
+extract_decision_from_text() {
+  local text="$1"
+  local decision
+  decision="$(printf '%s' "$text" | grep -Eio 'decision\s*:\s*(CONTINUE|STOP)' | head -n1 | sed -E 's/.*:\s*//I' | tr '[:lower:]' '[:upper:]' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' || true)"
+  if [[ -z "$decision" ]]; then
+    decision="$(printf '%s' "$text" | grep -Eio '\b(CONTINUE|STOP)\b' | head -n1 | tr '[:lower:]' '[:upper:]' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' || true)"
+  fi
+  [[ -n "$decision" ]] && echo "$decision" || echo "UNKNOWN"
 }
 
 extract_decision() {
   local file="$1"
-  [[ -f "$file" ]] || { echo "MISSING"; return 0; }
-  local decision
-  decision="$(grep -Eio 'decision\s*:\s*(CONTINUE|STOP)' "$file" | head -n1 | sed -E 's/.*:\s*//I' | tr '[:lower:]' '[:upper:]' || true)"
-  if [[ -z "$decision" ]]; then
-    decision="$(grep -Eio '\b(CONTINUE|STOP)\b' "$file" | head -n1 | tr '[:lower:]' '[:upper:]' || true)"
+  if [[ -f "$file" ]]; then
+    extract_decision_from_text "$(cat "$file")"
+    return 0
   fi
-  [[ -n "$decision" ]] && echo "$decision" || echo "UNKNOWN"
+  if [[ -n "${LAST_RESULT_JSON:-}" && -f "$LAST_RESULT_JSON" ]]; then
+    local extracted
+    extracted="$(python3 - <<'PY' "$LAST_RESULT_JSON"
+import json, sys
+p = sys.argv[1]
+obj = json.load(open(p))
+text = obj.get('outputs', {}).get('review-final-decision', '')
+print(text)
+PY
+)"
+    extract_decision_from_text "$extracted"
+    return 0
+  fi
+  echo "MISSING"
 }
 
 is_retryable_429() {
@@ -72,18 +97,18 @@ while (( iteration <= MAX_ITERATIONS )); do
     echo "[semi-loop] run attempt $attempt / $MAX_RUN_RETRIES"
     : > "$run_log"
     set +e
-    node "$REPO_ROOT/bin/obora.js" run "$WORKFLOW" \
-      --config "$CONFIG" \
-      --agents "$AGENTS" \
-      --output-dir "$RESULT_DIR" \
-      --timeout "$OBORA_TIMEOUT_MS" \
-      --verbose --no-color 2>&1 | tee "$run_log"
-    run_exit=${PIPESTATUS[0]}
+    "$RUN_HELPER" "$run_log" "$run_json" "$OBORA_IDLE_TIMEOUT_SEC" "$OBORA_SAFETY_TIMEOUT_SEC" "$OBORA_WATCHDOG_POLL_SEC" -- \
+      node "$REPO_ROOT/bin/obora.js" run "$WORKFLOW" \
+        --config "$CONFIG" \
+        --agents "$AGENTS" \
+        --output-dir "$RESULT_DIR" \
+        --timeout "$OBORA_TIMEOUT_MS" \
+        --verbose --no-color
+    run_exit=$?
     set -e
-    tail -n 200 "$run_log" > "$run_json" || true
+    LAST_RESULT_JSON="$(ls -1t "$RESULT_DIR"/glm47-master-research-loop-semicompact-*.json 2>/dev/null | head -n1 || true)"
 
     [[ $run_exit -eq 0 ]] && break
-
     if is_retryable_429 "$run_log" && (( attempt < MAX_RUN_RETRIES )); then
       echo "[semi-loop] retryable 429 detected; sleeping ${retry_delay}s"
       sleep "$retry_delay"
@@ -96,7 +121,6 @@ while (( iteration <= MAX_ITERATIONS )); do
 
   if [[ $run_exit -ne 0 ]]; then
     update_state "$iteration" "FAILED" "INSPECT_RUN_LOG"
-    echo "[semi-loop] workflow failed (exit=$run_exit)"
     exit $run_exit
   fi
 
@@ -105,7 +129,6 @@ while (( iteration <= MAX_ITERATIONS )); do
   case "$decision" in
     STOP)
       update_state "$iteration" "COMPLETED" "ARCHIVE_OR_FINISH"
-      echo "[semi-loop] stop condition reached"
       exit 0
       ;;
     CONTINUE)
@@ -113,7 +136,6 @@ while (( iteration <= MAX_ITERATIONS )); do
       ;;
     *)
       update_state "$iteration" "BLOCKED" "CHECK_DECISION_FILE"
-      echo "[semi-loop] could not parse decision file"
       exit 2
       ;;
   esac
@@ -122,5 +144,4 @@ while (( iteration <= MAX_ITERATIONS )); do
 done
 
 update_state "$MAX_ITERATIONS" "STOPPED" "MAX_ITERATIONS_REACHED"
-echo "[semi-loop] reached MAX_ITERATIONS without STOP"
 exit 4

@@ -8,8 +8,8 @@ steps:
     tools: [file_read, file_write, file_list, generate]
     input:
       task: |
-        Read input/research-brief.md.
-        Write/update output/final/01-problem-frame.md.
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/input/research-brief.md.
+        Write/update /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/01-problem-frame.md.
         한국어 markdown, 짧고 명확하게 작성.
         반드시 포함:
         - 연구 목적
@@ -23,8 +23,8 @@ steps:
     tools: [file_read, file_write, file_list, generate]
     input:
       task: |
-        Read input/research-brief.md, input/loop-policy.md, output/final/01-problem-frame.md.
-        Write/update output/final/02-success-criteria.md.
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/input/research-brief.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/input/loop-policy.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/01-problem-frame.md.
+        Write/update /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/02-success-criteria.md.
         한국어 markdown, 짧고 명확하게 작성.
         반드시 포함:
         - 성공 기준
@@ -38,12 +38,12 @@ steps:
     tools: [file_read, file_write, file_list, generate]
     input:
       task: |
-        Read input/research-brief.md, output/final/01-problem-frame.md, output/final/02-success-criteria.md.
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/input/research-brief.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/01-problem-frame.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/02-success-criteria.md.
         Write/update:
-        - output/iterations/10-research-notes.md
-        - output/iterations/11-findings.md
-        - output/iterations/12-open-questions.md
-        - output/iterations/13-interim-conclusion.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/iterations/10-research-notes.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/iterations/11-findings.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/iterations/12-open-questions.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/iterations/13-interim-conclusion.md
         Requirements:
         - evidence / insight / risk / unresolved questions를 분리
         - 잠정 결론 제시
@@ -57,12 +57,12 @@ steps:
     tools: [file_read, file_write, file_list, review]
     input:
       task: |
-        Read input/research-brief.md, input/loop-policy.md, output/final/01-problem-frame.md, output/final/02-success-criteria.md, output/iterations/13-interim-conclusion.md.
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/input/research-brief.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/input/loop-policy.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/01-problem-frame.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/02-success-criteria.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/iterations/13-interim-conclusion.md.
         Write/update:
-        - output/final/20-review-report.md
-        - output/final/21-remediation-plan.md
-        - output/final/22-final-conclusion.md
-        - output/final/23-loop-decision.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/20-review-report.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/21-remediation-plan.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/22-final-conclusion.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/23-loop-decision.md
         Requirements:
         - review: PASS/FAIL, P0/P1/P2 issues
         - remediation: what to fix / why
@@ -78,11 +78,11 @@ steps:
     tools: [file_read, file_write, file_list, generate]
     input:
       task: |
-        Read output/final/22-final-conclusion.md and output/final/23-loop-decision.md.
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/22-final-conclusion.md and /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/23-loop-decision.md.
         If decision is STOP, write/update:
-        - output/archive/30-abstract.md
-        - output/archive/31-executive-summary.md
-        - output/archive/32-methodology.md
-        - output/archive/33-decision-log.md
-        - output/archive/34-archive-bundle-index.md
-        If decision is CONTINUE, write output/archive/34-archive-bundle-index.md as a short deferral note.
+        - /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/archive/30-abstract.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/archive/31-executive-summary.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/archive/32-methodology.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/archive/33-decision-log.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/archive/34-archive-bundle-index.md
+        If decision is CONTINUE, write /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/archive/34-archive-bundle-index.md as a short deferral note.

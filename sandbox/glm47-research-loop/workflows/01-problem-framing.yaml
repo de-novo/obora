@@ -8,7 +8,7 @@ steps:
     tools: [file_read, file_write, file_list, generate]
     input:
       task: |
-        Read input/research-brief.md and write output/final/01-problem-frame.md.
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/input/research-brief.md and write /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/01-problem-frame.md.
         한국어 markdown으로 작성하세요.
         반드시 포함:
         - 실험 목적
@@ -24,8 +24,8 @@ steps:
     depends_on: [frame-problem]
     input:
       task: |
-        Read input/research-brief.md and output/final/01-problem-frame.md.
-        Write output/final/02-success-criteria.md.
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/input/research-brief.md and /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/01-problem-frame.md.
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/02-success-criteria.md.
         반드시 포함:
         - Context Fidelity 기준
         - Workflow Leverage 기준

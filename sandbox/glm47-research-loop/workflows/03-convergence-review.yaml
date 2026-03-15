@@ -9,8 +9,8 @@ steps:
     tools: [file_read, file_write, file_list, review]
     input:
       task: |
-        Read input/research-brief.md, output/final/01-problem-frame.md, output/final/02-success-criteria.md, and output/iterations/13-interim-conclusion.md.
-        Write output/final/20-review-report.md.
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/input/research-brief.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/01-problem-frame.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/02-success-criteria.md, and /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/iterations/13-interim-conclusion.md.
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/20-review-report.md.
         Output in Korean markdown.
         반드시 포함:
         - PASS 또는 FAIL
@@ -26,8 +26,8 @@ steps:
     depends_on: [review-context-fidelity]
     input:
       task: |
-        Read output/final/20-review-report.md and output/iterations/13-interim-conclusion.md.
-        Write output/final/21-remediation-plan.md.
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/20-review-report.md and /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/iterations/13-interim-conclusion.md.
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/21-remediation-plan.md.
         반드시 포함:
         - 수정 대상
         - 수정 이유
@@ -40,8 +40,8 @@ steps:
     depends_on: [remediation-plan]
     input:
       task: |
-        Read input/research-brief.md, output/final/20-review-report.md, output/final/21-remediation-plan.md, output/iterations/13-interim-conclusion.md.
-        Write output/final/22-final-conclusion.md.
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/input/research-brief.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/20-review-report.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/21-remediation-plan.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/iterations/13-interim-conclusion.md.
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/22-final-conclusion.md.
         반드시 포함:
         - 최종 결론
         - 확인된 한계
