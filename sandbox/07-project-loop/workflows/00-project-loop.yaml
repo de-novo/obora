@@ -1,0 +1,107 @@
+name: project-loop
+version: "1.0"
+steps:
+  - name: draft-project
+    agent: writer
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/07-project-loop/input/brief.md.
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/07-project-loop/output/final/01-draft.md.
+
+        Requirements:
+        - The draft must contain exactly these top-level sections:
+          1. Project Summary
+          2. Scope
+        - Intentionally omit Next Action so the first validation fails.
+
+  - name: review-project
+    agent: reviewer
+    depends_on: [draft-project]
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/07-project-loop/input/brief.md and /Users/denovo/workspace/github/obora-kit/sandbox/07-project-loop/output/final/01-draft.md.
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/07-project-loop/output/final/02-review.md.
+
+        Requirements:
+        - Include exactly these top-level sections:
+          1. Strengths
+          2. Issues
+          3. Suggested Revisions
+        - Explicitly mention that Next Action is missing.
+
+  - name: validate-project
+    agent: validator
+    depends_on: [review-project]
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/07-project-loop/output/final/01-draft.md and /Users/denovo/workspace/github/obora-kit/sandbox/07-project-loop/output/final/02-review.md.
+        Validate against this checklist:
+        - contains Project Summary
+        - contains Scope
+        - contains Next Action
+
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/07-project-loop/output/final/03-validation.md.
+
+        Requirements:
+        - Include exactly these top-level sections:
+          1. Verdict
+          2. Passed Checks
+          3. Failed Checks
+          4. Next Action
+        - Verdict must clearly say FAIL.
+
+  - name: repair-project
+    agent: writer
+    depends_on: [validate-project]
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/07-project-loop/output/final/01-draft.md and /Users/denovo/workspace/github/obora-kit/sandbox/07-project-loop/output/final/03-validation.md.
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/07-project-loop/output/final/04-repaired.md.
+
+        Requirements:
+        - Include exactly these top-level sections:
+          1. Project Summary
+          2. Scope
+          3. Next Action
+        - Fix the validation failure.
+
+  - name: validate-repaired-project
+    agent: validator
+    depends_on: [repair-project]
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/07-project-loop/output/final/04-repaired.md.
+        Validate against this checklist:
+        - contains Project Summary
+        - contains Scope
+        - contains Next Action
+
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/07-project-loop/output/final/05-final-validation.md.
+
+        Requirements:
+        - Include exactly these top-level sections:
+          1. Verdict
+          2. Passed Checks
+          3. Failed Checks
+          4. Next Action
+        - Verdict must clearly say PASS.
+
+  - name: archive-project
+    agent: archivist
+    depends_on: [validate-repaired-project]
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/07-project-loop/output/final/04-repaired.md and /Users/denovo/workspace/github/obora-kit/sandbox/07-project-loop/output/final/05-final-validation.md.
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/07-project-loop/output/archive/40-project-loop-archive-note.md.
+
+        Requirements:
+        - Include exactly these top-level sections:
+          1. Summary of Project
+          2. Why Archived
+          3. Reuse Notes

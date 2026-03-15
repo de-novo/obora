@@ -1,0 +1,15 @@
+version: "1.0"
+default_model: glm-5
+agents:
+  writer:
+    role: Create a concise project draft and later repair it after validation failure.
+    model: glm-5
+  reviewer:
+    role: Review the draft and identify concrete improvement points.
+    model: glm-5
+  validator:
+    role: Validate project documents against explicit checklist rules.
+    model: glm-5
+  archivist:
+    role: Preserve the validated final result as a reusable archive note.
+    model: glm-5
