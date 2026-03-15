@@ -54,6 +54,7 @@ const defaultClock: Clock = () => new Date().toISOString();
 
 /** Module-level clock; override via `setClock()` for testing. */
 let activeClock: Clock = defaultClock;
+let warnedDeprecatedDirectWrite = false;
 
 /** Override the clock used by record* functions. Pass `null` to reset. */
 export function setClock(clock: Clock | null): void {
