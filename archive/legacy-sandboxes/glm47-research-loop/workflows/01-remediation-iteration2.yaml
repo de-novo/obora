@@ -1,0 +1,98 @@
+name: glm47-remediation-iteration2
+version: "1.0"
+description: "Iteration 2: P0 remediation-focused loop"
+
+steps:
+  - name: p0-analysis
+    agent: analyst
+    tools: [file_read, file_write, file_list, generate]
+    input:
+      task: |
+        Read the following files:
+        - /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/20-review-report.md
+        - /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/21-remediation-plan.md
+        - /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/22-final-conclusion.md
+        - /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/23-loop-decision.md
+        Write /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/24-p0-analysis.md.
+        In Korean markdown, identify exactly:
+        - P0-001 quantitative criteria gap
+        - P0-002 counter reset rule gap
+        - P0-003 progress definition gap
+        - P0-004 hypothesis verification gap
+        For each gap, include why it blocks STOP.
+
+  - name: define-quantitative-criteria
+    agent: synthesizer
+    depends_on: [p0-analysis]
+    tools: [file_read, file_write, file_list, generate]
+    input:
+      task: |
+        Read:
+        - /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/24-p0-analysis.md
+        - /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/02-success-criteria.md
+        Write /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/25-quantitative-criteria.md.
+        In Korean markdown, define measurable criteria for:
+        - P0/P1 classification
+        - PASS/FAIL threshold
+        - archive-ready threshold
+        - bounded-stop threshold
+        Use tables and explicit thresholds.
+
+  - name: define-loop-rules
+    agent: synthesizer
+    depends_on: [define-quantitative-criteria]
+    tools: [file_read, file_write, file_list, generate]
+    input:
+      task: |
+        Read:
+        - /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/24-p0-analysis.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/input/loop-policy.md
+        Write /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/26-loop-rules.md.
+        In Korean markdown, define:
+        - counter reset conditions
+        - no-progress detection rules
+        - substantive progress definition
+        - repeat issue counting rule
+        - forced bounded-stop condition
+        Keep rules executable and unambiguous.
+
+  - name: verify-hypotheses
+    agent: researcher
+    depends_on: [define-loop-rules]
+    tools: [file_read, file_write, file_list, generate]
+    input:
+      task: |
+        Read:
+        - /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/iterations/13-interim-conclusion.md
+        - /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/24-p0-analysis.md
+        - /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/25-quantitative-criteria.md
+        - /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/26-loop-rules.md
+        Write /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/27-hypothesis-verification.md.
+        In Korean markdown, explicitly resolve H-002 and H-003 with one of:
+        - 지지
+        - 기각
+        - 조건부 지지
+        Include evidence, remaining risk, and what changed from iteration 1.
+
+  - name: remediation-review
+    pattern: consensus
+    participants: [reviewer-1, reviewer-2, reviewer-3]
+    depends_on: [verify-hypotheses]
+    tools: [file_read, file_write, file_list, review]
+    input:
+      task: |
+        Read:
+        - /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/24-p0-analysis.md
+        - /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/25-quantitative-criteria.md
+        - /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/26-loop-rules.md
+        - /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/27-hypothesis-verification.md
+        Write/update:
+        - /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/28-remediation-review.md
+        - /Users/denovo/workspace/github/obora-kit//Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/29-remediation-decision.md
+        Requirements:
+        - review must state whether P0-001~P0-004 are resolved
+        - if any P0 remains unresolved, decision must be CONTINUE
+        - only if all P0 are resolved may decision be STOP
+        - decision line must be exactly one of:
+          - decision: CONTINUE
+          - decision: STOP

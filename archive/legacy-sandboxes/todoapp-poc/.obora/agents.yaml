@@ -1,0 +1,16 @@
+version: "1.0"
+default_model: glm-4.7
+
+agents:
+  planner:
+    role: "제품 기획자 - 요구사항/PRD/범위 잠금"
+    model: glm-4.7
+  architect:
+    role: "아키텍트 - 데이터 모델/API/구조 설계"
+    model: glm-4.7
+  engineer:
+    role: "개발자 - 구현 단계/테스트 계획"
+    model: glm-4.7
+  qa:
+    role: "QA - 검증 시나리오/릴리즈 게이트"
+    model: glm-4.7

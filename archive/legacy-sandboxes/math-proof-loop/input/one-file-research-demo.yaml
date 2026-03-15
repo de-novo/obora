@@ -1,0 +1,24 @@
+name: one-file-research-demo
+mode: research-loop
+problem:
+  statement: Evaluate whether Obora one-file workflows are viable as a user-facing authoring model without sacrificing internal execution granularity.
+  goal: Produce a bounded research conclusion with clear next steps.
+agents:
+  researcher: researcher
+  reviewer: reviewer
+prompts:
+  frame: |
+    Frame the product/architecture research problem clearly.
+    Separate user UX need, runtime constraint, and product risk.
+  research: |
+    Produce structured research notes, findings, trade-offs, and a bounded recommendation.
+    Include why one-file authoring and internal graph expansion should coexist.
+  review: |
+    Review the research output, identify gaps, and produce a bounded final conclusion.
+    Be explicit about unresolved risks and next steps.
+loop:
+  max_iterations: 3
+archive:
+  enabled: true
+output:
+  root: ./output/one-file-research-demo

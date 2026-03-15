@@ -1,0 +1,60 @@
+name: glm47-research-loop
+version: "1.0"
+description: "연구 노트, 분석, 중간 결론 생성"
+
+steps:
+  - name: research-notes
+    agent: researcher
+    tools: [file_read, file_write, file_list, generate]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/input/research-brief.md.
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/iterations/10-research-notes.md.
+        주제: GLM-4.7 단일 모델 기반 Obora 연구 루프 검증.
+        반드시 포함:
+        - 왜 이 테스트가 필요한가
+        - 기대 효과
+        - 주요 리스크
+        - 관찰 포인트
+        - 장기 루프에서의 위험 요소
+
+  - name: findings-analysis
+    agent: analyst
+    tools: [file_read, file_write, file_list, generate]
+    depends_on: [research-notes]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/input/research-brief.md and /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/iterations/10-research-notes.md.
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/iterations/11-findings.md.
+        반드시 포함:
+        - 핵심 인사이트
+        - 병목/실패 가능성
+        - Obora 구조가 제공하는 이점
+        - GLM-4.7 단일 모델의 한계
+
+  - name: open-questions
+    agent: analyst
+    tools: [file_read, file_write, file_list, generate]
+    depends_on: [findings-analysis]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/iterations/10-research-notes.md and /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/iterations/11-findings.md.
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/iterations/12-open-questions.md.
+        반드시 포함:
+        - 아직 검증되지 않은 항목
+        - 루프 설계상 불확실성
+        - 다음 실험에서 추가 확인할 질문
+
+  - name: interim-conclusion
+    agent: synthesizer
+    tools: [file_read, file_write, file_list, generate]
+    depends_on: [open-questions]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/input/research-brief.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/iterations/10-research-notes.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/iterations/11-findings.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/iterations/12-open-questions.md.
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/iterations/13-interim-conclusion.md.
+        반드시 포함:
+        - 현재 시점 잠정 결론
+        - 채택 가능한 워크플로우 구조
+        - 즉시 실행 권장안
+        - unresolved issues

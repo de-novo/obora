@@ -1,0 +1,128 @@
+name: glm47-master-research-loop
+version: "1.0"
+description: "문제정의→연구→리뷰→보정→판정→아카이브의 반복형 마스터 루프"
+
+steps:
+  - name: initialize-loop
+    agent: researcher
+    tools: [file_read, file_write, file_list, generate]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/input/research-brief.md and /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/input/loop-policy.md.
+        Update /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/00-loop-state.md.
+        Set status to RUNNING and next_action to RUN_PROBLEM_FRAMING.
+        Summarize loop objective, max iterations, and stopping policy.
+
+  - name: problem-framing
+    agent: researcher
+    depends_on: [initialize-loop]
+    tools: [file_read, file_write, file_list, generate]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/input/research-brief.md and write/update /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/01-problem-frame.md.
+        Include experiment objective, research question, success/failure criteria, and scope.
+
+  - name: success-criteria
+    agent: analyst
+    depends_on: [problem-framing]
+    tools: [file_read, file_write, file_list, generate]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/input/research-brief.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/input/loop-policy.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/01-problem-frame.md.
+        Write/update /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/02-success-criteria.md.
+
+  - name: research-notes
+    agent: researcher
+    depends_on: [success-criteria]
+    tools: [file_read, file_write, file_list, generate]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/input/research-brief.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/01-problem-frame.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/02-success-criteria.md.
+        Write/update /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/iterations/10-research-notes.md.
+        Explicitly note what is newly learned in this iteration.
+
+  - name: findings-analysis
+    agent: analyst
+    depends_on: [research-notes]
+    tools: [file_read, file_write, file_list, generate]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/iterations/10-research-notes.md.
+        Write/update /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/iterations/11-findings.md.
+        Separate insights, bottlenecks, and risks.
+
+  - name: open-questions
+    agent: analyst
+    depends_on: [findings-analysis]
+    tools: [file_read, file_write, file_list, generate]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/iterations/11-findings.md.
+        Write/update /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/iterations/12-open-questions.md.
+        Explicitly list unresolved issues requiring another iteration.
+
+  - name: interim-conclusion
+    agent: synthesizer
+    depends_on: [open-questions]
+    tools: [file_read, file_write, file_list, generate]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/input/research-brief.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/iterations/10-research-notes.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/iterations/11-findings.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/iterations/12-open-questions.md.
+        Write/update /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/iterations/13-interim-conclusion.md.
+        State current conclusion confidence and remaining uncertainty.
+
+  - name: convergence-review
+    pattern: consensus
+    participants: [reviewer-1, reviewer-2, reviewer-3]
+    depends_on: [interim-conclusion]
+    tools: [file_read, file_write, file_list, review]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/input/research-brief.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/input/loop-policy.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/01-problem-frame.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/02-success-criteria.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/iterations/13-interim-conclusion.md.
+        Write/update /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/20-review-report.md.
+        Must include PASS/FAIL, P0/P1/P2 issues, whether another loop is needed, and why.
+
+  - name: remediation-plan
+    agent: synthesizer
+    depends_on: [convergence-review]
+    tools: [file_read, file_write, file_list, generate]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/20-review-report.md and /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/iterations/13-interim-conclusion.md.
+        Write/update /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/21-remediation-plan.md.
+        Include what to fix, why, and what improvement is expected next loop.
+
+  - name: final-conclusion
+    agent: synthesizer
+    depends_on: [remediation-plan]
+    tools: [file_read, file_write, file_list, generate]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/input/research-brief.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/input/loop-policy.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/20-review-report.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/21-remediation-plan.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/iterations/13-interim-conclusion.md.
+        Write/update /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/22-final-conclusion.md.
+        Include final conclusion, evidence, limitations, and next-study proposal.
+
+  - name: loop-judge
+    agent: reviewer-1
+    depends_on: [final-conclusion]
+    tools: [file_read, file_write, file_list, review]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/input/loop-policy.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/00-loop-state.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/20-review-report.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/21-remediation-plan.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/22-final-conclusion.md.
+        Write/update /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/23-loop-decision.md.
+        Decide CONTINUE or STOP using the loop policy.
+
+  - name: archive-packaging
+    agent: archivist
+    depends_on: [loop-judge]
+    tools: [file_read, file_write, file_list, generate]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/23-loop-decision.md and /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/22-final-conclusion.md.
+        If decision indicates STOP or archive-ready, write/update:
+        - /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/archive/30-abstract.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/archive/31-executive-summary.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/archive/32-methodology.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/archive/33-decision-log.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/archive/34-archive-bundle-index.md
+        If not archive-ready, explicitly write an archive deferral note into /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/archive/34-archive-bundle-index.md.

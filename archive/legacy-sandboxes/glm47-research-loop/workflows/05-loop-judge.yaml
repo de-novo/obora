@@ -1,0 +1,20 @@
+name: glm47-loop-judge
+version: "1.0"
+description: "현재 iteration 결과를 평가하고 continue/stop 판단"
+
+steps:
+  - name: judge-loop-state
+    agent: reviewer-1
+    tools: [file_read, file_write, file_list, review]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/input/research-brief.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/input/loop-policy.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/00-loop-state.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/20-review-report.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/21-remediation-plan.md, /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/22-final-conclusion.md.
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/glm47-research-loop/output/final/23-loop-decision.md.
+        반드시 포함:
+        - decision: CONTINUE 또는 STOP
+        - reason
+        - current_iteration assessment
+        - progress 여부
+        - critical issues 반복 여부
+        - archive 진행 가능 여부
+        - next action

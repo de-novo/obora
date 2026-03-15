@@ -1,0 +1,4 @@
+# Volatile runtime state and machine-generated run artifacts
+output/final/00-loop-state.md
+output/iterations/logs/
+output/iterations/results/

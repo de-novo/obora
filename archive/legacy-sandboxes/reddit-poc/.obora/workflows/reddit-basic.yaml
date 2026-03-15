@@ -1,0 +1,57 @@
+name: reddit-basic
+version: "1.0"
+description: "Reddit-like ranking workflow"
+
+steps:
+  - name: load-data
+    agent: loader
+    description: "Load posts and votes data from seeds"
+    input:
+      task: |
+        Read these JSON files and summarize:
+        
+        posts.json (with body content):
+        [{"id": "p1", "title": "Obora-kit v0.1 Released!", "author": "denovo", "body": "We just shipped the first version of obora-kit. Workflow-driven SaaS toolkit."},
+         {"id": "p2", "title": "AI Agent coordination patterns", "author": "alice", "body": "What patterns do you use for multi-agent coordination? Blackboard? Actor model?"},
+         {"id": "p3", "title": "Show HN: Built a Reddit clone with YAML", "author": "bob", "body": "No server, no database, just obora workflows. Here's how."},
+         {"id": "p4", "title": "Monorepo tooling in 2026", "author": "charlie", "body": "Turborepo vs Nx vs pnpm workspaces - what are you using?"}]
+        
+        votes.json:
+        [{"post_id": "p1", "type": "upvote"}, {"post_id": "p1", "type": "upvote"}, 
+         {"post_id": "p1", "type": "upvote"}, {"post_id": "p1", "type": "upvote"},
+         {"post_id": "p1", "type": "downvote"},
+         {"post_id": "p2", "type": "upvote"}, {"post_id": "p2", "type": "upvote"},
+         {"post_id": "p2", "type": "downvote"},
+         {"post_id": "p3", "type": "upvote"} x6,
+         {"post_id": "p4", "type": "upvote"}, {"post_id": "p4", "type": "downvote"} x2]
+        
+        Output: JSON with posts and vote counts
+
+  - name: calculate-scores
+    agent: aggregator
+    description: "Calculate net score for each post"
+    depends_on:
+      - load-data
+    input:
+      task: |
+        Based on previous step data, calculate for each post:
+        - upvotes count
+        - downvotes count
+        - net_score = upvotes - downvotes
+        
+        Output: JSON array sorted by net_score descending
+
+  - name: render-table
+    agent: renderer
+    description: "Render final ranking table"
+    depends_on:
+      - calculate-scores
+    input:
+      task: |
+        Render the ranked posts as a markdown table with content preview.
+        
+        Columns: | Rank | Title | Content Preview | Up | Down | Score |
+        
+        Content Preview: First 40 chars of body + "..."
+        
+        Output: ONLY the markdown table, nothing else.

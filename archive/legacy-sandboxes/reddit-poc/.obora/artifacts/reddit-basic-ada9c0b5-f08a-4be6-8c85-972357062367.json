@@ -1,0 +1,45 @@
+{
+  "id": "ada9c0b5-f08a-4be6-8c85-972357062367",
+  "workflowName": "reddit-basic",
+  "status": "completed",
+  "startedAt": "2026-03-15T12:37:05.066Z",
+  "stepOrder": [
+    "load-data",
+    "calculate-scores",
+    "render-table"
+  ],
+  "completedSteps": [
+    "load-data",
+    "calculate-scores",
+    "render-table"
+  ],
+  "stepRecords": {
+    "load-data": {
+      "output": "[stub] No LLM configured",
+      "raw": {
+        "stub": true,
+        "reason": "No LLM configured"
+      }
+    },
+    "calculate-scores": {
+      "output": "[stub] No LLM configured",
+      "raw": {
+        "stub": true,
+        "reason": "No LLM configured"
+      }
+    },
+    "render-table": {
+      "output": "[stub] No LLM configured",
+      "raw": {
+        "stub": true,
+        "reason": "No LLM configured"
+      }
+    }
+  },
+  "outputs": {
+    "load-data": "[stub] No LLM configured",
+    "calculate-scores": "[stub] No LLM configured",
+    "render-table": "[stub] No LLM configured"
+  },
+  "endedAt": "2026-03-15T12:37:05.487Z"
+}
