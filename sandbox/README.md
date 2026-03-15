@@ -9,6 +9,9 @@
 - `04-simple-loop` — validation fail → repair → pass
 - `05-simple-archive` — final → archive
 - `06-project-mini` — small project lifecycle
+- `07-project-loop` — project lifecycle + repair loop
+- `08-benchmark-mini` — solve → judge → archive
+- `09-benchmark-loop` — fail → repair → re-judge → archive
 
 ## Draft / future sandbox
 - `canonical-simple` — 초기 기준 초안 메모용 폴더

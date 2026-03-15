@@ -2,7 +2,7 @@
 
 > Last updated: 2026-03-15
 
-이 문서는 `sandbox/01~06` active canonical sandbox들이 공통으로 따라야 하는 최소 규격을 정의한다.
+이 문서는 `sandbox/01~09` active canonical sandbox들이 공통으로 따라야 하는 최소 규격을 정의한다.
 
 ## 목적
 
@@ -112,3 +112,12 @@ README에는 반드시 아래가 있어야 한다.
 - long-running extension
 
 단, 01~06의 공통 계약을 깨면 안 된다.
+으로 확장한다.
+
+즉 다음 단계 sandbox는 아래 중 하나여야 한다.
+- project-oriented extension
+- benchmark-oriented extension
+- long-running extension
+- multi-run comparison extension
+
+단, 01~09의 공통 계약을 깨면 안 된다.
