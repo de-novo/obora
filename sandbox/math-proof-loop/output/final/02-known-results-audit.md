@@ -1,312 +1,262 @@
-# 02-Known-Results-Audit
-
-## 메타데이터
-- 생성일: 2026-03-15
-- 문제 ID: CUBE-SUM-SQUARE-001
-- 선행 문서: 01-math-problem-frame.md
-- 상태: Known Results 감사 완료
+# Known Results Audit — 02-known-results-audit
 
 ---
 
-## 1. Known Facts (알려진 사실)
+## Overview
 
-### 1.1 직접 관련 정리
-
-#### KF-001: 자연수의 합 공식 (Triangular Number Formula)
-$$
-\sum_{k=1}^{n} k = \frac{n(n+1)}{2}
-$$
-- **증명 상태**: Well-established (기원전 피타고라스 학파까지 거슬러 올라감)
-- **증명 방법**: 수학적 귀납법, 가우스의 pairing 기법, 기하학적 증명 등 다수 존재
-- **본 문제와의 관계**: MC-001의 우변을 구성하는 핵심 구성요소
-
-#### KF-002: 이항정리 (Binomial Theorem) — 기본형
-$$
-(a + b)^2 = a^2 + 2ab + b^2
-$$
-- **증명 상태**: Axiomatically established
-- **본 문제와의 관계**: 귀납 단계 전개 시 필수
-
-#### KF-003: 급수의 선형성 (Linearity of Summation)
-$$
-\sum_{k=1}^{n}(a_k + b_k) = \sum_{k=1}^{n} a_k + \sum_{k=1}^{n} b_k
-$$
-$$
-\sum_{k=1}^{n} c \cdot a_k = c \cdot \sum_{k=1}^{n} a_k
-$$
-- **증명 상태**: 산술의 기본 성질에서 직접 도출 가능
-- **본 문제와의 관계**: 증명 과정에서 대수적 조작의 정당성 근거
-
-#### KF-004: 자연수의 멱급수 합 — 일반화된 공식 (Faulhaber's Formula)
-$$
-\sum_{k=1}^{n} k^p = \frac{1}{p+1}\sum_{j=0}^{p}(-1)^j \binom{p+1}{j} B_j n^{p+1-j}
-$$
-- **증명 상태**: Established (Faulhaber, 1615; Bernoulli numbers 활용)
-- **본 문제와의 관계**: \( p = 3 \)인 특수 경우가 MC-001에 해당
-- **주의**: Faulhaber 공식을 직접 인용하면 순환 논증 위험 있음 (MC-001을 포함하고 있으므로)
-
-#### KF-005: 세제곱수의 합 — 목표 정리 자체 (Nicomachus's Theorem)
-$$
-\sum_{k=1}^{n} k^3 = \left(\frac{n(n+1)}{2}\right)^2
-$$
-- **역사적 명칭**: Nicomachus's Theorem (기원후 100년경)
-- **증명 상태**: Well-established in literature
-- **본 실험에서의 위치**: **이 문서에서는 "known fact"로 분류하되, 증명 과정에서는 이를 전제하지 않고 독립적으로 증명해야 함**
-
-### 1.2 간접 관련 사실
-
-#### KF-006: 연속하는 자연수의 곱
-$$
-n(n+1) = n^2 + n
-$$
-- **증명 상태**: Distributive law의 직접적 적용
-- **활용**: 귀납 단계 전개 시 활용
-
-#### KF-007: 완전제곱수의 성질
-완전제곱수 \( m^2 \)의 양의 정수 \( m \)은 유일하게 존재한다.
-- **활용**: EQ-003 형태의 동치 명제 분석 시 참고
-
-#### KF-008: 페아노 공리계 (Peano Axioms)
-자연수의 정의와 수학적 귀납법의 정당성 근거를 제공하는 공리계.
-- **본 문제와의 관계**: 귀납법 적용의 meta-theoretic foundation
+본 문서는 문제 $P(n): \sum_{k=1}^{n} k^3 = \left(\frac{n(n+1)}{2}\right)^2$의 증명을 위해 알려진 사실(known facts), 허용 가능한 가정(permissible assumptions), 미지 사항(unknowns), 예상되는 난이도 포인트(likely difficulty points)를 체계적으로 정리한다.
 
 ---
 
-## 2. Permissible Assumptions (허용 가능한 가정)
+## 1. Known Facts
 
-### 2.1 명시적으로 허용하는 가정
+### 1.1 기본 산술 및 대수학
 
-#### PA-001: 자연수 합 공식의 성립
-$$
-\sum_{k=1}^{n} k = \frac{n(n+1)}{2}
-$$
-- **근거**: KF-001이 well-established이며, MC-001 증명과 독립적으로 증명 가능
-- **허용 수준**: 전제 가능 (별도 증명 불필요)
-- **출처**: A-002 (01-math-problem-frame.md)
+| Fact | Statement | Status |
+|------|-----------|--------|
+| **F1** | 덧셈/곱셈의 교환법칙, 결합법칙, 분배법칙 | Standard arithmetic |
+| **F2** | 자연수에서 덧셈/곱셈에 대한 닫힘성 | Closure property |
+| **F3** | 합동식: $\sum_{k=1}^{n} f(k) + g(k) = \sum_{k=1}^{n} f(k) + \sum_{k=1}^{n} g(k)$ | Linearity of sum |
+| **F4** | 상수 인수 분리: $\sum_{k=1}^{n} c \cdot f(k) = c \cdot \sum_{k=1}^{n} f(k)$ | Scalar multiplication |
 
-#### PA-002: 수학적 귀납법의 유효성
-자연수에 대한 명제 \( P(n) \)에 대해:
-1. \( P(1) \)이 참이고
-2. \( P(k) \Rightarrow P(k+1) \)이 모든 양의 정수 \( k \)에 대해 성립하면
-3. 모든 양의 정수 \( n \)에 대해 \( P(n) \)이 참이다.
+### 1.2 자연수 합 공식 (Already Established)
 
-- **근거**: PA-004 (Peano Axioms의 일부로 수용)
-- **허용 수준**: 증명 방법론으로 자유롭게 사용 가능
+| Fact | Statement | Source |
+|------|-----------|--------|
+| **F5** | $\sum_{k=1}^{n} k = \frac{n(n+1)}{2}$ | Classical formula (assumed in problem frame) |
+| **F6** | $1 + 2 + \cdots + n = \frac{n(n+1)}{2}$ | Equivalent to F5 |
 
-#### PA-003: 기본 산술 연산의 성질
-- 교환법칙: \( a + b = b + a \), \( a \cdot b = b \cdot a \)
-- 결합법칙: \( (a + b) + c = a + (b + c) \), \( (a \cdot b) \cdot c = a \cdot (b \cdot c) \)
-- 분배법칙: \( a(b + c) = ab + ac \)
+**Note**: F5/F6은 본 증명에서 **가정**으로 사용하며 재증명하지 않음.
 
-- **허용 수준**: 증명 없이 자유롭게 사용
+### 1.3 수학적 귀납법
 
-#### PA-004: 등식의 추이성과 조작
-- \( a = b \)이고 \( b = c \)이면 \( a = c \)
-- \( a = b \)이면 \( a + c = b + c \) 및 \( a \cdot c = b \cdot c \)
+| Fact | Statement | Status |
+|------|-----------|--------|
+| **F7** | 수학적 귀납법 원리: $P(1)$이 참이고 $P(k) \Rightarrow P(k+1)$이면 $\forall n \in \mathbb{Z}^+, P(n)$ | Proof technique |
+| **F8** | 귀납법은 자연수 전체에 대한 명제 증명에 유효 | Applicability confirmed |
 
-- **허용 수준**: 기본 논리 법칙으로 수용
+### 1.4 합 공식 관련 Known Results
 
-#### PA-005: 자연수의 정렬성 (Well-ordering Principle)
-자연수의 공집합이 아닌 부분집합은 최소 원소를 갖는다.
-- **근거**: 귀납법과 동치인 원리
-- **활용**: 귀납법의 대안적 정당화 시 사용 가능
+| Fact | Statement | Relevance |
+|------|-----------|-----------|
+| **F9** | $\sum_{k=1}^{n} k^2 = \frac{n(n+1)(2n+1)}{6}$ | Related but not directly needed |
+| **F10** | $\sum_{k=1}^{n} 1 = n$ | Trivial but may be used |
 
-### 2.2 조건부 허용 가정 (사용 시 명시 필요)
+### 1.5 대수적 항등식
 
-#### CA-001: 다항식의 항등식 성질
-두 다항식 \( P(n) \), \( Q(n) \)에 대해, 무한히 많은 \( n \)에 대해 \( P(n) = Q(n) \)이면 \( P \equiv Q \)이다.
-- **조건**: 사용할 경우 명시적 언급 필요
-- **활용**: 대수적 전개 후 "항등식이므로 성립"이라는 논증에 사용
-
-#### CA-002: 조합론적 해석의 직관
-\( \sum_{k=1}^{n} k = \binom{n+1}{2} \) 등의 조합론적 해석.
-- **조건**: 사용할 경우 별도 섹션에서 해석의 정당성 제시 필요
+| Fact | Statement | Use Case |
+|------|-----------|----------|
+| **F11** | $(a+b)^2 = a^2 + 2ab + b^2$ | Expansion of RHS |
+| **F12** | $n^2(n+1)^2 = (n(n+1))^2$ | Factorization |
 
 ---
 
-## 3. Unknowns (알려지지 않았거나 확인이 필요한 사항)
+## 2. Permissible Assumptions
 
-### 3.1 증명 전략 관련 Unknowns
+### 2.1 Core Assumptions (From Problem Frame)
 
-#### U-001: 최적 증명 경로
-- **질문**: 수학적 귀납법, 대수적 전개, 조합론적 해석 중 어느 방법이 가장 직접적인가?
-- **상태**: 미확정 (다중 경로 탐색 필요)
-- **난이도**: 낮음 (표준 교과서적 접근)
+| ID | Assumption | Justification |
+|----|------------|---------------|
+| **A1** | $\sum_{k=1}^{n} k = \frac{n(n+1)}{2}$ | Given as established theorem |
+| **A2** | 수학적 귀납법 사용 가능 | Standard proof technique |
+| **A3** | 대수적 동치 변형 허용 | Logical equivalence preserved |
+| **A4** | 유한 $n$에 대해 좌변/우변 계산 가능 | Computational verification possible |
 
-#### U-002: 필요한 중간 Lemma의 최소 집합
-- **질문**: MC-001 증명을 위해 필수적인 lemma는 무엇인가?
-- **상태**: 01-math-problem-frame.md에서 L-001 ~ L-005 제안되었으나, 충분성/필요성 미검증
-- **난이도**: 중간 (증명 경로에 따라 달라짐)
+### 2.2 Contextual Assumptions
 
-### 3.2 일반화 관련 Unknowns
+| ID | Assumption | Notes |
+|----|------------|-------|
+| **A5** | 자연수 $\mathbb{Z}^+$만 고려 | 정수/유리수/실수 확장 제외 |
+| **A6** | $n \ge 1$ | $n=0$은 정의에 따라 다를 수 있음 |
 
-#### U-003: 고차 멱급수와의 관계 패턴
-- **질문**: \( \sum k^4 \), \( \sum k^5 \) 등도 \( \left(\sum k\right)^p \) 형태와 관계가 있는가?
-- **상태**: 본 실험 범위 밖 (NG-002), but 호기심 유발 영역
-- **난이도**: 높음 (Faulhaber 공식 영역)
+### 2.3 Assumptions NOT Made
 
-#### U-004: 기하학적/시각적 증명의 존재
-- **질문**: 이 정리에 대한 직관적인 기하학적 해석이 존재하는가?
-- **상태**: 문헌상 존재 (정사각형 분할, 큐브 배열 등) but 본 실험에서는 심층 탐구 안 함 (NG-004)
-- **난이도**: 중간
-
-### 3.3 반례 및 경계 조건
-
-#### U-005: \( n = 0 \) 또는 음수 정수에서의 성립 여부
-- **질문**: \( n \leq 0 \)인 경우 등식은 어떻게 해석되는가?
-- **상태**: 문제 정의에서 \( n \geq 1 \)로 제한됨 (A-001), thus 본 실험 범위 밖
-- **난이도**: 낮음 (정의 영역 문제)
-
-#### U-006: 반례 존재 가능성
-- **질문**: 양의 정수 \( n \)에 대해 등식이 성립하지 않는 경우가 존재하는가?
-- **상태**: 알려진 바에 따르면 반례 없음 (Nicomachus's Theorem)
-- **본 실험에서의 처리**: Step 05 (Counterexample Check)에서 체계적 검증 필요
-- **난이도**: 낮음 (정리가 참인 경우 반례 없음이 예상됨)
+- **Not assuming**: $\sum_{k=1}^{n} k^3$의 closed form을 이미 안다
+- **Not assuming**: 일반적인 멱합 공식 $\sum k^m$
+- **Not assuming**: 생성 함수 방법의 결과
 
 ---
 
-## 4. Likely Difficulty Points (예상 난이도 지점)
+## 3. Unknowns
 
-### 4.1 증명 구조상의 난이점
+### 3.1 Direct Unknowns (To Be Proven)
 
-#### D-001: 귀납 단계의 대수적 전개 복잡성
-- **위치**: 수학적 귀납법 적용 시, \( n = k \Rightarrow n = k+1 \) 단계
-- **구체적 내용**:
-  - 가정: \( \sum_{i=1}^{k} i^3 = \left(\frac{k(k+1)}{2}\right)^2 \)
-  - 목표: \( \sum_{i=1}^{k+1} i^3 = \left(\frac{(k+1)(k+2)}{2}\right)^2 \)
-  - 전개 과정에서 다항식 연산의 정확성 요구
-- **위험 요소**: 계산 실수 (R-004), 논리적 비약 (R-005)
-- **난이도**: 중간
-- **완화 전략**: 단계별 전개를 명시적으로 기록하고, 각 단계를 검증 가능하게 작성
+| ID | Unknown | Target |
+|----|---------|--------|
+| **U1** | $\sum_{k=1}^{n} k^3$의 closed form | Prove equals $\left(\frac{n(n+1)}{2}\right)^2$ |
+| **U2** | 귀납 단계에서 필요한 항등식 | To be derived |
 
-#### D-002: "자명성"의 함정
-- **위치**: 대수적 전개 후 "따라서 성립한다"고 결론 내리는 시점
-- **구체적 내용**: 
-  - 양변이 동일한 다항식으로 전개되었을 때, 이를 "항등식이므로 성립"으로 간주하는 것
-  - 실제로는 항등식의 정의와 성질에 의존함
-- **위험 요소**: False progress (Q-001), "자명하다"는 근거 없는 주장 (Q-002)
-- **난이도**: 높음 (인지적 편향 위험)
-- **완화 전략**: "자명하다", "분명하다" 등의 표현 사용 시 구체적 근거 병기 강제
+### 3.2 Strategic Unknowns
 
-#### D-003: 귀납법의 기저 경우와 귀납 단계 연결
-- **위치**: 전체 증명의 구조적 완결성
-- **구체적 내용**:
-  - 기저 경우 (\( n = 1 \)) 검증이 귀납 단계와 독립적으로 보일 수 있음
-  - 두 부분이 논리적으로 어떻게 연결되어 "모든 \( n \)"에 대한 결론이 도출되는지 명시 필요
-- **난이도**: 낮음-중간
-- **완화 전략**: 증명 구조를 명시적으로 개요화하고, 각 부분의 역할을 기술
+| ID | Unknown | Decision Needed |
+|----|---------|-----------------|
+| **U3** | 귀납법 vs 직접 전개 중 어느 것이 더 효율적인가? | Proof strategy selection |
+| **U4** | 보조 lemma가 필요한가? | Lemma candidate generation |
+| **U5** | 조합론적 해석이 도움이 되는가? | Alternative approach |
 
-### 4.2 인지적/방법론적 난이점
+### 3.3 Verification Unknowns
 
-#### D-004: 성급한 일반화 (Hasty Generalization)
-- **위치**: 소수의 예시 검증 후 전체 증명으로 착각하는 시점
-- **구체적 내용**: \( n = 1, 2, 3 \)에서 성립함을 확인한 후 "따라서 모든 \( n \)에 대해 성립"이라고 결론 내림
-- **위험 요소**: R-002 (성급한 일반화)
-- **난이도**: 중간 (편향 인식 필요)
-- **완화 전략**: 예시 검증은 "힌트"로만 활용하고, 엄밀한 증명과 분리하여 기록
-
-#### D-005: 확인 편향 (Confirmation Bias)
-- **위치**: 반례 탐색 단계
-- **구체적 내용**: 증명을 찾는 데 집중하여 반례 가능성을 간과
-- **위험 요소**: R-003 (확인 편향)
-- **난이도**: 중간
-- **완화 전략**: Counterexample Check를 독립된 필수 단계로 지정 (SC-005)
-
-#### D-006: 다중 증명 경로의 일관성 검증
-- **위치**: 2개 이상의 증명 방법을 시도할 경우
-- **구체적 내용**:
-  - 귀납법, 대수적 전개, 조합론적 해석 등 서로 다른 방법이 동일한 결론에 도달하는지
-  - 각 방법의 전제 조건이 상충하지 않는지
-- **난이도**: 중간-높음
-- **완화 전략**: 각 증명 경로의 전제를 명시적으로 추적 (SC-009)
-
-### 4.3 기술적/연산적 난이점
-
-#### D-007: 다항식 전개에서의 계수 오류
-- **위치**: \( \left(\frac{(k+1)(k+2)}{2}\right)^2 \) 등의 전개
-- **구체적 내용**:
-  - 분수, 다항식 곱셈, 지수 법칙의 복합 적용
-  - 중간 단계 생략 시 오류 은폐 위험
-- **위험 요소**: R-004 (계산 실수)
-- **난이도**: 낮음-중간
-- **완화 전략**: 전개 과정을 단계별로 명시, 검산 절차 포함
-
-#### D-008: 급수 합의 표현 변환
-- **위치**: \( \sum_{k=1}^{n} k^3 \)을 폐구간 공식으로 변환하는 과정
-- **구체적 내용**:
-  - 급수의 정의에서 출발하여 공식 도출
-  - 중간에 순환 논증 위험 (KF-005를 전제로 사용하는 경우)
-- **난이도**: 중간
-- **완화 전략**: 어떤 known fact를 사용했는지 각 단계에서 명시
+| ID | Unknown | Method |
+|----|---------|--------|
+| **U6** | $n = 1, 2, 3, 4, 5$에서 실제로 일치하는가? | Direct computation |
+| **U7** | 반례가 존재할 가능성이 있는가? | Counterexample search |
 
 ---
 
-## 5. Known Facts vs. 이번 증명에서의 취급 원칙
+## 4. Likely Difficulty Points
 
-### 5.1 사용 가능한 Known Facts (별도 증명 불필요)
-| Fact ID | 내용 | 사용 조건 |
-|---------|------|-----------|
-| KF-001 | 자연수 합 공식 | 자유롭게 사용 |
-| KF-002 | 이항정리 | 자유롭게 사용 |
-| KF-003 | 급수의 선형성 | 자유롭게 사용 |
-| KF-006 | 연속 자연수의 곱 | 자유롭게 사용 |
-| KF-008 | 페아노 공리계 | 귀납법의 foundation |
+### 4.1 Proof Construction Difficulties
 
-### 5.2 사용 금지 또는 주의 필요한 Known Facts
-| Fact ID | 내용 | 취급 원칙 |
-|---------|------|-----------|
-| KF-004 | Faulhaber's Formula | 사용 금지 (순환 논증 위험) |
-| KF-005 | Nicomachus's Theorem (목표 정리) | 사용 금지 (이것이 증명 대상) |
-| KF-007 | 완전제곱수 성질 | 사용 시 명시적 언급 필요 |
+| Difficulty | Description | Severity | Mitigation |
+|------------|-------------|----------|------------|
+| **D1** | 귀납 단계 전개의 복잡성 | Medium | 체계적인 대수 전개 |
+| **D2** | $(n+1)^3$ 추가 후 항 정리 | Medium | 명시적 단계 기록 |
+| **D3** | RHS의 제곱 전개: $\left(\frac{(n+1)(n+2)}{2}\right)^2$ | Medium | Factorization 사용 |
+| **D4** | 귀납 가정과 목표식 간의 연결 | High | 항등식 증명 필요 |
 
----
+### 4.2 Conceptual Difficulties
 
-## 6. 종합 평가 및 다음 단계 권고
+| Difficulty | Description | Severity | Mitigation |
+|------------|-------------|----------|------------|
+| **D5** | "자명하다"는 표현의 오용 | High | 모든 단계 명시적 근거 |
+| **D6** | 합 공식의 의존 관계 혼동 | Medium | Assumption 명확화 |
+| **D7** | 귀납법 기저 단계 생략 | Medium | $n=1$ 명시적 검증 |
 
-### 6.1 Known Facts 기반의 증명 경로 요약
-1. **경로 A (수학적 귀납법)**: KF-001, KF-002 활용 → D-001, D-002, D-007 난이점 예상
-2. **경로 B (대수적 전개)**: KF-003, KF-006 활용 → D-002, D-008 난이점 예상
-3. **경로 C (조합론적 해석)**: CA-002 활용 (선택적) → D-004, D-006 난이점 예상
+### 4.3 False Progress Risks
 
-### 6.2 우선순위 권고
-1. **1순위**: 수학적 귀납법 경로 (가장 직접적, 난이도 중간)
-2. **2순위**: 대수적 전개 (귀납법 보완)
-3. **3순위**: 조합론적 해석 (선택적, 직관 제공)
-
-### 6.3 Critical Watchpoints
-- **CW-001**: "자명하다"는 표현 사용 시 구체적 근거 필수 (D-002)
-- **CW-002**: 귀납 단계 전개 시 단계별 기록 필수 (D-001, D-007)
-- **CW-003**: 반례 탐색을 독립 단계로 수행 (D-005)
-
-### 6.4 다음 단계 연결
-- **Step 03 (Lemma Generation)**: L-001 ~ L-005의 구체화 및 증명 상태 추적
-- **Step 04 (Proof Attempt 1)**: 수학적 귀납법 경로 시도
-- **Step 05 (Counterexample Check)**: U-006 해결 및 D-005 완화
+| Risk | Description | Detection Method |
+|------|-------------|------------------|
+| **R1** | 대수 전개에서 항 누락 | 재계산 및 검증 |
+| **R2** | 귀납 단계에서 순환 논증 | 논리 의존성 점검 |
+| **R3** | "쉽게 확인할 수 있다" 생략 | 모든 계산 명시 |
+| **R4** | 반례 점검 생략 | 소규모 $n$ 필수 검증 |
 
 ---
 
-## 부록: Known Results Audit 체크리스트
+## 5. Gap Analysis
 
-### A.1 완전성 검증
-- [x] 직접 관련 정리가 모두 식별되었는가?
-- [x] 각 known fact의 증명 상태가 확인되었는가?
-- [x] 순환 논증 위험이 있는 fact가 식별되었는가?
+### 5.1 Current Knowledge State
 
-### A.2 가정의 명시성 검증
-- [x] 허용 가능한 가정이 명확히 구분되었는가?
-- [x] 조건부 허용 가정의 사용 조건이 기술되었는가?
-- [x] 암묵적 가정이 최소화되었는가?
+```
+Known: F1-F12, A1-A6
+Unknown: U1-U7
+To Prove: U1
+Strategy: Induction (F7, F8) + Algebraic manipulation (F11, F12)
+```
 
-### A.3 난이점 분석 검증
-- [x] 증명 구조상의 난이점이 구체적으로 식별되었는가?
-- [x] 인지적 편향 위험이 명시되었는가?
-- [x] 각 난이점에 대한 완화 전략이 제시되었는가?
+### 5.2 Gap Between Known and Target
 
-### A.4 Unknowns 추적
-- [x] 미확인 사항이 명시적으로 나열되었는가?
-- [x] 각 unknown의 해결 방법/시점이 계획되었는가?
+| Gap | From | To | Required Action |
+|-----|------|----|--------------------|
+| **G1** | F5 (sum formula) | U1 (cubic sum formula) | Inductive proof or direct derivation |
+| **G2** | Induction hypothesis | Inductive step conclusion | Algebraic identity proof |
+| **G3** | Small $n$ verification | General $n$ proof | Induction principle application |
+
+### 5.3 Critical Dependencies
+
+```
+Target U1
+  ├─ Requires: A1 (sum formula as RHS)
+  ├─ Requires: A2 (induction allowed)
+  ├─ Requires: F7, F8 (induction principle)
+  └─ Requires: G2 resolution (inductive step identity)
+```
 
 ---
 
-*이 문서는 Obora Math Proof Loop의 두 번째 단계 산출물입니다.*
-*선행 문서: 01-math-problem-frame.md*
+## 6. Proof Strategy Recommendations
+
+### 6.1 Primary Strategy: Mathematical Induction
+
+**Rationale**: 
+- 문제가 "모든 양의 정수 $n$"에 대한 명제
+- 귀납법은 자연수에 대한 보편적 증명 기법
+- 기저 단계와 귀납 단계로 명확히 분리 가능
+
+**Structure**:
+1. Base case: $n = 1$
+   - LHS: $1^3 = 1$
+   - RHS: $\left(\frac{1 \cdot 2}{2}\right)^2 = 1$
+   - Verified ✓
+
+2. Inductive hypothesis: Assume for $n = k$
+   $$\sum_{i=1}^{k} i^3 = \left(\frac{k(k+1)}{2}\right)^2$$
+
+3. Inductive step: Prove for $n = k+1$
+   $$\sum_{i=1}^{k+1} i^3 = \left(\frac{(k+1)(k+2)}{2}\right)^2$$
+
+**Challenge**: G2 - Connecting hypothesis to conclusion
+
+### 6.2 Alternative Strategy: Direct Algebraic Manipulation
+
+**Rationale**: 
+- RHS를 전개하여 LHS와 비교
+- 귀납법 없이 직접 증명 가능할 수 있음
+
+**Structure**:
+1. Start with RHS: $\left(\frac{n(n+1)}{2}\right)^2 = \frac{n^2(n+1)^2}{4}$
+2. Find expression for LHS: $\sum_{k=1}^{n} k^3$
+3. Prove equality via known sum formulas
+
+**Challenge**: LHS closed form 유도 필요
+
+---
+
+## 7. Next Steps
+
+1. **Lemma Candidate Generation**:
+   - L1: $(k+1)^3 = k^3 + 3k^2 + 3k + 1$
+   - L2: $\sum_{k=1}^{n} k^2$ formula (if needed)
+   - L3: Algebraic identity for inductive step
+
+2. **Proof Attempt**:
+   - Base case verification
+   - Inductive step derivation
+   - Gap identification
+
+3. **Counterexample Check**:
+   - $n = 1, 2, 3, 4, 5$ computation
+   - Consistency verification
+
+---
+
+## 8. Summary
+
+| Category | Count | Status |
+|----------|-------|--------|
+| Known Facts | 12 (F1-F12) | Available |
+| Permissible Assumptions | 6 (A1-A6) | Defined |
+| Unknowns | 7 (U1-U7) | To be resolved |
+| Difficulty Points | 7 (D1-D7) | Identified |
+| False Progress Risks | 4 (R1-R4) | To be monitored |
+| Gaps | 3 (G1-G3) | To be bridged |
+
+---
+
+## Metadata
+
+- **Document**: 02-known-results-audit.md
+- **Created**: 2026-03-15
+- **Purpose**: Establish knowledge boundary for proof construction
+- **Next Document**: 03-lemma-candidates.md
+- **Iteration**: 1
+
+---
+
+## Appendix: Key Formulas Reference
+
+```
+Sum of first n natural numbers:
+  S₁(n) = 1 + 2 + ... + n = n(n+1)/2
+
+Sum of squares:
+  S₂(n) = 1² + 2² + ... + n² = n(n+1)(2n+1)/6
+
+Target (to prove):
+  S₃(n) = 1³ + 2³ + ... + n³ = [n(n+1)/2]² = S₁(n)²
+
+Inductive step target:
+  S₃(k+1) = S₃(k) + (k+1)³
+          = [k(k+1)/2]² + (k+1)³
+          = [(k+1)(k+2)/2]²
+```
