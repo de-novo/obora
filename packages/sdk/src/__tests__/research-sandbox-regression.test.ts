@@ -16,9 +16,17 @@ const GLM_WORKFLOW = join(
   REPO_ROOT,
   "sandbox/glm47-research-loop/workflows/00-master-research-loop-compact.yaml",
 );
+const GLM_RUNNER = join(
+  REPO_ROOT,
+  "sandbox/glm47-research-loop/run-master-loop-compact.sh",
+);
 const MATH_WORKFLOW = join(
   REPO_ROOT,
   "sandbox/math-proof-loop/workflows/00-math-proof-loop.yaml",
+);
+const MATH_RUNNER = join(
+  REPO_ROOT,
+  "sandbox/math-proof-loop/run-math-proof-loop.sh",
 );
 
 describe("research sandbox regressions", () => {
@@ -95,5 +103,21 @@ describe("research sandbox regressions", () => {
     expect(workflow).not.toContain("/Users/denovo/workspace/github/obora-kit/output/final/");
     expect(workflow).not.toContain("/Users/denovo/workspace/github/obora-kit/output/iterations/");
     expect(workflow).not.toContain("/Users/denovo/workspace/github/obora-kit/output/archive/");
+  });
+
+  it("active research runners use idle watchdogs with large safety ceilings", async () => {
+    const glmRunner = await readFile(GLM_RUNNER, "utf8");
+    const mathRunner = await readFile(MATH_RUNNER, "utf8");
+
+    expect(glmRunner).toContain('RUN_HELPER="$REPO_ROOT/sandbox/_lib/run-obora-with-watchdog.sh"');
+    expect(glmRunner).toContain('OBORA_TIMEOUT_MS="${OBORA_TIMEOUT_MS:-86400000}"');
+    expect(glmRunner).toContain('OBORA_IDLE_TIMEOUT_SEC="${OBORA_IDLE_TIMEOUT_SEC:-900}"');
+    expect(glmRunner).toContain('OBORA_SAFETY_TIMEOUT_SEC="${OBORA_SAFETY_TIMEOUT_SEC:-43200}"');
+
+    expect(mathRunner).toContain('RUN_HELPER="$REPO_ROOT/sandbox/_lib/run-obora-with-watchdog.sh"');
+    expect(mathRunner).toContain('OBORA_TIMEOUT_MS="${OBORA_TIMEOUT_MS:-86400000}"');
+    expect(mathRunner).toContain('OBORA_IDLE_TIMEOUT_SEC="${OBORA_IDLE_TIMEOUT_SEC:-900}"');
+    expect(mathRunner).toContain('OBORA_SAFETY_TIMEOUT_SEC="${OBORA_SAFETY_TIMEOUT_SEC:-43200}"');
+    expect(mathRunner).toContain('--output-dir "$RESULT_DIR"');
   });
 });

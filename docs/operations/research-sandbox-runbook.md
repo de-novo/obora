@@ -118,20 +118,27 @@ Required behavior:
 
 ---
 
-### 6. Timeout policy must match the loop shape
+### 6. Timeout policy must be progress-based, not short wall-clock based
 
 Recommended baseline:
 
-#### GLM research loop
-- review step timeout: up to `600000ms`
-- consensus timeout: only if consensus exists; otherwise remove it
-- whole runner timeout: large enough to survive review + archive packaging
+#### Runner policy
+- prefer **idle timeout + large safety ceiling** over a short hard wall-clock timeout
+- if the model/toolchain is still producing new log output, let the run continue
+- only stop early when the run becomes idle for too long or reaches an extreme safety ceiling
 
-#### Math proof loop
-- whole runner timeout must cover archive packaging, not just proof generation
-- current known-good runner default is larger than the prior `900000ms` ceiling used during failures
+Current active runner defaults:
+- `OBORA_TIMEOUT_MS`: very large safety ceiling (`86400000ms` by default)
+- `OBORA_IDLE_TIMEOUT_SEC`: `900` seconds
+- `OBORA_SAFETY_TIMEOUT_SEC`: `43200` seconds
+- `OBORA_WATCHDOG_POLL_SEC`: `5` seconds
 
-If the last step is `archive-packaging`, budget for it explicitly.
+#### Step policy
+- review / long synthesis steps may still use generous step-level timeouts
+- consensus timeout should only exist when consensus is intentionally required
+- do not use small runner-wide hard timeouts as the primary stop mechanism for research loops
+
+If the last step is `archive-packaging`, treat it as part of the normal run budget instead of a special failure case.
 
 ---
 

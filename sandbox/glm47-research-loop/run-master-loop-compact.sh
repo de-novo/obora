@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$ROOT/../.." && pwd)"
+RUN_HELPER="$REPO_ROOT/sandbox/_lib/run-obora-with-watchdog.sh"
 WORKFLOW="$ROOT/workflows/00-master-research-loop-compact.yaml"
 CONFIG="$ROOT/obora.config.yaml"
 AGENTS="$ROOT/agents.yaml"
@@ -13,7 +14,10 @@ RESULT_DIR="$ROOT/output/iterations/results"
 mkdir -p "$LOG_DIR" "$RESULT_DIR"
 
 MAX_ITERATIONS="${MAX_ITERATIONS:-4}"
-OBORA_TIMEOUT_MS="${OBORA_TIMEOUT_MS:-900000}"
+OBORA_TIMEOUT_MS="${OBORA_TIMEOUT_MS:-86400000}"
+OBORA_IDLE_TIMEOUT_SEC="${OBORA_IDLE_TIMEOUT_SEC:-900}"
+OBORA_SAFETY_TIMEOUT_SEC="${OBORA_SAFETY_TIMEOUT_SEC:-43200}"
+OBORA_WATCHDOG_POLL_SEC="${OBORA_WATCHDOG_POLL_SEC:-5}"
 MAX_RUN_RETRIES="${MAX_RUN_RETRIES:-6}"
 INITIAL_RETRY_DELAY_SEC="${INITIAL_RETRY_DELAY_SEC:-30}"
 
@@ -34,6 +38,7 @@ update_state() {
 ## Notes
 - Updated by run-master-loop-compact.sh
 - Compact workflow optimized for provider instability / 429 conditions.
+- Runner uses idle watchdog + large safety ceiling instead of a short wall-clock timeout.
 EOF
 }
 
@@ -93,15 +98,15 @@ while (( iteration <= MAX_ITERATIONS )); do
     echo "[compact-loop] run attempt $attempt / $MAX_RUN_RETRIES"
     : > "$run_log"
     set +e
-    node "$REPO_ROOT/bin/obora.js" run "$WORKFLOW" \
-      --config "$CONFIG" \
-      --agents "$AGENTS" \
-      --output-dir "$RESULT_DIR" \
-      --timeout "$OBORA_TIMEOUT_MS" \
-      --verbose --no-color 2>&1 | tee "$run_log"
-    run_exit=${PIPESTATUS[0]}
+    "$RUN_HELPER" "$run_log" "$run_json" "$OBORA_IDLE_TIMEOUT_SEC" "$OBORA_SAFETY_TIMEOUT_SEC" "$OBORA_WATCHDOG_POLL_SEC" -- \
+      node "$REPO_ROOT/bin/obora.js" run "$WORKFLOW" \
+        --config "$CONFIG" \
+        --agents "$AGENTS" \
+        --output-dir "$RESULT_DIR" \
+        --timeout "$OBORA_TIMEOUT_MS" \
+        --verbose --no-color
+    run_exit=$?
     set -e
-    tail -n 200 "$run_log" > "$run_json" || true
     LAST_RESULT_JSON="$(ls -1t "$RESULT_DIR"/glm47-master-research-loop-compact-*.json 2>/dev/null | head -n1 || true)"
 
     [[ $run_exit -eq 0 ]] && break
