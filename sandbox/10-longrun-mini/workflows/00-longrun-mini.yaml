@@ -1,0 +1,46 @@
+name: longrun-mini
+version: "1.0"
+steps:
+  - name: plan
+    agent: planner
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/10-longrun-mini/input/brief.md.
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/10-longrun-mini/output/final/01-plan.md.
+
+        Requirements:
+        - Include exactly these top-level sections:
+          1. Goal
+          2. Plan
+          3. Risks
+
+  - name: refine-plan
+    agent: reviewer
+    depends_on: [plan]
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/10-longrun-mini/output/final/01-plan.md.
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/10-longrun-mini/output/final/02-refined-plan.md.
+
+        Requirements:
+        - Include exactly these top-level sections:
+          1. Refined Goal
+          2. Refined Plan
+          3. Operating Notes
+
+  - name: archive-longrun
+    agent: archivist
+    depends_on: [refine-plan]
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/10-longrun-mini/output/final/02-refined-plan.md.
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/10-longrun-mini/output/archive/40-longrun-note.md.
+
+        Requirements:
+        - Include exactly these top-level sections:
+          1. Summary of Run
+          2. Why Preserved
+          3. Reuse Notes

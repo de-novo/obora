@@ -1,0 +1,12 @@
+version: "1.0"
+default_model: glm-5
+agents:
+  planner:
+    role: Create a structured execution plan from a short brief and then refine it.
+    model: glm-5
+  reviewer:
+    role: Review and refine the plan for reuse and preservation.
+    model: glm-5
+  archivist:
+    role: Preserve the refined result into an archive note.
+    model: glm-5
