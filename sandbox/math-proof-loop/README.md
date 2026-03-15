@@ -1,5 +1,7 @@
 # Math Proof Loop Sandbox
 
+> 운영 규칙과 회귀 포인트는 `docs/operations/research-sandbox-runbook.md`를 기준으로 봅니다.
+
 ## 목적
 이 sandbox는 Obora가 수학 난제급 문제에 대해 **증명 탐색 루프를 자율 운영할 수 있는지** 검증하기 위한 공간입니다.
 

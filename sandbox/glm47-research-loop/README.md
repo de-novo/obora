@@ -1,5 +1,7 @@
 # GLM-4.7 Research Loop Sandbox
 
+> 운영 규칙과 회귀 포인트는 `docs/operations/research-sandbox-runbook.md`를 기준으로 봅니다.
+
 ## 목적
 이 샌드박스는 **Obora 워크플로우가 GLM-4.7 단일 모델만으로도** 다음을 일관되게 수행하는지 검증하기 위한 실험 공간입니다.
 
