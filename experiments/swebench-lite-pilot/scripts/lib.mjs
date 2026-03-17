@@ -18,6 +18,16 @@ export function readJson(filePath) {
   return JSON.parse(raw);
 }
 
+export function writeJson(filePath, value) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+}
+
+export function writeText(filePath, value) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, value, "utf8");
+}
+
 export function readJsonLines(filePath) {
   const raw = fs.readFileSync(filePath, "utf8");
 
@@ -66,6 +76,20 @@ export function expectBoolean(value, label) {
   }
 }
 
+export function expectArray(value, label) {
+  if (!Array.isArray(value)) {
+    fail(`${label} must be an array.`);
+  }
+}
+
+export function expectStringArray(value, label) {
+  expectArray(value, label);
+
+  value.forEach((item, index) => {
+    expectString(item, `${label}[${index}]`);
+  });
+}
+
 export function expectNullableString(value, label) {
   if (value !== null) {
     expectString(value, label);
@@ -87,6 +111,28 @@ export function ensureBenchmark(value, label = "benchmark") {
 export function resolveSiblingPath(baseFilePath, relativePath) {
   expectString(relativePath, "relative path");
   return path.resolve(path.dirname(baseFilePath), relativePath);
+}
+
+export function ensureDirectory(dirPath) {
+  fs.mkdirSync(dirPath, { recursive: true });
+}
+
+export function pathExists(targetPath) {
+  return fs.existsSync(targetPath);
+}
+
+export function removeIfExists(targetPath) {
+  fs.rmSync(targetPath, { recursive: true, force: true });
+}
+
+export function sanitizePathComponent(value) {
+  expectString(value, "path component");
+  return value.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+export function timestampForPath(date = new Date()) {
+  const iso = date.toISOString();
+  return iso.replace(/[:]/g, "-").replace(/\.\d{3}Z$/, "Z");
 }
 
 export function average(values) {

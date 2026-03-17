@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "benchmark": "swe-bench-lite",
+  "task_id": "astropy__astropy-14995",
+  "repo": "astropy/astropy",
+  "issue_text": "REPLACE_WITH_REAL_ISSUE_TEXT. This sample exists to document the shape of task-specific context consumed by the reusable workflow.",
+  "base_commit": "REPLACE_WITH_BASE_COMMIT",
+  "test_command": "python -m pytest path/to/relevant/tests -q",
+  "workspace_path": "REPLACE_AT_RENDER_TIME",
+  "workspace_preparation": "manual-local-workspace",
+  "notes": [
+    "Prepared local workspace checkout is supplied externally to the runner.",
+    "Replace placeholder issue text and test command before claiming a real SWE-bench pilot run."
+  ],
+  "constraints": [
+    "Do not hard-code benchmark-specific data into the reusable workflow.",
+    "Use the injected context as the source of task-specific truth."
+  ],
+  "patch_hint_paths": ["REPLACE_WITH_OPTIONAL_HINT_PATH"],
+  "attachments": [
+    {
+      "label": "optional-problem-statement",
+      "path": "relative/path/inside/prepared/workspace/or/run-dir"
+    }
+  ],
+  "metadata": {
+    "sample_only": true
+  }
+}

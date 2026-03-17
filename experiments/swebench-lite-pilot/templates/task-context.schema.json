@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://obora.dev/schemas/swebench-lite-pilot/task-context.schema.json",
+  "title": "SWE-bench Lite pilot task context",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "benchmark",
+    "task_id",
+    "repo",
+    "issue_text",
+    "test_command",
+    "workspace_path"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "benchmark": {
+      "const": "swe-bench-lite"
+    },
+    "task_id": {
+      "type": "string"
+    },
+    "repo": {
+      "type": "string"
+    },
+    "issue_text": {
+      "type": "string"
+    },
+    "base_commit": {
+      "type": ["string", "null"]
+    },
+    "test_command": {
+      "type": "string"
+    },
+    "workspace_path": {
+      "type": "string"
+    },
+    "workspace_preparation": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "constraints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "patch_hint_paths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "attachments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["label", "path"],
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "metadata": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": true
+}

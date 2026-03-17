@@ -1,0 +1,113 @@
+name: obora-swebench-loop
+version: "1.0"
+description: "Reusable SWE-bench Lite repair loop driven by injected task context and a prepared local workspace"
+
+steps:
+  - name: prepare_task_context
+    agent: context_preparer
+    input:
+      task: |
+        You are preparing a reusable SWE-bench Lite task run inside a prepared local workspace.
+
+        Work only inside the current project root and the mounted pilot directory.
+
+        Read these files first:
+        - `.obora-swebench/current/input/task-context.json`
+        - `.obora-swebench/current/input/task-brief.md`
+
+        Then write `.obora-swebench/current/artifacts/01-context-summary.md` with:
+        1. Task Snapshot
+        2. Workspace Targets
+        3. Test Plan
+        4. Risks and Constraints
+
+        Keep the summary factual and grounded in the injected task context.
+
+  - name: implement_or_repair
+    agent: implementer
+    depends_on: [prepare_task_context]
+    config:
+      repair_loop:
+        enabled: true
+        validation_step: run_tests_and_judge
+        max_no_progress_iterations: 2
+        repeated_critical_issue_ceiling: 2
+      maxToolRounds: 128
+    input:
+      task: |
+        You are solving a SWE-bench Lite task using the same reusable Obora workflow used for every pilot task.
+
+        Read these files before changing code:
+        - `.obora-swebench/current/input/task-context.json`
+        - `.obora-swebench/current/input/task-brief.md`
+        - `.obora-swebench/current/artifacts/01-context-summary.md`
+
+        If this is a repair attempt, also use the injected repair context and the latest validation result.
+
+        Requirements:
+        - Inspect the prepared local workspace with file tools before editing.
+        - Make the smallest credible code or test changes needed for the injected task.
+        - Do not assume any task-specific details beyond what the task context says.
+        - Do not hard-code benchmark ids or repo-specific logic into reusable artifacts.
+
+        After editing, write `.obora-swebench/current/artifacts/02-implementation-notes.md` with:
+        1. Files Changed
+        2. Repair Rationale
+        3. Remaining Risks
+
+  - name: run_tests_and_judge
+    agent: validator
+    depends_on: [implement_or_repair]
+    config:
+      validation:
+        enabled: true
+        emit_structured_result: true
+      toolLimits:
+        run_prepared_test_command: 1
+      maxToolRounds: 32
+    on_fail:
+      goto: implement_or_repair
+      max_iterations: 8
+      escalate_on_exhaust: fail
+    input:
+      task: |
+        Validate the current implementation for the injected SWE-bench Lite task.
+
+        Read these files first:
+        - `.obora-swebench/current/input/task-context.json`
+        - `.obora-swebench/current/input/task-brief.md`
+        - `.obora-swebench/current/artifacts/02-implementation-notes.md`
+
+        Then call `run_prepared_test_command` exactly once.
+
+        After the tool call:
+        - Write `.obora-swebench/current/artifacts/03-test-report.md`.
+        - If the command failed, explain the concrete failure and tell `implement_or_repair` what to fix next.
+        - If the command passed, say the task is ready for archive.
+
+        Your final assistant response must be only a strict JSON ValidationResult object with this shape:
+        {
+          "passed": boolean,
+          "summary": "string",
+          "failedChecks": [{ "name": "string", "message": "string" }],
+          "signature": "stable-signature"
+        }
+
+  - name: archive_result
+    agent: archivist
+    depends_on: [run_tests_and_judge]
+    input:
+      task: |
+        Archive the reusable workflow result for this task.
+
+        Read these files:
+        - `.obora-swebench/current/input/task-context.json`
+        - `.obora-swebench/current/artifacts/02-implementation-notes.md`
+        - `.obora-swebench/current/artifacts/03-test-report.md`
+
+        Write `.obora-swebench/current/artifacts/04-archive-summary.md` with:
+        1. Task Outcome
+        2. Evidence Used
+        3. Reuse Notes
+
+        Describe the run honestly as a reusable Obora workflow driven by injected task context plus a prepared local workspace.

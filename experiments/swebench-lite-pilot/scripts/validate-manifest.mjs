@@ -33,6 +33,10 @@ export function validateManifest(manifest) {
     expectString(task.task_id, `tasks[${index}].task_id`);
     expectString(task.repo, `tasks[${index}].repo`);
 
+    if (task.task_context_path !== undefined) {
+      expectString(task.task_context_path, `tasks[${index}].task_context_path`);
+    }
+
     if (seen.has(task.task_id)) {
       throw new Error(`Duplicate task_id: ${task.task_id}`);
     }

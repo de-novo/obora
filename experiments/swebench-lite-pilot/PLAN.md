@@ -59,7 +59,7 @@ These fields are enough to tell whether the loop completes tasks, how expensive 
 3. Fill in the corresponding pilot config preset.
 4. Record the public reference metadata that will be used for coarse comparison.
 5. Validate config, manifest, and reference metadata.
-6. Run Obora loop manually or with the future runner, one task at a time.
+6. Materialize task context into a prepared local workspace and run the reusable Obora workflow one task at a time.
 7. Append one JSONL result row per task.
 8. Run the summary script and inspect success rate, timing, and failure distribution.
 9. If the 5-task slice looks operational, repeat with the 10-task slice.
@@ -70,8 +70,19 @@ Success means the pilot produces clean, auditable records and the observed succe
 
 ## If the pilot looks promising
 
-1. Lock a better curated 10-task slice and rerun.
+1. Lock a better curated 10-task slice and rerun the same shared workflow with new task-context inputs.
 2. Add a matched local baseline runner for the same slice.
 3. Tighten result normalization and automate ingestion from Obora traces.
 4. Expand to a larger Lite slice only after the matched baseline exists.
 5. Decide whether full SWE-bench or a broader benchmark portfolio is worth the engineering cost.
+
+## Phase 1 execution architecture
+
+The pilot should now be thought of as a reusable workflow system, not a workflow generator:
+
+- one shared Obora workflow for SWE-bench-style repair loops
+- one task-context document per benchmark task
+- one runner that selects a manifest task, mounts task context into a prepared workspace, and invokes the same workflow
+- one separate result-recording path that stays honest about what was actually executed locally
+
+This keeps the benchmark-facing UX simple while preserving auditability.

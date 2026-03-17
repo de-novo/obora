@@ -29,6 +29,9 @@ export function validateConfig(config) {
   expectObject(config.execution, "execution");
   expectString(config.execution.runner, "execution.runner");
   expectString(config.execution.mode, "execution.mode");
+  expectString(config.execution.workflow_path, "execution.workflow_path");
+  expectString(config.execution.context_mount_dir, "execution.context_mount_dir");
+  expectString(config.execution.workspace_preparation, "execution.workspace_preparation");
   expectString(config.execution.model, "execution.model");
   expectInteger(config.execution.max_iterations, "execution.max_iterations");
   expectBoolean(config.execution.record_optional_usage, "execution.record_optional_usage");

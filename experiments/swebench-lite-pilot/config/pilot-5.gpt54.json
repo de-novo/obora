@@ -8,7 +8,10 @@
   "references_path": "../references/public-reference.gpt54.json",
   "execution": {
     "runner": "obora-loop",
-    "mode": "manual-recorded",
+    "mode": "prepared-workspace-runner",
+    "workflow_path": "../workflows/obora-swebench-loop.yaml",
+    "context_mount_dir": ".obora-swebench",
+    "workspace_preparation": "manual-local-workspace",
     "model": "openai-codex/gpt-5.4",
     "max_iterations": 8,
     "record_optional_usage": true
