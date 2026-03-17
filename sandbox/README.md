@@ -12,19 +12,19 @@
 - `04-simple-loop` — validation fail → repair → pass
 - `05-simple-archive` — final → archive
 - `06-project-mini` — small project lifecycle
-- `07-project-loop` — project lifecycle + repair loop
+- `07-project-loop` — project lifecycle + runtime-native `build_or_repair -> review_project -> validate_project` loop
 - `08-benchmark-mini` — solve → judge → archive
-- `09-benchmark-loop` — fail → repair → re-judge → archive
+- `09-benchmark-loop` — runtime-native `solve_or_repair <-> judge` loop → archive
 - `10-longrun-mini` — watchdog-wrapped long-running workflow
 - `11-longrun-loop` — long-running runner + validation-repair loop contract
 - `12-longrun-benchmark-mini` — long-running runner + benchmark mini contract
-- `13-longrun-benchmark-loop` — long-running runner + benchmark remediation loop contract
+- `13-longrun-benchmark-loop` — long-running runner + runtime-native `solve_or_repair <-> judge` loop contract
 - `14-longrun-project-mini` — long-running runner + project mini lifecycle contract
-- `15-longrun-project-loop` — long-running runner + project remediation loop contract
+- `15-longrun-project-loop` — long-running runner + runtime-native `build_or_repair -> review_project -> validate_project` loop contract
 - `16-multi-run-comparison-mini` — multi-run comparison with normalized per-run results (solve×3 → compare → archive)
-- `17-multi-run-comparison-loop` — multi-run comparison remediation loop (solve×3 → compare → validate → repair → re-compare → archive)
+- `17-multi-run-comparison-loop` — multi-run comparison remediation loop with validator-driven `compare_or_repair <-> validate_comparison` re-entry
 - `18-longrun-paper-verification-mini` — long-running paper claim verification against vendored real-paper excerpts (verify → archive)
-- `19-longrun-paper-verification-loop` — long-running paper verification remediation loop against the same vendored real-paper fixture (verify → validate → repair → re-validate → archive)
+- `19-longrun-paper-verification-loop` — long-running paper verification remediation loop against the same vendored real-paper fixture with runtime-native `verify_or_repair <-> validate_paper_verification` re-entry
 - `20-longrun-feedback-convergence-loop` — long-running feedback convergence loop with a runtime-native `build_or_repair -> validate -> on_fail.goto build_or_repair` cycle until a threshold is reached
 
 ## Draft / future sandbox

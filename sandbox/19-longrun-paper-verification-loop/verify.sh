@@ -68,12 +68,21 @@ require_file "$ARCHIVE_NOTE"
 require_glob "$WORKFLOW_RESULT_GLOB"
 
 require_contains 'Workflow "longrun-paper-verification-loop" completed.' "$RUN_LOG"
-require_contains 'step_end: verify-paper-claims-initial (completed)' "$RUN_LOG"
-require_contains 'step_end: validate-paper-verification (completed)' "$RUN_LOG"
-require_contains 'step_end: repair-paper-verification (completed)' "$RUN_LOG"
-require_contains 'step_end: validate-repaired-paper-verification (completed)' "$RUN_LOG"
+require_contains 'step_end: verify_or_repair (completed)' "$RUN_LOG"
+require_contains 'step_end: validate_paper_verification (completed)' "$RUN_LOG"
 require_contains 'step_end: archive-paper-verification (completed)' "$RUN_LOG"
 require_contains 'Workflow "longrun-paper-verification-loop" completed.' "$RUN_TAIL_LOG"
+
+node -e '
+const fs = require("fs");
+const log = fs.readFileSync(process.argv[1], "utf8");
+const verifyCount = (log.match(/step_end: verify_or_repair \(completed\)/g) || []).length;
+const validateCount = (log.match(/→ validate_paper_verification/g) || []).length;
+const archiveCount = (log.match(/step_end: archive-paper-verification \(completed\)/g) || []).length;
+if (verifyCount < 2) throw new Error(`expected repeated verify_or_repair executions, saw ${verifyCount}`);
+if (validateCount < 2) throw new Error(`expected repeated validate_paper_verification executions, saw ${validateCount}`);
+if (archiveCount !== 1) throw new Error(`expected exactly one archive step, saw ${archiveCount}`);
+' "$RUN_LOG" || fail "expected runtime-native loop re-entry in $RUN_LOG"
 
 for REPORT in "$INITIAL_REPORT" "$REPAIRED_REPORT"; do
   grep -Eq '^#[[:space:]]+Paper Metadata$' "$REPORT" || fail "expected top-level Paper Metadata heading in $REPORT"
@@ -114,6 +123,8 @@ grep -Eq '\bPASS\b' "$FINAL_VALIDATION" || fail "expected PASS verdict in $FINAL
 grep -Eq '^#[[:space:]]+Summary of Verification Loop$' "$ARCHIVE_NOTE" || fail "expected top-level Summary of Verification Loop heading in $ARCHIVE_NOTE"
 grep -Eq '^#[[:space:]]+Final Paper Verification Result$' "$ARCHIVE_NOTE" || fail "expected top-level Final Paper Verification Result heading in $ARCHIVE_NOTE"
 grep -Eq '^#[[:space:]]+Reuse Notes$' "$ARCHIVE_NOTE" || fail "expected top-level Reuse Notes heading in $ARCHIVE_NOTE"
+require_contains 'runtime-native' "$ARCHIVE_NOTE"
+require_contains 'verify_or_repair' "$ARCHIVE_NOTE"
 node -e '
 const fs = require("fs");
 const text = fs.readFileSync(process.argv[1], "utf8");
@@ -128,4 +139,4 @@ if (( run_fresh )); then
   rm -f "$stamp_file"
 fi
 
-echo 'verify.sh: PASS - canonical longrun paper verification loop artifacts and verify->validate->repair->validate flow verified.'
+echo 'verify.sh: PASS - canonical longrun paper verification loop artifacts and runtime-native verify_or_repair<->validate_paper_verification flow verified.'

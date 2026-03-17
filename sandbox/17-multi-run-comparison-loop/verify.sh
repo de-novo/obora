@@ -77,13 +77,21 @@ require_contains 'Workflow "multi-run-comparison-loop" completed.' "$RUN_LOG"
 require_contains 'step_end: solve-run-1 (completed)' "$RUN_LOG"
 require_contains 'step_end: solve-run-2 (completed)' "$RUN_LOG"
 require_contains 'step_end: solve-run-3 (completed)' "$RUN_LOG"
-require_contains 'step_end: compare-initial-runs (completed)' "$RUN_LOG"
-require_contains 'step_end: validate-comparison (completed)' "$RUN_LOG"
-require_contains 'step_end: repair-run-2 (completed)' "$RUN_LOG"
-require_contains 'step_end: compare-repaired-runs (completed)' "$RUN_LOG"
-require_contains 'step_end: validate-final-comparison (completed)' "$RUN_LOG"
+require_contains 'step_end: compare_or_repair (completed)' "$RUN_LOG"
+require_contains 'step_end: validate_comparison (completed)' "$RUN_LOG"
 require_contains 'step_end: archive-comparison (completed)' "$RUN_LOG"
 require_contains 'Workflow "multi-run-comparison-loop" completed.' "$RUN_TAIL_LOG"
+
+node -e '
+const fs = require("fs");
+const log = fs.readFileSync(process.argv[1], "utf8");
+const compareCount = (log.match(/step_end: compare_or_repair \(completed\)/g) || []).length;
+const validateCount = (log.match(/→ validate_comparison/g) || []).length;
+const archiveCount = (log.match(/step_end: archive-comparison \(completed\)/g) || []).length;
+if (compareCount < 2) throw new Error(`expected repeated compare_or_repair executions, saw ${compareCount}`);
+if (validateCount < 2) throw new Error(`expected repeated validate_comparison executions, saw ${validateCount}`);
+if (archiveCount !== 1) throw new Error(`expected exactly one archive step, saw ${archiveCount}`);
+' "$RUN_LOG" || fail "expected runtime-native loop re-entry in $RUN_LOG"
 
 for RUN_FILE in "$RUN1" "$RUN2" "$RUN3" "$RUN2_REPAIRED"; do
   node -e '
@@ -119,9 +127,9 @@ grep -Eq '^#+[[:space:]]+([0-9]+\.[[:space:]]+)?Per-Run Snapshot' "$FINAL_SUMMAR
 grep -Eq '^#+[[:space:]]+([0-9]+\.[[:space:]]+)?Best Run' "$FINAL_SUMMARY" || fail "expected Best Run heading in $FINAL_SUMMARY"
 grep -Eq '^#+[[:space:]]+([0-9]+\.[[:space:]]+)?Worst Run' "$FINAL_SUMMARY" || fail "expected Worst Run heading in $FINAL_SUMMARY"
 grep -Eq '^#+[[:space:]]+([0-9]+\.[[:space:]]+)?Pass Rate' "$FINAL_SUMMARY" || fail "expected Pass Rate heading in $FINAL_SUMMARY"
-grep -Eq 'run-1' "$FINAL_SUMMARY" || fail "expected run-1 snapshot in $FINAL_SUMMARY"
-grep -Eq 'run-2-repaired' "$FINAL_SUMMARY" || fail "expected repaired run snapshot in $FINAL_SUMMARY"
-grep -Eq 'run-3' "$FINAL_SUMMARY" || fail "expected run-3 snapshot in $FINAL_SUMMARY"
+grep -Eq 'Run[[:space:]]+1|run-1' "$FINAL_SUMMARY" || fail "expected run-1 snapshot in $FINAL_SUMMARY"
+grep -Eq 'Run[[:space:]]+2|run-2-repaired|run-2[[:space:]]*\(Repaired\)|run-2\b' "$FINAL_SUMMARY" || fail "expected repaired run snapshot in $FINAL_SUMMARY"
+grep -Eq 'Run[[:space:]]+3|run-3' "$FINAL_SUMMARY" || fail "expected run-3 snapshot in $FINAL_SUMMARY"
 grep -Eq 'PASS' "$FINAL_SUMMARY" || fail "expected PASS verdict in $FINAL_SUMMARY"
 
 grep -Eq '^#+[[:space:]]+([0-9]+\.[[:space:]]+)?Verdict' "$FINAL_VALIDATION" || fail "expected Verdict heading in $FINAL_VALIDATION"
@@ -130,5 +138,7 @@ grep -Eq 'PASS' "$FINAL_VALIDATION" || fail "expected PASS verdict in $FINAL_VAL
 grep -Eq '^#+[[:space:]]+([0-9]+\.[[:space:]]+)?Summary of Loop' "$ARCHIVE_NOTE" || fail "expected Summary of Loop heading in $ARCHIVE_NOTE"
 grep -Eq '^#+[[:space:]]+([0-9]+\.[[:space:]]+)?Final Comparison Result' "$ARCHIVE_NOTE" || fail "expected Final Comparison Result heading in $ARCHIVE_NOTE"
 grep -Eq '^#+[[:space:]]+([0-9]+\.[[:space:]]+)?Reuse Notes' "$ARCHIVE_NOTE" || fail "expected Reuse Notes heading in $ARCHIVE_NOTE"
+require_contains 'runtime-native' "$ARCHIVE_NOTE"
+require_contains 'compare_or_repair' "$ARCHIVE_NOTE"
 
-echo 'verify.sh: PASS - canonical multi-run comparison loop artifacts and compare->validate->repair->compare flow verified.'
+echo 'verify.sh: PASS - canonical multi-run comparison loop artifacts and runtime-native compare_or_repair<->validate_comparison flow verified.'

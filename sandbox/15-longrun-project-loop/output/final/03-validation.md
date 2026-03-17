@@ -1,14 +1,26 @@
-# Validation Report: Sandbox 15 Draft
+# Validation Report: 15-Longrun Project Loop
 
-## Verdict
-**FAIL** - The draft document does not meet all required checklist criteria.
+## 1. Verdict
 
-## Passed Checks
-- [x] **Contains Project Summary**: Draft includes a clear "Project Summary" section describing the sandbox purpose and lifecycle demonstration.
-- [x] **Contains Scope**: Draft includes a well-defined "Scope" section with explicit in-scope and out-of-scope items.
+**FAIL**
 
-## Failed Checks
-- [ ] **Contains Next Action**: Draft does not include a "Next Action" section. This omission is confirmed by the review document, which explicitly flags the missing "Next Action" section as Issue #1.
+## 2. Passed Checks
 
-## Next Action
-Proceed to the repair step to add a "Next Action" section to the draft document. The repair should specify the immediate next step in the remediation loop workflow.
+| Check | Status |
+|-------|--------|
+| contains Project Summary | ✅ PASS |
+| contains Scope | ✅ PASS |
+
+## 3. Failed Checks
+
+| Check | Status | Details |
+|-------|--------|---------|
+| contains Next Action | ❌ FAIL | Document lacks a "Next Action" section entirely. Review confirms this as a blocking gap per validation requirements. |
+
+## 4. Next Action
+
+build_or_repair must add a "Next Action" section to the draft document. Suggested content includes:
+- Define validation checklist items for the remediation loop
+- Specify trigger conditions for repair cycles
+- Document when and how to generate the final archive note
+- State the first executable action (e.g., "Execute draft → review → validate pipeline in runner environment")

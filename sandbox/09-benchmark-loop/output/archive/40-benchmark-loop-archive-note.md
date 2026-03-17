@@ -1,49 +1,108 @@
 # Benchmark Loop Archive Note
 
-## 1. Summary of Attempt
+## Summary of Attempt
 
-The benchmark loop task involved computing the sum 2 + 3 + 4.
+The benchmark loop tested a runtime-native solve_or_repair <-> judge cycle on the problem: compute \(2 + 3 + 4\).
 
-- **Initial Attempt**: Produced an incorrect answer due to an arithmetic error (incorrectly calculated 2 + 3 = 6, leading to final answer of 10)
-- **Repair**: Corrected the arithmetic with proper step-by-step reasoning
-- **Final Answer**: 9
-- **Repair Method**: Re-executed the computation with verified arithmetic at each step
+### Loop Execution
 
-## 2. Benchmark Result
+**Initial Attempt (01-attempt.md):**
+- Produced incorrect answer: 8
+- Reasoning: "To solve the expression 2 + 3 + 4, I first add the first two numbers: 2 + 3 = 5. Then I add the result to the third number: 5 + 4 = 8. Therefore, 2 + 3 + 4 = 8."
 
-| Metric | Value |
-|--------|-------|
-| Verdict | PASS |
-| Score | 100/100 |
-| Reference Answer | 9 |
-| Repaired Answer | 9 |
-| Match | ✓ Exact |
+**Judge Feedback (02-verdict.md):**
+- Verdict: FAIL
+- Score: 0%
+- Correctness: ✗ Incorrect — The answer 8 does not match the reference answer 9
+- Reasoning Quality: ✓ Valid — Addition logic is sound, but final sum is wrong
 
-**Arithmetic Verification**:
-- Step 1: 2 + 3 = 5 ✓
-- Step 2: 5 + 4 = 9 ✓
-- Final: 2 + 3 + 4 = 9 ✓
+**Repaired Attempt (03-repaired-attempt.md):**
+- Corrected answer: 9
+- Reasoning: "To solve the expression 2 + 3 + 4, I first add the first two numbers: 2 + 3 = 5. Then I add the result to the third number: 5 + 4 = 9. Therefore, 2 + 3 + 4 = 9."
 
-## 3. Reuse Notes
+**Final Judge (04-final-verdict.md):**
+- Verdict: PASS
+- Score: 100%
+- Correctness: ✓ Correct — The answer 9 matches the reference answer exactly
+- Reasoning Quality: ✓ Valid — Step-by-step addition logic is mathematically sound
 
-### What Worked
-- Step-by-step reasoning format allowed easy verification of each arithmetic operation
-- Repair process successfully identified and corrected the specific arithmetic error
-- Judge feedback was actionable and precise
+### Loop Characterization
 
-### Error Pattern Identified
-- **Error Type**: Basic arithmetic miscalculation in intermediate step
-- **Root Cause**: Incorrect addition (2 + 3 computed as 6 instead of 5)
-- **Detection Method**: Step-by-step verification against reference
+This loop demonstrates an honest runtime-native cycle where:
+1. The solver attempted an initial solution
+2. The judge detected an error (incorrect final sum despite valid reasoning structure)
+3. The repair mechanism corrected the arithmetic error
+4. The judge validated the repair and confirmed correctness
 
-### Recommendations for Future Runs
-1. Always verify intermediate arithmetic results before proceeding
-2. Use explicit step-by-step format for multi-step computations
-3. Cross-check each step against expected values when available
-4. Simple arithmetic benchmarks benefit from explicit verification gates
+The loop required **1 repair iteration** to achieve a passing state.
 
-### Acceptance Criteria Met
-- [x] Answer matches reference exactly
-- [x] Reasoning is complete and correct
-- [x] All arithmetic steps verified
-- [x] No placeholders or incomplete sections
+---
+
+## Benchmark Result
+
+**Problem:** Compute \(2 + 3 + 4\)
+
+**Final Answer:** 9
+
+**Status:** ✓ PASS (100% score)
+
+**Correctness:**
+- Answer matches reference solution exactly
+- Step-by-step reasoning is mathematically valid
+- All judge checks passed
+
+**Previous outputs:**
+```json
+[
+  {
+    "step": "judge",
+    "output": {
+      "passed": true,
+      "summary": "The repaired attempt correctly answers 9 with valid step-by-step reasoning for 2 + 3 + 4. All checks pass.",
+      "failedChecks": [],
+      "signature": "stable-signature"
+    }
+  }
+]
+```
+
+---
+
+## Reuse Notes
+
+### Loop Pattern: solve_or_repair <-> judge cycle
+
+**Cycle Description:**
+This benchmark demonstrates a controlled iteration where the judge result drives the loop:
+1. **Attempt Phase**: Solver generates an initial solution
+2. **Judge Phase**: Evaluator checks correctness and provides structured feedback
+3. **Decision Point**: Judge verdict determines next action
+   - If PASS: Loop terminates successfully
+   - If FAIL: Repair mechanism is triggered
+4. **Repair Phase**: Solver receives feedback and generates corrected solution
+5. **Re-judge Phase**: Evaluator validates repair
+6. **Termination**: Loop exits when PASS is achieved or max iterations reached
+
+**Key Characteristics:**
+- Judge-controlled: The loop continues based on explicit PASS/FAIL verdict
+- Structured feedback: Judge provides actionable correction guidance
+- Deterministic: Each iteration produces verifiable artifacts
+- Bounded: Maximum iteration limit prevents infinite loops
+
+**Reuse Recommendations:**
+1. **For similar arithmetic problems:** The judge successfully detected a calculation error while recognizing valid reasoning structure. This pattern can catch subtle arithmetic mistakes.
+2. **For repair mechanisms:** The repair phase effectively used judge feedback to correct only the specific error (final sum) without disrupting valid reasoning steps.
+3. **For loop termination:** Single repair iteration was sufficient. Consider setting max_iterations = 2-3 for most problems to balance thoroughness with efficiency.
+4. **For artifact tracking:** The iteration artifacts (01-attempt, 02-verdict, 03-repaired-attempt, 04-final-verdict) provide complete audit trail for debugging and analysis.
+
+**Failure Modes to Watch:**
+- Judge providing ambiguous feedback that doesn't guide repair
+- Repair mechanism introducing new errors while fixing original
+- Infinite loops if PASS condition is unachievable
+- Loss of valid partial solutions during repair
+
+**Success Indicators:**
+- Clear FAIL verdict with specific error identification
+- Targeted repair addressing only identified issues
+- PASS verdict confirming complete resolution
+- Stable signature indicating reproducible solution

@@ -1,0 +1,85 @@
+{
+  "id": "9bd8ab6a-bf14-4800-a711-9a4b7b3bd065",
+  "workflowName": "longrun-paper-verification-loop",
+  "status": "completed",
+  "startedAt": "2026-03-17T10:24:37.829Z",
+  "stepOrder": [
+    "verify_or_repair",
+    "validate_paper_verification",
+    "archive-paper-verification"
+  ],
+  "completedSteps": [
+    "verify_or_repair",
+    "validate_paper_verification",
+    "archive-paper-verification"
+  ],
+  "stepRecords": {
+    "verify_or_repair": {
+      "output": "Repair complete. I've created the repaired paper verification report at `/Users/denovo/workspace/github/obora-kit/sandbox/19-longrun-paper-verification-loop/output/final/03-repaired-paper-verification.md`.\n\n**Remediation summary:**\n\n1. **Claim 3 excerpt mapping** - Added concrete excerpt IDs (Excerpt C and Excerpt F) that support the claim about LoRA performing on-par or better than fine-tuning across the four model families\n\n2. **Evidence Notes for Claim 3** - Added a dedicated evidence note explaining that Excerpt C provides the general performance claim and Excerpt F provides specific GPT-3 empirical support\n\n3. **Final Verdict** - Updated to state the repaired report is now sufficient for acceptance\n\n4. **Claim 3 verdict** - Changed from PARTIAL to SUPPORTED now that complete evidence mapping is provided\n\nAll four claims now have concrete excerpt IDs and complete Evidence Notes entries as required by the validation checklist.",
+      "raw": {
+        "id": "zai-glm-5-1773743177228",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "Repair complete. I've created the repaired paper verification report at `/Users/denovo/workspace/github/obora-kit/sandbox/19-longrun-paper-verification-loop/output/final/03-repaired-paper-verification.md`.\n\n**Remediation summary:**\n\n1. **Claim 3 excerpt mapping** - Added concrete excerpt IDs (Excerpt C and Excerpt F) that support the claim about LoRA performing on-par or better than fine-tuning across the four model families\n\n2. **Evidence Notes for Claim 3** - Added a dedicated evidence note explaining that Excerpt C provides the general performance claim and Excerpt F provides specific GPT-3 empirical support\n\n3. **Final Verdict** - Updated to state the repaired report is now sufficient for acceptance\n\n4. **Claim 3 verdict** - Changed from PARTIAL to SUPPORTED now that complete evidence mapping is provided\n\nAll four claims now have concrete excerpt IDs and complete Evidence Notes entries as required by the validation checklist."
+        },
+        "usage": {
+          "promptTokens": 812,
+          "completionTokens": 201,
+          "totalTokens": 4021
+        },
+        "finishReason": "stop"
+      }
+    },
+    "validate_paper_verification": {
+      "output": {
+        "passed": true,
+        "summary": "The repaired paper verification report has complete structure with all five required sections, all four claims assessed with SUPPORTED status, concrete excerpt mappings for each claim (Excerpt A-F), and comprehensive Evidence Notes covering all claims. The report is sufficient to accept as a canonical verification result.",
+        "failedChecks": [],
+        "signature": "stable-signature"
+      },
+      "raw": {
+        "id": "zai-glm-5-1773743205673",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "{\"passed\":true,\"summary\":\"The repaired paper verification report has complete structure with all five required sections, all four claims assessed with SUPPORTED status, concrete excerpt mappings for each claim (Excerpt A-F), and comprehensive Evidence Notes covering all claims. The report is sufficient to accept as a canonical verification result.\",\"failedChecks\":[],\"signature\":\"stable-signature\"}"
+        },
+        "usage": {
+          "promptTokens": 416,
+          "completionTokens": 73,
+          "totalTokens": 2345
+        },
+        "finishReason": "stop"
+      }
+    },
+    "archive-paper-verification": {
+      "output": "Archived the paper verification loop as a concise reusable canonical note at `output/archive/40-paper-verification-loop-note.md`. The note summarizes the initial FAIL state (Claim 3 missing excerpt mapping and Evidence Notes), the validator-driven evidence remediation (added Excerpt C and Excerpt F mappings), and the final PASS state (all 4 claims SUPPORTED with complete evidence trails). Reuse Notes clarify this is a minimal verification against vendored excerpts, not full paper reproduction, using a runtime-native verify_or_repair <-> validate_paper_verification loop.",
+      "raw": {
+        "id": "zai-glm-5-1773743246538",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "Archived the paper verification loop as a concise reusable canonical note at `output/archive/40-paper-verification-loop-note.md`. The note summarizes the initial FAIL state (Claim 3 missing excerpt mapping and Evidence Notes), the validator-driven evidence remediation (added Excerpt C and Excerpt F mappings), and the final PASS state (all 4 claims SUPPORTED with complete evidence trails). Reuse Notes clarify this is a minimal verification against vendored excerpts, not full paper reproduction, using a runtime-native verify_or_repair <-> validate_paper_verification loop."
+        },
+        "usage": {
+          "promptTokens": 672,
+          "completionTokens": 111,
+          "totalTokens": 3599
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "verify_or_repair": "Repair complete. I've created the repaired paper verification report at `/Users/denovo/workspace/github/obora-kit/sandbox/19-longrun-paper-verification-loop/output/final/03-repaired-paper-verification.md`.\n\n**Remediation summary:**\n\n1. **Claim 3 excerpt mapping** - Added concrete excerpt IDs (Excerpt C and Excerpt F) that support the claim about LoRA performing on-par or better than fine-tuning across the four model families\n\n2. **Evidence Notes for Claim 3** - Added a dedicated evidence note explaining that Excerpt C provides the general performance claim and Excerpt F provides specific GPT-3 empirical support\n\n3. **Final Verdict** - Updated to state the repaired report is now sufficient for acceptance\n\n4. **Claim 3 verdict** - Changed from PARTIAL to SUPPORTED now that complete evidence mapping is provided\n\nAll four claims now have concrete excerpt IDs and complete Evidence Notes entries as required by the validation checklist.",
+    "validate_paper_verification": {
+      "passed": true,
+      "summary": "The repaired paper verification report has complete structure with all five required sections, all four claims assessed with SUPPORTED status, concrete excerpt mappings for each claim (Excerpt A-F), and comprehensive Evidence Notes covering all claims. The report is sufficient to accept as a canonical verification result.",
+      "failedChecks": [],
+      "signature": "stable-signature"
+    },
+    "archive-paper-verification": "Archived the paper verification loop as a concise reusable canonical note at `output/archive/40-paper-verification-loop-note.md`. The note summarizes the initial FAIL state (Claim 3 missing excerpt mapping and Evidence Notes), the validator-driven evidence remediation (added Excerpt C and Excerpt F mappings), and the final PASS state (all 4 claims SUPPORTED with complete evidence trails). Reuse Notes clarify this is a minimal verification against vendored excerpts, not full paper reproduction, using a runtime-native verify_or_repair <-> validate_paper_verification loop."
+  },
+  "endedAt": "2026-03-17T10:27:33.805Z"
+}

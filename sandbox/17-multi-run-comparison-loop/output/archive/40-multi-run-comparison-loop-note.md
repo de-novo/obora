@@ -1,75 +1,58 @@
-# Multi-Run Comparison Loop — Archive Note
+# Multi-Run Comparison Loop Archive Note
 
-Date: 2026-03-17
+## 1. Summary of Loop
 
----
+The multi-run comparison loop executed a runtime-native `compare_or_repair` ↔ `validate_comparison` cycle to evaluate three execution runs against a reference answer.
 
-## Summary of Loop
+**Initial State (Partial):**
+- 2 of 3 runs passed (66.67% pass rate)
+- run-1: PASS (answer: 15)
+- run-2: FAIL (answer: 14 — arithmetic error)
+- run-3: PASS (answer: 15)
 
-The multi-run comparison loop evaluated three independent runs computing the processing rate for 120 records over 8 minutes.
+**Validator-Driven Remediation:**
+The initial validation detected run-2 as failing due to an arithmetic error (120 ÷ 8 computed as 14 instead of 15). The validation step signaled `compare_or_repair` to fix only the failing run while preserving the passing runs.
 
-### Initial State (Partial)
+**Final State (PASS):**
+- 3 of 3 runs passed (100% pass rate)
+- run-1: PASS (answer: 15)
+- run-2: PASS (answer: 15 — repaired)
+- run-3: PASS (answer: 15)
 
-- **Overall Result**: PARTIAL
-- **Pass Rate**: 2/3 (66.67%)
-- **Run Statuses**:
-  - run-1: PASS (answer: 15)
-  - run-2: FAIL (answer: 14 — intentionally incorrect)
-  - run-3: PASS (answer: 15)
+**Loop Iterations:** 1 repair cycle required to achieve full pass rate.
 
-### Repair Action
+## 2. Final Comparison Result
 
-- run-2 was identified as failing due to an incorrect calculation (14 instead of 15).
-- The run was repaired (renamed to run-2-repaired) and corrected its division: 120 records ÷ 8 minutes = 15 records per minute.
+**Verdict: PASS** — All three runs evaluated against the reference answer (15) and passed with 100% pass rate.
 
-### Final State (Pass)
+| Run ID | Final Answer | Status | Notes |
+|--------|--------------|--------|-------|
+| run-1 | 15 | PASS | Correct reasoning, explicit division wording |
+| run-2 | 15 | PASS | Repaired from initial error (14 → 15) |
+| run-3 | 15 | PASS | Correct reasoning using ÷ symbol |
 
-- **Overall Result**: PASS
-- **Pass Rate**: 3/3 (100%)
-- **All runs now produce the correct answer**: 15 records per minute.
+**Validation Signature:** stable-signature
 
----
+The final comparison is acceptable for archive with no further remediation required.
 
-## Final Comparison Result
+## 3. Reuse Notes
 
-| Run | Answer | Reasoning | Status |
-|-----|--------|-----------|--------|
-| run-1 | 15 | 120 records / 8 minutes = 15 records per minute | PASS |
-| run-2-repaired | 15 | 120 records divided by 8 minutes equals 15 records per minute | PASS |
-| run-3 | 15 | Processing rate = 120 records ÷ 8 minutes = 15 records per minute | PASS |
+**Pattern:** Runtime-native compare_or_repair ↔ validate_comparison loop
 
-**Reference Answer**: 15 records per minute
+**Key Behaviors:**
+1. **Targeted Repair:** The validator identified only the failing run (run-2) and instructed repair without modifying passing runs (run-1, run-3).
+2. **Deterministic Termination:** Loop terminates when validation passes with all runs evaluated and successful.
+3. **State Tracking:** Each iteration preserves the comparison summary and validation report for traceability.
 
-**Validation Verdict**: PASS — All runs passed against the reference answer. The final comparison is acceptable for archive.
+**Applicability:**
+- Use this pattern when executing multiple runs that must all pass against a reference answer.
+- The validator acts as the gatekeeper, signaling specific repair targets.
+- The compare_or_repair step performs minimal necessary corrections.
 
----
+**Artifacts Generated:**
+- Initial comparison summary (partial state)
+- Initial validation report (FAIL with specific failures)
+- Final comparison summary (PASS state)
+- Final validation report (PASS with all checks met)
 
-## Reuse Notes
-
-### What Worked Well
-
-1. **Per-Run Snapshot Table**: Providing a clear tabular summary of each run's answer, reasoning, and status made it easy to identify failures and track repairs.
-
-2. **Best/Worst Run Selection**: Explicitly documenting best and worst runs helped surface reasoning quality differences even when answers matched.
-
-3. **Pass Rate Tracking**: Including both fraction (e.g., 2/3) and percentage (e.g., 66.67%) provided unambiguous quality metrics.
-
-4. **Repair Mechanism**: Renaming failed runs (e.g., run-2 → run-2-repaired) preserved provenance while clearly indicating intervention.
-
-### Recommendations for Future Loops
-
-1. **Include Reference Answer Explicitly**: Always state the reference answer in the comparison summary for quick verification.
-
-2. **Standardize Reasoning Format**: Encourage runs to use consistent reasoning templates (e.g., "X / Y = Z units per time") to simplify comparison.
-
-3. **Automate Repair Detection**: Consider flagging runs with answers deviating from the majority for automatic repair prompts.
-
-4. **Archive Intermediate States**: Keep both initial and final comparison summaries to demonstrate the repair trajectory.
-
-### Template Artifacts
-
-- `01-initial-comparison-summary.md` — Captures partial state before repairs
-- `03-final-comparison-summary.md` — Captures final pass state after repairs
-- `04-final-comparison-validation.md` — Validates that all checklist criteria are met
-
-These artifacts form a complete audit trail for the multi-run comparison loop.
+**Failure Mode Observed:** Arithmetic calculation error (120 ÷ 8 = 14 instead of 15) — corrected in single repair cycle.

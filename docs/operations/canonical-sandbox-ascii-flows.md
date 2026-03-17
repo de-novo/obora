@@ -72,12 +72,13 @@
 
 ```text
 [brief]
-  -> [draft]
-  -> [review]
-  -> [validation: FAIL]
-  => [repair]
-  => [final validation: PASS]
-  -> [archive]
+  -> [build_or_repair]
+  -> [review_project]
+  -> [validate_project]
+       | FAIL
+       => [runtime back-edge to build_or_repair]
+       | PASS
+       -> [archive_project]
 ```
 
 ## 08 — benchmark mini
@@ -93,11 +94,12 @@
 
 ```text
 [problem]
-  -> [solve initial]
-  -> [judge: FAIL]
-  => [repair]
-  => [re-judge: PASS]
-  -> [archive]
+  -> [solve_or_repair]
+  -> [judge]
+       | FAIL
+       => [runtime back-edge to solve_or_repair]
+       | PASS
+       -> [archive]
 ```
 
 ---
@@ -135,11 +137,12 @@
 
 ```text
 [run-with-watchdog]
-  -> [solve initial]
-  -> [judge initial: FAIL]
-  => [repair]
-  => [judge repaired: PASS]
-  -> [archive]
+  -> [solve_or_repair]
+  -> [judge]
+       | FAIL
+       => [runtime back-edge to solve_or_repair]
+       | PASS
+       -> [archive]
 ```
 
 ## 14 — longrun project mini
@@ -157,12 +160,13 @@
 
 ```text
 [run-with-watchdog]
-  -> [draft]
-  -> [review]
-  -> [validation: FAIL]
-  => [repair]
-  => [final validation: PASS]
-  -> [archive]
+  -> [build_or_repair]
+  -> [review_project]
+  -> [validate_project]
+       | FAIL
+       => [runtime back-edge to build_or_repair]
+       | PASS
+       -> [archive_project]
 ```
 
 ---
@@ -178,24 +182,17 @@
 ## 17 — multi-run comparison loop
 
 ```text
-                 -> [run-1 result] -----------------------\
-[run-with-watchdog] -> [run-2 result: FAIL] ---------------> [initial comparison]
-                 -> [run-3 result] -----------------------/          |
-                                                                    v
-                                                         [comparison validation: FAIL]
-                                                                    |
-                                                                    v
-                                                           [repair failed run]
-                                                                    |
-                                                                    v
-                 -> [run-1 result] -----------------------\
-                 -> [run-2 repaired result] ---------------> [final comparison]
-                 -> [run-3 result] -----------------------/          |
-                                                                    v
-                                                         [final validation: PASS]
-                                                                    |
-                                                                    v
-                                                                 [archive]
+[run-with-watchdog]
+  -> [run-1 result]
+  -> [run-2 result: FAIL]
+  -> [run-3 result]
+  -> [compare_or_repair]
+  -> [validate_comparison]
+       | FAIL
+       => [runtime back-edge to compare_or_repair]
+       => [repair only the failing run named by validation]
+       | PASS
+       -> [archive]
 ```
 
 ---
@@ -213,13 +210,13 @@
 
 ```text
 [run-with-watchdog]
-  -> [paper metadata + excerpts + claims]
-  -> [initial verification report]
-  -> [validation: FAIL]
-  => [repair using same paper fixture]
-  => [repaired verification report]
-  => [final validation: PASS]
-  -> [archive]
+  -> [verify_or_repair]
+  -> [validate_paper_verification]
+       | FAIL
+       => [runtime back-edge to verify_or_repair]
+       => [repair same report with same vendored fixture]
+       | PASS
+       -> [archive]
 ```
 
 ## 20 — longrun feedback convergence loop

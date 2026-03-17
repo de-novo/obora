@@ -2,27 +2,17 @@
 
 ## 1. Verdict
 
-**FAIL**
-
-The project draft does not satisfy all checklist requirements. Specifically, the "Next Action" section is missing, which is a mandatory requirement.
+**FAIL** — The candidate document does not satisfy all required checklist items.
 
 ## 2. Passed Checks
 
-- ✅ **Contains Project Summary**: The draft includes a "Project Summary" section that clearly defines the project objectives (building sandbox #7, demonstrating project lifecycle) and key goals.
-
-- ✅ **Contains Scope**: The draft includes a "Scope" section with clear delineation of inclusion boundaries (sandbox structure, draft, validation failure scenario, review, repair, final validation, archive note) and exclusion boundaries (complex features, external integrations, large-scale data processing).
+- **Project Summary**: Present. The document includes a clear Project Summary section describing the 7th canonical sandbox project and its lifecycle demonstration purpose.
+- **Scope**: Present. The document includes a well-structured Scope section with explicit In Scope and Out of Scope subsections.
 
 ## 3. Failed Checks
 
-- ❌ **Contains Next Action**: The draft does NOT include a "Next Action" section. This is a required checklist item that is explicitly missing from the document. The review document (02-review.md) confirms this issue was identified as a critical gap.
+- **Next Action**: Missing. The document does not contain a Next Action section specifying the immediate executable step to advance the project.
 
 ## 4. Next Action
 
-The draft must be revised to include a "Next Action" section before re-validation can pass. Suggested content for this section:
-
-1. Review 피드백을 반영하여 draft 수정
-2. Next Action 섹션 추가
-3. 수정된 draft에 대해 재validation 수행
-4. Validation 통과 시 archive note 작성
-
-Return to draft revision step to address the missing "Next Action" section, then re-submit for validation.
+`build_or_repair` must create or repair the candidate document to add a concrete Next Action section (e.g., "리뷰 피드백을 반영하여 04-repaired.md를 작성하고 Next Action 섹션을 추가한 뒤 validation을 다시 실행한다.") and then re-submit for validation via 05-final-validation.md.

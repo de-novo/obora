@@ -1,8 +1,14 @@
 name: longrun-paper-verification-loop
 version: "1.0"
 steps:
-  - name: verify-paper-claims-initial
+  - name: verify_or_repair
     agent: verifier
+    config:
+      repair_loop:
+        enabled: true
+        validation_step: validate_paper_verification
+        max_no_progress_iterations: 1
+        repeated_critical_issue_ceiling: 1
     tools: [file_read, file_write]
     input:
       task: |
@@ -10,9 +16,8 @@ steps:
         /Users/denovo/workspace/github/obora-kit/sandbox/19-longrun-paper-verification-loop/input/paper-excerpts.md,
         and /Users/denovo/workspace/github/obora-kit/sandbox/19-longrun-paper-verification-loop/input/claims.md.
 
-        Write /Users/denovo/workspace/github/obora-kit/sandbox/19-longrun-paper-verification-loop/output/final/01-paper-verification.md.
-
-        Requirements:
+        If this is the first attempt:
+        - Write /Users/denovo/workspace/github/obora-kit/sandbox/19-longrun-paper-verification-loop/output/final/01-paper-verification.md.
         - Use only the provided vendored fixture. Do not rely on outside knowledge or live web access.
         - Verify exactly the four listed claims.
         - Do not add a document title or any extra section before the required sections.
@@ -30,15 +35,44 @@ steps:
         - Final Verdict must clearly state that the report is not yet sufficient for acceptance and needs remediation.
         - Keep the report concise, plausible, reproducible, and grounded in the supplied text.
 
-  - name: validate-paper-verification
+        If this is a repair attempt:
+        - Also read whichever of these files exist:
+          - /Users/denovo/workspace/github/obora-kit/sandbox/19-longrun-paper-verification-loop/output/final/01-paper-verification.md
+          - /Users/denovo/workspace/github/obora-kit/sandbox/19-longrun-paper-verification-loop/output/final/02-paper-validation.md
+        - Use the injected repair context, especially latestValidation.failedChecks.
+        - Repair only the claim-to-evidence gaps identified by the latest validation result.
+        - Write /Users/denovo/workspace/github/obora-kit/sandbox/19-longrun-paper-verification-loop/output/final/03-repaired-paper-verification.md.
+        - Keep the same document shape with exactly these top-level sections:
+          1. Paper Metadata
+          2. Verification Summary
+          3. Claim-by-Claim Assessment
+          4. Evidence Notes
+          5. Final Verdict
+        - Every claim entry must include concrete excerpt IDs.
+        - Evidence Notes must include a dedicated note for Claim 1, Claim 2, Claim 3, and Claim 4.
+        - Final Verdict must clearly state that the repaired report is now sufficient for acceptance.
+        - Keep the report concise, reproducible, and grounded in the supplied text.
+
+  - name: validate_paper_verification
     agent: validator
-    depends_on: [verify-paper-claims-initial]
+    depends_on: [verify_or_repair]
+    config:
+      validation:
+        enabled: true
+        emit_structured_result: true
+    on_fail:
+      goto: verify_or_repair
+      max_iterations: 1
     tools: [file_read, file_write]
     input:
       task: |
-        Read /Users/denovo/workspace/github/obora-kit/sandbox/19-longrun-paper-verification-loop/output/final/01-paper-verification.md.
+        Read whichever exists first:
+        - /Users/denovo/workspace/github/obora-kit/sandbox/19-longrun-paper-verification-loop/output/final/03-repaired-paper-verification.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/19-longrun-paper-verification-loop/output/final/01-paper-verification.md
 
-        Write /Users/denovo/workspace/github/obora-kit/sandbox/19-longrun-paper-verification-loop/output/final/02-paper-validation.md.
+        Write a human-readable validation report:
+        - if validating the initial report, write /Users/denovo/workspace/github/obora-kit/sandbox/19-longrun-paper-verification-loop/output/final/02-paper-validation.md
+        - if validating the repaired report, write /Users/denovo/workspace/github/obora-kit/sandbox/19-longrun-paper-verification-loop/output/final/04-final-paper-validation.md
 
         Validate against this checklist:
         - includes exactly the five required top-level sections
@@ -56,80 +90,33 @@ steps:
           2. Passed Checks
           3. Failed Checks
           4. Next Action
-        - Verdict must clearly say FAIL.
-        - Failed Checks must explicitly identify Claim 3 as missing sufficiently concrete excerpt mapping or evidence coverage.
-        - Next Action must direct the workflow to repair the report using the same vendored fixture only.
+        - If evidence coverage is still incomplete, Verdict must clearly say FAIL, Failed Checks must explicitly identify the remaining claim gaps, and Next Action must direct verify_or_repair to repair the report using the same vendored fixture only.
+        - If the report is complete, Verdict must clearly say PASS, Failed Checks should explicitly say none, and Next Action should say the verification loop is complete and can be archived.
 
-  - name: repair-paper-verification
-    agent: repairer
-    depends_on: [validate-paper-verification]
-    tools: [file_read, file_write]
-    input:
-      task: |
-        Read /Users/denovo/workspace/github/obora-kit/sandbox/19-longrun-paper-verification-loop/input/paper-metadata.md,
-        /Users/denovo/workspace/github/obora-kit/sandbox/19-longrun-paper-verification-loop/input/paper-excerpts.md,
-        /Users/denovo/workspace/github/obora-kit/sandbox/19-longrun-paper-verification-loop/input/claims.md,
-        /Users/denovo/workspace/github/obora-kit/sandbox/19-longrun-paper-verification-loop/output/final/01-paper-verification.md,
-        and /Users/denovo/workspace/github/obora-kit/sandbox/19-longrun-paper-verification-loop/output/final/02-paper-validation.md.
+        After writing the report, your assistant response must be ONLY a strict ValidationResult JSON object.
+        Do not include markdown fences.
+        Do not include prose before or after the JSON.
 
-        Write /Users/denovo/workspace/github/obora-kit/sandbox/19-longrun-paper-verification-loop/output/final/03-repaired-paper-verification.md.
-
-        Requirements:
-        - Use only the provided vendored fixture. Do not rely on outside knowledge or live web access.
-        - Keep the same document shape with exactly these top-level sections:
-          1. Paper Metadata
-          2. Verification Summary
-          3. Claim-by-Claim Assessment
-          4. Evidence Notes
-          5. Final Verdict
-        - Verify exactly the four listed claims.
-        - In Claim-by-Claim Assessment, include all four claims and mark each one as exactly one of: SUPPORTED, PARTIAL, UNSUPPORTED.
-        - Every claim entry must include concrete excerpt IDs.
-        - Evidence Notes must include a dedicated note for Claim 1, Claim 2, Claim 3, and Claim 4.
-        - Repair the earlier gap by giving Claim 3 explicit evidence mapping from the provided excerpts only.
-        - Final Verdict must clearly state that the repaired report is now sufficient for acceptance.
-        - Keep the report concise, reproducible, and grounded in the supplied text.
-
-  - name: validate-repaired-paper-verification
-    agent: validator
-    depends_on: [repair-paper-verification]
-    tools: [file_read, file_write]
-    input:
-      task: |
-        Read /Users/denovo/workspace/github/obora-kit/sandbox/19-longrun-paper-verification-loop/output/final/03-repaired-paper-verification.md.
-
-        Write /Users/denovo/workspace/github/obora-kit/sandbox/19-longrun-paper-verification-loop/output/final/04-final-paper-validation.md.
-
-        Validate against this checklist:
-        - includes exactly the five required top-level sections
-        - assesses Claim 1, Claim 2, Claim 3, and Claim 4
-        - each claim entry uses one of SUPPORTED, PARTIAL, UNSUPPORTED
-        - Claim 1, Claim 2, Claim 3, and Claim 4 each have a concrete excerpt mapping in the claim entry
-        - Evidence Notes cover Claim 1, Claim 2, Claim 3, and Claim 4
-        - the repaired report is sufficiently complete to accept as a canonical verification result
-
-        Requirements:
-        - Do not add a document title or any extra section before the required sections.
-        - Use Markdown H1 headings for the required sections and do not number them.
-        - Include exactly these top-level sections:
-          1. Verdict
-          2. Passed Checks
-          3. Failed Checks
-          4. Next Action
-        - Verdict must clearly say PASS.
-        - Failed Checks should explicitly say none.
-        - Next Action should say the verification loop is complete and can be archived.
+        Return this exact shape:
+        {
+          "passed": boolean,
+          "summary": "string",
+          "failedChecks": [{ "name": "string", "message": "string" }],
+          "signature": "stable-signature"
+        }
 
   - name: archive-paper-verification
     agent: archivist
-    depends_on: [validate-repaired-paper-verification]
+    depends_on: [validate_paper_verification]
     tools: [file_read, file_write]
     input:
       task: |
-        Read /Users/denovo/workspace/github/obora-kit/sandbox/19-longrun-paper-verification-loop/output/final/01-paper-verification.md,
-        /Users/denovo/workspace/github/obora-kit/sandbox/19-longrun-paper-verification-loop/output/final/02-paper-validation.md,
-        /Users/denovo/workspace/github/obora-kit/sandbox/19-longrun-paper-verification-loop/output/final/03-repaired-paper-verification.md,
-        and /Users/denovo/workspace/github/obora-kit/sandbox/19-longrun-paper-verification-loop/output/final/04-final-paper-validation.md.
+        Read whichever exists first:
+        - /Users/denovo/workspace/github/obora-kit/sandbox/19-longrun-paper-verification-loop/output/final/03-repaired-paper-verification.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/19-longrun-paper-verification-loop/output/final/01-paper-verification.md
+        Read whichever exists first:
+        - /Users/denovo/workspace/github/obora-kit/sandbox/19-longrun-paper-verification-loop/output/final/04-final-paper-validation.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/19-longrun-paper-verification-loop/output/final/02-paper-validation.md
 
         Write /Users/denovo/workspace/github/obora-kit/sandbox/19-longrun-paper-verification-loop/output/archive/40-paper-verification-loop-note.md.
 
@@ -140,5 +127,6 @@ steps:
           1. Summary of Verification Loop
           2. Final Paper Verification Result
           3. Reuse Notes
-        - Summarize the initial FAIL state, the Claim 3 evidence remediation, and the final PASS state.
+        - Summarize the initial FAIL state, the validator-driven evidence remediation, and the final PASS state.
         - Reuse Notes should explain that this sandbox demonstrates a minimal paper verification remediation loop against vendored excerpts, not full paper reproduction.
+        - Describe the workflow honestly as a runtime-native verify_or_repair <-> validate_paper_verification loop.

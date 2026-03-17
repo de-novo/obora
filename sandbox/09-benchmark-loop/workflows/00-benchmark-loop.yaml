@@ -1,70 +1,62 @@
 name: benchmark-loop
 version: "1.0"
 steps:
-  - name: solve-initial
+  - name: solve_or_repair
     agent: solver
+    config:
+      repair_loop:
+        enabled: true
+        validation_step: judge
+        max_no_progress_iterations: 1
+        repeated_critical_issue_ceiling: 1
     tools: [file_read, file_write]
     input:
       task: |
         Read /Users/denovo/workspace/github/obora-kit/sandbox/09-benchmark-loop/input/problem.md.
-        Do not read the reference answer.
-        Write /Users/denovo/workspace/github/obora-kit/sandbox/09-benchmark-loop/output/final/01-attempt.md.
 
-        Requirements:
+        If this is the first attempt:
+        - Do not read the reference answer.
+        - Write /Users/denovo/workspace/github/obora-kit/sandbox/09-benchmark-loop/output/final/01-attempt.md.
         - Include exactly these top-level sections:
           1. Answer
           2. Reasoning
         - Intentionally provide an incorrect final answer of 8 so the first benchmark verdict fails.
 
-  - name: judge-initial
-    agent: judge
-    depends_on: [solve-initial]
-    tools: [file_read, file_write]
-    input:
-      task: |
-        Read /Users/denovo/workspace/github/obora-kit/sandbox/09-benchmark-loop/input/problem.md,
-        /Users/denovo/workspace/github/obora-kit/sandbox/09-benchmark-loop/input/reference-answer.md,
-        and /Users/denovo/workspace/github/obora-kit/sandbox/09-benchmark-loop/output/final/01-attempt.md.
-
-        Write /Users/denovo/workspace/github/obora-kit/sandbox/09-benchmark-loop/output/final/02-verdict.md.
-
-        Requirements:
-        - Include exactly these top-level sections:
-          1. Verdict
-          2. Score
-          3. Correctness
-          4. Feedback
-        - Verdict must clearly say FAIL.
-
-  - name: repair-attempt
-    agent: solver
-    depends_on: [judge-initial]
-    tools: [file_read, file_write]
-    input:
-      task: |
-        Read /Users/denovo/workspace/github/obora-kit/sandbox/09-benchmark-loop/input/problem.md,
-        /Users/denovo/workspace/github/obora-kit/sandbox/09-benchmark-loop/input/reference-answer.md,
-        and /Users/denovo/workspace/github/obora-kit/sandbox/09-benchmark-loop/output/final/02-verdict.md.
-
-        Write /Users/denovo/workspace/github/obora-kit/sandbox/09-benchmark-loop/output/final/03-repaired-attempt.md.
-
-        Requirements:
-        - Include exactly these top-level sections:
+        If this is a repair attempt:
+        - Also read /Users/denovo/workspace/github/obora-kit/sandbox/09-benchmark-loop/input/reference-answer.md.
+        - Also read whichever of these files exist:
+          - /Users/denovo/workspace/github/obora-kit/sandbox/09-benchmark-loop/output/final/02-verdict.md
+          - /Users/denovo/workspace/github/obora-kit/sandbox/09-benchmark-loop/output/final/01-attempt.md
+        - Use the injected repair context, especially latestValidation.failedChecks.
+        - Repair only the issues identified by the latest judge result.
+        - Write /Users/denovo/workspace/github/obora-kit/sandbox/09-benchmark-loop/output/final/03-repaired-attempt.md.
+        - Keep exactly these top-level sections:
           1. Answer
           2. Reasoning
-        - Fix the answer so it is correct.
+        - Do not follow a fixed scripted repair story.
 
-  - name: judge-repaired
+  - name: judge
     agent: judge
-    depends_on: [repair-attempt]
+    depends_on: [solve_or_repair]
+    config:
+      validation:
+        enabled: true
+        emit_structured_result: true
+    on_fail:
+      goto: solve_or_repair
+      max_iterations: 1
     tools: [file_read, file_write]
     input:
       task: |
         Read /Users/denovo/workspace/github/obora-kit/sandbox/09-benchmark-loop/input/problem.md,
         /Users/denovo/workspace/github/obora-kit/sandbox/09-benchmark-loop/input/reference-answer.md,
-        and /Users/denovo/workspace/github/obora-kit/sandbox/09-benchmark-loop/output/final/03-repaired-attempt.md.
+        and whichever exists first:
+        - /Users/denovo/workspace/github/obora-kit/sandbox/09-benchmark-loop/output/final/03-repaired-attempt.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/09-benchmark-loop/output/final/01-attempt.md
 
-        Write /Users/denovo/workspace/github/obora-kit/sandbox/09-benchmark-loop/output/final/04-final-verdict.md.
+        Write a human-readable judge report:
+        - if judging the first attempt, write /Users/denovo/workspace/github/obora-kit/sandbox/09-benchmark-loop/output/final/02-verdict.md
+        - if judging the repaired attempt, write /Users/denovo/workspace/github/obora-kit/sandbox/09-benchmark-loop/output/final/04-final-verdict.md
 
         Requirements:
         - Include exactly these top-level sections:
@@ -72,15 +64,34 @@ steps:
           2. Score
           3. Correctness
           4. Feedback
-        - Verdict must clearly say PASS.
+        - If the answer is still incorrect, Verdict must clearly say FAIL and Feedback must direct solve_or_repair to fix the concrete mismatch.
+        - If the answer is correct, Verdict must clearly say PASS and Feedback must confirm the attempt is ready for archive.
+
+        After writing the report, your assistant response must be ONLY a strict ValidationResult JSON object.
+        Do not include markdown fences.
+        Do not include prose before or after the JSON.
+
+        Return this exact shape:
+        {
+          "passed": boolean,
+          "summary": "string",
+          "failedChecks": [{ "name": "string", "message": "string" }],
+          "signature": "stable-signature"
+        }
 
   - name: archive-benchmark-loop
     agent: archivist
-    depends_on: [judge-repaired]
+    depends_on: [judge]
     tools: [file_read, file_write]
     input:
       task: |
-        Read /Users/denovo/workspace/github/obora-kit/sandbox/09-benchmark-loop/output/final/03-repaired-attempt.md and /Users/denovo/workspace/github/obora-kit/sandbox/09-benchmark-loop/output/final/04-final-verdict.md.
+        Read whichever exists first:
+        - /Users/denovo/workspace/github/obora-kit/sandbox/09-benchmark-loop/output/final/03-repaired-attempt.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/09-benchmark-loop/output/final/01-attempt.md
+        Read whichever exists first:
+        - /Users/denovo/workspace/github/obora-kit/sandbox/09-benchmark-loop/output/final/04-final-verdict.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/09-benchmark-loop/output/final/02-verdict.md
+
         Write /Users/denovo/workspace/github/obora-kit/sandbox/09-benchmark-loop/output/archive/40-benchmark-loop-archive-note.md.
 
         Requirements:
@@ -88,3 +99,4 @@ steps:
           1. Summary of Attempt
           2. Benchmark Result
           3. Reuse Notes
+        - Describe the loop honestly as a runtime-native solve_or_repair <-> judge cycle controlled by the judge result.

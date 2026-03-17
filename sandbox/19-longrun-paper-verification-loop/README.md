@@ -2,14 +2,15 @@
 
 > 상태: **active / canonical step 19**
 >
-> 이 sandbox는 step 18의 minimal real-paper claim verification 패턴을 확장해, 같은 vendored LoRA fixture만으로 초기 불충분 보고서를 검증하고 remediation한 뒤 최종 PASS까지 닫는 canonical long-running verification loop 기준점입니다.
+> 이 sandbox는 step 18의 minimal real-paper claim verification 패턴 위에 `verify_or_repair <-> validate_paper_verification` back-edge를 올려, 같은 vendored fixture만으로 evidence gap을 메우는 canonical honest long-running verification loop 기준점입니다.
 
 ## 목적
 
 - long-running runner(watchdog + large safety ceiling)를 사용한다
 - step 18과 같은 vendored real-paper fixture만 사용한다
 - 초기 verification report를 의도적으로 불충분하게 작성해 validation FAIL을 만든다
-- 같은 fixture만으로 verification report를 repair한다
+- FAIL이면 runtime이 `verify_or_repair`로 되돌아간다
+- 같은 fixture만으로 latest validation이 지적한 evidence gap을 repair한다
 - 최종 validation PASS와 archive note까지 생성한다
 
 ## 입력
@@ -47,12 +48,12 @@ sandbox/19-longrun-paper-verification-loop/verify.sh --fresh
 - workflow가 `completed`로 끝난다
 - watchdog wrapper를 통해 실행된다
 - 초기 verification report가 요구된 5개 top-level section을 모두 포함한다
+- `verify_or_repair`와 `validate_paper_verification`이 실제로 두 번 이상 실행된다
 - 초기 validation report가 요구된 4개 top-level section을 포함하고 `FAIL`을 명시한다
 - repaired verification report가 모든 claim의 evidence coverage를 보강한다
 - final validation report가 `PASS`를 명시한다
 - archive note가 요구된 3개 top-level section을 모두 포함한다
 - 결과는 sandbox-local vendored paper fixture만을 근거로 서술된다
-
 
 ## 워크플로우 그래프 (ASCII)
 
@@ -62,44 +63,20 @@ sandbox/19-longrun-paper-verification-loop/verify.sh --fresh
 +-------------------+
     |
     v
-+----------------+
-| paper metadata |
-| + excerpts     |
-| + claims       |
-+----------------+
-    |
-    v
-+----------------------+
-| initial verification |
-| report               |
-+----------------------+
-    |
-    v
-+------------+
-| validation |
-| FAIL       |
-+------------+
-    |
-    v
-+-------------------+
-| repair using same |
-| paper fixture     |
-+-------------------+
-    |
-    v
-+-----------------------+
-| repaired verification |
-| report                |
-+-----------------------+
-    |
-    v
 +------------------+
-| final validation |
-| PASS             |
+| verify_or_repair |
 +------------------+
     |
     v
-+---------+
-| archive |
-+---------+
++-----------------------------+
+| validate_paper_verification |
++-----------------------------+
+    | FAIL                              PASS
+    |                                   |
+    +----------- back-edge -------------+
+    |   repair latest evidence gaps
+    v
++--------------------------+
+| archive-paper-verification |
++--------------------------+
 ```

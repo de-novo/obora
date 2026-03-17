@@ -2,21 +2,25 @@
 
 > 상태: **active / canonical step 13**
 >
-> 이 sandbox는 long-running runner 위에서 benchmark attempt가 처음엔 실패하고, judge feedback을 반영해 repair한 뒤 최종 PASS로 끝나는 canonical sandbox입니다.
+> 이 sandbox는 long-running runner 위에서 `solve_or_repair <-> judge` back-edge가 실제 judge 결과로 제어되는 canonical honest benchmark loop입니다.
 
 ## 목적
+
 - long-running runner(watchdog + large safety ceiling)를 사용한다
 - solver와 judge 역할을 분리한다
 - 첫 attempt는 의도적으로 FAIL verdict를 받는다
-- repair step이 judge feedback을 반영해 attempt를 수정한다
-- re-judge가 PASS verdict를 만든다
+- FAIL이면 runtime이 `solve_or_repair`로 되돌아간다
+- repaired attempt는 latest judge feedback으로 수정된다
+- PASS verdict 뒤에만 archive가 실행된다
 - 최종 결과를 archive note로 남긴다
 
 ## 입력
+
 - `input/problem.md`
 - `input/reference-answer.md`
 
 ## 출력
+
 - `output/final/01-attempt.md`
 - `output/final/02-verdict.md`
 - `output/final/03-repaired-attempt.md`
@@ -26,6 +30,7 @@
 - `output/iterations/logs/run.tail.log`
 
 ## 실행
+
 ```bash
 # existing outputs 검증
 sandbox/13-longrun-benchmark-loop/verify.sh
@@ -38,13 +43,13 @@ sandbox/13-longrun-benchmark-loop/verify.sh --fresh
 ```
 
 ## 성공 기준
+
 - workflow가 `completed`로 끝난다
 - watchdog wrapper를 통해 실행된다
+- `solve_or_repair`와 `judge`가 실제로 두 번 이상 실행된다
 - 첫 verdict는 FAIL이다
-- repaired attempt가 생성된다
 - 최종 verdict는 PASS다
 - archive note가 생성된다
-
 
 ## 워크플로우 그래프 (ASCII)
 
@@ -54,26 +59,17 @@ sandbox/13-longrun-benchmark-loop/verify.sh --fresh
 +-------------------+
     |
     v
-+---------------+
-| solve initial |
-+---------------+
++-----------------+
+| solve_or_repair |
++-----------------+
     |
     v
-+---------------+
-| judge initial |
-| FAIL          |
-+---------------+
-    |
-    v
-+--------+
-| repair |
-+--------+
-    |
-    v
-+----------------+
-| judge repaired |
-| PASS           |
-+----------------+
++-------+
+| judge |
++-------+
+    | FAIL          PASS
+    |               |
+    +-- back-edge --+
     |
     v
 +---------+

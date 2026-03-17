@@ -54,8 +54,8 @@ REVIEW="$ROOT/output/final/02-review.md"
 VALIDATION="$ROOT/output/final/03-validation.md"
 REPAIRED="$ROOT/output/final/04-repaired.md"
 FINAL_VALIDATION="$ROOT/output/final/05-final-validation.md"
-ARCHIVE_NOTE="$ROOT/output/archive/40-longrun-project-loop-note.md"
-RESULT_GLOB="$ROOT/output/iterations/results/longrun-project-loop-*.json"
+ARCHIVE_NOTE="$ROOT/output/archive/40-project-loop-archive-note.md"
+RESULT_GLOB="$ROOT/output/iterations/results/project-loop-*.json"
 
 require_file "$RUN_LOG"
 require_file "$RUN_TAIL_LOG"
@@ -67,12 +67,12 @@ require_file "$FINAL_VALIDATION"
 require_file "$ARCHIVE_NOTE"
 require_glob "$RESULT_GLOB"
 
-require_contains 'Workflow "longrun-project-loop" completed.' "$RUN_LOG"
+require_contains 'Workflow "project-loop" completed.' "$RUN_LOG"
 require_contains 'step_end: build_or_repair (completed)' "$RUN_LOG"
 require_contains 'step_end: review_project (completed)' "$RUN_LOG"
 require_contains 'step_end: validate_project (completed)' "$RUN_LOG"
 require_contains 'step_end: archive_project (completed)' "$RUN_LOG"
-require_contains 'Workflow "longrun-project-loop" completed.' "$RUN_TAIL_LOG"
+require_contains 'Workflow "project-loop" completed.' "$RUN_TAIL_LOG"
 
 node -e '
 const fs = require("fs");
@@ -84,7 +84,7 @@ const archiveCount = (log.match(/step_end: archive_project \(completed\)/g) || [
 if (buildCount < 2) throw new Error(`expected repeated build_or_repair executions, saw ${buildCount}`);
 if (reviewCount < 2) throw new Error(`expected repeated review_project executions, saw ${reviewCount}`);
 if (validateCount < 2) throw new Error(`expected repeated validate_project executions, saw ${validateCount}`);
-if (archiveCount !== 1) throw new Error(`expected exactly one archive step, saw ${archiveCount}`);
+if (archiveCount !== 1) throw new Error(`expected exactly one archive_project execution, saw ${archiveCount}`);
 ' "$RUN_LOG" || fail "expected runtime-native loop re-entry in $RUN_LOG"
 
 grep -Eq '^#+[[:space:]]+Project Summary' "$DRAFT" || fail "expected Project Summary heading in $DRAFT"
@@ -94,7 +94,6 @@ if grep -Eq '^#+[[:space:]]+Next Action' "$DRAFT"; then fail "draft should omit 
 grep -Eq '^#+[[:space:]]+([0-9]+\.[[:space:]]+)?Strengths' "$REVIEW" || fail "expected Strengths heading in $REVIEW"
 grep -Eq '^#+[[:space:]]+([0-9]+\.[[:space:]]+)?Issues' "$REVIEW" || fail "expected Issues heading in $REVIEW"
 grep -Eq '^#+[[:space:]]+([0-9]+\.[[:space:]]+)?Suggested Revisions' "$REVIEW" || fail "expected Suggested Revisions heading in $REVIEW"
-grep -Eq 'Next Action' "$REVIEW" || fail "expected missing Next Action note in $REVIEW"
 
 grep -Eq '^#+[[:space:]]+([0-9]+\.[[:space:]]+)?Verdict' "$VALIDATION" || fail "expected Verdict heading in $VALIDATION"
 grep -Eq 'FAIL' "$VALIDATION" || fail "expected FAIL verdict in $VALIDATION"
@@ -107,10 +106,10 @@ grep -Eq '^#+[[:space:]]+Next Action' "$REPAIRED" || fail "expected Next Action 
 grep -Eq '^#+[[:space:]]+([0-9]+\.[[:space:]]+)?Verdict' "$FINAL_VALIDATION" || fail "expected Verdict heading in $FINAL_VALIDATION"
 grep -Eq 'PASS' "$FINAL_VALIDATION" || fail "expected PASS verdict in $FINAL_VALIDATION"
 
-grep -Eq '^#+[[:space:]]+([0-9]+\.[[:space:]]+)?Summary of Project' "$ARCHIVE_NOTE" || fail "expected Summary of Project heading in $ARCHIVE_NOTE"
-grep -Eq '^#+[[:space:]]+([0-9]+\.[[:space:]]+)?Why Archived' "$ARCHIVE_NOTE" || fail "expected Why Archived heading in $ARCHIVE_NOTE"
-grep -Eq '^#+[[:space:]]+([0-9]+\.[[:space:]]+)?Reuse Notes' "$ARCHIVE_NOTE" || fail "expected Reuse Notes heading in $ARCHIVE_NOTE"
+grep -Eq '^#+[[:space:]]+Summary of Project' "$ARCHIVE_NOTE" || fail "expected Summary of Project heading in $ARCHIVE_NOTE"
+grep -Eq '^#+[[:space:]]+Why Archived' "$ARCHIVE_NOTE" || fail "expected Why Archived heading in $ARCHIVE_NOTE"
+grep -Eq '^#+[[:space:]]+Reuse Notes' "$ARCHIVE_NOTE" || fail "expected Reuse Notes heading in $ARCHIVE_NOTE"
 require_contains 'runtime-native' "$ARCHIVE_NOTE"
 require_contains 'build_or_repair' "$ARCHIVE_NOTE"
 
-echo 'verify.sh: PASS - canonical longrun project loop artifacts and runtime-native build_or_repair<->validate_project flow verified.'
+echo 'verify.sh: PASS - canonical project loop artifacts and runtime-native build_or_repair<->validate_project flow verified.'

@@ -1,15 +1,39 @@
-# Final Validation Report
+# Validation Report: 15-Longrun Project Loop (Repaired)
 
-## Verdict
-**PASS** - The repaired project document meets all checklist criteria.
+**Candidate Document:** `/output/final/04-repaired.md`  
+**Validation Date:** 2026-03-17
 
-## Passed Checks
-1. ✓ **Contains Project Summary** - Section present with clear description of sandbox purpose and lifecycle demonstration
-2. ✓ **Contains Scope** - Section present with explicit "In Scope" and "Out of Scope" items
-3. ✓ **Contains Next Action** - Section present specifying immediate next steps (final validation and archive generation)
+---
 
-## Failed Checks
-None - All required sections are present and properly structured.
+## 1. Verdict
 
-## Next Action
-Proceed to archive generation to capture the complete remediation loop as reusable documentation artifacts.
+**PASS**
+
+The repaired candidate document satisfies all required checklist criteria. All three mandatory sections are present and contain substantive content aligned with the project brief.
+
+---
+
+## 2. Passed Checks
+
+| # | Checklist Item | Status | Evidence |
+|---|----------------|--------|----------|
+| 1 | Contains Project Summary | ✅ PASS | Section "Project Summary" present with clear description of sandbox purpose and remediation loop objectives |
+| 2 | Contains Scope | ✅ PASS | Section "Scope" present with structured objectives, inclusion boundaries, and exclusion boundaries |
+| 3 | Contains Next Action | ✅ PASS | Section "Next Action" present with executable step describing the remediation loop demonstration |
+
+---
+
+## 3. Failed Checks
+
+**None.** All checklist items passed validation.
+
+---
+
+## 4. Next Action
+
+The candidate document has passed validation. The **archive** step can now run to finalize the project and generate the archive note.
+
+---
+
+**Validation Complete**  
+**Document Status:** Ready for archival

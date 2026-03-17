@@ -1,27 +1,54 @@
 name: longrun-project-loop
 version: "1.0"
 steps:
-  - name: draft-project
+  - name: build_or_repair
     agent: writer
+    config:
+      repair_loop:
+        enabled: true
+        validation_step: validate_project
+        max_no_progress_iterations: 1
+        repeated_critical_issue_ceiling: 1
     tools: [file_read, file_write]
     input:
       task: |
         Read /Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/input/brief.md.
-        Write /Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/01-draft.md.
 
-        Requirements:
+        If this is the first attempt, write /Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/01-draft.md.
+
+        First-attempt requirements:
         - The draft must contain exactly these top-level sections:
           1. Project Summary
           2. Scope
         - Intentionally omit Next Action so the first validation fails.
 
-  - name: review-project
+        If this is a repair attempt, also read whichever of these files exist:
+        - /Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/02-review.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/03-validation.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/01-draft.md
+
+        Repair-attempt requirements:
+        - Use the injected repair context, especially attempt, latestValidation, and previousValidationResults, when present.
+        - Repair only the issues identified by the latest validation result.
+        - Do not follow a fixed scripted stage narrative.
+        - Write /Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/04-repaired.md.
+        - The repaired document must contain exactly these top-level sections:
+          1. Project Summary
+          2. Scope
+          3. Next Action
+        - Preserve already valid content and fix the latest failed checks.
+
+  - name: review_project
     agent: reviewer
-    depends_on: [draft-project]
+    depends_on: [build_or_repair]
     tools: [file_read, file_write]
     input:
       task: |
-        Read /Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/input/brief.md and /Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/01-draft.md.
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/input/brief.md.
+        Read whichever exists first:
+        - /Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/04-repaired.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/01-draft.md
+
         Write /Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/02-review.md.
 
         Requirements:
@@ -29,21 +56,36 @@ steps:
           1. Strengths
           2. Issues
           3. Suggested Revisions
-        - Explicitly mention that Next Action is missing.
+        - If the candidate still lacks Next Action, explicitly mention that gap.
+        - If the candidate already includes Next Action, explicitly say there are no remaining blocking checklist gaps.
+        - This review is advisory context only; do not claim that it controls loop termination.
 
-  - name: validate-project
+  - name: validate_project
     agent: validator
-    depends_on: [review-project]
+    depends_on: [review_project]
+    config:
+      validation:
+        enabled: true
+        emit_structured_result: true
+    on_fail:
+      goto: build_or_repair
+      max_iterations: 1
     tools: [file_read, file_write]
     input:
       task: |
-        Read /Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/01-draft.md and /Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/02-review.md.
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/02-review.md.
+        Read whichever exists first:
+        - /Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/04-repaired.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/01-draft.md
+
         Validate against this checklist:
         - contains Project Summary
         - contains Scope
         - contains Next Action
 
-        Write /Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/03-validation.md.
+        Write a human-readable validation report:
+        - if validating the first attempt, write /Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/03-validation.md
+        - if validating the repaired attempt, write /Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/05-final-validation.md
 
         Requirements:
         - Include exactly these top-level sections:
@@ -51,53 +93,35 @@ steps:
           2. Passed Checks
           3. Failed Checks
           4. Next Action
-        - Verdict must clearly say FAIL.
+        - If the candidate still misses checklist items, Verdict must clearly say FAIL and Next Action must direct build_or_repair to fix the latest failed checks.
+        - If the candidate satisfies the checklist, Verdict must clearly say PASS and Next Action must say archive can run.
 
-  - name: repair-project
-    agent: writer
-    depends_on: [validate-project]
-    tools: [file_read, file_write]
-    input:
-      task: |
-        Read /Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/01-draft.md and /Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/03-validation.md.
-        Write /Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/04-repaired.md.
+        After writing the report, your assistant response must be ONLY a strict ValidationResult JSON object.
+        Do not include markdown fences.
+        Do not include prose before or after the JSON.
 
-        Requirements:
-        - Include exactly these top-level sections:
-          1. Project Summary
-          2. Scope
-          3. Next Action
-        - Fix the validation failure.
+        Return this exact shape:
+        {
+          "passed": boolean,
+          "summary": "string",
+          "failedChecks": [{ "name": "string", "message": "string" }],
+          "signature": "stable-signature"
+        }
 
-  - name: validate-repaired-project
-    agent: validator
-    depends_on: [repair-project]
-    tools: [file_read, file_write]
-    input:
-      task: |
-        Read /Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/04-repaired.md.
-        Validate against this checklist:
-        - contains Project Summary
-        - contains Scope
-        - contains Next Action
-
-        Write /Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/05-final-validation.md.
-
-        Requirements:
-        - Include exactly these top-level sections:
-          1. Verdict
-          2. Passed Checks
-          3. Failed Checks
-          4. Next Action
-        - Verdict must clearly say PASS.
-
-  - name: archive-project
+  - name: archive_project
     agent: archivist
-    depends_on: [validate-repaired-project]
+    depends_on: [validate_project]
     tools: [file_read, file_write]
     input:
       task: |
-        Read /Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/04-repaired.md and /Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/05-final-validation.md.
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/02-review.md.
+        Read whichever exists first:
+        - /Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/04-repaired.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/01-draft.md
+        Read whichever exists first:
+        - /Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/05-final-validation.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/03-validation.md
+
         Write /Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/archive/40-longrun-project-loop-note.md.
 
         Requirements:
@@ -105,3 +129,5 @@ steps:
           1. Summary of Project
           2. Why Archived
           3. Reuse Notes
+        - Describe the workflow honestly as a runtime-native project loop where validate_project can send control back to build_or_repair.
+        - Do not present the run as a fixed scripted draft -> review -> repair sequence.

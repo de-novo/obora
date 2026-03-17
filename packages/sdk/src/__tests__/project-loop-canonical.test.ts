@@ -4,17 +4,14 @@ import { fileURLToPath } from "node:url";
 import { Workflow } from "../workflow.js";
 
 const WORKFLOW_PATH = fileURLToPath(
-  new URL(
-    "../../../../sandbox/15-longrun-project-loop/workflows/00-longrun-project-loop.yaml",
-    import.meta.url
-  )
+  new URL("../../../../sandbox/07-project-loop/workflows/00-project-loop.yaml", import.meta.url)
 );
 
-describe("canonical sandbox 15 longrun-project-loop", () => {
-  it("preserves the longrun runtime-native project loop workflow contract", async () => {
+describe("canonical sandbox 07 project-loop", () => {
+  it("preserves the runtime-native project loop contract", async () => {
     const workflow = await Workflow.fromYaml(WORKFLOW_PATH);
 
-    expect(workflow.name).toBe("longrun-project-loop");
+    expect(workflow.name).toBe("project-loop");
     expect(workflow.steps).toHaveLength(4);
 
     expect(workflow.steps[0]).toMatchObject({ name: "build_or_repair", agent: "writer" });
@@ -40,9 +37,11 @@ describe("canonical sandbox 15 longrun-project-loop", () => {
     const validationTask = String(workflow.steps[2]?.input?.task ?? "");
     const archiveTask = String(workflow.steps[3]?.input?.task ?? "");
 
-    expect(buildTask).toContain("Intentionally omit Next Action so the first validation fails.");
+    expect(buildTask).toContain("If this is the first attempt");
     expect(buildTask).toContain("Use the injected repair context");
+    expect(buildTask).toContain("Do not follow a fixed scripted stage narrative.");
     expect(reviewTask).toContain("This review is advisory context only");
+    expect(validationTask).toContain('"passed": boolean');
     expect(validationTask).toContain("Next Action must direct build_or_repair");
     expect(archiveTask).toContain("runtime-native project loop");
   });

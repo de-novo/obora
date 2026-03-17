@@ -131,7 +131,7 @@ README에는 반드시 아래가 있어야 한다.
 
 ### 07 — project loop
 
-- primitive: project lifecycle 안의 remediation loop
+- primitive: project lifecycle 안의 runtime-native build_or_repair/validate remediation loop
 
 ### 08 — benchmark mini
 
@@ -139,7 +139,7 @@ README에는 반드시 아래가 있어야 한다.
 
 ### 09 — benchmark loop
 
-- primitive: fail → repair → re-judge → archive
+- primitive: runtime-native solve_or_repair/judge remediation loop
 
 ### 10 — longrun mini
 
@@ -155,7 +155,7 @@ README에는 반드시 아래가 있어야 한다.
 
 ### 13 — longrun benchmark loop
 
-- primitive: long-running runner + benchmark fail → repair → pass loop
+- primitive: long-running runner + runtime-native solve_or_repair/judge loop
 
 ### 14 — longrun project mini
 
@@ -163,7 +163,7 @@ README에는 반드시 아래가 있어야 한다.
 
 ### 15 — longrun project loop
 
-- primitive: long-running runner + project fail → repair → pass loop
+- primitive: long-running runner + runtime-native build_or_repair/validate loop
 
 ### 16 — multi-run comparison mini
 
@@ -171,7 +171,7 @@ README에는 반드시 아래가 있어야 한다.
 
 ### 17 — multi-run comparison loop
 
-- primitive: multi-run comparison + explicit validation fail + targeted remediation + final pass
+- primitive: multi-run comparison baseline + runtime-native compare_or_repair/validate loop with targeted remediation
 
 ### 18 — longrun paper verification mini
 
@@ -179,7 +179,7 @@ README에는 반드시 아래가 있어야 한다.
 
 ### 19 — longrun paper verification loop
 
-- primitive: long-running runner + paper verification validation/repair loop against the same vendored fixture + archive
+- primitive: long-running runner + runtime-native verify_or_repair/validate loop against the same vendored fixture + archive
 
 ### 20 — longrun feedback convergence loop
 

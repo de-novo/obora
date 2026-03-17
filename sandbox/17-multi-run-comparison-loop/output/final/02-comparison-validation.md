@@ -1,21 +1,23 @@
-# Comparison Validation
+# Comparison Validation Report
 
-## Verdict
+## 1. Verdict
 
-FAIL
+**FAIL** — The initial comparison is not acceptable for archive. One run (run-2) failed evaluation against the reference answer.
 
-## Passed Checks
+## 2. Passed Checks
 
-- ✓ includes Overall Result — Present as "PARTIAL"
-- ✓ includes Per-Run Snapshot — Table with all three runs
-- ✓ includes Pass Rate — Listed as 2/3 (66.67%)
-- ✓ not all runs passed — run-2 failed with incorrect answer of 14
-- ✓ repair is still required — Only 2 of 3 runs passed; at least one run still fails
+- ✓ Includes Overall Result section
+- ✓ Includes Per-Run Snapshot section
+- ✓ Includes Pass Rate section (66.67%)
+- ✓ Every listed run is evaluated against the reference answer:
+  - run-1: PASS (answer 15 matches reference)
+  - run-2: FAIL (answer 14 does not match reference 15)
+  - run-3: PASS (answer 15 matches reference)
 
-## Failed Checks
+## 3. Failed Checks
 
-- At least one run still fails: run-2 produced an incorrect answer of 14 instead of the correct answer of 15. With only 2/3 runs passing (66.67% pass rate), the comparison cannot be accepted until all runs pass.
+- ✗ Not all listed runs passed — **run-2** failed with incorrect answer (14 instead of 15)
 
-## Next Action
+## 4. Next Action
 
-Repair run-2 and compare again. The workflow must re-execute run-2 to produce the correct answer of 15, then re-run the comparison to verify all three runs pass before the comparison can be accepted.
+Direct **compare_or_repair** to fix only **run-2** and recompute the comparison. The other runs (run-1 and run-3) are already passing and should not be modified.

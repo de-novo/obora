@@ -4,17 +4,14 @@ import { fileURLToPath } from "node:url";
 import { Workflow } from "../workflow.js";
 
 const WORKFLOW_PATH = fileURLToPath(
-  new URL(
-    "../../../../sandbox/13-longrun-benchmark-loop/workflows/00-longrun-benchmark-loop.yaml",
-    import.meta.url
-  )
+  new URL("../../../../sandbox/09-benchmark-loop/workflows/00-benchmark-loop.yaml", import.meta.url)
 );
 
-describe("canonical sandbox 13 longrun-benchmark-loop", () => {
-  it("preserves the longrun runtime-native benchmark loop workflow contract", async () => {
+describe("canonical sandbox 09 benchmark-loop", () => {
+  it("preserves the runtime-native benchmark loop contract", async () => {
     const workflow = await Workflow.fromYaml(WORKFLOW_PATH);
 
-    expect(workflow.name).toBe("longrun-benchmark-loop");
+    expect(workflow.name).toBe("benchmark-loop");
     expect(workflow.steps).toHaveLength(3);
 
     expect(workflow.steps[0]).toMatchObject({ name: "solve_or_repair", agent: "solver" });
@@ -25,7 +22,7 @@ describe("canonical sandbox 13 longrun-benchmark-loop", () => {
       on_fail: { goto: "solve_or_repair", max_iterations: 1 },
     });
     expect(workflow.steps[2]).toMatchObject({
-      name: "archive-longrun-benchmark-loop",
+      name: "archive-benchmark-loop",
       agent: "archivist",
       depends_on: ["judge"],
     });
@@ -34,10 +31,10 @@ describe("canonical sandbox 13 longrun-benchmark-loop", () => {
     const judgeTask = String(workflow.steps[1]?.input?.task ?? "");
     const archiveTask = String(workflow.steps[2]?.input?.task ?? "");
 
-    expect(solveTask).toContain("Intentionally provide an incorrect answer of 10");
+    expect(solveTask).toContain("Intentionally provide an incorrect final answer of 8");
     expect(solveTask).toContain("Use the injected repair context");
-    expect(judgeTask).toContain('"signature": "stable-signature"');
-    expect(judgeTask).toContain("If the answer is correct, Verdict must clearly say PASS");
-    expect(archiveTask).toContain("runtime-native solve_or_repair <-> judge loop");
+    expect(judgeTask).toContain('"failedChecks": [{ "name": "string", "message": "string" }]');
+    expect(judgeTask).toContain("If the answer is still incorrect");
+    expect(archiveTask).toContain("runtime-native solve_or_repair <-> judge");
   });
 });
