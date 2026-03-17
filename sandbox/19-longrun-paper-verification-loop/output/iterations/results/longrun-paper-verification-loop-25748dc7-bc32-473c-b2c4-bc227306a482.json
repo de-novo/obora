@@ -1,0 +1,115 @@
+{
+  "id": "25748dc7-bc32-473c-b2c4-bc227306a482",
+  "workflowName": "longrun-paper-verification-loop",
+  "status": "completed",
+  "startedAt": "2026-03-17T07:47:03.825Z",
+  "stepOrder": [
+    "verify-paper-claims-initial",
+    "validate-paper-verification",
+    "repair-paper-verification",
+    "validate-repaired-paper-verification",
+    "archive-paper-verification"
+  ],
+  "completedSteps": [
+    "verify-paper-claims-initial",
+    "validate-paper-verification",
+    "repair-paper-verification",
+    "validate-repaired-paper-verification",
+    "archive-paper-verification"
+  ],
+  "stepRecords": {
+    "verify-paper-claims-initial": {
+      "output": "I have created the initial paper claim verification report at the specified output path. The report:\n\n1. **Includes all five required sections** with H1 headings (no numbering, no extra title)\n2. **Verifies exactly the four listed claims** against the vendored excerpts\n3. **Marked each claim** as SUPPORTED (1, 2, 4) or PARTIAL (3)\n4. **Cited excerpt IDs** for Claims 1, 2, and 4 (Excerpt A, Excerpt B, Excerpts C and E respectively)\n5. **Left Claim 3 incomplete** as required: marked PARTIAL with only general description, no specific excerpt IDs cited\n6. **Evidence Notes section** includes notes only for Claims 1, 2, and 4 (no dedicated note for Claim 3)\n7. **Final Verdict** clearly states the report is not yet sufficient for acceptance and needs remediation\n\nAll content is grounded exclusively in the provided vendored fixture with no external knowledge or assumptions.",
+      "raw": {
+        "id": "zai-glm-5-1773733674468",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "I have created the initial paper claim verification report at the specified output path. The report:\n\n1. **Includes all five required sections** with H1 headings (no numbering, no extra title)\n2. **Verifies exactly the four listed claims** against the vendored excerpts\n3. **Marked each claim** as SUPPORTED (1, 2, 4) or PARTIAL (3)\n4. **Cited excerpt IDs** for Claims 1, 2, and 4 (Excerpt A, Excerpt B, Excerpts C and E respectively)\n5. **Left Claim 3 incomplete** as required: marked PARTIAL with only general description, no specific excerpt IDs cited\n6. **Evidence Notes section** includes notes only for Claims 1, 2, and 4 (no dedicated note for Claim 3)\n7. **Final Verdict** clearly states the report is not yet sufficient for acceptance and needs remediation\n\nAll content is grounded exclusively in the provided vendored fixture with no external knowledge or assumptions."
+        },
+        "usage": {
+          "promptTokens": 627,
+          "completionTokens": 215,
+          "totalTokens": 2826
+        },
+        "finishReason": "stop"
+      }
+    },
+    "validate-paper-verification": {
+      "output": "I have created the validation report at the specified output path. The validation:\n\n1. **Verdict**: FAIL (as required)\n\n2. **Passed Checks**: Confirms the report includes all five required sections, properly assesses Claims 1, 2, and 4 with SUPPORTED verdicts and concrete excerpt mappings, and includes Evidence Notes for those three claims\n\n3. **Failed Checks**: Explicitly identifies Claim 3 as having insufficient concrete excerpt mapping (no specific excerpt IDs cited, only general description), missing dedicated Evidence Notes entry, and incomplete traceability compared to other claims\n\n4. **Next Action**: Directs the workflow to repair the report by completing Claim 3 with concrete excerpt IDs and adding a dedicated Evidence Notes entry, using only the same vendored fixture\n\nAll requirements have been met with no extra sections or title.",
+      "raw": {
+        "id": "zai-glm-5-1773733706924",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "I have created the validation report at the specified output path. The validation:\n\n1. **Verdict**: FAIL (as required)\n\n2. **Passed Checks**: Confirms the report includes all five required sections, properly assesses Claims 1, 2, and 4 with SUPPORTED verdicts and concrete excerpt mappings, and includes Evidence Notes for those three claims\n\n3. **Failed Checks**: Explicitly identifies Claim 3 as having insufficient concrete excerpt mapping (no specific excerpt IDs cited, only general description), missing dedicated Evidence Notes entry, and incomplete traceability compared to other claims\n\n4. **Next Action**: Directs the workflow to repair the report by completing Claim 3 with concrete excerpt IDs and adding a dedicated Evidence Notes entry, using only the same vendored fixture\n\nAll requirements have been met with no extra sections or title."
+        },
+        "usage": {
+          "promptTokens": 437,
+          "completionTokens": 170,
+          "totalTokens": 2399
+        },
+        "finishReason": "stop"
+      }
+    },
+    "repair-paper-verification": {
+      "output": "The repaired paper verification report has been written to `sandbox/19-longrun-paper-verification-loop/output/final/03-repaired-paper-verification.md`.\n\nKey repairs made:\n- **Claim 3 now has explicit excerpt mapping**: Cites Excerpt C (asserts on-par-or-better on RoBERTa, DeBERTa, GPT-2, and GPT-3) and Excerpt F (confirms matches-or-exceeds on GPT-3)\n- **Added dedicated Evidence Notes entry for Claim 3**: Explains the evidence mapping and rationale for PARTIAL verdict\n- **Maintains same document structure**: All five required sections preserved\n- **Final Verdict updated**: States the repaired report is now sufficient for acceptance\n- **All evidence grounded in provided fixture only**: No external sources introduced\n\nThe report now provides the same level of excerpt-to-claim traceability for all four claims, addressing the validation failures identified in the previous step.",
+      "raw": {
+        "id": "zai-glm-5-1773733777329",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "The repaired paper verification report has been written to `sandbox/19-longrun-paper-verification-loop/output/final/03-repaired-paper-verification.md`.\n\nKey repairs made:\n- **Claim 3 now has explicit excerpt mapping**: Cites Excerpt C (asserts on-par-or-better on RoBERTa, DeBERTa, GPT-2, and GPT-3) and Excerpt F (confirms matches-or-exceeds on GPT-3)\n- **Added dedicated Evidence Notes entry for Claim 3**: Explains the evidence mapping and rationale for PARTIAL verdict\n- **Maintains same document structure**: All five required sections preserved\n- **Final Verdict updated**: States the repaired report is now sufficient for acceptance\n- **All evidence grounded in provided fixture only**: No external sources introduced\n\nThe report now provides the same level of excerpt-to-claim traceability for all four claims, addressing the validation failures identified in the previous step."
+        },
+        "usage": {
+          "promptTokens": 1123,
+          "completionTokens": 197,
+          "totalTokens": 5096
+        },
+        "finishReason": "stop"
+      }
+    },
+    "validate-repaired-paper-verification": {
+      "output": "I have validated the repaired paper verification report against the checklist and written the final validation result.\n\n**Validation Summary:**\n\n- ✅ **Five required sections present**: Paper Metadata, Verification Summary, Claim-by-Claim Assessment, Evidence Notes, Final Verdict\n- ✅ **All four claims assessed**: Claims 1-4 with verdicts SUPPORTED, SUPPORTED, PARTIAL, SUPPORTED\n- ✅ **Concrete excerpt mappings for all claims**:\n  - Claim 1: Excerpt A\n  - Claim 2: Excerpt B\n  - Claim 3: Excerpt C, Excerpt F\n  - Claim 4: Excerpt C, Excerpt E\n- ✅ **Evidence Notes cover all four claims** with detailed explanations\n- ✅ **Repaired report is sufficiently complete** for acceptance as canonical verification result\n\n**Verdict: PASS** — The repaired report has complete structure and sufficient claim-to-evidence coverage. The verification loop is complete and can be archived.",
+      "raw": {
+        "id": "zai-glm-5-1773733806880",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "I have validated the repaired paper verification report against the checklist and written the final validation result.\n\n**Validation Summary:**\n\n- ✅ **Five required sections present**: Paper Metadata, Verification Summary, Claim-by-Claim Assessment, Evidence Notes, Final Verdict\n- ✅ **All four claims assessed**: Claims 1-4 with verdicts SUPPORTED, SUPPORTED, PARTIAL, SUPPORTED\n- ✅ **Concrete excerpt mappings for all claims**:\n  - Claim 1: Excerpt A\n  - Claim 2: Excerpt B\n  - Claim 3: Excerpt C, Excerpt F\n  - Claim 4: Excerpt C, Excerpt E\n- ✅ **Evidence Notes cover all four claims** with detailed explanations\n- ✅ **Repaired report is sufficiently complete** for acceptance as canonical verification result\n\n**Verdict: PASS** — The repaired report has complete structure and sufficient claim-to-evidence coverage. The verification loop is complete and can be archived."
+        },
+        "usage": {
+          "promptTokens": 303,
+          "completionTokens": 205,
+          "totalTokens": 2556
+        },
+        "finishReason": "stop"
+      }
+    },
+    "archive-paper-verification": {
+      "output": "Archived the verification loop as a concise canonical note at `output/archive/40-paper-verification-loop-note.md`.\n\n**Summary:**\n- Documented the FAIL → repair → PASS progression\n- Captured the Claim 3 evidence remediation (added Excerpt C and Excerpt F)\n- Recorded final verdict: 3 SUPPORTED, 1 PARTIAL, 0 UNSUPPORTED\n- Clarified reuse scope: minimal excerpt-based verification, not full paper reproduction",
+      "raw": {
+        "id": "zai-glm-5-1773733867800",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "Archived the verification loop as a concise canonical note at `output/archive/40-paper-verification-loop-note.md`.\n\n**Summary:**\n- Documented the FAIL → repair → PASS progression\n- Captured the Claim 3 evidence remediation (added Excerpt C and Excerpt F)\n- Recorded final verdict: 3 SUPPORTED, 1 PARTIAL, 0 UNSUPPORTED\n- Clarified reuse scope: minimal excerpt-based verification, not full paper reproduction"
+        },
+        "usage": {
+          "promptTokens": 886,
+          "completionTokens": 94,
+          "totalTokens": 4436
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "verify-paper-claims-initial": "I have created the initial paper claim verification report at the specified output path. The report:\n\n1. **Includes all five required sections** with H1 headings (no numbering, no extra title)\n2. **Verifies exactly the four listed claims** against the vendored excerpts\n3. **Marked each claim** as SUPPORTED (1, 2, 4) or PARTIAL (3)\n4. **Cited excerpt IDs** for Claims 1, 2, and 4 (Excerpt A, Excerpt B, Excerpts C and E respectively)\n5. **Left Claim 3 incomplete** as required: marked PARTIAL with only general description, no specific excerpt IDs cited\n6. **Evidence Notes section** includes notes only for Claims 1, 2, and 4 (no dedicated note for Claim 3)\n7. **Final Verdict** clearly states the report is not yet sufficient for acceptance and needs remediation\n\nAll content is grounded exclusively in the provided vendored fixture with no external knowledge or assumptions.",
+    "validate-paper-verification": "I have created the validation report at the specified output path. The validation:\n\n1. **Verdict**: FAIL (as required)\n\n2. **Passed Checks**: Confirms the report includes all five required sections, properly assesses Claims 1, 2, and 4 with SUPPORTED verdicts and concrete excerpt mappings, and includes Evidence Notes for those three claims\n\n3. **Failed Checks**: Explicitly identifies Claim 3 as having insufficient concrete excerpt mapping (no specific excerpt IDs cited, only general description), missing dedicated Evidence Notes entry, and incomplete traceability compared to other claims\n\n4. **Next Action**: Directs the workflow to repair the report by completing Claim 3 with concrete excerpt IDs and adding a dedicated Evidence Notes entry, using only the same vendored fixture\n\nAll requirements have been met with no extra sections or title.",
+    "repair-paper-verification": "The repaired paper verification report has been written to `sandbox/19-longrun-paper-verification-loop/output/final/03-repaired-paper-verification.md`.\n\nKey repairs made:\n- **Claim 3 now has explicit excerpt mapping**: Cites Excerpt C (asserts on-par-or-better on RoBERTa, DeBERTa, GPT-2, and GPT-3) and Excerpt F (confirms matches-or-exceeds on GPT-3)\n- **Added dedicated Evidence Notes entry for Claim 3**: Explains the evidence mapping and rationale for PARTIAL verdict\n- **Maintains same document structure**: All five required sections preserved\n- **Final Verdict updated**: States the repaired report is now sufficient for acceptance\n- **All evidence grounded in provided fixture only**: No external sources introduced\n\nThe report now provides the same level of excerpt-to-claim traceability for all four claims, addressing the validation failures identified in the previous step.",
+    "validate-repaired-paper-verification": "I have validated the repaired paper verification report against the checklist and written the final validation result.\n\n**Validation Summary:**\n\n- ✅ **Five required sections present**: Paper Metadata, Verification Summary, Claim-by-Claim Assessment, Evidence Notes, Final Verdict\n- ✅ **All four claims assessed**: Claims 1-4 with verdicts SUPPORTED, SUPPORTED, PARTIAL, SUPPORTED\n- ✅ **Concrete excerpt mappings for all claims**:\n  - Claim 1: Excerpt A\n  - Claim 2: Excerpt B\n  - Claim 3: Excerpt C, Excerpt F\n  - Claim 4: Excerpt C, Excerpt E\n- ✅ **Evidence Notes cover all four claims** with detailed explanations\n- ✅ **Repaired report is sufficiently complete** for acceptance as canonical verification result\n\n**Verdict: PASS** — The repaired report has complete structure and sufficient claim-to-evidence coverage. The verification loop is complete and can be archived.",
+    "archive-paper-verification": "Archived the verification loop as a concise canonical note at `output/archive/40-paper-verification-loop-note.md`.\n\n**Summary:**\n- Documented the FAIL → repair → PASS progression\n- Captured the Claim 3 evidence remediation (added Excerpt C and Excerpt F)\n- Recorded final verdict: 3 SUPPORTED, 1 PARTIAL, 0 UNSUPPORTED\n- Clarified reuse scope: minimal excerpt-based verification, not full paper reproduction"
+  },
+  "endedAt": "2026-03-17T07:51:15.830Z"
+}

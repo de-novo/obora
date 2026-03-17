@@ -2,7 +2,7 @@
 
 > Last updated: 2026-03-17
 
-이 문서는 `sandbox/01~18` active canonical sandbox들이 공통으로 따라야 하는 최소 규격을 정의한다.
+이 문서는 `sandbox/01~19` active canonical sandbox들이 공통으로 따라야 하는 최소 규격을 정의한다.
 
 ## 목적
 
@@ -20,6 +20,7 @@ canonical sandbox는 레거시 실험 자산이 아니라,
 - benchmark / judge separation
 - long-running runner contract
 - minimal real-paper claim verification
+- paper-verification remediation loop
 
 ---
 
@@ -164,6 +165,10 @@ README에는 반드시 아래가 있어야 한다.
 ### 18 — longrun paper verification mini
 
 - primitive: long-running runner + vendored public-paper fixture + claim-by-claim verification + archive
+
+### 19 — longrun paper verification loop
+
+- primitive: long-running runner + paper verification validation/repair loop against the same vendored fixture + archive
 
 ---
 

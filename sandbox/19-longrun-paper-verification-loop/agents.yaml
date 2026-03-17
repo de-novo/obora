@@ -1,0 +1,15 @@
+version: "1.0"
+default_model: glm-5
+agents:
+  verifier:
+    role: Draft an initial paper claim verification report from vendored excerpts, including a deliberate evidence gap for remediation.
+    model: glm-5
+  validator:
+    role: Validate whether a paper verification report has complete structure and sufficient claim-to-evidence coverage.
+    model: glm-5
+  repairer:
+    role: Repair a paper verification report using the same vendored fixture and validator feedback only.
+    model: glm-5
+  archivist:
+    role: Archive the verification loop as a concise reusable canonical note.
+    model: glm-5

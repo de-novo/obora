@@ -22,6 +22,7 @@
 - `16-multi-run-comparison-mini` — multi-run comparison with normalized per-run results (solve×3 → compare → archive)
 - `17-multi-run-comparison-loop` — multi-run comparison remediation loop (solve×3 → compare → validate → repair → re-compare → archive)
 - `18-longrun-paper-verification-mini` — long-running paper claim verification against vendored real-paper excerpts (verify → archive)
+- `19-longrun-paper-verification-loop` — long-running paper verification remediation loop against the same vendored real-paper fixture (verify → validate → repair → re-validate → archive)
 
 ## Draft / future sandbox
 

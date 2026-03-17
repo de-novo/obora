@@ -2,7 +2,7 @@
 
 > Last updated: 2026-03-17
 
-이 문서는 현재 활성 canonical sandbox `01~18`를 한눈에 설명하는 인덱스다.
+이 문서는 현재 활성 canonical sandbox `01~19`를 한눈에 설명하는 인덱스다.
 
 ## 목적
 
@@ -35,6 +35,7 @@ canonical sandbox ladder는 Obora의 핵심 실행 패턴을
 | 16   | `16-multi-run-comparison-mini`       | solve×3 → compare → archive                             | multi-run comparison with normalized per-run results      |
 | 17   | `17-multi-run-comparison-loop`       | solve×3 → compare → validate → repair → re-compare      | multi-run comparison remediation loop                     |
 | 18   | `18-longrun-paper-verification-mini` | longrun + paper claim verification → archive            | minimal real-paper verification against vendored excerpts |
+| 19   | `19-longrun-paper-verification-loop` | longrun + paper verification → validate → repair → pass | paper verification remediation loop against same fixture  |
 
 ---
 
@@ -244,6 +245,19 @@ validation fail 이후 repair를 수행한다.
 
 이 단계는 long-running workflow에서도 공개 논문 excerpt에 근거한 최소 claim verification이 재현 가능하게 동작하는지 검증한다.
 
+### 19 — longrun paper verification loop
+
+18 위에 paper verification remediation loop를 결합한다.
+
+- initial verification report는 구조상 완전하지만 evidence coverage가 불충분함
+- initial validation은 FAIL
+- same vendored paper fixture만으로 repair
+- final validation은 PASS
+- archive
+- watchdog wrapper
+
+이 단계는 long-running workflow에서도 실제 논문 excerpt 기반 verification을 검증-수정-재검증 루프로 안정적으로 닫을 수 있는지 검증한다.
+
 ---
 
 ## How to use this ladder
@@ -270,6 +284,7 @@ validation fail 이후 repair를 수행한다.
 16. 16
 17. 17
 18. 18
+19. 19
 
 ### 제품형 sandbox 설계자
 
@@ -293,6 +308,7 @@ validation fail 이후 repair를 수행한다.
 - 16
 - 17
 - 18
+- 19
 
 ---
 
@@ -308,4 +324,4 @@ validation fail 이후 repair를 수행한다.
 - conditional branching sandbox
 
 즉 01~09는 foundation이고,
-10~18은 runner/contract/benchmark/project/comparison/paper-verification expansion의 기준점이다.
+10~19는 runner/contract/benchmark/project/comparison/paper-verification expansion의 기준점이다.
