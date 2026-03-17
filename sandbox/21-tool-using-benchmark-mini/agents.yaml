@@ -1,0 +1,12 @@
+version: "1.0"
+default_model: glm-5
+agents:
+  solver:
+    role: Solve a tiny benchmark by first discovering and inspecting local artifacts with Obora tools.
+    model: glm-5
+  judge:
+    role: Compare the attempt to the reference answer and confirm that tool evidence was actually captured.
+    model: glm-5
+  archivist:
+    role: Summarize the benchmark result and the reusable tool-using pattern.
+    model: glm-5

@@ -2,7 +2,7 @@
 
 > Last updated: 2026-03-17
 
-이 문서는 `sandbox/01~20` active canonical sandbox들이 공통으로 따라야 하는 최소 규격을 정의한다.
+이 문서는 `sandbox/01~21` active canonical sandbox들이 공통으로 따라야 하는 최소 규격을 정의한다.
 
 ## 목적
 
@@ -22,6 +22,7 @@ canonical sandbox는 레거시 실험 자산이 아니라,
 - minimal real-paper claim verification
 - paper-verification remediation loop
 - threshold-driven feedback convergence loop
+- tool-dependent benchmark solving
 
 ---
 
@@ -185,6 +186,10 @@ README에는 반드시 아래가 있어야 한다.
 
 - primitive: long-running runner + runtime-native build_or_repair/validate back-edge loop with structured validation control until threshold + archive
 
+### 21 — tool-using benchmark mini
+
+- primitive: long-running runner + local tool-discovery/inspection + solver/judge benchmark separation + archive
+
 ---
 
 ## 다음 단계 설계 원칙
@@ -200,6 +205,6 @@ README에는 반드시 아래가 있어야 한다.
 - multi-run comparison extension (step 16 완료, step 17 loop 완료)
 - paper-verification extension
 - feedback-convergence extension
-- tool-using extension
+- tool-using extension (step 21 mini complete, step 22 loop reserved)
 
 단, 기존 canonical ladder의 공통 계약을 깨면 안 된다.

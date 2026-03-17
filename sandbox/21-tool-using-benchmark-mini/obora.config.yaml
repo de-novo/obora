@@ -1,0 +1,30 @@
+version: "1.0"
+workflows: ./workflows
+policies: .
+
+persistence:
+  enabled: true
+  adapter: sqlite
+  sqlite:
+    path: ./data/obora.db
+
+artifacts:
+  enabled: true
+  store: local
+  local:
+    basePath: ./data/artifacts
+
+defaults:
+  provider: zai
+  model: glm-5
+  temperature: 0.1
+  timeout: 180
+  maxTokens: 4096
+
+providers:
+  zai:
+    authMode: global
+    authRef: global:zai
+    defaultModel: glm-5
+    timeout: 180
+    maxTokens: 4096

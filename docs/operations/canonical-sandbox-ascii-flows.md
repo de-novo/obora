@@ -2,7 +2,7 @@
 
 > Last updated: 2026-03-17
 
-이 문서는 현재 canonical sandbox `01~20`의 workflow 흐름을 **ASCII 다이어그램**으로 빠르게 이해하기 위한 보조 문서다.
+이 문서는 현재 canonical sandbox `01~21`의 workflow 흐름을 **ASCII 다이어그램**으로 빠르게 이해하기 위한 보조 문서다.
 
 ## 읽는 법
 
@@ -238,6 +238,18 @@ loop invariant:
   iteration continues until threshold or loop stop guard is hit
 ```
 
+## 21 — tool-using benchmark mini
+
+```text
+[run-with-watchdog]
+  -> [solve-with-tool]
+  -> [file_list: discover benchmark reports]
+  -> [file_read: inspect discovered JSON reports]
+  -> [attempt with tool evidence]
+  -> [judge-tool-result]
+  -> [archive]
+```
+
 ---
 
 ## Family summary
@@ -263,6 +275,15 @@ watchdog runner
   -> feedback convergence flow
 ```
 
+### Tool-using family (21+)
+
+```text
+watchdog runner
+  -> tool-discover local artifacts
+  -> consume tool output in answer
+  -> judge both correctness and tool-use evidence
+```
+
 ### Current ladder intuition
 
 ```text
@@ -272,4 +293,5 @@ small single-run primitives
   -> comparison / aggregation
   -> real-paper verification
   -> threshold-driven feedback convergence
+  -> tool-dependent benchmark solving
 ```

@@ -26,6 +26,7 @@
 - `18-longrun-paper-verification-mini` — long-running paper claim verification against vendored real-paper excerpts (verify → archive)
 - `19-longrun-paper-verification-loop` — long-running paper verification remediation loop against the same vendored real-paper fixture with runtime-native `verify_or_repair <-> validate_paper_verification` re-entry
 - `20-longrun-feedback-convergence-loop` — long-running feedback convergence loop with a runtime-native `build_or_repair -> validate -> on_fail.goto build_or_repair` cycle until a threshold is reached
+- `21-tool-using-benchmark-mini` — watchdog-wrapped tool-using benchmark mini where local tool output is required to discover and answer the benchmark
 
 ## Draft / future sandbox
 

@@ -1,0 +1,74 @@
+name: tool-using-benchmark-mini
+version: "1.0"
+steps:
+  - name: solve-with-tool
+    agent: solver
+    tools: [file_list, file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/21-tool-using-benchmark-mini/input/problem.md
+        and /Users/denovo/workspace/github/obora-kit/sandbox/21-tool-using-benchmark-mini/input/tool-task.md.
+
+        Do not read any reference or answer key.
+
+        Before writing the attempt, you must:
+        - use file_list on sandbox/21-tool-using-benchmark-mini/input/tool-data
+        - use file_read on the discovered JSON files
+        - derive the winning report file, batch_id, and benchmark_score from those tool results
+
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/21-tool-using-benchmark-mini/output/final/01-attempt.md.
+
+        Requirements:
+        - Include exactly these top-level sections:
+          1. Final Answer
+          2. Short Reasoning
+          3. Tool Used
+          4. Observed Tool Output Summary
+        - The final answer must contain the winning report filename, batch_id, and benchmark_score.
+        - The Tool Used section must explicitly mention both `file_list` and `file_read`.
+        - The Observed Tool Output Summary section must mention at least two discovered report filenames and the winning score.
+        - Keep the reasoning short and concrete.
+
+  - name: judge-tool-result
+    agent: judge
+    depends_on: [solve-with-tool]
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/21-tool-using-benchmark-mini/input/problem.md,
+        /Users/denovo/workspace/github/obora-kit/sandbox/21-tool-using-benchmark-mini/input/reference-answer.md,
+        and /Users/denovo/workspace/github/obora-kit/sandbox/21-tool-using-benchmark-mini/output/final/01-attempt.md.
+
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/21-tool-using-benchmark-mini/output/final/02-verdict.md.
+
+        Requirements:
+        - Include exactly these top-level sections:
+          1. Verdict
+          2. Answer Check
+          3. Tool Usage Check
+          4. Evidence Check
+          5. Feedback
+        - Verdict must say PASS or FAIL.
+        - PASS only when the attempt matches the reference answer for report filename, batch_id, and benchmark_score.
+        - PASS only when the attempt explicitly says it used `file_list` and `file_read`.
+        - PASS only when the attempt includes concrete observed evidence such as discovered report filenames and the winning score.
+        - Keep the feedback brief and auditable.
+
+  - name: archive-tool-benchmark
+    agent: archivist
+    depends_on: [judge-tool-result]
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/21-tool-using-benchmark-mini/output/final/01-attempt.md
+        and /Users/denovo/workspace/github/obora-kit/sandbox/21-tool-using-benchmark-mini/output/final/02-verdict.md.
+
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/21-tool-using-benchmark-mini/output/archive/40-tool-using-benchmark-note.md.
+
+        Requirements:
+        - Include exactly these top-level sections:
+          1. Summary of Attempt
+          2. Tool Evidence
+          3. Benchmark Result
+          4. Reuse Notes
+        - Explain that the final answer depended on local tool-discovered benchmark reports.
