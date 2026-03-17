@@ -39,3 +39,27 @@ sandbox/03-simple-validation/run.sh
   - Passed Checks
   - Failed Checks
   - Next Action
+
+
+## 워크플로우 그래프 (ASCII)
+
+```text
++-------+
+| input |
++-------+
+    |
+    v
++-------+
+| draft |
++-------+
+    |
+    v
++------------+
+| validation |
++------------+
+    |
+    v
++-------------------+
+| validation report |
++-------------------+
+```

@@ -47,3 +47,30 @@ sandbox/18-longrun-paper-verification-mini/verify.sh --fresh
 - 각 claim이 `SUPPORTED`, `PARTIAL`, `UNSUPPORTED` 중 하나로 판정된다
 - archive note가 요구된 3개 top-level section을 모두 포함한다
 - 결과는 제공된 vendored paper fixture만을 근거로 서술된다
+
+
+## 워크플로우 그래프 (ASCII)
+
+```text
++-------------------+
+| run-with-watchdog |
++-------------------+
+    |
+    v
++----------------+
+| paper metadata |
+| + excerpts     |
+| + claims       |
++----------------+
+    |
+    v
++--------------------+
+| paper verification |
+| report             |
++--------------------+
+    |
+    v
++---------+
+| archive |
++---------+
+```

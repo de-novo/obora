@@ -36,3 +36,22 @@ sandbox/05-simple-archive/run.sh
 - `01-summary.md`가 생성된다
 - `40-archive-note.md`가 생성된다
 - archive 문서 안에 Summary of Result / Why Archived / Reuse Notes 가 존재한다
+
+
+## 워크플로우 그래프 (ASCII)
+
+```text
++-------+
+| input |
++-------+
+    |
+    v
++--------------+
+| final result |
++--------------+
+    |
+    v
++--------------+
+| archive note |
++--------------+
+```

@@ -42,3 +42,44 @@ sandbox/07-project-loop/run.sh
 - repair step이 실행된다
 - 최종 validation은 PASS다
 - archive 문서가 생성된다
+
+
+## 워크플로우 그래프 (ASCII)
+
+```text
++-------+
+| brief |
++-------+
+    |
+    v
++-------+
+| draft |
++-------+
+    |
+    v
++--------+
+| review |
++--------+
+    |
+    v
++------------+
+| validation |
+| FAIL       |
++------------+
+    |
+    v
++--------+
+| repair |
++--------+
+    |
+    v
++------------------+
+| final validation |
+| PASS             |
++------------------+
+    |
+    v
++---------+
+| archive |
++---------+
+```

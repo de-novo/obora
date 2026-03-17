@@ -33,3 +33,22 @@ node bin/obora.js run \
   - Key Points
   - Uncertainties
   - Next Action
+
+
+## 워크플로우 그래프 (ASCII)
+
+```text
++-------+
+| input |
++-------+
+    |
+    v
++-------------+
+| native step |
++-------------+
+    |
+    v
++--------+
+| output |
++--------+
+```

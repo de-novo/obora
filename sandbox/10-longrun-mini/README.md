@@ -29,3 +29,27 @@ sandbox/10-longrun-mini/run.sh
 - watchdog wrapper를 통해 실행된다
 - final + archive 문서가 생성된다
 - `output/iterations/logs/run.log`와 `run.tail.log`가 남는다
+
+
+## 워크플로우 그래프 (ASCII)
+
+```text
++-------------------+
+| run-with-watchdog |
++-------------------+
+    |
+    v
++------+
+| plan |
++------+
+    |
+    v
++--------+
+| refine |
++--------+
+    |
+    v
++---------+
+| archive |
++---------+
+```

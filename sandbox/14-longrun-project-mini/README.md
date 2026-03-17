@@ -42,3 +42,38 @@ sandbox/14-longrun-project-mini/verify.sh --fresh
 - draft / review / final / validation / archive가 모두 생성된다
 - validation 문서에 PASS verdict가 기록된다
 - archive note가 생성된다
+
+
+## 워크플로우 그래프 (ASCII)
+
+```text
++-------------------+
+| run-with-watchdog |
++-------------------+
+    |
+    v
++-------+
+| draft |
++-------+
+    |
+    v
++--------+
+| review |
++--------+
+    |
+    v
++-------+
+| final |
++-------+
+    |
+    v
++------------+
+| validation |
+| PASS       |
++------------+
+    |
+    v
++---------+
+| archive |
++---------+
+```

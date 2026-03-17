@@ -47,3 +47,29 @@ sandbox/16-multi-run-comparison-mini/verify.sh --fresh
 - 3개의 독립 solver run이 각각 JSON result artifact를 생성한다
 - 비교 요약에 `Overall Result`, `Per-Run Snapshot`, `Best Run`, `Worst Run`, `Pass Rate`가 포함된다
 - archive note가 안정적인 heading 구조로 생성된다
+
+
+## 워크플로우 그래프 (ASCII)
+
+```text
+                 +--------------+
+                 | run-1 result |
+                 +--------------+
+                        \
+                         \
+                          v
++-------------------+  +--------------------+  +---------+
+| run-with-watchdog |->| comparison summary |->| archive |
++-------------------+  +--------------------+  +---------+
+                          ^
+                         /
+                        /
+                 +--------------+
+                 | run-2 result |
+                 +--------------+
+                        ^
+                        |
+                 +--------------+
+                 | run-3 result |
+                 +--------------+
+```

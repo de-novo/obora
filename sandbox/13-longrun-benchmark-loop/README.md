@@ -44,3 +44,39 @@ sandbox/13-longrun-benchmark-loop/verify.sh --fresh
 - repaired attempt가 생성된다
 - 최종 verdict는 PASS다
 - archive note가 생성된다
+
+
+## 워크플로우 그래프 (ASCII)
+
+```text
++-------------------+
+| run-with-watchdog |
++-------------------+
+    |
+    v
++---------------+
+| solve initial |
++---------------+
+    |
+    v
++---------------+
+| judge initial |
+| FAIL          |
++---------------+
+    |
+    v
++--------+
+| repair |
++--------+
+    |
+    v
++----------------+
+| judge repaired |
+| PASS           |
++----------------+
+    |
+    v
++---------+
+| archive |
++---------+
+```

@@ -40,3 +40,27 @@ sandbox/12-longrun-benchmark-mini/verify.sh --fresh
 - solver와 judge step이 분리되어 있다
 - `02-verdict.md`가 PASS verdict를 남긴다
 - archive note가 생성된다
+
+
+## 워크플로우 그래프 (ASCII)
+
+```text
++-------------------+
+| run-with-watchdog |
++-------------------+
+    |
+    v
++-------+
+| solve |
++-------+
+    |
+    v
++-------+
+| judge |
++-------+
+    |
+    v
++---------+
+| archive |
++---------+
+```

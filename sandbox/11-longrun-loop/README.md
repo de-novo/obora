@@ -41,3 +41,39 @@ sandbox/11-longrun-loop/verify.sh --fresh
 - 첫 validation은 FAIL이다
 - repair 이후 최종 validation은 PASS다
 - archive note가 생성된다
+
+
+## 워크플로우 그래프 (ASCII)
+
+```text
++-------------------+
+| run-with-watchdog |
++-------------------+
+    |
+    v
++---------+
+| attempt |
++---------+
+    |
+    v
++------------+
+| validation |
+| FAIL       |
++------------+
+    |
+    v
++--------+
+| repair |
++--------+
+    |
+    v
++------------------+
+| final validation |
+| PASS             |
++------------------+
+    |
+    v
++---------+
+| archive |
++---------+
+```

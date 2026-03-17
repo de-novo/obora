@@ -38,3 +38,27 @@ sandbox/08-benchmark-mini/run.sh
 - workflow가 `completed`로 끝난다
 - `01-attempt.md`, `02-verdict.md`, `40-benchmark-archive-note.md`가 생성된다
 - `02-verdict.md` 안에 Verdict / Score / Correctness / Feedback 섹션이 있다
+
+
+## 워크플로우 그래프 (ASCII)
+
+```text
++---------+
+| problem |
++---------+
+    |
+    v
++-------+
+| solve |
++-------+
+    |
+    v
++-------+
+| judge |
++-------+
+    |
+    v
++---------+
+| archive |
++---------+
+```

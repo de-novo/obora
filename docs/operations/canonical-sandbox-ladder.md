@@ -1,6 +1,8 @@
 # Canonical Sandbox Ladder
 
 > Last updated: 2026-03-17
+>
+> 빠른 흐름 요약은 `docs/operations/canonical-sandbox-ascii-flows.md`를 참고한다.
 
 이 문서는 현재 활성 canonical sandbox `01~19`를 한눈에 설명하는 인덱스다.
 
@@ -15,27 +17,28 @@ canonical sandbox ladder는 Obora의 핵심 실행 패턴을
 
 ## Ladder Overview
 
-| Step | Sandbox                              | 핵심 패턴                                               | 무엇을 검증하는가                                         |
-| ---- | ------------------------------------ | ------------------------------------------------------- | --------------------------------------------------------- |
-| 01   | `01-simple-native`                   | 단일 native step                                        | 가장 작은 Obora native workflow                           |
-| 02   | `02-simple-review`                   | draft → review                                          | handoff / review 분리                                     |
-| 03   | `03-simple-validation`               | draft → validation                                      | validation report / PASS-FAIL 구조                        |
-| 04   | `04-simple-loop`                     | fail → repair → pass                                    | 최소 repair loop                                          |
-| 05   | `05-simple-archive`                  | final → archive                                         | 결과와 archive 분리                                       |
-| 06   | `06-project-mini`                    | small project lifecycle                                 | draft → review → final → validation → archive             |
-| 07   | `07-project-loop`                    | project + repair loop                                   | project lifecycle 안의 remediation                        |
-| 08   | `08-benchmark-mini`                  | solve → judge → archive                                 | solver / judge 분리 benchmark                             |
-| 09   | `09-benchmark-loop`                  | fail → repair → re-judge → archive                      | benchmark remediation loop                                |
-| 10   | `10-longrun-mini`                    | watchdog-wrapped longrun                                | long-running runner 계약                                  |
-| 11   | `11-longrun-loop`                    | longrun + fail → repair → pass                          | long-running repair loop contract                         |
-| 12   | `12-longrun-benchmark-mini`          | longrun + solve → judge → archive                       | long-running benchmark mini                               |
-| 13   | `13-longrun-benchmark-loop`          | longrun + fail → repair → re-judge → archive            | long-running benchmark loop                               |
-| 14   | `14-longrun-project-mini`            | longrun + draft → review → final → validation → archive | long-running project mini                                 |
-| 15   | `15-longrun-project-loop`            | longrun + fail → repair → final pass                    | long-running project loop                                 |
-| 16   | `16-multi-run-comparison-mini`       | solve×3 → compare → archive                             | multi-run comparison with normalized per-run results      |
-| 17   | `17-multi-run-comparison-loop`       | solve×3 → compare → validate → repair → re-compare      | multi-run comparison remediation loop                     |
-| 18   | `18-longrun-paper-verification-mini` | longrun + paper claim verification → archive            | minimal real-paper verification against vendored excerpts |
-| 19   | `19-longrun-paper-verification-loop` | longrun + paper verification → validate → repair → pass | paper verification remediation loop against same fixture  |
+| Step | Sandbox                              | 핵심 패턴                                               | 무엇을 검증하는가                                           |
+| ---- | ------------------------------------ | ------------------------------------------------------- | ----------------------------------------------------------- |
+| 01   | `01-simple-native`                   | 단일 native step                                        | 가장 작은 Obora native workflow                             |
+| 02   | `02-simple-review`                   | draft → review                                          | handoff / review 분리                                       |
+| 03   | `03-simple-validation`               | draft → validation                                      | validation report / PASS-FAIL 구조                          |
+| 04   | `04-simple-loop`                     | fail → repair → pass                                    | 최소 repair loop                                            |
+| 05   | `05-simple-archive`                  | final → archive                                         | 결과와 archive 분리                                         |
+| 06   | `06-project-mini`                    | small project lifecycle                                 | draft → review → final → validation → archive               |
+| 07   | `07-project-loop`                    | project + repair loop                                   | project lifecycle 안의 remediation                          |
+| 08   | `08-benchmark-mini`                  | solve → judge → archive                                 | solver / judge 분리 benchmark                               |
+| 09   | `09-benchmark-loop`                  | fail → repair → re-judge → archive                      | benchmark remediation loop                                  |
+| 10   | `10-longrun-mini`                    | watchdog-wrapped longrun                                | long-running runner 계약                                    |
+| 11   | `11-longrun-loop`                    | longrun + fail → repair → pass                          | long-running repair loop contract                           |
+| 12   | `12-longrun-benchmark-mini`          | longrun + solve → judge → archive                       | long-running benchmark mini                                 |
+| 13   | `13-longrun-benchmark-loop`          | longrun + fail → repair → re-judge → archive            | long-running benchmark loop                                 |
+| 14   | `14-longrun-project-mini`            | longrun + draft → review → final → validation → archive | long-running project mini                                   |
+| 15   | `15-longrun-project-loop`            | longrun + fail → repair → final pass                    | long-running project loop                                   |
+| 16   | `16-multi-run-comparison-mini`       | solve×3 → compare → archive                             | multi-run comparison with normalized per-run results        |
+| 17   | `17-multi-run-comparison-loop`       | solve×3 → compare → validate → repair → re-compare      | multi-run comparison remediation loop                       |
+| 18   | `18-longrun-paper-verification-mini` | longrun + paper claim verification → archive            | minimal real-paper verification against vendored excerpts   |
+| 19   | `19-longrun-paper-verification-loop` | longrun + paper verification → validate → repair → pass | paper verification remediation loop against same fixture    |
+| 20   | `20-longrun-paper-reproduction-mini` | longrun + reproduce result → compare claim → archive    | minimal real-paper reproduction from vendored source values |
 
 ---
 
@@ -258,6 +261,19 @@ validation fail 이후 repair를 수행한다.
 
 이 단계는 long-running workflow에서도 실제 논문 excerpt 기반 verification을 검증-수정-재검증 루프로 안정적으로 닫을 수 있는지 검증한다.
 
+### 20 — longrun paper reproduction mini
+
+처음으로 실제 공개 논문에서 vendored한 작은 수치 fixture를 다시 계산하는 reproduction baseline을 도입한다.
+
+- vendored paper metadata / task / source values / reported claim
+- explicit arithmetic trace
+- reproduced result
+- comparison against reported paper claim
+- archive
+- watchdog wrapper
+
+이 단계는 long-running workflow에서도 excerpt-only verification을 넘어서, 작은 paper-derived quantity를 재계산하고 reported claim과 비교하는 최소 reproduction 패턴이 재현 가능하게 동작하는지 검증한다.
+
 ---
 
 ## How to use this ladder
@@ -285,6 +301,7 @@ validation fail 이후 repair를 수행한다.
 17. 17
 18. 18
 19. 19
+20. 20
 
 ### 제품형 sandbox 설계자
 
@@ -309,6 +326,7 @@ validation fail 이후 repair를 수행한다.
 - 17
 - 18
 - 19
+- 20
 
 ---
 
@@ -324,4 +342,4 @@ validation fail 이후 repair를 수행한다.
 - conditional branching sandbox
 
 즉 01~09는 foundation이고,
-10~19는 runner/contract/benchmark/project/comparison/paper-verification expansion의 기준점이다.
+10~20는 runner/contract/benchmark/project/comparison/paper-verification/paper-reproduction expansion의 기준점이다.

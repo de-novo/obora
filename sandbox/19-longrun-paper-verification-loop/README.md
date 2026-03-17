@@ -52,3 +52,54 @@ sandbox/19-longrun-paper-verification-loop/verify.sh --fresh
 - final validation report가 `PASS`를 명시한다
 - archive note가 요구된 3개 top-level section을 모두 포함한다
 - 결과는 sandbox-local vendored paper fixture만을 근거로 서술된다
+
+
+## 워크플로우 그래프 (ASCII)
+
+```text
++-------------------+
+| run-with-watchdog |
++-------------------+
+    |
+    v
++----------------+
+| paper metadata |
+| + excerpts     |
+| + claims       |
++----------------+
+    |
+    v
++----------------------+
+| initial verification |
+| report               |
++----------------------+
+    |
+    v
++------------+
+| validation |
+| FAIL       |
++------------+
+    |
+    v
++-------------------+
+| repair using same |
+| paper fixture     |
++-------------------+
+    |
+    v
++-----------------------+
+| repaired verification |
+| report                |
++-----------------------+
+    |
+    v
++------------------+
+| final validation |
+| PASS             |
++------------------+
+    |
+    v
++---------+
+| archive |
++---------+
+```

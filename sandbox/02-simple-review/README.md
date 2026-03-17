@@ -44,3 +44,27 @@ sandbox/02-simple-review/run.sh
   - Key Points
   - Changes Applied
   - Next Action
+
+
+## 워크플로우 그래프 (ASCII)
+
+```text
++-------+
+| input |
++-------+
+    |
+    v
++-------+
+| draft |
++-------+
+    |
+    v
++--------+
+| review |
++--------+
+    |
+    v
++--------------+
+| final output |
++--------------+
+```

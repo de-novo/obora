@@ -43,3 +43,44 @@ sandbox/15-longrun-project-loop/verify.sh --fresh
 - repair step이 실행된다
 - 최종 validation은 PASS다
 - archive note가 생성된다
+
+
+## 워크플로우 그래프 (ASCII)
+
+```text
++-------------------+
+| run-with-watchdog |
++-------------------+
+    |
+    v
++-------+
+| draft |
++-------+
+    |
+    v
++--------+
+| review |
++--------+
+    |
+    v
++------------+
+| validation |
+| FAIL       |
++------------+
+    |
+    v
++--------+
+| repair |
++--------+
+    |
+    v
++------------------+
+| final validation |
+| PASS             |
++------------------+
+    |
+    v
++---------+
+| archive |
++---------+
+```

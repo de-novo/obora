@@ -43,3 +43,39 @@ sandbox/09-benchmark-loop/run.sh
 - repaired attempt가 생성된다
 - 최종 verdict는 PASS다
 - archive note가 생성된다
+
+
+## 워크플로우 그래프 (ASCII)
+
+```text
++---------+
+| problem |
++---------+
+    |
+    v
++---------------+
+| solve initial |
++---------------+
+    |
+    v
++-------+
+| judge |
+| FAIL  |
++-------+
+    |
+    v
++--------+
+| repair |
++--------+
+    |
+    v
++----------+
+| re-judge |
+| PASS     |
++----------+
+    |
+    v
++---------+
+| archive |
++---------+
+```

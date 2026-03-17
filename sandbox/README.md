@@ -2,6 +2,8 @@
 
 이 디렉터리에는 현재 **활성 canonical sandbox만** 둔다.
 
+빠른 workflow 흐름 요약은 `docs/operations/canonical-sandbox-ascii-flows.md`를 참고한다.
+
 ## Canonical ladder
 
 - `01-simple-native` — single native step

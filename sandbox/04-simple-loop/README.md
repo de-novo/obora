@@ -38,3 +38,34 @@ sandbox/04-simple-loop/run.sh
 - workflow가 `completed`로 끝난다
 - validation step이 적어도 한 번 실패 후 repair를 거친다
 - 최종 validation 결과가 PASS다
+
+
+## 워크플로우 그래프 (ASCII)
+
+```text
++-------+
+| input |
++-------+
+    |
+    v
++-------+
+| draft |
++-------+
+    |
+    v
++------------+
+| validation |
+| FAIL       |
++------------+
+    |
+    v
++--------+
+| repair |
++--------+
+    |
+    v
++------------+
+| validation |
+| PASS       |
++------------+
+```

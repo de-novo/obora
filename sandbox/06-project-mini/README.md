@@ -41,3 +41,37 @@ sandbox/06-project-mini/run.sh
 - 위 5개 문서가 모두 생성된다
 - validation 문서에 Verdict / Passed Checks / Failed Checks / Next Action이 있다
 - archive 문서에 Summary of Project / Why Archived / Reuse Notes가 있다
+
+
+## 워크플로우 그래프 (ASCII)
+
+```text
++-------+
+| brief |
++-------+
+    |
+    v
++-------+
+| draft |
++-------+
+    |
+    v
++--------+
+| review |
++--------+
+    |
+    v
++-------+
+| final |
++-------+
+    |
+    v
++------------+
+| validation |
++------------+
+    |
+    v
++---------+
+| archive |
++---------+
+```
