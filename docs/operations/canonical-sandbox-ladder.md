@@ -2,7 +2,7 @@
 
 > Last updated: 2026-03-17
 
-이 문서는 현재 활성 canonical sandbox `01~13`를 한눈에 설명하는 인덱스다.
+이 문서는 현재 활성 canonical sandbox `01~15`를 한눈에 설명하는 인덱스다.
 
 ## 목적
 
@@ -30,6 +30,8 @@ canonical sandbox ladder는 Obora의 핵심 실행 패턴을
 | 11 | `11-longrun-loop` | longrun + fail → repair → pass | long-running repair loop contract |
 | 12 | `12-longrun-benchmark-mini` | longrun + solve → judge → archive | long-running benchmark mini |
 | 13 | `13-longrun-benchmark-loop` | longrun + fail → repair → re-judge → archive | long-running benchmark loop |
+| 14 | `14-longrun-project-mini` | longrun + draft → review → final → validation → archive | long-running project mini |
+| 15 | `15-longrun-project-loop` | longrun + fail → repair → final pass | long-running project loop |
 
 ---
 
@@ -175,6 +177,17 @@ validation fail 이후 repair를 수행한다.
 
 이 단계는 long-running workflow에서도 project-style 직선형 lifecycle이 안정적으로 동작하는지 검증한다.
 
+### 15 — longrun project loop
+14 위에 project remediation loop를 결합한다.
+
+- initial validation fail
+- repair attempt
+- final validation pass
+- archive
+- watchdog wrapper
+
+이 단계는 long-running workflow에서도 project fail → repair → pass loop가 안정적으로 유지되는지 검증한다.
+
 ---
 
 ## How to use this ladder
@@ -194,6 +207,8 @@ validation fail 이후 repair를 수행한다.
 11. 11
 12. 12
 13. 13
+14. 14
+15. 15
 
 ### 제품형 sandbox 설계자
 추천 기준점:
@@ -201,8 +216,8 @@ validation fail 이후 repair를 수행한다.
 - 07
 - 10
 - 11
-- 12
-- 13
+- 14
+- 15
 
 ### benchmark형 sandbox 설계자
 추천 기준점:
@@ -225,4 +240,4 @@ validation fail 이후 repair를 수행한다.
 - tool-using benchmark sandbox
 
 즉 01~09는 foundation이고,
-10~13은 runner/contract/benchmark expansion의 첫 기준점이다.
+10~15는 runner/contract/benchmark/project expansion의 첫 기준점이다.

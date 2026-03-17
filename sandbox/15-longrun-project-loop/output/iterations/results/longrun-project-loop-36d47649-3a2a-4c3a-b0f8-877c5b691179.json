@@ -1,0 +1,135 @@
+{
+  "id": "36d47649-3a2a-4c3a-b0f8-877c5b691179",
+  "workflowName": "longrun-project-loop",
+  "status": "completed",
+  "startedAt": "2026-03-17T05:03:29.196Z",
+  "stepOrder": [
+    "draft-project",
+    "review-project",
+    "validate-project",
+    "repair-project",
+    "validate-repaired-project",
+    "archive-project"
+  ],
+  "completedSteps": [
+    "draft-project",
+    "review-project",
+    "validate-project",
+    "repair-project",
+    "validate-repaired-project",
+    "archive-project"
+  ],
+  "stepRecords": {
+    "draft-project": {
+      "output": "**Draft created successfully.**\n\n**What was delivered:**\n- Read the brief (Korean) describing sandbox 15 requirements for a long-running project remediation loop\n- Generated `/Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/01-draft.md` with exactly two top-level sections:\n  1. **Project Summary** - Describes the sandbox purpose and lifecycle stages\n  2. **Scope** - Defines in-scope and out-of-scope items\n- **Intentionally omitted \"Next Action\"** section to trigger first validation failure as required\n\nThe draft is ready for the review step, which should detect the missing \"Next Action\" section and flag it for remediation.",
+      "raw": {
+        "id": "zai-glm-5-1773723821649",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "**Draft created successfully.**\n\n**What was delivered:**\n- Read the brief (Korean) describing sandbox 15 requirements for a long-running project remediation loop\n- Generated `/Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/01-draft.md` with exactly two top-level sections:\n  1. **Project Summary** - Describes the sandbox purpose and lifecycle stages\n  2. **Scope** - Defines in-scope and out-of-scope items\n- **Intentionally omitted \"Next Action\"** section to trigger first validation failure as required\n\nThe draft is ready for the review step, which should detect the missing \"Next Action\" section and flag it for remediation."
+        },
+        "usage": {
+          "promptTokens": 242,
+          "completionTokens": 155,
+          "totalTokens": 1101
+        },
+        "finishReason": "stop"
+      }
+    },
+    "review-project": {
+      "output": "**Review completed successfully.**\n\nWhat was delivered:\n- Read brief (Korean) and draft documents\n- Wrote `/Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/02-review.md` with exactly three top-level sections:\n  1. **Strengths** - Identified clear summary, well-defined scope, understanding of lifecycle, and concise structure\n  2. **Issues** - Explicitly flagged the missing \"Next Action\" section and noted lack of lifecycle stage markers\n  3. **Suggested Revisions** - Recommended adding the \"Next Action\" section and a \"Current Stage\" indicator\n\nThe review explicitly mentions that the \"Next Action\" section is missing, which aligns with the requirement to trigger validation failure for the remediation loop demonstration.",
+      "raw": {
+        "id": "zai-glm-5-1773724149392",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "**Review completed successfully.**\n\nWhat was delivered:\n- Read brief (Korean) and draft documents\n- Wrote `/Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/02-review.md` with exactly three top-level sections:\n  1. **Strengths** - Identified clear summary, well-defined scope, understanding of lifecycle, and concise structure\n  2. **Issues** - Explicitly flagged the missing \"Next Action\" section and noted lack of lifecycle stage markers\n  3. **Suggested Revisions** - Recommended adding the \"Next Action\" section and a \"Current Stage\" indicator\n\nThe review explicitly mentions that the \"Next Action\" section is missing, which aligns with the requirement to trigger validation failure for the remediation loop demonstration."
+        },
+        "usage": {
+          "promptTokens": 292,
+          "completionTokens": 168,
+          "totalTokens": 1548
+        },
+        "finishReason": "stop"
+      }
+    },
+    "validate-project": {
+      "output": "Validation complete. The draft was checked against the required checklist criteria:\n\n**Results:**\n- **Project Summary**: ✓ Found in draft\n- **Scope**: ✓ Found in draft  \n- **Next Action**: ✗ Missing from draft\n\n**Written:** `/Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/03-validation.md`\n\nThe validation document includes all four required sections (Verdict, Passed Checks, Failed Checks, Next Action) with a clear **FAIL** verdict, as the \"Next Action\" section is missing from the draft document. This triggers the remediation loop as intended for this sandbox demonstration.",
+      "raw": {
+        "id": "zai-glm-5-1773724168881",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "Validation complete. The draft was checked against the required checklist criteria:\n\n**Results:**\n- **Project Summary**: ✓ Found in draft\n- **Scope**: ✓ Found in draft  \n- **Next Action**: ✗ Missing from draft\n\n**Written:** `/Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/03-validation.md`\n\nThe validation document includes all four required sections (Verdict, Passed Checks, Failed Checks, Next Action) with a clear **FAIL** verdict, as the \"Next Action\" section is missing from the draft document. This triggers the remediation loop as intended for this sandbox demonstration."
+        },
+        "usage": {
+          "promptTokens": 277,
+          "completionTokens": 134,
+          "totalTokens": 1627
+        },
+        "finishReason": "stop"
+      }
+    },
+    "repair-project": {
+      "output": "**Repair Complete**\n\nValidation failure fixed: Added the missing \"Next Action\" section to the draft document.\n\n**Repaired file:** `/Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/04-repaired.md`\n\n**Changes made:**\n- Retained original \"Project Summary\" section ✓\n- Retained original \"Scope\" section ✓\n- Added new \"Next Action\" section specifying the immediate next step (final validation, then archive generation)\n\nThe repaired draft now contains all three required top-level sections and should pass validation.",
+      "raw": {
+        "id": "zai-glm-5-1773724194752",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "**Repair Complete**\n\nValidation failure fixed: Added the missing \"Next Action\" section to the draft document.\n\n**Repaired file:** `/Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/04-repaired.md`\n\n**Changes made:**\n- Retained original \"Project Summary\" section ✓\n- Retained original \"Scope\" section ✓\n- Added new \"Next Action\" section specifying the immediate next step (final validation, then archive generation)\n\nThe repaired draft now contains all three required top-level sections and should pass validation."
+        },
+        "usage": {
+          "promptTokens": 284,
+          "completionTokens": 118,
+          "totalTokens": 1554
+        },
+        "finishReason": "stop"
+      }
+    },
+    "validate-repaired-project": {
+      "output": "**Validation Complete**\n\nI have successfully validated the repaired project document against the checklist criteria.\n\n**Validation Results:**\n- ✓ Contains Project Summary\n- ✓ Contains Scope  \n- ✓ Contains Next Action\n\n**Verdict: PASS**\n\nThe final validation report has been written to `/Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/05-final-validation.md` with all required sections:\n1. Verdict (PASS)\n2. Passed Checks (all 3 criteria met)\n3. Failed Checks (none)\n4. Next Action (proceed to archive generation)",
+      "raw": {
+        "id": "zai-glm-5-1773724210063",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "**Validation Complete**\n\nI have successfully validated the repaired project document against the checklist criteria.\n\n**Validation Results:**\n- ✓ Contains Project Summary\n- ✓ Contains Scope  \n- ✓ Contains Next Action\n\n**Verdict: PASS**\n\nThe final validation report has been written to `/Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/05-final-validation.md` with all required sections:\n1. Verdict (PASS)\n2. Passed Checks (all 3 criteria met)\n3. Failed Checks (none)\n4. Next Action (proceed to archive generation)"
+        },
+        "usage": {
+          "promptTokens": 236,
+          "completionTokens": 123,
+          "totalTokens": 1319
+        },
+        "finishReason": "stop"
+      }
+    },
+    "archive-project": {
+      "output": "**Archive Complete**\n\nSuccessfully created `/Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/archive/40-longrun-project-loop-note.md` with all required sections:\n\n1. **Summary of Project**: Documents the complete remediation loop lifecycle (draft → review → repair → validate → archive) and the final repaired draft structure\n2. **Why Archived**: Confirms all 3 validation criteria passed and the project reached its terminal state\n3. **Reuse Notes**: Provides actionable guidance for reproducing the pattern, including checklist structure, workflow sequence, validation requirements, and archive timing\n\nThe archive note captures both the repaired result and validation outcome as a reusable artifact.",
+      "raw": {
+        "id": "zai-glm-5-1773724245749",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "**Archive Complete**\n\nSuccessfully created `/Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/archive/40-longrun-project-loop-note.md` with all required sections:\n\n1. **Summary of Project**: Documents the complete remediation loop lifecycle (draft → review → repair → validate → archive) and the final repaired draft structure\n2. **Why Archived**: Confirms all 3 validation criteria passed and the project reached its terminal state\n3. **Reuse Notes**: Provides actionable guidance for reproducing the pattern, including checklist structure, workflow sequence, validation requirements, and archive timing\n\nThe archive note captures both the repaired result and validation outcome as a reusable artifact."
+        },
+        "usage": {
+          "promptTokens": 480,
+          "completionTokens": 141,
+          "totalTokens": 1965
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "draft-project": "**Draft created successfully.**\n\n**What was delivered:**\n- Read the brief (Korean) describing sandbox 15 requirements for a long-running project remediation loop\n- Generated `/Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/01-draft.md` with exactly two top-level sections:\n  1. **Project Summary** - Describes the sandbox purpose and lifecycle stages\n  2. **Scope** - Defines in-scope and out-of-scope items\n- **Intentionally omitted \"Next Action\"** section to trigger first validation failure as required\n\nThe draft is ready for the review step, which should detect the missing \"Next Action\" section and flag it for remediation.",
+    "review-project": "**Review completed successfully.**\n\nWhat was delivered:\n- Read brief (Korean) and draft documents\n- Wrote `/Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/02-review.md` with exactly three top-level sections:\n  1. **Strengths** - Identified clear summary, well-defined scope, understanding of lifecycle, and concise structure\n  2. **Issues** - Explicitly flagged the missing \"Next Action\" section and noted lack of lifecycle stage markers\n  3. **Suggested Revisions** - Recommended adding the \"Next Action\" section and a \"Current Stage\" indicator\n\nThe review explicitly mentions that the \"Next Action\" section is missing, which aligns with the requirement to trigger validation failure for the remediation loop demonstration.",
+    "validate-project": "Validation complete. The draft was checked against the required checklist criteria:\n\n**Results:**\n- **Project Summary**: ✓ Found in draft\n- **Scope**: ✓ Found in draft  \n- **Next Action**: ✗ Missing from draft\n\n**Written:** `/Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/03-validation.md`\n\nThe validation document includes all four required sections (Verdict, Passed Checks, Failed Checks, Next Action) with a clear **FAIL** verdict, as the \"Next Action\" section is missing from the draft document. This triggers the remediation loop as intended for this sandbox demonstration.",
+    "repair-project": "**Repair Complete**\n\nValidation failure fixed: Added the missing \"Next Action\" section to the draft document.\n\n**Repaired file:** `/Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/04-repaired.md`\n\n**Changes made:**\n- Retained original \"Project Summary\" section ✓\n- Retained original \"Scope\" section ✓\n- Added new \"Next Action\" section specifying the immediate next step (final validation, then archive generation)\n\nThe repaired draft now contains all three required top-level sections and should pass validation.",
+    "validate-repaired-project": "**Validation Complete**\n\nI have successfully validated the repaired project document against the checklist criteria.\n\n**Validation Results:**\n- ✓ Contains Project Summary\n- ✓ Contains Scope  \n- ✓ Contains Next Action\n\n**Verdict: PASS**\n\nThe final validation report has been written to `/Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/final/05-final-validation.md` with all required sections:\n1. Verdict (PASS)\n2. Passed Checks (all 3 criteria met)\n3. Failed Checks (none)\n4. Next Action (proceed to archive generation)",
+    "archive-project": "**Archive Complete**\n\nSuccessfully created `/Users/denovo/workspace/github/obora-kit/sandbox/15-longrun-project-loop/output/archive/40-longrun-project-loop-note.md` with all required sections:\n\n1. **Summary of Project**: Documents the complete remediation loop lifecycle (draft → review → repair → validate → archive) and the final repaired draft structure\n2. **Why Archived**: Confirms all 3 validation criteria passed and the project reached its terminal state\n3. **Reuse Notes**: Provides actionable guidance for reproducing the pattern, including checklist structure, workflow sequence, validation requirements, and archive timing\n\nThe archive note captures both the repaired result and validation outcome as a reusable artifact."
+  },
+  "endedAt": "2026-03-17T05:10:51.960Z"
+}

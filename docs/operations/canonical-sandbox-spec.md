@@ -2,7 +2,7 @@
 
 > Last updated: 2026-03-17
 
-이 문서는 `sandbox/01~14` active canonical sandbox들이 공통으로 따라야 하는 최소 규격을 정의한다.
+이 문서는 `sandbox/01~15` active canonical sandbox들이 공통으로 따라야 하는 최소 규격을 정의한다.
 
 ## 목적
 
@@ -124,6 +124,9 @@ README에는 반드시 아래가 있어야 한다.
 
 ### 14 — longrun project mini
 - primitive: long-running runner + project mini lifecycle
+
+### 15 — longrun project loop
+- primitive: long-running runner + project fail → repair → pass loop
 
 ---
 
