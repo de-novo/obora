@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://obora.dev/schemas/swebench-lite-pilot/reference-metadata.schema.json",
+  "title": "SWE-bench Lite pilot public reference metadata",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "benchmark",
+    "snapshot_label",
+    "model_family",
+    "matched_local_baseline_available",
+    "references"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "benchmark": {
+      "const": "swe-bench-lite"
+    },
+    "snapshot_label": {
+      "type": "string"
+    },
+    "model_family": {
+      "type": "string"
+    },
+    "matched_local_baseline_available": {
+      "type": "boolean"
+    },
+    "references": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["label", "source_type", "source_url", "model", "score_percent", "score_unit"],
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "source_type": {
+            "type": "string"
+          },
+          "source_url": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "score_percent": {
+            "type": ["number", "null"]
+          },
+          "score_unit": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "comparison_notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}

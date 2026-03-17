@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0",
+  "benchmark": "swe-bench-lite",
+  "preset_name": "pilot-5",
+  "pilot_size": 5,
+  "manifest_path": "../manifests/pilot-5.sample.json",
+  "results_path": "../results/pilot-5.results.jsonl",
+  "references_path": "../references/public-reference.sample.json",
+  "execution": {
+    "runner": "obora-loop",
+    "mode": "manual-recorded",
+    "model": "REPLACE_WITH_MODEL_ID",
+    "max_iterations": 8,
+    "record_optional_usage": true
+  },
+  "fairness_controls": {
+    "temperature": 0,
+    "task_order": "fixed-manifest-order",
+    "max_wall_time_sec_per_task": 3600,
+    "notes": "Keep prompts, tools, stop rules, and validation behavior fixed within the pilot."
+  }
+}

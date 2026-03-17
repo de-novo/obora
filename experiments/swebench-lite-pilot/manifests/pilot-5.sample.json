@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "benchmark": "swe-bench-lite",
+  "pilot_name": "pilot-5-sample",
+  "selection_notes": "Replace these sample task ids with a real fixed 5-task SWE-bench Lite slice before running the pilot.",
+  "task_count": 5,
+  "tasks": [
+    {
+      "task_id": "sample__task-001",
+      "repo": "example/repo-a"
+    },
+    {
+      "task_id": "sample__task-002",
+      "repo": "example/repo-b"
+    },
+    {
+      "task_id": "sample__task-003",
+      "repo": "example/repo-c"
+    },
+    {
+      "task_id": "sample__task-004",
+      "repo": "example/repo-d"
+    },
+    {
+      "task_id": "sample__task-005",
+      "repo": "example/repo-e"
+    }
+  ]
+}

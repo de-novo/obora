@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.0",
+  "benchmark": "swe-bench-lite",
+  "pilot_name": "pilot-10-sample",
+  "selection_notes": "Replace these sample task ids with a real fixed 10-task SWE-bench Lite slice before running the pilot.",
+  "task_count": 10,
+  "tasks": [
+    {
+      "task_id": "sample__task-001",
+      "repo": "example/repo-a"
+    },
+    {
+      "task_id": "sample__task-002",
+      "repo": "example/repo-b"
+    },
+    {
+      "task_id": "sample__task-003",
+      "repo": "example/repo-c"
+    },
+    {
+      "task_id": "sample__task-004",
+      "repo": "example/repo-d"
+    },
+    {
+      "task_id": "sample__task-005",
+      "repo": "example/repo-e"
+    },
+    {
+      "task_id": "sample__task-006",
+      "repo": "example/repo-f"
+    },
+    {
+      "task_id": "sample__task-007",
+      "repo": "example/repo-g"
+    },
+    {
+      "task_id": "sample__task-008",
+      "repo": "example/repo-h"
+    },
+    {
+      "task_id": "sample__task-009",
+      "repo": "example/repo-i"
+    },
+    {
+      "task_id": "sample__task-010",
+      "repo": "example/repo-j"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0",
+  "benchmark": "swe-bench-lite",
+  "snapshot_label": "replace-with-leaderboard-snapshot",
+  "model_family": "REPLACE_WITH_MODEL_FAMILY",
+  "matched_local_baseline_available": false,
+  "references": [
+    {
+      "label": "Published SWE-bench Lite score",
+      "source_type": "leaderboard",
+      "source_url": "https://www.swebench.com/",
+      "model": "REPLACE_WITH_MODEL_NAME",
+      "score_percent": null,
+      "score_unit": "percent_resolved",
+      "notes": "Record the coarse public reference score used for phase-1 comparison."
+    }
+  ],
+  "comparison_notes": [
+    "This file records public context only.",
+    "Do not treat this as a matched local baseline."
+  ]
+}
