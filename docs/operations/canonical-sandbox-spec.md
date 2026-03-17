@@ -173,7 +173,7 @@ README에는 반드시 아래가 있어야 한다.
 
 ### 20 — longrun feedback convergence loop
 
-- primitive: long-running runner + repeated evaluate/revise loop with monotonically improving scores until threshold + archive
+- primitive: long-running runner + runtime-native build_or_repair/validate back-edge loop with structured validation control until threshold + archive
 
 ---
 

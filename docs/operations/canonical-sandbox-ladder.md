@@ -17,28 +17,28 @@ canonical sandbox ladder는 Obora의 핵심 실행 패턴을
 
 ## Ladder Overview
 
-| Step | Sandbox                                | 핵심 패턴                                                   | 무엇을 검증하는가                                         |
-| ---- | -------------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------- |
-| 01   | `01-simple-native`                     | 단일 native step                                            | 가장 작은 Obora native workflow                           |
-| 02   | `02-simple-review`                     | draft → review                                              | handoff / review 분리                                     |
-| 03   | `03-simple-validation`                 | draft → validation                                          | validation report / PASS-FAIL 구조                        |
-| 04   | `04-simple-loop`                       | fail → repair → pass                                        | 최소 repair loop                                          |
-| 05   | `05-simple-archive`                    | final → archive                                             | 결과와 archive 분리                                       |
-| 06   | `06-project-mini`                      | small project lifecycle                                     | draft → review → final → validation → archive             |
-| 07   | `07-project-loop`                      | project + repair loop                                       | project lifecycle 안의 remediation                        |
-| 08   | `08-benchmark-mini`                    | solve → judge → archive                                     | solver / judge 분리 benchmark                             |
-| 09   | `09-benchmark-loop`                    | fail → repair → re-judge → archive                          | benchmark remediation loop                                |
-| 10   | `10-longrun-mini`                      | watchdog-wrapped longrun                                    | long-running runner 계약                                  |
-| 11   | `11-longrun-loop`                      | longrun + fail → repair → pass                              | long-running repair loop contract                         |
-| 12   | `12-longrun-benchmark-mini`            | longrun + solve → judge → archive                           | long-running benchmark mini                               |
-| 13   | `13-longrun-benchmark-loop`            | longrun + fail → repair → re-judge → archive                | long-running benchmark loop                               |
-| 14   | `14-longrun-project-mini`              | longrun + draft → review → final → validation → archive     | long-running project mini                                 |
-| 15   | `15-longrun-project-loop`              | longrun + fail → repair → final pass                        | long-running project loop                                 |
-| 16   | `16-multi-run-comparison-mini`         | solve×3 → compare → archive                                 | multi-run comparison with normalized per-run results      |
-| 17   | `17-multi-run-comparison-loop`         | solve×3 → compare → validate → repair → re-compare          | multi-run comparison remediation loop                     |
-| 18   | `18-longrun-paper-verification-mini`   | longrun + paper claim verification → archive                | minimal real-paper verification against vendored excerpts |
-| 19   | `19-longrun-paper-verification-loop`   | longrun + paper verification → validate → repair → pass     | paper verification remediation loop against same fixture  |
-| 20   | `20-longrun-feedback-convergence-loop` | longrun + generate → evaluate → revise → converge → archive | first true threshold-driven feedback convergence loop     |
+| Step | Sandbox                                | 핵심 패턴                                                       | 무엇을 검증하는가                                         |
+| ---- | -------------------------------------- | --------------------------------------------------------------- | --------------------------------------------------------- |
+| 01   | `01-simple-native`                     | 단일 native step                                                | 가장 작은 Obora native workflow                           |
+| 02   | `02-simple-review`                     | draft → review                                                  | handoff / review 분리                                     |
+| 03   | `03-simple-validation`                 | draft → validation                                              | validation report / PASS-FAIL 구조                        |
+| 04   | `04-simple-loop`                       | fail → repair → pass                                            | 최소 repair loop                                          |
+| 05   | `05-simple-archive`                    | final → archive                                                 | 결과와 archive 분리                                       |
+| 06   | `06-project-mini`                      | small project lifecycle                                         | draft → review → final → validation → archive             |
+| 07   | `07-project-loop`                      | project + repair loop                                           | project lifecycle 안의 remediation                        |
+| 08   | `08-benchmark-mini`                    | solve → judge → archive                                         | solver / judge 분리 benchmark                             |
+| 09   | `09-benchmark-loop`                    | fail → repair → re-judge → archive                              | benchmark remediation loop                                |
+| 10   | `10-longrun-mini`                      | watchdog-wrapped longrun                                        | long-running runner 계약                                  |
+| 11   | `11-longrun-loop`                      | longrun + fail → repair → pass                                  | long-running repair loop contract                         |
+| 12   | `12-longrun-benchmark-mini`            | longrun + solve → judge → archive                               | long-running benchmark mini                               |
+| 13   | `13-longrun-benchmark-loop`            | longrun + fail → repair → re-judge → archive                    | long-running benchmark loop                               |
+| 14   | `14-longrun-project-mini`              | longrun + draft → review → final → validation → archive         | long-running project mini                                 |
+| 15   | `15-longrun-project-loop`              | longrun + fail → repair → final pass                            | long-running project loop                                 |
+| 16   | `16-multi-run-comparison-mini`         | solve×3 → compare → archive                                     | multi-run comparison with normalized per-run results      |
+| 17   | `17-multi-run-comparison-loop`         | solve×3 → compare → validate → repair → re-compare              | multi-run comparison remediation loop                     |
+| 18   | `18-longrun-paper-verification-mini`   | longrun + paper claim verification → archive                    | minimal real-paper verification against vendored excerpts |
+| 19   | `19-longrun-paper-verification-loop`   | longrun + paper verification → validate → repair → pass         | paper verification remediation loop against same fixture  |
+| 20   | `20-longrun-feedback-convergence-loop` | longrun + runtime-native build/repair ↔ validate loop → archive | first true threshold-driven feedback convergence loop     |
 
 ---
 
@@ -263,17 +263,16 @@ validation fail 이후 repair를 수행한다.
 
 ### 20 — longrun feedback convergence loop
 
-처음으로 threshold에 도달할 때까지 반복 평가와 revision을 수행하는 true convergence loop를 도입한다.
+처음으로 threshold에 도달할 때까지 runtime back-edge로 반복되는 true convergence loop를 도입한다.
 
-- structured candidate v1 생성
-- evaluation v1 score 산출
-- feedback 기반 revise v2 / evaluate v2
-- feedback 기반 revise v3 / evaluate v3
-- feedback 기반 revise v4 / evaluate v4
-- final threshold 도달 후 archive
+- build_or_repair step이 같은 candidate를 생성/수정
+- validate step이 structured ValidationResult를 반환
+- FAIL 시 on_fail.goto가 build_or_repair로 재진입
+- repair step은 latest validation feedback를 읽고 다음 candidate를 개선
+- threshold 도달 후 archive
 - watchdog wrapper
 
-이 단계는 long-running workflow에서도 단일 FAIL → repair → PASS가 아니라, 점수가 단조 증가하며 threshold에 수렴하는 반복 feedback loop를 재현 가능하게 닫을 수 있는지 검증한다.
+이 단계는 long-running workflow에서도 단일 FAIL → repair → PASS가 아니라, runtime이 validator 결과로 back-edge를 제어하고 candidate가 threshold에 수렴할 때까지 반복되는 feedback loop를 재현 가능하게 닫을 수 있는지 검증한다.
 
 ---
 

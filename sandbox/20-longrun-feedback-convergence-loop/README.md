@@ -2,14 +2,15 @@
 
 > 상태: **active / canonical step 20**
 >
-> 이 sandbox는 step 19의 one-shot remediation loop를 넘어, 같은 과제를 여러 번 평가하고 피드백을 반영하며 임계치에 수렴할 때까지 개선하는 첫 canonical convergence loop 기준점입니다.
+> 이 sandbox는 step 19의 one-shot remediation loop를 넘어, validator의 structured result가 runtime back-edge를 다시 열고 같은 candidate를 임계치까지 수렴시키는 첫 canonical convergence loop 기준점입니다.
 
 ## 목적
 
 - long-running runner(watchdog + large safety ceiling)를 사용한다
-- 작은 구조화 writing task를 평가-수정-재평가 루프로 반복한다
-- 최소 4개의 candidate와 4개의 evaluation point를 생성한다
-- evaluation score가 단조 증가하며 최종 threshold 이상에 도달한다
+- 작은 구조화 writing task를 `build_or_repair -> validate` cyclic loop로 반복한다
+- validator의 structured result가 runtime loop control을 담당한다
+- builder가 실제 prior validation feedback를 읽고 같은 candidate를 개선한다
+- score가 threshold 이상에 도달하면 archive로 종료하고, 아니면 back-edge로 재진입한다
 - archive note로 convergence trajectory를 재사용 가능하게 남긴다
 
 ## 입력
@@ -19,15 +20,10 @@
 
 ## 출력
 
-- `output/final/01-v1.md`
-- `output/final/02-eval-v1.md`
-- `output/final/03-v2.md`
-- `output/final/04-eval-v2.md`
-- `output/final/05-v3.md`
-- `output/final/06-eval-v3.md`
-- `output/final/07-v4.md`
-- `output/final/08-eval-v4.md`
+- `output/final/01-current.md`
+- `output/final/02-validation.md`
 - `output/archive/40-feedback-convergence-note.md`
+- `output/iterations/30-validation-history.md`
 - `output/iterations/results/longrun-feedback-convergence-loop-*.json`
 - `output/iterations/logs/run.log`
 - `output/iterations/logs/run.tail.log`
@@ -49,12 +45,12 @@ sandbox/20-longrun-feedback-convergence-loop/verify.sh --fresh
 
 - workflow가 `completed`로 끝난다
 - watchdog wrapper를 통해 실행된다
-- candidate 4개와 evaluation 4개가 모두 생성된다
-- 각 candidate는 고정된 5개 top-level section을 유지한다
-- 각 evaluation은 고정된 4개 top-level section을 유지한다
-- evaluation score가 정수 `/10` 형식으로 기록되고 단조 증가한다
-- final evaluation score가 `>= 9/10`에 도달한다
-- archive note가 convergence trajectory와 재사용 포인트를 안정적인 heading 구조로 보존한다
+- `build_or_repair`와 `validate`가 로그에서 반복 실행된 뒤 archive로 닫힌다
+- current candidate는 고정된 5개 top-level section을 유지한다
+- latest validation report는 고정된 heading 구조와 정수 `/10` score를 가진다
+- validation history가 반복 실행의 score trajectory를 보존하며 non-regression을 보여준다
+- final validation state가 `PASS`이고 score가 `>= 9/10`이다
+- archive note가 runtime-native cyclic loop와 실제 convergence trajectory를 안정적인 heading 구조로 보존한다
 
 ## 워크플로우 그래프 (ASCII)
 
@@ -62,44 +58,36 @@ sandbox/20-longrun-feedback-convergence-loop/verify.sh --fresh
 +-------------------+
 | run-with-watchdog |
 +-------------------+
-    |
-    v
-+------------+     +-------------+
-| produce v1 | --> | evaluate v1 |
-+------------+     +-------------+
-                         |
-                         v
-                    +-----------+
-                    | revise v2 |
-                    +-----------+
-                         |
-                         v
-                    +-------------+
-                    | evaluate v2 |
-                    +-------------+
-                         |
-                         v
-                    +-----------+
-                    | revise v3 |
-                    +-----------+
-                         |
-                         v
-                    +-------------+
-                    | evaluate v3 |
-                    +-------------+
-                         |
-                         v
-                    +-----------+
-                    | revise v4 |
-                    +-----------+
-                         |
-                         v
-                    +-------------+
-                    | evaluate v4 |
-                    +-------------+
-                         |
-                         v
-                    +---------+
-                    | archive |
-                    +---------+
+          |
+          v
+ +-----------------+
+ | build_or_repair |
+ +-----------------+
+          |
+          v
+   +---------------+
+   | validate      |
+   | score: N/10   |
+   | verdict: ?    |
+   +---------------+
+      |         |
+      | FAIL    | PASS (>= 9/10)
+      |         |
+      v         v
++-----------------+   +---------------------+
+| on_fail.goto    |   | archive-convergence |
+| build_or_repair |   +---------------------+
++-----------------+
+          |
+          +------ feedback from latest validation ------+
+                                                         |
+                                                         v
+                                                  +-----------------+
+                                                  | build_or_repair |
+                                                  +-----------------+
+
+loop invariant:
+  validate emits structured results for runtime control
+  build_or_repair consumes actual latest validation feedback
+  repeat until threshold reached or runtime stop guard triggers
 ```

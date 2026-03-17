@@ -1,245 +1,136 @@
 name: longrun-feedback-convergence-loop
 version: "1.0"
 steps:
-  - name: produce-v1
+  - name: build_or_repair
     agent: planner
+    config:
+      repair_loop:
+        enabled: true
+        validation_step: validate
+        max_no_progress_iterations: 2
+        repeated_critical_issue_ceiling: 2
     tools: [file_read, file_write]
     input:
       task: |
         Read /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/input/brief.md
         and /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/input/rubric.md.
 
-        Write /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/01-v1.md.
+        If either file exists, also read:
+        - /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/02-validation.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/iterations/30-validation-history.md
 
-        Create a concise rollout note that uses exactly these top-level Markdown H1 sections and no others:
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/01-current.md.
+
+        Create or repair one concise rollout note that uses exactly these top-level Markdown H1 sections and no others:
           1. Objective
           2. Constraints
           3. Proposed Approach
           4. Risks
           5. Success Check
 
-        Candidate v1 rules:
+        Heading-shape rule:
+        - The only allowed H1 headings are Objective, Constraints, Proposed Approach, Risks, and Success Check.
+        - Do not add any other H1 headings such as Convergence History, Verification Invariants, Archive Note, Reuse Notes, or Score Trajectory.
+        - If you need that content, place it as bullets or nested headings under the existing five H1 sections only.
+
+        Global rules:
         - Make the note clearly about Obora canonical sandbox step 20.
-        - Explicitly satisfy only rubric checks C1, C2, C3, and C4.
-        - In Success Check, include exactly four bullets labeled C1 through C4.
-        - Do not mention or satisfy C5 through C10 anywhere in the file.
-        - Keep the note concise, operational, and sandbox-local.
+        - Keep all outputs sandbox-local under /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/.
+        - Describe a runtime-native cyclic loop, not a pre-scripted sequence.
+        - The convergence threshold is 9/10. Do not invent or use any other threshold.
+        - Do not invent exact iteration ceilings or fixed score sequences that are not grounded in the workflow inputs or actual validation history.
+        - Keep the note concise, operational, and reusable.
 
-  - name: evaluate-v1
+        First-attempt rules:
+        - Satisfy C1, C2, C3, and C4.
+        - Do not explicitly satisfy C5 through C10 yet.
+        - Make the draft clearly below the convergence threshold so validation must fail and re-enter the loop.
+
+        Repair-attempt rules:
+        - Use the injected repair context, especially attempt, latestValidation, and previousValidationResults, when present.
+        - Preserve already passed checks.
+        - Improve the same candidate using the actual latest failed checks from latestValidation.failedChecks.
+        - Do not follow a fixed stage script or mention predetermined check batches.
+        - Close at most two currently failed checks per repair attempt unless fewer remain.
+        - In Proposed Approach, include one bullet that begins exactly with: Feedback applied from latest validation:
+        - That feedback bullet must name the concrete failed checks being addressed in this repair attempt.
+        - If previousValidationResults are present, avoid regression against earlier passes.
+        - If the remaining failed checks can push the score to the 9/10 threshold, make the candidate threshold-ready.
+        - Describe convergence history, archive-note headings, verification invariants, and reuse guidance inside the existing five H1 sections only.
+
+  - name: validate
     agent: evaluator
-    depends_on: [produce-v1]
+    depends_on: [build_or_repair]
+    config:
+      validation:
+        enabled: true
+        emit_structured_result: true
+    on_fail:
+      goto: build_or_repair
+      max_iterations: 4
     tools: [file_read, file_write]
     input:
       task: |
         Read /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/input/rubric.md
-        and /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/01-v1.md.
+        and /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/01-current.md.
 
-        Write /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/02-eval-v1.md.
+        If it exists, also read /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/iterations/30-validation-history.md.
 
-        Evaluate the candidate strictly against rubric checks C1 through C10.
-
-        Scoring rule:
-        - A check passes only if the candidate explicitly and concretely satisfies that checklist item.
-        - Score equals the count of passed checks.
-        - Report the score as an integer out of 10.
-
-        Output requirements:
-        - Use exactly these top-level Markdown H1 sections and no others:
-          1. Score
-          2. Passed Checks
-          3. Failed Checks
-          4. Next Action
-        - Under Score, put the score on its own line in the form N/10.
-        - In Passed Checks and Failed Checks, list checklist IDs with one short reason each.
-        - In Next Action, direct the revision to preserve passes and add the failed checks needed next.
-
-  - name: revise-v2
-    agent: reviser
-    depends_on: [evaluate-v1]
-    tools: [file_read, file_write]
-    input:
-      task: |
-        Read /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/input/brief.md,
-        /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/input/rubric.md,
-        /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/01-v1.md,
-        and /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/02-eval-v1.md.
-
-        Write /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/03-v2.md.
-
-        Revise the rollout note using the prior evaluation feedback.
-
-        Candidate v2 rules:
-        - Keep exactly these top-level Markdown H1 sections and no others:
-          1. Objective
-          2. Constraints
-          3. Proposed Approach
-          4. Risks
-          5. Success Check
-        - Preserve all passed checks from v1.
-        - Add rubric checks C5 and C6.
-        - Do not mention or satisfy C7 through C10 yet.
-        - In Proposed Approach, include a bullet that begins exactly with: Feedback applied from 02-eval-v1:
-        - That feedback bullet must describe only this revision step, not a general rule for every revision.
-        - In Success Check, include exactly six bullets labeled C1 through C6.
-
-  - name: evaluate-v2
-    agent: evaluator
-    depends_on: [revise-v2]
-    tools: [file_read, file_write]
-    input:
-      task: |
-        Read /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/input/rubric.md
-        and /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/03-v2.md.
-
-        Write /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/04-eval-v2.md.
+        Write a human-readable validation report to /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/02-validation.md.
+        Also update /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/iterations/30-validation-history.md so it records every validation in chronological order.
 
         Evaluate the candidate strictly against rubric checks C1 through C10.
 
-        Scoring rule:
+        Scoring and loop-control rules:
         - A check passes only if the candidate explicitly and concretely satisfies that checklist item.
         - Score equals the count of passed checks.
         - Report the score as an integer out of 10.
+        - PASS only when score >= 9.
+        - When score < 9, the runtime should use your structured result to re-enter build_or_repair.
 
-        Output requirements:
+        Human-readable report requirements:
         - Use exactly these top-level Markdown H1 sections and no others:
           1. Score
-          2. Passed Checks
-          3. Failed Checks
-          4. Next Action
-        - Under Score, put the score on its own line in the form N/10.
+          2. Verdict
+          3. Passed Checks
+          4. Failed Checks
+          5. Next Action
+        - Under Score, put the score on its own line in the form Score: N/10.
+        - Under Verdict, put either PASS or FAIL on its own line.
         - In Passed Checks and Failed Checks, list checklist IDs with one short reason each.
-        - In Next Action, direct the next revision to preserve passes and add the next missing checks.
+        - In Next Action, if FAIL, direct build_or_repair to preserve passes and address up to two concrete failed checks from this validation.
+        - In Next Action, if PASS, state that the threshold was reached and archive can run.
 
-  - name: revise-v3
-    agent: reviser
-    depends_on: [evaluate-v2]
-    tools: [file_read, file_write]
-    input:
-      task: |
-        Read /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/input/brief.md,
-        /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/input/rubric.md,
-        /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/03-v2.md,
-        and /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/04-eval-v2.md.
+        Validation history requirements:
+        - Keep a stable Markdown table with columns Attempt, Score, Verdict, Failed Checks.
+        - In the Score column, record values in the form N/10.
+        - Append the current validation honestly; do not invent future rows.
 
-        Write /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/05-v3.md.
+        After writing both files, your assistant response must be ONLY a strict ValidationResult JSON object.
+        Do not include markdown fences.
+        Do not include prose before or after the JSON.
 
-        Revise the rollout note using the prior evaluation feedback.
+        Return this exact shape:
+        {
+          "passed": boolean,
+          "summary": "string",
+          "failedChecks": [{ "name": "string", "message": "string" }],
+          "signature": "stable-signature"
+        }
 
-        Candidate v3 rules:
-        - Keep exactly these top-level Markdown H1 sections and no others:
-          1. Objective
-          2. Constraints
-          3. Proposed Approach
-          4. Risks
-          5. Success Check
-        - Preserve all passed checks from v2.
-        - Add rubric checks C7 and C8.
-        - Do not mention or satisfy C9 or C10 yet.
-        - In Proposed Approach, include a bullet that begins exactly with: Feedback applied from 04-eval-v2:
-        - In Constraints, state as a standing workflow rule that every revision after v1 reads and applies the immediately previous evaluation feedback.
-        - Describe the archive-note requirement inside Proposed Approach or Success Check only; do not create a separate top-level Archive Note section.
-        - In Success Check, include exactly eight bullets labeled C1 through C8.
-
-  - name: evaluate-v3
-    agent: evaluator
-    depends_on: [revise-v3]
-    tools: [file_read, file_write]
-    input:
-      task: |
-        Read /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/input/rubric.md
-        and /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/05-v3.md.
-
-        Write /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/06-eval-v3.md.
-
-        Evaluate the candidate strictly against rubric checks C1 through C10.
-
-        Scoring rule:
-        - A check passes only if the candidate explicitly and concretely satisfies that checklist item.
-        - Score equals the count of passed checks.
-        - Report the score as an integer out of 10.
-
-        Output requirements:
-        - Use exactly these top-level Markdown H1 sections and no others:
-          1. Score
-          2. Passed Checks
-          3. Failed Checks
-          4. Next Action
-        - Under Score, put the score on its own line in the form N/10.
-        - In Passed Checks and Failed Checks, list checklist IDs with one short reason each.
-        - In Next Action, direct the next revision to preserve passes and add the remaining checks needed to converge.
-
-  - name: revise-v4
-    agent: reviser
-    depends_on: [evaluate-v3]
-    tools: [file_read, file_write]
-    input:
-      task: |
-        Read /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/input/brief.md,
-        /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/input/rubric.md,
-        /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/05-v3.md,
-        and /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/06-eval-v3.md.
-
-        Write /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/07-v4.md.
-
-        Revise the rollout note using the prior evaluation feedback.
-
-        Candidate v4 rules:
-        - Keep exactly these top-level Markdown H1 sections and no others:
-          1. Objective
-          2. Constraints
-          3. Proposed Approach
-          4. Risks
-          5. Success Check
-        - Preserve all passed checks from v3.
-        - Add rubric checks C9 and C10.
-        - In Proposed Approach, include a bullet that begins exactly with: Feedback applied from 06-eval-v3:
-        - Describe verification invariants and reuse guidance inside the existing five sections only; do not create separate top-level sections such as Verification Invariants or Archive Note.
-        - In Success Check, include exactly ten bullets labeled C1 through C10.
-        - Make the candidate clearly ready to stop because the threshold has been reached.
-
-  - name: evaluate-v4
-    agent: evaluator
-    depends_on: [revise-v4]
-    tools: [file_read, file_write]
-    input:
-      task: |
-        Read /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/input/rubric.md
-        and /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/07-v4.md.
-
-        Write /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/08-eval-v4.md.
-
-        Evaluate the candidate strictly against rubric checks C1 through C10.
-
-        Scoring rule:
-        - A check passes only if the candidate explicitly and concretely satisfies that checklist item.
-        - Score equals the count of passed checks.
-        - Report the score as an integer out of 10.
-
-        Output requirements:
-        - Use exactly these top-level Markdown H1 sections and no others:
-          1. Score
-          2. Passed Checks
-          3. Failed Checks
-          4. Next Action
-        - Under Score, put the score on its own line in the form N/10.
-        - In Passed Checks and Failed Checks, list checklist IDs with one short reason each.
-        - Final score must be at least 9/10.
-        - In Next Action, state that the threshold was reached and the convergence loop can be archived.
+        Signature rule:
+        - If PASS, use "threshold-met".
+        - Otherwise use "missing:" followed by the failed check IDs in rubric order separated by commas.
 
   - name: archive-convergence
     agent: archivist
-    depends_on: [evaluate-v4]
+    depends_on: [validate]
     tools: [file_read, file_write]
     input:
       task: |
-        Read /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/01-v1.md,
-        /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/02-eval-v1.md,
-        /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/03-v2.md,
-        /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/04-eval-v2.md,
-        /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/05-v3.md,
-        /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/06-eval-v3.md,
-        /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/07-v4.md,
-        and /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/08-eval-v4.md.
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/01-current.md,
+        /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/02-validation.md,
+        and /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/iterations/30-validation-history.md.
 
         Write /Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/archive/40-feedback-convergence-note.md.
 
@@ -248,6 +139,8 @@ steps:
           1. Summary of Convergence
           2. Score Trajectory
           3. Reuse Notes
-        - Explain that this sandbox demonstrates repeated evaluation-driven improvement toward a threshold, not one-shot repair.
-        - Score Trajectory must explicitly show the sequence 4 -> 6 -> 8 -> 10.
+        - Explain that this sandbox demonstrates a runtime-native cyclic feedback loop using build_or_repair -> validate with an on_fail.goto back-edge.
+        - Explain that termination is threshold-driven at 9/10 and bounded by runtime loop safeguards rather than a fixed four-stage script.
+        - Derive the score trajectory from the validation history honestly. Do not hard-code any score sequence.
+        - Mention the final PASS state and the 9/10 threshold reached.
         - Reuse Notes should explain how the same pattern can be adapted to other small structured checklist tasks.

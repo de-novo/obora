@@ -226,15 +226,19 @@
 
 ```text
 [run-with-watchdog]
-  -> [produce v1]
-  -> [evaluate v1: 4/10]
-  => [revise v2]
-  => [evaluate v2: 6/10]
-  => [revise v3]
-  => [evaluate v3: 8/10]
-  => [revise v4]
-  => [evaluate v4: 10/10]
-  -> [archive]
+  -> [build_or_repair]
+  -> [validate: score N/10]
+       | FAIL / threshold not reached
+       => [runtime back-edge via on_fail.goto]
+       => [build_or_repair using latest validation]
+       => [validate again]
+       | PASS / threshold reached
+       -> [archive]
+
+loop invariant:
+  validator emits structured result for runtime control
+  builder consumes actual latest validation feedback
+  iteration continues until threshold or loop stop guard is hit
 ```
 
 ---

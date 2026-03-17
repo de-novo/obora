@@ -52,113 +52,110 @@ fi
 RUN_LOG="$ROOT/output/iterations/logs/run.log"
 RUN_TAIL_LOG="$ROOT/output/iterations/logs/run.tail.log"
 ARCHIVE_NOTE="$ROOT/output/archive/40-feedback-convergence-note.md"
+CURRENT_CANDIDATE="$ROOT/output/final/01-current.md"
+LATEST_VALIDATION="$ROOT/output/final/02-validation.md"
+VALIDATION_HISTORY="$ROOT/output/iterations/30-validation-history.md"
 WORKFLOW_RESULT_GLOB="$ROOT/output/iterations/results/longrun-feedback-convergence-loop-*.json"
-
-CANDIDATES=(
-  "$ROOT/output/final/01-v1.md"
-  "$ROOT/output/final/03-v2.md"
-  "$ROOT/output/final/05-v3.md"
-  "$ROOT/output/final/07-v4.md"
-)
-
-EVALUATIONS=(
-  "$ROOT/output/final/02-eval-v1.md"
-  "$ROOT/output/final/04-eval-v2.md"
-  "$ROOT/output/final/06-eval-v3.md"
-  "$ROOT/output/final/08-eval-v4.md"
-)
 
 require_file "$RUN_LOG"
 require_file "$RUN_TAIL_LOG"
 require_file "$ARCHIVE_NOTE"
+require_file "$CURRENT_CANDIDATE"
+require_file "$LATEST_VALIDATION"
+require_file "$VALIDATION_HISTORY"
 require_glob "$WORKFLOW_RESULT_GLOB"
 
-for path in "${CANDIDATES[@]}" "${EVALUATIONS[@]}"; do
-  require_file "$path"
-done
-
 require_contains 'Workflow "longrun-feedback-convergence-loop" completed.' "$RUN_LOG"
-require_contains 'step_end: produce-v1 (completed)' "$RUN_LOG"
-require_contains 'step_end: evaluate-v1 (completed)' "$RUN_LOG"
-require_contains 'step_end: revise-v2 (completed)' "$RUN_LOG"
-require_contains 'step_end: evaluate-v2 (completed)' "$RUN_LOG"
-require_contains 'step_end: revise-v3 (completed)' "$RUN_LOG"
-require_contains 'step_end: evaluate-v3 (completed)' "$RUN_LOG"
-require_contains 'step_end: revise-v4 (completed)' "$RUN_LOG"
-require_contains 'step_end: evaluate-v4 (completed)' "$RUN_LOG"
+require_contains 'step_end: build_or_repair (completed)' "$RUN_LOG"
+require_contains 'step_end: validate (completed)' "$RUN_LOG"
 require_contains 'step_end: archive-convergence (completed)' "$RUN_LOG"
 require_contains 'Workflow "longrun-feedback-convergence-loop" completed.' "$RUN_TAIL_LOG"
 
-for candidate in "${CANDIDATES[@]}"; do
-  grep -Eq '^#[[:space:]]+Objective$' "$candidate" || fail "expected top-level Objective heading in $candidate"
-  grep -Eq '^#[[:space:]]+Constraints$' "$candidate" || fail "expected top-level Constraints heading in $candidate"
-  grep -Eq '^#[[:space:]]+Proposed Approach$' "$candidate" || fail "expected top-level Proposed Approach heading in $candidate"
-  grep -Eq '^#[[:space:]]+Risks$' "$candidate" || fail "expected top-level Risks heading in $candidate"
-  grep -Eq '^#[[:space:]]+Success Check$' "$candidate" || fail "expected top-level Success Check heading in $candidate"
-  node -e '
+node -e '
 const fs = require("fs");
 const text = fs.readFileSync(process.argv[1], "utf8");
+for (const heading of ["Objective", "Constraints", "Proposed Approach", "Risks", "Success Check"]) {
+  if (!new RegExp(`^# ${heading}$`, "m").test(text)) process.exit(2);
+}
 const headings = text.match(/^# /gm) || [];
 if (headings.length !== 5) process.exit(1);
-' "$candidate" || fail "expected exactly five top-level sections in $candidate"
-done
-
-for evaluation in "${EVALUATIONS[@]}"; do
-  grep -Eq '^#[[:space:]]+Score$' "$evaluation" || fail "expected top-level Score heading in $evaluation"
-  grep -Eq '^#[[:space:]]+Passed Checks$' "$evaluation" || fail "expected top-level Passed Checks heading in $evaluation"
-  grep -Eq '^#[[:space:]]+Failed Checks$' "$evaluation" || fail "expected top-level Failed Checks heading in $evaluation"
-  grep -Eq '^#[[:space:]]+Next Action$' "$evaluation" || fail "expected top-level Next Action heading in $evaluation"
-  node -e '
-const fs = require("fs");
-const text = fs.readFileSync(process.argv[1], "utf8");
-const headings = text.match(/^# /gm) || [];
-if (headings.length !== 4) process.exit(1);
-const match = text.match(/^# Score\n\n(?:Score:\s*)?(\d+)\/10/m);
-if (!match) process.exit(2);
-const score = Number(match[1]);
-if (!Number.isInteger(score) || score < 0 || score > 10) process.exit(3);
-' "$evaluation" || fail "expected integer /10 score in $evaluation"
-done
-
-grep -Fq 'Feedback applied from 02-eval-v1' "$ROOT/output/final/03-v2.md" || fail "expected v2 to reference prior evaluation feedback"
-grep -Fq 'Feedback applied from 04-eval-v2' "$ROOT/output/final/05-v3.md" || fail "expected v3 to reference prior evaluation feedback"
-grep -Fq 'Feedback applied from 06-eval-v3' "$ROOT/output/final/07-v4.md" || fail "expected v4 to reference prior evaluation feedback"
+' "$CURRENT_CANDIDATE" || fail "expected stable candidate heading structure in $CURRENT_CANDIDATE"
 
 node -e '
 const fs = require("fs");
-const paths = process.argv.slice(1);
-const scores = paths.map((file) => {
-  const text = fs.readFileSync(file, "utf8");
-  const match = text.match(/^# Score\n\n(?:Score:\s*)?(\d+)\/10/m);
-  if (!match) throw new Error(`missing score in ${file}`);
-  return Number(match[1]);
-});
+const text = fs.readFileSync(process.argv[1], "utf8");
+for (const heading of ["Score", "Verdict", "Passed Checks", "Failed Checks", "Next Action"]) {
+  if (!new RegExp(`^# ${heading}$`, "m").test(text)) process.exit(4);
+}
+const headings = text.match(/^# /gm) || [];
+if (headings.length !== 5) process.exit(1);
+const match = text.match(/^# Score\n\nScore:\s*(\d+)\/10/m);
+if (!match) process.exit(2);
+const score = Number(match[1]);
+if (!Number.isInteger(score) || score < 0 || score > 10) process.exit(3);
+' "$LATEST_VALIDATION" || fail "expected stable validation report structure in $LATEST_VALIDATION"
+
+node -e '
+const fs = require("fs");
+const log = fs.readFileSync(process.argv[1], "utf8");
+const buildCount = (log.match(/step_end: build_or_repair \(completed\)/g) || []).length;
+const validateCount = (log.match(/^.*→ validate$/gm) || []).length;
+const archiveCount = (log.match(/step_end: archive-convergence \(completed\)/g) || []).length;
+if (buildCount < 2) throw new Error(`expected repeated build_or_repair executions, saw ${buildCount}`);
+if (validateCount < 2) throw new Error(`expected repeated validate executions, saw ${validateCount}`);
+if (validateCount < buildCount) throw new Error(`expected validate to run at least as often as build_or_repair, saw ${buildCount}/${validateCount}`);
+if (archiveCount !== 1) throw new Error(`expected exactly one archive step, saw ${archiveCount}`);
+' "$RUN_LOG" || fail "expected repeated runtime-native loop execution in $RUN_LOG"
+
+node -e '
+const fs = require("fs");
+const text = fs.readFileSync(process.argv[1], "utf8");
+const rows = [...text.matchAll(/^\|\s*(\d+)\s*\|\s*(\d+)(?:\/10)?\s*\|\s*(PASS|FAIL)\s*\|\s*(.*?)\s*\|$/gm)];
+if (rows.length < 2) throw new Error(`expected at least two validation history rows, saw ${rows.length}`);
+const scores = rows.map((match) => Number(match[2]));
+const verdicts = rows.map((match) => match[3]);
+let improved = false;
 for (let i = 1; i < scores.length; i += 1) {
-  if (scores[i] <= scores[i - 1]) {
-    throw new Error(`scores are not strictly increasing: ${scores.join(" -> ")}`);
+  if (scores[i] < scores[i - 1]) {
+    throw new Error(`scores regressed: ${scores.join(" -> ")}`);
   }
+  if (scores[i] > scores[i - 1]) improved = true;
 }
-if (scores[scores.length - 1] < 9) {
-  throw new Error(`final score below threshold: ${scores[scores.length - 1]}`);
-}
-' "${EVALUATIONS[@]}" || fail "expected strictly increasing scores ending at >= 9/10"
+if (!improved) throw new Error(`expected at least one strict improvement: ${scores.join(" -> ")}`);
+if (scores[scores.length - 1] < 9) throw new Error(`final score below threshold: ${scores[scores.length - 1]}`);
+if (verdicts[verdicts.length - 1] !== "PASS") throw new Error(`final verdict is not PASS: ${verdicts[verdicts.length - 1]}`);
+' "$VALIDATION_HISTORY" || fail "expected non-regressing convergence history ending in PASS"
+
+require_contains 'Feedback applied from latest validation:' "$CURRENT_CANDIDATE"
+require_contains '9/10' "$CURRENT_CANDIDATE"
+require_contains 'runtime-native cyclic feedback loop' "$ARCHIVE_NOTE"
+require_contains '9/10' "$ARCHIVE_NOTE"
+node -e '
+const fs = require("fs");
+const text = fs.readFileSync(process.argv[1], "utf8");
+if (!/build_or_repair\s*(?:->|→)\s*validate/.test(text)) process.exit(1);
+' "$ARCHIVE_NOTE" || fail "expected archive note to describe the build_or_repair back-edge loop"
 
 grep -Eq '^#[[:space:]]+Summary of Convergence$' "$ARCHIVE_NOTE" || fail "expected top-level Summary of Convergence heading in $ARCHIVE_NOTE"
 grep -Eq '^#[[:space:]]+Score Trajectory$' "$ARCHIVE_NOTE" || fail "expected top-level Score Trajectory heading in $ARCHIVE_NOTE"
 grep -Eq '^#[[:space:]]+Reuse Notes$' "$ARCHIVE_NOTE" || fail "expected top-level Reuse Notes heading in $ARCHIVE_NOTE"
 node -e '
 const fs = require("fs");
-const text = fs.readFileSync(process.argv[1], "utf8");
+const [archivePath, historyPath] = process.argv.slice(1);
+const text = fs.readFileSync(archivePath, "utf8");
+const history = fs.readFileSync(historyPath, "utf8");
 const headings = text.match(/^# /gm) || [];
 if (headings.length !== 3) process.exit(1);
-  if (!/4\s*(?:->|→)\s*6\s*(?:->|→)\s*8\s*(?:->|→)\s*(9|10)/.test(text)) process.exit(2);
-' "$ARCHIVE_NOTE" || fail "expected stable archive headings and explicit score trajectory in $ARCHIVE_NOTE"
+const scores = [...history.matchAll(/^\|\s*\d+\s*\|\s*(\d+)(?:\/10)?\s*\|/gm)].map((match) => match[1]);
+if (scores.length < 2) process.exit(2);
+if (!scores.every((score) => text.includes(`${score}/10`) || text.includes(score))) process.exit(3);
+' "$ARCHIVE_NOTE" "$VALIDATION_HISTORY" || fail "expected stable archive headings and honest score trajectory in $ARCHIVE_NOTE"
 
 if (( run_fresh )); then
-  for path_to_check in "$RUN_LOG" "$RUN_TAIL_LOG" "$ARCHIVE_NOTE" "${CANDIDATES[@]}" "${EVALUATIONS[@]}"; do
+  for path_to_check in "$RUN_LOG" "$RUN_TAIL_LOG" "$ARCHIVE_NOTE" "$CURRENT_CANDIDATE" "$LATEST_VALIDATION" "$VALIDATION_HISTORY"; do
     [[ "$path_to_check" -nt "$stamp_file" ]] || fail "expected regenerated artifact newer than fresh-run stamp: $path_to_check"
   done
   rm -f "$stamp_file"
 fi
 
-echo 'verify.sh: PASS - canonical longrun feedback convergence loop artifacts and repeated evaluate->revise convergence flow verified.'
+echo 'verify.sh: PASS - canonical longrun feedback convergence loop artifacts and runtime-native cyclic convergence verified.'

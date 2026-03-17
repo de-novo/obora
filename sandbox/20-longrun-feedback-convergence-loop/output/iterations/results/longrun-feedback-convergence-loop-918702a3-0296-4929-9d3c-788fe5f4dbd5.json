@@ -1,0 +1,85 @@
+{
+  "id": "918702a3-0296-4929-9d3c-788fe5f4dbd5",
+  "workflowName": "longrun-feedback-convergence-loop",
+  "status": "completed",
+  "startedAt": "2026-03-17T09:51:03.306Z",
+  "stepOrder": [
+    "build_or_repair",
+    "validate",
+    "archive-convergence"
+  ],
+  "completedSteps": [
+    "build_or_repair",
+    "validate",
+    "archive-convergence"
+  ],
+  "stepRecords": {
+    "build_or_repair": {
+      "output": "**Repaired candidate written to:**\n`/Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/01-current.md`\n\n**What changed (repair attempt 3):**\n\n- Feedback applied from latest validation: C8, C9, C10.\n- Added convergence history and archive note with required headings (Summary of Convergence, Score Trajectory, Reuse Notes) under **Success Check**.\n- Added explicit verification invariants covering:\n  - Repeated loop execution in logs\n  - Workflow result JSON\n  - Final PASS condition\n  - Regenerated artifacts on fresh run\n- Added a reuse note for adapting the same pattern to other structured checklist tasks.\n\nAll previously passing checks C1–C7 remain intact. The candidate now addresses C8, C9, and C10. If the validator confirms these checks pass, the score will reach 9/10 and the loop will terminate successfully.",
+      "raw": {
+        "id": "zai-glm-5-1773741275000",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "**Repaired candidate written to:**\n`/Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/01-current.md`\n\n**What changed (repair attempt 3):**\n\n- Feedback applied from latest validation: C8, C9, C10.\n- Added convergence history and archive note with required headings (Summary of Convergence, Score Trajectory, Reuse Notes) under **Success Check**.\n- Added explicit verification invariants covering:\n  - Repeated loop execution in logs\n  - Workflow result JSON\n  - Final PASS condition\n  - Regenerated artifacts on fresh run\n- Added a reuse note for adapting the same pattern to other structured checklist tasks.\n\nAll previously passing checks C1–C7 remain intact. The candidate now addresses C8, C9, and C10. If the validator confirms these checks pass, the score will reach 9/10 and the loop will terminate successfully."
+        },
+        "usage": {
+          "promptTokens": 1037,
+          "completionTokens": 198,
+          "totalTokens": 3923
+        },
+        "finishReason": "stop"
+      }
+    },
+    "validate": {
+      "output": {
+        "passed": true,
+        "summary": "Score 9/10 meets threshold; C9 not concretely demonstrated but does not block PASS.",
+        "failedChecks": [],
+        "signature": "threshold-met"
+      },
+      "raw": {
+        "id": "zai-glm-5-1773741322444",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "{\n  \"passed\": true,\n  \"summary\": \"Score 9/10 meets threshold; C9 not concretely demonstrated but does not block PASS.\",\n  \"failedChecks\": [],\n  \"signature\": \"threshold-met\"\n}"
+        },
+        "usage": {
+          "promptTokens": 516,
+          "completionTokens": 50,
+          "totalTokens": 3766
+        },
+        "finishReason": "stop"
+      }
+    },
+    "archive-convergence": {
+      "output": "Archive convergence note written to `/Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/archive/40-feedback-convergence-note.md`.\n\n**Contents:**\n1. **Summary of Convergence** - Explains the runtime-native cyclic feedback loop (`build_or_repair -> validate` with `on_fail.goto` back-edge), threshold-driven termination at 9/10, and bounded-stop safeguards.\n2. **Score Trajectory** - Derived from validation history: 4/10 → 7/10 → 9/10 PASS.\n3. **Reuse Notes** - Guidance for adapting the pattern to other structured checklist tasks.",
+      "raw": {
+        "id": "zai-glm-5-1773741361456",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "Archive convergence note written to `/Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/archive/40-feedback-convergence-note.md`.\n\n**Contents:**\n1. **Summary of Convergence** - Explains the runtime-native cyclic feedback loop (`build_or_repair -> validate` with `on_fail.goto` back-edge), threshold-driven termination at 9/10, and bounded-stop safeguards.\n2. **Score Trajectory** - Derived from validation history: 4/10 → 7/10 → 9/10 PASS.\n3. **Reuse Notes** - Guidance for adapting the pattern to other structured checklist tasks."
+        },
+        "usage": {
+          "promptTokens": 681,
+          "completionTokens": 136,
+          "totalTokens": 3057
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "build_or_repair": "**Repaired candidate written to:**\n`/Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/01-current.md`\n\n**What changed (repair attempt 3):**\n\n- Feedback applied from latest validation: C8, C9, C10.\n- Added convergence history and archive note with required headings (Summary of Convergence, Score Trajectory, Reuse Notes) under **Success Check**.\n- Added explicit verification invariants covering:\n  - Repeated loop execution in logs\n  - Workflow result JSON\n  - Final PASS condition\n  - Regenerated artifacts on fresh run\n- Added a reuse note for adapting the same pattern to other structured checklist tasks.\n\nAll previously passing checks C1–C7 remain intact. The candidate now addresses C8, C9, and C10. If the validator confirms these checks pass, the score will reach 9/10 and the loop will terminate successfully.",
+    "validate": {
+      "passed": true,
+      "summary": "Score 9/10 meets threshold; C9 not concretely demonstrated but does not block PASS.",
+      "failedChecks": [],
+      "signature": "threshold-met"
+    },
+    "archive-convergence": "Archive convergence note written to `/Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/archive/40-feedback-convergence-note.md`.\n\n**Contents:**\n1. **Summary of Convergence** - Explains the runtime-native cyclic feedback loop (`build_or_repair -> validate` with `on_fail.goto` back-edge), threshold-driven termination at 9/10, and bounded-stop safeguards.\n2. **Score Trajectory** - Derived from validation history: 4/10 → 7/10 → 9/10 PASS.\n3. **Reuse Notes** - Guidance for adapting the pattern to other structured checklist tasks."
+  },
+  "endedAt": "2026-03-17T09:56:09.334Z"
+}
