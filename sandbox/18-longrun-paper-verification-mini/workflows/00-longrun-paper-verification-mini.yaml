@@ -1,0 +1,50 @@
+name: longrun-paper-verification-mini
+version: "1.0"
+steps:
+  - name: verify-paper-claims
+    agent: verifier
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/18-longrun-paper-verification-mini/input/paper-metadata.md,
+        /Users/denovo/workspace/github/obora-kit/sandbox/18-longrun-paper-verification-mini/input/paper-excerpts.md,
+        and /Users/denovo/workspace/github/obora-kit/sandbox/18-longrun-paper-verification-mini/input/claims.md.
+
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/18-longrun-paper-verification-mini/output/final/01-paper-verification.md.
+
+        Requirements:
+        - Use only the provided vendored fixture. Do not rely on outside knowledge or live web access.
+        - Verify exactly the four listed claims.
+        - Do not add a document title or any extra section before the required sections.
+        - Use Markdown H1 headings for the required sections and do not number them.
+        - Include exactly these top-level sections:
+          1. Paper Metadata
+          2. Verification Summary
+          3. Claim-by-Claim Assessment
+          4. Evidence Notes
+          5. Final Verdict
+        - In Claim-by-Claim Assessment, include all four claims and mark each one as exactly one of: SUPPORTED, PARTIAL, UNSUPPORTED.
+        - For each claim, cite the supporting excerpt IDs such as Excerpt A or Excerpt E.
+        - If a claim is fully supported by the provided excerpts, prefer SUPPORTED.
+        - Final Verdict must state whether the provided claims are sufficiently supported by the provided excerpts.
+        - Keep the report concise, reproducible, and grounded in the supplied text.
+
+  - name: archive-paper-verification
+    agent: archivist
+    depends_on: [verify-paper-claims]
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/18-longrun-paper-verification-mini/output/final/01-paper-verification.md.
+
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/18-longrun-paper-verification-mini/output/archive/40-paper-verification-note.md.
+
+        Requirements:
+        - Do not add a document title or any extra section before the required sections.
+        - Use Markdown H1 headings for the required sections and do not number them.
+        - Include exactly these top-level sections:
+          1. Summary of Verification
+          2. Paper Verification Result
+          3. Reuse Notes
+        - Summarize the paper, the scope limits of the vendored fixture, and the overall verdict.
+        - Reuse Notes should explain that this sandbox demonstrates minimal claim verification against real paper excerpts, not full result reproduction.

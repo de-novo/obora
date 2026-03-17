@@ -1,0 +1,55 @@
+{
+  "id": "c7fd178a-1674-4d6c-a7d9-3de926c7e08f",
+  "workflowName": "longrun-paper-verification-mini",
+  "status": "completed",
+  "startedAt": "2026-03-17T06:52:46.560Z",
+  "stepOrder": [
+    "verify-paper-claims",
+    "archive-paper-verification"
+  ],
+  "completedSteps": [
+    "verify-paper-claims",
+    "archive-paper-verification"
+  ],
+  "stepRecords": {
+    "verify-paper-claims": {
+      "output": "The verification report has been created at `/Users/denovo/workspace/github/obora-kit/sandbox/18-longrun-paper-verification-mini/output/final/01-paper-verification.md`.\n\nSummary of verification:\n- **All 4 claims are SUPPORTED** by the provided excerpts\n- Evidence is drawn from Excerpts A, B, C, E, and F\n- No external knowledge was used—all verification is grounded in the vendored fixture\n\nThe report follows the required structure with exactly the five specified H1 sections and provides concise, reproducible evidence citations for each claim.",
+      "raw": {
+        "id": "zai-glm-5-1773730421486",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "The verification report has been created at `/Users/denovo/workspace/github/obora-kit/sandbox/18-longrun-paper-verification-mini/output/final/01-paper-verification.md`.\n\nSummary of verification:\n- **All 4 claims are SUPPORTED** by the provided excerpts\n- Evidence is drawn from Excerpts A, B, C, E, and F\n- No external knowledge was used—all verification is grounded in the vendored fixture\n\nThe report follows the required structure with exactly the five specified H1 sections and provides concise, reproducible evidence citations for each claim."
+        },
+        "usage": {
+          "promptTokens": 713,
+          "completionTokens": 119,
+          "totalTokens": 3904
+        },
+        "finishReason": "stop"
+      }
+    },
+    "archive-paper-verification": {
+      "output": "Verification complete. The archived note at `output/archive/40-paper-verification-note.md` confirms the file was written successfully with the three required H1 sections. No discrepancies detected.",
+      "raw": {
+        "id": "zai-glm-5-1773730458138",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "Verification complete. The archived note at `output/archive/40-paper-verification-note.md` confirms the file was written successfully with the three required H1 sections. No discrepancies detected."
+        },
+        "usage": {
+          "promptTokens": 748,
+          "completionTokens": 37,
+          "totalTokens": 2769
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "verify-paper-claims": "The verification report has been created at `/Users/denovo/workspace/github/obora-kit/sandbox/18-longrun-paper-verification-mini/output/final/01-paper-verification.md`.\n\nSummary of verification:\n- **All 4 claims are SUPPORTED** by the provided excerpts\n- Evidence is drawn from Excerpts A, B, C, E, and F\n- No external knowledge was used—all verification is grounded in the vendored fixture\n\nThe report follows the required structure with exactly the five specified H1 sections and provides concise, reproducible evidence citations for each claim.",
+    "archive-paper-verification": "Verification complete. The archived note at `output/archive/40-paper-verification-note.md` confirms the file was written successfully with the three required H1 sections. No discrepancies detected."
+  },
+  "endedAt": "2026-03-17T06:54:21.792Z"
+}

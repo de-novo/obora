@@ -1,0 +1,9 @@
+version: "1.0"
+default_model: glm-5
+agents:
+  verifier:
+    role: Verify a small set of claims against vendored excerpts from a real public paper.
+    model: glm-5
+  archivist:
+    role: Archive the verification result as a concise reusable note.
+    model: glm-5
