@@ -2,7 +2,7 @@
 
 > Last updated: 2026-03-17
 
-이 문서는 `sandbox/01~13` active canonical sandbox들이 공통으로 따라야 하는 최소 규격을 정의한다.
+이 문서는 `sandbox/01~14` active canonical sandbox들이 공통으로 따라야 하는 최소 규격을 정의한다.
 
 ## 목적
 
@@ -119,6 +119,12 @@ README에는 반드시 아래가 있어야 한다.
 ### 12 — longrun benchmark mini
 - primitive: long-running runner + solver/judge benchmark separation
 
+### 13 — longrun benchmark loop
+- primitive: long-running runner + benchmark fail → repair → pass loop
+
+### 14 — longrun project mini
+- primitive: long-running runner + project mini lifecycle
+
 ---
 
 ## 다음 단계 설계 원칙
@@ -130,10 +136,6 @@ README에는 반드시 아래가 있어야 한다.
 - project-oriented extension
 - benchmark-oriented extension
 - long-running extension
-- multi-run comparison extension
-
-단, 기존 canonical ladder의 공통 계약을 깨면 안 된다.
-tension
 - multi-run comparison extension
 
 단, 기존 canonical ladder의 공통 계약을 깨면 안 된다.

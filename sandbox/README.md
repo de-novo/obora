@@ -16,6 +16,7 @@
 - `11-longrun-loop` — long-running runner + validation-repair loop contract
 - `12-longrun-benchmark-mini` — long-running runner + benchmark mini contract
 - `13-longrun-benchmark-loop` — long-running runner + benchmark remediation loop contract
+- `14-longrun-project-mini` — long-running runner + project mini lifecycle contract
 
 ## Draft / future sandbox
 - `canonical-simple` — 초기 기준 초안 메모용 폴더

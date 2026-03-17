@@ -163,6 +163,18 @@ validation fail 이후 repair를 수행한다.
 
 이 단계는 long-running workflow에서도 benchmark fail → repair → pass loop가 안정적으로 유지되는지 검증한다.
 
+### 14 — longrun project mini
+처음으로 long-running runner 위에 project mini lifecycle을 결합한다.
+
+- draft
+- review
+- final
+- validation
+- archive
+- watchdog wrapper
+
+이 단계는 long-running workflow에서도 project-style 직선형 lifecycle이 안정적으로 동작하는지 검증한다.
+
 ---
 
 ## How to use this ladder
