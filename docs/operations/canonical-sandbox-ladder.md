@@ -2,7 +2,7 @@
 
 > Last updated: 2026-03-17
 
-이 문서는 현재 활성 canonical sandbox `01~12`를 한눈에 설명하는 인덱스다.
+이 문서는 현재 활성 canonical sandbox `01~13`를 한눈에 설명하는 인덱스다.
 
 ## 목적
 
@@ -28,6 +28,8 @@ canonical sandbox ladder는 Obora의 핵심 실행 패턴을
 | 09 | `09-benchmark-loop` | fail → repair → re-judge → archive | benchmark remediation loop |
 | 10 | `10-longrun-mini` | watchdog-wrapped longrun | long-running runner 계약 |
 | 11 | `11-longrun-loop` | longrun + fail → repair → pass | long-running repair loop contract |
+| 12 | `12-longrun-benchmark-mini` | longrun + solve → judge → archive | long-running benchmark mini |
+| 13 | `13-longrun-benchmark-loop` | longrun + fail → repair → re-judge → archive | long-running benchmark loop |
 
 ---
 
@@ -139,6 +141,28 @@ validation fail 이후 repair를 수행한다.
 
 이 단계는 long-running workflow에서도 repair loop contract가 안정적으로 유지되는지 검증한다.
 
+### 12 — longrun benchmark mini
+처음으로 long-running runner 위에 benchmark mini 패턴을 결합한다.
+
+- solver step
+- judge step
+- archive
+- watchdog wrapper
+- benchmark verdict
+
+이 단계는 long-running workflow에서도 solver/judge 분리 benchmark가 안정적으로 동작하는지 검증한다.
+
+### 13 — longrun benchmark loop
+12 위에 benchmark remediation loop를 결합한다.
+
+- first verdict fail
+- repair attempt
+- re-judge pass
+- archive
+- watchdog wrapper
+
+이 단계는 long-running workflow에서도 benchmark fail → repair → pass loop가 안정적으로 유지되는지 검증한다.
+
 ---
 
 ## How to use this ladder
@@ -156,6 +180,8 @@ validation fail 이후 repair를 수행한다.
 9. 09
 10. 10
 11. 11
+12. 12
+13. 13
 
 ### 제품형 sandbox 설계자
 추천 기준점:
@@ -163,11 +189,15 @@ validation fail 이후 repair를 수행한다.
 - 07
 - 10
 - 11
+- 12
+- 13
 
 ### benchmark형 sandbox 설계자
 추천 기준점:
 - 08
 - 09
+- 12
+- 13
 
 ---
 
@@ -183,17 +213,4 @@ validation fail 이후 repair를 수행한다.
 - tool-using benchmark sandbox
 
 즉 01~09는 foundation이고,
-10~11은 runner/contract expansion의 첫 기준점이다.
-다.
-.
-보다,
-이미 검증된 조합을 더 현실적인 운영 시나리오로 확장한다.
-
-예시:
-- long-running project loop
-- long-running benchmark loop
-- multi-run comparison sandbox
-- tool-using benchmark sandbox
-
-즉 01~09는 foundation이고,
-10~11은 runner/contract expansion의 첫 기준점이다.
+10~13은 runner/contract/benchmark expansion의 첫 기준점이다.

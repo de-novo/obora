@@ -1,0 +1,12 @@
+version: "1.0"
+default_model: glm-5
+agents:
+  solver:
+    role: Produce an initial benchmark attempt, then repair it after judge feedback.
+    model: glm-5
+  judge:
+    role: Compare an attempt with the reference answer and produce a benchmark verdict.
+    model: glm-5
+  archivist:
+    role: Summarize the repaired attempt and final verdict into a reusable archive note.
+    model: glm-5
