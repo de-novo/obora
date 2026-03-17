@@ -20,6 +20,7 @@
 - `14-longrun-project-mini` — long-running runner + project mini lifecycle contract
 - `15-longrun-project-loop` — long-running runner + project remediation loop contract
 - `16-multi-run-comparison-mini` — multi-run comparison with normalized per-run results (solve×3 → compare → archive)
+- `17-multi-run-comparison-loop` — multi-run comparison remediation loop (solve×3 → compare → validate → repair → re-compare → archive)
 
 ## Draft / future sandbox
 

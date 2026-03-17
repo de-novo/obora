@@ -2,7 +2,7 @@
 
 > Last updated: 2026-03-17
 
-이 문서는 `sandbox/01~16` active canonical sandbox들이 공통으로 따라야 하는 최소 규격을 정의한다.
+이 문서는 `sandbox/01~17` active canonical sandbox들이 공통으로 따라야 하는 최소 규격을 정의한다.
 
 ## 목적
 
@@ -156,6 +156,10 @@ README에는 반드시 아래가 있어야 한다.
 
 - primitive: 동일 문제 다회 독립 실행 + 정규화된 per-run result 비교 + archive
 
+### 17 — multi-run comparison loop
+
+- primitive: multi-run comparison + explicit validation fail + targeted remediation + final pass
+
 ---
 
 ## 다음 단계 설계 원칙
@@ -168,7 +172,7 @@ README에는 반드시 아래가 있어야 한다.
 - project-oriented extension
 - benchmark-oriented extension
 - long-running extension
-- multi-run comparison extension (step 16 완료)
+- multi-run comparison extension (step 16 완료, step 17 loop 완료)
 - tool-using extension
 
 단, 기존 canonical ladder의 공통 계약을 깨면 안 된다.

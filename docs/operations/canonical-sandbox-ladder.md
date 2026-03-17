@@ -2,7 +2,7 @@
 
 > Last updated: 2026-03-17
 
-이 문서는 현재 활성 canonical sandbox `01~16`를 한눈에 설명하는 인덱스다.
+이 문서는 현재 활성 canonical sandbox `01~17`를 한눈에 설명하는 인덱스다.
 
 ## 목적
 
@@ -33,6 +33,7 @@ canonical sandbox ladder는 Obora의 핵심 실행 패턴을
 | 14   | `14-longrun-project-mini`      | longrun + draft → review → final → validation → archive | long-running project mini                            |
 | 15   | `15-longrun-project-loop`      | longrun + fail → repair → final pass                    | long-running project loop                            |
 | 16   | `16-multi-run-comparison-mini` | solve×3 → compare → archive                             | multi-run comparison with normalized per-run results |
+| 17   | `17-multi-run-comparison-loop` | solve×3 → compare → validate → repair → re-compare      | multi-run comparison remediation loop                |
 
 ---
 
@@ -216,6 +217,20 @@ validation fail 이후 repair를 수행한다.
 
 이 단계는 multi-run comparison이 안정적으로 동작하고 다회 실행 결과를 재현 가능한 형태로 정규화할 수 있는지 검증한다.
 
+### 17 — multi-run comparison loop
+
+16 위에 multi-run remediation loop를 결합한다.
+
+- 3회 독립 solver run
+- 초기 comparison summary는 PARTIAL
+- comparison validation은 FAIL
+- 실패한 run 하나를 repair
+- 최종 comparison summary는 PASS
+- archive
+- watchdog wrapper
+
+이 단계는 multi-run comparison에서도 초기 실패를 명시적으로 검증하고, 특정 run remediation 이후 최종 PASS 상태로 루프를 닫을 수 있는지 검증한다.
+
 ---
 
 ## How to use this ladder
@@ -240,6 +255,7 @@ validation fail 이후 repair를 수행한다.
 14. 14
 15. 15
 16. 16
+17. 17
 
 ### 제품형 sandbox 설계자
 
@@ -260,6 +276,8 @@ validation fail 이후 repair를 수행한다.
 - 09
 - 12
 - 13
+- 16
+- 17
 
 ---
 
@@ -275,4 +293,4 @@ validation fail 이후 repair를 수행한다.
 - conditional branching sandbox
 
 즉 01~09는 foundation이고,
-10~16은 runner/contract/benchmark/project/comparison expansion의 기준점이다.
+10~17은 runner/contract/benchmark/project/comparison expansion의 기준점이다.

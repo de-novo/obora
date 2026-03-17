@@ -1,0 +1,15 @@
+version: "1.0"
+default_model: glm-5
+agents:
+  solver:
+    role: Solve the benchmark problem using only the problem statement unless remediation requires the reference.
+    model: glm-5
+  comparator:
+    role: Compare multi-run results and summarize which runs pass or fail against the reference answer.
+    model: glm-5
+  validator:
+    role: Validate whether a comparison summary is fully successful and decide if remediation is required.
+    model: glm-5
+  archivist:
+    role: Summarize the repaired comparison loop into a reusable archive note.
+    model: glm-5

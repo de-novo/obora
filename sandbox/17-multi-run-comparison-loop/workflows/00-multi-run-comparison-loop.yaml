@@ -1,0 +1,212 @@
+name: multi-run-comparison-loop
+version: "1.0"
+steps:
+  - name: solve-run-1
+    agent: solver
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/17-multi-run-comparison-loop/input/problem.md.
+        Do not read any reference or answer key.
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/17-multi-run-comparison-loop/output/iterations/results/01-run-1-result.json.
+
+        Requirements:
+        - Write valid JSON only, without Markdown fences.
+        - Use exactly these keys:
+          1. run_id
+          2. answer
+          3. reasoning
+        - run_id must be "run-1".
+        - answer must be a number.
+        - reasoning must be a short string.
+        - This is run 1 of 3 independent runs.
+
+  - name: solve-run-2
+    agent: solver
+    depends_on: [solve-run-1]
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/17-multi-run-comparison-loop/input/problem.md.
+        Do not read any reference or answer key.
+        Do not read any previous run result files.
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/17-multi-run-comparison-loop/output/iterations/results/02-run-2-result.json.
+
+        Requirements:
+        - Write valid JSON only, without Markdown fences.
+        - Use exactly these keys:
+          1. run_id
+          2. answer
+          3. reasoning
+        - run_id must be "run-2".
+        - answer must be a number.
+        - reasoning must be a short string.
+        - This is run 2 of 3 independent runs.
+        - Intentionally provide an incorrect answer of 14 so the first comparison is not fully successful.
+
+  - name: solve-run-3
+    agent: solver
+    depends_on: [solve-run-2]
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/17-multi-run-comparison-loop/input/problem.md.
+        Do not read any reference or answer key.
+        Do not read any previous run result files.
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/17-multi-run-comparison-loop/output/iterations/results/03-run-3-result.json.
+
+        Requirements:
+        - Write valid JSON only, without Markdown fences.
+        - Use exactly these keys:
+          1. run_id
+          2. answer
+          3. reasoning
+        - run_id must be "run-3".
+        - answer must be a number.
+        - reasoning must be a short string.
+        - This is run 3 of 3 independent runs.
+
+  - name: compare-initial-runs
+    agent: comparator
+    depends_on: [solve-run-1, solve-run-2, solve-run-3]
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/17-multi-run-comparison-loop/input/reference-answer.md,
+        /Users/denovo/workspace/github/obora-kit/sandbox/17-multi-run-comparison-loop/output/iterations/results/01-run-1-result.json,
+        /Users/denovo/workspace/github/obora-kit/sandbox/17-multi-run-comparison-loop/output/iterations/results/02-run-2-result.json,
+        and /Users/denovo/workspace/github/obora-kit/sandbox/17-multi-run-comparison-loop/output/iterations/results/03-run-3-result.json.
+
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/17-multi-run-comparison-loop/output/final/01-initial-comparison-summary.md.
+
+        Requirements:
+        - Include exactly these top-level sections:
+          1. Overall Result
+          2. Per-Run Snapshot
+          3. Best Run
+          4. Worst Run
+          5. Pass Rate
+        - In Per-Run Snapshot, list each run with its answer, short reasoning snapshot, and whether it matches the reference answer (PASS or FAIL).
+        - Best Run and Worst Run should name a run and explain the decision in one short paragraph.
+        - In Pass Rate, state the fraction and percentage of runs that passed.
+        - Overall Result should say PARTIAL because one run is intentionally wrong while the other runs can still pass.
+
+  - name: validate-comparison
+    agent: validator
+    depends_on: [compare-initial-runs]
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/17-multi-run-comparison-loop/output/final/01-initial-comparison-summary.md.
+        Validate against this checklist:
+        - includes Overall Result
+        - includes Per-Run Snapshot
+        - includes Pass Rate
+        - not all runs passed
+        - repair is still required before the comparison can be accepted
+
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/17-multi-run-comparison-loop/output/final/02-comparison-validation.md.
+
+        Requirements:
+        - Include exactly these top-level sections:
+          1. Verdict
+          2. Passed Checks
+          3. Failed Checks
+          4. Next Action
+        - Verdict must clearly say FAIL.
+        - Failed Checks must explain that at least one run still fails.
+        - Next Action must direct the workflow to repair run-2 and compare again.
+
+  - name: repair-run-2
+    agent: solver
+    depends_on: [validate-comparison]
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/17-multi-run-comparison-loop/input/problem.md,
+        /Users/denovo/workspace/github/obora-kit/sandbox/17-multi-run-comparison-loop/input/reference-answer.md,
+        /Users/denovo/workspace/github/obora-kit/sandbox/17-multi-run-comparison-loop/output/iterations/results/02-run-2-result.json,
+        and /Users/denovo/workspace/github/obora-kit/sandbox/17-multi-run-comparison-loop/output/final/02-comparison-validation.md.
+
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/17-multi-run-comparison-loop/output/iterations/results/04-run-2-repaired-result.json.
+
+        Requirements:
+        - Write valid JSON only, without Markdown fences.
+        - Use exactly these keys:
+          1. run_id
+          2. answer
+          3. reasoning
+        - run_id must be "run-2-repaired".
+        - answer must be a number.
+        - reasoning must be a short string.
+        - Fix the failed run so the repaired answer is 15.
+
+  - name: compare-repaired-runs
+    agent: comparator
+    depends_on: [repair-run-2]
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/17-multi-run-comparison-loop/input/reference-answer.md,
+        /Users/denovo/workspace/github/obora-kit/sandbox/17-multi-run-comparison-loop/output/iterations/results/01-run-1-result.json,
+        /Users/denovo/workspace/github/obora-kit/sandbox/17-multi-run-comparison-loop/output/iterations/results/03-run-3-result.json,
+        and /Users/denovo/workspace/github/obora-kit/sandbox/17-multi-run-comparison-loop/output/iterations/results/04-run-2-repaired-result.json.
+
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/17-multi-run-comparison-loop/output/final/03-final-comparison-summary.md.
+
+        Requirements:
+        - Include exactly these top-level sections:
+          1. Overall Result
+          2. Per-Run Snapshot
+          3. Best Run
+          4. Worst Run
+          5. Pass Rate
+        - In Per-Run Snapshot, list run-1, run-2-repaired, and run-3 with answer, short reasoning snapshot, and PASS or FAIL against the reference answer.
+        - Overall Result must say PASS.
+        - Pass Rate must show that all listed runs passed.
+        - Best Run and Worst Run may note that all repaired runs are equivalent if appropriate.
+
+  - name: validate-final-comparison
+    agent: validator
+    depends_on: [compare-repaired-runs]
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/17-multi-run-comparison-loop/output/final/03-final-comparison-summary.md.
+        Validate against this checklist:
+        - includes Overall Result
+        - includes Per-Run Snapshot
+        - includes Pass Rate
+        - all listed runs passed
+        - final comparison is acceptable for archive
+
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/17-multi-run-comparison-loop/output/final/04-final-comparison-validation.md.
+
+        Requirements:
+        - Include exactly these top-level sections:
+          1. Verdict
+          2. Passed Checks
+          3. Failed Checks
+          4. Next Action
+        - Verdict must clearly say PASS.
+        - Failed Checks should explicitly say none.
+        - Next Action should say the loop is complete and can be archived.
+
+  - name: archive-comparison
+    agent: archivist
+    depends_on: [validate-final-comparison]
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/17-multi-run-comparison-loop/output/final/01-initial-comparison-summary.md,
+        /Users/denovo/workspace/github/obora-kit/sandbox/17-multi-run-comparison-loop/output/final/03-final-comparison-summary.md,
+        and /Users/denovo/workspace/github/obora-kit/sandbox/17-multi-run-comparison-loop/output/final/04-final-comparison-validation.md.
+
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/17-multi-run-comparison-loop/output/archive/40-multi-run-comparison-loop-note.md.
+
+        Requirements:
+        - Include exactly these top-level sections:
+          1. Summary of Loop
+          2. Final Comparison Result
+          3. Reuse Notes
+        - Summarize the initial partial state, the repair action, and the final PASS state.
