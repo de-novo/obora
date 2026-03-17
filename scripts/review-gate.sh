@@ -96,6 +96,9 @@ run_step "Tests" "$TEST_CMD"
 if [[ -n "$SELFTEST_CMD" ]]; then
   run_step "Gate selftest" "$SELFTEST_CMD"
 fi
+if [[ -n "$SANDBOX_SMOKE_CMD" ]]; then
+  run_step "Sandbox smoke" "$SANDBOX_SMOKE_CMD"
+fi
 run_step "Build" "$BUILD_CMD"
 
 echo "\n[PASS] Review gate completed successfully."

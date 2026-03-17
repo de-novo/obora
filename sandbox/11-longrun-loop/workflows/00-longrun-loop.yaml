@@ -1,0 +1,84 @@
+name: longrun-loop
+version: "1.0"
+steps:
+  - name: build-or-repair
+    agent: writer
+    config:
+      repair_loop:
+        enabled: true
+        validation_step: validate
+        max_no_progress_iterations: 1
+        repeated_critical_issue_ceiling: 1
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/11-longrun-loop/input/brief.md.
+
+        If this is the first attempt, write /Users/denovo/workspace/github/obora-kit/sandbox/11-longrun-loop/output/final/01-draft.md.
+        Requirements for the first attempt:
+        - Include exactly these top-level sections:
+          1. Goal
+          2. Plan
+        - Intentionally omit Next Action so validation fails.
+
+        If this is a repair attempt, write /Users/denovo/workspace/github/obora-kit/sandbox/11-longrun-loop/output/final/03-repaired.md.
+        Requirements for the repaired attempt:
+        - Include exactly these top-level sections:
+          1. Goal
+          2. Plan
+          3. Next Action
+        - Fix the validation issue.
+
+  - name: validate
+    agent: validator
+    depends_on: [build-or-repair]
+    config:
+      validation:
+        enabled: true
+        emit_structured_result: true
+    on_fail:
+      goto: build-or-repair
+      max_iterations: 1
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read whichever exists first:
+        - /Users/denovo/workspace/github/obora-kit/sandbox/11-longrun-loop/output/final/03-repaired.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/11-longrun-loop/output/final/01-draft.md
+
+        Validate against this checklist:
+        - contains Goal
+        - contains Plan
+        - contains Next Action
+
+        Also write a human-readable report:
+        - if validating the first attempt, write /Users/denovo/workspace/github/obora-kit/sandbox/11-longrun-loop/output/final/02-validation.md
+        - if validating the repaired attempt, write /Users/denovo/workspace/github/obora-kit/sandbox/11-longrun-loop/output/final/04-final-validation.md
+
+        After writing the report file, your assistant response must be ONLY a strict ValidationResult JSON object.
+        Do not include markdown fences.
+        Do not include prose before or after the JSON.
+        Do not restate the report in natural language.
+
+        Return this exact shape:
+        {
+          "passed": boolean,
+          "summary": "string",
+          "failedChecks": [{ "name": "string", "message": "string" }],
+          "signature": "stable-signature"
+        }
+
+  - name: archive-longrun-loop
+    agent: archivist
+    depends_on: [validate]
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/11-longrun-loop/output/final/03-repaired.md and /Users/denovo/workspace/github/obora-kit/sandbox/11-longrun-loop/output/final/04-final-validation.md.
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/11-longrun-loop/output/archive/40-longrun-loop-note.md.
+
+        Requirements:
+        - Include exactly these top-level sections:
+          1. Summary of Run
+          2. Why Preserved
+          3. Reuse Notes

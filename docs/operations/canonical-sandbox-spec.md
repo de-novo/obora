@@ -17,6 +17,8 @@ canonical sandbox는 레거시 실험 자산이 아니라,
 - repair loop
 - archive
 - small project lifecycle
+- benchmark / judge separation
+- long-running runner contract
 
 ---
 
@@ -99,20 +101,27 @@ README에는 반드시 아래가 있어야 한다.
 ### 06 — project mini
 - primitive: draft → review → final → validation → archive 조합
 
+### 07 — project loop
+- primitive: project lifecycle 안의 remediation loop
+
+### 08 — benchmark mini
+- primitive: solve → judge → archive
+
+### 09 — benchmark loop
+- primitive: fail → repair → re-judge → archive
+
+### 10 — longrun mini
+- primitive: watchdog-wrapped long-running runner
+
+### 11 — longrun loop
+- primitive: long-running runner + validation-repair contract
+
 ---
 
 ## 다음 단계 설계 원칙
 
-`07+`부터는 primitive를 하나 더 추가하기보다,
-이미 검증된 01~06 조합을 더 현실적인 제품/연구 흐름으로 확장한다.
-
-즉 다음 단계 sandbox는 아래 중 하나여야 한다.
-- project-oriented extension
-- benchmark-oriented extension
-- long-running extension
-
-단, 01~06의 공통 계약을 깨면 안 된다.
-으로 확장한다.
+`10+`부터는 primitive를 하나 더 추가하기보다,
+이미 검증된 조합을 더 현실적인 운영 흐름으로 확장한다.
 
 즉 다음 단계 sandbox는 아래 중 하나여야 한다.
 - project-oriented extension
@@ -120,4 +129,4 @@ README에는 반드시 아래가 있어야 한다.
 - long-running extension
 - multi-run comparison extension
 
-단, 01~09의 공통 계약을 깨면 안 된다.
+단, 기존 canonical ladder의 공통 계약을 깨면 안 된다.

@@ -117,6 +117,24 @@ repair loop summary에는 다음 메타데이터가 남습니다.
 2. summary만 바뀌고 signature가 계속 같다면 no-progress로 간주될 수 있습니다.
 3. repeated critical issue ceiling은 구조적으로 같은 blocker가 반복될 때 쓰세요.
 4. cancel/abort 경로도 persistence에 `aborted` 상태로 남도록 지원됩니다.
+5. validator가 사람이 읽는 리포트 파일도 남겨야 한다면, **리포트는 file write로 저장하고 step return은 strict `ValidationResult` JSON only**로 분리하세요.
+6. validator 응답에 설명 문장, markdown fence, 보고 본문이 섞이면 repair loop가 structured result를 안정적으로 해석하지 못할 수 있습니다.
+
+## 추천 validator contract 패턴
+validator가 두 가지 산출물을 모두 만들어야 할 때는 아래처럼 경계를 분리하는 것이 안전합니다.
+
+- human-readable report → 파일로 저장
+- machine-readable result → step return으로만 반환
+
+예시 지시문:
+
+```text
+After writing the report file, your assistant response must be ONLY a strict ValidationResult JSON object.
+Do not include markdown fences.
+Do not include prose before or after the JSON.
+```
+
+이 패턴은 canonical sandbox `11-longrun-loop`에서 회귀 검증 대상으로 고정되어 있습니다.
 
 ## 현재 범위
 이미 지원되는 것:

@@ -45,6 +45,11 @@
 ### 대응
 - fenced code block 대신 순수 JSON payload를 우선 사용한다
 - 필수 필드를 명확히 반환하도록 validator prompt를 조정한다
+- 사람이 읽는 validation report가 필요하면 파일로 따로 저장하고, step return에는 JSON만 남긴다
+- 아래 문구를 validator prompt에 명시한다:
+  - `After writing the report file, your assistant response must be ONLY a strict ValidationResult JSON object.`
+  - `Do not include markdown fences.`
+  - `Do not include prose before or after the JSON.`
 
 ---
 

@@ -82,6 +82,7 @@ Before opening a PR:
 
 - Rebase on latest `main`
 - Ensure `pnpm build` and `pnpm test` pass
+- Run `bash scripts/review-gate.sh` for the standardized pre-push gate
 - Update docs when behavior or public API changes
 
 In your PR:

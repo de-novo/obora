@@ -1,0 +1,12 @@
+version: "1.0"
+default_model: glm-5
+agents:
+  writer:
+    role: Create a draft first, then repair it after validation feedback.
+    model: glm-5
+  validator:
+    role: Validate the draft against explicit checklist rules.
+    model: glm-5
+  archivist:
+    role: Preserve the repaired result and final verdict into an archive note.
+    model: glm-5

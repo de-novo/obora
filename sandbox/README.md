@@ -12,6 +12,8 @@
 - `07-project-loop` — project lifecycle + repair loop
 - `08-benchmark-mini` — solve → judge → archive
 - `09-benchmark-loop` — fail → repair → re-judge → archive
+- `10-longrun-mini` — watchdog-wrapped long-running workflow
+- `11-longrun-loop` — long-running runner + validation-repair loop contract
 
 ## Draft / future sandbox
 - `canonical-simple` — 초기 기준 초안 메모용 폴더
