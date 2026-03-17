@@ -1,0 +1,12 @@
+version: "1.0"
+default_model: glm-5
+agents:
+  solver:
+    role: Solve the benchmark problem using only the problem statement.
+    model: glm-5
+  judge:
+    role: Compare the attempt with the reference answer and produce a benchmark verdict.
+    model: glm-5
+  archivist:
+    role: Summarize the attempt and verdict into a reusable archive note.
+    model: glm-5

@@ -14,6 +14,7 @@
 - `09-benchmark-loop` — fail → repair → re-judge → archive
 - `10-longrun-mini` — watchdog-wrapped long-running workflow
 - `11-longrun-loop` — long-running runner + validation-repair loop contract
+- `12-longrun-benchmark-mini` — long-running runner + benchmark mini contract
 
 ## Draft / future sandbox
 - `canonical-simple` — 초기 기준 초안 메모용 폴더

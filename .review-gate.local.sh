@@ -6,7 +6,7 @@ TYPECHECK_CMD="pnpm -r typecheck"
 TEST_CMD="pnpm -r test"
 BUILD_CMD="pnpm build"
 SELFTEST_CMD="bash scripts/review-gate-selftest.sh"
-SANDBOX_SMOKE_CMD="bash sandbox/11-longrun-loop/verify.sh"
+SANDBOX_SMOKE_CMD="bash sandbox/11-longrun-loop/verify.sh && bash sandbox/12-longrun-benchmark-mini/verify.sh"
 
 # Flexible model matrix for task-stage auto gate
 # MODEL_IDS='opus,codex,glm'

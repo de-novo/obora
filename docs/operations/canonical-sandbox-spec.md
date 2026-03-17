@@ -1,8 +1,8 @@
 # Canonical Sandbox Spec
 
-> Last updated: 2026-03-15
+> Last updated: 2026-03-17
 
-이 문서는 `sandbox/01~09` active canonical sandbox들이 공통으로 따라야 하는 최소 규격을 정의한다.
+이 문서는 `sandbox/01~12` active canonical sandbox들이 공통으로 따라야 하는 최소 규격을 정의한다.
 
 ## 목적
 
@@ -115,6 +115,9 @@ README에는 반드시 아래가 있어야 한다.
 
 ### 11 — longrun loop
 - primitive: long-running runner + validation-repair contract
+
+### 12 — longrun benchmark mini
+- primitive: long-running runner + solver/judge benchmark separation
 
 ---
 

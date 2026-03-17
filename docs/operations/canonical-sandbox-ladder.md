@@ -2,7 +2,7 @@
 
 > Last updated: 2026-03-17
 
-이 문서는 현재 활성 canonical sandbox `01~11`를 한눈에 설명하는 인덱스다.
+이 문서는 현재 활성 canonical sandbox `01~12`를 한눈에 설명하는 인덱스다.
 
 ## 목적
 
@@ -174,6 +174,19 @@ validation fail 이후 repair를 수행한다.
 ## What comes next
 
 `10+`부터는 primitive를 더 추가하기보다,
+이미 검증된 조합을 더 현실적인 운영 시나리오로 확장한다.
+
+예시:
+- long-running project loop
+- long-running benchmark loop
+- multi-run comparison sandbox
+- tool-using benchmark sandbox
+
+즉 01~09는 foundation이고,
+10~11은 runner/contract expansion의 첫 기준점이다.
+다.
+.
+보다,
 이미 검증된 조합을 더 현실적인 운영 시나리오로 확장한다.
 
 예시:
