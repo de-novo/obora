@@ -272,6 +272,8 @@ validation fail 이후 repair를 수행한다.
 - threshold 도달 후 archive
 - watchdog wrapper
 
+중요하게도 이 단계는 **고정된 v1/v2/v3/v4 scripted sequence가 아니라**, validator의 structured result가 실제 다음 control flow를 결정하는 runtime-native cyclic loop여야 한다.
+
 이 단계는 long-running workflow에서도 단일 FAIL → repair → PASS가 아니라, runtime이 validator 결과로 back-edge를 제어하고 candidate가 threshold에 수렴할 때까지 반복되는 feedback loop를 재현 가능하게 닫을 수 있는지 검증한다.
 
 ---

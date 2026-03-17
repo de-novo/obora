@@ -91,6 +91,16 @@ README에는 반드시 아래가 있어야 한다.
 - fallback demo는 canonical sandbox로 분류하지 않는다.
 - 각 sandbox는 이전 단계보다 정확히 하나의 새로운 primitive만 추가하는 것이 바람직하다.
 
+### 7. 루프 정직성 규칙
+
+- back-edge 없이 미리 펼쳐 둔 고정 step 나열을 **loop**라고 부르면 안 된다.
+- `v1 -> e1 -> v2 -> e2 -> v3 -> e3` 같은 scripted sequence는 feedback-aware sequence일 수는 있어도, runtime-native cyclic loop는 아니다.
+- canonical sandbox가 feedback loop / convergence loop / repair loop라고 주장하려면, **validator/judge 결과가 실제 control flow를 다시 이전 step으로 되돌리는 구조**가 있어야 한다.
+  - 예: `on_fail.goto`, runtime branch, explicit re-entry
+- revision step은 다음에 무엇을 고칠지 **미리 박아두면 안 되고**, 직전 evaluation/validation 결과에서 failed checks 또는 next action을 읽어 동적으로 결정해야 한다.
+- threshold-driven loop라고 주장하려면 종료는 미리 정한 마지막 step이 아니라 **실제 threshold 충족 여부**로 결정되어야 한다.
+- README의 ASCII 그래프와 ladder 설명은 데이터 참조가 아니라 **실제 control flow**를 그려야 한다.
+
 ---
 
 ## 현재 canonical ladder
