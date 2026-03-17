@@ -1,0 +1,115 @@
+{
+  "id": "4c8940e9-ab2d-42a1-9896-2d79a656be81",
+  "workflowName": "multi-run-comparison-mini",
+  "status": "completed",
+  "startedAt": "2026-03-17T05:49:00.970Z",
+  "stepOrder": [
+    "solve-run-1",
+    "solve-run-2",
+    "solve-run-3",
+    "compare-runs",
+    "archive-comparison"
+  ],
+  "completedSteps": [
+    "solve-run-1",
+    "solve-run-2",
+    "solve-run-3",
+    "compare-runs",
+    "archive-comparison"
+  ],
+  "stepRecords": {
+    "solve-run-1": {
+      "output": "I've completed run 1 of 3. The result has been written to the specified JSON file with:\n\n- **run_id**: \"run-1\"\n- **answer**: 15\n- **reasoning**: Simple calculation dividing total records by total time (120 ÷ 8 = 15 records per minute)",
+      "raw": {
+        "id": "zai-glm-5-1773726548411",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "I've completed run 1 of 3. The result has been written to the specified JSON file with:\n\n- **run_id**: \"run-1\"\n- **answer**: 15\n- **reasoning**: Simple calculation dividing total records by total time (120 ÷ 8 = 15 records per minute)"
+        },
+        "usage": {
+          "promptTokens": 119,
+          "completionTokens": 66,
+          "totalTokens": 953
+        },
+        "finishReason": "stop"
+      }
+    },
+    "solve-run-2": {
+      "output": "I've completed run 2 of 3. The result has been written to the specified JSON file with:\n\n- **run_id**: \"run-2\"\n- **answer**: 15\n- **reasoning**: Records per minute = total records ÷ total time = 120 ÷ 8 = 15",
+      "raw": {
+        "id": "zai-glm-5-1773726559123",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "I've completed run 2 of 3. The result has been written to the specified JSON file with:\n\n- **run_id**: \"run-2\"\n- **answer**: 15\n- **reasoning**: Records per minute = total records ÷ total time = 120 ÷ 8 = 15"
+        },
+        "usage": {
+          "promptTokens": 175,
+          "completionTokens": 65,
+          "totalTokens": 1072
+        },
+        "finishReason": "stop"
+      }
+    },
+    "solve-run-3": {
+      "output": "Successfully completed run 3 of 3. The result has been written to the specified JSON file:\n- **run_id**: \"run-3\"\n- **answer**: 15\n- **reasoning**: \"Records per minute = 120 records ÷ 8 minutes = 15\"",
+      "raw": {
+        "id": "zai-glm-5-1773726571539",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "Successfully completed run 3 of 3. The result has been written to the specified JSON file:\n- **run_id**: \"run-3\"\n- **answer**: 15\n- **reasoning**: \"Records per minute = 120 records ÷ 8 minutes = 15\""
+        },
+        "usage": {
+          "promptTokens": 162,
+          "completionTokens": 60,
+          "totalTokens": 1182
+        },
+        "finishReason": "stop"
+      }
+    },
+    "compare-runs": {
+      "output": "Comparison summary completed successfully. All three runs passed (100% pass rate), each producing the correct answer of 15 with consistent reasoning. The summary has been written to `/Users/denovo/workspace/github/obora-kit/sandbox/16-multi-run-comparison-mini/output/final/01-comparison-summary.md`.",
+      "raw": {
+        "id": "zai-glm-5-1773726592154",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "Comparison summary completed successfully. All three runs passed (100% pass rate), each producing the correct answer of 15 with consistent reasoning. The summary has been written to `/Users/denovo/workspace/github/obora-kit/sandbox/16-multi-run-comparison-mini/output/final/01-comparison-summary.md`."
+        },
+        "usage": {
+          "promptTokens": 347,
+          "completionTokens": 64,
+          "totalTokens": 1691
+        },
+        "finishReason": "stop"
+      }
+    },
+    "archive-comparison": {
+      "output": "Verification confirmed. The archive note at `/Users/denovo/workspace/github/obora-kit/sandbox/16-multi-run-comparison-mini/output/archive/40-multi-run-comparison-note.md` has been successfully created with all three required sections:\n\n1. **Summary of Comparison** - Describes the multi-run validation of 120 records ÷ 8 minutes = 15 records/minute\n2. **Comparison Result** - Documents PASS status with 100% pass rate (3/3 runs identical)\n3. **Reuse Notes** - Provides 6 actionable insights for future workflow applications\n\nThe archive note is complete, accurate, and ready for reuse. All information aligns with the source comparison summary.",
+      "raw": {
+        "id": "zai-glm-5-1773726638953",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "Verification confirmed. The archive note at `/Users/denovo/workspace/github/obora-kit/sandbox/16-multi-run-comparison-mini/output/archive/40-multi-run-comparison-note.md` has been successfully created with all three required sections:\n\n1. **Summary of Comparison** - Describes the multi-run validation of 120 records ÷ 8 minutes = 15 records/minute\n2. **Comparison Result** - Documents PASS status with 100% pass rate (3/3 runs identical)\n3. **Reuse Notes** - Provides 6 actionable insights for future workflow applications\n\nThe archive note is complete, accurate, and ready for reuse. All information aligns with the source comparison summary."
+        },
+        "usage": {
+          "promptTokens": 355,
+          "completionTokens": 142,
+          "totalTokens": 2609
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "solve-run-1": "I've completed run 1 of 3. The result has been written to the specified JSON file with:\n\n- **run_id**: \"run-1\"\n- **answer**: 15\n- **reasoning**: Simple calculation dividing total records by total time (120 ÷ 8 = 15 records per minute)",
+    "solve-run-2": "I've completed run 2 of 3. The result has been written to the specified JSON file with:\n\n- **run_id**: \"run-2\"\n- **answer**: 15\n- **reasoning**: Records per minute = total records ÷ total time = 120 ÷ 8 = 15",
+    "solve-run-3": "Successfully completed run 3 of 3. The result has been written to the specified JSON file:\n- **run_id**: \"run-3\"\n- **answer**: 15\n- **reasoning**: \"Records per minute = 120 records ÷ 8 minutes = 15\"",
+    "compare-runs": "Comparison summary completed successfully. All three runs passed (100% pass rate), each producing the correct answer of 15 with consistent reasoning. The summary has been written to `/Users/denovo/workspace/github/obora-kit/sandbox/16-multi-run-comparison-mini/output/final/01-comparison-summary.md`.",
+    "archive-comparison": "Verification confirmed. The archive note at `/Users/denovo/workspace/github/obora-kit/sandbox/16-multi-run-comparison-mini/output/archive/40-multi-run-comparison-note.md` has been successfully created with all three required sections:\n\n1. **Summary of Comparison** - Describes the multi-run validation of 120 records ÷ 8 minutes = 15 records/minute\n2. **Comparison Result** - Documents PASS status with 100% pass rate (3/3 runs identical)\n3. **Reuse Notes** - Provides 6 actionable insights for future workflow applications\n\nThe archive note is complete, accurate, and ready for reuse. All information aligns with the source comparison summary."
+  },
+  "endedAt": "2026-03-17T05:50:57.223Z"
+}

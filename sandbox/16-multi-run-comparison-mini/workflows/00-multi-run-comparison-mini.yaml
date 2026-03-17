@@ -1,0 +1,106 @@
+name: multi-run-comparison-mini
+version: "1.0"
+steps:
+  - name: solve-run-1
+    agent: solver
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/16-multi-run-comparison-mini/input/problem.md.
+        Do not read any reference or answer key.
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/16-multi-run-comparison-mini/output/iterations/results/01-run-1-result.json.
+
+        Requirements:
+        - Write valid JSON only, without Markdown fences.
+        - Use exactly these keys:
+          1. run_id
+          2. answer
+          3. reasoning
+        - run_id must be "run-1".
+        - answer must be a number.
+        - reasoning must be a short string.
+        - This is run 1 of 3 independent runs.
+
+  - name: solve-run-2
+    agent: solver
+    depends_on: [solve-run-1]
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/16-multi-run-comparison-mini/input/problem.md.
+        Do not read any reference or answer key.
+        Do not read any previous run result files.
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/16-multi-run-comparison-mini/output/iterations/results/02-run-2-result.json.
+
+        Requirements:
+        - Write valid JSON only, without Markdown fences.
+        - Use exactly these keys:
+          1. run_id
+          2. answer
+          3. reasoning
+        - run_id must be "run-2".
+        - answer must be a number.
+        - reasoning must be a short string.
+        - This is run 2 of 3 independent runs.
+
+  - name: solve-run-3
+    agent: solver
+    depends_on: [solve-run-2]
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/16-multi-run-comparison-mini/input/problem.md.
+        Do not read any reference or answer key.
+        Do not read any previous run result files.
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/16-multi-run-comparison-mini/output/iterations/results/03-run-3-result.json.
+
+        Requirements:
+        - Write valid JSON only, without Markdown fences.
+        - Use exactly these keys:
+          1. run_id
+          2. answer
+          3. reasoning
+        - run_id must be "run-3".
+        - answer must be a number.
+        - reasoning must be a short string.
+        - This is run 3 of 3 independent runs.
+
+  - name: compare-runs
+    agent: comparator
+    depends_on: [solve-run-1, solve-run-2, solve-run-3]
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/16-multi-run-comparison-mini/input/reference-answer.md,
+        /Users/denovo/workspace/github/obora-kit/sandbox/16-multi-run-comparison-mini/output/iterations/results/01-run-1-result.json,
+        /Users/denovo/workspace/github/obora-kit/sandbox/16-multi-run-comparison-mini/output/iterations/results/02-run-2-result.json,
+        and /Users/denovo/workspace/github/obora-kit/sandbox/16-multi-run-comparison-mini/output/iterations/results/03-run-3-result.json.
+
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/16-multi-run-comparison-mini/output/final/01-comparison-summary.md.
+
+        Requirements:
+        - Include exactly these top-level sections:
+          1. Overall Result
+          2. Per-Run Snapshot
+          3. Best Run
+          4. Worst Run
+          5. Pass Rate
+        - In Per-Run Snapshot, list each run with its answer, short reasoning snapshot, and whether it matches the reference answer (PASS or FAIL).
+        - Best Run and Worst Run should name a run and explain the decision in one short paragraph. If all runs are equivalent, say so explicitly.
+        - In Pass Rate, state the fraction and percentage of runs that passed (e.g. 3/3 = 100%).
+        - Overall Result should say PASS if all runs passed, PARTIAL if some passed, or FAIL if none passed.
+
+  - name: archive-comparison
+    agent: archivist
+    depends_on: [compare-runs]
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/16-multi-run-comparison-mini/output/final/01-comparison-summary.md.
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/16-multi-run-comparison-mini/output/archive/40-multi-run-comparison-note.md.
+
+        Requirements:
+        - Include exactly these top-level sections:
+          1. Summary of Comparison
+          2. Comparison Result
+          3. Reuse Notes

@@ -1,0 +1,12 @@
+version: "1.0"
+default_model: glm-5
+agents:
+  solver:
+    role: Solve the benchmark problem using only the problem statement.
+    model: glm-5
+  comparator:
+    role: Compare multiple independent run results and produce a comparison summary.
+    model: glm-5
+  archivist:
+    role: Summarize the comparison outcome into a reusable archive note.
+    model: glm-5
