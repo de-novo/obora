@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "benchmark": "swe-bench-lite",
+  "pilot_name": "pilot-5-astropy-django-v1",
+  "selection_notes": "First real pilot slice for Obora loop. Five SWE-bench Lite tasks chosen from two widely used Python repos (astropy, django) to keep the slice small, auditable, and operationally simple before expanding to 10 tasks.",
+  "task_count": 5,
+  "tasks": [
+    {
+      "task_id": "astropy__astropy-14995",
+      "repo": "astropy/astropy"
+    },
+    {
+      "task_id": "astropy__astropy-6938",
+      "repo": "astropy/astropy"
+    },
+    {
+      "task_id": "astropy__astropy-7746",
+      "repo": "astropy/astropy"
+    },
+    {
+      "task_id": "django__django-10914",
+      "repo": "django/django"
+    },
+    {
+      "task_id": "django__django-10924",
+      "repo": "django/django"
+    }
+  ]
+}

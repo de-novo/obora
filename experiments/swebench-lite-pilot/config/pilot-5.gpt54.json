@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0",
+  "benchmark": "swe-bench-lite",
+  "preset_name": "pilot-5-gpt54",
+  "pilot_size": 5,
+  "manifest_path": "../manifests/pilot-5.astropy-django.v1.json",
+  "results_path": "../results/pilot-5.gpt54.results.jsonl",
+  "references_path": "../references/public-reference.gpt54.json",
+  "execution": {
+    "runner": "obora-loop",
+    "mode": "manual-recorded",
+    "model": "openai-codex/gpt-5.4",
+    "max_iterations": 8,
+    "record_optional_usage": true
+  },
+  "fairness_controls": {
+    "temperature": 0,
+    "task_order": "fixed-manifest-order",
+    "max_wall_time_sec_per_task": 3600,
+    "notes": "Use the same Obora loop settings, stop rules, tool policy, and runtime judgment behavior for the whole pilot. This phase compares Obora runs against public reference context only, not a matched local direct baseline."
+  }
+}

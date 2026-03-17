@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "benchmark": "swe-bench-lite",
+  "snapshot_label": "swebench-lite-reference-gpt54-placeholder-2026-03-17",
+  "model_family": "openai-codex/gpt-5.4",
+  "matched_local_baseline_available": false,
+  "references": [
+    {
+      "label": "Published SWE-bench Lite score for the exact tested model or nearest public equivalent",
+      "source_type": "leaderboard",
+      "source_url": "https://www.swebench.com/",
+      "model": "openai-codex/gpt-5.4",
+      "score_percent": null,
+      "score_unit": "percent_resolved",
+      "notes": "Fill this with the exact published public score or the nearest defensible public reference before interpreting pilot deltas. Keep this as coarse context only; it is not a matched local baseline."
+    }
+  ],
+  "comparison_notes": [
+    "This file stores public reference context only.",
+    "Phase-1 pilot conclusions are directional and do not replace a matched local baseline.",
+    "If no exact public score exists for openai-codex/gpt-5.4, record the nearest defensible public comparison and explain the mismatch explicitly."
+  ]
+}
