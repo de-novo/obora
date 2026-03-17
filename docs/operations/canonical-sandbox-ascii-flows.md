@@ -222,13 +222,18 @@
   -> [archive]
 ```
 
-## 20 — longrun paper reproduction mini
+## 20 — longrun feedback convergence loop
 
 ```text
 [run-with-watchdog]
-  -> [paper metadata + reproduction task + source values + reported claim]
-  -> [recompute paper-derived result]
-  -> [compare with reported claim]
+  -> [produce v1]
+  -> [evaluate v1: 4/10]
+  => [revise v2]
+  => [evaluate v2: 6/10]
+  => [revise v3]
+  => [evaluate v3: 8/10]
+  => [revise v4]
+  => [evaluate v4: 10/10]
   -> [archive]
 ```
 
@@ -254,7 +259,7 @@ watchdog runner
   -> project flow
   -> multi-run comparison flow
   -> real-paper verification flow
-  -> real-paper reproduction flow
+  -> feedback convergence flow
 ```
 
 ### Current ladder intuition
@@ -265,5 +270,5 @@ small single-run primitives
   -> longrun runner contract
   -> comparison / aggregation
   -> real-paper verification
-  -> paper-derived reproduction
+  -> threshold-driven feedback convergence
 ```

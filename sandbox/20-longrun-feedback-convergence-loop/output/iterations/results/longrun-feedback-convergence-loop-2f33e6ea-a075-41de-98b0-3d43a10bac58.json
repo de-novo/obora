@@ -1,0 +1,195 @@
+{
+  "id": "2f33e6ea-a075-41de-98b0-3d43a10bac58",
+  "workflowName": "longrun-feedback-convergence-loop",
+  "status": "completed",
+  "startedAt": "2026-03-17T08:48:40.878Z",
+  "stepOrder": [
+    "produce-v1",
+    "evaluate-v1",
+    "revise-v2",
+    "evaluate-v2",
+    "revise-v3",
+    "evaluate-v3",
+    "revise-v4",
+    "evaluate-v4",
+    "archive-convergence"
+  ],
+  "completedSteps": [
+    "produce-v1",
+    "evaluate-v1",
+    "revise-v2",
+    "evaluate-v2",
+    "revise-v3",
+    "evaluate-v3",
+    "revise-v4",
+    "evaluate-v4",
+    "archive-convergence"
+  ],
+  "stepRecords": {
+    "produce-v1": {
+      "output": "Written `/Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/01-v1.md` with the required H1 sections. The note:\n\n- Explicitly satisfies C1–C4 and no others\n- Labels each success-check bullet C1 through C4\n- Stays concise and sandbox-local throughout",
+      "raw": {
+        "id": "zai-glm-5-1773737352470",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "Written `/Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/01-v1.md` with the required H1 sections. The note:\n\n- Explicitly satisfies C1–C4 and no others\n- Labels each success-check bullet C1 through C4\n- Stays concise and sandbox-local throughout"
+        },
+        "usage": {
+          "promptTokens": 430,
+          "completionTokens": 75,
+          "totalTokens": 1657
+        },
+        "finishReason": "stop"
+      }
+    },
+    "evaluate-v1": {
+      "output": "Evaluation complete. Written `/Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/02-eval-v1.md` with score 4/10 (C1–C4 passed; C5–C10 failed). Next revision should preserve passes and add the missing six checks.",
+      "raw": {
+        "id": "zai-glm-5-1773737402699",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "Evaluation complete. Written `/Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/02-eval-v1.md` with score 4/10 (C1–C4 passed; C5–C10 failed). Next revision should preserve passes and add the missing six checks."
+        },
+        "usage": {
+          "promptTokens": 443,
+          "completionTokens": 70,
+          "totalTokens": 2049
+        },
+        "finishReason": "stop"
+      }
+    },
+    "revise-v2": {
+      "output": "Revised v2 candidate written to `03-v2.md`.\n\n**Summary of Changes:**\n- Preserved all passed checks from v1 (C1–C4) in their original locations\n- Added C5 (monotonic score improvement) and C6 (9/10 convergence stop condition) as explicit constraints\n- Included required feedback bullet in Proposed Approach: \"Feedback applied from 02-eval-v1: Added explicit statements for monotonic score improvement (C5) and the 9/10 convergence stop condition (C6) to address the first two failed checks in the evaluation.\"\n- Success Check now contains exactly six bullets labeled C1–C6\n\nThe document maintains the required H1 sections (Objective, Constraints, Proposed Approach, Risks, Success Check) with no additional sections.",
+      "raw": {
+        "id": "zai-glm-5-1773737442367",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "Revised v2 candidate written to `03-v2.md`.\n\n**Summary of Changes:**\n- Preserved all passed checks from v1 (C1–C4) in their original locations\n- Added C5 (monotonic score improvement) and C6 (9/10 convergence stop condition) as explicit constraints\n- Included required feedback bullet in Proposed Approach: \"Feedback applied from 02-eval-v1: Added explicit statements for monotonic score improvement (C5) and the 9/10 convergence stop condition (C6) to address the first two failed checks in the evaluation.\"\n- Success Check now contains exactly six bullets labeled C1–C6\n\nThe document maintains the required H1 sections (Objective, Constraints, Proposed Approach, Risks, Success Check) with no additional sections."
+        },
+        "usage": {
+          "promptTokens": 637,
+          "completionTokens": 165,
+          "totalTokens": 2850
+        },
+        "finishReason": "stop"
+      }
+    },
+    "evaluate-v2": {
+      "output": "Evaluation complete. The v2 candidate scored **6/10**, passing C1–C6 and failing C7–C10. The next revision should preserve the existing passes and add the four missing elements: revision-feedback invariant, archive note with required headings, verification invariants, and reuse note.",
+      "raw": {
+        "id": "zai-glm-5-1773737476879",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "Evaluation complete. The v2 candidate scored **6/10**, passing C1–C6 and failing C7–C10. The next revision should preserve the existing passes and add the four missing elements: revision-feedback invariant, archive note with required headings, verification invariants, and reuse note."
+        },
+        "usage": {
+          "promptTokens": 449,
+          "completionTokens": 61,
+          "totalTokens": 2238
+        },
+        "finishReason": "stop"
+      }
+    },
+    "revise-v3": {
+      "output": "I've created 05-v3.md with the following changes based on the v2 evaluation feedback:\n\n**Changes from v2 to v3:**\n\n1. **Added C7 (revision-feedback invariant)** - New bullet in Constraints: \"Every revision after v1 must read and apply the immediately previous evaluation feedback as a standing workflow invariant.\"\n\n2. **Added C8 (archive-note requirement)** - New step 5 in Proposed Approach requiring an archive note with three specific headings: Summary of Convergence, Score Trajectory, and Reuse Notes.\n\n3. **Updated feedback bullet** - Changed from \"Feedback applied from 02-eval-v1\" to \"Feedback applied from 04-eval-v2\" with updated content reflecting C7 and C8 additions.\n\n4. **Updated Success Check** - Added exactly eight bullets labeled C1-C8 to match the passing rubric checks.\n\n**Preserved from v2:**\n- All five required H1 sections (Objective, Constraints, Proposed Approach, Risks, Success Check)\n- All previously passing checks C1-C6\n- No mention or satisfaction of C9 or C10 as instructed\n- Archive note described in Proposed Approach rather than as a separate top-level section\n\nThe v3 candidate now satisfies C1-C8 and should score 8/10 when evaluated.",
+      "raw": {
+        "id": "zai-glm-5-1773737508528",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "I've created 05-v3.md with the following changes based on the v2 evaluation feedback:\n\n**Changes from v2 to v3:**\n\n1. **Added C7 (revision-feedback invariant)** - New bullet in Constraints: \"Every revision after v1 must read and apply the immediately previous evaluation feedback as a standing workflow invariant.\"\n\n2. **Added C8 (archive-note requirement)** - New step 5 in Proposed Approach requiring an archive note with three specific headings: Summary of Convergence, Score Trajectory, and Reuse Notes.\n\n3. **Updated feedback bullet** - Changed from \"Feedback applied from 02-eval-v1\" to \"Feedback applied from 04-eval-v2\" with updated content reflecting C7 and C8 additions.\n\n4. **Updated Success Check** - Added exactly eight bullets labeled C1-C8 to match the passing rubric checks.\n\n**Preserved from v2:**\n- All five required H1 sections (Objective, Constraints, Proposed Approach, Risks, Success Check)\n- All previously passing checks C1-C6\n- No mention or satisfaction of C9 or C10 as instructed\n- Archive note described in Proposed Approach rather than as a separate top-level section\n\nThe v3 candidate now satisfies C1-C8 and should score 8/10 when evaluated."
+        },
+        "usage": {
+          "promptTokens": 707,
+          "completionTokens": 269,
+          "totalTokens": 3088
+        },
+        "finishReason": "stop"
+      }
+    },
+    "evaluate-v3": {
+      "output": "I've completed the evaluation of the v3 candidate against the rubric.\n\n**Summary:**\n- Score: 8/10\n- Passed: C1-C8 (all workflow definition and process checks)\n- Failed: C9-C10 (verification invariants and reuse guidance)\n\nThe v3 candidate successfully addressed the two failures from v2 (C7 and C8) but does not yet include the verification-invariants or reuse-note content needed for C9 and C10.",
+      "raw": {
+        "id": "zai-glm-5-1773737544997",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "I've completed the evaluation of the v3 candidate against the rubric.\n\n**Summary:**\n- Score: 8/10\n- Passed: C1-C8 (all workflow definition and process checks)\n- Failed: C9-C10 (verification invariants and reuse guidance)\n\nThe v3 candidate successfully addressed the two failures from v2 (C7 and C8) but does not yet include the verification-invariants or reuse-note content needed for C9 and C10."
+        },
+        "usage": {
+          "promptTokens": 377,
+          "completionTokens": 98,
+          "totalTokens": 2459
+        },
+        "finishReason": "stop"
+      }
+    },
+    "revise-v4": {
+      "output": "I've created the v4 candidate at `/Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/07-v4.md` that addresses all evaluation feedback:\n\n**Changes from v3 to v4:**\n\n1. **C9 (Verification Invariants)** - Added a new step 6 in Proposed Approach specifying three verification invariants:\n   - Logs must be present showing each generation/evaluation step\n   - workflow-result.json must contain score history, iteration count, and convergence status\n   - Fresh-run reproducibility requiring identical artifacts on clean re-run\n\n2. **C10 (Reuse Guidance)** - Extended the Reuse Notes heading content (step 5) to explicitly include guidance for adapting the pattern to other structured checklist tasks, including rubric substitution, iteration count adjustment, and score threshold calibration\n\n3. **Updated feedback bullet** - Changed to reference 06-eval-v3 and describe the C9/C10 additions\n\n**Preserved from v3:**\n- All five required top-level sections (Objective, Constraints, Proposed Approach, Risks, Success Check)\n- All passing checks C1-C8\n- No separate top-level sections for verification invariants or archive notes\n- Exactly ten bullets in Success Check labeled C1 through C10\n\nThe v4 candidate now satisfies all 10 rubric checks and is ready to stop because the convergence threshold (9/10) has been reached.",
+      "raw": {
+        "id": "zai-glm-5-1773737591363",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "I've created the v4 candidate at `/Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/07-v4.md` that addresses all evaluation feedback:\n\n**Changes from v3 to v4:**\n\n1. **C9 (Verification Invariants)** - Added a new step 6 in Proposed Approach specifying three verification invariants:\n   - Logs must be present showing each generation/evaluation step\n   - workflow-result.json must contain score history, iteration count, and convergence status\n   - Fresh-run reproducibility requiring identical artifacts on clean re-run\n\n2. **C10 (Reuse Guidance)** - Extended the Reuse Notes heading content (step 5) to explicitly include guidance for adapting the pattern to other structured checklist tasks, including rubric substitution, iteration count adjustment, and score threshold calibration\n\n3. **Updated feedback bullet** - Changed to reference 06-eval-v3 and describe the C9/C10 additions\n\n**Preserved from v3:**\n- All five required top-level sections (Objective, Constraints, Proposed Approach, Risks, Success Check)\n- All passing checks C1-C8\n- No separate top-level sections for verification invariants or archive notes\n- Exactly ten bullets in Success Check labeled C1 through C10\n\nThe v4 candidate now satisfies all 10 rubric checks and is ready to stop because the convergence threshold (9/10) has been reached."
+        },
+        "usage": {
+          "promptTokens": 926,
+          "completionTokens": 298,
+          "totalTokens": 3528
+        },
+        "finishReason": "stop"
+      }
+    },
+    "evaluate-v4": {
+      "output": "The evaluation has been completed and saved. The v4 candidate achieved a perfect score of **10/10**, passing all rubric checks. The convergence loop has successfully reached its threshold and can now be archived.",
+      "raw": {
+        "id": "zai-glm-5-1773737652493",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "The evaluation has been completed and saved. The v4 candidate achieved a perfect score of **10/10**, passing all rubric checks. The convergence loop has successfully reached its threshold and can now be archived."
+        },
+        "usage": {
+          "promptTokens": 485,
+          "completionTokens": 43,
+          "totalTokens": 3152
+        },
+        "finishReason": "stop"
+      }
+    },
+    "archive-convergence": {
+      "output": "Archive note created successfully at `/Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/archive/40-feedback-convergence-note.md`.\n\n**Summary:**\n\n- **Summary of Convergence**: Explains the repeated evaluation-driven improvement pattern (not one-shot repair), documents the monotonic improvement characteristic, threshold-based termination, and reproducible verification.\n\n- **Score Trajectory**: Shows the explicit sequence **4 → 6 → 8 → 10** with a table mapping each iteration, candidate version, evaluation, score, and failed checks addressed.\n\n- **Reuse Notes**: Provides guidance on adapting the pattern to other structured checklist tasks including rubric substitution, iteration count calibration, threshold configuration, a pattern template, and applicable use cases.",
+      "raw": {
+        "id": "zai-glm-5-1773737723092",
+        "model": "glm-5",
+        "message": {
+          "role": "assistant",
+          "content": "Archive note created successfully at `/Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/archive/40-feedback-convergence-note.md`.\n\n**Summary:**\n\n- **Summary of Convergence**: Explains the repeated evaluation-driven improvement pattern (not one-shot repair), documents the monotonic improvement characteristic, threshold-based termination, and reproducible verification.\n\n- **Score Trajectory**: Shows the explicit sequence **4 → 6 → 8 → 10** with a table mapping each iteration, candidate version, evaluation, score, and failed checks addressed.\n\n- **Reuse Notes**: Provides guidance on adapting the pattern to other structured checklist tasks including rubric substitution, iteration count calibration, threshold configuration, a pattern template, and applicable use cases."
+        },
+        "usage": {
+          "promptTokens": 1024,
+          "completionTokens": 156,
+          "totalTokens": 5980
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "produce-v1": "Written `/Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/01-v1.md` with the required H1 sections. The note:\n\n- Explicitly satisfies C1–C4 and no others\n- Labels each success-check bullet C1 through C4\n- Stays concise and sandbox-local throughout",
+    "evaluate-v1": "Evaluation complete. Written `/Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/02-eval-v1.md` with score 4/10 (C1–C4 passed; C5–C10 failed). Next revision should preserve passes and add the missing six checks.",
+    "revise-v2": "Revised v2 candidate written to `03-v2.md`.\n\n**Summary of Changes:**\n- Preserved all passed checks from v1 (C1–C4) in their original locations\n- Added C5 (monotonic score improvement) and C6 (9/10 convergence stop condition) as explicit constraints\n- Included required feedback bullet in Proposed Approach: \"Feedback applied from 02-eval-v1: Added explicit statements for monotonic score improvement (C5) and the 9/10 convergence stop condition (C6) to address the first two failed checks in the evaluation.\"\n- Success Check now contains exactly six bullets labeled C1–C6\n\nThe document maintains the required H1 sections (Objective, Constraints, Proposed Approach, Risks, Success Check) with no additional sections.",
+    "evaluate-v2": "Evaluation complete. The v2 candidate scored **6/10**, passing C1–C6 and failing C7–C10. The next revision should preserve the existing passes and add the four missing elements: revision-feedback invariant, archive note with required headings, verification invariants, and reuse note.",
+    "revise-v3": "I've created 05-v3.md with the following changes based on the v2 evaluation feedback:\n\n**Changes from v2 to v3:**\n\n1. **Added C7 (revision-feedback invariant)** - New bullet in Constraints: \"Every revision after v1 must read and apply the immediately previous evaluation feedback as a standing workflow invariant.\"\n\n2. **Added C8 (archive-note requirement)** - New step 5 in Proposed Approach requiring an archive note with three specific headings: Summary of Convergence, Score Trajectory, and Reuse Notes.\n\n3. **Updated feedback bullet** - Changed from \"Feedback applied from 02-eval-v1\" to \"Feedback applied from 04-eval-v2\" with updated content reflecting C7 and C8 additions.\n\n4. **Updated Success Check** - Added exactly eight bullets labeled C1-C8 to match the passing rubric checks.\n\n**Preserved from v2:**\n- All five required H1 sections (Objective, Constraints, Proposed Approach, Risks, Success Check)\n- All previously passing checks C1-C6\n- No mention or satisfaction of C9 or C10 as instructed\n- Archive note described in Proposed Approach rather than as a separate top-level section\n\nThe v3 candidate now satisfies C1-C8 and should score 8/10 when evaluated.",
+    "evaluate-v3": "I've completed the evaluation of the v3 candidate against the rubric.\n\n**Summary:**\n- Score: 8/10\n- Passed: C1-C8 (all workflow definition and process checks)\n- Failed: C9-C10 (verification invariants and reuse guidance)\n\nThe v3 candidate successfully addressed the two failures from v2 (C7 and C8) but does not yet include the verification-invariants or reuse-note content needed for C9 and C10.",
+    "revise-v4": "I've created the v4 candidate at `/Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/final/07-v4.md` that addresses all evaluation feedback:\n\n**Changes from v3 to v4:**\n\n1. **C9 (Verification Invariants)** - Added a new step 6 in Proposed Approach specifying three verification invariants:\n   - Logs must be present showing each generation/evaluation step\n   - workflow-result.json must contain score history, iteration count, and convergence status\n   - Fresh-run reproducibility requiring identical artifacts on clean re-run\n\n2. **C10 (Reuse Guidance)** - Extended the Reuse Notes heading content (step 5) to explicitly include guidance for adapting the pattern to other structured checklist tasks, including rubric substitution, iteration count adjustment, and score threshold calibration\n\n3. **Updated feedback bullet** - Changed to reference 06-eval-v3 and describe the C9/C10 additions\n\n**Preserved from v3:**\n- All five required top-level sections (Objective, Constraints, Proposed Approach, Risks, Success Check)\n- All passing checks C1-C8\n- No separate top-level sections for verification invariants or archive notes\n- Exactly ten bullets in Success Check labeled C1 through C10\n\nThe v4 candidate now satisfies all 10 rubric checks and is ready to stop because the convergence threshold (9/10) has been reached.",
+    "evaluate-v4": "The evaluation has been completed and saved. The v4 candidate achieved a perfect score of **10/10**, passing all rubric checks. The convergence loop has successfully reached its threshold and can now be archived.",
+    "archive-convergence": "Archive note created successfully at `/Users/denovo/workspace/github/obora-kit/sandbox/20-longrun-feedback-convergence-loop/output/archive/40-feedback-convergence-note.md`.\n\n**Summary:**\n\n- **Summary of Convergence**: Explains the repeated evaluation-driven improvement pattern (not one-shot repair), documents the monotonic improvement characteristic, threshold-based termination, and reproducible verification.\n\n- **Score Trajectory**: Shows the explicit sequence **4 → 6 → 8 → 10** with a table mapping each iteration, candidate version, evaluation, score, and failed checks addressed.\n\n- **Reuse Notes**: Provides guidance on adapting the pattern to other structured checklist tasks including rubric substitution, iteration count calibration, threshold configuration, a pattern template, and applicable use cases."
+  },
+  "endedAt": "2026-03-17T08:55:30.960Z"
+}

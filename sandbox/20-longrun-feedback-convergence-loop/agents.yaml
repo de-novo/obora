@@ -1,0 +1,15 @@
+version: "1.0"
+default_model: glm-5
+agents:
+  planner:
+    role: Draft structured candidate plans against an explicit checklist while keeping a fixed markdown shape.
+    model: glm-5
+  evaluator:
+    role: Score candidate plans against an explicit ten-check rubric and return structured feedback.
+    model: glm-5
+  reviser:
+    role: Read prior evaluations, preserve passing checks, and revise the candidate toward a higher threshold.
+    model: glm-5
+  archivist:
+    role: Summarize the convergence trajectory as a reusable canonical archive note.
+    model: glm-5

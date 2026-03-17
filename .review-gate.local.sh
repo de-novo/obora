@@ -6,7 +6,7 @@ TYPECHECK_CMD="pnpm -r typecheck"
 TEST_CMD="pnpm -r test"
 BUILD_CMD="pnpm build"
 SELFTEST_CMD="bash scripts/review-gate-selftest.sh"
-SANDBOX_SMOKE_CMD="bash sandbox/11-longrun-loop/verify.sh && bash sandbox/12-longrun-benchmark-mini/verify.sh && bash sandbox/13-longrun-benchmark-loop/verify.sh && bash sandbox/14-longrun-project-mini/verify.sh && bash sandbox/15-longrun-project-loop/verify.sh && bash sandbox/16-multi-run-comparison-mini/verify.sh && bash sandbox/17-multi-run-comparison-loop/verify.sh && bash sandbox/18-longrun-paper-verification-mini/verify.sh && bash sandbox/19-longrun-paper-verification-loop/verify.sh"
+SANDBOX_SMOKE_CMD="bash sandbox/11-longrun-loop/verify.sh && bash sandbox/12-longrun-benchmark-mini/verify.sh && bash sandbox/13-longrun-benchmark-loop/verify.sh && bash sandbox/14-longrun-project-mini/verify.sh && bash sandbox/15-longrun-project-loop/verify.sh && bash sandbox/16-multi-run-comparison-mini/verify.sh && bash sandbox/17-multi-run-comparison-loop/verify.sh && bash sandbox/18-longrun-paper-verification-mini/verify.sh && bash sandbox/19-longrun-paper-verification-loop/verify.sh && bash sandbox/20-longrun-feedback-convergence-loop/verify.sh"
 
 # Flexible model matrix for task-stage auto gate
 # MODEL_IDS='opus,codex,glm'
