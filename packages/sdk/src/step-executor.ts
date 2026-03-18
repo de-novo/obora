@@ -1,5 +1,6 @@
 import type { ChatMessage, ChatCompletionResult, ToolCall, ToolDefinition } from "@obora/adapters";
 import type { AgentFactory } from "./runtime.js";
+import type { HookExecutionResult, WorkflowHookLifecycle } from "./hooks.js";
 import type { WorkflowStep } from "./workflow.js";
 import {
   getValidationStepConfig,
@@ -38,12 +39,17 @@ export interface StepContext {
   previousOutputs: Record<string, unknown>;
   signal?: AbortSignal;
   repairContext?: RepairContext;
+  hookOutputs?: Partial<Record<WorkflowHookLifecycle, HookExecutionResult>>;
 }
 
 export interface StepResult {
   output: unknown;
   raw?: unknown;
-  votes?: Array<{ participant: string; vote: "APPROVE" | "REJECT" | "REQUEST_CHANGES"; response: string }>;
+  votes?: Array<{
+    participant: string;
+    vote: "APPROVE" | "REJECT" | "REQUEST_CHANGES";
+    response: string;
+  }>;
 }
 
 /**
@@ -119,19 +125,24 @@ const OBR_GLOBAL_SYSTEM_PROMPT_LINES = [
   "- Keep outputs concise, verifiable, and implementation-ready.",
 ];
 
-
 export interface StepExecutorConfig {
   model?: string;
   temperature?: number;
   maxTokens?: number;
   verbose?: boolean;
   resolveAgentLLM?: (
-    agentName?: string,
+    agentName?: string
   ) =>
-    | Promise<{ adapter: LLMAdapterLike; model?: string; temperature?: number; maxTokens?: number } | undefined>
+    | Promise<
+        | { adapter: LLMAdapterLike; model?: string; temperature?: number; maxTokens?: number }
+        | undefined
+      >
     | { adapter: LLMAdapterLike; model?: string; temperature?: number; maxTokens?: number }
     | undefined;
-  onEvent?: (event: "llm_request" | "llm_response" | "consensus_vote" | "consensus_result", data: unknown) => Promise<void> | void;
+  onEvent?: (
+    event: "llm_request" | "llm_response" | "consensus_vote" | "consensus_result",
+    data: unknown
+  ) => Promise<void> | void;
   /**
    * Custom tool handlers to inject into the executor.
    * By default, built-in tools (file_write, file_read, file_list) are merged with these.
@@ -186,7 +197,9 @@ function parseVote(text: string): "APPROVE" | "REJECT" | "REQUEST_CHANGES" {
  * Build a Map of name → ToolHandler for the builtin file tools.
  * Kept as a factory so each StepExecutor gets its own bound handlers.
  */
-function createBuiltinToolHandlers(resolveProjectPath: (path: string, opts?: { allowNonExistentTarget?: boolean }) => string): Map<string, ToolHandler> {
+function createBuiltinToolHandlers(
+  resolveProjectPath: (path: string, opts?: { allowNonExistentTarget?: boolean }) => string
+): Map<string, ToolHandler> {
   const handlers = new Map<string, ToolHandler>();
 
   handlers.set("file_write", {
@@ -234,7 +247,7 @@ export class StepExecutor {
   constructor(
     private readonly llmAdapter: LLMAdapterLike,
     private readonly agents: Map<string, AgentFactory>,
-    private readonly config: StepExecutorConfig = {},
+    private readonly config: StepExecutorConfig = {}
   ) {
     this.toolRegistry = this.buildToolRegistry();
   }
@@ -274,14 +287,21 @@ export class StepExecutor {
     };
   }
 
-  private async executeConsensusStep(step: WorkflowStep, context: StepContext): Promise<StepResult> {
+  private async executeConsensusStep(
+    step: WorkflowStep,
+    context: StepContext
+  ): Promise<StepResult> {
     const participants = Array.isArray(step.participants) ? step.participants : [];
     if (participants.length === 0) {
       throw new Error(`Consensus step '${step.name}' requires participants`);
     }
 
     const runConsensus = async (_timeoutSignal: AbortSignal): Promise<StepResult> => {
-      const votes: Array<{ participant: string; vote: "APPROVE" | "REJECT" | "REQUEST_CHANGES"; response: string }> = [];
+      const votes: Array<{
+        participant: string;
+        vote: "APPROVE" | "REJECT" | "REQUEST_CHANGES";
+        response: string;
+      }> = [];
       const consensusSignal = this.combineAbortSignals(context.signal, _timeoutSignal);
 
       try {
@@ -290,14 +310,21 @@ export class StepExecutor {
             step,
             {
               ...context,
-              ...(consensusSignal?.signal ? { signal: consensusSignal.signal } : { signal: _timeoutSignal }),
+              ...(consensusSignal?.signal
+                ? { signal: consensusSignal.signal }
+                : { signal: _timeoutSignal }),
             },
-            participant,
+            participant
           );
           const responseText = response.message.content ?? "";
           const vote = parseVote(responseText);
           votes.push({ participant, vote, response: responseText });
-          await this.config.onEvent?.("consensus_vote", { stepName: step.name, participant, vote, response: responseText });
+          await this.config.onEvent?.("consensus_vote", {
+            stepName: step.name,
+            participant,
+            vote,
+            response: responseText,
+          });
         }
       } finally {
         consensusSignal?.cleanup();
@@ -317,7 +344,7 @@ export class StepExecutor {
 
       if (!pass) {
         throw new Error(
-          `Consensus failed for step '${step.name}' (${approveCount}/${votes.length} approvals, requires ${quorumRule.description})`,
+          `Consensus failed for step '${step.name}' (${approveCount}/${votes.length} approvals, requires ${quorumRule.description})`
         );
       }
 
@@ -328,9 +355,17 @@ export class StepExecutor {
     };
 
     const perRequestTimeoutMs = this.getStepTimeoutMs(step);
-    const consensusTimeoutMs = this.getConsensusTimeoutMs(step, participants.length, perRequestTimeoutMs);
+    const consensusTimeoutMs = this.getConsensusTimeoutMs(
+      step,
+      participants.length,
+      perRequestTimeoutMs
+    );
 
-    return this.withTimeout(runConsensus, consensusTimeoutMs, `Consensus timed out for step '${step.name}' after ${consensusTimeoutMs}ms`);
+    return this.withTimeout(
+      runConsensus,
+      consensusTimeoutMs,
+      `Consensus timed out for step '${step.name}' after ${consensusTimeoutMs}ms`
+    );
   }
 
   private async requestForStep(step: WorkflowStep, context: StepContext, agentName?: string) {
@@ -343,7 +378,11 @@ export class StepExecutor {
       { role: "user", content: userPrompt },
     ];
 
-    await this.config.onEvent?.("llm_request", { stepName: step.name, agent: agentName ?? step.agent, messages });
+    await this.config.onEvent?.("llm_request", {
+      stepName: step.name,
+      agent: agentName ?? step.agent,
+      messages,
+    });
 
     const timeoutMs = this.getStepTimeoutMs(step);
     const requestSignal = this.combineSignals(context.signal, timeoutMs, step.name);
@@ -414,7 +453,9 @@ export class StepExecutor {
         }
       }
 
-      throw new Error(`Tool-call iteration limit (${maxToolRounds}) exceeded for step '${step.name}'`);
+      throw new Error(
+        `Tool-call iteration limit (${maxToolRounds}) exceeded for step '${step.name}'`
+      );
     } finally {
       requestSignal?.cleanup();
     }
@@ -448,7 +489,10 @@ export class StepExecutor {
     }
   }
 
-  private resolveProjectPath(relativePath: string, options?: { allowNonExistentTarget?: boolean }): string {
+  private resolveProjectPath(
+    relativePath: string,
+    options?: { allowNonExistentTarget?: boolean }
+  ): string {
     const projectRoot = realpathSync(process.cwd());
     const resolvedPath = resolve(projectRoot, relativePath);
 
@@ -480,7 +524,7 @@ export class StepExecutor {
   private combineSignals(
     signal: AbortSignal | undefined,
     timeoutMs: number,
-    stepName: string,
+    stepName: string
   ): { signal: AbortSignal; cleanup: () => void } | undefined {
     const shouldUseTimeout = Number.isFinite(timeoutMs) && timeoutMs > 0;
     let timeoutController: AbortController | undefined;
@@ -489,7 +533,9 @@ export class StepExecutor {
     if (shouldUseTimeout) {
       timeoutController = new AbortController();
       timeout = setTimeout(() => {
-        timeoutController?.abort(new Error(`LLM request timed out for step '${stepName}' after ${timeoutMs}ms`));
+        timeoutController?.abort(
+          new Error(`LLM request timed out for step '${stepName}' after ${timeoutMs}ms`)
+        );
       }, timeoutMs);
     }
 
@@ -521,7 +567,7 @@ export class StepExecutor {
   private async withTimeout<T>(
     task: (signal: AbortSignal) => Promise<T>,
     timeoutMs: number,
-    timeoutMessage: string,
+    timeoutMessage: string
   ): Promise<T> {
     const timeoutController = new AbortController();
     const timeout = setTimeout(() => {
@@ -537,7 +583,7 @@ export class StepExecutor {
             () => {
               reject(timeoutController.signal.reason ?? new Error(timeoutMessage));
             },
-            { once: true },
+            { once: true }
           );
         }),
       ]);
@@ -595,12 +641,16 @@ export class StepExecutor {
   private getConsensusTimeoutMs(
     step: WorkflowStep,
     participantCount: number,
-    perRequestTimeoutMs: number,
+    perRequestTimeoutMs: number
   ): number {
     const config = (step.config ?? {}) as Record<string, unknown>;
 
     const topLevelTimeoutMs = config.consensusTimeoutMs;
-    if (typeof topLevelTimeoutMs === "number" && Number.isFinite(topLevelTimeoutMs) && topLevelTimeoutMs > 0) {
+    if (
+      typeof topLevelTimeoutMs === "number" &&
+      Number.isFinite(topLevelTimeoutMs) &&
+      topLevelTimeoutMs > 0
+    ) {
       return topLevelTimeoutMs;
     }
 
@@ -610,12 +660,20 @@ export class StepExecutor {
         : undefined;
 
     const nestedTimeoutMs = consensusConfig?.timeoutMs;
-    if (typeof nestedTimeoutMs === "number" && Number.isFinite(nestedTimeoutMs) && nestedTimeoutMs > 0) {
+    if (
+      typeof nestedTimeoutMs === "number" &&
+      Number.isFinite(nestedTimeoutMs) &&
+      nestedTimeoutMs > 0
+    ) {
       return nestedTimeoutMs;
     }
 
     const nestedTimeoutSec = consensusConfig?.timeout;
-    if (typeof nestedTimeoutSec === "number" && Number.isFinite(nestedTimeoutSec) && nestedTimeoutSec > 0) {
+    if (
+      typeof nestedTimeoutSec === "number" &&
+      Number.isFinite(nestedTimeoutSec) &&
+      nestedTimeoutSec > 0
+    ) {
       return nestedTimeoutSec * 1_000;
     }
 
@@ -624,14 +682,18 @@ export class StepExecutor {
 
   private getConsensusQuorumRule(
     step: WorkflowStep,
-    totalVotes: number,
+    totalVotes: number
   ): { requiredApprovals: number; description: string } {
     const config = step.config;
-    const rawQuorum = config && typeof config === "object" ? (config as Record<string, unknown>).quorum : undefined;
+    const rawQuorum =
+      config && typeof config === "object" ? (config as Record<string, unknown>).quorum : undefined;
 
     if (typeof rawQuorum === "number" && Number.isFinite(rawQuorum) && rawQuorum > 0) {
       if (rawQuorum <= 1) {
-        const requiredApprovals = Math.min(totalVotes, Math.max(1, Math.ceil(totalVotes * rawQuorum)));
+        const requiredApprovals = Math.min(
+          totalVotes,
+          Math.max(1, Math.ceil(totalVotes * rawQuorum))
+        );
         return {
           requiredApprovals,
           description: `${requiredApprovals}/${totalVotes} approvals (quorum=${rawQuorum})`,
@@ -732,35 +794,42 @@ export class StepExecutor {
 
     const shouldIncludeRepairContext = Boolean(
       context.repairContext &&
-      (context.repairContext.mode === "repair" || context.repairContext.latestValidation),
+      (context.repairContext.mode === "repair" || context.repairContext.latestValidation)
     );
 
-    const repairContextLines = shouldIncludeRepairContext && context.repairContext
-      ? [
-          "",
-          "Repair context:",
-          `Mode: ${context.repairContext.mode}`,
-          `Attempt: ${context.repairContext.attempt}`,
-          context.repairContext.validationStep
-            ? `Validation step: ${context.repairContext.validationStep}`
-            : undefined,
-          typeof context.repairContext.repeatedSignatureCount === "number"
-            ? `Repeated signature count: ${context.repairContext.repeatedSignatureCount}`
-            : undefined,
-          typeof context.repairContext.maxNoProgressIterations === "number"
-            ? `No-progress ceiling: ${context.repairContext.maxNoProgressIterations}`
-            : undefined,
-          typeof context.repairContext.repeatedCriticalIssueCeiling === "number"
-            ? `Repeated critical issue ceiling: ${context.repairContext.repeatedCriticalIssueCeiling}`
-            : undefined,
-          context.repairContext.latestValidation
-            ? `Latest validation result:\n${JSON.stringify(context.repairContext.latestValidation, null, 2)}`
-            : "Latest validation result: none",
-          context.repairContext.previousValidationResults && context.repairContext.previousValidationResults.length > 0
-            ? `Previous validation history:\n${JSON.stringify(context.repairContext.previousValidationResults, null, 2)}`
-            : undefined,
-        ]
-      : [];
+    const repairContextLines =
+      shouldIncludeRepairContext && context.repairContext
+        ? [
+            "",
+            "Repair context:",
+            `Mode: ${context.repairContext.mode}`,
+            `Attempt: ${context.repairContext.attempt}`,
+            context.repairContext.validationStep
+              ? `Validation step: ${context.repairContext.validationStep}`
+              : undefined,
+            typeof context.repairContext.repeatedSignatureCount === "number"
+              ? `Repeated signature count: ${context.repairContext.repeatedSignatureCount}`
+              : undefined,
+            typeof context.repairContext.maxNoProgressIterations === "number"
+              ? `No-progress ceiling: ${context.repairContext.maxNoProgressIterations}`
+              : undefined,
+            typeof context.repairContext.repeatedCriticalIssueCeiling === "number"
+              ? `Repeated critical issue ceiling: ${context.repairContext.repeatedCriticalIssueCeiling}`
+              : undefined,
+            context.repairContext.latestValidation
+              ? `Latest validation result:\n${JSON.stringify(context.repairContext.latestValidation, null, 2)}`
+              : "Latest validation result: none",
+            context.repairContext.previousValidationResults &&
+            context.repairContext.previousValidationResults.length > 0
+              ? `Previous validation history:\n${JSON.stringify(context.repairContext.previousValidationResults, null, 2)}`
+              : undefined,
+          ]
+        : [];
+
+    const hookOutputLines =
+      context.hookOutputs && Object.keys(context.hookOutputs).length > 0
+        ? ["", "Hook outputs:", JSON.stringify(context.hookOutputs, null, 2)]
+        : [];
 
     return [
       `Step: ${step.name}`,
@@ -769,8 +838,11 @@ export class StepExecutor {
       "Task:",
       task,
       ...repairContextLines,
+      ...hookOutputLines,
       "",
-      dependencyContext.length > 0 ? `Previous outputs:\n${JSON.stringify(dependencyContext, null, 2)}` : "Previous outputs: none",
+      dependencyContext.length > 0
+        ? `Previous outputs:\n${JSON.stringify(dependencyContext, null, 2)}`
+        : "Previous outputs: none",
     ]
       .filter(Boolean)
       .join("\n");
@@ -789,7 +861,9 @@ export class StepExecutor {
     }
 
     if (validationConfig.emit_structured_result) {
-      throw new Error(`Validation step '${step.name}' is configured for structured output but did not return a valid ValidationResult JSON payload`);
+      throw new Error(
+        `Validation step '${step.name}' is configured for structured output but did not return a valid ValidationResult JSON payload`
+      );
     }
 
     return rawContent;

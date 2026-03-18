@@ -2,6 +2,10 @@ name: overnight-builder
 version: "4.0"
 description: "TDD 기반 프로덕션 수준 기획→설계→테스트→구현→실제빌드/린트/테스트실행→리뷰 cycle 반복"
 
+hooks:
+  pre_step:
+    shell: "mkdir -p artifacts workspace"
+
 steps:
   - name: refine_idea
     agent: planner
@@ -66,6 +70,9 @@ steps:
     agent: implementer
     depends_on: [design_and_write_tests]
     tools: [file_read, file_write, file_list, shell_exec]
+    hooks:
+      pre_step:
+        shell: "bash -lc 'cd workspace && if [ ! -d node_modules ]; then npm install --silent; fi'"
     config:
       repair_loop:
         enabled: true
@@ -91,8 +98,6 @@ steps:
         - workspace/ 안에서만 작업하세요.
         - 프로덕션 수준: 에러 처리, 입력 검증, 타입, JSDoc, console.log 금지
 
-        구현 전에 먼저 workspace/에서 npm install을 실행하세요 (node_modules가 없으면).
-
         구현 후 artifacts/03-implementation-notes.md를 작성하세요:
         1. 생성/수정한 파일
         2. 핵심 구현 결정
@@ -103,6 +108,17 @@ steps:
     agent: validator
     depends_on: [implement_or_repair]
     tools: [file_read, file_write, file_list, shell_exec]
+    hooks:
+      pre_validation:
+        shell: >-
+          bash -lc 'mkdir -p artifacts &&
+          cd workspace &&
+          if [ ! -d node_modules ]; then npm install --silent > ../artifacts/install.log 2>&1; else printf "npm install skipped (node_modules present)\n" > ../artifacts/install.log; fi;
+          npx tsc --noEmit > ../artifacts/typecheck.log 2>&1; TS=$?;
+          if [ -d src ]; then npx eslint src --ext .ts > ../artifacts/lint.log 2>&1; LINT=$?; else printf "lint skipped: src directory missing\n" > ../artifacts/lint.log; LINT=0; fi;
+          npm test > ../artifacts/test.log 2>&1; TEST=$?;
+          printf "typecheck_exit_code=%s\nlint_exit_code=%s\ntest_exit_code=%s\n" "$TS" "$LINT" "$TEST" > ../artifacts/command-status.env;
+          exit 0'
     config:
       validation:
         enabled: true
@@ -116,14 +132,14 @@ steps:
       task: |
         당신은 QA 엔지니어입니다. 프로덕션 배포 전 실제 검증을 합니다.
 
-        workspace/ 디렉터리에서 아래 명령어를 순서대로 실행하세요:
+        pre_validation hook이 아래 파일을 생성합니다. 이 파일들을 읽고 판정하세요:
+        - artifacts/install.log
+        - artifacts/typecheck.log
+        - artifacts/lint.log
+        - artifacts/test.log
+        - artifacts/command-status.env
 
-        1. npm install (node_modules가 없으면)
-        2. npx tsc --noEmit (TypeScript 타입 체크)
-        3. npx eslint src --ext .ts (린트 — eslint가 없으면 스킵 가능)
-        4. npm test (테스트 실행)
-
-        각 명령어의 exit code와 출력을 확인하세요.
+        각 명령어의 exit code와 출력을 확인해 판정하세요.
 
         artifacts/04-test-report.md를 작성하세요:
         1. TypeScript 타입 체크 결과 (PASS/FAIL + 에러 목록)

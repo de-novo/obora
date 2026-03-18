@@ -25,6 +25,7 @@ export {
   mapBlackboardToKnowledgeResults,
 } from "./knowledge/queryKnowledge.js";
 export { clearKnowledgeCache } from "./knowledge/queryKnowledge-cache.js";
+export { executeWorkflowHook, resolveWorkflowHook, WORKFLOW_HOOK_LIFECYCLES } from "./hooks.js";
 export {
   normalizeTag,
   suggestTags,
@@ -71,10 +72,25 @@ export type {
   AuditEventType,
   AuditEvent,
 } from "./runtime.js";
-export type { AddStepOptions, OnFailConfig, WorkflowDef, WorkflowStep, WorkflowStepConfig } from "./workflow.js";
+export type {
+  AddStepOptions,
+  HookDefinition,
+  OnFailConfig,
+  WorkflowDef,
+  WorkflowHooks,
+  WorkflowStep,
+  WorkflowStepConfig,
+} from "./workflow.js";
+export type { HookExecutionResult, WorkflowHookLifecycle } from "./hooks.js";
 export type { LLMConfig } from "./llm-config.js";
 export type { OboraConfig, ResolvedProviderConfig, ModelPricing } from "./config-loader.js";
-export type { StepContext, StepExecutorConfig, StepResult, LLMAdapterLike, ToolHandler as StepToolHandler } from "./step-executor.js";
+export type {
+  StepContext,
+  StepExecutorConfig,
+  StepResult,
+  LLMAdapterLike,
+  ToolHandler as StepToolHandler,
+} from "./step-executor.js";
 export type {
   RepairContext,
   RepairLoopConfig,

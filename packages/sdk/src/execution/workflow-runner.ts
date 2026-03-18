@@ -9,16 +9,18 @@ import { topologicalSort } from "../dependency-resolver.js";
 import { StepExecutor } from "../step-executor.js";
 import type { LLMAdapterLike } from "../step-executor.js";
 import { BudgetExceededError, CostTracker } from "../cost-tracker.js";
+import {
+  executeWorkflowHook,
+  resolveWorkflowHook,
+  type HookExecutionResult,
+  type WorkflowHookLifecycle,
+} from "../hooks.js";
 import { queryKnowledge } from "../knowledge/queryKnowledge.js";
 import type { WorkflowDef, WorkflowStep } from "../workflow.js";
 import type { StorageAdapter, PolicyHashInput, RunRecord } from "@obora/runtime";
 
 import { OboraError, OboraErrorCode } from "../runtime-types.js";
-import type {
-  AgentFactory,
-  OboraRuntimeConfig,
-  RuntimeExecution,
-} from "../runtime-types.js";
+import type { AgentFactory, OboraRuntimeConfig, RuntimeExecution } from "../runtime-types.js";
 import type { EventBus } from "../events/event-bus.js";
 import type { PersistenceManager } from "../persistence/persistence-manager.js";
 import { AdapterResolver } from "./adapter-resolver.js";
@@ -116,7 +118,13 @@ export class WorkflowRunner {
     const parsed = parseYaml(content) as {
       agents?: Record<
         string,
-        { role?: string; description?: string; provider?: string; model?: string; temperature?: number }
+        {
+          role?: string;
+          description?: string;
+          provider?: string;
+          model?: string;
+          temperature?: number;
+        }
       >;
     };
     const map = new Map<string, AgentFactory>();
@@ -143,7 +151,7 @@ export class WorkflowRunner {
   async buildEngine(
     executionId: string,
     persistenceEnabled: boolean,
-    persistenceConfig: OboraConfig["persistence"] | undefined,
+    persistenceConfig: OboraConfig["persistence"] | undefined
   ): Promise<ExecutionEngine> {
     const { config, eventBus, adapterFactory, persistenceManager, agents } = this.deps;
 
@@ -161,7 +169,7 @@ export class WorkflowRunner {
       ? new CostTracker(
           await persistenceManager.getCostTrackingAdapter(),
           executionId,
-          loadedConfig,
+          loadedConfig
         )
       : undefined;
 
@@ -183,7 +191,7 @@ export class WorkflowRunner {
             executionId,
             loadedConfig,
             runtimeAgents,
-            resolver,
+            resolver
           ),
           onEvent: async (eventType, data) => {
             if (eventType === "llm_response" && costTracker) {
@@ -229,7 +237,7 @@ export class WorkflowRunner {
     executionId: string,
     loadedConfig: OboraConfig | undefined,
     runtimeAgents: Map<string, AgentFactory>,
-    resolver: AdapterResolver,
+    resolver: AdapterResolver
   ) {
     return async (agentName?: string) => {
       if (!loadedConfig || !agentName) return undefined;
@@ -281,7 +289,7 @@ export class WorkflowRunner {
     execution: RuntimeExecution,
     knowledgeContext: NonNullable<import("../runtime-types.js").RunOptions["knowledgeContext"]>,
     persistenceEnabled: boolean,
-    persistenceConfig: OboraConfig["persistence"] | undefined,
+    persistenceConfig: OboraConfig["persistence"] | undefined
   ): Promise<void> {
     const { eventBus, persistenceManager } = this.deps;
 
@@ -305,8 +313,7 @@ export class WorkflowRunner {
       const ranked = deduped
         .map((k) => {
           const text = `${k.title}\n${k.body}`.toLowerCase();
-          const textHit =
-            normalizedQuery.length > 0 && text.includes(normalizedQuery) ? 0.4 : 0;
+          const textHit = normalizedQuery.length > 0 && text.includes(normalizedQuery) ? 0.4 : 0;
           const tagHits = (knowledgeContext.tags ?? []).filter((t) => k.tags.includes(t)).length;
           const tagScore = Math.min(0.3, tagHits * 0.1);
           const score = k.confidence + textHit + tagScore;
@@ -319,7 +326,7 @@ export class WorkflowRunner {
         "## Relevant Prior Knowledge",
         ...ranked.map(
           (k, idx) =>
-            `${idx + 1}) [${k.tags.join(", ")}] ${k.title}\n   - confidence: ${k.confidence.toFixed(2)}`,
+            `${idx + 1}) [${k.tags.join(", ")}] ${k.title}\n   - confidence: ${k.confidence.toFixed(2)}`
         ),
       ];
       let contextMd = contextLines.join("\n");
@@ -348,7 +355,7 @@ export class WorkflowRunner {
         try {
           const adapter = await persistenceManager.getStorageAdapter(
             persistenceEnabled,
-            persistenceConfig,
+            persistenceConfig
           );
           await adapter.saveAuditEvent({
             id: randomUUID(),
@@ -402,7 +409,9 @@ export class WorkflowRunner {
     return created;
   }
 
-  private getPersistedRepairLoopSummary(executionId: string): PersistedRepairLoopSummary | undefined {
+  private getPersistedRepairLoopSummary(
+    executionId: string
+  ): PersistedRepairLoopSummary | undefined {
     const summary = this.repairLoopSummaries.get(executionId);
     if (!summary) return undefined;
     const hasActivity =
@@ -423,7 +432,7 @@ export class WorkflowRunner {
   private recordValidationFailure(
     executionId: string,
     stepName: string,
-    validationResult: ValidationResult,
+    validationResult: ValidationResult
   ): void {
     const summary = this.ensureRepairLoopSummary(executionId);
     summary.validationFailed += 1;
@@ -449,7 +458,7 @@ export class WorkflowRunner {
   private recordValidationPass(
     executionId: string,
     stepName: string,
-    validationResult: ValidationResult,
+    validationResult: ValidationResult
   ): void {
     const summary = this.ensureRepairLoopSummary(executionId);
     summary.validationPassed += 1;
@@ -474,7 +483,7 @@ export class WorkflowRunner {
   private recordRepairNoProgress(
     executionId: string,
     reason: string,
-    category: "no_progress" | "repeated_critical_issue" = "no_progress",
+    category: "no_progress" | "repeated_critical_issue" = "no_progress"
   ): void {
     const summary = this.ensureRepairLoopSummary(executionId);
     summary.repairNoProgress += 1;
@@ -496,7 +505,7 @@ export class WorkflowRunner {
 
   private buildRepairContext(
     step: WorkflowStep,
-    repairLoopStates: Map<string, RepairLoopRuntimeState>,
+    repairLoopStates: Map<string, RepairLoopRuntimeState>
   ): RepairContext | undefined {
     const repairConfig = getRepairLoopConfig(step.config);
     if (!repairConfig?.enabled) {
@@ -526,7 +535,10 @@ export class WorkflowRunner {
     };
   }
 
-  private resolveValidationResult(step: WorkflowStep, output: unknown): ValidationResult | undefined {
+  private resolveValidationResult(
+    step: WorkflowStep,
+    output: unknown
+  ): ValidationResult | undefined {
     const validationConfig = getValidationStepConfig(step.config);
     if (!validationConfig?.enabled) {
       return undefined;
@@ -544,6 +556,56 @@ export class WorkflowRunner {
     return undefined;
   }
 
+  private async runStepHook(
+    workflow: WorkflowDef,
+    step: WorkflowStep,
+    lifecycle: WorkflowHookLifecycle,
+    executionId: string,
+    options: {
+      signal?: AbortSignal;
+      continueOnError?: boolean;
+      bestEffort?: boolean;
+    } = {}
+  ): Promise<HookExecutionResult | undefined> {
+    const hook = resolveWorkflowHook(workflow.hooks, step.hooks, lifecycle);
+    if (!hook) {
+      return undefined;
+    }
+
+    const result = await executeWorkflowHook(hook, lifecycle, {
+      cwd: process.cwd(),
+      signal: options.signal,
+    });
+
+    if (result.success) {
+      return result;
+    }
+
+    const failureDetails = {
+      stepName: step.name,
+      lifecycle,
+      command: result.command,
+      exitCode: result.exitCode,
+      signal: result.signal,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      durationMs: result.durationMs,
+    };
+
+    if (options.continueOnError || options.bestEffort) {
+      await this.deps.eventBus.emit("warning", executionId, {
+        message: `Hook '${lifecycle}' failed for step '${step.name}'`,
+        bestEffort: options.bestEffort ?? false,
+        ...failureDetails,
+      });
+      return result;
+    }
+
+    const exitText = result.exitCode === null ? "unknown" : String(result.exitCode);
+    const detailText = result.stderr.trim() || result.stdout.trim() || `exit code ${exitText}`;
+    throw new Error(`Hook '${lifecycle}' failed for step '${step.name}': ${detailText}`);
+  }
+
   // ── Core step-execution loop ─────────────────────────────────────────────
 
   /**
@@ -555,6 +617,7 @@ export class WorkflowRunner {
    */
   async executeStepLoop(
     sortedSteps: WorkflowStep[],
+    workflow: WorkflowDef,
     execution: RuntimeExecution,
     stepExecutor: StepExecutor | undefined,
     costTracker: CostTracker | undefined,
@@ -562,7 +625,7 @@ export class WorkflowRunner {
     persistenceEnabled: boolean,
     persistenceAdapter: StorageAdapter | null,
     signal?: AbortSignal,
-    isSettledFn?: () => boolean,
+    isSettledFn?: () => boolean
   ): Promise<void> {
     const { eventBus, config } = this.deps;
 
@@ -578,7 +641,7 @@ export class WorkflowRunner {
         noProgress?: boolean;
         category?: "no_progress" | "repeated_critical_issue";
         cause?: unknown;
-      },
+      }
     ): Promise<number> => {
       const onFail = (
         step as unknown as {
@@ -587,12 +650,12 @@ export class WorkflowRunner {
       ).on_fail;
 
       if (!onFail?.goto) {
-        throw (overrides?.cause ?? new Error(reason));
+        throw overrides?.cause ?? new Error(reason);
       }
 
       const targetIndex = stepIndexByName.get(onFail.goto);
       if (targetIndex === undefined) {
-        throw (overrides?.cause ?? new Error(reason));
+        throw overrides?.cause ?? new Error(reason);
       }
 
       const maxIterations =
@@ -626,13 +689,13 @@ export class WorkflowRunner {
           escalation: onFail.escalate_on_exhaust ?? "fail",
           reason,
         });
-        throw (overrides?.cause ?? new Error(reason));
+        throw overrides?.cause ?? new Error(reason);
       }
 
       const invalidated = sortedSteps.slice(targetIndex).map((s) => s.name);
       const invalidatedSet = new Set(invalidated);
       execution.completedSteps = execution.completedSteps.filter(
-        (name) => !invalidatedSet.has(name),
+        (name) => !invalidatedSet.has(name)
       );
       for (const name of invalidated) {
         delete execution.outputs[name];
@@ -646,6 +709,12 @@ export class WorkflowRunner {
         iteration: nextIteration,
         maxIterations,
         reason,
+      });
+
+      await this.runStepHook(workflow, step, "post_cycle", executionId, {
+        signal,
+        continueOnError: true,
+        bestEffort: true,
       });
 
       return targetIndex;
@@ -679,15 +748,48 @@ export class WorkflowRunner {
       });
 
       let result: { output: unknown; raw?: unknown } | undefined;
+      const hookOutputs: Partial<Record<WorkflowHookLifecycle, HookExecutionResult>> = {};
 
       try {
+        const preStepHook = await this.runStepHook(workflow, step, "pre_step", executionId, {
+          signal,
+        });
+        if (preStepHook) {
+          hookOutputs.pre_step = preStepHook;
+        }
+
+        if (getValidationStepConfig(step.config)?.enabled) {
+          const preValidationHook = await this.runStepHook(
+            workflow,
+            step,
+            "pre_validation",
+            executionId,
+            { signal }
+          );
+          if (preValidationHook) {
+            hookOutputs.pre_validation = preValidationHook;
+          }
+        }
+
         result = stepExecutor
           ? await stepExecutor.executeStep(step, {
               previousOutputs: execution.outputs,
               signal,
+              ...(Object.keys(hookOutputs).length > 0 ? { hookOutputs } : {}),
               ...(repairContext ? { repairContext } : {}),
             })
-          : { output: "[stub] No LLM configured", raw: { stub: true, reason: "No LLM configured" } };
+          : {
+              output: "[stub] No LLM configured",
+              raw: { stub: true, reason: "No LLM configured" },
+            };
+
+        const postStepHook = await this.runStepHook(workflow, step, "post_step", executionId, {
+          signal,
+          continueOnError: true,
+        });
+        if (postStepHook) {
+          hookOutputs.post_step = postStepHook;
+        }
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
         cursor = await triggerBackEdge(step, reason, { cause: error });
@@ -720,7 +822,8 @@ export class WorkflowRunner {
           if (targetStepName) {
             const previousState = repairLoopStates.get(targetStepName);
             const repeatedSignatureCount =
-              previousState?.lastSignature && previousState.lastSignature === validationResult.signature
+              previousState?.lastSignature &&
+              previousState.lastSignature === validationResult.signature
                 ? previousState.repeatedSignatureCount + 1
                 : 1;
             const nextState: RepairLoopRuntimeState = {
@@ -732,14 +835,16 @@ export class WorkflowRunner {
             };
             repairLoopStates.set(targetStepName, nextState);
 
-            const repairConfig = getRepairLoopConfig(sortedSteps.find((candidate) => candidate.name === targetStepName)?.config);
+            const repairConfig = getRepairLoopConfig(
+              sortedSteps.find((candidate) => candidate.name === targetStepName)?.config
+            );
             const noProgressLimit = repairConfig?.max_no_progress_iterations;
             const repeatedCriticalIssueCeiling = repairConfig?.repeated_critical_issue_ceiling;
             if (noProgressLimit !== undefined && repeatedSignatureCount > noProgressLimit) {
               cursor = await triggerBackEdge(
                 step,
                 `Validation for step '${step.name}' made no progress after ${repeatedSignatureCount} repeated failure signature(s): ${validationResult.summary}`,
-                { noProgress: true, category: "no_progress" },
+                { noProgress: true, category: "no_progress" }
               );
               continue;
             }
@@ -750,7 +855,7 @@ export class WorkflowRunner {
               cursor = await triggerBackEdge(
                 step,
                 `Validation for step '${step.name}' exceeded repeated critical issue ceiling after ${repeatedSignatureCount} repeated failure signature(s): ${validationResult.summary}`,
-                { noProgress: true, category: "repeated_critical_issue" },
+                { noProgress: true, category: "repeated_critical_issue" }
               );
               continue;
             }
@@ -758,14 +863,15 @@ export class WorkflowRunner {
 
           cursor = await triggerBackEdge(
             step,
-            `Validation failed for step '${step.name}': ${validationResult.summary}`,
+            `Validation failed for step '${step.name}': ${validationResult.summary}`
           );
           continue;
         }
       }
 
       execution.outputs[step.name] = result.output;
-      execution.stepRecords[step.name] = result;
+      execution.stepRecords[step.name] =
+        Object.keys(hookOutputs).length > 0 ? { ...result, hooks: hookOutputs } : result;
       execution.completedSteps.push(step.name);
 
       if (repairContext?.mode === "repair") {
@@ -829,7 +935,7 @@ export class WorkflowRunner {
     workflow: WorkflowDef,
     execution: RuntimeExecution,
     options: import("../runtime-types.js").RunOptions,
-    isSettledFn: () => boolean,
+    isSettledFn: () => boolean
   ): Promise<void> {
     const { input, variables, signal, knowledgeContext } = options;
     const { eventBus, persistenceManager, config } = this.deps;
@@ -854,7 +960,7 @@ export class WorkflowRunner {
       try {
         persistenceAdapter = await persistenceManager.getStorageAdapter(
           persistenceEnabled,
-          persistenceConfig,
+          persistenceConfig
         );
         await persistenceAdapter.saveRun({
           id: executionId,
@@ -883,7 +989,7 @@ export class WorkflowRunner {
         execution,
         knowledgeContext,
         persistenceEnabled,
-        persistenceConfig,
+        persistenceConfig
       );
     } else if (knowledgeEnabled) {
       // default: try with empty context options
@@ -893,7 +999,7 @@ export class WorkflowRunner {
         execution,
         {},
         persistenceEnabled,
-        persistenceConfig,
+        persistenceConfig
       );
     }
 
@@ -903,6 +1009,7 @@ export class WorkflowRunner {
     // Run step loop
     await this.executeStepLoop(
       sortedSteps,
+      workflow,
       execution,
       engine.stepExecutor,
       engine.costTracker,
@@ -910,7 +1017,7 @@ export class WorkflowRunner {
       persistenceEnabled,
       persistenceAdapter,
       signal,
-      isSettledFn,
+      isSettledFn
     );
 
     if (isSettledFn()) return;
@@ -976,14 +1083,14 @@ export class WorkflowRunner {
     variables: Record<string, unknown> | undefined,
     errorCode: string,
     persistenceEnabled: boolean,
-    persistenceConfig: OboraConfig["persistence"] | undefined,
+    persistenceConfig: OboraConfig["persistence"] | undefined
   ): Promise<void> {
     if (!persistenceEnabled) return;
     const { persistenceManager, config } = this.deps;
     try {
       const adapter = await persistenceManager.getStorageAdapter(
         persistenceEnabled,
-        persistenceConfig,
+        persistenceConfig
       );
       await adapter.saveRun({
         id: executionId,
@@ -1024,7 +1131,7 @@ export class WorkflowRunner {
     rerunSteps: string[],
     stepPolicies: Array<{ stepName: string; action: string; output?: unknown }>,
     currentPolicyConfig: PolicyHashInput,
-    adapter: StorageAdapter,
+    adapter: StorageAdapter
   ): Promise<RuntimeExecution> {
     const { eventBus, config } = this.deps;
     const executionId = runId;
@@ -1067,7 +1174,7 @@ export class WorkflowRunner {
     const mgr = new CheckpointManager(adapter);
 
     const sortedStepDefs = topologicalSort(workflow.steps).filter((s) =>
-      rerunSteps.includes(s.name),
+      rerunSteps.includes(s.name)
     );
 
     await eventBus.emit("execution_start", executionId, {
@@ -1085,6 +1192,7 @@ export class WorkflowRunner {
 
       const stepStartedAt = Date.now();
       const startedAtIso = new Date(stepStartedAt).toISOString();
+      const hookOutputs: Partial<Record<WorkflowHookLifecycle, HookExecutionResult>> = {};
 
       await adapter.saveStep({
         id: `${runId}:${step.name}`,
@@ -1095,14 +1203,43 @@ export class WorkflowRunner {
       });
 
       try {
+        const preStepHook = await this.runStepHook(workflow, step, "pre_step", executionId);
+        if (preStepHook) {
+          hookOutputs.pre_step = preStepHook;
+        }
+
+        if (getValidationStepConfig(step.config)?.enabled) {
+          const preValidationHook = await this.runStepHook(
+            workflow,
+            step,
+            "pre_validation",
+            executionId
+          );
+          if (preValidationHook) {
+            hookOutputs.pre_validation = preValidationHook;
+          }
+        }
+
         const result = engine.stepExecutor
-          ? await engine.stepExecutor.executeStep(step, { previousOutputs: execution.outputs })
+          ? await engine.stepExecutor.executeStep(step, {
+              previousOutputs: execution.outputs,
+              ...(Object.keys(hookOutputs).length > 0 ? { hookOutputs } : {}),
+            })
           : {
               output: "[stub] No LLM configured",
               raw: { stub: true, reason: "No LLM configured" },
             };
 
+        const postStepHook = await this.runStepHook(workflow, step, "post_step", executionId, {
+          continueOnError: true,
+        });
+        if (postStepHook) {
+          hookOutputs.post_step = postStepHook;
+        }
+
         execution.outputs[step.name] = result.output;
+        execution.stepRecords[step.name] =
+          Object.keys(hookOutputs).length > 0 ? { ...result, hooks: hookOutputs } : result;
         completedStepsSet.add(step.name);
         execution.completedSteps = [...completedStepsSet];
 
@@ -1126,7 +1263,7 @@ export class WorkflowRunner {
           step.name,
           execution.completedSteps,
           execution.outputs,
-          currentPolicyConfig,
+          currentPolicyConfig
         );
 
         await eventBus.emit("step_end", executionId, {
@@ -1161,7 +1298,7 @@ export class WorkflowRunner {
           step.name,
           execution.completedSteps,
           execution.outputs,
-          currentPolicyConfig,
+          currentPolicyConfig
         );
 
         throw stepErr;

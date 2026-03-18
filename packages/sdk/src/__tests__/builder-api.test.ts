@@ -50,7 +50,9 @@ describe("builder API", () => {
     }
 
     expect(() => Policy.create({ rules: "not-array" })).toThrowError(OboraError);
-    expect(() => Policy.create({ rules: "not-array" })).toThrowError("Policy rules must be an array");
+    expect(() => Policy.create({ rules: "not-array" })).toThrowError(
+      "Policy rules must be an array"
+    );
   });
 
   it("Workflow.create validates valid/invalid inputs", () => {
@@ -79,18 +81,45 @@ describe("builder API", () => {
 
     expect(() => Workflow.create({ name: "demo", steps: [{}] })).toThrowError(OboraError);
     expect(() => Workflow.create({ name: "demo", steps: [{}] })).toThrowError(
-      "Each workflow step must have a string name",
+      "Each workflow step must have a string name"
     );
   });
 
   it("Workflow.fromYaml loads workflow from YAML", async () => {
     const dir = await mkdtemp(join(tmpdir(), "obora-sdk-workflow-"));
     const path = join(dir, "workflow.yaml");
-    await writeFile(path, "name: yaml-demo\nsteps:\n  - name: first\n");
+    await writeFile(
+      path,
+      [
+        "name: yaml-demo",
+        "hooks:",
+        "  pre_step:",
+        "    shell: printf global",
+        "steps:",
+        "  - name: first",
+        "    hooks:",
+        "      post_step:",
+        "        shell: printf local",
+        "",
+      ].join("\n")
+    );
 
     const workflow = await Workflow.fromYaml(path);
     expect(workflow.name).toBe("yaml-demo");
-    expect(workflow.steps).toEqual([{ name: "first" }]);
+    expect(workflow.hooks).toEqual({ pre_step: { shell: "printf global" } });
+    expect(workflow.steps).toEqual([
+      { name: "first", hooks: { post_step: { shell: "printf local" } } },
+    ]);
+  });
+
+  it("Workflow.create validates hook definitions", () => {
+    expect(() =>
+      Workflow.create({
+        name: "invalid-hooks",
+        hooks: { pre_step: { shell: 123 } },
+        steps: [{ name: "step-1" }],
+      })
+    ).toThrow("workflow hook 'pre_step' must define a shell string");
   });
 
   it("Workflow.create expands one-file validation-repair mode", () => {
@@ -119,12 +148,14 @@ describe("builder API", () => {
       output_root: "./tmp-output",
       archive_enabled: true,
     });
-    expect(Workflow.getStopSemantics({
-      mode: "validation-repair",
-      loop: { max_iterations: 4, no_progress_ceiling: 2, repeated_critical_issue_ceiling: 2 },
-      output: { root: "./tmp-output" },
-      archive: { enabled: true },
-    })).toMatchObject({
+    expect(
+      Workflow.getStopSemantics({
+        mode: "validation-repair",
+        loop: { max_iterations: 4, no_progress_ceiling: 2, repeated_critical_issue_ceiling: 2 },
+        output: { root: "./tmp-output" },
+        archive: { enabled: true },
+      })
+    ).toMatchObject({
       output: { root: "./tmp-output" },
       archive: { enabled: true },
     });
@@ -275,7 +306,10 @@ describe("builder API", () => {
           usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
         }),
       };
-      vi.spyOn(runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> }, "createLLMAdapter").mockResolvedValue(adapterMock);
+      vi.spyOn(
+        runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> },
+        "createLLMAdapter"
+      ).mockResolvedValue(adapterMock);
       await runtime.loadWorkflow(workflowPath);
 
       const handle = await runtime.run("runtime-loaded", { input: { a: 1 } });
@@ -311,7 +345,7 @@ describe("builder API", () => {
           "  no_progress_ceiling: 2",
           "  repeated_critical_issue_ceiling: 2",
           "",
-        ].join("\n"),
+        ].join("\n")
       );
       await writeFile(policyPath, "version: v1\ntools:\n  any:\n    allowed: true\n");
 
@@ -344,7 +378,10 @@ describe("builder API", () => {
           };
         }),
       };
-      vi.spyOn(runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> }, "createLLMAdapter").mockResolvedValue(adapterMock);
+      vi.spyOn(
+        runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> },
+        "createLLMAdapter"
+      ).mockResolvedValue(adapterMock);
       await runtime.loadWorkflow(workflowPath);
 
       const handle = await runtime.run("runtime-one-file-validation-repair", { input: { a: 1 } });
@@ -383,7 +420,7 @@ describe("builder API", () => {
           "output:",
           "  root: ./research-output",
           "",
-        ].join("\n"),
+        ].join("\n")
       );
       await writeFile(policyPath, "version: v1\ntools:\n  any:\n    allowed: true\n");
 
@@ -398,7 +435,10 @@ describe("builder API", () => {
           usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
         }),
       };
-      vi.spyOn(runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> }, "createLLMAdapter").mockResolvedValue(adapterMock);
+      vi.spyOn(
+        runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> },
+        "createLLMAdapter"
+      ).mockResolvedValue(adapterMock);
       await runtime.loadWorkflow(workflowPath);
 
       const handle = await runtime.run("runtime-one-file-research-loop", { input: { a: 1 } });
@@ -439,7 +479,7 @@ describe("builder API", () => {
           "output:",
           "  root: ./proof-output",
           "",
-        ].join("\n"),
+        ].join("\n")
       );
       await writeFile(policyPath, "version: v1\ntools:\n  any:\n    allowed: true\n");
 
@@ -454,7 +494,10 @@ describe("builder API", () => {
           usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
         }),
       };
-      vi.spyOn(runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> }, "createLLMAdapter").mockResolvedValue(adapterMock);
+      vi.spyOn(
+        runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> },
+        "createLLMAdapter"
+      ).mockResolvedValue(adapterMock);
       await runtime.loadWorkflow(workflowPath);
 
       const handle = await runtime.run("runtime-one-file-proof-loop", { input: { a: 1 } });
@@ -462,7 +505,12 @@ describe("builder API", () => {
 
       expect(execution.workflowName).toBe("runtime-one-file-proof-loop");
       expect(execution.status).toBe("completed");
-      expect(execution.stepOrder).toEqual(["problem_frame", "known_results_audit", "proof_attempt", "review"]);
+      expect(execution.stepOrder).toEqual([
+        "problem_frame",
+        "known_results_audit",
+        "proof_attempt",
+        "review",
+      ]);
     } finally {
       restoreEnv();
     }

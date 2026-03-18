@@ -22,6 +22,11 @@ function makeLoadedPlugin(name: string, type: "tool" | "agent" = "tool"): Loaded
   };
 }
 
+function appendHookCommand(label: string, stdout?: string): string {
+  const stdoutStatement = stdout ? `process.stdout.write('${stdout}');` : "";
+  return `node -e \"const fs=require('node:fs');fs.appendFileSync('hook-order.log','${label}\\n');${stdoutStatement}\"`;
+}
+
 describe("OboraRuntime facade", () => {
   function withNoLLMEnv() {
     const keys = [
@@ -71,7 +76,7 @@ describe("OboraRuntime facade", () => {
 
     expect(() => runtime.define("invalid", { steps: [] } as never)).toThrowError(OboraError);
     expect(() => runtime.define("invalid", { steps: [] } as never)).toThrowError(
-      "Workflow must have a name",
+      "Workflow must have a name"
     );
   });
 
@@ -82,7 +87,7 @@ describe("OboraRuntime facade", () => {
       runtime.define("dup-steps", {
         name: "dup-steps",
         steps: [{ name: "a" }, { name: "a" }],
-      }),
+      })
     ).toThrow("Duplicate workflow step name");
   });
 
@@ -141,7 +146,7 @@ describe("OboraRuntime facade", () => {
     const adapterMock = {
       chatCompletion: vi.fn().mockImplementation(async ({ messages }) => {
         const toolResultMessage = messages.find(
-          (message: { role: string }) => message.role === "tool",
+          (message: { role: string }) => message.role === "tool"
         );
         if (!toolResultMessage) {
           return {
@@ -174,7 +179,7 @@ describe("OboraRuntime facade", () => {
       runtime as unknown as {
         createLLMAdapter: () => Promise<typeof adapterMock>;
       },
-      "createLLMAdapter",
+      "createLLMAdapter"
     ).mockResolvedValue(adapterMock);
 
     runtime.define("custom-step-tool", {
@@ -208,7 +213,7 @@ describe("OboraRuntime facade", () => {
       const adapterMock = {
         chatCompletion: vi.fn().mockImplementation(async ({ messages }) => {
           const toolResultMessage = messages.find(
-            (message: { role: string }) => message.role === "tool",
+            (message: { role: string }) => message.role === "tool"
           );
           if (!toolResultMessage) {
             return {
@@ -246,7 +251,7 @@ describe("OboraRuntime facade", () => {
         runtime as unknown as {
           createLLMAdapter: () => Promise<typeof adapterMock>;
         },
-        "createLLMAdapter",
+        "createLLMAdapter"
       ).mockResolvedValue(adapterMock);
 
       runtime.define("tool-smoke", {
@@ -272,24 +277,176 @@ describe("OboraRuntime facade", () => {
     }
   });
 
+  it("runs workflow hooks in lifecycle order", async () => {
+    const cwdBefore = process.cwd();
+    const workspace = await mkdtemp(join(tmpdir(), "obora-runtime-hooks-"));
+    process.chdir(workspace);
+
+    try {
+      const runtime = new OboraRuntime({
+        llm: { provider: "openai", apiKey: "test-key", model: "gpt-5" },
+      });
+
+      const validatePrompts: string[] = [];
+      let validationAttempt = 0;
+      const adapterMock = {
+        chatCompletion: vi.fn().mockImplementation(async ({ messages }) => {
+          const userPrompt = String(
+            messages.find((message: { role: string }) => message.role === "user")?.content ?? ""
+          );
+
+          if (userPrompt.includes("Step: implement")) {
+            return {
+              model: "gpt-5",
+              message: { role: "assistant", content: "implemented" },
+              usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+            };
+          }
+
+          if (userPrompt.includes("Step: validate")) {
+            validatePrompts.push(userPrompt);
+            validationAttempt += 1;
+            return {
+              model: "gpt-5",
+              message: {
+                role: "assistant",
+                content: JSON.stringify({
+                  passed: validationAttempt > 1,
+                  summary: validationAttempt > 1 ? "passed" : "failed",
+                  failedChecks:
+                    validationAttempt > 1 ? [] : [{ name: "tests", message: "still failing" }],
+                  signature: validationAttempt > 1 ? "pass" : "fail",
+                }),
+              },
+              usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+            };
+          }
+
+          throw new Error(`Unexpected prompt: ${userPrompt}`);
+        }),
+      };
+
+      vi.spyOn(
+        runtime as unknown as {
+          createLLMAdapter: () => Promise<typeof adapterMock>;
+        },
+        "createLLMAdapter"
+      ).mockResolvedValue(adapterMock);
+
+      runtime.define("hook-order", {
+        name: "hook-order",
+        hooks: {
+          pre_step: { shell: appendHookCommand("global-pre-step") },
+          post_step: { shell: appendHookCommand("global-post-step") },
+          pre_validation: { shell: appendHookCommand("global-pre-validation", "validator-pre") },
+          post_cycle: { shell: appendHookCommand("global-post-cycle") },
+        },
+        steps: [
+          {
+            name: "implement",
+            agent: "builder",
+            input: { task: "Implement the change." },
+          },
+          {
+            name: "validate",
+            agent: "validator",
+            depends_on: ["implement"],
+            hooks: {
+              post_step: { shell: appendHookCommand("step-post-step") },
+            },
+            config: {
+              validation: {
+                enabled: true,
+                emit_structured_result: true,
+              },
+            },
+            on_fail: {
+              goto: "implement",
+              max_iterations: 2,
+              escalate_on_exhaust: "fail",
+            },
+            input: { task: "Validate the change." },
+          },
+        ],
+      });
+
+      const handle = await runtime.run("hook-order");
+      const result = await handle.wait();
+
+      expect(result.status).toBe("completed");
+      expect(validatePrompts).toHaveLength(2);
+      expect(validatePrompts[0]).toContain("validator-pre");
+      expect(validatePrompts[1]).toContain("validator-pre");
+
+      const hookOrder = (await readFile(join(workspace, "hook-order.log"), "utf-8"))
+        .trim()
+        .split("\n");
+      expect(hookOrder).toEqual([
+        "global-pre-step",
+        "global-post-step",
+        "global-pre-step",
+        "global-pre-validation",
+        "step-post-step",
+        "global-post-cycle",
+        "global-pre-step",
+        "global-post-step",
+        "global-pre-step",
+        "global-pre-validation",
+        "step-post-step",
+      ]);
+    } finally {
+      process.chdir(cwdBefore);
+    }
+  });
+
   it("persists repair-loop summary into run metadata", async () => {
     const savedRuns: any[] = [];
     const storage = {
-      async saveRun(record: any) { savedRuns.push(structuredClone(record)); },
-      async getRun() { return null; },
-      async listRuns() { return []; },
-      async saveStep() { return; },
-      async getSteps() { return []; },
-      async saveArtifact(record: any) { return record; },
-      async getArtifacts() { return []; },
-      async deleteArtifact() { return; },
-      async saveCheckpoint() { return; },
-      async getLatestCheckpoint() { return null; },
-      async saveCost() { return; },
-      async getCosts() { return []; },
-      async getRunCostSummary() { return { totalTokens: 0, totalCostUsd: 0, byStep: [], byModel: [] }; },
-      async saveAuditEvent() { return; },
-      async getAuditTimeline() { return []; },
+      async saveRun(record: any) {
+        savedRuns.push(structuredClone(record));
+      },
+      async getRun() {
+        return null;
+      },
+      async listRuns() {
+        return [];
+      },
+      async saveStep() {
+        return;
+      },
+      async getSteps() {
+        return [];
+      },
+      async saveArtifact(record: any) {
+        return record;
+      },
+      async getArtifacts() {
+        return [];
+      },
+      async deleteArtifact() {
+        return;
+      },
+      async saveCheckpoint() {
+        return;
+      },
+      async getLatestCheckpoint() {
+        return null;
+      },
+      async saveCost() {
+        return;
+      },
+      async getCosts() {
+        return [];
+      },
+      async getRunCostSummary() {
+        return { totalTokens: 0, totalCostUsd: 0, byStep: [], byModel: [] };
+      },
+      async saveAuditEvent() {
+        return;
+      },
+      async getAuditTimeline() {
+        return [];
+      },
     };
 
     const runtime = new OboraRuntime({
@@ -354,9 +511,10 @@ describe("OboraRuntime facade", () => {
       }),
     };
 
-    vi.spyOn(runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> }, "createLLMAdapter").mockResolvedValue(
-      adapterMock,
-    );
+    vi.spyOn(
+      runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> },
+      "createLLMAdapter"
+    ).mockResolvedValue(adapterMock);
 
     runtime.define("validation-repair-loop", {
       name: "validation-repair-loop",
@@ -364,7 +522,14 @@ describe("OboraRuntime facade", () => {
         {
           name: "build_or_repair",
           agent: "builder",
-          config: { repair_loop: { enabled: true, validation_step: "validate", max_no_progress_iterations: 2, repeated_critical_issue_ceiling: 2 } },
+          config: {
+            repair_loop: {
+              enabled: true,
+              validation_step: "validate",
+              max_no_progress_iterations: 2,
+              repeated_critical_issue_ceiling: 2,
+            },
+          },
           input: { task: "Build or repair the app" },
         },
         {
@@ -383,7 +548,10 @@ describe("OboraRuntime facade", () => {
 
     expect(result.status).toBe("completed");
     expect(result.outputs["build_or_repair"]).toBe("repaired draft");
-    expect(result.outputs["validate"]).toMatchObject({ passed: true, summary: "Validation passed" });
+    expect(result.outputs["validate"]).toMatchObject({
+      passed: true,
+      summary: "Validation passed",
+    });
     expect(adapterMock.chatCompletion).toHaveBeenCalledTimes(4);
     expect(auditTypes).toContain("workflow.validation_failed");
     expect(auditTypes).toContain("workflow.validation_passed");
@@ -438,9 +606,10 @@ describe("OboraRuntime facade", () => {
       }),
     };
 
-    vi.spyOn(runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> }, "createLLMAdapter").mockResolvedValue(
-      adapterMock,
-    );
+    vi.spyOn(
+      runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> },
+      "createLLMAdapter"
+    ).mockResolvedValue(adapterMock);
 
     runtime.define("validation-no-progress", {
       name: "validation-no-progress",
@@ -470,21 +639,51 @@ describe("OboraRuntime facade", () => {
   it("stops repair loop on repeated critical issue ceiling", async () => {
     const savedRuns: any[] = [];
     const storage = {
-      async saveRun(record: any) { savedRuns.push(structuredClone(record)); },
-      async getRun() { return null; },
-      async listRuns() { return []; },
-      async saveStep() { return; },
-      async getSteps() { return []; },
-      async saveArtifact(record: any) { return record; },
-      async getArtifacts() { return []; },
-      async deleteArtifact() { return; },
-      async saveCheckpoint() { return; },
-      async getLatestCheckpoint() { return null; },
-      async saveCost() { return; },
-      async getCosts() { return []; },
-      async getRunCostSummary() { return { totalTokens: 0, totalCostUsd: 0, byStep: [], byModel: [] }; },
-      async saveAuditEvent() { return; },
-      async getAuditTimeline() { return []; },
+      async saveRun(record: any) {
+        savedRuns.push(structuredClone(record));
+      },
+      async getRun() {
+        return null;
+      },
+      async listRuns() {
+        return [];
+      },
+      async saveStep() {
+        return;
+      },
+      async getSteps() {
+        return [];
+      },
+      async saveArtifact(record: any) {
+        return record;
+      },
+      async getArtifacts() {
+        return [];
+      },
+      async deleteArtifact() {
+        return;
+      },
+      async saveCheckpoint() {
+        return;
+      },
+      async getLatestCheckpoint() {
+        return null;
+      },
+      async saveCost() {
+        return;
+      },
+      async getCosts() {
+        return [];
+      },
+      async getRunCostSummary() {
+        return { totalTokens: 0, totalCostUsd: 0, byStep: [], byModel: [] };
+      },
+      async saveAuditEvent() {
+        return;
+      },
+      async getAuditTimeline() {
+        return [];
+      },
     };
 
     const runtime = new OboraRuntime({
@@ -513,9 +712,10 @@ describe("OboraRuntime facade", () => {
       }),
     };
 
-    vi.spyOn(runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> }, "createLLMAdapter").mockResolvedValue(
-      adapterMock,
-    );
+    vi.spyOn(
+      runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> },
+      "createLLMAdapter"
+    ).mockResolvedValue(adapterMock);
 
     runtime.define("validation-repeated-critical", {
       name: "validation-repeated-critical",
@@ -574,11 +774,14 @@ describe("OboraRuntime facade", () => {
       });
 
       const adapterMock = {
-        chatCompletion: vi.fn().mockResolvedValue({ message: { role: "assistant", content: "ok" } }),
+        chatCompletion: vi
+          .fn()
+          .mockResolvedValue({ message: { role: "assistant", content: "ok" } }),
       };
-      vi.spyOn(runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> }, "createLLMAdapter").mockResolvedValue(
-        adapterMock,
-      );
+      vi.spyOn(
+        runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> },
+        "createLLMAdapter"
+      ).mockResolvedValue(adapterMock);
 
       runtime.define("agent-provider-fallback", {
         name: "agent-provider-fallback",
@@ -590,7 +793,7 @@ describe("OboraRuntime facade", () => {
 
       expect(result.status).toBe("completed");
       expect(warnings).toContain(
-        "Agent 'architect' configured with provider 'openai' but API key not resolved. Falling back to default.",
+        "Agent 'architect' configured with provider 'openai' but API key not resolved. Falling back to default."
       );
     } finally {
       if (prevAnthropic === undefined) {
@@ -673,21 +876,51 @@ describe("OboraRuntime facade", () => {
   it("persists aborted status when execution is cancelled", async () => {
     const savedRuns: any[] = [];
     const storage = {
-      async saveRun(record: any) { savedRuns.push(structuredClone(record)); },
-      async getRun() { return null; },
-      async listRuns() { return []; },
-      async saveStep() { return; },
-      async getSteps() { return []; },
-      async saveArtifact(record: any) { return record; },
-      async getArtifacts() { return []; },
-      async deleteArtifact() { return; },
-      async saveCheckpoint() { return; },
-      async getLatestCheckpoint() { return null; },
-      async saveCost() { return; },
-      async getCosts() { return []; },
-      async getRunCostSummary() { return { totalTokens: 0, totalCostUsd: 0, byStep: [], byModel: [] }; },
-      async saveAuditEvent() { return; },
-      async getAuditTimeline() { return []; },
+      async saveRun(record: any) {
+        savedRuns.push(structuredClone(record));
+      },
+      async getRun() {
+        return null;
+      },
+      async listRuns() {
+        return [];
+      },
+      async saveStep() {
+        return;
+      },
+      async getSteps() {
+        return [];
+      },
+      async saveArtifact(record: any) {
+        return record;
+      },
+      async getArtifacts() {
+        return [];
+      },
+      async deleteArtifact() {
+        return;
+      },
+      async saveCheckpoint() {
+        return;
+      },
+      async getLatestCheckpoint() {
+        return null;
+      },
+      async saveCost() {
+        return;
+      },
+      async getCosts() {
+        return [];
+      },
+      async getRunCostSummary() {
+        return { totalTokens: 0, totalCostUsd: 0, byStep: [], byModel: [] };
+      },
+      async saveAuditEvent() {
+        return;
+      },
+      async getAuditTimeline() {
+        return [];
+      },
     };
 
     const runtime = new OboraRuntime({
@@ -766,21 +999,51 @@ describe("OboraRuntime facade", () => {
   it("keeps aborted status when cancel races with step completion", async () => {
     const savedRuns: any[] = [];
     const storage = {
-      async saveRun(record: any) { savedRuns.push(structuredClone(record)); },
-      async getRun() { return null; },
-      async listRuns() { return []; },
-      async saveStep() { return; },
-      async getSteps() { return []; },
-      async saveArtifact(record: any) { return record; },
-      async getArtifacts() { return []; },
-      async deleteArtifact() { return; },
-      async saveCheckpoint() { return; },
-      async getLatestCheckpoint() { return null; },
-      async saveCost() { return; },
-      async getCosts() { return []; },
-      async getRunCostSummary() { return { totalTokens: 0, totalCostUsd: 0, byStep: [], byModel: [] }; },
-      async saveAuditEvent() { return; },
-      async getAuditTimeline() { return []; },
+      async saveRun(record: any) {
+        savedRuns.push(structuredClone(record));
+      },
+      async getRun() {
+        return null;
+      },
+      async listRuns() {
+        return [];
+      },
+      async saveStep() {
+        return;
+      },
+      async getSteps() {
+        return [];
+      },
+      async saveArtifact(record: any) {
+        return record;
+      },
+      async getArtifacts() {
+        return [];
+      },
+      async deleteArtifact() {
+        return;
+      },
+      async saveCheckpoint() {
+        return;
+      },
+      async getLatestCheckpoint() {
+        return null;
+      },
+      async saveCost() {
+        return;
+      },
+      async getCosts() {
+        return [];
+      },
+      async getRunCostSummary() {
+        return { totalTokens: 0, totalCostUsd: 0, byStep: [], byModel: [] };
+      },
+      async saveAuditEvent() {
+        return;
+      },
+      async getAuditTimeline() {
+        return [];
+      },
     };
 
     const runtime = new OboraRuntime({
@@ -802,7 +1065,10 @@ describe("OboraRuntime facade", () => {
       }),
     };
 
-    vi.spyOn(runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> }, "createLLMAdapter").mockResolvedValue(adapterMock);
+    vi.spyOn(
+      runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> },
+      "createLLMAdapter"
+    ).mockResolvedValue(adapterMock);
 
     const handle = await runtime.run("race-cancel");
     await new Promise((resolve) => setTimeout(resolve, 5));
@@ -823,18 +1089,49 @@ describe("OboraRuntime facade", () => {
   it("marks run handle as suspended on budget exceed", async () => {
     const costs: any[] = [];
     const storage = {
-      async saveRun() {}, async getRun() { return null; }, async listRuns() { return []; },
-      async saveStep() {}, async getSteps() { return []; },
-      async saveArtifact(record: any) { return record; }, async getArtifacts() { return []; }, async deleteArtifact() {},
-      async saveCheckpoint() {}, async getLatestCheckpoint() { return null; },
-      async saveCost(record: any) { costs.push(record); },
-      async getCosts(runId: string, stepName?: string) { return costs.filter((c) => c.runId === runId && (!stepName || c.stepName === stepName)); },
+      async saveRun() {},
+      async getRun() {
+        return null;
+      },
+      async listRuns() {
+        return [];
+      },
+      async saveStep() {},
+      async getSteps() {
+        return [];
+      },
+      async saveArtifact(record: any) {
+        return record;
+      },
+      async getArtifacts() {
+        return [];
+      },
+      async deleteArtifact() {},
+      async saveCheckpoint() {},
+      async getLatestCheckpoint() {
+        return null;
+      },
+      async saveCost(record: any) {
+        costs.push(record);
+      },
+      async getCosts(runId: string, stepName?: string) {
+        return costs.filter((c) => c.runId === runId && (!stepName || c.stepName === stepName));
+      },
       async getRunCostSummary(runId: string) {
         const rows = costs.filter((c) => c.runId === runId);
-        return { totalTokens: rows.reduce((s, r) => s + r.totalTokens, 0), totalCostUsd: rows.reduce((s, r) => s + r.costUsd, 0), byStep: [], byModel: [] };
+        return {
+          totalTokens: rows.reduce((s, r) => s + r.totalTokens, 0),
+          totalCostUsd: rows.reduce((s, r) => s + r.costUsd, 0),
+          byStep: [],
+          byModel: [],
+        };
       },
-      async saveAuditEvent() { return; },
-      async getAuditTimeline() { return []; },
+      async saveAuditEvent() {
+        return;
+      },
+      async getAuditTimeline() {
+        return [];
+      },
     };
 
     const runtime = new OboraRuntime({
@@ -858,10 +1155,15 @@ describe("OboraRuntime facade", () => {
         usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
       }),
     };
-    vi.spyOn(runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> }, "createLLMAdapter").mockResolvedValue(adapterMock);
+    vi.spyOn(
+      runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> },
+      "createLLMAdapter"
+    ).mockResolvedValue(adapterMock);
 
     const handle = await runtime.run("budget-stop");
-    await expect(handle.wait()).rejects.toMatchObject({ code: OboraErrorCode.POLICY_RESOURCE_EXCEEDED });
+    await expect(handle.wait()).rejects.toMatchObject({
+      code: OboraErrorCode.POLICY_RESOURCE_EXCEEDED,
+    });
     expect(handle.status).toBe("suspended");
   });
 
@@ -882,17 +1184,39 @@ describe("OboraRuntime facade", () => {
     ];
 
     const storage = {
-      async getRun() { return null; },
-      async listRuns() { return []; },
-      async saveRun() { return; },
-      async saveStep() { return; },
-      async getSteps() { return []; },
-      async saveArtifact(record: any) { return record; },
-      async getArtifacts() { return []; },
-      async deleteArtifact() { return; },
-      async saveCheckpoint() { return; },
-      async getLatestCheckpoint() { return null; },
-      async saveCost() { return; },
+      async getRun() {
+        return null;
+      },
+      async listRuns() {
+        return [];
+      },
+      async saveRun() {
+        return;
+      },
+      async saveStep() {
+        return;
+      },
+      async getSteps() {
+        return [];
+      },
+      async saveArtifact(record: any) {
+        return record;
+      },
+      async getArtifacts() {
+        return [];
+      },
+      async deleteArtifact() {
+        return;
+      },
+      async saveCheckpoint() {
+        return;
+      },
+      async getLatestCheckpoint() {
+        return null;
+      },
+      async saveCost() {
+        return;
+      },
       async getCosts(runId: string, stepName?: string) {
         return costs.filter((c) => c.runId === runId && (!stepName || c.stepName === stepName));
       },
@@ -905,8 +1229,12 @@ describe("OboraRuntime facade", () => {
           byModel: [{ model: "gpt-4o", tokens: 30, costUsd: 0.03 }],
         };
       },
-      async saveAuditEvent() { return; },
-      async getAuditTimeline() { return []; },
+      async saveAuditEvent() {
+        return;
+      },
+      async getAuditTimeline() {
+        return [];
+      },
     };
 
     const runtime = new OboraRuntime({
@@ -922,27 +1250,78 @@ describe("OboraRuntime facade", () => {
   });
 
   it("provides run.auditReplay(step?) API", async () => {
-    const timeline = [{ id: "a1", runId: "run-a", stepName: "review", timestamp: new Date().toISOString(), category: "consensus", action: "consensus_vote", actor: "agent-a", detail: {} }];
+    const timeline = [
+      {
+        id: "a1",
+        runId: "run-a",
+        stepName: "review",
+        timestamp: new Date().toISOString(),
+        category: "consensus",
+        action: "consensus_vote",
+        actor: "agent-a",
+        detail: {},
+      },
+    ];
 
     const storage = {
-      async getRun(runId: string) { return runId === "run-a" ? { id: runId, workflowName: "wf", status: "completed", input: {}, startedAt: new Date().toISOString() } : null; },
-      async listRuns() { return []; },
-      async saveRun() { return; },
-      async saveStep() { return; },
-      async getSteps() { return []; },
-      async saveArtifact(record: any) { return record; },
-      async getArtifacts() { return []; },
-      async deleteArtifact() { return; },
-      async saveCheckpoint() { return; },
-      async getLatestCheckpoint() { return null; },
-      async saveCost() { return; },
-      async getCosts() { return []; },
-      async getRunCostSummary() { return { totalTokens: 0, totalCostUsd: 0, byStep: [], byModel: [] }; },
-      async saveAuditEvent() { return; },
-      async getAuditTimeline(runId: string, stepName?: string) { return timeline.filter((e) => e.runId === runId && (!stepName || e.stepName === stepName)); },
+      async getRun(runId: string) {
+        return runId === "run-a"
+          ? {
+              id: runId,
+              workflowName: "wf",
+              status: "completed",
+              input: {},
+              startedAt: new Date().toISOString(),
+            }
+          : null;
+      },
+      async listRuns() {
+        return [];
+      },
+      async saveRun() {
+        return;
+      },
+      async saveStep() {
+        return;
+      },
+      async getSteps() {
+        return [];
+      },
+      async saveArtifact(record: any) {
+        return record;
+      },
+      async getArtifacts() {
+        return [];
+      },
+      async deleteArtifact() {
+        return;
+      },
+      async saveCheckpoint() {
+        return;
+      },
+      async getLatestCheckpoint() {
+        return null;
+      },
+      async saveCost() {
+        return;
+      },
+      async getCosts() {
+        return [];
+      },
+      async getRunCostSummary() {
+        return { totalTokens: 0, totalCostUsd: 0, byStep: [], byModel: [] };
+      },
+      async saveAuditEvent() {
+        return;
+      },
+      async getAuditTimeline(runId: string, stepName?: string) {
+        return timeline.filter((e) => e.runId === runId && (!stepName || e.stepName === stepName));
+      },
     };
 
-    const runtime = new OboraRuntime({ persistence: { enabled: true, adapter: "custom", custom: { instance: storage as any } } });
+    const runtime = new OboraRuntime({
+      persistence: { enabled: true, adapter: "custom", custom: { instance: storage as any } },
+    });
     const run = await runtime.getRun("run-a");
     const events = await run?.auditReplay("review");
     const events2 = await runtime.runs.auditReplay("run-a", "review");

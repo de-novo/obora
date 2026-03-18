@@ -6,6 +6,19 @@ import { OboraError, OboraErrorCode } from "./runtime.js";
 import type { RepairLoopConfig, ValidationStepConfig } from "./validation-repair.js";
 import { expandOneFileWorkflow, getOneFileStopSemantics } from "./one-file-modes.js";
 
+export interface HookDefinition {
+  shell: string;
+}
+
+export interface WorkflowHooks {
+  pre_step?: HookDefinition;
+  post_step?: HookDefinition;
+  pre_validation?: HookDefinition;
+  post_cycle?: HookDefinition;
+}
+
+const WORKFLOW_HOOK_KEYS = ["pre_step", "post_step", "pre_validation", "post_cycle"] as const;
+
 export interface WorkflowStepConfig extends Record<string, unknown> {
   validation?: ValidationStepConfig;
   repair_loop?: RepairLoopConfig;
@@ -20,6 +33,7 @@ export interface WorkflowStep {
   participants?: string[];
   input?: Record<string, unknown>;
   config?: WorkflowStepConfig;
+  hooks?: WorkflowHooks;
   depends_on?: string[];
   gate?: string | { type: string; [key: string]: unknown };
   on_fail?: {
@@ -37,9 +51,9 @@ export interface WorkflowDef {
   name: string;
   version?: string;
   steps: WorkflowStep[];
+  hooks?: WorkflowHooks;
   variables?: Record<string, unknown>;
 }
-
 
 export interface OnFailConfig {
   goto: string;
@@ -61,6 +75,7 @@ export interface AddStepOptions {
   participants?: string[];
   input?: Record<string, unknown>;
   config?: WorkflowStepConfig;
+  hooks?: WorkflowHooks;
   depends?: string[];
   dependsOn?: string[];
   gate?: string | { type: string; [key: string]: unknown };
@@ -77,14 +92,14 @@ export class Workflow {
   addStep(options: AddStepOptions): this {
     const onFail = options.onFail
       ? {
-        goto: options.onFail.goto,
-        max_iterations: options.onFail.maxIterations,
-        escalate_on_exhaust: options.onFail.escalateOnExhaust,
-        cooldown_ms: options.onFail.cooldownMs,
-        reset_state: options.onFail.resetState,
-        max_cost: options.onFail.maxCost,
-        max_cost_escalation: options.onFail.maxCostEscalation ?? null,
-      }
+          goto: options.onFail.goto,
+          max_iterations: options.onFail.maxIterations,
+          escalate_on_exhaust: options.onFail.escalateOnExhaust,
+          cooldown_ms: options.onFail.cooldownMs,
+          reset_state: options.onFail.resetState,
+          max_cost: options.onFail.maxCost,
+          max_cost_escalation: options.onFail.maxCostEscalation ?? null,
+        }
       : undefined;
 
     const step: WorkflowStep = {
@@ -96,6 +111,7 @@ export class Workflow {
       participants: options.participants,
       input: options.input,
       config: options.config,
+      hooks: options.hooks,
       depends_on: options.dependsOn ?? options.depends,
       gate: options.gate,
       on_fail: onFail,
@@ -134,21 +150,31 @@ export class Workflow {
       throw new OboraError("Workflow must have steps array", OboraErrorCode.SDK_INVALID_WORKFLOW);
     }
 
+    Workflow.validateHooks(def.hooks, "workflow");
+
     const steps = def.steps as unknown[];
     const seenStepNames = new Set<string>();
     for (const step of steps) {
       if (!step || typeof step !== "object") {
-        throw new OboraError("Each workflow step must be an object", OboraErrorCode.SDK_INVALID_WORKFLOW);
+        throw new OboraError(
+          "Each workflow step must be an object",
+          OboraErrorCode.SDK_INVALID_WORKFLOW
+        );
       }
       const s = step as Record<string, unknown>;
       if (!s.name || typeof s.name !== "string") {
-        throw new OboraError("Each workflow step must have a string name", OboraErrorCode.SDK_INVALID_WORKFLOW);
+        throw new OboraError(
+          "Each workflow step must have a string name",
+          OboraErrorCode.SDK_INVALID_WORKFLOW
+        );
       }
+
+      Workflow.validateHooks(s.hooks, `step '${s.name}'`);
 
       if (seenStepNames.has(s.name)) {
         throw new OboraError(
           `Duplicate workflow step name: ${s.name}`,
-          OboraErrorCode.SDK_INVALID_WORKFLOW,
+          OboraErrorCode.SDK_INVALID_WORKFLOW
         );
       }
       seenStepNames.add(s.name);
@@ -159,5 +185,34 @@ export class Workflow {
 
   private static expandOneFileMode(input: unknown): unknown {
     return expandOneFileWorkflow(input) ?? input;
+  }
+
+  private static validateHooks(input: unknown, owner: string): void {
+    if (input === undefined) {
+      return;
+    }
+
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+      throw new OboraError(`${owner} hooks must be an object`, OboraErrorCode.SDK_INVALID_WORKFLOW);
+    }
+
+    const hooks = input as Record<string, unknown>;
+    for (const key of WORKFLOW_HOOK_KEYS) {
+      const hook = hooks[key];
+      if (hook === undefined) {
+        continue;
+      }
+      if (
+        !hook ||
+        typeof hook !== "object" ||
+        Array.isArray(hook) ||
+        typeof (hook as Record<string, unknown>).shell !== "string"
+      ) {
+        throw new OboraError(
+          `${owner} hook '${key}' must define a shell string`,
+          OboraErrorCode.SDK_INVALID_WORKFLOW
+        );
+      }
+    }
   }
 }
