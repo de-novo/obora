@@ -23,40 +23,42 @@
   +----------------+
           |
           v
-  +-----------------+
-  | design_system   |
-  | (설계/구조)      |
-  +-----------------+
+  +----------------------+
+  | design_and_write_tests|
+  | (설계 + 테스트 작성)   |
+  | TDD: 테스트 먼저!     |
+  +----------------------+
           |
           v
   +---------------------+
   | implement_or_repair |
-  | (구현/수정)          |
+  | (구현: 테스트 통과)   |
   +---------------------+
           |
           v
   +---------------------+
   | run_tests_and_judge |
-  | (테스트 + 판정)      |
+  | (테스트 실행 + 판정)  |
   +---------------------+
       |         |
       | FAIL    | PASS
-      |         |
       v         v
-+---------------------+   +------------------+
-| on_fail.goto        |   | review_and_polish|
-| implement_or_repair |   | (리뷰/개선)       |
-+---------------------+   +------------------+
-                                    |
-                                    v
-                            +---------+
-                            | archive |
-                            +---------+
++---------------------+   +-------------------+
+| goto                |   | review_and_decide |
+| implement_or_repair |   | (리뷰 + 다음 판단) |
++---------------------+   +-------------------+
+                               |          |
+                               | 미완성    | MVP 완성
+                               v          v
+                      +----------------+  +---------+
+                      | goto           |  | archive |
+                      | refine_idea    |  +---------+
+                      | (다음 cycle)    |
+                      +----------------+
 
-loop invariant:
-  test 결과가 다음 implement_or_repair를 제어
-  PASS 후에도 review_and_polish가 품질 개선
-  전체는 watchdog timeout 안에서 동작
+inner loop: implement <-> test (테스트 통과까지)
+outer loop: refine -> design -> TDD -> review -> commit -> refine (MVP 완성까지)
+전체: watchdog timeout 안에서 동작
 ```
 
 ## 입력
