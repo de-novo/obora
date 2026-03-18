@@ -1,6 +1,6 @@
 name: overnight-builder
-version: "2.0"
-description: "TDD 기반 기획→설계→테스트작성→구현→리뷰→커밋 cycle을 반복하는 overnight workflow"
+version: "3.0"
+description: "TDD 기반 프로덕션 수준 기획→설계→테스트→구현→리뷰 cycle을 반복하는 overnight workflow"
 
 steps:
   - name: refine_idea
@@ -14,7 +14,7 @@ steps:
       maxToolRounds: 64
     input:
       task: |
-        당신은 기획자입니다. 매 cycle마다 프로젝트를 한 단계 더 발전시킵니다.
+        당신은 시니어 프로덕트 매니저입니다. 프로덕션 수준의 소프트웨어를 만들기 위해 기획합니다.
 
         아래 파일을 읽으세요:
         - input/idea.md
@@ -26,14 +26,20 @@ steps:
 
         artifacts/01-refined-idea.md를 작성하세요:
         1. 프로젝트 개요
-        2. 이번 cycle에서 추가/개선할 기능 (1~2개만)
-        3. 완료 기준 (이번 cycle의 done 조건)
-        4. MVP 전체 진행률 추정
+        2. 이번 cycle에서 추가/개선할 기능 (1~2개)
+        3. 프로덕션 품질 기준:
+           - 에러 핸들링 요구사항
+           - 엣지 케이스 목록
+           - 사용자 경험 기준
+           - 성능 기준 (있으면)
+        4. 완료 기준 (이번 cycle의 done 조건)
+        5. 전체 프로젝트 진행률 추정
 
         규칙:
-        - 첫 cycle이면 MVP 전체를 기획하되, 이번에 만들 범위는 작게 잡으세요.
-        - 이후 cycle이면 이전 cycle 결과를 보고 다음으로 할 일을 정하세요.
-        - 한 cycle에 너무 많이 하려 하지 마세요. 작은 단위로 쪼개세요.
+        - "동작하면 OK"가 아니라, 실제 사용자에게 배포 가능한 수준을 목표로 하세요.
+        - 에러 핸들링, 입력 검증, 엣지 케이스를 반드시 기획에 포함하세요.
+        - 한 cycle에 1~2개 기능만 집중하되, 그 기능은 프로덕션 완성도로 만드세요.
+        - 기술 부채를 남기지 마세요.
 
   - name: design_and_write_tests
     agent: architect
@@ -41,7 +47,7 @@ steps:
     tools: [file_read, file_write, file_list]
     input:
       task: |
-        당신은 TDD 기반 설계자입니다. 테스트를 먼저 작성합니다.
+        당신은 시니어 아키텍트이자 TDD 전문가입니다. 프로덕션 수준의 테스트를 먼저 작성합니다.
 
         아래 파일을 읽으세요:
         - artifacts/01-refined-idea.md
@@ -50,17 +56,22 @@ steps:
 
         이번 cycle에서 할 일:
         1. artifacts/02-system-design.md 작성:
-           - 이번 cycle의 설계 (파일 구조, 모듈, 인터페이스)
-           - 테스트 전략
+           - 이번 cycle의 아키텍처/모듈 설계
+           - 인터페이스 정의 (타입, 파라미터, 리턴)
+           - 에러 핸들링 전략
+           - 테스트 전략 (유닛 + 통합 + 엣지 케이스)
         2. workspace/ 안에 테스트 파일을 먼저 작성:
-           - 이번 cycle의 기능에 대한 테스트
-           - 아직 구현이 없으므로 테스트는 실패해야 정상
-        3. workspace/package.json이 없으면 만드세요 (test script 포함)
+           - 정상 케이스 테스트
+           - 에러/예외 케이스 테스트
+           - 엣지 케이스 테스트
+           - 입력 검증 테스트
+        3. workspace/package.json이 없으면 만드세요 (test script, lint, typecheck 포함)
 
         규칙:
         - TDD: 테스트를 먼저 쓰고, 구현은 다음 step에서 합니다.
-        - 테스트는 실행 가능해야 합니다.
+        - 테스트 커버리지는 happy path + error path + edge case 모두 포함.
         - 이전 cycle의 테스트는 유지하세요. 새 테스트만 추가하세요.
+        - 타입 안전성을 설계 단계에서 확보하세요.
 
   - name: implement_or_repair
     agent: implementer
@@ -75,7 +86,7 @@ steps:
       maxToolRounds: 256
     input:
       task: |
-        당신은 구현자입니다. 테스트를 통과시키는 것이 목표입니다.
+        당신은 시니어 개발자입니다. 프로덕션 수준의 코드를 작성합니다.
 
         아래 파일을 읽으세요:
         - artifacts/01-refined-idea.md
@@ -88,12 +99,21 @@ steps:
         - TDD: 테스트가 이미 있습니다. 그 테스트를 통과시키세요.
         - 테스트를 수정하지 마세요. 구현만 수정하세요.
         - workspace/ 안에서만 작업하세요.
-        - 최소한의 코드로 테스트를 통과시키세요.
+        - 프로덕션 수준 코드 기준:
+          * 모든 에러를 적절히 처리할 것
+          * 입력 검증을 빠뜨리지 말 것
+          * 타입을 명확히 할 것
+          * 매직 넘버/스트링 금지
+          * 함수/모듈 책임 분리
+          * 의미 있는 변수/함수 이름
+          * JSDoc 또는 TSDoc 주석
+          * 불필요한 console.log 금지
 
         구현 후 artifacts/03-implementation-notes.md를 작성하세요:
         1. 생성/수정한 파일
         2. 핵심 구현 결정
-        3. 남은 리스크
+        3. 에러 핸들링 전략
+        4. 남은 리스크
 
   - name: run_tests_and_judge
     agent: validator
@@ -106,17 +126,21 @@ steps:
       maxToolRounds: 64
     on_fail:
       goto: implement_or_repair
-      max_iterations: 8
+      max_iterations: 10
       escalate_on_exhaust: fail
     input:
       task: |
-        당신은 테스트 검증자입니다.
+        당신은 QA 엔지니어입니다. 프로덕션 배포 전 최종 검증을 합니다.
 
-        workspace/ 안에서 테스트를 실행하세요:
-        1. workspace/package.json의 test script 확인
-        2. 테스트 파일이 존재하는지 확인
-        3. 핵심 구현 파일이 존재하는지 확인
-        4. 코드 구조가 설계와 일치하는지 확인
+        workspace/ 안에서 아래를 검증하세요:
+        1. 모든 테스트 파일이 존재하고 실행 가능한지
+        2. 핵심 구현 파일이 설계와 일치하는지
+        3. 에러 핸들링 코드가 있는지
+        4. 입력 검증 로직이 있는지
+        5. 타입 정의가 올바른지
+        6. README가 있고 실행 방법이 명확한지
+        7. package.json의 scripts가 올바른지
+        8. 불필요한 console.log나 디버그 코드가 없는지
 
         artifacts/04-test-report.md를 작성하세요.
 
@@ -136,31 +160,50 @@ steps:
       validation:
         enabled: true
         emit_structured_result: true
-      maxToolRounds: 64
+      maxToolRounds: 128
     on_fail:
       goto: refine_idea
-      max_iterations: 20
+      max_iterations: 30
       escalate_on_exhaust: fail
     input:
       task: |
-        당신은 리뷰어이자 cycle controller입니다.
+        당신은 테크 리드이자 cycle controller입니다.
+        프로덕션 배포 가능 여부를 판단합니다.
 
         아래 파일을 읽으세요:
         - artifacts/01-refined-idea.md
+        - artifacts/02-system-design.md
         - artifacts/03-implementation-notes.md
         - artifacts/04-test-report.md
-        - workspace/ 안의 코드
+        - workspace/ 안의 모든 코드
+
+        프로덕션 수준 리뷰 체크리스트:
+        1. 코드 품질
+           - 함수/모듈 책임 분리가 적절한가
+           - 에러 핸들링이 빈틈없는가
+           - 입력 검증이 충분한가
+           - 타입이 명확한가
+           - 네이밍이 의미 있는가
+        2. 테스트 품질
+           - happy path + error path + edge case 모두 커버하는가
+           - 테스트가 깨지기 쉬운 구현 디테일에 의존하지 않는가
+        3. 문서화
+           - README가 충분한가 (설치, 실행, 예제)
+           - 코드 주석이 적절한가
+        4. 운영 준비
+           - 설정이 하드코딩되지 않았는가
+           - 로깅/에러 메시지가 디버깅에 충분한가
 
         할 일:
-        1. 코드 품질 리뷰
-        2. 필요하면 workspace/ 코드를 직접 개선 (리팩터링, 문서화)
+        1. 위 체크리스트 기반 리뷰
+        2. 필요하면 workspace/ 코드를 직접 개선
         3. artifacts/05-review-notes.md 작성
-        4. artifacts/cycle-log.md에 이번 cycle 결과를 append
-           (cycle 번호, 추가한 기능, 테스트 수, 상태)
+        4. artifacts/cycle-log.md에 이번 cycle 결과 append
 
-        그리고 판단하세요:
-        - MVP가 아직 미완성이고 더 만들 기능이 있으면 → FAIL (다음 cycle로)
-        - MVP가 충분히 완성됐으면 → PASS (archive로)
+        판단 기준:
+        - 아직 기획된 기능 중 미구현이 있으면 → FAIL (다음 cycle)
+        - 프로덕션 품질 체크리스트에 미달하면 → FAIL (다음 cycle에서 품질 개선)
+        - 모든 기능이 프로덕션 수준으로 완성됐으면 → PASS (archive)
 
         최종 응답은 반드시 아래 JSON만 반환하세요:
         {
@@ -170,7 +213,7 @@ steps:
           "signature": "stable-signature"
         }
 
-        FAIL일 때 failedChecks에는 다음 cycle에서 할 일을 적으세요.
+        FAIL일 때 failedChecks에는 다음 cycle에서 구체적으로 할 일을 적으세요.
 
   - name: archive_overnight
     agent: archivist
@@ -178,7 +221,7 @@ steps:
     tools: [file_read, file_write, file_list]
     input:
       task: |
-        당신은 아키비스트입니다. 전체 overnight build를 마무리합니다.
+        당신은 아키비스트입니다. 프로덕션 수준 overnight build를 마무리합니다.
 
         아래 파일을 모두 읽으세요:
         - artifacts/01-refined-idea.md
@@ -187,11 +230,14 @@ steps:
         - artifacts/04-test-report.md
         - artifacts/05-review-notes.md
         - artifacts/cycle-log.md
+        - workspace/ 안의 최종 코드
 
         artifacts/06-archive-summary.md를 작성하세요:
         1. 프로젝트 최종 요약
         2. cycle별 진행 기록
-        3. 최종 테스트 결과
-        4. 코드 품질 평가
-        5. 재사용 가능한 교훈
-        6. 다음 단계 제안
+        3. 프로덕션 품질 달성 근거
+        4. 테스트 커버리지 요약
+        5. 아키텍처 최종 상태
+        6. 알려진 제한사항
+        7. 배포/운영 가이드
+        8. 다음 단계 제안
