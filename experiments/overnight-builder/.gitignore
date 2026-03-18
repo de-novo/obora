@@ -1,0 +1,9 @@
+# Overnight builder workspace artifacts
+workspace/
+runs/
+*.db
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+.obora-overnight/

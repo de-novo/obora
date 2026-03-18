@@ -1,0 +1,21 @@
+version: "1.0"
+default_model: glm-5
+agents:
+  planner:
+    role: 아이디어를 구체적인 기획으로 고도화하고, 실행 가능한 요구사항으로 정리한다.
+    model: glm-5
+  architect:
+    role: 기획을 바탕으로 시스템 구조, 파일 구조, 기술 스택, 테스트 전략을 설계한다.
+    model: glm-5
+  implementer:
+    role: 설계를 바탕으로 실제 코드를 작성하고, 테스트 실패 시 수정한다.
+    model: glm-5
+  validator:
+    role: 구현된 코드를 테스트하고, 구조적 판정을 내린다.
+    model: glm-5
+  reviewer:
+    role: 통과된 코드를 리뷰하고, 품질 개선 포인트를 정리한다.
+    model: glm-5
+  archivist:
+    role: 전체 과정을 요약하고 재사용 가능한 archive note를 남긴다.
+    model: glm-5
