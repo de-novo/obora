@@ -10,6 +10,7 @@ steps:
   - name: refine_idea
     agent: planner
     tools: [file_read, file_write, file_list]
+    skills: [cycle-planning]
     config:
       repair_loop:
         enabled: true
@@ -43,7 +44,7 @@ steps:
     agent: architect
     depends_on: [refine_idea]
     tools: [file_read, file_write, file_list]
-    skills: [quality-guidelines]
+    skills: [quality-guidelines, tdd-test-design]
     input:
       task: |
         당신은 시니어 아키텍트이자 TDD 전문가입니다.
@@ -112,6 +113,7 @@ steps:
     agent: validator
     depends_on: [implement_or_repair]
     tools: [file_read, file_write, file_list, shell_exec]
+    skills: [structured-validation]
     hooks:
       pre_validation:
         shell: >-
@@ -181,6 +183,7 @@ steps:
     agent: reviewer
     depends_on: [run_tests_and_judge]
     tools: [file_read, file_write, file_list]
+    skills: [production-review]
     config:
       validation:
         enabled: true
