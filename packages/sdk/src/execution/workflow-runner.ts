@@ -31,6 +31,11 @@ import {
   type RepairContext,
   type ValidationResult,
 } from "../validation-repair.js";
+import {
+  resolveFailureRoute,
+  getAllRouteTargets,
+  type RouteResolution,
+} from "../conditional-routing.js";
 
 // ── Internal shared-setup result ───────────────────────────────────────────
 
@@ -641,19 +646,24 @@ export class WorkflowRunner {
         noProgress?: boolean;
         category?: "no_progress" | "repeated_critical_issue";
         cause?: unknown;
+        targetResolution?: RouteResolution;
       }
     ): Promise<number> => {
-      const onFail = (
-        step as unknown as {
-          on_fail?: { goto?: string; max_iterations?: number; escalate_on_exhaust?: string };
-        }
-      ).on_fail;
+      const onFail = step.on_fail;
 
       if (!onFail?.goto) {
         throw overrides?.cause ?? new Error(reason);
       }
 
-      const targetIndex = stepIndexByName.get(onFail.goto);
+      const targetStepName =
+        overrides?.targetResolution?.target ??
+        (typeof onFail.goto === "string" ? onFail.goto : onFail.goto[0]?.target);
+
+      if (!targetStepName) {
+        throw overrides?.cause ?? new Error(reason);
+      }
+
+      const targetIndex = stepIndexByName.get(targetStepName);
       if (targetIndex === undefined) {
         throw overrides?.cause ?? new Error(reason);
       }
@@ -664,7 +674,7 @@ export class WorkflowRunner {
         onFail.max_iterations > 0
           ? onFail.max_iterations
           : 1;
-      const key = `${step.name}->${onFail.goto}`;
+      const key = `${step.name}->${targetStepName}`;
       const nextIteration = (backEdgeIterations.get(key) ?? 0) + 1;
       backEdgeIterations.set(key, nextIteration);
 
@@ -672,7 +682,7 @@ export class WorkflowRunner {
         this.recordRepairNoProgress(executionId, reason, overrides.category ?? "no_progress");
         await eventBus.emit("workflow.repair_no_progress", executionId, {
           sourceStep: step.name,
-          targetStep: onFail.goto,
+          targetStep: targetStepName,
           iteration: nextIteration,
           reason,
           category: overrides.category ?? "no_progress",
@@ -683,7 +693,7 @@ export class WorkflowRunner {
         this.recordBackEdgeExhausted(executionId, reason);
         await eventBus.emit("workflow.back_edge_exhausted", executionId, {
           sourceStep: step.name,
-          targetStep: onFail.goto,
+          targetStep: targetStepName,
           iteration: nextIteration,
           maxIterations,
           escalation: onFail.escalate_on_exhaust ?? "fail",
@@ -705,10 +715,11 @@ export class WorkflowRunner {
       this.recordBackEdgeTriggered(executionId);
       await eventBus.emit("workflow.back_edge_triggered", executionId, {
         sourceStep: step.name,
-        targetStep: onFail.goto,
+        targetStep: targetStepName,
         iteration: nextIteration,
         maxIterations,
         reason,
+        ...(overrides?.targetResolution ? { routeResolution: overrides.targetResolution } : {}),
       });
 
       await this.runStepHook(workflow, step, "post_cycle", executionId, {
@@ -818,8 +829,11 @@ export class WorkflowRunner {
             logPath: validationResult.logPath,
           });
 
-          const targetStepName = step.on_fail?.goto;
-          if (targetStepName) {
+          const goto = step.on_fail?.goto;
+          if (goto) {
+            const routeResolution = resolveFailureRoute(goto, validationResult);
+            const targetStepName = routeResolution.target;
+
             const previousState = repairLoopStates.get(targetStepName);
             const repeatedSignatureCount =
               previousState?.lastSignature &&
@@ -844,7 +858,7 @@ export class WorkflowRunner {
               cursor = await triggerBackEdge(
                 step,
                 `Validation for step '${step.name}' made no progress after ${repeatedSignatureCount} repeated failure signature(s): ${validationResult.summary}`,
-                { noProgress: true, category: "no_progress" }
+                { noProgress: true, category: "no_progress", targetResolution: routeResolution }
               );
               continue;
             }
@@ -855,10 +869,21 @@ export class WorkflowRunner {
               cursor = await triggerBackEdge(
                 step,
                 `Validation for step '${step.name}' exceeded repeated critical issue ceiling after ${repeatedSignatureCount} repeated failure signature(s): ${validationResult.summary}`,
-                { noProgress: true, category: "repeated_critical_issue" }
+                {
+                  noProgress: true,
+                  category: "repeated_critical_issue",
+                  targetResolution: routeResolution,
+                }
               );
               continue;
             }
+
+            cursor = await triggerBackEdge(
+              step,
+              `Validation failed for step '${step.name}': ${validationResult.summary}`,
+              { targetResolution: routeResolution }
+            );
+            continue;
           }
 
           cursor = await triggerBackEdge(

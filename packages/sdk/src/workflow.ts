@@ -5,6 +5,7 @@ import { parse as parseYaml } from "yaml";
 import { OboraError, OboraErrorCode } from "./runtime.js";
 import type { RepairLoopConfig, ValidationStepConfig } from "./validation-repair.js";
 import { expandOneFileWorkflow, getOneFileStopSemantics } from "./one-file-modes.js";
+import { validateRoutes } from "./conditional-routing.js";
 
 export interface HookDefinition {
   shell: string;
@@ -24,6 +25,13 @@ export interface WorkflowStepConfig extends Record<string, unknown> {
   repair_loop?: RepairLoopConfig;
 }
 
+export interface OnFailRoute {
+  when?: string;
+  target: string;
+}
+
+export type GotoTarget = string | OnFailRoute[];
+
 export interface WorkflowStep {
   name: string;
   description?: string;
@@ -37,7 +45,7 @@ export interface WorkflowStep {
   depends_on?: string[];
   gate?: string | { type: string; [key: string]: unknown };
   on_fail?: {
-    goto: string;
+    goto: GotoTarget;
     max_iterations: number;
     escalate_on_exhaust?: "human" | "dlq" | "fail";
     cooldown_ms?: number;
@@ -56,7 +64,7 @@ export interface WorkflowDef {
 }
 
 export interface OnFailConfig {
-  goto: string;
+  goto: GotoTarget;
   maxIterations: number;
   escalateOnExhaust?: "human" | "dlq" | "fail";
   cooldownMs?: number;
@@ -178,6 +186,17 @@ export class Workflow {
         );
       }
       seenStepNames.add(s.name);
+    }
+
+    for (const step of steps) {
+      const s = step as Record<string, unknown>;
+      const onFail = s.on_fail as Record<string, unknown> | undefined;
+      if (onFail?.goto !== undefined) {
+        const routeError = validateRoutes(onFail.goto, seenStepNames, s.name as string);
+        if (routeError) {
+          throw new OboraError(routeError, OboraErrorCode.SDK_INVALID_WORKFLOW);
+        }
+      }
     }
 
     return compiled as WorkflowDef;

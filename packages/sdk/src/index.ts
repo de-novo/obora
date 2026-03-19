@@ -76,6 +76,8 @@ export type {
   AddStepOptions,
   HookDefinition,
   OnFailConfig,
+  OnFailRoute,
+  GotoTarget,
   WorkflowDef,
   WorkflowHooks,
   WorkflowStep,
@@ -98,6 +100,8 @@ export type {
   ValidationResult,
   ValidationStepConfig,
 } from "./validation-repair.js";
+export type { RouteResolution } from "./conditional-routing.js";
+export { resolveFailureRoute, validateRoutes, getAllRouteTargets } from "./conditional-routing.js";
 export { BUILTIN_TOOLS } from "./step-executor.js";
 export type {
   StepHandler,

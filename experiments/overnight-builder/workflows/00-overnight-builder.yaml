@@ -77,8 +77,8 @@ steps:
       repair_loop:
         enabled: true
         validation_step: run_tests_and_judge
-        max_no_progress_iterations: 3
-        repeated_critical_issue_ceiling: 3
+        max_no_progress_iterations: 6
+        repeated_critical_issue_ceiling: 6
       maxToolRounds: 256
     input:
       task: |
@@ -94,7 +94,9 @@ steps:
         - 빌드 에러, 타입 에러, 린트 에러, 테스트 실패 각각에 맞게 수정하세요.
 
         규칙:
-        - 테스트를 수정하지 마세요. 구현만 수정하세요.
+        - 기본적으로 구현 코드를 수정하세요.
+        - 단, validator가 "테스트 코드 버그"라고 명시적으로 판정한 경우에 한해 테스트도 수정할 수 있습니다.
+        - 테스트 수정 시에는 테스트의 의도(검증 목적)를 유지하면서 구현과 일치하도록 고치세요.
         - workspace/ 안에서만 작업하세요.
         - 프로덕션 수준: 에러 처리, 입력 검증, 타입, JSDoc, console.log 금지
 
@@ -113,11 +115,12 @@ steps:
         shell: >-
           bash -lc 'mkdir -p artifacts &&
           cd workspace &&
-          if [ ! -d node_modules ]; then npm install --silent > ../artifacts/install.log 2>&1; else printf "npm install skipped (node_modules present)\n" > ../artifacts/install.log; fi;
+          if [ ! -d node_modules ]; then npm install --silent > ../artifacts/install.log 2>&1; else printf "npm install skipped\n" > ../artifacts/install.log; fi;
+          npx tsc > ../artifacts/build.log 2>&1; BUILD=$?;
           npx tsc --noEmit > ../artifacts/typecheck.log 2>&1; TS=$?;
-          if [ -d src ]; then npx eslint src --ext .ts > ../artifacts/lint.log 2>&1; LINT=$?; else printf "lint skipped: src directory missing\n" > ../artifacts/lint.log; LINT=0; fi;
+          if [ -d src ]; then npx eslint src > ../artifacts/lint.log 2>&1; LINT=$?; else printf "lint skipped\n" > ../artifacts/lint.log; LINT=$?; fi;
           npm test > ../artifacts/test.log 2>&1; TEST=$?;
-          printf "typecheck_exit_code=%s\nlint_exit_code=%s\ntest_exit_code=%s\n" "$TS" "$LINT" "$TEST" > ../artifacts/command-status.env;
+          printf "build_exit_code=%s\ntypecheck_exit_code=%s\nlint_exit_code=%s\ntest_exit_code=%s\n" "$BUILD" "$TS" "$LINT" "$TEST" > ../artifacts/command-status.env;
           exit 0'
     config:
       validation:
@@ -125,7 +128,12 @@ steps:
         emit_structured_result: true
       maxToolRounds: 64
     on_fail:
-      goto: implement_or_repair
+      goto:
+        - when: 'failedChecks.some(c => c.name.includes("test_code_bug"))'
+          target: design_and_write_tests
+        - when: 'failedChecks.some(c => c.name.includes("design_issue"))'
+          target: refine_idea
+        - target: implement_or_repair
       max_iterations: 10
       escalate_on_exhaust: fail
     input:
@@ -153,12 +161,18 @@ steps:
         - 린트는 warning만 있으면 PASS 가능, error가 있으면 FAIL
         - 모두 통과해야 PASS
 
+        실패 원인 분류 (failedChecks의 name에 반드시 포함):
+        - "test_code_bug": 테스트 코드 자체가 잘못된 경우 (잘못된 assertion, 오타, 논리 오류)
+        - "design_issue": 설계/아키텍처 문제로 구현 불가능한 경우
+        - "implementation_bug": 구현 코드의 버그 (기본값)
+
         최종 응답은 반드시 아래 JSON만 반환하세요:
         {
           "passed": boolean,
           "summary": "string",
           "failedChecks": [{ "name": "string", "message": "string" }],
-          "signature": "stable-signature"
+          "signature": "stable-signature",
+          "suggestedTargets": ["optional_step_name"]
         }
 
   - name: review_and_decide
@@ -230,3 +244,127 @@ steps:
         5. 알려진 제한사항
         6. 배포/운영 가이드
         7. 다음 단계 제안
+
+  - name: strategic_recommendations
+    agent: reviewer
+    depends_on: [archive_overnight]
+    tools: [file_read, file_write, file_list]
+    input:
+      task: |
+        당신은 시니어 CTO이자 프로덕트 전략가입니다.
+        완성된 프로젝트를 분석하고, 앞으로의 발전 전략을 수립합니다.
+
+        아래 파일을 모두 읽으세요:
+        - artifacts/06-archive-summary.md
+        - artifacts/01-refined-idea.md
+        - artifacts/02-system-design.md
+        - artifacts/cycle-log.md
+        - workspace/README.md (있으면)
+        - workspace/package.json
+        - workspace/src/ 전체 구조
+
+        artifacts/07-strategic-recommendations.md를 작성하세요:
+
+        ## 1. 현재 프로젝트 성숙도 평가
+        - 기능 완성도 (현재 구현된 것 vs 가능한 확장)
+        - 코드 품질 수준 (아키텍처, 테스트 커버리지, 에러 핸들링)
+        - 프로덕션 준비 상태
+
+        ## 2. 단기 개선 (1~2 cycle, 즉시 가치)
+        - 가장 적은 노력으로 가장 큰 사용자 가치를 만드는 작업 3~5개
+        - 각 작업의 예상 난이도 (S/M/L)
+        - 우선순위와 근거
+
+        ## 3. 중기 확장 (3~5 cycle, 제품 차별화)
+        - 경쟁력을 만드는 핵심 기능 3~5개
+        - 기술적 의존성과 선행 작업
+        - 각 기능이 열어주는 가능성
+
+        ## 4. 장기 비전 (6+ cycle, 생태계/플랫폼)
+        - 이 프로젝트가 궁극적으로 될 수 있는 것
+        - 플랫폼/생태계 가능성
+        - 통합/연동 기회
+
+        ## 5. 기술 부채 & 리팩터링 로드맵
+        - 현재 발견된 기술 부채
+        - 방치 시 리스크
+        - 언제 어떤 순서로 해결할지
+
+        ## 6. 다음 overnight-builder cycle 추천
+        - 다음 cycle에서 정확히 무엇을 만들면 좋을지
+        - input/idea.md에 넣을 수 있는 형태로 구체적으로 작성
+        - 기대 결과물과 완료 기준
+
+        규칙:
+        - 추상적 조언이 아니라 실행 가능한 구체적 제안을 하세요.
+        - 각 제안에 "왜 지금 이것인가"의 근거를 포함하세요.
+        - 현재 코드를 실제로 읽고 분석한 뒤 작성하세요.
+        - 기술적 현실성을 고려하세요 (현재 스택, 의존성, 아키텍처 제약).
+
+  - name: product_vision
+    agent: planner
+    depends_on: [strategic_recommendations]
+    tools: [file_read, file_write, file_list]
+    input:
+      task: |
+        당신은 시니어 프로덕트 매니저이자 UX 전략가입니다.
+        완성된 프로젝트의 기능 기획 방향성을 수립합니다.
+
+        아래 파일을 모두 읽으세요:
+        - artifacts/07-strategic-recommendations.md
+        - artifacts/06-archive-summary.md
+        - artifacts/01-refined-idea.md
+        - workspace/README.md (있으면)
+        - workspace/package.json
+        - workspace/src/ 전체 구조 (명령어, 서비스, 타입 등)
+
+        artifacts/08-product-vision.md를 작성하세요:
+
+        ## 1. 현재 사용자 경험 분석
+        - 현재 제공하는 핵심 가치
+        - 사용자 여정 (설치 → 첫 사용 → 일상 사용 → 고급 사용)
+        - 현재 UX의 강점과 약점
+
+        ## 2. 타겟 사용자 페르소나
+        - 주요 사용자 유형 2~3개 정의
+        - 각 페르소나의 핵심 니즈
+        - 현재 제품이 어떤 페르소나를 잘 만족시키고, 어디가 부족한지
+
+        ## 3. 기능 로드맵
+        ### Phase 1: 핵심 경험 완성 (Must-have)
+        - 없으면 사용자가 떠나는 기능
+        - 각 기능의 사용자 스토리 (As a ..., I want ..., so that ...)
+        - 예상 구현 복잡도
+
+        ### Phase 2: 차별화 기능 (Nice-to-have)
+        - 경쟁 제품 대비 차별점을 만드는 기능
+        - 사용자가 "이거 때문에 쓴다"고 말할 기능
+        - 기술적 의존성
+
+        ### Phase 3: 생태계 확장 (Growth)
+        - 플러그인/확장 시스템
+        - 다른 도구와의 연동
+        - 커뮤니티/공유 기능
+
+        ## 4. 경쟁 분석
+        - 같은 문제를 푸는 기존 도구/제품 3~5개
+        - 각각의 강점과 약점
+        - 우리 제품이 가져야 할 포지셔닝
+
+        ## 5. 사용자 획득 전략
+        - 초기 사용자를 어떻게 모을 것인가
+        - 배포 채널 (npm, homebrew, GitHub releases 등)
+        - 문서화/온보딩 전략
+
+        ## 6. 다음 cycle 기능 기획서
+        - 다음 cycle에서 만들 기능의 상세 기획
+        - 사용자 스토리
+        - 수용 기준 (Acceptance Criteria)
+        - 와이어프레임/CLI 인터페이스 예시
+        - input/idea.md에 바로 넣을 수 있는 형태로 작성
+
+        규칙:
+        - 기술 관점이 아니라 사용자/프로덕트 관점에서 생각하세요.
+        - "좋겠다"가 아니라 "왜 이 기능이 지금 필요한가"를 설명하세요.
+        - 현재 코드를 실제로 읽고 현실적인 제안을 하세요.
+        - 실제 사용 시나리오 기반으로 작성하세요.
