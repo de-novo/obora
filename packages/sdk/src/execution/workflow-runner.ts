@@ -437,6 +437,16 @@ export class WorkflowRunner {
     this.repairLoopSummaries.delete(executionId);
   }
 
+  private extractFailurePatterns(
+    blackboard: BlackboardManager,
+    reflector: ExecutionReflector,
+  ): string[] {
+    const failures = blackboard.getFailureHistory();
+    if (failures.length === 0) return [];
+    const hint = reflector.analyzeFailures(failures);
+    return hint ? [hint] : [];
+  }
+
   private recordValidationFailure(
     executionId: string,
     stepName: string,
@@ -1065,6 +1075,9 @@ export class WorkflowRunner {
     const observer = new ExecutionObserver(eventBus);
     const reflector = new ExecutionReflector();
 
+    if (engine.costTracker) {
+      observer.attachCostTracker(engine.costTracker);
+    }
     observer.observe(executionId);
 
     // Run step loop
@@ -1085,8 +1098,15 @@ export class WorkflowRunner {
 
     if (isSettledFn()) return;
 
-    // Finalize observer metrics
-    observer.finalize(executionId);
+    // Finalize observer metrics and generate execution report
+    observer.finalize(executionId, "success");
+    const report = observer.generateReport(executionId, {
+      workflowName,
+      failurePatterns: this.extractFailurePatterns(blackboard, reflector),
+    });
+    if (report) {
+      await eventBus.emit("execution_end", executionId, { report });
+    }
     observer.dispose();
 
     execution.status = "completed";

@@ -7,6 +7,11 @@ export type {
 } from "./blackboard-manager.js";
 
 export { ExecutionObserver } from "./execution-observer.js";
-export type { StepMetrics, ExecutionMetrics } from "./execution-observer.js";
+export type {
+  StepMetrics,
+  ExecutionMetrics,
+  ExecutionReport,
+  ExecutionReportStepMetric,
+} from "./execution-observer.js";
 
 export { ExecutionReflector } from "./execution-reflector.js";

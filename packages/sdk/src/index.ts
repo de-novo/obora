@@ -111,6 +111,8 @@ export type {
   BlackboardSnapshot,
   StepMetrics,
   ExecutionMetrics,
+  ExecutionReport,
+  ExecutionReportStepMetric,
 } from "./blackboard/index.js";
 export type {
   StepHandler,

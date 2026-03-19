@@ -1,5 +1,7 @@
+import type { CostSummary } from "@obora/runtime";
 import type { EventBus } from "../events/event-bus.js";
 import type { AuditEventType, AuditEvent, Unsubscribe } from "../runtime-types.js";
+import type { CostTracker } from "../cost-tracker.js";
 
 export interface StepMetrics {
   stepName: string;
@@ -10,6 +12,10 @@ export interface StepMetrics {
   retryCount: number;
   validationFailures: number;
   validationPasses: number;
+  /** Per-step cost in USD (populated when CostTracker is attached). */
+  costUsd?: number;
+  /** Individual attempt durations in ms (for min/max/avg computation). */
+  attemptDurations: number[];
 }
 
 export interface ExecutionMetrics {
@@ -22,6 +28,34 @@ export interface ExecutionMetrics {
   totalRepairs: number;
   totalValidationFailures: number;
   totalValidationPasses: number;
+  /** Cumulative cost in USD (populated when CostTracker is attached). */
+  totalCostUsd?: number;
+}
+
+export interface ExecutionReportStepMetric {
+  stepName: string;
+  attempts: number;
+  successCount: number;
+  failureCount: number;
+  totalDuration: number;
+  avgDuration: number;
+  minDuration?: number;
+  maxDuration?: number;
+  cost: number;
+}
+
+export interface ExecutionReport {
+  workflowName: string;
+  startedAt: Date;
+  completedAt: Date;
+  totalDuration: number;
+  totalCost: number;
+  totalSteps: number;
+  totalRetries: number;
+  totalBackEdges: number;
+  stepMetrics: ExecutionReportStepMetric[];
+  failurePatterns: string[];
+  outcome: "success" | "failure" | "timeout";
 }
 
 /**
@@ -31,8 +65,18 @@ export interface ExecutionMetrics {
 export class ExecutionObserver {
   private readonly metrics = new Map<string, ExecutionMetrics>();
   private readonly unsubscribes: Unsubscribe[] = [];
+  private costTracker?: CostTracker;
+  /** Snapshot of cumulative cost at step_start, keyed by `executionId:stepName`. */
+  private readonly costSnapshots = new Map<string, number>();
 
   constructor(private readonly eventBus: EventBus) {}
+
+  /**
+   * Attach a CostTracker to enable per-step and total cost recording.
+   */
+  attachCostTracker(tracker: CostTracker): void {
+    this.costTracker = tracker;
+  }
 
   /**
    * Start observing events for a given execution.
@@ -84,7 +128,17 @@ export class ExecutionObserver {
           retryCount: existing?.retryCount ?? 0,
           validationFailures: existing?.validationFailures ?? 0,
           validationPasses: existing?.validationPasses ?? 0,
+          costUsd: existing?.costUsd,
+          attemptDurations: existing?.attemptDurations ?? [],
         });
+
+        // Snapshot cumulative cost before this step runs
+        if (this.costTracker) {
+          const key = `${executionId}:${stepName}`;
+          this.costTracker.runCost().then((summary: CostSummary) => {
+            this.costSnapshots.set(key, summary.totalCostUsd);
+          }).catch(() => { /* best-effort */ });
+        }
         break;
       }
       case "step_end": {
@@ -92,7 +146,22 @@ export class ExecutionObserver {
         if (step) {
           step.completedAt = Date.now();
           step.durationMs = step.completedAt - step.startedAt;
-          step.status = "completed";
+          step.attemptDurations.push(step.durationMs);
+
+          const status = (data?.status as string) ?? "completed";
+          step.status = status === "failed" ? "failed" : "completed";
+
+          // Compute per-step cost delta
+          if (this.costTracker) {
+            const key = `${executionId}:${stepName}`;
+            const beforeCost = this.costSnapshots.get(key) ?? 0;
+            this.costTracker.runCost().then((summary: CostSummary) => {
+              const delta = summary.totalCostUsd - beforeCost;
+              step.costUsd = (step.costUsd ?? 0) + delta;
+              exec.totalCostUsd = summary.totalCostUsd;
+              this.costSnapshots.delete(key);
+            }).catch(() => { /* best-effort */ });
+          }
         }
         break;
       }
@@ -141,12 +210,78 @@ export class ExecutionObserver {
   /**
    * Mark execution as completed and finalize metrics.
    */
-  finalize(executionId: string): ExecutionMetrics | undefined {
+  finalize(
+    executionId: string,
+    outcome?: "success" | "failure" | "timeout",
+  ): ExecutionMetrics | undefined {
     const exec = this.metrics.get(executionId);
     if (!exec) return undefined;
     exec.completedAt = Date.now();
     exec.totalDurationMs = exec.completedAt - exec.startedAt;
+    // Store outcome for report generation
+    (exec as ExecutionMetrics & { _outcome?: string })._outcome =
+      outcome ?? "success";
     return exec;
+  }
+
+  /**
+   * Generate a JSON-serializable execution report.
+   */
+  generateReport(
+    executionId: string,
+    options?: {
+      workflowName?: string;
+      failurePatterns?: string[];
+    },
+  ): ExecutionReport | undefined {
+    const exec = this.metrics.get(executionId);
+    if (!exec) return undefined;
+
+    const stepMetrics: ExecutionReportStepMetric[] = [];
+    let totalRetries = 0;
+
+    for (const step of exec.stepMetrics.values()) {
+      const attempts = 1 + step.retryCount;
+      totalRetries += step.retryCount;
+
+      const durations = step.attemptDurations;
+      const totalDuration = durations.reduce((sum, d) => sum + d, 0);
+      const avgDuration = durations.length > 0 ? totalDuration / durations.length : 0;
+      const minDuration = durations.length > 0 ? Math.min(...durations) : undefined;
+      const maxDuration = durations.length > 0 ? Math.max(...durations) : undefined;
+
+      stepMetrics.push({
+        stepName: step.stepName,
+        attempts,
+        successCount: step.validationPasses,
+        failureCount: step.validationFailures,
+        totalDuration,
+        avgDuration,
+        minDuration,
+        maxDuration,
+        cost: step.costUsd ?? 0,
+      });
+    }
+
+    const outcome =
+      ((exec as ExecutionMetrics & { _outcome?: string })._outcome as
+        | "success"
+        | "failure"
+        | "timeout") ?? "success";
+
+    return {
+      workflowName: options?.workflowName ?? "unknown",
+      startedAt: new Date(exec.startedAt),
+      completedAt: new Date(exec.completedAt ?? Date.now()),
+      totalDuration: exec.totalDurationMs ?? Date.now() - exec.startedAt,
+      totalCost: exec.totalCostUsd ?? 0,
+      totalSteps: exec.stepMetrics.size,
+      totalRetries,
+      totalBackEdges: exec.totalBackEdges,
+      stepMetrics,
+      failurePatterns: options?.failurePatterns ?? [],
+      outcome,
+    };
   }
 
   /**
