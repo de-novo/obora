@@ -35,6 +35,7 @@ export {
 export { createAuthResolver, resolveAuthRef } from "./auth-resolver.js";
 export { StepExecutor } from "./step-executor.js";
 export { topologicalSort, groupByParallelizableLevels } from "./dependency-resolver.js";
+export { ParallelScheduler } from "./execution/parallel-scheduler.js";
 export {
   buildValidationSignature,
   getRepairLoopConfig,
@@ -78,11 +79,19 @@ export type {
   OnFailConfig,
   OnFailRoute,
   GotoTarget,
+  MergeStrategy,
+  ParallelBranch,
   WorkflowDef,
   WorkflowHooks,
   WorkflowStep,
   WorkflowStepConfig,
 } from "./workflow.js";
+export type {
+  ExecutionPlan,
+  ParallelStepOutcome,
+  ParallelStepResult,
+  ParallelStepFailure,
+} from "./execution/parallel-scheduler.js";
 export type { HookExecutionResult, WorkflowHookLifecycle } from "./hooks.js";
 export type { LLMConfig } from "./llm-config.js";
 export type { OboraConfig, ResolvedProviderConfig, ModelPricing } from "./config-loader.js";

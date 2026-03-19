@@ -5,9 +5,13 @@ import { parse as parseYaml } from "yaml";
 
 import { loadConfig, resolveProviderConfig, type OboraConfig } from "../config-loader.js";
 import { resolveLLMConfig, type LLMConfig } from "../llm-config.js";
-import { topologicalSort } from "../dependency-resolver.js";
+import { topologicalSort, groupByParallelizableLevels } from "../dependency-resolver.js";
+import {
+  ParallelScheduler,
+  type ParallelStepOutcome,
+} from "./parallel-scheduler.js";
 import { StepExecutor } from "../step-executor.js";
-import type { LLMAdapterLike } from "../step-executor.js";
+import type { LLMAdapterLike, StepResult } from "../step-executor.js";
 import { BudgetExceededError, CostTracker } from "../cost-tracker.js";
 import {
   executeWorkflowHook,
@@ -16,7 +20,7 @@ import {
   type WorkflowHookLifecycle,
 } from "../hooks.js";
 import { queryKnowledge } from "../knowledge/queryKnowledge.js";
-import type { WorkflowDef, WorkflowStep } from "../workflow.js";
+import type { WorkflowDef, WorkflowStep, MergeStrategy } from "../workflow.js";
 import type { StorageAdapter, PolicyHashInput, RunRecord } from "@obora/runtime";
 
 import { OboraError, OboraErrorCode } from "../runtime-types.js";
@@ -89,6 +93,8 @@ interface PersistedRepairLoopSummary {
   lastStopCategory?: "no_progress" | "repeated_critical_issue" | "exhausted";
   recentValidationFailures: PersistedValidationFailureDetail[];
 }
+
+const DEFAULT_MAX_CONCURRENCY = 3;
 
 // ── WorkflowRunner ─────────────────────────────────────────────────────────
 
@@ -987,6 +993,314 @@ export class WorkflowRunner {
     }
   }
 
+  // ── Single-step execution (shared by sequential and parallel paths) ──────
+
+  /**
+   * Execute a single step with hooks, blackboard recording, persistence, and events.
+   * Does NOT handle back-edges or repair loops — those are the caller's responsibility.
+   * Throws on step failure.
+   */
+  private async executeSingleStep(
+    step: WorkflowStep,
+    workflow: WorkflowDef,
+    execution: RuntimeExecution,
+    stepExecutor: StepExecutor | undefined,
+    costTracker: CostTracker | undefined,
+    executionId: string,
+    persistenceEnabled: boolean,
+    persistenceAdapter: StorageAdapter | null,
+    signal?: AbortSignal,
+    blackboard?: BlackboardManager,
+  ): Promise<{ output: unknown; raw?: unknown }> {
+    const { eventBus, config } = this.deps;
+
+    if (costTracker) {
+      await costTracker.preStepGate(step.name);
+    }
+
+    const stepStartedAt = Date.now();
+    if (blackboard) {
+      blackboard.recordStepStart(step.name);
+    }
+    await eventBus.emit("step_start", executionId, {
+      stepName: step.name,
+      agent: step.agent,
+    });
+
+    const hookOutputs: Partial<Record<WorkflowHookLifecycle, HookExecutionResult>> = {};
+
+    const preStepHook = await this.runStepHook(workflow, step, "pre_step", executionId, {
+      signal,
+    });
+    if (preStepHook) {
+      hookOutputs.pre_step = preStepHook;
+    }
+
+    if (getValidationStepConfig(step.config)?.enabled) {
+      const preValidationHook = await this.runStepHook(
+        workflow,
+        step,
+        "pre_validation",
+        executionId,
+        { signal },
+      );
+      if (preValidationHook) {
+        hookOutputs.pre_validation = preValidationHook;
+      }
+    }
+
+    // Handle explicit parallel branches within a single step
+    let result: { output: unknown; raw?: unknown };
+    if (step.parallel && step.parallel.length > 0) {
+      result = await this.executeParallelBranches(
+        step,
+        execution,
+        stepExecutor,
+        signal,
+      );
+    } else {
+      result = stepExecutor
+        ? await stepExecutor.executeStep(step, {
+            previousOutputs: execution.outputs,
+            signal,
+            ...(Object.keys(hookOutputs).length > 0 ? { hookOutputs } : {}),
+          })
+        : {
+            output: "[stub] No LLM configured",
+            raw: { stub: true, reason: "No LLM configured" },
+          };
+    }
+
+    const postStepHook = await this.runStepHook(workflow, step, "post_step", executionId, {
+      signal,
+      continueOnError: true,
+    });
+    if (postStepHook) {
+      hookOutputs.post_step = postStepHook;
+    }
+
+    // Record output
+    execution.outputs[step.name] = result.output;
+    execution.stepRecords[step.name] =
+      Object.keys(hookOutputs).length > 0 ? { ...result, hooks: hookOutputs } : result;
+    execution.completedSteps.push(step.name);
+
+    if (blackboard) {
+      blackboard.recordStepOutput(step.name, result.output);
+      blackboard.recordStepEnd(step.name);
+    }
+
+    // Persist
+    if (persistenceEnabled && persistenceAdapter) {
+      try {
+        const outputValue =
+          typeof result.output === "object" && result.output !== null
+            ? (result.output as Record<string, unknown>)
+            : { value: result.output };
+        await persistenceAdapter.saveStep({
+          id: `${executionId}:${step.name}`,
+          runId: executionId,
+          stepName: step.name,
+          status: "completed",
+          output: outputValue,
+          startedAt: new Date(stepStartedAt).toISOString(),
+          completedAt: new Date().toISOString(),
+          durationMs: Date.now() - stepStartedAt,
+        });
+      } catch (err) {
+        if (config.verbose) {
+          console.warn("[persistence] Failed to save step:", err);
+        }
+      }
+    }
+
+    await eventBus.emit("step_end", executionId, {
+      stepName: step.name,
+      status: "completed",
+      durationMs: Date.now() - stepStartedAt,
+      outputPreview:
+        typeof result.output === "string"
+          ? result.output.slice(0, 200)
+          : JSON.stringify(result.output).slice(0, 200),
+    });
+
+    return result;
+  }
+
+  // ── Parallel branch execution (fan-out-fan-in within a single step) ────
+
+  /**
+   * Executes explicit parallel branches defined on a step, then merges results.
+   */
+  private async executeParallelBranches(
+    step: WorkflowStep,
+    execution: RuntimeExecution,
+    stepExecutor: StepExecutor | undefined,
+    signal?: AbortSignal,
+  ): Promise<{ output: unknown; raw?: unknown }> {
+    const branches = step.parallel!;
+    const mergeStrategy: MergeStrategy = step.merge ?? "concat";
+    const scheduler = new ParallelScheduler();
+
+    const settled = await Promise.allSettled(
+      branches.map(async (branch) => {
+        const branchStep: WorkflowStep = {
+          ...step,
+          agent: branch.agent,
+          input: branch.input ?? step.input,
+          parallel: undefined,
+          merge: undefined,
+        };
+
+        if (!stepExecutor) {
+          return { output: "[stub] No LLM configured", raw: { stub: true } } as StepResult;
+        }
+
+        return stepExecutor.executeStep(branchStep, {
+          previousOutputs: execution.outputs,
+          signal,
+        });
+      }),
+    );
+
+    const successResults = settled
+      .filter(
+        (r): r is PromiseFulfilledResult<StepResult> => r.status === "fulfilled",
+      )
+      .map((r) => r.value);
+
+    if (successResults.length === 0) {
+      const errors = settled
+        .filter((r): r is PromiseRejectedResult => r.status === "rejected")
+        .map((r) => (r.reason instanceof Error ? r.reason.message : String(r.reason)));
+      throw new Error(
+        `All parallel branches failed for step '${step.name}': ${errors.join("; ")}`,
+      );
+    }
+
+    const merged = scheduler.mergeResults(successResults, mergeStrategy);
+    return { output: merged, raw: { branches: settled } };
+  }
+
+  // ── Parallel step-execution loop ───────────────────────────────────────
+
+  /**
+   * Executes steps layer by layer, running independent steps in parallel.
+   *
+   * For single-step layers, delegates to the existing sequential `executeStepLoop`
+   * to preserve full back-edge and repair-loop support.
+   *
+   * For multi-step layers, runs all steps concurrently with `Promise.allSettled`.
+   */
+  async executeParallelStepLoop(
+    layers: WorkflowStep[][],
+    workflow: WorkflowDef,
+    execution: RuntimeExecution,
+    stepExecutor: StepExecutor | undefined,
+    costTracker: CostTracker | undefined,
+    executionId: string,
+    persistenceEnabled: boolean,
+    persistenceAdapter: StorageAdapter | null,
+    signal?: AbortSignal,
+    isSettledFn?: () => boolean,
+    blackboard?: BlackboardManager,
+    reflector?: ExecutionReflector,
+    maxConcurrency: number = DEFAULT_MAX_CONCURRENCY,
+  ): Promise<void> {
+    const { eventBus } = this.deps;
+    const scheduler = new ParallelScheduler(maxConcurrency);
+
+    for (let layerIdx = 0; layerIdx < layers.length; layerIdx++) {
+      const layer = layers[layerIdx]!;
+
+      if (isSettledFn?.() || signal?.aborted) return;
+
+      // Single-step layer → delegate to the full sequential loop
+      // (preserves back-edge, repair-loop, and validation handling)
+      if (layer.length === 1) {
+        await this.executeStepLoop(
+          layer,
+          workflow,
+          execution,
+          stepExecutor,
+          costTracker,
+          executionId,
+          persistenceEnabled,
+          persistenceAdapter,
+          signal,
+          isSettledFn,
+          blackboard,
+          reflector,
+        );
+        continue;
+      }
+
+      // Multi-step layer → parallel execution
+      await eventBus.emit("parallel_layer_start", executionId, {
+        layerIndex: layerIdx,
+        stepNames: layer.map((s) => s.name),
+        concurrency: Math.min(layer.length, scheduler.maxConcurrency),
+      });
+
+      const layerStartedAt = Date.now();
+      const outcomes = await scheduler.executeParallelSteps(
+        layer,
+        async (step) => {
+          const result = await this.executeSingleStep(
+            step,
+            workflow,
+            execution,
+            stepExecutor,
+            costTracker,
+            executionId,
+            persistenceEnabled,
+            persistenceAdapter,
+            signal,
+            blackboard,
+          );
+          return result as StepResult;
+        },
+      );
+
+      const completed: string[] = [];
+      const failed: string[] = [];
+      for (const outcome of outcomes) {
+        if (outcome.status === "fulfilled") {
+          completed.push(outcome.stepName);
+        } else {
+          failed.push(outcome.stepName);
+          await eventBus.emit("warning", executionId, {
+            message: `Step '${outcome.stepName}' failed in parallel layer: ${
+              outcome.error instanceof Error
+                ? outcome.error.message
+                : String(outcome.error)
+            }`,
+          });
+        }
+      }
+
+      // Record parallel execution metrics on blackboard
+      if (blackboard) {
+        blackboard.recordStepOutput(`__parallel_layer_${layerIdx}`, {
+          completed,
+          failed,
+          concurrency: Math.min(layer.length, scheduler.maxConcurrency),
+          durationMs: Date.now() - layerStartedAt,
+        });
+      }
+
+      await eventBus.emit("parallel_layer_end", executionId, {
+        layerIndex: layerIdx,
+        stepNames: layer.map((s) => s.name),
+        completed,
+        failed,
+        durationMs: Date.now() - layerStartedAt,
+      });
+
+      if (isSettledFn?.()) return;
+    }
+  }
+
   // ── Run execution ────────────────────────────────────────────────────────
 
   /**
@@ -1080,21 +1394,43 @@ export class WorkflowRunner {
     }
     observer.observe(executionId);
 
-    // Run step loop
-    await this.executeStepLoop(
-      sortedSteps,
-      workflow,
-      execution,
-      engine.stepExecutor,
-      engine.costTracker,
-      executionId,
-      persistenceEnabled,
-      persistenceAdapter,
-      signal,
-      isSettledFn,
-      blackboard,
-      reflector
-    );
+    // Build execution plan and choose sequential or parallel path
+    const scheduler = new ParallelScheduler(workflow.maxConcurrency ?? DEFAULT_MAX_CONCURRENCY);
+    const plan = scheduler.buildExecutionPlan(sortedSteps);
+
+    if (plan.isParallel) {
+      await this.executeParallelStepLoop(
+        plan.layers,
+        workflow,
+        execution,
+        engine.stepExecutor,
+        engine.costTracker,
+        executionId,
+        persistenceEnabled,
+        persistenceAdapter,
+        signal,
+        isSettledFn,
+        blackboard,
+        reflector,
+        scheduler.maxConcurrency,
+      );
+    } else {
+      // Sequential path — preserves full back-edge and repair-loop support
+      await this.executeStepLoop(
+        sortedSteps,
+        workflow,
+        execution,
+        engine.stepExecutor,
+        engine.costTracker,
+        executionId,
+        persistenceEnabled,
+        persistenceAdapter,
+        signal,
+        isSettledFn,
+        blackboard,
+        reflector,
+      );
+    }
 
     if (isSettledFn()) return;
 

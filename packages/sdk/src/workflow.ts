@@ -32,6 +32,14 @@ export interface OnFailRoute {
 
 export type GotoTarget = string | OnFailRoute[];
 
+export interface ParallelBranch {
+  agent: string;
+  prompt_file?: string;
+  input?: Record<string, unknown>;
+}
+
+export type MergeStrategy = "concat" | "best_score" | "consensus" | "first_success";
+
 export interface WorkflowStep {
   name: string;
   description?: string;
@@ -44,6 +52,10 @@ export interface WorkflowStep {
   hooks?: WorkflowHooks;
   depends_on?: string[];
   gate?: string | { type: string; [key: string]: unknown };
+  /** Explicit parallel branches for fan-out-fan-in within this step. */
+  parallel?: ParallelBranch[];
+  /** Merge strategy for parallel branch results. Default: 'concat'. */
+  merge?: MergeStrategy;
   on_fail?: {
     goto: GotoTarget;
     max_iterations: number;
@@ -61,6 +73,8 @@ export interface WorkflowDef {
   steps: WorkflowStep[];
   hooks?: WorkflowHooks;
   variables?: Record<string, unknown>;
+  /** Maximum number of steps to execute concurrently. Default: 3. */
+  maxConcurrency?: number;
 }
 
 export interface OnFailConfig {

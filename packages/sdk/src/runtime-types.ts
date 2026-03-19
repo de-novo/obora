@@ -48,6 +48,8 @@ export type AuditEventType =
   | "workflow.repair_completed"
   | "workflow.repair_no_progress"
   | "workflow.step_starvation_warning"
+  | "parallel_layer_start"
+  | "parallel_layer_end"
   | "warning"
   | "error"
   | "knowledge_context_attached";
