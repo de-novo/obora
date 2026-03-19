@@ -43,6 +43,7 @@ steps:
     agent: architect
     depends_on: [refine_idea]
     tools: [file_read, file_write, file_list]
+    skills: [quality-guidelines]
     input:
       task: |
         당신은 시니어 아키텍트이자 TDD 전문가입니다.
@@ -70,6 +71,7 @@ steps:
     agent: implementer
     depends_on: [design_and_write_tests]
     tools: [file_read, file_write, file_list, shell_exec]
+    skills: [quality-guidelines]
     hooks:
       pre_step:
         shell: "bash -lc 'cd workspace && if [ ! -d node_modules ]; then npm install --silent; fi'"
