@@ -823,6 +823,9 @@ export class StepExecutor {
             context.repairContext.previousValidationResults.length > 0
               ? `Previous validation history:\n${JSON.stringify(context.repairContext.previousValidationResults, null, 2)}`
               : undefined,
+            context.repairContext.reflectorHint
+              ? `\nReflector analysis: ${context.repairContext.reflectorHint}`
+              : undefined,
           ]
         : [];
 

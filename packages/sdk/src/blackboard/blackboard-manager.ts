@@ -1,0 +1,174 @@
+import type { ValidationResult } from "../validation-repair.js";
+
+export interface FailureEntry {
+  stepName: string;
+  attempt: number;
+  validation: ValidationResult;
+  timestamp: Date;
+}
+
+export interface BlackboardFact {
+  id: string;
+  content: string;
+  category: string;
+  tags: string[];
+  confidence: number;
+  createdAt: Date;
+}
+
+export interface BlackboardSnapshot {
+  facts: BlackboardFact[];
+  stepOutputs: Record<string, unknown>;
+  failures: FailureEntry[];
+  stepTimings: Record<string, { startedAt: number; durationMs?: number }>;
+  createdAt: Date;
+}
+
+export interface BlackboardManagerOptions {
+  sessionId?: string;
+}
+
+/**
+ * Manages an in-memory blackboard for a single workflow execution.
+ * Records step outputs as facts, tracks validation results,
+ * and maintains failure history for reflector analysis.
+ */
+export class BlackboardManager {
+  readonly sessionId: string;
+  private readonly facts: BlackboardFact[] = [];
+  private readonly stepOutputs = new Map<string, unknown>();
+  private readonly failures: FailureEntry[] = [];
+  private readonly stepTimings = new Map<string, { startedAt: number; durationMs?: number }>();
+
+  constructor(options: BlackboardManagerOptions = {}) {
+    this.sessionId = options.sessionId ?? `wf-${Date.now()}`;
+  }
+
+  /**
+   * Record step output as a fact on the blackboard.
+   */
+  recordStepOutput(stepName: string, output: unknown): void {
+    this.stepOutputs.set(stepName, output);
+
+    const content =
+      typeof output === "string"
+        ? output.slice(0, 500)
+        : JSON.stringify(output).slice(0, 500);
+
+    this.facts.push({
+      id: `step-output:${stepName}`,
+      content: `Step '${stepName}' completed: ${content}`,
+      category: "step-output",
+      tags: [stepName, "step-output"],
+      confidence: 1.0,
+      createdAt: new Date(),
+    });
+  }
+
+  /**
+   * Get outputs from a previous step.
+   */
+  getStepOutput(stepName: string): unknown | undefined {
+    return this.stepOutputs.get(stepName);
+  }
+
+  /**
+   * Get all recorded step outputs.
+   */
+  getAllStepOutputs(): Record<string, unknown> {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of this.stepOutputs) {
+      result[key] = value;
+    }
+    return result;
+  }
+
+  /**
+   * Record a validation result on the blackboard.
+   */
+  recordValidation(stepName: string, result: ValidationResult, attempt: number = 1): void {
+    const content = result.passed
+      ? `Validation passed for '${stepName}': ${result.summary}`
+      : `Validation failed for '${stepName}': ${result.summary}`;
+
+    this.facts.push({
+      id: `validation:${stepName}:${attempt}:${Date.now()}`,
+      content,
+      category: result.passed ? "validation-pass" : "validation-fail",
+      tags: [stepName, "validation", result.passed ? "pass" : "fail"],
+      confidence: 1.0,
+      createdAt: new Date(),
+    });
+
+    if (!result.passed) {
+      this.failures.push({
+        stepName,
+        attempt,
+        validation: result,
+        timestamp: new Date(),
+      });
+    }
+  }
+
+  /**
+   * Record step timing.
+   */
+  recordStepStart(stepName: string): void {
+    this.stepTimings.set(stepName, { startedAt: Date.now() });
+  }
+
+  /**
+   * Record step completion timing.
+   */
+  recordStepEnd(stepName: string): void {
+    const timing = this.stepTimings.get(stepName);
+    if (timing) {
+      timing.durationMs = Date.now() - timing.startedAt;
+    }
+  }
+
+  /**
+   * Get failure history for reflector analysis.
+   */
+  getFailureHistory(): FailureEntry[] {
+    return [...this.failures];
+  }
+
+  /**
+   * Get all facts recorded on the blackboard.
+   */
+  getFacts(): BlackboardFact[] {
+    return [...this.facts];
+  }
+
+  /**
+   * Get facts by category.
+   */
+  getFactsByCategory(category: string): BlackboardFact[] {
+    return this.facts.filter((f) => f.category === category);
+  }
+
+  /**
+   * Get the full blackboard snapshot.
+   */
+  getSnapshot(): BlackboardSnapshot {
+    const timings: Record<string, { startedAt: number; durationMs?: number }> = {};
+    for (const [key, value] of this.stepTimings) {
+      timings[key] = { ...value };
+    }
+    return {
+      facts: [...this.facts],
+      stepOutputs: this.getAllStepOutputs(),
+      failures: [...this.failures],
+      stepTimings: timings,
+      createdAt: new Date(),
+    };
+  }
+
+  /**
+   * Get step timings.
+   */
+  getStepTimings(): Map<string, { startedAt: number; durationMs?: number }> {
+    return new Map(this.stepTimings);
+  }
+}

@@ -103,6 +103,15 @@ export type {
 export type { RouteResolution } from "./conditional-routing.js";
 export { resolveFailureRoute, validateRoutes, getAllRouteTargets } from "./conditional-routing.js";
 export { BUILTIN_TOOLS } from "./step-executor.js";
+export { BlackboardManager, ExecutionObserver, ExecutionReflector } from "./blackboard/index.js";
+export type {
+  BlackboardManagerOptions,
+  FailureEntry,
+  BlackboardFact,
+  BlackboardSnapshot,
+  StepMetrics,
+  ExecutionMetrics,
+} from "./blackboard/index.js";
 export type {
   StepHandler,
   ToolContext,

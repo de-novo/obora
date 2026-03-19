@@ -25,6 +25,8 @@ export interface RepairContext {
   repeatedSignatureCount?: number;
   maxNoProgressIterations?: number;
   repeatedCriticalIssueCeiling?: number;
+  /** Hint from the reflector about repeated failure patterns. */
+  reflectorHint?: string;
 }
 
 export interface ValidationStepConfig {

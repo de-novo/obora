@@ -24,3 +24,16 @@ export * from "./_legacy/workflow/index.js";
  */
 export * from "./_legacy/agents/roles/index.js";
 export * from "./judgment/index.js";
+
+/**
+ * Promoted blackboard API — canonical location for blackboard pattern.
+ * Previously at _legacy/blackboard.
+ *
+ * NOTE: The full blackboard module is available via direct import from
+ * packages/runtime/src/blackboard/index.ts. Only selected exports are
+ * re-exported here to avoid naming conflicts with the legacy
+ * Blackboard class from state/RuntimeBlackboardCompat.
+ */
+export { Blackboard as BoardBlackboard } from "./blackboard/core/blackboard.js";
+export { TKGObserver, TKGReflector } from "./blackboard/observer-reflector.js";
+export type { ObserverOptions, ReflectorOptions } from "./blackboard/observer-reflector.js";

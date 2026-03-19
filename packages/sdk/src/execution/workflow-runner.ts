@@ -36,6 +36,9 @@ import {
   getAllRouteTargets,
   type RouteResolution,
 } from "../conditional-routing.js";
+import { BlackboardManager } from "../blackboard/blackboard-manager.js";
+import { ExecutionObserver } from "../blackboard/execution-observer.js";
+import { ExecutionReflector } from "../blackboard/execution-reflector.js";
 
 // ── Internal shared-setup result ───────────────────────────────────────────
 
@@ -630,7 +633,9 @@ export class WorkflowRunner {
     persistenceEnabled: boolean,
     persistenceAdapter: StorageAdapter | null,
     signal?: AbortSignal,
-    isSettledFn?: () => boolean
+    isSettledFn?: () => boolean,
+    blackboard?: BlackboardManager,
+    reflector?: ExecutionReflector
   ): Promise<void> {
     const { eventBus, config } = this.deps;
 
@@ -744,6 +749,16 @@ export class WorkflowRunner {
 
       const repairContext = this.buildRepairContext(step, repairLoopStates);
       if (repairContext?.mode === "repair") {
+        // Inject reflector hint from blackboard failure history
+        if (reflector && blackboard) {
+          const hint = reflector.analyzeFailures(
+            blackboard.getFailureHistory(),
+            step.name
+          );
+          if (hint) {
+            repairContext.reflectorHint = hint;
+          }
+        }
         this.recordRepairStarted(executionId, step.name, repairContext.attempt);
         await eventBus.emit("workflow.repair_started", executionId, {
           stepName: step.name,
@@ -753,6 +768,9 @@ export class WorkflowRunner {
       }
 
       const stepStartedAt = Date.now();
+      if (blackboard) {
+        blackboard.recordStepStart(step.name);
+      }
       await eventBus.emit("step_start", executionId, {
         stepName: step.name,
         agent: step.agent,
@@ -811,6 +829,11 @@ export class WorkflowRunner {
 
       const validationResult = this.resolveValidationResult(step, result.output);
       if (validationResult) {
+        if (blackboard) {
+          const repairState = repairLoopStates.get(step.name);
+          blackboard.recordValidation(step.name, validationResult, repairState?.attempt ?? 1);
+        }
+
         if (validationResult.passed) {
           this.recordValidationPass(executionId, step.name, validationResult);
           await eventBus.emit("workflow.validation_passed", executionId, {
@@ -898,6 +921,12 @@ export class WorkflowRunner {
       execution.stepRecords[step.name] =
         Object.keys(hookOutputs).length > 0 ? { ...result, hooks: hookOutputs } : result;
       execution.completedSteps.push(step.name);
+
+      // Record step output on blackboard
+      if (blackboard) {
+        blackboard.recordStepOutput(step.name, result.output);
+        blackboard.recordStepEnd(step.name);
+      }
 
       if (repairContext?.mode === "repair") {
         this.recordRepairCompleted(executionId, step.name, repairContext.attempt);
@@ -1031,6 +1060,13 @@ export class WorkflowRunner {
     // Build execution engine
     const engine = await this.buildEngine(executionId, persistenceEnabled, persistenceConfig);
 
+    // Create blackboard, observer, and reflector for this execution
+    const blackboard = new BlackboardManager({ sessionId: executionId });
+    const observer = new ExecutionObserver(eventBus);
+    const reflector = new ExecutionReflector();
+
+    observer.observe(executionId);
+
     // Run step loop
     await this.executeStepLoop(
       sortedSteps,
@@ -1042,10 +1078,16 @@ export class WorkflowRunner {
       persistenceEnabled,
       persistenceAdapter,
       signal,
-      isSettledFn
+      isSettledFn,
+      blackboard,
+      reflector
     );
 
     if (isSettledFn()) return;
+
+    // Finalize observer metrics
+    observer.finalize(executionId);
+    observer.dispose();
 
     execution.status = "completed";
     execution.endedAt = new Date();
