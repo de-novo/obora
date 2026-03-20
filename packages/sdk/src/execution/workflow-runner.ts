@@ -43,6 +43,12 @@ import {
 import { BlackboardManager } from "../blackboard/blackboard-manager.js";
 import { ExecutionObserver } from "../blackboard/execution-observer.js";
 import { ExecutionReflector } from "../blackboard/execution-reflector.js";
+import { ReflectorEngine } from "../reflector/reflector-engine.js";
+
+/** Duck-type for reflector: both ExecutionReflector and ReflectorEngine implement this. */
+type ReflectorLike = {
+  analyzeFailures(failures: import("../blackboard/blackboard-manager.js").FailureEntry[], currentStepName?: string): string | undefined;
+};
 
 // ── Internal shared-setup result ───────────────────────────────────────────
 
@@ -445,7 +451,7 @@ export class WorkflowRunner {
 
   private extractFailurePatterns(
     blackboard: BlackboardManager,
-    reflector: ExecutionReflector,
+    reflector: ReflectorLike,
   ): string[] {
     const failures = blackboard.getFailureHistory();
     if (failures.length === 0) return [];
@@ -651,7 +657,7 @@ export class WorkflowRunner {
     signal?: AbortSignal,
     isSettledFn?: () => boolean,
     blackboard?: BlackboardManager,
-    reflector?: ExecutionReflector
+    reflector?: ReflectorLike
   ): Promise<void> {
     const { eventBus, config } = this.deps;
 
@@ -1223,7 +1229,7 @@ export class WorkflowRunner {
     signal?: AbortSignal,
     isSettledFn?: () => boolean,
     blackboard?: BlackboardManager,
-    reflector?: ExecutionReflector,
+    reflector?: ReflectorLike,
     maxConcurrency: number = DEFAULT_MAX_CONCURRENCY,
   ): Promise<void> {
     const { eventBus } = this.deps;
@@ -1406,7 +1412,8 @@ export class WorkflowRunner {
     // Create blackboard, observer, and reflector for this execution
     const blackboard = new BlackboardManager({ sessionId: executionId });
     const observer = new ExecutionObserver(eventBus);
-    const reflector = new ExecutionReflector();
+    // Use ReflectorEngine v2 (backward compatible with ExecutionReflector)
+    const reflector = new ReflectorEngine();
 
     if (engine.costTracker) {
       observer.attachCostTracker(engine.costTracker);

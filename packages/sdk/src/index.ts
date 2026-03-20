@@ -130,6 +130,37 @@ export type {
   ExecutionReport,
   ExecutionReportStepMetric,
 } from "./blackboard/index.js";
+
+// ── Reflector v2 ────────────────────────────────────────────────────────
+export { ReflectorEngine } from "./reflector/index.js";
+export {
+  KeywordAnalyzer,
+  SignatureAnalyzer,
+  CategoryAnalyzer,
+  TrendAnalyzer,
+  ActionRegistry,
+  RuleEngine,
+  KnowledgeStore,
+  createDefaultAnalyzers,
+  createDefaultActionRegistry,
+} from "./reflector/index.js";
+export type {
+  ReflectorAnalyzer,
+  AnalyzerContext,
+  AnalyzerResult,
+  AnalysisSummary,
+  SuggestedAction,
+  ReflectorAction,
+  ActionExecutionContext,
+  ActionResult,
+  ActionHandler,
+  RuleCondition,
+  ReflectorRule,
+  KnowledgeEntry,
+  ReflectorOutput,
+  ReflectorEngineOptions,
+} from "./reflector/index.js";
+
 export type {
   StepHandler,
   ToolContext,
