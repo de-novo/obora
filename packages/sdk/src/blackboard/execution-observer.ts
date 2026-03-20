@@ -2,6 +2,7 @@ import type { CostSummary } from "@obora/runtime";
 import type { EventBus } from "../events/event-bus.js";
 import type { AuditEventType, AuditEvent, Unsubscribe } from "../runtime-types.js";
 import type { CostTracker } from "../cost-tracker.js";
+import type { BlackboardManager } from "./blackboard-manager.js";
 
 export interface StepMetrics {
   stepName: string;
@@ -68,8 +69,10 @@ export class ExecutionObserver {
   private costTracker?: CostTracker;
   /** Snapshot of cumulative cost at step_start, keyed by `executionId:stepName`. */
   private readonly costSnapshots = new Map<string, number>();
-
-  constructor(private readonly eventBus: EventBus) {}
+  constructor(
+    private readonly eventBus: EventBus,
+    private readonly blackboard?: BlackboardManager,
+  ) {}
 
   /**
    * Attach a CostTracker to enable per-step and total cost recording.
@@ -121,9 +124,10 @@ export class ExecutionObserver {
     switch (event.type) {
       case "step_start": {
         const existing = exec.stepMetrics.get(stepName);
+        const startedAt = Date.now();
         exec.stepMetrics.set(stepName, {
           stepName,
-          startedAt: Date.now(),
+          startedAt,
           status: "running",
           retryCount: existing?.retryCount ?? 0,
           validationFailures: existing?.validationFailures ?? 0,
@@ -131,6 +135,18 @@ export class ExecutionObserver {
           costUsd: existing?.costUsd,
           attemptDurations: existing?.attemptDurations ?? [],
         });
+
+        // Write to blackboard
+        if (this.blackboard) {
+          this.blackboard.board.write(
+            `state.context.observer.steps.${stepName}.startedAt`,
+            startedAt,
+          );
+          this.blackboard.board.write(
+            `state.context.observer.steps.${stepName}.status`,
+            "running",
+          );
+        }
 
         // Snapshot cumulative cost before this step runs
         if (this.costTracker) {
@@ -150,6 +166,22 @@ export class ExecutionObserver {
 
           const status = (data?.status as string) ?? "completed";
           step.status = status === "failed" ? "failed" : "completed";
+
+          // Write to blackboard
+          if (this.blackboard) {
+            this.blackboard.board.write(
+              `state.context.observer.steps.${stepName}.completedAt`,
+              step.completedAt,
+            );
+            this.blackboard.board.write(
+              `state.context.observer.steps.${stepName}.durationMs`,
+              step.durationMs,
+            );
+            this.blackboard.board.write(
+              `state.context.observer.steps.${stepName}.status`,
+              step.status,
+            );
+          }
 
           // Compute per-step cost delta
           if (this.costTracker) {
@@ -171,6 +203,25 @@ export class ExecutionObserver {
         if (step) {
           step.validationFailures += 1;
         }
+
+        // Write validation state + knowledge fact to blackboard
+        if (this.blackboard) {
+          this.blackboard.board.write(
+            `state.context.observer.validations.${stepName}`,
+            {
+              failures: exec.totalValidationFailures,
+              lastFailure: data?.summary ?? "validation failed",
+              timestamp: Date.now(),
+            },
+          );
+          this.blackboard.board.knowledge.addFact({
+            content: `Validation failure in step "${stepName}": ${data?.summary ?? "validation failed"}`,
+            source: "execution-observer",
+            confidence: 1.0,
+            category: "observer_validation_failure",
+            tags: ["observer", "validation-failure", stepName],
+          });
+        }
         break;
       }
       case "workflow.validation_passed": {
@@ -179,10 +230,33 @@ export class ExecutionObserver {
         if (step) {
           step.validationPasses += 1;
         }
+
+        // Write validation state to blackboard
+        if (this.blackboard) {
+          this.blackboard.board.write(
+            `state.context.observer.validations.${stepName}`,
+            {
+              passes: exec.totalValidationPasses,
+              lastPass: data?.summary ?? "validation passed",
+              timestamp: Date.now(),
+            },
+          );
+        }
         break;
       }
       case "workflow.back_edge_triggered": {
         exec.totalBackEdges += 1;
+
+        // Write knowledge fact to blackboard
+        if (this.blackboard) {
+          this.blackboard.board.knowledge.addFact({
+            content: `Back-edge triggered: "${data?.sourceStep ?? ""}" → "${data?.targetStep ?? ""}"`,
+            source: "execution-observer",
+            confidence: 1.0,
+            category: "observer_back_edge",
+            tags: ["observer", "back-edge", String(data?.sourceStep ?? ""), String(data?.targetStep ?? "")],
+          });
+        }
         break;
       }
       case "workflow.repair_started": {
@@ -221,6 +295,15 @@ export class ExecutionObserver {
     // Store outcome for report generation
     (exec as ExecutionMetrics & { _outcome?: string })._outcome =
       outcome ?? "success";
+
+    // Write execution report to blackboard
+    if (this.blackboard) {
+      const report = this.generateReport(executionId);
+      if (report) {
+        this.blackboard.board.write("state.context.observer.report", report);
+      }
+    }
+
     return exec;
   }
 

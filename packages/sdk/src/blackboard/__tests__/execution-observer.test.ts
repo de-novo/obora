@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { ExecutionObserver } from "../execution-observer.js";
 import type { ExecutionReport } from "../execution-observer.js";
 import { EventBus } from "../../events/event-bus.js";
+import { BlackboardManager } from "../blackboard-manager.js";
 
 describe("ExecutionObserver", () => {
   const execId = "exec-001";
@@ -354,6 +355,176 @@ describe("ExecutionObserver", () => {
       expect(parsed.workflowName).toBe("ci");
       expect(parsed.stepMetrics).toHaveLength(1);
       expect(parsed.stepMetrics[0]!.stepName).toBe("build");
+      observer.dispose();
+    });
+  });
+
+  // ── Blackboard integration ──────────────────────────────────────────
+
+  describe("Blackboard integration", () => {
+    const bbExecId = "exec-bb-001";
+
+    function createObserverWithBoard() {
+      const eventBus = new EventBus();
+      const blackboard = new BlackboardManager({ sessionId: bbExecId });
+      const observer = new ExecutionObserver(eventBus, blackboard);
+      return { eventBus, observer, blackboard };
+    }
+
+    it("should write step_start metrics to blackboard", async () => {
+      const { eventBus, observer, blackboard } = createObserverWithBoard();
+      observer.observe(bbExecId);
+
+      await eventBus.emit("step_start", bbExecId, { stepName: "build" });
+
+      const startedAt = blackboard.board.read("state.context.observer.steps.build.startedAt", { strict: false });
+      expect(startedAt).toBeGreaterThan(0);
+
+      const status = blackboard.board.read("state.context.observer.steps.build.status", { strict: false });
+      expect(status).toBe("running");
+
+      observer.dispose();
+    });
+
+    it("should write step_end metrics to blackboard", async () => {
+      const { eventBus, observer, blackboard } = createObserverWithBoard();
+      observer.observe(bbExecId);
+
+      await eventBus.emit("step_start", bbExecId, { stepName: "build" });
+      await eventBus.emit("step_end", bbExecId, { stepName: "build", status: "completed" });
+
+      const completedAt = blackboard.board.read("state.context.observer.steps.build.completedAt", { strict: false });
+      expect(completedAt).toBeGreaterThan(0);
+
+      const durationMs = blackboard.board.read("state.context.observer.steps.build.durationMs", { strict: false });
+      expect(durationMs).toBeGreaterThanOrEqual(0);
+
+      const status = blackboard.board.read("state.context.observer.steps.build.status", { strict: false });
+      expect(status).toBe("completed");
+
+      observer.dispose();
+    });
+
+    it("should write validation failure to blackboard and create knowledge fact", async () => {
+      const { eventBus, observer, blackboard } = createObserverWithBoard();
+      observer.observe(bbExecId);
+
+      await eventBus.emit("step_start", bbExecId, { stepName: "validate" });
+      await eventBus.emit("workflow.validation_failed", bbExecId, {
+        stepName: "validate",
+        summary: "Type check failed",
+      });
+
+      const validation = blackboard.board.read("state.context.observer.validations.validate", { strict: false });
+      expect(validation).toBeDefined();
+      expect((validation as Record<string, unknown>).failures).toBe(1);
+
+      const facts = blackboard.board.knowledge.findFacts({ category: "observer_validation_failure" });
+      expect(facts).toHaveLength(1);
+      expect(facts[0].content).toContain("validate");
+      expect(facts[0].content).toContain("Type check failed");
+      expect(facts[0].tags).toContain("observer");
+      expect(facts[0].tags).toContain("validation-failure");
+
+      observer.dispose();
+    });
+
+    it("should write validation pass to blackboard", async () => {
+      const { eventBus, observer, blackboard } = createObserverWithBoard();
+      observer.observe(bbExecId);
+
+      await eventBus.emit("step_start", bbExecId, { stepName: "validate" });
+      await eventBus.emit("workflow.validation_passed", bbExecId, {
+        stepName: "validate",
+        summary: "All checks passed",
+      });
+
+      const validation = blackboard.board.read("state.context.observer.validations.validate", { strict: false });
+      expect(validation).toBeDefined();
+      expect((validation as Record<string, unknown>).passes).toBe(1);
+
+      observer.dispose();
+    });
+
+    it("should write back-edge knowledge fact to blackboard", async () => {
+      const { eventBus, observer, blackboard } = createObserverWithBoard();
+      observer.observe(bbExecId);
+
+      await eventBus.emit("workflow.back_edge_triggered", bbExecId, {
+        sourceStep: "validate",
+        targetStep: "build",
+      });
+
+      const facts = blackboard.board.knowledge.findFacts({ category: "observer_back_edge" });
+      expect(facts).toHaveLength(1);
+      expect(facts[0].content).toContain("validate");
+      expect(facts[0].content).toContain("build");
+      expect(facts[0].tags).toContain("back-edge");
+
+      observer.dispose();
+    });
+
+    it("should write execution report to blackboard on finalize", async () => {
+      const { eventBus, observer, blackboard } = createObserverWithBoard();
+      observer.observe(bbExecId);
+
+      await eventBus.emit("step_start", bbExecId, { stepName: "build" });
+      await eventBus.emit("step_end", bbExecId, { stepName: "build", status: "completed" });
+
+      observer.finalize(bbExecId, "success");
+
+      const report = blackboard.board.read("state.context.observer.report", { strict: false });
+      expect(report).toBeDefined();
+      const r = report as Record<string, unknown>;
+      expect(r.outcome).toBe("success");
+      expect(r.totalSteps).toBe(1);
+
+      observer.dispose();
+    });
+
+    it("should work without blackboard (backward compatible)", async () => {
+      const eventBus = new EventBus();
+      const observer = new ExecutionObserver(eventBus);
+      observer.observe(bbExecId);
+
+      await eventBus.emit("step_start", bbExecId, { stepName: "build" });
+      await eventBus.emit("step_end", bbExecId, { stepName: "build", status: "completed" });
+
+      observer.finalize(bbExecId, "success");
+
+      const metrics = observer.getMetrics(bbExecId);
+      expect(metrics).toBeDefined();
+      expect(metrics!.stepMetrics.get("build")!.status).toBe("completed");
+
+      observer.dispose();
+    });
+
+    it("should accumulate knowledge facts across multiple events", async () => {
+      const { eventBus, observer, blackboard } = createObserverWithBoard();
+      observer.observe(bbExecId);
+
+      await eventBus.emit("step_start", bbExecId, { stepName: "build" });
+      await eventBus.emit("workflow.validation_failed", bbExecId, {
+        stepName: "build",
+        summary: "Failure 1",
+      });
+      await eventBus.emit("workflow.validation_failed", bbExecId, {
+        stepName: "build",
+        summary: "Failure 2",
+      });
+      await eventBus.emit("workflow.back_edge_triggered", bbExecId, {
+        sourceStep: "build",
+        targetStep: "init",
+      });
+
+      const failureFacts = blackboard.board.knowledge.findFacts({ category: "observer_validation_failure" });
+      expect(failureFacts).toHaveLength(2);
+      expect(failureFacts[0].content).toContain("Failure 1");
+      expect(failureFacts[1].content).toContain("Failure 2");
+
+      const backEdgeFacts = blackboard.board.knowledge.findFacts({ category: "observer_back_edge" });
+      expect(backEdgeFacts).toHaveLength(1);
+
       observer.dispose();
     });
   });

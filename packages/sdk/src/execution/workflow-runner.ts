@@ -1411,7 +1411,7 @@ export class WorkflowRunner {
 
     // Create blackboard, observer, and reflector for this execution
     const blackboard = new BlackboardManager({ sessionId: executionId });
-    const observer = new ExecutionObserver(eventBus);
+    const observer = new ExecutionObserver(eventBus, blackboard);
     // Use ReflectorEngine v2 (backward compatible with ExecutionReflector)
     const reflector = new ReflectorEngine();
 
