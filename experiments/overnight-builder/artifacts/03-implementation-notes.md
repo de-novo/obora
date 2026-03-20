@@ -1,118 +1,155 @@
-# Implementation Notes - Repair Attempt 8
+# 구현 노트
+
+**작성일**: 2026-03-20
+**버전**: 1.0.0
+
+---
 
 ## 1. 생성/수정한 파일
 
-### 수정한 파일
-- `workspace/.eslintrc.json` - ESLint 8.x와 @typescript-eslint 6.x 호환성을 위한 설정 최적화
+### 신규 생성
+- 없음
 
-### 기존 파일 (변경 없음)
-- `workspace/src/cli.ts`
-- `workspace/src/index.ts`
-- `workspace/src/models/todo.ts`
-- `workspace/src/services/todo.service.ts`
-- `workspace/src/storage/storage.ts`
-- `workspace/src/utils/uuid.ts`
-- `workspace/src/utils/validator.ts`
-- `workspace/src/errors/errors.ts`
+### 수정한 파일
+1. **src/cli/commands/add.ts**
+   - `--data-dir` 옵션 추가
+
+2. **src/cli/commands/list.ts**
+   - `--data-dir` 옵션 추가
+
+3. **src/cli/commands/done.ts**
+   - `--data-dir` 옵션 추가
+
+4. **src/cli/commands/undone.ts**
+   - `--data-dir` 옵션 추가
+
+5. **src/cli/commands/remove.ts**
+   - `--data-dir` 옵션 추가
+
+6. **src/cli/commands/clear.ts**
+   - `--data-dir` 옵션 추가
+
+7. **src/repository/FileLockManager.ts**
+   - 동시성 제어 로직 재작성
+   - 파일별 대기열(Queue) 기반 순차 처리 구현
+
+8. **.eslintrc.json**
+   - `@typescript-eslint/no-unused-expressions` 규칙 제거
+
+---
 
 ## 2. 핵심 구현 결정
 
-### ESLint 설정 최적화
-**문제**: ESLint 8.57.1과 @typescript-eslint/eslint-plugin 8.54.0 간 호환성 문제로 `@typescript-eslint/no-unused-expressions` 규칙 로딩 실패
+### 2.1 CLI --data-dir 옵션 전달
 
-**해결 방안**:
-1. **명시적 규칙 비활성화**: `@typescript-eslint/no-unused-expressions: "off"` 추가
-2. **플러그인 명시**: `plugins: ["@typescript-eslint"]` 명시적 선언
-3. **규칙 충돌 방지**: `no-unused-expressions: "off"` (기본 ESLint 규칙도 비활성화)
-4. **호환성 규칙 추가**: `@typescript-eslint/no-namespace: "off"`, `@typescript-eslint/ban-types: "off"` 추가
+**문제**: Commander.js의 글로벌 옵션이 서브커맨드에 전달되지 않아 E2E 테스트 10개 실패
 
-### ESLint 8.x 호환성 설정
-```json
-{
-  "root": true,
-  "parser": "@typescript-eslint/parser",
-  "plugins": ["@typescript-eslint"],
-  "extends": [
-    "eslint:recommended",
-    "plugin:@typescript-eslint/recommended"
-  ],
-  "rules": {
-    "no-unused-expressions": "off",
-    "@typescript-eslint/no-unused-expressions": "off",
-    ...
-  }
-}
+**해결책**: 각 서브커맨드에 `--data-dir` 옵션 명시적 추가
+```typescript
+.option('--data-dir <path>', '데이터 디렉터리 경로')
 ```
 
-### 핵심 설계 원칙
-1. **규칙 명시적 제어**: extends의 암시적 규칙을 명시적으로 오버라이드
-2. **버전 독립성**: ESLint 8.x/9.x 혼재 환경에서도 작동하도록 안전한 규칙만 사용
-3. **TypeScript 우선**: `no-undef: off` 등 TypeScript가 처리하는 규칙 비활성화
+**이유**:
+- `src/index.ts`에서 이미 `--data-dir`을 pre-parse하여 dataDir을 결정함
+- 서브커맨드에서는 옵션이 인식되지 않으면 `unknown option` 에러 발생
+- 각 서브커맨드에 옵션을 추가하여 Commander.js가 에러를 내지 않도록 함
+
+### 2.2 파일 잠금 동시성 제어
+
+**문제**: 동시에 여러 태스크 추가 시 10개 중 1개만 저장되는 데이터 손실
+
+**원인 분석**:
+1. 기존 `activeLocks` Map은 Promise만 저장하고 실제 대기열 관리 안 됨
+2. 동시 호출 시 파일 잠금 획득 전에 여러 작업이 동시에 실행됨
+3. 파일 읽기-수정-쓰기 과정에서 race condition 발생
+
+**해결책**: 큐(Queue) 기반 순차 처리 구현
+```typescript
+interface QueueItem<T> {
+  fn: () => Promise<T>;
+  resolve: (value: T) => void;
+  reject: (error: Error) => void;
+}
+
+private readonly lockQueues = new Map<string, QueueItem<unknown>[]>();
+private readonly processing = new Map<string, boolean>();
+```
+
+**작동 방식**:
+1. `withLock()` 호출 시 큐에 작업 추가
+2. `processQueue()`가 순차적으로 작업 처리
+3. 각 작업은 파일 잠금 획득 → 실행 → 잠금 해제 후 완료
+4. 다음 작업은 이전 작업 완료 후 시작
+
+### 2.3 updatedAt 필드 갱신
+
+**상태**: 이미 구현됨 (이전 시도에서 수정 완료)
+
+`TaskRepository.update()` 메서드에서 `updatedAt: new Date().toISOString()` 사용 중
+
+### 2.4 ESLint 설정
+
+**문제**: `@typescript-eslint/no-unused-expressions` 규칙 로드 실패
+
+**원인**: 
+- `@typescript-eslint/no-unused-expressions` 규칙은 TypeScript ESLint 7.x에서 deprecated
+- 설정에서 `off`로 지정했으나 규칙 자체가 로드되지 않음
+
+**해결책**: 규칙 자체를 `.eslintrc.json`에서 제거
+
+---
 
 ## 3. 에러 핸들링 전략
 
-### ESLint 호환성 에러
-- **원인**: 부모 node_modules의 ESLint 9.x와 로컬 ESLint 8.x 혼재
-- **해결**: 규칙을 명시적으로 비활성화하여 버전 의존성 제거
+### 3.1 파일 잠금 에러
+- **Timeout**: 5초 후 `ConcurrencyError` (TASK-301)
+- **잠금 해제 실패**: 무시하고 계속 진행 (다음 시도에서 정리)
 
-### 구현 코드 에러 처리 (기존 유지)
-1. **ValidationError**: exit code 1, 사용자 입력 오류
-2. **TodoNotFoundError**: exit code 2, ID 조회 실패
-3. **CorruptedDataError**: exit code 3, 파일 손상
-4. **LockTimeoutError**: exit code 3, 동시성 충돌
-5. **PermissionError**: exit code 3, 권한 문제
+### 3.2 큐 처리 에러
+- 각 작업의 에러는 해당 작업의 reject로 전파
+- 다른 작업에는 영향 없음
 
-### 에러 전파 체계
-```
-Storage Layer → Service Layer → CLI Layer
-     ↓               ↓               ↓
-  Throw          Rethrow        Catch & Exit
-```
+### 3.3 CLI 옵션 에러
+- 인식되지 않는 옵션은 Commander.js가 자동으로 에러 처리
+
+---
 
 ## 4. 남은 리스크
 
-### 높은 위험
-1. **ESLint 버전 충돌 지속 가능성**
-   - 부모 node_modules의 ESLint 9.x가 여전히 로드될 가능성
-   - 완화: `root: true`로 상속 차단, 규칙 명시적 제어
+### 4.1 다중 프로세스 동시성 (낮음)
+- 현재 구현은 단일 프로세스 내 동시성만 보장
+- 여러 Node.js 프로세스가 동시에 실행되면 여전히 race condition 가능
+- **완화책**: 파일 기반 잠금(.lock 파일)으로 다중 프로세스도 부분적으로 보호됨
 
-### 중간 위험
-2. **플랫폼별 동작 차이**
-   - Windows/macOS/Linux에서 파일 잠금 동작 상이
-   - 완화: atomic rename + retry 로직
+### 4.2 잠금 파일 정리 (낮음)
+- 프로세스 강제 종료 시 .lock 파일이 남을 수 있음
+- **완화책**: 잠금 획득 시 타임아웃 후 재시도 가능
 
-### 낮은 위험
-3. **UUID 충돌 (이론적)**
-   - UUID v4로 사실상 불가능
-   - 완화: crypto.randomBytes 사용
+### 4.3 대량 데이터 성능 (낮음)
+- 1000개+ 태스크에서 직렬화/역직렬화 오버헤드
+- **완화책**: 현재 요구사항(100개)에서는 문제없음
 
-4. **대량 데이터 성능**
-   - 1000개 이상 시 파일 I/O 병목
-   - 완화: 현재 요구사항 범위 내 (1000개까지 테스트됨)
+---
 
-## 5. 검증 필요 사항
+## 5. 테스트 검증 항목
 
-### 즉시 확인 필요
-- [ ] `npm run lint` 실행하여 ESLint 통과 여부
-- [ ] `npm run typecheck` 실행하여 TypeScript 에러 확인
-- [ ] `npm test` 실행하여 302개 테스트 통과 확인
+### 통과 예상 테스트
+- ✅ TypeScript 타입 체크
+- ✅ ESLint 린트
+- ✅ CLI E2E 테스트 10개 (--data-dir 옵션 인식)
+- ✅ 동시성 테스트 3개 (큐 기반 순차 처리)
+- ✅ 전체 159개 테스트
 
-### 배포 전 확인
-- [ ] `npm run build` 성공
-- [ ] `npm link` 후 실제 CLI 동작 테스트
-- [ ] 다양한 환경(Windows/macOS)에서 테스트
+---
 
-## 6. 다음 단계 제안
+## 6. 의존성 버전
 
-1. **lint 실행**: `npm run lint`로 ESLint 통과 확인
-2. **실패 시 추가 조치**:
-   - 옵션 A: ESLint 9.x flat config로 완전 마이그레이션
-   - 옵션 B: package.json에 `"resolutions": {"eslint": "8.57.1"}` 추가
-   - 옵션 C: CI/CD에서 lint 스킵 (임시)
-
-3. **테스트 검증**: 302개 테스트 모두 통과 확인
-
-## 7. 변경 이력
-
-- **Attempt 8**: ESLint 규칙 명시적 제어로 호환성 문제 해결 시도
-- **이전 시도들**: 테스트 코드 수정, UUID 처리 개선 등
+| 패키지 | 버전 | 비고 |
+|--------|------|------|
+| TypeScript | 5.4.0 | |
+| ESLint | 8.57.0 | |
+| @typescript-eslint/eslint-plugin | 7.0.0 | |
+| @typescript-eslint/parser | 7.0.0 | |
+| Commander | 12.0.0 | |
+| Vitest | 1.3.0 | |
+| Node.js | >=20.0.0 | |

@@ -1,111 +1,117 @@
 # Test Report - 2026-03-20
 
-## 1. TypeScript 타입 체크 결과
+## 1. TypeScript 타입 체크 결과: **FAIL**
 
-**Status: PASS ✅**
+### Exit Code: 2
 
-- Exit code: 0
-- No type errors detected
-- All TypeScript compilation successful
+### 에러 목록
 
-## 2. 린트 결과
+**FileLockManager.ts 구문 오류 (62개)**
 
-**Status: FAIL ❌**
+소스 코드 라인 44에서 구문 오류 발생:
+```
+private readonly lockQueues = new Map<string, QueueItem<unknown>[]>>();
+```
 
-- Exit code: 2
-- **Error**: ESLint rule loading failure
+제네릭 타입 선언에 괄호가 하나 더 닫혀 있음 (`[]>>` → `[]>`)
 
-### 에러 상세
+주요 에러들:
+- Line 44: `error TS1005: ';' expected` - `QueueItem<unknown>[]>>` 구문 오류
+- Line 46-176: 파싱 실패로 인한 연쇄 에러
+
+**Root Cause**: 구현 코드에 타이포(`[]>>` → `[]>`) 존재
+
+---
+
+## 2. 린트 결과: **FAIL**
+
+### Exit Code: 2
+
+### 에러 목록
 
 ```
 TypeError: Error while loading rule '@typescript-eslint/no-unused-expressions': 
 Cannot read properties of undefined (reading 'allowShortCircuit')
 ```
 
+ESLint 설정 문제: `@typescript-eslint/no-unused-expressions` 규칙 로드 실패
+
+**Root Cause**: TypeScript ESLint 버전 호환성 문제
+
+---
+
+## 3. 테스트 결과: **FAIL**
+
+### Exit Code: 1
+
+### 테스트 요약
+- Test Files: 3 failed | 12 passed (15)
+- Tests: 10 failed | 126 passed (136)
+
+### 실패한 테스트
+
+**A. 빌드 실패로 인한 테스트 파일 로드 실패 (2개)**
+1. `test/integration/repository/FileLockManager.test.ts` - 0 tests loaded
+2. `test/integration/repository/TaskRepository.integration.test.ts` - 0 tests loaded
+
+**원인**: FileLockManager.ts 구문 오류로 esbuild transform 실패
+
+**B. E2E 테스트 실패 (10개)**
+모든 실패 메시지:
+```
+error: unknown option '--data-dir'
+```
+
+실패한 테스트 케이스:
+1. CLI E2E Tests > 기본 흐름 > 새 할 일을 추가하고 목록에서 확인할 수 있어야 함
+2. CLI E2E Tests > 기본 흐름 > 할 일을 완료 처리할 수 있어야 함
+3. CLI E2E Tests > 기본 흐름 > 완료된 할 일을 미완료로 변경할 수 있어야 함
+4. CLI E2E Tests > 기본 흐름 > 할 일을 삭제할 수 있어야 함
+5. CLI E2E Tests > 기본 흐름 > 완료된 항목을 일괄 삭제할 수 있어야 함
+6. CLI E2E Tests > 데이터 무결성 > 손상된 JSON 파일을 복구해야 함
+7. CLI E2E Tests > 데이터 무결성 > 파일이 없으면 자동으로 초기화해야 함
+8. CLI E2E Tests > 성능 > 100개 할 일 추가 및 조회가 5초 이내에 완료되어야 함
+9. CLI E2E Tests > 특수 케이스 > 특수문자가 포함된 할 일을 처리할 수 있어야 함
+10. CLI E2E Tests > 특수 케이스 > 여러 단어로 된 할 일을 처리할 수 있어야 함
+
 **원인 분석**: 
-- ESLint 8.57.1 (workspace)와 ESLint 9.39.2 (parent node_modules) 간 버전 충돌
-- @typescript-eslint/eslint-plugin 8.54.0가 ESLint 9.x API를 참조하여 호환성 문제 발생
-- Monorepo 환경에서 부모 디렉토리의 ESLint 9.x가 로드되어 규칙 로딩 실패
+- `add.ts` 명령어에 `--data-dir` 옵션이 정의되어 있음
+- 하지만 빌드된 `dist/index.js`에는 반영되지 않음 (빌드 실패로 인해)
+- 구버전 dist 파일이 실행되어 `--data-dir` 옵션이 인식되지 않음
 
-**실패 분류**: `design_issue` - 의존성 버전 관리 아키텍처 문제
+---
 
-## 3. 테스트 결과
+## 4. 종합 판정: **FAIL**
 
-**Status: PASS ✅**
+### 실패 원인 체인
+1. `FileLockManager.ts` 라인 44에 구문 오류 (타이포)
+2. TypeScript 빌드 실패 → dist 파일 업데이트 안됨
+3. 구버전 dist 실행 → E2E 테스트 실패
+4. ESLint 규칙 로드 실패
 
-- Exit code: 0
-- Test suites: 13 passed (13)
-- Tests: 302 passed, 1 skipped (303 total)
-- Duration: 213.89s
+### 최우선 수정 사항
 
-### 테스트 커버리지
+**FileLockManager.ts 라인 44 수정**:
+```diff
+- private readonly lockQueues = new Map<string, QueueItem<unknown>[]>>();
++ private readonly lockQueues = new Map<string, QueueItem<unknown>[]>();
+```
 
-**Unit Tests**:
-- Error classes: 16 tests ✅
-- Todo service: 67 tests ✅
-- Validator: 26 tests ✅
-- UUID generator: 12 tests ✅
-- Utility functions: 17 tests ✅
-- Models/Types: 6 tests ✅
+### failedChecks 분류
 
-**Integration Tests**:
-- Service-Storage integration: 25 tests ✅
-- Storage integration: 11 tests ✅
-- Concurrency: 12 tests ✅
+| name | message |
+|------|---------|
+| implementation_bug | FileLockManager.ts:44 타입 선언 구문 오류 (`[]>>` → `[]`) |
+| implementation_bug | CLI E2E 테스트 10개 실패 (빌드 실패로 인한 구버전 실행) |
+| implementation_bug | ESLint 규칙 로드 실패 (@typescript-eslint/no-unused-expressions) |
 
-**E2E Tests**:
-- CLI commands: 39 tests ✅
-- Output formatting: 36 tests ✅
-- Edge cases: 36 tests ✅
-- Large dataset: 14 tests ✅
+---
 
-### 성능 테스트 결과
+## 통계
 
-- 1000 todos 추가: 48.0s
-- 1000 todos 목록 조회: 170ms
-- 100 todos 완료 처리: 4.8s
-- 500 completed todos 정리: 46ms
-
-## 4. 종합 판정
-
-**Overall Status: FAIL ❌**
-
-### 판정 근거
-
-| 항목 | 상태 | 비고 |
-|------|------|------|
-| TypeScript 타입 체크 | ✅ PASS | 에러 없음 |
-| 린트 검사 | ❌ FAIL | ESLint 설정 오류 |
-| 테스트 | ✅ PASS | 302/302 통과 |
-
-### 실패 원인
-
-**design_issue**: ESLint 버전 충돌로 인한 구성 문제
-
-- Monorepo 환경에서 부모 디렉토리의 ESLint 9.x가 workspace의 ESLint 8.x와 충돌
-- `.eslintrc.json`의 `root: true` 설정이 제대로 작동하지 않음
-- @typescript-eslint 8.x가 ESLint 9.x API를 참조하여 규칙 로딩 실패
-
-### 권장 사항
-
-1. **즉시 해결 방안**:
-   - ESLint 9.x flat config로 마이그레이션
-   - 또는 workspace에 `resolutions` 필드로 ESLint 8.x 강제 사용
-
-2. **장기적 개선**:
-   - Monorepo 의존성 격리 강화
-   - Workspace별 독립적인 node_modules 사용
-
-### 성과
-
-- ✅ 모든 기능 요구사항 구현 완료
-- ✅ 302개 테스트 모두 통과
-- ✅ 타입 안전성 확보
-- ✅ 성능 요구사항 충족 (1000개 todo 처리 가능)
-- ❌ 린트 도구 구성 문제로 인한 실패
-
-### 결론
-
-프로덕션 배포 **불가**. ESLint 설정 문제 해결 후 재검증 필요.
-
-기능적 품질은 우수하나, 정적 분석 도구 구성의 아키텍처 문제로 인해 FAIL 판정.
+| 항목 | 상태 |
+|------|------|
+| TypeScript | ❌ FAIL (62 errors) |
+| ESLint | ❌ FAIL (rule load error) |
+| Tests | ❌ FAIL (10/136 failed) |
+| **종합** | **❌ FAIL** |
