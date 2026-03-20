@@ -7,6 +7,18 @@ import {
   normalizeValidationResult,
   type RepairContext,
 } from "./validation-repair.js";
+import {
+  executeReviewersInParallel,
+  parseVote as parsePeerReviewVote,
+  parseReviewerScore,
+  parseReviewerIssues,
+  buildPeerReviewSummary,
+  evaluatePeerReview,
+  extractPeerReviewConfig,
+  type PeerReviewStepResult,
+  type Vote,
+  type ReviewerScore,
+} from "./execution/peer-review-executor.js";
 import { existsSync, realpathSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve, sep } from "node:path";
@@ -140,7 +152,13 @@ export interface StepExecutorConfig {
     | { adapter: LLMAdapterLike; model?: string; temperature?: number; maxTokens?: number }
     | undefined;
   onEvent?: (
-    event: "llm_request" | "llm_response" | "consensus_vote" | "consensus_result",
+    event:
+      | "llm_request"
+      | "llm_response"
+      | "consensus_vote"
+      | "consensus_result"
+      | "peer_review_vote"
+      | "peer_review_result",
     data: unknown
   ) => Promise<void> | void;
   /**
@@ -276,7 +294,11 @@ export class StepExecutor {
   }
 
   async executeStep(step: WorkflowStep, context: StepContext): Promise<StepResult> {
-    if (step.pattern === "consensus" || step.pattern === "peer-review") {
+    if (step.pattern === "peer-review") {
+      return this.executePeerReviewStep(step, context);
+    }
+
+    if (step.pattern === "consensus") {
       return this.executeConsensusStep(step, context);
     }
 
@@ -365,6 +387,130 @@ export class StepExecutor {
       runConsensus,
       consensusTimeoutMs,
       `Consensus timed out for step '${step.name}' after ${consensusTimeoutMs}ms`
+    );
+  }
+
+  private async executePeerReviewStep(
+    step: WorkflowStep,
+    context: StepContext
+  ): Promise<PeerReviewStepResult> {
+    const participants = Array.isArray(step.participants) ? step.participants : [];
+    if (participants.length === 0) {
+      throw new Error(`Peer-review step '${step.name}' requires participants`);
+    }
+
+    const prConfig = extractPeerReviewConfig(
+      (step.config ?? {}) as Record<string, unknown>
+    );
+    const isParallel = prConfig.parallel !== false; // default true
+
+    const runPeerReview = async (
+      _timeoutSignal: AbortSignal
+    ): Promise<PeerReviewStepResult> => {
+      const consensusSignal = this.combineAbortSignals(context.signal, _timeoutSignal);
+      const signalCtx: StepContext = {
+        ...context,
+        ...(consensusSignal?.signal
+          ? { signal: consensusSignal.signal }
+          : { signal: _timeoutSignal }),
+      };
+
+      const votes: Vote[] = [];
+      const scores: ReviewerScore[] = [];
+
+      const processResponse = async (participant: string): Promise<void> => {
+        const response = await this.requestForStep(step, signalCtx, participant);
+        const responseText = response.message.content ?? "";
+        const vote = parsePeerReviewVote(responseText);
+        const score = parseReviewerScore(responseText, vote);
+        const issues = parseReviewerIssues(responseText);
+
+        votes.push({ participant, vote, response: responseText });
+        scores.push({ reviewer: participant, score, issues });
+
+        await this.config.onEvent?.("peer_review_vote", {
+          stepName: step.name,
+          participant,
+          vote,
+          score,
+          issueCount: issues.length,
+          p0Count: issues.filter((i) => i.severity === "P0").length,
+        });
+      };
+
+      try {
+        if (isParallel) {
+          const outcomes = await executeReviewersInParallel(
+            participants,
+            processResponse,
+            prConfig.maxConcurrency
+          );
+
+          // Report failures but don't block — partial results still count
+          for (const outcome of outcomes) {
+            if (outcome.status === "rejected") {
+              await this.config.onEvent?.("peer_review_vote", {
+                stepName: step.name,
+                participant: outcome.participant,
+                error: outcome.error instanceof Error
+                  ? outcome.error.message
+                  : String(outcome.error),
+                failed: true,
+              });
+            }
+          }
+        } else {
+          // Sequential fallback
+          for (const participant of participants) {
+            await processResponse(participant);
+          }
+        }
+      } finally {
+        consensusSignal?.cleanup();
+      }
+
+      const summary = buildPeerReviewSummary(votes, scores);
+      const evaluation = evaluatePeerReview(summary, prConfig);
+
+      await this.config.onEvent?.("peer_review_result", {
+        stepName: step.name,
+        passed: evaluation.passed,
+        reasons: evaluation.reasons,
+        summary,
+      });
+
+      if (!evaluation.passed) {
+        throw new Error(
+          `Peer review failed for step '${step.name}': ${evaluation.reasons.join("; ")}`
+        );
+      }
+
+      const mergedOutput = votes
+        .map((v) => `[${v.participant}] ${v.vote} (score: ${
+          scores.find((s) => s.reviewer === v.participant)?.score ?? "?"
+        }): ${v.response}`)
+        .join("\n\n");
+
+      return {
+        output: mergedOutput,
+        votes,
+        scores,
+        passed: true,
+        summary,
+      };
+    };
+
+    const perRequestTimeoutMs = this.getStepTimeoutMs(step);
+    const consensusTimeoutMs = this.getConsensusTimeoutMs(
+      step,
+      participants.length,
+      perRequestTimeoutMs
+    );
+
+    return this.withTimeout(
+      runPeerReview,
+      consensusTimeoutMs,
+      `Peer review timed out for step '${step.name}' after ${consensusTimeoutMs}ms`
     );
   }
 

@@ -92,6 +92,13 @@ export type {
   ParallelStepResult,
   ParallelStepFailure,
 } from "./execution/parallel-scheduler.js";
+export type {
+  PeerReviewStepResult,
+  PeerReviewStepConfig,
+  PeerReviewSummary,
+  ReviewerScore,
+  Vote,
+} from "./execution/peer-review-executor.js";
 export type { HookExecutionResult, WorkflowHookLifecycle } from "./hooks.js";
 export type { LLMConfig } from "./llm-config.js";
 export type { OboraConfig, ResolvedProviderConfig, ModelPricing } from "./config-loader.js";

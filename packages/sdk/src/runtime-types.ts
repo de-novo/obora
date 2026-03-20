@@ -50,6 +50,8 @@ export type AuditEventType =
   | "workflow.step_starvation_warning"
   | "parallel_layer_start"
   | "parallel_layer_end"
+  | "peer_review_vote"
+  | "peer_review_result"
   | "warning"
   | "error"
   | "knowledge_context_attached";
