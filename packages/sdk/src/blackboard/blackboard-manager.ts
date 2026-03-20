@@ -1,3 +1,4 @@
+import { BoardBlackboard, createSessionId } from "@obora/runtime";
 import type { ValidationResult } from "../validation-repair.js";
 
 export interface FailureEntry {
@@ -30,11 +31,16 @@ export interface BlackboardManagerOptions {
 
 /**
  * Manages an in-memory blackboard for a single workflow execution.
- * Records step outputs as facts, tracks validation results,
- * and maintains failure history for reflector analysis.
+ * Wraps the Runtime Blackboard for unified state management while
+ * maintaining the simple API for recording step outputs, validations,
+ * and failure history.
  */
 export class BlackboardManager {
   readonly sessionId: string;
+
+  /** The underlying Runtime Blackboard — exposes full event, versioning, and section APIs. */
+  readonly board: BoardBlackboard;
+
   private readonly facts: BlackboardFact[] = [];
   private readonly stepOutputs = new Map<string, unknown>();
   private readonly failures: FailureEntry[] = [];
@@ -42,6 +48,9 @@ export class BlackboardManager {
 
   constructor(options: BlackboardManagerOptions = {}) {
     this.sessionId = options.sessionId ?? `wf-${Date.now()}`;
+    this.board = new BoardBlackboard({
+      sessionId: createSessionId(this.sessionId),
+    });
   }
 
   /**
@@ -55,13 +64,21 @@ export class BlackboardManager {
         ? output.slice(0, 500)
         : JSON.stringify(output).slice(0, 500);
 
-    this.facts.push({
+    const fact: BlackboardFact = {
       id: `step-output:${stepName}`,
       content: `Step '${stepName}' completed: ${content}`,
       category: "step-output",
       tags: [stepName, "step-output"],
       confidence: 1.0,
       createdAt: new Date(),
+    };
+    this.facts.push(fact);
+
+    // Dual-write: store in Runtime Blackboard
+    this.board.write("state.context.stepOutputs." + stepName, {
+      type: "step_output",
+      content: output,
+      timestamp: new Date(),
     });
   }
 
@@ -108,13 +125,23 @@ export class BlackboardManager {
         timestamp: new Date(),
       });
     }
+
+    // Dual-write: store in Runtime Blackboard
+    this.board.write("state.context.validations." + stepName + ".attempt_" + attempt, {
+      validation: result,
+      timestamp: new Date(),
+    });
   }
 
   /**
    * Record step timing.
    */
   recordStepStart(stepName: string): void {
-    this.stepTimings.set(stepName, { startedAt: Date.now() });
+    const startedAt = Date.now();
+    this.stepTimings.set(stepName, { startedAt });
+
+    // Dual-write: store in Runtime Blackboard
+    this.board.write("state.context.timings." + stepName, { startedAt });
   }
 
   /**
@@ -124,6 +151,9 @@ export class BlackboardManager {
     const timing = this.stepTimings.get(stepName);
     if (timing) {
       timing.durationMs = Date.now() - timing.startedAt;
+
+      // Dual-write: update in Runtime Blackboard
+      this.board.write("state.context.timings." + stepName, { ...timing });
     }
   }
 

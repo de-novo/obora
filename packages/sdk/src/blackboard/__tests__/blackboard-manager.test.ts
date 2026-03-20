@@ -1,6 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { BlackboardManager } from "../blackboard-manager.js";
 import type { ValidationResult } from "../../validation-repair.js";
+import { BoardBlackboard } from "@obora/runtime";
 
 describe("BlackboardManager", () => {
   it("should initialize with a session ID", () => {
@@ -175,6 +176,97 @@ describe("BlackboardManager", () => {
       expect(mgr.getFactsByCategory("step-output")).toHaveLength(1);
       expect(mgr.getFactsByCategory("validation-pass")).toHaveLength(1);
       expect(mgr.getFactsByCategory("nonexistent")).toHaveLength(0);
+    });
+  });
+
+  describe("Runtime Blackboard integration", () => {
+    it("should expose the underlying Runtime Blackboard", () => {
+      const mgr = new BlackboardManager({ sessionId: "board-test" });
+      expect(mgr.board).toBeInstanceOf(BoardBlackboard);
+    });
+
+    it("should pass sessionId to the Runtime Blackboard", () => {
+      const mgr = new BlackboardManager({ sessionId: "my-session" });
+      expect(mgr.board.sessionId).toBe("my-session");
+    });
+
+    it("should dual-write step outputs to the board", () => {
+      const mgr = new BlackboardManager();
+      mgr.recordStepOutput("plan", { title: "My Plan" });
+
+      const stored = mgr.board.read("state.context.stepOutputs.plan", { strict: false });
+      expect(stored).toBeDefined();
+      expect((stored as { type: string }).type).toBe("step_output");
+      expect((stored as { content: unknown }).content).toEqual({ title: "My Plan" });
+    });
+
+    it("should dual-write validations to the board", () => {
+      const mgr = new BlackboardManager();
+      const result: ValidationResult = {
+        passed: false,
+        summary: "Type errors",
+        failedChecks: [{ name: "typecheck", message: "errors" }],
+      };
+      mgr.recordValidation("build", result, 2);
+
+      const stored = mgr.board.read("state.context.validations.build.attempt_2", { strict: false });
+      expect(stored).toBeDefined();
+      expect((stored as { validation: ValidationResult }).validation.passed).toBe(false);
+    });
+
+    it("should dual-write timings to the board", () => {
+      const mgr = new BlackboardManager();
+      mgr.recordStepStart("step1");
+
+      const startStored = mgr.board.read("state.context.timings.step1", { strict: false });
+      expect(startStored).toBeDefined();
+      expect((startStored as { startedAt: number }).startedAt).toBeGreaterThan(0);
+
+      mgr.recordStepEnd("step1");
+
+      const endStored = mgr.board.read("state.context.timings.step1", { strict: false });
+      expect((endStored as { durationMs: number }).durationMs).toBeGreaterThanOrEqual(0);
+    });
+
+    it("should provide access to board section accessors", () => {
+      const mgr = new BlackboardManager();
+      expect(mgr.board.state).toBeDefined();
+      expect(mgr.board.knowledge).toBeDefined();
+      expect(mgr.board.decisions).toBeDefined();
+    });
+
+    it("should support board event subscriptions", () => {
+      const mgr = new BlackboardManager();
+      const events: string[] = [];
+
+      mgr.board.on("state.updated", (event: unknown) => {
+        events.push((event as { path: string }).path);
+      });
+
+      mgr.recordStepOutput("step1", "output");
+
+      expect(events.length).toBeGreaterThan(0);
+      expect(events.some((e) => e.includes("stepOutputs"))).toBe(true);
+    });
+
+    it("should support board snapshots", async () => {
+      const mgr = new BlackboardManager();
+      mgr.recordStepOutput("plan", "my plan");
+
+      const snapshot = await mgr.board.createSnapshot();
+      expect(snapshot).toBeDefined();
+    });
+
+    it("should increment board version on each write", () => {
+      const mgr = new BlackboardManager();
+      const v1 = mgr.board.version;
+
+      mgr.recordStepOutput("s1", "out");
+      expect(mgr.board.version).toBeGreaterThan(v1);
+
+      const v2 = mgr.board.version;
+      mgr.recordStepStart("s2");
+      expect(mgr.board.version).toBeGreaterThan(v2);
     });
   });
 });

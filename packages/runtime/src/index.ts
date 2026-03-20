@@ -35,5 +35,7 @@ export * from "./judgment/index.js";
  * Blackboard class from state/RuntimeBlackboardCompat.
  */
 export { Blackboard as BoardBlackboard } from "./blackboard/core/blackboard.js";
+export { createSessionId } from "./blackboard/types/base.js";
+export type { SessionId } from "./blackboard/types/base.js";
 export { TKGObserver, TKGReflector } from "./blackboard/observer-reflector.js";
 export type { ObserverOptions, ReflectorOptions } from "./blackboard/observer-reflector.js";
