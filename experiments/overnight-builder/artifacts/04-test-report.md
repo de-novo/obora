@@ -1,287 +1,309 @@
-# TaskVault - QA 최종 검증 보고서
+# QA 검증 보고서
 
-**검증 일시**: 2026-03-18  
-**검증자**: QA Engineer  
-**버전**: 0.2.0  
-**검증 범위**: Production Deployment Readiness
-
----
-
-## 📋 검증 항목 및 결과
-
-### ✅ 1. 모든 테스트 파일 존재 및 실행 가능
-
-#### Unit Tests (12개 파일)
-- ✅ `test/unit/JsonStorage.test.ts` - 스토리지 테스트
-- ✅ `test/unit/TaskService.test.ts` - 서비스 레이어 테스트
-- ✅ `test/unit/TaskService.search.test.ts` - 검색 기능 테스트
-- ✅ `test/unit/TaskService.tag.test.ts` - 태그 기능 테스트
-- ✅ `test/unit/date-validator.test.ts` - 날짜 검증 (30+ 케이스)
-- ✅ `test/unit/priority-validator.test.ts` - 우선순위 검증 (25+ 케이스)
-- ✅ `test/unit/task-filter.test.ts` - 필터링 로직 (20+ 케이스)
-- ✅ `test/unit/task-sorter.test.ts` - 정렬 로직 (15+ 케이스)
-- ✅ `test/unit/validator.test.ts` - 입력 검증
-- ✅ `test/unit/tag-validator.test.ts` - 태그 검증
-- ✅ `test/unit/search.test.ts` - 검색 유틸리티
-- ✅ `test/unit/formatter.test.ts` - 포맷팅
-
-#### Integration Tests (5개 파일)
-- ✅ `test/integration/add-with-due-priority.test.ts` - Due/Priority 통합
-- ✅ `test/integration/list-filter-sort.test.ts` - 필터/정렬 통합
-- ✅ `test/integration/commands.test.ts` - 커맨드 통합
-- ✅ `test/integration/search.test.ts` - 검색 통합
-- ✅ `test/integration/tag.test.ts` - 태그 통합
-
-#### Edge Case Tests (6개 파일)
-- ✅ `test/edge-cases/date-edge-cases.test.ts` - 날짜 경계값
-- ✅ `test/edge-cases/priority-edge-cases.test.ts` - 우선순위 경계값
-- ✅ `test/edge-cases/boundary-conditions.test.ts` - 경계 조건
-- ✅ `test/edge-cases/corrupted-data.test.ts` - 데이터 손상 복구
-- ✅ `test/edge-cases/search.test.ts` - 검색 엣지케이스
-- ✅ `test/edge-cases/tag.test.ts` - 태그 엣지케이스
-
-**상태**: ✅ **PASS** - 총 23개 테스트 파일, 380+ 테스트 케이스
+**생성일**: 2026-03-19
+**검증자**: QA 엔지니어
+**프로젝트**: todo-cli
 
 ---
 
-### ✅ 2. 핵심 구현 파일이 설계와 일치
+## 1. TypeScript 타입 체크 결과
 
-#### Source Files Structure
+### 상태: ✅ PASS
+
+**Exit Code**: 0
+
+**결과**: 타입 체크 성공적으로 완료됨
+
+---
+
+## 2. 린트 결과
+
+### 상태: ⚠️ SKIP (Configuration Error)
+
+**Exit Code**: 2
+
+**에러 내용**:
 ```
-src/
-├── commands/           (7개: add, list, done, delete, search, tag, tags)
-├── services/TaskService.ts
-├── storage/JsonStorage.ts
-├── utils/
-│   ├── date-validator.ts      (145 lines)
-│   ├── priority-validator.ts  (113 lines)
-│   ├── task-filter.ts         (73 lines)
-│   ├── task-sorter.ts         (120 lines)
-│   ├── tag-validator.ts
-│   ├── search.ts
-│   ├── formatter.ts
-│   └── validator.ts
-├── errors.ts
-├── types.ts
-└── index.ts
+TypeError: Error while loading rule '@typescript-eslint/no-unused-expressions': 
+Cannot read properties of undefined (reading 'allowShortCircuit')
 ```
 
-#### Cycle 3 Features Verified
-- ✅ Due Date System (validateDueDate, calculateDaysRemaining, isOverdue, isDueSoon)
-- ✅ Priority System (validatePriority, normalizePriority, getPriorityDisplay)
-- ✅ Smart Filtering (overdue, dueSoon, priority, tag filters)
-- ✅ Flexible Sorting (due, priority, created, updated)
+**원인**: ESLint v8과 TypeScript ESLint v8 간 호환성 문제
+- `@typescript-eslint/eslint-plugin` 설정 오류
+- ESLint flat config와 legacy config 간 충돌
 
-**상태**: ✅ **PASS** - 모든 설계된 기능이 구현됨
+**판정**: 린트 자체가 실행되지 않아 SKIP으로 처리
 
 ---
 
-### ✅ 3. 에러 핸들링 코드 존재
+## 3. 테스트 결과
 
-#### Error Implementation (`src/errors.ts`)
-- ✅ ErrorCode enum (25+ 에러 코드)
-  - CMD_XXX, TASK_XXX, VAL_XXX, STORAGE_XXX, TAG_XXX
-  - DUE_001~004 (날짜 에러)
-  - PRIORITY_001~002 (우선순위 에러)
+### 상태: ❌ FAIL
 
-- ✅ Error Classes
-  - TaskVaultError (기본)
-  - ValidationError (검증)
-  - NotFoundError (리소스 없음)
-  - StorageError (스토리지)
-  - DataIntegrityError (데이터 무결성)
+**Exit Code**: 1
 
-- ✅ Error Factory Functions (20+ 함수)
-  - invalidContentLength(), taskNotFound(), fileReadError()
-  - invalidDueDateFormat(), dueDateInPast(), invalidPriorityValue()
+**요약**:
+- 총 테스트: 1414개
+- 통과: 1383개 (97.8%)
+- 실패: 31개 (2.2%)
+- 실행 시간: 12.19초
 
-#### Error Handling in Code
-- ✅ TaskService: 모든 메서드에서 Result 타입 사용
-- ✅ JsonStorage: 파일 에러, JSON 파싱 에러 처리
-- ✅ Commands: 입력 검증 후 구조화된 에러 반환
+### 실패한 테스트 분류
 
-**상태**: ✅ **PASS** - 포괄적인 에러 핸들링 구현
+#### 3.1 구현 버그 - 최근 완료 통계 (implementation_bug)
+
+**영향받는 테스트 (9개)**:
+
+1. `should_exclude_todos_completed_7_or_more_days_ago`
+   - 파일: tests/unit/commands/stats.test.ts
+   - 원인: 7일 이상 지난 완료가 제외되지 않음
+   - 예상: 0, 실제: 1
+
+2. `should_handle_completion_exactly_7_days_ago`
+   - 파일: tests/edge-cases/search-stats-boundary.test.ts
+   - 원인: 정확히 7일 전 완료 처리 오류
+
+3. `should_handleTodosCompleted7DaysAgo_excluded`
+   - 파일: tests/edge-cases/search.edge-cases.test.ts
+   - 원인: 7일 경계값 처리 불일치
+
+4. `should_handleMultipleCompletionsSameDay`
+   - 파일: tests/edge-cases/search.edge-cases.test.ts
+   - 원인: 동일일 다중 완료 집계 실패
+   - 예상: 5, 실제: undefined
+
+5. `should_handle_multiple_completions_same_day`
+   - 파일: tests/unit/commands/stats.test.ts
+   - 원인: 동일일 완료 카운트 반환 안됨
+
+6. `should_calculate_recent_completions_correctly`
+   - 파일: tests/unit/commands/stats.test.ts
+   - 원인: 최근 완료 일수 계산 부정확
+   - 예상: ≥3일, 실제: 2일
+
+7. `should_count_completions_for_each_day`
+   - 파일: tests/unit/commands/stats.advanced.test.ts
+   - 원인: 일별 완료 카운트 undefined 반환
+
+8. `should_show_7day_trend_correctly`
+   - 파일: tests/integration/commands/search-integration.test.ts
+   - 원인: 7일 추이 데이터 부족
+   - 예상: 7일, 실제: 6일
+
+**근본 원인**: UTC vs Local Time 날짜 계산 불일치
+- `stats.ts`의 `calculateRecentCompletions` 함수가 UTC 기준으로 계산
+- 하지만 날짜 비교 로직에서 경계 조건 처리 오류
 
 ---
 
-### ✅ 4. 입력 검증 로직 존재
+#### 3.2 테스트 코드 버그 - 포맷팅 검증 (test_code_bug)
 
-#### Validation Functions
+**영향받는 테스트 (16개)**:
 
-**Content Validation** (`validator.ts`):
-- ✅ validateContent() - 길이 검증 (1-200자)
-- ✅ validateId() - 타입, NaN, 정수, 양수 검증
-- ✅ validateCommand() - 유효한 명령어 확인
+**CLI 검색 결과 포맷팅 (6개)**:
+1. `should_search_by_keyword` - ANSI 이스케이프 코드 미고려
+2. `should_search_case_insensitive_by_default` - ANSI 코드로 검색 실패
+3. `should_search_case_sensitive_with_flag` - ANSI 코드로 검색 실패
+4. `should_search_korean_keywords` - ANSI 코드로 검색 실패
+5. `should_search_with_emoji` - ANSI 코드로 검색 실패
+6. `should_search_with_special_chars` - ANSI 코드로 검색 실패
 
-**Tag Validation** (`tag-validator.ts`):
-- ✅ validateTag() - 형식, 길이(20자) 검증
-- ✅ validateTagCount() - 최대 5개 제한
-- ✅ parseTags() - 파싱, 정규화, 중복 제거
+**원인**: 테스트가 `toContain()`을 사용하여 ANSI 이스케이프 코드(`[1m`, `[0m`)가 포함된 출력에서 순수 텍스트를 찾으려 함
+- 실제 출력: `[1mBuy[0m groceries`
+- 테스트 검색: `Buy groceries`
+- 해결: ANSI 코드 제거 후 검증 필요
 
-**Date Validation** (`date-validator.ts`):
-- ✅ validateDueDate() - YYYY-MM-DD 형식, 실제 날짜 검증
-- ✅ 윤년, 월 경계, 과거 날짜, 미래 날짜 제한 처리
+**CLI 통계 포맷팅 (5개)**:
+1. `should_show_stats_for_empty_storage` - '완료율' 텍스트 없음 (UI 변경됨)
+2. `should_show_completed_count` - 숫자 포맷팅 변경 (1 → 0)
+3. `should_show_100_percent_for_all_completed` - 완료 상태 반영 안됨
+4. `should_round_completion_rate_correctly` - 33% → 0% (완료 미반영)
+5. `should_format_large_numbers` - `1500` → `1,500` (천 단위 콤마)
 
-**Priority Validation** (`priority-validator.ts`):
-- ✅ validatePriority() - high/medium/low, h/m/l, 1/2/3 허용
-- ✅ 대소문자 무시, 공백 제거, 정규화
+**원인**: 
+- UI 포맷 변경으로 텍스트 매칭 실패
+- `formatStats` 출력 형식이 테스트 기대값과 다름
+- 천 단위 콤마 포맷팅 미고려
 
-**상태**: ✅ **PASS** - 모든 입력에 대한 검증 로직 구현
+**유틸리티 포맷팅 (6개)**:
+1. `should_format_single_result` - ANSI 코드 미고려
+2. `should_format_multiple_results` - ANSI 코드 미고려
+3. `should_show_status_for_each_result` - ANSI 코드 미고려
+4. `should_handle_korean_content` - ANSI 코드 미고려
+5. `should_format_empty_stats` - '0' → '아직 할 일이 없습니다' (UI 변경)
+6. `should_format_large_numbers` - `1500` → `1,500` (천 단위 콤마)
 
 ---
 
-### ✅ 5. 타입 정의가 올바름
+#### 3.3 테스트 코드 버그 - 빈 문자열 검증 (test_code_bug)
 
-#### Type Definitions (`src/types.ts`)
+**영향받는 테스트 (1개)**:
+- `should_match_empty_string_pattern`
+- 파일: tests/edge-cases/search-boundary.test.ts
+- 원인: 빈 문자열을 유효한 검색어로 테스트하지만, 실제 구현은 `EMPTY_KEYWORD` 에러 반환
+- 테스트 의도: 정규식 빈 문자열 매칭 테스트
+- 실제 동작: 입력 검증에서 차단
+- 판정: 테스트가 구현의 입력 검증 로직을 고려하지 않음
 
-**Core Types**:
-```typescript
-✅ Task interface - id, content, createdAt, completedAt, isCompleted, tags, updatedAt, dueDate, priority
-✅ Priority type - 'high' | 'medium' | 'low' | null
-✅ TaskStorage interface - tasks, lastId, version
-✅ Result<T, E> type - { ok: true; value: T } | { ok: false; error: E }
+---
+
+#### 3.4 테스트 코드 버그 - 도움말 텍스트 (test_code_bug)
+
+**영향받는 테스트 (1개)**:
+- `should_show_help_for_search_command`
+- 파일: tests/integration/cli-search.test.ts
+- 원인: 한글화된 도움말에서 'keyword' 텍스트를 찾으려 함
+- 실제 출력: `<키워드>` (한글)
+- 테스트 검색: `keyword` (영어)
+- 판정: 한글화 미고려
+
+---
+
+#### 3.5 통합 테스트 환경 문제 (test_code_bug)
+
+**영향받는 테스트 (4개)**:
+1. `should_search_with_regex` - 파일 시스템 동시 접근 오류
+2. `should_filter_by_status` - 파일 시스템 동시 접근 오류
+3. `should_show_completion_rate` - 파일 시스템 동시 접근 오류
+4. `should_show_added_today` - 파일 시스템 동시 접근 오류
+
+**원인**: 
 ```
-
-**Command Input Types**:
-```typescript
-✅ AddCommandInput - content, tags?, dueDate?, priority?
-✅ ListCommandInput - showAll, tag?, overdue?, dueSoon?, priority?, sort?
-✅ SortCriteria - 'due' | 'priority' | 'created' | 'updated'
+ENOENT: no such file or directory, rename 
+'/Users/denovo/.todo-cli/todos.json.tmp' -> '/Users/denovo/.todo-cli/todos.json'
 ```
-
-**Validation Result Types**:
-```typescript
-✅ DateValidation - valid, error?, normalizedDate?
-✅ PriorityValidation - valid, error?, normalizedPriority?
-✅ ContentValidation - valid, error?
-```
-
-**TypeScript Config**:
-- ✅ strict: true
-- ✅ target: ES2022
-- ✅ No implicit any
-
-**상태**: ✅ **PASS** - 모든 타입이 명확하게 정의됨
+- 여러 테스트가 동시에 동일한 저장소 파일에 접근
+- atomic rename 연산 간섭
+- 해결: 각 테스트마다 격리된 저장소 사용 필요
 
 ---
 
-### ✅ 6. README 존재 및 실행 방법 명확
+## 4. 종합 판정
 
-#### README.md Structure
-- ✅ 개요 및 기능 소개
-- ✅ 설치 방법 (From Source, Development Mode)
-- ✅ Quick Start (15+ 예시)
-- ✅ Commands 상세 문서 (add, list, done, delete, search, tag, tags)
-- ✅ Data Storage (위치, 커스텀 경로, 포맷, 마이그레이션)
-- ✅ Development (프로젝트 구조, 아키텍처, 빌드 명령어)
-- ✅ Testing (실행 방법, 구조, 커버리지 목표)
-- ✅ Error Codes (전체 목록)
-- ✅ Priority System 설명
-- ✅ Due Date System 설명
-- ✅ Changelog
+### ❌ FAIL
 
-#### Execution Methods
-```bash
-✅ Development: npm run dev add "Task" --due 2026-03-25 --priority high
-✅ Production: node dist/index.js list --overdue --sort priority
-✅ Global: npm link && taskvault list --all
-✅ Test: npm test, npm run test:coverage
-```
+### 판정 근거
 
-**상태**: ✅ **PASS** - 포괄적이고 명확한 문서화
+1. **TypeScript**: ✅ PASS (exit code 0)
+2. **린트**: ⚠️ SKIP (설정 오류로 실행 불가)
+3. **테스트**: ❌ FAIL (31개 실패 / 1414개 중)
 
----
+### 실패 원인 요약
 
-### ✅ 7. package.json scripts가 올바름
+| 분류 | 개수 | 심각도 | 수정 필요 |
+|------|------|--------|-----------|
+| implementation_bug | 9 | 높음 | 구현 수정 필요 |
+| test_code_bug (포맷팅) | 16 | 중간 | 테스트 수정 필요 |
+| test_code_bug (입력 검증) | 1 | 낮음 | 테스트 수정 필요 |
+| test_code_bug (환경) | 4 | 중간 | 테스트 격리 필요 |
+| design_issue | 0 | - | - |
 
-```json
-{
-  "scripts": {
-    ✅ "build": "tsc",
-    ✅ "test": "vitest run",
-    ✅ "test:watch": "vitest",
-    ✅ "test:coverage": "vitest run --coverage",
-    ✅ "test:ui": "vitest --ui",
-    ✅ "test:unit": "vitest run test/unit",
-    ✅ "test:integration": "vitest run test/integration",
-    ✅ "test:edge": "vitest run test/edge-cases",
-    ✅ "lint": "eslint src test --ext .ts",
-    ✅ "lint:fix": "eslint src test --ext .ts --fix",
-    ✅ "typecheck": "tsc --noEmit",
-    ✅ "dev": "ts-node src/index.ts",
-    ✅ "clean": "rm -rf dist",
-    ✅ "prepublishOnly": "npm run clean && npm run build && npm test"
-  }
-}
-```
+### 우선순위 수정 사항
 
-**상태**: ✅ **PASS** - 모든 필수 스크립트 존재
+#### 🔴 Critical (즉시 수정)
 
----
+1. **stats.ts UTC 날짜 계산 로직 수정**
+   - `calculateRecentCompletions` 함수에서 7일 경계 처리
+   - 동일일 다중 완료 집계 로직 점검
+   - UTC/Local Time 일관성 확보
 
-### ✅ 8. 불필요한 console.log나 디버그 코드 없음
+#### 🟡 High (다음 릴리즈)
 
-#### 검증 결과
+2. **테스트 코드 ANSI 이스케이프 코드 처리**
+   ```typescript
+   // Before
+   expect(output).toContain('Buy groceries');
+   
+   // After
+   const plainText = output.replace(/\x1b\[[0-9;]*m/g, '');
+   expect(plainText).toContain('Buy groceries');
+   ```
 
-**index.ts (CLI Entry Point)**:
-- ✅ console.log() - CLI 출력용만 사용 (정상)
-- ✅ console.error() - 에러 출력용만 사용 (정상)
+3. **통합 테스트 격리**
+   - 각 테스트마다 고유한 저장소 경로 사용
+   - `TODO_CLI_HOME` 환경 변수로 격리
 
-**Commands (7개 파일)**:
-- ✅ console.log 없음
-- ✅ 디버그 코드 없음
+#### 🟢 Medium (향후 개선)
 
-**Services/Storage/Utils**:
-- ✅ console.log 없음
-- ✅ debugger 문 없음
-- ✅ 주석 처리된 코드 없음
+4. **포맷팅 테스트 UI 변경 반영**
+   - 천 단위 콤마 포맷팅 고려
+   - 빈 상태 메시지 변경 반영
+   - 한글화된 도움말 텍스트 업데이트
 
-**상태**: ✅ **PASS** - 불필요한 디버그 코드 없음
+### 배포 가능성 평가
 
----
+**현재 상태로 프로덕션 배포: ❌ 권장하지 않음**
 
-## 📊 종합 평가
+**이유**:
+- 9개의 핵심 기능 버그 (최근 완료 통계)
+- 사용자에게 잘못된 통계 정보 제공 가능
+- 데이터 무결성 문제
 
-### 검증 항목 요약
+**최소 수정 후 배포 가능**:
+- stats.ts UTC 날짜 계산 로직 1개 수정
+- 9개 테스트 자동 통과 예상
+- 나머지 22개는 테스트 코드 수정 필요 (기능 영향 없음)
 
-| 항목 | 상태 | 세부 내용 |
-|------|------|----------|
-| 1. 테스트 파일 | ✅ PASS | 23개 파일, 380+ 테스트 |
-| 2. 구현 일치 | ✅ PASS | 모든 Cycle 3 기능 구현 |
-| 3. 에러 핸들링 | ✅ PASS | 25+ 에러 코드, 포괄적 처리 |
-| 4. 입력 검증 | ✅ PASS | 모든 입력 검증 |
-| 5. 타입 정의 | ✅ PASS | Strict mode, 완전한 타입 |
-| 6. README | ✅ PASS | 포괄적 문서화 |
-| 7. package.json | ✅ PASS | 모든 스크립트 존재 |
-| 8. 디버그 코드 | ✅ PASS | 불필요한 코드 없음 |
+### 권장 사항
 
-### 품질 메트릭
-
-| 메트릭 | 상태 |
-|--------|------|
-| 테스트 커버리지 | ✅ 85%+ |
-| TypeScript 에러 | ✅ 0 |
-| ESLint 에러 | ✅ 0 |
-| 테스트 통과율 | ✅ 100% |
-| 문서화 완료도 | ✅ 100% |
+1. **즉시**: stats.ts 날짜 계산 로직 수정 및 재테스트
+2. **단기**: 테스트 코드 ANSI 처리 및 환경 격리
+3. **중기**: ESLint 설정 호환성 해결
+4. **장기**: 포맷팅 테스트 전면 개선
 
 ---
 
-## 🏆 최종 판정
+## 부록: 상세 테스트 결과
 
-### ✅ **PRODUCTION READY**
+### 통과한 테스트 스위트 (38개)
 
-**사유**:
-1. 모든 검증 항목 통과
-2. 380+ 테스트 케이스 존재
-3. 포괄적인 에러 핸들링
-4. 완전한 입력 검증
-5. 명확한 문서화
-6. 불필요한 디버그 코드 없음
-7. 타입 안전성 확보
+✅ tests/unit/commands/stats.comprehensive.test.ts (61 tests)
+✅ tests/unit/utils-formatting.test.ts (110 tests)
+✅ tests/unit/stats-advanced.test.ts (41 tests)
+✅ tests/edge-cases/stats.edge-cases.test.ts (46 tests)
+✅ tests/unit/commands/search.comprehensive.test.ts (61 tests)
+✅ tests/unit/search-advanced.test.ts (49 tests)
+✅ tests/unit/commands/search.test.ts (31 tests)
+✅ tests/unit/stats-command.test.ts (32 tests)
+✅ tests/edge-cases/search.stats.concurrency.test.ts (38 tests)
+✅ tests/unit/commands/search.advanced.test.ts (36 tests)
+✅ tests/integration/cli.search.stats.advanced.test.ts (30 tests)
+✅ tests/unit/search-command.test.ts (28 tests)
+✅ tests/edge-cases/cli-edge-cases.test.ts (38 tests)
+✅ tests/integration/search-stats-workflow.test.ts (16 tests)
+✅ tests/edge-cases/file-system-errors.test.ts (21 tests)
+✅ tests/integration/search.stats.performance.test.ts (20 tests)
+✅ tests/edge-cases/cli.search.stats.edge-cases.test.ts (28 tests)
+✅ tests/unit/storage.test.ts (22 tests)
+✅ tests/integration/commands/stats.integration.test.ts (15 tests)
+✅ tests/unit/validation-search.test.ts (68 tests)
+✅ tests/integration/commands/stats.cli.test.ts (23 tests)
+✅ tests/unit/commands/search.regex.test.ts (55 tests)
+✅ tests/edge-cases/error-handling.test.ts (22 tests)
+✅ tests/unit/utils.test.ts (29 tests)
+✅ tests/integration/commands/search.integration.test.ts (15 tests)
+✅ tests/integration/commands/list.test.ts (10 tests)
+✅ tests/integration/commands/search.cli.test.ts (18 tests)
+✅ tests/edge-cases/boundary-conditions.test.ts (39 tests)
+✅ tests/integration/commands/delete.test.ts (10 tests)
+✅ tests/unit/validation.test.ts (22 tests)
+✅ tests/integration/commands/done.test.ts (9 tests)
+✅ tests/integration/commands/add.test.ts (12 tests)
+✅ tests/integration/cli.test.ts (14 tests)
+✅ tests/unit/errors.test.ts (6 tests)
+✅ tests/integration/smoke-test.test.ts (6 tests)
+✅ tests/integration/cli-search-stats.test.ts (21 tests)
+✅ tests/integration/cli-search-advanced.test.ts (22 tests)
+✅ tests/edge-cases/cli-advanced.test.ts (28 tests)
 
----
+### 실패한 테스트 스위트 (9개)
 
-**검증 완료일**: 2026-03-18  
-**검증자**: QA Engineer  
-**최종 상태**: ✅ **PRODUCTION DEPLOYMENT APPROVED**
+❌ tests/edge-cases/search-boundary.test.ts (1/43 failed)
+❌ tests/unit/commands/stats.advanced.test.ts (1/30 failed)
+❌ tests/unit/commands/stats.test.ts (3/30 failed)
+❌ tests/edge-cases/search-stats-boundary.test.ts (1/34 failed)
+❌ tests/edge-cases/search.edge-cases.test.ts (2/27 failed)
+❌ tests/integration/commands/search-integration.test.ts (1/25 failed)
+❌ tests/unit/utils-formatting-advanced.test.ts (6/45 failed)
+❌ tests/integration/cli-search.test.ts (10/15 failed)
+❌ tests/integration/cli-stats.test.ts (6/13 failed)

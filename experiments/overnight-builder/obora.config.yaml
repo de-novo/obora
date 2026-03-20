@@ -16,7 +16,7 @@ artifacts:
 
 defaults:
   provider: zai
-  model: glm-5
+  model: glm-4.7
   temperature: 0.2
   timeout: 900
   maxTokens: 16384
@@ -25,6 +25,7 @@ providers:
   zai:
     authMode: global
     authRef: global:zai
+    baseUrl: "https://api.z.ai/api/coding/paas/v4"
     defaultModel: glm-5
     timeout: 900
     maxTokens: 16384

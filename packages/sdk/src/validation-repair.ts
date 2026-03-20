@@ -39,6 +39,8 @@ export interface RepairLoopConfig {
   validation_step?: string;
   max_no_progress_iterations?: number;
   repeated_critical_issue_ceiling?: number;
+  /** Global ceiling across all back-edges. Prevents infinite loops when back-edges reset per-step counters. */
+  max_total_repair_attempts?: number;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -185,6 +187,10 @@ export function getRepairLoopConfig(config: unknown): RepairLoopConfig | undefin
     repeated_critical_issue_ceiling:
       typeof repairLoop.repeated_critical_issue_ceiling === "number" && Number.isFinite(repairLoop.repeated_critical_issue_ceiling)
         ? Math.max(1, Math.floor(repairLoop.repeated_critical_issue_ceiling))
+        : undefined,
+    max_total_repair_attempts:
+      typeof repairLoop.max_total_repair_attempts === "number" && Number.isFinite(repairLoop.max_total_repair_attempts)
+        ? Math.max(1, Math.floor(repairLoop.max_total_repair_attempts))
         : undefined,
   };
 }

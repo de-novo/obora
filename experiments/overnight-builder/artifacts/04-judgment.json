@@ -1,0 +1,40 @@
+{
+  "passed": false,
+  "summary": "QA 검증 실패: 린트 오류(ESLint 구성 충돌) 및 테스트 20개 실패(1,179개 중). 핵심 이슈는 done 명령어가 completedAt 필드를 올바르게 설정하지 않아 통계 집계와 --status 필터가 작동하지 않음. 13개 테스트(전체 실패의 65%)가 동일한 근본 원인으로 실패.",
+  "failedChecks": [
+    {
+      "name": "implementation_bug: done_command_completedAt",
+      "message": "done 명령어 실행 후 completedAt 필드가 설정되지 않아 통계의 completedToday, completionRate가 0으로 유지되고 recentCompletions가 비어있음. --status done 필터도 작동하지 않음. 13개 테스트 실패의 근본 원인."
+    },
+    {
+      "name": "test_code_bug: syntax_error_search_test",
+      "message": "tests/unit/commands/search.test.ts:126:7 - Expected ';' but found ')'. 테스트 파일 구문 오류로 로드 실패."
+    },
+    {
+      "name": "test_code_bug: syntax_error_boundary_test",
+      "message": "tests/edge-cases/search-stats-boundary.test.ts:325:7 - Expected ';' but found ')'. 테스트 파일 구문 오류로 로드 실패."
+    },
+    {
+      "name": "design_issue: eslint_config_compatibility",
+      "message": "ESLint 8.57.1 (workspace)와 9.39.2 (pnpm root) 간의 버전 충돌. @typescript-eslint/eslint-plugin 8.54.0이 Flat Config와 호환되지 않아 'allowShortCircuit' undefined 오류 발생."
+    },
+    {
+      "name": "implementation_bug: recentCompletions_7day_boundary",
+      "message": "recentCompletions에서 정확히 7일 전 완료 항목이 카운트되지 않음. stats.comprehensive.test.ts의 'should handle todos from exactly 7 days ago' 테스트 실패."
+    },
+    {
+      "name": "implementation_bug: regex_group_handling",
+      "message": "정규식 그룹 처리에서 예상보다 많은 결과 반환. search.edge-cases.test.ts의 'should_handleRegexGroups_correctly' 테스트 실패 (expected length 1, got 2)."
+    },
+    {
+      "name": "test_code_bug: unrealistic_performance_threshold",
+      "message": "성능 테스트 임계값이 CI 환경에서 너무 엄격함. should_search_5000_items_efficiently (181ms > 50ms), should_search_1000_items_quickly (32ms > 10ms)."
+    },
+    {
+      "name": "test_code_bug: empty_stats_assertion",
+      "message": "빈 통계 테스트가 '0' 문자를 기대하지만 실제 출력은 '아직 할 일이 없습니다.' 메시지. 테스트 기대값이 실제 동작과 불일치."
+    }
+  ],
+  "signature": "test-fail-20-done-completedAt-critical",
+  "suggestedTargets": ["implement_or_repair"]
+}

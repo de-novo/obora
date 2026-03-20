@@ -82,6 +82,7 @@ steps:
         validation_step: run_tests_and_judge
         max_no_progress_iterations: 6
         repeated_critical_issue_ceiling: 6
+        max_total_repair_attempts: 15
       maxToolRounds: 256
     input:
       task: |

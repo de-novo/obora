@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "benchmark": "swe-bench-lite",
+  "task_id": "astropy__astropy-14995",
+  "repo": "astropy/astropy",
+  "issue_text": "Issue #14978: In astropy v5.3, NDDataRef mask propagation fails when one operand does not have a mask. Expected behavior: when one operand has no mask, the existing mask should be copied through arithmetic operations using handle_mask=np.bitwise_or, rather than raising TypeError on int | NoneType. Reproduce with NDDataRef(array, mask=mask).multiply(NDDataRef(array), handle_mask=np.bitwise_or).",
+  "base_commit": "b16c7d12ccbc7b2d20364b89fb44285bcbfede54",
+  "test_command": ".venv/bin/python repro_14978.py",
+  "workspace_path": "REPLACE_AT_RENDER_TIME",
+  "workspace_preparation": "manual-local-workspace",
+  "notes": [
+    "Prepared workspace is a local astropy checkout at the base commit before PR #14995.",
+    "The repro command currently fails on the base commit with TypeError: unsupported operand type(s) for |: int and NoneType.",
+    "This is an exploratory first real run for the reusable Obora workflow path, not yet an official SWE-bench harness execution."
+  ],
+  "constraints": [
+    "Keep the workflow reusable and task-agnostic; only this task context should carry task-specific data.",
+    "Prefer the smallest credible patch that makes the repro command pass.",
+    "Do not claim benchmark success unless the prepared repro command passes in the prepared workspace."
+  ],
+  "patch_hint_paths": [
+    "astropy/nddata/mixins/ndarithmetic.py",
+    "astropy/nddata/mixins/tests/test_ndarithmetic.py"
+  ],
+  "attachments": [
+    {
+      "label": "reproduction-script",
+      "path": "repro_14978.py"
+    }
+  ],
+  "metadata": {
+    "issue_number": 14978,
+    "pull_request_number": 14995,
+    "workspace_flavor": "prepared-local-base-commit"
+  }
+}

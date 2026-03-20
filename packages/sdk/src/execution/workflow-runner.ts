@@ -658,6 +658,8 @@ export class WorkflowRunner {
     const stepIndexByName = new Map(sortedSteps.map((step, idx) => [step.name, idx]));
     const backEdgeIterations = new Map<string, number>();
     const repairLoopStates = new Map<string, RepairLoopRuntimeState>();
+    /** Global repair attempt counter — not reset by back-edges */
+    let globalRepairAttempts = 0;
     let cursor = 0;
 
     const triggerBackEdge = async (
@@ -870,8 +872,23 @@ export class WorkflowRunner {
 
           const goto = step.on_fail?.goto;
           if (goto) {
+            globalRepairAttempts++;
+
+            // Check global repair ceiling (prevents infinite loops across back-edges)
             const routeResolution = resolveFailureRoute(goto, validationResult);
             const targetStepName = routeResolution.target;
+            const repairConfigForCeiling = getRepairLoopConfig(
+              sortedSteps.find((candidate) => candidate.name === targetStepName)?.config
+            );
+            const globalCeiling = repairConfigForCeiling?.max_total_repair_attempts;
+            if (globalCeiling !== undefined && globalRepairAttempts > globalCeiling) {
+              cursor = await triggerBackEdge(
+                step,
+                `Global repair ceiling exceeded (${globalRepairAttempts} total attempts across all back-edges). Stopping repair for step '${step.name}'.`,
+                { noProgress: true, category: "no_progress", targetResolution: routeResolution }
+              );
+              continue;
+            }
 
             const previousState = repairLoopStates.get(targetStepName);
             const repeatedSignatureCount =
