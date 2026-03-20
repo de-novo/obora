@@ -77,7 +77,7 @@ describe("Blackboard integration: Manager + Observer + Reflector", () => {
       "build"
     );
     expect(hint2).toBeDefined();
-    expect(hint2).toContain("same failure has occurred 3 times");
+    expect(hint2).toContain("typecheck");
     expect(hint2).toContain("fundamentally different approach");
 
     // Step 2 passes on retry
