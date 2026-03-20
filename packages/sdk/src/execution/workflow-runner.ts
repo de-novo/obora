@@ -44,6 +44,8 @@ import { BlackboardManager } from "../blackboard/blackboard-manager.js";
 import { ExecutionObserver } from "../blackboard/execution-observer.js";
 import { ExecutionReflector } from "../blackboard/execution-reflector.js";
 import { ReflectorEngine } from "../reflector/reflector-engine.js";
+import { KnowledgeStore } from "../reflector/knowledge-store.js";
+import type { ReflectorRule } from "../reflector/rule-engine.js";
 
 /** Duck-type for reflector: both ExecutionReflector and ReflectorEngine implement this. */
 type ReflectorLike = {
@@ -1412,8 +1414,24 @@ export class WorkflowRunner {
     // Create blackboard, observer, and reflector for this execution
     const blackboard = new BlackboardManager({ sessionId: executionId });
     const observer = new ExecutionObserver(eventBus, blackboard);
-    // Use ReflectorEngine v2 (backward compatible with ExecutionReflector)
-    const reflector = new ReflectorEngine();
+    // Use ReflectorEngine v2 — wire YAML reflector config if present
+    const reflectorConfig = workflow.reflector;
+    const reflectorRules: ReflectorRule[] = (reflectorConfig?.rules ?? []).map((r) => ({
+      name: r.name,
+      when: r.when,
+      actions: r.actions.map((a, i) => ({
+        type: a.type,
+        priority: i,
+        payload: Object.fromEntries(Object.entries(a).filter(([k]) => k !== "type")),
+      })),
+    }));
+    const knowledgeStore = reflectorConfig?.knowledge_store
+      ? new KnowledgeStore(reflectorConfig.knowledge_store)
+      : undefined;
+    const reflector = new ReflectorEngine({
+      rules: reflectorRules.length > 0 ? reflectorRules : undefined,
+      knowledgeStore,
+    });
 
     if (engine.costTracker) {
       observer.attachCostTracker(engine.costTracker);

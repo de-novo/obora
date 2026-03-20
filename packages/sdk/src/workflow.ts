@@ -67,6 +67,32 @@ export interface WorkflowStep {
   };
 }
 
+/** Reflector v2 configuration for the workflow. */
+export interface WorkflowReflectorConfig {
+  /** Path to persistent knowledge store directory. */
+  knowledge_store?: string;
+  /** Reflector analyzer configuration. */
+  analyzers?: Array<{ builtin?: string; custom?: string }>;
+  /** Reflector rules: condition → actions mapping. */
+  rules?: Array<{
+    name: string;
+    when: {
+      keywords_include?: string[];
+      keywords_exclude?: string[];
+      trend?: "worsening" | "stable" | "improving";
+      min_failures?: number;
+      max_failures?: number;
+      signature_repeated?: number;
+      category_includes?: string[];
+      min_attempt?: number;
+    };
+    actions: Array<{
+      type: string;
+      [key: string]: unknown;
+    }>;
+  }>;
+}
+
 export interface WorkflowDef {
   name: string;
   version?: string;
@@ -75,6 +101,8 @@ export interface WorkflowDef {
   variables?: Record<string, unknown>;
   /** Maximum number of steps to execute concurrently. Default: 3. */
   maxConcurrency?: number;
+  /** Reflector v2 configuration. */
+  reflector?: WorkflowReflectorConfig;
 }
 
 export interface OnFailConfig {
