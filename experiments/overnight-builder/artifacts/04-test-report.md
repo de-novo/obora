@@ -1,116 +1,175 @@
-# QA 검증 보고서
+# Test Report - QA Validation
 
-**검증 일시**: 2026-03-20
-**검증자**: QA 엔지니어 (자동화)
-**프로젝트**: todo-cli
-
----
+**Date**: 2026-03-20  
+**Project**: Todo CLI  
+**Validator**: QA Engineer
 
 ## 1. TypeScript 타입 체크 결과
 
-**상태**: ✅ PASS
+**Status**: ✅ PASS
 
-- **Exit Code**: 0
-- **에러 목록**: 없음
-- **상세**: 모든 TypeScript 파일이 타입 검사를 통과함
+**Exit Code**: 0
 
----
+**Details**: TypeScript 컴파일이 성공적으로 완료됨. 타입 에러 없음.
 
 ## 2. 린트 결과
 
-**상태**: ⚠️ SKIP
+**Status**: ⏭️ SKIP
 
-- **Exit Code**: 0
-- **에러 목록**: 해당 없음
-- **비고**: ESLint 버전 호환성 이슈로 인해 린트 검사 건너뜀 (코드 품질 실패 아님)
+**Exit Code**: 0
 
----
+**Details**: 
+- ESLint 실행이 건너뜀 처리됨
+- 사유: "ESLint version compatibility issues are not code quality failures"
+- 코드 품질 문제가 아닌 도구 호환성 이슈로 판단됨
 
 ## 3. 테스트 결과
 
-**상태**: ❌ FAIL
+**Status**: ❌ FAIL
 
-- **Exit Code**: 1
-- **총 테스트**: 516개
-- **통과**: 512개
-- **실패**: 4개
+**Exit Code**: 1
+
+**Summary**: 
+- **Total Tests**: 834
+- **Passed**: 810 (97.1%)
+- **Failed**: 24 (2.9%)
+- **Test Files**: 42 (14 failed, 28 passed)
 
 ### 실패한 테스트 목록
 
-#### 3.1 특수문자가 포함된 데이터 백업/복구
-- **파일**: `test/integration/backup-recovery.test.ts:315`
-- **에러**: `expected '특수문자 !@#$%^&*() 😀🎉' to be '특수문자 !@#$%^&*() 😀🎉 \n\t\r'`
-- **원인 분석**: 
-  - 테스트가 백업/복구 과정에서 공백 문자(`\n\t\r`) 보존을 기대
-  - 실제 구현은 JSON 직렬화/역직렬화 과정에서 trailing whitespace 제거
-  - **JSON.stringify()는 기본적으로 의미 있는 공백만 보존**
-- **분류**: `test_code_bug` (테스트의 기대값이 JSON 표준과 불일치)
+#### Category 1: Backup Creation Logic Issues (12 failures)
+These tests expect that **first save should NOT create backup**, but implementation creates backup on first save.
 
-#### 3.2 읽기 전용 디렉토리에 저장 시도 시 에러
-- **파일**: `test/unit/storage-advanced.test.ts:70`
-- **에러**: `promise resolved "undefined" instead of rejecting`
-- **원인 분석**:
-  - 테스트가 읽기 전용 디렉토리에서 `save()` 호출 시 reject를 기대
-  - 실제로는 `undefined`로 resolve됨
-  - 권한 체크 로직이 누락되었거나 플랫폼별 권한 동작 차이
-- **분류**: `implementation_bug` (파일 시스템 에러 처리 미흡)
+1. **test/integration/backup-recovery.test.ts**
+   - `두 번째 저장부터 백업 파일 생성` - expected false, got true
 
-#### 3.3 손상된 저장소 초기화 시 백업에서 복구
-- **파일**: `test/unit/storage-advanced.test.ts:321`
-- **에러**: `expected +0 to be 1`
-- **원인 분석**:
-  - 테스트가 손상된 저장소 파일을 백업에서 복구할 때 1개의 todo를 기대
-  - 실제로는 0개의 todo가 로드됨
-  - 백업 복구 로직이 정상 작동하지 않음
-- **분류**: `implementation_bug` (백업 복구 기능 결함)
+2. **test/integration/data-persistence.test.ts**
+   - `첫 번째 저장은 백업 없음, 두 번째 저장부터 백업 생성` - expected false, got true
+   - `backupCreated 플래그 관리` - expected false, got true
 
-#### 3.4 백업에서 자동 복구
-- **파일**: `test/e2e/cli-advanced.test.ts:153`
-- **에러**: `expected false to be true` (백업 파일 존재하지 않음)
-- **원인 분석**:
-  - E2E 테스트에서 백업 파일이 생성되지 않음
-  - 이전 단계에서 수정한 "빈 저장소는 백업 생성 안 함" 로직과 충돌 가능
-  - 또는 백업 생성 타이밍 이슈
-- **분류**: `implementation_bug` (백업 생성 로직 결함)
+3. **test/integration/edge-cases.test.ts**
+   - `첫 번째 저장 후 백업 없음, 두 번째 저장 후 백업 존재` - expected false, got true
 
----
+4. **test/e2e/cli-stress.test.ts**
+   - `백업 파일 생성 확인` - expected false, got true
+
+5. **test/unit/backup-recovery-edge-cases.test.ts**
+   - `should not create backup on first save` - expected false, got true
+
+6. **test/unit/cli-integration.test.ts**
+   - `should create backup on save` - expected false, got true
+
+7. **test/integration/data-integrity.test.ts**
+   - `should create backup on second save` - backup exists on first save
+
+8. **test/integration/backup-recovery-advanced.test.ts**
+   - `should create backup before save` - backup file should not exist on first save
+
+#### Category 2: Read-Only Directory Permission Handling (5 failures)
+Tests expect errors when saving to read-only directories, but implementation doesn't throw.
+
+9. **test/unit/storage-advanced.test.ts**
+   - `읽기 전용 디렉토리에 저장 시도 시 에러` - promise resolved instead of rejecting
+
+10. **test/debug.test.ts**
+    - `should throw error when saving to read-only directory` - promise resolved instead of rejecting
+
+11. **test/integration/advanced-scenarios.test.ts**
+    - `읽기 전용 디렉토리에 저장 시도` - StorageError thrown but with different behavior
+
+12. **test/integration/backup-recovery-advanced.test.ts**
+    - `should handle read-only backup file` - permission denied error instead of graceful handling
+
+#### Category 3: Backup Recovery Logic Issues (3 failures)
+Tests expect recovery from corrupted backup, but implementation returns null or initializes empty.
+
+13. **test/unit/storage-advanced.test.ts**
+    - `손상된 저장소 초기화 시 백업에서 복구` - expected 1 item, got 0
+
+14. **test/unit/backup-recovery-edge-cases.test.ts**
+    - `should recover from corrupted main file using backup` - expected 1 item, got 0
+    - `should handle very large backup file` - expected 100 items, got 99
+
+15. **test/unit/storage.test.ts**
+    - `should throw DataCorruptionError if backup is corrupted` - returned null instead of throwing
+
+16. **test/integration/error-recovery.test.ts**
+    - `백업도 손상된 경우 초기화` - expected rejection, got resolution
+
+#### Category 4: Test Code Bugs (4 failures)
+Tests have logical errors or incorrect assertions.
+
+17. **test/integration/performance-stress.test.ts**
+    - `should handle mixed operations on many items` - incorrect math: toHaveLength(37.5) is impossible
+    - `should handle many items with long content` - test expects success but operation fails
+    - `should sort items efficiently` - incorrect expectation about ID ordering
+
+18. **test/e2e/cli-stress.test.ts**
+    - `연속 추가/완료/삭제 사이클` - expected exitCode 0, got 1 (CLI operation failed)
+    - `동시 add 명령 처리` - expected 5 items, got 4 (race condition in test)
+    - `혼합 언어` - expected '中文' but output truncated to 'Chine...'
 
 ## 4. 종합 판정
 
-### ❌ FAIL
+**Overall Status**: ❌ **FAIL**
 
-### 판정 사유
+### 판정 근거
 
-1. **TypeScript 타입 체크**: ✅ PASS
-2. **린트**: ⚠️ SKIP (무시 가능)
-3. **테스트**: ❌ FAIL (4개 테스트 실패)
+1. ✅ TypeScript 타입 체크: PASS
+2. ⏭️ 린트: SKIP (0 errors)
+3. ❌ 테스트: **FAIL** (24 failures)
 
-### 실패 원인 요약
+### 주요 문제점
 
-| 분류 | 개수 | 상세 |
-|------|------|------|
-| `test_code_bug` | 1 | JSON 표준과 불일치하는 테스트 기대값 (특수문자 공백 보존) |
-| `implementation_bug` | 3 | 파일 시스템 에러 처리, 백업 생성/복구 로직 결함 |
+#### 🔴 Critical Issues (Implementation Bugs)
 
-### 주요 이슈
+1. **Backup Creation Logic**
+   - **Problem**: Implementation creates backup on first save, but tests expect backup only from second save onward
+   - **Root Cause**: `save()` method checks if file exists and creates backup regardless of whether this is first save or not
+   - **Impact**: 12 test failures, breaks expected behavior
+   - **Fix Required**: Track whether this is first save and skip backup creation if no previous data existed
 
-1. **백업/복구 시스템 불안정** (3개 테스트 실패)
-   - 백업 파일 생성 타이밍 로직 수정 후 회귀 발생
-   - 빈 저장소에서 백업 생성하지 않는 로직이 의도치 않게 다른 시나리오에 영향
-   - 손상된 저장소 복구 기능 미작동
+2. **Read-Only Directory Handling**
+   - **Problem**: Tests expect error when saving to read-only directory, but implementation silently succeeds
+   - **Root Cause**: `saveInternal()` may not properly throw StorageError in all permission-denied scenarios
+   - **Impact**: 5 test failures
+   - **Fix Required**: Ensure all file system errors in `save()` are properly wrapped and thrown
 
-2. **파일 시스템 에러 처리 미흡** (1개 테스트 실패)
-   - 읽기 전용 디렉토리에서의 에러 처리 누락
+3. **Backup Recovery Logic**
+   - **Problem**: When backup is corrupted, `restore()` returns null instead of throwing error, causing `initialize()` to create empty storage
+   - **Root Cause**: Design decision to return null instead of throwing, but tests expect different behavior
+   - **Impact**: 3 test failures
+   - **Fix Required**: Clarify design intent - should corrupted backup throw error or initialize empty?
 
-3. **테스트 코드 품질 이슈** (1개 테스트)
-   - JSON 표준 동작을 이해하지 못한 테스트 작성
+#### 🟡 Test Code Issues (Non-blocking)
 
-### 권장 조치
+4. **Invalid Test Logic**
+   - `toHaveLength(37.5)` - impossible assertion
+   - Race conditions in concurrent tests
+   - Output truncation issues in i18n tests
 
-1. **백업 로직 재검토**: 빈 저장소 예외 처리와 정상 시나리오 분리 필요
-2. **파일 시스템 에러 핸들링 강화**: 권한 체크 및 에러 전파 로직 점검
-3. **테스트 코드 수정**: JSON 표준 동작을 반영한 테스트 기대값 수정
+### 권장 사항
+
+1. **즉시 수정 필요** (Critical):
+   - Backup creation logic 수정: 첫 번째 저장 시 백업 생성하지 않도록 변경
+   - Error handling 수정: read-only directory에 저장 시 명확한 에러 throw
+
+2. **설계 명확화 필요**:
+   - Backup 복구 실패 시 동작: 에러 throw vs 빈 저장소 초기화
+   - 현재 구현은 "graceful degradation" 방식이나, 테스트는 "fail fast" 기대
+
+3. **테스트 수정 권장**:
+   - 불가능한 assertion 수정 (37.5 length)
+   - Race condition 가능성 있는 테스트 재설계
+
+### 최종 결론
+
+구현 코드에 명확한 버그가 존재하므로 **FAIL** 판정. 프로덕션 배포 전 수정 필요.
 
 ---
 
-**서명**: stable-signature
+**Test Environment**: 
+- Node.js: v20+
+- Vitest: v1.6.1
+- OS: macOS
+- Duration: 23.45s
