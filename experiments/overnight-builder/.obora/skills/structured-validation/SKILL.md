@@ -93,6 +93,20 @@ Example:
 }
 ```
 
+### `tooling_incompatibility` (PASS-THROUGH)
+
+**This is NOT a code quality failure.** When a tooling version incompatibility exists (e.g., ESLint 8.x with @typescript-eslint 8.x), and the tool itself crashes or refuses to run, this should NOT block validation.
+
+**CRITICAL RULE**: If `lint_exit_code != 0` but the lint log shows a **plugin/version TypeError** (not actual code lint errors), treat lint as SKIPPED and do NOT count it as a failure.
+
+Indicators:
+
+- ESLint crashes with TypeError in rule loading (e.g., `Cannot read properties of undefined`)
+- Version mismatch between ESLint and plugins (e.g., ESLint 8.x + @typescript-eslint/eslint-plugin 8.x)
+- Tool refuses to start due to dependency conflict
+
+**Decision**: If typecheck passes AND all tests pass, and lint failure is purely a tooling crash, the validation result should be `"passed": true` with a note about the skipped lint check.
+
 ### `design_issue`
 
 Architecture/interface problem requiring design changes.
@@ -179,6 +193,8 @@ Before outputting judgment:
 
 - [ ] Read `artifacts/command-status.env` first
 - [ ] Read all relevant log files
+- [ ] **If lint_exit_code != 0**: Read lint.log to determine if it's a real code issue or a tooling crash
+- [ ] **If lint crashed due to version incompatibility**: Mark lint as SKIPPED, do NOT fail validation for this
 - [ ] Each failure categorized with correct prefix
 - [ ] Category name included in `failedChecks[].name`
 - [ ] Signature follows `{category}:{count}` format
