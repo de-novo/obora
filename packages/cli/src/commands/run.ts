@@ -188,7 +188,7 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
   });
 
   runtime.on("workflow.repair_started", (event) => {
-    const data = event.data as { stepName?: string; attempt?: number } | undefined;
+    const data = event.data as { stepName?: string; attempt?: number; reflectorHint?: string } | undefined;
     repairLoopSummary.repairStarted += 1;
     repairLoopSummary.lastRepairStep = data?.stepName;
     repairLoopSummary.lastAttempt = data?.attempt;
@@ -197,6 +197,9 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
       formatter.info(
         `repair attempt ${data?.attempt ?? repairLoopSummary.repairStarted}${data?.stepName ? ` → ${data.stepName}` : ""}`
       );
+      if (data?.reflectorHint) {
+        formatter.info(`  💡 reflector: ${data.reflectorHint}`);
+      }
     }
   });
 

@@ -775,6 +775,7 @@ export class WorkflowRunner {
           );
           if (hint) {
             repairContext.reflectorHint = hint;
+            config?.logger?.info?.(`[reflector] ${step.name} attempt ${repairContext.attempt}: ${hint}`);
           }
         }
         this.recordRepairStarted(executionId, step.name, repairContext.attempt);
@@ -782,6 +783,7 @@ export class WorkflowRunner {
           stepName: step.name,
           attempt: repairContext.attempt,
           latestValidation: repairContext.latestValidation,
+          reflectorHint: repairContext.reflectorHint,
         });
       }
 
