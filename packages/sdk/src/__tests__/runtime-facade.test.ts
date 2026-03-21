@@ -575,6 +575,127 @@ describe("OboraRuntime facade", () => {
     });
   });
 
+  it("injects reflector hints into later repair attempts after repeated failures", async () => {
+    const runtime = new OboraRuntime({
+      llm: { provider: "openai", apiKey: "test-key", model: "gpt-5" },
+      audit: { enabled: true },
+    });
+
+    const repairEvents: Array<{ attempt?: number; reflectorHint?: string }> = [];
+    runtime.on("workflow.repair_started", (event) => {
+      const data = event.data as { attempt?: number; reflectorHint?: string } | undefined;
+      repairEvents.push({ attempt: data?.attempt, reflectorHint: data?.reflectorHint });
+    });
+
+    let callIndex = 0;
+    const adapterMock = {
+      chatCompletion: vi.fn().mockImplementation(async ({ messages }) => {
+        callIndex += 1;
+        const userPrompt = String(messages[1]?.content ?? "");
+
+        if (callIndex === 1) {
+          expect(userPrompt).not.toContain("Repair context:");
+          return { message: { role: "assistant", content: "initial draft" } };
+        }
+        if (callIndex === 2) {
+          return {
+            message: {
+              role: "assistant",
+              content: JSON.stringify({
+                passed: false,
+                summary: "backup restore logic failed in CLI path",
+                failedChecks: [{ name: "implementation_bug: backup", message: "backup restore path broken" }],
+                signature: "backup-cli-1",
+              }),
+            },
+          };
+        }
+        if (callIndex === 3) {
+          expect(userPrompt).toContain("Repair context:");
+          expect(userPrompt).toContain("Reflector analysis:");
+          expect(userPrompt).toContain("implementation_bug");
+          return { message: { role: "assistant", content: "repair attempt two" } };
+        }
+        if (callIndex === 4) {
+          return {
+            message: {
+              role: "assistant",
+              content: JSON.stringify({
+                passed: false,
+                summary: "backup restore logic still failing in CLI path",
+                failedChecks: [{ name: "implementation_bug: restore", message: "backup restore path still broken" }],
+                signature: "backup-cli-2",
+              }),
+            },
+          };
+        }
+        if (callIndex === 5) {
+          expect(userPrompt).toContain("Repair context:");
+          expect(userPrompt).toContain("Reflector analysis:");
+          expect(userPrompt.toLowerCase()).toContain("backup");
+          return { message: { role: "assistant", content: "repair attempt three" } };
+        }
+        return {
+          message: {
+            role: "assistant",
+            content: JSON.stringify({
+              passed: true,
+              summary: "Validation passed",
+              failedChecks: [],
+              signature: "pass",
+            }),
+          },
+        };
+      }),
+    };
+
+    vi.spyOn(
+      runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> },
+      "createLLMAdapter"
+    ).mockResolvedValue(adapterMock);
+
+    runtime.define("validation-repair-reflector", {
+      name: "validation-repair-reflector",
+      steps: [
+        {
+          name: "build_or_repair",
+          agent: "builder",
+          config: {
+            repair_loop: {
+              enabled: true,
+              validation_step: "validate",
+              max_no_progress_iterations: 4,
+              repeated_critical_issue_ceiling: 4,
+            },
+          },
+          input: { task: "Build or repair the app" },
+        },
+        {
+          name: "validate",
+          agent: "validator",
+          depends_on: ["build_or_repair"],
+          config: { validation: { enabled: true, emit_structured_result: true } },
+          on_fail: { goto: "build_or_repair", max_iterations: 4 },
+          input: { task: "Validate the app and return structured JSON" },
+        },
+      ],
+    });
+
+    const handle = await runtime.run("validation-repair-reflector");
+    const result = await handle.wait();
+
+    expect(result.status).toBe("completed");
+    expect(result.outputs["build_or_repair"]).toBe("repair attempt three");
+    expect(adapterMock.chatCompletion).toHaveBeenCalledTimes(6);
+    expect(repairEvents).toHaveLength(2);
+    expect(repairEvents[0]?.attempt).toBe(2);
+    expect(repairEvents[0]?.reflectorHint).toBeDefined();
+    expect(repairEvents[0]?.reflectorHint).toContain("implementation_bug");
+    expect(repairEvents[1]?.attempt).toBe(3);
+    expect(repairEvents[1]?.reflectorHint).toBeDefined();
+    expect(repairEvents[1]?.reflectorHint?.toLowerCase()).toContain("backup");
+  });
+
   it("stops repair loop on repeated no-progress validation signatures", async () => {
     const runtime = new OboraRuntime({
       llm: { provider: "openai", apiKey: "test-key", model: "gpt-5" },
