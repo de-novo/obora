@@ -1020,15 +1020,82 @@ export class StepExecutor {
 
   private tryParseStructuredContent(rawContent: string): unknown {
     const trimmed = rawContent.trim();
-    const normalized = trimmed.startsWith("```")
-      ? trimmed.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "")
-      : trimmed;
 
+    const direct = this.tryParseJson(trimmed);
+    if (direct !== undefined) return direct;
+
+    const fencedMatches = [...trimmed.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)];
+    for (const match of fencedMatches) {
+      const candidate = match[1]?.trim();
+      const parsed = candidate ? this.tryParseJson(candidate) : undefined;
+      if (parsed !== undefined) return parsed;
+    }
+
+    const embedded = this.extractEmbeddedJson(trimmed);
+    if (embedded) {
+      const parsed = this.tryParseJson(embedded);
+      if (parsed !== undefined) return parsed;
+    }
+
+    return undefined;
+  }
+
+  private tryParseJson(candidate: string): unknown {
     try {
-      return JSON.parse(normalized);
+      return JSON.parse(candidate);
     } catch {
       return undefined;
     }
+  }
+
+  private extractEmbeddedJson(text: string): string | undefined {
+    const start = [...text].findIndex((char) => char === "{" || char === "[");
+    if (start < 0) return undefined;
+
+    const stack: string[] = [];
+    let inString = false;
+    let escaped = false;
+
+    for (let i = start; i < text.length; i++) {
+      const char = text[i]!;
+
+      if (inString) {
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+        if (char === "\\") {
+          escaped = true;
+          continue;
+        }
+        if (char === '"') {
+          inString = false;
+        }
+        continue;
+      }
+
+      if (char === '"') {
+        inString = true;
+        continue;
+      }
+
+      if (char === "{") {
+        stack.push("}");
+        continue;
+      }
+      if (char === "[") {
+        stack.push("]");
+        continue;
+      }
+      if ((char === "}" || char === "]") && stack.at(-1) === char) {
+        stack.pop();
+        if (stack.length === 0) {
+          return text.slice(start, i + 1);
+        }
+      }
+    }
+
+    return undefined;
   }
 
   private extractTask(step: WorkflowStep): string {

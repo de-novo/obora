@@ -303,6 +303,70 @@ describe("StepExecutor", () => {
     });
   });
 
+  it("parses structured validation JSON when wrapped in explanatory text", async () => {
+    const chatCompletion = vi.fn<LLMAdapterLike["chatCompletion"]>().mockResolvedValue({
+      message: {
+        role: "assistant",
+        content: [
+          "판정 결과입니다.",
+          '{"passed":false,"summary":"Need backup redesign","failedChecks":[{"name":"implementation_bug","message":"backup path broken"}],"signature":"implementation_bug:1"}',
+          "위 JSON만 사용하세요.",
+        ].join("\n"),
+      },
+    });
+
+    const executor = new StepExecutor({ chatCompletion }, new Map(), {});
+    const result = await executor.executeStep(
+      {
+        name: "validate-text-wrapper",
+        agent: "validator",
+        input: { task: "Validate the generated app" },
+        config: { validation: { enabled: true, emit_structured_result: true } },
+      },
+      { previousOutputs: {} },
+    );
+
+    expect(result.output).toMatchObject({
+      passed: false,
+      summary: "Need backup redesign",
+      failedChecks: [{ name: "implementation_bug", message: "backup path broken" }],
+      signature: "implementation_bug:1",
+    });
+  });
+
+  it("parses structured validation JSON when fenced JSON appears after explanatory text", async () => {
+    const chatCompletion = vi.fn<LLMAdapterLike["chatCompletion"]>().mockResolvedValue({
+      message: {
+        role: "assistant",
+        content: [
+          "아래 JSON을 최종 판정으로 사용하세요.",
+          "```json",
+          '{"passed":true,"summary":"Validation passed","failedChecks":[],"signature":"pass"}',
+          "```",
+          "추가 설명은 무시해도 됩니다.",
+        ].join("\n"),
+      },
+    });
+
+    const executor = new StepExecutor({ chatCompletion }, new Map(), {});
+    const result = await executor.executeStep(
+      {
+        name: "validate-fenced-wrapper",
+        agent: "validator",
+        input: { task: "Validate the generated app" },
+        config: { validation: { enabled: true, emit_structured_result: true } },
+      },
+      { previousOutputs: {} },
+    );
+
+    expect(result.output).toMatchObject({
+      passed: true,
+      summary: "Validation passed",
+      failedChecks: [],
+      signature: "pass",
+    });
+  });
+
   it("injects repair context into the user prompt", async () => {
     const chatCompletion = vi.fn<LLMAdapterLike["chatCompletion"]>().mockResolvedValue({
       message: { role: "assistant", content: "done" },
