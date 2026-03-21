@@ -53,6 +53,16 @@ export interface OboraConfig {
     local?: { basePath?: string };
     custom?: { instance?: import("@obora/runtime").ArtifactStore };
   };
+  sharedMemory?: {
+    enabled?: boolean;
+    adapter?: "file" | "custom";
+    file?: {
+      basePath?: string;
+      projectKey?: string;
+      scopes?: import("./shared-memory/store.js").MemoryScopeLevel[];
+    };
+    custom?: { instance?: import("./shared-memory/store.js").SharedMemoryStore };
+  };
   resources?: {
     maxCostPerRun?: number;
     maxTokensPerStep?: number;
@@ -163,6 +173,15 @@ function mergeConfig(base: OboraConfig | undefined, override: OboraConfig | unde
         ...(override?.artifacts?.local ?? {}),
       },
       custom: override?.artifacts?.custom ?? base?.artifacts?.custom,
+    },
+    sharedMemory: {
+      ...(base?.sharedMemory ?? {}),
+      ...(override?.sharedMemory ?? {}),
+      file: {
+        ...(base?.sharedMemory?.file ?? {}),
+        ...(override?.sharedMemory?.file ?? {}),
+      },
+      custom: override?.sharedMemory?.custom ?? base?.sharedMemory?.custom,
     },
     resources: {
       ...(base?.resources ?? {}),

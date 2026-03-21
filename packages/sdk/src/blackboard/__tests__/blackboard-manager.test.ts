@@ -269,4 +269,50 @@ describe("BlackboardManager", () => {
       expect(mgr.board.version).toBeGreaterThan(v2);
     });
   });
+
+  describe("shared memory snapshot", () => {
+    it("exports persistent snapshot without transient step-output facts", () => {
+      const mgr = new BlackboardManager({ sessionId: "persist-session" });
+      mgr.recordStepOutput("plan", { title: "draft" });
+      mgr.recordValidation("validate", {
+        passed: false,
+        summary: "backup restore failed",
+        failedChecks: [{ name: "implementation_bug", message: "backup broken" }],
+      });
+
+      const snapshot = mgr.exportPersistentSnapshot("exec-1");
+
+      expect(snapshot.knowledge.facts.every((fact) => fact.category !== "step-output")).toBe(true);
+      expect(snapshot.knowledge.facts.some((fact) => fact.category === "validation-fail")).toBe(true);
+      expect(snapshot.context.projectFacts.knownStepOutputs).toEqual(["plan"]);
+    });
+
+    it("imports shared-memory facts into local facts and runtime board", () => {
+      const mgr = new BlackboardManager({ sessionId: "import-session" });
+      const result = mgr.importPersistentSnapshot(
+        {
+          knowledge: {
+            facts: [
+              {
+                id: "fact-1",
+                content: "Reuse backup redesign insight",
+                category: "lesson",
+                tags: ["backup"],
+                confidence: 0.9,
+                createdAt: new Date().toISOString(),
+              },
+            ],
+          },
+          decisions: { history: [] },
+          context: { projectFacts: { project: "obora" } },
+        },
+        { level: "project", key: "obora-kit" },
+      );
+
+      expect(result.importedFacts).toBe(1);
+      expect(mgr.getFactsByCategory("shared-memory-import")).toHaveLength(1);
+      const stored = mgr.board.read("state.context.sharedMemory.project.obora-kit", { strict: false });
+      expect(stored).toBeDefined();
+    });
+  });
 });

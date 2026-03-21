@@ -61,6 +61,7 @@ export type {
   OboraAuditConfig,
   PersistenceConfig,
   ArtifactsConfig,
+  SharedMemoryConfig,
   OboraRuntimeConfig,
 } from "./runtime-types.js";
 

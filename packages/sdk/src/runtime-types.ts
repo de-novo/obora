@@ -219,6 +219,19 @@ export interface ArtifactsConfig {
   custom?: { instance: import("@obora/runtime").ArtifactStore };
 }
 
+export interface SharedMemoryConfig {
+  enabled?: boolean;
+  adapter?: "file" | "custom";
+  file?: {
+    basePath?: string;
+    projectKey?: string;
+    scopes?: import("./shared-memory/store.js").MemoryScopeLevel[];
+  };
+  custom?: {
+    instance: import("./shared-memory/store.js").SharedMemoryStore;
+  };
+}
+
 export interface OboraRuntimeConfig {
   policyPath?: string;
   audit?: OboraAuditConfig;
@@ -230,4 +243,5 @@ export interface OboraRuntimeConfig {
   stepTools?: import("./step-executor.js").ToolHandler[];
   persistence?: PersistenceConfig;
   artifacts?: ArtifactsConfig;
+  sharedMemory?: SharedMemoryConfig;
 }

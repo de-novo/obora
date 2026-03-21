@@ -5,6 +5,12 @@ import { join } from "node:path";
 
 import { OboraError, OboraErrorCode, OboraRuntime } from "../runtime.js";
 import type { LoadedPlugin } from "../plugin-types.js";
+import {
+  mergeSharedMemorySnapshots,
+  type MemoryScope,
+  type SharedMemorySnapshot,
+  type SharedMemoryStore,
+} from "../shared-memory/store.js";
 
 function makeLoadedPlugin(name: string, type: "tool" | "agent" = "tool"): LoadedPlugin {
   return {
@@ -767,6 +773,120 @@ describe("OboraRuntime facade", () => {
     const handle = await runtime.run("validation-repair-reflector-abort");
     await expect(handle.wait()).rejects.toThrow(/reflector requested abort/i);
     expect(adapterMock.chatCompletion).toHaveBeenCalledTimes(2);
+  });
+
+  it("persists shared memory and injects it into the next execution prompt", async () => {
+    const store: SharedMemoryStore = {
+      _data: new Map<string, SharedMemorySnapshot>(),
+      async load(scope: MemoryScope) {
+        return (this as any)._data.get(`${scope.level}:${scope.key}`) ?? null;
+      },
+      async save(scope: MemoryScope, snapshot: SharedMemorySnapshot) {
+        (this as any)._data.set(`${scope.level}:${scope.key}`, snapshot);
+      },
+      async merge(scope: MemoryScope, snapshot: SharedMemorySnapshot) {
+        const existing = await this.load(scope);
+        await this.save(scope, mergeSharedMemorySnapshots(existing, snapshot));
+      },
+    };
+
+    // Run 1 — produces a validation failure fact that gets persisted
+    const runtime1 = new OboraRuntime({
+      llm: { provider: "openai", apiKey: "test-key", model: "gpt-5" },
+      sharedMemory: {
+        enabled: true,
+        adapter: "custom",
+        custom: { instance: store },
+        file: { projectKey: "test-project", scopes: ["project"] },
+      },
+    });
+
+    let run1CallIndex = 0;
+    const adapter1 = {
+      chatCompletion: vi.fn().mockImplementation(async () => {
+        run1CallIndex += 1;
+        if (run1CallIndex === 1) {
+          return { message: { role: "assistant", content: "build v1" } };
+        }
+        return {
+          message: {
+            role: "assistant",
+            content: JSON.stringify({
+              passed: true,
+              summary: "All passed",
+              failedChecks: [],
+              signature: "pass",
+            }),
+          },
+        };
+      }),
+    };
+
+    vi.spyOn(
+      runtime1 as unknown as { createLLMAdapter: () => Promise<typeof adapter1> },
+      "createLLMAdapter"
+    ).mockResolvedValue(adapter1);
+
+    runtime1.define("shared-mem-run1", {
+      name: "shared-mem-run1",
+      sharedMemory: { enabled: true, projectKey: "test-project", scopes: ["project"] },
+      steps: [
+        { name: "build", agent: "builder", input: { task: "Build app" } },
+        {
+          name: "validate",
+          agent: "validator",
+          depends_on: ["build"],
+          config: { validation: { enabled: true, emit_structured_result: true } },
+          input: { task: "Validate" },
+        },
+      ],
+    });
+
+    const handle1 = await runtime1.run("shared-mem-run1");
+    await handle1.wait();
+
+    // Verify something was saved
+    const saved = await store.load({ level: "project", key: "test-project" });
+    expect(saved).not.toBeNull();
+
+    // Run 2 — should see shared memory in prompt
+    const runtime2 = new OboraRuntime({
+      llm: { provider: "openai", apiKey: "test-key", model: "gpt-5" },
+      sharedMemory: {
+        enabled: true,
+        adapter: "custom",
+        custom: { instance: store },
+        file: { projectKey: "test-project", scopes: ["project"] },
+      },
+    });
+
+    const adapter2 = {
+      chatCompletion: vi.fn().mockImplementation(async () => {
+        return { message: { role: "assistant", content: "build v2" } };
+      }),
+    };
+
+    vi.spyOn(
+      runtime2 as unknown as { createLLMAdapter: () => Promise<typeof adapter2> },
+      "createLLMAdapter"
+    ).mockResolvedValue(adapter2);
+
+    runtime2.define("shared-mem-run2", {
+      name: "shared-mem-run2",
+      sharedMemory: { enabled: true, projectKey: "test-project", scopes: ["project"] },
+      steps: [
+        { name: "build", agent: "builder", input: { task: "Build app v2" } },
+      ],
+    });
+
+    const handle2 = await runtime2.run("shared-mem-run2");
+    await handle2.wait();
+
+    // The second run's prompt should contain shared memory context
+    const call = adapter2.chatCompletion.mock.calls[0]?.[0];
+    const userPrompt = String(call?.messages?.[1]?.content ?? "");
+    expect(userPrompt).toContain("Shared memory context:");
+    expect(userPrompt).toContain("test-project");
   });
 
   it("force_target reroutes next back-edge to the specified step", async () => {

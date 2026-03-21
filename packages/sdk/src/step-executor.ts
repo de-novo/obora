@@ -937,6 +937,7 @@ export class StepExecutor {
     const dependencyContext = (step.depends_on ?? [])
       .map((name) => ({ step: name, output: context.previousOutputs[name] }))
       .filter((entry) => entry.output !== undefined);
+    const sharedMemoryContext = context.previousOutputs.__shared_memory__;
 
     const shouldIncludeRepairContext = Boolean(
       context.repairContext &&
@@ -992,6 +993,9 @@ export class StepExecutor {
       dependencyContext.length > 0
         ? `Previous outputs:\n${JSON.stringify(dependencyContext, null, 2)}`
         : "Previous outputs: none",
+      sharedMemoryContext
+        ? `\nShared memory context:\n${JSON.stringify(sharedMemoryContext, null, 2)}`
+        : undefined,
     ]
       .filter(Boolean)
       .join("\n");

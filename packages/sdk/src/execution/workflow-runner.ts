@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { basename, join } from "node:path";
 
 import { parse as parseYaml } from "yaml";
 
@@ -41,11 +42,20 @@ import {
   type RouteResolution,
 } from "../conditional-routing.js";
 import { BlackboardManager } from "../blackboard/blackboard-manager.js";
+import type { BlackboardSnapshot } from "../blackboard/blackboard-manager.js";
 import { ExecutionObserver } from "../blackboard/execution-observer.js";
+import type { ExecutionMetrics } from "../blackboard/execution-observer.js";
 import { ExecutionReflector } from "../blackboard/execution-reflector.js";
 import { ReflectorEngine } from "../reflector/reflector-engine.js";
 import { KnowledgeStore } from "../reflector/knowledge-store.js";
 import type { ReflectorRule } from "../reflector/rule-engine.js";
+import {
+  FileSharedMemoryStore,
+  mergeSharedMemorySnapshots,
+  type MemoryScope,
+  type SharedMemorySnapshot,
+  type SharedMemoryStore,
+} from "../shared-memory/store.js";
 
 /** Duck-type for reflector: both ExecutionReflector and ReflectorEngine implement this. */
 type ReflectorLike = {
@@ -461,6 +471,123 @@ export class WorkflowRunner {
     return hint ? [hint] : [];
   }
 
+  private summarizeBlackboardSnapshot(snapshot: BlackboardSnapshot): Record<string, unknown> {
+    return {
+      facts: snapshot.facts.length,
+      failures: snapshot.failures.length,
+      stepOutputs: Object.keys(snapshot.stepOutputs),
+      stepTimings: Object.keys(snapshot.stepTimings),
+      lastFailure: snapshot.failures.at(-1)
+        ? {
+            stepName: snapshot.failures.at(-1)!.stepName,
+            attempt: snapshot.failures.at(-1)!.attempt,
+            summary: snapshot.failures.at(-1)!.validation.summary,
+          }
+        : undefined,
+    };
+  }
+
+  private summarizeObserverMetrics(metrics?: ExecutionMetrics): Record<string, unknown> | undefined {
+    if (!metrics) return undefined;
+    return {
+      totalSteps: metrics.stepMetrics.size,
+      totalBackEdges: metrics.totalBackEdges,
+      totalRepairs: metrics.totalRepairs,
+      totalValidationFailures: metrics.totalValidationFailures,
+      totalValidationPasses: metrics.totalValidationPasses,
+      steps: [...metrics.stepMetrics.values()].map((step) => ({
+        stepName: step.stepName,
+        status: step.status,
+        retryCount: step.retryCount,
+        validationFailures: step.validationFailures,
+        validationPasses: step.validationPasses,
+      })),
+    };
+  }
+
+  private resolveSharedMemoryStore(
+    runtimeConfig: OboraRuntimeConfig,
+    loadedConfig: OboraConfig | undefined,
+  ): SharedMemoryStore | undefined {
+    const sharedMemoryConfig = runtimeConfig.sharedMemory ?? loadedConfig?.sharedMemory;
+    if (!sharedMemoryConfig?.enabled) return undefined;
+
+    if (sharedMemoryConfig.adapter === "custom") {
+      return sharedMemoryConfig.custom?.instance;
+    }
+
+    const basePath = sharedMemoryConfig.file?.basePath ?? join(process.cwd(), ".obora", "shared-memory");
+    return new FileSharedMemoryStore(basePath);
+  }
+
+  private resolveSharedMemoryScopes(
+    workflow: WorkflowDef,
+    runtimeConfig: OboraRuntimeConfig,
+    loadedConfig: OboraConfig | undefined,
+  ): MemoryScope[] {
+    const sharedMemoryConfig = runtimeConfig.sharedMemory ?? loadedConfig?.sharedMemory;
+    const workflowSharedMemory = workflow.sharedMemory;
+    const scopeLevels = workflowSharedMemory?.scopes
+      ?? sharedMemoryConfig?.file?.scopes
+      ?? (["workflow", "project"] as MemoryScope["level"][]);
+    const projectKey = workflowSharedMemory?.projectKey
+      ?? sharedMemoryConfig?.file?.projectKey
+      ?? basename(process.cwd());
+
+    return scopeLevels.map((level) => ({
+      level,
+      key: level === "workflow" ? workflow.name : level === "global" ? "global" : projectKey,
+    }));
+  }
+
+  private async importSharedMemory(
+    store: SharedMemoryStore | undefined,
+    scopes: MemoryScope[],
+    blackboard: BlackboardManager,
+    execution: RuntimeExecution,
+  ): Promise<{ importedScopes: string[]; mergedSnapshot: SharedMemorySnapshot | null }> {
+    if (!store) return { importedScopes: [], mergedSnapshot: null };
+
+    let mergedSnapshot: SharedMemorySnapshot | null = null;
+    const importedScopes: string[] = [];
+
+    for (const scope of scopes) {
+      const snapshot = await store.load(scope);
+      if (!snapshot) continue;
+      blackboard.importPersistentSnapshot(snapshot, scope);
+      mergedSnapshot = mergeSharedMemorySnapshots(mergedSnapshot, snapshot);
+      importedScopes.push(`${scope.level}:${scope.key}`);
+    }
+
+    if (mergedSnapshot) {
+      execution.outputs.__shared_memory__ = {
+        importedScopes,
+        knowledge: mergedSnapshot.knowledge,
+        decisions: mergedSnapshot.decisions,
+        context: mergedSnapshot.context,
+      };
+    }
+
+    return { importedScopes, mergedSnapshot };
+  }
+
+  private async persistSharedMemory(
+    store: SharedMemoryStore | undefined,
+    scopes: MemoryScope[],
+    blackboard: BlackboardManager,
+    executionId: string,
+  ): Promise<void> {
+    if (!store || scopes.length === 0) return;
+    const snapshot = blackboard.exportPersistentSnapshot(executionId);
+    for (const scope of scopes) {
+      if (typeof store.merge === "function") {
+        await store.merge(scope, snapshot);
+      } else {
+        await store.save(scope, snapshot);
+      }
+    }
+  }
+
   private recordValidationFailure(
     executionId: string,
     stepName: string,
@@ -659,7 +786,8 @@ export class WorkflowRunner {
     signal?: AbortSignal,
     isSettledFn?: () => boolean,
     blackboard?: BlackboardManager,
-    reflector?: ReflectorLike
+    reflector?: ReflectorLike,
+    observer?: ExecutionObserver,
   ): Promise<void> {
     const { eventBus, config } = this.deps;
 
@@ -825,6 +953,26 @@ export class WorkflowRunner {
           attempt: repairContext.attempt,
           latestValidation: repairContext.latestValidation,
           reflectorHint: repairContext.reflectorHint,
+          ...(blackboard || observer
+            ? {
+                debugState: {
+                  ...(blackboard
+                    ? {
+                        blackboard: this.summarizeBlackboardSnapshot(
+                          blackboard.getSnapshot(),
+                        ),
+                      }
+                    : {}),
+                  ...(observer
+                    ? {
+                        observer: this.summarizeObserverMetrics(
+                          observer.getMetrics(executionId),
+                        ),
+                      }
+                    : {}),
+                },
+              }
+            : {}),
         });
       }
 
@@ -911,6 +1059,26 @@ export class WorkflowRunner {
             failedChecks: validationResult.failedChecks,
             signature: validationResult.signature,
             logPath: validationResult.logPath,
+            ...(blackboard || observer
+              ? {
+                  debugState: {
+                    ...(blackboard
+                      ? {
+                          blackboard: this.summarizeBlackboardSnapshot(
+                            blackboard.getSnapshot(),
+                          ),
+                        }
+                      : {}),
+                    ...(observer
+                      ? {
+                          observer: this.summarizeObserverMetrics(
+                            observer.getMetrics(executionId),
+                          ),
+                        }
+                      : {}),
+                  },
+                }
+              : {}),
           });
 
           const goto = step.on_fail?.goto;
@@ -1279,6 +1447,7 @@ export class WorkflowRunner {
     isSettledFn?: () => boolean,
     blackboard?: BlackboardManager,
     reflector?: ReflectorLike,
+    observer?: ExecutionObserver,
     maxConcurrency: number = DEFAULT_MAX_CONCURRENCY,
   ): Promise<void> {
     const { eventBus } = this.deps;
@@ -1305,6 +1474,7 @@ export class WorkflowRunner {
           isSettledFn,
           blackboard,
           reflector,
+          observer,
         );
         continue;
       }
@@ -1405,6 +1575,8 @@ export class WorkflowRunner {
 
     const persistenceConfig = config.persistence ?? loadedConfig?.persistence;
     const persistenceEnabled = persistenceConfig?.enabled ?? false;
+    const sharedMemoryStore = this.resolveSharedMemoryStore(config, loadedConfig);
+    const sharedMemoryScopes = this.resolveSharedMemoryScopes(workflow, config, loadedConfig);
 
     // Persistence: save run at start
     let persistenceAdapter: StorageAdapter | null = null;
@@ -1461,6 +1633,21 @@ export class WorkflowRunner {
     // Create blackboard, observer, and reflector for this execution
     const blackboard = new BlackboardManager({ sessionId: executionId });
     const observer = new ExecutionObserver(eventBus, blackboard);
+
+    const sharedMemoryImport = await this.importSharedMemory(
+      sharedMemoryStore,
+      sharedMemoryScopes,
+      blackboard,
+      execution,
+    );
+    if (sharedMemoryImport.importedScopes.length > 0) {
+      await eventBus.emit("knowledge_context_attached", executionId, {
+        workflowName,
+        itemCount: sharedMemoryImport.mergedSnapshot?.knowledge.facts.length ?? 0,
+        sources: sharedMemoryImport.importedScopes,
+        sourceType: "shared-memory",
+      });
+    }
     // Use ReflectorEngine v2 — wire YAML reflector config if present
     const reflectorConfig = workflow.reflector;
     const reflectorRules: ReflectorRule[] = (reflectorConfig?.rules ?? []).map((r) => ({
@@ -1503,6 +1690,7 @@ export class WorkflowRunner {
         isSettledFn,
         blackboard,
         reflector,
+        observer,
         scheduler.maxConcurrency,
       );
     } else {
@@ -1520,6 +1708,7 @@ export class WorkflowRunner {
         isSettledFn,
         blackboard,
         reflector,
+        observer,
       );
     }
 
@@ -1531,9 +1720,8 @@ export class WorkflowRunner {
       workflowName,
       failurePatterns: this.extractFailurePatterns(blackboard, reflector),
     });
-    if (report) {
-      await eventBus.emit("execution_end", executionId, { report });
-    }
+    await this.persistSharedMemory(sharedMemoryStore, sharedMemoryScopes, blackboard, executionId);
+    const blackboardSnapshot = blackboard.getSnapshot();
     observer.dispose();
 
     execution.status = "completed";
@@ -1584,6 +1772,11 @@ export class WorkflowRunner {
     await eventBus.emit("execution_end", executionId, {
       workflowName,
       status: "completed",
+      ...(report ? { report } : {}),
+      debugState: {
+        blackboard: this.summarizeBlackboardSnapshot(blackboardSnapshot),
+        observerReport: report,
+      },
     });
   }
 

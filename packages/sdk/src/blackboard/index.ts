@@ -4,6 +4,7 @@ export type {
   FailureEntry,
   BlackboardFact,
   BlackboardSnapshot,
+  SharedMemoryImportResult,
 } from "./blackboard-manager.js";
 
 export { ExecutionObserver } from "./execution-observer.js";

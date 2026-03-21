@@ -416,6 +416,36 @@ describe("StepExecutor", () => {
     expect(call?.messages[1]?.content).toContain("Repeated critical issue ceiling: 2");
   });
 
+  it("includes shared memory context in the user prompt when present", async () => {
+    const chatCompletion = vi.fn<LLMAdapterLike["chatCompletion"]>().mockResolvedValue({
+      message: { role: "assistant", content: "done" },
+    });
+
+    const executor = new StepExecutor({ chatCompletion }, new Map(), {});
+    await executor.executeStep(
+      {
+        name: "build",
+        agent: "builder",
+        input: { task: "Use prior shared memory context" },
+      },
+      {
+        previousOutputs: {
+          __shared_memory__: {
+            importedScopes: ["project:obora-kit"],
+            knowledge: {
+              facts: [{ id: "f1", content: "backup redesign was needed", category: "lesson" }],
+            },
+          },
+        },
+      },
+    );
+
+    const call = chatCompletion.mock.calls[0]?.[0];
+    expect(call?.messages[1]?.content).toContain("Shared memory context:");
+    expect(call?.messages[1]?.content).toContain("backup redesign was needed");
+    expect(call?.messages[1]?.content).toContain("project:obora-kit");
+  });
+
   it("executes file tools when model returns structured tool calls", async () => {
     const cwdBefore = process.cwd();
     const workspace = await mkdtemp(join(tmpdir(), "obora-step-tools-"));

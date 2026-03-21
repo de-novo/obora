@@ -1,4 +1,5 @@
 import { BoardBlackboard, createSessionId } from "@obora/runtime";
+import type { SharedMemorySnapshot, MemoryScope } from "../shared-memory/store.js";
 import type { ValidationResult } from "../validation-repair.js";
 
 export interface FailureEntry {
@@ -27,6 +28,11 @@ export interface BlackboardSnapshot {
 
 export interface BlackboardManagerOptions {
   sessionId?: string;
+}
+
+export interface SharedMemoryImportResult {
+  importedFacts: number;
+  source: MemoryScope;
 }
 
 /**
@@ -193,6 +199,76 @@ export class BlackboardManager {
       stepTimings: timings,
       createdAt: new Date(),
     };
+  }
+
+  /**
+   * Export a persistent shared-memory snapshot.
+   * Excludes transient step timing data and raw step outputs.
+   */
+  exportPersistentSnapshot(sourceExecutionId?: string): SharedMemorySnapshot {
+    const exportableFacts = this.facts.filter(
+      (fact) => fact.category !== "step-output" && fact.category !== "shared-memory-import",
+    );
+
+    const lastFailureSummaries = this.failures.slice(-5).map((failure) => failure.validation.summary);
+
+    return {
+      knowledge: {
+        facts: exportableFacts.map((fact) => ({
+          id: fact.id,
+          content: fact.content,
+          category: fact.category,
+          tags: [...fact.tags],
+          confidence: fact.confidence,
+          createdAt: fact.createdAt.toISOString(),
+          sourceExecutionId,
+        })),
+      },
+      decisions: {
+        history: [],
+      },
+      context: {
+        projectFacts: {
+          knownStepOutputs: Object.keys(this.getAllStepOutputs()),
+          recentFailureSummaries: lastFailureSummaries,
+        },
+      },
+    };
+  }
+
+  /**
+   * Import shared-memory snapshot into the local blackboard and Runtime Blackboard.
+   */
+  importPersistentSnapshot(
+    snapshot: SharedMemorySnapshot,
+    source: MemoryScope,
+  ): SharedMemoryImportResult {
+    let importedFacts = 0;
+
+    for (const fact of snapshot.knowledge.facts) {
+      const importedFact: BlackboardFact = {
+        id: `shared:${source.level}:${source.key}:${fact.id}`,
+        content: fact.content,
+        category: "shared-memory-import",
+        tags: [...fact.tags, "shared-memory", source.level, source.key],
+        confidence: fact.confidence,
+        createdAt: new Date(fact.createdAt),
+      };
+      this.facts.push(importedFact);
+      importedFacts += 1;
+
+      this.board.knowledge.addFact({
+        content: fact.content,
+        source: `shared-memory:${source.level}:${source.key}`,
+        confidence: fact.confidence,
+        category: "shared-memory-import",
+        tags: [...fact.tags, source.level, source.key],
+      });
+    }
+
+    this.board.write(`state.context.sharedMemory.${source.level}.${source.key}`, snapshot);
+
+    return { importedFacts, source };
   }
 
   /**

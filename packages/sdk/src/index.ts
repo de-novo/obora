@@ -61,6 +61,7 @@ export type { PluginManagerOptions } from "./plugin-manager.js";
 export type {
   PersistenceConfig,
   OboraRuntimeConfig,
+  SharedMemoryConfig,
   RunOptions,
   RunHandle,
   RunStatus,
@@ -83,6 +84,7 @@ export type {
   ParallelBranch,
   WorkflowDef,
   WorkflowHooks,
+  WorkflowSharedMemoryConfig,
   WorkflowStep,
   WorkflowStepConfig,
 } from "./workflow.js";
@@ -125,11 +127,22 @@ export type {
   FailureEntry,
   BlackboardFact,
   BlackboardSnapshot,
+  SharedMemoryImportResult,
   StepMetrics,
   ExecutionMetrics,
   ExecutionReport,
   ExecutionReportStepMetric,
 } from "./blackboard/index.js";
+
+export { FileSharedMemoryStore, mergeSharedMemorySnapshots } from "./shared-memory/index.js";
+export type {
+  MemoryScope,
+  MemoryScopeLevel,
+  SharedMemoryFact,
+  SharedMemoryDecision,
+  SharedMemorySnapshot,
+  SharedMemoryStore,
+} from "./shared-memory/index.js";
 
 // ── Reflector v2 ────────────────────────────────────────────────────────
 export { ReflectorEngine } from "./reflector/index.js";

@@ -93,6 +93,12 @@ export interface WorkflowReflectorConfig {
   }>;
 }
 
+export interface WorkflowSharedMemoryConfig {
+  enabled?: boolean;
+  projectKey?: string;
+  scopes?: import("./shared-memory/store.js").MemoryScopeLevel[];
+}
+
 export interface WorkflowDef {
   name: string;
   version?: string;
@@ -103,6 +109,8 @@ export interface WorkflowDef {
   maxConcurrency?: number;
   /** Reflector v2 configuration. */
   reflector?: WorkflowReflectorConfig;
+  /** Shared memory import/export overrides for this workflow. */
+  sharedMemory?: WorkflowSharedMemoryConfig;
 }
 
 export interface OnFailConfig {
