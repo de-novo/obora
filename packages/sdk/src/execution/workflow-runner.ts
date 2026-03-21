@@ -666,6 +666,8 @@ export class WorkflowRunner {
     const stepIndexByName = new Map(sortedSteps.map((step, idx) => [step.name, idx]));
     const backEdgeIterations = new Map<string, number>();
     const repairLoopStates = new Map<string, RepairLoopRuntimeState>();
+    /** Reflector v2 force_target overrides, keyed by validation/failing step name. */
+    const forcedRouteTargets = new Map<string, string>();
     /** Global repair attempt counter — not reset by back-edges */
     let globalRepairAttempts = 0;
     let cursor = 0;
@@ -804,6 +806,13 @@ export class WorkflowRunner {
                   if (target && stepIndexByName.has(target)) {
                     config?.logger?.info?.(`[reflector] force_target → ${target}`);
                     repairContext.forceTarget = target;
+                    const validationStepName = repairContext.validationStep;
+                    if (validationStepName) {
+                      forcedRouteTargets.set(validationStepName, target);
+                      config?.logger?.info?.(
+                        `[reflector] queued force_target for validation step ${validationStepName} → ${target}`
+                      );
+                    }
                   }
                 }
               }
@@ -910,14 +919,20 @@ export class WorkflowRunner {
 
             // Check global repair ceiling (prevents infinite loops across back-edges)
             // Reflector v2: forceTarget overrides route resolution
+            const queuedForceTarget = forcedRouteTargets.get(step.name);
             const repairState = repairLoopStates.get(step.name);
-            const forceTarget = repairState
-              ? undefined
-              : (repairContext as RepairContext | undefined)?.forceTarget;
+            const forceTarget = queuedForceTarget ?? (
+              repairState
+                ? undefined
+                : (repairContext as RepairContext | undefined)?.forceTarget
+            );
             const baseResolution = resolveFailureRoute(goto, validationResult);
             const routeResolution: RouteResolution = forceTarget && stepIndexByName.has(forceTarget)
               ? { target: forceTarget, matchReason: "default" as const }
               : baseResolution;
+            if (queuedForceTarget) {
+              forcedRouteTargets.delete(step.name);
+            }
             const targetStepName = routeResolution.target;
             const repairConfigForCeiling = getRepairLoopConfig(
               sortedSteps.find((candidate) => candidate.name === targetStepName)?.config

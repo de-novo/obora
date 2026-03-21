@@ -696,6 +696,227 @@ describe("OboraRuntime facade", () => {
     expect(repairEvents[1]?.reflectorHint?.toLowerCase()).toContain("backup");
   });
 
+  it("aborts repair loop when reflector abort action matches", async () => {
+    const runtime = new OboraRuntime({
+      llm: { provider: "openai", apiKey: "test-key", model: "gpt-5" },
+      audit: { enabled: true },
+    });
+
+    let callIndex = 0;
+    const adapterMock = {
+      chatCompletion: vi.fn().mockImplementation(async () => {
+        callIndex += 1;
+        if (callIndex === 1) {
+          return { message: { role: "assistant", content: "initial draft" } };
+        }
+        return {
+          message: {
+            role: "assistant",
+            content: JSON.stringify({
+              passed: false,
+              summary: "backup restore logic failed",
+              failedChecks: [{ name: "implementation_bug: backup", message: "backup restore path broken" }],
+              signature: "backup-fail-1",
+            }),
+          },
+        };
+      }),
+    };
+
+    vi.spyOn(
+      runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> },
+      "createLLMAdapter"
+    ).mockResolvedValue(adapterMock);
+
+    runtime.define("validation-repair-reflector-abort", {
+      name: "validation-repair-reflector-abort",
+      reflector: {
+        rules: [
+          {
+            name: "abort_on_backup",
+            when: { keywords_include: ["backup"], min_failures: 1 },
+            actions: [{ type: "abort", reason: "reflector requested abort on backup failures" }],
+          },
+        ],
+      },
+      steps: [
+        {
+          name: "build_or_repair",
+          agent: "builder",
+          config: {
+            repair_loop: {
+              enabled: true,
+              validation_step: "validate",
+              max_no_progress_iterations: 4,
+              repeated_critical_issue_ceiling: 4,
+            },
+          },
+          input: { task: "Build or repair the app" },
+        },
+        {
+          name: "validate",
+          agent: "validator",
+          depends_on: ["build_or_repair"],
+          config: { validation: { enabled: true, emit_structured_result: true } },
+          on_fail: { goto: "build_or_repair", max_iterations: 4 },
+          input: { task: "Validate the app and return structured JSON" },
+        },
+      ],
+    });
+
+    const handle = await runtime.run("validation-repair-reflector-abort");
+    await expect(handle.wait()).rejects.toThrow(/reflector requested abort/i);
+    expect(adapterMock.chatCompletion).toHaveBeenCalledTimes(2);
+  });
+
+  it("force_target reroutes next back-edge to the specified step", async () => {
+    const runtime = new OboraRuntime({
+      llm: { provider: "openai", apiKey: "test-key", model: "gpt-5" },
+      audit: { enabled: true },
+    });
+
+    const stepsSeen: string[] = [];
+    runtime.on("step_start", (event) => {
+      const data = event.data as { stepName?: string } | undefined;
+      if (data?.stepName) stepsSeen.push(data.stepName);
+    });
+
+    let callIndex = 0;
+    const adapterMock = {
+      chatCompletion: vi.fn().mockImplementation(async ({ messages }) => {
+        callIndex += 1;
+        const userPrompt = String(messages[1]?.content ?? "");
+
+        if (callIndex === 1) {
+          expect(userPrompt).toContain("Step: design");
+          return { message: { role: "assistant", content: "design v1" } };
+        }
+        if (callIndex === 2) {
+          expect(userPrompt).toContain("Step: build_or_repair");
+          return { message: { role: "assistant", content: "build v1" } };
+        }
+        if (callIndex === 3) {
+          expect(userPrompt).toContain("Step: validate");
+          return {
+            message: {
+              role: "assistant",
+              content: JSON.stringify({
+                passed: false,
+                summary: "backup restore logic failed in CLI path",
+                failedChecks: [{ name: "implementation_bug: backup", message: "backup restore path broken" }],
+                signature: "backup-force-1",
+              }),
+            },
+          };
+        }
+        if (callIndex === 4) {
+          expect(userPrompt).toContain("Step: build_or_repair");
+          expect(userPrompt).toContain("Reflector analysis:");
+          return { message: { role: "assistant", content: "build v2" } };
+        }
+        if (callIndex === 5) {
+          expect(userPrompt).toContain("Step: validate");
+          return {
+            message: {
+              role: "assistant",
+              content: JSON.stringify({
+                passed: false,
+                summary: "backup restore logic still failing in CLI path",
+                failedChecks: [{ name: "implementation_bug: restore", message: "backup restore path still broken" }],
+                signature: "backup-force-2",
+              }),
+            },
+          };
+        }
+        if (callIndex === 6) {
+          expect(userPrompt).toContain("Step: design");
+          return { message: { role: "assistant", content: "design v2" } };
+        }
+        if (callIndex === 7) {
+          expect(userPrompt).toContain("Step: build_or_repair");
+          return { message: { role: "assistant", content: "build v3" } };
+        }
+        expect(userPrompt).toContain("Step: validate");
+        return {
+          message: {
+            role: "assistant",
+            content: JSON.stringify({
+              passed: true,
+              summary: "Validation passed",
+              failedChecks: [],
+              signature: "pass",
+            }),
+          },
+        };
+      }),
+    };
+
+    vi.spyOn(
+      runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> },
+      "createLLMAdapter"
+    ).mockResolvedValue(adapterMock);
+
+    runtime.define("validation-repair-reflector-force-target", {
+      name: "validation-repair-reflector-force-target",
+      reflector: {
+        rules: [
+          {
+            name: "reroute_to_design_on_backup",
+            when: { keywords_include: ["backup"], min_failures: 1 },
+            actions: [{ type: "force_target", target: "design" }],
+          },
+        ],
+      },
+      steps: [
+        {
+          name: "design",
+          agent: "architect",
+          input: { task: "Design the app" },
+        },
+        {
+          name: "build_or_repair",
+          agent: "builder",
+          depends_on: ["design"],
+          config: {
+            repair_loop: {
+              enabled: true,
+              validation_step: "validate",
+              max_no_progress_iterations: 4,
+              repeated_critical_issue_ceiling: 4,
+            },
+          },
+          input: { task: "Build or repair the app" },
+        },
+        {
+          name: "validate",
+          agent: "validator",
+          depends_on: ["build_or_repair"],
+          config: { validation: { enabled: true, emit_structured_result: true } },
+          on_fail: { goto: "build_or_repair", max_iterations: 4 },
+          input: { task: "Validate the app and return structured JSON" },
+        },
+      ],
+    });
+
+    const handle = await runtime.run("validation-repair-reflector-force-target");
+    const result = await handle.wait();
+
+    expect(result.status).toBe("completed");
+    expect(result.outputs.design).toBe("design v2");
+    expect(result.outputs.build_or_repair).toBe("build v3");
+    expect(adapterMock.chatCompletion).toHaveBeenCalledTimes(8);
+    expect(stepsSeen).toEqual([
+      "design",
+      "build_or_repair",
+      "validate",
+      "build_or_repair",
+      "validate",
+      "design",
+      "build_or_repair",
+      "validate",
+    ]);
+  });
+
   it("stops repair loop on repeated no-progress validation signatures", async () => {
     const runtime = new OboraRuntime({
       llm: { provider: "openai", apiKey: "test-key", model: "gpt-5" },
