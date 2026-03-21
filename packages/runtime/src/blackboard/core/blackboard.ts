@@ -8,7 +8,13 @@ import type {
   BlackboardMeta,
   KnowledgeSection,
   BoardPhase,
+  DecisionsSection,
   SessionId,
+  StateSection,
+  VotingSession,
+  Opinion,
+  Task,
+  AgentStatus,
 } from "../types";
 import { createSessionId } from "../types/base";
 
@@ -764,27 +770,34 @@ export class Blackboard extends SimpleEventEmitter {
     knowledge?: unknown;
     decisions?: unknown;
   }): Blackboard {
+    type SerializableStateSection = Partial<Omit<StateSection, "agents" | "tasks">> & {
+      agents?: Record<string, AgentStatus>;
+      tasks?: Record<string, Task>;
+    };
+
+    type SerializableDecisionsSection = Partial<Omit<DecisionsSection, "opinions" | "voting">> & {
+      opinions?: Record<string, Opinion>;
+      voting?: Record<string, VotingSession>;
+    };
+
+    const stateJson = (json.state ?? undefined) as SerializableStateSection | undefined;
+    const decisionsJson = (json.decisions ?? undefined) as SerializableDecisionsSection | undefined;
+
     const state: Partial<BlackboardState> = {
       meta: json.meta as BlackboardMeta,
-      state: json.state
+      state: stateJson
         ? {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            ...(json.state as any),
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            agents: objectToMap((json.state as any).agents ?? {}),
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            tasks: objectToMap((json.state as any).tasks ?? {}),
+            ...stateJson,
+            agents: objectToMap(stateJson.agents ?? {}),
+            tasks: objectToMap(stateJson.tasks ?? {}),
           }
         : undefined,
       knowledge: json.knowledge as KnowledgeSection,
-      decisions: json.decisions
+      decisions: decisionsJson
         ? {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            ...(json.decisions as any),
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            opinions: objectToMap((json.decisions as any).opinions ?? {}),
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            voting: (json.decisions as any).voting ?? {},
+            ...decisionsJson,
+            opinions: objectToMap(decisionsJson.opinions ?? {}),
+            voting: decisionsJson.voting ?? {},
           }
         : undefined,
     };
