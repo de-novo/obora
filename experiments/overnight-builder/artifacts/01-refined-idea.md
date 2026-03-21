@@ -1,159 +1,83 @@
-# Refined Idea: TaskMaster CLI
+# Refined Idea: CLI 기반 할 일 관리 도구 (Cycle 1)
 
 ## 1. 프로젝트 개요
-
-**TaskMaster** - 로컬에서 동작하는 CLI 기반 할 일 관리 도구
-
-### 비전
-- 단순하지만 프로덕션 품질의 할 일 관리 도구
-- "진짜 배포할 수 있는 수준"의 완성도 목표
-- AI가 자율적으로 기획→개발→테스트→문서화까지 수행하는지 검증
-
-### 기술 스택 (constraints.md 준수)
-- 언어: TypeScript (strict mode)
-- 런타임: Node.js 20+
-- 패키지 매니저: npm
-- 테스트: vitest
-- 저장: 로컬 JSON 파일 (~/.taskmaster/tasks.json)
-- 외부 의존성: 없음 (순수 로컬)
+- 제품명: `todo-cli`
+- 목적: 로컬 환경에서 동작하는 간단한 CLI 할 일 관리 도구
+- 기술 스택: TypeScript, Node.js, npm, vitest, 로컬 JSON 파일 저장
 
 ---
 
-## 2. 이번 Cycle에서 추가/개선할 기능
+## 2. 이번 Cycle에서 구현할 기능 (Cycle 1)
 
-> **Cycle 1 - 핵심 CRUD 완성 + 기본 UX**
+### 기능 1: 할 일 추가 (`add`)
+- 명령어: `todo add "<할 일 내용>"`
+- 동작:
+  - 새로운 할 일 항목을 생성하여 JSON 파일에 저장
+  - 자동 생성 필드: `id` (숫자), `title` (문자열), `completed` (false), `createdAt` (ISO 날짜)
+- 에러 핸들링:
+  - 제목이 비어 있거나 누락된 경우 → 사용자 친화적 오류 메시지 후 종료 코드 1
+  - JSON 파일이 손상된 경우 → 복구 또는 초기화 후 안내 메시지
 
-### 2.1 할 일 추가 기능 (`taskmaster add`)
-- **사용자 입력**: `<제목>` (필수), `[--priority low|medium|high]` (선택, 기본값: medium)
-- **동작**:
-  - 고유 ID 생성 (timestamp 기반)
-  - 생성일시 자동 기록
-  - 우선순위 기본값 적용
-  - JSON 파일에 저장
-- **출력**: "✅ Task added: [ID] <제목>"
-
-### 2.2 할 일 목록 보기 (`taskmaster list` 또는 `taskmaster ls`)
-- **사용자 입력**: `[--all]` (선택, 완료된 항목도 표시)
-- **동작**:
-  - 미완료 항목 기본 표시
-  - `--all` 시 완료 항목도 함께 표시
-  - 우선순위별 정렬 (high → medium → low)
-  - 생성일시 오름차순 정렬 (2차 정렬)
-- **출력 형식**:
-  ```
-  📋 Tasks (3 pending, 1 completed)
-  
-  [A] abc123 Fix login bug                    (high)   2026-03-21 09:30
-  [ ] def456 Write documentation              (medium) 2026-03-21 10:15
-  [ ] ghi789 Review pull request              (low)    2026-03-21 11:00
-  
-  💡 Use --all to show completed tasks
-  ```
-  - `[A]` = 완료됨, `[ ]` = 미완료
-  - ID는 앞 6자리만 표시
+### 기능 2: 할 일 목록 보기 (`list`)
+- 명령어: `todo list [--all]`
+- 동작:
+  - 기본: 미완료 항목만 출력
+  - `--all` 플래그: 전체 항목 (완료/미완료) 출력
+  - 출력 포맷: `[id] [상태] 제목 (생성일)` 예: `[1] [ ] 할 일 예시 (2026-03-21)`
+- 에러 핸들링:
+  - 데이터 파일이 없을 경우 → "아직 할 일이 없습니다." 메시지
+  - 파일 읽기 권한 문제 → 명확한 에러 메시지와 종료 코드
 
 ---
 
 ## 3. 프로덕션 품질 기준
 
-### 3.1 에러 핸들링
-- **파일 시스템 에러**:
-  - 파일이 손상된 경우: "❌ Error: Task file corrupted. Run 'taskmaster repair' to fix."
-  - 권한 문제: "❌ Error: Cannot write to ~/.taskmaster/tasks.json. Check permissions."
-  - 디스크 가득 참: 명확한 에러 메시지
-- **입력 검증**:
-  - 빈 제목: "❌ Error: Task title cannot be empty"
-  - 잘못된 priority 값: "❌ Error: Priority must be low, medium, or high"
-- **Graceful degradation**:
-  - 파일이 없으면 자동 생성 (첫 실행 시)
-  - 디렉터리가 없으면 자동 생성
+### 에러 핸들링
+- 모든 예외를 try-catch로 감싸고, 사용자에게 이해하기 쉬운 메시지를 출력
+- 프로세스 종료 코드: 성공(0), 사용자 입력 오류(1), 시스템 오류(2)
 
-### 3.2 엣지 케이스
-- **빈 목록**: "✨ No tasks yet. Add one with 'taskmaster add <title>'"
-- **매우 긴 제목**: 80자 이상 시 말줄임표(...) 처리
-- **특수문자 포함 제목**: 안전하게 저장 (JSON escape)
-- **동시 실행**: 파일 잠금은 구현하지 않으나, 충돌 시 에러 메시지 명확히
-- **잘못된 JSON 복구**: `taskmaster repair` 명령으로 백업에서 복구 또는 초기화
+### 엣지 케이스
+- 빈 제목 입력 → 오류 메시지
+- 중복 ID 생성 방지 → 기존 최대 ID + 1 사용
+- 데이터 파일이 없는 상태에서 `list` 호출 → 빈 목록 메시지
 
-### 3.3 UX (사용자 경험)
-- **색상 코드**:
-  - 성공: 초록색 (✅)
-  - 에러: 빨간색 (❌)
-  - 정보: 파란색 (💡)
-  - 우선순위: high=빨강, medium=노랑, low=회색
-- **도움말**:
-  - `taskmaster --help`: 전체 명령 목록
-  - `taskmaster add --help`: add 명령 상세 도움말
-- **피드백**: 모든 작업에 즉각적인 시각적 피드백
-- **탭 완성**: (이번 cycle에는 미포함, 향후 추가 가능)
+### UX
+- 명령어 도움말: `todo --help`로 전체 명령어 및 옵션 안내
+- 컬러 출력 (선택적): chalk 라이브러리 사용으로 가독성 향상
+- 일관된 출력 포맷 유지
 
-### 3.4 코드 품질
-- TypeScript strict mode 활성화
-- 모든 함수에 JSDoc 주석
-- 테스트 커버리지 ≥ 80% (핵심 로직 100%)
-- Lint 통과 (ESLint)
+### 테스트
+- vitest로 단위 테스트 작성
+- 커버리지: 핵심 로직(추가, 목록) 80% 이상
 
 ---
 
 ## 4. 완료 기준 (Definition of Done)
-
-### 기능 완료
-- [ ] `taskmaster add <title>` 동작
-- [ ] `taskmaster list` / `taskmaster ls` 동작
-- [ ] `taskmaster --help` 동작
-- [ ] `taskmaster add --help` 동작
-- [ ] JSON 파일 저장/로드 동작
-
-### 품질 완료
-- [ ] 모든 테스트 통과 (`npm test`)
-- [ ] 테스트 커버리지 ≥ 80%
-- [ ] TypeScript 컴파일 에러 0개
-- [ ] ESLint 에러/경고 0개
-- [ ] 빈 목록, 긴 제목, 특수문자 엣지 케이스 테스트 포함
-- [ ] 파일 시스템 에러 핸들링 테스트 포함
-
-### 문서화 완료
-- [ ] README.md 작성 (설치 방법, 사용법, 예시)
-- [ ] 코드 내 JSDoc 주석 완료
-
-### 배포 준비
-- [ ] `npm install -g .` 로 전역 설치 가능
-- [ ] `taskmaster` 명령어로 실행 가능
+- [ ] `todo add "<할 일>"` 명령어가 정상 동작하며 JSON에 저장됨
+- [ ] `todo list` / `todo list --all` 명령어가 올바르게 출력됨
+- [ ] 모든 에러 케이스에 대해 사용자 친화적 메시지와 적절한 종료 코드 반환
+- [ ] `todo --help` 명령어로 사용법 안내가 출력됨
+- [ ] vitest 테스트가 통과함 (핵심 기능 커버리지 80%+)
+- [ ] README.md에 설치 및 사용법이 명확히 작성됨
+- [ ] TypeScript 빌드가 에러 없이 완료됨
+- [ ] `npm link`로 전역 설치 후 실제 CLI 명령어로 동작 확인
 
 ---
 
 ## 5. 전체 프로젝트 진행률 추정
 
-### 전체 로드맵
-| Phase | 기능 | 상태 |
-|-------|------|------|
-| **Cycle 1** | add, list | 🔄 현재 |
-| Cycle 2 | complete, delete | ⏳ 예정 |
-| Cycle 3 | edit, filter, search | ⏳ 예정 |
-| Cycle 4 | 통계, export/import | ⏳ 예정 |
-| Cycle 5 | polish, 최종 QA, README 완성 | ⏳ 예정 |
+| Phase | 기능 | 상태 | 예상 비중 |
+|-------|------|------|-----------|
+| Phase 1 | add / list | **이번 Cycle** | 40% |
+| Phase 2 | complete / delete | 다음 Cycle | 30% |
+| Phase 3 | 필터링 / 검색 / 정렬 | 추후 | 15% |
+| Phase 4 | 마이그레이션 / 백업 / 고급 UX | 추후 | 15% |
 
-### 현재 진행률
-- **전체 기능 기준**: 20% (2/10개 기능)
-- **프로덕션 품질 기준**: 10% (기본 CRUD 후 품질 향상 예정)
-- **이번 cycle 완료 후 예상**: 40% (기본 CRUD 완료)
-
-### 리스크
-1. **JSON 손상**: 사용자가 수동으로 파일 수정 시 문제 발생 가능 → repair 명령으로 완화
-2. **동시성 문제**: 다중 터미널에서 동시 실행 시 데이터 손실 가능 → 향후 파일 잠금 고려
-3. **플랫폼 호환성**: Windows 경로 문제 → path 모듈로 크로스 플랫폼 지원
+**현재 추정 진행률:** 0% → 이번 Cycle 완료 시 **40%** 도달 예상
 
 ---
 
-## 부록: 다음 Cycle 계획 (참고용)
-
-### Cycle 2 예정 기능
-1. `taskmaster complete <id>` - 할 일 완료 처리
-2. `taskmaster delete <id>` - 할 일 삭제
-
-### 이후 Cycle 예정 기능
-- edit (제목, 우선순위 수정)
-- filter (상태, 우선순위, 날짜별 필터)
-- search (제목 검색)
-- stats (완료율 등 통계)
-- export/import (JSON 백업/복원)
+## 비고
+- 외부 서비스 의존 없이 로컬 JSON 파일로만 동작
+- `workspace/` 디렉터리 내에 프로젝트 생성
+- 향후 Cycle에서 `complete`, `delete` 기능을 추가하여 핵심 CRUD 완성 예정

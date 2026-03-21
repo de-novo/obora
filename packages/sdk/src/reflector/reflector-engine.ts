@@ -167,16 +167,12 @@ export class ReflectorEngine {
   ): string | undefined {
     if (failures.length === 0) return undefined;
 
-    const relevant = currentStepName
-      ? failures.filter((f) => f.stepName === currentStepName)
-      : failures;
-
-    if (relevant.length === 0) return undefined;
-
+    // Use ALL failures for pattern detection across steps
+    // (Previously filtered by stepName, which prevented cross-step pattern detection)
     const context: AnalyzerContext = {
-      failures: relevant,
+      failures,
       stepName: currentStepName ?? "unknown",
-      attempt: relevant.length,
+      attempt: failures.filter(f => f.stepName === currentStepName).length || failures.length,
       knowledgeBase: this.knowledgeStore?.getEntries() ?? [],
     };
 
