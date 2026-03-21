@@ -181,7 +181,34 @@ export class ReflectorEngine {
     };
 
     const output = this.analyze(context);
+
+    // Merge inject_context action payloads into hints
+    for (const ar of output.actions) {
+      const pending = (ar.metadata as Record<string, unknown>)?.pendingAction as
+        | ReflectorAction
+        | undefined;
+      if (pending?.type === "inject_context" && pending.payload?.content) {
+        const injected = String(pending.payload.content).trim();
+        if (injected && !output.hints.includes(injected)) {
+          output.hints = output.hints
+            ? output.hints + " " + injected
+            : injected;
+        }
+      }
+    }
+
+    // Cache latest output for workflow-runner to query actions
+    this._lastOutput = output;
+
     return output.hints.length > 0 ? output.hints : undefined;
+  }
+
+  /** Most recent analysis output (includes actions). */
+  private _lastOutput?: ReflectorOutput;
+
+  /** Returns the latest full analysis output (after analyzeFailures). */
+  getLastOutput(): ReflectorOutput | undefined {
+    return this._lastOutput;
   }
 
   /**

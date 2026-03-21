@@ -27,6 +27,8 @@ export interface RepairContext {
   repeatedCriticalIssueCeiling?: number;
   /** Hint from the reflector about repeated failure patterns. */
   reflectorHint?: string;
+  /** Reflector v2: force the next back-edge to route to this step instead. */
+  forceTarget?: string;
 }
 
 export interface ValidationStepConfig {

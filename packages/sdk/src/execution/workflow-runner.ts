@@ -785,6 +785,30 @@ export class WorkflowRunner {
             repairContext.reflectorHint = hint;
             config?.logger?.info?.(`[reflector] ${step.name} attempt ${repairContext.attempt}: ${hint}`);
           }
+          // Execute Reflector v2 actions (force_target, abort, switch_model)
+          if (reflector instanceof ReflectorEngine) {
+            const lastOutput = reflector.getLastOutput();
+            if (lastOutput) {
+              for (const ar of lastOutput.actions) {
+                const pending = (ar.metadata as Record<string, unknown>)?.pendingAction as
+                  | { type: string; payload: Record<string, unknown> }
+                  | undefined;
+                if (!pending) continue;
+                if (pending.type === "abort") {
+                  const reason = String(pending.payload?.reason ?? "Reflector abort action triggered");
+                  config?.logger?.warn?.(`[reflector] ABORT: ${reason}`);
+                  throw new OboraError(reason, OboraErrorCode.EXECUTION_FAILED);
+                }
+                if (pending.type === "force_target") {
+                  const target = String(pending.payload?.target ?? "");
+                  if (target && stepIndexByName.has(target)) {
+                    config?.logger?.info?.(`[reflector] force_target → ${target}`);
+                    repairContext.forceTarget = target;
+                  }
+                }
+              }
+            }
+          }
         }
         this.recordRepairStarted(executionId, step.name, repairContext.attempt);
         await eventBus.emit("workflow.repair_started", executionId, {
@@ -885,7 +909,15 @@ export class WorkflowRunner {
             globalRepairAttempts++;
 
             // Check global repair ceiling (prevents infinite loops across back-edges)
-            const routeResolution = resolveFailureRoute(goto, validationResult);
+            // Reflector v2: forceTarget overrides route resolution
+            const repairState = repairLoopStates.get(step.name);
+            const forceTarget = repairState
+              ? undefined
+              : (repairContext as RepairContext | undefined)?.forceTarget;
+            const baseResolution = resolveFailureRoute(goto, validationResult);
+            const routeResolution: RouteResolution = forceTarget && stepIndexByName.has(forceTarget)
+              ? { target: forceTarget, matchReason: "default" as const }
+              : baseResolution;
             const targetStepName = routeResolution.target;
             const repairConfigForCeiling = getRepairLoopConfig(
               sortedSteps.find((candidate) => candidate.name === targetStepName)?.config

@@ -1,341 +1,488 @@
-# System Design: Todo CLI
-
-작성일: 2026-03-20
-Cycle: 1
-
----
+# System Design: TaskMaster CLI
 
 ## 1. 아키텍처 개요
 
-### 1.1 계층 구조
-
+### 1.1 레이어드 아키텍처
 ```
-┌─────────────────────────────────────────┐
-│              CLI Layer                   │
-│  (commander.js, chalk, index.ts)        │
-└─────────────────┬───────────────────────┘
-                  │
-┌─────────────────▼───────────────────────┐
-│           Command Layer                  │
-│  (AddCommand, ListCommand, etc.)        │
-└─────────────────┬───────────────────────┘
-                  │
-┌─────────────────▼───────────────────────┐
-│           Service Layer                  │
-│  (TodoService - business logic)         │
-└─────────────────┬───────────────────────┘
-                  │
-┌─────────────────▼───────────────────────┐
-│          Storage Layer                   │
-│  (JsonStore - persistence)              │
-└─────────────────────────────────────────┘
+┌─────────────────────────────────────┐
+│  CLI Layer (src/cli)                │  ← 사용자 입력/출력 담당
+├─────────────────────────────────────┤
+│  Service Layer (src/services)       │  ← 비즈니스 로직
+├─────────────────────────────────────┤
+│  Repository Layer (src/repositories)│  ← 데이터 영속성
+├─────────────────────────────────────┤
+│  Models (src/models)                │  ← 타입 정의
+└─────────────────────────────────────┘
 ```
 
-### 1.2 의존성 흐름
-- CLI → Commands → Service → Storage
-- 모든 의존성은 단방향 (하향식)
-- 상위 계층은 하위 계층의 인터페이스에만 의존
+### 1.2 의존성 규칙
+- CLI → Service → Repository → Models
+- 상위 레이어는 하위 레이어에만 의존
+- 역방향 의존성 금지
 
 ---
 
-## 2. 디렉터리 구조
+## 2. 모듈 구조
 
+### 2.1 디렉터리 구조
 ```
 workspace/
-├── package.json              # 프로젝트 설정 및 스크립트
-├── tsconfig.json             # TypeScript 설정 (strict mode)
-├── vitest.config.ts          # 테스트 설정
-├── .eslintrc.json            # 린트 설정
 ├── src/
-│   ├── index.ts              # 진입점 (CLI 부트스트랩)
-│   ├── cli.ts                # CLI 명령어 정의 (commander)
-│   ├── commands/             # 명령어 구현
-│   │   ├── add.ts            # AddCommand
-│   │   ├── list.ts           # ListCommand
-│   │   ├── complete.ts       # CompleteCommand
-│   │   └── delete.ts         # DeleteCommand
-│   ├── services/             # 비즈니스 로직
-│   │   └── todo-service.ts   # TodoService
-│   ├── storage/              # 영속성 계층
-│   │   └── json-store.ts     # JsonStore
-│   ├── models/               # 도메인 모델 팩토리
-│   │   └── todo.ts           # createTodo()
-│   ├── types/                # 타입 정의
-│   │   └── index.ts          # Todo, TodoData 인터페이스
-│   └── utils/                # 유틸리티
-│       ├── errors.ts         # 커스텀 에러 클래스
-│       └── validator.ts      # 입력 검증
+│   ├── index.ts                    # 진입점
+│   ├── cli/
+│   │   ├── cli.ts                  # CLI 메인 로직
+│   │   └── commands/               # 각 명령어 핸들러
+│   │       ├── add.ts              # add 명령
+│   │       └── list.ts             # list 명령
+│   ├── services/
+│   │   └── taskService.ts          # 태스크 비즈니스 로직
+│   ├── repositories/
+│   │   └── taskRepository.ts       # JSON 파일 CRUD
+│   ├── models/
+│   │   └── task.ts                 # Task 타입 정의
+│   └── utils/
+│       ├── logger.ts               # 색상 출력
+│       ├── storage.ts              # 파일 경로 관리
+│       └── validator.ts            # 입력 검증
 ├── test/
-│   ├── setup.ts              # 테스트 환경 설정
-│   ├── commands/             # 명령어 테스트
-│   ├── services/             # 서비스 테스트
-│   ├── storage/              # 스토리지 테스트
-│   ├── models/               # 모델 테스트
-│   └── integration/          # 통합 테스트
-└── dist/                     # 컴파일된 JS (gitignore)
+│   ├── unit/                       # 단위 테스트
+│   ├── integration/                # 통합 테스트
+│   └── edge/                       # 엣지 케이스 테스트
+└── dist/                           # 컴파일된 JS
 ```
 
 ---
 
-## 3. 핵심 인터페이스
+## 3. 인터페이스 설계
 
-### 3.1 Todo (도메인 모델)
+### 3.1 Models (src/models/task.ts)
 
 ```typescript
-interface Todo {
-  id: string;              // UUID v4
-  content: string;         // 1-1000자
+export type Priority = 'low' | 'medium' | 'high';
+
+export interface Task {
+  id: string;              // timestamp 기반 고유 ID
+  title: string;           // 할 일 제목
+  priority: Priority;      // 우선순위
   completed: boolean;      // 완료 여부
-  createdAt: Date;         // 생성 시각
-  updatedAt: Date;         // 수정 시각
+  createdAt: string;       // ISO 8601 형식
+  completedAt?: string;    // 완료 시점 (선택적)
+}
+
+export interface TaskFilter {
+  showCompleted?: boolean; // 완료된 태스크 포함 여부
+}
+
+export interface TaskSortOptions {
+  sortByPriority: boolean; // 우선순위 정렬 여부
+  sortByDate: boolean;     // 생성일 정렬 여부
 }
 ```
 
-### 3.2 TodoData (저장소 포맷)
+### 3.2 Repository Interface (src/repositories/taskRepository.ts)
 
 ```typescript
-interface TodoData {
-  version: string;         // 데이터 포맷 버전 ("1.0.0")
-  todos: Todo[];           // 할 일 목록
-}
-```
-
-### 3.3 IStorage (저장소 인터페이스)
-
-```typescript
-interface IStorage {
-  load(): Promise<TodoData>;
-  save(data: TodoData): Promise<void>;
+export interface ITaskRepository {
+  // 모든 태스크 조회
+  loadAll(): Promise<Task[]>;
+  
+  // 태스크 저장
+  save(task: Task): Promise<void>;
+  
+  // ID로 태스크 조회
+  findById(id: string): Promise<Task | null>;
+  
+  // 태스크 업데이트
+  update(task: Task): Promise<void>;
+  
+  // 태스크 삭제
+  delete(id: string): Promise<void>;
+  
+  // 파일 존재 여부 확인
   exists(): Promise<boolean>;
+  
+  // 파일 초기화
   initialize(): Promise<void>;
 }
 ```
 
-### 3.4 ITodoService (서비스 인터페이스)
+### 3.3 Service Interface (src/services/taskService.ts)
 
 ```typescript
-interface ITodoService {
-  add(content: string): Promise<Todo>;
-  list(options?: { all?: boolean }): Promise<Todo[]>;
-  complete(id: string): Promise<Todo>;
-  delete(id: string): Promise<void>;
+export interface ITaskService {
+  // 태스크 추가
+  addTask(title: string, priority?: Priority): Promise<Task>;
+  
+  // 태스크 목록 조회
+  listTasks(filter?: TaskFilter): Promise<Task[]>;
+  
+  // 태스크 완료 처리
+  completeTask(id: string): Promise<void>;
+  
+  // 태스크 삭제
+  deleteTask(id: string): Promise<void>;
 }
 ```
 
-### 3.5 CommandResult (명령어 실행 결과)
+### 3.4 CLI Interface (src/cli/cli.ts)
 
 ```typescript
-interface CommandResult {
-  success: boolean;
-  message?: string;
-  data?: unknown;
+export interface ICLI {
+  // 명령어 실행
+  run(args: string[]): Promise<void>;
+  
+  // 도움말 표시
+  showHelp(): void;
+  
+  // 에러 표시
+  showError(message: string): void;
+  
+  // 성공 메시지 표시
+  showSuccess(message: string): void;
 }
 ```
 
 ---
 
-## 4. 에러 전략
+## 4. 에러 처리 전략
 
 ### 4.1 에러 계층 구조
+```typescript
+// src/utils/errors.ts
+export class TaskMasterError extends Error {
+  constructor(message: string, public code: string) {
+    super(message);
+    this.name = 'TaskMasterError';
+  }
+}
 
+export class FileSystemError extends TaskMasterError {
+  constructor(message: string, code: string) {
+    super(message, code);
+    this.name = 'FileSystemError';
+  }
+}
+
+export class ValidationError extends TaskMasterError {
+  constructor(message: string, code: string) {
+    super(message, code);
+    this.name = 'ValidationError';
+  }
+}
+
+export class TaskNotFoundError extends TaskMasterError {
+  constructor(id: string) {
+    super(`Task not found: ${id}`, 'TASK_NOT_FOUND');
+    this.name = 'TaskNotFoundError';
+  }
+}
 ```
-TodoCliError (base)
-├── ValidationError     # 입력 검증 실패 (code: VALIDATION_ERROR)
-├── StorageError        # 저장소 오류 (code: STORAGE_ERROR)
-└── NotFoundError       # 리소스 없음 (code: NOT_FOUND)
-```
 
-### 4.2 에러 처리 규칙
+### 4.2 에러 코드 체계
+| 코드 | 의미 | 사용자 메시지 |
+|------|------|---------------|
+| `FS_PERMISSION_DENIED` | 파일 권한 없음 | "❌ Error: Cannot write to ~/.taskmaster/tasks.json. Check permissions." |
+| `FS_CORRUPTED_FILE` | JSON 손상 | "❌ Error: Task file corrupted. Run 'taskmaster repair' to fix." |
+| `FS_DISK_FULL` | 디스크 가득 참 | "❌ Error: Disk full. Free up space and try again." |
+| `VAL_EMPTY_TITLE` | 빈 제목 | "❌ Error: Task title cannot be empty" |
+| `VAL_INVALID_PRIORITY` | 잘못된 우선순위 | "❌ Error: Priority must be low, medium, or high" |
+| `TASK_NOT_FOUND` | 태스크 없음 | "❌ Error: Task not found: {id}" |
 
-| 계층 | 에러 처리 방식 |
-|------|----------------|
-| CLI | try-catch, process.exit(1) |
-| Command | try-catch, CommandResult 반환 |
-| Service | 에러 throw (비즈니스 예외) |
-| Storage | StorageError로 래핑하여 throw |
-
-### 4.3 사용자 메시지 규칙
-- 모든 에러 메시지는 한국어
-- 구체적인 원인과 해결 방법 제시
-- 내부 구현 세부사항 노출 금지
+### 4.3 Graceful Degradation
+- **파일 없음**: 첫 실행 시 자동 생성
+- **디렉터리 없음**: `~/.taskmaster/` 자동 생성
+- **JSON 손상**: 사용자에게 명확한 안내 + repair 명령 제안
 
 ---
 
 ## 5. 데이터 저장 전략
 
-### 5.1 저장 위치
-- 기본: `~/.todo-cli/todos.json`
-- 환경변수: `TODO_CLI_DATA_DIR` (테스트용)
+### 5.1 파일 위치
+```
+~/.taskmaster/
+├── tasks.json        # 메인 데이터 파일
+├── backup.json       # 자동 백업 (선택적, 향후 구현)
+└── config.json       # 설정 파일 (선택적, 향후 구현)
+```
 
-### 5.2 파일 포맷
+### 5.2 JSON 스키마
 ```json
 {
   "version": "1.0.0",
-  "todos": [
+  "tasks": [
     {
-      "id": "uuid-v4",
-      "content": "할 일 내용",
+      "id": "1710998400000",
+      "title": "Fix login bug",
+      "priority": "high",
       "completed": false,
-      "createdAt": "2026-03-20T10:00:00.000Z",
-      "updatedAt": "2026-03-20T10:00:00.000Z"
+      "createdAt": "2026-03-21T09:30:00.000Z"
     }
   ]
 }
 ```
 
-### 5.3 동시성 처리
-- 현재: 파일 단위 읽기/쓰기 (단일 프로세스 가정)
-- 향후: 파일 락 도입 가능 (필요 시)
+### 5.3 파일 잠금 전략
+- 이번 cycle: 미구현 (단순성 우선)
+- 향후: `proper-lockfile` 라이브러리로 파일 잠금 추가 가능
 
 ---
 
 ## 6. 테스트 전략
 
 ### 6.1 테스트 피라미드
-
 ```
-         ┌─────┐
-         │ E2E │     (통합 테스트: CLI 전체 플로우)
-         └─────┘
-       ┌───────────┐
-       │ Integration│  (서비스 + 저장소)
-       └───────────┘
-    ┌─────────────────┐
-    │    Unit Tests   │   (순수 함수, 모델)
-    └─────────────────┘
+        ┌───────┐
+        │  E2E  │  ← CLI 전체 흐름 테스트 (소수)
+        └───────┘
+      ┌───────────┐
+      │Integration│  ← Service + Repository 통합 (중간)
+      └───────────┘
+    ┌───────────────┐
+    │  Unit Tests   │  ← 각 함수/클래스 단위 (다수)
+    └───────────────┘
 ```
 
-### 6.2 테스트 분류
+### 6.2 테스트 커버리지 목표
+| 레이어 | 목표 커버리지 | 비고 |
+|--------|---------------|------|
+| Models | 100% | 타입이므로 간단 |
+| Utils | 100% | 순수 함수 |
+| Repository | 90% | 파일 시스템 mock |
+| Service | 95% | 핵심 로직 |
+| CLI | 80% | 통합 테스트로 보완 |
+| **전체** | **≥ 80%** | |
 
-| 카테고리 | 대상 | 파일 위치 |
-|----------|------|-----------|
-| 단위 | 모델, 유틸리티 | test/models/, test/utils/ |
-| 단위 | 서비스 (격리) | test/services/ |
-| 통합 | 저장소 | test/storage/ |
-| 통합 | 명령어 | test/commands/ |
-| E2E | CLI 전체 | test/integration/ |
+### 6.3 테스트 카테고리
 
-### 6.3 테스트 커버리지 목표
-- 전체: 80% 이상
-- 핵심 비즈니스 로직: 90% 이상
-- 명령어: 85% 이상
+#### 6.3.1 단위 테스트 (test/unit/)
+- **Repository**: `loadAll`, `save`, `findById`, `update`, `delete`
+- **Service**: `addTask`, `listTasks`, 정렬 로직, 필터링 로직
+- **Utils**: `logger`, `validator`, `storage`
 
-### 6.4 테스트 격리 전략
-- 각 테스트마다 임시 디렉터리 생성 (mkdtemp)
-- beforeEach에서 환경변수 설정
-- afterEach에서 정리
+#### 6.3.2 통합 테스트 (test/integration/)
+- Service → Repository 통합 흐름
+- 실제 파일 시스템 사용 (임시 디렉터리)
+- Cleanup 필수
 
----
+#### 6.3.3 엣지 케이스 테스트 (test/edge/)
+- 빈 목록
+- 매우 긴 제목 (80자 이상)
+- 특수문자 포함 제목 (이모지, 유니코드)
+- 손상된 JSON 파일
+- 동시 실행 (파일 충돌)
+- 디스크 가득 참 시뮬레이션
 
-## 7. 테스트 시나리오
+#### 6.3.4 에러 케이스 테스트 (test/integration/)
+- 빈 제목 입력
+- 잘못된 priority 값
+- 존재하지 않는 ID로 complete/delete
+- 파일 권한 없음
+- JSON 파싱 에러
 
-### 7.1 정상 시나리오 (Happy Path)
-- [x] 할 일 추가 및 조회
-- [x] 할 일 완료 처리
-- [x] 할 일 삭제
-- [x] 전체 목록 조회 (--all)
-- [x] 미완료 목록 조회 (기본)
+### 6.4 테스트 도구 설정
 
-### 7.2 에러 시나리오
-- [x] 빈 내용 추가 시도
-- [x] 1000자 초과 내용 추가
-- [x] 존재하지 않는 ID 완료/삭제
-- [x] 손상된 JSON 파일 읽기
-- [x] 권한 없는 경로 저장
+#### 6.4.1 Vitest 설정 (vitest.config.ts)
+```typescript
+export default defineConfig({
+  test: {
+    globals: true,
+    environment: 'node',
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html'],
+      exclude: ['node_modules/', 'dist/', 'test/'],
+      lines: 80,
+      functions: 80,
+      branches: 80,
+      statements: 80
+    }
+  }
+});
+```
 
-### 7.3 엣지 케이스
-- [x] 공백만 있는 내용
-- [x] 특수문자/이모지 포함 내용
-- [x] 정확히 1000자 내용
-- [x] 빈 목록 상태
-- [x] 이미 완료된 항목 재완료
-- [x] 유니코드 콘텐츠 처리
-
-### 7.4 통합 시나리오
-- [ ] CLI 명령어 전체 플로우
-- [ ] 연속 작업 (추가→완료→삭제)
-- [ ] 버전/도움말 출력
-
----
-
-## 8. 기술 스택 상세
-
-### 8.1 런타임 & 언어
-- Node.js 18+ (ES2022, crypto.randomUUID 네이티브 지원)
-- TypeScript 5.3+ (strict mode)
-
-### 8.2 주요 의존성
-| 패키지 | 용도 | 버전 |
-|--------|------|------|
-| commander | CLI 프레임워크 | ^12.0.0 |
-| chalk | 터미널 색상 | ^5.3.0 |
-| uuid | ID 생성 (예비) | ^9.0.0 |
-
-### 8.3 개발 의존성
-| 패키지 | 용도 | 버전 |
-|--------|------|------|
-| vitest | 테스트 프레임워크 | ^1.2.0 |
-| @vitest/coverage-v8 | 커버리지 | ^1.2.0 |
-| typescript | 컴파일러 | ^5.3.3 |
-| eslint | 린터 | ^8.56.0 |
+#### 6.4.2 Mock 전략
+- 파일 시스템: `memfs` 또는 임시 디렉터리 사용
+- 콘솔 출력: `console.log` spy
+- 날짜: `Date.now()` mock (ID 생성용)
 
 ---
 
-## 9. 빌드 & 실행
+## 7. 테스트 파일 구조
 
-### 9.1 npm scripts
-```json
-{
-  "build": "tsc",
-  "typecheck": "tsc --noEmit",
-  "lint": "eslint src test --ext .ts",
-  "test": "vitest run",
-  "test:watch": "vitest",
-  "test:coverage": "vitest run --coverage"
+### 7.1 Unit Tests
+```
+test/unit/
+├── models/
+│   └── task.test.ts          # Task 타입 테스트
+├── repositories/
+│   └── taskRepository.test.ts # Repository 단위 테스트
+├── services/
+│   └── taskService.test.ts   # Service 단위 테스트
+└── utils/
+    ├── logger.test.ts        # 로거 테스트
+    ├── validator.test.ts     # 검증 테스트
+    └── storage.test.ts       # 저장소 경로 테스트
+```
+
+### 7.2 Integration Tests
+```
+test/integration/
+├── add-task.test.ts          # add 명령 통합 테스트
+├── list-tasks.test.ts        # list 명령 통합 테스트
+├── file-operations.test.ts   # 파일 CRUD 통합 테스트
+└── error-handling.test.ts    # 에러 처리 통합 테스트
+```
+
+### 7.3 Edge Case Tests
+```
+test/edge/
+├── empty-list.test.ts        # 빈 목록 처리
+├── long-title.test.ts        # 긴 제목 처리
+├── special-characters.test.ts # 특수문자 처리
+├── corrupted-file.test.ts    # 손상된 파일 복구
+└── concurrency.test.ts       # 동시 실행 테스트
+```
+
+---
+
+## 8. 의존성 주입 전략
+
+### 8.1 팩토리 패턴 사용
+```typescript
+// src/factory.ts
+export function createTaskService(repository?: ITaskRepository): ITaskService {
+  const repo = repository || new TaskRepository();
+  return new TaskService(repo);
+}
+
+export function createCLI(service?: ITaskService): ICLI {
+  const svc = service || createTaskService();
+  return new CLI(svc);
 }
 ```
 
-### 9.2 CLI 명령어
-```bash
-todo add "내용"        # 할 일 추가
-todo list             # 미완료 목록
-todo list --all       # 전체 목록
-todo complete <id>    # 완료 처리
-todo delete <id>      # 삭제
-todo --help           # 도움말
-todo --version        # 버전 정보
+### 8.2 테스트에서의 DI
+```typescript
+// 테스트에서 mock repository 주입
+const mockRepo = {
+  loadAll: vi.fn(),
+  save: vi.fn(),
+  // ...
+};
+const service = new TaskService(mockRepo);
 ```
 
 ---
 
-## 10. 향후 확장 포인트
+## 9. 성능 고려사항
 
-### 10.1 Cycle 2 예정
-- 검색 기능 (`todo search <키워드>`)
-- 태그 시스템
-- 우선순위 지정
+### 9.1 현재 단계 (Cycle 1)
+- 태스크 수: < 1000개 예상
+- 파일 크기: < 100KB 예상
+- 성능 이슈 없음
 
-### 10.2 아키텍처 개선
-- 저장소 인터페이스 추상화 (다른 백엔드 지원)
-- 이벤트 시스템 (변경 알림)
-- 플러그인 시스템
+### 9.2 향후 최적화 (필요 시)
+- 대량 데이터: 스트리밍 JSON 파서 사용
+- 빠른 검색: 인메모리 인덱스 구축
+- 캐싱: Repository 레벨에서 캐시 적용
 
 ---
 
-## 11. 결정 사항 기록
+## 10. 보안 고려사항
 
-### 11.1 UUID vs 순차 ID
-- **결정**: UUID v4 사용
-- **이유**: 분산 환경 호환, 충돌 방지, 보안
+### 10.1 현재 단계
+- 로컬 파일 시스템만 사용 (네트워크 없음)
+- 민감 정보 저장 없음
+- 보안 이슈 최소화
 
-### 11.2 JSON vs 데이터베이스
-- **결정**: JSON 파일
-- **이유**: 단순함, 무설치, 포터블
+### 10.2 향후 고려사항
+- 파일 권한 검증 (0600)
+- 민감한 메타데이터 암호화 (필요 시)
 
-### 11.3 commander vs yargs
-- **결정**: commander
-- **이유**: 간결한 API, TypeScript 지원
+---
 
-### 11.4 vitest vs jest
-- **결정**: vitest
-- **이유**: 빠른 실행, ESM 네이티브, 간단한 설정
+## 11. 확장성
+
+### 11.1 향후 기능 추가 용이성
+- 새 명령어 추가: `src/cli/commands/`에 파일 추가
+- 새 필터/정렬: Service 레이어에 메서드 추가
+- 다른 저장소: Repository 인터페이스 구현체 추가 (예: SQLite)
+
+### 11.2 플러그인 아키텍처 (장기 계획)
+- 명령어 플러그인 시스템
+- 커스텀 포매터/필터 플러그인
+
+---
+
+## 12. 구현 우선순위 (Cycle 1)
+
+### Phase 1: 기본 구조 (TDD)
+1. ✅ Models 정의 (`Task` 타입)
+2. ✅ Utils 구현 (`logger`, `validator`, `storage`)
+3. ✅ Repository 구현 (`TaskRepository`)
+4. ✅ Service 구현 (`TaskService`)
+5. ✅ CLI 구현 (`add`, `list` 명령)
+
+### Phase 2: 품질 향상
+1. ✅ 에러 처리 강화
+2. ✅ 엣지 케이스 대응
+3. ✅ 색상 코딩
+4. ✅ 도움말 구현
+
+### Phase 3: 문서화
+1. ✅ README.md 작성
+2. ✅ JSDoc 주석 완료
+3. ✅ 사용 예시 추가
+
+---
+
+## 13. 다음 Cycle 예고
+
+### Cycle 2: CRUD 완성
+- `complete` 명령 구현
+- `delete` 명령 구현
+- 통합 테스트 보강
+
+### Cycle 3: 고급 기능
+- `edit` 명령
+- `filter` 명령
+- `search` 명령
+
+---
+
+## 14. 리스크 및 완화 전략
+
+| 리스크 | 영향 | 완화 전략 |
+|--------|------|-----------|
+| JSON 손상 | 데이터 손실 | 자동 백업, repair 명령 제공 |
+| 동시성 문제 | 데이터 손실 | 향후 파일 잠금 구현 |
+| 플랫폼 호환성 | Windows 경로 문제 | `path` 모듈 사용으로 크로스 플랫폼 지원 |
+| 성능 저하 | 대량 데이터 시 느림 | 스트리밍 파서, 인덱싱 (향후) |
+
+---
+
+## 15. 품질 체크리스트
+
+### 코드 품질
+- [ ] TypeScript strict mode 통과
+- [ ] ESLint 에러 0개
+- [ ] 모든 함수에 JSDoc 주석
+- [ ] 불변성 보장 (readonly 사용)
+
+### 테스트 품질
+- [ ] 커버리지 ≥ 80%
+- [ ] 모든 에러 케이스 테스트
+- [ ] 엣지 케이스 테스트
+- [ ] 통합 테스트 포함
+
+### 사용자 품질
+- [ ] 명확한 에러 메시지
+- [ ] 직관적인 UX
+- [ ] 색상 코딩
+- [ ] 도움말 제공
+
+---
+
+**작성 완료일**: 2026-03-21
+**작성자**: Senior Architect & TDD Expert
+**버전**: 1.0

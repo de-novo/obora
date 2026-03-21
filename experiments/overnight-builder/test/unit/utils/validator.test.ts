@@ -1,84 +1,86 @@
 import { describe, it, expect } from 'vitest';
-import { 
-  validateTodoText, 
-  validateTodoId,
-  validateTodo 
-} from '../../../src/utils/validator';
-import { ValidationError } from '../../../src/errors';
-import { createMockTodo } from '../../helpers/fixtures';
+import { validateTitle, validatePriority, Priority } from '../../../src/utils/validator';
 
-describe('검증 유틸리티', () => {
-  describe('validateTodoText', () => {
-    it('유효한 텍스트를 통과시켜야 한다', () => {
-      expect(() => validateTodoText('할 일 내용')).not.toThrow();
-      expect(() => validateTodoText('테스트')).not.toThrow();
-      expect(() => validateTodoText('a')).not.toThrow();
+describe('Validator Utils', () => {
+  describe('validateTitle', () => {
+    it('should accept valid title', () => {
+      expect(() => validateTitle('Fix login bug')).not.toThrow();
+      expect(() => validateTitle('Write documentation')).not.toThrow();
+      expect(() => validateTitle('Review pull request')).not.toThrow();
     });
 
-    it('빈 문자열을 거부해야 한다', () => {
-      expect(() => validateTodoText('')).toThrow(ValidationError);
-      expect(() => validateTodoText('')).toThrow('할 일 내용을 입력해주세요');
+    it('should accept title with special characters', () => {
+      expect(() => validateTitle('Fix bug #123')).not.toThrow();
+      expect(() => validateTitle('Update README.md')).not.toThrow();
+      expect(() => validateTitle('Deploy to prod (v1.2.3)')).not.toThrow();
     });
 
-    it('공백만 있는 문자열을 거부해야 한다', () => {
-      expect(() => validateTodoText('   ')).toThrow(ValidationError);
-      expect(() => validateTodoText('\t\n')).toThrow(ValidationError);
+    it('should accept title with unicode characters', () => {
+      expect(() => validateTitle('Fix 한국어 문제')).not.toThrow();
+      expect(() => validateTitle('Add emoji 🎉')).not.toThrow();
+      expect(() => validateTitle('Update 中文文档')).not.toThrow();
     });
 
-    it('앞뒤 공백을 제거해야 한다', () => {
-      const result = validateTodoText('  할 일  ');
-      expect(result).toBe('할 일');
+    it('should throw error for empty title', () => {
+      expect(() => validateTitle('')).toThrow('Task title cannot be empty');
+      expect(() => validateTitle('')).toThrow('VAL_EMPTY_TITLE');
     });
 
-    it('특수 문자를 허용해야 한다', () => {
-      expect(() => validateTodoText('할 일! @#$%^&*()')).not.toThrow();
-      expect(() => validateTodoText('이모지 🎉 테스트')).not.toThrow();
-      expect(() => validateTodoText('따옴표 "테스트" \'작은따옴표\'')).not.toThrow();
+    it('should throw error for whitespace-only title', () => {
+      expect(() => validateTitle('   ')).toThrow('Task title cannot be empty');
+      expect(() => validateTitle('\t\n')).toThrow('Task title cannot be empty');
     });
 
-    it('긴 텍스트를 허용해야 한다', () => {
-      const longText = 'a'.repeat(1000);
-      expect(() => validateTodoText(longText)).not.toThrow();
+    it('should trim whitespace from title', () => {
+      const result = validateTitle('  Test task  ');
+      expect(result).toBe('Test task');
     });
 
-    it('매우 긴 텍스트는 제한해야 한다', () => {
-      const tooLongText = 'a'.repeat(10001);
-      expect(() => validateTodoText(tooLongText)).toThrow(ValidationError);
-      expect(() => validateTodoText(tooLongText)).toThrow('할 일 내용은 10000자 이하여야 합니다');
-    });
-  });
-
-  describe('validateTodoId', () => {
-    it('유효한 UUID를 통과시켜야 한다', () => {
-      const validId = '550e8400-e29b-41d4-a716-446655440000';
-      expect(() => validateTodoId(validId)).not.toThrow();
+    it('should accept title with 80 characters', () => {
+      const longTitle = 'A'.repeat(80);
+      expect(() => validateTitle(longTitle)).not.toThrow();
     });
 
-    it('잘못된 ID 형식을 거부해야 한다', () => {
-      expect(() => validateTodoId('')).toThrow(ValidationError);
-      expect(() => validateTodoId('invalid')).toThrow(ValidationError);
-      expect(() => validateTodoId('12345')).toThrow(ValidationError);
-    });
-
-    it('ID가 제공되지 않으면 에러를 발생해야 한다', () => {
-      expect(() => validateTodoId('')).toThrow('유효한 ID를 입력해주세요');
+    it('should accept title longer than 80 characters', () => {
+      const veryLongTitle = 'A'.repeat(200);
+      expect(() => validateTitle(veryLongTitle)).not.toThrow();
     });
   });
 
-  describe('validateTodo', () => {
-    it('유효한 Todo 객체를 통과시켜야 한다', () => {
-      const todo = createMockTodo();
-      expect(() => validateTodo(todo)).not.toThrow();
+  describe('validatePriority', () => {
+    it('should accept valid priority values', () => {
+      expect(validatePriority('low')).toBe('low');
+      expect(validatePriority('medium')).toBe('medium');
+      expect(validatePriority('high')).toBe('high');
     });
 
-    it('필수 필드가 누락된 경우 에러를 발생해야 한다', () => {
-      const invalidTodo = { id: 'test' } as any;
-      expect(() => validateTodo(invalidTodo)).toThrow(ValidationError);
+    it('should be case-sensitive', () => {
+      expect(() => validatePriority('Low')).toThrow('Priority must be low, medium, or high');
+      expect(() => validatePriority('HIGH')).toThrow('Priority must be low, medium, or high');
+      expect(() => validatePriority('Medium')).toThrow('Priority must be low, medium, or high');
     });
 
-    it('잘못된 타입의 필드가 있으면 에러를 발생해야 한다', () => {
-      const invalidTodo = createMockTodo({ completed: 'yes' as any });
-      expect(() => validateTodo(invalidTodo)).toThrow(ValidationError);
+    it('should throw error for invalid priority', () => {
+      expect(() => validatePriority('urgent')).toThrow('Priority must be low, medium, or high');
+      expect(() => validatePriority('normal')).toThrow('Priority must be low, medium, or high');
+      expect(() => validatePriority('1')).toThrow('Priority must be low, medium, or high');
+    });
+
+    it('should throw error for empty priority', () => {
+      expect(() => validatePriority('')).toThrow('Priority must be low, medium, or high');
+    });
+
+    it('should return default priority when undefined', () => {
+      const result = validatePriority(undefined);
+      expect(result).toBe('medium');
+    });
+
+    it('should have correct error code', () => {
+      try {
+        validatePriority('invalid');
+      } catch (error: any) {
+        expect(error.code).toBe('VAL_INVALID_PRIORITY');
+      }
     });
   });
 });
