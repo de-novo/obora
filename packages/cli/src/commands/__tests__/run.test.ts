@@ -45,6 +45,7 @@ vi.mock("@obora/sdk", () => ({
 
 // Mock node:fs/promises (mkdir, writeFile used for --output-dir; readFile for YAML inspection)
 vi.mock("node:fs/promises", () => ({
+  appendFile: vi.fn(),
   mkdir: vi.fn(),
   writeFile: vi.fn(),
   readFile: vi.fn(),
@@ -74,7 +75,7 @@ vi.mock("../../utils/global-opts.js", () => ({
   getGlobalOpts: vi.fn(() => ({})),
 }));
 
-import { mkdir, writeFile, readFile } from "node:fs/promises";
+import { appendFile, mkdir, writeFile, readFile } from "node:fs/promises";
 import {
   loadConfig,
   detectLLMConfigFromEnv,
@@ -107,6 +108,7 @@ describe("run command", () => {
     mockRuntimeInstance.define.mockReturnValue(undefined);
 
     // FS defaults
+    vi.mocked(appendFile).mockResolvedValue(undefined);
     vi.mocked(mkdir).mockResolvedValue(undefined);
     vi.mocked(writeFile).mockResolvedValue(undefined);
     vi.mocked(readFile).mockResolvedValue("name: loaded-workflow\nmode: validation-repair\n" as never);
@@ -180,6 +182,16 @@ describe("run command", () => {
       const cmd = createRunCommand();
       expect(cmd.options.find((o) => o.long === "--timeout")).toBeDefined();
     });
+
+    it("should have --debug option", () => {
+      const cmd = createRunCommand();
+      expect(cmd.options.find((o) => o.long === "--debug")).toBeDefined();
+    });
+
+    it("should have --debug-file option", () => {
+      const cmd = createRunCommand();
+      expect(cmd.options.find((o) => o.long === "--debug-file")).toBeDefined();
+    });
   });
 
   // ─── workflow execution ──────────────────────────────────────────────────
@@ -251,6 +263,38 @@ describe("run command", () => {
 
       expect(MockOboraRuntime).toHaveBeenCalledWith(
         expect.objectContaining({ llm: undefined })
+      );
+    });
+
+    it("should enable debug trace file when --debug is set", async () => {
+      await runRun("my-workflow", { debug: true });
+
+      expect(mkdir).toHaveBeenCalledWith(
+        expect.stringContaining(".obora-debug"),
+        expect.objectContaining({ recursive: true })
+      );
+      expect(writeFile).toHaveBeenCalledWith(
+        expect.stringContaining(".obora-debug"),
+        "",
+        "utf-8"
+      );
+      expect(appendFile).toHaveBeenCalled();
+    });
+
+    it("should register extra debug event listeners in debug mode", async () => {
+      await runRun("my-workflow", { debug: true });
+
+      expect(mockRuntimeInstance.on).toHaveBeenCalledWith(
+        "execution_start",
+        expect.any(Function)
+      );
+      expect(mockRuntimeInstance.on).toHaveBeenCalledWith(
+        "workflow.back_edge_triggered",
+        expect.any(Function)
+      );
+      expect(mockRuntimeInstance.on).toHaveBeenCalledWith(
+        "error",
+        expect.any(Function)
       );
     });
   });

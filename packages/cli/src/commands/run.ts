@@ -1,5 +1,5 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { appendFile, mkdir, writeFile } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
 
 import {
   detectLLMConfigFromEnv,
@@ -26,6 +26,67 @@ function isQuietOutput(options: Record<string, unknown>): boolean {
 
 function isVerboseOutput(options: Record<string, unknown>): boolean {
   return Boolean(options.verbose);
+}
+
+function isDebugOutput(options: Record<string, unknown>): boolean {
+  return Boolean(options.debug || options.debugFile);
+}
+
+const DEBUG_EVENT_TYPES = [
+  "execution_start",
+  "execution_end",
+  "step_start",
+  "step_end",
+  "workflow.validation_failed",
+  "workflow.validation_passed",
+  "workflow.repair_started",
+  "workflow.repair_completed",
+  "workflow.repair_no_progress",
+  "workflow.back_edge_triggered",
+  "workflow.back_edge_exhausted",
+  "warning",
+  "error",
+  "knowledge_context_attached",
+] as const;
+
+function clipDebug(value: unknown, max = 180): string {
+  if (value === undefined || value === null) return "";
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  return text.length > max ? `${text.slice(0, max)}…` : text;
+}
+
+function summarizeDebugEvent(type: string, data: Record<string, unknown> | undefined): string {
+  switch (type) {
+    case "execution_start":
+    case "execution_end":
+      return `execution=${String(data?.executionId ?? "unknown")}`;
+    case "step_start":
+      return `step=${String(data?.stepName ?? "unknown")}`;
+    case "step_end":
+      return `step=${String(data?.stepName ?? "unknown")} status=${String(data?.status ?? "unknown")} durationMs=${String(data?.durationMs ?? "-")}`;
+    case "workflow.validation_failed": {
+      const failedChecks = Array.isArray(data?.failedChecks) ? data.failedChecks.length : "?";
+      return `step=${String(data?.stepName ?? "unknown")} failedChecks=${String(failedChecks)} summary=${clipDebug(data?.summary)}`;
+    }
+    case "workflow.validation_passed":
+      return `step=${String(data?.stepName ?? "unknown")} summary=${clipDebug(data?.summary)}`;
+    case "workflow.repair_started":
+      return `step=${String(data?.stepName ?? "unknown")} attempt=${String(data?.attempt ?? "?")} hint=${clipDebug(data?.reflectorHint) || "(none)"}`;
+    case "workflow.repair_completed":
+      return `step=${String(data?.stepName ?? "unknown")} attempt=${String(data?.attempt ?? "?")}`;
+    case "workflow.repair_no_progress":
+      return `source=${String(data?.sourceStep ?? "unknown")} category=${String(data?.category ?? "unknown")} reason=${clipDebug(data?.reason)}`;
+    case "workflow.back_edge_triggered":
+    case "workflow.back_edge_exhausted":
+      return `source=${String(data?.sourceStep ?? "unknown")} target=${String(data?.targetStep ?? "unknown")} reason=${clipDebug(data?.reason)}`;
+    case "warning":
+    case "error":
+      return clipDebug(data?.message ?? data?.error ?? data);
+    case "knowledge_context_attached":
+      return `workflow=${String(data?.workflowName ?? "unknown")} items=${String(data?.itemCount ?? "?")}`;
+    default:
+      return clipDebug(data);
+  }
 }
 
 export async function runRun(workflow: string, options: Record<string, unknown>): Promise<void> {
@@ -69,6 +130,14 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
   let stopSemantics: unknown;
   let derivedOutputRoot: string | undefined;
   let derivedArchiveEnabled = false;
+  const debugEnabled = isDebugOutput(options);
+  let debugFilePath: string | undefined;
+  let debugWriteChain = Promise.resolve();
+  const appendDebugRecord = (record: Record<string, unknown>): void => {
+    if (!debugEnabled || !debugFilePath) return;
+    const line = JSON.stringify({ ts: new Date().toISOString(), ...record }) + "\n";
+    debugWriteChain = debugWriteChain.then(() => appendFile(debugFilePath!, line, "utf-8"));
+  };
   if (workflow.endsWith(".yaml") || workflow.endsWith(".yml")) {
     const loadedConfigRaw = await import("node:fs/promises").then((m) => m.readFile(workflow, "utf-8"));
     const parsedRaw = await import("yaml").then((m) => m.parse(loadedConfigRaw));
@@ -108,6 +177,30 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
         "Invalid JSON input. Please provide a valid JSON string to --input.",
         ExitCode.VALIDATION_ERROR
       );
+    }
+  }
+
+  if (debugEnabled) {
+    debugFilePath =
+      typeof options.debugFile === "string" && options.debugFile.length > 0
+        ? (options.debugFile as string)
+        : join(process.cwd(), ".obora-debug", `${basename(workflowName)}-${startedAt}.jsonl`);
+    await mkdir(dirname(debugFilePath), { recursive: true });
+    await writeFile(debugFilePath, "", "utf-8");
+    appendDebugRecord({
+      type: "debug.start",
+      workflow,
+      workflowName,
+      options: {
+        timeout: options.timeout,
+        verbose: options.verbose,
+        quiet: options.quiet,
+        json: options.json,
+      },
+      pid: process.pid,
+    });
+    if (!isQuietOutput(options) && !isJsonOutput(options)) {
+      formatter.info(`debug trace enabled: ${debugFilePath}`);
     }
   }
 
@@ -243,22 +336,60 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
     });
   }
 
-  const handle = await runtime.run(workflowName, {
-    input,
-    variables,
-    signal: controller.signal,
-  });
+  if (debugEnabled) {
+    for (const type of DEBUG_EVENT_TYPES) {
+      runtime.on(type, (event) => {
+        const data = (event.data && typeof event.data === "object")
+          ? (event.data as Record<string, unknown>)
+          : undefined;
+        appendDebugRecord({
+          type,
+          executionId: event.executionId,
+          data: event.data,
+          metadata: event.metadata,
+        });
+        if (!isQuietOutput(options) && !isJsonOutput(options)) {
+          formatter.info(`[debug:${type}] ${summarizeDebugEvent(type, data)}`);
+        }
+      });
+    }
+  }
 
-  const result = await (async () => {
+  const execution = await (async () => {
     try {
-      return await handle.wait();
-    } finally {
-      if (timeoutHandle) {
-        clearTimeout(timeoutHandle);
-        timeoutHandle = undefined;
-      }
+      const handle = await runtime.run(workflowName, {
+        input,
+        variables,
+        signal: controller.signal,
+      });
+
+      appendDebugRecord({
+        type: "debug.handle_created",
+        executionId: handle.executionId,
+      });
+
+      const result = await (async () => {
+        try {
+          return await handle.wait();
+        } finally {
+          if (timeoutHandle) {
+            clearTimeout(timeoutHandle);
+            timeoutHandle = undefined;
+          }
+        }
+      })();
+
+      return { handle, result };
+    } catch (error) {
+      appendDebugRecord({
+        type: "debug.exception",
+        message: error instanceof Error ? error.message : String(error),
+      });
+      await debugWriteChain;
+      throw error;
     }
   })();
+  const { handle, result } = execution;
   const elapsedMs = Date.now() - startedAt;
 
   const effectiveOutputDir =
@@ -372,6 +503,15 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
     repairLoopSummary.repairCompleted > 0 ||
     repairLoopSummary.repairNoProgress > 0;
 
+  appendDebugRecord({
+    type: "debug.end",
+    workflowName: result.workflowName,
+    executionId: handle.executionId,
+    elapsedMs,
+    repairLoop: hasRepairLoopActivity ? repairLoopSummary : undefined,
+  });
+  await debugWriteChain;
+
   if (isJsonOutput(options)) {
     formatter.json({
       workflowName: result.workflowName,
@@ -419,6 +559,8 @@ export function createRunCommand(): Command {
     .option("--dump-expanded-workflow", "Print the expanded internal workflow when loading YAML")
     .option("--show-stop-semantics", "Print derived stop semantics when available")
     .option("--timeout <ms>", "Execution timeout in milliseconds", parseInt)
+    .option("--debug", "Enable live debug trace output and JSONL event log")
+    .option("--debug-file <path>", "Write debug JSONL trace to this file (implies --debug)")
     .action(async function (this: Command, workflow, options) {
       const mergedOptions = { ...getGlobalOpts(this), ...options };
       await handleCommandAction(

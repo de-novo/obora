@@ -20,12 +20,21 @@ echo ""
 
 cd "$ROOT"
 
+DEBUG_ARGS=()
+if [[ "${OBORA_DEBUG:-0}" == "1" ]]; then
+  DEBUG_ARGS+=(--debug)
+fi
+if [[ -n "${OBORA_DEBUG_FILE:-}" ]]; then
+  DEBUG_ARGS+=(--debug-file "$OBORA_DEBUG_FILE")
+fi
+
 node "$REPO_ROOT/bin/obora.js" run \
   "$ROOT/workflows/00-overnight-builder.yaml" \
   --config "$ROOT/obora.config.yaml" \
   --agents "$ROOT/agents.yaml" \
   --output-dir "$ROOT/output/iterations/results" \
   --timeout "$OBORA_TIMEOUT_MS" \
+  "${DEBUG_ARGS[@]}" \
   2>&1 | tee "$ROOT/output/iterations/logs/run.log"
 
 echo ""

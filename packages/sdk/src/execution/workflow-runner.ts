@@ -777,10 +777,10 @@ export class WorkflowRunner {
       if (repairContext?.mode === "repair") {
         // Inject reflector hint from blackboard failure history
         if (reflector && blackboard) {
-          const hint = reflector.analyzeFailures(
-            blackboard.getFailureHistory(),
-            step.name
-          );
+          const failures = blackboard.getFailureHistory();
+          config?.logger?.info?.(`[reflector] analyzing ${failures.length} failures for step ${step.name}`);
+          const hint = reflector.analyzeFailures(failures, step.name);
+          config?.logger?.info?.(`[reflector] hint result: ${hint ? hint.slice(0, 120) + '...' : '(none)'}`);
           if (hint) {
             repairContext.reflectorHint = hint;
             config?.logger?.info?.(`[reflector] ${step.name} attempt ${repairContext.attempt}: ${hint}`);
