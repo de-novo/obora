@@ -103,9 +103,10 @@ export class ExecutionReflector {
     const wordInFailures = new Map<string, Set<number>>(); // track which failures contain each word
 
     for (let i = 0; i < failures.length; i++) {
+      const failure = failures[i]!;
       const texts = [
-        failures[i].validation.summary.toLowerCase(),
-        ...failures[i].validation.failedChecks.map((c) => `${c.name} ${c.message}`.toLowerCase()),
+        failure.validation.summary.toLowerCase(),
+        ...failure.validation.failedChecks.map((c) => `${c.name} ${c.message}`.toLowerCase()),
       ];
       const allWords = texts.join(" ").split(/[\s,.:;()\[\]{}"'`/\\|!?=<>+\-*#@~^&%$]+/);
       const seen = new Set<string>();
@@ -153,7 +154,7 @@ export class ExecutionReflector {
 
     if (repeated.length === 0) return undefined;
 
-    const top = repeated[0];
+    const top = repeated[0]!;
     return `The same failure signature "${top[0]}" has occurred ${top[1]} times.`;
   }
 
@@ -194,16 +195,17 @@ export class ExecutionReflector {
     // Compare failure check counts across attempts
     const checkCounts = failures.map((f) => f.validation.failedChecks.length);
     const recent3 = checkCounts.slice(-3);
+    const [first, second, third] = recent3 as [number, number, number];
 
-    const isWorsening = recent3[2] > recent3[1] && recent3[1] > recent3[0];
-    const isImproving = recent3[2] < recent3[1] && recent3[1] < recent3[0];
-    const isStable = recent3[0] === recent3[1] && recent3[1] === recent3[2];
+    const isWorsening = third > second && second > first;
+    const isImproving = third < second && second < first;
+    const isStable = first === second && second === third;
 
     if (isWorsening) {
       return `⚠️ WORSENING TREND: Failed checks increased over last 3 attempts (${recent3.join(" → ")}). Current repairs may be introducing new bugs. Stop fixing symptoms and address the root cause.`;
     }
     if (isStable) {
-      return `Stable failure count (${recent3[0]}) over last 3 attempts. The current approach is not making progress.`;
+      return `Stable failure count (${first}) over last 3 attempts. The current approach is not making progress.`;
     }
     if (isImproving) {
       return `Improving trend (${recent3.join(" → ")}). Continue current approach.`;

@@ -1,4 +1,4 @@
-import type { CostSummary } from "@obora/runtime";
+import { createAgentId, type CostSummary } from "@obora/runtime";
 import type { EventBus } from "../events/event-bus.js";
 import type { AuditEventType, AuditEvent, Unsubscribe } from "../runtime-types.js";
 import type { CostTracker } from "../cost-tracker.js";
@@ -216,7 +216,7 @@ export class ExecutionObserver {
           );
           this.blackboard.board.knowledge.addFact({
             content: `Validation failure in step "${stepName}": ${data?.summary ?? "validation failed"}`,
-            source: "execution-observer",
+            source: createAgentId("execution-observer"),
             confidence: 1.0,
             category: "observer_validation_failure",
             tags: ["observer", "validation-failure", stepName],
@@ -251,7 +251,7 @@ export class ExecutionObserver {
         if (this.blackboard) {
           this.blackboard.board.knowledge.addFact({
             content: `Back-edge triggered: "${data?.sourceStep ?? ""}" → "${data?.targetStep ?? ""}"`,
-            source: "execution-observer",
+            source: createAgentId("execution-observer"),
             confidence: 1.0,
             category: "observer_back_edge",
             tags: ["observer", "back-edge", String(data?.sourceStep ?? ""), String(data?.targetStep ?? "")],

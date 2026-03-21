@@ -39,7 +39,7 @@ export interface ActionHandler {
 export class InjectContextHandler implements ActionHandler {
   readonly type = "inject_context";
 
-  execute(action: ReflectorAction): ActionResult {
+  execute(action: ReflectorAction, _context: ActionExecutionContext): ActionResult {
     const content = action.payload.content;
     if (typeof content !== "string" || content.length === 0) {
       return { applied: false };
@@ -80,7 +80,7 @@ export class ForceTargetHandler implements ActionHandler {
 export class SwitchModelHandler implements ActionHandler {
   readonly type = "switch_model";
 
-  execute(action: ReflectorAction): ActionResult {
+  execute(action: ReflectorAction, _context: ActionExecutionContext): ActionResult {
     const model = action.payload.model;
     if (typeof model !== "string" || model.length === 0) {
       return { applied: false };
@@ -97,7 +97,7 @@ export class SwitchModelHandler implements ActionHandler {
 export class AbortHandler implements ActionHandler {
   readonly type = "abort";
 
-  execute(action: ReflectorAction): ActionResult {
+  execute(action: ReflectorAction, _context: ActionExecutionContext): ActionResult {
     const reason =
       typeof action.payload.reason === "string"
         ? action.payload.reason

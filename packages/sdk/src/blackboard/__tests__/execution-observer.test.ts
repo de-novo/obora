@@ -421,10 +421,10 @@ describe("ExecutionObserver", () => {
 
       const facts = blackboard.board.knowledge.findFacts({ category: "observer_validation_failure" });
       expect(facts).toHaveLength(1);
-      expect(facts[0].content).toContain("validate");
-      expect(facts[0].content).toContain("Type check failed");
-      expect(facts[0].tags).toContain("observer");
-      expect(facts[0].tags).toContain("validation-failure");
+      expect(facts[0]!.content).toContain("validate");
+      expect(facts[0]!.content).toContain("Type check failed");
+      expect(facts[0]!.tags).toContain("observer");
+      expect(facts[0]!.tags).toContain("validation-failure");
 
       observer.dispose();
     });
@@ -457,9 +457,9 @@ describe("ExecutionObserver", () => {
 
       const facts = blackboard.board.knowledge.findFacts({ category: "observer_back_edge" });
       expect(facts).toHaveLength(1);
-      expect(facts[0].content).toContain("validate");
-      expect(facts[0].content).toContain("build");
-      expect(facts[0].tags).toContain("back-edge");
+      expect(facts[0]!.content).toContain("validate");
+      expect(facts[0]!.content).toContain("build");
+      expect(facts[0]!.tags).toContain("back-edge");
 
       observer.dispose();
     });
@@ -519,8 +519,8 @@ describe("ExecutionObserver", () => {
 
       const failureFacts = blackboard.board.knowledge.findFacts({ category: "observer_validation_failure" });
       expect(failureFacts).toHaveLength(2);
-      expect(failureFacts[0].content).toContain("Failure 1");
-      expect(failureFacts[1].content).toContain("Failure 2");
+      expect(failureFacts[0]!.content).toContain("Failure 1");
+      expect(failureFacts[1]!.content).toContain("Failure 2");
 
       const backEdgeFacts = blackboard.board.knowledge.findFacts({ category: "observer_back_edge" });
       expect(backEdgeFacts).toHaveLength(1);

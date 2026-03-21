@@ -3,6 +3,12 @@ import { dirname, join } from "node:path";
 
 export type MemoryScopeLevel = "workflow" | "project" | "global";
 
+export const SHARED_MEMORY_SCOPE_PRIORITY: Record<MemoryScopeLevel, number> = {
+  global: 0,
+  project: 1,
+  workflow: 2,
+};
+
 export interface MemoryScope {
   level: MemoryScopeLevel;
   key: string;
@@ -49,6 +55,17 @@ function dedupeById<T extends { id: string }>(items: T[]): T[] {
     seen.set(item.id, item);
   }
   return [...seen.values()];
+}
+
+export function sortMemoryScopesByPriority(scopes: MemoryScope[]): MemoryScope[] {
+  const deduped = new Map<string, MemoryScope>();
+  for (const scope of scopes) {
+    deduped.set(`${scope.level}:${scope.key}`, scope);
+  }
+
+  return [...deduped.values()].sort(
+    (left, right) => SHARED_MEMORY_SCOPE_PRIORITY[left.level] - SHARED_MEMORY_SCOPE_PRIORITY[right.level],
+  );
 }
 
 export function mergeSharedMemorySnapshots(

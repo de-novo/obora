@@ -1,4 +1,4 @@
-import { BoardBlackboard, createSessionId } from "@obora/runtime";
+import { BoardBlackboard, createAgentId, createSessionId } from "@obora/runtime";
 import type { SharedMemorySnapshot, MemoryScope } from "../shared-memory/store.js";
 import type { ValidationResult } from "../validation-repair.js";
 
@@ -33,6 +33,11 @@ export interface BlackboardManagerOptions {
 export interface SharedMemoryImportResult {
   importedFacts: number;
   source: MemoryScope;
+}
+
+export interface SharedMemoryImportOptions {
+  factSources?: Record<string, MemoryScope>;
+  storeSnapshot?: boolean;
 }
 
 /**
@@ -236,21 +241,28 @@ export class BlackboardManager {
     };
   }
 
+  recordSharedMemorySnapshot(snapshot: SharedMemorySnapshot, source: MemoryScope): void {
+    this.board.write(`state.context.sharedMemory.${source.level}.${source.key}`, snapshot);
+  }
+
   /**
    * Import shared-memory snapshot into the local blackboard and Runtime Blackboard.
    */
   importPersistentSnapshot(
     snapshot: SharedMemorySnapshot,
     source: MemoryScope,
+    options: SharedMemoryImportOptions = {},
   ): SharedMemoryImportResult {
     let importedFacts = 0;
 
     for (const fact of snapshot.knowledge.facts) {
+      const factSource = options.factSources?.[fact.id] ?? source;
+      const sourceRef = `${factSource.level}:${factSource.key}`;
       const importedFact: BlackboardFact = {
-        id: `shared:${source.level}:${source.key}:${fact.id}`,
+        id: `shared:${factSource.level}:${factSource.key}:${fact.id}`,
         content: fact.content,
         category: "shared-memory-import",
-        tags: [...fact.tags, "shared-memory", source.level, source.key],
+        tags: [...fact.tags, "shared-memory", factSource.level, factSource.key],
         confidence: fact.confidence,
         createdAt: new Date(fact.createdAt),
       };
@@ -259,14 +271,16 @@ export class BlackboardManager {
 
       this.board.knowledge.addFact({
         content: fact.content,
-        source: `shared-memory:${source.level}:${source.key}`,
+        source: createAgentId(`shared-memory:${sourceRef}`),
         confidence: fact.confidence,
         category: "shared-memory-import",
-        tags: [...fact.tags, source.level, source.key],
+        tags: [...fact.tags, factSource.level, factSource.key],
       });
     }
 
-    this.board.write(`state.context.sharedMemory.${source.level}.${source.key}`, snapshot);
+    if (options.storeSnapshot !== false) {
+      this.recordSharedMemorySnapshot(snapshot, source);
+    }
 
     return { importedFacts, source };
   }

@@ -40,9 +40,9 @@ describe("BlackboardManager", () => {
 
       const facts = mgr.getFacts();
       expect(facts).toHaveLength(2);
-      expect(facts[0].category).toBe("step-output");
-      expect(facts[0].tags).toContain("step1");
-      expect(facts[1].tags).toContain("step2");
+      expect(facts[0]!.category).toBe("step-output");
+      expect(facts[0]!.tags).toContain("step1");
+      expect(facts[1]!.tags).toContain("step2");
     });
   });
 
@@ -85,7 +85,7 @@ describe("BlackboardManager", () => {
 
       const facts = mgr.getFactsByCategory("validation-pass");
       expect(facts).toHaveLength(1);
-      expect(facts[0].content).toContain("Validation passed");
+      expect(facts[0]!.content).toContain("Validation passed");
     });
 
     it("should record failing validation as a fact and a failure entry", () => {
@@ -94,13 +94,13 @@ describe("BlackboardManager", () => {
 
       const facts = mgr.getFactsByCategory("validation-fail");
       expect(facts).toHaveLength(1);
-      expect(facts[0].content).toContain("Validation failed");
+      expect(facts[0]!.content).toContain("Validation failed");
 
       const failures = mgr.getFailureHistory();
       expect(failures).toHaveLength(1);
-      expect(failures[0].stepName).toBe("validate-step");
-      expect(failures[0].attempt).toBe(2);
-      expect(failures[0].validation).toBe(failingResult);
+      expect(failures[0]!.stepName).toBe("validate-step");
+      expect(failures[0]!.attempt).toBe(2);
+      expect(failures[0]!.validation).toBe(failingResult);
     });
 
     it("should not add to failure history for passing validations", () => {
@@ -313,6 +313,39 @@ describe("BlackboardManager", () => {
       expect(mgr.getFactsByCategory("shared-memory-import")).toHaveLength(1);
       const stored = mgr.board.read("state.context.sharedMemory.project.obora-kit", { strict: false });
       expect(stored).toBeDefined();
+    });
+
+    it("can record raw scope snapshots and import merged facts with provenance", () => {
+      const mgr = new BlackboardManager({ sessionId: "import-session-merged" });
+      const snapshot = {
+        knowledge: {
+          facts: [
+            {
+              id: "fact-1",
+              content: "Use workflow guidance",
+              category: "lesson",
+              tags: ["workflow"],
+              confidence: 0.95,
+              createdAt: new Date().toISOString(),
+            },
+          ],
+        },
+        decisions: { history: [] },
+        context: { projectFacts: { owner: "workflow" } },
+      };
+
+      mgr.recordSharedMemorySnapshot(snapshot, { level: "global", key: "global" });
+      mgr.importPersistentSnapshot(snapshot, { level: "workflow", key: "merged" }, {
+        factSources: { "fact-1": { level: "workflow", key: "build-app" } },
+        storeSnapshot: false,
+      });
+
+      const imported = mgr.getFactsByCategory("shared-memory-import");
+      expect(imported).toHaveLength(1);
+      expect(imported[0]?.id).toBe("shared:workflow:build-app:fact-1");
+      expect(imported[0]?.tags).toContain("build-app");
+      expect(mgr.board.read("state.context.sharedMemory.global.global", { strict: false })).toEqual(snapshot);
+      expect(mgr.board.read("state.context.sharedMemory.workflow.merged", { strict: false })).toBeUndefined();
     });
   });
 });

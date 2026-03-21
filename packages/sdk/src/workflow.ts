@@ -99,6 +99,25 @@ export interface WorkflowSharedMemoryConfig {
   scopes?: import("./shared-memory/store.js").MemoryScopeLevel[];
 }
 
+export interface WorkflowTKGProjectionConfig {
+  enabled?: boolean;
+  projectKey?: string;
+  scopes?: import("./shared-memory/store.js").MemoryScopeLevel[];
+  promotion?: {
+    enabled?: boolean;
+    minConfidence?: number;
+    confidenceSpreadThreshold?: number;
+    allowedEventTypes?: import("./tkg/store.js").ProjectableTKGEventType[];
+    applyScopes?: import("./shared-memory/store.js").MemoryScopeLevel[];
+  };
+  rollback?: {
+    enabled?: boolean;
+  };
+  reviewQueue?: {
+    enabled?: boolean;
+  };
+}
+
 export interface WorkflowDef {
   name: string;
   version?: string;
@@ -111,6 +130,8 @@ export interface WorkflowDef {
   reflector?: WorkflowReflectorConfig;
   /** Shared memory import/export overrides for this workflow. */
   sharedMemory?: WorkflowSharedMemoryConfig;
+  /** TKG staging projection overrides for this workflow. */
+  tkgProjection?: WorkflowTKGProjectionConfig;
 }
 
 export interface OnFailConfig {

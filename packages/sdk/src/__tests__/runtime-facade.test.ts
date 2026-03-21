@@ -33,6 +33,23 @@ function appendHookCommand(label: string, stdout?: string): string {
   return `node -e \"const fs=require('node:fs');fs.appendFileSync('hook-order.log','${label}\\n');${stdoutStatement}\"`;
 }
 
+function createInMemorySharedMemoryStore(): SharedMemoryStore {
+  const data = new Map<string, SharedMemorySnapshot>();
+
+  return {
+    async load(scope: MemoryScope) {
+      return data.get(`${scope.level}:${scope.key}`) ?? null;
+    },
+    async save(scope: MemoryScope, snapshot: SharedMemorySnapshot) {
+      data.set(`${scope.level}:${scope.key}`, snapshot);
+    },
+    async merge(scope: MemoryScope, snapshot: SharedMemorySnapshot) {
+      const existing = await this.load(scope);
+      await this.save(scope, mergeSharedMemorySnapshots(existing, snapshot));
+    },
+  };
+}
+
 describe("OboraRuntime facade", () => {
   function withNoLLMEnv() {
     const keys = [
@@ -776,19 +793,7 @@ describe("OboraRuntime facade", () => {
   });
 
   it("persists shared memory and injects it into the next execution prompt", async () => {
-    const store: SharedMemoryStore = {
-      _data: new Map<string, SharedMemorySnapshot>(),
-      async load(scope: MemoryScope) {
-        return (this as any)._data.get(`${scope.level}:${scope.key}`) ?? null;
-      },
-      async save(scope: MemoryScope, snapshot: SharedMemorySnapshot) {
-        (this as any)._data.set(`${scope.level}:${scope.key}`, snapshot);
-      },
-      async merge(scope: MemoryScope, snapshot: SharedMemorySnapshot) {
-        const existing = await this.load(scope);
-        await this.save(scope, mergeSharedMemorySnapshots(existing, snapshot));
-      },
-    };
+    const store = createInMemorySharedMemoryStore();
 
     // Run 1 — produces a validation failure fact that gets persisted
     const runtime1 = new OboraRuntime({
@@ -874,9 +879,7 @@ describe("OboraRuntime facade", () => {
     runtime2.define("shared-mem-run2", {
       name: "shared-mem-run2",
       sharedMemory: { enabled: true, projectKey: "test-project", scopes: ["project"] },
-      steps: [
-        { name: "build", agent: "builder", input: { task: "Build app v2" } },
-      ],
+      steps: [{ name: "build", agent: "builder", input: { task: "Build app v2" } }],
     });
 
     const handle2 = await runtime2.run("shared-mem-run2");
@@ -887,6 +890,919 @@ describe("OboraRuntime facade", () => {
     const userPrompt = String(call?.messages?.[1]?.content ?? "");
     expect(userPrompt).toContain("Shared memory context:");
     expect(userPrompt).toContain("test-project");
+  });
+
+  it("merges runtime and config shared-memory settings instead of dropping nested file config", async () => {
+    const store = createInMemorySharedMemoryStore();
+
+    const runtime = new OboraRuntime({
+      llm: { provider: "openai", apiKey: "test-key", model: "gpt-5" },
+      config: {
+        sharedMemory: {
+          enabled: true,
+          file: { projectKey: "config-project", scopes: ["project"] },
+        },
+      },
+      sharedMemory: {
+        enabled: true,
+        adapter: "custom",
+        custom: { instance: store },
+      },
+    });
+
+    const adapter = {
+      chatCompletion: vi.fn().mockImplementation(async () => {
+        return { message: { role: "assistant", content: "done" } };
+      }),
+    };
+
+    vi.spyOn(
+      runtime as unknown as { createLLMAdapter: () => Promise<typeof adapter> },
+      "createLLMAdapter"
+    ).mockResolvedValue(adapter);
+
+    runtime.define("shared-mem-config-merge", {
+      name: "shared-mem-config-merge",
+      steps: [{ name: "build", agent: "builder", input: { task: "Build app" } }],
+    });
+
+    const handle = await runtime.run("shared-mem-config-merge");
+    await handle.wait();
+
+    expect(await store.load({ level: "project", key: "config-project" })).not.toBeNull();
+  });
+
+  it("imports shared-memory scopes by specificity so workflow overrides project and global facts", async () => {
+    const store = createInMemorySharedMemoryStore();
+
+    await store.save(
+      { level: "global", key: "global" },
+      {
+        knowledge: {
+          facts: [
+            {
+              id: "fact-1",
+              content: "global guidance",
+              category: "lesson",
+              tags: ["global"],
+              confidence: 0.5,
+              createdAt: new Date().toISOString(),
+            },
+          ],
+        },
+        decisions: { history: [] },
+        context: { projectFacts: { owner: "global" } },
+      },
+    );
+    await store.save(
+      { level: "project", key: "test-project" },
+      {
+        knowledge: {
+          facts: [
+            {
+              id: "fact-1",
+              content: "project guidance",
+              category: "lesson",
+              tags: ["project"],
+              confidence: 0.7,
+              createdAt: new Date().toISOString(),
+            },
+          ],
+        },
+        decisions: { history: [] },
+        context: { projectFacts: { owner: "project" } },
+      },
+    );
+    await store.save(
+      { level: "workflow", key: "shared-mem-priority" },
+      {
+        knowledge: {
+          facts: [
+            {
+              id: "fact-1",
+              content: "workflow guidance",
+              category: "lesson",
+              tags: ["workflow"],
+              confidence: 0.9,
+              createdAt: new Date().toISOString(),
+            },
+          ],
+        },
+        decisions: { history: [] },
+        context: { projectFacts: { owner: "workflow" } },
+      },
+    );
+
+    const runtime = new OboraRuntime({
+      llm: { provider: "openai", apiKey: "test-key", model: "gpt-5" },
+      sharedMemory: {
+        enabled: true,
+        adapter: "custom",
+        custom: { instance: store },
+        file: { projectKey: "test-project", scopes: ["workflow", "global", "project"] },
+      },
+    });
+
+    const adapter = {
+      chatCompletion: vi.fn().mockImplementation(async () => {
+        return { message: { role: "assistant", content: "done" } };
+      }),
+    };
+
+    vi.spyOn(
+      runtime as unknown as { createLLMAdapter: () => Promise<typeof adapter> },
+      "createLLMAdapter"
+    ).mockResolvedValue(adapter);
+
+    runtime.define("shared-mem-priority", {
+      name: "shared-mem-priority",
+      steps: [{ name: "build", agent: "builder", input: { task: "Build with shared memory" } }],
+    });
+
+    const handle = await runtime.run("shared-mem-priority");
+    await handle.wait();
+
+    const call = adapter.chatCompletion.mock.calls[0]?.[0];
+    const userPrompt = String(call?.messages?.[1]?.content ?? "");
+    expect(userPrompt).toContain('"importedScopes": [\n    "global:global",\n    "project:test-project",\n    "workflow:shared-mem-priority"');
+    expect(userPrompt).toContain("workflow guidance");
+    expect(userPrompt).toContain('"owner": "workflow"');
+    expect(userPrompt).toContain('"provenance"');
+    expect(userPrompt).toContain('"fact-1": "workflow:shared-mem-priority"');
+  });
+
+  it("projects repair-loop events into the staging TKG store", async () => {
+    const store = {
+      _data: new Map<string, { nodes: any[] }>(),
+      async load(scope: MemoryScope) {
+        return (this as any)._data.get(`${scope.level}:${scope.key}`) ?? null;
+      },
+      async save(scope: MemoryScope, snapshot: { nodes: any[] }) {
+        (this as any)._data.set(`${scope.level}:${scope.key}`, snapshot);
+      },
+      async append(scope: MemoryScope, nodes: any[]) {
+        const existing = (await this.load(scope)) ?? { nodes: [] };
+        await this.save(scope, { nodes: [...existing.nodes, ...nodes] });
+      },
+    };
+
+    const runtime = new OboraRuntime({
+      llm: { provider: "openai", apiKey: "test-key", model: "gpt-5" },
+      tkgProjection: {
+        enabled: true,
+        adapter: "custom",
+        custom: { instance: store as any },
+        file: { projectKey: "test-project", scopes: ["project"] },
+      },
+    });
+
+    let callIndex = 0;
+    const adapterMock = {
+      chatCompletion: vi.fn().mockImplementation(async () => {
+        callIndex += 1;
+        if (callIndex === 1) {
+          return { message: { role: "assistant", content: "initial draft" } };
+        }
+        if (callIndex === 2) {
+          return {
+            message: {
+              role: "assistant",
+              content: JSON.stringify({
+                passed: false,
+                summary: "Fix TS1484 import type usage",
+                failedChecks: [{ name: "typescript", message: "TS1484" }],
+                signature: "ts1484",
+              }),
+            },
+          };
+        }
+        if (callIndex === 3) {
+          return { message: { role: "assistant", content: "repaired draft" } };
+        }
+        return {
+          message: {
+            role: "assistant",
+            content: JSON.stringify({
+              passed: true,
+              summary: "Validation passed",
+              failedChecks: [],
+              signature: "pass",
+            }),
+          },
+        };
+      }),
+    };
+
+    vi.spyOn(
+      runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> },
+      "createLLMAdapter"
+    ).mockResolvedValue(adapterMock);
+
+    runtime.define("tkg-projection-run", {
+      name: "tkg-projection-run",
+      tkgProjection: { enabled: true, projectKey: "test-project", scopes: ["project"] },
+      steps: [
+        {
+          name: "build_or_repair",
+          agent: "builder",
+          config: {
+            repair_loop: {
+              enabled: true,
+              validation_step: "validate",
+            },
+          },
+          input: { task: "Build or repair the app" },
+        },
+        {
+          name: "validate",
+          agent: "validator",
+          depends_on: ["build_or_repair"],
+          config: { validation: { enabled: true, emit_structured_result: true } },
+          on_fail: { goto: "build_or_repair", max_iterations: 3 },
+          input: { task: "Validate the app and return structured JSON" },
+        },
+      ],
+    });
+
+    const handle = await runtime.run("tkg-projection-run");
+    const result = await handle.wait();
+
+    const snapshot = await (store as any).load({ level: "project", key: "test-project" });
+    expect(snapshot?.nodes.map((node: { eventType: string }) => node.eventType)).toEqual([
+      "workflow.validation_failed",
+      "workflow.back_edge_triggered",
+      "workflow.repair_started",
+      "workflow.repair_completed",
+      "workflow.validation_passed",
+    ]);
+    expect(snapshot?.nodes[0]?.summary).toContain("Fix TS1484 import type usage");
+    expect(snapshot?.nodes[2]?.relations).toContainEqual({
+      type: "caused_by",
+      target: snapshot!.nodes[0]!.id,
+    });
+    expect(snapshot?.nodes[3]?.relations).toContainEqual({
+      type: "completes",
+      target: snapshot!.nodes[2]!.id,
+    });
+    expect(snapshot?.nodes[4]?.relations).toContainEqual({
+      type: "resolves",
+      target: snapshot!.nodes[0]!.id,
+    });
+    expect(result.outputs.__tkg_projection__).toEqual({
+      projectedNodeCount: 5,
+      projectedScopes: ["project:test-project"],
+      eventTypes: [
+        "workflow.validation_failed",
+        "workflow.back_edge_triggered",
+        "workflow.repair_started",
+        "workflow.repair_completed",
+        "workflow.validation_passed",
+      ],
+    });
+    expect(result.outputs.__tkg_promotion__).toMatchObject({
+      scope: "project:test-project",
+      minConfidence: 0.8,
+      allowedEventTypes: ["workflow.validation_passed", "workflow.repair_completed"],
+      candidateCount: 2,
+      promotableCount: 1,
+      reviewCandidateCount: 1,
+      conflictCount: 2,
+      reviewQueueCount: 2,
+    });
+  });
+
+  it("merges runtime and config tkgProjection settings instead of dropping nested file config", async () => {
+    const store = {
+      _data: new Map<string, { nodes: any[] }>(),
+      async load(scope: MemoryScope) {
+        return (this as any)._data.get(`${scope.level}:${scope.key}`) ?? null;
+      },
+      async save(scope: MemoryScope, snapshot: { nodes: any[] }) {
+        (this as any)._data.set(`${scope.level}:${scope.key}`, snapshot);
+      },
+      async append(scope: MemoryScope, nodes: any[]) {
+        const existing = (await this.load(scope)) ?? { nodes: [] };
+        await this.save(scope, { nodes: [...existing.nodes, ...nodes] });
+      },
+    };
+
+    const runtime = new OboraRuntime({
+      llm: { provider: "openai", apiKey: "test-key", model: "gpt-5" },
+      config: {
+        tkgProjection: {
+          enabled: true,
+          file: { projectKey: "config-tkg-project", scopes: ["project"] },
+        },
+      },
+      tkgProjection: {
+        enabled: true,
+        adapter: "custom",
+        custom: { instance: store as any },
+      },
+    });
+
+    let callIndex = 0;
+    const adapterMock = {
+      chatCompletion: vi.fn().mockImplementation(async () => {
+        callIndex += 1;
+        if (callIndex === 1) {
+          return { message: { role: "assistant", content: "build ok" } };
+        }
+        return {
+          message: {
+            role: "assistant",
+            content: JSON.stringify({
+              passed: true,
+              summary: "Validation passed",
+              failedChecks: [],
+              signature: "pass",
+            }),
+          },
+        };
+      }),
+    };
+
+    vi.spyOn(
+      runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> },
+      "createLLMAdapter"
+    ).mockResolvedValue(adapterMock);
+
+    runtime.define("tkg-config-merge", {
+      name: "tkg-config-merge",
+      tkgProjection: { enabled: true },
+      steps: [
+        { name: "build", agent: "builder", input: { task: "Build app" } },
+        {
+          name: "validate",
+          agent: "validator",
+          depends_on: ["build"],
+          config: { validation: { enabled: true, emit_structured_result: true } },
+          input: { task: "Validate app" },
+        },
+      ],
+    });
+
+    const handle = await runtime.run("tkg-config-merge");
+    await handle.wait();
+
+    const snapshot = await (store as any).load({ level: "project", key: "config-tkg-project" });
+    expect(snapshot).not.toBeNull();
+    expect(snapshot.nodes.map((node: { eventType: string }) => node.eventType)).toEqual([
+      "workflow.validation_passed",
+    ]);
+  });
+
+  it("stores high-severity promotion conflicts in the TKG review queue", async () => {
+    const stagingStore = {
+      _data: new Map<string, { nodes: any[] }>(),
+      async load(scope: MemoryScope) {
+        return (this as any)._data.get(`${scope.level}:${scope.key}`) ?? null;
+      },
+      async save(scope: MemoryScope, snapshot: { nodes: any[] }) {
+        (this as any)._data.set(`${scope.level}:${scope.key}`, snapshot);
+      },
+      async append(scope: MemoryScope, nodes: any[]) {
+        const existing = (await this.load(scope)) ?? { nodes: [] };
+        await this.save(scope, { nodes: [...existing.nodes, ...nodes] });
+      },
+    };
+    const reviewQueueStore = {
+      _data: new Map<string, { items: any[] }>(),
+      async load(scope: MemoryScope) {
+        return (this as any)._data.get(`${scope.level}:${scope.key}`) ?? null;
+      },
+      async save(scope: MemoryScope, snapshot: { items: any[] }) {
+        (this as any)._data.set(`${scope.level}:${scope.key}`, snapshot);
+      },
+      async enqueue(scope: MemoryScope, item: any) {
+        const existing = (await this.load(scope)) ?? { items: [] };
+        await this.save(scope, { items: [...existing.items, item] });
+      },
+    };
+
+    const runtime = new OboraRuntime({
+      llm: { provider: "openai", apiKey: "test-key", model: "gpt-5" },
+      tkgProjection: {
+        enabled: true,
+        adapter: "custom",
+        custom: { instance: stagingStore as any },
+        file: { projectKey: "test-project", scopes: ["project"] },
+        reviewQueue: {
+          enabled: true,
+          adapter: "custom",
+          custom: { instance: reviewQueueStore as any },
+        },
+      },
+    });
+
+    let callIndex = 0;
+    const adapterMock = {
+      chatCompletion: vi.fn().mockImplementation(async () => {
+        callIndex += 1;
+        if (callIndex === 1) {
+          return { message: { role: "assistant", content: "initial draft" } };
+        }
+        if (callIndex === 2) {
+          return {
+            message: {
+              role: "assistant",
+              content: JSON.stringify({
+                passed: false,
+                summary: "Fix TS1484 import type usage",
+                failedChecks: [{ name: "typescript", message: "TS1484" }],
+                signature: "ts1484",
+              }),
+            },
+          };
+        }
+        if (callIndex === 3) {
+          return { message: { role: "assistant", content: "repaired draft" } };
+        }
+        return {
+          message: {
+            role: "assistant",
+            content: JSON.stringify({
+              passed: true,
+              summary: "Validation passed",
+              failedChecks: [],
+              signature: "pass",
+            }),
+          },
+        };
+      }),
+    };
+
+    vi.spyOn(
+      runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> },
+      "createLLMAdapter"
+    ).mockResolvedValue(adapterMock);
+
+    runtime.define("tkg-review-queue-run", {
+      name: "tkg-review-queue-run",
+      tkgProjection: {
+        enabled: true,
+        projectKey: "test-project",
+        scopes: ["project"],
+        reviewQueue: { enabled: true },
+      },
+      steps: [
+        {
+          name: "build_or_repair",
+          agent: "builder",
+          config: {
+            repair_loop: {
+              enabled: true,
+              validation_step: "validate",
+            },
+          },
+          input: { task: "Build or repair the app" },
+        },
+        {
+          name: "validate",
+          agent: "validator",
+          depends_on: ["build_or_repair"],
+          config: { validation: { enabled: true, emit_structured_result: true } },
+          on_fail: { goto: "build_or_repair", max_iterations: 3 },
+          input: { task: "Validate the app and return structured JSON" },
+        },
+      ],
+    });
+
+    const handle = await runtime.run("tkg-review-queue-run");
+    const result = await handle.wait();
+
+    const snapshot = await (reviewQueueStore as any).load({ level: "project", key: "test-project" });
+    expect(snapshot?.items).toHaveLength(1);
+    expect(snapshot?.items[0]?.workflowName).toBe("tkg-review-queue-run");
+    expect(snapshot?.items[0]?.candidateNodeIds).toHaveLength(1);
+    expect(snapshot?.items[0]?.conflicts).toHaveLength(2);
+    expect(result.outputs.__tkg_review_queue__).toEqual({
+      scope: "project:test-project",
+      queuedItems: 2,
+    });
+  });
+
+  it("applies promotable TKG candidates into shared memory when conflicts do not block promotion", async () => {
+    const sharedMemoryStore = createInMemorySharedMemoryStore();
+    const stagingStore = {
+      _data: new Map<string, { nodes: any[] }>(),
+      async load(scope: MemoryScope) {
+        return (this as any)._data.get(`${scope.level}:${scope.key}`) ?? null;
+      },
+      async save(scope: MemoryScope, snapshot: { nodes: any[] }) {
+        (this as any)._data.set(`${scope.level}:${scope.key}`, snapshot);
+      },
+      async append(scope: MemoryScope, nodes: any[]) {
+        const existing = (await this.load(scope)) ?? { nodes: [] };
+        await this.save(scope, { nodes: [...existing.nodes, ...nodes] });
+      },
+    };
+
+    const runtime = new OboraRuntime({
+      llm: { provider: "openai", apiKey: "test-key", model: "gpt-5" },
+      sharedMemory: {
+        enabled: true,
+        adapter: "custom",
+        custom: { instance: sharedMemoryStore },
+        file: { projectKey: "test-project", scopes: ["project"] },
+      },
+      tkgProjection: {
+        enabled: true,
+        adapter: "custom",
+        custom: { instance: stagingStore as any },
+        file: { projectKey: "test-project", scopes: ["project"] },
+      },
+    });
+
+    let callIndex = 0;
+    const adapterMock = {
+      chatCompletion: vi.fn().mockImplementation(async () => {
+        callIndex += 1;
+        if (callIndex === 1) {
+          return { message: { role: "assistant", content: "build ok" } };
+        }
+        return {
+          message: {
+            role: "assistant",
+            content: JSON.stringify({
+              passed: true,
+              summary: "Validation passed",
+              failedChecks: [],
+              signature: "pass",
+            }),
+          },
+        };
+      }),
+    };
+
+    vi.spyOn(
+      runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> },
+      "createLLMAdapter"
+    ).mockResolvedValue(adapterMock);
+
+    runtime.define("tkg-promotion-apply-run", {
+      name: "tkg-promotion-apply-run",
+      sharedMemory: { enabled: true, projectKey: "test-project", scopes: ["project"] },
+      tkgProjection: { enabled: true, projectKey: "test-project", scopes: ["project"] },
+      steps: [
+        { name: "build", agent: "builder", input: { task: "Build app" } },
+        {
+          name: "validate",
+          agent: "validator",
+          depends_on: ["build"],
+          config: { validation: { enabled: true, emit_structured_result: true } },
+          input: { task: "Validate app" },
+        },
+      ],
+    });
+
+    const handle = await runtime.run("tkg-promotion-apply-run");
+    const result = await handle.wait();
+
+    const stored = await sharedMemoryStore.load({ level: "project", key: "test-project" });
+    expect(stored?.knowledge.facts.some((fact) => fact.category === "tkg-promotion")).toBe(true);
+    expect(result.outputs.__tkg_promotion_apply__).toEqual({
+      scopes: ["project:test-project"],
+      appliedFactCount: 1,
+      appliedNodeIds: [expect.stringMatching(/^tkg-promotion:/)],
+    });
+  });
+
+  it("uses configured tkg promotion policy for apply scopes and thresholds", async () => {
+    const sharedMemoryStore = createInMemorySharedMemoryStore();
+    const stagingStore = {
+      _data: new Map<string, { nodes: any[] }>(),
+      async load(scope: MemoryScope) {
+        return (this as any)._data.get(`${scope.level}:${scope.key}`) ?? null;
+      },
+      async save(scope: MemoryScope, snapshot: { nodes: any[] }) {
+        (this as any)._data.set(`${scope.level}:${scope.key}`, snapshot);
+      },
+      async append(scope: MemoryScope, nodes: any[]) {
+        const existing = (await this.load(scope)) ?? { nodes: [] };
+        await this.save(scope, { nodes: [...existing.nodes, ...nodes] });
+      },
+    };
+
+    const runtime = new OboraRuntime({
+      llm: { provider: "openai", apiKey: "test-key", model: "gpt-5" },
+      config: {
+        tkgProjection: {
+          enabled: true,
+          file: { projectKey: "test-project", scopes: ["project"] },
+          promotion: {
+            minConfidence: 0.9,
+            allowedEventTypes: ["workflow.validation_passed"],
+            applyScopes: ["global"],
+          },
+        },
+      },
+      sharedMemory: {
+        enabled: true,
+        adapter: "custom",
+        custom: { instance: sharedMemoryStore },
+      },
+      tkgProjection: {
+        enabled: true,
+        adapter: "custom",
+        custom: { instance: stagingStore as any },
+      },
+    });
+
+    let callIndex = 0;
+    const adapterMock = {
+      chatCompletion: vi.fn().mockImplementation(async () => {
+        callIndex += 1;
+        if (callIndex === 1) {
+          return { message: { role: "assistant", content: "build ok" } };
+        }
+        return {
+          message: {
+            role: "assistant",
+            content: JSON.stringify({
+              passed: true,
+              summary: "Validation passed",
+              failedChecks: [],
+              signature: "pass",
+            }),
+          },
+        };
+      }),
+    };
+
+    vi.spyOn(
+      runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> },
+      "createLLMAdapter"
+    ).mockResolvedValue(adapterMock);
+
+    runtime.define("tkg-promotion-policy-run", {
+      name: "tkg-promotion-policy-run",
+      sharedMemory: { enabled: true, projectKey: "test-project", scopes: ["project"] },
+      tkgProjection: { enabled: true },
+      steps: [
+        { name: "build", agent: "builder", input: { task: "Build app" } },
+        {
+          name: "validate",
+          agent: "validator",
+          depends_on: ["build"],
+          config: { validation: { enabled: true, emit_structured_result: true } },
+          input: { task: "Validate app" },
+        },
+      ],
+    });
+
+    const handle = await runtime.run("tkg-promotion-policy-run");
+    const result = await handle.wait();
+
+    const globalSnapshot = await sharedMemoryStore.load({ level: "global", key: "global" });
+    const projectSnapshot = await sharedMemoryStore.load({ level: "project", key: "test-project" });
+    expect(globalSnapshot?.knowledge.facts.some((fact) => fact.category === "tkg-promotion")).toBe(true);
+    expect(projectSnapshot?.knowledge.facts.some((fact) => fact.category === "tkg-promotion")).toBe(false);
+    expect(result.outputs.__tkg_promotion_apply__).toEqual({
+      scopes: ["global:global"],
+      appliedFactCount: 1,
+      appliedNodeIds: [expect.stringMatching(/^tkg-promotion:/)],
+    });
+    expect(result.outputs.__tkg_promotion__).toMatchObject({
+      minConfidence: 0.9,
+      allowedEventTypes: ["workflow.validation_passed"],
+    });
+  });
+
+  it("captures rollback snapshots before applying TKG promotion into shared memory", async () => {
+    const sharedMemoryStore = createInMemorySharedMemoryStore();
+    const rollbackStore = {
+      _data: new Map<string, { entries: any[] }>(),
+      async load(scope: MemoryScope) {
+        return (this as any)._data.get(`${scope.level}:${scope.key}`) ?? null;
+      },
+      async save(scope: MemoryScope, snapshot: { entries: any[] }) {
+        (this as any)._data.set(`${scope.level}:${scope.key}`, snapshot);
+      },
+      async append(scope: MemoryScope, entry: any) {
+        const existing = (await this.load(scope)) ?? { entries: [] };
+        await this.save(scope, { entries: [...existing.entries, entry] });
+      },
+    };
+    const stagingStore = {
+      _data: new Map<string, { nodes: any[] }>(),
+      async load(scope: MemoryScope) {
+        return (this as any)._data.get(`${scope.level}:${scope.key}`) ?? null;
+      },
+      async save(scope: MemoryScope, snapshot: { nodes: any[] }) {
+        (this as any)._data.set(`${scope.level}:${scope.key}`, snapshot);
+      },
+      async append(scope: MemoryScope, nodes: any[]) {
+        const existing = (await this.load(scope)) ?? { nodes: [] };
+        await this.save(scope, { nodes: [...existing.nodes, ...nodes] });
+      },
+    };
+
+    await sharedMemoryStore.save(
+      { level: "project", key: "test-project" },
+      {
+        knowledge: {
+          facts: [
+            {
+              id: "existing-fact",
+              content: "pre-existing shared memory fact",
+              category: "lesson",
+              tags: ["baseline"],
+              confidence: 0.7,
+              createdAt: new Date().toISOString(),
+            },
+          ],
+        },
+        decisions: { history: [] },
+        context: { projectFacts: { baseline: true } },
+      },
+    );
+
+    const runtime = new OboraRuntime({
+      llm: { provider: "openai", apiKey: "test-key", model: "gpt-5" },
+      sharedMemory: {
+        enabled: true,
+        adapter: "custom",
+        custom: { instance: sharedMemoryStore },
+        file: { projectKey: "test-project", scopes: ["project"] },
+      },
+      tkgProjection: {
+        enabled: true,
+        adapter: "custom",
+        custom: { instance: stagingStore as any },
+        file: { projectKey: "test-project", scopes: ["project"] },
+        rollback: {
+          enabled: true,
+          adapter: "custom",
+          custom: { instance: rollbackStore as any },
+        },
+      },
+    });
+
+    let callIndex = 0;
+    const adapterMock = {
+      chatCompletion: vi.fn().mockImplementation(async () => {
+        callIndex += 1;
+        if (callIndex === 1) {
+          return { message: { role: "assistant", content: "build ok" } };
+        }
+        return {
+          message: {
+            role: "assistant",
+            content: JSON.stringify({
+              passed: true,
+              summary: "Validation passed",
+              failedChecks: [],
+              signature: "pass",
+            }),
+          },
+        };
+      }),
+    };
+
+    vi.spyOn(
+      runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> },
+      "createLLMAdapter"
+    ).mockResolvedValue(adapterMock);
+
+    runtime.define("tkg-rollback-run", {
+      name: "tkg-rollback-run",
+      sharedMemory: { enabled: true, projectKey: "test-project", scopes: ["project"] },
+      tkgProjection: {
+        enabled: true,
+        projectKey: "test-project",
+        scopes: ["project"],
+        rollback: { enabled: true },
+      },
+      steps: [
+        { name: "build", agent: "builder", input: { task: "Build app" } },
+        {
+          name: "validate",
+          agent: "validator",
+          depends_on: ["build"],
+          config: { validation: { enabled: true, emit_structured_result: true } },
+          input: { task: "Validate app" },
+        },
+      ],
+    });
+
+    const handle = await runtime.run("tkg-rollback-run");
+    const result = await handle.wait();
+
+    const rollbackSnapshot = await (rollbackStore as any).load({ level: "project", key: "test-project" });
+    expect(rollbackSnapshot?.entries).toHaveLength(1);
+    expect(rollbackSnapshot?.entries[0]?.snapshot.knowledge.facts[0]?.id).toBe("existing-fact");
+    expect(result.outputs.__tkg_promotion_rollback__).toEqual({
+      capturedSnapshots: 1,
+      scopes: ["project:test-project"],
+      rollbackIds: [expect.any(String)],
+    });
+  });
+
+  it("reapplies approved TKG review queue items through the runtime facade API", async () => {
+    const sharedMemoryData = new Map<string, SharedMemorySnapshot>();
+    const sharedMemoryStore: SharedMemoryStore = {
+      async load(scope: MemoryScope) {
+        return sharedMemoryData.get(`${scope.level}:${scope.key}`) ?? null;
+      },
+      async save(scope: MemoryScope, snapshot: SharedMemorySnapshot) {
+        sharedMemoryData.set(`${scope.level}:${scope.key}`, snapshot);
+      },
+      async merge(scope: MemoryScope, snapshot: SharedMemorySnapshot) {
+        const existing = await this.load(scope);
+        await this.save(scope, mergeSharedMemorySnapshots(existing, snapshot));
+      },
+    };
+    const stagingStore = {
+      async load() {
+        return {
+          nodes: [
+            {
+              id: "n2",
+              eventType: "workflow.validation_passed",
+              executionId: "exec-1",
+              workflowName: "runtime-reapply",
+              stepName: "validate",
+              timestamp: new Date().toISOString(),
+              summary: "Validation passed",
+              attributes: {},
+              relations: [],
+            },
+          ],
+        };
+      },
+      async save() {},
+    };
+    const reviewQueueStore = {
+      async load() {
+        return {
+          items: [
+            {
+              id: "review-1",
+              createdAt: new Date().toISOString(),
+              scope: "project:test-project",
+              workflowName: "runtime-reapply",
+              status: "approved" as const,
+              candidateNodeIds: ["n2"],
+              conflicts: [],
+              summary: {
+                candidateCount: 1,
+                promotableCount: 1,
+                reviewCandidateCount: 1,
+                conflictCount: 0,
+                reviewQueueCount: 1,
+              },
+              resolution: {
+                status: "approved" as const,
+                resolvedAt: new Date().toISOString(),
+              },
+            },
+          ],
+        };
+      },
+      async save() {},
+    };
+
+    const runtime = new OboraRuntime({
+      sharedMemory: {
+        enabled: true,
+        adapter: "custom",
+        custom: { instance: sharedMemoryStore },
+        file: { projectKey: "test-project", scopes: ["project"] },
+      },
+      tkgProjection: {
+        enabled: true,
+        adapter: "custom",
+        custom: { instance: stagingStore as any },
+        file: { projectKey: "test-project", scopes: ["project"] },
+        reviewQueue: {
+          enabled: true,
+          adapter: "custom",
+          custom: { instance: reviewQueueStore as any },
+        },
+      },
+    });
+
+    runtime.define("runtime-reapply", {
+      name: "runtime-reapply",
+      sharedMemory: { enabled: true, projectKey: "test-project", scopes: ["project"] },
+      tkgProjection: { enabled: true, projectKey: "test-project", scopes: ["project"] },
+      steps: [{ name: "build", agent: "builder", input: { task: "Build app" } }],
+    });
+
+    const summary = await runtime.reapplyApprovedTKGReviewQueueItems("runtime-reapply", {
+      sourceExecutionId: "exec-reapply",
+    });
+
+    const stored = await sharedMemoryStore.load({ level: "project", key: "test-project" });
+    expect(stored?.knowledge.facts.map((fact) => fact.id)).toEqual(["tkg-promotion:n2"]);
+    expect(summary).toEqual({
+      appliedFactCount: 1,
+      appliedNodeIds: ["tkg-promotion:n2"],
+      approvedItemCount: 1,
+      approvedItemIds: ["review-1"],
+      scopes: ["project:test-project"],
+    });
   });
 
   it("force_target reroutes next back-edge to the specified step", async () => {

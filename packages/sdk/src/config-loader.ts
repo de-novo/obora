@@ -63,6 +63,35 @@ export interface OboraConfig {
     };
     custom?: { instance?: import("./shared-memory/store.js").SharedMemoryStore };
   };
+  tkgProjection?: {
+    enabled?: boolean;
+    adapter?: "file" | "custom";
+    file?: {
+      basePath?: string;
+      projectKey?: string;
+      scopes?: import("./shared-memory/store.js").MemoryScopeLevel[];
+    };
+    custom?: { instance?: import("./tkg/store.js").StagingTKGStore };
+    promotion?: {
+      enabled?: boolean;
+      minConfidence?: number;
+      confidenceSpreadThreshold?: number;
+      allowedEventTypes?: import("./tkg/store.js").ProjectableTKGEventType[];
+      applyScopes?: import("./shared-memory/store.js").MemoryScopeLevel[];
+    };
+    rollback?: {
+      enabled?: boolean;
+      adapter?: "file" | "custom";
+      file?: { basePath?: string };
+      custom?: { instance?: import("./tkg/rollback.js").TKGRollbackStore };
+    };
+    reviewQueue?: {
+      enabled?: boolean;
+      adapter?: "file" | "custom";
+      file?: { basePath?: string };
+      custom?: { instance?: import("./tkg/review-queue.js").TKGReviewQueueStore };
+    };
+  };
   resources?: {
     maxCostPerRun?: number;
     maxTokensPerStep?: number;
@@ -182,6 +211,37 @@ function mergeConfig(base: OboraConfig | undefined, override: OboraConfig | unde
         ...(override?.sharedMemory?.file ?? {}),
       },
       custom: override?.sharedMemory?.custom ?? base?.sharedMemory?.custom,
+    },
+    tkgProjection: {
+      ...(base?.tkgProjection ?? {}),
+      ...(override?.tkgProjection ?? {}),
+      file: {
+        ...(base?.tkgProjection?.file ?? {}),
+        ...(override?.tkgProjection?.file ?? {}),
+      },
+      custom: override?.tkgProjection?.custom ?? base?.tkgProjection?.custom,
+      promotion: {
+        ...(base?.tkgProjection?.promotion ?? {}),
+        ...(override?.tkgProjection?.promotion ?? {}),
+      },
+      rollback: {
+        ...(base?.tkgProjection?.rollback ?? {}),
+        ...(override?.tkgProjection?.rollback ?? {}),
+        file: {
+          ...(base?.tkgProjection?.rollback?.file ?? {}),
+          ...(override?.tkgProjection?.rollback?.file ?? {}),
+        },
+        custom: override?.tkgProjection?.rollback?.custom ?? base?.tkgProjection?.rollback?.custom,
+      },
+      reviewQueue: {
+        ...(base?.tkgProjection?.reviewQueue ?? {}),
+        ...(override?.tkgProjection?.reviewQueue ?? {}),
+        file: {
+          ...(base?.tkgProjection?.reviewQueue?.file ?? {}),
+          ...(override?.tkgProjection?.reviewQueue?.file ?? {}),
+        },
+        custom: override?.tkgProjection?.reviewQueue?.custom ?? base?.tkgProjection?.reviewQueue?.custom,
+      },
     },
     resources: {
       ...(base?.resources ?? {}),

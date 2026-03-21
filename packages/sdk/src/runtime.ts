@@ -62,6 +62,7 @@ export type {
   PersistenceConfig,
   ArtifactsConfig,
   SharedMemoryConfig,
+  TKGProjectionConfig,
   OboraRuntimeConfig,
 } from "./runtime-types.js";
 
@@ -86,6 +87,7 @@ import type {
   ToolHandler,
   Unsubscribe,
 } from "./runtime-types.js";
+import type { TKGApprovedReviewQueueApplySummary } from "./tkg/apply.js";
 
 export type WorkflowDefinition = WorkflowDef;
 
@@ -764,6 +766,20 @@ export class OboraRuntime {
     });
 
     return reResult;
+  }
+
+  async reapplyApprovedTKGReviewQueueItems(
+    workflowName: string,
+    options: { sourceExecutionId?: string } = {},
+  ): Promise<TKGApprovedReviewQueueApplySummary> {
+    if (!this.workflows.has(workflowName)) {
+      throw new OboraError(
+        `Workflow is not defined: ${workflowName}`,
+        OboraErrorCode.SDK_WORKFLOW_NOT_FOUND,
+      );
+    }
+
+    return this.runner.reapplyApprovedTKGReviewQueueItems(this.workflows.get(workflowName)!, options);
   }
 
   // ── Query facade (delegates to RunQuery) ──────────────────────────────────

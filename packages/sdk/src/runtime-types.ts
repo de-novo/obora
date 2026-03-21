@@ -109,6 +109,7 @@ export const OboraErrorCode = {
   SDK_EXECUTION_NOT_FOUND: "SDK_8007",
   SDK_INVALID_CONFIG: "SDK_8008",
   SDK_CONFIG_ERROR: "SDK_8009",
+  EXECUTION_FAILED: "SDK_8010",
   SDK_INVALID_PLUGIN: "SDK_9001",
   SDK_PLUGIN_LOAD_FAILED: "SDK_9002",
   SDK_PLUGIN_CONFLICT: "SDK_9003",
@@ -232,6 +233,38 @@ export interface SharedMemoryConfig {
   };
 }
 
+export interface TKGProjectionConfig {
+  enabled?: boolean;
+  adapter?: "file" | "custom";
+  file?: {
+    basePath?: string;
+    projectKey?: string;
+    scopes?: import("./shared-memory/store.js").MemoryScopeLevel[];
+  };
+  custom?: {
+    instance: import("./tkg/store.js").StagingTKGStore;
+  };
+  promotion?: {
+    enabled?: boolean;
+    minConfidence?: number;
+    confidenceSpreadThreshold?: number;
+    allowedEventTypes?: import("./tkg/store.js").ProjectableTKGEventType[];
+    applyScopes?: import("./shared-memory/store.js").MemoryScopeLevel[];
+  };
+  rollback?: {
+    enabled?: boolean;
+    adapter?: "file" | "custom";
+    file?: { basePath?: string };
+    custom?: { instance: import("./tkg/rollback.js").TKGRollbackStore };
+  };
+  reviewQueue?: {
+    enabled?: boolean;
+    adapter?: "file" | "custom";
+    file?: { basePath?: string };
+    custom?: { instance: import("./tkg/review-queue.js").TKGReviewQueueStore };
+  };
+}
+
 export interface OboraRuntimeConfig {
   policyPath?: string;
   audit?: OboraAuditConfig;
@@ -240,8 +273,15 @@ export interface OboraRuntimeConfig {
   configPath?: string;
   agentsPath?: string;
   verbose?: boolean;
+  logger?: {
+    info?: (...args: unknown[]) => void;
+    warn?: (...args: unknown[]) => void;
+    error?: (...args: unknown[]) => void;
+    debug?: (...args: unknown[]) => void;
+  };
   stepTools?: import("./step-executor.js").ToolHandler[];
   persistence?: PersistenceConfig;
   artifacts?: ArtifactsConfig;
   sharedMemory?: SharedMemoryConfig;
+  tkgProjection?: TKGProjectionConfig;
 }

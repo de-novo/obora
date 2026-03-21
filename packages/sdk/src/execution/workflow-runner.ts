@@ -52,10 +52,36 @@ import type { ReflectorRule } from "../reflector/rule-engine.js";
 import {
   FileSharedMemoryStore,
   mergeSharedMemorySnapshots,
+  sortMemoryScopesByPriority,
   type MemoryScope,
   type SharedMemorySnapshot,
   type SharedMemoryStore,
 } from "../shared-memory/store.js";
+import { TKGProjector } from "../tkg/projector.js";
+import {
+  buildSharedMemorySnapshotFromTKGPromotion,
+  reapplyApprovedTKGReviewQueueItems,
+  summarizeTKGPromotionApply,
+  type TKGApprovedReviewQueueApplySummary,
+} from "../tkg/apply.js";
+import {
+  evaluateTKGPromotion,
+  summarizeTKGPromotionEvaluation,
+} from "../tkg/promotion.js";
+import {
+  FileTKGRollbackStore,
+  summarizeTKGRollbackEntries,
+  type TKGRollbackEntry,
+  type TKGRollbackStore,
+} from "../tkg/rollback.js";
+import {
+  FileTKGReviewQueueStore,
+  type TKGReviewQueueStore,
+} from "../tkg/review-queue.js";
+import {
+  FileStagingTKGStore,
+  type StagingTKGStore,
+} from "../tkg/store.js";
 
 /** Duck-type for reflector: both ExecutionReflector and ReflectorEngine implement this. */
 type ReflectorLike = {
@@ -505,11 +531,46 @@ export class WorkflowRunner {
     };
   }
 
+  private resolveSharedMemoryConfig(
+    workflow: WorkflowDef,
+    runtimeConfig: OboraRuntimeConfig,
+    loadedConfig: OboraConfig | undefined,
+  ): NonNullable<OboraConfig["sharedMemory"]> | undefined {
+    const baseConfig = loadedConfig?.sharedMemory;
+    const runtimeSharedMemory = runtimeConfig.sharedMemory;
+
+    const merged: NonNullable<OboraConfig["sharedMemory"]> = {
+      ...(baseConfig ?? {}),
+      ...(runtimeSharedMemory ?? {}),
+      file: {
+        ...(baseConfig?.file ?? {}),
+        ...(runtimeSharedMemory?.file ?? {}),
+      },
+      custom: runtimeSharedMemory?.custom ?? baseConfig?.custom,
+    };
+
+    if (workflow.sharedMemory) {
+      merged.enabled = workflow.sharedMemory.enabled ?? merged.enabled;
+      merged.file = {
+        ...(merged.file ?? {}),
+        ...(workflow.sharedMemory.projectKey !== undefined
+          ? { projectKey: workflow.sharedMemory.projectKey }
+          : {}),
+        ...(workflow.sharedMemory.scopes !== undefined
+          ? { scopes: workflow.sharedMemory.scopes }
+          : {}),
+      };
+    }
+
+    return merged;
+  }
+
   private resolveSharedMemoryStore(
+    workflow: WorkflowDef,
     runtimeConfig: OboraRuntimeConfig,
     loadedConfig: OboraConfig | undefined,
   ): SharedMemoryStore | undefined {
-    const sharedMemoryConfig = runtimeConfig.sharedMemory ?? loadedConfig?.sharedMemory;
+    const sharedMemoryConfig = this.resolveSharedMemoryConfig(workflow, runtimeConfig, loadedConfig);
     if (!sharedMemoryConfig?.enabled) return undefined;
 
     if (sharedMemoryConfig.adapter === "custom") {
@@ -525,19 +586,20 @@ export class WorkflowRunner {
     runtimeConfig: OboraRuntimeConfig,
     loadedConfig: OboraConfig | undefined,
   ): MemoryScope[] {
-    const sharedMemoryConfig = runtimeConfig.sharedMemory ?? loadedConfig?.sharedMemory;
-    const workflowSharedMemory = workflow.sharedMemory;
-    const scopeLevels = workflowSharedMemory?.scopes
-      ?? sharedMemoryConfig?.file?.scopes
-      ?? (["workflow", "project"] as MemoryScope["level"][]);
-    const projectKey = workflowSharedMemory?.projectKey
-      ?? sharedMemoryConfig?.file?.projectKey
-      ?? basename(process.cwd());
+    const sharedMemoryConfig = this.resolveSharedMemoryConfig(workflow, runtimeConfig, loadedConfig);
+    if (!sharedMemoryConfig?.enabled) {
+      return [];
+    }
 
-    return scopeLevels.map((level) => ({
-      level,
-      key: level === "workflow" ? workflow.name : level === "global" ? "global" : projectKey,
-    }));
+    const scopeLevels = sharedMemoryConfig.file?.scopes ?? (["workflow", "project"] as MemoryScope["level"][]);
+    const projectKey = sharedMemoryConfig.file?.projectKey ?? basename(process.cwd());
+
+    return sortMemoryScopesByPriority(
+      scopeLevels.map((level) => ({
+        level,
+        key: level === "workflow" ? workflow.name : level === "global" ? "global" : projectKey,
+      })),
+    );
   }
 
   private async importSharedMemory(
@@ -550,21 +612,35 @@ export class WorkflowRunner {
 
     let mergedSnapshot: SharedMemorySnapshot | null = null;
     const importedScopes: string[] = [];
+    const factSources = new Map<string, MemoryScope>();
 
     for (const scope of scopes) {
       const snapshot = await store.load(scope);
       if (!snapshot) continue;
-      blackboard.importPersistentSnapshot(snapshot, scope);
+      blackboard.recordSharedMemorySnapshot(snapshot, scope);
+      for (const fact of snapshot.knowledge.facts) {
+        factSources.set(fact.id, scope);
+      }
       mergedSnapshot = mergeSharedMemorySnapshots(mergedSnapshot, snapshot);
       importedScopes.push(`${scope.level}:${scope.key}`);
     }
 
     if (mergedSnapshot) {
+      blackboard.importPersistentSnapshot(mergedSnapshot, scopes.at(-1) ?? { level: "workflow", key: "merged" }, {
+        factSources: Object.fromEntries(factSources.entries()),
+        storeSnapshot: false,
+      });
+
       execution.outputs.__shared_memory__ = {
         importedScopes,
         knowledge: mergedSnapshot.knowledge,
         decisions: mergedSnapshot.decisions,
         context: mergedSnapshot.context,
+        provenance: {
+          knowledge: Object.fromEntries(
+            [...factSources.entries()].map(([factId, scope]) => [factId, `${scope.level}:${scope.key}`]),
+          ),
+        },
       };
     }
 
@@ -586,6 +662,172 @@ export class WorkflowRunner {
         await store.save(scope, snapshot);
       }
     }
+  }
+
+  private resolveTKGProjectionConfig(
+    workflow: WorkflowDef,
+    runtimeConfig: OboraRuntimeConfig,
+    loadedConfig: OboraConfig | undefined,
+  ): NonNullable<OboraConfig["tkgProjection"]> | undefined {
+    const baseConfig = loadedConfig?.tkgProjection;
+    const runtimeTKGProjection = runtimeConfig.tkgProjection;
+
+    const merged: NonNullable<OboraConfig["tkgProjection"]> = {
+      ...(baseConfig ?? {}),
+      ...(runtimeTKGProjection ?? {}),
+      file: {
+        ...(baseConfig?.file ?? {}),
+        ...(runtimeTKGProjection?.file ?? {}),
+      },
+      custom: runtimeTKGProjection?.custom ?? baseConfig?.custom,
+      promotion: {
+        ...(baseConfig?.promotion ?? {}),
+        ...(runtimeTKGProjection?.promotion ?? {}),
+      },
+      rollback: {
+        ...(baseConfig?.rollback ?? {}),
+        ...(runtimeTKGProjection?.rollback ?? {}),
+        file: {
+          ...(baseConfig?.rollback?.file ?? {}),
+          ...(runtimeTKGProjection?.rollback?.file ?? {}),
+        },
+        custom: runtimeTKGProjection?.rollback?.custom ?? baseConfig?.rollback?.custom,
+      },
+      reviewQueue: {
+        ...(baseConfig?.reviewQueue ?? {}),
+        ...(runtimeTKGProjection?.reviewQueue ?? {}),
+        file: {
+          ...(baseConfig?.reviewQueue?.file ?? {}),
+          ...(runtimeTKGProjection?.reviewQueue?.file ?? {}),
+        },
+        custom: runtimeTKGProjection?.reviewQueue?.custom ?? baseConfig?.reviewQueue?.custom,
+      },
+    };
+
+    if (workflow.tkgProjection) {
+      merged.enabled = workflow.tkgProjection.enabled ?? merged.enabled;
+      merged.file = {
+        ...(merged.file ?? {}),
+        ...(workflow.tkgProjection.projectKey !== undefined
+          ? { projectKey: workflow.tkgProjection.projectKey }
+          : {}),
+        ...(workflow.tkgProjection.scopes !== undefined
+          ? { scopes: workflow.tkgProjection.scopes }
+          : {}),
+      };
+      merged.promotion = {
+        ...(merged.promotion ?? {}),
+        ...(workflow.tkgProjection.promotion ?? {}),
+      };
+      merged.rollback = {
+        ...(merged.rollback ?? {}),
+        ...(workflow.tkgProjection.rollback?.enabled !== undefined
+          ? { enabled: workflow.tkgProjection.rollback.enabled }
+          : {}),
+      };
+      merged.reviewQueue = {
+        ...(merged.reviewQueue ?? {}),
+        ...(workflow.tkgProjection.reviewQueue?.enabled !== undefined
+          ? { enabled: workflow.tkgProjection.reviewQueue.enabled }
+          : {}),
+      };
+    }
+
+    return merged;
+  }
+
+  private resolveStagingTKGStore(
+    workflow: WorkflowDef,
+    runtimeConfig: OboraRuntimeConfig,
+    loadedConfig: OboraConfig | undefined,
+  ): StagingTKGStore | undefined {
+    const tkgProjectionConfig = this.resolveTKGProjectionConfig(workflow, runtimeConfig, loadedConfig);
+    if (!tkgProjectionConfig?.enabled) return undefined;
+
+    if (tkgProjectionConfig.adapter === "custom") {
+      return tkgProjectionConfig.custom?.instance;
+    }
+
+    const basePath = tkgProjectionConfig.file?.basePath ?? join(process.cwd(), ".obora", "tkg-staging");
+    return new FileStagingTKGStore(basePath);
+  }
+
+  private resolveTKGProjectionScopes(
+    workflow: WorkflowDef,
+    runtimeConfig: OboraRuntimeConfig,
+    loadedConfig: OboraConfig | undefined,
+  ): MemoryScope[] {
+    const tkgProjectionConfig = this.resolveTKGProjectionConfig(workflow, runtimeConfig, loadedConfig);
+    if (!tkgProjectionConfig?.enabled) {
+      return [];
+    }
+
+    const scopeLevels = tkgProjectionConfig.file?.scopes ?? (["workflow", "project"] as MemoryScope["level"][]);
+    const projectKey = tkgProjectionConfig.file?.projectKey ?? basename(process.cwd());
+
+    return sortMemoryScopesByPriority(
+      scopeLevels.map((level) => ({
+        level,
+        key: level === "workflow" ? workflow.name : level === "global" ? "global" : projectKey,
+      })),
+    );
+  }
+
+  private resolveTKGPromotionApplyScopes(
+    workflow: WorkflowDef,
+    runtimeConfig: OboraRuntimeConfig,
+    loadedConfig: OboraConfig | undefined,
+  ): MemoryScope[] {
+    const tkgProjectionConfig = this.resolveTKGProjectionConfig(workflow, runtimeConfig, loadedConfig);
+    if (!tkgProjectionConfig?.enabled || tkgProjectionConfig.promotion?.enabled === false) {
+      return [];
+    }
+
+    const scopeLevels = tkgProjectionConfig.promotion?.applyScopes;
+    if (!scopeLevels || scopeLevels.length === 0) {
+      return [];
+    }
+
+    const projectKey = tkgProjectionConfig.file?.projectKey ?? basename(process.cwd());
+
+    return sortMemoryScopesByPriority(
+      scopeLevels.map((level) => ({
+        level,
+        key: level === "workflow" ? workflow.name : level === "global" ? "global" : projectKey,
+      })),
+    );
+  }
+
+  private resolveTKGRollbackStore(
+    workflow: WorkflowDef,
+    runtimeConfig: OboraRuntimeConfig,
+    loadedConfig: OboraConfig | undefined,
+  ): TKGRollbackStore | undefined {
+    const tkgProjectionConfig = this.resolveTKGProjectionConfig(workflow, runtimeConfig, loadedConfig);
+    if (!tkgProjectionConfig?.enabled || !tkgProjectionConfig.rollback?.enabled) return undefined;
+
+    if (tkgProjectionConfig.rollback.adapter === "custom") {
+      return tkgProjectionConfig.rollback.custom?.instance;
+    }
+
+    const basePath = tkgProjectionConfig.rollback.file?.basePath ?? join(process.cwd(), ".obora", "tkg-rollback");
+    return new FileTKGRollbackStore(basePath);
+  }
+
+  private resolveTKGReviewQueueStore(
+    workflow: WorkflowDef,
+    runtimeConfig: OboraRuntimeConfig,
+    loadedConfig: OboraConfig | undefined,
+  ): TKGReviewQueueStore | undefined {
+    const tkgProjectionConfig = this.resolveTKGProjectionConfig(workflow, runtimeConfig, loadedConfig);
+    if (!tkgProjectionConfig?.enabled || !tkgProjectionConfig.reviewQueue?.enabled) return undefined;
+
+    if (tkgProjectionConfig.reviewQueue.adapter === "custom") {
+      return tkgProjectionConfig.reviewQueue.custom?.instance;
+    }
+
+    const basePath = tkgProjectionConfig.reviewQueue.file?.basePath ?? join(process.cwd(), ".obora", "tkg-review-queue");
+    return new FileTKGReviewQueueStore(basePath);
   }
 
   private recordValidationFailure(
@@ -1575,8 +1817,14 @@ export class WorkflowRunner {
 
     const persistenceConfig = config.persistence ?? loadedConfig?.persistence;
     const persistenceEnabled = persistenceConfig?.enabled ?? false;
-    const sharedMemoryStore = this.resolveSharedMemoryStore(config, loadedConfig);
+    const tkgProjectionConfig = this.resolveTKGProjectionConfig(workflow, config, loadedConfig);
+    const sharedMemoryStore = this.resolveSharedMemoryStore(workflow, config, loadedConfig);
     const sharedMemoryScopes = this.resolveSharedMemoryScopes(workflow, config, loadedConfig);
+    const stagingTKGStore = this.resolveStagingTKGStore(workflow, config, loadedConfig);
+    const tkgProjectionScopes = this.resolveTKGProjectionScopes(workflow, config, loadedConfig);
+    const tkgPromotionApplyScopes = this.resolveTKGPromotionApplyScopes(workflow, config, loadedConfig);
+    const tkgRollbackStore = this.resolveTKGRollbackStore(workflow, config, loadedConfig);
+    const tkgReviewQueueStore = this.resolveTKGReviewQueueStore(workflow, config, loadedConfig);
 
     // Persistence: save run at start
     let persistenceAdapter: StorageAdapter | null = null;
@@ -1671,112 +1919,272 @@ export class WorkflowRunner {
       observer.attachCostTracker(engine.costTracker);
     }
     observer.observe(executionId);
-
-    // Build execution plan and choose sequential or parallel path
-    const scheduler = new ParallelScheduler(workflow.maxConcurrency ?? DEFAULT_MAX_CONCURRENCY);
-    const plan = scheduler.buildExecutionPlan(sortedSteps);
-
-    if (plan.isParallel) {
-      await this.executeParallelStepLoop(
-        plan.layers,
-        workflow,
-        execution,
-        engine.stepExecutor,
-        engine.costTracker,
-        executionId,
-        persistenceEnabled,
-        persistenceAdapter,
-        signal,
-        isSettledFn,
-        blackboard,
-        reflector,
-        observer,
-        scheduler.maxConcurrency,
-      );
-    } else {
-      // Sequential path — preserves full back-edge and repair-loop support
-      await this.executeStepLoop(
-        sortedSteps,
-        workflow,
-        execution,
-        engine.stepExecutor,
-        engine.costTracker,
-        executionId,
-        persistenceEnabled,
-        persistenceAdapter,
-        signal,
-        isSettledFn,
-        blackboard,
-        reflector,
-        observer,
-      );
-    }
-
-    if (isSettledFn()) return;
-
-    // Finalize observer metrics and generate execution report
-    observer.finalize(executionId, "success");
-    const report = observer.generateReport(executionId, {
-      workflowName,
-      failurePatterns: this.extractFailurePatterns(blackboard, reflector),
-    });
-    await this.persistSharedMemory(sharedMemoryStore, sharedMemoryScopes, blackboard, executionId);
-    const blackboardSnapshot = blackboard.getSnapshot();
-    observer.dispose();
-
-    execution.status = "completed";
-    execution.endedAt = new Date();
-
-    // Persistence: update on completion
-    if (persistenceEnabled && persistenceAdapter) {
-      try {
-        await persistenceAdapter.saveRun({
-          id: executionId,
+    const tkgProjector = stagingTKGStore && tkgProjectionScopes.length > 0
+      ? new TKGProjector(eventBus, stagingTKGStore, {
           workflowName,
-          status: "completed",
-          input: { value: input ?? null },
-          startedAt: execution.startedAt.toISOString(),
-          completedAt: execution.endedAt!.toISOString(),
-          metadata: {
-            variables,
-            stepOrder: execution.stepOrder,
-            ...(this.getPersistedRepairLoopSummary(executionId)
-              ? { repairLoop: this.getPersistedRepairLoopSummary(executionId) }
-              : {}),
-          },
-        });
+          scopes: tkgProjectionScopes,
+        })
+      : undefined;
+    tkgProjector?.observe(executionId);
 
-        await persistenceAdapter.saveAuditEvent({
-          id: randomUUID(),
-          runId: executionId,
-          stepName: "__knowledge__",
-          timestamp: new Date().toISOString(),
-          category: "execution",
-          action: "knowledge.run_summary",
-          actor: "sdk-runtime",
-          detail: {
-            workflowName,
-            stepOrder: execution.stepOrder,
-            outputKeys: Object.keys(execution.outputs),
-          },
-        });
-      } catch (err) {
-        if (config.verbose) {
-          console.warn("[persistence] Failed to save run on completion:", err);
+    try {
+      // Build execution plan and choose sequential or parallel path
+      const scheduler = new ParallelScheduler(workflow.maxConcurrency ?? DEFAULT_MAX_CONCURRENCY);
+      const plan = scheduler.buildExecutionPlan(sortedSteps);
+
+      if (plan.isParallel) {
+        await this.executeParallelStepLoop(
+          plan.layers,
+          workflow,
+          execution,
+          engine.stepExecutor,
+          engine.costTracker,
+          executionId,
+          persistenceEnabled,
+          persistenceAdapter,
+          signal,
+          isSettledFn,
+          blackboard,
+          reflector,
+          observer,
+          scheduler.maxConcurrency,
+        );
+      } else {
+        // Sequential path — preserves full back-edge and repair-loop support
+        await this.executeStepLoop(
+          sortedSteps,
+          workflow,
+          execution,
+          engine.stepExecutor,
+          engine.costTracker,
+          executionId,
+          persistenceEnabled,
+          persistenceAdapter,
+          signal,
+          isSettledFn,
+          blackboard,
+          reflector,
+          observer,
+        );
+      }
+
+      if (isSettledFn()) return;
+
+      // Finalize observer metrics and generate execution report
+      observer.finalize(executionId, "success");
+      const report = observer.generateReport(executionId, {
+        workflowName,
+        failurePatterns: this.extractFailurePatterns(blackboard, reflector),
+      });
+      await this.persistSharedMemory(sharedMemoryStore, sharedMemoryScopes, blackboard, executionId);
+      if (tkgProjector) {
+        execution.outputs.__tkg_projection__ = tkgProjector.getSummary();
+      }
+      if (stagingTKGStore && tkgProjectionScopes.length > 0) {
+        const evaluationScope = tkgProjectionScopes.at(-1)!;
+        const stagingSnapshot = await stagingTKGStore.load(evaluationScope);
+        if (stagingSnapshot) {
+          const promotionEvaluation = evaluateTKGPromotion(stagingSnapshot, {
+            minConfidence: tkgProjectionConfig?.promotion?.minConfidence,
+            confidenceSpreadThreshold: tkgProjectionConfig?.promotion?.confidenceSpreadThreshold,
+          });
+          const promotionSummary = summarizeTKGPromotionEvaluation(promotionEvaluation);
+
+          execution.outputs.__tkg_promotion__ = {
+            scope: `${evaluationScope.level}:${evaluationScope.key}`,
+            minConfidence: tkgProjectionConfig?.promotion?.minConfidence ?? 0.8,
+            allowedEventTypes: tkgProjectionConfig?.promotion?.allowedEventTypes ?? [
+              "workflow.validation_passed",
+              "workflow.repair_completed",
+            ],
+            ...promotionSummary,
+          };
+
+          const promotionApplyScopes = tkgPromotionApplyScopes.length > 0 ? tkgPromotionApplyScopes : sharedMemoryScopes;
+          if (sharedMemoryStore && promotionApplyScopes.length > 0 && tkgProjectionConfig?.promotion?.enabled !== false) {
+            const promotionSnapshot = buildSharedMemorySnapshotFromTKGPromotion(
+              stagingSnapshot,
+              promotionEvaluation,
+              executionId,
+              {
+                allowedEventTypes: tkgProjectionConfig?.promotion?.allowedEventTypes,
+              },
+            );
+
+            if (promotionSnapshot.knowledge.facts.length > 0) {
+              const rollbackEntries: TKGRollbackEntry[] = [];
+
+              for (const scope of promotionApplyScopes) {
+                if (tkgRollbackStore) {
+                  const existingSnapshot = await sharedMemoryStore.load(scope);
+                  if (existingSnapshot) {
+                    const rollbackEntry: TKGRollbackEntry = {
+                      id: randomUUID(),
+                      createdAt: new Date().toISOString(),
+                      executionId,
+                      workflowName,
+                      scope: `${scope.level}:${scope.key}`,
+                      reason: "pre-tkg-promotion-apply",
+                      snapshot: existingSnapshot,
+                    };
+
+                    if (typeof tkgRollbackStore.append === "function") {
+                      await tkgRollbackStore.append(scope, rollbackEntry);
+                    } else {
+                      const existing = await tkgRollbackStore.load(scope);
+                      await tkgRollbackStore.save(scope, {
+                        entries: [...(existing?.entries ?? []), rollbackEntry],
+                      });
+                    }
+                    rollbackEntries.push(rollbackEntry);
+                  }
+                }
+
+                if (typeof sharedMemoryStore.merge === "function") {
+                  await sharedMemoryStore.merge(scope, promotionSnapshot);
+                } else {
+                  await sharedMemoryStore.save(scope, promotionSnapshot);
+                }
+              }
+
+              execution.outputs.__tkg_promotion_apply__ = {
+                scopes: promotionApplyScopes.map((scope) => `${scope.level}:${scope.key}`),
+                ...summarizeTKGPromotionApply(promotionSnapshot),
+              };
+
+              if (rollbackEntries.length > 0) {
+                execution.outputs.__tkg_promotion_rollback__ = summarizeTKGRollbackEntries(rollbackEntries);
+              }
+            }
+          }
+
+          if (tkgReviewQueueStore && promotionEvaluation.reviewQueue.length > 0) {
+            const reviewItem = {
+              id: randomUUID(),
+              createdAt: new Date().toISOString(),
+              scope: `${evaluationScope.level}:${evaluationScope.key}`,
+              workflowName,
+              status: "open" as const,
+              candidateNodeIds: promotionEvaluation.candidates
+                .filter((candidate) => candidate.requiresReview)
+                .map((candidate) => candidate.nodeId),
+              conflicts: promotionEvaluation.reviewQueue,
+              summary: promotionSummary,
+            };
+
+            if (typeof tkgReviewQueueStore.enqueue === "function") {
+              await tkgReviewQueueStore.enqueue(evaluationScope, reviewItem);
+            } else {
+              const existing = await tkgReviewQueueStore.load(evaluationScope);
+              await tkgReviewQueueStore.save(evaluationScope, {
+                items: [...(existing?.items ?? []), reviewItem],
+              });
+            }
+
+            execution.outputs.__tkg_review_queue__ = {
+              scope: `${evaluationScope.level}:${evaluationScope.key}`,
+              queuedItems: promotionEvaluation.reviewQueue.length,
+            };
+          }
         }
       }
+      const blackboardSnapshot = blackboard.getSnapshot();
+
+      execution.status = "completed";
+      execution.endedAt = new Date();
+
+      // Persistence: update on completion
+      if (persistenceEnabled && persistenceAdapter) {
+        try {
+          await persistenceAdapter.saveRun({
+            id: executionId,
+            workflowName,
+            status: "completed",
+            input: { value: input ?? null },
+            startedAt: execution.startedAt.toISOString(),
+            completedAt: execution.endedAt!.toISOString(),
+            metadata: {
+              variables,
+              stepOrder: execution.stepOrder,
+              ...(this.getPersistedRepairLoopSummary(executionId)
+                ? { repairLoop: this.getPersistedRepairLoopSummary(executionId) }
+                : {}),
+            },
+          });
+
+          await persistenceAdapter.saveAuditEvent({
+            id: randomUUID(),
+            runId: executionId,
+            stepName: "__knowledge__",
+            timestamp: new Date().toISOString(),
+            category: "execution",
+            action: "knowledge.run_summary",
+            actor: "sdk-runtime",
+            detail: {
+              workflowName,
+              stepOrder: execution.stepOrder,
+              outputKeys: Object.keys(execution.outputs),
+            },
+          });
+        } catch (err) {
+          if (config.verbose) {
+            console.warn("[persistence] Failed to save run on completion:", err);
+          }
+        }
+      }
+
+      this.clearPersistedRepairLoopSummary(executionId);
+
+      await eventBus.emit("execution_end", executionId, {
+        workflowName,
+        status: "completed",
+        ...(report ? { report } : {}),
+        debugState: {
+          blackboard: this.summarizeBlackboardSnapshot(blackboardSnapshot),
+          observerReport: report,
+        },
+      });
+    } finally {
+      tkgProjector?.dispose();
+      observer.dispose();
+    }
+  }
+
+  async reapplyApprovedTKGReviewQueueItems(
+    workflow: WorkflowDef,
+    options: { sourceExecutionId?: string } = {},
+  ): Promise<TKGApprovedReviewQueueApplySummary> {
+    const { config } = this.deps;
+    const loadedConfig = config.config !== undefined ? config.config : await loadConfig(config.configPath);
+    const tkgProjectionConfig = this.resolveTKGProjectionConfig(workflow, config, loadedConfig);
+    const sharedMemoryStore = this.resolveSharedMemoryStore(workflow, config, loadedConfig);
+    const sharedMemoryScopes = this.resolveSharedMemoryScopes(workflow, config, loadedConfig);
+    const stagingTKGStore = this.resolveStagingTKGStore(workflow, config, loadedConfig);
+    const tkgProjectionScopes = this.resolveTKGProjectionScopes(workflow, config, loadedConfig);
+    const tkgPromotionApplyScopes = this.resolveTKGPromotionApplyScopes(workflow, config, loadedConfig);
+    const tkgReviewQueueStore = this.resolveTKGReviewQueueStore(workflow, config, loadedConfig);
+
+    const applyScopes = tkgPromotionApplyScopes.length > 0 ? tkgPromotionApplyScopes : sharedMemoryScopes;
+    const queueScope = tkgProjectionScopes.at(-1);
+
+    if (!sharedMemoryStore || !stagingTKGStore || !tkgReviewQueueStore || !queueScope || applyScopes.length === 0) {
+      return {
+        appliedFactCount: 0,
+        appliedNodeIds: [],
+        approvedItemCount: 0,
+        approvedItemIds: [],
+        scopes: applyScopes.map((scope) => `${scope.level}:${scope.key}`),
+      };
     }
 
-    this.clearPersistedRepairLoopSummary(executionId);
-
-    await eventBus.emit("execution_end", executionId, {
-      workflowName,
-      status: "completed",
-      ...(report ? { report } : {}),
-      debugState: {
-        blackboard: this.summarizeBlackboardSnapshot(blackboardSnapshot),
-        observerReport: report,
-      },
+    return reapplyApprovedTKGReviewQueueItems({
+      sharedMemoryStore,
+      stagingStore: stagingTKGStore,
+      reviewQueueStore: tkgReviewQueueStore,
+      queueScope,
+      applyScopes,
+      sourceExecutionId: options.sourceExecutionId,
+      allowedEventTypes: tkgProjectionConfig?.promotion?.allowedEventTypes,
     });
   }
 

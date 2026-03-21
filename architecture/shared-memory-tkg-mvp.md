@@ -1,6 +1,6 @@
 # Shared Memory / TKG 확장 MVP
 
-> **상태**: 🛠️ 구현용 MVP 스펙
+> **상태**: 🚧 MVP 구현 진행 중 (핵심 골격 구현 완료, 운영/문서 마감 단계)
 > **목적**: 현재 Obora의 runtime-safe 구조를 유지하면서, 장기 Shared Memory / TKG 방향으로 점진 확장한다.
 > **관련 문서**: [blackboard-memory-extension.md](./blackboard-memory-extension.md)
 
@@ -86,10 +86,12 @@ Shared Memory / TKG 확장은 repair loop, validation, observer report, reflecto
 
 ### 비목표 (MVP에서는 하지 않음)
 - multi-writer conflict resolution 완성
-- manual review queue
-- full production promotion pipeline
+- full production promotion pipeline 완성형
 - graph database 의존성 도입
 - distributed synchronization
+
+> 참고: 초기 문서에서는 manual review queue를 비목표로 두었지만,
+> 현재 구현에서는 **최소 review queue / approve-reject / rollback / re-apply helper**까지 MVP 범위로 일부 포함되었다.
 
 ---
 
@@ -175,9 +177,37 @@ export 제외:
 
 ---
 
+## 현재 구현 상태 요약
+
+### 이미 구현된 것
+- `SharedMemoryStore` / `FileSharedMemoryStore`
+- `BlackboardManager.exportPersistentSnapshot()` / `importPersistentSnapshot()`
+- execution start/end shared memory import/export
+- prompt 내 shared memory context 주입
+- scope 우선순위(`global -> project -> workflow`)
+- multi-scope dedupe / provenance
+- `TKGProjector` / `StagingTKGStore`
+- temporal relations (`caused_by`, `completes`, `resolves`, `triggered_by`, `returns_to`, `follows`)
+- promotion/conflict evaluation
+- manual review queue + approve/reject status
+- rollback snapshot
+- shared memory promotion apply
+- approved review item re-apply helper
+- `OboraRuntime.reapplyApprovedTKGReviewQueueItems(...)` runtime public API
+
+### 아직 남은 것
+- promotion policy 추가 정교화 (noise suppression / category strategy)
+- review queue 승인 결과의 운영 정책 문서화
+- rollback restore 경로(복원 실행) 명시화
+- 전체 repo 기준 typecheck 적체와 분리된 마감 정리
+- commit / changelog / 문서 polish
+
 ## 단계별 구현 계획
 
 ### Phase 1 — Persistent Blackboard Snapshot
+
+#### 상태
+- ✅ 구현 완료
 
 #### 구현
 - `SharedMemoryStore` 인터페이스 추가
@@ -195,10 +225,15 @@ export 제외:
 
 ### Phase 2 — Scoped Memory Layer
 
+#### 상태
+- ✅ 핵심 구현 완료
+
 #### 구현
 - scope: `workflow`, `project`, `global`
 - import 우선순위 정의
 - merge policy 정의 (append-first, last-write-wins 최소 정책)
+- multi-scope dedupe / provenance 추가
+- config / runtime / workflow override 레이어링 정리
 
 #### 효과
 - 프로젝트 공통 맥락 유지
@@ -207,6 +242,9 @@ export 제외:
 ---
 
 ### Phase 3 — Observer → TKG Projection
+
+#### 상태
+- ✅ MVP 구현 완료
 
 #### 구현
 - `TKGProjector` 추가
@@ -217,6 +255,14 @@ export 제외:
   - `workflow.repair_started`
   - `workflow.repair_completed`
 - file-backed `StagingTKGStore`부터 시작
+- projection summary를 runtime outputs에 노출
+- temporal relation 강화
+  - `caused_by`
+  - `completes`
+  - `resolves`
+  - `triggered_by`
+  - `returns_to`
+  - `follows`
 
 #### 효과
 - 현재 이벤트를 TKG-friendly graph 형태로 재사용 가능
@@ -226,15 +272,24 @@ export 제외:
 
 ### Phase 4 — Promotion / Conflict Resolution
 
+#### 상태
+- ✅ 최소 코어 구현 완료 / 운영 polish 일부 남음
+
 #### 구현
 - confidence threshold
 - contradiction/version/confidence conflict 탐지
 - manual review queue
 - rollback snapshot
+- promotion apply → shared memory merge
+- approve/reject 상태 관리
+- approved review item re-apply helper
+- runtime public API
+  - `OboraRuntime.reapplyApprovedTKGReviewQueueItems(...)`
 
 #### 효과
 - 기존 `TKGReflector` 설계와 연결
 - 진짜 long-term knowledge promotion 가능
+- 수동 검토 후 재적용까지 이어지는 운영 루프 최소 골격 확보
 
 ---
 
@@ -269,7 +324,7 @@ Blackboard가 local runtime state와 global memory를 동시에 책임지기 시
 ### 3. premature TKG complexity
 초기부터 graph promotion/conflict resolution까지 다 넣으면 속도가 떨어진다.
 
-**대응:** projection → staging까지만 먼저 구현
+**대응:** projection → staging부터 시작하고, promotion/review/rollback은 최소 코어만 구현 후 운영 정책은 점진 고도화
 
 ---
 
@@ -294,8 +349,8 @@ Blackboard가 local runtime state와 global memory를 동시에 책임지기 시
 
 ## 권장 다음 액션
 
-1. `SharedMemoryStore` 인터페이스 정의
-2. file-backed 구현 추가
-3. `BlackboardManager.exportPersistentSnapshot()` / `importPersistentSnapshot()` 추가
-4. execution_end / execution_start hook 연결
-5. 그 다음 `TKGProjector` 착수
+1. 문서/SDK public API 사용 예시 정리
+2. promotion policy/noise suppression 기준 문서화
+3. rollback restore 경로(실제 revert apply) 설계
+4. 전체 repo 적체 typecheck 이슈와 현재 변경분 분리 정리
+5. commit / changelog / release notes 준비
