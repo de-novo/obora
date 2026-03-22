@@ -1,7 +1,11 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
-import type { MemoryScope, SharedMemorySnapshot } from "../shared-memory/store.js";
+import type {
+  MemoryScope,
+  SharedMemorySnapshot,
+  SharedMemoryStore,
+} from "../shared-memory/store.js";
 
 export interface TKGRollbackEntry {
   id: string;
@@ -29,6 +33,13 @@ export interface TKGRollbackSummary {
   rollbackIds: string[];
 }
 
+export interface TKGRollbackRestoreSummary {
+  restored: boolean;
+  scope: string;
+  rollbackId?: string;
+  restoredFactCount: number;
+}
+
 function dedupeRollbackEntries(entries: TKGRollbackEntry[]): TKGRollbackEntry[] {
   const seen = new Map<string, TKGRollbackEntry>();
   for (const entry of entries) {
@@ -52,6 +63,56 @@ export function summarizeTKGRollbackEntries(entries: TKGRollbackEntry[]): TKGRol
     scopes: entries.map((entry) => entry.scope),
     rollbackIds: entries.map((entry) => entry.id),
   };
+}
+
+export function selectTKGRollbackEntry(
+  snapshot: TKGRollbackSnapshot | null | undefined,
+  rollbackId?: string,
+): TKGRollbackEntry | null {
+  const entries = snapshot?.entries ?? [];
+  if (entries.length === 0) return null;
+  if (rollbackId) {
+    return entries.find((entry) => entry.id === rollbackId) ?? null;
+  }
+
+  return [...entries]
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+    .at(-1) ?? null;
+}
+
+export async function restoreTKGRollbackEntryToSharedMemory(
+  store: SharedMemoryStore,
+  scope: MemoryScope,
+  entry: TKGRollbackEntry,
+): Promise<TKGRollbackRestoreSummary> {
+  await store.save(scope, entry.snapshot);
+
+  return {
+    restored: true,
+    scope: `${scope.level}:${scope.key}`,
+    rollbackId: entry.id,
+    restoredFactCount: entry.snapshot.knowledge.facts.length,
+  };
+}
+
+export async function restoreTKGRollbackFromStore(
+  rollbackStore: TKGRollbackStore,
+  sharedMemoryStore: SharedMemoryStore,
+  scope: MemoryScope,
+  rollbackId?: string,
+): Promise<TKGRollbackRestoreSummary> {
+  const snapshot = await rollbackStore.load(scope);
+  const entry = selectTKGRollbackEntry(snapshot, rollbackId);
+
+  if (!entry) {
+    return {
+      restored: false,
+      scope: `${scope.level}:${scope.key}`,
+      restoredFactCount: 0,
+    };
+  }
+
+  return restoreTKGRollbackEntryToSharedMemory(sharedMemoryStore, scope, entry);
 }
 
 export class FileTKGRollbackStore implements TKGRollbackStore {

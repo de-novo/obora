@@ -76,8 +76,10 @@ import {
 } from "../tkg/promotion.js";
 import {
   FileTKGRollbackStore,
+  restoreTKGRollbackFromStore,
   summarizeTKGRollbackEntries,
   type TKGRollbackEntry,
+  type TKGRollbackRestoreSummary,
   type TKGRollbackStore,
 } from "../tkg/rollback.js";
 import {
@@ -882,17 +884,21 @@ export class WorkflowRunner {
       return;
     }
 
+    const evaluationMode = tkgProjectionConfig?.promotion?.evaluationMode
+      ?? (trigger === "execution_end" ? "full_history" : "latest_effective");
+
     const promotionEvaluation = evaluateTKGPromotion(stagingSnapshot, {
       minConfidence: tkgProjectionConfig?.promotion?.minConfidence,
       confidenceSpreadThreshold: tkgProjectionConfig?.promotion?.confidenceSpreadThreshold,
-      executionId: trigger === "execution_end" ? undefined : executionId,
-      latestEffectiveOnly: trigger !== "execution_end",
+      executionId,
+      evaluationMode,
     });
     const promotionSummary = summarizeTKGPromotionEvaluation(promotionEvaluation);
 
     if (process.env.OBORA_DEBUG === "1") {
       await this.deps.eventBus.emit("tkg.checkpoint", executionId, {
         trigger,
+        evaluationMode,
         scope: `${evaluationScope.level}:${evaluationScope.key}`,
         candidateCount: promotionSummary.candidateCount,
         promotableCount: promotionSummary.promotableCount,
@@ -2343,6 +2349,34 @@ export class WorkflowRunner {
       tkgProjector?.dispose();
       observer.dispose();
     }
+  }
+
+  async restoreLatestTKGRollback(
+    workflow: WorkflowDef,
+    options: { rollbackId?: string } = {},
+  ): Promise<TKGRollbackRestoreSummary> {
+    const { config } = this.deps;
+    const loadedConfig = config.config !== undefined ? config.config : await loadConfig(config.configPath);
+    const sharedMemoryStore = this.resolveSharedMemoryStore(workflow, config, loadedConfig);
+    const sharedMemoryScopes = this.resolveSharedMemoryScopes(workflow, config, loadedConfig);
+    const tkgPromotionApplyScopes = this.resolveTKGPromotionApplyScopes(workflow, config, loadedConfig);
+    const tkgRollbackStore = this.resolveTKGRollbackStore(workflow, config, loadedConfig);
+
+    const targetScope = (tkgPromotionApplyScopes.length > 0 ? tkgPromotionApplyScopes : sharedMemoryScopes).at(-1);
+    if (!sharedMemoryStore || !tkgRollbackStore || !targetScope) {
+      return {
+        restored: false,
+        scope: targetScope ? `${targetScope.level}:${targetScope.key}` : "unresolved",
+        restoredFactCount: 0,
+      };
+    }
+
+    return restoreTKGRollbackFromStore(
+      tkgRollbackStore,
+      sharedMemoryStore,
+      targetScope,
+      options.rollbackId,
+    );
   }
 
   async reapplyApprovedTKGReviewQueueItems(

@@ -61,6 +61,7 @@ B 단계의 목표는 **기능 추가 자체보다 실행 일관성, 관측 가�
 - overnight-builder에서도 trigger checkpoint / shared memory apply / rollback이 실제로 동작하는 것을 확인
 - long-running workflow에서 과거 누적 이력 때문에 `promotable=0`이 되던 문제를 줄이기 위해
   `latest effective state` 기준 평가를 중간 trigger 경로에 적용
+- rollback snapshot을 실제 shared memory로 복원하는 runtime / helper API 추가
 
 ---
 
@@ -222,3 +223,4 @@ B 단계의 목표는 **기능 추가 자체보다 실행 일관성, 관측 가�
 
 현재 기준으로 가장 큰 value는 새로운 기능 추가보다,
 **왜 그렇게 동작했는지 항상 설명 가능한 상태**를 만드는 데 있다.
+�� 그렇게 동작했는지 항상 설명 가능한 상태**를 만드는 데 있다.

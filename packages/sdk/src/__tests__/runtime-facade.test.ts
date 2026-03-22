@@ -1797,6 +1797,85 @@ describe("OboraRuntime facade", () => {
     });
   });
 
+  it("restores the latest TKG rollback snapshot through the runtime facade API", async () => {
+    const sharedMemoryStore = createInMemorySharedMemoryStore();
+    const rollbackStore = {
+      async load() {
+        return {
+          entries: [
+            {
+              id: "rollback-1",
+              createdAt: new Date().toISOString(),
+              executionId: "exec-1",
+              workflowName: "runtime-rollback",
+              scope: "project:test-project",
+              reason: "pre-tkg-promotion-apply",
+              snapshot: {
+                knowledge: {
+                  facts: [
+                    {
+                      id: "restored-fact",
+                      content: "restored shared memory fact",
+                      category: "lesson",
+                      tags: ["restored"],
+                      confidence: 0.9,
+                      createdAt: new Date().toISOString(),
+                    },
+                  ],
+                },
+                decisions: { history: [] },
+                context: { projectFacts: { restored: true } },
+              },
+            },
+          ],
+        };
+      },
+      async save() {},
+      async append() {},
+    };
+
+    const runtime = new OboraRuntime({
+      sharedMemory: {
+        enabled: true,
+        adapter: "custom",
+        custom: { instance: sharedMemoryStore },
+        file: { projectKey: "test-project", scopes: ["project"] },
+      },
+      tkgProjection: {
+        enabled: true,
+        file: { projectKey: "test-project", scopes: ["project"] },
+        rollback: {
+          enabled: true,
+          adapter: "custom",
+          custom: { instance: rollbackStore as any },
+        },
+      },
+    });
+
+    runtime.define("runtime-rollback", {
+      name: "runtime-rollback",
+      sharedMemory: { enabled: true, projectKey: "test-project", scopes: ["project"] },
+      tkgProjection: {
+        enabled: true,
+        projectKey: "test-project",
+        scopes: ["project"],
+        rollback: { enabled: true },
+      },
+      steps: [{ name: "build", agent: "builder", input: { task: "Build app" } }],
+    });
+
+    const summary = await runtime.restoreLatestTKGRollback("runtime-rollback");
+    const restored = await sharedMemoryStore.load({ level: "project", key: "test-project" });
+
+    expect(summary).toEqual({
+      restored: true,
+      scope: "project:test-project",
+      rollbackId: "rollback-1",
+      restoredFactCount: 1,
+    });
+    expect(restored?.knowledge.facts[0]?.id).toBe("restored-fact");
+  });
+
   it("reapplies approved TKG review queue items through the runtime facade API", async () => {
     const sharedMemoryData = new Map<string, SharedMemorySnapshot>();
     const sharedMemoryStore: SharedMemoryStore = {

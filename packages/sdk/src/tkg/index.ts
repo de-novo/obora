@@ -13,6 +13,9 @@ export {
 export {
   FileTKGRollbackStore,
   mergeTKGRollbackSnapshot,
+  restoreTKGRollbackEntryToSharedMemory,
+  restoreTKGRollbackFromStore,
+  selectTKGRollbackEntry,
   summarizeTKGRollbackEntries,
 } from "./rollback.js";
 export {
@@ -65,6 +68,7 @@ export type {
 } from "./review-queue.js";
 export type {
   TKGRollbackEntry,
+  TKGRollbackRestoreSummary,
   TKGRollbackSnapshot,
   TKGRollbackStore,
   TKGRollbackSummary,

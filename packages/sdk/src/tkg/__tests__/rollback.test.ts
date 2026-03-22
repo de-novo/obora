@@ -6,10 +6,12 @@ import { tmpdir } from "node:os";
 import {
   FileTKGRollbackStore,
   mergeTKGRollbackSnapshot,
+  restoreTKGRollbackFromStore,
+  selectTKGRollbackEntry,
   summarizeTKGRollbackEntries,
   type TKGRollbackSnapshot,
 } from "../rollback.js";
-import type { MemoryScope } from "../../shared-memory/store.js";
+import type { MemoryScope, SharedMemorySnapshot, SharedMemoryStore } from "../../shared-memory/store.js";
 
 function makeSnapshot(id: string): TKGRollbackSnapshot {
   return {
@@ -40,6 +42,46 @@ describe("TKG rollback helpers", () => {
       scopes: ["project:obora-kit", "project:obora-kit"],
       rollbackIds: ["r1", "r2"],
     });
+  });
+
+  it("selects the latest rollback entry by default", () => {
+    const selected = selectTKGRollbackEntry(mergeTKGRollbackSnapshot(makeSnapshot("r1"), makeSnapshot("r2")));
+    expect(selected?.id).toBe("r2");
+  });
+
+  it("restores rollback entry snapshots into shared memory stores", async () => {
+    const rollbackStore = {
+      async load() {
+        return makeSnapshot("r1");
+      },
+      async save() {},
+    };
+    const data = new Map<string, SharedMemorySnapshot>();
+    const sharedMemoryStore: SharedMemoryStore = {
+      async load(scope: MemoryScope) {
+        return data.get(`${scope.level}:${scope.key}`) ?? null;
+      },
+      async save(scope: MemoryScope, snapshot: SharedMemorySnapshot) {
+        data.set(`${scope.level}:${scope.key}`, snapshot);
+      },
+      async merge() {
+        throw new Error("not used");
+      },
+    };
+
+    const summary = await restoreTKGRollbackFromStore(
+      rollbackStore as any,
+      sharedMemoryStore,
+      { level: "project", key: "obora-kit" },
+    );
+
+    expect(summary).toEqual({
+      restored: true,
+      scope: "project:obora-kit",
+      rollbackId: "r1",
+      restoredFactCount: 0,
+    });
+    expect(await sharedMemoryStore.load({ level: "project", key: "obora-kit" })).not.toBeNull();
   });
 });
 
