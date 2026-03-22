@@ -47,5 +47,25 @@ tsconfig.tsbuildinfo
 # Review gate artifacts
 .review-gate/
 
+# Experiment/sandbox generated artifacts
+experiments/overnight-builder/.obora-debug/
+experiments/overnight-builder/data/
+experiments/overnight-builder/output/
+experiments/overnight-builder/workspace/dist/
+experiments/overnight-builder/workspace/node_modules/
+experiments/overnight-builder/run-manual-validation.sh
+experiments/overnight-builder/run_validation.sh
+experiments/overnight-builder/test/
+experiments/overnight-builder/artifacts/*.json
+experiments/overnight-builder/artifacts/*-summary.md
+experiments/overnight-builder/artifacts/03-test-plan.md
+experiments/overnight-builder/artifacts/03-test-report.md
+experiments/overnight-builder/artifacts/05-review-notes.md
+experiments/overnight-builder/artifacts/06-archive-summary.md
+experiments/overnight-builder/artifacts/07-strategic-recommendations.md
+experiments/overnight-builder/artifacts/cycle-log.md
+sandbox/22-shared-memory-tkg-loop/data/
+sandbox/22-shared-memory-tkg-loop/output/
+
 # Next.js auto-generated
 next-env.d.ts
