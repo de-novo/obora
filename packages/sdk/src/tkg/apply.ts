@@ -1,6 +1,7 @@
 import {
   mergeSharedMemorySnapshots,
   type MemoryScope,
+  type SharedMemoryDecision,
   type SharedMemorySnapshot,
   type SharedMemoryStore,
 } from "../shared-memory/store.js";
@@ -17,6 +18,7 @@ export interface TKGPromotionApplySummary {
 export interface TKGApprovedReviewQueueApplySummary extends TKGPromotionApplySummary {
   approvedItemCount: number;
   approvedItemIds: string[];
+  appliedDecisionCount: number;
   scopes?: string[];
 }
 
@@ -32,6 +34,33 @@ export interface ApprovedTKGReviewQueueReapplyRequest {
   applyScopes: MemoryScope[];
   sourceExecutionId?: string;
   allowedEventTypes?: ProjectableTKGEventType[];
+}
+
+function buildSharedMemoryDecisionFromApprovedTKGReviewQueueItem(
+  reviewItem: TKGReviewQueueItem,
+  sourceExecutionId?: string,
+): SharedMemoryDecision | null {
+  if (reviewItem.status !== "approved") {
+    return null;
+  }
+
+  const resolution = reviewItem.resolution;
+  if (!resolution) {
+    return null;
+  }
+
+  const summaryParts = [
+    `Approved TKG review queue item ${reviewItem.id}`,
+    resolution.actor ? `by ${resolution.actor}` : undefined,
+    resolution.note ? `— ${resolution.note}` : undefined,
+  ].filter((part): part is string => Boolean(part));
+
+  return {
+    id: `tkg-review-resolution:${reviewItem.id}:${resolution.status}`,
+    summary: summaryParts.join(" "),
+    createdAt: resolution.resolvedAt,
+    ...(sourceExecutionId ? { sourceExecutionId } : {}),
+  };
 }
 
 export function buildSharedMemorySnapshotFromTKGPromotion(
@@ -117,10 +146,11 @@ export function buildSharedMemorySnapshotFromApprovedTKGReviewQueueItem(
       createdAt: node.timestamp,
       ...(sourceExecutionId ? { sourceExecutionId } : {}),
     }));
+  const resolutionDecision = buildSharedMemoryDecisionFromApprovedTKGReviewQueueItem(reviewItem, sourceExecutionId);
 
   return {
     knowledge: { facts },
-    decisions: { history: [] },
+    decisions: { history: resolutionDecision ? [resolutionDecision] : [] },
     context: {
       projectFacts: {
         promotedNodeIds: facts.map((fact) => fact.id),
@@ -174,13 +204,14 @@ export async function applyApprovedTKGReviewQueueItemsToSharedMemory(
     options,
   );
 
-  if (snapshot.knowledge.facts.length > 0) {
+  if (
+    snapshot.knowledge.facts.length > 0
+    || snapshot.decisions.history.length > 0
+    || Object.keys(snapshot.context.projectFacts).length > 0
+  ) {
     for (const scope of scopes) {
-      if (typeof store.merge === "function") {
-        await store.merge(scope, snapshot);
-      } else {
-        await store.save(scope, snapshot);
-      }
+      const existing = await store.load(scope);
+      await store.save(scope, mergeSharedMemorySnapshots(existing, snapshot));
     }
   }
 
@@ -190,6 +221,7 @@ export async function applyApprovedTKGReviewQueueItemsToSharedMemory(
     ...summarizeTKGPromotionApply(snapshot),
     approvedItemCount: approvedItems.length,
     approvedItemIds: approvedItems.map((item) => item.id),
+    appliedDecisionCount: snapshot.decisions.history.length,
     scopes: scopes.map((scope) => `${scope.level}:${scope.key}`),
   };
 }
@@ -206,6 +238,7 @@ export async function reapplyApprovedTKGReviewQueueItems(
       appliedNodeIds: [],
       approvedItemCount: 0,
       approvedItemIds: [],
+      appliedDecisionCount: 0,
       scopes: request.applyScopes.map((scope) => `${scope.level}:${scope.key}`),
     };
   }

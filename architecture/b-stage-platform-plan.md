@@ -130,9 +130,9 @@ B 단계의 목표는 **기능 추가 자체보다 실행 일관성, 관측 가�
 #### 작업
 - [x] open item list helper
 - [x] approve / reject helper
-- [ ] approved item re-apply helper 문서화
-- [ ] duplicate apply / idempotency 정리
-- [ ] review note / actor / resolution audit 정리
+- [x] approved item re-apply helper 문서화
+- [x] duplicate apply / idempotency 정리
+- [x] review note / actor / resolution audit 정리
 
 #### 완료 기준
 - 운영자가 CLI 또는 runtime API만으로 review queue를 처리할 수 있어야 함

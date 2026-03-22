@@ -2449,6 +2449,7 @@ export class WorkflowRunner {
         appliedNodeIds: [],
         approvedItemCount: 0,
         approvedItemIds: [],
+        appliedDecisionCount: 0,
         scopes: applyScopes.map((scope) => `${scope.level}:${scope.key}`),
       };
     }

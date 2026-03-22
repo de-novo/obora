@@ -2065,11 +2065,15 @@ describe("OboraRuntime facade", () => {
 
     const stored = await sharedMemoryStore.load({ level: "project", key: "test-project" });
     expect(stored?.knowledge.facts.map((fact) => fact.id)).toEqual(["tkg-promotion:n2"]);
+    expect(stored?.decisions.history.map((decision) => decision.id)).toEqual([
+      "tkg-review-resolution:review-1:approved",
+    ]);
     expect(summary).toEqual({
       appliedFactCount: 1,
       appliedNodeIds: ["tkg-promotion:n2"],
       approvedItemCount: 1,
       approvedItemIds: ["review-1"],
+      appliedDecisionCount: 1,
       scopes: ["project:test-project"],
     });
   });

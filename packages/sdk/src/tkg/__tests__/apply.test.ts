@@ -74,6 +74,12 @@ describe("TKG promotion apply", () => {
 
     expect(sharedMemorySnapshot.knowledge.facts.map((fact) => fact.id)).toEqual(["tkg-promotion:n2"]);
     expect(sharedMemorySnapshot.knowledge.facts[0]!.tags).toContain("review-approved");
+    expect(sharedMemorySnapshot.decisions.history).toEqual([
+      expect.objectContaining({
+        id: "tkg-review-resolution:review-1:approved",
+        summary: expect.stringContaining("Approved TKG review queue item review-1 by cto"),
+      }),
+    ]);
   });
 
   it("builds shared-memory facts from approved review queue item collections", () => {
@@ -174,13 +180,87 @@ describe("TKG promotion apply", () => {
 
     const stored = await store.load({ level: "project", key: "obora-kit" });
     expect(stored?.knowledge.facts.map((fact) => fact.id)).toEqual(["tkg-promotion:n2"]);
+    expect(stored?.decisions.history.map((decision) => decision.id)).toEqual([
+      "tkg-review-resolution:review-1:approved",
+    ]);
     expect(summary).toEqual({
       appliedFactCount: 1,
       appliedNodeIds: ["tkg-promotion:n2"],
       approvedItemCount: 1,
       approvedItemIds: ["review-1"],
+      appliedDecisionCount: 1,
       scopes: ["project:obora-kit"],
     });
+  });
+
+  it("keeps approved review queue re-apply idempotent for facts and audit decisions", async () => {
+    const data = new Map<string, SharedMemorySnapshot>();
+    const store: SharedMemoryStore = {
+      async load(scope: MemoryScope) {
+        return data.get(`${scope.level}:${scope.key}`) ?? null;
+      },
+      async save(scope: MemoryScope, snapshot: SharedMemorySnapshot) {
+        data.set(`${scope.level}:${scope.key}`, snapshot);
+      },
+      async merge(scope: MemoryScope, snapshot: SharedMemorySnapshot) {
+        const existing = await this.load(scope);
+        await this.save(scope, {
+          knowledge: { facts: [...(existing?.knowledge.facts ?? []), ...snapshot.knowledge.facts] },
+          decisions: { history: [...(existing?.decisions.history ?? []), ...snapshot.decisions.history] },
+          context: { projectFacts: { ...(existing?.context.projectFacts ?? {}), ...snapshot.context.projectFacts } },
+        });
+      },
+    };
+
+    const reviewQueueSnapshot = {
+      items: [
+        {
+          id: "review-1",
+          createdAt: new Date().toISOString(),
+          scope: "project:obora-kit",
+          workflowName: "demo",
+          status: "approved" as const,
+          candidateNodeIds: ["n2"],
+          conflicts: [],
+          summary: {
+            candidateCount: 2,
+            promotableCount: 2,
+            reviewCandidateCount: 1,
+            conflictCount: 1,
+            reviewQueueCount: 1,
+          },
+          resolution: {
+            status: "approved" as const,
+            resolvedAt: new Date().toISOString(),
+            actor: "cto",
+            note: "safe to promote",
+          },
+        },
+      ],
+    };
+
+    await applyApprovedTKGReviewQueueItemsToSharedMemory(
+      store,
+      [{ level: "project", key: "obora-kit" }],
+      snapshot,
+      reviewQueueSnapshot,
+      "exec-1",
+      { allowedEventTypes: ["workflow.validation_passed"] },
+    );
+    await applyApprovedTKGReviewQueueItemsToSharedMemory(
+      store,
+      [{ level: "project", key: "obora-kit" }],
+      snapshot,
+      reviewQueueSnapshot,
+      "exec-1",
+      { allowedEventTypes: ["workflow.validation_passed"] },
+    );
+
+    const stored = await store.load({ level: "project", key: "obora-kit" });
+    expect(stored?.knowledge.facts.map((fact) => fact.id)).toEqual(["tkg-promotion:n2"]);
+    expect(stored?.decisions.history.map((decision) => decision.id)).toEqual([
+      "tkg-review-resolution:review-1:approved",
+    ]);
   });
 
   it("can reapply approved review queue items by loading queue/staging stores", async () => {
@@ -245,11 +325,15 @@ describe("TKG promotion apply", () => {
 
     const stored = await sharedMemoryStore.load({ level: "global", key: "global" });
     expect(stored?.knowledge.facts.map((fact) => fact.id)).toEqual(["tkg-promotion:n2"]);
+    expect(stored?.decisions.history.map((decision) => decision.id)).toEqual([
+      "tkg-review-resolution:review-1:approved",
+    ]);
     expect(summary).toEqual({
       appliedFactCount: 1,
       appliedNodeIds: ["tkg-promotion:n2"],
       approvedItemCount: 1,
       approvedItemIds: ["review-1"],
+      appliedDecisionCount: 1,
       scopes: ["global:global"],
     });
   });

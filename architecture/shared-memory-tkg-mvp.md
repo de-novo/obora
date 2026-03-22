@@ -193,6 +193,8 @@ export 제외:
 - rollback snapshot
 - shared memory promotion apply
 - approved review item re-apply helper
+- approved review item re-apply의 idempotent merge 보장 (fact / decision id 기준 dedupe)
+- review resolution actor / note / resolvedAt audit를 shared memory decision history로 반영
 - `OboraRuntime.reapplyApprovedTKGReviewQueueItems(...)` runtime public API
 
 ### 아직 남은 것
@@ -283,6 +285,8 @@ export 제외:
 - promotion apply → shared memory merge
 - approve/reject 상태 관리
 - approved review item re-apply helper
+- re-apply는 shared memory fact / decision id 기준으로 idempotent merge
+- approved resolution의 actor / note / resolvedAt를 shared memory decision history에 audit로 남김
 - runtime public API
   - `OboraRuntime.reapplyApprovedTKGReviewQueueItems(...)`
 
