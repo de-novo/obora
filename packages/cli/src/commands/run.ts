@@ -58,20 +58,32 @@ function clipDebug(value: unknown, max = 180): string {
 function summarizeDebugEvent(type: string, data: Record<string, unknown> | undefined): string {
   switch (type) {
     case "execution_start":
-    case "execution_end":
       return `execution=${String(data?.executionId ?? "unknown")}`;
+    case "execution_end": {
+      const debugState = (data?.debugState as Record<string, unknown> | undefined) ?? undefined;
+      const bb = (debugState?.blackboard as Record<string, unknown> | undefined) ?? undefined;
+      const report = (debugState?.observerReport as Record<string, unknown> | undefined) ?? undefined;
+      return `status=${String(data?.status ?? "unknown")}${bb ? ` blackboard.failures=${String(bb.failures ?? "?")} blackboard.facts=${String(bb.facts ?? "?")}` : ""}${report ? ` observer.totalRetries=${String(report.totalRetries ?? "?")} observer.totalValidationFailures=${String(report.totalValidationFailures ?? "?")}` : ""}`;
+    }
     case "step_start":
       return `step=${String(data?.stepName ?? "unknown")}`;
     case "step_end":
       return `step=${String(data?.stepName ?? "unknown")} status=${String(data?.status ?? "unknown")} durationMs=${String(data?.durationMs ?? "-")}`;
     case "workflow.validation_failed": {
       const failedChecks = Array.isArray(data?.failedChecks) ? data.failedChecks.length : "?";
-      return `step=${String(data?.stepName ?? "unknown")} failedChecks=${String(failedChecks)} summary=${clipDebug(data?.summary)}`;
+      const debugState = (data?.debugState as Record<string, unknown> | undefined) ?? undefined;
+      const bb = (debugState?.blackboard as Record<string, unknown> | undefined) ?? undefined;
+      const observer = (debugState?.observer as Record<string, unknown> | undefined) ?? undefined;
+      return `step=${String(data?.stepName ?? "unknown")} failedChecks=${String(failedChecks)} summary=${clipDebug(data?.summary)}${bb ? ` bb.failures=${String(bb.failures ?? "?")} bb.facts=${String(bb.facts ?? "?")}` : ""}${observer ? ` obs.validationFailures=${String(observer.totalValidationFailures ?? "?")} obs.backEdges=${String(observer.totalBackEdges ?? "?")}` : ""}`;
     }
     case "workflow.validation_passed":
       return `step=${String(data?.stepName ?? "unknown")} summary=${clipDebug(data?.summary)}`;
-    case "workflow.repair_started":
-      return `step=${String(data?.stepName ?? "unknown")} attempt=${String(data?.attempt ?? "?")} hint=${clipDebug(data?.reflectorHint) || "(none)"}`;
+    case "workflow.repair_started": {
+      const debugState = (data?.debugState as Record<string, unknown> | undefined) ?? undefined;
+      const bb = (debugState?.blackboard as Record<string, unknown> | undefined) ?? undefined;
+      const observer = (debugState?.observer as Record<string, unknown> | undefined) ?? undefined;
+      return `step=${String(data?.stepName ?? "unknown")} attempt=${String(data?.attempt ?? "?")} hint=${clipDebug(data?.reflectorHint) || "(none)"}${bb ? ` bb.failures=${String(bb.failures ?? "?")} bb.outputs=${clipDebug(bb.stepOutputs, 80)}` : ""}${observer ? ` obs.repairs=${String(observer.totalRepairs ?? "?")} obs.validationFailures=${String(observer.totalValidationFailures ?? "?")}` : ""}`;
+    }
     case "workflow.repair_completed":
       return `step=${String(data?.stepName ?? "unknown")} attempt=${String(data?.attempt ?? "?")}`;
     case "workflow.repair_no_progress":

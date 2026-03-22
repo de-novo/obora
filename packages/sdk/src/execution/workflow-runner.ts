@@ -891,13 +891,13 @@ export class WorkflowRunner {
     const promotionSummary = summarizeTKGPromotionEvaluation(promotionEvaluation);
 
     if (process.env.OBORA_DEBUG === "1") {
-      await this.deps.eventBus.emit("warning", executionId, {
-        message: `TKG checkpoint ${trigger}: candidates=${promotionSummary.candidateCount} promotable=${promotionSummary.promotableCount} review=${promotionSummary.reviewQueueCount}`,
-        severity: "warning",
-        detail: {
-          scope: `${evaluationScope.level}:${evaluationScope.key}`,
-          candidateNodeIds: promotionEvaluation.candidates.map((candidate) => candidate.nodeId),
-        },
+      await this.deps.eventBus.emit("tkg.checkpoint", executionId, {
+        trigger,
+        scope: `${evaluationScope.level}:${evaluationScope.key}`,
+        candidateCount: promotionSummary.candidateCount,
+        promotableCount: promotionSummary.promotableCount,
+        reviewQueueCount: promotionSummary.reviewQueueCount,
+        candidateNodeIds: promotionEvaluation.candidates.map((candidate) => candidate.nodeId),
       });
     }
 
@@ -973,21 +973,27 @@ export class WorkflowRunner {
         };
 
         if (process.env.OBORA_DEBUG === "1") {
-          await this.deps.eventBus.emit("warning", executionId, {
-            message: `TKG apply ${trigger}: appliedFacts=${applySummary.appliedFactCount}`,
-            severity: "warning",
-            detail: {
-              scopes: promotionApplyScopes.map((scope) => `${scope.level}:${scope.key}`),
-              appliedNodeIds: applySummary.appliedNodeIds,
-            },
+          await this.deps.eventBus.emit("tkg.apply", executionId, {
+            trigger,
+            scopes: promotionApplyScopes.map((scope) => `${scope.level}:${scope.key}`),
+            appliedFactCount: applySummary.appliedFactCount,
+            appliedNodeIds: applySummary.appliedNodeIds,
           });
         }
 
         if (rollbackEntries.length > 0) {
+          const rollbackSummary = summarizeTKGRollbackEntries(rollbackEntries);
           execution.outputs.__tkg_promotion_rollback__ = {
             trigger,
-            ...summarizeTKGRollbackEntries(rollbackEntries),
+            ...rollbackSummary,
           };
+
+          if (process.env.OBORA_DEBUG === "1") {
+            await this.deps.eventBus.emit("tkg.rollback", executionId, {
+              trigger,
+              ...rollbackSummary,
+            });
+          }
         }
       }
     }
@@ -1028,12 +1034,10 @@ export class WorkflowRunner {
       };
 
       if (process.env.OBORA_DEBUG === "1") {
-        await this.deps.eventBus.emit("warning", executionId, {
-          message: `TKG review queue ${trigger}: queuedItems=${promotionEvaluation.reviewQueue.length}`,
-          severity: "warning",
-          detail: {
-            scope: `${evaluationScope.level}:${evaluationScope.key}`,
-          },
+        await this.deps.eventBus.emit("tkg.review_queue", executionId, {
+          trigger,
+          scope: `${evaluationScope.level}:${evaluationScope.key}`,
+          queuedItems: promotionEvaluation.reviewQueue.length,
         });
       }
     }

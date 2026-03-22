@@ -52,6 +52,10 @@ export type AuditEventType =
   | "parallel_layer_end"
   | "peer_review_vote"
   | "peer_review_result"
+  | "tkg.checkpoint"
+  | "tkg.apply"
+  | "tkg.review_queue"
+  | "tkg.rollback"
   | "warning"
   | "error"
   | "knowledge_context_attached";
