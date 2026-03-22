@@ -85,6 +85,8 @@ outer loop: refine -> design -> TDD -> review -> commit -> refine (MVP 완성까
 - `data/.obora/tkg-review-queue/` — promotion conflict review queue
 - `data/.obora/tkg-rollback/` — promotion apply 이전 rollback snapshot
 
+> `artifacts/`, `data/`, `output/`는 실험 실행 시 생성되는 산출물이며, 기본적으로 versioned source-of-truth가 아니라 generated output으로 취급한다.
+
 ## 실행
 
 ```bash
