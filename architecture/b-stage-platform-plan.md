@@ -111,11 +111,11 @@ B 단계의 목표는 **기능 추가 자체보다 실행 일관성, 관측 가�
 **목표:** long-run 누적 이력 때문에 항상 `promotable=0`이 되는 문제를 줄인다.
 
 #### 작업
-- [ ] `latestEffectiveOnly`를 정책 옵션으로 정식 승격
-- [ ] execution/window/step 단위 평가 전략 정리
-- [ ] `execution_end` 평가와 중간 trigger 평가를 구분
+- [x] `latestEffectiveOnly`를 정책 옵션으로 정식 승격
+- [x] execution/window/step 단위 평가 전략 정리
+- [x] `execution_end` 평가와 중간 trigger 평가를 구분
 - [ ] contradiction/version/confidence conflict가 언제 review queue로 가는지 명시
-- [ ] overnight-builder에서 실제로 useful shared memory가 남는지 재검증
+- [x] overnight-builder에서 실제로 useful shared memory가 남는지 재검증
 
 #### 완료 기준
 - 긴 workflow에서도 중간 trigger 이후 shared memory가 유의미하게 남아야 함

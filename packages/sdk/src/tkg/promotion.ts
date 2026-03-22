@@ -1,3 +1,4 @@
+import type { TKGPromotionEvaluationMode } from "../runtime-types.js";
 import type { StagingTKGSnapshot, TemporalNode } from "./store.js";
 
 export type TKGConflictType = "contradiction" | "version" | "confidence";
@@ -39,6 +40,7 @@ export interface TKGPromotionOptions {
   minConfidence?: number;
   confidenceSpreadThreshold?: number;
   executionId?: string;
+  evaluationMode?: TKGPromotionEvaluationMode;
   latestEffectiveOnly?: boolean;
 }
 
@@ -74,11 +76,17 @@ function normalizeTKGPromotionSnapshot(
   snapshot: StagingTKGSnapshot,
   options: TKGPromotionOptions = {},
 ): StagingTKGSnapshot {
-  const executionFilteredNodes = options.executionId
-    ? snapshot.nodes.filter((node) => node.executionId === options.executionId)
-    : snapshot.nodes;
+  const evaluationMode = options.evaluationMode
+    ?? (options.latestEffectiveOnly ? "latest_effective" : undefined)
+    ?? (options.executionId ? "current_execution" : "full_history");
 
-  if (!options.latestEffectiveOnly) {
+  const executionFilteredNodes = evaluationMode === "full_history"
+    ? snapshot.nodes
+    : options.executionId
+      ? snapshot.nodes.filter((node) => node.executionId === options.executionId)
+      : snapshot.nodes;
+
+  if (evaluationMode !== "latest_effective") {
     return { nodes: executionFilteredNodes };
   }
 

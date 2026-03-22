@@ -16,6 +16,7 @@ tkgProjection:
     minConfidence: 0.8
     allowedEventTypes: [workflow.validation_passed, workflow.repair_completed]
     applyScopes: [project]
+    evaluationMode: latest_effective
     triggers: [workflow.validation_passed, workflow.repair_completed, execution_end]
   reviewQueue:
     enabled: true

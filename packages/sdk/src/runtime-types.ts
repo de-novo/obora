@@ -241,6 +241,11 @@ export type TKGPromotionTrigger =
   | import("./tkg/store.js").ProjectableTKGEventType
   | "execution_end";
 
+export type TKGPromotionEvaluationMode =
+  | "full_history"
+  | "current_execution"
+  | "latest_effective";
+
 export interface TKGProjectionConfig {
   enabled?: boolean;
   adapter?: "file" | "custom";
@@ -259,6 +264,7 @@ export interface TKGProjectionConfig {
     allowedEventTypes?: import("./tkg/store.js").ProjectableTKGEventType[];
     applyScopes?: import("./shared-memory/store.js").MemoryScopeLevel[];
     triggers?: TKGPromotionTrigger[];
+    evaluationMode?: TKGPromotionEvaluationMode;
   };
   rollback?: {
     enabled?: boolean;

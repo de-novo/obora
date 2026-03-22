@@ -110,6 +110,7 @@ export interface WorkflowTKGProjectionConfig {
     allowedEventTypes?: import("./tkg/store.js").ProjectableTKGEventType[];
     applyScopes?: import("./shared-memory/store.js").MemoryScopeLevel[];
     triggers?: import("./runtime-types.js").TKGPromotionTrigger[];
+    evaluationMode?: import("./runtime-types.js").TKGPromotionEvaluationMode;
   };
   rollback?: {
     enabled?: boolean;

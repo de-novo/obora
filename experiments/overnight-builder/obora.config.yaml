@@ -36,6 +36,7 @@ tkgProjection:
       - workflow.validation_passed
       - workflow.repair_completed
     applyScopes: [project]
+    evaluationMode: latest_effective
     triggers:
       - workflow.validation_passed
       - workflow.repair_completed

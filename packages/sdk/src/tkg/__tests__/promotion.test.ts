@@ -76,10 +76,38 @@ describe("TKG promotion evaluation", () => {
     });
   });
 
+  it("can evaluate only the current execution when requested", () => {
+    const evaluation = evaluateTKGPromotion(
+      {
+        nodes: [
+          ...makeSnapshot().nodes,
+          {
+            id: "n4",
+            eventType: "workflow.validation_failed",
+            executionId: "exec-2",
+            workflowName: "demo",
+            stepName: "validate",
+            timestamp: new Date().toISOString(),
+            summary: "Other execution failed",
+            attributes: {},
+            relations: [],
+          },
+        ],
+      },
+      {
+        executionId: "exec-1",
+        evaluationMode: "current_execution",
+      },
+    );
+
+    expect(evaluation.candidates).toHaveLength(2);
+    expect(evaluation.conflicts.some((conflict) => conflict.nodeIds.includes("n4"))).toBe(false);
+  });
+
   it("can evaluate only the latest effective state for a current execution", () => {
     const evaluation = evaluateTKGPromotion(makeSnapshot(), {
       executionId: "exec-1",
-      latestEffectiveOnly: true,
+      evaluationMode: "latest_effective",
     });
 
     expect(evaluation.candidates).toHaveLength(2);
