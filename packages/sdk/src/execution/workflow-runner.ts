@@ -84,6 +84,10 @@ import {
 } from "../tkg/rollback.js";
 import {
   FileTKGReviewQueueStore,
+  listOpenTKGReviewQueueItemsFromStore,
+  resolveTKGReviewQueueItemInStore,
+  type TKGReviewQueueItem,
+  type TKGReviewQueueResolutionSummary,
   type TKGReviewQueueStore,
 } from "../tkg/review-queue.js";
 import {
@@ -2349,6 +2353,49 @@ export class WorkflowRunner {
       tkgProjector?.dispose();
       observer.dispose();
     }
+  }
+
+  async listOpenTKGReviewQueueItems(
+    workflow: WorkflowDef,
+  ): Promise<TKGReviewQueueItem[]> {
+    const { config } = this.deps;
+    const loadedConfig = config.config !== undefined ? config.config : await loadConfig(config.configPath);
+    const tkgProjectionScopes = this.resolveTKGProjectionScopes(workflow, config, loadedConfig);
+    const tkgReviewQueueStore = this.resolveTKGReviewQueueStore(workflow, config, loadedConfig);
+    const queueScope = tkgProjectionScopes.at(-1);
+
+    if (!tkgReviewQueueStore || !queueScope) {
+      return [];
+    }
+
+    return listOpenTKGReviewQueueItemsFromStore(tkgReviewQueueStore, queueScope);
+  }
+
+  async resolveTKGReviewQueueItem(
+    workflow: WorkflowDef,
+    itemId: string,
+    resolution: { status: "approved" | "rejected"; actor?: string; note?: string },
+  ): Promise<TKGReviewQueueResolutionSummary> {
+    const { config } = this.deps;
+    const loadedConfig = config.config !== undefined ? config.config : await loadConfig(config.configPath);
+    const tkgProjectionScopes = this.resolveTKGProjectionScopes(workflow, config, loadedConfig);
+    const tkgReviewQueueStore = this.resolveTKGReviewQueueStore(workflow, config, loadedConfig);
+    const queueScope = tkgProjectionScopes.at(-1);
+
+    if (!tkgReviewQueueStore || !queueScope) {
+      return {
+        resolved: false,
+        scope: queueScope ? `${queueScope.level}:${queueScope.key}` : "unresolved",
+        itemId,
+      };
+    }
+
+    return resolveTKGReviewQueueItemInStore(tkgReviewQueueStore, queueScope, itemId, {
+      status: resolution.status,
+      resolvedAt: new Date().toISOString(),
+      actor: resolution.actor,
+      note: resolution.note,
+    });
   }
 
   async restoreLatestTKGRollback(

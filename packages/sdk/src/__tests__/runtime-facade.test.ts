@@ -1797,6 +1797,98 @@ describe("OboraRuntime facade", () => {
     });
   });
 
+  it("lists and resolves TKG review queue items through the runtime facade API", async () => {
+    const reviewQueueData = new Map<string, { items: any[] }>();
+    const reviewQueueStore = {
+      async load(scope: MemoryScope) {
+        return reviewQueueData.get(`${scope.level}:${scope.key}`) ?? null;
+      },
+      async save(scope: MemoryScope, snapshot: { items: any[] }) {
+        reviewQueueData.set(`${scope.level}:${scope.key}`, snapshot);
+      },
+      async enqueue(scope: MemoryScope, item: any) {
+        const existing = (await this.load(scope)) ?? { items: [] };
+        await this.save(scope, { items: [...existing.items, item] });
+      },
+      async resolve(scope: MemoryScope, itemId: string, resolution: any) {
+        const existing = (await this.load(scope)) ?? { items: [] };
+        await this.save(scope, {
+          items: existing.items.map((item) => item.id === itemId ? {
+            ...item,
+            status: resolution.status,
+            resolution,
+          } : item),
+        });
+      },
+    };
+
+    await reviewQueueStore.save(
+      { level: "project", key: "test-project" },
+      {
+        items: [
+          {
+            id: "review-1",
+            createdAt: new Date().toISOString(),
+            scope: "project:test-project",
+            workflowName: "runtime-review-queue",
+            status: "open",
+            candidateNodeIds: ["n1"],
+            conflicts: [],
+            summary: {
+              candidateCount: 1,
+              promotableCount: 0,
+              reviewCandidateCount: 1,
+              conflictCount: 1,
+              reviewQueueCount: 1,
+            },
+          },
+        ],
+      },
+    );
+
+    const runtime = new OboraRuntime({
+      tkgProjection: {
+        enabled: true,
+        file: { projectKey: "test-project", scopes: ["project"] },
+        reviewQueue: {
+          enabled: true,
+          adapter: "custom",
+          custom: { instance: reviewQueueStore as any },
+        },
+      },
+    });
+
+    runtime.define("runtime-review-queue", {
+      name: "runtime-review-queue",
+      tkgProjection: {
+        enabled: true,
+        projectKey: "test-project",
+        scopes: ["project"],
+        reviewQueue: { enabled: true },
+      },
+      steps: [{ name: "build", agent: "builder", input: { task: "Build app" } }],
+    });
+
+    const items = await runtime.listOpenTKGReviewQueueItems("runtime-review-queue");
+    expect(items).toHaveLength(1);
+    expect(items[0]?.id).toBe("review-1");
+
+    const summary = await runtime.resolveTKGReviewQueueItem("runtime-review-queue", "review-1", {
+      status: "approved",
+      actor: "cto",
+      note: "safe to promote",
+    });
+
+    expect(summary).toEqual({
+      resolved: true,
+      scope: "project:test-project",
+      itemId: "review-1",
+      status: "approved",
+    });
+    const updated = await reviewQueueStore.load({ level: "project", key: "test-project" });
+    expect(updated?.items[0]?.status).toBe("approved");
+  });
+
   it("restores the latest TKG rollback snapshot through the runtime facade API", async () => {
     const sharedMemoryStore = createInMemorySharedMemoryStore();
     const rollbackStore = {

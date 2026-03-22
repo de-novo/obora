@@ -7,7 +7,9 @@ export {
 export {
   FileTKGReviewQueueStore,
   listOpenTKGReviewQueueItems,
+  listOpenTKGReviewQueueItemsFromStore,
   mergeTKGReviewQueueSnapshot,
+  resolveTKGReviewQueueItemInStore,
   resolveTKGReviewQueueSnapshot,
 } from "./review-queue.js";
 export {
@@ -62,6 +64,7 @@ export type {
 export type {
   TKGReviewQueueItem,
   TKGReviewQueueResolution,
+  TKGReviewQueueResolutionSummary,
   TKGReviewQueueSnapshot,
   TKGReviewQueueStatus,
   TKGReviewQueueStore,

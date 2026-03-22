@@ -88,6 +88,10 @@ import type {
   Unsubscribe,
 } from "./runtime-types.js";
 import type { TKGApprovedReviewQueueApplySummary } from "./tkg/apply.js";
+import type {
+  TKGReviewQueueItem,
+  TKGReviewQueueResolutionSummary,
+} from "./tkg/review-queue.js";
 import type { TKGRollbackRestoreSummary } from "./tkg/rollback.js";
 
 export type WorkflowDefinition = WorkflowDef;
@@ -767,6 +771,34 @@ export class OboraRuntime {
     });
 
     return reResult;
+  }
+
+  async listOpenTKGReviewQueueItems(
+    workflowName: string,
+  ): Promise<TKGReviewQueueItem[]> {
+    if (!this.workflows.has(workflowName)) {
+      throw new OboraError(
+        `Workflow is not defined: ${workflowName}`,
+        OboraErrorCode.SDK_WORKFLOW_NOT_FOUND,
+      );
+    }
+
+    return this.runner.listOpenTKGReviewQueueItems(this.workflows.get(workflowName)!);
+  }
+
+  async resolveTKGReviewQueueItem(
+    workflowName: string,
+    itemId: string,
+    resolution: { status: "approved" | "rejected"; actor?: string; note?: string },
+  ): Promise<TKGReviewQueueResolutionSummary> {
+    if (!this.workflows.has(workflowName)) {
+      throw new OboraError(
+        `Workflow is not defined: ${workflowName}`,
+        OboraErrorCode.SDK_WORKFLOW_NOT_FOUND,
+      );
+    }
+
+    return this.runner.resolveTKGReviewQueueItem(this.workflows.get(workflowName)!, itemId, resolution);
   }
 
   async restoreLatestTKGRollback(

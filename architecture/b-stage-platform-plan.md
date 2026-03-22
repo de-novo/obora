@@ -128,8 +128,8 @@ B 단계의 목표는 **기능 추가 자체보다 실행 일관성, 관측 가�
 **목표:** review queue가 데이터 구조가 아니라 실제 운영 가능한 루프가 되게 한다.
 
 #### 작업
-- [ ] open item list helper
-- [ ] approve / reject helper
+- [x] open item list helper
+- [x] approve / reject helper
 - [ ] approved item re-apply helper 문서화
 - [ ] duplicate apply / idempotency 정리
 - [ ] review note / actor / resolution audit 정리
@@ -223,4 +223,4 @@ B 단계의 목표는 **기능 추가 자체보다 실행 일관성, 관측 가�
 
 현재 기준으로 가장 큰 value는 새로운 기능 추가보다,
 **왜 그렇게 동작했는지 항상 설명 가능한 상태**를 만드는 데 있다.
-�� 그렇게 동작했는지 항상 설명 가능한 상태**를 만드는 데 있다.
+�� 그렇게 동작했는지 항상 설명 가능한 상태**를 만드는 데 있다.

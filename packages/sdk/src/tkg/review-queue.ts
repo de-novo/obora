@@ -13,6 +13,13 @@ export interface TKGReviewQueueResolution {
   note?: string;
 }
 
+export interface TKGReviewQueueResolutionSummary {
+  resolved: boolean;
+  scope: string;
+  itemId: string;
+  status?: Exclude<TKGReviewQueueStatus, "open">;
+}
+
 export interface TKGReviewQueueItem {
   id: string;
   createdAt: string;
@@ -75,6 +82,44 @@ export function listOpenTKGReviewQueueItems(
   snapshot: TKGReviewQueueSnapshot | null | undefined,
 ): TKGReviewQueueItem[] {
   return (snapshot?.items ?? []).filter((item) => item.status === "open");
+}
+
+export async function listOpenTKGReviewQueueItemsFromStore(
+  store: TKGReviewQueueStore,
+  scope: MemoryScope,
+): Promise<TKGReviewQueueItem[]> {
+  return listOpenTKGReviewQueueItems(await store.load(scope));
+}
+
+export async function resolveTKGReviewQueueItemInStore(
+  store: TKGReviewQueueStore,
+  scope: MemoryScope,
+  itemId: string,
+  resolution: TKGReviewQueueResolution,
+): Promise<TKGReviewQueueResolutionSummary> {
+  const existing = (await store.load(scope)) ?? { items: [] };
+  const before = existing.items.find((item) => item.id === itemId);
+
+  if (!before) {
+    return {
+      resolved: false,
+      scope: `${scope.level}:${scope.key}`,
+      itemId,
+    };
+  }
+
+  if (typeof store.resolve === "function") {
+    await store.resolve(scope, itemId, resolution);
+  } else {
+    await store.save(scope, resolveTKGReviewQueueSnapshot(existing, itemId, resolution));
+  }
+
+  return {
+    resolved: true,
+    scope: `${scope.level}:${scope.key}`,
+    itemId,
+    status: resolution.status,
+  };
 }
 
 export class FileTKGReviewQueueStore implements TKGReviewQueueStore {
