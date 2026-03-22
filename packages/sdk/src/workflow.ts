@@ -109,6 +109,7 @@ export interface WorkflowTKGProjectionConfig {
     confidenceSpreadThreshold?: number;
     allowedEventTypes?: import("./tkg/store.js").ProjectableTKGEventType[];
     applyScopes?: import("./shared-memory/store.js").MemoryScopeLevel[];
+    triggers?: import("./runtime-types.js").TKGPromotionTrigger[];
   };
   rollback?: {
     enabled?: boolean;

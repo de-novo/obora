@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-
 import type { EventBus } from "../events/event-bus.js";
 import type { AuditEvent, Unsubscribe } from "../runtime-types.js";
 import type { MemoryScope } from "../shared-memory/store.js";
@@ -66,7 +64,7 @@ export function projectAuditEventToTemporalNode(
   }
 
   return {
-    id: randomUUID(),
+    id: event.id,
     eventType: event.type,
     executionId: event.executionId,
     workflowName,

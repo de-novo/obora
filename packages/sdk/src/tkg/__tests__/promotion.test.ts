@@ -75,4 +75,22 @@ describe("TKG promotion evaluation", () => {
       reviewQueueCount: 2,
     });
   });
+
+  it("can evaluate only the latest effective state for a current execution", () => {
+    const evaluation = evaluateTKGPromotion(makeSnapshot(), {
+      executionId: "exec-1",
+      latestEffectiveOnly: true,
+    });
+
+    expect(evaluation.candidates).toHaveLength(2);
+    expect(evaluation.candidates.every((candidate) => candidate.promote)).toBe(true);
+    expect(evaluation.reviewQueue).toHaveLength(0);
+    expect(summarizeTKGPromotionEvaluation(evaluation)).toEqual({
+      candidateCount: 2,
+      promotableCount: 2,
+      reviewCandidateCount: 0,
+      conflictCount: 0,
+      reviewQueueCount: 0,
+    });
+  });
 });

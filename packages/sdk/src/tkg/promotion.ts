@@ -38,6 +38,8 @@ export interface TKGPromotionSummary {
 export interface TKGPromotionOptions {
   minConfidence?: number;
   confidenceSpreadThreshold?: number;
+  executionId?: string;
+  latestEffectiveOnly?: boolean;
 }
 
 function clampConfidence(value: number): number {
@@ -68,15 +70,72 @@ function stepKey(node: TemporalNode): string {
   return `${node.workflowName}:${node.stepName ?? "__workflow__"}`;
 }
 
+function normalizeTKGPromotionSnapshot(
+  snapshot: StagingTKGSnapshot,
+  options: TKGPromotionOptions = {},
+): StagingTKGSnapshot {
+  const executionFilteredNodes = options.executionId
+    ? snapshot.nodes.filter((node) => node.executionId === options.executionId)
+    : snapshot.nodes;
+
+  if (!options.latestEffectiveOnly) {
+    return { nodes: executionFilteredNodes };
+  }
+
+  const groups = new Map<string, TemporalNode[]>();
+  for (const node of executionFilteredNodes) {
+    const key = stepKey(node);
+    const bucket = groups.get(key) ?? [];
+    bucket.push(node);
+    groups.set(key, bucket);
+  }
+
+  const normalizedNodes: TemporalNode[] = [];
+  const latestNode = (nodes: TemporalNode[], eventType: TemporalNode["eventType"]): TemporalNode | undefined =>
+    nodes
+      .filter((node) => node.eventType === eventType)
+      .sort((left, right) => left.timestamp.localeCompare(right.timestamp))
+      .at(-1);
+
+  for (const nodes of groups.values()) {
+    const latestValidationFailed = latestNode(nodes, "workflow.validation_failed");
+    const latestValidationPassed = latestNode(nodes, "workflow.validation_passed");
+    const latestRepairCompleted = latestNode(nodes, "workflow.repair_completed");
+    const latestRepairStarted = latestNode(nodes, "workflow.repair_started");
+    const latestBackEdge = latestNode(nodes, "workflow.back_edge_triggered");
+
+    if (latestBackEdge) normalizedNodes.push(latestBackEdge);
+    if (latestRepairStarted) normalizedNodes.push(latestRepairStarted);
+    if (latestRepairCompleted) normalizedNodes.push(latestRepairCompleted);
+
+    if (latestValidationPassed && latestValidationFailed) {
+      if (latestValidationPassed.timestamp >= latestValidationFailed.timestamp) {
+        normalizedNodes.push(latestValidationPassed);
+      } else {
+        normalizedNodes.push(latestValidationFailed);
+      }
+    } else if (latestValidationPassed) {
+      normalizedNodes.push(latestValidationPassed);
+    } else if (latestValidationFailed) {
+      normalizedNodes.push(latestValidationFailed);
+    }
+  }
+
+  return {
+    nodes: normalizedNodes,
+  };
+}
+
 export function detectTKGConflicts(
   snapshot: StagingTKGSnapshot,
   options: TKGPromotionOptions = {},
 ): TKGConflict[] {
+  const normalizedSnapshot = normalizeTKGPromotionSnapshot(snapshot, options);
   const conflicts: TKGConflict[] = [];
   const groups = new Map<string, TemporalNode[]>();
   const confidenceSpreadThreshold = options.confidenceSpreadThreshold ?? 0.35;
 
-  for (const node of snapshot.nodes) {
+  for (const node of normalizedSnapshot.nodes) {
     const key = stepKey(node);
     const bucket = groups.get(key) ?? [];
     bucket.push(node);
@@ -130,15 +189,16 @@ export function evaluateTKGPromotion(
   snapshot: StagingTKGSnapshot,
   options: TKGPromotionOptions = {},
 ): TKGPromotionEvaluation {
+  const normalizedSnapshot = normalizeTKGPromotionSnapshot(snapshot, options);
   const minConfidence = options.minConfidence ?? 0.8;
-  const conflicts = detectTKGConflicts(snapshot, options);
+  const conflicts = detectTKGConflicts(normalizedSnapshot, options);
   const blockingNodeIds = new Set(
     conflicts
       .filter((conflict) => conflict.type === "contradiction" || conflict.type === "version")
       .flatMap((conflict) => conflict.nodeIds),
   );
 
-  const candidates = snapshot.nodes
+  const candidates = normalizedSnapshot.nodes
     .filter(
       (node) =>
         node.eventType === "workflow.validation_passed" ||

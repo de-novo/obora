@@ -1,0 +1,136 @@
+name: shared-memory-tkg-loop
+version: "1.0"
+description: "Sandbox workflow that exercises shared memory import/export, TKG projection, promotion, review queue, and rollback capture."
+
+sharedMemory:
+  enabled: true
+  projectKey: shared-memory-tkg-loop
+  scopes: [project, workflow]
+
+tkgProjection:
+  enabled: true
+  projectKey: shared-memory-tkg-loop
+  scopes: [project, workflow]
+  promotion:
+    enabled: true
+    minConfidence: 0.8
+    allowedEventTypes: [workflow.validation_passed, workflow.repair_completed]
+    applyScopes: [project]
+    triggers: [workflow.validation_passed, workflow.repair_completed, execution_end]
+  reviewQueue:
+    enabled: true
+  rollback:
+    enabled: true
+
+steps:
+  - name: build_or_repair
+    agent: writer
+    config:
+      repair_loop:
+        enabled: true
+        validation_step: validate_artifact
+        max_no_progress_iterations: 1
+        repeated_critical_issue_ceiling: 1
+    tools: [file_read, file_write, file_list]
+    input:
+      task: |
+        Read /Users/denovo/workspace/github/obora-kit/sandbox/22-shared-memory-tkg-loop/input/brief.md.
+
+        This workflow intentionally demonstrates runtime-native failure -> repair -> pass.
+
+        If this is the first attempt:
+        - Write /Users/denovo/workspace/github/obora-kit/sandbox/22-shared-memory-tkg-loop/output/final/01-draft.md.
+        - Include exactly these top-level sections:
+          1. Goal
+          2. Current Findings
+        - Intentionally omit Next Action so the first validation fails.
+
+        If this is a repair attempt, also read whichever files exist:
+        - /Users/denovo/workspace/github/obora-kit/sandbox/22-shared-memory-tkg-loop/output/final/01-draft.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/22-shared-memory-tkg-loop/output/final/03-validation.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/22-shared-memory-tkg-loop/output/final/04-repaired.md
+
+        Repair attempt requirements:
+        - Use injected repair context when present.
+        - Preserve already valid content.
+        - Add the missing Next Action section.
+        - If shared memory context is present in the prompt, reuse up to three concrete reusable lessons and add a subheading `Memory Signals Used` inside Current Findings.
+        - Write /Users/denovo/workspace/github/obora-kit/sandbox/22-shared-memory-tkg-loop/output/final/04-repaired.md.
+        - The repaired document must contain exactly these top-level sections:
+          1. Goal
+          2. Current Findings
+          3. Next Action
+
+  - name: validate_artifact
+    agent: validator
+    depends_on: [build_or_repair]
+    config:
+      validation:
+        enabled: true
+        emit_structured_result: true
+    on_fail:
+      goto: build_or_repair
+      max_iterations: 1
+    tools: [file_read, file_write]
+    input:
+      task: |
+        Read whichever exists first:
+        - /Users/denovo/workspace/github/obora-kit/sandbox/22-shared-memory-tkg-loop/output/final/04-repaired.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/22-shared-memory-tkg-loop/output/final/01-draft.md
+
+        Validate against this checklist:
+        - contains Goal
+        - contains Current Findings
+        - contains Next Action
+
+        Write a human-readable report:
+        - first validation attempt -> /Users/denovo/workspace/github/obora-kit/sandbox/22-shared-memory-tkg-loop/output/final/03-validation.md
+        - repaired validation attempt -> /Users/denovo/workspace/github/obora-kit/sandbox/22-shared-memory-tkg-loop/output/final/05-final-validation.md
+
+        Requirements:
+        - Include exactly these top-level sections:
+          1. Verdict
+          2. Passed Checks
+          3. Failed Checks
+          4. Next Action
+        - If FAIL, Next Action must direct build_or_repair to fix only the latest failed checks.
+        - If PASS, Next Action must say that inspection/archive can run.
+
+        After writing the report, return ONLY a strict ValidationResult JSON object.
+        No markdown fences. No prose.
+
+        Return this exact shape:
+        {
+          "passed": boolean,
+          "summary": "string",
+          "failedChecks": [{ "name": "string", "message": "string" }],
+          "signature": "shared-memory-tkg-loop"
+        }
+
+  - name: inspect_memory_and_tkg
+    agent: inspector
+    depends_on: [validate_artifact]
+    tools: [file_list, file_read, file_write]
+    input:
+      task: |
+        Inspect the persistence artifacts created by this workflow.
+
+        Use file_list / file_read as needed on these directories/files:
+        - /Users/denovo/workspace/github/obora-kit/sandbox/22-shared-memory-tkg-loop/data/.obora/shared-memory
+        - /Users/denovo/workspace/github/obora-kit/sandbox/22-shared-memory-tkg-loop/data/.obora/tkg-staging
+        - /Users/denovo/workspace/github/obora-kit/sandbox/22-shared-memory-tkg-loop/data/.obora/tkg-review-queue
+        - /Users/denovo/workspace/github/obora-kit/sandbox/22-shared-memory-tkg-loop/data/.obora/tkg-rollback
+
+        Also read whichever validation report exists:
+        - /Users/denovo/workspace/github/obora-kit/sandbox/22-shared-memory-tkg-loop/output/final/05-final-validation.md
+        - /Users/denovo/workspace/github/obora-kit/sandbox/22-shared-memory-tkg-loop/output/final/03-validation.md
+
+        Write /Users/denovo/workspace/github/obora-kit/sandbox/22-shared-memory-tkg-loop/output/archive/40-observability-report.md.
+
+        Requirements:
+        - Include exactly these top-level sections:
+          1. Shared Memory Snapshot
+          2. TKG Projection Snapshot
+          3. Review Queue and Rollback
+          4. Re-run Notes
+        - In Re-run Notes, explain what should be different on the second run if shared memory continuity works.

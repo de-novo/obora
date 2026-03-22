@@ -1,0 +1,12 @@
+version: "1.0"
+default_model: glm-5
+agents:
+  writer:
+    role: Build an artifact, fail once intentionally, then repair it using validation feedback and any shared memory context.
+    model: glm-5
+  validator:
+    role: Validate the artifact against a strict checklist and return only structured ValidationResult JSON.
+    model: glm-5
+  inspector:
+    role: Inspect generated shared memory / TKG files and summarize what was persisted for reuse.
+    model: glm-5

@@ -233,6 +233,10 @@ export interface SharedMemoryConfig {
   };
 }
 
+export type TKGPromotionTrigger =
+  | import("./tkg/store.js").ProjectableTKGEventType
+  | "execution_end";
+
 export interface TKGProjectionConfig {
   enabled?: boolean;
   adapter?: "file" | "custom";
@@ -250,6 +254,7 @@ export interface TKGProjectionConfig {
     confidenceSpreadThreshold?: number;
     allowedEventTypes?: import("./tkg/store.js").ProjectableTKGEventType[];
     applyScopes?: import("./shared-memory/store.js").MemoryScopeLevel[];
+    triggers?: TKGPromotionTrigger[];
   };
   rollback?: {
     enabled?: boolean;

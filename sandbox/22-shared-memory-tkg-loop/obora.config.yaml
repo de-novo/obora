@@ -18,16 +18,16 @@ sharedMemory:
   enabled: true
   adapter: file
   file:
-    basePath: /Users/denovo/workspace/github/obora-kit/experiments/overnight-builder/data/.obora/shared-memory
-    projectKey: overnight-builder
+    basePath: /Users/denovo/workspace/github/obora-kit/sandbox/22-shared-memory-tkg-loop/data/.obora/shared-memory
+    projectKey: shared-memory-tkg-loop
     scopes: [project, workflow]
 
 tkgProjection:
   enabled: true
   adapter: file
   file:
-    basePath: /Users/denovo/workspace/github/obora-kit/experiments/overnight-builder/data/.obora/tkg-staging
-    projectKey: overnight-builder
+    basePath: /Users/denovo/workspace/github/obora-kit/sandbox/22-shared-memory-tkg-loop/data/.obora/tkg-staging
+    projectKey: shared-memory-tkg-loop
     scopes: [project, workflow]
   promotion:
     enabled: true
@@ -44,25 +44,24 @@ tkgProjection:
     enabled: true
     adapter: file
     file:
-      basePath: /Users/denovo/workspace/github/obora-kit/experiments/overnight-builder/data/.obora/tkg-review-queue
+      basePath: /Users/denovo/workspace/github/obora-kit/sandbox/22-shared-memory-tkg-loop/data/.obora/tkg-review-queue
   rollback:
     enabled: true
     adapter: file
     file:
-      basePath: /Users/denovo/workspace/github/obora-kit/experiments/overnight-builder/data/.obora/tkg-rollback
+      basePath: /Users/denovo/workspace/github/obora-kit/sandbox/22-shared-memory-tkg-loop/data/.obora/tkg-rollback
 
 defaults:
   provider: zai
-  model: glm-4.7
+  model: glm-5
   temperature: 0.2
-  timeout: 900
-  maxTokens: 16384
+  timeout: 180
+  maxTokens: 4096
 
 providers:
   zai:
     authMode: global
     authRef: global:zai
-    baseUrl: "https://api.z.ai/api/coding/paas/v4"
     defaultModel: glm-5
-    timeout: 900
-    maxTokens: 16384
+    timeout: 180
+    maxTokens: 4096

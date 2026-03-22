@@ -80,6 +80,10 @@ outer loop: refine -> design -> TDD -> review -> commit -> refine (MVP 완성까
 - `artifacts/04-test-report.md` — 테스트 결과
 - `artifacts/05-review-notes.md` — 리뷰/개선 기록
 - `artifacts/06-archive-summary.md` — 최종 요약
+- `data/.obora/shared-memory/` — cycle 간 재사용 가능한 persistent memory
+- `data/.obora/tkg-staging/` — validation/repair/back-edge 이벤트의 temporal projection
+- `data/.obora/tkg-review-queue/` — promotion conflict review queue
+- `data/.obora/tkg-rollback/` — promotion apply 이전 rollback snapshot
 
 ## 실행
 
@@ -91,6 +95,36 @@ experiments/overnight-builder/run.sh
 experiments/overnight-builder/run.sh --dry-run
 ```
 
+## Shared Memory / TKG 적용
+
+이 실험에는 이제 Shared Memory / TKG MVP가 연결되어 있습니다.
+
+의도:
+- cycle이 길어질수록 validator/reviewer가 남긴 고신호 사실을 다음 실행에서 다시 활용
+- validation 실패/repair/pass 흐름을 TKG staging에 projection
+- promotion conflict가 생기면 review queue로 분리
+- promotion apply 전에 rollback snapshot 저장
+
+관찰 포인트:
+- `data/.obora/shared-memory/project/overnight-builder.json`
+- `data/.obora/tkg-staging/project/overnight-builder.json`
+- `data/.obora/tkg-review-queue/project/overnight-builder.json`
+- `data/.obora/tkg-rollback/project/overnight-builder.json`
+
+현재 설정에서는 promotion flush trigger를 다음 시점에 건다:
+- `workflow.validation_passed`
+- `workflow.repair_completed`
+- `execution_end`
+
+즉, 긴 overnight run이 마지막 문서 step에서 실패해도,
+핵심 validation/repair loop를 통과한 시점의 TKG promotion/shared memory apply는 먼저 남길 수 있다.
+
+실제 검증 결과(2026-03-22 기준):
+- `workflow.validation_passed` 시점에 trigger checkpoint 동작 확인
+- `shared-memory` project snapshot 생성 확인
+- `tkg-rollback` project snapshot 생성 확인
+- conflict가 없던 run에서는 `tkg-review-queue`는 비어 있거나 생성되지 않는 것이 정상
+
 ## 성공 기준
 
 - 기획이 구체화됨
@@ -99,3 +133,4 @@ experiments/overnight-builder/run.sh --dry-run
 - 테스트가 최소 1개 이상 통과
 - 리뷰/개선이 한 번 이상 수행됨
 - archive에 전체 과정이 기록됨
+- Shared Memory / TKG persistence 산출물이 생성됨

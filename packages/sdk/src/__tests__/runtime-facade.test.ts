@@ -1160,6 +1160,7 @@ describe("OboraRuntime facade", () => {
       ],
     });
     expect(result.outputs.__tkg_promotion__).toMatchObject({
+      trigger: "execution_end",
       scope: "project:test-project",
       minConfidence: 0.8,
       allowedEventTypes: ["workflow.validation_passed", "workflow.repair_completed"],
@@ -1377,6 +1378,7 @@ describe("OboraRuntime facade", () => {
     expect(snapshot?.items[0]?.candidateNodeIds).toHaveLength(1);
     expect(snapshot?.items[0]?.conflicts).toHaveLength(2);
     expect(result.outputs.__tkg_review_queue__).toEqual({
+      trigger: "execution_end",
       scope: "project:test-project",
       queuedItems: 2,
     });
@@ -1462,6 +1464,7 @@ describe("OboraRuntime facade", () => {
     const stored = await sharedMemoryStore.load({ level: "project", key: "test-project" });
     expect(stored?.knowledge.facts.some((fact) => fact.category === "tkg-promotion")).toBe(true);
     expect(result.outputs.__tkg_promotion_apply__).toEqual({
+      trigger: "execution_end",
       scopes: ["project:test-project"],
       appliedFactCount: 1,
       appliedNodeIds: [expect.stringMatching(/^tkg-promotion:/)],
@@ -1559,6 +1562,7 @@ describe("OboraRuntime facade", () => {
     expect(globalSnapshot?.knowledge.facts.some((fact) => fact.category === "tkg-promotion")).toBe(true);
     expect(projectSnapshot?.knowledge.facts.some((fact) => fact.category === "tkg-promotion")).toBe(false);
     expect(result.outputs.__tkg_promotion_apply__).toEqual({
+      trigger: "execution_end",
       scopes: ["global:global"],
       appliedFactCount: 1,
       appliedNodeIds: [expect.stringMatching(/^tkg-promotion:/)],
@@ -1567,6 +1571,99 @@ describe("OboraRuntime facade", () => {
       minConfidence: 0.9,
       allowedEventTypes: ["workflow.validation_passed"],
     });
+  });
+
+  it("flushes TKG promotion on validation_passed trigger before execution_end", async () => {
+    const sharedMemoryStore = createInMemorySharedMemoryStore();
+    const stagingStore = {
+      _data: new Map<string, { nodes: any[] }>(),
+      async load(scope: MemoryScope) {
+        return (this as any)._data.get(`${scope.level}:${scope.key}`) ?? null;
+      },
+      async save(scope: MemoryScope, snapshot: { nodes: any[] }) {
+        (this as any)._data.set(`${scope.level}:${scope.key}`, snapshot);
+      },
+      async append(scope: MemoryScope, nodes: any[]) {
+        const existing = (await this.load(scope)) ?? { nodes: [] };
+        await this.save(scope, { nodes: [...existing.nodes, ...nodes] });
+      },
+    };
+
+    const runtime = new OboraRuntime({
+      llm: { provider: "openai", apiKey: "test-key", model: "gpt-5" },
+      sharedMemory: {
+        enabled: true,
+        adapter: "custom",
+        custom: { instance: sharedMemoryStore },
+        file: { projectKey: "test-project", scopes: ["project"] },
+      },
+      tkgProjection: {
+        enabled: true,
+        adapter: "custom",
+        custom: { instance: stagingStore as any },
+        file: { projectKey: "test-project", scopes: ["project"] },
+        promotion: {
+          triggers: ["workflow.validation_passed"],
+        },
+      },
+    });
+
+    let callIndex = 0;
+    const adapterMock = {
+      chatCompletion: vi.fn().mockImplementation(async () => {
+        callIndex += 1;
+        if (callIndex === 1) {
+          return { message: { role: "assistant", content: "build ok" } };
+        }
+        if (callIndex === 2) {
+          return {
+            message: {
+              role: "assistant",
+              content: JSON.stringify({
+                passed: true,
+                summary: "Validation passed",
+                failedChecks: [],
+                signature: "pass",
+              }),
+            },
+          };
+        }
+        throw new Error("late failure");
+      }),
+    };
+
+    vi.spyOn(
+      runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> },
+      "createLLMAdapter"
+    ).mockResolvedValue(adapterMock);
+
+    runtime.define("tkg-triggered-flush-run", {
+      name: "tkg-triggered-flush-run",
+      sharedMemory: { enabled: true, projectKey: "test-project", scopes: ["project"] },
+      tkgProjection: {
+        enabled: true,
+        projectKey: "test-project",
+        scopes: ["project"],
+        promotion: { triggers: ["workflow.validation_passed"] },
+      },
+      steps: [
+        { name: "build", agent: "builder", input: { task: "Build app" } },
+        {
+          name: "validate",
+          agent: "validator",
+          depends_on: ["build"],
+          config: { validation: { enabled: true, emit_structured_result: true } },
+          input: { task: "Validate app" },
+        },
+        { name: "finalize", agent: "builder", depends_on: ["validate"], input: { task: "Fail late" } },
+      ],
+    });
+
+    const handle = await runtime.run("tkg-triggered-flush-run");
+    await expect(handle.wait()).rejects.toThrow(/late failure/i);
+
+    const stored = await sharedMemoryStore.load({ level: "project", key: "test-project" });
+    expect(stored?.knowledge.facts.some((fact) => fact.category === "tkg-promotion")).toBe(true);
   });
 
   it("captures rollback snapshots before applying TKG promotion into shared memory", async () => {
@@ -1693,6 +1790,7 @@ describe("OboraRuntime facade", () => {
     expect(rollbackSnapshot?.entries).toHaveLength(1);
     expect(rollbackSnapshot?.entries[0]?.snapshot.knowledge.facts[0]?.id).toBe("existing-fact");
     expect(result.outputs.__tkg_promotion_rollback__).toEqual({
+      trigger: "execution_end",
       capturedSnapshots: 1,
       scopes: ["project:test-project"],
       rollbackIds: [expect.any(String)],

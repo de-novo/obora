@@ -7,6 +7,7 @@
 - [poc-validation.md](./poc-validation.md) - PoC ↔ 제품 매핑
 - [blackboard-memory-extension.md](./blackboard-memory-extension.md) - Blackboard 메모리 확장 장기 비전 (north star)
 - [shared-memory-tkg-mvp.md](./shared-memory-tkg-mvp.md) - 현재 구현 가능한 Shared Memory / TKG 확장 MVP 및 migration path
+- [b-stage-platform-plan.md](./b-stage-platform-plan.md) - 개발자용 플랫폼(B 단계)로 가기 위한 실행 백로그 및 마감 계획
 
 ## 문서 읽는 순서
 
