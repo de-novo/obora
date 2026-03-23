@@ -32,6 +32,7 @@ tkgProjection:
   promotion:
     enabled: true
     minConfidence: 0.8
+    confidenceConflictMode: review
     allowedEventTypes:
       - workflow.validation_passed
       - workflow.repair_completed

@@ -14,6 +14,7 @@ tkgProjection:
   promotion:
     enabled: true
     minConfidence: 0.8
+    confidenceConflictMode: blocking
     allowedEventTypes: [workflow.validation_passed, workflow.repair_completed]
     applyScopes: [project]
     evaluationMode: latest_effective

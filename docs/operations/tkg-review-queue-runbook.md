@@ -45,6 +45,11 @@ tkgProjection:
     confidenceConflictMode: blocking
 ```
 
+권장 운영 기본:
+- canonical sandbox / 정책 데모: `blocking`
+- long-run 운영 실험(예: overnight-builder): `review`
+- 일반 workflow 기본값: `signal_only`
+
 ### conflict → review queue 라우팅 규칙
 
 현재 구현 기준:
