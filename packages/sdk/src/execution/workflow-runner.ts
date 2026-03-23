@@ -894,6 +894,7 @@ export class WorkflowRunner {
     const promotionEvaluation = evaluateTKGPromotion(stagingSnapshot, {
       minConfidence: tkgProjectionConfig?.promotion?.minConfidence,
       confidenceSpreadThreshold: tkgProjectionConfig?.promotion?.confidenceSpreadThreshold,
+      confidenceConflictMode: tkgProjectionConfig?.promotion?.confidenceConflictMode,
       executionId,
       evaluationMode,
     });

@@ -109,6 +109,114 @@ describe("TKG promotion evaluation", () => {
     expect(evaluation.candidates.every((candidate) => candidate.requiresReview)).toBe(true);
   });
 
+  it("keeps confidence conflicts as signal-only by default", () => {
+    const evaluation = evaluateTKGPromotion({
+      nodes: [
+        {
+          id: "n1",
+          eventType: "workflow.validation_passed",
+          executionId: "exec-1",
+          workflowName: "demo",
+          stepName: "review",
+          timestamp: new Date().toISOString(),
+          summary: "Validation passed",
+          attributes: { confidence: 0.95 },
+          relations: [],
+        },
+        {
+          id: "n2",
+          eventType: "workflow.repair_completed",
+          executionId: "exec-1",
+          workflowName: "demo",
+          stepName: "review",
+          timestamp: new Date().toISOString(),
+          summary: "Repair completed",
+          attributes: { confidence: 0.2 },
+          relations: [],
+        },
+      ],
+    });
+
+    expect(evaluation.conflicts.some((conflict) => conflict.type === "confidence" && conflict.severity === "high")).toBe(true);
+    expect(evaluation.reviewQueue).toHaveLength(0);
+    expect(evaluation.candidates.every((candidate) => candidate.requiresReview === false)).toBe(true);
+  });
+
+  it("can route high confidence conflicts to review queue without blocking", () => {
+    const evaluation = evaluateTKGPromotion(
+      {
+        nodes: [
+          {
+            id: "n1",
+            eventType: "workflow.validation_passed",
+            executionId: "exec-1",
+            workflowName: "demo",
+            stepName: "review",
+            timestamp: new Date().toISOString(),
+            summary: "Validation passed",
+            attributes: { confidence: 0.95 },
+            relations: [],
+          },
+          {
+            id: "n2",
+            eventType: "workflow.repair_completed",
+            executionId: "exec-1",
+            workflowName: "demo",
+            stepName: "review",
+            timestamp: new Date().toISOString(),
+            summary: "Repair completed",
+            attributes: { confidence: 0.2 },
+            relations: [],
+          },
+        ],
+      },
+      { confidenceConflictMode: "review" },
+    );
+
+    expect(evaluation.reviewQueue).toEqual([
+      expect.objectContaining({ type: "confidence", severity: "high" }),
+    ]);
+    expect(evaluation.candidates.every((candidate) => candidate.requiresReview === false)).toBe(true);
+  });
+
+  it("can escalate high confidence conflicts to blocking review", () => {
+    const evaluation = evaluateTKGPromotion(
+      {
+        nodes: [
+          {
+            id: "n1",
+            eventType: "workflow.validation_passed",
+            executionId: "exec-1",
+            workflowName: "demo",
+            stepName: "review",
+            timestamp: new Date().toISOString(),
+            summary: "Validation passed",
+            attributes: { confidence: 0.95 },
+            relations: [],
+          },
+          {
+            id: "n2",
+            eventType: "workflow.repair_completed",
+            executionId: "exec-1",
+            workflowName: "demo",
+            stepName: "review",
+            timestamp: new Date().toISOString(),
+            summary: "Repair completed",
+            attributes: { confidence: 0.2 },
+            relations: [],
+          },
+        ],
+      },
+      { confidenceConflictMode: "blocking" },
+    );
+
+    expect(evaluation.reviewQueue).toEqual([
+      expect.objectContaining({ type: "confidence", severity: "high" }),
+    ]);
+    expect(evaluation.candidates.every((candidate) => candidate.requiresReview)).toBe(true);
+    expect(evaluation.candidates.every((candidate) => candidate.promote === false)).toBe(true);
+  });
+
   it("can evaluate only the current execution when requested", () => {
     const evaluation = evaluateTKGPromotion(
       {

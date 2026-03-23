@@ -29,6 +29,22 @@ review queue는 단순 저장소가 아니라, 아래 운영 루프를 위한 �
   - `current_execution`
   - `latest_effective`
 
+### confidence conflict policy
+
+기본값은 `signal_only`다.
+
+- `signal_only`: confidence conflict를 summary/conflict signal로만 남김
+- `review`: high confidence conflict를 review queue에 넣지만 promotion block은 하지 않음
+- `blocking`: high confidence conflict를 review queue에 넣고 promotion도 block함
+
+설정 예시:
+
+```yaml
+tkgProjection:
+  promotion:
+    confidenceConflictMode: blocking
+```
+
 ### conflict → review queue 라우팅 규칙
 
 현재 구현 기준:
@@ -38,17 +54,18 @@ review queue는 단순 저장소가 아니라, 아래 운영 루프를 위한 �
 | `contradiction` | `high` | 예 | 예 | 같은 step에 `validation_failed`와 `validation_passed`가 동시에 존재 |
 | `version` | `medium` | 예 | 예 | 같은 step에 promotable version이 여러 개 존재 |
 | `confidence` | `medium` | 아니오 | 아니오 | spread가 threshold 이상이지만 high는 아님 |
-| `confidence` | `high` | 아니오 | 아니오 | 현재는 operator signal로만 남고 queue에는 올리지 않음 |
+| `confidence` | `high` | 기본은 아니오 | mode에 따라 달라짐 | `signal_only`/`review`/`blocking` 정책 적용 |
 
 핵심은 아래 두 줄입니다.
 
-- **blocking conflict**: `contradiction`, `version`
-- **queue 대상**: blocking conflict 전체
+- **기본 blocking conflict**: `contradiction`, `version`
+- **기본 queue 대상**: blocking conflict 전체
+- `confidence` high는 `confidenceConflictMode`에 따라 signal/review/blocking 중 하나로 승격 가능
 
-즉, 현재는 review queue의 의미가 더 단순하다.
+즉, 기본값 기준 review queue의 의미는 여전히 단순하다.
 
 - queue에 들어온 것은 **수동 검토가 실제로 필요한 blocking conflict**다
-- `confidence` conflict는 summary/conflict signal에는 남지만, approve/reject 루프 대상으로는 취급하지 않는다
+- 추가로 confidence를 queue에 올리고 싶을 때만 정책으로 승격한다
 
 ---
 
@@ -83,15 +100,16 @@ review queue는 단순 저장소가 아니라, 아래 운영 루프를 위한 �
 
 ### 3. confidence
 
-`confidence`는 현재 **operator signal**로 취급된다.
+`confidence`는 기본적으로는 **operator signal**로 취급된다.
 
 - `medium`: 지표로만 남음
-- `high`: 더 강한 경고이지만 여전히 queue로 올리지는 않음
-- confidence만으로는 candidate가 `requiresReview=true`가 되지 않는다
+- `high`: mode에 따라 signal / review / blocking으로 승격 가능
+- `signal_only`에서는 candidate가 `requiresReview=true`가 되지 않는다
+- `blocking`에서는 high confidence conflict에 걸린 candidate도 manual review 대상이 된다
 
 운영 해석:
-- confidence conflict는 지금 단계에서는 approve/reject 운영 루프 대상이 아니다
-- 실제 운영에서 confidence만으로 promote를 막아야 한다면 후속 정책 강화가 필요하다
+- 보수적인 workflow가 아니면 기본값 `signal_only`가 안전하다
+- 운영 리스크가 높은 workflow만 `review` 또는 `blocking`으로 올리는 편이 현실적이다
 
 ---
 
@@ -207,7 +225,7 @@ const summary = await runtime.reapplyApprovedTKGReviewQueueItems("my-workflow", 
 
 - contradiction는 수동 승인 없이 truth로 승격하지 않는다
 - version conflict도 contradiction와 동일하게 queue 기반 수동 검토 대상으로 본다
-- confidence conflict는 현재 구현에서 보조 signal 성격이 강하므로 conflict summary로 해석한다
+- confidence conflict는 workflow risk에 따라 `signal_only` / `review` / `blocking`으로 운영한다
 - approve는 단순 버튼이 아니라 **shared memory truth 승격 승인**으로 취급한다
 - reject는 실패가 아니라 noisy / stale 상태를 정리하는 정상 운영 액션이다
 
@@ -215,7 +233,7 @@ const summary = await runtime.reapplyApprovedTKGReviewQueueItems("my-workflow", 
 
 ## 현재 한계
 
-- confidence conflict를 언제 blocking/manual-review로 승격할지 정책이 아직 없다
+- confidence conflict mode를 workflow별로 어떻게 표준화할지 운영 기준은 더 다듬을 여지가 있다
 - no-op / apply skipped / review-queue-only 케이스를 더 잘 드러내는 표준 debug 출력은 추가 여지가 있다
 
 즉, 현재 review queue는 **핵심 운영 루프는 가능하지만 정책은 아직 완전 마감 전** 상태로 보는 것이 정확하다.

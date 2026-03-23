@@ -1385,6 +1385,103 @@ describe("OboraRuntime facade", () => {
     });
   });
 
+  it("can escalate high confidence conflicts to blocking review queue via config", async () => {
+    const stagingStore = {
+      _data: new Map<string, { nodes: any[] }>(),
+      async load(scope: MemoryScope) {
+        return (this as any)._data.get(`${scope.level}:${scope.key}`) ?? null;
+      },
+      async save(scope: MemoryScope, snapshot: { nodes: any[] }) {
+        (this as any)._data.set(`${scope.level}:${scope.key}`, snapshot);
+      },
+      async append(scope: MemoryScope, nodes: any[]) {
+        const existing = (await this.load(scope)) ?? { nodes: [] };
+        await this.save(scope, { nodes: [...existing.nodes, ...nodes] });
+      },
+    };
+    const reviewQueueStore = {
+      _data: new Map<string, { items: any[] }>(),
+      async load(scope: MemoryScope) {
+        return (this as any)._data.get(`${scope.level}:${scope.key}`) ?? null;
+      },
+      async save(scope: MemoryScope, snapshot: { items: any[] }) {
+        (this as any)._data.set(`${scope.level}:${scope.key}`, snapshot);
+      },
+      async enqueue(scope: MemoryScope, item: any) {
+        const existing = (await this.load(scope)) ?? { items: [] };
+        await this.save(scope, { items: [...existing.items, item] });
+      },
+    };
+
+    await (stagingStore as any).save(
+      { level: "project", key: "test-project" },
+      {
+        nodes: [
+          {
+            id: "n1",
+            eventType: "workflow.validation_passed",
+            executionId: "seed-exec",
+            workflowName: "tkg-confidence-blocking-run",
+            stepName: "review",
+            timestamp: new Date().toISOString(),
+            summary: "Validation passed",
+            attributes: { confidence: 0.95 },
+            relations: [],
+          },
+          {
+            id: "n2",
+            eventType: "workflow.repair_completed",
+            executionId: "seed-exec",
+            workflowName: "tkg-confidence-blocking-run",
+            stepName: "review",
+            timestamp: new Date().toISOString(),
+            summary: "Repair completed",
+            attributes: { confidence: 0.2 },
+            relations: [],
+          },
+        ],
+      },
+    );
+
+    const runtime = new OboraRuntime({
+      tkgProjection: {
+        enabled: true,
+        adapter: "custom",
+        custom: { instance: stagingStore as any },
+        file: { projectKey: "test-project", scopes: ["project"] },
+        promotion: {
+          confidenceConflictMode: "blocking",
+        },
+        reviewQueue: {
+          enabled: true,
+          adapter: "custom",
+          custom: { instance: reviewQueueStore as any },
+        },
+      },
+    });
+
+    runtime.define("tkg-confidence-blocking-run", {
+      name: "tkg-confidence-blocking-run",
+      tkgProjection: { enabled: true },
+      steps: [],
+    });
+
+    const handle = await runtime.run("tkg-confidence-blocking-run");
+    const result = await handle.wait();
+
+    const snapshot = await (reviewQueueStore as any).load({ level: "project", key: "test-project" });
+    expect(snapshot?.items).toHaveLength(1);
+    expect(snapshot?.items[0]?.conflicts).toEqual([
+      expect.objectContaining({ type: "confidence", severity: "high" }),
+    ]);
+    expect(snapshot?.items[0]?.candidateNodeIds).toEqual(["n1", "n2"]);
+    expect(result.outputs.__tkg_review_queue__).toEqual({
+      trigger: "execution_end",
+      scope: "project:test-project",
+      queuedItems: 1,
+    });
+  });
+
   it("applies promotable TKG candidates into shared memory when conflicts do not block promotion", async () => {
     const sharedMemoryStore = createInMemorySharedMemoryStore();
     const stagingStore = {

@@ -246,6 +246,11 @@ export type TKGPromotionEvaluationMode =
   | "current_execution"
   | "latest_effective";
 
+export type TKGConfidenceConflictMode =
+  | "signal_only"
+  | "review"
+  | "blocking";
+
 export interface TKGProjectionConfig {
   enabled?: boolean;
   adapter?: "file" | "custom";
@@ -261,6 +266,7 @@ export interface TKGProjectionConfig {
     enabled?: boolean;
     minConfidence?: number;
     confidenceSpreadThreshold?: number;
+    confidenceConflictMode?: TKGConfidenceConflictMode;
     allowedEventTypes?: import("./tkg/store.js").ProjectableTKGEventType[];
     applyScopes?: import("./shared-memory/store.js").MemoryScopeLevel[];
     triggers?: TKGPromotionTrigger[];

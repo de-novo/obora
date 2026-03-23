@@ -1,4 +1,7 @@
-import type { TKGPromotionEvaluationMode } from "../runtime-types.js";
+import type {
+  TKGConfidenceConflictMode,
+  TKGPromotionEvaluationMode,
+} from "../runtime-types.js";
 import type { StagingTKGSnapshot, TemporalNode } from "./store.js";
 
 export type TKGConflictType = "contradiction" | "version" | "confidence";
@@ -36,13 +39,44 @@ export interface TKGPromotionSummary {
   reviewQueueCount: number;
 }
 
-function isBlockingConflictType(type: TKGConflictType): boolean {
+function isAlwaysBlockingConflictType(type: TKGConflictType): boolean {
   return type === "contradiction" || type === "version";
+}
+
+function resolveConfidenceConflictMode(options: TKGPromotionOptions): TKGConfidenceConflictMode {
+  return options.confidenceConflictMode ?? "signal_only";
+}
+
+function isBlockingConflict(
+  conflict: TKGConflict,
+  confidenceConflictMode: TKGConfidenceConflictMode,
+): boolean {
+  if (isAlwaysBlockingConflictType(conflict.type)) {
+    return true;
+  }
+
+  return conflict.type === "confidence"
+    && confidenceConflictMode === "blocking"
+    && conflict.severity === "high";
+}
+
+function isReviewQueueConflict(
+  conflict: TKGConflict,
+  confidenceConflictMode: TKGConfidenceConflictMode,
+): boolean {
+  if (isAlwaysBlockingConflictType(conflict.type)) {
+    return true;
+  }
+
+  return conflict.type === "confidence"
+    && conflict.severity === "high"
+    && confidenceConflictMode !== "signal_only";
 }
 
 export interface TKGPromotionOptions {
   minConfidence?: number;
   confidenceSpreadThreshold?: number;
+  confidenceConflictMode?: TKGConfidenceConflictMode;
   executionId?: string;
   evaluationMode?: TKGPromotionEvaluationMode;
   latestEffectiveOnly?: boolean;
@@ -203,10 +237,11 @@ export function evaluateTKGPromotion(
 ): TKGPromotionEvaluation {
   const normalizedSnapshot = normalizeTKGPromotionSnapshot(snapshot, options);
   const minConfidence = options.minConfidence ?? 0.8;
+  const confidenceConflictMode = resolveConfidenceConflictMode(options);
   const conflicts = detectTKGConflicts(normalizedSnapshot, options);
   const blockingNodeIds = new Set(
     conflicts
-      .filter((conflict) => isBlockingConflictType(conflict.type))
+      .filter((conflict) => isBlockingConflict(conflict, confidenceConflictMode))
       .flatMap((conflict) => conflict.nodeIds),
   );
 
@@ -232,12 +267,12 @@ export function evaluateTKGPromotion(
         rationale: promote
           ? "Confidence threshold met and no blocking conflicts detected."
           : requiresReview
-            ? "Blocking contradiction/version conflict requires manual review."
+            ? "Promotion conflict policy requires manual review."
             : "Confidence below promotion threshold.",
       } satisfies PromotionCandidate;
     });
 
-  const reviewQueue = conflicts.filter((conflict) => isBlockingConflictType(conflict.type));
+  const reviewQueue = conflicts.filter((conflict) => isReviewQueueConflict(conflict, confidenceConflictMode));
 
   return {
     candidates,
