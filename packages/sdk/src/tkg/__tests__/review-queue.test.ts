@@ -36,7 +36,7 @@ function makeSnapshot(id: string): TKGReviewQueueSnapshot {
           promotableCount: 1,
           reviewCandidateCount: 1,
           conflictCount: 2,
-          reviewQueueCount: 2,
+          reviewQueueCount: 1,
         },
       },
     ],

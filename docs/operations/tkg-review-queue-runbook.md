@@ -36,21 +36,19 @@ review queue는 단순 저장소가 아니라, 아래 운영 루프를 위한 �
 | conflict type | severity | promotion block | review queue enqueue | 비고 |
 |---|---:|---:|---:|---|
 | `contradiction` | `high` | 예 | 예 | 같은 step에 `validation_failed`와 `validation_passed`가 동시에 존재 |
-| `version` | `medium` | 예 | 아니오 | 같은 step에 promotable version이 여러 개 존재 |
+| `version` | `medium` | 예 | 예 | 같은 step에 promotable version이 여러 개 존재 |
 | `confidence` | `medium` | 아니오 | 아니오 | spread가 threshold 이상이지만 high는 아님 |
-| `confidence` | `high` | 아니오 | 예 | operator visibility용 queue. 현재는 promotion 자체를 막지 않음 |
+| `confidence` | `high` | 아니오 | 아니오 | 현재는 operator signal로만 남고 queue에는 올리지 않음 |
 
 핵심은 아래 두 줄입니다.
 
 - **blocking conflict**: `contradiction`, `version`
-- **queue 대상**: `severity === high`
+- **queue 대상**: blocking conflict 전체
 
-즉, 현재는 다음이 가능합니다.
+즉, 현재는 review queue의 의미가 더 단순하다.
 
-- `version` conflict는 **promotion을 막지만 queue에는 안 들어감**
-- `confidence` high conflict는 **queue에는 들어가지만 promotion을 직접 막지는 않음**
-
-이건 현재 구현 의도와 운영 UX가 완전히 일치한다고 보긴 어렵기 때문에, 운영 시 아래 주의사항을 같이 봐야 한다.
+- queue에 들어온 것은 **수동 검토가 실제로 필요한 blocking conflict**다
+- `confidence` conflict는 summary/conflict signal에는 남지만, approve/reject 루프 대상으로는 취급하지 않는다
 
 ---
 
@@ -71,30 +69,29 @@ review queue는 단순 저장소가 아니라, 아래 운영 루프를 위한 �
 
 ### 2. version
 
-현재 구현에서는 **blocking이지만 queue item을 자동 생성하지 않습니다.**
+현재 구현에서는 **blocking이며 queue item도 자동 생성됩니다.**
 
 즉 증상은 다음처럼 보일 수 있습니다.
 
 - `promotableCount`가 기대보다 낮음
-- review queue는 비어 있음
-- apply가 안 됨
+- review queue에 version conflict item이 생성됨
+- apply는 보류됨
 
 운영 해석:
-- queue가 없다고 해서 conflict가 없는 것이 아님
-- version conflict는 현재 단계에서는 **silent block**에 가깝다
-- long-run에서는 `latest_effective`를 우선 사용해 version 충돌을 줄이는 것이 1차 대응이다
+- contradiction와 마찬가지로 운영자 확인 후 approve/reject해야 하는 대상이다
+- long-run에서는 `latest_effective`를 우선 사용해 version 충돌 자체를 줄이는 것이 1차 대응이다
 
 ### 3. confidence
 
 `confidence`는 현재 **operator signal**로 취급된다.
 
-- `medium`: 그냥 지표로만 남음
-- `high`: review queue에는 들어갈 수 있음
-- 하지만 confidence만으로는 candidate가 `requiresReview=true`가 되지 않으므로, promotion block과 review 재적용의 semantics가 contradiction/version보다 약하다
+- `medium`: 지표로만 남음
+- `high`: 더 강한 경고이지만 여전히 queue로 올리지는 않음
+- confidence만으로는 candidate가 `requiresReview=true`가 되지 않는다
 
 운영 해석:
-- confidence-only queue item은 “승인 후 재적용”보다는 **관찰/감사 포인트**로 보는 편이 맞다
-- 실제 운영에서 promote를 막아야 하는 confidence policy가 필요하면 후속 정책 강화가 필요하다
+- confidence conflict는 지금 단계에서는 approve/reject 운영 루프 대상이 아니다
+- 실제 운영에서 confidence만으로 promote를 막아야 한다면 후속 정책 강화가 필요하다
 
 ---
 
@@ -173,8 +170,8 @@ const summary = await runtime.reapplyApprovedTKGReviewQueueItems("my-workflow", 
 ### 케이스 1. queue item이 생겼다
 
 의미:
-- high severity conflict가 있었다
-- contradiction이거나 high confidence일 가능성이 높다
+- blocking conflict가 있었다
+- contradiction이거나 version conflict일 가능성이 높다
 
 우선 확인:
 - `candidateNodeIds`가 비었는지
@@ -183,12 +180,14 @@ const summary = await runtime.reapplyApprovedTKGReviewQueueItems("my-workflow", 
 ### 케이스 2. promote가 안 됐는데 queue도 없다
 
 가장 먼저 의심할 것:
-- `version` conflict
+- `confidence` signal만 있었는지
+- 단순 low-confidence로 promote가 안 된 것인지
 - `evaluationMode`가 `full_history`라서 누적 이력이 많이 섞였는지
 
 대응:
 - 중간 trigger에서 `latest_effective` 적용 여부 확인
 - debug trace의 `candidateCount / promotableCount / reviewQueueCount` 확인
+- conflict summary에 version/contradiction이 실제 없는지 확인
 
 ### 케이스 3. approve했는데 재적용 효과가 없다
 
@@ -207,8 +206,8 @@ const summary = await runtime.reapplyApprovedTKGReviewQueueItems("my-workflow", 
 ## 운영 원칙
 
 - contradiction는 수동 승인 없이 truth로 승격하지 않는다
-- version conflict는 queue가 없더라도 blocking 상태로 해석한다
-- confidence conflict는 현재 구현에서 보조 signal 성격이 강하므로 note를 남겨 운영 맥락을 보존한다
+- version conflict도 contradiction와 동일하게 queue 기반 수동 검토 대상으로 본다
+- confidence conflict는 현재 구현에서 보조 signal 성격이 강하므로 conflict summary로 해석한다
 - approve는 단순 버튼이 아니라 **shared memory truth 승격 승인**으로 취급한다
 - reject는 실패가 아니라 noisy / stale 상태를 정리하는 정상 운영 액션이다
 
@@ -216,8 +215,7 @@ const summary = await runtime.reapplyApprovedTKGReviewQueueItems("my-workflow", 
 
 ## 현재 한계
 
-- version conflict용 전용 queue 정책이 아직 없다
-- confidence-only queue item은 signal과 action semantics가 완전히 정렬돼 있지 않다
+- confidence conflict를 언제 blocking/manual-review로 승격할지 정책이 아직 없다
 - no-op / apply skipped / review-queue-only 케이스를 더 잘 드러내는 표준 debug 출력은 추가 여지가 있다
 
 즉, 현재 review queue는 **핵심 운영 루프는 가능하지만 정책은 아직 완전 마감 전** 상태로 보는 것이 정확하다.

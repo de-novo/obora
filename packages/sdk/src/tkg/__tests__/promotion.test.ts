@@ -72,8 +72,41 @@ describe("TKG promotion evaluation", () => {
       promotableCount: 1,
       reviewCandidateCount: 1,
       conflictCount: 2,
-      reviewQueueCount: 2,
+      reviewQueueCount: 1,
     });
+  });
+
+  it("queues blocking version conflicts for manual review", () => {
+    const evaluation = evaluateTKGPromotion({
+      nodes: [
+        {
+          id: "n1",
+          eventType: "workflow.validation_passed",
+          executionId: "exec-1",
+          workflowName: "demo",
+          stepName: "validate",
+          timestamp: new Date().toISOString(),
+          summary: "Validation passed v1",
+          attributes: {},
+          relations: [],
+        },
+        {
+          id: "n2",
+          eventType: "workflow.validation_passed",
+          executionId: "exec-1",
+          workflowName: "demo",
+          stepName: "validate",
+          timestamp: new Date().toISOString(),
+          summary: "Validation passed v2",
+          attributes: {},
+          relations: [],
+        },
+      ],
+    });
+
+    expect(evaluation.conflicts.some((conflict) => conflict.type === "version")).toBe(true);
+    expect(evaluation.reviewQueue.some((conflict) => conflict.type === "version")).toBe(true);
+    expect(evaluation.candidates.every((candidate) => candidate.requiresReview)).toBe(true);
   });
 
   it("can evaluate only the current execution when requested", () => {

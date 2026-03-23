@@ -36,6 +36,10 @@ export interface TKGPromotionSummary {
   reviewQueueCount: number;
 }
 
+function isBlockingConflictType(type: TKGConflictType): boolean {
+  return type === "contradiction" || type === "version";
+}
+
 export interface TKGPromotionOptions {
   minConfidence?: number;
   confidenceSpreadThreshold?: number;
@@ -202,7 +206,7 @@ export function evaluateTKGPromotion(
   const conflicts = detectTKGConflicts(normalizedSnapshot, options);
   const blockingNodeIds = new Set(
     conflicts
-      .filter((conflict) => conflict.type === "contradiction" || conflict.type === "version")
+      .filter((conflict) => isBlockingConflictType(conflict.type))
       .flatMap((conflict) => conflict.nodeIds),
   );
 
@@ -233,7 +237,7 @@ export function evaluateTKGPromotion(
       } satisfies PromotionCandidate;
     });
 
-  const reviewQueue = conflicts.filter((conflict) => conflict.severity === "high");
+  const reviewQueue = conflicts.filter((conflict) => isBlockingConflictType(conflict.type));
 
   return {
     candidates,

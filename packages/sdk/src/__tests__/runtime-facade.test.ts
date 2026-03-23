@@ -1168,7 +1168,7 @@ describe("OboraRuntime facade", () => {
       promotableCount: 1,
       reviewCandidateCount: 1,
       conflictCount: 2,
-      reviewQueueCount: 2,
+      reviewQueueCount: 1,
     });
   });
 
@@ -1253,7 +1253,7 @@ describe("OboraRuntime facade", () => {
     ]);
   });
 
-  it("stores high-severity promotion conflicts in the TKG review queue", async () => {
+  it("stores blocking promotion conflicts in the TKG review queue", async () => {
     const stagingStore = {
       _data: new Map<string, { nodes: any[] }>(),
       async load(scope: MemoryScope) {
@@ -1376,11 +1376,12 @@ describe("OboraRuntime facade", () => {
     expect(snapshot?.items).toHaveLength(1);
     expect(snapshot?.items[0]?.workflowName).toBe("tkg-review-queue-run");
     expect(snapshot?.items[0]?.candidateNodeIds).toHaveLength(1);
-    expect(snapshot?.items[0]?.conflicts).toHaveLength(2);
+    expect(snapshot?.items[0]?.conflicts).toHaveLength(1);
+    expect(snapshot?.items[0]?.conflicts[0]?.type).toBe("contradiction");
     expect(result.outputs.__tkg_review_queue__).toEqual({
       trigger: "execution_end",
       scope: "project:test-project",
-      queuedItems: 2,
+      queuedItems: 1,
     });
   });
 
