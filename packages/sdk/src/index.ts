@@ -290,3 +290,11 @@ export {
   WebhookAlertChannel,
   ConsoleAlertChannel,
 } from "./alerting/index.js";
+export {
+  MetricsCollector,
+  OBORA_METRICS,
+  type MetricPoint,
+  type HistogramBucket,
+  type HistogramMetric,
+  type MetricsSnapshot,
+} from "./metrics/index.js";

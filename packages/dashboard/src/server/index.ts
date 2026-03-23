@@ -23,6 +23,8 @@ import { createChannel } from './notification/channel-factory.js';
 import { registerNotificationRoutes } from './routes/notification.js';
 import { AdapterHistoryStore, InMemoryHistoryStore, type HistoryStore } from './history/history-store.js';
 import { registerHistoryRoutes } from './routes/history.js';
+import { registerDLQRoutes } from './routes/dlq.js';
+import { registerMetricsRoutes } from './routes/metrics.js';
 
 export interface DashboardServerDependencies {
   auditStore?: AuditStore;
@@ -140,6 +142,8 @@ export const createDashboardServer = async (
   registerPolicyRoutes(app, config.apiBasePath, policyStore, policyEngine, hotReloadAuditTrail);
   registerNotificationRoutes(app, config.apiBasePath, notificationEngine);
   registerHistoryRoutes(app, config.apiBasePath, historyStore);
+  registerDLQRoutes(app, config.apiBasePath, { dlqFilePath: process.env.OBORA_DLQ_PATH });
+  registerMetricsRoutes(app, config.apiBasePath);
 
   const indexPath = join(config.staticDir, 'index.html');
   if (existsSync(indexPath)) {
