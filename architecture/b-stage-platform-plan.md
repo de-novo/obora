@@ -114,7 +114,7 @@ B 단계의 목표는 **기능 추가 자체보다 실행 일관성, 관측 가�
 - [x] `latestEffectiveOnly`를 정책 옵션으로 정식 승격
 - [x] execution/window/step 단위 평가 전략 정리
 - [x] `execution_end` 평가와 중간 trigger 평가를 구분
-- [ ] contradiction/version/confidence conflict가 언제 review queue로 가는지 명시
+- [x] contradiction/version/confidence conflict가 언제 review queue로 가는지 명시
 - [x] overnight-builder에서 실제로 useful shared memory가 남는지 재검증
 
 #### 완료 기준
@@ -177,8 +177,8 @@ B 단계의 목표는 **기능 추가 자체보다 실행 일관성, 관측 가�
 - [ ] Shared Memory 설정 가이드
 - [ ] TKG 설정 가이드
 - [ ] trigger checkpoint 가이드
-- [ ] review queue 운영 가이드
-- [ ] rollback restore 가이드
+- [x] review queue 운영 가이드
+- [x] rollback restore 가이드
 - [ ] source/dist mismatch troubleshooting
 - [ ] no-op / review queue only / apply skipped case guide
 

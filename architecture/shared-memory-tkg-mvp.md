@@ -199,8 +199,8 @@ export 제외:
 
 ### 아직 남은 것
 - promotion policy 추가 정교화 (noise suppression / category strategy)
-- review queue 승인 결과의 운영 정책 문서화
-- rollback restore 경로(복원 실행) 명시화
+- review queue 승인 결과의 운영 정책 문서화 ✅
+- rollback restore 경로(복원 실행) 명시화 ✅
 - 전체 repo 기준 typecheck 적체와 분리된 마감 정리
 - commit / changelog / 문서 polish
 

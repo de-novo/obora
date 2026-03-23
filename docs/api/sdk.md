@@ -166,6 +166,70 @@ interface PersistedRepairLoopSummary {
 
 If `metadata.repairLoop` is absent, consumers can fall back to `runtime.getRunAuditTimeline(runId)` / `runtime.runs.auditReplay(runId)` and reconstruct the summary from raw events.
 
+### TKG manual operation helpers
+
+When `sharedMemory` + `tkgProjection` are enabled for a workflow, `OboraRuntime` also exposes manual operation helpers for the review/rollback loop.
+
+#### list open review queue items
+
+```ts
+const items = await runtime.listOpenTKGReviewQueueItems("my-workflow");
+```
+
+Returns open `TKGReviewQueueItem[]` for the workflow's resolved TKG projection scope.
+
+#### resolve a review queue item
+
+```ts
+await runtime.resolveTKGReviewQueueItem("my-workflow", itemId, {
+  status: "approved",
+  actor: "cto",
+  note: "latest validated state is safe to promote",
+});
+```
+
+Or reject:
+
+```ts
+await runtime.resolveTKGReviewQueueItem("my-workflow", itemId, {
+  status: "rejected",
+  actor: "cto",
+  note: "stale contradiction from older run",
+});
+```
+
+Returns a `TKGReviewQueueResolutionSummary`.
+
+#### re-apply approved review queue items
+
+```ts
+const summary = await runtime.reapplyApprovedTKGReviewQueueItems("my-workflow", {
+  sourceExecutionId: "manual-review-2026-03-23",
+});
+```
+
+Returns a `TKGApprovedReviewQueueApplySummary`.
+Current behavior:
+- dedupes by fact / decision id on re-apply
+- records approved resolution audit into `sharedMemory.decisions.history`
+
+#### restore latest or specific rollback snapshot
+
+```ts
+await runtime.restoreLatestTKGRollback("my-workflow");
+```
+
+```ts
+await runtime.restoreLatestTKGRollback("my-workflow", {
+  rollbackId: "rollback-123",
+});
+```
+
+Returns a `TKGRollbackRestoreSummary`.
+Current behavior:
+- restores by overwriting the target shared-memory scope with the stored snapshot
+- if `rollbackId` is omitted, the latest rollback entry is used
+
 ### Artifact diagnosis endpoints
 
 When using the dashboard history surface, related artifact access is available through:
