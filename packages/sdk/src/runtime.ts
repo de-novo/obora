@@ -36,6 +36,8 @@ import { EventBus } from "./events/event-bus.js";
 import { PersistenceManager } from "./persistence/persistence-manager.js";
 import { WorkflowRunner } from "./execution/workflow-runner.js";
 import { RunQuery } from "./query/run-query.js";
+import { type DLQStore, createDLQEntry, FileDLQStore } from "./dlq/index.js";
+import { type ExecutionLock, FileExecutionLock } from "./execution/execution-lock.js";
 
 // Re-export all types from runtime-types so existing imports keep working
 export {
@@ -112,6 +114,8 @@ export class OboraRuntime {
   private readonly persistenceManager: PersistenceManager;
   private readonly runner: WorkflowRunner;
   private readonly query: RunQuery;
+  private readonly dlqStore?: DLQStore;
+  private readonly executionLock?: ExecutionLock;
 
   // ── Policy ───────────────────────────────────────────────────────────────
   private policy?: PolicyDefinition;
@@ -128,6 +132,18 @@ export class OboraRuntime {
       persistenceManager: this.persistenceManager,
       agents: this.agents,
     });
+
+    // P0: DLQ store initialization
+    if (config.dlq?.enabled) {
+      const dlqPath = config.dlq.filePath ?? ".obora/dlq/dead-letters.json";
+      this.dlqStore = new FileDLQStore(dlqPath);
+    }
+
+    // P0: Execution lock initialization
+    if (config.executionLock?.enabled) {
+      const lockPath = config.executionLock.basePath ?? ".obora/locks";
+      this.executionLock = new FileExecutionLock(lockPath, config.executionLock.staleLockThresholdMs);
+    }
 
     if (config.policyPath) {
       this.policyLoadPromise = Policy.fromYaml(config.policyPath)
@@ -297,6 +313,18 @@ export class OboraRuntime {
     const executionId = randomUUID();
     const workflow = this.workflows.get(name)!;
 
+    // P0: Acquire execution lock if enabled
+    if (this.executionLock) {
+      const acquired = await this.executionLock.acquire(name, executionId);
+      if (!acquired) {
+        throw new OboraError(
+          `Another execution of workflow "${name}" is already running. Use executionLock.staleLockThresholdMs to configure stale lock detection.`,
+          OboraErrorCode.SDK_UNKNOWN_ERROR,
+          executionId,
+        );
+      }
+    }
+
     const execution: RuntimeExecution = {
       id: executionId,
       workflowName: name,
@@ -375,6 +403,90 @@ export class OboraRuntime {
             persistenceConfig,
           );
 
+          // P0: Auto-rollback on execution failure (not budget exceeded)
+          if (!budgetExceeded) {
+            try {
+              const workflowDef = this.workflows.get(name);
+              if (!workflowDef) throw new Error(`Workflow not found: ${name}`);
+              const rollbackResult = await this.runner.rollbackTKGOnExecutionFailure(
+                executionId,
+                name,
+                workflowDef,
+              );
+              if (rollbackResult.restored) {
+                await this.eventBus.emit("warning", executionId, {
+                  message: `Auto-rollback completed: ${rollbackResult.restoredFactCount} facts restored`,
+                  code: "TKG_AUTO_ROLLBACK_SUCCESS",
+                });
+              }
+            } catch (rollbackErr) {
+              // Log rollback failure but don't block execution end
+              await this.eventBus.emit("warning", executionId, {
+                message: `Auto-rollback failed: ${rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr)}`,
+                code: "TKG_AUTO_ROLLBACK_FAILED",
+              });
+            }
+          }
+
+          // P0: DLQ — capture unrecoverable failures
+          if (this.dlqStore && !budgetExceeded) {
+            try {
+              const dlqEntry = createDLQEntry({
+                executionId,
+                workflowName: name,
+                errorCode,
+                errorMessage: execution.error ?? "Unknown error",
+                errorStack: error instanceof Error ? error.stack : undefined,
+                repairAttempts: 0,  // TODO: extract from repair loop summary
+              });
+              await this.dlqStore.append(dlqEntry);
+              await this.eventBus.emit("warning", executionId, {
+                message: `Failure captured in DLQ: ${dlqEntry.id}`,
+                code: "DLQ_ENTRY_CREATED",
+              });
+            } catch (dlqErr) {
+              // Don't block execution end for DLQ failures
+              if (this.config.verbose) {
+                console.warn("[DLQ] Failed to append entry:", dlqErr);
+              }
+            }
+          }
+
+          // P0: Auto-recovery from checkpoint
+          const autoRecovery = this.config.autoRecovery;
+          if (autoRecovery?.enabled && !budgetExceeded) {
+            const maxRetries = autoRecovery.maxRetries ?? 1;
+            const delayMs = autoRecovery.delayMs ?? 5000;
+            const driftPolicy = autoRecovery.driftPolicy ?? "warn";
+
+            for (let attempt = 0; attempt < maxRetries; attempt++) {
+              try {
+                if (delayMs > 0) {
+                  await new Promise((r) => setTimeout(r, delayMs));
+                }
+                await this.eventBus.emit("warning", executionId, {
+                  message: `Auto-recovery attempt ${attempt + 1}/${maxRetries} from checkpoint`,
+                  code: "AUTO_RECOVERY_ATTEMPT",
+                });
+                const resumeResult = await this.resume(executionId, { driftPolicy });
+                if (resumeResult.execution.status === "completed") {
+                  // Recovery succeeded — resolve instead of reject
+                  status = "completed";
+                  execution.status = "completed";
+                  execution.endedAt = new Date();
+                  this.executions.set(executionId, structuredClone(execution));
+                  resolve(structuredClone(execution));
+                  return;
+                }
+              } catch (recoveryErr) {
+                await this.eventBus.emit("warning", executionId, {
+                  message: `Auto-recovery attempt ${attempt + 1} failed: ${recoveryErr instanceof Error ? recoveryErr.message : String(recoveryErr)}`,
+                  code: "AUTO_RECOVERY_FAILED",
+                });
+              }
+            }
+          }
+
           await this.eventBus.emit("error", executionId, {
             message: execution.error,
             code: errorCode,
@@ -400,6 +512,15 @@ export class OboraRuntime {
           }
           signalAbortListener?.();
           signalAbortListener = undefined;
+
+          // P0: Release execution lock
+          if (this.executionLock) {
+            try {
+              await this.executionLock.release(name);
+            } catch {
+              // Best-effort release
+            }
+          }
         }
       });
     });

@@ -305,4 +305,22 @@ export interface OboraRuntimeConfig {
   artifacts?: ArtifactsConfig;
   sharedMemory?: SharedMemoryConfig;
   tkgProjection?: TKGProjectionConfig;
+  /** Dead Letter Queue configuration for unrecoverable failures */
+  dlq?: {
+    enabled?: boolean;
+    filePath?: string;
+  };
+  /** Execution lock configuration to prevent concurrent runs */
+  executionLock?: {
+    enabled?: boolean;
+    basePath?: string;
+    staleLockThresholdMs?: number;
+  };
+  /** Auto-recovery: automatically resume from checkpoint on failure */
+  autoRecovery?: {
+    enabled?: boolean;
+    maxRetries?: number;
+    delayMs?: number;
+    driftPolicy?: "reject" | "warn" | "ignore";
+  };
 }

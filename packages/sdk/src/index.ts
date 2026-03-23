@@ -254,3 +254,39 @@ export type {
   StepDiff,
   NonDeterminismWarning,
 } from "./replay.js";
+export {
+  type DLQEntry,
+  type DLQSnapshot,
+  type DLQStore,
+  type DLQSummary,
+  createDLQEntry,
+  summarizeDLQ,
+  resolveDLQEntry,
+  FileDLQStore,
+} from "./dlq/index.js";
+export {
+  CircuitBreaker,
+  CircuitOpenError,
+  type CircuitBreakerConfig,
+  type CircuitState,
+} from "./execution/circuit-breaker.js";
+export {
+  type ExecutionLock,
+  FileExecutionLock,
+} from "./execution/execution-lock.js";
+export {
+  HealthChecker,
+  createStuckExecutionCheck,
+  type HealthStatus,
+  type HealthCheckResult,
+  type HealthCheckConfig,
+  type HealthCheckFn,
+} from "./execution/health-check.js";
+export {
+  type Alert,
+  type AlertChannel,
+  type AlertingConfig,
+  AlertManager,
+  WebhookAlertChannel,
+  ConsoleAlertChannel,
+} from "./alerting/index.js";

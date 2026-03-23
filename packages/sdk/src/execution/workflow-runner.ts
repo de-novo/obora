@@ -2721,4 +2721,31 @@ export class WorkflowRunner {
 
     return execution;
   }
+
+  /**
+   * P0: Auto-rollback on execution failure
+   * Called from runtime.ts catch block when execution fails (not budget exceeded)
+   */
+  async rollbackTKGOnExecutionFailure(
+    executionId: string,
+    workflowName: string,
+    workflow: WorkflowDef,
+  ): Promise<TKGRollbackRestoreSummary> {
+    const { config } = this.deps;
+    
+    try {
+      const result = await this.restoreLatestTKGRollback(workflow);
+      
+      if (result.restored && config.verbose) {
+        console.log(`[TKG] Auto-rollback completed for execution ${executionId}: ${result.restoredFactCount} facts restored`);
+      }
+      
+      return result;
+    } catch (err) {
+      if (config.verbose) {
+        console.warn(`[TKG] Auto-rollback failed for execution ${executionId}:`, err);
+      }
+      throw err;
+    }
+  }
 }
