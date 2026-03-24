@@ -53,6 +53,21 @@ tkgProjection:
     file:
       basePath: /Users/denovo/workspace/github/obora-kit/experiments/overnight-builder/data/.obora/tkg-rollback
 
+dlq:
+  enabled: true
+  filePath: /Users/denovo/workspace/github/obora-kit/experiments/overnight-builder/data/.obora/dlq/dead-letters.json
+
+executionLock:
+  enabled: true
+  basePath: /Users/denovo/workspace/github/obora-kit/experiments/overnight-builder/data/.obora/locks
+  staleLockThresholdMs: 7200000
+
+autoRecovery:
+  enabled: true
+  maxRetries: 1
+  delayMs: 5000
+  driftPolicy: warn
+
 defaults:
   provider: zai
   model: glm-4.7
