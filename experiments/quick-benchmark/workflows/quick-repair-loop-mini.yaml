@@ -1,0 +1,29 @@
+# Quick Benchmark: Repair Loop Mini
+#
+# 매우 단순화된 repair loop 테스트
+
+name: quick-benchmark-repair-loop-mini
+version: "1.0"
+
+steps:
+  - name: implement
+    agent: solver
+    input:
+      task: |
+        Fix this bug: function add(a, b) { return a - b; }
+        It should return a + b instead.
+
+        Write the fixed code to: {{output_dir}}/solution.js
+
+        Just write: function add(a, b) { return a + b; }
+
+  - name: validate
+    agent: validator
+    depends_on: [implement]
+    input:
+      task: |
+        Check if {{output_dir}}/solution.js contains "a + b".
+        Return PASS if it does, FAIL if it contains "a - b".
+    on_fail:
+      goto: implement
+      max_iterations: 2

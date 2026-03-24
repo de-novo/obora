@@ -1,0 +1,19 @@
+# Quick Benchmark: Baseline Simple (No Harness)
+#
+# 단일 step으로 단순화
+
+name: quick-benchmark-baseline-simple
+version: "1.0"
+
+steps:
+  - name: implement
+    agent: solver
+    input:
+      task: |
+        Read the coding task and implement the fix.
+
+        Task file: {{issue_file}}
+
+        Write the solution to: {{output_dir}}/solution.js
+
+        Keep it simple. Just write the code.

@@ -1,0 +1,53 @@
+# Quick Benchmark: Repair Loop Simple
+#
+# 단일 step으로 단순화 + repair loop
+
+name: quick-benchmark-repair-loop-simple
+version: "1.0"
+
+hooks:
+  post_step:
+    shell: |
+      cd {{output_dir}}
+      if [ -f solution.js ] && [ -f test.js ]; then
+        node test.js 2>&1 | tee test-output.log
+        exit ${PIPESTATUS[0]}
+      else
+        echo "SKIP: solution.js or test.js not found"
+      fi
+
+steps:
+  - name: implement_or_repair
+    agent: solver
+    config:
+      repair_loop:
+        enabled: true
+        validation_step: validate
+        max_no_progress_iterations: 2
+    input:
+      task: |
+        Read the coding task and implement the fix.
+
+        Task file: {{issue_file}}
+
+        Write TWO files:
+        1. {{output_dir}}/solution.js - The implementation
+        2. {{output_dir}}/test.js - A test script that validates the solution
+
+        If this is a REPAIR attempt, review the test output and fix the issues.
+
+  - name: validate
+    agent: validator
+    depends_on: [implement_or_repair]
+    config:
+      validation:
+        enabled: true
+        emit_structured_result: true
+    input:
+      task: |
+        Validate the implementation by checking the test output.
+        Return PASS if tests pass, FAIL otherwise.
+    on_fail:
+      goto: implement_or_repair
+      max_iterations: 3
+      escalate_on_exhaust: fail
