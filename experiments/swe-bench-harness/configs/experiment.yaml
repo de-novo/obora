@@ -1,0 +1,23 @@
+# SWE-bench Experiment Configuration
+
+llm:
+  provider: ${PROVIDER:-zai}
+  model: ${MODEL:-glm-4.7}
+
+runtime:
+  maxSteps: 100
+  timeout: ${TIMEOUT:-600000}
+
+logging:
+  level: info
+  file: {{output_dir}}/obora.log
+
+# Enterprise features (disabled for baseline, enabled for repair-loop)
+dlq:
+  enabled: false
+
+executionLock:
+  enabled: false
+
+autoRecovery:
+  enabled: false

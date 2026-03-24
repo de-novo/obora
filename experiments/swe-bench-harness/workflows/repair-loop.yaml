@@ -1,0 +1,71 @@
+# SWE-bench Repair Loop Workflow (Full Harness)
+#
+# 코드 생성 + 테스트 실행 + 실패 시 자동 수정 + 수렴까지 반복
+
+name: swe-bench-repair-loop
+version: "1.0"
+
+hooks:
+  pre_step:
+    shell: |
+      mkdir -p {{output_dir}}/workspace
+  post_step:
+    shell: |
+      cd {{output_dir}} && \
+      if [ -f test.sh ]; then
+        bash test.sh 2>&1 | tee test-output.log
+        exit ${PIPESTATUS[0]}
+      else
+        echo "SKIP: No test.sh found"
+      fi
+
+steps:
+  - name: read_issue
+    agent: solver
+    input:
+      task: |
+        Read the GitHub issue from {{issue_file}}.
+        Extract:
+        1. The problem description
+        2. Expected behavior
+        3. Any hints from the issue
+
+        Save the analysis to {{output_dir}}/issue-analysis.md
+
+  - name: implement_or_repair
+    agent: solver
+    depends_on: [read_issue]
+    config:
+      repair_loop:
+        enabled: true
+        validation_step: validate
+        max_no_progress_iterations: 3
+    input:
+      task: |
+        Based on the issue analysis, implement the fix.
+
+        Write:
+        1. {{output_dir}}/patch.diff - The code changes as unified diff
+        2. {{output_dir}}/test.sh - A script that validates the fix
+
+        If this is a REPAIR attempt, review the validation failure and fix the issue.
+
+  - name: validate
+    agent: validator
+    depends_on: [implement_or_repair]
+    config:
+      validation:
+        enabled: true
+        emit_structured_result: true
+    input:
+      task: |
+        Validate the implementation by:
+        1. Checking that patch.diff exists and is valid
+        2. Checking that test.sh exists and is executable
+        3. Running test.sh and checking the output
+
+        Return PASS if all checks pass, FAIL otherwise with specific failure reasons.
+    on_fail:
+      goto: implement_or_repair
+      max_iterations: 5
+      escalate_on_exhaust: fail

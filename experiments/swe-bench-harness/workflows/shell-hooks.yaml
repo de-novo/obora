@@ -1,0 +1,32 @@
+# SWE-bench Shell Hooks Workflow (Validation Only)
+#
+# 코드 생성 후 Shell로 테스트 실행. 하지만 실패해도 자동 수정 없음.
+
+name: swe-bench-shell-hooks
+version: "1.0"
+
+hooks:
+  post_step:
+    shell: |
+      cd {{output_dir}} && \
+      if [ -f test.sh ]; then bash test.sh; else echo "No test.sh found"; fi
+
+steps:
+  - name: read_issue
+    agent: solver
+    input:
+      task: |
+        Read the GitHub issue from {{issue_file}}.
+        Understand the problem and the expected fix.
+
+  - name: implement
+    agent: solver
+    depends_on: [read_issue]
+    input:
+      task: |
+        Based on the issue, implement the fix.
+        Write the code changes to {{output_dir}}/patch.diff
+
+        Also create {{output_dir}}/test.sh that will validate the fix.
+
+        Format the patch as a unified diff.

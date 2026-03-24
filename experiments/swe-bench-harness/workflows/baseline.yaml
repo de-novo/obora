@@ -1,0 +1,24 @@
+# SWE-bench Baseline Workflow (No Harness)
+#
+# LLM이 코드를 생성하고 끝. 검증 없음.
+
+name: swe-bench-baseline
+version: "1.0"
+
+steps:
+  - name: read_issue
+    agent: solver
+    input:
+      task: |
+        Read the GitHub issue from {{issue_file}}.
+        Understand the problem and the expected fix.
+
+  - name: implement
+    agent: solver
+    depends_on: [read_issue]
+    input:
+      task: |
+        Based on the issue, implement the fix.
+        Write the code changes to {{output_dir}}/patch.diff
+
+        Format the output as a unified diff.
