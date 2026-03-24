@@ -1,0 +1,12 @@
+{
+  "id": "mock-001-simple-bug",
+  "problem_statement": "Fix the bug in the add function. It should return the sum of two numbers, but currently returns the difference.",
+  "repo": "example/simple-math",
+  "initial_code": "function add(a, b) { return a - b; }",
+  "expected_code": "function add(a, b) { return a + b; }",
+  "test_cases": [
+    {"input": [1, 2], "expected": 3},
+    {"input": [5, 3], "expected": 8},
+    {"input": [-1, 1], "expected": 0}
+  ]
+}

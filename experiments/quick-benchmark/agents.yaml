@@ -1,0 +1,16 @@
+# Quick Benchmark Agents
+
+agents:
+  solver:
+    role: Software Engineer
+    description: Expert software engineer
+    provider: ${PROVIDER:-zai}
+    model: ${MODEL:-glm-4.7}
+    temperature: 0.3
+
+  validator:
+    role: Code Validator
+    description: Validates code by running tests
+    provider: ${PROVIDER:-zai}
+    model: ${MODEL:-glm-4.7}
+    temperature: 0.1

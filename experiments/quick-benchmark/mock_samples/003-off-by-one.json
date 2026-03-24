@@ -1,0 +1,12 @@
+{
+  "id": "mock-003-off-by-one",
+  "problem_statement": "Fix the off-by-one error in the range function. It should return an array from 0 to n-1, but currently returns 0 to n.",
+  "repo": "example/arrays",
+  "initial_code": "function range(n) { const arr = []; for (let i = 0; i <= n; i++) arr.push(i); return arr; }",
+  "expected_code": "function range(n) { const arr = []; for (let i = 0; i < n; i++) arr.push(i); return arr; }",
+  "test_cases": [
+    {"input": [3], "expected": [0, 1, 2]},
+    {"input": [5], "expected": [0, 1, 2, 3, 4]},
+    {"input": [0], "expected": []}
+  ]
+}

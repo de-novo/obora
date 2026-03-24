@@ -1,0 +1,23 @@
+# Quick Benchmark: Baseline (No Harness)
+#
+# LLM이 코드를 생성하고 끝. 검증 없음.
+
+name: quick-benchmark-baseline
+version: "1.0"
+
+steps:
+  - name: read_task
+    agent: solver
+    input:
+      task: |
+        Read the coding task from {{issue_file}}.
+        Understand what needs to be implemented or fixed.
+
+  - name: implement
+    agent: solver
+    depends_on: [read_task]
+    input:
+      task: |
+        Based on the task, write the code to {{output_dir}}/solution.js
+
+        Just write the code. Do not run any tests.

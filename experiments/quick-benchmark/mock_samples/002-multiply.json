@@ -1,0 +1,12 @@
+{
+  "id": "mock-002-multiply",
+  "problem_statement": "Implement a multiply function that returns the product of two numbers.",
+  "repo": "example/simple-math",
+  "initial_code": "",
+  "expected_code": "function multiply(a, b) { return a * b; }",
+  "test_cases": [
+    {"input": [2, 3], "expected": 6},
+    {"input": [4, 5], "expected": 20},
+    {"input": [0, 10], "expected": 0}
+  ]
+}

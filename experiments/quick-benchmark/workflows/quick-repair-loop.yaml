@@ -1,0 +1,68 @@
+# Quick Benchmark: With Repair Loop
+#
+# 코드 생성 + 테스트 실행 + 실패 시 자동 수정
+
+name: quick-benchmark-repair-loop
+version: "1.0"
+
+hooks:
+  post_step:
+    shell: |
+      cd {{output_dir}}
+      if [ -f solution.js ] && [ -f test.js ]; then
+        node test.js 2>&1 | tee test-output.log
+        exit ${PIPESTATUS[0]}
+      else
+        echo "SKIP: solution.js or test.js not found"
+      fi
+
+steps:
+  - name: read_task
+    agent: solver
+    input:
+      task: |
+        Read the coding task from {{issue_file}}.
+        Understand:
+        1. What needs to be implemented or fixed
+        2. The test cases that will validate the solution
+
+        Save the analysis to {{output_dir}}/task-analysis.md
+
+  - name: implement_or_repair
+    agent: solver
+    depends_on: [read_task]
+    config:
+      repair_loop:
+        enabled: true
+        validation_step: validate
+        max_no_progress_iterations: 3
+    input:
+      task: |
+        Based on the task, write:
+        1. {{output_dir}}/solution.js - The implementation
+        2. {{output_dir}}/test.js - A test script that validates the solution
+
+        If this is a REPAIR attempt:
+        - Review the test output
+        - Fix the issues in solution.js
+        - The test will run again automatically
+
+  - name: validate
+    agent: validator
+    depends_on: [implement_or_repair]
+    config:
+      validation:
+        enabled: true
+        emit_structured_result: true
+    input:
+      task: |
+        Validate the implementation:
+        1. Check that solution.js exists
+        2. Check that test.js exists
+        3. Run the test and check if it passes
+
+        Return PASS if all tests pass, FAIL otherwise.
+    on_fail:
+      goto: implement_or_repair
+      max_iterations: 5
+      escalate_on_exhaust: fail
