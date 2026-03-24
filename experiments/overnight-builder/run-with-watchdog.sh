@@ -16,6 +16,7 @@ PID=$!
 
 STARTED=$(date +%s)
 LAST_SIZE=$(stat -f%z "$LOG" 2>/dev/null || echo 0)
+IDLE=0
 
 while kill -0 "$PID" 2>/dev/null; do
   sleep "$POLL_SEC"

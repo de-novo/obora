@@ -63,6 +63,14 @@ Prerequisites:
 | **Policy Engine** | Rule-based control for tools, actions, and access |
 | **Audit Trail** | Full trace of inputs, decisions, state transitions, outputs |
 | **Knowledge Store** | Persistent failure patterns and resolution history across executions |
+| **TKG Projection** | Temporal Knowledge Graph — staging, promotion, confidence policy, review queue |
+| **Dead Letter Queue** | Isolate unrecoverable failures for manual review |
+| **Circuit Breaker** | LLM failure isolation (closed → open → half-open) |
+| **Execution Lock** | File-based mutex to prevent concurrent runs |
+| **Auto-Recovery** | Checkpoint-based automatic resume on failure |
+| **Health Checker** | Stuck execution detection with pluggable checks |
+| **Alert Manager** | Webhook/console alerting with severity filtering |
+| **Metrics Export** | Prometheus text + JSON metrics for observability |
 
 ---
 
@@ -332,6 +340,7 @@ ZAI_API_KEY=xxx pnpm test:e2e
 - [Examples](./examples) - Sample workflows and use cases
 - [API Reference](./docs/api/README.md) - Detailed API docs
 - [CLI Reference](./docs/cli/README.md) - Command documentation
+- [Enterprise Reliability](./docs/operations/enterprise-reliability.md) - DLQ, Circuit Breaker, Auto-Recovery, Metrics, etc.
 
 ---
 
