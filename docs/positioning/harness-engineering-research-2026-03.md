@@ -132,7 +132,120 @@ Temporal과 결합하면 Durability/Repair가 강화되지만, Validation/Learni
 
 ---
 
-## 4. Obora의 하네스 엔지니어링 위치
+## 4. 최신 코딩 에이전트의 하네스 분석 (2026)
+
+### 4.1 OpenAI Codex (codex-1)
+
+**하네스 수준: 높음 (Sandbox + Validation 중심)**
+
+OpenAI가 2025년 6월 출시한 클라우드 기반 코딩 에이전트.
+
+**하네스 특징**:
+- **Sandbox 격리**: 각 태스크가 별도 격리된 환경에서 실행
+- **Test Harness**: "iteratively run tests until it receives a passing result" — 테스트 통과까지 반복
+- **AGENTS.md 지원**: 프로젝트 컨벤션/테스트 명령어를 파일로 지정 가능
+- **Citations**: 터미널 로그/테스트 결과를 인용하여 검증 가능한 결과 제공
+
+**핵심 갭**:
+- **Cross-execution learning 없음**: 각 태스크가 독립적. 이전 실행에서 배운 것을 재사용하지 못함.
+- **Validation은 프로젝트 내부 한정**: 프로젝트 단위이지, 조직 전체 패턴 학습은 아님.
+- **Repair 전략이 불투명**: 어떤 방식으로 실패를 진단/수정하는지가 모델 내부 블랙박스.
+
+### 4.2 Claude Code
+
+**하네스 수준: 중간 (IDE 통합 중심)**
+
+Anthropic의 터미널/IDE/데스크톱/웹 코딩 에이전트.
+
+**하네스 특징**:
+- **다중 환경 지원**: Terminal CLI, VS Code, JetBrains, Desktop, Web
+- **MCP (Model Context Protocol) 네이티브**: 외부 시스템 연결 표준
+- **Third-party provider 지원**: Anthropic 외 다른 LLM도 사용 가능
+
+**핵심 갭**:
+- **Validation-Repair Loop 없음**: Claude Code 자체에는 테스트 실행 → 실패 분류 → 조건부 라우팅 같은 하네스가 없음.
+- **Cross-execution learning 없음**: 각 세션이 독립적.
+- **결정론적 검증은 개발자 책임**: 개발자가 직접 테스트를 실행하고 결과를 확인해야 함.
+
+### 4.3 Devin (Cognition AI)
+
+**하네스 수준: 높음 (Agent-centric)**
+
+> "Nubank: 12x engineering efficiency improvement, 20x cost savings with Devin"
+
+**하네스 특징**:
+- **Autonomous execution**: 사람 개입 없이 장시간 실행 가능
+- **Parallel task processing**: 여러 태스크를 병렬로 처리
+- **Evidence-based**: 실행 과정을 추적 가능한 형태로 제공
+
+**핵심 갭**:
+- **내부 하네스는 공개되지 않음**: Devin이 어떻게 실패를 처리하는지가 블랙박스.
+- **플랫폼 종속**: Devin 클라우드에서만 동작. 자체 인프라에 통합 불가.
+- **Customization 제한**: 하네스 로직을 커스터마이징할 수 없음.
+
+### 4.4 코딩 에이전트 하네스 비교표
+
+| | Codex | Claude Code | Devin | **Obora** |
+|---|:---:|:---:|:---:|:---:|
+| **Sandbox 격리** | ✅ | ❌ | ✅ | ✅ (configurable) |
+| **Test Harness** | ✅ | ❌ | ✅ | ✅ (Shell Hooks) |
+| **Validation-Repair Loop** | ⬛⬛ | ⬛ | ⬛⬛ | ⬛⬛⬛⬛ |
+| **Structured Failure Classification** | ❌ | ❌ | ❌ | ✅ |
+| **Cross-execution Learning** | ❌ | ❌ | ❌ | ✅ (TKG + Reflector) |
+| **Customizable Harness** | ❌ | ❌ | ❌ | ✅ (YAML config) |
+| **Self-hosted** | ❌ | ❌ | ❌ | ✅ |
+
+---
+
+## 5. MCP (Model Context Protocol)의 영향
+
+### 5.1 MCP란?
+
+> "MCP는 AI 애플리케이션을 위한 USB-C 포트와 같다. 표준화된 방식으로 외부 시스템에 연결한다."
+> — modelcontextprotocol.io
+
+**특징**:
+- Anthropic이 주도하는 오픈 표준
+- Claude, ChatGPT, VS Code, Cursor 등이 지원
+- Data sources, tools, workflows를 표준 인터페이스로 노출
+
+### 5.2 하네스 엔지니어링에서의 MCP 의미
+
+**기회**:
+- MCP 서버로 Obora의 Validation-Repair Loop를 노출하면, Claude/ChatGPT가 Obora를 "도구"로 사용 가능
+- 예: Claude Code가 "Obora 검증"을 MCP로 호출 → Obora가 테스트 실행 → 결과 반환
+
+**위협**:
+- MCP가 표준화되면, 하네스 기능도 MCP 서버 형태로 제공하는 경쟁자가 등장할 수 있음
+- "하네스" 자체가 커모디티화될 가능성
+
+### 5.3 Obora 전략
+
+1. **Obora MCP Server 제공**: Validation-Repair Loop를 MCP로 노출
+2. **Claude Code / Codex 연동**: 이 에이전트들이 Obora를 "검증 도구"로 사용하게
+3. **차별화 유지**: MCP는 "연결"만 제공. "학습/복구/거버넌스"는 Obora만의 영역.
+
+---
+
+## 6. IBM AI Orchestration 프레임워크
+
+### 6.1 IBM의 3대 Pillar
+
+| Pillar | 설명 | Obora 대응 |
+|---|---|---|
+| **AI Integration** | 데이터 파이프라인, 모델 간 통신 | Shell Hooks + MCP |
+| **AI Automation** | 워크플로우 자동화, 리소스 관리 | Workflow Engine + Auto-scaling |
+| **AI Management** | 거버넌스, 보안, 컴플라이언스 | TKG + Audit Trail + Cost Control |
+
+### 6.2 IBM이 강조하는 것
+
+> "AI orchestration platforms automate AI workflows, track progress toward task completion, manage resource usage, monitor data flow and memory and handle failure events."
+
+→ Obora가 이미 제공하는 것들과 정확히 일치.
+
+---
+
+## 7. Obora의 하네스 엔지니어링 위치
 
 ### 4.1 Obora가 유일하게 제공하는 것
 
@@ -174,7 +287,7 @@ Obora는 **"AI Control Runtime"**으로 포지셔닝하고 있지만, 하네스 
 
 ---
 
-## 5. 경쟁 위협 분석
+## 8. 경쟁 위협 분석
 
 ### 5.1 단기 위협 (6개월 내)
 - **LangGraph + Temporal 2-layer**: Durability는 강하지만 Validation/Learning 없음. Obora의 핵심 영역은 안전.
@@ -192,7 +305,7 @@ Obora는 **"AI Control Runtime"**으로 포지셔닝하고 있지만, 하네스 
 
 ---
 
-## 6. 기회 분석
+## 9. 기회 분석
 
 ### 6.1 하네스 엔지니어링 시장 크기 추정
 - 전체 AI Agent 오케스트레이션 시장 $7.38B 중
@@ -211,7 +324,7 @@ Obora는 **"AI Control Runtime"**으로 포지셔닝하고 있지만, 하네스 
 
 ---
 
-## 7. 전략적 시사점
+## 10. 전략적 시사점
 
 ### 7.1 핵심 메시지
 > "다른 도구는 AI를 쉽게 만든다. Obora는 AI가 실패해도 괜찮게 만든다."
@@ -231,3 +344,44 @@ Obora는 **"AI Control Runtime"**으로 포지셔닝하고 있지만, 하네스 
 2. **SWE-bench에서 Obora 하네스 효과 정량화** — "하네스 없이 vs 하네스 있으면" 비교
 3. **LangGraph → Obora 마이그레이션 가이드** — "LangGraph에서 2시간 만에 Validation-Repair Loop 추가하기"
 4. **Temporal 연동** — Temporal의 durability + Obora의 AI-aware harness = 최강 조합
+5. **MCP Server 제공** — Obora의 Validation-Repair Loop를 MCP로 노출하여 Claude Code / Codex 연동
+
+---
+
+## 11. 추가 조사 출처
+
+### 11.1 공식 문서 & 블로그
+- OpenAI Codex: https://openai.com/index/introducing-codex/
+- Claude Code: https://code.claude.com/docs
+- MCP: https://modelcontextprotocol.io/
+- IBM AI Orchestration: https://www.ibm.com/think/topics/ai-orchestration
+
+### 11.2 리서치 & 가이드
+- "A Practical Guide for Designing, Developing, and Deploying Production-Grade Agentic AI Workflows" (arXiv:2512.08769)
+- AI Workflow Lab: "AI Workflow Orchestration in Production"
+- Thread AI: "Enterprise AI Pillars"
+- Zylos AI: "AI Agent Orchestration Frameworks Comparison (2026)"
+- Rasa: "The Enterprise Guide to AI Agent Orchestration"
+
+### 11.3 케이스 스터디
+- Devin × Nubank: 12x efficiency, 20x cost savings (코드 마이그레이션)
+
+---
+
+## 12. 핵심 인사이트 요약
+
+### 12.1 시장 구조
+1. **에이전트는 이미 충분히 똑똑하다** — 문제는 "어떻게 프로덕션에서 안전하게 돌리느냐"
+2. **하네스 엔지니어링은 블루오션** — 경쟁자들은 "조립"에 집중, "복구/학습"은 미개척
+3. **MCP가 표준화되고 있다** — 연결은 커모디티, 차별화는 "무엇을 연결하느냐"
+
+### 12.2 Obora의 고유 위치
+1. **유일하게 모든 5축 커버**: Durability + Validation + Repair + Learning + Governance
+2. **코딩 에이전트와 보완적**: Codex/Claude Code/Devin이 "생성"하면, Obora가 "검증/복구"
+3. **Self-hosted 가능**: 엔터프라이즈가 자체 인프라에서 완전 통제
+
+### 12.3 전략적 우선순위
+1. **"Harness Engineering" 카테고리 창출** — 이 용어를 업계 표준으로
+2. **MCP Server 출시** — 기존 에이전트들이 Obora를 "검증 도구"로 쓰게
+3. **SWE-bench 정량화** — "하네스 있음 vs 없음"의 객관적 차이 증명
+4. **Temporal 연동** — Durability는 Temporal, AI-aware는 Obora로 분업
