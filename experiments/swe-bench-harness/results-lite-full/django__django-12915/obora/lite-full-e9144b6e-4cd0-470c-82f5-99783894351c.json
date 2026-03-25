@@ -1,0 +1,35 @@
+{
+  "id": "e9144b6e-4cd0-470c-82f5-99783894351c",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:34:13.515Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-12915/patch.diff`. The fix adds the missing `get_response_async` method to `StaticFilesHandlerMixin`, using `sync_to_async` to wrap the synchronous `serve` and `response_for_exception` functions for ASGI compatibility.",
+      "raw": {
+        "id": "zai-glm-4.7-1774413258656",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-12915/patch.diff`. The fix adds the missing `get_response_async` method to `StaticFilesHandlerMixin`, using `sync_to_async` to wrap the synchronous `serve` and `response_for_exception` functions for ASGI compatibility."
+        },
+        "usage": {
+          "promptTokens": 28,
+          "completionTokens": 70,
+          "totalTokens": 2626
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-12915/patch.diff`. The fix adds the missing `get_response_async` method to `StaticFilesHandlerMixin`, using `sync_to_async` to wrap the synchronous `serve` and `response_for_exception` functions for ASGI compatibility."
+  },
+  "endedAt": "2026-03-25T04:34:20.066Z"
+}

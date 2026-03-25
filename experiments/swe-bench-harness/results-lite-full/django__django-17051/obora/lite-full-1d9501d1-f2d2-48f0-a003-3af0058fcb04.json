@@ -1,0 +1,35 @@
+{
+  "id": "1d9501d1-f2d2-48f0-a003-3af0058fcb04",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:47:44.695Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-17051/patch.diff`. The fix modifies `django/db/models/query.py` to allow returning IDs in `QuerySet.bulk_create()` when using `update_conflicts=True`. The key changes:\n\n1. Condition `on_conflict is None` now also accepts `OnConflict.UPDATE` for bulk return operations\n2. Passes `on_conflict`, `update_fields`, and `unique_fields` to `_insert()` call, enabling proper RETURNING clause generation for upsert operations",
+      "raw": {
+        "id": "zai-glm-4.7-1774414071521",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-17051/patch.diff`. The fix modifies `django/db/models/query.py` to allow returning IDs in `QuerySet.bulk_create()` when using `update_conflicts=True`. The key changes:\n\n1. Condition `on_conflict is None` now also accepts `OnConflict.UPDATE` for bulk return operations\n2. Passes `on_conflict`, `update_fields`, and `unique_fields` to `_insert()` call, enabling proper RETURNING clause generation for upsert operations"
+        },
+        "usage": {
+          "promptTokens": 28,
+          "completionTokens": 117,
+          "totalTokens": 2898
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-17051/patch.diff`. The fix modifies `django/db/models/query.py` to allow returning IDs in `QuerySet.bulk_create()` when using `update_conflicts=True`. The key changes:\n\n1. Condition `on_conflict is None` now also accepts `OnConflict.UPDATE` for bulk return operations\n2. Passes `on_conflict`, `update_fields`, and `unique_fields` to `_insert()` call, enabling proper RETURNING clause generation for upsert operations"
+  },
+  "endedAt": "2026-03-25T04:47:54.496Z"
+}

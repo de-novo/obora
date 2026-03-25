@@ -1,0 +1,35 @@
+{
+  "id": "faacddf9-e95d-4767-ad5a-b149463c9a3c",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T05:15:11.347Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite-full/sympy__sympy-21612/patch.diff`.\n\nThe fix modifies the string printer in `sympy/printing/str.py` to add parentheses around `Pow` bases in addition to `Mul` bases, ensuring correct rendering of nested fractions like `\\frac{\\frac{a^3+b}{c}}{\\frac{1}{c^2}}`.",
+      "raw": {
+        "id": "zai-glm-4.7-1774415717282",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite-full/sympy__sympy-21612/patch.diff`.\n\nThe fix modifies the string printer in `sympy/printing/str.py` to add parentheses around `Pow` bases in addition to `Mul` bases, ensuring correct rendering of nested fractions like `\\frac{\\frac{a^3+b}{c}}{\\frac{1}{c^2}}`."
+        },
+        "usage": {
+          "promptTokens": 32,
+          "completionTokens": 93,
+          "totalTokens": 1600
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite-full/sympy__sympy-21612/patch.diff`.\n\nThe fix modifies the string printer in `sympy/printing/str.py` to add parentheses around `Pow` bases in addition to `Mul` bases, ensuring correct rendering of nested fractions like `\\frac{\\frac{a^3+b}{c}}{\\frac{1}{c^2}}`."
+  },
+  "endedAt": "2026-03-25T05:15:18.929Z"
+}

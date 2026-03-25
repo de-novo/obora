@@ -1,0 +1,35 @@
+{
+  "id": "9b7c00ea-d586-4b48-8f01-3c5d1484e2f2",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:59:26.527Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written successfully. The fix addresses issue #10949 where `warn_on_dtype` had no effect when input is a pandas DataFrame.\n\n**Summary of changes:**\n\n1. **Capture DataFrame dtypes early** (lines ~469-472): Before any conversion, check if the input has a `dtypes` attribute (like pandas DataFrame) and store the original dtypes.\n\n2. **Warn on dtype mismatch** (lines ~590-598): After all conversions are complete, if `warn_on_dtype=True` and the input had DataFrame dtypes that differ from the final array dtype, issue a `DataConversionWarning`.\n\nThis ensures that when a DataFrame with object dtype is converted to float64 (or any other type conversion occurs), a warning is properly raised, matching the behavior expected for regular arrays.",
+      "raw": {
+        "id": "zai-glm-4.7-1774414772597",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written successfully. The fix addresses issue #10949 where `warn_on_dtype` had no effect when input is a pandas DataFrame.\n\n**Summary of changes:**\n\n1. **Capture DataFrame dtypes early** (lines ~469-472): Before any conversion, check if the input has a `dtypes` attribute (like pandas DataFrame) and store the original dtypes.\n\n2. **Warn on dtype mismatch** (lines ~590-598): After all conversions are complete, if `warn_on_dtype=True` and the input had DataFrame dtypes that differ from the final array dtype, issue a `DataConversionWarning`.\n\nThis ensures that when a DataFrame with object dtype is converted to float64 (or any other type conversion occurs), a warning is properly raised, matching the behavior expected for regular arrays."
+        },
+        "usage": {
+          "promptTokens": 33,
+          "completionTokens": 167,
+          "totalTokens": 2911
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written successfully. The fix addresses issue #10949 where `warn_on_dtype` had no effect when input is a pandas DataFrame.\n\n**Summary of changes:**\n\n1. **Capture DataFrame dtypes early** (lines ~469-472): Before any conversion, check if the input has a `dtypes` attribute (like pandas DataFrame) and store the original dtypes.\n\n2. **Warn on dtype mismatch** (lines ~590-598): After all conversions are complete, if `warn_on_dtype=True` and the input had DataFrame dtypes that differ from the final array dtype, issue a `DataConversionWarning`.\n\nThis ensures that when a DataFrame with object dtype is converted to float64 (or any other type conversion occurs), a warning is properly raised, matching the behavior expected for regular arrays."
+  },
+  "endedAt": "2026-03-25T04:59:35.608Z"
+}

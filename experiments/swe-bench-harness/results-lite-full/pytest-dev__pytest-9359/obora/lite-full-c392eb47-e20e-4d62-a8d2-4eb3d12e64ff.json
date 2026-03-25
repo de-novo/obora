@@ -1,0 +1,35 @@
+{
+  "id": "c392eb47-e20e-4d62-a8d2-4eb3d12e64ff",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:58:58.674Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite-full/pytest-dev__pytest-9359/patch.diff`. The fix addresses the issue where pytest incorrectly included decorator lines in assertion failure messages in Python 3.9+ by ensuring decorators are accounted for when calculating statement boundaries in the AST traversal.",
+      "raw": {
+        "id": "zai-glm-4.7-1774414743123",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite-full/pytest-dev__pytest-9359/patch.diff`. The fix addresses the issue where pytest incorrectly included decorator lines in assertion failure messages in Python 3.9+ by ensuring decorators are accounted for when calculating statement boundaries in the AST traversal."
+        },
+        "usage": {
+          "promptTokens": 30,
+          "completionTokens": 66,
+          "totalTokens": 2530
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite-full/pytest-dev__pytest-9359/patch.diff`. The fix addresses the issue where pytest incorrectly included decorator lines in assertion failure messages in Python 3.9+ by ensuring decorators are accounted for when calculating statement boundaries in the AST traversal."
+  },
+  "endedAt": "2026-03-25T04:59:04.719Z"
+}

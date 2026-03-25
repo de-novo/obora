@@ -1,0 +1,35 @@
+{
+  "id": "def9e93a-2a59-4442-bc36-b513263909f5",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T05:01:51.564Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite-full/scikit-learn__scikit-learn-25500/patch.diff`.\n\nThe fix addresses the issue where `CalibratedClassifierCV` fails when `set_config(transform_output=\"pandas\")` is enabled. The problem occurs because `IsotonicRegression.predict()` was calling `self.transform()`, which returns a pandas DataFrame when `transform_output=\"pandas\"` is set. This caused a shape mismatch error in `_CalibratedClassifier.predict_proba`.\n\nThe solution:\n1. Extract the core transformation logic from `transform()` into a new private method `_transform()`\n2. Make both `transform()` and `predict()` call `_transform()` instead\n3. Since `_transform()` is not wrapped by the `transform_output` configuration, it always returns a numpy array, which is what `predict()` needs\n\nThis ensures that `transform()` respects the `transform_output` configuration while `predict()` always returns a numpy array, fixing the incompatibility with `CalibratedClassifierCV`.",
+      "raw": {
+        "id": "zai-glm-4.7-1774414918617",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite-full/scikit-learn__scikit-learn-25500/patch.diff`.\n\nThe fix addresses the issue where `CalibratedClassifierCV` fails when `set_config(transform_output=\"pandas\")` is enabled. The problem occurs because `IsotonicRegression.predict()` was calling `self.transform()`, which returns a pandas DataFrame when `transform_output=\"pandas\"` is set. This caused a shape mismatch error in `_CalibratedClassifier.predict_proba`.\n\nThe solution:\n1. Extract the core transformation logic from `transform()` into a new private method `_transform()`\n2. Make both `transform()` and `predict()` call `_transform()` instead\n3. Since `_transform()` is not wrapped by the `transform_output` configuration, it always returns a numpy array, which is what `predict()` needs\n\nThis ensures that `transform()` respects the `transform_output` configuration while `predict()` always returns a numpy array, fixing the incompatibility with `CalibratedClassifierCV`."
+        },
+        "usage": {
+          "promptTokens": 33,
+          "completionTokens": 214,
+          "totalTokens": 3974
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite-full/scikit-learn__scikit-learn-25500/patch.diff`.\n\nThe fix addresses the issue where `CalibratedClassifierCV` fails when `set_config(transform_output=\"pandas\")` is enabled. The problem occurs because `IsotonicRegression.predict()` was calling `self.transform()`, which returns a pandas DataFrame when `transform_output=\"pandas\"` is set. This caused a shape mismatch error in `_CalibratedClassifier.predict_proba`.\n\nThe solution:\n1. Extract the core transformation logic from `transform()` into a new private method `_transform()`\n2. Make both `transform()` and `predict()` call `_transform()` instead\n3. Since `_transform()` is not wrapped by the `transform_output` configuration, it always returns a numpy array, which is what `predict()` needs\n\nThis ensures that `transform()` respects the `transform_output` configuration while `predict()` always returns a numpy array, fixing the incompatibility with `CalibratedClassifierCV`."
+  },
+  "endedAt": "2026-03-25T05:02:01.675Z"
+}

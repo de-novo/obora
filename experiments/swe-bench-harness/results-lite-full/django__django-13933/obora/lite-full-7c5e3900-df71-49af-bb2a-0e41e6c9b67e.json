@@ -1,0 +1,35 @@
+{
+  "id": "7c5e3900-df71-49af-bb2a-0e41e6c9b67e",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:39:41.716Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-13933/patch.diff`. The fix updates `ModelChoiceField.to_python()` to pass the invalid `value` parameter when raising `ValidationError`, matching the behavior of `ModelMultipleChoiceField` and allowing the error message to display the invalid choice.",
+      "raw": {
+        "id": "zai-glm-4.7-1774413586418",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-13933/patch.diff`. The fix updates `ModelChoiceField.to_python()` to pass the invalid `value` parameter when raising `ValidationError`, matching the behavior of `ModelMultipleChoiceField` and allowing the error message to display the invalid choice."
+        },
+        "usage": {
+          "promptTokens": 28,
+          "completionTokens": 71,
+          "totalTokens": 1683
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-13933/patch.diff`. The fix updates `ModelChoiceField.to_python()` to pass the invalid `value` parameter when raising `ValidationError`, matching the behavior of `ModelMultipleChoiceField` and allowing the error message to display the invalid choice."
+  },
+  "endedAt": "2026-03-25T04:39:49.452Z"
+}

@@ -1,0 +1,35 @@
+{
+  "id": "21826fa1-864e-41f6-8e74-46e4f308ae70",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T05:02:41.075Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite-full/sphinx-doc__sphinx-11445/patch.diff`.\n\nThe patch fixes the issue where `rst_prolog` was incorrectly treating headings containing domain directives (e.g., `:mod:`) as docinfo fields. The key changes:\n\n1. Replaced the simplified `docinfo_re = re.compile(':\\\\w+:.*?')` with the correct docutils field marker pattern `FIELD_NAME_RE = re.compile(Body.patterns['field_marker'])`\n2. This ensures that only actual docinfo fields (like `:title:`, `:author:`) are treated as docinfo, while headings containing domain directives are correctly recognized as section headings\n\nThis prevents the `prepend_prolog` function from skipping over headings with domain directives when inserting the prolog content.",
+      "raw": {
+        "id": "zai-glm-4.7-1774414966531",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite-full/sphinx-doc__sphinx-11445/patch.diff`.\n\nThe patch fixes the issue where `rst_prolog` was incorrectly treating headings containing domain directives (e.g., `:mod:`) as docinfo fields. The key changes:\n\n1. Replaced the simplified `docinfo_re = re.compile(':\\\\w+:.*?')` with the correct docutils field marker pattern `FIELD_NAME_RE = re.compile(Body.patterns['field_marker'])`\n2. This ensures that only actual docinfo fields (like `:title:`, `:author:`) are treated as docinfo, while headings containing domain directives are correctly recognized as section headings\n\nThis prevents the `prepend_prolog` function from skipping over headings with domain directives when inserting the prolog content."
+        },
+        "usage": {
+          "promptTokens": 30,
+          "completionTokens": 173,
+          "totalTokens": 3298
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite-full/sphinx-doc__sphinx-11445/patch.diff`.\n\nThe patch fixes the issue where `rst_prolog` was incorrectly treating headings containing domain directives (e.g., `:mod:`) as docinfo fields. The key changes:\n\n1. Replaced the simplified `docinfo_re = re.compile(':\\\\w+:.*?')` with the correct docutils field marker pattern `FIELD_NAME_RE = re.compile(Body.patterns['field_marker'])`\n2. This ensures that only actual docinfo fields (like `:title:`, `:author:`) are treated as docinfo, while headings containing domain directives are correctly recognized as section headings\n\nThis prevents the `prepend_prolog` function from skipping over headings with domain directives when inserting the prolog content."
+  },
+  "endedAt": "2026-03-25T05:02:49.092Z"
+}

@@ -1,0 +1,35 @@
+{
+  "id": "ef04c780-83a0-4afa-80b7-62ef3c4f4dc6",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:57:32.259Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite-full/pytest-dev__pytest-5413/patch.diff`. The fix removes the custom `__str__` method from `ExceptionInfo` class in `src/_pytest/_code/code.py`, so that `str(e)` on the pytest.raises context variable will return the same as `repr(e)` (delegating to the default behavior), matching the normal exception catch behavior as requested in the issue.",
+      "raw": {
+        "id": "zai-glm-4.7-1774414656081",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite-full/pytest-dev__pytest-5413/patch.diff`. The fix removes the custom `__str__` method from `ExceptionInfo` class in `src/_pytest/_code/code.py`, so that `str(e)` on the pytest.raises context variable will return the same as `repr(e)` (delegating to the default behavior), matching the normal exception catch behavior as requested in the issue."
+        },
+        "usage": {
+          "promptTokens": 30,
+          "completionTokens": 98,
+          "totalTokens": 2619
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite-full/pytest-dev__pytest-5413/patch.diff`. The fix removes the custom `__str__` method from `ExceptionInfo` class in `src/_pytest/_code/code.py`, so that `str(e)` on the pytest.raises context variable will return the same as `repr(e)` (delegating to the default behavior), matching the normal exception catch behavior as requested in the issue."
+  },
+  "endedAt": "2026-03-25T04:57:37.849Z"
+}

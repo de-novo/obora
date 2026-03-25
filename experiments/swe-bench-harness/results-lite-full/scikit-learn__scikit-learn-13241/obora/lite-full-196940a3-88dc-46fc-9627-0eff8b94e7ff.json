@@ -1,0 +1,35 @@
+{
+  "id": "196940a3-88dc-46fc-9627-0eff8b94e7ff",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T05:00:22.174Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "The patch has been written successfully. The fix addresses the issue where KernelPCA with RBF kernel produces different signs across multiple runs by:\n\n1. Adding an import for `svd_flip` from `sklearn.utils.extmath`\n2. Applying `svd_flip` to the eigenvectors (`self.alphas_`) to enforce deterministic output\n3. The sign flipping is done after eigendecomposition but before sorting, ensuring consistent signs across runs while preserving the mathematical correctness of the transformation\n\nThis is a common technique in PCA implementations to handle the sign ambiguity inherent in eigenvector computations.",
+      "raw": {
+        "id": "zai-glm-4.7-1774414827801",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "The patch has been written successfully. The fix addresses the issue where KernelPCA with RBF kernel produces different signs across multiple runs by:\n\n1. Adding an import for `svd_flip` from `sklearn.utils.extmath`\n2. Applying `svd_flip` to the eigenvectors (`self.alphas_`) to enforce deterministic output\n3. The sign flipping is done after eigendecomposition but before sorting, ensuring consistent signs across runs while preserving the mathematical correctness of the transformation\n\nThis is a common technique in PCA implementations to handle the sign ambiguity inherent in eigenvector computations."
+        },
+        "usage": {
+          "promptTokens": 33,
+          "completionTokens": 121,
+          "totalTokens": 2486
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "The patch has been written successfully. The fix addresses the issue where KernelPCA with RBF kernel produces different signs across multiple runs by:\n\n1. Adding an import for `svd_flip` from `sklearn.utils.extmath`\n2. Applying `svd_flip` to the eigenvectors (`self.alphas_`) to enforce deterministic output\n3. The sign flipping is done after eigendecomposition but before sorting, ensuring consistent signs across runs while preserving the mathematical correctness of the transformation\n\nThis is a common technique in PCA implementations to handle the sign ambiguity inherent in eigenvector computations."
+  },
+  "endedAt": "2026-03-25T05:00:30.166Z"
+}

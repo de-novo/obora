@@ -1,0 +1,35 @@
+{
+  "id": "046ae826-34e6-484f-9c57-db22e47fc857",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:45:03.644Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "I've created the patch at `experiments/swe-bench-harness/results-lite-full/django__django-15814/patch.diff`.\n\nThe patch fixes the issue where `QuerySet.only()` after `select_related()` crashes on proxy models. The fix adds a single line to use the concrete model instead of the proxy model when getting the model options:\n\n```python\ncur_model = cur_model._meta.concrete_model\n```\n\nThis ensures that when processing deferred fields through related models, the concrete model's metadata is used instead of the proxy model's metadata, which resolves the `ValueError: 'id' is not in list` error that occurred when the primary key field couldn't be found in the field list.",
+      "raw": {
+        "id": "zai-glm-4.7-1774413909133",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "I've created the patch at `experiments/swe-bench-harness/results-lite-full/django__django-15814/patch.diff`.\n\nThe patch fixes the issue where `QuerySet.only()` after `select_related()` crashes on proxy models. The fix adds a single line to use the concrete model instead of the proxy model when getting the model options:\n\n```python\ncur_model = cur_model._meta.concrete_model\n```\n\nThis ensures that when processing deferred fields through related models, the concrete model's metadata is used instead of the proxy model's metadata, which resolves the `ValueError: 'id' is not in list` error that occurred when the primary key field couldn't be found in the field list."
+        },
+        "usage": {
+          "promptTokens": 28,
+          "completionTokens": 147,
+          "totalTokens": 2168
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "I've created the patch at `experiments/swe-bench-harness/results-lite-full/django__django-15814/patch.diff`.\n\nThe patch fixes the issue where `QuerySet.only()` after `select_related()` crashes on proxy models. The fix adds a single line to use the concrete model instead of the proxy model when getting the model options:\n\n```python\ncur_model = cur_model._meta.concrete_model\n```\n\nThis ensures that when processing deferred fields through related models, the concrete model's metadata is used instead of the proxy model's metadata, which resolves the `ValueError: 'id' is not in list` error that occurred when the primary key field couldn't be found in the field list."
+  },
+  "endedAt": "2026-03-25T04:45:14.338Z"
+}

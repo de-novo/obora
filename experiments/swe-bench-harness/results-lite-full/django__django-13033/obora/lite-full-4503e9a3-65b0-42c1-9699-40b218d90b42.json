@@ -1,0 +1,35 @@
+{
+  "id": "4503e9a3-65b0-42c1-9699-40b218d90b42",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:34:46.195Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-13033/patch.diff`. The fix changes `getattr(field, 'attname', None) != name` to `getattr(field, 'attname', None) != pieces[-1]` in `django/db/models/sql/compiler.py` to prevent self-referencing foreign keys from incorrectly inheriting default ordering when ordering by the `_id` field.",
+      "raw": {
+        "id": "zai-glm-4.7-1774413290984",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-13033/patch.diff`. The fix changes `getattr(field, 'attname', None) != name` to `getattr(field, 'attname', None) != pieces[-1]` in `django/db/models/sql/compiler.py` to prevent self-referencing foreign keys from incorrectly inheriting default ordering when ordering by the `_id` field."
+        },
+        "usage": {
+          "promptTokens": 28,
+          "completionTokens": 92,
+          "totalTokens": 2801
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-13033/patch.diff`. The fix changes `getattr(field, 'attname', None) != name` to `getattr(field, 'attname', None) != pieces[-1]` in `django/db/models/sql/compiler.py` to prevent self-referencing foreign keys from incorrectly inheriting default ordering when ordering by the `_id` field."
+  },
+  "endedAt": "2026-03-25T04:34:52.590Z"
+}

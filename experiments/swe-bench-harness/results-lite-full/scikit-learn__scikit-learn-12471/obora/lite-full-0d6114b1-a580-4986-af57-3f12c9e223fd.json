@@ -1,0 +1,35 @@
+{
+  "id": "0d6114b1-a580-4986-af57-3f12c9e223fd",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:59:56.436Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite-full/scikit-learn__scikit-learn-12471/patch.diff`.\n\nThe fix addresses the OneHotEncoder bug where `handle_unknown='ignore'` with string categories would fail when the training data had longer strings than the test data. The patch modifies `_transform()` in `sklearn/preprocessing/_encoders.py` to cast the input array to a compatible string dtype before assigning unknown values, preventing truncation errors.",
+      "raw": {
+        "id": "zai-glm-4.7-1774414811306",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite-full/scikit-learn__scikit-learn-12471/patch.diff`.\n\nThe fix addresses the OneHotEncoder bug where `handle_unknown='ignore'` with string categories would fail when the training data had longer strings than the test data. The patch modifies `_transform()` in `sklearn/preprocessing/_encoders.py` to cast the input array to a compatible string dtype before assigning unknown values, preventing truncation errors."
+        },
+        "usage": {
+          "promptTokens": 33,
+          "completionTokens": 102,
+          "totalTokens": 2432
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite-full/scikit-learn__scikit-learn-12471/patch.diff`.\n\nThe fix addresses the OneHotEncoder bug where `handle_unknown='ignore'` with string categories would fail when the training data had longer strings than the test data. The patch modifies `_transform()` in `sklearn/preprocessing/_encoders.py` to cast the input array to a compatible string dtype before assigning unknown values, preventing truncation errors."
+  },
+  "endedAt": "2026-03-25T05:00:14.048Z"
+}

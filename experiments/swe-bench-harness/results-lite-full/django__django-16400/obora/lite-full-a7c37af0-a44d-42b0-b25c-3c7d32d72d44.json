@@ -1,0 +1,35 @@
+{
+  "id": "a7c37af0-a44d-42b0-b25c-3c7d32d72d44",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:46:26.906Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-16400/patch.diff`.\n\nThe fix addresses the issue where the `migrate` management command does not respect the database parameter when adding Permissions. \n\n**Problem:** When creating Permission objects using list comprehension with `Permission(codename=..., name=..., content_type=...)`, the `_state.db` attribute is not set, causing subsequent operations to use the default database instead of the specified database.\n\n**Solution:** Replace the list comprehension with an explicit loop that creates each Permission object and sets `permission._state.db = using` before adding it to the list. This ensures that when `Permission.objects.using(using).bulk_create(perms)` is called, the permissions are properly associated with the specified database.",
+      "raw": {
+        "id": "zai-glm-4.7-1774413994320",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-16400/patch.diff`.\n\nThe fix addresses the issue where the `migrate` management command does not respect the database parameter when adding Permissions. \n\n**Problem:** When creating Permission objects using list comprehension with `Permission(codename=..., name=..., content_type=...)`, the `_state.db` attribute is not set, causing subsequent operations to use the default database instead of the specified database.\n\n**Solution:** Replace the list comprehension with an explicit loop that creates each Permission object and sets `permission._state.db = using` before adding it to the list. This ensures that when `Permission.objects.using(using).bulk_create(perms)` is called, the permissions are properly associated with the specified database."
+        },
+        "usage": {
+          "promptTokens": 28,
+          "completionTokens": 163,
+          "totalTokens": 2389
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-16400/patch.diff`.\n\nThe fix addresses the issue where the `migrate` management command does not respect the database parameter when adding Permissions. \n\n**Problem:** When creating Permission objects using list comprehension with `Permission(codename=..., name=..., content_type=...)`, the `_state.db` attribute is not set, causing subsequent operations to use the default database instead of the specified database.\n\n**Solution:** Replace the list comprehension with an explicit loop that creates each Permission object and sets `permission._state.db = using` before adding it to the list. This ensures that when `Permission.objects.using(using).bulk_create(perms)` is called, the permissions are properly associated with the specified database."
+  },
+  "endedAt": "2026-03-25T04:46:37.951Z"
+}

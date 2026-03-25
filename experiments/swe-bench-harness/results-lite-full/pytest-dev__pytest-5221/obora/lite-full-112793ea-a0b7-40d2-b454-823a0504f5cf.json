@@ -1,0 +1,35 @@
+{
+  "id": "112793ea-a0b7-40d2-b454-823a0504f5cf",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:57:18.617Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite-full/pytest-dev__pytest-5221/patch.diff`. The patch modifies `src/_pytest/python.py` to display fixture scope with `pytest --fixtures`:\n\n- Writes the fixture name in green\n- For non-function scope fixtures, appends the scope (e.g., `[session scope]`, `[module scope]`) in cyan\n- For verbose mode (`-v`), also appends the location path in yellow\n- Adds a blank line after each fixture entry for better readability",
+      "raw": {
+        "id": "zai-glm-4.7-1774414643282",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite-full/pytest-dev__pytest-5221/patch.diff`. The patch modifies `src/_pytest/python.py` to display fixture scope with `pytest --fixtures`:\n\n- Writes the fixture name in green\n- For non-function scope fixtures, appends the scope (e.g., `[session scope]`, `[module scope]`) in cyan\n- For verbose mode (`-v`), also appends the location path in yellow\n- Adds a blank line after each fixture entry for better readability"
+        },
+        "usage": {
+          "promptTokens": 30,
+          "completionTokens": 116,
+          "totalTokens": 1818
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite-full/pytest-dev__pytest-5221/patch.diff`. The patch modifies `src/_pytest/python.py` to display fixture scope with `pytest --fixtures`:\n\n- Writes the fixture name in green\n- For non-function scope fixtures, appends the scope (e.g., `[session scope]`, `[module scope]`) in cyan\n- For verbose mode (`-v`), also appends the location path in yellow\n- Adds a blank line after each fixture entry for better readability"
+  },
+  "endedAt": "2026-03-25T04:57:25.149Z"
+}

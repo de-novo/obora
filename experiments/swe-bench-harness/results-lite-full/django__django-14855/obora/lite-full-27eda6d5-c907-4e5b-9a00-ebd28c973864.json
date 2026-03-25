@@ -1,0 +1,35 @@
+{
+  "id": "27eda6d5-c907-4e5b-9a00-ebd28c973864",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:42:21.597Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-14855/patch.diff`.\n\nThe fix adds the `current_app` parameter to the `reverse()` call in `get_admin_url()`, passing `self.model_admin.admin_site.name` to ensure URLs are correctly generated for custom admin sites instead of defaulting to `/admin/...`.",
+      "raw": {
+        "id": "zai-glm-4.7-1774413746993",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-14855/patch.diff`.\n\nThe fix adds the `current_app` parameter to the `reverse()` call in `get_admin_url()`, passing `self.model_admin.admin_site.name` to ensure URLs are correctly generated for custom admin sites instead of defaulting to `/admin/...`."
+        },
+        "usage": {
+          "promptTokens": 28,
+          "completionTokens": 78,
+          "totalTokens": 2087
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-14855/patch.diff`.\n\nThe fix adds the `current_app` parameter to the `reverse()` call in `get_admin_url()`, passing `self.model_admin.admin_site.name` to ensure URLs are correctly generated for custom admin sites instead of defaulting to `/admin/...`."
+  },
+  "endedAt": "2026-03-25T04:42:29.167Z"
+}

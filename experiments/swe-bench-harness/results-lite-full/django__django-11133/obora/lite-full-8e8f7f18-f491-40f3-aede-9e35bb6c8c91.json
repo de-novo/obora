@@ -1,0 +1,35 @@
+{
+  "id": "8e8f7f18-f491-40f3-aede-9e35bb6c8c91",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:28:36.788Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-11133/patch.diff`.\n\nThe fix adds `memoryview` to the type check in `HttpResponse.make_bytes()` method at line 232, allowing memoryview objects to be properly converted to bytes before being returned as content. This resolves the issue where HttpResponse was incorrectly displaying `b'<memory at 0x...>'` instead of the actual byte content when memoryview objects were passed.",
+      "raw": {
+        "id": "zai-glm-4.7-1774412920567",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-11133/patch.diff`.\n\nThe fix adds `memoryview` to the type check in `HttpResponse.make_bytes()` method at line 232, allowing memoryview objects to be properly converted to bytes before being returned as content. This resolves the issue where HttpResponse was incorrectly displaying `b'<memory at 0x...>'` instead of the actual byte content when memoryview objects were passed."
+        },
+        "usage": {
+          "promptTokens": 28,
+          "completionTokens": 99,
+          "totalTokens": 1581
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-11133/patch.diff`.\n\nThe fix adds `memoryview` to the type check in `HttpResponse.make_bytes()` method at line 232, allowing memoryview objects to be properly converted to bytes before being returned as content. This resolves the issue where HttpResponse was incorrectly displaying `b'<memory at 0x...>'` instead of the actual byte content when memoryview objects were passed."
+  },
+  "endedAt": "2026-03-25T04:28:43.301Z"
+}

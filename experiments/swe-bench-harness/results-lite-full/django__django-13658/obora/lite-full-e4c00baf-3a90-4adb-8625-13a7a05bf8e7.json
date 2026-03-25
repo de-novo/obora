@@ -1,0 +1,35 @@
+{
+  "id": "e4c00baf-3a90-4adb-8625-13a7a05bf8e7",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:37:36.463Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-13658/patch.diff`. The fix passes `prog=self.prog_name` to `CommandParser` so the program name is taken from the computed `self.prog_name` rather than from `sys.argv[0]`.",
+      "raw": {
+        "id": "zai-glm-4.7-1774413474047",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-13658/patch.diff`. The fix passes `prog=self.prog_name` to `CommandParser` so the program name is taken from the computed `self.prog_name` rather than from `sys.argv[0]`."
+        },
+        "usage": {
+          "promptTokens": 28,
+          "completionTokens": 67,
+          "totalTokens": 1995
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-13658/patch.diff`. The fix passes `prog=self.prog_name` to `CommandParser` so the program name is taken from the computed `self.prog_name` rather than from `sys.argv[0]`."
+  },
+  "endedAt": "2026-03-25T04:37:55.567Z"
+}

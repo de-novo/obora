@@ -1,0 +1,35 @@
+{
+  "id": "0fd9ebc1-c521-457c-8917-895717a10f3e",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:54:57.528Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite-full/psf__requests-863/patch.diff`. The fix modifies `register_hook()` in `requests/models.py` to accept lists/tuples/sets of hook functions, using `extend()` when a collection is passed and `append()` for single functions.",
+      "raw": {
+        "id": "zai-glm-4.7-1774414502559",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite-full/psf__requests-863/patch.diff`. The fix modifies `register_hook()` in `requests/models.py` to accept lists/tuples/sets of hook functions, using `extend()` when a collection is passed and `append()` for single functions."
+        },
+        "usage": {
+          "promptTokens": 29,
+          "completionTokens": 69,
+          "totalTokens": 1658
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite-full/psf__requests-863/patch.diff`. The fix modifies `register_hook()` in `requests/models.py` to accept lists/tuples/sets of hook functions, using `extend()` when a collection is passed and `append()` for single functions."
+  },
+  "endedAt": "2026-03-25T04:55:04.287Z"
+}

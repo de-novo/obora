@@ -1,0 +1,35 @@
+{
+  "id": "1a7d7174-80ce-4f6d-95ef-562c6f387417",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:49:02.227Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Done. Wrote patch and test patch to:\n\n- `experiments/swe-bench-harness/results-lite-full/matplotlib__matplotlib-23299/patch.diff` — fixes `rc_context` in `lib/matplotlib/__init__.py` to exclude `backend` from the saved-to-restore state (prevents `get_backend()` from clearing figures created under `rc_context`)\n- `experiments/swe-bench-harness/results-lite-full/matplotlib__matplotlib-23299/test_patch.diff` — adds `test_no_backend_reset_rccontext()` to `lib/matplotlib/tests/test_rcparams.py` verifying the backend is not reset after exiting `rc_context`",
+      "raw": {
+        "id": "zai-glm-4.7-1774414149513",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Done. Wrote patch and test patch to:\n\n- `experiments/swe-bench-harness/results-lite-full/matplotlib__matplotlib-23299/patch.diff` — fixes `rc_context` in `lib/matplotlib/__init__.py` to exclude `backend` from the saved-to-restore state (prevents `get_backend()` from clearing figures created under `rc_context`)\n- `experiments/swe-bench-harness/results-lite-full/matplotlib__matplotlib-23299/test_patch.diff` — adds `test_no_backend_reset_rccontext()` to `lib/matplotlib/tests/test_rcparams.py` verifying the backend is not reset after exiting `rc_context`"
+        },
+        "usage": {
+          "promptTokens": 28,
+          "completionTokens": 136,
+          "totalTokens": 2291
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Done. Wrote patch and test patch to:\n\n- `experiments/swe-bench-harness/results-lite-full/matplotlib__matplotlib-23299/patch.diff` — fixes `rc_context` in `lib/matplotlib/__init__.py` to exclude `backend` from the saved-to-restore state (prevents `get_backend()` from clearing figures created under `rc_context`)\n- `experiments/swe-bench-harness/results-lite-full/matplotlib__matplotlib-23299/test_patch.diff` — adds `test_no_backend_reset_rccontext()` to `lib/matplotlib/tests/test_rcparams.py` verifying the backend is not reset after exiting `rc_context`"
+  },
+  "endedAt": "2026-03-25T04:49:12.984Z"
+}

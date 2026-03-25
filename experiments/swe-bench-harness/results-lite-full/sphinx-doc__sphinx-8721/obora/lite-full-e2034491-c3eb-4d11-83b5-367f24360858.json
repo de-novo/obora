@@ -1,0 +1,35 @@
+{
+  "id": "e2034491-c3eb-4d11-83b5-367f24360858",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T05:04:32.266Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite-full/sphinx-doc__sphinx-8721/patch.diff`. The fix adds two early returns in the `collect_pages()` function in `sphinx/ext/viewcode.py`:\n\n1. Returns early if the builder is \"singlehtml\"\n2. Returns early if the builder name starts with \"epub\" and `viewcode_enable_epub` is `False`\n\nThis prevents viewcode from creating module pages for epub builds when the feature is disabled.",
+      "raw": {
+        "id": "zai-glm-4.7-1774415076354",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite-full/sphinx-doc__sphinx-8721/patch.diff`. The fix adds two early returns in the `collect_pages()` function in `sphinx/ext/viewcode.py`:\n\n1. Returns early if the builder is \"singlehtml\"\n2. Returns early if the builder name starts with \"epub\" and `viewcode_enable_epub` is `False`\n\nThis prevents viewcode from creating module pages for epub builds when the feature is disabled."
+        },
+        "usage": {
+          "promptTokens": 31,
+          "completionTokens": 108,
+          "totalTokens": 1655
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite-full/sphinx-doc__sphinx-8721/patch.diff`. The fix adds two early returns in the `collect_pages()` function in `sphinx/ext/viewcode.py`:\n\n1. Returns early if the builder is \"singlehtml\"\n2. Returns early if the builder name starts with \"epub\" and `viewcode_enable_epub` is `False`\n\nThis prevents viewcode from creating module pages for epub builds when the feature is disabled."
+  },
+  "endedAt": "2026-03-25T05:04:38.438Z"
+}

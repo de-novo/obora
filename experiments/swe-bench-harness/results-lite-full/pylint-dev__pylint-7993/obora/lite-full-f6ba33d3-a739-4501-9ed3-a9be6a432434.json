@@ -1,0 +1,35 @@
+{
+  "id": "f6ba33d3-a739-4501-9ed3-a9be6a432434",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:56:51.918Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written successfully. The fix changes the regex pattern in `pylint/reporters/text.py` from `r\"\\{(.+?)(:.*)?\\}\"` to `r\"\\{(\\w+?)(:.*)?\\}\"`. This restricts template argument matching to word characters only, allowing custom braces (like `{{ \"Category\": \"{category}\" }}`) to be used in message templates without being incorrectly parsed as template arguments.",
+      "raw": {
+        "id": "zai-glm-4.7-1774414615714",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written successfully. The fix changes the regex pattern in `pylint/reporters/text.py` from `r\"\\{(.+?)(:.*)?\\}\"` to `r\"\\{(\\w+?)(:.*)?\\}\"`. This restricts template argument matching to word characters only, allowing custom braces (like `{{ \"Category\": \"{category}\" }}`) to be used in message templates without being incorrectly parsed as template arguments."
+        },
+        "usage": {
+          "promptTokens": 31,
+          "completionTokens": 89,
+          "totalTokens": 2521
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written successfully. The fix changes the regex pattern in `pylint/reporters/text.py` from `r\"\\{(.+?)(:.*)?\\}\"` to `r\"\\{(\\w+?)(:.*)?\\}\"`. This restricts template argument matching to word characters only, allowing custom braces (like `{{ \"Category\": \"{category}\" }}`) to be used in message templates without being incorrectly parsed as template arguments."
+  },
+  "endedAt": "2026-03-25T04:56:57.170Z"
+}

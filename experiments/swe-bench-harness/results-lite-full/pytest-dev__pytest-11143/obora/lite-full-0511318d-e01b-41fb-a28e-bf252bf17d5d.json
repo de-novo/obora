@@ -1,0 +1,35 @@
+{
+  "id": "0511318d-e01b-41fb-a28e-bf252bf17d5d",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:56:57.489Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written successfully. The fix adds a type check to ensure the module docstring is actually a string constant before attempting to check for `\"PYTEST_DONT_REWRITE\"`. This prevents the `TypeError: argument of type 'int' is not iterable` when the first expression in a file is a number literal like `0`.",
+      "raw": {
+        "id": "zai-glm-4.7-1774414620780",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written successfully. The fix adds a type check to ensure the module docstring is actually a string constant before attempting to check for `\"PYTEST_DONT_REWRITE\"`. This prevents the `TypeError: argument of type 'int' is not iterable` when the first expression in a file is a number literal like `0`."
+        },
+        "usage": {
+          "promptTokens": 29,
+          "completionTokens": 67,
+          "totalTokens": 3236
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written successfully. The fix adds a type check to ensure the module docstring is actually a string constant before attempting to check for `\"PYTEST_DONT_REWRITE\"`. This prevents the `TypeError: argument of type 'int' is not iterable` when the first expression in a file is a number literal like `0`."
+  },
+  "endedAt": "2026-03-25T04:57:02.075Z"
+}

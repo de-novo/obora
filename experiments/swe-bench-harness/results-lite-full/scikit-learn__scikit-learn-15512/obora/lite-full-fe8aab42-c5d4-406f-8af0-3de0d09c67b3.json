@@ -1,0 +1,35 @@
+{
+  "id": "fe8aab42-c5d4-406f-8af0-3de0d09c67b3",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T05:01:37.026Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written successfully to `experiments/swe-bench-harness/results-lite-full/scikit-learn__scikit-learn-15512/patch.diff`. \n\nThe patch fixes the affinity propagation clustering issue where non-converged algorithms were not returning empty array for `cluster_center_indices_` and `-1` labels as documented. The fix adds a `never_converged` flag that is set when the algorithm exits without convergence, and uses this flag to skip cluster assignment when appropriate, resulting in the expected `-1` labels for all samples. Additionally, it adds a missing `check_array(X)` call in the `predict` method for consistency.",
+      "raw": {
+        "id": "zai-glm-4.7-1774414901832",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written successfully to `experiments/swe-bench-harness/results-lite-full/scikit-learn__scikit-learn-15512/patch.diff`. \n\nThe patch fixes the affinity propagation clustering issue where non-converged algorithms were not returning empty array for `cluster_center_indices_` and `-1` labels as documented. The fix adds a `never_converged` flag that is set when the algorithm exits without convergence, and uses this flag to skip cluster assignment when appropriate, resulting in the expected `-1` labels for all samples. Additionally, it adds a missing `check_array(X)` call in the `predict` method for consistency."
+        },
+        "usage": {
+          "promptTokens": 33,
+          "completionTokens": 133,
+          "totalTokens": 2538
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written successfully to `experiments/swe-bench-harness/results-lite-full/scikit-learn__scikit-learn-15512/patch.diff`. \n\nThe patch fixes the affinity propagation clustering issue where non-converged algorithms were not returning empty array for `cluster_center_indices_` and `-1` labels as documented. The fix adds a `never_converged` flag that is set when the algorithm exits without convergence, and uses this flag to skip cluster assignment when appropriate, resulting in the expected `-1` labels for all samples. Additionally, it adds a missing `check_array(X)` call in the `predict` method for consistency."
+  },
+  "endedAt": "2026-03-25T05:01:44.469Z"
+}

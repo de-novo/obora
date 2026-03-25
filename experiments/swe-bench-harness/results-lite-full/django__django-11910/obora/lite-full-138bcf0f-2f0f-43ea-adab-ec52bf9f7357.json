@@ -1,0 +1,35 @@
+{
+  "id": "138bcf0f-2f0f-43ea-adab-ec52bf9f7357",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:31:24.234Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-11910/patch.diff`. The fix addresses the ForeignKey `to_field` parameter issue when renaming a PrimaryKey field by ensuring that when a referenced primary key field is renamed, both the model and field name are repointed correctly in the foreign key relationship.",
+      "raw": {
+        "id": "zai-glm-4.7-1774413090085",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-11910/patch.diff`. The fix addresses the ForeignKey `to_field` parameter issue when renaming a PrimaryKey field by ensuring that when a referenced primary key field is renamed, both the model and field name are repointed correctly in the foreign key relationship."
+        },
+        "usage": {
+          "promptTokens": 28,
+          "completionTokens": 72,
+          "totalTokens": 1977
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-11910/patch.diff`. The fix addresses the ForeignKey `to_field` parameter issue when renaming a PrimaryKey field by ensuring that when a referenced primary key field is renamed, both the model and field name are repointed correctly in the foreign key relationship."
+  },
+  "endedAt": "2026-03-25T04:31:34.513Z"
+}

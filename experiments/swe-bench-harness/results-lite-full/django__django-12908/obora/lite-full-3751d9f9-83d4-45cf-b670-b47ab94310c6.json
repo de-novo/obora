@@ -1,0 +1,35 @@
+{
+  "id": "3751d9f9-83d4-45cf-b670-b47ab94310c6",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:34:06.641Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-12908/patch.diff`. The fix adds a check to raise an error when `distinct()` is called on combined queries (union, intersection, difference) since Django's ORM doesn't properly support `distinct()` on those querysets.",
+      "raw": {
+        "id": "zai-glm-4.7-1774413251162",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-12908/patch.diff`. The fix adds a check to raise an error when `distinct()` is called on combined queries (union, intersection, difference) since Django's ORM doesn't properly support `distinct()` on those querysets."
+        },
+        "usage": {
+          "promptTokens": 28,
+          "completionTokens": 68,
+          "totalTokens": 1487
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-12908/patch.diff`. The fix adds a check to raise an error when `distinct()` is called on combined queries (union, intersection, difference) since Django's ORM doesn't properly support `distinct()` on those querysets."
+  },
+  "endedAt": "2026-03-25T04:34:13.200Z"
+}

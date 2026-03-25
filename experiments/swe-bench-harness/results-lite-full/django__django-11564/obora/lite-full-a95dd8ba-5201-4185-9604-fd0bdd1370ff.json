@@ -1,0 +1,35 @@
+{
+  "id": "a95dd8ba-5201-4185-9604-fd0bdd1370ff",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:29:14.722Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "The patch has been written to `experiments/swe-bench-harness/results-lite-full/django__django-11564/patch.diff`. \n\nThis patch adds support for SCRIPT_NAME prefixing in STATIC_URL and MEDIA_URL by:\n\n1. Adding a static method `_add_script_prefix(value)` to the LazySettings class that:\n   - Returns the value unchanged if it's a valid URL\n   - Returns the value unchanged if it starts with `/` (absolute path)\n   - Otherwise prepends the current script prefix using `get_script_prefix()`\n\n2. Adding property getters for `STATIC_URL` and `MEDIA_URL` that automatically apply the script prefix to their values\n\nThis allows Django to correctly handle static and media URLs when the application is served at a subpath with a dynamic SCRIPT_NAME value.",
+      "raw": {
+        "id": "zai-glm-4.7-1774412965439",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "The patch has been written to `experiments/swe-bench-harness/results-lite-full/django__django-11564/patch.diff`. \n\nThis patch adds support for SCRIPT_NAME prefixing in STATIC_URL and MEDIA_URL by:\n\n1. Adding a static method `_add_script_prefix(value)` to the LazySettings class that:\n   - Returns the value unchanged if it's a valid URL\n   - Returns the value unchanged if it starts with `/` (absolute path)\n   - Otherwise prepends the current script prefix using `get_script_prefix()`\n\n2. Adding property getters for `STATIC_URL` and `MEDIA_URL` that automatically apply the script prefix to their values\n\nThis allows Django to correctly handle static and media URLs when the application is served at a subpath with a dynamic SCRIPT_NAME value."
+        },
+        "usage": {
+          "promptTokens": 28,
+          "completionTokens": 163,
+          "totalTokens": 2826
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "The patch has been written to `experiments/swe-bench-harness/results-lite-full/django__django-11564/patch.diff`. \n\nThis patch adds support for SCRIPT_NAME prefixing in STATIC_URL and MEDIA_URL by:\n\n1. Adding a static method `_add_script_prefix(value)` to the LazySettings class that:\n   - Returns the value unchanged if it's a valid URL\n   - Returns the value unchanged if it starts with `/` (absolute path)\n   - Otherwise prepends the current script prefix using `get_script_prefix()`\n\n2. Adding property getters for `STATIC_URL` and `MEDIA_URL` that automatically apply the script prefix to their values\n\nThis allows Django to correctly handle static and media URLs when the application is served at a subpath with a dynamic SCRIPT_NAME value."
+  },
+  "endedAt": "2026-03-25T04:29:29.120Z"
+}

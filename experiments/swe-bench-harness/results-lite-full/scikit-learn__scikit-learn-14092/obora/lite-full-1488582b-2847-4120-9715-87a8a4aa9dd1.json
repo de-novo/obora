@@ -1,0 +1,35 @@
+{
+  "id": "1488582b-2847-4120-9715-87a8a4aa9dd1",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T05:01:12.534Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch file written to `experiments/swe-bench-harness/results-lite-full/scikit-learn__scikit-learn-14092/patch.diff`.\n\nThe fix addresses the issue where NCA fails in GridSearch due to overly strict parameter type checks. The changes:\n\n1. **Added `import numbers`** to access abstract base classes for numeric types\n\n2. **Changed parameter type checks from concrete types to abstract numeric types:**\n   - `n_components`, `max_iter`, `verbose`: Changed from `int` to `numbers.Integral` (accepts `int`, `np.int32`, `np.int64`, etc.)\n   - `tol`: Changed from `float` to `numbers.Real` (accepts `float`, `np.float32`, `np.float64`, etc.)\n\nThis allows GridSearchCV to work with numpy scalar types (e.g., `np.int64`, `np.float32`) which are commonly produced when creating parameter grids with numpy functions like `np.arange()`.",
+      "raw": {
+        "id": "zai-glm-4.7-1774414878436",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch file written to `experiments/swe-bench-harness/results-lite-full/scikit-learn__scikit-learn-14092/patch.diff`.\n\nThe fix addresses the issue where NCA fails in GridSearch due to overly strict parameter type checks. The changes:\n\n1. **Added `import numbers`** to access abstract base classes for numeric types\n\n2. **Changed parameter type checks from concrete types to abstract numeric types:**\n   - `n_components`, `max_iter`, `verbose`: Changed from `int` to `numbers.Integral` (accepts `int`, `np.int32`, `np.int64`, etc.)\n   - `tol`: Changed from `float` to `numbers.Real` (accepts `float`, `np.float32`, `np.float64`, etc.)\n\nThis allows GridSearchCV to work with numpy scalar types (e.g., `np.int64`, `np.float32`) which are commonly produced when creating parameter grids with numpy functions like `np.arange()`."
+        },
+        "usage": {
+          "promptTokens": 33,
+          "completionTokens": 207,
+          "totalTokens": 2956
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch file written to `experiments/swe-bench-harness/results-lite-full/scikit-learn__scikit-learn-14092/patch.diff`.\n\nThe fix addresses the issue where NCA fails in GridSearch due to overly strict parameter type checks. The changes:\n\n1. **Added `import numbers`** to access abstract base classes for numeric types\n\n2. **Changed parameter type checks from concrete types to abstract numeric types:**\n   - `n_components`, `max_iter`, `verbose`: Changed from `int` to `numbers.Integral` (accepts `int`, `np.int32`, `np.int64`, etc.)\n   - `tol`: Changed from `float` to `numbers.Real` (accepts `float`, `np.float32`, `np.float64`, etc.)\n\nThis allows GridSearchCV to work with numpy scalar types (e.g., `np.int64`, `np.float32`) which are commonly produced when creating parameter grids with numpy functions like `np.arange()`."
+  },
+  "endedAt": "2026-03-25T05:01:21.629Z"
+}

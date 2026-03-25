@@ -1,0 +1,35 @@
+{
+  "id": "56459747-bd6c-455a-b54b-aeba197dac05",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T05:00:36.555Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written successfully. The patch:\n\n1. **Exposes `warm_start` parameter** in `IsolationForest.__init__()` with default value `False`\n2. **Adds documentation** for the parameter consistent with other ensemble methods (like `RandomForestClassifier`)\n3. **Passes `warm_start`** to the parent `BaseBagging` class via `super().__init__()`\n4. **Includes version annotation** `.. versionadded:: 0.21`\n\nThis allows users to incrementally add trees to an IsolationForest by setting `warm_start=True` and increasing `n_estimators` on subsequent `fit()` calls, matching the behavior already supported by the parent `BaseBagging` class.",
+      "raw": {
+        "id": "zai-glm-4.7-1774414842028",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written successfully. The patch:\n\n1. **Exposes `warm_start` parameter** in `IsolationForest.__init__()` with default value `False`\n2. **Adds documentation** for the parameter consistent with other ensemble methods (like `RandomForestClassifier`)\n3. **Passes `warm_start`** to the parent `BaseBagging` class via `super().__init__()`\n4. **Includes version annotation** `.. versionadded:: 0.21`\n\nThis allows users to incrementally add trees to an IsolationForest by setting `warm_start=True` and increasing `n_estimators` on subsequent `fit()` calls, matching the behavior already supported by the parent `BaseBagging` class."
+        },
+        "usage": {
+          "promptTokens": 33,
+          "completionTokens": 146,
+          "totalTokens": 2261
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written successfully. The patch:\n\n1. **Exposes `warm_start` parameter** in `IsolationForest.__init__()` with default value `False`\n2. **Adds documentation** for the parameter consistent with other ensemble methods (like `RandomForestClassifier`)\n3. **Passes `warm_start`** to the parent `BaseBagging` class via `super().__init__()`\n4. **Includes version annotation** `.. versionadded:: 0.21`\n\nThis allows users to incrementally add trees to an IsolationForest by setting `warm_start=True` and increasing `n_estimators` on subsequent `fit()` calls, matching the behavior already supported by the parent `BaseBagging` class."
+  },
+  "endedAt": "2026-03-25T05:00:44.406Z"
+}

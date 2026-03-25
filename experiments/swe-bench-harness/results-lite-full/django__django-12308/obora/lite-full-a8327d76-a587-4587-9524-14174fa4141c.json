@@ -1,0 +1,35 @@
+{
+  "id": "a8327d76-a587-4587-9524-14174fa4141c",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:32:35.140Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-12308/patch.diff`.\n\nThe fix adds a special case in `django.contrib.admin.utils.display_for_field` to properly handle `JSONField` values when they are readonly in the admin. It uses `field.get_prep_value(value)` to serialize the value to valid JSON, and falls back to `display_for_value` if a `TypeError` is raised (e.g., for invalid JSON input).",
+      "raw": {
+        "id": "zai-glm-4.7-1774413160979",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-12308/patch.diff`.\n\nThe fix adds a special case in `django.contrib.admin.utils.display_for_field` to properly handle `JSONField` values when they are readonly in the admin. It uses `field.get_prep_value(value)` to serialize the value to valid JSON, and falls back to `display_for_value` if a `TypeError` is raised (e.g., for invalid JSON input)."
+        },
+        "usage": {
+          "promptTokens": 28,
+          "completionTokens": 101,
+          "totalTokens": 1612
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-12308/patch.diff`.\n\nThe fix adds a special case in `django.contrib.admin.utils.display_for_field` to properly handle `JSONField` values when they are readonly in the admin. It uses `field.get_prep_value(value)` to serialize the value to valid JSON, and falls back to `display_for_value` if a `TypeError` is raised (e.g., for invalid JSON input)."
+  },
+  "endedAt": "2026-03-25T04:32:43.025Z"
+}

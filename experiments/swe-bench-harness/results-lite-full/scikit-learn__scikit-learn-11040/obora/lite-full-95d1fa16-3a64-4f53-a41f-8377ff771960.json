@@ -1,0 +1,35 @@
+{
+  "id": "95d1fa16-3a64-4f53-a41f-8377ff771960",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:59:35.942Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "The patch has been written to `experiments/swe-bench-harness/results-lite-full/scikit-learn__scikit-learn-11040/patch.diff`.\n\nThe patch adds parameter validation to catch float values for `n_neighbors` and raise a helpful error message:\n\n1. In the `_fit` method: Checks if `self.n_neighbors` is an integer type when initializing the estimator, raises `TypeError` if it's a float.\n\n2. In the `kneighbors` method: Checks if the `n_neighbors` parameter is an integer type, raises `TypeError` if it's a float. Also validates that `n_neighbors > 0`.\n\nThis ensures that cases like `NearestNeighbors(n_neighbors=3.)` and `neighbors.kneighbors(X, n_neighbors=3.)` will produce clear error messages instead of failing later with a cryptic \"TypeError: 'float' object cannot be interpreted as an integer\" error.",
+      "raw": {
+        "id": "zai-glm-4.7-1774414782149",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "The patch has been written to `experiments/swe-bench-harness/results-lite-full/scikit-learn__scikit-learn-11040/patch.diff`.\n\nThe patch adds parameter validation to catch float values for `n_neighbors` and raise a helpful error message:\n\n1. In the `_fit` method: Checks if `self.n_neighbors` is an integer type when initializing the estimator, raises `TypeError` if it's a float.\n\n2. In the `kneighbors` method: Checks if the `n_neighbors` parameter is an integer type, raises `TypeError` if it's a float. Also validates that `n_neighbors > 0`.\n\nThis ensures that cases like `NearestNeighbors(n_neighbors=3.)` and `neighbors.kneighbors(X, n_neighbors=3.)` will produce clear error messages instead of failing later with a cryptic \"TypeError: 'float' object cannot be interpreted as an integer\" error."
+        },
+        "usage": {
+          "promptTokens": 33,
+          "completionTokens": 191,
+          "totalTokens": 2179
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "The patch has been written to `experiments/swe-bench-harness/results-lite-full/scikit-learn__scikit-learn-11040/patch.diff`.\n\nThe patch adds parameter validation to catch float values for `n_neighbors` and raise a helpful error message:\n\n1. In the `_fit` method: Checks if `self.n_neighbors` is an integer type when initializing the estimator, raises `TypeError` if it's a float.\n\n2. In the `kneighbors` method: Checks if the `n_neighbors` parameter is an integer type, raises `TypeError` if it's a float. Also validates that `n_neighbors > 0`.\n\nThis ensures that cases like `NearestNeighbors(n_neighbors=3.)` and `neighbors.kneighbors(X, n_neighbors=3.)` will produce clear error messages instead of failing later with a cryptic \"TypeError: 'float' object cannot be interpreted as an integer\" error."
+  },
+  "endedAt": "2026-03-25T04:59:44.855Z"
+}

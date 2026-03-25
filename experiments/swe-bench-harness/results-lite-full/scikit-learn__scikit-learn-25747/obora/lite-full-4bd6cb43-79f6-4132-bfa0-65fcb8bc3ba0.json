@@ -1,0 +1,35 @@
+{
+  "id": "4bd6cb43-79f6-4132-bfa0-65fcb8bc3ba0",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T05:02:18.066Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite-full/scikit-learn__scikit-learn-25747/patch.diff`.\n\nThe fix modifies `_wrap_in_pandas_container` in `sklearn/utils/_set_output.py` to:\n1. Update the docstring to document that `index` is ignored when input is already a DataFrame\n2. Remove the lines that override the index of an existing DataFrame\n\nThis resolves the issue where `FeatureUnion` fails when aggregating data with pandas transform output, because the transformer's output (with a different index after grouping) was incorrectly being reset to the original input's index.",
+      "raw": {
+        "id": "zai-glm-4.7-1774414941660",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite-full/scikit-learn__scikit-learn-25747/patch.diff`.\n\nThe fix modifies `_wrap_in_pandas_container` in `sklearn/utils/_set_output.py` to:\n1. Update the docstring to document that `index` is ignored when input is already a DataFrame\n2. Remove the lines that override the index of an existing DataFrame\n\nThis resolves the issue where `FeatureUnion` fails when aggregating data with pandas transform output, because the transformer's output (with a different index after grouping) was incorrectly being reset to the original input's index."
+        },
+        "usage": {
+          "promptTokens": 34,
+          "completionTokens": 133,
+          "totalTokens": 3782
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite-full/scikit-learn__scikit-learn-25747/patch.diff`.\n\nThe fix modifies `_wrap_in_pandas_container` in `sklearn/utils/_set_output.py` to:\n1. Update the docstring to document that `index` is ignored when input is already a DataFrame\n2. Remove the lines that override the index of an existing DataFrame\n\nThis resolves the issue where `FeatureUnion` fails when aggregating data with pandas transform output, because the transformer's output (with a different index after grouping) was incorrectly being reset to the original input's index."
+  },
+  "endedAt": "2026-03-25T05:02:23.691Z"
+}

@@ -1,0 +1,35 @@
+{
+  "id": "3d74fa49-0696-4669-bea6-3ca6b1ce5dac",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T05:05:44.074Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite-full/sympy__sympy-12481/patch.diff`. The fix removes the ValueError for non-disjoint cycles by only raising the error when `has_dups(temp)` is true AND `is_cycle` is false, allowing cycles with repeated elements to be processed in left-to-right order as intended.",
+      "raw": {
+        "id": "zai-glm-4.7-1774415147595",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite-full/sympy__sympy-12481/patch.diff`. The fix removes the ValueError for non-disjoint cycles by only raising the error when `has_dups(temp)` is true AND `is_cycle` is false, allowing cycles with repeated elements to be processed in left-to-right order as intended."
+        },
+        "usage": {
+          "promptTokens": 32,
+          "completionTokens": 79,
+          "totalTokens": 1768
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite-full/sympy__sympy-12481/patch.diff`. The fix removes the ValueError for non-disjoint cycles by only raising the error when `has_dups(temp)` is true AND `is_cycle` is false, allowing cycles with repeated elements to be processed in left-to-right order as intended."
+  },
+  "endedAt": "2026-03-25T05:05:49.745Z"
+}

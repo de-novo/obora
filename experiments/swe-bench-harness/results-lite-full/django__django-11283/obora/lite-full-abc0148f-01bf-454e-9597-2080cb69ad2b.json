@@ -1,0 +1,35 @@
+{
+  "id": "abc0148f-01bf-454e-9597-2080cb69ad2b",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:28:53.242Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-11283/patch.diff`. The fix handles the `IntegrityError` when proxy model permissions already exist by wrapping the update in an atomic transaction and outputting a warning message to audit the affected permissions.",
+      "raw": {
+        "id": "zai-glm-4.7-1774412944291",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-11283/patch.diff`. The fix handles the `IntegrityError` when proxy model permissions already exist by wrapping the update in an atomic transaction and outputting a warning message to audit the affected permissions."
+        },
+        "usage": {
+          "promptTokens": 28,
+          "completionTokens": 62,
+          "totalTokens": 2556
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-11283/patch.diff`. The fix handles the `IntegrityError` when proxy model permissions already exist by wrapping the update in an atomic transaction and outputting a warning message to audit the affected permissions."
+  },
+  "endedAt": "2026-03-25T04:29:05.872Z"
+}

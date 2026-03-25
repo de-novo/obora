@@ -1,0 +1,35 @@
+{
+  "id": "e8425ab6-bb5b-4d04-8223-9a4909ec12c6",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T05:14:01.106Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite-full/sympy__sympy-20322/patch.diff`. The patch modifies `sympy/core/mul.py` to fix inconsistent behavior in `_eval_is_integer()` for `Mul` expressions, specifically addressing the issue with ceiling operations and integer property detection.",
+      "raw": {
+        "id": "zai-glm-4.7-1774415652233",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite-full/sympy__sympy-20322/patch.diff`. The patch modifies `sympy/core/mul.py` to fix inconsistent behavior in `_eval_is_integer()` for `Mul` expressions, specifically addressing the issue with ceiling operations and integer property detection."
+        },
+        "usage": {
+          "promptTokens": 32,
+          "completionTokens": 71,
+          "totalTokens": 3298
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite-full/sympy__sympy-20322/patch.diff`. The patch modifies `sympy/core/mul.py` to fix inconsistent behavior in `_eval_is_integer()` for `Mul` expressions, specifically addressing the issue with ceiling operations and integer property detection."
+  },
+  "endedAt": "2026-03-25T05:14:16.051Z"
+}

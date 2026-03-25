@@ -1,0 +1,35 @@
+{
+  "id": "6a73c646-ea89-4221-aab3-3e677b042021",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:46:04.206Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Done. I've written the patch to `experiments/swe-bench-harness/results-lite-full/django__django-16229/patch.diff`.\n\nThe patch modifies `django/forms/boundfield.py` in the `as_widget()` method to properly propagate hidden initial values for ModelForm fields with callable defaults. When rendering a hidden initial widget (`only_initial=True`), it now checks if the initial value exists in the form data and uses `self.form._widget_data_value()` to retrieve and propagate it, preventing the default from being incorrectly applied on subsequent form submissions.",
+      "raw": {
+        "id": "zai-glm-4.7-1774413969498",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Done. I've written the patch to `experiments/swe-bench-harness/results-lite-full/django__django-16229/patch.diff`.\n\nThe patch modifies `django/forms/boundfield.py` in the `as_widget()` method to properly propagate hidden initial values for ModelForm fields with callable defaults. When rendering a hidden initial widget (`only_initial=True`), it now checks if the initial value exists in the form data and uses `self.form._widget_data_value()` to retrieve and propagate it, preventing the default from being incorrectly applied on subsequent form submissions."
+        },
+        "usage": {
+          "promptTokens": 28,
+          "completionTokens": 116,
+          "totalTokens": 2078
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Done. I've written the patch to `experiments/swe-bench-harness/results-lite-full/django__django-16229/patch.diff`.\n\nThe patch modifies `django/forms/boundfield.py` in the `as_widget()` method to properly propagate hidden initial values for ModelForm fields with callable defaults. When rendering a hidden initial widget (`only_initial=True`), it now checks if the initial value exists in the form data and uses `self.form._widget_data_value()` to retrieve and propagate it, preventing the default from being incorrectly applied on subsequent form submissions."
+  },
+  "endedAt": "2026-03-25T04:46:13.095Z"
+}

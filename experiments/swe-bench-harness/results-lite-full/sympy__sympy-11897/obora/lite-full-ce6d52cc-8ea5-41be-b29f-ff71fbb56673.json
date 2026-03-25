@@ -1,0 +1,35 @@
+{
+  "id": "ce6d52cc-8ea5-41be-b29f-ff71fbb56673",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T05:05:01.304Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "I've written the patch to `experiments/swe-bench-harness/results-lite-full/sympy__sympy-11897/patch.diff`.\n\nThe patch fixes the inconsistency between the LaTeX printer and pretty printer by modifying the `_needs_mul_brackets` method in `sympy/printing/latex.py`:\n\n1. Adds a check that returns `True` when `expr.is_Piecewise` (lines 238-239)\n2. Removes `Piecewise` from the list of expressions checked in the final condition (line 242)\n\nThis ensures that Piecewise expressions get proper bracketing when multiplied, making the LaTeX printer output consistent with the pretty printer.",
+      "raw": {
+        "id": "zai-glm-4.7-1774415106431",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "I've written the patch to `experiments/swe-bench-harness/results-lite-full/sympy__sympy-11897/patch.diff`.\n\nThe patch fixes the inconsistency between the LaTeX printer and pretty printer by modifying the `_needs_mul_brackets` method in `sympy/printing/latex.py`:\n\n1. Adds a check that returns `True` when `expr.is_Piecewise` (lines 238-239)\n2. Removes `Piecewise` from the list of expressions checked in the final condition (line 242)\n\nThis ensures that Piecewise expressions get proper bracketing when multiplied, making the LaTeX printer output consistent with the pretty printer."
+        },
+        "usage": {
+          "promptTokens": 32,
+          "completionTokens": 142,
+          "totalTokens": 1790
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "I've written the patch to `experiments/swe-bench-harness/results-lite-full/sympy__sympy-11897/patch.diff`.\n\nThe patch fixes the inconsistency between the LaTeX printer and pretty printer by modifying the `_needs_mul_brackets` method in `sympy/printing/latex.py`:\n\n1. Adds a check that returns `True` when `expr.is_Piecewise` (lines 238-239)\n2. Removes `Piecewise` from the list of expressions checked in the final condition (line 242)\n\nThis ensures that Piecewise expressions get proper bracketing when multiplied, making the LaTeX printer output consistent with the pretty printer."
+  },
+  "endedAt": "2026-03-25T05:05:08.552Z"
+}

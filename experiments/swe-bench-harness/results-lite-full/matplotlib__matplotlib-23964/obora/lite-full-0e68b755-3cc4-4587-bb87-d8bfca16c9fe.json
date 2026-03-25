@@ -1,0 +1,35 @@
+{
+  "id": "0e68b755-3cc4-4587-bb87-d8bfca16c9fe",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:50:12.339Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "The patch has been written to `experiments/swe-bench-harness/results-lite-full/matplotlib__matplotlib-23964/patch.diff`.\n\nThe fix addresses the bug in the PostScript backend where a text label with an empty line causes a `TypeError: cannot unpack non-iterable NoneType object`. The issue is that when an empty line exists in multi-line text, `curr_stream` remains `None` or empty, and attempting to iterate over `stream` later fails because `None` was appended.\n\nThe fix adds a conditional check before appending `curr_stream` to ensure it only gets appended if it contains valid data. This prevents `None` from being added to the stream list, which would cause the unpacking error when iterating.",
+      "raw": {
+        "id": "zai-glm-4.7-1774414217163",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "The patch has been written to `experiments/swe-bench-harness/results-lite-full/matplotlib__matplotlib-23964/patch.diff`.\n\nThe fix addresses the bug in the PostScript backend where a text label with an empty line causes a `TypeError: cannot unpack non-iterable NoneType object`. The issue is that when an empty line exists in multi-line text, `curr_stream` remains `None` or empty, and attempting to iterate over `stream` later fails because `None` was appended.\n\nThe fix adds a conditional check before appending `curr_stream` to ensure it only gets appended if it contains valid data. This prevents `None` from being added to the stream list, which would cause the unpacking error when iterating."
+        },
+        "usage": {
+          "promptTokens": 29,
+          "completionTokens": 153,
+          "totalTokens": 2714
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "The patch has been written to `experiments/swe-bench-harness/results-lite-full/matplotlib__matplotlib-23964/patch.diff`.\n\nThe fix addresses the bug in the PostScript backend where a text label with an empty line causes a `TypeError: cannot unpack non-iterable NoneType object`. The issue is that when an empty line exists in multi-line text, `curr_stream` remains `None` or empty, and attempting to iterate over `stream` later fails because `None` was appended.\n\nThe fix adds a conditional check before appending `curr_stream` to ensure it only gets appended if it contains valid data. This prevents `None` from being added to the stream list, which would cause the unpacking error when iterating."
+  },
+  "endedAt": "2026-03-25T04:50:22.025Z"
+}

@@ -1,0 +1,35 @@
+{
+  "id": "4da63d64-83cf-421d-9617-0c4fd5aa19f0",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:26:52.852Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-10914/patch.diff`. The change sets the default `FILE_UPLOAD_PERMISSIONS` from `None` to `0o644` in `django/conf/global_settings.py` to ensure consistent file permissions for uploads regardless of whether `MemoryUploadedFile` or `TemporaryUploadedFile` is used.",
+      "raw": {
+        "id": "zai-glm-4.7-1774412817486",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-10914/patch.diff`. The change sets the default `FILE_UPLOAD_PERMISSIONS` from `None` to `0o644` in `django/conf/global_settings.py` to ensure consistent file permissions for uploads regardless of whether `MemoryUploadedFile` or `TemporaryUploadedFile` is used."
+        },
+        "usage": {
+          "promptTokens": 28,
+          "completionTokens": 81,
+          "totalTokens": 1485
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-10914/patch.diff`. The change sets the default `FILE_UPLOAD_PERMISSIONS` from `None` to `0o644` in `django/conf/global_settings.py` to ensure consistent file permissions for uploads regardless of whether `MemoryUploadedFile` or `TemporaryUploadedFile` is used."
+  },
+  "endedAt": "2026-03-25T04:26:59.057Z"
+}

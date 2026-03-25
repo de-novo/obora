@@ -1,0 +1,35 @@
+{
+  "id": "69037554-1aac-4cb9-8aa9-f57d4d6e9659",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T05:03:36.508Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written successfully. The fix modifies `sphinx/ext/autodoc/__init__.py` to respect the `autodoc_typehints` configuration setting for overloaded callables. \n\nThe change adds a check `self.env.config.autodoc_typehints == 'signature'` in three locations where overloaded signatures are used:\n\n1. In `FunctionDocumenter.format_signature()` - for overloaded functions\n2. In `ClassDocumenter.format_signature()` - for overloaded methods  \n3. In `AttributeDocumenter.format_signature()` - for overloaded properties\n\nThis ensures that when `autodoc_typehints` is set to `'none'` or `'description'`, the implementation signature (without type hints) will be used instead of the overloaded signatures that contain type hints.",
+      "raw": {
+        "id": "zai-glm-4.7-1774415023176",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written successfully. The fix modifies `sphinx/ext/autodoc/__init__.py` to respect the `autodoc_typehints` configuration setting for overloaded callables. \n\nThe change adds a check `self.env.config.autodoc_typehints == 'signature'` in three locations where overloaded signatures are used:\n\n1. In `FunctionDocumenter.format_signature()` - for overloaded functions\n2. In `ClassDocumenter.format_signature()` - for overloaded methods  \n3. In `AttributeDocumenter.format_signature()` - for overloaded properties\n\nThis ensures that when `autodoc_typehints` is set to `'none'` or `'description'`, the implementation signature (without type hints) will be used instead of the overloaded signatures that contain type hints."
+        },
+        "usage": {
+          "promptTokens": 31,
+          "completionTokens": 156,
+          "totalTokens": 2670
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written successfully. The fix modifies `sphinx/ext/autodoc/__init__.py` to respect the `autodoc_typehints` configuration setting for overloaded callables. \n\nThe change adds a check `self.env.config.autodoc_typehints == 'signature'` in three locations where overloaded signatures are used:\n\n1. In `FunctionDocumenter.format_signature()` - for overloaded functions\n2. In `ClassDocumenter.format_signature()` - for overloaded methods  \n3. In `AttributeDocumenter.format_signature()` - for overloaded properties\n\nThis ensures that when `autodoc_typehints` is set to `'none'` or `'description'`, the implementation signature (without type hints) will be used instead of the overloaded signatures that contain type hints."
+  },
+  "endedAt": "2026-03-25T05:03:45.456Z"
+}

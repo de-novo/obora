@@ -1,0 +1,35 @@
+{
+  "id": "f972cc3b-de0c-4b47-89a7-66bedfe971d6",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:47:54.815Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-17087/patch.diff`.\n\nThe fix changes `klass.__name__` to `klass.__qualname__` in `django/db/migrations/serializer.py`. This ensures that when serializing class methods from nested classes, the full qualified name (including outer class names) is preserved. For example, `appname.models.Profile.Capability.default` instead of `appname.models.Capability.default`.",
+      "raw": {
+        "id": "zai-glm-4.7-1774414080568",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-17087/patch.diff`.\n\nThe fix changes `klass.__name__` to `klass.__qualname__` in `django/db/migrations/serializer.py`. This ensures that when serializing class methods from nested classes, the full qualified name (including outer class names) is preserved. For example, `appname.models.Profile.Capability.default` instead of `appname.models.Capability.default`."
+        },
+        "usage": {
+          "promptTokens": 28,
+          "completionTokens": 101,
+          "totalTokens": 1745
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-17087/patch.diff`.\n\nThe fix changes `klass.__name__` to `klass.__qualname__` in `django/db/migrations/serializer.py`. This ensures that when serializing class methods from nested classes, the full qualified name (including outer class names) is preserved. For example, `appname.models.Profile.Capability.default` instead of `appname.models.Capability.default`."
+  },
+  "endedAt": "2026-03-25T04:48:04.295Z"
+}

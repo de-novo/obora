@@ -1,0 +1,35 @@
+{
+  "id": "fc73bf30-d9af-4408-8237-7c45783e8a82",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:26:15.771Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite-full/astropy__astropy-14365/patch.diff`.\n\nThe fix makes the QDP parser case-insensitive by:\n1. Adding `re.IGNORECASE` flag to the regex pattern that parses QDP commands\n2. Using `v.upper() == \"NO\"` when checking for masked values\n\nThis allows QDP files with lowercase commands like \"read serr 1 2\" to be parsed correctly.",
+      "raw": {
+        "id": "zai-glm-4.7-1774412783074",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite-full/astropy__astropy-14365/patch.diff`.\n\nThe fix makes the QDP parser case-insensitive by:\n1. Adding `re.IGNORECASE` flag to the regex pattern that parses QDP commands\n2. Using `v.upper() == \"NO\"` when checking for masked values\n\nThis allows QDP files with lowercase commands like \"read serr 1 2\" to be parsed correctly."
+        },
+        "usage": {
+          "promptTokens": 30,
+          "completionTokens": 99,
+          "totalTokens": 2426
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite-full/astropy__astropy-14365/patch.diff`.\n\nThe fix makes the QDP parser case-insensitive by:\n1. Adding `re.IGNORECASE` flag to the regex pattern that parses QDP commands\n2. Using `v.upper() == \"NO\"` when checking for masked values\n\nThis allows QDP files with lowercase commands like \"read serr 1 2\" to be parsed correctly."
+  },
+  "endedAt": "2026-03-25T04:26:26.655Z"
+}

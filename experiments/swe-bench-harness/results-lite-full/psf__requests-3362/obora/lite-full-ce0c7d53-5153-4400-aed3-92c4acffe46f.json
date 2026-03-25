@@ -1,0 +1,35 @@
+{
+  "id": "ce0c7d53-5153-4400-aed3-92c4acffe46f",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:54:46.003Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "I've created the patch that fixes issue psf__requests-3362. The fix addresses the problem where `iter_content(decode_unicode=True)` was returning bytes instead of unicode strings when the response encoding was None.\n\n**Changes made to `requests/utils.py`:**\n\n1. Store `r.encoding` in a local variable `encoding` for cleaner code\n2. When `encoding` is None, fall back to using `r.apparent_encoding` instead of just yielding raw bytes\n3. Wrap the decoder creation in a try-except block to handle cases where the encoding is invalid or cannot be found, raising a helpful `UnicodeError` instead of failing silently\n\nThis ensures that `iter_content(decode_unicode=True)` consistently returns unicode strings, matching the behavior of `r.text`, as originally expected by the user.",
+      "raw": {
+        "id": "zai-glm-4.7-1774414493368",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "I've created the patch that fixes issue psf__requests-3362. The fix addresses the problem where `iter_content(decode_unicode=True)` was returning bytes instead of unicode strings when the response encoding was None.\n\n**Changes made to `requests/utils.py`:**\n\n1. Store `r.encoding` in a local variable `encoding` for cleaner code\n2. When `encoding` is None, fall back to using `r.apparent_encoding` instead of just yielding raw bytes\n3. Wrap the decoder creation in a try-except block to handle cases where the encoding is invalid or cannot be found, raising a helpful `UnicodeError` instead of failing silently\n\nThis ensures that `iter_content(decode_unicode=True)` consistently returns unicode strings, matching the behavior of `r.text`, as originally expected by the user."
+        },
+        "usage": {
+          "promptTokens": 30,
+          "completionTokens": 168,
+          "totalTokens": 1782
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "I've created the patch that fixes issue psf__requests-3362. The fix addresses the problem where `iter_content(decode_unicode=True)` was returning bytes instead of unicode strings when the response encoding was None.\n\n**Changes made to `requests/utils.py`:**\n\n1. Store `r.encoding` in a local variable `encoding` for cleaner code\n2. When `encoding` is None, fall back to using `r.apparent_encoding` instead of just yielding raw bytes\n3. Wrap the decoder creation in a try-except block to handle cases where the encoding is invalid or cannot be found, raising a helpful `UnicodeError` instead of failing silently\n\nThis ensures that `iter_content(decode_unicode=True)` consistently returns unicode strings, matching the behavior of `r.text`, as originally expected by the user."
+  },
+  "endedAt": "2026-03-25T04:54:57.213Z"
+}

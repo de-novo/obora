@@ -1,0 +1,35 @@
+{
+  "id": "651a91a1-b9b9-4918-b72d-353c7bd3b0f8",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T05:09:55.894Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite-full/sympy__sympy-15346/patch.diff`. The fix reorders transformations in `_futrig` so `TR10i` (sin-cos products to sin-cos of sums) is applied before `TRmorrie`, allowing simplification of expressions like `sin(1/50)*sin(1/25) + cos(1/50)*cos(1/25)` to `cos(1/50)`.",
+      "raw": {
+        "id": "zai-glm-4.7-1774415399893",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite-full/sympy__sympy-15346/patch.diff`. The fix reorders transformations in `_futrig` so `TR10i` (sin-cos products to sin-cos of sums) is applied before `TRmorrie`, allowing simplification of expressions like `sin(1/50)*sin(1/25) + cos(1/50)*cos(1/25)` to `cos(1/50)`."
+        },
+        "usage": {
+          "promptTokens": 32,
+          "completionTokens": 109,
+          "totalTokens": 2270
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite-full/sympy__sympy-15346/patch.diff`. The fix reorders transformations in `_futrig` so `TR10i` (sin-cos products to sin-cos of sums) is applied before `TRmorrie`, allowing simplification of expressions like `sin(1/50)*sin(1/25) + cos(1/50)*cos(1/25)` to `cos(1/50)`."
+  },
+  "endedAt": "2026-03-25T05:10:01.839Z"
+}

@@ -1,0 +1,35 @@
+{
+  "id": "4ee68a51-035f-4e75-b76a-907ae9c06eb3",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:29:06.182Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-11422/patch.diff`. The fix modifies `django/utils/autoreload.py` to properly track changes in the `__main__` module (typically `manage.py`) by handling it as a special case before checking for `__spec__`, since `__main__` doesn't always have a `__spec__` attribute set.",
+      "raw": {
+        "id": "zai-glm-4.7-1774412952541",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-11422/patch.diff`. The fix modifies `django/utils/autoreload.py` to properly track changes in the `__main__` module (typically `manage.py`) by handling it as a special case before checking for `__spec__`, since `__main__` doesn't always have a `__spec__` attribute set."
+        },
+        "usage": {
+          "promptTokens": 28,
+          "completionTokens": 91,
+          "totalTokens": 1745
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-11422/patch.diff`. The fix modifies `django/utils/autoreload.py` to properly track changes in the `__main__` module (typically `manage.py`) by handling it as a special case before checking for `__spec__`, since `__main__` doesn't always have a `__spec__` attribute set."
+  },
+  "endedAt": "2026-03-25T04:29:14.353Z"
+}

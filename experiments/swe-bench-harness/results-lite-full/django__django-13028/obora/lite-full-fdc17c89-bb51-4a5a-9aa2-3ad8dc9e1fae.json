@@ -1,0 +1,35 @@
+{
+  "id": "fdc17c89-bb51-4a5a-9aa2-3ad8dc9e1fae",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:34:36.081Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-13028/patch.diff`.\n\nThe fix modifies `check_filterable()` in `django/db/models/sql/query.py` to check if the expression has `resolve_expression` before applying the `filterable` attribute check. This prevents the `NotSupportedError` when filtering on a model instance that happens to have a `filterable` field, as the check now only applies to expressions that implement the Django query expression interface.",
+      "raw": {
+        "id": "zai-glm-4.7-1774413283564",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-13028/patch.diff`.\n\nThe fix modifies `check_filterable()` in `django/db/models/sql/query.py` to check if the expression has `resolve_expression` before applying the `filterable` attribute check. This prevents the `NotSupportedError` when filtering on a model instance that happens to have a `filterable` field, as the check now only applies to expressions that implement the Django query expression interface."
+        },
+        "usage": {
+          "promptTokens": 28,
+          "completionTokens": 105,
+          "totalTokens": 2589
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-13028/patch.diff`.\n\nThe fix modifies `check_filterable()` in `django/db/models/sql/query.py` to check if the expression has `resolve_expression` before applying the `filterable` attribute check. This prevents the `NotSupportedError` when filtering on a model instance that happens to have a `filterable` field, as the check now only applies to expressions that implement the Django query expression interface."
+  },
+  "endedAt": "2026-03-25T04:34:45.871Z"
+}

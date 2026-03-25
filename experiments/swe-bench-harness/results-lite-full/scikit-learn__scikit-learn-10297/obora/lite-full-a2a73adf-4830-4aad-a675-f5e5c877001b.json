@@ -1,0 +1,35 @@
+{
+  "id": "a2a73adf-4830-4aad-a675-f5e5c877001b",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:59:05.036Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite-full/scikit-learn__scikit-learn-10297/patch.diff`.\n\nThe patch adds `store_cv_values` parameter support to `RidgeClassifierCV` by:\n1. Adding the `store_cv_values` parameter to the `__init__` method with default `False`\n2. Passing it to the parent `_BaseRidgeCV` constructor\n3. Adding proper documentation for the parameter in the docstring\n4. Fixing docstring formatting for consistency (backticks)",
+      "raw": {
+        "id": "zai-glm-4.7-1774414756519",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite-full/scikit-learn__scikit-learn-10297/patch.diff`.\n\nThe patch adds `store_cv_values` parameter support to `RidgeClassifierCV` by:\n1. Adding the `store_cv_values` parameter to the `__init__` method with default `False`\n2. Passing it to the parent `_BaseRidgeCV` constructor\n3. Adding proper documentation for the parameter in the docstring\n4. Fixing docstring formatting for consistency (backticks)"
+        },
+        "usage": {
+          "promptTokens": 33,
+          "completionTokens": 115,
+          "totalTokens": 4069
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite-full/scikit-learn__scikit-learn-10297/patch.diff`.\n\nThe patch adds `store_cv_values` parameter support to `RidgeClassifierCV` by:\n1. Adding the `store_cv_values` parameter to the `__init__` method with default `False`\n2. Passing it to the parent `_BaseRidgeCV` constructor\n3. Adding proper documentation for the parameter in the docstring\n4. Fixing docstring formatting for consistency (backticks)"
+  },
+  "endedAt": "2026-03-25T04:59:18.828Z"
+}

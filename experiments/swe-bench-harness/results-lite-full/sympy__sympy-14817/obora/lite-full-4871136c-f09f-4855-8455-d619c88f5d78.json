@@ -1,0 +1,35 @@
+{
+  "id": "4871136c-f09f-4855-8455-d619c88f5d78",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T05:07:57.734Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "I have written the patch to:\n\n**experiments/swe-bench-harness/results-lite-full/sympy__sympy-14817/patch.diff**\n\nThe patch fixes the issue in `_print_MatAdd` method in `sympy/printing/pretty/pretty.py`. The problem was that the code was using `S(item.args[0]).is_negative` which attempted to sympify the first argument, causing a `SympifyError` when MatrixSymbol names contain special characters like '*' (e.g., 'y*').\n\nThe fix:\n1. Uses `item.as_coeff_mmul()[0]` to safely extract the coefficient\n2. Uses `_coeff_isneg(S(coeff))` to check if the coefficient is negative, which avoids sympifying string arguments\n\nThis resolves the pretty printing error for MatrixAdd expressions with MatrixSymbols having special characters in their names.",
+      "raw": {
+        "id": "zai-glm-4.7-1774415316216",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "I have written the patch to:\n\n**experiments/swe-bench-harness/results-lite-full/sympy__sympy-14817/patch.diff**\n\nThe patch fixes the issue in `_print_MatAdd` method in `sympy/printing/pretty/pretty.py`. The problem was that the code was using `S(item.args[0]).is_negative` which attempted to sympify the first argument, causing a `SympifyError` when MatrixSymbol names contain special characters like '*' (e.g., 'y*').\n\nThe fix:\n1. Uses `item.as_coeff_mmul()[0]` to safely extract the coefficient\n2. Uses `_coeff_isneg(S(coeff))` to check if the coefficient is negative, which avoids sympifying string arguments\n\nThis resolves the pretty printing error for MatrixAdd expressions with MatrixSymbols having special characters in their names."
+        },
+        "usage": {
+          "promptTokens": 32,
+          "completionTokens": 182,
+          "totalTokens": 5170
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "I have written the patch to:\n\n**experiments/swe-bench-harness/results-lite-full/sympy__sympy-14817/patch.diff**\n\nThe patch fixes the issue in `_print_MatAdd` method in `sympy/printing/pretty/pretty.py`. The problem was that the code was using `S(item.args[0]).is_negative` which attempted to sympify the first argument, causing a `SympifyError` when MatrixSymbol names contain special characters like '*' (e.g., 'y*').\n\nThe fix:\n1. Uses `item.as_coeff_mmul()[0]` to safely extract the coefficient\n2. Uses `_coeff_isneg(S(coeff))` to check if the coefficient is negative, which avoids sympifying string arguments\n\nThis resolves the pretty printing error for MatrixAdd expressions with MatrixSymbols having special characters in their names."
+  },
+  "endedAt": "2026-03-25T05:08:39.975Z"
+}

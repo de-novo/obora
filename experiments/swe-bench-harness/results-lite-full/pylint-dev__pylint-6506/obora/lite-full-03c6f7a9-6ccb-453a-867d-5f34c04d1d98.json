@@ -1,0 +1,35 @@
+{
+  "id": "03c6f7a9-6ccb-453a-867d-5f34c04d1d98",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:56:21.744Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite-full/pylint-dev__pylint-6506/patch.diff`. The fix replaces the traceback-raising behavior with a user-friendly argument parser error that displays usage information, matching the expected behavior described in the issue.",
+      "raw": {
+        "id": "zai-glm-4.7-1774414585699",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite-full/pylint-dev__pylint-6506/patch.diff`. The fix replaces the traceback-raising behavior with a user-friendly argument parser error that displays usage information, matching the expected behavior described in the issue."
+        },
+        "usage": {
+          "promptTokens": 30,
+          "completionTokens": 58,
+          "totalTokens": 2109
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite-full/pylint-dev__pylint-6506/patch.diff`. The fix replaces the traceback-raising behavior with a user-friendly argument parser error that displays usage information, matching the expected behavior described in the issue."
+  },
+  "endedAt": "2026-03-25T04:56:27.946Z"
+}

@@ -1,0 +1,35 @@
+{
+  "id": "88c90451-e895-401f-8a74-d2278ad32b36",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T05:16:17.827Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite-full/sympy__sympy-23191/patch.diff`. The fix addresses the display bug where unit vectors were incorrectly inserted in the middle of pretty-printed expressions when using `sympy.vector` objects. The changes ensure vector strings are placed after all right parentheses in fraction expressions.",
+      "raw": {
+        "id": "zai-glm-4.7-1774415786294",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite-full/sympy__sympy-23191/patch.diff`. The fix addresses the display bug where unit vectors were incorrectly inserted in the middle of pretty-printed expressions when using `sympy.vector` objects. The changes ensure vector strings are placed after all right parentheses in fraction expressions."
+        },
+        "usage": {
+          "promptTokens": 33,
+          "completionTokens": 77,
+          "totalTokens": 4689
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite-full/sympy__sympy-23191/patch.diff`. The fix addresses the display bug where unit vectors were incorrectly inserted in the middle of pretty-printed expressions when using `sympy.vector` objects. The changes ensure vector strings are placed after all right parentheses in fraction expressions."
+  },
+  "endedAt": "2026-03-25T05:16:28.185Z"
+}

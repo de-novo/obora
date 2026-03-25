@@ -1,0 +1,35 @@
+{
+  "id": "862bc8db-0547-40cd-94f0-3740cde9dcbe",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:34:20.398Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written successfully. The fix modifies `django/utils/text.py` to:\n\n1. Remove the `.strip()` call after the first regex substitution\n2. Add `.strip('-_')` after the final regex substitution to remove leading and trailing dashes and underscores\n\nThis ensures `slugify(\"___This is a test ---\")` returns `\"this-is-a-test\"` instead of `\"___this-is-a-test-\"`.",
+      "raw": {
+        "id": "zai-glm-4.7-1774413274053",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written successfully. The fix modifies `django/utils/text.py` to:\n\n1. Remove the `.strip()` call after the first regex substitution\n2. Add `.strip('-_')` after the final regex substitution to remove leading and trailing dashes and underscores\n\nThis ensures `slugify(\"___This is a test ---\")` returns `\"this-is-a-test\"` instead of `\"___this-is-a-test-\"`."
+        },
+        "usage": {
+          "promptTokens": 28,
+          "completionTokens": 84,
+          "totalTokens": 1935
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written successfully. The fix modifies `django/utils/text.py` to:\n\n1. Remove the `.strip()` call after the first regex substitution\n2. Add `.strip('-_')` after the final regex substitution to remove leading and trailing dashes and underscores\n\nThis ensures `slugify(\"___This is a test ---\")` returns `\"this-is-a-test\"` instead of `\"___this-is-a-test-\"`."
+  },
+  "endedAt": "2026-03-25T04:34:35.702Z"
+}

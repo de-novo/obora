@@ -1,0 +1,35 @@
+{
+  "id": "42e80173-169e-4928-abb2-2c2c38b0105d",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T05:05:58.267Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written successfully. The fix changes the `decompose()` function in `sympy/integrals/intpoly.py` to return a `set` instead of a `list` when `separate=True`, which resolves the issue of arbitrary ordering. This includes:\n\n1. **Line 559**: Updated docstring example to show set return type\n2. **Line 572**: Changed list comprehension to set comprehension for the Add case\n3. **Line 596**: Changed `list(poly_dict.values())` to `set(poly_dict.values())` for the final return",
+      "raw": {
+        "id": "zai-glm-4.7-1774415163595",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written successfully. The fix changes the `decompose()` function in `sympy/integrals/intpoly.py` to return a `set` instead of a `list` when `separate=True`, which resolves the issue of arbitrary ordering. This includes:\n\n1. **Line 559**: Updated docstring example to show set return type\n2. **Line 572**: Changed list comprehension to set comprehension for the Add case\n3. **Line 596**: Changed `list(poly_dict.values())` to `set(poly_dict.values())` for the final return"
+        },
+        "usage": {
+          "promptTokens": 32,
+          "completionTokens": 120,
+          "totalTokens": 2359
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written successfully. The fix changes the `decompose()` function in `sympy/integrals/intpoly.py` to return a `set` instead of a `list` when `separate=True`, which resolves the issue of arbitrary ordering. This includes:\n\n1. **Line 559**: Updated docstring example to show set return type\n2. **Line 572**: Changed list comprehension to set comprehension for the Add case\n3. **Line 596**: Changed `list(poly_dict.values())` to `set(poly_dict.values())` for the final return"
+  },
+  "endedAt": "2026-03-25T05:06:05.495Z"
+}

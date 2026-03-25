@@ -1,0 +1,35 @@
+{
+  "id": "d4e3da54-c1f3-4697-a158-f38415d56c03",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:39:24.257Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-13768/patch.diff`.\n\nThe patch adds logging to `Signal.send_robust()` in `django/dispatch/dispatcher.py`:\n1. Imports `logging` module\n2. Creates a logger for `django.dispatch`\n3. Logs errors at ERROR level when a receiver raises an exception, including the receiver's qualified name, error message, and full exception info (traceback) via `exc_info=err`",
+      "raw": {
+        "id": "zai-glm-4.7-1774413571355",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-13768/patch.diff`.\n\nThe patch adds logging to `Signal.send_robust()` in `django/dispatch/dispatcher.py`:\n1. Imports `logging` module\n2. Creates a logger for `django.dispatch`\n3. Logs errors at ERROR level when a receiver raises an exception, including the receiver's qualified name, error message, and full exception info (traceback) via `exc_info=err`"
+        },
+        "usage": {
+          "promptTokens": 28,
+          "completionTokens": 107,
+          "totalTokens": 1911
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite-full/django__django-13768/patch.diff`.\n\nThe patch adds logging to `Signal.send_robust()` in `django/dispatch/dispatcher.py`:\n1. Imports `logging` module\n2. Creates a logger for `django.dispatch`\n3. Logs errors at ERROR level when a receiver raises an exception, including the receiver's qualified name, error message, and full exception info (traceback) via `exc_info=err`"
+  },
+  "endedAt": "2026-03-25T04:39:33.906Z"
+}

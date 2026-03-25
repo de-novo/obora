@@ -1,0 +1,9 @@
+{
+  "id": "sympy__sympy-13146",
+  "problem_statement": "Exponent doesn't fully simplify\nSay I have code like this:\n\n```\nimport sympy\nfrom sympy import *\nx=Symbol('x')\nexpr1 = S(1)/2*x**2.5\nexpr2 = S(1)*x**(S(5)/2)/2\nres = expr1-expr2\nres= simplify(res.evalf(5))\nprint res\n```\n\nThe output is\n`-0.5*x**2.5 + 0.5*x**2.5`\nHow do I simplify it to 0?\n\n",
+  "repo": "sympy/sympy",
+  "base_commit": "b678d8103e48fdb1af335dbf0080b3d5366f2d17",
+  "patch": "diff --git a/sympy/core/operations.py b/sympy/core/operations.py\n--- a/sympy/core/operations.py\n+++ b/sympy/core/operations.py\n@@ -332,9 +332,7 @@ def _eval_evalf(self, prec):\n                         args.append(a)\n                     else:\n                         args.append(newa)\n-                if not _aresame(tuple(args), tail_args):\n-                    tail = self.func(*args)\n-                return self.func(x, tail)\n+                return self.func(x, *args)\n \n         # this is the same as above, but there were no pure-number args to\n         # deal with\n@@ -345,9 +343,7 @@ def _eval_evalf(self, prec):\n                 args.append(a)\n             else:\n                 args.append(newa)\n-        if not _aresame(tuple(args), self.args):\n-            return self.func(*args)\n-        return self\n+        return self.func(*args)\n \n     @classmethod\n     def make_args(cls, expr):\n",
+  "test_patch": "diff --git a/sympy/core/tests/test_evalf.py b/sympy/core/tests/test_evalf.py\n--- a/sympy/core/tests/test_evalf.py\n+++ b/sympy/core/tests/test_evalf.py\n@@ -227,6 +227,9 @@ def test_evalf_bugs():\n     assert ((oo*I).n() == S.Infinity*I)\n     assert ((oo+oo*I).n() == S.Infinity + S.Infinity*I)\n \n+    #issue 11518\n+    assert NS(2*x**2.5, 5) == '2.0000*x**2.5000'\n+\n \n def test_evalf_integer_parts():\n     a = floor(log(8)/log(2) - exp(-1000), evaluate=False)\n",
+  "version": "1.1"
+}

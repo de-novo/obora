@@ -1,0 +1,35 @@
+{
+  "id": "9fc8ee50-6299-43a4-bfeb-1b862d69d39e",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:32:25.698Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written successfully. The fix modifies `django/core/checks/translation.py` to use `get_supported_language_variant()` instead of checking against a hardcoded set of available language tags. This allows Django to correctly handle sublanguages (like `de-at`) by falling back to their base language (like `de`) when the base language is available, aligning with Django's documented behavior.",
+      "raw": {
+        "id": "zai-glm-4.7-1774413152552",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written successfully. The fix modifies `django/core/checks/translation.py` to use `get_supported_language_variant()` instead of checking against a hardcoded set of available language tags. This allows Django to correctly handle sublanguages (like `de-at`) by falling back to their base language (like `de`) when the base language is available, aligning with Django's documented behavior."
+        },
+        "usage": {
+          "promptTokens": 28,
+          "completionTokens": 78,
+          "totalTokens": 2005
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written successfully. The fix modifies `django/core/checks/translation.py` to use `get_supported_language_variant()` instead of checking against a hardcoded set of available language tags. This allows Django to correctly handle sublanguages (like `de-at`) by falling back to their base language (like `de`) when the base language is available, aligning with Django's documented behavior."
+  },
+  "endedAt": "2026-03-25T04:32:34.781Z"
+}

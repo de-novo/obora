@@ -1,0 +1,35 @@
+{
+  "id": "2f250789-c8d5-4d80-83c8-5eb4d9ee6986",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T05:11:49.947Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite-full/sympy__sympy-18087/patch.diff`. The fix addresses issue #18087 by:\n\n1. Using `S.Zero` instead of `0` when initializing factor exponents to maintain proper SymPy type handling\n2. Restructuring the `as_expr()` method to only decompose base/exp when `exp` is an `Integer`, avoiding incorrect handling of rational exponents like `S.Half`\n\nThis prevents `trigsimp` from incorrectly simplifying `cos(x) + sqrt(sin(x)**2)` to `cos(x) + sin(x)` for complex x.",
+      "raw": {
+        "id": "zai-glm-4.7-1774415516518",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite-full/sympy__sympy-18087/patch.diff`. The fix addresses issue #18087 by:\n\n1. Using `S.Zero` instead of `0` when initializing factor exponents to maintain proper SymPy type handling\n2. Restructuring the `as_expr()` method to only decompose base/exp when `exp` is an `Integer`, avoiding incorrect handling of rational exponents like `S.Half`\n\nThis prevents `trigsimp` from incorrectly simplifying `cos(x) + sqrt(sin(x)**2)` to `cos(x) + sin(x)` for complex x."
+        },
+        "usage": {
+          "promptTokens": 32,
+          "completionTokens": 139,
+          "totalTokens": 2186
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite-full/sympy__sympy-18087/patch.diff`. The fix addresses issue #18087 by:\n\n1. Using `S.Zero` instead of `0` when initializing factor exponents to maintain proper SymPy type handling\n2. Restructuring the `as_expr()` method to only decompose base/exp when `exp` is an `Integer`, avoiding incorrect handling of rational exponents like `S.Half`\n\nThis prevents `trigsimp` from incorrectly simplifying `cos(x) + sqrt(sin(x)**2)` to `cos(x) + sin(x)` for complex x."
+  },
+  "endedAt": "2026-03-25T05:12:00.413Z"
+}

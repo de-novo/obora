@@ -1,0 +1,35 @@
+{
+  "id": "4ad572db-9d9f-4ccd-8979-a7297e1d930a",
+  "workflowName": "lite-full",
+  "status": "completed",
+  "startedAt": "2026-03-25T04:50:01.059Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "I've created the patch file at `experiments/swe-bench-harness/results-lite-full/matplotlib__matplotlib-23913/patch.diff`.\n\nThe patch adds the `draggable` keyword parameter to the `Legend.__init__()` function:\n\n1. **Documentation**: Adds the `draggable` parameter documentation to the docstring (bool, default: False)\n\n2. **Parameter addition**: Adds `draggable=False` as a new keyword-only parameter in the `__init__` method signature\n\n3. **Implementation**: Calls `self.set_draggable(state=draggable)` after the legend is initialized to apply the draggable state\n\nThis allows users to make a legend draggable at creation time by passing `draggable=True`, rather than having to call `legend.set_draggable(True)` separately after creation.",
+      "raw": {
+        "id": "zai-glm-4.7-1774414208877",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "I've created the patch file at `experiments/swe-bench-harness/results-lite-full/matplotlib__matplotlib-23913/patch.diff`.\n\nThe patch adds the `draggable` keyword parameter to the `Legend.__init__()` function:\n\n1. **Documentation**: Adds the `draggable` parameter documentation to the docstring (bool, default: False)\n\n2. **Parameter addition**: Adds `draggable=False` as a new keyword-only parameter in the `__init__` method signature\n\n3. **Implementation**: Calls `self.set_draggable(state=draggable)` after the legend is initialized to apply the draggable state\n\nThis allows users to make a legend draggable at creation time by passing `draggable=True`, rather than having to call `legend.set_draggable(True)` separately after creation."
+        },
+        "usage": {
+          "promptTokens": 29,
+          "completionTokens": 165,
+          "totalTokens": 1910
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "I've created the patch file at `experiments/swe-bench-harness/results-lite-full/matplotlib__matplotlib-23913/patch.diff`.\n\nThe patch adds the `draggable` keyword parameter to the `Legend.__init__()` function:\n\n1. **Documentation**: Adds the `draggable` parameter documentation to the docstring (bool, default: False)\n\n2. **Parameter addition**: Adds `draggable=False` as a new keyword-only parameter in the `__init__` method signature\n\n3. **Implementation**: Calls `self.set_draggable(state=draggable)` after the legend is initialized to apply the draggable state\n\nThis allows users to make a legend draggable at creation time by passing `draggable=True`, rather than having to call `legend.set_draggable(True)` separately after creation."
+  },
+  "endedAt": "2026-03-25T04:50:12.025Z"
+}
