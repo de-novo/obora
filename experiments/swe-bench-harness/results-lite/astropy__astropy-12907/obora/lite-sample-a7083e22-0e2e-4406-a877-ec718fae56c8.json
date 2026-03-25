@@ -1,0 +1,35 @@
+{
+  "id": "a7083e22-0e2e-4406-a877-ec718fae56c8",
+  "workflowName": "lite-sample",
+  "status": "completed",
+  "startedAt": "2026-03-25T01:29:17.865Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written. The fix changes line 245 in `astropy/modeling/separable.py`:\n- Was: `cright[-right.shape[0]:, -right.shape[1]:] = 1`\n- Now: `cright[-right.shape[0]:, -right.shape[1]:] = right`\n\nThe bug was that `_cstack` was setting the submatrix to all `1`s (True) instead of copying the actual `right` matrix. This caused nested CompoundModels to incorrectly show inputs as non-separable when they should be independent.",
+      "raw": {
+        "id": "zai-glm-4.7-1774402168852",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written. The fix changes line 245 in `astropy/modeling/separable.py`:\n- Was: `cright[-right.shape[0]:, -right.shape[1]:] = 1`\n- Now: `cright[-right.shape[0]:, -right.shape[1]:] = right`\n\nThe bug was that `_cstack` was setting the submatrix to all `1`s (True) instead of copying the actual `right` matrix. This caused nested CompoundModels to incorrectly show inputs as non-separable when they should be independent."
+        },
+        "usage": {
+          "promptTokens": 29,
+          "completionTokens": 118,
+          "totalTokens": 2071
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written. The fix changes line 245 in `astropy/modeling/separable.py`:\n- Was: `cright[-right.shape[0]:, -right.shape[1]:] = 1`\n- Now: `cright[-right.shape[0]:, -right.shape[1]:] = right`\n\nThe bug was that `_cstack` was setting the submatrix to all `1`s (True) instead of copying the actual `right` matrix. This caused nested CompoundModels to incorrectly show inputs as non-separable when they should be independent."
+  },
+  "endedAt": "2026-03-25T01:29:53.832Z"
+}

@@ -1,0 +1,35 @@
+{
+  "id": "a7629f93-8e29-48cd-b9c9-3a0e34bbf2c2",
+  "workflowName": "lite-sample",
+  "status": "completed",
+  "startedAt": "2026-03-25T01:35:15.075Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite/django__django-10924/patch.diff`. The fix modifies `django/db/models/fields/__init__.py` to make `FilePathField` accept a callable for its `path` parameter by calling `self.path()` if it's callable before passing it to the form field.",
+      "raw": {
+        "id": "zai-glm-4.7-1774402520234",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite/django__django-10924/patch.diff`. The fix modifies `django/db/models/fields/__init__.py` to make `FilePathField` accept a callable for its `path` parameter by calling `self.path()` if it's callable before passing it to the form field."
+        },
+        "usage": {
+          "promptTokens": 27,
+          "completionTokens": 73,
+          "totalTokens": 1501
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite/django__django-10924/patch.diff`. The fix modifies `django/db/models/fields/__init__.py` to make `FilePathField` accept a callable for its `path` parameter by calling `self.path()` if it's callable before passing it to the form field."
+  },
+  "endedAt": "2026-03-25T01:35:22.188Z"
+}

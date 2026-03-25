@@ -1,0 +1,35 @@
+{
+  "id": "5b7afad6-8cc1-44ca-aada-0ccc115c87a7",
+  "workflowName": "lite-sample",
+  "status": "completed",
+  "startedAt": "2026-03-25T01:32:11.320Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite/astropy__astropy-14995/patch.diff`.\n\nThe fix corrects the bug in `astropy/nddata/mixins/ndarithmetic.py` on line 523. The original condition `elif operand is None:` was checking if the operand itself was None, but it should check if `operand.mask is None`. When the operand exists but has no mask, the self mask should be copied over rather than trying to apply `np.bitwise_or` on a mask and `None`, which causes the `TypeError`.",
+      "raw": {
+        "id": "zai-glm-4.7-1774402393944",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite/astropy__astropy-14995/patch.diff`.\n\nThe fix corrects the bug in `astropy/nddata/mixins/ndarithmetic.py` on line 523. The original condition `elif operand is None:` was checking if the operand itself was None, but it should check if `operand.mask is None`. When the operand exists but has no mask, the self mask should be copied over rather than trying to apply `np.bitwise_or` on a mask and `None`, which causes the `TypeError`."
+        },
+        "usage": {
+          "promptTokens": 29,
+          "completionTokens": 125,
+          "totalTokens": 2813
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite/astropy__astropy-14995/patch.diff`.\n\nThe fix corrects the bug in `astropy/nddata/mixins/ndarithmetic.py` on line 523. The original condition `elif operand is None:` was checking if the operand itself was None, but it should check if `operand.mask is None`. When the operand exists but has no mask, the self mask should be copied over rather than trying to apply `np.bitwise_or` on a mask and `None`, which causes the `TypeError`."
+  },
+  "endedAt": "2026-03-25T01:33:17.406Z"
+}

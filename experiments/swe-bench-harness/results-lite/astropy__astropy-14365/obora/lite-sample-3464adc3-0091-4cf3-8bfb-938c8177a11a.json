@@ -1,0 +1,35 @@
+{
+  "id": "3464adc3-0091-4cf3-8bfb-938c8177a11a",
+  "workflowName": "lite-sample",
+  "status": "completed",
+  "startedAt": "2026-03-25T01:30:56.170Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written successfully. The fix addresses the issue by:\n\n1. Adding `re.IGNORECASE` flag to the regex compilation in `_line_type()` function, allowing QDP commands to be case-insensitive\n2. Changing the \"NO\" comparison to use `.upper()` in `_get_tables_from_qdp_file()` function to handle mixed-case \"NO\" values in data\n\nThis allows QDP files with lowercase commands (like \"read serr 1 2\") to be parsed correctly, matching QDP's actual case-insensitive behavior.",
+      "raw": {
+        "id": "zai-glm-4.7-1774402327586",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written successfully. The fix addresses the issue by:\n\n1. Adding `re.IGNORECASE` flag to the regex compilation in `_line_type()` function, allowing QDP commands to be case-insensitive\n2. Changing the \"NO\" comparison to use `.upper()` in `_get_tables_from_qdp_file()` function to handle mixed-case \"NO\" values in data\n\nThis allows QDP files with lowercase commands (like \"read serr 1 2\") to be parsed correctly, matching QDP's actual case-insensitive behavior."
+        },
+        "usage": {
+          "promptTokens": 29,
+          "completionTokens": 109,
+          "totalTokens": 2428
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written successfully. The fix addresses the issue by:\n\n1. Adding `re.IGNORECASE` flag to the regex compilation in `_line_type()` function, allowing QDP commands to be case-insensitive\n2. Changing the \"NO\" comparison to use `.upper()` in `_get_tables_from_qdp_file()` function to handle mixed-case \"NO\" values in data\n\nThis allows QDP files with lowercase commands (like \"read serr 1 2\") to be parsed correctly, matching QDP's actual case-insensitive behavior."
+  },
+  "endedAt": "2026-03-25T01:32:11.017Z"
+}
