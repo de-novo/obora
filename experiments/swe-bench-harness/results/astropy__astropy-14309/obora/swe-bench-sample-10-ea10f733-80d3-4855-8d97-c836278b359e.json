@@ -1,0 +1,35 @@
+{
+  "id": "ea10f733-80d3-4855-8d97-c836278b359e",
+  "workflowName": "swe-bench-sample-10",
+  "status": "completed",
+  "startedAt": "2026-03-25T01:19:03.348Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "The patch has been written successfully. The fix addresses the `IndexError: tuple index out of range` issue in `is_fits` function by restructuring the filepath check logic:\n\n**Root Cause**: When the filepath didn't end with FITS extensions, the code would fall through to `isinstance(args[0], ...)` without checking if `args` was non-empty, causing an IndexError.\n\n**Fix**: Changed from a conditional return to a direct return for the filepath extension check. This prevents execution of the `isinstance(args[0], ...)` line when filepath doesn't match FITS extensions, avoiding the IndexError when `args` is empty (as in the case `identify_format(\"write\", Table, \"bububu.ecsv\", None, [], {})`).",
+      "raw": {
+        "id": "zai-glm-4.7-1774401548199",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "The patch has been written successfully. The fix addresses the `IndexError: tuple index out of range` issue in `is_fits` function by restructuring the filepath check logic:\n\n**Root Cause**: When the filepath didn't end with FITS extensions, the code would fall through to `isinstance(args[0], ...)` without checking if `args` was non-empty, causing an IndexError.\n\n**Fix**: Changed from a conditional return to a direct return for the filepath extension check. This prevents execution of the `isinstance(args[0], ...)` line when filepath doesn't match FITS extensions, avoiding the IndexError when `args` is empty (as in the case `identify_format(\"write\", Table, \"bububu.ecsv\", None, [], {})`)."
+        },
+        "usage": {
+          "promptTokens": 28,
+          "completionTokens": 158,
+          "totalTokens": 3044
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "The patch has been written successfully. The fix addresses the `IndexError: tuple index out of range` issue in `is_fits` function by restructuring the filepath check logic:\n\n**Root Cause**: When the filepath didn't end with FITS extensions, the code would fall through to `isinstance(args[0], ...)` without checking if `args` was non-empty, causing an IndexError.\n\n**Fix**: Changed from a conditional return to a direct return for the filepath extension check. This prevents execution of the `isinstance(args[0], ...)` line when filepath doesn't match FITS extensions, avoiding the IndexError when `args` is empty (as in the case `identify_format(\"write\", Table, \"bububu.ecsv\", None, [], {})`)."
+  },
+  "endedAt": "2026-03-25T01:19:11.450Z"
+}

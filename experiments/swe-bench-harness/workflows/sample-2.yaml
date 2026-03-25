@@ -1,0 +1,14 @@
+# SWE-bench Sample 2: astropy__astropy-13033
+name: swe-bench-sample-2
+version: "1.0"
+
+steps:
+  - name: analyze_and_fix
+    agent: solver
+    input:
+      task: |
+        Read the issue file at: experiments/swe-bench-harness/samples/astropy__astropy-13033.json
+        
+        Write the fix patch to: experiments/swe-bench-harness/results/astropy__astropy-13033/patch.diff
+        
+        The issue is about TimeSeries misleading exception when required column check fails.

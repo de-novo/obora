@@ -1,0 +1,51 @@
+# SWE-bench Repair Loop Version
+name: swe-bench-repair-sample-1
+version: "1.0"
+
+hooks:
+  post_step:
+    shell: |
+      cd experiments/swe-bench-harness/results/astropy__astropy-12907
+      if [ -f patch.diff ]; then
+        # 간단한 패치 검증
+        if grep -q "cright\[-right.shape\[0\]" patch.diff; then
+          echo "PASS"
+        else
+          echo "FAIL"
+        fi
+      fi
+
+steps:
+  - name: analyze_and_fix
+    agent: solver
+    config:
+      repair_loop:
+        enabled: true
+        validation_step: validate
+        max_no_progress_iterations: 2
+    input:
+      task: |
+        Read: experiments/swe-bench-harness/samples/astropy__astropy-12907.json
+        Write patch to: experiments/swe-bench-harness/results/astropy__astropy-12907-repair/patch.diff
+        
+        Fix the separability_matrix issue for nested CompoundModels.
+
+  - name: validate
+    agent: validator
+    depends_on: [analyze_and_fix]
+    config:
+      validation:
+        enabled: true
+        emit_structured_result: true
+    input:
+      task: |
+        Check if the patch correctly fixes the issue.
+        The patch should change line 245 from:
+        cright[-right.shape[0]:, -right.shape[1]:] = 1
+        to:
+        cright[-right.shape[0]:, -right.shape[1]:] = right
+        
+        Return PASS if correct, FAIL otherwise.
+    on_fail:
+      goto: analyze_and_fix
+      max_iterations: 3

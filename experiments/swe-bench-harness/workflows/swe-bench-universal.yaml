@@ -1,0 +1,19 @@
+# SWE-bench Universal Workflow
+#
+# 샘플 ID를 입력받아 실행하는 범용 워크플로우
+
+name: swe-bench-universal
+version: "1.0"
+
+steps:
+  - name: analyze_and_fix
+    agent: solver
+    input:
+      task: |
+        Read the issue file: experiments/swe-bench-harness/samples/{{sample_id}}.json
+
+        Analyze the problem and generate a fix patch.
+
+        Write the patch to: experiments/swe-bench-harness/results/{{sample_id}}/patch.diff
+
+        The patch should be in unified diff format.

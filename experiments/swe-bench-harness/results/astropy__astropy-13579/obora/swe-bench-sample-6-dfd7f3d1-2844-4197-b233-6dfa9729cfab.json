@@ -1,0 +1,35 @@
+{
+  "id": "dfd7f3d1-2844-4197-b233-6dfa9729cfab",
+  "workflowName": "swe-bench-sample-6",
+  "status": "completed",
+  "startedAt": "2026-03-25T01:18:17.819Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Done. Wrote patch.diff for astropy__astropy-13579 to experiments/swe-bench-harness/results/astropy__astropy-13579/patch.diff. The fix uses _pixel_to_world_values_all to compute the appropriate world coordinates for sliced-out axes and injects those into world_to_pixel_values instead of hardcoding 1.0, which resolves the coupled-dimension behavior.",
+      "raw": {
+        "id": "zai-glm-4.7-1774401501872",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Done. Wrote patch.diff for astropy__astropy-13579 to experiments/swe-bench-harness/results/astropy__astropy-13579/patch.diff. The fix uses _pixel_to_world_values_all to compute the appropriate world coordinates for sliced-out axes and injects those into world_to_pixel_values instead of hardcoding 1.0, which resolves the coupled-dimension behavior."
+        },
+        "usage": {
+          "promptTokens": 28,
+          "completionTokens": 83,
+          "totalTokens": 3616
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Done. Wrote patch.diff for astropy__astropy-13579 to experiments/swe-bench-harness/results/astropy__astropy-13579/patch.diff. The fix uses _pixel_to_world_values_all to compute the appropriate world coordinates for sliced-out axes and injects those into world_to_pixel_values instead of hardcoding 1.0, which resolves the coupled-dimension behavior."
+  },
+  "endedAt": "2026-03-25T01:18:24.121Z"
+}

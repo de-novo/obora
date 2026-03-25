@@ -1,0 +1,9 @@
+name: swe-bench-sample-5
+version: "1.0"
+steps:
+  - name: fix
+    agent: solver
+    input:
+      task: |
+        Read: experiments/swe-bench-harness/samples/astropy__astropy-13453.json
+        Write to: experiments/swe-bench-harness/results/astropy__astropy-13453/patch.diff

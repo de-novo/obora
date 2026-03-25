@@ -1,0 +1,35 @@
+{
+  "id": "f9838adb-4875-480b-8f65-66e0af79e6d9",
+  "workflowName": "swe-bench-sample-5",
+  "status": "completed",
+  "startedAt": "2026-03-25T01:18:11.999Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch file written successfully. The fix for astropy__astropy-13453 adds two lines to `astropy/io/ascii/html.py` in the `write()` method:\n\n1. Sets `self.data.cols = cols` to ensure columns are properly set on the data object\n2. Calls `self.data._set_col_formats()` to apply any user-supplied column formatting\n\nThis ensures that the `formats` argument is respected when writing tables to HTML format, matching the behavior of other output formats like CSV and RST.",
+      "raw": {
+        "id": "zai-glm-4.7-1774401495436",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch file written successfully. The fix for astropy__astropy-13453 adds two lines to `astropy/io/ascii/html.py` in the `write()` method:\n\n1. Sets `self.data.cols = cols` to ensure columns are properly set on the data object\n2. Calls `self.data._set_col_formats()` to apply any user-supplied column formatting\n\nThis ensures that the `formats` argument is respected when writing tables to HTML format, matching the behavior of other output formats like CSV and RST."
+        },
+        "usage": {
+          "promptTokens": 28,
+          "completionTokens": 108,
+          "totalTokens": 4360
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch file written successfully. The fix for astropy__astropy-13453 adds two lines to `astropy/io/ascii/html.py` in the `write()` method:\n\n1. Sets `self.data.cols = cols` to ensure columns are properly set on the data object\n2. Calls `self.data._set_col_formats()` to apply any user-supplied column formatting\n\nThis ensures that the `formats` argument is respected when writing tables to HTML format, matching the behavior of other output formats like CSV and RST."
+  },
+  "endedAt": "2026-03-25T01:18:17.420Z"
+}
