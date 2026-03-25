@@ -10,26 +10,20 @@ Usage:
 import argparse
 import json
 import os
-import subprocess
 import sys
 from pathlib import Path
-
-
-def install_swe_bench():
-    """swebench 패키지 설치"""
-    try:
-        import swebench
-    except ImportError:
-        print("Installing swebench...")
-        subprocess.run([sys.executable, "-m", "pip", "install", "swebench"], check=True)
 
 
 def download_samples(count: int, dataset: str, output_dir: Path):
     """SWE-bench 샘플 다운로드"""
 
-    install_swe_bench()
-
-    from datasets import load_dataset
+    try:
+        from datasets import load_dataset
+    except ImportError:
+        print("Installing datasets...")
+        import subprocess
+        subprocess.run([sys.executable, "-m", "pip", "install", "datasets"], check=True)
+        from datasets import load_dataset
 
     print(f"Loading {dataset} dataset...")
     if dataset == "verified":

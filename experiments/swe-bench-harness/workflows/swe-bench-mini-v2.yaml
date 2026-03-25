@@ -1,0 +1,17 @@
+# SWE-bench Mini Workflow v2
+#
+# 환경 변수를 직접 사용
+
+name: swe-bench-mini-v2
+version: "1.0"
+
+steps:
+  - name: analyze_and_fix
+    agent: solver
+    input:
+      task: |
+        Read the issue file at: experiments/swe-bench-harness/samples/astropy__astropy-12907.json
+        
+        Write the fix patch to: experiments/swe-bench-harness/results/astropy__astropy-12907/patch.diff
+        
+        The issue is about separability_matrix not computing correctly for nested CompoundModels.

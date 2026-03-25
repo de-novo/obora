@@ -1,0 +1,24 @@
+# SWE-bench Mini Workflow
+#
+# 단일 step으로 단순화된 SWE-bench 태스크
+
+name: swe-bench-mini
+version: "1.0"
+
+steps:
+  - name: analyze_and_fix
+    agent: solver
+    input:
+      task: |
+        You are given a GitHub issue. Analyze the problem and provide a fix.
+
+        Issue file: {{issue_file}}
+
+        Tasks:
+        1. Read the issue from the file
+        2. Understand the problem
+        3. Write a patch (diff format) to fix the issue
+
+        Write the patch to: {{output_dir}}/patch.diff
+
+        Keep the patch minimal and focused on the specific issue.
