@@ -1,0 +1,35 @@
+{
+  "id": "1ae59c9f-4757-4665-afbc-867dbc57a3f0",
+  "workflowName": "lite-sample",
+  "status": "completed",
+  "startedAt": "2026-03-25T01:45:11.214Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite/django__django-11133/patch.diff`. The fix adds `memoryview` to the isinstance check in `django/http/response.py` line 232, allowing `HttpResponse` to properly handle memoryview objects by converting them to bytes.",
+      "raw": {
+        "id": "zai-glm-4.7-1774403139564",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite/django__django-11133/patch.diff`. The fix adds `memoryview` to the isinstance check in `django/http/response.py` line 232, allowing `HttpResponse` to properly handle memoryview objects by converting them to bytes."
+        },
+        "usage": {
+          "promptTokens": 27,
+          "completionTokens": 64,
+          "totalTokens": 1553
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite/django__django-11133/patch.diff`. The fix adds `memoryview` to the isinstance check in `django/http/response.py` line 232, allowing `HttpResponse` to properly handle memoryview objects by converting them to bytes."
+  },
+  "endedAt": "2026-03-25T01:45:41.563Z"
+}

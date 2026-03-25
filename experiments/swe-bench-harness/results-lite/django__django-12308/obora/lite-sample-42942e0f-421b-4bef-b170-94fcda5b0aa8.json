@@ -1,0 +1,35 @@
+{
+  "id": "42942e0f-421b-4bef-b170-94fcda5b0aa8",
+  "workflowName": "lite-sample",
+  "status": "completed",
+  "startedAt": "2026-03-25T01:53:30.296Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite/django__django-12308/patch.diff`. The fix adds special handling for JSONField in `display_for_field()`, using `field.get_prep_value()` to properly format the JSON output, with a fallback to `display_for_value()` for invalid JSON.",
+      "raw": {
+        "id": "zai-glm-4.7-1774403617381",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite/django__django-12308/patch.diff`. The fix adds special handling for JSONField in `display_for_field()`, using `field.get_prep_value()` to properly format the JSON output, with a fallback to `display_for_value()` for invalid JSON."
+        },
+        "usage": {
+          "promptTokens": 27,
+          "completionTokens": 68,
+          "totalTokens": 1579
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite/django__django-12308/patch.diff`. The fix adds special handling for JSONField in `display_for_field()`, using `field.get_prep_value()` to properly format the JSON output, with a fallback to `display_for_value()` for invalid JSON."
+  },
+  "endedAt": "2026-03-25T01:53:39.940Z"
+}

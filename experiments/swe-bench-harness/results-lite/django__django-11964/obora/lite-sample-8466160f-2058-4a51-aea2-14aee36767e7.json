@@ -1,0 +1,35 @@
+{
+  "id": "8466160f-2058-4a51-aea2-14aee36767e7",
+  "workflowName": "lite-sample",
+  "status": "completed",
+  "startedAt": "2026-03-25T01:51:55.271Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite/django__django-11964/patch.diff`. The fix adds a `__str__` method to the `Choices` class in `django/db/models/enums.py` that returns `str(self.value)`, ensuring that TextChoices/IntegerChoices fields return their actual value (string or integer) rather than the enum representation when cast to string.",
+      "raw": {
+        "id": "zai-glm-4.7-1774403522863",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite/django__django-11964/patch.diff`. The fix adds a `__str__` method to the `Choices` class in `django/db/models/enums.py` that returns `str(self.value)`, ensuring that TextChoices/IntegerChoices fields return their actual value (string or integer) rather than the enum representation when cast to string."
+        },
+        "usage": {
+          "promptTokens": 27,
+          "completionTokens": 86,
+          "totalTokens": 1850
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite/django__django-11964/patch.diff`. The fix adds a `__str__` method to the `Choices` class in `django/db/models/enums.py` that returns `str(self.value)`, ensuring that TextChoices/IntegerChoices fields return their actual value (string or integer) rather than the enum representation when cast to string."
+  },
+  "endedAt": "2026-03-25T01:52:06.125Z"
+}

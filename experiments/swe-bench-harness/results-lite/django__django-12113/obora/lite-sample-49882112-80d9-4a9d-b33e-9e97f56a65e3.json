@@ -1,0 +1,35 @@
+{
+  "id": "49882112-80d9-4a9d-b33e-9e97f56a65e3",
+  "workflowName": "lite-sample",
+  "status": "completed",
+  "startedAt": "2026-03-25T01:52:21.812Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Done. The patch has been written to `experiments/swe-bench-harness/results-lite/django__django-12113/patch.diff`.\n\nThis fix addresses the `admin_views.test_multidb` failure with persistent SQLite databases by modifying `django/db/backends/sqlite3/creation.py` to include the test database name in the signature when using a non-in-memory database. This prevents database locking issues when using `--keepdb` with custom test database names.",
+      "raw": {
+        "id": "zai-glm-4.7-1774403547258",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Done. The patch has been written to `experiments/swe-bench-harness/results-lite/django__django-12113/patch.diff`.\n\nThis fix addresses the `admin_views.test_multidb` failure with persistent SQLite databases by modifying `django/db/backends/sqlite3/creation.py` to include the test database name in the signature when using a non-in-memory database. This prevents database locking issues when using `--keepdb` with custom test database names."
+        },
+        "usage": {
+          "promptTokens": 27,
+          "completionTokens": 97,
+          "totalTokens": 2655
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Done. The patch has been written to `experiments/swe-bench-harness/results-lite/django__django-12113/patch.diff`.\n\nThis fix addresses the `admin_views.test_multidb` failure with persistent SQLite databases by modifying `django/db/backends/sqlite3/creation.py` to include the test database name in the signature when using a non-in-memory database. This prevents database locking issues when using `--keepdb` with custom test database names."
+  },
+  "endedAt": "2026-03-25T01:52:29.491Z"
+}

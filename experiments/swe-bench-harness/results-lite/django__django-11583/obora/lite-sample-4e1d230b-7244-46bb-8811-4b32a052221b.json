@@ -1,0 +1,35 @@
+{
+  "id": "4e1d230b-7244-46bb-8811-4b32a052221b",
+  "workflowName": "lite-sample",
+  "status": "completed",
+  "startedAt": "2026-03-25T01:47:36.857Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite/django__django-11583/patch.diff`. The fix catches `ValueError` exceptions (specifically \"embedded null byte\" errors) when resolving paths in `iter_modules_and_files()`, logs them at debug level, and continues processing instead of failing. This handles intermittent issues with network filesystems that may return null bytes in file paths.",
+      "raw": {
+        "id": "zai-glm-4.7-1774403264901",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite/django__django-11583/patch.diff`. The fix catches `ValueError` exceptions (specifically \"embedded null byte\" errors) when resolving paths in `iter_modules_and_files()`, logs them at debug level, and continues processing instead of failing. This handles intermittent issues with network filesystems that may return null bytes in file paths."
+        },
+        "usage": {
+          "promptTokens": 27,
+          "completionTokens": 85,
+          "totalTokens": 2793
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite/django__django-11583/patch.diff`. The fix catches `ValueError` exceptions (specifically \"embedded null byte\" errors) when resolving paths in `iter_modules_and_files()`, logs them at debug level, and continues processing instead of failing. This handles intermittent issues with network filesystems that may return null bytes in file paths."
+  },
+  "endedAt": "2026-03-25T01:47:47.807Z"
+}

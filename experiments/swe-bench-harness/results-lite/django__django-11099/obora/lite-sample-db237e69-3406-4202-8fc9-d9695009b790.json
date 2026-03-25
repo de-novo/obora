@@ -1,0 +1,35 @@
+{
+  "id": "db237e69-3406-4202-8fc9-d9695009b790",
+  "workflowName": "lite-sample",
+  "status": "completed",
+  "startedAt": "2026-03-25T01:45:01.403Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite/django__django-11099/patch.diff`. The fix changes the regex anchor from `$` to `\\Z` in both `ASCIIUsernameValidator` and `UnicodeUsernameValidator` to prevent trailing newlines from being accepted in usernames.",
+      "raw": {
+        "id": "zai-glm-4.7-1774403109200",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite/django__django-11099/patch.diff`. The fix changes the regex anchor from `$` to `\\Z` in both `ASCIIUsernameValidator` and `UnicodeUsernameValidator` to prevent trailing newlines from being accepted in usernames."
+        },
+        "usage": {
+          "promptTokens": 27,
+          "completionTokens": 63,
+          "totalTokens": 1785
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite/django__django-11099/patch.diff`. The fix changes the regex anchor from `$` to `\\Z` in both `ASCIIUsernameValidator` and `UnicodeUsernameValidator` to prevent trailing newlines from being accepted in usernames."
+  },
+  "endedAt": "2026-03-25T01:45:10.907Z"
+}

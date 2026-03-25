@@ -1,0 +1,35 @@
+{
+  "id": "9069887e-108c-44fd-ae8c-cd2a073d9acf",
+  "workflowName": "lite-sample",
+  "status": "completed",
+  "startedAt": "2026-03-25T01:45:41.865Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written successfully. The fix adds a line to set the primary key attribute to `None` after fast-deleting a model instance with no dependencies, which addresses the issue where `delete()` on such instances doesn't clear PKs.",
+      "raw": {
+        "id": "zai-glm-4.7-1774403147912",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written successfully. The fix adds a line to set the primary key attribute to `None` after fast-deleting a model instance with no dependencies, which addresses the issue where `delete()` on such instances doesn't clear PKs."
+        },
+        "usage": {
+          "promptTokens": 27,
+          "completionTokens": 48,
+          "totalTokens": 1377
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written successfully. The fix adds a line to set the primary key attribute to `None` after fast-deleting a model instance with no dependencies, which addresses the issue where `delete()` on such instances doesn't clear PKs."
+  },
+  "endedAt": "2026-03-25T01:46:28.119Z"
+}

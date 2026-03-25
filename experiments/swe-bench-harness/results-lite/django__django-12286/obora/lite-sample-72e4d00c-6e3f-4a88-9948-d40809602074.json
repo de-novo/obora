@@ -1,0 +1,35 @@
+{
+  "id": "72e4d00c-6e3f-4a88-9948-d40809602074",
+  "workflowName": "lite-sample",
+  "status": "completed",
+  "startedAt": "2026-03-25T01:53:05.943Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite/django__django-12286/patch.diff`. The fix modifies `check_language_settings_consistent()` in `django/core/checks/translation.py` to use `get_supported_language_variant()` instead of a simple set membership check. This allows sublanguages (like `de-at`) to fall back to their base language (like `de`) without raising the E004 error, consistent with Django's documented behavior.",
+      "raw": {
+        "id": "zai-glm-4.7-1774403604132",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite/django__django-12286/patch.diff`. The fix modifies `check_language_settings_consistent()` in `django/core/checks/translation.py` to use `get_supported_language_variant()` instead of a simple set membership check. This allows sublanguages (like `de-at`) to fall back to their base language (like `de`) without raising the E004 error, consistent with Django's documented behavior."
+        },
+        "usage": {
+          "promptTokens": 27,
+          "completionTokens": 99,
+          "totalTokens": 2028
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite/django__django-12286/patch.diff`. The fix modifies `check_language_settings_consistent()` in `django/core/checks/translation.py` to use `get_supported_language_variant()` instead of a simple set membership check. This allows sublanguages (like `de-at`) to fall back to their base language (like `de`) without raising the E004 error, consistent with Django's documented behavior."
+  },
+  "endedAt": "2026-03-25T01:53:29.987Z"
+}

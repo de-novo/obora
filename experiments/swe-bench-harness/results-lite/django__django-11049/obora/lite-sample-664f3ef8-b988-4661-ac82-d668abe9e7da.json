@@ -1,0 +1,35 @@
+{
+  "id": "664f3ef8-b988-4661-ac82-d668abe9e7da",
+  "workflowName": "lite-sample",
+  "status": "completed",
+  "startedAt": "2026-03-25T01:44:32.030Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite/django__django-11049/patch.diff`. The fix corrects the DurationField error message format from `[DD] [HH:[MM:]]ss[.uuuuuu]` to `[DD] [[HH:]MM:]ss[.uuuuuu]`, which accurately reflects that seconds are mandatory while minutes and hours are optional.",
+      "raw": {
+        "id": "zai-glm-4.7-1774403077646",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite/django__django-11049/patch.diff`. The fix corrects the DurationField error message format from `[DD] [HH:[MM:]]ss[.uuuuuu]` to `[DD] [[HH:]MM:]ss[.uuuuuu]`, which accurately reflects that seconds are mandatory while minutes and hours are optional."
+        },
+        "usage": {
+          "promptTokens": 93,
+          "completionTokens": 85,
+          "totalTokens": 1450
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite/django__django-11049/patch.diff`. The fix corrects the DurationField error message format from `[DD] [HH:[MM:]]ss[.uuuuuu]` to `[DD] [[HH:]MM:]ss[.uuuuuu]`, which accurately reflects that seconds are mandatory while minutes and hours are optional."
+  },
+  "endedAt": "2026-03-25T01:45:01.090Z"
+}

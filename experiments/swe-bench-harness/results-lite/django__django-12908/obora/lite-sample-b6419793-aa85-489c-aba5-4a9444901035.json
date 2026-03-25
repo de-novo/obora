@@ -1,0 +1,35 @@
+{
+  "id": "b6419793-aa85-489c-aba5-4a9444901035",
+  "workflowName": "lite-sample",
+  "status": "completed",
+  "startedAt": "2026-03-25T01:56:12.337Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite/django__django-12908/patch.diff`. The fix adds a check to raise an error when `.distinct()` is called on a union queryset, since this operation is not supported on combined queries.",
+      "raw": {
+        "id": "zai-glm-4.7-1774403778309",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite/django__django-12908/patch.diff`. The fix adds a check to raise an error when `.distinct()` is called on a union queryset, since this operation is not supported on combined queries."
+        },
+        "usage": {
+          "promptTokens": 27,
+          "completionTokens": 56,
+          "totalTokens": 1482
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite/django__django-12908/patch.diff`. The fix adds a check to raise an error when `.distinct()` is called on a union queryset, since this operation is not supported on combined queries."
+  },
+  "endedAt": "2026-03-25T01:56:20.619Z"
+}

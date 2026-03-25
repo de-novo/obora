@@ -1,0 +1,35 @@
+{
+  "id": "c8ac2383-c60f-4f57-b0f4-98595f4874f9",
+  "workflowName": "lite-sample",
+  "status": "completed",
+  "startedAt": "2026-03-25T01:57:06.404Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written successfully. The fix addresses `QuerySet.none()` on combined queries returning all results by:\n\n1. **Cloning combined queries**: In the `clone()` method, ensuring `combined_queries` are properly cloned so mutations don't affect the original.\n\n2. **Setting empty on combined queries**: In the `set_empty()` method, propagating the empty state to all combined queries, not just the main query.\n\nThis resolves the issue where forms with union querysets would incorrectly add all objects when submitted empty, instead of adding none as expected.",
+      "raw": {
+        "id": "zai-glm-4.7-1774403833074",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written successfully. The fix addresses `QuerySet.none()` on combined queries returning all results by:\n\n1. **Cloning combined queries**: In the `clone()` method, ensuring `combined_queries` are properly cloned so mutations don't affect the original.\n\n2. **Setting empty on combined queries**: In the `set_empty()` method, propagating the empty state to all combined queries, not just the main query.\n\nThis resolves the issue where forms with union querysets would incorrectly add all objects when submitted empty, instead of adding none as expected."
+        },
+        "usage": {
+          "promptTokens": 27,
+          "completionTokens": 111,
+          "totalTokens": 1842
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written successfully. The fix addresses `QuerySet.none()` on combined queries returning all results by:\n\n1. **Cloning combined queries**: In the `clone()` method, ensuring `combined_queries` are properly cloned so mutations don't affect the original.\n\n2. **Setting empty on combined queries**: In the `set_empty()` method, propagating the empty state to all combined queries, not just the main query.\n\nThis resolves the issue where forms with union querysets would incorrectly add all objects when submitted empty, instead of adding none as expected."
+  },
+  "endedAt": "2026-03-25T01:57:16.216Z"
+}

@@ -1,0 +1,35 @@
+{
+  "id": "d5f42612-7479-4e56-807b-1d92793ec805",
+  "workflowName": "lite-sample",
+  "status": "completed",
+  "startedAt": "2026-03-25T01:49:53.663Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "**Patch written successfully.**\n\nThe fix addresses the issue where filtering on a query result overrides the GROUP BY clause of an internal subquery. The problem occurs in `django/db/models/lookups.py` in the `process_rhs` method.\n\n**Root cause:** When processing a subquery with `has_limit_one()`, the code was unconditionally clearing the select clause and forcing it to select only the primary key. This discarded the original GROUP BY clause that was part of the subquery's definition.\n\n**Solution:** Add a check `if not self.rhs.has_select_fields:` before clearing the select clause. This preserves the subquery's original SELECT/GROUP BY structure when it has explicit field selections (like when using `.values().annotate().values()`).",
+      "raw": {
+        "id": "zai-glm-4.7-1774403424834",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "**Patch written successfully.**\n\nThe fix addresses the issue where filtering on a query result overrides the GROUP BY clause of an internal subquery. The problem occurs in `django/db/models/lookups.py` in the `process_rhs` method.\n\n**Root cause:** When processing a subquery with `has_limit_one()`, the code was unconditionally clearing the select clause and forcing it to select only the primary key. This discarded the original GROUP BY clause that was part of the subquery's definition.\n\n**Solution:** Add a check `if not self.rhs.has_select_fields:` before clearing the select clause. This preserves the subquery's original SELECT/GROUP BY structure when it has explicit field selections (like when using `.values().annotate().values()`)."
+        },
+        "usage": {
+          "promptTokens": 27,
+          "completionTokens": 154,
+          "totalTokens": 1762
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "**Patch written successfully.**\n\nThe fix addresses the issue where filtering on a query result overrides the GROUP BY clause of an internal subquery. The problem occurs in `django/db/models/lookups.py` in the `process_rhs` method.\n\n**Root cause:** When processing a subquery with `has_limit_one()`, the code was unconditionally clearing the select clause and forcing it to select only the primary key. This discarded the original GROUP BY clause that was part of the subquery's definition.\n\n**Solution:** Add a check `if not self.rhs.has_select_fields:` before clearing the select clause. This preserves the subquery's original SELECT/GROUP BY structure when it has explicit field selections (like when using `.values().annotate().values()`)."
+  },
+  "endedAt": "2026-03-25T01:50:29.274Z"
+}

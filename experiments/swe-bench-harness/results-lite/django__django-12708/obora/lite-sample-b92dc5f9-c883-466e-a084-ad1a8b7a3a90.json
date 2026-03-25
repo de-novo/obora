@@ -1,0 +1,35 @@
+{
+  "id": "b92dc5f9-c883-466e-a084-ad1a8b7a3a90",
+  "workflowName": "lite-sample",
+  "status": "completed",
+  "startedAt": "2026-03-25T01:55:37.058Z",
+  "stepOrder": [
+    "fix"
+  ],
+  "completedSteps": [
+    "fix"
+  ],
+  "stepRecords": {
+    "fix": {
+      "output": "Patch written to `experiments/swe-bench-harness/results-lite/django__django-12708/patch.diff`. The fix modifies `alter_index_together()` in `django/db/backends/base/schema.py` to pass `{'index': True, 'unique': False}` instead of `{'index': True}` when deleting indexes. This ensures that when deleting an `index_together`, the `_delete_composed_index()` method correctly identifies only the non-unique index constraint and doesn't mistakenly find the `unique_together` constraint on the same fields.",
+      "raw": {
+        "id": "zai-glm-4.7-1774403746123",
+        "model": "glm-4.7",
+        "message": {
+          "role": "assistant",
+          "content": "Patch written to `experiments/swe-bench-harness/results-lite/django__django-12708/patch.diff`. The fix modifies `alter_index_together()` in `django/db/backends/base/schema.py` to pass `{'index': True, 'unique': False}` instead of `{'index': True}` when deleting indexes. This ensures that when deleting an `index_together`, the `_delete_composed_index()` method correctly identifies only the non-unique index constraint and doesn't mistakenly find the `unique_together` constraint on the same fields."
+        },
+        "usage": {
+          "promptTokens": 27,
+          "completionTokens": 115,
+          "totalTokens": 2319
+        },
+        "finishReason": "stop"
+      }
+    }
+  },
+  "outputs": {
+    "fix": "Patch written to `experiments/swe-bench-harness/results-lite/django__django-12708/patch.diff`. The fix modifies `alter_index_together()` in `django/db/backends/base/schema.py` to pass `{'index': True, 'unique': False}` instead of `{'index': True}` when deleting indexes. This ensures that when deleting an `index_together`, the `_delete_composed_index()` method correctly identifies only the non-unique index constraint and doesn't mistakenly find the `unique_together` constraint on the same fields."
+  },
+  "endedAt": "2026-03-25T01:55:49.654Z"
+}
