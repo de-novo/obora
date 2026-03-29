@@ -1,12 +1,12 @@
 {
   "name": "@obora/cli",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Obora CLI \u2014 command-line interface for AI Control Runtime",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "obora": "dist/index.js"
+    "obora": "bin/obora.js"
   },
   "scripts": {
     "dev": "tsc --watch",
@@ -53,6 +53,7 @@
   "license": "MIT",
   "files": [
     "dist",
+    "bin",
     "!dist/**/__tests__/**",
     "!dist/**/*.test.*",
     "!dist/**/*-e2e.test.*",

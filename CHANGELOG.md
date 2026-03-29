@@ -4,6 +4,12 @@ All notable changes to Obora will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed — CLI Packaging and Release Verification (2026-03-30)
+- **CLI version mismatch root cause identified**: published `@obora/cli` package can report an older version when stale `dist` artifacts are shipped alongside newer package metadata.
+- **Release gate strengthened**: CLI publish flow now verifies changelog presence before publish.
+- **Release verification strengthened**: release verification now checks that `CHANGELOG.md` has an `[Unreleased]` section with release-facing notes before package verification.
+- **Sequential harness drivers normalized**: `run_30_sequential.sh` and `run_50_sequential.sh` now resolve repo/harness paths relative to script location instead of relying on machine-specific absolute paths.
+
 ### Added — Enterprise Reliability (2026-03-24)
 
 #### P0: Foundation for Unattended Operation
