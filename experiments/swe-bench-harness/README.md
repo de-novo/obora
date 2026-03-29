@@ -213,6 +213,25 @@ results/
 
 ---
 
+## Current Operating Defaults (validated)
+
+- Primary workflow: `experiments/swe-bench-harness/obora-os-workflow.yaml`
+- `OBORA_RUN_TIMEOUT_MS=240000`
+- `discover_target.config.maxToolRounds=256`
+- Retry `SDK_8002` in runner
+- Retry `429` with backoff
+- Final validation source of truth:
+  1. `artifacts/target_file.txt`
+  2. fallback `artifacts/edit.json.target_file`
+
+Failure buckets are tracked separately:
+- `PASS`
+- `RUNTIME_FAIL`
+- `QUALITY_FAIL`
+- `INFRA_FAIL`
+
+See also: `experiments/swe-bench-harness/OPERATING_DEFAULTS.md`
+
 ## 다음 단계
 
 1. [ ] `scripts/download_samples.py` 작성

@@ -374,7 +374,7 @@ export function resolveProviderConfig(
     provider: selectedProviderName,
     apiKey,
     model: provider?.defaultModel ?? config.defaults?.model,
-    baseUrl: provider?.baseUrl,
+    // baseUrl 제거 - pi-ai가 알아서 처리
     timeout: provider?.timeout ?? config.defaults?.timeout,
     maxTokens: provider?.maxTokens ?? config.defaults?.maxTokens,
     temperature: config.defaults?.temperature,

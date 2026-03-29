@@ -14,7 +14,6 @@ describe("llm-config", () => {
       provider: "openai",
       apiKey: "openai-key",
       model: undefined,
-      baseUrl: undefined,
     });
   });
 
@@ -30,7 +29,6 @@ describe("llm-config", () => {
       provider: "my-provider",
       apiKey: "my-key",
       model: "my-model",
-      baseUrl: "https://llm.example.com",
     });
   });
 

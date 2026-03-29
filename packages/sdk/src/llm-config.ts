@@ -10,11 +10,23 @@ export interface LLMConfig {
   maxTokens?: number;
 }
 
-const PROVIDER_ENV_MAP: Array<{ provider: string; key: string; baseUrl?: string; model?: string }> = [
-  { provider: "openai", key: "OPENAI_API_KEY", baseUrl: "OPENAI_BASE_URL", model: "OPENAI_MODEL" },
-  { provider: "anthropic", key: "ANTHROPIC_API_KEY", baseUrl: "ANTHROPIC_BASE_URL", model: "ANTHROPIC_MODEL" },
-  { provider: "google", key: "GOOGLE_API_KEY", baseUrl: "GOOGLE_BASE_URL", model: "GOOGLE_MODEL" },
-  { provider: "xai", key: "XAI_API_KEY", baseUrl: "XAI_BASE_URL", model: "XAI_MODEL" },
+const PROVIDER_ENV_MAP: Array<{ provider: string; key: string; model?: string }> = [
+  { provider: "openai", key: "OPENAI_API_KEY", model: "OPENAI_MODEL" },
+  { provider: "anthropic", key: "ANTHROPIC_API_KEY", model: "ANTHROPIC_MODEL" },
+  { provider: "google", key: "GOOGLE_API_KEY", model: "GOOGLE_MODEL" },
+  { provider: "zai", key: "ZAI_API_KEY", model: "ZAI_MODEL" },
+  { provider: "xai", key: "XAI_API_KEY", model: "XAI_MODEL" },
+  { provider: "groq", key: "GROQ_API_KEY", model: "GROQ_MODEL" },
+  { provider: "cerebras", key: "CEREBRAS_API_KEY", model: "CEREBRAS_MODEL" },
+  { provider: "openrouter", key: "OPENROUTER_API_KEY", model: "OPENROUTER_MODEL" },
+  { provider: "vercel-ai-gateway", key: "VERCEL_AI_GATEWAY_API_KEY", model: "VERCEL_AI_GATEWAY_MODEL" },
+  { provider: "mistral", key: "MISTRAL_API_KEY", model: "MISTRAL_MODEL" },
+  { provider: "minimax", key: "MINIMAX_API_KEY", model: "MINIMAX_MODEL" },
+  { provider: "minimax-cn", key: "MINIMAX_CN_API_KEY", model: "MINIMAX_CN_MODEL" },
+  { provider: "huggingface", key: "HUGGINGFACE_API_KEY", model: "HUGGINGFACE_MODEL" },
+  { provider: "opencode", key: "OPENCODE_API_KEY", model: "OPENCODE_MODEL" },
+  { provider: "kimi-coding", key: "KIMI_CODING_API_KEY", model: "KIMI_CODING_MODEL" },
+  { provider: "github-copilot", key: "GITHUB_COPILOT_API_KEY", model: "GITHUB_COPILOT_MODEL" },
 ];
 
 export function detectLLMConfigFromEnv(env: NodeJS.ProcessEnv = process.env): LLMConfig | undefined {
@@ -28,7 +40,7 @@ export function detectLLMConfigFromEnv(env: NodeJS.ProcessEnv = process.env): LL
       provider: candidate.provider,
       apiKey,
       model: candidate.model ? env[candidate.model] : undefined,
-      baseUrl: candidate.baseUrl ? env[candidate.baseUrl] : undefined,
+      // baseUrl 제거 - pi-ai가 알아서 처리
     };
   }
 
@@ -39,7 +51,7 @@ export function detectLLMConfigFromEnv(env: NodeJS.ProcessEnv = process.env): LL
       provider: customProvider,
       apiKey: customApiKey,
       model: env.OBORA_LLM_MODEL,
-      baseUrl: env.OBORA_LLM_BASE_URL,
+      // baseUrl 제거 - pi-ai가 알아서 처리
     };
   }
 

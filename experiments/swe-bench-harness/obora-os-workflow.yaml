@@ -1,0 +1,120 @@
+name: swe-bench-obora-os
+version: "1.0"
+description: "Obora-led file discovery + structured edit + validation-repair loop"
+
+agents:
+  solver:
+    provider: zai
+    model: glm-4.7
+    role: SWE-bench solving agent
+    temperature: 0.1
+  validator:
+    provider: zai
+    model: glm-4.7
+    role: Structured edit validator
+    temperature: 0
+
+steps:
+  - name: discover_target
+    agent: solver
+    config:
+      maxToolRounds: 256
+    input:
+      task: |
+        Use file tools only.
+
+        Your job is to identify the single most likely target source file for the issue.
+
+        First read:
+        - artifacts/problem.txt
+
+        Then inspect the checked-out repository to find the relevant file.
+        You may read multiple repo files, but you must make one best target choice.
+
+        Write ONLY the repo-relative file path to:
+        - artifacts/target_file.txt
+
+        Rules:
+        - choose exactly one repo-relative source file path
+        - no markdown fences
+        - no explanation in the file
+        - prefer files directly implicated by traceback paths, function names, classes, warnings, or failing behavior
+
+  - name: generate_edit
+    agent: solver
+    depends_on: [discover_target]
+    config:
+      repair_loop:
+        enabled: true
+        validation_step: validate_edit
+        max_no_progress_iterations: 2
+        repeated_critical_issue_ceiling: 2
+    input:
+      task: |
+        Use file tools only.
+
+        First read:
+        - artifacts/problem.txt
+        - artifacts/target_file.txt
+        - artifacts/validation-report.json if it exists
+
+        Then read the real target file from the repository using the path in artifacts/target_file.txt.
+
+        Write EXACTLY one JSON object to artifacts/edit.json.
+        No markdown fences. No prose.
+
+        Required JSON schema:
+        {"target_file":"...","old_string":"...","new_string":"..."}
+
+        Rules:
+        - target_file must exactly match artifacts/target_file.txt
+        - old_string must be exact text from the real target file
+        - old_string should be the smallest exact contiguous span that is sufficient for the fix; avoid large class or module blocks when a few lines are enough
+        - new_string must be the replacement text
+        - modify only what is needed to solve the issue
+        - on repair attempts, use latest validation feedback and change only what failed
+
+  - name: validate_edit
+    agent: validator
+    depends_on: [generate_edit]
+    config:
+      validation:
+        enabled: true
+        emit_structured_result: true
+    on_fail:
+      goto: generate_edit
+      max_iterations: 3
+      escalate_on_exhaust: fail
+    input:
+      task: |
+        Use file tools only.
+
+        Read these files:
+        - artifacts/problem.txt
+        - artifacts/target_file.txt
+        - artifacts/edit.json
+
+        Also read the real target file whose path is written in artifacts/target_file.txt.
+
+        Validate:
+        1. artifacts/target_file.txt contains exactly one plausible repo-relative source file path
+        2. artifacts/edit.json is valid JSON
+        3. it has target_file, old_string, new_string string fields
+        4. target_file exactly matches artifacts/target_file.txt
+        5. old_string exists in the target file
+        6. the edit is specific to the issue and chosen file
+
+        Write a human-readable report to artifacts/validation-report.json.
+
+        Then return ONLY a strict ValidationResult JSON object.
+        No markdown fences. No prose.
+
+        ValidationResult shape:
+        {
+          "passed": true or false,
+          "summary": "...",
+          "failedChecks": [
+            {"name":"...","message":"...","file":"..."}
+          ],
+          "signature": "stable-short-signature"
+        }

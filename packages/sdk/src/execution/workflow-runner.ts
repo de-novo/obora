@@ -222,7 +222,8 @@ export class WorkflowRunner {
   async buildEngine(
     executionId: string,
     persistenceEnabled: boolean,
-    persistenceConfig: OboraConfig["persistence"] | undefined
+    persistenceConfig: OboraConfig["persistence"] | undefined,
+    workflow?: WorkflowDef
   ): Promise<ExecutionEngine> {
     const { config, eventBus, adapterFactory, persistenceManager, agents } = this.deps;
 
@@ -231,7 +232,33 @@ export class WorkflowRunner {
 
     const llmConfig = resolveLLMConfig(config.llm, loadedConfig);
     const runtimeAgents = await this.loadAgentsFromYaml(config.agentsPath);
-    const allAgents = new Map<string, AgentFactory>([...runtimeAgents, ...agents]);
+    
+    // YAML 워크플로우의 agents 섹션도 추가
+    const workflowAgents = new Map<string, AgentFactory>();
+    if (workflow?.agents && typeof workflow.agents === "object") {
+      for (const [name, info] of Object.entries(workflow.agents as Record<string, unknown>)) {
+        if (info && typeof info === "object") {
+          const agentInfo = info as {
+            role?: string;
+            description?: string;
+            provider?: string;
+            model?: string;
+            temperature?: number;
+            api_key?: string;
+          };
+          workflowAgents.set(name, () => ({
+            role: agentInfo.role,
+            description: agentInfo.description,
+            provider: agentInfo.provider,
+            model: agentInfo.model,
+            temperature: agentInfo.temperature,
+            api_key: agentInfo.api_key,
+          }));
+        }
+      }
+    }
+    
+    const allAgents = new Map<string, AgentFactory>([...runtimeAgents, ...workflowAgents, ...agents]);
     const resolver = new AdapterResolver(adapterFactory);
 
     const resourcesConfig = loadedConfig?.resources;
@@ -261,7 +288,7 @@ export class WorkflowRunner {
           resolveAgentLLM: this.buildResolveAgentLLM(
             executionId,
             loadedConfig,
-            runtimeAgents,
+            allAgents,
             resolver
           ),
           onEvent: async (eventType, data) => {
@@ -316,7 +343,7 @@ export class WorkflowRunner {
       const yamlAgentRaw = runtimeAgents.get(agentName)?.();
       const yamlAgent =
         yamlAgentRaw && typeof yamlAgentRaw === "object"
-          ? (yamlAgentRaw as { provider?: string; model?: string; temperature?: number })
+          ? (yamlAgentRaw as { provider?: string; model?: string; temperature?: number; api_key?: string })
           : undefined;
       const configAgent = loadedConfig.agents?.[agentName];
       const preferYamlAgent = Boolean(yamlAgent);
@@ -325,9 +352,18 @@ export class WorkflowRunner {
         ? (yamlAgent?.provider ?? loadedConfig.defaults?.provider)
         : (configAgent?.provider ?? loadedConfig.defaults?.provider);
 
-      const providerConfig = resolveProviderConfig(loadedConfig, resolvedProviderName, {
+      // YAML에서 api_key가 제공되면 그것을 사용, 아니면 config에서 해결
+      let providerConfig = resolveProviderConfig(loadedConfig, resolvedProviderName, {
         verbose: this.deps.config.verbose,
       });
+
+      // YAML의 api_key가 있으면 덮어쓰기
+      if (preferYamlAgent && yamlAgent?.api_key && providerConfig) {
+        providerConfig = {
+          ...providerConfig,
+          apiKey: yamlAgent.api_key,
+        };
+      }
 
       if (!providerConfig) {
         if (resolvedProviderName) {
@@ -2133,7 +2169,7 @@ export class WorkflowRunner {
     }
 
     // Build execution engine
-    const engine = await this.buildEngine(executionId, persistenceEnabled, persistenceConfig);
+    const engine = await this.buildEngine(executionId, persistenceEnabled, persistenceConfig, workflow);
 
     // Create blackboard, observer, and reflector for this execution
     const blackboard = new BlackboardManager({ sessionId: executionId });
@@ -2560,7 +2596,7 @@ export class WorkflowRunner {
     const persistenceEnabled = config.persistence?.enabled ?? false;
     const persistenceConfig = config.persistence;
 
-    const engine = await this.buildEngine(executionId, persistenceEnabled, persistenceConfig);
+    const engine = await this.buildEngine(executionId, persistenceEnabled, persistenceConfig, workflow);
 
     // Import CheckpointManager here to avoid top-level circular deps
     const { CheckpointManager } = await import("@obora/runtime");

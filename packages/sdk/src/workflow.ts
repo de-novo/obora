@@ -127,6 +127,8 @@ export interface WorkflowDef {
   steps: WorkflowStep[];
   hooks?: WorkflowHooks;
   variables?: Record<string, unknown>;
+  /** Optional workflow-local agent definitions. */
+  agents?: Record<string, unknown>;
   /** Maximum number of steps to execute concurrently. Default: 3. */
   maxConcurrency?: number;
   /** Reflector v2 configuration. */

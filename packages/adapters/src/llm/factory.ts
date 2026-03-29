@@ -91,7 +91,7 @@ const PROVIDER_DEFINITIONS: Record<LLMProvider, ProviderDefinition> = {
   zai: {
     envApiKey: "ZAI_API_KEY",
     envBaseUrl: "ZAI_BASE_URL",
-    defaultBaseUrl: "https://api.z.ai/v1",
+    defaultBaseUrl: "https://api.z.ai/api/coding/paas/v4",
     defaultModel: "glm-4.7",
     provider: "zai",
   },
@@ -206,14 +206,15 @@ export function createLLMAdapter(provider: LLMProvider, config: LLMAdapterConfig
     throw new Error(`Unsupported LLM provider: ${provider}`);
   }
 
+  // baseUrl을 전달하지 않음 - pi-ai가 알아서 매핑함 (getModel에서 자동 처리)
   return withRetry(
     new PiAIAdapter({
       provider: definition.provider,
       apiKey: config.apiKey,
-      baseUrl: config.baseUrl,
       model: config.model ?? definition.defaultModel,
       adapterId: provider,
-    })
+    }),
+    { maxRetries: 0 }
   );
 }
 
