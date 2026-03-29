@@ -1,7 +1,7 @@
 {
   "name": "@obora/sdk",
-  "version": "0.1.0",
-  "description": "Obora SDK — programmatic API for AI Control Runtime",
+  "version": "0.1.1",
+  "description": "Obora SDK \u2014 programmatic API for AI Control Runtime",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -25,11 +25,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@obora/runtime": "workspace:*",
+    "@obora/runtime": "0.1.1",
     "yaml": "^2.8.2"
   },
   "optionalDependencies": {
-    "@obora/adapters": "workspace:*"
+    "@obora/adapters": "0.1.1"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
@@ -39,7 +39,7 @@
   },
   "peerDependencies": {
     "typescript": ">=5.0.0",
-    "@obora/runtime": "^0.1.0"
+    "@obora/runtime": "0.1.1"
   },
   "peerDependenciesMeta": {
     "typescript": {
@@ -57,12 +57,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/obora-labs/obora-kit.git"
+    "url": "git+https://github.com/de-novo/obora.git"
   },
   "bugs": {
-    "url": "https://github.com/obora-labs/obora-kit/issues"
+    "url": "https://github.com/de-novo/obora/issues"
   },
-  "homepage": "https://github.com/obora-labs/obora-kit#readme",
+  "homepage": "https://github.com/de-novo/obora#readme",
   "license": "MIT",
   "engines": {
     "node": ">=18"

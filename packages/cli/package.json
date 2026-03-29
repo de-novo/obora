@@ -1,12 +1,12 @@
 {
   "name": "@obora/cli",
-  "version": "0.1.0",
-  "description": "Obora CLI — command-line interface for AI Control Runtime",
+  "version": "0.1.1",
+  "description": "Obora CLI \u2014 command-line interface for AI Control Runtime",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "obora": "./dist/index.js"
+    "obora": "dist/index.js"
   },
   "scripts": {
     "dev": "tsc --watch",
@@ -17,9 +17,9 @@
     "test:coverage": "vitest --coverage"
   },
   "dependencies": {
-    "@obora/sdk": "workspace:*",
-    "@obora/adapters": "workspace:*",
-    "@obora/runtime": "workspace:*",
+    "@obora/sdk": "0.1.1",
+    "@obora/adapters": "0.1.1",
+    "@obora/runtime": "0.1.1",
     "commander": "^14.0.3",
     "fs-extra": "^11.3.3",
     "open": "^10.2.0",
@@ -44,12 +44,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/obora-labs/obora-kit.git"
+    "url": "git+https://github.com/de-novo/obora.git"
   },
   "bugs": {
-    "url": "https://github.com/obora-labs/obora-kit/issues"
+    "url": "https://github.com/de-novo/obora/issues"
   },
-  "homepage": "https://github.com/obora-labs/obora-kit#readme",
+  "homepage": "https://github.com/de-novo/obora#readme",
   "license": "MIT",
   "files": [
     "dist",

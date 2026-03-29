@@ -1,7 +1,7 @@
 {
   "name": "@obora/runtime",
-  "version": "0.1.0",
-  "description": "AI Control Runtime — deterministic orchestration for non-deterministic AI",
+  "version": "0.1.1",
+  "description": "AI Control Runtime \u2014 deterministic orchestration for non-deterministic AI",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -35,7 +35,7 @@
     "yaml": "^2.8.2"
   },
   "devDependencies": {
-    "@obora/adapters": "workspace:*",
+    "@obora/adapters": "0.1.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.0.0",
     "@types/pako": "^2.0.4",
@@ -63,12 +63,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/obora-labs/obora-kit.git"
+    "url": "git+https://github.com/de-novo/obora.git"
   },
   "bugs": {
-    "url": "https://github.com/obora-labs/obora-kit/issues"
+    "url": "https://github.com/de-novo/obora/issues"
   },
-  "homepage": "https://github.com/obora-labs/obora-kit#readme",
+  "homepage": "https://github.com/de-novo/obora#readme",
   "license": "MIT",
   "engines": {
     "node": ">=18"
