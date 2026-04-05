@@ -1,0 +1,15 @@
+name: one-file-judge
+mode: judge
+provider: zai
+model: zai/glm-5-turbo
+prompt: |
+  Evaluate the input and return JSON.
+input:
+  json: artifacts/submission.json
+  schema: artifacts/submission.schema.json
+output:
+  path: artifacts/result.json
+  schema: artifacts/result.schema.json
+options:
+  repair: false
+  fallback: false

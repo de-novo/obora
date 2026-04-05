@@ -1,6 +1,6 @@
 {
   "name": "@obora/runtime",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "AI Control Runtime \u2014 deterministic orchestration for non-deterministic AI",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -27,15 +27,16 @@
     "typecheck": "tsc --noEmit -p tsconfig.typecheck.json"
   },
   "dependencies": {
-    "@mariozechner/pi-agent-core": "^0.52.12",
-    "@mariozechner/pi-ai": "^0.52.12",
+    "@mariozechner/pi-agent-core": "^0.65.0",
+    "@mariozechner/pi-ai": "^0.65.0",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
     "pako": "^2.1.0",
-    "yaml": "^2.8.2"
+    "yaml": "^2.8.2",
+    "@obora/adapters": "workspace:*"
   },
   "devDependencies": {
-    "@obora/adapters": "0.1.1",
+    "@obora/adapters": "workspace:*",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.0.0",
     "@types/pako": "^2.0.4",
@@ -71,6 +72,6 @@
   "homepage": "https://github.com/de-novo/obora#readme",
   "license": "MIT",
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   }
 }

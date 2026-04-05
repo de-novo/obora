@@ -1,0 +1,13 @@
+name: judge-e2e
+mode: judge
+provider: mock
+model: mock-evaluator
+prompt: |
+  Evaluate the input and return JSON with fields score, verdict, rationale.
+input:
+  json: artifacts/submission.json
+output:
+  path: artifacts/result.json
+options:
+  repair: false
+  fallback: false

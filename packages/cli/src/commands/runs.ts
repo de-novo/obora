@@ -71,7 +71,10 @@ function toValidationFailureDetail(event: StructuredAuditEventLike): ValidationF
   const detail = event.detail ?? {};
   const rawChecks = Array.isArray(detail.failedChecks) ? detail.failedChecks : [];
   const failedChecks = rawChecks
-    .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object" && !Array.isArray(entry))
+    .filter(
+      (entry): entry is Record<string, unknown> =>
+        Boolean(entry) && typeof entry === "object" && !Array.isArray(entry)
+    )
     .map((entry) => ({
       ...(typeof entry.name === "string" ? { name: entry.name } : {}),
       ...(typeof entry.message === "string" ? { message: entry.message } : {}),
@@ -89,7 +92,7 @@ function toValidationFailureDetail(event: StructuredAuditEventLike): ValidationF
 }
 
 export function summarizeRepairLoopTimeline(
-  timeline: StructuredAuditEventLike[],
+  timeline: StructuredAuditEventLike[]
 ): RepairLoopInspectSummary | undefined {
   const summary: RepairLoopInspectSummary = {
     validationFailed: 0,
@@ -108,7 +111,8 @@ export function summarizeRepairLoopTimeline(
       case "workflow.validation_failed":
         summary.validationFailed += 1;
         summary.lastValidationStep = event.stepName;
-        summary.lastValidationSummary = typeof detail.summary === "string" ? detail.summary : summary.lastValidationSummary;
+        summary.lastValidationSummary =
+          typeof detail.summary === "string" ? detail.summary : summary.lastValidationSummary;
         summary.recentValidationFailures.push(toValidationFailureDetail(event));
         if (summary.recentValidationFailures.length > 5) {
           summary.recentValidationFailures.shift();
@@ -117,28 +121,35 @@ export function summarizeRepairLoopTimeline(
       case "workflow.validation_passed":
         summary.validationPassed += 1;
         summary.lastValidationStep = event.stepName;
-        summary.lastValidationSummary = typeof detail.summary === "string" ? detail.summary : summary.lastValidationSummary;
+        summary.lastValidationSummary =
+          typeof detail.summary === "string" ? detail.summary : summary.lastValidationSummary;
         break;
       case "workflow.repair_started":
         summary.repairStarted += 1;
-        summary.lastRepairStep = typeof detail.stepName === "string" ? detail.stepName : event.stepName;
-        summary.lastAttempt = typeof detail.attempt === "number" ? detail.attempt : summary.lastAttempt;
+        summary.lastRepairStep =
+          typeof detail.stepName === "string" ? detail.stepName : event.stepName;
+        summary.lastAttempt =
+          typeof detail.attempt === "number" ? detail.attempt : summary.lastAttempt;
         break;
       case "workflow.repair_completed":
         summary.repairCompleted += 1;
-        summary.lastRepairStep = typeof detail.stepName === "string" ? detail.stepName : event.stepName;
-        summary.lastAttempt = typeof detail.attempt === "number" ? detail.attempt : summary.lastAttempt;
+        summary.lastRepairStep =
+          typeof detail.stepName === "string" ? detail.stepName : event.stepName;
+        summary.lastAttempt =
+          typeof detail.attempt === "number" ? detail.attempt : summary.lastAttempt;
         break;
       case "workflow.repair_no_progress":
         summary.repairNoProgress += 1;
-        summary.lastNoProgressReason = typeof detail.reason === "string" ? detail.reason : summary.lastNoProgressReason;
+        summary.lastNoProgressReason =
+          typeof detail.reason === "string" ? detail.reason : summary.lastNoProgressReason;
         break;
       case "workflow.back_edge_triggered":
         summary.backEdgeTriggered += 1;
         break;
       case "workflow.back_edge_exhausted":
         summary.backEdgeExhausted += 1;
-        summary.lastExhaustReason = typeof detail.reason === "string" ? detail.reason : summary.lastExhaustReason;
+        summary.lastExhaustReason =
+          typeof detail.reason === "string" ? detail.reason : summary.lastExhaustReason;
         break;
       default:
         break;
@@ -157,7 +168,10 @@ export function summarizeRepairLoopTimeline(
   return hasActivity ? summary : undefined;
 }
 
-function matchesRepairLoopFilter(summary: RepairLoopInspectSummary | undefined, filter: string | undefined): boolean {
+function matchesRepairLoopFilter(
+  summary: RepairLoopInspectSummary | undefined,
+  filter: string | undefined
+): boolean {
   if (!filter) return true;
   switch (filter) {
     case "with":
@@ -175,7 +189,7 @@ function matchesRepairLoopFilter(summary: RepairLoopInspectSummary | undefined, 
 
 function getCliSortValue(
   run: { startedAt?: string; metadata?: Record<string, unknown> },
-  sortBy: "startedAt" | "validationFailed" | "repairStarted",
+  sortBy: "startedAt" | "validationFailed" | "repairStarted"
 ): number | string {
   const repairLoop = extractPersistedRepairLoopSummary(run);
   switch (sortBy) {
@@ -192,7 +206,7 @@ function getCliSortValue(
 export function sortRunsForCli(
   runs: any[],
   sortBy: "startedAt" | "validationFailed" | "repairStarted" = "startedAt",
-  order: "asc" | "desc" = "desc",
+  order: "asc" | "desc" = "desc"
 ): any[] {
   const sign = order === "asc" ? 1 : -1;
   return [...runs].sort((a, b) => {
@@ -214,9 +228,12 @@ export async function listRunsForCli(
     repairLoop?: string;
     sortBy?: "startedAt" | "validationFailed" | "repairStarted";
     order?: "asc" | "desc";
-  },
+  }
 ): Promise<any[]> {
-  const needsPostProcessing = Boolean(opts.repairLoop) || (opts.sortBy && opts.sortBy !== "startedAt") || opts.order === "asc";
+  const needsPostProcessing =
+    Boolean(opts.repairLoop) ||
+    (opts.sortBy && opts.sortBy !== "startedAt") ||
+    opts.order === "asc";
 
   if (!needsPostProcessing) {
     return runtime.listRunRecords({
@@ -244,7 +261,7 @@ export async function listRunsForCli(
   }
 
   const filtered = allRuns.filter((run) =>
-    matchesRepairLoopFilter(extractPersistedRepairLoopSummary(run), opts.repairLoop),
+    matchesRepairLoopFilter(extractPersistedRepairLoopSummary(run), opts.repairLoop)
   );
 
   const sorted = sortRunsForCli(filtered, opts.sortBy ?? "startedAt", opts.order ?? "desc");
@@ -277,7 +294,9 @@ function formatRepairLoopListSummary(summary: RepairLoopInspectSummary | undefin
   return last ? `${prefix} ${last}` : prefix;
 }
 
-function extractPersistedRepairLoopSummary(run: { metadata?: Record<string, unknown> } | null | undefined): RepairLoopInspectSummary | undefined {
+function extractPersistedRepairLoopSummary(
+  run: { metadata?: Record<string, unknown> } | null | undefined
+): RepairLoopInspectSummary | undefined {
   const metadata = run?.metadata;
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return undefined;
   const repairLoop = metadata.repairLoop;
@@ -294,7 +313,7 @@ export async function inspectPersistedRun(
     getRunAuditTimeline(runId: string): Promise<StructuredAuditEventLike[]>;
   },
   runId: string,
-  opts: { json?: boolean; cost?: boolean; steps?: boolean },
+  opts: { json?: boolean; cost?: boolean; steps?: boolean }
 ): Promise<void> {
   const run = await runtime.getRunRecord(runId);
   if (!run) {
@@ -338,25 +357,35 @@ export async function inspectPersistedRun(
     console.log(`  No Progress Events:  ${repairLoop.repairNoProgress}`);
     console.log(`  Back-edges:          ${repairLoop.backEdgeTriggered}`);
     console.log(`  Exhausted:           ${repairLoop.backEdgeExhausted}`);
-    if (repairLoop.lastAttempt !== undefined) console.log(`  Last Attempt:        ${repairLoop.lastAttempt}`);
-    if (repairLoop.lastValidationStep) console.log(`  Last Validator:      ${repairLoop.lastValidationStep}`);
-    if (repairLoop.lastRepairStep) console.log(`  Last Repair Step:    ${repairLoop.lastRepairStep}`);
-    if (repairLoop.lastValidationSummary) console.log(`  Last Validation:     ${repairLoop.lastValidationSummary}`);
+    if (repairLoop.lastAttempt !== undefined)
+      console.log(`  Last Attempt:        ${repairLoop.lastAttempt}`);
+    if (repairLoop.lastValidationStep)
+      console.log(`  Last Validator:      ${repairLoop.lastValidationStep}`);
+    if (repairLoop.lastRepairStep)
+      console.log(`  Last Repair Step:    ${repairLoop.lastRepairStep}`);
+    if (repairLoop.lastValidationSummary)
+      console.log(`  Last Validation:     ${repairLoop.lastValidationSummary}`);
     if ((repairLoop as { lastStopCategory?: string }).lastStopCategory) {
-      console.log(`  Last Stop Category:  ${(repairLoop as { lastStopCategory?: string }).lastStopCategory}`);
+      console.log(
+        `  Last Stop Category:  ${(repairLoop as { lastStopCategory?: string }).lastStopCategory}`
+      );
     }
-    if (repairLoop.lastNoProgressReason) console.log(`  Last No-Progress:    ${repairLoop.lastNoProgressReason}`);
-    if (repairLoop.lastExhaustReason) console.log(`  Last Exhaust Reason: ${repairLoop.lastExhaustReason}`);
+    if (repairLoop.lastNoProgressReason)
+      console.log(`  Last No-Progress:    ${repairLoop.lastNoProgressReason}`);
+    if (repairLoop.lastExhaustReason)
+      console.log(`  Last Exhaust Reason: ${repairLoop.lastExhaustReason}`);
 
     if (repairLoop.recentValidationFailures.length > 0) {
       console.log(`\nRecent Validation Failures (${repairLoop.recentValidationFailures.length}):`);
       repairLoop.recentValidationFailures.forEach((failure, index) => {
-        console.log(`  ${index + 1}. ${failure.stepName ?? "validate"}${failure.summary ? ` — ${failure.summary}` : ""}`);
+        console.log(
+          `  ${index + 1}. ${failure.stepName ?? "validate"}${failure.summary ? ` — ${failure.summary}` : ""}`
+        );
         if (failure.errorCode) console.log(`     Code: ${failure.errorCode}`);
         if (failure.logPath) console.log(`     Log:  ${failure.logPath}`);
         for (const check of failure.failedChecks.slice(0, 3)) {
           console.log(
-            `     - ${check.name ?? "check"}${check.file ? ` [${check.file}]` : ""}${check.message ? `: ${check.message}` : ""}`,
+            `     - ${check.name ?? "check"}${check.file ? ` [${check.file}]` : ""}${check.message ? `: ${check.message}` : ""}`
           );
         }
       });
@@ -434,7 +463,9 @@ export function createRunsCommand(): Command {
         return;
       }
 
-      console.log(`${"ID".padEnd(38)} ${"Workflow".padEnd(20)} ${"Status".padEnd(12)} ${"Loop State".padEnd(12)} ${"Repair Loop".padEnd(40)} Started At`);
+      console.log(
+        `${"ID".padEnd(38)} ${"Workflow".padEnd(20)} ${"Status".padEnd(12)} ${"Loop State".padEnd(12)} ${"Repair Loop".padEnd(40)} Started At`
+      );
       console.log("-".repeat(145));
       for (const run of runRecords) {
         const repairLoop = extractPersistedRepairLoopSummary(run);

@@ -2,8 +2,8 @@
  * ContextBuilder unit tests
  */
 
-import type { Step, Workflow } from "@obora/runtime";
 import type { ChatMessage } from "@obora/adapters";
+import type { Step, Workflow } from "@obora/runtime";
 import { describe, it, expect } from "vitest";
 
 import {

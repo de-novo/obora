@@ -1,0 +1,8 @@
+{
+  "type": "object",
+  "required": ["score", "verdict"],
+  "properties": {
+    "score": { "type": "number" },
+    "verdict": { "type": "string" }
+  }
+}

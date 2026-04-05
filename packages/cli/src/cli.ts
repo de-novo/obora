@@ -1,4 +1,5 @@
 import { Command } from "commander";
+
 import packageJson from "../package.json" with { type: "json" };
 
 import { createArtifactCommand } from "./commands/artifact.js";
@@ -10,7 +11,11 @@ import { createPluginCommand } from "./commands/plugin.js";
 import { createPolicyCommand } from "./commands/policy.js";
 import { createResumeCommand } from "./commands/resume.js";
 import { createRunCommand } from "./commands/run.js";
-import { createRunsCommand, createRuntime as createRunsRuntime, inspectPersistedRun } from "./commands/runs.js";
+import {
+  createRunsCommand,
+  createRuntime as createRunsRuntime,
+  inspectPersistedRun,
+} from "./commands/runs.js";
 import { createTestCommand } from "./commands/test.js";
 
 /**

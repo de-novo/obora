@@ -1,0 +1,9 @@
+{
+  "title": "Sample submission",
+  "body": "This is a clear and specific explanation.",
+  "rubric": {
+    "clarity": 0.4,
+    "correctness": 0.4,
+    "specificity": 0.2
+  }
+}

@@ -361,7 +361,9 @@ export function resolveProviderConfig(
       const sources = (config as ConfigWithMeta)[CONFIG_META_KEY]?.sources ?? [];
       const sourceInfo = sources.length > 0 ? sources.join(", ") : "unknown source";
       console.warn(
-        `[obora] Provider config missing authRef for '${selectedProviderName}'. Tried env fallback '${fallbackEnv}'. Searched in: ${sourceInfo}`,
+        `[obora] Provider config for '${selectedProviderName}' has no authRef and no API key was resolved. ` +
+          `Tried env fallback '${fallbackEnv}'. Searched config in: ${sourceInfo}. ` +
+          `Next action: export ${fallbackEnv}=... for first-time setup, or add providers.${selectedProviderName}.authRef to your config.`,
       );
     }
   }

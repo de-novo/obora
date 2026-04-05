@@ -160,8 +160,6 @@ describe("PiAIAdapter", () => {
         model: "bad-model",
         messages: [{ role: "user", content: "hello" }],
       })
-    ).rejects.toThrow(
-      "Model 'bad-model' not found for provider 'openai'. Available models: gpt-4o-mini"
-    );
+    ).rejects.toThrow(/(\[MODEL_1002\] Unsupported model ref: bad-model|Model 'bad-model' not found for provider 'openai')/);
   });
 });

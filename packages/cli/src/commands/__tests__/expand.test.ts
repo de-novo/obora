@@ -31,7 +31,9 @@ vi.mock("../../utils/global-opts.js", () => ({
 }));
 
 import { readFile } from "node:fs/promises";
+
 import { Workflow } from "@obora/sdk";
+
 import { formatter } from "../../utils/formatter.js";
 import { createExpandCommand, runExpand } from "../expand.js";
 
@@ -59,7 +61,7 @@ describe("expand command", () => {
         workflow: "wf",
         expandedWorkflow: expect.objectContaining({ name: "wf" }),
         stopSemantics: expect.objectContaining({ mode: "validation-repair" }),
-      }),
+      })
     );
   });
 });

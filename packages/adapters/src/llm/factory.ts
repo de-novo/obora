@@ -1,12 +1,10 @@
-import { getOAuthApiKey, type KnownProvider, type OAuthCredentials } from "@mariozechner/pi-ai";
+import { type KnownProvider } from "@mariozechner/pi-ai";
 
 import { FileAuthManager, getAuthToken, type OAuthAuth, type ProviderAuth } from "../auth";
 import type { LLMAdapter } from "./adapter";
 import { MockLLMAdapter } from "./mock-adapter";
 import { PiAIAdapter } from "./pi-ai-adapter";
 import { withRetry } from "./retry-handler";
-
-export type LLMProvider = KnownProvider | "pi-mono";
 
 type LLMAdapterConfig = {
   apiKey: string;
@@ -52,7 +50,7 @@ export function getProviderDefaultModel(provider: string): string | undefined {
   return PROVIDER_DEFINITIONS[provider as LLMProvider]?.defaultModel;
 }
 
-const PROVIDER_DEFINITIONS: Record<LLMProvider, ProviderDefinition> = {
+const PROVIDER_DEFINITIONS = {
   "pi-mono": {
     envApiKey: "PIMONO_API_KEY",
     envBaseUrl: "PIMONO_BASE_URL",
@@ -192,13 +190,21 @@ const PROVIDER_DEFINITIONS: Record<LLMProvider, ProviderDefinition> = {
     defaultModel: "gpt-4o-mini",
     provider: "opencode",
   },
+  "opencode-go": {
+    envApiKey: "OPENCODE_GO_API_KEY",
+    defaultBaseUrl: "https://api.openai.com/v1",
+    defaultModel: "gpt-4o-mini",
+    provider: "opencode",
+  },
   "kimi-coding": {
     envApiKey: "KIMI_CODING_API_KEY",
     defaultBaseUrl: "https://api.moonshot.ai/v1",
     defaultModel: "kimi-k2-0905-preview",
     provider: "kimi-coding",
   },
-};
+} satisfies Record<string, ProviderDefinition>;
+
+export type LLMProvider = keyof typeof PROVIDER_DEFINITIONS;
 
 export function createLLMAdapter(provider: LLMProvider, config: LLMAdapterConfig): LLMAdapter {
   const definition = PROVIDER_DEFINITIONS[provider];
@@ -298,7 +304,9 @@ export function createAdapterFromEnv(
 
   return createLLMAdapter(selectedProvider, {
     apiKey,
-    baseUrl: options?.baseUrl ?? (definition.envBaseUrl ? env?.[definition.envBaseUrl] : undefined),
+    baseUrl:
+      options?.baseUrl ??
+      (("envBaseUrl" in definition && definition.envBaseUrl) ? env?.[definition.envBaseUrl] : undefined),
     model: options?.model ?? definition.defaultModel,
   });
 }
@@ -331,7 +339,20 @@ async function resolveApiKey(
   const normalizedProvider = PROVIDER_DEFINITIONS[provider]?.provider ?? provider;
   const oauthCredentials = toOAuthCredentials(auth);
 
-  const resolved = await getOAuthApiKey(normalizedProvider, {
+  const oauthModule = (await import("@mariozechner/pi-ai/oauth")) as {
+    getOAuthApiKey?: (
+      provider: string,
+      credentials: Record<string, OAuthCredentials>
+    ) => Promise<
+      | {
+          apiKey: string;
+          newCredentials: { access: string; refresh?: string; expires: number };
+        }
+      | undefined
+    >;
+  };
+
+  const resolved = await oauthModule.getOAuthApiKey?.(normalizedProvider, {
     [normalizedProvider]: oauthCredentials,
   });
 
@@ -351,6 +372,8 @@ async function resolveApiKey(
 
   return resolved.apiKey;
 }
+
+type OAuthCredentials = { access: string; refresh: string; expires: number };
 
 function toOAuthCredentials(auth: OAuthAuth): OAuthCredentials {
   const expires = auth.expiresAt ? Math.floor(Date.parse(auth.expiresAt) / 1000) : Date.now() / 1000;

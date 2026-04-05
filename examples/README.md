@@ -12,6 +12,7 @@ Sample workflows and use cases for Obora AI Control Runtime.
 | [04-plugin-custom](./04-plugin-custom) | Custom plugin integration |
 | [05-dashboard-monitoring](./05-dashboard-monitoring) | Web dashboard monitoring |
 | [06-validation-repair-loop](./06-validation-repair-loop) | Runtime-native validation / repair / re-validation loop |
+| [07-contract-first-evaluation](./07-contract-first-evaluation) | Contract-first structured evaluation with bindings and output schema |
 | [todo-app](./todo-app) | Todo app generator workflow |
 
 ## Quick Start
@@ -26,6 +27,9 @@ obora run workflow.yaml
 
 # Run the validation-repair loop example (runtime + custom step tools)
 node examples/06-validation-repair-loop/run.mjs
+
+# Run the contract-first evaluation example
+obora run examples/07-contract-first-evaluation/workflow.yaml
 ```
 
 ## Workflow Basics

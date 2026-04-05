@@ -1,6 +1,6 @@
 {
   "name": "@obora/adapters",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "External integration adapters",
   "type": "module",
   "keywords": [
@@ -20,7 +20,7 @@
   "homepage": "https://github.com/de-novo/obora#readme",
   "license": "MIT",
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -92,8 +92,8 @@
     }
   },
   "dependencies": {
-    "@mariozechner/pi-ai": "^0.52.12",
-    "@mariozechner/pi-agent-core": "^0.52.12",
+    "@mariozechner/pi-ai": "^0.65.0",
+    "@mariozechner/pi-agent-core": "^0.65.0",
     "yaml": "^2.8.2"
   }
 }

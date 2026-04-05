@@ -24,6 +24,8 @@ async function runDashboard(options: DashboardOptions): Promise<void> {
   }
 
   const stop = async () => {
+    process.off("SIGINT", stop);
+    process.off("SIGTERM", stop);
     await server.stop();
     process.exit(0);
   };

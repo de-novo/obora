@@ -1,6 +1,12 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 
-import { getCliRepairLoopState, inspectPersistedRun, listRunsForCli, sortRunsForCli, summarizeRepairLoopTimeline } from "../runs.js";
+import {
+  getCliRepairLoopState,
+  inspectPersistedRun,
+  listRunsForCli,
+  sortRunsForCli,
+  summarizeRepairLoopTimeline,
+} from "../runs.js";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -9,8 +15,16 @@ afterEach(() => {
 describe("runs list triage sorting", () => {
   it("sorts runs by validationFailed descending using persisted repairLoop metadata", () => {
     const runs = [
-      { id: "run-a", startedAt: "2026-03-08T10:00:00.000Z", metadata: { repairLoop: { validationFailed: 1, repairStarted: 1 } } },
-      { id: "run-b", startedAt: "2026-03-08T11:00:00.000Z", metadata: { repairLoop: { validationFailed: 3, repairStarted: 2 } } },
+      {
+        id: "run-a",
+        startedAt: "2026-03-08T10:00:00.000Z",
+        metadata: { repairLoop: { validationFailed: 1, repairStarted: 1 } },
+      },
+      {
+        id: "run-b",
+        startedAt: "2026-03-08T11:00:00.000Z",
+        metadata: { repairLoop: { validationFailed: 3, repairStarted: 2 } },
+      },
       { id: "run-c", startedAt: "2026-03-08T12:00:00.000Z" },
     ];
 
@@ -20,8 +34,16 @@ describe("runs list triage sorting", () => {
 
   it("sorts runs by repairStarted ascending", () => {
     const runs = [
-      { id: "run-a", startedAt: "2026-03-08T10:00:00.000Z", metadata: { repairLoop: { validationFailed: 1, repairStarted: 4 } } },
-      { id: "run-b", startedAt: "2026-03-08T11:00:00.000Z", metadata: { repairLoop: { validationFailed: 3, repairStarted: 2 } } },
+      {
+        id: "run-a",
+        startedAt: "2026-03-08T10:00:00.000Z",
+        metadata: { repairLoop: { validationFailed: 1, repairStarted: 4 } },
+      },
+      {
+        id: "run-b",
+        startedAt: "2026-03-08T11:00:00.000Z",
+        metadata: { repairLoop: { validationFailed: 3, repairStarted: 2 } },
+      },
       { id: "run-c", startedAt: "2026-03-08T12:00:00.000Z" },
     ];
 
@@ -31,45 +53,84 @@ describe("runs list triage sorting", () => {
 
   it("derives compact CLI repair-loop states", () => {
     expect(getCliRepairLoopState(undefined)).toBe("-");
-    expect(getCliRepairLoopState({
-      validationFailed: 1,
-      validationPassed: 0,
-      repairStarted: 1,
-      repairCompleted: 0,
-      repairNoProgress: 0,
-      backEdgeTriggered: 1,
-      backEdgeExhausted: 1,
-      recentValidationFailures: [],
-    } as any)).toBe("EXHAUSTED");
-    expect(getCliRepairLoopState({
-      validationFailed: 2,
-      validationPassed: 0,
-      repairStarted: 2,
-      repairCompleted: 1,
-      repairNoProgress: 1,
-      backEdgeTriggered: 2,
-      backEdgeExhausted: 0,
-      recentValidationFailures: [],
-    } as any)).toBe("STALLED");
-    expect(getCliRepairLoopState({
-      validationFailed: 1,
-      validationPassed: 1,
-      repairStarted: 1,
-      repairCompleted: 1,
-      repairNoProgress: 0,
-      backEdgeTriggered: 1,
-      backEdgeExhausted: 0,
-      recentValidationFailures: [],
-    } as any)).toBe("CONVERGED");
+    expect(
+      getCliRepairLoopState({
+        validationFailed: 1,
+        validationPassed: 0,
+        repairStarted: 1,
+        repairCompleted: 0,
+        repairNoProgress: 0,
+        backEdgeTriggered: 1,
+        backEdgeExhausted: 1,
+        recentValidationFailures: [],
+      } as any)
+    ).toBe("EXHAUSTED");
+    expect(
+      getCliRepairLoopState({
+        validationFailed: 2,
+        validationPassed: 0,
+        repairStarted: 2,
+        repairCompleted: 1,
+        repairNoProgress: 1,
+        backEdgeTriggered: 2,
+        backEdgeExhausted: 0,
+        recentValidationFailures: [],
+      } as any)
+    ).toBe("STALLED");
+    expect(
+      getCliRepairLoopState({
+        validationFailed: 1,
+        validationPassed: 1,
+        repairStarted: 1,
+        repairCompleted: 1,
+        repairNoProgress: 0,
+        backEdgeTriggered: 1,
+        backEdgeExhausted: 0,
+        recentValidationFailures: [],
+      } as any)
+    ).toBe("CONVERGED");
   });
 
   it("filters and sorts post-processed runs for CLI list", async () => {
     const runtime = {
       async listRunRecords() {
         return [
-          { id: "run-a", startedAt: "2026-03-08T10:00:00.000Z", metadata: { repairLoop: { validationFailed: 1, repairStarted: 1, repairNoProgress: 0, backEdgeExhausted: 0 } } },
-          { id: "run-b", startedAt: "2026-03-08T11:00:00.000Z", metadata: { repairLoop: { validationFailed: 3, repairStarted: 2, repairNoProgress: 1, backEdgeExhausted: 0 } } },
-          { id: "run-c", startedAt: "2026-03-08T12:00:00.000Z", metadata: { repairLoop: { validationFailed: 2, repairStarted: 2, repairNoProgress: 0, backEdgeExhausted: 1 } } },
+          {
+            id: "run-a",
+            startedAt: "2026-03-08T10:00:00.000Z",
+            metadata: {
+              repairLoop: {
+                validationFailed: 1,
+                repairStarted: 1,
+                repairNoProgress: 0,
+                backEdgeExhausted: 0,
+              },
+            },
+          },
+          {
+            id: "run-b",
+            startedAt: "2026-03-08T11:00:00.000Z",
+            metadata: {
+              repairLoop: {
+                validationFailed: 3,
+                repairStarted: 2,
+                repairNoProgress: 1,
+                backEdgeExhausted: 0,
+              },
+            },
+          },
+          {
+            id: "run-c",
+            startedAt: "2026-03-08T12:00:00.000Z",
+            metadata: {
+              repairLoop: {
+                validationFailed: 2,
+                repairStarted: 2,
+                repairNoProgress: 0,
+                backEdgeExhausted: 1,
+              },
+            },
+          },
           { id: "run-d", startedAt: "2026-03-08T13:00:00.000Z" },
         ];
       },
@@ -134,7 +195,7 @@ describe("runs inspect repair-loop summary", () => {
             summary: "Missing READY marker",
           }),
         ],
-      }),
+      })
     );
   });
 
@@ -171,7 +232,11 @@ describe("runs inspect repair-loop summary", () => {
               errorCode: "VALIDATION_ERROR",
               logPath: "artifacts/VALIDATION-ATTEMPT-01.log",
               failedChecks: [
-                { name: "marker", message: "Missing READY marker", file: "artifacts/release-note.md" },
+                {
+                  name: "marker",
+                  message: "Missing READY marker",
+                  file: "artifacts/release-note.md",
+                },
               ],
             },
           },
@@ -236,7 +301,11 @@ describe("runs inspect repair-loop summary", () => {
                   errorCode: "VALIDATION_ERROR",
                   logPath: "artifacts/VALIDATION-ATTEMPT-01.log",
                   failedChecks: [
-                    { name: "marker", message: "Missing READY marker", file: "artifacts/release-note.md" },
+                    {
+                      name: "marker",
+                      message: "Missing READY marker",
+                      file: "artifacts/release-note.md",
+                    },
                   ],
                 },
               ],
@@ -244,9 +313,15 @@ describe("runs inspect repair-loop summary", () => {
           },
         };
       },
-      async getRunSteps() { return []; },
-      async getRunArtifacts() { return []; },
-      async getRunCostSummary() { return { totalTokens: 0, totalCostUsd: 0, byStep: [], byModel: [] }; },
+      async getRunSteps() {
+        return [];
+      },
+      async getRunArtifacts() {
+        return [];
+      },
+      async getRunCostSummary() {
+        return { totalTokens: 0, totalCostUsd: 0, byStep: [], byModel: [] };
+      },
       getRunAuditTimeline,
     };
 
@@ -288,7 +363,11 @@ describe("runs inspect repair-loop summary", () => {
               errorCode: "VALIDATION_ERROR",
               logPath: "artifacts/VALIDATION-ATTEMPT-01.log",
               failedChecks: [
-                { name: "marker", message: "Missing READY marker", file: "artifacts/release-note.md" },
+                {
+                  name: "marker",
+                  message: "Missing READY marker",
+                  file: "artifacts/release-note.md",
+                },
               ],
             },
           },
@@ -305,17 +384,11 @@ describe("runs inspect repair-loop summary", () => {
 
     await inspectPersistedRun(runtime, "run-1", { json: true, cost: false, steps: false });
 
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('"repairLoop"'));
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('"validationFailed": 1'));
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('"recentValidationFailures"'));
     expect(log).toHaveBeenCalledWith(
-      expect.stringContaining('"repairLoop"'),
-    );
-    expect(log).toHaveBeenCalledWith(
-      expect.stringContaining('"validationFailed": 1'),
-    );
-    expect(log).toHaveBeenCalledWith(
-      expect.stringContaining('"recentValidationFailures"'),
-    );
-    expect(log).toHaveBeenCalledWith(
-      expect.stringContaining('"logPath": "artifacts/VALIDATION-ATTEMPT-01.log"'),
+      expect.stringContaining('"logPath": "artifacts/VALIDATION-ATTEMPT-01.log"')
     );
   });
 });
