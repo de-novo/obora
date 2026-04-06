@@ -6,6 +6,8 @@ import { parse as parseYaml } from "yaml";
 
 import { loadConfig, resolveProviderConfig, type OboraConfig } from "../config-loader.js";
 import { resolveLLMConfig, type LLMConfig } from "../llm-config.js";
+import { buildBindingPreview, buildOutputPreview, buildResolutionSummary, formatBindingPreview, formatOutputPreview, formatResolutionSummary } from "../resolution-summary.js";
+import { formatDiagnostic } from "../diagnostics.js";
 import { topologicalSort, groupByParallelizableLevels } from "../dependency-resolver.js";
 import {
   ParallelScheduler,
@@ -231,6 +233,17 @@ export class WorkflowRunner {
       config.config !== undefined ? config.config : await loadConfig(config.configPath);
 
     const llmConfig = resolveLLMConfig(config.llm, loadedConfig);
+    const resolutionSummary = buildResolutionSummary(config, llmConfig, loadedConfig);
+    const resolutionText = formatResolutionSummary(resolutionSummary);
+    const bindingPreviewText = formatBindingPreview(buildBindingPreview(workflow));
+    const outputPreviewText = formatOutputPreview(buildOutputPreview(workflow));
+    const startupSections = [resolutionText, bindingPreviewText, outputPreviewText].filter(Boolean);
+    const startupText = startupSections.join("\n");
+    if (config.logger?.info) {
+      config.logger.info(startupText);
+    } else {
+      console.info(startupText);
+    }
     const runtimeAgents = await this.loadAgentsFromYaml(config.agentsPath);
     
     // YAML 워크플로우의 agents 섹션도 추가
@@ -272,8 +285,25 @@ export class WorkflowRunner {
       : undefined;
 
     if (!llmConfig) {
+      const selectedProvider = config.llm?.provider ?? loadedConfig?.defaults?.provider ?? "unknown";
       await eventBus.emit("warning", executionId, {
-        message: "No LLM configured; workflow will run in stub mode.",
+        message: formatDiagnostic({
+          code: "AUTH_1001",
+          summary: `Missing auth for provider ${selectedProvider}`,
+          reason: "no provider auth could be resolved from explicit config, project config, or environment",
+          fix: "configure provider auth before execution or switch explicitly to mock mode",
+          context: { provider: selectedProvider, fallback: true },
+        }),
+        code: OboraErrorCode.ADAPTER_LLM_UNAVAILABLE,
+      });
+      await eventBus.emit("warning", executionId, {
+        message: formatDiagnostic({
+          code: "FALLBACK_1001",
+          summary: "Execution will run in stub mode",
+          reason: "no LLM configuration was resolved for the current execution",
+          fix: "set provider/model/auth explicitly or disable stub fallback for this run",
+          context: { provider: selectedProvider },
+        }),
         code: OboraErrorCode.ADAPTER_LLM_UNAVAILABLE,
       });
     }

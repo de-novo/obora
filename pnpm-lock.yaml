@@ -54,11 +54,11 @@ importers:
   packages/adapters:
     dependencies:
       '@mariozechner/pi-agent-core':
-        specifier: ^0.52.12
-        version: 0.52.12(ws@8.19.0)(zod@3.25.76)
+        specifier: ^0.65.0
+        version: 0.65.0(ws@8.19.0)(zod@3.25.76)
       '@mariozechner/pi-ai':
-        specifier: ^0.52.12
-        version: 0.52.12(ws@8.19.0)(zod@3.25.76)
+        specifier: ^0.65.0
+        version: 0.65.0(ws@8.19.0)(zod@3.25.76)
       yaml:
         specifier: ^2.8.2
         version: 2.8.2
@@ -79,14 +79,14 @@ importers:
   packages/cli:
     dependencies:
       '@obora/adapters':
-        specifier: workspace:*
-        version: link:../adapters
+        specifier: 0.1.1
+        version: 0.1.1(typescript@5.9.3)(ws@8.19.0)(zod@3.25.76)
       '@obora/runtime':
-        specifier: workspace:*
-        version: link:../runtime
+        specifier: 0.1.1
+        version: 0.1.1(typescript@5.9.3)(ws@8.19.0)(zod@3.25.76)
       '@obora/sdk':
-        specifier: workspace:*
-        version: link:../sdk
+        specifier: 0.1.1
+        version: 0.1.1(@obora/runtime@0.1.1(typescript@5.9.3)(ws@8.19.0)(zod@3.25.76))(typescript@5.9.3)(ws@8.19.0)(zod@3.25.76)
       commander:
         specifier: ^14.0.3
         version: 14.0.3
@@ -186,11 +186,14 @@ importers:
   packages/runtime:
     dependencies:
       '@mariozechner/pi-agent-core':
-        specifier: ^0.52.12
-        version: 0.52.12(ws@8.19.0)(zod@3.25.76)
+        specifier: ^0.65.0
+        version: 0.65.0(ws@8.19.0)(zod@3.25.76)
       '@mariozechner/pi-ai':
-        specifier: ^0.52.12
-        version: 0.52.12(ws@8.19.0)(zod@3.25.76)
+        specifier: ^0.65.0
+        version: 0.65.0(ws@8.19.0)(zod@3.25.76)
+      '@obora/adapters':
+        specifier: workspace:*
+        version: link:../adapters
       ajv:
         specifier: ^8.17.1
         version: 8.17.1
@@ -204,9 +207,6 @@ importers:
         specifier: ^2.8.2
         version: 2.8.2
     devDependencies:
-      '@obora/adapters':
-        specifier: workspace:*
-        version: link:../adapters
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
@@ -232,15 +232,15 @@ importers:
   packages/sdk:
     dependencies:
       '@obora/runtime':
-        specifier: workspace:*
-        version: link:../runtime
+        specifier: 0.1.1
+        version: 0.1.1(typescript@5.9.3)(ws@8.19.0)(zod@3.25.76)
       yaml:
         specifier: ^2.8.2
         version: 2.8.2
     optionalDependencies:
       '@obora/adapters':
-        specifier: workspace:*
-        version: link:../adapters
+        specifier: 0.1.1
+        version: 0.1.1(typescript@5.9.3)(ws@8.19.0)(zod@3.25.76)
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
@@ -923,13 +923,53 @@ packages:
     resolution: {integrity: sha512-fBQdwLMvTteHUP9nJxMjtMpEHH4I8tdGnkerOoCFnS9y03AHdqy96IhtL+zZjw9N3dmVCOVqh8gwGjAGLZT31Q==}
     engines: {node: '>=20.0.0'}
 
+  '@mariozechner/pi-agent-core@0.65.0':
+    resolution: {integrity: sha512-QCDqkgxvCkizCgJOl0aFekT1gURppznzuBIGXS8dXWZMour/xX6YF7chxX56mZ0p0DXkILM1ixf5jXYBfDsP5w==}
+    engines: {node: '>=20.0.0'}
+
   '@mariozechner/pi-ai@0.52.12':
     resolution: {integrity: sha512-oF7OMJu1aUx7MXJeJoJ/3JDXzD2a5SqK9nHVK3mCA8DRQaykv9g+wcFZaANcCl0vAR2QSDr5KN3ZMARlFNWiVg==}
     engines: {node: '>=20.0.0'}
     hasBin: true
 
+  '@mariozechner/pi-ai@0.65.0':
+    resolution: {integrity: sha512-MsCsCHlHIlBYbg6jB2PJBeCNKbjzVZge7ddBNUJN2gsFY8sdjFh482+GB+r5Ou6k9Fnhi3nO779YDymo5+t89w==}
+    engines: {node: '>=20.0.0'}
+    hasBin: true
+
   '@mistralai/mistralai@1.10.0':
     resolution: {integrity: sha512-tdIgWs4Le8vpvPiUEWne6tK0qbVc+jMenujnvTqOjogrJUsCSQhus0tHTU1avDDh5//Rq2dFgP9mWRAdIEoBqg==}
+
+  '@mistralai/mistralai@1.14.1':
+    resolution: {integrity: sha512-IiLmmZFCCTReQgPAT33r7KQ1nYo5JPdvGkrkZqA8qQ2qB1GHgs5LoP5K2ICyrjnpw2n8oSxMM/VP+liiKcGNlQ==}
+
+  '@obora/adapters@0.1.1':
+    resolution: {integrity: sha512-LxkJaLsVLdYAd/Ii2qKZTqPxnfMCm6JcUarckC2z02zxGuz8ke6RRbLgzJ+rwJxZ/RWWOWLdGbm9c5M8W/3CqQ==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      typescript: '>=5.0.0'
+    peerDependenciesMeta:
+      typescript:
+        optional: true
+
+  '@obora/runtime@0.1.1':
+    resolution: {integrity: sha512-Pg6eVy4ofTyL5WOTZ+sBqVE8Ds+cezQtaKdgQHPqg1K2PRZn0ubfgY4Bt9o8pp7+yEfFUTfZMuDTdByiOSpQtQ==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      typescript: '>=5.0.0'
+    peerDependenciesMeta:
+      typescript:
+        optional: true
+
+  '@obora/sdk@0.1.1':
+    resolution: {integrity: sha512-hLoBPHWQ4zULLdh41Bu89u2oostgtrGeh4wFjzRQD8zBXWAcqY/xoliBwHAh2HsnNsLLpgt8/VIHZsoTikfOqQ==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      '@obora/runtime': 0.1.1
+      typescript: '>=5.0.0'
+    peerDependenciesMeta:
+      typescript:
+        optional: true
 
   '@pinojs/redact@0.4.0':
     resolution: {integrity: sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg==}
@@ -1657,6 +1697,7 @@ packages:
   basic-ftp@5.1.0:
     resolution: {integrity: sha512-RkaJzeJKDbaDWTIPiJwubyljaEPwpVWkm9Rt5h9Nd6h7tEXTJ3VB4qxdZBioV7JO5yLUaOKwz7vDOzlncUsegw==}
     engines: {node: '>=10.0.0'}
+    deprecated: Security vulnerability fixed in 5.2.0, please upgrade
 
   better-sqlite3@12.6.2:
     resolution: {integrity: sha512-8VYKM3MjCa9WcaSAI3hzwhmyHVlH8tiGFwf0RlTsZPWJ1I5MkzjiudCo4KC4DxOaL/53A5B1sI/IbldNFDbsKA==}
@@ -2763,6 +2804,18 @@ packages:
 
   openai@6.10.0:
     resolution: {integrity: sha512-ITxOGo7rO3XRMiKA5l7tQ43iNNu+iXGFAcf2t+aWVzzqRaS0i7m1K2BhxNdaveB+5eENhO0VY1FkiZzhBk4v3A==}
+    hasBin: true
+    peerDependencies:
+      ws: ^8.18.0
+      zod: ^3.25 || ^4.0
+    peerDependenciesMeta:
+      ws:
+        optional: true
+      zod:
+        optional: true
+
+  openai@6.26.0:
+    resolution: {integrity: sha512-zd23dbWTjiJ6sSAX6s0HrCZi41JwTA1bQVs0wLQPZ2/5o2gxOJA5wh7yOAUgwYybfhDXyhwlpeQf7Mlgx8EOCA==}
     hasBin: true
     peerDependencies:
       ws: ^8.18.0
@@ -4499,6 +4552,18 @@ snapshots:
       - ws
       - zod
 
+  '@mariozechner/pi-agent-core@0.65.0(ws@8.19.0)(zod@3.25.76)':
+    dependencies:
+      '@mariozechner/pi-ai': 0.65.0(ws@8.19.0)(zod@3.25.76)
+    transitivePeerDependencies:
+      - '@modelcontextprotocol/sdk'
+      - aws-crt
+      - bufferutil
+      - supports-color
+      - utf-8-validate
+      - ws
+      - zod
+
   '@mariozechner/pi-ai@0.52.12(ws@8.19.0)(zod@3.25.76)':
     dependencies:
       '@anthropic-ai/sdk': 0.73.0(zod@3.25.76)
@@ -4523,10 +4588,94 @@ snapshots:
       - ws
       - zod
 
+  '@mariozechner/pi-ai@0.65.0(ws@8.19.0)(zod@3.25.76)':
+    dependencies:
+      '@anthropic-ai/sdk': 0.73.0(zod@3.25.76)
+      '@aws-sdk/client-bedrock-runtime': 3.990.0
+      '@google/genai': 1.41.0
+      '@mistralai/mistralai': 1.14.1
+      '@sinclair/typebox': 0.34.48
+      ajv: 8.17.1
+      ajv-formats: 3.0.1(ajv@8.17.1)
+      chalk: 5.6.2
+      openai: 6.26.0(ws@8.19.0)(zod@3.25.76)
+      partial-json: 0.1.7
+      proxy-agent: 6.5.0
+      undici: 7.22.0
+      zod-to-json-schema: 3.25.1(zod@3.25.76)
+    transitivePeerDependencies:
+      - '@modelcontextprotocol/sdk'
+      - aws-crt
+      - bufferutil
+      - supports-color
+      - utf-8-validate
+      - ws
+      - zod
+
   '@mistralai/mistralai@1.10.0':
     dependencies:
       zod: 3.25.76
       zod-to-json-schema: 3.25.1(zod@3.25.76)
+
+  '@mistralai/mistralai@1.14.1':
+    dependencies:
+      ws: 8.19.0
+      zod: 3.25.76
+      zod-to-json-schema: 3.25.1(zod@3.25.76)
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+
+  '@obora/adapters@0.1.1(typescript@5.9.3)(ws@8.19.0)(zod@3.25.76)':
+    dependencies:
+      '@mariozechner/pi-agent-core': 0.52.12(ws@8.19.0)(zod@3.25.76)
+      '@mariozechner/pi-ai': 0.52.12(ws@8.19.0)(zod@3.25.76)
+      yaml: 2.8.2
+    optionalDependencies:
+      typescript: 5.9.3
+    transitivePeerDependencies:
+      - '@modelcontextprotocol/sdk'
+      - aws-crt
+      - bufferutil
+      - supports-color
+      - utf-8-validate
+      - ws
+      - zod
+
+  '@obora/runtime@0.1.1(typescript@5.9.3)(ws@8.19.0)(zod@3.25.76)':
+    dependencies:
+      '@mariozechner/pi-agent-core': 0.52.12(ws@8.19.0)(zod@3.25.76)
+      '@mariozechner/pi-ai': 0.52.12(ws@8.19.0)(zod@3.25.76)
+      ajv: 8.17.1
+      ajv-formats: 3.0.1(ajv@8.17.1)
+      pako: 2.1.0
+      yaml: 2.8.2
+    optionalDependencies:
+      typescript: 5.9.3
+    transitivePeerDependencies:
+      - '@modelcontextprotocol/sdk'
+      - aws-crt
+      - bufferutil
+      - supports-color
+      - utf-8-validate
+      - ws
+      - zod
+
+  '@obora/sdk@0.1.1(@obora/runtime@0.1.1(typescript@5.9.3)(ws@8.19.0)(zod@3.25.76))(typescript@5.9.3)(ws@8.19.0)(zod@3.25.76)':
+    dependencies:
+      '@obora/runtime': 0.1.1(typescript@5.9.3)(ws@8.19.0)(zod@3.25.76)
+      yaml: 2.8.2
+    optionalDependencies:
+      '@obora/adapters': 0.1.1(typescript@5.9.3)(ws@8.19.0)(zod@3.25.76)
+      typescript: 5.9.3
+    transitivePeerDependencies:
+      - '@modelcontextprotocol/sdk'
+      - aws-crt
+      - bufferutil
+      - supports-color
+      - utf-8-validate
+      - ws
+      - zod
 
   '@pinojs/redact@0.4.0': {}
 
@@ -6613,6 +6762,11 @@ snapshots:
       wsl-utils: 0.1.0
 
   openai@6.10.0(ws@8.19.0)(zod@3.25.76):
+    optionalDependencies:
+      ws: 8.19.0
+      zod: 3.25.76
+
+  openai@6.26.0(ws@8.19.0)(zod@3.25.76):
     optionalDependencies:
       ws: 8.19.0
       zod: 3.25.76

@@ -1,3 +1,4 @@
+import { createAgentId } from "../../blackboard/types/base.js";
 import {
   BaseAgent,
   BaseAgentConfig,
@@ -145,5 +146,5 @@ Be diplomatic, organized, and results-oriented in your coordination.`;
  * 디렉터 에이전트 생성
  */
 export function createDirectorAgent(id: string, llm: BaseAgentConfig["llm"]): DirectorAgent {
-  return new DirectorAgent({ id, llm });
+  return new DirectorAgent({ id: createAgentId(id), llm });
 }

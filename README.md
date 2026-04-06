@@ -41,8 +41,31 @@ obora run workflow.yaml
 ```
 
 Prerequisites:
-- Node.js 18+
+- Node.js 20+
 - At least one LLM provider API key (ZAI, OpenAI, Anthropic, etc.)
+
+### Recommended Getting Started Path
+
+If you are new to Obora, follow this order:
+
+1. [LLM Config / Auth Quickstart](./docs/tutorials/06-llm-config-auth-quickstart.md)
+2. [Contract-First Quickstart](./docs/tutorials/04-contract-first-quickstart.md)
+3. [Contract-First Authoring Guide](./docs/tutorials/05-contract-first-authoring-guide.md)
+4. [One-File Workflows](./docs/tutorials/one-file-workflows.md)
+
+### Recommended default setup
+
+Use this default rule unless you have a strong reason not to:
+
+- **auth in env**
+- **provider/model defaults in project `.obora/config.yaml`**
+- **runtime `llm` overrides only for advanced or temporary cases**
+
+### Runnable example
+
+A ready-to-run contract-first example is here:
+
+- [`examples/07-contract-first-evaluation`](./examples/07-contract-first-evaluation)
 
 ---
 
@@ -132,35 +155,80 @@ Prerequisites:
 
 ## 🔧 SDK Example
 
+### Contract-First Workflow Example
+
 ```typescript
-import { OboraRuntime, Workflow } from "@obora/sdk";
+import { OboraRuntime } from "@obora/sdk";
 
 const runtime = new OboraRuntime({
-  llm: { provider: "zai", model: "glm-4.7" }
+  llm: {
+    provider: "openai",
+    apiKey: process.env.OPENAI_API_KEY!,
+    model: "gpt-4o-mini",
+  },
 });
 
-// Define a workflow
-runtime.define("my-workflow", {
-  name: "my-workflow",
+runtime.define("contract-first-evaluation", {
+  name: "contract-first-evaluation",
   version: "1.0",
   steps: [
-    { name: "plan", agent: "architect", input: { task: "Design the API" } },
-    { name: "implement", agent: "coder", depends_on: ["plan"] },
-    { name: "review", agent: "reviewer", depends_on: ["implement"], pattern: "peer-review" }
-  ]
+    {
+      name: "evaluate_submission",
+      agent: "evaluator",
+      input: {
+        bindings: {
+          submission: { path: "artifacts/submission.json", kind: "json" },
+          rubric: { path: "artifacts/rubric.json", kind: "json" },
+        },
+        task: "Evaluate {{submission}} using {{rubric}}. Return JSON only.",
+      },
+      output: {
+        path: "artifacts/result.json",
+        schema: "artifacts/result.schema.json",
+      },
+    },
+  ],
 });
 
-// Register agents
-runtime.registerAgent("architect", () => ({ role: "Software Architect" }));
-runtime.registerAgent("coder", () => ({ role: "Software Developer" }));
-runtime.registerAgent("reviewer", () => ({ role: "Code Reviewer" }));
-
-// Execute
-const handle = await runtime.run("my-workflow");
+const handle = await runtime.run("contract-first-evaluation");
 const result = await handle.wait();
 
 console.log(result.outputs);
 ```
+
+### Why this style is recommended
+
+This authoring style makes workflows easier to operate because:
+- inputs are declared explicitly with `input.bindings`
+- outputs are declared explicitly with `output.path` / `output.schema`
+- startup summary can preview both sides of the contract
+- structured outputs can be persisted automatically
+
+### One-File Judge Short Path
+
+If you want the shortest JSON-in / JSON-out path for a single evaluation, use one-file judge mode:
+
+```yaml
+name: one-file-judge
+mode: judge
+
+provider: openai
+model: gpt-4o-mini
+prompt: |
+  Evaluate the submission and return JSON only.
+
+input:
+  json: artifacts/submission.json
+  schema: artifacts/submission.schema.json
+
+output:
+  path: artifacts/result.json
+  schema: artifacts/result.schema.json
+```
+
+See also:
+- [One-File Workflows](./docs/tutorials/one-file-workflows.md)
+- [Contract-First Quickstart](./docs/tutorials/04-contract-first-quickstart.md)
 
 ### Harness Engineering Example
 

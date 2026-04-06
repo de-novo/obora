@@ -71,7 +71,7 @@ export class AgentRegistry implements AgentResolver {
 
     const role = this.mapToRole(normalized);
     const resolvedConfig = typeof queryOrName === "string" ? undefined : queryOrName.config;
-    const llm = resolvedConfig
+    const llm = resolvedConfig?.provider
       ? await this.getAdapterForProvider(resolvedConfig.provider, resolvedConfig)
       : this.fallbackLlm;
 

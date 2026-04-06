@@ -17,6 +17,9 @@ Obora의 설계는 이를 다음처럼 풀어냅니다.
 
 ## 현재 지원 mode
 
+one-file DSL도 점점 **contract-first authoring** 방향으로 이동하고 있습니다.
+특히 JSON in / JSON out 평가 계열에서는 `input.schema`, `output.path`, `output.schema` 같은 contract surface가 중요합니다.
+
 ### 1. validation-repair
 생성 → 검증 → 수정 반복 패턴.
 
@@ -83,6 +86,36 @@ archive:
 output:
   root: ./proof-output
 ```
+
+### 4. judge
+JSON input을 받아 단일 평가 step을 실행하고 JSON output artifact를 저장하는 가장 짧은 경로입니다.
+
+```yaml
+name: one-file-judge
+mode: judge
+
+provider: mock
+model: mock-evaluator
+prompt: |
+  Evaluate the submission and return JSON only.
+
+input:
+  json: artifacts/submission.json
+  schema: artifacts/submission.schema.json
+
+output:
+  path: artifacts/result.json
+  schema: artifacts/result.schema.json
+```
+
+이 mode는 아래 use case에 적합합니다.
+- 단일 submission 평가
+- rubric 기반 점수화
+- JSON in / JSON out contract 테스트
+- larger workflow 없이 짧은 structured path 확인
+
+일반 step 기반의 runnable contract-first example이 필요하면 아래를 참고하세요.
+- `examples/07-contract-first-evaluation/`
 
 ## 디버깅 / 확인
 가장 직접적인 방법은 `expand` 명령입니다.
@@ -164,6 +197,20 @@ obora run my-workflow.yaml --dry-run --json --dump-expanded-workflow --show-stop
 - `archive`: `enabled`
 - `output`: `root`
 
+### judge 허용 top-level 키
+- `name`
+- `version`
+- `mode`
+- `provider`
+- `model`
+- `prompt`
+- `input`
+- `output`
+
+#### judge nested keys
+- `input`: `json`, `schema`
+- `output`: `path`, `schema`
+
 ### 에러 힌트
 현재 validation은 다음을 제공합니다.
 - required field 누락 감지
@@ -181,14 +228,19 @@ obora run my-workflow.yaml --dry-run --json --dump-expanded-workflow --show-stop
 - validation-repair overrides (prompt suffix)
 - output/archive intent exposure
 - schema validation for required fields, unknown keys, and nested type checks
+- judge mode JSON in → single-step evaluation → JSON out path
+- one-file judge input/output schema intent exposure
 
 ## 제한사항
 - archive behavior는 아직 intent 중심이며 full runtime wiring은 미완료
 - research-loop / proof-loop는 현재 최소 vertical slice 수준
 - formal proof verification이나 full remediation generation은 아직 포함되지 않음
+- judge mode의 schema 지원은 현재 contract-first 최소 경로 중심이며 full JSON Schema coverage는 아님
 
 ## 관련 파일
 - `packages/sdk/examples/validation-repair-loop.yaml`
 - `docs/tutorials/validation-repair-loop.md`
+- `docs/tutorials/04-contract-first-quickstart.md`
+- `docs/tutorials/05-contract-first-authoring-guide.md`
 - `output/archive/38-one-file-workflow-dsl-spec.md`
 - `output/archive/39-one-file-dsl-followups.md`

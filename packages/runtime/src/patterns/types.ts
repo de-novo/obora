@@ -354,7 +354,7 @@ export interface CollaborationPattern extends PatternRuntimeContract {
 export abstract class CollaborationPatternBase implements CollaborationPattern {
   abstract readonly name: string;
   abstract readonly kind: BuiltinPatternKind | (string & {});
-  readonly version = "1.0.0";
+  readonly version: string = "1.0.0";
 
   validateConfig(_config: PatternConfig): void {
     // optional override

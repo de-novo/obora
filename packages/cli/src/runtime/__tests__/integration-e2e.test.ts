@@ -28,9 +28,9 @@
  * Scenario G: appendHistory MAX_HISTORY_LENGTH boundary trimming
  */
 
-import type { Step, Workflow, ErrorCode } from "@obora/runtime";
 import { MockLLMAdapter } from "@obora/adapters";
 import type { ChatMessage } from "@obora/adapters";
+import type { Step, Workflow, ErrorCode } from "@obora/runtime";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 import { AgentRegistry } from "../agent-registry.js";

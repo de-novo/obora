@@ -4,6 +4,7 @@ import type {
   EscalateRecoveryStrategy,
   RecoveryContext,
   RecoveryEngine as RecoveryEngineContract,
+  RecoveryExecutionContext,
   RecoveryResult,
   RecoveryHandleOptions,
   RecoveryStrategy,
@@ -29,7 +30,7 @@ class RetryStrategyPluginImpl implements RecoveryStrategyPlugin {
   async execute(
     failure: CellFailure,
     strategy: RetryRecoveryStrategy,
-    context: Required<RecoveryContext>
+    context: RecoveryExecutionContext
   ): Promise<RecoveryResult> {
     const { retryExecutor, wait } = context;
 
@@ -75,7 +76,7 @@ class RollbackStrategyPluginImpl implements RecoveryStrategyPlugin {
   async execute(
     _failure: CellFailure,
     strategy: RollbackRecoveryStrategy,
-    context: Required<RecoveryContext>
+    context: RecoveryExecutionContext
   ): Promise<RecoveryResult> {
     if (!context.snapshotStore) {
       return fail(this.type, new Error("snapshotStore is required for rollback strategy"));
@@ -100,7 +101,7 @@ class EscalateStrategyPluginImpl implements RecoveryStrategyPlugin {
   async execute(
     failure: CellFailure,
     strategy: EscalateRecoveryStrategy,
-    context: Required<RecoveryContext>
+    context: RecoveryExecutionContext
   ): Promise<RecoveryResult> {
     if (!context.escalationNotifier) {
       return fail(this.type, new Error("escalationNotifier is required for escalate strategy"));
@@ -131,7 +132,7 @@ class AlternativeStrategyPluginImpl implements RecoveryStrategyPlugin {
   async execute(
     failure: CellFailure,
     strategy: AlternativeRecoveryStrategy,
-    context: Required<RecoveryContext>
+    context: RecoveryExecutionContext
   ): Promise<RecoveryResult> {
     if (!context.alternativeExecutor) {
       return fail(this.type, new Error("alternativeExecutor is required for alternative strategy"));
@@ -156,7 +157,7 @@ class AlternativeStrategyPluginImpl implements RecoveryStrategyPlugin {
 }
 
 export class RecoveryEngine implements RecoveryEngineContract {
-  private readonly context: Required<RecoveryContext>;
+  private readonly context: RecoveryContext & { wait: NonNullable<RecoveryContext["wait"]> };
   private readonly plugins = new Map<RecoveryStrategy["type"], RecoveryStrategyPlugin>();
 
   constructor(context: RecoveryContext = {}) {

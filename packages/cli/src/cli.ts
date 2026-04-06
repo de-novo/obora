@@ -1,5 +1,7 @@
 import { Command } from "commander";
 
+import packageJson from "../package.json" with { type: "json" };
+
 import { createArtifactCommand } from "./commands/artifact.js";
 import { createAuditCommand } from "./commands/audit.js";
 import { createExpandCommand } from "./commands/expand.js";
@@ -9,7 +11,11 @@ import { createPluginCommand } from "./commands/plugin.js";
 import { createPolicyCommand } from "./commands/policy.js";
 import { createResumeCommand } from "./commands/resume.js";
 import { createRunCommand } from "./commands/run.js";
-import { createRunsCommand, createRuntime as createRunsRuntime, inspectPersistedRun } from "./commands/runs.js";
+import {
+  createRunsCommand,
+  createRuntime as createRunsRuntime,
+  inspectPersistedRun,
+} from "./commands/runs.js";
 import { createTestCommand } from "./commands/test.js";
 
 /**
@@ -37,7 +43,7 @@ function createInspectCommand(): Command {
 export function createCLI(): Command {
   const program = new Command("obora")
     .description("Obora AI Control Runtime CLI")
-    .version("0.1.0")
+    .version(packageJson.version)
     .option("--json", "Output in JSON format")
     .option("-q, --quiet", "Suppress non-essential output")
     .option("--verbose", "Show detailed progress and diagnostics")

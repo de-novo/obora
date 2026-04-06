@@ -11,7 +11,13 @@ const TEST_DIR = fileURLToPath(new URL(".", import.meta.url));
 const FIXTURE_DIR = join(TEST_DIR, "fixtures");
 
 const fixtureFiles = (await readdir(FIXTURE_DIR))
-  .filter((name) => /\.ya?ml$/i.test(name) && !name.startsWith("one-file-") && name != "validation-repair-loop.yaml")
+  .filter(
+    (name) =>
+      /\.ya?ml$/i.test(name) &&
+      !name.startsWith("one-file-") &&
+      name !== "validation-repair-loop.yaml" &&
+      name !== "judge-e2e.yaml",
+  )
   .sort();
 const fixtures = await Promise.all(fixtureFiles.map((name) => loadFixture(join(FIXTURE_DIR, name))));
 

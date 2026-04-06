@@ -19,7 +19,7 @@
 
 ## Prerequisites
 
-- **Node.js 18+**
+- **Node.js 20+**
 - **npm** 또는 **pnpm**
 - **LLM API Key** (ZAI, OpenAI, Anthropic 중 하나)
 
@@ -71,7 +71,52 @@ obora run examples/hello-obora.yaml
 
 ---
 
-## Step 3: Validation-Repair Loop 체험 (10분)
+## Step 3: Contract-First Workflow 체험 (5분)
+
+Obora의 최신 authoring 방향은 **contract-first workflow** 입니다.
+즉, input/output contract를 prompt prose가 아니라 workflow 구조에 더 명시적으로 올리는 방식입니다.
+
+빠르게 보려면 아래 튜토리얼부터 시작하세요:
+
+- [Contract-First Quickstart](./tutorials/04-contract-first-quickstart.md)
+- [Contract-First Authoring Guide](./tutorials/05-contract-first-authoring-guide.md)
+- [LLM Config / Auth Quickstart](./tutorials/06-llm-config-auth-quickstart.md)
+- [One-File Workflows](./tutorials/one-file-workflows.md)
+
+바로 실행 가능한 canonical example은 여기 있습니다:
+
+- [`examples/07-contract-first-evaluation`](../examples/07-contract-first-evaluation)
+
+이 흐름에서는 다음이 핵심입니다.
+- `input.bindings` 로 입력 artifact 선언
+- `{{binding}}` 으로 prompt에 주입
+- `output.path` / `output.schema` 로 출력 contract 선언
+- startup preview 로 실행 전 contract 확인
+
+예시:
+
+```yaml
+steps:
+  - name: evaluate_submission
+    agent: evaluator
+    input:
+      bindings:
+        submission:
+          path: artifacts/submission.json
+          kind: json
+      task: |
+        Evaluate {{submission}}.
+        Return JSON only.
+    output:
+      path: artifacts/result.json
+      schema: artifacts/result.schema.json
+```
+
+이 방식은 structured step에서 특히 유용합니다.
+
+---
+
+## Step 4: Validation-Repair Loop 체험 (10분)
 
 **이게 Obora의 핵심입니다.** AI가 생성한 결과물을 자동으로 검증하고, 실패하면 수정해서 다시 시도합니다.
 
@@ -157,7 +202,7 @@ steps:
 
 ---
 
-## Step 4: Shell Hooks로 실제 빌드/테스트 실행 (5분)
+## Step 5: Shell Hooks로 실제 빌드/테스트 실행 (5분)
 
 LLM에게 "테스트 통과했어?"라고 묻지 마세요. **실제로 테스트를 실행하세요.**
 
@@ -191,7 +236,7 @@ obora run workflow.yaml
 
 ---
 
-## Step 5: Enterprise 기능 체험 (선택, 5분)
+## Step 6: Enterprise 기능 체험 (선택, 5분)
 
 ### DLQ (Dead Letter Queue)
 

@@ -19,7 +19,7 @@ You'll go through:
 
 - You completed [Tutorial 01](./01-first-workflow.md)
 - Familiarity with TypeScript basics
-- Node.js 18+
+- Node.js 20+
 
 ---
 

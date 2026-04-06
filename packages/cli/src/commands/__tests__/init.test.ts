@@ -153,9 +153,7 @@ describe("init command", () => {
     it("should output JSON when --json flag is set", async () => {
       await runInit("my-project", { json: true });
 
-      expect(formatter.json).toHaveBeenCalledWith(
-        expect.objectContaining({ initialized: true })
-      );
+      expect(formatter.json).toHaveBeenCalledWith(expect.objectContaining({ initialized: true }));
       expect(formatter.success).not.toHaveBeenCalled();
     });
 
@@ -247,9 +245,9 @@ describe("init command", () => {
 
       await runInit("my-project", {});
 
-      const configWrites = vi.mocked(writeFile).mock.calls.filter((c) =>
-        String(c[0]).includes("obora.config.yaml")
-      );
+      const configWrites = vi
+        .mocked(writeFile)
+        .mock.calls.filter((c) => String(c[0]).includes("obora.config.yaml"));
       expect(configWrites).toHaveLength(0);
     });
 

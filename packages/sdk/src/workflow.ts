@@ -25,6 +25,11 @@ export interface WorkflowStepConfig extends Record<string, unknown> {
   repair_loop?: RepairLoopConfig;
 }
 
+export interface WorkflowStepOutput {
+  path?: string;
+  schema?: string;
+}
+
 export interface OnFailRoute {
   when?: string;
   target: string;
@@ -48,6 +53,7 @@ export interface WorkflowStep {
   pattern?: string;
   participants?: string[];
   input?: Record<string, unknown>;
+  output?: WorkflowStepOutput;
   config?: WorkflowStepConfig;
   hooks?: WorkflowHooks;
   depends_on?: string[];
@@ -158,6 +164,7 @@ export interface AddStepOptions {
   pattern?: string;
   participants?: string[];
   input?: Record<string, unknown>;
+  output?: WorkflowStepOutput;
   config?: WorkflowStepConfig;
   hooks?: WorkflowHooks;
   depends?: string[];
@@ -194,6 +201,7 @@ export class Workflow {
       pattern: options.pattern,
       participants: options.participants,
       input: options.input,
+      output: undefined,
       config: options.config,
       hooks: options.hooks,
       depends_on: options.dependsOn ?? options.depends,

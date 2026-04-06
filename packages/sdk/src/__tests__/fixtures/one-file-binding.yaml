@@ -1,0 +1,17 @@
+name: one-file-binding
+version: "1.0"
+agents:
+  writer:
+    provider: mock
+    model: mock-model
+steps:
+  - name: bind-test
+    agent: writer
+    input:
+      bindings:
+        submission:
+          path: artifacts/submission.json
+          kind: json
+      task: |
+        Evaluate this payload:
+        {{submission}}

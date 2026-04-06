@@ -1,14 +1,19 @@
 #!/bin/bash
 set -euo pipefail
 
-cd /Users/denovo/workspace/github/obora-kit
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+HARNESS_DIR="$REPO_ROOT/experiments/swe-bench-harness"
+RESULTS_DIR="$HARNESS_DIR/results-repair"
+
+cd "$REPO_ROOT"
 
 LOG_DIR="/tmp/obora-30seq-$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$LOG_DIR"
 
-python3 - <<'PY' > "$LOG_DIR/samples.txt"
+python3 - <<PY > "$LOG_DIR/samples.txt"
 from pathlib import Path
-base = Path('experiments/swe-bench-harness/samples-no-answer')
+base = Path(r'''$HARNESS_DIR/samples-no-answer''')
 files = sorted(p.stem for p in base.glob('*.json') if p.name != 'metadata.json')[:30]
 for f in files:
     print(f)
@@ -20,8 +25,8 @@ while IFS= read -r s; do
   [ -n "$s" ] || continue
   idx=$((idx+1))
   echo "=== [$idx/30] $s ===" | tee -a "$LOG_DIR/run.log"
-  ./experiments/swe-bench-harness/run_repair_experiment.sh "$s" > "$LOG_DIR/$s.log" 2>&1 || true
-  status=$(cat "experiments/swe-bench-harness/results-repair/$s/status.txt" 2>/dev/null || echo FAIL_UNKNOWN)
+  "$HARNESS_DIR/run_repair_experiment.sh" "$s" > "$LOG_DIR/$s.log" 2>&1 || true
+  status=$(cat "$RESULTS_DIR/$s/status.txt" 2>/dev/null || echo FAIL_UNKNOWN)
   printf '%s\t%s\t%s\n' "$idx" "$s" "$status" | tee -a "$LOG_DIR/summary.tsv"
   sleep 5
 done < "$LOG_DIR/samples.txt"

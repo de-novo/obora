@@ -1,0 +1,25 @@
+name: contract-first-evaluation
+version: "1.0"
+
+agents:
+  evaluator:
+    provider: openai
+    model: gpt-4o-mini
+
+steps:
+  - name: evaluate_submission
+    agent: evaluator
+    input:
+      bindings:
+        submission:
+          path: artifacts/submission.json
+          kind: json
+        rubric:
+          path: artifacts/rubric.json
+          kind: json
+      task: |
+        Evaluate {{submission}} using {{rubric}}.
+        Return JSON only.
+    output:
+      path: artifacts/result.json
+      schema: artifacts/result.schema.json

@@ -1,3 +1,4 @@
+import { createAgentId } from "../../blackboard/types/base.js";
 import {
   BaseAgent,
   BaseAgentConfig,
@@ -169,5 +170,5 @@ Be thorough, objective, and constructive in your verification.`;
  * 검증 에이전트 생성
  */
 export function createVerifierAgent(id: string, llm: BaseAgentConfig["llm"]): VerifierAgent {
-  return new VerifierAgent({ id, llm });
+  return new VerifierAgent({ id: createAgentId(id), llm });
 }

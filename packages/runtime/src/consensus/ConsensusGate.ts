@@ -1,5 +1,6 @@
 import type { AuditTrail } from "../audit/AuditTrail.js";
 import { VotingSessionStore } from "./voting/VotingSessionStore.js";
+import { createAgendaId, createAgentId, createSessionId } from "../blackboard/types/base.js";
 
 export interface ConsensusVoterSpec {
   id: string;
@@ -126,13 +127,13 @@ export class DefaultConsensusGate implements ConsensusGate {
     };
 
     const internalSession = this.votingSessionStore.create({
-      agendaId: `consensus:${sessionId}`,
+      agendaId: createAgendaId(`consensus:${sessionId}`),
       policy:
         config.type === "score-threshold" || config.type === "custom"
           ? "majority"
           : config.type,
       quorum: config.minRequired,
-      createdBy: "runtime:consensus-gate",
+      createdBy: createAgentId("runtime:consensus-gate"),
     });
     this.votingSessionStore.open(internalSession.id);
 
@@ -148,7 +149,7 @@ export class DefaultConsensusGate implements ConsensusGate {
     const state = this.requireState(sessionId);
     const timestamp = vote.timestamp ?? (this.options.now?.() ?? new Date());
     const resolvedVote: ConsensusVote = {
-      voterId: vote.voterId,
+      voterId: createAgentId(vote.voterId),
       score: clampScore(vote.score),
       approved: vote.approved,
       issues: vote.issues,
@@ -158,8 +159,8 @@ export class DefaultConsensusGate implements ConsensusGate {
     state.votes.set(vote.voterId, resolvedVote);
 
     this.votingSessionStore.addVote({
-      sessionId: this.findVotingSessionId(sessionId),
-      voterId: vote.voterId,
+      sessionId: createSessionId(this.findVotingSessionId(sessionId)),
+      voterId: createAgentId(vote.voterId),
       option: vote.approved ? "approve" : "reject",
       weight: state.session.config.voters.find((v) => v.id === vote.voterId)?.weight,
     });

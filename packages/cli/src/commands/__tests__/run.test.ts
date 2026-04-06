@@ -76,12 +76,7 @@ vi.mock("../../utils/global-opts.js", () => ({
 }));
 
 import { appendFile, mkdir, writeFile, readFile } from "node:fs/promises";
-import {
-  loadConfig,
-  detectLLMConfigFromEnv,
-  resolveLLMConfig,
-  Workflow,
-} from "@obora/sdk";
+import { loadConfig, detectLLMConfigFromEnv, resolveLLMConfig, Workflow } from "@obora/sdk";
 
 import { formatter } from "../../utils/formatter.js";
 import { createRunCommand, runRun } from "../run.js";
@@ -95,9 +90,7 @@ describe("run command", () => {
     vi.clearAllMocks();
 
     // SDK defaults
-    vi.mocked(loadConfig).mockResolvedValue(
-      {} as Awaited<ReturnType<typeof loadConfig>>
-    );
+    vi.mocked(loadConfig).mockResolvedValue({} as Awaited<ReturnType<typeof loadConfig>>);
     vi.mocked(detectLLMConfigFromEnv).mockReturnValue(null);
     vi.mocked(resolveLLMConfig).mockReturnValue(null);
 
@@ -111,7 +104,9 @@ describe("run command", () => {
     vi.mocked(appendFile).mockResolvedValue(undefined);
     vi.mocked(mkdir).mockResolvedValue(undefined);
     vi.mocked(writeFile).mockResolvedValue(undefined);
-    vi.mocked(readFile).mockResolvedValue("name: loaded-workflow\nmode: validation-repair\n" as never);
+    vi.mocked(readFile).mockResolvedValue(
+      "name: loaded-workflow\nmode: validation-repair\n" as never
+    );
   });
 
   // ─── command creation ────────────────────────────────────────────────────
@@ -233,9 +228,7 @@ describe("run command", () => {
     it("should show a success message upon completion", async () => {
       await runRun("my-workflow", {});
 
-      expect(formatter.success).toHaveBeenCalledWith(
-        expect.stringContaining("my-workflow")
-      );
+      expect(formatter.success).toHaveBeenCalledWith(expect.stringContaining("my-workflow"));
     });
 
     it("should pass model/provider overrides to runtime when LLM config is resolved", async () => {
@@ -261,9 +254,7 @@ describe("run command", () => {
 
       await runRun("my-workflow", {});
 
-      expect(MockOboraRuntime).toHaveBeenCalledWith(
-        expect.objectContaining({ llm: undefined })
-      );
+      expect(MockOboraRuntime).toHaveBeenCalledWith(expect.objectContaining({ llm: undefined }));
     });
 
     it("should enable debug trace file when --debug is set", async () => {
@@ -273,29 +264,19 @@ describe("run command", () => {
         expect.stringContaining(".obora-debug"),
         expect.objectContaining({ recursive: true })
       );
-      expect(writeFile).toHaveBeenCalledWith(
-        expect.stringContaining(".obora-debug"),
-        "",
-        "utf-8"
-      );
+      expect(writeFile).toHaveBeenCalledWith(expect.stringContaining(".obora-debug"), "", "utf-8");
       expect(appendFile).toHaveBeenCalled();
     });
 
     it("should register extra debug event listeners in debug mode", async () => {
       await runRun("my-workflow", { debug: true });
 
-      expect(mockRuntimeInstance.on).toHaveBeenCalledWith(
-        "execution_start",
-        expect.any(Function)
-      );
+      expect(mockRuntimeInstance.on).toHaveBeenCalledWith("execution_start", expect.any(Function));
       expect(mockRuntimeInstance.on).toHaveBeenCalledWith(
         "workflow.back_edge_triggered",
         expect.any(Function)
       );
-      expect(mockRuntimeInstance.on).toHaveBeenCalledWith(
-        "error",
-        expect.any(Function)
-      );
+      expect(mockRuntimeInstance.on).toHaveBeenCalledWith("error", expect.any(Function));
     });
   });
 
@@ -350,9 +331,7 @@ describe("run command", () => {
     it("should emit JSON with validated:true in dry-run + json mode", async () => {
       await runRun("my-workflow", { dryRun: true, json: true });
 
-      expect(formatter.json).toHaveBeenCalledWith(
-        expect.objectContaining({ validated: true })
-      );
+      expect(formatter.json).toHaveBeenCalledWith(expect.objectContaining({ validated: true }));
     });
 
     it("should include expanded workflow in dry-run JSON when dump flag is set", async () => {
@@ -391,7 +370,9 @@ describe("run command", () => {
       vi.mocked(Workflow.fromYaml).mockResolvedValue(
         mockWorkflow as Awaited<ReturnType<typeof Workflow.fromYaml>>
       );
-      vi.mocked(Workflow.getStopSemantics).mockReturnValue(mockStopSemantics as ReturnType<typeof Workflow.getStopSemantics>);
+      vi.mocked(Workflow.getStopSemantics).mockReturnValue(
+        mockStopSemantics as ReturnType<typeof Workflow.getStopSemantics>
+      );
 
       await runRun("my-workflow.yaml", { dryRun: true, json: true, showStopSemantics: true });
 
@@ -482,17 +463,23 @@ describe("run command", () => {
       expect(mkdir).toHaveBeenCalledWith("./tmp-output", { recursive: true });
       expect(vi.mocked(writeFile).mock.calls[0]).toEqual([
         expect.stringContaining("tmp-output/loaded-workflow"),
-        expect.stringContaining("\"workflowName\": \"my-workflow\""),
+        expect.stringContaining('"workflowName": "my-workflow"'),
         "utf-8",
       ]);
       expect(vi.mocked(writeFile).mock.calls[1]).toEqual([
         expect.stringContaining("tmp-output/loaded-workflow"),
-        expect.stringContaining("\"archiveEnabled\": true"),
+        expect.stringContaining('"archiveEnabled": true'),
         "utf-8",
       ]);
-      expect(vi.mocked(writeFile).mock.calls[2]?.[0]).toEqual(expect.stringContaining(".archive/README.md"));
-      expect(vi.mocked(writeFile).mock.calls[3]?.[0]).toEqual(expect.stringContaining(".archive/SUMMARY.md"));
-      expect(vi.mocked(writeFile).mock.calls[4]?.[0]).toEqual(expect.stringContaining(".archive/NEXT_STEPS.md"));
+      expect(vi.mocked(writeFile).mock.calls[2]?.[0]).toEqual(
+        expect.stringContaining(".archive/README.md")
+      );
+      expect(vi.mocked(writeFile).mock.calls[3]?.[0]).toEqual(
+        expect.stringContaining(".archive/SUMMARY.md")
+      );
+      expect(vi.mocked(writeFile).mock.calls[4]?.[0]).toEqual(
+        expect.stringContaining(".archive/NEXT_STEPS.md")
+      );
     });
 
     it("should include the execution ID in the output file name", async () => {
@@ -557,7 +544,7 @@ describe("run command", () => {
 
       const secondCall = vi.mocked(writeFile).mock.calls[1];
       expect(secondCall?.[0]).toEqual(expect.stringContaining("archive-intent.json"));
-      expect(secondCall?.[1]).toEqual(expect.stringContaining("\"archiveEnabled\": true"));
+      expect(secondCall?.[1]).toEqual(expect.stringContaining('"archiveEnabled": true'));
     });
 
     it("should create archive scaffold files when archive is enabled", async () => {
@@ -574,17 +561,32 @@ describe("run command", () => {
       await runRun("my-workflow.yaml", {});
 
       expect(mkdir).toHaveBeenCalledWith(expect.stringContaining(".archive"), { recursive: true });
-      expect(vi.mocked(writeFile).mock.calls[2]?.[1]).toEqual(expect.stringContaining("mode: validation-repair"));
-      expect(vi.mocked(writeFile).mock.calls[3]?.[1]).toEqual(expect.stringContaining("validation failures, repair attempts"));
-      expect(vi.mocked(writeFile).mock.calls[4]?.[1]).toEqual(expect.stringContaining("another repair loop"));
-      expect(vi.mocked(writeFile).mock.calls[5]?.[0]).toEqual(expect.stringContaining("REPAIR_LOG.md"));
-      expect(vi.mocked(writeFile).mock.calls[5]?.[1]).toEqual(expect.stringContaining("# Repair Log"));
+      expect(vi.mocked(writeFile).mock.calls[2]?.[1]).toEqual(
+        expect.stringContaining("mode: validation-repair")
+      );
+      expect(vi.mocked(writeFile).mock.calls[3]?.[1]).toEqual(
+        expect.stringContaining("validation failures, repair attempts")
+      );
+      expect(vi.mocked(writeFile).mock.calls[4]?.[1]).toEqual(
+        expect.stringContaining("another repair loop")
+      );
+      expect(vi.mocked(writeFile).mock.calls[5]?.[0]).toEqual(
+        expect.stringContaining("REPAIR_LOG.md")
+      );
+      expect(vi.mocked(writeFile).mock.calls[5]?.[1]).toEqual(
+        expect.stringContaining("# Repair Log")
+      );
     });
 
     it("should create mode-specific proof archive scaffold file", async () => {
       const mockWorkflow = {
         name: "loaded-proof",
-        steps: [{ name: "problem_frame" }, { name: "known_results_audit" }, { name: "proof_attempt" }, { name: "review" }],
+        steps: [
+          { name: "problem_frame" },
+          { name: "known_results_audit" },
+          { name: "proof_attempt" },
+          { name: "review" },
+        ],
         variables: { output_root: "./tmp-output", archive_enabled: true },
       };
       vi.mocked(Workflow.fromYaml).mockResolvedValue(
@@ -594,8 +596,12 @@ describe("run command", () => {
 
       await runRun("proof.yaml", {});
 
-      expect(vi.mocked(writeFile).mock.calls[5]?.[0]).toEqual(expect.stringContaining("PROOF_GAPS.md"));
-      expect(vi.mocked(writeFile).mock.calls[5]?.[1]).toEqual(expect.stringContaining("# Proof Gaps"));
+      expect(vi.mocked(writeFile).mock.calls[5]?.[0]).toEqual(
+        expect.stringContaining("PROOF_GAPS.md")
+      );
+      expect(vi.mocked(writeFile).mock.calls[5]?.[1]).toEqual(
+        expect.stringContaining("# Proof Gaps")
+      );
     });
 
     it("should create mode-specific research archive scaffold file", async () => {
@@ -611,8 +617,12 @@ describe("run command", () => {
 
       await runRun("research.yaml", {});
 
-      expect(vi.mocked(writeFile).mock.calls[5]?.[0]).toEqual(expect.stringContaining("FINDINGS.md"));
-      expect(vi.mocked(writeFile).mock.calls[5]?.[1]).toEqual(expect.stringContaining("# Findings"));
+      expect(vi.mocked(writeFile).mock.calls[5]?.[0]).toEqual(
+        expect.stringContaining("FINDINGS.md")
+      );
+      expect(vi.mocked(writeFile).mock.calls[5]?.[1]).toEqual(
+        expect.stringContaining("# Findings")
+      );
     });
   });
 
@@ -670,7 +680,9 @@ describe("run command", () => {
         expect.stringContaining("validation passed [validate]: Validation passed")
       );
       expect(formatter.info).toHaveBeenCalledWith(
-        expect.stringContaining("repair loop summary: validation failed=1, validation passed=1, repairs started=1, repairs completed=0")
+        expect.stringContaining(
+          "repair loop summary: validation failed=1, validation passed=1, repairs started=1, repairs completed=0"
+        )
       );
     });
 

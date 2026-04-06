@@ -1,7 +1,7 @@
 import type { WorkflowDef } from "./workflow.js";
 import { OboraError, OboraErrorCode } from "./runtime.js";
 
-export type OneFileMode = "validation-repair" | "research-loop" | "proof-loop";
+export type OneFileMode = "validation-repair" | "research-loop" | "proof-loop" | "judge";
 
 export interface OneFileModeExpander {
   mode: OneFileMode;
@@ -394,17 +394,116 @@ const proofLoopExpander: OneFileModeExpander = {
   },
 };
 
+
+const judgeModeExpander: OneFileModeExpander = {
+  mode: "judge",
+  validate(input) {
+    assertAllowedKeys(input, ["name", "version", "mode", "provider", "model", "agent", "prompt", "input", "output", "options"], "");
+    requireString(input.name, "name");
+    requireString(input.provider, "provider");
+    requireString(input.model, "model");
+    requireString(input.prompt, "prompt");
+
+    const inputObj = asObject(input.input);
+    assertAllowedKeys(inputObj, ["json", "schema"], "input.");
+    requireString(inputObj.json, "input.json");
+    requireOptionalString(inputObj.schema, "input.schema");
+
+    const outputObj = asObject(input.output);
+    assertAllowedKeys(outputObj, ["path", "schema"], "output.");
+    requireString(outputObj.path, "output.path");
+    requireOptionalString(outputObj.schema, "output.schema");
+
+    const options = asObject(input.options);
+    assertAllowedKeys(options, ["repair", "fallback", "temperature", "maxTokens"], "options.");
+    requireOptionalBoolean(options.repair, "options.repair");
+    requireOptionalBoolean(options.fallback, "options.fallback");
+    requireOptionalNumber(options.temperature, "options.temperature");
+    requireOptionalNumber(options.maxTokens, "options.maxTokens");
+    requireOptionalString(input.agent, "agent");
+  },
+  expand(input) {
+    const inputObj = asObject(input.input);
+    const outputObj = asObject(input.output);
+    const options = asObject(input.options);
+    const prompt = requireString(input.prompt, "prompt");
+    const provider = requireString(input.provider, "provider");
+    const model = requireString(input.model, "model");
+    const agent = typeof input.agent === "string" ? input.agent : "judge";
+    return {
+      name: String(input.name),
+      version: typeof input.version === "string" ? input.version : undefined,
+      variables: {
+        judge_input_json: String(inputObj.json),
+        ...(typeof inputObj.schema === "string" ? { judge_input_schema: inputObj.schema } : {}),
+        judge_output_path: String(outputObj.path),
+        ...(typeof outputObj.schema === "string" ? { judge_output_schema: outputObj.schema } : {}),
+        judge_mode: true,
+      },
+      steps: [
+        {
+          name: "judge",
+          agent,
+          input: { task: prompt },
+          config: {
+            judge: {
+              enabled: true,
+              provider,
+              model,
+              input_json: String(inputObj.json),
+              input_schema: typeof inputObj.schema === "string" ? inputObj.schema : undefined,
+              output_path: String(outputObj.path),
+              output_schema: typeof outputObj.schema === "string" ? outputObj.schema : undefined,
+              repair: options.repair === true,
+              fallback: options.fallback === true,
+              temperature: typeof options.temperature === "number" ? options.temperature : undefined,
+              maxTokens: typeof options.maxTokens === "number" ? options.maxTokens : undefined,
+            },
+          },
+        },
+      ],
+    };
+  },
+  getStopSemantics(input) {
+    const inputObj = asObject(input.input);
+    const outputObj = asObject(input.output);
+    const options = asObject(input.options);
+    return {
+      mode: "judge",
+      outcomes: ["success", "schema_failed", "binding_failed", "provider_failed", "aborted"],
+      input: {
+        json: typeof inputObj.json === "string" ? inputObj.json : undefined,
+        schema: typeof inputObj.schema === "string" ? inputObj.schema : undefined,
+      },
+      output: {
+        path: typeof outputObj.path === "string" ? outputObj.path : undefined,
+        schema: typeof outputObj.schema === "string" ? outputObj.schema : undefined,
+      },
+      options: {
+        repair: options.repair === true,
+        fallback: options.fallback === true,
+      },
+      notes: [
+        "judge mode expands to a single-step workflow",
+        "provider/model are carried in step config.judge",
+        "input/output paths are surfaced as workflow variables",
+      ],
+    };
+  },
+};
+
 const EXPANDERS: Record<OneFileMode, OneFileModeExpander> = {
   "validation-repair": validationRepairExpander,
   "research-loop": researchLoopExpander,
   "proof-loop": proofLoopExpander,
+  "judge": judgeModeExpander,
 };
 
 export function expandOneFileWorkflow(input: unknown): WorkflowDef | undefined {
   if (!input || typeof input !== "object") return undefined;
   const def = input as Record<string, unknown>;
   const mode = def.mode;
-  if (mode !== "validation-repair" && mode !== "research-loop" && mode !== "proof-loop") return undefined;
+  if (mode !== "validation-repair" && mode !== "research-loop" && mode !== "proof-loop" && mode !== "judge") return undefined;
   EXPANDERS[mode].validate(def);
   return EXPANDERS[mode].expand(def);
 }
@@ -413,6 +512,6 @@ export function getOneFileStopSemantics(input: unknown): Record<string, unknown>
   if (!input || typeof input !== "object") return undefined;
   const def = input as Record<string, unknown>;
   const mode = def.mode;
-  if (mode !== "validation-repair" && mode !== "research-loop" && mode !== "proof-loop") return undefined;
+  if (mode !== "validation-repair" && mode !== "research-loop" && mode !== "proof-loop" && mode !== "judge") return undefined;
   return EXPANDERS[mode].getStopSemantics(def);
 }

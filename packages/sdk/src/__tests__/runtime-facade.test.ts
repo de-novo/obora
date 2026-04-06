@@ -136,7 +136,7 @@ describe("OboraRuntime facade", () => {
       expect(result.completedSteps).toEqual(["step-a", "step-b"]);
       expect(result.outputs["step-a"]).toBe("[stub] No LLM configured");
       expect(result.outputs["step-b"]).toBe("[stub] No LLM configured");
-      expect(warnings[0]).toContain("No LLM configured");
+      expect(warnings[0]).toContain("Missing auth for provider");
     } finally {
       restoreEnv();
     }

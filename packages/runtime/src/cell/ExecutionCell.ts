@@ -189,7 +189,7 @@ export class DefaultExecutionCell implements ExecutionCell {
       await this.waitIfSuspended();
       this.throwIfAborted();
 
-      const action = await this.actor.think(observation);
+      const action = await this.actor.think();
       await this.waitIfSuspended();
       this.throwIfAborted();
 

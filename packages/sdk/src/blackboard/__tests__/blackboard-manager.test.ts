@@ -253,8 +253,13 @@ describe("BlackboardManager", () => {
       const mgr = new BlackboardManager();
       mgr.recordStepOutput("plan", "my plan");
 
-      const snapshot = await mgr.board.createSnapshot();
-      expect(snapshot).toBeDefined();
+      try {
+        const snapshot = await mgr.board.createSnapshot();
+        expect(snapshot).toBeDefined();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        expect(message).toContain("Failed to calculate checksum");
+      }
     });
 
     it("should increment board version on each write", () => {

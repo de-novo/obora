@@ -17,7 +17,7 @@ By the end, you'll know how to:
 
 ## Prerequisites
 
-- Node.js 18+
+- Node.js 20+
 - npm or pnpm
 - A terminal
 

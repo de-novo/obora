@@ -106,11 +106,12 @@ describe("M3 CLI command IA", () => {
   });
 
   it("runRun detects OBORA_LLM_* env via SDK helper", async () => {
-    const detectSpy = vi.spyOn(oboraSdk, "detectLLMConfigFromEnv").mockReturnValue({
-      provider: "custom-provider",
-      apiKey: "custom-key",
-      model: "custom-model",
-    });
+    const prevProvider = process.env.OBORA_LLM_PROVIDER;
+    const prevApiKey = process.env.OBORA_LLM_API_KEY;
+    const prevModel = process.env.OBORA_LLM_MODEL;
+    process.env.OBORA_LLM_PROVIDER = "custom-provider";
+    process.env.OBORA_LLM_API_KEY = "custom-key";
+    process.env.OBORA_LLM_MODEL = "custom-model";
 
     const runSpy = vi.spyOn(oboraSdk.OboraRuntime.prototype, "run").mockResolvedValue({
       executionId: "test-exec",
@@ -133,9 +134,17 @@ describe("M3 CLI command IA", () => {
     const workflow = "inline-workflow";
     const runtimeDefineSpy = vi.spyOn(oboraSdk.OboraRuntime.prototype, "define");
 
-    await runRun(workflow, {});
+    try {
+      await runRun(workflow, {});
+    } finally {
+      if (prevProvider === undefined) delete process.env.OBORA_LLM_PROVIDER;
+      else process.env.OBORA_LLM_PROVIDER = prevProvider;
+      if (prevApiKey === undefined) delete process.env.OBORA_LLM_API_KEY;
+      else process.env.OBORA_LLM_API_KEY = prevApiKey;
+      if (prevModel === undefined) delete process.env.OBORA_LLM_MODEL;
+      else process.env.OBORA_LLM_MODEL = prevModel;
+    }
 
-    expect(detectSpy).toHaveBeenCalled();
     expect(runtimeDefineSpy).not.toHaveBeenCalled();
     expect(runSpy).toHaveBeenCalledWith(workflow, expect.any(Object));
   });

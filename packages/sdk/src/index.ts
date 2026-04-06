@@ -10,6 +10,8 @@ export { OboraRuntime, OboraError, OboraErrorCode } from "./runtime.js";
 export { Workflow } from "./workflow.js";
 export { detectLLMConfigFromEnv, resolveLLMConfig } from "./llm-config.js";
 export { loadConfig, resolveProviderConfig } from "./config-loader.js";
+export { buildResolutionSummary, formatResolutionSummary } from "./resolution-summary.js";
+export { formatDiagnostic } from "./diagnostics.js";
 export { CostTracker, BudgetExceededError } from "./cost-tracker.js";
 export {
   validateKnowledgeSchema,
@@ -34,6 +36,7 @@ export {
 } from "./knowledge/schema-ai.js";
 export { createAuthResolver, resolveAuthRef } from "./auth-resolver.js";
 export { StepExecutor } from "./step-executor.js";
+export { findSchemaMismatchReason, loadMinimalJsonSchema } from "./schema-output.js";
 export { topologicalSort, groupByParallelizableLevels } from "./dependency-resolver.js";
 export { ParallelScheduler } from "./execution/parallel-scheduler.js";
 export {

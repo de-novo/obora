@@ -19,9 +19,10 @@ import {
   type Vote,
   type ReviewerScore,
 } from "./execution/peer-review-executor.js";
-import { existsSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve, sep } from "node:path";
+import { findSchemaMismatchReason, loadMinimalJsonSchema } from "./schema-output.js";
 
 /**
  * Minimal LLM adapter interface for StepExecutor.
@@ -302,9 +303,167 @@ export class StepExecutor {
       return this.executeConsensusStep(step, context);
     }
 
+    const judgeConfig = this.getJudgeStepConfig(step.config);
+    if (judgeConfig?.enabled) {
+      return this.executeJudgeStep(step, context, judgeConfig);
+    }
+
     const response = await this.requestForStep(step, context, step.agent);
+    const output = this.parseStepOutputContract(step, this.parseStructuredStepOutput(step, response.message.content ?? ""));
+    await this.persistStepOutput(step, output);
     return {
-      output: this.parseStructuredStepOutput(step, response.message.content ?? ""),
+      output,
+      raw: response,
+    };
+  }
+
+
+
+
+  private async persistStepOutput(step: WorkflowStep, output: unknown): Promise<void> {
+    const outputConfig = step.output;
+    const outputPath = outputConfig && typeof outputConfig === "object" && typeof outputConfig.path === "string"
+      ? outputConfig.path
+      : undefined;
+
+    if (!outputPath) return;
+
+    const resolvedOutputPath = this.resolveProjectPath(outputPath, { allowNonExistentTarget: true });
+    await mkdir(dirname(resolvedOutputPath), { recursive: true });
+
+    const content = typeof output === "string"
+      ? output.endsWith("\n") ? output : `${output}\n`
+      : JSON.stringify(output, null, 2) + "\n";
+
+    await writeFile(resolvedOutputPath, content, "utf-8");
+  }
+
+  private parseStepOutputContract(step: WorkflowStep, parsedOutput: unknown): unknown {
+    const output = step.output;
+    const schemaPath = output && typeof output === "object" && typeof output.schema === "string"
+      ? output.schema
+      : undefined;
+
+    if (!schemaPath) {
+      return parsedOutput;
+    }
+
+    const resolvedSchemaPath = this.resolveProjectPath(schemaPath);
+    if (!existsSync(resolvedSchemaPath)) {
+      throw new Error(
+        `[SCHEMA_1002] Missing schema file: ${schemaPath}
+` +
+          `Reason: step '${step.name}' declared output.schema but the file was not found
+` +
+          `Fix: create the schema file or correct output.schema path`
+      );
+    }
+
+    let candidate = parsedOutput;
+    if (typeof candidate === "string") {
+      candidate = this.tryParseStructuredContent(candidate);
+      if (candidate === undefined) {
+        throw new Error(
+          `[SCHEMA_1001] Invalid structured output for step '${step.name}'
+` +
+            `Reason: output.schema requires valid JSON output, but the model response was not parseable JSON
+` +
+            `Fix: instruct the model to return JSON only that matches the declared output contract`
+        );
+      }
+    }
+
+    const schema = loadMinimalJsonSchema(resolvedSchemaPath);
+    const mismatchReason = findSchemaMismatchReason(candidate, schema);
+    if (mismatchReason) {
+      throw new Error(
+        `[SCHEMA_1003] Output contract mismatch for step '${step.name}'
+` +
+          `Reason: ${mismatchReason}
+` +
+          `Fix: return JSON that matches the declared schema at ${schemaPath}`
+      );
+    }
+
+    return candidate;
+  }
+
+  private getJudgeStepConfig(config: WorkflowStep["config"]):
+    | {
+        enabled: boolean;
+        provider?: string;
+        model?: string;
+        input_json?: string;
+        input_schema?: string;
+        output_path?: string;
+        output_schema?: string;
+        repair?: boolean;
+        fallback?: boolean;
+        temperature?: number;
+        maxTokens?: number;
+      }
+    | undefined {
+    if (!config || typeof config !== "object") return undefined;
+    const judge = (config as Record<string, unknown>).judge;
+    if (!judge || typeof judge !== "object") return undefined;
+    return judge as {
+      enabled: boolean;
+      provider?: string;
+      model?: string;
+      input_json?: string;
+      input_schema?: string;
+      output_path?: string;
+      output_schema?: string;
+      repair?: boolean;
+      fallback?: boolean;
+      temperature?: number;
+      maxTokens?: number;
+    };
+  }
+
+  private async executeJudgeStep(
+    step: WorkflowStep,
+    context: StepContext,
+    judgeConfig: NonNullable<ReturnType<StepExecutor["getJudgeStepConfig"]>>
+  ): Promise<StepResult> {
+    if (!judgeConfig.input_json) {
+      throw new Error("[BIND_1001] Missing input artifact path for judge step\nReason: config.judge.input_json is required\nFix: set input.json in judge mode or provide config.judge.input_json");
+    }
+    if (!judgeConfig.output_path) {
+      throw new Error("[BIND_1001] Missing output artifact path for judge step\nReason: config.judge.output_path is required\nFix: set output.path in judge mode or provide config.judge.output_path");
+    }
+
+    const inputPath = this.resolveProjectPath(judgeConfig.input_json);
+    const outputPath = this.resolveProjectPath(judgeConfig.output_path, { allowNonExistentTarget: true });
+    const inputJson = await readFile(inputPath, 'utf-8');
+    const task = this.extractTask(step);
+    const augmentedStep: WorkflowStep = {
+      ...step,
+      input: {
+        ...(step.input && typeof step.input === 'object' ? step.input : {}),
+        task: `${task}
+
+Input JSON (${judgeConfig.input_json}):
+
+${inputJson}
+
+Return JSON only.`,
+      },
+    };
+
+    const response = await this.requestForStep(augmentedStep, context, step.agent);
+    let parsed = this.parseStructuredStepOutput(augmentedStep, response.message.content ?? "");
+    if (typeof parsed === "string") {
+      try {
+        parsed = JSON.parse(parsed) as unknown;
+      } catch {
+        // keep original parsed string; schema validation/repair can handle this later
+      }
+    }
+    await mkdir(dirname(outputPath), { recursive: true });
+    await writeFile(outputPath, JSON.stringify(parsed, null, 2) + "\n", "utf-8");
+    return {
+      output: parsed,
       raw: response,
     };
   }
@@ -1107,7 +1266,7 @@ export class StepExecutor {
     if (input && typeof input === "object") {
       const task = (input as Record<string, unknown>).task;
       if (typeof task === "string") {
-        return task;
+        return this.applyBindings(task, input as Record<string, unknown>);
       }
     }
 
@@ -1116,5 +1275,47 @@ export class StepExecutor {
     }
 
     return `Execute workflow step '${step.name}'`;
+  }
+
+  private applyBindings(task: string, input: Record<string, unknown>): string {
+    const bindings = input.bindings;
+    if (!bindings || typeof bindings !== "object") {
+      return task;
+    }
+
+    let rendered = task;
+    for (const [name, rawBinding] of Object.entries(bindings as Record<string, unknown>)) {
+      if (!rawBinding || typeof rawBinding !== "object") continue;
+      const binding = rawBinding as Record<string, unknown>;
+      const pathValue = binding.path;
+      if (typeof pathValue !== "string") continue;
+      const kind = typeof binding.kind === "string" ? binding.kind : "text";
+      const required = binding.required !== false;
+      const content = this.loadBindingContent(pathValue, kind, required, name);
+      rendered = rendered.replaceAll(`{{${name}}}`, content);
+    }
+    return rendered;
+  }
+
+  private loadBindingContent(pathValue: string, kind: string, required: boolean, name: string): string {
+    const filePath = this.resolveProjectPath(pathValue);
+    try {
+      const raw = readFileSync(filePath, "utf-8");
+      if (kind === "json") {
+        const parsed = JSON.parse(raw) as unknown;
+        return JSON.stringify(parsed, null, 2);
+      }
+      return raw;
+    } catch (error) {
+      if (!required) return "";
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `[BIND_1001] Missing input artifact: ${pathValue}
+` +
+          `Reason: the declared binding '${name}' could not be resolved (${message})
+` +
+          `Fix: create the input artifact before execution or correct the binding path`
+      );
+    }
   }
 }

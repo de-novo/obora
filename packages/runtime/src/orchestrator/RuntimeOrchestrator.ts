@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { buildGraph, generateExecutionPlan, getNextSteps, parseWorkflow, type Step, type Workflow } from "../_legacy/workflow/index.js";
 import type { CellManager } from "../cell/CellManager.js";
-import type { Task } from "../cell/types.js";
+import type { CellResult, Task } from "../cell/types.js";
 import type { AuditTrail } from "../audit/AuditTrail.js";
 import type { AuditEventType } from "../audit/types.js";
 import { persistStructuredAuditEvent } from "../audit/AuditReplay.js";
@@ -51,9 +51,9 @@ interface StepGateDecision {
   config?: { timeout?: string; fallback?: "fail" | "escalate" | "auto-approve" };
 }
 
-interface RuntimeGateDecision extends Extract<PolicyDecision, { type: "gate" }> {
+interface RuntimeGateDecision extends Omit<Extract<PolicyDecision, { type: "gate" }>, "gateType" | "config"> {
   gateType: GateWaitState["gateType"];
-  config?: { timeout?: string; fallback?: "fail" | "escalate" | "auto-approve" };
+  config: { timeout?: string; fallback?: "fail" | "escalate" | "auto-approve" };
 }
 
 interface BackEdgeState {
@@ -248,7 +248,18 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
         // Skip non-serializable values (functions, symbols); restore all JSON-safe values including primitives
         if (typeof value === "function" || typeof value === "symbol") continue;
         await this.dependencies.stateBinder.bind(
-          { success: true, output: value, toolCalls: [], metrics: { durationMs: 0, tokenUsage: { input: 0, output: 0 }, retries: 0 } },
+          {
+            success: true,
+            output: value,
+            stateChanges: [],
+            toolCalls: [],
+            metrics: {
+              startTime: new Date(0),
+              endTime: new Date(0),
+              durationMs: 0,
+              toolCallCount: 0,
+            },
+          },
           [{ source: "output", target: key }],
         );
       }
@@ -561,6 +572,9 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
         }
 
         if (result.status === "back_edge") {
+          if (!result.targetStep) {
+            throw new Error(`back_edge result missing targetStep for step ${result.step.name}`);
+          }
           this.pruneForBackEdge(execution, workflow, completed, scheduled, result.targetStep);
           execution.completedSteps = [...completed];
           if (this.checkpointManager) {
@@ -752,7 +766,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
       const result = await this.dependencies.cellManager.execute(cellId, this.stepToTask(step, workflowInput));
       record.result = result;
       record.endedAt = this.now();
-      this.trackLoopCost(execution, workflow, step.name, result.metrics.costUsd, completed);
+      this.trackLoopCost(execution, workflow, step.name, result.metrics.costUsd);
 
       await this.recordAudit(execution.id, "cell_end", {
         stepName: step.name,
@@ -812,7 +826,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
       try {
         await this.captureArtifacts(execution.id, step.name, result.output, result.toolCalls);
       } catch (artifactError) {
-        await this.recordAudit(execution.id, "warning", {
+        await this.recordAudit(execution.id, "error", {
           stepName: step.name,
           message: "Artifact capture failed",
           error: artifactError instanceof Error ? artifactError.message : String(artifactError),
@@ -913,7 +927,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
     cellId: string,
     _unusedCellCost: number | undefined,
     completed: Set<string>,
-  ): Promise<BackEdgeTriggerResult | undefined> {
+  ): Promise<{ step: Step; status: "failed" | "back_edge"; targetStep?: string; error?: string } | undefined> {
     const onFail = step.on_fail;
     if (!onFail?.goto) {
       return undefined;
@@ -1276,11 +1290,14 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
       };
     };
 
-    if (gate === undefined || gate === false) {
+    if (gate === undefined) {
       return undefined;
     }
 
-    if (gate === true) {
+    if (typeof gate === "boolean") {
+      if (gate === false) {
+        return undefined;
+      }
       const parsedConfig = parseConfig(gateConfig);
       const gateType = parsedConfig && gateConfig && typeof gateConfig === "object"
         && validGateTypes.includes((gateConfig as Record<string, unknown>).type as GateWaitState["gateType"])
@@ -1317,7 +1334,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
       ? policyDecision.config as { timeout?: unknown; fallback?: unknown }
       : undefined;
 
-    const mergedConfig = {
+    const mergedConfig: RuntimeGateDecision["config"] = {
       timeout: typeof policyConfig?.timeout === "string" ? policyConfig.timeout : undefined,
       fallback:
         policyConfig?.fallback === "fail" ||
@@ -1539,7 +1556,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
     };
   }
 
-  private async bindStepState(execution: Execution, step: Step, result: { success: boolean; output: unknown }): Promise<void> {
+  private async bindStepState(execution: Execution, step: Step, result: CellResult): Promise<void> {
     const bindings = this.extractStateBindings(step);
     if (!this.dependencies.stateBinder || bindings.length === 0) {
       return;

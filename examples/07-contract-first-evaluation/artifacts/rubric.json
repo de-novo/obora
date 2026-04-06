@@ -1,0 +1,10 @@
+{
+  "criteria": [
+    { "name": "clarity", "weight": 0.5 },
+    { "name": "correctness", "weight": 0.5 }
+  ],
+  "output": {
+    "required_fields": ["score", "verdict"],
+    "score_range": [0, 1]
+  }
+}

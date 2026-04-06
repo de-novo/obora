@@ -159,6 +159,8 @@ describe("config-loader", () => {
       expect(resolved).toBeUndefined();
       expect(warn).toHaveBeenCalledWith(expect.stringContaining("missing"));
       expect(warn).toHaveBeenCalledWith(expect.stringContaining(explicit));
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("Next action: export MISSING_API_KEY=..."));
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("providers.missing.authRef"));
       warn.mockRestore();
     });
   });

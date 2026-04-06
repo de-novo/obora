@@ -148,10 +148,10 @@ function normalizeResourcePolicy(input: unknown): ResourcePolicy | undefined {
   }
 
   return {
-    timeoutMs,
-    maxTokens,
-    maxCostUsd,
-    maxToolCalls,
+    timeoutMs: timeoutMs as number | undefined,
+    maxTokens: maxTokens as number | undefined,
+    maxCostUsd: maxCostUsd as number | undefined,
+    maxToolCalls: maxToolCalls as number | undefined,
     maxOutputSize,
     dynamicQuota: normalizeDynamicQuota(input.dynamicQuota ?? input.dynamic_quota),
   };

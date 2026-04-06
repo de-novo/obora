@@ -12,6 +12,7 @@
   - [define](#define)
   - [registerPattern](#registerpattern)
 - [Workflow Builder](#workflow-builder)
+- [LLM Config Happy Path](#llm-config-happy-path)
 - [Policy Builder](#policy-builder)
 - [Agent Builder](#agent-builder)
 - [RunHandle](#runhandle)
@@ -43,6 +44,44 @@ import {
   loadFixture,
 } from "@obora/sdk";
 ```
+
+---
+
+## LLM Config Happy Path
+
+For most users, the recommended setup is:
+
+1. put the API key in env
+2. put default provider/model in project `.obora/config.yaml`
+3. use runtime `llm` only for temporary or programmatic overrides
+
+Example project config:
+
+```yaml
+defaults:
+  provider: openai
+
+providers:
+  openai:
+    defaultModel: gpt-4o-mini
+```
+
+Auth via env:
+
+```bash
+export OPENAI_API_KEY=your-key
+```
+
+Resolution order is currently:
+
+```text
+runtime.llm > config file > env fallback
+```
+
+This means the easiest mental model is:
+- secret → env
+- project default provider/model → config file
+- temporary override → runtime `llm`
 
 ---
 
@@ -321,6 +360,55 @@ Workflow.create(input: unknown): WorkflowDef
 Workflow.fromYaml(path: string): Promise<WorkflowDef>
 ```
 
+### WorkflowStep Input / Output Surface
+
+`WorkflowStep` now supports a more contract-first authoring style for structured steps.
+
+```yaml
+steps:
+  - name: evaluate_submission
+    agent: evaluator
+    input:
+      bindings:
+        submission:
+          path: artifacts/submission.json
+          kind: json
+        rubric:
+          path: artifacts/rubric.json
+          kind: json
+      task: |
+        Evaluate {{submission}} using {{rubric}}.
+        Return JSON only.
+    output:
+      path: artifacts/result.json
+      schema: artifacts/result.schema.json
+```
+
+#### Current input conventions
+
+- `input.task` — primary task prompt for the step.
+- `input.bindings` — named artifact bindings injected into `task` via `{{bindingName}}` placeholders.
+  - current minimal path is artifact `path` bindings
+  - `kind: json` is rendered as serialized JSON text
+
+#### Current output conventions
+
+- `output.path` — persist the final step output to an artifact file.
+- `output.schema` — require structured JSON output and apply minimal contract checks.
+
+When `output.schema` is declared, the runtime currently provides:
+- JSON parse requirement
+- schema file presence check
+- top-level object expectation
+- required field mismatch hints
+- field type mismatch hints
+- nested object required/type mismatch hints
+- array item type mismatch hints
+- enum mismatch hints
+- minimal `anyOf` mismatch hints
+- minimal `oneOf` mismatch hints
+- minimal `allOf` mismatch hints
+
 ### Validation / Repair Config
 
 `WorkflowStep.config` now supports runtime-oriented repair-loop controls:
@@ -367,11 +455,24 @@ steps:
 
 ```ts
 const workflow = Workflow.create({
-  name: "pipeline",
+  name: "contract-first-evaluation",
   version: "1.0",
   steps: [
-    { name: "draft", agent: "writer" },
-    { name: "review", agent: "reviewer", depends_on: ["draft"] },
+    {
+      name: "evaluate_submission",
+      agent: "evaluator",
+      input: {
+        bindings: {
+          submission: { path: "artifacts/submission.json", kind: "json" },
+          rubric: { path: "artifacts/rubric.json", kind: "json" },
+        },
+        task: "Evaluate {{submission}} using {{rubric}}. Return JSON only.",
+      },
+      output: {
+        path: "artifacts/result.json",
+        schema: "artifacts/result.schema.json",
+      },
+    },
   ],
 });
 
@@ -610,6 +711,17 @@ await runtime.runs.auditReplay("run-123", "review");
 ---
 
 ## Error Codes
+
+### Structured output / schema
+
+- `SCHEMA_1001` — declared structured output could not be parsed as JSON
+- `SCHEMA_1002` — declared `output.schema` file was not found
+- `SCHEMA_1003` — structured output did not satisfy the current minimal contract checks
+
+### Binding / input artifacts
+
+- `BIND_1001` — required binding or judge input/output artifact path was missing or unreadable
+
 
 ### SDK_8001 ~ SDK_8007
 

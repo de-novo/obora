@@ -55,7 +55,7 @@ export class PluginRegistry {
       throw new Error(`Plugin '${name}' of type '${type}' was not found`);
     }
 
-    return plugin as T;
+    return plugin as unknown as T;
   }
 
   has(type: PluginType, name: string): boolean {

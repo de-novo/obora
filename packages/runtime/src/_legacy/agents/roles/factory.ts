@@ -1,10 +1,10 @@
+import { createAgentId } from "../../blackboard/types/base.js";
 import { BaseAgent } from "./base-agent";
 import { AnalystAgent } from "./analyst-agent";
 import { ExecutorAgent } from "./executor-agent";
 import { VerifierAgent } from "./verifier-agent";
 import { DirectorAgent } from "./director-agent";
-import type { LLMAdapter } from "../llm/adapter";
-import type { ToolRegistry } from "../tools";
+import type { LLMAdapter, ToolRegistry } from "@obora/adapters";
 
 /**
  * 에이전트 생성 설정
@@ -28,7 +28,7 @@ export function createAgent(config: CreateAgentConfig): BaseAgent {
   switch (config.role) {
     case "analyst":
       return new AnalystAgent({
-        id: config.id,
+        id: createAgentId(config.id),
         llm: config.llm,
         ...(config.systemPrompt ? { systemPrompt: config.systemPrompt } : {}),
         ...(config.provider ? { provider: config.provider } : {}),
@@ -39,7 +39,7 @@ export function createAgent(config: CreateAgentConfig): BaseAgent {
 
     case "executor":
       return new ExecutorAgent({
-        id: config.id,
+        id: createAgentId(config.id),
         llm: config.llm,
         toolRegistry: config.toolRegistry,
         ...(config.systemPrompt ? { systemPrompt: config.systemPrompt } : {}),
@@ -51,7 +51,7 @@ export function createAgent(config: CreateAgentConfig): BaseAgent {
 
     case "verifier":
       return new VerifierAgent({
-        id: config.id,
+        id: createAgentId(config.id),
         llm: config.llm,
         ...(config.systemPrompt ? { systemPrompt: config.systemPrompt } : {}),
         ...(config.provider ? { provider: config.provider } : {}),
@@ -62,7 +62,7 @@ export function createAgent(config: CreateAgentConfig): BaseAgent {
 
     case "director":
       return new DirectorAgent({
-        id: config.id,
+        id: createAgentId(config.id),
         llm: config.llm,
         ...(config.systemPrompt ? { systemPrompt: config.systemPrompt } : {}),
         ...(config.provider ? { provider: config.provider } : {}),

@@ -62,7 +62,8 @@ function summarizeDebugEvent(type: string, data: Record<string, unknown> | undef
     case "execution_end": {
       const debugState = (data?.debugState as Record<string, unknown> | undefined) ?? undefined;
       const bb = (debugState?.blackboard as Record<string, unknown> | undefined) ?? undefined;
-      const report = (debugState?.observerReport as Record<string, unknown> | undefined) ?? undefined;
+      const report =
+        (debugState?.observerReport as Record<string, unknown> | undefined) ?? undefined;
       return `status=${String(data?.status ?? "unknown")}${bb ? ` blackboard.failures=${String(bb.failures ?? "?")} blackboard.facts=${String(bb.facts ?? "?")}` : ""}${report ? ` observer.totalRetries=${String(report.totalRetries ?? "?")} observer.totalValidationFailures=${String(report.totalValidationFailures ?? "?")}` : ""}`;
     }
     case "step_start":
@@ -151,17 +152,21 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
     debugWriteChain = debugWriteChain.then(() => appendFile(debugFilePath!, line, "utf-8"));
   };
   if (workflow.endsWith(".yaml") || workflow.endsWith(".yml")) {
-    const loadedConfigRaw = await import("node:fs/promises").then((m) => m.readFile(workflow, "utf-8"));
+    const loadedConfigRaw = await import("node:fs/promises").then((m) =>
+      m.readFile(workflow, "utf-8")
+    );
     const parsedRaw = await import("yaml").then((m) => m.parse(loadedConfigRaw));
     const loaded = await Workflow.fromYaml(workflow);
     runtime.define(loaded.name, loaded);
     workflowName = loaded.name;
     expandedWorkflow = loaded;
     stopSemantics = Workflow.getStopSemantics(parsedRaw);
-    const workflowVariables = (loaded.variables && typeof loaded.variables === "object")
-      ? (loaded.variables as Record<string, unknown>)
-      : {};
-    derivedOutputRoot = typeof workflowVariables.output_root === "string" ? workflowVariables.output_root : undefined;
+    const workflowVariables =
+      loaded.variables && typeof loaded.variables === "object"
+        ? (loaded.variables as Record<string, unknown>)
+        : {};
+    derivedOutputRoot =
+      typeof workflowVariables.output_root === "string" ? workflowVariables.output_root : undefined;
     derivedArchiveEnabled = workflowVariables.archive_enabled === true;
 
     if (isVerboseOutput(options) && !isQuietOutput(options) && !isJsonOutput(options)) {
@@ -270,10 +275,14 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
     repairLoopSummary.lastValidationSummary = data?.summary;
 
     if (!isQuietOutput(options) && !isJsonOutput(options)) {
-      const failedChecksCount = Array.isArray(data?.failedChecks) ? data!.failedChecks.length : undefined;
+      const failedChecksCount = Array.isArray(data?.failedChecks)
+        ? data!.failedChecks.length
+        : undefined;
       formatter.warn(
         `validation failed${data?.stepName ? ` [${data.stepName}]` : ""}: ${data?.summary ?? "unknown reason"}${
-          typeof failedChecksCount === "number" ? ` (${failedChecksCount} check${failedChecksCount === 1 ? "" : "s"})` : ""
+          typeof failedChecksCount === "number"
+            ? ` (${failedChecksCount} check${failedChecksCount === 1 ? "" : "s"})`
+            : ""
         }`
       );
     }
@@ -293,7 +302,9 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
   });
 
   runtime.on("workflow.repair_started", (event) => {
-    const data = event.data as { stepName?: string; attempt?: number; reflectorHint?: string } | undefined;
+    const data = event.data as
+      | { stepName?: string; attempt?: number; reflectorHint?: string }
+      | undefined;
     repairLoopSummary.repairStarted += 1;
     repairLoopSummary.lastRepairStep = data?.stepName;
     repairLoopSummary.lastAttempt = data?.attempt;
@@ -322,7 +333,9 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
   });
 
   runtime.on("workflow.repair_no_progress", (event) => {
-    const data = event.data as { sourceStep?: string; reason?: string; category?: string } | undefined;
+    const data = event.data as
+      | { sourceStep?: string; reason?: string; category?: string }
+      | undefined;
     repairLoopSummary.repairNoProgress += 1;
 
     if (!isQuietOutput(options) && !isJsonOutput(options)) {
@@ -351,9 +364,10 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
   if (debugEnabled) {
     for (const type of DEBUG_EVENT_TYPES) {
       runtime.on(type, (event) => {
-        const data = (event.data && typeof event.data === "object")
-          ? (event.data as Record<string, unknown>)
-          : undefined;
+        const data =
+          event.data && typeof event.data === "object"
+            ? (event.data as Record<string, unknown>)
+            : undefined;
         appendDebugRecord({
           type,
           executionId: event.executionId,
@@ -410,7 +424,9 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
       : derivedOutputRoot;
 
   const derivedMode =
-    stopSemantics && typeof stopSemantics === "object" && typeof (stopSemantics as Record<string, unknown>).mode === "string"
+    stopSemantics &&
+    typeof stopSemantics === "object" &&
+    typeof (stopSemantics as Record<string, unknown>).mode === "string"
       ? ((stopSemantics as Record<string, unknown>).mode as string)
       : undefined;
 
@@ -438,12 +454,15 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
             sourceResultPath: filePath,
           },
           null,
-          2,
+          2
         ),
-        "utf-8",
+        "utf-8"
       );
 
-      const archiveDir = join(effectiveOutputDir, `${basename(workflowName)}-${handle.executionId}.archive`);
+      const archiveDir = join(
+        effectiveOutputDir,
+        `${basename(workflowName)}-${handle.executionId}.archive`
+      );
       await mkdir(archiveDir, { recursive: true });
       const readmeBody =
         derivedMode === "validation-repair"
@@ -477,7 +496,7 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
         await writeFile(
           join(archiveDir, "REPAIR_LOG.md"),
           "# Repair Log\n\n- validation failures\n- repair attempts\n- stop category\n",
-          "utf-8",
+          "utf-8"
         );
       }
 
@@ -485,7 +504,7 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
         await writeFile(
           join(archiveDir, "FINDINGS.md"),
           "# Findings\n\n- problem framing\n- main findings\n- bounded conclusion\n",
-          "utf-8",
+          "utf-8"
         );
       }
 
@@ -493,7 +512,7 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
         await writeFile(
           join(archiveDir, "PROOF_GAPS.md"),
           "# Proof Gaps\n\n- unresolved lemmas\n- hidden assumptions\n- refutation risk\n",
-          "utf-8",
+          "utf-8"
         );
       }
 

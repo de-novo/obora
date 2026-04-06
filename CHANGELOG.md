@@ -1,8 +1,39 @@
+## Unreleased
+
+### Added — Contract-First Workflow DX
+
+- Added explicit `input.bindings` support for path-based structured inputs with `{{binding}}` substitution.
+- Added startup `Binding Preview` logging for resolved/missing input artifacts.
+- Added step-level `output.schema` support for structured JSON output contracts.
+- Added step-level `output.path` persistence for structured result artifacts.
+- Added startup `Output Preview` logging for declared output path/schema.
+- Added minimal schema diagnostics for common contract failures:
+  - `SCHEMA_1001` invalid JSON output
+  - `SCHEMA_1002` missing schema file
+  - `SCHEMA_1003` contract mismatch (top-level object, required field, field type)
+- Added runnable canonical example: `examples/07-contract-first-evaluation`.
+- Added smoke coverage to keep the canonical contract-first example from drifting.
+
+### Added — Documentation
+
+- Added `docs/tutorials/04-contract-first-quickstart.md`.
+- Added `docs/tutorials/05-contract-first-authoring-guide.md`.
+- Updated `docs/getting-started.md` to highlight contract-first authoring.
+- Updated `docs/tutorials/one-file-workflows.md` with `judge` mode and contract-first JSON in/out guidance.
+- Updated `docs/api/sdk.md` to document the current `WorkflowStep` input/output contract surface.
+
 # Changelog
 
 All notable changes to Obora will be documented in this file.
 
 ## [Unreleased]
+
+### Fixed — CLI Packaging and Release Verification (2026-03-30)
+- **CLI version mismatch fixed for next release**: `@obora/cli` patch release is bumped to `0.1.3` so corrected version wiring can be published as a fresh artifact instead of attempting to overwrite an existing version.
+- **CLI version mismatch root cause identified**: published `@obora/cli` package can report an older version when stale `dist` artifacts are shipped alongside newer package metadata.
+- **Release gate strengthened**: CLI publish flow now verifies changelog presence before publish.
+- **Release verification strengthened**: release verification now checks that `CHANGELOG.md` has an `[Unreleased]` section with release-facing notes before package verification.
+- **Sequential harness drivers normalized**: `run_30_sequential.sh` and `run_50_sequential.sh` now resolve repo/harness paths relative to script location instead of relying on machine-specific absolute paths.
 
 ### Added — Enterprise Reliability (2026-03-24)
 
