@@ -69,8 +69,8 @@ export interface Metric {
  * Database client wrapper
  */
 export class OboraDatabase {
-  private db: duckdb.Database;
-  private connection: duckdb.Connection;
+  private db: any;
+  private connection: any;
   private dbPath: string;
   private initialized: boolean = false;
 

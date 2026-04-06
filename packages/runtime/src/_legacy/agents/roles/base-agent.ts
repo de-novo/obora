@@ -4,9 +4,9 @@ import { existsSync, realpathSync } from "node:fs";
 import { mkdir, open, readdir, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname, resolve, sep } from "node:path";
 import { promisify } from "node:util";
-import { LLMAdapter, ChatMessage } from "../llm/adapter";
+import type { LLMAdapter, ChatMessage } from "@obora/adapters";
 import type { Blackboard } from "../../blackboard/core/blackboard.js";
-import type { AgentId } from "../types";
+import { createAgentId, type AgentId } from "../../blackboard/types/base.js";
 
 export type { AgentId };
 
@@ -161,7 +161,7 @@ export abstract class BaseAgent {
   private latestUsage = { prompt: 0, completion: 0, total: 0 };
 
   constructor(config: BaseAgentConfig) {
-    this.id = config.id ?? `${config.role}-${Date.now()}`;
+    this.id = config.id ?? createAgentId(`${config.role}-${Date.now()}`);
     this.role = config.role;
     this.llm = config.llm;
     this.systemPrompt = config.systemPrompt ?? this.getDefaultSystemPrompt();
@@ -272,7 +272,7 @@ export abstract class BaseAgent {
   }> {
     const messages = this.buildMessages(task, observation, context);
 
-    const result = await this.llm.chatCompletion({
+    const result = await this.llm.chatCompletion!({
       messages,
       temperature: 0.7,
       maxTokens: this.thinkMaxTokens,
@@ -626,7 +626,7 @@ Use board_read to inspect context, then perform role_action, and finish with boa
             },
           }));
 
-          const res = await this.llm.chatCompletion({
+          const res = await this.llm.chatCompletion!({
             messages: [
               ...(context.systemPrompt ? [{ role: "system", content: context.systemPrompt } as const] : []),
               ...context.messages.map((m): ChatMessage => {
@@ -670,7 +670,7 @@ Use board_read to inspect context, then perform role_action, and finish with boa
           };
 
           const textContent = res.message.content?.trim();
-          const toolCallContent = (res.message.toolCalls ?? []).map((tc) => {
+          const toolCallContent = (res.message.toolCalls ?? []).map((tc: { id?: string; function: { name?: string; arguments?: string } }) => {
             let args: Record<string, unknown> = {};
             try {
               args = JSON.parse(tc.function.arguments || "{}");
@@ -679,8 +679,8 @@ Use board_read to inspect context, then perform role_action, and finish with boa
             }
             return {
               type: "toolCall" as const,
-              id: tc.id,
-              name: tc.function.name,
+              id: tc.id ?? `tool-${Date.now()}`,
+              name: tc.function.name ?? "unknown_tool",
               arguments: args,
             };
           });
@@ -695,7 +695,7 @@ Use board_read to inspect context, then perform role_action, and finish with boa
             content: contentParts.length > 0 ? contentParts : [{ type: "text", text: "" }],
             api: "openai-completions",
             provider: this.llm.id,
-            model: res.model,
+            model: res.model ?? "unknown",
             usage: {
               input: res.usage.promptTokens,
               output: res.usage.completionTokens,

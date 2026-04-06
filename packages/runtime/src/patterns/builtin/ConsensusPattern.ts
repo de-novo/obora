@@ -1,5 +1,6 @@
 import { OboraErrorCode } from "../../errors/OboraErrorCode.js";
 import { VotingSessionStore } from "../../consensus/voting/VotingSessionStore.js";
+import { createAgendaId, createAgentId } from "../../blackboard/types/base.js";
 import {
   CollaborationPatternBase,
   type BuiltinPatternKind,
@@ -152,17 +153,17 @@ export class ConsensusPattern extends CollaborationPatternBase {
     // VotingSessionStore integration: create, record, close, and use tally for cross-validation
     const votingSessionStore = new VotingSessionStore();
     const votingSession = votingSessionStore.create({
-      agendaId: `consensus:${context.executionId ?? context.stepName ?? "session"}`,
+      agendaId: createAgendaId(`consensus:${context.executionId ?? context.stepName ?? "session"}`),
       policy: rule === "score-threshold" || rule === "custom" ? "majority" : rule,
       quorum: requiredParticipants.length,
-      createdBy: "runtime:consensus-pattern",
+      createdBy: createAgentId("runtime:consensus-pattern"),
     });
     votingSessionStore.open(votingSession.id);
 
     for (const vote of votes) {
       votingSessionStore.addVote({
         sessionId: votingSession.id,
-        voterId: vote.voterId,
+        voterId: createAgentId(vote.voterId),
         option: vote.approved ? "approve" : "reject",
         weight: config.weights?.[vote.voterId],
       });

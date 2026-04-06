@@ -1,4 +1,5 @@
 import { AgendaStore } from "../../consensus/agenda/index.js";
+import { createAgendaId } from "../../blackboard/types/base.js";
 import { EventBus } from "../../_legacy/blackboard/events/index.js";
 import { MeetingStateMachine } from "./discussion/index.js";
 import {
@@ -96,7 +97,7 @@ export class DiscussionPattern extends CollaborationPatternBase {
     const agendaStore = new AgendaStore({ eventBus: messageBus });
     const meetingStateMachine = new MeetingStateMachine(messageBus);
 
-    const agendaId = `discussion-${context.executionId ?? context.stepName ?? "agenda"}`;
+    const agendaId = createAgendaId(`discussion-${context.executionId ?? context.stepName ?? "agenda"}`);
     const topic = this.getDiscussionInput(context).topic ?? context.stepName ?? "Discussion";
 
     agendaStore.create({ id: agendaId, title: topic }, "system");

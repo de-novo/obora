@@ -16,7 +16,7 @@ import type {
   Task,
   AgentStatus,
 } from "../types";
-import { createSessionId } from "../types/base";
+import { createAgentId, createSessionId, createTaskId } from "../types/base";
 
 import { VersionManager, VersionConflictError } from "./versioning";
 import { getByPath, setByPath, deleteByPath, isValidPath } from "./path-utils";
@@ -788,14 +788,19 @@ export class Blackboard extends SimpleEventEmitter {
       state: stateJson
         ? {
             ...stateJson,
-            agents: objectToMap(stateJson.agents ?? {}),
-            tasks: objectToMap(stateJson.tasks ?? {}),
+            phase: stateJson.phase ?? "idle",
+            context: stateJson.context ?? {},
+            agents: new Map(Object.entries(stateJson.agents ?? {}).map(([key, value]) => [createAgentId(key), value])),
+            tasks: new Map(Object.entries(stateJson.tasks ?? {}).map(([key, value]) => [createTaskId(key), value])),
           }
         : undefined,
       knowledge: json.knowledge as KnowledgeSection,
       decisions: decisionsJson
         ? {
             ...decisionsJson,
+            current: decisionsJson.current ?? null,
+            pending: decisionsJson.pending ?? [],
+            history: decisionsJson.history ?? [],
             opinions: objectToMap(decisionsJson.opinions ?? {}),
             voting: decisionsJson.voting ?? {},
           }

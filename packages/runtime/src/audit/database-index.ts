@@ -3,4 +3,4 @@
  * Public API only.
  */
 
-export * from "./public-api.js";
+export * from "./database-api.js";

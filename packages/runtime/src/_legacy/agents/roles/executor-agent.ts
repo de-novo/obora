@@ -1,3 +1,4 @@
+import { createAgentId } from "../../blackboard/types/base.js";
 import {
   BaseAgent,
   BaseAgentConfig,
@@ -7,7 +8,7 @@ import {
   ExecutorInput,
   ExecutorOutput,
 } from "./base-agent";
-import { ToolRegistry, ToolContext as ToolCtx } from "../tools";
+import type { ToolRegistry, ToolContext as ToolCtx } from "@obora/adapters";
 
 /**
  * Executor 에이전트
@@ -31,7 +32,7 @@ export class ExecutorAgent extends BaseAgent {
   protected getDefaultSystemPrompt(): string {
     const runtimeTools = ["file_write", "file_read", "file_list", "shell_exec"];
     const availableTools = this.toolRegistry
-      ? [...new Set([...this.toolRegistry.listTools().map((t) => t.name), ...runtimeTools])].join(", ")
+      ? [...new Set([...this.toolRegistry.listTools().map((t: { name: string }) => t.name), ...runtimeTools])].join(", ")
       : runtimeTools.join(", ");
 
     return `You are an executor agent responsible for taking action and executing tasks.
@@ -156,5 +157,5 @@ export function createExecutorAgent(
   llm: BaseAgentConfig["llm"],
   toolRegistry?: ToolRegistry
 ): ExecutorAgent {
-  return new ExecutorAgent({ id, llm, toolRegistry });
+  return new ExecutorAgent({ id: createAgentId(id), llm, toolRegistry });
 }

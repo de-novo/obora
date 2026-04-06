@@ -80,7 +80,7 @@ export class JudgmentEngine {
     while (true) {
       // Batch deadline check before each attempt
       if (applyBatchDeadline()) {
-        if (runState === 'timeout') errorCode = 'TIMEOUT';
+        errorCode = 'TIMEOUT';
         break;
       }
 
@@ -99,7 +99,7 @@ export class JudgmentEngine {
 
       // Enforce batchDeadline AFTER judge execution (not only at loop-top)
       if (applyBatchDeadline()) {
-        if (runState === 'timeout') errorCode = 'TIMEOUT';
+        errorCode = 'TIMEOUT';
         break;
       }
 
@@ -133,9 +133,7 @@ export class JudgmentEngine {
       }
 
       // Retry exhausted — transition to failed first
-      if (runState !== 'failed') {
-        transition('failed', 'retries exhausted');
-      }
+      transition('failed', 'retries exhausted');
 
       // Set TIMEOUT errorCode if last attempt was a timeout
       if (lastWasTimeout) {

@@ -110,12 +110,16 @@ export interface RecoveryResult {
   error?: Error;
 }
 
+export type RecoveryExecutionContext = RecoveryContext & {
+  wait: NonNullable<RecoveryContext["wait"]>;
+};
+
 export interface RecoveryStrategyPlugin {
   readonly type: RecoveryStrategyType;
   execute(
     failure: CellFailure,
     strategy: RecoveryStrategy,
-    context: Required<RecoveryContext>
+    context: RecoveryExecutionContext
   ): Promise<RecoveryResult>;
 }
 

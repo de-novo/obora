@@ -72,6 +72,7 @@ function buildStepErrorMetadata(error: Error, diagnosisCode: ErrorCode): StepErr
       getLastErrorCode?: () => string | undefined;
       getRootCause?: () => unknown;
       lastError?: { lastErrorCode?: string };
+      originalError?: unknown;
     };
 
     const lastErrorCode =

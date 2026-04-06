@@ -1,3 +1,4 @@
+import { createAgentId } from "../../blackboard/types/base.js";
 import {
   BaseAgent,
   BaseAgentConfig,
@@ -89,5 +90,5 @@ Be thorough, objective, and analytical in your approach.`;
  * 분석 에이전트 생성
  */
 export function createAnalystAgent(id: string, llm: BaseAgentConfig["llm"]): AnalystAgent {
-  return new AnalystAgent({ id, llm });
+  return new AnalystAgent({ id: createAgentId(id), llm });
 }

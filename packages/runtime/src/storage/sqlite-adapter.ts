@@ -18,12 +18,13 @@ import type {
 } from "./types.js";
 
 // Lazy import to keep better-sqlite3 optional at runtime
-let Database: typeof import("better-sqlite3").default;
+type BetterSqlite3Ctor = typeof import("better-sqlite3");
+let Database: BetterSqlite3Ctor;
 
 async function loadDatabase() {
   if (!Database) {
     const mod = await import("better-sqlite3");
-    Database = mod.default;
+    Database = mod.default as unknown as BetterSqlite3Ctor;
   }
   return Database;
 }
