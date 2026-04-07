@@ -5,13 +5,13 @@
  * For production, use SQLiteStorageAdapter from '../storage/sqlite-adapter.js'.
  */
 
-// Re-export types only (for backwards compatibility)
+// Re-export deprecated database record types only (for backwards compatibility)
 export type {
   Project,
   WorkflowRun,
   StepExecution,
   Metric,
-} from "../_legacy/database/src/duckdb-client.js";
+} from "./deprecated-database-types.js";
 
 // Deprecated stubs
 export const OboraDatabase = class {
