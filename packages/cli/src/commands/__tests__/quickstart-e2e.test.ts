@@ -95,4 +95,24 @@ describe("CLI quickstart integration", () => {
     );
     expect(errorSpy).not.toHaveBeenCalled();
   });
+
+  it("supports dedicated quickstart command as a shorter alias", async () => {
+    const cli = createCLI();
+    const projectDir = join(workDir, "alias-demo");
+
+    await cli.parseAsync(["--json", "quickstart", projectDir], { from: "user" });
+
+    const payload = lastJsonCall();
+    expect(payload).toEqual(
+      expect.objectContaining({
+        initialized: true,
+        template: "quickstart",
+        path: projectDir,
+      })
+    );
+
+    const judgeYaml = await readFile(join(projectDir, "judge.yaml"), "utf-8");
+    expect(judgeYaml).toContain("name: quickstart-judge");
+  });
+
 });

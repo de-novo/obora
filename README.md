@@ -34,6 +34,8 @@ npm install -g @obora/cli
 
 # Create a quickstart project
 obora init my-project --quickstart
+# or shorter:
+obora quickstart my-project
 cd my-project
 
 # Check readiness and missing setup

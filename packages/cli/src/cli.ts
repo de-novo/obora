@@ -9,6 +9,7 @@ import { createExpandCommand } from "./commands/expand.js";
 import { createInitCommand } from "./commands/init.js";
 import { createKnowledgeCommand } from "./commands/knowledge.js";
 import { createPluginCommand } from "./commands/plugin.js";
+import { createQuickstartCommand } from "./commands/quickstart.js";
 import { createPolicyCommand } from "./commands/policy.js";
 import { createResumeCommand } from "./commands/resume.js";
 import { createRunCommand } from "./commands/run.js";
@@ -51,6 +52,7 @@ export function createCLI(): Command {
     .option("--no-color", "Disable ANSI colors in output");
 
   program.addCommand(createInitCommand());
+  program.addCommand(createQuickstartCommand());
   program.addCommand(createDoctorCommand());
   program.addCommand(createExpandCommand());
   program.addCommand(createRunCommand());

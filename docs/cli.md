@@ -5,6 +5,7 @@
 - [Global Options](#global-options)
 - [Exit Codes](#exit-codes)
 - [`obora init`](#obora-init)
+- [`obora quickstart`](#obora-quickstart)
 - [`obora doctor`](#obora-doctor)
 - [`obora run`](#obora-run)
 - [`obora test`](#obora-test)
@@ -36,7 +37,7 @@ obora --verbose --no-color run workflows/example.yaml
 If you are starting from zero, use this order:
 
 ```bash
-obora init my-project --quickstart
+obora quickstart my-project
 cd my-project
 obora doctor
 obora run judge.yaml --dry-run
@@ -62,6 +63,25 @@ Defined in `packages/cli/src/utils/exit-codes.ts`:
 - `10` `CLI_ERROR`
 
 Error-to-exit mapping uses SDK error code prefixes (`POLICY_*`, `CELL_*`, `ORCH_*`, etc.).
+
+---
+
+## `obora quickstart`
+
+Shortcut for creating a minimal judge-mode project.
+
+### Usage
+
+```bash
+obora quickstart [name]
+obora quickstart my-project
+```
+
+### Behavior
+
+- Equivalent to `obora init [name] --quickstart`
+- Creates the same quickstart scaffold as `init --quickstart`
+- Intended as the shortest first-run command
 
 ---
 
