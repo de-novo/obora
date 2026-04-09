@@ -166,6 +166,17 @@ describe("init command", () => {
       expect(formatter.success).toHaveBeenCalledWith(expect.stringContaining("initialized"));
     });
 
+
+    it("should print next-step guidance for quickstart projects", async () => {
+      await runInit("my-project", { quickstart: true });
+
+      expect(formatter.info).toHaveBeenCalledWith("Next steps:");
+      expect(formatter.step).toHaveBeenCalledWith("cd my-project");
+      expect(formatter.step).toHaveBeenCalledWith("obora doctor");
+      expect(formatter.step).toHaveBeenCalledWith("obora run judge.yaml --dry-run");
+      expect(formatter.step).toHaveBeenCalledWith("obora run judge.yaml");
+    });
+
     it("should output JSON when --json flag is set", async () => {
       await runInit("my-project", { json: true });
 

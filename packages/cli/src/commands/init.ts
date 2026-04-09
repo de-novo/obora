@@ -76,6 +76,17 @@ export async function runInit(
     formatter.json({ initialized: true, path: targetDir, template: templateName });
   } else if (!options.quiet) {
     formatter.success(`Obora project initialized. Path: ${targetDir}`);
+
+    if (templateName === "quickstart") {
+      const relativeTarget = projectName === "." ? "." : projectName;
+      formatter.info("Next steps:");
+      if (relativeTarget !== ".") {
+        formatter.step(`cd ${relativeTarget}`);
+      }
+      formatter.step("obora doctor");
+      formatter.step("obora run judge.yaml --dry-run");
+      formatter.step("obora run judge.yaml");
+    }
   }
 }
 
