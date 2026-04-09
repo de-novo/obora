@@ -44,6 +44,15 @@ interface DoctorAuthDiagnostics {
   setupGuide: string;
 }
 
+interface DoctorConfigDiagnostics {
+  configSource: string;
+  sourceChain: string[];
+  globalConfigPath: string | null;
+  projectConfigPath: string | null;
+  activeConfigPath: string | null;
+  nextPlaceToEdit: string;
+}
+
 const AUTH_ENV_EXAMPLES = [
   "OPENAI_API_KEY",
   "ANTHROPIC_API_KEY",
@@ -51,6 +60,7 @@ const AUTH_ENV_EXAMPLES = [
 ] as const;
 
 const AUTH_SETUP_GUIDE = "docs/tutorials/06-llm-config-auth-quickstart.md";
+
 const PROVIDER_MODEL_ENV_KEY_MAP: Record<string, string> = {
   anthropic: "ANTHROPIC_MODEL",
   cerebras: "CEREBRAS_MODEL",
@@ -93,6 +103,10 @@ const PROVIDER_AUTH_ENV_KEY_MAP: Record<string, string> = {
 
 function inferAuthEnvKey(provider: string): string {
   return PROVIDER_AUTH_ENV_KEY_MAP[provider] ?? `${provider.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_API_KEY`;
+}
+
+function inferModelEnvKey(provider: string): string {
+  return PROVIDER_MODEL_ENV_KEY_MAP[provider] ?? `${provider.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_MODEL`;
 }
 
 function detectAuthProviders(env: NodeJS.ProcessEnv = process.env): string[] {
@@ -142,6 +156,30 @@ function buildAuthDiagnostics(providerHint: DoctorProviderHint): DoctorAuthDiagn
   };
 }
 
+function buildConfigDiagnostics(
+  checks: DoctorChecks,
+  summary: { configSource: string; nextPlaceToEdit: string },
+): DoctorConfigDiagnostics {
+  const sourceChain = summary.configSource === "none"
+    ? []
+    : summary.configSource.split(" -> ").map((part) => part.trim()).filter(Boolean);
+
+  const globalConfigPath = sourceChain.find((path) => path === checks.globalConfigPath) ?? null;
+  const activeConfigPath = sourceChain.at(-1) ?? null;
+  const projectConfigPath =
+    sourceChain.find((path) => path !== globalConfigPath && path.endsWith('/.obora/config.yaml'))
+    ?? (activeConfigPath !== globalConfigPath ? activeConfigPath : null);
+
+  return {
+    configSource: summary.configSource,
+    sourceChain,
+    globalConfigPath,
+    projectConfigPath,
+    activeConfigPath,
+    nextPlaceToEdit: summary.nextPlaceToEdit,
+  };
+}
+
 function buildAuthExampleHint(summary: { authSource: string }): string | null {
   if (summary.authSource !== "none") {
     return null;
@@ -174,15 +212,10 @@ function buildDoctorChecks(): DoctorChecks {
   };
 }
 
-function inferModelEnvKey(provider: string): string {
-  return PROVIDER_MODEL_ENV_KEY_MAP[provider] ?? `${provider.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_MODEL`;
-}
-
 function buildDoctorStatus(summary: {
   provider: string | null;
   model: string | null;
   authSource: string;
-  configSource: string;
   fallbackStub: boolean;
 }): { status: "ready" | "needs_config" | "stub_mode"; message: string } {
   if (!summary.fallbackStub && summary.provider && summary.model) {
@@ -215,6 +248,8 @@ function buildDoctorStatus(summary: {
 function buildDoctorRecommendations(
   checks: DoctorChecks,
   summary: {
+    provider: string | null;
+    model: string | null;
     authSource: string;
     configSource: string;
     fallbackStub: boolean;
@@ -269,6 +304,7 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
   const status = buildDoctorStatus(summary);
   const providerHint = buildRecommendedProviderHint(summary, loadedConfig);
   const authDiagnostics = buildAuthDiagnostics(providerHint);
+  const configDiagnostics = buildConfigDiagnostics(checks, summary);
   const recommendations = buildDoctorRecommendations(checks, summary, providerHint, authDiagnostics);
 
   if (options.json) {
@@ -284,6 +320,7 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
       recommendations,
       resolution: summary,
       auth: authDiagnostics,
+      config: configDiagnostics,
       recommendedProvider: providerHint.recommendedProvider,
       recommendedAuthEnvKey: providerHint.recommendedAuthEnvKey,
     });
