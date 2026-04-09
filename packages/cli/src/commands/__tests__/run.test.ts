@@ -356,6 +356,11 @@ describe("run command", () => {
       expect(formatter.info).toHaveBeenCalledWith("Execution Resolution\n- provider: none");
       expect(formatter.info).toHaveBeenCalledWith("Dry run preview complete. No execution was started.");
     });
+    it("should suggest the next run command after dry-run success", async () => {
+      await runRun("judge.yaml", { dryRun: true });
+
+      expect(formatter.info).toHaveBeenCalledWith("Next step: obora run judge.yaml");
+    });
 
     it("should print binding/output previews when available", async () => {
       vi.mocked(formatBindingPreview).mockReturnValue("Binding Preview\n- judge.input: json <- artifacts/submission.json [resolved]");

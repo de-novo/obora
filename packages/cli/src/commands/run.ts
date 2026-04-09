@@ -289,6 +289,7 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
         formatter.json(stopSemantics);
       }
       formatter.info("Dry run preview complete. No execution was started.");
+      formatter.info(`Next step: obora run ${workflow}`);
       if (isVerboseOutput(options)) {
         formatter.info(`Validation completed in ${Date.now() - startedAt}ms`);
       }
