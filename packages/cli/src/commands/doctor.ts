@@ -249,6 +249,25 @@ function buildConfigDiagnostics(
   };
 }
 
+
+function summarizeConfigChain(configDiagnostics: DoctorConfigDiagnostics): string | null {
+  if (configDiagnostics.sourceChain.length <= 1) {
+    return null;
+  }
+
+  const labels = configDiagnostics.sourceChain.map((path) => {
+    if (path === configDiagnostics.globalConfigPath) {
+      return "global";
+    }
+    if (path === configDiagnostics.projectConfigPath) {
+      return "project";
+    }
+    return "config";
+  });
+
+  return labels.join(" -> ");
+}
+
 function buildAuthExampleHint(summary: { authSource: string }): string | null {
   if (summary.authSource !== "none") {
     return null;
@@ -479,6 +498,13 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
   formatter.step(`Global config (~/.obora/config.yaml): ${checks.globalConfig ? "found" : "missing"}`);
   formatter.step(`Auth source: ${summary.authSource}`);
   formatter.step(`Config source: ${summary.configSource}`);
+  const configChainSummary = summarizeConfigChain(configDiagnostics);
+  if (configChainSummary) {
+    formatter.step(`Merged sources: ${configChainSummary}`);
+  }
+  if (configDiagnostics.activeConfigPath) {
+    formatter.step(`Active config: ${configDiagnostics.activeConfigPath}`);
+  }
   formatter.step(`Fallback/stub: ${summary.fallbackStub ? "enabled" : "disabled"}`);
 
   formatter.info(formatResolutionSummary(summary));

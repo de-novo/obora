@@ -271,6 +271,25 @@ describe("doctor command", () => {
       );
     });
 
+    it("should print config chain summary in default mode", async () => {
+      vi.mocked(buildResolutionSummary).mockReturnValue({
+        provider: null,
+        model: null,
+        authSource: "none",
+        configSource: "/Users/denovo/.obora/config.yaml -> /tmp/demo/.obora/config.yaml",
+        modelSource: "none",
+        chosenByPrecedence: "none",
+        nextPlaceToEdit: "/tmp/demo/.obora/config.yaml",
+        fallbackStub: true,
+        warnings: ["No LLM resolved; execution will run in stub mode"],
+      });
+
+      await runDoctor({});
+
+      expect(formatter.step).toHaveBeenCalledWith("Merged sources: global -> project");
+      expect(formatter.step).toHaveBeenCalledWith("Active config: /tmp/demo/.obora/config.yaml");
+    });
+
     it("should include structured config source diagnostics in json output", async () => {
       vi.mocked(buildResolutionSummary).mockReturnValue({
         provider: null,

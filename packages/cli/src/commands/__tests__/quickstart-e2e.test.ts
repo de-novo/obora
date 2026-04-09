@@ -1,4 +1,4 @@
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -131,4 +131,100 @@ describe("CLI quickstart integration", () => {
     expect(stdout).toContain("obora run judge.yaml --dry-run");
     expect(stdout).toContain("obora run judge.yaml");
   });
+
+  it("tracks onboarding state transitions across auth, mismatch, and model setup", async () => {
+    const cli = createCLI();
+    const projectDir = join(workDir, "contract-demo");
+
+    await cli.parseAsync(["--json", "quickstart", projectDir], { from: "user" });
+
+    process.chdir(projectDir);
+
+    logSpy.mockClear();
+    await cli.parseAsync(["--json", "doctor"], { from: "user" });
+    const noAuthPayload = lastJsonCall();
+    expect(noAuthPayload).toEqual(
+      expect.objectContaining({
+        status: expect.objectContaining({
+          status: "needs_config",
+          message: "Needs auth: no provider credential detected",
+        }),
+        auth: expect.objectContaining({
+          configuredProvider: "openai",
+          recommendedProvider: "openai",
+          recommendedAuthEnvKey: "OPENAI_API_KEY",
+        }),
+      }),
+    );
+
+    process.env.OPENAI_API_KEY = "test-openai-key";
+    logSpy.mockClear();
+    await cli.parseAsync(["--json", "doctor"], { from: "user" });
+    const missingModelPayload = lastJsonCall();
+    expect(missingModelPayload).toEqual(
+      expect.objectContaining({
+        status: expect.objectContaining({
+          status: "needs_config",
+          message: "Needs model: provider auth detected but no model is resolved",
+        }),
+        recommendations: expect.arrayContaining([
+          "Set a default model in .obora/config.yaml or export OPENAI_MODEL=***",
+        ]),
+      }),
+    );
+
+    const configPath = join(projectDir, ".obora", "config.yaml");
+    const configRaw = await readFile(configPath, "utf-8");
+    await writeFile(
+      configPath,
+      configRaw.replace("provider: openai", "provider: anthropic").replace("openai: {}", "anthropic: {}"),
+      "utf-8",
+    );
+
+    logSpy.mockClear();
+    await cli.parseAsync(["--json", "doctor"], { from: "user" });
+    const mismatchPayload = lastJsonCall();
+    expect(mismatchPayload).toEqual(
+      expect.objectContaining({
+        auth: expect.objectContaining({
+          configuredProvider: "anthropic",
+          resolvedProvider: "openai",
+          providerMismatchWarning:
+            "Configured provider 'anthropic' differs from detected env auth providers: openai",
+          resolvedModelEnvExample: "export OPENAI_MODEL=gpt-4o-mini",
+        }),
+        recommendations: expect.arrayContaining([
+          "Resolved provider does not match configured provider. Either export ANTHROPIC_API_KEY=*** or switch defaults.provider to openai",
+          "Resolved provider model env example: export OPENAI_MODEL=gpt-4o-mini",
+        ]),
+      }),
+    );
+
+    process.env.ANTHROPIC_API_KEY = "test-anthropic-key";
+    process.env.ANTHROPIC_MODEL = "claude-3-7-sonnet-latest";
+    delete process.env.OPENAI_API_KEY;
+
+    logSpy.mockClear();
+    await cli.parseAsync(["--json", "doctor"], { from: "user" });
+    const readyPayload = lastJsonCall();
+    expect(readyPayload).toEqual(
+      expect.objectContaining({
+        status: expect.objectContaining({
+          status: "ready",
+          message: "Ready: anthropic/claude-3-7-sonnet-latest",
+        }),
+      }),
+    );
+
+    logSpy.mockClear();
+    await cli.parseAsync(["--json", "run", "judge.yaml", "--dry-run"], { from: "user" });
+    const dryRunPayload = lastJsonCall();
+    expect(dryRunPayload).toEqual(
+      expect.objectContaining({
+        workflow: "quickstart-judge",
+        validated: true,
+      }),
+    );
+  });
+
 });
