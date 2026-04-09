@@ -131,8 +131,13 @@ export class PiAIAdapter implements LLMAdapter {
       return this.withOverrides(model);
     } catch {
       throw new Error(
-        `Model '${requested}' not found for provider '${this.config.provider}'. ` +
-          `Available models: ${this.listAvailableModels()}`
+        `[MODEL_1002] Unsupported model ref: ${requested}
+` +
+          `Reason: installed runtime catalog does not include this model for provider ${this.config.provider}
+` +
+          `Fix: use a supported model or upgrade @mariozechner/pi-ai
+` +
+          `Context: provider=${this.config.provider}, available=${this.listAvailableModels()}`
       );
     }
   }
