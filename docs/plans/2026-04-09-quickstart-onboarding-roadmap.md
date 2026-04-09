@@ -1,4 +1,4 @@
-# Obora Easy Usage Roadmap
+# Obora Quickstart Onboarding Roadmap
 
 > **For Hermes:** 이 문서는 Obora를 "아주 쉽게" 쓰게 만들기 위한 제품 실행 계획이다. 구현 시 작은 배치로 나누고, 각 배치는 사용자의 first success 시간을 줄이는 방향으로 우선순위를 둔다.
 
@@ -41,7 +41,7 @@ Obora의 사용성 목표는 "옵션이 많다"가 아니라 아래 4가지를 �
 ```bash
 npm install -g @obora/cli
 obora doctor
-obora init --easy
+obora init --quickstart
 obora run judge.yaml --input @input.json
 ```
 
@@ -86,7 +86,7 @@ obora run judge.yaml --input @input.json
 ### Deliverables
 
 - `obora doctor`
-- `obora init --easy`
+- `obora init --quickstart`
 - root README의 3분 quickstart 재작성
 - one-file judge hello-world 예제 고정
 
@@ -113,7 +113,7 @@ obora run judge.yaml --input @input.json
 - `obora doctor` 한 번으로 실행 가능 상태를 판단 가능
 - failure 대신 actionable warning 중심으로 출력
 
-### Task A2: Add `obora init --easy`
+### Task A2: Add `obora init --quickstart`
 
 **Objective:** 기본 scaffold를 더 쉬운 시작 구조로 생성
 
@@ -129,7 +129,7 @@ obora run judge.yaml --input @input.json
 - 생성 후 바로 실행 명령 안내
 
 **Acceptance Criteria:**
-- `obora init --easy` 후 사용자는 바로 `obora run judge.yaml --input @input.json` 가능
+- `obora init --quickstart` 후 사용자는 바로 `obora run judge.yaml --input @input.json` 가능
 
 ### Task A3: Rewrite root Quick Start
 
@@ -140,7 +140,7 @@ obora run judge.yaml --input @input.json
 - Modify: `docs/getting-started.md`
 
 **Acceptance Criteria:**
-- 첫 60줄 안에 설치 → doctor → init --easy → run 예제가 들어감
+- 첫 60줄 안에 설치 → doctor → init --quickstart → run 예제가 들어감
 - "어떤 문서부터 읽어야 하지?"가 아니라 "일단 실행"이 먼저 됨
 
 ---
@@ -341,7 +341,7 @@ prompt-first authoring을 줄이고, binding/path/schema 중심 authoring을 기
 
 **Recommended order:**
 1. doctor
-2. init --easy
+2. init --quickstart
 3. judge quickstart
 4. config/auth quickstart
 5. contract-first quickstart
@@ -360,7 +360,7 @@ prompt-first authoring을 줄이고, binding/path/schema 중심 authoring을 기
 
 ### Phase 1 — P0 first success
 1. `obora doctor`
-2. `obora init --easy`
+2. `obora init --quickstart`
 3. README quickstart rewrite
 4. dry-run / resolution summary 강화
 
@@ -390,7 +390,7 @@ prompt-first authoring을 줄이고, binding/path/schema 중심 authoring을 기
 
 ### Verification commands
 - `obora doctor`
-- `obora init --easy`
+- `obora init --quickstart`
 - `obora run judge.yaml --input @input.json`
 - `obora run judge.yaml --dry-run`
 - `obora validate judge.yaml`
@@ -400,11 +400,11 @@ prompt-first authoring을 줄이고, binding/path/schema 중심 authoring을 기
 ## Immediate Recommended Tickets
 
 1. `feat(cli): add obora doctor command`
-2. `feat(cli): add easy init template for judge-mode onboarding`
+2. `feat(cli): add quickstart init template for judge-mode onboarding`
 3. `feat(cli/sdk): strengthen execution resolution and output preview`
 4. `feat(diagnostics): add short actionable onboarding error taxonomy`
-5. `feat(cli): promote judge mode as first-class easy path`
-6. `docs: rewrite quickstart around doctor + init --easy + judge`
+5. `feat(cli): promote judge mode as first-class quickstart path`
+6. `docs: rewrite quickstart around doctor + init --quickstart + judge`
 
 ---
 

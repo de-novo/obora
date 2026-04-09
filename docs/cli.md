@@ -5,6 +5,7 @@
 - [Global Options](#global-options)
 - [Exit Codes](#exit-codes)
 - [`obora init`](#obora-init)
+- [`obora doctor`](#obora-doctor)
 - [`obora run`](#obora-run)
 - [`obora test`](#obora-test)
 - [`obora plugin`](#obora-plugin)
@@ -41,6 +42,41 @@ Defined in `packages/cli/src/utils/exit-codes.ts`:
 - `10` `CLI_ERROR`
 
 Error-to-exit mapping uses SDK error code prefixes (`POLICY_*`, `CELL_*`, `ORCH_*`, etc.).
+
+---
+
+## `obora doctor`
+
+Diagnose local Obora setup and show the shortest next action.
+
+### Usage
+
+```bash
+obora doctor
+obora --json doctor
+```
+
+### What it checks
+
+- Node.js availability
+- project config presence (`.obora/config.yaml`)
+- global config presence (`~/.obora/config.yaml`)
+- current provider/model resolution
+- fallback/stub 여부
+- next place to edit
+
+### Example
+
+```bash
+obora doctor
+```
+
+Expected output includes:
+
+- `Execution Resolution`
+- whether project/global config exists
+- warnings like stub/fallback activation
+- a final `Next step: ...` hint
 
 ---
 

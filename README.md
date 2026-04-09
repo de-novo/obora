@@ -32,6 +32,9 @@ Obora provides an operational backbone for AI-included systems:
 # Install CLI
 npm install -g @obora/cli
 
+# Diagnose local setup
+obora doctor
+
 # Initialize a new project
 obora init my-project
 cd my-project
