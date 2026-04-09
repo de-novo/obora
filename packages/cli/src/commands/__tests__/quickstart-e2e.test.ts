@@ -55,7 +55,7 @@ describe("CLI quickstart integration", () => {
         initialized: true,
         template: "quickstart",
         path: projectDir,
-      })
+      }),
     );
 
     const judgeYaml = await readFile(join(projectDir, "judge.yaml"), "utf-8");
@@ -78,7 +78,7 @@ describe("CLI quickstart integration", () => {
         resolution: expect.objectContaining({
           configSource: expect.stringContaining(projectDir),
         }),
-      })
+      }),
     );
 
     logSpy.mockClear();
@@ -91,7 +91,7 @@ describe("CLI quickstart integration", () => {
         workflow: "quickstart-judge",
         validated: true,
         elapsedMs: expect.any(Number),
-      })
+      }),
     );
     expect(errorSpy).not.toHaveBeenCalled();
   });
@@ -108,11 +108,27 @@ describe("CLI quickstart integration", () => {
         initialized: true,
         template: "quickstart",
         path: projectDir,
-      })
+      }),
     );
 
     const judgeYaml = await readFile(join(projectDir, "judge.yaml"), "utf-8");
     expect(judgeYaml).toContain("name: quickstart-judge");
   });
 
+  it("prints provider-aware next steps in quickstart stdout", async () => {
+    const cli = createCLI();
+    const projectDir = join(workDir, "stdout-demo");
+
+    await cli.parseAsync(["quickstart", projectDir], { from: "user" });
+
+    const stdout = logSpy.mock.calls.map((call) => String(call[0] ?? "")).join("\n");
+    expect(stdout).toContain("Obora project initialized. Path:");
+    expect(stdout).toContain("Next steps:");
+    expect(stdout).toContain(`cd ${projectDir}`);
+    expect(stdout).toContain("This template defaults to openai");
+    expect(stdout).toContain("export OPENAI_API_KEY=***");
+    expect(stdout).toContain("obora doctor");
+    expect(stdout).toContain("obora run judge.yaml --dry-run");
+    expect(stdout).toContain("obora run judge.yaml");
+  });
 });
