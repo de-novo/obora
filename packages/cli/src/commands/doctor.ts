@@ -65,6 +65,44 @@ interface DoctorConfigDiagnostics {
   nextPlaceToEdit: string;
 }
 
+interface DoctorOutputSections {
+  status: {
+    heading: "Status";
+    status: "ready" | "needs_config" | "stub_mode";
+    message: string;
+  };
+  configuration: {
+    heading: "Configuration";
+    node: boolean;
+    projectConfig: boolean;
+    projectConfigPath: string;
+    globalConfig: boolean;
+    globalConfigPath: string;
+    authSource: string;
+    configSource: string;
+    mergedSources: string | null;
+    activeConfigPath: string | null;
+  };
+  resolution: {
+    heading: "Resolution";
+    provider: string | null;
+    model: string | null;
+    modelSource: string;
+    chosenByPrecedence: string;
+    fallbackStub: boolean;
+    nextPlaceToEdit: string;
+  };
+  warnings: {
+    heading: "Warnings";
+    items: string[];
+  };
+  recommendedNextActions: {
+    heading: "Recommended next actions";
+    items: string[];
+  };
+}
+
+
 const AUTH_ENV_EXAMPLES = [
   "OPENAI_API_KEY",
   "ANTHROPIC_API_KEY",
@@ -455,6 +493,68 @@ function buildDoctorRecommendations(
 }
 
 
+function buildDoctorOutputSections(
+  checks: DoctorChecks,
+  status: { status: "ready" | "needs_config" | "stub_mode"; message: string },
+  summary: {
+    provider: string | null;
+    model: string | null;
+    authSource: string;
+    configSource: string;
+    modelSource: string;
+    chosenByPrecedence: string;
+    nextPlaceToEdit: string;
+    fallbackStub: boolean;
+    warnings: string[];
+  },
+  configDiagnostics: DoctorConfigDiagnostics,
+  authDiagnostics: DoctorAuthDiagnostics,
+  recommendations: string[],
+): DoctorOutputSections {
+  const mergedSources = summarizeConfigChain(configDiagnostics);
+  const warnings = [...summary.warnings];
+  if (authDiagnostics.providerMismatchWarning) {
+    warnings.push(authDiagnostics.providerMismatchWarning);
+  }
+
+  return {
+    status: {
+      heading: "Status",
+      status: status.status,
+      message: status.message,
+    },
+    configuration: {
+      heading: "Configuration",
+      node: checks.node,
+      projectConfig: checks.projectConfig,
+      projectConfigPath: checks.projectConfigPath,
+      globalConfig: checks.globalConfig,
+      globalConfigPath: checks.globalConfigPath,
+      authSource: summary.authSource,
+      configSource: summary.configSource,
+      mergedSources,
+      activeConfigPath: configDiagnostics.activeConfigPath,
+    },
+    resolution: {
+      heading: "Resolution",
+      provider: summary.provider,
+      model: summary.model,
+      modelSource: summary.modelSource,
+      chosenByPrecedence: summary.chosenByPrecedence,
+      fallbackStub: summary.fallbackStub,
+      nextPlaceToEdit: summary.nextPlaceToEdit,
+    },
+    warnings: {
+      heading: "Warnings",
+      items: warnings,
+    },
+    recommendedNextActions: {
+      heading: "Recommended next actions",
+      items: recommendations,
+    },
+  };
+}
+
 function printResolutionSection(summary: {
   provider: string | null;
   model: string | null;
@@ -485,6 +585,14 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
   const authDiagnostics = buildAuthDiagnostics(providerHint, summary);
   const configDiagnostics = buildConfigDiagnostics(checks, summary);
   const recommendations = buildDoctorRecommendations(checks, summary, providerHint, authDiagnostics);
+  const sections = buildDoctorOutputSections(
+    checks,
+    status,
+    summary,
+    configDiagnostics,
+    authDiagnostics,
+    recommendations,
+  );
 
   if (options.json) {
     formatter.json({
@@ -500,6 +608,7 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
       resolution: summary,
       auth: authDiagnostics,
       config: configDiagnostics,
+      sections,
       recommendedProvider: providerHint.recommendedProvider,
       recommendedAuthEnvKey: providerHint.recommendedAuthEnvKey,
     });
@@ -512,37 +621,33 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
 
   formatter.info("Obora doctor");
 
-  formatter.info("Status");
-  formatter.step(status.message);
+  formatter.info(sections.status.heading);
+  formatter.step(sections.status.message);
 
-  formatter.info("Configuration");
-  formatter.step(`Node.js: ${checks.node ? "available" : "missing"}`);
-  formatter.step(`Project config (.obora/config.yaml): ${checks.projectConfig ? "found" : "missing"}`);
-  formatter.step(`Global config (~/.obora/config.yaml): ${checks.globalConfig ? "found" : "missing"}`);
-  formatter.step(`Auth source: ${summary.authSource}`);
-  formatter.step(`Config source: ${summary.configSource}`);
-  const configChainSummary = summarizeConfigChain(configDiagnostics);
-  if (configChainSummary) {
-    formatter.step(`Merged sources: ${configChainSummary}`);
+  formatter.info(sections.configuration.heading);
+  formatter.step(`Node.js: ${sections.configuration.node ? "available" : "missing"}`);
+  formatter.step(`Project config (.obora/config.yaml): ${sections.configuration.projectConfig ? "found" : "missing"}`);
+  formatter.step(`Global config (~/.obora/config.yaml): ${sections.configuration.globalConfig ? "found" : "missing"}`);
+  formatter.step(`Auth source: ${sections.configuration.authSource}`);
+  formatter.step(`Config source: ${sections.configuration.configSource}`);
+  if (sections.configuration.mergedSources) {
+    formatter.step(`Merged sources: ${sections.configuration.mergedSources}`);
   }
-  if (configDiagnostics.activeConfigPath) {
-    formatter.step(`Active config: ${configDiagnostics.activeConfigPath}`);
+  if (sections.configuration.activeConfigPath) {
+    formatter.step(`Active config: ${sections.configuration.activeConfigPath}`);
   }
 
   printResolutionSection(summary);
 
-  if (summary.warnings.length > 0 || authDiagnostics.providerMismatchWarning) {
-    formatter.info("Warnings");
+  if (sections.warnings.items.length > 0) {
+    formatter.info(sections.warnings.heading);
   }
-  for (const warning of summary.warnings) {
+  for (const warning of sections.warnings.items) {
     formatter.warn(warning);
   }
-  if (authDiagnostics.providerMismatchWarning) {
-    formatter.warn(authDiagnostics.providerMismatchWarning);
-  }
 
-  formatter.info("Recommended next actions");
-  for (const recommendation of recommendations) {
+  formatter.info(sections.recommendedNextActions.heading);
+  for (const recommendation of sections.recommendedNextActions.items) {
     formatter.step(recommendation);
   }
 

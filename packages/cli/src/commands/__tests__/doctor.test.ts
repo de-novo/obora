@@ -132,6 +132,59 @@ describe("doctor command", () => {
       );
     });
 
+    it("should include structured sections in json output", async () => {
+      vi.mocked(buildResolutionSummary).mockReturnValue({
+        provider: "openai",
+        model: "gpt-4o-mini",
+        authSource: "env(OPENAI_API_KEY)",
+        configSource: "/Users/denovo/.obora/config.yaml -> /tmp/demo/.obora/config.yaml",
+        modelSource: "config.defaults.model",
+        chosenByPrecedence: "config > env",
+        nextPlaceToEdit: "/tmp/demo/.obora/config.yaml",
+        fallbackStub: false,
+        warnings: ["Example warning"],
+      });
+      vi.mocked(existsSync).mockReturnValue(true);
+
+      await runDoctor({ json: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sections: expect.objectContaining({
+            status: expect.objectContaining({
+              heading: "Status",
+              status: "ready",
+              message: "Ready: openai/gpt-4o-mini",
+            }),
+            configuration: expect.objectContaining({
+              heading: "Configuration",
+              authSource: "env(OPENAI_API_KEY)",
+              configSource: "/Users/denovo/.obora/config.yaml -> /tmp/demo/.obora/config.yaml",
+              mergedSources: "global -> project",
+              activeConfigPath: "/tmp/demo/.obora/config.yaml",
+            }),
+            resolution: expect.objectContaining({
+              heading: "Resolution",
+              provider: "openai",
+              model: "gpt-4o-mini",
+              modelSource: "config.defaults.model",
+              chosenByPrecedence: "config > env",
+              fallbackStub: false,
+              nextPlaceToEdit: "/tmp/demo/.obora/config.yaml",
+            }),
+            warnings: expect.objectContaining({
+              heading: "Warnings",
+              items: ["Example warning"],
+            }),
+            recommendedNextActions: expect.objectContaining({
+              heading: "Recommended next actions",
+              items: [],
+            }),
+          }),
+        }),
+      );
+    });
+
     it("should include provider-aware fields in json output", async () => {
       vi.mocked(loadConfig).mockResolvedValue({
         defaults: {
