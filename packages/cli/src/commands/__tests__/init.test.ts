@@ -167,11 +167,23 @@ describe("init command", () => {
     });
 
 
-    it("should print next-step guidance for quickstart projects", async () => {
+    it("should print provider-aware next-step guidance for quickstart projects", async () => {
+      vi.mocked(readFile).mockImplementation(async (pathLike) => {
+        const path = String(pathLike);
+        if (path.includes('.obora/config.yaml')) {
+          return `defaults:
+  provider: anthropic
+`;
+        }
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      });
+
       await runInit("my-project", { quickstart: true });
 
       expect(formatter.info).toHaveBeenCalledWith("Next steps:");
       expect(formatter.step).toHaveBeenCalledWith("cd my-project");
+      expect(formatter.step).toHaveBeenCalledWith("This template defaults to anthropic");
+      expect(formatter.step).toHaveBeenCalledWith("export ANTHROPIC_API_KEY=***");
       expect(formatter.step).toHaveBeenCalledWith("obora doctor");
       expect(formatter.step).toHaveBeenCalledWith("obora run judge.yaml --dry-run");
       expect(formatter.step).toHaveBeenCalledWith("obora run judge.yaml");

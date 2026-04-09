@@ -8,9 +8,43 @@ import { handleCommandAction } from "../utils/error-handler.js";
 import { formatter } from "../utils/formatter.js";
 import { getGlobalOpts } from "../utils/global-opts.js";
 
+const PROVIDER_AUTH_ENV_KEY_MAP: Record<string, string> = {
+  anthropic: "ANTHROPIC_API_KEY",
+  cerebras: "CEREBRAS_API_KEY",
+  google: "GOOGLE_API_KEY",
+  groq: "GROQ_API_KEY",
+  huggingface: "HUGGINGFACE_API_KEY",
+  "github-copilot": "GITHUB_COPILOT_API_KEY",
+  "kimi-coding": "KIMI_CODING_API_KEY",
+  mistral: "MISTRAL_API_KEY",
+  minimax: "MINIMAX_API_KEY",
+  "minimax-cn": "MINIMAX_CN_API_KEY",
+  opencode: "OPENCODE_API_KEY",
+  openai: "OPENAI_API_KEY",
+  "openai-codex": "OPENAI_API_KEY",
+  openrouter: "OPENROUTER_API_KEY",
+  xai: "XAI_API_KEY",
+  zai: "ZAI_API_KEY",
+  "vercel-ai-gateway": "VERCEL_AI_GATEWAY_API_KEY",
+};
+
 function resolveTemplatePath(templateName: string): string {
   const commandDir = dirname(fileURLToPath(import.meta.url));
   return resolve(commandDir, "../../templates", templateName);
+}
+
+function inferAuthEnvKey(provider: string): string {
+  return PROVIDER_AUTH_ENV_KEY_MAP[provider] ?? `${provider.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_API_KEY`;
+}
+
+async function detectQuickstartProvider(targetDir: string): Promise<string | null> {
+  try {
+    const configRaw = await readFile(join(targetDir, ".obora", "config.yaml"), "utf-8");
+    const match = configRaw.match(/^\s*provider:\s*([^\s#]+)\s*$/m);
+    return match?.[1] ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function runInit(
@@ -79,9 +113,14 @@ export async function runInit(
 
     if (templateName === "quickstart") {
       const relativeTarget = projectName === "." ? "." : projectName;
+      const quickstartProvider = await detectQuickstartProvider(targetDir);
       formatter.info("Next steps:");
       if (relativeTarget !== ".") {
         formatter.step(`cd ${relativeTarget}`);
+      }
+      if (quickstartProvider) {
+        formatter.step(`This template defaults to ${quickstartProvider}`);
+        formatter.step(`export ${inferAuthEnvKey(quickstartProvider)}=***`);
       }
       formatter.step("obora doctor");
       formatter.step("obora run judge.yaml --dry-run");
