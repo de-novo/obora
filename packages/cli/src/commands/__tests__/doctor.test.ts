@@ -172,7 +172,6 @@ describe("doctor command", () => {
       );
     });
 
-
     it("should include provider-specific setup examples in json output", async () => {
       vi.mocked(loadConfig).mockResolvedValue({
         defaults: {
@@ -186,11 +185,63 @@ describe("doctor command", () => {
         expect.objectContaining({
           auth: expect.objectContaining({
             authExportExample: "export ANTHROPIC_API_KEY=***",
-            modelConfigExample: `providers:
-  anthropic:
-    defaultModel: claude-3-7-sonnet-latest`,
+            modelConfigExample: "providers:\n  anthropic:\n    defaultModel: claude-3-7-sonnet-latest",
             modelEnvExample: "export ANTHROPIC_MODEL=claude-3-7-sonnet-latest",
           }),
+        }),
+      );
+    });
+
+    it("should warn when detected env provider does not match configured provider", async () => {
+      process.env.OPENAI_API_KEY = "test-key";
+      vi.mocked(loadConfig).mockResolvedValue({
+        defaults: {
+          provider: "anthropic",
+        },
+      });
+
+      await runDoctor({ json: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          auth: expect.objectContaining({
+            providerMismatchWarning:
+              "Configured provider 'anthropic' differs from detected env auth providers: openai",
+          }),
+          recommendations: expect.arrayContaining([
+            "Detected env auth does not match configured provider. Either export ANTHROPIC_API_KEY=*** or switch defaults.provider to one of: openai",
+          ]),
+        }),
+      );
+    });
+
+
+    it("should recommend fixing mismatch when resolved provider differs from configured provider", async () => {
+      process.env.OPENAI_API_KEY = "test-key";
+      vi.mocked(loadConfig).mockResolvedValue({
+        defaults: {
+          provider: "anthropic",
+        },
+      });
+      vi.mocked(buildResolutionSummary).mockReturnValue({
+        provider: "openai",
+        model: null,
+        authSource: "env(OPENAI_API_KEY)",
+        configSource: ".obora/config.yaml",
+        modelSource: "none",
+        chosenByPrecedence: "config > env",
+        nextPlaceToEdit: ".obora/config.yaml",
+        fallbackStub: false,
+        warnings: [],
+      });
+
+      await runDoctor({ json: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recommendations: expect.arrayContaining([
+            "Resolved provider does not match configured provider. Either export ANTHROPIC_API_KEY=*** or switch defaults.provider to openai",
+          ]),
         }),
       );
     });

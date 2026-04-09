@@ -47,6 +47,7 @@ interface DoctorAuthDiagnostics extends ProviderSetupExamples {
   recommendedProvider: string | null;
   recommendedAuthEnvKey: string | null;
   detectedProviders: string[];
+  providerMismatchWarning: string | null;
   setupGuide: string;
 }
 
@@ -189,12 +190,20 @@ function buildAuthDiagnostics(providerHint: DoctorProviderHint): DoctorAuthDiagn
   const setupExamples = buildProviderSetupExamples(
     providerHint.recommendedProvider ?? providerHint.configuredProvider,
   );
+  const detectedProviders = detectAuthProviders();
+  const providerMismatchWarning =
+    providerHint.configuredProvider &&
+    detectedProviders.length > 0 &&
+    !detectedProviders.includes(providerHint.configuredProvider)
+      ? `Configured provider '${providerHint.configuredProvider}' differs from detected env auth providers: ${detectedProviders.join(', ')}`
+      : null;
 
   return {
     configuredProvider: providerHint.configuredProvider,
     recommendedProvider: providerHint.recommendedProvider,
     recommendedAuthEnvKey: providerHint.recommendedAuthEnvKey,
-    detectedProviders: detectAuthProviders(),
+    detectedProviders,
+    providerMismatchWarning,
     setupGuide: AUTH_SETUP_GUIDE,
     ...setupExamples,
   };
@@ -241,6 +250,22 @@ function buildConfiguredProviderHints(providerHint: DoctorProviderHint): string[
     `Configured default provider: ${providerHint.recommendedProvider}`,
     `Recommended auth: export ${providerHint.recommendedAuthEnvKey}=***`,
   ];
+}
+
+function buildResolvedProviderMismatchRecommendation(
+  summary: { provider: string | null },
+  providerHint: DoctorProviderHint,
+  authDiagnostics: DoctorAuthDiagnostics,
+): string | null {
+  if (!summary.provider || !providerHint.configuredProvider) {
+    return null;
+  }
+
+  if (summary.provider === providerHint.configuredProvider) {
+    return null;
+  }
+
+  return `Resolved provider does not match configured provider. Either export ${inferAuthEnvKey(providerHint.configuredProvider)}=*** or switch defaults.provider to ${summary.provider}`;
 }
 
 function buildProviderSpecificGuidance(
@@ -338,6 +363,20 @@ function buildDoctorRecommendations(
     if (authExampleHint) {
       recommendations.push(authExampleHint);
     }
+    if (authDiagnostics.providerMismatchWarning && providerHint.recommendedAuthEnvKey) {
+      recommendations.push(
+        `Detected env auth does not match configured provider. Either export ${providerHint.recommendedAuthEnvKey}=*** or switch defaults.provider to one of: ${authDiagnostics.detectedProviders.join(', ')}`,
+      );
+    }
+  }
+
+  const resolvedProviderMismatchRecommendation = buildResolvedProviderMismatchRecommendation(
+    summary,
+    providerHint,
+    authDiagnostics,
+  );
+  if (resolvedProviderMismatchRecommendation) {
+    recommendations.push(resolvedProviderMismatchRecommendation);
   }
 
   recommendations.push(...buildProviderSpecificGuidance(summary, authDiagnostics));
