@@ -147,6 +147,19 @@ describe("doctor command", () => {
       expect(formatter.info).toHaveBeenCalledWith("Next step: .obora/config.yaml (or set env key for first-time setup)");
     });
 
+    it("should prioritize configured default provider in auth hints", async () => {
+      vi.mocked(loadConfig).mockResolvedValue({
+        defaults: {
+          provider: "anthropic",
+        },
+      });
+
+      await runDoctor({});
+
+      expect(formatter.step).toHaveBeenCalledWith("Configured default provider: anthropic");
+      expect(formatter.step).toHaveBeenCalledWith("Recommended auth: export ANTHROPIC_API_KEY=***");
+    });
+
     it("should report ready status when provider and model are resolved", async () => {
       vi.mocked(buildResolutionSummary).mockReturnValue({
         provider: "openai",

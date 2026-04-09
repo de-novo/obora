@@ -8,6 +8,7 @@ import {
   formatResolutionSummary,
   loadConfig,
   resolveLLMConfig,
+  type OboraConfig,
 } from "@obora/sdk";
 import { Command } from "commander";
 
@@ -35,12 +36,52 @@ const AUTH_ENV_EXAMPLES = [
   "ZAI_API_KEY",
 ] as const;
 
+const PROVIDER_AUTH_ENV_KEY_MAP: Record<string, string> = {
+  anthropic: "ANTHROPIC_API_KEY",
+  cerebras: "CEREBRAS_API_KEY",
+  google: "GOOGLE_API_KEY",
+  groq: "GROQ_API_KEY",
+  huggingface: "HUGGINGFACE_API_KEY",
+  "github-copilot": "GITHUB_COPILOT_API_KEY",
+  "kimi-coding": "KIMI_CODING_API_KEY",
+  mistral: "MISTRAL_API_KEY",
+  minimax: "MINIMAX_API_KEY",
+  "minimax-cn": "MINIMAX_CN_API_KEY",
+  opencode: "OPENCODE_API_KEY",
+  openai: "OPENAI_API_KEY",
+  "openai-codex": "OPENAI_API_KEY",
+  openrouter: "OPENROUTER_API_KEY",
+  xai: "XAI_API_KEY",
+  zai: "ZAI_API_KEY",
+  "vercel-ai-gateway": "VERCEL_AI_GATEWAY_API_KEY",
+};
+
+function inferAuthEnvKey(provider: string): string {
+  return PROVIDER_AUTH_ENV_KEY_MAP[provider] ?? `${provider.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_API_KEY`;
+}
+
 function buildAuthExampleHint(summary: { authSource: string }): string | null {
   if (summary.authSource !== "none") {
     return null;
   }
 
   return `Examples: export ${AUTH_ENV_EXAMPLES[0]}=***  |  export ${AUTH_ENV_EXAMPLES[1]}=***  |  export ${AUTH_ENV_EXAMPLES[2]}=***`;
+}
+
+function buildConfiguredProviderHints(summary: { authSource: string }, loadedConfig?: OboraConfig): string[] {
+  if (summary.authSource !== "none") {
+    return [];
+  }
+
+  const configuredProvider = loadedConfig?.defaults?.provider;
+  if (!configuredProvider) {
+    return [];
+  }
+
+  return [
+    `Configured default provider: ${configuredProvider}`,
+    `Recommended auth: export ${inferAuthEnvKey(configuredProvider)}=***`,
+  ];
 }
 
 function buildDoctorChecks(): DoctorChecks {
@@ -83,12 +124,16 @@ function buildDoctorStatus(summary: {
   };
 }
 
-function buildDoctorRecommendations(checks: DoctorChecks, summary: {
-  authSource: string;
-  configSource: string;
-  fallbackStub: boolean;
-  warnings: string[];
-}): string[] {
+function buildDoctorRecommendations(
+  checks: DoctorChecks,
+  summary: {
+    authSource: string;
+    configSource: string;
+    fallbackStub: boolean;
+    warnings: string[];
+  },
+  loadedConfig?: OboraConfig,
+): string[] {
   const recommendations: string[] = [];
 
   if (!checks.projectConfig) {
@@ -97,6 +142,7 @@ function buildDoctorRecommendations(checks: DoctorChecks, summary: {
 
   if (summary.authSource === "none") {
     recommendations.push("Set one provider API key, then rerun: obora doctor");
+    recommendations.push(...buildConfiguredProviderHints(summary, loadedConfig));
     const authExampleHint = buildAuthExampleHint(summary);
     if (authExampleHint) {
       recommendations.push(authExampleHint);
@@ -125,7 +171,7 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
   const resolvedLLM = resolveLLMConfig(envLLM, loadedConfig);
   const summary = buildResolutionSummary({}, resolvedLLM, loadedConfig);
   const status = buildDoctorStatus(summary);
-  const recommendations = buildDoctorRecommendations(checks, summary);
+  const recommendations = buildDoctorRecommendations(checks, summary, loadedConfig);
 
   if (options.json) {
     formatter.json({
