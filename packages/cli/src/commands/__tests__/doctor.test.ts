@@ -159,6 +159,7 @@ describe("doctor command", () => {
             configuration: expect.objectContaining({
               heading: "Configuration",
               configuredProvider: null,
+              configuredModel: null,
               authSource: "env(OPENAI_API_KEY)",
               configSource: "/Users/denovo/.obora/config.yaml -> /tmp/demo/.obora/config.yaml",
               mergedSources: "global -> project",
@@ -168,6 +169,7 @@ describe("doctor command", () => {
               heading: "Resolution",
               resolvedProvider: "openai",
               provider: "openai",
+              resolvedModel: "gpt-4o-mini",
               model: "gpt-4o-mini",
               modelSource: "config.defaults.model",
               chosenByPrecedence: "config > env",
@@ -200,6 +202,45 @@ describe("doctor command", () => {
         expect.objectContaining({
           recommendedProvider: "anthropic",
           recommendedAuthEnvKey: "ANTHROPIC_API_KEY",
+        }),
+      );
+    });
+
+    it("should include configured and resolved model context in json sections", async () => {
+      vi.mocked(loadConfig).mockResolvedValue({
+        defaults: {
+          provider: "anthropic",
+          model: "claude-3-7-sonnet-latest",
+        },
+      });
+      vi.mocked(buildResolutionSummary).mockReturnValue({
+        provider: "openai",
+        model: "gpt-4o-mini",
+        authSource: "env(OPENAI_API_KEY)",
+        configSource: "/Users/denovo/.obora/config.yaml -> /tmp/demo/.obora/config.yaml",
+        modelSource: "env(OPENAI_MODEL)",
+        chosenByPrecedence: "config > env",
+        nextPlaceToEdit: "/tmp/demo/.obora/config.yaml",
+        fallbackStub: false,
+        warnings: [],
+      });
+      vi.mocked(existsSync).mockReturnValue(true);
+
+      await runDoctor({ json: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sections: expect.objectContaining({
+            configuration: expect.objectContaining({
+              configuredProvider: "anthropic",
+              configuredModel: "claude-3-7-sonnet-latest",
+            }),
+            resolution: expect.objectContaining({
+              resolvedProvider: "openai",
+              resolvedModel: "gpt-4o-mini",
+              modelSource: "env(OPENAI_MODEL)",
+            }),
+          }),
         }),
       );
     });
@@ -443,6 +484,7 @@ describe("doctor command", () => {
 
       expect(formatter.step).toHaveBeenCalledWith("Ready: openai/gpt-4o-mini");
       expect(formatter.step).toHaveBeenCalledWith("Resolved provider: openai");
+      expect(formatter.step).toHaveBeenCalledWith("Resolved model: gpt-4o-mini");
       expect(formatter.step).toHaveBeenCalledWith("Fallback/stub: disabled");
       expect(formatter.step).toHaveBeenCalledWith("Run your workflow: obora run judge.yaml");
     });

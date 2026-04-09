@@ -79,6 +79,7 @@ interface DoctorOutputSections {
     globalConfig: boolean;
     globalConfigPath: string;
     configuredProvider: string | null;
+    configuredModel: string | null;
     authSource: string;
     configSource: string;
     mergedSources: string | null;
@@ -88,6 +89,7 @@ interface DoctorOutputSections {
     heading: "Resolution";
     resolvedProvider: string | null;
     provider: string | null;
+    resolvedModel: string | null;
     model: string | null;
     modelSource: string;
     chosenByPrecedence: string;
@@ -509,6 +511,7 @@ function buildDoctorOutputSections(
     fallbackStub: boolean;
     warnings: string[];
   },
+  loadedConfig: OboraConfig | undefined,
   configDiagnostics: DoctorConfigDiagnostics,
   authDiagnostics: DoctorAuthDiagnostics,
   recommendations: string[],
@@ -533,6 +536,7 @@ function buildDoctorOutputSections(
       globalConfig: checks.globalConfig,
       globalConfigPath: checks.globalConfigPath,
       configuredProvider: authDiagnostics.configuredProvider,
+      configuredModel: loadedConfig?.defaults?.model ?? null,
       authSource: summary.authSource,
       configSource: summary.configSource,
       mergedSources,
@@ -542,6 +546,7 @@ function buildDoctorOutputSections(
       heading: "Resolution",
       resolvedProvider: summary.provider,
       provider: summary.provider,
+      resolvedModel: summary.model,
       model: summary.model,
       modelSource: summary.modelSource,
       chosenByPrecedence: summary.chosenByPrecedence,
@@ -571,7 +576,7 @@ function printResolutionSection(summary: {
 }): void {
   formatter.info("Resolution");
   formatter.step(`Resolved provider: ${summary.provider ?? "none"}`);
-  formatter.step(`Model: ${summary.model ?? "none"}`);
+  formatter.step(`Resolved model: ${summary.model ?? "none"}`);
   formatter.step(`Model source: ${summary.modelSource}`);
   formatter.step(`Chosen by precedence: ${summary.chosenByPrecedence}`);
   formatter.step(`Fallback/stub: ${summary.fallbackStub ? "enabled" : "disabled"}`);
@@ -593,6 +598,7 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
     checks,
     status,
     summary,
+    loadedConfig,
     configDiagnostics,
     authDiagnostics,
     recommendations,
@@ -634,6 +640,9 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
   formatter.step(`Global config (~/.obora/config.yaml): ${sections.configuration.globalConfig ? "found" : "missing"}`);
   if (sections.configuration.configuredProvider) {
     formatter.step(`Configured provider: ${sections.configuration.configuredProvider}`);
+  }
+  if (sections.configuration.configuredModel) {
+    formatter.step(`Configured model: ${sections.configuration.configuredModel}`);
   }
   formatter.step(`Auth source: ${sections.configuration.authSource}`);
   formatter.step(`Config source: ${sections.configuration.configSource}`);

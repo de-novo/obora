@@ -262,4 +262,29 @@ describe("CLI quickstart integration", () => {
     expect(stderr).toContain("Configured provider 'anthropic' differs from detected env auth providers: openai");
   });
 
+
+  it("prints configured and resolved model context in doctor stdout", async () => {
+    const cli = createCLI();
+    const projectDir = join(workDir, "doctor-model-stdout-demo");
+
+    await cli.parseAsync(["quickstart", projectDir], { from: "user" });
+
+    process.chdir(projectDir);
+    process.env.OPENAI_API_KEY = "test-openai-key";
+    process.env.OPENAI_MODEL = "gpt-4o-mini";
+
+    logSpy.mockClear();
+    errorSpy.mockClear();
+
+    await cli.parseAsync(["doctor"], { from: "user" });
+
+    const stdout = logSpy.mock.calls.map((call) => String(call[0] ?? "")).join("\n");
+
+    expect(stdout).toContain("Configured provider: openai");
+    expect(stdout).toContain("Configured model: gpt-4o-mini");
+    expect(stdout).toContain("Resolved provider: openai");
+    expect(stdout).toContain("Resolved model: gpt-4o-mini");
+    expect(stdout).toContain("Model source: config.defaults.model");
+  });
+
 });
