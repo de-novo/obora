@@ -26,6 +26,22 @@ export * as LegacyWorkflow from "./_legacy/workflow/index.js";
 export * as LegacyAgentRoles from "./_legacy/agents/roles/index.js";
 export * as Judgment from "./judgment/index.js";
 
+export { OboraError } from "./_legacy/workflow/errors/index.js";
+export type { ErrorCode } from "./_legacy/workflow/errors/index.js";
+export {
+  AgentRole,
+  AgentState,
+  MeetingPhase,
+  BaseAgent,
+  createAgent,
+} from "./_legacy/agents/roles/index.js";
+export type {
+  AgentContext,
+  AgentStatus,
+  Task,
+  TaskResult,
+  RuntimeExtensions,
+} from "./_legacy/agents/roles/index.js";
 /**
  * Promoted blackboard API — canonical location for blackboard pattern.
  * Previously at _legacy/blackboard.
@@ -36,7 +52,7 @@ export * as Judgment from "./judgment/index.js";
  * Blackboard class from state/RuntimeBlackboardCompat.
  */
 export { Blackboard as BoardBlackboard } from "./blackboard/core/blackboard.js";
-export { createSessionId } from "./blackboard/types/base.js";
-export type { SessionId } from "./blackboard/types/base.js";
+export { createAgentId, createSessionId } from "./blackboard/types/base.js";
+export type { AgentId, SessionId } from "./blackboard/types/base.js";
 export { TKGObserver, TKGReflector } from "./blackboard/observer-reflector.js";
 export type { ObserverOptions, ReflectorOptions } from "./blackboard/observer-reflector.js";
