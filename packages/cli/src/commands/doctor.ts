@@ -5,7 +5,6 @@ import { join } from "node:path";
 import {
   buildResolutionSummary,
   detectLLMConfigFromEnv,
-  formatResolutionSummary,
   loadConfig,
   resolveLLMConfig,
   type OboraConfig,
@@ -455,6 +454,26 @@ function buildDoctorRecommendations(
   return recommendations;
 }
 
+
+function printResolutionSection(summary: {
+  provider: string | null;
+  model: string | null;
+  authSource: string;
+  configSource: string;
+  modelSource: string;
+  chosenByPrecedence: string;
+  nextPlaceToEdit: string;
+  fallbackStub: boolean;
+}): void {
+  formatter.info("Resolution");
+  formatter.step(`Provider: ${summary.provider ?? "none"}`);
+  formatter.step(`Model: ${summary.model ?? "none"}`);
+  formatter.step(`Model source: ${summary.modelSource}`);
+  formatter.step(`Chosen by precedence: ${summary.chosenByPrecedence}`);
+  formatter.step(`Fallback/stub: ${summary.fallbackStub ? "enabled" : "disabled"}`);
+  formatter.step(`Next place to edit: ${summary.nextPlaceToEdit}`);
+}
+
 export async function runDoctor(options: DoctorOptions): Promise<void> {
   const checks = buildDoctorChecks();
   const loadedConfig = await loadConfig();
@@ -492,7 +511,11 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
   }
 
   formatter.info("Obora doctor");
-  formatter.step(`Status: ${status.message}`);
+
+  formatter.info("Status");
+  formatter.step(status.message);
+
+  formatter.info("Configuration");
   formatter.step(`Node.js: ${checks.node ? "available" : "missing"}`);
   formatter.step(`Project config (.obora/config.yaml): ${checks.projectConfig ? "found" : "missing"}`);
   formatter.step(`Global config (~/.obora/config.yaml): ${checks.globalConfig ? "found" : "missing"}`);
@@ -505,10 +528,12 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
   if (configDiagnostics.activeConfigPath) {
     formatter.step(`Active config: ${configDiagnostics.activeConfigPath}`);
   }
-  formatter.step(`Fallback/stub: ${summary.fallbackStub ? "enabled" : "disabled"}`);
 
-  formatter.info(formatResolutionSummary(summary));
+  printResolutionSection(summary);
 
+  if (summary.warnings.length > 0 || authDiagnostics.providerMismatchWarning) {
+    formatter.info("Warnings");
+  }
   for (const warning of summary.warnings) {
     formatter.warn(warning);
   }
@@ -516,7 +541,7 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
     formatter.warn(authDiagnostics.providerMismatchWarning);
   }
 
-  formatter.info("Recommended next actions:");
+  formatter.info("Recommended next actions");
   for (const recommendation of recommendations) {
     formatter.step(recommendation);
   }

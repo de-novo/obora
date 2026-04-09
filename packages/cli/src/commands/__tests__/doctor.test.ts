@@ -322,11 +322,21 @@ describe("doctor command", () => {
       );
     });
 
+    it("should print section headings in default mode", async () => {
+      await runDoctor({});
+
+      expect(formatter.info).toHaveBeenCalledWith("Status");
+      expect(formatter.info).toHaveBeenCalledWith("Configuration");
+      expect(formatter.info).toHaveBeenCalledWith("Resolution");
+      expect(formatter.info).toHaveBeenCalledWith("Warnings");
+      expect(formatter.info).toHaveBeenCalledWith("Recommended next actions");
+    });
+
     it("should print actionable lines in default mode", async () => {
       await runDoctor({});
 
       expect(formatter.info).toHaveBeenCalledWith("Obora doctor");
-      expect(formatter.step).toHaveBeenCalledWith("Status: Needs auth: no provider credential detected");
+      expect(formatter.step).toHaveBeenCalledWith("Needs auth: no provider credential detected");
       expect(formatter.step).toHaveBeenCalledWith("Node.js: available");
       expect(formatter.step).toHaveBeenCalledWith("Project config (.obora/config.yaml): missing");
       expect(formatter.step).toHaveBeenCalledWith("Global config (~/.obora/config.yaml): missing");
@@ -334,7 +344,7 @@ describe("doctor command", () => {
       expect(formatter.step).toHaveBeenCalledWith("Config source: none");
       expect(formatter.step).toHaveBeenCalledWith("Fallback/stub: enabled");
       expect(formatter.warn).toHaveBeenCalledWith("No LLM resolved; execution will run in stub mode");
-      expect(formatter.info).toHaveBeenCalledWith("Recommended next actions:");
+      expect(formatter.info).toHaveBeenCalledWith("Recommended next actions");
       expect(formatter.step).toHaveBeenCalledWith(expect.stringContaining("Run: obora init --quickstart"));
       expect(formatter.step).toHaveBeenCalledWith("Set one provider API key, then rerun: obora doctor");
       expect(formatter.step).toHaveBeenCalledWith(
@@ -375,7 +385,7 @@ describe("doctor command", () => {
 
       await runDoctor({});
 
-      expect(formatter.step).toHaveBeenCalledWith("Status: Ready: openai/gpt-4o-mini");
+      expect(formatter.step).toHaveBeenCalledWith("Ready: openai/gpt-4o-mini");
       expect(formatter.step).toHaveBeenCalledWith("Fallback/stub: disabled");
       expect(formatter.step).toHaveBeenCalledWith("Run your workflow: obora run judge.yaml");
     });
