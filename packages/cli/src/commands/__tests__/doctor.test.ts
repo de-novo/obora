@@ -122,6 +122,23 @@ describe("doctor command", () => {
       );
     });
 
+    it("should include provider-aware fields in json output", async () => {
+      vi.mocked(loadConfig).mockResolvedValue({
+        defaults: {
+          provider: "anthropic",
+        },
+      });
+
+      await runDoctor({ json: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recommendedProvider: "anthropic",
+          recommendedAuthEnvKey: "ANTHROPIC_API_KEY",
+        }),
+      );
+    });
+
     it("should print actionable lines in default mode", async () => {
       await runDoctor({});
 
@@ -135,14 +152,10 @@ describe("doctor command", () => {
       expect(formatter.step).toHaveBeenCalledWith("Fallback/stub: enabled");
       expect(formatter.warn).toHaveBeenCalledWith("No LLM resolved; execution will run in stub mode");
       expect(formatter.info).toHaveBeenCalledWith("Recommended next actions:");
+      expect(formatter.step).toHaveBeenCalledWith(expect.stringContaining("Run: obora init --quickstart"));
+      expect(formatter.step).toHaveBeenCalledWith("Set one provider API key, then rerun: obora doctor");
       expect(formatter.step).toHaveBeenCalledWith(
-        expect.stringContaining("Run: obora init --quickstart")
-      );
-      expect(formatter.step).toHaveBeenCalledWith(
-        "Set one provider API key, then rerun: obora doctor"
-      );
-      expect(formatter.step).toHaveBeenCalledWith(
-        "Examples: export OPENAI_API_KEY=***  |  export ANTHROPIC_API_KEY=***  |  export ZAI_API_KEY=***"
+        "Examples: export OPENAI_API_KEY=***  |  export ANTHROPIC_API_KEY=***  |  export ZAI_API_KEY=***",
       );
       expect(formatter.info).toHaveBeenCalledWith("Next step: .obora/config.yaml (or set env key for first-time setup)");
     });

@@ -30,6 +30,11 @@ interface DoctorChecks {
   globalConfig: boolean;
 }
 
+interface DoctorProviderHint {
+  recommendedProvider: string | null;
+  recommendedAuthEnvKey: string | null;
+}
+
 const AUTH_ENV_EXAMPLES = [
   "OPENAI_API_KEY",
   "ANTHROPIC_API_KEY",
@@ -60,6 +65,28 @@ function inferAuthEnvKey(provider: string): string {
   return PROVIDER_AUTH_ENV_KEY_MAP[provider] ?? `${provider.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_API_KEY`;
 }
 
+function buildRecommendedProviderHint(summary: { authSource: string }, loadedConfig?: OboraConfig): DoctorProviderHint {
+  if (summary.authSource !== "none") {
+    return {
+      recommendedProvider: null,
+      recommendedAuthEnvKey: null,
+    };
+  }
+
+  const configuredProvider = loadedConfig?.defaults?.provider;
+  if (!configuredProvider) {
+    return {
+      recommendedProvider: null,
+      recommendedAuthEnvKey: null,
+    };
+  }
+
+  return {
+    recommendedProvider: configuredProvider,
+    recommendedAuthEnvKey: inferAuthEnvKey(configuredProvider),
+  };
+}
+
 function buildAuthExampleHint(summary: { authSource: string }): string | null {
   if (summary.authSource !== "none") {
     return null;
@@ -68,19 +95,14 @@ function buildAuthExampleHint(summary: { authSource: string }): string | null {
   return `Examples: export ${AUTH_ENV_EXAMPLES[0]}=***  |  export ${AUTH_ENV_EXAMPLES[1]}=***  |  export ${AUTH_ENV_EXAMPLES[2]}=***`;
 }
 
-function buildConfiguredProviderHints(summary: { authSource: string }, loadedConfig?: OboraConfig): string[] {
-  if (summary.authSource !== "none") {
-    return [];
-  }
-
-  const configuredProvider = loadedConfig?.defaults?.provider;
-  if (!configuredProvider) {
+function buildConfiguredProviderHints(providerHint: DoctorProviderHint): string[] {
+  if (!providerHint.recommendedProvider || !providerHint.recommendedAuthEnvKey) {
     return [];
   }
 
   return [
-    `Configured default provider: ${configuredProvider}`,
-    `Recommended auth: export ${inferAuthEnvKey(configuredProvider)}=***`,
+    `Configured default provider: ${providerHint.recommendedProvider}`,
+    `Recommended auth: export ${providerHint.recommendedAuthEnvKey}=***`,
   ];
 }
 
@@ -132,7 +154,7 @@ function buildDoctorRecommendations(
     fallbackStub: boolean;
     warnings: string[];
   },
-  loadedConfig?: OboraConfig,
+  providerHint: DoctorProviderHint,
 ): string[] {
   const recommendations: string[] = [];
 
@@ -142,7 +164,7 @@ function buildDoctorRecommendations(
 
   if (summary.authSource === "none") {
     recommendations.push("Set one provider API key, then rerun: obora doctor");
-    recommendations.push(...buildConfiguredProviderHints(summary, loadedConfig));
+    recommendations.push(...buildConfiguredProviderHints(providerHint));
     const authExampleHint = buildAuthExampleHint(summary);
     if (authExampleHint) {
       recommendations.push(authExampleHint);
@@ -171,7 +193,8 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
   const resolvedLLM = resolveLLMConfig(envLLM, loadedConfig);
   const summary = buildResolutionSummary({}, resolvedLLM, loadedConfig);
   const status = buildDoctorStatus(summary);
-  const recommendations = buildDoctorRecommendations(checks, summary, loadedConfig);
+  const providerHint = buildRecommendedProviderHint(summary, loadedConfig);
+  const recommendations = buildDoctorRecommendations(checks, summary, providerHint);
 
   if (options.json) {
     formatter.json({
@@ -185,6 +208,8 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
       status,
       recommendations,
       resolution: summary,
+      recommendedProvider: providerHint.recommendedProvider,
+      recommendedAuthEnvKey: providerHint.recommendedAuthEnvKey,
     });
     return;
   }
@@ -196,12 +221,8 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
   formatter.info("Obora doctor");
   formatter.step(`Status: ${status.message}`);
   formatter.step(`Node.js: ${checks.node ? "available" : "missing"}`);
-  formatter.step(
-    `Project config (.obora/config.yaml): ${checks.projectConfig ? "found" : "missing"}`,
-  );
-  formatter.step(
-    `Global config (~/.obora/config.yaml): ${checks.globalConfig ? "found" : "missing"}`,
-  );
+  formatter.step(`Project config (.obora/config.yaml): ${checks.projectConfig ? "found" : "missing"}`);
+  formatter.step(`Global config (~/.obora/config.yaml): ${checks.globalConfig ? "found" : "missing"}`);
   formatter.step(`Auth source: ${summary.authSource}`);
   formatter.step(`Config source: ${summary.configSource}`);
   formatter.step(`Fallback/stub: ${summary.fallbackStub ? "enabled" : "disabled"}`);
