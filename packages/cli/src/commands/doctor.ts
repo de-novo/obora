@@ -29,6 +29,20 @@ interface DoctorChecks {
   globalConfig: boolean;
 }
 
+const AUTH_ENV_EXAMPLES = [
+  "OPENAI_API_KEY",
+  "ANTHROPIC_API_KEY",
+  "ZAI_API_KEY",
+] as const;
+
+function buildAuthExampleHint(summary: { authSource: string }): string | null {
+  if (summary.authSource !== "none") {
+    return null;
+  }
+
+  return `Examples: export ${AUTH_ENV_EXAMPLES[0]}=***  |  export ${AUTH_ENV_EXAMPLES[1]}=***  |  export ${AUTH_ENV_EXAMPLES[2]}=***`;
+}
+
 function buildDoctorChecks(): DoctorChecks {
   const projectConfigPath = join(process.cwd(), ".obora", "config.yaml");
   const globalConfigPath = join(homedir(), ".obora", "config.yaml");
@@ -83,6 +97,10 @@ function buildDoctorRecommendations(checks: DoctorChecks, summary: {
 
   if (summary.authSource === "none") {
     recommendations.push("Set one provider API key, then rerun: obora doctor");
+    const authExampleHint = buildAuthExampleHint(summary);
+    if (authExampleHint) {
+      recommendations.push(authExampleHint);
+    }
   }
 
   if (summary.configSource === "none") {
