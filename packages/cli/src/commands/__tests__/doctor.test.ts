@@ -108,6 +108,13 @@ describe("doctor command", () => {
             projectConfig: false,
             globalConfig: false,
           }),
+          status: expect.objectContaining({
+            status: "needs_config",
+          }),
+          recommendations: expect.arrayContaining([
+            expect.stringContaining("obora init --quickstart"),
+            expect.stringContaining("obora doctor"),
+          ]),
           resolution: expect.objectContaining({
             fallbackStub: true,
           }),
@@ -119,11 +126,43 @@ describe("doctor command", () => {
       await runDoctor({});
 
       expect(formatter.info).toHaveBeenCalledWith("Obora doctor");
+      expect(formatter.step).toHaveBeenCalledWith("Status: Needs auth: no provider credential detected");
       expect(formatter.step).toHaveBeenCalledWith("Node.js: available");
       expect(formatter.step).toHaveBeenCalledWith("Project config (.obora/config.yaml): missing");
       expect(formatter.step).toHaveBeenCalledWith("Global config (~/.obora/config.yaml): missing");
+      expect(formatter.step).toHaveBeenCalledWith("Auth source: none");
+      expect(formatter.step).toHaveBeenCalledWith("Config source: none");
+      expect(formatter.step).toHaveBeenCalledWith("Fallback/stub: enabled");
       expect(formatter.warn).toHaveBeenCalledWith("No LLM resolved; execution will run in stub mode");
+      expect(formatter.info).toHaveBeenCalledWith("Recommended next actions:");
+      expect(formatter.step).toHaveBeenCalledWith(
+        expect.stringContaining("Run: obora init --quickstart")
+      );
+      expect(formatter.step).toHaveBeenCalledWith(
+        "Set one provider API key, then rerun: obora doctor"
+      );
       expect(formatter.info).toHaveBeenCalledWith("Next step: .obora/config.yaml (or set env key for first-time setup)");
+    });
+
+    it("should report ready status when provider and model are resolved", async () => {
+      vi.mocked(buildResolutionSummary).mockReturnValue({
+        provider: "openai",
+        model: "gpt-4o-mini",
+        authSource: "env(OPENAI_API_KEY)",
+        configSource: ".obora/config.yaml",
+        modelSource: "config.defaults.model",
+        chosenByPrecedence: "config > env",
+        nextPlaceToEdit: ".obora/config.yaml",
+        fallbackStub: false,
+        warnings: [],
+      });
+      vi.mocked(existsSync).mockReturnValue(true);
+
+      await runDoctor({});
+
+      expect(formatter.step).toHaveBeenCalledWith("Status: Ready: openai/gpt-4o-mini");
+      expect(formatter.step).toHaveBeenCalledWith("Fallback/stub: disabled");
+      expect(formatter.step).toHaveBeenCalledWith("Run your workflow: obora run judge.yaml");
     });
   });
 });

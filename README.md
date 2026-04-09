@@ -32,7 +32,7 @@ Obora provides an operational backbone for AI-included systems:
 # Install CLI
 npm install -g @obora/cli
 
-# Diagnose local setup
+# Diagnose local setup (status + next actions)
 obora doctor
 
 # Initialize a quickstart project
@@ -46,6 +46,9 @@ obora run judge.yaml
 Prerequisites:
 - Node.js 20+
 - At least one LLM provider API key (ZAI, OpenAI, Anthropic, etc.)
+
+Tip:
+- `obora doctor` tells you whether you are ready, in stub mode, or still missing auth/config, and suggests the shortest next command.
 
 ### Recommended Getting Started Path
 

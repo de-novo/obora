@@ -62,7 +62,9 @@ obora --json doctor
 - project config presence (`.obora/config.yaml`)
 - global config presence (`~/.obora/config.yaml`)
 - current provider/model resolution
-- fallback/stub 여부
+- auth source / config source
+- fallback/stub state
+- recommended next actions
 - next place to edit
 
 ### Example
@@ -73,9 +75,12 @@ obora doctor
 
 Expected output includes:
 
-- `Execution Resolution`
+- top-level status like `Ready: openai/gpt-4o-mini` or `Needs auth: ...`
 - whether project/global config exists
+- auth/config/stub summary lines
+- `Execution Resolution`
 - warnings like stub/fallback activation
+- `Recommended next actions:` with concrete commands
 - a final `Next step: ...` hint
 
 ---
