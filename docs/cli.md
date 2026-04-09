@@ -88,11 +88,13 @@ Initialize a new Obora project.
 
 ```bash
 obora init [name] [options]
+obora init my-project --quickstart
 ```
 
 ### Options
 
 - `--template <name>` (default: `default`)
+- `--quickstart` initialize a judge-mode quickstart scaffold
 - `-y, --yes` skip prompts and use defaults
 
 ### Behavior
@@ -100,7 +102,7 @@ obora init [name] [options]
 - If `name` is provided, creates that directory and initializes files there.
 - If `name` is omitted, initializes files in the current directory.
 
-Creates:
+Default template creates:
 
 - `workflow.yaml`
 - `policy.yaml`
@@ -108,11 +110,21 @@ Creates:
 - `obora.config.yaml`
 - `.gitignore`
 
+Quickstart template creates:
+
+- `judge.yaml`
+- `.obora/config.yaml`
+- `artifacts/submission.json`
+- `artifacts/submission.schema.json`
+- `artifacts/result.schema.json`
+- `.gitignore`
+
 ### Example
 
 ```bash
 mkdir my-obora && cd my-obora
 obora init --yes
+obora init demo --quickstart
 ```
 
 ---

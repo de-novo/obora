@@ -21,7 +21,7 @@ export async function runInit(
   const options =
     (typeof projectNameOrOptions === "string" ? maybeOptions : projectNameOrOptions) ?? {};
 
-  const templateName = String(options.template ?? "default");
+  const templateName = options.quickstart ? "quickstart" : String(options.template ?? "default");
   const templatePath = resolveTemplatePath(templateName);
   const targetDir = resolve(process.cwd(), projectName);
 
@@ -84,6 +84,7 @@ export function createInitCommand(): Command {
     .description("Initialize a new Obora project")
     .argument("[project-name]", "Project directory name", ".")
     .option("--template <name>", "Project template", "default")
+    .option("--quickstart", "Initialize a quickstart judge-mode scaffold")
     .option("-y, --yes", "Skip prompts, use defaults")
     .action(async function (this: Command, projectName, options) {
       const mergedOptions = { ...getGlobalOpts(this), ...options };

@@ -35,12 +35,12 @@ npm install -g @obora/cli
 # Diagnose local setup
 obora doctor
 
-# Initialize a new project
-obora init my-project
+# Initialize a quickstart project
+obora init my-project --quickstart
 cd my-project
 
-# Run a workflow
-obora run workflow.yaml
+# Run the bundled judge example
+obora run judge.yaml
 ```
 
 Prerequisites:

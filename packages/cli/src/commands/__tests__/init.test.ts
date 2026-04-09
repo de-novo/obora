@@ -91,6 +91,12 @@ describe("init command", () => {
       const opt = cmd.options.find((o) => o.long === "--yes");
       expect(opt).toBeDefined();
     });
+
+    it("should have --quickstart option", () => {
+      const cmd = createInitCommand();
+      const opt = cmd.options.find((o) => o.long === "--quickstart");
+      expect(opt).toBeDefined();
+    });
   });
 
   // ─── project initialization ────────────────────────────────────────────────
@@ -144,6 +150,16 @@ describe("init command", () => {
       );
     });
 
+    it("should use quickstart template when --quickstart is specified", async () => {
+      await runInit("my-project", { quickstart: true });
+
+      expect(cp).toHaveBeenCalledWith(
+        expect.stringContaining("quickstart"),
+        expect.any(String),
+        expect.any(Object)
+      );
+    });
+
     it("should show a success message by default", async () => {
       await runInit("my-project", {});
 
@@ -178,6 +194,14 @@ describe("init command", () => {
 
       expect(formatter.json).toHaveBeenCalledWith(
         expect.objectContaining({ path: expect.stringContaining("my-project") })
+      );
+    });
+
+    it("should report quickstart template in JSON output", async () => {
+      await runInit("my-project", { json: true, quickstart: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({ template: "quickstart" })
       );
     });
   });
