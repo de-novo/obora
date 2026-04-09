@@ -124,19 +124,20 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
   const loadedConfig = await loadConfig(options.config as string | undefined);
   const envLLM = detectLLMConfigFromEnv();
   const resolvedLLM = resolveLLMConfig(envLLM, loadedConfig);
+  const runtimeLLM = resolvedLLM && ((options.provider as string | undefined) || (options.model as string | undefined))
+    ? {
+        ...resolvedLLM,
+        provider: (options.provider as string | undefined) ?? resolvedLLM.provider,
+        model: (options.model as string | undefined) ?? resolvedLLM.model,
+      }
+    : undefined;
 
   const runtime = new OboraRuntime({
     policyPath: options.policy as string | undefined,
     agentsPath: options.agents as string | undefined,
     configPath: options.config as string | undefined,
     config: loadedConfig,
-    llm: resolvedLLM
-      ? {
-          ...resolvedLLM,
-          provider: (options.provider as string | undefined) ?? resolvedLLM.provider,
-          model: (options.model as string | undefined) ?? resolvedLLM.model,
-        }
-      : undefined,
+    llm: runtimeLLM,
     verbose: Boolean(options.verbose),
   });
 
@@ -151,21 +152,9 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
 
     const summary = buildResolutionSummary(
       {
-        llm: resolvedLLM
-          ? {
-              ...resolvedLLM,
-              provider: (options.provider as string | undefined) ?? resolvedLLM.provider,
-              model: (options.model as string | undefined) ?? resolvedLLM.model,
-            }
-          : undefined,
+        llm: runtimeLLM,
       },
-      resolvedLLM
-        ? {
-            ...resolvedLLM,
-            provider: (options.provider as string | undefined) ?? resolvedLLM.provider,
-            model: (options.model as string | undefined) ?? resolvedLLM.model,
-          }
-        : undefined,
+      runtimeLLM ?? resolvedLLM,
       loadedConfig
     );
 

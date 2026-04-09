@@ -287,4 +287,27 @@ describe("CLI quickstart integration", () => {
     expect(stdout).toContain("Model source: env(OPENAI_MODEL)");
   });
 
+
+  it("shows env source precedence in run dry-run preview", async () => {
+    const cli = createCLI();
+    const projectDir = join(workDir, "run-preview-demo");
+
+    await cli.parseAsync(["quickstart", projectDir], { from: "user" });
+
+    process.chdir(projectDir);
+    process.env.OPENAI_API_KEY = "test-openai-key";
+    process.env.OPENAI_MODEL = "gpt-4o-mini";
+
+    logSpy.mockClear();
+    errorSpy.mockClear();
+
+    await cli.parseAsync(["run", "judge.yaml", "--dry-run"], { from: "user" });
+
+    const stdout = logSpy.mock.calls.map((call) => String(call[0] ?? "")).join("\n");
+
+    expect(stdout).toContain("- auth source: env(OPENAI_API_KEY)");
+    expect(stdout).toContain("- model source: env(OPENAI_MODEL)");
+    expect(stdout).toContain("- chosen by precedence: env > config");
+  });
+
 });

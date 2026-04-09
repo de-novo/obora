@@ -273,6 +273,18 @@ describe("run command", () => {
       expect(MockOboraRuntime).toHaveBeenCalledWith(expect.objectContaining({ llm: undefined }));
     });
 
+    it("should not pass resolved env/config llm into runtime without explicit overrides", async () => {
+      vi.mocked(resolveLLMConfig).mockReturnValue({
+        provider: "openai",
+        model: "gpt-4o-mini",
+        apiKey: "env-key",
+      } as ReturnType<typeof resolveLLMConfig>);
+
+      await runRun("my-workflow", {});
+
+      expect(MockOboraRuntime).toHaveBeenCalledWith(expect.objectContaining({ llm: undefined }));
+    });
+
     it("should enable debug trace file when --debug is set", async () => {
       await runRun("my-workflow", { debug: true });
 
