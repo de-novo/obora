@@ -216,6 +216,21 @@ describe("doctor command", () => {
     });
 
 
+    it("should print mismatch warning in default mode", async () => {
+      process.env.OPENAI_API_KEY = "test-key";
+      vi.mocked(loadConfig).mockResolvedValue({
+        defaults: {
+          provider: "anthropic",
+        },
+      });
+
+      await runDoctor({});
+
+      expect(formatter.warn).toHaveBeenCalledWith(
+        "Configured provider 'anthropic' differs from detected env auth providers: openai",
+      );
+    });
+
     it("should recommend fixing mismatch when resolved provider differs from configured provider", async () => {
       process.env.OPENAI_API_KEY = "test-key";
       vi.mocked(loadConfig).mockResolvedValue({

@@ -452,6 +452,9 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
   for (const warning of summary.warnings) {
     formatter.warn(warning);
   }
+  if (authDiagnostics.providerMismatchWarning) {
+    formatter.warn(authDiagnostics.providerMismatchWarning);
+  }
 
   formatter.info("Recommended next actions:");
   for (const recommendation of recommendations) {
