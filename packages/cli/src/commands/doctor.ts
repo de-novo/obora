@@ -78,6 +78,7 @@ interface DoctorOutputSections {
     projectConfigPath: string;
     globalConfig: boolean;
     globalConfigPath: string;
+    configuredProvider: string | null;
     authSource: string;
     configSource: string;
     mergedSources: string | null;
@@ -85,6 +86,7 @@ interface DoctorOutputSections {
   };
   resolution: {
     heading: "Resolution";
+    resolvedProvider: string | null;
     provider: string | null;
     model: string | null;
     modelSource: string;
@@ -530,6 +532,7 @@ function buildDoctorOutputSections(
       projectConfigPath: checks.projectConfigPath,
       globalConfig: checks.globalConfig,
       globalConfigPath: checks.globalConfigPath,
+      configuredProvider: authDiagnostics.configuredProvider,
       authSource: summary.authSource,
       configSource: summary.configSource,
       mergedSources,
@@ -537,6 +540,7 @@ function buildDoctorOutputSections(
     },
     resolution: {
       heading: "Resolution",
+      resolvedProvider: summary.provider,
       provider: summary.provider,
       model: summary.model,
       modelSource: summary.modelSource,
@@ -566,7 +570,7 @@ function printResolutionSection(summary: {
   fallbackStub: boolean;
 }): void {
   formatter.info("Resolution");
-  formatter.step(`Provider: ${summary.provider ?? "none"}`);
+  formatter.step(`Resolved provider: ${summary.provider ?? "none"}`);
   formatter.step(`Model: ${summary.model ?? "none"}`);
   formatter.step(`Model source: ${summary.modelSource}`);
   formatter.step(`Chosen by precedence: ${summary.chosenByPrecedence}`);
@@ -628,6 +632,9 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
   formatter.step(`Node.js: ${sections.configuration.node ? "available" : "missing"}`);
   formatter.step(`Project config (.obora/config.yaml): ${sections.configuration.projectConfig ? "found" : "missing"}`);
   formatter.step(`Global config (~/.obora/config.yaml): ${sections.configuration.globalConfig ? "found" : "missing"}`);
+  if (sections.configuration.configuredProvider) {
+    formatter.step(`Configured provider: ${sections.configuration.configuredProvider}`);
+  }
   formatter.step(`Auth source: ${sections.configuration.authSource}`);
   formatter.step(`Config source: ${sections.configuration.configSource}`);
   if (sections.configuration.mergedSources) {

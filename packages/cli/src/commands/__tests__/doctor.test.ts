@@ -158,6 +158,7 @@ describe("doctor command", () => {
             }),
             configuration: expect.objectContaining({
               heading: "Configuration",
+              configuredProvider: null,
               authSource: "env(OPENAI_API_KEY)",
               configSource: "/Users/denovo/.obora/config.yaml -> /tmp/demo/.obora/config.yaml",
               mergedSources: "global -> project",
@@ -165,6 +166,7 @@ describe("doctor command", () => {
             }),
             resolution: expect.objectContaining({
               heading: "Resolution",
+              resolvedProvider: "openai",
               provider: "openai",
               model: "gpt-4o-mini",
               modelSource: "config.defaults.model",
@@ -418,6 +420,7 @@ describe("doctor command", () => {
 
       await runDoctor({});
 
+      expect(formatter.step).toHaveBeenCalledWith("Configured provider: anthropic");
       expect(formatter.step).toHaveBeenCalledWith("Configured default provider: anthropic");
       expect(formatter.step).toHaveBeenCalledWith("Recommended auth: export ANTHROPIC_API_KEY=***");
     });
@@ -439,6 +442,7 @@ describe("doctor command", () => {
       await runDoctor({});
 
       expect(formatter.step).toHaveBeenCalledWith("Ready: openai/gpt-4o-mini");
+      expect(formatter.step).toHaveBeenCalledWith("Resolved provider: openai");
       expect(formatter.step).toHaveBeenCalledWith("Fallback/stub: disabled");
       expect(formatter.step).toHaveBeenCalledWith("Run your workflow: obora run judge.yaml");
     });

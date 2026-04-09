@@ -227,4 +227,39 @@ describe("CLI quickstart integration", () => {
     );
   });
 
+
+  it("prints configured and resolved provider context in doctor stdout for mismatch", async () => {
+    const cli = createCLI();
+    const projectDir = join(workDir, "doctor-stdout-demo");
+
+    await cli.parseAsync(["quickstart", projectDir], { from: "user" });
+
+    process.chdir(projectDir);
+    process.env.OPENAI_API_KEY = "test-openai-key";
+
+    const configPath = join(projectDir, ".obora", "config.yaml");
+    const configRaw = await readFile(configPath, "utf-8");
+    await writeFile(
+      configPath,
+      configRaw.replace("provider: openai", "provider: anthropic").replace("openai: {}", "anthropic: {}"),
+      "utf-8",
+    );
+
+    logSpy.mockClear();
+    errorSpy.mockClear();
+
+    await cli.parseAsync(["doctor"], { from: "user" });
+
+    const stdout = logSpy.mock.calls.map((call) => String(call[0] ?? "")).join("\n");
+    const stderr = errorSpy.mock.calls.map((call) => String(call[0] ?? "")).join("\n");
+
+    expect(stdout).toContain("Status");
+    expect(stdout).toContain("Configuration");
+    expect(stdout).toContain("Resolution");
+    expect(stdout).toContain("Configured provider: anthropic");
+    expect(stdout).toContain("Resolved provider: openai");
+    expect(stdout).toContain("Resolved provider model env example: export OPENAI_MODEL=gpt-4o-mini");
+    expect(stderr).toContain("Configured provider 'anthropic' differs from detected env auth providers: openai");
+  });
+
 });
