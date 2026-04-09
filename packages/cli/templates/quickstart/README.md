@@ -1,20 +1,28 @@
 # Obora Quickstart
 
-## 1) Set your API key
+## First run
+
+1) Set your API key
 
 Example with OpenAI:
 
 ```bash
-export OPENAI_API_KEY=your_key_here
+export OPENAI_API_KEY=***
 ```
 
-## 2) Diagnose setup
+2) Check readiness
 
 ```bash
 obora doctor
 ```
 
-## 3) Run the judge example
+3) Validate before execution
+
+```bash
+obora run judge.yaml --dry-run
+```
+
+4) Run the judge example
 
 ```bash
 obora run judge.yaml

@@ -31,6 +31,26 @@ obora --verbose --no-color run workflows/example.yaml
 
 ---
 
+## Quickstart First-Run Path
+
+If you are starting from zero, use this order:
+
+```bash
+obora init my-project --quickstart
+cd my-project
+obora doctor
+obora run judge.yaml --dry-run
+obora run judge.yaml
+```
+
+Why this order:
+- `init --quickstart` creates the smallest runnable project
+- `doctor` tells you whether auth/config is missing
+- `run --dry-run` validates the workflow before execution
+- `run` starts the real judge workflow
+
+---
+
 ## Exit Codes
 
 Defined in `packages/cli/src/utils/exit-codes.ts`:
@@ -70,6 +90,8 @@ obora --json doctor
 ### Example
 
 ```bash
+obora init demo --quickstart
+cd demo
 obora doctor
 ```
 
@@ -130,6 +152,9 @@ Quickstart template creates:
 mkdir my-obora && cd my-obora
 obora init --yes
 obora init demo --quickstart
+cd demo
+obora doctor
+obora run judge.yaml --dry-run
 ```
 
 ---
@@ -159,6 +184,7 @@ obora run workflow.yaml
 obora run workflow.yaml --input '{"topic":"safety"}'
 obora run my-workflow --var env=prod --var region=ap-northeast-2
 obora run workflow.yaml --dry-run
+obora run judge.yaml --dry-run
 ```
 
 ### Exit Codes
