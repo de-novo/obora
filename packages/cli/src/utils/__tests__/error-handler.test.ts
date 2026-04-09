@@ -2,7 +2,7 @@ import { OboraError, OboraErrorCode } from "@obora/sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CLIError } from "../cli-error.js";
-import { handleCommandAction } from "../error-handler.js";
+import { handleCommandAction, inferNextCommand } from "../error-handler.js";
 import { ExitCode } from "../exit-codes.js";
 import { formatter } from "../formatter.js";
 
@@ -29,6 +29,16 @@ describe("error handler and formatter", () => {
     expect(errorSpy).toHaveBeenCalledWith("❌ bad input");
   });
 
+  it("prints dry-run hint for validation errors", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await handleCommandAction(async () => {
+      throw new CLIError("Invalid JSON input. Please provide a valid JSON string to --input.", ExitCode.VALIDATION_ERROR);
+    });
+
+    expect(logSpy).toHaveBeenCalledWith("ℹ Run: obora run <workflow.yaml> --dry-run");
+  });
+
   it("maps OboraError to exit code", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
@@ -42,6 +52,16 @@ describe("error handler and formatter", () => {
     );
   });
 
+  it("prints doctor hint for adapter/auth errors", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await handleCommandAction(async () => {
+      throw new OboraError("provider auth failed", OboraErrorCode.ADAPTER_AUTH_FAILED);
+    });
+
+    expect(logSpy).toHaveBeenCalledWith("ℹ Run: obora doctor");
+  });
+
   it("sets CLI_ERROR for unknown error", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
@@ -51,6 +71,12 @@ describe("error handler and formatter", () => {
 
     expect(process.exitCode).toBe(ExitCode.CLI_ERROR);
     expect(errorSpy).toHaveBeenCalledWith("❌ Unexpected error: boom");
+  });
+
+  it("infers quickstart hint for missing workflow paths", () => {
+    expect(inferNextCommand(new Error("ENOENT: no such file or directory"))).toBe(
+      "obora init --quickstart"
+    );
   });
 
   it("formatter.error writes to stderr", () => {
