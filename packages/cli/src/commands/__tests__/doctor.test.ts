@@ -1,6 +1,6 @@
 /* eslint-disable import/order */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("@obora/sdk", () => ({
   loadConfig: vi.fn(),
@@ -49,8 +49,14 @@ import { formatter } from "../../utils/formatter.js";
 import { createDoctorCommand, runDoctor } from "../doctor.js";
 
 describe("doctor command", () => {
+  const originalEnv = { ...process.env };
+
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env = { ...originalEnv };
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.ZAI_API_KEY;
 
     vi.mocked(loadConfig).mockResolvedValue(undefined);
     vi.mocked(detectLLMConfigFromEnv).mockReturnValue(undefined);
@@ -75,6 +81,10 @@ describe("doctor command", () => {
       ].join("\n"),
     );
     vi.mocked(existsSync).mockReturnValue(false);
+  });
+
+  afterEach(() => {
+    process.env = { ...originalEnv };
   });
 
   describe("command creation", () => {
@@ -139,6 +149,29 @@ describe("doctor command", () => {
       );
     });
 
+    it("should include structured auth diagnostics and setup guide in json output", async () => {
+      process.env.OPENAI_API_KEY = "test-key";
+      vi.mocked(loadConfig).mockResolvedValue({
+        defaults: {
+          provider: "anthropic",
+        },
+      });
+
+      await runDoctor({ json: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          auth: expect.objectContaining({
+            configuredProvider: "anthropic",
+            recommendedProvider: "anthropic",
+            recommendedAuthEnvKey: "ANTHROPIC_API_KEY",
+            setupGuide: "docs/tutorials/06-llm-config-auth-quickstart.md",
+            detectedProviders: ["openai"],
+          }),
+        }),
+      );
+    });
+
     it("should print actionable lines in default mode", async () => {
       await runDoctor({});
 
@@ -154,6 +187,9 @@ describe("doctor command", () => {
       expect(formatter.info).toHaveBeenCalledWith("Recommended next actions:");
       expect(formatter.step).toHaveBeenCalledWith(expect.stringContaining("Run: obora init --quickstart"));
       expect(formatter.step).toHaveBeenCalledWith("Set one provider API key, then rerun: obora doctor");
+      expect(formatter.step).toHaveBeenCalledWith(
+        "Setup guide: docs/tutorials/06-llm-config-auth-quickstart.md",
+      );
       expect(formatter.step).toHaveBeenCalledWith(
         "Examples: export OPENAI_API_KEY=***  |  export ANTHROPIC_API_KEY=***  |  export ZAI_API_KEY=***",
       );
@@ -192,6 +228,37 @@ describe("doctor command", () => {
       expect(formatter.step).toHaveBeenCalledWith("Status: Ready: openai/gpt-4o-mini");
       expect(formatter.step).toHaveBeenCalledWith("Fallback/stub: disabled");
       expect(formatter.step).toHaveBeenCalledWith("Run your workflow: obora run judge.yaml");
+    });
+
+
+    it("should diagnose missing model when auth exists but model is unresolved", async () => {
+      process.env.OPENAI_API_KEY = "test-key";
+      vi.mocked(buildResolutionSummary).mockReturnValue({
+        provider: "openai",
+        model: null,
+        authSource: "env(OPENAI_API_KEY)",
+        configSource: ".obora/config.yaml",
+        modelSource: "none",
+        chosenByPrecedence: "config > env",
+        nextPlaceToEdit: ".obora/config.yaml",
+        fallbackStub: false,
+        warnings: [],
+      });
+      vi.mocked(existsSync).mockReturnValue(true);
+
+      await runDoctor({ json: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: expect.objectContaining({
+            status: "needs_config",
+            message: "Needs model: provider auth detected but no model is resolved",
+          }),
+          recommendations: expect.arrayContaining([
+            "Set a default model in .obora/config.yaml or export OPENAI_MODEL=***",
+          ]),
+        }),
+      );
     });
   });
 });

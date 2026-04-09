@@ -31,8 +31,17 @@ interface DoctorChecks {
 }
 
 interface DoctorProviderHint {
+  configuredProvider: string | null;
   recommendedProvider: string | null;
   recommendedAuthEnvKey: string | null;
+}
+
+interface DoctorAuthDiagnostics {
+  configuredProvider: string | null;
+  recommendedProvider: string | null;
+  recommendedAuthEnvKey: string | null;
+  detectedProviders: string[];
+  setupGuide: string;
 }
 
 const AUTH_ENV_EXAMPLES = [
@@ -40,6 +49,27 @@ const AUTH_ENV_EXAMPLES = [
   "ANTHROPIC_API_KEY",
   "ZAI_API_KEY",
 ] as const;
+
+const AUTH_SETUP_GUIDE = "docs/tutorials/06-llm-config-auth-quickstart.md";
+const PROVIDER_MODEL_ENV_KEY_MAP: Record<string, string> = {
+  anthropic: "ANTHROPIC_MODEL",
+  cerebras: "CEREBRAS_MODEL",
+  google: "GOOGLE_MODEL",
+  groq: "GROQ_MODEL",
+  huggingface: "HUGGINGFACE_MODEL",
+  "github-copilot": "GITHUB_COPILOT_MODEL",
+  "kimi-coding": "KIMI_CODING_MODEL",
+  mistral: "MISTRAL_MODEL",
+  minimax: "MINIMAX_MODEL",
+  "minimax-cn": "MINIMAX_CN_MODEL",
+  opencode: "OPENCODE_MODEL",
+  openai: "OPENAI_MODEL",
+  "openai-codex": "OPENAI_MODEL",
+  openrouter: "OPENROUTER_MODEL",
+  xai: "XAI_MODEL",
+  zai: "ZAI_MODEL",
+  "vercel-ai-gateway": "VERCEL_AI_GATEWAY_MODEL",
+};
 
 const PROVIDER_AUTH_ENV_KEY_MAP: Record<string, string> = {
   anthropic: "ANTHROPIC_API_KEY",
@@ -65,25 +95,50 @@ function inferAuthEnvKey(provider: string): string {
   return PROVIDER_AUTH_ENV_KEY_MAP[provider] ?? `${provider.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_API_KEY`;
 }
 
-function buildRecommendedProviderHint(summary: { authSource: string }, loadedConfig?: OboraConfig): DoctorProviderHint {
-  if (summary.authSource !== "none") {
-    return {
-      recommendedProvider: null,
-      recommendedAuthEnvKey: null,
-    };
+function detectAuthProviders(env: NodeJS.ProcessEnv = process.env): string[] {
+  const detected: string[] = [];
+  const seenEnvKeys = new Set<string>();
+
+  for (const [provider, envKey] of Object.entries(PROVIDER_AUTH_ENV_KEY_MAP)) {
+    if (!env[envKey] || seenEnvKeys.has(envKey)) {
+      continue;
+    }
+
+    detected.push(provider);
+    seenEnvKeys.add(envKey);
   }
 
-  const configuredProvider = loadedConfig?.defaults?.provider;
-  if (!configuredProvider) {
+  return detected.sort();
+}
+
+function buildRecommendedProviderHint(
+  summary: { authSource: string },
+  loadedConfig?: OboraConfig,
+): DoctorProviderHint {
+  const configuredProvider = loadedConfig?.defaults?.provider ?? null;
+
+  if (summary.authSource !== "none" || !configuredProvider) {
     return {
+      configuredProvider,
       recommendedProvider: null,
       recommendedAuthEnvKey: null,
     };
   }
 
   return {
+    configuredProvider,
     recommendedProvider: configuredProvider,
     recommendedAuthEnvKey: inferAuthEnvKey(configuredProvider),
+  };
+}
+
+function buildAuthDiagnostics(providerHint: DoctorProviderHint): DoctorAuthDiagnostics {
+  return {
+    configuredProvider: providerHint.configuredProvider,
+    recommendedProvider: providerHint.recommendedProvider,
+    recommendedAuthEnvKey: providerHint.recommendedAuthEnvKey,
+    detectedProviders: detectAuthProviders(),
+    setupGuide: AUTH_SETUP_GUIDE,
   };
 }
 
@@ -119,6 +174,10 @@ function buildDoctorChecks(): DoctorChecks {
   };
 }
 
+function inferModelEnvKey(provider: string): string {
+  return PROVIDER_MODEL_ENV_KEY_MAP[provider] ?? `${provider.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_MODEL`;
+}
+
 function buildDoctorStatus(summary: {
   provider: string | null;
   model: string | null;
@@ -140,6 +199,13 @@ function buildDoctorStatus(summary: {
     };
   }
 
+  if (summary.provider && !summary.model) {
+    return {
+      status: "needs_config",
+      message: "Needs model: provider auth detected but no model is resolved",
+    };
+  }
+
   return {
     status: "stub_mode",
     message: "Stub mode: provider/model is not fully resolved yet",
@@ -155,6 +221,7 @@ function buildDoctorRecommendations(
     warnings: string[];
   },
   providerHint: DoctorProviderHint,
+  authDiagnostics: DoctorAuthDiagnostics,
 ): string[] {
   const recommendations: string[] = [];
 
@@ -164,11 +231,18 @@ function buildDoctorRecommendations(
 
   if (summary.authSource === "none") {
     recommendations.push("Set one provider API key, then rerun: obora doctor");
+    recommendations.push(`Setup guide: ${authDiagnostics.setupGuide}`);
     recommendations.push(...buildConfiguredProviderHints(providerHint));
     const authExampleHint = buildAuthExampleHint(summary);
     if (authExampleHint) {
       recommendations.push(authExampleHint);
     }
+  }
+
+  if (summary.provider && !summary.model) {
+    recommendations.push(
+      `Set a default model in .obora/config.yaml or export ${inferModelEnvKey(summary.provider)}=***`,
+    );
   }
 
   if (summary.configSource === "none") {
@@ -194,7 +268,8 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
   const summary = buildResolutionSummary({}, resolvedLLM, loadedConfig);
   const status = buildDoctorStatus(summary);
   const providerHint = buildRecommendedProviderHint(summary, loadedConfig);
-  const recommendations = buildDoctorRecommendations(checks, summary, providerHint);
+  const authDiagnostics = buildAuthDiagnostics(providerHint);
+  const recommendations = buildDoctorRecommendations(checks, summary, providerHint, authDiagnostics);
 
   if (options.json) {
     formatter.json({
@@ -208,6 +283,7 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
       status,
       recommendations,
       resolution: summary,
+      auth: authDiagnostics,
       recommendedProvider: providerHint.recommendedProvider,
       recommendedAuthEnvKey: providerHint.recommendedAuthEnvKey,
     });
