@@ -46,6 +46,12 @@ interface DoctorAuthDiagnostics extends ProviderSetupExamples {
   configuredProvider: string | null;
   recommendedProvider: string | null;
   recommendedAuthEnvKey: string | null;
+  resolvedProvider: string | null;
+  resolvedAuthEnvKey: string | null;
+  resolvedModelEnvKey: string | null;
+  resolvedAuthExportExample: string | null;
+  resolvedModelEnvExample: string | null;
+  resolvedModelConfigExample: string | null;
   detectedProviders: string[];
   providerMismatchWarning: string | null;
   setupGuide: string;
@@ -186,10 +192,14 @@ function buildRecommendedProviderHint(
   };
 }
 
-function buildAuthDiagnostics(providerHint: DoctorProviderHint): DoctorAuthDiagnostics {
+function buildAuthDiagnostics(
+  providerHint: DoctorProviderHint,
+  summary: { provider: string | null },
+): DoctorAuthDiagnostics {
   const setupExamples = buildProviderSetupExamples(
     providerHint.recommendedProvider ?? providerHint.configuredProvider,
   );
+  const resolvedSetupExamples = buildProviderSetupExamples(summary.provider);
   const detectedProviders = detectAuthProviders();
   const providerMismatchWarning =
     providerHint.configuredProvider &&
@@ -202,6 +212,12 @@ function buildAuthDiagnostics(providerHint: DoctorProviderHint): DoctorAuthDiagn
     configuredProvider: providerHint.configuredProvider,
     recommendedProvider: providerHint.recommendedProvider,
     recommendedAuthEnvKey: providerHint.recommendedAuthEnvKey,
+    resolvedProvider: summary.provider,
+    resolvedAuthEnvKey: summary.provider ? inferAuthEnvKey(summary.provider) : null,
+    resolvedModelEnvKey: summary.provider ? inferModelEnvKey(summary.provider) : null,
+    resolvedAuthExportExample: resolvedSetupExamples.authExportExample,
+    resolvedModelEnvExample: resolvedSetupExamples.modelEnvExample,
+    resolvedModelConfigExample: resolvedSetupExamples.modelConfigExample,
     detectedProviders,
     providerMismatchWarning,
     setupGuide: AUTH_SETUP_GUIDE,
@@ -279,11 +295,29 @@ function buildProviderSpecificGuidance(
   }
 
   if (summary.provider && !summary.model) {
-    if (authDiagnostics.modelConfigExample) {
-      guidance.push(`Provider model config example: ${authDiagnostics.modelConfigExample}`);
+    const useResolvedExamples =
+      authDiagnostics.resolvedProvider
+      && authDiagnostics.configuredProvider
+      && authDiagnostics.resolvedProvider !== authDiagnostics.configuredProvider;
+
+    const modelConfigExample = useResolvedExamples
+      ? authDiagnostics.resolvedModelConfigExample
+      : authDiagnostics.modelConfigExample;
+    const modelEnvExample = useResolvedExamples
+      ? authDiagnostics.resolvedModelEnvExample
+      : authDiagnostics.modelEnvExample;
+    const modelConfigPrefix = useResolvedExamples
+      ? 'Resolved provider model config example'
+      : 'Provider model config example';
+    const modelEnvPrefix = useResolvedExamples
+      ? 'Resolved provider model env example'
+      : 'Provider model env example';
+
+    if (modelConfigExample) {
+      guidance.push(`${modelConfigPrefix}: ${modelConfigExample}`);
     }
-    if (authDiagnostics.modelEnvExample) {
-      guidance.push(`Provider model env example: ${authDiagnostics.modelEnvExample}`);
+    if (modelEnvExample) {
+      guidance.push(`${modelEnvPrefix}: ${modelEnvExample}`);
     }
   }
 
@@ -410,7 +444,7 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
   const summary = buildResolutionSummary({}, resolvedLLM, loadedConfig);
   const status = buildDoctorStatus(summary);
   const providerHint = buildRecommendedProviderHint(summary, loadedConfig);
-  const authDiagnostics = buildAuthDiagnostics(providerHint);
+  const authDiagnostics = buildAuthDiagnostics(providerHint, summary);
   const configDiagnostics = buildConfigDiagnostics(checks, summary);
   const recommendations = buildDoctorRecommendations(checks, summary, providerHint, authDiagnostics);
 

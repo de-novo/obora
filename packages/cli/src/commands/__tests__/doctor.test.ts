@@ -232,7 +232,7 @@ describe("doctor command", () => {
     });
 
     it("should recommend fixing mismatch when resolved provider differs from configured provider", async () => {
-      process.env.OPENAI_API_KEY = "test-key";
+      process.env.OPENAI_API_KEY="***";
       vi.mocked(loadConfig).mockResolvedValue({
         defaults: {
           provider: "anthropic",
@@ -254,8 +254,18 @@ describe("doctor command", () => {
 
       expect(formatter.json).toHaveBeenCalledWith(
         expect.objectContaining({
+          auth: expect.objectContaining({
+            resolvedProvider: "openai",
+            resolvedAuthEnvKey: "OPENAI_API_KEY",
+            resolvedModelEnvKey: "OPENAI_MODEL",
+            resolvedAuthExportExample: "export OPENAI_API_KEY=***",
+            resolvedModelEnvExample: "export OPENAI_MODEL=gpt-4o-mini",
+            resolvedModelConfigExample: "providers:\n  openai:\n    defaultModel: gpt-4o-mini",
+          }),
           recommendations: expect.arrayContaining([
             "Resolved provider does not match configured provider. Either export ANTHROPIC_API_KEY=*** or switch defaults.provider to openai",
+            "Resolved provider model config example: providers:\n  openai:\n    defaultModel: gpt-4o-mini",
+            "Resolved provider model env example: export OPENAI_MODEL=gpt-4o-mini",
           ]),
         }),
       );
