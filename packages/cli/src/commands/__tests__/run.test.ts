@@ -362,6 +362,23 @@ describe("run command", () => {
       expect(formatter.json).toHaveBeenCalledWith(expect.objectContaining({ validated: true }));
     });
 
+    it("should include structured resolution data in dry-run JSON", async () => {
+      await runRun("my-workflow", { dryRun: true, json: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          resolution: expect.objectContaining({
+            provider: "none",
+            authSource: "none",
+            modelSource: "none",
+            chosenByPrecedence: "none",
+            nextPlaceToEdit: ".obora/config.yaml",
+            fallbackStub: true,
+          }),
+        })
+      );
+    });
+
     it("should print resolution preview in dry-run text mode", async () => {
       await runRun("my-workflow", { dryRun: true });
 

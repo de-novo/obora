@@ -91,6 +91,14 @@ describe("CLI quickstart integration", () => {
         workflow: "quickstart-judge",
         validated: true,
         elapsedMs: expect.any(Number),
+        resolution: expect.objectContaining({
+          provider: null,
+          authSource: "none",
+          modelSource: "none",
+          chosenByPrecedence: "none",
+          fallbackStub: true,
+          nextPlaceToEdit: expect.stringContaining('.obora/config.yaml'),
+        }),
       }),
     );
     expect(errorSpy).not.toHaveBeenCalled();
@@ -223,6 +231,13 @@ describe("CLI quickstart integration", () => {
       expect.objectContaining({
         workflow: "quickstart-judge",
         validated: true,
+        resolution: expect.objectContaining({
+          provider: "anthropic",
+          model: "claude-3-7-sonnet-latest",
+          authSource: "env(ANTHROPIC_API_KEY)",
+          modelSource: "env(ANTHROPIC_MODEL)",
+          chosenByPrecedence: "env > config",
+        }),
       }),
     );
   });

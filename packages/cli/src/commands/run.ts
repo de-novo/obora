@@ -145,20 +145,20 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
     formatter.info(`Starting workflow execution: ${workflow}`);
   }
 
+  const resolutionSummary = buildResolutionSummary(
+    {
+      llm: runtimeLLM,
+    },
+    runtimeLLM ?? resolvedLLM,
+    loadedConfig
+  );
+
   const printPreview = (workflowDef?: { steps?: Array<{ name: string; input?: Record<string, unknown>; output?: { path?: string; schema?: string } }> }): void => {
     if (isQuietOutput(options) || isJsonOutput(options)) {
       return;
     }
 
-    const summary = buildResolutionSummary(
-      {
-        llm: runtimeLLM,
-      },
-      runtimeLLM ?? resolvedLLM,
-      loadedConfig
-    );
-
-    formatter.info(formatResolutionSummary(summary));
+    formatter.info(formatResolutionSummary(resolutionSummary));
     const bindingPreview = workflowDef ? formatBindingPreview(buildBindingPreview(workflowDef)) : "";
     if (bindingPreview) {
       formatter.info(bindingPreview);
@@ -263,6 +263,7 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
       formatter.json({
         workflow: workflowName,
         validated: true,
+        resolution: resolutionSummary,
         ...(options.dumpExpandedWorkflow ? { expandedWorkflow } : {}),
         ...(options.showStopSemantics ? { stopSemantics } : {}),
         elapsedMs: Date.now() - startedAt,
