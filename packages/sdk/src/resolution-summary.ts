@@ -2,7 +2,8 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
 import type { OboraConfig } from "./config-loader.js";
-import type { LLMConfig } from "./llm-config.js";
+import { resolveProviderConfig } from "./config-loader.js";
+import { detectLLMConfigFromEnv, type LLMConfig } from "./llm-config.js";
 import type { OboraRuntimeConfig } from "./runtime-types.js";
 
 const CONFIG_META_KEY = Symbol.for("obora.config.meta");
@@ -29,6 +30,26 @@ const PROVIDER_ENV_KEY_MAP: Record<string, string> = {
 
 type ConfigWithMeta = OboraConfig & {
   [CONFIG_META_KEY]?: { sources?: string[] };
+};
+
+const PROVIDER_MODEL_ENV_KEY_MAP: Record<string, string> = {
+  anthropic: "ANTHROPIC_MODEL",
+  openai: "OPENAI_MODEL",
+  "openai-codex": "OPENAI_MODEL",
+  zai: "ZAI_MODEL",
+  google: "GOOGLE_MODEL",
+  xai: "XAI_MODEL",
+  groq: "GROQ_MODEL",
+  cerebras: "CEREBRAS_MODEL",
+  openrouter: "OPENROUTER_MODEL",
+  minimax: "MINIMAX_MODEL",
+  "minimax-cn": "MINIMAX_CN_MODEL",
+  mistral: "MISTRAL_MODEL",
+  huggingface: "HUGGINGFACE_MODEL",
+  opencode: "OPENCODE_MODEL",
+  "kimi-coding": "KIMI_CODING_MODEL",
+  "github-copilot": "GITHUB_COPILOT_MODEL",
+  "vercel-ai-gateway": "VERCEL_AI_GATEWAY_MODEL",
 };
 
 export interface BindingPreviewEntry {
@@ -60,17 +81,59 @@ export interface ResolutionSummary {
   warnings: string[];
 }
 
+function getAuthEnvKey(provider: string): string {
+  if (process.env.OBORA_LLM_PROVIDER === provider) {
+    return "OBORA_LLM_API_KEY";
+  }
+  return PROVIDER_ENV_KEY_MAP[provider] ?? `${provider.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_API_KEY`;
+}
+
+function getModelEnvKey(provider: string): string {
+  if (process.env.OBORA_LLM_PROVIDER === provider) {
+    return "OBORA_LLM_MODEL";
+  }
+  return PROVIDER_MODEL_ENV_KEY_MAP[provider] ?? `${provider.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_MODEL`;
+}
+
+function isSameLLMConfig(left: LLMConfig | undefined, right: LLMConfig | undefined): boolean {
+  if (!left || !right) {
+    return false;
+  }
+
+  return (
+    left.provider === right.provider
+    && left.apiKey === right.apiKey
+    && left.model === right.model
+    && left.baseUrl === right.baseUrl
+  );
+}
+
+function inferResolvedSource(
+  runtimeConfig: OboraRuntimeConfig,
+  config: OboraConfig | undefined,
+  llmConfig: LLMConfig | undefined,
+): "none" | "runtime" | "env" | "config" | "unknown" {
+  if (!llmConfig) return "none";
+  if (isSameLLMConfig(runtimeConfig.llm, llmConfig)) return "runtime";
+  if (isSameLLMConfig(detectLLMConfigFromEnv(), llmConfig)) return "env";
+  if (config && isSameLLMConfig(resolveProviderConfig(config, llmConfig.provider), llmConfig)) return "config";
+  return "unknown";
+}
+
 function inferConfigSource(config?: OboraConfig): string {
   const sources = (config as ConfigWithMeta | undefined)?.[CONFIG_META_KEY]?.sources ?? [];
   if (sources.length === 0) return "none";
   return sources.join(" -> ");
 }
 
-function inferAuthSource(llmConfig: LLMConfig | undefined, config?: OboraConfig): string {
+function inferAuthSource(runtimeConfig: OboraRuntimeConfig, llmConfig: LLMConfig | undefined, config?: OboraConfig): string {
   if (!llmConfig) return "none";
+  const resolvedSource = inferResolvedSource(runtimeConfig, config, llmConfig);
+  if (resolvedSource === "runtime") return "runtime.llm";
+  if (resolvedSource === "env") return `env(${getAuthEnvKey(llmConfig.provider)})`;
   const providerConfig = config?.providers?.[llmConfig.provider];
   if (providerConfig?.authRef) return `authRef(${providerConfig.authRef})`;
-  const envKey = PROVIDER_ENV_KEY_MAP[llmConfig.provider] ?? `${llmConfig.provider.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_API_KEY`;
+  const envKey = getAuthEnvKey(llmConfig.provider);
   if (process.env[envKey]) return `env(${envKey})`;
   return "direct/unknown";
 }
@@ -78,7 +141,10 @@ function inferAuthSource(llmConfig: LLMConfig | undefined, config?: OboraConfig)
 
 function inferChosenByPrecedence(runtimeConfig: OboraRuntimeConfig, config?: OboraConfig, llmConfig?: LLMConfig): string {
   if (!llmConfig) return "none";
-  if (runtimeConfig.llm) return "runtime.llm > config > env";
+  const resolvedSource = inferResolvedSource(runtimeConfig, config, llmConfig);
+  if (resolvedSource === "runtime") return "runtime.llm > config > env";
+  if (resolvedSource === "env") return "env > config";
+  if (resolvedSource === "config") return "config > env";
   if (config) return "config > env";
   return "env fallback";
 }
@@ -92,11 +158,15 @@ function inferNextPlaceToEdit(runtimeConfig: OboraRuntimeConfig, config?: OboraC
 
 function inferModelSource(runtimeConfig: OboraRuntimeConfig, config?: OboraConfig, llmConfig?: LLMConfig): string {
   if (!llmConfig?.model) return "none";
-  if (runtimeConfig.llm?.model) return "runtime.llm";
+  const resolvedSource = inferResolvedSource(runtimeConfig, config, llmConfig);
+  if (resolvedSource === "runtime" && runtimeConfig.llm?.model === llmConfig.model) return "runtime.llm";
+  if (resolvedSource === "env" && process.env[getModelEnvKey(llmConfig.provider)] === llmConfig.model) {
+    return `env(${getModelEnvKey(llmConfig.provider)})`;
+  }
   const providerConfig = config?.providers?.[llmConfig.provider];
   if (providerConfig?.defaultModel === llmConfig.model) return `provider(${llmConfig.provider}).defaultModel`;
   if (config?.defaults?.model === llmConfig.model) return "config.defaults.model";
-  const envKey = "OBORA_LLM_MODEL";
+  const envKey = getModelEnvKey(llmConfig.provider);
   if (process.env[envKey] === llmConfig.model) return `env(${envKey})`;
   return "resolved/unknown";
 }
@@ -109,7 +179,7 @@ export function buildResolutionSummary(runtimeConfig: OboraRuntimeConfig, llmCon
   return {
     provider: llmConfig?.provider ?? null,
     model: llmConfig?.model ?? null,
-    authSource: inferAuthSource(llmConfig, loadedConfig),
+    authSource: inferAuthSource(runtimeConfig, llmConfig, loadedConfig),
     configSource: inferConfigSource(loadedConfig),
     modelSource: inferModelSource(runtimeConfig, loadedConfig, llmConfig),
     chosenByPrecedence: inferChosenByPrecedence(runtimeConfig, loadedConfig, llmConfig),

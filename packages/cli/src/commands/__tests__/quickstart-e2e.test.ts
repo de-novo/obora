@@ -284,7 +284,7 @@ describe("CLI quickstart integration", () => {
     expect(stdout).toContain("Configured model: gpt-4o-mini");
     expect(stdout).toContain("Resolved provider: openai");
     expect(stdout).toContain("Resolved model: gpt-4o-mini");
-    expect(stdout).toContain("Model source: config.defaults.model");
+    expect(stdout).toContain("Model source: env(OPENAI_MODEL)");
   });
 
 });
