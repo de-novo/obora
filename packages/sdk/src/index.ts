@@ -10,7 +10,7 @@ export { OboraRuntime, OboraError, OboraErrorCode } from "./runtime.js";
 export { Workflow } from "./workflow.js";
 export { detectLLMConfigFromEnv, resolveLLMConfig } from "./llm-config.js";
 export { loadConfig, resolveProviderConfig } from "./config-loader.js";
-export { buildResolutionSummary, formatResolutionSummary } from "./resolution-summary.js";
+export { buildResolutionSummary, formatResolutionSummary, buildBindingPreview, formatBindingPreview, buildOutputPreview, formatOutputPreview } from "./resolution-summary.js";
 export { formatDiagnostic } from "./diagnostics.js";
 export { CostTracker, BudgetExceededError } from "./cost-tracker.js";
 export {
