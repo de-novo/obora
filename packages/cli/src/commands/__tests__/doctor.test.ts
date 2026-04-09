@@ -172,6 +172,29 @@ describe("doctor command", () => {
       );
     });
 
+
+    it("should include provider-specific setup examples in json output", async () => {
+      vi.mocked(loadConfig).mockResolvedValue({
+        defaults: {
+          provider: "anthropic",
+        },
+      });
+
+      await runDoctor({ json: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          auth: expect.objectContaining({
+            authExportExample: "export ANTHROPIC_API_KEY=***",
+            modelConfigExample: `providers:
+  anthropic:
+    defaultModel: claude-3-7-sonnet-latest`,
+            modelEnvExample: "export ANTHROPIC_MODEL=claude-3-7-sonnet-latest",
+          }),
+        }),
+      );
+    });
+
     it("should include structured config source diagnostics in json output", async () => {
       vi.mocked(buildResolutionSummary).mockReturnValue({
         provider: null,

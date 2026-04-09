@@ -36,7 +36,13 @@ interface DoctorProviderHint {
   recommendedAuthEnvKey: string | null;
 }
 
-interface DoctorAuthDiagnostics {
+interface ProviderSetupExamples {
+  authExportExample: string | null;
+  modelEnvExample: string | null;
+  modelConfigExample: string | null;
+}
+
+interface DoctorAuthDiagnostics extends ProviderSetupExamples {
   configuredProvider: string | null;
   recommendedProvider: string | null;
   recommendedAuthEnvKey: string | null;
@@ -101,12 +107,45 @@ const PROVIDER_AUTH_ENV_KEY_MAP: Record<string, string> = {
   "vercel-ai-gateway": "VERCEL_AI_GATEWAY_API_KEY",
 };
 
+const PROVIDER_DEFAULT_MODEL_MAP: Record<string, string> = {
+  anthropic: "claude-3-7-sonnet-latest",
+  openai: "gpt-4o-mini",
+  openrouter: "openai/gpt-4o-mini",
+  zai: "glm-4.7",
+};
+
 function inferAuthEnvKey(provider: string): string {
   return PROVIDER_AUTH_ENV_KEY_MAP[provider] ?? `${provider.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_API_KEY`;
 }
 
 function inferModelEnvKey(provider: string): string {
   return PROVIDER_MODEL_ENV_KEY_MAP[provider] ?? `${provider.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_MODEL`;
+}
+
+function inferDefaultModel(provider: string): string {
+  return PROVIDER_DEFAULT_MODEL_MAP[provider] ?? "your-model-name";
+}
+
+function buildProviderSetupExamples(provider: string | null): ProviderSetupExamples {
+  if (!provider) {
+    return {
+      authExportExample: null,
+      modelEnvExample: null,
+      modelConfigExample: null,
+    };
+  }
+
+  const authEnvKey = inferAuthEnvKey(provider);
+  const modelEnvKey = inferModelEnvKey(provider);
+  const defaultModel = inferDefaultModel(provider);
+
+  return {
+    authExportExample: `export ${authEnvKey}=***`,
+    modelEnvExample: `export ${modelEnvKey}=${defaultModel}`,
+    modelConfigExample: `providers:
+  ${provider}:
+    defaultModel: ${defaultModel}`,
+  };
 }
 
 function detectAuthProviders(env: NodeJS.ProcessEnv = process.env): string[] {
@@ -147,12 +186,17 @@ function buildRecommendedProviderHint(
 }
 
 function buildAuthDiagnostics(providerHint: DoctorProviderHint): DoctorAuthDiagnostics {
+  const setupExamples = buildProviderSetupExamples(
+    providerHint.recommendedProvider ?? providerHint.configuredProvider,
+  );
+
   return {
     configuredProvider: providerHint.configuredProvider,
     recommendedProvider: providerHint.recommendedProvider,
     recommendedAuthEnvKey: providerHint.recommendedAuthEnvKey,
     detectedProviders: detectAuthProviders(),
     setupGuide: AUTH_SETUP_GUIDE,
+    ...setupExamples,
   };
 }
 
@@ -197,6 +241,28 @@ function buildConfiguredProviderHints(providerHint: DoctorProviderHint): string[
     `Configured default provider: ${providerHint.recommendedProvider}`,
     `Recommended auth: export ${providerHint.recommendedAuthEnvKey}=***`,
   ];
+}
+
+function buildProviderSpecificGuidance(
+  summary: { authSource: string; provider: string | null; model: string | null },
+  authDiagnostics: DoctorAuthDiagnostics,
+): string[] {
+  const guidance: string[] = [];
+
+  if (summary.authSource === "none" && authDiagnostics.authExportExample) {
+    guidance.push(`Provider auth example: ${authDiagnostics.authExportExample}`);
+  }
+
+  if (summary.provider && !summary.model) {
+    if (authDiagnostics.modelConfigExample) {
+      guidance.push(`Provider model config example: ${authDiagnostics.modelConfigExample}`);
+    }
+    if (authDiagnostics.modelEnvExample) {
+      guidance.push(`Provider model env example: ${authDiagnostics.modelEnvExample}`);
+    }
+  }
+
+  return guidance;
 }
 
 function buildDoctorChecks(): DoctorChecks {
@@ -273,6 +339,8 @@ function buildDoctorRecommendations(
       recommendations.push(authExampleHint);
     }
   }
+
+  recommendations.push(...buildProviderSpecificGuidance(summary, authDiagnostics));
 
   if (summary.provider && !summary.model) {
     recommendations.push(
