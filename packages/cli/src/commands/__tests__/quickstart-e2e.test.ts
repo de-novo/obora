@@ -99,6 +99,8 @@ describe("CLI quickstart integration", () => {
           fallbackStub: true,
           nextPlaceToEdit: expect.stringContaining('.obora/config.yaml'),
         }),
+        bindingPreview: expect.any(Array),
+        outputPreview: expect.any(Array),
       }),
     );
     expect(errorSpy).not.toHaveBeenCalled();
@@ -238,6 +240,8 @@ describe("CLI quickstart integration", () => {
           modelSource: "env(ANTHROPIC_MODEL)",
           chosenByPrecedence: "env > config",
         }),
+        bindingPreview: expect.any(Array),
+        outputPreview: expect.any(Array),
       }),
     );
   });

@@ -159,11 +159,11 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
     }
 
     formatter.info(formatResolutionSummary(resolutionSummary));
-    const bindingPreview = workflowDef ? formatBindingPreview(buildBindingPreview(workflowDef)) : "";
+    const bindingPreview = workflowDef ? formatBindingPreview(bindingPreviewEntries) : "";
     if (bindingPreview) {
       formatter.info(bindingPreview);
     }
-    const outputPreview = workflowDef ? formatOutputPreview(buildOutputPreview(workflowDef)) : "";
+    const outputPreview = workflowDef ? formatOutputPreview(outputPreviewEntries) : "";
     if (outputPreview) {
       formatter.info(outputPreview);
     }
@@ -205,8 +205,14 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
     }
   }
 
+  const previewWorkflow = expandedWorkflow as
+    | { steps?: Array<{ name: string; input?: Record<string, unknown>; output?: { path?: string; schema?: string } }> }
+    | undefined;
+  const bindingPreviewEntries = previewWorkflow ? buildBindingPreview(previewWorkflow) : [];
+  const outputPreviewEntries = previewWorkflow ? buildOutputPreview(previewWorkflow) : [];
+
   if (expandedWorkflow) {
-    printPreview(expandedWorkflow as { steps?: Array<{ name: string; input?: Record<string, unknown>; output?: { path?: string; schema?: string } }> });
+    printPreview(previewWorkflow);
   } else if (!isQuietOutput(options) && !isJsonOutput(options)) {
     printPreview();
   }
@@ -264,6 +270,8 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
         workflow: workflowName,
         validated: true,
         resolution: resolutionSummary,
+        bindingPreview: bindingPreviewEntries,
+        outputPreview: outputPreviewEntries,
         ...(options.dumpExpandedWorkflow ? { expandedWorkflow } : {}),
         ...(options.showStopSemantics ? { stopSemantics } : {}),
         elapsedMs: Date.now() - startedAt,

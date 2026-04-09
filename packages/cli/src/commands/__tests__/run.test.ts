@@ -92,7 +92,7 @@ vi.mock("../../utils/global-opts.js", () => ({
 }));
 
 import { appendFile, mkdir, writeFile, readFile } from "node:fs/promises";
-import { loadConfig, detectLLMConfigFromEnv, resolveLLMConfig, Workflow, formatResolutionSummary, formatBindingPreview, formatOutputPreview } from "@obora/sdk";
+import { loadConfig, detectLLMConfigFromEnv, resolveLLMConfig, Workflow, buildBindingPreview, buildOutputPreview, formatResolutionSummary, formatBindingPreview, formatOutputPreview } from "@obora/sdk";
 
 import { formatter } from "../../utils/formatter.js";
 import { createRunCommand, runRun } from "../run.js";
@@ -375,6 +375,57 @@ describe("run command", () => {
             nextPlaceToEdit: ".obora/config.yaml",
             fallbackStub: true,
           }),
+        })
+      );
+    });
+
+    it("should include binding and output preview arrays in dry-run JSON when available", async () => {
+      vi.mocked(buildBindingPreview).mockReturnValue([
+        {
+          stepName: "judge",
+          bindingName: "input",
+          path: "artifacts/submission.json",
+          kind: "json",
+          resolved: true,
+          required: true,
+        },
+      ]);
+      vi.mocked(buildOutputPreview).mockReturnValue([
+        {
+          stepName: "judge",
+          path: "artifacts/result.json",
+          schema: "artifacts/result.schema.json",
+          pathResolved: false,
+          schemaResolved: true,
+        },
+      ]);
+      const mockWorkflow = {
+        name: "loaded-workflow",
+        steps: [{ name: "judge", input: {}, output: {} }],
+      };
+      vi.mocked(Workflow.fromYaml).mockResolvedValue(
+        mockWorkflow as Awaited<ReturnType<typeof Workflow.fromYaml>>
+      );
+
+      await runRun("my-workflow.yaml", { dryRun: true, json: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          bindingPreview: [
+            expect.objectContaining({
+              stepName: "judge",
+              bindingName: "input",
+              path: "artifacts/submission.json",
+              resolved: true,
+            }),
+          ],
+          outputPreview: [
+            expect.objectContaining({
+              stepName: "judge",
+              path: "artifacts/result.json",
+              schemaResolved: true,
+            }),
+          ],
         })
       );
     });
