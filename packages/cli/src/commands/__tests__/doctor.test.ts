@@ -21,6 +21,9 @@ vi.mock("@obora/adapters", () => ({
     if (provider === "zai") {
       return ["glm-4.7", "glm-5", "glm-5-turbo"];
     }
+    if (provider === "google") {
+      return ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-3-pro-preview"];
+    }
     if (provider === "openrouter") {
       return ["openai/gpt-5.4", "openai/gpt-5.4", "openai/gpt-5.4-mini"];
     }
@@ -292,6 +295,19 @@ describe("doctor command", () => {
       );
     });
 
+    it("should keep recommendation reason fields as null when no provider is available", async () => {
+      await runDoctor({ json: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          auth: expect.objectContaining({
+            modelRecommendationReason: null,
+            resolvedModelRecommendationReason: null,
+          }),
+        })
+      );
+    });
+
     it("should include provider-specific setup examples in json output", async () => {
       vi.mocked(loadConfig).mockResolvedValue({
         defaults: {
@@ -307,6 +323,122 @@ describe("doctor command", () => {
             authExportExample: "export ANTHROPIC_API_KEY=***",
             modelConfigExample: "providers:\n  anthropic:\n    defaultModel: claude-opus-4-6",
             modelEnvExample: "export ANTHROPIC_MODEL=claude-opus-4-6",
+            modelRecommendationReason:
+              "pi-ai catalog latest stable base Claude model for anthropic",
+          }),
+        })
+      );
+    });
+
+    it("should recommend the latest stable google pro model from the catalog", async () => {
+      vi.mocked(loadConfig).mockResolvedValue({
+        defaults: {
+          provider: "google",
+        },
+      });
+
+      await runDoctor({ json: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          auth: expect.objectContaining({
+            modelEnvExample: "export GOOGLE_MODEL=gemini-2.5-pro",
+            modelRecommendationReason: "pi-ai catalog latest stable Gemini Pro model for google",
+          }),
+        })
+      );
+    });
+
+    it("should fall back to static provider defaults when catalog models are unavailable", async () => {
+      vi.mocked(listPiAIModels).mockImplementation((provider: string) => {
+        if (provider === "openai") {
+          return [];
+        }
+        if (provider === "anthropic") {
+          return ["claude-opus-4-20250514", "claude-opus-4-6", "claude-sonnet-4-6"];
+        }
+        if (provider === "zai") {
+          return ["glm-4.7", "glm-5", "glm-5-turbo"];
+        }
+        if (provider === "google") {
+          return ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-3-pro-preview"];
+        }
+        if (provider === "openrouter") {
+          return ["openai/gpt-5.4", "openai/gpt-5.4-mini"];
+        }
+        return [];
+      });
+      vi.mocked(loadConfig).mockResolvedValue({
+        defaults: {
+          provider: "openai",
+        },
+      });
+
+      await runDoctor({ json: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          auth: expect.objectContaining({
+            modelEnvExample: "export OPENAI_MODEL=gpt-5.4",
+            modelRecommendationReason: "static fallback default model for openai",
+          }),
+        })
+      );
+    });
+
+    it("should explain when neither catalog nor static defaults exist for a provider", async () => {
+      vi.mocked(listPiAIModels).mockImplementation(() => []);
+      vi.mocked(loadConfig).mockResolvedValue({
+        defaults: {
+          provider: "google",
+        },
+      });
+
+      await runDoctor({ json: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          auth: expect.objectContaining({
+            modelEnvExample: "export GOOGLE_MODEL=your-model-name",
+            modelRecommendationReason:
+              "no catalog-backed default available; choose a provider-specific model for google",
+          }),
+        })
+      );
+    });
+
+    it("should prefer stable google flash over flash-lite and explain the selected family", async () => {
+      vi.mocked(listPiAIModels).mockImplementation((provider: string) => {
+        if (provider === "google") {
+          return ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-3-pro-preview"];
+        }
+        if (provider === "openai") {
+          return ["gpt-5.4", "gpt-5", "gpt-5.4-mini"];
+        }
+        if (provider === "anthropic") {
+          return ["claude-opus-4-20250514", "claude-opus-4-6", "claude-sonnet-4-6"];
+        }
+        if (provider === "zai") {
+          return ["glm-4.7", "glm-5", "glm-5-turbo"];
+        }
+        if (provider === "openrouter") {
+          return ["openai/gpt-5.4", "openai/gpt-5.4-mini"];
+        }
+        return [];
+      });
+      vi.mocked(loadConfig).mockResolvedValue({
+        defaults: {
+          provider: "google",
+        },
+      });
+
+      await runDoctor({ json: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          auth: expect.objectContaining({
+            modelEnvExample: "export GOOGLE_MODEL=gemini-2.5-flash",
+            modelRecommendationReason: "pi-ai catalog latest stable Gemini Flash model for google",
           }),
         })
       );
@@ -400,11 +532,13 @@ describe("doctor command", () => {
             resolvedAuthExportExample: "export OPENAI_API_KEY=***",
             resolvedModelEnvExample: "export OPENAI_MODEL=gpt-5.4",
             resolvedModelConfigExample: "providers:\n  openai:\n    defaultModel: gpt-5.4",
+            resolvedModelRecommendationReason: "pi-ai catalog latest GPT base model for openai",
           }),
           recommendations: expect.arrayContaining([
             "Resolved provider does not match configured provider. Either export ANTHROPIC_API_KEY=*** or switch defaults.provider to openai",
             "Resolved provider model config example: providers:\n  openai:\n    defaultModel: gpt-5.4",
             "Resolved provider model env example: export OPENAI_MODEL=gpt-5.4",
+            "Resolved provider model recommendation basis: pi-ai catalog latest GPT base model for openai",
           ]),
         })
       );
@@ -512,6 +646,9 @@ describe("doctor command", () => {
       expect(formatter.step).toHaveBeenCalledWith("Configured provider: anthropic");
       expect(formatter.step).toHaveBeenCalledWith("Configured default provider: anthropic");
       expect(formatter.step).toHaveBeenCalledWith("Recommended auth: export ANTHROPIC_API_KEY=***");
+      expect(formatter.step).toHaveBeenCalledWith(
+        "Provider model recommendation basis: pi-ai catalog latest stable base Claude model for anthropic"
+      );
     });
 
     it("should report ready status when provider and model are resolved", async () => {
@@ -535,6 +672,30 @@ describe("doctor command", () => {
       expect(formatter.step).toHaveBeenCalledWith("Resolved model: gpt-5.4");
       expect(formatter.step).toHaveBeenCalledWith("Fallback/stub: disabled");
       expect(formatter.step).toHaveBeenCalledWith("Run your workflow: obora run judge.yaml");
+    });
+
+    it("should show resolved model recommendation basis in env-only missing-model text output", async () => {
+      process.env.OPENAI_API_KEY = "***";
+      vi.mocked(buildResolutionSummary).mockReturnValue({
+        provider: "openai",
+        model: null,
+        authSource: "env(OPENAI_API_KEY)",
+        configSource: "none",
+        modelSource: "none",
+        chosenByPrecedence: "env > config",
+        nextPlaceToEdit: ".obora/config.yaml (or set env key for first-time setup)",
+        fallbackStub: false,
+        warnings: [],
+      });
+
+      await runDoctor({});
+
+      expect(formatter.step).toHaveBeenCalledWith(
+        "Resolved provider model env example: export OPENAI_MODEL=gpt-5.4"
+      );
+      expect(formatter.step).toHaveBeenCalledWith(
+        "Resolved provider model recommendation basis: pi-ai catalog latest GPT base model for openai"
+      );
     });
 
     it("should diagnose missing model when auth exists but model is unresolved", async () => {
