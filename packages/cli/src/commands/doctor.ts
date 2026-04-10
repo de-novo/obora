@@ -592,6 +592,43 @@ function buildConfiguredProviderHints(providerHint: DoctorProviderHint): string[
   ];
 }
 
+function buildDetectedProviderMismatchRecommendations(
+  checks: DoctorChecks,
+  providerHint: DoctorProviderHint,
+  authDiagnostics: DoctorAuthDiagnostics
+): string[] {
+  if (!authDiagnostics.providerMismatchWarning || !providerHint.recommendedAuthEnvKey) {
+    return [];
+  }
+
+  const recommendations = [
+    `Detected env auth does not match configured provider. Either export ${providerHint.recommendedAuthEnvKey}=*** or switch defaults.provider to one of: ${authDiagnostics.detectedProviders.join(", ")}`,
+  ];
+
+  const envKeysToUnset = authDiagnostics.detectedProviders.flatMap((provider) => {
+    const keys = [inferAuthEnvKey(provider)];
+    const modelEnvKey = PROVIDER_MODEL_ENV_KEY_MAP[provider];
+    if (modelEnvKey) {
+      keys.push(modelEnvKey);
+    }
+    return keys;
+  });
+
+  if (envKeysToUnset.length > 0) {
+    recommendations.push(
+      `Use configured provider in this shell: unset ${Array.from(new Set(envKeysToUnset)).join(" ")}`
+    );
+  }
+
+  if (authDiagnostics.detectedProviders.length === 1) {
+    recommendations.push(
+      `Switch config default provider: edit ${checks.projectConfigPath} and set defaults.provider: ${authDiagnostics.detectedProviders[0]}`
+    );
+  }
+
+  return recommendations;
+}
+
 function isConfigFilePath(path: string): boolean {
   return /\.(ya?ml)$/i.test(path);
 }
@@ -755,11 +792,9 @@ function buildDoctorRecommendations(
     if (authExampleHint) {
       recommendations.push(authExampleHint);
     }
-    if (authDiagnostics.providerMismatchWarning && providerHint.recommendedAuthEnvKey) {
-      recommendations.push(
-        `Detected env auth does not match configured provider. Either export ${providerHint.recommendedAuthEnvKey}=*** or switch defaults.provider to one of: ${authDiagnostics.detectedProviders.join(", ")}`
-      );
-    }
+    recommendations.push(
+      ...buildDetectedProviderMismatchRecommendations(checks, providerHint, authDiagnostics)
+    );
   }
 
   recommendations.push(
