@@ -10,6 +10,24 @@ vi.mock("@obora/sdk", () => ({
   formatResolutionSummary: vi.fn(),
 }));
 
+vi.mock("@obora/adapters", () => ({
+  listPiAIModels: vi.fn((provider: string) => {
+    if (provider === "openai") {
+      return ["gpt-5.4", "gpt-5", "gpt-5.4", "gpt-5.4-mini"];
+    }
+    if (provider === "anthropic") {
+      return ["claude-opus-4-20250514", "claude-opus-4-6", "claude-sonnet-4-6"];
+    }
+    if (provider === "zai") {
+      return ["glm-4.7", "glm-5", "glm-5-turbo"];
+    }
+    if (provider === "openrouter") {
+      return ["openai/gpt-5.4", "openai/gpt-5.4", "openai/gpt-5.4-mini"];
+    }
+    return [];
+  }),
+}));
+
 vi.mock("node:fs", () => ({
   existsSync: vi.fn(),
 }));
@@ -39,6 +57,7 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
+import { listPiAIModels } from "@obora/adapters";
 import {
   buildResolutionSummary,
   detectLLMConfigFromEnv,
@@ -140,7 +159,7 @@ describe("doctor command", () => {
     it("should include structured sections in json output", async () => {
       vi.mocked(buildResolutionSummary).mockReturnValue({
         provider: "openai",
-        model: "gpt-4o-mini",
+        model: "gpt-5.4",
         authSource: "env(OPENAI_API_KEY)",
         configSource: mockedConfigSource,
         modelSource: "config.defaults.model",
@@ -159,7 +178,7 @@ describe("doctor command", () => {
             status: expect.objectContaining({
               heading: "Status",
               status: "ready",
-              message: "Ready: openai/gpt-4o-mini",
+              message: "Ready: openai/gpt-5.4",
             }),
             configuration: expect.objectContaining({
               heading: "Configuration",
@@ -174,8 +193,8 @@ describe("doctor command", () => {
               heading: "Resolution",
               resolvedProvider: "openai",
               provider: "openai",
-              resolvedModel: "gpt-4o-mini",
-              model: "gpt-4o-mini",
+              resolvedModel: "gpt-5.4",
+              model: "gpt-5.4",
               modelSource: "config.defaults.model",
               chosenByPrecedence: "config > env",
               fallbackStub: false,
@@ -215,12 +234,12 @@ describe("doctor command", () => {
       vi.mocked(loadConfig).mockResolvedValue({
         defaults: {
           provider: "anthropic",
-          model: "claude-3-7-sonnet-latest",
+          model: "claude-opus-4-6",
         },
       });
       vi.mocked(buildResolutionSummary).mockReturnValue({
         provider: "openai",
-        model: "gpt-4o-mini",
+        model: "gpt-5.4",
         authSource: "env(OPENAI_API_KEY)",
         configSource: mockedConfigSource,
         modelSource: "env(OPENAI_MODEL)",
@@ -238,11 +257,11 @@ describe("doctor command", () => {
           sections: expect.objectContaining({
             configuration: expect.objectContaining({
               configuredProvider: "anthropic",
-              configuredModel: "claude-3-7-sonnet-latest",
+              configuredModel: "claude-opus-4-6",
             }),
             resolution: expect.objectContaining({
               resolvedProvider: "openai",
-              resolvedModel: "gpt-4o-mini",
+              resolvedModel: "gpt-5.4",
               modelSource: "env(OPENAI_MODEL)",
             }),
           }),
@@ -286,9 +305,28 @@ describe("doctor command", () => {
         expect.objectContaining({
           auth: expect.objectContaining({
             authExportExample: "export ANTHROPIC_API_KEY=***",
-            modelConfigExample:
-              "providers:\n  anthropic:\n    defaultModel: claude-3-7-sonnet-latest",
-            modelEnvExample: "export ANTHROPIC_MODEL=claude-3-7-sonnet-latest",
+            modelConfigExample: "providers:\n  anthropic:\n    defaultModel: claude-opus-4-6",
+            modelEnvExample: "export ANTHROPIC_MODEL=claude-opus-4-6",
+          }),
+        })
+      );
+    });
+
+    it("should infer latest provider model examples from pi-ai catalog", async () => {
+      vi.mocked(loadConfig).mockResolvedValue({
+        defaults: {
+          provider: "zai",
+        },
+      });
+
+      await runDoctor({ json: true });
+
+      expect(listPiAIModels).toHaveBeenCalledWith("zai");
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          auth: expect.objectContaining({
+            modelConfigExample: "providers:\n  zai:\n    defaultModel: glm-5",
+            modelEnvExample: "export ZAI_MODEL=glm-5",
           }),
         })
       );
@@ -360,13 +398,13 @@ describe("doctor command", () => {
             resolvedAuthEnvKey: "OPENAI_API_KEY",
             resolvedModelEnvKey: "OPENAI_MODEL",
             resolvedAuthExportExample: "export OPENAI_API_KEY=***",
-            resolvedModelEnvExample: "export OPENAI_MODEL=gpt-4o-mini",
-            resolvedModelConfigExample: "providers:\n  openai:\n    defaultModel: gpt-4o-mini",
+            resolvedModelEnvExample: "export OPENAI_MODEL=gpt-5.4",
+            resolvedModelConfigExample: "providers:\n  openai:\n    defaultModel: gpt-5.4",
           }),
           recommendations: expect.arrayContaining([
             "Resolved provider does not match configured provider. Either export ANTHROPIC_API_KEY=*** or switch defaults.provider to openai",
-            "Resolved provider model config example: providers:\n  openai:\n    defaultModel: gpt-4o-mini",
-            "Resolved provider model env example: export OPENAI_MODEL=gpt-4o-mini",
+            "Resolved provider model config example: providers:\n  openai:\n    defaultModel: gpt-5.4",
+            "Resolved provider model env example: export OPENAI_MODEL=gpt-5.4",
           ]),
         })
       );
@@ -479,7 +517,7 @@ describe("doctor command", () => {
     it("should report ready status when provider and model are resolved", async () => {
       vi.mocked(buildResolutionSummary).mockReturnValue({
         provider: "openai",
-        model: "gpt-4o-mini",
+        model: "gpt-5.4",
         authSource: "env(OPENAI_API_KEY)",
         configSource: ".obora/config.yaml",
         modelSource: "config.defaults.model",
@@ -492,9 +530,9 @@ describe("doctor command", () => {
 
       await runDoctor({});
 
-      expect(formatter.step).toHaveBeenCalledWith("Ready: openai/gpt-4o-mini");
+      expect(formatter.step).toHaveBeenCalledWith("Ready: openai/gpt-5.4");
       expect(formatter.step).toHaveBeenCalledWith("Resolved provider: openai");
-      expect(formatter.step).toHaveBeenCalledWith("Resolved model: gpt-4o-mini");
+      expect(formatter.step).toHaveBeenCalledWith("Resolved model: gpt-5.4");
       expect(formatter.step).toHaveBeenCalledWith("Fallback/stub: disabled");
       expect(formatter.step).toHaveBeenCalledWith("Run your workflow: obora run judge.yaml");
     });
