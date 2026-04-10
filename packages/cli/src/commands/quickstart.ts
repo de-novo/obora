@@ -1,8 +1,9 @@
 import { Command } from "commander";
 
-import { runInit } from "./init.js";
 import { handleCommandAction } from "../utils/error-handler.js";
 import { getGlobalOpts } from "../utils/global-opts.js";
+
+import { runInit } from "./init.js";
 
 export function createQuickstartCommand(): Command {
   return new Command("quickstart")

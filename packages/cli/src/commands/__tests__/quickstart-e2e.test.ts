@@ -55,7 +55,7 @@ describe("CLI quickstart integration", () => {
         initialized: true,
         template: "quickstart",
         path: projectDir,
-      }),
+      })
     );
 
     const judgeYaml = await readFile(join(projectDir, "judge.yaml"), "utf-8");
@@ -78,7 +78,7 @@ describe("CLI quickstart integration", () => {
         resolution: expect.objectContaining({
           configSource: expect.stringContaining(projectDir),
         }),
-      }),
+      })
     );
 
     logSpy.mockClear();
@@ -97,7 +97,7 @@ describe("CLI quickstart integration", () => {
           modelSource: "none",
           chosenByPrecedence: "none",
           fallbackStub: true,
-          nextPlaceToEdit: expect.stringContaining('.obora/config.yaml'),
+          nextPlaceToEdit: expect.stringContaining(".obora/config.yaml"),
         }),
         bindingPreview: expect.arrayContaining([
           expect.objectContaining({
@@ -114,7 +114,7 @@ describe("CLI quickstart integration", () => {
             schema: "artifacts/result.schema.json",
           }),
         ]),
-      }),
+      })
     );
     expect(errorSpy).not.toHaveBeenCalled();
   });
@@ -131,7 +131,7 @@ describe("CLI quickstart integration", () => {
         initialized: true,
         template: "quickstart",
         path: projectDir,
-      }),
+      })
     );
 
     const judgeYaml = await readFile(join(projectDir, "judge.yaml"), "utf-8");
@@ -177,7 +177,7 @@ describe("CLI quickstart integration", () => {
           recommendedProvider: "openai",
           recommendedAuthEnvKey: "OPENAI_API_KEY",
         }),
-      }),
+      })
     );
 
     process.env.OPENAI_API_KEY = "test-openai-key";
@@ -193,15 +193,17 @@ describe("CLI quickstart integration", () => {
         recommendations: expect.arrayContaining([
           "Set a default model in .obora/config.yaml or export OPENAI_MODEL=***",
         ]),
-      }),
+      })
     );
 
     const configPath = join(projectDir, ".obora", "config.yaml");
     const configRaw = await readFile(configPath, "utf-8");
     await writeFile(
       configPath,
-      configRaw.replace("provider: openai", "provider: anthropic").replace("openai: {}", "anthropic: {}"),
-      "utf-8",
+      configRaw
+        .replace("provider: openai", "provider: anthropic")
+        .replace("openai: {}", "anthropic: {}"),
+      "utf-8"
     );
 
     logSpy.mockClear();
@@ -220,7 +222,7 @@ describe("CLI quickstart integration", () => {
           "Resolved provider does not match configured provider. Either export ANTHROPIC_API_KEY=*** or switch defaults.provider to openai",
           "Resolved provider model env example: export OPENAI_MODEL=gpt-4o-mini",
         ]),
-      }),
+      })
     );
 
     process.env.ANTHROPIC_API_KEY = "test-anthropic-key";
@@ -236,7 +238,7 @@ describe("CLI quickstart integration", () => {
           status: "ready",
           message: "Ready: anthropic/claude-3-7-sonnet-latest",
         }),
-      }),
+      })
     );
 
     logSpy.mockClear();
@@ -268,10 +270,9 @@ describe("CLI quickstart integration", () => {
             schema: "artifacts/result.schema.json",
           }),
         ]),
-      }),
+      })
     );
   });
-
 
   it("prints configured and resolved provider context in doctor stdout for mismatch", async () => {
     const cli = createCLI();
@@ -286,8 +287,10 @@ describe("CLI quickstart integration", () => {
     const configRaw = await readFile(configPath, "utf-8");
     await writeFile(
       configPath,
-      configRaw.replace("provider: openai", "provider: anthropic").replace("openai: {}", "anthropic: {}"),
-      "utf-8",
+      configRaw
+        .replace("provider: openai", "provider: anthropic")
+        .replace("openai: {}", "anthropic: {}"),
+      "utf-8"
     );
 
     logSpy.mockClear();
@@ -303,10 +306,13 @@ describe("CLI quickstart integration", () => {
     expect(stdout).toContain("Resolution");
     expect(stdout).toContain("Configured provider: anthropic");
     expect(stdout).toContain("Resolved provider: openai");
-    expect(stdout).toContain("Resolved provider model env example: export OPENAI_MODEL=gpt-4o-mini");
-    expect(stderr).toContain("Configured provider 'anthropic' differs from detected env auth providers: openai");
+    expect(stdout).toContain(
+      "Resolved provider model env example: export OPENAI_MODEL=gpt-4o-mini"
+    );
+    expect(stderr).toContain(
+      "Configured provider 'anthropic' differs from detected env auth providers: openai"
+    );
   });
-
 
   it("prints configured and resolved model context in doctor stdout", async () => {
     const cli = createCLI();
@@ -332,7 +338,6 @@ describe("CLI quickstart integration", () => {
     expect(stdout).toContain("Model source: env(OPENAI_MODEL)");
   });
 
-
   it("shows env source precedence in run dry-run preview", async () => {
     const cli = createCLI();
     const projectDir = join(workDir, "run-preview-demo");
@@ -354,7 +359,6 @@ describe("CLI quickstart integration", () => {
     expect(stdout).toContain("- model source: env(OPENAI_MODEL)");
     expect(stdout).toContain("- chosen by precedence: env > config");
   });
-
 
   it("prints binding and output previews for quickstart one-file judge dry-runs", async () => {
     const cli = createCLI();
@@ -379,5 +383,4 @@ describe("CLI quickstart integration", () => {
     expect(stdout).toContain("schema <- artifacts/result.schema.json [resolved]");
     expect(errorSpy).not.toHaveBeenCalled();
   });
-
 });

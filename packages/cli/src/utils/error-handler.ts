@@ -14,7 +14,11 @@ function isVerboseEnabled(verbose?: boolean): boolean {
 
 function inferNextCommand(err: unknown): string | null {
   const message =
-    err instanceof Error ? err.message.toLowerCase() : typeof err === "string" ? err.toLowerCase() : "";
+    err instanceof Error
+      ? err.message.toLowerCase()
+      : typeof err === "string"
+        ? err.toLowerCase()
+        : "";
   const code = err instanceof OboraError ? err.code : null;
   const exitCode = err instanceof CLIError ? err.exitCode : null;
 

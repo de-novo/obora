@@ -34,7 +34,10 @@ function resolveTemplatePath(templateName: string): string {
 }
 
 function inferAuthEnvKey(provider: string): string {
-  return PROVIDER_AUTH_ENV_KEY_MAP[provider] ?? `${provider.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_API_KEY`;
+  return (
+    PROVIDER_AUTH_ENV_KEY_MAP[provider] ??
+    `${provider.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_API_KEY`
+  );
 }
 
 async function detectQuickstartProvider(targetDir: string): Promise<string | null> {

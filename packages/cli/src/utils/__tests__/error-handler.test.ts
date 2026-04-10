@@ -33,7 +33,10 @@ describe("error handler and formatter", () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
 
     await handleCommandAction(async () => {
-      throw new CLIError("Invalid JSON input. Please provide a valid JSON string to --input.", ExitCode.VALIDATION_ERROR);
+      throw new CLIError(
+        "Invalid JSON input. Please provide a valid JSON string to --input.",
+        ExitCode.VALIDATION_ERROR
+      );
     });
 
     expect(logSpy).toHaveBeenCalledWith("ℹ Run: obora run <workflow.yaml> --dry-run");

@@ -106,12 +106,7 @@ interface DoctorOutputSections {
   };
 }
 
-
-const AUTH_ENV_EXAMPLES = [
-  "OPENAI_API_KEY",
-  "ANTHROPIC_API_KEY",
-  "ZAI_API_KEY",
-] as const;
+const AUTH_ENV_EXAMPLES = ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "ZAI_API_KEY"] as const;
 
 const AUTH_SETUP_GUIDE = "docs/tutorials/06-llm-config-auth-quickstart.md";
 
@@ -163,11 +158,17 @@ const PROVIDER_DEFAULT_MODEL_MAP: Record<string, string> = {
 };
 
 function inferAuthEnvKey(provider: string): string {
-  return PROVIDER_AUTH_ENV_KEY_MAP[provider] ?? `${provider.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_API_KEY`;
+  return (
+    PROVIDER_AUTH_ENV_KEY_MAP[provider] ??
+    `${provider.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_API_KEY`
+  );
 }
 
 function inferModelEnvKey(provider: string): string {
-  return PROVIDER_MODEL_ENV_KEY_MAP[provider] ?? `${provider.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_MODEL`;
+  return (
+    PROVIDER_MODEL_ENV_KEY_MAP[provider] ??
+    `${provider.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_MODEL`
+  );
 }
 
 function inferDefaultModel(provider: string): string {
@@ -196,7 +197,7 @@ function buildProviderSetupExamples(provider: string | null): ProviderSetupExamp
   };
 }
 
-function detectAuthProviders(env: NodeJS.ProcessEnv = process.env): string[] {
+function detectAuthProviders(env: Record<string, string | undefined> = process.env): string[] {
   const detected: string[] = [];
   const seenEnvKeys = new Set<string>();
 
@@ -214,7 +215,7 @@ function detectAuthProviders(env: NodeJS.ProcessEnv = process.env): string[] {
 
 function buildRecommendedProviderHint(
   summary: { authSource: string },
-  loadedConfig?: OboraConfig,
+  loadedConfig?: OboraConfig
 ): DoctorProviderHint {
   const configuredProvider = loadedConfig?.defaults?.provider ?? null;
 
@@ -235,10 +236,10 @@ function buildRecommendedProviderHint(
 
 function buildAuthDiagnostics(
   providerHint: DoctorProviderHint,
-  summary: { provider: string | null },
+  summary: { provider: string | null }
 ): DoctorAuthDiagnostics {
   const setupExamples = buildProviderSetupExamples(
-    providerHint.recommendedProvider ?? providerHint.configuredProvider,
+    providerHint.recommendedProvider ?? providerHint.configuredProvider
   );
   const resolvedSetupExamples = buildProviderSetupExamples(summary.provider);
   const detectedProviders = detectAuthProviders();
@@ -246,7 +247,7 @@ function buildAuthDiagnostics(
     providerHint.configuredProvider &&
     detectedProviders.length > 0 &&
     !detectedProviders.includes(providerHint.configuredProvider)
-      ? `Configured provider '${providerHint.configuredProvider}' differs from detected env auth providers: ${detectedProviders.join(', ')}`
+      ? `Configured provider '${providerHint.configuredProvider}' differs from detected env auth providers: ${detectedProviders.join(", ")}`
       : null;
 
   return {
@@ -268,17 +269,21 @@ function buildAuthDiagnostics(
 
 function buildConfigDiagnostics(
   checks: DoctorChecks,
-  summary: { configSource: string; nextPlaceToEdit: string },
+  summary: { configSource: string; nextPlaceToEdit: string }
 ): DoctorConfigDiagnostics {
-  const sourceChain = summary.configSource === "none"
-    ? []
-    : summary.configSource.split(" -> ").map((part) => part.trim()).filter(Boolean);
+  const sourceChain =
+    summary.configSource === "none"
+      ? []
+      : summary.configSource
+          .split(" -> ")
+          .map((part) => part.trim())
+          .filter(Boolean);
 
   const globalConfigPath = sourceChain.find((path) => path === checks.globalConfigPath) ?? null;
   const activeConfigPath = sourceChain.at(-1) ?? null;
   const projectConfigPath =
-    sourceChain.find((path) => path !== globalConfigPath && path.endsWith('/.obora/config.yaml'))
-    ?? (activeConfigPath !== globalConfigPath ? activeConfigPath : null);
+    sourceChain.find((path) => path !== globalConfigPath && path.endsWith("/.obora/config.yaml")) ??
+    (activeConfigPath !== globalConfigPath ? activeConfigPath : null);
 
   return {
     configSource: summary.configSource,
@@ -289,7 +294,6 @@ function buildConfigDiagnostics(
     nextPlaceToEdit: summary.nextPlaceToEdit,
   };
 }
-
 
 function summarizeConfigChain(configDiagnostics: DoctorConfigDiagnostics): string | null {
   if (configDiagnostics.sourceChain.length <= 1) {
@@ -330,8 +334,7 @@ function buildConfiguredProviderHints(providerHint: DoctorProviderHint): string[
 
 function buildResolvedProviderMismatchRecommendation(
   summary: { provider: string | null },
-  providerHint: DoctorProviderHint,
-  authDiagnostics: DoctorAuthDiagnostics,
+  providerHint: DoctorProviderHint
 ): string | null {
   if (!summary.provider || !providerHint.configuredProvider) {
     return null;
@@ -346,7 +349,7 @@ function buildResolvedProviderMismatchRecommendation(
 
 function buildProviderSpecificGuidance(
   summary: { authSource: string; provider: string | null; model: string | null },
-  authDiagnostics: DoctorAuthDiagnostics,
+  authDiagnostics: DoctorAuthDiagnostics
 ): string[] {
   const guidance: string[] = [];
 
@@ -356,9 +359,9 @@ function buildProviderSpecificGuidance(
 
   if (summary.provider && !summary.model) {
     const useResolvedExamples =
-      authDiagnostics.resolvedProvider
-      && authDiagnostics.configuredProvider
-      && authDiagnostics.resolvedProvider !== authDiagnostics.configuredProvider;
+      authDiagnostics.resolvedProvider &&
+      authDiagnostics.configuredProvider &&
+      authDiagnostics.resolvedProvider !== authDiagnostics.configuredProvider;
 
     const modelConfigExample = useResolvedExamples
       ? authDiagnostics.resolvedModelConfigExample
@@ -367,11 +370,11 @@ function buildProviderSpecificGuidance(
       ? authDiagnostics.resolvedModelEnvExample
       : authDiagnostics.modelEnvExample;
     const modelConfigPrefix = useResolvedExamples
-      ? 'Resolved provider model config example'
-      : 'Provider model config example';
+      ? "Resolved provider model config example"
+      : "Provider model config example";
     const modelEnvPrefix = useResolvedExamples
-      ? 'Resolved provider model env example'
-      : 'Provider model env example';
+      ? "Resolved provider model env example"
+      : "Provider model env example";
 
     if (modelConfigExample) {
       guidance.push(`${modelConfigPrefix}: ${modelConfigExample}`);
@@ -441,7 +444,7 @@ function buildDoctorRecommendations(
     warnings: string[];
   },
   providerHint: DoctorProviderHint,
-  authDiagnostics: DoctorAuthDiagnostics,
+  authDiagnostics: DoctorAuthDiagnostics
 ): string[] {
   const recommendations: string[] = [];
 
@@ -459,7 +462,7 @@ function buildDoctorRecommendations(
     }
     if (authDiagnostics.providerMismatchWarning && providerHint.recommendedAuthEnvKey) {
       recommendations.push(
-        `Detected env auth does not match configured provider. Either export ${providerHint.recommendedAuthEnvKey}=*** or switch defaults.provider to one of: ${authDiagnostics.detectedProviders.join(', ')}`,
+        `Detected env auth does not match configured provider. Either export ${providerHint.recommendedAuthEnvKey}=*** or switch defaults.provider to one of: ${authDiagnostics.detectedProviders.join(", ")}`
       );
     }
   }
@@ -467,7 +470,7 @@ function buildDoctorRecommendations(
   const resolvedProviderMismatchRecommendation = buildResolvedProviderMismatchRecommendation(
     summary,
     providerHint,
-    authDiagnostics,
+    authDiagnostics
   );
   if (resolvedProviderMismatchRecommendation) {
     recommendations.push(resolvedProviderMismatchRecommendation);
@@ -477,7 +480,7 @@ function buildDoctorRecommendations(
 
   if (summary.provider && !summary.model) {
     recommendations.push(
-      `Set a default model in .obora/config.yaml or export ${inferModelEnvKey(summary.provider)}=***`,
+      `Set a default model in .obora/config.yaml or export ${inferModelEnvKey(summary.provider)}=***`
     );
   }
 
@@ -496,7 +499,6 @@ function buildDoctorRecommendations(
   return recommendations;
 }
 
-
 function buildDoctorOutputSections(
   checks: DoctorChecks,
   status: { status: "ready" | "needs_config" | "stub_mode"; message: string },
@@ -514,7 +516,7 @@ function buildDoctorOutputSections(
   loadedConfig: OboraConfig | undefined,
   configDiagnostics: DoctorConfigDiagnostics,
   authDiagnostics: DoctorAuthDiagnostics,
-  recommendations: string[],
+  recommendations: string[]
 ): DoctorOutputSections {
   const mergedSources = summarizeConfigChain(configDiagnostics);
   const warnings = [...summary.warnings];
@@ -593,7 +595,12 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
   const providerHint = buildRecommendedProviderHint(summary, loadedConfig);
   const authDiagnostics = buildAuthDiagnostics(providerHint, summary);
   const configDiagnostics = buildConfigDiagnostics(checks, summary);
-  const recommendations = buildDoctorRecommendations(checks, summary, providerHint, authDiagnostics);
+  const recommendations = buildDoctorRecommendations(
+    checks,
+    summary,
+    providerHint,
+    authDiagnostics
+  );
   const sections = buildDoctorOutputSections(
     checks,
     status,
@@ -601,7 +608,7 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
     loadedConfig,
     configDiagnostics,
     authDiagnostics,
-    recommendations,
+    recommendations
   );
 
   if (options.json) {
@@ -636,8 +643,12 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
 
   formatter.info(sections.configuration.heading);
   formatter.step(`Node.js: ${sections.configuration.node ? "available" : "missing"}`);
-  formatter.step(`Project config (.obora/config.yaml): ${sections.configuration.projectConfig ? "found" : "missing"}`);
-  formatter.step(`Global config (~/.obora/config.yaml): ${sections.configuration.globalConfig ? "found" : "missing"}`);
+  formatter.step(
+    `Project config (.obora/config.yaml): ${sections.configuration.projectConfig ? "found" : "missing"}`
+  );
+  formatter.step(
+    `Global config (~/.obora/config.yaml): ${sections.configuration.globalConfig ? "found" : "missing"}`
+  );
   if (sections.configuration.configuredProvider) {
     formatter.step(`Configured provider: ${sections.configuration.configuredProvider}`);
   }
@@ -679,7 +690,7 @@ export function createDoctorCommand(): Command {
         async () => {
           await runDoctor(globalOpts);
         },
-        { verbose: Boolean(globalOpts.verbose) },
+        { verbose: Boolean(globalOpts.verbose) }
       );
     });
 }

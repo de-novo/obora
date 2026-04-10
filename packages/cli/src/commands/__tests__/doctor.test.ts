@@ -83,7 +83,7 @@ describe("doctor command", () => {
         "- provider: none",
         "- model: none",
         "- fallback/stub: enabled",
-      ].join("\n"),
+      ].join("\n")
     );
     vi.mocked(existsSync).mockReturnValue(false);
   });
@@ -133,7 +133,7 @@ describe("doctor command", () => {
           resolution: expect.objectContaining({
             fallbackStub: true,
           }),
-        }),
+        })
       );
     });
 
@@ -190,7 +190,7 @@ describe("doctor command", () => {
               items: [],
             }),
           }),
-        }),
+        })
       );
     });
 
@@ -207,7 +207,7 @@ describe("doctor command", () => {
         expect.objectContaining({
           recommendedProvider: "anthropic",
           recommendedAuthEnvKey: "ANTHROPIC_API_KEY",
-        }),
+        })
       );
     });
 
@@ -246,7 +246,7 @@ describe("doctor command", () => {
               modelSource: "env(OPENAI_MODEL)",
             }),
           }),
-        }),
+        })
       );
     });
 
@@ -269,7 +269,7 @@ describe("doctor command", () => {
             setupGuide: "docs/tutorials/06-llm-config-auth-quickstart.md",
             detectedProviders: ["openai"],
           }),
-        }),
+        })
       );
     });
 
@@ -286,10 +286,11 @@ describe("doctor command", () => {
         expect.objectContaining({
           auth: expect.objectContaining({
             authExportExample: "export ANTHROPIC_API_KEY=***",
-            modelConfigExample: "providers:\n  anthropic:\n    defaultModel: claude-3-7-sonnet-latest",
+            modelConfigExample:
+              "providers:\n  anthropic:\n    defaultModel: claude-3-7-sonnet-latest",
             modelEnvExample: "export ANTHROPIC_MODEL=claude-3-7-sonnet-latest",
           }),
-        }),
+        })
       );
     });
 
@@ -312,10 +313,9 @@ describe("doctor command", () => {
           recommendations: expect.arrayContaining([
             "Detected env auth does not match configured provider. Either export ANTHROPIC_API_KEY=*** or switch defaults.provider to one of: openai",
           ]),
-        }),
+        })
       );
     });
-
 
     it("should print mismatch warning in default mode", async () => {
       process.env.OPENAI_API_KEY = "test-key";
@@ -328,12 +328,12 @@ describe("doctor command", () => {
       await runDoctor({});
 
       expect(formatter.warn).toHaveBeenCalledWith(
-        "Configured provider 'anthropic' differs from detected env auth providers: openai",
+        "Configured provider 'anthropic' differs from detected env auth providers: openai"
       );
     });
 
     it("should recommend fixing mismatch when resolved provider differs from configured provider", async () => {
-      process.env.OPENAI_API_KEY="***";
+      process.env.OPENAI_API_KEY = "***";
       vi.mocked(loadConfig).mockResolvedValue({
         defaults: {
           provider: "anthropic",
@@ -368,7 +368,7 @@ describe("doctor command", () => {
             "Resolved provider model config example: providers:\n  openai:\n    defaultModel: gpt-4o-mini",
             "Resolved provider model env example: export OPENAI_MODEL=gpt-4o-mini",
           ]),
-        }),
+        })
       );
     });
 
@@ -410,16 +410,13 @@ describe("doctor command", () => {
         expect.objectContaining({
           config: expect.objectContaining({
             configSource: mockedConfigSource,
-            sourceChain: [
-              mockedGlobalConfigPath,
-              mockedProjectConfigPath,
-            ],
+            sourceChain: [mockedGlobalConfigPath, mockedProjectConfigPath],
             globalConfigPath: mockedGlobalConfigPath,
             projectConfigPath: mockedProjectConfigPath,
             activeConfigPath: mockedProjectConfigPath,
             nextPlaceToEdit: mockedProjectConfigPath,
           }),
-        }),
+        })
       );
     });
 
@@ -444,17 +441,25 @@ describe("doctor command", () => {
       expect(formatter.step).toHaveBeenCalledWith("Auth source: none");
       expect(formatter.step).toHaveBeenCalledWith("Config source: none");
       expect(formatter.step).toHaveBeenCalledWith("Fallback/stub: enabled");
-      expect(formatter.warn).toHaveBeenCalledWith("No LLM resolved; execution will run in stub mode");
+      expect(formatter.warn).toHaveBeenCalledWith(
+        "No LLM resolved; execution will run in stub mode"
+      );
       expect(formatter.info).toHaveBeenCalledWith("Recommended next actions");
-      expect(formatter.step).toHaveBeenCalledWith(expect.stringContaining("Run: obora init --quickstart"));
-      expect(formatter.step).toHaveBeenCalledWith("Set one provider API key, then rerun: obora doctor");
       expect(formatter.step).toHaveBeenCalledWith(
-        "Setup guide: docs/tutorials/06-llm-config-auth-quickstart.md",
+        expect.stringContaining("Run: obora init --quickstart")
       );
       expect(formatter.step).toHaveBeenCalledWith(
-        "Examples: export OPENAI_API_KEY=***  |  export ANTHROPIC_API_KEY=***  |  export ZAI_API_KEY=***",
+        "Set one provider API key, then rerun: obora doctor"
       );
-      expect(formatter.info).toHaveBeenCalledWith("Next step: .obora/config.yaml (or set env key for first-time setup)");
+      expect(formatter.step).toHaveBeenCalledWith(
+        "Setup guide: docs/tutorials/06-llm-config-auth-quickstart.md"
+      );
+      expect(formatter.step).toHaveBeenCalledWith(
+        "Examples: export OPENAI_API_KEY=***  |  export ANTHROPIC_API_KEY=***  |  export ZAI_API_KEY=***"
+      );
+      expect(formatter.info).toHaveBeenCalledWith(
+        "Next step: .obora/config.yaml (or set env key for first-time setup)"
+      );
     });
 
     it("should prioritize configured default provider in auth hints", async () => {
@@ -520,7 +525,7 @@ describe("doctor command", () => {
           recommendations: expect.arrayContaining([
             "Set a default model in .obora/config.yaml or export OPENAI_MODEL=***",
           ]),
-        }),
+        })
       );
     });
   });

@@ -124,13 +124,15 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
   const loadedConfig = await loadConfig(options.config as string | undefined);
   const envLLM = detectLLMConfigFromEnv();
   const resolvedLLM = resolveLLMConfig(envLLM, loadedConfig);
-  const runtimeLLM = resolvedLLM && ((options.provider as string | undefined) || (options.model as string | undefined))
-    ? {
-        ...resolvedLLM,
-        provider: (options.provider as string | undefined) ?? resolvedLLM.provider,
-        model: (options.model as string | undefined) ?? resolvedLLM.model,
-      }
-    : undefined;
+  const runtimeLLM =
+    resolvedLLM &&
+    ((options.provider as string | undefined) || (options.model as string | undefined))
+      ? {
+          ...resolvedLLM,
+          provider: (options.provider as string | undefined) ?? resolvedLLM.provider,
+          model: (options.model as string | undefined) ?? resolvedLLM.model,
+        }
+      : undefined;
 
   const runtime = new OboraRuntime({
     policyPath: options.policy as string | undefined,
@@ -153,7 +155,13 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
     loadedConfig
   );
 
-  const printPreview = (workflowDef?: { steps?: Array<{ name: string; input?: Record<string, unknown>; output?: { path?: string; schema?: string } }> }): void => {
+  const printPreview = (workflowDef?: {
+    steps?: Array<{
+      name: string;
+      input?: Record<string, unknown>;
+      output?: { path?: string; schema?: string };
+    }>;
+  }): void => {
     if (isQuietOutput(options) || isJsonOutput(options)) {
       return;
     }
@@ -206,7 +214,13 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
   }
 
   const previewWorkflow = expandedWorkflow as
-    | { steps?: Array<{ name: string; input?: Record<string, unknown>; output?: { path?: string; schema?: string } }> }
+    | {
+        steps?: Array<{
+          name: string;
+          input?: Record<string, unknown>;
+          output?: { path?: string; schema?: string };
+        }>;
+      }
     | undefined;
   const bindingPreviewEntries = previewWorkflow ? buildBindingPreview(previewWorkflow) : [];
   const outputPreviewEntries = previewWorkflow ? buildOutputPreview(previewWorkflow) : [];

@@ -166,16 +166,15 @@ describe("init command", () => {
       expect(formatter.success).toHaveBeenCalledWith(expect.stringContaining("initialized"));
     });
 
-
     it("should print provider-aware next-step guidance for quickstart projects", async () => {
       vi.mocked(readFile).mockImplementation(async (pathLike) => {
         const path = String(pathLike);
-        if (path.includes('.obora/config.yaml')) {
+        if (path.includes(".obora/config.yaml")) {
           return `defaults:
   provider: anthropic
 `;
         }
-        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+        throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
       });
 
       await runInit("my-project", { quickstart: true });

@@ -92,7 +92,17 @@ vi.mock("../../utils/global-opts.js", () => ({
 }));
 
 import { appendFile, mkdir, writeFile, readFile } from "node:fs/promises";
-import { loadConfig, detectLLMConfigFromEnv, resolveLLMConfig, Workflow, buildBindingPreview, buildOutputPreview, formatResolutionSummary, formatBindingPreview, formatOutputPreview } from "@obora/sdk";
+import {
+  loadConfig,
+  detectLLMConfigFromEnv,
+  resolveLLMConfig,
+  Workflow,
+  buildBindingPreview,
+  buildOutputPreview,
+  formatResolutionSummary,
+  formatBindingPreview,
+  formatOutputPreview,
+} from "@obora/sdk";
 
 import { formatter } from "../../utils/formatter.js";
 import { createRunCommand, runRun } from "../run.js";
@@ -434,7 +444,9 @@ describe("run command", () => {
       await runRun("my-workflow", { dryRun: true });
 
       expect(formatter.info).toHaveBeenCalledWith("Execution Resolution\n- provider: none");
-      expect(formatter.info).toHaveBeenCalledWith("Dry run preview complete. No execution was started.");
+      expect(formatter.info).toHaveBeenCalledWith(
+        "Dry run preview complete. No execution was started."
+      );
     });
     it("should suggest the next run command after dry-run success", async () => {
       await runRun("judge.yaml", { dryRun: true });
@@ -443,8 +455,12 @@ describe("run command", () => {
     });
 
     it("should print binding/output previews when available", async () => {
-      vi.mocked(formatBindingPreview).mockReturnValue("Binding Preview\n- judge.input: json <- artifacts/submission.json [resolved]");
-      vi.mocked(formatOutputPreview).mockReturnValue("Output Preview\n- judge: path <- artifacts/result.json [pending]");
+      vi.mocked(formatBindingPreview).mockReturnValue(
+        "Binding Preview\n- judge.input: json <- artifacts/submission.json [resolved]"
+      );
+      vi.mocked(formatOutputPreview).mockReturnValue(
+        "Output Preview\n- judge: path <- artifacts/result.json [pending]"
+      );
       const mockWorkflow = {
         name: "loaded-workflow",
         steps: [{ name: "judge", input: {}, output: {} }],
