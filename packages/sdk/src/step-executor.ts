@@ -452,14 +452,18 @@ Return JSON only.`,
     };
 
     const response = await this.requestForStep(augmentedStep, context, step.agent);
-    let parsed = this.parseStructuredStepOutput(augmentedStep, response.message.content ?? "");
-    if (typeof parsed === "string") {
-      try {
-        parsed = JSON.parse(parsed) as unknown;
-      } catch {
-        // keep original parsed string; schema validation/repair can handle this later
-      }
-    }
+    const rawContent = response.message.content ?? "";
+    const parsedCandidate = this.tryParseStructuredContent(rawContent) ?? rawContent;
+    const parsed = this.parseStepOutputContract(
+      {
+        ...augmentedStep,
+        output: {
+          path: judgeConfig.output_path,
+          ...(judgeConfig.output_schema ? { schema: judgeConfig.output_schema } : {}),
+        },
+      },
+      parsedCandidate,
+    );
     await mkdir(dirname(outputPath), { recursive: true });
     await writeFile(outputPath, JSON.stringify(parsed, null, 2) + "\n", "utf-8");
     return {
