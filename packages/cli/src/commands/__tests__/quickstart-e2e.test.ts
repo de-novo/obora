@@ -225,6 +225,10 @@ describe("CLI quickstart integration", () => {
         }),
         recommendations: expect.arrayContaining([
           "Resolved provider does not match configured provider. Either export ANTHROPIC_API_KEY=*** or switch defaults.provider to openai",
+          "Use configured provider in this shell: unset OPENAI_API_KEY OPENAI_MODEL",
+          expect.stringContaining(
+            "contract-demo/.obora/config.yaml and set defaults.provider: openai"
+          ),
           "Resolved provider model env example: export OPENAI_MODEL=gpt-5.4",
         ]),
       })
@@ -311,6 +315,12 @@ describe("CLI quickstart integration", () => {
     expect(stdout).toContain("Resolution");
     expect(stdout).toContain("Configured provider: anthropic");
     expect(stdout).toContain("Resolved provider: openai");
+    expect(stdout).toContain(
+      "Use configured provider in this shell: unset OPENAI_API_KEY OPENAI_MODEL"
+    );
+    expect(stdout).toContain(
+      "doctor-stdout-demo/.obora/config.yaml and set defaults.provider: openai"
+    );
     expect(stdout).toContain("Resolved provider model env example: export OPENAI_MODEL=gpt-5.4");
     expect(stderr).toContain(
       "Configured provider 'anthropic' differs from detected env auth providers: openai"
