@@ -36,6 +36,8 @@ vi.mock("../../utils/global-opts.js", () => ({
 }));
 
 import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 import {
   buildResolutionSummary,
@@ -50,6 +52,9 @@ import { createDoctorCommand, runDoctor } from "../doctor.js";
 
 describe("doctor command", () => {
   const originalEnv = { ...process.env };
+  const mockedGlobalConfigPath = join(homedir(), ".obora", "config.yaml");
+  const mockedProjectConfigPath = "/tmp/demo/.obora/config.yaml";
+  const mockedConfigSource = `${mockedGlobalConfigPath} -> ${mockedProjectConfigPath}`;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -137,10 +142,10 @@ describe("doctor command", () => {
         provider: "openai",
         model: "gpt-4o-mini",
         authSource: "env(OPENAI_API_KEY)",
-        configSource: "/Users/denovo/.obora/config.yaml -> /tmp/demo/.obora/config.yaml",
+        configSource: mockedConfigSource,
         modelSource: "config.defaults.model",
         chosenByPrecedence: "config > env",
-        nextPlaceToEdit: "/tmp/demo/.obora/config.yaml",
+        nextPlaceToEdit: mockedProjectConfigPath,
         fallbackStub: false,
         warnings: ["Example warning"],
       });
@@ -161,9 +166,9 @@ describe("doctor command", () => {
               configuredProvider: null,
               configuredModel: null,
               authSource: "env(OPENAI_API_KEY)",
-              configSource: "/Users/denovo/.obora/config.yaml -> /tmp/demo/.obora/config.yaml",
+              configSource: mockedConfigSource,
               mergedSources: "global -> project",
-              activeConfigPath: "/tmp/demo/.obora/config.yaml",
+              activeConfigPath: mockedProjectConfigPath,
             }),
             resolution: expect.objectContaining({
               heading: "Resolution",
@@ -174,7 +179,7 @@ describe("doctor command", () => {
               modelSource: "config.defaults.model",
               chosenByPrecedence: "config > env",
               fallbackStub: false,
-              nextPlaceToEdit: "/tmp/demo/.obora/config.yaml",
+              nextPlaceToEdit: mockedProjectConfigPath,
             }),
             warnings: expect.objectContaining({
               heading: "Warnings",
@@ -217,10 +222,10 @@ describe("doctor command", () => {
         provider: "openai",
         model: "gpt-4o-mini",
         authSource: "env(OPENAI_API_KEY)",
-        configSource: "/Users/denovo/.obora/config.yaml -> /tmp/demo/.obora/config.yaml",
+        configSource: mockedConfigSource,
         modelSource: "env(OPENAI_MODEL)",
         chosenByPrecedence: "config > env",
-        nextPlaceToEdit: "/tmp/demo/.obora/config.yaml",
+        nextPlaceToEdit: mockedProjectConfigPath,
         fallbackStub: false,
         warnings: [],
       });
@@ -372,10 +377,10 @@ describe("doctor command", () => {
         provider: null,
         model: null,
         authSource: "none",
-        configSource: "/Users/denovo/.obora/config.yaml -> /tmp/demo/.obora/config.yaml",
+        configSource: mockedConfigSource,
         modelSource: "none",
         chosenByPrecedence: "none",
-        nextPlaceToEdit: "/tmp/demo/.obora/config.yaml",
+        nextPlaceToEdit: mockedProjectConfigPath,
         fallbackStub: true,
         warnings: ["No LLM resolved; execution will run in stub mode"],
       });
@@ -383,7 +388,7 @@ describe("doctor command", () => {
       await runDoctor({});
 
       expect(formatter.step).toHaveBeenCalledWith("Merged sources: global -> project");
-      expect(formatter.step).toHaveBeenCalledWith("Active config: /tmp/demo/.obora/config.yaml");
+      expect(formatter.step).toHaveBeenCalledWith(`Active config: ${mockedProjectConfigPath}`);
     });
 
     it("should include structured config source diagnostics in json output", async () => {
@@ -391,10 +396,10 @@ describe("doctor command", () => {
         provider: null,
         model: null,
         authSource: "none",
-        configSource: "/Users/denovo/.obora/config.yaml -> /tmp/demo/.obora/config.yaml",
+        configSource: mockedConfigSource,
         modelSource: "none",
         chosenByPrecedence: "none",
-        nextPlaceToEdit: "/tmp/demo/.obora/config.yaml",
+        nextPlaceToEdit: mockedProjectConfigPath,
         fallbackStub: true,
         warnings: ["No LLM resolved; execution will run in stub mode"],
       });
@@ -404,15 +409,15 @@ describe("doctor command", () => {
       expect(formatter.json).toHaveBeenCalledWith(
         expect.objectContaining({
           config: expect.objectContaining({
-            configSource: "/Users/denovo/.obora/config.yaml -> /tmp/demo/.obora/config.yaml",
+            configSource: mockedConfigSource,
             sourceChain: [
               "/Users/denovo/.obora/config.yaml",
               "/tmp/demo/.obora/config.yaml",
             ],
             globalConfigPath: "/Users/denovo/.obora/config.yaml",
             projectConfigPath: "/tmp/demo/.obora/config.yaml",
-            activeConfigPath: "/tmp/demo/.obora/config.yaml",
-            nextPlaceToEdit: "/tmp/demo/.obora/config.yaml",
+            activeConfigPath: mockedProjectConfigPath,
+            nextPlaceToEdit: mockedProjectConfigPath,
           }),
         }),
       );
