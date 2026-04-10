@@ -113,6 +113,40 @@ export interface DoctorOutputSections {
   };
 }
 
+export interface DoctorOverview {
+  status: "ready" | "needs_config" | "stub_mode";
+  message: string;
+  configuredProvider: string | null;
+  configuredModel: string | null;
+  resolvedProvider: string | null;
+  resolvedModel: string | null;
+  fallbackStub: boolean;
+  conflictSummary: string | null;
+  nextPlaceToEdit: string;
+}
+
+export interface DoctorDiagnosticsBundle {
+  checks: DoctorChecks;
+  auth: DoctorAuthDiagnostics;
+  config: DoctorConfigDiagnostics;
+  resolution: {
+    provider: string | null;
+    model: string | null;
+    authSource: string;
+    configSource: string;
+    modelSource: string;
+    chosenByPrecedence: string;
+    nextPlaceToEdit: string;
+    fallbackStub: boolean;
+    warnings: string[];
+  };
+}
+
+export interface DoctorGuidance {
+  recommendations: string[];
+  actions: DoctorAction[];
+}
+
 export const AUTH_ENV_EXAMPLES = ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "ZAI_API_KEY"] as const;
 
 export const AUTH_SETUP_GUIDE = "docs/tutorials/06-llm-config-auth-quickstart.md";
@@ -1070,6 +1104,64 @@ export function buildDoctorOutputSections(
       heading: "Recommended next actions",
       items: recommendations,
     },
+  };
+}
+
+export function buildDoctorOverview(
+  status: { status: "ready" | "needs_config" | "stub_mode"; message: string },
+  loadedConfig: OboraConfig | undefined,
+  summary: {
+    provider: string | null;
+    model: string | null;
+    nextPlaceToEdit: string;
+    fallbackStub: boolean;
+  },
+  authDiagnostics: DoctorAuthDiagnostics
+): DoctorOverview {
+  return {
+    status: status.status,
+    message: status.message,
+    configuredProvider: authDiagnostics.configuredProvider,
+    configuredModel: loadedConfig?.defaults?.model ?? null,
+    resolvedProvider: summary.provider,
+    resolvedModel: summary.model,
+    fallbackStub: summary.fallbackStub,
+    conflictSummary: authDiagnostics.conflictSummary,
+    nextPlaceToEdit: summary.nextPlaceToEdit,
+  };
+}
+
+export function buildDoctorDiagnosticsBundle(
+  checks: DoctorChecks,
+  authDiagnostics: DoctorAuthDiagnostics,
+  configDiagnostics: DoctorConfigDiagnostics,
+  summary: {
+    provider: string | null;
+    model: string | null;
+    authSource: string;
+    configSource: string;
+    modelSource: string;
+    chosenByPrecedence: string;
+    nextPlaceToEdit: string;
+    fallbackStub: boolean;
+    warnings: string[];
+  }
+): DoctorDiagnosticsBundle {
+  return {
+    checks,
+    auth: authDiagnostics,
+    config: configDiagnostics,
+    resolution: summary,
+  };
+}
+
+export function buildDoctorGuidance(
+  recommendations: string[],
+  actions: DoctorAction[]
+): DoctorGuidance {
+  return {
+    recommendations,
+    actions,
   };
 }
 

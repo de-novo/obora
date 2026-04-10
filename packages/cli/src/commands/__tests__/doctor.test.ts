@@ -162,6 +162,37 @@ describe("doctor command", () => {
               command: "obora doctor",
             }),
           ]),
+          overview: expect.objectContaining({
+            status: "needs_config",
+            fallbackStub: true,
+            configuredProvider: null,
+            resolvedProvider: null,
+            resolvedModel: null,
+          }),
+          diagnostics: expect.objectContaining({
+            checks: expect.objectContaining({
+              projectConfig: false,
+              globalConfig: false,
+            }),
+            auth: expect.objectContaining({
+              detectedProviders: [],
+            }),
+            resolution: expect.objectContaining({
+              fallbackStub: true,
+            }),
+          }),
+          guidance: expect.objectContaining({
+            recommendations: expect.arrayContaining([
+              expect.stringContaining("obora init --quickstart"),
+              expect.stringContaining("obora doctor"),
+            ]),
+            actions: expect.arrayContaining([
+              expect.objectContaining({
+                kind: "run",
+                command: expect.stringContaining("obora init --quickstart"),
+              }),
+            ]),
+          }),
           resolution: expect.objectContaining({
             fallbackStub: true,
           }),
@@ -578,6 +609,32 @@ describe("doctor command", () => {
               value: "openai",
             }),
           ]),
+          overview: expect.objectContaining({
+            status: "needs_config",
+            configuredProvider: "anthropic",
+            resolvedProvider: "openai",
+            conflictSummary: "config anthropic · env openai · resolved openai",
+          }),
+          diagnostics: expect.objectContaining({
+            auth: expect.objectContaining({
+              resolvedProvider: "openai",
+              conflictSummary: "config anthropic · env openai · resolved openai",
+            }),
+            config: expect.objectContaining({
+              nextPlaceToEdit: ".obora/config.yaml",
+            }),
+          }),
+          guidance: expect.objectContaining({
+            actions: expect.arrayContaining([
+              expect.objectContaining({
+                kind: "shell",
+                shellCommand: "unset OPENAI_API_KEY OPENAI_MODEL",
+              }),
+            ]),
+            recommendations: expect.arrayContaining([
+              "Resolved provider does not match configured provider. Either export ANTHROPIC_API_KEY=*** or switch defaults.provider to openai",
+            ]),
+          }),
         })
       );
     });

@@ -15,7 +15,10 @@ import {
   buildConfigDiagnostics,
   buildDoctorActions,
   buildDoctorChecks,
+  buildDoctorDiagnosticsBundle,
+  buildDoctorGuidance,
   buildDoctorOutputSections,
+  buildDoctorOverview,
   buildDoctorRecommendations,
   buildDoctorStatus,
   buildRecommendedProviderHint,
@@ -49,6 +52,14 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
     authDiagnostics,
     recommendations
   );
+  const overview = buildDoctorOverview(status, loadedConfig, summary, authDiagnostics);
+  const diagnostics = buildDoctorDiagnosticsBundle(
+    checks,
+    authDiagnostics,
+    configDiagnostics,
+    summary
+  );
+  const guidance = buildDoctorGuidance(recommendations, actions);
 
   if (options.json) {
     formatter.json({
@@ -62,6 +73,9 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
       status,
       recommendations,
       actions,
+      overview,
+      diagnostics,
+      guidance,
       resolution: summary,
       auth: authDiagnostics,
       config: configDiagnostics,
