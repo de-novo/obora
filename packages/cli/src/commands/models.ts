@@ -14,6 +14,24 @@ interface GlobalModelMatch {
   model: string;
 }
 
+function buildGlobalNoMatchHint(): string {
+  return `No models matched. Check the spelling or try \`obora models <provider> [query]\`.`;
+}
+
+function shellQuoteArg(value: string): string {
+  return `'${value.replace(/'/g, `'"'"'`)}'`;
+}
+
+function buildProviderNoMatchHint(query: string, providers: string[]): string {
+  const normalizedQuery = query.toLowerCase();
+  if (providers.some((provider) => provider.toLowerCase() == normalizedQuery)) {
+    return "No models matched this provider filter. Check the query spelling or search across all providers instead.";
+  }
+
+  const suggestedQuery = shellQuoteArg(query);
+  return `No models matched this provider filter. Check the query spelling or run \`obora models ${suggestedQuery}\`.`;
+}
+
 function filterModels(models: string[], query?: string): string[] {
   if (!query) {
     return models;
@@ -43,6 +61,7 @@ function printGlobalMatches(
       query,
       count: matches.length,
       matches,
+      ...(matches.length === 0 ? { hint: buildGlobalNoMatchHint() } : {}),
     });
     return;
   }
@@ -51,6 +70,11 @@ function printGlobalMatches(
   formatter.step("Source: pi-ai");
   formatter.step(`Global filter: ${query}`);
   formatter.step(`Match count: ${matches.length}`);
+  if (matches.length === 0) {
+    formatter.warn(buildGlobalNoMatchHint());
+    return;
+  }
+
   for (const match of matches) {
     formatter.step(`${match.provider}: ${match.model}`);
   }
@@ -84,6 +108,9 @@ export async function runModels(
         ...(query ? { query } : {}),
         count: models.length,
         models,
+        ...(models.length === 0 && query
+          ? { hint: buildProviderNoMatchHint(query, providers) }
+          : {}),
       });
       return;
     }
@@ -95,6 +122,11 @@ export async function runModels(
       formatter.step(`Filter: ${query}`);
     }
     formatter.step(`Model count: ${models.length}`);
+    if (models.length === 0 && query) {
+      formatter.warn(buildProviderNoMatchHint(query, providers));
+      return;
+    }
+
     for (const model of models) {
       formatter.step(model);
     }

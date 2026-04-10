@@ -88,6 +88,16 @@ describe("models command", () => {
     expect(formatter.step).toHaveBeenCalledWith("anthropic: claude-opus-4-6");
   });
 
+  it("prints a helpful hint when global search returns no matches in text mode", async () => {
+    await runModels("not-a-real-model", undefined, {});
+
+    expect(formatter.step).toHaveBeenCalledWith("Global filter: not-a-real-model");
+    expect(formatter.step).toHaveBeenCalledWith("Match count: 0");
+    expect(formatter.warn).toHaveBeenCalledWith(
+      "No models matched. Check the spelling or try `obora models <provider> [query]`."
+    );
+  });
+
   it("prints model list for a specific provider in text mode", async () => {
     await runModels("openai", undefined, {});
 
@@ -139,6 +149,71 @@ describe("models command", () => {
       query: "gpt-5",
       count: 2,
       models: ["gpt-5", "gpt-5.4"],
+    });
+  });
+
+  it("prints a helpful hint when provider filter returns no matches in json mode", async () => {
+    await runModels("openai", "not-a-real-model", { json: true });
+
+    expect(formatter.json).toHaveBeenCalledWith({
+      source: "pi-ai",
+      provider: "openai",
+      query: "not-a-real-model",
+      count: 0,
+      models: [],
+      hint: "No models matched this provider filter. Check the query spelling or run `obora models 'not-a-real-model'`.",
+    });
+  });
+
+  it("uses a generic provider zero-match hint when the query is also a provider name", async () => {
+    await runModels("openai", "anthropic", { json: true });
+
+    expect(formatter.json).toHaveBeenCalledWith({
+      source: "pi-ai",
+      provider: "openai",
+      query: "anthropic",
+      count: 0,
+      models: [],
+      hint: "No models matched this provider filter. Check the query spelling or search across all providers instead.",
+    });
+  });
+
+  it("uses the same generic hint for mixed-case provider-name queries", async () => {
+    await runModels("openai", "Anthropic", { json: true });
+
+    expect(formatter.json).toHaveBeenCalledWith({
+      source: "pi-ai",
+      provider: "openai",
+      query: "Anthropic",
+      count: 0,
+      models: [],
+      hint: "No models matched this provider filter. Check the query spelling or search across all providers instead.",
+    });
+  });
+
+  it("quotes multi-word provider filter hints so the suggested command stays valid", async () => {
+    await runModels("openai", "claude opus", { json: true });
+
+    expect(formatter.json).toHaveBeenCalledWith({
+      source: "pi-ai",
+      provider: "openai",
+      query: "claude opus",
+      count: 0,
+      models: [],
+      hint: "No models matched this provider filter. Check the query spelling or run `obora models 'claude opus'`.",
+    });
+  });
+
+  it("shell-quotes special characters in provider zero-match fallback commands", async () => {
+    await runModels("openai", "price $HOME", { json: true });
+
+    expect(formatter.json).toHaveBeenCalledWith({
+      source: "pi-ai",
+      provider: "openai",
+      query: "price $HOME",
+      count: 0,
+      models: [],
+      hint: "No models matched this provider filter. Check the query spelling or run `obora models 'price $HOME'`.",
     });
   });
 
