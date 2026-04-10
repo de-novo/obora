@@ -411,11 +411,11 @@ describe("doctor command", () => {
           config: expect.objectContaining({
             configSource: mockedConfigSource,
             sourceChain: [
-              "/Users/denovo/.obora/config.yaml",
-              "/tmp/demo/.obora/config.yaml",
+              mockedGlobalConfigPath,
+              mockedProjectConfigPath,
             ],
-            globalConfigPath: "/Users/denovo/.obora/config.yaml",
-            projectConfigPath: "/tmp/demo/.obora/config.yaml",
+            globalConfigPath: mockedGlobalConfigPath,
+            projectConfigPath: mockedProjectConfigPath,
             activeConfigPath: mockedProjectConfigPath,
             nextPlaceToEdit: mockedProjectConfigPath,
           }),
