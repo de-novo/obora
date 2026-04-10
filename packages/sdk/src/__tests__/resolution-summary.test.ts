@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vitest";
 
-import { buildResolutionSummary } from "../resolution-summary.js";
+import { buildBindingPreview, buildOutputPreview, buildResolutionSummary } from "../resolution-summary.js";
 
 describe("resolution-summary", () => {
   it("prefers env model source over config when env LLM is selected", () => {
-    process.env.OPENAI_API_KEY = "env-openai-key";
+    process.env.OPENAI_API_KEY="***";
     process.env.OPENAI_MODEL = "gpt-4o-mini";
 
     const summary = buildResolutionSummary(
       {},
       {
         provider: "openai",
-        apiKey: "env-openai-key",
+        apiKey: "***",
         model: "gpt-4o-mini",
       },
       {
@@ -57,5 +57,55 @@ describe("resolution-summary", () => {
 
     expect(summary.modelSource).toBe("config.defaults.model");
     expect(summary.chosenByPrecedence).toBe("config > env");
+  });
+
+  it("builds previews for judge-mode one-file workflow steps", () => {
+    const workflow = {
+      steps: [
+        {
+          name: "judge",
+          config: {
+            judge: {
+              enabled: true,
+              provider: "openai",
+              model: "gpt-4o-mini",
+              input_json: "artifacts/submission.json",
+              input_schema: "artifacts/submission.schema.json",
+              output_path: "artifacts/result.json",
+              output_schema: "artifacts/result.schema.json",
+            },
+          },
+        },
+      ],
+    };
+
+    expect(buildBindingPreview(workflow, "/tmp/nonexistent-preview-root")).toEqual([
+      {
+        stepName: "judge",
+        bindingName: "input",
+        path: "artifacts/submission.json",
+        kind: "json",
+        resolved: false,
+        required: true,
+      },
+      {
+        stepName: "judge",
+        bindingName: "schema",
+        path: "artifacts/submission.schema.json",
+        kind: "schema",
+        resolved: false,
+        required: true,
+      },
+    ]);
+
+    expect(buildOutputPreview(workflow, "/tmp/nonexistent-preview-root")).toEqual([
+      {
+        stepName: "judge",
+        path: "artifacts/result.json",
+        schema: "artifacts/result.schema.json",
+        pathResolved: false,
+        schemaResolved: false,
+      },
+    ]);
   });
 });

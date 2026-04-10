@@ -209,26 +209,69 @@ export function formatResolutionSummary(summary: ResolutionSummary): string {
   return lines.join("\n");
 }
 
-export function buildBindingPreview(workflow?: { steps?: Array<{ name: string; input?: Record<string, unknown> }> }, rootDir = process.cwd()): BindingPreviewEntry[] {
+type PreviewStep = {
+  name: string;
+  input?: Record<string, unknown>;
+  output?: { path?: string; schema?: string };
+  config?: Record<string, unknown>;
+};
+
+function getJudgePreviewConfig(step: PreviewStep): Record<string, unknown> | undefined {
+  const config = step.config;
+  if (!config || typeof config !== "object") return undefined;
+  const judge = (config as Record<string, unknown>).judge;
+  return judge && typeof judge === "object" ? (judge as Record<string, unknown>) : undefined;
+}
+
+function isResolvedPath(rootDir: string, path: string): boolean {
+  return existsSync(resolve(rootDir, path));
+}
+
+export function buildBindingPreview(workflow?: { steps?: PreviewStep[] }, rootDir = process.cwd()): BindingPreviewEntry[] {
   const entries: BindingPreviewEntry[] = [];
   for (const step of workflow?.steps ?? []) {
     const input = step.input;
     const bindings = input && typeof input === "object" ? (input as Record<string, unknown>).bindings : undefined;
-    if (!bindings || typeof bindings !== "object") continue;
-    for (const [bindingName, rawBinding] of Object.entries(bindings as Record<string, unknown>)) {
-      if (!rawBinding || typeof rawBinding !== "object") continue;
-      const binding = rawBinding as Record<string, unknown>;
-      const path = typeof binding.path === "string" ? binding.path : undefined;
-      if (!path) continue;
-      const kind = typeof binding.kind === "string" ? binding.kind : "text";
-      const required = binding.required !== false;
+    if (bindings && typeof bindings === "object") {
+      for (const [bindingName, rawBinding] of Object.entries(bindings as Record<string, unknown>)) {
+        if (!rawBinding || typeof rawBinding !== "object") continue;
+        const binding = rawBinding as Record<string, unknown>;
+        const path = typeof binding.path === "string" ? binding.path : undefined;
+        if (!path) continue;
+        const kind = typeof binding.kind === "string" ? binding.kind : "text";
+        const required = binding.required !== false;
+        entries.push({
+          stepName: step.name,
+          bindingName,
+          path,
+          kind,
+          required,
+          resolved: isResolvedPath(rootDir, path),
+        });
+      }
+    }
+
+    const judgeConfig = getJudgePreviewConfig(step);
+    const inputJson = typeof judgeConfig?.input_json === "string" ? judgeConfig.input_json : undefined;
+    if (inputJson) {
       entries.push({
         stepName: step.name,
-        bindingName,
-        path,
-        kind,
-        required,
-        resolved: existsSync(resolve(rootDir, path)),
+        bindingName: "input",
+        path: inputJson,
+        kind: "json",
+        required: true,
+        resolved: isResolvedPath(rootDir, inputJson),
+      });
+    }
+    const inputSchema = typeof judgeConfig?.input_schema === "string" ? judgeConfig.input_schema : undefined;
+    if (inputSchema) {
+      entries.push({
+        stepName: step.name,
+        bindingName: "schema",
+        path: inputSchema,
+        kind: "schema",
+        required: true,
+        resolved: isResolvedPath(rootDir, inputSchema),
       });
     }
   }
@@ -246,20 +289,28 @@ export function formatBindingPreview(entries: BindingPreviewEntry[]): string {
   return lines.join("\n");
 }
 
-export function buildOutputPreview(workflow?: { steps?: Array<{ name: string; output?: { path?: string; schema?: string } }> }, rootDir = process.cwd()): OutputPreviewEntry[] {
+export function buildOutputPreview(workflow?: { steps?: PreviewStep[] }, rootDir = process.cwd()): OutputPreviewEntry[] {
   const entries: OutputPreviewEntry[] = [];
   for (const step of workflow?.steps ?? []) {
     const output = step.output;
-    if (!output || typeof output !== "object") continue;
-    const path = typeof output.path === "string" ? output.path : undefined;
-    const schema = typeof output.schema === "string" ? output.schema : undefined;
+    const judgeConfig = getJudgePreviewConfig(step);
+    const path = typeof output?.path === "string"
+      ? output.path
+      : typeof judgeConfig?.output_path === "string"
+        ? judgeConfig.output_path
+        : undefined;
+    const schema = typeof output?.schema === "string"
+      ? output.schema
+      : typeof judgeConfig?.output_schema === "string"
+        ? judgeConfig.output_schema
+        : undefined;
     if (!path && !schema) continue;
     entries.push({
       stepName: step.name,
       path,
       schema,
-      pathResolved: path ? existsSync(resolve(rootDir, path)) : undefined,
-      schemaResolved: schema ? existsSync(resolve(rootDir, schema)) : undefined,
+      pathResolved: path ? isResolvedPath(rootDir, path) : undefined,
+      schemaResolved: schema ? isResolvedPath(rootDir, schema) : undefined,
     });
   }
   return entries;

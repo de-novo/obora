@@ -99,8 +99,21 @@ describe("CLI quickstart integration", () => {
           fallbackStub: true,
           nextPlaceToEdit: expect.stringContaining('.obora/config.yaml'),
         }),
-        bindingPreview: expect.any(Array),
-        outputPreview: expect.any(Array),
+        bindingPreview: expect.arrayContaining([
+          expect.objectContaining({
+            stepName: "judge",
+            bindingName: "input",
+            path: "artifacts/submission.json",
+            kind: "json",
+          }),
+        ]),
+        outputPreview: expect.arrayContaining([
+          expect.objectContaining({
+            stepName: "judge",
+            path: "artifacts/result.json",
+            schema: "artifacts/result.schema.json",
+          }),
+        ]),
       }),
     );
     expect(errorSpy).not.toHaveBeenCalled();
@@ -240,8 +253,21 @@ describe("CLI quickstart integration", () => {
           modelSource: "env(ANTHROPIC_MODEL)",
           chosenByPrecedence: "env > config",
         }),
-        bindingPreview: expect.any(Array),
-        outputPreview: expect.any(Array),
+        bindingPreview: expect.arrayContaining([
+          expect.objectContaining({
+            stepName: "judge",
+            bindingName: "input",
+            path: "artifacts/submission.json",
+            kind: "json",
+          }),
+        ]),
+        outputPreview: expect.arrayContaining([
+          expect.objectContaining({
+            stepName: "judge",
+            path: "artifacts/result.json",
+            schema: "artifacts/result.schema.json",
+          }),
+        ]),
       }),
     );
   });
