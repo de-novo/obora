@@ -6,10 +6,10 @@ vi.mock("@obora/adapters", () => ({
   listPiAIProviders: vi.fn(() => ["openai", "anthropic"]),
   listPiAIModels: vi.fn((provider: string) => {
     if (provider === "openai") {
-      return ["gpt-4o-mini", "gpt-4o", "gpt-5"];
+      return ["gpt-4o-mini", "gpt-4o", "gpt-5", "gpt-5.4"];
     }
     if (provider === "anthropic") {
-      return ["claude-3-7-sonnet-20250219"];
+      return ["claude-3-7-sonnet-20250219", "claude-opus-4-6"];
     }
     throw new Error(`Unsupported provider: ${provider}`);
   }),
@@ -57,10 +57,35 @@ describe("models command", () => {
     expect(formatter.json).toHaveBeenCalledWith({
       source: "pi-ai",
       providers: [
-        { provider: "openai", count: 3 },
-        { provider: "anthropic", count: 1 },
+        { provider: "openai", count: 4 },
+        { provider: "anthropic", count: 2 },
       ],
     });
+  });
+
+  it("treats an unknown first arg as global query in json mode", async () => {
+    await runModels("gpt-5", undefined, { json: true });
+
+    expect(formatter.json).toHaveBeenCalledWith({
+      source: "pi-ai",
+      query: "gpt-5",
+      count: 2,
+      matches: [
+        { provider: "openai", model: "gpt-5" },
+        { provider: "openai", model: "gpt-5.4" },
+      ],
+    });
+  });
+
+  it("treats an unknown first arg as global query in text mode", async () => {
+    await runModels("claude", undefined, {});
+
+    expect(formatter.info).toHaveBeenCalledWith("Obora models");
+    expect(formatter.step).toHaveBeenCalledWith("Source: pi-ai");
+    expect(formatter.step).toHaveBeenCalledWith("Global filter: claude");
+    expect(formatter.step).toHaveBeenCalledWith("Match count: 2");
+    expect(formatter.step).toHaveBeenCalledWith("anthropic: claude-3-7-sonnet-20250219");
+    expect(formatter.step).toHaveBeenCalledWith("anthropic: claude-opus-4-6");
   });
 
   it("prints model list for a specific provider in text mode", async () => {
@@ -69,7 +94,7 @@ describe("models command", () => {
     expect(formatter.info).toHaveBeenCalledWith("Obora models");
     expect(formatter.step).toHaveBeenCalledWith("Source: pi-ai");
     expect(formatter.step).toHaveBeenCalledWith("Provider: openai");
-    expect(formatter.step).toHaveBeenCalledWith("Model count: 3");
+    expect(formatter.step).toHaveBeenCalledWith("Model count: 4");
     expect(formatter.step).toHaveBeenCalledWith("gpt-4o-mini");
     expect(formatter.step).toHaveBeenCalledWith("gpt-4o");
     expect(formatter.step).toHaveBeenCalledWith("gpt-5");
@@ -81,13 +106,19 @@ describe("models command", () => {
     expect(formatter.json).toHaveBeenCalledWith({
       source: "pi-ai",
       provider: "anthropic",
-      count: 1,
-      models: ["claude-3-7-sonnet-20250219"],
+      count: 2,
+      models: ["claude-3-7-sonnet-20250219", "claude-opus-4-6"],
     });
   });
 
-  it("throws a helpful error for unsupported providers", async () => {
-    await expect(runModels("unknown-provider", undefined, {})).rejects.toThrow(
+  it("throws a helpful error for unsupported providers when a provider filter is explicit", async () => {
+    await expect(runModels("unknown-provider", "mini", {})).rejects.toThrow(
+      "Unsupported provider 'unknown-provider'. Supported providers: openai, anthropic"
+    );
+  });
+
+  it("throws a helpful error for unsupported providers when an empty explicit query is supplied", async () => {
+    await expect(runModels("unknown-provider", "", {})).rejects.toThrow(
       "Unsupported provider 'unknown-provider'. Supported providers: openai, anthropic"
     );
   });
@@ -106,8 +137,8 @@ describe("models command", () => {
       source: "pi-ai",
       provider: "openai",
       query: "gpt-5",
-      count: 1,
-      models: ["gpt-5"],
+      count: 2,
+      models: ["gpt-5", "gpt-5.4"],
     });
   });
 
