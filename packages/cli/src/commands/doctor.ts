@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
+import { listPiAIModels } from "@obora/adapters";
 import {
   buildResolutionSummary,
   detectLLMConfigFromEnv,
@@ -151,11 +152,156 @@ const PROVIDER_AUTH_ENV_KEY_MAP: Record<string, string> = {
 };
 
 const PROVIDER_DEFAULT_MODEL_MAP: Record<string, string> = {
-  anthropic: "claude-3-7-sonnet-latest",
-  openai: "gpt-4o-mini",
-  openrouter: "openai/gpt-4o-mini",
-  zai: "glm-4.7",
+  anthropic: "claude-opus-4-6",
+  openai: "gpt-5.4",
+  openrouter: "openai/gpt-5.4",
+  zai: "glm-5",
 };
+
+function selectOpenAILatestModel(models: string[]): string | undefined {
+  const scored = models
+    .map((model) => {
+      const match = /^gpt-(\d+)(?:\.(\d+))?$/.exec(model);
+      if (!match) return null;
+      return {
+        model,
+        major: Number(match[1] ?? 0),
+        minor: Number(match[2] ?? 0),
+      };
+    })
+    .filter((entry): entry is { model: string; major: number; minor: number } => entry !== null)
+    .sort((left, right) => right.major - left.major || right.minor - left.minor);
+
+  return scored[0]?.model;
+}
+
+interface AnthropicModelScore {
+  model: string;
+  family: number;
+  major: number;
+  minor: number;
+  stableAlias: boolean;
+  snapshotDate: number;
+}
+
+function parseAnthropicModel(
+  model: string,
+  familyPriority: Record<string, number>
+): AnthropicModelScore | null {
+  const modernMatch = /^claude-(opus|sonnet|haiku)-(\d+)-(\d+)(?:-(\d{8}))?$/.exec(model);
+  if (modernMatch) {
+    const major = Number(modernMatch[2] ?? 0);
+    const thirdToken = modernMatch[3] ?? "0";
+    const snapshotDate = modernMatch[4] ? Number(modernMatch[4]) : 0;
+
+    if (!modernMatch[4] && thirdToken.length === 8) {
+      return {
+        model,
+        family: familyPriority[modernMatch[1] ?? ""] ?? 0,
+        major,
+        minor: 0,
+        stableAlias: false,
+        snapshotDate: Number(thirdToken),
+      };
+    }
+
+    return {
+      model,
+      family: familyPriority[modernMatch[1] ?? ""] ?? 0,
+      major,
+      minor: Number(thirdToken),
+      stableAlias: !modernMatch[4],
+      snapshotDate,
+    };
+  }
+
+  const legacyMatch = /^claude-(\d+)-(\d+)-(opus|sonnet|haiku)(?:-(latest|\d{8}))?$/.exec(model);
+  if (!legacyMatch) {
+    return null;
+  }
+
+  return {
+    model,
+    family: familyPriority[legacyMatch[3] ?? ""] ?? 0,
+    major: Number(legacyMatch[1] ?? 0),
+    minor: Number(legacyMatch[2] ?? 0),
+    stableAlias: !legacyMatch[4] || legacyMatch[4] === "latest",
+    snapshotDate: legacyMatch[4] && legacyMatch[4] !== "latest" ? Number(legacyMatch[4]) : 0,
+  };
+}
+
+function selectAnthropicLatestModel(models: string[]): string | undefined {
+  const familyPriority: Record<string, number> = {
+    opus: 3,
+    sonnet: 2,
+    haiku: 1,
+  };
+
+  const scored = models
+    .map((model) => parseAnthropicModel(model, familyPriority))
+    .filter((entry): entry is AnthropicModelScore => entry !== null)
+    .sort(
+      (left, right) =>
+        right.family - left.family ||
+        right.major - left.major ||
+        right.minor - left.minor ||
+        Number(right.stableAlias) - Number(left.stableAlias) ||
+        right.snapshotDate - left.snapshotDate
+    );
+
+  return scored[0]?.model;
+}
+
+function selectZAILatestModel(models: string[]): string | undefined {
+  const scored = models
+    .map((model) => {
+      const match = /^glm-(\d+)(?:\.(\d+))?$/.exec(model);
+      if (!match) return null;
+      return {
+        model,
+        major: Number(match[1] ?? 0),
+        minor: Number(match[2] ?? 0),
+      };
+    })
+    .filter((entry): entry is { model: string; major: number; minor: number } => entry !== null)
+    .sort((left, right) => right.major - left.major || right.minor - left.minor);
+
+  return scored[0]?.model;
+}
+
+function selectOpenRouterLatestModel(models: string[]): string | undefined {
+  const openaiModels = models.filter((model) => model.startsWith("openai/"));
+  const selectedOpenAI = selectOpenAILatestModel(
+    openaiModels.map((model) => model.replace(/^openai\//, ""))
+  );
+  return selectedOpenAI ? `openai/${selectedOpenAI}` : undefined;
+}
+
+function inferLatestCatalogModel(provider: string): string | undefined {
+  let models: string[];
+  try {
+    models = listPiAIModels(provider);
+  } catch {
+    return undefined;
+  }
+
+  if (models.length === 0) {
+    return undefined;
+  }
+
+  switch (provider) {
+    case "openai":
+      return selectOpenAILatestModel(models);
+    case "anthropic":
+      return selectAnthropicLatestModel(models);
+    case "zai":
+      return selectZAILatestModel(models);
+    case "openrouter":
+      return selectOpenRouterLatestModel(models);
+    default:
+      return undefined;
+  }
+}
 
 function inferAuthEnvKey(provider: string): string {
   return (
@@ -172,7 +318,9 @@ function inferModelEnvKey(provider: string): string {
 }
 
 function inferDefaultModel(provider: string): string {
-  return PROVIDER_DEFAULT_MODEL_MAP[provider] ?? "your-model-name";
+  return (
+    inferLatestCatalogModel(provider) ?? PROVIDER_DEFAULT_MODEL_MAP[provider] ?? "your-model-name"
+  );
 }
 
 function buildProviderSetupExamples(provider: string | null): ProviderSetupExamples {
