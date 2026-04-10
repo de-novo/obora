@@ -440,6 +440,42 @@ describe("run command", () => {
       );
     });
 
+    it("should include overview, diagnostics, and guidance in dry-run JSON", async () => {
+      await runRun("judge.yaml", { dryRun: true, json: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          overview: expect.objectContaining({
+            workflow: "loaded-workflow",
+            validated: true,
+            resolvedProvider: "none",
+            resolvedModel: "none",
+            fallbackStub: true,
+            bindingCount: 1,
+            outputCount: 1,
+            nextStep: "obora run judge.yaml",
+          }),
+          diagnostics: expect.objectContaining({
+            resolution: expect.objectContaining({
+              provider: "none",
+              fallbackStub: true,
+            }),
+            bindingPreview: expect.any(Array),
+            outputPreview: expect.any(Array),
+          }),
+          guidance: {
+            recommendations: [
+              "Stub mode: configure auth with `obora doctor` before live execution.",
+            ],
+            actions: [
+              { kind: "run", command: "obora doctor" },
+              { kind: "run", command: "obora run judge.yaml" },
+            ],
+          },
+        })
+      );
+    });
+
     it("should print resolution preview in dry-run text mode", async () => {
       await runRun("my-workflow", { dryRun: true });
 
@@ -452,6 +488,15 @@ describe("run command", () => {
       await runRun("judge.yaml", { dryRun: true });
 
       expect(formatter.info).toHaveBeenCalledWith("Next step: obora run judge.yaml");
+    });
+
+    it("should point to doctor before live execution when dry-run stays in stub mode", async () => {
+      await runRun("judge.yaml", { dryRun: true });
+
+      expect(formatter.warn).toHaveBeenCalledWith(
+        "Stub mode: configure auth with `obora doctor` before live execution."
+      );
+      expect(formatter.info).toHaveBeenCalledWith("Before live execution: obora doctor");
     });
 
     it("should print binding/output previews when available", async () => {

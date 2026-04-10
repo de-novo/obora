@@ -99,6 +99,28 @@ describe("CLI quickstart integration", () => {
           fallbackStub: true,
           nextPlaceToEdit: expect.stringContaining(".obora/config.yaml"),
         }),
+        overview: expect.objectContaining({
+          workflow: "quickstart-judge",
+          validated: true,
+          resolvedProvider: null,
+          resolvedModel: null,
+          fallbackStub: true,
+          nextStep: "obora run judge.yaml",
+        }),
+        diagnostics: expect.objectContaining({
+          resolution: expect.objectContaining({
+            fallbackStub: true,
+          }),
+          bindingPreview: expect.any(Array),
+          outputPreview: expect.any(Array),
+        }),
+        guidance: {
+          recommendations: ["Stub mode: configure auth with `obora doctor` before live execution."],
+          actions: [
+            { kind: "run", command: "obora doctor" },
+            { kind: "run", command: "obora run judge.yaml" },
+          ],
+        },
         bindingPreview: expect.arrayContaining([
           expect.objectContaining({
             stepName: "judge",
@@ -395,6 +417,10 @@ describe("CLI quickstart integration", () => {
     expect(stdout).toContain("Output Preview");
     expect(stdout).toContain("path <- artifacts/result.json [pending]");
     expect(stdout).toContain("schema <- artifacts/result.schema.json [resolved]");
-    expect(errorSpy).not.toHaveBeenCalled();
+
+    const stderr = errorSpy.mock.calls.map((call) => String(call[0] ?? "")).join("\n");
+    expect(stderr).toContain(
+      "Stub mode: configure auth with `obora doctor` before live execution."
+    );
   });
 });

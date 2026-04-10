@@ -55,6 +55,16 @@ const DEBUG_EVENT_TYPES = [
   "knowledge_context_attached",
 ] as const;
 
+interface RunGuidanceAction {
+  kind: "run";
+  command: string;
+}
+
+interface DryRunGuidance {
+  recommendations: string[];
+  actions: RunGuidanceAction[];
+}
+
 function clipDebug(value: unknown, max = 180): string {
   if (value === undefined || value === null) return "";
   const text = typeof value === "string" ? value : JSON.stringify(value);
@@ -106,6 +116,66 @@ function summarizeDebugEvent(type: string, data: Record<string, unknown> | undef
     default:
       return clipDebug(data);
   }
+}
+
+function buildDryRunGuidance(
+  workflowCommand: string,
+  resolutionSummary: {
+    fallbackStub: boolean;
+  }
+): DryRunGuidance {
+  const actions: RunGuidanceAction[] = [{ kind: "run", command: `obora run ${workflowCommand}` }];
+  const recommendations: string[] = [];
+
+  if (resolutionSummary.fallbackStub) {
+    actions.unshift({ kind: "run", command: "obora doctor" });
+    recommendations.push("Stub mode: configure auth with `obora doctor` before live execution.");
+  } else {
+    recommendations.push("Dry run passed. Start live execution when ready.");
+  }
+
+  return { recommendations, actions };
+}
+
+function buildDryRunOverview(
+  workflowName: string,
+  workflowCommand: string,
+  resolutionSummary: {
+    provider: string | null;
+    model: string | null;
+    fallbackStub: boolean;
+  },
+  bindingPreviewEntries: unknown[],
+  outputPreviewEntries: unknown[]
+): Record<string, unknown> {
+  return {
+    workflow: workflowName,
+    validated: true,
+    resolvedProvider: resolutionSummary.provider,
+    resolvedModel: resolutionSummary.model,
+    fallbackStub: resolutionSummary.fallbackStub,
+    bindingCount: bindingPreviewEntries.length,
+    outputCount: outputPreviewEntries.length,
+    nextStep: `obora run ${workflowCommand}`,
+  };
+}
+
+function buildDryRunDiagnostics(
+  resolutionSummary: Record<string, unknown>,
+  bindingPreviewEntries: unknown[],
+  outputPreviewEntries: unknown[],
+  extras: {
+    expandedWorkflow?: unknown;
+    stopSemantics?: unknown;
+  } = {}
+): Record<string, unknown> {
+  return {
+    resolution: resolutionSummary,
+    bindingPreview: bindingPreviewEntries,
+    outputPreview: outputPreviewEntries,
+    ...(extras.expandedWorkflow !== undefined ? { expandedWorkflow: extras.expandedWorkflow } : {}),
+    ...(extras.stopSemantics !== undefined ? { stopSemantics: extras.stopSemantics } : {}),
+  };
 }
 
 export async function runRun(workflow: string, options: Record<string, unknown>): Promise<void> {
@@ -285,6 +355,24 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
   }
 
   if (options.dryRun) {
+    const guidance = buildDryRunGuidance(workflow, resolutionSummary);
+    const overview = buildDryRunOverview(
+      workflowName,
+      workflow,
+      resolutionSummary,
+      bindingPreviewEntries,
+      outputPreviewEntries
+    );
+    const diagnostics = buildDryRunDiagnostics(
+      resolutionSummary,
+      bindingPreviewEntries,
+      outputPreviewEntries,
+      {
+        ...(options.dumpExpandedWorkflow ? { expandedWorkflow } : {}),
+        ...(options.showStopSemantics ? { stopSemantics } : {}),
+      }
+    );
+
     if (isJsonOutput(options)) {
       formatter.json({
         workflow: workflowName,
@@ -292,6 +380,9 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
         resolution: resolutionSummary,
         bindingPreview: bindingPreviewEntries,
         outputPreview: outputPreviewEntries,
+        overview,
+        diagnostics,
+        guidance,
         ...(options.dumpExpandedWorkflow ? { expandedWorkflow } : {}),
         ...(options.showStopSemantics ? { stopSemantics } : {}),
         elapsedMs: Date.now() - startedAt,
@@ -307,6 +398,10 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
         formatter.json(stopSemantics);
       }
       formatter.info("Dry run preview complete. No execution was started.");
+      if (resolutionSummary.fallbackStub) {
+        formatter.warn("Stub mode: configure auth with `obora doctor` before live execution.");
+        formatter.info("Before live execution: obora doctor");
+      }
       formatter.info(`Next step: obora run ${workflow}`);
       if (isVerboseOutput(options)) {
         formatter.info(`Validation completed in ${Date.now() - startedAt}ms`);
