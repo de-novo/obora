@@ -141,6 +141,12 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
     config: loadedConfig,
     llm: runtimeLLM,
     verbose: Boolean(options.verbose),
+    logger: {
+      info: () => undefined,
+      warn: () => undefined,
+      error: () => undefined,
+      debug: () => undefined,
+    },
   });
 
   if (isVerboseOutput(options) && !isQuietOutput(options) && !isJsonOutput(options)) {

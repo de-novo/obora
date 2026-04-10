@@ -647,6 +647,21 @@ describe("run command", () => {
       expect(formatter.success).not.toHaveBeenCalled();
     });
 
+    it("should silence runtime startup logs in json mode", async () => {
+      await runRun("my-workflow", { json: true });
+
+      expect(MockOboraRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({
+          logger: expect.objectContaining({
+            info: expect.any(Function),
+            warn: expect.any(Function),
+            error: expect.any(Function),
+            debug: expect.any(Function),
+          }),
+        })
+      );
+    });
+
     it("should include elapsed time in JSON output", async () => {
       await runRun("my-workflow", { json: true });
 
