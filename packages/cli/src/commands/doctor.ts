@@ -70,6 +70,17 @@ interface DoctorConfigDiagnostics {
   nextPlaceToEdit: string;
 }
 
+interface DoctorAction {
+  kind: "run" | "env" | "shell" | "config" | "doc";
+  command?: string;
+  shellCommand?: string;
+  envKey?: string;
+  envKeys?: string[];
+  path?: string;
+  key?: string;
+  value?: string;
+}
+
 interface DoctorOutputSections {
   status: {
     heading: "Status";
@@ -654,6 +665,105 @@ function isConfigFilePath(path: string): boolean {
   return /\.(ya?ml)$/i.test(path);
 }
 
+function pushDoctorAction(actions: DoctorAction[], action: DoctorAction): void {
+  const signature = JSON.stringify(action);
+  if (actions.some((existing) => JSON.stringify(existing) === signature)) {
+    return;
+  }
+  actions.push(action);
+}
+
+function buildDetectedProviderMismatchActions(
+  checks: DoctorChecks,
+  providerHint: DoctorProviderHint,
+  authDiagnostics: DoctorAuthDiagnostics
+): DoctorAction[] {
+  if (!authDiagnostics.providerMismatchWarning || !providerHint.recommendedAuthEnvKey) {
+    return [];
+  }
+
+  const actions: DoctorAction[] = [
+    {
+      kind: "env",
+      envKey: providerHint.recommendedAuthEnvKey,
+      shellCommand: `export ${providerHint.recommendedAuthEnvKey}=***`,
+    },
+  ];
+
+  const envKeysToUnset = authDiagnostics.detectedProviders.flatMap((provider) => {
+    const keys = [inferAuthEnvKey(provider)];
+    const modelEnvKey = PROVIDER_MODEL_ENV_KEY_MAP[provider];
+    if (modelEnvKey) {
+      keys.push(modelEnvKey);
+    }
+    return keys;
+  });
+
+  if (envKeysToUnset.length > 0) {
+    actions.push({
+      kind: "shell",
+      shellCommand: `unset ${Array.from(new Set(envKeysToUnset)).join(" ")}`,
+      envKeys: Array.from(new Set(envKeysToUnset)),
+    });
+  }
+
+  if (authDiagnostics.detectedProviders.length === 1) {
+    actions.push({
+      kind: "config",
+      path: checks.projectConfigPath,
+      key: "defaults.provider",
+      value: authDiagnostics.detectedProviders[0],
+    });
+  }
+
+  return actions;
+}
+
+function buildResolvedProviderMismatchActions(
+  summary: { provider: string | null; nextPlaceToEdit: string },
+  providerHint: DoctorProviderHint,
+  authDiagnostics: DoctorAuthDiagnostics
+): DoctorAction[] {
+  if (!summary.provider || !providerHint.configuredProvider) {
+    return [];
+  }
+
+  if (summary.provider === providerHint.configuredProvider) {
+    return [];
+  }
+
+  const actions: DoctorAction[] = [
+    {
+      kind: "env",
+      envKey: inferAuthEnvKey(providerHint.configuredProvider),
+      shellCommand: `export ${inferAuthEnvKey(providerHint.configuredProvider)}=***`,
+    },
+  ];
+
+  const envKeysToUnset = [
+    authDiagnostics.resolvedAuthEnvKey,
+    authDiagnostics.resolvedModelEnvKey,
+  ].filter((key): key is string => Boolean(key));
+  if (envKeysToUnset.length > 0) {
+    actions.push({
+      kind: "shell",
+      shellCommand: `unset ${Array.from(new Set(envKeysToUnset)).join(" ")}`,
+      envKeys: Array.from(new Set(envKeysToUnset)),
+    });
+  }
+
+  if (isConfigFilePath(summary.nextPlaceToEdit)) {
+    actions.push({
+      kind: "config",
+      path: summary.nextPlaceToEdit,
+      key: "defaults.provider",
+      value: summary.provider,
+    });
+  }
+
+  return actions;
+}
+
 function buildResolvedProviderMismatchRecommendations(
   summary: { provider: string | null; nextPlaceToEdit: string },
   providerHint: DoctorProviderHint,
@@ -837,6 +947,66 @@ function buildDoctorRecommendations(
   return recommendations;
 }
 
+function buildDoctorActions(
+  checks: DoctorChecks,
+  summary: {
+    provider: string | null;
+    model: string | null;
+    authSource: string;
+    configSource: string;
+    nextPlaceToEdit: string;
+    fallbackStub: boolean;
+    warnings: string[];
+  },
+  providerHint: DoctorProviderHint,
+  authDiagnostics: DoctorAuthDiagnostics
+): DoctorAction[] {
+  const actions: DoctorAction[] = [];
+
+  if (!checks.projectConfig) {
+    pushDoctorAction(actions, { kind: "run", command: "obora init --quickstart" });
+  }
+
+  if (summary.authSource === "none") {
+    pushDoctorAction(actions, { kind: "run", command: "obora doctor" });
+    pushDoctorAction(actions, { kind: "doc", path: authDiagnostics.setupGuide });
+  }
+
+  for (const action of buildDetectedProviderMismatchActions(
+    checks,
+    providerHint,
+    authDiagnostics
+  )) {
+    pushDoctorAction(actions, action);
+  }
+
+  for (const action of buildResolvedProviderMismatchActions(
+    summary,
+    providerHint,
+    authDiagnostics
+  )) {
+    pushDoctorAction(actions, action);
+  }
+
+  if (summary.provider && !summary.model) {
+    pushDoctorAction(actions, {
+      kind: "env",
+      envKey: inferModelEnvKey(summary.provider),
+      shellCommand: `export ${inferModelEnvKey(summary.provider)}=***`,
+    });
+  }
+
+  if (summary.fallbackStub) {
+    pushDoctorAction(actions, { kind: "run", command: "obora run judge.yaml --dry-run" });
+  }
+
+  if (actions.length === 0 && summary.warnings.length === 0) {
+    pushDoctorAction(actions, { kind: "run", command: "obora run judge.yaml" });
+  }
+
+  return actions;
+}
+
 function buildDoctorOutputSections(
   checks: DoctorChecks,
   status: { status: "ready" | "needs_config" | "stub_mode"; message: string },
@@ -942,6 +1112,7 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
     providerHint,
     authDiagnostics
   );
+  const actions = buildDoctorActions(checks, summary, providerHint, authDiagnostics);
   const sections = buildDoctorOutputSections(
     checks,
     status,
@@ -963,6 +1134,7 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
       },
       status,
       recommendations,
+      actions,
       resolution: summary,
       auth: authDiagnostics,
       config: configDiagnostics,
