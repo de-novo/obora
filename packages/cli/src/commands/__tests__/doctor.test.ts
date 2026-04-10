@@ -479,6 +479,8 @@ describe("doctor command", () => {
           auth: expect.objectContaining({
             providerMismatchWarning:
               "Configured provider 'anthropic' differs from detected env auth providers: openai",
+            conflictSummary:
+              "configured provider anthropic, detected env auth openai, resolved provider none",
           }),
           recommendations: expect.arrayContaining([
             "Detected env auth does not match configured provider. Either export ANTHROPIC_API_KEY=*** or switch defaults.provider to one of: openai",
@@ -503,6 +505,9 @@ describe("doctor command", () => {
 
       expect(formatter.warn).toHaveBeenCalledWith(
         "Configured provider 'anthropic' differs from detected env auth providers: openai"
+      );
+      expect(formatter.warn).toHaveBeenCalledWith(
+        "Conflict summary: configured provider anthropic, detected env auth openai, resolved provider none"
       );
     });
 
@@ -537,6 +542,8 @@ describe("doctor command", () => {
             resolvedModelEnvExample: "export OPENAI_MODEL=gpt-5.4",
             resolvedModelConfigExample: "providers:\n  openai:\n    defaultModel: gpt-5.4",
             resolvedModelRecommendationReason: "pi-ai catalog latest GPT base model for openai",
+            conflictSummary:
+              "configured provider anthropic, detected env auth openai, resolved provider openai",
           }),
           recommendations: expect.arrayContaining([
             "Resolved provider does not match configured provider. Either export ANTHROPIC_API_KEY=*** or switch defaults.provider to openai",

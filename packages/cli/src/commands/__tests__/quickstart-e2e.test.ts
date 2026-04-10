@@ -221,6 +221,8 @@ describe("CLI quickstart integration", () => {
           resolvedProvider: "openai",
           providerMismatchWarning:
             "Configured provider 'anthropic' differs from detected env auth providers: openai",
+          conflictSummary:
+            "configured provider anthropic, detected env auth openai, resolved provider openai",
           resolvedModelEnvExample: "export OPENAI_MODEL=gpt-5.4",
         }),
         recommendations: expect.arrayContaining([
@@ -324,6 +326,9 @@ describe("CLI quickstart integration", () => {
     expect(stdout).toContain("Resolved provider model env example: export OPENAI_MODEL=gpt-5.4");
     expect(stderr).toContain(
       "Configured provider 'anthropic' differs from detected env auth providers: openai"
+    );
+    expect(stderr).toContain(
+      "Conflict summary: configured provider anthropic, detected env auth openai, resolved provider openai"
     );
   });
 
