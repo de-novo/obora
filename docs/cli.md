@@ -194,7 +194,7 @@ obora run <workflow> [options]
 - `-i, --input <json>` input JSON string
 - `-v, --var <key=value...>` repeatable variables
 - `--policy <path>` policy YAML path
-- `--dry-run` validate only (no execution)
+- `--dry-run` validate only (no execution) and print resolution/binding/output previews when available
 - `--timeout <ms>` execution timeout in milliseconds
 
 ### Examples
@@ -205,7 +205,14 @@ obora run workflow.yaml --input '{"topic":"safety"}'
 obora run my-workflow --var env=prod --var region=ap-northeast-2
 obora run workflow.yaml --dry-run
 obora run judge.yaml --dry-run
+obora --json run judge.yaml --dry-run
 ```
+
+Dry-run output includes:
+- `Execution Resolution`
+- `Binding Preview` / `Output Preview` in text mode when previewable paths exist
+- `resolution`, `bindingPreview`, and `outputPreview` in JSON mode
+- for quickstart one-file judge workflows, preview entries are derived from the expanded `config.judge` input/output paths
 
 ### Exit Codes
 

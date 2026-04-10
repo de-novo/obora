@@ -55,7 +55,7 @@ Prerequisites:
 What this path gives you:
 - `obora init --quickstart` creates a minimal judge-mode project
 - `obora doctor` shows ready/stub/missing-auth status and next actions
-- `obora run judge.yaml --dry-run` validates the workflow without starting execution
+- `obora run judge.yaml --dry-run` validates the workflow without starting execution and previews the input/output contract
 
 ### Recommended Getting Started Path
 
@@ -219,7 +219,7 @@ This authoring style makes workflows easier to operate because:
 
 ### One-File Judge Short Path
 
-If you want the shortest JSON-in / JSON-out path for a single evaluation, use one-file judge mode:
+If you want the shortest JSON-in / JSON-out path for a single evaluation, use one-file judge mode. `obora run <file> --dry-run` now previews the same input/output paths from the expanded judge config in both text and JSON output:
 
 ```yaml
 name: one-file-judge

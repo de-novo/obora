@@ -22,6 +22,12 @@ obora doctor
 obora run judge.yaml --dry-run
 ```
 
+This prints the resolved provider/model context plus a preview of:
+- `artifacts/submission.json`
+- `artifacts/submission.schema.json`
+- `artifacts/result.json`
+- `artifacts/result.schema.json`
+
 4) Run the judge example
 
 ```bash
