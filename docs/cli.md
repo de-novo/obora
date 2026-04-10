@@ -95,7 +95,8 @@ List provider model refs from the installed `pi-ai` catalog.
 ```bash
 obora models
 obora models openai
-obora --json models anthropic
+obora models openai gpt-5.4
+obora --json models anthropic sonnet
 ```
 
 ### Behavior
