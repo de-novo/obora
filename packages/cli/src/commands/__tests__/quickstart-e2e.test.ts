@@ -355,4 +355,29 @@ describe("CLI quickstart integration", () => {
     expect(stdout).toContain("- chosen by precedence: env > config");
   });
 
+
+  it("prints binding and output previews for quickstart one-file judge dry-runs", async () => {
+    const cli = createCLI();
+    const projectDir = join(workDir, "run-preview-contract-demo");
+
+    await cli.parseAsync(["quickstart", projectDir], { from: "user" });
+
+    process.chdir(projectDir);
+
+    logSpy.mockClear();
+    errorSpy.mockClear();
+
+    await cli.parseAsync(["run", "judge.yaml", "--dry-run"], { from: "user" });
+
+    const stdout = logSpy.mock.calls.map((call) => String(call[0] ?? "")).join("\n");
+
+    expect(stdout).toContain("Binding Preview");
+    expect(stdout).toContain("judge.input: json <- artifacts/submission.json [resolved]");
+    expect(stdout).toContain("judge.schema: schema <- artifacts/submission.schema.json [resolved]");
+    expect(stdout).toContain("Output Preview");
+    expect(stdout).toContain("path <- artifacts/result.json [pending]");
+    expect(stdout).toContain("schema <- artifacts/result.schema.json [resolved]");
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
+
 });
