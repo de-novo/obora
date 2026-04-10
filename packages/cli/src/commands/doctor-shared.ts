@@ -632,6 +632,15 @@ export function summarizeConfigChain(configDiagnostics: DoctorConfigDiagnostics)
   return labels.join(" -> ");
 }
 
+function extractExportValue(example: string | null): string | null {
+  if (!example) {
+    return null;
+  }
+
+  const match = /^export [A-Z0-9_]+=(.+)$/.exec(example.trim());
+  return match?.[1] ?? null;
+}
+
 export function buildAuthExampleHint(summary: { authSource: string }): string | null {
   if (summary.authSource !== "none") {
     return null;
@@ -839,32 +848,43 @@ export function buildProviderSpecificGuidance(
   }
 
   if (summary.provider && !summary.model) {
-    const useResolvedExamples =
-      authDiagnostics.resolvedProvider &&
-      (!authDiagnostics.configuredProvider ||
-        authDiagnostics.resolvedProvider !== authDiagnostics.configuredProvider);
+    const hasProviderMismatch =
+      Boolean(authDiagnostics.configuredProvider) &&
+      Boolean(authDiagnostics.resolvedProvider) &&
+      authDiagnostics.configuredProvider !== authDiagnostics.resolvedProvider;
 
-    const modelConfigExample = useResolvedExamples
-      ? authDiagnostics.resolvedModelConfigExample
-      : authDiagnostics.modelConfigExample;
-    const modelEnvExample = useResolvedExamples
-      ? authDiagnostics.resolvedModelEnvExample
-      : authDiagnostics.modelEnvExample;
-    const modelRecommendationReason = useResolvedExamples
-      ? authDiagnostics.resolvedModelRecommendationReason
-      : authDiagnostics.modelRecommendationReason;
-    const modelConfigPrefix = useResolvedExamples ? "Resolved model config" : "Model config";
-    const modelEnvPrefix = useResolvedExamples ? "Resolved model env" : "Model env";
-    const modelReasonPrefix = useResolvedExamples ? "Resolved model basis" : "Model basis";
+    if (!hasProviderMismatch) {
+      const useResolvedExamples =
+        authDiagnostics.resolvedProvider &&
+        (!authDiagnostics.configuredProvider ||
+          authDiagnostics.resolvedProvider !== authDiagnostics.configuredProvider);
 
-    if (modelConfigExample) {
-      guidance.push(`${modelConfigPrefix}: ${modelConfigExample}`);
-    }
-    if (modelEnvExample) {
-      guidance.push(`${modelEnvPrefix}: ${modelEnvExample}`);
-    }
-    if (modelRecommendationReason) {
-      guidance.push(`${modelReasonPrefix}: ${modelRecommendationReason}`);
+      const modelConfigExample = useResolvedExamples
+        ? authDiagnostics.resolvedModelConfigExample
+        : authDiagnostics.modelConfigExample;
+      const modelEnvExample = useResolvedExamples
+        ? authDiagnostics.resolvedModelEnvExample
+        : authDiagnostics.modelEnvExample;
+      const modelRecommendationReason = useResolvedExamples
+        ? authDiagnostics.resolvedModelRecommendationReason
+        : authDiagnostics.modelRecommendationReason;
+      const modelConfigPrefix = useResolvedExamples ? "Resolved model config" : "Model config";
+      const modelEnvPrefix = useResolvedExamples ? "Resolved model env" : "Model env";
+      const modelReasonPrefix = useResolvedExamples ? "Resolved model basis" : "Model basis";
+
+      const hasConcreteRecommendedModel =
+        extractExportValue(modelEnvExample) !== null &&
+        extractExportValue(modelEnvExample) !== "your-model-name";
+
+      if (modelConfigExample && hasConcreteRecommendedModel) {
+        guidance.push(`${modelConfigPrefix}: ${modelConfigExample}`);
+      }
+      if (modelEnvExample && hasConcreteRecommendedModel) {
+        guidance.push(`${modelEnvPrefix}: ${modelEnvExample}`);
+      }
+      if (modelRecommendationReason) {
+        guidance.push(`${modelReasonPrefix}: ${modelRecommendationReason}`);
+      }
     }
   }
 
@@ -884,12 +904,26 @@ export function buildDoctorChecks(): DoctorChecks {
   };
 }
 
-export function buildDoctorStatus(summary: {
-  provider: string | null;
-  model: string | null;
-  authSource: string;
-  fallbackStub: boolean;
-}): { status: "ready" | "needs_config" | "stub_mode"; message: string } {
+export function buildDoctorStatus(
+  summary: {
+    provider: string | null;
+    model: string | null;
+    authSource: string;
+    fallbackStub: boolean;
+  },
+  authDiagnostics?: { configuredProvider: string | null }
+): { status: "ready" | "needs_config" | "stub_mode"; message: string } {
+  if (
+    authDiagnostics?.configuredProvider &&
+    summary.provider &&
+    authDiagnostics.configuredProvider !== summary.provider
+  ) {
+    return {
+      status: "needs_config",
+      message: `Needs provider alignment: configured ${authDiagnostics.configuredProvider} but resolved ${summary.provider}`,
+    };
+  }
+
   if (!summary.fallbackStub && summary.provider && summary.model) {
     return {
       status: "ready",
@@ -957,9 +991,32 @@ export function buildDoctorRecommendations(
   recommendations.push(...buildProviderSpecificGuidance(summary, authDiagnostics));
 
   if (summary.provider && !summary.model) {
-    recommendations.push(
-      `Set a default model in .obora/config.yaml or export ${inferModelEnvKey(summary.provider)}=***`
-    );
+    const recommendedModelValue =
+      extractExportValue(authDiagnostics.resolvedModelEnvExample) ??
+      extractExportValue(authDiagnostics.modelEnvExample);
+    const hasConcreteRecommendedModel =
+      Boolean(recommendedModelValue) && recommendedModelValue !== "your-model-name";
+    const hasProviderMismatch =
+      Boolean(summary.provider) &&
+      Boolean(providerHint.configuredProvider) &&
+      summary.provider !== providerHint.configuredProvider;
+
+    if (!hasProviderMismatch) {
+      if (hasConcreteRecommendedModel) {
+        if (isConfigFilePath(summary.nextPlaceToEdit)) {
+          recommendations.push(
+            `Config fix: edit ${summary.nextPlaceToEdit} -> providers.${summary.provider}.defaultModel: ${recommendedModelValue}`
+          );
+        }
+        recommendations.push(
+          `Shell fix: export ${inferModelEnvKey(summary.provider)}=${recommendedModelValue}`
+        );
+      } else {
+        recommendations.push(
+          `Set a default model in .obora/config.yaml or export ${inferModelEnvKey(summary.provider)}=***`
+        );
+      }
+    }
   }
 
   if (summary.configSource === "none") {
@@ -1000,6 +1057,13 @@ export function buildDoctorActions(
   if (summary.authSource === "none") {
     pushDoctorAction(actions, { kind: "run", command: "obora doctor" });
     pushDoctorAction(actions, { kind: "doc", path: authDiagnostics.setupGuide });
+    if (providerHint.recommendedAuthEnvKey) {
+      pushDoctorAction(actions, {
+        kind: "env",
+        envKey: providerHint.recommendedAuthEnvKey,
+        shellCommand: `export ${providerHint.recommendedAuthEnvKey}=***`,
+      });
+    }
   }
 
   for (const action of buildDetectedProviderMismatchActions(
@@ -1019,11 +1083,40 @@ export function buildDoctorActions(
   }
 
   if (summary.provider && !summary.model) {
-    pushDoctorAction(actions, {
-      kind: "env",
-      envKey: inferModelEnvKey(summary.provider),
-      shellCommand: `export ${inferModelEnvKey(summary.provider)}=***`,
-    });
+    const recommendedModelValue =
+      extractExportValue(authDiagnostics.resolvedModelEnvExample) ??
+      extractExportValue(authDiagnostics.modelEnvExample);
+    const hasConcreteRecommendedModel =
+      Boolean(recommendedModelValue) && recommendedModelValue !== "your-model-name";
+    const hasProviderMismatch =
+      Boolean(summary.provider) &&
+      Boolean(providerHint.configuredProvider) &&
+      summary.provider !== providerHint.configuredProvider;
+
+    if (!hasProviderMismatch) {
+      if (hasConcreteRecommendedModel) {
+        if (isConfigFilePath(summary.nextPlaceToEdit)) {
+          pushDoctorAction(actions, {
+            kind: "config",
+            path: summary.nextPlaceToEdit,
+            key: `providers.${summary.provider}.defaultModel`,
+            value: recommendedModelValue,
+          });
+        }
+
+        pushDoctorAction(actions, {
+          kind: "env",
+          envKey: inferModelEnvKey(summary.provider),
+          shellCommand: `export ${inferModelEnvKey(summary.provider)}=${recommendedModelValue}`,
+        });
+      } else {
+        pushDoctorAction(actions, {
+          kind: "env",
+          envKey: inferModelEnvKey(summary.provider),
+          shellCommand: `export ${inferModelEnvKey(summary.provider)}=***`,
+        });
+      }
+    }
   }
 
   if (summary.fallbackStub) {

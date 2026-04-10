@@ -32,9 +32,9 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
   const envLLM = detectLLMConfigFromEnv();
   const resolvedLLM = resolveLLMConfig(envLLM, loadedConfig);
   const summary = buildResolutionSummary({}, resolvedLLM, loadedConfig);
-  const status = buildDoctorStatus(summary);
   const providerHint = buildRecommendedProviderHint(summary, loadedConfig);
   const authDiagnostics = buildAuthDiagnostics(providerHint, summary);
+  const status = buildDoctorStatus(summary, authDiagnostics);
   const configDiagnostics = buildConfigDiagnostics(checks, summary);
   const recommendations = buildDoctorRecommendations(
     checks,

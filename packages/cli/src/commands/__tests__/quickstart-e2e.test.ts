@@ -216,6 +216,10 @@ describe("CLI quickstart integration", () => {
     const mismatchPayload = lastJsonCall();
     expect(mismatchPayload).toEqual(
       expect.objectContaining({
+        status: expect.objectContaining({
+          status: "needs_config",
+          message: "Needs provider alignment: configured anthropic but resolved openai",
+        }),
         auth: expect.objectContaining({
           configuredProvider: "anthropic",
           resolvedProvider: "openai",
@@ -229,7 +233,6 @@ describe("CLI quickstart integration", () => {
           "Shell fix: unset OPENAI_API_KEY OPENAI_MODEL",
           expect.stringContaining("Config fix: edit "),
           expect.stringContaining("contract-demo/.obora/config.yaml -> defaults.provider: openai"),
-          "Resolved model env: export OPENAI_MODEL=gpt-5.4",
         ]),
       })
     );
@@ -311,6 +314,7 @@ describe("CLI quickstart integration", () => {
     const stderr = errorSpy.mock.calls.map((call) => String(call[0] ?? "")).join("\n");
 
     expect(stdout).toContain("Status");
+    expect(stdout).toContain("Needs provider alignment: configured anthropic but resolved openai");
     expect(stdout).toContain("Configuration");
     expect(stdout).toContain("Resolution");
     expect(stdout).toContain("Configured provider: anthropic");
@@ -318,7 +322,6 @@ describe("CLI quickstart integration", () => {
     expect(stdout).toContain("Shell fix: unset OPENAI_API_KEY OPENAI_MODEL");
     expect(stdout).toContain("Config fix: edit ");
     expect(stdout).toContain("doctor-stdout-demo/.obora/config.yaml -> defaults.provider: openai");
-    expect(stdout).toContain("Resolved model env: export OPENAI_MODEL=gpt-5.4");
     expect(stderr).toContain(
       "Configured provider 'anthropic' differs from detected env auth providers: openai"
     );

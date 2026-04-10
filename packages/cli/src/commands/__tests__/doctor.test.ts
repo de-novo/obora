@@ -270,6 +270,13 @@ describe("doctor command", () => {
         expect.objectContaining({
           recommendedProvider: "anthropic",
           recommendedAuthEnvKey: "ANTHROPIC_API_KEY",
+          actions: expect.arrayContaining([
+            expect.objectContaining({
+              kind: "env",
+              envKey: "ANTHROPIC_API_KEY",
+              shellCommand: "export ANTHROPIC_API_KEY=***",
+            }),
+          ]),
         })
       );
     });
@@ -587,9 +594,6 @@ describe("doctor command", () => {
             "Resolved provider does not match configured provider. Either export ANTHROPIC_API_KEY=*** or switch defaults.provider to openai",
             "Shell fix: unset OPENAI_API_KEY OPENAI_MODEL",
             "Config fix: edit .obora/config.yaml -> defaults.provider: openai",
-            "Resolved model config: providers:\n  openai:\n    defaultModel: gpt-5.4",
-            "Resolved model env: export OPENAI_MODEL=gpt-5.4",
-            "Resolved model basis: pi-ai catalog latest GPT base model for openai",
           ]),
           actions: expect.arrayContaining([
             expect.objectContaining({
@@ -609,8 +613,13 @@ describe("doctor command", () => {
               value: "openai",
             }),
           ]),
+          status: expect.objectContaining({
+            status: "needs_config",
+            message: "Needs provider alignment: configured anthropic but resolved openai",
+          }),
           overview: expect.objectContaining({
             status: "needs_config",
+            message: "Needs provider alignment: configured anthropic but resolved openai",
             configuredProvider: "anthropic",
             resolvedProvider: "openai",
             conflictSummary: "config anthropic · env openai · resolved openai",
@@ -636,6 +645,33 @@ describe("doctor command", () => {
             ]),
           }),
         })
+      );
+
+      const payload = vi.mocked(formatter.json).mock.calls[0]?.[0];
+      expect(payload.actions).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            key: "providers.openai.defaultModel",
+            value: "gpt-5.4",
+          }),
+          expect.objectContaining({
+            envKey: "OPENAI_MODEL",
+            shellCommand: "export OPENAI_MODEL=gpt-5.4",
+          }),
+          expect.objectContaining({
+            envKey: "OPENAI_MODEL",
+            shellCommand: "export OPENAI_MODEL=***",
+          }),
+        ])
+      );
+      expect(payload.recommendations).not.toContain(
+        "Set a default model in .obora/config.yaml or export OPENAI_MODEL=***"
+      );
+      expect(payload.recommendations).not.toContain(
+        "Resolved model config: providers:\n  openai:\n    defaultModel: gpt-5.4"
+      );
+      expect(payload.recommendations).not.toContain(
+        "Resolved model env: export OPENAI_MODEL=gpt-5.4"
       );
     });
 
@@ -769,6 +805,44 @@ describe("doctor command", () => {
       expect(formatter.step).toHaveBeenCalledWith("Run your workflow: obora run judge.yaml");
     });
 
+    it("should prioritize provider alignment over ready status when configured and resolved providers differ", async () => {
+      vi.mocked(loadConfig).mockResolvedValue({
+        defaults: {
+          provider: "anthropic",
+        },
+      });
+      vi.mocked(buildResolutionSummary).mockReturnValue({
+        provider: "openai",
+        model: "gpt-5.4",
+        authSource: "env(OPENAI_API_KEY)",
+        configSource: ".obora/config.yaml",
+        modelSource: "env(OPENAI_MODEL)",
+        chosenByPrecedence: "env > config",
+        nextPlaceToEdit: ".obora/config.yaml",
+        fallbackStub: false,
+        warnings: [],
+      });
+      vi.mocked(existsSync).mockReturnValue(true);
+
+      await runDoctor({ json: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: expect.objectContaining({
+            status: "needs_config",
+            message: "Needs provider alignment: configured anthropic but resolved openai",
+          }),
+          overview: expect.objectContaining({
+            status: "needs_config",
+            message: "Needs provider alignment: configured anthropic but resolved openai",
+          }),
+          recommendations: expect.arrayContaining([
+            "Resolved provider does not match configured provider. Either export ANTHROPIC_API_KEY=*** or switch defaults.provider to openai",
+          ]),
+        })
+      );
+    });
+
     it("should show resolved model recommendation basis in env-only missing-model text output", async () => {
       process.env.OPENAI_API_KEY = "***";
       vi.mocked(buildResolutionSummary).mockReturnValue({
@@ -794,7 +868,7 @@ describe("doctor command", () => {
     });
 
     it("should diagnose missing model when auth exists but model is unresolved", async () => {
-      process.env.OPENAI_API_KEY = "test-key";
+      process.env.OPENAI_API_KEY = "***";
       vi.mocked(buildResolutionSummary).mockReturnValue({
         provider: "openai",
         model: null,
@@ -817,10 +891,49 @@ describe("doctor command", () => {
             message: "Needs model: provider auth detected but no model is resolved",
           }),
           recommendations: expect.arrayContaining([
-            "Set a default model in .obora/config.yaml or export OPENAI_MODEL=***",
+            "Config fix: edit .obora/config.yaml -> providers.openai.defaultModel: gpt-5.4",
+            "Shell fix: export OPENAI_MODEL=gpt-5.4",
+          ]),
+          actions: expect.arrayContaining([
+            expect.objectContaining({
+              kind: "config",
+              path: ".obora/config.yaml",
+              key: "providers.openai.defaultModel",
+              value: "gpt-5.4",
+            }),
+            expect.objectContaining({
+              kind: "env",
+              envKey: "OPENAI_MODEL",
+              shellCommand: "export OPENAI_MODEL=gpt-5.4",
+            }),
           ]),
         })
       );
+    });
+
+    it("should avoid placeholder model fixes when no catalog-backed default exists", async () => {
+      process.env.GROQ_API_KEY = "***";
+      vi.mocked(buildResolutionSummary).mockReturnValue({
+        provider: "groq",
+        model: null,
+        authSource: "env(GROQ_API_KEY)",
+        configSource: ".obora/config.yaml",
+        modelSource: "none",
+        chosenByPrecedence: "config > env",
+        nextPlaceToEdit: ".obora/config.yaml",
+        fallbackStub: false,
+        warnings: [],
+      });
+      vi.mocked(existsSync).mockReturnValue(true);
+
+      await runDoctor({ json: true });
+
+      const payload = vi.mocked(formatter.json).mock.calls[0]?.[0];
+      expect(payload.recommendations).toContain(
+        "Set a default model in .obora/config.yaml or export GROQ_MODEL=***"
+      );
+      expect(JSON.stringify(payload.actions)).not.toContain("your-model-name");
+      expect(JSON.stringify(payload.recommendations)).not.toContain("your-model-name");
     });
   });
 });
