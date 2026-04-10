@@ -152,6 +152,16 @@ describe("doctor command", () => {
             expect.stringContaining("obora init --quickstart"),
             expect.stringContaining("obora doctor"),
           ]),
+          actions: expect.arrayContaining([
+            expect.objectContaining({
+              kind: "run",
+              command: expect.stringContaining("obora init --quickstart"),
+            }),
+            expect.objectContaining({
+              kind: "run",
+              command: "obora doctor",
+            }),
+          ]),
           resolution: expect.objectContaining({
             fallbackStub: true,
           }),
@@ -549,6 +559,24 @@ describe("doctor command", () => {
             "Resolved model config: providers:\n  openai:\n    defaultModel: gpt-5.4",
             "Resolved model env: export OPENAI_MODEL=gpt-5.4",
             "Resolved model basis: pi-ai catalog latest GPT base model for openai",
+          ]),
+          actions: expect.arrayContaining([
+            expect.objectContaining({
+              kind: "env",
+              envKey: "ANTHROPIC_API_KEY",
+              shellCommand: "export ANTHROPIC_API_KEY=***",
+            }),
+            expect.objectContaining({
+              kind: "shell",
+              shellCommand: "unset OPENAI_API_KEY OPENAI_MODEL",
+              envKeys: ["OPENAI_API_KEY", "OPENAI_MODEL"],
+            }),
+            expect.objectContaining({
+              kind: "config",
+              path: ".obora/config.yaml",
+              key: "defaults.provider",
+              value: "openai",
+            }),
           ]),
         })
       );
