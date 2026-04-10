@@ -44,6 +44,16 @@ import { createModelsCommand, runModels } from "../models.js";
 describe("models command", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(listPiAIProviders).mockReturnValue(["openai", "anthropic"]);
+    vi.mocked(listPiAIModels).mockImplementation((provider: string) => {
+      if (provider === "openai") {
+        return ["gpt-4o-mini", "gpt-4o", "gpt-5", "gpt-5.4"];
+      }
+      if (provider === "anthropic") {
+        return ["claude-3-7-sonnet-20250219", "claude-opus-4-6"];
+      }
+      throw new Error(`Unsupported provider: ${provider}`);
+    });
   });
 
   it("creates models command with correct name", () => {
@@ -86,6 +96,83 @@ describe("models command", () => {
     expect(formatter.step).toHaveBeenCalledWith("Match count: 2");
     expect(formatter.step).toHaveBeenCalledWith("anthropic: claude-3-7-sonnet-20250219");
     expect(formatter.step).toHaveBeenCalledWith("anthropic: claude-opus-4-6");
+  });
+
+  it("ranks global matches by relevance so exact refs appear before longer variants", async () => {
+    vi.mocked(listPiAIProviders).mockReturnValue(["openrouter"]);
+    vi.mocked(listPiAIModels).mockImplementation((provider: string) => {
+      if (provider === "openrouter") {
+        return ["openai/gpt-5.4-mini", "openai/gpt-5.4", "openai/gpt-5.4-pro"];
+      }
+      throw new Error(`Unsupported provider: ${provider}`);
+    });
+
+    await runModels("gpt-5.4", undefined, { json: true });
+
+    expect(formatter.json).toHaveBeenCalledWith({
+      source: "pi-ai",
+      query: "gpt-5.4",
+      count: 3,
+      matches: [
+        { provider: "openrouter", model: "openai/gpt-5.4" },
+        { provider: "openrouter", model: "openai/gpt-5.4-mini" },
+        { provider: "openrouter", model: "openai/gpt-5.4-pro" },
+      ],
+    });
+  });
+
+  it("keeps equally relevant global matches in provider catalog priority order", async () => {
+    vi.mocked(listPiAIProviders).mockReturnValue(["openai", "openrouter", "github-copilot"]);
+    vi.mocked(listPiAIModels).mockImplementation((provider: string) => {
+      if (provider === "openai") {
+        return ["gpt-5.4"];
+      }
+      if (provider === "openrouter") {
+        return ["openai/gpt-5.4"];
+      }
+      if (provider === "github-copilot") {
+        return ["gpt-5.4"];
+      }
+      throw new Error(`Unsupported provider: ${provider}`);
+    });
+
+    await runModels("gpt-5.4", undefined, { json: true });
+
+    expect(formatter.json).toHaveBeenCalledWith({
+      source: "pi-ai",
+      query: "gpt-5.4",
+      count: 3,
+      matches: [
+        { provider: "openai", model: "gpt-5.4" },
+        { provider: "github-copilot", model: "gpt-5.4" },
+        { provider: "openrouter", model: "openai/gpt-5.4" },
+      ],
+    });
+  });
+
+  it("keeps provider catalog priority even when equally relevant variants differ by name", async () => {
+    vi.mocked(listPiAIProviders).mockReturnValue(["openai", "github-copilot"]);
+    vi.mocked(listPiAIModels).mockImplementation((provider: string) => {
+      if (provider === "openai") {
+        return ["gpt-5.4-pro"];
+      }
+      if (provider === "github-copilot") {
+        return ["gpt-5.4-mini"];
+      }
+      throw new Error(`Unsupported provider: ${provider}`);
+    });
+
+    await runModels("gpt-5.4", undefined, { json: true });
+
+    expect(formatter.json).toHaveBeenCalledWith({
+      source: "pi-ai",
+      query: "gpt-5.4",
+      count: 2,
+      matches: [
+        { provider: "openai", model: "gpt-5.4-pro" },
+        { provider: "github-copilot", model: "gpt-5.4-mini" },
+      ],
+    });
   });
 
   it("prints a helpful hint when global search returns no matches in text mode", async () => {
@@ -149,6 +236,28 @@ describe("models command", () => {
       query: "gpt-5",
       count: 2,
       models: ["gpt-5", "gpt-5.4"],
+    });
+  });
+
+  it("ranks provider matches by relevance so exact refs appear before longer variants", async () => {
+    vi.mocked(listPiAIModels).mockImplementation((provider: string) => {
+      if (provider === "openai") {
+        return ["gpt-5.4-mini", "gpt-5.4", "gpt-5.4-pro"];
+      }
+      if (provider === "anthropic") {
+        return ["claude-3-7-sonnet-20250219", "claude-opus-4-6"];
+      }
+      throw new Error(`Unsupported provider: ${provider}`);
+    });
+
+    await runModels("openai", "gpt-5.4", { json: true });
+
+    expect(formatter.json).toHaveBeenCalledWith({
+      source: "pi-ai",
+      provider: "openai",
+      query: "gpt-5.4",
+      count: 3,
+      models: ["gpt-5.4", "gpt-5.4-mini", "gpt-5.4-pro"],
     });
   });
 
