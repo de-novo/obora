@@ -57,6 +57,7 @@ interface DoctorAuthDiagnostics extends ProviderSetupExamples {
   resolvedModelRecommendationReason: string | null;
   detectedProviders: string[];
   providerMismatchWarning: string | null;
+  conflictSummary: string | null;
   setupGuide: string;
 }
 
@@ -487,6 +488,22 @@ function buildRecommendedProviderHint(
   };
 }
 
+function buildConflictSummary(
+  configuredProvider: string | null,
+  detectedProviders: string[],
+  resolvedProvider: string | null
+): string | null {
+  if (
+    !configuredProvider ||
+    detectedProviders.length === 0 ||
+    detectedProviders.includes(configuredProvider)
+  ) {
+    return null;
+  }
+
+  return `configured provider ${configuredProvider}, detected env auth ${detectedProviders.join(", ")}, resolved provider ${resolvedProvider ?? "none"}`;
+}
+
 function buildAuthDiagnostics(
   providerHint: DoctorProviderHint,
   summary: { provider: string | null }
@@ -502,6 +519,11 @@ function buildAuthDiagnostics(
     !detectedProviders.includes(providerHint.configuredProvider)
       ? `Configured provider '${providerHint.configuredProvider}' differs from detected env auth providers: ${detectedProviders.join(", ")}`
       : null;
+  const conflictSummary = buildConflictSummary(
+    providerHint.configuredProvider,
+    detectedProviders,
+    summary.provider
+  );
 
   return {
     configuredProvider: providerHint.configuredProvider,
@@ -517,6 +539,7 @@ function buildAuthDiagnostics(
     resolvedModelRecommendationReason: resolvedSetupExamples.modelRecommendationReason,
     detectedProviders,
     providerMismatchWarning,
+    conflictSummary,
     setupGuide: AUTH_SETUP_GUIDE,
     ...setupExamples,
   };
@@ -847,6 +870,9 @@ function buildDoctorOutputSections(
   const warnings = [...summary.warnings];
   if (authDiagnostics.providerMismatchWarning) {
     warnings.push(authDiagnostics.providerMismatchWarning);
+  }
+  if (authDiagnostics.conflictSummary) {
+    warnings.push(`Conflict summary: ${authDiagnostics.conflictSummary}`);
   }
 
   return {
