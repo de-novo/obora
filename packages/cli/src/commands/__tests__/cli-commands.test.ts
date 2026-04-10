@@ -33,7 +33,16 @@ describe("M3 CLI command IA", () => {
     const names = cli.commands.map((command) => command.name());
 
     expect(names).toEqual(
-      expect.arrayContaining(["run", "test", "plugin", "audit", "policy", "init", "quickstart", "models"])
+      expect.arrayContaining([
+        "run",
+        "test",
+        "plugin",
+        "audit",
+        "policy",
+        "init",
+        "quickstart",
+        "models",
+      ])
     );
   });
 

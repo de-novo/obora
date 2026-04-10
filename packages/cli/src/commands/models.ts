@@ -9,7 +9,10 @@ interface ModelsOptions {
   json?: boolean;
 }
 
-export async function runModels(provider: string | undefined, options: ModelsOptions): Promise<void> {
+export async function runModels(
+  provider: string | undefined,
+  options: ModelsOptions
+): Promise<void> {
   const providers = listPiAIProviders();
 
   if (provider) {
