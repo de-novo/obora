@@ -592,19 +592,44 @@ function buildConfiguredProviderHints(providerHint: DoctorProviderHint): string[
   ];
 }
 
-function buildResolvedProviderMismatchRecommendation(
-  summary: { provider: string | null },
-  providerHint: DoctorProviderHint
-): string | null {
+function isConfigFilePath(path: string): boolean {
+  return /\.(ya?ml)$/i.test(path);
+}
+
+function buildResolvedProviderMismatchRecommendations(
+  summary: { provider: string | null; nextPlaceToEdit: string },
+  providerHint: DoctorProviderHint,
+  authDiagnostics: DoctorAuthDiagnostics
+): string[] {
   if (!summary.provider || !providerHint.configuredProvider) {
-    return null;
+    return [];
   }
 
   if (summary.provider === providerHint.configuredProvider) {
-    return null;
+    return [];
   }
 
-  return `Resolved provider does not match configured provider. Either export ${inferAuthEnvKey(providerHint.configuredProvider)}=*** or switch defaults.provider to ${summary.provider}`;
+  const recommendations = [
+    `Resolved provider does not match configured provider. Either export ${inferAuthEnvKey(providerHint.configuredProvider)}=*** or switch defaults.provider to ${summary.provider}`,
+  ];
+
+  const envKeysToUnset = [
+    authDiagnostics.resolvedAuthEnvKey,
+    authDiagnostics.resolvedModelEnvKey,
+  ].filter((key): key is string => Boolean(key));
+  if (envKeysToUnset.length > 0) {
+    recommendations.push(
+      `Use configured provider in this shell: unset ${Array.from(new Set(envKeysToUnset)).join(" ")}`
+    );
+  }
+
+  if (isConfigFilePath(summary.nextPlaceToEdit)) {
+    recommendations.push(
+      `Switch config default provider: edit ${summary.nextPlaceToEdit} and set defaults.provider: ${summary.provider}`
+    );
+  }
+
+  return recommendations;
 }
 
 function buildProviderSpecificGuidance(
@@ -709,6 +734,7 @@ function buildDoctorRecommendations(
     model: string | null;
     authSource: string;
     configSource: string;
+    nextPlaceToEdit: string;
     fallbackStub: boolean;
     warnings: string[];
   },
@@ -736,14 +762,9 @@ function buildDoctorRecommendations(
     }
   }
 
-  const resolvedProviderMismatchRecommendation = buildResolvedProviderMismatchRecommendation(
-    summary,
-    providerHint,
-    authDiagnostics
+  recommendations.push(
+    ...buildResolvedProviderMismatchRecommendations(summary, providerHint, authDiagnostics)
   );
-  if (resolvedProviderMismatchRecommendation) {
-    recommendations.push(resolvedProviderMismatchRecommendation);
-  }
 
   recommendations.push(...buildProviderSpecificGuidance(summary, authDiagnostics));
 

@@ -536,6 +536,8 @@ describe("doctor command", () => {
           }),
           recommendations: expect.arrayContaining([
             "Resolved provider does not match configured provider. Either export ANTHROPIC_API_KEY=*** or switch defaults.provider to openai",
+            "Use configured provider in this shell: unset OPENAI_API_KEY OPENAI_MODEL",
+            "Switch config default provider: edit .obora/config.yaml and set defaults.provider: openai",
             "Resolved provider model config example: providers:\n  openai:\n    defaultModel: gpt-5.4",
             "Resolved provider model env example: export OPENAI_MODEL=gpt-5.4",
             "Resolved provider model recommendation basis: pi-ai catalog latest GPT base model for openai",
