@@ -91,6 +91,12 @@ describe("init command", () => {
       const opt = cmd.options.find((o) => o.long === "--yes");
       expect(opt).toBeDefined();
     });
+
+    it("should have --quickstart option", () => {
+      const cmd = createInitCommand();
+      const opt = cmd.options.find((o) => o.long === "--quickstart");
+      expect(opt).toBeDefined();
+    });
   });
 
   // ─── project initialization ────────────────────────────────────────────────
@@ -144,10 +150,42 @@ describe("init command", () => {
       );
     });
 
+    it("should use quickstart template when --quickstart is specified", async () => {
+      await runInit("my-project", { quickstart: true });
+
+      expect(cp).toHaveBeenCalledWith(
+        expect.stringContaining("quickstart"),
+        expect.any(String),
+        expect.any(Object)
+      );
+    });
+
     it("should show a success message by default", async () => {
       await runInit("my-project", {});
 
       expect(formatter.success).toHaveBeenCalledWith(expect.stringContaining("initialized"));
+    });
+
+    it("should print provider-aware next-step guidance for quickstart projects", async () => {
+      vi.mocked(readFile).mockImplementation(async (pathLike) => {
+        const path = String(pathLike);
+        if (path.includes(".obora/config.yaml")) {
+          return `defaults:
+  provider: anthropic
+`;
+        }
+        throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      });
+
+      await runInit("my-project", { quickstart: true });
+
+      expect(formatter.info).toHaveBeenCalledWith("Next steps:");
+      expect(formatter.step).toHaveBeenCalledWith("cd my-project");
+      expect(formatter.step).toHaveBeenCalledWith("This template defaults to anthropic");
+      expect(formatter.step).toHaveBeenCalledWith("export ANTHROPIC_API_KEY=***");
+      expect(formatter.step).toHaveBeenCalledWith("obora doctor");
+      expect(formatter.step).toHaveBeenCalledWith("obora run judge.yaml --dry-run");
+      expect(formatter.step).toHaveBeenCalledWith("obora run judge.yaml");
     });
 
     it("should output JSON when --json flag is set", async () => {
@@ -178,6 +216,14 @@ describe("init command", () => {
 
       expect(formatter.json).toHaveBeenCalledWith(
         expect.objectContaining({ path: expect.stringContaining("my-project") })
+      );
+    });
+
+    it("should report quickstart template in JSON output", async () => {
+      await runInit("my-project", { json: true, quickstart: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({ template: "quickstart" })
       );
     });
   });

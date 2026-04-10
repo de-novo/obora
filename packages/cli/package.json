@@ -1,7 +1,7 @@
 {
   "name": "@obora/cli",
   "version": "0.1.3",
-  "description": "Obora CLI \u2014 command-line interface for AI Control Runtime",
+  "description": "Obora CLI — command-line interface for AI Control Runtime",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -17,9 +17,9 @@
     "test:coverage": "node --no-warnings ./node_modules/vitest/vitest.mjs --coverage"
   },
   "dependencies": {
-    "@obora/sdk": "0.1.1",
-    "@obora/adapters": "0.1.1",
-    "@obora/runtime": "0.1.1",
+    "@obora/sdk": "workspace:*",
+    "@obora/adapters": "workspace:*",
+    "@obora/runtime": "workspace:*",
     "commander": "^14.0.3",
     "fs-extra": "^11.3.3",
     "open": "^10.2.0",

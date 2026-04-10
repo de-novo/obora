@@ -4,11 +4,13 @@ import packageJson from "../package.json" with { type: "json" };
 
 import { createArtifactCommand } from "./commands/artifact.js";
 import { createAuditCommand } from "./commands/audit.js";
+import { createDoctorCommand } from "./commands/doctor.js";
 import { createExpandCommand } from "./commands/expand.js";
 import { createInitCommand } from "./commands/init.js";
 import { createKnowledgeCommand } from "./commands/knowledge.js";
 import { createPluginCommand } from "./commands/plugin.js";
 import { createPolicyCommand } from "./commands/policy.js";
+import { createQuickstartCommand } from "./commands/quickstart.js";
 import { createResumeCommand } from "./commands/resume.js";
 import { createRunCommand } from "./commands/run.js";
 import {
@@ -50,6 +52,8 @@ export function createCLI(): Command {
     .option("--no-color", "Disable ANSI colors in output");
 
   program.addCommand(createInitCommand());
+  program.addCommand(createQuickstartCommand());
+  program.addCommand(createDoctorCommand());
   program.addCommand(createExpandCommand());
   program.addCommand(createRunCommand());
   program.addCommand(createTestCommand());

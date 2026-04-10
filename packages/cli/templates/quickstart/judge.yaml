@@ -1,0 +1,15 @@
+name: quickstart-judge
+mode: judge
+provider: openai
+model: gpt-4o-mini
+prompt: |
+  Evaluate the submission and return JSON with fields score, verdict, rationale.
+input:
+  json: artifacts/submission.json
+  schema: artifacts/submission.schema.json
+output:
+  path: artifacts/result.json
+  schema: artifacts/result.schema.json
+options:
+  repair: false
+  fallback: false

@@ -5,6 +5,8 @@
 - [Global Options](#global-options)
 - [Exit Codes](#exit-codes)
 - [`obora init`](#obora-init)
+- [`obora quickstart`](#obora-quickstart)
+- [`obora doctor`](#obora-doctor)
 - [`obora run`](#obora-run)
 - [`obora test`](#obora-test)
 - [`obora plugin`](#obora-plugin)
@@ -30,6 +32,26 @@ obora --verbose --no-color run workflows/example.yaml
 
 ---
 
+## Quickstart First-Run Path
+
+If you are starting from zero, use this order:
+
+```bash
+obora quickstart my-project
+cd my-project
+obora doctor
+obora run judge.yaml --dry-run
+obora run judge.yaml
+```
+
+Why this order:
+- `init --quickstart` creates the smallest runnable project
+- `doctor` tells you whether auth/config is missing
+- `run --dry-run` validates the workflow before execution
+- `run` starts the real judge workflow
+
+---
+
 ## Exit Codes
 
 Defined in `packages/cli/src/utils/exit-codes.ts`:
@@ -44,6 +66,67 @@ Error-to-exit mapping uses SDK error code prefixes (`POLICY_*`, `CELL_*`, `ORCH_
 
 ---
 
+## `obora quickstart`
+
+Shortcut for creating a minimal judge-mode project.
+
+### Usage
+
+```bash
+obora quickstart [name]
+obora quickstart my-project
+```
+
+### Behavior
+
+- Equivalent to `obora init [name] --quickstart`
+- Creates the same quickstart scaffold as `init --quickstart`
+- Intended as the shortest first-run command
+
+---
+
+## `obora doctor`
+
+Diagnose local Obora setup and show the shortest next action.
+
+### Usage
+
+```bash
+obora doctor
+obora --json doctor
+```
+
+### What it checks
+
+- Node.js availability
+- project config presence (`.obora/config.yaml`)
+- global config presence (`~/.obora/config.yaml`)
+- current provider/model resolution
+- auth source / config source
+- fallback/stub state
+- recommended next actions
+- next place to edit
+
+### Example
+
+```bash
+obora init demo --quickstart
+cd demo
+obora doctor
+```
+
+Expected output includes:
+
+- top-level status like `Ready: openai/gpt-4o-mini` or `Needs auth: ...`
+- whether project/global config exists
+- auth/config/stub summary lines
+- `Execution Resolution`
+- warnings like stub/fallback activation
+- `Recommended next actions:` with concrete commands
+- a final `Next step: ...` hint
+
+---
+
 ## `obora init`
 
 Initialize a new Obora project.
@@ -52,11 +135,13 @@ Initialize a new Obora project.
 
 ```bash
 obora init [name] [options]
+obora init my-project --quickstart
 ```
 
 ### Options
 
 - `--template <name>` (default: `default`)
+- `--quickstart` initialize a judge-mode quickstart scaffold
 - `-y, --yes` skip prompts and use defaults
 
 ### Behavior
@@ -64,7 +149,7 @@ obora init [name] [options]
 - If `name` is provided, creates that directory and initializes files there.
 - If `name` is omitted, initializes files in the current directory.
 
-Creates:
+Default template creates:
 
 - `workflow.yaml`
 - `policy.yaml`
@@ -72,11 +157,24 @@ Creates:
 - `obora.config.yaml`
 - `.gitignore`
 
+Quickstart template creates:
+
+- `judge.yaml`
+- `.obora/config.yaml`
+- `artifacts/submission.json`
+- `artifacts/submission.schema.json`
+- `artifacts/result.schema.json`
+- `.gitignore`
+
 ### Example
 
 ```bash
 mkdir my-obora && cd my-obora
 obora init --yes
+obora init demo --quickstart
+cd demo
+obora doctor
+obora run judge.yaml --dry-run
 ```
 
 ---
@@ -96,7 +194,7 @@ obora run <workflow> [options]
 - `-i, --input <json>` input JSON string
 - `-v, --var <key=value...>` repeatable variables
 - `--policy <path>` policy YAML path
-- `--dry-run` validate only (no execution)
+- `--dry-run` validate only (no execution) and print resolution/binding/output previews when available
 - `--timeout <ms>` execution timeout in milliseconds
 
 ### Examples
@@ -106,7 +204,15 @@ obora run workflow.yaml
 obora run workflow.yaml --input '{"topic":"safety"}'
 obora run my-workflow --var env=prod --var region=ap-northeast-2
 obora run workflow.yaml --dry-run
+obora run judge.yaml --dry-run
+obora --json run judge.yaml --dry-run
 ```
+
+Dry-run output includes:
+- `Execution Resolution`
+- `Binding Preview` / `Output Preview` in text mode when previewable paths exist
+- `resolution`, `bindingPreview`, and `outputPreview` in JSON mode
+- for quickstart one-file judge workflows, preview entries are derived from the expanded `config.judge` input/output paths
 
 ### Exit Codes
 

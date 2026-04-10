@@ -2,7 +2,13 @@ import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 
 import {
+  buildBindingPreview,
+  buildOutputPreview,
+  buildResolutionSummary,
   detectLLMConfigFromEnv,
+  formatBindingPreview,
+  formatOutputPreview,
+  formatResolutionSummary,
   loadConfig,
   OboraRuntime,
   resolveLLMConfig,
@@ -118,25 +124,58 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
   const loadedConfig = await loadConfig(options.config as string | undefined);
   const envLLM = detectLLMConfigFromEnv();
   const resolvedLLM = resolveLLMConfig(envLLM, loadedConfig);
+  const runtimeLLM =
+    resolvedLLM &&
+    ((options.provider as string | undefined) || (options.model as string | undefined))
+      ? {
+          ...resolvedLLM,
+          provider: (options.provider as string | undefined) ?? resolvedLLM.provider,
+          model: (options.model as string | undefined) ?? resolvedLLM.model,
+        }
+      : undefined;
 
   const runtime = new OboraRuntime({
     policyPath: options.policy as string | undefined,
     agentsPath: options.agents as string | undefined,
     configPath: options.config as string | undefined,
     config: loadedConfig,
-    llm: resolvedLLM
-      ? {
-          ...resolvedLLM,
-          provider: (options.provider as string | undefined) ?? resolvedLLM.provider,
-          model: (options.model as string | undefined) ?? resolvedLLM.model,
-        }
-      : undefined,
+    llm: runtimeLLM,
     verbose: Boolean(options.verbose),
   });
 
   if (isVerboseOutput(options) && !isQuietOutput(options) && !isJsonOutput(options)) {
     formatter.info(`Starting workflow execution: ${workflow}`);
   }
+
+  const resolutionSummary = buildResolutionSummary(
+    {
+      llm: runtimeLLM,
+    },
+    runtimeLLM ?? resolvedLLM,
+    loadedConfig
+  );
+
+  const printPreview = (workflowDef?: {
+    steps?: Array<{
+      name: string;
+      input?: Record<string, unknown>;
+      output?: { path?: string; schema?: string };
+    }>;
+  }): void => {
+    if (isQuietOutput(options) || isJsonOutput(options)) {
+      return;
+    }
+
+    formatter.info(formatResolutionSummary(resolutionSummary));
+    const bindingPreview = workflowDef ? formatBindingPreview(bindingPreviewEntries) : "";
+    if (bindingPreview) {
+      formatter.info(bindingPreview);
+    }
+    const outputPreview = workflowDef ? formatOutputPreview(outputPreviewEntries) : "";
+    if (outputPreview) {
+      formatter.info(outputPreview);
+    }
+  };
 
   let workflowName = workflow;
   let expandedWorkflow: unknown;
@@ -172,6 +211,24 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
     if (isVerboseOutput(options) && !isQuietOutput(options) && !isJsonOutput(options)) {
       formatter.step(`Loaded workflow YAML: ${workflow} -> ${workflowName}`);
     }
+  }
+
+  const previewWorkflow = expandedWorkflow as
+    | {
+        steps?: Array<{
+          name: string;
+          input?: Record<string, unknown>;
+          output?: { path?: string; schema?: string };
+        }>;
+      }
+    | undefined;
+  const bindingPreviewEntries = previewWorkflow ? buildBindingPreview(previewWorkflow) : [];
+  const outputPreviewEntries = previewWorkflow ? buildOutputPreview(previewWorkflow) : [];
+
+  if (expandedWorkflow) {
+    printPreview(previewWorkflow);
+  } else if (!isQuietOutput(options) && !isJsonOutput(options)) {
+    printPreview();
   }
 
   const variables: Record<string, unknown> = {};
@@ -226,6 +283,9 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
       formatter.json({
         workflow: workflowName,
         validated: true,
+        resolution: resolutionSummary,
+        bindingPreview: bindingPreviewEntries,
+        outputPreview: outputPreviewEntries,
         ...(options.dumpExpandedWorkflow ? { expandedWorkflow } : {}),
         ...(options.showStopSemantics ? { stopSemantics } : {}),
         elapsedMs: Date.now() - startedAt,
@@ -240,6 +300,8 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
         formatter.info("Stop semantics:");
         formatter.json(stopSemantics);
       }
+      formatter.info("Dry run preview complete. No execution was started.");
+      formatter.info(`Next step: obora run ${workflow}`);
       if (isVerboseOutput(options)) {
         formatter.info(`Validation completed in ${Date.now() - startedAt}ms`);
       }

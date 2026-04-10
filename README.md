@@ -32,17 +32,30 @@ Obora provides an operational backbone for AI-included systems:
 # Install CLI
 npm install -g @obora/cli
 
-# Initialize a new project
-obora init my-project
+# Create a quickstart project
+obora init my-project --quickstart
+# or shorter:
+obora quickstart my-project
 cd my-project
 
-# Run a workflow
-obora run workflow.yaml
+# Check readiness and missing setup
+obora doctor
+
+# Validate the bundled judge workflow before execution
+obora run judge.yaml --dry-run
+
+# Run the bundled judge example
+obora run judge.yaml
 ```
 
 Prerequisites:
 - Node.js 20+
 - At least one LLM provider API key (ZAI, OpenAI, Anthropic, etc.)
+
+What this path gives you:
+- `obora init --quickstart` creates a minimal judge-mode project
+- `obora doctor` shows ready/stub/missing-auth status and next actions
+- `obora run judge.yaml --dry-run` validates the workflow without starting execution and previews the input/output contract
 
 ### Recommended Getting Started Path
 
@@ -206,7 +219,7 @@ This authoring style makes workflows easier to operate because:
 
 ### One-File Judge Short Path
 
-If you want the shortest JSON-in / JSON-out path for a single evaluation, use one-file judge mode:
+If you want the shortest JSON-in / JSON-out path for a single evaluation, use one-file judge mode. `obora run <file> --dry-run` now previews the same input/output paths from the expanded judge config in both text and JSON output:
 
 ```yaml
 name: one-file-judge

@@ -1,0 +1,6 @@
+defaults:
+  provider: openai
+  model: gpt-4o-mini
+
+providers:
+  openai: {}

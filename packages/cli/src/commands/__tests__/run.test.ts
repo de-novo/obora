@@ -36,6 +36,22 @@ vi.mock("@obora/sdk", () => ({
   loadConfig: vi.fn(),
   detectLLMConfigFromEnv: vi.fn(),
   resolveLLMConfig: vi.fn(),
+  buildResolutionSummary: vi.fn(() => ({
+    provider: "none",
+    model: "none",
+    authSource: "none",
+    configSource: "none",
+    modelSource: "none",
+    chosenByPrecedence: "none",
+    nextPlaceToEdit: ".obora/config.yaml",
+    fallbackStub: true,
+    warnings: [],
+  })),
+  formatResolutionSummary: vi.fn(() => "Execution Resolution\n- provider: none"),
+  buildBindingPreview: vi.fn(() => []),
+  formatBindingPreview: vi.fn(() => ""),
+  buildOutputPreview: vi.fn(() => []),
+  formatOutputPreview: vi.fn(() => ""),
   OboraRuntime: MockOboraRuntime,
   Workflow: {
     fromYaml: vi.fn(),
@@ -76,7 +92,17 @@ vi.mock("../../utils/global-opts.js", () => ({
 }));
 
 import { appendFile, mkdir, writeFile, readFile } from "node:fs/promises";
-import { loadConfig, detectLLMConfigFromEnv, resolveLLMConfig, Workflow } from "@obora/sdk";
+import {
+  loadConfig,
+  detectLLMConfigFromEnv,
+  resolveLLMConfig,
+  Workflow,
+  buildBindingPreview,
+  buildOutputPreview,
+  formatResolutionSummary,
+  formatBindingPreview,
+  formatOutputPreview,
+} from "@obora/sdk";
 
 import { formatter } from "../../utils/formatter.js";
 import { createRunCommand, runRun } from "../run.js";
@@ -91,8 +117,8 @@ describe("run command", () => {
 
     // SDK defaults
     vi.mocked(loadConfig).mockResolvedValue({} as Awaited<ReturnType<typeof loadConfig>>);
-    vi.mocked(detectLLMConfigFromEnv).mockReturnValue(null);
-    vi.mocked(resolveLLMConfig).mockReturnValue(null);
+    vi.mocked(detectLLMConfigFromEnv).mockReturnValue(undefined);
+    vi.mocked(resolveLLMConfig).mockReturnValue(undefined);
 
     // Runtime defaults
     mockHandle.wait.mockResolvedValue(DEFAULT_RESULT);
@@ -250,7 +276,19 @@ describe("run command", () => {
     });
 
     it("should pass llm:undefined when no LLM config is resolved", async () => {
-      vi.mocked(resolveLLMConfig).mockReturnValue(null);
+      vi.mocked(resolveLLMConfig).mockReturnValue(undefined);
+
+      await runRun("my-workflow", {});
+
+      expect(MockOboraRuntime).toHaveBeenCalledWith(expect.objectContaining({ llm: undefined }));
+    });
+
+    it("should not pass resolved env/config llm into runtime without explicit overrides", async () => {
+      vi.mocked(resolveLLMConfig).mockReturnValue({
+        provider: "openai",
+        model: "gpt-4o-mini",
+        apiKey: "env-key",
+      } as ReturnType<typeof resolveLLMConfig>);
 
       await runRun("my-workflow", {});
 
@@ -332,6 +370,113 @@ describe("run command", () => {
       await runRun("my-workflow", { dryRun: true, json: true });
 
       expect(formatter.json).toHaveBeenCalledWith(expect.objectContaining({ validated: true }));
+    });
+
+    it("should include structured resolution data in dry-run JSON", async () => {
+      await runRun("my-workflow", { dryRun: true, json: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          resolution: expect.objectContaining({
+            provider: "none",
+            authSource: "none",
+            modelSource: "none",
+            chosenByPrecedence: "none",
+            nextPlaceToEdit: ".obora/config.yaml",
+            fallbackStub: true,
+          }),
+        })
+      );
+    });
+
+    it("should include binding and output preview arrays in dry-run JSON when available", async () => {
+      vi.mocked(buildBindingPreview).mockReturnValue([
+        {
+          stepName: "judge",
+          bindingName: "input",
+          path: "artifacts/submission.json",
+          kind: "json",
+          resolved: true,
+          required: true,
+        },
+      ]);
+      vi.mocked(buildOutputPreview).mockReturnValue([
+        {
+          stepName: "judge",
+          path: "artifacts/result.json",
+          schema: "artifacts/result.schema.json",
+          pathResolved: false,
+          schemaResolved: true,
+        },
+      ]);
+      const mockWorkflow = {
+        name: "loaded-workflow",
+        steps: [{ name: "judge", input: {}, output: {} }],
+      };
+      vi.mocked(Workflow.fromYaml).mockResolvedValue(
+        mockWorkflow as Awaited<ReturnType<typeof Workflow.fromYaml>>
+      );
+
+      await runRun("my-workflow.yaml", { dryRun: true, json: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          bindingPreview: [
+            expect.objectContaining({
+              stepName: "judge",
+              bindingName: "input",
+              path: "artifacts/submission.json",
+              resolved: true,
+            }),
+          ],
+          outputPreview: [
+            expect.objectContaining({
+              stepName: "judge",
+              path: "artifacts/result.json",
+              schemaResolved: true,
+            }),
+          ],
+        })
+      );
+    });
+
+    it("should print resolution preview in dry-run text mode", async () => {
+      await runRun("my-workflow", { dryRun: true });
+
+      expect(formatter.info).toHaveBeenCalledWith("Execution Resolution\n- provider: none");
+      expect(formatter.info).toHaveBeenCalledWith(
+        "Dry run preview complete. No execution was started."
+      );
+    });
+    it("should suggest the next run command after dry-run success", async () => {
+      await runRun("judge.yaml", { dryRun: true });
+
+      expect(formatter.info).toHaveBeenCalledWith("Next step: obora run judge.yaml");
+    });
+
+    it("should print binding/output previews when available", async () => {
+      vi.mocked(formatBindingPreview).mockReturnValue(
+        "Binding Preview\n- judge.input: json <- artifacts/submission.json [resolved]"
+      );
+      vi.mocked(formatOutputPreview).mockReturnValue(
+        "Output Preview\n- judge: path <- artifacts/result.json [pending]"
+      );
+      const mockWorkflow = {
+        name: "loaded-workflow",
+        steps: [{ name: "judge", input: {}, output: {} }],
+      };
+      vi.mocked(Workflow.fromYaml).mockResolvedValue(
+        mockWorkflow as Awaited<ReturnType<typeof Workflow.fromYaml>>
+      );
+
+      await runRun("my-workflow.yaml", { dryRun: true });
+
+      expect(formatter.info).toHaveBeenCalledWith(
+        "Binding Preview\n- judge.input: json <- artifacts/submission.json [resolved]"
+      );
+      expect(formatter.info).toHaveBeenCalledWith(
+        "Output Preview\n- judge: path <- artifacts/result.json [pending]"
+      );
     });
 
     it("should include expanded workflow in dry-run JSON when dump flag is set", async () => {
