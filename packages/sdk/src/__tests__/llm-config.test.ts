@@ -33,7 +33,7 @@ describe("llm-config", () => {
   });
 
   it("resolveLLMConfig priority: explicit > config > env", () => {
-    process.env.ANTHROPIC_API_KEY = "env-key";
+    process.env.ANTHROPIC_API_KEY="env-key";
 
     const fromExplicit = resolveLLMConfig(
       { provider: "openai", apiKey: "explicit-key", model: "gpt-5" },
@@ -42,7 +42,7 @@ describe("llm-config", () => {
         providers: {
           anthropic: { authRef: "plain-config-key", defaultModel: "claude-opus-4-6" },
         },
-      },
+      }
     );
     expect(fromExplicit?.provider).toBe("openai");
 
@@ -60,5 +60,25 @@ describe("llm-config", () => {
     expect(fromEnv?.apiKey).toBe("env-key");
 
     delete process.env.ANTHROPIC_API_KEY;
+  });
+
+  it("inherits config model when env auth is present for the configured provider", () => {
+    const resolved = resolveLLMConfig(
+      { provider: "openai", apiKey: "env-openai-key" },
+      {
+        defaults: { provider: "openai", model: "gpt-4o-mini" },
+        providers: {
+          openai: {},
+        },
+      }
+    );
+
+    expect(resolved).toEqual(
+      expect.objectContaining({
+        provider: "openai",
+        apiKey: "env-openai-key",
+        model: "gpt-4o-mini",
+      })
+    );
   });
 });

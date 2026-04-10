@@ -139,9 +139,22 @@ function inferAuthSource(runtimeConfig: OboraRuntimeConfig, llmConfig: LLMConfig
 }
 
 
-function inferChosenByPrecedence(runtimeConfig: OboraRuntimeConfig, config?: OboraConfig, llmConfig?: LLMConfig): string {
+function inferChosenByPrecedence(
+  runtimeConfig: OboraRuntimeConfig,
+  config?: OboraConfig,
+  llmConfig?: LLMConfig
+): string {
   if (!llmConfig) return "none";
+  const authSource = inferAuthSource(runtimeConfig, llmConfig, config);
+  const modelSource = inferModelSource(runtimeConfig, config, llmConfig);
   const resolvedSource = inferResolvedSource(runtimeConfig, config, llmConfig);
+
+  if (authSource === "runtime.llm" && modelSource.startsWith("config")) {
+    return "runtime.llm(auth) + config(model)";
+  }
+  if (authSource.startsWith("env(") && modelSource.startsWith("config")) {
+    return "env(auth) + config(model)";
+  }
   if (resolvedSource === "runtime") return "runtime.llm > config > env";
   if (resolvedSource === "env") return "env > config";
   if (resolvedSource === "config") return "config > env";

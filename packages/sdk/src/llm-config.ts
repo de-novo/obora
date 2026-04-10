@@ -58,9 +58,38 @@ export function detectLLMConfigFromEnv(env: NodeJS.ProcessEnv = process.env): LL
   return undefined;
 }
 
+function mergeExplicitWithConfig(explicit: LLMConfig, config?: OboraConfig): LLMConfig {
+  if (!config) {
+    return explicit;
+  }
+
+  const providerConfig = config.providers?.[explicit.provider];
+  const inheritedModel =
+    providerConfig?.defaultModel ??
+    (config.defaults?.provider === explicit.provider ? config.defaults?.model : undefined);
+  const inheritedTimeout =
+    providerConfig?.timeout ??
+    (config.defaults?.provider === explicit.provider ? config.defaults?.timeout : undefined);
+  const inheritedMaxTokens =
+    providerConfig?.maxTokens ??
+    (config.defaults?.provider === explicit.provider ? config.defaults?.maxTokens : undefined);
+  const inheritedTemperature =
+    config.defaults?.provider === explicit.provider ? config.defaults?.temperature : undefined;
+  const inheritedBaseUrl = providerConfig?.baseUrl;
+
+  return {
+    ...explicit,
+    model: explicit.model ?? inheritedModel,
+    timeout: explicit.timeout ?? inheritedTimeout,
+    maxTokens: explicit.maxTokens ?? inheritedMaxTokens,
+    temperature: explicit.temperature ?? inheritedTemperature,
+    baseUrl: explicit.baseUrl ?? inheritedBaseUrl,
+  };
+}
+
 export function resolveLLMConfig(explicit?: LLMConfig, config?: OboraConfig): LLMConfig | undefined {
   if (explicit) {
-    return explicit;
+    return mergeExplicitWithConfig(explicit, config);
   }
 
   if (config) {

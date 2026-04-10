@@ -183,16 +183,21 @@ describe("CLI quickstart integration", () => {
     process.env.OPENAI_API_KEY = "test-openai-key";
     logSpy.mockClear();
     await cli.parseAsync(["--json", "doctor"], { from: "user" });
-    const missingModelPayload = lastJsonCall();
-    expect(missingModelPayload).toEqual(
+    const authOnlyPayload = lastJsonCall();
+    expect(authOnlyPayload).toEqual(
       expect.objectContaining({
         status: expect.objectContaining({
-          status: "needs_config",
-          message: "Needs model: provider auth detected but no model is resolved",
+          status: "ready",
+          message: "Ready: openai/gpt-4o-mini",
         }),
-        recommendations: expect.arrayContaining([
-          "Set a default model in .obora/config.yaml or export OPENAI_MODEL=***",
-        ]),
+        resolution: expect.objectContaining({
+          provider: "openai",
+          model: "gpt-4o-mini",
+          authSource: "env(OPENAI_API_KEY)",
+          modelSource: "config.defaults.model",
+          chosenByPrecedence: "env(auth) + config(model)",
+          fallbackStub: false,
+        }),
       })
     );
 
