@@ -9,9 +9,19 @@ interface ModelsOptions {
   json?: boolean;
 }
 
+function filterModels(models: string[], query?: string): string[] {
+  if (!query) {
+    return models;
+  }
+
+  const normalizedQuery = query.toLowerCase();
+  return models.filter((model) => model.toLowerCase().includes(normalizedQuery));
+}
+
 export async function runModels(
   provider: string | undefined,
-  options: ModelsOptions
+  query: string | undefined,
+  options: ModelsOptions = {}
 ): Promise<void> {
   const providers = listPiAIProviders();
 
@@ -22,12 +32,13 @@ export async function runModels(
       );
     }
 
-    const models = listPiAIModels(provider);
+    const models = filterModels(listPiAIModels(provider), query);
 
     if (options.json) {
       formatter.json({
         source: "pi-ai",
         provider,
+        ...(query ? { query } : {}),
         count: models.length,
         models,
       });
@@ -37,6 +48,9 @@ export async function runModels(
     formatter.info("Obora models");
     formatter.step("Source: pi-ai");
     formatter.step(`Provider: ${provider}`);
+    if (query) {
+      formatter.step(`Filter: ${query}`);
+    }
     formatter.step(`Model count: ${models.length}`);
     for (const model of models) {
       formatter.step(model);
@@ -63,18 +77,19 @@ export async function runModels(
   for (const row of providerRows) {
     formatter.step(`${row.provider} (${row.count})`);
   }
-  formatter.info("Next step: obora models <provider>");
+  formatter.info("Next step: obora models <provider> [query]");
 }
 
 export function createModelsCommand(): Command {
   return new Command("models")
     .description("List supported model refs from the installed pi-ai catalog")
     .argument("[provider]", "Provider name to inspect")
-    .action(async function (this: Command, provider?: string) {
+    .argument("[query]", "Optional substring filter for model refs")
+    .action(async function (this: Command, provider?: string, query?: string) {
       const globalOpts = getGlobalOpts(this);
       await handleCommandAction(
         async () => {
-          await runModels(provider, globalOpts);
+          await runModels(provider, query, globalOpts);
         },
         { verbose: Boolean(globalOpts.verbose) }
       );

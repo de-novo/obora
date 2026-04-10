@@ -53,8 +53,8 @@ Prerequisites:
 - At least one LLM provider API key (ZAI, OpenAI, Anthropic, etc.)
 
 Useful discovery command:
-- `obora models <provider>` shows the model refs available from the installed `pi-ai` catalog
-  - examples: `obora models openai`, `obora models anthropic`, `obora --json models zai`
+- `obora models <provider> [query]` shows the model refs available from the installed `pi-ai` catalog
+  - examples: `obora models openai`, `obora models openai gpt-5.4`, `obora --json models zai glm-4.7`
 
 What this path gives you:
 - `obora init --quickstart` creates a minimal judge-mode project

@@ -52,7 +52,7 @@ describe("models command", () => {
   });
 
   it("prints provider list in json mode when no provider is specified", async () => {
-    await runModels(undefined, { json: true });
+    await runModels(undefined, undefined, { json: true });
 
     expect(formatter.json).toHaveBeenCalledWith({
       source: "pi-ai",
@@ -64,7 +64,7 @@ describe("models command", () => {
   });
 
   it("prints model list for a specific provider in text mode", async () => {
-    await runModels("openai", {});
+    await runModels("openai", undefined, {});
 
     expect(formatter.info).toHaveBeenCalledWith("Obora models");
     expect(formatter.step).toHaveBeenCalledWith("Source: pi-ai");
@@ -76,7 +76,7 @@ describe("models command", () => {
   });
 
   it("prints model list for a specific provider in json mode", async () => {
-    await runModels("anthropic", { json: true });
+    await runModels("anthropic", undefined, { json: true });
 
     expect(formatter.json).toHaveBeenCalledWith({
       source: "pi-ai",
@@ -87,15 +87,38 @@ describe("models command", () => {
   });
 
   it("throws a helpful error for unsupported providers", async () => {
-    await expect(runModels("unknown-provider", {})).rejects.toThrow(
+    await expect(runModels("unknown-provider", undefined, {})).rejects.toThrow(
       "Unsupported provider 'unknown-provider'. Supported providers: openai, anthropic"
     );
   });
 
   it("queries pi-ai provider catalog helpers", async () => {
-    await runModels("openai", {});
+    await runModels("openai", undefined, {});
 
     expect(listPiAIProviders).toHaveBeenCalled();
     expect(listPiAIModels).toHaveBeenCalledWith("openai");
+  });
+
+  it("filters provider models by query in json mode", async () => {
+    await runModels("openai", "gpt-5", { json: true });
+
+    expect(formatter.json).toHaveBeenCalledWith({
+      source: "pi-ai",
+      provider: "openai",
+      query: "gpt-5",
+      count: 1,
+      models: ["gpt-5"],
+    });
+  });
+
+  it("filters provider models by query in text mode", async () => {
+    await runModels("openai", "MINI", {});
+
+    expect(formatter.step).toHaveBeenCalledWith("Provider: openai");
+    expect(formatter.step).toHaveBeenCalledWith("Filter: MINI");
+    expect(formatter.step).toHaveBeenCalledWith("Model count: 1");
+    expect(formatter.step).toHaveBeenCalledWith("gpt-4o-mini");
+    expect(formatter.step).not.toHaveBeenCalledWith("gpt-4o");
+    expect(formatter.step).not.toHaveBeenCalledWith("gpt-5");
   });
 });
