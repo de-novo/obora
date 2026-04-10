@@ -8,6 +8,7 @@ import { createDoctorCommand } from "./commands/doctor.js";
 import { createExpandCommand } from "./commands/expand.js";
 import { createInitCommand } from "./commands/init.js";
 import { createKnowledgeCommand } from "./commands/knowledge.js";
+import { createModelsCommand } from "./commands/models.js";
 import { createPluginCommand } from "./commands/plugin.js";
 import { createPolicyCommand } from "./commands/policy.js";
 import { createQuickstartCommand } from "./commands/quickstart.js";
@@ -53,6 +54,7 @@ export function createCLI(): Command {
 
   program.addCommand(createInitCommand());
   program.addCommand(createQuickstartCommand());
+  program.addCommand(createModelsCommand());
   program.addCommand(createDoctorCommand());
   program.addCommand(createExpandCommand());
   program.addCommand(createRunCommand());

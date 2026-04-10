@@ -6,6 +6,7 @@
 - [Exit Codes](#exit-codes)
 - [`obora init`](#obora-init)
 - [`obora quickstart`](#obora-quickstart)
+- [`obora models`](#obora-models)
 - [`obora doctor`](#obora-doctor)
 - [`obora run`](#obora-run)
 - [`obora test`](#obora-test)
@@ -82,6 +83,27 @@ obora quickstart my-project
 - Equivalent to `obora init [name] --quickstart`
 - Creates the same quickstart scaffold as `init --quickstart`
 - Intended as the shortest first-run command
+
+---
+
+## `obora models`
+
+List provider model refs from the installed `pi-ai` catalog.
+
+### Usage
+
+```bash
+obora models
+obora models openai
+obora --json models anthropic
+```
+
+### Behavior
+
+- uses the installed `@mariozechner/pi-ai` runtime catalog as the source of truth
+- without a provider, lists available providers and model counts
+- with a provider, lists the supported model refs for that provider
+- useful for choosing a valid `OPENAI_MODEL`, `ANTHROPIC_MODEL`, or `providers.<name>.defaultModel`
 
 ---
 

@@ -52,6 +52,10 @@ Prerequisites:
 - Node.js 20+
 - At least one LLM provider API key (ZAI, OpenAI, Anthropic, etc.)
 
+Useful discovery command:
+- `obora models <provider>` shows the model refs available from the installed `pi-ai` catalog
+  - examples: `obora models openai`, `obora models anthropic`, `obora --json models zai`
+
 What this path gives you:
 - `obora init --quickstart` creates a minimal judge-mode project
 - `obora doctor` shows ready/stub/missing-auth status and next actions

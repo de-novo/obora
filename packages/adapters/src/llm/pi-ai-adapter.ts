@@ -21,6 +21,41 @@ import type {
   ToolDefinition,
 } from "./adapter";
 
+
+const PI_AI_PROVIDER_CANDIDATES = [
+  "openai",
+  "anthropic",
+  "google",
+  "zai",
+  "xai",
+  "groq",
+  "cerebras",
+  "openrouter",
+  "vercel-ai-gateway",
+  "mistral",
+  "minimax",
+  "minimax-cn",
+  "huggingface",
+  "opencode",
+  "kimi-coding",
+  "github-copilot",
+] as const;
+
+export function listPiAIProviders(): string[] {
+  return PI_AI_PROVIDER_CANDIDATES.filter((provider) => {
+    try {
+      return getModels(provider as KnownProvider).length > 0;
+    } catch {
+      return false;
+    }
+  });
+}
+
+export function listPiAIModels(provider: string): string[] {
+  const models = getModels(provider as KnownProvider);
+  return models.map((model) => model.id);
+}
+
 interface PiAIAdapterConfig {
   provider: KnownProvider;
   apiKey: string;
@@ -143,8 +178,7 @@ export class PiAIAdapter implements LLMAdapter {
   }
 
   private listAvailableModels(): string {
-    const models = getModels(this.config.provider);
-    return models.map((model) => model.id).join(", ");
+    return listPiAIModels(this.config.provider).join(", ");
   }
 
   private withOverrides<TApi extends string>(model: Model<TApi>): Model<TApi> {
