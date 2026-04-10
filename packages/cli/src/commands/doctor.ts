@@ -40,6 +40,7 @@ interface ProviderSetupExamples {
   authExportExample: string | null;
   modelEnvExample: string | null;
   modelConfigExample: string | null;
+  modelRecommendationReason: string | null;
 }
 
 interface DoctorAuthDiagnostics extends ProviderSetupExamples {
@@ -52,6 +53,8 @@ interface DoctorAuthDiagnostics extends ProviderSetupExamples {
   resolvedAuthExportExample: string | null;
   resolvedModelEnvExample: string | null;
   resolvedModelConfigExample: string | null;
+  modelRecommendationReason: string | null;
+  resolvedModelRecommendationReason: string | null;
   detectedProviders: string[];
   providerMismatchWarning: string | null;
   setupGuide: string;
@@ -157,6 +160,69 @@ const PROVIDER_DEFAULT_MODEL_MAP: Record<string, string> = {
   openrouter: "openai/gpt-5.4",
   zai: "glm-5",
 };
+
+interface RecommendedModelInfo {
+  model: string;
+  reason: string;
+}
+
+function buildGoogleModelRecommendationReason(model: string): string {
+  const stable = !/preview|latest|live/i.test(model);
+  const stability = stable ? "stable" : "preview";
+
+  if (model.includes("flash-lite")) {
+    return `pi-ai catalog latest ${stability} Gemini Flash Lite model for google`;
+  }
+  if (model.includes("flash")) {
+    return `pi-ai catalog latest ${stability} Gemini Flash model for google`;
+  }
+  return `pi-ai catalog latest ${stability} Gemini Pro model for google`;
+}
+
+function buildModelRecommendationReason(provider: string, source: "catalog" | "fallback"): string {
+  if (source === "catalog") {
+    switch (provider) {
+      case "openai":
+        return "pi-ai catalog latest GPT base model for openai";
+      case "anthropic":
+        return "pi-ai catalog latest stable base Claude model for anthropic";
+      case "zai":
+        return "pi-ai catalog latest GLM base model for zai";
+      case "openrouter":
+        return "pi-ai catalog latest OpenAI base model routed via openrouter";
+      default:
+        return `pi-ai catalog latest base model for ${provider}`;
+    }
+  }
+
+  return `static fallback default model for ${provider}`;
+}
+
+function buildRecommendedModelInfo(provider: string): RecommendedModelInfo {
+  const catalogModel = inferLatestCatalogModel(provider);
+  if (catalogModel) {
+    return {
+      model: catalogModel,
+      reason:
+        provider === "google"
+          ? buildGoogleModelRecommendationReason(catalogModel)
+          : buildModelRecommendationReason(provider, "catalog"),
+    };
+  }
+
+  const mappedDefault = PROVIDER_DEFAULT_MODEL_MAP[provider];
+  if (mappedDefault) {
+    return {
+      model: mappedDefault,
+      reason: buildModelRecommendationReason(provider, "fallback"),
+    };
+  }
+
+  return {
+    model: "your-model-name",
+    reason: `no catalog-backed default available; choose a provider-specific model for ${provider}`,
+  };
+}
 
 function selectOpenAILatestModel(models: string[]): string | undefined {
   const scored = models
@@ -269,6 +335,47 @@ function selectZAILatestModel(models: string[]): string | undefined {
   return scored[0]?.model;
 }
 
+function selectGoogleLatestModel(models: string[]): string | undefined {
+  const familyPriority: Record<string, number> = {
+    pro: 3,
+    flash: 2,
+    "flash-lite": 1,
+  };
+
+  const scored = models
+    .map((model) => {
+      const match = /^gemini-(\d+)(?:\.(\d+))?-(pro|flash-lite|flash)(?:-.+)?$/.exec(model);
+      if (!match) return null;
+      return {
+        model,
+        major: Number(match[1] ?? 0),
+        minor: Number(match[2] ?? 0),
+        family: familyPriority[match[3] ?? ""] ?? 0,
+        stableAlias: !/preview|latest|live/i.test(model),
+      };
+    })
+    .filter(
+      (
+        entry
+      ): entry is {
+        model: string;
+        major: number;
+        minor: number;
+        family: number;
+        stableAlias: boolean;
+      } => entry !== null
+    )
+    .sort(
+      (left, right) =>
+        Number(right.stableAlias) - Number(left.stableAlias) ||
+        right.family - left.family ||
+        right.major - left.major ||
+        right.minor - left.minor
+    );
+
+  return scored[0]?.model;
+}
+
 function selectOpenRouterLatestModel(models: string[]): string | undefined {
   const openaiModels = models.filter((model) => model.startsWith("openai/"));
   const selectedOpenAI = selectOpenAILatestModel(
@@ -298,6 +405,8 @@ function inferLatestCatalogModel(provider: string): string | undefined {
       return selectZAILatestModel(models);
     case "openrouter":
       return selectOpenRouterLatestModel(models);
+    case "google":
+      return selectGoogleLatestModel(models);
     default:
       return undefined;
   }
@@ -317,31 +426,27 @@ function inferModelEnvKey(provider: string): string {
   );
 }
 
-function inferDefaultModel(provider: string): string {
-  return (
-    inferLatestCatalogModel(provider) ?? PROVIDER_DEFAULT_MODEL_MAP[provider] ?? "your-model-name"
-  );
-}
-
 function buildProviderSetupExamples(provider: string | null): ProviderSetupExamples {
   if (!provider) {
     return {
       authExportExample: null,
       modelEnvExample: null,
       modelConfigExample: null,
+      modelRecommendationReason: null,
     };
   }
 
   const authEnvKey = inferAuthEnvKey(provider);
   const modelEnvKey = inferModelEnvKey(provider);
-  const defaultModel = inferDefaultModel(provider);
+  const recommendedModel = buildRecommendedModelInfo(provider);
 
   return {
     authExportExample: `export ${authEnvKey}=***`,
-    modelEnvExample: `export ${modelEnvKey}=${defaultModel}`,
+    modelEnvExample: `export ${modelEnvKey}=${recommendedModel.model}`,
     modelConfigExample: `providers:
   ${provider}:
-    defaultModel: ${defaultModel}`,
+    defaultModel: ${recommendedModel.model}`,
+    modelRecommendationReason: recommendedModel.reason,
   };
 }
 
@@ -408,6 +513,8 @@ function buildAuthDiagnostics(
     resolvedAuthExportExample: resolvedSetupExamples.authExportExample,
     resolvedModelEnvExample: resolvedSetupExamples.modelEnvExample,
     resolvedModelConfigExample: resolvedSetupExamples.modelConfigExample,
+    modelRecommendationReason: setupExamples.modelRecommendationReason,
+    resolvedModelRecommendationReason: resolvedSetupExamples.modelRecommendationReason,
     detectedProviders,
     providerMismatchWarning,
     setupGuide: AUTH_SETUP_GUIDE,
@@ -474,9 +581,14 @@ function buildConfiguredProviderHints(providerHint: DoctorProviderHint): string[
     return [];
   }
 
+  const setupExamples = buildProviderSetupExamples(providerHint.recommendedProvider);
+
   return [
     `Configured default provider: ${providerHint.recommendedProvider}`,
     `Recommended auth: export ${providerHint.recommendedAuthEnvKey}=***`,
+    ...(setupExamples.modelRecommendationReason
+      ? [`Provider model recommendation basis: ${setupExamples.modelRecommendationReason}`]
+      : []),
   ];
 }
 
@@ -508,8 +620,8 @@ function buildProviderSpecificGuidance(
   if (summary.provider && !summary.model) {
     const useResolvedExamples =
       authDiagnostics.resolvedProvider &&
-      authDiagnostics.configuredProvider &&
-      authDiagnostics.resolvedProvider !== authDiagnostics.configuredProvider;
+      (!authDiagnostics.configuredProvider ||
+        authDiagnostics.resolvedProvider !== authDiagnostics.configuredProvider);
 
     const modelConfigExample = useResolvedExamples
       ? authDiagnostics.resolvedModelConfigExample
@@ -517,18 +629,27 @@ function buildProviderSpecificGuidance(
     const modelEnvExample = useResolvedExamples
       ? authDiagnostics.resolvedModelEnvExample
       : authDiagnostics.modelEnvExample;
+    const modelRecommendationReason = useResolvedExamples
+      ? authDiagnostics.resolvedModelRecommendationReason
+      : authDiagnostics.modelRecommendationReason;
     const modelConfigPrefix = useResolvedExamples
       ? "Resolved provider model config example"
       : "Provider model config example";
     const modelEnvPrefix = useResolvedExamples
       ? "Resolved provider model env example"
       : "Provider model env example";
+    const modelReasonPrefix = useResolvedExamples
+      ? "Resolved provider model recommendation basis"
+      : "Provider model recommendation basis";
 
     if (modelConfigExample) {
       guidance.push(`${modelConfigPrefix}: ${modelConfigExample}`);
     }
     if (modelEnvExample) {
       guidance.push(`${modelEnvPrefix}: ${modelEnvExample}`);
+    }
+    if (modelRecommendationReason) {
+      guidance.push(`${modelReasonPrefix}: ${modelRecommendationReason}`);
     }
   }
 
