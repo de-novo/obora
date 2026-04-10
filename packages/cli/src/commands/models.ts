@@ -14,6 +14,19 @@ interface GlobalModelMatch {
   model: string;
 }
 
+interface ModelsOverview {
+  mode: "providers" | "provider" | "global";
+  source: "pi-ai";
+  count: number;
+  provider?: string;
+  query?: string;
+}
+
+interface ModelsGuidance {
+  nextStep: string;
+  hint?: string;
+}
+
 function buildGlobalNoMatchHint(): string {
   return `No models matched. Check the spelling or try \`obora models <provider> [query]\`.`;
 }
@@ -30,6 +43,70 @@ function buildProviderNoMatchHint(query: string, providers: string[]): string {
 
   const suggestedQuery = shellQuoteArg(query);
   return `No models matched this provider filter. Check the query spelling or run \`obora models ${suggestedQuery}\`.`;
+}
+
+function buildProviderOverview(provider: string, models: string[], query?: string): ModelsOverview {
+  return {
+    mode: "provider",
+    source: "pi-ai",
+    provider,
+    ...(query ? { query } : {}),
+    count: models.length,
+  };
+}
+
+function buildGlobalOverview(query: string, matches: GlobalModelMatch[]): ModelsOverview {
+  return {
+    mode: "global",
+    source: "pi-ai",
+    query,
+    count: matches.length,
+  };
+}
+
+function buildProvidersOverview(
+  providers: Array<{ provider: string; count: number }>
+): ModelsOverview {
+  return {
+    mode: "providers",
+    source: "pi-ai",
+    count: providers.length,
+  };
+}
+
+function buildProviderGuidance(
+  provider: string,
+  query: string | undefined,
+  models: string[]
+): ModelsGuidance {
+  return {
+    nextStep:
+      query && models.length > 0
+        ? `obora models ${provider}`
+        : `obora models ${provider}${query ? "" : " <query>"}`,
+    ...(query && models.length === 0
+      ? { hint: `No matches yet. Inspect the full ${provider} catalog or broaden the query.` }
+      : {}),
+  };
+}
+
+function buildGlobalGuidance(query: string, matches: GlobalModelMatch[]): ModelsGuidance {
+  if (matches.length === 0) {
+    return {
+      nextStep: "obora models <provider> [query]",
+      hint: buildGlobalNoMatchHint(),
+    };
+  }
+
+  return {
+    nextStep: `obora models ${matches[0]!.provider} ${query}`,
+  };
+}
+
+function buildProvidersGuidance(): ModelsGuidance {
+  return {
+    nextStep: "obora models <provider> [query]",
+  };
 }
 
 function naturalCompare(a: string, b: string): number {
@@ -142,6 +219,8 @@ function printGlobalMatches(
   query: string,
   options: ModelsOptions
 ): void {
+  const guidance = buildGlobalGuidance(query, matches);
+
   if (options.json) {
     formatter.json({
       source: "pi-ai",
@@ -149,6 +228,9 @@ function printGlobalMatches(
       count: matches.length,
       matches,
       ...(matches.length === 0 ? { hint: buildGlobalNoMatchHint() } : {}),
+      overview: buildGlobalOverview(query, matches),
+      diagnostics: { matches },
+      guidance,
     });
     return;
   }
@@ -159,12 +241,14 @@ function printGlobalMatches(
   formatter.step(`Match count: ${matches.length}`);
   if (matches.length === 0) {
     formatter.warn(buildGlobalNoMatchHint());
+    formatter.info(`Next step: ${guidance.nextStep}`);
     return;
   }
 
   for (const match of matches) {
     formatter.step(`${match.provider}: ${match.model}`);
   }
+  formatter.info(`Next step: ${guidance.nextStep}`);
 }
 
 export async function runModels(
@@ -187,6 +271,7 @@ export async function runModels(
 
   if (provider) {
     const models = filterModels(listPiAIModels(provider), query);
+    const guidance = buildProviderGuidance(provider, query, models);
 
     if (options.json) {
       formatter.json({
@@ -198,6 +283,14 @@ export async function runModels(
         ...(models.length === 0 && query
           ? { hint: buildProviderNoMatchHint(query, providers) }
           : {}),
+        overview: buildProviderOverview(provider, models, query),
+        diagnostics: { models },
+        guidance: {
+          ...guidance,
+          ...(models.length === 0 && query
+            ? { hint: buildProviderNoMatchHint(query, providers) }
+            : {}),
+        },
       });
       return;
     }
@@ -211,12 +304,14 @@ export async function runModels(
     formatter.step(`Model count: ${models.length}`);
     if (models.length === 0 && query) {
       formatter.warn(buildProviderNoMatchHint(query, providers));
+      formatter.info(`Next step: ${guidance.nextStep}`);
       return;
     }
 
     for (const model of models) {
       formatter.step(model);
     }
+    formatter.info(`Next step: ${guidance.nextStep}`);
     return;
   }
 
@@ -224,11 +319,15 @@ export async function runModels(
     provider: name,
     count: listPiAIModels(name).length,
   }));
+  const guidance = buildProvidersGuidance();
 
   if (options.json) {
     formatter.json({
       source: "pi-ai",
       providers: providerRows,
+      overview: buildProvidersOverview(providerRows),
+      diagnostics: { providers: providerRows },
+      guidance,
     });
     return;
   }
@@ -239,7 +338,7 @@ export async function runModels(
   for (const row of providerRows) {
     formatter.step(`${row.provider} (${row.count})`);
   }
-  formatter.info("Next step: obora models <provider> [query] or obora models <query>");
+  formatter.info(`Next step: ${guidance.nextStep}`);
 }
 
 export function createModelsCommand(): Command {
