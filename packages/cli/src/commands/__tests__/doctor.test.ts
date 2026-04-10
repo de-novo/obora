@@ -482,6 +482,10 @@ describe("doctor command", () => {
           }),
           recommendations: expect.arrayContaining([
             "Detected env auth does not match configured provider. Either export ANTHROPIC_API_KEY=*** or switch defaults.provider to one of: openai",
+            "Use configured provider in this shell: unset OPENAI_API_KEY OPENAI_MODEL",
+            expect.stringContaining(
+              "packages/cli/.obora/config.yaml and set defaults.provider: openai"
+            ),
           ]),
         })
       );
