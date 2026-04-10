@@ -501,7 +501,7 @@ function buildConflictSummary(
     return null;
   }
 
-  return `configured provider ${configuredProvider}, detected env auth ${detectedProviders.join(", ")}, resolved provider ${resolvedProvider ?? "none"}`;
+  return `config ${configuredProvider} · env ${detectedProviders.join(", ")} · resolved ${resolvedProvider ?? "none"}`;
 }
 
 function buildAuthDiagnostics(
@@ -610,7 +610,7 @@ function buildConfiguredProviderHints(providerHint: DoctorProviderHint): string[
     `Configured default provider: ${providerHint.recommendedProvider}`,
     `Recommended auth: export ${providerHint.recommendedAuthEnvKey}=***`,
     ...(setupExamples.modelRecommendationReason
-      ? [`Provider model recommendation basis: ${setupExamples.modelRecommendationReason}`]
+      ? [`Model basis: ${setupExamples.modelRecommendationReason}`]
       : []),
   ];
 }
@@ -638,14 +638,12 @@ function buildDetectedProviderMismatchRecommendations(
   });
 
   if (envKeysToUnset.length > 0) {
-    recommendations.push(
-      `Use configured provider in this shell: unset ${Array.from(new Set(envKeysToUnset)).join(" ")}`
-    );
+    recommendations.push(`Shell fix: unset ${Array.from(new Set(envKeysToUnset)).join(" ")}`);
   }
 
   if (authDiagnostics.detectedProviders.length === 1) {
     recommendations.push(
-      `Switch config default provider: edit ${checks.projectConfigPath} and set defaults.provider: ${authDiagnostics.detectedProviders[0]}`
+      `Config fix: edit ${checks.projectConfigPath} -> defaults.provider: ${authDiagnostics.detectedProviders[0]}`
     );
   }
 
@@ -678,14 +676,12 @@ function buildResolvedProviderMismatchRecommendations(
     authDiagnostics.resolvedModelEnvKey,
   ].filter((key): key is string => Boolean(key));
   if (envKeysToUnset.length > 0) {
-    recommendations.push(
-      `Use configured provider in this shell: unset ${Array.from(new Set(envKeysToUnset)).join(" ")}`
-    );
+    recommendations.push(`Shell fix: unset ${Array.from(new Set(envKeysToUnset)).join(" ")}`);
   }
 
   if (isConfigFilePath(summary.nextPlaceToEdit)) {
     recommendations.push(
-      `Switch config default provider: edit ${summary.nextPlaceToEdit} and set defaults.provider: ${summary.provider}`
+      `Config fix: edit ${summary.nextPlaceToEdit} -> defaults.provider: ${summary.provider}`
     );
   }
 
@@ -717,15 +713,9 @@ function buildProviderSpecificGuidance(
     const modelRecommendationReason = useResolvedExamples
       ? authDiagnostics.resolvedModelRecommendationReason
       : authDiagnostics.modelRecommendationReason;
-    const modelConfigPrefix = useResolvedExamples
-      ? "Resolved provider model config example"
-      : "Provider model config example";
-    const modelEnvPrefix = useResolvedExamples
-      ? "Resolved provider model env example"
-      : "Provider model env example";
-    const modelReasonPrefix = useResolvedExamples
-      ? "Resolved provider model recommendation basis"
-      : "Provider model recommendation basis";
+    const modelConfigPrefix = useResolvedExamples ? "Resolved model config" : "Model config";
+    const modelEnvPrefix = useResolvedExamples ? "Resolved model env" : "Model env";
+    const modelReasonPrefix = useResolvedExamples ? "Resolved model basis" : "Model basis";
 
     if (modelConfigExample) {
       guidance.push(`${modelConfigPrefix}: ${modelConfigExample}`);
@@ -872,7 +862,7 @@ function buildDoctorOutputSections(
     warnings.push(authDiagnostics.providerMismatchWarning);
   }
   if (authDiagnostics.conflictSummary) {
-    warnings.push(`Conflict summary: ${authDiagnostics.conflictSummary}`);
+    warnings.push(`Conflict: ${authDiagnostics.conflictSummary}`);
   }
 
   return {
