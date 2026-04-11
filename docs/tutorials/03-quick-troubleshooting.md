@@ -1,6 +1,6 @@
 # Tutorial 03: Quick Troubleshooting
 
-**Estimated time:** 3 minutes  
+**Estimated time:** 3 minutes
 **Audience:** First-time users who are blocked in the install → doctor → quickstart → run path
 
 ## Use this page for the common first-run failures

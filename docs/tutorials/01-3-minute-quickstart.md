@@ -1,6 +1,6 @@
 # Tutorial 01: 3-Minute Quickstart
 
-**Estimated time:** 3 minutes  
+**Estimated time:** 3 minutes
 **Audience:** First-time users who want the shortest path to a successful Obora run
 
 ## Goal

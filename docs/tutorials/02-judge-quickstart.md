@@ -1,6 +1,6 @@
 # Tutorial 02: Judge Quickstart
 
-**Estimated time:** 5 minutes  
+**Estimated time:** 5 minutes
 **Audience:** Users who want the shortest JSON-in / JSON-out evaluation path
 
 ## What judge mode is
