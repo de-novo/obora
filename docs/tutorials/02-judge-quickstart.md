@@ -82,6 +82,13 @@ obora judge --dry-run
 obora judge
 ```
 
+If you want to try a different payload without editing `judge.yaml`, you can also point `--input` at a JSON file:
+
+```bash
+obora judge --input @artifacts/submission.json --dry-run
+obora judge --input @artifacts/submission.json
+```
+
 ---
 
 ## What to inspect before execution

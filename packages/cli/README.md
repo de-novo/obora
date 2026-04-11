@@ -31,17 +31,26 @@ Execute a workflow.
 ```bash
 obora run workflow.yaml
 obora run workflow.yaml --input '{"task": "Build API"}'
+obora run workflow.yaml --input @artifacts/input.json
 obora run workflow.yaml --dry-run
 ```
 
 Options:
-- `--input <json>` - Input variables
+- `--input <json>` - Input JSON string or `@path/to/input.json`
 - `--var <key=value>` - Set variable (repeatable)
 - `--dry-run` - Show execution plan without running
 - `--json` - Output results as JSON
 - `--quiet` - Suppress non-essential output
 - `--verbose` - Show detailed execution info
 - `--output-dir <dir>` - Output directory for artifacts
+
+For quickstart judge-mode projects, prefer:
+
+```bash
+obora judge --dry-run
+obora judge
+obora judge --input @artifacts/submission.json
+```
 
 ### `obora validate <workflow>`
 
@@ -143,6 +152,14 @@ obora run .obora/workflows/simple.yaml
 ```bash
 obora run workflow.yaml \
   --input '{"task": "Create REST API for users"}' \
+  --output-dir ./output
+```
+
+Or load input from a file:
+
+```bash
+obora run workflow.yaml \
+  --input @artifacts/input.json \
   --output-dir ./output
 ```
 

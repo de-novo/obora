@@ -34,6 +34,13 @@ This prints the resolved provider/model context plus a preview of:
 obora judge
 ```
 
+If you want to test a different payload without editing `judge.yaml`, you can also load JSON from a file:
+
+```bash
+obora judge --input @artifacts/submission.json --dry-run
+obora judge --input @artifacts/submission.json
+```
+
 ## Files
 
 - `judge.yaml` — one-file judge workflow
