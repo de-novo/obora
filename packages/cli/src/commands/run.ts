@@ -38,6 +38,18 @@ function isDebugOutput(options: Record<string, unknown>): boolean {
   return Boolean(options.debug || options.debugFile);
 }
 
+async function readJsonInputFromStdin(): Promise<string> {
+  if (typeof process.stdin.setEncoding === "function") {
+    process.stdin.setEncoding("utf8");
+  }
+
+  let content = "";
+  for await (const chunk of process.stdin) {
+    content += typeof chunk === "string" ? chunk : String(chunk);
+  }
+  return content;
+}
+
 const DEBUG_EVENT_TYPES = [
   "execution_start",
   "execution_end",
@@ -77,7 +89,7 @@ function buildPreferredRunCommand(workflowCommand: string): string {
 
 export function applyRunExecutionOptions(command: Command): Command {
   return command
-    .option("-i, --input <json>", "Input data as JSON string or @path/to/input.json")
+    .option("-i, --input <json>", "Input data as JSON string, @path/to/input.json, or @- for stdin")
     .option("-v, --var <key=value...>", "Variables (repeatable)")
     .option("--policy <path>", "Policy file path")
     .option("--agents <path>", "agents.yaml path")
@@ -354,15 +366,34 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
     if (rawInput.startsWith("@")) {
       const inputPath = rawInput.slice(1);
       let fileContent: string;
-      try {
-        fileContent = await readFile(inputPath, "utf-8");
-      } catch {
-        throw new CLIError(`Failed to read JSON input file: ${inputPath}`, ExitCode.VALIDATION_ERROR);
-      }
-      try {
-        input = JSON.parse(fileContent.replace(/^\uFEFF/, ""));
-      } catch {
-        throw new CLIError(`Invalid JSON input file: ${inputPath}`, ExitCode.VALIDATION_ERROR);
+      if (inputPath === "-") {
+        try {
+          fileContent = await readJsonInputFromStdin();
+        } catch {
+          throw new CLIError("Failed to read JSON input from stdin.", ExitCode.VALIDATION_ERROR);
+        }
+        try {
+          input = JSON.parse(fileContent.replace(/^\uFEFF/, ""));
+        } catch {
+          throw new CLIError(
+            "Invalid JSON input from stdin. Please pipe valid JSON to --input @-.",
+            ExitCode.VALIDATION_ERROR
+          );
+        }
+      } else {
+        try {
+          fileContent = await readFile(inputPath, "utf-8");
+        } catch {
+          throw new CLIError(
+            `Failed to read JSON input file: ${inputPath}`,
+            ExitCode.VALIDATION_ERROR
+          );
+        }
+        try {
+          input = JSON.parse(fileContent.replace(/^\uFEFF/, ""));
+        } catch {
+          throw new CLIError(`Invalid JSON input file: ${inputPath}`, ExitCode.VALIDATION_ERROR);
+        }
       }
     } else {
       try {
@@ -789,12 +820,12 @@ export function createRunCommand(): Command {
       .description("Execute a workflow (named workflow or one-file YAML mode)")
       .argument("<workflow>", "Workflow name or YAML path")
   ).action(async function (this: Command, workflow, options) {
-      const mergedOptions = { ...getGlobalOpts(this), ...options };
-      await handleCommandAction(
-        async () => {
-          await runRun(workflow, mergedOptions);
-        },
-        { verbose: Boolean(mergedOptions.verbose) }
-      );
-    });
+    const mergedOptions = { ...getGlobalOpts(this), ...options };
+    await handleCommandAction(
+      async () => {
+        await runRun(workflow, mergedOptions);
+      },
+      { verbose: Boolean(mergedOptions.verbose) }
+    );
+  });
 }

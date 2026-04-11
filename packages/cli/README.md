@@ -32,11 +32,12 @@ Execute a workflow.
 obora run workflow.yaml
 obora run workflow.yaml --input '{"task": "Build API"}'
 obora run workflow.yaml --input @artifacts/input.json
+printf '{"task":"Build API"}' | obora run workflow.yaml --input @-
 obora run workflow.yaml --dry-run
 ```
 
 Options:
-- `--input <json>` - Input JSON string or `@path/to/input.json`
+- `--input <json>` - Input JSON string, `@path/to/input.json`, or `@-` for stdin
 - `--var <key=value>` - Set variable (repeatable)
 - `--dry-run` - Show execution plan without running
 - `--json` - Output results as JSON
@@ -50,6 +51,7 @@ For quickstart judge-mode projects, prefer:
 obora judge --dry-run
 obora judge
 obora judge --input @artifacts/submission.json
+cat artifacts/submission.json | obora judge --input @- --dry-run
 ```
 
 ### `obora validate <workflow>`
@@ -161,6 +163,13 @@ Or load input from a file:
 obora run workflow.yaml \
   --input @artifacts/input.json \
   --output-dir ./output
+```
+
+Or stream JSON through stdin:
+
+```bash
+printf '{"task":"Create REST API for users"}' | \
+  obora run workflow.yaml --input @-
 ```
 
 ### Dry Run

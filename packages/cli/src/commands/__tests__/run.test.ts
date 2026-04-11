@@ -8,7 +8,9 @@
  * - No longer uses @obora/runtime (parseWorkflow, buildGraph, etc.) or feature-centric API
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { Readable } from "node:stream";
+
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // ─── hoisted mocks (resolved before import hoisting) ─────────────────────────
 const { mockHandle, mockRuntimeInstance, MockOboraRuntime } = vi.hoisted(() => {
@@ -99,7 +101,6 @@ import {
   Workflow,
   buildBindingPreview,
   buildOutputPreview,
-  formatResolutionSummary,
   formatBindingPreview,
   formatOutputPreview,
 } from "@obora/sdk";
@@ -112,6 +113,8 @@ import { createRunCommand, runRun } from "../run.js";
 const DEFAULT_RESULT = { workflowName: "my-workflow", status: "completed" };
 
 describe("run command", () => {
+  const originalStdin = process.stdin;
+
   beforeEach(() => {
     vi.clearAllMocks();
 
@@ -133,6 +136,13 @@ describe("run command", () => {
     vi.mocked(readFile).mockResolvedValue(
       "name: loaded-workflow\nmode: validation-repair\n" as never
     );
+  });
+
+  afterEach(() => {
+    Object.defineProperty(process, "stdin", {
+      value: originalStdin,
+      configurable: true,
+    });
   });
 
   // ─── command creation ────────────────────────────────────────────────────
@@ -491,7 +501,10 @@ describe("run command", () => {
     });
 
     it("should preserve explicit judge workflow paths in dry-run guidance", async () => {
-      const mockWorkflow = { name: "loaded-workflow", steps: [{ name: "judge", input: {}, output: {} }] };
+      const mockWorkflow = {
+        name: "loaded-workflow",
+        steps: [{ name: "judge", input: {}, output: {} }],
+      };
       vi.mocked(Workflow.fromYaml).mockResolvedValue(
         mockWorkflow as Awaited<ReturnType<typeof Workflow.fromYaml>>
       );
@@ -602,6 +615,13 @@ describe("run command", () => {
   // ─── --input option ───────────────────────────────────────────────────────
 
   describe("--input option", () => {
+    function mockStdin(chunks: string[]): void {
+      Object.defineProperty(process, "stdin", {
+        value: Readable.from(chunks),
+        configurable: true,
+      });
+    }
+
     it("should parse valid JSON and pass it as input to the workflow", async () => {
       await runRun("my-workflow", { input: '{"key":"value"}' });
 
@@ -623,12 +643,43 @@ describe("run command", () => {
       );
     });
 
+    it("should load JSON input from stdin when --input is @-", async () => {
+      mockStdin(['{"from":"stdin"}']);
+
+      await runRun("my-workflow", { input: "@-" });
+
+      expect(readFile).not.toHaveBeenCalledWith("-", "utf-8");
+      expect(mockRuntimeInstance.run).toHaveBeenCalledWith(
+        "my-workflow",
+        expect.objectContaining({ input: { from: "stdin" } })
+      );
+    });
+
+    it("should accept BOM-prefixed JSON input from stdin", async () => {
+      mockStdin(['\uFEFF{"stdin":true}']);
+
+      await runRun("my-workflow", { input: "@-" });
+
+      expect(mockRuntimeInstance.run).toHaveBeenCalledWith(
+        "my-workflow",
+        expect.objectContaining({ input: { stdin: true } })
+      );
+    });
+
     it("should throw CLIError for invalid JSON input", async () => {
       await expect(runRun("my-workflow", { input: "not-valid-json" })).rejects.toThrow();
     });
 
+    it("should throw CLIError for invalid JSON loaded from stdin", async () => {
+      mockStdin(["not-valid-json"]);
+
+      await expect(runRun("my-workflow", { input: "@-" })).rejects.toThrow(
+        "Invalid JSON input from stdin. Please pipe valid JSON to --input @-."
+      );
+    });
+
     it("should throw CLIError for invalid JSON loaded from an @file path", async () => {
-      vi.mocked(readFile).mockResolvedValueOnce('not-valid-json' as never);
+      vi.mocked(readFile).mockResolvedValueOnce("not-valid-json" as never);
 
       await expect(runRun("my-workflow", { input: "@artifacts/input.json" })).rejects.toThrow(
         "Invalid JSON input file: artifacts/input.json"
@@ -636,7 +687,9 @@ describe("run command", () => {
     });
 
     it("should throw CLIError when an @file input path cannot be read", async () => {
-      vi.mocked(readFile).mockRejectedValueOnce(new Error("ENOENT: no such file or directory") as never);
+      vi.mocked(readFile).mockRejectedValueOnce(
+        new Error("ENOENT: no such file or directory") as never
+      );
 
       await expect(runRun("my-workflow", { input: "@artifacts/missing.json" })).rejects.toThrow(
         "Failed to read JSON input file: artifacts/missing.json"

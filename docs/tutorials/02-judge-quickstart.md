@@ -89,6 +89,13 @@ obora judge --input @artifacts/submission.json --dry-run
 obora judge --input @artifacts/submission.json
 ```
 
+If the payload is coming from another command, stdin is also supported:
+
+```bash
+cat artifacts/submission.json | obora judge --input @- --dry-run
+cat artifacts/submission.json | obora judge --input @-
+```
+
 ---
 
 ## What to inspect before execution

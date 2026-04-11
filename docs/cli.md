@@ -222,7 +222,7 @@ obora run <workflow> [options]
 
 ### Options
 
-- `-i, --input <json>` input JSON string or `@path/to/input.json`
+- `-i, --input <json>` input JSON string, `@path/to/input.json`, or `@-` for stdin
 - `-v, --var <key=value...>` repeatable variables
 - `--policy <path>` policy YAML path
 - `--dry-run` validate only (no execution) and print resolution/binding/output previews when available
@@ -234,9 +234,11 @@ obora run <workflow> [options]
 obora run workflow.yaml
 obora run workflow.yaml --input '{"topic":"safety"}'
 obora run workflow.yaml --input @artifacts/input.json
+printf '{"topic":"safety"}' | obora run workflow.yaml --input @-
 obora run my-workflow --var env=prod --var region=ap-northeast-2
 obora run workflow.yaml --dry-run
 obora judge --input @artifacts/submission.json --dry-run
+cat artifacts/submission.json | obora judge --input @- --dry-run
 obora judge --dry-run
 obora --json judge --dry-run
 ```
