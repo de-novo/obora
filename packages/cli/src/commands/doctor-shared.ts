@@ -1024,11 +1024,11 @@ export function buildDoctorRecommendations(
   }
 
   if (summary.fallbackStub) {
-    recommendations.push("Preview before execution: obora run judge.yaml --dry-run");
+    recommendations.push("Preview before execution: obora judge --dry-run");
   }
 
   if (recommendations.length === 0 && summary.warnings.length === 0) {
-    recommendations.push("Run your workflow: obora run judge.yaml");
+    recommendations.push("Run your workflow: obora judge");
   }
 
   return recommendations;
@@ -1120,11 +1120,11 @@ export function buildDoctorActions(
   }
 
   if (summary.fallbackStub) {
-    pushDoctorAction(actions, { kind: "run", command: "obora run judge.yaml --dry-run" });
+    pushDoctorAction(actions, { kind: "run", command: "obora judge --dry-run" });
   }
 
   if (actions.length === 0 && summary.warnings.length === 0) {
-    pushDoctorAction(actions, { kind: "run", command: "obora run judge.yaml" });
+    pushDoctorAction(actions, { kind: "run", command: "obora judge" });
   }
 
   return actions;

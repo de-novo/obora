@@ -802,7 +802,7 @@ describe("doctor command", () => {
       expect(formatter.step).toHaveBeenCalledWith("Resolved provider: openai");
       expect(formatter.step).toHaveBeenCalledWith("Resolved model: gpt-5.4");
       expect(formatter.step).toHaveBeenCalledWith("Fallback/stub: disabled");
-      expect(formatter.step).toHaveBeenCalledWith("Run your workflow: obora run judge.yaml");
+      expect(formatter.step).toHaveBeenCalledWith("Run your workflow: obora judge");
     });
 
     it("should prioritize provider alignment over ready status when configured and resolved providers differ", async () => {

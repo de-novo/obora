@@ -105,7 +105,7 @@ describe("CLI quickstart integration", () => {
           resolvedProvider: null,
           resolvedModel: null,
           fallbackStub: true,
-          nextStep: "obora run judge.yaml",
+          nextStep: "obora judge",
         }),
         diagnostics: expect.objectContaining({
           resolution: expect.objectContaining({
@@ -118,7 +118,7 @@ describe("CLI quickstart integration", () => {
           recommendations: ["Stub mode: configure auth with `obora doctor` before live execution."],
           actions: [
             { kind: "run", command: "obora doctor" },
-            { kind: "run", command: "obora run judge.yaml" },
+            { kind: "run", command: "obora judge" },
           ],
         },
         bindingPreview: expect.arrayContaining([
@@ -160,6 +160,37 @@ describe("CLI quickstart integration", () => {
     expect(judgeYaml).toContain("name: quickstart-judge");
   });
 
+  it("supports judge command as a first-class alias for running judge.yaml", async () => {
+    const cli = createCLI();
+    const projectDir = join(workDir, "judge-command-demo");
+
+    await cli.parseAsync(["--json", "quickstart", projectDir], { from: "user" });
+
+    process.chdir(projectDir);
+    logSpy.mockClear();
+
+    await cli.parseAsync(["--json", "judge", "--dry-run"], { from: "user" });
+
+    const dryRunPayload = lastJsonCall();
+    expect(dryRunPayload).toEqual(
+      expect.objectContaining({
+        workflow: "quickstart-judge",
+        validated: true,
+        overview: expect.objectContaining({
+          workflow: "quickstart-judge",
+          nextStep: "obora judge",
+        }),
+        guidance: {
+          recommendations: ["Stub mode: configure auth with `obora doctor` before live execution."],
+          actions: [
+            { kind: "run", command: "obora doctor" },
+            { kind: "run", command: "obora judge" },
+          ],
+        },
+      })
+    );
+  });
+
   it("prints provider-aware next steps in quickstart stdout", async () => {
     const cli = createCLI();
     const projectDir = join(workDir, "stdout-demo");
@@ -173,8 +204,8 @@ describe("CLI quickstart integration", () => {
     expect(stdout).toContain("This template defaults to openai");
     expect(stdout).toContain("export OPENAI_API_KEY=***");
     expect(stdout).toContain("obora doctor");
-    expect(stdout).toContain("obora run judge.yaml --dry-run");
-    expect(stdout).toContain("obora run judge.yaml");
+    expect(stdout).toContain("obora judge --dry-run");
+    expect(stdout).toContain("obora judge");
   });
 
   it("tracks onboarding state transitions across auth, mismatch, and model setup", async () => {

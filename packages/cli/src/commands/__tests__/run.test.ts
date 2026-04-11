@@ -453,7 +453,7 @@ describe("run command", () => {
             fallbackStub: true,
             bindingCount: 1,
             outputCount: 1,
-            nextStep: "obora run judge.yaml",
+            nextStep: "obora judge",
           }),
           diagnostics: expect.objectContaining({
             resolution: expect.objectContaining({
@@ -469,7 +469,7 @@ describe("run command", () => {
             ],
             actions: [
               { kind: "run", command: "obora doctor" },
-              { kind: "run", command: "obora run judge.yaml" },
+              { kind: "run", command: "obora judge" },
             ],
           },
         })
@@ -484,10 +484,33 @@ describe("run command", () => {
         "Dry run preview complete. No execution was started."
       );
     });
-    it("should suggest the next run command after dry-run success", async () => {
+    it("should suggest the judge alias after judge.yaml dry-run success", async () => {
       await runRun("judge.yaml", { dryRun: true });
 
-      expect(formatter.info).toHaveBeenCalledWith("Next step: obora run judge.yaml");
+      expect(formatter.info).toHaveBeenCalledWith("Next step: obora judge");
+    });
+
+    it("should preserve explicit judge workflow paths in dry-run guidance", async () => {
+      const mockWorkflow = { name: "loaded-workflow", steps: [{ name: "judge", input: {}, output: {} }] };
+      vi.mocked(Workflow.fromYaml).mockResolvedValue(
+        mockWorkflow as Awaited<ReturnType<typeof Workflow.fromYaml>>
+      );
+
+      await runRun("workflows/judge.yaml", { dryRun: true, json: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          overview: expect.objectContaining({
+            nextStep: "obora judge workflows/judge.yaml",
+          }),
+          guidance: expect.objectContaining({
+            actions: [
+              { kind: "run", command: "obora doctor" },
+              { kind: "run", command: "obora judge workflows/judge.yaml" },
+            ],
+          }),
+        })
+      );
     });
 
     it("should point to doctor before live execution when dry-run stays in stub mode", async () => {

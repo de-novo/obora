@@ -65,6 +65,34 @@ interface DryRunGuidance {
   actions: RunGuidanceAction[];
 }
 
+function buildPreferredRunCommand(workflowCommand: string): string {
+  const normalizedWorkflow = workflowCommand.replace(/\\/g, "/");
+  if (normalizedWorkflow === "judge.yaml" || normalizedWorkflow === "./judge.yaml") {
+    return "obora judge";
+  }
+  return basename(normalizedWorkflow) === "judge.yaml"
+    ? `obora judge ${workflowCommand}`
+    : `obora run ${workflowCommand}`;
+}
+
+export function applyRunExecutionOptions(command: Command): Command {
+  return command
+    .option("-i, --input <json>", "Input data as JSON string")
+    .option("-v, --var <key=value...>", "Variables (repeatable)")
+    .option("--policy <path>", "Policy file path")
+    .option("--agents <path>", "agents.yaml path")
+    .option("--config <path>", "obora config.yaml path")
+    .option("--model <name>", "Default LLM model")
+    .option("--provider <name>", "LLM provider override")
+    .option("--output-dir <path>", "Write execution result JSON into directory")
+    .option("--dry-run", "Validate without executing")
+    .option("--dump-expanded-workflow", "Print the expanded internal workflow when loading YAML")
+    .option("--show-stop-semantics", "Print derived stop semantics when available")
+    .option("--timeout <ms>", "Execution timeout in milliseconds", parseInt)
+    .option("--debug", "Enable live debug trace output and JSONL event log")
+    .option("--debug-file <path>", "Write debug JSONL trace to this file (implies --debug)");
+}
+
 function clipDebug(value: unknown, max = 180): string {
   if (value === undefined || value === null) return "";
   const text = typeof value === "string" ? value : JSON.stringify(value);
@@ -124,7 +152,9 @@ function buildDryRunGuidance(
     fallbackStub: boolean;
   }
 ): DryRunGuidance {
-  const actions: RunGuidanceAction[] = [{ kind: "run", command: `obora run ${workflowCommand}` }];
+  const actions: RunGuidanceAction[] = [
+    { kind: "run", command: buildPreferredRunCommand(workflowCommand) },
+  ];
   const recommendations: string[] = [];
 
   if (resolutionSummary.fallbackStub) {
@@ -156,7 +186,7 @@ function buildDryRunOverview(
     fallbackStub: resolutionSummary.fallbackStub,
     bindingCount: bindingPreviewEntries.length,
     outputCount: outputPreviewEntries.length,
-    nextStep: `obora run ${workflowCommand}`,
+    nextStep: buildPreferredRunCommand(workflowCommand),
   };
 }
 
@@ -402,7 +432,7 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
         formatter.warn("Stub mode: configure auth with `obora doctor` before live execution.");
         formatter.info("Before live execution: obora doctor");
       }
-      formatter.info(`Next step: obora run ${workflow}`);
+      formatter.info(`Next step: ${buildPreferredRunCommand(workflow)}`);
       if (isVerboseOutput(options)) {
         formatter.info(`Validation completed in ${Date.now() - startedAt}ms`);
       }
@@ -738,24 +768,11 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
 }
 
 export function createRunCommand(): Command {
-  return new Command("run")
-    .description("Execute a workflow (named workflow or one-file YAML mode)")
-    .argument("<workflow>", "Workflow name or YAML path")
-    .option("-i, --input <json>", "Input data as JSON string")
-    .option("-v, --var <key=value...>", "Variables (repeatable)")
-    .option("--policy <path>", "Policy file path")
-    .option("--agents <path>", "agents.yaml path")
-    .option("--config <path>", "obora config.yaml path")
-    .option("--model <name>", "Default LLM model")
-    .option("--provider <name>", "LLM provider override")
-    .option("--output-dir <path>", "Write execution result JSON into directory")
-    .option("--dry-run", "Validate without executing")
-    .option("--dump-expanded-workflow", "Print the expanded internal workflow when loading YAML")
-    .option("--show-stop-semantics", "Print derived stop semantics when available")
-    .option("--timeout <ms>", "Execution timeout in milliseconds", parseInt)
-    .option("--debug", "Enable live debug trace output and JSONL event log")
-    .option("--debug-file <path>", "Write debug JSONL trace to this file (implies --debug)")
-    .action(async function (this: Command, workflow, options) {
+  return applyRunExecutionOptions(
+    new Command("run")
+      .description("Execute a workflow (named workflow or one-file YAML mode)")
+      .argument("<workflow>", "Workflow name or YAML path")
+  ).action(async function (this: Command, workflow, options) {
       const mergedOptions = { ...getGlobalOpts(this), ...options };
       await handleCommandAction(
         async () => {

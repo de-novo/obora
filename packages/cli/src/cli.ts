@@ -7,6 +7,7 @@ import { createAuditCommand } from "./commands/audit.js";
 import { createDoctorCommand } from "./commands/doctor.js";
 import { createExpandCommand } from "./commands/expand.js";
 import { createInitCommand } from "./commands/init.js";
+import { createJudgeCommand } from "./commands/judge.js";
 import { createKnowledgeCommand } from "./commands/knowledge.js";
 import { createModelsCommand } from "./commands/models.js";
 import { createPluginCommand } from "./commands/plugin.js";
@@ -54,6 +55,7 @@ export function createCLI(): Command {
 
   program.addCommand(createInitCommand());
   program.addCommand(createQuickstartCommand());
+  program.addCommand(createJudgeCommand());
   program.addCommand(createModelsCommand());
   program.addCommand(createDoctorCommand());
   program.addCommand(createExpandCommand());

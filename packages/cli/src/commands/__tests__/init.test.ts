@@ -184,8 +184,8 @@ describe("init command", () => {
       expect(formatter.step).toHaveBeenCalledWith("This template defaults to anthropic");
       expect(formatter.step).toHaveBeenCalledWith("export ANTHROPIC_API_KEY=***");
       expect(formatter.step).toHaveBeenCalledWith("obora doctor");
-      expect(formatter.step).toHaveBeenCalledWith("obora run judge.yaml --dry-run");
-      expect(formatter.step).toHaveBeenCalledWith("obora run judge.yaml");
+      expect(formatter.step).toHaveBeenCalledWith("obora judge --dry-run");
+      expect(formatter.step).toHaveBeenCalledWith("obora judge");
     });
 
     it("should output JSON when --json flag is set", async () => {
