@@ -34,8 +34,6 @@ npm install -g @obora/cli
 
 # Create a quickstart project
 obora init my-project --quickstart
-# or shorter:
-obora quickstart my-project
 cd my-project
 
 # Check readiness and missing setup
@@ -60,15 +58,19 @@ What this path gives you:
 - `obora init --quickstart` creates a minimal judge-mode project
 - `obora doctor` shows ready/stub/missing-auth status and next actions
 - `obora run judge.yaml --dry-run` validates the workflow without starting execution and previews the input/output contract
+- `obora run judge.yaml` writes the JSON result artifact
 
 ### Recommended Getting Started Path
 
 If you are new to Obora, follow this order:
 
-1. [LLM Config / Auth Quickstart](./docs/tutorials/06-llm-config-auth-quickstart.md)
-2. [Contract-First Quickstart](./docs/tutorials/04-contract-first-quickstart.md)
-3. [Contract-First Authoring Guide](./docs/tutorials/05-contract-first-authoring-guide.md)
-4. [One-File Workflows](./docs/tutorials/one-file-workflows.md)
+1. [3-Minute Quickstart](./docs/tutorials/01-3-minute-quickstart.md)
+2. [Judge Quickstart](./docs/tutorials/02-judge-quickstart.md)
+3. [Quick Troubleshooting](./docs/tutorials/03-quick-troubleshooting.md)
+4. [LLM Config / Auth Quickstart](./docs/tutorials/06-llm-config-auth-quickstart.md)
+5. [Contract-First Quickstart](./docs/tutorials/04-contract-first-quickstart.md)
+6. [Contract-First Authoring Guide](./docs/tutorials/05-contract-first-authoring-guide.md)
+7. [One-File Workflows](./docs/tutorials/one-file-workflows.md)
 
 ### Recommended default setup
 

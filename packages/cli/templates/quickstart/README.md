@@ -40,3 +40,12 @@ obora run judge.yaml
 - `artifacts/submission.json` — sample input
 - `artifacts/result.schema.json` — expected output schema
 - `artifacts/result.json` — written after a successful run
+
+## Read next
+
+If you want the shortest onboarding path, continue with the main Obora docs:
+
+1. https://github.com/de-novo/obora/blob/main/docs/tutorials/01-3-minute-quickstart.md
+2. https://github.com/de-novo/obora/blob/main/docs/tutorials/02-judge-quickstart.md
+3. https://github.com/de-novo/obora/blob/main/docs/tutorials/03-quick-troubleshooting.md
+4. https://github.com/de-novo/obora/blob/main/docs/tutorials/06-llm-config-auth-quickstart.md

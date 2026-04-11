@@ -2,7 +2,36 @@
 
 > **Obora는 AI가 실패해도 시스템이 흔들리지 않게 만드는 AI Control Runtime입니다.**
 
-이 가이드는 30분 안에 Obora의 핵심 기능을 체험할 수 있도록 구성했습니다.
+이 문서는 두 경로를 제공합니다.
+
+- 가장 빠른 first success 경로
+- 그 다음에 읽을 deeper tour
+
+---
+
+## Fastest Path
+
+처음이면 아래 3개 문서부터 보시면 됩니다.
+
+1. [3-Minute Quickstart](./tutorials/01-3-minute-quickstart.md)
+2. [Judge Quickstart](./tutorials/02-judge-quickstart.md)
+3. [Quick Troubleshooting](./tutorials/03-quick-troubleshooting.md)
+
+권장 명령 순서는 아래입니다.
+
+```bash
+npm install -g @obora/cli
+obora init my-project --quickstart
+cd my-project
+obora doctor
+obora run judge.yaml --dry-run
+obora run judge.yaml
+```
+
+설정이 막히면 바로 이어서 보실 문서:
+
+- [LLM Config / Auth Quickstart](./tutorials/06-llm-config-auth-quickstart.md)
+- [One-File Workflows](./tutorials/one-file-workflows.md)
 
 ---
 

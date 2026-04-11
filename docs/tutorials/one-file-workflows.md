@@ -90,6 +90,10 @@ output:
 ### 4. judge
 JSON input을 받아 단일 평가 step을 실행하고 JSON output artifact를 저장하는 가장 짧은 경로입니다.
 
+처음 onboarding 경로로 보려면 아래 문서를 먼저 읽는 편이 좋습니다.
+- [Judge Quickstart](./02-judge-quickstart.md)
+- [Quick Troubleshooting](./03-quick-troubleshooting.md)
+
 ```yaml
 name: one-file-judge
 mode: judge

@@ -201,6 +201,8 @@ from the startup summary.
 
 Once this setup is working, continue with:
 
+- [Judge Quickstart](./02-judge-quickstart.md)
+- [Quick Troubleshooting](./03-quick-troubleshooting.md)
 - [Contract-First Quickstart](./04-contract-first-quickstart.md)
 - [Contract-First Authoring Guide](./05-contract-first-authoring-guide.md)
 - [One-File Workflows](./one-file-workflows.md)
