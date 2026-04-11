@@ -14,9 +14,9 @@ If you are new to Obora, follow this order:
 
 ## Deeper walkthroughs
 
-- [First Workflow](./01-first-workflow.md)
-- [Policy and Consensus](./02-policy-and-consensus.md)
-- [Custom Plugin](./03-custom-plugin.md)
+- [First Workflow](./first-workflow.md)
+- [Policy and Consensus](./policy-and-consensus.md)
+- [Custom Plugin](./custom-plugin.md)
 - [Validation-Repair Loop](./validation-repair-loop.md)
 - [Validation-Repair Loop Migration Guide](./validation-repair-loop-migration.md)
 - [Validation-Repair Loop Troubleshooting](./validation-repair-loop-troubleshooting.md)

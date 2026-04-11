@@ -1,4 +1,4 @@
-# Tutorial 03: Building a Custom Plugin
+# Tutorial: Custom Plugin
 
 **Estimated time:** 20 minutes  
 **Audience:** Developers who want to extend Obora
@@ -17,7 +17,7 @@ You'll go through:
 
 ## Prerequisites
 
-- You completed [Tutorial 01](./01-first-workflow.md)
+- You completed [Tutorial: First Workflow](./first-workflow.md)
 - Familiarity with TypeScript basics
 - Node.js 20+
 

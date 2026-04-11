@@ -16,7 +16,7 @@ By the end, you'll have a workflow that is easier to inspect before execution an
 
 ## Prerequisites
 
-- You completed [Tutorial 01](./01-first-workflow.md), or you already have a working Obora project
+- You completed [Tutorial: First Workflow](./first-workflow.md), or you already have a working Obora project
 - You can run `obora run ...` successfully
 
 ---

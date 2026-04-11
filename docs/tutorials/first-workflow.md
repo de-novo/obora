@@ -1,4 +1,4 @@
-# Tutorial 01: Your First Workflow
+# Tutorial: First Workflow
 
 **Estimated time:** 10 minutes  
 **Audience:** Developers who are new to Obora
@@ -145,4 +145,4 @@ If the file exists and the command succeeded, your first workflow is complete �
 
 Great job. Now let's add stronger runtime control with policy and consensus:
 
-➡️ [Tutorial 02: Adding Policies and Consensus](./02-policy-and-consensus.md)
+➡️ [Tutorial: Policy and Consensus](./policy-and-consensus.md)

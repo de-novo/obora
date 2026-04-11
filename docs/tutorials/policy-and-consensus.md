@@ -1,4 +1,4 @@
-# Tutorial 02: Adding Policies and Consensus
+# Tutorial: Policy and Consensus
 
 **Estimated time:** 15 minutes  
 **Audience:** Developers who already built a basic workflow
@@ -15,7 +15,7 @@ In this tutorial, we'll add control layers to your workflow:
 
 ## Prerequisites
 
-- You completed [Tutorial 01](./01-first-workflow.md), or you have a working Obora project
+- You completed [Tutorial: First Workflow](./first-workflow.md), or you have a working Obora project
 - Obora CLI installed
 
 ---
@@ -191,4 +191,4 @@ Nice. You now control execution with explicit policies and gates.
 
 Let's make Obora extensible by building your own plugin:
 
-➡️ [Tutorial 03: Building a Custom Plugin](./03-custom-plugin.md)
+➡️ [Tutorial: Custom Plugin](./custom-plugin.md)
