@@ -40,10 +40,10 @@ cd my-project
 obora doctor
 
 # Validate the bundled judge workflow before execution
-obora run judge.yaml --dry-run
+obora judge --dry-run
 
 # Run the bundled judge example
-obora run judge.yaml
+obora judge
 ```
 
 Prerequisites:
@@ -57,8 +57,8 @@ Useful discovery command:
 What this path gives you:
 - `obora init --quickstart` creates a minimal judge-mode project
 - `obora doctor` shows ready/stub/missing-auth status and next actions
-- `obora run judge.yaml --dry-run` validates the workflow without starting execution and previews the input/output contract
-- `obora run judge.yaml` writes the JSON result artifact
+- `obora judge --dry-run` validates the workflow without starting execution and previews the input/output contract
+- `obora judge` writes the JSON result artifact
 
 ### Recommended Getting Started Path
 

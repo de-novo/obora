@@ -41,15 +41,15 @@ If you are starting from zero, use this order:
 obora quickstart my-project
 cd my-project
 obora doctor
-obora run judge.yaml --dry-run
-obora run judge.yaml
+obora judge --dry-run
+obora judge
 ```
 
 Why this order:
 - `init --quickstart` creates the smallest runnable project
 - `doctor` tells you whether auth/config is missing
-- `run --dry-run` validates the workflow before execution
-- `run` starts the real judge workflow
+- `judge --dry-run` validates the workflow before execution
+- `judge` starts the real judge workflow
 
 ---
 
@@ -197,7 +197,7 @@ obora init --yes
 obora init demo --quickstart
 cd demo
 obora doctor
-obora run judge.yaml --dry-run
+obora judge --dry-run
 ```
 
 ---
@@ -205,6 +205,14 @@ obora run judge.yaml --dry-run
 ## `obora run`
 
 Execute a workflow by name or YAML path.
+
+For quickstart judge-mode projects, prefer the shorter alias:
+
+```bash
+obora judge
+obora judge --dry-run
+obora judge workflows/judge.yaml --dry-run
+```
 
 ### Usage
 
@@ -227,8 +235,8 @@ obora run workflow.yaml
 obora run workflow.yaml --input '{"topic":"safety"}'
 obora run my-workflow --var env=prod --var region=ap-northeast-2
 obora run workflow.yaml --dry-run
-obora run judge.yaml --dry-run
-obora --json run judge.yaml --dry-run
+obora judge --dry-run
+obora --json judge --dry-run
 ```
 
 Dry-run output includes:

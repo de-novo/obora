@@ -157,8 +157,8 @@ Use this order every time:
 
 ```bash
 obora doctor
-obora run judge.yaml --dry-run
-obora run judge.yaml
+obora judge --dry-run
+obora judge
 ```
 
 If the first two commands look correct, the live run usually becomes much easier to debug.

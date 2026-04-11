@@ -73,13 +73,13 @@ obora doctor
 3) Preview the resolved execution
 
 ```bash
-obora run judge.yaml --dry-run
+obora judge --dry-run
 ```
 
 4) Execute
 
 ```bash
-obora run judge.yaml
+obora judge
 ```
 
 ---

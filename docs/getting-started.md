@@ -24,8 +24,8 @@ npm install -g @obora/cli
 obora init my-project --quickstart
 cd my-project
 obora doctor
-obora run judge.yaml --dry-run
-obora run judge.yaml
+obora judge --dry-run
+obora judge
 ```
 
 설정이 막히면 바로 이어서 보실 문서:

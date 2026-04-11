@@ -19,7 +19,7 @@ obora doctor
 3) Validate before execution
 
 ```bash
-obora run judge.yaml --dry-run
+obora judge --dry-run
 ```
 
 This prints the resolved provider/model context plus a preview of:
@@ -31,7 +31,7 @@ This prints the resolved provider/model context plus a preview of:
 4) Run the judge example
 
 ```bash
-obora run judge.yaml
+obora judge
 ```
 
 ## Files

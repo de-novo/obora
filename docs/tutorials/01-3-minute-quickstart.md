@@ -77,7 +77,7 @@ If `doctor` reports missing auth or stub mode, jump to:
 ## Step 4) Preview before execution
 
 ```bash
-obora run judge.yaml --dry-run
+obora judge --dry-run
 ```
 
 This validates the workflow and shows:
@@ -91,7 +91,7 @@ This validates the workflow and shows:
 ## Step 5) Run it
 
 ```bash
-obora run judge.yaml
+obora judge
 ```
 
 After a successful run, check:
