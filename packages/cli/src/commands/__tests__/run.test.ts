@@ -611,8 +611,47 @@ describe("run command", () => {
       );
     });
 
+    it("should load JSON input from an @file path", async () => {
+      vi.mocked(readFile).mockResolvedValueOnce('{"from":"file"}' as never);
+
+      await runRun("my-workflow", { input: "@artifacts/input.json" });
+
+      expect(readFile).toHaveBeenCalledWith("artifacts/input.json", "utf-8");
+      expect(mockRuntimeInstance.run).toHaveBeenCalledWith(
+        "my-workflow",
+        expect.objectContaining({ input: { from: "file" } })
+      );
+    });
+
     it("should throw CLIError for invalid JSON input", async () => {
       await expect(runRun("my-workflow", { input: "not-valid-json" })).rejects.toThrow();
+    });
+
+    it("should throw CLIError for invalid JSON loaded from an @file path", async () => {
+      vi.mocked(readFile).mockResolvedValueOnce('not-valid-json' as never);
+
+      await expect(runRun("my-workflow", { input: "@artifacts/input.json" })).rejects.toThrow(
+        "Invalid JSON input file: artifacts/input.json"
+      );
+    });
+
+    it("should throw CLIError when an @file input path cannot be read", async () => {
+      vi.mocked(readFile).mockRejectedValueOnce(new Error("ENOENT: no such file or directory") as never);
+
+      await expect(runRun("my-workflow", { input: "@artifacts/missing.json" })).rejects.toThrow(
+        "Failed to read JSON input file: artifacts/missing.json"
+      );
+    });
+
+    it("should accept BOM-prefixed JSON input files", async () => {
+      vi.mocked(readFile).mockResolvedValueOnce('\uFEFF{"bom":true}' as never);
+
+      await runRun("my-workflow", { input: "@artifacts/input.json" });
+
+      expect(mockRuntimeInstance.run).toHaveBeenCalledWith(
+        "my-workflow",
+        expect.objectContaining({ input: { bom: true } })
+      );
     });
   });
 

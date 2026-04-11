@@ -7,8 +7,11 @@ import { ExitCode } from "../exit-codes.js";
 import { formatter } from "../formatter.js";
 
 describe("error handler and formatter", () => {
+  const originalArgv = [...process.argv];
+
   afterEach(() => {
     process.exitCode = undefined;
+    process.argv = [...originalArgv];
     vi.restoreAllMocks();
   });
 
@@ -37,6 +40,38 @@ describe("error handler and formatter", () => {
         "Invalid JSON input. Please provide a valid JSON string to --input.",
         ExitCode.VALIDATION_ERROR
       );
+    });
+
+    expect(logSpy).toHaveBeenCalledWith("ℹ Run: obora run <workflow.yaml> --dry-run");
+  });
+
+  it("prints dry-run hint for invalid JSON input files", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await handleCommandAction(async () => {
+      throw new CLIError("Invalid JSON input file: artifacts/input.json", ExitCode.VALIDATION_ERROR);
+    });
+
+    expect(logSpy).toHaveBeenCalledWith("ℹ Run: obora run <workflow.yaml> --dry-run");
+  });
+
+  it("prints judge dry-run hint for validation errors when judge command is active", async () => {
+    process.argv = ["node", "obora", "judge", "--input", "@bad.json"];
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await handleCommandAction(async () => {
+      throw new CLIError("Invalid JSON input file: bad.json", ExitCode.VALIDATION_ERROR);
+    });
+
+    expect(logSpy).toHaveBeenCalledWith("ℹ Run: obora judge --dry-run");
+  });
+
+  it("keeps run dry-run hint when workflow name happens to be judge", async () => {
+    process.argv = ["node", "obora", "run", "judge", "--input", "@bad.json"];
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await handleCommandAction(async () => {
+      throw new CLIError("Invalid JSON input file: bad.json", ExitCode.VALIDATION_ERROR);
     });
 
     expect(logSpy).toHaveBeenCalledWith("ℹ Run: obora run <workflow.yaml> --dry-run");

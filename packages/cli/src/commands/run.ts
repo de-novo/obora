@@ -1,4 +1,4 @@
-import { appendFile, mkdir, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 
 import {
@@ -77,7 +77,7 @@ function buildPreferredRunCommand(workflowCommand: string): string {
 
 export function applyRunExecutionOptions(command: Command): Command {
   return command
-    .option("-i, --input <json>", "Input data as JSON string")
+    .option("-i, --input <json>", "Input data as JSON string or @path/to/input.json")
     .option("-v, --var <key=value...>", "Variables (repeatable)")
     .option("--policy <path>", "Policy file path")
     .option("--agents <path>", "agents.yaml path")
@@ -350,13 +350,29 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
 
   let input: unknown;
   if (options.input) {
-    try {
-      input = JSON.parse(options.input as string);
-    } catch {
-      throw new CLIError(
-        "Invalid JSON input. Please provide a valid JSON string to --input.",
-        ExitCode.VALIDATION_ERROR
-      );
+    const rawInput = String(options.input);
+    if (rawInput.startsWith("@")) {
+      const inputPath = rawInput.slice(1);
+      let fileContent: string;
+      try {
+        fileContent = await readFile(inputPath, "utf-8");
+      } catch {
+        throw new CLIError(`Failed to read JSON input file: ${inputPath}`, ExitCode.VALIDATION_ERROR);
+      }
+      try {
+        input = JSON.parse(fileContent.replace(/^\uFEFF/, ""));
+      } catch {
+        throw new CLIError(`Invalid JSON input file: ${inputPath}`, ExitCode.VALIDATION_ERROR);
+      }
+    } else {
+      try {
+        input = JSON.parse(rawInput);
+      } catch {
+        throw new CLIError(
+          "Invalid JSON input. Please provide a valid JSON string to --input.",
+          ExitCode.VALIDATION_ERROR
+        );
+      }
     }
   }
 

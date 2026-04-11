@@ -21,6 +21,9 @@ function inferNextCommand(err: unknown): string | null {
         : "";
   const code = err instanceof OboraError ? err.code : null;
   const exitCode = err instanceof CLIError ? err.exitCode : null;
+  const commandPath = process.argv.slice(2);
+  const activeCommand = commandPath.find((token) => token.length > 0 && !token.startsWith("-")) ?? null;
+  const isJudgeCommand = activeCommand === "judge";
 
   if (
     code?.startsWith("ADAPTER_") ||
@@ -51,7 +54,7 @@ function inferNextCommand(err: unknown): string | null {
     message.includes("binding") ||
     message.includes("validation")
   ) {
-    return "obora run <workflow.yaml> --dry-run";
+    return isJudgeCommand ? "obora judge --dry-run" : "obora run <workflow.yaml> --dry-run";
   }
 
   return null;
