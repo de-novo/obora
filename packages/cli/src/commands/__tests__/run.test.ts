@@ -112,6 +112,30 @@ import { createRunCommand, runRun } from "../run.js";
 
 const DEFAULT_RESULT = { workflowName: "my-workflow", status: "completed" };
 
+function mockReadableStdin(chunks: string[]): void {
+  Object.defineProperty(process, "stdin", {
+    value: Readable.from(chunks),
+    configurable: true,
+  });
+}
+
+function mockTTYStdin(): { setEncoding: ReturnType<typeof vi.fn> } {
+  const stdin = {
+    isTTY: true,
+    setEncoding: vi.fn(),
+    async *[Symbol.asyncIterator](): AsyncGenerator<string> {
+      yield* [];
+    },
+  };
+
+  Object.defineProperty(process, "stdin", {
+    value: stdin,
+    configurable: true,
+  });
+
+  return { setEncoding: stdin.setEncoding };
+}
+
 describe("run command", () => {
   const originalStdin = process.stdin;
 
@@ -615,30 +639,6 @@ describe("run command", () => {
   // ─── --input option ───────────────────────────────────────────────────────
 
   describe("--input option", () => {
-    function mockStdin(chunks: string[]): void {
-      Object.defineProperty(process, "stdin", {
-        value: Readable.from(chunks),
-        configurable: true,
-      });
-    }
-
-    function mockTTYStdin(): { setEncoding: ReturnType<typeof vi.fn> } {
-      const stdin = {
-        isTTY: true,
-        setEncoding: vi.fn(),
-        async *[Symbol.asyncIterator](): AsyncGenerator<string> {
-          yield* [];
-        },
-      };
-
-      Object.defineProperty(process, "stdin", {
-        value: stdin,
-        configurable: true,
-      });
-
-      return { setEncoding: stdin.setEncoding };
-    }
-
     it("should parse valid JSON and pass it as input to the workflow", async () => {
       await runRun("my-workflow", { input: '{"key":"value"}' });
 
@@ -661,7 +661,7 @@ describe("run command", () => {
     });
 
     it("should load JSON input from stdin when --input is @-", async () => {
-      mockStdin(['{"from":"stdin"}']);
+      mockReadableStdin(['{"from":"stdin"}']);
 
       await runRun("my-workflow", { input: "@-" });
 
@@ -673,7 +673,7 @@ describe("run command", () => {
     });
 
     it("should normalize short equals-style stdin input values", async () => {
-      mockStdin(['{"from":"stdin"}']);
+      mockReadableStdin(['{"from":"stdin"}']);
 
       await runRun("my-workflow", { input: "=@-" });
 
@@ -685,7 +685,7 @@ describe("run command", () => {
     });
 
     it("should accept BOM-prefixed JSON input from stdin", async () => {
-      mockStdin(['\uFEFF{"stdin":true}']);
+      mockReadableStdin(['\uFEFF{"stdin":true}']);
 
       await runRun("my-workflow", { input: "@-" });
 
@@ -705,7 +705,7 @@ describe("run command", () => {
     });
 
     it("should fail with a stdin guidance error when --input @- receives no data", async () => {
-      mockStdin([]);
+      mockReadableStdin([]);
 
       await expect(runRun("my-workflow", { input: "@-" })).rejects.toThrow(
         "No stdin JSON detected. Pipe JSON to --input @- or pass inline JSON to --input."
@@ -723,7 +723,7 @@ describe("run command", () => {
     });
 
     it("should throw CLIError for invalid JSON loaded from stdin", async () => {
-      mockStdin(["not-valid-json"]);
+      mockReadableStdin(["not-valid-json"]);
 
       await expect(runRun("my-workflow", { input: "@-" })).rejects.toThrow(
         "Invalid JSON input from stdin. Please pipe valid JSON to --input @-."
@@ -1120,13 +1120,6 @@ describe("run command", () => {
   // ─── commander integration ────────────────────────────────────────────────
 
   describe("commander integration", () => {
-    function mockCommanderStdin(chunks: string[]): void {
-      Object.defineProperty(process, "stdin", {
-        value: Readable.from(chunks),
-        configurable: true,
-      });
-    }
-
     it("should execute the workflow when parsed with a name argument", async () => {
       const cmd = createRunCommand();
       cmd.exitOverride();
@@ -1137,7 +1130,7 @@ describe("run command", () => {
     });
 
     it("should parse short equals stdin input values when handled by commander", async () => {
-      mockCommanderStdin(['{"from":"stdin"}']);
+      mockReadableStdin(['{"from":"stdin"}']);
       const cmd = createRunCommand();
       cmd.exitOverride();
 
