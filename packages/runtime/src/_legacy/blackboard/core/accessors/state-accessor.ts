@@ -247,7 +247,7 @@ export class StateSectionAccessor {
   /**
    * 활성 에이전트 수 조회 (BUSY 상태 에이전트)
    * @description 현재 작업을 수행 중인(BUSY 상태) 에이전트의 수를 반환합니다.
-   * @deprecated 이름이 혼동스러울 수 있으므로 {@link getBusyAgentCount()} 사용 권장
+   * 호환용 별칭입니다. 새 코드는 {@link getBusyAgentCount()} 사용 권장
    */
   getActiveAgentCount(): number {
     return this.getAgents({ status: AgentStatusEnum.BUSY }).length;

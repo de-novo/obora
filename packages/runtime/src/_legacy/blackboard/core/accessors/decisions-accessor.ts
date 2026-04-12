@@ -362,7 +362,7 @@ export class DecisionsSectionAccessor {
 
   /**
    * 에이전트의 의견 조회 (agendaId 먼저)
-   * @deprecated getAgentOpinion() 사용 권장
+   * 호환용 별칭입니다. 새 코드는 {@link getAgentOpinion()} 사용 권장
    */
   getOpinionByAgent(agendaId: AgendaId, agentId: AgentId): Opinion | undefined {
     return this.getAgentOpinion(agentId, agendaId);
