@@ -112,16 +112,24 @@ import { createRunCommand, runRun } from "../run.js";
 
 const DEFAULT_RESULT = { workflowName: "my-workflow", status: "completed" };
 
-function mockReadableStdin(chunks: string[]): { setEncoding: ReturnType<typeof vi.fn> } {
-  const stdin = Readable.from(chunks) as Readable & { setEncoding: ReturnType<typeof vi.fn> };
-  stdin.setEncoding = vi.fn();
+function mockReadableStdin(chunks: Array<string | Buffer>): {
+  setEncoding: ReturnType<typeof vi.fn>;
+} {
+  const stdin = Readable.from(chunks);
+  const originalSetEncoding = stdin.setEncoding.bind(stdin);
+  const setEncoding = vi.fn((encoding: Parameters<typeof stdin.setEncoding>[0]) => {
+    originalSetEncoding(encoding);
+    return stdin;
+  });
+
+  stdin.setEncoding = setEncoding;
 
   Object.defineProperty(process, "stdin", {
     value: stdin,
     configurable: true,
   });
 
-  return { setEncoding: stdin.setEncoding };
+  return { setEncoding };
 }
 
 function mockTTYStdin(): { setEncoding: ReturnType<typeof vi.fn> } {
@@ -687,6 +695,22 @@ describe("run command", () => {
       expect(mockRuntimeInstance.run).toHaveBeenCalledWith(
         "my-workflow",
         expect.objectContaining({ input: { from: "stdin" } })
+      );
+    });
+
+    it("should decode multibyte UTF-8 stdin chunks before JSON parsing", async () => {
+      const euro = Buffer.from("€");
+      const stdin = mockReadableStdin([
+        Buffer.concat([Buffer.from('{"currency":"'), euro.subarray(0, 1)]),
+        Buffer.concat([euro.subarray(1), Buffer.from('"}')]),
+      ]);
+
+      await runRun("my-workflow", { input: "@-" });
+
+      expect(stdin.setEncoding).toHaveBeenCalledWith("utf8");
+      expect(mockRuntimeInstance.run).toHaveBeenCalledWith(
+        "my-workflow",
+        expect.objectContaining({ input: { currency: "€" } })
       );
     });
 
