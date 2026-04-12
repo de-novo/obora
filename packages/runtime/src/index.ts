@@ -28,6 +28,13 @@ export * as Judgment from "./judgment/index.js";
 
 export { OboraError } from "./_legacy/workflow/errors/index.js";
 export type { ErrorCode } from "./_legacy/workflow/errors/index.js";
+export { log } from "./_legacy/workflow/utils.js";
+export {
+  getAllDiagnoses,
+  formatDiagnosis,
+  getDiagnosis,
+} from "./_legacy/workflow/errors/diagnosis.js";
+export { parseAndValidate, ValidationErrorCode } from "./_legacy/workflow/validator/workflow-validator.js";
 export {
   AgentRole,
   AgentState,
@@ -42,6 +49,14 @@ export type {
   TaskResult,
   RuntimeExtensions,
 } from "./_legacy/agents/roles/index.js";
+export type {
+  Step,
+  Workflow,
+} from "./_legacy/workflow/types/workflow.js";
+export type {
+  ValidationResult,
+  ValidationError,
+} from "./_legacy/workflow/validator/workflow-validator.js";
 /**
  * Promoted blackboard API — canonical location for blackboard pattern.
  * Previously at _legacy/blackboard.

@@ -188,7 +188,7 @@ async function executeOnce(
       subscribe?: (listener: (event: unknown) => void) => () => void;
     };
     if (typeof subscribable.subscribe === "function") {
-      unsubscribe = subscribable.subscribe((event) => {
+      unsubscribe = subscribable.subscribe((event: unknown) => {
         onEvent?.(event);
       });
     }

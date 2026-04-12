@@ -138,7 +138,8 @@ describe("executeStep — success", () => {
 
     await executeStep(step, resolver, makeContext());
 
-    const calledTask = (agent.execute as unknown).mock.calls[0][0] as Task;
+    const executeMock = agent.execute as unknown as ReturnType<typeof vi.fn>;
+    const calledTask = executeMock.mock.calls[0]?.[0] as Task;
     expect(calledTask.id).toBe("test-step");
     expect(calledTask.type).toBe("executor");
   });

@@ -262,7 +262,7 @@ describe("status command", () => {
       vi.mocked(readdirSync).mockReturnValue([
         { name: "feature1", isDirectory: () => true },
         { name: "feature2", isDirectory: () => true },
-      ] as unknown);
+      ] as unknown as ReturnType<typeof readdirSync>);
       vi.mocked(readStatus)
         .mockReturnValueOnce({
           ...mockStatus,

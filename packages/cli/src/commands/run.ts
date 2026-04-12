@@ -14,7 +14,7 @@ import {
   resolveLLMConfig,
   Workflow,
 } from "@obora/sdk";
-import type { OneFileStopSemantics } from "@obora/sdk";
+import type { OneFileStopSemantics, ResolutionSummary } from "@obora/sdk";
 import { Command } from "commander";
 
 import { CLIError } from "../utils/cli-error.js";
@@ -210,7 +210,7 @@ function buildDryRunOverview(
 }
 
 function buildDryRunDiagnostics(
-  resolutionSummary: Record<string, unknown>,
+  resolutionSummary: ResolutionSummary,
   bindingPreviewEntries: unknown[],
   outputPreviewEntries: unknown[],
   extras: {

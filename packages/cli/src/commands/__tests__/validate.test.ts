@@ -254,7 +254,7 @@ describe("validate command", () => {
       vi.mocked(readdirSync).mockReturnValue([
         { name: "simple.yaml", isDirectory: () => false },
         { name: "standard.yaml", isDirectory: () => false },
-      ] as unknown);
+      ] as unknown as ReturnType<typeof readdirSync>);
       vi.mocked(readFileSync).mockReturnValue("name: test\nsteps: []");
       vi.mocked(parseAndValidate).mockReturnValue({
         isValid: true,

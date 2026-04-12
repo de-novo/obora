@@ -647,7 +647,10 @@ describe("doctor command", () => {
         })
       );
 
-      const payload = vi.mocked(formatter.json).mock.calls[0]?.[0];
+      const payload = vi.mocked(formatter.json).mock.calls[0]?.[0] as {
+        actions: unknown[];
+        recommendations: string[];
+      };
       expect(payload.actions).not.toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -928,7 +931,10 @@ describe("doctor command", () => {
 
       await runDoctor({ json: true });
 
-      const payload = vi.mocked(formatter.json).mock.calls[0]?.[0];
+      const payload = vi.mocked(formatter.json).mock.calls[0]?.[0] as {
+        actions: unknown[];
+        recommendations: string[];
+      };
       expect(payload.recommendations).toContain(
         "Set a default model in .obora/config.yaml or export GROQ_MODEL=***"
       );

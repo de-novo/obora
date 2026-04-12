@@ -13,10 +13,10 @@ async function runDashboard(options: DashboardOptions): Promise<void> {
     throw new Error(`Invalid port: ${options.port}`);
   }
 
-  const server = createDashboardServer(process.cwd());
-  await server.start(port);
+  const { app, config } = await createDashboardServer({ port });
+  await app.listen({ host: config.host, port });
 
-  const url = `http://localhost:${port}`;
+  const url = `http://${config.host}:${port}`;
   console.log(`Dashboard running: ${url}`);
 
   if (!options.noOpen) {
@@ -26,7 +26,7 @@ async function runDashboard(options: DashboardOptions): Promise<void> {
   const stop = async () => {
     process.off("SIGINT", stop);
     process.off("SIGTERM", stop);
-    await server.stop();
+    await app.close();
     process.exit(0);
   };
 

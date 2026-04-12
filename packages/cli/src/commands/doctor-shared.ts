@@ -576,7 +576,6 @@ export function buildAuthDiagnostics(
     resolvedAuthExportExample: resolvedSetupExamples.authExportExample,
     resolvedModelEnvExample: resolvedSetupExamples.modelEnvExample,
     resolvedModelConfigExample: resolvedSetupExamples.modelConfigExample,
-    modelRecommendationReason: setupExamples.modelRecommendationReason,
     resolvedModelRecommendationReason: resolvedSetupExamples.modelRecommendationReason,
     detectedProviders,
     providerMismatchWarning,
@@ -1095,7 +1094,7 @@ export function buildDoctorActions(
 
     if (!hasProviderMismatch) {
       if (hasConcreteRecommendedModel) {
-        if (isConfigFilePath(summary.nextPlaceToEdit)) {
+        if (isConfigFilePath(summary.nextPlaceToEdit) && recommendedModelValue) {
           pushDoctorAction(actions, {
             kind: "config",
             path: summary.nextPlaceToEdit,
