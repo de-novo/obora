@@ -10,8 +10,6 @@
 
 ## 제외 파일
 - `src/index.ts`
-- `src/audit/AuditStore.ts`
-- `src/audit/database-index.ts`
 - `src/cell/ExecutionCell.ts`
 - `src/consensus/ConsensusGate.ts`
 - `src/orchestrator/RuntimeOrchestrator.ts`

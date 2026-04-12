@@ -81,7 +81,6 @@ The **Audit Trail** records execution events (start/end, tool calls, policy chec
 
 Related runtime modules:
 - `audit/AuditTrail.ts`
-- `audit/AuditStore.ts`
 - `audit/ReExecutionPlanner.ts`
 - `audit/ReExecutionRuntime.ts`
 
