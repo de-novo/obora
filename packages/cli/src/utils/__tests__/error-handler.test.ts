@@ -74,6 +74,22 @@ describe("error handler and formatter", () => {
     );
   });
 
+  it("prints stdin pipe hint for empty stdin validation errors on run command with -i", async () => {
+    process.argv = ["node", "obora", "run", "workflow.yaml", "-i", "@-"];
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await handleCommandAction(async () => {
+      throw new CLIError(
+        "No stdin JSON detected. Pipe JSON to --input @- or pass inline JSON to --input.",
+        ExitCode.VALIDATION_ERROR
+      );
+    });
+
+    expect(logSpy).toHaveBeenCalledWith(
+      `ℹ Run: printf '{"key":"value"}' | obora run workflow.yaml --input @- --dry-run`
+    );
+  });
+
   it("prints judge stdin pipe hint for empty stdin validation errors when judge command is active", async () => {
     process.argv = ["node", "obora", "judge", "--input", "@-"];
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
@@ -92,6 +108,22 @@ describe("error handler and formatter", () => {
 
   it("preserves explicit judge workflow path in stdin pipe hint", async () => {
     process.argv = ["node", "obora", "judge", "workflows/judge.yaml", "--input", "@-"];
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await handleCommandAction(async () => {
+      throw new CLIError(
+        "No stdin JSON detected. Pipe JSON to --input @- or pass inline JSON to --input.",
+        ExitCode.VALIDATION_ERROR
+      );
+    });
+
+    expect(logSpy).toHaveBeenCalledWith(
+      "ℹ Run: cat artifacts/submission.json | obora judge workflows/judge.yaml --input @- --dry-run"
+    );
+  });
+
+  it("preserves explicit judge workflow path in stdin pipe hint with -i", async () => {
+    process.argv = ["node", "obora", "judge", "workflows/judge.yaml", "-i", "@-"];
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
 
     await handleCommandAction(async () => {
