@@ -1129,6 +1129,24 @@ describe("run command", () => {
       expect(mockRuntimeInstance.run).toHaveBeenCalled();
     });
 
+    it("should reject empty long equals input values when parsed by commander", async () => {
+      const cmd = createRunCommand();
+      cmd.exitOverride();
+
+      await expect(cmd.parseAsync(["my-workflow", "--input="], { from: "user" })).rejects.toThrow(
+        "Invalid JSON input. Please provide a valid JSON string to --input."
+      );
+    });
+
+    it("should reject empty short equals input values when parsed by commander", async () => {
+      const cmd = createRunCommand();
+      cmd.exitOverride();
+
+      await expect(cmd.parseAsync(["my-workflow", "-i="], { from: "user" })).rejects.toThrow(
+        "Invalid JSON input. Please provide a valid JSON string to --input."
+      );
+    });
+
     it("should skip execution when --dry-run is passed", async () => {
       const cmd = createRunCommand();
       cmd.exitOverride();
