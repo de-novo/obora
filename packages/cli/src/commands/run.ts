@@ -367,13 +367,26 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
       const inputPath = rawInput.slice(1);
       let fileContent: string;
       if (inputPath === "-") {
+        if (process.stdin.isTTY) {
+          throw new CLIError(
+            "No stdin JSON detected. Pipe JSON to --input @- or pass inline JSON to --input.",
+            ExitCode.VALIDATION_ERROR
+          );
+        }
         try {
           fileContent = await readJsonInputFromStdin();
         } catch {
           throw new CLIError("Failed to read JSON input from stdin.", ExitCode.VALIDATION_ERROR);
         }
+        const normalizedStdin = fileContent.replace(/^\uFEFF/, "");
+        if (normalizedStdin.trim().length === 0) {
+          throw new CLIError(
+            "No stdin JSON detected. Pipe JSON to --input @- or pass inline JSON to --input.",
+            ExitCode.VALIDATION_ERROR
+          );
+        }
         try {
-          input = JSON.parse(fileContent.replace(/^\uFEFF/, ""));
+          input = JSON.parse(normalizedStdin);
         } catch {
           throw new CLIError(
             "Invalid JSON input from stdin. Please pipe valid JSON to --input @-.",

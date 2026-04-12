@@ -622,6 +622,23 @@ describe("run command", () => {
       });
     }
 
+    function mockTTYStdin(): { setEncoding: ReturnType<typeof vi.fn> } {
+      const stdin = {
+        isTTY: true,
+        setEncoding: vi.fn(),
+        async *[Symbol.asyncIterator](): AsyncGenerator<string> {
+          yield* [];
+        },
+      };
+
+      Object.defineProperty(process, "stdin", {
+        value: stdin,
+        configurable: true,
+      });
+
+      return { setEncoding: stdin.setEncoding };
+    }
+
     it("should parse valid JSON and pass it as input to the workflow", async () => {
       await runRun("my-workflow", { input: '{"key":"value"}' });
 
@@ -663,6 +680,23 @@ describe("run command", () => {
       expect(mockRuntimeInstance.run).toHaveBeenCalledWith(
         "my-workflow",
         expect.objectContaining({ input: { stdin: true } })
+      );
+    });
+
+    it("should fail fast when --input @- is used from an interactive TTY", async () => {
+      const stdin = mockTTYStdin();
+
+      await expect(runRun("my-workflow", { input: "@-" })).rejects.toThrow(
+        "No stdin JSON detected. Pipe JSON to --input @- or pass inline JSON to --input."
+      );
+      expect(stdin.setEncoding).not.toHaveBeenCalled();
+    });
+
+    it("should fail with a stdin guidance error when --input @- receives no data", async () => {
+      mockStdin([]);
+
+      await expect(runRun("my-workflow", { input: "@-" })).rejects.toThrow(
+        "No stdin JSON detected. Pipe JSON to --input @- or pass inline JSON to --input."
       );
     });
 
