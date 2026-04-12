@@ -2,7 +2,7 @@ import { OboraError, OboraErrorCode } from "@obora/sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CLIError } from "../cli-error.js";
-import { handleCommandAction, inferNextCommand } from "../error-handler.js";
+import { handleCommandAction, inferNextCommand, parseCommandContext } from "../error-handler.js";
 import { ExitCode } from "../exit-codes.js";
 import { formatter } from "../formatter.js";
 
@@ -192,6 +192,31 @@ describe("error handler and formatter", () => {
 
     expect(process.exitCode).toBe(ExitCode.CLI_ERROR);
     expect(errorSpy).toHaveBeenCalledWith("❌ Unexpected error: boom");
+  });
+
+  it("parses run argv context when value options appear before the workflow path", () => {
+    expect(
+      parseCommandContext([
+        "run",
+        "--config",
+        ".obora/config.yaml",
+        "packages/cli/templates/quickstart/judge.yaml",
+        "-i",
+        "@-",
+      ])
+    ).toEqual({
+      activeCommand: "run",
+      inputValue: "@-",
+      commandArgument: "packages/cli/templates/quickstart/judge.yaml",
+    });
+  });
+
+  it("parses judge argv context with explicit workflow path and short input option", () => {
+    expect(parseCommandContext(["judge", "workflows/judge.yaml", "-i", "@-"])).toEqual({
+      activeCommand: "judge",
+      inputValue: "@-",
+      commandArgument: "workflows/judge.yaml",
+    });
   });
 
   it("infers quickstart hint for missing workflow paths", () => {

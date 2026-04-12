@@ -27,18 +27,22 @@ const VALUE_OPTIONS = new Set([
   "--debug-file",
 ]);
 
-function findPositionalArgumentAfterCommand(
-  commandPath: string[],
-  commandName: string
-): string | null {
-  const commandIndex = commandPath.findIndex((token) => token === commandName);
-  if (commandIndex < 0) {
-    return null;
-  }
+export function parseCommandContext(commandPath: string[]): {
+  activeCommand: string | null;
+  inputValue: string | null;
+  commandArgument: string | null;
+} {
+  let activeCommand: string | null = null;
+  let inputValue: string | null = null;
+  let commandArgument: string | null = null;
 
-  for (let i = commandIndex + 1; i < commandPath.length; i += 1) {
+  for (let i = 0; i < commandPath.length; i += 1) {
     const token = commandPath[i];
     if (VALUE_OPTIONS.has(token)) {
+      const optionValue = commandPath[i + 1] ?? null;
+      if (token === "--input" || token === "-i") {
+        inputValue = optionValue;
+      }
       i += 1;
       continue;
     }
@@ -47,30 +51,34 @@ function findPositionalArgumentAfterCommand(
       continue;
     }
 
-    return token;
+    if (!activeCommand) {
+      activeCommand = token;
+      continue;
+    }
+
+    if (!commandArgument) {
+      commandArgument = token;
+    }
   }
 
-  return null;
+  return { activeCommand, inputValue, commandArgument };
 }
 
-function inferStdinHint(commandPath: string[], activeCommand: string | null): string | null {
-  const inputIndex = commandPath.findIndex((token) => token === "--input" || token === "-i");
-  const inputValue = inputIndex >= 0 ? commandPath[inputIndex + 1] : null;
-
-  if (inputValue !== "@-") {
+function inferStdinHint(context: {
+  activeCommand: string | null;
+  inputValue: string | null;
+  commandArgument: string | null;
+}): string | null {
+  if (context.inputValue !== "@-") {
     return null;
   }
 
-  if (activeCommand === "judge") {
-    const workflowArg = findPositionalArgumentAfterCommand(commandPath, "judge");
-
-    return `cat artifacts/submission.json | obora judge${workflowArg ? ` ${workflowArg}` : ""} --input @- --dry-run`;
+  if (context.activeCommand === "judge") {
+    return `cat artifacts/submission.json | obora judge${context.commandArgument ? ` ${context.commandArgument}` : ""} --input @- --dry-run`;
   }
 
-  if (activeCommand === "run") {
-    const workflowArg = findPositionalArgumentAfterCommand(commandPath, "run");
-
-    return `printf '{"key":"value"}' | obora run ${workflowArg ?? "<workflow.yaml>"} --input @- --dry-run`;
+  if (context.activeCommand === "run") {
+    return `printf '{"key":"value"}' | obora run ${context.commandArgument ?? "<workflow.yaml>"} --input @- --dry-run`;
   }
 
   return null;
@@ -86,12 +94,11 @@ function inferNextCommand(err: unknown): string | null {
   const code = err instanceof OboraError ? err.code : null;
   const exitCode = err instanceof CLIError ? err.exitCode : null;
   const commandPath = process.argv.slice(2);
-  const activeCommand =
-    commandPath.find((token) => token.length > 0 && !token.startsWith("-")) ?? null;
-  const isJudgeCommand = activeCommand === "judge";
+  const commandContext = parseCommandContext(commandPath);
+  const isJudgeCommand = commandContext.activeCommand === "judge";
 
   if (message.includes("no stdin json detected")) {
-    return inferStdinHint(commandPath, activeCommand);
+    return inferStdinHint(commandContext);
   }
 
   if (
