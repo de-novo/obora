@@ -1120,6 +1120,13 @@ describe("run command", () => {
   // ─── commander integration ────────────────────────────────────────────────
 
   describe("commander integration", () => {
+    function mockCommanderStdin(chunks: string[]): void {
+      Object.defineProperty(process, "stdin", {
+        value: Readable.from(chunks),
+        configurable: true,
+      });
+    }
+
     it("should execute the workflow when parsed with a name argument", async () => {
       const cmd = createRunCommand();
       cmd.exitOverride();
@@ -1127,6 +1134,19 @@ describe("run command", () => {
       await cmd.parseAsync(["my-workflow"], { from: "user" });
 
       expect(mockRuntimeInstance.run).toHaveBeenCalled();
+    });
+
+    it("should parse short equals stdin input values when handled by commander", async () => {
+      mockCommanderStdin(['{"from":"stdin"}']);
+      const cmd = createRunCommand();
+      cmd.exitOverride();
+
+      await cmd.parseAsync(["my-workflow", "-i=@-"], { from: "user" });
+
+      expect(mockRuntimeInstance.run).toHaveBeenCalledWith(
+        "my-workflow",
+        expect.objectContaining({ input: { from: "stdin" } })
+      );
     });
 
     it("should reject empty long equals input values when parsed by commander", async () => {
