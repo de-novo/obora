@@ -138,6 +138,45 @@ describe("error handler and formatter", () => {
     );
   });
 
+  it("prints judge stdin pipe hint when --input=@- is used", async () => {
+    process.argv = ["node", "obora", "judge", "workflows/judge.yaml", "--input=@-"];
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await handleCommandAction(async () => {
+      throw new CLIError(
+        "No stdin JSON detected. Pipe JSON to --input @- or pass inline JSON to --input.",
+        ExitCode.VALIDATION_ERROR
+      );
+    });
+
+    expect(logSpy).toHaveBeenCalledWith(
+      "ℹ Run: cat artifacts/submission.json | obora judge workflows/judge.yaml --input @- --dry-run"
+    );
+  });
+
+  it("prints run stdin pipe hint when value options use equals syntax", async () => {
+    process.argv = [
+      "node",
+      "obora",
+      "run",
+      "--config=.obora/config.yaml",
+      "packages/cli/templates/quickstart/judge.yaml",
+      "--input=@-",
+    ];
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await handleCommandAction(async () => {
+      throw new CLIError(
+        "No stdin JSON detected. Pipe JSON to --input @- or pass inline JSON to --input.",
+        ExitCode.VALIDATION_ERROR
+      );
+    });
+
+    expect(logSpy).toHaveBeenCalledWith(
+      `ℹ Run: printf '{"key":"value"}' | obora run packages/cli/templates/quickstart/judge.yaml --input @- --dry-run`
+    );
+  });
+
   it("prints judge dry-run hint for validation errors when judge command is active", async () => {
     process.argv = ["node", "obora", "judge", "--input", "@bad.json"];
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
@@ -216,6 +255,21 @@ describe("error handler and formatter", () => {
       activeCommand: "judge",
       inputValue: "@-",
       commandArgument: "workflows/judge.yaml",
+    });
+  });
+
+  it("parses equals-style option values in command context", () => {
+    expect(
+      parseCommandContext([
+        "run",
+        "--config=.obora/config.yaml",
+        "packages/cli/templates/quickstart/judge.yaml",
+        "--input=@-",
+      ])
+    ).toEqual({
+      activeCommand: "run",
+      inputValue: "@-",
+      commandArgument: "packages/cli/templates/quickstart/judge.yaml",
     });
   });
 

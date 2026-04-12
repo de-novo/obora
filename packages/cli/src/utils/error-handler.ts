@@ -27,6 +27,30 @@ const VALUE_OPTIONS = new Set([
   "--debug-file",
 ]);
 
+function parseValueOptionToken(
+  token: string
+): { optionName: string; optionValue: string | null } | null {
+  if (VALUE_OPTIONS.has(token)) {
+    return { optionName: token, optionValue: null };
+  }
+
+  for (const optionName of VALUE_OPTIONS) {
+    if (!optionName.startsWith("--")) {
+      continue;
+    }
+
+    const prefix = `${optionName}=`;
+    if (token.startsWith(prefix)) {
+      return {
+        optionName,
+        optionValue: token.slice(prefix.length),
+      };
+    }
+  }
+
+  return null;
+}
+
 export function parseCommandContext(commandPath: string[]): {
   activeCommand: string | null;
   inputValue: string | null;
@@ -38,12 +62,15 @@ export function parseCommandContext(commandPath: string[]): {
 
   for (let i = 0; i < commandPath.length; i += 1) {
     const token = commandPath[i];
-    if (VALUE_OPTIONS.has(token)) {
-      const optionValue = commandPath[i + 1] ?? null;
-      if (token === "--input" || token === "-i") {
+    const parsedValueOption = parseValueOptionToken(token);
+    if (parsedValueOption) {
+      const optionValue = parsedValueOption.optionValue ?? commandPath[i + 1] ?? null;
+      if (parsedValueOption.optionName === "--input" || parsedValueOption.optionName === "-i") {
         inputValue = optionValue;
       }
-      i += 1;
+      if (parsedValueOption.optionValue === null) {
+        i += 1;
+      }
       continue;
     }
 
