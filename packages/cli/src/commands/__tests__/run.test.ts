@@ -104,6 +104,12 @@ import {
   formatBindingPreview,
   formatOutputPreview,
 } from "@obora/sdk";
+import type {
+  OneFileStopSemantics,
+  ProofLoopStopSemantics,
+  ResearchLoopStopSemantics,
+  ValidationRepairStopSemantics,
+} from "@obora/sdk";
 
 import { formatter } from "../../utils/formatter.js";
 import { createRunCommand, runRun } from "../run.js";
@@ -111,6 +117,63 @@ import { createRunCommand, runRun } from "../run.js";
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 const DEFAULT_RESULT = { workflowName: "my-workflow", status: "completed" };
+
+function makeValidationRepairStopSemantics(
+  overrides: Partial<ValidationRepairStopSemantics> = {}
+): ValidationRepairStopSemantics {
+  return {
+    mode: "validation-repair",
+    outcomes: [
+      "continue",
+      "success",
+      "exhausted",
+      "no_progress",
+      "repeated_critical_issue",
+      "aborted",
+    ],
+    thresholds: {
+      max_iterations: 3,
+      no_progress_ceiling: undefined,
+      repeated_critical_issue_ceiling: undefined,
+    },
+    output: { root: "./tmp-output" },
+    archive: { enabled: true },
+    notes: ["test stop semantics"],
+    ...overrides,
+  };
+}
+
+function makeProofLoopStopSemantics(
+  overrides: Partial<ProofLoopStopSemantics> = {}
+): ProofLoopStopSemantics {
+  return {
+    mode: "proof-loop",
+    outcomes: ["continue", "success", "bounded_stop", "refuted", "exhausted", "aborted"],
+    thresholds: { max_iterations: 3 },
+    output: { root: "./tmp-output" },
+    archive: { enabled: true },
+    notes: ["test stop semantics"],
+    ...overrides,
+  };
+}
+
+function makeResearchLoopStopSemantics(
+  overrides: Partial<ResearchLoopStopSemantics> = {}
+): ResearchLoopStopSemantics {
+  return {
+    mode: "research-loop",
+    outcomes: ["continue", "success", "bounded_stop", "exhausted", "aborted"],
+    thresholds: { max_iterations: 3 },
+    output: { root: "./tmp-output" },
+    archive: { enabled: true },
+    notes: ["test stop semantics"],
+    ...overrides,
+  };
+}
+
+function mockWorkflowStopSemantics(value: OneFileStopSemantics | undefined): void {
+  vi.mocked(Workflow.getStopSemantics).mockReturnValue(value);
+}
 
 function mockReadableStdin(chunks: Array<string | Buffer>): {
   setEncoding: ReturnType<typeof vi.fn>;
@@ -624,18 +687,20 @@ describe("run command", () => {
         steps: [{ name: "build_or_repair" }, { name: "validate" }],
         variables: { output_root: "./tmp-output", archive_enabled: true },
       };
-      const mockStopSemantics = {
-        mode: "validation-repair",
-        outcomes: ["continue", "success"],
-        output: { root: "./tmp-output" },
-        archive: { enabled: true },
-      };
+      const mockStopSemantics = makeValidationRepairStopSemantics({
+        outcomes: [
+          "continue",
+          "success",
+          "exhausted",
+          "no_progress",
+          "repeated_critical_issue",
+          "aborted",
+        ],
+      });
       vi.mocked(Workflow.fromYaml).mockResolvedValue(
         mockWorkflow as Awaited<ReturnType<typeof Workflow.fromYaml>>
       );
-      vi.mocked(Workflow.getStopSemantics).mockReturnValue(
-        mockStopSemantics as ReturnType<typeof Workflow.getStopSemantics>
-      );
+      mockWorkflowStopSemantics(mockStopSemantics);
 
       await runRun("my-workflow.yaml", { dryRun: true, json: true, showStopSemantics: true });
 
@@ -958,9 +1023,7 @@ describe("run command", () => {
       vi.mocked(Workflow.fromYaml).mockResolvedValue(
         mockWorkflow as Awaited<ReturnType<typeof Workflow.fromYaml>>
       );
-      vi.mocked(Workflow.getStopSemantics).mockReturnValue({
-        mode: "validation-repair",
-      } as ReturnType<typeof Workflow.getStopSemantics>);
+      mockWorkflowStopSemantics(makeValidationRepairStopSemantics());
 
       await runRun("my-workflow.yaml", {});
 
@@ -996,9 +1059,7 @@ describe("run command", () => {
       vi.mocked(Workflow.fromYaml).mockResolvedValue(
         mockWorkflow as Awaited<ReturnType<typeof Workflow.fromYaml>>
       );
-      vi.mocked(Workflow.getStopSemantics).mockReturnValue({
-        mode: "proof-loop",
-      } as ReturnType<typeof Workflow.getStopSemantics>);
+      mockWorkflowStopSemantics(makeProofLoopStopSemantics());
 
       await runRun("proof.yaml", {});
 
@@ -1019,9 +1080,7 @@ describe("run command", () => {
       vi.mocked(Workflow.fromYaml).mockResolvedValue(
         mockWorkflow as Awaited<ReturnType<typeof Workflow.fromYaml>>
       );
-      vi.mocked(Workflow.getStopSemantics).mockReturnValue({
-        mode: "research-loop",
-      } as ReturnType<typeof Workflow.getStopSemantics>);
+      mockWorkflowStopSemantics(makeResearchLoopStopSemantics());
 
       await runRun("research.yaml", {});
 

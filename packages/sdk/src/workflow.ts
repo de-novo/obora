@@ -5,6 +5,7 @@ import { parse as parseYaml } from "yaml";
 import { OboraError, OboraErrorCode } from "./runtime.js";
 import type { RepairLoopConfig, ValidationStepConfig } from "./validation-repair.js";
 import { expandOneFileWorkflow, getOneFileStopSemantics } from "./one-file-modes.js";
+import type { OneFileStopSemantics } from "./one-file-modes.js";
 import { validateRoutes } from "./conditional-routing.js";
 
 export interface HookDefinition {
@@ -223,7 +224,7 @@ export class Workflow {
     return Workflow.create(parsed);
   }
 
-  static getStopSemantics(input: unknown): Record<string, unknown> | undefined {
+  static getStopSemantics(input: unknown): OneFileStopSemantics | undefined {
     return getOneFileStopSemantics(input);
   }
 

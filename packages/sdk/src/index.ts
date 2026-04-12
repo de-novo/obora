@@ -108,6 +108,14 @@ export type {
 } from "./execution/peer-review-executor.js";
 export type { HookExecutionResult, WorkflowHookLifecycle } from "./hooks.js";
 export type { LLMConfig } from "./llm-config.js";
+export type {
+  OneFileMode,
+  OneFileStopSemantics,
+  ValidationRepairStopSemantics,
+  ResearchLoopStopSemantics,
+  ProofLoopStopSemantics,
+  JudgeStopSemantics,
+} from "./one-file-modes.js";
 export type { OboraConfig, ResolvedProviderConfig, ModelPricing } from "./config-loader.js";
 export type {
   StepContext,

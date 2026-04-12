@@ -3,11 +3,85 @@ import { OboraError, OboraErrorCode } from "./runtime.js";
 
 export type OneFileMode = "validation-repair" | "research-loop" | "proof-loop" | "judge";
 
-export interface OneFileModeExpander {
-  mode: OneFileMode;
+export interface ValidationRepairStopSemantics {
+  mode: "validation-repair";
+  outcomes: Array<"continue" | "success" | "exhausted" | "no_progress" | "repeated_critical_issue" | "aborted">;
+  thresholds: {
+    max_iterations: number;
+    no_progress_ceiling: number | undefined;
+    repeated_critical_issue_ceiling: number | undefined;
+  };
+  output: {
+    root: string | undefined;
+  };
+  archive: {
+    enabled: boolean;
+  };
+  notes: string[];
+}
+
+export interface ResearchLoopStopSemantics {
+  mode: "research-loop";
+  outcomes: Array<"continue" | "success" | "bounded_stop" | "exhausted" | "aborted">;
+  thresholds: {
+    max_iterations: number;
+  };
+  output: {
+    root: string | undefined;
+  };
+  archive: {
+    enabled: boolean;
+  };
+  notes: string[];
+}
+
+export interface ProofLoopStopSemantics {
+  mode: "proof-loop";
+  outcomes: Array<"continue" | "success" | "bounded_stop" | "refuted" | "exhausted" | "aborted">;
+  thresholds: {
+    max_iterations: number;
+  };
+  output: {
+    root: string | undefined;
+  };
+  archive: {
+    enabled: boolean;
+  };
+  notes: string[];
+}
+
+export interface JudgeStopSemantics {
+  mode: "judge";
+  outcomes: Array<"success" | "schema_failed" | "binding_failed" | "provider_failed" | "aborted">;
+  input: {
+    json: string | undefined;
+    schema: string | undefined;
+  };
+  output: {
+    path: string | undefined;
+    schema: string | undefined;
+  };
+  options: {
+    repair: boolean;
+    fallback: boolean;
+  };
+  notes: string[];
+}
+
+export type OneFileStopSemanticsByMode = {
+  "validation-repair": ValidationRepairStopSemantics;
+  "research-loop": ResearchLoopStopSemantics;
+  "proof-loop": ProofLoopStopSemantics;
+  judge: JudgeStopSemantics;
+};
+
+export type OneFileStopSemantics = OneFileStopSemanticsByMode[OneFileMode];
+
+export interface OneFileModeExpander<TMode extends OneFileMode = OneFileMode> {
+  mode: TMode;
   validate(input: Record<string, unknown>): void;
   expand(input: Record<string, unknown>): WorkflowDef;
-  getStopSemantics(input: Record<string, unknown>): Record<string, unknown>;
+  getStopSemantics(input: Record<string, unknown>): OneFileStopSemanticsByMode[TMode];
 }
 
 function asObject(value: unknown): Record<string, unknown> {
@@ -81,7 +155,7 @@ function requireOptionalNumber(value: unknown, path: string): void {
   }
 }
 
-const validationRepairExpander: OneFileModeExpander = {
+const validationRepairExpander: OneFileModeExpander<"validation-repair"> = {
   mode: "validation-repair",
   validate(input) {
     assertAllowedKeys(input, ["name", "version", "mode", "agents", "prompts", "loop", "archive", "output", "overrides"], "");
@@ -223,7 +297,7 @@ const validationRepairExpander: OneFileModeExpander = {
   },
 };
 
-const researchLoopExpander: OneFileModeExpander = {
+const researchLoopExpander: OneFileModeExpander<"research-loop"> = {
   mode: "research-loop",
   validate(input) {
     assertAllowedKeys(input, ["name", "version", "mode", "problem", "agents", "prompts", "loop", "archive", "output"], "");
@@ -305,7 +379,7 @@ const researchLoopExpander: OneFileModeExpander = {
   },
 };
 
-const proofLoopExpander: OneFileModeExpander = {
+const proofLoopExpander: OneFileModeExpander<"proof-loop"> = {
   mode: "proof-loop",
   validate(input) {
     assertAllowedKeys(input, ["name", "version", "mode", "problem", "agents", "prompts", "loop", "archive", "output"], "");
@@ -395,7 +469,7 @@ const proofLoopExpander: OneFileModeExpander = {
 };
 
 
-const judgeModeExpander: OneFileModeExpander = {
+const judgeModeExpander: OneFileModeExpander<"judge"> = {
   mode: "judge",
   validate(input) {
     assertAllowedKeys(input, ["name", "version", "mode", "provider", "model", "agent", "prompt", "input", "output", "options"], "");
@@ -492,7 +566,7 @@ const judgeModeExpander: OneFileModeExpander = {
   },
 };
 
-const EXPANDERS: Record<OneFileMode, OneFileModeExpander> = {
+const EXPANDERS: { [K in OneFileMode]: OneFileModeExpander<K> } = {
   "validation-repair": validationRepairExpander,
   "research-loop": researchLoopExpander,
   "proof-loop": proofLoopExpander,
@@ -508,7 +582,7 @@ export function expandOneFileWorkflow(input: unknown): WorkflowDef | undefined {
   return EXPANDERS[mode].expand(def);
 }
 
-export function getOneFileStopSemantics(input: unknown): Record<string, unknown> | undefined {
+export function getOneFileStopSemantics(input: unknown): OneFileStopSemantics | undefined {
   if (!input || typeof input !== "object") return undefined;
   const def = input as Record<string, unknown>;
   const mode = def.mode;

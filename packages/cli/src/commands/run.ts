@@ -14,6 +14,7 @@ import {
   resolveLLMConfig,
   Workflow,
 } from "@obora/sdk";
+import type { OneFileStopSemantics } from "@obora/sdk";
 import { Command } from "commander";
 
 import { CLIError } from "../utils/cli-error.js";
@@ -214,7 +215,7 @@ function buildDryRunDiagnostics(
   outputPreviewEntries: unknown[],
   extras: {
     expandedWorkflow?: unknown;
-    stopSemantics?: unknown;
+    stopSemantics?: OneFileStopSemantics;
   } = {}
 ): Record<string, unknown> {
   return {
@@ -303,7 +304,7 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
 
   let workflowName = workflow;
   let expandedWorkflow: unknown;
-  let stopSemantics: unknown;
+  let stopSemantics: OneFileStopSemantics | undefined;
   let derivedOutputRoot: string | undefined;
   let derivedArchiveEnabled = false;
   const debugEnabled = isDebugOutput(options);
@@ -682,12 +683,7 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
       ? options.outputDir
       : derivedOutputRoot;
 
-  const derivedMode =
-    stopSemantics &&
-    typeof stopSemantics === "object" &&
-    typeof (stopSemantics as Record<string, unknown>).mode === "string"
-      ? ((stopSemantics as Record<string, unknown>).mode as string)
-      : undefined;
+  const derivedMode = stopSemantics?.mode;
 
   if (effectiveOutputDir) {
     await mkdir(effectiveOutputDir, { recursive: true });
