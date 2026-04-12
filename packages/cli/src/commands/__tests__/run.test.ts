@@ -958,7 +958,9 @@ describe("run command", () => {
       vi.mocked(Workflow.fromYaml).mockResolvedValue(
         mockWorkflow as Awaited<ReturnType<typeof Workflow.fromYaml>>
       );
-      vi.mocked(Workflow.getStopSemantics).mockReturnValue({ mode: "validation-repair" } as any);
+      vi.mocked(Workflow.getStopSemantics).mockReturnValue({
+        mode: "validation-repair",
+      } as ReturnType<typeof Workflow.getStopSemantics>);
 
       await runRun("my-workflow.yaml", {});
 
@@ -994,7 +996,9 @@ describe("run command", () => {
       vi.mocked(Workflow.fromYaml).mockResolvedValue(
         mockWorkflow as Awaited<ReturnType<typeof Workflow.fromYaml>>
       );
-      vi.mocked(Workflow.getStopSemantics).mockReturnValue({ mode: "proof-loop" } as any);
+      vi.mocked(Workflow.getStopSemantics).mockReturnValue({
+        mode: "proof-loop",
+      } as ReturnType<typeof Workflow.getStopSemantics>);
 
       await runRun("proof.yaml", {});
 
@@ -1015,7 +1019,9 @@ describe("run command", () => {
       vi.mocked(Workflow.fromYaml).mockResolvedValue(
         mockWorkflow as Awaited<ReturnType<typeof Workflow.fromYaml>>
       );
-      vi.mocked(Workflow.getStopSemantics).mockReturnValue({ mode: "research-loop" } as any);
+      vi.mocked(Workflow.getStopSemantics).mockReturnValue({
+        mode: "research-loop",
+      } as ReturnType<typeof Workflow.getStopSemantics>);
 
       await runRun("research.yaml", {});
 
