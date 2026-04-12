@@ -35,10 +35,6 @@ function parseValueOptionToken(
   }
 
   for (const optionName of VALUE_OPTIONS) {
-    if (!optionName.startsWith("--")) {
-      continue;
-    }
-
     const prefix = `${optionName}=`;
     if (token.startsWith(prefix)) {
       return {

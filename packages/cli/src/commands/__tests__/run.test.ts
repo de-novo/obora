@@ -672,6 +672,18 @@ describe("run command", () => {
       );
     });
 
+    it("should normalize short equals-style stdin input values", async () => {
+      mockStdin(['{"from":"stdin"}']);
+
+      await runRun("my-workflow", { input: "=@-" });
+
+      expect(readFile).not.toHaveBeenCalledWith("-", "utf-8");
+      expect(mockRuntimeInstance.run).toHaveBeenCalledWith(
+        "my-workflow",
+        expect.objectContaining({ input: { from: "stdin" } })
+      );
+    });
+
     it("should accept BOM-prefixed JSON input from stdin", async () => {
       mockStdin(['\uFEFF{"stdin":true}']);
 

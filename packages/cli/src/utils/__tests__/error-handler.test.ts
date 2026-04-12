@@ -154,6 +154,22 @@ describe("error handler and formatter", () => {
     );
   });
 
+  it("prints judge stdin pipe hint when -i=@- is used", async () => {
+    process.argv = ["node", "obora", "judge", "workflows/judge.yaml", "-i=@-"];
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await handleCommandAction(async () => {
+      throw new CLIError(
+        "No stdin JSON detected. Pipe JSON to --input @- or pass inline JSON to --input.",
+        ExitCode.VALIDATION_ERROR
+      );
+    });
+
+    expect(logSpy).toHaveBeenCalledWith(
+      "ℹ Run: cat artifacts/submission.json | obora judge workflows/judge.yaml --input @- --dry-run"
+    );
+  });
+
   it("prints run stdin pipe hint when value options use equals syntax", async () => {
     process.argv = [
       "node",
@@ -270,6 +286,14 @@ describe("error handler and formatter", () => {
       activeCommand: "run",
       inputValue: "@-",
       commandArgument: "packages/cli/templates/quickstart/judge.yaml",
+    });
+  });
+
+  it("parses short equals-style input values in command context", () => {
+    expect(parseCommandContext(["judge", "workflows/judge.yaml", "-i=@-"])).toEqual({
+      activeCommand: "judge",
+      inputValue: "@-",
+      commandArgument: "workflows/judge.yaml",
     });
   });
 

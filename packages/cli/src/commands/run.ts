@@ -50,6 +50,12 @@ async function readJsonInputFromStdin(): Promise<string> {
   return content;
 }
 
+function normalizeInputOptionValue(value: unknown): string {
+  const rawValue = String(value);
+  // Commander parses short equals syntax like `-i=@-` as the literal value `=@-`.
+  return rawValue.startsWith("=") ? rawValue.slice(1) : rawValue;
+}
+
 const DEBUG_EVENT_TYPES = [
   "execution_start",
   "execution_end",
@@ -362,7 +368,7 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
 
   let input: unknown;
   if (options.input) {
-    const rawInput = String(options.input);
+    const rawInput = normalizeInputOptionValue(options.input);
     if (rawInput.startsWith("@")) {
       const inputPath = rawInput.slice(1);
       let fileContent: string;
