@@ -367,7 +367,7 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
   }
 
   let input: unknown;
-  if (options.input) {
+  if (options.input !== undefined) {
     const rawInput = normalizeInputOptionValue(options.input);
     if (rawInput.startsWith("@")) {
       const inputPath = rawInput.slice(1);

@@ -716,6 +716,12 @@ describe("run command", () => {
       await expect(runRun("my-workflow", { input: "not-valid-json" })).rejects.toThrow();
     });
 
+    it("should throw CLIError for empty equals-style input values", async () => {
+      await expect(runRun("my-workflow", { input: "" })).rejects.toThrow(
+        "Invalid JSON input. Please provide a valid JSON string to --input."
+      );
+    });
+
     it("should throw CLIError for invalid JSON loaded from stdin", async () => {
       mockStdin(["not-valid-json"]);
 
