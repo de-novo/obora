@@ -49,10 +49,61 @@ describe("error handler and formatter", () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
 
     await handleCommandAction(async () => {
-      throw new CLIError("Invalid JSON input file: artifacts/input.json", ExitCode.VALIDATION_ERROR);
+      throw new CLIError(
+        "Invalid JSON input file: artifacts/input.json",
+        ExitCode.VALIDATION_ERROR
+      );
     });
 
     expect(logSpy).toHaveBeenCalledWith("ℹ Run: obora run <workflow.yaml> --dry-run");
+  });
+
+  it("prints stdin pipe hint for empty stdin validation errors on run command", async () => {
+    process.argv = ["node", "obora", "run", "workflow.yaml", "--input", "@-"];
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await handleCommandAction(async () => {
+      throw new CLIError(
+        "No stdin JSON detected. Pipe JSON to --input @- or pass inline JSON to --input.",
+        ExitCode.VALIDATION_ERROR
+      );
+    });
+
+    expect(logSpy).toHaveBeenCalledWith(
+      `ℹ Run: printf '{"key":"value"}' | obora run workflow.yaml --input @- --dry-run`
+    );
+  });
+
+  it("prints judge stdin pipe hint for empty stdin validation errors when judge command is active", async () => {
+    process.argv = ["node", "obora", "judge", "--input", "@-"];
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await handleCommandAction(async () => {
+      throw new CLIError(
+        "No stdin JSON detected. Pipe JSON to --input @- or pass inline JSON to --input.",
+        ExitCode.VALIDATION_ERROR
+      );
+    });
+
+    expect(logSpy).toHaveBeenCalledWith(
+      "ℹ Run: cat artifacts/submission.json | obora judge --input @- --dry-run"
+    );
+  });
+
+  it("preserves explicit judge workflow path in stdin pipe hint", async () => {
+    process.argv = ["node", "obora", "judge", "workflows/judge.yaml", "--input", "@-"];
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await handleCommandAction(async () => {
+      throw new CLIError(
+        "No stdin JSON detected. Pipe JSON to --input @- or pass inline JSON to --input.",
+        ExitCode.VALIDATION_ERROR
+      );
+    });
+
+    expect(logSpy).toHaveBeenCalledWith(
+      "ℹ Run: cat artifacts/submission.json | obora judge workflows/judge.yaml --input @- --dry-run"
+    );
   });
 
   it("prints judge dry-run hint for validation errors when judge command is active", async () => {
