@@ -19,7 +19,7 @@
     },
     "lint": {
       "dependsOn": [
-        "^build"
+        "^lint"
       ]
     },
     "test:e2e": {
