@@ -24,7 +24,59 @@ interface ValidationFailureDetail {
   }>;
 }
 
-interface RepairLoopInspectSummary {
+interface PersistedRunRecord {
+  id: string;
+  workflowName?: string;
+  status?: string;
+  startedAt?: string;
+  completedAt?: string;
+  metadata?: Record<string, unknown>;
+}
+
+interface PersistedRunStep {
+  stepName: string;
+  status: string;
+  durationMs?: number;
+  error?: {
+    code: string;
+    message: string;
+  };
+}
+
+interface PersistedArtifactRecord {
+  stepName: string;
+  name: string;
+  mimeType: string;
+  sizeBytes: number;
+}
+
+interface PersistedCostBreakdownItem {
+  stepName?: string;
+  model?: string;
+  tokens: number;
+  costUsd: number;
+}
+
+interface PersistedCostSummary {
+  totalTokens: number;
+  totalCostUsd: number;
+  byStep: PersistedCostBreakdownItem[];
+  byModel: PersistedCostBreakdownItem[];
+}
+
+interface PersistedRunsRuntime {
+  listRunRecords(query: Record<string, unknown>): Promise<PersistedRunRecord[]>;
+}
+
+interface PersistedRunInspectRuntime {
+  getRunRecord(runId: string): Promise<PersistedRunRecord | null>;
+  getRunSteps(runId: string): Promise<PersistedRunStep[]>;
+  getRunArtifacts(runId: string): Promise<PersistedArtifactRecord[]>;
+  getRunCostSummary(runId: string): Promise<PersistedCostSummary>;
+  getRunAuditTimeline(runId: string): Promise<StructuredAuditEventLike[]>;
+}
+
+export interface RepairLoopInspectSummary {
   validationFailed: number;
   validationPassed: number;
   repairStarted: number;
@@ -38,6 +90,7 @@ interface RepairLoopInspectSummary {
   lastAttempt?: number;
   lastNoProgressReason?: string;
   lastExhaustReason?: string;
+  lastStopCategory?: string;
   recentValidationFailures: ValidationFailureDetail[];
 }
 
@@ -188,7 +241,7 @@ function matchesRepairLoopFilter(
 }
 
 function getCliSortValue(
-  run: { startedAt?: string; metadata?: Record<string, unknown> },
+  run: PersistedRunRecord,
   sortBy: "startedAt" | "validationFailed" | "repairStarted"
 ): number | string {
   const repairLoop = extractPersistedRepairLoopSummary(run);
@@ -204,10 +257,10 @@ function getCliSortValue(
 }
 
 export function sortRunsForCli(
-  runs: any[],
+  runs: PersistedRunRecord[],
   sortBy: "startedAt" | "validationFailed" | "repairStarted" = "startedAt",
   order: "asc" | "desc" = "desc"
-): any[] {
+): PersistedRunRecord[] {
   const sign = order === "asc" ? 1 : -1;
   return [...runs].sort((a, b) => {
     const aValue = getCliSortValue(a, sortBy);
@@ -220,7 +273,7 @@ export function sortRunsForCli(
 }
 
 export async function listRunsForCli(
-  runtime: { listRunRecords(query: Record<string, unknown>): Promise<any[]> },
+  runtime: PersistedRunsRuntime,
   opts: {
     status?: string;
     workflow?: string;
@@ -229,7 +282,7 @@ export async function listRunsForCli(
     sortBy?: "startedAt" | "validationFailed" | "repairStarted";
     order?: "asc" | "desc";
   }
-): Promise<any[]> {
+): Promise<PersistedRunRecord[]> {
   const needsPostProcessing =
     Boolean(opts.repairLoop) ||
     (opts.sortBy && opts.sortBy !== "startedAt") ||
@@ -245,7 +298,7 @@ export async function listRunsForCli(
 
   const pageSize = 200;
   const maxTotalRuns = 10_000;
-  const allRuns: any[] = [];
+  const allRuns: PersistedRunRecord[] = [];
   let offset = 0;
 
   while (allRuns.length < maxTotalRuns) {
@@ -295,7 +348,7 @@ function formatRepairLoopListSummary(summary: RepairLoopInspectSummary | undefin
 }
 
 function extractPersistedRepairLoopSummary(
-  run: { metadata?: Record<string, unknown> } | null | undefined
+  run: PersistedRunRecord | null | undefined
 ): RepairLoopInspectSummary | undefined {
   const metadata = run?.metadata;
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return undefined;
@@ -305,13 +358,7 @@ function extractPersistedRepairLoopSummary(
 }
 
 export async function inspectPersistedRun(
-  runtime: {
-    getRunRecord(runId: string): Promise<any>;
-    getRunSteps(runId: string): Promise<any[]>;
-    getRunArtifacts(runId: string): Promise<any[]>;
-    getRunCostSummary(runId: string): Promise<any>;
-    getRunAuditTimeline(runId: string): Promise<StructuredAuditEventLike[]>;
-  },
+  runtime: PersistedRunInspectRuntime,
   runId: string,
   opts: { json?: boolean; cost?: boolean; steps?: boolean }
 ): Promise<void> {
@@ -365,10 +412,8 @@ export async function inspectPersistedRun(
       console.log(`  Last Repair Step:    ${repairLoop.lastRepairStep}`);
     if (repairLoop.lastValidationSummary)
       console.log(`  Last Validation:     ${repairLoop.lastValidationSummary}`);
-    if ((repairLoop as { lastStopCategory?: string }).lastStopCategory) {
-      console.log(
-        `  Last Stop Category:  ${(repairLoop as { lastStopCategory?: string }).lastStopCategory}`
-      );
+    if (repairLoop.lastStopCategory) {
+      console.log(`  Last Stop Category:  ${repairLoop.lastStopCategory}`);
     }
     if (repairLoop.lastNoProgressReason)
       console.log(`  Last No-Progress:    ${repairLoop.lastNoProgressReason}`);
@@ -472,7 +517,7 @@ export function createRunsCommand(): Command {
         const repairState = getCliRepairLoopState(repairLoop);
         const repairSummary = formatRepairLoopListSummary(repairLoop);
         console.log(
-          `${run.id.padEnd(38)} ${run.workflowName.padEnd(20)} ${run.status.padEnd(12)} ${repairState.padEnd(12)} ${repairSummary.padEnd(40)} ${run.startedAt}`
+          `${run.id.padEnd(38)} ${(run.workflowName ?? "-").padEnd(20)} ${(run.status ?? "-").padEnd(12)} ${repairState.padEnd(12)} ${repairSummary.padEnd(40)} ${run.startedAt ?? "-"}`
         );
       }
       console.log(`\n${runRecords.length} run(s)`);

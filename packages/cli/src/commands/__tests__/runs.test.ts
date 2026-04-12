@@ -7,10 +7,27 @@ import {
   sortRunsForCli,
   summarizeRepairLoopTimeline,
 } from "../runs.js";
+import type { RepairLoopInspectSummary } from "../runs.js";
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
+
+function makeRepairLoopSummary(
+  overrides: Partial<RepairLoopInspectSummary> = {}
+): RepairLoopInspectSummary {
+  return {
+    validationFailed: 0,
+    validationPassed: 0,
+    repairStarted: 0,
+    repairCompleted: 0,
+    repairNoProgress: 0,
+    backEdgeTriggered: 0,
+    backEdgeExhausted: 0,
+    recentValidationFailures: [],
+    ...overrides,
+  };
+}
 
 describe("runs list triage sorting", () => {
   it("sorts runs by validationFailed descending using persisted repairLoop metadata", () => {
@@ -54,40 +71,36 @@ describe("runs list triage sorting", () => {
   it("derives compact CLI repair-loop states", () => {
     expect(getCliRepairLoopState(undefined)).toBe("-");
     expect(
-      getCliRepairLoopState({
-        validationFailed: 1,
-        validationPassed: 0,
-        repairStarted: 1,
-        repairCompleted: 0,
-        repairNoProgress: 0,
-        backEdgeTriggered: 1,
-        backEdgeExhausted: 1,
-        recentValidationFailures: [],
-      } as any)
+      getCliRepairLoopState(
+        makeRepairLoopSummary({
+          validationFailed: 1,
+          repairStarted: 1,
+          backEdgeTriggered: 1,
+          backEdgeExhausted: 1,
+        })
+      )
     ).toBe("EXHAUSTED");
     expect(
-      getCliRepairLoopState({
-        validationFailed: 2,
-        validationPassed: 0,
-        repairStarted: 2,
-        repairCompleted: 1,
-        repairNoProgress: 1,
-        backEdgeTriggered: 2,
-        backEdgeExhausted: 0,
-        recentValidationFailures: [],
-      } as any)
+      getCliRepairLoopState(
+        makeRepairLoopSummary({
+          validationFailed: 2,
+          repairStarted: 2,
+          repairCompleted: 1,
+          repairNoProgress: 1,
+          backEdgeTriggered: 2,
+        })
+      )
     ).toBe("STALLED");
     expect(
-      getCliRepairLoopState({
-        validationFailed: 1,
-        validationPassed: 1,
-        repairStarted: 1,
-        repairCompleted: 1,
-        repairNoProgress: 0,
-        backEdgeTriggered: 1,
-        backEdgeExhausted: 0,
-        recentValidationFailures: [],
-      } as any)
+      getCliRepairLoopState(
+        makeRepairLoopSummary({
+          validationFailed: 1,
+          validationPassed: 1,
+          repairStarted: 1,
+          repairCompleted: 1,
+          backEdgeTriggered: 1,
+        })
+      )
     ).toBe("CONVERGED");
   });
 
