@@ -112,11 +112,16 @@ import { createRunCommand, runRun } from "../run.js";
 
 const DEFAULT_RESULT = { workflowName: "my-workflow", status: "completed" };
 
-function mockReadableStdin(chunks: string[]): void {
+function mockReadableStdin(chunks: string[]): { setEncoding: ReturnType<typeof vi.fn> } {
+  const stdin = Readable.from(chunks) as Readable & { setEncoding: ReturnType<typeof vi.fn> };
+  stdin.setEncoding = vi.fn();
+
   Object.defineProperty(process, "stdin", {
-    value: Readable.from(chunks),
+    value: stdin,
     configurable: true,
   });
+
+  return { setEncoding: stdin.setEncoding };
 }
 
 function mockTTYStdin(): { setEncoding: ReturnType<typeof vi.fn> } {
@@ -661,10 +666,11 @@ describe("run command", () => {
     });
 
     it("should load JSON input from stdin when --input is @-", async () => {
-      mockReadableStdin(['{"from":"stdin"}']);
+      const stdin = mockReadableStdin(['{"from":"stdin"}']);
 
       await runRun("my-workflow", { input: "@-" });
 
+      expect(stdin.setEncoding).toHaveBeenCalledWith("utf8");
       expect(readFile).not.toHaveBeenCalledWith("-", "utf-8");
       expect(mockRuntimeInstance.run).toHaveBeenCalledWith(
         "my-workflow",
