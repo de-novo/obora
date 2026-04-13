@@ -181,12 +181,21 @@ Verification:
 
 Objective: harness 입력/워크플로/스크립트와 결과물의 경계를 명확히 한다.
 
+Status:
+- 결정 완료: `experiments/swe-bench-harness/samples/*.json`는 실험 부산물이 아니라 versioned fixture로 유지한다.
+- 근거:
+  - `run_pytest.sh`, `run_pytest_all.sh`, `run_pytest_full.sh`가 해당 JSON을 직접 입력으로 읽는다.
+  - `workflows/sample-*.yaml`, `workflows/swe-bench-universal.yaml`가 특정 sample JSON 경로를 고정 참조한다.
+  - `samples/metadata.json`가 현재 검증 대상인 verified 10-sample subset을 고정한다.
+  - `scripts/download_samples.py`로 재생성 가능하지만, repo 안의 checked-in JSON은 문서/워크플로/회귀 검증이 기대는 재현용 입력 fixture다.
+
 Keep likely:
 - `workflows/*.yaml`
 - `agents-anthropic.yaml`
 - `compare_*.py`
 - `prepare_samples.sh`
 - `run_*.sh`, `run_*.ts`, `run_*.mjs` 중 재사용 스크립트
+- `samples/*.json` + `samples/metadata.json` (verified fixture)
 - `samples-no-answer/`가 fixture면 유지
 
 Discard likely:
@@ -197,6 +206,7 @@ Discard likely:
 
 Verification:
 - 재현 가능한 입력만 추적되고, 실행 결과는 추적되지 않아야 한다.
+- `samples/*.json`는 스크립트/워크플로가 직접 소비하는 fixture로 남아 있어야 한다.
 
 ### Task 7: `experiments/obora-harnesses` 문서 드리프트 판단
 
@@ -289,7 +299,7 @@ Verification:
 2. `origin/main` 기반 새 cleanup 브랜치 생성
 3. generated artifact 삭제
 4. 루트 scratch 파일 삭제
-5. tracked 경계 파일(`.tgz`, harness docs/scripts, samples`) 정책 확정 (`packages/cli/*.tgz`는 완료)
+5. tracked 경계 파일(`.tgz`, harness docs/scripts, samples`) 정책 확정 (`packages/cli/*.tgz`, `experiments/swe-bench-harness/samples/*.json`는 완료)
 6. `.gitignore` 보강
 7. typecheck 재검증
 8. 필요 시 cleanup PR 생성
@@ -297,6 +307,6 @@ Verification:
 ## Immediate Decisions Needed
 
 1. `packages/cli/obora-cli-0.1.3.tgz`를 repo에서 계속 추적할지 (완료: 추적 안 함)
-2. `experiments/swe-bench-harness/samples/*.json` 수정은 fixture 개선인지 실험 부산물인지
+2. `experiments/swe-bench-harness/samples/*.json` 수정은 fixture 개선인지 실험 부산물인지 (완료: versioned fixture로 유지)
 3. `experiments/obora-harnesses-*.md` 5개는 문서 분리본으로 승격할지 임시 export로 삭제할지
 4. `.bench-workspaces/`와 `.sandbox/` 전체 삭제를 지금 바로 해도 되는지
