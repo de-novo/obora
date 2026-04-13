@@ -114,7 +114,8 @@ Public npm publishing follows explicit control gates:
 
 1. Use `.github/workflows/publish.yml` with `environment: npm-publish` (manual approval via environment protection rules).
 2. Publish only from release tags (`v*`) after CI is green.
-3. If publish fails:
+3. Release scripts inject npm auth via `scripts/release/npm-auth.sh`; keep `NPM_TOKEN` scoped to the publish shell instead of relying on a global `~/.npmrc` token entry.
+4. If publish fails:
    - If npm policy allows: unpublish immediately.
    - If unpublish is not allowed: deprecate the broken version and republish with a bumped version.
    - Never reuse an already published version.
