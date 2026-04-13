@@ -10,7 +10,8 @@ pnpm --filter @obora/sdk build >/dev/null
 pnpm --filter @obora/cli build >/dev/null
 
 bash scripts/release/verify-changelog.sh
+bash scripts/release/npm-auth-selftest.sh
 bash scripts/release/verify-publish-packages.sh
-bash scripts/release/verify-cli-package.sh
+bash scripts/release/verify-cli-package-selftest.sh
 
 echo "[PASS] Release verification completed successfully."

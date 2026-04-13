@@ -34,7 +34,7 @@ for entry in "${PACKAGES[@]}"; do
   pkg_name="${entry##*:}"
   pkg_version="$(jq -r '.version' "$pkg_dir/package.json")"
   echo "=== publishing ${pkg_name}@${pkg_version} ==="
-  (cd "$pkg_dir" && npm publish --access public)
+  (cd "$pkg_dir" && pnpm publish --access public --no-git-checks)
   echo
   echo "[release] published ${pkg_name}@${pkg_version}"
 done

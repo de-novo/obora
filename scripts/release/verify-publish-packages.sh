@@ -8,7 +8,7 @@ PACKAGES=(packages/runtime packages/adapters packages/sdk packages/cli)
 
 for p in "${PACKAGES[@]}"; do
   echo "=== verify $p ==="
-  (cd "$p" && npm publish --dry-run --access public >/dev/null)
+  (cd "$p" && pnpm publish --dry-run --access public --no-git-checks >/dev/null)
 done
 
-echo "[PASS] All publishable packages passed npm publish --dry-run."
+echo "[PASS] All publishable packages passed pnpm publish --dry-run."

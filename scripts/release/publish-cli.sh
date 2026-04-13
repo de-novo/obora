@@ -23,6 +23,6 @@ bash scripts/release/verify-cli-package.sh
 
 pkg_version="$(jq -r '.version' packages/cli/package.json)"
 echo "=== publishing @obora/cli@${pkg_version} ==="
-(cd packages/cli && npm publish --access public)
+(cd packages/cli && pnpm publish --access public --no-git-checks)
 
 echo "[PASS] CLI publish completed successfully."
