@@ -58,7 +58,7 @@ Tech Stack: git, gh CLI, pnpm, Node.js, TypeScript, shell cleanup, .gitignore �
 3. 당시 검토 필요 tracked 파일
 - `packages/adapters/src/llm/pi-ai-adapter.ts`
 - `packages/cli/obora-cli-0.1.3.tgz` (현재는 제거 완료)
-- `experiments/obora-harnesses/*`
+- `experiments/obora-harnesses/*` (현재는 별도 harness repo bootstrap 초안으로 제거 완료)
 - `experiments/swe-bench-harness/run_repair_experiment.sh`
 - `experiments/swe-bench-harness/samples/*.json`
 
@@ -84,7 +84,7 @@ Steps:
 2. 특히 아래는 우선 수동 판정한다.
    - `packages/adapters/src/llm/pi-ai-adapter.ts`
    - `packages/cli/obora-cli-0.1.3.tgz` (정책 확정으로 제거 완료)
-   - `experiments/obora-harnesses/**/*.md`
+   - `experiments/obora-harnesses/**/*.md` (정책 확정으로 제거 완료)
    - `experiments/swe-bench-harness/samples/*.json`
 3. untracked 78개는 경로 prefix 기준으로 일괄 후보를 만든다.
 
@@ -218,13 +218,17 @@ Verification:
 
 Objective: 실험 문서 갱신인지 임시 메모인지 구분한다.
 
-Steps:
-1. 수정된 markdown 3개와 루트로 새로 생긴 `experiments/obora-harnesses-*.md` 5개를 비교한다.
-2. 내용이 기존 docs 분해본/임시 export면 삭제한다.
-3. 실제 구조 문서 개선이면 기존 문서에 흡수하고 중복 파일은 제거한다.
+Status:
+- 결정 완료: `experiments/obora-harnesses/`는 obora-kit 안에 유지할 문서 자산이 아니라, 별도 harness repository bootstrap 초안으로 보고 제거한다.
+- 조치 완료: placeholder/초안 성격의 `experiments/obora-harnesses/` 전체 삭제.
+- 근거:
+  - 현재 repo 내부 참조가 사실상 없고 cleanup plan 외에는 소비처가 없다.
+  - `repository-scope.md`, `artifact-governance.md`, `evaluation-methodology.md`, `failure-buckets.md`, `runtime-stability.md`는 3줄 placeholder 수준의 스텁이다.
+  - `README.md`, `operating-defaults.md`, `harnesses/swe-bench/README.md`도 "dedicated harness repository"를 전제로 한 bootstrap draft로, obora-kit product docs라기보다 별도 레포 설계 메모에 가깝다.
+  - 현재 운영 원칙상 harness 작업은 별도 레포에서 진행하고, obora-kit에는 core runtime/SDK/CLI와 직접 연결된 문서만 남긴다.
 
 Verification:
-- 동일 문서가 2군데 이상 중복되지 않아야 한다.
+- `experiments/obora-harnesses/`가 repo에서 제거되고, 같은 내용의 중복 문서가 남지 않아야 한다.
 
 ---
 
@@ -315,5 +319,5 @@ Verification:
 1. `packages/cli/obora-cli-0.1.3.tgz`를 repo에서 계속 추적할지 (완료: 추적 안 함)
 2. `experiments/swe-bench-harness/samples/*.json` 수정은 fixture 개선인지 실험 부산물인지 (완료: versioned fixture로 유지)
 3. `experiments/swe-bench-harness/results*`와 `pytest-results/`를 repo에서 계속 추적할지 (완료: generated output으로 제거)
-4. `experiments/obora-harnesses-*.md` 5개는 문서 분리본으로 승격할지 임시 export로 삭제할지
+4. `experiments/obora-harnesses-*.md` 5개는 문서 분리본으로 승격할지 임시 export로 삭제할지 (완료: 별도 harness repo bootstrap 초안으로 제거)
 5. `.bench-workspaces/`와 `.sandbox/` 전체 삭제를 지금 바로 해도 되는지
