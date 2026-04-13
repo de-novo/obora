@@ -55,16 +55,16 @@ Tech Stack: git, gh CLI, pnpm, Node.js, TypeScript, shell cleanup, .gitignore �
 2. 일회성 로컬 분석/패치 파일
 - 루트의 `*.patch`, `tmp_*.py`, `count_*.py`, `show_*.py`, `run_validation.mjs`, `solution.js`, `hello.txt` 등
 
-3. 검토 필요 tracked 파일
+3. 당시 검토 필요 tracked 파일
 - `packages/adapters/src/llm/pi-ai-adapter.ts`
-- `packages/cli/obora-cli-0.1.3.tgz`
+- `packages/cli/obora-cli-0.1.3.tgz` (현재는 제거 완료)
 - `experiments/obora-harnesses/*`
 - `experiments/swe-bench-harness/run_repair_experiment.sh`
 - `experiments/swe-bench-harness/samples/*.json`
 
 4. 정책/구조 개선 필요 항목
 - `.gitignore`에 swe-bench 결과물과 루트 scratch 파일 패턴이 충분히 반영되지 않음
-- 배포 tarball(`packages/cli/obora-cli-0.1.3.tgz`)이 추적 중이라 재오염 위험이 높음
+- 배포 tarball(`packages/cli/obora-cli-0.1.3.tgz`)이 추적 중이라 재오염 위험이 높았음 → 현재 제거 및 `.gitignore` 반영 완료
 - 병합 완료 브랜치에서 계속 작업 중이라 상태 인지가 흐려짐
 
 ---
@@ -83,7 +83,7 @@ Steps:
 1. tracked modified 11개를 파일별로 `keep / discard / decide`로 표기한다.
 2. 특히 아래는 우선 수동 판정한다.
    - `packages/adapters/src/llm/pi-ai-adapter.ts`
-   - `packages/cli/obora-cli-0.1.3.tgz`
+   - `packages/cli/obora-cli-0.1.3.tgz` (정책 확정으로 제거 완료)
    - `experiments/obora-harnesses/**/*.md`
    - `experiments/swe-bench-harness/samples/*.json`
 3. untracked 78개는 경로 prefix 기준으로 일괄 후보를 만든다.
@@ -165,12 +165,17 @@ Verification:
 
 Objective: publish tarball을 repo에 계속 둘지 제거할지 결정한다.
 
+Status:
+- 결정 완료: `packages/cli/*.tgz`는 repo에서 추적하지 않는다.
+- 조치 완료: tracked tarball 제거, `.gitignore`에 `packages/cli/*.tgz` 추가.
+- release 검증은 temp `pnpm pack --pack-destination` 기반 selftest로 대체되었다.
+
 Decision rule:
 - 릴리즈 검증 산출물일 뿐이면 git tracking에서 제거하고 `.gitignore` 또는 release artifact 경로로 이동한다.
 - 실제 제품 배포 체인에서 반드시 버전 고정 파일로 써야 하는 특별한 이유가 없으면 repo 추적 대상에서 제외한다.
 
 Verification:
-- tarball의 역할이 README/release script 기준으로 설명 가능해야 한다.
+- tarball 정책이 release script와 `.gitignore`에 일관되게 반영되어야 한다.
 
 ### Task 6: `experiments/swe-bench-harness`의 versioned asset 범위 확정
 
@@ -227,7 +232,7 @@ Add candidate patterns:
 - `experiments/swe-bench-harness/results-*/`
 - `experiments/swe-bench-harness/pytest-eval/`
 - `experiments/swe-bench-harness/.obora/`
-- `packages/cli/*.tgz` (정책 결정 후)
+- `packages/cli/*.tgz` (완료)
 
 Verification:
 - 동일 실험을 다시 실행해도 generated artifact가 기본적으로 untracked 노이즈를 만들지 않아야 한다.
@@ -284,14 +289,14 @@ Verification:
 2. `origin/main` 기반 새 cleanup 브랜치 생성
 3. generated artifact 삭제
 4. 루트 scratch 파일 삭제
-5. tracked 경계 파일(`.tgz`, harness docs/scripts, samples`) 정책 확정
+5. tracked 경계 파일(`.tgz`, harness docs/scripts, samples`) 정책 확정 (`packages/cli/*.tgz`는 완료)
 6. `.gitignore` 보강
 7. typecheck 재검증
 8. 필요 시 cleanup PR 생성
 
 ## Immediate Decisions Needed
 
-1. `packages/cli/obora-cli-0.1.3.tgz`를 repo에서 계속 추적할지
+1. `packages/cli/obora-cli-0.1.3.tgz`를 repo에서 계속 추적할지 (완료: 추적 안 함)
 2. `experiments/swe-bench-harness/samples/*.json` 수정은 fixture 개선인지 실험 부산물인지
 3. `experiments/obora-harnesses-*.md` 5개는 문서 분리본으로 승격할지 임시 export로 삭제할지
 4. `.bench-workspaces/`와 `.sandbox/` 전체 삭제를 지금 바로 해도 되는지
