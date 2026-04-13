@@ -5,6 +5,7 @@ node_modules/
 dist/
 .next/
 .turbo/
+packages/cli/*.tgz
 
 # Environment files
 .env
