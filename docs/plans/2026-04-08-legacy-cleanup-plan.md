@@ -183,11 +183,14 @@ Objective: harness 입력/워크플로/스크립트와 결과물의 경계를 �
 
 Status:
 - 결정 완료: `experiments/swe-bench-harness/samples/*.json`는 실험 부산물이 아니라 versioned fixture로 유지한다.
+- 결정 완료: `experiments/swe-bench-harness/results*`와 `pytest-results/`는 tracked benchmark evidence가 아니라 generated output으로 취급한다.
+- 조치 완료: tracked `results/`, `results-lite/`, `results-lite-full/` 제거 + `.gitignore`에 results/pytest 패턴 추가.
 - 근거:
-  - `run_pytest.sh`, `run_pytest_all.sh`, `run_pytest_full.sh`가 해당 JSON을 직접 입력으로 읽는다.
+  - `run_pytest.sh`, `run_pytest_all.sh`, `run_pytest_full.sh`가 `samples/*.json`를 직접 입력으로 읽는다.
   - `workflows/sample-*.yaml`, `workflows/swe-bench-universal.yaml`가 특정 sample JSON 경로를 고정 참조한다.
   - `samples/metadata.json`가 현재 검증 대상인 verified 10-sample subset을 고정한다.
-  - `scripts/download_samples.py`로 재생성 가능하지만, repo 안의 checked-in JSON은 문서/워크플로/회귀 검증이 기대는 재현용 입력 fixture다.
+  - 반면 `results*`는 `run_lite.sh`, `run_300_patches.sh`, `run_repair_experiment.sh` 등이 생성하는 출력 경로이며, `patch.diff`/로그/obora JSON은 재실행으로 다시 만들 수 있다.
+  - `run_pytest_full.sh` 등은 기존 결과를 입력으로 소비하지만, 그것은 "체크인된 정적 fixture"가 아니라 직전 benchmark run의 산출물을 대상으로 한 후속 검증 단계다.
 
 Keep likely:
 - `workflows/*.yaml`
@@ -200,6 +203,8 @@ Keep likely:
 
 Discard likely:
 - `results-*/`
+- `results/`
+- `pytest-results/`
 - `pytest-eval/`
 - 로컬 `.obora/`
 - 실행 로그/patch 산출물
@@ -207,6 +212,7 @@ Discard likely:
 Verification:
 - 재현 가능한 입력만 추적되고, 실행 결과는 추적되지 않아야 한다.
 - `samples/*.json`는 스크립트/워크플로가 직접 소비하는 fixture로 남아 있어야 한다.
+- `results*`와 `pytest-results/`는 rerun 시 생성되지만 git tracking 대상은 아니어야 한다.
 
 ### Task 7: `experiments/obora-harnesses` 문서 드리프트 판단
 
@@ -308,5 +314,6 @@ Verification:
 
 1. `packages/cli/obora-cli-0.1.3.tgz`를 repo에서 계속 추적할지 (완료: 추적 안 함)
 2. `experiments/swe-bench-harness/samples/*.json` 수정은 fixture 개선인지 실험 부산물인지 (완료: versioned fixture로 유지)
-3. `experiments/obora-harnesses-*.md` 5개는 문서 분리본으로 승격할지 임시 export로 삭제할지
-4. `.bench-workspaces/`와 `.sandbox/` 전체 삭제를 지금 바로 해도 되는지
+3. `experiments/swe-bench-harness/results*`와 `pytest-results/`를 repo에서 계속 추적할지 (완료: generated output으로 제거)
+4. `experiments/obora-harnesses-*.md` 5개는 문서 분리본으로 승격할지 임시 export로 삭제할지
+5. `.bench-workspaces/`와 `.sandbox/` 전체 삭제를 지금 바로 해도 되는지

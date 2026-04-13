@@ -59,6 +59,10 @@ experiments/overnight-builder/run_validation.sh
 experiments/overnight-builder/test/
 experiments/overnight-builder/artifacts/*
 !experiments/overnight-builder/artifacts/.gitkeep
+experiments/swe-bench-harness/results/
+experiments/swe-bench-harness/results-*/
+experiments/swe-bench-harness/pytest-results/
+experiments/swe-bench-harness/pytest-eval/
 sandbox/22-shared-memory-tkg-loop/data/
 sandbox/22-shared-memory-tkg-loop/output/
 
