@@ -4,10 +4,10 @@ set -euo pipefail
 ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$ROOT_DIR"
 
-if [[ -z "${NPM_TOKEN:-}" ]]; then
-  echo "[FAIL] NPM_TOKEN is not set."
-  exit 1
-fi
+# shellcheck disable=SC1091
+source scripts/release/npm-auth.sh
+setup_npm_auth
+trap cleanup_npm_auth EXIT
 
 echo "[release-cli] cleaning CLI dist"
 rm -rf packages/cli/dist
