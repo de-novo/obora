@@ -1,0 +1,7 @@
+^packages/adapters/src/skills/types\.ts:.*@deprecated Use OboraSkill\.tools \(AgentTool\[\]\) directly\.
+^packages/adapters/src/tools/registry\.ts:.*@deprecated toToolDefinitions 사용 권장
+^packages/adapters/src/tools/types\.ts:.*@deprecated ToolCall 사용 권장
+^packages/runtime/src/blackboard/core/accessors/state-accessor\.ts:.*@deprecated 이름이 혼동스러울 수 있으므로 \{@link getBusyAgentCount\(\)\} 사용 권장
+^packages/runtime/src/index\.ts:.*@deprecated Legacy workflow API — will be removed in v0\.3\.0\.
+^packages/runtime/src/index\.ts:.*@deprecated Legacy agent roles API — will be removed in v0\.3\.0\.
+^packages/runtime/src/blackboard/core/accessors/decisions-accessor\.ts:.*@deprecated getAgentOpinion\(\) 사용 권장

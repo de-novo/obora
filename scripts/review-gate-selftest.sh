@@ -39,4 +39,51 @@ if MODEL_IDS='opus,codex,glm' \
   exit 1
 fi
 
+# 4) review-gate deprecated scan respects allowlisted exact path:line matches
+mkdir -p "$TMP/scan"
+cat > "$TMP/scan/allowed.ts" <<'EOF'
+/** @deprecated intentional compatibility shim */
+export const allowed = true;
+EOF
+cat > "$TMP/deprecated-allowlist.txt" <<'EOF'
+^\.review-gate/selftest/scan/allowed\.ts:1:
+EOF
+ALLOWLIST_OUTPUT=$(SCAN_PATHS='.review-gate/selftest/scan' \
+  TYPECHECK_CMD='echo [skip] typecheck' \
+  TEST_CMD='echo [skip] test' \
+  BUILD_CMD='echo [skip] build' \
+  SELFTEST_CMD='' \
+  SANDBOX_SMOKE_CMD='' \
+  DEPRECATED_ALLOWLIST_FILE='.review-gate/selftest/deprecated-allowlist.txt' \
+  bash scripts/review-gate.sh 2>&1)
+if ! grep -Fq '[OK] No deprecated signals found by pattern scan.' <<< "$ALLOWLIST_OUTPUT"; then
+  echo "[FAIL] expected allowlisted deprecated match to be ignored"
+  echo "$ALLOWLIST_OUTPUT"
+  exit 1
+fi
+
+# 5) review-gate still warns for non-allowlisted deprecated matches in same scan scope
+cat > "$TMP/scan/unlisted.ts" <<'EOF'
+/** @deprecated not allowlisted */
+export const unlisted = true;
+EOF
+WARN_OUTPUT=$(SCAN_PATHS='.review-gate/selftest/scan' \
+  TYPECHECK_CMD='echo [skip] typecheck' \
+  TEST_CMD='echo [skip] test' \
+  BUILD_CMD='echo [skip] build' \
+  SELFTEST_CMD='' \
+  SANDBOX_SMOKE_CMD='' \
+  DEPRECATED_ALLOWLIST_FILE='.review-gate/selftest/deprecated-allowlist.txt' \
+  bash scripts/review-gate.sh 2>&1)
+if ! grep -Fq '[WARN] Deprecated signals found above. Review required.' <<< "$WARN_OUTPUT"; then
+  echo "[FAIL] expected non-allowlisted deprecated match to remain visible"
+  echo "$WARN_OUTPUT"
+  exit 1
+fi
+if ! grep -Fq '.review-gate/selftest/scan/unlisted.ts:1:' <<< "$WARN_OUTPUT"; then
+  echo "[FAIL] expected non-allowlisted file to appear in deprecated scan output"
+  echo "$WARN_OUTPUT"
+  exit 1
+fi
+
 echo "[PASS] review gate selftest passed"

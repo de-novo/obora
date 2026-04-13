@@ -83,6 +83,7 @@ Before opening a PR:
 - Rebase on latest `main`
 - Ensure `pnpm build` and `pnpm test` pass
 - Run `bash scripts/review-gate.sh` for the standardized pre-push gate
+- Keep intentional compatibility `@deprecated` entries in `scripts/review-gate-deprecated-allowlist.txt`; do not add new entries unless the deprecation is an intentional public contract
 - Update docs when behavior or public API changes
 
 In your PR:
