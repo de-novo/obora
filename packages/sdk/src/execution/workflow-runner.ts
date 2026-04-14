@@ -2543,12 +2543,12 @@ export class WorkflowRunner {
     errorCode: string,
     persistenceEnabled: boolean,
     persistenceConfig: OboraConfig["persistence"] | undefined
-  ): Promise<number> {
+  ): Promise<{ repairAttempts: number; repairLoopSummary?: PersistedRepairLoopSummary }> {
     const repairLoopSummary = this.getPersistedRepairLoopSummary(executionId);
     const repairAttempts = repairLoopSummary?.repairStarted ?? 0;
     if (!persistenceEnabled) {
       this.clearPersistedRepairLoopSummary(executionId);
-      return repairAttempts;
+      return { repairAttempts, repairLoopSummary };
     }
     const { persistenceManager, config } = this.deps;
     try {
@@ -2577,7 +2577,7 @@ export class WorkflowRunner {
     } finally {
       this.clearPersistedRepairLoopSummary(executionId);
     }
-    return repairAttempts;
+    return { repairAttempts, repairLoopSummary };
   }
 
   // ── Resume execution ─────────────────────────────────────────────────────

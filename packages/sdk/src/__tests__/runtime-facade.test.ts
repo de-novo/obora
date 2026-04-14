@@ -2679,8 +2679,100 @@ describe("OboraRuntime facade", () => {
     expect(snapshot.entries).toHaveLength(1);
     expect(snapshot.entries[0]).toMatchObject({
       workflowName: "validation-repeated-critical-dlq-persist",
+      stepName: "build_or_repair",
       repairAttempts: 1,
       errorCode: OboraErrorCode.SDK_UNKNOWN_ERROR,
+      metadata: {
+        repairLoop: {
+          lastRepairStep: "build_or_repair",
+          lastValidationStep: "validate",
+          lastStopCategory: "repeated_critical_issue",
+        },
+      },
+    });
+  });
+
+  it("captures repair loop context in DLQ metadata", async () => {
+    const dlqDir = await mkdtemp(join(tmpdir(), "obora-dlq-context-"));
+    const dlqFile = join(dlqDir, "dead-letters.json");
+
+    const runtime = new OboraRuntime({
+      llm: { provider: "openai", apiKey: "test-key", model: "gpt-5" },
+      dlq: { enabled: true, filePath: dlqFile },
+    });
+
+    const adapterMock = {
+      chatCompletion: vi.fn().mockImplementation(async () => {
+        const callIndex = adapterMock.chatCompletion.mock.calls.length;
+        if (callIndex % 2 === 1) {
+          return { message: { role: "assistant", content: `draft-${callIndex}` } };
+        }
+        return {
+          message: {
+            role: "assistant",
+            content: JSON.stringify({
+              passed: false,
+              summary: "Critical issue repeats",
+              failedChecks: [{ name: "critical", message: "same blocker" }],
+              signature: "same-critical-issue",
+            }),
+          },
+        };
+      }),
+    };
+
+    vi.spyOn(
+      runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> },
+      "createLLMAdapter"
+    ).mockResolvedValue(adapterMock);
+
+    runtime.define("validation-repeated-critical-dlq-context", {
+      name: "validation-repeated-critical-dlq-context",
+      steps: [
+        {
+          name: "build_or_repair",
+          agent: "builder",
+          config: { repair_loop: { enabled: true, repeated_critical_issue_ceiling: 1 } },
+          input: { task: "Build or repair the app" },
+        },
+        {
+          name: "validate",
+          agent: "validator",
+          depends_on: ["build_or_repair"],
+          config: { validation: { enabled: true, emit_structured_result: true } },
+          on_fail: { goto: "build_or_repair", max_iterations: 5 },
+          input: { task: "Validate the app and return structured JSON" },
+        },
+      ],
+    });
+
+    const handle = await runtime.run("validation-repeated-critical-dlq-context");
+    await expect(handle.wait()).rejects.toThrow(/repeated critical issue ceiling/i);
+
+    const snapshot = JSON.parse(await readFile(dlqFile, "utf-8")) as {
+      entries: Array<{
+        workflowName: string;
+        stepName?: string;
+        metadata?: {
+          repairLoop?: {
+            lastRepairStep?: string;
+            lastValidationStep?: string;
+            lastStopCategory?: string;
+          };
+        };
+      }>;
+    };
+    expect(snapshot.entries).toHaveLength(1);
+    expect(snapshot.entries[0]).toMatchObject({
+      workflowName: "validation-repeated-critical-dlq-context",
+      stepName: "build_or_repair",
+      metadata: {
+        repairLoop: {
+          lastRepairStep: "build_or_repair",
+          lastValidationStep: "validate",
+          lastStopCategory: "repeated_critical_issue",
+        },
+      },
     });
   });
 

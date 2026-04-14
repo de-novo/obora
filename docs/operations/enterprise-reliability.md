@@ -61,6 +61,11 @@ dlq:
 
 ### SDK API
 
+기본 entry에는 다음 진단 필드가 포함됩니다.
+- `stepName`: 마지막 repair 대상 step 또는 마지막 validation step
+- `repairAttempts`: 실제 repair loop 시도 횟수
+- `metadata.repairLoop`: 최근 repair/validation 요약 (`lastRepairStep`, `lastValidationStep`, `lastStopCategory` 등)
+
 ```typescript
 import { FileDLQStore, createDLQEntry, summarizeDLQ, resolveDLQEntry } from '@obora/sdk';
 

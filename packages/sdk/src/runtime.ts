@@ -393,7 +393,7 @@ export class OboraRuntime {
             this.config.config?.persistence ?? this.config.persistence;
           const persistenceEnabled = persistenceConfig?.enabled ?? false;
 
-          const repairAttempts = await this.runner.saveRunOnError(
+          const { repairAttempts, repairLoopSummary } = await this.runner.saveRunOnError(
             executionId,
             name,
             execution,
@@ -434,10 +434,12 @@ export class OboraRuntime {
               const dlqEntry = createDLQEntry({
                 executionId,
                 workflowName: name,
+                stepName: repairLoopSummary?.lastRepairStep ?? repairLoopSummary?.lastValidationStep,
                 errorCode,
                 errorMessage: execution.error ?? "Unknown error",
                 errorStack: error instanceof Error ? error.stack : undefined,
                 repairAttempts,
+                metadata: repairLoopSummary ? { repairLoop: repairLoopSummary } : undefined,
               });
               await this.dlqStore.append(dlqEntry);
               await this.eventBus.emit("warning", executionId, {
