@@ -129,6 +129,9 @@
 
 ## Files
 
+> Historical artifact note: these paths are the recorded output locations from the original run.
+> Current default output root is `.temp/swe-bench-harness/`.
+
 - `experiments/swe-bench-harness/results-lite-full/full_300.log` — Full execution log
 - `experiments/swe-bench-harness/results-lite-full/progress.log` — Progress tracking
 - `experiments/swe-bench-harness/results-lite-full/*/patch.diff` — Generated patches

@@ -92,6 +92,11 @@ All 50 samples PASS ✅
 
 ## Reproducibility
 
+> Historical note: the commands below reflect the original March 2026 run layout.
+> Current harness scripts default generated outputs to `.temp/swe-bench-harness/`.
+> To reproduce the old in-repo path layout, first source `experiments/swe-bench-harness/_env.sh`
+> and set `SWE_BENCH_OUTPUT_ROOT=$REPO_ROOT/experiments/swe-bench-harness`.
+
 ```bash
 # Download samples
 python3 experiments/swe-bench-harness/scripts/download_samples.py --count 50 --dataset lite --output experiments/swe-bench-harness/samples-lite

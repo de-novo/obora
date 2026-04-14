@@ -121,6 +121,10 @@
 
 ## Reproducibility
 
+> Historical note: the commands below reflect the original March 2026 run layout.
+> Current harness scripts default generated outputs to `.temp/swe-bench-harness/`.
+> Current pytest summary outputs are also split into `pytest-results/verified/` and `pytest-results/lite/`.
+
 ### Environment
 ```
 Model: ZAI GLM-4.7
@@ -149,6 +153,9 @@ done
 ---
 
 ## Files
+
+> Historical artifact note: these paths are the recorded output locations from the original run.
+> Current default output root is `.temp/swe-bench-harness/`, and current pytest summaries are split by dataset.
 
 - `experiments/swe-bench-harness/pytest-results/full_run.log` — First 30 samples
 - `experiments/swe-bench-harness/pytest-results/remaining.log` — Remaining 29 samples
