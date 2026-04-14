@@ -219,6 +219,64 @@ describe("dlq command", () => {
     );
   });
 
+  it("includes curated triage summary in JSON inspect output", async () => {
+    const load = vi.fn().mockResolvedValue({
+      entries: [
+        {
+          id: "entry-triage",
+          createdAt: "2026-03-10T10:00:00.000Z",
+          executionId: "run-triage",
+          workflowName: "repair-workflow",
+          stepName: "validate",
+          errorCode: "SDK_STEP_FAILED",
+          errorMessage: "repair failed",
+          repairAttempts: 3,
+          status: "pending",
+          metadata: {
+            repairLoop: {
+              lastStopCategory: "repeated_critical_issue",
+              lastValidationSummary: "Missing READY marker",
+              lastValidationStep: "validate",
+              lastRepairStep: "build_or_repair",
+              lastAttempt: 3,
+            },
+          },
+        },
+      ],
+      lastUpdated: "2026-03-10T10:05:00.000Z",
+    });
+    vi.mocked(FileDLQStore).mockImplementation(
+      () =>
+        ({
+          load,
+          save: vi.fn(),
+          append: vi.fn(),
+        }) as never
+    );
+    vi.mocked(createRunsRuntime).mockResolvedValue({
+      getRunRecord: vi.fn().mockResolvedValue(null),
+      getRunArtifacts: vi.fn().mockResolvedValue([]),
+    } as never);
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createDlqCommand();
+
+    await cmd.parseAsync(["inspect", "entry-triage", "--json"], { from: "user" });
+
+    const payload = JSON.parse(log.mock.calls.at(-1)?.[0] ?? "{}");
+    expect(payload.triage).toEqual(
+      expect.objectContaining({
+        stepName: "validate",
+        repairAttempts: 3,
+        lastStopCategory: "repeated_critical_issue",
+        lastValidationSummary: "Missing READY marker",
+        lastValidationStep: "validate",
+        lastRepairStep: "build_or_repair",
+        lastAttempt: 3,
+      })
+    );
+  });
+
   it("keeps the most recent five artifacts in JSON inspect output", async () => {
     const load = vi.fn().mockResolvedValue({
       entries: [
@@ -330,6 +388,57 @@ describe("dlq command", () => {
     expect(output).toContain("obora artifact get run-1 validate VALIDATION-ATTEMPT-01.log");
   });
 
+  it("prints triage summary in text inspect output", async () => {
+    const load = vi.fn().mockResolvedValue({
+      entries: [
+        {
+          id: "entry-triage",
+          createdAt: "2026-03-10T10:00:00.000Z",
+          executionId: "run-triage",
+          workflowName: "repair-workflow",
+          stepName: "validate",
+          errorCode: "SDK_STEP_FAILED",
+          errorMessage: "repair failed",
+          repairAttempts: 3,
+          status: "pending",
+          metadata: {
+            repairLoop: {
+              lastStopCategory: "repeated_critical_issue",
+              lastValidationSummary: "Missing READY marker",
+              lastValidationStep: "validate",
+              lastRepairStep: "build_or_repair",
+              lastAttempt: 3,
+            },
+          },
+        },
+      ],
+      lastUpdated: "2026-03-10T10:05:00.000Z",
+    });
+    vi.mocked(FileDLQStore).mockImplementation(
+      () =>
+        ({
+          load,
+          save: vi.fn(),
+          append: vi.fn(),
+        }) as never
+    );
+    vi.mocked(createRunsRuntime).mockResolvedValue({
+      getRunRecord: vi.fn().mockResolvedValue(null),
+      getRunArtifacts: vi.fn().mockResolvedValue([]),
+    } as never);
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createDlqCommand();
+
+    await cmd.parseAsync(["inspect", "entry-triage"], { from: "user" });
+
+    const output = log.mock.calls.map((args) => args.join(" ")).join("\n");
+    expect(output).toContain("Triage Summary:");
+    expect(output).toContain("Stop Category:   repeated_critical_issue");
+    expect(output).toContain("Validation:      Missing READY marker");
+    expect(output).toContain("Repair Step:     build_or_repair");
+  });
+
   it("resolves a DLQ entry and persists actor and note", async () => {
     const load = vi.fn().mockResolvedValue({
       entries: [
@@ -378,7 +487,17 @@ describe("dlq command", () => {
     const cmd = createDlqCommand();
 
     await cmd.parseAsync(
-      ["resolve", "entry-1", "--status", "reviewed", "--actor", "cto", "--note", "triaged", "--json"],
+      [
+        "resolve",
+        "entry-1",
+        "--status",
+        "reviewed",
+        "--actor",
+        "cto",
+        "--note",
+        "triaged",
+        "--json",
+      ],
       { from: "user" }
     );
 
@@ -464,7 +583,9 @@ describe("dlq command", () => {
     expect(process.exit).not.toHaveBeenCalled();
     expect(process.exitCode).toBe(2);
     expect(error).toHaveBeenCalled();
-    expect(log.mock.calls.map((args) => args.join(" ")).join("\n")).not.toContain("obora run <workflow.yaml> --dry-run");
+    expect(log.mock.calls.map((args) => args.join(" ")).join("\n")).not.toContain(
+      "obora run <workflow.yaml> --dry-run"
+    );
   });
 
   it("uses execution-failed exit code for DLQ store errors", async () => {

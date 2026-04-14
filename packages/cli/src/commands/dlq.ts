@@ -49,6 +49,16 @@ type RelatedInspectContext = {
   relatedArtifacts: RelatedArtifactSummary[];
 };
 
+type DlqTriageSummary = {
+  stepName?: string;
+  repairAttempts: number;
+  lastStopCategory?: string;
+  lastValidationSummary?: string;
+  lastValidationStep?: string;
+  lastRepairStep?: string;
+  lastAttempt?: number;
+};
+
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -67,7 +77,9 @@ function isDlqEntryStatus(value: string | undefined): value is DlqEntryStatus {
 }
 
 function isDlqResolutionStatus(value: string | undefined): value is DlqResolutionStatus {
-  return typeof value === "string" && (DLQ_RESOLUTION_STATUSES as readonly string[]).includes(value);
+  return (
+    typeof value === "string" && (DLQ_RESOLUTION_STATUSES as readonly string[]).includes(value)
+  );
 }
 
 async function createDlqStore(filePath?: string): Promise<DlqStoreLike> {
@@ -76,17 +88,25 @@ async function createDlqStore(filePath?: string): Promise<DlqStoreLike> {
     const resolvedPath = filePath ?? config?.dlq?.filePath ?? DEFAULT_DLQ_PATH;
     return new FileDLQStore(resolvedPath);
   } catch (error) {
-    throw new CLIError(`Failed to resolve DLQ config: ${getErrorMessage(error)}`, ExitCode.EXECUTION_FAILED);
+    throw new CLIError(
+      `Failed to resolve DLQ config: ${getErrorMessage(error)}`,
+      ExitCode.EXECUTION_FAILED
+    );
   }
 }
 
-async function loadDlqSnapshot(filePath?: string): Promise<{ store: DlqStoreLike; snapshot: DLQSnapshot }> {
+async function loadDlqSnapshot(
+  filePath?: string
+): Promise<{ store: DlqStoreLike; snapshot: DLQSnapshot }> {
   const store = await createDlqStore(filePath);
   try {
     const snapshot = await store.load();
     return { store, snapshot };
   } catch (error) {
-    throw new CLIError(`Failed to load DLQ store: ${getErrorMessage(error)}`, ExitCode.EXECUTION_FAILED);
+    throw new CLIError(
+      `Failed to load DLQ store: ${getErrorMessage(error)}`,
+      ExitCode.EXECUTION_FAILED
+    );
   }
 }
 
@@ -94,7 +114,10 @@ async function saveDlqSnapshot(store: DlqStoreLike, snapshot: DLQSnapshot): Prom
   try {
     await store.save(snapshot);
   } catch (error) {
-    throw new CLIError(`Failed to save DLQ store: ${getErrorMessage(error)}`, ExitCode.EXECUTION_FAILED);
+    throw new CLIError(
+      `Failed to save DLQ store: ${getErrorMessage(error)}`,
+      ExitCode.EXECUTION_FAILED
+    );
   }
 }
 
@@ -134,6 +157,33 @@ function formatStopCategory(entry: DLQEntry): string {
   if (!repairLoop || typeof repairLoop !== "object" || Array.isArray(repairLoop)) return "-";
   const lastStopCategory = (repairLoop as Record<string, unknown>).lastStopCategory;
   return typeof lastStopCategory === "string" ? lastStopCategory : "-";
+}
+
+function buildDlqTriageSummary(entry: DLQEntry): DlqTriageSummary {
+  const repairLoop =
+    entry.metadata?.repairLoop &&
+    typeof entry.metadata.repairLoop === "object" &&
+    !Array.isArray(entry.metadata.repairLoop)
+      ? (entry.metadata.repairLoop as Record<string, unknown>)
+      : undefined;
+
+  return {
+    ...(entry.stepName ? { stepName: entry.stepName } : {}),
+    repairAttempts: entry.repairAttempts,
+    ...(typeof repairLoop?.lastStopCategory === "string"
+      ? { lastStopCategory: repairLoop.lastStopCategory }
+      : {}),
+    ...(typeof repairLoop?.lastValidationSummary === "string"
+      ? { lastValidationSummary: repairLoop.lastValidationSummary }
+      : {}),
+    ...(typeof repairLoop?.lastValidationStep === "string"
+      ? { lastValidationStep: repairLoop.lastValidationStep }
+      : {}),
+    ...(typeof repairLoop?.lastRepairStep === "string"
+      ? { lastRepairStep: repairLoop.lastRepairStep }
+      : {}),
+    ...(typeof repairLoop?.lastAttempt === "number" ? { lastAttempt: repairLoop.lastAttempt } : {}),
+  };
 }
 
 async function loadRelatedInspectContext(executionId: string): Promise<RelatedInspectContext> {
@@ -196,6 +246,7 @@ function formatTextList(entries: DLQEntry[]): void {
 
 function printTextInspect(
   entry: DLQEntry,
+  triage: DlqTriageSummary,
   relatedRun?: RelatedRunSummary,
   relatedArtifacts: RelatedArtifactSummary[] = []
 ): void {
@@ -215,6 +266,17 @@ function printTextInspect(
   if (entry.metadata) {
     console.log(`  Metadata:        ${JSON.stringify(entry.metadata, null, 2)}`);
   }
+
+  console.log(`\nTriage Summary:`);
+  console.log(`  Repair Attempts: ${triage.repairAttempts}`);
+  if (triage.stepName) console.log(`  Step Name:       ${triage.stepName}`);
+  if (triage.lastStopCategory) console.log(`  Stop Category:   ${triage.lastStopCategory}`);
+  if (triage.lastValidationSummary)
+    console.log(`  Validation:      ${triage.lastValidationSummary}`);
+  if (triage.lastValidationStep) console.log(`  Validator:       ${triage.lastValidationStep}`);
+  if (triage.lastRepairStep) console.log(`  Repair Step:     ${triage.lastRepairStep}`);
+  if (triage.lastAttempt !== undefined) console.log(`  Last Attempt:    ${triage.lastAttempt}`);
+
   if (relatedRun) {
     console.log(`\nRelated Run:`);
     console.log(`  ID:              ${relatedRun.id}`);
@@ -229,7 +291,9 @@ function printTextInspect(
       console.log(
         `  - ${artifact.stepName}/${artifact.name} (${artifact.mimeType}, ${artifact.sizeBytes} bytes)`
       );
-      console.log(`    Fetch: obora artifact get ${entry.executionId} ${artifact.stepName} ${artifact.name}`);
+      console.log(
+        `    Fetch: obora artifact get ${entry.executionId} ${artifact.stepName} ${artifact.name}`
+      );
     }
   }
 }
@@ -267,7 +331,9 @@ async function runListDlq(
   }
 
   formatTextList(payload.entries);
-  console.log(`\n${payload.entries.length} entry(s) shown of ${payload.total} total. Pending: ${payload.pending}`);
+  console.log(
+    `\n${payload.entries.length} entry(s) shown of ${payload.total} total. Pending: ${payload.pending}`
+  );
 }
 
 async function runInspectDlq(
@@ -282,21 +348,26 @@ async function runInspectDlq(
     throw new CLIError(`DLQ entry not found: ${entryId}`, ExitCode.VALIDATION_ERROR);
   }
 
+  const triage = buildDlqTriageSummary(entry);
   const { relatedRun, relatedArtifacts } = await loadRelatedInspectContext(entry.executionId);
 
   if (shouldOutputJson(opts.json, globalOpts)) {
     formatter.json({
       entry,
+      triage,
       ...(relatedRun ? { relatedRun } : {}),
       ...(relatedArtifacts.length > 0 ? { relatedArtifacts } : {}),
     });
     return;
   }
 
-  printTextInspect(entry, relatedRun, relatedArtifacts);
+  printTextInspect(entry, triage, relatedRun, relatedArtifacts);
 }
 
-async function runSummaryDlq(opts: { file?: string; json?: boolean }, globalOpts: GlobalOptions): Promise<void> {
+async function runSummaryDlq(
+  opts: { file?: string; json?: boolean },
+  globalOpts: GlobalOptions
+): Promise<void> {
   const { snapshot } = await loadDlqSnapshot(opts.file);
   const summary = summarizeDLQ(snapshot);
   const payload = { ...summary, lastUpdated: snapshot.lastUpdated };

@@ -46,6 +46,7 @@ obora judge
 ```
 
 Why this order:
+
 - `init --quickstart` creates the smallest runnable project
 - `doctor` tells you whether auth/config is missing
 - `judge --dry-run` validates the workflow before execution
@@ -244,6 +245,7 @@ obora --json judge --dry-run
 ```
 
 Dry-run output includes:
+
 - `Execution Resolution`
 - `Binding Preview` / `Output Preview` in text mode when previewable paths exist
 - `resolution`, `bindingPreview`, and `outputPreview` in JSON mode
@@ -377,10 +379,12 @@ obora runs list \
 List persisted runs with optional workflow / repair-loop filtering and triage-oriented sorting.
 
 Text output includes:
+
 - `Loop State` column (`EXHAUSTED`, `STALLED`, `CONVERGED`, `REPAIRED`, `PASSED`, `-`)
 - compact repair-loop summary (`F/R/P/N/X` style counts + latest validation summary when available)
 
 Loop state precedence:
+
 1. `EXHAUSTED` — `backEdgeExhausted > 0`
 2. `STALLED` — `repairNoProgress > 0`
 3. `CONVERGED` — both validation failures and passes recorded
@@ -454,8 +458,9 @@ obora dlq list --file ./data/.obora/dlq/dead-letters.json --json
 obora dlq inspect <entryId> [--file <path>] [--json]
 ```
 
-Show one DLQ entry including error, repair attempts, resolution fields, and raw metadata.
+Show one DLQ entry including error, repair attempts, resolution fields, raw metadata, and a curated triage summary (`repairAttempts`, stop category, latest validation/repair context`).
 If a persisted run record exists for the same `executionId`, CLI also includes:
+
 - a compact related-run summary
 - a ready-to-run `obora runs inspect <runId>` hint
 - up to 5 most recent related artifact previews with `obora artifact get <runId> <stepName> <name>` fetch hints
