@@ -37,6 +37,18 @@ type RelatedRunSummary = {
   completedAt?: string;
 };
 
+type RelatedArtifactSummary = {
+  stepName: string;
+  name: string;
+  mimeType: string;
+  sizeBytes: number;
+};
+
+type RelatedInspectContext = {
+  relatedRun?: RelatedRunSummary;
+  relatedArtifacts: RelatedArtifactSummary[];
+};
+
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -124,20 +136,49 @@ function formatStopCategory(entry: DLQEntry): string {
   return typeof lastStopCategory === "string" ? lastStopCategory : "-";
 }
 
-async function loadRelatedRun(executionId: string): Promise<RelatedRunSummary | undefined> {
+async function loadRelatedInspectContext(executionId: string): Promise<RelatedInspectContext> {
   try {
-    const runtime = await createRunsRuntime();
-    const run = await runtime.getRunRecord(executionId);
-    if (!run) return undefined;
-    return {
-      id: run.id,
-      ...(run.workflowName ? { workflowName: run.workflowName } : {}),
-      ...(run.status ? { status: run.status } : {}),
-      ...(run.startedAt ? { startedAt: run.startedAt } : {}),
-      ...(run.completedAt ? { completedAt: run.completedAt } : {}),
+    const runtime = (await createRunsRuntime()) as {
+      getRunRecord(runId: string): Promise<RelatedRunSummary | null>;
+      getRunArtifacts?: (runId: string) => Promise<RelatedArtifactSummary[]>;
     };
+
+    let relatedRun: RelatedRunSummary | undefined;
+    try {
+      const run = await runtime.getRunRecord(executionId);
+      relatedRun = run
+        ? {
+            id: run.id,
+            ...(run.workflowName ? { workflowName: run.workflowName } : {}),
+            ...(run.status ? { status: run.status } : {}),
+            ...(run.startedAt ? { startedAt: run.startedAt } : {}),
+            ...(run.completedAt ? { completedAt: run.completedAt } : {}),
+          }
+        : undefined;
+    } catch {
+      relatedRun = undefined;
+    }
+
+    let relatedArtifacts: RelatedArtifactSummary[] = [];
+    if (runtime.getRunArtifacts) {
+      try {
+        relatedArtifacts = (await runtime.getRunArtifacts(executionId))
+          .slice(-5)
+          .reverse()
+          .map((artifact) => ({
+            stepName: artifact.stepName,
+            name: artifact.name,
+            mimeType: artifact.mimeType,
+            sizeBytes: artifact.sizeBytes,
+          }));
+      } catch {
+        relatedArtifacts = [];
+      }
+    }
+
+    return { relatedRun, relatedArtifacts };
   } catch {
-    return undefined;
+    return { relatedArtifacts: [] };
   }
 }
 
@@ -153,7 +194,11 @@ function formatTextList(entries: DLQEntry[]): void {
   }
 }
 
-function printTextInspect(entry: DLQEntry, relatedRun?: RelatedRunSummary): void {
+function printTextInspect(
+  entry: DLQEntry,
+  relatedRun?: RelatedRunSummary,
+  relatedArtifacts: RelatedArtifactSummary[] = []
+): void {
   console.log(`\nDLQ Entry: ${entry.id}`);
   console.log(`  Workflow:        ${entry.workflowName}`);
   console.log(`  Execution ID:    ${entry.executionId}`);
@@ -177,6 +222,15 @@ function printTextInspect(entry: DLQEntry, relatedRun?: RelatedRunSummary): void
     if (relatedRun.startedAt) console.log(`  Started:         ${relatedRun.startedAt}`);
     if (relatedRun.completedAt) console.log(`  Completed:       ${relatedRun.completedAt}`);
     console.log(`  Inspect:         obora runs inspect ${relatedRun.id}`);
+  }
+  if (relatedArtifacts.length > 0) {
+    console.log(`\nRelated Artifacts (${relatedArtifacts.length}):`);
+    for (const artifact of relatedArtifacts) {
+      console.log(
+        `  - ${artifact.stepName}/${artifact.name} (${artifact.mimeType}, ${artifact.sizeBytes} bytes)`
+      );
+      console.log(`    Fetch: obora artifact get ${entry.executionId} ${artifact.stepName} ${artifact.name}`);
+    }
   }
 }
 
@@ -228,17 +282,18 @@ async function runInspectDlq(
     throw new CLIError(`DLQ entry not found: ${entryId}`, ExitCode.VALIDATION_ERROR);
   }
 
-  const relatedRun = await loadRelatedRun(entry.executionId);
+  const { relatedRun, relatedArtifacts } = await loadRelatedInspectContext(entry.executionId);
 
   if (shouldOutputJson(opts.json, globalOpts)) {
     formatter.json({
       entry,
       ...(relatedRun ? { relatedRun } : {}),
+      ...(relatedArtifacts.length > 0 ? { relatedArtifacts } : {}),
     });
     return;
   }
 
-  printTextInspect(entry, relatedRun);
+  printTextInspect(entry, relatedRun, relatedArtifacts);
 }
 
 async function runSummaryDlq(opts: { file?: string; json?: boolean }, globalOpts: GlobalOptions): Promise<void> {

@@ -93,6 +93,8 @@ obora dlq list --status pending
 obora dlq inspect <entryId>
 # persisted run이 있으면 related run summary와
 # `obora runs inspect <runId>` 힌트까지 함께 표시
+# 관련 artifact preview와
+# `obora artifact get <runId> <stepName> <name>` 힌트도 함께 표시
 
 # aggregate counts
 obora dlq summary

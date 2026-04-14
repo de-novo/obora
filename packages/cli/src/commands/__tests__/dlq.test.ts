@@ -184,6 +184,14 @@ describe("dlq command", () => {
         startedAt: "2026-03-10T09:59:00.000Z",
         completedAt: "2026-03-10T10:00:00.000Z",
       }),
+      getRunArtifacts: vi.fn().mockResolvedValue([
+        {
+          stepName: "validate",
+          name: "VALIDATION-ATTEMPT-01.log",
+          mimeType: "text/plain",
+          sizeBytes: 512,
+        },
+      ]),
     } as never);
 
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
@@ -200,8 +208,71 @@ describe("dlq command", () => {
           status: "failed",
           startedAt: "2026-03-10T09:59:00.000Z",
         }),
+        relatedArtifacts: [
+          expect.objectContaining({
+            stepName: "validate",
+            name: "VALIDATION-ATTEMPT-01.log",
+            mimeType: "text/plain",
+          }),
+        ],
       })
     );
+  });
+
+  it("keeps the most recent five artifacts in JSON inspect output", async () => {
+    const load = vi.fn().mockResolvedValue({
+      entries: [
+        {
+          id: "entry-1",
+          createdAt: "2026-03-10T10:00:00.000Z",
+          executionId: "run-1",
+          workflowName: "repair-workflow",
+          errorCode: "SDK_STEP_FAILED",
+          errorMessage: "repair failed",
+          repairAttempts: 2,
+          status: "pending",
+        },
+      ],
+      lastUpdated: "2026-03-10T10:05:00.000Z",
+    });
+    vi.mocked(FileDLQStore).mockImplementation(
+      () =>
+        ({
+          load,
+          save: vi.fn(),
+          append: vi.fn(),
+        }) as never
+    );
+    vi.mocked(createRunsRuntime).mockResolvedValue({
+      getRunRecord: vi.fn().mockResolvedValue({
+        id: "run-1",
+        workflowName: "repair-workflow",
+        status: "failed",
+        startedAt: "2026-03-10T09:59:00.000Z",
+      }),
+      getRunArtifacts: vi.fn().mockResolvedValue([
+        { stepName: "validate", name: "artifact-1.log", mimeType: "text/plain", sizeBytes: 101 },
+        { stepName: "validate", name: "artifact-2.log", mimeType: "text/plain", sizeBytes: 102 },
+        { stepName: "validate", name: "artifact-3.log", mimeType: "text/plain", sizeBytes: 103 },
+        { stepName: "validate", name: "artifact-4.log", mimeType: "text/plain", sizeBytes: 104 },
+        { stepName: "validate", name: "artifact-5.log", mimeType: "text/plain", sizeBytes: 105 },
+        { stepName: "validate", name: "artifact-6.log", mimeType: "text/plain", sizeBytes: 106 },
+      ]),
+    } as never);
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createDlqCommand();
+
+    await cmd.parseAsync(["inspect", "entry-1", "--json"], { from: "user" });
+
+    const payload = JSON.parse(log.mock.calls.at(-1)?.[0] ?? "{}");
+    expect(payload.relatedArtifacts.map((artifact: { name: string }) => artifact.name)).toEqual([
+      "artifact-6.log",
+      "artifact-5.log",
+      "artifact-4.log",
+      "artifact-3.log",
+      "artifact-2.log",
+    ]);
   });
 
   it("prints related persisted run hint in text inspect output", async () => {
@@ -235,6 +306,14 @@ describe("dlq command", () => {
         status: "failed",
         startedAt: "2026-03-10T09:59:00.000Z",
       }),
+      getRunArtifacts: vi.fn().mockResolvedValue([
+        {
+          stepName: "validate",
+          name: "VALIDATION-ATTEMPT-01.log",
+          mimeType: "text/plain",
+          sizeBytes: 512,
+        },
+      ]),
     } as never);
 
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
@@ -246,6 +325,9 @@ describe("dlq command", () => {
     expect(output).toContain("Related Run:");
     expect(output).toContain("Status:          failed");
     expect(output).toContain("obora runs inspect run-1");
+    expect(output).toContain("Related Artifacts (1):");
+    expect(output).toContain("validate/VALIDATION-ATTEMPT-01.log");
+    expect(output).toContain("obora artifact get run-1 validate VALIDATION-ATTEMPT-01.log");
   });
 
   it("resolves a DLQ entry and persists actor and note", async () => {

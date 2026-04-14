@@ -455,7 +455,10 @@ obora dlq inspect <entryId> [--file <path>] [--json]
 ```
 
 Show one DLQ entry including error, repair attempts, resolution fields, and raw metadata.
-If a persisted run record exists for the same `executionId`, CLI also includes a compact related-run summary and a ready-to-run `obora runs inspect <runId>` hint.
+If a persisted run record exists for the same `executionId`, CLI also includes:
+- a compact related-run summary
+- a ready-to-run `obora runs inspect <runId>` hint
+- up to 5 most recent related artifact previews with `obora artifact get <runId> <stepName> <name>` fetch hints
 
 #### `obora dlq summary`
 
