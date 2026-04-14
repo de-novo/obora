@@ -445,9 +445,9 @@ obora dlq <subcommand>
 obora dlq list [--status <pending|reviewed|retried|dismissed>] [--limit <n>] [--offset <n>] [--file <path>] [--json]
 ```
 
-List DLQ entries sorted by newest first. Text output includes workflow, status, repair attempt count, persisted `metadata.repairLoop.lastStopCategory`, compact related-run status, and compact related run loop state when a persisted run exists for the same `executionId`.
+List DLQ entries sorted by newest first. Text output includes workflow, status, repair attempt count, persisted `metadata.repairLoop.lastStopCategory`, compact related-run status, compact related run loop state, and a truncated latest validation summary when available.
 
-JSON output preserves the existing DLQ payload shape and enriches each listed entry with `relatedRun` (including loop state / stop category when available) when the corresponding persisted run can be resolved.
+JSON output preserves the existing DLQ payload shape and enriches each listed entry with `triage` plus `relatedRun` (including loop state / stop category when available) when the corresponding persisted run can be resolved.
 
 Examples:
 

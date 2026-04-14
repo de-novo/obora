@@ -135,6 +135,10 @@ describe("dlq command", () => {
           metadata: {
             repairLoop: {
               lastStopCategory: "repeated_critical_issue",
+              lastValidationSummary: "Missing READY marker in release note",
+              lastValidationStep: "validate",
+              lastRepairStep: "build_or_repair",
+              lastAttempt: 2,
             },
           },
         },
@@ -180,6 +184,14 @@ describe("dlq command", () => {
     expect(payload.entries).toEqual([
       expect.objectContaining({
         id: "entry-new",
+        triage: expect.objectContaining({
+          repairAttempts: 2,
+          lastStopCategory: "repeated_critical_issue",
+          lastValidationSummary: "Missing READY marker in release note",
+          lastValidationStep: "validate",
+          lastRepairStep: "build_or_repair",
+          lastAttempt: 2,
+        }),
         relatedRun: expect.objectContaining({
           id: "run-1",
           status: "failed",
@@ -206,6 +218,8 @@ describe("dlq command", () => {
           metadata: {
             repairLoop: {
               lastStopCategory: "repeated_critical_issue",
+              lastValidationSummary:
+                "Missing READY marker in release note due to unresolved section header",
             },
           },
         },
@@ -250,8 +264,56 @@ describe("dlq command", () => {
     const output = log.mock.calls.map((args) => args.join(" ")).join("\n");
     expect(output).toContain("Run");
     expect(output).toContain("Run Loop");
+    expect(output).toContain("Validation");
     expect(output).toContain("failed");
     expect(output).toContain("STALLED");
+    expect(output).toContain("Missing READY marker in rel…");
+  });
+
+  it("normalizes multiline validation summaries in text DLQ list output", async () => {
+    const load = vi.fn().mockResolvedValue({
+      entries: [
+        {
+          id: "entry-wrap",
+          createdAt: "2026-03-10T10:00:00.000Z",
+          executionId: "run-wrap",
+          workflowName: "repair-workflow",
+          stepName: "build_or_repair",
+          errorCode: "SDK_STEP_FAILED",
+          errorMessage: "repair failed",
+          repairAttempts: 2,
+          status: "pending",
+          metadata: {
+            repairLoop: {
+              lastStopCategory: "repeated_critical_issue",
+              lastValidationSummary: "Missing READY marker\nSecond line should be compacted",
+            },
+          },
+        },
+      ],
+      lastUpdated: "2026-03-10T10:05:00.000Z",
+    });
+
+    vi.mocked(FileDLQStore).mockImplementation(
+      () =>
+        ({
+          load,
+          save: vi.fn(),
+          append: vi.fn(),
+        }) as never
+    );
+    vi.mocked(createRunsRuntime).mockResolvedValue({
+      getRunRecord: vi.fn().mockResolvedValue(null),
+    } as never);
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createDlqCommand();
+
+    await cmd.parseAsync(["list"], { from: "user" });
+
+    const output = log.mock.calls.map((args) => args.join(" ")).join("\n");
+    expect(output).not.toContain("Second line should be compacted\n");
+    expect(output).toContain("Missing READY marker Second…");
   });
 
   it("prints DLQ summary in text mode", async () => {

@@ -52,6 +52,7 @@ type RelatedInspectContext = {
 };
 
 type DlqListEntry = DLQEntry & {
+  triage?: DlqTriageSummary;
   relatedRun?: RelatedRunSummary;
 };
 
@@ -330,14 +331,21 @@ async function loadRelatedInspectContext(executionId: string): Promise<RelatedIn
   }
 }
 
+function formatValidationSummary(summary: string | undefined, maxLength = 28): string {
+  if (!summary) return "-";
+  const compact = summary.replace(/\s+/g, " ").trim();
+  if (compact.length <= maxLength) return compact;
+  return `${compact.slice(0, maxLength - 1)}…`;
+}
+
 function formatTextList(entries: DlqListEntry[]): void {
   console.log(
-    `${"ID".padEnd(38)} ${"Workflow".padEnd(18)} ${"Status".padEnd(10)} ${"Attempts".padEnd(8)} ${"Stop".padEnd(24)} ${"Run".padEnd(12)} ${"Run Loop".padEnd(12)} Created At`
+    `${"ID".padEnd(38)} ${"Workflow".padEnd(18)} ${"Status".padEnd(10)} ${"Attempts".padEnd(8)} ${"Stop".padEnd(24)} ${"Run".padEnd(12)} ${"Run Loop".padEnd(12)} ${"Validation".padEnd(28)} Created At`
   );
-  console.log("-".repeat(138));
+  console.log("-".repeat(167));
   for (const entry of entries) {
     console.log(
-      `${entry.id.padEnd(38)} ${entry.workflowName.padEnd(18)} ${entry.status.padEnd(10)} ${String(entry.repairAttempts).padEnd(8)} ${formatStopCategory(entry).padEnd(24)} ${(entry.relatedRun?.status ?? "-").padEnd(12)} ${(entry.relatedRun?.loopState ?? "-").padEnd(12)} ${entry.createdAt}`
+      `${entry.id.padEnd(38)} ${entry.workflowName.padEnd(18)} ${entry.status.padEnd(10)} ${String(entry.repairAttempts).padEnd(8)} ${formatStopCategory(entry).padEnd(24)} ${(entry.relatedRun?.status ?? "-").padEnd(12)} ${(entry.relatedRun?.loopState ?? "-").padEnd(12)} ${formatValidationSummary(entry.triage?.lastValidationSummary).padEnd(28)} ${entry.createdAt}`
     );
   }
 }
@@ -423,6 +431,7 @@ async function runListDlq(
   );
   const entries: DlqListEntry[] = payload.entries.map((entry) => ({
     ...entry,
+    triage: buildDlqTriageSummary(entry),
     ...(relatedRunsByExecutionId[entry.executionId]
       ? { relatedRun: relatedRunsByExecutionId[entry.executionId] }
       : {}),

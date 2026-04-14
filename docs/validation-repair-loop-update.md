@@ -135,6 +135,7 @@ precomputed summary를 저장한다.
 - 무엇이 수렴했는지
 - 무엇이 stalled / exhausted 상태인지
 - 무엇이 어떤 stop category로 멈췄는지
+- 무엇이 마지막으로 어떤 validation summary에서 막혔는지
 - 무엇이 이미 DLQ로 넘어갔는지
   를 목록에서 바로 triage할 수 있다.
 
