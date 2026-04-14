@@ -1,25 +1,41 @@
 #!/bin/bash
+set -u
+set -o pipefail
 
-SAMPLES_DIR="experiments/swe-bench-harness/samples-lite"
-RESULTS_DIR="experiments/swe-bench-harness/results-lite"
-mkdir -p $RESULTS_DIR
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=./_env.sh
+source "$SCRIPT_DIR/_env.sh"
 
-# 샘플 목록 가져오기
-SAMPLES=($(ls $SAMPLES_DIR/*.json | grep -v metadata))
+cd "$REPO_ROOT" || exit 1
 
-TOTAL=${#SAMPLES[@]}
+SAMPLES_DIR="${SAMPLES_DIR:-$HARNESS_DIR/samples-lite}"
+RESULTS_DIR="${RESULTS_DIR:-$SWE_BENCH_RESULTS_LITE_DIR}"
+AGENTS_FILE="${AGENTS_FILE:-$REPO_ROOT/experiments/quick-benchmark/agents.yaml}"
+WORKFLOW_FILE="$(mktemp "${TMPDIR:-/tmp}/swe-bench-lite-XXXXXX.yaml")"
+trap 'rm -f "$WORKFLOW_FILE"' EXIT
+
+if [ ! -f "$OBORA_CLI_BIN" ]; then
+  echo "Missing CLI build: $OBORA_CLI_BIN"
+  echo "Run pnpm --filter @obora/cli build first."
+  exit 1
+fi
+
+mkdir -p "$RESULTS_DIR"
+mapfile -t SAMPLES < <(find "$SAMPLES_DIR" -maxdepth 1 -name '*.json' ! -name 'metadata.json' | sort)
+
+TOTAL="${#SAMPLES[@]}"
 PASS=0
 FAIL=0
 
 echo "Running $TOTAL samples..."
+echo "Results dir: $RESULTS_DIR"
 
 for SAMPLE_FILE in "${SAMPLES[@]}"; do
-  SAMPLE_ID=$(basename $SAMPLE_FILE .json)
+  SAMPLE_ID="$(basename "$SAMPLE_FILE" .json)"
   SAMPLE_DIR="$RESULTS_DIR/$SAMPLE_ID"
-  mkdir -p $SAMPLE_DIR
-  
-  # 워크플로우 동적 생성
-  cat > /tmp/sample-workflow.yaml << EOF
+  mkdir -p "$SAMPLE_DIR"
+
+  cat > "$WORKFLOW_FILE" <<EOF
 name: swe-bench-lite
 version: "1.0"
 steps:
@@ -31,15 +47,14 @@ steps:
         Write patch to: $SAMPLE_DIR/patch.diff
 EOF
 
-  echo "[$(($PASS + $FAIL + 1))/$TOTAL] Running: $SAMPLE_ID"
-  
-  node bin/obora.js run /tmp/sample-workflow.yaml \
-    --agents experiments/quick-benchmark/agents.yaml \
-    --output-dir $SAMPLE_DIR/obora \
+  echo "[$((PASS + FAIL + 1))/$TOTAL] Running: $SAMPLE_ID"
+
+  node "$OBORA_CLI_BIN" run "$WORKFLOW_FILE" \
+    --agents "$AGENTS_FILE" \
+    --output-dir "$SAMPLE_DIR/obora" \
     --timeout 180000 \
     2>&1 | tail -1
-  
-  # 결과 확인
+
   if [ -f "$SAMPLE_DIR/patch.diff" ]; then
     echo "  ✅ Patch generated"
     PASS=$((PASS + 1))
@@ -51,7 +66,10 @@ done
 
 echo ""
 echo "=== Results ==="
+echo "Results dir: $RESULTS_DIR"
 echo "Total: $TOTAL"
 echo "Pass: $PASS"
 echo "Fail: $FAIL"
-echo "Pass Rate: $((PASS * 100 / TOTAL))%"
+if [ "$TOTAL" -gt 0 ]; then
+  echo "Pass Rate: $((PASS * 100 / TOTAL))%"
+fi

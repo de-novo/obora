@@ -2,32 +2,57 @@
 set -u
 set -o pipefail
 
-cd /Users/denovo/workspace/github/obora-kit || exit 1
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=./_env.sh
+source "$SCRIPT_DIR/_env.sh"
 
-if [ -z "${ZAI_API_KEY:-}" ]; then
-  export ZAI_API_KEY=$(jq -r '.providers.zai.apiKey // empty' ~/.obora/auth.json)
-  echo "Loaded ZAI_API_KEY from auth.json"
+cd "$REPO_ROOT" || exit 1
+
+if [ -z "${ZAI_API_KEY:-}" ] && [ -f "$HOME/.obora/auth.json" ]; then
+  export ZAI_API_KEY="$(jq -r '.providers.zai.apiKey // empty' "$HOME/.obora/auth.json")"
+  if [ -n "${ZAI_API_KEY:-}" ]; then
+    echo "Loaded ZAI_API_KEY from auth.json"
+  fi
 fi
 
-SAMPLES_DIR="experiments/swe-bench-harness/samples-no-answer"
-RESULTS_DIR="experiments/swe-bench-harness/results-repair"
-SAMPLE_ARG=${1:-5}
-HELPER="/Users/denovo/workspace/github/obora-kit/experiments/swe-bench-harness/structured_repair_helper.py"
-WORKFLOW="${WORKFLOW:-/Users/denovo/workspace/github/obora-kit/experiments/swe-bench-harness/structured-cli-workflow.yaml}"
-CONFIG="/Users/denovo/workspace/github/obora-kit/experiments/swe-bench-harness/.obora/config.yaml"
+SAMPLES_DIR="${SAMPLES_DIR:-$SWE_BENCH_REPAIR_SAMPLES_DIR}"
+RESULTS_DIR="${RESULTS_DIR:-$SWE_BENCH_RESULTS_REPAIR_DIR}"
+SAMPLE_ARG="${1:-5}"
+HELPER="${HELPER:-$HARNESS_DIR/structured_repair_helper.py}"
+WORKFLOW="${WORKFLOW:-$SWE_BENCH_REPAIR_WORKFLOW}"
+CONFIG="${CONFIG:-$SWE_BENCH_EXPERIMENT_CONFIG}"
+
+if [ ! -f "$OBORA_CLI_BIN" ]; then
+  echo "Missing CLI build: $OBORA_CLI_BIN"
+  echo "Run pnpm --filter @obora/cli build first."
+  exit 1
+fi
+
+if [ ! -d "$SAMPLES_DIR" ]; then
+  echo "Missing samples dir: $SAMPLES_DIR"
+  exit 1
+fi
+
+if [ ! -f "$WORKFLOW" ]; then
+  echo "Missing workflow: $WORKFLOW"
+  exit 1
+fi
 
 PASS=0
 FAIL=0
 TOTAL=0
 
+mkdir -p "$RESULTS_DIR"
+
+echo "=== SWE-bench Evaluation with CLI Validation Repair ==="
+echo "Start: $(date)"
+echo "Results dir: $RESULTS_DIR"
+
 SAMPLE_FILES=()
 if echo "$SAMPLE_ARG" | grep -Eq '^[0-9]+$'; then
   SAMPLE_COUNT="$SAMPLE_ARG"
-  while IFS= read -r f; do
-    SAMPLE_FILES+=("$f")
-  done < <(ls "$SAMPLES_DIR"/*.json | head -n "$SAMPLE_COUNT")
+  mapfile -t SAMPLE_FILES < <(find "$SAMPLES_DIR" -maxdepth 1 -name '*.json' ! -name 'metadata.json' | sort | head -n "$SAMPLE_COUNT")
 else
-  SAMPLE_COUNT=1
   if [ -f "$SAMPLES_DIR/$SAMPLE_ARG.json" ]; then
     SAMPLE_FILES+=("$SAMPLES_DIR/$SAMPLE_ARG.json")
   else
@@ -36,19 +61,16 @@ else
   fi
 fi
 
-echo "=== SWE-bench Evaluation with CLI Validation Repair ==="
-echo "Start: $(date)"
+SAMPLE_COUNT="${#SAMPLE_FILES[@]}"
 echo "Samples: $SAMPLE_COUNT"
 echo ""
-
-mkdir -p "$RESULTS_DIR"
 
 for SAMPLE_FILE in "${SAMPLE_FILES[@]}"; do
   [ -f "$SAMPLE_FILE" ] || continue
   TOTAL=$((TOTAL + 1))
-  SAMPLE_ID=$(basename "$SAMPLE_FILE" .json)
+  SAMPLE_ID="$(basename "$SAMPLE_FILE" .json)"
   RESULT_DIR="$RESULTS_DIR/$SAMPLE_ID"
-  WORK_DIR="/tmp/swebench_repair_$SAMPLE_ID"
+  WORK_DIR="${TMPDIR:-/tmp}/swebench_repair_${SAMPLE_ID}"
   REPO_DIR="$WORK_DIR/repo"
   ARTIFACTS_DIR="$REPO_DIR/artifacts"
 
@@ -58,8 +80,8 @@ for SAMPLE_FILE in "${SAMPLE_FILES[@]}"; do
   rm -rf "$RESULT_DIR" "$WORK_DIR"
   mkdir -p "$RESULT_DIR" "$WORK_DIR"
 
-  REPO=$(jq -r '.repo' "$SAMPLE_FILE")
-  BASE_COMMIT=$(jq -r '.base_commit' "$SAMPLE_FILE")
+  REPO="$(jq -r '.repo' "$SAMPLE_FILE")"
+  BASE_COMMIT="$(jq -r '.base_commit' "$SAMPLE_FILE")"
 
   echo "Cloning $REPO..."
   if ! timeout 180 git clone --depth 1 "https://github.com/$REPO.git" "$REPO_DIR" >/dev/null 2>&1; then
@@ -86,7 +108,7 @@ for SAMPLE_FILE in "${SAMPLE_FILES[@]}"; do
   mkdir -p "$ARTIFACTS_DIR"
   jq -r '.problem_statement' "$SAMPLE_FILE" > "$ARTIFACTS_DIR/problem.txt"
 
-  TARGET_FILE=$(python3 "$HELPER" extract-target "$ARTIFACTS_DIR/problem.txt")
+  TARGET_FILE="$(python3 "$HELPER" extract-target "$ARTIFACTS_DIR/problem.txt")"
   printf '%s\n' "$TARGET_FILE" > "$ARTIFACTS_DIR/target_file.txt"
 
   if [ -n "$TARGET_FILE" ] && [ -f "$REPO_DIR/$TARGET_FILE" ]; then
@@ -99,9 +121,13 @@ for SAMPLE_FILE in "${SAMPLE_FILES[@]}"; do
   ATTEMPT=1
   MAX_ATTEMPTS=3
   RUN_OK=false
-  while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+  while [ "$ATTEMPT" -le "$MAX_ATTEMPTS" ]; do
     : > "$RESULT_DIR/obora.log"
-    if (cd "$REPO_DIR" && node /Users/denovo/workspace/github/obora-kit/packages/cli/dist/index.js run "$WORKFLOW" --config "$CONFIG" --output-dir "$RESULT_DIR" --timeout ${OBORA_RUN_TIMEOUT_MS:-240000}) 2>&1 | tee "$RESULT_DIR/obora.log"; then
+    RUN_CMD=(node "$OBORA_CLI_BIN" run "$WORKFLOW" --output-dir "$RESULT_DIR" --timeout "${OBORA_RUN_TIMEOUT_MS:-240000}")
+    if [ -f "$CONFIG" ]; then
+      RUN_CMD+=(--config "$CONFIG")
+    fi
+    if (cd "$REPO_DIR" && "${RUN_CMD[@]}") 2>&1 | tee "$RESULT_DIR/obora.log"; then
       RUN_OK=true
       break
     fi
@@ -115,7 +141,7 @@ for SAMPLE_FILE in "${SAMPLE_FILES[@]}"; do
     fi
 
     if grep -q '\[SDK_8002\] Execution cancelled' "$RESULT_DIR/obora.log"; then
-      if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
+      if [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; then
         echo "⚠️ SDK_8002 execution cancelled, retrying..."
         sleep 5
         ATTEMPT=$((ATTEMPT + 1))
@@ -131,9 +157,9 @@ for SAMPLE_FILE in "${SAMPLE_FILES[@]}"; do
       cp "$ARTIFACTS_DIR/edit.json" "$RESULT_DIR/edit.json"
     fi
 
-    FINAL_TARGET_FILE=$(cat "$ARTIFACTS_DIR/target_file.txt" 2>/dev/null || true)
+    FINAL_TARGET_FILE="$(cat "$ARTIFACTS_DIR/target_file.txt" 2>/dev/null || true)"
     if [ -z "$FINAL_TARGET_FILE" ] && [ -f "$ARTIFACTS_DIR/edit.json" ]; then
-      FINAL_TARGET_FILE=$(jq -r '.target_file // empty' "$ARTIFACTS_DIR/edit.json" 2>/dev/null || true)
+      FINAL_TARGET_FILE="$(jq -r '.target_file // empty' "$ARTIFACTS_DIR/edit.json" 2>/dev/null || true)"
     fi
     if [ -z "$FINAL_TARGET_FILE" ]; then
       echo "❌ FAIL: Missing final target file"
@@ -174,6 +200,7 @@ done
 echo ""
 echo "=== Final Results ==="
 echo "End: $(date)"
+echo "Results dir: $RESULTS_DIR"
 echo "Total: $TOTAL"
 echo "PASS: $PASS"
 echo "FAIL: $FAIL"
@@ -181,9 +208,9 @@ if [ "$TOTAL" -gt 0 ]; then
   echo "Pass Rate: $((PASS * 100 / TOTAL))%"
 fi
 
-RUNTIME_FAIL_COUNT=$(find "$RESULTS_DIR" -maxdepth 2 -name status.txt -exec grep -l '^FAIL_RUNTIME$' {} \; 2>/dev/null | wc -l | tr -d ' ')
-QUALITY_FAIL_COUNT=$(find "$RESULTS_DIR" -maxdepth 2 -name status.txt -exec grep -El '^(FAIL_PATCH|FAIL_WRONG_TARGET|FAIL_NO_TARGET)$' {} \; 2>/dev/null | wc -l | tr -d ' ')
-INFRA_FAIL_COUNT=$(find "$RESULTS_DIR" -maxdepth 2 -name status.txt -exec grep -El '^(FAIL_CLONE|FAIL_FETCH|FAIL_CHECKOUT|FAIL_UNKNOWN)$' {} \; 2>/dev/null | wc -l | tr -d ' ')
+RUNTIME_FAIL_COUNT="$(find "$RESULTS_DIR" -maxdepth 2 -name status.txt -exec grep -l '^FAIL_RUNTIME$' {} \; 2>/dev/null | wc -l | tr -d ' ')"
+QUALITY_FAIL_COUNT="$(find "$RESULTS_DIR" -maxdepth 2 -name status.txt -exec grep -El '^(FAIL_PATCH|FAIL_WRONG_TARGET|FAIL_NO_TARGET)$' {} \; 2>/dev/null | wc -l | tr -d ' ')"
+INFRA_FAIL_COUNT="$(find "$RESULTS_DIR" -maxdepth 2 -name status.txt -exec grep -El '^(FAIL_CLONE|FAIL_FETCH|FAIL_CHECKOUT|FAIL_UNKNOWN)$' {} \; 2>/dev/null | wc -l | tr -d ' ')"
 
 echo "total: $TOTAL" > "$RESULTS_DIR/summary.txt"
 echo "pass: $PASS" >> "$RESULTS_DIR/summary.txt"

@@ -12,8 +12,10 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-OBORA_BIN="$PROJECT_ROOT/bin/obora.js"
+# shellcheck source=./_env.sh
+source "$SCRIPT_DIR/_env.sh"
+PROJECT_ROOT="$REPO_ROOT"
+OBORA_BIN="$OBORA_CLI_BIN"
 
 # 기본값
 SAMPLES_DIR=""

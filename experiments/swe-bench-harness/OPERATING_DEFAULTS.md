@@ -14,6 +14,7 @@
 - Discovery step runs inside Obora.
 - Edit generation and repair run inside Obora.
 - External helper is validation-oriented, not solution-oriented.
+- Repair sample source defaults to `samples-no-answer/` when present, otherwise falls back to `samples/`.
 
 ### Runtime defaults
 - `OBORA_RUN_TIMEOUT_MS=240000`
@@ -21,6 +22,10 @@
 - Retry `SDK_8002` with short retry loop in `run_repair_experiment.sh`
 - Retry `429 Rate limit reached for requests` with backoff
 - Sleep briefly between samples to reduce burst pressure
+- Default generated artifact root: `.temp/swe-bench-harness/`
+- Override artifact root with `SWE_BENCH_OUTPUT_ROOT=/absolute/path`
+- Legacy in-repo output layout can be reproduced by setting `SWE_BENCH_OUTPUT_ROOT=$REPO_ROOT/experiments/swe-bench-harness`
+- Pytest summary files are split into `pytest-results/verified/` and `pytest-results/lite/` to avoid sample-id collisions.
 
 ## Source of Truth Rules
 Final validation must use workflow artifacts as the source of truth.

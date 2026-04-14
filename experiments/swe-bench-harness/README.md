@@ -220,6 +220,10 @@ results/
 - `discover_target.config.maxToolRounds=256`
 - Retry `SDK_8002` in runner
 - Retry `429` with backoff
+- Default generated artifact root: `.temp/swe-bench-harness/`
+- Override artifact root with `SWE_BENCH_OUTPUT_ROOT=/absolute/path`
+- Repair sample source defaults to `samples-no-answer/` when present, otherwise `samples/`
+- Pytest summary files are split into `pytest-results/verified/` and `pytest-results/lite/`
 - Final validation source of truth:
   1. `artifacts/target_file.txt`
   2. fallback `artifacts/edit.json.target_file`

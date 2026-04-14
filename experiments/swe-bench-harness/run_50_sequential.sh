@@ -2,9 +2,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-HARNESS_DIR="$REPO_ROOT/experiments/swe-bench-harness"
-RESULTS_DIR="$HARNESS_DIR/results-repair"
+# shellcheck source=./_env.sh
+source "$SCRIPT_DIR/_env.sh"
+RESULTS_DIR="${RESULTS_DIR:-$SWE_BENCH_RESULTS_REPAIR_DIR}"
 WORKFLOW_PATH="$HARNESS_DIR/obora-os-workflow.yaml"
 
 cd "$REPO_ROOT"
@@ -14,7 +14,7 @@ mkdir -p "$LOG_DIR"
 
 python3 - <<PY > "$LOG_DIR/samples.txt"
 from pathlib import Path
-base = Path(r'''$HARNESS_DIR/samples-no-answer''')
+base = Path(r'''$SWE_BENCH_REPAIR_SAMPLES_DIR''')
 files = sorted(p.stem for p in base.glob('*.json') if p.name != 'metadata.json')[:50]
 for f in files:
     print(f)
