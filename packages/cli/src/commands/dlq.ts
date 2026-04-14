@@ -35,6 +35,8 @@ type RelatedRunSummary = {
   status?: string;
   startedAt?: string;
   completedAt?: string;
+  loopState?: string;
+  lastStopCategory?: string;
 };
 
 type RelatedArtifactSummary = {
@@ -190,6 +192,81 @@ function buildDlqTriageSummary(entry: DLQEntry): DlqTriageSummary {
   };
 }
 
+function extractRelatedRunRepairLoopSummary(
+  run: { metadata?: Record<string, unknown> } | null | undefined
+):
+  | {
+      validationFailed: number;
+      validationPassed: number;
+      repairStarted: number;
+      repairCompleted: number;
+      repairNoProgress: number;
+      backEdgeExhausted: number;
+      lastStopCategory?: string;
+    }
+  | undefined {
+  const metadata = run?.metadata;
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return undefined;
+  const repairLoop = metadata.repairLoop;
+  if (!repairLoop || typeof repairLoop !== "object" || Array.isArray(repairLoop)) return undefined;
+  const summary = repairLoop as Record<string, unknown>;
+
+  return {
+    validationFailed: typeof summary.validationFailed === "number" ? summary.validationFailed : 0,
+    validationPassed: typeof summary.validationPassed === "number" ? summary.validationPassed : 0,
+    repairStarted: typeof summary.repairStarted === "number" ? summary.repairStarted : 0,
+    repairCompleted: typeof summary.repairCompleted === "number" ? summary.repairCompleted : 0,
+    repairNoProgress: typeof summary.repairNoProgress === "number" ? summary.repairNoProgress : 0,
+    backEdgeExhausted:
+      typeof summary.backEdgeExhausted === "number" ? summary.backEdgeExhausted : 0,
+    ...(typeof summary.lastStopCategory === "string"
+      ? { lastStopCategory: summary.lastStopCategory }
+      : {}),
+  };
+}
+
+function getRelatedRunLoopState(
+  summary:
+    | {
+        validationFailed: number;
+        validationPassed: number;
+        repairStarted: number;
+        repairCompleted: number;
+        repairNoProgress: number;
+        backEdgeExhausted: number;
+      }
+    | undefined
+): string | undefined {
+  if (!summary) return undefined;
+  if (summary.backEdgeExhausted > 0) return "EXHAUSTED";
+  if (summary.repairNoProgress > 0) return "STALLED";
+  if (summary.validationFailed > 0 && summary.validationPassed > 0) return "CONVERGED";
+  if (summary.repairStarted > 0 || summary.repairCompleted > 0) return "REPAIRED";
+  return "PASSED";
+}
+
+function toRelatedRunSummary(
+  run:
+    | (RelatedRunSummary & {
+        metadata?: Record<string, unknown>;
+      })
+    | null
+): RelatedRunSummary | undefined {
+  if (!run) return undefined;
+  const repairLoop = extractRelatedRunRepairLoopSummary(run);
+  return {
+    id: run.id,
+    ...(run.workflowName ? { workflowName: run.workflowName } : {}),
+    ...(run.status ? { status: run.status } : {}),
+    ...(run.startedAt ? { startedAt: run.startedAt } : {}),
+    ...(run.completedAt ? { completedAt: run.completedAt } : {}),
+    ...(repairLoop ? { loopState: getRelatedRunLoopState(repairLoop) } : {}),
+    ...(typeof repairLoop?.lastStopCategory === "string"
+      ? { lastStopCategory: repairLoop.lastStopCategory }
+      : {}),
+  };
+}
+
 async function loadRelatedRunsByExecutionId(
   executionIds: string[]
 ): Promise<Record<string, RelatedRunSummary | undefined>> {
@@ -198,7 +275,9 @@ async function loadRelatedRunsByExecutionId(
 
   try {
     const runtime = (await createRunsRuntime()) as {
-      getRunRecord(runId: string): Promise<RelatedRunSummary | null>;
+      getRunRecord(
+        runId: string
+      ): Promise<(RelatedRunSummary & { metadata?: Record<string, unknown> }) | null>;
       getRunArtifacts?: (runId: string) => Promise<RelatedArtifactSummary[]>;
     };
 
@@ -206,18 +285,7 @@ async function loadRelatedRunsByExecutionId(
       uniqueExecutionIds.map(async (executionId) => {
         try {
           const run = await runtime.getRunRecord(executionId);
-          return [
-            executionId,
-            run
-              ? {
-                  id: run.id,
-                  ...(run.workflowName ? { workflowName: run.workflowName } : {}),
-                  ...(run.status ? { status: run.status } : {}),
-                  ...(run.startedAt ? { startedAt: run.startedAt } : {}),
-                  ...(run.completedAt ? { completedAt: run.completedAt } : {}),
-                }
-              : undefined,
-          ] as const;
+          return [executionId, toRelatedRunSummary(run)] as const;
         } catch {
           return [executionId, undefined] as const;
         }
@@ -264,12 +332,12 @@ async function loadRelatedInspectContext(executionId: string): Promise<RelatedIn
 
 function formatTextList(entries: DlqListEntry[]): void {
   console.log(
-    `${"ID".padEnd(38)} ${"Workflow".padEnd(18)} ${"Status".padEnd(10)} ${"Attempts".padEnd(8)} ${"Stop".padEnd(24)} ${"Run".padEnd(12)} Created At`
+    `${"ID".padEnd(38)} ${"Workflow".padEnd(18)} ${"Status".padEnd(10)} ${"Attempts".padEnd(8)} ${"Stop".padEnd(24)} ${"Run".padEnd(12)} ${"Run Loop".padEnd(12)} Created At`
   );
-  console.log("-".repeat(125));
+  console.log("-".repeat(138));
   for (const entry of entries) {
     console.log(
-      `${entry.id.padEnd(38)} ${entry.workflowName.padEnd(18)} ${entry.status.padEnd(10)} ${String(entry.repairAttempts).padEnd(8)} ${formatStopCategory(entry).padEnd(24)} ${(entry.relatedRun?.status ?? "-").padEnd(12)} ${entry.createdAt}`
+      `${entry.id.padEnd(38)} ${entry.workflowName.padEnd(18)} ${entry.status.padEnd(10)} ${String(entry.repairAttempts).padEnd(8)} ${formatStopCategory(entry).padEnd(24)} ${(entry.relatedRun?.status ?? "-").padEnd(12)} ${(entry.relatedRun?.loopState ?? "-").padEnd(12)} ${entry.createdAt}`
     );
   }
 }

@@ -156,6 +156,18 @@ describe("dlq command", () => {
         workflowName: "repair-workflow",
         status: "failed",
         startedAt: "2026-03-10T09:59:00.000Z",
+        metadata: {
+          repairLoop: {
+            validationFailed: 2,
+            validationPassed: 0,
+            repairStarted: 1,
+            repairCompleted: 0,
+            repairNoProgress: 1,
+            backEdgeTriggered: 1,
+            backEdgeExhausted: 0,
+            lastStopCategory: "no_progress",
+          },
+        },
       }),
     } as never);
 
@@ -171,6 +183,8 @@ describe("dlq command", () => {
         relatedRun: expect.objectContaining({
           id: "run-1",
           status: "failed",
+          loopState: "STALLED",
+          lastStopCategory: "no_progress",
         }),
       }),
     ]);
@@ -213,6 +227,18 @@ describe("dlq command", () => {
         workflowName: "repair-workflow",
         status: "failed",
         startedAt: "2026-03-10T09:59:00.000Z",
+        metadata: {
+          repairLoop: {
+            validationFailed: 2,
+            validationPassed: 0,
+            repairStarted: 1,
+            repairCompleted: 0,
+            repairNoProgress: 1,
+            backEdgeTriggered: 1,
+            backEdgeExhausted: 0,
+            lastStopCategory: "no_progress",
+          },
+        },
       }),
     } as never);
 
@@ -223,7 +249,9 @@ describe("dlq command", () => {
 
     const output = log.mock.calls.map((args) => args.join(" ")).join("\n");
     expect(output).toContain("Run");
+    expect(output).toContain("Run Loop");
     expect(output).toContain("failed");
+    expect(output).toContain("STALLED");
   });
 
   it("prints DLQ summary in text mode", async () => {

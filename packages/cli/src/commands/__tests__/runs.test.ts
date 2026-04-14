@@ -289,6 +289,7 @@ describe("runs list triage sorting", () => {
     expect(payload).toEqual([
       expect.objectContaining({
         id: "run-1",
+        triageCause: "repeated_critical_issue",
         linkedDlqEntry: expect.objectContaining({
           id: "dlq-1",
           status: "pending",
@@ -341,6 +342,11 @@ describe("runs list triage sorting", () => {
                 errorMessage: "repair failed",
                 repairAttempts: 3,
                 status: "pending",
+                metadata: {
+                  repairLoop: {
+                    lastStopCategory: "repeated_critical_issue",
+                  },
+                },
               },
             ],
             lastUpdated: "2026-03-10T10:05:00.000Z",
@@ -355,7 +361,9 @@ describe("runs list triage sorting", () => {
 
     const output = log.mock.calls.map((args) => args.join(" ")).join("\n");
     expect(output).toContain("DLQ");
+    expect(output).toContain("Cause");
     expect(output).toContain("pending/3");
+    expect(output).toContain("repeated_critical_issue");
   });
 });
 

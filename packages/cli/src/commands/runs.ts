@@ -76,6 +76,7 @@ interface LinkedDlqInspectEntry {
 }
 
 interface PersistedRunListRow extends PersistedRunRecord {
+  triageCause?: string;
   linkedDlqEntry?: LinkedDlqInspectEntry;
 }
 
@@ -429,6 +430,12 @@ function formatLinkedDlqIndicator(linkedDlqEntry: LinkedDlqInspectEntry | undefi
   return `${linkedDlqEntry.status}/${linkedDlqEntry.repairAttempts}`;
 }
 
+function getRunTriageCause(run: PersistedRunListRow): string | undefined {
+  const repairLoop = extractPersistedRepairLoopSummary(run);
+  if (typeof repairLoop?.lastStopCategory === "string") return repairLoop.lastStopCategory;
+  return run.linkedDlqEntry?.lastStopCategory;
+}
+
 export async function inspectPersistedRun(
   runtime: PersistedRunInspectRuntime,
   runId: string,
@@ -587,10 +594,17 @@ export function createRunsCommand(): Command {
         limit: Number(opts.limit),
       });
       const linkedDlqEntries = await loadLinkedDlqEntries(runRecords.map((run) => run.id));
-      const runRows: PersistedRunListRow[] = runRecords.map((run) => ({
-        ...run,
-        ...(linkedDlqEntries[run.id] ? { linkedDlqEntry: linkedDlqEntries[run.id] } : {}),
-      }));
+      const runRows: PersistedRunListRow[] = runRecords.map((run) => {
+        const row: PersistedRunListRow = {
+          ...run,
+          ...(linkedDlqEntries[run.id] ? { linkedDlqEntry: linkedDlqEntries[run.id] } : {}),
+        };
+        const triageCause = getRunTriageCause(row);
+        return {
+          ...row,
+          ...(triageCause ? { triageCause } : {}),
+        };
+      });
 
       if (opts.json) {
         console.log(JSON.stringify(runRows, null, 2));
@@ -603,16 +617,17 @@ export function createRunsCommand(): Command {
       }
 
       console.log(
-        `${"ID".padEnd(38)} ${"Workflow".padEnd(20)} ${"Status".padEnd(12)} ${"Loop State".padEnd(12)} ${"DLQ".padEnd(12)} ${"Repair Loop".padEnd(40)} Started At`
+        `${"ID".padEnd(38)} ${"Workflow".padEnd(20)} ${"Status".padEnd(12)} ${"Loop State".padEnd(12)} ${"Cause".padEnd(24)} ${"DLQ".padEnd(12)} ${"Repair Loop".padEnd(40)} Started At`
       );
-      console.log("-".repeat(158));
+      console.log("-".repeat(183));
       for (const run of runRows) {
         const repairLoop = extractPersistedRepairLoopSummary(run);
         const repairState = getCliRepairLoopState(repairLoop);
         const repairSummary = formatRepairLoopListSummary(repairLoop);
         const linkedDlqIndicator = formatLinkedDlqIndicator(run.linkedDlqEntry);
+        const triageCause = run.triageCause ?? "-";
         console.log(
-          `${run.id.padEnd(38)} ${(run.workflowName ?? "-").padEnd(20)} ${(run.status ?? "-").padEnd(12)} ${repairState.padEnd(12)} ${linkedDlqIndicator.padEnd(12)} ${repairSummary.padEnd(40)} ${run.startedAt ?? "-"}`
+          `${run.id.padEnd(38)} ${(run.workflowName ?? "-").padEnd(20)} ${(run.status ?? "-").padEnd(12)} ${repairState.padEnd(12)} ${triageCause.padEnd(24)} ${linkedDlqIndicator.padEnd(12)} ${repairSummary.padEnd(40)} ${run.startedAt ?? "-"}`
         );
       }
       console.log(`\n${runRows.length} run(s)`);

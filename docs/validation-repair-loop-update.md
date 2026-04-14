@@ -124,15 +124,17 @@ precomputed summary를 저장한다.
 - `--sort startedAt|validationFailed|repairStarted`
 - `--order asc|desc`
 - compact `Loop State` column (`EXHAUSTED`, `STALLED`, `CONVERGED`, `REPAIRED`, `PASSED`)
+- compact `Cause` column for the latest stop category when available
 - compact `DLQ` column (`<status>/<attempts>`) for the latest linked DLQ entry
 - compact repair summary (`F/R/P/N/X` counts + latest validation summary)
-- JSON list rows include `linkedDlqEntry` when the run has a matching DLQ record
+- JSON list rows include `triageCause` and `linkedDlqEntry` when the run has a matching DLQ record
 
 즉 CLI에서도 이제:
 
 - 무엇이 가장 많이 실패했는지
 - 무엇이 수렴했는지
 - 무엇이 stalled / exhausted 상태인지
+- 무엇이 어떤 stop category로 멈췄는지
 - 무엇이 이미 DLQ로 넘어갔는지
   를 목록에서 바로 triage할 수 있다.
 
