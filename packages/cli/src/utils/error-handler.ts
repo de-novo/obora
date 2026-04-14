@@ -120,6 +120,15 @@ function inferNextCommand(err: unknown): string | null {
   const commandContext = parseCommandContext(commandPath);
   const isJudgeCommand = commandContext.activeCommand === "judge";
 
+  if (
+    commandContext.activeCommand === "dlq" ||
+    message.includes("dlq entry") ||
+    message.includes("dlq store") ||
+    message.includes("dlq config")
+  ) {
+    return null;
+  }
+
   if (message.includes("no stdin json detected")) {
     return inferStdinHint(commandContext);
   }

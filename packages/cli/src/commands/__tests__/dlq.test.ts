@@ -272,6 +272,7 @@ describe("dlq command", () => {
         }) as never
     );
 
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const cmd = createDlqCommand();
 
@@ -280,6 +281,7 @@ describe("dlq command", () => {
     expect(process.exit).not.toHaveBeenCalled();
     expect(process.exitCode).toBe(2);
     expect(error).toHaveBeenCalled();
+    expect(log.mock.calls.map((args) => args.join(" ")).join("\n")).not.toContain("obora run <workflow.yaml> --dry-run");
   });
 
   it("uses execution-failed exit code for DLQ store errors", async () => {
