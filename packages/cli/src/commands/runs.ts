@@ -235,6 +235,10 @@ function matchesRepairLoopFilter(
       return (summary?.repairNoProgress ?? 0) > 0;
     case "exhausted":
       return (summary?.backEdgeExhausted ?? 0) > 0;
+    case "critical":
+      return summary?.lastStopCategory === "repeated_critical_issue";
+    case "no-progress":
+      return summary?.lastStopCategory === "no_progress";
     default:
       return true;
   }
@@ -482,7 +486,7 @@ export function createRunsCommand(): Command {
     .description("List persisted runs")
     .option("--status <status>", "Filter by status (running|completed|failed|suspended)")
     .option("--workflow <name>", "Filter by workflow name")
-    .option("--repair-loop <mode>", "Filter by repair-loop state (with|without|stalled|exhausted)")
+    .option("--repair-loop <mode>", "Filter by repair-loop state (with|without|stalled|exhausted|critical|no-progress)")
     .option("--sort <field>", "Sort by startedAt|validationFailed|repairStarted", "startedAt")
     .option("--order <dir>", "Sort order asc|desc", "desc")
     .option("--limit <n>", "Max results", "20")

@@ -84,7 +84,7 @@ Lists persisted runs with summary data.
 
 - `status` — `running|completed|failed|suspended`
 - `workflowName`
-- `repairLoop` — `with|without|stalled|exhausted`
+- `repairLoop` — `with|without|stalled|exhausted|critical|no-progress`
 - `from`, `to`
 - `costMin`, `costMax`
 - `limit`, `offset`

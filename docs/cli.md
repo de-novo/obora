@@ -367,7 +367,7 @@ obora runs <subcommand>
 obora runs list \
   [--status <status>] \
   [--workflow <name>] \
-  [--repair-loop <with|without|stalled|exhausted>] \
+  [--repair-loop <with|without|stalled|exhausted|critical|no-progress>] \
   [--sort <startedAt|validationFailed|repairStarted>] \
   [--order <asc|desc>] \
   [--limit <n>] \
@@ -393,6 +393,12 @@ Examples:
 ```bash
 # most recent exhausted runs
 obora runs list --repair-loop exhausted --sort startedAt --order desc
+
+# runs that stopped on repeated critical issue ceiling
+obora runs list --repair-loop critical --sort startedAt --order desc
+
+# runs that stopped on explicit no-progress detection
+obora runs list --repair-loop no-progress --sort startedAt --order desc
 
 # runs with the most validation failures first
 obora runs list --repair-loop with --sort validationFailed --order desc

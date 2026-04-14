@@ -110,7 +110,7 @@ precomputed summary를 저장한다.
 
 #### `obora runs list`
 목록 triage를 위한 기능 추가:
-- `--repair-loop with|without|stalled|exhausted`
+- `--repair-loop with|without|stalled|exhausted|critical|no-progress`
 - `--sort startedAt|validationFailed|repairStarted`
 - `--order asc|desc`
 - compact `Loop State` column (`EXHAUSTED`, `STALLED`, `CONVERGED`, `REPAIRED`, `PASSED`)

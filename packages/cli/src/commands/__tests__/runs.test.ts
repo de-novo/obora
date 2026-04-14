@@ -158,6 +158,67 @@ describe("runs list triage sorting", () => {
 
     expect(runs.map((run) => run.id)).toEqual(["run-b"]);
   });
+
+  it("filters runs by repair-loop stop category", async () => {
+    const runtime = {
+      async listRunRecords() {
+        return [
+          {
+            id: "run-critical",
+            startedAt: "2026-03-08T10:00:00.000Z",
+            metadata: {
+              repairLoop: {
+                validationFailed: 2,
+                repairStarted: 1,
+                repairNoProgress: 1,
+                lastStopCategory: "repeated_critical_issue",
+              },
+            },
+          },
+          {
+            id: "run-no-progress",
+            startedAt: "2026-03-08T11:00:00.000Z",
+            metadata: {
+              repairLoop: {
+                validationFailed: 2,
+                repairStarted: 1,
+                repairNoProgress: 1,
+                lastStopCategory: "no_progress",
+              },
+            },
+          },
+          {
+            id: "run-exhausted",
+            startedAt: "2026-03-08T12:00:00.000Z",
+            metadata: {
+              repairLoop: {
+                validationFailed: 4,
+                repairStarted: 3,
+                backEdgeExhausted: 1,
+                lastStopCategory: "exhausted",
+              },
+            },
+          },
+        ];
+      },
+    };
+
+    const criticalRuns = await listRunsForCli(runtime, {
+      repairLoop: "critical",
+      sortBy: "startedAt",
+      order: "desc",
+      limit: 10,
+    });
+    expect(criticalRuns.map((run) => run.id)).toEqual(["run-critical"]);
+
+    const noProgressRuns = await listRunsForCli(runtime, {
+      repairLoop: "no-progress",
+      sortBy: "startedAt",
+      order: "desc",
+      limit: 10,
+    });
+    expect(noProgressRuns.map((run) => run.id)).toEqual(["run-no-progress"]);
+  });
 });
 
 describe("runs inspect repair-loop summary", () => {
