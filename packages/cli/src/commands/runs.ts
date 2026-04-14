@@ -75,6 +75,10 @@ interface LinkedDlqInspectEntry {
   lastStopCategory?: string;
 }
 
+interface PersistedRunListRow extends PersistedRunRecord {
+  linkedDlqEntry?: LinkedDlqInspectEntry;
+}
+
 interface PersistedRunsRuntime {
   listRunRecords(query: Record<string, unknown>): Promise<PersistedRunRecord[]>;
 }
@@ -372,38 +376,57 @@ function extractPersistedRepairLoopSummary(
   return repairLoop as RepairLoopInspectSummary;
 }
 
-async function loadLinkedDlqEntry(runId: string): Promise<LinkedDlqInspectEntry | undefined> {
+async function loadLinkedDlqEntries(
+  runIds: string[]
+): Promise<Record<string, LinkedDlqInspectEntry | undefined>> {
+  const uniqueRunIds = [...new Set(runIds.filter(Boolean))];
+  if (uniqueRunIds.length === 0) return {};
+
   try {
     const { FileDLQStore, loadConfig } = await import("@obora/sdk");
     const config = await loadConfig();
     const filePath = config?.dlq?.filePath ?? ".obora/dlq/dead-letters.json";
     const store = new FileDLQStore(filePath);
     const snapshot = await store.load();
-    const match = [...snapshot.entries]
-      .filter((entry) => entry.executionId === runId)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
-    if (!match) return undefined;
-    const repairLoop =
-      match.metadata?.repairLoop &&
-      typeof match.metadata.repairLoop === "object" &&
-      !Array.isArray(match.metadata.repairLoop)
-        ? (match.metadata.repairLoop as Record<string, unknown>)
-        : undefined;
-    return {
-      id: match.id,
-      createdAt: match.createdAt,
-      status: match.status,
-      errorCode: match.errorCode,
-      errorMessage: match.errorMessage,
-      repairAttempts: match.repairAttempts,
-      ...(match.stepName ? { stepName: match.stepName } : {}),
-      ...(typeof repairLoop?.lastStopCategory === "string"
-        ? { lastStopCategory: repairLoop.lastStopCategory }
-        : {}),
-    };
+    const entryMap = new Map<string, LinkedDlqInspectEntry>();
+
+    for (const entry of [...snapshot.entries].sort((a, b) =>
+      b.createdAt.localeCompare(a.createdAt)
+    )) {
+      if (!uniqueRunIds.includes(entry.executionId) || entryMap.has(entry.executionId)) continue;
+      const repairLoop =
+        entry.metadata?.repairLoop &&
+        typeof entry.metadata.repairLoop === "object" &&
+        !Array.isArray(entry.metadata.repairLoop)
+          ? (entry.metadata.repairLoop as Record<string, unknown>)
+          : undefined;
+      entryMap.set(entry.executionId, {
+        id: entry.id,
+        createdAt: entry.createdAt,
+        status: entry.status,
+        errorCode: entry.errorCode,
+        errorMessage: entry.errorMessage,
+        repairAttempts: entry.repairAttempts,
+        ...(entry.stepName ? { stepName: entry.stepName } : {}),
+        ...(typeof repairLoop?.lastStopCategory === "string"
+          ? { lastStopCategory: repairLoop.lastStopCategory }
+          : {}),
+      });
+    }
+
+    return Object.fromEntries(uniqueRunIds.map((runId) => [runId, entryMap.get(runId)]));
   } catch {
-    return undefined;
+    return {};
   }
+}
+
+async function loadLinkedDlqEntry(runId: string): Promise<LinkedDlqInspectEntry | undefined> {
+  return (await loadLinkedDlqEntries([runId]))[runId];
+}
+
+function formatLinkedDlqIndicator(linkedDlqEntry: LinkedDlqInspectEntry | undefined): string {
+  if (!linkedDlqEntry) return "-";
+  return `${linkedDlqEntry.status}/${linkedDlqEntry.repairAttempts}`;
 }
 
 export async function inspectPersistedRun(
@@ -563,30 +586,36 @@ export function createRunsCommand(): Command {
         order: opts.order,
         limit: Number(opts.limit),
       });
+      const linkedDlqEntries = await loadLinkedDlqEntries(runRecords.map((run) => run.id));
+      const runRows: PersistedRunListRow[] = runRecords.map((run) => ({
+        ...run,
+        ...(linkedDlqEntries[run.id] ? { linkedDlqEntry: linkedDlqEntries[run.id] } : {}),
+      }));
 
       if (opts.json) {
-        console.log(JSON.stringify(runRecords, null, 2));
+        console.log(JSON.stringify(runRows, null, 2));
         return;
       }
 
-      if (runRecords.length === 0) {
+      if (runRows.length === 0) {
         console.log("No runs found.");
         return;
       }
 
       console.log(
-        `${"ID".padEnd(38)} ${"Workflow".padEnd(20)} ${"Status".padEnd(12)} ${"Loop State".padEnd(12)} ${"Repair Loop".padEnd(40)} Started At`
+        `${"ID".padEnd(38)} ${"Workflow".padEnd(20)} ${"Status".padEnd(12)} ${"Loop State".padEnd(12)} ${"DLQ".padEnd(12)} ${"Repair Loop".padEnd(40)} Started At`
       );
-      console.log("-".repeat(145));
-      for (const run of runRecords) {
+      console.log("-".repeat(158));
+      for (const run of runRows) {
         const repairLoop = extractPersistedRepairLoopSummary(run);
         const repairState = getCliRepairLoopState(repairLoop);
         const repairSummary = formatRepairLoopListSummary(repairLoop);
+        const linkedDlqIndicator = formatLinkedDlqIndicator(run.linkedDlqEntry);
         console.log(
-          `${run.id.padEnd(38)} ${(run.workflowName ?? "-").padEnd(20)} ${(run.status ?? "-").padEnd(12)} ${repairState.padEnd(12)} ${repairSummary.padEnd(40)} ${run.startedAt ?? "-"}`
+          `${run.id.padEnd(38)} ${(run.workflowName ?? "-").padEnd(20)} ${(run.status ?? "-").padEnd(12)} ${repairState.padEnd(12)} ${linkedDlqIndicator.padEnd(12)} ${repairSummary.padEnd(40)} ${run.startedAt ?? "-"}`
         );
       }
-      console.log(`\n${runRecords.length} run(s)`);
+      console.log(`\n${runRows.length} run(s)`);
     });
 
   runs

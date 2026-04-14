@@ -43,6 +43,7 @@ steps:
 ### 2. Structured validation contracts
 
 추가된 핵심 계약:
+
 - `ValidationResult`
 - `RepairContext`
 - `ValidationStepConfig`
@@ -68,6 +69,7 @@ config:
 ```
 
 의도:
+
 - `file_read`, `file_write`, `file_list` 같은 로컬 file tool은 생성 단계에서 충분히 자유롭게 사용
 - validator / fetch / API call처럼 비용이 있거나 멱등성이 중요한 tool만 제한
 
@@ -79,6 +81,7 @@ Persistence가 켜져 있으면 Obora는 이제 `run.metadata.repairLoop`에
 precomputed summary를 저장한다.
 
 포함되는 내용:
+
 - validation failed / passed counts
 - repair started / completed counts
 - no-progress / exhausted counts
@@ -87,6 +90,7 @@ precomputed summary를 저장한다.
 - recent validation failures
 
 의도:
+
 - `inspect` / dashboard / external analytics가
   audit timeline 전체 replay 없이도 빠르게 상태를 볼 수 있게 함
 
@@ -95,32 +99,42 @@ precomputed summary를 저장한다.
 ### 5. CLI observability
 
 #### `obora run`
+
 실행 중 validation-repair progress를 바로 보여준다.
+
 - validation failed
 - repair started
 - validation passed
 - repair loop summary
 
 #### `obora inspect <runId>` / `obora runs inspect <runId>`
+
 실행 후 persisted repair-loop summary를 보여준다.
+
 - 마지막 validation 요약
 - repair 횟수
 - recent validation failures
 - log path / failed checks
 
 #### `obora runs list`
+
 목록 triage를 위한 기능 추가:
+
 - `--repair-loop with|without|stalled|exhausted|critical|no-progress`
 - `--sort startedAt|validationFailed|repairStarted`
 - `--order asc|desc`
 - compact `Loop State` column (`EXHAUSTED`, `STALLED`, `CONVERGED`, `REPAIRED`, `PASSED`)
+- compact `DLQ` column (`<status>/<attempts>`) for the latest linked DLQ entry
 - compact repair summary (`F/R/P/N/X` counts + latest validation summary)
+- JSON list rows include `linkedDlqEntry` when the run has a matching DLQ record
 
 즉 CLI에서도 이제:
+
 - 무엇이 가장 많이 실패했는지
 - 무엇이 수렴했는지
 - 무엇이 stalled / exhausted 상태인지
-를 목록에서 바로 triage할 수 있다.
+- 무엇이 이미 DLQ로 넘어갔는지
+  를 목록에서 바로 triage할 수 있다.
 
 ---
 
@@ -129,6 +143,7 @@ precomputed summary를 저장한다.
 Dashboard는 이제 repair-loop runs를 실제 운영 관점에서 다룰 수 있다.
 
 #### 목록 화면
+
 - Repair Loop column
 - 상태 badge: `CONVERGED`, `STALLED`, `EXHAUSTED`, `REPAIRED`, `PASSED`
 - quick filter chips
@@ -136,6 +151,7 @@ Dashboard는 이제 repair-loop runs를 실제 운영 관점에서 다룰 수 �
 - validationFailed sort
 
 #### 상세 화면
+
 - Repair Loop summary card
 - recent validation failures
 - log path / failed checks
@@ -146,11 +162,13 @@ Dashboard는 이제 repair-loop runs를 실제 운영 관점에서 다룰 수 �
 ## 무엇이 달라졌는가
 
 이전 Obora:
+
 - 워크플로우를 실행하고
 - 실패를 기록하고
 - retry / back-edge / recovery를 제공
 
 현재 Obora:
+
 - 검증 실패를 구조화하고
 - repair step에 자동 주입하고
 - 반복 수렴을 runtime이 관리하고
@@ -165,12 +183,15 @@ Dashboard는 이제 repair-loop runs를 실제 운영 관점에서 다룰 수 �
 ## 실제 reference implementations
 
 ### 최소 예제
+
 - `examples/06-validation-repair-loop`
 
 ### 프로젝트급 검증
+
 - `.sandbox/12-reddit-clone-modern-repair-loop`
 
 이 둘을 통해:
+
 - 최소 이해용 reference
 - 실전 수렴 검증 reference
 
@@ -221,6 +242,7 @@ Dashboard는 이제 repair-loop runs를 실제 운영 관점에서 다룰 수 �
 이번 업데이트는 단순한 기능 추가가 아니다.
 
 Obora는 이제:
+
 - validation evidence를 읽고
 - repair를 반복하며
 - 그 수렴 과정을 저장하고

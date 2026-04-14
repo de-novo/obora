@@ -119,6 +119,113 @@ describe("dlq command", () => {
     );
   });
 
+  it("includes related run indicators in JSON DLQ list output", async () => {
+    const load = vi.fn().mockResolvedValue({
+      entries: [
+        {
+          id: "entry-new",
+          createdAt: "2026-03-10T10:00:00.000Z",
+          executionId: "run-1",
+          workflowName: "repair-workflow",
+          stepName: "build_or_repair",
+          errorCode: "SDK_STEP_FAILED",
+          errorMessage: "repair failed",
+          repairAttempts: 2,
+          status: "pending",
+          metadata: {
+            repairLoop: {
+              lastStopCategory: "repeated_critical_issue",
+            },
+          },
+        },
+      ],
+      lastUpdated: "2026-03-10T10:05:00.000Z",
+    });
+
+    vi.mocked(FileDLQStore).mockImplementation(
+      () =>
+        ({
+          load,
+          save: vi.fn(),
+          append: vi.fn(),
+        }) as never
+    );
+    vi.mocked(createRunsRuntime).mockResolvedValue({
+      getRunRecord: vi.fn().mockResolvedValue({
+        id: "run-1",
+        workflowName: "repair-workflow",
+        status: "failed",
+        startedAt: "2026-03-10T09:59:00.000Z",
+      }),
+    } as never);
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createDlqCommand();
+
+    await cmd.parseAsync(["list", "--json"], { from: "user" });
+
+    const payload = JSON.parse(log.mock.calls.at(-1)?.[0] ?? "{}");
+    expect(payload.entries).toEqual([
+      expect.objectContaining({
+        id: "entry-new",
+        relatedRun: expect.objectContaining({
+          id: "run-1",
+          status: "failed",
+        }),
+      }),
+    ]);
+  });
+
+  it("prints related run indicators in text DLQ list output", async () => {
+    const load = vi.fn().mockResolvedValue({
+      entries: [
+        {
+          id: "entry-new",
+          createdAt: "2026-03-10T10:00:00.000Z",
+          executionId: "run-1",
+          workflowName: "repair-workflow",
+          stepName: "build_or_repair",
+          errorCode: "SDK_STEP_FAILED",
+          errorMessage: "repair failed",
+          repairAttempts: 2,
+          status: "pending",
+          metadata: {
+            repairLoop: {
+              lastStopCategory: "repeated_critical_issue",
+            },
+          },
+        },
+      ],
+      lastUpdated: "2026-03-10T10:05:00.000Z",
+    });
+
+    vi.mocked(FileDLQStore).mockImplementation(
+      () =>
+        ({
+          load,
+          save: vi.fn(),
+          append: vi.fn(),
+        }) as never
+    );
+    vi.mocked(createRunsRuntime).mockResolvedValue({
+      getRunRecord: vi.fn().mockResolvedValue({
+        id: "run-1",
+        workflowName: "repair-workflow",
+        status: "failed",
+        startedAt: "2026-03-10T09:59:00.000Z",
+      }),
+    } as never);
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createDlqCommand();
+
+    await cmd.parseAsync(["list"], { from: "user" });
+
+    const output = log.mock.calls.map((args) => args.join(" ")).join("\n");
+    expect(output).toContain("Run");
+    expect(output).toContain("failed");
+  });
+
   it("prints DLQ summary in text mode", async () => {
     const load = vi.fn().mockResolvedValue({
       entries: [],

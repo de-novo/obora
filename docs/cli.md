@@ -381,7 +381,10 @@ List persisted runs with optional workflow / repair-loop filtering and triage-or
 Text output includes:
 
 - `Loop State` column (`EXHAUSTED`, `STALLED`, `CONVERGED`, `REPAIRED`, `PASSED`, `-`)
+- `DLQ` column showing the latest linked DLQ status / repair-attempt count as `<status>/<attempts>` when present
 - compact repair-loop summary (`F/R/P/N/X` style counts + latest validation summary when available)
+
+JSON output preserves persisted run fields and additionally includes `linkedDlqEntry` when a matching DLQ entry exists for the same run.
 
 Loop state precedence:
 
@@ -441,7 +444,9 @@ obora dlq <subcommand>
 obora dlq list [--status <pending|reviewed|retried|dismissed>] [--limit <n>] [--offset <n>] [--file <path>] [--json]
 ```
 
-List DLQ entries sorted by newest first. Text output includes workflow, status, repair attempt count, and persisted `metadata.repairLoop.lastStopCategory` when present.
+List DLQ entries sorted by newest first. Text output includes workflow, status, repair attempt count, persisted `metadata.repairLoop.lastStopCategory`, and compact related-run status when a persisted run exists for the same `executionId`.
+
+JSON output preserves the existing DLQ payload shape and enriches each listed entry with `relatedRun` when the corresponding persisted run can be resolved.
 
 Examples:
 

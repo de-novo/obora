@@ -1,13 +1,17 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 
+const oboraRuntimeState: { instance?: { listRunRecords?: () => Promise<unknown[]> } } = {};
+
 vi.mock("@obora/sdk", () => ({
   loadConfig: vi.fn(),
   FileDLQStore: vi.fn(),
+  OboraRuntime: vi.fn().mockImplementation(() => oboraRuntimeState.instance),
 }));
 
-import { FileDLQStore, loadConfig } from "@obora/sdk";
+import { FileDLQStore, OboraRuntime, loadConfig } from "@obora/sdk";
 
 import {
+  createRunsCommand,
   getCliRepairLoopState,
   inspectPersistedRun,
   listRunsForCli,
@@ -225,6 +229,133 @@ describe("runs list triage sorting", () => {
       limit: 10,
     });
     expect(noProgressRuns.map((run) => run.id)).toEqual(["run-no-progress"]);
+  });
+
+  it("includes linked DLQ indicators in JSON runs list output", async () => {
+    oboraRuntimeState.instance = {
+      listRunRecords: vi.fn().mockResolvedValue([
+        {
+          id: "run-1",
+          workflowName: "validation-repair-loop-example",
+          status: "failed",
+          startedAt: "2026-03-08T10:00:00.000Z",
+        },
+        {
+          id: "run-2",
+          workflowName: "validation-repair-loop-example",
+          status: "completed",
+          startedAt: "2026-03-08T09:00:00.000Z",
+        },
+      ]),
+    };
+    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    vi.mocked(loadConfig).mockResolvedValue({
+      dlq: { filePath: "./data/.obora/dlq/dead-letters.json" },
+      persistence: { enabled: true, adapter: "sqlite", sqlite: { path: "./data/obora.db" } },
+    } as never);
+    vi.mocked(FileDLQStore).mockImplementation(
+      () =>
+        ({
+          load: vi.fn().mockResolvedValue({
+            entries: [
+              {
+                id: "dlq-1",
+                createdAt: "2026-03-10T10:00:00.000Z",
+                executionId: "run-1",
+                workflowName: "validation-repair-loop-example",
+                stepName: "validate",
+                errorCode: "SDK_STEP_FAILED",
+                errorMessage: "repair failed",
+                repairAttempts: 3,
+                status: "pending",
+                metadata: {
+                  repairLoop: {
+                    lastStopCategory: "repeated_critical_issue",
+                  },
+                },
+              },
+            ],
+            lastUpdated: "2026-03-10T10:05:00.000Z",
+          }),
+        }) as never
+    );
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createRunsCommand();
+
+    await cmd.parseAsync(["list", "--json"], { from: "user" });
+
+    const payload = JSON.parse(log.mock.calls.at(-1)?.[0] ?? "[]");
+    expect(payload).toEqual([
+      expect.objectContaining({
+        id: "run-1",
+        linkedDlqEntry: expect.objectContaining({
+          id: "dlq-1",
+          status: "pending",
+          repairAttempts: 3,
+          lastStopCategory: "repeated_critical_issue",
+        }),
+      }),
+      expect.objectContaining({
+        id: "run-2",
+      }),
+    ]);
+    expect(payload[1].linkedDlqEntry).toBeUndefined();
+  });
+
+  it("prints linked DLQ indicators in text runs list output", async () => {
+    oboraRuntimeState.instance = {
+      listRunRecords: vi.fn().mockResolvedValue([
+        {
+          id: "run-1",
+          workflowName: "validation-repair-loop-example",
+          status: "failed",
+          startedAt: "2026-03-08T10:00:00.000Z",
+          metadata: {
+            repairLoop: {
+              validationFailed: 2,
+              repairStarted: 1,
+              repairNoProgress: 1,
+            },
+          },
+        },
+      ]),
+    };
+    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    vi.mocked(loadConfig).mockResolvedValue({
+      dlq: { filePath: "./data/.obora/dlq/dead-letters.json" },
+      persistence: { enabled: true, adapter: "sqlite", sqlite: { path: "./data/obora.db" } },
+    } as never);
+    vi.mocked(FileDLQStore).mockImplementation(
+      () =>
+        ({
+          load: vi.fn().mockResolvedValue({
+            entries: [
+              {
+                id: "dlq-1",
+                createdAt: "2026-03-10T10:00:00.000Z",
+                executionId: "run-1",
+                workflowName: "validation-repair-loop-example",
+                stepName: "validate",
+                errorCode: "SDK_STEP_FAILED",
+                errorMessage: "repair failed",
+                repairAttempts: 3,
+                status: "pending",
+              },
+            ],
+            lastUpdated: "2026-03-10T10:05:00.000Z",
+          }),
+        }) as never
+    );
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createRunsCommand();
+
+    await cmd.parseAsync(["list"], { from: "user" });
+
+    const output = log.mock.calls.map((args) => args.join(" ")).join("\n");
+    expect(output).toContain("DLQ");
+    expect(output).toContain("pending/3");
   });
 });
 

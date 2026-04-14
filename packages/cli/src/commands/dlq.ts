@@ -49,6 +49,10 @@ type RelatedInspectContext = {
   relatedArtifacts: RelatedArtifactSummary[];
 };
 
+type DlqListEntry = DLQEntry & {
+  relatedRun?: RelatedRunSummary;
+};
+
 type DlqTriageSummary = {
   stepName?: string;
   repairAttempts: number;
@@ -186,6 +190,46 @@ function buildDlqTriageSummary(entry: DLQEntry): DlqTriageSummary {
   };
 }
 
+async function loadRelatedRunsByExecutionId(
+  executionIds: string[]
+): Promise<Record<string, RelatedRunSummary | undefined>> {
+  const uniqueExecutionIds = [...new Set(executionIds.filter(Boolean))];
+  if (uniqueExecutionIds.length === 0) return {};
+
+  try {
+    const runtime = (await createRunsRuntime()) as {
+      getRunRecord(runId: string): Promise<RelatedRunSummary | null>;
+      getRunArtifacts?: (runId: string) => Promise<RelatedArtifactSummary[]>;
+    };
+
+    const relatedRuns = await Promise.all(
+      uniqueExecutionIds.map(async (executionId) => {
+        try {
+          const run = await runtime.getRunRecord(executionId);
+          return [
+            executionId,
+            run
+              ? {
+                  id: run.id,
+                  ...(run.workflowName ? { workflowName: run.workflowName } : {}),
+                  ...(run.status ? { status: run.status } : {}),
+                  ...(run.startedAt ? { startedAt: run.startedAt } : {}),
+                  ...(run.completedAt ? { completedAt: run.completedAt } : {}),
+                }
+              : undefined,
+          ] as const;
+        } catch {
+          return [executionId, undefined] as const;
+        }
+      })
+    );
+
+    return Object.fromEntries(relatedRuns);
+  } catch {
+    return {};
+  }
+}
+
 async function loadRelatedInspectContext(executionId: string): Promise<RelatedInspectContext> {
   try {
     const runtime = (await createRunsRuntime()) as {
@@ -193,21 +237,7 @@ async function loadRelatedInspectContext(executionId: string): Promise<RelatedIn
       getRunArtifacts?: (runId: string) => Promise<RelatedArtifactSummary[]>;
     };
 
-    let relatedRun: RelatedRunSummary | undefined;
-    try {
-      const run = await runtime.getRunRecord(executionId);
-      relatedRun = run
-        ? {
-            id: run.id,
-            ...(run.workflowName ? { workflowName: run.workflowName } : {}),
-            ...(run.status ? { status: run.status } : {}),
-            ...(run.startedAt ? { startedAt: run.startedAt } : {}),
-            ...(run.completedAt ? { completedAt: run.completedAt } : {}),
-          }
-        : undefined;
-    } catch {
-      relatedRun = undefined;
-    }
+    const relatedRun = (await loadRelatedRunsByExecutionId([executionId]))[executionId];
 
     let relatedArtifacts: RelatedArtifactSummary[] = [];
     if (runtime.getRunArtifacts) {
@@ -232,14 +262,14 @@ async function loadRelatedInspectContext(executionId: string): Promise<RelatedIn
   }
 }
 
-function formatTextList(entries: DLQEntry[]): void {
+function formatTextList(entries: DlqListEntry[]): void {
   console.log(
-    `${"ID".padEnd(38)} ${"Workflow".padEnd(18)} ${"Status".padEnd(10)} ${"Attempts".padEnd(8)} ${"Stop".padEnd(24)} Created At`
+    `${"ID".padEnd(38)} ${"Workflow".padEnd(18)} ${"Status".padEnd(10)} ${"Attempts".padEnd(8)} ${"Stop".padEnd(24)} ${"Run".padEnd(12)} Created At`
   );
-  console.log("-".repeat(112));
+  console.log("-".repeat(125));
   for (const entry of entries) {
     console.log(
-      `${entry.id.padEnd(38)} ${entry.workflowName.padEnd(18)} ${entry.status.padEnd(10)} ${String(entry.repairAttempts).padEnd(8)} ${formatStopCategory(entry).padEnd(24)} ${entry.createdAt}`
+      `${entry.id.padEnd(38)} ${entry.workflowName.padEnd(18)} ${entry.status.padEnd(10)} ${String(entry.repairAttempts).padEnd(8)} ${formatStopCategory(entry).padEnd(24)} ${(entry.relatedRun?.status ?? "-").padEnd(12)} ${entry.createdAt}`
     );
   }
 }
@@ -313,26 +343,36 @@ async function runListDlq(
     );
   }
 
+  const status = isDlqEntryStatus(opts.status) ? opts.status : undefined;
   const { snapshot } = await loadDlqSnapshot(opts.file);
   const payload = listDlqEntriesForCli(snapshot, {
-    status: opts.status,
+    status,
     limit: parseNumberOption(opts.limit, 50, "limit"),
     offset: parseNumberOption(opts.offset, 0, "offset"),
   });
+  const relatedRunsByExecutionId = await loadRelatedRunsByExecutionId(
+    payload.entries.map((entry) => entry.executionId)
+  );
+  const entries: DlqListEntry[] = payload.entries.map((entry) => ({
+    ...entry,
+    ...(relatedRunsByExecutionId[entry.executionId]
+      ? { relatedRun: relatedRunsByExecutionId[entry.executionId] }
+      : {}),
+  }));
 
   if (shouldOutputJson(opts.json, globalOpts)) {
-    formatter.json(payload);
+    formatter.json({ ...payload, entries });
     return;
   }
 
-  if (payload.entries.length === 0) {
+  if (entries.length === 0) {
     console.log("No DLQ entries found.");
     return;
   }
 
-  formatTextList(payload.entries);
+  formatTextList(entries);
   console.log(
-    `\n${payload.entries.length} entry(s) shown of ${payload.total} total. Pending: ${payload.pending}`
+    `\n${entries.length} entry(s) shown of ${payload.total} total. Pending: ${payload.pending}`
   );
 }
 

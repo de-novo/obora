@@ -92,6 +92,7 @@ await store.save(resolved);
 
 ```bash
 # pending DLQ triage queue
+# persisted run이 있으면 목록에 compact run status도 같이 표시
 obora dlq list --status pending
 
 # inspect one entry with repair metadata
