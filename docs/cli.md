@@ -416,11 +416,67 @@ obora runs inspect <runId> [--json] [--cost]
 Show run details including step records, artifacts, and repair-loop inspection summaries.
 If persisted `run.metadata.repairLoop` is present, CLI uses it first and falls back to audit replay only when needed.
 
+---
+
+## `obora dlq`
+
+Dead-letter queue triage commands.
+
+### Usage
+
+```bash
+obora dlq <subcommand>
+```
+
+### Subcommands
+
+#### `obora dlq list`
+
+```bash
+obora dlq list [--status <pending|reviewed|retried|dismissed>] [--limit <n>] [--offset <n>] [--file <path>] [--json]
+```
+
+List DLQ entries sorted by newest first. Text output includes workflow, status, repair attempt count, and persisted `metadata.repairLoop.lastStopCategory` when present.
+
+Examples:
+
+```bash
+# newest pending DLQ entries
+obora dlq list --status pending
+
+# inspect a custom DLQ file
+obora dlq list --file ./data/.obora/dlq/dead-letters.json --json
+```
+
+#### `obora dlq inspect <entryId>`
+
+```bash
+obora dlq inspect <entryId> [--file <path>] [--json]
+```
+
+Show one DLQ entry including error, repair attempts, resolution fields, and raw metadata.
+
+#### `obora dlq summary`
+
+```bash
+obora dlq summary [--file <path>] [--json]
+```
+
+Show aggregate DLQ counts (`pending`, `reviewed`, `retried`, `dismissed`) plus oldest pending timestamp.
+
+#### `obora dlq resolve <entryId>`
+
+```bash
+obora dlq resolve <entryId> --status <reviewed|retried|dismissed> [--actor <name>] [--note <text>] [--file <path>] [--json]
+```
+
+Resolve a DLQ entry and persist actor/note metadata.
+
 ### Exit Codes
 
 - `0` success
-- `2` invalid args or run not found
-- `3` storage/runtime errors
+- `2` invalid args or DLQ entry not found
+- `3` DLQ storage/config/runtime errors
 
 ---
 

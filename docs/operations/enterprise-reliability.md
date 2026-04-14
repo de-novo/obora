@@ -83,6 +83,24 @@ const resolved = resolveDLQEntry(snapshot, entryId, {
 await store.save(resolved);
 ```
 
+### CLI
+
+```bash
+# pending DLQ triage queue
+obora dlq list --status pending
+
+# inspect one entry with repair metadata
+obora dlq inspect <entryId>
+
+# aggregate counts
+obora dlq summary
+
+# resolve after triage
+obora dlq resolve <entryId> --status reviewed --actor cto --note "root cause identified"
+```
+
+기본 경로는 config의 `dlq.filePath`를 따르고, 필요하면 각 subcommand에 `--file <path>`로 override할 수 있습니다.
+
 ### Dashboard API
 
 ```

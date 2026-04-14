@@ -39,6 +39,7 @@ describe("M3 CLI command IA", () => {
         "plugin",
         "audit",
         "policy",
+        "dlq",
         "init",
         "quickstart",
         "judge",
