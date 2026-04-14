@@ -2543,8 +2543,13 @@ export class WorkflowRunner {
     errorCode: string,
     persistenceEnabled: boolean,
     persistenceConfig: OboraConfig["persistence"] | undefined
-  ): Promise<void> {
-    if (!persistenceEnabled) return;
+  ): Promise<number> {
+    const repairLoopSummary = this.getPersistedRepairLoopSummary(executionId);
+    const repairAttempts = repairLoopSummary?.repairStarted ?? 0;
+    if (!persistenceEnabled) {
+      this.clearPersistedRepairLoopSummary(executionId);
+      return repairAttempts;
+    }
     const { persistenceManager, config } = this.deps;
     try {
       const adapter = await persistenceManager.getStorageAdapter(
@@ -2562,9 +2567,7 @@ export class WorkflowRunner {
           variables,
           error: execution.error,
           errorCode,
-          ...(this.getPersistedRepairLoopSummary(executionId)
-            ? { repairLoop: this.getPersistedRepairLoopSummary(executionId) }
-            : {}),
+          ...(repairLoopSummary ? { repairLoop: repairLoopSummary } : {}),
         },
       });
     } catch (err) {
@@ -2574,6 +2577,7 @@ export class WorkflowRunner {
     } finally {
       this.clearPersistedRepairLoopSummary(executionId);
     }
+    return repairAttempts;
   }
 
   // ── Resume execution ─────────────────────────────────────────────────────

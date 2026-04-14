@@ -2495,6 +2495,195 @@ describe("OboraRuntime facade", () => {
     });
   });
 
+  it("captures repair attempts in DLQ entries for failed repair loops", async () => {
+    const dlqDir = await mkdtemp(join(tmpdir(), "obora-dlq-"));
+    const dlqFile = join(dlqDir, "dead-letters.json");
+
+    const runtime = new OboraRuntime({
+      llm: { provider: "openai", apiKey: "test-key", model: "gpt-5" },
+      dlq: { enabled: true, filePath: dlqFile },
+    });
+
+    const adapterMock = {
+      chatCompletion: vi.fn().mockImplementation(async () => {
+        const callIndex = adapterMock.chatCompletion.mock.calls.length;
+        if (callIndex % 2 === 1) {
+          return { message: { role: "assistant", content: `draft-${callIndex}` } };
+        }
+        return {
+          message: {
+            role: "assistant",
+            content: JSON.stringify({
+              passed: false,
+              summary: "Critical issue repeats",
+              failedChecks: [{ name: "critical", message: "same blocker" }],
+              signature: "same-critical-issue",
+            }),
+          },
+        };
+      }),
+    };
+
+    vi.spyOn(
+      runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> },
+      "createLLMAdapter"
+    ).mockResolvedValue(adapterMock);
+
+    runtime.define("validation-repeated-critical-dlq", {
+      name: "validation-repeated-critical-dlq",
+      steps: [
+        {
+          name: "build_or_repair",
+          agent: "builder",
+          config: { repair_loop: { enabled: true, repeated_critical_issue_ceiling: 1 } },
+          input: { task: "Build or repair the app" },
+        },
+        {
+          name: "validate",
+          agent: "validator",
+          depends_on: ["build_or_repair"],
+          config: { validation: { enabled: true, emit_structured_result: true } },
+          on_fail: { goto: "build_or_repair", max_iterations: 5 },
+          input: { task: "Validate the app and return structured JSON" },
+        },
+      ],
+    });
+
+    const handle = await runtime.run("validation-repeated-critical-dlq");
+    await expect(handle.wait()).rejects.toThrow(/repeated critical issue ceiling/i);
+
+    const snapshot = JSON.parse(await readFile(dlqFile, "utf-8")) as {
+      entries: Array<{ workflowName: string; repairAttempts: number; errorCode: string }>;
+    };
+    expect(snapshot.entries).toHaveLength(1);
+    expect(snapshot.entries[0]).toMatchObject({
+      workflowName: "validation-repeated-critical-dlq",
+      repairAttempts: 1,
+      errorCode: OboraErrorCode.SDK_UNKNOWN_ERROR,
+    });
+  });
+
+  it("captures repair attempts in DLQ entries when persistence is enabled", async () => {
+    const savedRuns: any[] = [];
+    const storage = {
+      async saveRun(record: any) {
+        savedRuns.push(structuredClone(record));
+      },
+      async getRun() {
+        return null;
+      },
+      async listRuns() {
+        return [];
+      },
+      async saveStep() {
+        return;
+      },
+      async getSteps() {
+        return [];
+      },
+      async saveArtifact(record: any) {
+        return record;
+      },
+      async getArtifacts() {
+        return [];
+      },
+      async deleteArtifact() {
+        return;
+      },
+      async saveCheckpoint() {
+        return;
+      },
+      async getLatestCheckpoint() {
+        return null;
+      },
+      async saveCost() {
+        return;
+      },
+      async getCosts() {
+        return [];
+      },
+      async getRunCostSummary() {
+        return { totalTokens: 0, totalCostUsd: 0, byStep: [], byModel: [] };
+      },
+      async saveAuditEvent() {
+        return;
+      },
+      async getAuditTimeline() {
+        return [];
+      },
+    };
+
+    const dlqDir = await mkdtemp(join(tmpdir(), "obora-dlq-persist-"));
+    const dlqFile = join(dlqDir, "dead-letters.json");
+
+    const runtime = new OboraRuntime({
+      llm: { provider: "openai", apiKey: "test-key", model: "gpt-5" },
+      persistence: { enabled: true, adapter: "custom", custom: { instance: storage as any } },
+      dlq: { enabled: true, filePath: dlqFile },
+    });
+
+    const adapterMock = {
+      chatCompletion: vi.fn().mockImplementation(async () => {
+        const callIndex = adapterMock.chatCompletion.mock.calls.length;
+        if (callIndex % 2 === 1) {
+          return { message: { role: "assistant", content: `draft-${callIndex}` } };
+        }
+        return {
+          message: {
+            role: "assistant",
+            content: JSON.stringify({
+              passed: false,
+              summary: "Critical issue repeats",
+              failedChecks: [{ name: "critical", message: "same blocker" }],
+              signature: "same-critical-issue",
+            }),
+          },
+        };
+      }),
+    };
+
+    vi.spyOn(
+      runtime as unknown as { createLLMAdapter: () => Promise<typeof adapterMock> },
+      "createLLMAdapter"
+    ).mockResolvedValue(adapterMock);
+
+    runtime.define("validation-repeated-critical-dlq-persist", {
+      name: "validation-repeated-critical-dlq-persist",
+      steps: [
+        {
+          name: "build_or_repair",
+          agent: "builder",
+          config: { repair_loop: { enabled: true, repeated_critical_issue_ceiling: 1 } },
+          input: { task: "Build or repair the app" },
+        },
+        {
+          name: "validate",
+          agent: "validator",
+          depends_on: ["build_or_repair"],
+          config: { validation: { enabled: true, emit_structured_result: true } },
+          on_fail: { goto: "build_or_repair", max_iterations: 5 },
+          input: { task: "Validate the app and return structured JSON" },
+        },
+      ],
+    });
+
+    const handle = await runtime.run("validation-repeated-critical-dlq-persist");
+    await expect(handle.wait()).rejects.toThrow(/repeated critical issue ceiling/i);
+
+    const finalRun = savedRuns.at(-1);
+    expect(finalRun?.metadata?.repairLoop).toMatchObject({ repairStarted: 1 });
+
+    const snapshot = JSON.parse(await readFile(dlqFile, "utf-8")) as {
+      entries: Array<{ workflowName: string; repairAttempts: number; errorCode: string }>;
+    };
+    expect(snapshot.entries).toHaveLength(1);
+    expect(snapshot.entries[0]).toMatchObject({
+      workflowName: "validation-repeated-critical-dlq-persist",
+      repairAttempts: 1,
+      errorCode: OboraErrorCode.SDK_UNKNOWN_ERROR,
+    });
+  });
+
   it("emits warning when agent-specific provider is configured but cannot be resolved", async () => {
     const prevAnthropic = process.env.TEST_ANTHROPIC_KEY;
     const prevOpenAI = process.env.TEST_OPENAI_KEY;
