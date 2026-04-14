@@ -91,6 +91,8 @@ obora dlq list --status pending
 
 # inspect one entry with repair metadata
 obora dlq inspect <entryId>
+# persisted run이 있으면 related run summary와
+# `obora runs inspect <runId>` 힌트까지 함께 표시
 
 # aggregate counts
 obora dlq summary

@@ -9,6 +9,8 @@ import {
   type DLQSnapshot,
 } from "@obora/sdk";
 
+import { createRuntime as createRunsRuntime } from "./runs.js";
+
 import { CLIError } from "../utils/cli-error.js";
 import { handleCommandAction } from "../utils/error-handler.js";
 import { ExitCode } from "../utils/exit-codes.js";
@@ -25,6 +27,14 @@ type DlqResolutionStatus = (typeof DLQ_RESOLUTION_STATUSES)[number];
 type DlqStoreLike = {
   load(): Promise<DLQSnapshot>;
   save(snapshot: DLQSnapshot): Promise<void>;
+};
+
+type RelatedRunSummary = {
+  id: string;
+  workflowName?: string;
+  status?: string;
+  startedAt?: string;
+  completedAt?: string;
 };
 
 function getErrorMessage(error: unknown): string {
@@ -114,6 +124,23 @@ function formatStopCategory(entry: DLQEntry): string {
   return typeof lastStopCategory === "string" ? lastStopCategory : "-";
 }
 
+async function loadRelatedRun(executionId: string): Promise<RelatedRunSummary | undefined> {
+  try {
+    const runtime = await createRunsRuntime();
+    const run = await runtime.getRunRecord(executionId);
+    if (!run) return undefined;
+    return {
+      id: run.id,
+      ...(run.workflowName ? { workflowName: run.workflowName } : {}),
+      ...(run.status ? { status: run.status } : {}),
+      ...(run.startedAt ? { startedAt: run.startedAt } : {}),
+      ...(run.completedAt ? { completedAt: run.completedAt } : {}),
+    };
+  } catch {
+    return undefined;
+  }
+}
+
 function formatTextList(entries: DLQEntry[]): void {
   console.log(
     `${"ID".padEnd(38)} ${"Workflow".padEnd(18)} ${"Status".padEnd(10)} ${"Attempts".padEnd(8)} ${"Stop".padEnd(24)} Created At`
@@ -126,7 +153,7 @@ function formatTextList(entries: DLQEntry[]): void {
   }
 }
 
-function printTextInspect(entry: DLQEntry): void {
+function printTextInspect(entry: DLQEntry, relatedRun?: RelatedRunSummary): void {
   console.log(`\nDLQ Entry: ${entry.id}`);
   console.log(`  Workflow:        ${entry.workflowName}`);
   console.log(`  Execution ID:    ${entry.executionId}`);
@@ -142,6 +169,14 @@ function printTextInspect(entry: DLQEntry): void {
   if (entry.errorStack) console.log(`  Error Stack:     ${entry.errorStack}`);
   if (entry.metadata) {
     console.log(`  Metadata:        ${JSON.stringify(entry.metadata, null, 2)}`);
+  }
+  if (relatedRun) {
+    console.log(`\nRelated Run:`);
+    console.log(`  ID:              ${relatedRun.id}`);
+    if (relatedRun.status) console.log(`  Status:          ${relatedRun.status}`);
+    if (relatedRun.startedAt) console.log(`  Started:         ${relatedRun.startedAt}`);
+    if (relatedRun.completedAt) console.log(`  Completed:       ${relatedRun.completedAt}`);
+    console.log(`  Inspect:         obora runs inspect ${relatedRun.id}`);
   }
 }
 
@@ -193,12 +228,17 @@ async function runInspectDlq(
     throw new CLIError(`DLQ entry not found: ${entryId}`, ExitCode.VALIDATION_ERROR);
   }
 
+  const relatedRun = await loadRelatedRun(entry.executionId);
+
   if (shouldOutputJson(opts.json, globalOpts)) {
-    formatter.json({ entry });
+    formatter.json({
+      entry,
+      ...(relatedRun ? { relatedRun } : {}),
+    });
     return;
   }
 
-  printTextInspect(entry);
+  printTextInspect(entry, relatedRun);
 }
 
 async function runSummaryDlq(opts: { file?: string; json?: boolean }, globalOpts: GlobalOptions): Promise<void> {
