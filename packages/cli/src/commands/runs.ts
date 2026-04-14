@@ -64,6 +64,17 @@ interface PersistedCostSummary {
   byModel: PersistedCostBreakdownItem[];
 }
 
+interface LinkedDlqInspectEntry {
+  id: string;
+  createdAt: string;
+  status: string;
+  errorCode: string;
+  errorMessage: string;
+  repairAttempts: number;
+  stepName?: string;
+  lastStopCategory?: string;
+}
+
 interface PersistedRunsRuntime {
   listRunRecords(query: Record<string, unknown>): Promise<PersistedRunRecord[]>;
 }
@@ -361,6 +372,40 @@ function extractPersistedRepairLoopSummary(
   return repairLoop as RepairLoopInspectSummary;
 }
 
+async function loadLinkedDlqEntry(runId: string): Promise<LinkedDlqInspectEntry | undefined> {
+  try {
+    const { FileDLQStore, loadConfig } = await import("@obora/sdk");
+    const config = await loadConfig();
+    const filePath = config?.dlq?.filePath ?? ".obora/dlq/dead-letters.json";
+    const store = new FileDLQStore(filePath);
+    const snapshot = await store.load();
+    const match = [...snapshot.entries]
+      .filter((entry) => entry.executionId === runId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+    if (!match) return undefined;
+    const repairLoop =
+      match.metadata?.repairLoop &&
+      typeof match.metadata.repairLoop === "object" &&
+      !Array.isArray(match.metadata.repairLoop)
+        ? (match.metadata.repairLoop as Record<string, unknown>)
+        : undefined;
+    return {
+      id: match.id,
+      createdAt: match.createdAt,
+      status: match.status,
+      errorCode: match.errorCode,
+      errorMessage: match.errorMessage,
+      repairAttempts: match.repairAttempts,
+      ...(match.stepName ? { stepName: match.stepName } : {}),
+      ...(typeof repairLoop?.lastStopCategory === "string"
+        ? { lastStopCategory: repairLoop.lastStopCategory }
+        : {}),
+    };
+  } catch {
+    return undefined;
+  }
+}
+
 export async function inspectPersistedRun(
   runtime: PersistedRunInspectRuntime,
   runId: string,
@@ -378,6 +423,7 @@ export async function inspectPersistedRun(
   const persistedRepairLoop = extractPersistedRepairLoopSummary(run);
   const auditTimeline = persistedRepairLoop ? undefined : await runtime.getRunAuditTimeline(runId);
   const repairLoop = persistedRepairLoop ?? summarizeRepairLoopTimeline(auditTimeline ?? []);
+  const linkedDlqEntry = await loadLinkedDlqEntry(runId);
 
   if (opts.json) {
     const payload: Record<string, unknown> = {
@@ -385,6 +431,7 @@ export async function inspectPersistedRun(
       artifacts,
       ...(auditTimeline ? { auditTimeline } : {}),
       ...(repairLoop ? { repairLoop } : {}),
+      ...(linkedDlqEntry ? { linkedDlqEntry } : {}),
       ...(costSummary ? { costSummary } : {}),
     };
     if (opts.steps !== false) payload.steps = steps;
@@ -459,6 +506,18 @@ export async function inspectPersistedRun(
     }
   }
 
+  if (linkedDlqEntry) {
+    console.log(`\nLinked DLQ Entry:`);
+    console.log(`  ID:               ${linkedDlqEntry.id}`);
+    console.log(`  Status:           ${linkedDlqEntry.status}`);
+    console.log(`  Error Code:       ${linkedDlqEntry.errorCode}`);
+    console.log(`  Repair Attempts:  ${linkedDlqEntry.repairAttempts}`);
+    if (linkedDlqEntry.stepName) console.log(`  Step Name:        ${linkedDlqEntry.stepName}`);
+    if (linkedDlqEntry.lastStopCategory)
+      console.log(`  Stop Category:    ${linkedDlqEntry.lastStopCategory}`);
+    console.log(`  Inspect:          obora dlq inspect ${linkedDlqEntry.id}`);
+  }
+
   if (costSummary) {
     console.log(`\nCost Summary:`);
     console.log(`  Total Tokens: ${costSummary.totalTokens}`);
@@ -486,7 +545,10 @@ export function createRunsCommand(): Command {
     .description("List persisted runs")
     .option("--status <status>", "Filter by status (running|completed|failed|suspended)")
     .option("--workflow <name>", "Filter by workflow name")
-    .option("--repair-loop <mode>", "Filter by repair-loop state (with|without|stalled|exhausted|critical|no-progress)")
+    .option(
+      "--repair-loop <mode>",
+      "Filter by repair-loop state (with|without|stalled|exhausted|critical|no-progress)"
+    )
     .option("--sort <field>", "Sort by startedAt|validationFailed|repairStarted", "startedAt")
     .option("--order <dir>", "Sort order asc|desc", "desc")
     .option("--limit <n>", "Max results", "20")

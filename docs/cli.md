@@ -419,6 +419,7 @@ obora runs inspect <runId> [--json] [--cost]
 
 Show run details including step records, artifacts, and repair-loop inspection summaries.
 If persisted `run.metadata.repairLoop` is present, CLI uses it first and falls back to audit replay only when needed.
+If the run is linked to a DLQ entry, CLI also shows a compact linked-DLQ summary plus a ready-to-run `obora dlq inspect <entryId>` hint.
 
 ---
 

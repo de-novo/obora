@@ -7,7 +7,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadConfig, resolveProviderConfig } from "../config-loader.js";
 import { OboraErrorCode } from "../runtime.js";
 
-async function withIsolatedDirs(testFn: (ctx: { homeDir: string; projectDir: string; cwdBefore: string; homeBefore: string | undefined }) => Promise<void>) {
+async function withIsolatedDirs(
+  testFn: (ctx: {
+    homeDir: string;
+    projectDir: string;
+    cwdBefore: string;
+    homeBefore: string | undefined;
+  }) => Promise<void>
+) {
   const homeDir = await mkdtemp(join(tmpdir(), "obora-home-"));
   const projectDir = await mkdtemp(join(tmpdir(), "obora-project-"));
   const cwdBefore = process.cwd();
@@ -66,7 +73,7 @@ describe("config-loader", () => {
           "    provider: anthropic",
           "    model: claude-opus-4-6",
         ].join("\n"),
-        "utf-8",
+        "utf-8"
       );
 
       await mkdir(join(projectDir, ".obora"), { recursive: true });
@@ -82,7 +89,7 @@ describe("config-loader", () => {
           "  planner:",
           "    model: claude-opus-4-5",
         ].join("\n"),
-        "utf-8",
+        "utf-8"
       );
 
       process.env.TEST_ANTHROPIC_KEY = "anthropic-key";
@@ -103,6 +110,28 @@ describe("config-loader", () => {
     });
   });
 
+  it("merges dlq config from global and project config", async () => {
+    await withIsolatedDirs(async ({ homeDir, projectDir }) => {
+      await mkdir(join(homeDir, ".obora"), { recursive: true });
+      await writeFile(
+        join(homeDir, ".obora", "config.yaml"),
+        ["dlq:", "  enabled: true", "  filePath: ./data/global-dlq.json"].join("\n"),
+        "utf-8"
+      );
+
+      await mkdir(join(projectDir, ".obora"), { recursive: true });
+      await writeFile(
+        join(projectDir, ".obora", "config.yaml"),
+        ["dlq:", "  filePath: ./data/project-dlq.json"].join("\n"),
+        "utf-8"
+      );
+
+      const loaded = await loadConfig();
+      expect(loaded?.dlq?.enabled).toBe(true);
+      expect(loaded?.dlq?.filePath).toBe("./data/project-dlq.json");
+    });
+  });
+
   it("throws OboraError when YAML parse fails", async () => {
     await withIsolatedDirs(async ({ projectDir }) => {
       const explicit = join(projectDir, "broken.yaml");
@@ -112,7 +141,7 @@ describe("config-loader", () => {
         expect.objectContaining({
           code: OboraErrorCode.SDK_INVALID_CONFIG,
           message: expect.stringContaining(explicit),
-        }),
+        })
       );
     });
   });
@@ -131,7 +160,7 @@ describe("config-loader", () => {
         expect.objectContaining({
           code: OboraErrorCode.SDK_INVALID_CONFIG,
           message: `Config must be a YAML object (mapping), got: ${typeName}`,
-        }),
+        })
       );
     });
   });
@@ -143,7 +172,7 @@ describe("config-loader", () => {
         expect.objectContaining({
           code: OboraErrorCode.SDK_INVALID_CONFIG,
           message: expect.stringContaining(explicit),
-        }),
+        })
       );
     });
   });
@@ -155,11 +184,15 @@ describe("config-loader", () => {
       const loaded = await loadConfig(explicit);
       const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
-      const resolved = loaded ? resolveProviderConfig(loaded, "missing", { verbose: true }) : undefined;
+      const resolved = loaded
+        ? resolveProviderConfig(loaded, "missing", { verbose: true })
+        : undefined;
       expect(resolved).toBeUndefined();
       expect(warn).toHaveBeenCalledWith(expect.stringContaining("missing"));
       expect(warn).toHaveBeenCalledWith(expect.stringContaining(explicit));
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining("Next action: export MISSING_API_KEY=..."));
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining("Next action: export MISSING_API_KEY=...")
+      );
       expect(warn).toHaveBeenCalledWith(expect.stringContaining("providers.missing.authRef"));
       warn.mockRestore();
     });
@@ -179,7 +212,7 @@ describe("config-loader", () => {
           "    authRef: env:TEST_ZAI_KEY",
           "    defaultModel: glm-4.7",
         ].join("\n"),
-        "utf-8",
+        "utf-8"
       );
 
       const nestedDir = join(projectDir, ".sandbox", "01-hello-world");

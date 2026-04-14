@@ -53,6 +53,10 @@ export interface OboraConfig {
     local?: { basePath?: string };
     custom?: { instance?: import("@obora/runtime").ArtifactStore };
   };
+  dlq?: {
+    enabled?: boolean;
+    filePath?: string;
+  };
   sharedMemory?: {
     enabled?: boolean;
     adapter?: "file" | "custom";
@@ -159,14 +163,18 @@ async function fileExists(path: string): Promise<boolean> {
   }
 }
 
-function mergeConfig(base: OboraConfig | undefined, override: OboraConfig | undefined): OboraConfig | undefined {
+function mergeConfig(
+  base: OboraConfig | undefined,
+  override: OboraConfig | undefined
+): OboraConfig | undefined {
   if (!base && !override) {
     return undefined;
   }
 
-  const mergedProviders = Object.entries({ ...(base?.providers ?? {}), ...(override?.providers ?? {}) }).reduce<
-    NonNullable<OboraConfig["providers"]>
-  >((acc, [name, provider]) => {
+  const mergedProviders = Object.entries({
+    ...(base?.providers ?? {}),
+    ...(override?.providers ?? {}),
+  }).reduce<NonNullable<OboraConfig["providers"]>>((acc, [name, provider]) => {
     acc[name] = {
       ...(base?.providers?.[name] ?? {}),
       ...(provider ?? {}),
@@ -174,9 +182,10 @@ function mergeConfig(base: OboraConfig | undefined, override: OboraConfig | unde
     return acc;
   }, {});
 
-  const mergedAgents = Object.entries({ ...(base?.agents ?? {}), ...(override?.agents ?? {}) }).reduce<
-    NonNullable<OboraConfig["agents"]>
-  >((acc, [name, agent]) => {
+  const mergedAgents = Object.entries({
+    ...(base?.agents ?? {}),
+    ...(override?.agents ?? {}),
+  }).reduce<NonNullable<OboraConfig["agents"]>>((acc, [name, agent]) => {
     acc[name] = {
       ...(base?.agents?.[name] ?? {}),
       ...(agent ?? {}),
@@ -205,6 +214,10 @@ function mergeConfig(base: OboraConfig | undefined, override: OboraConfig | unde
         ...(override?.artifacts?.local ?? {}),
       },
       custom: override?.artifacts?.custom ?? base?.artifacts?.custom,
+    },
+    dlq: {
+      ...(base?.dlq ?? {}),
+      ...(override?.dlq ?? {}),
     },
     sharedMemory: {
       ...(base?.sharedMemory ?? {}),
@@ -243,7 +256,8 @@ function mergeConfig(base: OboraConfig | undefined, override: OboraConfig | unde
           ...(base?.tkgProjection?.reviewQueue?.file ?? {}),
           ...(override?.tkgProjection?.reviewQueue?.file ?? {}),
         },
-        custom: override?.tkgProjection?.reviewQueue?.custom ?? base?.tkgProjection?.reviewQueue?.custom,
+        custom:
+          override?.tkgProjection?.reviewQueue?.custom ?? base?.tkgProjection?.reviewQueue?.custom,
       },
     },
     resources: {
@@ -264,7 +278,7 @@ async function readConfigFile(path: string): Promise<OboraConfig | undefined> {
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       throw new OboraError(
         `Config must be a YAML object (mapping), got: ${getYamlValueType(parsed)}`,
-        OboraErrorCode.SDK_INVALID_CONFIG,
+        OboraErrorCode.SDK_INVALID_CONFIG
       );
     }
 
@@ -279,7 +293,7 @@ async function readConfigFile(path: string): Promise<OboraConfig | undefined> {
       OboraErrorCode.SDK_INVALID_CONFIG,
       undefined,
       undefined,
-      error,
+      error
     );
   }
 }
@@ -307,7 +321,10 @@ export async function loadConfig(configPath?: string): Promise<OboraConfig | und
     const explicitPath = resolve(configPath);
     const explicit = (await readConfigFile(explicitPath)) as ConfigWithMeta | undefined;
     if (!explicit) {
-      throw new OboraError(`Config file not found: ${explicitPath}`, OboraErrorCode.SDK_INVALID_CONFIG);
+      throw new OboraError(
+        `Config file not found: ${explicitPath}`,
+        OboraErrorCode.SDK_INVALID_CONFIG
+      );
     }
 
     explicit[CONFIG_META_KEY] = { sources: [explicitPath] };
@@ -340,7 +357,7 @@ export async function loadConfig(configPath?: string): Promise<OboraConfig | und
 export function resolveProviderConfig(
   config: OboraConfig,
   providerName?: string,
-  options?: { verbose?: boolean },
+  options?: { verbose?: boolean }
 ): ResolvedProviderConfig | undefined {
   const selectedProviderName = providerName ?? config.defaults?.provider;
   if (!selectedProviderName) {
@@ -354,7 +371,9 @@ export function resolveProviderConfig(
   if (authRef) {
     apiKey = authResolver.resolveAuthRef(authRef, { verbose: options?.verbose });
   } else {
-    const fallbackEnv = PROVIDER_ENV_KEY_MAP[selectedProviderName] ?? `${selectedProviderName.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_API_KEY`;
+    const fallbackEnv =
+      PROVIDER_ENV_KEY_MAP[selectedProviderName] ??
+      `${selectedProviderName.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_API_KEY`;
     apiKey = process.env[fallbackEnv];
 
     if (options?.verbose) {
@@ -363,7 +382,7 @@ export function resolveProviderConfig(
       console.warn(
         `[obora] Provider config for '${selectedProviderName}' has no authRef and no API key was resolved. ` +
           `Tried env fallback '${fallbackEnv}'. Searched config in: ${sourceInfo}. ` +
-          `Next action: export ${fallbackEnv}=... for first-time setup, or add providers.${selectedProviderName}.authRef to your config.`,
+          `Next action: export ${fallbackEnv}=... for first-time setup, or add providers.${selectedProviderName}.authRef to your config.`
       );
     }
   }

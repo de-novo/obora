@@ -1,5 +1,12 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 
+vi.mock("@obora/sdk", () => ({
+  loadConfig: vi.fn(),
+  FileDLQStore: vi.fn(),
+}));
+
+import { FileDLQStore, loadConfig } from "@obora/sdk";
+
 import {
   getCliRepairLoopState,
   inspectPersistedRun,
@@ -464,5 +471,129 @@ describe("runs inspect repair-loop summary", () => {
     expect(log).toHaveBeenCalledWith(
       expect.stringContaining('"logPath": "artifacts/VALIDATION-ATTEMPT-01.log"')
     );
+  });
+
+  it("includes linked DLQ entry in JSON inspect output", async () => {
+    vi.mocked(loadConfig).mockResolvedValue({
+      dlq: { filePath: "./data/.obora/dlq/dead-letters.json" },
+    } as never);
+    vi.mocked(FileDLQStore).mockImplementation(
+      () =>
+        ({
+          load: vi.fn().mockResolvedValue({
+            entries: [
+              {
+                id: "dlq-1",
+                createdAt: "2026-03-10T10:00:00.000Z",
+                executionId: "run-1",
+                workflowName: "validation-repair-loop-example",
+                stepName: "validate",
+                errorCode: "SDK_STEP_FAILED",
+                errorMessage: "repair failed",
+                repairAttempts: 3,
+                status: "pending",
+              },
+            ],
+            lastUpdated: "2026-03-10T10:05:00.000Z",
+          }),
+        }) as never
+    );
+
+    const runtime = {
+      async getRunRecord() {
+        return {
+          id: "run-1",
+          workflowName: "validation-repair-loop-example",
+          status: "failed",
+          startedAt: "2026-03-08T10:00:00.000Z",
+        };
+      },
+      async getRunSteps() {
+        return [];
+      },
+      async getRunArtifacts() {
+        return [];
+      },
+      async getRunCostSummary() {
+        return { totalTokens: 0, totalCostUsd: 0, byStep: [], byModel: [] };
+      },
+      async getRunAuditTimeline() {
+        return [];
+      },
+    };
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await inspectPersistedRun(runtime, "run-1", { json: true, cost: false, steps: false });
+
+    const payload = JSON.parse(log.mock.calls.at(-1)?.[0] ?? "{}");
+    expect(payload.linkedDlqEntry).toEqual(
+      expect.objectContaining({
+        id: "dlq-1",
+        status: "pending",
+        repairAttempts: 3,
+        stepName: "validate",
+      })
+    );
+  });
+
+  it("prints linked DLQ entry in text inspect output", async () => {
+    vi.mocked(loadConfig).mockResolvedValue({
+      dlq: { filePath: "./data/.obora/dlq/dead-letters.json" },
+    } as never);
+    vi.mocked(FileDLQStore).mockImplementation(
+      () =>
+        ({
+          load: vi.fn().mockResolvedValue({
+            entries: [
+              {
+                id: "dlq-1",
+                createdAt: "2026-03-10T10:00:00.000Z",
+                executionId: "run-1",
+                workflowName: "validation-repair-loop-example",
+                stepName: "validate",
+                errorCode: "SDK_STEP_FAILED",
+                errorMessage: "repair failed",
+                repairAttempts: 3,
+                status: "pending",
+              },
+            ],
+            lastUpdated: "2026-03-10T10:05:00.000Z",
+          }),
+        }) as never
+    );
+
+    const runtime = {
+      async getRunRecord() {
+        return {
+          id: "run-1",
+          workflowName: "validation-repair-loop-example",
+          status: "failed",
+          startedAt: "2026-03-08T10:00:00.000Z",
+        };
+      },
+      async getRunSteps() {
+        return [];
+      },
+      async getRunArtifacts() {
+        return [];
+      },
+      async getRunCostSummary() {
+        return { totalTokens: 0, totalCostUsd: 0, byStep: [], byModel: [] };
+      },
+      async getRunAuditTimeline() {
+        return [];
+      },
+    };
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await inspectPersistedRun(runtime, "run-1", { json: false, cost: false, steps: false });
+
+    const output = log.mock.calls.map((args) => args.join(" ")).join("\n");
+    expect(output).toContain("Linked DLQ Entry:");
+    expect(output).toContain("ID:               dlq-1");
+    expect(output).toContain("Repair Attempts:  3");
+    expect(output).toContain("obora dlq inspect dlq-1");
   });
 });
