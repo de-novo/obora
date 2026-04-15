@@ -4,6 +4,7 @@ import packageJson from "../package.json" with { type: "json" };
 
 import { createArtifactCommand } from "./commands/artifact.js";
 import { createAuditCommand } from "./commands/audit.js";
+import { createAuthCommand } from "./commands/auth.js";
 import { createDlqCommand } from "./commands/dlq.js";
 import { createDoctorCommand } from "./commands/doctor.js";
 import { createExpandCommand } from "./commands/expand.js";
@@ -75,6 +76,7 @@ export function createCLI(): Command {
   program.addCommand(createJudgeCommand());
   program.addCommand(createModelsCommand());
   program.addCommand(createDoctorCommand());
+  program.addCommand(createAuthCommand());
   program.addCommand(createExpandCommand());
   program.addCommand(createRunCommand());
   program.addCommand(createStatusCommand());

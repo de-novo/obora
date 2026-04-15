@@ -132,6 +132,7 @@ function inferNextCommand(err: unknown): string | null {
     commandContext.activeCommand === "test" ||
     commandContext.activeCommand === "expand" ||
     commandContext.activeCommand === "doctor" ||
+    commandContext.activeCommand === "auth" ||
     commandContext.activeCommand === "status" ||
     commandContext.activeCommand === "validate" ||
     commandContext.activeCommand === "init" ||
@@ -164,6 +165,17 @@ function inferNextCommand(err: unknown): string | null {
     message.includes("failed to expand workflow") ||
     message.includes("failed to load doctor config") ||
     message.includes("failed to resolve doctor configuration") ||
+    message.includes("invalid auth type") ||
+    message.includes("provider auth not found") ||
+    message.includes("failed to load provider auth store") ||
+    message.includes("failed to save provider auth") ||
+    message.includes("failed to remove provider auth") ||
+    message.includes("unsupported provider auth test target") ||
+    message.includes("failed to test provider auth") ||
+    message.includes("auth test failed for provider") ||
+    message.includes("--apikey is required when --type=apikey") ||
+    message.includes("--token is required when --type=token") ||
+    message.includes("--accesstoken is required when --type=oauth") ||
     message.includes("failed to initialize scaffold") ||
     message.includes("invalid status limit") ||
     message.includes("failed to load status runtime") ||

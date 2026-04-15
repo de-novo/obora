@@ -8,6 +8,7 @@
 - [`obora quickstart`](#obora-quickstart)
 - [`obora models`](#obora-models)
 - [`obora doctor`](#obora-doctor)
+- [`obora auth`](#obora-auth)
 - [`obora expand`](#obora-expand)
 - [`obora judge`](#obora-judge)
 - [`obora run`](#obora-run)
@@ -177,6 +178,43 @@ Supports both local `obora doctor --json` and root `obora --json doctor`.
 
 - `0` doctor completed successfully
 - `3` doctor config/resolution load failure
+
+---
+
+## `obora auth`
+
+Manage the global provider-auth store used by Obora adapters.
+
+### Usage
+
+```bash
+obora auth list
+obora auth add openai --apiKey "$OPENAI_API_KEY"
+obora auth test openai --json
+obora --json auth list
+```
+
+### Subcommands
+
+- `auth add <provider>` — save or update provider credentials in `~/.obora/auth.json`
+- `auth list` — list masked provider auth entries
+- `auth remove <provider>` — remove a saved provider entry
+- `auth test <provider>` — call the provider API with the saved auth entry
+
+### Behavior
+
+- supports both local `--json` and root `obora --json auth ...` on every subcommand
+- `auth add` accepts `--type apiKey|token|oauth` plus matching credential flags
+- if `--type` is omitted, auth type is inferred from the provided fields
+- `auth list` masks secret values before printing JSON or table output
+- missing provider entries, invalid auth types, and unsupported `auth test` providers exit with code `2`
+- auth-store load/save/remove failures and failed provider connection tests exit with code `3`
+
+### Exit Codes
+
+- `0` command completed successfully
+- `2` invalid auth type / missing provider auth / unsupported auth test target
+- `3` auth store operation failure / failed provider auth test
 
 ---
 

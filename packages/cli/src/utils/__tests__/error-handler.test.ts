@@ -471,6 +471,24 @@ describe("error handler and formatter", () => {
     ).toBe(null);
   });
 
+  it("suppresses generic hints for auth command errors", () => {
+    process.argv = ["node", "obora", "auth", "add", "openai", "--type", "session"];
+
+    expect(
+      inferNextCommand(
+        new CLIError(
+          "Invalid auth type: session. Supported types: apiKey, token, oauth",
+          ExitCode.VALIDATION_ERROR
+        )
+      )
+    ).toBe(null);
+    expect(
+      inferNextCommand(
+        new CLIError("Provider auth not found: missing-provider", ExitCode.VALIDATION_ERROR)
+      )
+    ).toBe(null);
+  });
+
   it("suppresses generic hints for onboarding scaffold command errors", () => {
     process.argv = ["node", "obora", "init", "demo"];
 

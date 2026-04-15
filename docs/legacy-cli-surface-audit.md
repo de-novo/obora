@@ -11,7 +11,7 @@ Targets reviewed:
 - `status` (initially legacy-boundary, later redesigned as a live surface)
 - `new`
 - `done`
-- `auth`
+- `auth` (initially legacy-boundary, later redesigned as a live surface)
 - `skills`
 - `agents`
 - `dashboard`
@@ -24,16 +24,17 @@ The following files are only re-export shims:
 
 - `packages/cli/src/commands/new.ts` -> `./_legacy/new.js`
 - `packages/cli/src/commands/done.ts` -> `./_legacy/done.js`
-- `packages/cli/src/commands/auth.ts` -> `./_legacy/auth.js`
 - `packages/cli/src/commands/skills.ts` -> `./_legacy/skills.js`
 - `packages/cli/src/commands/agents.ts` -> `./_legacy/agents.js`
 - `packages/cli/src/commands/dashboard.ts` -> `./_legacy/dashboard.js`
 
 `packages/cli/src/commands/status.ts` has since been redesigned as a live top-level command over persisted runs/DLQ state and is no longer just a shim.
 
+`packages/cli/src/commands/auth.ts` has since been redesigned as a live top-level command over the current provider-auth store and is no longer just a shim.
+
 ### Registration
 
-`status` is now registered in `createCLI()` as a live command.
+`status` and `auth` are now registered in `createCLI()` as live commands.
 
 The remaining legacy-boundary targets above are still not added in `createCLI()`.
 
@@ -72,10 +73,11 @@ Recommended order:
 
 - `status`
   - now revived as a thin operator view over persisted runs/DLQ state rather than the legacy feature-status mock path.
+- `auth`
+  - now revived as a live provider-auth management surface over `~/.obora/auth.json` rather than promoting the raw legacy wrapper.
 
 ### Candidate for later decision
 
-- `auth`
 - `skills`
 
 ### Likely keep legacy-only unless a concrete product need reappears
@@ -88,5 +90,6 @@ Recommended order:
 ## Immediate action taken
 
 - `status` was redesigned and registered as a live top-level surface.
+- `auth` was redesigned and registered as a live top-level surface.
 - The remaining legacy surfaces were not promoted automatically.
 - Audit conclusion recorded here so future promotion work starts from an explicit baseline rather than accidentally wiring legacy commands into the live CLI.
