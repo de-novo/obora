@@ -331,6 +331,22 @@ describe("error handler and formatter", () => {
     ).toBe(null);
   });
 
+  it("suppresses generic hints for knowledge command errors", () => {
+    process.argv = ["node", "obora", "knowledge", "schema", "show"];
+
+    expect(
+      inferNextCommand(new CLIError("Invalid knowledge limit: abc", ExitCode.VALIDATION_ERROR))
+    ).toBe(null);
+    expect(
+      inferNextCommand(
+        new CLIError(
+          "Failed to read knowledge schema: ENOENT: no such file or directory, open '.obora/knowledge-schema.yaml'",
+          ExitCode.EXECUTION_FAILED
+        )
+      )
+    ).toBe(null);
+  });
+
   it("formatter.error writes to stderr", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 

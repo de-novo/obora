@@ -47,6 +47,7 @@ describe("M3 CLI command IA", () => {
         "artifact",
         "resume",
         "inspect",
+        "knowledge",
       ])
     );
   });

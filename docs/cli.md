@@ -14,6 +14,7 @@
 - [`obora runs`](#obora-runs)
 - [`obora inspect`](#obora-inspect)
 - [`obora resume`](#obora-resume)
+- [`obora knowledge`](#obora-knowledge)
 - [`obora dlq`](#obora-dlq)
 - [`obora artifact`](#obora-artifact)
 - [`obora audit`](#obora-audit)
@@ -486,6 +487,35 @@ Behavior:
 - `0` success
 - `2` run not found
 - `3` runtime initialization or resume execution failure
+
+---
+
+## `obora knowledge`
+
+Knowledge retrieval and schema inspection commands.
+
+### Usage
+
+```bash
+obora knowledge list [--limit <n>] [--json]
+obora knowledge query [--tag <tag>] [--project <id>] [--min-confidence <n>] [--limit <n>] [--json]
+obora knowledge search <query> [--limit <n>] [--json]
+obora knowledge stats [--json]
+obora knowledge schema show [--json]
+```
+
+Behavior:
+
+- reads knowledge entries from `.obora/knowledge.json` or `.obora/knowledge.jsonl`
+- supports both local `--json` and root `obora --json knowledge ...`
+- validates numeric options like `--limit` and `--min-confidence`
+- `schema show --json` parses the schema into structured JSON; without `--json` it prints the raw YAML
+
+### Exit Codes
+
+- `0` success
+- `2` invalid knowledge query options
+- `3` knowledge file/schema read or query execution errors
 
 ---
 

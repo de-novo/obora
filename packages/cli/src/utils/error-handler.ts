@@ -124,6 +124,7 @@ function inferNextCommand(err: unknown): string | null {
     commandContext.activeCommand === "dlq" ||
     commandContext.activeCommand === "runs" ||
     commandContext.activeCommand === "artifact" ||
+    commandContext.activeCommand === "knowledge" ||
     message.includes("dlq entry") ||
     message.includes("dlq store") ||
     message.includes("dlq config") ||
@@ -133,7 +134,11 @@ function inferNextCommand(err: unknown): string | null {
     message.includes("artifact not found") ||
     message.includes("artifact download failed") ||
     message.includes("failed to resolve artifact") ||
-    message.includes("artifact json output requires")
+    message.includes("artifact json output requires") ||
+    message.includes("knowledge schema") ||
+    message.includes("knowledge file") ||
+    message.includes("knowledge limit") ||
+    message.includes("knowledge min-confidence")
   ) {
     return null;
   }
