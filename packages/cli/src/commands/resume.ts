@@ -9,6 +9,132 @@ import { resolve } from "node:path";
 
 import { Command, Option } from "commander";
 
+import { CLIError } from "../utils/cli-error.js";
+import { handleCommandAction } from "../utils/error-handler.js";
+import { ExitCode } from "../utils/exit-codes.js";
+import { formatter } from "../utils/formatter.js";
+import { getGlobalOpts, type GlobalOptions } from "../utils/global-opts.js";
+
+interface ResumeRuntimeLike {
+  getRunRecord(runId: string): Promise<{ workflowName: string } | null>;
+  loadWorkflow(path: string): Promise<unknown>;
+  resume(
+    runId: string,
+    opts: { fromStep?: string; driftPolicy: "reject" | "warn" | "ignore" }
+  ): Promise<{
+    execution: { id: string; status: string };
+    restoredSteps: string[];
+    rerunSteps: string[];
+    driftDetected?: boolean;
+  }>;
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function shouldOutputJson(localJson: boolean | undefined, globalOpts: GlobalOptions): boolean {
+  return Boolean(localJson || globalOpts.json);
+}
+
+async function createResumeRuntime(): Promise<ResumeRuntimeLike> {
+  try {
+    const { OboraRuntime, loadConfig } = await import("@obora/sdk");
+
+    const config = await loadConfig();
+    const persistence = (config as Record<string, unknown>).persistence as
+      | { enabled?: boolean; adapter?: string; sqlite?: { path?: string }; custom?: unknown }
+      | undefined;
+
+    return new OboraRuntime({
+      persistence: {
+        enabled: persistence?.enabled ?? true,
+        adapter: (persistence?.adapter as "sqlite" | "custom") ?? "sqlite",
+        sqlite: { path: persistence?.sqlite?.path ?? "./data/obora.db" },
+        ...(persistence?.custom
+          ? {
+              custom: persistence.custom as { instance: import("@obora/runtime").StorageAdapter },
+            }
+          : {}),
+      },
+    }) as ResumeRuntimeLike;
+  } catch (error) {
+    throw new CLIError(
+      `Failed to initialize resume runtime: ${getErrorMessage(error)}`,
+      ExitCode.EXECUTION_FAILED
+    );
+  }
+}
+
+async function loadResumeWorkflow(
+  runtime: ResumeRuntimeLike,
+  workflowName: string
+): Promise<boolean> {
+  const workflowCandidates = [
+    workflowName,
+    `${workflowName}.yaml`,
+    `${workflowName}.yml`,
+    `.obora/workflows/${workflowName}.yaml`,
+    `.obora/workflows/${workflowName}.yml`,
+  ].map((candidate) => resolve(process.cwd(), candidate));
+
+  for (const candidate of workflowCandidates) {
+    try {
+      await access(candidate);
+    } catch {
+      continue;
+    }
+
+    await runtime.loadWorkflow(candidate);
+    return true;
+  }
+
+  return false;
+}
+
+async function runResume(
+  runId: string,
+  opts: { fromStep?: string; driftPolicy: "reject" | "warn" | "ignore"; json?: boolean },
+  globalOpts: GlobalOptions
+): Promise<void> {
+  const runtime = await createResumeRuntime();
+
+  const run = await runtime.getRunRecord(runId);
+  if (!run) {
+    throw new CLIError(`Run not found: ${runId}`, ExitCode.VALIDATION_ERROR);
+  }
+
+  const workflowLoaded = await loadResumeWorkflow(runtime, run.workflowName);
+  if (!workflowLoaded) {
+    formatter.warn(
+      `Workflow file not found for '${run.workflowName}'. Resume may fail if rerun steps are required.`
+    );
+  }
+
+  let result;
+  try {
+    result = await runtime.resume(runId, {
+      fromStep: opts.fromStep,
+      driftPolicy: opts.driftPolicy,
+    });
+  } catch (error) {
+    throw new CLIError(`Resume failed: ${getErrorMessage(error)}`, ExitCode.EXECUTION_FAILED);
+  }
+
+  if (shouldOutputJson(opts.json, globalOpts)) {
+    formatter.json(result);
+    return;
+  }
+
+  console.log(`\n✅ Run resumed: ${result.execution.id}`);
+  console.log(`  Status: ${result.execution.status}`);
+  console.log(`  Restored steps: ${result.restoredSteps.join(", ") || "(none)"}`);
+  console.log(`  Re-run steps: ${result.rerunSteps.join(", ") || "(none)"}`);
+  if (result.driftDetected) {
+    console.log(`  ⚠️  Policy drift detected (action: ${opts.driftPolicy})`);
+  }
+}
+
 export function createResumeCommand(): Command {
   return new Command("resume")
     .description("Resume a failed or suspended run from its last checkpoint")
@@ -20,82 +146,14 @@ export function createResumeCommand(): Command {
         .default("warn")
     )
     .option("--json", "Output as JSON")
-    .action(async (runId: string, opts) => {
-      const { OboraRuntime, loadConfig } = await import("@obora/sdk");
-
-      const config = await loadConfig();
-      const persistence = (config as Record<string, unknown>).persistence as
-        | { enabled?: boolean; adapter?: string; sqlite?: { path?: string }; custom?: unknown }
-        | undefined;
-
-      const runtime = new OboraRuntime({
-        persistence: {
-          enabled: persistence?.enabled ?? true,
-          adapter: (persistence?.adapter as "sqlite" | "custom") ?? "sqlite",
-          sqlite: { path: persistence?.sqlite?.path ?? "./data/obora.db" },
-          ...(persistence?.custom
-            ? {
-                custom: persistence.custom as { instance: import("@obora/runtime").StorageAdapter },
-              }
-            : {}),
-        },
+    .action(async function (
+      this: Command,
+      runId: string,
+      opts: { fromStep?: string; driftPolicy: "reject" | "warn" | "ignore"; json?: boolean }
+    ) {
+      const globalOpts = getGlobalOpts(this);
+      await handleCommandAction(() => runResume(runId, opts, globalOpts), {
+        verbose: Boolean(globalOpts.verbose),
       });
-
-      try {
-        const run = await runtime.getRunRecord(runId);
-        if (!run) {
-          throw new Error(`Run not found: ${runId}`);
-        }
-
-        const workflowName = run.workflowName;
-        const workflowCandidates = [
-          workflowName,
-          `${workflowName}.yaml`,
-          `${workflowName}.yml`,
-          `.obora/workflows/${workflowName}.yaml`,
-          `.obora/workflows/${workflowName}.yml`,
-        ].map((candidate) => resolve(process.cwd(), candidate));
-
-        let workflowLoaded = false;
-        for (const candidate of workflowCandidates) {
-          try {
-            await access(candidate);
-          } catch {
-            continue;
-          }
-
-          await runtime.loadWorkflow(candidate);
-          workflowLoaded = true;
-          break;
-        }
-
-        if (!workflowLoaded) {
-          console.warn(
-            `⚠️  Workflow file not found for '${workflowName}'. Resume may fail if rerun steps are required.`
-          );
-        }
-
-        const result = await runtime.resume(runId, {
-          fromStep: opts.fromStep,
-          driftPolicy: opts.driftPolicy as "reject" | "warn" | "ignore",
-        });
-
-        if (opts.json) {
-          console.log(JSON.stringify(result, null, 2));
-          return;
-        }
-
-        console.log(`\n✅ Run resumed: ${result.execution.id}`);
-        console.log(`  Status: ${result.execution.status}`);
-        console.log(`  Restored steps: ${result.restoredSteps.join(", ") || "(none)"}`);
-        console.log(`  Re-run steps: ${result.rerunSteps.join(", ") || "(none)"}`);
-        if (result.driftDetected) {
-          console.log(`  ⚠️  Policy drift detected (action: ${opts.driftPolicy})`);
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        console.error(`\n❌ Resume failed: ${message}`);
-        process.exit(1);
-      }
     });
 }

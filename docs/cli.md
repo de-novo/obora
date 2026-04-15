@@ -12,6 +12,7 @@
 - [`obora test`](#obora-test)
 - [`obora plugin`](#obora-plugin)
 - [`obora runs`](#obora-runs)
+- [`obora resume`](#obora-resume)
 - [`obora dlq`](#obora-dlq)
 - [`obora artifact`](#obora-artifact)
 - [`obora audit`](#obora-audit)
@@ -435,6 +436,31 @@ Both local `--json` and root `obora --json runs inspect <runId>` are supported.
 - `0` success
 - `2` invalid runs filters/options or run not found
 - `3` persisted run load/inspect errors
+
+---
+
+## `obora resume`
+
+Resume a failed or suspended run from persistence/checkpoints.
+
+### Usage
+
+```bash
+obora resume <runId> [--from-step <stepName>] [--drift-policy <reject|warn|ignore>] [--json]
+```
+
+Behavior:
+
+- loads the persisted run record first
+- attempts to find and load the workflow file from the current directory or `.obora/workflows/`
+- if no workflow file is found, emits a warning and still attempts resume
+- supports both local `--json` and root `obora --json resume <runId>`
+
+### Exit Codes
+
+- `0` success
+- `2` run not found
+- `3` runtime initialization or resume execution failure
 
 ---
 

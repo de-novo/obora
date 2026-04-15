@@ -45,6 +45,7 @@ describe("M3 CLI command IA", () => {
         "judge",
         "models",
         "artifact",
+        "resume",
       ])
     );
   });
