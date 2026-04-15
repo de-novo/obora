@@ -81,13 +81,24 @@ Recommended order:
 - `skills`
   - `docs/m3-sdk-cli-design.md` already classifies `new/plan/done/skills` as pre-pivot workflow UX rather than the modern runtime-centric CLI family.
 - `new`
+  - still writes `.obora/features/<name>/...` proposal/design/tasks/status scaffolds and points operators at `obora plan`, which is not part of the live runtime-centric CLI.
 - `done`
+  - still depends on `.obora/features/...` status files, placeholder DuckDB/git paths, and archive semantics from the pre-pivot feature workflow.
+
+### Defer until a fresh product/UX decision exists
+
 - `agents`
+  - current wrapper directly edits `.obora/config.yaml` / `~/.obora/config.yaml` with raw YAML writes and has no live-command tests or modern shared-contract wiring.
+  - current runtime onboarding already leans on explicit config editing plus `doctor` / `models` / `auth`, so a separate top-level agents surface needs a new UX decision before revival.
 - `dashboard`
+  - `docs/m3-sdk-cli-design.md` marks dashboard UI as out of scope for M3 and keeps `@obora/dashboard` as an M4 concern.
+  - current wrapper is only a thin `createDashboardServer()` launcher with `open(...)` and `process.exit(0)` signal handling, not a modern CLI contract surface.
 
 ## Immediate action taken
 
 - `status` was redesigned and registered as a live top-level surface.
 - `auth` was redesigned and registered as a live top-level surface.
+- `new` / `done` are now explicitly classified as legacy-only unless the feature-centric workflow returns.
+- `agents` / `dashboard` are explicitly deferred until a fresh product UX decision exists.
 - The remaining legacy surfaces were not promoted automatically.
 - Audit conclusion recorded here so future promotion work starts from an explicit baseline rather than accidentally wiring legacy commands into the live CLI.
