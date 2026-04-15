@@ -22,6 +22,8 @@ import {
   inspectPersistedRun,
 } from "./commands/runs.js";
 import { createTestCommand } from "./commands/test.js";
+import { handleCommandAction } from "./utils/error-handler.js";
+import { getGlobalOpts } from "./utils/global-opts.js";
 
 /**
  * Create top-level `obora inspect <runId>` alias.
@@ -35,13 +37,25 @@ function createInspectCommand(): Command {
     .option("--json", "Output as JSON")
     .option("--no-steps", "Hide step details")
     .option("--cost", "Include detailed cost summary")
-    .action(async (runId: string, opts) => {
-      const runtime = await createRunsRuntime();
-      await inspectPersistedRun(runtime, runId, {
-        json: opts.json,
-        cost: opts.cost,
-        steps: opts.steps !== false,
-      });
+    .action(async function (
+      this: Command,
+      runId: string,
+      opts: { json?: boolean; cost?: boolean; steps?: boolean }
+    ) {
+      const globalOpts = getGlobalOpts(this);
+      await handleCommandAction(
+        async () => {
+          const runtime = await createRunsRuntime();
+          await inspectPersistedRun(runtime, runId, {
+            json: Boolean(opts.json || globalOpts.json),
+            cost: opts.cost,
+            steps: opts.steps !== false,
+          });
+        },
+        {
+          verbose: Boolean(globalOpts.verbose),
+        }
+      );
     });
 }
 

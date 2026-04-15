@@ -12,6 +12,7 @@
 - [`obora test`](#obora-test)
 - [`obora plugin`](#obora-plugin)
 - [`obora runs`](#obora-runs)
+- [`obora inspect`](#obora-inspect)
 - [`obora resume`](#obora-resume)
 - [`obora dlq`](#obora-dlq)
 - [`obora artifact`](#obora-artifact)
@@ -435,6 +436,30 @@ Both local `--json` and root `obora --json runs inspect <runId>` are supported.
 
 - `0` success
 - `2` invalid runs filters/options or run not found
+- `3` persisted run load/inspect errors
+
+---
+
+## `obora inspect`
+
+Top-level alias for `obora runs inspect`.
+
+### Usage
+
+```bash
+obora inspect <runId> [--json] [--no-steps] [--cost]
+```
+
+Behavior:
+
+- delegates to the same persisted-run inspection surface as `obora runs inspect`
+- supports both local `--json` and root `obora --json inspect <runId>`
+- `--no-steps` hides step details while keeping the rest of the run summary intact
+
+### Exit Codes
+
+- `0` success
+- `2` run not found
 - `3` persisted run load/inspect errors
 
 ---
