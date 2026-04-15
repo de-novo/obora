@@ -2,11 +2,20 @@ import { listPiAIModels, listPiAIProviders } from "@obora/adapters";
 import { Command } from "commander";
 
 import { handleCommandAction } from "../utils/error-handler.js";
+import { CLIError } from "../utils/cli-error.js";
+import { ExitCode } from "../utils/exit-codes.js";
 import { formatter } from "../utils/formatter.js";
 import { getGlobalOpts } from "../utils/global-opts.js";
 
 interface ModelsOptions {
   json?: boolean;
+}
+
+function shouldOutputJson(
+  localJson: boolean | undefined,
+  globalJson: boolean | undefined
+): boolean {
+  return Boolean(localJson || globalJson);
 }
 
 interface GlobalModelMatch {
@@ -260,8 +269,9 @@ export async function runModels(
 
   if (provider && !providers.includes(provider)) {
     if (query !== undefined) {
-      throw new Error(
-        `Unsupported provider '${provider}'. Supported providers: ${providers.join(", ")}`
+      throw new CLIError(
+        `Unsupported models provider '${provider}'. Supported providers: ${providers.join(", ")}`,
+        ExitCode.VALIDATION_ERROR
       );
     }
 
@@ -346,11 +356,19 @@ export function createModelsCommand(): Command {
     .description("List supported model refs from the installed pi-ai catalog")
     .argument("[provider]", "Provider name to inspect or global query")
     .argument("[query]", "Optional substring filter for provider-specific model refs")
-    .action(async function (this: Command, provider?: string, query?: string) {
+    .option("--json", "Output as JSON")
+    .action(async function (
+      this: Command,
+      provider?: string,
+      query?: string,
+      options: ModelsOptions = {}
+    ) {
       const globalOpts = getGlobalOpts(this);
       await handleCommandAction(
         async () => {
-          await runModels(provider, query, globalOpts);
+          await runModels(provider, query, {
+            json: shouldOutputJson(options.json, globalOpts.json),
+          });
         },
         { verbose: Boolean(globalOpts.verbose) }
       );

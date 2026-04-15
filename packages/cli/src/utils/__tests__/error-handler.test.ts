@@ -360,6 +360,19 @@ describe("error handler and formatter", () => {
     ).toBe(null);
   });
 
+  it("suppresses generic hints for models command errors", () => {
+    process.argv = ["node", "obora", "models", "unknown-provider", "mini"];
+
+    expect(
+      inferNextCommand(
+        new CLIError(
+          "Unsupported models provider 'unknown-provider'. Supported providers: openai, anthropic",
+          ExitCode.VALIDATION_ERROR
+        )
+      )
+    ).toBe(null);
+  });
+
   it("formatter.error writes to stderr", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 

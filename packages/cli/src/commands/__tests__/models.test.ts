@@ -245,15 +245,15 @@ describe("models command", () => {
     );
   });
 
-  it("throws a helpful error for unsupported providers when a provider filter is explicit", async () => {
+  it("throws a helpful validation error for unsupported providers when a provider filter is explicit", async () => {
     await expect(runModels("unknown-provider", "mini", {})).rejects.toThrow(
-      "Unsupported provider 'unknown-provider'. Supported providers: openai, anthropic"
+      "Unsupported models provider 'unknown-provider'. Supported providers: openai, anthropic"
     );
   });
 
-  it("throws a helpful error for unsupported providers when an empty explicit query is supplied", async () => {
+  it("throws a helpful validation error for unsupported providers when an empty explicit query is supplied", async () => {
     await expect(runModels("unknown-provider", "", {})).rejects.toThrow(
-      "Unsupported provider 'unknown-provider'. Supported providers: openai, anthropic"
+      "Unsupported models provider 'unknown-provider'. Supported providers: openai, anthropic"
     );
   });
 

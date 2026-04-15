@@ -126,6 +126,7 @@ function inferNextCommand(err: unknown): string | null {
     commandContext.activeCommand === "artifact" ||
     commandContext.activeCommand === "knowledge" ||
     commandContext.activeCommand === "audit" ||
+    commandContext.activeCommand === "models" ||
     message.includes("dlq entry") ||
     message.includes("dlq store") ||
     message.includes("dlq config") ||
@@ -141,7 +142,8 @@ function inferNextCommand(err: unknown): string | null {
     message.includes("knowledge limit") ||
     message.includes("knowledge min-confidence") ||
     message.includes("invalid audit ") ||
-    message.includes("audit timeline")
+    message.includes("audit timeline") ||
+    message.includes("unsupported models provider")
   ) {
     return null;
   }
