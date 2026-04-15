@@ -757,6 +757,177 @@ describe("dlq command", () => {
     );
   });
 
+  it("inherits root --json for list output", async () => {
+    const load = vi.fn().mockResolvedValue({
+      entries: [
+        {
+          id: "entry-root-list",
+          createdAt: "2026-03-10T10:00:00.000Z",
+          executionId: "run-root-list",
+          workflowName: "repair-workflow",
+          errorCode: "SDK_STEP_FAILED",
+          errorMessage: "repair failed",
+          repairAttempts: 1,
+          status: "pending",
+        },
+      ],
+      lastUpdated: "2026-03-10T10:05:00.000Z",
+    });
+    vi.mocked(FileDLQStore).mockImplementation(
+      () =>
+        ({
+          load,
+          save: vi.fn(),
+          append: vi.fn(),
+        }) as never
+    );
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const root = new Command("obora").option("--json");
+    root.addCommand(createDlqCommand());
+
+    await root.parseAsync(["--json", "dlq", "list", "--limit", "1"], { from: "user" });
+
+    const payload = JSON.parse(log.mock.calls.at(-1)?.[0] ?? "{}");
+    expect(payload).toEqual(
+      expect.objectContaining({
+        total: 1,
+        limit: 1,
+        entries: [expect.objectContaining({ id: "entry-root-list", status: "pending" })],
+      })
+    );
+  });
+
+  it("inherits root --json for inspect output", async () => {
+    const load = vi.fn().mockResolvedValue({
+      entries: [
+        {
+          id: "entry-root-inspect",
+          createdAt: "2026-03-10T10:00:00.000Z",
+          executionId: "run-root-inspect",
+          workflowName: "repair-workflow",
+          stepName: "repair",
+          errorCode: "SDK_STEP_FAILED",
+          errorMessage: "repair failed",
+          repairAttempts: 2,
+          status: "pending",
+          metadata: {
+            repairLoop: {
+              lastStopCategory: "repeated_critical_issue",
+            },
+          },
+        },
+      ],
+      lastUpdated: "2026-03-10T10:05:00.000Z",
+    });
+    vi.mocked(FileDLQStore).mockImplementation(
+      () =>
+        ({
+          load,
+          save: vi.fn(),
+          append: vi.fn(),
+        }) as never
+    );
+    vi.mocked(createRunsRuntime).mockResolvedValue({
+      getRunRecord: vi.fn().mockResolvedValue(null),
+    } as never);
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const root = new Command("obora").option("--json");
+    root.addCommand(createDlqCommand());
+
+    await root.parseAsync(["--json", "dlq", "inspect", "entry-root-inspect"], { from: "user" });
+
+    const payload = JSON.parse(log.mock.calls.at(-1)?.[0] ?? "{}");
+    expect(payload).toEqual(
+      expect.objectContaining({
+        entry: expect.objectContaining({
+          id: "entry-root-inspect",
+        }),
+        triage: expect.objectContaining({
+          repairAttempts: 2,
+          lastStopCategory: "repeated_critical_issue",
+        }),
+      })
+    );
+  });
+
+  it("inherits root --json for resolve output", async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    const load = vi.fn().mockResolvedValue({
+      entries: [
+        {
+          id: "entry-root-resolve",
+          createdAt: "2026-03-10T10:00:00.000Z",
+          executionId: "run-root-resolve",
+          workflowName: "repair-workflow",
+          errorCode: "SDK_STEP_FAILED",
+          errorMessage: "repair failed",
+          repairAttempts: 1,
+          status: "pending",
+        },
+      ],
+      lastUpdated: "2026-03-10T10:10:00.000Z",
+    });
+    vi.mocked(FileDLQStore).mockImplementation(
+      () =>
+        ({
+          load,
+          save,
+          append: vi.fn(),
+        }) as never
+    );
+    vi.mocked(resolveDLQEntry).mockReturnValue({
+      entries: [
+        {
+          id: "entry-root-resolve",
+          createdAt: "2026-03-10T10:00:00.000Z",
+          executionId: "run-root-resolve",
+          workflowName: "repair-workflow",
+          errorCode: "SDK_STEP_FAILED",
+          errorMessage: "repair failed",
+          repairAttempts: 1,
+          status: "retried",
+          resolution: {
+            actor: "cto",
+            note: "root-json",
+            resolvedAt: "2026-03-10T10:12:00.000Z",
+          },
+        },
+      ],
+      lastUpdated: "2026-03-10T10:12:00.000Z",
+    } as never);
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const root = new Command("obora").option("--json");
+    root.addCommand(createDlqCommand());
+
+    await root.parseAsync(
+      [
+        "--json",
+        "dlq",
+        "resolve",
+        "entry-root-resolve",
+        "--status",
+        "retried",
+        "--actor",
+        "cto",
+        "--note",
+        "root-json",
+      ],
+      { from: "user" }
+    );
+
+    const payload = JSON.parse(log.mock.calls.at(-1)?.[0] ?? "{}");
+    expect(payload.entry).toEqual(
+      expect.objectContaining({
+        id: "entry-root-resolve",
+        status: "retried",
+      })
+    );
+    expect(save).toHaveBeenCalled();
+  });
+
   it("uses validation exit code instead of process.exit for missing entries", async () => {
     const load = vi.fn().mockResolvedValue({
       entries: [],

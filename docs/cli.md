@@ -628,6 +628,8 @@ List DLQ entries sorted by newest first. Text output includes workflow, status, 
 
 JSON output preserves the existing DLQ payload shape and enriches each listed entry with `triage` plus `relatedRun` (including loop state / stop category when available) when the corresponding persisted run can be resolved.
 
+Supports both local `--json` and root `obora --json dlq list ...`.
+
 Examples:
 
 ```bash
@@ -645,6 +647,7 @@ obora dlq inspect <entryId> [--file <path>] [--json]
 ```
 
 Show one DLQ entry including error, repair attempts, resolution fields, raw metadata, and a curated triage summary (`repairAttempts`, stop category, latest validation/repair context`).
+Supports both local `--json`and root`obora --json dlq inspect <entryId>`.
 If a persisted run record exists for the same `executionId`, CLI also includes:
 
 - a compact related-run summary
@@ -658,6 +661,7 @@ obora dlq summary [--file <path>] [--json]
 ```
 
 Show aggregate DLQ counts (`pending`, `reviewed`, `retried`, `dismissed`) plus oldest pending timestamp.
+Supports both local `--json` and root `obora --json dlq summary`.
 
 #### `obora dlq resolve <entryId>`
 
@@ -666,6 +670,7 @@ obora dlq resolve <entryId> --status <reviewed|retried|dismissed> [--actor <name
 ```
 
 Resolve a DLQ entry and persist actor/note metadata.
+Supports both local `--json` and root `obora --json dlq resolve <entryId> ...`.
 
 ### Exit Codes
 
