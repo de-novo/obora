@@ -399,6 +399,19 @@ describe("error handler and formatter", () => {
     ).toBe(null);
   });
 
+  it("suppresses generic hints for test command errors", () => {
+    process.argv = ["node", "obora", "test", "./missing-tests"];
+
+    expect(
+      inferNextCommand(
+        new CLIError(
+          "Test target not found: ./missing-tests. Check the path and try again.",
+          ExitCode.VALIDATION_ERROR
+        )
+      )
+    ).toBe(null);
+  });
+
   it("formatter.error writes to stderr", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 

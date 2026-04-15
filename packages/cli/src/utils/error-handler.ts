@@ -129,6 +129,7 @@ function inferNextCommand(err: unknown): string | null {
     commandContext.activeCommand === "models" ||
     commandContext.activeCommand === "policy" ||
     commandContext.activeCommand === "plugin" ||
+    commandContext.activeCommand === "test" ||
     message.includes("dlq entry") ||
     message.includes("dlq store") ||
     message.includes("dlq config") ||
@@ -148,7 +149,10 @@ function inferNextCommand(err: unknown): string | null {
     message.includes("unsupported models provider") ||
     message.includes("unsupported policy file format") ||
     message.includes("invalid policy/workflow yaml") ||
-    message.includes("plugin not found")
+    message.includes("plugin not found") ||
+    message.includes("test target not found") ||
+    message.includes("no test target provided") ||
+    message.includes("unsupported test target")
   ) {
     return null;
   }

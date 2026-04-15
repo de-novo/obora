@@ -7,7 +7,7 @@ import { CLIError } from "../utils/cli-error.js";
 import { handleCommandAction } from "../utils/error-handler.js";
 import { ExitCode } from "../utils/exit-codes.js";
 import { formatter } from "../utils/formatter.js";
-import { getGlobalOpts } from "../utils/global-opts.js";
+import { getGlobalOpts, type GlobalOptions } from "../utils/global-opts.js";
 
 function isYamlFile(path: string): boolean {
   return path.endsWith(".yaml") || path.endsWith(".yml");
@@ -21,17 +21,33 @@ function matchesFilter(name: string, filter?: string): boolean {
   return name.toLowerCase().includes(filter.toLowerCase());
 }
 
+interface TestCommandOptions {
+  fixture?: string;
+  filter?: string;
+  json?: boolean;
+}
+
+function shouldOutputJson(localJson: boolean | undefined, globalOpts: GlobalOptions): boolean {
+  return Boolean(localJson || globalOpts.json);
+}
+
 export function createTestCommand(): Command {
   return new Command("test")
     .description("Run workflow tests")
     .argument("[target]", "Workflow or test suite path")
     .option("--fixture <path>", "YAML fixture file")
     .option("--filter <pattern>", "Filter test cases by name")
-    .action(async function (this: Command, target, options) {
+    .option("--json", "Output as JSON")
+    .action(async function (
+      this: Command,
+      target: string | undefined,
+      options: TestCommandOptions
+    ) {
       const globalOpts = getGlobalOpts(this);
       await handleCommandAction(
         async () => {
           const fixturePath = options.fixture ?? target ?? "./tests";
+          const jsonOutput = shouldOutputJson(options.json, globalOpts);
 
           const fixtureStat = await stat(fixturePath).catch(() => null);
 
@@ -66,7 +82,7 @@ export function createTestCommand(): Command {
           );
 
           if (selected.length === 0) {
-            if (globalOpts.json) {
+            if (jsonOutput) {
               formatter.json({
                 target: fixturePath,
                 filter: options.filter ?? null,
@@ -83,21 +99,21 @@ export function createTestCommand(): Command {
 
           const results = [];
           for (const fixture of selected) {
-            if (globalOpts.verbose && !globalOpts.quiet && !globalOpts.json) {
+            if (globalOpts.verbose && !globalOpts.quiet && !jsonOutput) {
               formatter.step(`Running test fixture: ${fixture.name}`);
             }
 
             const result = await runWorkflowTest(fixtureToTestCase(fixture));
             results.push(result);
 
-            if (globalOpts.verbose && !globalOpts.quiet && !globalOpts.json) {
+            if (globalOpts.verbose && !globalOpts.quiet && !jsonOutput) {
               formatter.step(`Finished: ${fixture.name} (${result.duration}ms)`);
             }
           }
 
           const failed = results.filter((result) => !result.passed);
 
-          if (globalOpts.json) {
+          if (jsonOutput) {
             formatter.json({
               target: fixturePath,
               filter: options.filter ?? null,

@@ -277,16 +277,20 @@ Run fixture-based workflow tests.
 
 ```bash
 obora test [target] [options]
+obora test [target] --json
+obora --json test [target]
 ```
 
 ### Options
 
 - `--fixture <path>` fixture file path (`.yaml`/`.yml`)
 - `--filter <pattern>` filter fixtures by name
+- `--json` output structured test results as JSON
 
 ### Behavior
 
 - If target is omitted, defaults to `./tests`.
+- Supports both local `obora test ... --json` and root `obora --json test ...`.
 - Supports single YAML fixture or directory of fixtures.
 - Uses SDK test APIs: `loadFixture(s)`, `fixtureToTestCase`, `runWorkflowTest`.
 
@@ -297,6 +301,7 @@ obora test
 obora test ./tests
 obora test --fixture ./tests/happy-path.yaml
 obora test ./tests --filter recovery
+obora test ./tests --json
 ```
 
 ### Exit Codes
