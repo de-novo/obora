@@ -11,6 +11,24 @@
 
 import { Command } from "commander";
 
+import { CLIError } from "../utils/cli-error.js";
+import { handleCommandAction } from "../utils/error-handler.js";
+import { ExitCode } from "../utils/exit-codes.js";
+import { formatter } from "../utils/formatter.js";
+import { getGlobalOpts, type GlobalOptions } from "../utils/global-opts.js";
+
+const RUN_STATUSES = ["running", "completed", "failed", "suspended"] as const;
+const RUN_REPAIR_LOOP_FILTERS = [
+  "with",
+  "without",
+  "stalled",
+  "exhausted",
+  "critical",
+  "no-progress",
+] as const;
+const RUN_SORT_FIELDS = ["startedAt", "validationFailed", "repairStarted"] as const;
+const RUN_SORT_ORDERS = ["asc", "desc"] as const;
+
 interface ValidationFailureDetail {
   stepName?: string;
   summary?: string;
@@ -134,6 +152,43 @@ export async function createRuntime() {
         : {}),
     },
   });
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function parseNumberOption(value: string | undefined, fallback: number, label: string): number {
+  if (value === undefined) return fallback;
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new CLIError(`Invalid runs ${label}: ${value}`, ExitCode.VALIDATION_ERROR);
+  }
+  return parsed;
+}
+
+function shouldOutputJson(localJson: boolean | undefined, globalOpts: GlobalOptions): boolean {
+  return Boolean(localJson || globalOpts.json);
+}
+
+function isRunStatus(value: string | undefined): value is (typeof RUN_STATUSES)[number] {
+  return typeof value === "string" && (RUN_STATUSES as readonly string[]).includes(value);
+}
+
+function isRunRepairLoopFilter(
+  value: string | undefined
+): value is (typeof RUN_REPAIR_LOOP_FILTERS)[number] {
+  return (
+    typeof value === "string" && (RUN_REPAIR_LOOP_FILTERS as readonly string[]).includes(value)
+  );
+}
+
+function isRunSortField(value: string | undefined): value is (typeof RUN_SORT_FIELDS)[number] {
+  return typeof value === "string" && (RUN_SORT_FIELDS as readonly string[]).includes(value);
+}
+
+function isRunSortOrder(value: string | undefined): value is (typeof RUN_SORT_ORDERS)[number] {
+  return typeof value === "string" && (RUN_SORT_ORDERS as readonly string[]).includes(value);
 }
 
 function toValidationFailureDetail(event: StructuredAuditEventLike): ValidationFailureDetail {
@@ -443,8 +498,7 @@ export async function inspectPersistedRun(
 ): Promise<void> {
   const run = await runtime.getRunRecord(runId);
   if (!run) {
-    console.error(`Run not found: ${runId}`);
-    process.exit(1);
+    throw new CLIError(`Run not found: ${runId}`, ExitCode.VALIDATION_ERROR);
   }
 
   const steps = opts.steps !== false ? await runtime.getRunSteps(runId) : [];
@@ -465,7 +519,7 @@ export async function inspectPersistedRun(
       ...(costSummary ? { costSummary } : {}),
     };
     if (opts.steps !== false) payload.steps = steps;
-    console.log(JSON.stringify(payload, null, 2));
+    formatter.json(payload);
     return;
   }
 
@@ -567,6 +621,129 @@ export async function inspectPersistedRun(
   }
 }
 
+async function runListRuns(
+  opts: {
+    status?: string;
+    workflow?: string;
+    repairLoop?: string;
+    sort?: string;
+    order?: string;
+    limit?: string;
+    json?: boolean;
+  },
+  globalOpts: GlobalOptions
+): Promise<void> {
+  if (opts.status && !isRunStatus(opts.status)) {
+    throw new CLIError(
+      `Invalid runs status. Must be one of: ${RUN_STATUSES.join(", ")}`,
+      ExitCode.VALIDATION_ERROR
+    );
+  }
+  if (opts.repairLoop && !isRunRepairLoopFilter(opts.repairLoop)) {
+    throw new CLIError(
+      `Invalid runs repair-loop filter. Must be one of: ${RUN_REPAIR_LOOP_FILTERS.join(", ")}`,
+      ExitCode.VALIDATION_ERROR
+    );
+  }
+  if (opts.sort && !isRunSortField(opts.sort)) {
+    throw new CLIError(
+      `Invalid runs sort field. Must be one of: ${RUN_SORT_FIELDS.join(", ")}`,
+      ExitCode.VALIDATION_ERROR
+    );
+  }
+  if (opts.order && !isRunSortOrder(opts.order)) {
+    throw new CLIError(
+      `Invalid runs sort order. Must be one of: ${RUN_SORT_ORDERS.join(", ")}`,
+      ExitCode.VALIDATION_ERROR
+    );
+  }
+
+  const status = isRunStatus(opts.status) ? opts.status : undefined;
+  const repairLoop = isRunRepairLoopFilter(opts.repairLoop) ? opts.repairLoop : undefined;
+  const sortBy = isRunSortField(opts.sort) ? opts.sort : "startedAt";
+  const order = isRunSortOrder(opts.order) ? opts.order : "desc";
+  const limit = parseNumberOption(opts.limit, 20, "limit");
+
+  let runRecords: PersistedRunRecord[];
+  try {
+    const runtime = await createRuntime();
+    runRecords = await listRunsForCli(runtime, {
+      status,
+      workflow: opts.workflow,
+      repairLoop,
+      sortBy,
+      order,
+      limit,
+    });
+  } catch (error) {
+    if (error instanceof CLIError) throw error;
+    throw new CLIError(
+      `Failed to load persisted runs: ${getErrorMessage(error)}`,
+      ExitCode.EXECUTION_FAILED
+    );
+  }
+
+  const linkedDlqEntries = await loadLinkedDlqEntries(runRecords.map((run) => run.id));
+  const runRows: PersistedRunListRow[] = runRecords.map((run) => {
+    const row: PersistedRunListRow = {
+      ...run,
+      ...(linkedDlqEntries[run.id] ? { linkedDlqEntry: linkedDlqEntries[run.id] } : {}),
+    };
+    const triageCause = getRunTriageCause(row);
+    return {
+      ...row,
+      ...(triageCause ? { triageCause } : {}),
+    };
+  });
+
+  if (shouldOutputJson(opts.json, globalOpts)) {
+    formatter.json(runRows);
+    return;
+  }
+
+  if (runRows.length === 0) {
+    console.log("No runs found.");
+    return;
+  }
+
+  console.log(
+    `${"ID".padEnd(38)} ${"Workflow".padEnd(20)} ${"Status".padEnd(12)} ${"Loop State".padEnd(12)} ${"Cause".padEnd(24)} ${"DLQ".padEnd(12)} ${"Repair Loop".padEnd(40)} Started At`
+  );
+  console.log("-".repeat(183));
+  for (const run of runRows) {
+    const repairLoopSummary = extractPersistedRepairLoopSummary(run);
+    const repairState = getCliRepairLoopState(repairLoopSummary);
+    const repairSummary = formatRepairLoopListSummary(repairLoopSummary);
+    const linkedDlqIndicator = formatLinkedDlqIndicator(run.linkedDlqEntry);
+    const triageCause = run.triageCause ?? "-";
+    console.log(
+      `${run.id.padEnd(38)} ${(run.workflowName ?? "-").padEnd(20)} ${(run.status ?? "-").padEnd(12)} ${repairState.padEnd(12)} ${triageCause.padEnd(24)} ${linkedDlqIndicator.padEnd(12)} ${repairSummary.padEnd(40)} ${run.startedAt ?? "-"}`
+    );
+  }
+  console.log(`\n${runRows.length} run(s)`);
+}
+
+async function runInspectPersistedRun(
+  runId: string,
+  opts: { json?: boolean; cost?: boolean },
+  globalOpts: GlobalOptions
+): Promise<void> {
+  try {
+    const runtime = await createRuntime();
+    await inspectPersistedRun(runtime, runId, {
+      json: shouldOutputJson(opts.json, globalOpts),
+      cost: opts.cost,
+      steps: true,
+    });
+  } catch (error) {
+    if (error instanceof CLIError) throw error;
+    throw new CLIError(
+      `Failed to inspect persisted run: ${getErrorMessage(error)}`,
+      ExitCode.EXECUTION_FAILED
+    );
+  }
+}
+
 export function createRunsCommand(): Command {
   const runs = new Command("runs").description("Query persisted run records");
 
@@ -583,54 +760,11 @@ export function createRunsCommand(): Command {
     .option("--order <dir>", "Sort order asc|desc", "desc")
     .option("--limit <n>", "Max results", "20")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
-      const runtime = await createRuntime();
-      const runRecords = await listRunsForCli(runtime, {
-        status: opts.status,
-        workflow: opts.workflow,
-        repairLoop: opts.repairLoop,
-        sortBy: opts.sort,
-        order: opts.order,
-        limit: Number(opts.limit),
+    .action(async function (this: Command, opts) {
+      const globalOpts = getGlobalOpts(this);
+      await handleCommandAction(() => runListRuns(opts, globalOpts), {
+        verbose: Boolean(globalOpts.verbose),
       });
-      const linkedDlqEntries = await loadLinkedDlqEntries(runRecords.map((run) => run.id));
-      const runRows: PersistedRunListRow[] = runRecords.map((run) => {
-        const row: PersistedRunListRow = {
-          ...run,
-          ...(linkedDlqEntries[run.id] ? { linkedDlqEntry: linkedDlqEntries[run.id] } : {}),
-        };
-        const triageCause = getRunTriageCause(row);
-        return {
-          ...row,
-          ...(triageCause ? { triageCause } : {}),
-        };
-      });
-
-      if (opts.json) {
-        console.log(JSON.stringify(runRows, null, 2));
-        return;
-      }
-
-      if (runRows.length === 0) {
-        console.log("No runs found.");
-        return;
-      }
-
-      console.log(
-        `${"ID".padEnd(38)} ${"Workflow".padEnd(20)} ${"Status".padEnd(12)} ${"Loop State".padEnd(12)} ${"Cause".padEnd(24)} ${"DLQ".padEnd(12)} ${"Repair Loop".padEnd(40)} Started At`
-      );
-      console.log("-".repeat(183));
-      for (const run of runRows) {
-        const repairLoop = extractPersistedRepairLoopSummary(run);
-        const repairState = getCliRepairLoopState(repairLoop);
-        const repairSummary = formatRepairLoopListSummary(repairLoop);
-        const linkedDlqIndicator = formatLinkedDlqIndicator(run.linkedDlqEntry);
-        const triageCause = run.triageCause ?? "-";
-        console.log(
-          `${run.id.padEnd(38)} ${(run.workflowName ?? "-").padEnd(20)} ${(run.status ?? "-").padEnd(12)} ${repairState.padEnd(12)} ${triageCause.padEnd(24)} ${linkedDlqIndicator.padEnd(12)} ${repairSummary.padEnd(40)} ${run.startedAt ?? "-"}`
-        );
-      }
-      console.log(`\n${runRows.length} run(s)`);
     });
 
   runs
@@ -638,9 +772,11 @@ export function createRunsCommand(): Command {
     .description("Inspect a run with step details")
     .option("--json", "Output as JSON")
     .option("--cost", "Include detailed cost summary")
-    .action(async (runId: string, opts) => {
-      const runtime = await createRuntime();
-      await inspectPersistedRun(runtime, runId, { json: opts.json, cost: opts.cost, steps: true });
+    .action(async function (this: Command, runId: string, opts) {
+      const globalOpts = getGlobalOpts(this);
+      await handleCommandAction(() => runInspectPersistedRun(runId, opts, globalOpts), {
+        verbose: Boolean(globalOpts.verbose),
+      });
     });
 
   return runs;

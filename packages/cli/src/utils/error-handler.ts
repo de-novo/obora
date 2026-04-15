@@ -122,9 +122,13 @@ function inferNextCommand(err: unknown): string | null {
 
   if (
     commandContext.activeCommand === "dlq" ||
+    commandContext.activeCommand === "runs" ||
     message.includes("dlq entry") ||
     message.includes("dlq store") ||
-    message.includes("dlq config")
+    message.includes("dlq config") ||
+    message.includes("run not found") ||
+    message.includes("persisted run") ||
+    message.includes("invalid runs ")
   ) {
     return null;
   }

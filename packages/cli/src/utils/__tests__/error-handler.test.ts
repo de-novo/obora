@@ -303,6 +303,19 @@ describe("error handler and formatter", () => {
     );
   });
 
+  it("suppresses generic run hints for runs triage errors", () => {
+    process.argv = ["node", "obora", "runs", "inspect", "missing-run"];
+
+    expect(
+      inferNextCommand(new CLIError("Run not found: missing-run", ExitCode.VALIDATION_ERROR))
+    ).toBe(null);
+    expect(
+      inferNextCommand(
+        new CLIError("Failed to load persisted runs: sqlite offline", ExitCode.EXECUTION_FAILED)
+      )
+    ).toBe(null);
+  });
+
   it("formatter.error writes to stderr", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 

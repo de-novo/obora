@@ -386,6 +386,7 @@ Text output includes:
 - compact repair-loop summary (`F/R/P/N/X` style counts + latest validation summary when available)
 
 JSON output preserves persisted run fields and additionally includes `triageCause` plus `linkedDlqEntry` when a matching DLQ entry exists for the same run.
+Both local `--json` and root `obora --json runs ...` are supported.
 
 Loop state precedence:
 
@@ -424,6 +425,13 @@ obora runs inspect <runId> [--json] [--cost]
 Show run details including step records, artifacts, and repair-loop inspection summaries.
 If persisted `run.metadata.repairLoop` is present, CLI uses it first and falls back to audit replay only when needed.
 If the run is linked to a DLQ entry, CLI also shows a compact linked-DLQ summary plus a ready-to-run `obora dlq inspect <entryId>` hint.
+Both local `--json` and root `obora --json runs inspect <runId>` are supported.
+
+### Exit Codes
+
+- `0` success
+- `2` invalid runs filters/options or run not found
+- `3` persisted run load/inspect errors
 
 ---
 
