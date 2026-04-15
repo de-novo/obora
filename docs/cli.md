@@ -11,6 +11,9 @@
 - [`obora run`](#obora-run)
 - [`obora test`](#obora-test)
 - [`obora plugin`](#obora-plugin)
+- [`obora runs`](#obora-runs)
+- [`obora dlq`](#obora-dlq)
+- [`obora artifact`](#obora-artifact)
 - [`obora audit`](#obora-audit)
 - [`obora policy`](#obora-policy)
 
@@ -501,6 +504,35 @@ Resolve a DLQ entry and persist actor/note metadata.
 - `0` success
 - `2` invalid args or DLQ entry not found
 - `3` DLQ storage/config/runtime errors
+
+---
+
+## `obora artifact`
+
+Artifact retrieval commands.
+
+### Usage
+
+```bash
+obora artifact get <runId> <stepName> <name> [--output <path>] [--json]
+```
+
+Download a persisted artifact by run ID, step name, and artifact name.
+
+Behavior:
+
+- without `--output`, the artifact bytes are written directly to stdout
+- with `--output`, CLI writes the artifact to the given path and prints the saved path
+- with local `--json` or root `obora --json artifact get ...`, CLI writes the artifact to `--output` and returns JSON metadata instead of mixing binary bytes into stdout
+- JSON mode requires `--output`
+
+JSON output includes the resolved artifact identity plus `outputPath` and any available persisted metadata such as `mimeType`, `sizeBytes`, and `createdAt`.
+
+### Exit Codes
+
+- `0` success
+- `2` artifact not found or invalid JSON/output usage
+- `3` artifact runtime/resolve/download/write errors
 
 ---
 

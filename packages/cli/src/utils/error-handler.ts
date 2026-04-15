@@ -123,12 +123,17 @@ function inferNextCommand(err: unknown): string | null {
   if (
     commandContext.activeCommand === "dlq" ||
     commandContext.activeCommand === "runs" ||
+    commandContext.activeCommand === "artifact" ||
     message.includes("dlq entry") ||
     message.includes("dlq store") ||
     message.includes("dlq config") ||
     message.includes("run not found") ||
     message.includes("persisted run") ||
-    message.includes("invalid runs ")
+    message.includes("invalid runs ") ||
+    message.includes("artifact not found") ||
+    message.includes("artifact download failed") ||
+    message.includes("failed to resolve artifact") ||
+    message.includes("artifact json output requires")
   ) {
     return null;
   }

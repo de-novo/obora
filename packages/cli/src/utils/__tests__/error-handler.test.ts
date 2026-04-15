@@ -316,6 +316,21 @@ describe("error handler and formatter", () => {
     ).toBe(null);
   });
 
+  it("suppresses generic run hints for artifact retrieval errors", () => {
+    process.argv = ["node", "obora", "artifact", "get", "run-1", "validate", "missing.log"];
+
+    expect(
+      inferNextCommand(
+        new CLIError("Artifact not found: run-1/validate/missing.log", ExitCode.VALIDATION_ERROR)
+      )
+    ).toBe(null);
+    expect(
+      inferNextCommand(
+        new CLIError("Artifact download failed: disk offline", ExitCode.EXECUTION_FAILED)
+      )
+    ).toBe(null);
+  });
+
   it("formatter.error writes to stderr", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
