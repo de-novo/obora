@@ -425,6 +425,16 @@ describe("error handler and formatter", () => {
     ).toBe(null);
   });
 
+  it("suppresses generic hints for doctor command errors", () => {
+    process.argv = ["node", "obora", "doctor"];
+
+    expect(
+      inferNextCommand(
+        new CLIError("Failed to load doctor config: config disk offline", ExitCode.EXECUTION_FAILED)
+      )
+    ).toBe(null);
+  });
+
   it("formatter.error writes to stderr", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 

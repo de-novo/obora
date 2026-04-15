@@ -6,9 +6,11 @@ import {
 } from "@obora/sdk";
 import { Command } from "commander";
 
+import { CLIError } from "../utils/cli-error.js";
 import { handleCommandAction } from "../utils/error-handler.js";
+import { ExitCode } from "../utils/exit-codes.js";
 import { formatter } from "../utils/formatter.js";
-import { getGlobalOpts } from "../utils/global-opts.js";
+import { getGlobalOpts, type GlobalOptions } from "../utils/global-opts.js";
 
 import {
   buildAuthDiagnostics,
@@ -26,11 +28,33 @@ import {
   type DoctorOptions,
 } from "./doctor-shared.js";
 
+function shouldOutputJson(localJson: boolean | undefined, globalOpts: GlobalOptions): boolean {
+  return Boolean(localJson || globalOpts.json);
+}
+
 export async function runDoctor(options: DoctorOptions): Promise<void> {
   const checks = buildDoctorChecks();
-  const loadedConfig = await loadConfig();
-  const envLLM = detectLLMConfigFromEnv();
-  const resolvedLLM = resolveLLMConfig(envLLM, loadedConfig);
+
+  let loadedConfig;
+  try {
+    loadedConfig = await loadConfig();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new CLIError(`Failed to load doctor config: ${message}`, ExitCode.EXECUTION_FAILED);
+  }
+
+  let envLLM;
+  let resolvedLLM;
+  try {
+    envLLM = detectLLMConfigFromEnv();
+    resolvedLLM = resolveLLMConfig(envLLM, loadedConfig);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new CLIError(
+      `Failed to resolve doctor configuration: ${message}`,
+      ExitCode.EXECUTION_FAILED
+    );
+  }
   const summary = buildResolutionSummary({}, resolvedLLM, loadedConfig);
   const providerHint = buildRecommendedProviderHint(summary, loadedConfig);
   const authDiagnostics = buildAuthDiagnostics(providerHint, summary);
@@ -138,11 +162,15 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
 export function createDoctorCommand(): Command {
   return new Command("doctor")
     .description("Diagnose local Obora setup and onboarding readiness")
-    .action(async function (this: Command) {
+    .option("--json", "Output as JSON")
+    .action(async function (this: Command, options: DoctorOptions = {}) {
       const globalOpts = getGlobalOpts(this);
       await handleCommandAction(
         async () => {
-          await runDoctor(globalOpts);
+          await runDoctor({
+            ...globalOpts,
+            json: shouldOutputJson(options.json, globalOpts),
+          });
         },
         { verbose: Boolean(globalOpts.verbose) }
       );

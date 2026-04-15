@@ -131,6 +131,7 @@ function inferNextCommand(err: unknown): string | null {
     commandContext.activeCommand === "plugin" ||
     commandContext.activeCommand === "test" ||
     commandContext.activeCommand === "expand" ||
+    commandContext.activeCommand === "doctor" ||
     message.includes("dlq entry") ||
     message.includes("dlq store") ||
     message.includes("dlq config") ||
@@ -156,7 +157,9 @@ function inferNextCommand(err: unknown): string | null {
     message.includes("unsupported test target") ||
     message.includes("expand source not found") ||
     message.includes("invalid expand yaml") ||
-    message.includes("failed to expand workflow")
+    message.includes("failed to expand workflow") ||
+    message.includes("failed to load doctor config") ||
+    message.includes("failed to resolve doctor configuration")
   ) {
     return null;
   }

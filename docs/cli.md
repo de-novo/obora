@@ -127,6 +127,7 @@ Diagnose local Obora setup and show the shortest next action.
 
 ```bash
 obora doctor
+obora doctor --json
 obora --json doctor
 ```
 
@@ -158,6 +159,13 @@ Expected output includes:
 - warnings like stub/fallback activation
 - `Recommended next actions:` with concrete commands
 - a final `Next step: ...` hint
+
+Supports both local `obora doctor --json` and root `obora --json doctor`.
+
+### Exit Codes
+
+- `0` doctor completed successfully
+- `3` doctor config/resolution load failure
 
 ---
 
