@@ -9,6 +9,7 @@
 - [`obora models`](#obora-models)
 - [`obora doctor`](#obora-doctor)
 - [`obora expand`](#obora-expand)
+- [`obora judge`](#obora-judge)
 - [`obora run`](#obora-run)
 - [`obora validate`](#obora-validate)
 - [`obora test`](#obora-test)
@@ -270,6 +271,43 @@ obora expand workflows/project-loop.yaml --json
 - `0` successful expansion
 - `2` missing source file or invalid YAML
 - `3` workflow expansion failure
+
+---
+
+## `obora judge`
+
+Run the judge-mode workflow alias.
+
+### Usage
+
+```bash
+obora judge [workflow] [options]
+obora judge --json
+obora --json judge
+```
+
+### Behavior
+
+- Defaults to `judge.yaml` when no workflow path is provided.
+- Shares the same execution options and exit-code contract as `obora run`.
+- Supports both local `--json` and root `obora --json judge ...`.
+- Dry-run guidance prefers `obora judge` instead of `obora run judge.yaml` when the workflow target resolves to judge mode.
+
+### Examples
+
+```bash
+obora judge
+obora judge --dry-run
+obora judge workflows/judge.yaml --dry-run
+obora judge --json --dry-run
+```
+
+### Exit Codes
+
+- `0` success
+- `2` validation failure or invalid input JSON
+- `3` runtime execution failure
+- `4` timeout/abort mapped from gate/abort conditions
 
 ---
 
