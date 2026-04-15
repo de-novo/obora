@@ -412,6 +412,19 @@ describe("error handler and formatter", () => {
     ).toBe(null);
   });
 
+  it("suppresses generic hints for expand command errors", () => {
+    process.argv = ["node", "obora", "expand", "missing.yaml"];
+
+    expect(
+      inferNextCommand(
+        new CLIError("Expand source not found: missing.yaml", ExitCode.VALIDATION_ERROR)
+      )
+    ).toBe(null);
+    expect(
+      inferNextCommand(new CLIError("Invalid expand YAML: demo.yaml", ExitCode.VALIDATION_ERROR))
+    ).toBe(null);
+  });
+
   it("formatter.error writes to stderr", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 

@@ -8,6 +8,7 @@
 - [`obora quickstart`](#obora-quickstart)
 - [`obora models`](#obora-models)
 - [`obora doctor`](#obora-doctor)
+- [`obora expand`](#obora-expand)
 - [`obora run`](#obora-run)
 - [`obora test`](#obora-test)
 - [`obora plugin`](#obora-plugin)
@@ -209,6 +210,41 @@ cd demo
 obora doctor
 obora judge --dry-run
 ```
+
+---
+
+## `obora expand`
+
+Expand a one-file YAML workflow into its internal workflow graph.
+
+### Usage
+
+```bash
+obora expand <file>
+obora expand <file> --json
+obora --json expand <file>
+```
+
+### Behavior
+
+- supports both local `obora expand <file> --json` and root `obora --json expand <file>`
+- reads the source YAML and derives one-file stop semantics
+- prints expanded workflow plus stop semantics in JSON mode
+- missing input files or invalid YAML return exit code `2`
+- workflow expansion failures return exit code `3`
+
+### Example
+
+```bash
+obora expand workflows/project-loop.yaml
+obora expand workflows/project-loop.yaml --json
+```
+
+### Exit Codes
+
+- `0` successful expansion
+- `2` missing source file or invalid YAML
+- `3` workflow expansion failure
 
 ---
 

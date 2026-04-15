@@ -130,6 +130,7 @@ function inferNextCommand(err: unknown): string | null {
     commandContext.activeCommand === "policy" ||
     commandContext.activeCommand === "plugin" ||
     commandContext.activeCommand === "test" ||
+    commandContext.activeCommand === "expand" ||
     message.includes("dlq entry") ||
     message.includes("dlq store") ||
     message.includes("dlq config") ||
@@ -152,7 +153,10 @@ function inferNextCommand(err: unknown): string | null {
     message.includes("plugin not found") ||
     message.includes("test target not found") ||
     message.includes("no test target provided") ||
-    message.includes("unsupported test target")
+    message.includes("unsupported test target") ||
+    message.includes("expand source not found") ||
+    message.includes("invalid expand yaml") ||
+    message.includes("failed to expand workflow")
   ) {
     return null;
   }
