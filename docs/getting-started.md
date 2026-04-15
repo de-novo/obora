@@ -1,23 +1,17 @@
 # Getting Started with Obora
 
-> **Obora는 AI가 실패해도 시스템이 흔들리지 않게 만드는 AI Control Runtime입니다.**
+> Obora는 AI가 실패해도 시스템이 흔들리지 않게 만드는 AI Control Runtime입니다.
 
-이 문서는 두 경로를 제공합니다.
+이 문서는 두 가지를 제공합니다.
 
-- 가장 빠른 first success 경로
-- 그 다음에 읽을 deeper tour
+- 가장 짧은 first-success 경로
+- 그 다음에 이어서 볼 문서와 예시
 
 ---
 
 ## Fastest Path
 
-처음이면 아래 3개 문서부터 보시면 됩니다.
-
-1. [3-Minute Quickstart](./tutorials/01-3-minute-quickstart.md)
-2. [Judge Quickstart](./tutorials/02-judge-quickstart.md)
-3. [Quick Troubleshooting](./tutorials/03-quick-troubleshooting.md)
-
-권장 명령 순서는 아래입니다.
+처음이면 아래 순서로 진행하시면 됩니다.
 
 ```bash
 npm install -g @obora/cli
@@ -28,365 +22,179 @@ obora judge --dry-run
 obora judge
 ```
 
-설정이 막히면 바로 이어서 보실 문서:
+이 경로에서 바로 확인하게 되는 것:
 
-- [LLM Config / Auth Quickstart](./tutorials/06-llm-config-auth-quickstart.md)
-- [One-File Workflows](./tutorials/one-file-workflows.md)
+- quickstart project 생성
+- provider / model / auth readiness
+- input / output binding preview
+- judge result artifact 생성
 
----
+### Prerequisites
 
-## What Makes Obora Different
+- Node.js 20+
+- shell에 provider API key 하나
 
-| 기능 | 다른 프레임워크 | Obora |
-|------|----------------|-------|
-| AI가 실패하면 | 전체 재시작 | **자동 진단 → 수정 → 재검증** |
-| 실패 패턴 학습 | 없음 (각 실행이 독립) | **이전 실행에서 배워서 재발 방지** |
-| 결과물 검증 | LLM에게 물어봄 | **Shell로 실제 빌드/테스트 실행** |
-| 무인 운영 | 위험 | **DLQ + Auto-rollback + Health Check** |
-
----
-
-## Prerequisites
-
-- **Node.js 20+**
-- **npm** 또는 **pnpm**
-- **LLM API Key** (ZAI, OpenAI, Anthropic 중 하나)
+예:
 
 ```bash
-# ZAI (권장 - 한국어 최적화)
-export ZAI_API_KEY=your-key
+export OPENAI_API_KEY=***
+```
 
-# 또는 OpenAI
-export OPENAI_API_KEY=your-key
+Anthropic 또는 ZAI를 쓰려면 해당 provider key를 export하면 됩니다.
 
-# 또는 Anthropic
-export ANTHROPIC_API_KEY=your-key
+---
+
+## What each command is for
+
+### 1) `obora init --quickstart`
+
+```bash
+obora init my-project --quickstart
+cd my-project
+```
+
+생성되는 핵심 파일:
+
+- `judge.yaml`
+- `artifacts/submission.json`
+- `artifacts/submission.schema.json`
+- `artifacts/result.schema.json`
+- `.obora/config.yaml`
+- `README.md`
+
+### 2) `obora doctor`
+
+```bash
+obora doctor
+```
+
+확인 포인트:
+
+- 어떤 provider/model이 실제로 선택됐는지
+- auth가 env/config/auth store 중 어디서 왔는지
+- stub/fallback 상태인지
+- 다음에 무엇을 실행해야 하는지
+
+### 3) `obora judge --dry-run`
+
+```bash
+obora judge --dry-run
+```
+
+실행 전 아래를 미리 보여줍니다.
+
+- provider / model / auth resolution
+- `artifacts/submission.json` binding preview
+- `artifacts/result.json` output preview
+
+### 4) `obora judge`
+
+```bash
+obora judge
+```
+
+성공하면 결과는 여기로 기록됩니다.
+
+```bash
+cat artifacts/result.json
 ```
 
 ---
 
-## Step 1: 설치 (2분)
+## If setup is blocked
+
+우선 아래 문서 순서로 보시면 됩니다.
+
+1. [Quick Troubleshooting](./tutorials/03-quick-troubleshooting.md)
+2. [LLM Config / Auth Quickstart](./tutorials/06-llm-config-auth-quickstart.md)
+3. [CLI Reference](./cli.md)
+
+추가로 유용한 명령:
 
 ```bash
-# Clone & build
-git clone https://github.com/your-org/obora-kit.git
-cd obora-kit
-pnpm install
-pnpm build
-
-# 또는 (npm publish 후)
-npm install -g @obora/cli
+obora models
+obora models openai
+obora auth add openai --apiKey "$OPENAI_API_KEY"
+obora auth list
+obora auth test openai
 ```
 
 ---
 
-## Step 2: 첫 워크플로우 실행 (5분)
+## Recommended tutorial order
 
-### Hello Obora
+빠른 성공 이후에는 아래 순서가 가장 자연스럽습니다.
 
-가장 간단한 워크플로우를 실행해 봅니다.
+1. [3-Minute Quickstart](./tutorials/01-3-minute-quickstart.md)
+2. [Judge Quickstart](./tutorials/02-judge-quickstart.md)
+3. [Quick Troubleshooting](./tutorials/03-quick-troubleshooting.md)
+4. [LLM Config / Auth Quickstart](./tutorials/06-llm-config-auth-quickstart.md)
+5. [Contract-First Quickstart](./tutorials/04-contract-first-quickstart.md)
+6. [Contract-First Authoring Guide](./tutorials/05-contract-first-authoring-guide.md)
+7. [One-File Workflows](./tutorials/one-file-workflows.md)
 
-```bash
-cd obora-kit
+튜토리얼 인덱스 전체 보기:
 
-# ZAI API Key 설정
-export ZAI_API_KEY=your-key
-
-# Hello World 실행
-obora run examples/hello-obora.yaml
-```
-
-**결과**: `workspace/` 폴더에 AI가 생성한 결과물이 저장됩니다.
+- [Tutorials README](./tutorials/README.md)
 
 ---
 
-## Step 3: Contract-First Workflow 체험 (5분)
+## Recommended default setup
 
-Obora의 최신 authoring 방향은 **contract-first workflow** 입니다.
-즉, input/output contract를 prompt prose가 아니라 workflow 구조에 더 명시적으로 올리는 방식입니다.
+처음에는 아래 원칙을 기본값으로 두는 편이 가장 덜 헷갈립니다.
 
-빠르게 보려면 아래 튜토리얼부터 시작하세요:
+- secret → env
+- default provider/model → project `.obora/config.yaml`
+- temporary override → runtime `llm`
 
-- [Contract-First Quickstart](./tutorials/04-contract-first-quickstart.md)
-- [Contract-First Authoring Guide](./tutorials/05-contract-first-authoring-guide.md)
-- [LLM Config / Auth Quickstart](./tutorials/06-llm-config-auth-quickstart.md)
-- [One-File Workflows](./tutorials/one-file-workflows.md)
+---
 
-바로 실행 가능한 canonical example은 여기 있습니다:
+## After the first success
+
+### Contract-first example
+
+바로 실행 가능한 canonical example:
 
 - [`examples/07-contract-first-evaluation`](../examples/07-contract-first-evaluation)
 
-이 흐름에서는 다음이 핵심입니다.
+이 흐름에서 핵심은 아래입니다.
+
 - `input.bindings` 로 입력 artifact 선언
 - `{{binding}}` 으로 prompt에 주입
 - `output.path` / `output.schema` 로 출력 contract 선언
 - startup preview 로 실행 전 contract 확인
 
-예시:
+### Validation-repair loop example
 
-```yaml
-steps:
-  - name: evaluate_submission
-    agent: evaluator
-    input:
-      bindings:
-        submission:
-          path: artifacts/submission.json
-          kind: json
-      task: |
-        Evaluate {{submission}}.
-        Return JSON only.
-    output:
-      path: artifacts/result.json
-      schema: artifacts/result.schema.json
-```
+Obora의 핵심 execution pattern을 더 보려면:
 
-이 방식은 structured step에서 특히 유용합니다.
+- [`examples/06-validation-repair-loop`](../examples/06-validation-repair-loop)
+- [Validation-Repair Loop tutorial](./tutorials/validation-repair-loop.md)
+
+### CLI reference
+
+자세한 명령 계약은 여기에서 확인합니다.
+
+- [CLI Reference](./cli.md)
 
 ---
 
-## Step 4: Validation-Repair Loop 체험 (10분)
+## Local repo development
 
-**이게 Obora의 핵심입니다.** AI가 생성한 결과물을 자동으로 검증하고, 실패하면 수정해서 다시 시도합니다.
-
-### 실행
+CLI를 설치해서 쓰는 대신 이 저장소를 직접 빌드하며 확인하려면:
 
 ```bash
-cd examples/06-validation-repair-loop
-
-# 의존성 빌드 (최초 1회)
-pnpm --filter @obora/sdk build
-
-# 실행
-export ZAI_API_KEY=your-key
-node run.mjs
-```
-
-### 무슨 일이 일어나나?
-
-```
-┌─────────────────┐
-│ build_or_repair │  ← 릴리스 노트 초안 작성
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│    validate     │  ← 커스텀 validator 실행
-└────────┬────────┘
-         │
-    ┌────┴────┐
-    │ FAILED? │
-    └────┬────┘
-         │ YES
-         ▼
-┌─────────────────┐
-│ build_or_repair │  ← 검증 실패 컨텍스트와 함께 재진입
-└────────┬────────┘
-         │
-         ▼
-    (loop until PASS or max_iterations)
-```
-
-### 결과 확인
-
-```bash
-cat artifacts/release-note.md
-```
-
-**예상 결과**:
-```markdown
-# Release Note
-
-## Changes
-- Feature A added
-- Bug B fixed
-
-READY
-```
-
-### YAML로 보는 핵심 패턴
-
-```yaml
-steps:
-  - name: build_or_repair
-    agent: builder
-    config:
-      repair_loop:
-        enabled: true
-        validation_step: validate
-        max_no_progress_iterations: 2
-
-  - name: validate
-    agent: validator
-    depends_on: [build_or_repair]
-    config:
-      validation:
-        enabled: true
-        emit_structured_result: true
-    on_fail:
-      goto: build_or_repair      # ← 실패 시 어디로 돌아갈지
-      max_iterations: 3          # ← 최대 반복 횟수
-      escalate_on_exhaust: fail  # ← 소진 시 동작
-```
-
----
-
-## Step 5: Shell Hooks로 실제 빌드/테스트 실행 (5분)
-
-LLM에게 "테스트 통과했어?"라고 묻지 마세요. **실제로 테스트를 실행하세요.**
-
-```yaml
-# workflow.yaml
-hooks:
-  pre_step:
-    shell: "npm install && npm run build"
-  post_step:
-    shell: "npm test"
-
-steps:
-  - name: implement
-    agent: coder
-    skills: [typescript, testing]
-```
-
-### 실제 예시: Todo App 생성
-
-```bash
-cd examples/todo-app
-export ZAI_API_KEY=your-key
-obora run workflow.yaml
-```
-
-이 워크플로우는:
-1. Todo 앱 코드를 생성
-2. **실제로 TypeScript 빌드** (`tsc`)
-3. **실제로 테스트 실행** (`npm test`)
-4. 실패하면 자동으로 수정 후 재시도
-
----
-
-## Step 6: Enterprise 기능 체험 (선택, 5분)
-
-### DLQ (Dead Letter Queue)
-
-실패한 실행을 자동으로 기록하고, 나중에 분석할 수 있습니다.
-
-```yaml
-# obora.config.yaml
-dlq:
-  enabled: true
-  store: file
-  path: ./dlq
-```
-
-### Execution Lock
-
-같은 워크플로우가 동시에 실행되지 않도록 보호합니다.
-
-```yaml
-executionLock:
-  enabled: true
-  timeout: 3600000  # 1 hour
-```
-
-### Auto-Recovery
-
-실패 시 이전 상태로 자동 복구합니다.
-
-```yaml
-autoRecovery:
-  enabled: true
-  strategy: rollback
-```
-
----
-
-## Next Steps
-
-### 1. Examples 둘러보기
-
-| Example | 설명 |
-|---------|------|
-| [01-simple-pipeline](../examples/01-simple-pipeline) | 기본 선형 워크플로우 |
-| [02-multi-agent-consensus](../examples/02-multi-agent-consensus) | 다중 에이전트 합의 |
-| [03-policy-gate](../examples/03-policy-gate) | 정책 게이트 |
-| [06-validation-repair-loop](../examples/06-validation-repair-loop) | 검증-수정 루프 (핵심) |
-
-### 2. CLI Reference
-
-```bash
-obora --help
-obora run --help
-obora init --help
-```
-
-### 3. API Reference
-
-Obora를 프로그래밍 방식으로 사용:
-
-```typescript
-import { OboraRuntime, Workflow } from "@obora/sdk";
-
-const runtime = new OboraRuntime({
-  llm: { provider: "zai", model: "glm-4.7" }
-});
-
-const workflow: Workflow = {
-  name: "my-workflow",
-  version: "1.0",
-  steps: [
-    { name: "plan", agent: "architect" },
-    { name: "implement", agent: "coder", depends_on: ["plan"] }
-  ]
-};
-
-const result = await runtime.execute(workflow);
-```
-
-### 4. Enterprise Guide
-
-프로덕션 배포를 위한 Enterprise 기능:
-
-- [Enterprise Reliability Guide](./operations/enterprise-reliability.md)
-- [DLQ & Recovery](./operations/enterprise-reliability.md#dlq-dead-letter-queue)
-- [Execution Lock](./operations/enterprise-reliability.md#execution-lock)
-- [Health Check & Alerting](./operations/enterprise-reliability.md#health-check--alerting)
-
----
-
-## Troubleshooting
-
-### "No LLM provider configured"
-
-API Key가 설정되지 않았습니다:
-
-```bash
-export ZAI_API_KEY=your-key
-# 또는
-export OPENAI_API_KEY=your-key
-```
-
-### "Module not found"
-
-SDK를 빌드해야 합니다:
-
-```bash
-pnpm --filter @obora/sdk build
-```
-
-### "Validation keeps failing"
-
-`max_no_progress_iterations`를 늘려보세요:
-
-```yaml
-repair_loop:
-  max_no_progress_iterations: 5
+git clone https://github.com/de-novo/obora.git
+cd obora-kit
+pnpm install
+pnpm build
+node packages/cli/bin/obora.js --help
 ```
 
 ---
 
 ## Need Help?
 
-- **GitHub Issues**: https://github.com/your-org/obora-kit/issues
-- **Discord**: https://discord.gg/obora
-- **Docs**: https://docs.obora.ai
+- repo issues: https://github.com/de-novo/obora/issues
+- docs entry: [README.md](../README.md)
+- tutorials index: [docs/tutorials/README.md](./tutorials/README.md)

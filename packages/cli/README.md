@@ -8,175 +8,95 @@ Command-line interface for Obora AI Control Runtime.
 npm install -g @obora/cli
 ```
 
-## Commands
-
-### `obora init [project-name]`
-
-Initialize a new Obora project.
+## Fastest first-success path
 
 ```bash
-obora init my-project
-obora init .                    # Current directory
-obora init my-project --template standard
+obora init my-project --quickstart
+cd my-project
+obora doctor
+obora judge --dry-run
+obora judge
 ```
 
-Options:
-- `--template <name>` - Project template (default, standard)
-- `--yes` - Skip prompts, use defaults
+What this gives you:
 
-### `obora run <workflow>`
+- `obora init --quickstart` creates a minimal judge-mode project
+- `obora doctor` shows provider/model/auth readiness and next actions
+- `obora judge --dry-run` validates the bundled workflow and previews bindings/output
+- `obora judge` writes `artifacts/result.json`
 
-Execute a workflow.
+## Useful commands
+
+### Doctor
+
+```bash
+obora doctor
+obora doctor --json
+obora --json doctor
+```
+
+### Models
+
+```bash
+obora models
+obora models openai
+obora models openai gpt-5.4
+obora --json models anthropic sonnet
+```
+
+### Auth
+
+```bash
+obora auth add openai --apiKey "$OPENAI_API_KEY"
+obora auth list
+obora auth test openai
+obora auth remove openai
+```
+
+### Run / Judge
 
 ```bash
 obora run workflow.yaml
-obora run workflow.yaml --input '{"task": "Build API"}'
 obora run workflow.yaml --input @artifacts/input.json
 printf '{"task":"Build API"}' | obora run workflow.yaml --input @-
 obora run workflow.yaml --dry-run
-```
 
-Options:
-- `--input <json>` - Input JSON string, `@path/to/input.json`, or `@-` for stdin
-- `--var <key=value>` - Set variable (repeatable)
-- `--dry-run` - Show execution plan without running
-- `--json` - Output results as JSON
-- `--quiet` - Suppress non-essential output
-- `--verbose` - Show detailed execution info
-- `--output-dir <dir>` - Output directory for artifacts
-
-For quickstart judge-mode projects, prefer:
-
-```bash
 obora judge --dry-run
-obora judge
 obora judge --input @artifacts/submission.json
-cat artifacts/submission.json | obora judge --input @- --dry-run
+cat artifacts/submission.json | obora judge --input @-
 ```
 
-### `obora validate <workflow>`
-
-Validate a workflow definition.
+### Validate
 
 ```bash
-obora validate workflow.yaml
+obora validate --file workflow.yaml
+obora validate --all
+obora validate --file workflow.yaml --json
 ```
 
-### `obora config`
+## JSON mode
 
-Manage configuration.
+Most live command surfaces support both local and root JSON flags:
 
 ```bash
-obora config list
-obora config get providers.zai.model
-obora config set providers.zai.model glm-4.7
+obora doctor --json
+obora auth list --json
+obora judge --json
+obora --json runs list
 ```
 
-### `obora auth`
+## Full command reference
 
-Manage authentication for LLM providers.
+- CLI reference: https://github.com/de-novo/obora/blob/main/docs/cli.md
+- getting started: https://github.com/de-novo/obora/blob/main/docs/getting-started.md
+- tutorial index: https://github.com/de-novo/obora/blob/main/docs/tutorials/README.md
+
+## Local development
 
 ```bash
-obora auth login zai
-obora auth logout zai
-obora auth status
-```
-
-## Configuration
-
-### Project Config (`.obora/config.yaml`)
-
-```yaml
-project:
-  name: my-project
-
-providers:
-  zai:
-    api_key_env: ZAI_API_KEY
-    model: glm-4.7
-
-defaults:
-  provider: zai
-  model: glm-4.7
-```
-
-### Global Config (`~/.obora/config.yaml`)
-
-```yaml
-providers:
-  zai:
-    api_key_env: ZAI_API_KEY
-  openai:
-    api_key_env: OPENAI_API_KEY
-  anthropic:
-    api_key_env: ANTHROPIC_API_KEY
-```
-
-## Environment Variables
-
-| Variable | Description |
-|----------|-------------|
-| `ZAI_API_KEY` | ZAI provider API key |
-| `OPENAI_API_KEY` | OpenAI API key |
-| `ANTHROPIC_API_KEY` | Anthropic API key |
-| `OBORA_LLM_PROVIDER` | Default provider |
-| `OBORA_LLM_MODEL` | Default model |
-
-## Project Structure
-
-```
-my-project/
-├── .obora/
-│   ├── config.yaml       # Project configuration
-│   ├── workflows/        # Workflow definitions
-│   ├── agents.yaml       # Agent definitions
-│   └── policies/         # Policy definitions
-├── features/             # Feature workspaces
-├── archive/              # Completed features
-└── output/               # Generated outputs
-```
-
-## Examples
-
-### Simple Pipeline
-
-```bash
-# Create project
-obora init pipeline-demo
-cd pipeline-demo
-
-# Run example workflow
-obora run .obora/workflows/simple.yaml
-```
-
-### With Custom Input
-
-```bash
-obora run workflow.yaml \
-  --input '{"task": "Create REST API for users"}' \
-  --output-dir ./output
-```
-
-Or load input from a file:
-
-```bash
-obora run workflow.yaml \
-  --input @artifacts/input.json \
-  --output-dir ./output
-```
-
-Or stream JSON through stdin:
-
-```bash
-printf '{"task":"Create REST API for users"}' | \
-  obora run workflow.yaml --input @-
-```
-
-### Dry Run
-
-```bash
-obora run workflow.yaml --dry-run
-# Shows: Execution plan with step order and dependencies
+pnpm install
+pnpm --filter @obora/cli build
+node packages/cli/bin/obora.js --help
 ```
 
 ## License
