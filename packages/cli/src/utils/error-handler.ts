@@ -128,6 +128,7 @@ function inferNextCommand(err: unknown): string | null {
     commandContext.activeCommand === "audit" ||
     commandContext.activeCommand === "models" ||
     commandContext.activeCommand === "policy" ||
+    commandContext.activeCommand === "plugin" ||
     message.includes("dlq entry") ||
     message.includes("dlq store") ||
     message.includes("dlq config") ||
@@ -146,7 +147,8 @@ function inferNextCommand(err: unknown): string | null {
     message.includes("audit timeline") ||
     message.includes("unsupported models provider") ||
     message.includes("unsupported policy file format") ||
-    message.includes("invalid policy/workflow yaml")
+    message.includes("invalid policy/workflow yaml") ||
+    message.includes("plugin not found")
   ) {
     return null;
   }

@@ -322,34 +322,42 @@ obora plugin <subcommand>
 #### `obora plugin list`
 
 List discovered plugins from `node_modules`.
+Supports both local `--json` and root `obora --json plugin list`.
 
 ```bash
 obora plugin list
 obora plugin list --json
+obora --json plugin list
 ```
 
 #### `obora plugin install <name>`
 
 Install plugin via `npm install <name>` and validate discovery.
+Supports both local `--json` and root `obora --json plugin install ...`.
 
 ```bash
 obora plugin install @example/obora-plugin-foo
+obora plugin install @example/obora-plugin-foo --json
 ```
 
 #### `obora plugin remove <name>`
 
 Remove plugin via `npm uninstall <name>` and verify removal.
+Supports both local `--json` and root `obora --json plugin remove ...`.
 
 ```bash
 obora plugin remove @example/obora-plugin-foo
+obora plugin remove @example/obora-plugin-foo --json
 ```
 
 #### `obora plugin inspect <name>`
 
 Load and inspect plugin metadata + exported symbols.
+Supports both local `--json` and root `obora --json plugin inspect ...`.
 
 ```bash
 obora plugin inspect @example/obora-plugin-foo --json
+obora --json plugin inspect @example/obora-plugin-foo
 ```
 
 ### Exit Codes

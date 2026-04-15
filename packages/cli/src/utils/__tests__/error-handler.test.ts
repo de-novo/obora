@@ -391,6 +391,14 @@ describe("error handler and formatter", () => {
     ).toBe(null);
   });
 
+  it("suppresses generic hints for plugin command errors", () => {
+    process.argv = ["node", "obora", "plugin", "inspect", "missing-plugin"];
+
+    expect(
+      inferNextCommand(new CLIError("Plugin not found: missing-plugin", ExitCode.VALIDATION_ERROR))
+    ).toBe(null);
+  });
+
   it("formatter.error writes to stderr", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 

@@ -8,17 +8,31 @@ import { CLIError } from "../utils/cli-error.js";
 import { handleCommandAction } from "../utils/error-handler.js";
 import { ExitCode } from "../utils/exit-codes.js";
 import { formatter } from "../utils/formatter.js";
-import { getGlobalOpts } from "../utils/global-opts.js";
+import { getGlobalOpts, type GlobalOptions } from "../utils/global-opts.js";
 
 const execFileAsync = promisify(execFile);
+
+interface PluginCommandOptions {
+  json?: boolean;
+}
+
+function shouldOutputJson(localJson: boolean | undefined, globalOpts: GlobalOptions): boolean {
+  return Boolean(localJson || globalOpts.json);
+}
 
 async function scanPlugins() {
   const manager = new PluginManager({ cwd: process.cwd() });
   const loader = new PluginLoader({ cwd: process.cwd() });
-  return {
-    manager,
-    plugins: await loader.scan(),
-  };
+
+  try {
+    return {
+      manager,
+      plugins: await loader.scan(),
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new CLIError(`Failed to scan plugins: ${message}`, ExitCode.EXECUTION_FAILED);
+  }
 }
 
 async function runNpmCommand(args: string[]): Promise<void> {
@@ -36,7 +50,8 @@ export function createPluginCommand(): Command {
   cmd
     .command("list")
     .description("List installed plugins")
-    .action(async function (this: Command) {
+    .option("--json", "Output as JSON")
+    .action(async function (this: Command, options: PluginCommandOptions = {}) {
       const globalOpts = getGlobalOpts(this);
       await handleCommandAction(
         async () => {
@@ -49,7 +64,7 @@ export function createPluginCommand(): Command {
             path: plugin.packagePath,
           }));
 
-          if (globalOpts.json) {
+          if (shouldOutputJson(options.json, globalOpts)) {
             formatter.json({ command: "plugin list", plugins: rows });
             return;
           }
@@ -72,7 +87,8 @@ export function createPluginCommand(): Command {
   cmd
     .command("install <name>")
     .description("Install a plugin")
-    .action(async function (this: Command, name: string) {
+    .option("--json", "Output as JSON")
+    .action(async function (this: Command, name: string, options: PluginCommandOptions = {}) {
       const globalOpts = getGlobalOpts(this);
       await handleCommandAction(
         async () => {
@@ -89,7 +105,7 @@ export function createPluginCommand(): Command {
             );
           }
 
-          if (globalOpts.json) {
+          if (shouldOutputJson(options.json, globalOpts)) {
             formatter.json({ command: "plugin install", name, installed: true, plugin: installed });
           } else if (!globalOpts.quiet) {
             formatter.success(`Installed plugin: ${installed.metadata.name}`);
@@ -102,7 +118,8 @@ export function createPluginCommand(): Command {
   cmd
     .command("remove <name>")
     .description("Remove a plugin")
-    .action(async function (this: Command, name: string) {
+    .option("--json", "Output as JSON")
+    .action(async function (this: Command, name: string, options: PluginCommandOptions = {}) {
       const globalOpts = getGlobalOpts(this);
       await handleCommandAction(
         async () => {
@@ -119,7 +136,7 @@ export function createPluginCommand(): Command {
             );
           }
 
-          if (globalOpts.json) {
+          if (shouldOutputJson(options.json, globalOpts)) {
             formatter.json({ command: "plugin remove", name, removed: true });
           } else if (!globalOpts.quiet) {
             formatter.success(`Removed plugin: ${name}`);
@@ -132,7 +149,8 @@ export function createPluginCommand(): Command {
   cmd
     .command("inspect <name>")
     .description("Inspect plugin details")
-    .action(async function (this: Command, name: string) {
+    .option("--json", "Output as JSON")
+    .action(async function (this: Command, name: string, options: PluginCommandOptions = {}) {
       const globalOpts = getGlobalOpts(this);
       await handleCommandAction(
         async () => {
@@ -145,7 +163,17 @@ export function createPluginCommand(): Command {
             throw new CLIError(`Plugin not found: ${name}`, ExitCode.VALIDATION_ERROR);
           }
 
-          const loaded = await manager.loadAndRegister(descriptor);
+          let loaded;
+          try {
+            loaded = await manager.loadAndRegister(descriptor);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            throw new CLIError(
+              `Failed to inspect plugin ${name}: ${message}`,
+              ExitCode.EXECUTION_FAILED
+            );
+          }
+
           const detail = {
             packageName: descriptor.packageName,
             version: descriptor.version,
@@ -154,7 +182,7 @@ export function createPluginCommand(): Command {
             exports: Object.keys((loaded.module as Record<string, unknown>) ?? {}),
           };
 
-          if (globalOpts.json) {
+          if (shouldOutputJson(options.json, globalOpts)) {
             formatter.json({ command: "plugin inspect", name, plugin: detail });
           } else if (!globalOpts.quiet) {
             formatter.json(detail);
