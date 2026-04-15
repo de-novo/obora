@@ -76,12 +76,10 @@ Recommended order:
 - `auth`
   - now revived as a live provider-auth management surface over `~/.obora/auth.json` rather than promoting the raw legacy wrapper.
 
-### Candidate for later decision
-
-- `skills`
-
 ### Likely keep legacy-only unless a concrete product need reappears
 
+- `skills`
+  - `docs/m3-sdk-cli-design.md` already classifies `new/plan/done/skills` as pre-pivot workflow UX rather than the modern runtime-centric CLI family.
 - `new`
 - `done`
 - `agents`
