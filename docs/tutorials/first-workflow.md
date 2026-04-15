@@ -19,7 +19,14 @@ By the end, you'll know how to:
 
 - Node.js 20+
 - npm or pnpm
-- A terminal
+- one provider API key in your shell
+- a terminal
+
+Example:
+
+```bash
+export OPENAI_API_KEY=***
+```
 
 ---
 
@@ -107,18 +114,14 @@ EOF
 
 ---
 
-## Step 4) Run the workflow
+## Step 4) Check readiness and run the workflow
 
-Now let's execute it:
-
-```bash
-obora run workflow.yaml
-```
-
-You can also run in validation mode first:
+Before executing a custom workflow, confirm provider/model/auth resolution first:
 
 ```bash
+obora doctor
 obora run workflow.yaml --dry-run
+obora run workflow.yaml
 ```
 
 ---
@@ -140,6 +143,15 @@ ls -la .obora/audit/first-workflow.duckdb
 If the file exists and the command succeeded, your first workflow is complete 🎉
 
 ---
+
+## If you get blocked
+
+Use this order before changing the workflow YAML again:
+
+- `obora doctor`
+- `obora run workflow.yaml --dry-run`
+- [Quick Troubleshooting](./03-quick-troubleshooting.md)
+- [LLM Config / Auth Quickstart](./06-llm-config-auth-quickstart.md)
 
 ## Next step
 

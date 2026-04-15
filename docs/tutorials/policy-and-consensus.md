@@ -15,8 +15,9 @@ In this tutorial, we'll add control layers to your workflow:
 
 ## Prerequisites
 
-- You completed [Tutorial: First Workflow](./first-workflow.md), or you have a working Obora project
+- You completed [First Workflow](./first-workflow.md), or you already have a working Obora project
 - Obora CLI installed
+- `obora doctor` and `obora run ... --dry-run` already work in your environment
 
 ---
 
@@ -126,9 +127,10 @@ EOF
 
 ---
 
-## Step 3) Run with policy and consensus enabled
+## Step 3) Preview and run with policy and consensus enabled
 
 ```bash
+obora run workflows/policy-consensus-workflow.yaml --policy policies/policy-consensus.yaml --dry-run
 obora run workflows/policy-consensus-workflow.yaml --policy policies/policy-consensus.yaml
 ```
 

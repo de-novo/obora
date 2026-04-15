@@ -17,9 +17,10 @@ You'll go through:
 
 ## Prerequisites
 
-- You completed [Tutorial: First Workflow](./first-workflow.md)
+- You completed [First Workflow](./first-workflow.md), or you already have a working Obora project
 - Familiarity with TypeScript basics
 - Node.js 20+
+- `obora plugin list` and `obora run ... --dry-run` work in your environment
 
 ---
 
