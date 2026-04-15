@@ -132,6 +132,8 @@ function inferNextCommand(err: unknown): string | null {
     commandContext.activeCommand === "test" ||
     commandContext.activeCommand === "expand" ||
     commandContext.activeCommand === "doctor" ||
+    commandContext.activeCommand === "init" ||
+    commandContext.activeCommand === "quickstart" ||
     message.includes("dlq entry") ||
     message.includes("dlq store") ||
     message.includes("dlq config") ||
@@ -159,7 +161,8 @@ function inferNextCommand(err: unknown): string | null {
     message.includes("invalid expand yaml") ||
     message.includes("failed to expand workflow") ||
     message.includes("failed to load doctor config") ||
-    message.includes("failed to resolve doctor configuration")
+    message.includes("failed to resolve doctor configuration") ||
+    message.includes("failed to initialize scaffold")
   ) {
     return null;
   }

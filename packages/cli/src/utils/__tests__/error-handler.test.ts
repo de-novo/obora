@@ -435,6 +435,16 @@ describe("error handler and formatter", () => {
     ).toBe(null);
   });
 
+  it("suppresses generic hints for onboarding scaffold command errors", () => {
+    process.argv = ["node", "obora", "init", "demo"];
+
+    expect(
+      inferNextCommand(
+        new CLIError("Failed to initialize scaffold: disk full", ExitCode.EXECUTION_FAILED)
+      )
+    ).toBe(null);
+  });
+
   it("formatter.error writes to stderr", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 

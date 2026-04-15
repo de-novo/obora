@@ -4,7 +4,9 @@ import { fileURLToPath } from "node:url";
 
 import { Command } from "commander";
 
+import { CLIError } from "../utils/cli-error.js";
 import { handleCommandAction } from "../utils/error-handler.js";
+import { ExitCode } from "../utils/exit-codes.js";
 import { formatter } from "../utils/formatter.js";
 import { getGlobalOpts } from "../utils/global-opts.js";
 
@@ -62,8 +64,13 @@ export async function runInit(
   const templatePath = resolveTemplatePath(templateName);
   const targetDir = resolve(process.cwd(), projectName);
 
-  await mkdir(targetDir, { recursive: true });
-  await cp(templatePath, targetDir, { recursive: true });
+  try {
+    await mkdir(targetDir, { recursive: true });
+    await cp(templatePath, targetDir, { recursive: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new CLIError(`Failed to initialize scaffold: ${message}`, ExitCode.EXECUTION_FAILED);
+  }
 
   // Backward-compatible scaffold layout expected by existing tests and docs
   const workflowsDir = join(targetDir, "workflows");
@@ -138,6 +145,7 @@ export function createInitCommand(): Command {
     .argument("[project-name]", "Project directory name", ".")
     .option("--template <name>", "Project template", "default")
     .option("--quickstart", "Initialize a quickstart judge-mode scaffold")
+    .option("--json", "Output as JSON")
     .option("-y, --yes", "Skip prompts, use defaults")
     .action(async function (this: Command, projectName, options) {
       const mergedOptions = { ...getGlobalOpts(this), ...options };

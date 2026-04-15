@@ -84,13 +84,21 @@ Shortcut for creating a minimal judge-mode project.
 ```bash
 obora quickstart [name]
 obora quickstart my-project
+obora quickstart my-project --json
+obora --json quickstart my-project
 ```
 
 ### Behavior
 
 - Equivalent to `obora init [name] --quickstart`
+- Supports both local `obora quickstart ... --json` and root `obora --json quickstart ...`
 - Creates the same quickstart scaffold as `init --quickstart`
 - Intended as the shortest first-run command
+
+### Exit Codes
+
+- `0` scaffold created successfully
+- `3` scaffold initialization failure
 
 ---
 
@@ -178,12 +186,15 @@ Initialize a new Obora project.
 ```bash
 obora init [name] [options]
 obora init my-project --quickstart
+obora init my-project --json
+obora --json init my-project --quickstart
 ```
 
 ### Options
 
 - `--template <name>` (default: `default`)
 - `--quickstart` initialize a judge-mode quickstart scaffold
+- `--json` output scaffold result as JSON
 - `-y, --yes` skip prompts and use defaults
 
 ### Behavior
@@ -218,6 +229,11 @@ cd demo
 obora doctor
 obora judge --dry-run
 ```
+
+### Exit Codes
+
+- `0` scaffold created successfully
+- `3` scaffold initialization failure
 
 ---
 
