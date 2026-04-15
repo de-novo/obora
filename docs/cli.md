@@ -632,18 +632,23 @@ obora audit <subcommand>
 #### `obora audit query`
 
 ```bash
-obora audit query [--execution <id>] [--type <type>] [--limit <n>]
+obora audit query [--execution <id>] [--type <type>] [--limit <n>] [--json]
 ```
 
 Queries audit events from the execution log store.
+Current implementation is a stub surface that reports the command is not yet connected to a backing audit store.
+Supports both local `--json` and root `obora --json audit query ...`.
+Invalid `--limit` values return exit code `2`.
 
 #### `obora audit tail`
 
 ```bash
-obora audit tail [--execution <id>]
+obora audit tail [--execution <id>] [--json]
 ```
 
 Streams audit events for a running or completed execution.
+Current implementation is a stub surface that reports the command is not yet connected to a backing audit store.
+Supports both local `--json` and root `obora --json audit tail ...`.
 
 #### `obora audit replay <runId>`
 
@@ -652,6 +657,9 @@ Show structured audit replay timeline for a persisted run.
 Options:
 
 - `--step <stepName>` filter timeline by step name
+- `--json` output structured replay JSON
+
+Supports both local `--json` and root `obora --json audit replay <runId>`.
 
 Example:
 

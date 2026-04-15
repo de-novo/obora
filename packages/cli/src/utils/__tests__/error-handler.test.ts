@@ -347,6 +347,19 @@ describe("error handler and formatter", () => {
     ).toBe(null);
   });
 
+  it("suppresses generic hints for audit command errors", () => {
+    process.argv = ["node", "obora", "audit", "query", "--limit", "abc"];
+
+    expect(
+      inferNextCommand(new CLIError("Invalid audit limit: abc", ExitCode.VALIDATION_ERROR))
+    ).toBe(null);
+    expect(
+      inferNextCommand(
+        new CLIError("Failed to replay audit timeline: sqlite offline", ExitCode.EXECUTION_FAILED)
+      )
+    ).toBe(null);
+  });
+
   it("formatter.error writes to stderr", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
