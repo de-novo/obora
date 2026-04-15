@@ -18,7 +18,7 @@ The fastest recovery rule is:
 ### Symptom
 
 - `doctor` does not show a ready state
-- `run --dry-run` warns about fallback or stub mode
+- `judge --dry-run` or `run ... --dry-run` warns about fallback or stub mode
 
 ### Fix
 
@@ -101,7 +101,7 @@ Then update `.obora/config.yaml` with a real model ref.
 
 ---
 
-## 4) `run --dry-run` preview does not match what you expected
+## 4) `judge --dry-run` or `run ... --dry-run` preview does not match what you expected
 
 ### Symptom
 

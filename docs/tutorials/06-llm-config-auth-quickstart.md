@@ -44,9 +44,10 @@ export ANTHROPIC_API_KEY=your-key
 
 ---
 
-## Step 2) Create project config
+## Step 2) Create or edit project config
 
-Create `.obora/config.yaml` in your project.
+If you started from quickstart, `.obora/config.yaml` already exists.
+If not, create it in your project.
 
 ```bash
 mkdir -p .obora
@@ -77,20 +78,24 @@ providers:
 - env is better for secrets
 - project config is better for provider/model defaults
 - this keeps auth and model selection easy to understand
+- if you later want a managed auth store, use `obora auth add/list/test/remove` as a separate operator workflow
 
 ---
 
-## Step 3) Run a workflow
+## Step 3) Verify resolution on the quickest path
 
-Now run any workflow normally.
+If you are following the onboarding path, use the quickstart project directly:
 
 ```bash
-obora run examples/hello-obora.yaml
+obora doctor
+obora judge --dry-run
+obora judge
 ```
 
-Or use the contract-first example:
+If you want a normal multi-step workflow instead, you can still run one explicitly:
 
 ```bash
+obora run examples/07-contract-first-evaluation/workflow.yaml --dry-run
 obora run examples/07-contract-first-evaluation/workflow.yaml
 ```
 
@@ -111,6 +116,7 @@ Execution Resolution
 ```
 
 This tells you:
+
 - which provider was selected
 - which model was selected
 - where auth came from
@@ -133,11 +139,13 @@ const runtime = new OboraRuntime({
 ```
 
 ### Good use cases
+
 - tests
 - temporary experiments
 - app-level runtime overrides
 
 ### Not the best default for beginners
+
 - everyday project setup
 - team-shared workflow defaults
 
@@ -174,20 +182,25 @@ If you're unsure where to put something, use this rule:
 ## Common mistakes
 
 ### Mistake 1: putting everything in runtime `llm`
+
 This works, but it is less friendly for shared project defaults.
 
 ### Mistake 2: mixing too many layers at once
+
 If you are just getting started, do not combine:
+
 - env
 - authRef
 - runtime overrides
 - workflow-local provider/model
-all at the same time.
+  all at the same time.
 
 Start with the simplest path first.
 
 ### Mistake 3: debugging the workflow before debugging resolution
+
 Before changing prompts or workflow steps, first confirm:
+
 - provider
 - model
 - auth source

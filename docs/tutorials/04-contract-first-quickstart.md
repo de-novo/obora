@@ -16,7 +16,9 @@ By the end, you'll have a workflow that is easier to inspect before execution an
 
 ## Prerequisites
 
-- You completed [Tutorial: First Workflow](./first-workflow.md), or you already have a working Obora project
+- You already have a working Obora project, or you completed:
+  - [3-Minute Quickstart](./01-3-minute-quickstart.md)
+  - [Judge Quickstart](./02-judge-quickstart.md)
 - You can run `obora run ...` successfully
 
 ---
@@ -97,9 +99,10 @@ EOF
 
 ---
 
-## Step 3) Run the workflow
+## Step 3) Preview and run the workflow
 
 ```bash
+obora run workflow-contract-first.yaml --dry-run
 obora run workflow-contract-first.yaml
 ```
 
@@ -137,18 +140,22 @@ You should see a JSON object similar to:
 When `output.schema` is declared, Obora now produces short diagnostics for common failures.
 
 ### Invalid JSON
+
 - `SCHEMA_1001`
 - The model did not return valid JSON.
 
 ### Missing schema file
+
 - `SCHEMA_1002`
 - The declared schema file path does not exist.
 
 ### Contract mismatch
+
 - `SCHEMA_1003`
 - The JSON shape does not match the declared contract.
 
 Examples:
+
 - `missing required field(s): verdict`
 - `field 'score' should be number, got string`
 - `missing required field(s): meta.summary`
