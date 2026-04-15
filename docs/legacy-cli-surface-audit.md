@@ -93,6 +93,7 @@ Recommended order:
 - `dashboard`
   - `docs/m3-sdk-cli-design.md` marks dashboard UI as out of scope for M3 and keeps `@obora/dashboard` as an M4 concern.
   - current wrapper is only a thin `createDashboardServer()` launcher with `open(...)` and `process.exit(0)` signal handling, not a modern CLI contract surface.
+  - M4 revive roadmap is documented in `docs/plans/2026-04-15-dashboard-cli-m4-roadmap.md`.
 
 ## Immediate action taken
 
