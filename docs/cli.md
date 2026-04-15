@@ -288,15 +288,20 @@ obora judge workflows/judge.yaml --dry-run
 
 ```bash
 obora run <workflow> [options]
+obora run <workflow> --json
+obora --json run <workflow>
+obora judge [workflow] --json
+obora --json judge [workflow]
 ```
 
 ### Options
 
+- `--json` output structured execution results as JSON
 - `-i, --input <json>` input JSON string, `@path/to/input.json`, or `@-` for stdin
 - `-v, --var <key=value...>` repeatable variables
 - `--policy <path>` policy YAML path
 - `--dry-run` validate only (no execution) and print resolution/binding/output previews when available
-- `--timeout <ms>` execution timeout in milliseconds
+- `--timeout <ms>` execution timeout in milliseconds (positive integer only)
 
 ### Examples
 
@@ -310,8 +315,14 @@ obora run workflow.yaml --dry-run
 obora judge --input @artifacts/submission.json --dry-run
 cat artifacts/submission.json | obora judge --input @- --dry-run
 obora judge --dry-run
+obora judge --json --dry-run
 obora --json judge --dry-run
 ```
+
+Behavior:
+
+- Supports both local `--json` and root `--json` for `run` and `judge`.
+- `--timeout` must be a positive integer; malformed values fail with exit code `2`.
 
 Dry-run output includes:
 

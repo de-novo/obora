@@ -22,6 +22,7 @@ import { handleCommandAction } from "../utils/error-handler.js";
 import { ExitCode } from "../utils/exit-codes.js";
 import { formatter } from "../utils/formatter.js";
 import { getGlobalOpts } from "../utils/global-opts.js";
+import type { GlobalOptions } from "../utils/global-opts.js";
 
 function isJsonOutput(options: Record<string, unknown>): boolean {
   return Boolean(options.json);
@@ -96,6 +97,7 @@ function buildPreferredRunCommand(workflowCommand: string): string {
 
 export function applyRunExecutionOptions(command: Command): Command {
   return command
+    .option("--json", "Output structured execution results as JSON")
     .option("-i, --input <json>", "Input data as JSON string, @path/to/input.json, or @- for stdin")
     .option("-v, --var <key=value...>", "Variables (repeatable)")
     .option("--policy <path>", "Policy file path")
@@ -107,9 +109,42 @@ export function applyRunExecutionOptions(command: Command): Command {
     .option("--dry-run", "Validate without executing")
     .option("--dump-expanded-workflow", "Print the expanded internal workflow when loading YAML")
     .option("--show-stop-semantics", "Print derived stop semantics when available")
-    .option("--timeout <ms>", "Execution timeout in milliseconds", parseInt)
+    .option("--timeout <ms>", "Execution timeout in milliseconds")
     .option("--debug", "Enable live debug trace output and JSONL event log")
     .option("--debug-file <path>", "Write debug JSONL trace to this file (implies --debug)");
+}
+
+function parseExecutionTimeout(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === "") {
+    return undefined;
+  }
+
+  if (typeof value === "number") {
+    if (Number.isInteger(value) && value > 0) {
+      return value;
+    }
+
+    throw new CLIError(`Invalid execution timeout: ${String(value)}`, ExitCode.VALIDATION_ERROR);
+  }
+
+  const parsed = Number(value);
+  if (Number.isInteger(parsed) && parsed > 0) {
+    return parsed;
+  }
+
+  throw new CLIError(`Invalid execution timeout: ${String(value)}`, ExitCode.VALIDATION_ERROR);
+}
+
+export function normalizeRunExecutionOptions(
+  globalOpts: GlobalOptions,
+  commandOpts: Record<string, unknown>
+): Record<string, unknown> {
+  const merged = { ...globalOpts, ...commandOpts } as Record<string, unknown>;
+
+  return {
+    ...merged,
+    timeout: parseExecutionTimeout(merged.timeout),
+  };
 }
 
 function clipDebug(value: unknown, max = 180): string {
@@ -835,12 +870,13 @@ export function createRunCommand(): Command {
       .description("Execute a workflow (named workflow or one-file YAML mode)")
       .argument("<workflow>", "Workflow name or YAML path")
   ).action(async function (this: Command, workflow, options) {
-    const mergedOptions = { ...getGlobalOpts(this), ...options };
+    const globalOpts = getGlobalOpts(this);
     await handleCommandAction(
       async () => {
+        const mergedOptions = normalizeRunExecutionOptions(globalOpts, options);
         await runRun(workflow, mergedOptions);
       },
-      { verbose: Boolean(mergedOptions.verbose) }
+      { verbose: Boolean(globalOpts.verbose || options.verbose) }
     );
   });
 }

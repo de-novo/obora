@@ -264,6 +264,11 @@ describe("run command", () => {
       expect(cmd.registeredArguments[0].name()).toBe("workflow");
     });
 
+    it("should have --json option", () => {
+      const cmd = createRunCommand();
+      expect(cmd.options.find((o) => o.long === "--json")).toBeDefined();
+    });
+
     it("should have --input / -i option", () => {
       const cmd = createRunCommand();
       expect(cmd.options.find((o) => o.long === "--input")).toBeDefined();

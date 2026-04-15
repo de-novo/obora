@@ -162,7 +162,8 @@ function inferNextCommand(err: unknown): string | null {
     message.includes("failed to expand workflow") ||
     message.includes("failed to load doctor config") ||
     message.includes("failed to resolve doctor configuration") ||
-    message.includes("failed to initialize scaffold")
+    message.includes("failed to initialize scaffold") ||
+    message.includes("invalid execution timeout")
   ) {
     return null;
   }

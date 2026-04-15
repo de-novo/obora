@@ -425,6 +425,14 @@ describe("error handler and formatter", () => {
     ).toBe(null);
   });
 
+  it("suppresses generic hints for invalid execution timeout errors", () => {
+    process.argv = ["node", "obora", "run", "workflow.yaml", "--timeout", "abc"];
+
+    expect(
+      inferNextCommand(new CLIError("Invalid execution timeout: abc", ExitCode.VALIDATION_ERROR))
+    ).toBe(null);
+  });
+
   it("suppresses generic hints for doctor command errors", () => {
     process.argv = ["node", "obora", "doctor"];
 
