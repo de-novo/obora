@@ -6,64 +6,57 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { parseAndValidate, type ValidationResult, type ValidationError } from "@obora/runtime";
-import chalk from "chalk";
+import { parseAndValidate, type ValidationError, type ValidationResult } from "@obora/runtime";
 import { Command } from "commander";
 
 import { CLIError } from "../errors.js";
+import { handleCommandAction } from "../utils/error-handler.js";
+import { ExitCode } from "../utils/exit-codes.js";
+import { formatter } from "../utils/formatter.js";
+import { getGlobalOpts, type GlobalOptions } from "../utils/global-opts.js";
 import { validatePath } from "../utils/path-utils.js";
 
-/**
- * Options for validate command
- */
 interface ValidateOptions {
-  /** Validate all workflow files */
-  all: boolean;
-  /** Validate specific file */
+  all?: boolean;
   file?: string;
-  /** Treat warnings as errors */
-  strict: boolean;
-  /** Output format */
+  strict?: boolean;
   format?: "default" | "json";
-  /** Show detailed output */
   verbose?: boolean;
+  json?: boolean;
 }
 
-/**
- * Color-coded symbols for output
- */
+interface ValidateSummary {
+  total: number;
+  passed: number;
+  failed: number;
+  warnings: number;
+}
+
 const SYMBOLS = {
-  success: chalk.green("✓"),
-  error: chalk.red("✗"),
-  warning: chalk.yellow("⚠"),
-  info: chalk.blue("ℹ"),
+  success: "✅",
+  error: "❌",
+  warning: "⚠️",
+  info: "ℹ",
 } as const;
 
-/**
- * Format a validation error for display
- */
-function formatError(error: ValidationError, filePath: string): string {
-  const location = error.path ? `${chalk.dim(`[${filePath}:${error.path}]`)}` : "";
-  const message = `${SYMBOLS.error} ${location} ${chalk.red(error.message)}`;
+function shouldOutputJson(options: ValidateOptions, globalOpts: GlobalOptions): boolean {
+  return Boolean(options.json || options.format === "json" || globalOpts.json);
+}
 
-  if (error.suggestion) {
-    return `${message}\n  ${chalk.dim("→")} ${chalk.cyan(error.suggestion)}`;
+function formatIssue(kind: "error" | "warning", issue: ValidationError, filePath: string): string {
+  const symbol = kind === "error" ? SYMBOLS.error : SYMBOLS.warning;
+  const location = issue.path
+    ? `[${path.relative(process.cwd(), filePath)}:${issue.path}]`
+    : `[${path.relative(process.cwd(), filePath)}]`;
+  const lines = [`${symbol} ${location} ${issue.message}`];
+
+  if (issue.suggestion) {
+    lines.push(`  → ${issue.suggestion}`);
   }
 
-  return message;
+  return lines.join("\n");
 }
 
-/**
- * Format a validation warning for display
- */
-function formatWarning(warning: ValidationError, filePath: string): string {
-  const location = warning.path ? `${chalk.dim(`[${filePath}:${warning.path}]`)}` : "";
-  return `${SYMBOLS.warning} ${location} ${chalk.yellow(warning.message)}`;
-}
-
-/**
- * Validate a single workflow file
- */
 function validateFile(filePath: string): ValidationResult {
   try {
     const content = fs.readFileSync(filePath, "utf-8");
@@ -84,23 +77,25 @@ function validateFile(filePath: string): ValidationResult {
   }
 }
 
-/**
- * Find all workflow files in a directory
- */
 function findWorkflowFiles(dir: string): string[] {
-  const files: string[] = [];
-
   if (!fs.existsSync(dir)) {
-    return files;
+    return [];
   }
 
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true }) as fs.Dirent[];
+  } catch (error) {
+    throw new CLIError(
+      `Failed to scan workflow directory: ${dir}: ${error instanceof Error ? error.message : String(error)}`,
+      ExitCode.EXECUTION_FAILED
+    );
+  }
 
+  const files: string[] = [];
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name);
-
     if (entry.isDirectory()) {
-      // Recursively search subdirectories
       files.push(...findWorkflowFiles(fullPath));
     } else if (entry.name.endsWith(".yaml") || entry.name.endsWith(".yml")) {
       files.push(fullPath);
@@ -110,34 +105,55 @@ function findWorkflowFiles(dir: string): string[] {
   return files.sort();
 }
 
-/**
- * Print validation result summary
- */
-function printSummary(total: number, passed: number, failed: number, warnings: number): void {
-  console.log("");
-  console.log(chalk.bold("Results:"));
+function resolveValidateFiles(options: ValidateOptions): string[] {
+  if (options.file) {
+    let resolvedPath: string;
+    try {
+      resolvedPath = validatePath(options.file, process.cwd());
+    } catch {
+      throw new CLIError(`Invalid validate file path: ${options.file}`, ExitCode.VALIDATION_ERROR);
+    }
 
-  const parts: string[] = [];
+    if (!fs.existsSync(resolvedPath)) {
+      throw new CLIError(`Validate file not found: ${options.file}`, ExitCode.VALIDATION_ERROR);
+    }
 
-  if (passed > 0) {
-    parts.push(`${chalk.green(passed)} passed`);
+    return [resolvedPath];
   }
 
-  if (failed > 0) {
-    parts.push(`${chalk.red(failed)} failed`);
-  }
-
-  if (warnings > 0) {
-    parts.push(`${chalk.yellow(warnings)} warning${warnings === 1 ? "" : "s"}`);
-  }
-
-  console.log(`  ${parts.join(", ")} (${total} total)`);
+  const oboraDir = path.join(process.cwd(), ".obora");
+  return [
+    ...findWorkflowFiles(path.join(oboraDir, "workflows")),
+    ...findWorkflowFiles(path.join(oboraDir, "features")),
+  ];
 }
 
-/**
- * Format validation result as JSON
- */
-function formatJsonResult(files: string[], results: Map<string, ValidationResult>): string {
+function summarizeResults(results: Map<string, ValidationResult>): ValidateSummary {
+  let passed = 0;
+  let failed = 0;
+  let warnings = 0;
+
+  for (const result of results.values()) {
+    if (result.errors.length > 0) {
+      failed += 1;
+    } else {
+      passed += 1;
+    }
+    warnings += result.warnings.length;
+  }
+
+  return {
+    total: results.size,
+    passed,
+    failed,
+    warnings,
+  };
+}
+
+function buildJsonPayload(
+  files: string[],
+  results: Map<string, ValidationResult>
+): Record<string, unknown> {
   const output: Record<
     string,
     {
@@ -149,136 +165,120 @@ function formatJsonResult(files: string[], results: Map<string, ValidationResult
 
   for (const file of files) {
     const result = results.get(file);
-    if (result) {
-      output[file] = {
-        valid: result.isValid,
-        errors: result.errors,
-        warnings: result.warnings,
-      };
+    if (!result) continue;
+    output[file] = {
+      valid: result.isValid,
+      errors: result.errors,
+      warnings: result.warnings,
+    };
+  }
+
+  return {
+    summary: summarizeResults(results),
+    results: output,
+  };
+}
+
+function printTextResults(
+  files: string[],
+  results: Map<string, ValidationResult>,
+  options: ValidateOptions
+): void {
+  const summary = summarizeResults(results);
+
+  for (const file of files) {
+    const result = results.get(file);
+    if (!result) continue;
+
+    console.log("");
+    console.log(`${SYMBOLS.info} Checking ${path.relative(process.cwd(), file)}`);
+
+    if (result.errors.length === 0 && result.warnings.length === 0) {
+      console.log(`${SYMBOLS.success} Valid - no issues`);
+      continue;
+    }
+
+    for (const error of result.errors) {
+      console.log(formatIssue("error", error, file));
+    }
+
+    for (const warning of result.warnings) {
+      console.log(formatIssue("warning", warning, file));
+    }
+
+    if (options.verbose && result.errors.length === 0 && result.warnings.length > 0) {
+      console.log(`${SYMBOLS.info} Detailed validation warnings printed above.`);
     }
   }
 
-  return JSON.stringify(output, null, 2);
+  console.log("");
+  console.log("Results:");
+  console.log(
+    `  ${summary.passed} passed, ${summary.failed} failed, ${summary.warnings} warning${summary.warnings === 1 ? "" : "s"} (${summary.total} total)`
+  );
 }
 
-/**
- * Main validate command handler
- */
-export function validateCommand(): Command {
-  const cmd = new Command("validate")
+export async function runValidate(
+  options: ValidateOptions,
+  globalOpts: GlobalOptions
+): Promise<void> {
+  const files = resolveValidateFiles(options);
+  const jsonOutput = shouldOutputJson(options, globalOpts);
+
+  if (files.length === 0) {
+    if (jsonOutput) {
+      formatter.json({
+        summary: {
+          total: 0,
+          passed: 0,
+          failed: 0,
+          warnings: 0,
+        },
+        results: {},
+      });
+    } else {
+      formatter.info("No workflow files found in .obora/workflows or .obora/features");
+    }
+    return;
+  }
+
+  const results = new Map<string, ValidationResult>();
+  for (const file of files) {
+    results.set(file, validateFile(file));
+  }
+
+  const summary = summarizeResults(results);
+
+  if (jsonOutput) {
+    formatter.json(buildJsonPayload(files, results));
+  } else {
+    printTextResults(files, results, options);
+  }
+
+  if (summary.failed > 0) {
+    throw new CLIError("Validation failed with errors", ExitCode.VALIDATION_ERROR);
+  }
+
+  if (options.strict && summary.warnings > 0) {
+    throw new CLIError("Validation failed with warnings in strict mode", ExitCode.VALIDATION_ERROR);
+  }
+}
+
+export function createValidateCommand(): Command {
+  return new Command("validate")
     .description("Validate workflow YAML files")
     .option("--all", "Validate all workflow files in .obora/workflows and .obora/features")
     .option("-f, --file <path>", "Validate a specific workflow file")
     .option("--strict", "Treat warnings as errors")
     .option("-o, --format <type>", "Output format (default, json)", "default")
+    .option("--json", "Output structured validation results as JSON")
     .option("-v, --verbose", "Show detailed output")
-    .action((options: ValidateOptions) => {
-      let files: string[] = [];
-
-      if (options.file) {
-        // Validate specific file
-        // Resolve the file path and validate against current working directory
-        const resolvedPath = path.resolve(options.file);
-        try {
-          validatePath(options.file, process.cwd());
-        } catch {
-          console.error(`${SYMBOLS.error} Invalid file path: ${chalk.red(options.file)}`);
-          throw new CLIError(`Invalid file path: ${options.file}`, 1);
-        }
-
-        if (!fs.existsSync(resolvedPath)) {
-          console.error(`${SYMBOLS.error} File not found: ${chalk.red(options.file)}`);
-          throw new CLIError(`File not found: ${options.file}`, 1);
-        }
-
-        files = [resolvedPath];
-      } else if (options.all) {
-        // Validate all workflow files
-        const oboraDir = path.join(process.cwd(), ".obora");
-
-        // Check .obora/workflows
-        const workflowsDir = path.join(oboraDir, "workflows");
-        files.push(...findWorkflowFiles(workflowsDir));
-
-        // Check .obora/features
-        const featuresDir = path.join(oboraDir, "features");
-        files.push(...findWorkflowFiles(featuresDir));
-
-        if (files.length === 0) {
-          console.log(
-            `${SYMBOLS.warning} No workflow files found in .obora/workflows or .obora/features`
-          );
-          return; // Exit normally
-        }
-      } else {
-        // Default behavior: validate all (same as --all)
-        options.all = true;
-      }
-
-      // Validate files
-      let totalErrors = 0;
-      let totalWarnings = 0;
-      let passedCount = 0;
-      let failedCount = 0;
-      const results = new Map<string, ValidationResult>();
-
-      for (const file of files) {
-        const result = validateFile(file);
-        results.set(file, result);
-
-        if (result.isValid && result.warnings.length === 0) {
-          passedCount++;
-        } else {
-          failedCount++;
-          totalErrors += result.errors.length;
-          totalWarnings += result.warnings.length;
-        }
-      }
-
-      // Output results
-      if (options.format === "json") {
-        console.log(formatJsonResult(files, results));
-      } else {
-        // Default format
-        for (const file of files) {
-          const result = results.get(file);
-          if (!result) continue;
-
-          console.log("");
-          console.log(`${SYMBOLS.info} Checking ${chalk.dim(path.relative(process.cwd(), file))}`);
-
-          if (result.isValid && result.warnings.length === 0) {
-            console.log(`${SYMBOLS.success} ${chalk.green("Valid")}${chalk.dim(" - no issues")}`);
-          } else {
-            console.log("");
-
-            // Print errors
-            for (const error of result.errors) {
-              console.log(formatError(error, file));
-            }
-
-            // Print warnings
-            for (const warning of result.warnings) {
-              console.log(formatWarning(warning, file));
-            }
-          }
-        }
-
-        // Print summary
-        printSummary(files.length, passedCount, failedCount, totalWarnings);
-      }
-
-      // Exit with appropriate code
-      if (totalErrors > 0) {
-        throw new CLIError("Validation failed with errors", 1);
-      }
-
-      if (options.strict && totalWarnings > 0) {
-        throw new CLIError("Validation failed with warnings in strict mode", 2);
-      }
-
-      return; // Success
+    .action(async function (this: Command, options: ValidateOptions) {
+      const globalOpts = getGlobalOpts(this);
+      await handleCommandAction(() => runValidate(options, globalOpts), {
+        verbose: Boolean(globalOpts.verbose || options.verbose),
+      });
     });
-
-  return cmd;
 }
+
+export const validateCommand = createValidateCommand;

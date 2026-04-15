@@ -10,6 +10,7 @@
 - [`obora doctor`](#obora-doctor)
 - [`obora expand`](#obora-expand)
 - [`obora run`](#obora-run)
+- [`obora validate`](#obora-validate)
 - [`obora test`](#obora-test)
 - [`obora plugin`](#obora-plugin)
 - [`obora runs`](#obora-runs)
@@ -337,6 +338,50 @@ Dry-run output includes:
 - `2` invalid input JSON or validation failure
 - `3` runtime execution failure
 - `4` timeout/abort mapped from gate/abort conditions
+
+---
+
+## `obora validate`
+
+Validate workflow YAML files under `.obora/workflows` and `.obora/features`, or a specific file.
+
+### Usage
+
+```bash
+obora validate [--all] [--file <path>] [--strict] [--format <default|json>] [--json]
+obora --json validate [--all] [--file <path>] [--strict]
+```
+
+### Options
+
+- `--all` validate all workflow YAML files under `.obora/workflows` and `.obora/features`
+- `-f, --file <path>` validate a specific workflow file
+- `--strict` treat warnings as validation failures
+- `-o, --format <default|json>` legacy output selector; `json` is equivalent to local `--json`
+- `--json` output structured validation results as JSON
+- `-v, --verbose` show detailed validation output
+
+### Behavior
+
+- Supports both local `obora validate ... --json` and root `obora --json validate ...`.
+- If `--file` is omitted, the command scans `.obora/workflows` and `.obora/features`.
+- If no workflow files are found, the command exits successfully and reports an empty result.
+- JSON output includes `summary` plus per-file `results`.
+
+### Examples
+
+```bash
+obora validate --all
+obora validate --file .obora/workflows/example.yaml
+obora validate --file .obora/workflows/example.yaml --json
+obora --json validate --all
+```
+
+### Exit Codes
+
+- `0` all selected files valid, or only non-strict warnings
+- `2` invalid file path, missing file, validation failure, or strict-mode warnings
+- `3` workflow directory scan failure
 
 ---
 

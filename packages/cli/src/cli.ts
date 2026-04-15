@@ -22,6 +22,7 @@ import {
   inspectPersistedRun,
 } from "./commands/runs.js";
 import { createTestCommand } from "./commands/test.js";
+import { createValidateCommand } from "./commands/validate.js";
 import { handleCommandAction } from "./utils/error-handler.js";
 import { getGlobalOpts } from "./utils/global-opts.js";
 
@@ -75,6 +76,7 @@ export function createCLI(): Command {
   program.addCommand(createDoctorCommand());
   program.addCommand(createExpandCommand());
   program.addCommand(createRunCommand());
+  program.addCommand(createValidateCommand());
   program.addCommand(createTestCommand());
   program.addCommand(createPluginCommand());
   program.addCommand(createAuditCommand());

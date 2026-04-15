@@ -132,6 +132,7 @@ function inferNextCommand(err: unknown): string | null {
     commandContext.activeCommand === "test" ||
     commandContext.activeCommand === "expand" ||
     commandContext.activeCommand === "doctor" ||
+    commandContext.activeCommand === "validate" ||
     commandContext.activeCommand === "init" ||
     commandContext.activeCommand === "quickstart" ||
     message.includes("dlq entry") ||
@@ -163,7 +164,12 @@ function inferNextCommand(err: unknown): string | null {
     message.includes("failed to load doctor config") ||
     message.includes("failed to resolve doctor configuration") ||
     message.includes("failed to initialize scaffold") ||
-    message.includes("invalid execution timeout")
+    message.includes("invalid execution timeout") ||
+    message.includes("invalid validate file path") ||
+    message.includes("validate file not found") ||
+    message.includes("failed to scan workflow directory") ||
+    message.includes("validation failed with errors") ||
+    message.includes("validation failed with warnings in strict mode")
   ) {
     return null;
   }

@@ -433,6 +433,21 @@ describe("error handler and formatter", () => {
     ).toBe(null);
   });
 
+  it("suppresses generic hints for validate command errors", () => {
+    process.argv = ["node", "obora", "validate", "--file", "missing.yaml"];
+
+    expect(
+      inferNextCommand(
+        new CLIError("Invalid validate file path: ../../../etc/passwd", ExitCode.VALIDATION_ERROR)
+      )
+    ).toBe(null);
+    expect(
+      inferNextCommand(
+        new CLIError("Validate file not found: missing.yaml", ExitCode.VALIDATION_ERROR)
+      )
+    ).toBe(null);
+  });
+
   it("suppresses generic hints for doctor command errors", () => {
     process.argv = ["node", "obora", "doctor"];
 
