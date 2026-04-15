@@ -11,6 +11,7 @@
 - [`obora expand`](#obora-expand)
 - [`obora judge`](#obora-judge)
 - [`obora run`](#obora-run)
+- [`obora status`](#obora-status)
 - [`obora validate`](#obora-validate)
 - [`obora test`](#obora-test)
 - [`obora plugin`](#obora-plugin)
@@ -376,6 +377,52 @@ Dry-run output includes:
 - `2` invalid input JSON or validation failure
 - `3` runtime execution failure
 - `4` timeout/abort mapped from gate/abort conditions
+
+---
+
+## `obora status`
+
+Show a persisted run and DLQ overview for operators.
+
+### Usage
+
+```bash
+obora status [--workflow <name>] [--limit <n>] [--json]
+obora --json status [--workflow <name>] [--limit <n>]
+```
+
+### Options
+
+- `--workflow <name>` filter recent runs to a single workflow
+- `--limit <n>` number of recent runs to include (default `5`)
+- `--json` output structured status JSON
+
+### Behavior
+
+- Supports both local `obora status --json` and root `obora --json status`.
+- Reads recent persisted runs from the current runtime persistence adapter.
+- Loads DLQ counts from the configured DLQ store.
+- Text output shows:
+  - top-level run count summary
+  - latest run details
+  - linked DLQ indicator when present
+  - DLQ summary counts
+  - compact recent-runs table
+
+### Examples
+
+```bash
+obora status
+obora status --workflow repair-workflow
+obora status --limit 10 --json
+obora --json status --workflow judge
+```
+
+### Exit Codes
+
+- `0` success
+- `2` invalid limit
+- `3` failed to load persisted runs or DLQ state
 
 ---
 

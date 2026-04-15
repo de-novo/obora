@@ -3,458 +3,217 @@
  * status command tests
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { Command } from "commander";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Mock node:fs module
-vi.mock("node:fs", () => ({
-  existsSync: vi.fn(),
-  readFileSync: vi.fn(),
-  readdirSync: vi.fn(),
+vi.mock("@obora/sdk", () => ({
+  loadConfig: vi.fn(),
+  FileDLQStore: vi.fn(),
+  summarizeDLQ: vi.fn(),
+  OboraError: class OboraError extends Error {
+    code: string;
+
+    constructor(message: string, code = "TEST_ERROR") {
+      super(message);
+      this.code = code;
+    }
+  },
+  OboraErrorCode: {
+    POLICY_GATE_TIMEOUT: "POLICY_GATE_TIMEOUT",
+    CELL_ABORTED: "CELL_ABORTED",
+  },
 }));
 
-// Mock @obora/runtime
-vi.mock("@obora/runtime", () => ({
-  log: vi.fn(),
-  getAllDiagnoses: vi.fn(() => [
-    {
-      code: "E4004",
-      title: "Lock acquisition failed",
-      hypothesis: "h",
-      evidence: "e",
-      commands: ["cmd"],
-      rollback: "r",
-    },
-    {
-      code: "E4005",
-      title: "Step failed",
-      hypothesis: "h",
-      evidence: "e",
-      commands: ["cmd"],
-      rollback: "r",
-    },
-    {
-      code: "E4006",
-      title: "Spec validation failed",
-      hypothesis: "h",
-      evidence: "e",
-      commands: ["cmd"],
-      rollback: "r",
-    },
-    {
-      code: "E6003",
-      title: "OpenClaw connection failed",
-      hypothesis: "h",
-      evidence: "e",
-      commands: ["cmd"],
-      rollback: "r",
-    },
-  ]),
-  formatDiagnosis: vi.fn(
-    (d: { code: string; title?: string }) => `\n💊 Diagnosis for ${d.code}: ${d.title}\n`
+vi.mock("../runs.js", () => ({
+  createRuntime: vi.fn(),
+  getCliRepairLoopState: vi.fn(
+    (summary?: { backEdgeExhausted?: number; repairNoProgress?: number }) => {
+      if (!summary) return "-";
+      if ((summary.backEdgeExhausted ?? 0) > 0) return "EXHAUSTED";
+      if ((summary.repairNoProgress ?? 0) > 0) return "STALLED";
+      return "REPAIRED";
+    }
   ),
-  getDiagnosis: vi.fn((code: string) => {
-    const map: Record<string, unknown> = {
-      E4004: {
-        code: "E4004",
-        title: "Lock acquisition failed",
-        hypothesis: "h",
-        evidence: "e",
-        commands: ["cmd"],
-        rollback: "r",
-      },
-      E4005: {
-        code: "E4005",
-        title: "Step failed",
-        hypothesis: "h",
-        evidence: "e",
-        commands: ["cmd"],
-        rollback: "r",
-      },
-      E4006: {
-        code: "E4006",
-        title: "Spec validation failed",
-        hypothesis: "h",
-        evidence: "e",
-        commands: ["cmd"],
-        rollback: "r",
-      },
-      E6003: {
-        code: "E6003",
-        title: "OpenClaw connection failed",
-        hypothesis: "h",
-        evidence: "e",
-        commands: ["cmd"],
-        rollback: "r",
-      },
-    };
-    return map[code];
-  }),
 }));
 
-// Mock path-utils
-vi.mock("../../utils/path-utils.js", () => ({
-  validatePathComponent: vi.fn(),
-}));
+import { FileDLQStore, loadConfig, summarizeDLQ } from "@obora/sdk";
 
-// Mock status utils
-vi.mock("../../utils/status.js", () => ({
-  readStatus: vi.fn(),
-}));
-
-import { existsSync, readdirSync } from "node:fs";
-
-import { validatePathComponent } from "../../utils/path-utils.js";
-import { readStatus } from "../../utils/status.js";
+import { ExitCode } from "../../utils/exit-codes.js";
+import { createRuntime } from "../runs.js";
 import { createStatusCommand } from "../status.js";
 
 describe("status command", () => {
-  let consoleLogSpy: ReturnType<typeof vi.spyOn>;
-  let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
-
-  const mockStatus = {
-    feature: {
-      name: "test-feature",
-      created_at: "2026-02-04T00:00:00Z",
-      workflow: "simple",
-    },
-    status: "pending",
-    progress: {
-      current_stage: "planning",
-      completed_stages: [],
-    },
-    metadata: {
-      last_updated: "2026-02-04T00:00:00Z",
-      notes: "",
-    },
-  };
-
   beforeEach(() => {
     vi.clearAllMocks();
-    consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    vi.mocked(validatePathComponent).mockImplementation(() => undefined);
+    process.exitCode = undefined;
+    vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+      throw new Error(`process.exit:${code ?? "undefined"}`);
+    }) as never);
+
+    vi.mocked(loadConfig).mockResolvedValue({
+      dlq: {
+        filePath: "./data/.obora/dlq/dead-letters.json",
+      },
+    } as never);
+    vi.mocked(summarizeDLQ).mockReturnValue({
+      totalEntries: 2,
+      pendingCount: 1,
+      reviewedCount: 1,
+      retriedCount: 0,
+      dismissedCount: 0,
+      oldestPendingAt: "2026-03-10T09:00:00.000Z",
+    } as never);
   });
 
   afterEach(() => {
-    consoleLogSpy.mockRestore();
-    consoleErrorSpy.mockRestore();
+    vi.restoreAllMocks();
+    process.exitCode = undefined;
   });
 
-  describe("command creation", () => {
-    it("should create status command with correct options", () => {
-      const cmd = createStatusCommand();
-      expect(cmd.name()).toBe("status");
-      expect(cmd.description()).toBe("Show workflow status");
-    });
-
-    it('should have --format option with default "default"', () => {
-      const cmd = createStatusCommand();
-      const formatOption = cmd.options.find((opt) => opt.long === "--format");
-      expect(formatOption).toBeDefined();
-      expect(formatOption?.defaultValue).toBe("default");
-    });
-
-    it("should have --feature option", () => {
-      const cmd = createStatusCommand();
-      const featureOption = cmd.options.find((opt) => opt.long === "--feature");
-      expect(featureOption).toBeDefined();
-    });
-
-    it("should have --verbose option", () => {
-      const cmd = createStatusCommand();
-      const verboseOption = cmd.options.find((opt) => opt.long === "--verbose");
-      expect(verboseOption).toBeDefined();
-    });
-  });
-
-  describe("status display - default format", () => {
-    it("should display status for a specific feature", async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readStatus).mockReturnValue(mockStatus);
-
-      const cmd = createStatusCommand();
-      cmd.exitOverride();
-      await cmd.parseAsync(["--feature", "test-feature"], { from: "user" });
-
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("Feature: test-feature"));
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("Status:"));
-    });
-
-    it("should show current stage", async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readStatus).mockReturnValue({
-        ...mockStatus,
-        status: "running",
-        progress: {
-          current_stage: "implementation",
-          completed_stages: ["planning", "design"],
+  function mockRuntimeAndDlq(): void {
+    vi.mocked(createRuntime).mockResolvedValue({
+      listRunRecords: vi.fn().mockResolvedValue([
+        {
+          id: "run-1",
+          workflowName: "repair-workflow",
+          status: "failed",
+          startedAt: "2026-03-10T10:00:00.000Z",
+          completedAt: "2026-03-10T10:05:00.000Z",
+          metadata: {
+            repairLoop: {
+              validationFailed: 2,
+              validationPassed: 1,
+              repairStarted: 1,
+              repairCompleted: 1,
+              repairNoProgress: 0,
+              backEdgeTriggered: 0,
+              backEdgeExhausted: 1,
+              lastStopCategory: "repeated_critical_issue",
+            },
+          },
         },
-      });
+      ]),
+    } as never);
 
-      const cmd = createStatusCommand();
-      cmd.exitOverride();
-      await cmd.parseAsync(["--feature", "test-feature"], { from: "user" });
+    vi.mocked(FileDLQStore).mockImplementation(
+      () =>
+        ({
+          load: vi.fn().mockResolvedValue({
+            entries: [
+              {
+                id: "dlq-1",
+                createdAt: "2026-03-10T10:06:00.000Z",
+                executionId: "run-1",
+                workflowName: "repair-workflow",
+                errorCode: "SDK_STEP_FAILED",
+                errorMessage: "repair failed",
+                repairAttempts: 2,
+                status: "pending",
+                metadata: {
+                  repairLoop: {
+                    lastStopCategory: "repeated_critical_issue",
+                  },
+                },
+              },
+            ],
+            lastUpdated: "2026-03-10T10:07:00.000Z",
+          }),
+        }) as never
+    );
+  }
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining("Current Stage: implementation")
-      );
-    });
+  it("creates status command with modern options", () => {
+    const cmd = createStatusCommand();
+
+    expect(cmd.name()).toBe("status");
+    expect(cmd.description()).toBe("Show persisted run and DLQ status overview");
+    expect(cmd.options.find((opt) => opt.long === "--json")).toBeDefined();
+    expect(cmd.options.find((opt) => opt.long === "--workflow")).toBeDefined();
+    expect(cmd.options.find((opt) => opt.long === "--limit")?.defaultValue).toBe("5");
   });
 
-  describe("--format json", () => {
-    it("should output JSON format", async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readStatus).mockReturnValue({
-        ...mockStatus,
-        status: "completed",
-      });
+  it("supports local --json for status", async () => {
+    mockRuntimeAndDlq();
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createStatusCommand();
 
-      const cmd = createStatusCommand();
-      cmd.exitOverride();
-      await cmd.parseAsync(["--feature", "test-feature", "--format", "json"], {
-        from: "user",
-      });
+    await cmd.parseAsync(["--json"], { from: "user" });
 
-      const logCalls = consoleLogSpy.mock.calls.flat();
-      const jsonOutput = logCalls.join(" ");
-      expect(jsonOutput).toContain('"status"');
-      expect(jsonOutput).toContain('"feature"');
-    });
+    const payload = JSON.parse(String(log.mock.calls.at(-1)?.[0] ?? "{}"));
+    expect(payload).toEqual(
+      expect.objectContaining({
+        runs: expect.objectContaining({
+          totalListed: 1,
+          byStatus: expect.objectContaining({ failed: 1 }),
+          latest: expect.objectContaining({
+            id: "run-1",
+            loopState: "EXHAUSTED",
+            triageCause: "repeated_critical_issue",
+          }),
+        }),
+        dlq: expect.objectContaining({
+          totalEntries: 2,
+          pendingCount: 1,
+          lastUpdated: "2026-03-10T10:07:00.000Z",
+        }),
+      })
+    );
   });
 
-  describe("--format minimal", () => {
-    it("should display minimal format", async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readStatus).mockReturnValue({
-        ...mockStatus,
-        status: "planned",
-      });
+  it("inherits root --json for status", async () => {
+    mockRuntimeAndDlq();
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const root = new Command("obora").option("--json");
+    root.addCommand(createStatusCommand());
 
-      const cmd = createStatusCommand();
-      cmd.exitOverride();
-      await cmd.parseAsync(["--feature", "test-feature", "--format", "minimal"], {
-        from: "user",
-      });
+    await root.parseAsync(["--json", "status"], { from: "user" });
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("📋 planned"));
-    });
+    const payload = JSON.parse(String(log.mock.calls.at(-1)?.[0] ?? "{}"));
+    expect(payload.runs.latest).toEqual(
+      expect.objectContaining({
+        id: "run-1",
+      })
+    );
   });
 
-  describe("--verbose option", () => {
-    it("should show step details with --verbose", async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readStatus).mockReturnValue({
-        ...mockStatus,
-        status: "running",
-      });
+  it("uses validation exit code for invalid status limit without generic hints", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const cmd = createStatusCommand();
 
-      const cmd = createStatusCommand();
-      cmd.exitOverride();
-      await cmd.parseAsync(["--feature", "test-feature", "--verbose"], { from: "user" });
+    await cmd.parseAsync(["--limit", "abc"], { from: "user" });
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("Steps:"));
-    });
+    expect(process.exit).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(ExitCode.VALIDATION_ERROR);
+    expect(error).toHaveBeenCalled();
+    expect(log.mock.calls.map((args) => args.join(" ")).join("\n")).not.toContain(
+      "obora run <workflow.yaml> --dry-run"
+    );
   });
 
-  describe("all features status", () => {
-    it("should display all features when no feature specified", async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readdirSync).mockReturnValue([
-        { name: "feature1", isDirectory: () => true },
-        { name: "feature2", isDirectory: () => true },
-      ] as unknown as ReturnType<typeof readdirSync>);
-      vi.mocked(readStatus)
-        .mockReturnValueOnce({
-          ...mockStatus,
-          feature: { ...mockStatus.feature, name: "feature1" },
-        })
-        .mockReturnValueOnce({
-          ...mockStatus,
-          feature: { ...mockStatus.feature, name: "feature2" },
-          status: "running",
-        });
+  it("uses execution-failed exit code for status runtime errors", async () => {
+    vi.mocked(createRuntime).mockRejectedValue(new Error("sqlite offline"));
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const cmd = createStatusCommand();
 
-      const cmd = createStatusCommand();
-      cmd.exitOverride();
-      await cmd.parseAsync([], { from: "user" });
+    await cmd.parseAsync([], { from: "user" });
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("Features:"));
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("feature1"));
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("feature2"));
-    });
-
-    it('should show "No features found" when features directory is empty', async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readdirSync).mockReturnValue([]);
-
-      const cmd = createStatusCommand();
-      cmd.exitOverride();
-      await cmd.parseAsync([], { from: "user" });
-
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("No features found"));
-    });
+    expect(process.exit).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(ExitCode.EXECUTION_FAILED);
+    expect(error).toHaveBeenCalled();
   });
 
-  describe("error handling", () => {
-    it("should throw error when .obora does not exist", async () => {
-      vi.mocked(existsSync).mockReturnValue(false);
+  it("prints text overview when not using json", async () => {
+    mockRuntimeAndDlq();
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createStatusCommand();
 
-      const cmd = createStatusCommand();
-      cmd.exitOverride();
-      await expect(
-        cmd.parseAsync(["--feature", "test-feature"], { from: "user" })
-      ).rejects.toThrow();
-    });
+    await cmd.parseAsync([], { from: "user" });
 
-    it("should throw error when feature not found", async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readStatus).mockReturnValue(null);
-
-      const cmd = createStatusCommand();
-      cmd.exitOverride();
-      await expect(
-        cmd.parseAsync(["--feature", "nonexistent-feature"], { from: "user" })
-      ).rejects.toThrow();
-    });
-
-    it("should throw error when features directory does not exist", async () => {
-      vi.mocked(existsSync).mockImplementation((path) => {
-        const strPath = String(path);
-        return strPath.includes(".obora") && !strPath.includes("features");
-      });
-
-      const cmd = createStatusCommand();
-      cmd.exitOverride();
-      await expect(cmd.parseAsync([], { from: "user" })).rejects.toThrow();
-    });
-  });
-
-  describe("--diagnose option", () => {
-    it("should have --diagnose option", () => {
-      const cmd = createStatusCommand();
-      const diagnoseOption = cmd.options.find((opt) => opt.long === "--diagnose");
-      expect(diagnoseOption).toBeDefined();
-    });
-
-    it("should show all diagnosis guides without feature", async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readdirSync).mockReturnValue([]);
-
-      const cmd = createStatusCommand();
-      cmd.exitOverride();
-      await cmd.parseAsync(["--diagnose"], { from: "user" });
-
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining("Available diagnosis guides")
-      );
-    });
-
-    it("should show diagnosis for failed feature", async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readStatus).mockReturnValue({
-        ...mockStatus,
-        status: "failed",
-      });
-
-      const cmd = createStatusCommand();
-      cmd.exitOverride();
-      await cmd.parseAsync(["--feature", "test-feature", "--diagnose"], { from: "user" });
-
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining("Diagnosis guides for failed feature")
-      );
-    });
-
-    it("should show specific diagnosis when last_error_code is present", async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readStatus).mockReturnValue({
-        ...mockStatus,
-        status: "failed",
-        metadata: { ...mockStatus.metadata, last_error_code: "E4005" },
-      });
-
-      const cmd = createStatusCommand();
-      cmd.exitOverride();
-      await cmd.parseAsync(["--feature", "test-feature", "--diagnose"], { from: "user" });
-
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining("Diagnosis for failed feature")
-      );
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("E4005"));
-    });
-
-    it("should show not-failed message for non-failed feature", async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readStatus).mockReturnValue({
-        ...mockStatus,
-        status: "running",
-      });
-
-      const cmd = createStatusCommand();
-      cmd.exitOverride();
-      await cmd.parseAsync(["--feature", "test-feature", "--diagnose"], { from: "user" });
-
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("not in failed state"));
-    });
-  });
-
-  describe("path validation", () => {
-    it("should call validatePathComponent for feature name", async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readStatus).mockReturnValue(mockStatus);
-
-      const cmd = createStatusCommand();
-      cmd.exitOverride();
-      await cmd.parseAsync(["--feature", "test-feature"], { from: "user" });
-
-      expect(validatePathComponent).toHaveBeenCalledWith("test-feature");
-    });
-  });
-
-  describe("status formatting", () => {
-    it("should format pending status correctly", async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readStatus).mockReturnValue({
-        ...mockStatus,
-        status: "pending",
-      });
-
-      const cmd = createStatusCommand();
-      cmd.exitOverride();
-      await cmd.parseAsync(["--feature", "test-feature"], { from: "user" });
-
-      const logCalls = consoleLogSpy.mock.calls.flat();
-      expect(logCalls.join(" ")).toContain("⏳");
-    });
-
-    it("should format running status correctly", async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readStatus).mockReturnValue({
-        ...mockStatus,
-        status: "running",
-      });
-
-      const cmd = createStatusCommand();
-      cmd.exitOverride();
-      await cmd.parseAsync(["--feature", "test-feature"], { from: "user" });
-
-      const logCalls = consoleLogSpy.mock.calls.flat();
-      expect(logCalls.join(" ")).toContain("🔄");
-    });
-
-    it("should format completed status correctly", async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readStatus).mockReturnValue({
-        ...mockStatus,
-        status: "completed",
-      });
-
-      const cmd = createStatusCommand();
-      cmd.exitOverride();
-      await cmd.parseAsync(["--feature", "test-feature"], { from: "user" });
-
-      const logCalls = consoleLogSpy.mock.calls.flat();
-      expect(logCalls.join(" ")).toContain("✅");
-    });
+    const output = log.mock.calls.map((args) => args.join(" ")).join("\n");
+    expect(output).toContain("Status Overview");
+    expect(output).toContain("Latest Run");
+    expect(output).toContain("DLQ Summary");
+    expect(output).toContain("Recent Runs");
   });
 });

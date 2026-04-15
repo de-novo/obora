@@ -35,6 +35,7 @@ describe("M3 CLI command IA", () => {
     expect(names).toEqual(
       expect.arrayContaining([
         "run",
+        "status",
         "validate",
         "test",
         "plugin",

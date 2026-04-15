@@ -8,7 +8,7 @@ Audited legacy-boundary command surfaces that still exist under `packages/cli/sr
 
 Targets reviewed:
 
-- `status`
+- `status` (initially legacy-boundary, later redesigned as a live surface)
 - `new`
 - `done`
 - `auth`
@@ -22,7 +22,6 @@ Targets reviewed:
 
 The following files are only re-export shims:
 
-- `packages/cli/src/commands/status.ts` -> `./_legacy/status.js`
 - `packages/cli/src/commands/new.ts` -> `./_legacy/new.js`
 - `packages/cli/src/commands/done.ts` -> `./_legacy/done.js`
 - `packages/cli/src/commands/auth.ts` -> `./_legacy/auth.js`
@@ -30,15 +29,19 @@ The following files are only re-export shims:
 - `packages/cli/src/commands/agents.ts` -> `./_legacy/agents.js`
 - `packages/cli/src/commands/dashboard.ts` -> `./_legacy/dashboard.js`
 
+`packages/cli/src/commands/status.ts` has since been redesigned as a live top-level command over persisted runs/DLQ state and is no longer just a shim.
+
 ### Registration
 
-None of the targets above are currently added in `createCLI()`.
+`status` is now registered in `createCLI()` as a live command.
 
-This means they are not part of the live top-level CLI contract even though command files and tests still exist.
+The remaining legacy-boundary targets above are still not added in `createCLI()`.
 
-### Why `status` is not a trivial promotion
+This means those remaining surfaces are not part of the live top-level CLI contract even though command files and tests still exist.
 
-`_legacy/status.ts` still carries old assumptions that do not match the modern CLI contract:
+### Why `status` required redesign instead of direct promotion
+
+`_legacy/status.ts` carried old assumptions that did not match the modern CLI contract:
 
 - raw `console.log` / `console.error`
 - raw legacy `CLIError(..., 1/3)` numeric exits instead of `ExitCode.*`
@@ -49,6 +52,8 @@ This means they are not part of the live top-level CLI contract even though comm
 - placeholder/mock workflow/step run fetches instead of current persisted run surfaces
 - feature-centric `.obora/features/...` UX instead of current live `runs` / `dlq` / `inspect` surfaces
 - `@obora/runtime` diagnosis/template behavior not aligned with the modern operational CLI family
+
+That audit conclusion led to a redesign: the live `obora status` surface now summarizes persisted runs plus DLQ state instead of promoting the legacy feature-status implementation directly.
 
 ## Recommendation
 
@@ -63,10 +68,10 @@ Recommended order:
 
 ## Suggested prioritization
 
-### Candidate for redesign first
+### Redesigned from audit conclusion
 
 - `status`
-  - if revived, it should likely become a thin operator view over persisted runs/DLQ state, not the current feature-status mock path.
+  - now revived as a thin operator view over persisted runs/DLQ state rather than the legacy feature-status mock path.
 
 ### Candidate for later decision
 
@@ -82,5 +87,6 @@ Recommended order:
 
 ## Immediate action taken
 
-- No legacy surface was promoted automatically.
+- `status` was redesigned and registered as a live top-level surface.
+- The remaining legacy surfaces were not promoted automatically.
 - Audit conclusion recorded here so future promotion work starts from an explicit baseline rather than accidentally wiring legacy commands into the live CLI.

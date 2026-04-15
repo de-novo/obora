@@ -448,6 +448,19 @@ describe("error handler and formatter", () => {
     ).toBe(null);
   });
 
+  it("suppresses generic hints for status command errors", () => {
+    process.argv = ["node", "obora", "status", "--limit", "abc"];
+
+    expect(
+      inferNextCommand(new CLIError("Invalid status limit: abc", ExitCode.VALIDATION_ERROR))
+    ).toBe(null);
+    expect(
+      inferNextCommand(
+        new CLIError("Failed to load status runs: sqlite offline", ExitCode.EXECUTION_FAILED)
+      )
+    ).toBe(null);
+  });
+
   it("suppresses generic hints for doctor command errors", () => {
     process.argv = ["node", "obora", "doctor"];
 

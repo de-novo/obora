@@ -132,6 +132,7 @@ function inferNextCommand(err: unknown): string | null {
     commandContext.activeCommand === "test" ||
     commandContext.activeCommand === "expand" ||
     commandContext.activeCommand === "doctor" ||
+    commandContext.activeCommand === "status" ||
     commandContext.activeCommand === "validate" ||
     commandContext.activeCommand === "init" ||
     commandContext.activeCommand === "quickstart" ||
@@ -164,6 +165,10 @@ function inferNextCommand(err: unknown): string | null {
     message.includes("failed to load doctor config") ||
     message.includes("failed to resolve doctor configuration") ||
     message.includes("failed to initialize scaffold") ||
+    message.includes("invalid status limit") ||
+    message.includes("failed to load status runtime") ||
+    message.includes("failed to load status runs") ||
+    message.includes("failed to load status dlq") ||
     message.includes("invalid execution timeout") ||
     message.includes("invalid validate file path") ||
     message.includes("validate file not found") ||
