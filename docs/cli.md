@@ -687,14 +687,18 @@ Policy validation commands.
 
 ```bash
 obora policy validate <path>
+obora policy validate <path> --json
+obora --json policy validate <path>
 ```
 
 ### Behavior
 
 - Accepts `.yaml`/`.yml` files.
+- Supports both local `obora policy validate ... --json` and root `obora --json policy validate ...`.
 - Tries policy parsing first (`Policy.fromYaml`).
 - If policy parse fails, tries workflow parsing (`Workflow.fromYaml`).
 - Reports file as `policy` or `workflow` when valid.
+- Unsupported file extensions return exit code `2`.
 
 ### Example
 

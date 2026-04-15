@@ -127,6 +127,7 @@ function inferNextCommand(err: unknown): string | null {
     commandContext.activeCommand === "knowledge" ||
     commandContext.activeCommand === "audit" ||
     commandContext.activeCommand === "models" ||
+    commandContext.activeCommand === "policy" ||
     message.includes("dlq entry") ||
     message.includes("dlq store") ||
     message.includes("dlq config") ||
@@ -143,7 +144,9 @@ function inferNextCommand(err: unknown): string | null {
     message.includes("knowledge min-confidence") ||
     message.includes("invalid audit ") ||
     message.includes("audit timeline") ||
-    message.includes("unsupported models provider")
+    message.includes("unsupported models provider") ||
+    message.includes("unsupported policy file format") ||
+    message.includes("invalid policy/workflow yaml")
   ) {
     return null;
   }

@@ -373,6 +373,24 @@ describe("error handler and formatter", () => {
     ).toBe(null);
   });
 
+  it("suppresses generic hints for policy command errors", () => {
+    process.argv = ["node", "obora", "policy", "validate", "policy.txt"];
+
+    expect(
+      inferNextCommand(
+        new CLIError("Unsupported policy file format: policy.txt", ExitCode.VALIDATION_ERROR)
+      )
+    ).toBe(null);
+    expect(
+      inferNextCommand(
+        new CLIError(
+          "Invalid policy/workflow YAML: policies/default.yaml",
+          ExitCode.VALIDATION_ERROR
+        )
+      )
+    ).toBe(null);
+  });
+
   it("formatter.error writes to stderr", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
