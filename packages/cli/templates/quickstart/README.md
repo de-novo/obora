@@ -28,7 +28,7 @@ If you edit `judge.yaml` and want deeper inspection, expand the one-file workflo
 obora expand judge.yaml --json
 ```
 
-4. Validate before execution
+4. Preview before execution
 
 ```bash
 obora judge --dry-run

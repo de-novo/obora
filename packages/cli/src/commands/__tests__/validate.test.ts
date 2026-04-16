@@ -166,8 +166,32 @@ describe("validate command", () => {
     const firstResult = Object.values(payload.results as Record<string, unknown>)[0] as {
       errors: Array<{ suggestion?: string }>;
     };
-    expect(firstResult.errors[0]?.suggestion).toContain("obora expand workflow.yaml --json");
+    expect(firstResult.errors[0]?.suggestion).toContain("obora expand --json -- 'workflow.yaml'");
     expect(parseAndValidate).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(ExitCode.VALIDATION_ERROR);
+  });
+
+  it("shell-quotes one-file expand guidance for paths with spaces and shell metacharacters", async () => {
+    vi.mocked(existsSync).mockReturnValue(true);
+    vi.mocked(readFileSync).mockReturnValue("name: invalid-judge\nmode: judge\nnonesense: true\n");
+    vi.mocked(Workflow.getStopSemantics).mockReturnValue({ mode: "judge" } as never);
+    vi.mocked(Workflow.create).mockImplementation(() => {
+      throw new OboraError(
+        'One-file workflow does not allow key "nonesense". Allowed keys: name, version, mode, provider, model, agent, prompt, input, output, options',
+        "SDK_8005"
+      );
+    });
+
+    const cmd = validateCommand();
+    await cmd.parseAsync(["workflows/my weird $(name).yaml", "--json"], { from: "user" });
+
+    const payload = JSON.parse(String(consoleLogSpy.mock.calls.at(-1)?.[0] ?? "{}"));
+    const firstResult = Object.values(payload.results as Record<string, unknown>)[0] as {
+      errors: Array<{ suggestion?: string }>;
+    };
+    expect(firstResult.errors[0]?.suggestion).toContain(
+      "obora expand --json -- 'workflows/my weird $(name).yaml'"
+    );
     expect(process.exitCode).toBe(ExitCode.VALIDATION_ERROR);
   });
 

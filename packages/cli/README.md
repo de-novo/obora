@@ -14,6 +14,7 @@ npm install -g @obora/cli
 obora init my-project --quickstart
 cd my-project
 obora doctor
+obora validate judge.yaml
 obora judge --dry-run
 obora judge
 ```
@@ -22,7 +23,8 @@ What this gives you:
 
 - `obora init --quickstart` creates a minimal judge-mode project
 - `obora doctor` shows provider/model/auth readiness and next actions
-- `obora judge --dry-run` validates the bundled workflow and previews bindings/output
+- `obora validate judge.yaml` checks the bundled one-file workflow before execution
+- `obora judge --dry-run` previews bindings/output without starting execution
 - `obora judge` writes `artifacts/result.json`
 
 ## Useful commands
@@ -76,7 +78,7 @@ obora expand workflow.yaml --json
 ```
 
 For one-file workflow authoring, start with `obora validate workflow.yaml`.
-If validation fails on a one-file mode such as `judge`, follow the suggestion with `obora expand workflow.yaml --json` to inspect the expanded workflow.
+If validation fails on a one-file mode such as `judge`, follow the suggestion with `obora expand --json -- <file>` to inspect the expanded workflow. The CLI uses shell-safe quoting when filenames contain spaces or shell metacharacters.
 
 ## JSON mode
 

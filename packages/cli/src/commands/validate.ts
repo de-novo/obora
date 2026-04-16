@@ -6,8 +6,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { OboraError, Workflow } from "@obora/sdk";
 import { parseAndValidate, type ValidationError, type ValidationResult } from "@obora/runtime";
+import { OboraError, Workflow } from "@obora/sdk";
 import { Command } from "commander";
 import { parse as parseYaml } from "yaml";
 
@@ -64,9 +64,14 @@ function formatIssue(kind: "error" | "warning", issue: ValidationError, filePath
   return lines.join("\n");
 }
 
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'"'"'`)}'`;
+}
+
 function buildOneFileValidationSuggestion(filePath: string): string {
   const relativePath = path.relative(process.cwd(), filePath) || filePath;
-  return `Review one-file workflow fields, allowed keys, and required sections. Then run \`obora expand ${relativePath} --json\` to inspect the expanded workflow.`;
+  const quotedPath = shellQuote(relativePath);
+  return `Review one-file workflow fields, allowed keys, and required sections. Then run \`obora expand --json -- ${quotedPath}\` to inspect the expanded workflow.`;
 }
 
 function validateFileContent(content: string, filePath: string): ValidationResult {
