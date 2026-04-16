@@ -71,7 +71,7 @@ function shellQuote(value: string): string {
 function buildOneFileValidationSuggestion(filePath: string): string {
   const relativePath = path.relative(process.cwd(), filePath) || filePath;
   const quotedPath = shellQuote(relativePath);
-  return `Review one-file workflow fields, allowed keys, and required sections. Then run \`obora expand --json -- ${quotedPath}\` to inspect the expanded workflow.`;
+  return `Fix the reported one-file workflow errors, then run \`obora expand --json -- ${quotedPath}\` to inspect the expanded workflow.`;
 }
 
 function validateFileContent(content: string, filePath: string): ValidationResult {
