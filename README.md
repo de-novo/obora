@@ -39,7 +39,10 @@ cd my-project
 # Check readiness and missing setup
 obora doctor
 
-# Validate the bundled judge workflow before execution
+# Validate the bundled judge workflow file
+obora validate judge.yaml
+
+# Preview execution without starting the judge run
 obora judge --dry-run
 
 # Run the bundled judge example
@@ -47,17 +50,21 @@ obora judge
 ```
 
 Prerequisites:
+
 - Node.js 20+
 - At least one LLM provider API key (ZAI, OpenAI, Anthropic, etc.)
 
 Useful discovery command:
+
 - `obora models <provider> [query]` shows the model refs available from the installed `pi-ai` catalog
   - examples: `obora models openai`, `obora models openai gpt-5.4`, `obora --json models zai glm-4.7`
 
 What this path gives you:
+
 - `obora init --quickstart` creates a minimal judge-mode project
+- `obora validate judge.yaml` checks the bundled one-file workflow before execution
 - `obora doctor` shows ready/stub/missing-auth status and next actions
-- `obora judge --dry-run` validates the workflow without starting execution and previews the input/output contract
+- `obora judge --dry-run` previews the input/output contract without starting execution
 - `obora judge` writes the JSON result artifact
 
 ### Recommended Getting Started Path
@@ -90,29 +97,29 @@ A ready-to-run contract-first example is here:
 
 ## 🧩 Core Concepts
 
-| Concept | Description |
-|---------|-------------|
-| **Workflow** | YAML-defined multi-agent execution pipeline |
-| **Validation-Repair Loop** | Automated test → fix → re-test cycle with convergence control |
-| **Conditional Routing** | Route failures to different steps based on failure type |
-| **Blackboard** | Shared state across steps (facts, decisions, failure history) |
-| **Reflector v2** | Plugin analyzers + rule engine + action system + cross-execution learning |
-| **Observer** | Real-time metrics, cost tracking, and execution reports |
-| **Shell Hooks** | Deterministic pre/post step commands (build, test, lint) |
-| **Skills** | Domain knowledge injection per step (AgentSkills compatible) |
-| **Parallel Execution** | Run independent steps concurrently with merge strategies |
-| **Peer Review** | Multi-reviewer parallel scoring with quorum rules |
-| **Policy Engine** | Rule-based control for tools, actions, and access |
-| **Audit Trail** | Full trace of inputs, decisions, state transitions, outputs |
-| **Knowledge Store** | Persistent failure patterns and resolution history across executions |
-| **TKG Projection** | Temporal Knowledge Graph — staging, promotion, confidence policy, review queue |
-| **Dead Letter Queue** | Isolate unrecoverable failures for manual review |
-| **Circuit Breaker** | LLM failure isolation (closed → open → half-open) |
-| **Execution Lock** | File-based mutex to prevent concurrent runs |
-| **Auto-Recovery** | Checkpoint-based automatic resume on failure |
-| **Health Checker** | Stuck execution detection with pluggable checks |
-| **Alert Manager** | Webhook/console alerting with severity filtering |
-| **Metrics Export** | Prometheus text + JSON metrics for observability |
+| Concept                    | Description                                                                    |
+| -------------------------- | ------------------------------------------------------------------------------ |
+| **Workflow**               | YAML-defined multi-agent execution pipeline                                    |
+| **Validation-Repair Loop** | Automated test → fix → re-test cycle with convergence control                  |
+| **Conditional Routing**    | Route failures to different steps based on failure type                        |
+| **Blackboard**             | Shared state across steps (facts, decisions, failure history)                  |
+| **Reflector v2**           | Plugin analyzers + rule engine + action system + cross-execution learning      |
+| **Observer**               | Real-time metrics, cost tracking, and execution reports                        |
+| **Shell Hooks**            | Deterministic pre/post step commands (build, test, lint)                       |
+| **Skills**                 | Domain knowledge injection per step (AgentSkills compatible)                   |
+| **Parallel Execution**     | Run independent steps concurrently with merge strategies                       |
+| **Peer Review**            | Multi-reviewer parallel scoring with quorum rules                              |
+| **Policy Engine**          | Rule-based control for tools, actions, and access                              |
+| **Audit Trail**            | Full trace of inputs, decisions, state transitions, outputs                    |
+| **Knowledge Store**        | Persistent failure patterns and resolution history across executions           |
+| **TKG Projection**         | Temporal Knowledge Graph — staging, promotion, confidence policy, review queue |
+| **Dead Letter Queue**      | Isolate unrecoverable failures for manual review                               |
+| **Circuit Breaker**        | LLM failure isolation (closed → open → half-open)                              |
+| **Execution Lock**         | File-based mutex to prevent concurrent runs                                    |
+| **Auto-Recovery**          | Checkpoint-based automatic resume on failure                                   |
+| **Health Checker**         | Stuck execution detection with pluggable checks                                |
+| **Alert Manager**          | Webhook/console alerting with severity filtering                               |
+| **Metrics Export**         | Prometheus text + JSON metrics for observability                               |
 
 ---
 
@@ -162,13 +169,13 @@ A ready-to-run contract-first example is here:
 
 ## 📦 Packages
 
-| Package | Description |
-|---------|-------------|
-| [`@obora/sdk`](./packages/sdk) | Programmatic API for building workflows |
-| [`@obora/runtime`](./packages/runtime) | Core execution engine, policies, audit |
-| [`@obora/cli`](./packages/cli) | Command-line interface |
-| [`@obora/adapters`](./packages/adapters) | LLM provider adapters (ZAI, OpenAI, etc.) |
-| [`@obora/dashboard`](./packages/dashboard) | Web UI for monitoring |
+| Package                                    | Description                               |
+| ------------------------------------------ | ----------------------------------------- |
+| [`@obora/sdk`](./packages/sdk)             | Programmatic API for building workflows   |
+| [`@obora/runtime`](./packages/runtime)     | Core execution engine, policies, audit    |
+| [`@obora/cli`](./packages/cli)             | Command-line interface                    |
+| [`@obora/adapters`](./packages/adapters)   | LLM provider adapters (ZAI, OpenAI, etc.) |
+| [`@obora/dashboard`](./packages/dashboard) | Web UI for monitoring                     |
 
 ---
 
@@ -218,6 +225,7 @@ console.log(result.outputs);
 ### Why this style is recommended
 
 This authoring style makes workflows easier to operate because:
+
 - inputs are declared explicitly with `input.bindings`
 - outputs are declared explicitly with `output.path` / `output.schema`
 - startup summary can preview both sides of the contract
@@ -246,6 +254,7 @@ output:
 ```
 
 See also:
+
 - [One-File Workflows](./docs/tutorials/one-file-workflows.md)
 - [Contract-First Quickstart](./docs/tutorials/04-contract-first-quickstart.md)
 

@@ -14,16 +14,14 @@ npm install @obora/sdk
 import { OboraRuntime, Workflow } from "@obora/sdk";
 
 const runtime = new OboraRuntime({
-  llm: { provider: "zai", model: "glm-4.7" }
+  llm: { provider: "zai", model: "glm-4.7" },
 });
 
 // Define and run a workflow
 runtime.define("hello", {
   name: "hello",
   version: "1.0",
-  steps: [
-    { name: "greet", agent: "assistant", input: { task: "Say hello" } }
-  ]
+  steps: [{ name: "greet", agent: "assistant", input: { task: "Say hello" } }],
 });
 
 runtime.registerAgent("assistant", () => ({ role: "Assistant" }));
@@ -82,8 +80,8 @@ const workflow = new Workflow({
 import { StepExecutor, type StepToolHandler } from "@obora/sdk";
 
 const executor = new StepExecutor(llmAdapter, agentFactories, {
-  tools: customTools,           // Custom tool handlers
-  disableBuiltinTools: false,   // Keep file_write, file_read, file_list
+  tools: customTools, // Custom tool handlers
+  disableBuiltinTools: false, // Keep file_write, file_read, file_list
 });
 
 const result = await executor.executeStep(step, context);
@@ -95,8 +93,10 @@ const result = await executor.executeStep(step, context);
 import { MockAgent, runWorkflowTest, loadFixture } from "@obora/sdk/testing";
 
 const mockAgent = new MockAgent()
-  .when("plan").respond("Plan created")
-  .when("implement").respond("Code written");
+  .when("plan")
+  .respond("Plan created")
+  .when("implement")
+  .respond("Code written");
 
 const result = await runWorkflowTest(workflow, { agents: { architect: mockAgent } });
 ```
@@ -109,7 +109,7 @@ import { queryKnowledge, validateKnowledgeSchema } from "@obora/sdk";
 const results = await queryKnowledge({
   query: "authentication patterns",
   tags: ["security", "auth"],
-  limit: 10
+  limit: 10,
 });
 ```
 
@@ -127,7 +127,7 @@ const config = detectLLMConfigFromEnv();
 const config = resolveLLMConfig({
   provider: "zai",
   model: "glm-4.7",
-  apiKey: process.env.ZAI_API_KEY
+  apiKey: process.env.ZAI_API_KEY,
 });
 ```
 
@@ -136,7 +136,7 @@ const config = resolveLLMConfig({
 ```typescript
 import { CostTracker, BudgetExceededError } from "@obora/sdk";
 
-const tracker = new CostTracker({ maxCost: 1.00 }); // $1 budget
+const tracker = new CostTracker({ maxCost: 1.0 }); // $1 budget
 runtime.on("llm_response", (event) => tracker.track(event));
 ```
 
@@ -149,7 +149,7 @@ try {
   await runtime.run("workflow");
 } catch (e) {
   if (e instanceof OboraError) {
-    console.log(e.code);    // OboraErrorCode.CELL_TIMEOUT
+    console.log(e.code); // OboraErrorCode.CELL_TIMEOUT
     console.log(e.message); // Human-readable message
   }
 }
@@ -189,6 +189,7 @@ steps:
 ```
 
 When the validator emits a structured `ValidationResult`, the repair step receives a `RepairContext` including:
+
 - latest validation result
 - previous validation history
 - current repair attempt
@@ -199,6 +200,7 @@ When the validator emits a structured `ValidationResult`, the repair step receiv
 See `docs/tutorials/validation-repair-loop.md` for a fuller walkthrough.
 
 Related files:
+
 - `packages/sdk/examples/validation-repair-loop.yaml`
 - `docs/tutorials/validation-repair-loop-migration.md`
 - `docs/tutorials/validation-repair-loop-troubleshooting.md`
@@ -207,6 +209,7 @@ Related files:
 
 The SDK also supports one-file declarative workflow authoring for selected high-level modes.
 Currently available modes:
+
 - `validation-repair`
 - `research-loop`
 - `proof-loop`
@@ -228,7 +231,14 @@ loop:
   repeated_critical_issue_ceiling: 2
 ```
 
-You can inspect how a one-file YAML expands internally:
+Start by validating the one-file YAML itself:
+
+```bash
+obora validate my-workflow.yaml
+obora validate my-workflow.yaml --json
+```
+
+If you need the internal structure, inspect how a one-file YAML expands internally:
 
 ```bash
 obora expand my-workflow.yaml --json
@@ -243,6 +253,7 @@ obora run my-workflow.yaml --dry-run --json --dump-expanded-workflow --show-stop
 See `docs/tutorials/one-file-workflows.md` for mode examples, validation contract, and current limitations.
 
 Current validation includes:
+
 - required field checks
 - unknown key detection
 - nested key validation

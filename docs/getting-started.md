@@ -62,6 +62,13 @@ cd my-project
 - `.obora/config.yaml`
 - `README.md`
 
+`judge.yaml`을 직접 수정했다면 실행 전에 아래를 먼저 권장합니다.
+
+```bash
+obora validate judge.yaml
+obora expand judge.yaml --json
+```
+
 ### 2) `obora doctor`
 
 ```bash

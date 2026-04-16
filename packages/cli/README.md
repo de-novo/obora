@@ -70,9 +70,13 @@ cat artifacts/submission.json | obora judge --input @-
 
 ```bash
 obora validate workflow.yaml
-obora validate --all
 obora validate workflow.yaml --json
+obora validate --all
+obora expand workflow.yaml --json
 ```
+
+For one-file workflow authoring, start with `obora validate workflow.yaml`.
+If validation fails on a one-file mode such as `judge`, follow the suggestion with `obora expand workflow.yaml --json` to inspect the expanded workflow.
 
 ## JSON mode
 

@@ -2,7 +2,7 @@
 
 ## First run
 
-1) Set your API key
+1. Set your API key
 
 Example with OpenAI:
 
@@ -10,25 +10,38 @@ Example with OpenAI:
 export OPENAI_API_KEY=***
 ```
 
-2) Check readiness
+2. Check readiness
 
 ```bash
 obora doctor
 ```
 
-3) Validate before execution
+3. Validate the workflow file
+
+```bash
+obora validate judge.yaml
+```
+
+If you edit `judge.yaml` and want deeper inspection, expand the one-file workflow:
+
+```bash
+obora expand judge.yaml --json
+```
+
+4. Validate before execution
 
 ```bash
 obora judge --dry-run
 ```
 
 This prints the resolved provider/model context plus a preview of:
+
 - `artifacts/submission.json`
 - `artifacts/submission.schema.json`
 - `artifacts/result.json`
 - `artifacts/result.schema.json`
 
-4) Run the judge example
+5. Run the judge example
 
 ```bash
 obora judge
