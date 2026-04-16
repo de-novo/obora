@@ -18,6 +18,7 @@ npm install -g @obora/cli
 obora init my-project --quickstart
 cd my-project
 obora doctor
+obora validate judge.yaml
 obora judge --dry-run
 obora judge
 ```
@@ -82,7 +83,25 @@ obora doctor
 - stub/fallback 상태인지
 - 다음에 무엇을 실행해야 하는지
 
-### 3) `obora judge --dry-run`
+### 3) `obora validate judge.yaml`
+
+```bash
+obora validate judge.yaml
+```
+
+확인 포인트:
+
+- one-file workflow top-level / nested key 유효성
+- required field 누락 여부
+- 실행 전에 먼저 잡을 수 있는 judge workflow shape 오류
+
+필요하면 바로 이어서 아래도 확인합니다.
+
+```bash
+obora expand judge.yaml --json
+```
+
+### 4) `obora judge --dry-run`
 
 ```bash
 obora judge --dry-run
@@ -94,7 +113,7 @@ obora judge --dry-run
 - `artifacts/submission.json` binding preview
 - `artifacts/result.json` output preview
 
-### 4) `obora judge`
+### 5) `obora judge`
 
 ```bash
 obora judge

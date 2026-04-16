@@ -74,13 +74,24 @@ If `doctor` reports missing auth or stub mode, jump to:
 
 ---
 
-## Step 4) Preview before execution
+## Step 4) Validate the workflow file
+
+```bash
+obora validate judge.yaml
+```
+
+If you edited `judge.yaml`, this catches one-file schema/key issues before execution.
+Use `obora expand judge.yaml --json` if you need the expanded workflow structure.
+
+---
+
+## Step 5) Preview before execution
 
 ```bash
 obora judge --dry-run
 ```
 
-This validates the workflow and shows:
+This previews execution and shows:
 
 - provider / model / auth resolution
 - binding preview for `artifacts/submission.json`
@@ -88,7 +99,7 @@ This validates the workflow and shows:
 
 ---
 
-## Step 5) Run it
+## Step 6) Run it
 
 ```bash
 obora judge

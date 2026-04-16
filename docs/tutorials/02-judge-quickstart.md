@@ -58,25 +58,37 @@ Read it as:
 
 ## First run
 
-1) Set auth in env
+1. Set auth in env
 
 ```bash
 export OPENAI_API_KEY=***
 ```
 
-2) Check readiness
+2. Check readiness
 
 ```bash
 obora doctor
 ```
 
-3) Preview the resolved execution
+3. Validate the one-file workflow
+
+```bash
+obora validate judge.yaml
+```
+
+If you edited `judge.yaml` and want to inspect the expanded shape, run:
+
+```bash
+obora expand judge.yaml --json
+```
+
+4. Preview the resolved execution
 
 ```bash
 obora judge --dry-run
 ```
 
-4) Execute
+5. Execute
 
 ```bash
 obora judge

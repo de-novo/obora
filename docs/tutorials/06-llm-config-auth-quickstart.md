@@ -88,6 +88,7 @@ If you are following the onboarding path, use the quickstart project directly:
 
 ```bash
 obora doctor
+obora validate judge.yaml
 obora judge --dry-run
 obora judge
 ```

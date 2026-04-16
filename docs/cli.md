@@ -52,6 +52,7 @@ If you are starting from zero, use this order:
 obora quickstart my-project
 cd my-project
 obora doctor
+obora validate judge.yaml
 obora judge --dry-run
 obora judge
 ```
@@ -60,7 +61,8 @@ Why this order:
 
 - `init --quickstart` creates the smallest runnable project
 - `doctor` tells you whether auth/config is missing
-- `judge --dry-run` validates the workflow before execution
+- `validate judge.yaml` catches one-file workflow shape issues before execution
+- `judge --dry-run` previews the resolved execution without starting it
 - `judge` starts the real judge workflow
 
 ---
