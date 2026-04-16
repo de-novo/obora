@@ -490,6 +490,7 @@ obora --json validate [target] [--all] [--file <path>] [--strict]
 - Supports both local `obora validate ... --json` and root `obora --json validate ...`.
 - Accepts a positional workflow target (`obora validate judge.yaml`) as an alias for `--file`.
 - Validates one-file workflows (for example `mode: judge`) through SDK expansion instead of the legacy graph parser.
+- One-file validation failures include an `obora expand <file> --json` follow-up suggestion for deeper inspection.
 - `[target]` and `--file` are mutually exclusive.
 - `--all` cannot be combined with `[target]` or `--file`.
 - If neither `[target]` nor `--file` is provided, the command scans `.obora/workflows` and `.obora/features`.

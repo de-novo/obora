@@ -64,7 +64,12 @@ function formatIssue(kind: "error" | "warning", issue: ValidationError, filePath
   return lines.join("\n");
 }
 
-function validateFileContent(content: string): ValidationResult {
+function buildOneFileValidationSuggestion(filePath: string): string {
+  const relativePath = path.relative(process.cwd(), filePath) || filePath;
+  return `Review one-file workflow fields, allowed keys, and required sections. Then run \`obora expand ${relativePath} --json\` to inspect the expanded workflow.`;
+}
+
+function validateFileContent(content: string, filePath: string): ValidationResult {
   let parsed: unknown;
   try {
     parsed = parseYaml(content);
@@ -92,7 +97,7 @@ function validateFileContent(content: string): ValidationResult {
             code: error.code,
             message: error.message,
             path: "",
-            suggestion: "Review one-file workflow fields, allowed keys, and required sections.",
+            suggestion: buildOneFileValidationSuggestion(filePath),
           },
         ],
         warnings: [],
@@ -106,7 +111,7 @@ function validateFileContent(content: string): ValidationResult {
 function validateFile(filePath: string): ValidationResult {
   try {
     const content = fs.readFileSync(filePath, "utf-8");
-    return validateFileContent(content);
+    return validateFileContent(content, filePath);
   } catch (error) {
     return {
       isValid: false,

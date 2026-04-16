@@ -133,7 +133,20 @@ output:
 
 ## 디버깅 / 확인
 
-가장 직접적인 방법은 `expand` 명령입니다.
+가장 먼저 확인할 명령은 `validate`입니다.
+
+```bash
+obora validate my-workflow.yaml
+obora validate my-workflow.yaml --json
+```
+
+이 경로는 다음을 빠르게 확인할 때 적합합니다.
+
+- one-file top-level / nested key 유효성
+- required field 누락
+- 일반 workflow와 one-file workflow 모두에 대한 계약 검증
+
+구조를 더 자세히 보고 싶으면 `expand`를 사용합니다.
 
 ```bash
 obora expand my-workflow.yaml --json

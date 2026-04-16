@@ -33,7 +33,7 @@ vi.mock("@obora/sdk", () => ({
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 
-import { Workflow } from "@obora/sdk";
+import { OboraError, Workflow } from "@obora/sdk";
 import { parseAndValidate } from "@obora/runtime";
 
 import { ExitCode } from "../../utils/exit-codes.js";
@@ -146,6 +146,29 @@ describe("validate command", () => {
     expect(Workflow.create).toHaveBeenCalled();
     expect(parseAndValidate).not.toHaveBeenCalled();
     expect(process.exitCode).toBe(ExitCode.SUCCESS);
+  });
+
+  it("adds expand guidance to one-file validation errors", async () => {
+    vi.mocked(existsSync).mockReturnValue(true);
+    vi.mocked(readFileSync).mockReturnValue("name: invalid-judge\nmode: judge\nnonesense: true\n");
+    vi.mocked(Workflow.getStopSemantics).mockReturnValue({ mode: "judge" } as never);
+    vi.mocked(Workflow.create).mockImplementation(() => {
+      throw new OboraError(
+        'One-file workflow does not allow key "nonesense". Allowed keys: name, version, mode, provider, model, agent, prompt, input, output, options',
+        "SDK_8005"
+      );
+    });
+
+    const cmd = validateCommand();
+    await cmd.parseAsync(["workflow.yaml", "--json"], { from: "user" });
+
+    const payload = JSON.parse(String(consoleLogSpy.mock.calls.at(-1)?.[0] ?? "{}"));
+    const firstResult = Object.values(payload.results as Record<string, unknown>)[0] as {
+      errors: Array<{ suggestion?: string }>;
+    };
+    expect(firstResult.errors[0]?.suggestion).toContain("obora expand workflow.yaml --json");
+    expect(parseAndValidate).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(ExitCode.VALIDATION_ERROR);
   });
 
   it("outputs structured JSON with local --json", async () => {
