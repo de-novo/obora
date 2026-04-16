@@ -332,6 +332,7 @@ obora --json judge
 - Defaults to `judge.yaml` when no workflow path is provided.
 - Shares the same execution options and exit-code contract as `obora run`.
 - Supports both local `--json` and root `obora --json judge ...`.
+- For one-file workflow shape checks, use `obora validate judge.yaml` before `judge --dry-run`.
 - Dry-run guidance prefers `obora judge` instead of `obora run judge.yaml` when the workflow target resolves to judge mode.
 
 ### Examples

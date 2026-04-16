@@ -8,8 +8,9 @@
 The fastest recovery rule is:
 
 1. run `obora doctor`
-2. read the resolved provider/model/auth source
-3. fix resolution before changing prompts or workflow YAML
+2. run `obora validate judge.yaml` if you changed the quickstart workflow
+3. read the resolved provider/model/auth source
+4. fix resolution before changing prompts or workflow YAML
 
 ---
 
@@ -113,10 +114,12 @@ Then update `.obora/config.yaml` with a real model ref.
 
 Check in this order:
 
-1. `obora doctor`
-2. `.obora/config.yaml`
-3. environment variables like `OPENAI_MODEL`, `ANTHROPIC_MODEL`
-4. `judge.yaml` input/output paths
+1. `obora validate judge.yaml`
+2. `obora expand judge.yaml --json` if the workflow shape still looks suspicious
+3. `obora doctor`
+4. `.obora/config.yaml`
+5. environment variables like `OPENAI_MODEL`, `ANTHROPIC_MODEL`
+6. `judge.yaml` input/output paths
 
 For the bundled quickstart, these are the important files:
 
@@ -157,11 +160,12 @@ Use this order every time:
 
 ```bash
 obora doctor
+obora validate judge.yaml
 obora judge --dry-run
 obora judge
 ```
 
-If the first two commands look correct, the live run usually becomes much easier to debug.
+If the first three commands look correct, the live run usually becomes much easier to debug.
 
 ## Next docs
 
