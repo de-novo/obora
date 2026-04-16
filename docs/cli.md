@@ -471,12 +471,13 @@ Validate workflow YAML files under `.obora/workflows` and `.obora/features`, or 
 ### Usage
 
 ```bash
-obora validate [--all] [--file <path>] [--strict] [--format <default|json>] [--json]
-obora --json validate [--all] [--file <path>] [--strict]
+obora validate [target] [--all] [--file <path>] [--strict] [--format <default|json>] [--json]
+obora --json validate [target] [--all] [--file <path>] [--strict]
 ```
 
 ### Options
 
+- `[target]` positional workflow file path to validate
 - `--all` validate all workflow YAML files under `.obora/workflows` and `.obora/features`
 - `-f, --file <path>` validate a specific workflow file
 - `--strict` treat warnings as validation failures
@@ -487,7 +488,11 @@ obora --json validate [--all] [--file <path>] [--strict]
 ### Behavior
 
 - Supports both local `obora validate ... --json` and root `obora --json validate ...`.
-- If `--file` is omitted, the command scans `.obora/workflows` and `.obora/features`.
+- Accepts a positional workflow target (`obora validate judge.yaml`) as an alias for `--file`.
+- Validates one-file workflows (for example `mode: judge`) through SDK expansion instead of the legacy graph parser.
+- `[target]` and `--file` are mutually exclusive.
+- `--all` cannot be combined with `[target]` or `--file`.
+- If neither `[target]` nor `--file` is provided, the command scans `.obora/workflows` and `.obora/features`.
 - If no workflow files are found, the command exits successfully and reports an empty result.
 - JSON output includes `summary` plus per-file `results`.
 
@@ -495,8 +500,9 @@ obora --json validate [--all] [--file <path>] [--strict]
 
 ```bash
 obora validate --all
+obora validate judge.yaml
 obora validate --file .obora/workflows/example.yaml
-obora validate --file .obora/workflows/example.yaml --json
+obora validate judge.yaml --json
 obora --json validate --all
 ```
 

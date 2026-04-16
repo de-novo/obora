@@ -69,9 +69,9 @@ cat artifacts/submission.json | obora judge --input @-
 ### Validate
 
 ```bash
-obora validate --file workflow.yaml
+obora validate workflow.yaml
 obora validate --all
-obora validate --file workflow.yaml --json
+obora validate workflow.yaml --json
 ```
 
 ## JSON mode

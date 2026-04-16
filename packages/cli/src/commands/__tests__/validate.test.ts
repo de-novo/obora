@@ -16,8 +16,24 @@ vi.mock("@obora/runtime", () => ({
   parseAndValidate: vi.fn(),
 }));
 
+vi.mock("@obora/sdk", () => ({
+  OboraError: class OboraError extends Error {
+    code: string;
+
+    constructor(message: string, code = "SDK_INVALID_WORKFLOW") {
+      super(message);
+      this.code = code;
+    }
+  },
+  Workflow: {
+    create: vi.fn(),
+    getStopSemantics: vi.fn(),
+  },
+}));
+
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 
+import { Workflow } from "@obora/sdk";
 import { parseAndValidate } from "@obora/runtime";
 
 import { ExitCode } from "../../utils/exit-codes.js";
@@ -72,6 +88,64 @@ describe("validate command", () => {
     expect(parseAndValidate).toHaveBeenCalledWith("name: test\nsteps: []");
     expect(process.exitCode).toBe(ExitCode.SUCCESS);
     expect(consoleLogSpy.mock.calls.flat().join(" ")).toContain("Results:");
+  });
+
+  it("accepts a positional workflow path as a validate target", async () => {
+    vi.mocked(existsSync).mockReturnValue(true);
+    vi.mocked(readFileSync).mockReturnValue("name: positional\nsteps: []");
+    vi.mocked(parseAndValidate).mockReturnValue({
+      isValid: true,
+      errors: [],
+      warnings: [],
+    });
+
+    const cmd = validateCommand();
+    await cmd.parseAsync(["workflow.yaml"], { from: "user" });
+
+    expect(parseAndValidate).toHaveBeenCalledWith("name: positional\nsteps: []");
+    expect(process.exitCode).toBe(ExitCode.SUCCESS);
+  });
+
+  it("rejects combining --all with a positional validate target", async () => {
+    vi.mocked(existsSync).mockReturnValue(true);
+
+    const cmd = validateCommand();
+    await cmd.parseAsync(["workflow.yaml", "--all"], { from: "user" });
+
+    expect(process.exitCode).toBe(ExitCode.VALIDATION_ERROR);
+    expect(process.exit).not.toHaveBeenCalled();
+    expect(parseAndValidate).not.toHaveBeenCalled();
+  });
+
+  it("rejects combining --file with a positional validate target", async () => {
+    vi.mocked(existsSync).mockReturnValue(true);
+
+    const cmd = validateCommand();
+    await cmd.parseAsync(["workflow.yaml", "--file", "other.yaml"], { from: "user" });
+
+    expect(process.exitCode).toBe(ExitCode.VALIDATION_ERROR);
+    expect(process.exit).not.toHaveBeenCalled();
+    expect(parseAndValidate).not.toHaveBeenCalled();
+  });
+
+  it("validates one-file workflows through SDK expansion instead of legacy parser", async () => {
+    vi.mocked(existsSync).mockReturnValue(true);
+    vi.mocked(readFileSync).mockReturnValue("name: quickstart-judge\nmode: judge\n");
+    vi.mocked(parseAndValidate).mockReturnValue({
+      isValid: false,
+      errors: [{ code: "E2002", message: "Missing required field 'steps'", path: "" }],
+      warnings: [],
+    });
+    vi.mocked(Workflow.getStopSemantics).mockReturnValue({ mode: "judge" } as never);
+    vi.mocked(Workflow.create).mockReturnValue({ name: "quickstart-judge", steps: [] } as never);
+
+    const cmd = validateCommand();
+    await cmd.parseAsync(["workflow.yaml"], { from: "user" });
+
+    expect(Workflow.getStopSemantics).toHaveBeenCalled();
+    expect(Workflow.create).toHaveBeenCalled();
+    expect(parseAndValidate).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(ExitCode.SUCCESS);
   });
 
   it("outputs structured JSON with local --json", async () => {

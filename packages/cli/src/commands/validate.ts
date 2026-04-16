@@ -6,8 +6,10 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+import { OboraError, Workflow } from "@obora/sdk";
 import { parseAndValidate, type ValidationError, type ValidationResult } from "@obora/runtime";
 import { Command } from "commander";
+import { parse as parseYaml } from "yaml";
 
 import { CLIError } from "../errors.js";
 import { handleCommandAction } from "../utils/error-handler.js";
@@ -23,6 +25,11 @@ interface ValidateOptions {
   format?: "default" | "json";
   verbose?: boolean;
   json?: boolean;
+}
+
+interface ValidateTargetSelection {
+  target?: string;
+  options: ValidateOptions;
 }
 
 interface ValidateSummary {
@@ -57,10 +64,49 @@ function formatIssue(kind: "error" | "warning", issue: ValidationError, filePath
   return lines.join("\n");
 }
 
+function validateFileContent(content: string): ValidationResult {
+  let parsed: unknown;
+  try {
+    parsed = parseYaml(content);
+  } catch {
+    return parseAndValidate(content);
+  }
+
+  if (!Workflow.getStopSemantics(parsed)) {
+    return parseAndValidate(content);
+  }
+
+  try {
+    Workflow.create(parsed);
+    return {
+      isValid: true,
+      errors: [],
+      warnings: [],
+    };
+  } catch (error) {
+    if (error instanceof OboraError) {
+      return {
+        isValid: false,
+        errors: [
+          {
+            code: error.code,
+            message: error.message,
+            path: "",
+            suggestion: "Review one-file workflow fields, allowed keys, and required sections.",
+          },
+        ],
+        warnings: [],
+      };
+    }
+
+    throw error;
+  }
+}
+
 function validateFile(filePath: string): ValidationResult {
   try {
     const content = fs.readFileSync(filePath, "utf-8");
-    return parseAndValidate(content);
+    return validateFileContent(content);
   } catch (error) {
     return {
       isValid: false,
@@ -105,17 +151,36 @@ function findWorkflowFiles(dir: string): string[] {
   return files.sort();
 }
 
-function resolveValidateFiles(options: ValidateOptions): string[] {
-  if (options.file) {
+function resolveValidateFiles(selection: ValidateTargetSelection): string[] {
+  const requestedTarget = selection.options.file ?? selection.target;
+
+  if (selection.options.file && selection.target) {
+    throw new CLIError(
+      "Specify either a positional validate target or --file, not both.",
+      ExitCode.VALIDATION_ERROR
+    );
+  }
+
+  if (selection.options.all && requestedTarget) {
+    throw new CLIError(
+      "Cannot combine --all with a specific validate target.",
+      ExitCode.VALIDATION_ERROR
+    );
+  }
+
+  if (requestedTarget) {
     let resolvedPath: string;
     try {
-      resolvedPath = validatePath(options.file, process.cwd());
+      resolvedPath = validatePath(requestedTarget, process.cwd());
     } catch {
-      throw new CLIError(`Invalid validate file path: ${options.file}`, ExitCode.VALIDATION_ERROR);
+      throw new CLIError(
+        `Invalid validate file path: ${requestedTarget}`,
+        ExitCode.VALIDATION_ERROR
+      );
     }
 
     if (!fs.existsSync(resolvedPath)) {
-      throw new CLIError(`Validate file not found: ${options.file}`, ExitCode.VALIDATION_ERROR);
+      throw new CLIError(`Validate file not found: ${requestedTarget}`, ExitCode.VALIDATION_ERROR);
     }
 
     return [resolvedPath];
@@ -219,11 +284,11 @@ function printTextResults(
 }
 
 export async function runValidate(
-  options: ValidateOptions,
+  selection: ValidateTargetSelection,
   globalOpts: GlobalOptions
 ): Promise<void> {
-  const files = resolveValidateFiles(options);
-  const jsonOutput = shouldOutputJson(options, globalOpts);
+  const files = resolveValidateFiles(selection);
+  const jsonOutput = shouldOutputJson(selection.options, globalOpts);
 
   if (files.length === 0) {
     if (jsonOutput) {
@@ -252,14 +317,14 @@ export async function runValidate(
   if (jsonOutput) {
     formatter.json(buildJsonPayload(files, results));
   } else {
-    printTextResults(files, results, options);
+    printTextResults(files, results, selection.options);
   }
 
   if (summary.failed > 0) {
     throw new CLIError("Validation failed with errors", ExitCode.VALIDATION_ERROR);
   }
 
-  if (options.strict && summary.warnings > 0) {
+  if (selection.options.strict && summary.warnings > 0) {
     throw new CLIError("Validation failed with warnings in strict mode", ExitCode.VALIDATION_ERROR);
   }
 }
@@ -267,15 +332,16 @@ export async function runValidate(
 export function createValidateCommand(): Command {
   return new Command("validate")
     .description("Validate workflow YAML files")
+    .argument("[target]", "Workflow file path to validate")
     .option("--all", "Validate all workflow files in .obora/workflows and .obora/features")
     .option("-f, --file <path>", "Validate a specific workflow file")
     .option("--strict", "Treat warnings as errors")
     .option("-o, --format <type>", "Output format (default, json)", "default")
     .option("--json", "Output structured validation results as JSON")
     .option("-v, --verbose", "Show detailed output")
-    .action(async function (this: Command, options: ValidateOptions) {
+    .action(async function (this: Command, target: string | undefined, options: ValidateOptions) {
       const globalOpts = getGlobalOpts(this);
-      await handleCommandAction(() => runValidate(options, globalOpts), {
+      await handleCommandAction(() => runValidate({ target, options }, globalOpts), {
         verbose: Boolean(globalOpts.verbose || options.verbose),
       });
     });
