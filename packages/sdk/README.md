@@ -201,7 +201,7 @@ See https://github.com/de-novo/obora/blob/main/docs/tutorials/validation-repair-
 
 Related files:
 
-- `packages/sdk/examples/validation-repair-loop.yaml`
+- https://github.com/de-novo/obora/blob/main/packages/sdk/examples/validation-repair-loop.yaml
 - https://github.com/de-novo/obora/blob/main/docs/tutorials/validation-repair-loop-migration.md
 - https://github.com/de-novo/obora/blob/main/docs/tutorials/validation-repair-loop-troubleshooting.md
 
