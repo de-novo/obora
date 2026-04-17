@@ -768,6 +768,52 @@ describe("doctor command", () => {
       );
     });
 
+    it("should add validate guidance before dry-run for quickstart-style fallback projects", async () => {
+      vi.mocked(loadConfig).mockResolvedValue({
+        defaults: {
+          provider: "openai",
+          model: "gpt-4o-mini",
+        },
+      });
+      vi.mocked(buildResolutionSummary).mockReturnValue({
+        provider: null,
+        model: null,
+        authSource: "none",
+        configSource: mockedProjectConfigPath,
+        modelSource: "config.defaults.model",
+        chosenByPrecedence: "config",
+        nextPlaceToEdit: mockedProjectConfigPath,
+        fallbackStub: true,
+        warnings: ["No LLM resolved; execution will run in stub mode"],
+      });
+      vi.mocked(existsSync).mockReturnValue(true);
+
+      await runDoctor({ json: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recommendations: expect.arrayContaining([
+            "Validate workflow shape: obora validate judge.yaml",
+            "Preview before execution: obora judge --dry-run",
+          ]),
+          actions: expect.arrayContaining([
+            expect.objectContaining({ kind: "run", command: "obora validate judge.yaml" }),
+            expect.objectContaining({ kind: "run", command: "obora judge --dry-run" }),
+          ]),
+          guidance: expect.objectContaining({
+            recommendations: expect.arrayContaining([
+              "Validate workflow shape: obora validate judge.yaml",
+              "Preview before execution: obora judge --dry-run",
+            ]),
+            actions: expect.arrayContaining([
+              expect.objectContaining({ kind: "run", command: "obora validate judge.yaml" }),
+              expect.objectContaining({ kind: "run", command: "obora judge --dry-run" }),
+            ]),
+          }),
+        })
+      );
+    });
+
     it("should prioritize configured default provider in auth hints", async () => {
       vi.mocked(loadConfig).mockResolvedValue({
         defaults: {

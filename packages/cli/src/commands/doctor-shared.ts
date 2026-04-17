@@ -950,6 +950,10 @@ export function buildDoctorStatus(
   };
 }
 
+function hasQuickstartJudgeWorkflow(checks: DoctorChecks): boolean {
+  return checks.projectConfig && existsSync(join(process.cwd(), "judge.yaml"));
+}
+
 export function buildDoctorRecommendations(
   checks: DoctorChecks,
   summary: {
@@ -1023,6 +1027,9 @@ export function buildDoctorRecommendations(
   }
 
   if (summary.fallbackStub) {
+    if (hasQuickstartJudgeWorkflow(checks)) {
+      recommendations.push("Validate workflow shape: obora validate judge.yaml");
+    }
     recommendations.push("Preview before execution: obora judge --dry-run");
   }
 
@@ -1119,6 +1126,9 @@ export function buildDoctorActions(
   }
 
   if (summary.fallbackStub) {
+    if (hasQuickstartJudgeWorkflow(checks)) {
+      pushDoctorAction(actions, { kind: "run", command: "obora validate judge.yaml" });
+    }
     pushDoctorAction(actions, { kind: "run", command: "obora judge --dry-run" });
   }
 

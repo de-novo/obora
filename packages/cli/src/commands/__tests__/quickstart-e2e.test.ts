@@ -207,7 +207,9 @@ describe("CLI quickstart integration", () => {
     expect(stdout).toContain("obora validate judge.yaml");
     expect(stdout).toContain("obora judge --dry-run");
     expect(stdout).toContain("obora judge");
-    expect(stdout.indexOf("obora doctor")).toBeLessThan(stdout.indexOf("obora validate judge.yaml"));
+    expect(stdout.indexOf("obora doctor")).toBeLessThan(
+      stdout.indexOf("obora validate judge.yaml")
+    );
     expect(stdout.indexOf("obora validate judge.yaml")).toBeLessThan(
       stdout.indexOf("obora judge --dry-run")
     );
@@ -235,11 +237,34 @@ describe("CLI quickstart integration", () => {
           recommendedProvider: "openai",
           recommendedAuthEnvKey: "OPENAI_API_KEY",
         }),
+        guidance: expect.objectContaining({
+          recommendations: expect.arrayContaining([
+            "Validate workflow shape: obora validate judge.yaml",
+            "Preview before execution: obora judge --dry-run",
+          ]),
+          actions: expect.arrayContaining([
+            { kind: "run", command: "obora doctor" },
+            { kind: "run", command: "obora validate judge.yaml" },
+            { kind: "run", command: "obora judge --dry-run" },
+          ]),
+        }),
       })
     );
 
-    process.env.OPENAI_API_KEY = "test-openai-key";
-    logSpy.mockClear();
+    const noAuthActions = (
+      (noAuthPayload.guidance as { actions?: Array<{ command?: string }> })?.actions ?? []
+    )
+      .map((action) => action.command)
+      .filter((command): command is string => Boolean(command));
+    expect(noAuthActions.indexOf("obora doctor")).toBeLessThan(
+      noAuthActions.indexOf("obora validate judge.yaml")
+    );
+    expect(noAuthActions.indexOf("obora validate judge.yaml")).toBeLessThan(
+      noAuthActions.indexOf("obora judge --dry-run")
+    );
+
+    process.env.OPENAI_API_KEY = "***";
+
     await cli.parseAsync(["--json", "doctor"], { from: "user" });
     const authOnlyPayload = lastJsonCall();
     expect(authOnlyPayload).toEqual(
@@ -384,6 +409,34 @@ describe("CLI quickstart integration", () => {
       "Configured provider 'anthropic' differs from detected env auth providers: openai"
     );
     expect(stderr).toContain("Conflict: config anthropic · env openai · resolved openai");
+  });
+
+  it("prints quickstart validate guidance before dry-run in doctor stdout when auth is missing", async () => {
+    const cli = createCLI();
+    const projectDir = join(workDir, "doctor-quickstart-stdout-demo");
+
+    await cli.parseAsync(["quickstart", projectDir], { from: "user" });
+
+    process.chdir(projectDir);
+    logSpy.mockClear();
+    errorSpy.mockClear();
+
+    await cli.parseAsync(["doctor"], { from: "user" });
+
+    const stdout = logSpy.mock.calls.map((call) => String(call[0] ?? "")).join("\n");
+    const stderr = errorSpy.mock.calls.map((call) => String(call[0] ?? "")).join("\n");
+
+    expect(stdout).toContain("Recommended next actions");
+    expect(stdout).toContain("Set one provider API key, then rerun: obora doctor");
+    expect(stdout).toContain("Validate workflow shape: obora validate judge.yaml");
+    expect(stdout).toContain("Preview before execution: obora judge --dry-run");
+    expect(stdout.indexOf("obora doctor")).toBeLessThan(
+      stdout.indexOf("obora validate judge.yaml")
+    );
+    expect(stdout.indexOf("obora validate judge.yaml")).toBeLessThan(
+      stdout.indexOf("obora judge --dry-run")
+    );
+    expect(stderr).toContain("No LLM resolved; execution will run in stub mode");
   });
 
   it("prints configured and resolved model context in doctor stdout", async () => {
