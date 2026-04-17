@@ -99,6 +99,7 @@ obora --json quickstart my-project
 - Equivalent to `obora init [name] --quickstart`
 - Supports both local `obora quickstart ... --json` and root `obora --json quickstart ...`
 - Creates the same quickstart scaffold as `init --quickstart`
+- Prints quickstart next steps in the order `doctor -> validate judge.yaml -> judge --dry-run -> judge`
 - Intended as the shortest first-run command
 
 ### Exit Codes
@@ -171,7 +172,9 @@ Expected output includes:
 - auth/config/stub summary lines
 - `Execution Resolution`
 - warnings like stub/fallback activation
-- `Recommended next actions:` with concrete commands
+- `Recommended next actions:` with project-aware commands
+  - quickstart/judge projects use `obora validate judge.yaml`, `obora judge --dry-run`, `obora judge`
+  - non-judge projects fall back to `obora run <workflow.yaml> --dry-run` / `obora run <workflow.yaml>`
 - a final `Next step: ...` hint
 
 Supports both local `obora doctor --json` and root `obora --json doctor`.
@@ -270,6 +273,7 @@ obora init --yes
 obora init demo --quickstart
 cd demo
 obora doctor
+obora validate judge.yaml
 obora judge --dry-run
 ```
 
