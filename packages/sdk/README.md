@@ -244,10 +244,10 @@ If you need the internal structure, inspect how a one-file YAML expands internal
 obora expand my-workflow.yaml --json
 ```
 
-For dry-run validation with the same information:
+For dry-run validation with the same information, prefer the root-global JSON form for advanced preview flags:
 
 ```bash
-obora run my-workflow.yaml --dry-run --json --dump-expanded-workflow --show-stop-semantics
+obora --json run my-workflow.yaml --dry-run --dump-expanded-workflow --show-stop-semantics
 ```
 
 See `docs/tutorials/one-file-workflows.md` for mode examples, validation contract, and current limitations.

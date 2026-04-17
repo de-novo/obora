@@ -159,6 +159,7 @@ obora expand my-workflow.yaml --json
 - mode metadata
 
 기존 `run --dry-run` 경로도 계속 사용할 수 있습니다.
+고급 preview flag와 JSON 출력을 함께 볼 때는 root-global JSON form을 권장합니다.
 
 ```bash
 obora run my-workflow.yaml --dry-run --dump-expanded-workflow --show-stop-semantics
