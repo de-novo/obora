@@ -25,7 +25,7 @@ obora validate judge.yaml
 If you edit `judge.yaml` and want deeper inspection, expand the one-file workflow:
 
 ```bash
-obora expand judge.yaml --json
+obora expand --json -- judge.yaml
 ```
 
 4. Preview before execution

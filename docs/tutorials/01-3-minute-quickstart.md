@@ -81,7 +81,7 @@ obora validate judge.yaml
 ```
 
 If you edited `judge.yaml`, this catches one-file schema/key issues before execution.
-Use `obora expand judge.yaml --json` if you need the expanded workflow structure.
+Use `obora expand --json -- judge.yaml` if you need the expanded workflow structure.
 
 ---
 

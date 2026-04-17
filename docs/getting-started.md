@@ -67,7 +67,7 @@ cd my-project
 
 ```bash
 obora validate judge.yaml
-obora expand judge.yaml --json
+obora expand --json -- judge.yaml
 ```
 
 ### 2) `obora doctor`
@@ -98,7 +98,7 @@ obora validate judge.yaml
 필요하면 바로 이어서 아래도 확인합니다.
 
 ```bash
-obora expand judge.yaml --json
+obora expand --json -- judge.yaml
 ```
 
 ### 4) `obora judge --dry-run`

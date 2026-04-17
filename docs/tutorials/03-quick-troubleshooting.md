@@ -115,7 +115,7 @@ Then update `.obora/config.yaml` with a real model ref.
 Check in this order:
 
 1. `obora validate judge.yaml`
-2. `obora expand judge.yaml --json` if the workflow shape still looks suspicious
+2. `obora expand --json -- judge.yaml` if the workflow shape still looks suspicious
 3. `obora doctor`
 4. `.obora/config.yaml`
 5. environment variables like `OPENAI_MODEL`, `ANTHROPIC_MODEL`
