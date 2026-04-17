@@ -75,13 +75,13 @@ cat artifacts/submission.json | obora judge --input @-
 ### Validate
 
 ```bash
-obora validate workflow.yaml
-obora validate workflow.yaml --json
+obora validate judge.yaml
+obora validate judge.yaml --json
 obora validate --all
-obora expand workflow.yaml --json
+obora expand --json -- workflow.yaml
 ```
 
-For one-file workflow authoring, start with `obora validate workflow.yaml`.
+For one-file workflow authoring, start with a positional target such as `obora validate judge.yaml`.
 If validation fails on a one-file mode such as `judge`, follow the suggestion with `obora expand --json -- <file>` to inspect the expanded workflow. The CLI uses shell-safe quoting when filenames contain spaces or shell metacharacters.
 
 ## JSON mode
