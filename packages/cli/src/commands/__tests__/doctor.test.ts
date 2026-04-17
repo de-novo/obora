@@ -814,6 +814,50 @@ describe("doctor command", () => {
       );
     });
 
+    it("should not add validate guidance when fallback project has no judge workflow file", async () => {
+      vi.mocked(loadConfig).mockResolvedValue({
+        defaults: {
+          provider: "openai",
+          model: "gpt-4o-mini",
+        },
+      });
+      vi.mocked(buildResolutionSummary).mockReturnValue({
+        provider: null,
+        model: null,
+        authSource: "none",
+        configSource: mockedProjectConfigPath,
+        modelSource: "config.defaults.model",
+        chosenByPrecedence: "config",
+        nextPlaceToEdit: mockedProjectConfigPath,
+        fallbackStub: true,
+        warnings: ["No LLM resolved; execution will run in stub mode"],
+      });
+      vi.mocked(existsSync).mockImplementation(
+        (pathLike) => !String(pathLike).endsWith("judge.yaml")
+      );
+
+      await runDoctor({ json: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recommendations: expect.not.arrayContaining([
+            "Validate workflow shape: obora validate judge.yaml",
+          ]),
+          actions: expect.not.arrayContaining([
+            expect.objectContaining({ kind: "run", command: "obora validate judge.yaml" }),
+          ]),
+          guidance: expect.objectContaining({
+            recommendations: expect.not.arrayContaining([
+              "Validate workflow shape: obora validate judge.yaml",
+            ]),
+            actions: expect.not.arrayContaining([
+              expect.objectContaining({ kind: "run", command: "obora validate judge.yaml" }),
+            ]),
+          }),
+        })
+      );
+    });
+
     it("should prioritize configured default provider in auth hints", async () => {
       vi.mocked(loadConfig).mockResolvedValue({
         defaults: {
