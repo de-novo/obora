@@ -133,6 +133,7 @@ export async function runInit(
         formatter.step(`export ${inferAuthEnvKey(quickstartProvider)}=***`);
       }
       formatter.step("obora doctor");
+      formatter.step("obora validate judge.yaml");
       formatter.step("obora judge --dry-run");
       formatter.step("obora judge");
     }

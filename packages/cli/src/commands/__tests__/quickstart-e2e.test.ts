@@ -204,8 +204,13 @@ describe("CLI quickstart integration", () => {
     expect(stdout).toContain("This template defaults to openai");
     expect(stdout).toContain("export OPENAI_API_KEY=***");
     expect(stdout).toContain("obora doctor");
+    expect(stdout).toContain("obora validate judge.yaml");
     expect(stdout).toContain("obora judge --dry-run");
     expect(stdout).toContain("obora judge");
+    expect(stdout.indexOf("obora doctor")).toBeLessThan(stdout.indexOf("obora validate judge.yaml"));
+    expect(stdout.indexOf("obora validate judge.yaml")).toBeLessThan(
+      stdout.indexOf("obora judge --dry-run")
+    );
   });
 
   it("tracks onboarding state transitions across auth, mismatch, and model setup", async () => {

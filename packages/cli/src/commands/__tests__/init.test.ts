@@ -184,8 +184,15 @@ describe("init command", () => {
       expect(formatter.step).toHaveBeenCalledWith("This template defaults to anthropic");
       expect(formatter.step).toHaveBeenCalledWith("export ANTHROPIC_API_KEY=***");
       expect(formatter.step).toHaveBeenCalledWith("obora doctor");
+      expect(formatter.step).toHaveBeenCalledWith("obora validate judge.yaml");
       expect(formatter.step).toHaveBeenCalledWith("obora judge --dry-run");
       expect(formatter.step).toHaveBeenCalledWith("obora judge");
+
+      const stepCalls = vi.mocked(formatter.step).mock.calls.map(([message]) => String(message));
+      expect(stepCalls.indexOf("obora doctor")).toBeLessThan(stepCalls.indexOf("obora validate judge.yaml"));
+      expect(stepCalls.indexOf("obora validate judge.yaml")).toBeLessThan(
+        stepCalls.indexOf("obora judge --dry-run")
+      );
     });
 
     it("should output JSON when --json flag is set", async () => {
