@@ -59,8 +59,8 @@ obora judge
 
 Why this order:
 
-- `init --quickstart` creates the smallest runnable project
-- `doctor` tells you whether auth/config is missing
+- `quickstart` / `init --quickstart` creates the smallest runnable judge-mode project
+- `doctor` shows onboarding readiness and project-aware next actions
 - `validate judge.yaml` catches one-file workflow shape issues before execution
 - `judge --dry-run` previews the resolved execution without starting it
 - `judge` starts the real judge workflow
