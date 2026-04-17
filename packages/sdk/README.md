@@ -202,8 +202,8 @@ See https://github.com/de-novo/obora/blob/main/docs/tutorials/validation-repair-
 Related files:
 
 - `packages/sdk/examples/validation-repair-loop.yaml`
-- `docs/tutorials/validation-repair-loop-migration.md`
-- `docs/tutorials/validation-repair-loop-troubleshooting.md`
+- https://github.com/de-novo/obora/blob/main/docs/tutorials/validation-repair-loop-migration.md
+- https://github.com/de-novo/obora/blob/main/docs/tutorials/validation-repair-loop-troubleshooting.md
 
 ## One-File Workflows
 
