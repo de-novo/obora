@@ -109,6 +109,56 @@ describe("doctor command contracts", () => {
     );
   });
 
+  it("returns generic workflow guidance for non-judge doctor json output", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createDoctorCommand();
+
+    await cmd.parseAsync(["--json"], { from: "user" });
+
+    const payload = JSON.parse(log.mock.calls.at(-1)?.[0] ?? "{}") as {
+      recommendations: string[];
+      actions: Array<{ kind?: string; command?: string }>;
+      guidance: {
+        recommendations: string[];
+        actions: Array<{ kind?: string; command?: string }>;
+      };
+    };
+
+    expect(payload.recommendations).toContain(
+      "Preview before execution: obora run <workflow.yaml> --dry-run"
+    );
+    expect(payload.recommendations).not.toContain(
+      "Preview before execution: obora judge --dry-run"
+    );
+    expect(payload.actions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "run",
+          command: "obora run <workflow.yaml> --dry-run",
+        }),
+      ])
+    );
+    expect(payload.actions).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "run",
+          command: "obora judge --dry-run",
+        }),
+      ])
+    );
+    expect(payload.guidance.recommendations).toContain(
+      "Preview before execution: obora run <workflow.yaml> --dry-run"
+    );
+    expect(payload.guidance.actions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "run",
+          command: "obora run <workflow.yaml> --dry-run",
+        }),
+      ])
+    );
+  });
+
   it("uses execution-failed exit code for doctor config load failures without generic hints", async () => {
     vi.mocked(loadConfig).mockRejectedValue(new Error("config disk offline"));
 
