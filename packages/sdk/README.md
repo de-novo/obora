@@ -197,7 +197,7 @@ When the validator emits a structured `ValidationResult`, the repair step receiv
 - no-progress ceiling
 - repeated critical issue ceiling
 
-See `docs/tutorials/validation-repair-loop.md` for a fuller walkthrough.
+See https://github.com/de-novo/obora/blob/main/docs/tutorials/validation-repair-loop.md for a fuller walkthrough.
 
 Related files:
 
@@ -250,7 +250,7 @@ For dry-run validation with the same information, prefer the root-global JSON fo
 obora --json run my-workflow.yaml --dry-run --dump-expanded-workflow --show-stop-semantics
 ```
 
-See `docs/tutorials/one-file-workflows.md` for mode examples, validation contract, and current limitations.
+See https://github.com/de-novo/obora/blob/main/docs/tutorials/one-file-workflows.md for mode examples, validation contract, and current limitations.
 
 Current validation includes:
 
