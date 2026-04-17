@@ -81,7 +81,7 @@ obora doctor
 - 어떤 provider/model이 실제로 선택됐는지
 - auth가 env/config/auth store 중 어디서 왔는지
 - stub/fallback 상태인지
-- 다음에 무엇을 실행해야 하는지
+- 다음에 무엇을 실행해야 하는지 (`judge.yaml`이 있으면 judge 경로, 없으면 generic run 경로)
 
 ### 3) `obora validate judge.yaml`
 

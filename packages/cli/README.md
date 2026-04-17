@@ -22,7 +22,7 @@ obora judge
 What this gives you:
 
 - `obora init --quickstart` creates a minimal judge-mode project
-- `obora doctor` shows provider/model/auth readiness and next actions
+- `obora doctor` shows onboarding readiness and project-aware next actions
 - `obora validate judge.yaml` checks the bundled one-file workflow before execution
 - `obora judge --dry-run` previews bindings/output without starting execution
 - `obora judge` writes `artifacts/result.json`

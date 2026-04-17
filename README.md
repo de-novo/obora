@@ -63,7 +63,7 @@ What this path gives you:
 
 - `obora init --quickstart` creates a minimal judge-mode project
 - `obora validate judge.yaml` checks the bundled one-file workflow before execution
-- `obora doctor` shows ready/stub/missing-auth status and next actions
+- `obora doctor` shows onboarding readiness and project-aware next actions
 - `obora judge --dry-run` previews the input/output contract without starting execution
 - `obora judge` writes the JSON result artifact
 
