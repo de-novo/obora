@@ -136,7 +136,7 @@ obora --json models anthropic sonnet
 
 ## `obora doctor`
 
-Diagnose local Obora setup and show the shortest next action.
+Diagnose local Obora setup and onboarding readiness.
 
 ### Usage
 
@@ -178,6 +178,9 @@ Expected output includes:
 - a final `Next step: ...` hint
 
 Supports both local `obora doctor --json` and root `obora --json doctor`.
+
+When `judge.yaml` exists in the current project, doctor guidance prefers judge-specific commands.
+Otherwise it keeps generic workflow guidance such as `obora run <workflow.yaml> --dry-run`.
 
 ### Exit Codes
 

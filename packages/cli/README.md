@@ -37,6 +37,10 @@ obora doctor --json
 obora --json doctor
 ```
 
+- `doctor` reports onboarding readiness, not just a single next step
+- judge-mode projects prefer `obora validate judge.yaml`, `obora judge --dry-run`, and `obora judge`
+- non-judge projects fall back to generic guidance like `obora run <workflow.yaml> --dry-run`
+
 ### Models
 
 ```bash
