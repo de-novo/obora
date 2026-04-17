@@ -86,12 +86,19 @@ If validation fails on a one-file mode such as `judge`, follow the suggestion wi
 
 ## JSON mode
 
-Most live command surfaces support both local and root JSON flags:
+Most live command surfaces support both local and root JSON flags. Representative pairs:
 
 ```bash
 obora doctor --json
+obora --json doctor
+
 obora auth list --json
+obora --json auth list
+
 obora judge --json
+obora --json judge
+
+obora runs list --json
 obora --json runs list
 ```
 
