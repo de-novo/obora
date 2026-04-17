@@ -838,20 +838,86 @@ describe("doctor command", () => {
 
       await runDoctor({ json: true });
 
+      expect(formatter.json).toHaveBeenCalledOnce();
+      const payload = vi.mocked(formatter.json).mock.calls[0]?.[0] as {
+        recommendations: string[];
+        actions: Array<{ kind?: string; command?: string }>;
+        guidance: {
+          recommendations: string[];
+          actions: Array<{ kind?: string; command?: string }>;
+        };
+      };
+
+      expect(payload.recommendations).not.toContain(
+        "Validate workflow shape: obora validate judge.yaml"
+      );
+      expect(payload.recommendations).toContain(
+        "Preview before execution: obora run <workflow.yaml> --dry-run"
+      );
+      expect(payload.actions).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ kind: "run", command: "obora validate judge.yaml" }),
+        ])
+      );
+      expect(payload.actions).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "run",
+            command: "obora run <workflow.yaml> --dry-run",
+          }),
+        ])
+      );
+      expect(payload.guidance.recommendations).not.toContain(
+        "Validate workflow shape: obora validate judge.yaml"
+      );
+      expect(payload.guidance.recommendations).toContain(
+        "Preview before execution: obora run <workflow.yaml> --dry-run"
+      );
+      expect(payload.guidance.actions).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ kind: "run", command: "obora validate judge.yaml" }),
+        ])
+      );
+      expect(payload.guidance.actions).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "run",
+            command: "obora run <workflow.yaml> --dry-run",
+          }),
+        ])
+      );
+    });
+
+    it("should use generic run guidance when ready project has no judge workflow file", async () => {
+      vi.mocked(buildResolutionSummary).mockReturnValue({
+        provider: "openai",
+        model: "gpt-5.4",
+        authSource: "env(OPENAI_API_KEY)",
+        configSource: ".obora/config.yaml",
+        modelSource: "config.defaults.model",
+        chosenByPrecedence: "config > env",
+        nextPlaceToEdit: ".obora/config.yaml",
+        fallbackStub: false,
+        warnings: [],
+      });
+      vi.mocked(existsSync).mockImplementation(
+        (pathLike) => !String(pathLike).endsWith("judge.yaml")
+      );
+
+      await runDoctor({ json: true });
+
       expect(formatter.json).toHaveBeenCalledWith(
         expect.objectContaining({
-          recommendations: expect.not.arrayContaining([
-            "Validate workflow shape: obora validate judge.yaml",
-          ]),
-          actions: expect.not.arrayContaining([
-            expect.objectContaining({ kind: "run", command: "obora validate judge.yaml" }),
+          recommendations: expect.arrayContaining(["Run your workflow: obora run <workflow.yaml>"]),
+          actions: expect.arrayContaining([
+            expect.objectContaining({ kind: "run", command: "obora run <workflow.yaml>" }),
           ]),
           guidance: expect.objectContaining({
-            recommendations: expect.not.arrayContaining([
-              "Validate workflow shape: obora validate judge.yaml",
+            recommendations: expect.arrayContaining([
+              "Run your workflow: obora run <workflow.yaml>",
             ]),
-            actions: expect.not.arrayContaining([
-              expect.objectContaining({ kind: "run", command: "obora validate judge.yaml" }),
+            actions: expect.arrayContaining([
+              expect.objectContaining({ kind: "run", command: "obora run <workflow.yaml>" }),
             ]),
           }),
         })

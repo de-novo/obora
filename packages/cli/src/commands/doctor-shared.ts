@@ -954,6 +954,26 @@ function hasProjectJudgeWorkflow(checks: DoctorChecks): boolean {
   return checks.projectConfig && existsSync(join(process.cwd(), "judge.yaml"));
 }
 
+function getDoctorWorkflowCommands(checks: DoctorChecks): {
+  validateCommand: string | null;
+  previewCommand: string;
+  runCommand: string;
+} {
+  if (hasProjectJudgeWorkflow(checks)) {
+    return {
+      validateCommand: "obora validate judge.yaml",
+      previewCommand: "obora judge --dry-run",
+      runCommand: "obora judge",
+    };
+  }
+
+  return {
+    validateCommand: null,
+    previewCommand: "obora run <workflow.yaml> --dry-run",
+    runCommand: "obora run <workflow.yaml>",
+  };
+}
+
 export function buildDoctorRecommendations(
   checks: DoctorChecks,
   summary: {
@@ -969,6 +989,7 @@ export function buildDoctorRecommendations(
   authDiagnostics: DoctorAuthDiagnostics
 ): string[] {
   const recommendations: string[] = [];
+  const workflowCommands = getDoctorWorkflowCommands(checks);
 
   if (!checks.projectConfig) {
     recommendations.push(`Run: obora init --quickstart  # creates ${checks.projectConfigPath}`);
@@ -1027,14 +1048,14 @@ export function buildDoctorRecommendations(
   }
 
   if (summary.fallbackStub) {
-    if (hasProjectJudgeWorkflow(checks)) {
-      recommendations.push("Validate workflow shape: obora validate judge.yaml");
+    if (workflowCommands.validateCommand) {
+      recommendations.push(`Validate workflow shape: ${workflowCommands.validateCommand}`);
     }
-    recommendations.push("Preview before execution: obora judge --dry-run");
+    recommendations.push(`Preview before execution: ${workflowCommands.previewCommand}`);
   }
 
   if (recommendations.length === 0 && summary.warnings.length === 0) {
-    recommendations.push("Run your workflow: obora judge");
+    recommendations.push(`Run your workflow: ${workflowCommands.runCommand}`);
   }
 
   return recommendations;
@@ -1055,6 +1076,7 @@ export function buildDoctorActions(
   authDiagnostics: DoctorAuthDiagnostics
 ): DoctorAction[] {
   const actions: DoctorAction[] = [];
+  const workflowCommands = getDoctorWorkflowCommands(checks);
 
   if (!checks.projectConfig) {
     pushDoctorAction(actions, { kind: "run", command: "obora init --quickstart" });
@@ -1126,14 +1148,14 @@ export function buildDoctorActions(
   }
 
   if (summary.fallbackStub) {
-    if (hasProjectJudgeWorkflow(checks)) {
-      pushDoctorAction(actions, { kind: "run", command: "obora validate judge.yaml" });
+    if (workflowCommands.validateCommand) {
+      pushDoctorAction(actions, { kind: "run", command: workflowCommands.validateCommand });
     }
-    pushDoctorAction(actions, { kind: "run", command: "obora judge --dry-run" });
+    pushDoctorAction(actions, { kind: "run", command: workflowCommands.previewCommand });
   }
 
   if (actions.length === 0 && summary.warnings.length === 0) {
-    pushDoctorAction(actions, { kind: "run", command: "obora judge" });
+    pushDoctorAction(actions, { kind: "run", command: workflowCommands.runCommand });
   }
 
   return actions;
