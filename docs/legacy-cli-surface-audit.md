@@ -102,4 +102,5 @@ Recommended order:
 - `new` / `done` are now explicitly classified as legacy-only unless the feature-centric workflow returns.
 - `agents` / `dashboard` are explicitly deferred until a fresh product UX decision exists.
 - The remaining legacy surfaces were not promoted automatically.
+- `packages/cli/src/commands/__tests__/cli-commands.test.ts` now asserts that `new` / `done` / `skills` / `agents` / `dashboard` stay out of `createCLI()` until a deliberate redesign happens.
 - Audit conclusion recorded here so future promotion work starts from an explicit baseline rather than accidentally wiring legacy commands into the live CLI.
