@@ -3,6 +3,7 @@
 Updated: 2026-04-18
 
 이 문서는 현재 `obora-kit`에서 실제로 가능한 것과, 아직 live surface가 아닌 것을 빠르게 파악하기 위한 기능 정리입니다.
+운영자용 짧은 사용 순서가 필요하면 `docs/operator-guide.md`를 먼저 보는 편이 좋습니다.
 기준은 다음입니다.
 
 - top-level CLI에 실제 등록된 command (`packages/cli/src/cli.ts`)
