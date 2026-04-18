@@ -78,6 +78,7 @@ If you are new to Obora, follow this order:
 5. [Contract-First Quickstart](./docs/tutorials/04-contract-first-quickstart.md)
 6. [Contract-First Authoring Guide](./docs/tutorials/05-contract-first-authoring-guide.md)
 7. [One-File Workflows](./docs/tutorials/one-file-workflows.md)
+8. [Current Capabilities](./docs/current-capabilities.md)
 
 ### Recommended default setup
 
