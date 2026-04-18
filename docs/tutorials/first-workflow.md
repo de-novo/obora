@@ -102,11 +102,6 @@ recovery:
     max_retries: 1
     backoff: linear
     backoff_base: "1s"
-
-audit:
-  store: duckdb
-  path: "./.obora/audit/first-workflow.duckdb"
-  retention: "30d"
 EOF
 ```
 
