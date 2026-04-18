@@ -3,7 +3,10 @@
 ## Table of Contents
 
 - [Global Options](#global-options)
+- [Start Here](#start-here)
 - [Exit Codes](#exit-codes)
+- [Command Groups by Use Case](#command-groups-by-use-case)
+- [Detailed Command Reference](#detailed-command-reference)
 - [`obora init`](#obora-init)
 - [`obora quickstart`](#obora-quickstart)
 - [`obora models`](#obora-models)
@@ -44,7 +47,7 @@ obora --verbose --no-color run workflows/example.yaml
 
 ---
 
-## Quickstart First-Run Path
+## Start Here
 
 If you are starting from zero, use this order:
 
@@ -80,6 +83,92 @@ Defined in `packages/cli/src/utils/exit-codes.ts`:
 Error-to-exit mapping uses SDK error code prefixes (`POLICY_*`, `CELL_*`, `ORCH_*`, etc.).
 
 ---
+
+## Command Groups by Use Case
+
+### 1. Start a project
+
+Use these when you are trying to get from zero to first successful execution.
+
+- `obora quickstart`
+- `obora init`
+- `obora doctor`
+- `obora validate`
+- `obora judge`
+
+Typical path:
+
+```bash
+obora quickstart my-project
+cd my-project
+obora doctor
+obora validate judge.yaml
+obora judge --dry-run
+obora judge
+```
+
+### 2. Diagnose and preview before execution
+
+Use these when you want to confirm config, auth, workflow shape, or expanded execution state before running.
+
+- `obora doctor`
+- `obora models`
+- `obora auth`
+- `obora validate`
+- `obora expand`
+- `obora run --dry-run`
+
+Typical path:
+
+```bash
+obora doctor
+obora validate workflow.yaml
+obora expand --json -- workflow.yaml
+obora --json run workflow.yaml --dry-run --dump-expanded-workflow --show-stop-semantics
+```
+
+### 3. Execute workflows
+
+Use these when you are ready to actually run work.
+
+- `obora judge`
+- `obora run`
+- `obora test`
+- `obora policy`
+
+Typical path:
+
+```bash
+obora run workflow.yaml
+obora test workflow.yaml
+```
+
+### 4. Operate, inspect, and recover
+
+Use these after runs exist and you need operator visibility or manual follow-up.
+
+- `obora status`
+- `obora runs`
+- `obora inspect`
+- `obora resume`
+- `obora dlq`
+- `obora artifact`
+- `obora audit`
+- `obora knowledge`
+
+Typical path:
+
+```bash
+obora status
+obora runs list
+obora inspect <runId>
+obora dlq list
+obora audit query <runId>
+```
+
+---
+
+## Detailed Command Reference
 
 ## `obora quickstart`
 
