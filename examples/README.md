@@ -4,16 +4,18 @@ Sample workflows and use cases for Obora AI Control Runtime.
 
 ## Examples
 
-| Example | Description |
-|---------|-------------|
-| [01-simple-pipeline](./01-simple-pipeline) | Basic linear workflow |
-| [02-multi-agent-consensus](./02-multi-agent-consensus) | Multi-agent consensus gate |
-| [03-policy-gate](./03-policy-gate) | Policy enforcement |
-| [04-plugin-custom](./04-plugin-custom) | Custom plugin integration |
-| [05-dashboard-monitoring](./05-dashboard-monitoring) | Web dashboard monitoring |
-| [06-validation-repair-loop](./06-validation-repair-loop) | Runtime-native validation / repair / re-validation loop |
+| Example                                                        | Description                                                          |
+| -------------------------------------------------------------- | -------------------------------------------------------------------- |
+| [`hello-obora.yaml`](./hello-obora.yaml)                       | Single-file hello world workflow                                     |
+| [01-simple-pipeline](./01-simple-pipeline)                     | Basic linear workflow                                                |
+| [02-multi-agent-consensus](./02-multi-agent-consensus)         | Multi-agent consensus gate                                           |
+| [03-policy-gate](./03-policy-gate)                             | Human approval gate + policy enforcement                             |
+| [04-plugin-custom](./04-plugin-custom)                         | Custom plugin integration                                            |
+| [05-dashboard-monitoring](./05-dashboard-monitoring)           | Monitoring-oriented workflow example for the dashboard package       |
+| [06-validation-repair-loop](./06-validation-repair-loop)       | Runtime-native validation / repair / re-validation loop              |
 | [07-contract-first-evaluation](./07-contract-first-evaluation) | Contract-first structured evaluation with bindings and output schema |
-| [todo-app](./todo-app) | Todo app generator workflow |
+| [todo-app](./todo-app)                                         | Compact end-to-end todo app generator workflow                       |
+| [todo-app-glm47](./todo-app-glm47)                             | Step-by-step single-model todo app workflow suite                    |
 
 ## Quick Start
 
@@ -124,15 +126,15 @@ agents:
 
 ## Patterns
 
-| Pattern | Description |
-|---------|-------------|
-| `pipeline` | Sequential execution |
-| `consensus` | Multi-agent voting |
-| `peer-review` | Code review pattern |
-| `supervisor` | Supervisor/worker pattern |
-| `fan-out-fan-in` | Parallel execution |
-| `red-blue` | A/B testing pattern |
-| `brainstorm` | Idea generation |
+| Pattern          | Description               |
+| ---------------- | ------------------------- |
+| `pipeline`       | Sequential execution      |
+| `consensus`      | Multi-agent voting        |
+| `peer-review`    | Code review pattern       |
+| `supervisor`     | Supervisor/worker pattern |
+| `fan-out-fan-in` | Parallel execution        |
+| `red-blue`       | A/B testing pattern       |
+| `brainstorm`     | Idea generation           |
 
 ## License
 

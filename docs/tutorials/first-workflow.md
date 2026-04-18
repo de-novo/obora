@@ -134,13 +134,14 @@ You should see each step run in order:
 - `review`
 - `finalize`
 
-And you should have an audit DB file:
+And you should be able to inspect the persisted result with the current operator surface:
 
 ```bash
-ls -la .obora/audit/first-workflow.duckdb
+obora status
+obora runs list
 ```
 
-If the file exists and the command succeeded, your first workflow is complete 🎉
+If the workflow completed and the operator commands can see the run, your first workflow is complete 🎉
 
 ---
 
