@@ -322,8 +322,6 @@ legacy audit 기준, 아래는 현재 top-level live CLI가 아닙니다.
 
 기능 정리 관점에서 다음 후보는 아래입니다.
 
-1. `docs/current-capabilities.md`를 README / docs/cli / tutorial index에서 링크하기
-2. live CLI command를 use-case별로 더 재분류한 operator guide 만들기
-3. package capability와 CLI capability를 분리한 "지원 범위 / 비지원 범위" 문서 만들기
-4. deferred surface(`agents`, `dashboard`)를 언제 revive할지 제품 판단 기준 문서화하기
+1. package capability와 CLI capability를 분리한 "지원 범위 / 비지원 범위" 문서 만들기
+2. deferred surface(`agents`, `dashboard`)를 언제 revive할지 제품 판단 기준 문서화하기
    - see `docs/deferred-surface-revival-criteria.md`

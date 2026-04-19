@@ -68,6 +68,11 @@ Why this order:
 - `judge --dry-run` previews the resolved execution without starting it
 - `judge` starts the real judge workflow
 
+Need a shorter operator flow or capability inventory first?
+
+- [Operator Guide](./operator-guide.md)
+- [Current Capabilities](./current-capabilities.md)
+
 ---
 
 ## Exit Codes

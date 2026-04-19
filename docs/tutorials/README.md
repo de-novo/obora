@@ -1,5 +1,10 @@
 # Tutorials
 
+Before you dive in:
+
+- [Operator Guide](../operator-guide.md) — operator-first command flow
+- [Current Capabilities](../current-capabilities.md) — current live/deferred surface inventory
+
 ## Start here
 
 If you are new to Obora, follow this order:
