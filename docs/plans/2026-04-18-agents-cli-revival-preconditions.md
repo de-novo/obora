@@ -111,6 +111,7 @@ Suggested scope:
 패키지 배치 설계 초안:
 
 - `docs/plans/2026-04-18-agents-resolution-snapshot-helper-design.md`
+- `docs/plans/2026-04-18-agents-resolution-snapshot-implementation-plan.md`
 
 Acceptance criteria:
 

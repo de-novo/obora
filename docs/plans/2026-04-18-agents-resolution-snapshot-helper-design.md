@@ -4,9 +4,13 @@
 
 Goal: agent resolution visibility를 위한 typed snapshot contract를 만들 때, 어떤 책임을 `@obora/adapters`가 맡고 어떤 책임을 `@obora/sdk`가 맡아야 하는지 정리한다.
 
-Architecture: read-side config resolution의 핵심은 이미 `@obora/adapters`에 있고, execution-time source(`agentsPath`, workflow-local agents, runtime registration) 결합은 `@obora/sdk`의 `WorkflowRunner`에 있다. 따라서 snapshot helper는 단일 패키지에 몰아넣지 말고, base snapshot은 adapters에, execution augmentation은 sdk에 두는 2-layer 구조가 가장 안전하다.
+Architecture: read-side config resolution의 핵심은 이미 `@obora/adapters`에 있고, execution-time source(`agentsPath`, workflow-local `agents`, runtime registration) 결합은 `@obora/sdk`의 `WorkflowRunner`에 있다. 따라서 snapshot helper는 단일 패키지에 몰아넣지 말고, base snapshot은 adapters에, execution augmentation은 sdk에 두는 2-layer 구조가 가장 안전하다.
 
 Tech Stack: `@obora/adapters`, `@obora/sdk`, YAML config loader, runtime workflow loading path, current docs for deferred-surface revival
+
+Implementation plan:
+
+- `docs/plans/2026-04-18-agents-resolution-snapshot-implementation-plan.md`
 
 ---
 
