@@ -3,7 +3,7 @@
 Updated: 2026-04-18
 
 이 문서는 현재 `obora-kit`에서 실제로 가능한 것과, 아직 live surface가 아닌 것을 빠르게 파악하기 위한 기능 정리입니다.
-운영자용 짧은 사용 순서가 필요하면 `docs/operator-guide.md`를 먼저 보는 편이 좋습니다.
+지원/비지원 범위 구분이 먼저 필요하면 `docs/support-scope.md`, 운영자용 짧은 사용 순서가 필요하면 `docs/operator-guide.md`를 먼저 보는 편이 좋습니다.
 기준은 다음입니다.
 
 - top-level CLI에 실제 등록된 command (`packages/cli/src/cli.ts`)
@@ -322,6 +322,6 @@ legacy audit 기준, 아래는 현재 top-level live CLI가 아닙니다.
 
 기능 정리 관점에서 다음 후보는 아래입니다.
 
-1. package capability와 CLI capability를 분리한 "지원 범위 / 비지원 범위" 문서 만들기
-2. deferred surface(`agents`, `dashboard`)를 언제 revive할지 제품 판단 기준 문서화하기
+1. support scope 문서를 README / docs 진입점에 더 촘촘히 연결하기
+2. deferred surface(`agents`, `dashboard`)를 언제 revive할지 제품 판단 기준을 실제 구현 milestone과 연결하기
    - see `docs/deferred-surface-revival-criteria.md`

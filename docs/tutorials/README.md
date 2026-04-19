@@ -4,6 +4,7 @@ Before you dive in:
 
 - [Operator Guide](../operator-guide.md) — operator-first command flow
 - [Current Capabilities](../current-capabilities.md) — current live/deferred surface inventory
+- [Support Scope](../support-scope.md) — what is live, package-only, deferred, or legacy-only
 
 ## Start here
 
