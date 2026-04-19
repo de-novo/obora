@@ -90,6 +90,7 @@ Recommended order:
 - `agents`
   - current wrapper directly edits `.obora/config.yaml` / `~/.obora/config.yaml` with raw YAML writes and has no live-command tests or modern shared-contract wiring.
   - current runtime onboarding already leans on explicit config editing plus `doctor` / `models` / `auth`, so a separate top-level agents surface needs a new UX decision before revival.
+  - revival preconditions are tracked in `docs/plans/2026-04-18-agents-cli-revival-preconditions.md`.
 - `dashboard`
   - `docs/m3-sdk-cli-design.md` marks dashboard UI as out of scope for M3 and keeps `@obora/dashboard` as an M4 concern.
   - current wrapper is only a thin `createDashboardServer()` launcher with `open(...)` and `process.exit(0)` signal handling, not a modern CLI contract surface.

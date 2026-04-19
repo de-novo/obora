@@ -439,6 +439,9 @@ expect:
 | workflow          | 통합                    | runtime/schemas + sdk/workflow  |
 | dashboard         | 유지(M4)                | dashboard                       |
 
+`agents`는 package/runtime 경계 재정렬 대상이지만, CLI revival은 아직 active milestone이 아닙니다.
+향후 `obora agents`를 다시 열 필요가 생기면 `docs/plans/2026-04-18-agents-cli-revival-preconditions.md`를 선행 조건 문서로 사용합니다.
+
 M4에서 CLI launcher를 다시 열 경우에는 `docs/plans/2026-04-15-dashboard-cli-m4-roadmap.md`를 기준 구현 계획으로 사용합니다.
 
 ### 7.3 전환 원칙

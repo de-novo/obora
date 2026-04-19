@@ -76,6 +76,25 @@ revival 순간부터 아래 유지 비용이 생깁니다.
 
 ---
 
+## 1.6 실제 milestone 문서와 연결해서 본다
+
+deferred surface는 기준 문서만 보고 판단하지 않고, 실제 구현 milestone 문서와 함께 봐야 합니다.
+
+현재 연결 기준:
+
+- `agents`
+  - preconditions: `docs/plans/2026-04-18-agents-cli-revival-preconditions.md`
+- `dashboard`
+  - roadmap: `docs/plans/2026-04-15-dashboard-cli-m4-roadmap.md`
+
+의미:
+
+- 이 문서는 “열 수 있는 기준”을 정의함
+- 각 plan/roadmap 문서는 “만약 시작한다면 어떤 순서로 구현할지”를 정의함
+- 둘 중 하나라도 없으면 아직 live revival 판단을 내리기 이릅니다.
+
+---
+
 ## 2. `obora agents` revival 기준
 
 ## 현재 상태
@@ -95,6 +114,10 @@ revival 순간부터 아래 유지 비용이 생깁니다.
 - `obora auth`
 - `.obora/config.yaml` 직접 편집
 - `agents.yaml` / runtime `agentsPath` 기반 설정
+
+연결 milestone 문서:
+
+- `docs/plans/2026-04-18-agents-cli-revival-preconditions.md`
 
 ### revival을 고려해도 되는 조건
 
@@ -163,6 +186,13 @@ revival 순간부터 아래 유지 비용이 생깁니다.
 2. package/helper boundary 정리
 3. read-only surface부터 판단
 4. mutation surface는 그 다음
+
+현재 milestone 매핑:
+
+- A0: defer 유지
+- A1: package-level resolution snapshot helper
+- A2: 필요 시 read-only introspection CLI
+- A3: 실제 운영 pain이 반복될 때만 safe override 검토
 
 ---
 
@@ -258,6 +288,12 @@ revival 순간부터 아래 유지 비용이 생깁니다.
 3. product launch decision
 4. 그 다음 CLI live surface 등록
 
+현재 milestone 매핑:
+
+- Workstream A: package bootstrap / failure taxonomy
+- Workstream B: modern CLI contract rebuild
+- Workstream C: docs / regression coverage
+
 ---
 
 ## 4. 실제 revival 체크리스트
@@ -286,8 +322,10 @@ revival 순간부터 아래 유지 비용이 생깁니다.
 - `agents`
   - 즉시 revival 대상 아님
   - 필요 시 read-only introspection부터 검토
+  - implementation preconditions: `docs/plans/2026-04-18-agents-cli-revival-preconditions.md`
 - `dashboard`
   - 즉시 revival 대상 아님
   - M4 이후 product decision + package bootstrap 정리 이후 검토
+  - roadmap: `docs/plans/2026-04-15-dashboard-cli-m4-roadmap.md`
 
 따라서 지금은 두 명령 모두 live CLI surface에 넣지 않고, 관련 package/doc/plan만 유지하는 것이 맞습니다.

@@ -201,11 +201,13 @@ obora audit query <runId>
 - 필요 시 revival 후보는 될 수 있음
 - 다만 현재는 `doctor / models / auth / config editing`으로 역할을 대체
 - raw YAML mutation helper 수준이면 다시 열지 않음
+- preconditions 문서: `docs/plans/2026-04-18-agents-cli-revival-preconditions.md`
 
 #### `dashboard`
 
 - package capability는 있으나 live CLI는 아님
 - M4 이후 product decision + bootstrap contract 정리 전까지 defer
+- roadmap 문서: `docs/plans/2026-04-15-dashboard-cli-m4-roadmap.md`
 
 상세 기준:
 
