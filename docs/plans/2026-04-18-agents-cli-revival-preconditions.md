@@ -108,6 +108,10 @@ Suggested scope:
   - runtime registration
 - resolved 값뿐 아니라 source provenance도 포함
 
+패키지 배치 설계 초안:
+
+- `docs/plans/2026-04-18-agents-resolution-snapshot-helper-design.md`
+
 Acceptance criteria:
 
 - CLI 없이도 테스트 가능한 typed snapshot contract 존재
@@ -178,6 +182,7 @@ Acceptance criteria:
 
 1. A0 유지 여부 확인
 2. A1 resolution snapshot helper
+   - package placement draft: `docs/plans/2026-04-18-agents-resolution-snapshot-helper-design.md`
 3. A1 tests / error taxonomy 고정
 4. A2 read-only CLI 필요성 판단
 5. 필요할 때만 A2 구현
