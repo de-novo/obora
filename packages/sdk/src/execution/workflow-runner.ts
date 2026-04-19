@@ -1,18 +1,19 @@
 import { createHash, randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
-
-import { parse as parseYaml } from "yaml";
 
 import { loadConfig, resolveProviderConfig, type OboraConfig } from "../config-loader.js";
 import { resolveLLMConfig, type LLMConfig } from "../llm-config.js";
-import { buildBindingPreview, buildOutputPreview, buildResolutionSummary, formatBindingPreview, formatOutputPreview, formatResolutionSummary } from "../resolution-summary.js";
+import {
+  buildBindingPreview,
+  buildOutputPreview,
+  buildResolutionSummary,
+  formatBindingPreview,
+  formatOutputPreview,
+  formatResolutionSummary,
+} from "../resolution-summary.js";
 import { formatDiagnostic } from "../diagnostics.js";
 import { topologicalSort, groupByParallelizableLevels } from "../dependency-resolver.js";
-import {
-  ParallelScheduler,
-  type ParallelStepOutcome,
-} from "./parallel-scheduler.js";
+import { ParallelScheduler, type ParallelStepOutcome } from "./parallel-scheduler.js";
 import { StepExecutor } from "../step-executor.js";
 import type { LLMAdapterLike, StepResult } from "../step-executor.js";
 import { BudgetExceededError, CostTracker } from "../cost-tracker.js";
@@ -66,16 +67,14 @@ import {
   type SharedMemoryStore,
 } from "../shared-memory/store.js";
 import { TKGProjector, projectAuditEventToTemporalNode } from "../tkg/projector.js";
+import { loadAgentsFromYamlFile, loadWorkflowAgents } from "../agents/source-loaders.js";
 import {
   buildSharedMemorySnapshotFromTKGPromotion,
   reapplyApprovedTKGReviewQueueItems,
   summarizeTKGPromotionApply,
   type TKGApprovedReviewQueueApplySummary,
 } from "../tkg/apply.js";
-import {
-  evaluateTKGPromotion,
-  summarizeTKGPromotionEvaluation,
-} from "../tkg/promotion.js";
+import { evaluateTKGPromotion, summarizeTKGPromotionEvaluation } from "../tkg/promotion.js";
 import {
   FileTKGRollbackStore,
   restoreTKGRollbackFromStore,
@@ -100,7 +99,10 @@ import {
 
 /** Duck-type for reflector: both ExecutionReflector and ReflectorEngine implement this. */
 type ReflectorLike = {
-  analyzeFailures(failures: import("../blackboard/blackboard-manager.js").FailureEntry[], currentStepName?: string): string | undefined;
+  analyzeFailures(
+    failures: import("../blackboard/blackboard-manager.js").FailureEntry[],
+    currentStepName?: string
+  ): string | undefined;
 };
 
 // ── Internal shared-setup result ───────────────────────────────────────────
@@ -185,34 +187,7 @@ export class WorkflowRunner {
   // ── Agent YAML loader ────────────────────────────────────────────────────
 
   async loadAgentsFromYaml(path?: string): Promise<Map<string, AgentFactory>> {
-    if (!path) return new Map();
-
-    const content = await readFile(path, "utf-8");
-    const parsed = parseYaml(content) as {
-      agents?: Record<
-        string,
-        {
-          role?: string;
-          description?: string;
-          provider?: string;
-          model?: string;
-          temperature?: number;
-        }
-      >;
-    };
-    const map = new Map<string, AgentFactory>();
-
-    for (const [name, info] of Object.entries(parsed.agents ?? {})) {
-      map.set(name, () => ({
-        role: info.role,
-        description: info.description,
-        provider: info.provider,
-        model: info.model,
-        temperature: info.temperature,
-      }));
-    }
-
-    return map;
+    return loadAgentsFromYamlFile(path);
   }
 
   // ── Shared engine builder ────────────────────────────────────────────────
@@ -245,33 +220,13 @@ export class WorkflowRunner {
       console.info(startupText);
     }
     const runtimeAgents = await this.loadAgentsFromYaml(config.agentsPath);
-    
-    // YAML 워크플로우의 agents 섹션도 추가
-    const workflowAgents = new Map<string, AgentFactory>();
-    if (workflow?.agents && typeof workflow.agents === "object") {
-      for (const [name, info] of Object.entries(workflow.agents as Record<string, unknown>)) {
-        if (info && typeof info === "object") {
-          const agentInfo = info as {
-            role?: string;
-            description?: string;
-            provider?: string;
-            model?: string;
-            temperature?: number;
-            api_key?: string;
-          };
-          workflowAgents.set(name, () => ({
-            role: agentInfo.role,
-            description: agentInfo.description,
-            provider: agentInfo.provider,
-            model: agentInfo.model,
-            temperature: agentInfo.temperature,
-            api_key: agentInfo.api_key,
-          }));
-        }
-      }
-    }
-    
-    const allAgents = new Map<string, AgentFactory>([...runtimeAgents, ...workflowAgents, ...agents]);
+    const workflowAgents = loadWorkflowAgents(workflow);
+
+    const allAgents = new Map<string, AgentFactory>([
+      ...runtimeAgents,
+      ...workflowAgents,
+      ...agents,
+    ]);
     const resolver = new AdapterResolver(adapterFactory);
 
     const resourcesConfig = loadedConfig?.resources;
@@ -285,12 +240,14 @@ export class WorkflowRunner {
       : undefined;
 
     if (!llmConfig) {
-      const selectedProvider = config.llm?.provider ?? loadedConfig?.defaults?.provider ?? "unknown";
+      const selectedProvider =
+        config.llm?.provider ?? loadedConfig?.defaults?.provider ?? "unknown";
       await eventBus.emit("warning", executionId, {
         message: formatDiagnostic({
           code: "AUTH_1001",
           summary: `Missing auth for provider ${selectedProvider}`,
-          reason: "no provider auth could be resolved from explicit config, project config, or environment",
+          reason:
+            "no provider auth could be resolved from explicit config, project config, or environment",
           fix: "configure provider auth before execution or switch explicitly to mock mode",
           context: { provider: selectedProvider, fallback: true },
         }),
@@ -373,7 +330,12 @@ export class WorkflowRunner {
       const yamlAgentRaw = runtimeAgents.get(agentName)?.();
       const yamlAgent =
         yamlAgentRaw && typeof yamlAgentRaw === "object"
-          ? (yamlAgentRaw as { provider?: string; model?: string; temperature?: number; api_key?: string })
+          ? (yamlAgentRaw as {
+              provider?: string;
+              model?: string;
+              temperature?: number;
+              api_key?: string;
+            })
           : undefined;
       const configAgent = loadedConfig.agents?.[agentName];
       const preferYamlAgent = Boolean(yamlAgent);
@@ -568,7 +530,7 @@ export class WorkflowRunner {
 
   private extractFailurePatterns(
     blackboard: BlackboardManager,
-    reflector: ReflectorLike,
+    reflector: ReflectorLike
   ): string[] {
     const failures = blackboard.getFailureHistory();
     if (failures.length === 0) return [];
@@ -592,7 +554,9 @@ export class WorkflowRunner {
     };
   }
 
-  private summarizeObserverMetrics(metrics?: ExecutionMetrics): Record<string, unknown> | undefined {
+  private summarizeObserverMetrics(
+    metrics?: ExecutionMetrics
+  ): Record<string, unknown> | undefined {
     if (!metrics) return undefined;
     return {
       totalSteps: metrics.stepMetrics.size,
@@ -613,7 +577,7 @@ export class WorkflowRunner {
   private resolveSharedMemoryConfig(
     workflow: WorkflowDef,
     runtimeConfig: OboraRuntimeConfig,
-    loadedConfig: OboraConfig | undefined,
+    loadedConfig: OboraConfig | undefined
   ): NonNullable<OboraConfig["sharedMemory"]> | undefined {
     const baseConfig = loadedConfig?.sharedMemory;
     const runtimeSharedMemory = runtimeConfig.sharedMemory;
@@ -647,37 +611,47 @@ export class WorkflowRunner {
   private resolveSharedMemoryStore(
     workflow: WorkflowDef,
     runtimeConfig: OboraRuntimeConfig,
-    loadedConfig: OboraConfig | undefined,
+    loadedConfig: OboraConfig | undefined
   ): SharedMemoryStore | undefined {
-    const sharedMemoryConfig = this.resolveSharedMemoryConfig(workflow, runtimeConfig, loadedConfig);
+    const sharedMemoryConfig = this.resolveSharedMemoryConfig(
+      workflow,
+      runtimeConfig,
+      loadedConfig
+    );
     if (!sharedMemoryConfig?.enabled) return undefined;
 
     if (sharedMemoryConfig.adapter === "custom") {
       return sharedMemoryConfig.custom?.instance;
     }
 
-    const basePath = sharedMemoryConfig.file?.basePath ?? join(process.cwd(), ".obora", "shared-memory");
+    const basePath =
+      sharedMemoryConfig.file?.basePath ?? join(process.cwd(), ".obora", "shared-memory");
     return new FileSharedMemoryStore(basePath);
   }
 
   private resolveSharedMemoryScopes(
     workflow: WorkflowDef,
     runtimeConfig: OboraRuntimeConfig,
-    loadedConfig: OboraConfig | undefined,
+    loadedConfig: OboraConfig | undefined
   ): MemoryScope[] {
-    const sharedMemoryConfig = this.resolveSharedMemoryConfig(workflow, runtimeConfig, loadedConfig);
+    const sharedMemoryConfig = this.resolveSharedMemoryConfig(
+      workflow,
+      runtimeConfig,
+      loadedConfig
+    );
     if (!sharedMemoryConfig?.enabled) {
       return [];
     }
 
-    const scopeLevels = sharedMemoryConfig.file?.scopes ?? (["workflow", "project"] as MemoryScope["level"][]);
+    const scopeLevels =
+      sharedMemoryConfig.file?.scopes ?? (["workflow", "project"] as MemoryScope["level"][]);
     const projectKey = sharedMemoryConfig.file?.projectKey ?? basename(process.cwd());
 
     return sortMemoryScopesByPriority(
       scopeLevels.map((level) => ({
         level,
         key: level === "workflow" ? workflow.name : level === "global" ? "global" : projectKey,
-      })),
+      }))
     );
   }
 
@@ -685,7 +659,7 @@ export class WorkflowRunner {
     store: SharedMemoryStore | undefined,
     scopes: MemoryScope[],
     blackboard: BlackboardManager,
-    execution: RuntimeExecution,
+    execution: RuntimeExecution
   ): Promise<{ importedScopes: string[]; mergedSnapshot: SharedMemorySnapshot | null }> {
     if (!store) return { importedScopes: [], mergedSnapshot: null };
 
@@ -705,10 +679,14 @@ export class WorkflowRunner {
     }
 
     if (mergedSnapshot) {
-      blackboard.importPersistentSnapshot(mergedSnapshot, scopes.at(-1) ?? { level: "workflow", key: "merged" }, {
-        factSources: Object.fromEntries(factSources.entries()),
-        storeSnapshot: false,
-      });
+      blackboard.importPersistentSnapshot(
+        mergedSnapshot,
+        scopes.at(-1) ?? { level: "workflow", key: "merged" },
+        {
+          factSources: Object.fromEntries(factSources.entries()),
+          storeSnapshot: false,
+        }
+      );
 
       execution.outputs.__shared_memory__ = {
         importedScopes,
@@ -717,7 +695,10 @@ export class WorkflowRunner {
         context: mergedSnapshot.context,
         provenance: {
           knowledge: Object.fromEntries(
-            [...factSources.entries()].map(([factId, scope]) => [factId, `${scope.level}:${scope.key}`]),
+            [...factSources.entries()].map(([factId, scope]) => [
+              factId,
+              `${scope.level}:${scope.key}`,
+            ])
           ),
         },
       };
@@ -730,7 +711,7 @@ export class WorkflowRunner {
     store: SharedMemoryStore | undefined,
     scopes: MemoryScope[],
     blackboard: BlackboardManager,
-    executionId: string,
+    executionId: string
   ): Promise<void> {
     if (!store || scopes.length === 0) return;
     const snapshot = blackboard.exportPersistentSnapshot(executionId);
@@ -746,7 +727,7 @@ export class WorkflowRunner {
   private resolveTKGProjectionConfig(
     workflow: WorkflowDef,
     runtimeConfig: OboraRuntimeConfig,
-    loadedConfig: OboraConfig | undefined,
+    loadedConfig: OboraConfig | undefined
   ): NonNullable<OboraConfig["tkgProjection"]> | undefined {
     const baseConfig = loadedConfig?.tkgProjection;
     const runtimeTKGProjection = runtimeConfig.tkgProjection;
@@ -818,46 +799,60 @@ export class WorkflowRunner {
   private resolveStagingTKGStore(
     workflow: WorkflowDef,
     runtimeConfig: OboraRuntimeConfig,
-    loadedConfig: OboraConfig | undefined,
+    loadedConfig: OboraConfig | undefined
   ): StagingTKGStore | undefined {
-    const tkgProjectionConfig = this.resolveTKGProjectionConfig(workflow, runtimeConfig, loadedConfig);
+    const tkgProjectionConfig = this.resolveTKGProjectionConfig(
+      workflow,
+      runtimeConfig,
+      loadedConfig
+    );
     if (!tkgProjectionConfig?.enabled) return undefined;
 
     if (tkgProjectionConfig.adapter === "custom") {
       return tkgProjectionConfig.custom?.instance;
     }
 
-    const basePath = tkgProjectionConfig.file?.basePath ?? join(process.cwd(), ".obora", "tkg-staging");
+    const basePath =
+      tkgProjectionConfig.file?.basePath ?? join(process.cwd(), ".obora", "tkg-staging");
     return new FileStagingTKGStore(basePath);
   }
 
   private resolveTKGProjectionScopes(
     workflow: WorkflowDef,
     runtimeConfig: OboraRuntimeConfig,
-    loadedConfig: OboraConfig | undefined,
+    loadedConfig: OboraConfig | undefined
   ): MemoryScope[] {
-    const tkgProjectionConfig = this.resolveTKGProjectionConfig(workflow, runtimeConfig, loadedConfig);
+    const tkgProjectionConfig = this.resolveTKGProjectionConfig(
+      workflow,
+      runtimeConfig,
+      loadedConfig
+    );
     if (!tkgProjectionConfig?.enabled) {
       return [];
     }
 
-    const scopeLevels = tkgProjectionConfig.file?.scopes ?? (["workflow", "project"] as MemoryScope["level"][]);
+    const scopeLevels =
+      tkgProjectionConfig.file?.scopes ?? (["workflow", "project"] as MemoryScope["level"][]);
     const projectKey = tkgProjectionConfig.file?.projectKey ?? basename(process.cwd());
 
     return sortMemoryScopesByPriority(
       scopeLevels.map((level) => ({
         level,
         key: level === "workflow" ? workflow.name : level === "global" ? "global" : projectKey,
-      })),
+      }))
     );
   }
 
   private resolveTKGPromotionApplyScopes(
     workflow: WorkflowDef,
     runtimeConfig: OboraRuntimeConfig,
-    loadedConfig: OboraConfig | undefined,
+    loadedConfig: OboraConfig | undefined
   ): MemoryScope[] {
-    const tkgProjectionConfig = this.resolveTKGProjectionConfig(workflow, runtimeConfig, loadedConfig);
+    const tkgProjectionConfig = this.resolveTKGProjectionConfig(
+      workflow,
+      runtimeConfig,
+      loadedConfig
+    );
     if (!tkgProjectionConfig?.enabled || tkgProjectionConfig.promotion?.enabled === false) {
       return [];
     }
@@ -873,16 +868,20 @@ export class WorkflowRunner {
       scopeLevels.map((level) => ({
         level,
         key: level === "workflow" ? workflow.name : level === "global" ? "global" : projectKey,
-      })),
+      }))
     );
   }
 
   private resolveTKGPromotionTriggers(
     workflow: WorkflowDef,
     runtimeConfig: OboraRuntimeConfig,
-    loadedConfig: OboraConfig | undefined,
+    loadedConfig: OboraConfig | undefined
   ): TKGPromotionTrigger[] {
-    const tkgProjectionConfig = this.resolveTKGProjectionConfig(workflow, runtimeConfig, loadedConfig);
+    const tkgProjectionConfig = this.resolveTKGProjectionConfig(
+      workflow,
+      runtimeConfig,
+      loadedConfig
+    );
     if (!tkgProjectionConfig?.enabled || tkgProjectionConfig.promotion?.enabled === false) {
       return [];
     }
@@ -899,23 +898,21 @@ export class WorkflowRunner {
     return createHash("sha1").update(JSON.stringify(parts)).digest("hex");
   }
 
-  private async flushTKGPromotionCheckpoint(
-    params: {
-      trigger: TKGPromotionTrigger;
-      execution: RuntimeExecution;
-      executionId: string;
-      workflowName: string;
-      tkgProjectionConfig: NonNullable<OboraConfig["tkgProjection"]> | undefined;
-      sharedMemoryStore: SharedMemoryStore | undefined;
-      sharedMemoryScopes: MemoryScope[];
-      stagingTKGStore: StagingTKGStore | undefined;
-      tkgProjectionScopes: MemoryScope[];
-      tkgPromotionApplyScopes: MemoryScope[];
-      tkgRollbackStore: TKGRollbackStore | undefined;
-      tkgReviewQueueStore: TKGReviewQueueStore | undefined;
-      pendingEvent?: AuditEvent & { type: ProjectableTKGEventType };
-    },
-  ): Promise<void> {
+  private async flushTKGPromotionCheckpoint(params: {
+    trigger: TKGPromotionTrigger;
+    execution: RuntimeExecution;
+    executionId: string;
+    workflowName: string;
+    tkgProjectionConfig: NonNullable<OboraConfig["tkgProjection"]> | undefined;
+    sharedMemoryStore: SharedMemoryStore | undefined;
+    sharedMemoryScopes: MemoryScope[];
+    stagingTKGStore: StagingTKGStore | undefined;
+    tkgProjectionScopes: MemoryScope[];
+    tkgPromotionApplyScopes: MemoryScope[];
+    tkgRollbackStore: TKGRollbackStore | undefined;
+    tkgReviewQueueStore: TKGReviewQueueStore | undefined;
+    pendingEvent?: AuditEvent & { type: ProjectableTKGEventType };
+  }): Promise<void> {
     const {
       trigger,
       execution,
@@ -954,8 +951,9 @@ export class WorkflowRunner {
       return;
     }
 
-    const evaluationMode = tkgProjectionConfig?.promotion?.evaluationMode
-      ?? (trigger === "execution_end" ? "full_history" : "latest_effective");
+    const evaluationMode =
+      tkgProjectionConfig?.promotion?.evaluationMode ??
+      (trigger === "execution_end" ? "full_history" : "latest_effective");
 
     const promotionEvaluation = evaluateTKGPromotion(stagingSnapshot, {
       minConfidence: tkgProjectionConfig?.promotion?.minConfidence,
@@ -989,15 +987,20 @@ export class WorkflowRunner {
       ...promotionSummary,
     };
 
-    const promotionApplyScopes = tkgPromotionApplyScopes.length > 0 ? tkgPromotionApplyScopes : sharedMemoryScopes;
-    if (sharedMemoryStore && promotionApplyScopes.length > 0 && tkgProjectionConfig?.promotion?.enabled !== false) {
+    const promotionApplyScopes =
+      tkgPromotionApplyScopes.length > 0 ? tkgPromotionApplyScopes : sharedMemoryScopes;
+    if (
+      sharedMemoryStore &&
+      promotionApplyScopes.length > 0 &&
+      tkgProjectionConfig?.promotion?.enabled !== false
+    ) {
       const promotionSnapshot = buildSharedMemorySnapshotFromTKGPromotion(
         stagingSnapshot,
         promotionEvaluation,
         executionId,
         {
           allowedEventTypes: tkgProjectionConfig?.promotion?.allowedEventTypes,
-        },
+        }
       );
 
       if (promotionSnapshot.knowledge.facts.length > 0) {
@@ -1123,32 +1126,44 @@ export class WorkflowRunner {
   private resolveTKGRollbackStore(
     workflow: WorkflowDef,
     runtimeConfig: OboraRuntimeConfig,
-    loadedConfig: OboraConfig | undefined,
+    loadedConfig: OboraConfig | undefined
   ): TKGRollbackStore | undefined {
-    const tkgProjectionConfig = this.resolveTKGProjectionConfig(workflow, runtimeConfig, loadedConfig);
+    const tkgProjectionConfig = this.resolveTKGProjectionConfig(
+      workflow,
+      runtimeConfig,
+      loadedConfig
+    );
     if (!tkgProjectionConfig?.enabled || !tkgProjectionConfig.rollback?.enabled) return undefined;
 
     if (tkgProjectionConfig.rollback.adapter === "custom") {
       return tkgProjectionConfig.rollback.custom?.instance;
     }
 
-    const basePath = tkgProjectionConfig.rollback.file?.basePath ?? join(process.cwd(), ".obora", "tkg-rollback");
+    const basePath =
+      tkgProjectionConfig.rollback.file?.basePath ?? join(process.cwd(), ".obora", "tkg-rollback");
     return new FileTKGRollbackStore(basePath);
   }
 
   private resolveTKGReviewQueueStore(
     workflow: WorkflowDef,
     runtimeConfig: OboraRuntimeConfig,
-    loadedConfig: OboraConfig | undefined,
+    loadedConfig: OboraConfig | undefined
   ): TKGReviewQueueStore | undefined {
-    const tkgProjectionConfig = this.resolveTKGProjectionConfig(workflow, runtimeConfig, loadedConfig);
-    if (!tkgProjectionConfig?.enabled || !tkgProjectionConfig.reviewQueue?.enabled) return undefined;
+    const tkgProjectionConfig = this.resolveTKGProjectionConfig(
+      workflow,
+      runtimeConfig,
+      loadedConfig
+    );
+    if (!tkgProjectionConfig?.enabled || !tkgProjectionConfig.reviewQueue?.enabled)
+      return undefined;
 
     if (tkgProjectionConfig.reviewQueue.adapter === "custom") {
       return tkgProjectionConfig.reviewQueue.custom?.instance;
     }
 
-    const basePath = tkgProjectionConfig.reviewQueue.file?.basePath ?? join(process.cwd(), ".obora", "tkg-review-queue");
+    const basePath =
+      tkgProjectionConfig.reviewQueue.file?.basePath ??
+      join(process.cwd(), ".obora", "tkg-review-queue");
     return new FileTKGReviewQueueStore(basePath);
   }
 
@@ -1351,7 +1366,7 @@ export class WorkflowRunner {
     isSettledFn?: () => boolean,
     blackboard?: BlackboardManager,
     reflector?: ReflectorLike,
-    observer?: ExecutionObserver,
+    observer?: ExecutionObserver
   ): Promise<void> {
     const { eventBus, config } = this.deps;
 
@@ -1472,12 +1487,18 @@ export class WorkflowRunner {
         // Inject reflector hint from blackboard failure history
         if (reflector && blackboard) {
           const failures = blackboard.getFailureHistory();
-          config?.logger?.info?.(`[reflector] analyzing ${failures.length} failures for step ${step.name}`);
+          config?.logger?.info?.(
+            `[reflector] analyzing ${failures.length} failures for step ${step.name}`
+          );
           const hint = reflector.analyzeFailures(failures, step.name);
-          config?.logger?.info?.(`[reflector] hint result: ${hint ? hint.slice(0, 120) + '...' : '(none)'}`);
+          config?.logger?.info?.(
+            `[reflector] hint result: ${hint ? hint.slice(0, 120) + "..." : "(none)"}`
+          );
           if (hint) {
             repairContext.reflectorHint = hint;
-            config?.logger?.info?.(`[reflector] ${step.name} attempt ${repairContext.attempt}: ${hint}`);
+            config?.logger?.info?.(
+              `[reflector] ${step.name} attempt ${repairContext.attempt}: ${hint}`
+            );
           }
           // Execute Reflector v2 actions (force_target, abort, switch_model)
           if (reflector instanceof ReflectorEngine) {
@@ -1489,7 +1510,9 @@ export class WorkflowRunner {
                   | undefined;
                 if (!pending) continue;
                 if (pending.type === "abort") {
-                  const reason = String(pending.payload?.reason ?? "Reflector abort action triggered");
+                  const reason = String(
+                    pending.payload?.reason ?? "Reflector abort action triggered"
+                  );
                   config?.logger?.warn?.(`[reflector] ABORT: ${reason}`);
                   throw new OboraError(reason, OboraErrorCode.EXECUTION_FAILED);
                 }
@@ -1522,16 +1545,12 @@ export class WorkflowRunner {
                 debugState: {
                   ...(blackboard
                     ? {
-                        blackboard: this.summarizeBlackboardSnapshot(
-                          blackboard.getSnapshot(),
-                        ),
+                        blackboard: this.summarizeBlackboardSnapshot(blackboard.getSnapshot()),
                       }
                     : {}),
                   ...(observer
                     ? {
-                        observer: this.summarizeObserverMetrics(
-                          observer.getMetrics(executionId),
-                        ),
+                        observer: this.summarizeObserverMetrics(observer.getMetrics(executionId)),
                       }
                     : {}),
                 },
@@ -1628,16 +1647,12 @@ export class WorkflowRunner {
                   debugState: {
                     ...(blackboard
                       ? {
-                          blackboard: this.summarizeBlackboardSnapshot(
-                            blackboard.getSnapshot(),
-                          ),
+                          blackboard: this.summarizeBlackboardSnapshot(blackboard.getSnapshot()),
                         }
                       : {}),
                     ...(observer
                       ? {
-                          observer: this.summarizeObserverMetrics(
-                            observer.getMetrics(executionId),
-                          ),
+                          observer: this.summarizeObserverMetrics(observer.getMetrics(executionId)),
                         }
                       : {}),
                   },
@@ -1653,15 +1668,14 @@ export class WorkflowRunner {
             // Reflector v2: forceTarget overrides route resolution
             const queuedForceTarget = forcedRouteTargets.get(step.name);
             const repairState = repairLoopStates.get(step.name);
-            const forceTarget = queuedForceTarget ?? (
-              repairState
-                ? undefined
-                : (repairContext as RepairContext | undefined)?.forceTarget
-            );
+            const forceTarget =
+              queuedForceTarget ??
+              (repairState ? undefined : (repairContext as RepairContext | undefined)?.forceTarget);
             const baseResolution = resolveFailureRoute(goto, validationResult);
-            const routeResolution: RouteResolution = forceTarget && stepIndexByName.has(forceTarget)
-              ? { target: forceTarget, matchReason: "default" as const }
-              : baseResolution;
+            const routeResolution: RouteResolution =
+              forceTarget && stepIndexByName.has(forceTarget)
+                ? { target: forceTarget, matchReason: "default" as const }
+                : baseResolution;
             if (queuedForceTarget) {
               forcedRouteTargets.delete(step.name);
             }
@@ -1816,7 +1830,7 @@ export class WorkflowRunner {
     persistenceEnabled: boolean,
     persistenceAdapter: StorageAdapter | null,
     signal?: AbortSignal,
-    blackboard?: BlackboardManager,
+    blackboard?: BlackboardManager
   ): Promise<{ output: unknown; raw?: unknown }> {
     const { eventBus, config } = this.deps;
 
@@ -1848,7 +1862,7 @@ export class WorkflowRunner {
         step,
         "pre_validation",
         executionId,
-        { signal },
+        { signal }
       );
       if (preValidationHook) {
         hookOutputs.pre_validation = preValidationHook;
@@ -1858,12 +1872,7 @@ export class WorkflowRunner {
     // Handle explicit parallel branches within a single step
     let result: { output: unknown; raw?: unknown };
     if (step.parallel && step.parallel.length > 0) {
-      result = await this.executeParallelBranches(
-        step,
-        execution,
-        stepExecutor,
-        signal,
-      );
+      result = await this.executeParallelBranches(step, execution, stepExecutor, signal);
     } else {
       result = stepExecutor
         ? await stepExecutor.executeStep(step, {
@@ -1942,7 +1951,7 @@ export class WorkflowRunner {
     step: WorkflowStep,
     execution: RuntimeExecution,
     stepExecutor: StepExecutor | undefined,
-    signal?: AbortSignal,
+    signal?: AbortSignal
   ): Promise<{ output: unknown; raw?: unknown }> {
     const branches = step.parallel!;
     const mergeStrategy: MergeStrategy = step.merge ?? "concat";
@@ -1966,22 +1975,18 @@ export class WorkflowRunner {
           previousOutputs: execution.outputs,
           signal,
         });
-      }),
+      })
     );
 
     const successResults = settled
-      .filter(
-        (r): r is PromiseFulfilledResult<StepResult> => r.status === "fulfilled",
-      )
+      .filter((r): r is PromiseFulfilledResult<StepResult> => r.status === "fulfilled")
       .map((r) => r.value);
 
     if (successResults.length === 0) {
       const errors = settled
         .filter((r): r is PromiseRejectedResult => r.status === "rejected")
         .map((r) => (r.reason instanceof Error ? r.reason.message : String(r.reason)));
-      throw new Error(
-        `All parallel branches failed for step '${step.name}': ${errors.join("; ")}`,
-      );
+      throw new Error(`All parallel branches failed for step '${step.name}': ${errors.join("; ")}`);
     }
 
     const merged = scheduler.mergeResults(successResults, mergeStrategy);
@@ -2012,7 +2017,7 @@ export class WorkflowRunner {
     blackboard?: BlackboardManager,
     reflector?: ReflectorLike,
     observer?: ExecutionObserver,
-    maxConcurrency: number = DEFAULT_MAX_CONCURRENCY,
+    maxConcurrency: number = DEFAULT_MAX_CONCURRENCY
   ): Promise<void> {
     const { eventBus } = this.deps;
     const scheduler = new ParallelScheduler(maxConcurrency);
@@ -2038,7 +2043,7 @@ export class WorkflowRunner {
           isSettledFn,
           blackboard,
           reflector,
-          observer,
+          observer
         );
         continue;
       }
@@ -2051,24 +2056,21 @@ export class WorkflowRunner {
       });
 
       const layerStartedAt = Date.now();
-      const outcomes = await scheduler.executeParallelSteps(
-        layer,
-        async (step) => {
-          const result = await this.executeSingleStep(
-            step,
-            workflow,
-            execution,
-            stepExecutor,
-            costTracker,
-            executionId,
-            persistenceEnabled,
-            persistenceAdapter,
-            signal,
-            blackboard,
-          );
-          return result as StepResult;
-        },
-      );
+      const outcomes = await scheduler.executeParallelSteps(layer, async (step) => {
+        const result = await this.executeSingleStep(
+          step,
+          workflow,
+          execution,
+          stepExecutor,
+          costTracker,
+          executionId,
+          persistenceEnabled,
+          persistenceAdapter,
+          signal,
+          blackboard
+        );
+        return result as StepResult;
+      });
 
       const completed: string[] = [];
       const failed: string[] = [];
@@ -2079,9 +2081,7 @@ export class WorkflowRunner {
           failed.push(outcome.stepName);
           await eventBus.emit("warning", executionId, {
             message: `Step '${outcome.stepName}' failed in parallel layer: ${
-              outcome.error instanceof Error
-                ? outcome.error.message
-                : String(outcome.error)
+              outcome.error instanceof Error ? outcome.error.message : String(outcome.error)
             }`,
           });
         }
@@ -2144,7 +2144,11 @@ export class WorkflowRunner {
     const sharedMemoryScopes = this.resolveSharedMemoryScopes(workflow, config, loadedConfig);
     const stagingTKGStore = this.resolveStagingTKGStore(workflow, config, loadedConfig);
     const tkgProjectionScopes = this.resolveTKGProjectionScopes(workflow, config, loadedConfig);
-    const tkgPromotionApplyScopes = this.resolveTKGPromotionApplyScopes(workflow, config, loadedConfig);
+    const tkgPromotionApplyScopes = this.resolveTKGPromotionApplyScopes(
+      workflow,
+      config,
+      loadedConfig
+    );
     const tkgPromotionTriggers = this.resolveTKGPromotionTriggers(workflow, config, loadedConfig);
     const tkgRollbackStore = this.resolveTKGRollbackStore(workflow, config, loadedConfig);
     const tkgReviewQueueStore = this.resolveTKGReviewQueueStore(workflow, config, loadedConfig);
@@ -2199,7 +2203,12 @@ export class WorkflowRunner {
     }
 
     // Build execution engine
-    const engine = await this.buildEngine(executionId, persistenceEnabled, persistenceConfig, workflow);
+    const engine = await this.buildEngine(
+      executionId,
+      persistenceEnabled,
+      persistenceConfig,
+      workflow
+    );
 
     // Create blackboard, observer, and reflector for this execution
     const blackboard = new BlackboardManager({ sessionId: executionId });
@@ -2209,7 +2218,7 @@ export class WorkflowRunner {
       sharedMemoryStore,
       sharedMemoryScopes,
       blackboard,
-      execution,
+      execution
     );
     if (sharedMemoryImport.importedScopes.length > 0) {
       await eventBus.emit("knowledge_context_attached", executionId, {
@@ -2242,12 +2251,13 @@ export class WorkflowRunner {
       observer.attachCostTracker(engine.costTracker);
     }
     observer.observe(executionId);
-    const tkgProjector = stagingTKGStore && tkgProjectionScopes.length > 0
-      ? new TKGProjector(eventBus, stagingTKGStore, {
-          workflowName,
-          scopes: tkgProjectionScopes,
-        })
-      : undefined;
+    const tkgProjector =
+      stagingTKGStore && tkgProjectionScopes.length > 0
+        ? new TKGProjector(eventBus, stagingTKGStore, {
+            workflowName,
+            scopes: tkgProjectionScopes,
+          })
+        : undefined;
     tkgProjector?.observe(executionId);
     const tkgPromotionTriggerUnsubscribes = tkgPromotionTriggers
       .filter((trigger) => trigger !== "execution_end")
@@ -2277,7 +2287,7 @@ export class WorkflowRunner {
               detail: String(error),
             });
           }
-        }),
+        })
       );
 
     try {
@@ -2300,7 +2310,7 @@ export class WorkflowRunner {
           blackboard,
           reflector,
           observer,
-          scheduler.maxConcurrency,
+          scheduler.maxConcurrency
         );
       } else {
         // Sequential path — preserves full back-edge and repair-loop support
@@ -2317,7 +2327,7 @@ export class WorkflowRunner {
           isSettledFn,
           blackboard,
           reflector,
-          observer,
+          observer
         );
       }
 
@@ -2329,7 +2339,12 @@ export class WorkflowRunner {
         workflowName,
         failurePatterns: this.extractFailurePatterns(blackboard, reflector),
       });
-      await this.persistSharedMemory(sharedMemoryStore, sharedMemoryScopes, blackboard, executionId);
+      await this.persistSharedMemory(
+        sharedMemoryStore,
+        sharedMemoryScopes,
+        blackboard,
+        executionId
+      );
       if (tkgProjector) {
         execution.outputs.__tkg_projection__ = tkgProjector.getSummary();
       }
@@ -2422,11 +2437,10 @@ export class WorkflowRunner {
     }
   }
 
-  async listOpenTKGReviewQueueItems(
-    workflow: WorkflowDef,
-  ): Promise<TKGReviewQueueItem[]> {
+  async listOpenTKGReviewQueueItems(workflow: WorkflowDef): Promise<TKGReviewQueueItem[]> {
     const { config } = this.deps;
-    const loadedConfig = config.config !== undefined ? config.config : await loadConfig(config.configPath);
+    const loadedConfig =
+      config.config !== undefined ? config.config : await loadConfig(config.configPath);
     const tkgProjectionScopes = this.resolveTKGProjectionScopes(workflow, config, loadedConfig);
     const tkgReviewQueueStore = this.resolveTKGReviewQueueStore(workflow, config, loadedConfig);
     const queueScope = tkgProjectionScopes.at(-1);
@@ -2441,10 +2455,11 @@ export class WorkflowRunner {
   async resolveTKGReviewQueueItem(
     workflow: WorkflowDef,
     itemId: string,
-    resolution: { status: "approved" | "rejected"; actor?: string; note?: string },
+    resolution: { status: "approved" | "rejected"; actor?: string; note?: string }
   ): Promise<TKGReviewQueueResolutionSummary> {
     const { config } = this.deps;
-    const loadedConfig = config.config !== undefined ? config.config : await loadConfig(config.configPath);
+    const loadedConfig =
+      config.config !== undefined ? config.config : await loadConfig(config.configPath);
     const tkgProjectionScopes = this.resolveTKGProjectionScopes(workflow, config, loadedConfig);
     const tkgReviewQueueStore = this.resolveTKGReviewQueueStore(workflow, config, loadedConfig);
     const queueScope = tkgProjectionScopes.at(-1);
@@ -2467,16 +2482,23 @@ export class WorkflowRunner {
 
   async restoreLatestTKGRollback(
     workflow: WorkflowDef,
-    options: { rollbackId?: string } = {},
+    options: { rollbackId?: string } = {}
   ): Promise<TKGRollbackRestoreSummary> {
     const { config } = this.deps;
-    const loadedConfig = config.config !== undefined ? config.config : await loadConfig(config.configPath);
+    const loadedConfig =
+      config.config !== undefined ? config.config : await loadConfig(config.configPath);
     const sharedMemoryStore = this.resolveSharedMemoryStore(workflow, config, loadedConfig);
     const sharedMemoryScopes = this.resolveSharedMemoryScopes(workflow, config, loadedConfig);
-    const tkgPromotionApplyScopes = this.resolveTKGPromotionApplyScopes(workflow, config, loadedConfig);
+    const tkgPromotionApplyScopes = this.resolveTKGPromotionApplyScopes(
+      workflow,
+      config,
+      loadedConfig
+    );
     const tkgRollbackStore = this.resolveTKGRollbackStore(workflow, config, loadedConfig);
 
-    const targetScope = (tkgPromotionApplyScopes.length > 0 ? tkgPromotionApplyScopes : sharedMemoryScopes).at(-1);
+    const targetScope = (
+      tkgPromotionApplyScopes.length > 0 ? tkgPromotionApplyScopes : sharedMemoryScopes
+    ).at(-1);
     if (!sharedMemoryStore || !tkgRollbackStore || !targetScope) {
       return {
         restored: false,
@@ -2489,28 +2511,40 @@ export class WorkflowRunner {
       tkgRollbackStore,
       sharedMemoryStore,
       targetScope,
-      options.rollbackId,
+      options.rollbackId
     );
   }
 
   async reapplyApprovedTKGReviewQueueItems(
     workflow: WorkflowDef,
-    options: { sourceExecutionId?: string } = {},
+    options: { sourceExecutionId?: string } = {}
   ): Promise<TKGApprovedReviewQueueApplySummary> {
     const { config } = this.deps;
-    const loadedConfig = config.config !== undefined ? config.config : await loadConfig(config.configPath);
+    const loadedConfig =
+      config.config !== undefined ? config.config : await loadConfig(config.configPath);
     const tkgProjectionConfig = this.resolveTKGProjectionConfig(workflow, config, loadedConfig);
     const sharedMemoryStore = this.resolveSharedMemoryStore(workflow, config, loadedConfig);
     const sharedMemoryScopes = this.resolveSharedMemoryScopes(workflow, config, loadedConfig);
     const stagingTKGStore = this.resolveStagingTKGStore(workflow, config, loadedConfig);
     const tkgProjectionScopes = this.resolveTKGProjectionScopes(workflow, config, loadedConfig);
-    const tkgPromotionApplyScopes = this.resolveTKGPromotionApplyScopes(workflow, config, loadedConfig);
+    const tkgPromotionApplyScopes = this.resolveTKGPromotionApplyScopes(
+      workflow,
+      config,
+      loadedConfig
+    );
     const tkgReviewQueueStore = this.resolveTKGReviewQueueStore(workflow, config, loadedConfig);
 
-    const applyScopes = tkgPromotionApplyScopes.length > 0 ? tkgPromotionApplyScopes : sharedMemoryScopes;
+    const applyScopes =
+      tkgPromotionApplyScopes.length > 0 ? tkgPromotionApplyScopes : sharedMemoryScopes;
     const queueScope = tkgProjectionScopes.at(-1);
 
-    if (!sharedMemoryStore || !stagingTKGStore || !tkgReviewQueueStore || !queueScope || applyScopes.length === 0) {
+    if (
+      !sharedMemoryStore ||
+      !stagingTKGStore ||
+      !tkgReviewQueueStore ||
+      !queueScope ||
+      applyScopes.length === 0
+    ) {
       return {
         appliedFactCount: 0,
         appliedNodeIds: [],
@@ -2630,7 +2664,12 @@ export class WorkflowRunner {
     const persistenceEnabled = config.persistence?.enabled ?? false;
     const persistenceConfig = config.persistence;
 
-    const engine = await this.buildEngine(executionId, persistenceEnabled, persistenceConfig, workflow);
+    const engine = await this.buildEngine(
+      executionId,
+      persistenceEnabled,
+      persistenceConfig,
+      workflow
+    );
 
     // Import CheckpointManager here to avoid top-level circular deps
     const { CheckpointManager } = await import("@obora/runtime");
@@ -2799,17 +2838,19 @@ export class WorkflowRunner {
   async rollbackTKGOnExecutionFailure(
     executionId: string,
     workflowName: string,
-    workflow: WorkflowDef,
+    workflow: WorkflowDef
   ): Promise<TKGRollbackRestoreSummary> {
     const { config } = this.deps;
-    
+
     try {
       const result = await this.restoreLatestTKGRollback(workflow);
-      
+
       if (result.restored && config.verbose) {
-        console.log(`[TKG] Auto-rollback completed for execution ${executionId}: ${result.restoredFactCount} facts restored`);
+        console.log(
+          `[TKG] Auto-rollback completed for execution ${executionId}: ${result.restoredFactCount} facts restored`
+        );
       }
-      
+
       return result;
     } catch (err) {
       if (config.verbose) {

@@ -43,7 +43,7 @@ Architecture anchors:
 
 즉 현재 구현은 modern live command가 아니라 helper script에 가깝습니다.
 
-### 2. Read-side resolution already exists, but CLI contract-ready shape는 아님
+### 2. Read-side resolution exists and A1 snapshot foundation now exists
 
 `packages/adapters/src/agents/config-resolver.ts` 기준 현재 존재하는 것은 아래입니다.
 
@@ -53,15 +53,21 @@ Architecture anchors:
 - global agents override
 - project agents override
 - auth-aware provider fallback
+- `AgentConfigResolver.snapshot(name)`
+- `packages/adapters/src/agents/resolution-snapshot.ts`의 base provenance snapshot builder
 
-즉 “resolved agent config”를 계산하는 핵심은 이미 존재합니다.
+즉 “resolved agent config”를 계산하는 핵심과 base snapshot contract는 이미 존재합니다.
 
-하지만 아직 부족한 것은 아래입니다.
+추가로 execution-only source는 아래처럼 분리 구현됐습니다.
 
-- source provenance를 구조적으로 보여주는 snapshot
-- workflow-local `agents` / runtime `agentsPath`까지 포함한 operator view
-- CLI-safe error taxonomy
-- read-only introspection payload contract
+- `packages/sdk/src/agents/execution-resolution-snapshot.ts`
+- `packages/sdk/src/agents/source-loaders.ts`
+
+즉 A1 수준의 package/helper foundation은 구현됐고, 현재 남은 것은 아래입니다.
+
+- read-only CLI introspection payload/formatting contract
+- CLI-safe exit code / hint suppression / root `--json` 정합성
+- 실제 operator pain이 A2까지 갈 만큼 반복되는지 판단
 
 ### 3. Runtime path already combines multiple agent sources
 
@@ -89,35 +95,37 @@ Go/No-Go:
 
 - repeated operator pain이 증명되기 전까지는 여기서 멈추는 것이 기본
 
-### A1. Package-level resolution snapshot first
+### A1. Package-level resolution snapshot foundation
 
-Objective:
+Status:
 
-- CLI보다 먼저 package/helper 레벨에서 “agent resolution snapshot”을 구조적으로 만들 수 있어야 함
+- 구현 완료
 
-Suggested scope:
+Implemented surface:
 
-- adapters 또는 sdk에 read-only helper 추가
-- 최소한 아래 source를 구분해 보여줌
-  - auth-aware defaults
-  - global config
-  - project config
-  - provider defaults
-  - `agentsPath`
-  - workflow-local agents
-  - runtime registration
-- resolved 값뿐 아니라 source provenance도 포함
+- adapters base snapshot
+  - `packages/adapters/src/agents/resolution-snapshot.ts`
+  - `packages/adapters/src/agents/config-resolver.ts`
+  - `packages/adapters/src/config/types.ts`
+- sdk execution augmentation
+  - `packages/sdk/src/agents/execution-resolution-snapshot.ts`
+  - `packages/sdk/src/agents/source-loaders.ts`
+  - `packages/sdk/src/execution/workflow-runner.ts`
+- tests
+  - `packages/adapters/src/__tests__/agents/resolution-snapshot.test.ts`
+  - `packages/sdk/src/__tests__/agents/execution-resolution-snapshot.test.ts`
 
-패키지 배치 설계 초안:
+관련 문서:
 
 - `docs/plans/2026-04-18-agents-resolution-snapshot-helper-design.md`
 - `docs/plans/2026-04-18-agents-resolution-snapshot-implementation-plan.md`
 
-Acceptance criteria:
+What A1 now guarantees:
 
 - CLI 없이도 테스트 가능한 typed snapshot contract 존재
 - 어떤 값이 어디서 왔는지 operator-readable 하게 설명 가능
-- resolution failure가 generic throw가 아니라 contract-aware error로 정리됨
+- adapters와 sdk 경계를 유지한 채 execution source까지 분리 설명 가능
+- resolution failure가 generic string throw와 별도 snapshot failure shape로 정리됨
 
 ### A2. Read-only CLI introspection candidate
 
@@ -179,12 +187,13 @@ Acceptance criteria:
 
 ---
 
-## Recommended order if revival ever starts
+## Recommended order if revival ever resumes
 
 1. A0 유지 여부 확인
-2. A1 resolution snapshot helper
-   - package placement draft: `docs/plans/2026-04-18-agents-resolution-snapshot-helper-design.md`
-3. A1 tests / error taxonomy 고정
+2. A1 helper existing surface 재사용
+   - implementation record: `docs/plans/2026-04-18-agents-resolution-snapshot-helper-design.md`
+   - task plan / verification trail: `docs/plans/2026-04-18-agents-resolution-snapshot-implementation-plan.md`
+3. 필요 시에만 A1 output / error taxonomy 추가 고정
 4. A2 read-only CLI 필요성 판단
 5. 필요할 때만 A2 구현
 6. mutation need가 입증된 뒤에만 A3 검토

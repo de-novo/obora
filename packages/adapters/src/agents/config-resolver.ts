@@ -11,6 +11,7 @@ import {
   isSupportedProvider,
   pickPreferredProvider,
 } from "../llm/factory";
+import { buildAgentResolutionSnapshot } from "./resolution-snapshot";
 
 const BUILTIN_DEFAULTS: AgentConfig = {
   provider: "pi-mono",
@@ -19,27 +20,6 @@ const BUILTIN_DEFAULTS: AgentConfig = {
   maxTokens: 4096,
   timeout: 120,
 };
-
-function mergeShallow<T extends object>(base: T, patch?: Partial<T>): T {
-  return patch ? ({ ...base, ...patch } as T) : base;
-}
-
-function applyProviderLayer(config: AgentConfig, layer?: { defaultModel?: string } & Partial<AgentConfig>) {
-  if (!layer) {
-    return config;
-  }
-
-  const next = { ...config };
-
-  if (layer.baseUrl !== undefined) next.baseUrl = layer.baseUrl;
-  if ((layer as { defaultModel?: string }).defaultModel !== undefined) {
-    next.model = (layer as { defaultModel?: string }).defaultModel as string;
-  }
-  if (layer.timeout !== undefined) next.timeout = layer.timeout;
-  if (layer.maxTokens !== undefined) next.maxTokens = layer.maxTokens;
-
-  return next;
-}
 
 export class AgentConfigResolver implements AgentConfigResolverContract {
   private constructor(
@@ -61,43 +41,34 @@ export class AgentConfigResolver implements AgentConfigResolverContract {
     );
     const authAwareDefaults: Partial<AgentConfig> = preferredProvider
       ? {
-        provider: preferredProvider,
-        model: getProviderDefaultModel(preferredProvider) ?? BUILTIN_DEFAULTS.model,
-      }
+          provider: preferredProvider,
+          model: getProviderDefaultModel(preferredProvider) ?? BUILTIN_DEFAULTS.model,
+        }
       : {};
 
     return new AgentConfigResolver(globalConfig, projectConfig, authAwareDefaults);
   }
 
+  snapshot(agentName: string) {
+    return buildAgentResolutionSnapshot({
+      agentName,
+      globalConfig: this.globalConfig,
+      projectConfig: this.projectConfig,
+      authAwareDefaults: this.authAwareDefaults,
+      builtinDefaults: BUILTIN_DEFAULTS,
+    });
+  }
+
   resolve(agentName: string): AgentConfig {
-    // 1) built-in defaults + auth-aware defaults
-    let resolved = mergeShallow({ ...BUILTIN_DEFAULTS }, this.authAwareDefaults);
+    const snapshot = this.snapshot(agentName);
 
-    // 2) global defaults
-    resolved = mergeShallow(resolved, this.globalConfig.defaults);
-
-    // 3) project defaults
-    resolved = mergeShallow(resolved, this.projectConfig.defaults);
-
-    const providerName = resolved.provider;
-
-    // 4) global providers[providerName]
-    resolved = applyProviderLayer(resolved, this.globalConfig.providers?.[providerName]);
-
-    // 5) project providers[providerName]
-    resolved = applyProviderLayer(resolved, this.projectConfig.providers?.[providerName]);
-
-    // 6) global agents[agentName]
-    resolved = mergeShallow(resolved, this.globalConfig.agents?.[agentName]);
-
-    // 7) project agents[agentName]
-    resolved = mergeShallow(resolved, this.projectConfig.agents?.[agentName]);
-
-    if (!resolved.provider || !resolved.model) {
-      throw new Error(`Unable to resolve agent config for '${agentName}': provider/model is required`);
+    if (snapshot.status !== "resolved" || !snapshot.resolved.provider || !snapshot.resolved.model) {
+      throw new Error(
+        `Unable to resolve agent config for '${agentName}': provider/model is required`
+      );
     }
 
-    return resolved;
+    return snapshot.resolved as AgentConfig;
   }
 
   resolveForStep(agentName: string, override?: AgentStepOverride): AgentConfig {
@@ -124,11 +95,9 @@ export class AgentConfigResolver implements AgentConfigResolverContract {
       names.add("default");
     }
 
-    return [...names]
-      .sort()
-      .map((name) => ({
-        name,
-        config: this.resolve(name),
-      }));
+    return [...names].sort().map((name) => ({
+      name,
+      config: this.resolve(name),
+    }));
   }
 }

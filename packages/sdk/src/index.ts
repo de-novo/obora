@@ -10,7 +10,14 @@ export { OboraRuntime, OboraError, OboraErrorCode } from "./runtime.js";
 export { Workflow } from "./workflow.js";
 export { detectLLMConfigFromEnv, resolveLLMConfig } from "./llm-config.js";
 export { loadConfig, resolveProviderConfig } from "./config-loader.js";
-export { buildResolutionSummary, formatResolutionSummary, buildBindingPreview, formatBindingPreview, buildOutputPreview, formatOutputPreview } from "./resolution-summary.js";
+export {
+  buildResolutionSummary,
+  formatResolutionSummary,
+  buildBindingPreview,
+  formatBindingPreview,
+  buildOutputPreview,
+  formatOutputPreview,
+} from "./resolution-summary.js";
 export { formatDiagnostic } from "./diagnostics.js";
 export { CostTracker, BudgetExceededError } from "./cost-tracker.js";
 export {
@@ -39,6 +46,7 @@ export { StepExecutor } from "./step-executor.js";
 export { findSchemaMismatchReason, loadMinimalJsonSchema } from "./schema-output.js";
 export { topologicalSort, groupByParallelizableLevels } from "./dependency-resolver.js";
 export { ParallelScheduler } from "./execution/parallel-scheduler.js";
+export { buildExecutionAgentSnapshot } from "./agents/execution-resolution-snapshot.js";
 export {
   buildValidationSignature,
   getRepairLoopConfig,
@@ -99,6 +107,11 @@ export type {
   ParallelStepResult,
   ParallelStepFailure,
 } from "./execution/parallel-scheduler.js";
+export type {
+  ExecutionAgentSource,
+  ExecutionAgentSourceKind,
+  ExecutionAgentSnapshot,
+} from "./agents/execution-resolution-snapshot.js";
 export type {
   PeerReviewStepResult,
   PeerReviewStepConfig,
@@ -282,10 +295,7 @@ export {
   type CircuitBreakerConfig,
   type CircuitState,
 } from "./execution/circuit-breaker.js";
-export {
-  type ExecutionLock,
-  FileExecutionLock,
-} from "./execution/execution-lock.js";
+export { type ExecutionLock, FileExecutionLock } from "./execution/execution-lock.js";
 export {
   HealthChecker,
   createStuckExecutionCheck,

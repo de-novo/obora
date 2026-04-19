@@ -1,6 +1,6 @@
 # Agents Resolution Snapshot Helper Design
 
-> For Hermes: 이 문서는 `obora agents` revival의 A1 단계에서 필요한 resolution snapshot helper를 어느 패키지에 둘지 결정하기 위한 설계 초안입니다. 아직 구현 지시가 아니라 package boundary를 먼저 고정하는 문서입니다.
+> For Hermes: 이 문서는 `obora agents` revival의 A1 단계에서 필요한 resolution snapshot helper를 어느 패키지에 둘지 정리한 설계 기록이며, 현재 구현된 adapters/sdk split을 설명합니다. live CLI revival 지시는 여전히 아닙니다.
 
 Goal: agent resolution visibility를 위한 typed snapshot contract를 만들 때, 어떤 책임을 `@obora/adapters`가 맡고 어떤 책임을 `@obora/sdk`가 맡아야 하는지 정리한다.
 
@@ -155,13 +155,15 @@ A1 목표는 아래입니다.
 
 ## 4. 권장 구조
 
-### 4.1 adapters가 소유할 것
+### 4.1 adapters가 소유하는 것
 
-권장 위치:
+현재 구현 위치:
 
-- Create: `packages/adapters/src/agents/resolution-snapshot.ts`
-- Modify: `packages/adapters/src/agents/index.ts`
-- Modify: `packages/adapters/src/config/types.ts`
+- `packages/adapters/src/agents/resolution-snapshot.ts`
+- `packages/adapters/src/agents/config-resolver.ts`
+- `packages/adapters/src/agents/index.ts`
+- `packages/adapters/src/config/types.ts`
+- test: `packages/adapters/src/__tests__/agents/resolution-snapshot.test.ts`
 
 adapters가 소유해야 하는 이유:
 
@@ -187,13 +189,15 @@ snapshot에는 최소한 아래가 들어가야 합니다.
 - warnings[]
 - failure info (provider/model missing 등)
 
-### 4.2 sdk가 소유할 것
+### 4.2 sdk가 소유하는 것
 
-권장 위치:
+현재 구현 위치:
 
-- Create: `packages/sdk/src/agents/execution-resolution-snapshot.ts`
-- Modify: `packages/sdk/src/index.ts`
-- Optional Modify: `packages/sdk/src/execution/workflow-runner.ts`
+- `packages/sdk/src/agents/execution-resolution-snapshot.ts`
+- `packages/sdk/src/agents/source-loaders.ts`
+- `packages/sdk/src/index.ts`
+- `packages/sdk/src/execution/workflow-runner.ts`
+- test: `packages/sdk/src/__tests__/agents/execution-resolution-snapshot.test.ts`
 
 sdk가 소유해야 하는 이유:
 
@@ -287,77 +291,59 @@ CLI는 아래만 해야 합니다.
 
 ---
 
-## 6. 구현 순서 권장안
+## 6. 구현 상태 요약
 
-### Step 1. adapters에 base snapshot 추가
+### 완료된 항목
 
-범위:
+1. adapters base snapshot 추가
 
-- `AgentConfigResolver.resolve()` 로직을 재사용
-- provenance layer를 함께 반환하는 read-only helper 추가
-- 기존 `resolve()` / `listAgents()`와 중복 최소화
+- `buildAgentResolutionSnapshot(...)`
+- `AgentConfigResolver.snapshot(name)`
+- provenance layer / warnings / failure shape
 
-완료 기준:
+2. adapters failure shape 정리
 
-- 특정 agent에 대해 “어떤 값이 어디서 왔는지”를 adapters 단위 테스트로 증명 가능
+- unresolved 상태에서 `provider-model-required` failure code 제공
+- 기존 `resolve()` throw text는 compatibility를 위해 유지
 
-### Step 2. adapters failure taxonomy 정리
+3. sdk execution augmentation helper 추가
 
-범위:
+- `buildExecutionAgentSnapshot(...)`
+- `agentsPath`, workflow-local `agents`, runtime registration source 분리
+- `packages/sdk/src/agents/source-loaders.ts`로 `WorkflowRunner`와 YAML parsing 재사용 경로 정리
 
-- 현재 generic `Error`를 snapshot-friendly failure shape로 정리
-- missing provider/model 같은 경우를 structured warning/failure로 표현 가능하게 함
+### 다음 판단 지점
 
-완료 기준:
-
-- future CLI가 string 비교 없이 failure category를 처리 가능
-
-### Step 3. sdk에 execution augmentation helper 추가
-
-범위:
-
-- `agentsPath`, workflow-local `agents`, runtime registration source를 합친 execution snapshot 제공
-- `WorkflowRunner` 내부 구현과 중복 최소화
-
-완료 기준:
-
-- future read-only CLI가 실제 execution-relevant visibility를 제공할 수 있음
-
-### Step 4. CLI 도입 여부는 그 다음 판단
-
-범위:
+4. CLI 도입 여부는 그 다음 판단
 
 - A1 helper만으로 operator pain이 줄어드는지 확인
 - 필요 시 A2 read-only CLI로 진행
-
-완료 기준:
-
-- package/helper contract가 먼저 안정화됨
+- package/helper contract를 직접 깨지 않는 thin consumer만 허용
 
 ---
 
-## 7. 추천 파일 배치 요약
-
-### A1 최소 구현 시
+## 7. 구현 파일 배치 요약
 
 adapters:
 
-- Create: `packages/adapters/src/agents/resolution-snapshot.ts`
-- Modify: `packages/adapters/src/agents/config-resolver.ts`
-- Modify: `packages/adapters/src/agents/index.ts`
-- Modify: `packages/adapters/src/config/types.ts`
-- Test: `packages/adapters/src/__tests__/agents/resolution-snapshot.test.ts`
+- `packages/adapters/src/agents/resolution-snapshot.ts`
+- `packages/adapters/src/agents/config-resolver.ts`
+- `packages/adapters/src/agents/index.ts`
+- `packages/adapters/src/config/types.ts`
+- test: `packages/adapters/src/__tests__/agents/resolution-snapshot.test.ts`
 
 sdk:
 
-- Create: `packages/sdk/src/agents/execution-resolution-snapshot.ts`
-- Modify: `packages/sdk/src/index.ts`
-- Test: `packages/sdk/src/__tests__/agents/execution-resolution-snapshot.test.ts`
+- `packages/sdk/src/agents/execution-resolution-snapshot.ts`
+- `packages/sdk/src/agents/source-loaders.ts`
+- `packages/sdk/src/index.ts`
+- `packages/sdk/src/execution/workflow-runner.ts`
+- test: `packages/sdk/src/__tests__/agents/execution-resolution-snapshot.test.ts`
 
 문서:
 
-- Modify: `docs/plans/2026-04-18-agents-cli-revival-preconditions.md`
-- Optional Modify: `docs/deferred-surface-revival-criteria.md`
+- `docs/plans/2026-04-18-agents-cli-revival-preconditions.md`
+- `docs/plans/2026-04-18-agents-resolution-snapshot-implementation-plan.md`
 
 ---
 
