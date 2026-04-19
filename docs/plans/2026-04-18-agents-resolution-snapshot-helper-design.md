@@ -223,6 +223,7 @@ sdk가 소유해야 하는 이유:
 권장 위치:
 
 - future: `packages/cli/src/commands/agents.ts`
+- read-only UX contract: `docs/plans/2026-04-18-agents-readonly-cli-contract.md`
 
 CLI는 아래만 해야 합니다.
 

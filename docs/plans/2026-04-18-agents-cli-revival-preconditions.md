@@ -133,6 +133,10 @@ Objective:
 
 - 실제 pain이 visibility 부족이라면 mutation보다 먼저 read-only surface를 검토
 
+Candidate UX contract:
+
+- `docs/plans/2026-04-18-agents-readonly-cli-contract.md`
+
 Candidate UX:
 
 ```bash
@@ -150,12 +154,14 @@ Requirements:
 - irrelevant hint suppression
 - source provenance가 보이는 payload
 - `doctor`와 역할 분리 설명 가능
+- YAML mutation / raw file view 금지
 
 Acceptance criteria:
 
 - 현재 resolved state를 operator가 직접 확인하는 가치가 명확함
 - raw file view가 아니라 runtime-relevant resolution view를 보여줌
 - docs/cli.md에 올려도 onboarding 혼동이 늘지 않음
+- A1 helper 위 thin consumer로만 구현 가능함
 
 ### A3. Safe override surface only if repeated operator need exists
 
@@ -194,7 +200,8 @@ Acceptance criteria:
    - implementation record: `docs/plans/2026-04-18-agents-resolution-snapshot-helper-design.md`
    - task plan / verification trail: `docs/plans/2026-04-18-agents-resolution-snapshot-implementation-plan.md`
 3. 필요 시에만 A1 output / error taxonomy 추가 고정
-4. A2 read-only CLI 필요성 판단
+4. A2 read-only CLI contract 확인
+   - UX contract: `docs/plans/2026-04-18-agents-readonly-cli-contract.md`
 5. 필요할 때만 A2 구현
 6. mutation need가 입증된 뒤에만 A3 검토
 
