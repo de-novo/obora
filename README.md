@@ -96,6 +96,10 @@ A ready-to-run contract-first example is here:
 
 - [`examples/07-contract-first-evaluation`](./examples/07-contract-first-evaluation)
 
+For categorized examples:
+
+- [`examples/README.md`](./examples/README.md)
+
 ---
 
 ## 🧩 Core Concepts

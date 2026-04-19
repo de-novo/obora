@@ -193,23 +193,34 @@ README / examples / tutorial 기준으로 현재 obora-kit이 제공하는 핵�
 
 ## 5. 예시로 바로 돌려볼 수 있는 것
 
-현재 examples 기준 대표 runnable surface:
+현재 examples는 아래처럼 보는 것이 맞습니다.
+
+### onboarding / first-success 예제
 
 - `examples/hello-obora.yaml`
 - `examples/01-simple-pipeline`
-- `examples/02-multi-agent-consensus`
-- `examples/06-validation-repair-loop`
 - `examples/07-contract-first-evaluation`
+
+### supported runtime pattern 예제
+
+- `examples/02-multi-agent-consensus`
+- `examples/03-policy-gate`
+- `examples/06-validation-repair-loop`
+
+### advanced / integration-oriented 예제
+
+- `examples/04-plugin-custom`
+- `examples/05-dashboard-monitoring`
 - `examples/todo-app`
+- `examples/todo-app-glm47`
 
-문서상 소개된 example 범주:
+주의:
 
-- simple pipeline
-- multi-agent consensus
-- policy gate
-- plugin custom integration
-- validation-repair loop
-- contract-first evaluation
+- `05-dashboard-monitoring`은 dashboard 맥락 예제이지만, `obora dashboard`가 live CLI라는 뜻은 아님
+- `04-plugin-custom`은 runtime/plugin registration이 필요한 advanced 예제
+- `todo-app*`은 compact/large end-to-end reference 예제로 보는 편이 맞음
+
+전체 분류는 `examples/README.md`를 기준으로 봅니다.
 
 ---
 

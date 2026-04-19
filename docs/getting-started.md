@@ -197,6 +197,12 @@ Obora의 핵심 execution pattern을 더 보려면:
 - [`examples/06-validation-repair-loop`](../examples/06-validation-repair-loop)
 - [Validation-Repair Loop tutorial](./tutorials/validation-repair-loop.md)
 
+### Examples index by use case
+
+examples를 onboarding / supported runtime pattern / advanced example 기준으로 보려면:
+
+- [`examples/README.md`](../examples/README.md)
+
 ### CLI reference
 
 자세한 명령 계약은 여기에서 확인합니다.
