@@ -71,6 +71,22 @@ export interface AgentInventoryEntry {
   source: AgentInventorySource;
 }
 
+export type AgentMutationScope = "project" | "global";
+
+export type AgentMutationAction = "set" | "reset";
+
+export interface AgentOverridePreview {
+  action: AgentMutationAction;
+  scope: AgentMutationScope;
+  agentName: string;
+  targetPath: string;
+  before: Partial<AgentConfig> | null;
+  after: Partial<AgentConfig> | null;
+  warnings: string[];
+  nextConfigDocument: Record<string, unknown>;
+  nextYaml: string;
+}
+
 export interface AgentConfigResolverContract {
   resolve(agentName: string): AgentConfig;
   resolveForStep(agentName: string, override?: AgentStepOverride): AgentConfig;
