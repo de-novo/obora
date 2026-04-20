@@ -1,8 +1,8 @@
 # Obora Agents CLI Revival Preconditions
 
-> For Hermes: 이 문서는 `obora agents`를 지금 바로 live CLI로 복구하라는 뜻이 아닙니다. 현재는 defer 유지가 기본값이고, 나중에 revival을 검토할 때 어떤 구현 milestone을 먼저 밟아야 하는지 정리한 preconditions 문서입니다.
+> For Hermes: 이 문서는 원래 `obora agents` revival 전 preconditions를 정리한 문서였습니다. 현재는 A2 read-only `list/show`가 live로 구현되었고, 이 문서는 남은 mutation(A3) 검토와 구현 순서 기록을 위한 baseline으로 유지합니다.
 
-Goal: `obora agents`를 단순 raw YAML mutation wrapper가 아니라, 현재 config resolution/runtime contract와 맞는 modern CLI surface로 다시 열 수 있는지 판단하는 단계별 기준을 정의한다.
+Goal: `obora agents`를 단순 raw YAML mutation wrapper가 아니라, 현재 config resolution/runtime contract와 맞는 modern CLI surface로 다시 열 수 있는지 판단했던 단계별 기준과, 이후 mutation 논의를 어디까지 허용할지 남겨둔다.
 
 Architecture anchors:
 
@@ -63,11 +63,11 @@ Architecture anchors:
 - `packages/sdk/src/agents/execution-resolution-snapshot.ts`
 - `packages/sdk/src/agents/source-loaders.ts`
 
-즉 A1 수준의 package/helper foundation은 구현됐고, 현재 남은 것은 아래입니다.
+즉 A1 수준의 package/helper foundation은 구현됐고, 이후 A2에서 실제로 마감된 것은 아래였습니다.
 
 - read-only CLI introspection payload/formatting contract
 - CLI-safe exit code / hint suppression / root `--json` 정합성
-- 실제 operator pain이 A2까지 갈 만큼 반복되는지 판단
+- live `list/show` registration + regression tests
 
 ### 3. Runtime path already combines multiple agent sources
 
@@ -83,17 +83,17 @@ Architecture anchors:
 
 ## Milestone ladder
 
-### A0. Default state: keep deferred
+### A0. Historical default: keep deferred
 
-현재 기본 상태는 이것입니다.
+초기 기본 상태는 이것이었습니다.
 
-- `obora agents`는 live top-level command가 아님
-- config 변경은 `.obora/config.yaml` 편집이 기준
-- visibility는 `doctor`, `models`, `auth`, docs로 보완
+- `obora agents`는 live top-level command가 아니었음
+- config 변경은 `.obora/config.yaml` 편집이 기준이었음
+- visibility는 `doctor`, `models`, `auth`, docs로 보완했음
 
-Go/No-Go:
+현재 참고 의미:
 
-- repeated operator pain이 증명되기 전까지는 여기서 멈추는 것이 기본
+- mutation(A3)을 논의할 때도 출발점은 여전히 여기이며, read-only A2 이상을 자동으로 정당화하지는 않음
 
 ### A1. Package-level resolution snapshot foundation
 
@@ -127,11 +127,15 @@ What A1 now guarantees:
 - adapters와 sdk 경계를 유지한 채 execution source까지 분리 설명 가능
 - resolution failure가 generic string throw와 별도 snapshot failure shape로 정리됨
 
-### A2. Read-only CLI introspection candidate
+### A2. Read-only CLI introspection
+
+Status:
+
+- 구현 완료
 
 Objective:
 
-- 실제 pain이 visibility 부족이라면 mutation보다 먼저 read-only surface를 검토
+- 실제 pain이 visibility 부족일 때 mutation보다 먼저 read-only surface를 live로 제공
 
 Candidate UX contract:
 

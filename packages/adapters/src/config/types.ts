@@ -64,9 +64,17 @@ export interface AgentResolutionSnapshot {
   failure?: AgentResolutionFailure;
 }
 
+export type AgentInventorySource = "config" | "default-fallback";
+
+export interface AgentInventoryEntry {
+  name: string;
+  source: AgentInventorySource;
+}
+
 export interface AgentConfigResolverContract {
   resolve(agentName: string): AgentConfig;
   resolveForStep(agentName: string, override?: AgentStepOverride): AgentConfig;
   listAgents(): Array<{ name: string; config: AgentConfig }>;
+  listAgentInventory(): AgentInventoryEntry[];
   snapshot(agentName: string): AgentResolutionSnapshot;
 }

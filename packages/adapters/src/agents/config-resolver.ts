@@ -4,6 +4,7 @@ import type {
   AgentConfig,
   AgentConfigFile,
   AgentConfigResolverContract,
+  AgentInventoryEntry,
   AgentStepOverride,
 } from "../config/types";
 import {
@@ -85,17 +86,24 @@ export class AgentConfigResolver implements AgentConfigResolverContract {
     };
   }
 
-  listAgents(): Array<{ name: string; config: AgentConfig }> {
+  listAgentInventory(): AgentInventoryEntry[] {
     const names = new Set<string>([
       ...Object.keys(this.globalConfig.agents ?? {}),
       ...Object.keys(this.projectConfig.agents ?? {}),
     ]);
 
     if (names.size === 0) {
-      names.add("default");
+      return [{ name: "default", source: "default-fallback" }];
     }
 
     return [...names].sort().map((name) => ({
+      name,
+      source: "config",
+    }));
+  }
+
+  listAgents(): Array<{ name: string; config: AgentConfig }> {
+    return this.listAgentInventory().map(({ name }) => ({
       name,
       config: this.resolve(name),
     }));

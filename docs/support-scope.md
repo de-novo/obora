@@ -72,6 +72,7 @@ top-level CLI가 아니라도 현재 코드/패키지 기준으로 사용 가능
 - `obora quickstart`
 - `obora doctor`
 - `obora models`
+- `obora agents`
 - `obora auth`
 
 #### workflow 검증 / 실행
@@ -126,6 +127,7 @@ obora audit query <runId>
 
 - onboarding surface
 - config/auth/model discovery
+- read-only agent resolution inspection
 - workflow validate/expand/run/judge
 - operational inspection and recovery
 
@@ -190,24 +192,18 @@ obora audit query <runId>
 
 아래는 “완전히 삭제된 것”은 아니지만 현재 live support로 보지 않습니다.
 
-- `obora agents`
 - `obora dashboard`
-
-이 둘은 현재 상태가 다릅니다.
-
-#### `agents`
-
-- 현재는 live command 아님
-- 필요 시 revival 후보는 될 수 있음
-- 다만 현재는 `doctor / models / auth / config editing`으로 역할을 대체
-- raw YAML mutation helper 수준이면 다시 열지 않음
-- preconditions 문서: `docs/plans/2026-04-18-agents-cli-revival-preconditions.md`
 
 #### `dashboard`
 
 - package capability는 있으나 live CLI는 아님
 - M4 이후 product decision + bootstrap contract 정리 전까지 defer
 - roadmap 문서: `docs/plans/2026-04-15-dashboard-cli-m4-roadmap.md`
+
+추가 메모:
+
+- `obora agents`는 이제 read-only `list/show` 범위로 live support에 포함됩니다.
+- 다만 mutation surface(`set/reset`)는 여전히 deferred이며 A3 검토 전까지 열지 않습니다.
 
 상세 기준:
 

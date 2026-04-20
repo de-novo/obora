@@ -25,16 +25,17 @@ The following files are only re-export shims:
 - `packages/cli/src/commands/new.ts` -> `./_legacy/new.js`
 - `packages/cli/src/commands/done.ts` -> `./_legacy/done.js`
 - `packages/cli/src/commands/skills.ts` -> `./_legacy/skills.js`
-- `packages/cli/src/commands/agents.ts` -> `./_legacy/agents.js`
 - `packages/cli/src/commands/dashboard.ts` -> `./_legacy/dashboard.js`
 
 `packages/cli/src/commands/status.ts` has since been redesigned as a live top-level command over persisted runs/DLQ state and is no longer just a shim.
 
 `packages/cli/src/commands/auth.ts` has since been redesigned as a live top-level command over the current provider-auth store and is no longer just a shim.
 
+`packages/cli/src/commands/agents.ts` has since been redesigned as a live read-only command over adapters/sdk agent snapshots and is no longer just a shim.
+
 ### Registration
 
-`status` and `auth` are now registered in `createCLI()` as live commands.
+`status`, `auth`, and read-only `agents` are now registered in `createCLI()` as live commands.
 
 The remaining legacy-boundary targets above are still not added in `createCLI()`.
 
@@ -87,11 +88,6 @@ Recommended order:
 
 ### Defer until a fresh product/UX decision exists
 
-- `agents`
-  - current wrapper directly edits `.obora/config.yaml` / `~/.obora/config.yaml` with raw YAML writes and has no live-command tests or modern shared-contract wiring.
-  - current runtime onboarding already leans on explicit config editing plus `doctor` / `models` / `auth`, so a separate top-level agents surface needs a new UX decision before revival.
-  - revival preconditions are tracked in `docs/plans/2026-04-18-agents-cli-revival-preconditions.md`.
-  - if A2 ever starts, the read-only contract baseline is `docs/plans/2026-04-18-agents-readonly-cli-contract.md`.
 - `dashboard`
   - `docs/m3-sdk-cli-design.md` marks dashboard UI as out of scope for M3 and keeps `@obora/dashboard` as an M4 concern.
   - current wrapper is only a thin `createDashboardServer()` launcher with `open(...)` and `process.exit(0)` signal handling, not a modern CLI contract surface.
@@ -101,9 +97,10 @@ Recommended order:
 
 - `status` was redesigned and registered as a live top-level surface.
 - `auth` was redesigned and registered as a live top-level surface.
+- `agents` was redesigned and registered as a live read-only top-level surface.
 - `new` / `done` are now explicitly classified as legacy-only unless the feature-centric workflow returns.
-- `agents` / `dashboard` are explicitly deferred until a fresh product UX decision exists.
-- Revival criteria for those deferred surfaces are tracked in `docs/deferred-surface-revival-criteria.md`.
+- `dashboard` remains explicitly deferred until a fresh product UX decision exists.
+- Revival criteria for remaining deferred surfaces are tracked in `docs/deferred-surface-revival-criteria.md`.
 - The remaining legacy surfaces were not promoted automatically.
-- `packages/cli/src/commands/__tests__/cli-commands.test.ts` now asserts that `new` / `done` / `skills` / `agents` / `dashboard` stay out of `createCLI()` until a deliberate redesign happens.
+- `packages/cli/src/commands/__tests__/cli-commands.test.ts` now asserts that `new` / `done` / `skills` / `dashboard` stay out of `createCLI()` until a deliberate redesign happens.
 - Audit conclusion recorded here so future promotion work starts from an explicit baseline rather than accidentally wiring legacy commands into the live CLI.

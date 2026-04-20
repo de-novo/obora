@@ -192,14 +192,13 @@ obora resume <runId>
 - `obora new`
 - `obora done`
 - `obora skills`
-- `obora agents`
 - `obora dashboard`
 
 의미:
 
 - 문서/코드 흔적이 있어도 현재 운영 명령으로 간주하지 않음
 - `dashboard`는 package capability는 있으나 live CLI surface는 아님
-- `agents`는 별도 revival 기준 문서가 생기기 전까지 defer 유지
+- `agents`는 이제 read-only `list/show`만 live이고 mutation은 아직 defer 상태임
 
 관련 문서:
 

@@ -1,8 +1,8 @@
 # Agents Read-only CLI Contract
 
-> For Hermes: 이 문서는 `obora agents`를 live top-level command로 즉시 되살리라는 뜻이 아닙니다. A2가 실제로 필요해질 때, mutation 없는 read-only introspection surface를 어떤 최소 계약으로 열어야 하는지 고정하는 문서입니다.
+> For Hermes: 이 문서는 `obora agents` A2 read-only revival에 사용된 최소 계약 기록입니다. 현재 live `list/show` 구현은 이 문서를 baseline으로 삼고, 이후 변경도 이 계약을 기준으로 맞춥니다.
 
-Goal: `obora agents`를 다시 열어야 한다면 raw YAML mutation wrapper가 아니라 현재 A1 snapshot helper를 소비하는 read-only operator surface로만 시작한다.
+Goal: `obora agents`는 raw YAML mutation wrapper가 아니라 현재 A1 snapshot helper를 소비하는 read-only operator surface로 유지한다.
 
 Architecture: CLI는 `@obora/adapters` / `@obora/sdk` helper를 소비하는 thin formatter여야 한다. config provenance는 adapters snapshot, execution-only source는 sdk snapshot이 소유한다. CLI는 YAML을 직접 파싱하거나 config file을 직접 수정하지 않는다.
 

@@ -46,6 +46,7 @@ describe("M3 CLI command IA", () => {
         "quickstart",
         "judge",
         "models",
+        "agents",
         "auth",
         "artifact",
         "resume",
@@ -59,9 +60,7 @@ describe("M3 CLI command IA", () => {
     const cli = createCLI();
     const names = cli.commands.map((command) => command.name());
 
-    expect(names).not.toEqual(
-      expect.arrayContaining(["new", "done", "skills", "agents", "dashboard"])
-    );
+    expect(names).not.toEqual(expect.arrayContaining(["new", "done", "skills", "dashboard"]));
   });
 
   it("has run command options", () => {

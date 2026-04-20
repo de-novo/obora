@@ -489,6 +489,24 @@ describe("error handler and formatter", () => {
     ).toBe(null);
   });
 
+  it("suppresses generic hints for agents command errors", () => {
+    process.argv = ["node", "obora", "agents", "show", "missing-agent"];
+
+    expect(
+      inferNextCommand(
+        new CLIError("Agent not found in visible sources: missing-agent", ExitCode.VALIDATION_ERROR)
+      )
+    ).toBe(null);
+    expect(
+      inferNextCommand(
+        new CLIError(
+          "Failed to build agent snapshot: config disk offline",
+          ExitCode.EXECUTION_FAILED
+        )
+      )
+    ).toBe(null);
+  });
+
   it("suppresses generic hints for onboarding scaffold command errors", () => {
     process.argv = ["node", "obora", "init", "demo"];
 

@@ -2,18 +2,19 @@
 
 Updated: 2026-04-18
 
-이 문서는 현재 live CLI에 포함되지 않은 deferred surface 중 특히 `agents`와 `dashboard`를 언제, 어떤 조건에서 다시 열지 판단하기 위한 기준입니다.
+이 문서는 현재 deferred 상태인 surface와, 이미 일부 복구된 surface의 다음 단계(`agents` mutation) 조건을 함께 정리합니다.
 
 대상:
 
-- `obora agents`
+- `obora agents` mutation surface (`set/reset`)
 - `obora dashboard`
 
 전제:
 
-- 둘 다 현재 top-level live CLI surface가 아닙니다.
-- 둘 다 단순히 legacy wrapper를 `createCLI()`에 다시 꽂는 방식으로는 복구하지 않습니다.
-- revival은 product 필요 + operator UX + shared CLI contract + 테스트/문서 정합성이 동시에 만족될 때만 진행합니다.
+- `agents`의 read-only `list/show`는 이미 live top-level CLI surface입니다.
+- `dashboard`는 아직 top-level live CLI surface가 아닙니다.
+- 둘 다 단순히 legacy wrapper를 `createCLI()`에 다시 꽂는 방식으로는 확장/복구하지 않습니다.
+- 추가 revival은 product 필요 + operator UX + shared CLI contract + 테스트/문서 정합성이 동시에 만족될 때만 진행합니다.
 
 ---
 
@@ -99,13 +100,22 @@ deferred surface는 기준 문서만 보고 판단하지 않고, 실제 구현 m
 
 ## 현재 상태
 
-현재 legacy wrapper는 아래 성격입니다.
+현재 상태는 두 층으로 나뉩니다.
+
+### 이미 live인 A2 read-only surface
+
+- `obora agents list`
+- `obora agents show <name>`
+- local/root `--json`
+- shared exit-code / hint suppression / regression tests 반영
+
+### 아직 deferred인 legacy mutation surface
+
+legacy wrapper는 여전히 아래 성격입니다.
 
 - `.obora/config.yaml` / `~/.obora/config.yaml`를 raw YAML write로 직접 수정
-- `list/show/set/reset` 수준의 단순 config helper
-- shared CLI contract 없음
-- live top-level tests 없음
-- current onboarding path에서 필수 surface가 아님
+- `set/reset` mutation 중심 helper
+- modern live contract와 직접 연결하지 않음
 
 현재 live 대체 수단:
 
@@ -178,20 +188,19 @@ deferred surface는 기준 문서만 보고 판단하지 않고, 실제 구현 m
 
 ### 결론
 
-현재 기준으로 `agents`는 “필요하면 나중에 read-only introspection부터 여는 후보”이지, 바로 live top-level command로 복구할 대상은 아닙니다.
+현재 기준으로 `agents`는 read-only introspection까지는 live로 복구되었고, 남은 deferred 범위는 mutation surface뿐입니다.
 
 즉 우선순위:
 
-1. agent config resolution visibility 필요성 확인
-2. package/helper boundary 정리
-3. read-only surface부터 판단
-4. mutation surface는 그 다음
+1. current read-only A2를 thin/read-only로 유지
+2. agent config resolution visibility와 mutation 필요를 분리해서 본다
+3. mutation surface는 실제 반복 운영 pain이 입증될 때만 검토한다
 
 현재 milestone 매핑:
 
-- A0: defer 유지
+- A0: historical defer baseline
 - A1: package-level resolution snapshot helper
-- A2: 필요 시 read-only introspection CLI
+- A2: read-only introspection CLI 구현 완료
 - A3: 실제 운영 pain이 반복될 때만 safe override 검토
 
 ---

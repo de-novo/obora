@@ -10,6 +10,7 @@
 - [`obora init`](#obora-init)
 - [`obora quickstart`](#obora-quickstart)
 - [`obora models`](#obora-models)
+- [`obora agents`](#obora-agents)
 - [`obora doctor`](#obora-doctor)
 - [`obora auth`](#obora-auth)
 - [`obora expand`](#obora-expand)
@@ -119,6 +120,7 @@ Use these when you want to confirm config, auth, workflow shape, or expanded exe
 
 - `obora doctor`
 - `obora models`
+- `obora agents`
 - `obora auth`
 - `obora validate`
 - `obora expand`
@@ -226,6 +228,43 @@ obora --json models anthropic sonnet
 - with a provider, lists the supported model refs for that provider
 - if you pass an explicit provider plus query and the provider is unknown, exits with code `2`
 - useful for choosing a valid `OPENAI_MODEL`, `ANTHROPIC_MODEL`, or `providers.<name>.defaultModel`
+
+---
+
+## `obora agents`
+
+Inspect visible agent resolution without mutating config.
+
+### Usage
+
+```bash
+obora agents list
+obora agents list --json
+obora agents show reviewer
+obora agents show reviewer --json
+obora --json agents show reviewer
+```
+
+### Subcommands
+
+- `agents list` — list visible agent names with compact resolution summaries
+- `agents show <name>` — show layered config provenance plus execution-source visibility for one agent
+
+### Behavior
+
+- read-only only; `set` / `reset` mutation verbs are intentionally not part of the live command
+- supports both local `--json` and root `obora --json agents ...`
+- consumes adapters/sdk snapshot helpers instead of parsing YAML directly in the CLI
+- `list` returns a compact summary payload and text inventory view
+- `show` returns config provenance and execution-source visibility separately
+- missing visible agents exit with code `2`
+- inventory/snapshot load failures exit with code `3`
+
+### Exit Codes
+
+- `0` command completed successfully
+- `2` agent not found in visible sources
+- `3` failed to load agent inventory / failed to build agent snapshot
 
 ---
 

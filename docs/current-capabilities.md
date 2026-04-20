@@ -287,7 +287,6 @@ legacy audit 기준, 아래는 현재 top-level live CLI가 아닙니다.
 - `obora new`
 - `obora done`
 - `obora skills`
-- `obora agents`
 - `obora dashboard`
 
 현재 판단:
@@ -306,13 +305,13 @@ legacy audit 기준, 아래는 현재 top-level live CLI가 아닙니다.
 
 ### defer된 것
 
-- `agents`
 - `dashboard`
+- `agents` mutation surface (`set/reset`)
 
 사유:
 
-- modern shared contract 기준으로 재설계가 아직 안 끝남
-- product UX 결정이 먼저 필요함
+- `agents` read-only `list/show`는 live로 복구됐지만 mutation contract는 아직 열지 않음
+- `dashboard`는 modern shared contract 기준 재설계와 product UX 결정이 먼저 필요함
 - `dashboard`는 현재 명시적으로 M4 concern
 
 ---
@@ -324,8 +323,9 @@ legacy audit 기준, 아래는 현재 top-level live CLI가 아닙니다.
 1. onboarding은 `quickstart / doctor / validate / judge` 기준으로 본다
 2. 일반 실행 surface는 `run / validate / expand / test` 기준으로 본다
 3. 운영 surface는 `status / runs / inspect / resume / dlq / artifact / audit` 기준으로 본다
-4. legacy wrapper(`new/done/skills/agents/dashboard`)는 live feature로 간주하지 않는다
-5. dashboard는 package capability로만 보고 CLI capability로는 아직 제외한다
+4. legacy wrapper(`new/done/skills/dashboard`)는 live feature로 간주하지 않는다
+5. `agents`는 read-only `list/show`만 live로 보고 mutation은 아직 제외한다
+6. dashboard는 package capability로만 보고 CLI capability로는 아직 제외한다
 
 ---
 
@@ -334,5 +334,5 @@ legacy audit 기준, 아래는 현재 top-level live CLI가 아닙니다.
 기능 정리 관점에서 다음 후보는 아래입니다.
 
 1. support scope 문서를 README / docs 진입점에 더 촘촘히 연결하기
-2. deferred surface(`agents`, `dashboard`)를 언제 revive할지 제품 판단 기준을 실제 구현 milestone과 연결하기
+2. `agents` mutation surface와 `dashboard` revival 기준을 실제 구현 milestone과 계속 연결하기
    - see `docs/deferred-surface-revival-criteria.md`

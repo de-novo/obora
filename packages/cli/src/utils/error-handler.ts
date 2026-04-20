@@ -125,6 +125,7 @@ function inferNextCommand(err: unknown): string | null {
     commandContext.activeCommand === "runs" ||
     commandContext.activeCommand === "artifact" ||
     commandContext.activeCommand === "knowledge" ||
+    commandContext.activeCommand === "agents" ||
     commandContext.activeCommand === "audit" ||
     commandContext.activeCommand === "models" ||
     commandContext.activeCommand === "policy" ||
@@ -149,6 +150,9 @@ function inferNextCommand(err: unknown): string | null {
     message.includes("artifact json output requires") ||
     message.includes("knowledge schema") ||
     message.includes("knowledge file") ||
+    message.includes("agent not found in visible sources") ||
+    message.includes("failed to load agent inventory") ||
+    message.includes("failed to build agent snapshot") ||
     message.includes("knowledge limit") ||
     message.includes("knowledge min-confidence") ||
     message.includes("invalid audit ") ||

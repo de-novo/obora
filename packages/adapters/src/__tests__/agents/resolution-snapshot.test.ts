@@ -146,4 +146,43 @@ describe("agent resolution snapshot", () => {
       expect("executionSources" in snapshot).toBe(false);
     });
   });
+
+  it("lists visible agent inventory without forcing resolution", async () => {
+    vi.spyOn(FileAuthManager.prototype, "listProviders").mockResolvedValue([]);
+
+    await withIsolatedResolver(async ({ projectDir }) => {
+      await mkdir(join(projectDir, ".obora"), { recursive: true });
+      await writeFile(
+        join(projectDir, ".obora", "config.yaml"),
+        [
+          "agents:",
+          "  reviewer:",
+          "    provider: openai",
+          "    model: gpt-5",
+          "  critic:",
+          "    provider: anthropic",
+        ].join("\n"),
+        "utf-8"
+      );
+
+      const resolver = await AgentConfigResolver.create(projectDir);
+
+      expect(resolver.listAgentInventory()).toEqual([
+        { name: "critic", source: "config" },
+        { name: "reviewer", source: "config" },
+      ]);
+    });
+  });
+
+  it("exposes default fallback inventory when no named agents are configured", async () => {
+    vi.spyOn(FileAuthManager.prototype, "listProviders").mockResolvedValue([]);
+
+    await withIsolatedResolver(async ({ projectDir }) => {
+      const resolver = await AgentConfigResolver.create(projectDir);
+
+      expect(resolver.listAgentInventory()).toEqual([
+        { name: "default", source: "default-fallback" },
+      ]);
+    });
+  });
 });
