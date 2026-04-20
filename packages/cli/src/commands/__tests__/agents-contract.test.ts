@@ -542,6 +542,9 @@ describe("agents command contracts", () => {
       scope: "project",
       agentName: "reviewer",
       targetPath: `${process.cwd()}/.obora/config.yaml`,
+      requested: { provider: "openai", model: "gpt-5.4" },
+      resolvedOverride: { provider: "openai", model: "gpt-5.4" },
+      changedKeys: ["model", "timeout"],
       before: { provider: "openai", model: "gpt-4.1" },
       after: { provider: "openai", model: "gpt-5.4", timeout: 90 },
       warnings: [],
@@ -599,6 +602,9 @@ describe("agents command contracts", () => {
       scope: "project",
       agentName: "reviewer",
       targetPath: `${process.cwd()}/.obora/config.yaml`,
+      requested: { model: "gpt-5.4" },
+      resolvedOverride: { provider: "openai", model: "gpt-5.4" },
+      changedKeys: ["model"],
       before: { provider: "openai", model: "gpt-4.1", timeout: 90 },
       after: { provider: "openai", model: "gpt-5.4", timeout: 90 },
       warnings: [],
@@ -642,6 +648,7 @@ describe("agents command contracts", () => {
       scope: "global",
       agentName: "reviewer",
       targetPath: "/Users/test/.obora/config.yaml",
+      changedKeys: ["model", "provider"],
       before: { provider: "openai", model: "gpt-5.4" },
       after: null,
       warnings: [],
@@ -675,6 +682,9 @@ describe("agents command contracts", () => {
     expect(output).toContain("- action: set");
     expect(output).toContain("- scope: project");
     expect(output).toContain("- target: ");
+    expect(output).toContain("- requested: provider=openai, model=gpt-5.4");
+    expect(output).toContain("- resolved override: provider=openai, model=gpt-5.4");
+    expect(output).toContain("- changed: model, timeout");
     expect(output).toContain("- next: obora agents show reviewer");
   });
 

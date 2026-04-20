@@ -269,6 +269,7 @@ obora --json agents show reviewer
 - `show` text mode also prints the current cwd plus resolved `--agents` / `--workflow` paths as a context summary
 - `set/reset` only touch project/global `.obora/config.yaml` and never mutate `agentsPath`, workflow-local `agents`, or runtime registrations
 - `set/reset --dry-run` return preview output without writing config
+- mutation text/JSON payloads include changed keys, and `set` also includes requested vs resolved override values
 - `set` accepts full `--provider` + `--model`, or a partial override when the missing field already exists in the same target config layer
 - `--agents` and `--workflow` let `list/show` truthfully include execution-only sources instead of showing only config-side visibility
 - mutation validation failures exit with code `2`

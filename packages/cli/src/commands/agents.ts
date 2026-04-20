@@ -281,12 +281,66 @@ function formatMutationValues(values: AgentOverridePreview["before"]): string {
   return formatAppliedValues(values as Record<string, unknown>);
 }
 
-function printAgentMutationText(result: AgentOverridePreview, mode: "preview" | "applied"): void {
+function toRecord(values: AgentOverridePreview["before"]): Record<string, unknown> {
+  return values ? (values as Record<string, unknown>) : {};
+}
+
+function buildRequestedMutationValues(
+  action: "set" | "reset",
+  options: AgentsMutationOptions
+): Partial<Record<"provider" | "model", string>> {
+  if (action !== "set") {
+    return {};
+  }
+
+  return {
+    ...(options.provider ? { provider: options.provider } : {}),
+    ...(options.model ? { model: options.model } : {}),
+  };
+}
+
+function buildResolvedMutationValues(
+  action: "set" | "reset",
+  result: AgentOverridePreview
+): Partial<Record<"provider" | "model", string>> {
+  if (action !== "set" || !result.after) {
+    return {};
+  }
+
+  return {
+    ...(result.after.provider ? { provider: result.after.provider } : {}),
+    ...(result.after.model ? { model: result.after.model } : {}),
+  };
+}
+
+function buildChangedMutationKeys(result: AgentOverridePreview): string[] {
+  const before = toRecord(result.before);
+  const after = toRecord(result.after);
+  const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])].sort();
+  return keys.filter((key) => !Object.is(before[key], after[key]));
+}
+
+function printAgentMutationText(
+  result: AgentOverridePreview,
+  mode: "preview" | "applied",
+  summary: {
+    requested: Partial<Record<"provider" | "model", string>>;
+    resolvedOverride: Partial<Record<"provider" | "model", string>>;
+    changedKeys: string[];
+  }
+): void {
   console.log(mode === "preview" ? "Agent override preview" : "Agent override applied");
   console.log(`- action: ${result.action}`);
   console.log(`- scope: ${result.scope}`);
   console.log(`- target: ${result.targetPath}`);
   console.log(`- agent: ${result.agentName}`);
+  if (Object.keys(summary.requested).length > 0) {
+    console.log(`- requested: ${formatAppliedValues(summary.requested)}`);
+  }
+  if (Object.keys(summary.resolvedOverride).length > 0) {
+    console.log(`- resolved override: ${formatAppliedValues(summary.resolvedOverride)}`);
+  }
+  console.log(`- changed: ${summary.changedKeys.join(", ") || "none"}`);
   console.log(`- before: ${formatMutationValues(result.before)}`);
   console.log(`- after: ${formatMutationValues(result.after)}`);
   if (result.warnings.length > 0) {
@@ -374,6 +428,9 @@ async function executeAgentMutation(
       ? await previewAgentOverride(mutationInput)
       : await applyAgentOverride(mutationInput);
     const mode = options.dryRun ? "preview" : "applied";
+    const requested = buildRequestedMutationValues(action, options);
+    const resolvedOverride = buildResolvedMutationValues(action, result);
+    const changedKeys = buildChangedMutationKeys(result);
 
     if (json) {
       formatter.json({
@@ -382,6 +439,9 @@ async function executeAgentMutation(
         scope: result.scope,
         agentName,
         targetPath: result.targetPath,
+        ...(Object.keys(requested).length > 0 ? { requested } : {}),
+        ...(Object.keys(resolvedOverride).length > 0 ? { resolvedOverride } : {}),
+        changedKeys,
         before: result.before,
         after: result.after,
         warnings: result.warnings,
@@ -390,7 +450,7 @@ async function executeAgentMutation(
       return;
     }
 
-    printAgentMutationText(result, mode);
+    printAgentMutationText(result, mode, { requested, resolvedOverride, changedKeys });
   } catch (error) {
     throw toMutationCLIError(error);
   }
