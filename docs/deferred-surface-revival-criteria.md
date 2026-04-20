@@ -1,6 +1,6 @@
 # Deferred Surface Revival Criteria
 
-Updated: 2026-04-18
+Updated: 2026-04-20
 
 이 문서는 현재 deferred 상태인 surface와, 이미 일부 복구된 surface의 다음 단계(`agents` mutation) 조건을 함께 정리합니다.
 
@@ -85,6 +85,7 @@ deferred surface는 기준 문서만 보고 판단하지 않고, 실제 구현 m
 
 - `agents`
   - preconditions: `docs/plans/2026-04-18-agents-cli-revival-preconditions.md`
+  - A3 roadmap: `docs/plans/2026-04-20-agents-safe-override-a3-roadmap.md`
 - `dashboard`
   - roadmap: `docs/plans/2026-04-15-dashboard-cli-m4-roadmap.md`
 
@@ -128,6 +129,7 @@ legacy wrapper는 여전히 아래 성격입니다.
 연결 milestone 문서:
 
 - `docs/plans/2026-04-18-agents-cli-revival-preconditions.md`
+- `docs/plans/2026-04-20-agents-safe-override-a3-roadmap.md`
 
 ### revival을 고려해도 되는 조건
 
@@ -201,7 +203,7 @@ legacy wrapper는 여전히 아래 성격입니다.
 - A0: historical defer baseline
 - A1: package-level resolution snapshot helper
 - A2: read-only introspection CLI 구현 완료
-- A3: 실제 운영 pain이 반복될 때만 safe override 검토
+- A3: `docs/plans/2026-04-20-agents-safe-override-a3-roadmap.md` 기준으로만 safe override 검토
 
 ---
 

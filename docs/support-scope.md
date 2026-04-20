@@ -204,6 +204,7 @@ obora audit query <runId>
 
 - `obora agents`는 이제 read-only `list/show` 범위로 live support에 포함됩니다.
 - 다만 mutation surface(`set/reset`)는 여전히 deferred이며 A3 검토 전까지 열지 않습니다.
+- A3 후보는 `docs/plans/2026-04-20-agents-safe-override-a3-roadmap.md` 기준으로만 다룹니다.
 
 상세 기준:
 

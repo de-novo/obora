@@ -169,6 +169,11 @@ Acceptance criteria:
 
 ### A3. Safe override surface only if repeated operator need exists
 
+Status:
+
+- 아직 미구현
+- roadmap fixed in `docs/plans/2026-04-20-agents-safe-override-a3-roadmap.md`
+
 Objective:
 
 - set/reset은 read-only introspection 이후에도 실제 운영 pain이 반복될 때만 검토
@@ -207,7 +212,8 @@ Acceptance criteria:
 4. A2 read-only CLI contract 확인
    - UX contract: `docs/plans/2026-04-18-agents-readonly-cli-contract.md`
 5. 필요할 때만 A2 구현
-6. mutation need가 입증된 뒤에만 A3 검토
+6. mutation need가 입증된 뒤에만 A3 roadmap 확인
+   - roadmap: `docs/plans/2026-04-20-agents-safe-override-a3-roadmap.md`
 
 즉 `set/reset`부터 다시 여는 접근은 금지에 가깝게 보는 편이 맞습니다.
 
