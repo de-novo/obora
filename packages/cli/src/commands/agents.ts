@@ -1,6 +1,11 @@
 import { resolve as resolvePath } from "node:path";
 
 import {
+  applyAgentOverride,
+  previewAgentOverride,
+  type AgentOverridePreview,
+} from "@obora/adapters";
+import {
   buildExecutionAgentInventory,
   buildExecutionAgentSnapshot,
   Workflow,
@@ -19,6 +24,14 @@ interface AgentsCommandOptions {
   json?: boolean;
   agents?: string;
   workflow?: string;
+}
+
+interface AgentsMutationOptions {
+  json?: boolean;
+  scope?: string;
+  dryRun?: boolean;
+  provider?: string;
+  model?: string;
 }
 
 interface AgentExecutionContext {
@@ -64,6 +77,29 @@ function buildAgentContextSummary(cwd: string, options: AgentsCommandOptions): A
 
 function formatContextPath(path?: string): string {
   return path ?? "not provided";
+}
+
+function getNextAgentCommand(action: "set" | "reset", agentName: string): string {
+  return action === "set" ? `obora agents show ${agentName}` : "obora agents list";
+}
+
+function isMutationValidationMessage(message: string): boolean {
+  return (
+    message.startsWith("Invalid agents scope:") ||
+    message === "Agent override preview requires both provider and model" ||
+    message.startsWith("Unsupported agent provider override:") ||
+    message.startsWith("Unsupported agent model override for provider")
+  );
+}
+
+function toMutationCLIError(error: unknown): CLIError {
+  const message = getErrorMessage(error);
+
+  if (isMutationValidationMessage(message)) {
+    return new CLIError(message, ExitCode.VALIDATION_ERROR);
+  }
+
+  return new CLIError(message, ExitCode.EXECUTION_FAILED);
 }
 
 async function loadAgentExecutionContext(
@@ -233,6 +269,28 @@ function printAgentShowText(
   }
 }
 
+function formatMutationValues(values: AgentOverridePreview["before"]): string {
+  if (!values) {
+    return "none";
+  }
+
+  return formatAppliedValues(values as Record<string, unknown>);
+}
+
+function printAgentMutationText(result: AgentOverridePreview, mode: "preview" | "applied"): void {
+  console.log(mode === "preview" ? "Agent override preview" : "Agent override applied");
+  console.log(`- action: ${result.action}`);
+  console.log(`- scope: ${result.scope}`);
+  console.log(`- target: ${result.targetPath}`);
+  console.log(`- agent: ${result.agentName}`);
+  console.log(`- before: ${formatMutationValues(result.before)}`);
+  console.log(`- after: ${formatMutationValues(result.after)}`);
+  if (result.warnings.length > 0) {
+    console.log(`- warnings: ${result.warnings.join(" | ")}`);
+  }
+  console.log(`- next: ${getNextAgentCommand(result.action, result.agentName)}`);
+}
+
 async function runAgentsList(
   options: AgentsCommandOptions,
   globalOpts: GlobalOptions
@@ -286,9 +344,73 @@ async function runAgentsShow(
   printAgentShowText(snapshot, contextSummary);
 }
 
+async function executeAgentMutation(
+  action: "set" | "reset",
+  agentName: string,
+  options: AgentsMutationOptions,
+  globalOpts: GlobalOptions
+): Promise<void> {
+  const cwd = process.cwd();
+  const json = shouldOutputJson(options.json, globalOpts);
+
+  try {
+    const mutationInput = {
+      action,
+      scope: options.scope,
+      cwd,
+      agentName,
+      ...(action === "set"
+        ? {
+            provider: options.provider,
+            model: options.model,
+          }
+        : {}),
+    };
+    const result = options.dryRun
+      ? await previewAgentOverride(mutationInput)
+      : await applyAgentOverride(mutationInput);
+    const mode = options.dryRun ? "preview" : "applied";
+
+    if (json) {
+      formatter.json({
+        command: `agents ${action}`,
+        mode,
+        scope: result.scope,
+        agentName,
+        targetPath: result.targetPath,
+        before: result.before,
+        after: result.after,
+        warnings: result.warnings,
+        nextCommand: getNextAgentCommand(action, agentName),
+      });
+      return;
+    }
+
+    printAgentMutationText(result, mode);
+  } catch (error) {
+    throw toMutationCLIError(error);
+  }
+}
+
+async function runAgentsSet(
+  agentName: string,
+  options: AgentsMutationOptions,
+  globalOpts: GlobalOptions
+): Promise<void> {
+  await executeAgentMutation("set", agentName, options, globalOpts);
+}
+
+async function runAgentsReset(
+  agentName: string,
+  options: AgentsMutationOptions,
+  globalOpts: GlobalOptions
+): Promise<void> {
+  await executeAgentMutation("reset", agentName, options, globalOpts);
+}
+
 export function createAgentsCommand(): Command {
   const agents = new Command("agents").description(
-    "Inspect visible agent resolution without mutating config"
+    "Inspect visible agent resolution and safely manage config-layer overrides"
   );
 
   agents
@@ -313,6 +435,34 @@ export function createAgentsCommand(): Command {
     .action(async function (this: Command, name: string, options: AgentsCommandOptions) {
       const globalOpts = getGlobalOpts(this);
       await handleCommandAction(() => runAgentsShow(name, options, globalOpts), {
+        verbose: Boolean(globalOpts.verbose),
+      });
+    });
+
+  agents
+    .command("set <name>")
+    .description("Set config-layer provider/model overrides for an agent")
+    .option("--provider <provider>", "Provider name")
+    .option("--model <model>", "Model ref")
+    .option("--scope <scope>", "project|global", "project")
+    .option("--dry-run", "Preview the mutation without writing config")
+    .option("--json", "Output as JSON")
+    .action(async function (this: Command, name: string, options: AgentsMutationOptions) {
+      const globalOpts = getGlobalOpts(this);
+      await handleCommandAction(() => runAgentsSet(name, options, globalOpts), {
+        verbose: Boolean(globalOpts.verbose),
+      });
+    });
+
+  agents
+    .command("reset <name>")
+    .description("Reset config-layer overrides for an agent")
+    .option("--scope <scope>", "project|global", "project")
+    .option("--dry-run", "Preview the mutation without writing config")
+    .option("--json", "Output as JSON")
+    .action(async function (this: Command, name: string, options: AgentsMutationOptions) {
+      const globalOpts = getGlobalOpts(this);
+      await handleCommandAction(() => runAgentsReset(name, options, globalOpts), {
         verbose: Boolean(globalOpts.verbose),
       });
     });

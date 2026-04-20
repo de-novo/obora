@@ -2,16 +2,16 @@
 
 Updated: 2026-04-20
 
-이 문서는 현재 deferred 상태인 surface와, 이미 일부 복구된 surface의 다음 단계(`agents` mutation) 조건을 함께 정리합니다.
+이 문서는 현재 deferred 상태인 surface와, 최근 live로 복구된 `agents`의 historical revival 기준을 함께 정리합니다.
 
 대상:
 
-- `obora agents` mutation surface (`set/reset`)
 - `obora dashboard`
+- historical record: `obora agents`
 
 전제:
 
-- `agents`의 read-only `list/show`는 이미 live top-level CLI surface입니다.
+- `agents`는 이제 `list/show/set/reset`이 live top-level CLI surface입니다.
 - `dashboard`는 아직 top-level live CLI surface가 아닙니다.
 - 둘 다 단순히 legacy wrapper를 `createCLI()`에 다시 꽂는 방식으로는 확장/복구하지 않습니다.
 - 추가 revival은 product 필요 + operator UX + shared CLI contract + 테스트/문서 정합성이 동시에 만족될 때만 진행합니다.
@@ -110,21 +110,21 @@ deferred surface는 기준 문서만 보고 판단하지 않고, 실제 구현 m
 - local/root `--json`
 - shared exit-code / hint suppression / regression tests 반영
 
-### 아직 deferred인 legacy mutation surface
+### historical legacy mutation surface
 
-legacy wrapper는 여전히 아래 성격입니다.
+legacy wrapper는 원래 아래 성격이었습니다.
 
 - `.obora/config.yaml` / `~/.obora/config.yaml`를 raw YAML write로 직접 수정
 - `set/reset` mutation 중심 helper
 - modern live contract와 직접 연결하지 않음
 
-현재 live 대체 수단:
+현재 live surface는 이미 아래로 대체/복구되었습니다.
 
-- `obora doctor`
-- `obora models`
-- `obora auth`
-- `.obora/config.yaml` 직접 편집
-- `agents.yaml` / runtime `agentsPath` 기반 설정
+- `obora agents set <name>`
+- `obora agents reset <name>`
+- `--dry-run` preview
+- project/global scope contract
+- adapters-owned mutation helper + CLI thin formatter
 
 연결 milestone 문서:
 
@@ -190,20 +190,20 @@ legacy wrapper는 여전히 아래 성격입니다.
 
 ### 결론
 
-현재 기준으로 `agents`는 read-only introspection까지는 live로 복구되었고, 남은 deferred 범위는 mutation surface뿐입니다.
+현재 기준으로 `agents`는 read-only introspection과 safe override surface까지 live로 복구되었습니다.
 
-즉 우선순위:
+즉 현재 원칙:
 
-1. current read-only A2를 thin/read-only로 유지
-2. agent config resolution visibility와 mutation 필요를 분리해서 본다
-3. mutation surface는 실제 반복 운영 pain이 입증될 때만 검토한다
+1. `list/show`는 resolution/execution visibility를 정직하게 보여준다
+2. `set/reset`은 config-layer override만 다룬다
+3. execution-only source(`agentsPath`, workflow-local `agents`, runtime registration`)는 여전히 mutation 대상이 아니다
 
 현재 milestone 매핑:
 
 - A0: historical defer baseline
 - A1: package-level resolution snapshot helper
 - A2: read-only introspection CLI 구현 완료
-- A3: `docs/plans/2026-04-20-agents-safe-override-a3-roadmap.md` 기준으로만 safe override 검토
+- A3: safe override surface 구현 완료 (`docs/plans/2026-04-20-agents-safe-override-a3-roadmap.md`)
 
 ---
 

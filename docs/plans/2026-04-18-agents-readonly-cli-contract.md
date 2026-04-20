@@ -387,5 +387,5 @@ No-Go if:
 
 Recommended release posture:
 
-- A2 should ship only as read-only `list/show`
-- A3 mutation discussion remains blocked until separate evidence appears
+- A2 should stay the read-side baseline for `list/show`
+- A3 mutation now ships separately as `set/reset` with adapters-owned mutation helpers

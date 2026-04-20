@@ -80,6 +80,7 @@ obora judge
 - `doctor`로 현재 project/global config, provider/model resolution, auth 상태, 다음 액션 확인
 - `models`로 provider별 사용 가능한 model ref 확인
 - `auth`로 `~/.obora/auth.json` 기반 provider auth 저장/조회/삭제/테스트
+- `agents list/show/set/reset`으로 agent-level resolution을 조회하고 project/global config-layer override를 안전하게 preview/apply
 
 ### 2.2 workflow authoring / validation / preview / execution
 
@@ -307,12 +308,9 @@ legacy audit 기준, 아래는 현재 top-level live CLI가 아닙니다.
 ### defer된 것
 
 - `dashboard`
-- `agents` mutation surface (`set/reset`)
 
 사유:
 
-- `agents` read-only `list/show`는 live로 복구됐지만 mutation contract는 아직 열지 않음
-- `agents` A3 후보는 `docs/plans/2026-04-20-agents-safe-override-a3-roadmap.md` 기준으로만 검토함
 - `dashboard`는 modern shared contract 기준 재설계와 product UX 결정이 먼저 필요함
 - `dashboard`는 현재 명시적으로 M4 concern
 
@@ -326,7 +324,7 @@ legacy audit 기준, 아래는 현재 top-level live CLI가 아닙니다.
 2. 일반 실행 surface는 `run / validate / expand / test` 기준으로 본다
 3. 운영 surface는 `status / runs / inspect / resume / dlq / artifact / audit` 기준으로 본다
 4. legacy wrapper(`new/done/skills/dashboard`)는 live feature로 간주하지 않는다
-5. `agents`는 read-only `list/show`만 live로 보고 mutation은 아직 제외한다
+5. `agents`는 `list/show/set/reset`을 live surface로 보고, execution-only source와 config-layer override를 구분해서 사용한다
 6. dashboard는 package capability로만 보고 CLI capability로는 아직 제외한다
 
 ---

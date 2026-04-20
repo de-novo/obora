@@ -1,6 +1,6 @@
 # Obora Agents CLI Revival Preconditions
 
-> For Hermes: 이 문서는 원래 `obora agents` revival 전 preconditions를 정리한 문서였습니다. 현재는 A2 read-only `list/show`가 live로 구현되었고, 이 문서는 남은 mutation(A3) 검토와 구현 순서 기록을 위한 baseline으로 유지합니다.
+> For Hermes: 이 문서는 원래 `obora agents` revival 전 preconditions를 정리한 문서였습니다. 현재는 A2 read-only `list/show`와 A3 safe override `set/reset`이 live로 구현되었고, 이 문서는 revival 전제와 구현 순서를 설명하는 historical baseline으로 유지합니다.
 
 Goal: `obora agents`를 단순 raw YAML mutation wrapper가 아니라, 현재 config resolution/runtime contract와 맞는 modern CLI surface로 다시 열 수 있는지 판단했던 단계별 기준과, 이후 mutation 논의를 어디까지 허용할지 남겨둔다.
 
@@ -171,8 +171,8 @@ Acceptance criteria:
 
 Status:
 
-- 아직 미구현
-- roadmap fixed in `docs/plans/2026-04-20-agents-safe-override-a3-roadmap.md`
+- 구현 완료
+- implementation record: `docs/plans/2026-04-20-agents-safe-override-a3-roadmap.md`
 
 Objective:
 
@@ -212,10 +212,10 @@ Acceptance criteria:
 4. A2 read-only CLI contract 확인
    - UX contract: `docs/plans/2026-04-18-agents-readonly-cli-contract.md`
 5. 필요할 때만 A2 구현
-6. mutation need가 입증된 뒤에만 A3 roadmap 확인
+6. 필요할 때만 A3 roadmap 기준으로 safe override 구현
    - roadmap: `docs/plans/2026-04-20-agents-safe-override-a3-roadmap.md`
 
-즉 `set/reset`부터 다시 여는 접근은 금지에 가깝게 보는 편이 맞습니다.
+현재는 `set/reset`도 thin/live surface로 복구되었고, 이 문서는 그 전제와 순서를 설명하는 기록 문서입니다.
 
 ---
 

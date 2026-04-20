@@ -24,6 +24,8 @@ vi.mock("@obora/adapters", () => ({
       listAgentInventory: () => agentsState.inventory,
     })),
   },
+  previewAgentOverride: vi.fn(),
+  applyAgentOverride: vi.fn(),
 }));
 
 vi.mock("@obora/sdk", () => ({
@@ -58,6 +60,7 @@ vi.mock("@obora/sdk", () => ({
   },
 }));
 
+import { applyAgentOverride, previewAgentOverride } from "@obora/adapters";
 import { buildExecutionAgentInventory, buildExecutionAgentSnapshot, Workflow } from "@obora/sdk";
 
 import { createAgentsCommand } from "../agents.js";
@@ -485,6 +488,167 @@ describe("agents command contracts", () => {
         },
       ],
     });
+  });
+
+  it("supports dry-run json preview for agents set", async () => {
+    vi.mocked(previewAgentOverride).mockResolvedValueOnce({
+      action: "set",
+      scope: "project",
+      agentName: "reviewer",
+      targetPath: `${process.cwd()}/.obora/config.yaml`,
+      before: { provider: "openai", model: "gpt-4.1" },
+      after: { provider: "openai", model: "gpt-5.4", timeout: 90 },
+      warnings: [],
+      nextConfigDocument: {
+        agents: {
+          reviewer: {
+            provider: "openai",
+            model: "gpt-5.4",
+            timeout: 90,
+          },
+        },
+      },
+      nextYaml: [
+        "agents:",
+        "  reviewer:",
+        "    provider: openai",
+        "    model: gpt-5.4",
+        "    timeout: 90",
+      ].join("\n"),
+    });
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createAgentsCommand();
+
+    await cmd.parseAsync(
+      ["set", "reviewer", "--provider", "openai", "--model", "gpt-5.4", "--dry-run", "--json"],
+      { from: "user" }
+    );
+
+    expect(applyAgentOverride).not.toHaveBeenCalled();
+    expect(previewAgentOverride).toHaveBeenCalledWith({
+      action: "set",
+      scope: "project",
+      cwd: process.cwd(),
+      agentName: "reviewer",
+      provider: "openai",
+      model: "gpt-5.4",
+    });
+
+    const payload = JSON.parse(log.mock.calls.at(-1)?.[0] ?? "{}");
+    expect(payload).toEqual({
+      command: "agents set",
+      mode: "preview",
+      scope: "project",
+      agentName: "reviewer",
+      targetPath: `${process.cwd()}/.obora/config.yaml`,
+      before: { provider: "openai", model: "gpt-4.1" },
+      after: { provider: "openai", model: "gpt-5.4", timeout: 90 },
+      warnings: [],
+      nextCommand: "obora agents show reviewer",
+    });
+  });
+
+  it("inherits root --json for applied agents reset output", async () => {
+    vi.mocked(applyAgentOverride).mockResolvedValueOnce({
+      action: "reset",
+      scope: "global",
+      agentName: "reviewer",
+      targetPath: "/Users/test/.obora/config.yaml",
+      before: { provider: "openai", model: "gpt-5.4" },
+      after: null,
+      warnings: [],
+      nextConfigDocument: { agents: {} },
+      nextYaml: "agents: {}\n",
+    });
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const root = new Command("obora").option("--json");
+    root.addCommand(createAgentsCommand());
+
+    await root.parseAsync(["--json", "agents", "reset", "reviewer", "--scope", "global"], {
+      from: "user",
+    });
+
+    expect(previewAgentOverride).not.toHaveBeenCalled();
+    expect(applyAgentOverride).toHaveBeenCalledWith({
+      action: "reset",
+      scope: "global",
+      cwd: process.cwd(),
+      agentName: "reviewer",
+    });
+
+    const payload = JSON.parse(log.mock.calls.at(-1)?.[0] ?? "{}");
+    expect(payload).toEqual({
+      command: "agents reset",
+      mode: "applied",
+      scope: "global",
+      agentName: "reviewer",
+      targetPath: "/Users/test/.obora/config.yaml",
+      before: { provider: "openai", model: "gpt-5.4" },
+      after: null,
+      warnings: [],
+      nextCommand: "obora agents list",
+    });
+  });
+
+  it("prints compact human-readable text for agents set preview", async () => {
+    vi.mocked(previewAgentOverride).mockResolvedValueOnce({
+      action: "set",
+      scope: "project",
+      agentName: "reviewer",
+      targetPath: `${process.cwd()}/.obora/config.yaml`,
+      before: { provider: "openai", model: "gpt-4.1" },
+      after: { provider: "openai", model: "gpt-5.4", timeout: 90 },
+      warnings: [],
+      nextConfigDocument: {},
+      nextYaml: "",
+    });
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createAgentsCommand();
+
+    await cmd.parseAsync(
+      ["set", "reviewer", "--provider", "openai", "--model", "gpt-5.4", "--dry-run"],
+      { from: "user" }
+    );
+
+    const output = log.mock.calls.map((args) => args.join(" ")).join("\n");
+    expect(output).toContain("Agent override preview");
+    expect(output).toContain("- action: set");
+    expect(output).toContain("- scope: project");
+    expect(output).toContain("- target: ");
+    expect(output).toContain("- next: obora agents show reviewer");
+  });
+
+  it("uses validation exit code for mutation validation failures", async () => {
+    vi.mocked(applyAgentOverride).mockRejectedValueOnce(
+      new Error("Agent override preview requires both provider and model")
+    );
+
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const cmd = createAgentsCommand();
+
+    await cmd.parseAsync(["set", "reviewer", "--provider", "openai"], { from: "user" });
+
+    expect(process.exit).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(ExitCode.VALIDATION_ERROR);
+    expect(error).toHaveBeenCalled();
+  });
+
+  it("uses execution-failed exit code when applying agent override fails", async () => {
+    vi.mocked(applyAgentOverride).mockRejectedValueOnce(
+      new Error("Failed to write agent override: disk locked")
+    );
+
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const cmd = createAgentsCommand();
+
+    await cmd.parseAsync(["reset", "reviewer"], { from: "user" });
+
+    expect(process.exit).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(ExitCode.EXECUTION_FAILED);
+    expect(error).toHaveBeenCalled();
   });
 
   it("uses validation exit code for agents missing from visible inventory", async () => {

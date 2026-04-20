@@ -439,8 +439,8 @@ expect:
 | workflow          | 통합                    | runtime/schemas + sdk/workflow  |
 | dashboard         | 유지(M4)                | dashboard                       |
 
-`agents`는 package/runtime 경계 재정렬 대상이며, 현재는 read-only `list/show`가 live surface로 복구된 상태입니다.
-추가 mutation surface(`set/reset`)를 다시 열 필요가 생기면 `docs/plans/2026-04-18-agents-cli-revival-preconditions.md`를 선행 조건 문서로 사용합니다.
+`agents`는 package/runtime 경계 재정렬 대상이며, 현재는 `list/show/set/reset`이 live surface로 복구된 상태입니다.
+config-layer override mutation은 `docs/plans/2026-04-20-agents-safe-override-a3-roadmap.md`를 기준으로 구현되었고, execution-only source는 여전히 별도 visibility 범위로 유지합니다.
 
 M4에서 CLI launcher를 다시 열 경우에는 `docs/plans/2026-04-15-dashboard-cli-m4-roadmap.md`를 기준 구현 계획으로 사용합니다.
 

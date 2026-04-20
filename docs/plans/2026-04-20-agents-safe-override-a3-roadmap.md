@@ -1,6 +1,6 @@
 # Obora Agents Safe Override A3 Roadmap
 
-> **For Hermes:** 이 문서는 `obora agents` mutation surface를 당장 열라는 지시가 아니라, 실제 운영 pain이 반복되어 A3를 시작할 때 따라야 할 구현 계획입니다. read-only A2 contract를 깨지 말고, `@obora/adapters`에 mutation ownership을 두고 `@obora/cli`는 thin operator surface로만 유지하세요.
+> **For Hermes:** 이 문서는 원래 `obora agents` mutation surface를 열기 전 A3 구현 계획으로 작성되었습니다. 현재 `set/reset`은 이 문서를 기준으로 live 구현되었고, 문서는 구현 기록과 후속 확장 기준으로 유지합니다. read-only A2 contract를 깨지 말고, `@obora/adapters`에 mutation ownership을 두고 `@obora/cli`는 thin operator surface로만 유지하세요.
 
 **Goal:** `obora agents set/reset`를 raw YAML wrapper가 아니라 preview 가능한 safe override surface로 도입한다.
 
@@ -10,16 +10,18 @@
 
 ---
 
-## Why A3 is still deferred
+## Implementation status
 
 현재 구현 사실:
 
 - A1: adapters/sdk split 기반 resolution snapshot helper 구현 완료
 - A2: live `obora agents list/show` 구현 완료
-- legacy `_legacy/agents.ts`의 `set/reset`은 여전히 `.obora/config.yaml` / `~/.obora/config.yaml`를 직접 읽고 전체 YAML을 다시 쓰는 helper script 성격
-- 현재 runtime truth는 config뿐 아니라 `agentsPath`, workflow-local `agents`, runtime registration도 함께 봄
+- A3: live `obora agents set/reset` 구현 완료
+- adapters는 preview helper + atomic apply helper를 소유함
+- CLI는 thin formatter + exit code contract만 담당함
+- 현재 runtime truth는 config뿐 아니라 `agentsPath`, workflow-local `agents`, runtime registration도 함께 보며, mutation은 config-layer only로 제한됨
 
-즉 A3에서 해결해야 하는 핵심은 “쓰기 기능 추가” 자체가 아니라 아래입니다.
+즉 A3에서 해결해야 했던 핵심은 “쓰기 기능 추가” 자체가 아니라 아래였고, 현재 구현도 그 원칙을 따릅니다.
 
 1. 무엇을 수정하는지 operator에게 정직하게 설명할 것
 2. config-layer override만 바꾸고 execution-only source와 혼동하지 않을 것
@@ -531,12 +533,12 @@ push는 승인 후만 진행합니다.
 
 ## Recommendation right now
 
-현재는 이 roadmap을 기준으로 “A3를 시작할 가치가 있는 반복 운영 pain이 실제로 있는지”를 먼저 판단하는 것이 맞습니다.
+현재는 이 roadmap을 구현 기록 + 확장 기준으로 유지하는 것이 맞습니다.
 
-즉 다음 질문이 먼저입니다.
+즉 다음 후속 질문이 남습니다.
 
-- config-layer agent override를 CLI로 자주 바꿔야 하는가?
-- 그 작업이 `.obora/config.yaml` 직접 편집보다 충분히 낫고 반복적인가?
-- `doctor/models/auth`와 분리된 operator 가치가 있는가?
+- `agents set/reset` text/json payload를 더 다듬어야 하는가?
+- provider-only/model-only override 같은 추가 contract가 필요한가?
+- docs/onboarding에서 mutation surface를 더 전면에 노출할 가치가 있는가?
 
-이 질문에 반복적으로 yes가 쌓일 때만 위 순서대로 구현을 시작합니다.
+이 질문에 따라 후속 A3.x 슬라이스를 이어가면 됩니다.

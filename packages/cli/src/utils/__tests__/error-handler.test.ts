@@ -513,6 +513,24 @@ describe("error handler and formatter", () => {
         )
       )
     ).toBe(null);
+    expect(
+      inferNextCommand(
+        new CLIError(
+          "Agent override preview requires both provider and model",
+          ExitCode.VALIDATION_ERROR
+        )
+      )
+    ).toBe(null);
+    expect(
+      inferNextCommand(
+        new CLIError("Unsupported agent provider override: bad-provider", ExitCode.VALIDATION_ERROR)
+      )
+    ).toBe(null);
+    expect(
+      inferNextCommand(
+        new CLIError("Failed to write agent override: disk locked", ExitCode.EXECUTION_FAILED)
+      )
+    ).toBe(null);
   });
 
   it("suppresses generic hints for onboarding scaffold command errors", () => {

@@ -233,7 +233,7 @@ obora --json models anthropic sonnet
 
 ## `obora agents`
 
-Inspect visible agent resolution without mutating config.
+Inspect visible agent resolution and safely manage config-layer overrides.
 
 ### Usage
 
@@ -244,6 +244,8 @@ obora agents list --agents agents.yaml --workflow judge.yaml
 obora agents show reviewer
 obora agents show reviewer --json
 obora agents show reviewer --agents agents.yaml --workflow judge.yaml
+obora agents set reviewer --provider openai --model gpt-5.4 --dry-run
+obora agents reset reviewer --scope global --json
 obora --json agents show reviewer
 ```
 
@@ -251,26 +253,31 @@ obora --json agents show reviewer
 
 - `agents list` — list visible agent names with compact resolution summaries
 - `agents show <name>` — show layered config provenance plus execution-source visibility for one agent
+- `agents set <name>` — set config-layer provider/model overrides for project/global scope
+- `agents reset <name>` — remove config-layer overrides for project/global scope
 - `--agents <path>` — include `agentsPath` YAML visibility in the read-side snapshot
 - `--workflow <path>` — include workflow-local `agents` visibility from a workflow YAML
+- `--dry-run` — preview `set/reset` changes without writing config
 
 ### Behavior
 
-- read-only only; `set` / `reset` mutation verbs are intentionally not part of the live command
 - supports both local `--json` and root `obora --json agents ...`
-- consumes adapters/sdk snapshot helpers instead of parsing YAML directly in the CLI
+- consumes adapters/sdk helpers instead of parsing YAML directly in the CLI
 - `list` returns a compact summary payload and text inventory view
 - `show` returns config provenance and execution-source visibility separately
 - `show` text mode also prints the current cwd plus resolved `--agents` / `--workflow` paths as a context summary
-- `--agents` and `--workflow` let the command truthfully include execution-only sources instead of showing only config-side visibility
-- missing visible agents exit with code `2`
-- inventory/snapshot load failures exit with code `3`
+- `set/reset` only touch project/global `.obora/config.yaml` and never mutate `agentsPath`, workflow-local `agents`, or runtime registrations
+- `set/reset --dry-run` return preview output without writing config
+- `--agents` and `--workflow` let `list/show` truthfully include execution-only sources instead of showing only config-side visibility
+- mutation validation failures exit with code `2`
+- visible-agent lookup failures exit with code `2`
+- inventory/snapshot/mutation execution failures exit with code `3`
 
 ### Exit Codes
 
 - `0` command completed successfully
-- `2` agent not found in visible sources
-- `3` failed to load agent inventory / failed to build agent snapshot
+- `2` agent not found in visible sources / invalid mutation input
+- `3` failed to load agent inventory / failed to build agent snapshot / failed to write agent override
 
 ---
 

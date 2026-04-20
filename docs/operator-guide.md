@@ -198,7 +198,7 @@ obora resume <runId>
 
 - 문서/코드 흔적이 있어도 현재 운영 명령으로 간주하지 않음
 - `dashboard`는 package capability는 있으나 live CLI surface는 아님
-- `agents`는 이제 read-only `list/show`만 live이고 mutation은 아직 defer 상태임
+- `agents`는 이제 `list/show/set/reset`이 live이고, execution-only source와 config-layer override를 분리해서 다룸
 
 관련 문서:
 

@@ -154,6 +154,11 @@ function inferNextCommand(err: unknown): string | null {
     message.includes("failed to load agent context") ||
     message.includes("failed to load agent inventory") ||
     message.includes("failed to build agent snapshot") ||
+    message.includes("invalid agents scope") ||
+    message.includes("agent override preview requires both provider and model") ||
+    message.includes("unsupported agent provider override") ||
+    message.includes("unsupported agent model override") ||
+    message.includes("failed to write agent override") ||
     message.includes("knowledge limit") ||
     message.includes("knowledge min-confidence") ||
     message.includes("invalid audit ") ||

@@ -58,8 +58,9 @@ Useful discovery commands:
 
 - `obora models <provider> [query]` shows the model refs available from the installed `pi-ai` catalog
   - examples: `obora models openai`, `obora models openai gpt-5.4`, `obora --json models zai glm-4.7`
-- `obora agents list` / `obora agents show <name>` show the current read-only agent resolution view
-  - examples: `obora agents list --json`, `obora --json agents show reviewer`
+- `obora agents list` / `obora agents show <name>` inspect the current agent resolution view
+- `obora agents set <name>` / `obora agents reset <name>` safely manage config-layer overrides with preview support
+  - examples: `obora agents list --json`, `obora --json agents show reviewer`, `obora agents set reviewer --provider openai --model gpt-5.4 --dry-run`, `obora agents reset reviewer --scope global`
 
 What this path gives you:
 
