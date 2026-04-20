@@ -1,6 +1,6 @@
 # Agents Resolution Snapshot Helper Design
 
-> For Hermes: 이 문서는 `obora agents` revival의 A1 단계에서 필요한 resolution snapshot helper를 어느 패키지에 둘지 정리한 설계 기록이며, 현재 구현된 adapters/sdk split을 설명합니다. live CLI revival 지시는 여전히 아닙니다.
+> For Hermes: 이 문서는 `obora agents` revival의 A1 단계에서 필요한 resolution snapshot helper를 어느 패키지에 둘지 정리한 설계 기록이며, 현재 구현된 adapters/sdk split을 설명합니다. 이후 A2 read-only `list/show`는 이 설계 위에서 구현됐고, 이 문서는 그 기초 설계 기록으로 유지합니다.
 
 Goal: agent resolution visibility를 위한 typed snapshot contract를 만들 때, 어떤 책임을 `@obora/adapters`가 맡고 어떤 책임을 `@obora/sdk`가 맡아야 하는지 정리한다.
 

@@ -1,6 +1,6 @@
 # Agents Resolution Snapshot Helper Implementation Plan
 
-> **For Hermes:** Use this plan only after confirming A0 still needs to advance to A1. Implement task-by-task with small commits. Do not add a live `obora agents` command in this plan.
+> **For Hermes:** This document records the A1 implementation plan that existed before the later A2 read-only CLI revival. Read it as the package-foundation implementation record; the live `obora agents list/show` work happened later on top of this foundation.
 
 **Goal:** Add a typed read-only agent resolution snapshot foundation so future `agents` visibility work can explain both config provenance and execution-time sources without reviving the legacy YAML mutation wrapper.
 
@@ -543,7 +543,7 @@ git commit -m "docs: record agents resolution snapshot implementation"
 
 - [ ] adapters exposes a typed base `snapshot()` contract
 - [ ] sdk exposes execution augmentation without moving config provenance ownership out of adapters
-- [ ] no new live `obora agents` command is added in this plan
+- [ ] no new live `obora agents` command is added in this A1 plan itself (A2 was handled later)
 - [ ] targeted adapters/sdk tests pass
 - [ ] workspace tests pass
 - [ ] `git diff --check` passes

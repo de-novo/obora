@@ -59,6 +59,18 @@ obora auth test openai
 obora auth remove openai
 ```
 
+### Agents
+
+```bash
+obora agents list
+obora agents list --json
+obora agents show reviewer
+obora --json agents show reviewer
+```
+
+- read-only visibility surface for current agent resolution
+- useful when you want layered config provenance without mutating `.obora/config.yaml`
+
 ### Run / Judge
 
 ```bash
@@ -94,6 +106,9 @@ obora --json doctor
 
 obora auth list --json
 obora --json auth list
+
+obora agents list --json
+obora --json agents list
 
 obora judge --json
 obora --json judge
