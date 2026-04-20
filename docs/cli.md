@@ -240,8 +240,10 @@ Inspect visible agent resolution without mutating config.
 ```bash
 obora agents list
 obora agents list --json
+obora agents list --agents agents.yaml --workflow judge.yaml
 obora agents show reviewer
 obora agents show reviewer --json
+obora agents show reviewer --agents agents.yaml --workflow judge.yaml
 obora --json agents show reviewer
 ```
 
@@ -249,6 +251,8 @@ obora --json agents show reviewer
 
 - `agents list` — list visible agent names with compact resolution summaries
 - `agents show <name>` — show layered config provenance plus execution-source visibility for one agent
+- `--agents <path>` — include `agentsPath` YAML visibility in the read-side snapshot
+- `--workflow <path>` — include workflow-local `agents` visibility from a workflow YAML
 
 ### Behavior
 
@@ -257,6 +261,7 @@ obora --json agents show reviewer
 - consumes adapters/sdk snapshot helpers instead of parsing YAML directly in the CLI
 - `list` returns a compact summary payload and text inventory view
 - `show` returns config provenance and execution-source visibility separately
+- `--agents` and `--workflow` let the command truthfully include execution-only sources instead of showing only config-side visibility
 - missing visible agents exit with code `2`
 - inventory/snapshot load failures exit with code `3`
 

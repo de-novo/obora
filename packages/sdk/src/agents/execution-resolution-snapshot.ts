@@ -24,12 +24,25 @@ export interface ExecutionAgentSnapshot {
   };
 }
 
-export interface BuildExecutionAgentSnapshotInput {
+export interface ExecutionAgentInventoryEntry {
+  name: string;
+  sources: {
+    config: boolean;
+    agentsPath: boolean;
+    workflow: boolean;
+    runtime: boolean;
+  };
+}
+
+export interface BuildExecutionAgentInventoryInput {
   cwd: string;
-  agentName: string;
   agentsPath?: string;
   workflow?: WorkflowDef;
   runtimeAgents: Map<string, AgentFactory>;
+}
+
+export interface BuildExecutionAgentSnapshotInput extends BuildExecutionAgentInventoryInput {
+  agentName: string;
 }
 
 function toSource(
@@ -46,6 +59,35 @@ function toSource(
     label,
     agentNames: [...agents.keys()],
   };
+}
+
+export async function buildExecutionAgentInventory({
+  cwd,
+  agentsPath,
+  workflow,
+  runtimeAgents,
+}: BuildExecutionAgentInventoryInput): Promise<ExecutionAgentInventoryEntry[]> {
+  const resolver = await AgentConfigResolver.create(cwd);
+  const configInventory = resolver.listAgentInventory();
+  const configNames = new Set(configInventory.map((entry) => entry.name));
+  const yamlAgents = await loadAgentsFromYamlFile(agentsPath);
+  const workflowAgents = loadWorkflowAgents(workflow);
+  const names = new Set<string>([
+    ...configNames,
+    ...yamlAgents.keys(),
+    ...workflowAgents.keys(),
+    ...runtimeAgents.keys(),
+  ]);
+
+  return [...names].sort().map((name) => ({
+    name,
+    sources: {
+      config: configNames.has(name),
+      agentsPath: yamlAgents.has(name),
+      workflow: workflowAgents.has(name),
+      runtime: runtimeAgents.has(name),
+    },
+  }));
 }
 
 export async function buildExecutionAgentSnapshot({

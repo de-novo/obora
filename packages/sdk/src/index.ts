@@ -46,7 +46,10 @@ export { StepExecutor } from "./step-executor.js";
 export { findSchemaMismatchReason, loadMinimalJsonSchema } from "./schema-output.js";
 export { topologicalSort, groupByParallelizableLevels } from "./dependency-resolver.js";
 export { ParallelScheduler } from "./execution/parallel-scheduler.js";
-export { buildExecutionAgentSnapshot } from "./agents/execution-resolution-snapshot.js";
+export {
+  buildExecutionAgentInventory,
+  buildExecutionAgentSnapshot,
+} from "./agents/execution-resolution-snapshot.js";
 export {
   buildValidationSignature,
   getRepairLoopConfig,
@@ -108,6 +111,7 @@ export type {
   ParallelStepFailure,
 } from "./execution/parallel-scheduler.js";
 export type {
+  ExecutionAgentInventoryEntry,
   ExecutionAgentSource,
   ExecutionAgentSourceKind,
   ExecutionAgentSnapshot,

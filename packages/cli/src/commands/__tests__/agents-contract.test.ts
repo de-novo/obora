@@ -3,10 +3,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const agentsState: {
   inventory: Array<{ name: string; source: "config" | "default-fallback" }>;
+  executionInventory: Array<{
+    name: string;
+    sources: { config: boolean; agentsPath: boolean; workflow: boolean; runtime: boolean };
+  }>;
   snapshots: Record<string, unknown>;
+  workflows: Record<string, unknown>;
 } = {
   inventory: [],
+  executionInventory: [],
   snapshots: {},
+  workflows: {},
 };
 
 vi.mock("@obora/adapters", () => ({
@@ -18,6 +25,7 @@ vi.mock("@obora/adapters", () => ({
 }));
 
 vi.mock("@obora/sdk", () => ({
+  buildExecutionAgentInventory: vi.fn(async () => agentsState.executionInventory),
   buildExecutionAgentSnapshot: vi.fn(async ({ agentName }: { agentName: string }) => {
     const snapshot = agentsState.snapshots[agentName];
     if (!snapshot) {
@@ -25,6 +33,15 @@ vi.mock("@obora/sdk", () => ({
     }
     return snapshot;
   }),
+  Workflow: {
+    fromYaml: vi.fn(async (path: string) => {
+      const workflow = agentsState.workflows[path];
+      if (!workflow) {
+        throw new Error(`Unexpected workflow request: ${path}`);
+      }
+      return workflow;
+    }),
+  },
   OboraError: class OboraError extends Error {
     code: string;
 
@@ -39,7 +56,7 @@ vi.mock("@obora/sdk", () => ({
   },
 }));
 
-import { buildExecutionAgentSnapshot } from "@obora/sdk";
+import { buildExecutionAgentInventory, buildExecutionAgentSnapshot, Workflow } from "@obora/sdk";
 
 import { createAgentsCommand } from "../agents.js";
 import { ExitCode } from "../../utils/exit-codes.js";
@@ -82,7 +99,9 @@ describe("agents command contracts", () => {
     }) as never);
     process.exitCode = undefined;
     agentsState.inventory = [];
+    agentsState.executionInventory = [];
     agentsState.snapshots = {};
+    agentsState.workflows = {};
   });
 
   afterEach(() => {
@@ -94,6 +113,16 @@ describe("agents command contracts", () => {
     agentsState.inventory = [
       { name: "critic", source: "config" },
       { name: "reviewer", source: "config" },
+    ];
+    agentsState.executionInventory = [
+      {
+        name: "critic",
+        sources: { config: true, agentsPath: false, workflow: false, runtime: false },
+      },
+      {
+        name: "reviewer",
+        sources: { config: true, agentsPath: false, workflow: false, runtime: false },
+      },
     ];
     agentsState.snapshots = {
       reviewer: makeSnapshot(),
@@ -158,6 +187,12 @@ describe("agents command contracts", () => {
 
   it("inherits root --json for agents show output", async () => {
     agentsState.inventory = [{ name: "reviewer", source: "config" }];
+    agentsState.executionInventory = [
+      {
+        name: "reviewer",
+        sources: { config: true, agentsPath: false, workflow: false, runtime: false },
+      },
+    ];
     agentsState.snapshots = {
       reviewer: makeSnapshot(),
     };
@@ -181,6 +216,16 @@ describe("agents command contracts", () => {
     agentsState.inventory = [
       { name: "reviewer", source: "config" },
       { name: "critic", source: "config" },
+    ];
+    agentsState.executionInventory = [
+      {
+        name: "reviewer",
+        sources: { config: true, agentsPath: false, workflow: false, runtime: false },
+      },
+      {
+        name: "critic",
+        sources: { config: true, agentsPath: false, workflow: false, runtime: false },
+      },
     ];
     agentsState.snapshots = {
       reviewer: makeSnapshot(),
@@ -220,6 +265,12 @@ describe("agents command contracts", () => {
 
   it("supports default fallback inventory entries", async () => {
     agentsState.inventory = [{ name: "default", source: "default-fallback" }];
+    agentsState.executionInventory = [
+      {
+        name: "default",
+        sources: { config: true, agentsPath: false, workflow: false, runtime: false },
+      },
+    ];
     agentsState.snapshots = {
       default: makeSnapshot({
         base: {
@@ -262,7 +313,127 @@ describe("agents command contracts", () => {
       command: "agents show",
       agentName: "default",
       status: "resolved",
-      ...agentsState.snapshots.default,
+      ...(agentsState.snapshots.default as object),
+    });
+  });
+
+  it("includes execution-only agents when context files are provided", async () => {
+    agentsState.executionInventory = [
+      {
+        name: "reviewer",
+        sources: { config: true, agentsPath: true, workflow: true, runtime: false },
+      },
+      {
+        name: "yaml-only",
+        sources: { config: false, agentsPath: true, workflow: false, runtime: false },
+      },
+      {
+        name: "workflow-only",
+        sources: { config: false, agentsPath: false, workflow: true, runtime: false },
+      },
+    ];
+    agentsState.workflows["workflow.yaml"] = {
+      name: "workflow-context",
+      agents: {
+        reviewer: { role: "Workflow Reviewer" },
+        "workflow-only": { role: "Workflow Only" },
+      },
+      steps: [],
+    };
+    agentsState.snapshots = {
+      reviewer: makeSnapshot({
+        effectiveExecutionView: {
+          agentName: "reviewer",
+          hasAgentsPathEntry: true,
+          hasWorkflowAgentEntry: true,
+          hasRuntimeRegistration: false,
+        },
+      }),
+      "yaml-only": makeSnapshot({
+        base: {
+          agentName: "yaml-only",
+          status: "resolved",
+          resolved: {
+            provider: "openai",
+            model: "gpt-5",
+            timeout: 120,
+          },
+          layers: [],
+          warnings: [],
+        },
+        effectiveExecutionView: {
+          agentName: "yaml-only",
+          hasAgentsPathEntry: true,
+          hasWorkflowAgentEntry: false,
+          hasRuntimeRegistration: false,
+        },
+      }),
+      "workflow-only": makeSnapshot({
+        base: {
+          agentName: "workflow-only",
+          status: "resolved",
+          resolved: {
+            provider: "openai",
+            model: "gpt-5",
+            timeout: 120,
+          },
+          layers: [],
+          warnings: [],
+        },
+        effectiveExecutionView: {
+          agentName: "workflow-only",
+          hasAgentsPathEntry: false,
+          hasWorkflowAgentEntry: true,
+          hasRuntimeRegistration: false,
+        },
+      }),
+    };
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createAgentsCommand();
+
+    await cmd.parseAsync(
+      ["list", "--json", "--agents", "agents.yaml", "--workflow", "workflow.yaml"],
+      { from: "user" }
+    );
+
+    const payload = JSON.parse(log.mock.calls.at(-1)?.[0] ?? "{}");
+    expect(Workflow.fromYaml).toHaveBeenCalledWith("workflow.yaml");
+    expect(buildExecutionAgentInventory).toHaveBeenCalledWith({
+      cwd: process.cwd(),
+      agentsPath: "agents.yaml",
+      workflow: agentsState.workflows["workflow.yaml"],
+      runtimeAgents: new Map(),
+    });
+    expect(payload).toEqual({
+      command: "agents list",
+      mode: "summary",
+      agents: [
+        {
+          name: "reviewer",
+          status: "resolved",
+          provider: "openai",
+          model: "gpt-5",
+          sources: { config: true, agentsPath: true, workflow: true, runtime: false },
+          warnings: [],
+        },
+        {
+          name: "yaml-only",
+          status: "resolved",
+          provider: "openai",
+          model: "gpt-5",
+          sources: { config: false, agentsPath: true, workflow: false, runtime: false },
+          warnings: [],
+        },
+        {
+          name: "workflow-only",
+          status: "resolved",
+          provider: "openai",
+          model: "gpt-5",
+          sources: { config: false, agentsPath: false, workflow: true, runtime: false },
+          warnings: [],
+        },
+      ],
     });
   });
 
@@ -284,8 +455,26 @@ describe("agents command contracts", () => {
     );
   });
 
+  it("uses execution-failed exit code when workflow context cannot be loaded", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const cmd = createAgentsCommand();
+
+    await cmd.parseAsync(["list", "--workflow", "missing-workflow.yaml"], { from: "user" });
+
+    expect(process.exit).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(ExitCode.EXECUTION_FAILED);
+    expect(error).toHaveBeenCalled();
+    expect(buildExecutionAgentInventory).not.toHaveBeenCalled();
+  });
+
   it("uses execution-failed exit code when snapshot building fails", async () => {
     agentsState.inventory = [{ name: "reviewer", source: "config" }];
+    agentsState.executionInventory = [
+      {
+        name: "reviewer",
+        sources: { config: true, agentsPath: false, workflow: false, runtime: false },
+      },
+    ];
     vi.mocked(buildExecutionAgentSnapshot).mockRejectedValueOnce(new Error("config disk offline"));
 
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);

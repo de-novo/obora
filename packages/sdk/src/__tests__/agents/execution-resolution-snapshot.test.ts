@@ -6,7 +6,10 @@ import { FileAuthManager } from "@obora/adapters";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AgentFactory } from "../../runtime.js";
-import { buildExecutionAgentSnapshot } from "../../agents/execution-resolution-snapshot.js";
+import {
+  buildExecutionAgentInventory,
+  buildExecutionAgentSnapshot,
+} from "../../agents/execution-resolution-snapshot.js";
 
 async function withIsolatedProject(
   testFn: (ctx: {
@@ -134,6 +137,67 @@ describe("execution-agent-resolution-snapshot", () => {
       ]);
       expect("executionSources" in snapshot.base).toBe(false);
       expect(snapshot.effectiveExecutionView.hasRuntimeRegistration).toBe(true);
+    });
+  });
+
+  it("builds context-aware agent inventory across config and execution-only sources", async () => {
+    vi.spyOn(FileAuthManager.prototype, "listProviders").mockResolvedValue([]);
+
+    await withIsolatedProject(async ({ projectDir }) => {
+      await mkdir(join(projectDir, ".obora"), { recursive: true });
+      await writeFile(
+        join(projectDir, ".obora", "config.yaml"),
+        ["agents:", "  reviewer:", "    provider: openai", "    model: gpt-5"].join("\n"),
+        "utf-8"
+      );
+
+      const agentsPath = join(projectDir, "agents.yaml");
+      await writeFile(
+        agentsPath,
+        [
+          "agents:",
+          "  reviewer:",
+          "    role: YAML Reviewer",
+          "  yaml-only:",
+          "    role: YAML Only",
+        ].join("\n"),
+        "utf-8"
+      );
+
+      const inventory = await buildExecutionAgentInventory({
+        cwd: projectDir,
+        agentsPath,
+        workflow: {
+          name: "workflow-agent-inventory",
+          agents: {
+            reviewer: { role: "Workflow Reviewer" },
+            "workflow-only": { role: "Workflow Only" },
+          },
+          steps: [],
+        },
+        runtimeAgents: new Map<string, AgentFactory>([
+          ["runtime-only", () => ({ role: "Runtime Only" })],
+        ]),
+      });
+
+      expect(inventory).toEqual([
+        {
+          name: "reviewer",
+          sources: { config: true, agentsPath: true, workflow: true, runtime: false },
+        },
+        {
+          name: "runtime-only",
+          sources: { config: false, agentsPath: false, workflow: false, runtime: true },
+        },
+        {
+          name: "workflow-only",
+          sources: { config: false, agentsPath: false, workflow: true, runtime: false },
+        },
+        {
+          name: "yaml-only",
+          sources: { config: false, agentsPath: true, workflow: false, runtime: false },
+        },
+      ]);
     });
   });
 });

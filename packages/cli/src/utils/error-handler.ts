@@ -151,6 +151,7 @@ function inferNextCommand(err: unknown): string | null {
     message.includes("knowledge schema") ||
     message.includes("knowledge file") ||
     message.includes("agent not found in visible sources") ||
+    message.includes("failed to load agent context") ||
     message.includes("failed to load agent inventory") ||
     message.includes("failed to build agent snapshot") ||
     message.includes("knowledge limit") ||

@@ -500,6 +500,14 @@ describe("error handler and formatter", () => {
     expect(
       inferNextCommand(
         new CLIError(
+          "Failed to load agent context: invalid workflow yaml",
+          ExitCode.EXECUTION_FAILED
+        )
+      )
+    ).toBe(null);
+    expect(
+      inferNextCommand(
+        new CLIError(
           "Failed to build agent snapshot: config disk offline",
           ExitCode.EXECUTION_FAILED
         )

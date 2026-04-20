@@ -64,12 +64,15 @@ obora auth remove openai
 ```bash
 obora agents list
 obora agents list --json
+obora agents list --agents agents.yaml --workflow judge.yaml
 obora agents show reviewer
+obora agents show reviewer --agents agents.yaml --workflow judge.yaml
 obora --json agents show reviewer
 ```
 
 - read-only visibility surface for current agent resolution
 - useful when you want layered config provenance without mutating `.obora/config.yaml`
+- `--agents` and `--workflow` let the command include execution-only sources such as `agentsPath` YAML and workflow-local `agents`
 
 ### Run / Judge
 

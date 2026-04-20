@@ -71,12 +71,13 @@ Expected source coverage:
   - default fallback agent if relevant
 - sdk execution-side names
   - `agentsPath`
-  - workflow-local `agents` when an explicit workflow target is later supported
+  - workflow-local `agents` when an explicit workflow target is provided (for example `--workflow <path>`)
   - runtime registration only if the invocation context can truthfully provide it
 
 Important:
 
-- 최소 ship에서는 “지금 이 디렉터리에서 확인 가능한 source만” 보여준다.
+- 기본 ship에서는 “지금 이 디렉터리에서 확인 가능한 source만” 보여준다.
+- `--agents` / `--workflow`를 주면 그 explicit context까지 visibility 범위에 포함할 수 있다.
 - runtime registration이 현재 invocation에 없으면 fake/placeholder 값을 만들지 않는다.
 
 Text mode minimum fields:

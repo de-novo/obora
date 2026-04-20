@@ -1,5 +1,10 @@
-import { AgentConfigResolver, type AgentInventoryEntry } from "@obora/adapters";
-import { buildExecutionAgentSnapshot } from "@obora/sdk";
+import {
+  buildExecutionAgentInventory,
+  buildExecutionAgentSnapshot,
+  Workflow,
+  type ExecutionAgentInventoryEntry,
+  type WorkflowDef,
+} from "@obora/sdk";
 import { Command } from "commander";
 
 import { handleCommandAction } from "../utils/error-handler.js";
@@ -10,6 +15,13 @@ import { getGlobalOpts, type GlobalOptions } from "../utils/global-opts.js";
 
 interface AgentsCommandOptions {
   json?: boolean;
+  agents?: string;
+  workflow?: string;
+}
+
+interface AgentExecutionContext {
+  agentsPath?: string;
+  workflow?: WorkflowDef;
 }
 
 interface AgentListSummary {
@@ -34,10 +46,33 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-async function loadAgentInventory(cwd: string): Promise<AgentInventoryEntry[]> {
+async function loadAgentExecutionContext(
+  options: AgentsCommandOptions
+): Promise<AgentExecutionContext> {
   try {
-    const resolver = await AgentConfigResolver.create(cwd);
-    return resolver.listAgentInventory();
+    return {
+      agentsPath: options.agents,
+      workflow: options.workflow ? await Workflow.fromYaml(options.workflow) : undefined,
+    };
+  } catch (error) {
+    throw new CLIError(
+      `Failed to load agent context: ${getErrorMessage(error)}`,
+      ExitCode.EXECUTION_FAILED
+    );
+  }
+}
+
+async function loadAgentInventory(
+  cwd: string,
+  context: AgentExecutionContext
+): Promise<ExecutionAgentInventoryEntry[]> {
+  try {
+    return await buildExecutionAgentInventory({
+      cwd,
+      agentsPath: context.agentsPath,
+      workflow: context.workflow,
+      runtimeAgents: new Map(),
+    });
   } catch (error) {
     throw new CLIError(
       `Failed to load agent inventory: ${getErrorMessage(error)}`,
@@ -46,17 +81,23 @@ async function loadAgentInventory(cwd: string): Promise<AgentInventoryEntry[]> {
   }
 }
 
-function ensureVisibleAgent(name: string, inventory: AgentInventoryEntry[]): void {
+function ensureVisibleAgent(name: string, inventory: ExecutionAgentInventoryEntry[]): void {
   if (!inventory.some((entry) => entry.name === name)) {
     throw new CLIError(`Agent not found in visible sources: ${name}`, ExitCode.VALIDATION_ERROR);
   }
 }
 
-async function loadExecutionSnapshot(cwd: string, agentName: string) {
+async function loadExecutionSnapshot(
+  cwd: string,
+  agentName: string,
+  context: AgentExecutionContext
+) {
   try {
     return await buildExecutionAgentSnapshot({
       cwd,
       agentName,
+      agentsPath: context.agentsPath,
+      workflow: context.workflow,
       runtimeAgents: new Map(),
     });
   } catch (error) {
@@ -68,7 +109,7 @@ async function loadExecutionSnapshot(cwd: string, agentName: string) {
 }
 
 function buildAgentListSummary(
-  entry: AgentInventoryEntry,
+  entry: ExecutionAgentInventoryEntry,
   snapshot: Awaited<ReturnType<typeof loadExecutionSnapshot>>
 ): AgentListSummary {
   return {
@@ -82,12 +123,7 @@ function buildAgentListSummary(
           model: snapshot.base.resolved.model,
         }
       : {}),
-    sources: {
-      config: entry.source === "config" || entry.source === "default-fallback",
-      agentsPath: snapshot.effectiveExecutionView.hasAgentsPathEntry,
-      workflow: snapshot.effectiveExecutionView.hasWorkflowAgentEntry,
-      runtime: snapshot.effectiveExecutionView.hasRuntimeRegistration,
-    },
+    sources: entry.sources,
     warnings: snapshot.base.warnings,
   };
 }
@@ -175,10 +211,11 @@ async function runAgentsList(
 ): Promise<void> {
   const cwd = process.cwd();
   const json = shouldOutputJson(options.json, globalOpts);
-  const inventory = await loadAgentInventory(cwd);
+  const context = await loadAgentExecutionContext(options);
+  const inventory = await loadAgentInventory(cwd, context);
   const snapshots = await Promise.all(
     inventory.map(async (entry) =>
-      buildAgentListSummary(entry, await loadExecutionSnapshot(cwd, entry.name))
+      buildAgentListSummary(entry, await loadExecutionSnapshot(cwd, entry.name, context))
     )
   );
 
@@ -201,9 +238,10 @@ async function runAgentsShow(
 ): Promise<void> {
   const cwd = process.cwd();
   const json = shouldOutputJson(options.json, globalOpts);
-  const inventory = await loadAgentInventory(cwd);
+  const context = await loadAgentExecutionContext(options);
+  const inventory = await loadAgentInventory(cwd, context);
   ensureVisibleAgent(agentName, inventory);
-  const snapshot = await loadExecutionSnapshot(cwd, agentName);
+  const snapshot = await loadExecutionSnapshot(cwd, agentName, context);
 
   if (json) {
     formatter.json({
@@ -227,6 +265,8 @@ export function createAgentsCommand(): Command {
     .command("list")
     .description("List visible agents with compact resolution summaries")
     .option("--json", "Output as JSON")
+    .option("--agents <path>", "Inspect agentsPath YAML visibility")
+    .option("--workflow <path>", "Inspect workflow-local agent visibility from a workflow YAML")
     .action(async function (this: Command, options: AgentsCommandOptions) {
       const globalOpts = getGlobalOpts(this);
       await handleCommandAction(() => runAgentsList(options, globalOpts), {
@@ -238,6 +278,8 @@ export function createAgentsCommand(): Command {
     .command("show <name>")
     .description("Show config provenance and execution visibility for an agent")
     .option("--json", "Output as JSON")
+    .option("--agents <path>", "Inspect agentsPath YAML visibility")
+    .option("--workflow <path>", "Inspect workflow-local agent visibility from a workflow YAML")
     .action(async function (this: Command, name: string, options: AgentsCommandOptions) {
       const globalOpts = getGlobalOpts(this);
       await handleCommandAction(() => runAgentsShow(name, options, globalOpts), {
