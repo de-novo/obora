@@ -1075,16 +1075,28 @@ export function buildAgentOverrideDiagnostics(
   };
 }
 
-function buildAgentInspectionRecommendations(loadedConfig?: OboraConfig): string[] {
+function getPrimaryAgentInspectionTarget(
+  loadedConfig: OboraConfig | undefined,
+  agentOverrideDiagnostics: DoctorAgentOverrideDiagnostics
+): string | undefined {
+  return (
+    agentOverrideDiagnostics.driftedAgents[0]?.name ?? getConfiguredAgentNames(loadedConfig)[0]
+  );
+}
+
+function buildAgentInspectionRecommendations(
+  loadedConfig: OboraConfig | undefined,
+  agentOverrideDiagnostics: DoctorAgentOverrideDiagnostics
+): string[] {
   const agentNames = getConfiguredAgentNames(loadedConfig);
   if (agentNames.length === 0) {
     return [];
   }
 
   const recommendations = ["Inspect agent overrides: obora agents list"];
-  const firstAgent = agentNames[0];
-  if (firstAgent) {
-    recommendations.push(`Inspect configured agent: obora agents show ${firstAgent}`);
+  const primaryAgent = getPrimaryAgentInspectionTarget(loadedConfig, agentOverrideDiagnostics);
+  if (primaryAgent) {
+    recommendations.push(`Inspect configured agent: obora agents show ${primaryAgent}`);
   }
 
   return recommendations;
@@ -1101,16 +1113,19 @@ function buildAgentDriftRecommendations(
     );
 }
 
-function buildAgentInspectionActions(loadedConfig?: OboraConfig): DoctorAction[] {
+function buildAgentInspectionActions(
+  loadedConfig: OboraConfig | undefined,
+  agentOverrideDiagnostics: DoctorAgentOverrideDiagnostics
+): DoctorAction[] {
   const agentNames = getConfiguredAgentNames(loadedConfig);
   if (agentNames.length === 0) {
     return [];
   }
 
   const actions: DoctorAction[] = [{ kind: "run", command: "obora agents list" }];
-  const firstAgent = agentNames[0];
-  if (firstAgent) {
-    actions.push({ kind: "run", command: `obora agents show ${firstAgent}` });
+  const primaryAgent = getPrimaryAgentInspectionTarget(loadedConfig, agentOverrideDiagnostics);
+  if (primaryAgent) {
+    actions.push({ kind: "run", command: `obora agents show ${primaryAgent}` });
   }
 
   return actions;
@@ -1230,7 +1245,9 @@ export function buildDoctorRecommendations(
     recommendations.push(`Run your workflow: ${workflowCommands.runCommand}`);
   }
 
-  recommendations.push(...buildAgentInspectionRecommendations(loadedConfig));
+  recommendations.push(
+    ...buildAgentInspectionRecommendations(loadedConfig, agentOverrideDiagnostics)
+  );
   recommendations.push(...buildAgentDriftRecommendations(agentOverrideDiagnostics));
 
   return recommendations;
@@ -1335,7 +1352,7 @@ export function buildDoctorActions(
     pushDoctorAction(actions, { kind: "run", command: workflowCommands.runCommand });
   }
 
-  for (const action of buildAgentInspectionActions(loadedConfig)) {
+  for (const action of buildAgentInspectionActions(loadedConfig, agentOverrideDiagnostics)) {
     pushDoctorAction(actions, action);
   }
   for (const action of buildAgentDriftActions(agentOverrideDiagnostics)) {

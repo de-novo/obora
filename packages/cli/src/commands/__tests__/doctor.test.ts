@@ -1168,6 +1168,107 @@ describe("doctor command", () => {
       );
     });
 
+    it("should prioritize the first drifted agent for agents show guidance", async () => {
+      vi.mocked(loadConfig).mockResolvedValue({
+        defaults: {
+          provider: "openai",
+          model: "gpt-5.4",
+        },
+        agents: {
+          alpha: {
+            provider: "openai",
+            model: "gpt-5.4",
+          },
+          reviewer: {
+            model: "gpt-4.1",
+          },
+        },
+      });
+      vi.mocked(buildResolutionSummary).mockReturnValue({
+        provider: "openai",
+        model: "gpt-5.4",
+        authSource: "env(OPENAI_API_KEY)",
+        configSource: mockedProjectConfigPath,
+        modelSource: "config.defaults.model",
+        chosenByPrecedence: "config > env",
+        nextPlaceToEdit: mockedProjectConfigPath,
+        fallbackStub: false,
+        warnings: [],
+      });
+      vi.mocked(existsSync).mockImplementation(
+        (pathLike) => !String(pathLike).endsWith("judge.yaml")
+      );
+
+      await runDoctor({ json: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recommendations: expect.arrayContaining([
+            "Inspect agent overrides: obora agents list",
+            "Inspect configured agent: obora agents show reviewer",
+            "Preview reset of drifted agent override: obora agents reset reviewer --dry-run",
+          ]),
+          actions: expect.arrayContaining([
+            expect.objectContaining({ kind: "run", command: "obora agents list" }),
+            expect.objectContaining({ kind: "run", command: "obora agents show reviewer" }),
+            expect.objectContaining({
+              kind: "run",
+              command: "obora agents reset reviewer --dry-run",
+            }),
+          ]),
+          guidance: expect.objectContaining({
+            recommendations: expect.arrayContaining([
+              "Inspect configured agent: obora agents show reviewer",
+            ]),
+            actions: expect.arrayContaining([
+              expect.objectContaining({ kind: "run", command: "obora agents show reviewer" }),
+            ]),
+          }),
+        })
+      );
+    });
+
+    it("should print the first drifted agent in default-mode show guidance", async () => {
+      vi.mocked(loadConfig).mockResolvedValue({
+        defaults: {
+          provider: "openai",
+          model: "gpt-5.4",
+        },
+        agents: {
+          alpha: {
+            provider: "openai",
+            model: "gpt-5.4",
+          },
+          reviewer: {
+            model: "gpt-4.1",
+          },
+        },
+      });
+      vi.mocked(buildResolutionSummary).mockReturnValue({
+        provider: "openai",
+        model: "gpt-5.4",
+        authSource: "env(OPENAI_API_KEY)",
+        configSource: mockedProjectConfigPath,
+        modelSource: "config.defaults.model",
+        chosenByPrecedence: "config > env",
+        nextPlaceToEdit: mockedProjectConfigPath,
+        fallbackStub: false,
+        warnings: [],
+      });
+      vi.mocked(existsSync).mockImplementation(
+        (pathLike) => !String(pathLike).endsWith("judge.yaml")
+      );
+
+      await runDoctor({});
+
+      expect(formatter.step).toHaveBeenCalledWith(
+        "Inspect configured agent: obora agents show reviewer"
+      );
+      expect(formatter.step).not.toHaveBeenCalledWith(
+        "Inspect configured agent: obora agents show alpha"
+      );
+    });
+
     it("should add validate guidance before dry-run for quickstart-style fallback projects", async () => {
       vi.mocked(loadConfig).mockResolvedValue({
         defaults: {

@@ -70,6 +70,7 @@ obora agents reset reviewer --dry-run
 - 변경 전후 diff와 changed keys를 먼저 보고 싶을 때
 - drifted agent가 여러 개일 때도 doctor가 이름순으로 reset preview를 최대 2개까지 바로 제안하길 기대할 때
 - provider/model뿐 아니라 agent-level `temperature` drift도 doctor warning에서 바로 확인하고 싶을 때
+- drift가 있는 경우 `obora agents show <name>`가 그 drifted agent를 바로 가리키길 기대할 때
 - project/global `.obora/config.yaml`만 건드리고 싶을 때
 
 주의:
