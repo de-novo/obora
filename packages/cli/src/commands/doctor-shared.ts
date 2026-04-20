@@ -991,11 +991,31 @@ function formatAgentDriftFields(entry: DoctorAgentOverrideDriftEntry): string {
 
 const AGENT_DRIFT_PREVIEW_LIMIT = 2;
 
-function compareAgentOverrideEntries(
+function compareConfiguredAgentOverrideEntries(
   left: DoctorAgentOverrideDriftEntry,
   right: DoctorAgentOverrideDriftEntry
 ): number {
   return left.name.localeCompare(right.name);
+}
+
+function getAgentOverrideDriftSeverity(entry: DoctorAgentOverrideDriftEntry): number {
+  if (entry.differingFields.includes("provider") || entry.differingFields.includes("model")) {
+    return 2;
+  }
+  if (entry.differingFields.includes("temperature")) {
+    return 1;
+  }
+  return 0;
+}
+
+function compareDriftedAgentOverrideEntries(
+  left: DoctorAgentOverrideDriftEntry,
+  right: DoctorAgentOverrideDriftEntry
+): number {
+  return (
+    getAgentOverrideDriftSeverity(right) - getAgentOverrideDriftSeverity(left) ||
+    left.name.localeCompare(right.name)
+  );
 }
 
 function buildAgentOverrideDriftWarning(
@@ -1062,11 +1082,11 @@ export function buildAgentOverrideDiagnostics(
         differsFromDefaults: differingFromDefaults.length > 0,
       };
     })
-    .sort(compareAgentOverrideEntries);
+    .sort(compareConfiguredAgentOverrideEntries);
 
   const driftedAgents = entries
     .filter((entry) => entry.differsFromResolved || entry.differsFromDefaults)
-    .sort(compareAgentOverrideEntries);
+    .sort(compareDriftedAgentOverrideEntries);
 
   return {
     totalConfiguredAgents: entries.length,

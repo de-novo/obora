@@ -1168,16 +1168,18 @@ describe("doctor command", () => {
       );
     });
 
-    it("should prioritize the first drifted agent for agents show guidance", async () => {
+    it("should prioritize higher-severity drift for agents show guidance", async () => {
       vi.mocked(loadConfig).mockResolvedValue({
         defaults: {
           provider: "openai",
           model: "gpt-5.4",
+          temperature: 0.4,
         },
         agents: {
           alpha: {
             provider: "openai",
             model: "gpt-5.4",
+            temperature: 0.2,
           },
           reviewer: {
             model: "gpt-4.1",
@@ -1203,10 +1205,21 @@ describe("doctor command", () => {
 
       expect(formatter.json).toHaveBeenCalledWith(
         expect.objectContaining({
+          diagnostics: expect.objectContaining({
+            agentOverrides: expect.objectContaining({
+              warning:
+                "Named agent overrides diverge from the current resolved default path: reviewer(model=gpt-4.1), alpha(temperature=0.2)",
+              driftedAgents: [
+                expect.objectContaining({ name: "reviewer", differingFields: ["model"] }),
+                expect.objectContaining({ name: "alpha", differingFields: ["temperature"] }),
+              ],
+            }),
+          }),
           recommendations: expect.arrayContaining([
             "Inspect agent overrides: obora agents list",
             "Inspect configured agent: obora agents show reviewer",
             "Preview reset of drifted agent override: obora agents reset reviewer --dry-run",
+            "Preview reset of drifted agent override: obora agents reset alpha --dry-run",
           ]),
           actions: expect.arrayContaining([
             expect.objectContaining({ kind: "run", command: "obora agents list" }),
@@ -1214,6 +1227,10 @@ describe("doctor command", () => {
             expect.objectContaining({
               kind: "run",
               command: "obora agents reset reviewer --dry-run",
+            }),
+            expect.objectContaining({
+              kind: "run",
+              command: "obora agents reset alpha --dry-run",
             }),
           ]),
           guidance: expect.objectContaining({
@@ -1228,16 +1245,18 @@ describe("doctor command", () => {
       );
     });
 
-    it("should print the first drifted agent in default-mode show guidance", async () => {
+    it("should print the highest-severity drifted agent in default-mode show guidance", async () => {
       vi.mocked(loadConfig).mockResolvedValue({
         defaults: {
           provider: "openai",
           model: "gpt-5.4",
+          temperature: 0.4,
         },
         agents: {
           alpha: {
             provider: "openai",
             model: "gpt-5.4",
+            temperature: 0.2,
           },
           reviewer: {
             model: "gpt-4.1",

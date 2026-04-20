@@ -328,7 +328,7 @@ Expected output includes:
   - when `.obora/config.yaml` already defines named agent overrides, doctor also points to `obora agents list` and `obora agents show <name>` for operator triage
   - if drift exists, the `agents show <name>` hint prioritizes the first drifted agent instead of the first alphabetic agent overall
 - warnings now include provider mismatch/conflict plus named agent override drift when an agent diverges from the current resolved default path; drift preview covers explicit provider/model and agent-level `temperature`
-- drifted agent overrides also add safe preview follow-ups like `obora agents reset <name> --dry-run`; when several agents drift, doctor surfaces up to two reset previews in stable name order and leaves the rest to `obora agents list/show`
+- drifted agent overrides also add safe preview follow-ups like `obora agents reset <name> --dry-run`; when several agents drift, doctor prioritizes provider/model drift ahead of temperature-only drift, then surfaces up to two reset previews and leaves the rest to `obora agents list/show`
 - a final `Next step: ...` hint
 
 Supports both local `obora doctor --json` and root `obora --json doctor`.
