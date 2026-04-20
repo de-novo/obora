@@ -64,9 +64,10 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
     checks,
     summary,
     providerHint,
-    authDiagnostics
+    authDiagnostics,
+    loadedConfig
   );
-  const actions = buildDoctorActions(checks, summary, providerHint, authDiagnostics);
+  const actions = buildDoctorActions(checks, summary, providerHint, authDiagnostics, loadedConfig);
   const sections = buildDoctorOutputSections(
     checks,
     status,

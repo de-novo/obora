@@ -325,6 +325,7 @@ Expected output includes:
 - `Recommended next actions:` with project-aware commands
   - quickstart/judge projects use `obora validate judge.yaml`, `obora judge --dry-run`, `obora judge`
   - non-judge projects fall back to `obora run <workflow.yaml> --dry-run` / `obora run <workflow.yaml>`
+  - when `.obora/config.yaml` already defines named agent overrides, doctor also points to `obora agents list` and `obora agents show <name>` for operator triage
 - a final `Next step: ...` hint
 
 Supports both local `obora doctor --json` and root `obora --json doctor`.
