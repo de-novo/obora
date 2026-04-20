@@ -84,7 +84,8 @@ obora doctor
 - 다음에 무엇을 실행해야 하는지 (`judge.yaml`이 있으면 judge 경로, 없으면 generic run 경로)
 - config에 named agent override가 있으면 `obora agents list/show`까지 같이 안내되는지
 - 특정 agent가 current default path와 다르게 덮여 있으면 drift warning이 뜨는지
-- drifted override를 바로 지우지 않고 `obora agents reset <name> --dry-run`으로 먼저 preview하라고 안내하는지
+- drifted override를 바로 지우지 않고 `obora agents reset <name> --dry-run` preview를 먼저 안내하는지
+- drifted agent가 여러 개면 이름순으로 최대 2개까지 reset preview를 제안하고, 나머지는 `obora agents list/show`로 이어지는지
 
 agent-level resolution을 더 자세히 보고 싶다면 아래를 이어서 확인할 수 있습니다.
 

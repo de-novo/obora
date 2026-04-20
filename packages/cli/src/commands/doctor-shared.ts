@@ -977,6 +977,15 @@ function formatAgentDriftFields(entry: { provider: string | null; model: string 
   return parts.join(", ") || "no explicit provider/model";
 }
 
+const AGENT_DRIFT_PREVIEW_LIMIT = 2;
+
+function compareAgentOverrideEntries(
+  left: DoctorAgentOverrideDriftEntry,
+  right: DoctorAgentOverrideDriftEntry
+): number {
+  return left.name.localeCompare(right.name);
+}
+
 function buildAgentOverrideDriftWarning(
   driftedAgents: DoctorAgentOverrideDriftEntry[]
 ): string | null {
@@ -985,10 +994,13 @@ function buildAgentOverrideDriftWarning(
   }
 
   const preview = driftedAgents
-    .slice(0, 2)
+    .slice(0, AGENT_DRIFT_PREVIEW_LIMIT)
     .map((entry) => `${entry.name}(${formatAgentDriftFields(entry)})`)
     .join(", ");
-  const suffix = driftedAgents.length > 2 ? ` (+${driftedAgents.length - 2} more)` : "";
+  const suffix =
+    driftedAgents.length > AGENT_DRIFT_PREVIEW_LIMIT
+      ? ` (+${driftedAgents.length - AGENT_DRIFT_PREVIEW_LIMIT} more)`
+      : "";
   return `Named agent overrides diverge from the current resolved default path: ${preview}${suffix}`;
 }
 
@@ -1000,28 +1012,30 @@ export function buildAgentOverrideDiagnostics(
   loadedConfig: OboraConfig | undefined,
   summary: { provider: string | null; model: string | null }
 ): DoctorAgentOverrideDiagnostics {
-  const entries = Object.entries(loadedConfig?.agents ?? {}).map(([name, config]) => {
-    const provider = config?.provider ?? null;
-    const model = config?.model ?? null;
-    const differsFromResolved =
-      (provider !== null && provider !== summary.provider) ||
-      (model !== null && model !== summary.model);
-    const differsFromDefaults =
-      (provider !== null && provider !== (loadedConfig?.defaults?.provider ?? null)) ||
-      (model !== null && model !== (loadedConfig?.defaults?.model ?? null));
+  const entries = Object.entries(loadedConfig?.agents ?? {})
+    .map(([name, config]) => {
+      const provider = config?.provider ?? null;
+      const model = config?.model ?? null;
+      const differsFromResolved =
+        (provider !== null && provider !== summary.provider) ||
+        (model !== null && model !== summary.model);
+      const differsFromDefaults =
+        (provider !== null && provider !== (loadedConfig?.defaults?.provider ?? null)) ||
+        (model !== null && model !== (loadedConfig?.defaults?.model ?? null));
 
-    return {
-      name,
-      provider,
-      model,
-      differsFromResolved,
-      differsFromDefaults,
-    };
-  });
+      return {
+        name,
+        provider,
+        model,
+        differsFromResolved,
+        differsFromDefaults,
+      };
+    })
+    .sort(compareAgentOverrideEntries);
 
-  const driftedAgents = entries.filter(
-    (entry) => entry.differsFromResolved || entry.differsFromDefaults
-  );
+  const driftedAgents = entries
+    .filter((entry) => entry.differsFromResolved || entry.differsFromDefaults)
+    .sort(compareAgentOverrideEntries);
 
   return {
     totalConfiguredAgents: entries.length,
@@ -1048,14 +1062,12 @@ function buildAgentInspectionRecommendations(loadedConfig?: OboraConfig): string
 function buildAgentDriftRecommendations(
   agentOverrideDiagnostics: DoctorAgentOverrideDiagnostics
 ): string[] {
-  const firstDriftedAgent = agentOverrideDiagnostics.driftedAgents[0]?.name;
-  if (!firstDriftedAgent) {
-    return [];
-  }
-
-  return [
-    `Preview reset of drifted agent override: obora agents reset ${firstDriftedAgent} --dry-run`,
-  ];
+  return agentOverrideDiagnostics.driftedAgents
+    .slice(0, AGENT_DRIFT_PREVIEW_LIMIT)
+    .map(
+      (entry) =>
+        `Preview reset of drifted agent override: obora agents reset ${entry.name} --dry-run`
+    );
 }
 
 function buildAgentInspectionActions(loadedConfig?: OboraConfig): DoctorAction[] {
@@ -1076,12 +1088,9 @@ function buildAgentInspectionActions(loadedConfig?: OboraConfig): DoctorAction[]
 function buildAgentDriftActions(
   agentOverrideDiagnostics: DoctorAgentOverrideDiagnostics
 ): DoctorAction[] {
-  const firstDriftedAgent = agentOverrideDiagnostics.driftedAgents[0]?.name;
-  if (!firstDriftedAgent) {
-    return [];
-  }
-
-  return [{ kind: "run", command: `obora agents reset ${firstDriftedAgent} --dry-run` }];
+  return agentOverrideDiagnostics.driftedAgents
+    .slice(0, AGENT_DRIFT_PREVIEW_LIMIT)
+    .map((entry) => ({ kind: "run", command: `obora agents reset ${entry.name} --dry-run` }));
 }
 
 function getDoctorWorkflowCommands(checks: DoctorChecks): {
