@@ -813,6 +813,26 @@ describe("doctor command", () => {
               ],
             }),
           }),
+          recommendations: expect.arrayContaining([
+            "Preview reset of drifted agent override: obora agents reset reviewer --dry-run",
+          ]),
+          actions: expect.arrayContaining([
+            expect.objectContaining({
+              kind: "run",
+              command: "obora agents reset reviewer --dry-run",
+            }),
+          ]),
+          guidance: expect.objectContaining({
+            recommendations: expect.arrayContaining([
+              "Preview reset of drifted agent override: obora agents reset reviewer --dry-run",
+            ]),
+            actions: expect.arrayContaining([
+              expect.objectContaining({
+                kind: "run",
+                command: "obora agents reset reviewer --dry-run",
+              }),
+            ]),
+          }),
           sections: expect.objectContaining({
             warnings: expect.objectContaining({
               items: expect.arrayContaining([
@@ -855,6 +875,9 @@ describe("doctor command", () => {
 
       expect(formatter.warn).toHaveBeenCalledWith(
         "Named agent overrides diverge from the current resolved default path: reviewer(model=gpt-4.1)"
+      );
+      expect(formatter.step).toHaveBeenCalledWith(
+        "Preview reset of drifted agent override: obora agents reset reviewer --dry-run"
       );
     });
 

@@ -1045,6 +1045,19 @@ function buildAgentInspectionRecommendations(loadedConfig?: OboraConfig): string
   return recommendations;
 }
 
+function buildAgentDriftRecommendations(
+  agentOverrideDiagnostics: DoctorAgentOverrideDiagnostics
+): string[] {
+  const firstDriftedAgent = agentOverrideDiagnostics.driftedAgents[0]?.name;
+  if (!firstDriftedAgent) {
+    return [];
+  }
+
+  return [
+    `Preview reset of drifted agent override: obora agents reset ${firstDriftedAgent} --dry-run`,
+  ];
+}
+
 function buildAgentInspectionActions(loadedConfig?: OboraConfig): DoctorAction[] {
   const agentNames = getConfiguredAgentNames(loadedConfig);
   if (agentNames.length === 0) {
@@ -1058,6 +1071,17 @@ function buildAgentInspectionActions(loadedConfig?: OboraConfig): DoctorAction[]
   }
 
   return actions;
+}
+
+function buildAgentDriftActions(
+  agentOverrideDiagnostics: DoctorAgentOverrideDiagnostics
+): DoctorAction[] {
+  const firstDriftedAgent = agentOverrideDiagnostics.driftedAgents[0]?.name;
+  if (!firstDriftedAgent) {
+    return [];
+  }
+
+  return [{ kind: "run", command: `obora agents reset ${firstDriftedAgent} --dry-run` }];
 }
 
 function getDoctorWorkflowCommands(checks: DoctorChecks): {
@@ -1093,7 +1117,8 @@ export function buildDoctorRecommendations(
   },
   providerHint: DoctorProviderHint,
   authDiagnostics: DoctorAuthDiagnostics,
-  loadedConfig?: OboraConfig
+  loadedConfig: OboraConfig | undefined,
+  agentOverrideDiagnostics: DoctorAgentOverrideDiagnostics
 ): string[] {
   const recommendations: string[] = [];
   const workflowCommands = getDoctorWorkflowCommands(checks);
@@ -1166,6 +1191,7 @@ export function buildDoctorRecommendations(
   }
 
   recommendations.push(...buildAgentInspectionRecommendations(loadedConfig));
+  recommendations.push(...buildAgentDriftRecommendations(agentOverrideDiagnostics));
 
   return recommendations;
 }
@@ -1183,7 +1209,8 @@ export function buildDoctorActions(
   },
   providerHint: DoctorProviderHint,
   authDiagnostics: DoctorAuthDiagnostics,
-  loadedConfig?: OboraConfig
+  loadedConfig: OboraConfig | undefined,
+  agentOverrideDiagnostics: DoctorAgentOverrideDiagnostics
 ): DoctorAction[] {
   const actions: DoctorAction[] = [];
   const workflowCommands = getDoctorWorkflowCommands(checks);
@@ -1269,6 +1296,9 @@ export function buildDoctorActions(
   }
 
   for (const action of buildAgentInspectionActions(loadedConfig)) {
+    pushDoctorAction(actions, action);
+  }
+  for (const action of buildAgentDriftActions(agentOverrideDiagnostics)) {
     pushDoctorAction(actions, action);
   }
 
