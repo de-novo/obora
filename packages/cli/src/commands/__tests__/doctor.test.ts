@@ -881,6 +881,117 @@ describe("doctor command", () => {
       );
     });
 
+    it("should expose temperature-only agent override drift diagnostics in json output", async () => {
+      vi.mocked(loadConfig).mockResolvedValue({
+        defaults: {
+          provider: "openai",
+          model: "gpt-5.4",
+          temperature: 0.4,
+        },
+        agents: {
+          reviewer: {
+            provider: "openai",
+            model: "gpt-5.4",
+            temperature: 0.2,
+          },
+        },
+      });
+      vi.mocked(buildResolutionSummary).mockReturnValue({
+        provider: "openai",
+        model: "gpt-5.4",
+        authSource: "env(OPENAI_API_KEY)",
+        configSource: mockedProjectConfigPath,
+        modelSource: "config.defaults.model",
+        chosenByPrecedence: "config > env",
+        nextPlaceToEdit: mockedProjectConfigPath,
+        fallbackStub: false,
+        warnings: [],
+      });
+      vi.mocked(existsSync).mockImplementation(
+        (pathLike) => !String(pathLike).endsWith("judge.yaml")
+      );
+
+      await runDoctor({ json: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          diagnostics: expect.objectContaining({
+            agentOverrides: expect.objectContaining({
+              warning:
+                "Named agent overrides diverge from the current resolved default path: reviewer(temperature=0.2)",
+              driftedAgents: [
+                expect.objectContaining({
+                  name: "reviewer",
+                  provider: "openai",
+                  model: "gpt-5.4",
+                  temperature: 0.2,
+                  differingFields: ["temperature"],
+                  differsFromResolved: true,
+                  differsFromDefaults: true,
+                }),
+              ],
+            }),
+          }),
+          recommendations: expect.arrayContaining([
+            "Preview reset of drifted agent override: obora agents reset reviewer --dry-run",
+          ]),
+          actions: expect.arrayContaining([
+            expect.objectContaining({
+              kind: "run",
+              command: "obora agents reset reviewer --dry-run",
+            }),
+          ]),
+          sections: expect.objectContaining({
+            warnings: expect.objectContaining({
+              items: expect.arrayContaining([
+                "Named agent overrides diverge from the current resolved default path: reviewer(temperature=0.2)",
+              ]),
+            }),
+          }),
+        })
+      );
+    });
+
+    it("should print temperature-only agent override drift warning in default mode", async () => {
+      vi.mocked(loadConfig).mockResolvedValue({
+        defaults: {
+          provider: "openai",
+          model: "gpt-5.4",
+          temperature: 0.4,
+        },
+        agents: {
+          reviewer: {
+            provider: "openai",
+            model: "gpt-5.4",
+            temperature: 0.2,
+          },
+        },
+      });
+      vi.mocked(buildResolutionSummary).mockReturnValue({
+        provider: "openai",
+        model: "gpt-5.4",
+        authSource: "env(OPENAI_API_KEY)",
+        configSource: mockedProjectConfigPath,
+        modelSource: "config.defaults.model",
+        chosenByPrecedence: "config > env",
+        nextPlaceToEdit: mockedProjectConfigPath,
+        fallbackStub: false,
+        warnings: [],
+      });
+      vi.mocked(existsSync).mockImplementation(
+        (pathLike) => !String(pathLike).endsWith("judge.yaml")
+      );
+
+      await runDoctor({});
+
+      expect(formatter.warn).toHaveBeenCalledWith(
+        "Named agent overrides diverge from the current resolved default path: reviewer(temperature=0.2)"
+      );
+      expect(formatter.step).toHaveBeenCalledWith(
+        "Preview reset of drifted agent override: obora agents reset reviewer --dry-run"
+      );
+    });
+
     it("should recommend multiple drift reset previews in a stable order", async () => {
       vi.mocked(loadConfig).mockResolvedValue({
         defaults: {

@@ -125,10 +125,14 @@ export interface DoctorOverview {
   nextPlaceToEdit: string;
 }
 
+export type DoctorAgentOverrideDriftField = "provider" | "model" | "temperature";
+
 export interface DoctorAgentOverrideDriftEntry {
   name: string;
   provider: string | null;
   model: string | null;
+  temperature: number | null;
+  differingFields: DoctorAgentOverrideDriftField[];
   differsFromResolved: boolean;
   differsFromDefaults: boolean;
 }
@@ -969,12 +973,20 @@ function hasProjectJudgeWorkflow(checks: DoctorChecks): boolean {
   return checks.projectConfig && existsSync(join(process.cwd(), "judge.yaml"));
 }
 
-function formatAgentDriftFields(entry: { provider: string | null; model: string | null }): string {
-  const parts = [
-    ...(entry.provider ? [`provider=${entry.provider}`] : []),
-    ...(entry.model ? [`model=${entry.model}`] : []),
-  ];
-  return parts.join(", ") || "no explicit provider/model";
+function formatAgentDriftFields(entry: DoctorAgentOverrideDriftEntry): string {
+  const parts = entry.differingFields.flatMap((field) => {
+    switch (field) {
+      case "provider":
+        return entry.provider ? [`provider=${entry.provider}`] : [];
+      case "model":
+        return entry.model ? [`model=${entry.model}`] : [];
+      case "temperature":
+        return typeof entry.temperature === "number" ? [`temperature=${entry.temperature}`] : [];
+      default:
+        return [];
+    }
+  });
+  return parts.join(", ") || "no explicit drift field";
 }
 
 const AGENT_DRIFT_PREVIEW_LIMIT = 2;
@@ -1012,23 +1024,42 @@ export function buildAgentOverrideDiagnostics(
   loadedConfig: OboraConfig | undefined,
   summary: { provider: string | null; model: string | null }
 ): DoctorAgentOverrideDiagnostics {
+  const defaultProvider = loadedConfig?.defaults?.provider ?? null;
+  const defaultModel = loadedConfig?.defaults?.model ?? null;
+  const defaultTemperature = loadedConfig?.defaults?.temperature ?? null;
+
   const entries = Object.entries(loadedConfig?.agents ?? {})
     .map(([name, config]) => {
       const provider = config?.provider ?? null;
       const model = config?.model ?? null;
-      const differsFromResolved =
-        (provider !== null && provider !== summary.provider) ||
-        (model !== null && model !== summary.model);
-      const differsFromDefaults =
-        (provider !== null && provider !== (loadedConfig?.defaults?.provider ?? null)) ||
-        (model !== null && model !== (loadedConfig?.defaults?.model ?? null));
+      const temperature = typeof config?.temperature === "number" ? config.temperature : null;
+
+      const differingFromResolved: DoctorAgentOverrideDriftField[] = [
+        ...(provider !== null && provider !== summary.provider ? (["provider"] as const) : []),
+        ...(model !== null && model !== summary.model ? (["model"] as const) : []),
+        ...(temperature !== null && temperature !== defaultTemperature
+          ? (["temperature"] as const)
+          : []),
+      ];
+      const differingFromDefaults: DoctorAgentOverrideDriftField[] = [
+        ...(provider !== null && provider !== defaultProvider ? (["provider"] as const) : []),
+        ...(model !== null && model !== defaultModel ? (["model"] as const) : []),
+        ...(temperature !== null && temperature !== defaultTemperature
+          ? (["temperature"] as const)
+          : []),
+      ];
+      const differingFields = Array.from(
+        new Set<DoctorAgentOverrideDriftField>([...differingFromResolved, ...differingFromDefaults])
+      );
 
       return {
         name,
         provider,
         model,
-        differsFromResolved,
-        differsFromDefaults,
+        temperature,
+        differingFields,
+        differsFromResolved: differingFromResolved.length > 0,
+        differsFromDefaults: differingFromDefaults.length > 0,
       };
     })
     .sort(compareAgentOverrideEntries);
