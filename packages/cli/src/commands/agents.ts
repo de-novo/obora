@@ -1,3 +1,5 @@
+import { resolve as resolvePath } from "node:path";
+
 import {
   buildExecutionAgentInventory,
   buildExecutionAgentSnapshot,
@@ -24,6 +26,12 @@ interface AgentExecutionContext {
   workflow?: WorkflowDef;
 }
 
+interface AgentContextSummary {
+  cwd: string;
+  agentsPath?: string;
+  workflow?: string;
+}
+
 interface AgentListSummary {
   name: string;
   status: "resolved" | "unresolved";
@@ -44,6 +52,18 @@ function shouldOutputJson(localJson: boolean | undefined, globalOpts: GlobalOpti
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function buildAgentContextSummary(cwd: string, options: AgentsCommandOptions): AgentContextSummary {
+  return {
+    cwd,
+    ...(options.agents ? { agentsPath: resolvePath(cwd, options.agents) } : {}),
+    ...(options.workflow ? { workflow: resolvePath(cwd, options.workflow) } : {}),
+  };
+}
+
+function formatContextPath(path?: string): string {
+  return path ?? "not provided";
 }
 
 async function loadAgentExecutionContext(
@@ -158,7 +178,10 @@ function printAgentListText(summaries: AgentListSummary[]): void {
   }
 }
 
-function printAgentShowText(snapshot: Awaited<ReturnType<typeof loadExecutionSnapshot>>): void {
+function printAgentShowText(
+  snapshot: Awaited<ReturnType<typeof loadExecutionSnapshot>>,
+  context: AgentContextSummary
+): void {
   const resolvedProvider = snapshot.base.resolved.provider;
   const resolvedModel = snapshot.base.resolved.model;
 
@@ -167,6 +190,11 @@ function printAgentShowText(snapshot: Awaited<ReturnType<typeof loadExecutionSna
   console.log(
     `Effective model: ${resolvedProvider && resolvedModel ? `${resolvedProvider} / ${resolvedModel}` : "n/a"}`
   );
+  console.log("");
+  console.log("Context");
+  console.log(`- cwd: ${context.cwd}`);
+  console.log(`- agentsPath: ${formatContextPath(context.agentsPath)}`);
+  console.log(`- workflow: ${formatContextPath(context.workflow)}`);
   console.log("");
   console.log("Config provenance");
   if (snapshot.base.layers.length === 0) {
@@ -238,6 +266,7 @@ async function runAgentsShow(
 ): Promise<void> {
   const cwd = process.cwd();
   const json = shouldOutputJson(options.json, globalOpts);
+  const contextSummary = buildAgentContextSummary(cwd, options);
   const context = await loadAgentExecutionContext(options);
   const inventory = await loadAgentInventory(cwd, context);
   ensureVisibleAgent(agentName, inventory);
@@ -248,12 +277,13 @@ async function runAgentsShow(
       command: "agents show",
       agentName,
       status: snapshot.base.status,
+      context: contextSummary,
       ...snapshot,
     });
     return;
   }
 
-  printAgentShowText(snapshot);
+  printAgentShowText(snapshot, contextSummary);
 }
 
 export function createAgentsCommand(): Command {

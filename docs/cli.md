@@ -261,6 +261,7 @@ obora --json agents show reviewer
 - consumes adapters/sdk snapshot helpers instead of parsing YAML directly in the CLI
 - `list` returns a compact summary payload and text inventory view
 - `show` returns config provenance and execution-source visibility separately
+- `show` text mode also prints the current cwd plus resolved `--agents` / `--workflow` paths as a context summary
 - `--agents` and `--workflow` let the command truthfully include execution-only sources instead of showing only config-side visibility
 - missing visible agents exit with code `2`
 - inventory/snapshot load failures exit with code `3`

@@ -72,6 +72,7 @@ obora --json agents show reviewer
 
 - read-only visibility surface for current agent resolution
 - useful when you want layered config provenance without mutating `.obora/config.yaml`
+- `agents show` text output includes a context summary for cwd / `--agents` / `--workflow` paths
 - `--agents` and `--workflow` let the command include execution-only sources such as `agentsPath` YAML and workflow-local `agents`
 
 ### Run / Judge

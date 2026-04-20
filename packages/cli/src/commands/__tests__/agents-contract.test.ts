@@ -1,3 +1,5 @@
+import { resolve } from "node:path";
+
 import { Command } from "commander";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -208,6 +210,9 @@ describe("agents command contracts", () => {
       command: "agents show",
       agentName: "reviewer",
       status: "resolved",
+      context: {
+        cwd: process.cwd(),
+      },
       ...makeSnapshot(),
     });
   });
@@ -313,8 +318,53 @@ describe("agents command contracts", () => {
       command: "agents show",
       agentName: "default",
       status: "resolved",
+      context: {
+        cwd: process.cwd(),
+      },
       ...(agentsState.snapshots.default as object),
     });
+  });
+
+  it("shows context path summary in human-readable agents show output", async () => {
+    agentsState.inventory = [{ name: "reviewer", source: "config" }];
+    agentsState.executionInventory = [
+      {
+        name: "reviewer",
+        sources: { config: true, agentsPath: true, workflow: true, runtime: false },
+      },
+    ];
+    agentsState.workflows["workflow.yaml"] = {
+      name: "workflow-context",
+      agents: {
+        reviewer: { role: "Workflow Reviewer" },
+      },
+      steps: [],
+    };
+    agentsState.snapshots = {
+      reviewer: makeSnapshot({
+        effectiveExecutionView: {
+          agentName: "reviewer",
+          hasAgentsPathEntry: true,
+          hasWorkflowAgentEntry: true,
+          hasRuntimeRegistration: false,
+        },
+      }),
+    };
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createAgentsCommand();
+
+    await cmd.parseAsync(
+      ["show", "reviewer", "--agents", "agents.yaml", "--workflow", "workflow.yaml"],
+      { from: "user" }
+    );
+
+    const output = log.mock.calls.map((args) => args.join(" ")).join("\n");
+    expect(output).toContain("Context");
+    expect(output).toContain(`- cwd: ${process.cwd()}`);
+    expect(output).toContain(`- agentsPath: ${resolve(process.cwd(), "agents.yaml")}`);
+    expect(output).toContain(`- workflow: ${resolve(process.cwd(), "workflow.yaml")}`);
+    expect(output).toContain("Execution sources");
   });
 
   it("includes execution-only agents when context files are provided", async () => {

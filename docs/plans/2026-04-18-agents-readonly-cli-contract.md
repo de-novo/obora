@@ -144,18 +144,24 @@ Text mode minimum sections:
 - resolved / unresolved
 - effective provider/model
 
-2. config provenance
+2. context
+
+- current cwd
+- resolved `--agents` path if provided
+- resolved `--workflow` path if provided
+
+3. config provenance
 
 - built-in / auth-aware / global / project / provider / agent override layer 순서
 - 각 layer가 실제로 적용한 key 요약
 
-3. execution sources
+4. execution sources
 
 - `agentsPath` presence
 - workflow-local `agents` presence
 - runtime registration presence
 
-4. warnings / failure
+5. warnings / failure
 
 - warning list
 - unresolved failure code/message if present
@@ -166,6 +172,11 @@ Example text shape:
 Agent: reviewer
 Status: resolved
 Effective model: openai / gpt-5
+
+Context
+- cwd: /workspace/project
+- agentsPath: /workspace/project/agents.yaml
+- workflow: /workspace/project/judge.yaml
 
 Config provenance
 - builtin-defaults: provider=pi-mono, model=pi-mono-1
@@ -188,6 +199,11 @@ JSON minimum payload:
   "command": "agents show",
   "agentName": "reviewer",
   "status": "resolved",
+  "context": {
+    "cwd": "/workspace/project",
+    "agentsPath": "/workspace/project/agents.yaml",
+    "workflow": "/workspace/project/judge.yaml"
+  },
   "base": {
     "resolved": {
       "provider": "openai",
