@@ -17,6 +17,8 @@ vi.mock("node:fs/promises", () => ({
   cp: vi.fn(),
   mkdir: vi.fn(),
   readFile: vi.fn(),
+  rename: vi.fn(),
+  rm: vi.fn(),
   writeFile: vi.fn(),
 }));
 
@@ -189,7 +191,9 @@ describe("init command", () => {
       expect(formatter.step).toHaveBeenCalledWith("obora judge");
 
       const stepCalls = vi.mocked(formatter.step).mock.calls.map(([message]) => String(message));
-      expect(stepCalls.indexOf("obora doctor")).toBeLessThan(stepCalls.indexOf("obora validate judge.yaml"));
+      expect(stepCalls.indexOf("obora doctor")).toBeLessThan(
+        stepCalls.indexOf("obora validate judge.yaml")
+      );
       expect(stepCalls.indexOf("obora validate judge.yaml")).toBeLessThan(
         stepCalls.indexOf("obora judge --dry-run")
       );

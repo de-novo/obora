@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import * as fsPromises from "node:fs/promises";
 
 import YAML from "yaml";
 
@@ -25,18 +25,11 @@ export interface PreviewAgentOverrideInput {
 }
 
 interface AgentOverrideWriteDeps {
-  mkdir: typeof fsPromises.mkdir;
-  writeFile: typeof fsPromises.writeFile;
-  rename: typeof fsPromises.rename;
-  rm: typeof fsPromises.rm;
+  mkdir: (path: string, options: { recursive: true }) => Promise<unknown>;
+  writeFile: (path: string, data: string, encoding: "utf-8") => Promise<unknown>;
+  rename: (oldPath: string, newPath: string) => Promise<void>;
+  rm: (path: string, options?: { force?: boolean }) => Promise<void>;
 }
-
-const DEFAULT_WRITE_DEPS: AgentOverrideWriteDeps = {
-  mkdir: fsPromises.mkdir,
-  writeFile: fsPromises.writeFile,
-  rename: fsPromises.rename,
-  rm: fsPromises.rm,
-};
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -59,7 +52,7 @@ async function readConfigDocument(targetPath: string): Promise<Record<string, un
     return {};
   }
 
-  const rawText = await fsPromises.readFile(targetPath, "utf-8");
+  const rawText = await readFile(targetPath, "utf-8");
   if (!rawText.trim()) {
     return {};
   }
@@ -182,9 +175,31 @@ export async function applyAgentOverride(
   deps: Partial<AgentOverrideWriteDeps> = {}
 ): Promise<AgentOverridePreview> {
   const preview = await previewAgentOverride(input);
-  const writeDeps = {
-    ...DEFAULT_WRITE_DEPS,
-    ...deps,
+  const writeDeps: AgentOverrideWriteDeps = {
+    mkdir: deps.mkdir ?? mkdir,
+    writeFile: deps.writeFile ?? writeFile,
+    rename:
+      deps.rename ??
+      (async (oldPath: string, newPath: string) => {
+        const module = (await import("node:fs/promises")) as {
+          rename?: (oldPath: string, newPath: string) => Promise<void>;
+        };
+        if (typeof module.rename !== "function") {
+          throw new Error("rename is not available");
+        }
+        await module.rename(oldPath, newPath);
+      }),
+    rm:
+      deps.rm ??
+      (async (path: string, options?: { force?: boolean }) => {
+        const module = (await import("node:fs/promises")) as {
+          rm?: (path: string, options?: { force?: boolean }) => Promise<void>;
+        };
+        if (typeof module.rm !== "function") {
+          return;
+        }
+        await module.rm(path, options);
+      }),
   };
   const tempPath = `${preview.targetPath}.tmp`;
 
