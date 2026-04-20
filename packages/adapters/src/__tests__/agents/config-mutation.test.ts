@@ -1,11 +1,11 @@
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { access, mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
+import { applyAgentOverride, previewAgentOverride } from "../../agents/config-mutation.js";
 import { listPiAIModels } from "../../llm/pi-ai-adapter.js";
-import { previewAgentOverride } from "../../agents/config-mutation.js";
 
 async function withIsolatedMutationContext(
   testFn: (ctx: {
@@ -202,6 +202,119 @@ describe("agent config mutation preview", () => {
       ).rejects.toThrow(
         "Unsupported agent model override for provider openai: definitely-not-a-real-openai-model"
       );
+    });
+  });
+
+  it("writes project-scope set overrides into a missing config file", async () => {
+    const openaiModels = listPiAIModels("openai");
+    const targetModel = openaiModels[0] ?? "gpt-4o-mini";
+
+    await withIsolatedMutationContext(async ({ projectDir }) => {
+      const result = await applyAgentOverride({
+        action: "set",
+        scope: "project",
+        cwd: projectDir,
+        agentName: "reviewer",
+        provider: "openai",
+        model: targetModel,
+      });
+
+      expect(result.targetPath).toBe(join(projectDir, ".obora", "config.yaml"));
+      expect(result.before).toBeNull();
+      expect(result.after).toMatchObject({
+        provider: "openai",
+        model: targetModel,
+      });
+
+      const written = await readFile(join(projectDir, ".obora", "config.yaml"), "utf-8");
+      expect(written).toContain("agents:");
+      expect(written).toContain("reviewer:");
+      expect(written).toContain(`model: ${targetModel}`);
+    });
+  });
+
+  it("writes reset updates while preserving unrelated config keys", async () => {
+    const openaiModel = listPiAIModels("openai")[0] ?? "gpt-4o-mini";
+
+    await withIsolatedMutationContext(async ({ projectDir }) => {
+      await mkdir(join(projectDir, ".obora"), { recursive: true });
+      await writeFile(
+        join(projectDir, ".obora", "config.yaml"),
+        [
+          "defaults:",
+          "  timeout: 120",
+          "providers:",
+          "  openai:",
+          `    defaultModel: ${openaiModel}`,
+          "agents:",
+          "  reviewer:",
+          "    provider: openai",
+          `    model: ${openaiModel}`,
+          "  critic:",
+          "    provider: openai",
+          `    model: ${openaiModel}`,
+        ].join("\n"),
+        "utf-8"
+      );
+
+      const result = await applyAgentOverride({
+        action: "reset",
+        scope: "project",
+        cwd: projectDir,
+        agentName: "reviewer",
+      });
+
+      expect(result.before).toMatchObject({
+        provider: "openai",
+        model: openaiModel,
+      });
+      expect(result.after).toBeNull();
+
+      const written = await readFile(join(projectDir, ".obora", "config.yaml"), "utf-8");
+      expect(written).toContain("defaults:");
+      expect(written).toContain("timeout: 120");
+      expect(written).toContain("providers:");
+      expect(written).toContain(`defaultModel: ${openaiModel}`);
+      expect(written).toContain("critic:");
+      expect(written).not.toContain("reviewer:");
+    });
+  });
+
+  it("cleans up temp files when atomic rename fails", async () => {
+    const openaiModel = listPiAIModels("openai")[0] ?? "gpt-4o-mini";
+
+    await withIsolatedMutationContext(async ({ projectDir }) => {
+      await mkdir(join(projectDir, ".obora"), { recursive: true });
+      await writeFile(
+        join(projectDir, ".obora", "config.yaml"),
+        ["agents:", "  reviewer:", "    provider: openai", `    model: ${openaiModel}`].join("\n"),
+        "utf-8"
+      );
+
+      const targetPath = join(projectDir, ".obora", "config.yaml");
+      const tempPath = `${targetPath}.tmp`;
+      const original = await readFile(targetPath, "utf-8");
+
+      await expect(
+        applyAgentOverride(
+          {
+            action: "set",
+            scope: "project",
+            cwd: projectDir,
+            agentName: "reviewer",
+            provider: "openai",
+            model: openaiModel,
+          },
+          {
+            rename: async () => {
+              throw new Error("disk locked");
+            },
+          }
+        )
+      ).rejects.toThrow("Failed to write agent override: disk locked");
+
+      await expect(access(tempPath)).rejects.toThrow();
+      expect(await readFile(targetPath, "utf-8")).toBe(original);
     });
   });
 });

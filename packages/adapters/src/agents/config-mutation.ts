@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { dirname } from "node:path";
+import * as fsPromises from "node:fs/promises";
 
 import YAML from "yaml";
 
@@ -23,6 +24,20 @@ export interface PreviewAgentOverrideInput {
   model?: string;
 }
 
+interface AgentOverrideWriteDeps {
+  mkdir: typeof fsPromises.mkdir;
+  writeFile: typeof fsPromises.writeFile;
+  rename: typeof fsPromises.rename;
+  rm: typeof fsPromises.rm;
+}
+
+const DEFAULT_WRITE_DEPS: AgentOverrideWriteDeps = {
+  mkdir: fsPromises.mkdir,
+  writeFile: fsPromises.writeFile,
+  rename: fsPromises.rename,
+  rm: fsPromises.rm,
+};
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -44,7 +59,7 @@ async function readConfigDocument(targetPath: string): Promise<Record<string, un
     return {};
   }
 
-  const rawText = await readFile(targetPath, "utf-8");
+  const rawText = await fsPromises.readFile(targetPath, "utf-8");
   if (!rawText.trim()) {
     return {};
   }
@@ -160,4 +175,27 @@ export async function previewAgentOverride(
     nextConfigDocument,
     nextYaml: YAML.stringify(nextConfigDocument),
   };
+}
+
+export async function applyAgentOverride(
+  input: PreviewAgentOverrideInput,
+  deps: Partial<AgentOverrideWriteDeps> = {}
+): Promise<AgentOverridePreview> {
+  const preview = await previewAgentOverride(input);
+  const writeDeps = {
+    ...DEFAULT_WRITE_DEPS,
+    ...deps,
+  };
+  const tempPath = `${preview.targetPath}.tmp`;
+
+  try {
+    await writeDeps.mkdir(dirname(preview.targetPath), { recursive: true });
+    await writeDeps.writeFile(tempPath, preview.nextYaml, "utf-8");
+    await writeDeps.rename(tempPath, preview.targetPath);
+    return preview;
+  } catch (error) {
+    await writeDeps.rm(tempPath, { force: true }).catch(() => undefined);
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to write agent override: ${message}`);
+  }
 }
