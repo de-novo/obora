@@ -326,6 +326,7 @@ Expected output includes:
   - quickstart/judge projects use `obora validate judge.yaml`, `obora judge --dry-run`, `obora judge`
   - non-judge projects fall back to `obora run <workflow.yaml> --dry-run` / `obora run <workflow.yaml>`
   - when `.obora/config.yaml` already defines named agent overrides, doctor also points to `obora agents list` and `obora agents show <name>` for operator triage
+- warnings now include provider mismatch/conflict plus named agent override drift when an agent diverges from the current resolved default path
 - a final `Next step: ...` hint
 
 Supports both local `obora doctor --json` and root `obora --json doctor`.

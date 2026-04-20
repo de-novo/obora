@@ -125,10 +125,25 @@ export interface DoctorOverview {
   nextPlaceToEdit: string;
 }
 
+export interface DoctorAgentOverrideDriftEntry {
+  name: string;
+  provider: string | null;
+  model: string | null;
+  differsFromResolved: boolean;
+  differsFromDefaults: boolean;
+}
+
+export interface DoctorAgentOverrideDiagnostics {
+  totalConfiguredAgents: number;
+  driftedAgents: DoctorAgentOverrideDriftEntry[];
+  warning: string | null;
+}
+
 export interface DoctorDiagnosticsBundle {
   checks: DoctorChecks;
   auth: DoctorAuthDiagnostics;
   config: DoctorConfigDiagnostics;
+  agentOverrides: DoctorAgentOverrideDiagnostics;
   resolution: {
     provider: string | null;
     model: string | null;
@@ -954,8 +969,65 @@ function hasProjectJudgeWorkflow(checks: DoctorChecks): boolean {
   return checks.projectConfig && existsSync(join(process.cwd(), "judge.yaml"));
 }
 
+function formatAgentDriftFields(entry: { provider: string | null; model: string | null }): string {
+  const parts = [
+    ...(entry.provider ? [`provider=${entry.provider}`] : []),
+    ...(entry.model ? [`model=${entry.model}`] : []),
+  ];
+  return parts.join(", ") || "no explicit provider/model";
+}
+
+function buildAgentOverrideDriftWarning(
+  driftedAgents: DoctorAgentOverrideDriftEntry[]
+): string | null {
+  if (driftedAgents.length === 0) {
+    return null;
+  }
+
+  const preview = driftedAgents
+    .slice(0, 2)
+    .map((entry) => `${entry.name}(${formatAgentDriftFields(entry)})`)
+    .join(", ");
+  const suffix = driftedAgents.length > 2 ? ` (+${driftedAgents.length - 2} more)` : "";
+  return `Named agent overrides diverge from the current resolved default path: ${preview}${suffix}`;
+}
+
 function getConfiguredAgentNames(loadedConfig?: OboraConfig): string[] {
   return Object.keys(loadedConfig?.agents ?? {}).sort();
+}
+
+export function buildAgentOverrideDiagnostics(
+  loadedConfig: OboraConfig | undefined,
+  summary: { provider: string | null; model: string | null }
+): DoctorAgentOverrideDiagnostics {
+  const entries = Object.entries(loadedConfig?.agents ?? {}).map(([name, config]) => {
+    const provider = config?.provider ?? null;
+    const model = config?.model ?? null;
+    const differsFromResolved =
+      (provider !== null && provider !== summary.provider) ||
+      (model !== null && model !== summary.model);
+    const differsFromDefaults =
+      (provider !== null && provider !== (loadedConfig?.defaults?.provider ?? null)) ||
+      (model !== null && model !== (loadedConfig?.defaults?.model ?? null));
+
+    return {
+      name,
+      provider,
+      model,
+      differsFromResolved,
+      differsFromDefaults,
+    };
+  });
+
+  const driftedAgents = entries.filter(
+    (entry) => entry.differsFromResolved || entry.differsFromDefaults
+  );
+
+  return {
+    totalConfiguredAgents: entries.length,
+    driftedAgents,
+    warning: buildAgentOverrideDriftWarning(driftedAgents),
+  };
 }
 
 function buildAgentInspectionRecommendations(loadedConfig?: OboraConfig): string[] {
@@ -1220,6 +1292,7 @@ export function buildDoctorOutputSections(
   loadedConfig: OboraConfig | undefined,
   configDiagnostics: DoctorConfigDiagnostics,
   authDiagnostics: DoctorAuthDiagnostics,
+  agentOverrideDiagnostics: DoctorAgentOverrideDiagnostics,
   recommendations: string[]
 ): DoctorOutputSections {
   const mergedSources = summarizeConfigChain(configDiagnostics);
@@ -1229,6 +1302,9 @@ export function buildDoctorOutputSections(
   }
   if (authDiagnostics.conflictSummary) {
     warnings.push(`Conflict: ${authDiagnostics.conflictSummary}`);
+  }
+  if (agentOverrideDiagnostics.warning) {
+    warnings.push(agentOverrideDiagnostics.warning);
   }
 
   return {
@@ -1301,6 +1377,7 @@ export function buildDoctorDiagnosticsBundle(
   checks: DoctorChecks,
   authDiagnostics: DoctorAuthDiagnostics,
   configDiagnostics: DoctorConfigDiagnostics,
+  agentOverrideDiagnostics: DoctorAgentOverrideDiagnostics,
   summary: {
     provider: string | null;
     model: string | null;
@@ -1317,6 +1394,7 @@ export function buildDoctorDiagnosticsBundle(
     checks,
     auth: authDiagnostics,
     config: configDiagnostics,
+    agentOverrides: agentOverrideDiagnostics,
     resolution: summary,
   };
 }

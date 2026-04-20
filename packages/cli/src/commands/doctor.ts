@@ -13,6 +13,7 @@ import { formatter } from "../utils/formatter.js";
 import { getGlobalOpts, type GlobalOptions } from "../utils/global-opts.js";
 
 import {
+  buildAgentOverrideDiagnostics,
   buildAuthDiagnostics,
   buildConfigDiagnostics,
   buildDoctorActions,
@@ -60,6 +61,7 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
   const authDiagnostics = buildAuthDiagnostics(providerHint, summary);
   const status = buildDoctorStatus(summary, authDiagnostics);
   const configDiagnostics = buildConfigDiagnostics(checks, summary);
+  const agentOverrideDiagnostics = buildAgentOverrideDiagnostics(loadedConfig, summary);
   const recommendations = buildDoctorRecommendations(
     checks,
     summary,
@@ -75,6 +77,7 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
     loadedConfig,
     configDiagnostics,
     authDiagnostics,
+    agentOverrideDiagnostics,
     recommendations
   );
   const overview = buildDoctorOverview(status, loadedConfig, summary, authDiagnostics);
@@ -82,6 +85,7 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
     checks,
     authDiagnostics,
     configDiagnostics,
+    agentOverrideDiagnostics,
     summary
   );
   const guidance = buildDoctorGuidance(recommendations, actions);

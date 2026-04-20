@@ -768,6 +768,96 @@ describe("doctor command", () => {
       );
     });
 
+    it("should expose agent override drift diagnostics in json output", async () => {
+      vi.mocked(loadConfig).mockResolvedValue({
+        defaults: {
+          provider: "openai",
+          model: "gpt-5.4",
+        },
+        agents: {
+          reviewer: {
+            model: "gpt-4.1",
+          },
+        },
+      });
+      vi.mocked(buildResolutionSummary).mockReturnValue({
+        provider: "openai",
+        model: "gpt-5.4",
+        authSource: "env(OPENAI_API_KEY)",
+        configSource: mockedProjectConfigPath,
+        modelSource: "config.defaults.model",
+        chosenByPrecedence: "config > env",
+        nextPlaceToEdit: mockedProjectConfigPath,
+        fallbackStub: false,
+        warnings: [],
+      });
+      vi.mocked(existsSync).mockImplementation(
+        (pathLike) => !String(pathLike).endsWith("judge.yaml")
+      );
+
+      await runDoctor({ json: true });
+
+      expect(formatter.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          diagnostics: expect.objectContaining({
+            agentOverrides: expect.objectContaining({
+              warning:
+                "Named agent overrides diverge from the current resolved default path: reviewer(model=gpt-4.1)",
+              driftedAgents: [
+                expect.objectContaining({
+                  name: "reviewer",
+                  model: "gpt-4.1",
+                  differsFromResolved: true,
+                  differsFromDefaults: true,
+                }),
+              ],
+            }),
+          }),
+          sections: expect.objectContaining({
+            warnings: expect.objectContaining({
+              items: expect.arrayContaining([
+                "Named agent overrides diverge from the current resolved default path: reviewer(model=gpt-4.1)",
+              ]),
+            }),
+          }),
+        })
+      );
+    });
+
+    it("should print agent override drift warning in default mode", async () => {
+      vi.mocked(loadConfig).mockResolvedValue({
+        defaults: {
+          provider: "openai",
+          model: "gpt-5.4",
+        },
+        agents: {
+          reviewer: {
+            model: "gpt-4.1",
+          },
+        },
+      });
+      vi.mocked(buildResolutionSummary).mockReturnValue({
+        provider: "openai",
+        model: "gpt-5.4",
+        authSource: "env(OPENAI_API_KEY)",
+        configSource: mockedProjectConfigPath,
+        modelSource: "config.defaults.model",
+        chosenByPrecedence: "config > env",
+        nextPlaceToEdit: mockedProjectConfigPath,
+        fallbackStub: false,
+        warnings: [],
+      });
+      vi.mocked(existsSync).mockImplementation(
+        (pathLike) => !String(pathLike).endsWith("judge.yaml")
+      );
+
+      await runDoctor({});
+
+      expect(formatter.warn).toHaveBeenCalledWith(
+        "Named agent overrides diverge from the current resolved default path: reviewer(model=gpt-4.1)"
+      );
+    });
+
     it("should print agents list/show guidance in default mode when config defines agent overrides", async () => {
       vi.mocked(loadConfig).mockResolvedValue({
         defaults: {
