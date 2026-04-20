@@ -68,6 +68,7 @@ obora agents list --agents agents.yaml --workflow judge.yaml
 obora agents show reviewer
 obora agents show reviewer --agents agents.yaml --workflow judge.yaml
 obora agents set reviewer --provider openai --model gpt-5.4 --dry-run
+obora agents set reviewer --model gpt-5.4 --dry-run
 obora agents reset reviewer --scope global --json
 obora --json agents show reviewer
 ```
@@ -76,6 +77,7 @@ obora --json agents show reviewer
 - `agents show` text output includes a context summary for cwd / `--agents` / `--workflow` paths
 - `agents set/reset` only touch project/global `.obora/config.yaml` and never mutate execution-only sources
 - `--dry-run` previews the override without writing config
+- `agents set` supports partial override only when the missing provider/model already exists in the same target config layer
 - `--agents` and `--workflow` let list/show include execution-only sources such as `agentsPath` YAML and workflow-local `agents`
 
 ### Run / Judge

@@ -76,25 +76,50 @@ function getCurrentAgentConfig(
   return validatedConfig.agents?.[agentName] ?? null;
 }
 
-function validateSetTarget(provider: string | undefined, model: string | undefined): void {
-  if (!provider || !model) {
-    throw new Error("Agent override preview requires both provider and model");
+function resolveSetTarget(
+  currentAgentConfig: Partial<AgentConfig> | null,
+  provider: string | undefined,
+  model: string | undefined
+): { provider: string; model: string } {
+  if (!provider && !model) {
+    throw new Error("Agent override preview requires at least one of provider or model");
   }
 
-  if (!isSupportedProvider(provider)) {
-    throw new Error(`Unsupported agent provider override: ${provider}`);
+  const resolvedProvider = provider ?? currentAgentConfig?.provider;
+  if (!resolvedProvider) {
+    throw new Error(
+      "Model-only override requires an existing provider in target config; pass --provider explicitly"
+    );
+  }
+
+  const resolvedModel = model ?? currentAgentConfig?.model;
+  if (!resolvedModel) {
+    throw new Error(
+      "Provider-only override requires an existing model in target config; pass --model explicitly"
+    );
+  }
+
+  if (!isSupportedProvider(resolvedProvider)) {
+    throw new Error(`Unsupported agent provider override: ${resolvedProvider}`);
   }
 
   let availableModels: string[] = [];
   try {
-    availableModels = listPiAIModels(provider);
+    availableModels = listPiAIModels(resolvedProvider);
   } catch {
     availableModels = [];
   }
 
-  if (!availableModels.includes(model)) {
-    throw new Error(`Unsupported agent model override for provider ${provider}: ${model}`);
+  if (!availableModels.includes(resolvedModel)) {
+    throw new Error(
+      `Unsupported agent model override for provider ${resolvedProvider}: ${resolvedModel}`
+    );
   }
+
+  return {
+    provider: resolvedProvider,
+    model: resolvedModel,
+  };
 }
 
 function buildNextConfigDocument(input: {
@@ -142,17 +167,18 @@ export async function previewAgentOverride(
   const targetPath = scope === "global" ? getGlobalConfigPath() : getProjectConfigPath(cwd);
   const document = await readConfigDocument(targetPath);
   const validatedConfig = validateConfig(targetPath, document);
-
-  if (input.action === "set") {
-    validateSetTarget(input.provider, input.model);
-  }
+  const currentAgentConfig = getCurrentAgentConfig(validatedConfig, input.agentName);
+  const resolvedSetTarget =
+    input.action === "set"
+      ? resolveSetTarget(currentAgentConfig, input.provider, input.model)
+      : undefined;
 
   const nextConfigDocument = buildNextConfigDocument({
     document,
     action: input.action,
     agentName: input.agentName,
-    provider: input.provider,
-    model: input.model,
+    provider: resolvedSetTarget?.provider,
+    model: resolvedSetTarget?.model,
   });
   const nextValidatedConfig = validateConfig(targetPath, nextConfigDocument);
 

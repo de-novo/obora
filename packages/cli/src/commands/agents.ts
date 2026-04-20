@@ -86,7 +86,11 @@ function getNextAgentCommand(action: "set" | "reset", agentName: string): string
 function isMutationValidationMessage(message: string): boolean {
   return (
     message.startsWith("Invalid agents scope:") ||
-    message === "Agent override preview requires both provider and model" ||
+    message === "Agent override preview requires at least one of provider or model" ||
+    message ===
+      "Model-only override requires an existing provider in target config; pass --provider explicitly" ||
+    message ===
+      "Provider-only override requires an existing model in target config; pass --model explicitly" ||
     message.startsWith("Unsupported agent provider override:") ||
     message.startsWith("Unsupported agent model override for provider")
   );

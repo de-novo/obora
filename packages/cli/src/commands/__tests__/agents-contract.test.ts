@@ -549,6 +549,63 @@ describe("agents command contracts", () => {
     });
   });
 
+  it("supports dry-run json preview for model-only agents set", async () => {
+    vi.mocked(previewAgentOverride).mockResolvedValueOnce({
+      action: "set",
+      scope: "project",
+      agentName: "reviewer",
+      targetPath: `${process.cwd()}/.obora/config.yaml`,
+      before: { provider: "openai", model: "gpt-4.1", timeout: 90 },
+      after: { provider: "openai", model: "gpt-5.4", timeout: 90 },
+      warnings: [],
+      nextConfigDocument: {
+        agents: {
+          reviewer: {
+            provider: "openai",
+            model: "gpt-5.4",
+            timeout: 90,
+          },
+        },
+      },
+      nextYaml: [
+        "agents:",
+        "  reviewer:",
+        "    provider: openai",
+        "    model: gpt-5.4",
+        "    timeout: 90",
+      ].join("\n"),
+    });
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createAgentsCommand();
+
+    await cmd.parseAsync(["set", "reviewer", "--model", "gpt-5.4", "--dry-run", "--json"], {
+      from: "user",
+    });
+
+    expect(applyAgentOverride).not.toHaveBeenCalled();
+    expect(previewAgentOverride).toHaveBeenCalledWith({
+      action: "set",
+      scope: "project",
+      cwd: process.cwd(),
+      agentName: "reviewer",
+      model: "gpt-5.4",
+    });
+
+    const payload = JSON.parse(log.mock.calls.at(-1)?.[0] ?? "{}");
+    expect(payload).toEqual({
+      command: "agents set",
+      mode: "preview",
+      scope: "project",
+      agentName: "reviewer",
+      targetPath: `${process.cwd()}/.obora/config.yaml`,
+      before: { provider: "openai", model: "gpt-4.1", timeout: 90 },
+      after: { provider: "openai", model: "gpt-5.4", timeout: 90 },
+      warnings: [],
+      nextCommand: "obora agents show reviewer",
+    });
+  });
+
   it("inherits root --json for applied agents reset output", async () => {
     vi.mocked(applyAgentOverride).mockResolvedValueOnce({
       action: "reset",
@@ -623,13 +680,13 @@ describe("agents command contracts", () => {
 
   it("uses validation exit code for mutation validation failures", async () => {
     vi.mocked(applyAgentOverride).mockRejectedValueOnce(
-      new Error("Agent override preview requires both provider and model")
+      new Error("Agent override preview requires at least one of provider or model")
     );
 
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const cmd = createAgentsCommand();
 
-    await cmd.parseAsync(["set", "reviewer", "--provider", "openai"], { from: "user" });
+    await cmd.parseAsync(["set", "reviewer"], { from: "user" });
 
     expect(process.exit).not.toHaveBeenCalled();
     expect(process.exitCode).toBe(ExitCode.VALIDATION_ERROR);

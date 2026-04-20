@@ -516,7 +516,23 @@ describe("error handler and formatter", () => {
     expect(
       inferNextCommand(
         new CLIError(
-          "Agent override preview requires both provider and model",
+          "Agent override preview requires at least one of provider or model",
+          ExitCode.VALIDATION_ERROR
+        )
+      )
+    ).toBe(null);
+    expect(
+      inferNextCommand(
+        new CLIError(
+          "Model-only override requires an existing provider in target config; pass --provider explicitly",
+          ExitCode.VALIDATION_ERROR
+        )
+      )
+    ).toBe(null);
+    expect(
+      inferNextCommand(
+        new CLIError(
+          "Provider-only override requires an existing model in target config; pass --model explicitly",
           ExitCode.VALIDATION_ERROR
         )
       )

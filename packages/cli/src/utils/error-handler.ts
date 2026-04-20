@@ -155,7 +155,9 @@ function inferNextCommand(err: unknown): string | null {
     message.includes("failed to load agent inventory") ||
     message.includes("failed to build agent snapshot") ||
     message.includes("invalid agents scope") ||
-    message.includes("agent override preview requires both provider and model") ||
+    message.includes("agent override preview requires at least one of provider or model") ||
+    message.includes("model-only override requires an existing provider in target config") ||
+    message.includes("provider-only override requires an existing model in target config") ||
     message.includes("unsupported agent provider override") ||
     message.includes("unsupported agent model override") ||
     message.includes("failed to write agent override") ||

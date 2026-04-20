@@ -156,7 +156,8 @@ A3 error는 generic onboarding hint를 띄우면 안 됩니다.
 추가될 가능성이 높은 error family:
 
 - invalid agents scope
-- provider/model pair required
+- missing provider/model input
+- partial override requires existing sibling field in target config
 - unsupported provider override target
 - unsupported model override target
 - failed to preview agent override
@@ -354,7 +355,8 @@ Expected: PASS
 
 최소 시나리오:
 
-- missing provider/model pair
+- missing provider/model input
+- partial override without sibling field in target config
 - invalid scope
 - unsupported provider
 - unsupported model
@@ -538,7 +540,7 @@ push는 승인 후만 진행합니다.
 즉 다음 후속 질문이 남습니다.
 
 - `agents set/reset` text/json payload를 더 다듬어야 하는가?
-- provider-only/model-only override 같은 추가 contract가 필요한가?
+- partial override를 target-layer sibling reuse 범위를 넘어 더 넓힐 가치가 있는가?
 - docs/onboarding에서 mutation surface를 더 전면에 노출할 가치가 있는가?
 
 이 질문에 따라 후속 A3.x 슬라이스를 이어가면 됩니다.

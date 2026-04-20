@@ -107,6 +107,84 @@ describe("agent config mutation preview", () => {
     });
   });
 
+  it("supports model-only preview when target config already owns provider", async () => {
+    const openaiModels = listPiAIModels("openai");
+    const currentModel = openaiModels[0] ?? "gpt-4o-mini";
+    const nextModel = openaiModels.find((model) => model !== currentModel) ?? currentModel;
+
+    await withIsolatedMutationContext(async ({ projectDir }) => {
+      await mkdir(join(projectDir, ".obora"), { recursive: true });
+      await writeFile(
+        join(projectDir, ".obora", "config.yaml"),
+        [
+          "agents:",
+          "  reviewer:",
+          "    provider: openai",
+          `    model: ${currentModel}`,
+          "    timeout: 90",
+        ].join("\n"),
+        "utf-8"
+      );
+
+      const preview = await previewAgentOverride({
+        action: "set",
+        scope: "project",
+        cwd: projectDir,
+        agentName: "reviewer",
+        model: nextModel,
+      });
+
+      expect(preview.before).toMatchObject({
+        provider: "openai",
+        model: currentModel,
+        timeout: 90,
+      });
+      expect(preview.after).toMatchObject({
+        provider: "openai",
+        model: nextModel,
+        timeout: 90,
+      });
+    });
+  });
+
+  it("supports provider-only preview when target config already owns model", async () => {
+    const openaiModel = listPiAIModels("openai")[0] ?? "gpt-4o-mini";
+
+    await withIsolatedMutationContext(async ({ projectDir }) => {
+      await mkdir(join(projectDir, ".obora"), { recursive: true });
+      await writeFile(
+        join(projectDir, ".obora", "config.yaml"),
+        [
+          "agents:",
+          "  reviewer:",
+          "    provider: openai",
+          `    model: ${openaiModel}`,
+          "    timeout: 90",
+        ].join("\n"),
+        "utf-8"
+      );
+
+      const preview = await previewAgentOverride({
+        action: "set",
+        scope: "project",
+        cwd: projectDir,
+        agentName: "reviewer",
+        provider: "openai",
+      });
+
+      expect(preview.before).toMatchObject({
+        provider: "openai",
+        model: openaiModel,
+        timeout: 90,
+      });
+      expect(preview.after).toMatchObject({
+        provider: "openai",
+        model: openaiModel,
+        timeout: 90,
+      });
+    });
+  });
+
   it("builds global-scope reset preview and preserves sibling agents plus unrelated keys", async () => {
     const openaiModel = listPiAIModels("openai")[0] ?? "gpt-4o-mini";
 
@@ -174,6 +252,43 @@ describe("agent config mutation preview", () => {
           agentName: "reviewer",
         })
       ).rejects.toThrow("Invalid agents scope: workspace. Supported scopes: project, global");
+    });
+  });
+
+  it("rejects partial set overrides when the target layer does not already own the missing field", async () => {
+    const openaiModel = listPiAIModels("openai")[0] ?? "gpt-4o-mini";
+
+    await withIsolatedMutationContext(async ({ projectDir }) => {
+      await mkdir(join(projectDir, ".obora"), { recursive: true });
+      await writeFile(
+        join(projectDir, ".obora", "config.yaml"),
+        ["agents:", "  reviewer:", "    timeout: 90"].join("\n"),
+        "utf-8"
+      );
+
+      await expect(
+        previewAgentOverride({
+          action: "set",
+          scope: "project",
+          cwd: projectDir,
+          agentName: "reviewer",
+          model: openaiModel,
+        })
+      ).rejects.toThrow(
+        "Model-only override requires an existing provider in target config; pass --provider explicitly"
+      );
+
+      await expect(
+        previewAgentOverride({
+          action: "set",
+          scope: "project",
+          cwd: projectDir,
+          agentName: "reviewer",
+          provider: "openai",
+        })
+      ).rejects.toThrow(
+        "Provider-only override requires an existing model in target config; pass --model explicitly"
+      );
     });
   });
 
