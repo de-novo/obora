@@ -60,7 +60,8 @@ Useful discovery commands:
   - examples: `obora models openai`, `obora models openai gpt-5.4`, `obora --json models zai glm-4.7`
 - `obora agents list` / `obora agents show <name>` inspect the current agent resolution view
 - `obora agents set <name>` / `obora agents reset <name>` safely manage config-layer overrides with preview support
-  - examples: `obora agents list --json`, `obora --json agents show reviewer`, `obora agents set reviewer --provider openai --model gpt-5.4 --dry-run`, `obora agents reset reviewer --scope global`
+  - examples: `obora agents list --json`, `obora --json agents show reviewer`, `obora agents set reviewer --provider openai --model gpt-5.4 --dry-run`, `obora agents set reviewer --model gpt-5.4 --dry-run`, `obora agents reset reviewer --scope global`
+  - mutation payloads show requested input, resolved override values, and changed keys
 
 What this path gives you:
 

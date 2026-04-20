@@ -43,6 +43,8 @@ obora judge
 obora doctor
 obora models openai
 obora auth list
+obora agents show reviewer
+obora agents set reviewer --model gpt-5.4 --dry-run
 ```
 
 언제 쓰나:
@@ -50,6 +52,29 @@ obora auth list
 - 왜 실행이 안 되는지 볼 때
 - 어떤 provider/model ref를 써야 하는지 확인할 때
 - 저장된 auth 상태를 확인할 때
+- 특정 agent만 config layer에서 바꿔야 할 때
+
+### 2.1b agent override preview / apply
+
+```bash
+obora agents list
+obora agents show reviewer
+obora agents set reviewer --model gpt-5.4 --dry-run
+obora agents set reviewer --model gpt-5.4
+obora agents reset reviewer --dry-run
+```
+
+언제 쓰나:
+
+- reviewer / critic 같은 특정 agent만 빠르게 바꿔야 할 때
+- 변경 전후 diff와 changed keys를 먼저 보고 싶을 때
+- project/global `.obora/config.yaml`만 건드리고 싶을 때
+
+주의:
+
+- 이 명령은 config-layer override만 다룹니다.
+- `agentsPath`, workflow-local `agents`, runtime registration은 mutation 대상이 아닙니다.
+- model-only / provider-only partial override는 같은 target config layer에 sibling field가 이미 있을 때만 허용됩니다.
 
 ### 2.2 workflow 파일 점검
 

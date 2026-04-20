@@ -90,6 +90,16 @@ obora agents list
 obora agents show reviewer
 ```
 
+특정 agent만 project/global config layer에서 안전하게 바꾸고 싶다면 preview-first로 아래 순서를 권장합니다.
+
+```bash
+obora agents set reviewer --model gpt-5.4 --dry-run
+obora agents set reviewer --model gpt-5.4
+obora agents reset reviewer --dry-run
+```
+
+이 surface는 `.obora/config.yaml`의 project/global agent override만 다루고, `agentsPath`, workflow-local `agents`, runtime registration은 바꾸지 않습니다.
+
 ### 3) `obora validate judge.yaml`
 
 ```bash

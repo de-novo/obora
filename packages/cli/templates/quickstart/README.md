@@ -47,6 +47,15 @@ This prints the resolved provider/model context plus a preview of:
 obora judge
 ```
 
+Optional: inspect or override the quickstart reviewer agent
+
+```bash
+obora agents show reviewer
+obora agents set reviewer --model gpt-5.4 --dry-run
+```
+
+This only mutates project/global `.obora/config.yaml` agent overrides. It does not rewrite workflow-local `agents` or other execution-only sources.
+
 If you want to test a different payload without editing `judge.yaml`, you can also load JSON from a file:
 
 ```bash
