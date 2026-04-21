@@ -70,6 +70,8 @@ obora quickstart my-project
 cd my-project
 obora doctor
 obora validate judge.yaml
+# Optional: inspect the expanded one-file workflow after edits
+obora expand --json -- judge.yaml
 obora judge --dry-run
 obora judge
 ```
@@ -88,6 +90,7 @@ obora judge
 
 - `validate`로 graph workflow + one-file workflow 계약 검증
 - `expand`로 one-file workflow를 internal expanded graph로 확인
+- quickstart judge path에서는 `validate` 뒤에 `expand --json -- judge.yaml`를 optional deeper inspection step으로 사용 가능
 - `run --dry-run`으로 실행 전 preview 확인
 - `judge`로 judge one-file onboarding 경로를 가장 짧게 실행
 - `run`으로 일반 workflow 실행

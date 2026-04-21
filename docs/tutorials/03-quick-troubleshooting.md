@@ -161,6 +161,8 @@ Use this order every time:
 ```bash
 obora doctor
 obora validate judge.yaml
+# Optional: inspect the expanded one-file workflow after edits
+obora expand --json -- judge.yaml
 obora judge --dry-run
 obora judge
 ```
