@@ -48,6 +48,7 @@ obora --json doctor
 obora models gpt-5.4
 obora models openai
 obora auth list
+obora --json auth test openai
 obora agents show reviewer
 obora agents set reviewer --model gpt-5.4 --dry-run
 ```

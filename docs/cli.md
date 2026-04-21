@@ -362,6 +362,7 @@ obora auth list
 obora auth add openai --apiKey "$OPENAI_API_KEY"
 obora auth test openai --json
 obora --json auth list
+obora --json auth test openai
 ```
 
 ### Subcommands
@@ -377,6 +378,7 @@ obora --json auth list
 - `auth add` accepts `--type apiKey|token|oauth` plus matching credential flags
 - if `--type` is omitted, auth type is inferred from the provided fields
 - `auth list` masks secret values before printing JSON or table output
+- `auth test --json` returns the masked saved auth entry together with the test result
 - missing provider entries, invalid auth types, and unsupported `auth test` providers exit with code `2`
 - auth-store load/save/remove failures and failed provider connection tests exit with code `3`
 

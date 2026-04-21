@@ -169,6 +169,7 @@ obora models openai
 obora auth add openai --apiKey "$OPENAI_API_KEY"
 obora auth list
 obora auth test openai
+obora --json auth test openai
 ```
 
 ---

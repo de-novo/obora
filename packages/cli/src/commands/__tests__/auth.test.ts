@@ -128,7 +128,7 @@ describe("auth command", () => {
     authState.providers.set("anthropic", {
       provider: "anthropic",
       type: "token",
-      token: "sk-ant-oat-abc123",
+      token: "***",
       addedAt: "2026-04-15T00:00:00.000Z",
       updatedAt: "2026-04-15T00:00:00.000Z",
     });
@@ -152,6 +152,61 @@ describe("auth command", () => {
         },
       ],
     });
+  });
+
+  it("supports local --json for auth remove", async () => {
+    authState.providers.set("openai", {
+      provider: "openai",
+      type: "apiKey",
+      apiKey: "***",
+      addedAt: "2026-04-15T00:00:00.000Z",
+      updatedAt: "2026-04-15T00:00:00.000Z",
+    });
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createAuthCommand();
+
+    await cmd.parseAsync(["remove", "openai", "--json"], { from: "user" });
+
+    const payload = JSON.parse(log.mock.calls.at(-1)?.[0] ?? "{}");
+    expect(payload).toEqual({
+      command: "auth remove",
+      provider: "openai",
+      removed: true,
+      storePath: "/tmp/obora/auth.json",
+    });
+    expect(authState.removeProvider).toHaveBeenCalledWith("openai");
+  });
+
+  it("inherits root --json for auth test", async () => {
+    authState.providers.set("openai", {
+      provider: "openai",
+      type: "apiKey",
+      apiKey: "***",
+      addedAt: "2026-04-15T00:00:00.000Z",
+      updatedAt: "2026-04-15T00:00:00.000Z",
+    });
+    authState.testConnection.mockResolvedValue(true);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const root = new Command("obora").option("--json");
+    root.addCommand(createAuthCommand());
+
+    await root.parseAsync(["--json", "auth", "test", "openai"], { from: "user" });
+
+    const payload = JSON.parse(log.mock.calls.at(-1)?.[0] ?? "{}");
+    expect(payload).toEqual({
+      command: "auth test",
+      provider: "openai",
+      ok: true,
+      storePath: "/tmp/obora/auth.json",
+      auth: {
+        provider: "openai",
+        type: "apiKey",
+        apiKey: "sk-ope...1234",
+        addedAt: "2026-04-15T00:00:00.000Z",
+        updatedAt: "2026-04-15T00:00:00.000Z",
+      },
+    });
+    expect(authState.testConnection).toHaveBeenCalledWith("openai");
   });
 
   it("uses validation exit code for invalid auth type without doctor hint leak", async () => {
@@ -194,6 +249,25 @@ describe("auth command", () => {
 
     expect(process.exit).not.toHaveBeenCalled();
     expect(process.exitCode).toBe(ExitCode.EXECUTION_FAILED);
+    expect(error).toHaveBeenCalled();
+  });
+
+  it("uses validation exit code for unsupported auth test providers", async () => {
+    authState.providers.set("custom", {
+      provider: "custom",
+      type: "apiKey",
+      apiKey: "***",
+      addedAt: "2026-04-15T00:00:00.000Z",
+      updatedAt: "2026-04-15T00:00:00.000Z",
+    });
+    authState.testConnection.mockRejectedValue(new Error("Unsupported provider for testConnection: custom"));
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const cmd = createAuthCommand();
+
+    await cmd.parseAsync(["test", "custom"], { from: "user" });
+
+    expect(process.exit).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(ExitCode.VALIDATION_ERROR);
     expect(error).toHaveBeenCalled();
   });
 
