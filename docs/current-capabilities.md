@@ -334,6 +334,8 @@ legacy audit 기준, 아래는 현재 top-level live CLI가 아닙니다.
 기능 정리 관점에서 다음 후보는 아래입니다.
 
 1. README / `docs/current-capabilities.md` / `docs/support-scope.md` / `docs/operator-guide.md`를 같은 판단 기준으로 계속 함께 유지하기
+   - legacy baseline: `docs/legacy-cli-surface-audit.md`
+   - deferred criteria: `docs/deferred-surface-revival-criteria.md`
 2. `agents` mutation surface와 `dashboard` revival 기준을 실제 구현 milestone과 계속 연결하기
    - see `docs/deferred-surface-revival-criteria.md`
    - agents A3 roadmap: `docs/plans/2026-04-20-agents-safe-override-a3-roadmap.md`

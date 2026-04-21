@@ -232,6 +232,7 @@ obora resume <runId>
 관련 문서:
 
 - `docs/current-capabilities.md`
+- `docs/support-scope.md`
 - `docs/deferred-surface-revival-criteria.md`
 - `docs/legacy-cli-surface-audit.md`
 

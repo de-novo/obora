@@ -2,6 +2,13 @@
 
 Date: 2026-04-15
 
+Related live/deferred baseline docs:
+
+- `docs/current-capabilities.md`
+- `docs/support-scope.md`
+- `docs/operator-guide.md`
+- `docs/deferred-surface-revival-criteria.md`
+
 ## Scope
 
 Audited legacy-boundary command surfaces that still exist under `packages/cli/src/commands/` via thin re-export wrappers but are not currently registered in `packages/cli/src/cli.ts`.
