@@ -98,9 +98,9 @@ obora judge
 
 현재 가능한 것:
 
-- `status`로 persisted runs + DLQ 상태 요약 확인
-- `runs`로 실행 이력 목록/상세 조회
-- `inspect`로 특정 run을 top-level alias로 조회
+- `status`로 persisted runs + DLQ 상태 요약 확인 (`--workflow`, `--limit`, local/root `--json` 지원)
+- `runs`로 실행 이력 목록/상세 조회 (`repair-loop`, `workflow`, local/root `--json` 포함)
+- `inspect`로 특정 run을 top-level alias로 조회 (`runs inspect`와 같은 contract)
 - `resume`로 suspended run 재개
 - `dlq`로 dead letter queue 목록/상세/요약/resolve
 - `artifact`로 run artifact 조회/다운로드

@@ -127,27 +127,35 @@ obora test workflow.yaml
 
 ```bash
 obora status
+obora status --workflow repair-workflow --limit 10 --json
+obora --json status --workflow judge
 ```
 
 보는 것:
 
 - persisted runs 요약
 - 최근 실행 상태
+- linked DLQ indicator를 포함한 latest/recent run overview
 - DLQ 요약
+- local `obora status --json`과 root `obora --json status` 둘 다 같은 operator payload 계약으로 지원되는지
 
 ### 3.2 실행 이력 보기
 
 ```bash
 obora runs list
-obora runs list --status failed
+obora runs list --status failed --repair-loop critical --json
+obora --json runs list --workflow judge
 obora inspect <runId>
+obora --json inspect <runId>
 ```
 
 보는 것:
 
 - 최근 실행 목록
 - 실패/중단 실행 필터
-- 특정 실행 상세
+- repair-loop / triageCause / linked DLQ 기준으로 정렬·필터된 operator view
+- `inspect`를 top-level alias로 바로 써서 특정 실행 상세 조회
+- local/root `--json`으로 같은 persisted-run inspection contract를 자동화에 연결
 
 ### 3.3 중단 실행 이어서 처리
 

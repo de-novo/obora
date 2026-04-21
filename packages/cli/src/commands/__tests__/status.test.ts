@@ -70,29 +70,31 @@ describe("status command", () => {
     process.exitCode = undefined;
   });
 
-  function mockRuntimeAndDlq(): void {
-    vi.mocked(createRuntime).mockResolvedValue({
-      listRunRecords: vi.fn().mockResolvedValue([
-        {
-          id: "run-1",
-          workflowName: "repair-workflow",
-          status: "failed",
-          startedAt: "2026-03-10T10:00:00.000Z",
-          completedAt: "2026-03-10T10:05:00.000Z",
-          metadata: {
-            repairLoop: {
-              validationFailed: 2,
-              validationPassed: 1,
-              repairStarted: 1,
-              repairCompleted: 1,
-              repairNoProgress: 0,
-              backEdgeTriggered: 0,
-              backEdgeExhausted: 1,
-              lastStopCategory: "repeated_critical_issue",
-            },
+  function mockRuntimeAndDlq() {
+    const listRunRecords = vi.fn().mockResolvedValue([
+      {
+        id: "run-1",
+        workflowName: "repair-workflow",
+        status: "failed",
+        startedAt: "2026-03-10T10:00:00.000Z",
+        completedAt: "2026-03-10T10:05:00.000Z",
+        metadata: {
+          repairLoop: {
+            validationFailed: 2,
+            validationPassed: 1,
+            repairStarted: 1,
+            repairCompleted: 1,
+            repairNoProgress: 0,
+            backEdgeTriggered: 0,
+            backEdgeExhausted: 1,
+            lastStopCategory: "repeated_critical_issue",
           },
         },
-      ]),
+      },
+    ]);
+
+    vi.mocked(createRuntime).mockResolvedValue({
+      listRunRecords,
     } as never);
 
     vi.mocked(FileDLQStore).mockImplementation(
@@ -120,6 +122,8 @@ describe("status command", () => {
           }),
         }) as never
     );
+
+    return { listRunRecords };
   }
 
   it("creates status command with modern options", () => {
@@ -176,6 +180,31 @@ describe("status command", () => {
     );
   });
 
+  it("propagates workflow filter and limit into status json payload and runtime query", async () => {
+    const { listRunRecords } = mockRuntimeAndDlq();
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createStatusCommand();
+
+    await cmd.parseAsync(["--json", "--workflow", "repair-workflow", "--limit", "10"], {
+      from: "user",
+    });
+
+    expect(listRunRecords).toHaveBeenCalledWith({
+      workflow: "repair-workflow",
+      limit: 10,
+    });
+
+    const payload = JSON.parse(String(log.mock.calls.at(-1)?.[0] ?? "{}"));
+    expect(payload).toEqual(
+      expect.objectContaining({
+        workflow: "repair-workflow",
+        runs: expect.objectContaining({
+          totalListed: 1,
+        }),
+      })
+    );
+  });
+
   it("uses validation exit code for invalid status limit without generic hints", async () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -189,6 +218,17 @@ describe("status command", () => {
     expect(log.mock.calls.map((args) => args.join(" ")).join("\n")).not.toContain(
       "obora run <workflow.yaml> --dry-run"
     );
+  });
+
+  it("rejects non-positive status limits with validation exit code", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const cmd = createStatusCommand();
+
+    await cmd.parseAsync(["--limit", "0"], { from: "user" });
+
+    expect(process.exit).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(ExitCode.VALIDATION_ERROR);
+    expect(error).toHaveBeenCalled();
   });
 
   it("uses execution-failed exit code for status runtime errors", async () => {
