@@ -50,6 +50,6 @@ In short: **creative AI, controlled by runtime guarantees.**
 
 ## Get Started
 
-- Repository: https://github.com/obora-labs/obora-kit
-- Quick Start: https://github.com/obora-labs/obora-kit#quick-start
+- Repository: https://github.com/de-novo/obora
+- Quick Start: https://github.com/de-novo/obora#quick-start
 - SDK package: https://www.npmjs.com/package/@obora/sdk

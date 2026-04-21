@@ -3,20 +3,26 @@
   "version": "0.1.0",
   "type": "module",
   "private": true,
-  "description": "Fast SaaS development toolkit - templates, presets, and shared packages",
+  "description": "Obora monorepo — AI Control Runtime packages, CLI, SDK, adapters, and dashboard",
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
-    "build:actor": "pnpm --filter @obora-kit/actor build",
     "test": "pnpm -r test",
     "test:e2e": "vitest run --config vitest.config.e2e.ts",
     "test:e2e:watch": "vitest --config vitest.config.e2e.ts",
-    "test:actor": "pnpm --filter @obora-kit/actor test",
     "lint": "turbo lint",
     "typecheck": "pnpm -r typecheck",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "clean": "turbo clean && rm -rf node_modules"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/de-novo/obora.git"
+  },
+  "bugs": {
+    "url": "https://github.com/de-novo/obora/issues"
+  },
+  "homepage": "https://github.com/de-novo/obora#readme",
   "devDependencies": {
     "@eslint/js": "^9.19.0",
     "@playwright/test": "^1.57.0",

@@ -1,6 +1,6 @@
-# Contributing to Obora Kit
+# Contributing to Obora
 
-Thanks for your interest in contributing to Obora Kit 🎉
+Thanks for your interest in contributing to Obora 🎉
 
 We welcome bug reports, feature proposals, documentation improvements, and pull requests.
 
@@ -23,7 +23,7 @@ Example branch names:
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20+
 - pnpm 9+
 
 ### Install

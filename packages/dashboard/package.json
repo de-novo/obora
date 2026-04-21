@@ -12,12 +12,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/obora-labs/obora-kit.git"
+    "url": "git+https://github.com/de-novo/obora.git"
   },
   "bugs": {
-    "url": "https://github.com/obora-labs/obora-kit/issues"
+    "url": "https://github.com/de-novo/obora/issues"
   },
-  "homepage": "https://github.com/obora-labs/obora-kit#readme",
+  "homepage": "https://github.com/de-novo/obora#readme",
   "license": "MIT",
   "engines": {
     "node": ">=20"
