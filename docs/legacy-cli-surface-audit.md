@@ -105,4 +105,5 @@ Recommended order:
 - Revival criteria for remaining deferred surfaces are tracked in `docs/deferred-surface-revival-criteria.md`.
 - The remaining legacy surfaces were not promoted automatically.
 - `packages/cli/src/commands/__tests__/cli-commands.test.ts` now asserts that `new` / `done` / `skills` / `dashboard` stay out of `createCLI()` until a deliberate redesign happens.
+- `packages/cli/src/commands/__tests__/legacy-shim-boundary.test.ts` now asserts that `new` / `done` / `skills` / `dashboard` remain thin `_legacy/*` re-export shims until a deliberate redesign replaces them.
 - Audit conclusion recorded here so future promotion work starts from an explicit baseline rather than accidentally wiring legacy commands into the live CLI.
