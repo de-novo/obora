@@ -19,6 +19,12 @@ obora judge --dry-run
 obora judge
 ```
 
+If you edited `judge.yaml` and want a deeper one-file inspection before previewing execution:
+
+```bash
+obora expand --json -- judge.yaml
+```
+
 What this gives you:
 
 - `obora init --quickstart` creates a minimal judge-mode project

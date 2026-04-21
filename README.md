@@ -42,6 +42,9 @@ obora doctor
 # Validate the bundled judge workflow file
 obora validate judge.yaml
 
+# Optional: inspect the expanded one-file workflow after edits
+obora expand --json -- judge.yaml
+
 # Preview execution without starting the judge run
 obora judge --dry-run
 
@@ -66,8 +69,9 @@ Useful discovery commands:
 What this path gives you:
 
 - `obora init --quickstart` creates a minimal judge-mode project
-- `obora validate judge.yaml` checks the bundled one-file workflow before execution
 - `obora doctor` shows onboarding readiness and project-aware next actions
+- `obora validate judge.yaml` checks the bundled one-file workflow before execution
+- `obora expand --json -- judge.yaml` helps inspect the expanded one-file workflow after edits
 - `obora judge --dry-run` previews the input/output contract without starting execution
 - `obora judge` writes the JSON result artifact
 

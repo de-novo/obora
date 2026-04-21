@@ -28,6 +28,8 @@ obora judge
   - config/auth/provider/model readiness 확인
 - `validate judge.yaml`
   - one-file workflow shape/field 검증
+- `expand --json -- judge.yaml`
+  - judge 파일을 직접 바꿨을 때 expanded workflow를 더 깊게 확인하는 optional inspection
 - `judge --dry-run`
   - 실행 직전 preview
 - `judge`
