@@ -213,7 +213,7 @@ legacy wrapper는 원래 아래 성격이었습니다.
 
 ## 현재 상태
 
-현재 legacy wrapper는 아래 성격입니다.
+historical legacy wrapper는 원래 아래 성격이었습니다.
 
 - `@obora/dashboard` 서버를 직접 띄움
 - `open(...)` 호출 포함
@@ -221,6 +221,8 @@ legacy wrapper는 원래 아래 성격이었습니다.
 - CLI가 lifecycle 세부 구현을 직접 담당
 - shared CLI contract 없음
 - live top-level 등록 없음
+
+현재는 이 launcher wrapper 자체를 active CLI source에 남겨두지 않았습니다.
 
 현재 package 상태:
 
@@ -286,7 +288,7 @@ legacy wrapper는 원래 아래 성격이었습니다.
 아래면 아직 시기상조입니다.
 
 - dashboard package가 아직 CLI-friendly lifecycle helper를 제공하지 않음
-- launcher가 여전히 wrapper script 수준임
+- dashboard launcher를 다시 만들더라도 wrapper script 수준을 넘지 못함
 - product가 dashboard를 package/dev tool 이상으로 보고 있지 않음
 - 문서/튜토리얼/operations에 올릴 가치가 아직 약함
 

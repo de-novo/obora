@@ -22,7 +22,6 @@
     "@obora/runtime": "workspace:*",
     "commander": "^14.0.3",
     "fs-extra": "^11.3.3",
-    "open": "^10.2.0",
     "yaml": "^2.8.2"
   },
   "devDependencies": {

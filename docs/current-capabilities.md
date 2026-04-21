@@ -323,7 +323,7 @@ legacy audit 기준, 아래는 현재 top-level live CLI가 아닙니다.
 1. onboarding은 `quickstart / doctor / validate / judge` 기준으로 본다
 2. 일반 실행 surface는 `run / validate / expand / test` 기준으로 본다
 3. 운영 surface는 `status / runs / inspect / resume / dlq / artifact / audit` 기준으로 본다
-4. legacy wrapper(`new/done/skills/dashboard`)는 live feature로 간주하지 않는다
+4. historical/deferred command(`new/done/skills/dashboard`)는 live feature로 간주하지 않는다
 5. `agents`는 `list/show/set/reset`을 live surface로 보고, execution-only source와 config-layer override를 구분해서 사용한다
 6. dashboard는 package capability로만 보고 CLI capability로는 아직 제외한다
 

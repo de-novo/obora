@@ -1,6 +1,6 @@
 # Legacy CLI Surface Audit
 
-Date: 2026-04-15
+Date: 2026-04-21
 
 Related live/deferred baseline docs:
 
@@ -11,7 +11,7 @@ Related live/deferred baseline docs:
 
 ## Scope
 
-Audited legacy-boundary command surfaces that still exist under `packages/cli/src/commands/` via thin re-export wrappers but are not currently registered in `packages/cli/src/cli.ts`.
+Audited legacy-boundary command surfaces that historically lived under `packages/cli/src/commands/` but are not currently registered in `packages/cli/src/cli.ts`.
 
 Targets reviewed:
 
@@ -27,12 +27,12 @@ Targets reviewed:
 
 ### Wrapper pattern
 
-The following files are only re-export shims:
+The following retained files are only re-export shims:
 
 - `packages/cli/src/commands/new.ts` -> `./_legacy/new.js`
 - `packages/cli/src/commands/done.ts` -> `./_legacy/done.js`
-- `packages/cli/src/commands/skills.ts` -> `./_legacy/skills.js`
-- `packages/cli/src/commands/dashboard.ts` -> `./_legacy/dashboard.js`
+
+`packages/cli/src/commands/skills.ts` and `packages/cli/src/commands/dashboard.ts` plus their `_legacy/*` implementations were removed from the active CLI source tree once the deferred/live boundary was documented and guarded elsewhere.
 
 `packages/cli/src/commands/status.ts` has since been redesigned as a live top-level command over persisted runs/DLQ state and is no longer just a shim.
 
@@ -46,7 +46,7 @@ The following files are only re-export shims:
 
 The remaining legacy-boundary targets above are still not added in `createCLI()`.
 
-This means those remaining surfaces are not part of the live top-level CLI contract even though command files and tests still exist.
+This means those remaining surfaces are not part of the live top-level CLI contract even though some historical docs and a small retained compatibility bucket still exist.
 
 ### Why `status` required redesign instead of direct promotion
 
@@ -99,7 +99,7 @@ Recommended order:
 
 - `dashboard`
   - `docs/m3-sdk-cli-design.md` marks dashboard UI as out of scope for M3 and keeps `@obora/dashboard` as an M4 concern.
-  - current wrapper is only a thin `createDashboardServer()` launcher with `open(...)` and `process.exit(0)` signal handling, not a modern CLI contract surface.
+  - the old thin launcher wrapper has been removed from active CLI source instead of being kept around as a dormant command.
   - M4 revive roadmap is documented in `docs/plans/2026-04-15-dashboard-cli-m4-roadmap.md`.
 
 ## Immediate action taken
@@ -108,9 +108,10 @@ Recommended order:
 - `auth` was redesigned and registered as a live top-level surface.
 - `agents` was redesigned and registered as a live top-level surface with introspection and safe override subcommands.
 - `new` / `done` are now explicitly classified as legacy-only unless the feature-centric workflow returns.
+- `skills` / `dashboard` legacy wrappers were removed from active CLI source instead of being kept as dormant shims.
 - `dashboard` remains explicitly deferred until a fresh product UX decision exists.
 - Revival criteria for remaining deferred surfaces are tracked in `docs/deferred-surface-revival-criteria.md`.
 - The remaining legacy surfaces were not promoted automatically.
 - `packages/cli/src/commands/__tests__/cli-commands.test.ts` now asserts that `new` / `done` / `skills` / `dashboard` stay out of `createCLI()` until a deliberate redesign happens.
-- `packages/cli/src/commands/__tests__/legacy-shim-boundary.test.ts` now asserts that `new` / `done` / `skills` / `dashboard` remain thin `_legacy/*` re-export shims until a deliberate redesign replaces them.
+- `packages/cli/src/commands/__tests__/legacy-shim-boundary.test.ts` now asserts that the retained legacy bucket (`new` / `done`) remains thin `_legacy/*` re-export shims until a deliberate redesign replaces them.
 - Audit conclusion recorded here so future promotion work starts from an explicit baseline rather than accidentally wiring legacy commands into the live CLI.
