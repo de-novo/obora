@@ -161,12 +161,62 @@ describe("plugin command", () => {
     expect(execFileMock).toHaveBeenCalled();
   });
 
+  it("inherits root --json for plugin install", async () => {
+    pluginState.scan.mockResolvedValue([
+      {
+        packageName: "@example/obora-plugin-foo",
+        packagePath: "/tmp/node_modules/@example/obora-plugin-foo",
+        version: "1.2.3",
+        metadata: {
+          name: "foo",
+          type: "adapter",
+        },
+      },
+    ]);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const root = new Command("obora").option("--json");
+    root.addCommand(createPluginCommand());
+
+    await root.parseAsync(["--json", "plugin", "install", "@example/obora-plugin-foo"], {
+      from: "user",
+    });
+
+    const payload = JSON.parse(log.mock.calls.at(-1)?.[0] ?? "{}");
+    expect(payload).toEqual(
+      expect.objectContaining({
+        command: "plugin install",
+        name: "@example/obora-plugin-foo",
+        installed: true,
+      })
+    );
+    expect(execFileMock).toHaveBeenCalled();
+  });
+
   it("supports local --json for plugin remove", async () => {
     pluginState.scan.mockResolvedValue([]);
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const cmd = createPluginCommand();
 
     await cmd.parseAsync(["remove", "@example/obora-plugin-foo", "--json"], { from: "user" });
+
+    const payload = JSON.parse(log.mock.calls.at(-1)?.[0] ?? "{}");
+    expect(payload).toEqual({
+      command: "plugin remove",
+      name: "@example/obora-plugin-foo",
+      removed: true,
+    });
+    expect(execFileMock).toHaveBeenCalled();
+  });
+
+  it("inherits root --json for plugin remove", async () => {
+    pluginState.scan.mockResolvedValue([]);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const root = new Command("obora").option("--json");
+    root.addCommand(createPluginCommand());
+
+    await root.parseAsync(["--json", "plugin", "remove", "@example/obora-plugin-foo"], {
+      from: "user",
+    });
 
     const payload = JSON.parse(log.mock.calls.at(-1)?.[0] ?? "{}");
     expect(payload).toEqual({

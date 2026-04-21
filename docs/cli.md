@@ -763,6 +763,7 @@ Supports both local `--json` and root `obora --json plugin install ...`.
 ```bash
 obora plugin install @example/obora-plugin-foo
 obora plugin install @example/obora-plugin-foo --json
+obora --json plugin install @example/obora-plugin-foo
 ```
 
 #### `obora plugin remove <name>`
@@ -773,6 +774,7 @@ Supports both local `--json` and root `obora --json plugin remove ...`.
 ```bash
 obora plugin remove @example/obora-plugin-foo
 obora plugin remove @example/obora-plugin-foo --json
+obora --json plugin remove @example/obora-plugin-foo
 ```
 
 #### `obora plugin inspect <name>`
