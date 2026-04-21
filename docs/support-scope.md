@@ -263,7 +263,7 @@ obora audit query <runId>
 1. 처음 쓰거나 운영할 때는 `quickstart / doctor / validate / judge / run / status / runs / inspect / dlq / audit`만 중심으로 본다
 2. SDK 통합이 필요할 때만 `@obora/sdk` / `@obora/runtime` / `@obora/adapters`를 본다
 3. `dashboard`는 패키지 capability로만 보고 CLI 명령으로 기대하지 않는다
-4. `new / done / skills / agents / dashboard`는 top-level live feature처럼 다루지 않는다
+4. `agents`는 live지만 `new / done / skills / dashboard`는 top-level live feature처럼 다루지 않는다
 
 ---
 

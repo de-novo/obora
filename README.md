@@ -86,6 +86,12 @@ If you are new to Obora, follow this order:
 9. [Support Scope](./docs/support-scope.md)
 10. [Operator Guide](./docs/operator-guide.md)
 
+Use the last three docs like this:
+
+- [Current Capabilities](./docs/current-capabilities.md): what is actually available now
+- [Support Scope](./docs/support-scope.md): what is live CLI vs package-only vs deferred
+- [Operator Guide](./docs/operator-guide.md): the shortest operator-facing command flow
+
 ### Recommended default setup
 
 Use this default rule unless you have a strong reason not to:
