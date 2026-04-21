@@ -21,11 +21,9 @@
     "@obora/adapters": "workspace:*",
     "@obora/runtime": "workspace:*",
     "commander": "^14.0.3",
-    "fs-extra": "^11.3.3",
     "yaml": "^2.8.2"
   },
   "devDependencies": {
-    "@types/fs-extra": "^11.0.4",
     "@types/node": "^22.0.0",
     "@vitest/coverage-v8": "^2.1.9",
     "chalk": "^5.6.2",

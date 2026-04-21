@@ -25,16 +25,13 @@ Targets reviewed:
 
 ## Current state
 
-### Wrapper pattern
+### Source-tree status
 
-The following retained files are only re-export shims:
+The deferred/legacy command files are no longer kept in the active CLI source tree.
 
-- `packages/cli/src/commands/new.ts` -> `./_legacy/new.js`
-- `packages/cli/src/commands/done.ts` -> `./_legacy/done.js`
-
-`packages/cli/src/commands/skills.ts` and `packages/cli/src/commands/dashboard.ts` plus their `_legacy/*` implementations were removed from the active CLI source tree once the deferred/live boundary was documented and guarded elsewhere.
-
-`packages/cli/src/commands/status.ts` has since been redesigned as a live top-level command over persisted runs/DLQ state and is no longer just a shim.
+- `skills` / `dashboard` wrappers and `_legacy/*` implementations were removed first because they had no remaining in-repo test or source dependency.
+- `new` / `done` wrappers and `_legacy/*` implementations were later removed together with their legacy-only unit tests.
+- `status` was redesigned as a live top-level command over persisted runs/DLQ state, and the old `_legacy/status.ts` feature-status implementation was removed once it became dead code.
 
 `packages/cli/src/commands/auth.ts` has since been redesigned as a live top-level command over the current provider-auth store and is no longer just a shim.
 
@@ -44,9 +41,9 @@ The following retained files are only re-export shims:
 
 `status`, `auth`, and `agents` are now registered in `createCLI()` as live commands.
 
-The remaining legacy-boundary targets above are still not added in `createCLI()`.
+`new`, `done`, `skills`, and `dashboard` are not added in `createCLI()`, and no dormant implementation for them is kept in the active CLI tree.
 
-This means those remaining surfaces are not part of the live top-level CLI contract even though some historical docs and a small retained compatibility bucket still exist.
+This means those surfaces remain historical/deferred only and are not part of the live top-level CLI contract.
 
 ### Why `status` required redesign instead of direct promotion
 
@@ -109,9 +106,10 @@ Recommended order:
 - `agents` was redesigned and registered as a live top-level surface with introspection and safe override subcommands.
 - `new` / `done` are now explicitly classified as legacy-only unless the feature-centric workflow returns.
 - `skills` / `dashboard` legacy wrappers were removed from active CLI source instead of being kept as dormant shims.
+- `new` / `done` wrappers, their `_legacy/*` implementations, and their legacy-only unit tests were also removed from active CLI source.
+- `_legacy/status.ts` plus the old feature-status helper were removed once they became pure dead code.
 - `dashboard` remains explicitly deferred until a fresh product UX decision exists.
 - Revival criteria for remaining deferred surfaces are tracked in `docs/deferred-surface-revival-criteria.md`.
-- The remaining legacy surfaces were not promoted automatically.
+- The remaining historical/deferred surfaces were not promoted automatically.
 - `packages/cli/src/commands/__tests__/cli-commands.test.ts` now asserts that `new` / `done` / `skills` / `dashboard` stay out of `createCLI()` until a deliberate redesign happens.
-- `packages/cli/src/commands/__tests__/legacy-shim-boundary.test.ts` now asserts that the retained legacy bucket (`new` / `done`) remains thin `_legacy/*` re-export shims until a deliberate redesign replaces them.
 - Audit conclusion recorded here so future promotion work starts from an explicit baseline rather than accidentally wiring legacy commands into the live CLI.
