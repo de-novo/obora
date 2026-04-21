@@ -940,6 +940,7 @@ obora knowledge query [--tag <tag>] [--project <id>] [--min-confidence <n>] [--l
 obora knowledge search <query> [--limit <n>] [--json]
 obora knowledge stats [--json]
 obora knowledge schema show [--json]
+obora --json knowledge stats
 ```
 
 Behavior:

@@ -117,6 +117,49 @@ describe("knowledge command", () => {
     expect(payload).toEqual(expect.objectContaining({ version: "1.0" }));
   });
 
+  it("inherits root --json for knowledge stats", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "obora-knowledge-stats-"));
+    await mkdir(join(dir, ".obora"), { recursive: true });
+    await writeFile(
+      join(dir, ".obora", "knowledge.json"),
+      JSON.stringify([
+        {
+          id: "entry-1",
+          title: "Release note policy",
+          body: "READY marker is required.",
+          tags: ["qa.policy", "qa.checklist"],
+          source: "manual",
+          confidence: 0.9,
+          createdAt: "2026-03-10T10:00:00.000Z",
+        },
+        {
+          id: "entry-2",
+          title: "Judge prompt note",
+          body: "Prefer concise score rationale.",
+          tags: ["judge.prompt"],
+          source: "manual",
+          confidence: 0.8,
+          createdAt: "2026-03-11T10:00:00.000Z",
+        },
+      ])
+    );
+    process.chdir(dir);
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cli = createCLI();
+
+    await cli.parseAsync(["--json", "knowledge", "stats"], { from: "user" });
+
+    const payload = JSON.parse(log.mock.calls.at(-1)?.[0] ?? "{}");
+    expect(payload).toEqual({
+      entries: 2,
+      domains: [
+        { domain: "qa", count: 2 },
+        { domain: "judge", count: 1 },
+      ],
+    });
+  });
+
   it("uses validation exit code for invalid knowledge limits", async () => {
     const dir = await mkdtemp(join(tmpdir(), "obora-knowledge-invalid-limit-"));
     await mkdir(join(dir, ".obora"), { recursive: true });
