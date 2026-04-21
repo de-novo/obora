@@ -1,10 +1,12 @@
 # Obora Dashboard CLI M4 Roadmap
 
 > **For Hermes:** 이 문서는 `obora dashboard`를 지금 바로 복구하라는 뜻이 아니라, M4 시점에 modern live surface로 되살릴 때 따라야 할 구현 계획입니다. 구현 시 작은 배치로 나누고, `packages/cli`의 공통 계약(`handleCommandAction`, root/local `--json`, exit code, docs/tests`)을 우선 적용하세요.
+>
+> Historical note: 이 문서 작성 이후 old `_legacy/dashboard.ts`와 dormant `packages/cli/src/commands/dashboard.ts` 경로는 active CLI source에서 제거되었습니다. 따라서 아래 task는 "기존 shim 수정"이 아니라, 필요 시 modern dashboard command를 새로 추가하는 계획으로 읽어야 합니다.
 
 **Goal:** `obora dashboard`를 단순 legacy launcher가 아니라, dashboard 패키지의 서버 부트스트랩과 CLI operator UX를 분리한 modern command surface로 재도입한다.
 
-**Architecture:** 현재 `_legacy/dashboard.ts`는 `@obora/dashboard` 서버를 직접 띄우고 `open(...)`과 `process.exit(0)`까지 CLI wrapper 안에서 처리합니다. M4에서는 dashboard package가 서버 lifecycle/bootstrap API를 제공하고, CLI는 그 API를 감싼 얇은 operator surface로만 남아야 합니다.
+**Architecture:** historical `_legacy/dashboard.ts`는 `@obora/dashboard` 서버를 직접 띄우고 `open(...)`과 `process.exit(0)`까지 CLI wrapper 안에서 처리했습니다. M4에서는 dashboard package가 서버 lifecycle/bootstrap API를 제공하고, CLI는 그 API를 감싼 얇은 operator surface로만 남아야 합니다.
 
 **Tech Stack:** `packages/cli`, `packages/dashboard`, Fastify server bootstrap, `open`, shared CLI error handling, docs/cli.md, Vitest
 
@@ -16,7 +18,7 @@
 
 - `docs/m3-sdk-cli-design.md`에서 dashboard UI는 M3 비목표로 명시되어 있습니다.
 - 같은 문서에서 `@obora/dashboard`는 M4 중심 패키지로 남겨둡니다.
-- 현 `_legacy/dashboard.ts`는 CLI contract보다 launcher 스크립트에 가깝습니다.
+- historical `_legacy/dashboard.ts`는 CLI contract보다 launcher 스크립트에 가까웠습니다.
 - 따라서 지금은 live 등록보다 “어떤 product UX로 되살릴지”를 먼저 고정하는 편이 맞습니다.
 
 즉 이 계획은 “나중에 revive할 때 어디서부터 시작할지”를 미리 정리한 문서입니다.
@@ -25,7 +27,7 @@
 
 ## Current Gaps
 
-현재 legacy wrapper의 문제:
+historical legacy wrapper의 문제:
 
 - local/root `--json` 없음
 - `handleCommandAction` / `getGlobalOpts` 미사용
@@ -166,20 +168,20 @@ CLI wrapper가 lifecycle를 직접 구현하지 않도록 dashboard package 쪽�
 
 legacy wrapper를 modern command contract로 교체한다.
 
-### Task B1: Replace shim with modern `packages/cli/src/commands/dashboard.ts`
+### Task B1: Add modern `packages/cli/src/commands/dashboard.ts`
 
 **Files:**
 
-- Modify: `packages/cli/src/commands/dashboard.ts`
+- Create: `packages/cli/src/commands/dashboard.ts`
 - Modify: `packages/cli/src/cli.ts`
 - Modify: `packages/cli/src/utils/error-handler.ts`
-- Test: `packages/cli/src/commands/__tests__/dashboard.test.ts`
+- Create/Test: `packages/cli/src/commands/__tests__/dashboard.test.ts`
 - Test: `packages/cli/src/commands/__tests__/cli-commands.test.ts`
 - Test: `packages/cli/src/utils/__tests__/error-handler.test.ts`
 
 **Requirements:**
 
-- `_legacy/dashboard.ts` re-export 제거
+- removed legacy wrapper를 복원하지 않고 modern command를 새로 추가
 - `getGlobalOpts(this)` 적용
 - `handleCommandAction(...)` 적용
 - local/root `--json` 지원
@@ -196,8 +198,8 @@ legacy wrapper를 modern command contract로 교체한다.
 
 **Files:**
 
-- Modify: `packages/cli/src/commands/dashboard.ts`
-- Test: `packages/cli/src/commands/__tests__/dashboard.test.ts`
+- Modify/Create: `packages/cli/src/commands/dashboard.ts`
+- Create/Test: `packages/cli/src/commands/__tests__/dashboard.test.ts`
 - Docs: `docs/cli.md`
 
 **Decision to make:**

@@ -229,7 +229,7 @@ obora audit query <runId>
 
 아래는 repo 안에 남아 있어도 product 기본 경로로 오해하면 안 됩니다.
 
-- `_legacy` command 구현
+- historical plan/docs에 남아 있는 옛 `_legacy/*` command 경로 언급
 - historical review / cleanup plan 문서 속 옛 command 표현
 - schema compatibility 설명용 field 예시
 - 과거 feature-local audit DB / DuckDB 기준 설명

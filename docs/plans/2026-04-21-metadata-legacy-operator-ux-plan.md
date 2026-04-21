@@ -2,6 +2,8 @@
 
 > **For Hermes:** Use this as the execution order for the current Obora cleanup push. Keep changes small, verify each slice, and commit frequently.
 
+> Historical note (2026-04-21): 이 계획 문서는 작성 당시 기준입니다. 이후 `skills/dashboard` dormant shim과 `new/done` feature-workflow legacy command가 active CLI source에서 제거되어, 아래 legacy shim 관련 항목 일부는 현재 baseline이 아니라 historical record로만 읽어야 합니다.
+
 **Goal:** 일주일 안에 Obora repo의 이름/메타데이터 mismatch를 걷어내고, deferred/live baseline 문서를 더 단단히 묶은 뒤, `doctor` / `status` / `runs` 주변 operator UX contract drift를 순차 정리합니다.
 
 **Architecture:** 두 트랙으로 나눕니다. Track A는 product-facing metadata/docs/legacy baseline 정리, Track B는 live operator command(`doctor`, `status`, `runs`) contract 재감사입니다. Track A가 support boundary를 고정해 주고, Track B가 실제 operator UX를 안정화합니다.
@@ -37,8 +39,10 @@
 이미 존재하는 가드:
 - `packages/cli/src/commands/__tests__/cli-commands.test.ts`
   - `new` / `done` / `skills` / `dashboard` 미등록 가드
-- `packages/cli/src/commands/__tests__/legacy-shim-boundary.test.ts`
-  - deferred command shim 유지 가드
+
+Historical note:
+- 작성 당시에는 `packages/cli/src/commands/__tests__/legacy-shim-boundary.test.ts`가 deferred command shim 유지 가드 역할을 했습니다.
+- 현재는 dormant shim/source 자체가 제거되어 이 항목은 historical record입니다.
 
 추가로 필요한 것:
 - 문서 간 cross-link를 더 명시적으로 유지
