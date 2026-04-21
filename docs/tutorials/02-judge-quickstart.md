@@ -130,6 +130,7 @@ If the preview is wrong, fix resolution first before editing prompts.
 If you want a different model ref, inspect the provider catalog first:
 
 ```bash
+obora models gpt-5.4
 obora models openai
 obora models openai gpt-5.4
 obora models anthropic opus

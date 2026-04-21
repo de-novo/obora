@@ -45,6 +45,7 @@ obora judge
 obora doctor
 obora doctor --json
 obora --json doctor
+obora models gpt-5.4
 obora models openai
 obora auth list
 obora agents show reviewer

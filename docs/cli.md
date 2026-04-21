@@ -219,9 +219,11 @@ List provider model refs from the installed `pi-ai` catalog.
 
 ```bash
 obora models
+obora models gpt-5.4
 obora models openai
 obora models openai gpt-5.4
 obora models openai --json
+obora --json models gpt-5.4
 obora --json models anthropic sonnet
 ```
 
@@ -230,6 +232,7 @@ obora --json models anthropic sonnet
 - uses the installed `@mariozechner/pi-ai` runtime catalog as the source of truth
 - supports both local `obora models ... --json` and root `obora --json models ...`
 - without a provider, lists available providers and model counts
+- with an unknown first argument, treats that value as a cross-provider global search query
 - with a provider, lists the supported model refs for that provider
 - if you pass an explicit provider plus query and the provider is unknown, exits with code `2`
 - useful for choosing a valid `OPENAI_MODEL`, `ANTHROPIC_MODEL`, or `providers.<name>.defaultModel`

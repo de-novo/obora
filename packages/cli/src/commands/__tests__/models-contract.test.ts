@@ -80,6 +80,31 @@ describe("models command contracts", () => {
     );
   });
 
+  it("inherits root --json for cross-provider global search queries", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cli = createCLI();
+
+    await cli.parseAsync(["--json", "models", "gpt-5.4"], { from: "user" });
+
+    const payload = JSON.parse(log.mock.calls.at(-1)?.[0] ?? "{}");
+    expect(payload).toEqual(
+      expect.objectContaining({
+        source: "pi-ai",
+        query: "gpt-5.4",
+        count: 1,
+        matches: [{ provider: "openai", model: "gpt-5.4" }],
+        overview: expect.objectContaining({
+          mode: "global",
+          query: "gpt-5.4",
+          count: 1,
+        }),
+        guidance: expect.objectContaining({
+          nextStep: "obora models openai gpt-5.4",
+        }),
+      })
+    );
+  });
+
   it("uses validation exit code for unsupported explicit providers", async () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);

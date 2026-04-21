@@ -164,6 +164,7 @@ cat artifacts/result.json
 
 ```bash
 obora models
+obora models gpt-5.4
 obora models openai
 obora auth add openai --apiKey "$OPENAI_API_KEY"
 obora auth list
