@@ -1,6 +1,7 @@
 # Obora Repository Legacy Cleanup Plan
 
 > For Hermes: execute only after preserving intended changes and confirming deletion scope. Do not push or delete remote branches without approval.
+> Historical note: 이 문서는 2026-04-08 시점의 cleanup baseline 기록이며, 현재 live support / metadata / deferred 기준 문서는 `docs/current-capabilities.md`, `docs/support-scope.md`, `docs/legacy-cli-surface-audit.md`, `docs/deferred-surface-revival-criteria.md`를 우선 봅니다.
 
 Goal: obora-kit 저장소에서 실험 부산물, 로컬 아티팩트, 병합 완료 브랜치 잔재, 추적되면 안 되는 배포 산출물을 분리해 워킹트리를 다시 예측 가능하게 만든다.
 
