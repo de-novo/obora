@@ -127,7 +127,7 @@ obora audit query <runId>
 
 - onboarding surface
 - config/auth/model discovery
-- read-only agent resolution inspection
+- agent resolution inspection plus safe config-layer override (`list/show/set/reset`)
 - workflow validate/expand/run/judge
 - operational inspection and recovery
 

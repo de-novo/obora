@@ -333,12 +333,13 @@ legacy wrapper는 원래 아래 성격이었습니다.
 현재 판단은 아래로 고정합니다.
 
 - `agents`
-  - 즉시 revival 대상 아님
-  - 필요 시 read-only introspection부터 검토
-  - implementation preconditions: `docs/plans/2026-04-18-agents-cli-revival-preconditions.md`
+  - 이미 live CLI surface로 복구 완료
+  - 현재 범위는 `list/show/set/reset`
+  - execution-only source와 config-layer override를 구분하는 A3 기준을 유지
+  - baseline / roadmap: `docs/plans/2026-04-18-agents-readonly-cli-contract.md`, `docs/plans/2026-04-20-agents-safe-override-a3-roadmap.md`
 - `dashboard`
   - 즉시 revival 대상 아님
   - M4 이후 product decision + package bootstrap 정리 이후 검토
   - roadmap: `docs/plans/2026-04-15-dashboard-cli-m4-roadmap.md`
 
-따라서 지금은 두 명령 모두 live CLI surface에 넣지 않고, 관련 package/doc/plan만 유지하는 것이 맞습니다.
+따라서 지금은 `agents`를 live CLI surface로 유지하되, `dashboard`만 deferred 상태로 package/doc/plan 기준에서 관리하는 것이 맞습니다.
