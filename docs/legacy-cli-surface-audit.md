@@ -31,11 +31,11 @@ The following files are only re-export shims:
 
 `packages/cli/src/commands/auth.ts` has since been redesigned as a live top-level command over the current provider-auth store and is no longer just a shim.
 
-`packages/cli/src/commands/agents.ts` has since been redesigned as a live read-only command over adapters/sdk agent snapshots and is no longer just a shim.
+`packages/cli/src/commands/agents.ts` has since been redesigned as a live agent surface over adapters/sdk resolution snapshots plus safe config-layer override helpers and is no longer just a shim.
 
 ### Registration
 
-`status`, `auth`, and read-only `agents` are now registered in `createCLI()` as live commands.
+`status`, `auth`, and `agents` are now registered in `createCLI()` as live commands.
 
 The remaining legacy-boundary targets above are still not added in `createCLI()`.
 
@@ -76,6 +76,8 @@ Recommended order:
   - now revived as a thin operator view over persisted runs/DLQ state rather than the legacy feature-status mock path.
 - `auth`
   - now revived as a live provider-auth management surface over `~/.obora/auth.json` rather than promoting the raw legacy wrapper.
+- `agents`
+  - now revived as a live operator surface with `list/show/set/reset`, resolution snapshots, and safe config-layer override previews rather than promoting the raw legacy wrapper.
 
 ### Likely keep legacy-only unless a concrete product need reappears
 
@@ -97,7 +99,7 @@ Recommended order:
 
 - `status` was redesigned and registered as a live top-level surface.
 - `auth` was redesigned and registered as a live top-level surface.
-- `agents` was redesigned and registered as a live read-only top-level surface.
+- `agents` was redesigned and registered as a live top-level surface with introspection and safe override subcommands.
 - `new` / `done` are now explicitly classified as legacy-only unless the feature-centric workflow returns.
 - `dashboard` remains explicitly deferred until a fresh product UX decision exists.
 - Revival criteria for remaining deferred surfaces are tracked in `docs/deferred-surface-revival-criteria.md`.

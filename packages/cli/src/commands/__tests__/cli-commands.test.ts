@@ -100,6 +100,14 @@ describe("M3 CLI command IA", () => {
     expect(names).toEqual(expect.arrayContaining(["query", "tail", "replay"]));
   });
 
+  it("has agents introspection and safe-override subcommands", () => {
+    const cli = createCLI();
+    const agents = cli.commands.find((command) => command.name() === "agents");
+    const names = agents?.commands.map((command) => command.name()) ?? [];
+
+    expect(names).toEqual(expect.arrayContaining(["list", "show", "set", "reset"]));
+  });
+
   it("--json global option propagates to subcommands", async () => {
     const cli = createCLI();
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);

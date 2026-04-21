@@ -101,14 +101,22 @@ deferred surface는 기준 문서만 보고 판단하지 않고, 실제 구현 m
 
 ## 현재 상태
 
-현재 상태는 두 층으로 나뉩니다.
+현재 상태는 historical baseline과 현재 live surface로 나뉩니다.
 
-### 이미 live인 A2 read-only surface
+### Historical A2 baseline
 
 - `obora agents list`
 - `obora agents show <name>`
 - local/root `--json`
 - shared exit-code / hint suppression / regression tests 반영
+
+### 현재 live A3 extension
+
+- `obora agents set <name>`
+- `obora agents reset <name>`
+- `--dry-run` preview
+- project/global scope contract
+- adapters-owned mutation helper + CLI thin formatter
 
 ### historical legacy mutation surface
 
@@ -118,13 +126,7 @@ legacy wrapper는 원래 아래 성격이었습니다.
 - `set/reset` mutation 중심 helper
 - modern live contract와 직접 연결하지 않음
 
-현재 live surface는 이미 아래로 대체/복구되었습니다.
-
-- `obora agents set <name>`
-- `obora agents reset <name>`
-- `--dry-run` preview
-- project/global scope contract
-- adapters-owned mutation helper + CLI thin formatter
+현재 live surface는 raw legacy mutation wrapper를 직접 올리지 않고 위 A3 extension으로 대체/복구되었습니다.
 
 연결 milestone 문서:
 
