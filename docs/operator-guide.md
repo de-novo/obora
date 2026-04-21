@@ -2,7 +2,7 @@
 
 Updated: 2026-04-18
 
-이 문서는 현재 obora-kit을 "운영자 관점"에서 빠르게 쓰기 위한 짧은 가이드입니다.
+이 문서는 현재 Obora를 "운영자 관점"에서 빠르게 쓰기 위한 짧은 가이드입니다.
 상세 기능 인벤토리는 `docs/current-capabilities.md`, 지원/비지원 범위 구분은 `docs/support-scope.md`, deferred 판단 기준은 `docs/deferred-surface-revival-criteria.md`를 참고하고, 이 문서는 실제 운영 흐름만 남깁니다.
 
 ---

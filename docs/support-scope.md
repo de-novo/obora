@@ -2,7 +2,7 @@
 
 Updated: 2026-04-18
 
-이 문서는 현재 `obora-kit`에서 무엇을 “지원 범위”로 보고, 무엇을 “비지원 / 비-live / deferred”로 보는지 빠르게 구분하기 위한 문서입니다.
+이 문서는 현재 Obora repo에서 무엇을 “지원 범위”로 보고, 무엇을 “비지원 / 비-live / deferred”로 보는지 빠르게 구분하기 위한 문서입니다.
 기능 인벤토리 전체는 `docs/current-capabilities.md`, 운영 흐름은 `docs/operator-guide.md`, deferred revival 기준은 `docs/deferred-surface-revival-criteria.md`를 참고하세요.
 
 기준은 아래 4가지입니다.
@@ -16,7 +16,7 @@ Updated: 2026-04-18
 
 ## 1. 한눈에 보는 판단 기준
 
-현재 obora-kit의 surface는 아래 4가지로 나누어 보는 것이 가장 안전합니다.
+현재 Obora의 surface는 아래 4가지로 나누어 보는 것이 가장 안전합니다.
 
 1. live CLI support
 2. supported package capability

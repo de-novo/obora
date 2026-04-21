@@ -2,7 +2,7 @@
 
 Updated: 2026-04-20
 
-이 문서는 현재 `obora-kit`에서 실제로 가능한 것과, 아직 live surface가 아닌 것을 빠르게 파악하기 위한 기능 정리입니다.
+이 문서는 현재 Obora repo에서 실제로 가능한 것과, 아직 live surface가 아닌 것을 빠르게 파악하기 위한 기능 정리입니다.
 README에서 전체 진입 순서를 먼저 보고 싶으면 `README.md`, 지원/비지원 범위 구분이 먼저 필요하면 `docs/support-scope.md`, 운영자용 짧은 사용 순서가 필요하면 `docs/operator-guide.md`, deferred revival 기준까지 보고 싶으면 `docs/deferred-surface-revival-criteria.md`를 먼저 보는 편이 좋습니다.
 기준은 다음입니다.
 
@@ -14,7 +14,7 @@ README에서 전체 진입 순서를 먼저 보고 싶으면 `README.md`, 지원
 
 ## 한눈에 보기
 
-현재 obora-kit은 크게 아래 5가지를 할 수 있습니다.
+현재 Obora는 크게 아래 5가지를 할 수 있습니다.
 
 1. 빠르게 프로젝트를 생성하고 onboarding 상태를 점검할 수 있음
 2. workflow YAML / one-file workflow를 검증·확장·dry-run·실행할 수 있음
@@ -158,7 +158,7 @@ judge mode는 현재 onboarding의 shortest path로 정리돼 있습니다.
 
 ## 4. 핵심 제품 기능 관점 정리
 
-README / examples / tutorial 기준으로 현재 obora-kit이 제공하는 핵심 기능은 아래입니다.
+README / examples / tutorial 기준으로 현재 Obora가 제공하는 핵심 기능은 아래입니다.
 
 ### 4.1 제어 가능한 실행 backbone
 
