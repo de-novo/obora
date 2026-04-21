@@ -27,11 +27,14 @@ obora quickstart my-project
 cd my-project
 obora doctor
 obora validate judge.yaml
+obora expand --json -- judge.yaml   # optional, after editing judge.yaml
 obora judge --dry-run
 obora judge
 
 # 그 다음 examples
+obora run examples/hello-obora.yaml --dry-run
 obora run examples/hello-obora.yaml
+obora run examples/07-contract-first-evaluation/workflow.yaml --dry-run
 obora run examples/07-contract-first-evaluation/workflow.yaml
 ```
 
@@ -111,6 +114,7 @@ node examples/06-validation-repair-loop/run.mjs
 
 ```bash
 cd examples/todo-app
+obora run workflow.yaml --dry-run
 obora run workflow.yaml
 ```
 
@@ -118,6 +122,7 @@ obora run workflow.yaml
 
 ```bash
 cd examples/todo-app-glm47
+obora run workflows/01-planning.yaml --dry-run
 obora run workflows/01-planning.yaml
 ```
 
@@ -127,7 +132,7 @@ obora run workflows/01-planning.yaml
 
 헷갈리면 아래처럼 보면 됩니다.
 
-1. 처음 성공 경로는 `quickstart -> doctor -> validate -> judge --dry-run -> judge`
+1. 처음 성공 경로는 `quickstart -> doctor -> validate -> optional expand -> judge --dry-run -> judge`
 2. examples는 그 다음에 capability를 넓혀 보는 참고 surface
 3. contract-first / validation-repair / consensus 예제는 현재 live product capability와 가장 가깝다
 4. plugin/dashboard/todo-app 계열은 advanced example로 보고, 기본 onboarding success 기준으로 삼지 않는다

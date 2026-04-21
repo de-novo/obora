@@ -66,8 +66,11 @@
 
 ```bash
 cd examples/todo-app-glm47
+obora run workflows/01-planning.yaml --dry-run
 obora run workflows/01-planning.yaml
+obora run workflows/02-architecture.yaml --dry-run
 obora run workflows/02-architecture.yaml
+obora run workflows/03-design-review.yaml --dry-run
 obora run workflows/03-design-review.yaml
 ```
 
@@ -96,6 +99,7 @@ obora run workflows/03-design-review.yaml
 
 ```bash
 cd examples/todo-app-glm47
+obora run workflows/01-planning-pipeline.yaml --config obora.config.yaml --agents agents.yaml --output-dir ./output --json --dry-run
 obora run workflows/01-planning-pipeline.yaml --config obora.config.yaml --agents agents.yaml --output-dir ./output --json
 python3 materialize-planning-output.py
 ```
@@ -123,9 +127,13 @@ materialize 이후 고정 출력 경로 예시:
 
 ```bash
 cd examples/todo-app-glm47
+obora run workflows/complex/02-architecture-complex.yaml --dry-run
 obora run workflows/complex/02-architecture-complex.yaml
+obora run workflows/complex/03-design-complex.yaml --dry-run
 obora run workflows/complex/03-design-complex.yaml
+obora run workflows/complex/04-development-complex.yaml --dry-run
 obora run workflows/complex/04-development-complex.yaml
+obora run workflows/complex/05-validation-complex.yaml --dry-run
 obora run workflows/complex/05-validation-complex.yaml
 ```
 

@@ -48,10 +48,11 @@
 ## Run
 
 ```bash
+obora run examples/05-dashboard-monitoring/workflow.yaml --policy examples/05-dashboard-monitoring/policy.yaml --dry-run
 obora run examples/05-dashboard-monitoring/workflow.yaml --policy examples/05-dashboard-monitoring/policy.yaml
 ```
 
-실행 전 preview:
+실행 전 preview를 먼저 보는 이유:
 
 ```bash
 obora run examples/05-dashboard-monitoring/workflow.yaml --policy examples/05-dashboard-monitoring/policy.yaml --dry-run

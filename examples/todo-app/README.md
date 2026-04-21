@@ -48,6 +48,7 @@ obora quickstart my-project
 cd my-project
 obora doctor
 obora validate judge.yaml
+obora expand --json -- judge.yaml   # optional, after editing judge.yaml
 obora judge --dry-run
 obora judge
 ```
@@ -64,10 +65,11 @@ obora judge
 
 ```bash
 cd examples/todo-app
+obora run workflow.yaml --dry-run
 obora run workflow.yaml
 ```
 
-필요하면 실행 전 preview도 먼저 볼 수 있습니다.
+preview-first로 보는 이유:
 
 ```bash
 cd examples/todo-app
