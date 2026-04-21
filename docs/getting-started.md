@@ -240,7 +240,7 @@ CLI를 설치해서 쓰는 대신 이 저장소를 직접 빌드하며 확인하
 
 ```bash
 git clone https://github.com/de-novo/obora.git
-cd obora-kit
+cd obora
 pnpm install
 pnpm build
 node packages/cli/bin/obora.js --help
