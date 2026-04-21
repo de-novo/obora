@@ -38,8 +38,10 @@ obora --json doctor
 ```
 
 - `doctor` reports onboarding readiness, not just a single next step
+- supports both local `obora doctor --json` and root `obora --json doctor`
 - judge-mode projects prefer `obora validate judge.yaml`, `obora judge --dry-run`, and `obora judge`
 - non-judge projects fall back to generic guidance like `obora run <workflow.yaml> --dry-run`
+- when named agent overrides drift from the current default path, doctor points operators to `obora agents list`, `obora agents show <name>`, and capped `obora agents reset <name> --dry-run` previews
 
 ### Models
 

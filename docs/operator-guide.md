@@ -1,6 +1,6 @@
 # Obora Operator Guide
 
-Updated: 2026-04-18
+Updated: 2026-04-21
 
 이 문서는 현재 Obora를 "운영자 관점"에서 빠르게 쓰기 위한 짧은 가이드입니다.
 상세 기능 인벤토리는 `docs/current-capabilities.md`, 지원/비지원 범위 구분은 `docs/support-scope.md`, deferred 판단 기준은 `docs/deferred-surface-revival-criteria.md`를 참고하고, 이 문서는 실제 운영 흐름만 남깁니다.
@@ -41,6 +41,8 @@ obora judge
 
 ```bash
 obora doctor
+obora doctor --json
+obora --json doctor
 obora models openai
 obora auth list
 obora agents show reviewer
@@ -50,9 +52,18 @@ obora agents set reviewer --model gpt-5.4 --dry-run
 언제 쓰나:
 
 - 왜 실행이 안 되는지 볼 때
+- 자동화/스크립트에서 machine-readable doctor payload가 필요할 때
 - 어떤 provider/model ref를 써야 하는지 확인할 때
 - 저장된 auth 상태를 확인할 때
 - 특정 agent만 config layer에서 바꿔야 할 때
+
+`doctor`에서 바로 보는 것:
+
+- `Ready: ...`, `Needs auth: ...`, `Needs provider alignment: ...` 같은 현재 readiness 상태
+- `judge.yaml`이 있으면 `validate judge.yaml -> judge --dry-run -> judge` 순서의 next action
+- `judge.yaml`이 없으면 `run <workflow.yaml> --dry-run -> run <workflow.yaml>` 같은 generic next action
+- local `obora doctor --json`과 root `obora --json doctor` 둘 다 같은 계약으로 지원되는 JSON payload
+- named agent override가 있으면 `obora agents list`, `obora agents show <name>`, `obora agents reset <name> --dry-run`까지 이어지는 operator triage 힌트
 
 ### 2.1b agent override preview / apply
 

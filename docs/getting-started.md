@@ -74,6 +74,8 @@ obora expand --json -- judge.yaml
 
 ```bash
 obora doctor
+obora doctor --json
+obora --json doctor
 ```
 
 확인 포인트:
