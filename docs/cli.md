@@ -803,6 +803,7 @@ Query persisted run records (requires persistence enabled).
 
 ```bash
 obora runs <subcommand>
+obora --json runs <subcommand>
 ```
 
 ### Subcommands
@@ -913,6 +914,7 @@ Resume a failed or suspended run from persistence/checkpoints.
 
 ```bash
 obora resume <runId> [--from-step <stepName>] [--drift-policy <reject|warn|ignore>] [--json]
+obora --json resume <runId> [--from-step <stepName>] [--drift-policy <reject|warn|ignore>]
 ```
 
 Behavior:
@@ -968,6 +970,7 @@ Dead-letter queue triage commands.
 
 ```bash
 obora dlq <subcommand>
+obora --json dlq <subcommand>
 ```
 
 ### Subcommands
@@ -1079,6 +1082,7 @@ Audit trail commands.
 
 ```bash
 obora audit <subcommand>
+obora --json audit <subcommand>
 ```
 
 ### Subcommands
