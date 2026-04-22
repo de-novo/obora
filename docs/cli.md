@@ -974,6 +974,7 @@ obora dlq <subcommand>
 
 ```bash
 obora dlq list [--status <pending|reviewed|retried|dismissed>] [--limit <n>] [--offset <n>] [--file <path>] [--json]
+obora --json dlq list [--status <pending|reviewed|retried|dismissed>] [--limit <n>] [--offset <n>] [--file <path>]
 ```
 
 List DLQ entries sorted by newest first. Text output includes workflow, status, repair attempt count, persisted `metadata.repairLoop.lastStopCategory`, compact related-run status, compact related run loop state, and a truncated latest validation summary when available.
@@ -990,16 +991,20 @@ obora dlq list --status pending
 
 # inspect a custom DLQ file
 obora dlq list --file ./data/.obora/dlq/dead-letters.json --json
+
+# root/global JSON form
+obora --json dlq list --limit 5
 ```
 
 #### `obora dlq inspect <entryId>`
 
 ```bash
 obora dlq inspect <entryId> [--file <path>] [--json]
+obora --json dlq inspect <entryId> [--file <path>]
 ```
 
-Show one DLQ entry including error, repair attempts, resolution fields, raw metadata, and a curated triage summary (`repairAttempts`, stop category, latest validation/repair context`).
-Supports both local `--json`and root`obora --json dlq inspect <entryId>`.
+Show one DLQ entry including error, repair attempts, resolution fields, raw metadata, and a curated triage summary (`repairAttempts`, stop category, latest validation/repair context).
+Supports both local `--json` and root `obora --json dlq inspect <entryId>`.
 If a persisted run record exists for the same `executionId`, CLI also includes:
 
 - a compact related-run summary
@@ -1010,6 +1015,7 @@ If a persisted run record exists for the same `executionId`, CLI also includes:
 
 ```bash
 obora dlq summary [--file <path>] [--json]
+obora --json dlq summary [--file <path>]
 ```
 
 Show aggregate DLQ counts (`pending`, `reviewed`, `retried`, `dismissed`) plus oldest pending timestamp.
@@ -1019,6 +1025,7 @@ Supports both local `--json` and root `obora --json dlq summary`.
 
 ```bash
 obora dlq resolve <entryId> --status <reviewed|retried|dismissed> [--actor <name>] [--note <text>] [--file <path>] [--json]
+obora --json dlq resolve <entryId> --status <reviewed|retried|dismissed> [--actor <name>] [--note <text>] [--file <path>]
 ```
 
 Resolve a DLQ entry and persist actor/note metadata.
