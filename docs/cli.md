@@ -864,6 +864,7 @@ obora runs list --repair-loop with --sort repairStarted --order asc
 
 ```bash
 obora runs inspect <runId> [--json] [--cost]
+obora --json runs inspect <runId> [--cost]
 ```
 
 Show run details including step records, artifacts, and repair-loop inspection summaries.
@@ -887,6 +888,7 @@ Top-level alias for `obora runs inspect`.
 
 ```bash
 obora inspect <runId> [--json] [--no-steps] [--cost]
+obora --json inspect <runId> [--no-steps] [--cost]
 ```
 
 Behavior:
@@ -1047,6 +1049,7 @@ Artifact retrieval commands.
 
 ```bash
 obora artifact get <runId> <stepName> <name> [--output <path>] [--json]
+obora --json artifact get <runId> <stepName> <name> --output <path>
 ```
 
 Download a persisted artifact by run ID, step name, and artifact name.
