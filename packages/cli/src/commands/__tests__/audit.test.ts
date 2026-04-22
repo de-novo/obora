@@ -89,6 +89,54 @@ describe("audit command", () => {
     );
   });
 
+  it("supports local --json for audit tail", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createAuditCommand();
+
+    await cmd.parseAsync(["tail", "--execution", "run-1", "--json"], { from: "user" });
+
+    const payload = JSON.parse(log.mock.calls.at(-1)?.[0] ?? "{}");
+    expect(payload).toEqual(
+      expect.objectContaining({
+        command: "audit tail",
+        connected: false,
+        options: expect.objectContaining({ execution: "run-1", json: true }),
+      })
+    );
+  });
+
+  it("inherits root --json for audit query", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cli = createCLI();
+
+    await cli.parseAsync(["--json", "audit", "query", "--execution", "run-1"], { from: "user" });
+
+    const payload = JSON.parse(log.mock.calls.at(-1)?.[0] ?? "{}");
+    expect(payload).toEqual(
+      expect.objectContaining({
+        command: "audit query",
+        connected: false,
+        options: expect.objectContaining({ execution: "run-1", limit: 20 }),
+      })
+    );
+  });
+
+  it("inherits root --json for audit tail", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cli = createCLI();
+
+    await cli.parseAsync(["--json", "audit", "tail", "--execution", "run-1"], { from: "user" });
+
+    const payload = JSON.parse(log.mock.calls.at(-1)?.[0] ?? "{}");
+    expect(payload).toEqual(
+      expect.objectContaining({
+        command: "audit tail",
+        connected: false,
+        options: expect.objectContaining({ execution: "run-1" }),
+      })
+    );
+  });
+
   it("inherits root --json for audit replay", async () => {
     oboraRuntimeState.instance = {
       getRunAuditTimeline: vi.fn().mockResolvedValue([]),

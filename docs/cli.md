@@ -1077,6 +1077,7 @@ obora audit <subcommand>
 
 ```bash
 obora audit query [--execution <id>] [--type <type>] [--limit <n>] [--json]
+obora --json audit query [--execution <id>] [--type <type>] [--limit <n>]
 ```
 
 Queries audit events from the execution log store.
@@ -1088,6 +1089,7 @@ Invalid `--limit` values return exit code `2`.
 
 ```bash
 obora audit tail [--execution <id>] [--json]
+obora --json audit tail [--execution <id>]
 ```
 
 Streams audit events for a running or completed execution.
