@@ -138,6 +138,7 @@ output:
 ```bash
 obora validate my-workflow.yaml
 obora validate my-workflow.yaml --json
+obora --json validate my-workflow.yaml
 ```
 
 이 경로는 다음을 빠르게 확인할 때 적합합니다.
@@ -150,6 +151,7 @@ obora validate my-workflow.yaml --json
 
 ```bash
 obora expand my-workflow.yaml --json
+obora --json expand my-workflow.yaml
 ```
 
 이 명령은 다음을 보여줍니다.

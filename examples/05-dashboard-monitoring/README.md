@@ -68,7 +68,7 @@ obora run examples/05-dashboard-monitoring/workflow.yaml --policy examples/05-da
 obora status
 obora runs list
 obora inspect <runId>
-obora audit query <runId>
+obora audit replay <runId>
 ```
 
 즉 이 예제의 핵심은 아래입니다.

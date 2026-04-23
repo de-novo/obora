@@ -72,6 +72,7 @@ obora doctor
 obora validate judge.yaml
 # Optional: inspect the expanded one-file workflow after edits
 obora expand --json -- judge.yaml
+obora --json expand judge.yaml
 obora judge --dry-run
 obora judge
 ```
@@ -153,6 +154,7 @@ obora judge
 
 - `obora validate my-workflow.yaml`
 - `obora expand my-workflow.yaml --json`
+- `obora --json expand my-workflow.yaml`
 - `obora --json run my-workflow.yaml --dry-run --dump-expanded-workflow --show-stop-semantics`
 
 judge mode는 현재 onboarding의 shortest path로 정리돼 있습니다.

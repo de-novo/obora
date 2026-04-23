@@ -59,6 +59,7 @@ obora doctor
 obora validate judge.yaml
 # Optional: inspect the expanded one-file workflow after edits
 obora expand --json -- judge.yaml
+obora --json expand judge.yaml
 obora judge --dry-run
 obora judge
 ```
@@ -115,6 +116,7 @@ obora doctor
 obora validate judge.yaml
 # Optional: inspect the expanded one-file workflow after edits
 obora expand --json -- judge.yaml
+obora --json expand judge.yaml
 obora judge --dry-run
 obora judge
 ```
@@ -137,6 +139,7 @@ Typical path:
 obora doctor
 obora validate workflow.yaml
 obora expand --json -- workflow.yaml
+obora --json expand workflow.yaml
 obora --json run workflow.yaml --dry-run --dump-expanded-workflow --show-stop-semantics
 ```
 
@@ -176,7 +179,7 @@ obora status
 obora runs list
 obora inspect <runId>
 obora dlq list
-obora audit query <runId>
+obora audit replay <runId>
 ```
 
 ---
@@ -476,6 +479,7 @@ obora --json expand <file>
 ```bash
 obora expand workflows/project-loop.yaml
 obora expand workflows/project-loop.yaml --json
+obora --json expand workflows/project-loop.yaml
 ```
 
 ### Exit Codes
@@ -513,6 +517,7 @@ obora judge
 obora judge --dry-run
 obora judge workflows/judge.yaml --dry-run
 obora judge --json --dry-run
+obora --json judge --dry-run
 ```
 
 ### Exit Codes
@@ -722,6 +727,7 @@ obora test ./tests
 obora test --fixture ./tests/happy-path.yaml
 obora test ./tests --filter recovery
 obora test ./tests --json
+obora --json test ./tests
 ```
 
 ### Exit Codes
@@ -740,6 +746,7 @@ Manage plugins.
 
 ```bash
 obora plugin <subcommand>
+obora --json plugin <subcommand>
 ```
 
 ### Subcommands
@@ -819,6 +826,13 @@ obora runs list \
   [--order <asc|desc>] \
   [--limit <n>] \
   [--json]
+obora --json runs list \
+  [--status <status>] \
+  [--workflow <name>] \
+  [--repair-loop <with|without|stalled|exhausted|critical|no-progress>] \
+  [--sort <startedAt|validationFailed|repairStarted>] \
+  [--order <asc|desc>] \
+  [--limit <n>]
 ```
 
 List persisted runs with optional workflow / repair-loop filtering and triage-oriented sorting.
@@ -1126,6 +1140,7 @@ Example:
 ```bash
 obora audit replay run-123
 obora audit replay run-123 --step review
+obora --json audit replay run-123 --step review
 ```
 
 ### Exit Codes
@@ -1162,6 +1177,7 @@ obora --json policy validate <path>
 ```bash
 obora policy validate policies/default.yaml
 obora policy validate workflows/example.yaml --json
+obora --json policy validate workflows/example.yaml
 ```
 
 ### Exit Codes

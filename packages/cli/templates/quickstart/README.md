@@ -26,6 +26,7 @@ If you edit `judge.yaml` and want deeper inspection, expand the one-file workflo
 
 ```bash
 obora expand --json -- judge.yaml
+obora --json expand judge.yaml
 ```
 
 4. Preview before execution

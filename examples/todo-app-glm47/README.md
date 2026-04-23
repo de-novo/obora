@@ -100,7 +100,9 @@ obora run workflows/03-design-review.yaml
 ```bash
 cd examples/todo-app-glm47
 obora run workflows/01-planning-pipeline.yaml --config obora.config.yaml --agents agents.yaml --output-dir ./output --json --dry-run
+obora --json run workflows/01-planning-pipeline.yaml --config obora.config.yaml --agents agents.yaml --output-dir ./output --dry-run
 obora run workflows/01-planning-pipeline.yaml --config obora.config.yaml --agents agents.yaml --output-dir ./output --json
+obora --json run workflows/01-planning-pipeline.yaml --config obora.config.yaml --agents agents.yaml --output-dir ./output
 python3 materialize-planning-output.py
 ```
 
@@ -168,8 +170,8 @@ obora run workflows/complex/03b-uiux-pencilskill-design-system.yaml
 obora status
 obora runs list
 obora inspect <runId>
-obora audit query <runId>
-obora artifact list <runId>
+obora audit replay <runId>
+obora artifact get <runId> <stepName> <name> --output ./artifact.out
 ```
 
 즉 개별 output 파일만 보는 것보다 persisted run / audit / artifact 기준으로 확인하는 편이 맞습니다.

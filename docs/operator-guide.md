@@ -100,6 +100,7 @@ obora agents reset reviewer --dry-run
 ```bash
 obora validate workflow.yaml
 obora expand --json -- workflow.yaml
+obora --json expand workflow.yaml
 obora --json run workflow.yaml --dry-run --dump-expanded-workflow --show-stop-semantics
 ```
 
@@ -188,10 +189,10 @@ obora dlq resolve <entryId> --status reviewed --actor cto --note "checked"
 ### 3.5 artifact / audit 확인
 
 ```bash
-obora artifact list <runId>
-obora artifact get <runId> <artifactName> --output ./artifact.out
-obora audit query <runId>
-obora audit tail <runId>
+obora inspect <runId>
+obora artifact get <runId> <stepName> <name> --output ./artifact.out
+obora audit replay <runId>
+obora audit tail --execution <runId>
 ```
 
 언제 쓰나:
@@ -226,7 +227,7 @@ obora inspect <runId>
 ```bash
 obora dlq list
 obora dlq inspect <entryId>
-obora audit query <runId>
+obora audit replay <runId>
 ```
 
 ### D. 중단 실행 재개
@@ -279,6 +280,7 @@ obora judge
 ```bash
 obora validate workflow.yaml
 obora expand --json -- workflow.yaml
+obora --json expand workflow.yaml
 obora run workflow.yaml --dry-run
 obora run workflow.yaml
 ```
@@ -290,14 +292,14 @@ obora status
 obora runs list
 obora inspect <runId>
 obora dlq list
-obora audit query <runId>
+obora audit replay <runId>
 ```
 
 ### 복구/후처리
 
 ```bash
 obora resume <runId>
-obora artifact list <runId>
-obora artifact get <runId> <artifactName> --output ./artifact.out
+obora inspect <runId>
+obora artifact get <runId> <stepName> <name> --output ./artifact.out
 obora dlq resolve <entryId> --status reviewed --actor cto --note "checked"
 ```

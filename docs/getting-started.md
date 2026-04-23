@@ -68,6 +68,7 @@ cd my-project
 ```bash
 obora validate judge.yaml
 obora expand --json -- judge.yaml
+obora --json expand judge.yaml
 ```
 
 ### 2) `obora doctor`
@@ -124,6 +125,7 @@ obora validate judge.yaml
 
 ```bash
 obora expand --json -- judge.yaml
+obora --json expand judge.yaml
 ```
 
 ### 4) `obora judge --dry-run`

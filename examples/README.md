@@ -28,6 +28,7 @@ cd my-project
 obora doctor
 obora validate judge.yaml
 obora expand --json -- judge.yaml   # optional, after editing judge.yaml
+obora --json expand judge.yaml
 obora judge --dry-run
 obora judge
 

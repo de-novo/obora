@@ -236,12 +236,14 @@ Start by validating the one-file YAML itself:
 ```bash
 obora validate my-workflow.yaml
 obora validate my-workflow.yaml --json
+obora --json validate my-workflow.yaml
 ```
 
 If you need the internal structure, inspect how a one-file YAML expands internally:
 
 ```bash
 obora expand my-workflow.yaml --json
+obora --json expand my-workflow.yaml
 ```
 
 For dry-run validation with the same information, prefer the root-global JSON form for advanced preview flags:

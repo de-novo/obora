@@ -49,6 +49,7 @@ cd my-project
 obora doctor
 obora validate judge.yaml
 obora expand --json -- judge.yaml   # optional, after editing judge.yaml
+obora --json expand judge.yaml
 obora judge --dry-run
 obora judge
 ```
@@ -90,7 +91,7 @@ obora run workflow.yaml --dry-run
 obora status
 obora runs list
 obora inspect <runId>
-obora audit query <runId>
+obora audit replay <runId>
 ```
 
 ---

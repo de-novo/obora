@@ -23,6 +23,7 @@ If you edited `judge.yaml` and want a deeper one-file inspection before previewi
 
 ```bash
 obora expand --json -- judge.yaml
+obora --json expand judge.yaml
 ```
 
 What this gives you:
@@ -107,8 +108,10 @@ cat artifacts/submission.json | obora judge --input @-
 ```bash
 obora validate judge.yaml
 obora validate judge.yaml --json
+obora --json validate judge.yaml
 obora validate --all
 obora expand --json -- workflow.yaml
+obora --json expand workflow.yaml
 ```
 
 For one-file workflow authoring, start with a positional target such as `obora validate judge.yaml`.

@@ -91,7 +91,7 @@ obora plugin inspect <your-plugin-name>
 obora status
 obora runs list
 obora inspect <runId>
-obora audit query <runId>
+obora audit replay <runId>
 ```
 
 ---

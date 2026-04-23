@@ -105,6 +105,7 @@ obora doctor
 obora validate judge.yaml
 # Optional: inspect the expanded one-file workflow after edits
 obora expand --json -- judge.yaml
+obora --json expand judge.yaml
 obora judge --dry-run
 obora judge
 ```
@@ -116,7 +117,7 @@ obora status
 obora runs list
 obora inspect <runId>
 obora dlq list
-obora audit query <runId>
+obora audit replay <runId>
 ```
 
 ### 2.2 supported package capability

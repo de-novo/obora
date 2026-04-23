@@ -44,6 +44,7 @@ obora validate judge.yaml
 
 # Optional: inspect the expanded one-file workflow after edits
 obora expand --json -- judge.yaml
+obora --json expand judge.yaml
 
 # Preview execution without starting the judge run
 obora judge --dry-run

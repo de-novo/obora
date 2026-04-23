@@ -80,6 +80,7 @@ If you edited `judge.yaml` and want to inspect the expanded shape, run:
 
 ```bash
 obora expand --json -- judge.yaml
+obora --json expand judge.yaml
 ```
 
 4. Preview the resolved execution
