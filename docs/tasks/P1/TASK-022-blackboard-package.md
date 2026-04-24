@@ -63,12 +63,12 @@ packages/blackboard/
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/obora-kit/obora-kit.git",
+    "url": "https://github.com/de-novo/obora.git",
     "directory": "packages/blackboard"
   },
-  "homepage": "https://github.com/obora-kit/obora-kit/tree/main/packages/blackboard",
+  "homepage": "https://github.com/de-novo/obora/tree/main/packages/blackboard",
   "bugs": {
-    "url": "https://github.com/obora-kit/obora-kit/issues"
+    "url": "https://github.com/de-novo/obora/issues"
   },
   "type": "module",
   "main": "./dist/index.cjs",
