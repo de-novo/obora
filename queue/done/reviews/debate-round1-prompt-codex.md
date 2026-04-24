@@ -167,13 +167,13 @@ packages/agents/
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/obora-kit/obora-kit.git",
+    "url": "https://github.com/de-novo/obora.git",
     "directory": "packages/agents"
   },
   "bugs": {
-    "url": "https://github.com/obora-kit/obora-kit/issues"
+    "url": "https://github.com/de-novo/obora/issues"
   },
-  "homepage": "https://github.com/obora-kit/obora-kit/tree/main/packages/agents#readme"
+  "homepage": "https://github.com/de-novo/obora/tree/main/packages/agents#readme"
 }
 ```
 
