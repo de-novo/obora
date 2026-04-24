@@ -131,11 +131,11 @@ packages/actor/
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-org/obora-kit.git",
+    "url": "https://github.com/de-novo/obora.git",
     "directory": "packages/actor"
   },
   "bugs": {
-    "url": "https://github.com/your-org/obora-kit/issues"
+    "url": "https://github.com/de-novo/obora/issues"
   },
   "engines": {
     "node": ">=20.0.0"
