@@ -346,9 +346,9 @@ describe("CLI quickstart integration", () => {
         resolution: expect.objectContaining({
           provider: "anthropic",
           model: "claude-3-7-sonnet-latest",
-          authSource: "env(ANTHROPIC_API_KEY)",
-          modelSource: "env(ANTHROPIC_MODEL)",
-          chosenByPrecedence: "env > config",
+          authSource: "runtime.llm",
+          modelSource: "runtime.llm",
+          chosenByPrecedence: "runtime.llm > config > env",
         }),
         bindingPreview: expect.arrayContaining([
           expect.objectContaining({
@@ -480,9 +480,9 @@ describe("CLI quickstart integration", () => {
 
     const stdout = logSpy.mock.calls.map((call) => String(call[0] ?? "")).join("\n");
 
-    expect(stdout).toContain("- auth source: env(OPENAI_API_KEY)");
-    expect(stdout).toContain("- model source: env(OPENAI_MODEL)");
-    expect(stdout).toContain("- chosen by precedence: env > config");
+    expect(stdout).toContain("- provider: openai");
+    expect(stdout).toContain("- model: gpt-4o-mini");
+    expect(stdout).toContain("- chosen by precedence: runtime.llm > config > env");
   });
 
   it("prints binding and output previews for quickstart one-file judge dry-runs", async () => {

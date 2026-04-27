@@ -321,16 +321,16 @@ export class WorkflowRunner {
   private buildResolveAgentLLM(
     executionId: string,
     loadedConfig: OboraConfig | undefined,
-    runtimeAgents: Map<string, AgentFactory>,
+    allAgents: Map<string, AgentFactory>,
     resolver: AdapterResolver
   ) {
     return async (agentName?: string) => {
       if (!loadedConfig || !agentName) return undefined;
 
-      const yamlAgentRaw = runtimeAgents.get(agentName)?.();
-      const yamlAgent =
-        yamlAgentRaw && typeof yamlAgentRaw === "object"
-          ? (yamlAgentRaw as {
+      const agentRaw = allAgents.get(agentName)?.();
+      const agentInfo =
+        agentRaw && typeof agentRaw === "object"
+          ? (agentRaw as {
               provider?: string;
               model?: string;
               temperature?: number;
@@ -338,22 +338,22 @@ export class WorkflowRunner {
             })
           : undefined;
       const configAgent = loadedConfig.agents?.[agentName];
-      const preferYamlAgent = Boolean(yamlAgent);
+      const preferAgentInfo = Boolean(agentInfo);
 
-      const resolvedProviderName = preferYamlAgent
-        ? (yamlAgent?.provider ?? loadedConfig.defaults?.provider)
+      const resolvedProviderName = preferAgentInfo
+        ? (agentInfo?.provider ?? loadedConfig.defaults?.provider)
         : (configAgent?.provider ?? loadedConfig.defaults?.provider);
 
-      // YAML에서 api_key가 제공되면 그것을 사용, 아니면 config에서 해결
+      // agentInfo에서 api_key가 제공되면 그것을 사용, 아니면 config에서 해결
       let providerConfig = resolveProviderConfig(loadedConfig, resolvedProviderName, {
         verbose: this.deps.config.verbose,
       });
 
-      // YAML의 api_key가 있으면 덮어쓰기
-      if (preferYamlAgent && yamlAgent?.api_key && providerConfig) {
+      // agentInfo의 api_key가 있으면 덮어쓰기
+      if (preferAgentInfo && agentInfo?.api_key && providerConfig) {
         providerConfig = {
           ...providerConfig,
-          apiKey: yamlAgent.api_key,
+          apiKey: agentInfo.api_key,
         };
       }
 
@@ -369,11 +369,11 @@ export class WorkflowRunner {
 
       return {
         adapter: await resolver.get(providerConfig),
-        model: preferYamlAgent
-          ? (yamlAgent?.model ?? providerConfig.model)
+        model: preferAgentInfo
+          ? (agentInfo?.model ?? providerConfig.model)
           : (configAgent?.model ?? providerConfig.model),
-        temperature: preferYamlAgent
-          ? (yamlAgent?.temperature ?? providerConfig.temperature)
+        temperature: preferAgentInfo
+          ? (agentInfo?.temperature ?? providerConfig.temperature)
           : (configAgent?.temperature ?? providerConfig.temperature),
         maxTokens: providerConfig.maxTokens,
       };

@@ -278,15 +278,13 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
   const loadedConfig = await loadConfig(options.config as string | undefined);
   const envLLM = detectLLMConfigFromEnv();
   const resolvedLLM = resolveLLMConfig(envLLM, loadedConfig);
-  const runtimeLLM =
-    resolvedLLM &&
-    ((options.provider as string | undefined) || (options.model as string | undefined))
-      ? {
-          ...resolvedLLM,
-          provider: (options.provider as string | undefined) ?? resolvedLLM.provider,
-          model: (options.model as string | undefined) ?? resolvedLLM.model,
-        }
-      : undefined;
+  const runtimeLLM = resolvedLLM
+    ? {
+        ...resolvedLLM,
+        provider: (options.provider as string | undefined) ?? resolvedLLM.provider,
+        model: (options.model as string | undefined) ?? resolvedLLM.model,
+      }
+    : undefined;
 
   const runtime = new OboraRuntime({
     policyPath: options.policy as string | undefined,
