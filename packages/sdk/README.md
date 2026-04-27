@@ -1,6 +1,6 @@
 # @obora/sdk
 
-Programmatic SDK for Obora AI Control Runtime.
+Obora SDK — programmatic API for AI Control Runtime.
 
 ## Installation
 

@@ -1,6 +1,6 @@
 # @obora/cli
 
-Command-line interface for Obora AI Control Runtime.
+Obora CLI — command-line interface for AI Control Runtime.
 
 ## Installation
 

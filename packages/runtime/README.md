@@ -1,6 +1,6 @@
 # @obora/runtime
 
-Core execution engine for Obora AI Control Runtime.
+AI Control Runtime — deterministic orchestration for non-deterministic AI.
 
 ## Installation
 

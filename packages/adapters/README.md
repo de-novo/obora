@@ -1,6 +1,6 @@
 # @obora/adapters
 
-LLM provider adapters for Obora AI Control Runtime.
+Obora adapters — LLM, tool, and auth integration layer.
 
 ## Installation
 
