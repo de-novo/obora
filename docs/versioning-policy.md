@@ -1,7 +1,7 @@
 # Versioning Policy
 
 ## 목적
-obora-kit 모노레포 패키지의 버전 규칙을 통일하여 릴리즈 예측 가능성을 높입니다.
+Obora 모노레포 패키지의 버전 규칙을 통일하여 릴리즈 예측 가능성을 높입니다。
 
 ## SemVer 규칙
 모든 패키지는 **Semantic Versioning (MAJOR.MINOR.PATCH)** 를 따릅니다.
