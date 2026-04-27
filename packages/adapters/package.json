@@ -1,7 +1,7 @@
 {
   "name": "@obora/adapters",
   "version": "0.1.2",
-  "description": "External integration adapters",
+  "description": "Obora adapters — LLM, tool, and auth integration layer",
   "type": "module",
   "keywords": [
     "ai",

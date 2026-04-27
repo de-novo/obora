@@ -2,7 +2,7 @@
   "name": "@obora/dashboard",
   "version": "0.1.0",
   "private": true,
-  "description": "Obora M4 dashboard web server scaffold",
+  "description": "Obora dashboard — web monitoring and control server",
   "type": "module",
   "keywords": [
     "dashboard",
