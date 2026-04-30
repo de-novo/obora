@@ -48,6 +48,7 @@ import {
 } from "../ExecutionContextBuilder.js";
 import { MockLLMAdapter } from "../../../../adapters/src/llm/mock-adapter";
 import type { ChatMessage } from "@obora/adapters";
+import type { BaseAgent } from "../../cell/agents/roles/index.js";
 import type { Step, Workflow, ErrorCode } from "../workflow/index.js";
 
 // ---------------------------------------------------------------------------
@@ -366,12 +367,13 @@ describe("E2E Scenario C: timeout failure with blackboard recording", () => {
 
   it("records E4002 timeout on blackboard", async () => {
     const board = createWorkflowBlackboard(SESSION_ID, WORKFLOW, "feat");
+    const slowAgent = {
+      execute: () => new Promise<never>(() => {}), // never resolves
+      role: "executor",
+    } as unknown as BaseAgent;
 
     const slowResolver: AgentResolver = {
-      resolve: () => ({
-        execute: () => new Promise<never>(() => {}), // never resolves
-        role: "executor",
-      }) as any,
+      resolve: () => slowAgent,
     };
 
     const step: Step = { name: "slow-step", agent: "executor", timeout: "1s" } as Step;

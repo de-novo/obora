@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 import type { ActorRuntime } from "../../cell/actor/runtime/ActorRuntime";
 import { ActorLifecycleStatus } from "../../cell/actor/types/actor";
@@ -233,6 +233,15 @@ describe("Supervisor", () => {
   });
 
   describe("backoff policies", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    });
+
     it("should use fixed backoff", async () => {
       const fixedSupervisor = new Supervisor(runtime as unknown as ActorRuntime, {
         strategy: RestartStrategy.ONE_FOR_ONE,
@@ -245,16 +254,17 @@ describe("Supervisor", () => {
         restartWindow: 60000,
       });
 
-      const delaySpy = vi.spyOn(fixedSupervisor as any, "delay").mockResolvedValue(undefined);
-
       fixedSupervisor.start();
       fixedSupervisor.watch(actorId("actor-1"));
+      const restartSpy = vi.spyOn(runtime, "restart");
 
-      await fixedSupervisor.handleFailure(actorId("actor-1"), new Error("Test"));
+      const failure = fixedSupervisor.handleFailure(actorId("actor-1"), new Error("Test"));
 
-      expect(delaySpy).toHaveBeenCalledWith(100);
-
-      delaySpy.mockRestore();
+      await vi.advanceTimersByTimeAsync(99);
+      expect(restartSpy).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      await failure;
+      expect(restartSpy).toHaveBeenCalledWith(actorId("actor-1"));
     });
 
     it("should use exponential backoff", async () => {
@@ -270,19 +280,22 @@ describe("Supervisor", () => {
         restartWindow: 60000,
       });
 
-      const delaySpy = vi.spyOn(expSupervisor as any, "delay").mockResolvedValue(undefined);
-
       expSupervisor.start();
       expSupervisor.watch(actorId("actor-1"));
+      const restartSpy = vi.spyOn(runtime, "restart");
 
-      await expSupervisor.handleFailure(actorId("actor-1"), new Error("Test"));
+      const firstFailure = expSupervisor.handleFailure(actorId("actor-1"), new Error("Test"));
+      await vi.advanceTimersByTimeAsync(100);
+      await firstFailure;
+      expect(restartSpy).toHaveBeenCalledTimes(1);
 
-      expect(delaySpy).toHaveBeenCalledWith(100);
+      const secondFailure = expSupervisor.handleFailure(actorId("actor-1"), new Error("Test 2"));
+      await vi.advanceTimersByTimeAsync(199);
+      expect(restartSpy).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      await secondFailure;
+      expect(restartSpy).toHaveBeenCalledTimes(2);
 
-      await expSupervisor.handleFailure(actorId("actor-1"), new Error("Test 2"));
-      expect(delaySpy).toHaveBeenCalledWith(200);
-
-      delaySpy.mockRestore();
     });
 
     it("should use linear backoff", async () => {
@@ -297,22 +310,26 @@ describe("Supervisor", () => {
         restartWindow: 60000,
       });
 
-      const delaySpy = vi.spyOn(linearSupervisor as any, "delay").mockResolvedValue(undefined);
-
       linearSupervisor.start();
       linearSupervisor.watch(actorId("actor-1"));
+      const restartSpy = vi.spyOn(runtime, "restart");
 
-      await linearSupervisor.handleFailure(actorId("actor-1"), new Error("Test"));
+      const firstFailure = linearSupervisor.handleFailure(actorId("actor-1"), new Error("Test"));
+      await vi.advanceTimersByTimeAsync(100);
+      await firstFailure;
+      expect(restartSpy).toHaveBeenCalledTimes(1);
 
-      expect(delaySpy).toHaveBeenCalledWith(100);
+      const secondFailure = linearSupervisor.handleFailure(actorId("actor-1"), new Error("Test 2"));
+      await vi.advanceTimersByTimeAsync(199);
+      expect(restartSpy).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      await secondFailure;
+      expect(restartSpy).toHaveBeenCalledTimes(2);
 
-      await linearSupervisor.handleFailure(actorId("actor-1"), new Error("Test 2"));
-      expect(delaySpy).toHaveBeenCalledWith(200);
-
-      delaySpy.mockRestore();
     });
 
     it("should use exponential jitter backoff", async () => {
+      vi.spyOn(Math, "random").mockReturnValue(0.5);
       const jitterSupervisor = new Supervisor(runtime as unknown as ActorRuntime, {
         strategy: RestartStrategy.ONE_FOR_ONE,
         backoff: {
@@ -326,19 +343,16 @@ describe("Supervisor", () => {
         restartWindow: 60000,
       });
 
-      const delaySpy = vi.spyOn(jitterSupervisor as any, "delay").mockResolvedValue(undefined);
-
       jitterSupervisor.start();
       jitterSupervisor.watch(actorId("actor-1"));
+      const restartSpy = vi.spyOn(runtime, "restart");
 
-      await jitterSupervisor.handleFailure(actorId("actor-1"), new Error("Test"));
-
-      expect(delaySpy).toHaveBeenCalled();
-      const delayValue = delaySpy.mock.calls[0][0];
-      expect(delayValue).toBeGreaterThan(90);
-      expect(delayValue).toBeLessThan(110);
-
-      delaySpy.mockRestore();
+      const failure = jitterSupervisor.handleFailure(actorId("actor-1"), new Error("Test"));
+      await vi.advanceTimersByTimeAsync(99);
+      expect(restartSpy).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      await failure;
+      expect(restartSpy).toHaveBeenCalledWith(actorId("actor-1"));
     });
   });
 
