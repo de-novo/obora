@@ -30,6 +30,7 @@ jobs:
         with:
           node-version: 20
           registry-url: 'https://registry.npmjs.org'
+          package-manager-cache: false
 
       - name: Enable Corepack
         run: corepack enable
