@@ -1,4 +1,5 @@
 import { createAgentId } from "../../../blackboard/types/base.js";
+import type { ToolContext } from "@obora/adapters";
 import {
   BaseAgent,
   BaseAgentConfig,
@@ -9,17 +10,9 @@ import {
   ExecutorOutput,
 } from "./base-agent";
 
-interface ToolCtx {
-  sessionId: string;
-  agentId: string;
-  taskId?: string;
-  metadata?: Record<string, unknown>;
-  permissions: Set<string>;
-}
-
 export interface ToolRegistryLike {
   listTools(): Array<{ name: string }>;
-  execute(name: string, params: Record<string, unknown>, context: ToolCtx): Promise<unknown>;
+  execute(name: string, params: Record<string, unknown>, context: ToolContext): Promise<unknown>;
 }
 
 /**
@@ -90,7 +83,7 @@ Be precise, efficient, and safety-conscious in your execution.`;
 
     if (plan.tool && this.toolRegistry) {
       // 도구 레지스트리에서 도구 실행
-      const toolContext: ToolCtx = {
+      const toolContext: ToolContext = {
         sessionId: context.sessionId,
         agentId: this.id,
         taskId: context.currentTask?.id,

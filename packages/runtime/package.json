@@ -24,7 +24,7 @@
     "build": "tsup && tsc --emitDeclarationOnly --declaration --declarationMap false --outDir dist --noCheck",
     "dev": "tsup --watch",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@mariozechner/pi-agent-core": "^0.65.0",
