@@ -1,0 +1,24 @@
+# path<TAB>classification<TAB>reason
+# classification: keep | deprecate | remove-later
+packages/adapters/src/skills/types.ts	deprecate	Public alias retained for minor compatibility; replacement is OboraSkill.tools.
+packages/adapters/src/tools/registry.ts	deprecate	Deprecated helper retained until the next breaking cleanup; replacement is toToolDefinitions.
+packages/adapters/src/tools/types.ts	deprecate	Deprecated ToolDefinition alias retained; replacement is ToolCall.
+packages/cli/src/commands/__tests__/cli-commands.test.ts	keep	Regression test that removed/deferred CLI wrappers remain unregistered.
+packages/cli/src/commands/__tests__/validate.test.ts	keep	Test name documents canonical SDK expansion path replacing the old parser.
+packages/cli/src/commands/doctor-shared.ts	keep	Claude model ref parser intentionally accepts historical model naming shapes.
+packages/cli/src/runtime/__tests__/agent-registry.test.ts	remove-later	Test wording still references historical task names; behavior stays until registry naming cleanup.
+packages/cli/src/runtime/context-builder.ts	keep	No-op hook protects older agent plugin shapes without reintroducing legacy source paths.
+packages/cli/src/tui/error-ui.ts	keep	Readline fallback is a runtime compatibility behavior, not legacy command support.
+packages/runtime/src/audit/index.ts	deprecate	Audit re-export surface is kept for current minor compatibility; remove only in breaking cleanup.
+packages/runtime/src/blackboard/core/accessors/decisions-accessor.ts	deprecate	Deprecated accessor retained with replacement guidance.
+packages/runtime/src/blackboard/core/accessors/knowledge-accessor.ts	deprecate	Deprecated counters retained with replacement getter guidance.
+packages/runtime/src/blackboard/core/accessors/state-accessor.ts	deprecate	Deprecated busy-agent accessor retained with replacement guidance.
+packages/runtime/src/blackboard/types/knowledge.ts	deprecate	Deprecated field retained for snapshot/data compatibility; replacement is source.
+packages/runtime/src/orchestrator/RuntimeOrchestrator.ts	keep	Consensus schema compatibility is live workflow parser behavior.
+packages/runtime/src/patterns/builtin/FanOutFanInPattern.ts	keep	Forward-compatible aggregation fallback is intentional runtime behavior.
+packages/runtime/src/patterns/types.ts	keep	Internal execute entrypoint delegates to canonical run API.
+packages/sdk/src/__tests__/conditional-routing.test.ts	keep	Regression coverage for existing string goto workflow compatibility.
+packages/sdk/src/blackboard/__tests__/execution-observer.test.ts	keep	Regression coverage for observer behavior without blackboard.
+packages/sdk/src/execution/parallel-scheduler.ts	keep	Runtime scheduling fallback preserves existing workflow behavior.
+packages/sdk/src/reflector/__tests__/reflector-engine.test.ts	deprecate	Coverage for old analyzeFailures entrypoint until reflector API cleanup.
+packages/sdk/src/reflector/reflector-engine.ts	deprecate	Backward-compatible reflector entrypoint retained until breaking cleanup.

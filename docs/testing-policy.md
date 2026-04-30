@@ -26,6 +26,7 @@ Obora 전 패키지의 테스트 기준을 통일해 변경 안정성과 릴리�
 - 로컬에서 destructive clean-checkout 시뮬레이션이 필요하면 `pnpm verify:clean`을 실행합니다.
   이 스크립트는 install/build/Turbo 산출물을 제거한 뒤 lockfile 기준 install과 기본 게이트를 실행합니다.
 - PR/push 기본 CI는 `pnpm typecheck -> pnpm lint -> pnpm test -> pnpm build`를 실행합니다.
+- 릴리즈 후보 검증은 `docs/release-readiness.md`를 기준으로 `pnpm verify:release`, `pnpm verify:compat`, `pnpm verify:test-type-debt`를 추가 실행합니다.
 - flaky 테스트는 머지 전 원인 분석 후 수정하거나 격리합니다.
 - 테스트 실패 허용 머지는 금지합니다.
 

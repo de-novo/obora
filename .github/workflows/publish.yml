@@ -55,6 +55,11 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      - name: Publish @obora/adapters
+        run: pnpm --filter @obora/adapters exec npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Publish @obora/sdk
         run: pnpm --filter @obora/sdk exec npm publish --access public
         env:

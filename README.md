@@ -83,6 +83,16 @@ lockfile and running the same default gate.
 credentials, such as `ZAI_API_KEY`, are available and external API cost/latency is
 acceptable.
 
+Release readiness checks are documented in
+[`docs/release-readiness.md`](./docs/release-readiness.md). Before a release
+candidate, run the release gate and tracking gates:
+
+```bash
+pnpm verify:release
+pnpm verify:compat
+pnpm verify:test-type-debt
+```
+
 Useful discovery commands:
 
 - `obora models <provider> [query]` shows the model refs available from the installed `pi-ai` catalog

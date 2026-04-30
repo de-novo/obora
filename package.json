@@ -14,7 +14,10 @@
     "typecheck": "pnpm -r typecheck",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "clean": "turbo clean && rm -rf node_modules",
-    "verify:clean": "bash scripts/verify-clean.sh"
+    "verify:clean": "bash scripts/verify-clean.sh",
+    "verify:release": "bash scripts/release/verify-release.sh",
+    "verify:compat": "bash scripts/release/verify-compat-inventory.sh",
+    "verify:test-type-debt": "bash scripts/release/verify-test-type-debt.sh"
   },
   "repository": {
     "type": "git",

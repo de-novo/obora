@@ -1,4 +1,17 @@
-## Unreleased
+# Changelog
+
+All notable changes to Obora will be documented in this file.
+
+## [Unreleased]
+
+### Added — Release Readiness
+
+- Added release readiness documentation for default gates, publish order, package payload checks, and manual publish flow.
+- Added `verify:release`, `verify:compat`, and `verify:test-type-debt` root scripts.
+- Added compatibility/deprecation and SDK/CLI test type-debt allowlists so release-readiness debt cannot grow silently.
+- Aligned the GitHub publish workflow with the release scripts by publishing `@obora/adapters` between `@obora/runtime` and `@obora/sdk`.
+- Switched package payload verification to `npm pack --dry-run` so release checks remain runnable before version bumps.
+- Hardened publish payload checks so test artifacts cannot be included in release tarballs.
 
 ### Added — Contract-First Workflow DX
 
@@ -21,12 +34,6 @@
 - Updated `docs/getting-started.md` to highlight contract-first authoring.
 - Updated `docs/tutorials/one-file-workflows.md` with `judge` mode and contract-first JSON in/out guidance.
 - Updated `docs/api/sdk.md` to document the current `WorkflowStep` input/output contract surface.
-
-# Changelog
-
-All notable changes to Obora will be documented in this file.
-
-## [Unreleased]
 
 ### Fixed — CLI Packaging and Release Verification (2026-03-30)
 - **CLI version mismatch fixed for next release**: `@obora/cli` patch release is bumped to `0.1.3` so corrected version wiring can be published as a fresh artifact instead of attempting to overwrite an existing version.
