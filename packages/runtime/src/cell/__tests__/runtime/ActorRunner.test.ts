@@ -1,19 +1,19 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-import type { Observation, Action, Result } from "../actor-types";
-import { createActionId } from "../actor-types/action";
+import type { Observation, Action, Result } from "../../actor-types";
+import { createActionId } from "../../actor-types/action";
 import {
   Actor,
   ActorRole,
   ActorLifecycleStatus,
   createActorId,
   type ActorId,
-} from "../actor-types/actor";
-import type { IBlackboard } from "../actor-types/actor";
-import type { IMessageBus } from "../actor-types/message";
-import { createActorMetrics } from "../actor-types/metrics";
-import { createResultId } from "../actor-types/result";
-import { ActorRunner } from "../internal/ActorRunnerAdapter";
+} from "../../actor-types/actor";
+import type { IBlackboard } from "../../actor-types/actor";
+import type { IMessageBus } from "../../actor-types/message";
+import { createActorMetrics } from "../../actor-types/metrics";
+import { createResultId } from "../../actor-types/result";
+import { ActorRunner } from "../../internal/ActorRunnerAdapter";
 
 class TestActor implements Actor {
   readonly id: ActorId = createActorId("analyst");

@@ -17,17 +17,21 @@ Obora 전 패키지의 테스트 기준을 통일해 변경 안정성과 릴리�
 - 신규 패키지/핵심 모듈(`cli`, `core`, `database`)은 목표 미달 시 PR에서 사유를 명시해야 합니다.
 
 ## CI 설정 원칙
-- PR 기준 필수 체크:
-  1. 타입체크 통과
-  2. 빌드 통과
-  3. 테스트 통과
+- 기본 로컬/CI 게이트는 clean checkout 기준 아래 순서로 고정합니다.
+  1. `pnpm install`
+  2. `pnpm typecheck`
+  3. `pnpm lint`
+  4. `pnpm test`
+  5. `pnpm build`
+- PR/push 기본 CI는 `pnpm typecheck -> pnpm lint -> pnpm test -> pnpm build`를 실행합니다.
 - flaky 테스트는 머지 전 원인 분석 후 수정하거나 격리합니다.
 - 테스트 실패 허용 머지는 금지합니다.
 
 ## E2E 테스트 위치
 - CLI E2E 테스트는 `packages/cli` 하위(`test:e2e` 스크립트)에서 관리합니다.
 - E2E는 실제 사용자 플로우(생성/초기화/동기화)를 기준으로 작성합니다.
-- 주요 릴리즈 전에는 E2E를 필수 실행합니다.
+- `pnpm test:e2e`는 기본 push/PR CI에 포함하지 않는 수동 live-LLM 검증입니다.
+- `ZAI_API_KEY` 등 필요한 provider credential이 있고 외부 API 비용/지연을 허용할 때만 실행합니다.
 
 ## 운영 원칙
 - 버그 수정 PR에는 회귀 테스트를 함께 추가합니다.
