@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { SupervisorTree } from "../../../cell/actor/supervision/SupervisorTree";
-import type { ActorRuntime } from "../../../cell/actor/runtime/ActorRuntime";
+import { SupervisorTree } from "../../cell/actor/supervision/SupervisorTree";
+import type { ActorRuntime } from "../../cell/actor/runtime/ActorRuntime";
 
 class MockRuntime {
   async restart() {}

@@ -1,4 +1,4 @@
-import { IBlackboard } from "../../../actor-types/blackboard";
+import { IBlackboard } from "../../actor-types/blackboard";
 
 export class MockBlackboard implements IBlackboard {
   private readonly data: Map<string, unknown>;

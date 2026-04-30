@@ -1,9 +1,9 @@
-import type { ActorFactory, ActorConfig } from "../../../types";
-import type { Actor } from "../../../actor-types/actor";
-import type { IBlackboard } from "../../../actor-types/blackboard";
-import type { IMessageBus } from "../../../actor-types/message";
+import type { ActorFactory, ActorConfig } from "../../types";
+import type { Actor } from "../../actor-types/actor";
+import type { IBlackboard } from "../../actor-types/blackboard";
+import type { IMessageBus } from "../../actor-types/message";
 
-import { createActorId } from "../../../actor-types/actor";
+import { createActorId } from "../../actor-types/actor";
 import { TestActor, TestActorConfig } from "./TestActor";
 
 export class TestActorFactory implements ActorFactory {
