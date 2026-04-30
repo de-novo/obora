@@ -31,5 +31,5 @@ sqlite3 ./data/obora.db "SELECT id, run_id, step_name, event_type, created_at FR
 
 ## Notes
 
-- `docs/legacy-cli-surface-audit.md`에 정리된 pre-pivot feature workflow / DuckDB 기반 설명은 현재 live CLI 기준이 아닙니다.
+- `docs/legacy-cli-surface-audit.md`에 정리된 historical pre-pivot feature workflow / DuckDB 기반 설명은 현재 live CLI 기준이 아닙니다.
 - 현재 live operator surface는 feature-local `.obora/features/<feature>/...` 경로보다 persisted runs + artifacts + DLQ 기준으로 보는 편이 맞습니다.

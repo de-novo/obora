@@ -258,7 +258,7 @@ obora resume <runId>
 - `docs/current-capabilities.md`
 - `docs/support-scope.md`
 - `docs/deferred-surface-revival-criteria.md`
-- `docs/legacy-cli-surface-audit.md`
+- `docs/legacy-cli-surface-audit.md` (historical audit baseline, not a live operator surface)
 
 ---
 

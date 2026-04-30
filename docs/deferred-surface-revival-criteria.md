@@ -13,7 +13,7 @@ Updated: 2026-04-20
 
 - `agents`는 이제 `list/show/set/reset`이 live top-level CLI surface입니다.
 - `dashboard`는 아직 top-level live CLI surface가 아닙니다.
-- 둘 다 단순히 legacy wrapper를 `createCLI()`에 다시 꽂는 방식으로는 확장/복구하지 않습니다.
+- 둘 다 삭제된 historical wrapper를 `createCLI()`에 다시 꽂는 방식으로는 확장/복구하지 않습니다.
 - 추가 revival은 product 필요 + operator UX + shared CLI contract + 테스트/문서 정합성이 동시에 만족될 때만 진행합니다.
 
 ---
@@ -42,7 +42,7 @@ deferred surface를 다시 열기 전에 아래 5가지를 모두 만족해야 �
 - irrelevant generic hint suppression
 - dedicated tests + `docs/cli.md` 반영
 
-즉, `_legacy/*.ts`를 그대로 재등록하는 방식은 금지입니다.
+즉, 삭제된 historical wrapper 구현을 그대로 재등록하는 방식은 금지입니다.
 
 ### 1.3 package boundary가 먼저 정리돼야 함
 
@@ -118,15 +118,15 @@ deferred surface는 기준 문서만 보고 판단하지 않고, 실제 구현 m
 - project/global scope contract
 - adapters-owned mutation helper + CLI thin formatter
 
-### historical legacy mutation surface
+### historical mutation surface
 
-legacy wrapper는 원래 아래 성격이었습니다.
+삭제된 historical wrapper는 원래 아래 성격이었습니다.
 
 - `.obora/config.yaml` / `~/.obora/config.yaml`를 raw YAML write로 직접 수정
 - `set/reset` mutation 중심 helper
 - modern live contract와 직접 연결하지 않음
 
-현재 live surface는 raw legacy mutation wrapper를 직접 올리지 않고 위 A3 extension으로 대체/복구되었습니다.
+현재 live surface는 raw historical mutation wrapper를 직접 올리지 않고 위 A3 extension으로 대체/복구되었습니다.
 
 연결 milestone 문서:
 
@@ -213,7 +213,7 @@ legacy wrapper는 원래 아래 성격이었습니다.
 
 ## 현재 상태
 
-historical legacy wrapper는 원래 아래 성격이었습니다.
+삭제된 historical dashboard wrapper는 원래 아래 성격이었습니다.
 
 - `@obora/dashboard` 서버를 직접 띄움
 - `open(...)` 호출 포함
@@ -317,7 +317,7 @@ historical legacy wrapper는 원래 아래 성격이었습니다.
 
 - [ ] top-level product 이유 1문장으로 설명 가능
 - [ ] existing live commands와 역할 경계가 명확함
-- [ ] `_legacy/*` 재등록이 아니라 새 command 구현임
+- [ ] 삭제된 historical wrapper 재등록이 아니라 새 command 구현임
 - [ ] package/helper boundary가 정리됨
 - [ ] local/root `--json` 계약 있음
 - [ ] exit code 계약 있음

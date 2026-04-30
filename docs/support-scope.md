@@ -10,7 +10,7 @@ Updated: 2026-04-18
 - 현재 top-level CLI에 실제 등록돼 있는가
 - 현재 README / `docs/cli.md` / tutorials에서 product-facing flow로 가르치는가
 - monorepo package로 build/test/publish 대상인가
-- legacy wrapper / historical 흔적이 아니라 현재 contract로 유지되는가
+- 삭제된 historical wrapper / 과거 흔적이 아니라 현재 contract로 유지되는가
 
 ---
 
@@ -21,7 +21,7 @@ Updated: 2026-04-18
 1. live CLI support
 2. supported package capability
 3. package-only capability
-4. deferred / legacy-only / non-live surface
+4. deferred / historical-only / non-live surface
 
 의미는 아래와 같습니다.
 
@@ -54,7 +54,7 @@ top-level CLI가 아니라도 현재 코드/패키지 기준으로 사용 가능
 - package capability는 있음
 - 하지만 top-level CLI / onboarding / operator guide에 올리지는 않음
 
-### 1.4 deferred / legacy-only / non-live surface
+### 1.4 deferred / historical-only / non-live surface
 
 코드나 문서 흔적이 있어도 현재 기준 product support로 간주하지 않는 영역입니다.
 
@@ -213,7 +213,7 @@ obora audit replay <runId>
 
 - `docs/deferred-surface-revival-criteria.md`
 
-### 4.2 legacy-only surface
+### 4.2 historical-only surface
 
 아래는 현재 product support로 간주하지 않습니다.
 
@@ -232,7 +232,7 @@ obora audit replay <runId>
 
 아래는 repo 안에 남아 있어도 product 기본 경로로 오해하면 안 됩니다.
 
-- historical plan/docs에 남아 있는 옛 `_legacy/*` command 경로 언급
+- historical plan/docs에 남아 있는 삭제된 wrapper command 경로 언급
 - historical review / cleanup plan 문서 속 옛 command 표현
 - schema compatibility 설명용 field 예시
 - 과거 feature-local audit DB / DuckDB 기준 설명
@@ -255,7 +255,7 @@ obora audit replay <runId>
 
 - live CLI에 있고 문서 흐름에 있으면 지원 범위
 - package는 있으나 live CLI가 아니면 package-only capability일 수 있음
-- legacy/deferred는 현재 기본 사용 경로가 아님
+- historical/deferred surface는 현재 기본 사용 경로가 아님
 
 ---
 

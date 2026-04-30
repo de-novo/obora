@@ -660,7 +660,7 @@ obora --json validate [target] [--all] [--file <path>] [--strict]
 - `--all` validate all workflow YAML files under `.obora/workflows` and `.obora/features`
 - `-f, --file <path>` validate a specific workflow file
 - `--strict` treat warnings as validation failures
-- `-o, --format <default|json>` legacy output selector; `json` is equivalent to local `--json`
+- `-o, --format <default|json>` compatibility output selector; `json` is equivalent to local `--json`
 - `--json` output structured validation results as JSON
 - `-v, --verbose` show detailed validation output
 
@@ -668,7 +668,7 @@ obora --json validate [target] [--all] [--file <path>] [--strict]
 
 - Supports both local `obora validate ... --json` and root `obora --json validate ...`.
 - Accepts a positional workflow target (`obora validate judge.yaml`) as an alias for `--file`.
-- Validates one-file workflows (for example `mode: judge`) through SDK expansion instead of the legacy graph parser.
+- Validates one-file workflows (for example `mode: judge`) through SDK expansion instead of the removed historical graph-parser path.
 - One-file validation failures include an `obora expand --json -- <file>` follow-up suggestion for deeper inspection, using shell-safe quoting when needed.
 - `[target]` and `--file` are mutually exclusive.
 - `--all` cannot be combined with `[target]` or `--file`.
