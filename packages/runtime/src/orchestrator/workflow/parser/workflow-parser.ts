@@ -568,11 +568,11 @@ function checkOnFailMutualExclusion(
     }
 
     const workflowRecovery = recovery?.[step.name];
-    const legacyRecovery = (step.config as Record<string, unknown> | undefined)?.recovery as Record<string, unknown> | undefined;
-    const hasLegacyOnFail = typeof legacyRecovery?.on_fail === "string";
+    const stepConfigRecovery = (step.config as Record<string, unknown> | undefined)?.recovery as Record<string, unknown> | undefined;
+    const hasStepConfigOnFail = typeof stepConfigRecovery?.on_fail === "string";
     const hasWorkflowOnFail = typeof workflowRecovery?.on_fail === "string";
 
-    if (hasLegacyOnFail || hasWorkflowOnFail) {
+    if (hasStepConfigOnFail || hasWorkflowOnFail) {
       throw new ParseError(
         "E2003",
         `Step '${step.name}': 'on_fail.goto' and 'recovery.on_fail' are mutually exclusive`,

@@ -70,6 +70,15 @@ pnpm test
 pnpm build
 ```
 
+For a destructive clean-checkout simulation, run:
+
+```bash
+pnpm verify:clean
+```
+
+This removes local install/build/Turbo artifacts before reinstalling from the
+lockfile and running the same default gate.
+
 `pnpm test:e2e` is a manual live-LLM gate. Run it only when the required provider
 credentials, such as `ZAI_API_KEY`, are available and external API cost/latency is
 acceptable.

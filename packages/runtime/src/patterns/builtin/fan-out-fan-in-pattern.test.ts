@@ -277,7 +277,7 @@ describe("FanOutFanInPattern", () => {
   // --- failure_policy tests ---
 
   describe("failure_policy: best_effort (default)", () => {
-    it("succeeds with partial failures when no failure_policy specified (backward compat)", async () => {
+    it("succeeds with partial failures when no failure_policy specified (default behavior)", async () => {
       const pattern = new FanOutFanInPattern();
 
       const result = await pattern.execute({

@@ -80,7 +80,7 @@ describe("AgentRegistry.has", () => {
 });
 
 describe("AgentRegistry.listAvailable", () => {
-  it("should include both legacy and TASK-053/054 names", () => {
+  it("should include canonical agent names", () => {
     const registry = makeRegistry();
     const available = registry.listAvailable();
     expect(available).toEqual([

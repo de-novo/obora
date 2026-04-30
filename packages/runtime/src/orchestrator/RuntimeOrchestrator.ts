@@ -1355,8 +1355,8 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
   /**
    * Consensus schema compatibility:
    * - Canonical (SCHEMAS.md): `step.consensus.rule`, `step.consensus.best_effort`
-   * - Legacy compatibility: `step.consensus.type`, `step.consensus.bestEffort`
-   * - Transitional fallback: `step.config.consensus` (older workflow fixtures)
+   * - Accepted aliases: `step.consensus.type`, `step.consensus.bestEffort`
+   * - Extension fallback: `step.config.consensus`
    */
   private extractConsensusConfig(step: Step) {
     const directConsensus = (step as Step & { consensus?: Record<string, unknown> }).consensus;
@@ -1370,7 +1370,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
     }
 
     // SCHEMAS.md uses `consensus.min`; runtime consensus gate consumes `minRequired` internally.
-    // Keep backward compatibility with legacy `minRequired` while prioritizing `min`.
+    // Prefer `min`, but continue accepting `minRequired` from extension config.
     const minRequired = typeof raw.min === "number"
       ? raw.min
       : typeof raw.minRequired === "number"
@@ -1399,14 +1399,14 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
   private extractRecoveryStrategy(step: Step, execution: Execution) {
     const workflow = this.workflows.get(execution.workflowName);
     const workflowRecovery = workflow?.recovery?.[step.name] as Record<string, unknown> | undefined;
-    const legacyRecovery = (step.config as Record<string, unknown> | undefined)?.recovery as Record<string, unknown> | undefined;
+    const stepConfigRecovery = (step.config as Record<string, unknown> | undefined)?.recovery as Record<string, unknown> | undefined;
 
     const modern = this.toRecoveryStrategyFromWorkflow(workflowRecovery);
     if (modern) {
       return modern;
     }
 
-    return this.toRecoveryStrategyFromLegacy(legacyRecovery);
+    return this.toRecoveryStrategyFromStepConfig(stepConfigRecovery);
   }
 
   private toRecoveryStrategyFromWorkflow(raw?: Record<string, unknown>) {
@@ -1453,7 +1453,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
     return undefined;
   }
 
-  private toRecoveryStrategyFromLegacy(raw?: Record<string, unknown>) {
+  private toRecoveryStrategyFromStepConfig(raw?: Record<string, unknown>) {
     if (!raw || typeof raw.type !== "string") {
       return undefined;
     }

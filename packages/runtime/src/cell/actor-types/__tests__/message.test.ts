@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 
+import { actorId } from "../../__tests__/helpers/ids";
 import {
   createMessageId,
   isValidMessageId,
@@ -67,7 +68,7 @@ describe("isValidMessageId", () => {
 });
 
 describe("createMessage", () => {
-  const mockActorId = "actor-123" as any;
+  const mockActorId = actorId("actor-123");
 
   it("should create a message with required properties", () => {
     const message = createMessage({
@@ -274,16 +275,16 @@ describe("Message type behavior", () => {
     const ping = createMessage({
       id: createMessageId("msg-ping"),
       type: MessageType.PING,
-      from: "actor-1" as any,
-      to: "actor-2" as any,
+      from: actorId("actor-1"),
+      to: actorId("actor-2"),
       payload: {},
     });
 
     const error = createMessage({
       id: createMessageId("msg-error"),
       type: MessageType.ERROR,
-      from: "actor-1" as any,
-      to: "actor-2" as any,
+      from: actorId("actor-1"),
+      to: actorId("actor-2"),
       payload: { error: "test error" },
     });
 
@@ -296,8 +297,8 @@ describe("Message type behavior", () => {
     const minimalMessage = createMessage({
       id: createMessageId("msg-min"),
       type: MessageType.PING,
-      from: "actor-1" as any,
-      to: "actor-2" as any,
+      from: actorId("actor-1"),
+      to: actorId("actor-2"),
       payload: {},
     });
 
@@ -310,11 +311,11 @@ describe("Message type behavior", () => {
     const fullMessage = createMessage({
       id: createMessageId("msg-full"),
       type: MessageType.PING,
-      from: "actor-1" as any,
-      to: "actor-2" as any,
+      from: actorId("actor-1"),
+      to: actorId("actor-2"),
       payload: {},
       correlationId: "test",
-      replyTo: "actor-1" as any,
+      replyTo: actorId("actor-1"),
       priority: MessagePriority.HIGH,
       ttl: 1000,
       deliveryReceipt: true,

@@ -410,7 +410,7 @@ steps:
     expect(execution.stepRecords.review.error).toContain("majority not reached");
   });
 
-  it("integrates recovery engine and reads workflow.recovery before legacy config fallback", async () => {
+  it("integrates recovery engine and reads workflow.recovery before step config fallback", async () => {
     const retryExecutor = {
       executeRetry: vi.fn(async () => ({ ok: true })),
     };
@@ -434,7 +434,7 @@ steps:
           config: {
             recovery: {
               type: "rollback",
-              snapshotId: "legacy-should-not-be-used",
+              snapshotId: "step-config-should-not-be-used",
             },
           },
         },

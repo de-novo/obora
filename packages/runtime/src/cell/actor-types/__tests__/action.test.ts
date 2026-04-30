@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 
+import { taskId } from "../../__tests__/helpers/ids";
 import { ActionType, createAction, createActionId, isValidActionId } from "../action";
 import { createActorId } from "../actor";
 
@@ -57,9 +58,10 @@ describe("action.test.ts", () => {
 
     it("should create action with taskId", () => {
       const actorId = createActorId("analyst");
-      const action = createAction(actorId, "verify", undefined, "task-001" as any);
+      const id = taskId("task-001");
+      const action = createAction(actorId, "verify", undefined, id);
 
-      expect(action.taskId).toBe("task-001" as any);
+      expect(action.taskId).toBe(id);
     });
 
     it("should support all action types", () => {

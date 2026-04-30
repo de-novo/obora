@@ -122,7 +122,7 @@ export interface Step {
   policy?: PolicyOverride;
   /** Conditional back-edge on failure */
   on_fail?: StepOnFailConfig;
-  /** Step-specific configuration (legacy/backward compatibility) */
+  /** Step-specific extension configuration */
   config?: Record<string, unknown>;
 }
 

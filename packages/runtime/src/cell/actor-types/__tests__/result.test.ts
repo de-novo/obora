@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 
+import { actionId, actorId } from "../../__tests__/helpers/ids";
 import {
   createResultId,
   isValidResultId,
@@ -66,8 +67,8 @@ describe("isValidResultId", () => {
 });
 
 describe("createSuccessResult", () => {
-  const mockActionId = "action-123" as any;
-  const mockActorId = "actor-123" as any;
+  const mockActionId = actionId("action-123");
+  const mockActorId = actorId("actor-123");
   const mockOutput = { data: "test output" };
   const duration = 100;
 
@@ -125,8 +126,8 @@ describe("createSuccessResult", () => {
 });
 
 describe("createFailureResult", () => {
-  const mockActionId = "action-123" as any;
-  const mockActorId = "actor-123" as any;
+  const mockActionId = actionId("action-123");
+  const mockActorId = actorId("actor-123");
   const mockError = "Something went wrong";
   const duration = 50;
 
@@ -192,8 +193,8 @@ describe("createFailureResult", () => {
 
 describe("Result type behavior", () => {
   it("should distinguish between success and failure results", () => {
-    const success = createSuccessResult("action-1" as any, "actor-1" as any, "data", 100);
-    const failure = createFailureResult("action-2" as any, "actor-2" as any, "error", 50);
+    const success = createSuccessResult(actionId("action-1"), actorId("actor-1"), "data", 100);
+    const failure = createFailureResult(actionId("action-2"), actorId("actor-2"), "error", 50);
 
     expect(success.status).toBe("success");
     expect(success.output).toBeDefined();

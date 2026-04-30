@@ -4,6 +4,7 @@ import type { ActorRuntime } from "../../cell/actor/runtime/ActorRuntime";
 import { ActorLifecycleStatus } from "../../cell/actor/types/actor";
 import { Supervisor } from "../../cell/actor/supervision/Supervisor";
 import { RestartStrategy, BackoffPolicy, RestartDirective } from "../../cell/actor/supervision/types";
+import { actorId } from "../../cell/__tests__/helpers/ids";
 
 // Mock ActorRuntime
 class MockRuntime {
@@ -27,7 +28,7 @@ class MockRuntime {
 
   addMockActor(id: string) {
     this.actors.set(id, {
-      id: id as any,
+      id: actorId(id),
       role: "analyst",
       status: ActorLifecycleStatus.RUNNING,
     });
@@ -65,7 +66,7 @@ describe("Supervisor", () => {
 
     it("should stop supervisor", () => {
       supervisor.start();
-      supervisor.watch("actor-1" as any);
+      supervisor.watch(actorId("actor-1"));
       supervisor.stop();
       expect(supervisor.getWatchedActors()).toHaveLength(0);
     });
@@ -82,56 +83,56 @@ describe("Supervisor", () => {
     });
 
     it("should watch actor", () => {
-      supervisor.watch("actor-1" as any);
-      expect(supervisor.getWatchedActors()).toContain("actor-1" as any);
+      supervisor.watch(actorId("actor-1"));
+      expect(supervisor.getWatchedActors()).toContain(actorId("actor-1"));
     });
 
     it("should unwatch actor", () => {
-      supervisor.watch("actor-1" as any);
-      supervisor.unwatch("actor-1" as any);
-      expect(supervisor.getWatchedActors()).not.toContain("actor-1" as any);
+      supervisor.watch(actorId("actor-1"));
+      supervisor.unwatch(actorId("actor-1"));
+      expect(supervisor.getWatchedActors()).not.toContain(actorId("actor-1"));
     });
 
     it("should throw when watching without starting", () => {
       supervisor.stop();
-      expect(() => supervisor.watch("actor-1" as any)).toThrow("not running");
+      expect(() => supervisor.watch(actorId("actor-1"))).toThrow("not running");
     });
   });
 
   describe("handleFailure", () => {
     beforeEach(() => {
       supervisor.start();
-      supervisor.watch("actor-1" as any);
+      supervisor.watch(actorId("actor-1"));
     });
 
     it("should emit actor:failed event", async () => {
       const failedHandler = vi.fn();
       supervisor.on("actor:failed", failedHandler);
 
-      await supervisor.handleFailure("actor-1" as any, new Error("Test error"));
+      await supervisor.handleFailure(actorId("actor-1"), new Error("Test error"));
 
-      expect(failedHandler).toHaveBeenCalledWith("actor-1" as any, expect.any(Error));
+      expect(failedHandler).toHaveBeenCalledWith(actorId("actor-1"), expect.any(Error));
     });
 
     it("should restart actor on failure", async () => {
       const restartedHandler = vi.fn();
       supervisor.on("actor:restarted", restartedHandler);
 
-      await supervisor.handleFailure("actor-1" as any, new Error("Test error"));
+      await supervisor.handleFailure(actorId("actor-1"), new Error("Test error"));
 
       // 백오프 대기 후 재시작
       await new Promise((resolve) => setTimeout(resolve, 50));
 
-      expect(restartedHandler).toHaveBeenCalledWith("actor-1" as any, 1);
+      expect(restartedHandler).toHaveBeenCalledWith(actorId("actor-1"), 1);
     });
 
     it("should record restart history", async () => {
-      await supervisor.handleFailure("actor-1" as any, new Error("Test error"));
+      await supervisor.handleFailure(actorId("actor-1"), new Error("Test error"));
       await new Promise((resolve) => setTimeout(resolve, 50));
 
-      const history = supervisor.getRestartHistory("actor-1" as any);
+      const history = supervisor.getRestartHistory(actorId("actor-1"));
       expect(history).toHaveLength(1);
-      expect(history[0].actorId).toBe("actor-1" as any);
+      expect(history[0].actorId).toBe(actorId("actor-1"));
       expect(history[0].success).toBe(true);
     });
   });
@@ -139,7 +140,7 @@ describe("Supervisor", () => {
   describe("max restarts", () => {
     beforeEach(() => {
       supervisor.start();
-      supervisor.watch("actor-1" as any);
+      supervisor.watch(actorId("actor-1"));
     });
 
     it("should stop after max restarts", async () => {
@@ -151,7 +152,7 @@ describe("Supervisor", () => {
 
       // 최대 재시작 횟수 초과
       for (let i = 0; i <= 3; i++) {
-        await supervisor.handleFailure("actor-1" as any, new Error("Test error"));
+        await supervisor.handleFailure(actorId("actor-1"), new Error("Test error"));
         await new Promise((resolve) => setTimeout(resolve, 20));
       }
 
@@ -162,16 +163,16 @@ describe("Supervisor", () => {
   describe("restart strategies", () => {
     it("should restart only failed actor with ONE_FOR_ONE", async () => {
       supervisor.start();
-      supervisor.watch("actor-1" as any);
-      supervisor.watch("actor-2" as any);
+      supervisor.watch(actorId("actor-1"));
+      supervisor.watch(actorId("actor-2"));
 
       const restartSpy = vi.spyOn(runtime, "restart");
 
-      await supervisor.handleFailure("actor-1" as any, new Error("Test error"));
+      await supervisor.handleFailure(actorId("actor-1"), new Error("Test error"));
       await new Promise((resolve) => setTimeout(resolve, 50));
 
-      expect(restartSpy).toHaveBeenCalledWith("actor-1" as any);
-      expect(restartSpy).not.toHaveBeenCalledWith("actor-2" as any);
+      expect(restartSpy).toHaveBeenCalledWith(actorId("actor-1"));
+      expect(restartSpy).not.toHaveBeenCalledWith(actorId("actor-2"));
     });
 
     it("should restart all actors with ALL_FOR_ONE", async () => {
@@ -188,18 +189,18 @@ describe("Supervisor", () => {
       });
 
       allForOneSupervisor.start();
-      allForOneSupervisor.watch("actor-1" as any);
-      allForOneSupervisor.watch("actor-2" as any);
-      allForOneSupervisor.watch("actor-3" as any);
+      allForOneSupervisor.watch(actorId("actor-1"));
+      allForOneSupervisor.watch(actorId("actor-2"));
+      allForOneSupervisor.watch(actorId("actor-3"));
 
       const restartSpy = vi.spyOn(runtime, "restart");
 
-      await allForOneSupervisor.handleFailure("actor-1" as any, new Error("Test"));
+      await allForOneSupervisor.handleFailure(actorId("actor-1"), new Error("Test"));
       await new Promise((resolve) => setTimeout(resolve, 50));
 
-      expect(restartSpy).toHaveBeenCalledWith("actor-1" as any);
-      expect(restartSpy).toHaveBeenCalledWith("actor-2" as any);
-      expect(restartSpy).toHaveBeenCalledWith("actor-3" as any);
+      expect(restartSpy).toHaveBeenCalledWith(actorId("actor-1"));
+      expect(restartSpy).toHaveBeenCalledWith(actorId("actor-2"));
+      expect(restartSpy).toHaveBeenCalledWith(actorId("actor-3"));
     });
 
     it("should restart failed and subsequent actors with REST_FOR_ONE", async () => {
@@ -216,18 +217,18 @@ describe("Supervisor", () => {
       });
 
       restForOneSupervisor.start();
-      restForOneSupervisor.watch("actor-1" as any);
-      restForOneSupervisor.watch("actor-2" as any);
-      restForOneSupervisor.watch("actor-3" as any);
+      restForOneSupervisor.watch(actorId("actor-1"));
+      restForOneSupervisor.watch(actorId("actor-2"));
+      restForOneSupervisor.watch(actorId("actor-3"));
 
       const restartSpy = vi.spyOn(runtime, "restart");
 
-      await restForOneSupervisor.handleFailure("actor-2" as any, new Error("Test"));
+      await restForOneSupervisor.handleFailure(actorId("actor-2"), new Error("Test"));
       await new Promise((resolve) => setTimeout(resolve, 50));
 
-      expect(restartSpy).not.toHaveBeenCalledWith("actor-1" as any);
-      expect(restartSpy).toHaveBeenCalledWith("actor-2" as any);
-      expect(restartSpy).toHaveBeenCalledWith("actor-3" as any);
+      expect(restartSpy).not.toHaveBeenCalledWith(actorId("actor-1"));
+      expect(restartSpy).toHaveBeenCalledWith(actorId("actor-2"));
+      expect(restartSpy).toHaveBeenCalledWith(actorId("actor-3"));
     });
   });
 
@@ -247,9 +248,9 @@ describe("Supervisor", () => {
       const delaySpy = vi.spyOn(fixedSupervisor as any, "delay").mockResolvedValue(undefined);
 
       fixedSupervisor.start();
-      fixedSupervisor.watch("actor-1" as any);
+      fixedSupervisor.watch(actorId("actor-1"));
 
-      await fixedSupervisor.handleFailure("actor-1" as any, new Error("Test"));
+      await fixedSupervisor.handleFailure(actorId("actor-1"), new Error("Test"));
 
       expect(delaySpy).toHaveBeenCalledWith(100);
 
@@ -272,13 +273,13 @@ describe("Supervisor", () => {
       const delaySpy = vi.spyOn(expSupervisor as any, "delay").mockResolvedValue(undefined);
 
       expSupervisor.start();
-      expSupervisor.watch("actor-1" as any);
+      expSupervisor.watch(actorId("actor-1"));
 
-      await expSupervisor.handleFailure("actor-1" as any, new Error("Test"));
+      await expSupervisor.handleFailure(actorId("actor-1"), new Error("Test"));
 
       expect(delaySpy).toHaveBeenCalledWith(100);
 
-      await expSupervisor.handleFailure("actor-1" as any, new Error("Test 2"));
+      await expSupervisor.handleFailure(actorId("actor-1"), new Error("Test 2"));
       expect(delaySpy).toHaveBeenCalledWith(200);
 
       delaySpy.mockRestore();
@@ -299,13 +300,13 @@ describe("Supervisor", () => {
       const delaySpy = vi.spyOn(linearSupervisor as any, "delay").mockResolvedValue(undefined);
 
       linearSupervisor.start();
-      linearSupervisor.watch("actor-1" as any);
+      linearSupervisor.watch(actorId("actor-1"));
 
-      await linearSupervisor.handleFailure("actor-1" as any, new Error("Test"));
+      await linearSupervisor.handleFailure(actorId("actor-1"), new Error("Test"));
 
       expect(delaySpy).toHaveBeenCalledWith(100);
 
-      await linearSupervisor.handleFailure("actor-1" as any, new Error("Test 2"));
+      await linearSupervisor.handleFailure(actorId("actor-1"), new Error("Test 2"));
       expect(delaySpy).toHaveBeenCalledWith(200);
 
       delaySpy.mockRestore();
@@ -328,9 +329,9 @@ describe("Supervisor", () => {
       const delaySpy = vi.spyOn(jitterSupervisor as any, "delay").mockResolvedValue(undefined);
 
       jitterSupervisor.start();
-      jitterSupervisor.watch("actor-1" as any);
+      jitterSupervisor.watch(actorId("actor-1"));
 
-      await jitterSupervisor.handleFailure("actor-1" as any, new Error("Test"));
+      await jitterSupervisor.handleFailure(actorId("actor-1"), new Error("Test"));
 
       expect(delaySpy).toHaveBeenCalled();
       const delayValue = delaySpy.mock.calls[0][0];
@@ -347,13 +348,13 @@ describe("Supervisor", () => {
       runtime.actors.delete("actor-1");
 
       supervisor.start();
-      supervisor.watch("actor-1" as any);
+      supervisor.watch(actorId("actor-1"));
 
       const deadLetterHandler = vi.fn();
       supervisor.on("dead-letter", deadLetterHandler);
 
       try {
-        await supervisor.handleFailure("actor-1" as any, new Error("Test error"));
+        await supervisor.handleFailure(actorId("actor-1"), new Error("Test error"));
       } catch {
         // 예외 무시
       }
@@ -369,7 +370,7 @@ describe("Supervisor", () => {
 
       // dead letter 객체의 핵심 필드 검증
       const firstLetter = deadLetters[0];
-      expect(firstLetter.actorId).toBe("actor-1" as any);
+      expect(firstLetter.actorId).toBe(actorId("actor-1"));
       expect(firstLetter.error).toBeInstanceOf(Error);
       expect(firstLetter.timestamp).toBeInstanceOf(Date);
       expect(firstLetter.retryCount).toBeGreaterThanOrEqual(1);
@@ -380,10 +381,10 @@ describe("Supervisor", () => {
       runtime.actors.delete("actor-1");
 
       supervisor.start();
-      supervisor.watch("actor-1" as any);
+      supervisor.watch(actorId("actor-1"));
 
       try {
-        await supervisor.handleFailure("actor-1" as any, new Error("Test error"));
+        await supervisor.handleFailure(actorId("actor-1"), new Error("Test error"));
       } catch {
         // 예외 무시
       }
@@ -419,12 +420,12 @@ describe("Supervisor", () => {
       });
 
       customSupervisor.start();
-      customSupervisor.watch("actor-1" as any);
+      customSupervisor.watch(actorId("actor-1"));
 
       const stoppedHandler = vi.fn();
       customSupervisor.on("actor:stopped", stoppedHandler);
 
-      await customSupervisor.handleFailure("actor-1" as any, new Error("fatal error"));
+      await customSupervisor.handleFailure(actorId("actor-1"), new Error("fatal error"));
       await new Promise((resolve) => setTimeout(resolve, 50));
 
       expect(stoppedHandler).toHaveBeenCalled();

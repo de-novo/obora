@@ -273,7 +273,7 @@ export class RedBluePattern extends CollaborationPatternBase {
 
     if (mode === "custom") {
       const config = (context.config ?? {}) as RedBluePatternConfig;
-      // Also support legacy context-level fn for backward compat
+      // Accept the context-level hook while callers migrate to config.custom_convergence.
       const customConvergence = config.custom_convergence ?? (context as PatternRuntimeContext & {
         redBlueConvergenceFn?: typeof config.custom_convergence;
       }).redBlueConvergenceFn;

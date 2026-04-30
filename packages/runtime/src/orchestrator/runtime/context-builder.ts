@@ -54,7 +54,7 @@ const defaultClock: Clock = () => new Date().toISOString();
 
 /** Module-level clock; override via `setClock()` for testing. */
 let activeClock: Clock = defaultClock;
-let warnedDeprecatedDirectWrite = false;
+let warnedDirectWriteNoop = false;
 
 /** Override the clock used by record* functions. Pass `null` to reset. */
 export function setClock(clock: Clock | null): void {
@@ -94,14 +94,13 @@ export function createWorkflowBlackboard(
   });
 
   // Compatibility shim for agents expecting board.write().
-  // Deprecated no-op to avoid crashing legacy agents while preserving
-  // runtime single-writer policy via recordStepResult/recordStepError.
+  // The no-op preserves runtime single-writer policy via recordStepResult/recordStepError.
   Object.defineProperty(board as unknown as { write?: (path: string, value: unknown) => void }, "write", {
     value: (path: string, _value: unknown) => {
-      if (!warnedDeprecatedDirectWrite && process.env.NODE_ENV !== "test") {
-        warnedDeprecatedDirectWrite = true;
+      if (!warnedDirectWriteNoop && process.env.NODE_ENV !== "test") {
+        warnedDirectWriteNoop = true;
         console.warn(
-          `[Blackboard] Deprecated: direct write("${path}") is a no-op. Use recordStepResult/recordStepError.`,
+          `[Blackboard] Direct write("${path}") is a no-op. Use recordStepResult/recordStepError.`,
         );
       }
       // no-op: single-writer policy — mutation only via recordStepResult/recordStepError
