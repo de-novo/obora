@@ -28,14 +28,14 @@ const WORKFLOW: Workflow = {
     { name: "plan", agent: "analyst" },
     { name: "implement", agent: "executor", depends_on: ["plan"] },
   ],
-} as any;
+};
 
-const STEP_PLAN: Step = { name: "plan", agent: "analyst", description: "Plan the work" } as any;
+const STEP_PLAN: Step = { name: "plan", agent: "analyst", description: "Plan the work" };
 const STEP_IMPL: Step = {
   name: "implement",
   agent: "executor",
   depends_on: ["plan"],
-} as any;
+};
 
 const SESSION = "session-test-001";
 

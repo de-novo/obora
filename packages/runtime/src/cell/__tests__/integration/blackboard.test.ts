@@ -1,25 +1,29 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { ActorRuntime } from "../../CellManager";
 import { ActorPool } from "../../ActorPool";
-import { ActorRole } from "../../actor-types/actor";
+import { ActorLifecycleStatus, ActorRole, type ActorId } from "../../actor-types/actor";
 import { MockBlackboard } from "../helpers/MockBlackboard";
 import { createActorId } from "../../actor-types/actor";
 import type { ActorFactory, ActorConfig } from "../../types";
 import type { IBlackboard } from "../../actor-types/blackboard";
 import type { IMessageBus } from "../../actor-types/message";
 import type { Actor } from "../../actor-types/actor";
+import type { Action } from "../../actor-types/action";
+import type { Observation } from "../../actor-types/observation";
+import type { Result } from "../../actor-types/result";
+import { actionId, resultId } from "../helpers/ids";
 
 class MockActor implements Actor {
-  readonly id: string;
+  readonly id: ActorId;
   readonly name: string = "mock";
   readonly role: ActorRole;
   board: IBlackboard;
   messageBus: IMessageBus;
   status: {
-    id: string;
+    id: ActorId;
     name: string;
     role: ActorRole;
-    status: string;
+    status: ActorLifecycleStatus;
     messageQueue: { pending: number; processing: boolean };
     metrics: {
       totalMessagesProcessed: number;
@@ -41,7 +45,7 @@ class MockActor implements Actor {
     lastExecutionTime: 0,
   };
 
-  constructor(id: string, role: ActorRole, board: IBlackboard, messageBus: IMessageBus) {
+  constructor(id: ActorId, role: ActorRole, board: IBlackboard, messageBus: IMessageBus) {
     this.id = id;
     this.role = role;
     this.board = board;
@@ -50,7 +54,7 @@ class MockActor implements Actor {
       id: this.id,
       name: "mock",
       role: this.role,
-      status: "running",
+      status: ActorLifecycleStatus.RUNNING,
       messageQueue: { pending: 0, processing: false },
       metrics: {
         totalMessagesProcessed: 0,
@@ -64,10 +68,10 @@ class MockActor implements Actor {
     };
   }
 
-  async observe() {
+  async observe(): Promise<Observation> {
     const data = this.board.read("state");
     return {
-      actorId: this.id as any,
+      actorId: this.id,
       timestamp: new Date(),
       data,
       source: "read",
@@ -75,11 +79,11 @@ class MockActor implements Actor {
     };
   }
 
-  think(obs: any) {
+  think(obs: Observation): Action {
     return {
-      id: `action-${Date.now()}`,
-      actorId: this.id as any,
-      type: "write",
+      id: actionId(`action-${Date.now()}`),
+      actorId: this.id,
+      type: "execute",
       params: {
         section: "results",
         data: { processed: obs.data },
@@ -88,16 +92,16 @@ class MockActor implements Actor {
     };
   }
 
-  async act(action: any) {
+  async act(action: Action): Promise<Result> {
     await new Promise((resolve) => setTimeout(resolve, 10));
-    this.board.write(action.params.section as string, action.params.data);
+    this.board.write(action.params?.section as string, action.params?.data);
     return {
-      id: `result-${Date.now()}`,
+      id: resultId(`result-${Date.now()}`),
       actionId: action.id,
-      actorId: this.id as any,
+      actorId: this.id,
       timestamp: new Date(),
       status: "success",
-      duration: 10,
+      metrics: { duration: 10 },
     };
   }
 
@@ -123,7 +127,7 @@ class MockActor implements Actor {
 class MockFactory implements ActorFactory {
   async create(config: ActorConfig, board: IBlackboard, messageBus: IMessageBus): Promise<Actor> {
     const actorId = config.id || createActorId(config.role);
-    const actor = new MockActor(actorId as string, config.role, board, messageBus);
+    const actor = new MockActor(actorId, config.role, board, messageBus);
     return Promise.resolve(actor);
   }
 }

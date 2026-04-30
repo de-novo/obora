@@ -1,13 +1,16 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 import type { Action } from "../../actor-types/action";
+import { createActionId } from "../../actor-types/action";
 import { ActorRole, ActorLifecycleStatus } from "../../actor-types/actor";
 import type { IBlackboard } from "../../actor-types/blackboard";
 import type { IMessageBus, Message } from "../../actor-types/message";
+import { createMessageId, MessageType } from "../../actor-types/message";
 import type { Observation } from "../../actor-types/observation";
 import { createSuccessResult, createFailureResult } from "../../actor-types/result";
 import type { Result } from "../../actor-types/result";
 import { BaseActor } from "../../BaseActor";
+import { actionId, actorId } from "../helpers/ids";
 
 class TestActor extends BaseActor {
   observe(): Observation {
@@ -19,7 +22,7 @@ class TestActor extends BaseActor {
 
   think(observation: Observation): Action {
     return {
-      id: crypto.randomUUID() as any,
+      id: createActionId(`action-${crypto.randomUUID()}`),
       actorId: this.id,
       type: "execute" as const,
       timestamp: new Date(),
@@ -27,7 +30,7 @@ class TestActor extends BaseActor {
   }
 
   act(action: Action): Result {
-    return createSuccessResult(action.id as any, this.id, { output: "test" }, 100);
+    return createSuccessResult(action.id, this.id, { output: "test" }, 100);
   }
 }
 
@@ -57,9 +60,9 @@ describe("BaseActor", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (mockMessageBus.subscribe as any).mockImplementation(() => () => {});
+    vi.mocked(mockMessageBus.subscribe).mockImplementation(() => () => {});
     actor = new TestActor(
-      "analyst-test-id" as any,
+      actorId("analyst-test-id"),
       "TestActor",
       "analyst",
       mockBoard,
@@ -115,13 +118,13 @@ describe("BaseActor", () => {
 
     it("should not start if already alive", async () => {
       await actor.start();
-      const subscribeCallCount = (mockMessageBus.subscribe as any).mock.calls.length;
+      const subscribeCallCount = vi.mocked(mockMessageBus.subscribe).mock.calls.length;
       await actor.start();
-      expect((mockMessageBus.subscribe as any).mock.calls.length).toBe(subscribeCallCount);
+      expect(vi.mocked(mockMessageBus.subscribe).mock.calls.length).toBe(subscribeCallCount);
     });
 
     it("should transition to ERROR on start failure", async () => {
-      (mockMessageBus.subscribe as any).mockImplementation(() => {
+      vi.mocked(mockMessageBus.subscribe).mockImplementation(() => {
         throw new Error("Subscribe failed");
       });
       try {
@@ -245,9 +248,9 @@ describe("BaseActor", () => {
   describe("receive()", () => {
     it("should handle PING message", async () => {
       const message: Message = {
-        id: crypto.randomUUID() as any,
-        type: "ping" as any,
-        from: "test-sender" as any,
+        id: createMessageId(`msg-${crypto.randomUUID()}`),
+        type: MessageType.PING,
+        from: actorId("test-sender"),
         to: "broadcast",
         payload: {},
         timestamp: new Date(),
@@ -259,9 +262,9 @@ describe("BaseActor", () => {
     it("should handle TASK_ASSIGN message", async () => {
       await actor.start();
       const message: Message = {
-        id: crypto.randomUUID() as any,
-        type: "task.assign" as any,
-        from: "test-sender" as any,
+        id: createMessageId(`msg-${crypto.randomUUID()}`),
+        type: MessageType.TASK_ASSIGN,
+        from: actorId("test-sender"),
         to: actor.id,
         payload: {},
         timestamp: new Date(),
@@ -272,9 +275,9 @@ describe("BaseActor", () => {
 
     it("should handle STATUS_REQUEST message", async () => {
       const message: Message = {
-        id: crypto.randomUUID() as any,
-        type: "status.request" as any,
-        from: "test-sender" as any,
+        id: createMessageId(`msg-${crypto.randomUUID()}`),
+        type: MessageType.STATUS_REQUEST,
+        from: actorId("test-sender"),
         to: actor.id,
         payload: {},
         timestamp: new Date(),
@@ -286,9 +289,9 @@ describe("BaseActor", () => {
     it("should handle STOP message", async () => {
       await actor.start();
       const message: Message = {
-        id: crypto.randomUUID() as any,
-        type: "stop" as any,
-        from: "test-sender" as any,
+        id: createMessageId(`msg-${crypto.randomUUID()}`),
+        type: MessageType.STOP,
+        from: actorId("test-sender"),
         to: actor.id,
         payload: {},
         timestamp: new Date(),
@@ -300,7 +303,7 @@ describe("BaseActor", () => {
 
   describe("report()", () => {
     it("should update metrics on success result", () => {
-      const result = createSuccessResult("action-1" as any, actor.id, { output: "value" }, 100);
+      const result = createSuccessResult(actionId("action-1"), actor.id, { output: "value" }, 100);
       actor.report(result);
       expect(actor.metrics.totalRuns).toBe(1);
       expect(actor.metrics.successCount).toBe(1);
@@ -308,7 +311,7 @@ describe("BaseActor", () => {
     });
 
     it("should update metrics on failure result", () => {
-      const result = createFailureResult("action-1" as any, actor.id, "Test error", 50);
+      const result = createFailureResult(actionId("action-1"), actor.id, "Test error", 50);
       actor.report(result);
       expect(actor.metrics.totalRuns).toBe(1);
       expect(actor.metrics.failureCount).toBe(1);
@@ -317,20 +320,20 @@ describe("BaseActor", () => {
     });
 
     it("should broadcast task.complete message", () => {
-      const result = createSuccessResult("action-1" as any, actor.id, { output: "value" }, 100);
+      const result = createSuccessResult(actionId("action-1"), actor.id, { output: "value" }, 100);
       actor.report(result);
       expect(mockMessageBus.broadcast).toHaveBeenCalled();
       expect(mockMessageBus.broadcast).toHaveBeenCalledWith(
         expect.objectContaining({
-          type: "task.complete" as any,
+          type: MessageType.TASK_COMPLETE,
           from: actor.id,
         })
       );
     });
 
     it("should update average execution time", () => {
-      const result1 = createSuccessResult("action-1" as any, actor.id, { output: "value" }, 100);
-      const result2 = createSuccessResult("action-2" as any, actor.id, { output: "value" }, 200);
+      const result1 = createSuccessResult(actionId("action-1"), actor.id, { output: "value" }, 100);
+      const result2 = createSuccessResult(actionId("action-2"), actor.id, { output: "value" }, 200);
       actor.report(result1);
       actor.report(result2);
       expect(actor.metrics.averageExecutionTime).toBe(150);

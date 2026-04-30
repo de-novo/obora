@@ -12,6 +12,7 @@ import {
 } from "../StepScheduler.js";
 import type { Step } from "../workflow/index.js";
 import type { BaseAgent, Task, TaskResult, AgentContext } from "@obora-kit/runtime";
+import { Blackboard } from "../../blackboard/core/blackboard.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -32,22 +33,22 @@ function makeStep(overrides: Partial<Step> = {}): Step {
 function makeContext(): AgentContext {
   return {
     sessionId: "test-session",
-    board: { read: () => ({}), write: () => {} } as any,
+    board: new Blackboard(),
     history: [],
   };
 }
 
 function makeAgent(result: Partial<TaskResult> = {}): BaseAgent {
   return {
-    execute: vi.fn().mockResolvedValue({
+    execute: vi.fn(async (): Promise<TaskResult> => ({
       taskId: "test-step",
       success: true,
       output: "agent output",
       duration: 100,
       tokensUsed: { prompt: 10, completion: 20, total: 30 },
       ...result,
-    }),
-  } as any;
+    })),
+  } as unknown as BaseAgent;
 }
 
 function makeResolver(agent: BaseAgent): AgentResolver {
@@ -143,7 +144,7 @@ describe("executeStep — success", () => {
 
     await executeStep(step, resolver, makeContext());
 
-    const calledTask = (agent.execute as any).mock.calls[0][0] as Task;
+    const calledTask = vi.mocked(agent.execute).mock.calls[0][0] as Task;
     expect(calledTask.id).toBe("test-step");
     expect(calledTask.type).toBe("executor");
   });
@@ -171,8 +172,10 @@ describe("executeStep — agent failure", () => {
 
   it("should return E4001 when agent throws unexpected error", async () => {
     const agent = {
-      execute: vi.fn().mockRejectedValue(new Error("unexpected")),
-    } as any;
+      execute: vi.fn(async (): Promise<TaskResult> => {
+        throw new Error("unexpected");
+      }),
+    } as unknown as BaseAgent;
     const resolver = makeResolver(agent);
 
     const result = await executeStep(makeStep(), resolver, makeContext());
@@ -206,7 +209,7 @@ describe("executeStep — timeout precedence", () => {
       execute: vi.fn().mockImplementation(
         () => new Promise((resolve) => setTimeout(resolve, 5000)),
       ),
-    } as any;
+    } as unknown as BaseAgent;
     const resolver = makeResolver(agent);
     const step = makeStep({ timeout: "10s" }); // 10s from YAML
 
@@ -223,7 +226,7 @@ describe("executeStep — timeout precedence", () => {
       execute: vi.fn().mockImplementation(
         () => new Promise((resolve) => setTimeout(resolve, 5000)),
       ),
-    } as any;
+    } as unknown as BaseAgent;
     const resolver = makeResolver(agent);
     const step = makeStep({ timeout: "1s" });
 
@@ -240,7 +243,7 @@ describe("executeStep — timeout (E4002)", () => {
       execute: vi.fn().mockImplementation(
         () => new Promise((resolve) => setTimeout(resolve, 5000)),
       ),
-    } as any;
+    } as unknown as BaseAgent;
     const resolver = makeResolver(agent);
 
     const result = await executeStep(
@@ -263,9 +266,14 @@ describe("executeStep — timeout (E4002)", () => {
 describe("executeStep — single-writer policy", () => {
   it("should NOT call board.write — status persistence is executeWorkflow's responsibility", async () => {
     const writeSpy = vi.fn();
+    const board = new Blackboard();
+    vi.spyOn(board, "write").mockImplementation(() => {
+      writeSpy();
+      return { success: true, version: board.version, path: "test", previousValue: undefined };
+    });
     const ctx: AgentContext = {
       sessionId: "s",
-      board: { read: () => ({}), write: writeSpy } as any,
+      board,
       history: [],
     };
 
@@ -280,9 +288,14 @@ describe("executeStep — single-writer policy", () => {
 
   it("should not call board.write even on agent failure", async () => {
     const writeSpy = vi.fn();
+    const board = new Blackboard();
+    vi.spyOn(board, "write").mockImplementation(() => {
+      writeSpy();
+      return { success: true, version: board.version, path: "test", previousValue: undefined };
+    });
     const ctx: AgentContext = {
       sessionId: "s",
-      board: { read: () => ({}), write: writeSpy } as any,
+      board,
       history: [],
     };
 
@@ -296,9 +309,14 @@ describe("executeStep — single-writer policy", () => {
 
   it("should not call board.write on timeout", async () => {
     const writeSpy = vi.fn();
+    const board = new Blackboard();
+    vi.spyOn(board, "write").mockImplementation(() => {
+      writeSpy();
+      return { success: true, version: board.version, path: "test", previousValue: undefined };
+    });
     const ctx: AgentContext = {
       sessionId: "s",
-      board: { read: () => ({}), write: writeSpy } as any,
+      board,
       history: [],
     };
 
@@ -306,7 +324,7 @@ describe("executeStep — single-writer policy", () => {
       execute: vi.fn().mockImplementation(
         () => new Promise((resolve) => setTimeout(resolve, 5000)),
       ),
-    } as any;
+    } as unknown as BaseAgent;
     const resolver = makeResolver(agent);
 
     await executeStep(makeStep(), resolver, ctx, { timeoutMs: 50 });
