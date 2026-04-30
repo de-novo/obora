@@ -58,6 +58,22 @@ Prerequisites:
 - Node.js 20+
 - At least one LLM provider API key (ZAI, OpenAI, Anthropic, etc.)
 
+### Repository verification
+
+Use this order for the default local gate, especially from a clean checkout:
+
+```bash
+pnpm install
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm build
+```
+
+`pnpm test:e2e` is a manual live-LLM gate. Run it only when the required provider
+credentials, such as `ZAI_API_KEY`, are available and external API cost/latency is
+acceptable.
+
 Useful discovery commands:
 
 - `obora models <provider> [query]` shows the model refs available from the installed `pi-ai` catalog

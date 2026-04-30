@@ -10,7 +10,7 @@
   },
   "scripts": {
     "dev": "tsc --watch",
-    "build": "tsc --noCheck",
+    "build": "tsc --noCheck -p tsconfig.build.json",
     "lint": "eslint src --ext .ts",
     "clean": "rm -rf dist",
     "test": "node --no-warnings ./node_modules/vitest/vitest.mjs run",

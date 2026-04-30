@@ -1,5 +1,7 @@
 import { resolve } from "node:path";
 
+import { applyAgentOverride, previewAgentOverride } from "@obora/adapters";
+import { buildExecutionAgentInventory, buildExecutionAgentSnapshot, Workflow } from "@obora/sdk";
 import { Command } from "commander";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -60,11 +62,8 @@ vi.mock("@obora/sdk", () => ({
   },
 }));
 
-import { applyAgentOverride, previewAgentOverride } from "@obora/adapters";
-import { buildExecutionAgentInventory, buildExecutionAgentSnapshot, Workflow } from "@obora/sdk";
-
-import { createAgentsCommand } from "../agents.js";
 import { ExitCode } from "../../utils/exit-codes.js";
+import { createAgentsCommand } from "../agents.js";
 
 function makeSnapshot(overrides: Partial<Record<string, unknown>> = {}) {
   return {

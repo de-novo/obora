@@ -260,7 +260,9 @@ describe("auth command", () => {
       addedAt: "2026-04-15T00:00:00.000Z",
       updatedAt: "2026-04-15T00:00:00.000Z",
     });
-    authState.testConnection.mockRejectedValue(new Error("Unsupported provider for testConnection: custom"));
+    authState.testConnection.mockRejectedValue(
+      new Error("Unsupported provider for testConnection: custom")
+    );
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const cmd = createAuthCommand();
 

@@ -5,9 +5,13 @@
   },
   "include": [],
   "files": [
+    "src/typecheck-public.d.ts",
     "src/errors/index.ts",
     "src/gates/index.ts",
     "src/artifacts/index.ts",
+    "src/artifacts/types.ts",
+    "src/audit/types.ts",
+    "src/storage/types.ts",
     "src/checkpoint/index.ts"
   ],
   "exclude": ["src/_legacy/**"]

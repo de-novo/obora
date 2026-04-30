@@ -1,3 +1,4 @@
+import { Policy, Workflow } from "@obora/sdk";
 import { Command } from "commander";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -35,8 +36,6 @@ vi.mock("@obora/sdk", () => {
     },
   };
 });
-
-import { Policy, Workflow } from "@obora/sdk";
 
 import { ExitCode } from "../../utils/exit-codes.js";
 import { createPolicyCommand } from "../policy.js";

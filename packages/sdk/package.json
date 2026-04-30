@@ -18,7 +18,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && tsc --emitDeclarationOnly --declaration --declarationMap false --outDir dist --noCheck",
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:e2e": "vitest run --config vitest.config.e2e.ts",

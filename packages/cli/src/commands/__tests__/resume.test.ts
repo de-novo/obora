@@ -2,6 +2,7 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { loadConfig, OboraRuntime } from "@obora/sdk";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const originalCwd = process.cwd();
@@ -29,8 +30,6 @@ vi.mock("@obora/sdk", () => ({
     CELL_ABORTED: "CELL_ABORTED",
   },
 }));
-
-import { loadConfig, OboraRuntime } from "@obora/sdk";
 
 import { createCLI } from "../../cli.js";
 import { ExitCode } from "../../utils/exit-codes.js";

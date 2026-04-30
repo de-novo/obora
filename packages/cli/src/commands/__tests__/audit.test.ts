@@ -1,3 +1,4 @@
+import { loadConfig, OboraRuntime } from "@obora/sdk";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const oboraRuntimeState: {
@@ -22,8 +23,6 @@ vi.mock("@obora/sdk", () => ({
     CELL_ABORTED: "CELL_ABORTED",
   },
 }));
-
-import { loadConfig, OboraRuntime } from "@obora/sdk";
 
 import { createCLI } from "../../cli.js";
 import { ExitCode } from "../../utils/exit-codes.js";

@@ -14,8 +14,8 @@ import {
 } from "@obora/sdk";
 import { Command } from "commander";
 
-import { handleCommandAction } from "../utils/error-handler.js";
 import { CLIError } from "../utils/cli-error.js";
+import { handleCommandAction } from "../utils/error-handler.js";
 import { ExitCode } from "../utils/exit-codes.js";
 import { formatter } from "../utils/formatter.js";
 import { getGlobalOpts, type GlobalOptions } from "../utils/global-opts.js";

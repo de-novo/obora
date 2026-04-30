@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { Workflow } from "@obora/sdk";
 import { Command } from "commander";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import yaml from "yaml";
 
 vi.mock("node:fs/promises", () => ({
   readFile: vi.fn(),
@@ -32,8 +33,6 @@ vi.mock("@obora/sdk", () => ({
     CELL_ABORTED: "CELL_ABORTED",
   },
 }));
-
-import yaml from "yaml";
 
 import { ExitCode } from "../../utils/exit-codes.js";
 import { createExpandCommand } from "../expand.js";
