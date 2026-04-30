@@ -1,2 +1,2 @@
-export { VerifierAgent as VerifierCellAgent } from "../../_legacy/agents/roles/verifier-agent.js";
-export * from "../../_legacy/agents/roles/verifier-agent.js";
+export { VerifierAgent as VerifierCellAgent } from "./roles/verifier-agent.js";
+export * from "./roles/verifier-agent.js";

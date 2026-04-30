@@ -249,5 +249,5 @@ export class RecoveryEngine implements RecoveryEngineContract {
 }
 
 // Legacy export for compatibility during M1 migration.
-export { Supervisor as LegacyRecoveryEngine } from "../_legacy/actor/supervision/Supervisor.js";
+export { Supervisor as LegacyRecoveryEngine } from "../cell/actor/supervision/Supervisor.js";
 export { RecoveryEngine as DefaultRecoveryEngine };

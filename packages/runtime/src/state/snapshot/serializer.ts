@@ -1,1 +1,1 @@
-export * from "../../_legacy/blackboard/snapshot/serializer.js";
+export * from "../../blackboard/snapshot/serializer.js";

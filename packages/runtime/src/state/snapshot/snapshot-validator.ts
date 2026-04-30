@@ -1,1 +1,1 @@
-export * from "../../_legacy/blackboard/snapshot/snapshot-validator.js";
+export * from "../../blackboard/snapshot/snapshot-validator.js";

@@ -1,4 +1,4 @@
-import type { Step, Workflow } from "../_legacy/workflow/index.js";
+import type { Step, Workflow } from "./workflow/index.js";
 import type { CellResult } from "../cell/types.js";
 import type { ConsensusConfig, ConsensusVoteInput, GateConsensusResult } from "../consensus/ConsensusGate.js";
 import type { PolicyDecision } from "../policy/types.js";
@@ -85,4 +85,4 @@ export interface RuntimeOrchestratorOptions {
   defaultRecoveryStrategy?: RecoveryStrategy;
 }
 
-export * from "../_legacy/cli-runtime/runtime/types.js";
+export * from "./runtime/types.js";

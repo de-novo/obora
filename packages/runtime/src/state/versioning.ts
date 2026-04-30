@@ -1,1 +1,1 @@
-export * from "../_legacy/blackboard/core/versioning.js";
+export * from "../blackboard/core/versioning.js";

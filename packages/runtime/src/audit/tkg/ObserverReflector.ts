@@ -1,1 +1,1 @@
-export * from "../../_legacy/blackboard/domains/tkg/ObserverReflector.js";
+export * from "../../blackboard/domains/tkg/ObserverReflector.js";

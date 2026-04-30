@@ -1,1 +1,1 @@
-export * from "../../_legacy/blackboard/domains/tkg/InMemoryTKG.js";
+export * from "../../blackboard/domains/tkg/InMemoryTKG.js";

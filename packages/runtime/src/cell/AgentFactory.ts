@@ -1,1 +1,1 @@
-export * from "../_legacy/agents/roles/factory.js";
+export * from "./agents/roles/factory.js";

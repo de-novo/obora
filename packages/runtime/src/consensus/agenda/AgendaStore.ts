@@ -1,1 +1,1 @@
-export * from "../../_legacy/blackboard/domains/agenda/AgendaStore.js";
+export * from "../../blackboard/domains/agenda/AgendaStore.js";

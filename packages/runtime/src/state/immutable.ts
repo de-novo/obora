@@ -1,1 +1,1 @@
-export * from "../_legacy/blackboard/core/immutable.js";
+export * from "../blackboard/core/immutable.js";

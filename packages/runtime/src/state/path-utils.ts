@@ -1,1 +1,1 @@
-export * from "../_legacy/blackboard/core/path-utils.js";
+export * from "../blackboard/core/path-utils.js";

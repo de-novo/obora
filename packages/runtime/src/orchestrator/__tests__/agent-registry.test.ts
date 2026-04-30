@@ -5,7 +5,7 @@
 import { describe, it, expect } from "vitest";
 import { AgentRegistry } from "../../cell/AgentRegistry.js";
 import { MockLLMAdapter } from "../../../../adapters/src/llm/mock-adapter";
-import { OboraError } from "../../_legacy/workflow/index.js";
+import { OboraError } from "../workflow/index.js";
 
 function makeRegistry() {
   return new AgentRegistry({ llm: new MockLLMAdapter() });

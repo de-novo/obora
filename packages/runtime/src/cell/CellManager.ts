@@ -1,4 +1,4 @@
-import { ActorRuntime, ActorStopTimeoutError } from "../_legacy/actor/runtime/ActorRuntime.js";
+import { ActorRuntime, ActorStopTimeoutError } from "./actor/runtime/ActorRuntime.js";
 import { DefaultExecutionCell } from "./ExecutionCell.js";
 import type { CellContext } from "./CellContext.js";
 import type { CellConfig, CellId, CellResult, CellStatus, Task } from "./types.js";
@@ -299,4 +299,4 @@ export class CellManager {
 }
 
 export { ActorRuntime, ActorStopTimeoutError };
-export * from "../_legacy/actor/runtime/ActorRuntime.js";
+export * from "./actor/runtime/ActorRuntime.js";

@@ -10,7 +10,7 @@ import {
   type AgentResolver,
   type StepResult,
 } from "../StepScheduler.js";
-import type { Step } from "../../_legacy/workflow/index.js";
+import type { Step } from "../workflow/index.js";
 import type { BaseAgent, Task, TaskResult, AgentContext } from "@obora-kit/runtime";
 
 // ---------------------------------------------------------------------------

@@ -4,7 +4,6 @@ import path from 'node:path';
 export default defineConfig({
   test: {
     include: ['src/**/*.test.ts'],
-    exclude: ['src/_legacy/workflow/**'],
     environment: 'node',
   },
   resolve: {

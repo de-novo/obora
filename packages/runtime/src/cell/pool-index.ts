@@ -1,1 +1,1 @@
-export * from "../_legacy/actor/pool/index.js";
+export * from "./actor/pool/index.js";

@@ -1,1 +1,1 @@
-export * from "../../_legacy/blackboard/snapshot/compression.js";
+export * from "../../blackboard/snapshot/compression.js";

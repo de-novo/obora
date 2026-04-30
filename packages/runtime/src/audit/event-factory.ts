@@ -1,1 +1,1 @@
-export * from "../_legacy/blackboard/events/event-factory.js";
+export * from "../blackboard/events/event-factory.js";

@@ -1,5 +1,5 @@
 /**
- * @obora-kit/blackboard (promoted from _legacy)
+ * @obora-kit/blackboard
  *
  * Blackboard pattern implementation for AI agent coordination.
  *

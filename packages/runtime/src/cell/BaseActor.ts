@@ -1,1 +1,1 @@
-export { BaseActor } from "../_legacy/actor/base/BaseActor.js";
+export { BaseActor } from "./actor/base/BaseActor.js";

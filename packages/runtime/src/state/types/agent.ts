@@ -1,1 +1,1 @@
-export * from "../../_legacy/blackboard/types/agent.js";
+export * from "../../blackboard/types/agent.js";

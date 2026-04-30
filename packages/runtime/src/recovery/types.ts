@@ -136,4 +136,4 @@ export interface RecoveryEngine {
 }
 
 // Legacy export for compatibility during M1 migration.
-export * from "../_legacy/actor/supervision/types.js";
+export * from "../cell/actor/supervision/types.js";

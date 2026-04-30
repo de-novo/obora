@@ -1,1 +1,1 @@
-export * from "../../_legacy/blackboard/snapshot/types.js";
+export * from "../../blackboard/snapshot/types.js";

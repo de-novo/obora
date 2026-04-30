@@ -1,1 +1,1 @@
-export * from "../_legacy/blackboard/core/id-generator.js";
+export * from "../blackboard/core/id-generator.js";

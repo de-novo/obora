@@ -1,1 +1,1 @@
-export * from "../_legacy/cli-runtime/runtime/agent-registry.js";
+export * from "../orchestrator/runtime/agent-registry.js";

@@ -1,1 +1,1 @@
-export * from "../../../_legacy/blackboard/workflow/meeting-state-machine/types.js";
+export * from "../../../blackboard/workflow/meeting-state-machine/types.js";

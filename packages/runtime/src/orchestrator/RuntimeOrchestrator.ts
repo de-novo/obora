@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { buildGraph, generateExecutionPlan, getNextSteps, parseWorkflow, type Step, type Workflow } from "../_legacy/workflow/index.js";
+import { buildGraph, generateExecutionPlan, getNextSteps, parseWorkflow, type Step, type Workflow } from "./workflow/index.js";
 import type { CellManager } from "../cell/CellManager.js";
 import type { CellResult, Task } from "../cell/types.js";
 import type { AuditTrail } from "../audit/AuditTrail.js";

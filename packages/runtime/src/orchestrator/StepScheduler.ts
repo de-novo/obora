@@ -1,2 +1,2 @@
-export { executeStep as scheduleStep } from "../_legacy/cli-runtime/runtime/step-executor.js";
-export * from "../_legacy/cli-runtime/runtime/step-executor.js";
+export { executeStep as scheduleStep } from "./runtime/step-executor.js";
+export * from "./runtime/step-executor.js";

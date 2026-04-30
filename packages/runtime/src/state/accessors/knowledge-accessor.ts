@@ -1,1 +1,1 @@
-export * from "../../_legacy/blackboard/core/accessors/knowledge-accessor.js";
+export * from "../../blackboard/core/accessors/knowledge-accessor.js";

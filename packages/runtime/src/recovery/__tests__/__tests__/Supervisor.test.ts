@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-import type { ActorRuntime } from "../../../_legacy/actor/runtime/ActorRuntime";
-import { ActorLifecycleStatus } from "../../../_legacy/actor/types/actor";
-import { Supervisor } from "../../../_legacy/actor/supervision/Supervisor";
-import { RestartStrategy, BackoffPolicy, RestartDirective } from "../../../_legacy/actor/supervision/types";
+import type { ActorRuntime } from "../../../cell/actor/runtime/ActorRuntime";
+import { ActorLifecycleStatus } from "../../../cell/actor/types/actor";
+import { Supervisor } from "../../../cell/actor/supervision/Supervisor";
+import { RestartStrategy, BackoffPolicy, RestartDirective } from "../../../cell/actor/supervision/types";
 
 // Mock ActorRuntime
 class MockRuntime {

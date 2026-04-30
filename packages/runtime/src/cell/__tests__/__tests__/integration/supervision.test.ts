@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { Supervisor } from "../../../../_legacy/actor/supervision/Supervisor";
-import { SupervisorTree } from "../../../../_legacy/actor/supervision/SupervisorTree";
-import { RestartStrategy, BackoffPolicy } from "../../../../_legacy/actor/supervision/types";
+import { Supervisor } from "../../../actor/supervision/Supervisor";
+import { SupervisorTree } from "../../../actor/supervision/SupervisorTree";
+import { RestartStrategy, BackoffPolicy } from "../../../actor/supervision/types";
 import { ActorRuntime } from "../../../CellManager";
 import { ActorId } from "../../../actor-types/actor";
 import { createActorId } from "../../../actor-types/actor";

@@ -1,6 +1,6 @@
 import { AgendaStore } from "../../consensus/agenda/index.js";
 import { createAgendaId } from "../../blackboard/types/base.js";
-import { EventBus } from "../../_legacy/blackboard/events/index.js";
+import { EventBus } from "../../blackboard/events/index.js";
 import { MeetingStateMachine } from "./discussion/index.js";
 import {
   CollaborationPatternBase,

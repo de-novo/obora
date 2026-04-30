@@ -1,1 +1,1 @@
-export * from "../../_legacy/blackboard/domains/voting/VotingSessionStore.js";
+export * from "../../blackboard/domains/voting/VotingSessionStore.js";

@@ -1,1 +1,1 @@
-export * from "../../_legacy/blackboard/types/decision.js";
+export * from "../../blackboard/types/decision.js";

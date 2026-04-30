@@ -1,1 +1,1 @@
-export * from "../_legacy/blackboard/core/tkg.js";
+export * from "../blackboard/core/tkg.js";

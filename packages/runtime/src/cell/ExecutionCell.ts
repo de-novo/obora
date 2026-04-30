@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { BaseActor } from "./BaseActor.js";
-import type { IBlackboard } from "../_legacy/actor/types/blackboard.js";
-import { createActorId } from "../_legacy/actor/types/actor.js";
-import type { ActorId, ActorRole } from "../_legacy/actor/types/actor.js";
-import type { IMessageBus, Message, MessageType } from "../_legacy/actor/types/message.js";
-import { createAction } from "../_legacy/actor/types/action.js";
-import { createObservation } from "../_legacy/actor/types/observation.js";
-import { createFailureResult, createSuccessResult } from "../_legacy/actor/types/result.js";
+import type { IBlackboard } from "./actor/types/blackboard.js";
+import { createActorId } from "./actor/types/actor.js";
+import type { ActorId, ActorRole } from "./actor/types/actor.js";
+import type { IMessageBus, Message, MessageType } from "./actor/types/message.js";
+import { createAction } from "./actor/types/action.js";
+import { createObservation } from "./actor/types/observation.js";
+import { createFailureResult, createSuccessResult } from "./actor/types/result.js";
 import type {
   CellId,
   CellMetrics,

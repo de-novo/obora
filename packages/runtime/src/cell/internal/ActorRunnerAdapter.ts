@@ -1,2 +1,2 @@
-export { ActorRunner as ActorRunnerAdapter } from "../../_legacy/actor/runtime/ActorRunner.js";
-export * from "../../_legacy/actor/runtime/ActorRunner.js";
+export { ActorRunner as ActorRunnerAdapter } from "../actor/runtime/ActorRunner.js";
+export * from "../actor/runtime/ActorRunner.js";

@@ -11,7 +11,7 @@ import type {
 import type {
   Agenda as DomainAgenda,
   AgendaStatus as DomainAgendaStatus,
-} from '../../_legacy/blackboard/domains/agenda/types';
+} from '../../blackboard/domains/agenda/types';
 import {
   BoardPhase,
   AgentStatus,

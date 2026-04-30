@@ -1,1 +1,1 @@
-export * from "../../_legacy/blackboard/domains/tkg/JsonFileReflectorStateStore.js";
+export * from "../../blackboard/domains/tkg/JsonFileReflectorStateStore.js";

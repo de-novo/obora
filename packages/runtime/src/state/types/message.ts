@@ -1,1 +1,1 @@
-export * from "../../_legacy/blackboard/types/message.js";
+export * from "../../blackboard/types/message.js";

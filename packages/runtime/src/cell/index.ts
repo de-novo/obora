@@ -7,3 +7,4 @@ export * from "./types.js";
 export * from "./internal/ActorRunnerAdapter.js";
 export * from "./internal/CellActorFactory.js";
 export * from "./internal/NoOpRuntimeBus.js";
+export * from "./agents/index.js";

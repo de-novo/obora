@@ -1,1 +1,1 @@
-export * from "../../_legacy/blackboard/snapshot/id-utils.js";
+export * from "../../blackboard/snapshot/id-utils.js";

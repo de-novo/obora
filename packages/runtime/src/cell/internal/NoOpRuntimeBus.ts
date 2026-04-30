@@ -1,2 +1,2 @@
-export { NoOpMessageBus as NoOpRuntimeBus } from "../../_legacy/actor/pool/NoOpMessageBus.js";
-export * from "../../_legacy/actor/pool/NoOpMessageBus.js";
+export { NoOpMessageBus as NoOpRuntimeBus } from "../actor/pool/NoOpMessageBus.js";
+export * from "../actor/pool/NoOpMessageBus.js";

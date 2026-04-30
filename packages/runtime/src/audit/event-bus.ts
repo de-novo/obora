@@ -1,1 +1,1 @@
-export * from "../_legacy/blackboard/events/event-bus.js";
+export * from "../blackboard/events/event-bus.js";

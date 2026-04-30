@@ -1,1 +1,1 @@
-export * from "../../_legacy/blackboard/core/accessors/state-accessor.js";
+export * from "../../blackboard/core/accessors/state-accessor.js";

@@ -1,1 +1,1 @@
-export * from "../_legacy/blackboard/domains/consensus/types.js";
+export * from "../blackboard/domains/consensus/types.js";

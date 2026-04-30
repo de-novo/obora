@@ -22,7 +22,6 @@
     "src/**/__tests__/**",
     "src/**/runtime-tests/**",
     "src/**/pool-tests/**",
-    "src/**/base-tests/**",
-    "src/_legacy/**"
+    "src/**/base-tests/**"
   ]
 }

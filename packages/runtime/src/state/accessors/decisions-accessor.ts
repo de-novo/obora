@@ -1,1 +1,1 @@
-export * from "../../_legacy/blackboard/core/accessors/decisions-accessor.js";
+export * from "../../blackboard/core/accessors/decisions-accessor.js";

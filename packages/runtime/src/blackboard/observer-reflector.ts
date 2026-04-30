@@ -2,7 +2,7 @@ import type { Event } from './events';
 import { EventBus, type Unsubscribe } from './events';
 import { createAgentId } from './types';
 import { createNodeId, type IProductionPromotionPort, type TemporalNode } from './types/tkg';
-import type { InMemoryStagingTKG } from '../_legacy/blackboard/domains/tkg/InMemoryTKG';
+import type { InMemoryStagingTKG } from '../blackboard/domains/tkg/InMemoryTKG';
 
 export interface ObserverOptions {
   readonly stagingThreshold?: number;

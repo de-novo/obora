@@ -1,1 +1,1 @@
-export * from "../../_legacy/actor/runtime/utils/delay.js";
+export * from "../actor/runtime/utils/delay.js";

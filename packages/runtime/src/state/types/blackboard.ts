@@ -1,1 +1,1 @@
-export * from "../../_legacy/blackboard/types/blackboard.js";
+export * from "../../blackboard/types/blackboard.js";

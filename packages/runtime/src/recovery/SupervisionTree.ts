@@ -1,1 +1,1 @@
-export * from "../_legacy/actor/supervision/SupervisorTree.js";
+export * from "../cell/actor/supervision/SupervisorTree.js";
