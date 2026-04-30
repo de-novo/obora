@@ -7,6 +7,23 @@ on:
       - develop
       - 'feature/**'
   pull_request:
+  workflow_dispatch:
+    inputs:
+      e2e_provider:
+        description: "Provider for manual live-LLM e2e tests"
+        required: false
+        default: "zai"
+        type: string
+      e2e_model:
+        description: "Model for manual live-LLM e2e tests"
+        required: false
+        default: "glm-4.7"
+        type: string
+      e2e_base_url:
+        description: "Optional provider base URL for manual live-LLM e2e tests"
+        required: false
+        default: ""
+        type: string
 
 jobs:
   build-test:
@@ -32,19 +49,22 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build
-        run: pnpm build
-
-      - name: Test
-        run: pnpm test
+      - name: Typecheck
+        run: pnpm typecheck
 
       - name: Lint
         run: pnpm lint
 
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
   e2e-test:
     runs-on: ubuntu-latest
     needs: build-test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -64,9 +84,10 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: E2E Tests (zai/glm-4.7)
+      - name: E2E Tests (manual live LLM)
         run: pnpm test:e2e
         env:
           ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
-          OBORA_TEST_MODEL: glm-4.7
-          OBORA_TEST_PROVIDER: zai
+          OBORA_TEST_MODEL: ${{ inputs.e2e_model }}
+          OBORA_TEST_PROVIDER: ${{ inputs.e2e_provider }}
+          OBORA_TEST_BASE_URL: ${{ inputs.e2e_base_url }}

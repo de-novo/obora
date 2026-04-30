@@ -40,7 +40,7 @@ jobs:
 
       # Same 3 checks as scripts/ci/judgment-gate.sh
       - name: TypeScript type-check
-        run: pnpm --filter @obora/runtime exec tsc --noEmit
+        run: pnpm --filter @obora/runtime typecheck
 
       - name: Judgment tests
         run: pnpm --filter @obora/runtime exec vitest run --reporter=verbose src/judgment/
