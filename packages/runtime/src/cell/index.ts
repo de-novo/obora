@@ -3,7 +3,15 @@ export * from "./CellManager.js";
 export * from "./PoolManager.js";
 export * from "./ExecutionCell.js";
 export * from "./CellContext.js";
-export * from "./types.js";
+export type {
+  CellId,
+  CellStatus,
+  CellConfig,
+  StateChange,
+  ToolCallRecord,
+  CellMetrics,
+  CellResult,
+} from "./types.js";
 export * from "./internal/ActorRunnerAdapter.js";
 export * from "./internal/CellActorFactory.js";
 export * from "./internal/NoOpRuntimeBus.js";

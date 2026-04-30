@@ -1,8 +1,5 @@
 {
   "extends": "./tsconfig.json",
-  "compilerOptions": {
-    "noUncheckedIndexedAccess": true
-  },
   "include": [],
   "files": [
     "src/typecheck-public.d.ts",

@@ -8,6 +8,10 @@ export type { AuditEvent, AuditEventType, AuditFilter } from "./audit/types.js";
 export * from "./errors/index.js";
 export * from "./recovery/index.js";
 export * from "./orchestrator/index.js";
+export type {
+  ConsensusConfig,
+  ConsensusVoterSpec,
+} from "./orchestrator/workflow/types/workflow.js";
 export * from "./patterns/index.js";
 export * as Plugins from "./plugins/index.js";
 export * from "./storage/index.js";

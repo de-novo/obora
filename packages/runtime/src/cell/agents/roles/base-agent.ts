@@ -10,6 +10,28 @@ import { createAgentId, type AgentId } from "../../../blackboard/types/base.js";
 
 export type { AgentId };
 
+const ZERO_TOKEN_USAGE = {
+  promptTokens: 0,
+  completionTokens: 0,
+  totalTokens: 0,
+} as const;
+
+function normalizeTokenUsage(usage: {
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+} | undefined): {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+} {
+  return {
+    promptTokens: usage?.promptTokens ?? 0,
+    completionTokens: usage?.completionTokens ?? 0,
+    totalTokens: usage?.totalTokens ?? 0,
+  };
+}
+
 export enum AgentRole {
   ANALYST = "analyst",
   EXECUTOR = "executor",
@@ -280,7 +302,7 @@ export abstract class BaseAgent {
 
     return {
       action: this.parseResponse(result.message.content ?? "", task),
-      usage: result.usage,
+      usage: normalizeTokenUsage(result.usage),
     };
   }
 
@@ -663,10 +685,12 @@ Use board_read to inspect context, then perform role_action, and finish with boa
             maxTokens: this.executeMaxTokens,
           });
 
+          const usage = normalizeTokenUsage(res.usage);
+
           this.latestUsage = {
-            prompt: res.usage.promptTokens,
-            completion: res.usage.completionTokens,
-            total: res.usage.totalTokens,
+            prompt: usage.promptTokens,
+            completion: usage.completionTokens,
+            total: usage.totalTokens,
           };
 
           const textContent = res.message.content?.trim();
@@ -697,11 +721,11 @@ Use board_read to inspect context, then perform role_action, and finish with boa
             provider: this.llm.id,
             model: res.model ?? "unknown",
             usage: {
-              input: res.usage.promptTokens,
-              output: res.usage.completionTokens,
+              input: usage.promptTokens,
+              output: usage.completionTokens,
               cacheRead: 0,
               cacheWrite: 0,
-              totalTokens: res.usage.totalTokens,
+              totalTokens: usage.totalTokens,
               cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
             },
             stopReason: res.finishReason === "tool_calls" ? "toolUse" : "stop",

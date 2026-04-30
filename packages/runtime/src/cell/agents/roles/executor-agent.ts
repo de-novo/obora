@@ -8,7 +8,19 @@ import {
   ExecutorInput,
   ExecutorOutput,
 } from "./base-agent";
-import type { ToolRegistry, ToolContext as ToolCtx } from "@obora/adapters";
+
+interface ToolCtx {
+  sessionId: string;
+  agentId: string;
+  taskId?: string;
+  metadata?: Record<string, unknown>;
+  permissions: Set<string>;
+}
+
+export interface ToolRegistryLike {
+  listTools(): Array<{ name: string }>;
+  execute(name: string, params: Record<string, unknown>, context: ToolCtx): Promise<unknown>;
+}
 
 /**
  * Executor 에이전트
@@ -18,11 +30,11 @@ import type { ToolRegistry, ToolContext as ToolCtx } from "@obora/adapters";
  * 출력: ExecutorOutput
  */
 export class ExecutorAgent extends BaseAgent {
-  private toolRegistry?: ToolRegistry;
+  private toolRegistry?: ToolRegistryLike;
 
   constructor(
     config: Omit<BaseAgentConfig, "role"> & {
-      toolRegistry?: ToolRegistry;
+      toolRegistry?: ToolRegistryLike;
     }
   ) {
     super({ ...config, role: AgentRole.EXECUTOR });
@@ -85,7 +97,11 @@ Be precise, efficient, and safety-conscious in your execution.`;
         metadata: context.currentTask?.metadata,
         permissions: new Set(["*"]),
       };
-      const toolResult = await this.toolRegistry.execute(plan.tool, plan.parameters, toolContext);
+      const toolResult = await this.toolRegistry.execute(
+        plan.tool,
+        (plan.parameters ?? {}) as Record<string, unknown>,
+        toolContext,
+      );
 
       // 실행 결과를 상태에 저장
       context.board.write(`state.execution.${this.id}.${Date.now()}`, {
@@ -144,7 +160,7 @@ Be precise, efficient, and safety-conscious in your execution.`;
   /**
    * 도구 레지스트리 설정
    */
-  setToolRegistry(registry: ToolRegistry): void {
+  setToolRegistry(registry: ToolRegistryLike): void {
     this.toolRegistry = registry;
   }
 }
@@ -155,7 +171,7 @@ Be precise, efficient, and safety-conscious in your execution.`;
 export function createExecutorAgent(
   id: string,
   llm: BaseAgentConfig["llm"],
-  toolRegistry?: ToolRegistry
+  toolRegistry?: ToolRegistryLike
 ): ExecutorAgent {
   return new ExecutorAgent({ id: createAgentId(id), llm, toolRegistry });
 }

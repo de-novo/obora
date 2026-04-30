@@ -1,10 +1,10 @@
 import { createAgentId } from "../../../blackboard/types/base.js";
 import { BaseAgent } from "./base-agent";
 import { AnalystAgent } from "./analyst-agent";
-import { ExecutorAgent } from "./executor-agent";
+import { ExecutorAgent, type ToolRegistryLike } from "./executor-agent";
 import { VerifierAgent } from "./verifier-agent";
 import { DirectorAgent } from "./director-agent";
-import type { LLMAdapter, ToolRegistry } from "@obora/adapters";
+import type { LLMAdapter } from "@obora/adapters";
 
 /**
  * 에이전트 생성 설정
@@ -13,7 +13,7 @@ export interface CreateAgentConfig {
   id: string;
   role: "analyst" | "executor" | "verifier" | "director";
   llm: LLMAdapter;
-  toolRegistry?: ToolRegistry;
+  toolRegistry?: ToolRegistryLike;
   systemPrompt?: string;
   provider?: string;
   model?: string;

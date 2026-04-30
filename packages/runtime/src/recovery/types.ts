@@ -134,6 +134,3 @@ export interface RecoveryEngine {
     options?: RecoveryHandleOptions
   ): Promise<RecoveryResult>;
 }
-
-// Legacy export for compatibility during M1 migration.
-export * from "../cell/actor/supervision/types.js";

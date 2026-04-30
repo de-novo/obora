@@ -275,8 +275,16 @@ export async function executeStep(
     };
   }
 
-  let loadedSkills: Awaited<ReturnType<SkillLoader["loadSkills"]>> | undefined;
-  const skillLoader = new SkillLoader(new SkillRegistry({ cwd: process.cwd() }));
+  type RuntimeSkillLoader = SkillLoader & {
+    loadSkills(
+      skills: string[],
+      options: { cwd: string; agentId?: string; stepName?: string }
+    ): Promise<{ loaded: unknown[]; tools?: unknown[]; systemPrompt?: string }>;
+    teardown(loaded: unknown[]): Promise<void>;
+  };
+
+  let loadedSkills: Awaited<ReturnType<RuntimeSkillLoader["loadSkills"]>> | undefined;
+  const skillLoader = new SkillLoader(new SkillRegistry({ cwd: process.cwd() })) as RuntimeSkillLoader;
 
   if (step.skills && step.skills.length > 0) {
     loadedSkills = await skillLoader.loadSkills(step.skills, {
