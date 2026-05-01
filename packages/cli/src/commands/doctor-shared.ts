@@ -340,18 +340,21 @@ export function parseAnthropicModel(
     };
   }
 
-  const legacyMatch = /^claude-(\d+)-(\d+)-(opus|sonnet|haiku)(?:-(latest|\d{8}))?$/.exec(model);
-  if (!legacyMatch) {
+  const historicalMatch = /^claude-(\d+)-(\d+)-(opus|sonnet|haiku)(?:-(latest|\d{8}))?$/.exec(
+    model
+  );
+  if (!historicalMatch) {
     return null;
   }
 
   return {
     model,
-    family: familyPriority[legacyMatch[3] ?? ""] ?? 0,
-    major: Number(legacyMatch[1] ?? 0),
-    minor: Number(legacyMatch[2] ?? 0),
-    stableAlias: !legacyMatch[4] || legacyMatch[4] === "latest",
-    snapshotDate: legacyMatch[4] && legacyMatch[4] !== "latest" ? Number(legacyMatch[4]) : 0,
+    family: familyPriority[historicalMatch[3] ?? ""] ?? 0,
+    major: Number(historicalMatch[1] ?? 0),
+    minor: Number(historicalMatch[2] ?? 0),
+    stableAlias: !historicalMatch[4] || historicalMatch[4] === "latest",
+    snapshotDate:
+      historicalMatch[4] && historicalMatch[4] !== "latest" ? Number(historicalMatch[4]) : 0,
   };
 }
 

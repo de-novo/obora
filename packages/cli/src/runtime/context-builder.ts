@@ -95,7 +95,7 @@ export function createWorkflowBlackboard(
   });
 
   // Compatibility shim for agents expecting board.write().
-  // Deprecated no-op to avoid crashing legacy agents while preserving
+  // Deprecated no-op to avoid crashing older agent plugins while preserving
   // runtime single-writer policy via recordStepResult/recordStepError.
   Object.defineProperty(
     board as unknown as { write?: (path: string, value: unknown) => void },

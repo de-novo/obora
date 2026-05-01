@@ -8,7 +8,7 @@ export * from "./ReExecutionDiffReport.js";
 export * from "./ReExecutionRuntime.js";
 export * from "./AuditReplay.js";
 
-// Legacy re-exports kept for compatibility during M1 migration.
+// Compatibility re-exports retained for the current 0.x public surface.
 export * from "./event-bus.js";
 export * from "./event-factory.js";
 export * from "./tkg/index.js";

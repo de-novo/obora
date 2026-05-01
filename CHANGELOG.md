@@ -12,6 +12,7 @@ All notable changes to Obora will be documented in this file.
 - Aligned the GitHub publish workflow with the release scripts by publishing `@obora/adapters` between `@obora/runtime` and `@obora/sdk`.
 - Switched package payload verification to `npm pack --dry-run` so release checks remain runnable before version bumps.
 - Hardened publish payload checks so test artifacts cannot be included in release tarballs.
+- Standardized active CLI/runtime compatibility wording so historical/deferred surfaces are not described as live legacy paths.
 
 ### Added — Contract-First Workflow DX
 

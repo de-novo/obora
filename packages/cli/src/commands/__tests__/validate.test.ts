@@ -128,7 +128,7 @@ describe("validate command", () => {
     expect(parseAndValidate).not.toHaveBeenCalled();
   });
 
-  it("validates one-file workflows through SDK expansion instead of legacy parser", async () => {
+  it("validates one-file workflows through SDK expansion instead of the canonical workflow parser", async () => {
     vi.mocked(existsSync).mockReturnValue(true);
     vi.mocked(readFileSync).mockReturnValue("name: quickstart-judge\nmode: judge\n");
     vi.mocked(parseAndValidate).mockReturnValue({

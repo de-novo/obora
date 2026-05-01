@@ -56,7 +56,7 @@ describe("M3 CLI command IA", () => {
     );
   });
 
-  it("does not register legacy-boundary wrapper commands", () => {
+  it("does not register deferred wrapper commands", () => {
     const cli = createCLI();
     const names = cli.commands.map((command) => command.name());
 

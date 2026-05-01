@@ -19,7 +19,6 @@ This inventory defines how active source mentions of `legacy`, `deprecated`, `ba
 ## Current Follow-up Candidates
 
 - Standardize runtime blackboard deprecation comments so each retained accessor names the replacement.
-- Replace remaining CLI/test wording that says `legacy` when it only means `deferred` or `historical`.
 - Plan a future breaking cleanup for reflector compatibility entrypoints and audit re-export aliases.
 - Continue SDK test type-safety cleanup by reducing `scripts/release/test-type-debt-allowlist.txt` counts rather than allowing new casts.
 

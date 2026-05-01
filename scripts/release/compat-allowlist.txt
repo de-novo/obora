@@ -3,10 +3,6 @@
 packages/adapters/src/skills/types.ts	deprecate	Public alias retained for minor compatibility; replacement is OboraSkill.tools.
 packages/adapters/src/tools/registry.ts	deprecate	Deprecated helper retained until the next breaking cleanup; replacement is toToolDefinitions.
 packages/adapters/src/tools/types.ts	deprecate	Deprecated ToolDefinition alias retained; replacement is ToolCall.
-packages/cli/src/commands/__tests__/cli-commands.test.ts	keep	Regression test that removed/deferred CLI wrappers remain unregistered.
-packages/cli/src/commands/__tests__/validate.test.ts	keep	Test name documents canonical SDK expansion path replacing the old parser.
-packages/cli/src/commands/doctor-shared.ts	keep	Claude model ref parser intentionally accepts historical model naming shapes.
-packages/cli/src/runtime/__tests__/agent-registry.test.ts	remove-later	Test wording still references historical task names; behavior stays until registry naming cleanup.
 packages/cli/src/runtime/context-builder.ts	keep	No-op hook protects older agent plugin shapes without reintroducing legacy source paths.
 packages/cli/src/tui/error-ui.ts	keep	Readline fallback is a runtime compatibility behavior, not legacy command support.
 packages/runtime/src/audit/index.ts	deprecate	Audit re-export surface is kept for current minor compatibility; remove only in breaking cleanup.
