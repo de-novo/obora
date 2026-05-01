@@ -241,14 +241,12 @@ export const AgentRole: {
 };
 export type AgentRole = (typeof AgentRole)[keyof typeof AgentRole];
 
-export interface BlackboardLike {
-  read<T = unknown>(path: string, options?: { strict?: boolean }): T;
-  write?(path: string, value: unknown): void;
-}
-
 export interface AgentContext {
   sessionId: string;
-  board: BlackboardLike;
+  board: {
+    read<T = unknown>(path: string, options?: { strict?: boolean }): T;
+    write?(path: string, value: unknown): void;
+  };
   currentTask?: Task;
   history: unknown[];
   signal?: AbortSignal;

@@ -17,6 +17,7 @@ bash scripts/release/verify-doc-code-snippets.sh
 bash scripts/release/verify-doc-shell-snippets.sh
 bash scripts/release/verify-doc-structured-snippets.sh
 bash scripts/release/verify-doc-tutorial-cli-flows.sh
+bash scripts/release/verify-typecheck-public-shims.sh
 bash scripts/release/verify-publish-packages.sh
 bash scripts/release/verify-cli-package-selftest.sh
 

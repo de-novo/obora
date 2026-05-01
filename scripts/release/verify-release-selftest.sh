@@ -44,4 +44,9 @@ if ! grep -Fq 'bash scripts/release/verify-doc-tutorial-cli-flows.sh' scripts/re
   exit 1
 fi
 
+if ! grep -Fq 'bash scripts/release/verify-typecheck-public-shims.sh' scripts/release/verify-release.sh; then
+  echo "[FAIL] expected verify-release.sh to run typecheck-public shim verification"
+  exit 1
+fi
+
 echo "[PASS] verify release selftest passed"

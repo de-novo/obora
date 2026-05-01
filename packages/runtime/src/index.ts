@@ -1,4 +1,5 @@
 export * from "./cell/index.js";
+export { createAgent } from "./cell/agents/roles/factory.js";
 export * from "./policy/index.js";
 export * as State from "./state/index.js";
 export * from "./consensus/index.js";

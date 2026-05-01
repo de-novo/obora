@@ -220,7 +220,6 @@ export const BUILTIN_TOOLS: Record<string, unknown>;
 
 export type OneFileStopSemantics = Record<string, unknown>;
 export type ValidationResult = Record<string, unknown>;
-export type ValidationError = Record<string, unknown>;
 
 export function fixtureToTestCase(...args: unknown[]): any;
 export function loadFixture(...args: unknown[]): any;
