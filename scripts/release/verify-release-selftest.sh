@@ -34,4 +34,9 @@ if ! grep -Fq 'bash scripts/release/verify-doc-shell-snippets.sh' scripts/releas
   exit 1
 fi
 
+if ! grep -Fq 'bash scripts/release/verify-doc-structured-snippets.sh' scripts/release/verify-release.sh; then
+  echo "[FAIL] expected verify-release.sh to run docs structured snippet verification"
+  exit 1
+fi
+
 echo "[PASS] verify release selftest passed"
