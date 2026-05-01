@@ -14,7 +14,11 @@ npm install @obora/sdk
 import { OboraRuntime, Workflow } from "@obora/sdk";
 
 const runtime = new OboraRuntime({
-  llm: { provider: "zai", model: "glm-4.7" },
+  llm: {
+    provider: "zai",
+    model: "glm-4.7",
+    apiKey: process.env.ZAI_API_KEY ?? "local-dev-key",
+  },
 });
 
 // Define and run a workflow
@@ -56,10 +60,16 @@ The SDK is organized into focused modules:
 ```typescript
 import { OboraRuntime, OboraError, OboraErrorCode } from "@obora/sdk";
 
-const runtime = new OboraRuntime(config);
-await runtime.define(name, workflow);
-await runtime.registerAgent(name, factory);
-const handle = await runtime.run(workflowName);
+const runtime = new OboraRuntime();
+const workflow = {
+  name: "example",
+  version: "1.0",
+  steps: [{ name: "greet", agent: "assistant", input: { task: "Say hello" } }],
+};
+
+runtime.define("example", workflow);
+runtime.registerAgent("assistant", () => ({ role: "Assistant" }));
+const handle = await runtime.run("example");
 ```
 
 ### Workflow
@@ -67,11 +77,9 @@ const handle = await runtime.run(workflowName);
 ```typescript
 import { Workflow } from "@obora/sdk";
 
-const workflow = new Workflow({
-  name: "my-workflow",
-  version: "1.0",
-  steps: [...]
-});
+const workflow = new Workflow("my-workflow", "1.0")
+  .addStep({ id: "plan", agent: "architect", input: { task: "Plan the change" } })
+  .toDefinition();
 ```
 
 ### Step Execution
@@ -79,12 +87,21 @@ const workflow = new Workflow({
 ```typescript
 import { StepExecutor, type StepToolHandler } from "@obora/sdk";
 
+const llmAdapter = {
+  async chatCompletion() {
+    return { message: { role: "assistant" as const, content: "done" } };
+  },
+};
+const agentFactories = new Map();
 const executor = new StepExecutor(llmAdapter, agentFactories, {
-  tools: customTools, // Custom tool handlers
+  tools: [] satisfies StepToolHandler[], // Custom tool handlers
   disableBuiltinTools: false, // Keep file_write, file_read, file_list
 });
 
-const result = await executor.executeStep(step, context);
+const result = await executor.executeStep(
+  { name: "plan", agent: "assistant", input: { task: "Plan" } },
+  { previousOutputs: {} }
+);
 ```
 
 ### Testing Utilities
@@ -92,13 +109,19 @@ const result = await executor.executeStep(step, context);
 ```typescript
 import { MockAgent, runWorkflowTest, loadFixture } from "@obora/sdk/testing";
 
-const mockAgent = new MockAgent()
-  .when("plan")
-  .respond("Plan created")
-  .when("implement")
-  .respond("Code written");
+const mockAgent = new MockAgent("architect")
+  .onStep("plan", async () => ({ output: "Plan created" }))
+  .onStep("implement", async () => ({ output: "Code written" }));
 
-const result = await runWorkflowTest(workflow, { agents: { architect: mockAgent } });
+const result = await runWorkflowTest({
+  name: "happy path",
+  workflow: {
+    name: "example",
+    steps: [{ name: "plan", agent: "architect" }]
+  },
+  mocks: { agents: [mockAgent] },
+  expect: { status: "completed" }
+});
 ```
 
 ### Knowledge
@@ -107,7 +130,7 @@ const result = await runWorkflowTest(workflow, { agents: { architect: mockAgent 
 import { queryKnowledge, validateKnowledgeSchema } from "@obora/sdk";
 
 const results = await queryKnowledge({
-  query: "authentication patterns",
+  textQuery: "authentication patterns",
   tags: ["security", "auth"],
   limit: 10,
 });
@@ -121,13 +144,13 @@ const results = await queryKnowledge({
 import { resolveLLMConfig, detectLLMConfigFromEnv } from "@obora/sdk";
 
 // From environment
-const config = detectLLMConfigFromEnv();
+const envConfig = detectLLMConfigFromEnv();
 
 // Explicit
-const config = resolveLLMConfig({
+const explicitConfig = resolveLLMConfig({
   provider: "zai",
   model: "glm-4.7",
-  apiKey: process.env.ZAI_API_KEY,
+  apiKey: process.env.ZAI_API_KEY ?? "local-dev-key",
 });
 ```
 
@@ -135,17 +158,22 @@ const config = resolveLLMConfig({
 
 ```typescript
 import { CostTracker, BudgetExceededError } from "@obora/sdk";
+import type { StorageAdapter } from "@obora/runtime";
 
-const tracker = new CostTracker({ maxCost: 1.0 }); // $1 budget
-runtime.on("llm_response", (event) => tracker.track(event));
+declare const storage: StorageAdapter;
+
+const tracker = new CostTracker(storage, "run-1", {
+  resources: { maxCostPerRun: 1.0 }, // $1 budget
+});
 ```
 
 ## Error Handling
 
 ```typescript
-import { OboraError, OboraErrorCode } from "@obora/sdk";
+import { OboraRuntime, OboraError, OboraErrorCode } from "@obora/sdk";
 
 try {
+  const runtime = new OboraRuntime();
   await runtime.run("workflow");
 } catch (e) {
   if (e instanceof OboraError) {

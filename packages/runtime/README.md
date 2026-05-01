@@ -67,9 +67,9 @@ import { DefaultPolicyEngine } from "@obora/runtime";
 
 const engine = new DefaultPolicyEngine();
 engine.loadInline({
-  tools: {
-    "delete_file": { effect: "deny", reason: "Destructive operations not allowed" }
-  }
+  tools: [
+    { name: "delete_file", effect: "deny" }
+  ]
 });
 
 const result = engine.enforce({ type: "tool_call", name: "delete_file", params: {} }, {});
@@ -83,10 +83,11 @@ import { Audit } from "@obora/runtime";
 
 const store = new Audit.InMemoryAuditStore();
 await store.record({
+  id: "event-1",
   type: "step_start",
   executionId: "exec-1",
-  stepName: "plan",
-  timestamp: new Date()
+  timestamp: new Date(),
+  data: { stepName: "plan" }
 });
 
 const events = await store.query({ executionId: "exec-1" });
@@ -117,7 +118,7 @@ const result = evaluateConsensus(snapshot, {
   method: "majority",
   summary: "release readiness vote"
 });
-// { approved: true, status: "APPROVED", ... }
+console.log(result.approved, result.status);
 ```
 
 ### Patterns
@@ -145,8 +146,8 @@ registry.register({
   name: "my-tool",
   version: "1.0.0",
   type: "tool",
-  schema: { ... },
-  execute: async (params) => { ... }
+  schema: { type: "object", properties: {} },
+  execute: async (params: unknown) => params
 });
 ```
 
@@ -169,7 +170,7 @@ registry.register({
 import { SQLiteStorageAdapter } from "@obora/runtime/storage";
 
 const storage = new SQLiteStorageAdapter({ path: "./data.db" });
-await storage.initialize();
+const runs = await storage.listRuns({ limit: 10 });
 ```
 
 ## License

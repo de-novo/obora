@@ -26,17 +26,13 @@ npm install @obora/adapters
 ### Create Adapter
 
 ```typescript
-import { createAdapter } from "@obora/adapters";
+import { createAdapter, createAdapterFromEnv } from "@obora/adapters";
 
-// From environment (auto-detect)
-const adapter = await createAdapter();
+// From environment
+const envAdapter = createAdapterFromEnv("zai", { model: "glm-4.7" });
 
 // Explicit provider
-const adapter = await createAdapter({
-  provider: "zai",
-  model: "glm-4.7",
-  apiKey: process.env.ZAI_API_KEY
-});
+const zaiAdapter = await createAdapter("zai", { model: "glm-4.7" });
 ```
 
 ### Chat Completion
@@ -96,8 +92,10 @@ const result = await adapter.chatCompletion({
 
 if (result.message.toolCalls) {
   const call = result.message.toolCalls[0];
-  console.log(call.function.name);     // "get_weather"
-  console.log(call.function.arguments); // '{"location":"Seoul"}'
+  if (call) {
+    console.log(call.function.name);     // "get_weather"
+    console.log(call.function.arguments); // '{"location":"Seoul"}'
+  }
 }
 ```
 
@@ -106,12 +104,10 @@ if (result.message.toolCalls) {
 ```typescript
 import { AgentConfigResolver } from "@obora/adapters";
 
-const resolver = await AgentConfigResolver.create({
-  configPath: ".obora/config.yaml"
-});
+const resolver = await AgentConfigResolver.create(process.cwd());
 
 // Resolve config for a specific agent
-const config = resolver.resolveForStep("architect", "plan");
+const config = resolver.resolveForStep("architect", { model: "glm-4.7" });
 // { provider: "zai", model: "glm-4.7", temperature: 0.7 }
 ```
 
@@ -120,9 +116,10 @@ const config = resolver.resolveForStep("architect", "plan");
 ```typescript
 import { MockLLMAdapter } from "@obora/adapters/testing";
 
-const mock = new MockLLMAdapter()
-  .addResponse("Hello!", "Hi there!")
-  .addResponse("Goodbye!", "See you later!");
+const mock = new MockLLMAdapter({
+  "Hello!": "Hi there!",
+  "Goodbye!": "See you later!"
+});
 
 const result = await mock.chatCompletion({
   messages: [{ role: "user", content: "Hello!" }]
