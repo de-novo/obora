@@ -1,8 +1,4 @@
 # path<TAB>max_matches<TAB>reason
-packages/sdk/src/blackboard/__tests__/execution-observer.test.ts	1	Mock cost tracker fixture lacks a typed test helper.
-packages/sdk/src/tkg/__tests__/rollback.test.ts	1	Rollback store fixture needs a shared typed snapshot store helper.
-packages/sdk/src/tkg/__tests__/apply.test.ts	2	TKG staging/review queue stores need shared typed snapshot store helpers.
 packages/sdk/src/__tests__/error-event-api.test.ts	7	Tests currently reach a private event emitter; replace with observable public event path.
-packages/sdk/src/__tests__/validation-repair-fixture.test.ts	2	Fixture YAML shape needs a typed workflow assertion helper.
 packages/sdk/src/__tests__/cost-tracker.test.ts	6	Cost tracker storage fixture needs typed storage helper.
 packages/sdk/src/__tests__/runtime-facade.test.ts	54	Large facade fixture owns most remaining custom persistence store casts.

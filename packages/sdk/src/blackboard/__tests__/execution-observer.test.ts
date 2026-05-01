@@ -1,8 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
+import { CostTracker } from "../../cost-tracker.js";
 import { ExecutionObserver } from "../execution-observer.js";
 import type { ExecutionReport } from "../execution-observer.js";
 import { EventBus } from "../../events/event-bus.js";
 import { BlackboardManager } from "../blackboard-manager.js";
+import type { CostRecord, CostSummary, StorageAdapter } from "@obora/runtime";
 
 describe("ExecutionObserver", () => {
   const execId = "exec-001";
@@ -195,8 +197,34 @@ describe("ExecutionObserver", () => {
     const { eventBus, observer } = createObserver();
 
     let callCount = 0;
-    const mockCostTracker = {
-      runCost: vi.fn(async () => {
+    const storage: StorageAdapter = {
+      async saveRun() {},
+      async getRun() {
+        return null;
+      },
+      async listRuns() {
+        return [];
+      },
+      async saveStep() {},
+      async getSteps() {
+        return [];
+      },
+      async saveArtifact(record) {
+        return record;
+      },
+      async getArtifacts() {
+        return [];
+      },
+      async deleteArtifact() {},
+      async saveCheckpoint() {},
+      async getLatestCheckpoint() {
+        return null;
+      },
+      async saveCost() {},
+      async getCosts(): Promise<CostRecord[]> {
+        return [];
+      },
+      getRunCostSummary: vi.fn(async (): Promise<CostSummary> => {
         callCount++;
         // First call (step_start snapshot): totalCostUsd = 1.00
         // Second call (step_end delta):     totalCostUsd = 1.50
@@ -207,9 +235,14 @@ describe("ExecutionObserver", () => {
           byModel: [],
         };
       }),
+      async saveAuditEvent() {},
+      async getAuditTimeline() {
+        return [];
+      },
     };
+    const mockCostTracker = new CostTracker(storage, execId);
 
-    observer.attachCostTracker(mockCostTracker as any);
+    observer.attachCostTracker(mockCostTracker);
     observer.observe(execId);
 
     await eventBus.emit("step_start", execId, { stepName: "generate" });

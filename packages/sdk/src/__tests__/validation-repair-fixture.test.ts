@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { join } from "node:path";
 
 import { loadFixture } from "../testing/index.js";
+import type { WorkflowStep } from "../workflow.js";
 
 describe("validation-repair fixture", () => {
   it("loads validation-repair-loop fixture", async () => {
@@ -15,12 +16,13 @@ describe("validation-repair fixture", () => {
 
     expect(fixture.workflow.name).toBe("validation-repair-loop");
     expect(fixture.workflow.steps).toHaveLength(2);
-    expect((fixture.workflow.steps[0] as any)?.config?.repair_loop).toMatchObject({
+    const [buildStep, validateStep] = fixture.workflow.steps as [WorkflowStep, WorkflowStep];
+    expect(buildStep.config?.repair_loop).toMatchObject({
       enabled: true,
       validation_step: "validate",
       max_no_progress_iterations: 2,
       repeated_critical_issue_ceiling: 2,
     });
-    expect((fixture.workflow.steps[1] as any)?.on_fail?.goto).toBe("build_or_repair");
+    expect(validateStep.on_fail?.goto).toBe("build_or_repair");
   });
 });

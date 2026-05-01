@@ -9,7 +9,8 @@ import {
   summarizeTKGPromotionApply,
 } from "../apply.js";
 import { evaluateTKGPromotion } from "../promotion.js";
-import type { StagingTKGSnapshot } from "../store.js";
+import type { StagingTKGSnapshot, StagingTKGStore } from "../store.js";
+import type { TKGReviewQueueStore } from "../review-queue.js";
 import {
   mergeSharedMemorySnapshots,
   type MemoryScope,
@@ -277,13 +278,13 @@ describe("TKG promotion apply", () => {
         await this.save(scope, mergeSharedMemorySnapshots(existing, snapshot));
       },
     };
-    const stagingStore = {
+    const stagingStore: StagingTKGStore = {
       async load() {
         return snapshot;
       },
       async save() {},
     };
-    const reviewQueueStore = {
+    const reviewQueueStore: TKGReviewQueueStore = {
       async load() {
         return {
           items: [
@@ -315,8 +316,8 @@ describe("TKG promotion apply", () => {
 
     const summary = await reapplyApprovedTKGReviewQueueItems({
       sharedMemoryStore,
-      stagingStore: stagingStore as any,
-      reviewQueueStore: reviewQueueStore as any,
+      stagingStore,
+      reviewQueueStore,
       queueScope: { level: "project", key: "obora-kit" },
       applyScopes: [{ level: "global", key: "global" }],
       sourceExecutionId: "exec-1",

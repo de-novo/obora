@@ -13,6 +13,7 @@ All notable changes to Obora will be documented in this file.
 - Switched package payload verification to `npm pack --dry-run` so release checks remain runnable before version bumps.
 - Hardened publish payload checks so test artifacts cannot be included in release tarballs.
 - Standardized active CLI/runtime compatibility wording so historical/deferred surfaces are not described as live legacy paths.
+- Reduced SDK test type-safety debt in small TKG, fixture, and observer tests and tightened the tracking allowlist.
 
 ### Added — Contract-First Workflow DX
 

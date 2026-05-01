@@ -10,6 +10,7 @@ import {
   selectTKGRollbackEntry,
   summarizeTKGRollbackEntries,
   type TKGRollbackSnapshot,
+  type TKGRollbackStore,
 } from "../rollback.js";
 import type { MemoryScope, SharedMemorySnapshot, SharedMemoryStore } from "../../shared-memory/store.js";
 
@@ -50,7 +51,7 @@ describe("TKG rollback helpers", () => {
   });
 
   it("restores rollback entry snapshots into shared memory stores", async () => {
-    const rollbackStore = {
+    const rollbackStore: TKGRollbackStore = {
       async load() {
         return makeSnapshot("r1");
       },
@@ -70,7 +71,7 @@ describe("TKG rollback helpers", () => {
     };
 
     const summary = await restoreTKGRollbackFromStore(
-      rollbackStore as any,
+      rollbackStore,
       sharedMemoryStore,
       { level: "project", key: "obora-kit" },
     );
