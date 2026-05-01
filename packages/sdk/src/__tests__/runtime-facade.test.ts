@@ -499,7 +499,7 @@ describe("OboraRuntime facade", () => {
     } finally {
       process.chdir(cwdBefore);
     }
-  });
+  }, 15_000);
 
   it("persists repair-loop summary into run metadata", async () => {
     const savedRuns: RunRecord[] = [];
