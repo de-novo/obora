@@ -13,6 +13,10 @@ pnpm test
 pnpm build
 ```
 
+`pnpm typecheck` is a Turbo task. It builds upstream package declarations before
+running package typechecks so the CLI is checked against publishable public
+declarations from its workspace dependencies.
+
 For a destructive clean-checkout simulation, run:
 
 ```bash
