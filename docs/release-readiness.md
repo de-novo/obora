@@ -47,6 +47,9 @@ pnpm verify:test-type-debt
 Package payload validation fails if publishable tarballs include `dist/**/__tests__/**`,
 `*.test.*`, or `*-e2e.test.*` artifacts.
 
+Package payload validation also enforces packed-size budgets so dependency bundling changes do not silently inflate publish artifacts. The current byte budgets are
+`5,500,000` for `@obora/runtime`, `9,000,000` for `@obora/adapters`, `1,000,000` for `@obora/sdk`, and `250,000` for `@obora/cli`.
+
 `pnpm verify:compat` ensures active source compatibility/deprecation mentions are covered by `scripts/release/compat-allowlist.txt` and that active runtime/CLI/SDK source does not reintroduce `_legacy` references.
 
 `pnpm verify:test-type-debt` keeps runtime source/test type debt at zero and prevents SDK/CLI `as any` or ts-ignore debt from growing outside `scripts/release/test-type-debt-allowlist.txt`.

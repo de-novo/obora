@@ -16,12 +16,24 @@ trap cleanup EXIT
 
 mkdir -p "$PACK_DIR" "$SMOKE_DIR"
 
+max_packed_bytes() {
+  case "$1" in
+    packages/runtime) echo 5500000 ;;
+    packages/adapters) echo 9000000 ;;
+    packages/sdk) echo 1000000 ;;
+    packages/cli) echo 250000 ;;
+    *) echo 0 ;;
+  esac
+}
+
 for p in "${PACKAGES[@]}"; do
   echo "=== verify $p ==="
+  max_bytes="$(max_packed_bytes "$p")"
   payload_json="$(cd "$p" && npm pack --dry-run --json)"
   printf '%s' "$payload_json" | node -e '
 const fs = require("node:fs");
 const pkgDir = process.argv[1];
+const maxPackedBytes = Number(process.argv[2] ?? 0);
 const payload = JSON.parse(fs.readFileSync(0, "utf8"))[0];
 const files = payload.files.map((file) => file.path);
 const forbidden = files.filter((path) => /(^|\/)__tests__\/|\.test\.|-e2e\.test\./.test(path));
@@ -42,8 +54,12 @@ if (pkgDir === "packages/cli" && !files.includes("bin/obora.js")) {
   console.error("[FAIL] packages/cli publish payload is missing bin/obora.js");
   process.exit(1);
 }
+if (maxPackedBytes > 0 && payload.size > maxPackedBytes) {
+  console.error(`[FAIL] ${pkgDir} publish payload is ${payload.size} bytes, exceeding the ${maxPackedBytes} byte budget.`);
+  process.exit(1);
+}
 console.log(`[PASS] ${pkgDir} payload: ${files.length} files, ${payload.size} bytes packed.`);
-' "$p"
+' "$p" "$max_bytes"
 
   tarball_path="$(cd "$p" && pnpm pack --pack-destination "$PACK_DIR")"
   printf '%s\n' "$tarball_path" | node -e '

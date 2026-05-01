@@ -6,39 +6,35 @@ cd "$ROOT_DIR"
 
 CHANGELOG_FILE="CHANGELOG.md"
 CLI_PKG="packages/cli/package.json"
-CLI_VERSION="$(jq -r '.version' "$CLI_PKG")"
+CLI_VERSION="$(node -e 'const fs = require("node:fs"); console.log(JSON.parse(fs.readFileSync(process.argv[1], "utf8")).version);' "$CLI_PKG")"
 
-if [[ ! -f "$CHANGELOG_FILE" ]]; then
-  echo "[FAIL] CHANGELOG.md not found."
-  exit 1
-fi
-
-if ! rg -q '^## \[Unreleased\]' "$CHANGELOG_FILE"; then
-  echo "[FAIL] CHANGELOG.md is missing an [Unreleased] section."
-  exit 1
-fi
-
-if ! rg -q "0\.1\.0|0\.1\.2|CLI|version|release|packag" "$CHANGELOG_FILE"; then
-  echo "[WARN] CHANGELOG.md has no obvious release/version notes."
-fi
-
-if ! python3 - <<'PY'
+python3 - <<'PY'
+import re
+import sys
 from pathlib import Path
-text = Path('CHANGELOG.md').read_text()
+
+path = Path('CHANGELOG.md')
+if not path.exists():
+    print('[FAIL] CHANGELOG.md not found.', file=sys.stderr)
+    raise SystemExit(1)
+
+text = path.read_text()
 start = text.find('## [Unreleased]')
 if start < 0:
+    print('[FAIL] CHANGELOG.md is missing an [Unreleased] section.', file=sys.stderr)
     raise SystemExit(1)
+
+if not re.search(r'0\.1\.\d+|CLI|version|release|packag', text, re.IGNORECASE):
+    print('[WARN] CHANGELOG.md has no obvious release/version notes.')
+
 next_idx = text.find('\n## [', start + 1)
 block = text[start: next_idx if next_idx != -1 else None]
 keywords = ['cli', 'release', 'version', 'pack', 'publish', 'dist', 'artifact', 'verification', 'changelog']
 if not any(k.lower() in block.lower() for k in keywords):
-    raise SystemExit(2)
+    print('[FAIL] CHANGELOG.md [Unreleased] section does not mention pending release-facing changes.', file=sys.stderr)
+    print('       Add a brief note for CLI packaging/version/release verification changes before releasing.', file=sys.stderr)
+    raise SystemExit(1)
 PY
-then
-  echo "[FAIL] CHANGELOG.md [Unreleased] section does not mention pending release-facing changes."
-  echo "       Add a brief note for CLI packaging/version/release verification changes before releasing."
-  exit 1
-fi
 
 echo "[PASS] CHANGELOG.md contains an [Unreleased] section with release-facing notes."
 echo "[INFO] current CLI package version: $CLI_VERSION"
