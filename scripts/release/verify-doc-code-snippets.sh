@@ -37,8 +37,13 @@ if (missing.length > 0) {
 const docs = [
   "README.md",
   ...fs.readdirSync("packages")
+    .sort()
     .map((name) => path.join("packages", name, "README.md"))
     .filter((file) => fs.existsSync(file)),
+  ...fs.readdirSync("docs/tutorials")
+    .sort()
+    .map((name) => path.join("docs/tutorials", name))
+    .filter((file) => file.endsWith(".md") && fs.existsSync(file)),
 ];
 
 function extractTypeScriptBlocks(markdown) {
@@ -65,6 +70,9 @@ function buildPrelude(code) {
   }
   if (/\bruntime\b/.test(code) && !declaresIdentifier(code, "runtime")) {
     lines.push('declare const runtime: import("@obora/sdk").OboraRuntime;');
+  }
+  if (/\bOboraRuntime\b/.test(code) && !declaresIdentifier(code, "OboraRuntime")) {
+    lines.push('declare const OboraRuntime: typeof import("@obora/sdk").OboraRuntime;');
   }
   if (/\bfailure\b/.test(code) && !declaresIdentifier(code, "failure")) {
     lines.push('declare const failure: import("@obora/runtime").CellFailure;');
@@ -139,4 +147,4 @@ JS
 
 pnpm exec tsc --project "$TMP_DIR/tsconfig.json"
 
-echo "[PASS] Package README TypeScript snippets compile against public declarations."
+echo "[PASS] Checked TypeScript doc snippets compile against public declarations."

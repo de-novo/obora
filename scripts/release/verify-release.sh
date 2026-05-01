@@ -14,6 +14,7 @@ bash scripts/release/npm-auth-selftest.sh
 bash scripts/release/verify-public-module-tags.sh
 bash scripts/release/verify-doc-public-imports.sh
 bash scripts/release/verify-doc-code-snippets.sh
+bash scripts/release/verify-doc-shell-snippets.sh
 bash scripts/release/verify-publish-packages.sh
 bash scripts/release/verify-cli-package-selftest.sh
 
