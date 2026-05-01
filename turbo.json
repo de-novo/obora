@@ -39,30 +39,6 @@
     },
     "clean": {
       "cache": false
-    },
-    "@obora-kit/runtime#build": {
-      "dependsOn": [
-        "^build"
-      ],
-      "outputs": [
-        "dist/**"
-      ]
-    },
-    "@obora-kit/workflow#build": {
-      "dependsOn": [
-        "^build"
-      ],
-      "outputs": [
-        "dist/**"
-      ]
-    },
-    "@obora-kit/adapters#build": {
-      "dependsOn": [
-        "^build"
-      ],
-      "outputs": [
-        "dist/**"
-      ]
     }
   }
 }

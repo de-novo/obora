@@ -38,6 +38,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Security audit
+        run: pnpm audit --audit-level moderate
+
       - name: Typecheck
         run: pnpm typecheck
 
@@ -50,22 +53,16 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Publish @obora/runtime
-        run: pnpm --filter @obora/runtime exec npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Verify release
+        run: pnpm verify:release
 
-      - name: Publish @obora/adapters
-        run: pnpm --filter @obora/adapters exec npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Verify compatibility inventory
+        run: pnpm verify:compat
 
-      - name: Publish @obora/sdk
-        run: pnpm --filter @obora/sdk exec npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Verify type debt
+        run: pnpm verify:test-type-debt
 
-      - name: Publish @obora/cli
-        run: pnpm --filter @obora/cli exec npm publish --access public
+      - name: Publish packages
+        run: bash scripts/release/publish-packages.sh
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -1,3 +1,5 @@
+import { isAbsolute } from "node:path";
+
 import { describe, expect, it, vi, beforeAll, afterAll } from "vitest";
 
 import { PatternRegistry } from "../PatternRegistry.js";
@@ -211,7 +213,7 @@ describe("CustomPatternAPI", () => {
       expect(loadFromFile).toHaveBeenCalledTimes(1);
       const calledPath = loadFromFile.mock.calls[0]![0] as string;
       expect(calledPath).toMatch(/patterns[/\\]custom\.ts$/);
-      expect(require("node:path").isAbsolute(calledPath)).toBe(true);
+      expect(isAbsolute(calledPath)).toBe(true);
       expect(resolved.name).toBe("echo-custom");
     });
 

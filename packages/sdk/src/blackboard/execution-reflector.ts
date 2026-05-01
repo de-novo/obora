@@ -108,7 +108,7 @@ export class ExecutionReflector {
         failure.validation.summary.toLowerCase(),
         ...failure.validation.failedChecks.map((c) => `${c.name} ${c.message}`.toLowerCase()),
       ];
-      const allWords = texts.join(" ").split(/[\s,.:;()\[\]{}"'`/\\|!?=<>+\-*#@~^&%$]+/);
+      const allWords = texts.join(" ").split(/[\s,.:;()[\]{}"'`/\\|!?=<>+*#@~^&%$-]+/);
       const seen = new Set<string>();
 
       for (const word of allWords) {

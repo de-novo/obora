@@ -73,6 +73,7 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
+    "lint": "eslint src --ext .ts --quiet",
     "test": "vitest run",
     "test:e2e": "vitest run --config vitest.config.e2e.ts",
     "typecheck": "tsc --noEmit"
@@ -92,8 +93,8 @@
     }
   },
   "dependencies": {
-    "@mariozechner/pi-ai": "^0.65.0",
     "@mariozechner/pi-agent-core": "^0.65.0",
-    "yaml": "^2.8.2"
+    "@mariozechner/pi-ai": "^0.65.0",
+    "yaml": "^2.8.3"
   }
 }

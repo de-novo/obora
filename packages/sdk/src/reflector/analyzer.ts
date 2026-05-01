@@ -62,7 +62,7 @@ const STOP_WORDS = new Set([
   "total", "개", "실패", "통과", "인해",
 ]);
 
-const WORD_SPLIT_RE = /[\s,.:;()\[\]{}"'`/\\|!?=<>+\-*#@~^&%$]+/;
+const WORD_SPLIT_RE = /[\s,.:;()[\]{}"'`/\\|!?=<>+*#@~^&%$-]+/;
 
 // ── Builtin: KeywordAnalyzer ───────────────────────────────────────────
 

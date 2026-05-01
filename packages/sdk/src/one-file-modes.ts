@@ -130,7 +130,7 @@ function assertAllowedKeys(obj: Record<string, unknown>, allowed: string[], scop
     if (!allowed.includes(key)) {
       const suggestion = suggestKey(key, allowed);
       throw new OboraError(
-        `One-file workflow does not allow key \"${scope}${key}\". Allowed keys: ${allowed.join(", ")}${suggestion ? `. Did you mean \"${scope}${suggestion}\"?` : ""}`,
+        `One-file workflow does not allow key "${scope}${key}". Allowed keys: ${allowed.join(", ")}${suggestion ? `. Did you mean "${scope}${suggestion}"?` : ""}`,
         OboraErrorCode.SDK_INVALID_WORKFLOW,
       );
     }

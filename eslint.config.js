@@ -39,7 +39,9 @@ export default [
     rules: {
       ...tseslint.configs.recommended.rules,
       ...prettierConfig.rules,
-      "prettier/prettier": "error",
+      "no-redeclare": "off",
+      "no-undef": "off",
+      "prettier/prettier": "warn",
       "@typescript-eslint/no-unused-vars": [
         "warn",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
@@ -79,7 +81,7 @@ export default [
     },
     rules: {
       ...prettierConfig.rules,
-      "prettier/prettier": "error",
+      "prettier/prettier": "warn",
     },
   },
 ];

@@ -43,7 +43,7 @@ describe("one-file schema validation", () => {
         problem: { statement: "Investigate X" },
         nonsense: true,
       }),
-    ).toThrow(/does not allow key \"nonsense\".*Allowed keys:/i);
+    ).toThrow(/does not allow key "nonsense".*Allowed keys:/i);
   });
 
   it("rejects unknown override key for validation-repair", () => {
@@ -55,7 +55,7 @@ describe("one-file schema validation", () => {
           unknown_step: { prompt_suffix: "nope" },
         },
       }),
-    ).toThrow(/does not allow key \"overrides\.unknown_step\".*Allowed keys:/i);
+    ).toThrow(/does not allow key "overrides\.unknown_step".*Allowed keys:/i);
   });
 
   it("rejects wrong nested type for validation-repair loop", () => {
@@ -76,7 +76,7 @@ describe("one-file schema validation", () => {
         problem: { statement: "Prove X" },
         prompts: { extra: "not allowed" },
       }),
-    ).toThrow(/does not allow key \"prompts\.extra\".*Allowed keys:/i);
+    ).toThrow(/does not allow key "prompts\.extra".*Allowed keys:/i);
   });
 
   it("suggests nearest key for research-loop agent typo", () => {
@@ -87,7 +87,7 @@ describe("one-file schema validation", () => {
         problem: { statement: "Investigate X" },
         agents: { reviewrs: "reviewer" },
       }),
-    ).toThrow(/Did you mean \"agents\.reviewer\"\?/i);
+    ).toThrow(/Did you mean "agents\.reviewer"\?/i);
   });
 
   it("suggests nearest key for validation-repair prompt typo", () => {
@@ -97,6 +97,6 @@ describe("one-file schema validation", () => {
         mode: "validation-repair",
         prompts: { valdate: "Validate it" },
       }),
-    ).toThrow(/Did you mean \"prompts\.validate\"\?/i);
+    ).toThrow(/Did you mean "prompts\.validate"\?/i);
   });
 });

@@ -245,7 +245,7 @@ function evaluateConditionExpression(
 
   const parseUnary = (): unknown => {
     if (matchOperator("!")) {
-      return !Boolean(parseUnary());
+      return !parseUnary();
     }
     return parsePrimary();
   };

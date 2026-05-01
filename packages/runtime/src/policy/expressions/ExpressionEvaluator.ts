@@ -59,7 +59,7 @@ function evaluateNode(ast: ExpressionAST, ctx: ExpressionContext): unknown {
     case "array_literal":
       return ast.items.map((item) => evaluateNode(item, ctx));
     case "not":
-      return !Boolean(evaluateNode(ast.expression, ctx));
+      return !evaluateNode(ast.expression, ctx);
     case "logical": {
       if (ast.operator === "&&") {
         return Boolean(evaluateNode(ast.left, ctx)) && Boolean(evaluateNode(ast.right, ctx));

@@ -50,6 +50,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Security audit
+        run: pnpm audit --audit-level moderate
+
       - name: Typecheck
         run: pnpm typecheck
 
@@ -61,6 +64,15 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Release verification
+        run: pnpm verify:release
+
+      - name: Compatibility inventory
+        run: pnpm verify:compat
+
+      - name: Type debt guard
+        run: pnpm verify:test-type-debt
 
   e2e-test:
     runs-on: ubuntu-latest

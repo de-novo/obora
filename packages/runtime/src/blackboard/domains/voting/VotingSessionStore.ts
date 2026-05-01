@@ -89,16 +89,17 @@ export class VotingSessionStore {
     let passed = false;
 
     switch (session.policy) {
-      case 'majority':
+      case 'majority': {
         // 과반수 승인 (기권 제외)
         const majorityVotes = totalVotes - abstains;
         passed = majorityVotes > 0 && approves > majorityVotes / 2;
         break;
+      }
       case 'unanimous':
         // 만장일치 (반대 없고 기권 포함 전체 동의)
         passed = rejects === 0;
         break;
-      case 'weighted':
+      case 'weighted': {
         // 가중치 기반
         const approveWeight = votes
           .filter((v) => v.option === 'approve')
@@ -106,6 +107,7 @@ export class VotingSessionStore {
         const totalWeight = votes.reduce((sum, v) => sum + (v.weight || 1), 0);
         passed = totalWeight > 0 && approveWeight > totalWeight / 2;
         break;
+      }
     }
 
     // 정족수 체크

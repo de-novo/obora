@@ -39,7 +39,7 @@ function makeLoadedPlugin(name: string, type: "tool" | "agent" = "tool"): Loaded
 
 function appendHookCommand(label: string, stdout?: string): string {
   const stdoutStatement = stdout ? `process.stdout.write('${stdout}');` : "";
-  return `node -e \"const fs=require('node:fs');fs.appendFileSync('hook-order.log','${label}\\n');${stdoutStatement}\"`;
+  return `node -e "const fs=require('node:fs');fs.appendFileSync('hook-order.log','${label}\\n');${stdoutStatement}"`;
 }
 
 function createInMemorySharedMemoryStore(): SharedMemoryStore {

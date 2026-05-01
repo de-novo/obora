@@ -148,7 +148,7 @@ export abstract class BaseAgent {
     /(?:^|\s)rm\s+-[a-z\-\s]*r[a-z\-\s]*f[a-z\-\s]*\s+(?:--no-preserve-root\s+)?(?:\/|~|\.)/i,
     /(?:^|\s)rm\s+--no-preserve-root\s+-[a-z\-\s]*r[a-z\-\s]*f[a-z\-\s]*\s+(?:\/|~|\.)/i,
     /(?:^|\s)rm\s+(?:-[a-zA-Z]+\s+)+(?:\/|~|\.)/i,
-    /(?:^|\s)rm\s+(?:--[a-zA-Z\-]+\s+)*(?:\/|~|\.)/i,
+    /(?:^|\s)rm\s+(?:--[a-zA-Z-]+\s+)*(?:\/|~|\.)/i,
     // Pipe to shell execution
     /\|\s*(?:sh|bash|zsh|ksh|dash)(?:\s|$)/i,
     // Shell wrapper execution (sh -c, bash -c, etc.)

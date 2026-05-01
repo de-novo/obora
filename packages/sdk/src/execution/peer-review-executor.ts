@@ -47,7 +47,7 @@ export interface PeerReviewStepConfig {
 // ── Response Parsing ───────────────────────────────────────────────────────
 
 const SCORE_PATTERN = /\bscore\s*[:=]\s*(\d+(?:\.\d+)?)\s*(?:\/\s*100)?/i;
-const ISSUE_PATTERN = /\b(P[012])\s*[:–\-]\s*(.+)/gi;
+const ISSUE_PATTERN = /\b(P[012])\s*[:–-]\s*(.+)/gi;
 
 export function parseVote(text: string): "APPROVE" | "REJECT" | "REQUEST_CHANGES" {
   const normalized = text.toUpperCase();
