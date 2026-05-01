@@ -39,4 +39,9 @@ if ! grep -Fq 'bash scripts/release/verify-doc-structured-snippets.sh' scripts/r
   exit 1
 fi
 
+if ! grep -Fq 'bash scripts/release/verify-doc-tutorial-cli-flows.sh' scripts/release/verify-release.sh; then
+  echo "[FAIL] expected verify-release.sh to run tutorial CLI flow verification"
+  exit 1
+fi
+
 echo "[PASS] verify release selftest passed"

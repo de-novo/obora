@@ -42,7 +42,7 @@ pnpm verify:compat
 pnpm verify:test-type-debt
 ```
 
-`pnpm verify:release` builds publishable packages, checks changelog release notes, runs npm-auth selftests, rejects source JSDoc tags that advertise scoped `@obora` module subpaths outside package exports, verifies Markdown `@obora` import samples against public package exports, compiles checked TypeScript snippets against built public declarations, validates checked shell snippets with `bash -n`, parses tutorial YAML/JSON snippets and semantically checks workflow/config/policy examples, validates package `npm pack --dry-run` output, validates `pnpm pack` package metadata, runs published-package import/require smoke checks, and selftests CLI package installation.
+`pnpm verify:release` builds publishable packages, checks changelog release notes, runs npm-auth selftests, rejects source JSDoc tags that advertise scoped `@obora` module subpaths outside package exports, verifies Markdown `@obora` import samples against public package exports, compiles checked TypeScript snippets against built public declarations, validates checked shell snippets with `bash -n`, parses tutorial YAML/JSON snippets and semantically checks workflow/config/policy examples, runs tutorial quickstart and contract-first dry-run flows through the built CLI, validates package `npm pack --dry-run` output, validates `pnpm pack` package metadata, runs published-package import/require smoke checks, and selftests CLI package installation.
 
 Package payload validation fails if publishable tarballs include `dist/**/__tests__/**`,
 `*.test.*`, or `*-e2e.test.*` artifacts.
