@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { OboraError, OboraErrorCode, OboraRuntime } from "../runtime.js";
+import type { RunRecord, StorageAdapter, StructuredAuditEvent } from "@obora/runtime";
 import type { LoadedPlugin } from "../plugin-types.js";
 import {
   mergeSharedMemorySnapshots,
@@ -11,6 +12,14 @@ import {
   type SharedMemorySnapshot,
   type SharedMemoryStore,
 } from "../shared-memory/store.js";
+import type { StagingTKGSnapshot, StagingTKGStore, TemporalNode } from "../tkg/store.js";
+import type {
+  TKGReviewQueueItem,
+  TKGReviewQueueResolution,
+  TKGReviewQueueSnapshot,
+  TKGReviewQueueStore,
+} from "../tkg/review-queue.js";
+import type { TKGRollbackEntry, TKGRollbackSnapshot, TKGRollbackStore } from "../tkg/rollback.js";
 
 function makeLoadedPlugin(name: string, type: "tool" | "agent" = "tool"): LoadedPlugin {
   return {
@@ -48,6 +57,76 @@ function createInMemorySharedMemoryStore(): SharedMemoryStore {
       await this.save(scope, mergeSharedMemorySnapshots(existing, snapshot));
     },
   };
+}
+
+function scopeKey(scope: MemoryScope): string {
+  return `${scope.level}:${scope.key}`;
+}
+
+class InMemoryStagingTKGStore implements StagingTKGStore {
+  private readonly data = new Map<string, StagingTKGSnapshot>();
+
+  async load(scope: MemoryScope): Promise<StagingTKGSnapshot | null> {
+    return this.data.get(scopeKey(scope)) ?? null;
+  }
+
+  async save(scope: MemoryScope, snapshot: StagingTKGSnapshot): Promise<void> {
+    this.data.set(scopeKey(scope), snapshot);
+  }
+
+  async append(scope: MemoryScope, nodes: TemporalNode[]): Promise<void> {
+    const existing = (await this.load(scope)) ?? { nodes: [] };
+    await this.save(scope, { nodes: [...existing.nodes, ...nodes] });
+  }
+}
+
+class InMemoryTKGReviewQueueStore implements TKGReviewQueueStore {
+  private readonly data = new Map<string, TKGReviewQueueSnapshot>();
+
+  async load(scope: MemoryScope): Promise<TKGReviewQueueSnapshot | null> {
+    return this.data.get(scopeKey(scope)) ?? null;
+  }
+
+  async save(scope: MemoryScope, snapshot: TKGReviewQueueSnapshot): Promise<void> {
+    this.data.set(scopeKey(scope), snapshot);
+  }
+
+  async enqueue(scope: MemoryScope, item: TKGReviewQueueItem): Promise<void> {
+    const existing = (await this.load(scope)) ?? { items: [] };
+    await this.save(scope, { items: [...existing.items, item] });
+  }
+
+  async resolve(scope: MemoryScope, itemId: string, resolution: TKGReviewQueueResolution): Promise<void> {
+    const existing = (await this.load(scope)) ?? { items: [] };
+    await this.save(scope, {
+      items: existing.items.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              status: resolution.status,
+              resolution,
+            }
+          : item,
+      ),
+    });
+  }
+}
+
+class InMemoryTKGRollbackStore implements TKGRollbackStore {
+  private readonly data = new Map<string, TKGRollbackSnapshot>();
+
+  async load(scope: MemoryScope): Promise<TKGRollbackSnapshot | null> {
+    return this.data.get(scopeKey(scope)) ?? null;
+  }
+
+  async save(scope: MemoryScope, snapshot: TKGRollbackSnapshot): Promise<void> {
+    this.data.set(scopeKey(scope), snapshot);
+  }
+
+  async append(scope: MemoryScope, entry: TKGRollbackEntry): Promise<void> {
+    const existing = (await this.load(scope)) ?? { entries: [] };
+    await this.save(scope, { entries: [...existing.entries, entry] });
+  }
 }
 
 describe("OboraRuntime facade", () => {
@@ -423,8 +502,8 @@ describe("OboraRuntime facade", () => {
   });
 
   it("persists repair-loop summary into run metadata", async () => {
-    const savedRuns: any[] = [];
-    const storage = {
+    const savedRuns: RunRecord[] = [];
+    const storage: StorageAdapter = {
       async saveRun(record: any) {
         savedRuns.push(structuredClone(record));
       },
@@ -440,7 +519,7 @@ describe("OboraRuntime facade", () => {
       async getSteps() {
         return [];
       },
-      async saveArtifact(record: any) {
+      async saveArtifact(record) {
         return record;
       },
       async getArtifacts() {
@@ -475,7 +554,7 @@ describe("OboraRuntime facade", () => {
     const runtime = new OboraRuntime({
       llm: { provider: "openai", apiKey: "test-key", model: "gpt-5" },
       audit: { enabled: true },
-      persistence: { enabled: true, adapter: "custom", custom: { instance: storage as any } },
+      persistence: { enabled: true, adapter: "custom", custom: { instance: storage } },
     });
 
     const auditTypes: string[] = [];
@@ -1032,26 +1111,14 @@ describe("OboraRuntime facade", () => {
   });
 
   it("projects repair-loop events into the staging TKG store", async () => {
-    const store = {
-      _data: new Map<string, { nodes: any[] }>(),
-      async load(scope: MemoryScope) {
-        return (this as any)._data.get(`${scope.level}:${scope.key}`) ?? null;
-      },
-      async save(scope: MemoryScope, snapshot: { nodes: any[] }) {
-        (this as any)._data.set(`${scope.level}:${scope.key}`, snapshot);
-      },
-      async append(scope: MemoryScope, nodes: any[]) {
-        const existing = (await this.load(scope)) ?? { nodes: [] };
-        await this.save(scope, { nodes: [...existing.nodes, ...nodes] });
-      },
-    };
+    const store = new InMemoryStagingTKGStore();
 
     const runtime = new OboraRuntime({
       llm: { provider: "openai", apiKey: "test-key", model: "gpt-5" },
       tkgProjection: {
         enabled: true,
         adapter: "custom",
-        custom: { instance: store as any },
+        custom: { instance: store },
         file: { projectKey: "test-project", scopes: ["project"] },
       },
     });
@@ -1127,7 +1194,7 @@ describe("OboraRuntime facade", () => {
     const handle = await runtime.run("tkg-projection-run");
     const result = await handle.wait();
 
-    const snapshot = await (store as any).load({ level: "project", key: "test-project" });
+    const snapshot = await store.load({ level: "project", key: "test-project" });
     expect(snapshot?.nodes.map((node: { eventType: string }) => node.eventType)).toEqual([
       "workflow.validation_failed",
       "workflow.back_edge_triggered",
@@ -1173,19 +1240,7 @@ describe("OboraRuntime facade", () => {
   });
 
   it("merges runtime and config tkgProjection settings instead of dropping nested file config", async () => {
-    const store = {
-      _data: new Map<string, { nodes: any[] }>(),
-      async load(scope: MemoryScope) {
-        return (this as any)._data.get(`${scope.level}:${scope.key}`) ?? null;
-      },
-      async save(scope: MemoryScope, snapshot: { nodes: any[] }) {
-        (this as any)._data.set(`${scope.level}:${scope.key}`, snapshot);
-      },
-      async append(scope: MemoryScope, nodes: any[]) {
-        const existing = (await this.load(scope)) ?? { nodes: [] };
-        await this.save(scope, { nodes: [...existing.nodes, ...nodes] });
-      },
-    };
+    const store = new InMemoryStagingTKGStore();
 
     const runtime = new OboraRuntime({
       llm: { provider: "openai", apiKey: "test-key", model: "gpt-5" },
@@ -1198,7 +1253,7 @@ describe("OboraRuntime facade", () => {
       tkgProjection: {
         enabled: true,
         adapter: "custom",
-        custom: { instance: store as any },
+        custom: { instance: store },
       },
     });
 
@@ -1246,52 +1301,28 @@ describe("OboraRuntime facade", () => {
     const handle = await runtime.run("tkg-config-merge");
     await handle.wait();
 
-    const snapshot = await (store as any).load({ level: "project", key: "config-tkg-project" });
+    const snapshot = await store.load({ level: "project", key: "config-tkg-project" });
     expect(snapshot).not.toBeNull();
-    expect(snapshot.nodes.map((node: { eventType: string }) => node.eventType)).toEqual([
+    expect(snapshot?.nodes.map((node) => node.eventType)).toEqual([
       "workflow.validation_passed",
     ]);
   });
 
   it("stores blocking promotion conflicts in the TKG review queue", async () => {
-    const stagingStore = {
-      _data: new Map<string, { nodes: any[] }>(),
-      async load(scope: MemoryScope) {
-        return (this as any)._data.get(`${scope.level}:${scope.key}`) ?? null;
-      },
-      async save(scope: MemoryScope, snapshot: { nodes: any[] }) {
-        (this as any)._data.set(`${scope.level}:${scope.key}`, snapshot);
-      },
-      async append(scope: MemoryScope, nodes: any[]) {
-        const existing = (await this.load(scope)) ?? { nodes: [] };
-        await this.save(scope, { nodes: [...existing.nodes, ...nodes] });
-      },
-    };
-    const reviewQueueStore = {
-      _data: new Map<string, { items: any[] }>(),
-      async load(scope: MemoryScope) {
-        return (this as any)._data.get(`${scope.level}:${scope.key}`) ?? null;
-      },
-      async save(scope: MemoryScope, snapshot: { items: any[] }) {
-        (this as any)._data.set(`${scope.level}:${scope.key}`, snapshot);
-      },
-      async enqueue(scope: MemoryScope, item: any) {
-        const existing = (await this.load(scope)) ?? { items: [] };
-        await this.save(scope, { items: [...existing.items, item] });
-      },
-    };
+    const stagingStore = new InMemoryStagingTKGStore();
+    const reviewQueueStore = new InMemoryTKGReviewQueueStore();
 
     const runtime = new OboraRuntime({
       llm: { provider: "openai", apiKey: "test-key", model: "gpt-5" },
       tkgProjection: {
         enabled: true,
         adapter: "custom",
-        custom: { instance: stagingStore as any },
+        custom: { instance: stagingStore },
         file: { projectKey: "test-project", scopes: ["project"] },
         reviewQueue: {
           enabled: true,
           adapter: "custom",
-          custom: { instance: reviewQueueStore as any },
+          custom: { instance: reviewQueueStore },
         },
       },
     });
@@ -1372,7 +1403,7 @@ describe("OboraRuntime facade", () => {
     const handle = await runtime.run("tkg-review-queue-run");
     const result = await handle.wait();
 
-    const snapshot = await (reviewQueueStore as any).load({ level: "project", key: "test-project" });
+    const snapshot = await reviewQueueStore.load({ level: "project", key: "test-project" });
     expect(snapshot?.items).toHaveLength(1);
     expect(snapshot?.items[0]?.workflowName).toBe("tkg-review-queue-run");
     expect(snapshot?.items[0]?.candidateNodeIds).toHaveLength(1);
@@ -1386,34 +1417,10 @@ describe("OboraRuntime facade", () => {
   });
 
   it("can escalate high confidence conflicts to blocking review queue via config", async () => {
-    const stagingStore = {
-      _data: new Map<string, { nodes: any[] }>(),
-      async load(scope: MemoryScope) {
-        return (this as any)._data.get(`${scope.level}:${scope.key}`) ?? null;
-      },
-      async save(scope: MemoryScope, snapshot: { nodes: any[] }) {
-        (this as any)._data.set(`${scope.level}:${scope.key}`, snapshot);
-      },
-      async append(scope: MemoryScope, nodes: any[]) {
-        const existing = (await this.load(scope)) ?? { nodes: [] };
-        await this.save(scope, { nodes: [...existing.nodes, ...nodes] });
-      },
-    };
-    const reviewQueueStore = {
-      _data: new Map<string, { items: any[] }>(),
-      async load(scope: MemoryScope) {
-        return (this as any)._data.get(`${scope.level}:${scope.key}`) ?? null;
-      },
-      async save(scope: MemoryScope, snapshot: { items: any[] }) {
-        (this as any)._data.set(`${scope.level}:${scope.key}`, snapshot);
-      },
-      async enqueue(scope: MemoryScope, item: any) {
-        const existing = (await this.load(scope)) ?? { items: [] };
-        await this.save(scope, { items: [...existing.items, item] });
-      },
-    };
+    const stagingStore = new InMemoryStagingTKGStore();
+    const reviewQueueStore = new InMemoryTKGReviewQueueStore();
 
-    await (stagingStore as any).save(
+    await stagingStore.save(
       { level: "project", key: "test-project" },
       {
         nodes: [
@@ -1447,7 +1454,7 @@ describe("OboraRuntime facade", () => {
       tkgProjection: {
         enabled: true,
         adapter: "custom",
-        custom: { instance: stagingStore as any },
+        custom: { instance: stagingStore },
         file: { projectKey: "test-project", scopes: ["project"] },
         promotion: {
           confidenceConflictMode: "blocking",
@@ -1455,7 +1462,7 @@ describe("OboraRuntime facade", () => {
         reviewQueue: {
           enabled: true,
           adapter: "custom",
-          custom: { instance: reviewQueueStore as any },
+          custom: { instance: reviewQueueStore },
         },
       },
     });
@@ -1469,7 +1476,7 @@ describe("OboraRuntime facade", () => {
     const handle = await runtime.run("tkg-confidence-blocking-run");
     const result = await handle.wait();
 
-    const snapshot = await (reviewQueueStore as any).load({ level: "project", key: "test-project" });
+    const snapshot = await reviewQueueStore.load({ level: "project", key: "test-project" });
     expect(snapshot?.items).toHaveLength(1);
     expect(snapshot?.items[0]?.conflicts).toEqual([
       expect.objectContaining({ type: "confidence", severity: "high" }),
@@ -1484,19 +1491,7 @@ describe("OboraRuntime facade", () => {
 
   it("applies promotable TKG candidates into shared memory when conflicts do not block promotion", async () => {
     const sharedMemoryStore = createInMemorySharedMemoryStore();
-    const stagingStore = {
-      _data: new Map<string, { nodes: any[] }>(),
-      async load(scope: MemoryScope) {
-        return (this as any)._data.get(`${scope.level}:${scope.key}`) ?? null;
-      },
-      async save(scope: MemoryScope, snapshot: { nodes: any[] }) {
-        (this as any)._data.set(`${scope.level}:${scope.key}`, snapshot);
-      },
-      async append(scope: MemoryScope, nodes: any[]) {
-        const existing = (await this.load(scope)) ?? { nodes: [] };
-        await this.save(scope, { nodes: [...existing.nodes, ...nodes] });
-      },
-    };
+    const stagingStore = new InMemoryStagingTKGStore();
 
     const runtime = new OboraRuntime({
       llm: { provider: "openai", apiKey: "test-key", model: "gpt-5" },
@@ -1509,7 +1504,7 @@ describe("OboraRuntime facade", () => {
       tkgProjection: {
         enabled: true,
         adapter: "custom",
-        custom: { instance: stagingStore as any },
+        custom: { instance: stagingStore },
         file: { projectKey: "test-project", scopes: ["project"] },
       },
     });
@@ -1571,19 +1566,7 @@ describe("OboraRuntime facade", () => {
 
   it("uses configured tkg promotion policy for apply scopes and thresholds", async () => {
     const sharedMemoryStore = createInMemorySharedMemoryStore();
-    const stagingStore = {
-      _data: new Map<string, { nodes: any[] }>(),
-      async load(scope: MemoryScope) {
-        return (this as any)._data.get(`${scope.level}:${scope.key}`) ?? null;
-      },
-      async save(scope: MemoryScope, snapshot: { nodes: any[] }) {
-        (this as any)._data.set(`${scope.level}:${scope.key}`, snapshot);
-      },
-      async append(scope: MemoryScope, nodes: any[]) {
-        const existing = (await this.load(scope)) ?? { nodes: [] };
-        await this.save(scope, { nodes: [...existing.nodes, ...nodes] });
-      },
-    };
+    const stagingStore = new InMemoryStagingTKGStore();
 
     const runtime = new OboraRuntime({
       llm: { provider: "openai", apiKey: "test-key", model: "gpt-5" },
@@ -1606,7 +1589,7 @@ describe("OboraRuntime facade", () => {
       tkgProjection: {
         enabled: true,
         adapter: "custom",
-        custom: { instance: stagingStore as any },
+        custom: { instance: stagingStore },
       },
     });
 
@@ -1673,19 +1656,7 @@ describe("OboraRuntime facade", () => {
 
   it("flushes TKG promotion on validation_passed trigger before execution_end", async () => {
     const sharedMemoryStore = createInMemorySharedMemoryStore();
-    const stagingStore = {
-      _data: new Map<string, { nodes: any[] }>(),
-      async load(scope: MemoryScope) {
-        return (this as any)._data.get(`${scope.level}:${scope.key}`) ?? null;
-      },
-      async save(scope: MemoryScope, snapshot: { nodes: any[] }) {
-        (this as any)._data.set(`${scope.level}:${scope.key}`, snapshot);
-      },
-      async append(scope: MemoryScope, nodes: any[]) {
-        const existing = (await this.load(scope)) ?? { nodes: [] };
-        await this.save(scope, { nodes: [...existing.nodes, ...nodes] });
-      },
-    };
+    const stagingStore = new InMemoryStagingTKGStore();
 
     const runtime = new OboraRuntime({
       llm: { provider: "openai", apiKey: "test-key", model: "gpt-5" },
@@ -1698,7 +1669,7 @@ describe("OboraRuntime facade", () => {
       tkgProjection: {
         enabled: true,
         adapter: "custom",
-        custom: { instance: stagingStore as any },
+        custom: { instance: stagingStore },
         file: { projectKey: "test-project", scopes: ["project"] },
         promotion: {
           triggers: ["workflow.validation_passed"],
@@ -1766,32 +1737,8 @@ describe("OboraRuntime facade", () => {
 
   it("captures rollback snapshots before applying TKG promotion into shared memory", async () => {
     const sharedMemoryStore = createInMemorySharedMemoryStore();
-    const rollbackStore = {
-      _data: new Map<string, { entries: any[] }>(),
-      async load(scope: MemoryScope) {
-        return (this as any)._data.get(`${scope.level}:${scope.key}`) ?? null;
-      },
-      async save(scope: MemoryScope, snapshot: { entries: any[] }) {
-        (this as any)._data.set(`${scope.level}:${scope.key}`, snapshot);
-      },
-      async append(scope: MemoryScope, entry: any) {
-        const existing = (await this.load(scope)) ?? { entries: [] };
-        await this.save(scope, { entries: [...existing.entries, entry] });
-      },
-    };
-    const stagingStore = {
-      _data: new Map<string, { nodes: any[] }>(),
-      async load(scope: MemoryScope) {
-        return (this as any)._data.get(`${scope.level}:${scope.key}`) ?? null;
-      },
-      async save(scope: MemoryScope, snapshot: { nodes: any[] }) {
-        (this as any)._data.set(`${scope.level}:${scope.key}`, snapshot);
-      },
-      async append(scope: MemoryScope, nodes: any[]) {
-        const existing = (await this.load(scope)) ?? { nodes: [] };
-        await this.save(scope, { nodes: [...existing.nodes, ...nodes] });
-      },
-    };
+    const rollbackStore = new InMemoryTKGRollbackStore();
+    const stagingStore = new InMemoryStagingTKGStore();
 
     await sharedMemoryStore.save(
       { level: "project", key: "test-project" },
@@ -1824,12 +1771,12 @@ describe("OboraRuntime facade", () => {
       tkgProjection: {
         enabled: true,
         adapter: "custom",
-        custom: { instance: stagingStore as any },
+        custom: { instance: stagingStore },
         file: { projectKey: "test-project", scopes: ["project"] },
         rollback: {
           enabled: true,
           adapter: "custom",
-          custom: { instance: rollbackStore as any },
+          custom: { instance: rollbackStore },
         },
       },
     });
@@ -1884,7 +1831,7 @@ describe("OboraRuntime facade", () => {
     const handle = await runtime.run("tkg-rollback-run");
     const result = await handle.wait();
 
-    const rollbackSnapshot = await (rollbackStore as any).load({ level: "project", key: "test-project" });
+    const rollbackSnapshot = await rollbackStore.load({ level: "project", key: "test-project" });
     expect(rollbackSnapshot?.entries).toHaveLength(1);
     expect(rollbackSnapshot?.entries[0]?.snapshot.knowledge.facts[0]?.id).toBe("existing-fact");
     expect(result.outputs.__tkg_promotion_rollback__).toEqual({
@@ -1896,29 +1843,7 @@ describe("OboraRuntime facade", () => {
   });
 
   it("lists and resolves TKG review queue items through the runtime facade API", async () => {
-    const reviewQueueData = new Map<string, { items: any[] }>();
-    const reviewQueueStore = {
-      async load(scope: MemoryScope) {
-        return reviewQueueData.get(`${scope.level}:${scope.key}`) ?? null;
-      },
-      async save(scope: MemoryScope, snapshot: { items: any[] }) {
-        reviewQueueData.set(`${scope.level}:${scope.key}`, snapshot);
-      },
-      async enqueue(scope: MemoryScope, item: any) {
-        const existing = (await this.load(scope)) ?? { items: [] };
-        await this.save(scope, { items: [...existing.items, item] });
-      },
-      async resolve(scope: MemoryScope, itemId: string, resolution: any) {
-        const existing = (await this.load(scope)) ?? { items: [] };
-        await this.save(scope, {
-          items: existing.items.map((item) => item.id === itemId ? {
-            ...item,
-            status: resolution.status,
-            resolution,
-          } : item),
-        });
-      },
-    };
+    const reviewQueueStore = new InMemoryTKGReviewQueueStore();
 
     await reviewQueueStore.save(
       { level: "project", key: "test-project" },
@@ -1951,7 +1876,7 @@ describe("OboraRuntime facade", () => {
         reviewQueue: {
           enabled: true,
           adapter: "custom",
-          custom: { instance: reviewQueueStore as any },
+          custom: { instance: reviewQueueStore },
         },
       },
     });
@@ -1989,7 +1914,7 @@ describe("OboraRuntime facade", () => {
 
   it("restores the latest TKG rollback snapshot through the runtime facade API", async () => {
     const sharedMemoryStore = createInMemorySharedMemoryStore();
-    const rollbackStore = {
+    const rollbackStore: TKGRollbackStore = {
       async load() {
         return {
           entries: [
@@ -2037,7 +1962,7 @@ describe("OboraRuntime facade", () => {
         rollback: {
           enabled: true,
           adapter: "custom",
-          custom: { instance: rollbackStore as any },
+          custom: { instance: rollbackStore },
         },
       },
     });
@@ -2080,7 +2005,7 @@ describe("OboraRuntime facade", () => {
         await this.save(scope, mergeSharedMemorySnapshots(existing, snapshot));
       },
     };
-    const stagingStore = {
+    const stagingStore: StagingTKGStore = {
       async load() {
         return {
           nodes: [
@@ -2100,7 +2025,7 @@ describe("OboraRuntime facade", () => {
       },
       async save() {},
     };
-    const reviewQueueStore = {
+    const reviewQueueStore: TKGReviewQueueStore = {
       async load() {
         return {
           items: [
@@ -2140,12 +2065,12 @@ describe("OboraRuntime facade", () => {
       tkgProjection: {
         enabled: true,
         adapter: "custom",
-        custom: { instance: stagingStore as any },
+        custom: { instance: stagingStore },
         file: { projectKey: "test-project", scopes: ["project"] },
         reviewQueue: {
           enabled: true,
           adapter: "custom",
-          custom: { instance: reviewQueueStore as any },
+          custom: { instance: reviewQueueStore },
         },
       },
     });
@@ -2386,8 +2311,8 @@ describe("OboraRuntime facade", () => {
   });
 
   it("stops repair loop on repeated critical issue ceiling", async () => {
-    const savedRuns: any[] = [];
-    const storage = {
+    const savedRuns: RunRecord[] = [];
+    const storage: StorageAdapter = {
       async saveRun(record: any) {
         savedRuns.push(structuredClone(record));
       },
@@ -2403,7 +2328,7 @@ describe("OboraRuntime facade", () => {
       async getSteps() {
         return [];
       },
-      async saveArtifact(record: any) {
+      async saveArtifact(record) {
         return record;
       },
       async getArtifacts() {
@@ -2438,7 +2363,7 @@ describe("OboraRuntime facade", () => {
     const runtime = new OboraRuntime({
       llm: { provider: "openai", apiKey: "test-key", model: "gpt-5" },
       audit: { enabled: true },
-      persistence: { enabled: true, adapter: "custom", custom: { instance: storage as any } },
+      persistence: { enabled: true, adapter: "custom", custom: { instance: storage } },
     });
 
     const adapterMock = {
@@ -2564,8 +2489,8 @@ describe("OboraRuntime facade", () => {
   });
 
   it("captures repair attempts in DLQ entries when persistence is enabled", async () => {
-    const savedRuns: any[] = [];
-    const storage = {
+    const savedRuns: RunRecord[] = [];
+    const storage: StorageAdapter = {
       async saveRun(record: any) {
         savedRuns.push(structuredClone(record));
       },
@@ -2581,7 +2506,7 @@ describe("OboraRuntime facade", () => {
       async getSteps() {
         return [];
       },
-      async saveArtifact(record: any) {
+      async saveArtifact(record) {
         return record;
       },
       async getArtifacts() {
@@ -2618,7 +2543,7 @@ describe("OboraRuntime facade", () => {
 
     const runtime = new OboraRuntime({
       llm: { provider: "openai", apiKey: "test-key", model: "gpt-5" },
-      persistence: { enabled: true, adapter: "custom", custom: { instance: storage as any } },
+      persistence: { enabled: true, adapter: "custom", custom: { instance: storage } },
       dlq: { enabled: true, filePath: dlqFile },
     });
 
@@ -2904,8 +2829,8 @@ describe("OboraRuntime facade", () => {
   });
 
   it("persists aborted status when execution is cancelled", async () => {
-    const savedRuns: any[] = [];
-    const storage = {
+    const savedRuns: RunRecord[] = [];
+    const storage: StorageAdapter = {
       async saveRun(record: any) {
         savedRuns.push(structuredClone(record));
       },
@@ -2921,7 +2846,7 @@ describe("OboraRuntime facade", () => {
       async getSteps() {
         return [];
       },
-      async saveArtifact(record: any) {
+      async saveArtifact(record) {
         return record;
       },
       async getArtifacts() {
@@ -2954,7 +2879,7 @@ describe("OboraRuntime facade", () => {
     };
 
     const runtime = new OboraRuntime({
-      persistence: { enabled: true, adapter: "custom", custom: { instance: storage as any } },
+      persistence: { enabled: true, adapter: "custom", custom: { instance: storage } },
     });
     runtime.define("cancel-persist", { name: "cancel-persist", steps: [] });
 
@@ -3027,8 +2952,8 @@ describe("OboraRuntime facade", () => {
   });
 
   it("keeps aborted status when cancel races with step completion", async () => {
-    const savedRuns: any[] = [];
-    const storage = {
+    const savedRuns: RunRecord[] = [];
+    const storage: StorageAdapter = {
       async saveRun(record: any) {
         savedRuns.push(structuredClone(record));
       },
@@ -3044,7 +2969,7 @@ describe("OboraRuntime facade", () => {
       async getSteps() {
         return [];
       },
-      async saveArtifact(record: any) {
+      async saveArtifact(record) {
         return record;
       },
       async getArtifacts() {
@@ -3078,7 +3003,7 @@ describe("OboraRuntime facade", () => {
 
     const runtime = new OboraRuntime({
       llm: { provider: "test", apiKey: "test", model: "test" },
-      persistence: { enabled: true, adapter: "custom", custom: { instance: storage as any } },
+      persistence: { enabled: true, adapter: "custom", custom: { instance: storage } },
     });
 
     runtime.define("race-cancel", {
@@ -3118,7 +3043,7 @@ describe("OboraRuntime facade", () => {
 
   it("marks run handle as suspended on budget exceed", async () => {
     const costs: any[] = [];
-    const storage = {
+    const storage: StorageAdapter = {
       async saveRun() {},
       async getRun() {
         return null;
@@ -3130,7 +3055,7 @@ describe("OboraRuntime facade", () => {
       async getSteps() {
         return [];
       },
-      async saveArtifact(record: any) {
+      async saveArtifact(record) {
         return record;
       },
       async getArtifacts() {
@@ -3166,7 +3091,7 @@ describe("OboraRuntime facade", () => {
 
     const runtime = new OboraRuntime({
       llm: { provider: "test", apiKey: "test", model: "gpt-4o" },
-      persistence: { enabled: true, adapter: "custom", custom: { instance: storage as any } },
+      persistence: { enabled: true, adapter: "custom", custom: { instance: storage } },
       config: {
         defaults: { provider: "test" },
         resources: {
@@ -3213,7 +3138,7 @@ describe("OboraRuntime facade", () => {
       },
     ];
 
-    const storage = {
+    const storage: StorageAdapter = {
       async getRun() {
         return null;
       },
@@ -3229,7 +3154,7 @@ describe("OboraRuntime facade", () => {
       async getSteps() {
         return [];
       },
-      async saveArtifact(record: any) {
+      async saveArtifact(record) {
         return record;
       },
       async getArtifacts() {
@@ -3268,7 +3193,7 @@ describe("OboraRuntime facade", () => {
     };
 
     const runtime = new OboraRuntime({
-      persistence: { enabled: true, adapter: "custom", custom: { instance: storage as any } },
+      persistence: { enabled: true, adapter: "custom", custom: { instance: storage } },
     });
 
     const runCost = await runtime.runs.cost("run-cost-api");
@@ -3280,7 +3205,7 @@ describe("OboraRuntime facade", () => {
   });
 
   it("provides run.auditReplay(step?) API", async () => {
-    const timeline = [
+    const timeline: StructuredAuditEvent[] = [
       {
         id: "a1",
         runId: "run-a",
@@ -3293,7 +3218,7 @@ describe("OboraRuntime facade", () => {
       },
     ];
 
-    const storage = {
+    const storage: StorageAdapter = {
       async getRun(runId: string) {
         return runId === "run-a"
           ? {
@@ -3317,7 +3242,7 @@ describe("OboraRuntime facade", () => {
       async getSteps() {
         return [];
       },
-      async saveArtifact(record: any) {
+      async saveArtifact(record) {
         return record;
       },
       async getArtifacts() {
@@ -3350,7 +3275,7 @@ describe("OboraRuntime facade", () => {
     };
 
     const runtime = new OboraRuntime({
-      persistence: { enabled: true, adapter: "custom", custom: { instance: storage as any } },
+      persistence: { enabled: true, adapter: "custom", custom: { instance: storage } },
     });
     const run = await runtime.getRun("run-a");
     const events = await run?.auditReplay("review");

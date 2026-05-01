@@ -1,4 +1,1 @@
 # path<TAB>max_matches<TAB>reason
-packages/sdk/src/__tests__/error-event-api.test.ts	7	Tests currently reach a private event emitter; replace with observable public event path.
-packages/sdk/src/__tests__/cost-tracker.test.ts	6	Cost tracker storage fixture needs typed storage helper.
-packages/sdk/src/__tests__/runtime-facade.test.ts	54	Large facade fixture owns most remaining custom persistence store casts.

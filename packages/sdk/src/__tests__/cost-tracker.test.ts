@@ -1,11 +1,36 @@
 import { describe, expect, it } from "vitest";
 
 import { BudgetExceededError, CostTracker } from "../cost-tracker.js";
+import type { CostRecord, StorageAdapter } from "@obora/runtime";
 
-function createStorage() {
-  const costs: any[] = [];
+function createStorage(): StorageAdapter {
+  const costs: CostRecord[] = [];
   return {
-    async saveCost(record: any) { costs.push(record); },
+    async saveRun() {},
+    async getRun() {
+      return null;
+    },
+    async listRuns() {
+      return [];
+    },
+    async saveStep() {},
+    async getSteps() {
+      return [];
+    },
+    async saveArtifact(record) {
+      return record;
+    },
+    async getArtifacts() {
+      return [];
+    },
+    async deleteArtifact() {},
+    async saveCheckpoint() {},
+    async getLatestCheckpoint() {
+      return null;
+    },
+    async saveCost(record) {
+      costs.push(record);
+    },
     async getCosts(runId: string, stepName?: string) {
       return costs.filter((c) => c.runId === runId && (!stepName || c.stepName === stepName));
     },
@@ -29,13 +54,17 @@ function createStorage() {
       }
       return { totalTokens, totalCostUsd, byStep: [...byStepMap.values()], byModel: [...byModelMap.values()] };
     },
+    async saveAuditEvent() {},
+    async getAuditTimeline() {
+      return [];
+    },
   };
 }
 
 describe("CostTracker", () => {
   it("records cost with configured model pricing", async () => {
     const storage = createStorage();
-    const tracker = new CostTracker(storage as any, "run-1", {
+    const tracker = new CostTracker(storage, "run-1", {
       resources: {
         pricing: [{ model: "gpt-4o", promptPer1kTokens: 0.0025, completionPer1kTokens: 0.01 }],
       },
@@ -57,7 +86,7 @@ describe("CostTracker", () => {
 
   it("blocks unknown model when unknownModel=block", async () => {
     const storage = createStorage();
-    const tracker = new CostTracker(storage as any, "run-2", {
+    const tracker = new CostTracker(storage, "run-2", {
       resources: {
         pricing: {
           models: [],
@@ -73,7 +102,7 @@ describe("CostTracker", () => {
 
   it("enforces maxCostPerRun in gate2", async () => {
     const storage = createStorage();
-    const tracker = new CostTracker(storage as any, "run-3", {
+    const tracker = new CostTracker(storage, "run-3", {
       resources: {
         maxCostPerRun: 0.001,
         onBudgetExceed: "block",
@@ -88,7 +117,7 @@ describe("CostTracker", () => {
 
   it("supports unknownModel=estimate with fallback pricing", async () => {
     const storage = createStorage();
-    const tracker = new CostTracker(storage as any, "run-4", {
+    const tracker = new CostTracker(storage, "run-4", {
       resources: {
         pricing: {
           models: [],
@@ -105,7 +134,7 @@ describe("CostTracker", () => {
 
   it("preStepGate warns at 90% but does not throw in warn mode", async () => {
     const storage = createStorage();
-    const tracker = new CostTracker(storage as any, "run-5", {
+    const tracker = new CostTracker(storage, "run-5", {
       resources: {
         maxCostPerRun: 1,
         onBudgetExceed: "warn",
@@ -119,7 +148,7 @@ describe("CostTracker", () => {
 
   it("supports array pricing + sibling unknownModel/fallback config", async () => {
     const storage = createStorage();
-    const tracker = new CostTracker(storage as any, "run-6", {
+    const tracker = new CostTracker(storage, "run-6", {
       resources: {
         pricing: [],
         unknownModel: "estimate",
