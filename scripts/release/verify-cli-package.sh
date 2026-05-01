@@ -5,12 +5,26 @@ ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$ROOT_DIR"
 
 PKG_DIR="packages/cli"
-EXPECTED_VERSION="$(jq -r '.version' "$PKG_DIR/package.json")"
 TMP_DIR="$(mktemp -d)"
 PACK_DIR="$TMP_DIR/tarballs"
 cleanup() { rm -rf "$TMP_DIR"; }
 trap cleanup EXIT
 mkdir -p "$PACK_DIR"
+
+read_package_json_field() {
+  node -e '
+const fs = require("node:fs");
+const [file, field] = process.argv.slice(1);
+const value = JSON.parse(fs.readFileSync(file, "utf8"))[field];
+if (typeof value !== "string") {
+  console.error(`[FAIL] ${file} field ${field} must be a string`);
+  process.exit(1);
+}
+console.log(value);
+' "$1/package.json" "$2"
+}
+
+EXPECTED_VERSION="$(read_package_json_field "$PKG_DIR" version)"
 
 pack_local_tarball() {
   local pkg_dir="$1"
@@ -18,8 +32,8 @@ pack_local_tarball() {
   local pkg_version
   local tarball_base
 
-  pkg_name="$(jq -r '.name' "$pkg_dir/package.json")"
-  pkg_version="$(jq -r '.version' "$pkg_dir/package.json")"
+  pkg_name="$(read_package_json_field "$pkg_dir" name)"
+  pkg_version="$(read_package_json_field "$pkg_dir" version)"
   tarball_base="${pkg_name#@}"
   tarball_base="${tarball_base//\//-}"
 

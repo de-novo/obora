@@ -7,6 +7,11 @@ on:
         description: "Release tag to publish (for traceability)"
         required: true
         type: string
+      dry_run:
+        description: "Run the publish flow without publishing to npm"
+        required: false
+        default: true
+        type: boolean
   push:
     tags:
       - 'v*'
@@ -66,3 +71,4 @@ jobs:
         run: bash scripts/release/publish-packages.sh
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PUBLISH_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true && '1' || '0' }}

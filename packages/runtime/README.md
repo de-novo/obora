@@ -63,26 +63,25 @@ The runtime package provides:
 ### Policy Engine
 
 ```typescript
-import { PolicyEngine, PolicyEvaluator } from "@obora/runtime";
+import { DefaultPolicyEngine } from "@obora/runtime";
 
-const engine = new PolicyEngine();
-engine.register({
-  name: "no-destructive-ops",
-  condition: "tool.name matches 'delete*'",
-  effect: "deny",
-  message: "Destructive operations not allowed"
+const engine = new DefaultPolicyEngine();
+engine.loadInline({
+  tools: {
+    "delete_file": { effect: "deny", reason: "Destructive operations not allowed" }
+  }
 });
 
-const result = engine.evaluate({ tool: { name: "delete_file" } });
-// { allowed: false, reason: "Destructive operations not allowed" }
+const result = engine.enforce({ type: "tool_call", name: "delete_file", params: {} }, {});
+// { type: "deny", reason: "Destructive operations not allowed" }
 ```
 
 ### Audit Trail
 
 ```typescript
-import { InMemoryAuditStore } from "@obora/runtime";
+import { Audit } from "@obora/runtime";
 
-const store = new InMemoryAuditStore();
+const store = new Audit.InMemoryAuditStore();
 await store.record({
   type: "step_start",
   executionId: "exec-1",
@@ -96,34 +95,29 @@ const events = await store.query({ executionId: "exec-1" });
 ### Recovery Engine
 
 ```typescript
-import { RecoveryEngine, RetryStrategy } from "@obora/runtime";
+import { RecoveryEngine } from "@obora/runtime";
 
-const engine = new RecoveryEngine({
-  strategies: [
-    new RetryStrategy({ maxRetries: 3, backoff: "exponential" })
-  ]
-});
+const engine = new RecoveryEngine();
 
-const result = await engine.executeWithRecovery(async () => {
-  // risky operation
+const result = await engine.handle(failure, {
+  type: "retry",
+  maxAttempts: 3,
+  initialDelayMs: 100,
+  maxDelayMs: 1_000,
+  mode: "exponential"
 });
 ```
 
 ### Consensus
 
 ```typescript
-import { ConsensusRuleEngine, VotingSessionStore } from "@obora/runtime";
+import { evaluateConsensus } from "@obora/runtime";
 
-const engine = new ConsensusRuleEngine();
-const result = await engine.evaluate({
-  votes: [
-    { participant: "r1", vote: "APPROVE" },
-    { participant: "r2", vote: "APPROVE" },
-    { participant: "r3", vote: "REJECT" }
-  ],
-  rule: "majority"
+const result = evaluateConsensus(snapshot, {
+  method: "majority",
+  summary: "release readiness vote"
 });
-// { approved: true, ratio: 0.67 }
+// { approved: true, status: "APPROVED", ... }
 ```
 
 ### Patterns
@@ -141,10 +135,10 @@ import {
 ### Plugin System
 
 ```typescript
-import { PluginRegistry, registerBuiltinPlugins } from "@obora/runtime";
+import { Plugins } from "@obora/runtime";
 
-const registry = new PluginRegistry();
-await registerBuiltinPlugins(registry);
+const registry = new Plugins.PluginRegistry();
+await Plugins.registerBuiltinPlugins(registry);
 
 // Register custom plugin
 registry.register({

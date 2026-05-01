@@ -4,17 +4,103 @@ set -euo pipefail
 ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$ROOT_DIR"
 
-# shellcheck disable=SC1091
-source scripts/release/npm-auth.sh
-setup_npm_auth
-trap cleanup_npm_auth EXIT
-
 PACKAGES=(
   "packages/runtime:@obora/runtime"
   "packages/adapters:@obora/adapters"
   "packages/sdk:@obora/sdk"
   "packages/cli:@obora/cli"
 )
+TMP_DIR="$(mktemp -d)"
+PACK_DIR="$TMP_DIR/tarballs"
+NPM_AUTH_CONFIGURED=0
+
+cleanup() {
+  rm -rf "$TMP_DIR"
+  if [[ "$NPM_AUTH_CONFIGURED" == "1" ]]; then
+    cleanup_npm_auth
+  fi
+}
+trap cleanup EXIT
+
+mkdir -p "$PACK_DIR"
+
+read_package_json_field() {
+  node -e '
+const fs = require("node:fs");
+const [file, field] = process.argv.slice(1);
+const value = JSON.parse(fs.readFileSync(file, "utf8"))[field];
+if (typeof value !== "string") {
+  console.error(`[FAIL] ${file} field ${field} must be a string`);
+  process.exit(1);
+}
+console.log(value);
+' "$1/package.json" "$2"
+}
+
+is_dry_run() {
+  case "${PUBLISH_DRY_RUN:-0}" in
+    1|true|TRUE|yes|YES) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+run_publish() {
+  local tarball="$1"
+  local pkg_name="$2"
+  local pkg_version="$3"
+  local log_file
+  local status
+
+  log_file="$(mktemp)"
+  status=0
+  npm publish "$tarball" "${PUBLISH_ARGS[@]}" >"$log_file" 2>&1 || status=$?
+  cat "$log_file"
+
+  if (( status != 0 )); then
+    if is_dry_run && grep -Fq "previously published versions" "$log_file"; then
+      echo "[release] dry-run reached npm version check; ${pkg_name}@${pkg_version} is already published."
+      rm -f "$log_file"
+      return 0
+    fi
+    rm -f "$log_file"
+    return "$status"
+  fi
+
+  rm -f "$log_file"
+}
+
+pack_package() {
+  local pkg_dir="$1"
+  local tarball_path
+
+  tarball_path="$(cd "$pkg_dir" && pnpm pack --pack-destination "$PACK_DIR")"
+  printf '%s\n' "$tarball_path" | node -e '
+const fs = require("node:fs");
+const path = require("node:path");
+const pkgDir = process.argv[1];
+const packDir = process.argv[2];
+const tarballPath = fs.readFileSync(0, "utf8").trim();
+const resolvedTarballPath = path.isAbsolute(tarballPath)
+  ? tarballPath
+  : path.resolve(pkgDir, tarballPath);
+if (!resolvedTarballPath.startsWith(path.resolve(packDir) + path.sep)) {
+  console.error(`[FAIL] pnpm pack wrote outside the temporary pack directory: ${resolvedTarballPath}`);
+  process.exit(1);
+}
+console.log(resolvedTarballPath);
+' "$pkg_dir" "$PACK_DIR"
+}
+
+PUBLISH_ARGS=(--access public)
+if is_dry_run; then
+  echo "[release] dry-run mode enabled; packages will not be published to npm"
+  PUBLISH_ARGS+=(--dry-run)
+else
+  # shellcheck disable=SC1091
+  source scripts/release/npm-auth.sh
+  setup_npm_auth
+  NPM_AUTH_CONFIGURED=1
+fi
 
 echo "[release] cleaning build artifacts"
 rm -rf packages/runtime/dist packages/adapters/dist packages/sdk/dist packages/cli/dist
@@ -32,11 +118,16 @@ echo "[release] publishing packages"
 for entry in "${PACKAGES[@]}"; do
   pkg_dir="${entry%%:*}"
   pkg_name="${entry##*:}"
-  pkg_version="$(jq -r '.version' "$pkg_dir/package.json")"
+  pkg_version="$(read_package_json_field "$pkg_dir" version)"
+  tarball="$(pack_package "$pkg_dir")"
   echo "=== publishing ${pkg_name}@${pkg_version} ==="
-  (cd "$pkg_dir" && pnpm publish --access public --no-git-checks)
+  run_publish "$tarball" "$pkg_name" "$pkg_version"
   echo
-  echo "[release] published ${pkg_name}@${pkg_version}"
+  if is_dry_run; then
+    echo "[release] dry-run completed for ${pkg_name}@${pkg_version}"
+  else
+    echo "[release] published ${pkg_name}@${pkg_version}"
+  fi
 done
 
 echo "[PASS] Publish flow completed successfully."

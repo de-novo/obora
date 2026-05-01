@@ -73,4 +73,12 @@ Manual package publish should use:
 bash scripts/release/publish-packages.sh
 ```
 
-The script requires `NPM_TOKEN`, uses an isolated temporary npm userconfig, rebuilds publishable packages, runs release verification, and publishes in dependency order.
+For a publish rehearsal that rebuilds packages and runs the same release verification without writing to npm, use:
+
+```bash
+PUBLISH_DRY_RUN=1 bash scripts/release/publish-packages.sh
+```
+
+If the current package versions are already present on npm, dry-run mode treats npm's duplicate-version check as a successful rehearsal stop after the package manifest and tarball checks have run.
+
+The live publish path requires `NPM_TOKEN`, uses an isolated temporary npm userconfig, rebuilds publishable packages, runs release verification, and publishes in dependency order. Manual `workflow_dispatch` runs default to dry-run mode; tag pushes publish live packages.
