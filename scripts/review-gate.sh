@@ -93,6 +93,83 @@ collect_existing_paths() {
   printf '%s\n' "${out[@]}"
 }
 
+scan_pattern() {
+  local pattern="$1"
+  local scan_kind="$2"
+  shift 2
+
+  python3 - "$pattern" "$scan_kind" "$@" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+pattern = sys.argv[1]
+scan_kind = sys.argv[2]
+roots = [Path(arg) for arg in sys.argv[3:]]
+flags = 0 if any(char.isupper() for char in pattern) else re.IGNORECASE
+
+try:
+    regex = re.compile(pattern, flags)
+except re.error as error:
+    print(f'[FAIL] Invalid scan regex: {error}', file=sys.stderr)
+    raise SystemExit(2)
+
+
+def iter_files(root: Path):
+    if root.is_file():
+        yield root
+        return
+    if not root.exists():
+        return
+    for path in root.rglob('*'):
+        if path.is_file():
+            yield path
+
+
+def is_excluded(path: Path) -> bool:
+    rel = path
+    try:
+        rel = path.relative_to(Path.cwd())
+    except ValueError:
+        pass
+
+    parts = rel.parts
+    if '.git' in parts or 'node_modules' in parts or 'dist' in parts:
+        return True
+
+    if scan_kind == 'deprecated':
+        return rel.name == 'Cargo.lock' or (len(parts) > 0 and parts[0] == 'scripts')
+
+    if scan_kind == 'ban':
+        return (
+            '__tests__' in parts
+            or '_legacy' in parts
+            or 'docs' in parts
+            or '.test.' in rel.name
+        )
+
+    return False
+
+
+matched = False
+for root in roots:
+    for path in iter_files(root):
+        if is_excluded(path):
+            continue
+        try:
+            lines = path.read_text(errors='ignore').splitlines()
+        except OSError:
+            continue
+        display_path = path.as_posix()
+        for line_no, line in enumerate(lines, start=1):
+            if regex.search(line):
+                matched = True
+                print(f'{display_path}:{line_no}:{line}')
+
+raise SystemExit(0 if matched else 1)
+PY
+}
+
 echo "[Review Gate]"
 echo "project: ${PROJECT_NAME}"
 echo "target : ${REVIEW_TARGET}"
@@ -107,9 +184,9 @@ echo "\n==> Deprecated scan"
 DEPRECATED_MATCHES_FILE="$(mktemp)"
 DEPRECATED_FILTERED_FILE="$(mktemp)"
 trap 'rm -f "$DEPRECATED_MATCHES_FILE" "$DEPRECATED_FILTERED_FILE"' EXIT
-if rg -n -S \
-  -g '!node_modules' -g '!dist' -g '!**/Cargo.lock' -g '!scripts/**' \
-  "$DEPRECATED_GREP" "${EFFECTIVE_SCAN_PATHS[@]}" >"$DEPRECATED_MATCHES_FILE"; then
+deprecated_scan_status=0
+scan_pattern "$DEPRECATED_GREP" deprecated "${EFFECTIVE_SCAN_PATHS[@]}" >"$DEPRECATED_MATCHES_FILE" || deprecated_scan_status=$?
+if (( deprecated_scan_status == 0 )); then
   if [[ -n "$DEPRECATED_ALLOWLIST_FILE" ]]; then
     if [[ ! -f "$DEPRECATED_ALLOWLIST_FILE" ]]; then
       echo "[FAIL] Deprecated allowlist file not found: $DEPRECATED_ALLOWLIST_FILE"
@@ -125,20 +202,22 @@ if rg -n -S \
     cat "$DEPRECATED_MATCHES_FILE"
     echo "[WARN] Deprecated signals found above. Review required."
   fi
-else
+elif (( deprecated_scan_status == 1 )); then
   echo "[OK] No deprecated signals found by pattern scan."
+else
+  exit "$deprecated_scan_status"
 fi
 
 echo "\n==> Ban pattern scan"
-if rg -n -S \
-  -g '!node_modules' -g '!dist' \
-  -g '!**/__tests__/**' -g '!**/*.test.*' \
-  -g '!**/_legacy/**' -g '!**/docs/**' \
-  "$BAN_GREP" "${EFFECTIVE_SCAN_PATHS[@]}"; then
+ban_scan_status=0
+scan_pattern "$BAN_GREP" ban "${EFFECTIVE_SCAN_PATHS[@]}" || ban_scan_status=$?
+if (( ban_scan_status == 0 )); then
   echo "[FAIL] Forbidden patterns found (as any / @ts-ignore)."
   exit 1
-else
+elif (( ban_scan_status == 1 )); then
   echo "[OK] No forbidden patterns found."
+else
+  exit "$ban_scan_status"
 fi
 
 if [[ -n "$RUST_CHECK_CMD" ]]; then

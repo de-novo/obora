@@ -14,7 +14,13 @@ if bash scripts/review-gate-task.sh --project haru --task-id "../../bad" --stage
   exit 1
 fi
 
-# 2) task script passes with valid 3-model JSON
+# 2) review-gate shell must not depend on ripgrep
+if grep -Eq '(^|[^[:alnum:]_])rg([[:space:]]|$)' scripts/review-gate.sh; then
+  echo "[FAIL] review-gate.sh must not depend on rg"
+  exit 1
+fi
+
+# 3) task script passes with valid 3-model JSON
 mkdir -p .review-gate/tasks/SELFTEST/stage-draft/round-1
 cat > .review-gate/tasks/SELFTEST/stage-draft/round-1/opus.json <<'EOF'
 {"score":9.1,"p0":0,"p1":0,"summary":"ok"}
@@ -28,7 +34,7 @@ EOF
 
 bash scripts/review-gate-task.sh --project haru --task-id SELFTEST --stage draft --target t --scope s --round 1 >/dev/null
 
-# 3) auto script fails fast on invalid task-id before writing
+# 4) auto script fails fast on invalid task-id before writing
 if MODEL_IDS='opus,codex,glm' \
    MODEL_CMD_OPUS='echo {"score":9.1,"p0":0,"p1":0,"summary":"ok"}' \
    MODEL_CMD_CODEX='echo {"score":9.1,"p0":0,"p1":0,"summary":"ok"}' \
@@ -39,7 +45,7 @@ if MODEL_IDS='opus,codex,glm' \
   exit 1
 fi
 
-# 4) review-gate deprecated scan respects allowlisted exact path:line matches
+# 5) review-gate deprecated scan respects allowlisted exact path:line matches
 mkdir -p "$TMP/scan"
 cat > "$TMP/scan/allowed.ts" <<'EOF'
 /** @deprecated intentional compatibility shim */
@@ -62,7 +68,7 @@ if ! grep -Fq '[OK] No deprecated signals found by pattern scan.' <<< "$ALLOWLIS
   exit 1
 fi
 
-# 5) review-gate still warns for non-allowlisted deprecated matches in same scan scope
+# 6) review-gate still warns for non-allowlisted deprecated matches in same scan scope
 cat > "$TMP/scan/unlisted.ts" <<'EOF'
 /** @deprecated not allowlisted */
 export const unlisted = true;

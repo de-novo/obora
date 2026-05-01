@@ -14,4 +14,14 @@ if ! grep -Fq 'bash scripts/release/verify-cli-package-selftest.sh' scripts/rele
   exit 1
 fi
 
+if ! grep -Fq 'bash scripts/release/verify-public-module-tags.sh' scripts/release/verify-release.sh; then
+  echo "[FAIL] expected verify-release.sh to run public module tag verification"
+  exit 1
+fi
+
+if ! grep -Fq 'bash scripts/release/verify-doc-public-imports.sh' scripts/release/verify-release.sh; then
+  echo "[FAIL] expected verify-release.sh to run docs public import verification"
+  exit 1
+fi
+
 echo "[PASS] verify release selftest passed"
