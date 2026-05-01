@@ -1,7 +1,6 @@
 /**
  * Actionable diagnosis templates for high-frequency errors
  * Each template follows: Hypothesis → Evidence → Command → Rollback
- * @module @obora/core/errors/diagnosis
  */
 
 export interface DiagnosisTemplate {

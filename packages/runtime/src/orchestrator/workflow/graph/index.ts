@@ -1,6 +1,5 @@
 /**
  * Graph utilities for dependency resolution
- * @module @obora/core/graph
  */
 
 import type { Step } from "../types/workflow.js";

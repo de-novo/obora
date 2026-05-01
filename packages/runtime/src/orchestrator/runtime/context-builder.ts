@@ -7,8 +7,6 @@
  * - Build AgentContext for each step with board, task, history
  * - Record step results/errors on the board for inter-step state sharing
  * - Maintain single-writer: only this module writes step results to board
- *
- * @module @obora/cli/runtime/context-builder
  */
 
 import type { ChatMessage } from "@obora/adapters";

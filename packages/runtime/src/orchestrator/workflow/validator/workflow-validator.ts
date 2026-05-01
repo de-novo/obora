@@ -1,6 +1,5 @@
 /**
  * Workflow validator using JSON Schema and graph analysis
- * @module @obora/core/validator/workflow-validator
  */
 
 import Ajv, { type ErrorObject } from "ajv";

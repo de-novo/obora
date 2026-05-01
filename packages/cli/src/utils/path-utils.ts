@@ -1,6 +1,5 @@
 /**
  * Path utilities for security
- * @module @obora/cli/utils/path-utils
  */
 
 import * as fs from "node:fs";

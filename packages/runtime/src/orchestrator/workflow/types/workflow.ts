@@ -1,6 +1,5 @@
 /**
  * Workflow type definitions for obora-kit
- * @module @obora/core/types/workflow
  */
 
 /**

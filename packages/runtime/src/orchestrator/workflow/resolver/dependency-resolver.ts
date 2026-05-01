@@ -1,6 +1,5 @@
 /**
  * Dependency resolver using Kahn's Algorithm
- * @module @obora/core/resolver/dependency-resolver
  */
 
 import {

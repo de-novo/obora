@@ -1,6 +1,5 @@
 /**
  * Error codes and classes for obora-kit
- * @module @obora/core/errors
  */
 
 /**

@@ -1,6 +1,5 @@
 /**
  * obora validate command
- * @module @obora/cli/commands/validate
  */
 
 import * as fs from "node:fs";

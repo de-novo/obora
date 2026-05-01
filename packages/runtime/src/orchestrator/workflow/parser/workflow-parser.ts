@@ -1,6 +1,5 @@
 /**
  * Workflow YAML parser
- * @module @obora/core/parser/workflow-parser
  */
 
 import { parse as parseYaml, YAMLParseError } from "yaml";
