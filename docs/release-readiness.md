@@ -42,7 +42,7 @@ pnpm verify:compat
 pnpm verify:test-type-debt
 ```
 
-`pnpm verify:release` builds publishable packages, checks changelog release notes, runs npm-auth selftests, validates package `npm pack --dry-run` output, and selftests CLI package installation.
+`pnpm verify:release` builds publishable packages, checks changelog release notes, runs npm-auth selftests, validates package `npm pack --dry-run` output, validates `pnpm pack` package metadata, runs published-package import/require smoke checks, and selftests CLI package installation.
 
 Package payload validation fails if publishable tarballs include `dist/**/__tests__/**`,
 `*.test.*`, or `*-e2e.test.*` artifacts.
@@ -60,7 +60,7 @@ pnpm build
 bash scripts/release/verify-publish-packages.sh
 ```
 
-The payload must include built `dist` output, package README/LICENSE entries where declared, the declared `exports`, package `types`, and the CLI `bin/obora.js` entry for `@obora/cli`.
+The payload must include built `dist` output, package README/LICENSE entries where declared, the declared `exports`, package `types`, and the CLI `bin/obora.js` entry for `@obora/cli`. The release gate also rejects `workspace:` dependency specifiers in the `pnpm pack` package metadata and smoke-tests public imports such as `@obora/sdk/testing`, `@obora/runtime/storage`, and `@obora/adapters/testing` after installing the local tarballs.
 
 ## Manual Publish
 
