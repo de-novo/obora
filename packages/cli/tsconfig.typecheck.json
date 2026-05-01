@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "../..",
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "paths": {
+      "@obora/adapters": ["packages/adapters/src/typecheck-public.d.ts"],
+      "@obora/adapters/llm": ["packages/adapters/src/typecheck-public.d.ts"],
+      "@obora/adapters/tools": ["packages/adapters/src/typecheck-public.d.ts"],
+      "@obora/adapters/auth": ["packages/adapters/src/typecheck-public.d.ts"],
+      "@obora/runtime": ["packages/runtime/src/typecheck-public.d.ts"],
+      "@obora/sdk": ["packages/sdk/src/typecheck-public.d.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "src/**/__tests__/**"]
+}

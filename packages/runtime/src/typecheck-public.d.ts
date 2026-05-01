@@ -241,10 +241,17 @@ export const AgentRole: {
 };
 export type AgentRole = (typeof AgentRole)[keyof typeof AgentRole];
 
+export interface BlackboardLike {
+  read<T = unknown>(path: string, options?: { strict?: boolean }): T;
+  write?(path: string, value: unknown): void;
+}
+
 export interface AgentContext {
   sessionId: string;
-  board: unknown;
+  board: BlackboardLike;
+  currentTask?: Task;
   history: unknown[];
+  signal?: AbortSignal;
 }
 
 export interface Task {
@@ -253,6 +260,7 @@ export interface Task {
   description: string;
   input?: unknown;
   priority?: number;
+  metadata?: Record<string, unknown>;
 }
 
 export interface TaskResult {
@@ -272,6 +280,10 @@ export interface BaseAgent {
   readonly id: string;
   readonly role: AgentRole;
   execute(task: Task, context: AgentContext): Promise<TaskResult>;
+  subscribe?(listener: (event: unknown) => void): () => void;
+  continue?(): Promise<void>;
+  configureRuntimeExtensions?(input: { tools?: unknown[]; systemPromptAppend?: string }): void;
+  clearRuntimeExtensions?(): void;
 }
 
 export function createAgent(config: {
@@ -288,11 +300,18 @@ export function createAgent(config: {
 export interface Step {
   name: string;
   agent: string;
+  description?: string;
+  inputs?: string[];
+  outputs?: string[];
+  timeout?: string;
+  skills?: string[];
+  config?: Record<string, unknown>;
   [key: string]: unknown;
 }
 
 export interface Workflow {
   name: string;
+  version?: string;
   steps: Step[];
   [key: string]: unknown;
 }
