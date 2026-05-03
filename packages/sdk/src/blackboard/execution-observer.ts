@@ -153,7 +153,9 @@ export class ExecutionObserver {
           const key = `${executionId}:${stepName}`;
           this.costTracker.runCost().then((summary: CostSummary) => {
             this.costSnapshots.set(key, summary.totalCostUsd);
-          }).catch(() => { /* best-effort */ });
+          }).catch((err) => {
+            console.warn("[execution-observer] Failed to snapshot cost:", err);
+          });
         }
         break;
       }
@@ -192,7 +194,9 @@ export class ExecutionObserver {
               step.costUsd = (step.costUsd ?? 0) + delta;
               exec.totalCostUsd = summary.totalCostUsd;
               this.costSnapshots.delete(key);
-            }).catch(() => { /* best-effort */ });
+            }).catch((err) => {
+              console.warn("[execution-observer] Failed to compute step cost delta:", err);
+            });
           }
         }
         break;

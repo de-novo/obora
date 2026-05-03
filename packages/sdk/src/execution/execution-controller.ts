@@ -42,6 +42,10 @@ export interface ExecutionControllerOptions {
 export class ExecutionController {
   constructor(private readonly opts: ExecutionControllerOptions) {}
 
+  setPolicy(policy: PolicyDefinition | undefined): void {
+    this.opts.policy = policy;
+  }
+
   async start(
     name: string,
     workflow: WorkflowDef,
@@ -190,9 +194,7 @@ export class ExecutionController {
                 code: "DLQ_ENTRY_CREATED",
               });
             } catch (dlqErr) {
-              if (this.opts.config.verbose) {
-                console.warn("[DLQ] Failed to append entry:", dlqErr);
-              }
+              this.opts.config.logger?.warn?.("[DLQ] Failed to append entry:", dlqErr);
             }
           }
 

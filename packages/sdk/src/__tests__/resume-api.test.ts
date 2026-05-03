@@ -3,13 +3,24 @@ import { describe, expect, it } from "vitest";
 import { OboraError, OboraRuntime } from "../runtime.js";
 
 function makeIsolatedRuntime() {
-  return new OboraRuntime({
+  const runtime = new OboraRuntime({
     persistence: {
       enabled: true,
       adapter: "sqlite",
       sqlite: { path: ":memory:" },
     },
+    llm: { provider: "mock", apiKey: "test-key", model: "mock-model" },
   });
+  // Inject mock adapter so steps can execute without real LLM
+  (runtime as unknown as { createLLMAdapter: (cfg: unknown) => Promise<unknown> }).createLLMAdapter = async () => ({
+    async chatCompletion() {
+      return {
+        model: "mock",
+        message: { role: "assistant", content: "mock output" },
+      };
+    },
+  });
+  return runtime;
 }
 
 describe("M3-05 Resume SDK API", () => {

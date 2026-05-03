@@ -94,6 +94,7 @@ import {
   type StagingTKGStore,
 } from "../tkg/store.js";
 import { TKGService } from "./tkg-service.js";
+import { DEFAULTS } from "../defaults.js";
 
 /** Duck-type for reflector: both ExecutionReflector and ReflectorEngine implement this. */
 type ReflectorLike = {
@@ -479,15 +480,11 @@ export class WorkflowRunner {
             },
           });
         } catch (error) {
-          if (this.deps.config.verbose) {
-            console.warn("[knowledge] failed to persist knowledge audit event:", error);
-          }
+          this.deps.config.logger?.warn?.("[knowledge] failed to persist knowledge audit event:", error);
         }
       }
     } catch (error) {
-      if (this.deps.config.verbose) {
-        console.warn("[knowledge] failed to attach context:", error);
-      }
+      this.deps.config.logger?.warn?.("[knowledge] failed to attach context:", error);
     }
   }
 
@@ -1298,17 +1295,15 @@ export class WorkflowRunner {
           }
         }
 
-        result = stepExecutor
-          ? await stepExecutor.executeStep(step, {
-              previousOutputs: execution.outputs,
-              signal,
-              ...(Object.keys(hookOutputs).length > 0 ? { hookOutputs } : {}),
-              ...(repairContext ? { repairContext } : {}),
-            })
-          : {
-              output: "[stub] No LLM configured",
-              raw: { stub: true, reason: "No LLM configured" },
-            };
+        if (!stepExecutor) {
+          throw OboraError.adapterUnavailable(new Error("No LLM adapter configured for step execution"));
+        }
+        result = await stepExecutor.executeStep(step, {
+          previousOutputs: execution.outputs,
+          signal,
+          ...(Object.keys(hookOutputs).length > 0 ? { hookOutputs } : {}),
+          ...(repairContext ? { repairContext } : {}),
+        });
 
         const postStepHook = await this.runStepHook(workflow, step, "post_step", executionId, {
           signal,
@@ -1495,9 +1490,7 @@ export class WorkflowRunner {
             durationMs: Date.now() - stepStartedAt,
           });
         } catch (err) {
-          if (config.verbose) {
-            console.warn("[persistence] Failed to save step:", err);
-          }
+          config.logger?.warn?.("[persistence] Failed to save step:", err);
         }
       }
 
@@ -1580,16 +1573,14 @@ export class WorkflowRunner {
     if (step.parallel && step.parallel.length > 0) {
       result = await this.executeParallelBranches(step, execution, stepExecutor, signal);
     } else {
-      result = stepExecutor
-        ? await stepExecutor.executeStep(step, {
-            previousOutputs: execution.outputs,
-            signal,
-            ...(Object.keys(hookOutputs).length > 0 ? { hookOutputs } : {}),
-          })
-        : {
-            output: "[stub] No LLM configured",
-            raw: { stub: true, reason: "No LLM configured" },
-          };
+      if (!stepExecutor) {
+        throw OboraError.adapterUnavailable(new Error("No LLM adapter configured for step execution"));
+      }
+      result = await stepExecutor.executeStep(step, {
+        previousOutputs: execution.outputs,
+        signal,
+        ...(Object.keys(hookOutputs).length > 0 ? { hookOutputs } : {}),
+      });
     }
 
     const postStepHook = await this.runStepHook(workflow, step, "post_step", executionId, {
@@ -1629,9 +1620,7 @@ export class WorkflowRunner {
           durationMs: Date.now() - stepStartedAt,
         });
       } catch (err) {
-        if (config.verbose) {
-          console.warn("[persistence] Failed to save step:", err);
-        }
+        config.logger?.warn?.("[persistence] Failed to save step:", err);
       }
     }
 
@@ -1641,8 +1630,8 @@ export class WorkflowRunner {
       durationMs: Date.now() - stepStartedAt,
       outputPreview:
         typeof result.output === "string"
-          ? result.output.slice(0, 200)
-          : JSON.stringify(result.output).slice(0, 200),
+          ? result.output.slice(0, DEFAULTS.OUTPUT_PREVIEW_LENGTH)
+          : JSON.stringify(result.output).slice(0, DEFAULTS.OUTPUT_PREVIEW_LENGTH),
     });
 
     return result;
@@ -1674,7 +1663,7 @@ export class WorkflowRunner {
         };
 
         if (!stepExecutor) {
-          return { output: "[stub] No LLM configured", raw: { stub: true } } as StepResult;
+          throw OboraError.adapterUnavailable(new Error("No LLM adapter configured for parallel branch execution"));
         }
 
         return stepExecutor.executeStep(branchStep, {
@@ -1876,9 +1865,7 @@ export class WorkflowRunner {
           metadata: { variables },
         });
       } catch (err) {
-        if (config.verbose) {
-          console.warn("[persistence] Failed to save run at start:", err);
-        }
+        config.logger?.warn?.("[persistence] Failed to save run at start:", err);
       }
     }
 
@@ -2117,9 +2104,7 @@ export class WorkflowRunner {
             },
           });
         } catch (err) {
-          if (config.verbose) {
-            console.warn("[persistence] Failed to save run on completion:", err);
-          }
+          config.logger?.warn?.("[persistence] Failed to save run on completion:", err);
         }
       }
 
@@ -2220,9 +2205,7 @@ export class WorkflowRunner {
         },
       });
     } catch (err) {
-      if (config.verbose) {
-        console.warn("[persistence] Failed to save run on error:", err);
-      }
+      config.logger?.warn?.("[persistence] Failed to save run on error:", err);
     } finally {
       this.clearPersistedRepairLoopSummary(executionId);
     }
@@ -2337,15 +2320,13 @@ export class WorkflowRunner {
           }
         }
 
-        const result = engine.stepExecutor
-          ? await engine.stepExecutor.executeStep(step, {
-              previousOutputs: execution.outputs,
-              ...(Object.keys(hookOutputs).length > 0 ? { hookOutputs } : {}),
-            })
-          : {
-              output: "[stub] No LLM configured",
-              raw: { stub: true, reason: "No LLM configured" },
-            };
+        if (!engine.stepExecutor) {
+          throw OboraError.adapterUnavailable(new Error("No LLM adapter configured for resumed step execution"));
+        }
+        const result = await engine.stepExecutor.executeStep(step, {
+          previousOutputs: execution.outputs,
+          ...(Object.keys(hookOutputs).length > 0 ? { hookOutputs } : {}),
+        });
 
         const postStepHook = await this.runStepHook(workflow, step, "post_step", executionId, {
           continueOnError: true,

@@ -150,6 +150,7 @@ export class PluginLoader {
         return null;
       }
 
+      console.warn(`[plugin-loader] Failed to load plugin '${packageName}':`, error);
       return null;
     }
   }

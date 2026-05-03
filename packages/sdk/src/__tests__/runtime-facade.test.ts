@@ -217,12 +217,7 @@ describe("OboraRuntime facade", () => {
       });
 
       const handle = await runtime.run("stub-flow");
-      const result = await handle.wait();
-
-      expect(result.status).toBe("completed");
-      expect(result.completedSteps).toEqual(["step-a", "step-b"]);
-      expect(result.outputs["step-a"]).toBe("[stub] No LLM configured");
-      expect(result.outputs["step-b"]).toBe("[stub] No LLM configured");
+      await expect(handle.wait()).rejects.toThrow(/LLM adapter is unavailable/);
       expect(warnings[0]).toContain("Missing auth for provider");
     } finally {
       restoreEnv();

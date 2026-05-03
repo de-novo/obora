@@ -3,7 +3,20 @@ import { describe, expect, it, vi } from "vitest";
 import { OboraError, OboraErrorCode, OboraRuntime } from "../runtime.js";
 
 function makeIsolatedRuntime() {
-  return new OboraRuntime({ config: {} });
+  const runtime = new OboraRuntime({
+    config: {},
+    llm: { provider: "mock", apiKey: "test-key", model: "mock-model" },
+  });
+  // Inject mock adapter so steps can execute without real LLM
+  (runtime as unknown as { createLLMAdapter: (cfg: unknown) => Promise<unknown> }).createLLMAdapter = async () => ({
+    async chatCompletion() {
+      return {
+        model: "mock",
+        message: { role: "assistant", content: "mock output" },
+      };
+    },
+  });
+  return runtime;
 }
 
 describe("M3-05 Replay/Re-execution SDK API", () => {
@@ -127,18 +140,6 @@ describe("M3-05 Replay/Re-execution SDK API", () => {
           description: "Non-determinism detection is limited in simulation mode",
           severity: "info",
         }),
-        expect.objectContaining({
-          type: "state_external",
-          description: "Potential non-determinism: no original output for step 's1'",
-          stepName: "s1",
-          severity: "warning",
-        }),
-        expect.objectContaining({
-          type: "state_external",
-          description: "Potential non-determinism: no original output for step 's2'",
-          stepName: "s2",
-          severity: "warning",
-        }),
       ]),
     );
   });
@@ -190,7 +191,20 @@ describe("M3-05 Replay/Re-execution SDK API", () => {
 
   it("uses dryRun=true by default", async () => {
     const sink = vi.fn();
-    const runtime = new OboraRuntime({ audit: { enabled: true, sink }, config: {} });
+    const runtime = new OboraRuntime({
+      audit: { enabled: true, sink },
+      config: {},
+      llm: { provider: "mock", apiKey: "test-key", model: "mock-model" },
+    });
+    // Inject mock adapter so steps can execute without real LLM
+    (runtime as unknown as { createLLMAdapter: (cfg: unknown) => Promise<unknown> }).createLLMAdapter = async () => ({
+      async chatCompletion() {
+        return {
+          model: "mock",
+          message: { role: "assistant", content: "mock output" },
+        };
+      },
+    });
     runtime.define("dry", { name: "dry", steps: [{ name: "s1" }] });
 
     const handle = await runtime.run("dry");

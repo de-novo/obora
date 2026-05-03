@@ -31,8 +31,8 @@ function loadGlobalAuth(): GlobalAuthMap {
       );
       return globalAuthCache;
     }
-  } catch {
-    // ignore parse failures and fallback to empty map
+  } catch (err) {
+    console.warn("[auth-resolver] Failed to parse global auth file, falling back to empty map:", err);
   }
 
   globalAuthCache = {};

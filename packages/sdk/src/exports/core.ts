@@ -26,3 +26,4 @@ export { findSchemaMismatchReason, loadMinimalJsonSchema } from "../schema-outpu
 export { topologicalSort, groupByParallelizableLevels } from "../dependency-resolver.js";
 export { BUILTIN_TOOLS } from "../step-executor.js";
 export { resolveFailureRoute, validateRoutes, getAllRouteTargets } from "../conditional-routing.js";
+export { DEFAULTS } from "../defaults.js";

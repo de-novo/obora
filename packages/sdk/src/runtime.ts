@@ -309,7 +309,7 @@ export class OboraRuntime {
     const workflow = this.workflows.get(name)!;
 
     // Update policy reference on the controller in case it loaded after construction
-    (this.executionController as unknown as { opts: { policy?: PolicyDefinition } }).opts.policy = this.policy;
+    this.executionController.setPolicy(this.policy);
 
     return this.executionController.start(name, workflow, options, this.agents, this.workflows);
   }
@@ -328,7 +328,7 @@ export class OboraRuntime {
     await this.policyLoadPromise;
 
     // Update policy reference on the controller in case it loaded after construction
-    (this.executionController as unknown as { opts: { policy?: PolicyDefinition } }).opts.policy = this.policy;
+    this.executionController.setPolicy(this.policy);
 
     return this.executionController.resume(runId, options, this.workflows);
   }
@@ -404,14 +404,7 @@ export class OboraRuntime {
           });
           continue;
         }
-        if (typeof output === "string" && output.startsWith("[stub] No LLM configured")) {
-          nonDeterminismWarnings.push({
-            type: "state_external",
-            description: `Potential non-determinism: no original output for step '${stepName}'`,
-            stepName,
-            severity: "warning",
-          });
-        }
+
       }
     }
 

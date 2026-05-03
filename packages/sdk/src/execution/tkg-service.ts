@@ -183,17 +183,15 @@ export class TKGService {
     try {
       const result = await this.restoreLatestTKGRollback(workflow);
 
-      if (result.restored && config.verbose) {
-        console.log(
+      if (result.restored) {
+        config.logger?.info?.(
           `[TKG] Auto-rollback completed for execution ${executionId}: ${result.restoredFactCount} facts restored`
         );
       }
 
       return result;
     } catch (err) {
-      if (config.verbose) {
-        console.warn(`[TKG] Auto-rollback failed for execution ${executionId}:`, err);
-      }
+      config.logger?.warn?.(`[TKG] Auto-rollback failed for execution ${executionId}:`, err);
       throw err;
     }
   }
