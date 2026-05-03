@@ -48,6 +48,10 @@ tsconfig.tsbuildinfo
 # Review gate artifacts
 .review-gate/
 
+# Obora runtime generated artifacts
+.obora/tkg-review-queue/
+.obora/tkg-rollback/
+
 # Experiment/sandbox generated artifacts
 experiments/overnight-builder/.obora-debug/
 experiments/overnight-builder/data/
