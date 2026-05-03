@@ -27,7 +27,7 @@ import type {
 } from "./replay.js";
 import { Workflow } from "./workflow.js";
 import type { WorkflowDef } from "./workflow.js";
-import { BudgetExceededError } from "./cost-tracker.js";
+
 import type { LLMConfig } from "./llm-config.js";
 import type { LLMAdapterLike } from "./step-executor.js";
 
@@ -35,8 +35,9 @@ import type { LLMAdapterLike } from "./step-executor.js";
 import { EventBus } from "./events/event-bus.js";
 import { PersistenceManager } from "./persistence/persistence-manager.js";
 import { WorkflowRunner } from "./execution/workflow-runner.js";
+import { ExecutionController } from "./execution/execution-controller.js";
 import { RunQuery } from "./query/run-query.js";
-import { type DLQStore, createDLQEntry, FileDLQStore } from "./dlq/index.js";
+import { type DLQStore, FileDLQStore } from "./dlq/index.js";
 import { type ExecutionLock, FileExecutionLock } from "./execution/execution-lock.js";
 
 // Re-export all types from runtime-types so existing imports keep working
@@ -116,6 +117,7 @@ export class OboraRuntime {
   private readonly query: RunQuery;
   private readonly dlqStore?: DLQStore;
   private readonly executionLock?: ExecutionLock;
+  private readonly executionController: ExecutionController;
 
   // ── Policy ───────────────────────────────────────────────────────────────
   private policy?: PolicyDefinition;
@@ -145,6 +147,16 @@ export class OboraRuntime {
       this.executionLock = new FileExecutionLock(lockPath, config.executionLock.staleLockThresholdMs);
     }
 
+    this.executionController = new ExecutionController({
+      config,
+      runner: this.runner,
+      eventBus: this.eventBus,
+      persistenceManager: this.persistenceManager,
+      dlqStore: this.dlqStore,
+      executionLock: this.executionLock,
+      executions: this.executions,
+    });
+
     if (config.policyPath) {
       this.policyLoadPromise = Policy.fromYaml(config.policyPath)
         .then((policy) => {
@@ -156,13 +168,7 @@ export class OboraRuntime {
 
           if (error instanceof OboraError) throw error;
 
-          throw new OboraError(
-            "Failed to load policy",
-            OboraErrorCode.POLICY_LOAD_FAILED,
-            undefined,
-            undefined,
-            error,
-          );
+          throw OboraError.policyLoadFailed(error);
         });
     }
   }
@@ -287,13 +293,7 @@ export class OboraRuntime {
         baseUrl: config.baseUrl,
       });
     } catch (error) {
-      throw new OboraError(
-        "LLM adapter is unavailable",
-        OboraErrorCode.ADAPTER_LLM_UNAVAILABLE,
-        undefined,
-        undefined,
-        error,
-      );
+      throw OboraError.adapterUnavailable(error);
     }
   }
 
@@ -303,317 +303,15 @@ export class OboraRuntime {
     await this.policyLoadPromise;
 
     if (!this.workflows.has(name)) {
-      throw new OboraError(
-        `Workflow is not defined: ${name}`,
-        OboraErrorCode.SDK_WORKFLOW_NOT_FOUND,
-      );
+      throw OboraError.workflowNotFound(name);
     }
 
-    const { input, variables, signal } = options;
-    const executionId = randomUUID();
     const workflow = this.workflows.get(name)!;
 
-    // P0: Acquire execution lock if enabled
-    if (this.executionLock) {
-      const acquired = await this.executionLock.acquire(name, executionId);
-      if (!acquired) {
-        throw new OboraError(
-          `Another execution of workflow "${name}" is already running. Use executionLock.staleLockThresholdMs to configure stale lock detection.`,
-          OboraErrorCode.SDK_UNKNOWN_ERROR,
-          executionId,
-        );
-      }
-    }
+    // Update policy reference on the controller in case it loaded after construction
+    (this.executionController as unknown as { opts: { policy?: PolicyDefinition } }).opts.policy = this.policy;
 
-    const execution: RuntimeExecution = {
-      id: executionId,
-      workflowName: name,
-      status: "running",
-      input,
-      startedAt: new Date(),
-      stepOrder: workflow.steps.map((s) => s.name),
-      completedSteps: [],
-      stepRecords: {},
-      outputs: {},
-    };
-
-    const runTimeoutMs = this.resolveExecutionTimeoutMs(workflow, variables);
-    let status: RunStatus = "queued";
-    let settled = false;
-    let rejectWait: ((reason?: unknown) => void) | undefined;
-    let runTimeout: ReturnType<typeof setTimeout> | undefined;
-    let signalAbortListener: (() => void) | undefined;
-
-    const waitPromise = new Promise<RuntimeExecution>((resolve, reject) => {
-      rejectWait = reject;
-
-      queueMicrotask(async () => {
-        try {
-          if (settled) return;
-
-          status = "running";
-          execution.status = "running";
-
-          await this.runner.executeRun(
-            executionId,
-            name,
-            workflow,
-            execution,
-            options,
-            () => settled,
-          );
-
-          if (settled) return;
-
-          status = "completed";
-          execution.status = "completed";
-          execution.endedAt = new Date();
-          settled = true;
-
-          this.executions.set(executionId, structuredClone(execution));
-          resolve(structuredClone(execution));
-        } catch (error) {
-          if (settled) return;
-
-          const budgetExceeded = error instanceof BudgetExceededError;
-          status = budgetExceeded ? "suspended" : "failed";
-          execution.status = budgetExceeded ? "suspended" : "failed";
-          execution.error = error instanceof Error ? error.message : String(error);
-          execution.endedAt = new Date();
-          settled = true;
-
-          const errorCode = budgetExceeded
-            ? OboraErrorCode.POLICY_RESOURCE_EXCEEDED
-            : error instanceof OboraError
-              ? error.code
-              : OboraErrorCode.SDK_UNKNOWN_ERROR;
-
-          // Determine persistence config for error save
-          const persistenceConfig =
-            this.config.config?.persistence ?? this.config.persistence;
-          const persistenceEnabled = persistenceConfig?.enabled ?? false;
-
-          const { repairAttempts, repairLoopSummary } = await this.runner.saveRunOnError(
-            executionId,
-            name,
-            execution,
-            variables,
-            errorCode,
-            persistenceEnabled,
-            persistenceConfig,
-          );
-
-          // P0: Auto-rollback on execution failure (not budget exceeded)
-          if (!budgetExceeded) {
-            try {
-              const workflowDef = this.workflows.get(name);
-              if (!workflowDef) throw new Error(`Workflow not found: ${name}`);
-              const rollbackResult = await this.runner.rollbackTKGOnExecutionFailure(
-                executionId,
-                name,
-                workflowDef,
-              );
-              if (rollbackResult.restored) {
-                await this.eventBus.emit("warning", executionId, {
-                  message: `Auto-rollback completed: ${rollbackResult.restoredFactCount} facts restored`,
-                  code: "TKG_AUTO_ROLLBACK_SUCCESS",
-                });
-              }
-            } catch (rollbackErr) {
-              // Log rollback failure but don't block execution end
-              await this.eventBus.emit("warning", executionId, {
-                message: `Auto-rollback failed: ${rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr)}`,
-                code: "TKG_AUTO_ROLLBACK_FAILED",
-              });
-            }
-          }
-
-          // P0: DLQ — capture unrecoverable failures
-          if (this.dlqStore && !budgetExceeded) {
-            try {
-              const dlqEntry = createDLQEntry({
-                executionId,
-                workflowName: name,
-                stepName: repairLoopSummary?.lastRepairStep ?? repairLoopSummary?.lastValidationStep,
-                errorCode,
-                errorMessage: execution.error ?? "Unknown error",
-                errorStack: error instanceof Error ? error.stack : undefined,
-                repairAttempts,
-                metadata: repairLoopSummary ? { repairLoop: repairLoopSummary } : undefined,
-              });
-              await this.dlqStore.append(dlqEntry);
-              await this.eventBus.emit("warning", executionId, {
-                message: `Failure captured in DLQ: ${dlqEntry.id}`,
-                code: "DLQ_ENTRY_CREATED",
-              });
-            } catch (dlqErr) {
-              // Don't block execution end for DLQ failures
-              if (this.config.verbose) {
-                console.warn("[DLQ] Failed to append entry:", dlqErr);
-              }
-            }
-          }
-
-          // P0: Auto-recovery from checkpoint
-          const autoRecovery = this.config.autoRecovery;
-          if (autoRecovery?.enabled && !budgetExceeded) {
-            const maxRetries = autoRecovery.maxRetries ?? 1;
-            const delayMs = autoRecovery.delayMs ?? 5000;
-            const driftPolicy = autoRecovery.driftPolicy ?? "warn";
-
-            for (let attempt = 0; attempt < maxRetries; attempt++) {
-              try {
-                if (delayMs > 0) {
-                  await new Promise((r) => setTimeout(r, delayMs));
-                }
-                await this.eventBus.emit("warning", executionId, {
-                  message: `Auto-recovery attempt ${attempt + 1}/${maxRetries} from checkpoint`,
-                  code: "AUTO_RECOVERY_ATTEMPT",
-                });
-                const resumeResult = await this.resume(executionId, { driftPolicy });
-                if (resumeResult.execution.status === "completed") {
-                  // Recovery succeeded — resolve instead of reject
-                  status = "completed";
-                  execution.status = "completed";
-                  execution.endedAt = new Date();
-                  this.executions.set(executionId, structuredClone(execution));
-                  resolve(structuredClone(execution));
-                  return;
-                }
-              } catch (recoveryErr) {
-                await this.eventBus.emit("warning", executionId, {
-                  message: `Auto-recovery attempt ${attempt + 1} failed: ${recoveryErr instanceof Error ? recoveryErr.message : String(recoveryErr)}`,
-                  code: "AUTO_RECOVERY_FAILED",
-                });
-              }
-            }
-          }
-
-          await this.eventBus.emit("error", executionId, {
-            message: execution.error,
-            code: errorCode,
-          });
-          await this.eventBus.emit("execution_end", executionId, {
-            workflowName: name,
-            status: budgetExceeded ? "suspended" : "failed",
-          });
-
-          reject(
-            budgetExceeded
-              ? new OboraError(
-                  execution.error,
-                  OboraErrorCode.POLICY_RESOURCE_EXCEEDED,
-                  executionId,
-                )
-              : error,
-          );
-        } finally {
-          if (runTimeout) {
-            clearTimeout(runTimeout);
-            runTimeout = undefined;
-          }
-          signalAbortListener?.();
-          signalAbortListener = undefined;
-
-          // P0: Release execution lock
-          if (this.executionLock) {
-            try {
-              await this.executionLock.release(name);
-            } catch {
-              // Best-effort release
-            }
-          }
-        }
-      });
-    });
-
-    const handle: RunHandle = {
-      executionId,
-      get status() {
-        return status;
-      },
-      wait: () => waitPromise,
-      cancel: async (reason?: string) => {
-        if (
-          settled ||
-          status === "completed" ||
-          status === "failed" ||
-          status === "aborted"
-        ) {
-          return;
-        }
-
-        if (runTimeout) {
-          clearTimeout(runTimeout);
-          runTimeout = undefined;
-        }
-        signalAbortListener?.();
-        signalAbortListener = undefined;
-
-        status = "aborted";
-        execution.status = "aborted";
-        execution.error = reason ?? "Execution cancelled";
-        execution.endedAt = new Date();
-        settled = true;
-
-        const abortError = new OboraError(
-          execution.error,
-          OboraErrorCode.SDK_EXECUTION_CANCELLED,
-          executionId,
-          undefined,
-          reason,
-        );
-
-        await this.eventBus.emit("error", executionId, {
-          message: abortError.message,
-          code: abortError.code,
-        });
-        const persistenceConfig =
-          this.config.config?.persistence ?? this.config.persistence;
-        const persistenceEnabled = persistenceConfig?.enabled ?? false;
-
-        await this.runner.saveRunOnError(
-          executionId,
-          name,
-          execution,
-          variables,
-          OboraErrorCode.SDK_EXECUTION_CANCELLED,
-          persistenceEnabled,
-          persistenceConfig,
-        );
-
-        await this.eventBus.emit("execution_end", executionId, {
-          workflowName: name,
-          status: "aborted",
-        });
-
-        rejectWait?.(abortError);
-      },
-    };
-
-    if (runTimeoutMs !== undefined) {
-      runTimeout = setTimeout(() => {
-        void handle.cancel(`Execution timed out after ${runTimeoutMs}ms`);
-      }, runTimeoutMs);
-    }
-
-    if (signal) {
-      if (signal.aborted) {
-        void handle.cancel(
-          typeof signal.reason === "string" ? signal.reason : undefined,
-        );
-      } else {
-        const onAbort = () => {
-          void handle.cancel(
-            typeof signal.reason === "string" ? signal.reason : undefined,
-          );
-        };
-        signal.addEventListener("abort", onAbort, { once: true });
-        signalAbortListener = () => signal.removeEventListener("abort", onAbort);
-      }
-    }
-
-    return handle;
+    return this.executionController.start(name, workflow, options, this.agents, this.workflows);
   }
 
   // ── resume() ──────────────────────────────────────────────────────────────
@@ -627,137 +325,28 @@ export class OboraRuntime {
     rerunSteps: string[];
     driftDetected: boolean;
   }> {
-    const adapter = await this.persistenceManager.getStorageAdapter();
-    const { CheckpointManager } = await import("@obora/runtime");
+    await this.policyLoadPromise;
 
-    const mgr = new CheckpointManager(adapter);
-    const run = await adapter.getRun(runId);
-    if (!run) {
-      throw new OboraError(`Run not found: ${runId}`, OboraErrorCode.SDK_EXECUTION_NOT_FOUND);
-    }
+    // Update policy reference on the controller in case it loaded after construction
+    (this.executionController as unknown as { opts: { policy?: PolicyDefinition } }).opts.policy = this.policy;
 
-    const checkpoint = await mgr.getLatestCheckpoint(runId);
-    if (!checkpoint) {
-      throw new OboraError(`No checkpoint found for run: ${runId}`, "SDK_CHECKPOINT_NOT_FOUND");
-    }
-
-    if (run.status !== "failed" && run.status !== "suspended") {
-      throw new OboraError(
-        `Run ${runId} is not resumable (status: ${run.status})`,
-        "SDK_RESUME_INVALID_STATUS",
-        runId,
-      );
-    }
-
-    const currentPolicyConfig = (this.policy ?? {}) as import("@obora/runtime").PolicyHashInput;
-    const drift = mgr.detectDrift(checkpoint, currentPolicyConfig);
-    const driftPolicy = options.driftPolicy ?? "warn";
-    if (drift.drifted && driftPolicy === "reject") {
-      throw new OboraError(
-        `Policy drift detected: ${drift.oldHash} → ${drift.newHash}`,
-        "SDK_POLICY_DRIFT",
-      );
-    }
-
-    const workflow = this.workflows.get(run.workflowName);
-    const savedSteps = await adapter.getSteps(runId);
-
-    let allStepNames: string[];
-    if (workflow) {
-      allStepNames = workflow.steps.map((s) => s.name);
-    } else {
-      const seen = new Set<string>();
-      allStepNames = [];
-      for (const s of savedSteps) {
-        if (!seen.has(s.stepName)) {
-          seen.add(s.stepName);
-          allStepNames.push(s.stepName);
-        }
-      }
-    }
-
-    if (options.fromStep && !allStepNames.includes(options.fromStep)) {
-      throw new OboraError(
-        `Invalid fromStep: '${options.fromStep}' is not a valid step name. Available steps: ${allStepNames.join(", ")}`,
-        OboraErrorCode.ORCH_STEP_NOT_FOUND,
-      );
-    }
-
-    const stepPolicies = mgr.resolveStepPolicies(
-      savedSteps,
-      checkpoint.completedSteps,
-      allStepNames,
-      options,
-    );
-
-    const restoredSteps = stepPolicies
-      .filter((p: { action: string }) => p.action === "restore")
-      .map((p: { stepName: string }) => p.stepName);
-    const rerunSteps = stepPolicies
-      .filter((p: { action: string }) => p.action === "rerun")
-      .map((p: { stepName: string }) => p.stepName);
-
-    if (!workflow && rerunSteps.length > 0) {
-      throw new OboraError(
-        `Workflow '${run.workflowName}' is not loaded. Load the workflow definition before resume to execute rerun steps.`,
-        OboraErrorCode.SDK_WORKFLOW_NOT_FOUND,
-        runId,
-      );
-    }
-
-    if (rerunSteps.length === 0) {
-      await adapter.saveRun({
-        ...run,
-        status: "completed",
-        completedAt: new Date().toISOString(),
-      });
-      return {
-        execution: { id: runId, status: "completed" },
-        restoredSteps,
-        rerunSteps,
-        driftDetected: drift.drifted,
-      };
-    }
-
-    await adapter.saveRun({ ...run, status: "running", completedAt: undefined });
-
-    if (workflow) {
-      await this.policyLoadPromise;
-
-      const execution = await this.runner.executeResume(
-        runId,
-        run.workflowName,
-        workflow,
-        run.input,
-        rerunSteps,
-        stepPolicies,
-        currentPolicyConfig,
-        adapter,
-      );
-
-      this.executions.set(runId, structuredClone(execution));
-    }
-
-    return {
-      execution: { id: runId, status: "completed" },
-      restoredSteps,
-      rerunSteps,
-      driftDetected: drift.drifted,
-    };
+    return this.executionController.resume(runId, options, this.workflows);
   }
 
   // ── Replay API ────────────────────────────────────────────────────────────
 
-  async replay(
+  /**
+   * Simulate a replay of a previous execution.
+   * This is a dry-run simulation: it does not re-invoke the LLM or re-execute steps.
+   * It generates a replay plan and diff report based on the original execution record.
+   */
+  async simulateReplay(
     executionId: string,
     options?: Partial<ReExecutionOptions>,
   ): Promise<ReExecutionResult> {
     const execution = this.executions.get(executionId);
     if (!execution) {
-      throw new OboraError(
-        `Execution not found: ${executionId}`,
-        OboraErrorCode.AUDIT_REPLAY_NOT_FOUND,
-      );
+      throw OboraError.replayExecutionNotFound(executionId);
     }
 
     const reExecutionId = randomUUID();
@@ -776,10 +365,7 @@ export class OboraRuntime {
       options?.startFromStep &&
       !allSteps.includes(options.startFromStep)
     ) {
-      throw new OboraError(
-        `Checkpoint step not found: ${options.startFromStep}`,
-        OboraErrorCode.AUDIT_REPLAY_NOT_FOUND,
-      );
+      throw OboraError.replayStepNotFound(options.startFromStep);
     }
 
     const checkpointIdx = options?.startFromStep
@@ -900,10 +486,7 @@ export class OboraRuntime {
     workflowName: string,
   ): Promise<TKGReviewQueueItem[]> {
     if (!this.workflows.has(workflowName)) {
-      throw new OboraError(
-        `Workflow is not defined: ${workflowName}`,
-        OboraErrorCode.SDK_WORKFLOW_NOT_FOUND,
-      );
+      throw OboraError.workflowNotFound(workflowName);
     }
 
     return this.runner.listOpenTKGReviewQueueItems(this.workflows.get(workflowName)!);
@@ -915,10 +498,7 @@ export class OboraRuntime {
     resolution: { status: "approved" | "rejected"; actor?: string; note?: string },
   ): Promise<TKGReviewQueueResolutionSummary> {
     if (!this.workflows.has(workflowName)) {
-      throw new OboraError(
-        `Workflow is not defined: ${workflowName}`,
-        OboraErrorCode.SDK_WORKFLOW_NOT_FOUND,
-      );
+      throw OboraError.workflowNotFound(workflowName);
     }
 
     return this.runner.resolveTKGReviewQueueItem(this.workflows.get(workflowName)!, itemId, resolution);
@@ -929,10 +509,7 @@ export class OboraRuntime {
     options: { rollbackId?: string } = {},
   ): Promise<TKGRollbackRestoreSummary> {
     if (!this.workflows.has(workflowName)) {
-      throw new OboraError(
-        `Workflow is not defined: ${workflowName}`,
-        OboraErrorCode.SDK_WORKFLOW_NOT_FOUND,
-      );
+      throw OboraError.workflowNotFound(workflowName);
     }
 
     return this.runner.restoreLatestTKGRollback(this.workflows.get(workflowName)!, options);
@@ -943,10 +520,7 @@ export class OboraRuntime {
     options: { sourceExecutionId?: string } = {},
   ): Promise<TKGApprovedReviewQueueApplySummary> {
     if (!this.workflows.has(workflowName)) {
-      throw new OboraError(
-        `Workflow is not defined: ${workflowName}`,
-        OboraErrorCode.SDK_WORKFLOW_NOT_FOUND,
-      );
+      throw OboraError.workflowNotFound(workflowName);
     }
 
     return this.runner.reapplyApprovedTKGReviewQueueItems(this.workflows.get(workflowName)!, options);
@@ -1017,22 +591,4 @@ export class OboraRuntime {
       this.query.step.artifact(runId, stepName, name),
   };
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
-
-  private resolveExecutionTimeoutMs(
-    workflow: WorkflowDefinition,
-    variables?: Record<string, unknown>,
-  ): number | undefined {
-    const fromOptions = variables?.executionTimeoutMs;
-    if (typeof fromOptions === "number" && Number.isFinite(fromOptions) && fromOptions > 0) {
-      return fromOptions;
-    }
-
-    const fromWorkflow = workflow.variables?.executionTimeoutMs;
-    if (typeof fromWorkflow === "number" && Number.isFinite(fromWorkflow) && fromWorkflow > 0) {
-      return fromWorkflow;
-    }
-
-    return undefined;
-  }
 }

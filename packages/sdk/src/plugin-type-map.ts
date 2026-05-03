@@ -25,8 +25,5 @@ export function resolvePluginType(typeOrAlias: string): PluginType {
     return typeOrAlias as PluginType;
   }
 
-  throw new OboraError(
-    `Unknown plugin type: ${typeOrAlias}. Must be one of aliases (${Object.keys(PLUGIN_TYPE_ALIASES).join(", ")}) or canonical types (${PLUGIN_TYPES.join(", ")}).`,
-    OboraErrorCode.SDK_INVALID_PLUGIN,
-  );
+  throw OboraError.invalidPluginType(typeOrAlias);
 }

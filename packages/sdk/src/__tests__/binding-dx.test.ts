@@ -16,7 +16,7 @@ describe("input bindings DX", () => {
       "utf8",
     );
 
-    const workflow = await Workflow.fromYaml(join(process.cwd(), "src/__tests__/fixtures/one-file-binding.yaml"));
+    const workflow = await Workflow.fromYaml(join(process.cwd(), "packages/sdk/src/__tests__/fixtures/one-file-binding.yaml"));
     const step = workflow.steps[0]!;
 
     let seenPrompt = "";

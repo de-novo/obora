@@ -10,7 +10,7 @@ describe("M3-05 Replay/Re-execution SDK API", () => {
   it("throws OboraError with AUDIT_REPLAY_NOT_FOUND for unknown executionId", async () => {
     const runtime = makeIsolatedRuntime();
 
-    await expect(runtime.replay("missing-exec-id")).rejects.toMatchObject({
+    await expect(runtime.simulateReplay("missing-exec-id")).rejects.toMatchObject({
       name: "OboraError",
       code: OboraErrorCode.AUDIT_REPLAY_NOT_FOUND,
       message: "Execution not found: missing-exec-id",
@@ -24,7 +24,7 @@ describe("M3-05 Replay/Re-execution SDK API", () => {
     const handle = await runtime.run("demo");
     const execution = await handle.wait();
 
-    const replay = await runtime.replay(execution.id);
+    const replay = await runtime.simulateReplay(execution.id);
     expect(replay.success).toBe(true);
     expect(replay.originalExecutionId).toBe(execution.id);
     expect(replay.stepResults).toHaveLength(2);
@@ -40,7 +40,7 @@ describe("M3-05 Replay/Re-execution SDK API", () => {
     const handle = await runtime.run("cp");
     const execution = await handle.wait();
 
-    const replay = await runtime.replay(execution.id, {
+    const replay = await runtime.simulateReplay(execution.id, {
       mode: "from_checkpoint",
       startFromStep: "b",
     });
@@ -74,7 +74,7 @@ describe("M3-05 Replay/Re-execution SDK API", () => {
       c: { value: "from-c" },
     };
 
-    const replay = await runtime.replay(execution.id, {
+    const replay = await runtime.simulateReplay(execution.id, {
       mode: "from_checkpoint",
       startFromStep: "c",
     });
@@ -97,7 +97,7 @@ describe("M3-05 Replay/Re-execution SDK API", () => {
     const execution = await handle.wait();
 
     await expect(
-      runtime.replay(execution.id, {
+      runtime.simulateReplay(execution.id, {
         mode: "from_checkpoint",
         startFromStep: "z",
       }),
@@ -118,7 +118,7 @@ describe("M3-05 Replay/Re-execution SDK API", () => {
     const handle = await runtime.run("nd");
     const execution = await handle.wait();
 
-    const replay = await runtime.replay(execution.id, { detectNonDeterminism: true });
+    const replay = await runtime.simulateReplay(execution.id, { detectNonDeterminism: true });
 
     expect(replay.plan.nonDeterminismWarnings).toEqual(
       expect.arrayContaining([
@@ -159,7 +159,7 @@ describe("M3-05 Replay/Re-execution SDK API", () => {
 
     const handle = await runtime.run("events");
     const execution = await handle.wait();
-    await runtime.replay(execution.id);
+    await runtime.simulateReplay(execution.id);
 
     expect(start).toHaveBeenCalledTimes(1);
     expect(stepStart).toHaveBeenCalledTimes(2);
@@ -178,7 +178,7 @@ describe("M3-05 Replay/Re-execution SDK API", () => {
     const handle = await runtime.run("callback");
     const execution = await handle.wait();
 
-    await runtime.replay(execution.id, { onStepComplete: callback });
+    await runtime.simulateReplay(execution.id, { onStepComplete: callback });
 
     expect(callback).toHaveBeenCalledTimes(3);
     expect(callback).toHaveBeenNthCalledWith(
@@ -195,7 +195,7 @@ describe("M3-05 Replay/Re-execution SDK API", () => {
 
     const handle = await runtime.run("dry");
     const execution = await handle.wait();
-    await runtime.replay(execution.id);
+    await runtime.simulateReplay(execution.id);
 
     const replayStartEvent = sink.mock.calls
       .map((call) => call[0])
@@ -211,6 +211,6 @@ describe("M3-05 Replay/Re-execution SDK API", () => {
   it("throws OboraError instance for unknown executionId", async () => {
     const runtime = makeIsolatedRuntime();
 
-    await expect(runtime.replay("unknown")).rejects.toBeInstanceOf(OboraError);
+    await expect(runtime.simulateReplay("unknown")).rejects.toBeInstanceOf(OboraError);
   });
 });

@@ -27,7 +27,7 @@ export class PersistenceManager {
 
     const enabled = persistenceEnabled ?? this.config.persistence?.enabled ?? false;
     if (!enabled) {
-      throw new OboraError("Persistence is not enabled", "SDK_PERSISTENCE_DISABLED");
+      throw OboraError.persistenceDisabled();
     }
 
     const p = persistenceConfig ?? this.config.persistence;
@@ -37,7 +37,7 @@ export class PersistenceManager {
       const { SQLiteStorageAdapter } = await import("@obora/runtime");
       this._storageAdapter = new SQLiteStorageAdapter({ path: p.sqlite.path });
     } else {
-      throw new OboraError("Invalid persistence configuration", "SDK_PERSISTENCE_CONFIG_ERROR");
+      throw OboraError.persistenceConfigError();
     }
 
     return this._storageAdapter;

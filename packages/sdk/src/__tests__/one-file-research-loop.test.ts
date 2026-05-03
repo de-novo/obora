@@ -5,7 +5,7 @@ import { Workflow } from "../workflow.js";
 
 describe("one-file research-loop workflow", () => {
   it("expands one-file research-loop YAML through Workflow.fromYaml", async () => {
-    const fixturePath = join(process.cwd(), "src/__tests__/fixtures/one-file-research-loop.yaml");
+    const fixturePath = join(process.cwd(), "packages/sdk/src/__tests__/fixtures/one-file-research-loop.yaml");
     const workflow = await Workflow.fromYaml(fixturePath);
 
     expect(workflow.name).toBe("one-file-research-loop");

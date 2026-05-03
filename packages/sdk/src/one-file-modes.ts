@@ -90,7 +90,7 @@ function asObject(value: unknown): Record<string, unknown> {
 
 function requireString(value: unknown, path: string): string {
   if (typeof value !== "string" || value.trim().length === 0) {
-    throw new OboraError(`One-file workflow requires a non-empty string at ${path}`, OboraErrorCode.SDK_INVALID_WORKFLOW);
+    throw OboraError.invalidWorkflow(`One-file workflow requires a non-empty string at ${path}`);
   }
   return value;
 }
@@ -129,9 +129,8 @@ function assertAllowedKeys(obj: Record<string, unknown>, allowed: string[], scop
   for (const key of Object.keys(obj)) {
     if (!allowed.includes(key)) {
       const suggestion = suggestKey(key, allowed);
-      throw new OboraError(
+      throw OboraError.invalidWorkflow(
         `One-file workflow does not allow key "${scope}${key}". Allowed keys: ${allowed.join(", ")}${suggestion ? `. Did you mean "${scope}${suggestion}"?` : ""}`,
-        OboraErrorCode.SDK_INVALID_WORKFLOW,
       );
     }
   }
@@ -139,19 +138,19 @@ function assertAllowedKeys(obj: Record<string, unknown>, allowed: string[], scop
 
 function requireOptionalString(value: unknown, path: string): void {
   if (value !== undefined && typeof value !== "string") {
-    throw new OboraError(`One-file workflow expects a string at ${path}`, OboraErrorCode.SDK_INVALID_WORKFLOW);
+    throw OboraError.invalidWorkflow(`One-file workflow expects a string at ${path}`);
   }
 }
 
 function requireOptionalBoolean(value: unknown, path: string): void {
   if (value !== undefined && typeof value !== "boolean") {
-    throw new OboraError(`One-file workflow expects a boolean at ${path}`, OboraErrorCode.SDK_INVALID_WORKFLOW);
+    throw OboraError.invalidWorkflow(`One-file workflow expects a boolean at ${path}`);
   }
 }
 
 function requireOptionalNumber(value: unknown, path: string): void {
   if (value !== undefined && typeof value !== "number") {
-    throw new OboraError(`One-file workflow expects a number at ${path}`, OboraErrorCode.SDK_INVALID_WORKFLOW);
+    throw OboraError.invalidWorkflow(`One-file workflow expects a number at ${path}`);
   }
 }
 
@@ -190,10 +189,10 @@ const validationRepairExpander: OneFileModeExpander<"validation-repair"> = {
     const buildOverride = overrides.build_or_repair;
     const validateOverride = overrides.validate;
     if (buildOverride !== undefined && typeof buildOverride !== "object") {
-      throw new OboraError("One-file validation-repair override build_or_repair must be an object", OboraErrorCode.SDK_INVALID_WORKFLOW);
+      throw OboraError.invalidWorkflow("One-file validation-repair override build_or_repair must be an object");
     }
     if (validateOverride !== undefined && typeof validateOverride !== "object") {
-      throw new OboraError("One-file validation-repair override validate must be an object", OboraErrorCode.SDK_INVALID_WORKFLOW);
+      throw OboraError.invalidWorkflow("One-file validation-repair override validate must be an object");
     }
     const buildOverrideObj = asObject(buildOverride);
     const validateOverrideObj = asObject(validateOverride);

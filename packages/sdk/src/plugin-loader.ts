@@ -89,20 +89,14 @@ export class PluginLoader {
   async load(descriptor: PluginDescriptor): Promise<LoadedPlugin> {
     const modulePath = resolve(descriptor.packagePath, descriptor.metadata.exports);
     if (!modulePath.startsWith(descriptor.packagePath + "/")) {
-      throw new OboraError(
-        `Plugin "${descriptor.metadata.name}": exports path escapes package root`,
-        OboraErrorCode.SDK_PLUGIN_LOAD_FAILED,
-      );
+      throw OboraError.pluginLoadFailed(descriptor.metadata.name);
     }
 
     try {
       const module = await import(modulePath);
       return { descriptor, module };
     } catch (error) {
-      throw new OboraError(
-        `Failed to load plugin "${descriptor.metadata.name}" from ${modulePath}: ${error instanceof Error ? error.message : String(error)}`,
-        OboraErrorCode.SDK_PLUGIN_LOAD_FAILED,
-      );
+      throw OboraError.pluginLoadFailed(descriptor.metadata.name);
     }
   }
 

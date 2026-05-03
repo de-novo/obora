@@ -7,8 +7,6 @@ describe("contract-first example smoke", () => {
   it("loads the canonical contract-first example and preserves its public authoring surface", async () => {
     const workflowPath = join(
       process.cwd(),
-      "..",
-      "..",
       "examples",
       "07-contract-first-evaluation",
       "workflow.yaml",

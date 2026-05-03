@@ -16,7 +16,7 @@ describe("judge mode e2e", () => {
       "utf8",
     );
 
-    const workflow = await Workflow.fromYaml(join(process.cwd(), "src/__tests__/fixtures/judge-e2e.yaml"));
+    const workflow = await Workflow.fromYaml(join(process.cwd(), "packages/sdk/src/__tests__/fixtures/judge-e2e.yaml"));
 
     const runtime = new OboraRuntime({
       llm: {
@@ -70,7 +70,7 @@ describe("judge mode e2e", () => {
       "utf8",
     );
 
-    const workflow = await Workflow.fromYaml(join(process.cwd(), "src/__tests__/fixtures/judge-e2e.yaml"));
+    const workflow = await Workflow.fromYaml(join(process.cwd(), "packages/sdk/src/__tests__/fixtures/judge-e2e.yaml"));
 
     const runtime = new OboraRuntime({
       llm: {

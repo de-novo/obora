@@ -1,4 +1,4 @@
-import type { ChatMessage, ChatCompletionResult, ToolCall, ToolDefinition } from "@obora/adapters";
+import type { ChatMessage, ToolCall, ToolDefinition } from "@obora/adapters";
 import type { AgentFactory } from "./runtime.js";
 import type { HookExecutionResult, WorkflowHookLifecycle } from "./hooks.js";
 import type { WorkflowStep } from "./workflow.js";
@@ -7,22 +7,15 @@ import {
   normalizeValidationResult,
   type RepairContext,
 } from "./validation-repair.js";
-import {
-  executeReviewersInParallel,
-  parseVote as parsePeerReviewVote,
-  parseReviewerScore,
-  parseReviewerIssues,
-  buildPeerReviewSummary,
-  evaluatePeerReview,
-  extractPeerReviewConfig,
-  type PeerReviewStepResult,
-  type Vote,
-  type ReviewerScore,
-} from "./execution/peer-review-executor.js";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, resolve, sep } from "node:path";
+import { dirname, normalize, resolve, sep } from "node:path";
 import { findSchemaMismatchReason, loadMinimalJsonSchema } from "./schema-output.js";
+import type { StepExecutionStrategy } from "./execution/strategies/types.js";
+import { defaultStrategy } from "./execution/strategies/default-strategy.js";
+import { consensusStrategy } from "./execution/strategies/consensus-strategy.js";
+import { peerReviewStrategy } from "./execution/strategies/peer-review-strategy.js";
+import { judgeStrategy } from "./execution/strategies/judge-strategy.js";
 
 /**
  * Minimal LLM adapter interface for StepExecutor.
@@ -62,6 +55,11 @@ export interface StepResult {
     participant: string;
     vote: "APPROVE" | "REJECT" | "REQUEST_CHANGES";
     response: string;
+  }>;
+  scores?: Array<{
+    reviewer: string;
+    score: number;
+    reasoning?: string;
   }>;
 }
 
@@ -143,6 +141,8 @@ export interface StepExecutorConfig {
   temperature?: number;
   maxTokens?: number;
   verbose?: boolean;
+  /** Project root directory for path resolution. Defaults to process.cwd(). */
+  projectRoot?: string;
   resolveAgentLLM?: (
     agentName?: string
   ) =>
@@ -204,13 +204,7 @@ function normalizeAgentInfo(factory?: AgentFactory): { role?: string; descriptio
   };
 }
 
-function parseVote(text: string): "APPROVE" | "REJECT" | "REQUEST_CHANGES" {
-  const normalized = text.toUpperCase();
-  if (normalized.includes("REQUEST_CHANGES")) return "REQUEST_CHANGES";
-  if (normalized.includes("REJECT")) return "REJECT";
-  if (normalized.includes("APPROVE")) return "APPROVE";
-  return "REQUEST_CHANGES";
-}
+
 
 /**
  * Build a Map of name → ToolHandler for the builtin file tools.
@@ -262,13 +256,23 @@ function createBuiltinToolHandlers(
 
 export class StepExecutor {
   private readonly toolRegistry: Map<string, ToolHandler>;
+  private readonly strategies: Map<string, StepExecutionStrategy>;
 
   constructor(
     private readonly llmAdapter: LLMAdapterLike,
     private readonly agents: Map<string, AgentFactory>,
-    private readonly config: StepExecutorConfig = {}
+    readonly config: StepExecutorConfig = {}
   ) {
     this.toolRegistry = this.buildToolRegistry();
+    this.strategies = new Map<string, StepExecutionStrategy>([
+      [consensusStrategy.pattern, consensusStrategy],
+      [peerReviewStrategy.pattern, peerReviewStrategy],
+      [judgeStrategy.pattern, judgeStrategy],
+    ]);
+  }
+
+  private getProjectRoot(): string {
+    return realpathSync(this.config.projectRoot ?? process.cwd());
   }
 
   private buildToolRegistry(): Map<string, ToolHandler> {
@@ -295,32 +299,30 @@ export class StepExecutor {
   }
 
   async executeStep(step: WorkflowStep, context: StepContext): Promise<StepResult> {
-    if (step.pattern === "peer-review") {
-      return this.executePeerReviewStep(step, context);
+    // Pattern-matched strategies
+    if (step.pattern && this.strategies.has(step.pattern)) {
+      const strategy = this.strategies.get(step.pattern)!;
+      return strategy.execute(step, context, this);
     }
 
-    if (step.pattern === "consensus") {
-      return this.executeConsensusStep(step, context);
+    // Judge mode is config-driven, not pattern-driven
+    const judgeConfig = (step.config ?? {}) as Record<string, unknown>;
+    if (
+      judgeConfig.judge &&
+      typeof judgeConfig.judge === "object" &&
+      (judgeConfig.judge as Record<string, unknown>).enabled === true
+    ) {
+      return judgeStrategy.execute(step, context, this);
     }
 
-    const judgeConfig = this.getJudgeStepConfig(step.config);
-    if (judgeConfig?.enabled) {
-      return this.executeJudgeStep(step, context, judgeConfig);
-    }
-
-    const response = await this.requestForStep(step, context, step.agent);
-    const output = this.parseStepOutputContract(step, this.parseStructuredStepOutput(step, response.message.content ?? ""));
-    await this.persistStepOutput(step, output);
-    return {
-      output,
-      raw: response,
-    };
+    return defaultStrategy.execute(step, context, this);
   }
 
 
 
 
-  private async persistStepOutput(step: WorkflowStep, output: unknown): Promise<void> {
+  /** @internal */
+  async persistStepOutput(step: WorkflowStep, output: unknown): Promise<void> {
     const outputConfig = step.output;
     const outputPath = outputConfig && typeof outputConfig === "object" && typeof outputConfig.path === "string"
       ? outputConfig.path
@@ -338,7 +340,8 @@ export class StepExecutor {
     await writeFile(resolvedOutputPath, content, "utf-8");
   }
 
-  private parseStepOutputContract(step: WorkflowStep, parsedOutput: unknown): unknown {
+  /** @internal */
+  parseStepOutputContract(step: WorkflowStep, parsedOutput: unknown): unknown {
     const output = step.output;
     const schemaPath = output && typeof output === "object" && typeof output.schema === "string"
       ? output.schema
@@ -388,296 +391,8 @@ export class StepExecutor {
     return candidate;
   }
 
-  private getJudgeStepConfig(config: WorkflowStep["config"]):
-    | {
-        enabled: boolean;
-        provider?: string;
-        model?: string;
-        input_json?: string;
-        input_schema?: string;
-        output_path?: string;
-        output_schema?: string;
-        repair?: boolean;
-        fallback?: boolean;
-        temperature?: number;
-        maxTokens?: number;
-      }
-    | undefined {
-    if (!config || typeof config !== "object") return undefined;
-    const judge = (config as Record<string, unknown>).judge;
-    if (!judge || typeof judge !== "object") return undefined;
-    return judge as {
-      enabled: boolean;
-      provider?: string;
-      model?: string;
-      input_json?: string;
-      input_schema?: string;
-      output_path?: string;
-      output_schema?: string;
-      repair?: boolean;
-      fallback?: boolean;
-      temperature?: number;
-      maxTokens?: number;
-    };
-  }
-
-  private async executeJudgeStep(
-    step: WorkflowStep,
-    context: StepContext,
-    judgeConfig: NonNullable<ReturnType<StepExecutor["getJudgeStepConfig"]>>
-  ): Promise<StepResult> {
-    if (!judgeConfig.input_json) {
-      throw new Error("[BIND_1001] Missing input artifact path for judge step\nReason: config.judge.input_json is required\nFix: set input.json in judge mode or provide config.judge.input_json");
-    }
-    if (!judgeConfig.output_path) {
-      throw new Error("[BIND_1001] Missing output artifact path for judge step\nReason: config.judge.output_path is required\nFix: set output.path in judge mode or provide config.judge.output_path");
-    }
-
-    const inputPath = this.resolveProjectPath(judgeConfig.input_json);
-    const outputPath = this.resolveProjectPath(judgeConfig.output_path, { allowNonExistentTarget: true });
-    const inputJson = await readFile(inputPath, 'utf-8');
-    const task = this.extractTask(step);
-    const augmentedStep: WorkflowStep = {
-      ...step,
-      input: {
-        ...(step.input && typeof step.input === 'object' ? step.input : {}),
-        task: `${task}
-
-Input JSON (${judgeConfig.input_json}):
-
-${inputJson}
-
-Return JSON only.`,
-      },
-    };
-
-    const response = await this.requestForStep(augmentedStep, context, step.agent);
-    const rawContent = response.message.content ?? "";
-    const parsedCandidate = this.tryParseStructuredContent(rawContent) ?? rawContent;
-    const parsed = this.parseStepOutputContract(
-      {
-        ...augmentedStep,
-        output: {
-          path: judgeConfig.output_path,
-          ...(judgeConfig.output_schema ? { schema: judgeConfig.output_schema } : {}),
-        },
-      },
-      parsedCandidate,
-    );
-    await mkdir(dirname(outputPath), { recursive: true });
-    await writeFile(outputPath, JSON.stringify(parsed, null, 2) + "\n", "utf-8");
-    return {
-      output: parsed,
-      raw: response,
-    };
-  }
-
-  private async executeConsensusStep(
-    step: WorkflowStep,
-    context: StepContext
-  ): Promise<StepResult> {
-    const participants = Array.isArray(step.participants) ? step.participants : [];
-    if (participants.length === 0) {
-      throw new Error(`Consensus step '${step.name}' requires participants`);
-    }
-
-    const runConsensus = async (_timeoutSignal: AbortSignal): Promise<StepResult> => {
-      const votes: Array<{
-        participant: string;
-        vote: "APPROVE" | "REJECT" | "REQUEST_CHANGES";
-        response: string;
-      }> = [];
-      const consensusSignal = this.combineAbortSignals(context.signal, _timeoutSignal);
-
-      try {
-        for (const participant of participants) {
-          const response = await this.requestForStep(
-            step,
-            {
-              ...context,
-              ...(consensusSignal?.signal
-                ? { signal: consensusSignal.signal }
-                : { signal: _timeoutSignal }),
-            },
-            participant
-          );
-          const responseText = response.message.content ?? "";
-          const vote = parseVote(responseText);
-          votes.push({ participant, vote, response: responseText });
-          await this.config.onEvent?.("consensus_vote", {
-            stepName: step.name,
-            participant,
-            vote,
-            response: responseText,
-          });
-        }
-      } finally {
-        consensusSignal?.cleanup();
-      }
-
-      const approveCount = votes.filter((v) => v.vote === "APPROVE").length;
-      const quorumRule = this.getConsensusQuorumRule(step, votes.length);
-      const pass = approveCount >= quorumRule.requiredApprovals;
-      await this.config.onEvent?.("consensus_result", {
-        stepName: step.name,
-        pass,
-        approveCount,
-        requiredApprovals: quorumRule.requiredApprovals,
-        totalVotes: votes.length,
-        votes,
-      });
-
-      if (!pass) {
-        throw new Error(
-          `Consensus failed for step '${step.name}' (${approveCount}/${votes.length} approvals, requires ${quorumRule.description})`
-        );
-      }
-
-      return {
-        output: votes.map((v) => `[${v.participant}] ${v.vote}: ${v.response}`).join("\n\n"),
-        votes,
-      };
-    };
-
-    const perRequestTimeoutMs = this.getStepTimeoutMs(step);
-    const consensusTimeoutMs = this.getConsensusTimeoutMs(
-      step,
-      participants.length,
-      perRequestTimeoutMs
-    );
-
-    return this.withTimeout(
-      runConsensus,
-      consensusTimeoutMs,
-      `Consensus timed out for step '${step.name}' after ${consensusTimeoutMs}ms`
-    );
-  }
-
-  private async executePeerReviewStep(
-    step: WorkflowStep,
-    context: StepContext
-  ): Promise<PeerReviewStepResult> {
-    const participants = Array.isArray(step.participants) ? step.participants : [];
-    if (participants.length === 0) {
-      throw new Error(`Peer-review step '${step.name}' requires participants`);
-    }
-
-    const prConfig = extractPeerReviewConfig(
-      (step.config ?? {}) as Record<string, unknown>
-    );
-    const isParallel = prConfig.parallel !== false; // default true
-
-    const runPeerReview = async (
-      _timeoutSignal: AbortSignal
-    ): Promise<PeerReviewStepResult> => {
-      const consensusSignal = this.combineAbortSignals(context.signal, _timeoutSignal);
-      const signalCtx: StepContext = {
-        ...context,
-        ...(consensusSignal?.signal
-          ? { signal: consensusSignal.signal }
-          : { signal: _timeoutSignal }),
-      };
-
-      const votes: Vote[] = [];
-      const scores: ReviewerScore[] = [];
-
-      const processResponse = async (participant: string): Promise<void> => {
-        const response = await this.requestForStep(step, signalCtx, participant);
-        const responseText = response.message.content ?? "";
-        const vote = parsePeerReviewVote(responseText);
-        const score = parseReviewerScore(responseText, vote);
-        const issues = parseReviewerIssues(responseText);
-
-        votes.push({ participant, vote, response: responseText });
-        scores.push({ reviewer: participant, score, issues });
-
-        await this.config.onEvent?.("peer_review_vote", {
-          stepName: step.name,
-          participant,
-          vote,
-          score,
-          issueCount: issues.length,
-          p0Count: issues.filter((i) => i.severity === "P0").length,
-        });
-      };
-
-      try {
-        if (isParallel) {
-          const outcomes = await executeReviewersInParallel(
-            participants,
-            processResponse,
-            prConfig.maxConcurrency
-          );
-
-          // Report failures but don't block — partial results still count
-          for (const outcome of outcomes) {
-            if (outcome.status === "rejected") {
-              await this.config.onEvent?.("peer_review_vote", {
-                stepName: step.name,
-                participant: outcome.participant,
-                error: outcome.error instanceof Error
-                  ? outcome.error.message
-                  : String(outcome.error),
-                failed: true,
-              });
-            }
-          }
-        } else {
-          // Sequential fallback
-          for (const participant of participants) {
-            await processResponse(participant);
-          }
-        }
-      } finally {
-        consensusSignal?.cleanup();
-      }
-
-      const summary = buildPeerReviewSummary(votes, scores);
-      const evaluation = evaluatePeerReview(summary, prConfig);
-
-      await this.config.onEvent?.("peer_review_result", {
-        stepName: step.name,
-        passed: evaluation.passed,
-        reasons: evaluation.reasons,
-        summary,
-      });
-
-      if (!evaluation.passed) {
-        throw new Error(
-          `Peer review failed for step '${step.name}': ${evaluation.reasons.join("; ")}`
-        );
-      }
-
-      const mergedOutput = votes
-        .map((v) => `[${v.participant}] ${v.vote} (score: ${
-          scores.find((s) => s.reviewer === v.participant)?.score ?? "?"
-        }): ${v.response}`)
-        .join("\n\n");
-
-      return {
-        output: mergedOutput,
-        votes,
-        scores,
-        passed: true,
-        summary,
-      };
-    };
-
-    const perRequestTimeoutMs = this.getStepTimeoutMs(step);
-    const consensusTimeoutMs = this.getConsensusTimeoutMs(
-      step,
-      participants.length,
-      perRequestTimeoutMs
-    );
-
-    return this.withTimeout(
-      runPeerReview,
-      consensusTimeoutMs,
-      `Peer review timed out for step '${step.name}' after ${consensusTimeoutMs}ms`
-    );
-  }
-
-  private async requestForStep(step: WorkflowStep, context: StepContext, agentName?: string) {
+  /** @internal */
+  async requestForStep(step: WorkflowStep, context: StepContext, agentName?: string) {
     const task = this.extractTask(step);
     const systemPrompt = this.buildSystemPrompt(agentName ?? step.agent);
     const userPrompt = this.buildUserPrompt(step, task, context);
@@ -798,12 +513,23 @@ Return JSON only.`,
     }
   }
 
-  private resolveProjectPath(
+  /** @internal */
+  resolveProjectPath(
     relativePath: string,
     options?: { allowNonExistentTarget?: boolean }
   ): string {
-    const projectRoot = realpathSync(process.cwd());
+    const projectRoot = this.getProjectRoot();
     const resolvedPath = resolve(projectRoot, relativePath);
+
+    // Always validate that the resolved path stays within project root
+    const normalizedResolved = normalize(resolvedPath);
+    const normalizedRoot = normalize(projectRoot);
+    if (
+      normalizedResolved !== normalizedRoot &&
+      !normalizedResolved.startsWith(`${normalizedRoot}${sep}`)
+    ) {
+      throw new Error("Path validation failed: target escapes project directory");
+    }
 
     if (!options?.allowNonExistentTarget || existsSync(resolvedPath)) {
       const realTarget = realpathSync(resolvedPath);
@@ -873,7 +599,8 @@ Return JSON only.`,
     };
   }
 
-  private async withTimeout<T>(
+  /** @internal */
+  async withTimeout<T>(
     task: (signal: AbortSignal) => Promise<T>,
     timeoutMs: number,
     timeoutMessage: string
@@ -937,7 +664,8 @@ Return JSON only.`,
     return this.config.maxToolRounds ?? DEFAULT_MAX_TOOL_ROUNDS;
   }
 
-  private getStepTimeoutMs(step: WorkflowStep): number {
+  /** @internal */
+  getStepTimeoutMs(step: WorkflowStep): number {
     const config = (step.config ?? {}) as Record<string, unknown>;
     const raw = config.llmTimeoutMs ?? config.timeoutMs;
     if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) {
@@ -947,7 +675,8 @@ Return JSON only.`,
     return 30_000;
   }
 
-  private getConsensusTimeoutMs(
+  /** @internal */
+  getConsensusTimeoutMs(
     step: WorkflowStep,
     participantCount: number,
     perRequestTimeoutMs: number
@@ -989,7 +718,8 @@ Return JSON only.`,
     return perRequestTimeoutMs * participantCount * 2;
   }
 
-  private getConsensusQuorumRule(
+  /** @internal */
+  getConsensusQuorumRule(
     step: WorkflowStep,
     totalVotes: number
   ): { requiredApprovals: number; description: string } {
@@ -1023,7 +753,8 @@ Return JSON only.`,
     };
   }
 
-  private combineAbortSignals(
+  /** @internal */
+  combineAbortSignals(
     ...signals: Array<AbortSignal | undefined>
   ): { signal: AbortSignal; cleanup: () => void } | undefined {
     const activeSignals = signals.filter((value): value is AbortSignal => value !== undefined);
@@ -1164,7 +895,8 @@ Return JSON only.`,
       .join("\n");
   }
 
-  private parseStructuredStepOutput(step: WorkflowStep, rawContent: string): unknown {
+  /** @internal */
+  parseStructuredStepOutput(step: WorkflowStep, rawContent: string): unknown {
     const validationConfig = getValidationStepConfig(step.config);
     if (!validationConfig?.enabled) {
       return rawContent;
@@ -1185,7 +917,8 @@ Return JSON only.`,
     return rawContent;
   }
 
-  private tryParseStructuredContent(rawContent: string): unknown {
+  /** @internal */
+  tryParseStructuredContent(rawContent: string): unknown {
     const trimmed = rawContent.trim();
 
     const direct = this.tryParseJson(trimmed);
@@ -1265,7 +998,8 @@ Return JSON only.`,
     return undefined;
   }
 
-  private extractTask(step: WorkflowStep): string {
+  /** @internal */
+  extractTask(step: WorkflowStep): string {
     const input = step.input;
     if (input && typeof input === "object") {
       const task = (input as Record<string, unknown>).task;

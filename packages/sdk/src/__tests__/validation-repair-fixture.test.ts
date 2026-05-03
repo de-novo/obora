@@ -6,7 +6,7 @@ import type { WorkflowStep } from "../workflow.js";
 
 describe("validation-repair fixture", () => {
   it("loads validation-repair-loop fixture", async () => {
-    const fixturePath = join(process.cwd(), "src/__tests__/fixtures/validation-repair-loop.yaml");
+    const fixturePath = join(process.cwd(), "packages/sdk/src/__tests__/fixtures/validation-repair-loop.yaml");
     const fixture = await loadFixture(fixturePath);
 
     expect(typeof fixture.workflow).not.toBe("string");

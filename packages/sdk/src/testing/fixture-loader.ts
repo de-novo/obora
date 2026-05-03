@@ -180,5 +180,5 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function fixtureError(message: string): OboraError {
-  return new OboraError(message, OboraErrorCode.SDK_FIXTURE_INVALID);
+  return OboraError.fixtureInvalid(message);
 }

@@ -131,6 +131,168 @@ export class OboraError extends Error {
     super(message);
     this.name = "OboraError";
   }
+
+  // ── Factory methods ────────────────────────────────────────────────────────
+
+  static workflowNotFound(name: string): OboraError {
+    return new OboraError(
+      `Workflow is not defined: ${name}`,
+      OboraErrorCode.SDK_WORKFLOW_NOT_FOUND,
+    );
+  }
+
+  static stepNotFound(name: string): OboraError {
+    return new OboraError(
+      `Step is not defined: ${name}`,
+      OboraErrorCode.ORCH_STEP_NOT_FOUND,
+    );
+  }
+
+  static executionNotFound(id: string): OboraError {
+    return new OboraError(
+      `Execution not found: ${id}`,
+      OboraErrorCode.SDK_EXECUTION_NOT_FOUND,
+    );
+  }
+
+  static checkpointNotFound(id: string): OboraError {
+    return new OboraError(
+      `No checkpoint found for run: ${id}`,
+      "SDK_CHECKPOINT_NOT_FOUND",
+    );
+  }
+
+  static policyLoadFailed(cause?: unknown): OboraError {
+    return new OboraError(
+      "Failed to load policy",
+      OboraErrorCode.POLICY_LOAD_FAILED,
+      undefined,
+      undefined,
+      cause,
+    );
+  }
+
+  static adapterUnavailable(cause?: unknown): OboraError {
+    return new OboraError(
+      "LLM adapter is unavailable",
+      OboraErrorCode.ADAPTER_LLM_UNAVAILABLE,
+      undefined,
+      undefined,
+      cause,
+    );
+  }
+
+  static invalidWorkflow(message: string): OboraError {
+    return new OboraError(message, OboraErrorCode.SDK_INVALID_WORKFLOW);
+  }
+
+  static policyDrift(oldHash: string, newHash: string): OboraError {
+    return new OboraError(
+      `Policy drift detected: ${oldHash} → ${newHash}`,
+      "SDK_POLICY_DRIFT",
+    );
+  }
+
+  static resumeInvalidStatus(id: string, status: string): OboraError {
+    return new OboraError(
+      `Run ${id} is not resumable (status: ${status})`,
+      "SDK_RESUME_INVALID_STATUS",
+      id,
+    );
+  }
+
+  static executionCancelled(id: string, reason?: string): OboraError {
+    return new OboraError(
+      reason ?? "Execution cancelled",
+      OboraErrorCode.SDK_EXECUTION_CANCELLED,
+      id,
+    );
+  }
+
+  static replayExecutionNotFound(id: string): OboraError {
+    return new OboraError(
+      `Execution not found: ${id}`,
+      OboraErrorCode.AUDIT_REPLAY_NOT_FOUND,
+    );
+  }
+
+  static replayStepNotFound(stepName: string): OboraError {
+    return new OboraError(
+      `Checkpoint step not found: ${stepName}`,
+      OboraErrorCode.AUDIT_REPLAY_NOT_FOUND,
+    );
+  }
+
+  static invalidPolicy(message: string): OboraError {
+    return new OboraError(message, OboraErrorCode.SDK_INVALID_POLICY);
+  }
+
+  static circularDependency(): OboraError {
+    return new OboraError(
+      "Circular dependency detected in workflow",
+      OboraErrorCode.SDK_INVALID_WORKFLOW,
+    );
+  }
+
+  static persistenceDisabled(): OboraError {
+    return new OboraError("Persistence is not enabled", "SDK_PERSISTENCE_DISABLED");
+  }
+
+  static persistenceConfigError(): OboraError {
+    return new OboraError("Invalid persistence configuration", "SDK_PERSISTENCE_CONFIG_ERROR");
+  }
+
+  static invalidConfig(message: string): OboraError {
+    return new OboraError(message, OboraErrorCode.SDK_INVALID_CONFIG);
+  }
+
+  static configError(message: string): OboraError {
+    return new OboraError(message, OboraErrorCode.SDK_CONFIG_ERROR);
+  }
+
+  static pluginConflict(name: string): OboraError {
+    return new OboraError(
+      `Plugin conflict: ${name} is already registered`,
+      OboraErrorCode.SDK_PLUGIN_CONFLICT,
+    );
+  }
+
+  static pluginInvalid(message: string): OboraError {
+    return new OboraError(message, OboraErrorCode.SDK_INVALID_PLUGIN);
+  }
+
+  static pluginLoadFailed(name: string): OboraError {
+    return new OboraError(
+      `Failed to load plugin: ${name}`,
+      OboraErrorCode.SDK_PLUGIN_LOAD_FAILED,
+    );
+  }
+
+  static invalidPluginType(type: string): OboraError {
+    return new OboraError(
+      `Unknown plugin type: ${type}`,
+      OboraErrorCode.SDK_INVALID_PLUGIN,
+    );
+  }
+
+  static fixtureInvalid(message: string): OboraError {
+    return new OboraError(message, OboraErrorCode.SDK_FIXTURE_INVALID);
+  }
+
+  static executionFailed(message: string): OboraError {
+    return new OboraError(message, OboraErrorCode.EXECUTION_FAILED);
+  }
+
+  static adapterAuthFailed(): OboraError {
+    return new OboraError("Authentication failed", OboraErrorCode.ADAPTER_AUTH_FAILED);
+  }
+
+  static adapterToolNotFound(name: string): OboraError {
+    return new OboraError(
+      `Tool not found: ${name}`,
+      OboraErrorCode.ADAPTER_TOOL_NOT_FOUND,
+    );
+  }
 }
 
 // ── Runtime Data Structures ────────────────────────────────────────────────

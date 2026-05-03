@@ -25,14 +25,14 @@ export class Policy {
 
   static create(input: unknown): PolicyDefinition {
     if (!input || typeof input !== "object") {
-      throw new OboraError("Invalid policy definition", OboraErrorCode.SDK_INVALID_POLICY);
+      throw OboraError.invalidPolicy("Invalid policy definition");
     }
     const def = input as Record<string, unknown>;
     if (def.rules !== undefined && !Array.isArray(def.rules)) {
-      throw new OboraError("Policy rules must be an array", OboraErrorCode.SDK_INVALID_POLICY);
+      throw OboraError.invalidPolicy("Policy rules must be an array");
     }
     if (def.tools !== undefined && (typeof def.tools !== "object" || Array.isArray(def.tools))) {
-      throw new OboraError("Policy tools must be an object", OboraErrorCode.SDK_INVALID_POLICY);
+      throw OboraError.invalidPolicy("Policy tools must be an object");
     }
     return input as PolicyDefinition;
   }

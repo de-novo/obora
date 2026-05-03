@@ -276,9 +276,8 @@ async function readConfigFile(path: string): Promise<OboraConfig | undefined> {
   try {
     const parsed = parseYaml(content);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      throw new OboraError(
+      throw OboraError.invalidConfig(
         `Config must be a YAML object (mapping), got: ${getYamlValueType(parsed)}`,
-        OboraErrorCode.SDK_INVALID_CONFIG
       );
     }
 
@@ -288,12 +287,8 @@ async function readConfigFile(path: string): Promise<OboraConfig | undefined> {
       throw error;
     }
 
-    throw new OboraError(
+    throw OboraError.invalidConfig(
       `Failed to parse config YAML: ${path}`,
-      OboraErrorCode.SDK_INVALID_CONFIG,
-      undefined,
-      undefined,
-      error
     );
   }
 }
@@ -321,9 +316,8 @@ export async function loadConfig(configPath?: string): Promise<OboraConfig | und
     const explicitPath = resolve(configPath);
     const explicit = (await readConfigFile(explicitPath)) as ConfigWithMeta | undefined;
     if (!explicit) {
-      throw new OboraError(
+      throw OboraError.invalidConfig(
         `Config file not found: ${explicitPath}`,
-        OboraErrorCode.SDK_INVALID_CONFIG
       );
     }
 

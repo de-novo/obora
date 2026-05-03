@@ -5,10 +5,7 @@ export function topologicalSort(steps: WorkflowStep[]): WorkflowStep[] {
   const seenStepNames = new Set<string>();
   for (const step of steps) {
     if (seenStepNames.has(step.name)) {
-      throw new OboraError(
-        `Duplicate workflow step name: ${step.name}`,
-        OboraErrorCode.SDK_INVALID_WORKFLOW,
-      );
+      throw OboraError.invalidWorkflow(`Duplicate workflow step name: ${step.name}`);
     }
     seenStepNames.add(step.name);
   }
@@ -20,10 +17,7 @@ export function topologicalSort(steps: WorkflowStep[]): WorkflowStep[] {
   for (const step of steps) {
     for (const dep of step.depends_on ?? []) {
       if (!map.has(dep)) {
-        throw new OboraError(
-          `Unknown dependency '${dep}' for step '${step.name}'`,
-          OboraErrorCode.SDK_INVALID_WORKFLOW,
-        );
+        throw OboraError.invalidWorkflow(`Unknown dependency '${dep}' for step '${step.name}'`);
       }
       graph.set(dep, [...(graph.get(dep) ?? []), step.name]);
       inDegree.set(step.name, (inDegree.get(step.name) ?? 0) + 1);
@@ -52,7 +46,7 @@ export function topologicalSort(steps: WorkflowStep[]): WorkflowStep[] {
   }
 
   if (result.length !== steps.length) {
-    throw new OboraError("Circular dependency detected in workflow", OboraErrorCode.SDK_INVALID_WORKFLOW);
+    throw OboraError.circularDependency();
   }
 
   return result;

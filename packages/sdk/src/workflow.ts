@@ -230,17 +230,17 @@ export class Workflow {
 
   static create(input: unknown): WorkflowDef {
     if (!input || typeof input !== "object") {
-      throw new OboraError("Invalid workflow definition", OboraErrorCode.SDK_INVALID_WORKFLOW);
+      throw OboraError.invalidWorkflow("Invalid workflow definition");
     }
 
     const compiled = Workflow.expandOneFileMode(input);
     const def = compiled as Record<string, unknown>;
     if (!def.name || typeof def.name !== "string") {
-      throw new OboraError("Workflow must have a name", OboraErrorCode.SDK_INVALID_WORKFLOW);
+      throw OboraError.invalidWorkflow("Workflow must have a name");
     }
 
     if (!Array.isArray(def.steps)) {
-      throw new OboraError("Workflow must have steps array", OboraErrorCode.SDK_INVALID_WORKFLOW);
+      throw OboraError.invalidWorkflow("Workflow must have steps array");
     }
 
     Workflow.validateHooks(def.hooks, "workflow");
@@ -249,26 +249,17 @@ export class Workflow {
     const seenStepNames = new Set<string>();
     for (const step of steps) {
       if (!step || typeof step !== "object") {
-        throw new OboraError(
-          "Each workflow step must be an object",
-          OboraErrorCode.SDK_INVALID_WORKFLOW
-        );
+        throw OboraError.invalidWorkflow("Each workflow step must be an object");
       }
       const s = step as Record<string, unknown>;
       if (!s.name || typeof s.name !== "string") {
-        throw new OboraError(
-          "Each workflow step must have a string name",
-          OboraErrorCode.SDK_INVALID_WORKFLOW
-        );
+        throw OboraError.invalidWorkflow("Each workflow step must have a string name");
       }
 
       Workflow.validateHooks(s.hooks, `step '${s.name}'`);
 
       if (seenStepNames.has(s.name)) {
-        throw new OboraError(
-          `Duplicate workflow step name: ${s.name}`,
-          OboraErrorCode.SDK_INVALID_WORKFLOW
-        );
+        throw OboraError.invalidWorkflow(`Duplicate workflow step name: ${s.name}`);
       }
       seenStepNames.add(s.name);
     }
@@ -279,7 +270,7 @@ export class Workflow {
       if (onFail?.goto !== undefined) {
         const routeError = validateRoutes(onFail.goto, seenStepNames, s.name as string);
         if (routeError) {
-          throw new OboraError(routeError, OboraErrorCode.SDK_INVALID_WORKFLOW);
+          throw OboraError.invalidWorkflow(routeError);
         }
       }
     }
@@ -297,7 +288,7 @@ export class Workflow {
     }
 
     if (!input || typeof input !== "object" || Array.isArray(input)) {
-      throw new OboraError(`${owner} hooks must be an object`, OboraErrorCode.SDK_INVALID_WORKFLOW);
+      throw OboraError.invalidWorkflow(`${owner} hooks must be an object`);
     }
 
     const hooks = input as Record<string, unknown>;
@@ -312,10 +303,7 @@ export class Workflow {
         Array.isArray(hook) ||
         typeof (hook as Record<string, unknown>).shell !== "string"
       ) {
-        throw new OboraError(
-          `${owner} hook '${key}' must define a shell string`,
-          OboraErrorCode.SDK_INVALID_WORKFLOW
-        );
+        throw OboraError.invalidWorkflow(`${owner} hook '${key}' must define a shell string`);
       }
     }
   }

@@ -26,10 +26,7 @@ export class PluginRegistry {
     const shouldOverride = options.override ?? this.allowOverride;
 
     if (existing && !shouldOverride) {
-      throw new OboraError(
-        `Plugin conflict: type "${type}" with name "${name}" is already registered`,
-        OboraErrorCode.SDK_PLUGIN_CONFLICT,
-      );
+      throw OboraError.pluginConflict(name);
     }
 
     if (existing && shouldOverride) {
