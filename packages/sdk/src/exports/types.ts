@@ -182,6 +182,8 @@ export type {
   HealthCheckConfig,
   HealthCheckFn,
 } from "../execution/health-check.js";
+export type { ExecutionControllerOptions } from "../execution/execution-controller.js";
+export type { TKGServiceDeps } from "../execution/tkg-service.js";
 export type {
   Alert,
   AlertChannel,

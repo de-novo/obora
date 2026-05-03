@@ -21,9 +21,8 @@ function makeMockRunner(): WorkflowRunner {
 function makeMockEventBus(): EventBus {
   return {
     on: vi.fn().mockReturnValue(() => {}),
-    off: vi.fn(),
     emit: vi.fn().mockResolvedValue(undefined),
-  };
+  } as unknown as EventBus;
 }
 
 function makeMockPersistenceManager(): PersistenceManager {
@@ -37,13 +36,11 @@ function makeBaseConfig(): OboraRuntimeConfig {
   return {
     llm: { provider: "mock", apiKey: "test-key", model: "mock-model" },
     verbose: false,
-    allowIncomplete: true,
-    timeout: 60000,
   };
 }
 
 function makeWorkflow(name: string): WorkflowDef {
-  return { name, steps: [], hooks: [] };
+  return { name, steps: [] };
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────
@@ -97,7 +94,9 @@ describe("ExecutionController", () => {
       await handle.wait();
 
       expect(runner.executeRun).toHaveBeenCalledTimes(1);
-      const [execId, workflowName, wf, execution] = vi.mocked(runner.executeRun).mock.calls[0];
+      const call = vi.mocked(runner.executeRun).mock.calls[0];
+      if (!call) throw new Error("Expected executeRun to be called");
+      const [, workflowName, wf, execution] = call;
       expect(workflowName).toBe("test");
       expect(wf.name).toBe("test");
       // execution object status at call time was running, but by now it's completed
@@ -119,7 +118,7 @@ describe("ExecutionController", () => {
 
     it("marks as suspended when BudgetExceededError is thrown", async () => {
       vi.mocked(runner.executeRun).mockRejectedValueOnce(
-        new BudgetExceededError("budget exceeded", 10, 5)
+        new BudgetExceededError("budget exceeded")
       );
 
       const workflow = makeWorkflow("test");

@@ -1,29 +1,29 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { TKGService, type TKGServiceDeps } from "../tkg-service.js";
-import type { WorkflowDef } from "../workflow.js";
+import type { WorkflowDef } from "../../workflow.js";
 import type {
   MemoryScope,
   SharedMemorySnapshot,
   SharedMemoryStore,
-} from "../shared-memory/store.js";
+} from "../../shared-memory/store.js";
 import type {
   StagingTKGSnapshot,
   StagingTKGStore,
   TemporalNode,
-} from "../tkg/store.js";
+} from "../../tkg/store.js";
 import type {
   TKGRollbackSnapshot,
   TKGRollbackStore,
   TKGRollbackEntry,
-} from "../tkg/rollback.js";
+} from "../../tkg/rollback.js";
 import type {
   TKGReviewQueueSnapshot,
   TKGReviewQueueStore,
   TKGReviewQueueItem,
   TKGReviewQueueResolution,
-} from "../tkg/review-queue.js";
-import type { OboraRuntimeConfig } from "../runtime-types.js";
-import type { EventBus } from "../events/event-bus.js";
+} from "../../tkg/review-queue.js";
+import type { OboraRuntimeConfig } from "../../runtime-types.js";
+import type { EventBus } from "../../events/event-bus.js";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -112,7 +112,7 @@ class InMemoryTKGReviewQueueStore implements TKGReviewQueueStore {
   ): Promise<void> {
     const existing = (await this.load(scope)) ?? { items: [] };
     await this.save(scope, {
-      items: existing.items.map((item) =>
+      items: existing.items.map((item: TKGReviewQueueItem) =>
         item.id === itemId
           ? {
               ...item,
@@ -128,9 +128,8 @@ class InMemoryTKGReviewQueueStore implements TKGReviewQueueStore {
 function makeMockEventBus(): EventBus {
   return {
     on: () => () => {},
-    off: () => {},
     emit: async () => {},
-  };
+  } as unknown as EventBus;
 }
 
 function makeBaseConfig(): OboraRuntimeConfig {
@@ -141,8 +140,6 @@ function makeBaseConfig(): OboraRuntimeConfig {
       model: "mock-model",
     },
     verbose: false,
-    allowIncomplete: true,
-    timeout: 60000,
   };
 }
 
@@ -150,7 +147,6 @@ function makeWorkflow(name: string): WorkflowDef {
   return {
     name,
     steps: [],
-    hooks: [],
   };
 }
 
@@ -298,19 +294,21 @@ describe("TKGService", () => {
       const originalSnapshot: SharedMemorySnapshot = {
         knowledge: {
           facts: [
-            { id: "fact-1", content: "original", category: "test", tags: [], confidence: 1, createdAt: new Date() },
+            { id: "fact-1", content: "original", category: "test", tags: [], confidence: 1, createdAt: new Date().toISOString() },
           ],
         },
-        decisions: [],
+        decisions: { history: [] },
+        context: { projectFacts: {} },
       };
 
       await sharedMemoryStore.save(scope, {
         knowledge: {
           facts: [
-            { id: "fact-2", content: "promoted", category: "tkg-promotion", tags: [], confidence: 1, createdAt: new Date() },
+            { id: "fact-2", content: "promoted", category: "tkg-promotion", tags: [], confidence: 1, createdAt: new Date().toISOString() },
           ],
         },
-        decisions: [],
+        decisions: { history: [] },
+        context: { projectFacts: {} },
       });
 
       await rollbackStore.append(scope, {

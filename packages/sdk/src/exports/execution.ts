@@ -23,3 +23,5 @@ export {
   resolveWorkflowHook,
   WORKFLOW_HOOK_LIFECYCLES,
 } from "../hooks.js";
+export { ExecutionController } from "../execution/execution-controller.js";
+export { TKGService } from "../execution/tkg-service.js";
