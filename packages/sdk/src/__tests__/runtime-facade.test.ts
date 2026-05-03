@@ -46,6 +46,7 @@ function createInMemorySharedMemoryStore(): SharedMemoryStore {
   const data = new Map<string, SharedMemorySnapshot>();
 
   return {
+    __testMarker: true,
     async load(scope: MemoryScope) {
       return data.get(`${scope.level}:${scope.key}`) ?? null;
     },
@@ -53,10 +54,17 @@ function createInMemorySharedMemoryStore(): SharedMemoryStore {
       data.set(`${scope.level}:${scope.key}`, snapshot);
     },
     async merge(scope: MemoryScope, snapshot: SharedMemorySnapshot) {
-      const existing = await this.load(scope);
-      await this.save(scope, mergeSharedMemorySnapshots(existing, snapshot));
+      const existing = data.get(`${scope.level}:${scope.key}`);
+      const merged: SharedMemorySnapshot = {
+        ...snapshot,
+        knowledge: {
+          ...snapshot.knowledge,
+          facts: [...(existing?.knowledge.facts ?? []), ...(snapshot.knowledge.facts ?? [])],
+        },
+      };
+      data.set(`${scope.level}:${scope.key}`, merged);
     },
-  };
+  } as SharedMemoryStore & { __testMarker: boolean };
 }
 
 function scopeKey(scope: MemoryScope): string {
