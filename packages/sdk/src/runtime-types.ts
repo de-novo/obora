@@ -3,6 +3,15 @@
  * Extracted to break circular import chains.
  */
 
+import type { StorageAdapter, ArtifactStore } from "@obora/runtime";
+import type { LLMConfig } from "./llm-config.js";
+import type { OboraConfig } from "./config-loader.js";
+import type { ToolHandler } from "./step-executor.js";
+import type { MemoryScopeLevel, SharedMemoryStore } from "./shared-memory/store.js";
+import type { ProjectableTKGEventType, StagingTKGStore } from "./tkg/store.js";
+import type { TKGRollbackStore } from "./tkg/rollback.js";
+import type { TKGReviewQueueStore } from "./tkg/review-queue.js";
+
 // ── Audit Event Types ──────────────────────────────────────────────────────
 
 export type AuditEventType =
@@ -346,7 +355,7 @@ export type Unsubscribe = () => void;
 // ── Registration Types ─────────────────────────────────────────────────────
 
 export type AgentFactory = (...args: unknown[]) => unknown;
-export type ToolHandler = (params: unknown, context?: unknown) => unknown | Promise<unknown>;
+export type PluginToolHandler = (params: unknown, context?: unknown) => unknown | Promise<unknown>;
 
 export interface PatternPlugin {
   name: string;
@@ -376,14 +385,14 @@ export interface PersistenceConfig {
   enabled: boolean;
   adapter: "sqlite" | "custom";
   sqlite?: { path: string };
-  custom?: { instance: import("@obora/runtime").StorageAdapter };
+  custom?: { instance: StorageAdapter };
 }
 
 export interface ArtifactsConfig {
   enabled?: boolean;
   store?: "local" | "custom";
   local?: { basePath?: string };
-  custom?: { instance: import("@obora/runtime").ArtifactStore };
+  custom?: { instance: ArtifactStore };
 }
 
 export interface SharedMemoryConfig {
@@ -392,15 +401,15 @@ export interface SharedMemoryConfig {
   file?: {
     basePath?: string;
     projectKey?: string;
-    scopes?: import("./shared-memory/store.js").MemoryScopeLevel[];
+    scopes?: MemoryScopeLevel[];
   };
   custom?: {
-    instance: import("./shared-memory/store.js").SharedMemoryStore;
+    instance: SharedMemoryStore;
   };
 }
 
 export type TKGPromotionTrigger =
-  | import("./tkg/store.js").ProjectableTKGEventType
+  | ProjectableTKGEventType
   | "execution_end";
 
 export type TKGPromotionEvaluationMode =
@@ -419,18 +428,18 @@ export interface TKGProjectionConfig {
   file?: {
     basePath?: string;
     projectKey?: string;
-    scopes?: import("./shared-memory/store.js").MemoryScopeLevel[];
+    scopes?: MemoryScopeLevel[];
   };
   custom?: {
-    instance: import("./tkg/store.js").StagingTKGStore;
+    instance: StagingTKGStore;
   };
   promotion?: {
     enabled?: boolean;
     minConfidence?: number;
     confidenceSpreadThreshold?: number;
     confidenceConflictMode?: TKGConfidenceConflictMode;
-    allowedEventTypes?: import("./tkg/store.js").ProjectableTKGEventType[];
-    applyScopes?: import("./shared-memory/store.js").MemoryScopeLevel[];
+    allowedEventTypes?: ProjectableTKGEventType[];
+    applyScopes?: MemoryScopeLevel[];
     triggers?: TKGPromotionTrigger[];
     evaluationMode?: TKGPromotionEvaluationMode;
   };
@@ -438,21 +447,21 @@ export interface TKGProjectionConfig {
     enabled?: boolean;
     adapter?: "file" | "custom";
     file?: { basePath?: string };
-    custom?: { instance: import("./tkg/rollback.js").TKGRollbackStore };
+    custom?: { instance: TKGRollbackStore };
   };
   reviewQueue?: {
     enabled?: boolean;
     adapter?: "file" | "custom";
     file?: { basePath?: string };
-    custom?: { instance: import("./tkg/review-queue.js").TKGReviewQueueStore };
+    custom?: { instance: TKGReviewQueueStore };
   };
 }
 
 export interface OboraRuntimeConfig {
   policyPath?: string;
   audit?: OboraAuditConfig;
-  llm?: import("./llm-config.js").LLMConfig;
-  config?: import("./config-loader.js").OboraConfig;
+  llm?: LLMConfig;
+  config?: OboraConfig;
   configPath?: string;
   agentsPath?: string;
   verbose?: boolean;
@@ -462,7 +471,7 @@ export interface OboraRuntimeConfig {
     error?: (...args: unknown[]) => void;
     debug?: (...args: unknown[]) => void;
   };
-  stepTools?: import("./step-executor.js").ToolHandler[];
+  stepTools?: ToolHandler[];
   persistence?: PersistenceConfig;
   artifacts?: ArtifactsConfig;
   sharedMemory?: SharedMemoryConfig;

@@ -1,3 +1,4 @@
+import type { ToolCall } from "@obora/adapters";
 import type { WorkflowStep } from "../../workflow.js";
 import type { StepContext, StepResult, StepExecutorConfig } from "../../step-executor.js";
 
@@ -16,7 +17,7 @@ export interface StepExecutionServices {
     message: {
       role: "assistant";
       content: string | null;
-      toolCalls?: import("@obora/adapters").ToolCall[];
+      toolCalls?: ToolCall[];
     };
     usage?: {
       promptTokens?: number;

@@ -7,6 +7,9 @@ import type { RepairLoopConfig, ValidationStepConfig } from "./validation-repair
 import { expandOneFileWorkflow, getOneFileStopSemantics } from "./one-file-modes.js";
 import type { OneFileStopSemantics } from "./one-file-modes.js";
 import { validateRoutes } from "./conditional-routing.js";
+import type { MemoryScopeLevel } from "./shared-memory/store.js";
+import type { TKGConfidenceConflictMode, TKGPromotionTrigger, TKGPromotionEvaluationMode } from "./runtime-types.js";
+import type { ProjectableTKGEventType } from "./tkg/store.js";
 
 export interface HookDefinition {
   shell: string;
@@ -103,22 +106,22 @@ export interface WorkflowReflectorConfig {
 export interface WorkflowSharedMemoryConfig {
   enabled?: boolean;
   projectKey?: string;
-  scopes?: import("./shared-memory/store.js").MemoryScopeLevel[];
+  scopes?: MemoryScopeLevel[];
 }
 
 export interface WorkflowTKGProjectionConfig {
   enabled?: boolean;
   projectKey?: string;
-  scopes?: import("./shared-memory/store.js").MemoryScopeLevel[];
+  scopes?: MemoryScopeLevel[];
   promotion?: {
     enabled?: boolean;
     minConfidence?: number;
     confidenceSpreadThreshold?: number;
-    confidenceConflictMode?: import("./runtime-types.js").TKGConfidenceConflictMode;
-    allowedEventTypes?: import("./tkg/store.js").ProjectableTKGEventType[];
-    applyScopes?: import("./shared-memory/store.js").MemoryScopeLevel[];
-    triggers?: import("./runtime-types.js").TKGPromotionTrigger[];
-    evaluationMode?: import("./runtime-types.js").TKGPromotionEvaluationMode;
+    confidenceConflictMode?: TKGConfidenceConflictMode;
+    allowedEventTypes?: ProjectableTKGEventType[];
+    applyScopes?: MemoryScopeLevel[];
+    triggers?: TKGPromotionTrigger[];
+    evaluationMode?: TKGPromotionEvaluationMode;
   };
   rollback?: {
     enabled?: boolean;

@@ -5,6 +5,12 @@ import { dirname, join, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 
 import type { LLMConfig } from "./llm-config.js";
+import type { ArtifactStore } from "@obora/runtime";
+import type { MemoryScopeLevel, SharedMemoryStore } from "./shared-memory/store.js";
+import type { ProjectableTKGEventType, StagingTKGStore } from "./tkg/store.js";
+import type { TKGRollbackStore } from "./tkg/rollback.js";
+import type { TKGReviewQueueStore } from "./tkg/review-queue.js";
+import type { TKGConfidenceConflictMode, TKGPromotionTrigger, TKGPromotionEvaluationMode } from "./runtime-types.js";
 import { createAuthResolver } from "./auth-resolver.js";
 import { OboraError, OboraErrorCode } from "./runtime.js";
 
@@ -51,7 +57,7 @@ export interface OboraConfig {
     enabled?: boolean;
     store?: "local" | "custom";
     local?: { basePath?: string };
-    custom?: { instance?: import("@obora/runtime").ArtifactStore };
+    custom?: { instance?: ArtifactStore };
   };
   dlq?: {
     enabled?: boolean;
@@ -63,9 +69,9 @@ export interface OboraConfig {
     file?: {
       basePath?: string;
       projectKey?: string;
-      scopes?: import("./shared-memory/store.js").MemoryScopeLevel[];
+      scopes?: MemoryScopeLevel[];
     };
-    custom?: { instance?: import("./shared-memory/store.js").SharedMemoryStore };
+    custom?: { instance?: SharedMemoryStore };
   };
   tkgProjection?: {
     enabled?: boolean;
@@ -73,30 +79,30 @@ export interface OboraConfig {
     file?: {
       basePath?: string;
       projectKey?: string;
-      scopes?: import("./shared-memory/store.js").MemoryScopeLevel[];
+      scopes?: MemoryScopeLevel[];
     };
-    custom?: { instance?: import("./tkg/store.js").StagingTKGStore };
+    custom?: { instance?: StagingTKGStore };
     promotion?: {
       enabled?: boolean;
       minConfidence?: number;
       confidenceSpreadThreshold?: number;
-      confidenceConflictMode?: import("./runtime-types.js").TKGConfidenceConflictMode;
-      allowedEventTypes?: import("./tkg/store.js").ProjectableTKGEventType[];
-      applyScopes?: import("./shared-memory/store.js").MemoryScopeLevel[];
-      triggers?: import("./runtime-types.js").TKGPromotionTrigger[];
-      evaluationMode?: import("./runtime-types.js").TKGPromotionEvaluationMode;
+      confidenceConflictMode?: TKGConfidenceConflictMode;
+      allowedEventTypes?: ProjectableTKGEventType[];
+      applyScopes?: MemoryScopeLevel[];
+      triggers?: TKGPromotionTrigger[];
+      evaluationMode?: TKGPromotionEvaluationMode;
     };
     rollback?: {
       enabled?: boolean;
       adapter?: "file" | "custom";
       file?: { basePath?: string };
-      custom?: { instance?: import("./tkg/rollback.js").TKGRollbackStore };
+      custom?: { instance?: TKGRollbackStore };
     };
     reviewQueue?: {
       enabled?: boolean;
       adapter?: "file" | "custom";
       file?: { basePath?: string };
-      custom?: { instance?: import("./tkg/review-queue.js").TKGReviewQueueStore };
+      custom?: { instance?: TKGReviewQueueStore };
     };
   };
   resources?: {

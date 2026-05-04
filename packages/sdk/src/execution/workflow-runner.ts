@@ -27,7 +27,7 @@ import { queryKnowledge } from "../knowledge/queryKnowledge.js";
 import type { WorkflowDef, WorkflowStep, MergeStrategy } from "../workflow.js";
 import type { StorageAdapter, PolicyHashInput, RunRecord } from "@obora/runtime";
 
-import { OboraError, OboraErrorCode } from "../runtime-types.js";
+import { OboraError, OboraErrorCode, type RunOptions } from "../runtime-types.js";
 import type {
   AgentFactory,
   AuditEvent,
@@ -95,11 +95,12 @@ import {
 } from "../tkg/store.js";
 import { TKGService } from "./tkg-service.js";
 import { DEFAULTS } from "../defaults.js";
+import type { FailureEntry } from "../blackboard/blackboard-manager.js";
 
 /** Duck-type for reflector: both ExecutionReflector and ReflectorEngine implement this. */
 type ReflectorLike = {
   analyzeFailures(
-    failures: import("../blackboard/blackboard-manager.js").FailureEntry[],
+    failures: FailureEntry[],
     currentStepName?: string
   ): string | undefined;
 };
@@ -388,7 +389,7 @@ export class WorkflowRunner {
     executionId: string,
     workflowName: string,
     execution: RuntimeExecution,
-    knowledgeContext: NonNullable<import("../runtime-types.js").RunOptions["knowledgeContext"]>,
+    knowledgeContext: NonNullable<RunOptions["knowledgeContext"]>,
     persistenceEnabled: boolean,
     persistenceConfig: OboraConfig["persistence"] | undefined
   ): Promise<void> {
@@ -1815,7 +1816,7 @@ export class WorkflowRunner {
     workflowName: string,
     workflow: WorkflowDef,
     execution: RuntimeExecution,
-    options: import("../runtime-types.js").RunOptions,
+    options: RunOptions,
     isSettledFn: () => boolean
   ): Promise<void> {
     const { input, variables, signal, knowledgeContext } = options;

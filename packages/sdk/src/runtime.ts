@@ -30,6 +30,7 @@ import type { WorkflowDef } from "./workflow.js";
 
 import type { LLMConfig } from "./llm-config.js";
 import type { LLMAdapterLike } from "./step-executor.js";
+import type { RunFilter } from "@obora/runtime";
 
 // Sub-modules
 import { EventBus } from "./events/event-bus.js";
@@ -56,7 +57,6 @@ export type {
   EventHandler,
   Unsubscribe,
   AgentFactory,
-  ToolHandler,
   PatternPlugin,
   CustomPatternDefinition,
   PatternRegistration,
@@ -68,6 +68,7 @@ export type {
   TKGProjectionConfig,
   OboraRuntimeConfig,
 } from "./runtime-types.js";
+export type { PluginToolHandler } from "./runtime-types.js";
 
 import {
   OboraError,
@@ -83,11 +84,11 @@ import type {
   OboraRuntimeConfig,
   PatternPlugin,
   PatternRegistration,
+  PluginToolHandler,
   RunHandle,
   RunOptions,
   RunStatus,
   RuntimeExecution,
-  ToolHandler,
   Unsubscribe,
 } from "./runtime-types.js";
 import type { TKGApprovedReviewQueueApplySummary } from "./tkg/apply.js";
@@ -105,7 +106,7 @@ export class OboraRuntime {
   // ── Registries ───────────────────────────────────────────────────────────
   private readonly workflows = new Map<string, WorkflowDefinition>();
   private readonly agents = new Map<string, AgentFactory>();
-  private readonly tools = new Map<string, ToolHandler>();
+  private readonly tools = new Map<string, PluginToolHandler>();
   private readonly patterns = new Map<string, PatternRegistration>();
   private readonly pluginRegistry = new PluginRegistry();
   private readonly executions = new Map<string, RuntimeExecution>();
@@ -194,7 +195,7 @@ export class OboraRuntime {
     return this;
   }
 
-  registerTool(name: string, tool: ToolHandler): this {
+  registerTool(name: string, tool: PluginToolHandler): this {
     this.tools.set(name, tool);
     return this;
   }
@@ -525,7 +526,7 @@ export class OboraRuntime {
     return this.query.runs.get(runId);
   }
 
-  async listRunRecords(filter: import("@obora/runtime").RunFilter = {}) {
+  async listRunRecords(filter: RunFilter = {}) {
     return this.query.runs.list(filter);
   }
 
@@ -566,7 +567,7 @@ export class OboraRuntime {
 
   readonly runs = {
     get: (runId: string) => this.query.runs.get(runId),
-    list: (filter: import("@obora/runtime").RunFilter = {}) =>
+    list: (filter: RunFilter = {}) =>
       this.query.runs.list(filter),
     steps: (runId: string) => this.query.runs.steps(runId),
     artifacts: (runId: string, stepName?: string) =>

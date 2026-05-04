@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { CheckpointManager } from "@obora/runtime";
+import type { PolicyHashInput } from "@obora/runtime";
 
 import type { PolicyDefinition } from "../policy.js";
 import type { EventBus } from "../events/event-bus.js";
@@ -399,7 +400,7 @@ export class ExecutionController {
       throw OboraError.resumeInvalidStatus(runId, run.status);
     }
 
-    const currentPolicyConfig = (this.opts.policy ?? {}) as import("@obora/runtime").PolicyHashInput;
+    const currentPolicyConfig = (this.opts.policy ?? {}) as PolicyHashInput;
     const drift = mgr.detectDrift(checkpoint, currentPolicyConfig);
     const driftPolicy = options.driftPolicy ?? "warn";
     if (drift.drifted && driftPolicy === "reject") {

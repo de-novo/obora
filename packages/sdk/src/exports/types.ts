@@ -15,7 +15,7 @@ export type {
   EventHandler,
   Unsubscribe,
   AgentFactory,
-  ToolHandler,
+  PluginToolHandler,
   PatternRegistration,
   OboraAuditConfig,
   AuditEventType,
@@ -72,7 +72,7 @@ export type {
   StepExecutorConfig,
   StepResult,
   LLMAdapterLike,
-  ToolHandler as StepToolHandler,
+  ToolHandler,
 } from "../step-executor.js";
 export type {
   RepairContext,
