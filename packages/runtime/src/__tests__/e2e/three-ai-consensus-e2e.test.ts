@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
 import { describe, expect, it } from "vitest";
 import { InMemoryAuditStore } from "../../audit/InMemoryAuditStore.js";
@@ -340,7 +341,7 @@ class ThreeAIConsensusE2ERunner {
 }
 
 async function loadWorkflowFixture(): Promise<WorkflowFixture> {
-  const fixtureDir = join(process.cwd(), "src", "__tests__", "e2e", "fixtures");
+  const fixtureDir = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
   const workflowPath = join(fixtureDir, "three-ai-consensus-workflow.yaml");
   const workflowYaml = await readFile(workflowPath, "utf8");
   return parse(workflowYaml) as WorkflowFixture;
