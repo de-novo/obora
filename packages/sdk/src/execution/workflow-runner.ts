@@ -96,6 +96,7 @@ import { DEFAULTS } from "../defaults.js";
 import type { FailureEntry } from "../blackboard/blackboard-manager.js";
 import { RepairLoopTracker } from "./repair-loop-tracker.js";
 import { EngineBuilder } from "./engine-builder.js";
+import { StepExecutionEngine } from "./step-execution-engine.js";
 
 /** Duck-type for reflector: both ExecutionReflector and ReflectorEngine implement this. */
 type ReflectorLike = {
@@ -153,11 +154,17 @@ export class WorkflowRunner {
   private readonly tkgService: TKGService;
   private readonly tkgPromotionEngine: TKGPromotionEngine;
   private readonly engineBuilder: EngineBuilder;
+  private readonly stepExecutionEngine: StepExecutionEngine;
 
   constructor(private readonly deps: WorkflowRunnerDeps) {
     this.tkgService = new TKGService(deps);
     this.tkgPromotionEngine = new TKGPromotionEngine({ eventBus: deps.eventBus });
     this.engineBuilder = new EngineBuilder(deps);
+    this.stepExecutionEngine = new StepExecutionEngine({
+      eventBus: deps.eventBus,
+      config: deps.config,
+      repairLoopTracker: this.repairLoopTracker,
+    });
   }
 
   // ── Agent YAML loader ────────────────────────────────────────────────────
@@ -302,51 +309,7 @@ export class WorkflowRunner {
     this.repairLoopTracker.clearSummary(executionId);
   }
 
-  private extractFailurePatterns(
-    blackboard: BlackboardManager,
-    reflector: ReflectorLike
-  ): string[] {
-    const failures = blackboard.getFailureHistory();
-    if (failures.length === 0) return [];
-    const hint = reflector.analyzeFailures(failures);
-    return hint ? [hint] : [];
-  }
 
-  private summarizeBlackboardSnapshot(snapshot: BlackboardSnapshot): Record<string, unknown> {
-    return {
-      facts: snapshot.facts.length,
-      failures: snapshot.failures.length,
-      stepOutputs: Object.keys(snapshot.stepOutputs),
-      stepTimings: Object.keys(snapshot.stepTimings),
-      lastFailure: snapshot.failures.at(-1)
-        ? {
-            stepName: snapshot.failures.at(-1)!.stepName,
-            attempt: snapshot.failures.at(-1)!.attempt,
-            summary: snapshot.failures.at(-1)!.validation.summary,
-          }
-        : undefined,
-    };
-  }
-
-  private summarizeObserverMetrics(
-    metrics?: ExecutionMetrics
-  ): Record<string, unknown> | undefined {
-    if (!metrics) return undefined;
-    return {
-      totalSteps: metrics.stepMetrics.size,
-      totalBackEdges: metrics.totalBackEdges,
-      totalRepairs: metrics.totalRepairs,
-      totalValidationFailures: metrics.totalValidationFailures,
-      totalValidationPasses: metrics.totalValidationPasses,
-      steps: [...metrics.stepMetrics.values()].map((step) => ({
-        stepName: step.stepName,
-        status: step.status,
-        retryCount: step.retryCount,
-        validationFailures: step.validationFailures,
-        validationPasses: step.validationPasses,
-      })),
-    };
-  }
 
   private async importSharedMemory(
     store: SharedMemoryStore | undefined,
@@ -440,58 +403,6 @@ export class WorkflowRunner {
     this.repairLoopTracker.recordBackEdgeExhausted(executionId, reason);
   }
 
-  private buildRepairContext(
-    step: WorkflowStep,
-    repairLoopStates: Map<string, RepairLoopRuntimeState>
-  ): RepairContext | undefined {
-    const repairConfig = getRepairLoopConfig(step.config);
-    if (!repairConfig?.enabled) {
-      return undefined;
-    }
-
-    const state = repairLoopStates.get(step.name);
-    if (!state) {
-      return {
-        mode: "initial_build",
-        attempt: 1,
-        validationStep: repairConfig.validation_step,
-        maxNoProgressIterations: repairConfig.max_no_progress_iterations,
-        repeatedCriticalIssueCeiling: repairConfig.repeated_critical_issue_ceiling,
-      };
-    }
-
-    return {
-      mode: "repair",
-      attempt: state.attempt,
-      latestValidation: state.latestValidation,
-      previousValidationResults: state.history,
-      validationStep: repairConfig.validation_step,
-      repeatedSignatureCount: state.repeatedSignatureCount,
-      maxNoProgressIterations: repairConfig.max_no_progress_iterations,
-      repeatedCriticalIssueCeiling: repairConfig.repeated_critical_issue_ceiling,
-    };
-  }
-
-  private resolveValidationResult(
-    step: WorkflowStep,
-    output: unknown
-  ): ValidationResult | undefined {
-    const validationConfig = getValidationStepConfig(step.config);
-    if (!validationConfig?.enabled) {
-      return undefined;
-    }
-
-    const normalized = normalizeValidationResult(output);
-    if (normalized) {
-      return normalized;
-    }
-
-    if (validationConfig.emit_structured_result) {
-      throw new Error(`Validation step '${step.name}' must emit a structured ValidationResult`);
-    }
-
-    return undefined;
-  }
 
   private async runStepHook(
     workflow: WorkflowDef,
@@ -681,7 +592,7 @@ export class WorkflowRunner {
         await costTracker.preStepGate(step.name);
       }
 
-      const repairContext = this.buildRepairContext(step, repairLoopStates);
+      const repairContext = this.stepExecutionEngine.buildRepairContext(step, repairLoopStates);
       if (repairContext?.mode === "repair") {
         // Inject reflector hint from blackboard failure history
         if (reflector && blackboard) {
@@ -744,12 +655,12 @@ export class WorkflowRunner {
                 debugState: {
                   ...(blackboard
                     ? {
-                        blackboard: this.summarizeBlackboardSnapshot(blackboard.getSnapshot()),
+                        blackboard: this.stepExecutionEngine.summarizeBlackboardSnapshot(blackboard.getSnapshot()),
                       }
                     : {}),
                   ...(observer
                     ? {
-                        observer: this.summarizeObserverMetrics(observer.getMetrics(executionId)),
+                        observer: this.stepExecutionEngine.summarizeObserverMetrics(observer.getMetrics(executionId)),
                       }
                     : {}),
                 },
@@ -816,7 +727,7 @@ export class WorkflowRunner {
 
       if (isSettledFn?.() || !result) return;
 
-      const validationResult = this.resolveValidationResult(step, result.output);
+      const validationResult = this.stepExecutionEngine.resolveValidationResult(step, result.output);
       if (validationResult) {
         if (blackboard) {
           const repairState = repairLoopStates.get(step.name);
@@ -844,12 +755,12 @@ export class WorkflowRunner {
                   debugState: {
                     ...(blackboard
                       ? {
-                          blackboard: this.summarizeBlackboardSnapshot(blackboard.getSnapshot()),
+                          blackboard: this.stepExecutionEngine.summarizeBlackboardSnapshot(blackboard.getSnapshot()),
                         }
                       : {}),
                     ...(observer
                       ? {
-                          observer: this.summarizeObserverMetrics(observer.getMetrics(executionId)),
+                          observer: this.stepExecutionEngine.summarizeObserverMetrics(observer.getMetrics(executionId)),
                         }
                       : {}),
                   },
@@ -1526,7 +1437,7 @@ export class WorkflowRunner {
       observer.finalize(executionId, "success");
       const report = observer.generateReport(executionId, {
         workflowName,
-        failurePatterns: this.extractFailurePatterns(blackboard, reflector),
+        failurePatterns: this.stepExecutionEngine.extractFailurePatterns(blackboard, reflector),
       });
       const sharedMemorySnapshot = blackboard.exportPersistentSnapshot(executionId);
       await this.tkgPromotionEngine.persistSharedMemory(
@@ -1612,7 +1523,7 @@ export class WorkflowRunner {
         status: "completed",
         ...(report ? { report } : {}),
         debugState: {
-          blackboard: this.summarizeBlackboardSnapshot(blackboardSnapshot),
+          blackboard: this.stepExecutionEngine.summarizeBlackboardSnapshot(blackboardSnapshot),
           observerReport: report,
         },
       });
