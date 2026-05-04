@@ -25,6 +25,18 @@ export interface TKGPromotionEngineDeps {
   eventBus: EventBus;
 }
 
+/**
+ * Manages TKG (Temporal Knowledge Graph) promotion and checkpointing.
+ *
+ * @description
+ * Handles the evaluation and application of TKG promotion candidates:
+ * - Builds deterministic IDs for TKG entities
+ * - Persists shared memory snapshots to configured stores
+ * - Flushes promotion checkpoints on configured triggers
+ * - Manages rollback entries before applying promotions
+ * - Enqueues review queue items for conflicting candidates
+ * - Emits debug events when DEBUG_ENV_VAR is set
+ */
 export class TKGPromotionEngine {
   constructor(private readonly deps: TKGPromotionEngineDeps) {}
 

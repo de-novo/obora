@@ -33,11 +33,24 @@ export interface ExecutionEngine {
 export interface EngineBuilderDeps {
   config: OboraRuntimeConfig;
   eventBus: EventBus;
+  /** Factory bound to OboraRuntime.createLLMAdapter so spies still work. */
   adapterFactory: (cfg: LLMConfig) => Promise<LLMAdapterLike>;
   persistenceManager: PersistenceManager;
   agents: Map<string, AgentFactory>;
 }
 
+/**
+ * Builds the execution engine for a workflow run.
+ *
+ * @description
+ * Responsible for:
+ * - Loading and resolving configuration
+ * - Building LLM adapter resolution
+ * - Loading agent definitions from YAML
+ * - Constructing StepExecutor with per-agent LLM resolution
+ * - Setting up cost tracking when resources are configured
+ * - Emitting startup diagnostics
+ */
 export class EngineBuilder {
   constructor(private readonly deps: EngineBuilderDeps) {}
 

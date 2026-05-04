@@ -9,6 +9,14 @@ export interface PersistenceCoordinatorDeps {
   logger?: { warn?: (message: string, ...args: unknown[]) => void };
 }
 
+/**
+ * Coordinates persistence operations for workflow executions.
+ *
+ * @description
+ * Encapsulates the logic for saving run records to persistent storage,
+ * particularly on error paths where the execution has failed or been suspended.
+ * Gracefully handles persistence failures by logging warnings instead of throwing.
+ */
 export class PersistenceCoordinator {
   constructor(private readonly deps: PersistenceCoordinatorDeps) {}
 

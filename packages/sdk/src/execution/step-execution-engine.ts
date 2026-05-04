@@ -54,6 +54,18 @@ export interface StepExecutionEngineDeps {
   repairLoopTracker: RepairLoopTracker;
 }
 
+/**
+ * Core step execution logic for workflow runs.
+ *
+ * @description
+ * Handles the execution of individual workflow steps including:
+ * - Sequential and parallel step execution loops
+ * - Back-edge routing (on_fail.goto with retry limits)
+ * - Validation and repair loop management
+ * - Workflow hook execution (pre_step, post_step, pre_validation, post_cycle)
+ * - Blackboard snapshot summarization and failure pattern extraction
+ * - Cost tracking integration
+ */
 export class StepExecutionEngine {
   constructor(private readonly deps: StepExecutionEngineDeps) {}
 

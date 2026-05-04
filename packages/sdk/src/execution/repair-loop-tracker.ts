@@ -3,6 +3,22 @@ import type {
   PersistedRepairLoopSummary,
 } from "../runtime-types.js";
 
+/**
+ * Tracks repair loop state for workflow executions.
+ * 
+ * @description
+ * Maintains per-execution counters for validation failures/passes, repair attempts,
+ * back-edge triggers, and recent failure history. Used by StepExecutionEngine to
+ * detect repair loops that are stuck or exhausted.
+ * 
+ * @example
+ * ```ts
+ * const tracker = new RepairLoopTracker();
+ * tracker.recordValidationFailure("exec-1", "step-a", validationResult);
+ * tracker.recordRepairStarted("exec-1", "step-a", 2);
+ * const summary = tracker.getSummary("exec-1");
+ * ```
+ */
 export class RepairLoopTracker {
   private readonly repairLoopSummaries = new Map<string, PersistedRepairLoopSummary>();
 

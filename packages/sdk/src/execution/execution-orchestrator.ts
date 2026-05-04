@@ -49,6 +49,19 @@ export interface ExecutionOrchestratorDeps {
   repairLoopTracker: RepairLoopTracker;
 }
 
+/**
+ * Orchestrates workflow execution and resume operations.
+ *
+ * @description
+ * High-level orchestrator that coordinates the entire workflow lifecycle:
+ * - executeRun: Full workflow execution with setup, step loops, and finalization
+ * - executeResume: Re-execution of selected steps with restored state
+ * - injectKnowledgeContext: Attaches prior knowledge to execution inputs
+ * - importSharedMemory: Imports shared memory snapshots into the blackboard
+ *
+ * Delegates step execution to StepExecutionEngine and TKG operations to
+ * TKGPromotionEngine, while managing blackboard, observer, and reflector lifecycle.
+ */
 export class ExecutionOrchestrator {
   constructor(private readonly deps: ExecutionOrchestratorDeps) {}
 
