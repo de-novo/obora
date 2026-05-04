@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { parse as parseYaml } from "yaml";
 
-import { OboraError, OboraErrorCode } from "../runtime.js";
+import { OboraError, OboraErrorCode } from "../runtime-errors.js";
 import type { WorkflowDef } from "../workflow.js";
 import { MockAgent } from "./mock-agent.js";
 import { MockTool } from "./mock-tool.js";

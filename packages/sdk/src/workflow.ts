@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 
 import { parse as parseYaml } from "yaml";
 
-import { OboraError, OboraErrorCode } from "./runtime.js";
+import { OboraError, OboraErrorCode } from "./runtime-errors.js";
 import type { RepairLoopConfig, ValidationStepConfig } from "./validation-repair.js";
 import { expandOneFileWorkflow, getOneFileStopSemantics } from "./one-file-modes.js";
 import type { OneFileStopSemantics } from "./one-file-modes.js";

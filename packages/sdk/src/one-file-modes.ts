@@ -1,5 +1,5 @@
 import type { WorkflowDef } from "./workflow.js";
-import { OboraError, OboraErrorCode } from "./runtime.js";
+import { OboraError, OboraErrorCode } from "./runtime-errors.js";
 
 export type OneFileMode = "validation-repair" | "research-loop" | "proof-loop" | "judge";
 

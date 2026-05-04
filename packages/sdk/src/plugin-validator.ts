@@ -1,5 +1,5 @@
 import { PLUGIN_TYPES, type PluginMetadata } from "./plugin-types.js";
-import { OboraError, OboraErrorCode } from "./runtime.js";
+import { OboraError, OboraErrorCode } from "./runtime-errors.js";
 
 /**
  * Validates the `obora` field from a package.json.

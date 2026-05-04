@@ -1,5 +1,5 @@
 import type { LoadedPlugin, PluginType } from "./plugin-types.js";
-import { OboraError, OboraErrorCode } from "./runtime.js";
+import { OboraError, OboraErrorCode } from "./runtime-errors.js";
 
 export interface PluginRegistryOptions {
   allowOverride?: boolean;

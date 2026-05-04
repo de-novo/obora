@@ -41,12 +41,10 @@ import { RunQuery } from "./query/run-query.js";
 import { type DLQStore, FileDLQStore } from "./dlq/index.js";
 import { type ExecutionLock, FileExecutionLock } from "./execution/execution-lock.js";
 
-// Re-export all types from runtime-types so existing imports keep working
-export {
-  OboraError,
-  OboraErrorCode,
-} from "./runtime-types.js";
+// Re-export error classes from runtime-errors.ts for backward compatibility
+export { OboraError, OboraErrorCode } from "./runtime-errors.js";
 
+// Re-export all types from runtime-types so existing imports keep working
 export type {
   AuditEventType,
   AuditEvent,
@@ -73,7 +71,7 @@ export type { PluginToolHandler } from "./runtime-types.js";
 import {
   OboraError,
   OboraErrorCode,
-} from "./runtime-types.js";
+} from "./runtime-errors.js";
 
 import type {
   AuditEvent,

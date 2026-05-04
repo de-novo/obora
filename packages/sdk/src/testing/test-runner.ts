@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { OboraErrorCode } from "../runtime.js";
+import { OboraErrorCode } from "../runtime-errors.js";
 import { Workflow, type WorkflowDef, type WorkflowStep } from "../workflow.js";
 import type { MockAgent } from "./mock-agent.js";
 import type { MockTool } from "./mock-tool.js";

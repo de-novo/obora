@@ -1,5 +1,5 @@
 import { PLUGIN_TYPES, type PluginType } from "./plugin-types.js";
-import { OboraError, OboraErrorCode } from "./runtime.js";
+import { OboraError, OboraErrorCode } from "./runtime-errors.js";
 
 /**
  * Short alias → SCHEMAS.md PluginType mapping.

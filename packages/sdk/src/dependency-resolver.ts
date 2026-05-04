@@ -1,4 +1,4 @@
-import { OboraError, OboraErrorCode } from "./runtime.js";
+import { OboraError, OboraErrorCode } from "./runtime-errors.js";
 import type { WorkflowStep } from "./workflow.js";
 
 export function topologicalSort(steps: WorkflowStep[]): WorkflowStep[] {

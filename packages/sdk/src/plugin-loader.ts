@@ -3,7 +3,7 @@ import { join, resolve } from "node:path";
 
 import type { LoadedPlugin, PluginDescriptor } from "./plugin-types.js";
 import { validatePluginMetadata } from "./plugin-validator.js";
-import { OboraError, OboraErrorCode } from "./runtime.js";
+import { OboraError, OboraErrorCode } from "./runtime-errors.js";
 
 export interface PluginLoaderOptions {
   /** Paths to scan for plugins (default: node_modules in cwd) */
