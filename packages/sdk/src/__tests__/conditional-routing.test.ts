@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { resolveFailureRoute, validateRoutes, getAllRouteTargets } from "../conditional-routing.js";
 import type { ValidationResult } from "../validation-repair.js";
-import type { OnFailRoute } from "../workflow.js";
+import type { OnFailRoute } from "../conditional-routing.js";
 
 function makeValidationResult(overrides: Partial<ValidationResult> = {}): ValidationResult {
   return {

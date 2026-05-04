@@ -34,10 +34,9 @@ export interface WorkflowStepOutput {
   schema?: string;
 }
 
-export interface OnFailRoute {
-  when?: string;
-  target: string;
-}
+import type { OnFailRoute } from "./conditional-routing.js";
+
+export type { OnFailRoute } from "./conditional-routing.js";
 
 export type GotoTarget = string | OnFailRoute[];
 

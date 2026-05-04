@@ -1,5 +1,9 @@
 import type { ValidationResult } from "./validation-repair.js";
-import type { OnFailRoute } from "./workflow.js";
+
+export interface OnFailRoute {
+  when?: string;
+  target: string;
+}
 
 export interface RouteResolution {
   target: string;

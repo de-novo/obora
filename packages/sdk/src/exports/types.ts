@@ -25,7 +25,6 @@ export type {
   AddStepOptions,
   HookDefinition,
   OnFailConfig,
-  OnFailRoute,
   GotoTarget,
   MergeStrategy,
   ParallelBranch,
@@ -36,6 +35,7 @@ export type {
   WorkflowStep,
   WorkflowStepConfig,
 } from "../workflow.js";
+export type { OnFailRoute } from "../conditional-routing.js";
 export type {
   ExecutionPlan,
   ParallelStepOutcome,

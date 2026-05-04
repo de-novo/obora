@@ -1,4 +1,3 @@
-import type { WorkflowDef } from "./workflow.js";
 import { OboraError, OboraErrorCode } from "./runtime-errors.js";
 
 export type OneFileMode = "validation-repair" | "research-loop" | "proof-loop" | "judge";
@@ -80,7 +79,7 @@ export type OneFileStopSemantics = OneFileStopSemanticsByMode[OneFileMode];
 export interface OneFileModeExpander<TMode extends OneFileMode = OneFileMode> {
   mode: TMode;
   validate(input: Record<string, unknown>): void;
-  expand(input: Record<string, unknown>): WorkflowDef;
+  expand(input: Record<string, unknown>): Record<string, unknown>;
   getStopSemantics(input: Record<string, unknown>): OneFileStopSemanticsByMode[TMode];
 }
 
@@ -572,7 +571,7 @@ const EXPANDERS: { [K in OneFileMode]: OneFileModeExpander<K> } = {
   "judge": judgeModeExpander,
 };
 
-export function expandOneFileWorkflow(input: unknown): WorkflowDef | undefined {
+export function expandOneFileWorkflow(input: unknown): Record<string, unknown> | undefined {
   if (!input || typeof input !== "object") return undefined;
   const def = input as Record<string, unknown>;
   const mode = def.mode;

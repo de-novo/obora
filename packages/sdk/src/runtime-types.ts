@@ -126,6 +126,16 @@ import type { MemoryScopeLevel, SharedMemoryStore } from "./shared-memory/store.
 import type { ProjectableTKGEventType, StagingTKGStore } from "./tkg/store.js";
 import type { TKGRollbackStore } from "./tkg/rollback.js";
 import type { TKGReviewQueueStore } from "./tkg/review-queue.js";
+export type {
+  TKGConfidenceConflictMode,
+  TKGPromotionEvaluationMode,
+  TKGPromotionTrigger,
+} from "./tkg/tkg-types.js";
+import type {
+  TKGConfidenceConflictMode,
+  TKGPromotionEvaluationMode,
+  TKGPromotionTrigger,
+} from "./tkg/tkg-types.js";
 
 // ── Audit Event Types ──────────────────────────────────────────────────────
 
@@ -311,20 +321,6 @@ export interface SharedMemoryConfig {
     instance: SharedMemoryStore;
   };
 }
-
-export type TKGPromotionTrigger =
-  | ProjectableTKGEventType
-  | "execution_end";
-
-export type TKGPromotionEvaluationMode =
-  | "full_history"
-  | "current_execution"
-  | "latest_effective";
-
-export type TKGConfidenceConflictMode =
-  | "signal_only"
-  | "review"
-  | "blocking";
 
 export interface TKGProjectionConfig {
   enabled?: boolean;

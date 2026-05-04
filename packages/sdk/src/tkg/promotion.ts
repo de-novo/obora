@@ -1,7 +1,7 @@
 import type {
   TKGConfidenceConflictMode,
   TKGPromotionEvaluationMode,
-} from "../runtime-types.js";
+} from "./tkg-types.js";
 import type { StagingTKGSnapshot, TemporalNode } from "./store.js";
 
 export type TKGConflictType = "contradiction" | "version" | "confidence";
