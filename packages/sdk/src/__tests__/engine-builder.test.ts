@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import { EngineBuilder } from "../execution/engine-builder.js";
 import type { EventBus } from "../events/event-bus.js";
 import type { PersistenceManager } from "../persistence/persistence-manager.js";
@@ -41,6 +41,15 @@ vi.mock("../agents/source-loaders.js", () => ({
 }));
 
 describe("EngineBuilder", () => {
+  beforeEach(async () => {
+    const { resolveProviderConfig } = await import("../config-loader.js");
+    (resolveProviderConfig as ReturnType<typeof vi.fn>).mockReturnValue({
+      provider: "openai",
+      model: "gpt-4",
+      apiKey: "test-key",
+    });
+  });
+
   const createMockEventBus = (): EventBus =>
     ({
       emit: vi.fn().mockResolvedValue(undefined),
@@ -158,5 +167,167 @@ describe("EngineBuilder", () => {
     await builder.build("exec-5", false, undefined);
 
     expect(info).toHaveBeenCalled();
+  });
+
+  it("resolves agent LLM from agent info when factory returns object with api_key", async () => {
+    const { resolveProviderConfig } = await import("../config-loader.js");
+    const eventBus = createMockEventBus();
+    const persistenceManager = createMockPersistenceManager();
+    const adapterFactory = createMockAdapterFactory();
+    const agents = new Map<string, AgentFactory>([
+      [
+        "custom-agent",
+        () =>
+          ({
+            provider: "openai",
+            model: "gpt-4o",
+            temperature: 0.5,
+            api_key: "agent-key",
+          }) as unknown as ReturnType<AgentFactory>,
+      ],
+    ]);
+
+    const builder = new EngineBuilder({
+      config: createBaseConfig(),
+      eventBus,
+      adapterFactory,
+      persistenceManager,
+      agents,
+    });
+
+    const engine = await builder.build("exec-6", false, undefined);
+    expect(engine.stepExecutor).toBeDefined();
+
+    const resolveAgent = (engine.stepExecutor as unknown as { config?: { resolveAgentLLM?: (name: string) => Promise<unknown> } })?.config?.resolveAgentLLM;
+    expect(resolveAgent).toBeDefined();
+    if (resolveAgent) {
+      await resolveAgent("custom-agent");
+    }
+    expect(resolveProviderConfig).toHaveBeenCalled();
+  });
+
+  it("resolves agent LLM from config agent when factory returns undefined", async () => {
+    const { resolveProviderConfig } = await import("../config-loader.js");
+    (resolveProviderConfig as ReturnType<typeof vi.fn>).mockReturnValueOnce(undefined);
+    const eventBus = createMockEventBus();
+    const persistenceManager = createMockPersistenceManager();
+    const adapterFactory = createMockAdapterFactory();
+    const agents = new Map<string, AgentFactory>([
+      ["missing-agent", () => undefined as unknown as ReturnType<AgentFactory>],
+    ]);
+
+    const builder = new EngineBuilder({
+      config: createBaseConfig(),
+      eventBus,
+      adapterFactory,
+      persistenceManager,
+      agents,
+    });
+
+    const engine = await builder.build("exec-7", false, undefined);
+    const resolveAgent = (engine.stepExecutor as unknown as { config?: { resolveAgentLLM?: (name: string) => Promise<unknown> } })?.config?.resolveAgentLLM;
+    expect(resolveAgent).toBeDefined();
+    if (resolveAgent) {
+      const result = await resolveAgent("missing-agent");
+      expect(result).toBeUndefined();
+    }
+  });
+
+  it("resolves agent LLM from config agent when factory returns non-object", async () => {
+    const eventBus = createMockEventBus();
+    const persistenceManager = createMockPersistenceManager();
+    const adapterFactory = createMockAdapterFactory();
+    const agents = new Map<string, AgentFactory>([
+      ["string-agent", () => "not-an-object" as unknown as ReturnType<AgentFactory>],
+    ]);
+
+    const builder = new EngineBuilder({
+      config: createBaseConfig(),
+      eventBus,
+      adapterFactory,
+      persistenceManager,
+      agents,
+    });
+
+    const engine = await builder.build("exec-8", false, undefined);
+    const resolveAgent = (engine.stepExecutor as unknown as { config?: { resolveAgentLLM?: (name: string) => Promise<unknown> } })?.config?.resolveAgentLLM;
+    expect(resolveAgent).toBeDefined();
+    if (resolveAgent) {
+      const result = await resolveAgent("string-agent");
+      expect(result).toBeDefined();
+    }
+  });
+
+  it("warns and returns undefined when provider config missing for agent", async () => {
+    const { resolveProviderConfig } = await import("../config-loader.js");
+    (resolveProviderConfig as ReturnType<typeof vi.fn>).mockReturnValue(undefined);
+    const eventBus = createMockEventBus();
+    const persistenceManager = createMockPersistenceManager();
+    const adapterFactory = createMockAdapterFactory();
+    const agents = new Map<string, AgentFactory>([
+      [
+        "no-provider-agent",
+        () => ({ provider: "unknown" }) as unknown as ReturnType<AgentFactory>,
+      ],
+    ]);
+
+    const builder = new EngineBuilder({
+      config: createBaseConfig(),
+      eventBus,
+      adapterFactory,
+      persistenceManager,
+      agents,
+    });
+
+    const engine = await builder.build("exec-9", false, undefined);
+    const resolveAgent = (engine.stepExecutor as unknown as { config?: { resolveAgentLLM?: (name: string) => Promise<unknown> } })?.config?.resolveAgentLLM;
+    expect(resolveAgent).toBeDefined();
+    if (resolveAgent) {
+      const result = await resolveAgent("no-provider-agent");
+      expect(result).toBeUndefined();
+    }
+    expect(eventBus.emit).toHaveBeenCalledWith("warning", "exec-9", expect.any(Object));
+  });
+
+  it("uses config.agents entry when preferAgentInfo is false", async () => {
+    const eventBus = createMockEventBus();
+    const persistenceManager = createMockPersistenceManager();
+    const adapterFactory = createMockAdapterFactory();
+    const agents = new Map<string, AgentFactory>([
+      [
+        "config-agent",
+        () => undefined as unknown as ReturnType<AgentFactory>,
+      ],
+    ]);
+
+    const { loadConfig } = await import("../config-loader.js");
+    (loadConfig as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      defaults: { provider: "openai", model: "gpt-4" },
+      agents: {
+        "config-agent": {
+          provider: "openai",
+          model: "gpt-3.5-turbo",
+          temperature: 0.2,
+        },
+      },
+    });
+
+    const builder = new EngineBuilder({
+      config: createBaseConfig(),
+      eventBus,
+      adapterFactory,
+      persistenceManager,
+      agents,
+    });
+
+    const engine = await builder.build("exec-10", false, undefined);
+    const resolveAgent = (engine.stepExecutor as unknown as { config?: { resolveAgentLLM?: (name: string) => Promise<unknown> } })?.config?.resolveAgentLLM;
+    expect(resolveAgent).toBeDefined();
+    if (resolveAgent) {
+      const result = (await resolveAgent("config-agent")) as { model: string; temperature: number } | undefined;
+      expect(result).toBeDefined();
+      expect(result?.model).toBe("gpt-3.5-turbo");
+      expect(result?.temperature).toBe(0.2);
+    }
   });
 });

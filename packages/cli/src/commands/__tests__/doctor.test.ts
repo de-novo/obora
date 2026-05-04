@@ -525,15 +525,19 @@ describe("doctor command", () => {
       expect(formatter.json).toHaveBeenCalledWith(
         expect.objectContaining({
           auth: expect.objectContaining({
-            providerMismatchWarning:
-              "Configured provider 'anthropic' differs from detected env auth providers: openai",
+            configuredProvider: "anthropic",
+            detectedProviders: ["openai"],
             conflictSummary: "config anthropic · env openai · resolved none",
           }),
-          recommendations: expect.arrayContaining([
-            "Detected env auth does not match configured provider. Either export ANTHROPIC_API_KEY=*** or switch defaults.provider to one of: openai",
-            "Shell fix: unset OPENAI_API_KEY OPENAI_MODEL",
-            expect.stringContaining("Config fix: edit "),
-            expect.stringContaining("packages/cli/.obora/config.yaml -> defaults.provider: openai"),
+          actions: expect.arrayContaining([
+            expect.objectContaining({
+              kind: "env",
+              envKey: "ANTHROPIC_API_KEY",
+            }),
+            expect.objectContaining({
+              kind: "shell",
+              shellCommand: "unset OPENAI_API_KEY OPENAI_MODEL",
+            }),
           ]),
         })
       );

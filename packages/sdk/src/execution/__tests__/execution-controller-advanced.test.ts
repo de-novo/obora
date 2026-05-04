@@ -11,6 +11,21 @@ import type { ExecutionLock } from "../execution-lock.js";
 import type { RuntimeExecution, RunOptions } from "../../runtime-types.js";
 import type { WorkflowDef } from "../../workflow.js";
 
+const mockCheckpointManager = {
+  getLatestCheckpoint: vi.fn(),
+  detectDrift: vi.fn(),
+  resolveStepPolicies: vi.fn(),
+  saveCheckpoint: vi.fn().mockResolvedValue(undefined),
+};
+
+vi.mock("@obora/runtime", async () => {
+  const actual = await vi.importActual<typeof import("@obora/runtime")>("@obora/runtime");
+  return {
+    ...actual,
+    CheckpointManager: vi.fn().mockImplementation(() => mockCheckpointManager),
+  };
+});
+
 function createMockRunner(): WorkflowRunner {
   return {
     executeRun: vi.fn().mockResolvedValue(undefined),
@@ -81,6 +96,7 @@ function createController(opts: Partial<ConstructorParameters<typeof ExecutionCo
       config: {
         logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
         config: {},
+        autoRecovery: { enabled: false },
       } as any,
       runner,
       tkgService,
@@ -168,6 +184,21 @@ describe("ExecutionController - Auto-rollback & DLQ", () => {
     )).toBe(true);
   });
 
+  it("handles DLQ append failure gracefully", async () => {
+    const { controller, runner, dlqStore } = createController();
+    
+    vi.mocked(runner.executeRun).mockRejectedValue(new Error("step failed"));
+    vi.mocked(dlqStore.append).mockRejectedValue(new Error("dlq full"));
+
+    const workflow = createWorkflowDef();
+    const workflows = new Map([["test", workflow]]);
+    const handle = await controller.start("test", workflow, {}, new Map(), workflows);
+
+    // Should not throw even when DLQ fails
+    await expect(handle.wait()).rejects.toThrow("step failed");
+    expect(dlqStore.append).toHaveBeenCalled();
+  });
+
   it("skips DLQ and rollback for budget exceeded", async () => {
     const { controller, runner, tkgService, dlqStore } = createController();
     
@@ -181,6 +212,94 @@ describe("ExecutionController - Auto-rollback & DLQ", () => {
 
     expect(tkgService.rollbackTKGOnExecutionFailure).not.toHaveBeenCalled();
     expect(dlqStore.append).not.toHaveBeenCalled();
+  });
+});
+
+describe("ExecutionController - Auto-recovery", () => {
+  it("attempts auto-recovery on failure and succeeds", async () => {
+    const { controller, runner, eventBus, persistenceManager } = createController({
+      config: {
+        logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
+        config: {},
+        autoRecovery: { enabled: true, maxRetries: 2, delayMs: 10 },
+      } as any,
+    });
+    
+    vi.mocked(runner.executeRun).mockRejectedValue(new Error("step failed"));
+    vi.mocked(runner.executeResume).mockResolvedValue({
+      execution: { id: "run-1", status: "completed" },
+    } as any);
+
+    const mockAdapter = {
+      getRun: vi.fn().mockResolvedValue({ id: "run-1", status: "failed", workflowName: "test", input: {} }),
+      getSteps: vi.fn().mockResolvedValue([]),
+      saveRun: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.mocked(persistenceManager.getStorageAdapter).mockResolvedValue(mockAdapter as any);
+
+    mockCheckpointManager.getLatestCheckpoint.mockResolvedValue({
+      id: "cp-1",
+      runId: "run-1",
+      completedSteps: [],
+      policyHash: "abc",
+    });
+    mockCheckpointManager.detectDrift.mockReturnValue({ drifted: false });
+    mockCheckpointManager.resolveStepPolicies.mockReturnValue([
+      { stepName: "step1", action: "restore" },
+    ]);
+
+    const workflow = createWorkflowDef();
+    const workflows = new Map([["test", workflow]]);
+    const handle = await controller.start("test", workflow, {}, new Map(), workflows);
+
+    // Auto-recovery succeeds, so wait resolves
+    const result = await handle.wait();
+    expect(result.status).toBe("completed");
+
+    expect(eventBus.emit).toHaveBeenCalledWith("warning", expect.any(String), expect.objectContaining({
+      code: "AUTO_RECOVERY_ATTEMPT",
+    }));
+  });
+
+  it("attempts auto-recovery and fails after max retries", async () => {
+    const { controller, runner, eventBus, persistenceManager } = createController({
+      config: {
+        logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
+        config: {},
+        autoRecovery: { enabled: true, maxRetries: 1, delayMs: 10 },
+      } as any,
+    });
+    
+    vi.mocked(runner.executeRun).mockRejectedValue(new Error("step failed"));
+    vi.mocked(runner.executeResume).mockRejectedValue(new Error("resume failed"));
+
+    const mockAdapter = {
+      getRun: vi.fn().mockResolvedValue({ id: "run-1", status: "failed", workflowName: "test", input: {} }),
+      getSteps: vi.fn().mockResolvedValue([]),
+      saveRun: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.mocked(persistenceManager.getStorageAdapter).mockResolvedValue(mockAdapter as any);
+
+    mockCheckpointManager.getLatestCheckpoint.mockResolvedValue({
+      id: "cp-1",
+      runId: "run-1",
+      completedSteps: [],
+      policyHash: "abc",
+    });
+    mockCheckpointManager.detectDrift.mockReturnValue({ drifted: false });
+    mockCheckpointManager.resolveStepPolicies.mockReturnValue([
+      { stepName: "step1", action: "rerun" },
+    ]);
+
+    const workflow = createWorkflowDef();
+    const workflows = new Map([["test", workflow]]);
+    const handle = await controller.start("test", workflow, {}, new Map(), workflows);
+
+    await expect(handle.wait()).rejects.toThrow("step failed");
+
+    expect(eventBus.emit).toHaveBeenCalledWith("warning", expect.any(String), expect.objectContaining({
+      code: "AUTO_RECOVERY_FAILED",
+    }));
   });
 });
 
@@ -300,5 +419,218 @@ describe("ExecutionController - Resume", () => {
     vi.mocked(persistenceManager.getStorageAdapter).mockResolvedValue(mockAdapter as any);
 
     await expect(controller.resume("missing", {}, new Map())).rejects.toThrow(OboraError);
+  });
+
+  it("throws when checkpoint not found", async () => {
+    const { controller, persistenceManager } = createController();
+    
+    const mockAdapter = {
+      getRun: vi.fn().mockResolvedValue({ id: "run-1", status: "failed", workflowName: "test" }),
+    };
+    vi.mocked(persistenceManager.getStorageAdapter).mockResolvedValue(mockAdapter as any);
+
+    mockCheckpointManager.getLatestCheckpoint.mockResolvedValue(null);
+
+    await expect(controller.resume("run-1", {}, new Map())).rejects.toThrow(OboraError);
+  });
+
+  it("throws when run status is invalid", async () => {
+    const { controller, persistenceManager } = createController();
+    
+    const mockAdapter = {
+      getRun: vi.fn().mockResolvedValue({ id: "run-1", status: "running", workflowName: "test" }),
+      getSteps: vi.fn().mockResolvedValue([]),
+    };
+    vi.mocked(persistenceManager.getStorageAdapter).mockResolvedValue(mockAdapter as any);
+
+    mockCheckpointManager.getLatestCheckpoint.mockResolvedValue({
+      id: "cp-1",
+      runId: "run-1",
+      completedSteps: [],
+      policyHash: "abc",
+    });
+
+    await expect(controller.resume("run-1", {}, new Map())).rejects.toThrow(OboraError);
+  });
+
+  it("throws on policy drift when driftPolicy is reject", async () => {
+    const { controller, persistenceManager } = createController();
+    
+    const mockAdapter = {
+      getRun: vi.fn().mockResolvedValue({ id: "run-1", status: "failed", workflowName: "test" }),
+      getSteps: vi.fn().mockResolvedValue([]),
+    };
+    vi.mocked(persistenceManager.getStorageAdapter).mockResolvedValue(mockAdapter as any);
+
+    mockCheckpointManager.getLatestCheckpoint.mockResolvedValue({
+      id: "cp-1",
+      runId: "run-1",
+      completedSteps: [],
+      policyHash: "old",
+    });
+    mockCheckpointManager.detectDrift.mockReturnValue({
+      drifted: true,
+      oldHash: "old",
+      newHash: "new",
+    });
+
+    await expect(
+      controller.resume("run-1", { driftPolicy: "reject" }, new Map())
+    ).rejects.toThrow(OboraError);
+  });
+
+  it("throws when workflow not found and rerunSteps exist", async () => {
+    const { controller, persistenceManager } = createController();
+    
+    const mockAdapter = {
+      getRun: vi.fn().mockResolvedValue({ id: "run-1", status: "failed", workflowName: "missing" }),
+      getSteps: vi.fn().mockResolvedValue([
+        { stepName: "step1", status: "completed" },
+      ]),
+      saveRun: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.mocked(persistenceManager.getStorageAdapter).mockResolvedValue(mockAdapter as any);
+
+    mockCheckpointManager.getLatestCheckpoint.mockResolvedValue({
+      id: "cp-1",
+      runId: "run-1",
+      completedSteps: ["step1"],
+      policyHash: "abc",
+    });
+    mockCheckpointManager.detectDrift.mockReturnValue({ drifted: false });
+    mockCheckpointManager.resolveStepPolicies.mockReturnValue([
+      { stepName: "step1", action: "rerun" },
+    ]);
+
+    await expect(controller.resume("run-1", {}, new Map())).rejects.toThrow(OboraError);
+  });
+
+  it("returns completed when no rerun steps", async () => {
+    const { controller, persistenceManager } = createController();
+    
+    const mockAdapter = {
+      getRun: vi.fn().mockResolvedValue({ id: "run-1", status: "failed", workflowName: "test" }),
+      getSteps: vi.fn().mockResolvedValue([
+        { stepName: "step1", status: "completed" },
+      ]),
+      saveRun: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.mocked(persistenceManager.getStorageAdapter).mockResolvedValue(mockAdapter as any);
+
+    mockCheckpointManager.getLatestCheckpoint.mockResolvedValue({
+      id: "cp-1",
+      runId: "run-1",
+      completedSteps: ["step1"],
+      policyHash: "abc",
+    });
+    mockCheckpointManager.detectDrift.mockReturnValue({ drifted: false });
+    mockCheckpointManager.resolveStepPolicies.mockReturnValue([
+      { stepName: "step1", action: "restore" },
+    ]);
+
+    const result = await controller.resume("run-1", {}, new Map());
+
+    expect(result.execution.status).toBe("completed");
+    expect(result.rerunSteps).toHaveLength(0);
+    expect(result.restoredSteps).toContain("step1");
+    expect(mockAdapter.saveRun).toHaveBeenCalledWith(expect.objectContaining({ status: "completed" }));
+  });
+
+  it("throws when fromStep is invalid", async () => {
+    const { controller, persistenceManager } = createController();
+    
+    const mockAdapter = {
+      getRun: vi.fn().mockResolvedValue({ id: "run-1", status: "failed", workflowName: "test" }),
+      getSteps: vi.fn().mockResolvedValue([
+        { stepName: "step1", status: "completed" },
+      ]),
+    };
+    vi.mocked(persistenceManager.getStorageAdapter).mockResolvedValue(mockAdapter as any);
+
+    mockCheckpointManager.getLatestCheckpoint.mockResolvedValue({
+      id: "cp-1",
+      runId: "run-1",
+      completedSteps: ["step1"],
+      policyHash: "abc",
+    });
+    mockCheckpointManager.detectDrift.mockReturnValue({ drifted: false });
+
+    const workflow = createWorkflowDef();
+    const workflows = new Map([["test", workflow]]);
+
+    await expect(
+      controller.resume("run-1", { fromStep: "nonexistent" }, workflows)
+    ).rejects.toThrow(OboraError);
+  });
+
+  it("executes resume with rerun steps", async () => {
+    const { controller, runner, persistenceManager, executions } = createController();
+    
+    const mockAdapter = {
+      getRun: vi.fn().mockResolvedValue({ id: "run-1", status: "failed", workflowName: "test", input: {} }),
+      getSteps: vi.fn().mockResolvedValue([
+        { stepName: "step1", status: "completed" },
+        { stepName: "step2", status: "failed" },
+      ]),
+      saveRun: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.mocked(persistenceManager.getStorageAdapter).mockResolvedValue(mockAdapter as any);
+    vi.mocked(runner.executeResume).mockResolvedValue({ id: "run-1", status: "completed" } as any);
+
+    mockCheckpointManager.getLatestCheckpoint.mockResolvedValue({
+      id: "cp-1",
+      runId: "run-1",
+      completedSteps: ["step1"],
+      policyHash: "abc",
+    });
+    mockCheckpointManager.detectDrift.mockReturnValue({ drifted: false });
+    mockCheckpointManager.resolveStepPolicies.mockReturnValue([
+      { stepName: "step1", action: "restore", output: "restored" },
+      { stepName: "step2", action: "rerun" },
+    ]);
+
+    const workflow = createWorkflowDef();
+    const workflows = new Map([["test", workflow]]);
+
+    const result = await controller.resume("run-1", {}, workflows);
+
+    expect(result.execution.status).toBe("completed");
+    expect(result.restoredSteps).toContain("step1");
+    expect(result.rerunSteps).toContain("step2");
+    expect(runner.executeResume).toHaveBeenCalled();
+    expect(executions.get("run-1")).toBeDefined();
+  });
+
+  it("warns on policy drift when driftPolicy is warn", async () => {
+    const { controller, persistenceManager } = createController();
+    
+    const mockAdapter = {
+      getRun: vi.fn().mockResolvedValue({ id: "run-1", status: "failed", workflowName: "test" }),
+      getSteps: vi.fn().mockResolvedValue([
+        { stepName: "step1", status: "completed" },
+      ]),
+      saveRun: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.mocked(persistenceManager.getStorageAdapter).mockResolvedValue(mockAdapter as any);
+
+    mockCheckpointManager.getLatestCheckpoint.mockResolvedValue({
+      id: "cp-1",
+      runId: "run-1",
+      completedSteps: ["step1"],
+      policyHash: "old",
+    });
+    mockCheckpointManager.detectDrift.mockReturnValue({
+      drifted: true,
+      oldHash: "old",
+      newHash: "new",
+    });
+    mockCheckpointManager.resolveStepPolicies.mockReturnValue([
+      { stepName: "step1", action: "restore" },
+    ]);
+
+    const result = await controller.resume("run-1", { driftPolicy: "warn" }, new Map());
+
+    expect(result.driftDetected).toBe(true);
+    expect(result.execution.status).toBe("completed");
   });
 });

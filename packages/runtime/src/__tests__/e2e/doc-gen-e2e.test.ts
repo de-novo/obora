@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
 import { describe, expect, it } from "vitest";
 import { InMemoryAuditStore } from "../../audit/InMemoryAuditStore.js";
@@ -517,7 +518,7 @@ class DocGenE2ERunner {
 
 // ── Fixtures ─────────────────────────────────────────────────────────
 async function loadFixtures(): Promise<{ workflow: WorkflowFixture; policyPath: string }> {
-  const fixtureDir = join(process.cwd(), "src", "__tests__", "e2e", "fixtures");
+  const fixtureDir = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
   const workflowPath = join(fixtureDir, "doc-gen-workflow.yaml");
   const workflowYaml = await readFile(workflowPath, "utf8");
   const workflow = parse(workflowYaml) as WorkflowFixture;
