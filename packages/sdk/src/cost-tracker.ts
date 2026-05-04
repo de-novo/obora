@@ -25,6 +25,7 @@ export class CostTracker {
     private readonly storage: StorageAdapter,
     private readonly runId: string,
     private readonly config?: OboraConfig,
+    private readonly logger?: { warn?: (message: string, ...args: unknown[]) => void },
   ) {}
 
   private getPolicies(): BudgetPolicies {
@@ -94,7 +95,11 @@ export class CostTracker {
       if ((policies.onBudgetExceed ?? "block") === "block") {
         throw new BudgetExceededError(msg);
       }
-      console.warn(msg);
+      if (this.logger?.warn) {
+        this.logger.warn(msg);
+      } else {
+        console.warn(msg);
+      }
     }
   }
 
@@ -130,7 +135,12 @@ export class CostTracker {
           + (completionTokens / 1000) * pricingConfig.fallback.completion;
       } else if (pricingConfig.configured && !this.warnedUnknownModels.has(model)) {
         this.warnedUnknownModels.add(model);
-        console.warn(`[budget] Unknown model pricing for '${model}', cost recorded as 0 (unknownModel=warn)`);
+        const msg = `[budget] Unknown model pricing for '${model}', cost recorded as 0 (unknownModel=warn)`;
+        if (this.logger?.warn) {
+          this.logger.warn(msg);
+        } else {
+          console.warn(msg);
+        }
       }
     }
 
@@ -156,19 +166,31 @@ export class CostTracker {
     if (policies.maxTokensPerStep !== undefined && (stepSummary?.tokens ?? 0) > policies.maxTokensPerStep) {
       const msg = `[budget] Step token limit exceeded at '${params.stepName}': ${stepSummary?.tokens} > ${policies.maxTokensPerStep}`;
       if ((policies.onBudgetExceed ?? "block") === "block") throw new BudgetExceededError(msg);
-      console.warn(msg);
+      if (this.logger?.warn) {
+        this.logger.warn(msg);
+      } else {
+        console.warn(msg);
+      }
     }
 
     if (policies.maxCostPerStep !== undefined && (stepSummary?.costUsd ?? 0) > policies.maxCostPerStep) {
       const msg = `[budget] Step cost limit exceeded at '${params.stepName}': ${(stepSummary?.costUsd ?? 0).toFixed(4)} > ${policies.maxCostPerStep.toFixed(4)}`;
       if ((policies.onBudgetExceed ?? "block") === "block") throw new BudgetExceededError(msg);
-      console.warn(msg);
+      if (this.logger?.warn) {
+        this.logger.warn(msg);
+      } else {
+        console.warn(msg);
+      }
     }
 
     if (policies.maxCostPerRun !== undefined && summary.totalCostUsd > policies.maxCostPerRun) {
       const msg = `[budget] Run cost limit exceeded: ${summary.totalCostUsd.toFixed(4)} > ${policies.maxCostPerRun.toFixed(4)}`;
       if ((policies.onBudgetExceed ?? "block") === "block") throw new BudgetExceededError(msg);
-      console.warn(msg);
+      if (this.logger?.warn) {
+        this.logger.warn(msg);
+      } else {
+        console.warn(msg);
+      }
     }
 
     return record;

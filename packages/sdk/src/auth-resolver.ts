@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { OboraError, OboraErrorCode } from "./runtime-errors.js";
 
 export interface AuthResolver {
-  resolveAuthRef(authRef: string, options?: { verbose?: boolean }): string | undefined;
+  resolveAuthRef(authRef: string, options?: { verbose?: boolean; logger?: { warn?: (message: string, ...args: unknown[]) => void } }): string | undefined;
 }
 
 type GlobalAuthMap = Record<string, string>;
@@ -43,7 +43,7 @@ export function createAuthResolver(): AuthResolver {
   let plainTextAuthRefWarned = false;
 
   return {
-    resolveAuthRef(authRef: string, options?: { verbose?: boolean }): string | undefined {
+    resolveAuthRef(authRef: string, options?: { verbose?: boolean; logger?: { warn?: (message: string, ...args: unknown[]) => void } }): string | undefined {
       if (!authRef) {
         return undefined;
       }
@@ -72,7 +72,12 @@ export function createAuthResolver(): AuthResolver {
 
       if (options?.verbose && !plainTextAuthRefWarned) {
         plainTextAuthRefWarned = true;
-        console.warn("[obora] Plain text authRef detected in config. This is supported but not recommended.");
+        const msg = "[obora] Plain text authRef detected in config. This is supported but not recommended.";
+        if (options?.logger?.warn) {
+          options.logger.warn(msg);
+        } else {
+          console.warn(msg);
+        }
       }
 
       return authRef;

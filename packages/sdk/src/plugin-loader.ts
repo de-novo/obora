@@ -10,6 +10,8 @@ export interface PluginLoaderOptions {
   searchPaths?: string[];
   /** Working directory (default: process.cwd()) */
   cwd?: string;
+  /** Optional logger for warnings */
+  logger?: { warn?: (message: string, ...args: unknown[]) => void };
 }
 
 function isErrnoCode(error: unknown, code: string): error is NodeJS.ErrnoException {
@@ -19,10 +21,12 @@ function isErrnoCode(error: unknown, code: string): error is NodeJS.ErrnoExcepti
 export class PluginLoader {
   private readonly searchPaths: string[];
   private readonly cwd: string;
+  private readonly logger?: { warn?: (message: string, ...args: unknown[]) => void };
 
   constructor(options?: PluginLoaderOptions) {
     this.cwd = options?.cwd ?? process.cwd();
     this.searchPaths = options?.searchPaths ?? [join(this.cwd, "node_modules")];
+    this.logger = options?.logger;
   }
 
   /**
@@ -150,7 +154,11 @@ export class PluginLoader {
         return null;
       }
 
-      console.warn(`[plugin-loader] Failed to load plugin '${packageName}':`, error);
+      if (this.logger?.warn) {
+        this.logger.warn(`[plugin-loader] Failed to load plugin '${packageName}':`, error);
+      } else {
+        console.warn(`[plugin-loader] Failed to load plugin '${packageName}':`, error);
+      }
       return null;
     }
   }

@@ -245,7 +245,7 @@ export async function loadConfig(configPath?: string): Promise<OboraConfig | und
 export function resolveProviderConfig(
   config: OboraConfig,
   providerName?: string,
-  options?: { verbose?: boolean }
+  options?: { verbose?: boolean; logger?: { warn?: (message: string, ...args: unknown[]) => void } }
 ): ResolvedProviderConfig | undefined {
   const selectedProviderName = providerName ?? config.defaults?.provider;
   if (!selectedProviderName) {
@@ -267,11 +267,15 @@ export function resolveProviderConfig(
     if (options?.verbose) {
       const sources = (config as ConfigWithMeta)[CONFIG_META_KEY]?.sources ?? [];
       const sourceInfo = sources.length > 0 ? sources.join(", ") : "unknown source";
-      console.warn(
+      const msg =
         `[obora] Provider config for '${selectedProviderName}' has no authRef and no API key was resolved. ` +
-          `Tried env fallback '${fallbackEnv}'. Searched config in: ${sourceInfo}. ` +
-          `Next action: export ${fallbackEnv}=... for first-time setup, or add providers.${selectedProviderName}.authRef to your config.`
-      );
+        `Tried env fallback '${fallbackEnv}'. Searched config in: ${sourceInfo}. ` +
+        `Next action: export ${fallbackEnv}=... for first-time setup, or add providers.${selectedProviderName}.authRef to your config.`;
+      if (options?.logger?.warn) {
+        options.logger.warn(msg);
+      } else {
+        console.warn(msg);
+      }
     }
   }
 

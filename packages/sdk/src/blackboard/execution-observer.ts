@@ -72,6 +72,7 @@ export class ExecutionObserver {
   constructor(
     private readonly eventBus: EventBus,
     private readonly blackboard?: BlackboardManager,
+    private readonly logger?: { warn?: (message: string, ...args: unknown[]) => void },
   ) {}
 
   /**
@@ -154,7 +155,11 @@ export class ExecutionObserver {
           this.costTracker.runCost().then((summary: CostSummary) => {
             this.costSnapshots.set(key, summary.totalCostUsd);
           }).catch((err) => {
-            console.warn("[execution-observer] Failed to snapshot cost:", err);
+            if (this.logger?.warn) {
+              this.logger.warn("[execution-observer] Failed to snapshot cost:", err);
+            } else {
+              console.warn("[execution-observer] Failed to snapshot cost:", err);
+            }
           });
         }
         break;
@@ -195,7 +200,11 @@ export class ExecutionObserver {
               exec.totalCostUsd = summary.totalCostUsd;
               this.costSnapshots.delete(key);
             }).catch((err) => {
-              console.warn("[execution-observer] Failed to compute step cost delta:", err);
+              if (this.logger?.warn) {
+                this.logger.warn("[execution-observer] Failed to compute step cost delta:", err);
+              } else {
+                console.warn("[execution-observer] Failed to compute step cost delta:", err);
+              }
             });
           }
         }
