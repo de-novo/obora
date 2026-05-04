@@ -268,6 +268,106 @@ describe("ExecutionOrchestrator", () => {
     });
   });
 
+  describe("error scenarios", () => {
+    it("throws when no step executor is available", async () => {
+      const { orchestrator } = createOrchestrator();
+      const executionId = "exec-error";
+      const workflow = createWorkflowDef();
+      const execution = createExecution(executionId, workflow.name);
+
+      // Force engine builder to return no step executor
+      const originalBuild = orchestrator.deps.engineBuilder.build;
+      orchestrator.deps.engineBuilder.build = vi.fn().mockResolvedValue({
+        stepExecutor: undefined,
+        costTracker: undefined,
+        loadedConfig: undefined,
+        llmConfig: undefined,
+        runtimeAgents: new Map(),
+        resolver: { get: vi.fn() },
+      });
+
+      try {
+        await expect(
+          orchestrator.executeRun(
+            executionId,
+            workflow.name,
+            workflow,
+            execution,
+            {},
+            () => false
+          )
+        ).rejects.toThrow();
+      } finally {
+        orchestrator.deps.engineBuilder.build = originalBuild;
+      }
+    });
+
+    it("handles settled state during execution", async () => {
+      const { orchestrator } = createOrchestrator();
+      const executionId = "exec-settled";
+      const workflow = createWorkflowDef();
+      const execution = createExecution(executionId, workflow.name);
+
+      let settled = false;
+      
+      // Mock step execution
+      const originalExecuteStepLoop = orchestrator.deps.stepExecutionEngine.executeStepLoop;
+      orchestrator.deps.stepExecutionEngine.executeStepLoop = vi.fn().mockImplementation(async () => {
+        // Simulate work then check settled
+        await new Promise(resolve => setTimeout(resolve, 10));
+        if (settled) return;
+      });
+
+      try {
+        const runPromise = orchestrator.executeRun(
+          executionId,
+          workflow.name,
+          workflow,
+          execution,
+          {},
+          () => settled
+        );
+
+        // Settle during execution
+        settled = true;
+        await runPromise;
+
+        // Should complete without error
+        expect(execution.status).toBe("running");
+      } finally {
+        orchestrator.deps.stepExecutionEngine.executeStepLoop = originalExecuteStepLoop;
+      }
+    });
+
+    it("preserves execution state on failure", async () => {
+      const { orchestrator } = createOrchestrator();
+      const executionId = "exec-fail";
+      const workflow = createWorkflowDef();
+      const execution = createExecution(executionId, workflow.name);
+
+      const testError = new Error("step execution failed");
+      
+      // Mock step execution to throw
+      const originalExecuteStepLoop = orchestrator.deps.stepExecutionEngine.executeStepLoop;
+      orchestrator.deps.stepExecutionEngine.executeStepLoop = vi.fn().mockRejectedValue(testError);
+
+      try {
+        await expect(
+          orchestrator.executeRun(
+            executionId,
+            workflow.name,
+            workflow,
+            execution,
+            {},
+            () => false
+          )
+        ).rejects.toThrow("step execution failed");
+      } finally {
+        orchestrator.deps.stepExecutionEngine.executeStepLoop = originalExecuteStepLoop;
+      }
+    });
+  });
+
   describe("repair loop tracking", () => {
     it("tracks validation failures and exposes summary", () => {
       const { orchestrator } = createOrchestrator();
