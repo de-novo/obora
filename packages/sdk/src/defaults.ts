@@ -44,6 +44,24 @@ export const DEFAULTS = {
   /** Default SQLite knowledge bridge row limit. */
   KNOWLEDGE_SQLITE_LIMIT: 200,
 
+  // ── Budget ──────────────────────────────────────────────────────────────
+  /** Budget warning threshold (90%). */
+  BUDGET_WARNING_THRESHOLD: 0.9,
+
+  // ── Peer Review ─────────────────────────────────────────────────────────
+  /** Minimum peer review score. */
+  PEER_REVIEW_SCORE_MIN: 0,
+  /** Maximum peer review score. */
+  PEER_REVIEW_SCORE_MAX: 100,
+
+  // ── Caching ─────────────────────────────────────────────────────────────
+  /** Adapter cache hash length. */
+  ADAPTER_CACHE_HASH_LENGTH: 16,
+
+  // ── Alerting ────────────────────────────────────────────────────────────
+  /** Maximum alert history size. */
+  ALERT_MAX_HISTORY_SIZE: 100,
+
   // ── Environment ─────────────────────────────────────────────────────────
   /** Environment variable name for debug mode. */
   DEBUG_ENV_VAR: "OBORA_DEBUG",

@@ -1,3 +1,5 @@
+import { DEFAULTS } from "../defaults.js";
+
 export interface KnowledgeResult {
   id: string;
   title: string;
@@ -139,7 +141,7 @@ export async function configureKnowledgeProviderFromSqlite(
          ORDER BY timestamp DESC
          LIMIT ?`,
       )
-      .all(...(options.runId ? [options.runId] : []), options.limit ?? 200);
+      .all(...(options.runId ? [options.runId] : []), options.limit ?? DEFAULTS.KNOWLEDGE_SQLITE_LIMIT);
 
     const entries: KnowledgeResult[] = rows.map((row) => {
       let detailObj: Record<string, unknown> = {};
@@ -204,7 +206,7 @@ export async function queryKnowledge(params: QueryKnowledgeParams): Promise<Know
     return b.confidence - a.confidence;
   });
 
-  const limit = params.limit ?? 20;
+  const limit = params.limit ?? DEFAULTS.KNOWLEDGE_QUERY_LIMIT;
   const result = filtered.slice(0, Math.max(0, limit));
   setCachedKnowledge(params, result);
   return result;

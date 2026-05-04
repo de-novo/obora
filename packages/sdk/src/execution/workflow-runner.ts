@@ -1196,7 +1196,7 @@ export class WorkflowRunner {
           );
           const hint = reflector.analyzeFailures(failures, step.name);
           config?.logger?.info?.(
-            `[reflector] hint result: ${hint ? hint.slice(0, 120) + "..." : "(none)"}`
+            `[reflector] hint result: ${hint ? hint.slice(0, DEFAULTS.REFLECTOR_HINT_PREVIEW_LENGTH) + "..." : "(none)"}`
           );
           if (hint) {
             repairContext.reflectorHint = hint;

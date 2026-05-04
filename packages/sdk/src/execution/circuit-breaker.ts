@@ -16,6 +16,8 @@ export interface CircuitBreakerConfig {
   successThreshold?: number;
 }
 
+import { DEFAULTS } from "../defaults.js";
+
 export class CircuitBreaker {
   private state: CircuitState = "closed";
   private failureCount = 0;
@@ -26,8 +28,8 @@ export class CircuitBreaker {
   private readonly successThreshold: number;
 
   constructor(config: CircuitBreakerConfig = {}) {
-    this.failureThreshold = config.failureThreshold ?? 5;
-    this.resetTimeoutMs = config.resetTimeoutMs ?? 30_000;
+    this.failureThreshold = config.failureThreshold ?? DEFAULTS.CIRCUIT_BREAKER_FAILURE_THRESHOLD;
+    this.resetTimeoutMs = config.resetTimeoutMs ?? DEFAULTS.CIRCUIT_BREAKER_RESET_MS;
     this.successThreshold = config.successThreshold ?? 2;
   }
 

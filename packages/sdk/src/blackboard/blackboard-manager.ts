@@ -1,6 +1,7 @@
 import { BoardBlackboard, createAgentId, createSessionId } from "@obora/runtime";
 import type { SharedMemorySnapshot, MemoryScope } from "../shared-memory/store.js";
 import type { ValidationResult } from "../validation-repair.js";
+import { DEFAULTS } from "../defaults.js";
 
 export interface FailureEntry {
   stepName: string;
@@ -72,8 +73,8 @@ export class BlackboardManager {
 
     const content =
       typeof output === "string"
-        ? output.slice(0, 500)
-        : JSON.stringify(output).slice(0, 500);
+        ? output.slice(0, DEFAULTS.FACT_CONTENT_MAX_LENGTH)
+        : JSON.stringify(output).slice(0, DEFAULTS.FACT_CONTENT_MAX_LENGTH);
 
     const fact: BlackboardFact = {
       id: `step-output:${stepName}`,

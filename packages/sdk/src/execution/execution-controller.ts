@@ -10,6 +10,7 @@ import { type ExecutionLock } from "../execution/execution-lock.js";
 import type { PersistenceManager } from "../persistence/persistence-manager.js";
 import type { WorkflowRunner } from "../execution/workflow-runner.js";
 import { BudgetExceededError } from "../cost-tracker.js";
+import { DEFAULTS } from "../defaults.js";
 import {
   OboraError,
   OboraErrorCode,
@@ -203,7 +204,7 @@ export class ExecutionController {
           const autoRecovery = this.opts.config.autoRecovery;
           if (autoRecovery?.enabled && !budgetExceeded) {
             const maxRetries = autoRecovery.maxRetries ?? 1;
-            const delayMs = autoRecovery.delayMs ?? 5000;
+            const delayMs = autoRecovery.delayMs ?? DEFAULTS.AUTO_RECOVERY_DELAY_MS;
             const driftPolicy = autoRecovery.driftPolicy ?? "warn";
 
             for (let attempt = 0; attempt < maxRetries; attempt++) {

@@ -28,6 +28,8 @@ export interface HealthCheckConfig {
 
 export type HealthCheckFn = () => Promise<HealthCheckResult>;
 
+import { DEFAULTS } from "../defaults.js";
+
 export class HealthChecker {
   private readonly checks = new Map<string, HealthCheckFn>();
   private timer?: ReturnType<typeof setInterval>;
@@ -36,7 +38,7 @@ export class HealthChecker {
   private listeners: Array<(status: HealthStatus) => void> = [];
 
   constructor(config: HealthCheckConfig = {}) {
-    this.intervalMs = config.intervalMs ?? 60_000;
+    this.intervalMs = config.intervalMs ?? DEFAULTS.HEALTH_CHECK_INTERVAL_MS;
   }
 
   /** Register a named health check function */
@@ -123,7 +125,7 @@ export class HealthChecker {
  */
 export function createStuckExecutionCheck(
   getActiveExecutions: () => Array<{ id: string; startedAt: Date; workflowName: string }>,
-  thresholdMs: number = 7_200_000,
+  thresholdMs: number = DEFAULTS.STALE_LOCK_THRESHOLD_MS,
 ): HealthCheckFn {
   return async () => {
     const now = Date.now();

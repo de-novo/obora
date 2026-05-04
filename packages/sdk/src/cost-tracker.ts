@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type { CostRecord, CostSummary, StorageAdapter } from "@obora/runtime";
 import type { ModelPricing, OboraConfig } from "./config-loader.js";
+import { DEFAULTS } from "./defaults.js";
 
 export interface BudgetPolicies {
   maxCostPerRun?: number;
@@ -88,7 +89,7 @@ export class CostTracker {
     if (!policies.maxCostPerRun) return;
 
     const summary = await this.storage.getRunCostSummary(this.runId);
-    if (summary.totalCostUsd >= policies.maxCostPerRun * 0.9) {
+    if (summary.totalCostUsd >= policies.maxCostPerRun * DEFAULTS.BUDGET_WARNING_THRESHOLD) {
       const msg = `[budget] Gate1 pre-check: run cost reached 90% (${summary.totalCostUsd.toFixed(4)}/${policies.maxCostPerRun.toFixed(4)} USD) before step '${stepName}'`;
       if ((policies.onBudgetExceed ?? "block") === "block") {
         throw new BudgetExceededError(msg);

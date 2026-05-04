@@ -1,4 +1,5 @@
 import type { StepResult } from "../step-executor.js";
+import { DEFAULTS } from "../defaults.js";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -61,7 +62,7 @@ export function parseReviewerScore(text: string, vote: string): number {
   const match = SCORE_PATTERN.exec(text);
   if (match) {
     const score = parseFloat(match[1]!);
-    if (Number.isFinite(score)) return Math.min(100, Math.max(0, score));
+    if (Number.isFinite(score)) return Math.min(DEFAULTS.PEER_REVIEW_SCORE_MAX, Math.max(DEFAULTS.PEER_REVIEW_SCORE_MIN, score));
   }
 
   // Derive score from vote if no explicit score found

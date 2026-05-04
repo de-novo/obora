@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 import type { LLMAdapterLike } from "../step-executor.js";
 import type { LLMConfig } from "../llm-config.js";
+import { DEFAULTS } from "../defaults.js";
 
 /**
  * AdapterResolver provides a per-execution LLM adapter cache.
@@ -21,7 +22,7 @@ export class AdapterResolver {
   ) {}
 
   async get(cfg: LLMConfig): Promise<LLMAdapterLike> {
-    const apiKeyHash = createHash("sha256").update(cfg.apiKey).digest("hex").slice(0, 16);
+    const apiKeyHash = createHash("sha256").update(cfg.apiKey).digest("hex").slice(0, DEFAULTS.ADAPTER_CACHE_HASH_LENGTH);
     const cacheKey = `${cfg.provider}:${cfg.model ?? ""}:${cfg.baseUrl ?? ""}:${apiKeyHash}`;
     const cached = this.cache.get(cacheKey);
     if (cached) return cached;
