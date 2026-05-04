@@ -3,7 +3,7 @@
  * @description 지식 섹션 접근자
  */
 
-import type { Blackboard } from '../blackboard';
+import type { IBlackboard } from "../blackboard-interface";
 import type { KnowledgeSection } from '../../types';
 import type {
   Fact,
@@ -24,7 +24,7 @@ import { BlackboardError, BlackboardErrorCode } from '../errors';
  * @description knowledge 섹션에 대한 타입 안전한 접근 제공
  */
 export class KnowledgeSectionAccessor {
-  constructor(private readonly board: Blackboard) {}
+  constructor(private readonly board: IBlackboard) {}
 
   // === 헬퍼 메서드 ===
 

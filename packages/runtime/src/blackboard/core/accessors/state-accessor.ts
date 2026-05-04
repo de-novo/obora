@@ -3,7 +3,7 @@
  * @description 상태 섹션 접근자
  */
 
-import type { Blackboard } from "../blackboard";
+import type { IBlackboard } from "../blackboard-interface";
 import type { BoardPhase, StateSection } from "../../types";
 import type { AgentStatus, AgentRole } from "../../types";
 import { AgentStatusEnum } from "../../types";
@@ -17,7 +17,7 @@ import { BlackboardError, BlackboardErrorCode, PathNotFoundError } from "../erro
  * @description state 섹션에 대한 타입 안전한 접근 제공
  */
 export class StateSectionAccessor {
-  constructor(private readonly board: Blackboard) {}
+  constructor(private readonly board: IBlackboard) {}
 
   // === 단계 관리 ===
 

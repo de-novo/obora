@@ -3,7 +3,7 @@
  * @description 의사결정 섹션 접근자
  */
 
-import type { Blackboard } from "../blackboard";
+import type { IBlackboard } from "../blackboard-interface";
 import type { DecisionsSection } from "../../types";
 import type {
   Agenda,
@@ -24,7 +24,7 @@ import { BlackboardError, BlackboardErrorCode } from "../errors";
  * @description decisions 섹션에 대한 타입 안전한 접근 제공
  */
 export class DecisionsSectionAccessor {
-  constructor(private readonly board: Blackboard) {}
+  constructor(private readonly board: IBlackboard) {}
 
   /**
    * 의견 키 생성 (agendaId + agentId 조합)

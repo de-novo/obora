@@ -29,6 +29,8 @@ import { DecisionsSectionAccessor } from "./accessors/decisions-accessor";
 export { BlackboardError, BlackboardErrorCode, PathNotFoundError } from "./errors";
 import { BlackboardError, BlackboardErrorCode, PathNotFoundError } from "./errors";
 
+import type { IBlackboard } from "./blackboard-interface";
+
 // Snapshot imports
 import { SnapshotManager } from "../snapshot";
 import type {
@@ -121,37 +123,7 @@ export interface BlackboardOptions {
   onEvent?: (event: { type: string; timestamp: Date }) => void;
 }
 
-/**
- * 쿼리 옵션
- */
-export interface QueryOptions {
-  /** 깊은 복사 반환 여부 (기본: true) */
-  deep?: boolean;
-  /** 필터 조건 */
-  filter?: Record<string, unknown>;
-  /** 정렬 기준 */
-  sort?: { field: string; order: "asc" | "desc" };
-  /** 결과 제한 */
-  limit?: number;
-  /** 오프셋 */
-  offset?: number;
-}
-
-/**
- * 쓰기 결과
- */
-export interface WriteResult {
-  /** 성공 여부 */
-  success: boolean;
-  /** 새 버전 */
-  version: number;
-  /** 변경된 경로 */
-  path: string;
-  /** 이전 값 */
-  previousValue: unknown;
-  /** 에러 (실패 시) */
-  error?: Error;
-}
+export { QueryOptions, WriteResult } from "./blackboard-interface";
 
 /**
  * 트랜잭션 연산
@@ -187,7 +159,7 @@ export interface Operation {
  * const decisionsSection = board.decisions;
  * ```
  */
-export class Blackboard extends SimpleEventEmitter {
+export class Blackboard extends SimpleEventEmitter implements IBlackboard {
   private _state: BlackboardState;
   private readonly versionManager: VersionManager;
   private readonly options: Required<Omit<BlackboardOptions, "onEvent">> &
