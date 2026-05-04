@@ -46,8 +46,8 @@ describe("RepairLoopTracker", () => {
     }
     const summary = tracker.getSummary(id)!;
     expect(summary.recentValidationFailures).toHaveLength(5);
-    expect(summary.recentValidationFailures[0].summary).toBe("fail-2");
-    expect(summary.recentValidationFailures[4].summary).toBe("fail-6");
+    expect(summary.recentValidationFailures[0]!.summary).toBe("fail-2");
+    expect(summary.recentValidationFailures[4]!.summary).toBe("fail-6");
   });
 
   it("records validation pass", () => {

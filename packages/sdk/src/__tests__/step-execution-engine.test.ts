@@ -54,6 +54,7 @@ describe("StepExecutionEngine", () => {
         failures: [],
         stepOutputs: {},
         stepTimings: {},
+        createdAt: new Date(),
       };
       const summary = engine.summarizeBlackboardSnapshot(snapshot);
       expect(summary).toEqual({
@@ -68,10 +69,11 @@ describe("StepExecutionEngine", () => {
     it("summarizes snapshot with data", () => {
       const engine = createEngine();
       const snapshot: BlackboardSnapshot = {
-        facts: [{ id: "f1" }],
-        failures: [{ stepName: "s1", attempt: 2, validation: { passed: false, summary: "oops", failedChecks: [] } }],
+        facts: [{ id: "f1", content: "test", category: "test", tags: [], confidence: 0.9, createdAt: new Date() }],
+        failures: [{ stepName: "s1", attempt: 2, timestamp: new Date(), validation: { passed: false, summary: "oops", failedChecks: [] } }],
         stepOutputs: { s1: "output" },
-        stepTimings: { s1: 100 },
+        stepTimings: { s1: { startedAt: Date.now(), durationMs: 100 } },
+        createdAt: new Date(),
       };
       const summary = engine.summarizeBlackboardSnapshot(snapshot);
       expect(summary).toMatchObject({
@@ -97,9 +99,11 @@ describe("StepExecutionEngine", () => {
     it("summarizes metrics correctly", () => {
       const engine = createEngine();
       const metrics: ExecutionMetrics = {
+        executionId: "exec-1",
+        startedAt: Date.now(),
         stepMetrics: new Map([
-          ["s1", { stepName: "s1", status: "completed", retryCount: 0, validationFailures: 0, validationPasses: 1 }],
-          ["s2", { stepName: "s2", status: "failed", retryCount: 2, validationFailures: 3, validationPasses: 0 }],
+          ["s1", { stepName: "s1", startedAt: Date.now(), status: "completed", retryCount: 0, validationFailures: 0, validationPasses: 1, attemptDurations: [100] }],
+          ["s2", { stepName: "s2", startedAt: Date.now(), status: "failed", retryCount: 2, validationFailures: 3, validationPasses: 0, attemptDurations: [50, 60, 70] }],
         ]),
         totalBackEdges: 5,
         totalRepairs: 3,

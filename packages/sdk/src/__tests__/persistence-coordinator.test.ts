@@ -77,7 +77,7 @@ describe("PersistenceCoordinator", () => {
 
     expect(manager.getStorageAdapter).toHaveBeenCalledTimes(1);
     expect(adapter.saveRun).toHaveBeenCalledTimes(1);
-    const saved = (adapter.saveRun as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const saved = (adapter.saveRun as ReturnType<typeof vi.fn>).mock.calls[0]![0];
     expect(saved).toMatchObject({
       id: "exec-1",
       workflowName: "wf-1",
@@ -129,7 +129,7 @@ describe("PersistenceCoordinator", () => {
       repairSummary
     );
 
-    const saved = (adapter.saveRun as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const saved = (adapter.saveRun as ReturnType<typeof vi.fn>).mock.calls[0]![0];
     expect(saved.metadata.repairLoop).toEqual(repairSummary);
   });
 
