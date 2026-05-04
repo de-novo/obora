@@ -1,4 +1,22 @@
-import type { KnowledgeResult, QueryKnowledgeParams } from "./queryKnowledge.js";
+export interface KnowledgeResult {
+  id: string;
+  title: string;
+  body: string;
+  tags: string[];
+  source: string;
+  projectId?: string;
+  confidence: number;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface QueryKnowledgeParams {
+  tags?: string[];
+  textQuery?: string;
+  minConfidence?: number;
+  limit?: number;
+  projectId?: string;
+}
 
 interface CacheEntry {
   expiresAt: number;
