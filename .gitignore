@@ -49,6 +49,7 @@ tsconfig.tsbuildinfo
 .review-gate/
 
 # Obora runtime generated artifacts
+.obora/tkg-*
 .obora/tkg-review-queue/
 .obora/tkg-rollback/
 
