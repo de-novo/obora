@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { Workflow } from "../workflow.js";
 
 describe("contract-first example smoke", () => {
   it("loads the canonical contract-first example and preserves its public authoring surface", async () => {
     const workflowPath = join(
-      process.cwd(),
+      dirname(fileURLToPath(import.meta.url)),
+      "../../../..",
       "examples",
       "07-contract-first-evaluation",
       "workflow.yaml",

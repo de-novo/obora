@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { Workflow } from "../workflow.js";
 
 describe("one-file research-loop workflow", () => {
   it("expands one-file research-loop YAML through Workflow.fromYaml", async () => {
-    const fixturePath = join(process.cwd(), "packages/sdk/src/__tests__/fixtures/one-file-research-loop.yaml");
+    const fixturePath = join(dirname(fileURLToPath(import.meta.url)), "fixtures/one-file-research-loop.yaml");
     const workflow = await Workflow.fromYaml(fixturePath);
 
     expect(workflow.name).toBe("one-file-research-loop");

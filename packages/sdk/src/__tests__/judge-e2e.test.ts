@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 
@@ -16,7 +17,7 @@ describe("judge mode e2e", () => {
       "utf8",
     );
 
-    const workflow = await Workflow.fromYaml(join(process.cwd(), "packages/sdk/src/__tests__/fixtures/judge-e2e.yaml"));
+    const workflow = await Workflow.fromYaml(join(dirname(fileURLToPath(import.meta.url)), "fixtures/judge-e2e.yaml"));
 
     const runtime = new OboraRuntime({
       llm: {
@@ -70,7 +71,7 @@ describe("judge mode e2e", () => {
       "utf8",
     );
 
-    const workflow = await Workflow.fromYaml(join(process.cwd(), "packages/sdk/src/__tests__/fixtures/judge-e2e.yaml"));
+    const workflow = await Workflow.fromYaml(join(dirname(fileURLToPath(import.meta.url)), "fixtures/judge-e2e.yaml"));
 
     const runtime = new OboraRuntime({
       llm: {

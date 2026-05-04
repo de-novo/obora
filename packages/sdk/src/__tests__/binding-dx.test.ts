@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 
@@ -16,7 +17,7 @@ describe("input bindings DX", () => {
       "utf8",
     );
 
-    const workflow = await Workflow.fromYaml(join(process.cwd(), "packages/sdk/src/__tests__/fixtures/one-file-binding.yaml"));
+    const workflow = await Workflow.fromYaml(join(dirname(fileURLToPath(import.meta.url)), "fixtures/one-file-binding.yaml"));
     const step = workflow.steps[0]!;
 
     let seenPrompt = "";

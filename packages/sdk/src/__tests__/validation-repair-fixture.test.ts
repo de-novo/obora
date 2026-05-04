@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { loadFixture } from "../testing/index.js";
 import type { WorkflowStep } from "../workflow.js";
 
 describe("validation-repair fixture", () => {
   it("loads validation-repair-loop fixture", async () => {
-    const fixturePath = join(process.cwd(), "packages/sdk/src/__tests__/fixtures/validation-repair-loop.yaml");
+    const fixturePath = join(dirname(fileURLToPath(import.meta.url)), "fixtures/validation-repair-loop.yaml");
     const fixture = await loadFixture(fixturePath);
 
     expect(typeof fixture.workflow).not.toBe("string");
