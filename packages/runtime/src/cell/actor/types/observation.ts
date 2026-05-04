@@ -3,7 +3,7 @@
  * @description Observation 타입 정의 - 액터의 환경 관찰 결과
  */
 
-import type { ActorId } from "./actor";
+import type { ActorId } from "./base";
 
 /**
  * 관찰 인터페이스

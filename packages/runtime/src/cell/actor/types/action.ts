@@ -3,7 +3,7 @@
  * @description Action 타입 정의 - 액터가 수행하는 행동
  */
 
-import type { ActorId } from "./actor";
+import type { ActorId } from "./base";
 
 /**
  * Action 고유 ID 타입

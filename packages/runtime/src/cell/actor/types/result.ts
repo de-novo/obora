@@ -4,7 +4,7 @@
  */
 
 import type { ActionId } from "./action";
-import type { ActorId } from "./actor";
+import type { ActorId } from "./base";
 
 /**
  * Result 고유 ID 타입

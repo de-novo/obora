@@ -3,7 +3,7 @@
  * @description Metrics 타입 정의 - 액터 성능 메트릭
  */
 
-import type { ActorId } from "./actor";
+import type { ActorId } from "./base";
 
 /**
  * Actor 성능 메트릭 인터페이스

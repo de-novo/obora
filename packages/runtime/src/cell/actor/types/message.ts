@@ -3,7 +3,7 @@
  * @description Message 타입 정의 - 액터 간 통신
  */
 
-import type { ActorId } from "./actor";
+import type { ActorId } from "./base";
 
 /**
  * Message 고유 ID 타입
