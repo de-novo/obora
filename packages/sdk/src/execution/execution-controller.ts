@@ -9,6 +9,7 @@ import { type DLQStore, createDLQEntry } from "../dlq/index.js";
 import { type ExecutionLock } from "../execution/execution-lock.js";
 import type { PersistenceManager } from "../persistence/persistence-manager.js";
 import type { WorkflowRunner } from "../execution/workflow-runner.js";
+import type { TKGService } from "../execution/tkg-service.js";
 import { BudgetExceededError } from "../cost-tracker.js";
 import { DEFAULTS } from "../defaults.js";
 import {
@@ -27,6 +28,7 @@ import { PersistenceCoordinator } from "./persistence-coordinator.js";
 export interface ExecutionControllerOptions {
   config: OboraRuntimeConfig;
   runner: WorkflowRunner;
+  tkgService: TKGService;
   eventBus: EventBus;
   persistenceManager: PersistenceManager;
   dlqStore?: DLQStore;
@@ -167,7 +169,7 @@ export class ExecutionController {
             try {
               const workflowDef = workflows.get(name);
               if (!workflowDef) throw new Error(`Workflow not found: ${name}`);
-              const rollbackResult = await this.opts.runner.rollbackTKGOnExecutionFailure(
+              const rollbackResult = await this.opts.tkgService.rollbackTKGOnExecutionFailure(
                 executionId,
                 name,
                 workflowDef,

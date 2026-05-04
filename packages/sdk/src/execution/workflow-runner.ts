@@ -15,9 +15,6 @@ import { BlackboardManager } from "../blackboard/blackboard-manager.js";
 import { ExecutionObserver } from "../blackboard/execution-observer.js";
 import type { FailureEntry } from "../blackboard/blackboard-manager.js";
 import { loadAgentsFromYamlFile } from "../agents/source-loaders.js";
-import type { TKGApprovedReviewQueueApplySummary } from "../tkg/apply.js";
-import type { TKGRollbackRestoreSummary } from "../tkg/rollback.js";
-import type { TKGReviewQueueItem, TKGReviewQueueResolutionSummary } from "../tkg/review-queue.js";
 import { TKGService } from "./tkg-service.js";
 import { TKGPromotionEngine } from "./tkg-promotion-engine.js";
 import { RepairLoopTracker } from "./repair-loop-tracker.js";
@@ -219,44 +216,6 @@ export class WorkflowRunner {
       options,
       isSettledFn
     );
-  }
-
-  async listOpenTKGReviewQueueItems(workflow: WorkflowDef): Promise<TKGReviewQueueItem[]> {
-    return this.tkgService.listOpenTKGReviewQueueItems(workflow);
-  }
-
-  async resolveTKGReviewQueueItem(
-    workflow: WorkflowDef,
-    itemId: string,
-    resolution: { status: "approved" | "rejected"; actor?: string; note?: string }
-  ): Promise<TKGReviewQueueResolutionSummary> {
-    return this.tkgService.resolveTKGReviewQueueItem(workflow, itemId, resolution);
-  }
-
-  async restoreLatestTKGRollback(
-    workflow: WorkflowDef,
-    options: { rollbackId?: string } = {}
-  ): Promise<TKGRollbackRestoreSummary> {
-    return this.tkgService.restoreLatestTKGRollback(workflow, options);
-  }
-
-  async reapplyApprovedTKGReviewQueueItems(
-    workflow: WorkflowDef,
-    options: { sourceExecutionId?: string } = {}
-  ): Promise<TKGApprovedReviewQueueApplySummary> {
-    return this.tkgService.reapplyApprovedTKGReviewQueueItems(workflow, options);
-  }
-
-  /**
-    * P0: Auto-rollback on execution failure
-    * Called from runtime.ts catch block when execution fails (not budget exceeded)
-    */
-  async rollbackTKGOnExecutionFailure(
-    executionId: string,
-    _workflowName: string,
-    workflow: WorkflowDef
-  ): Promise<TKGRollbackRestoreSummary> {
-    return this.tkgService.rollbackTKGOnExecutionFailure(executionId, workflow);
   }
 
   // ── Resume execution ─────────────────────────────────────────────────────

@@ -37,6 +37,7 @@ import { EventBus } from "./events/event-bus.js";
 import { PersistenceManager } from "./persistence/persistence-manager.js";
 import { WorkflowRunner } from "./execution/workflow-runner.js";
 import { ExecutionController } from "./execution/execution-controller.js";
+import { TKGService } from "./execution/tkg-service.js";
 import { RunQuery } from "./query/run-query.js";
 import { type DLQStore, FileDLQStore } from "./dlq/index.js";
 import { type ExecutionLock, FileExecutionLock } from "./execution/execution-lock.js";
@@ -113,6 +114,7 @@ export class OboraRuntime {
   private readonly eventBus: EventBus;
   private readonly persistenceManager: PersistenceManager;
   private readonly runner: WorkflowRunner;
+  private readonly tkgService: TKGService;
   private readonly query: RunQuery;
   private readonly dlqStore?: DLQStore;
   private readonly executionLock?: ExecutionLock;
@@ -127,6 +129,13 @@ export class OboraRuntime {
     this.persistenceManager = new PersistenceManager(config);
     this.query = new RunQuery(this.persistenceManager);
     this.runner = new WorkflowRunner({
+      config,
+      eventBus: this.eventBus,
+      adapterFactory: (cfg) => this.createLLMAdapter(cfg),
+      persistenceManager: this.persistenceManager,
+      agents: this.agents,
+    });
+    this.tkgService = new TKGService({
       config,
       eventBus: this.eventBus,
       adapterFactory: (cfg) => this.createLLMAdapter(cfg),
@@ -149,6 +158,7 @@ export class OboraRuntime {
     this.executionController = new ExecutionController({
       config,
       runner: this.runner,
+      tkgService: this.tkgService,
       eventBus: this.eventBus,
       persistenceManager: this.persistenceManager,
       dlqStore: this.dlqStore,
@@ -481,7 +491,7 @@ export class OboraRuntime {
       throw OboraError.workflowNotFound(workflowName);
     }
 
-    return this.runner.listOpenTKGReviewQueueItems(this.workflows.get(workflowName)!);
+    return this.tkgService.listOpenTKGReviewQueueItems(this.workflows.get(workflowName)!);
   }
 
   async resolveTKGReviewQueueItem(
@@ -493,7 +503,7 @@ export class OboraRuntime {
       throw OboraError.workflowNotFound(workflowName);
     }
 
-    return this.runner.resolveTKGReviewQueueItem(this.workflows.get(workflowName)!, itemId, resolution);
+    return this.tkgService.resolveTKGReviewQueueItem(this.workflows.get(workflowName)!, itemId, resolution);
   }
 
   async restoreLatestTKGRollback(
@@ -504,7 +514,7 @@ export class OboraRuntime {
       throw OboraError.workflowNotFound(workflowName);
     }
 
-    return this.runner.restoreLatestTKGRollback(this.workflows.get(workflowName)!, options);
+    return this.tkgService.restoreLatestTKGRollback(this.workflows.get(workflowName)!, options);
   }
 
   async reapplyApprovedTKGReviewQueueItems(
@@ -515,7 +525,7 @@ export class OboraRuntime {
       throw OboraError.workflowNotFound(workflowName);
     }
 
-    return this.runner.reapplyApprovedTKGReviewQueueItems(this.workflows.get(workflowName)!, options);
+    return this.tkgService.reapplyApprovedTKGReviewQueueItems(this.workflows.get(workflowName)!, options);
   }
 
   // ── Query facade (delegates to RunQuery) ──────────────────────────────────

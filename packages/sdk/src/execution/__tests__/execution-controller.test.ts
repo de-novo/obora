@@ -15,8 +15,13 @@ function makeMockRunner(): WorkflowRunner {
     executeRun: vi.fn().mockResolvedValue(undefined),
     getPersistedRepairLoopSummary: vi.fn().mockReturnValue(undefined),
     clearPersistedRepairLoopSummary: vi.fn(),
-    rollbackTKGOnExecutionFailure: vi.fn().mockResolvedValue({ restored: false, restoredFactCount: 0, scope: "" }),
   } as unknown as WorkflowRunner;
+}
+
+function makeMockTKGService() {
+  return {
+    rollbackTKGOnExecutionFailure: vi.fn().mockResolvedValue({ restored: false, restoredFactCount: 0, scope: "" }),
+  };
 }
 
 function makeMockEventBus(): EventBus {
@@ -63,6 +68,7 @@ describe("ExecutionController", () => {
     opts = {
       config: makeBaseConfig(),
       runner,
+      tkgService: makeMockTKGService() as any,
       eventBus,
       persistenceManager,
       executions,
@@ -114,7 +120,7 @@ describe("ExecutionController", () => {
       const handle = await controller.start("test", workflow, {}, agents, workflows);
       await expect(handle.wait()).rejects.toThrow("step failed");
       expect(handle.status).toBe("failed");
-      expect(runner.rollbackTKGOnExecutionFailure).toHaveBeenCalledTimes(1);
+      expect(opts.tkgService.rollbackTKGOnExecutionFailure).toHaveBeenCalledTimes(1);
     });
 
     it("marks as suspended when BudgetExceededError is thrown", async () => {
@@ -129,7 +135,7 @@ describe("ExecutionController", () => {
       const handle = await controller.start("test", workflow, {}, agents, workflows);
       await expect(handle.wait()).rejects.toThrow("budget exceeded");
       expect(handle.status).toBe("suspended");
-      expect(runner.rollbackTKGOnExecutionFailure).not.toHaveBeenCalled();
+      expect(opts.tkgService.rollbackTKGOnExecutionFailure).not.toHaveBeenCalled();
     });
 
     it("rejects wait when cancel() is called", async () => {
