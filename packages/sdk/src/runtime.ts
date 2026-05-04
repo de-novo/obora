@@ -28,7 +28,7 @@ import type {
 import { Workflow } from "./workflow.js";
 import type { WorkflowDef } from "./workflow.js";
 
-import type { LLMConfig } from "./llm-config.js";
+import type { LLMConfig } from "./runtime-types.js";
 import type { LLMAdapterLike } from "./step-executor.js";
 import type { RunFilter } from "@obora/runtime";
 

@@ -3,7 +3,8 @@ import { resolve } from "node:path";
 
 import type { OboraConfig } from "./config-loader.js";
 import { resolveProviderConfig } from "./config-loader.js";
-import { detectLLMConfigFromEnv, type LLMConfig } from "./llm-config.js";
+import { detectLLMConfigFromEnv } from "./llm-config.js";
+import type { LLMConfig } from "./runtime-types.js";
 import type { OboraRuntimeConfig } from "./runtime-types.js";
 
 const CONFIG_META_KEY = Symbol.for("obora.config.meta");

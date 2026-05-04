@@ -4,7 +4,7 @@ import { dirname, join, resolve } from "node:path";
 
 import { parse as parseYaml } from "yaml";
 
-import type { LLMConfig } from "./llm-config.js";
+import type { LLMConfig } from "./runtime-types.js";
 import type { ModelPricing, OboraConfig } from "./runtime-types.js";
 import { createAuthResolver } from "./auth-resolver.js";
 import { OboraError, OboraErrorCode } from "./runtime-errors.js";

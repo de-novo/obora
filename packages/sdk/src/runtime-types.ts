@@ -5,11 +5,20 @@
 
 import type { StorageAdapter, ArtifactStore } from "@obora/runtime";
 import type { ToolDefinition } from "@obora/adapters";
-import type { LLMConfig } from "./llm-config.js";
 export interface ModelPricing {
   model: string;
   promptPer1kTokens: number;
   completionPer1kTokens: number;
+}
+
+export interface LLMConfig {
+  provider: string;
+  apiKey: string;
+  model?: string;
+  baseUrl?: string;
+  temperature?: number;
+  timeout?: number;
+  maxTokens?: number;
 }
 
 export interface OboraConfig {

@@ -13,7 +13,7 @@
 import { describe, expect, it, afterEach } from "vitest";
 
 import { OboraRuntime, type AuditEvent } from "../runtime.js";
-import type { LLMConfig } from "../llm-config.js";
+import type { LLMConfig } from "../runtime-types.js";
 
 function resolveTestLLMConfig(): LLMConfig | undefined {
   const apiKey = process.env.ZAI_API_KEY;

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 import type { LLMAdapterLike } from "../step-executor.js";
-import type { LLMConfig } from "../llm-config.js";
+import type { LLMConfig } from "../runtime-types.js";
 import { DEFAULTS } from "../defaults.js";
 
 /**

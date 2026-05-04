@@ -56,7 +56,7 @@ export type {
   Vote,
 } from "../execution/peer-review-executor.js";
 export type { HookExecutionResult, WorkflowHookLifecycle } from "../hooks.js";
-export type { LLMConfig } from "../llm-config.js";
+export type { LLMConfig } from "../runtime-types.js";
 export type { ResolutionSummary } from "../resolution-summary.js";
 export type {
   OneFileMode,

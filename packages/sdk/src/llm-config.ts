@@ -1,14 +1,5 @@
 import { resolveProviderConfig, type OboraConfig } from "./config-loader.js";
-
-export interface LLMConfig {
-  provider: string;
-  apiKey: string;
-  model?: string;
-  baseUrl?: string;
-  temperature?: number;
-  timeout?: number;
-  maxTokens?: number;
-}
+import type { LLMConfig } from "./runtime-types.js";
 
 const PROVIDER_ENV_MAP: Array<{ provider: string; key: string; model?: string }> = [
   { provider: "openai", key: "OPENAI_API_KEY", model: "OPENAI_MODEL" },

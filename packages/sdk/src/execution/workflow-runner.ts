@@ -3,7 +3,8 @@ import { randomUUID } from "node:crypto";
 import { basename, join } from "node:path";
 
 import { loadConfig, resolveProviderConfig, type OboraConfig } from "../config-loader.js";
-import { resolveLLMConfig, type LLMConfig } from "../llm-config.js";
+import { resolveLLMConfig } from "../llm-config.js";
+import type { LLMConfig } from "../runtime-types.js";
 import {
   buildBindingPreview,
   buildOutputPreview,
