@@ -72,8 +72,8 @@ export type {
   StepExecutorConfig,
   StepResult,
   LLMAdapterLike,
-  ToolHandler,
 } from "../step-executor.js";
+export type { ToolHandler } from "../runtime-types.js";
 export type {
   RepairContext,
   RepairLoopConfig,

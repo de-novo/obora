@@ -4,6 +4,7 @@
  */
 
 import type { StorageAdapter, ArtifactStore } from "@obora/runtime";
+import type { ToolDefinition } from "@obora/adapters";
 import type { LLMConfig } from "./llm-config.js";
 export interface ModelPricing {
   model: string;
@@ -112,7 +113,6 @@ export interface OboraConfig {
     fallbackPer1kTokens?: { prompt: number; completion: number };
   };
 }
-import type { ToolHandler } from "./step-executor.js";
 import type { MemoryScopeLevel, SharedMemoryStore } from "./shared-memory/store.js";
 import type { ProjectableTKGEventType, StagingTKGStore } from "./tkg/store.js";
 import type { TKGRollbackStore } from "./tkg/rollback.js";
@@ -246,6 +246,11 @@ export type Unsubscribe = () => void;
 
 export type AgentFactory = (...args: unknown[]) => unknown;
 export type PluginToolHandler = (params: unknown, context?: unknown) => unknown | Promise<unknown>;
+
+export interface ToolHandler {
+  definition: ToolDefinition;
+  execute: (args: Record<string, unknown>) => Promise<string>;
+}
 
 export interface PatternPlugin {
   name: string;

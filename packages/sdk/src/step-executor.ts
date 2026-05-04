@@ -1,5 +1,5 @@
 import type { ChatMessage, ToolCall, ToolDefinition } from "@obora/adapters";
-import type { AgentFactory } from "./runtime.js";
+import type { AgentFactory, ToolHandler } from "./runtime-types.js";
 import type { HookExecutionResult, WorkflowHookLifecycle } from "./hooks.js";
 import type { WorkflowStep } from "./workflow.js";
 import {
@@ -67,11 +67,6 @@ export interface StepResult {
  * A handler that pairs a tool definition with its execution logic.
  * Pass instances via StepExecutorConfig.tools to inject custom tools.
  */
-export interface ToolHandler {
-  definition: ToolDefinition;
-  execute: (args: Record<string, unknown>) => Promise<string>;
-}
-
 export const BUILTIN_TOOLS: ToolDefinition[] = [
   {
     type: "function",
