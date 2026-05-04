@@ -174,6 +174,177 @@ describe("RunOrchestrator - executeRun", () => {
   });
 });
 
+describe("RunOrchestrator - executeRun with TKG", () => {
+  it("triggers TKG promotion on execution_end", async () => {
+    const mockDeps = createMockDeps();
+    mockDeps.deps.tkgService.resolveTKGPromotionTriggers.mockReturnValue(["execution_end"]);
+    const orchestrator = new RunOrchestrator(mockDeps.deps);
+    const workflow = createWorkflowDef();
+    const execution = createExecution();
+
+    vi.mocked(mockDeps.stepExecutionEngine.executeStepLoop).mockResolvedValue(undefined);
+
+    await orchestrator.executeRun(
+      "exec-1", "test", workflow, execution, {}, () => false
+    );
+
+    expect(mockDeps.tkgPromotionEngine.flushTKGPromotionCheckpoint).toHaveBeenCalled();
+  });
+
+  it("handles TKG promotion failure gracefully", async () => {
+    const mockDeps = createMockDeps();
+    mockDeps.deps.tkgService.resolveTKGPromotionTriggers.mockReturnValue(["execution_end"]);
+    vi.mocked(mockDeps.tkgPromotionEngine.flushTKGPromotionCheckpoint).mockRejectedValue(new Error("tkg fail"));
+    const orchestrator = new RunOrchestrator(mockDeps.deps);
+    const workflow = createWorkflowDef();
+    const execution = createExecution();
+
+    vi.mocked(mockDeps.stepExecutionEngine.executeStepLoop).mockResolvedValue(undefined);
+
+    await orchestrator.executeRun(
+      "exec-1", "test", workflow, execution, {}, () => false
+    );
+
+    expect(mockDeps.eventBus.emit).toHaveBeenCalledWith("warning", "exec-1", expect.objectContaining({
+      message: "TKG execution_end checkpoint failed",
+    }));
+    expect(execution.status).toBe("completed");
+  });
+
+  it("sets up TKG trigger listeners for non-execution_end triggers", async () => {
+    const mockDeps = createMockDeps();
+    mockDeps.deps.tkgService.resolveTKGPromotionTriggers.mockReturnValue(["step_end"]);
+    const orchestrator = new RunOrchestrator(mockDeps.deps);
+    const workflow = createWorkflowDef();
+    const execution = createExecution();
+
+    vi.mocked(mockDeps.stepExecutionEngine.executeStepLoop).mockResolvedValue(undefined);
+
+    await orchestrator.executeRun(
+      "exec-1", "test", workflow, execution, {}, () => false
+    );
+
+    expect(mockDeps.eventBus.on).toHaveBeenCalledWith("step_end", expect.any(Function));
+  });
+
+  it("handles TKG trigger checkpoint failure", async () => {
+    const mockDeps = createMockDeps();
+    mockDeps.deps.tkgService.resolveTKGPromotionTriggers.mockReturnValue(["step_end"]);
+    const orchestrator = new RunOrchestrator(mockDeps.deps);
+    const workflow = createWorkflowDef();
+    const execution = createExecution();
+
+    vi.mocked(mockDeps.stepExecutionEngine.executeStepLoop).mockResolvedValue(undefined);
+
+    await orchestrator.executeRun(
+      "exec-1", "test", workflow, execution, {}, () => false
+    );
+
+    // Event listener is registered for step_end trigger
+    expect(mockDeps.eventBus.on).toHaveBeenCalledWith("step_end", expect.any(Function));
+  });
+});
+
+describe("RunOrchestrator - executeRun with Reflector", () => {
+  it("configures reflector with rules", async () => {
+    const mockDeps = createMockDeps();
+    const orchestrator = new RunOrchestrator(mockDeps.deps);
+    const workflow: WorkflowDef = {
+      name: "test",
+      version: "1.0",
+      steps: [{ name: "step1", agent: "agent1", input: {} }],
+      reflector: {
+        rules: [
+          {
+            name: "retry-on-failure",
+            when: "stepFailed",
+            actions: [{ type: "retry", maxAttempts: 3 }],
+          },
+        ],
+      },
+    };
+    const execution = createExecution();
+
+    vi.mocked(mockDeps.stepExecutionEngine.executeStepLoop).mockResolvedValue(undefined);
+
+    await orchestrator.executeRun(
+      "exec-1", "test", workflow, execution, {}, () => false
+    );
+
+    expect(execution.status).toBe("completed");
+  });
+});
+
+describe("RunOrchestrator - executeRun with Persistence", () => {
+  it("saves run at start when persistence enabled", async () => {
+    const mockDeps = createMockDeps();
+    mockDeps.deps.deps.config.persistence = { enabled: true };
+    const orchestrator = new RunOrchestrator(mockDeps.deps);
+    const workflow = createWorkflowDef();
+    const execution = createExecution();
+
+    const saveRun = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(mockDeps.persistenceManager.getStorageAdapter).mockResolvedValue({
+      saveRun,
+      saveAuditEvent: vi.fn().mockResolvedValue(undefined),
+    } as any);
+
+    vi.mocked(mockDeps.stepExecutionEngine.executeStepLoop).mockResolvedValue(undefined);
+
+    await orchestrator.executeRun(
+      "exec-1", "test", workflow, execution, {}, () => false
+    );
+
+    expect(saveRun).toHaveBeenCalledWith(expect.objectContaining({ status: "running" }));
+    expect(saveRun).toHaveBeenCalledWith(expect.objectContaining({ status: "completed" }));
+  });
+
+  it("handles persistence save failure at start", async () => {
+    const mockDeps = createMockDeps();
+    mockDeps.deps.deps.config.persistence = { enabled: true };
+    const orchestrator = new RunOrchestrator(mockDeps.deps);
+    const workflow = createWorkflowDef();
+    const execution = createExecution();
+
+    vi.mocked(mockDeps.persistenceManager.getStorageAdapter).mockRejectedValue(new Error("db error"));
+
+    vi.mocked(mockDeps.stepExecutionEngine.executeStepLoop).mockResolvedValue(undefined);
+
+    await orchestrator.executeRun(
+      "exec-1", "test", workflow, execution, {}, () => false
+    );
+
+    expect(mockDeps.deps.deps.config.logger.warn).toHaveBeenCalled();
+    expect(execution.status).toBe("completed");
+  });
+
+  it("includes repairLoop in metadata when summary exists", async () => {
+    const mockDeps = createMockDeps();
+    mockDeps.deps.deps.config.persistence = { enabled: true };
+    mockDeps.deps.repairLoopTracker.getSummary.mockReturnValue({ repairs: 2 });
+    const orchestrator = new RunOrchestrator(mockDeps.deps);
+    const workflow = createWorkflowDef();
+    const execution = createExecution();
+
+    const saveRun = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(mockDeps.persistenceManager.getStorageAdapter).mockResolvedValue({
+      saveRun,
+      saveAuditEvent: vi.fn().mockResolvedValue(undefined),
+    } as any);
+
+    vi.mocked(mockDeps.stepExecutionEngine.executeStepLoop).mockResolvedValue(undefined);
+
+    await orchestrator.executeRun(
+      "exec-1", "test", workflow, execution, {}, () => false
+    );
+
+    expect(saveRun).toHaveBeenCalledWith(expect.objectContaining({
+      metadata: expect.objectContaining({ repairLoop: { repairs: 2 } }),
+    }));
+    expect(mockDeps.repairLoopTracker.clearSummary).toHaveBeenCalledWith("exec-1");
+  });
+});
+
 describe("RunOrchestrator - importSharedMemory", () => {
   it("imports shared memory scopes", async () => {
     const mockDeps = createMockDeps();
