@@ -95,6 +95,7 @@ import { TKGPromotionEngine } from "./tkg-promotion-engine.js";
 import { DEFAULTS } from "../defaults.js";
 import type { FailureEntry } from "../blackboard/blackboard-manager.js";
 import { RepairLoopTracker } from "./repair-loop-tracker.js";
+import { EngineBuilder } from "./engine-builder.js";
 
 /** Duck-type for reflector: both ExecutionReflector and ReflectorEngine implement this. */
 type ReflectorLike = {
@@ -151,10 +152,12 @@ export class WorkflowRunner {
   private readonly repairLoopTracker = new RepairLoopTracker();
   private readonly tkgService: TKGService;
   private readonly tkgPromotionEngine: TKGPromotionEngine;
+  private readonly engineBuilder: EngineBuilder;
 
   constructor(private readonly deps: WorkflowRunnerDeps) {
     this.tkgService = new TKGService(deps);
     this.tkgPromotionEngine = new TKGPromotionEngine({ eventBus: deps.eventBus });
+    this.engineBuilder = new EngineBuilder(deps);
   }
 
   // ── Agent YAML loader ────────────────────────────────────────────────────
@@ -175,182 +178,12 @@ export class WorkflowRunner {
     persistenceConfig: OboraConfig["persistence"] | undefined,
     workflow?: WorkflowDef
   ): Promise<ExecutionEngine> {
-    const { config, eventBus, adapterFactory, persistenceManager, agents } = this.deps;
-
-    const loadedConfig =
-      config.config !== undefined ? config.config : await loadConfig(config.configPath);
-
-    const llmConfig = resolveLLMConfig(config.llm, loadedConfig);
-    const resolutionSummary = buildResolutionSummary(config, llmConfig, loadedConfig);
-    const resolutionText = formatResolutionSummary(resolutionSummary);
-    const bindingPreviewText = formatBindingPreview(buildBindingPreview(workflow));
-    const outputPreviewText = formatOutputPreview(buildOutputPreview(workflow));
-    const startupSections = [resolutionText, bindingPreviewText, outputPreviewText].filter(Boolean);
-    const startupText = startupSections.join("\n");
-    if (config.logger?.info) {
-      config.logger.info(startupText);
-    } else {
-      console.info(startupText);
-    }
-    const runtimeAgents = await this.loadAgentsFromYaml(config.agentsPath);
-    const workflowAgents = loadWorkflowAgents(workflow);
-
-    const allAgents = new Map<string, AgentFactory>([
-      ...runtimeAgents,
-      ...workflowAgents,
-      ...agents,
-    ]);
-    const resolver = new AdapterResolver(adapterFactory);
-
-    const resourcesConfig = loadedConfig?.resources;
-    const shouldTrackCost = Boolean(resourcesConfig);
-    const costTracker = shouldTrackCost
-      ? new CostTracker(
-          await persistenceManager.getCostTrackingAdapter(),
-          executionId,
-          loadedConfig
-        )
-      : undefined;
-
-    if (!llmConfig) {
-      const selectedProvider =
-        config.llm?.provider ?? loadedConfig?.defaults?.provider ?? "unknown";
-      await eventBus.emit("warning", executionId, {
-        message: formatDiagnostic({
-          code: "AUTH_1001",
-          summary: `Missing auth for provider ${selectedProvider}`,
-          reason:
-            "no provider auth could be resolved from explicit config, project config, or environment",
-          fix: "configure provider auth before execution or switch explicitly to mock mode",
-          context: { provider: selectedProvider, fallback: true },
-        }),
-        code: OboraErrorCode.ADAPTER_LLM_UNAVAILABLE,
-      });
-      await eventBus.emit("warning", executionId, {
-        message: formatDiagnostic({
-          code: "FALLBACK_1001",
-          summary: "Execution will run in stub mode",
-          reason: "no LLM configuration was resolved for the current execution",
-          fix: "set provider/model/auth explicitly or disable stub fallback for this run",
-          context: { provider: selectedProvider },
-        }),
-        code: OboraErrorCode.ADAPTER_LLM_UNAVAILABLE,
-      });
-    }
-
-    const stepExecutor = llmConfig
-      ? new StepExecutor(await resolver.get(llmConfig), allAgents, {
-          model: llmConfig.model,
-          temperature: llmConfig.temperature,
-          maxTokens: llmConfig.maxTokens,
-          verbose: config.verbose,
-          tools: config.stepTools,
-          resolveAgentLLM: this.buildResolveAgentLLM(
-            executionId,
-            loadedConfig,
-            allAgents,
-            resolver
-          ),
-          onEvent: async (eventType, data) => {
-            if (eventType === "llm_response" && costTracker) {
-              const payload = data as {
-                stepName?: string;
-                model?: string;
-                usage?: {
-                  promptTokens?: number;
-                  completionTokens?: number;
-                  totalTokens?: number;
-                };
-                latencyMs?: number;
-              };
-              if (payload.stepName) {
-                await costTracker.recordCall({
-                  stepName: payload.stepName,
-                  model: payload.model,
-                  promptTokens: payload.usage?.promptTokens,
-                  completionTokens: payload.usage?.completionTokens,
-                  totalTokens: payload.usage?.totalTokens,
-                  latencyMs: payload.latencyMs,
-                });
-              }
-            }
-            await eventBus.emit(eventType, executionId, data);
-          },
-        })
-      : undefined;
-
-    return {
-      stepExecutor,
-      costTracker,
-      loadedConfig,
-      llmConfig,
-      runtimeAgents,
-      resolver,
-    };
-  }
-
-  // ── resolveAgentLLM builder ──────────────────────────────────────────────
-
-  private buildResolveAgentLLM(
-    executionId: string,
-    loadedConfig: OboraConfig | undefined,
-    allAgents: Map<string, AgentFactory>,
-    resolver: AdapterResolver
-  ) {
-    return async (agentName?: string) => {
-      if (!loadedConfig || !agentName) return undefined;
-
-      const agentRaw = allAgents.get(agentName)?.();
-      const agentInfo =
-        agentRaw && typeof agentRaw === "object"
-          ? (agentRaw as {
-              provider?: string;
-              model?: string;
-              temperature?: number;
-              api_key?: string;
-            })
-          : undefined;
-      const configAgent = loadedConfig.agents?.[agentName];
-      const preferAgentInfo = Boolean(agentInfo);
-
-      const resolvedProviderName = preferAgentInfo
-        ? (agentInfo?.provider ?? loadedConfig.defaults?.provider)
-        : (configAgent?.provider ?? loadedConfig.defaults?.provider);
-
-      // agentInfo에서 api_key가 제공되면 그것을 사용, 아니면 config에서 해결
-      let providerConfig = resolveProviderConfig(loadedConfig, resolvedProviderName, {
-        verbose: this.deps.config.verbose,
-      });
-
-      // agentInfo의 api_key가 있으면 덮어쓰기
-      if (preferAgentInfo && agentInfo?.api_key && providerConfig) {
-        providerConfig = {
-          ...providerConfig,
-          apiKey: agentInfo.api_key,
-        };
-      }
-
-      if (!providerConfig) {
-        if (resolvedProviderName) {
-          await this.deps.eventBus.emit("warning", executionId, {
-            message: `Agent '${agentName}' configured with provider '${resolvedProviderName}' but API key not resolved. Falling back to default.`,
-            code: OboraErrorCode.ADAPTER_LLM_UNAVAILABLE,
-          });
-        }
-        return undefined;
-      }
-
-      return {
-        adapter: await resolver.get(providerConfig),
-        model: preferAgentInfo
-          ? (agentInfo?.model ?? providerConfig.model)
-          : (configAgent?.model ?? providerConfig.model),
-        temperature: preferAgentInfo
-          ? (agentInfo?.temperature ?? providerConfig.temperature)
-          : (configAgent?.temperature ?? providerConfig.temperature),
-        maxTokens: providerConfig.maxTokens,
-      };
-    };
+    return this.engineBuilder.build(
+      executionId,
+      persistenceEnabled,
+      persistenceConfig,
+      workflow
+    );
   }
 
   // ── Knowledge context injection ──────────────────────────────────────────
