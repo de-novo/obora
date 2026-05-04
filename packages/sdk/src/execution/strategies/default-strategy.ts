@@ -1,5 +1,5 @@
 import type { WorkflowStep } from "../../workflow.js";
-import type { StepContext, StepResult } from "../../step-executor.js";
+import type { StepContext, StepResult } from "../../step-executor-types.js";
 import type { StepExecutionServices } from "./types.js";
 
 export const defaultStrategy = {

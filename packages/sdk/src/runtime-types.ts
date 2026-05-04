@@ -4,7 +4,7 @@
  */
 
 import type { StorageAdapter, ArtifactStore } from "@obora/runtime";
-import type { ToolDefinition } from "@obora/adapters";
+import type { ChatMessage, ToolCall, ToolDefinition } from "@obora/adapters";
 export interface ModelPricing {
   model: string;
   promptPer1kTokens: number;
@@ -398,6 +398,26 @@ export interface OboraRuntimeConfig {
     delayMs?: number;
     driftPolicy?: "reject" | "warn" | "ignore";
   };
+}
+
+export interface LLMAdapterLike {
+  chatCompletion(params: {
+    model?: string;
+    messages: ChatMessage[];
+    temperature?: number;
+    maxTokens?: number;
+    signal?: AbortSignal;
+    tools?: ToolDefinition[];
+    toolChoice?: "auto" | "none" | "required" | { type: "function"; name: string };
+  }): Promise<{
+    model?: string;
+    message: { role: "assistant"; content: string | null; toolCalls?: ToolCall[] };
+    usage?: {
+      promptTokens?: number;
+      completionTokens?: number;
+      totalTokens?: number;
+    };
+  }>;
 }
 
 export interface PersistedValidationFailureDetail {

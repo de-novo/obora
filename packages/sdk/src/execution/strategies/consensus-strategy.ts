@@ -1,5 +1,5 @@
 import type { WorkflowStep } from "../../workflow.js";
-import type { StepContext, StepResult } from "../../step-executor.js";
+import type { StepContext, StepResult } from "../../step-executor-types.js";
 import { parseVote as parsePeerReviewVote } from "../peer-review-executor.js";
 import type { StepExecutionServices } from "./types.js";
 

@@ -1,6 +1,6 @@
 import type { ToolCall } from "@obora/adapters";
 import type { WorkflowStep } from "../../workflow.js";
-import type { StepContext, StepResult, StepExecutorConfig } from "../../step-executor.js";
+import type { StepContext, StepResult, StepExecutorConfig } from "../../step-executor-types.js";
 
 /**
  * Shared services exposed to step execution strategies.

@@ -1,4 +1,4 @@
-import type { StepResult } from "../step-executor.js";
+import type { StepResult } from "../step-executor-types.js";
 import { DEFAULTS } from "../defaults.js";
 
 // ── Types ──────────────────────────────────────────────────────────────────
