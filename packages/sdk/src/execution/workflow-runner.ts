@@ -1,4 +1,5 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
+
 import { basename, join } from "node:path";
 
 import { loadConfig, resolveProviderConfig, type OboraConfig } from "../config-loader.js";
@@ -66,18 +67,13 @@ import {
   type SharedMemorySnapshot,
   type SharedMemoryStore,
 } from "../shared-memory/store.js";
-import { TKGProjector, projectAuditEventToTemporalNode } from "../tkg/projector.js";
+import { TKGProjector } from "../tkg/projector.js";
 import { loadAgentsFromYamlFile, loadWorkflowAgents } from "../agents/source-loaders.js";
 import {
-  buildSharedMemorySnapshotFromTKGPromotion,
-  summarizeTKGPromotionApply,
   type TKGApprovedReviewQueueApplySummary,
 } from "../tkg/apply.js";
-import { evaluateTKGPromotion, summarizeTKGPromotionEvaluation } from "../tkg/promotion.js";
 import {
   restoreTKGRollbackFromStore,
-  summarizeTKGRollbackEntries,
-  type TKGRollbackEntry,
   type TKGRollbackRestoreSummary,
   type TKGRollbackStore,
 } from "../tkg/rollback.js";
@@ -89,11 +85,11 @@ import {
   type TKGReviewQueueStore,
 } from "../tkg/review-queue.js";
 import {
-  FileStagingTKGStore,
   type ProjectableTKGEventType,
   type StagingTKGStore,
 } from "../tkg/store.js";
 import { TKGService } from "./tkg-service.js";
+import { TKGPromotionEngine } from "./tkg-promotion-engine.js";
 import { DEFAULTS } from "../defaults.js";
 import type { FailureEntry } from "../blackboard/blackboard-manager.js";
 
@@ -182,9 +178,11 @@ export interface WorkflowRunnerDeps {
 export class WorkflowRunner {
   private readonly repairLoopSummaries = new Map<string, PersistedRepairLoopSummary>();
   private readonly tkgService: TKGService;
+  private readonly tkgPromotionEngine: TKGPromotionEngine;
 
   constructor(private readonly deps: WorkflowRunnerDeps) {
     this.tkgService = new TKGService(deps);
+    this.tkgPromotionEngine = new TKGPromotionEngine({ eventBus: deps.eventBus });
   }
 
   // ── Agent YAML loader ────────────────────────────────────────────────────
@@ -623,252 +621,6 @@ export class WorkflowRunner {
     }
 
     return { importedScopes, mergedSnapshot };
-  }
-
-  private async persistSharedMemory(
-    store: SharedMemoryStore | undefined,
-    scopes: MemoryScope[],
-    blackboard: BlackboardManager,
-    executionId: string
-  ): Promise<void> {
-    if (!store || scopes.length === 0) return;
-    const snapshot = blackboard.exportPersistentSnapshot(executionId);
-    for (const scope of scopes) {
-      if (typeof store.merge === "function") {
-        await store.merge(scope, snapshot);
-      } else {
-        await store.save(scope, snapshot);
-      }
-    }
-  }
-
-  private buildDeterministicTKGId(parts: unknown[]): string {
-    return createHash("sha1").update(JSON.stringify(parts)).digest("hex");
-  }
-
-  private async flushTKGPromotionCheckpoint(params: {
-    trigger: TKGPromotionTrigger;
-    execution: RuntimeExecution;
-    executionId: string;
-    workflowName: string;
-    tkgProjectionConfig: NonNullable<OboraConfig["tkgProjection"]> | undefined;
-    sharedMemoryStore: SharedMemoryStore | undefined;
-    sharedMemoryScopes: MemoryScope[];
-    stagingTKGStore: StagingTKGStore | undefined;
-    tkgProjectionScopes: MemoryScope[];
-    tkgPromotionApplyScopes: MemoryScope[];
-    tkgRollbackStore: TKGRollbackStore | undefined;
-    tkgReviewQueueStore: TKGReviewQueueStore | undefined;
-    pendingEvent?: AuditEvent & { type: ProjectableTKGEventType };
-  }): Promise<void> {
-    const {
-      trigger,
-      execution,
-      executionId,
-      workflowName,
-      tkgProjectionConfig,
-      sharedMemoryStore,
-      sharedMemoryScopes,
-      stagingTKGStore,
-      tkgProjectionScopes,
-      tkgPromotionApplyScopes,
-      tkgRollbackStore,
-      tkgReviewQueueStore,
-      pendingEvent,
-    } = params;
-
-    if (!stagingTKGStore || tkgProjectionScopes.length === 0) {
-      return;
-    }
-
-    const evaluationScope = tkgProjectionScopes.at(-1)!;
-    const loadedStagingSnapshot = await stagingTKGStore.load(evaluationScope);
-    let stagingSnapshot = loadedStagingSnapshot;
-
-    if (pendingEvent) {
-      const pendingNode = projectAuditEventToTemporalNode(pendingEvent, workflowName);
-      stagingSnapshot = {
-        nodes: [
-          ...(loadedStagingSnapshot?.nodes ?? []).filter((node) => node.id !== pendingNode.id),
-          pendingNode,
-        ],
-      };
-    }
-
-    if (!stagingSnapshot) {
-      return;
-    }
-
-    const evaluationMode =
-      tkgProjectionConfig?.promotion?.evaluationMode ??
-      (trigger === "execution_end" ? "full_history" : "latest_effective");
-
-    const promotionEvaluation = evaluateTKGPromotion(stagingSnapshot, {
-      minConfidence: tkgProjectionConfig?.promotion?.minConfidence,
-      confidenceSpreadThreshold: tkgProjectionConfig?.promotion?.confidenceSpreadThreshold,
-      confidenceConflictMode: tkgProjectionConfig?.promotion?.confidenceConflictMode,
-      executionId,
-      evaluationMode,
-    });
-    const promotionSummary = summarizeTKGPromotionEvaluation(promotionEvaluation);
-
-    if (process.env.OBORA_DEBUG === "1") {
-      await this.deps.eventBus.emit("tkg.checkpoint", executionId, {
-        trigger,
-        evaluationMode,
-        scope: `${evaluationScope.level}:${evaluationScope.key}`,
-        candidateCount: promotionSummary.candidateCount,
-        promotableCount: promotionSummary.promotableCount,
-        reviewQueueCount: promotionSummary.reviewQueueCount,
-        candidateNodeIds: promotionEvaluation.candidates.map((candidate) => candidate.nodeId),
-      });
-    }
-
-    execution.outputs.__tkg_promotion__ = {
-      trigger,
-      scope: `${evaluationScope.level}:${evaluationScope.key}`,
-      minConfidence: tkgProjectionConfig?.promotion?.minConfidence ?? 0.8,
-      allowedEventTypes: tkgProjectionConfig?.promotion?.allowedEventTypes ?? [
-        "workflow.validation_passed",
-        "workflow.repair_completed",
-      ],
-      ...promotionSummary,
-    };
-
-    const promotionApplyScopes =
-      tkgPromotionApplyScopes.length > 0 ? tkgPromotionApplyScopes : sharedMemoryScopes;
-    if (
-      sharedMemoryStore &&
-      promotionApplyScopes.length > 0 &&
-      tkgProjectionConfig?.promotion?.enabled !== false
-    ) {
-      const promotionSnapshot = buildSharedMemorySnapshotFromTKGPromotion(
-        stagingSnapshot,
-        promotionEvaluation,
-        executionId,
-        {
-          allowedEventTypes: tkgProjectionConfig?.promotion?.allowedEventTypes,
-        }
-      );
-
-      if (promotionSnapshot.knowledge.facts.length > 0) {
-        const rollbackEntries: TKGRollbackEntry[] = [];
-
-        for (const scope of promotionApplyScopes) {
-          if (tkgRollbackStore) {
-            const existingSnapshot = await sharedMemoryStore.load(scope);
-            if (existingSnapshot) {
-              const rollbackEntry: TKGRollbackEntry = {
-                id: this.buildDeterministicTKGId([
-                  "rollback",
-                  executionId,
-                  scope.level,
-                  scope.key,
-                  promotionSnapshot.knowledge.facts.map((fact) => fact.id).sort(),
-                ]),
-                createdAt: new Date().toISOString(),
-                executionId,
-                workflowName,
-                scope: `${scope.level}:${scope.key}`,
-                reason: "pre-tkg-promotion-apply",
-                snapshot: existingSnapshot,
-              };
-
-              if (typeof tkgRollbackStore.append === "function") {
-                await tkgRollbackStore.append(scope, rollbackEntry);
-              } else {
-                const existing = await tkgRollbackStore.load(scope);
-                await tkgRollbackStore.save(scope, {
-                  entries: [...(existing?.entries ?? []), rollbackEntry],
-                });
-              }
-              rollbackEntries.push(rollbackEntry);
-            }
-          }
-
-          if (typeof sharedMemoryStore.merge === "function") {
-            await sharedMemoryStore.merge(scope, promotionSnapshot);
-          } else {
-            await sharedMemoryStore.save(scope, promotionSnapshot);
-          }
-        }
-
-        const applySummary = summarizeTKGPromotionApply(promotionSnapshot);
-        execution.outputs.__tkg_promotion_apply__ = {
-          trigger,
-          scopes: promotionApplyScopes.map((scope) => `${scope.level}:${scope.key}`),
-          ...applySummary,
-        };
-
-        if (process.env.OBORA_DEBUG === "1") {
-          await this.deps.eventBus.emit("tkg.apply", executionId, {
-            trigger,
-            scopes: promotionApplyScopes.map((scope) => `${scope.level}:${scope.key}`),
-            appliedFactCount: applySummary.appliedFactCount,
-            appliedNodeIds: applySummary.appliedNodeIds,
-          });
-        }
-
-        if (rollbackEntries.length > 0) {
-          const rollbackSummary = summarizeTKGRollbackEntries(rollbackEntries);
-          execution.outputs.__tkg_promotion_rollback__ = {
-            trigger,
-            ...rollbackSummary,
-          };
-
-          if (process.env.OBORA_DEBUG === "1") {
-            await this.deps.eventBus.emit("tkg.rollback", executionId, {
-              trigger,
-              ...rollbackSummary,
-            });
-          }
-        }
-      }
-    }
-
-    if (tkgReviewQueueStore && promotionEvaluation.reviewQueue.length > 0) {
-      const reviewItem = {
-        id: this.buildDeterministicTKGId([
-          "review-queue",
-          executionId,
-          evaluationScope.level,
-          evaluationScope.key,
-          promotionEvaluation.reviewQueue,
-        ]),
-        createdAt: new Date().toISOString(),
-        scope: `${evaluationScope.level}:${evaluationScope.key}`,
-        workflowName,
-        status: "open" as const,
-        candidateNodeIds: promotionEvaluation.candidates
-          .filter((candidate) => candidate.requiresReview)
-          .map((candidate) => candidate.nodeId),
-        conflicts: promotionEvaluation.reviewQueue,
-        summary: promotionSummary,
-      };
-
-      if (typeof tkgReviewQueueStore.enqueue === "function") {
-        await tkgReviewQueueStore.enqueue(evaluationScope, reviewItem);
-      } else {
-        const existing = await tkgReviewQueueStore.load(evaluationScope);
-        await tkgReviewQueueStore.save(evaluationScope, {
-          items: [...(existing?.items ?? []), reviewItem],
-        });
-      }
-
-      execution.outputs.__tkg_review_queue__ = {
-        trigger,
-        scope: `${evaluationScope.level}:${evaluationScope.key}`,
-        queuedItems: promotionEvaluation.reviewQueue.length,
-      };
-
-      if (process.env.OBORA_DEBUG === "1") {
-        await this.deps.eventBus.emit("tkg.review_queue", executionId, {
-          trigger,
-          scope: `${evaluationScope.level}:${evaluationScope.key}`,
-          queuedItems: promotionEvaluation.reviewQueue.length,
-        });
-      }
-    }
   }
 
   private recordValidationFailure(
@@ -1959,7 +1711,7 @@ export class WorkflowRunner {
         eventBus.on(trigger, async (event) => {
           if (event.executionId !== executionId) return;
           try {
-            await this.flushTKGPromotionCheckpoint({
+            await this.tkgPromotionEngine.flushTKGPromotionCheckpoint({
               trigger,
               execution,
               executionId,
@@ -2033,10 +1785,11 @@ export class WorkflowRunner {
         workflowName,
         failurePatterns: this.extractFailurePatterns(blackboard, reflector),
       });
-      await this.persistSharedMemory(
+      const sharedMemorySnapshot = blackboard.exportPersistentSnapshot(executionId);
+      await this.tkgPromotionEngine.persistSharedMemory(
         sharedMemoryStore,
         sharedMemoryScopes,
-        blackboard,
+        sharedMemorySnapshot,
         executionId
       );
       if (tkgProjector) {
@@ -2044,7 +1797,7 @@ export class WorkflowRunner {
       }
       if (tkgPromotionTriggers.includes("execution_end")) {
         try {
-          await this.flushTKGPromotionCheckpoint({
+          await this.tkgPromotionEngine.flushTKGPromotionCheckpoint({
             trigger: "execution_end",
             execution,
             executionId,
