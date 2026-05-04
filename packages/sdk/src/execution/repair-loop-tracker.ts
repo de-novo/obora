@@ -1,7 +1,6 @@
 import type { ValidationResult } from "../validation-repair.js";
 import type {
   PersistedRepairLoopSummary,
-  PersistedValidationFailureDetail,
 } from "../runtime-types.js";
 
 export class RepairLoopTracker {

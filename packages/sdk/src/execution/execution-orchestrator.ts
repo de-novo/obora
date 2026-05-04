@@ -6,7 +6,7 @@ import { topologicalSort } from "../dependency-resolver.js";
 import { ParallelScheduler } from "./parallel-scheduler.js";
 import type { StorageAdapter, PolicyHashInput } from "@obora/runtime";
 import { OboraError, OboraErrorCode } from "../runtime-types.js";
-import type { RunOptions, RuntimeExecution, AuditEvent, TKGPromotionTrigger } from "../runtime-types.js";
+import type { RunOptions, RuntimeExecution, AuditEvent } from "../runtime-types.js";
 import type { WorkflowDef } from "../workflow.js";
 import { BlackboardManager } from "../blackboard/blackboard-manager.js";
 import { ExecutionObserver } from "../blackboard/execution-observer.js";
@@ -33,11 +33,6 @@ import { TKGPromotionEngine } from "./tkg-promotion-engine.js";
 import { EngineBuilder } from "./engine-builder.js";
 import { StepExecutionEngine } from "./step-execution-engine.js";
 import { RepairLoopTracker } from "./repair-loop-tracker.js";
-import type { ExecutionEngine } from "./engine-builder.js";
-import {
-  getValidationStepConfig,
-  type ValidationResult,
-} from "../validation-repair.js";
 import {
   type HookExecutionResult,
   type WorkflowHookLifecycle,
@@ -745,5 +740,13 @@ export class ExecutionOrchestrator {
     this.deps.repairLoopTracker.clearSummary(executionId);
 
     return execution;
+  }
+
+  getPersistedRepairLoopSummary(executionId: string) {
+    return this.deps.repairLoopTracker.getSummary(executionId);
+  }
+
+  clearPersistedRepairLoopSummary(executionId: string): void {
+    this.deps.repairLoopTracker.clearSummary(executionId);
   }
 }

@@ -1,13 +1,13 @@
 import { createHash } from "node:crypto";
 import type { EventBus } from "../events/event-bus.js";
-import type { AuditEvent, RuntimeExecution, TKGPromotionTrigger } from "../runtime-types.js";
+import type { AuditEvent, RuntimeExecution } from "../runtime-types.js";
 import type { OboraConfig } from "../runtime-types.js";
 import type { MemoryScope, SharedMemoryStore } from "../shared-memory/store.js";
 import type {
   StagingTKGStore,
   ProjectableTKGEventType,
 } from "../tkg/store.js";
-import type { TKGRollbackStore, TKGRollbackEntry } from "../tkg/rollback.js";
+import type { TKGRollbackStore } from "../tkg/rollback.js";
 import type { TKGReviewQueueStore } from "../tkg/review-queue.js";
 import { projectAuditEventToTemporalNode } from "../tkg/projector.js";
 import {

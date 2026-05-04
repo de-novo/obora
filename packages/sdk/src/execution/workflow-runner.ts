@@ -1,5 +1,4 @@
 import type { LLMConfig } from "../runtime-types.js";
-import { StepExecutor } from "../step-executor.js";
 import type { LLMAdapterLike } from "../step-executor.js";
 import { CostTracker } from "../cost-tracker.js";
 import type { WorkflowDef, WorkflowStep } from "../workflow.js";
@@ -116,11 +115,11 @@ export class WorkflowRunner {
   getPersistedRepairLoopSummary(
     executionId: string
   ): PersistedRepairLoopSummary | undefined {
-    return this.repairLoopTracker.getSummary(executionId);
+    return this.orchestrator.getPersistedRepairLoopSummary(executionId);
   }
 
   clearPersistedRepairLoopSummary(executionId: string): void {
-    this.repairLoopTracker.clearSummary(executionId);
+    this.orchestrator.clearPersistedRepairLoopSummary(executionId);
   }
 
   // ── Core step-execution loop ─────────────────────────────────────────────

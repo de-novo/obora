@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { basename, join } from "node:path";
 import type { WorkflowDef } from "../workflow.js";
-import type { OboraRuntimeConfig, TKGPromotionTrigger, RuntimeExecution } from "../runtime-types.js";
+import type { OboraRuntimeConfig, TKGPromotionTrigger } from "../runtime-types.js";
 import type { OboraConfig } from "../config-loader.js";
 import { loadConfig } from "../config-loader.js";
 import {
