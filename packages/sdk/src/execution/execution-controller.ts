@@ -22,6 +22,7 @@ import {
   type AgentFactory,
 } from "../runtime-types.js";
 import type { WorkflowDef } from "../workflow.js";
+import { PersistenceCoordinator } from "./persistence-coordinator.js";
 
 export interface ExecutionControllerOptions {
   config: OboraRuntimeConfig;
@@ -42,7 +43,14 @@ export interface ExecutionControllerOptions {
  *   - RunHandle creation with cancel/timeout/signal support
  */
 export class ExecutionController {
-  constructor(private readonly opts: ExecutionControllerOptions) {}
+  private readonly persistenceCoordinator: PersistenceCoordinator;
+
+  constructor(private readonly opts: ExecutionControllerOptions) {
+    this.persistenceCoordinator = new PersistenceCoordinator({
+      persistenceManager: opts.persistenceManager,
+      logger: opts.config.logger,
+    });
+  }
 
   setPolicy(policy: PolicyDefinition | undefined): void {
     this.opts.policy = policy;
@@ -139,7 +147,10 @@ export class ExecutionController {
             this.opts.config.config?.persistence ?? this.opts.config.persistence;
           const persistenceEnabled = persistenceConfig?.enabled ?? false;
 
-          const { repairAttempts, repairLoopSummary } = await this.opts.runner.saveRunOnError(
+          const repairLoopSummary = this.opts.runner.getPersistedRepairLoopSummary(executionId);
+          const repairAttempts = repairLoopSummary?.repairStarted ?? 0;
+
+          await this.persistenceCoordinator.saveRunOnError(
             executionId,
             name,
             execution,
@@ -147,7 +158,9 @@ export class ExecutionController {
             errorCode,
             persistenceEnabled,
             persistenceConfig,
+            repairLoopSummary,
           );
+          this.opts.runner.clearPersistedRepairLoopSummary(executionId);
 
           // P0: Auto-rollback on execution failure (not budget exceeded)
           if (!budgetExceeded) {
@@ -310,7 +323,8 @@ export class ExecutionController {
           this.opts.config.config?.persistence ?? this.opts.config.persistence;
         const persistenceEnabled = persistenceConfig?.enabled ?? false;
 
-        await this.opts.runner.saveRunOnError(
+        const repairLoopSummary = this.opts.runner.getPersistedRepairLoopSummary(executionId);
+        await this.persistenceCoordinator.saveRunOnError(
           executionId,
           name,
           execution,
@@ -318,7 +332,9 @@ export class ExecutionController {
           OboraErrorCode.SDK_EXECUTION_CANCELLED,
           persistenceEnabled,
           persistenceConfig,
+          repairLoopSummary,
         );
+        this.opts.runner.clearPersistedRepairLoopSummary(executionId);
 
         await this.opts.eventBus.emit("execution_end", executionId, {
           workflowName: name,

@@ -13,7 +13,8 @@ import { BudgetExceededError } from "../../cost-tracker.js";
 function makeMockRunner(): WorkflowRunner {
   return {
     executeRun: vi.fn().mockResolvedValue(undefined),
-    saveRunOnError: vi.fn().mockResolvedValue({ repairAttempts: 0, repairLoopSummary: undefined }),
+    getPersistedRepairLoopSummary: vi.fn().mockReturnValue(undefined),
+    clearPersistedRepairLoopSummary: vi.fn(),
     rollbackTKGOnExecutionFailure: vi.fn().mockResolvedValue({ restored: false, restoredFactCount: 0, scope: "" }),
   } as unknown as WorkflowRunner;
 }

@@ -33,6 +33,7 @@ import type {
   AgentFactory,
   AuditEvent,
   OboraRuntimeConfig,
+  PersistedRepairLoopSummary,
   RuntimeExecution,
   TKGPromotionTrigger,
 } from "../runtime-types.js";
@@ -118,37 +119,6 @@ interface RepairLoopRuntimeState {
   attempt: number;
   repeatedSignatureCount: number;
   lastSignature?: string;
-}
-
-interface PersistedValidationFailureDetail {
-  stepName?: string;
-  summary?: string;
-  errorCode?: string;
-  logPath?: string;
-  failedChecks: Array<{
-    name?: string;
-    message?: string;
-    severity?: string;
-    file?: string;
-  }>;
-}
-
-interface PersistedRepairLoopSummary {
-  validationFailed: number;
-  validationPassed: number;
-  repairStarted: number;
-  repairCompleted: number;
-  repairNoProgress: number;
-  backEdgeTriggered: number;
-  backEdgeExhausted: number;
-  lastValidationSummary?: string;
-  lastValidationStep?: string;
-  lastRepairStep?: string;
-  lastAttempt?: number;
-  lastNoProgressReason?: string;
-  lastExhaustReason?: string;
-  lastStopCategory?: "no_progress" | "repeated_critical_issue" | "exhausted";
-  recentValidationFailures: PersistedValidationFailureDetail[];
 }
 
 const DEFAULT_MAX_CONCURRENCY = 3;
@@ -505,7 +475,7 @@ export class WorkflowRunner {
     return created;
   }
 
-  private getPersistedRepairLoopSummary(
+  getPersistedRepairLoopSummary(
     executionId: string
   ): PersistedRepairLoopSummary | undefined {
     const summary = this.repairLoopSummaries.get(executionId);
@@ -521,7 +491,7 @@ export class WorkflowRunner {
     return hasActivity ? structuredClone(summary) : undefined;
   }
 
-  private clearPersistedRepairLoopSummary(executionId: string): void {
+  clearPersistedRepairLoopSummary(executionId: string): void {
     this.repairLoopSummaries.delete(executionId);
   }
 
@@ -1918,52 +1888,6 @@ export class WorkflowRunner {
     workflow: WorkflowDef
   ): Promise<TKGRollbackRestoreSummary> {
     return this.tkgService.rollbackTKGOnExecutionFailure(executionId, workflow);
-  }
-
-  /**
-   * Saves the run record on failure/abort.
-   */
-  async saveRunOnError(
-    executionId: string,
-    workflowName: string,
-    execution: RuntimeExecution,
-    variables: Record<string, unknown> | undefined,
-    errorCode: string,
-    persistenceEnabled: boolean,
-    persistenceConfig: OboraConfig["persistence"] | undefined
-  ): Promise<{ repairAttempts: number; repairLoopSummary?: PersistedRepairLoopSummary }> {
-    const repairLoopSummary = this.getPersistedRepairLoopSummary(executionId);
-    const repairAttempts = repairLoopSummary?.repairStarted ?? 0;
-    if (!persistenceEnabled) {
-      this.clearPersistedRepairLoopSummary(executionId);
-      return { repairAttempts, repairLoopSummary };
-    }
-    const { persistenceManager, config } = this.deps;
-    try {
-      const adapter = await persistenceManager.getStorageAdapter(
-        persistenceEnabled,
-        persistenceConfig
-      );
-      await adapter.saveRun({
-        id: executionId,
-        workflowName,
-        status: execution.status as RunRecord["status"],
-        input: { value: execution.input ?? null },
-        startedAt: execution.startedAt.toISOString(),
-        completedAt: execution.endedAt?.toISOString(),
-        metadata: {
-          variables,
-          error: execution.error,
-          errorCode,
-          ...(repairLoopSummary ? { repairLoop: repairLoopSummary } : {}),
-        },
-      });
-    } catch (err) {
-      config.logger?.warn?.("[persistence] Failed to save run on error:", err);
-    } finally {
-      this.clearPersistedRepairLoopSummary(executionId);
-    }
-    return { repairAttempts, repairLoopSummary };
   }
 
   // ── Resume execution ─────────────────────────────────────────────────────

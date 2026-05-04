@@ -385,3 +385,34 @@ export interface OboraRuntimeConfig {
     driftPolicy?: "reject" | "warn" | "ignore";
   };
 }
+
+export interface PersistedValidationFailureDetail {
+  stepName?: string;
+  summary?: string;
+  errorCode?: string;
+  logPath?: string;
+  failedChecks: Array<{
+    name?: string;
+    message?: string;
+    severity?: string;
+    file?: string;
+  }>;
+}
+
+export interface PersistedRepairLoopSummary {
+  validationFailed: number;
+  validationPassed: number;
+  repairStarted: number;
+  repairCompleted: number;
+  repairNoProgress: number;
+  backEdgeTriggered: number;
+  backEdgeExhausted: number;
+  lastValidationSummary?: string;
+  lastValidationStep?: string;
+  lastRepairStep?: string;
+  lastAttempt?: number;
+  lastNoProgressReason?: string;
+  lastExhaustReason?: string;
+  lastStopCategory?: "no_progress" | "repeated_critical_issue" | "exhausted";
+  recentValidationFailures: PersistedValidationFailureDetail[];
+}
