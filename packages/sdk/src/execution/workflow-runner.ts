@@ -94,6 +94,7 @@ import { TKGService } from "./tkg-service.js";
 import { TKGPromotionEngine } from "./tkg-promotion-engine.js";
 import { DEFAULTS } from "../defaults.js";
 import type { FailureEntry } from "../blackboard/blackboard-manager.js";
+import { RepairLoopTracker } from "./repair-loop-tracker.js";
 
 /** Duck-type for reflector: both ExecutionReflector and ReflectorEngine implement this. */
 type ReflectorLike = {
@@ -147,7 +148,7 @@ export interface WorkflowRunnerDeps {
  *  - Knowledge context injection
  */
 export class WorkflowRunner {
-  private readonly repairLoopSummaries = new Map<string, PersistedRepairLoopSummary>();
+  private readonly repairLoopTracker = new RepairLoopTracker();
   private readonly tkgService: TKGService;
   private readonly tkgPromotionEngine: TKGPromotionEngine;
 
@@ -458,42 +459,14 @@ export class WorkflowRunner {
     }
   }
 
-  private ensureRepairLoopSummary(executionId: string): PersistedRepairLoopSummary {
-    const existing = this.repairLoopSummaries.get(executionId);
-    if (existing) return existing;
-
-    const created: PersistedRepairLoopSummary = {
-      validationFailed: 0,
-      validationPassed: 0,
-      repairStarted: 0,
-      repairCompleted: 0,
-      repairNoProgress: 0,
-      backEdgeTriggered: 0,
-      backEdgeExhausted: 0,
-      recentValidationFailures: [],
-    };
-    this.repairLoopSummaries.set(executionId, created);
-    return created;
-  }
-
   getPersistedRepairLoopSummary(
     executionId: string
   ): PersistedRepairLoopSummary | undefined {
-    const summary = this.repairLoopSummaries.get(executionId);
-    if (!summary) return undefined;
-    const hasActivity =
-      summary.validationFailed > 0 ||
-      summary.validationPassed > 0 ||
-      summary.repairStarted > 0 ||
-      summary.repairCompleted > 0 ||
-      summary.repairNoProgress > 0 ||
-      summary.backEdgeTriggered > 0 ||
-      summary.backEdgeExhausted > 0;
-    return hasActivity ? structuredClone(summary) : undefined;
+    return this.repairLoopTracker.getSummary(executionId);
   }
 
   clearPersistedRepairLoopSummary(executionId: string): void {
-    this.repairLoopSummaries.delete(executionId);
+    this.repairLoopTracker.clearSummary(executionId);
   }
 
   private extractFailurePatterns(
@@ -599,25 +572,7 @@ export class WorkflowRunner {
     stepName: string,
     validationResult: ValidationResult
   ): void {
-    const summary = this.ensureRepairLoopSummary(executionId);
-    summary.validationFailed += 1;
-    summary.lastValidationStep = stepName;
-    summary.lastValidationSummary = validationResult.summary;
-    summary.recentValidationFailures.push({
-      stepName,
-      summary: validationResult.summary,
-      ...(validationResult.errorCode ? { errorCode: validationResult.errorCode } : {}),
-      ...(validationResult.logPath ? { logPath: validationResult.logPath } : {}),
-      failedChecks: validationResult.failedChecks.map((check) => ({
-        ...(check.name ? { name: check.name } : {}),
-        ...(check.message ? { message: check.message } : {}),
-        ...(check.severity ? { severity: check.severity } : {}),
-        ...(check.file ? { file: check.file } : {}),
-      })),
-    });
-    if (summary.recentValidationFailures.length > 5) {
-      summary.recentValidationFailures.shift();
-    }
+    this.repairLoopTracker.recordValidationFailure(executionId, stepName, validationResult);
   }
 
   private recordValidationPass(
@@ -625,24 +580,15 @@ export class WorkflowRunner {
     stepName: string,
     validationResult: ValidationResult
   ): void {
-    const summary = this.ensureRepairLoopSummary(executionId);
-    summary.validationPassed += 1;
-    summary.lastValidationStep = stepName;
-    summary.lastValidationSummary = validationResult.summary;
+    this.repairLoopTracker.recordValidationPass(executionId, stepName, validationResult);
   }
 
   private recordRepairStarted(executionId: string, stepName: string, attempt?: number): void {
-    const summary = this.ensureRepairLoopSummary(executionId);
-    summary.repairStarted += 1;
-    summary.lastRepairStep = stepName;
-    if (attempt !== undefined) summary.lastAttempt = attempt;
+    this.repairLoopTracker.recordRepairStarted(executionId, stepName, attempt);
   }
 
   private recordRepairCompleted(executionId: string, stepName: string, attempt?: number): void {
-    const summary = this.ensureRepairLoopSummary(executionId);
-    summary.repairCompleted += 1;
-    summary.lastRepairStep = stepName;
-    if (attempt !== undefined) summary.lastAttempt = attempt;
+    this.repairLoopTracker.recordRepairCompleted(executionId, stepName, attempt);
   }
 
   private recordRepairNoProgress(
@@ -650,22 +596,15 @@ export class WorkflowRunner {
     reason: string,
     category: "no_progress" | "repeated_critical_issue" = "no_progress"
   ): void {
-    const summary = this.ensureRepairLoopSummary(executionId);
-    summary.repairNoProgress += 1;
-    summary.lastNoProgressReason = reason;
-    summary.lastStopCategory = category;
+    this.repairLoopTracker.recordRepairNoProgress(executionId, reason, category);
   }
 
   private recordBackEdgeTriggered(executionId: string): void {
-    const summary = this.ensureRepairLoopSummary(executionId);
-    summary.backEdgeTriggered += 1;
+    this.repairLoopTracker.recordBackEdgeTriggered(executionId);
   }
 
   private recordBackEdgeExhausted(executionId: string, reason: string): void {
-    const summary = this.ensureRepairLoopSummary(executionId);
-    summary.backEdgeExhausted += 1;
-    summary.lastExhaustReason = reason;
-    summary.lastStopCategory ??= "exhausted";
+    this.repairLoopTracker.recordBackEdgeExhausted(executionId, reason);
   }
 
   private buildRepairContext(
