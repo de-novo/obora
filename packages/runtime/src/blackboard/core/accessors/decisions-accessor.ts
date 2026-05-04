@@ -17,7 +17,7 @@ import type {
 } from "../../types";
 import type { AgentId } from "../../types";
 import { AgendaStatus, createOpinionId, createAgendaId } from "../../types";
-import { BlackboardError, BlackboardErrorCode } from "../blackboard";
+import { BlackboardError, BlackboardErrorCode } from "../errors";
 
 /**
  * 의사결정 섹션 접근자

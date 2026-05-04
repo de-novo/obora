@@ -10,7 +10,7 @@ import { AgentStatusEnum } from "../../types";
 import type { Task, TaskId, TaskError } from "../../types";
 import { TaskStatus, TaskPriority } from "../../types";
 import type { AgentId } from "../../types";
-import { BlackboardError, BlackboardErrorCode, PathNotFoundError } from "../blackboard";
+import { BlackboardError, BlackboardErrorCode, PathNotFoundError } from "../errors";
 
 /**
  * 상태 섹션 접근자

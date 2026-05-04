@@ -17,7 +17,7 @@ import type {
   PatternQuery,
 } from '../../types';
 import type { AgentId } from '../../types';
-import { BlackboardError, BlackboardErrorCode } from '../blackboard';
+import { BlackboardError, BlackboardErrorCode } from '../errors';
 
 /**
  * 지식 섹션 접근자
