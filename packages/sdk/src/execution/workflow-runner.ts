@@ -404,55 +404,6 @@ export class WorkflowRunner {
   }
 
 
-  private async runStepHook(
-    workflow: WorkflowDef,
-    step: WorkflowStep,
-    lifecycle: WorkflowHookLifecycle,
-    executionId: string,
-    options: {
-      signal?: AbortSignal;
-      continueOnError?: boolean;
-      bestEffort?: boolean;
-    } = {}
-  ): Promise<HookExecutionResult | undefined> {
-    const hook = resolveWorkflowHook(workflow.hooks, step.hooks, lifecycle);
-    if (!hook) {
-      return undefined;
-    }
-
-    const result = await executeWorkflowHook(hook, lifecycle, {
-      cwd: process.cwd(),
-      signal: options.signal,
-    });
-
-    if (result.success) {
-      return result;
-    }
-
-    const failureDetails = {
-      stepName: step.name,
-      lifecycle,
-      command: result.command,
-      exitCode: result.exitCode,
-      signal: result.signal,
-      stdout: result.stdout,
-      stderr: result.stderr,
-      durationMs: result.durationMs,
-    };
-
-    if (options.continueOnError || options.bestEffort) {
-      await this.deps.eventBus.emit("warning", executionId, {
-        message: `Hook '${lifecycle}' failed for step '${step.name}'`,
-        bestEffort: options.bestEffort ?? false,
-        ...failureDetails,
-      });
-      return result;
-    }
-
-    const exitText = result.exitCode === null ? "unknown" : String(result.exitCode);
-    const detailText = result.stderr.trim() || result.stdout.trim() || `exit code ${exitText}`;
-    throw new Error(`Hook '${lifecycle}' failed for step '${step.name}': ${detailText}`);
-  }
 
   // ── Core step-execution loop ─────────────────────────────────────────────
 
@@ -572,7 +523,7 @@ export class WorkflowRunner {
         ...(overrides?.targetResolution ? { routeResolution: overrides.targetResolution } : {}),
       });
 
-      await this.runStepHook(workflow, step, "post_cycle", executionId, {
+      await this.stepExecutionEngine.runStepHook(workflow, step, "post_cycle", executionId, {
         signal,
         continueOnError: true,
         bestEffort: true,
@@ -682,7 +633,7 @@ export class WorkflowRunner {
       const hookOutputs: Partial<Record<WorkflowHookLifecycle, HookExecutionResult>> = {};
 
       try {
-        const preStepHook = await this.runStepHook(workflow, step, "pre_step", executionId, {
+        const preStepHook = await this.stepExecutionEngine.runStepHook(workflow, step, "pre_step", executionId, {
           signal,
         });
         if (preStepHook) {
@@ -690,7 +641,7 @@ export class WorkflowRunner {
         }
 
         if (getValidationStepConfig(step.config)?.enabled) {
-          const preValidationHook = await this.runStepHook(
+          const preValidationHook = await this.stepExecutionEngine.runStepHook(
             workflow,
             step,
             "pre_validation",
@@ -712,7 +663,7 @@ export class WorkflowRunner {
           ...(repairContext ? { repairContext } : {}),
         });
 
-        const postStepHook = await this.runStepHook(workflow, step, "post_step", executionId, {
+        const postStepHook = await this.stepExecutionEngine.runStepHook(workflow, step, "post_step", executionId, {
           signal,
           continueOnError: true,
         });
@@ -926,174 +877,6 @@ export class WorkflowRunner {
    * Does NOT handle back-edges or repair loops — those are the caller's responsibility.
    * Throws on step failure.
    */
-  private async executeSingleStep(
-    step: WorkflowStep,
-    workflow: WorkflowDef,
-    execution: RuntimeExecution,
-    stepExecutor: StepExecutor | undefined,
-    costTracker: CostTracker | undefined,
-    executionId: string,
-    persistenceEnabled: boolean,
-    persistenceAdapter: StorageAdapter | null,
-    signal?: AbortSignal,
-    blackboard?: BlackboardManager
-  ): Promise<{ output: unknown; raw?: unknown }> {
-    const { eventBus, config } = this.deps;
-
-    if (costTracker) {
-      await costTracker.preStepGate(step.name);
-    }
-
-    const stepStartedAt = Date.now();
-    if (blackboard) {
-      blackboard.recordStepStart(step.name);
-    }
-    await eventBus.emit("step_start", executionId, {
-      stepName: step.name,
-      agent: step.agent,
-    });
-
-    const hookOutputs: Partial<Record<WorkflowHookLifecycle, HookExecutionResult>> = {};
-
-    const preStepHook = await this.runStepHook(workflow, step, "pre_step", executionId, {
-      signal,
-    });
-    if (preStepHook) {
-      hookOutputs.pre_step = preStepHook;
-    }
-
-    if (getValidationStepConfig(step.config)?.enabled) {
-      const preValidationHook = await this.runStepHook(
-        workflow,
-        step,
-        "pre_validation",
-        executionId,
-        { signal }
-      );
-      if (preValidationHook) {
-        hookOutputs.pre_validation = preValidationHook;
-      }
-    }
-
-    // Handle explicit parallel branches within a single step
-    let result: { output: unknown; raw?: unknown };
-    if (step.parallel && step.parallel.length > 0) {
-      result = await this.executeParallelBranches(step, execution, stepExecutor, signal);
-    } else {
-      if (!stepExecutor) {
-        throw OboraError.adapterUnavailable(new Error("No LLM adapter configured for step execution"));
-      }
-      result = await stepExecutor.executeStep(step, {
-        previousOutputs: execution.outputs,
-        signal,
-        ...(Object.keys(hookOutputs).length > 0 ? { hookOutputs } : {}),
-      });
-    }
-
-    const postStepHook = await this.runStepHook(workflow, step, "post_step", executionId, {
-      signal,
-      continueOnError: true,
-    });
-    if (postStepHook) {
-      hookOutputs.post_step = postStepHook;
-    }
-
-    // Record output
-    execution.outputs[step.name] = result.output;
-    execution.stepRecords[step.name] =
-      Object.keys(hookOutputs).length > 0 ? { ...result, hooks: hookOutputs } : result;
-    execution.completedSteps.push(step.name);
-
-    if (blackboard) {
-      blackboard.recordStepOutput(step.name, result.output);
-      blackboard.recordStepEnd(step.name);
-    }
-
-    // Persist
-    if (persistenceEnabled && persistenceAdapter) {
-      try {
-        const outputValue =
-          typeof result.output === "object" && result.output !== null
-            ? (result.output as Record<string, unknown>)
-            : { value: result.output };
-        await persistenceAdapter.saveStep({
-          id: `${executionId}:${step.name}`,
-          runId: executionId,
-          stepName: step.name,
-          status: "completed",
-          output: outputValue,
-          startedAt: new Date(stepStartedAt).toISOString(),
-          completedAt: new Date().toISOString(),
-          durationMs: Date.now() - stepStartedAt,
-        });
-      } catch (err) {
-        config.logger?.warn?.("[persistence] Failed to save step:", err);
-      }
-    }
-
-    await eventBus.emit("step_end", executionId, {
-      stepName: step.name,
-      status: "completed",
-      durationMs: Date.now() - stepStartedAt,
-      outputPreview:
-        typeof result.output === "string"
-          ? result.output.slice(0, DEFAULTS.OUTPUT_PREVIEW_LENGTH)
-          : JSON.stringify(result.output).slice(0, DEFAULTS.OUTPUT_PREVIEW_LENGTH),
-    });
-
-    return result;
-  }
-
-  // ── Parallel branch execution (fan-out-fan-in within a single step) ────
-
-  /**
-   * Executes explicit parallel branches defined on a step, then merges results.
-   */
-  private async executeParallelBranches(
-    step: WorkflowStep,
-    execution: RuntimeExecution,
-    stepExecutor: StepExecutor | undefined,
-    signal?: AbortSignal
-  ): Promise<{ output: unknown; raw?: unknown }> {
-    const branches = step.parallel!;
-    const mergeStrategy: MergeStrategy = step.merge ?? "concat";
-    const scheduler = new ParallelScheduler();
-
-    const settled = await Promise.allSettled(
-      branches.map(async (branch) => {
-        const branchStep: WorkflowStep = {
-          ...step,
-          agent: branch.agent,
-          input: branch.input ?? step.input,
-          parallel: undefined,
-          merge: undefined,
-        };
-
-        if (!stepExecutor) {
-          throw OboraError.adapterUnavailable(new Error("No LLM adapter configured for parallel branch execution"));
-        }
-
-        return stepExecutor.executeStep(branchStep, {
-          previousOutputs: execution.outputs,
-          signal,
-        });
-      })
-    );
-
-    const successResults = settled
-      .filter((r): r is PromiseFulfilledResult<StepResult> => r.status === "fulfilled")
-      .map((r) => r.value);
-
-    if (successResults.length === 0) {
-      const errors = settled
-        .filter((r): r is PromiseRejectedResult => r.status === "rejected")
-        .map((r) => (r.reason instanceof Error ? r.reason.message : String(r.reason)));
-      throw new Error(`All parallel branches failed for step '${step.name}': ${errors.join("; ")}`);
-    }
-
-    const merged = scheduler.mergeResults(successResults, mergeStrategy);
-    return { output: merged, raw: { branches: settled } };
-  }
 
   // ── Parallel step-execution loop ───────────────────────────────────────
 
@@ -1159,7 +942,7 @@ export class WorkflowRunner {
 
       const layerStartedAt = Date.now();
       const outcomes = await scheduler.executeParallelSteps(layer, async (step) => {
-        const result = await this.executeSingleStep(
+        const result = await this.stepExecutionEngine.executeSingleStep(
           step,
           workflow,
           execution,
@@ -1665,13 +1448,13 @@ export class WorkflowRunner {
       });
 
       try {
-        const preStepHook = await this.runStepHook(workflow, step, "pre_step", executionId);
+        const preStepHook = await this.stepExecutionEngine.runStepHook(workflow, step, "pre_step", executionId);
         if (preStepHook) {
           hookOutputs.pre_step = preStepHook;
         }
 
         if (getValidationStepConfig(step.config)?.enabled) {
-          const preValidationHook = await this.runStepHook(
+          const preValidationHook = await this.stepExecutionEngine.runStepHook(
             workflow,
             step,
             "pre_validation",
@@ -1690,7 +1473,7 @@ export class WorkflowRunner {
           ...(Object.keys(hookOutputs).length > 0 ? { hookOutputs } : {}),
         });
 
-        const postStepHook = await this.runStepHook(workflow, step, "post_step", executionId, {
+        const postStepHook = await this.stepExecutionEngine.runStepHook(workflow, step, "post_step", executionId, {
           continueOnError: true,
         });
         if (postStepHook) {
