@@ -10,6 +10,7 @@ Run the default gate in this order before any release candidate:
 pnpm typecheck
 pnpm lint
 pnpm test
+pnpm verify:coverage
 pnpm build
 ```
 
@@ -41,10 +42,22 @@ The release scripts and publish workflow treat the publishable package order as:
 Use the repo-local release gate before publishing:
 
 ```bash
+pnpm verify:coverage
 pnpm verify:release
 pnpm verify:compat
 pnpm verify:test-type-debt
 ```
+
+`pnpm verify:coverage` enforces the package-level baseline in
+`scripts/coverage/thresholds.json`. The baseline is a regression floor, not a
+single repo-wide 90% target. Raise a package threshold only in the same slice
+that adds the tests needed to support the higher number. `pnpm coverage:report`
+remains available as a report-only command.
+
+The current dashboard baseline covers Node-testable dashboard code and TSX
+component tests. It intentionally excludes `src/client/App.tsx`,
+`src/client/main.tsx`, and `src/client/pages/**/*.tsx` until the page/hook
+jsdom harness is added.
 
 `pnpm verify:release` builds publishable packages, checks changelog release notes, runs npm-auth selftests, rejects SDK source console writes outside the explicit `ConsoleAlertChannel`, verifies the `@obora/sdk` public API snapshot for the root and `@obora/sdk/testing` exports, rejects source JSDoc tags that advertise scoped `@obora` module subpaths outside package exports, verifies Markdown `@obora` import samples against public package exports, compiles checked TypeScript snippets against built public declarations, validates checked shell snippets with `bash -n`, parses tutorial YAML/JSON snippets and semantically checks workflow/config/policy examples, runs tutorial quickstart and contract-first dry-run flows through the built CLI, verifies that `typecheck-public.d.ts` shims do not declare exports absent from built public declarations, validates package `npm pack --dry-run` output, validates `pnpm pack` package metadata, runs published-package import/require/TypeScript smoke checks, and selftests CLI package installation.
 

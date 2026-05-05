@@ -13,6 +13,7 @@
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
     "coverage:report": "node scripts/coverage/report.mjs",
+    "verify:coverage": "node scripts/coverage/report.mjs --thresholds=scripts/coverage/thresholds.json",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "clean": "turbo clean && rm -rf node_modules",
     "verify:clean": "bash scripts/verify-clean.sh",

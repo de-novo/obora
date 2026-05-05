@@ -55,6 +55,9 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: Coverage guard
+        run: pnpm verify:coverage
+
       - name: Build
         run: pnpm build
 
