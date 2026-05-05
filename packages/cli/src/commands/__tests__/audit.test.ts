@@ -104,6 +104,27 @@ describe("audit command", () => {
     );
   });
 
+  it("prints quiet-safe warnings for disconnected query and tail commands", async () => {
+    const warn = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const cmd = createAuditCommand();
+
+    await cmd.parseAsync(["query", "--limit", "0"], { from: "user" });
+    await cmd.parseAsync(["tail", "--execution", "run-1"], { from: "user" });
+
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("audit query is not yet connected")
+    );
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("audit tail is not yet connected")
+    );
+
+    warn.mockClear();
+    const cli = createCLI();
+    await cli.parseAsync(["--quiet", "audit", "query"], { from: "user" });
+    await cli.parseAsync(["--quiet", "audit", "tail"], { from: "user" });
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it("inherits root --json for audit query", async () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const cli = createCLI();
@@ -163,6 +184,136 @@ describe("audit command", () => {
     expect(error).toHaveBeenCalled();
     expect(log.mock.calls.map((args) => args.join(" ")).join("\n")).not.toContain(
       "obora run <workflow.yaml> --dry-run"
+    );
+  });
+
+  it("prints replay text with colors, votes, confidence, and step filter", async () => {
+    oboraRuntimeState.instance = {
+      getRunAuditTimeline: vi.fn().mockResolvedValue([
+        {
+          timestamp: "2026-03-10T10:00:00.000Z",
+          category: "consensus",
+          stepName: "review",
+          actor: "judge",
+          action: "vote.cast",
+          vote: { decision: "approve", confidence: 0.91 },
+        },
+        {
+          timestamp: "2026-03-10T10:00:01.000Z",
+          category: "policy",
+          stepName: "validate",
+          actor: "policy",
+          action: "gate.opened",
+        },
+        {
+          timestamp: "2026-03-10T10:00:02.000Z",
+          category: "recovery",
+          stepName: "repair",
+          actor: "supervisor",
+          action: "retry",
+        },
+        {
+          timestamp: "2026-03-10T10:00:03.000Z",
+          category: "other",
+          stepName: "note",
+          actor: "system",
+          action: "annotate",
+        },
+      ]),
+    };
+    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createAuditCommand();
+    const previousNoColor = process.env.NO_COLOR;
+    delete process.env.NO_COLOR;
+
+    try {
+      await cmd.parseAsync(["replay", "run-1", "--step", "review"], { from: "user" });
+    } finally {
+      if (previousNoColor === undefined) {
+        delete process.env.NO_COLOR;
+      } else {
+        process.env.NO_COLOR = previousNoColor;
+      }
+    }
+
+    expect(oboraRuntimeState.instance.getRunAuditTimeline).toHaveBeenCalledWith(
+      "run-1",
+      "review"
+    );
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("run-1 (step: review)"));
+    const output = log.mock.calls.map((args) => args.join(" ")).join("\n");
+    expect(output).toContain("\x1b[34m");
+    expect(output).toContain("vote=approve(0.91)");
+    expect(output).toContain("\x1b[33m");
+    expect(output).toContain("\x1b[31m");
+    expect(output).toContain("\x1b[90m");
+  });
+
+  it("prints no-color replay output and empty timeline warnings", async () => {
+    oboraRuntimeState.instance = {
+      getRunAuditTimeline: vi.fn().mockResolvedValueOnce([
+        {
+          timestamp: "2026-03-10T10:00:00.000Z",
+          category: "policy",
+          stepName: "validate",
+          actor: "policy",
+          action: "gate.opened",
+        },
+      ]).mockResolvedValueOnce([]),
+    };
+    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const warn = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const cli = createCLI();
+
+    await cli.parseAsync(["--no-color", "audit", "replay", "run-1"], { from: "user" });
+    expect(log.mock.calls.map((args) => args.join(" ")).join("\n")).not.toContain("\x1b[");
+
+    await cli.parseAsync(["audit", "replay", "empty-run", "--step", "validate"], {
+      from: "user",
+    });
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("No audit events found for run 'empty-run' (step: validate).")
+    );
+  });
+
+  it("uses execution-failed exit code when audit runtime initialization fails", async () => {
+    vi.mocked(loadConfig).mockRejectedValue(new Error("config unreadable"));
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const cmd = createAuditCommand();
+
+    await cmd.parseAsync(["replay", "run-1"], { from: "user" });
+
+    expect(process.exit).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(ExitCode.EXECUTION_FAILED);
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("config unreadable"));
+  });
+
+  it("warns when CLI config requests a non-injectable custom audit adapter", async () => {
+    vi.mocked(loadConfig).mockResolvedValue({
+      persistence: { enabled: true, adapter: "custom" },
+    } as never);
+    oboraRuntimeState.instance = {
+      getRunAuditTimeline: vi.fn().mockResolvedValue([]),
+    };
+    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    const warn = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const cmd = createAuditCommand();
+
+    await cmd.parseAsync(["replay", "run-1"], { from: "user" });
+
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("falling back to sqlite adapter")
+    );
+    expect(OboraRuntime).toHaveBeenCalledWith(
+      expect.objectContaining({
+        persistence: expect.objectContaining({
+          adapter: "sqlite",
+        }),
+      })
     );
   });
 

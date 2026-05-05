@@ -2,8 +2,14 @@
  * StepExecutor unit tests
  */
 
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { RetryExhaustedError } from "@obora/adapters";
 import type { Step } from "@obora/runtime";
 import type { BaseAgent, Task, TaskResult, AgentContext } from "@obora/runtime";
+import { OboraError } from "@obora/runtime";
 import { describe, it, expect, vi } from "vitest";
 
 import { stepToTask, parseDuration, executeStep, type AgentResolver } from "../step-executor.js";
@@ -175,6 +181,74 @@ describe("executeStep — success", () => {
     expect(onEvent).toHaveBeenCalledWith({ type: "stream", chunk: "hello" });
     expect(unsubscribe).toHaveBeenCalledTimes(1);
   });
+
+  it("should pass resolved agent config through to the resolver", async () => {
+    const agent = makeAgent();
+    const resolver = makeResolver(agent);
+    const config = {
+      provider: "openai",
+      model: "gpt-4o-mini",
+      systemPrompt: "Use policy.",
+    };
+
+    const result = await executeStep(makeStep(), resolver, makeContext(), {
+      resolvedAgentConfig: config,
+    });
+
+    expect(result.success).toBe(true);
+    expect(resolver.resolve).toHaveBeenCalledWith({
+      agent: "executor",
+      type: "executor",
+      config,
+    });
+  });
+
+  it("should load local skills and clear runtime extensions after execution", async () => {
+    const root = await mkdtemp(join(tmpdir(), "obora-step-skill-"));
+    const skillDir = join(root, ".obora", "skills", "local-test");
+    await mkdir(skillDir, { recursive: true });
+    await writeFile(
+      join(skillDir, "SKILL.md"),
+      [
+        "---",
+        "name: local-test",
+        "description: Local test skill",
+        "---",
+        "Add local test instructions.",
+        "",
+      ].join("\n"),
+      "utf-8"
+    );
+
+    const cwd = vi.spyOn(process, "cwd").mockReturnValue(root);
+    const configureRuntimeExtensions = vi.fn();
+    const clearRuntimeExtensions = vi.fn();
+    const agent = {
+      ...makeAgent(),
+      id: "agent-1",
+      configureRuntimeExtensions,
+      clearRuntimeExtensions,
+    } as unknown as BaseAgent;
+    const resolver = makeResolver(agent);
+
+    try {
+      const result = await executeStep(
+        makeStep({ skills: ["local-test"] }),
+        resolver,
+        makeContext()
+      );
+
+      expect(result).toEqual({ success: true, output: "agent output" });
+      expect(configureRuntimeExtensions).toHaveBeenCalledWith({
+        tools: [],
+        systemPromptAppend: "Add local test instructions.",
+      });
+      expect(clearRuntimeExtensions).toHaveBeenCalledTimes(1);
+    } finally {
+      cwd.mockRestore();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -249,6 +323,118 @@ describe("executeStep — agent failure", () => {
       diagnosisCode: "E4001",
     });
   });
+
+  it("should preserve OboraError diagnosis codes and metadata", async () => {
+    const error = new OboraError("E4007", "context unavailable");
+    const agent = {
+      execute: vi.fn().mockRejectedValue(error),
+    } as unknown as BaseAgent;
+    const resolver = makeResolver(agent);
+
+    const result = await executeStep(makeStep(), resolver, makeContext());
+
+    expect(result.success).toBe(false);
+    expect(result.diagnosisCode).toBe("E4007");
+    expect(result.errorMeta).toEqual(
+      expect.objectContaining({
+        code: "E4007",
+        message: error.message,
+      })
+    );
+  });
+
+  it("should preserve typed E4 codes from generic errors", async () => {
+    const typedError = Object.assign(new Error("policy blocked"), {
+      code: "E4123",
+      provider: "openai",
+      statusCode: 429,
+      attempts: 2,
+    });
+    const agent = makeAgent({
+      success: false,
+      output: "blocked",
+      error: typedError,
+    });
+    const resolver = makeResolver(agent);
+
+    const result = await executeStep(makeStep(), resolver, makeContext());
+
+    expect(result.success).toBe(false);
+    expect(result.diagnosisCode).toBe("E4123");
+    expect(result.errorMeta).toEqual(
+      expect.objectContaining({
+        code: "E4123",
+        provider: "openai",
+        statusCode: 429,
+        attempts: 2,
+      })
+    );
+  });
+
+  it("should preserve typed E4 codes from thrown plain objects", async () => {
+    const agent = {
+      execute: vi.fn().mockRejectedValue({ code: "E4555", message: "object failure" }),
+    } as unknown as BaseAgent;
+    const resolver = makeResolver(agent);
+
+    const result = await executeStep(makeStep(), resolver, makeContext());
+
+    expect(result).toEqual({
+      success: false,
+      error: "[object Object]",
+      diagnosisCode: "E4555",
+    });
+  });
+
+  it("should include retry exhaustion last error codes in metadata", async () => {
+    const rootCause = Object.assign(new Error("provider unavailable"), { code: "E4012" });
+    const exhausted = new RetryExhaustedError("Max retries exceeded", rootCause, 3);
+    const agent = {
+      execute: vi.fn().mockRejectedValue(exhausted),
+    } as unknown as BaseAgent;
+    const resolver = makeResolver(agent);
+
+    const result = await executeStep(makeStep(), resolver, makeContext());
+
+    expect(result.success).toBe(false);
+    expect(result.diagnosisCode).toBe("E4005");
+    expect(result.errorMeta).toEqual(
+      expect.objectContaining({
+        code: "E4005",
+        attempts: 3,
+        lastError: "E4012",
+      })
+    );
+  });
+
+  it("should map retry exhaustion root causes when no E4 last code is available", async () => {
+    const exhausted = new RetryExhaustedError(
+      {
+        code: "HTTP_500",
+        message: "gateway failed",
+        lastError: "gateway failed",
+        lastErrorCode: "HTTP_500",
+      },
+      2
+    );
+    const agent = makeAgent({
+      success: false,
+      output: null,
+      error: exhausted,
+    });
+    const resolver = makeResolver(agent);
+
+    const result = await executeStep(makeStep(), resolver, makeContext());
+
+    expect(result.success).toBe(false);
+    expect(result.diagnosisCode).toBe("E4005");
+    expect(result.errorMeta).toEqual(
+      expect.objectContaining({
+        attempts: 2,
+        lastError: "E4001",
+      })
+    );
+  });
 });
 
 describe("executeStep — resolver failure (E4003)", () => {
@@ -299,6 +485,15 @@ describe("executeStep — timeout precedence", () => {
 
     expect(result.success).toBe(false);
     expect(result.diagnosisCode).toBe("E4002");
+  });
+
+  it("should fall back to the default timeout when step.timeout is invalid", async () => {
+    const agent = makeAgent();
+    const resolver = makeResolver(agent);
+
+    const result = await executeStep(makeStep({ timeout: "not-a-duration" }), resolver, makeContext());
+
+    expect(result).toEqual({ success: true, output: "agent output" });
   });
 });
 

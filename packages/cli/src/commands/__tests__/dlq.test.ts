@@ -29,7 +29,7 @@ vi.mock("../runs.js", () => ({
 import { FileDLQStore, loadConfig, resolveDLQEntry, summarizeDLQ } from "@obora/sdk";
 import { createRuntime as createRunsRuntime } from "../runs.js";
 
-import { createDlqCommand } from "../dlq.js";
+import { createDlqCommand, listDlqEntriesForCli } from "../dlq.js";
 
 describe("dlq command", () => {
   beforeEach(() => {
@@ -974,5 +974,550 @@ describe("dlq command", () => {
     expect(process.exit).not.toHaveBeenCalled();
     expect(process.exitCode).toBe(3);
     expect(error).toHaveBeenCalled();
+  });
+
+  it("sorts and paginates DLQ snapshots without command IO", () => {
+    const payload = listDlqEntriesForCli(
+      {
+        entries: [
+          {
+            id: "entry-old",
+            createdAt: "2026-03-09T10:00:00.000Z",
+            executionId: "run-old",
+            workflowName: "workflow",
+            errorCode: "SDK_STEP_FAILED",
+            errorMessage: "old",
+            repairAttempts: 1,
+            status: "reviewed",
+          },
+          {
+            id: "entry-new",
+            createdAt: "2026-03-10T10:00:00.000Z",
+            executionId: "run-new",
+            workflowName: "workflow",
+            errorCode: "SDK_STEP_FAILED",
+            errorMessage: "new",
+            repairAttempts: 1,
+            status: "pending",
+          },
+        ],
+        lastUpdated: "2026-03-10T10:05:00.000Z",
+      },
+      {}
+    );
+
+    expect(payload).toEqual(
+      expect.objectContaining({
+        total: 2,
+        limit: 50,
+        offset: 0,
+        pending: 1,
+        entries: [
+          expect.objectContaining({ id: "entry-new" }),
+          expect.objectContaining({ id: "entry-old" }),
+        ],
+      })
+    );
+  });
+
+  it("prints empty list text when no entries match", async () => {
+    vi.mocked(FileDLQStore).mockImplementation(
+      () =>
+        ({
+          load: vi.fn().mockResolvedValue({
+            entries: [],
+            lastUpdated: "2026-03-10T10:05:00.000Z",
+          }),
+          save: vi.fn(),
+          append: vi.fn(),
+        }) as never
+    );
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createDlqCommand();
+
+    await cmd.parseAsync(["list"], { from: "user" });
+
+    expect(log.mock.calls.map((args) => args.join(" ")).join("\n")).toContain(
+      "No DLQ entries found."
+    );
+  });
+
+  it("reports validation errors for invalid list options", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const cmd = createDlqCommand();
+
+    await cmd.parseAsync(["list", "--status", "closed"], { from: "user" });
+    expect(process.exitCode).toBe(2);
+    expect(error.mock.calls.map((args) => args.join(" ")).join("\n")).toContain(
+      "Invalid DLQ status"
+    );
+
+    process.exitCode = undefined;
+    vi.mocked(FileDLQStore).mockImplementation(
+      () =>
+        ({
+          load: vi.fn().mockResolvedValue({
+            entries: [],
+            lastUpdated: "2026-03-10T10:05:00.000Z",
+          }),
+          save: vi.fn(),
+          append: vi.fn(),
+        }) as never
+    );
+    await cmd.parseAsync(["list", "--limit", "-1"], { from: "user" });
+    expect(process.exitCode).toBe(2);
+    expect(error.mock.calls.map((args) => args.join(" ")).join("\n")).toContain(
+      "Invalid limit: -1"
+    );
+
+    process.exitCode = undefined;
+    await cmd.parseAsync(["list", "--offset", "NaN"], { from: "user" });
+    expect(process.exitCode).toBe(2);
+    expect(error.mock.calls.map((args) => args.join(" ")).join("\n")).toContain(
+      "Invalid offset: NaN"
+    );
+  });
+
+  it("reports config resolution errors with non-Error payloads", async () => {
+    vi.mocked(loadConfig).mockRejectedValueOnce("config unavailable");
+
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const cmd = createDlqCommand();
+
+    await cmd.parseAsync(["summary"], { from: "user" });
+
+    expect(process.exitCode).toBe(3);
+    expect(error.mock.calls.map((args) => args.join(" ")).join("\n")).toContain(
+      "Failed to resolve DLQ config: config unavailable"
+    );
+  });
+
+  it("summarizes related run loop states in JSON list output", async () => {
+    vi.mocked(FileDLQStore).mockImplementation(
+      () =>
+        ({
+          load: vi.fn().mockResolvedValue({
+            entries: [
+              {
+                id: "entry-exhausted",
+                createdAt: "2026-03-10T10:06:00.000Z",
+                executionId: "run-exhausted",
+                workflowName: "workflow",
+                errorCode: "SDK_STEP_FAILED",
+                errorMessage: "exhausted",
+                repairAttempts: 1,
+                status: "pending",
+              },
+              {
+                id: "entry-converged",
+                createdAt: "2026-03-10T10:05:00.000Z",
+                executionId: "run-converged",
+                workflowName: "workflow",
+                errorCode: "SDK_STEP_FAILED",
+                errorMessage: "converged",
+                repairAttempts: 1,
+                status: "pending",
+              },
+              {
+                id: "entry-repaired",
+                createdAt: "2026-03-10T10:04:00.000Z",
+                executionId: "run-repaired",
+                workflowName: "workflow",
+                errorCode: "SDK_STEP_FAILED",
+                errorMessage: "repaired",
+                repairAttempts: 1,
+                status: "pending",
+              },
+              {
+                id: "entry-passed",
+                createdAt: "2026-03-10T10:03:00.000Z",
+                executionId: "run-passed",
+                workflowName: "workflow",
+                errorCode: "SDK_STEP_FAILED",
+                errorMessage: "passed",
+                repairAttempts: 1,
+                status: "pending",
+              },
+              {
+                id: "entry-missing",
+                createdAt: "2026-03-10T10:02:00.000Z",
+                executionId: "run-missing",
+                workflowName: "workflow",
+                errorCode: "SDK_STEP_FAILED",
+                errorMessage: "missing",
+                repairAttempts: 1,
+                status: "pending",
+              },
+            ],
+            lastUpdated: "2026-03-10T10:06:00.000Z",
+          }),
+          save: vi.fn(),
+          append: vi.fn(),
+        }) as never
+    );
+    const runById = new Map<string, unknown>([
+      [
+        "run-exhausted",
+        {
+          id: "run-exhausted",
+          metadata: { repairLoop: { backEdgeExhausted: 1 } },
+        },
+      ],
+      [
+        "run-converged",
+        {
+          id: "run-converged",
+          status: "failed",
+          metadata: { repairLoop: { validationFailed: 1, validationPassed: 1 } },
+        },
+      ],
+      [
+        "run-repaired",
+        {
+          id: "run-repaired",
+          startedAt: "2026-03-10T10:00:00.000Z",
+          metadata: { repairLoop: { repairStarted: 1 } },
+        },
+      ],
+      [
+        "run-passed",
+        {
+          id: "run-passed",
+          completedAt: "2026-03-10T10:01:00.000Z",
+          metadata: { repairLoop: { validationPassed: 1 } },
+        },
+      ],
+    ]);
+    vi.mocked(createRunsRuntime).mockResolvedValue({
+      getRunRecord: vi.fn((runId: string) => Promise.resolve(runById.get(runId) ?? null)),
+    } as never);
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createDlqCommand();
+
+    await cmd.parseAsync(["list", "--json"], { from: "user" });
+
+    const payload = JSON.parse(log.mock.calls.at(-1)?.[0] ?? "{}");
+    expect(payload.entries.map((entry: { relatedRun?: { loopState?: string } }) => entry.relatedRun?.loopState)).toEqual([
+      "EXHAUSTED",
+      "CONVERGED",
+      "REPAIRED",
+      "PASSED",
+      undefined,
+    ]);
+  });
+
+  it("omits related list context when runtime lookup fails", async () => {
+    vi.mocked(FileDLQStore).mockImplementation(
+      () =>
+        ({
+          load: vi.fn().mockResolvedValue({
+            entries: [
+              {
+                id: "entry-runtime-fail",
+                createdAt: "2026-03-10T10:00:00.000Z",
+                executionId: "run-runtime-fail",
+                workflowName: "workflow",
+                errorCode: "SDK_STEP_FAILED",
+                errorMessage: "runtime fail",
+                repairAttempts: 1,
+                status: "pending",
+              },
+            ],
+            lastUpdated: "2026-03-10T10:05:00.000Z",
+          }),
+          save: vi.fn(),
+          append: vi.fn(),
+        }) as never
+    );
+    vi.mocked(createRunsRuntime).mockRejectedValueOnce(new Error("runtime offline"));
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createDlqCommand();
+
+    await cmd.parseAsync(["list", "--json"], { from: "user" });
+
+    const payload = JSON.parse(log.mock.calls.at(-1)?.[0] ?? "{}");
+    expect(payload.entries).toEqual([
+      expect.not.objectContaining({
+        relatedRun: expect.anything(),
+      }),
+    ]);
+  });
+
+  it("falls back when related artifact lookup fails during inspect", async () => {
+    vi.mocked(FileDLQStore).mockImplementation(
+      () =>
+        ({
+          load: vi.fn().mockResolvedValue({
+            entries: [
+              {
+                id: "entry-artifact-fail",
+                createdAt: "2026-03-10T10:00:00.000Z",
+                executionId: "run-artifact-fail",
+                workflowName: "workflow",
+                errorCode: "SDK_STEP_FAILED",
+                errorMessage: "artifact fail",
+                repairAttempts: 1,
+                status: "pending",
+              },
+            ],
+            lastUpdated: "2026-03-10T10:05:00.000Z",
+          }),
+          save: vi.fn(),
+          append: vi.fn(),
+        }) as never
+    );
+    vi.mocked(createRunsRuntime).mockResolvedValue({
+      getRunRecord: vi.fn().mockResolvedValue({
+        id: "run-artifact-fail",
+        status: "failed",
+      }),
+      getRunArtifacts: vi.fn().mockRejectedValue(new Error("artifact store offline")),
+    } as never);
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createDlqCommand();
+
+    await cmd.parseAsync(["inspect", "entry-artifact-fail", "--json"], { from: "user" });
+
+    const payload = JSON.parse(log.mock.calls.at(-1)?.[0] ?? "{}");
+    expect(payload.relatedRun).toEqual(expect.objectContaining({ id: "run-artifact-fail" }));
+    expect(payload.relatedArtifacts).toBeUndefined();
+  });
+
+  it("prints every optional DLQ inspect field in text output", async () => {
+    vi.mocked(FileDLQStore).mockImplementation(
+      () =>
+        ({
+          load: vi.fn().mockResolvedValue({
+            entries: [
+              {
+                id: "entry-full-text",
+                createdAt: "2026-03-10T10:00:00.000Z",
+                executionId: "run-full-text",
+                workflowName: "workflow",
+                stepName: "validate",
+                errorCode: "SDK_STEP_FAILED",
+                errorMessage: "full text",
+                errorStack: "Error: full text",
+                repairAttempts: 2,
+                status: "reviewed",
+                resolvedAt: "2026-03-10T10:03:00.000Z",
+                resolvedBy: "ops",
+                resolution: "reviewed manually",
+                metadata: {
+                  repairLoop: {
+                    lastStopCategory: "operator_review",
+                    lastValidationStep: "validate",
+                    lastRepairStep: "repair",
+                    lastAttempt: 2,
+                  },
+                },
+              },
+            ],
+            lastUpdated: "2026-03-10T10:05:00.000Z",
+          }),
+          save: vi.fn(),
+          append: vi.fn(),
+        }) as never
+    );
+    vi.mocked(createRunsRuntime).mockResolvedValue({
+      getRunRecord: vi.fn().mockResolvedValue({
+        id: "run-full-text",
+        status: "failed",
+        completedAt: "2026-03-10T10:02:00.000Z",
+      }),
+    } as never);
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createDlqCommand();
+
+    await cmd.parseAsync(["inspect", "entry-full-text"], { from: "user" });
+
+    const output = log.mock.calls.map((args) => args.join(" ")).join("\n");
+    expect(output).toContain("Resolved At:     2026-03-10T10:03:00.000Z");
+    expect(output).toContain("Resolved By:     ops");
+    expect(output).toContain("Resolution:      reviewed manually");
+    expect(output).toContain("Error Stack:     Error: full text");
+    expect(output).toContain("Metadata:");
+    expect(output).toContain("Completed:       2026-03-10T10:02:00.000Z");
+    expect(output).toContain("Validator:       validate");
+    expect(output).toContain("Last Attempt:    2");
+  });
+
+  it("reports resolve validation, persistence, and missing-update failures", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const cmd = createDlqCommand();
+
+    await cmd.parseAsync(["resolve", "entry-1", "--status", "pending"], { from: "user" });
+    expect(process.exitCode).toBe(2);
+    expect(error.mock.calls.map((args) => args.join(" ")).join("\n")).toContain(
+      "Invalid resolution status"
+    );
+
+    process.exitCode = undefined;
+    vi.mocked(FileDLQStore).mockImplementation(
+      () =>
+        ({
+          load: vi.fn().mockResolvedValue({
+            entries: [],
+            lastUpdated: "2026-03-10T10:05:00.000Z",
+          }),
+          save: vi.fn(),
+          append: vi.fn(),
+        }) as never
+    );
+    await cmd.parseAsync(["resolve", "missing", "--status", "reviewed"], { from: "user" });
+    expect(process.exitCode).toBe(2);
+    expect(error.mock.calls.map((args) => args.join(" ")).join("\n")).toContain(
+      "DLQ entry not found: missing"
+    );
+
+    process.exitCode = undefined;
+    vi.mocked(FileDLQStore).mockImplementation(
+      () =>
+        ({
+          load: vi.fn().mockResolvedValue({
+            entries: [
+              {
+                id: "entry-save-fail",
+                createdAt: "2026-03-10T10:00:00.000Z",
+                executionId: "run-save-fail",
+                workflowName: "workflow",
+                errorCode: "SDK_STEP_FAILED",
+                errorMessage: "save fail",
+                repairAttempts: 1,
+                status: "pending",
+              },
+            ],
+            lastUpdated: "2026-03-10T10:05:00.000Z",
+          }),
+          save: vi.fn().mockRejectedValue(new Error("disk full")),
+          append: vi.fn(),
+        }) as never
+    );
+    vi.mocked(resolveDLQEntry).mockReturnValue({
+      entries: [
+        {
+          id: "entry-save-fail",
+          createdAt: "2026-03-10T10:00:00.000Z",
+          executionId: "run-save-fail",
+          workflowName: "workflow",
+          errorCode: "SDK_STEP_FAILED",
+          errorMessage: "save fail",
+          repairAttempts: 1,
+          status: "reviewed",
+        },
+      ],
+      lastUpdated: "2026-03-10T10:06:00.000Z",
+    } as never);
+    await cmd.parseAsync(["resolve", "entry-save-fail", "--status", "reviewed"], { from: "user" });
+    expect(process.exitCode).toBe(3);
+    expect(error.mock.calls.map((args) => args.join(" ")).join("\n")).toContain(
+      "Failed to save DLQ store: disk full"
+    );
+
+    process.exitCode = undefined;
+    vi.mocked(FileDLQStore).mockImplementation(
+      () =>
+        ({
+          load: vi.fn().mockResolvedValue({
+            entries: [
+              {
+                id: "entry-update-missing",
+                createdAt: "2026-03-10T10:00:00.000Z",
+                executionId: "run-update-missing",
+                workflowName: "workflow",
+                errorCode: "SDK_STEP_FAILED",
+                errorMessage: "update missing",
+                repairAttempts: 1,
+                status: "pending",
+              },
+            ],
+            lastUpdated: "2026-03-10T10:05:00.000Z",
+          }),
+          save: vi.fn().mockResolvedValue(undefined),
+          append: vi.fn(),
+        }) as never
+    );
+    vi.mocked(resolveDLQEntry).mockReturnValue({
+      entries: [],
+      lastUpdated: "2026-03-10T10:06:00.000Z",
+    } as never);
+    await cmd.parseAsync(["resolve", "entry-update-missing", "--status", "dismissed"], {
+      from: "user",
+    });
+    expect(process.exitCode).toBe(3);
+    expect(error.mock.calls.map((args) => args.join(" ")).join("\n")).toContain(
+      "Failed to resolve DLQ entry: entry-update-missing"
+    );
+  });
+
+  it("prints text resolve success with actor and note", async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(FileDLQStore).mockImplementation(
+      () =>
+        ({
+          load: vi.fn().mockResolvedValue({
+            entries: [
+              {
+                id: "entry-text-resolve",
+                createdAt: "2026-03-10T10:00:00.000Z",
+                executionId: "run-text-resolve",
+                workflowName: "workflow",
+                errorCode: "SDK_STEP_FAILED",
+                errorMessage: "text resolve",
+                repairAttempts: 1,
+                status: "pending",
+              },
+            ],
+            lastUpdated: "2026-03-10T10:05:00.000Z",
+          }),
+          save,
+          append: vi.fn(),
+        }) as never
+    );
+    vi.mocked(resolveDLQEntry).mockReturnValue({
+      entries: [
+        {
+          id: "entry-text-resolve",
+          createdAt: "2026-03-10T10:00:00.000Z",
+          executionId: "run-text-resolve",
+          workflowName: "workflow",
+          errorCode: "SDK_STEP_FAILED",
+          errorMessage: "text resolve",
+          repairAttempts: 1,
+          status: "dismissed",
+          resolvedBy: "ops",
+          resolution: "not actionable",
+        },
+      ],
+      lastUpdated: "2026-03-10T10:06:00.000Z",
+    } as never);
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createDlqCommand();
+
+    await cmd.parseAsync(
+      [
+        "resolve",
+        "entry-text-resolve",
+        "--status",
+        "dismissed",
+        "--actor",
+        "ops",
+        "--note",
+        "not actionable",
+      ],
+      { from: "user" }
+    );
+
+    const output = log.mock.calls.map((args) => args.join(" ")).join("\n");
+    expect(output).toContain("Resolved DLQ entry entry-text-resolve as dismissed.");
+    expect(output).toContain("Actor: ops");
+    expect(output).toContain("Note:  not actionable");
+    expect(save).toHaveBeenCalled();
   });
 });

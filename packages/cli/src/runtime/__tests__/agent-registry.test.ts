@@ -2,10 +2,10 @@
  * AgentRegistry unit tests
  */
 
-import { MockLLMAdapter } from "@obora/adapters";
+import { MockLLMAdapter, type AgentConfig } from "@obora/adapters";
 import { AgentRole } from "@obora/runtime";
 import { OboraError } from "@obora/runtime";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 
 import { AgentRegistry } from "../agent-registry.js";
 
@@ -63,6 +63,49 @@ describe("AgentRegistry.resolve — unknown agent", () => {
   it("should throw E4003 for empty string", async () => {
     const registry = makeRegistry();
     await expect(registry.resolve("")).rejects.toThrow(OboraError);
+  });
+});
+
+describe("AgentRegistry.resolve — query config", () => {
+  it("should throw E4007 when no fallback LLM is configured", async () => {
+    const registry = new AgentRegistry({});
+
+    await expect(registry.resolve("executor")).rejects.toMatchObject({
+      code: "E4007",
+    });
+  });
+
+  it("should resolve object queries, custom roles, and cached provider adapters", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const config: AgentConfig = {
+      provider: "openai",
+      model: "gpt-4o-mini",
+      baseUrl: "https://example.test/v1",
+      systemPrompt: "Use the configured policy.",
+    };
+    const registry = new AgentRegistry({
+      roleMap: {
+        specialist: AgentRole.EXECUTOR,
+      },
+    });
+
+    const agent = await registry.resolve({ type: "specialist", config });
+    const firstAdapter = await registry.getAdapterForProvider("openai", config);
+    const secondAdapter = await registry.getAdapterForProvider("openai", config);
+
+    expect(agent.role).toBe(AgentRole.EXECUTOR);
+    expect(typeof agent.execute).toBe("function");
+    expect(firstAdapter).toBe(secondAdapter);
+
+    warn.mockRestore();
+  });
+
+  it("should reject object queries without an agent or type", async () => {
+    const registry = makeRegistry();
+
+    await expect(registry.resolve({})).rejects.toMatchObject({
+      code: "E4003",
+    });
   });
 });
 

@@ -114,6 +114,25 @@ describe("runs list triage sorting", () => {
     expect(sorted.map((run) => run.id)).toEqual(["run-c", "run-b", "run-a"]);
   });
 
+  it("sorts runs by startedAt ascending and descending with missing timestamps", () => {
+    const runs = [
+      { id: "missing" },
+      { id: "old", startedAt: "2026-03-08T09:00:00.000Z" },
+      { id: "new", startedAt: "2026-03-08T11:00:00.000Z" },
+    ];
+
+    expect(sortRunsForCli(runs, "startedAt", "asc").map((run) => run.id)).toEqual([
+      "missing",
+      "old",
+      "new",
+    ]);
+    expect(sortRunsForCli(runs, "startedAt", "desc").map((run) => run.id)).toEqual([
+      "new",
+      "old",
+      "missing",
+    ]);
+  });
+
   it("derives compact CLI repair-loop states", () => {
     expect(getCliRepairLoopState(undefined)).toBe("-");
     expect(
@@ -148,6 +167,94 @@ describe("runs list triage sorting", () => {
         })
       )
     ).toBe("CONVERGED");
+    expect(
+      getCliRepairLoopState(
+        makeRepairLoopSummary({
+          repairStarted: 1,
+        })
+      )
+    ).toBe("REPAIRED");
+    expect(
+      getCliRepairLoopState(
+        makeRepairLoopSummary({
+          validationPassed: 1,
+        })
+      )
+    ).toBe("PASSED");
+  });
+
+  it("uses direct storage query when no CLI post-processing is needed", async () => {
+    const listRunRecords = vi.fn().mockResolvedValue([{ id: "run-1" }]);
+
+    const runs = await listRunsForCli(
+      { listRunRecords },
+      {
+        status: "completed",
+        workflow: "release",
+        limit: 3,
+      }
+    );
+
+    expect(runs).toEqual([{ id: "run-1" }]);
+    expect(listRunRecords).toHaveBeenCalledWith({
+      status: "completed",
+      workflowName: "release",
+      limit: 3,
+    });
+  });
+
+  it("paginates post-processed storage queries and applies repair-loop filters", async () => {
+    const firstPage = Array.from({ length: 200 }, (_, index) => ({
+      id: `run-${index}`,
+      startedAt: `2026-03-08T10:${String(index % 60).padStart(2, "0")}:00.000Z`,
+      metadata:
+        index === 199
+          ? { repairLoop: { validationFailed: 2, repairStarted: 1, backEdgeExhausted: 1 } }
+          : undefined,
+    }));
+    const secondPage = [
+      {
+        id: "run-last",
+        startedAt: "2026-03-08T12:00:00.000Z",
+        metadata: { repairLoop: { validationFailed: 1, repairStarted: 1 } },
+      },
+      { id: "without-loop", startedAt: "2026-03-08T13:00:00.000Z" },
+    ];
+    const listRunRecords = vi.fn()
+      .mockResolvedValueOnce(firstPage)
+      .mockResolvedValueOnce(secondPage);
+
+    const exhausted = await listRunsForCli(
+      { listRunRecords },
+      {
+        repairLoop: "exhausted",
+        sortBy: "startedAt",
+        order: "asc",
+        limit: 5,
+      }
+    );
+    expect(exhausted.map((run) => run.id)).toEqual(["run-199"]);
+    expect(listRunRecords).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ limit: 200, offset: 0 })
+    );
+    expect(listRunRecords).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ limit: 200, offset: 200 })
+    );
+
+    listRunRecords.mockReset();
+    listRunRecords.mockResolvedValueOnce(secondPage);
+    const without = await listRunsForCli(
+      { listRunRecords },
+      {
+        repairLoop: "without",
+        sortBy: "startedAt",
+        order: "asc",
+        limit: 5,
+      }
+    );
+    expect(without.map((run) => run.id)).toEqual(["without-loop"]);
   });
 
   it("filters and sorts post-processed runs for CLI list", async () => {
@@ -536,6 +643,25 @@ describe("runs list triage sorting", () => {
     expect(process.exitCode).toBe(ExitCode.VALIDATION_ERROR);
     expect(error).toHaveBeenCalled();
   });
+
+  it("uses validation exit code for invalid runs status, repair-loop, sort, and order", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const cmd = createRunsCommand();
+
+    for (const args of [
+      ["list", "--status", "paused"],
+      ["list", "--repair-loop", "unknown"],
+      ["list", "--sort", "duration"],
+      ["list", "--order", "sideways"],
+      ["list", "--limit", "-1"],
+    ]) {
+      process.exitCode = undefined;
+      error.mockClear();
+      await cmd.parseAsync(args, { from: "user" });
+      expect(process.exitCode).toBe(ExitCode.VALIDATION_ERROR);
+      expect(error).toHaveBeenCalled();
+    }
+  });
 });
 
 describe("runs inspect repair-loop summary", () => {
@@ -588,6 +714,65 @@ describe("runs inspect repair-loop summary", () => {
         ],
       })
     );
+  });
+
+  it("returns undefined for inactive timelines and keeps only recent validation failures", () => {
+    expect(summarizeRepairLoopTimeline([{ action: "unrelated", detail: {} }])).toBeUndefined();
+
+    const summary = summarizeRepairLoopTimeline([
+      ...Array.from({ length: 7 }, (_, index) => ({
+        action: "workflow.validation_failed",
+        stepName: `validate-${index}`,
+        detail: {
+          summary: `failure-${index}`,
+          failedChecks: [
+            null,
+            "bad",
+            {
+              name: `check-${index}`,
+              message: `message-${index}`,
+              severity: "error",
+              file: `file-${index}.ts`,
+            },
+          ],
+        },
+      })),
+      {
+        action: "workflow.repair_no_progress",
+        detail: { reason: "same failure" },
+      },
+      {
+        action: "workflow.back_edge_triggered",
+        detail: {},
+      },
+      {
+        action: "workflow.back_edge_exhausted",
+        detail: { reason: "max attempts" },
+      },
+    ]);
+
+    expect(summary).toEqual(
+      expect.objectContaining({
+        validationFailed: 7,
+        repairNoProgress: 1,
+        backEdgeTriggered: 1,
+        backEdgeExhausted: 1,
+        lastNoProgressReason: "same failure",
+        lastExhaustReason: "max attempts",
+      })
+    );
+    expect(summary?.recentValidationFailures).toHaveLength(5);
+    expect(summary?.recentValidationFailures[0]).toEqual(
+      expect.objectContaining({ stepName: "validate-2", summary: "failure-2" })
+    );
+    expect(summary?.recentValidationFailures.at(-1)?.failedChecks).toEqual([
+      {
+        name: "check-6",
+        message: "message-6",
+        severity: "error",
+        file: "file-6.ts",
+      },
+    ]);
   });
 
   it("prints repair-loop summary in text inspect output", async () => {
@@ -905,5 +1090,65 @@ describe("runs inspect repair-loop summary", () => {
     expect(output).toContain("ID:               dlq-1");
     expect(output).toContain("Repair Attempts:  3");
     expect(output).toContain("obora dlq inspect dlq-1");
+  });
+
+  it("prints metadata, step errors, artifacts, and cost breakdowns in text inspect output", async () => {
+    const runtime = {
+      async getRunRecord() {
+        return {
+          id: "run-1",
+          workflowName: "release",
+          status: "failed",
+          startedAt: "2026-03-08T10:00:00.000Z",
+          completedAt: "2026-03-08T10:05:00.000Z",
+          metadata: { env: "staging" },
+        };
+      },
+      async getRunSteps() {
+        return [
+          {
+            stepName: "build",
+            status: "failed",
+            durationMs: 42,
+            error: { code: "BUILD_FAILED", message: "compile error" },
+          },
+        ];
+      },
+      async getRunArtifacts() {
+        return [
+          {
+            stepName: "build",
+            name: "stdout.log",
+            mimeType: "text/plain",
+            sizeBytes: 123,
+          },
+        ];
+      },
+      async getRunCostSummary() {
+        return {
+          totalTokens: 300,
+          totalCostUsd: 0.1234567,
+          byStep: [{ stepName: "build", tokens: 100, costUsd: 0.05 }],
+          byModel: [{ model: "gpt-4o-mini", tokens: 200, costUsd: 0.073456 }],
+        };
+      },
+      async getRunAuditTimeline() {
+        return [];
+      },
+    };
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await inspectPersistedRun(runtime, "run-1", { json: false, cost: true, steps: true });
+
+    const output = log.mock.calls.map((args) => args.join(" ")).join("\n");
+    expect(output).toContain('Metadata: {"env":"staging"}');
+    expect(output).toContain("build                failed       (42ms)");
+    expect(output).toContain("Error: [BUILD_FAILED] compile error");
+    expect(output).toContain("build/stdout.log (text/plain, 123 bytes)");
+    expect(output).toContain("Total Tokens: 300");
+    expect(output).toContain("Total Cost:   $0.123457");
+    expect(output).toContain("- build: 100 tokens, $0.050000");
+    expect(output).toContain("- gpt-4o-mini: 200 tokens, $0.073456");
   });
 });

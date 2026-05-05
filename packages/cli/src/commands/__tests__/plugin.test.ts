@@ -91,6 +91,30 @@ describe("plugin command", () => {
     });
   });
 
+  it("prints table output for plugin list and respects quiet empty output", async () => {
+    pluginState.scan.mockResolvedValueOnce([
+      {
+        packageName: "@example/obora-plugin-foo",
+        packagePath: "/tmp/node_modules/@example/obora-plugin-foo",
+        version: "1.2.3",
+        metadata: {
+          name: "foo",
+          type: "adapter",
+        },
+      },
+    ]).mockResolvedValueOnce([]);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const root = new Command("obora").option("--quiet");
+    root.addCommand(createPluginCommand());
+
+    await root.parseAsync(["plugin", "list"], { from: "user" });
+    expect(log.mock.calls.map((args) => args.join(" ")).join("\n")).toContain("foo");
+
+    log.mockClear();
+    await root.parseAsync(["--quiet", "plugin", "list"], { from: "user" });
+    expect(log).not.toHaveBeenCalled();
+  });
+
   it("inherits root --json for plugin inspect", async () => {
     pluginState.scan.mockResolvedValue([
       {
@@ -159,6 +183,55 @@ describe("plugin command", () => {
       })
     );
     expect(execFileMock).toHaveBeenCalled();
+  });
+
+  it("prints text success for plugin install, remove, and inspect", async () => {
+    pluginState.scan
+      .mockResolvedValueOnce([
+        {
+          packageName: "@example/obora-plugin-foo",
+          packagePath: "/tmp/node_modules/@example/obora-plugin-foo",
+          version: "1.2.3",
+          metadata: {
+            name: "foo",
+            type: "adapter",
+          },
+        },
+      ])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          packageName: "@example/obora-plugin-foo",
+          packagePath: "/tmp/node_modules/@example/obora-plugin-foo",
+          version: "1.2.3",
+          metadata: {
+            name: "foo",
+            type: "adapter",
+          },
+        },
+      ]);
+    pluginState.loadAndRegister.mockResolvedValue({
+      module: {
+        activate() {
+          return true;
+        },
+        deactivate() {
+          return true;
+        },
+      },
+    });
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createPluginCommand();
+
+    await cmd.parseAsync(["install", "@example/obora-plugin-foo"], { from: "user" });
+    await cmd.parseAsync(["remove", "@example/obora-plugin-foo"], { from: "user" });
+    await cmd.parseAsync(["inspect", "foo"], { from: "user" });
+
+    const output = log.mock.calls.map((args) => args.join(" ")).join("\n");
+    expect(output).toContain("Installed plugin: foo");
+    expect(output).toContain("Removed plugin: @example/obora-plugin-foo");
+    expect(output).toContain('"exports"');
+    expect(output).toContain("deactivate");
   });
 
   it("inherits root --json for plugin install", async () => {
@@ -241,6 +314,54 @@ describe("plugin command", () => {
     expect(log.mock.calls.map((args) => args.join(" ")).join("\n")).not.toContain(
       "obora run <workflow.yaml> --dry-run"
     );
+  });
+
+  it("uses execution-failed exit code for scan, npm, and post-install validation failures", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const cmd = createPluginCommand();
+
+    pluginState.scan.mockRejectedValueOnce(new Error("scan failed"));
+    await cmd.parseAsync(["list"], { from: "user" });
+    expect(process.exitCode).toBe(ExitCode.EXECUTION_FAILED);
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("scan failed"));
+
+    process.exitCode = undefined;
+    error.mockClear();
+    execFileMock.mockImplementationOnce((_file, _args, _opts, callback) => {
+      callback?.(new Error("npm offline"), "", "");
+      return {} as never;
+    });
+    await cmd.parseAsync(["install", "@example/obora-plugin-foo"], { from: "user" });
+    expect(process.exitCode).toBe(ExitCode.EXECUTION_FAILED);
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("npm offline"));
+
+    process.exitCode = undefined;
+    error.mockClear();
+    execFileMock.mockImplementation((_file, _args, _opts, callback) => {
+      callback?.(null, "", "");
+      return {} as never;
+    });
+    pluginState.scan.mockResolvedValueOnce([]);
+    await cmd.parseAsync(["install", "@example/obora-plugin-foo"], { from: "user" });
+    expect(process.exitCode).toBe(ExitCode.EXECUTION_FAILED);
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("not detected"));
+
+    process.exitCode = undefined;
+    error.mockClear();
+    pluginState.scan.mockResolvedValueOnce([
+      {
+        packageName: "@example/obora-plugin-foo",
+        packagePath: "/tmp/node_modules/@example/obora-plugin-foo",
+        version: "1.2.3",
+        metadata: {
+          name: "foo",
+          type: "adapter",
+        },
+      },
+    ]);
+    await cmd.parseAsync(["remove", "foo"], { from: "user" });
+    expect(process.exitCode).toBe(ExitCode.EXECUTION_FAILED);
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("still present"));
   });
 
   it("uses execution-failed exit code for plugin inspect load errors", async () => {

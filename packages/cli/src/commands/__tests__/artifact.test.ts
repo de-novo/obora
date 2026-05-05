@@ -135,6 +135,38 @@ describe("artifact command", () => {
     );
   });
 
+  it("falls back to request identifiers when artifact metadata is partial", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "obora-artifact-partial-json-"));
+    const outputPath = join(dir, "artifact.log");
+    const artifact = makeArtifact({
+      runId: undefined,
+      stepName: undefined,
+      name: undefined,
+      mimeType: undefined,
+      sizeBytes: undefined,
+      createdAt: undefined,
+    });
+    oboraRuntimeState.instance = {
+      getArtifact: vi.fn().mockResolvedValue(artifact),
+    };
+    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createArtifactCommand();
+
+    await cmd.parseAsync(["get", "run-9", "build", "stdout.txt", "-o", outputPath, "--json"], {
+      from: "user",
+    });
+
+    const payload = JSON.parse(log.mock.calls.at(-1)?.[0] ?? "{}");
+    expect(payload).toEqual({
+      runId: "run-9",
+      stepName: "build",
+      name: "stdout.txt",
+      outputPath,
+    });
+  });
+
   it("inherits root --json for artifact get output", async () => {
     const dir = await mkdtemp(join(tmpdir(), "obora-artifact-root-json-"));
     const outputPath = join(dir, "artifact.log");
@@ -167,6 +199,49 @@ describe("artifact command", () => {
     expect(payload).toEqual(
       expect.objectContaining({ outputPath, name: "VALIDATION-ATTEMPT-01.log" })
     );
+  });
+
+  it("passes persistence and artifact config into the SDK runtime", async () => {
+    const customPersistence = { write: vi.fn() };
+    const customArtifactStore = { get: vi.fn() };
+    vi.mocked(loadConfig).mockResolvedValue({
+      persistence: {
+        enabled: false,
+        adapter: "custom",
+        custom: customPersistence,
+      },
+      artifacts: {
+        enabled: false,
+        store: "custom",
+        custom: { instance: customArtifactStore },
+      },
+    } as never);
+    const artifact = makeArtifact();
+    oboraRuntimeState.instance = {
+      getArtifact: vi.fn().mockResolvedValue(artifact),
+    };
+    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+
+    const stdoutWrite = vi.spyOn(process.stdout, "write").mockImplementation((() => true) as never);
+    const cmd = createArtifactCommand();
+
+    await cmd.parseAsync(["get", "run-1", "validate", "artifact.log"], { from: "user" });
+
+    expect(stdoutWrite).toHaveBeenCalled();
+    expect(OboraRuntime).toHaveBeenCalledWith({
+      persistence: {
+        enabled: false,
+        adapter: "custom",
+        sqlite: { path: "./data/obora.db" },
+        custom: customPersistence,
+      },
+      artifacts: {
+        enabled: false,
+        store: "custom",
+        local: { basePath: "./data/artifacts" },
+        custom: { instance: customArtifactStore },
+      },
+    });
   });
 
   it("uses validation exit code when JSON output is requested without an output path", async () => {
@@ -215,6 +290,51 @@ describe("artifact command", () => {
     expect(log.mock.calls.map((args) => args.join(" ")).join("\n")).not.toContain(
       "obora run <workflow.yaml> --dry-run"
     );
+  });
+
+  it("uses execution-failed exit code for runtime initialization and artifact lookup errors", async () => {
+    vi.mocked(loadConfig).mockRejectedValueOnce(new Error("config broken"));
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const cmd = createArtifactCommand();
+
+    await cmd.parseAsync(["get", "run-1", "validate", "artifact.log"], { from: "user" });
+
+    expect(process.exitCode).toBe(ExitCode.EXECUTION_FAILED);
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("config broken"));
+
+    process.exitCode = undefined;
+    error.mockClear();
+    vi.mocked(loadConfig).mockResolvedValue({
+      persistence: { enabled: true, adapter: "sqlite" },
+      artifacts: { enabled: true, store: "local" },
+    } as never);
+    oboraRuntimeState.instance = {
+      getArtifact: vi.fn().mockRejectedValue(new Error("sqlite locked")),
+    };
+    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+
+    await cmd.parseAsync(["get", "run-1", "validate", "artifact.log"], { from: "user" });
+
+    expect(process.exitCode).toBe(ExitCode.EXECUTION_FAILED);
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("sqlite locked"));
+  });
+
+  it("uses execution-failed exit code when writing artifact output fails", async () => {
+    const artifact = makeArtifact();
+    oboraRuntimeState.instance = {
+      getArtifact: vi.fn().mockResolvedValue(artifact),
+    };
+    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const dir = await mkdtemp(join(tmpdir(), "obora-artifact-write-dir-"));
+    const cmd = createArtifactCommand();
+
+    await cmd.parseAsync(["get", "run-1", "validate", "artifact.log", "-o", dir], {
+      from: "user",
+    });
+
+    expect(process.exitCode).toBe(ExitCode.EXECUTION_FAILED);
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("Failed to write artifact output"));
   });
 
   it("uses execution-failed exit code for artifact download errors", async () => {
