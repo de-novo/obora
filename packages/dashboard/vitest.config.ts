@@ -3,7 +3,7 @@ import path from 'node:path';
 
 export default defineConfig({
   test: {
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     environment: 'node',
     coverage: {
       provider: 'v8',
@@ -12,8 +12,11 @@ export default defineConfig({
         'dist/',
         '**/*.config.ts',
         'src/**/*.test.ts',
+        'src/**/*.test.tsx',
         'src/**/__tests__/**',
-        'src/client/**/*.tsx',
+        'src/client/App.tsx',
+        'src/client/main.tsx',
+        'src/client/pages/**/*.tsx',
       ],
     },
   },
