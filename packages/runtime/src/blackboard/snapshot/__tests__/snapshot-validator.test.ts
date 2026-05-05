@@ -4,6 +4,7 @@ import { SnapshotValidator } from "../snapshot-validator";
 import { compress } from "../compression";
 import { SNAPSHOT_FORMAT_VERSION } from "../types";
 import { createSessionId } from "../../types";
+import { isSerializedState } from "../type-guards";
 import type { SerializedState, Snapshot } from "../types";
 
 const timestamp = "2026-01-01T00:00:00.000Z";
@@ -217,5 +218,39 @@ describe("SnapshotValidator", () => {
         "decisions.opinions[0] must be a [string, unknown] tuple",
       ])
     );
+  });
+
+  it("guards serialized state section shapes before runtime validation", () => {
+    expect(isSerializedState(createSerializedState())).toBe(true);
+
+    const invalidCases: unknown[] = [
+      null,
+      [],
+      { ...createSerializedState(), meta: null },
+      { ...createSerializedState(), meta: "bad" },
+      { ...createSerializedState(), meta: { sessionId: 1, version: 1 } },
+      { ...createSerializedState(), meta: { sessionId, version: "1" } },
+      { ...createSerializedState(), state: null },
+      { ...createSerializedState(), state: "bad" },
+      createSerializedState({ state: { ...createSerializedState().state, phase: 1 as never } }),
+      createSerializedState({ state: { ...createSerializedState().state, context: "bad" as never } }),
+      createSerializedState({ state: { ...createSerializedState().state, context: null as never } }),
+      createSerializedState({ state: { ...createSerializedState().state, agents: {} as never } }),
+      createSerializedState({ state: { ...createSerializedState().state, tasks: {} as never } }),
+      { ...createSerializedState(), knowledge: null },
+      { ...createSerializedState(), knowledge: "bad" },
+      createSerializedState({ knowledge: { ...createSerializedState().knowledge, facts: {} as never } }),
+      createSerializedState({ knowledge: { ...createSerializedState().knowledge, inferences: {} as never } }),
+      createSerializedState({ knowledge: { ...createSerializedState().knowledge, patterns: {} as never } }),
+      { ...createSerializedState(), decisions: null },
+      { ...createSerializedState(), decisions: "bad" },
+      createSerializedState({ decisions: { ...createSerializedState().decisions, pending: {} as never } }),
+      createSerializedState({ decisions: { ...createSerializedState().decisions, opinions: {} as never } }),
+      createSerializedState({ decisions: { ...createSerializedState().decisions, history: {} as never } }),
+    ];
+
+    for (const value of invalidCases) {
+      expect(isSerializedState(value)).toBe(false);
+    }
   });
 });

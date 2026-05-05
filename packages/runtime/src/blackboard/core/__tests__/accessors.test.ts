@@ -16,6 +16,7 @@ import type {
   TaskId,
   AgentStatus,
   Task,
+  TaskError,
   StateSection,
   DecisionsSection,
   KnowledgeSection,
@@ -79,6 +80,44 @@ function createDecisionKnowledgeState(): Record<string, unknown> {
       inferences: [],
       patterns: [],
     } satisfies KnowledgeSection,
+  };
+}
+
+function createAgentStatus(
+  id: AgentId,
+  overrides: Partial<AgentStatus> = {}
+): AgentStatus {
+  return {
+    id,
+    name: `Agent ${id}`,
+    role: "reviewer",
+    status: AgentStatusEnum.IDLE,
+    joinedAt: new Date("2026-01-01T00:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+function createTask(overrides: Partial<Task> & { id: TaskId }): Task {
+  const timestamp = new Date("2026-01-01T00:00:00.000Z");
+
+  return {
+    id: overrides.id,
+    name: `Task ${overrides.id}`,
+    description: "Task used by state accessor tests",
+    assignedTo: null,
+    status: TaskStatus.PENDING,
+    priority: TaskPriority.NORMAL,
+    inputs: {},
+    outputs: null,
+    dependsOn: [],
+    error: null,
+    startedAt: null,
+    completedAt: null,
+    timeout: null,
+    version: 1,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    ...overrides,
   };
 }
 
@@ -271,6 +310,150 @@ describe("StateSectionAccessor", () => {
     accessor.addTask(task);
     accessor.updateTask("task-1" as TaskId, { status: TaskStatus.IN_PROGRESS });
     expect(accessor.getTask("task-1" as TaskId)?.status).toBe(TaskStatus.IN_PROGRESS);
+  });
+
+  it("filters, removes, and selects next executable tasks", () => {
+    const completedTaskId = "task-done" as TaskId;
+    const highPriorityReady = createTask({
+      id: "task-ready-high" as TaskId,
+      priority: TaskPriority.CRITICAL,
+    });
+    const normalPriorityReady = createTask({
+      id: "task-ready-normal" as TaskId,
+      priority: TaskPriority.NORMAL,
+    });
+    const blockedTask = createTask({
+      id: "task-blocked" as TaskId,
+      priority: TaskPriority.HIGH,
+      dependsOn: [completedTaskId],
+    });
+    const runningTask = createTask({
+      id: "task-running" as TaskId,
+      assignedTo: "agent-filter" as AgentId,
+      status: TaskStatus.RUNNING,
+      priority: TaskPriority.LOW,
+    });
+    const completedTask = createTask({
+      id: completedTaskId,
+      status: TaskStatus.COMPLETED,
+      priority: TaskPriority.LOW,
+    });
+
+    for (const task of [
+      highPriorityReady,
+      normalPriorityReady,
+      blockedTask,
+      runningTask,
+      completedTask,
+    ]) {
+      accessor.addTask(task);
+    }
+
+    expect(accessor.getTasks({ status: TaskStatus.PENDING })).toHaveLength(3);
+    expect(accessor.getTasks({ assignedTo: "agent-filter" as AgentId })).toEqual([runningTask]);
+    expect(accessor.getTasks({ priority: TaskPriority.CRITICAL })).toEqual([highPriorityReady]);
+    expect(accessor.getRunningTaskCount()).toBe(1);
+    expect(accessor.getPendingTaskCount()).toBe(3);
+    expect(accessor.hasTask(highPriorityReady.id)).toBe(true);
+
+    expect(accessor.getNextTasks().map((task) => task.id)).toEqual([
+      highPriorityReady.id,
+      normalPriorityReady.id,
+    ]);
+    expect(accessor.getNextTasks(new Set([completedTaskId])).map((task) => task.id)).toEqual([
+      highPriorityReady.id,
+      blockedTask.id,
+      normalPriorityReady.id,
+    ]);
+
+    accessor.removeTask(normalPriorityReady.id);
+    expect(accessor.hasTask(normalPriorityReady.id)).toBe(false);
+    expect(() => accessor.removeTask(normalPriorityReady.id)).toThrow(BlackboardError);
+  });
+
+  it("assigns, unassigns, completes, and fails tasks while syncing agents", () => {
+    const agentId = "agent-task-owner" as AgentId;
+    const agent = createAgentStatus(agentId);
+    const task = createTask({ id: "task-life-cycle" as TaskId });
+    const failureTask = createTask({ id: "task-failure" as TaskId });
+
+    accessor.registerAgent(agent);
+    accessor.addTask(task);
+    accessor.addTask(failureTask);
+
+    accessor.assignTask(task.id, agentId);
+    expect(accessor.getTask(task.id)).toMatchObject({
+      assignedTo: agentId,
+      status: TaskStatus.RUNNING,
+      version: 2,
+    });
+    expect(accessor.getAgent(agentId)).toMatchObject({
+      status: AgentStatusEnum.BUSY,
+      currentTask: task.id,
+    });
+    expect(accessor.getAgentCurrentTask(agentId)?.id).toBe(task.id);
+
+    accessor.unassignTask(task.id);
+    expect(accessor.getTask(task.id)).toMatchObject({
+      assignedTo: null,
+      status: TaskStatus.PENDING,
+      startedAt: null,
+    });
+    expect(accessor.getAgent(agentId)).toMatchObject({
+      status: AgentStatusEnum.IDLE,
+      currentTask: null,
+    });
+
+    accessor.assignTask(task.id, agentId);
+    accessor.completeTask(task.id, { result: "ok" });
+    expect(accessor.getTask(task.id)).toMatchObject({
+      status: TaskStatus.COMPLETED,
+      outputs: { result: "ok" },
+    });
+    expect(accessor.getTask(task.id)?.completedAt).toBeInstanceOf(Date);
+    expect(accessor.getAgent(agentId)).toMatchObject({
+      status: AgentStatusEnum.IDLE,
+      currentTask: null,
+    });
+
+    accessor.assignTask(failureTask.id, agentId);
+    const error: TaskError = {
+      code: "TEST_FAILURE",
+      message: "Task failed during test",
+      retryable: false,
+    };
+    accessor.failTask(failureTask.id, error);
+    expect(accessor.getTask(failureTask.id)).toMatchObject({
+      status: TaskStatus.FAILED,
+      error,
+    });
+    expect(accessor.getAgent(agentId)).toMatchObject({
+      status: AgentStatusEnum.IDLE,
+      currentTask: null,
+    });
+  });
+
+  it("rejects invalid task assignment transitions", () => {
+    const idleAgentId = "agent-idle" as AgentId;
+    const busyAgentId = "agent-busy" as AgentId;
+    const task = createTask({ id: "task-errors" as TaskId });
+
+    accessor.registerAgent(createAgentStatus(idleAgentId));
+    accessor.registerAgent(createAgentStatus(busyAgentId, { status: AgentStatusEnum.BUSY }));
+    accessor.addTask(task);
+
+    expect(() => accessor.assignTask(task.id, "agent-missing" as AgentId)).toThrow(BlackboardError);
+    expect(() => accessor.assignTask(task.id, busyAgentId)).toThrow(BlackboardError);
+    expect(() => accessor.assignTask("task-missing" as TaskId, idleAgentId)).toThrow(BlackboardError);
+    expect(() => accessor.unassignTask("task-missing" as TaskId)).toThrow(BlackboardError);
+    expect(() => accessor.completeTask("task-missing" as TaskId, {})).toThrow(BlackboardError);
+    expect(() =>
+      accessor.failTask("task-missing" as TaskId, {
+        code: "MISSING",
+        message: "missing",
+        retryable: false,
+      })
+    ).toThrow(BlackboardError);
   });
 });
 

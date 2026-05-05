@@ -111,6 +111,66 @@ describe("Expression DSL evaluator", () => {
     const ast = parseExpression('in(action.name, ["file_read", "shell_exec"])');
     expect(evaluateExpression(ast, baseContext)).toBe(true);
   });
+
+  it("evaluates comparison, logical, regex, and missing-field branches", () => {
+    expect(evaluateExpression(parseExpression("context.currentCost >= 7"), baseContext)).toBe(true);
+    expect(evaluateExpression(parseExpression("context.currentCost <= 7"), baseContext)).toBe(true);
+    expect(evaluateExpression(parseExpression("context.currentCost < 8"), baseContext)).toBe(true);
+    expect(evaluateExpression(parseExpression('action.name != "file_read"'), baseContext)).toBe(true);
+    expect(
+      evaluateExpression(
+        parseExpression('context.currentCost > 10 || action.name == "shell_exec"'),
+        baseContext
+      )
+    ).toBe(true);
+    expect(evaluateExpression(parseExpression('!contains(action.name, "danger")'), baseContext)).toBe(true);
+    expect(evaluateExpression(parseExpression('matches(action.name, "^shell_")'), baseContext)).toBe(true);
+    expect(evaluateExpression(parseExpression('contains(context.missing, "x")'), baseContext)).toBe(false);
+    expect(evaluateExpression(parseExpression('state.knowledge.score.value == "x"'), baseContext)).toBe(false);
+  });
+
+  it("evaluates optional root objects and reports evaluator errors", () => {
+    const richContext = {
+      ...baseContext,
+      execution: {
+        id: "exec-1",
+        workflowName: "release",
+        startedAt: new Date("2026-01-01T00:00:00.000Z"),
+        elapsedMs: 10,
+        totalTokens: 100,
+        totalCost: 1,
+        totalToolCalls: 2,
+        completedSteps: ["build"],
+      },
+      actor: { id: "actor-1", role: "runner" },
+      metrics: {
+        errorCount: 0,
+        retryCount: 2,
+        avgStepDurationMs: 10,
+        maxStepDurationMs: 20,
+      },
+      previousResults: {
+        build: { success: true, output: { artifact: "dist" } },
+      },
+    };
+
+    expect(evaluateExpression(parseExpression('execution.workflowName == "release"'), richContext)).toBe(true);
+    expect(evaluateExpression(parseExpression('actor.role == "runner"'), richContext)).toBe(true);
+    expect(evaluateExpression(parseExpression("metrics.retryCount == 2"), richContext)).toBe(true);
+    expect(
+      evaluateExpression(parseExpression("previousResults.build.success == true"), richContext)
+    ).toBe(true);
+
+    expect(() => evaluateExpression(parseExpression('context.currentCost > "3"'), baseContext)).toThrow(
+      "same comparable type"
+    );
+    expect(() => evaluateExpression(parseExpression("contains(action.name)"), baseContext)).toThrow(
+      "contains() expects 2 arguments"
+    );
+    expect(() => evaluateExpression(parseExpression('in(action.name, "shell_exec")'), baseContext)).toThrow(
+      "in() expects an array"
+    );
+  });
 });
 
 describe("Expression DSL policy integration", () => {

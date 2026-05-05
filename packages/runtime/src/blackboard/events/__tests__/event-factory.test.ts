@@ -213,6 +213,31 @@ describe("EventFactory", () => {
     });
   });
 
+  it("propagates source and correlation options across event families", () => {
+    const factory = createFactory();
+    const options = { source: agentId, correlationId: "corr-options" };
+    const events: EventLike[] = [
+      factory.createContextUpdated("key", "old", "new", options),
+      factory.createStateTaskCompleted(taskId, { ok: true }, 10, options),
+      factory.createAgentRemoved(agentId, "finished", options),
+      factory.createTaskStarted(taskId, agentId, options),
+      factory.createDecisionsAgendaStarted(agendaId, options),
+      factory.createVoteRequested(agendaId, later, [agentId], options),
+      factory.createFactAdded(fact, options),
+      factory.createSystemError("E_TEST", "failed", { detail: true }, options),
+      factory.createSystemSnapshotCreated("system-snapshot-1", later, options),
+      factory.createSystemSnapshotRestored("system-snapshot-1", later, options),
+      factory.createStateInitialized("session-options", options),
+      factory.createSnapshotCreated("snapshot-1", 1, options),
+      factory.createSnapshotRestored("snapshot-1", 2, 3, options),
+    ];
+
+    for (const event of events) {
+      expect(event.source).toBe(agentId);
+      expect(event.correlationId).toBe("corr-options");
+    }
+  });
+
   it("creates state, agent, and task events", () => {
     const factory = createFactory();
 
