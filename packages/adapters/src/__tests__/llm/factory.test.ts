@@ -2,12 +2,34 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 import { FileAuthManager } from "../../auth";
 import type { LLMAdapter } from "../../llm/adapter";
-import { createAdapter, createLLMAdapter, createAdapterFromEnv } from "../../llm/factory";
+import {
+  createAdapter,
+  createLLMAdapter,
+  createAdapterFromEnv,
+  getProviderDefaultModel,
+  isSupportedProvider,
+  pickPreferredProvider,
+} from "../../llm/factory";
 import { MockLLMAdapter } from "../../llm/mock-adapter";
 import { PiAIAdapter } from "../../llm/pi-ai-adapter";
 import { withRetry } from "../../llm/retry-handler";
 
 describe("Factory", () => {
+  describe("provider inventory helpers", () => {
+    it("selects preferred authenticated providers by priority and stable fallback order", () => {
+      expect(pickPreferredProvider([])).toBeUndefined();
+      expect(pickPreferredProvider(["zai", "openai", "anthropic"])).toBe("anthropic");
+      expect(pickPreferredProvider(["xai", "cerebras", "groq"])).toBe("cerebras");
+    });
+
+    it("checks provider support and default model lookup", () => {
+      expect(isSupportedProvider("openai")).toBe(true);
+      expect(isSupportedProvider("unknown")).toBe(false);
+      expect(getProviderDefaultModel("openai")).toBe("gpt-4o-mini");
+      expect(getProviderDefaultModel("unknown")).toBeUndefined();
+    });
+  });
+
   describe("createLLMAdapter", () => {
     it("should create pi-ai backed adapter", () => {
       const adapter = createLLMAdapter("openai", { apiKey: "test-key" });
@@ -87,6 +109,23 @@ describe("Factory", () => {
       const adapter = createAdapterFromEnv();
       expect(adapter).toBeInstanceOf(MockLLMAdapter);
     });
+
+    it("should reject unsupported env providers before auth fallback", () => {
+      process.env!.OBORA_LLM_PROVIDER = "unsupported-provider";
+
+      expect(() => createAdapterFromEnv()).toThrow(
+        "Unsupported LLM provider: unsupported-provider"
+      );
+    });
+
+    it("should create adapters for providers without base URL env overrides", () => {
+      process.env!.BEDROCK_API_KEY = "bedrock-key";
+
+      const adapter = createAdapterFromEnv("amazon-bedrock");
+
+      expect(adapter).toBeInstanceOf(PiAIAdapter);
+      expect(adapter.id).toBe("amazon-bedrock");
+    });
   });
 });
 
@@ -141,6 +180,59 @@ describe("createAdapter", () => {
     expect(adapter).toBeInstanceOf(PiAIAdapter);
     expect(adapter.id).toBe("anthropic");
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Falling back to authenticated provider"));
+  });
+
+  it("uses requested provider auth before env or fallback providers", async () => {
+    process.env!.OPENAI_API_KEY = "env-key";
+
+    vi.spyOn(FileAuthManager.prototype, "getProvider").mockResolvedValue({
+      provider: "openai",
+      type: "apiKey",
+      apiKey: "stored-key",
+      baseUrl: "https://stored.test/v1",
+      addedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    vi.spyOn(FileAuthManager.prototype, "listProviders").mockResolvedValue([]);
+
+    const adapter = await createAdapter("openai", { model: "gpt-4o-mini" });
+
+    expect(adapter).toBeInstanceOf(PiAIAdapter);
+    expect(adapter.id).toBe("openai");
+  });
+
+  it("uses env auth when no stored credentials exist", async () => {
+    process.env!.OPENAI_API_KEY = "env-key";
+
+    vi.spyOn(FileAuthManager.prototype, "getProvider").mockResolvedValue(undefined);
+    vi.spyOn(FileAuthManager.prototype, "listProviders").mockResolvedValue([]);
+
+    const adapter = await createAdapter("openai");
+
+    expect(adapter).toBeInstanceOf(PiAIAdapter);
+    expect(adapter.id).toBe("openai");
+  });
+
+  it("falls back to env behavior when listed fallback providers cannot be resolved", async () => {
+    delete process.env!.OPENAI_API_KEY;
+    process.env!.NODE_ENV = "development";
+
+    vi.spyOn(FileAuthManager.prototype, "getProvider").mockResolvedValue(undefined);
+    vi.spyOn(FileAuthManager.prototype, "listProviders").mockResolvedValue([
+      {
+        provider: "anthropic",
+        type: "apiKey",
+        apiKey: "anthropic-key",
+        addedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ]);
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const adapter = await createAdapter("openai");
+
+    expect(adapter).toBeInstanceOf(MockLLMAdapter);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("OPENAI_API_KEY not set"));
   });
 });
 

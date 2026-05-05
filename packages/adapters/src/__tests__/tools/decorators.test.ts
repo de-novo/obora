@@ -99,4 +99,41 @@ describe("tool decorators", () => {
     });
     await expect(registered?.execute({ value: "ok" }, context)).resolves.toBe("agent-1:ok");
   });
+
+  it("uses default decorator metadata and optional parameter schema branches", async () => {
+    class MinimalToolHost {
+      static ping(): string {
+        return "pong";
+      }
+    }
+
+    const descriptor = Object.getOwnPropertyDescriptor(MinimalToolHost, "ping");
+    if (!descriptor) {
+      throw new Error("missing descriptor");
+    }
+
+    tool({
+      name: "decorated_echo",
+      description: "Minimal decorated tool",
+    })(MinimalToolHost, "ping", descriptor);
+
+    const registered = globalToolRegistry.get("decorated_echo");
+    expect(registered).toMatchObject({
+      name: "decorated_echo",
+      description: "Minimal decorated tool",
+      parameters: { type: "object", properties: {} },
+      hasSideEffects: true,
+    });
+    await expect(registered?.execute({}, context)).resolves.toBe("pong");
+
+    const schema = params()
+      .string("optionalString", "Optional string", { required: false })
+      .number("optionalNumber", "Optional number", { required: false })
+      .boolean("optionalBoolean", "Optional boolean", { required: false })
+      .array("optionalArray", "Optional array", { type: "string" }, { required: false })
+      .object("optionalObject", "Optional object", {}, { required: false })
+      .build();
+
+    expect(schema.required).toEqual([]);
+  });
 });

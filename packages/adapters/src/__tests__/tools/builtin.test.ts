@@ -117,6 +117,46 @@ describe("builtin tools", () => {
     );
   });
 
+  it("uses default HTTP request options when optional fields are omitted", async () => {
+    const fetch = vi.fn(
+      async () =>
+        new Response("ok", {
+          status: 200,
+        })
+    );
+    vi.stubGlobal("fetch", fetch);
+
+    await expect(
+      httpRequestTool.execute(
+        {
+          url: "https://example.test/defaults",
+        },
+        { ...context, timeout: undefined }
+      )
+    ).resolves.toMatchObject({
+      status: 200,
+      body: "ok",
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      "https://example.test/defaults",
+      expect.objectContaining({
+        method: "GET",
+        headers: undefined,
+        body: undefined,
+        signal: expect.any(AbortSignal),
+      })
+    );
+  });
+
+  it("uses random generator defaults for number and string modes", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0);
+
+    await expect(randomGeneratorTool.execute({ type: "number" }, context)).resolves.toBe(0);
+    await expect(randomGeneratorTool.execute({ type: "string" }, context)).resolves.toBe(
+      "AAAAAAAAAA"
+    );
+  });
+
   it("generates deterministic random values when Math.random is controlled", async () => {
     vi.spyOn(Math, "random").mockReturnValue(0);
 

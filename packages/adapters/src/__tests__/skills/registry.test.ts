@@ -70,6 +70,22 @@ Body`;
     expect(result!.frontmatter.dependencies).toEqual([]);
   });
 
+  it("should normalize non-array dependencies to an empty list", () => {
+    const content = `---
+name: skill-with-invalid-deps
+description: Has invalid dependencies
+dependencies: base-skill
+unknown: ignored
+---
+
+Body`;
+
+    const result = parseSkillMd(content);
+
+    expect(result).not.toBeNull();
+    expect(result!.frontmatter.dependencies).toEqual([]);
+  });
+
   it("should return null for missing frontmatter", () => {
     const content = `# No frontmatter
 Just markdown content`;
@@ -210,6 +226,28 @@ Body`;
     expect(result!.references.get("guide.md")).toBe("# Guide\nContent");
   });
 
+  it("should ignore non-markdown references and script subdirectories", () => {
+    const skillMd = `---
+name: mixed-assets-skill
+description: Has mixed assets
+---
+
+Body`;
+    writeFileSync(join(testDir, "SKILL.md"), skillMd);
+    mkdirSync(join(testDir, "references"), { recursive: true });
+    writeFileSync(join(testDir, "references", "guide.md"), "# Guide\nContent");
+    writeFileSync(join(testDir, "references", "notes.txt"), "Ignore");
+    mkdirSync(join(testDir, "scripts"), { recursive: true });
+    writeFileSync(join(testDir, "scripts", "setup.sh"), "echo setup");
+    mkdirSync(join(testDir, "scripts", "nested"), { recursive: true });
+
+    const result = loadSkillMdDirectory(testDir);
+
+    expect(result).not.toBeNull();
+    expect([...result!.references.keys()]).toEqual(["guide.md"]);
+    expect([...result!.scripts.keys()]).toEqual(["setup.sh"]);
+  });
+
   it("should load scripts from scripts directory", () => {
     const skillMd = `---
 name: scripts-skill
@@ -333,6 +371,41 @@ Body`;
 
     const custom = skills.find((s) => s.skill.name === "custom-skill");
     expect(custom).toBeDefined();
+  });
+
+  it("should return undefined for missing skills", () => {
+    const registry = new SkillRegistry({ localSkillsDir: testDir });
+
+    expect(registry.getSkillSync("missing-skill")).toBeUndefined();
+  });
+
+  it("should use package path and defaults when package metadata is partial", () => {
+    writeFileSync(join(skillDir, "package.json"), JSON.stringify({}));
+
+    const registry = new SkillRegistry({ localSkillsDir: testDir });
+    const found = registry.getSkillSync("test-skill");
+
+    expect(found).toBeDefined();
+    expect(found!.skill).toMatchObject({
+      name: "test-skill",
+      description: "External skill: test-skill",
+      version: "0.0.0",
+    });
+  });
+
+  it("should skip invalid package metadata", () => {
+    writeFileSync(join(skillDir, "package.json"), "{bad json");
+
+    const registry = new SkillRegistry({ localSkillsDir: testDir });
+
+    expect(registry.listAvailableSync().some((entry) => entry.path === skillDir)).toBe(false);
+  });
+
+  it("should no-op npm removal when local skill directory is absent", async () => {
+    rmSync(testDir, { recursive: true, force: true });
+    const registry = new SkillRegistry({ localSkillsDir: testDir });
+
+    await expect(registry.removeFromNpm("missing-package", { cwd: testDir })).resolves.toBeUndefined();
   });
 
   it("should load dependencies from SKILL.md", () => {
