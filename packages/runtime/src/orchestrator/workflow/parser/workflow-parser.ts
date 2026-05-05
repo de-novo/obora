@@ -378,7 +378,7 @@ function parseStep(raw: unknown, index: number, options: ParserOptions): Step {
 function parseConfig(raw: unknown, options: ParserOptions): WorkflowConfig | undefined {
   if (raw === undefined) return undefined;
 
-  if (typeof raw !== "object" || raw === null) {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
     throw new ParseError("E2003", "'config' must be an object");
   }
 

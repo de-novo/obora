@@ -72,6 +72,35 @@ const workflowSchema = {
       },
       additionalProperties: false,
     },
+    policy: { type: "string" },
+    recovery: {
+      type: "object",
+      additionalProperties: {
+        type: "object",
+        required: ["on_fail"],
+        properties: {
+          on_fail: { type: "string", enum: ["retry", "rollback", "escalate", "alternative", "custom"] },
+          max_retries: { type: "integer", minimum: 0 },
+          backoff: { type: "string", enum: ["linear", "exponential"] },
+          backoff_base: { type: "string" },
+          to: { type: "string" },
+          fallback: { type: "object" },
+          custom: { type: "string" },
+        },
+        additionalProperties: false,
+      },
+    },
+    audit: {
+      type: "object",
+      required: ["store"],
+      properties: {
+        store: { type: "string", enum: ["duckdb", "sqlite", "custom"] },
+        path: { type: "string" },
+        retention: { type: "string" },
+        custom: { type: "string" },
+      },
+      additionalProperties: false,
+    },
     steps: {
       type: "array",
       items: {
@@ -88,6 +117,83 @@ const workflowSchema = {
           outputs: { type: "array", items: { type: "string" } },
           timeout: { type: "string", pattern: "^[1-9]\\d*[smhd]$" },
           skills: { type: "array", items: { type: "string" } },
+          tools: { type: "array", items: { type: "string" } },
+          bindings: {
+            type: "array",
+            items: {
+              type: "object",
+              required: ["source", "target"],
+              properties: {
+                source: { type: "string" },
+                target: { type: "string" },
+                transform: { type: "string" },
+                condition: { type: "string" },
+              },
+              additionalProperties: false,
+            },
+          },
+          consensus: {
+            type: "object",
+            required: ["type"],
+            properties: {
+              type: { type: "string", enum: ["majority", "unanimous", "weighted", "score-threshold", "custom"] },
+              voters: {
+                type: "array",
+                items: {
+                  type: "object",
+                  required: ["id"],
+                  properties: {
+                    id: { type: "string" },
+                    weight: { type: "number" },
+                    role: { type: "string", enum: ["ai", "human", "service"] },
+                    required: { type: "boolean" },
+                  },
+                  additionalProperties: false,
+                },
+              },
+              min: { type: "number" },
+              of: { type: "number" },
+              threshold: { type: "number" },
+              timeout: { type: "string" },
+              best_effort: { type: "array", items: { type: "string" } },
+              custom: { type: "string" },
+            },
+            additionalProperties: false,
+          },
+          gate: { type: "string", enum: ["human-approval", "consensus", "external"] },
+          gate_config: {
+            type: "object",
+            properties: {
+              timeout: { type: "string" },
+              fallback: { type: "string", enum: ["fail", "escalate", "auto-approve"] },
+              escalation_to: { type: "string" },
+            },
+            additionalProperties: false,
+          },
+          pattern: { type: "string" },
+          participants: {
+            type: "object",
+            additionalProperties: { type: "string" },
+          },
+          policy: {
+            type: "object",
+            properties: {
+              sandbox: { type: "string" },
+              tools_override: {
+                type: "array",
+                items: {
+                  type: "object",
+                  required: ["name", "effect"],
+                  properties: {
+                    name: { type: "string" },
+                    effect: { type: "string", enum: ["allow", "deny", "transform", "gate"] },
+                  },
+                  additionalProperties: false,
+                },
+              },
+            },
+            additionalProperties: false,
+          },
           on_fail: {
             type: "object",
             required: ["goto", "max_iterations"],

@@ -6,10 +6,10 @@
     "lines": 95
   },
   "@obora/runtime": {
-    "statements": 75,
-    "branches": 75,
-    "functions": 79,
-    "lines": 75
+    "statements": 81,
+    "branches": 77,
+    "functions": 81,
+    "lines": 81
   },
   "@obora/adapters": {
     "statements": 78,
