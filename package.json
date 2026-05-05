@@ -12,6 +12,7 @@
     "test:e2e:watch": "vitest --config vitest.config.e2e.ts",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
+    "coverage:report": "node scripts/coverage/report.mjs",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "clean": "turbo clean && rm -rf node_modules",
     "verify:clean": "bash scripts/verify-clean.sh",

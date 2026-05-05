@@ -31,7 +31,11 @@ import { OboraError } from "../runtime-types.js";
 import { DEFAULTS } from "../defaults.js";
 import { resolveFailureRoute } from "../conditional-routing.js";
 import type { RouteResolution } from "../conditional-routing.js";
-import { ReflectorEngine } from "../reflector/reflector-engine.js";
+import {
+  summarizeBlackboardSnapshot,
+  summarizeObserverMetrics,
+} from "./execution-debug-state.js";
+import { applyReflectorRepairActions } from "./reflector-repair-actions.js";
 
 interface RepairLoopRuntimeState {
   latestValidation?: ValidationResult;
@@ -77,37 +81,11 @@ export class StepExecutionEngine {
   }
 
   summarizeBlackboardSnapshot(snapshot: BlackboardSnapshot): Record<string, unknown> {
-    return {
-      facts: snapshot.facts.length,
-      failures: snapshot.failures.length,
-      stepOutputs: Object.keys(snapshot.stepOutputs),
-      stepTimings: Object.keys(snapshot.stepTimings),
-      lastFailure: snapshot.failures.at(-1)
-        ? {
-            stepName: snapshot.failures.at(-1)!.stepName,
-            attempt: snapshot.failures.at(-1)!.attempt,
-            summary: snapshot.failures.at(-1)!.validation.summary,
-          }
-        : undefined,
-    };
+    return summarizeBlackboardSnapshot(snapshot);
   }
 
   summarizeObserverMetrics(metrics?: ExecutionMetrics): Record<string, unknown> | undefined {
-    if (!metrics) return undefined;
-    return {
-      totalSteps: metrics.stepMetrics.size,
-      totalBackEdges: metrics.totalBackEdges,
-      totalRepairs: metrics.totalRepairs,
-      totalValidationFailures: metrics.totalValidationFailures,
-      totalValidationPasses: metrics.totalValidationPasses,
-      steps: [...metrics.stepMetrics.values()].map((step) => ({
-        stepName: step.stepName,
-        status: step.status,
-        retryCount: step.retryCount,
-        validationFailures: step.validationFailures,
-        validationPasses: step.validationPasses,
-      })),
-    };
+    return summarizeObserverMetrics(metrics);
   }
 
   buildRepairContext(
@@ -520,39 +498,14 @@ export class StepExecutionEngine {
               `[reflector] ${step.name} attempt ${repairContext.attempt}: ${hint}`
             );
           }
-          // Execute Reflector v2 actions (force_target, abort, switch_model)
-          if (reflector instanceof ReflectorEngine) {
-            const lastOutput = reflector.getLastOutput();
-            if (lastOutput) {
-              for (const ar of lastOutput.actions) {
-                const pending = (ar.metadata as Record<string, unknown>)?.pendingAction as
-                  | { type: string; payload: Record<string, unknown> }
-                  | undefined;
-                if (!pending) continue;
-                if (pending.type === "abort") {
-                  const reason = String(
-                    pending.payload?.reason ?? "Reflector abort action triggered"
-                  );
-                  config?.logger?.warn?.(`[reflector] ABORT: ${reason}`);
-                  throw OboraError.executionFailed(reason);
-                }
-                if (pending.type === "force_target") {
-                  const target = String(pending.payload?.target ?? "");
-                  if (target && stepIndexByName.has(target)) {
-                    config?.logger?.info?.(`[reflector] force_target → ${target}`);
-                    repairContext.forceTarget = target;
-                    const validationStepName = repairContext.validationStep;
-                    if (validationStepName) {
-                      forcedRouteTargets.set(validationStepName, target);
-                      config?.logger?.info?.(
-                        `[reflector] queued force_target for validation step ${validationStepName} → ${target}`
-                      );
-                    }
-                  }
-                }
-              }
-            }
-          }
+          applyReflectorRepairActions({
+            reflector,
+            config,
+            repairContext,
+            validationStepName: repairContext.validationStep,
+            stepIndexByName,
+            forcedRouteTargets,
+          });
         }
         this.deps.repairLoopTracker.recordRepairStarted(executionId, step.name, repairContext.attempt);
         await eventBus.emit("workflow.repair_started", executionId, {
