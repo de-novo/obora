@@ -215,32 +215,39 @@ export { OboraError, OboraErrorCode } from "./runtime-errors.js";
 
 // ── Runtime Data Structures ────────────────────────────────────────────────
 
-export interface RuntimeExecution {
+export interface RuntimeExecution<
+  TInput = unknown,
+  TOutputs extends Record<string, unknown> = Record<string, unknown>,
+  TStepRecords extends Record<string, unknown> = Record<string, unknown>,
+> {
   id: string;
   workflowName: string;
   status: "running" | "completed" | "failed" | "waiting" | "suspended" | "aborted";
-  input: unknown;
+  input: TInput;
   startedAt: Date;
   endedAt?: Date;
   error?: string;
   stepOrder: string[];
   completedSteps: string[];
-  stepRecords: Record<string, unknown>;
-  outputs: Record<string, unknown>;
+  stepRecords: TStepRecords;
+  outputs: TOutputs;
 }
 
 export type RunStatus = "queued" | "running" | "waiting" | "suspended" | "completed" | "failed" | "aborted";
 
-export interface RunHandle {
+export interface RunHandle<TExecution extends RuntimeExecution = RuntimeExecution> {
   executionId: string;
   readonly status: RunStatus;
-  wait(): Promise<RuntimeExecution>;
+  wait(): Promise<TExecution>;
   cancel(reason?: string): Promise<void>;
 }
 
-export interface RunOptions {
-  input?: unknown;
-  variables?: Record<string, unknown>;
+export interface RunOptions<
+  TInput = unknown,
+  TVariables extends Record<string, unknown> = Record<string, unknown>,
+> {
+  input?: TInput;
+  variables?: TVariables;
   signal?: AbortSignal;
   knowledgeContext?: {
     enabled?: boolean;
@@ -263,12 +270,21 @@ export type Unsubscribe = () => void;
 
 // ── Registration Types ─────────────────────────────────────────────────────
 
-export type AgentFactory = (...args: unknown[]) => unknown;
-export type PluginToolHandler = (params: unknown, context?: unknown) => unknown | Promise<unknown>;
+export type AgentFactory<
+  TArgs extends readonly unknown[] = readonly unknown[],
+  TResult = unknown,
+> = (...args: TArgs) => TResult;
+export type PluginToolHandler<TParams = unknown, TContext = unknown, TResult = unknown> = (
+  params: TParams,
+  context?: TContext
+) => TResult | Promise<TResult>;
 
-export interface ToolHandler {
+export interface ToolHandler<
+  TArgs extends Record<string, unknown> = Record<string, unknown>,
+  TResult = string,
+> {
   definition: ToolDefinition;
-  execute: (args: Record<string, unknown>) => Promise<string>;
+  execute: (args: TArgs) => Promise<TResult>;
 }
 
 export interface PatternPlugin {

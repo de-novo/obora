@@ -2,15 +2,15 @@ import type { RepairContext } from "./validation-repair.js";
 import type { HookExecutionResult, WorkflowHookLifecycle } from "./hooks.js";
 import type { LLMAdapterLike, ToolHandler } from "./runtime-types.js";
 
-export interface StepContext {
-  previousOutputs: Record<string, unknown>;
+export interface StepContext<TPreviousOutputs extends Record<string, unknown> = Record<string, unknown>> {
+  previousOutputs: TPreviousOutputs;
   signal?: AbortSignal;
   repairContext?: RepairContext;
   hookOutputs?: Partial<Record<WorkflowHookLifecycle, HookExecutionResult>>;
 }
 
-export interface StepResult {
-  output: unknown;
+export interface StepResult<TOutput = unknown> {
+  output: TOutput;
   raw?: unknown;
   votes?: Array<{
     participant: string;

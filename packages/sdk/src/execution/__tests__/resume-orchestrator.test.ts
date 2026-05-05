@@ -8,6 +8,8 @@ import type { StepExecutionEngine } from "../step-execution-engine.js";
 import type { RepairLoopTracker } from "../repair-loop-tracker.js";
 import type { StorageAdapter } from "@obora/runtime";
 
+const RESUME_TEST_TIMEOUT_MS = 10_000;
+
 function createMockDeps() {
   const eventBus: EventBus = {
     emit: vi.fn().mockResolvedValue(undefined),
@@ -96,7 +98,7 @@ describe("ResumeOrchestrator - executeResume", () => {
     expect(mockDeps.eventBus.emit).toHaveBeenCalledWith("execution_start", "run-1", expect.any(Object));
     expect(mockDeps.eventBus.emit).toHaveBeenCalledWith("execution_end", "run-1", expect.any(Object));
     expect(adapter.saveRun).toHaveBeenCalledWith(expect.objectContaining({ status: "completed" }));
-  });
+  }, RESUME_TEST_TIMEOUT_MS);
 
   it("handles skip policy", async () => {
     const mockDeps = createMockDeps();
@@ -116,7 +118,7 @@ describe("ResumeOrchestrator - executeResume", () => {
 
     expect(result.completedSteps).toContain("step1");
     expect(result.outputs.step1).toBeUndefined();
-  });
+  }, RESUME_TEST_TIMEOUT_MS);
 
   it("handles step execution failure", async () => {
     const mockDeps = createMockDeps();

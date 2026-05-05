@@ -156,8 +156,6 @@ export class PluginLoader {
 
       if (this.logger?.warn) {
         this.logger.warn(`[plugin-loader] Failed to load plugin '${packageName}':`, error);
-      } else {
-        console.warn(`[plugin-loader] Failed to load plugin '${packageName}':`, error);
       }
       return null;
     }

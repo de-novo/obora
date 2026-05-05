@@ -11,6 +11,8 @@ pnpm --filter @obora/cli build >/dev/null
 
 bash scripts/release/verify-changelog.sh
 bash scripts/release/npm-auth-selftest.sh
+node scripts/release/verify-sdk-no-console.mjs
+node scripts/release/verify-sdk-public-api.mjs
 bash scripts/release/verify-public-module-tags.sh
 bash scripts/release/verify-doc-public-imports.sh
 bash scripts/release/verify-doc-code-snippets.sh

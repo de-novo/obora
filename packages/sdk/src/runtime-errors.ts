@@ -42,6 +42,7 @@ export const OboraErrorCode = {
   SDK_INVALID_CONFIG: "SDK_8008",
   SDK_CONFIG_ERROR: "SDK_8009",
   EXECUTION_FAILED: "SDK_8010",
+  SDK_TOOL_INPUT_INVALID: "SDK_8011",
   SDK_INVALID_PLUGIN: "SDK_9001",
   SDK_PLUGIN_LOAD_FAILED: "SDK_9002",
   SDK_PLUGIN_CONFLICT: "SDK_9003",
@@ -209,6 +210,17 @@ export class OboraError extends Error {
 
   static executionFailed(message: string): OboraError {
     return new OboraError(message, OboraErrorCode.EXECUTION_FAILED);
+  }
+
+  static toolInputInvalid(toolName: string | undefined, cause?: unknown): OboraError {
+    const suffix = toolName ? ` for tool '${toolName}'` : "";
+    return new OboraError(
+      `Tool input failed schema validation${suffix}`,
+      OboraErrorCode.SDK_TOOL_INPUT_INVALID,
+      undefined,
+      undefined,
+      cause,
+    );
   }
 
   static adapterAuthFailed(): OboraError {

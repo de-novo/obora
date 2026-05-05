@@ -1,16 +1,16 @@
-export interface AgentContext {
+export interface AgentContext<TInput = unknown, TVariables extends Record<string, unknown> = Record<string, unknown>> {
   executionId: string;
   stepName: string;
-  input: unknown;
-  variables?: Record<string, unknown>;
+  input: TInput;
+  variables?: TVariables;
 }
 
-export interface AgentResult {
-  output: unknown;
+export interface AgentResult<TOutput = unknown> {
+  output: TOutput;
   metadata?: Record<string, unknown>;
 }
 
-export abstract class Agent {
+export abstract class Agent<TInput = unknown, TOutput = unknown> {
   abstract readonly name: string;
-  abstract execute(ctx: AgentContext): Promise<AgentResult>;
+  abstract execute(ctx: AgentContext<TInput>): Promise<AgentResult<TOutput>>;
 }

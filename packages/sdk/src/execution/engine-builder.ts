@@ -74,8 +74,6 @@ export class EngineBuilder {
     const startupText = startupSections.join("\n");
     if (config.logger?.info) {
       config.logger.info(startupText);
-    } else {
-      console.info(startupText);
     }
     const runtimeAgents = await loadAgentsFromYamlFile(config.agentsPath);
     const workflowAgents = loadWorkflowAgents(workflow);

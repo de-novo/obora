@@ -25,6 +25,7 @@ export interface AlertingConfig {
   channels?: AlertChannel[];
   /** Minimum severity to trigger alerts. Default: "warning" */
   minSeverity?: "info" | "warning" | "critical";
+  logger?: { warn?: (message: string, ...args: unknown[]) => void };
 }
 
 const SEVERITY_LEVEL: Record<string, number> = {
@@ -38,10 +39,12 @@ export class AlertManager {
   private readonly minSeverity: number;
   private readonly history: Alert[] = [];
   private readonly maxHistorySize = 100;
+  private readonly logger?: AlertingConfig["logger"];
 
   constructor(config: AlertingConfig = {}) {
     this.channels = config.channels ?? [];
     this.minSeverity = SEVERITY_LEVEL[config.minSeverity ?? "warning"] ?? 1;
+    this.logger = config.logger;
   }
 
   addChannel(channel: AlertChannel): void {
@@ -63,7 +66,7 @@ export class AlertManager {
 
     for (const result of results) {
       if (result.status === "rejected") {
-        console.warn(`[alerting] Channel failed:`, result.reason);
+        this.logger?.warn?.("[alerting] Channel failed:", result.reason);
       }
     }
   }
@@ -107,7 +110,7 @@ export class ConsoleAlertChannel implements AlertChannel {
   readonly name = "console";
 
   async send(alert: Alert): Promise<void> {
-    const prefix = alert.severity === "critical" ? "🚨" : alert.severity === "warning" ? "⚠️" : "ℹ️";
+    const prefix = alert.severity === "critical" ? "[critical]" : alert.severity === "warning" ? "[warning]" : "[info]";
     const line = `${prefix} [${alert.severity.toUpperCase()}] ${alert.title}: ${alert.message}`;
     if (alert.severity === "critical") {
       console.error(line);

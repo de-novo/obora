@@ -31,8 +31,8 @@ function loadGlobalAuth(): GlobalAuthMap {
       );
       return globalAuthCache;
     }
-  } catch (err) {
-    console.warn("[auth-resolver] Failed to parse global auth file, falling back to empty map:", err);
+  } catch {
+    // Invalid global auth files are ignored so local development can continue.
   }
 
   globalAuthCache = {};
@@ -75,8 +75,6 @@ export function createAuthResolver(): AuthResolver {
         const msg = "[obora] Plain text authRef detected in config. This is supported but not recommended.";
         if (options?.logger?.warn) {
           options.logger.warn(msg);
-        } else {
-          console.warn(msg);
         }
       }
 
@@ -87,6 +85,6 @@ export function createAuthResolver(): AuthResolver {
 
 const defaultAuthResolver = createAuthResolver();
 
-export function resolveAuthRef(authRef: string, options?: { verbose?: boolean }): string | undefined {
+export function resolveAuthRef(authRef: string, options?: { verbose?: boolean; logger?: { warn?: (message: string, ...args: unknown[]) => void } }): string | undefined {
   return defaultAuthResolver.resolveAuthRef(authRef, options);
 }

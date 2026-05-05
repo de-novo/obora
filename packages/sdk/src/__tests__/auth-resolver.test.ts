@@ -25,36 +25,33 @@ describe("auth-resolver", () => {
   it("returns plain string and warns only once per resolver in verbose mode", async () => {
     const { createAuthResolver } = await import("../auth-resolver.js");
     const resolver = createAuthResolver();
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const warn = vi.fn();
 
-    expect(resolver.resolveAuthRef("plain-key", { verbose: true })).toBe("plain-key");
-    expect(resolver.resolveAuthRef("plain-key", { verbose: true })).toBe("plain-key");
+    expect(resolver.resolveAuthRef("plain-key", { verbose: true, logger: { warn } })).toBe("plain-key");
+    expect(resolver.resolveAuthRef("plain-key", { verbose: true, logger: { warn } })).toBe("plain-key");
 
     expect(warn).toHaveBeenCalledTimes(1);
-    warn.mockRestore();
   });
 
   it("isolates warning state across resolver instances", async () => {
     const { createAuthResolver } = await import("../auth-resolver.js");
     const resolverA = createAuthResolver();
     const resolverB = createAuthResolver();
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const warn = vi.fn();
 
-    expect(resolverA.resolveAuthRef("plain-key", { verbose: true })).toBe("plain-key");
-    expect(resolverA.resolveAuthRef("plain-key", { verbose: true })).toBe("plain-key");
-    expect(resolverB.resolveAuthRef("plain-key", { verbose: true })).toBe("plain-key");
+    expect(resolverA.resolveAuthRef("plain-key", { verbose: true, logger: { warn } })).toBe("plain-key");
+    expect(resolverA.resolveAuthRef("plain-key", { verbose: true, logger: { warn } })).toBe("plain-key");
+    expect(resolverB.resolveAuthRef("plain-key", { verbose: true, logger: { warn } })).toBe("plain-key");
 
     expect(warn).toHaveBeenCalledTimes(2);
-    warn.mockRestore();
   });
 
   it("suppresses plain text warning when verbose is false", async () => {
     const { createAuthResolver } = await import("../auth-resolver.js");
     const resolver = createAuthResolver();
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const warn = vi.fn();
 
-    expect(resolver.resolveAuthRef("plain-key")).toBe("plain-key");
+    expect(resolver.resolveAuthRef("plain-key", { logger: { warn } })).toBe("plain-key");
     expect(warn).not.toHaveBeenCalled();
-    warn.mockRestore();
   });
 });

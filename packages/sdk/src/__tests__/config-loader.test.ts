@@ -182,10 +182,10 @@ describe("config-loader", () => {
       const explicit = join(projectDir, "custom.yaml");
       await writeFile(explicit, "defaults:\n  provider: missing\n", "utf-8");
       const loaded = await loadConfig(explicit);
-      const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      const warn = vi.fn();
 
       const resolved = loaded
-        ? resolveProviderConfig(loaded, "missing", { verbose: true })
+        ? resolveProviderConfig(loaded, "missing", { verbose: true, logger: { warn } })
         : undefined;
       expect(resolved).toBeUndefined();
       expect(warn).toHaveBeenCalledWith(expect.stringContaining("missing"));
@@ -194,7 +194,6 @@ describe("config-loader", () => {
         expect.stringContaining("Next action: export MISSING_API_KEY=...")
       );
       expect(warn).toHaveBeenCalledWith(expect.stringContaining("providers.missing.authRef"));
-      warn.mockRestore();
     });
   });
 

@@ -305,7 +305,14 @@ export class OboraRuntime {
 
   // ── run() ─────────────────────────────────────────────────────────────────
 
-  async run(name: string, options: RunOptions = {}): Promise<RunHandle> {
+  async run<
+    TInput = unknown,
+    TOutputs extends Record<string, unknown> = Record<string, unknown>,
+    TStepRecords extends Record<string, unknown> = Record<string, unknown>,
+  >(
+    name: string,
+    options: RunOptions<TInput> = {},
+  ): Promise<RunHandle<RuntimeExecution<TInput, TOutputs, TStepRecords>>> {
     await this.policyLoadPromise;
 
     if (!this.workflows.has(name)) {
@@ -317,7 +324,13 @@ export class OboraRuntime {
     // Update policy reference on the controller in case it loaded after construction
     this.executionController.setPolicy(this.policy);
 
-    return this.executionController.start(name, workflow, options, this.agents, this.workflows);
+    return this.executionController.start(
+      name,
+      workflow,
+      options,
+      this.agents,
+      this.workflows,
+    ) as Promise<RunHandle<RuntimeExecution<TInput, TOutputs, TStepRecords>>>;
   }
 
   // ── resume() ──────────────────────────────────────────────────────────────

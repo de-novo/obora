@@ -97,8 +97,6 @@ export class CostTracker {
       }
       if (this.logger?.warn) {
         this.logger.warn(msg);
-      } else {
-        console.warn(msg);
       }
     }
   }
@@ -138,8 +136,6 @@ export class CostTracker {
         const msg = `[budget] Unknown model pricing for '${model}', cost recorded as 0 (unknownModel=warn)`;
         if (this.logger?.warn) {
           this.logger.warn(msg);
-        } else {
-          console.warn(msg);
         }
       }
     }
@@ -168,8 +164,6 @@ export class CostTracker {
       if ((policies.onBudgetExceed ?? "block") === "block") throw new BudgetExceededError(msg);
       if (this.logger?.warn) {
         this.logger.warn(msg);
-      } else {
-        console.warn(msg);
       }
     }
 
@@ -178,8 +172,6 @@ export class CostTracker {
       if ((policies.onBudgetExceed ?? "block") === "block") throw new BudgetExceededError(msg);
       if (this.logger?.warn) {
         this.logger.warn(msg);
-      } else {
-        console.warn(msg);
       }
     }
 
@@ -188,8 +180,6 @@ export class CostTracker {
       if ((policies.onBudgetExceed ?? "block") === "block") throw new BudgetExceededError(msg);
       if (this.logger?.warn) {
         this.logger.warn(msg);
-      } else {
-        console.warn(msg);
       }
     }
 

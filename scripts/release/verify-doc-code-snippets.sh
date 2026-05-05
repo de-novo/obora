@@ -119,6 +119,7 @@ if (snippetFiles.length === 0) {
 const paths = Object.fromEntries(
   Object.entries(publicPaths).map(([specifier, target]) => [specifier, [`../${target}`]])
 );
+paths.zod = ["../packages/sdk/node_modules/zod/index.d.ts"];
 
 fs.writeFileSync(
   path.join(tmpDir, "tsconfig.json"),

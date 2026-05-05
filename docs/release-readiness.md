@@ -46,7 +46,7 @@ pnpm verify:compat
 pnpm verify:test-type-debt
 ```
 
-`pnpm verify:release` builds publishable packages, checks changelog release notes, runs npm-auth selftests, rejects source JSDoc tags that advertise scoped `@obora` module subpaths outside package exports, verifies Markdown `@obora` import samples against public package exports, compiles checked TypeScript snippets against built public declarations, validates checked shell snippets with `bash -n`, parses tutorial YAML/JSON snippets and semantically checks workflow/config/policy examples, runs tutorial quickstart and contract-first dry-run flows through the built CLI, verifies that `typecheck-public.d.ts` shims do not declare exports absent from built public declarations, validates package `npm pack --dry-run` output, validates `pnpm pack` package metadata, runs published-package import/require smoke checks, and selftests CLI package installation.
+`pnpm verify:release` builds publishable packages, checks changelog release notes, runs npm-auth selftests, rejects SDK source console writes outside the explicit `ConsoleAlertChannel`, verifies the `@obora/sdk` public API snapshot for the root and `@obora/sdk/testing` exports, rejects source JSDoc tags that advertise scoped `@obora` module subpaths outside package exports, verifies Markdown `@obora` import samples against public package exports, compiles checked TypeScript snippets against built public declarations, validates checked shell snippets with `bash -n`, parses tutorial YAML/JSON snippets and semantically checks workflow/config/policy examples, runs tutorial quickstart and contract-first dry-run flows through the built CLI, verifies that `typecheck-public.d.ts` shims do not declare exports absent from built public declarations, validates package `npm pack --dry-run` output, validates `pnpm pack` package metadata, runs published-package import/require/TypeScript smoke checks, and selftests CLI package installation.
 
 Package payload validation fails if publishable tarballs include `dist/**/__tests__/**`,
 `*.test.*`, or `*-e2e.test.*` artifacts.
@@ -67,7 +67,7 @@ pnpm build
 bash scripts/release/verify-publish-packages.sh
 ```
 
-The payload must include built `dist` output, package README/LICENSE entries where declared, the declared `exports`, package `types`, and the CLI `bin/obora.js` entry for `@obora/cli`. The release gate also rejects `workspace:` dependency specifiers in the `pnpm pack` package metadata and smoke-tests public imports such as `@obora/sdk/testing`, `@obora/runtime/storage`, and `@obora/adapters/testing` after installing the local tarballs.
+The payload must include built `dist` output, package README/LICENSE entries where declared, the declared `exports`, package `types`, and the CLI `bin/obora.js` entry for `@obora/cli`. The release gate also rejects `workspace:` dependency specifiers in the `pnpm pack` package metadata and smoke-tests public imports such as `@obora/sdk/testing`, `@obora/runtime/storage`, and `@obora/adapters/testing` after installing the local tarballs. The TypeScript smoke also compiles the SDK typed helper path (`defineWorkflow`, `defineTool`, `defineSchemaTool`, typed `run`) against the installed tarball declarations.
 
 ## Manual Publish
 

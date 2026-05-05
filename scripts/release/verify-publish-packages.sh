@@ -170,4 +170,68 @@ for (const [label, specifier] of requires) {
 console.log("[PASS] Published package require smoke checks passed.");
 EOF
 
+cat > tsconfig.json <<'EOF'
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "lib": ["ES2022", "DOM"]
+  },
+  "files": ["index.mts"]
+}
+EOF
+
+cat > index.mts <<'EOF'
+import { z } from "zod";
+import {
+  OboraRuntime,
+  defineSchemaTool,
+  defineTool,
+  defineWorkflow,
+  type RuntimeExecution,
+  type TypedRunHandle,
+  type TypedRunOptions,
+} from "@obora/sdk";
+import { MockAgent } from "@obora/sdk/testing";
+
+const workflow = defineWorkflow({
+  name: "release-smoke",
+  variables: { topic: "release" },
+  steps: [{ name: "plan", agent: "assistant", input: { task: "Plan release" } }],
+});
+
+const runtime = new OboraRuntime();
+runtime.define(workflow.name, workflow);
+runtime.registerAgent("assistant", () => ({ role: "Assistant" }));
+
+const options: TypedRunOptions<{ topic: string }> = { input: { topic: "release" } };
+const handlePromise = runtime.run<{ topic: string }, { plan: string }>(workflow.name, options);
+type Execution = RuntimeExecution<{ topic: string }, { plan: string }>;
+const waitForExecution = async (
+  handle: TypedRunHandle<{ topic: string }, { plan: string }>
+): Promise<Execution> => handle.wait();
+
+const schemaTool = defineSchemaTool(
+  z.object({ topic: z.string() }),
+  async (params) => params.topic,
+  { name: "topic" }
+);
+const identityTool = defineTool<{ value: string }, undefined, string>(
+  async (params) => params.value
+);
+
+void handlePromise;
+void waitForExecution;
+void schemaTool;
+void identityTool;
+void MockAgent;
+EOF
+
+"$ROOT_DIR/node_modules/.bin/tsc" --project tsconfig.json
+echo "[PASS] Published package TypeScript smoke checks passed."
+
 echo "[PASS] All publishable packages passed npm pack --dry-run payload checks."

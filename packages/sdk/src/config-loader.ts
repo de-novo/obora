@@ -257,7 +257,10 @@ export function resolveProviderConfig(
 
   let apiKey: string | undefined;
   if (authRef) {
-    apiKey = authResolver.resolveAuthRef(authRef, { verbose: options?.verbose });
+    apiKey = authResolver.resolveAuthRef(authRef, {
+      verbose: options?.verbose,
+      logger: options?.logger,
+    });
   } else {
     const fallbackEnv =
       PROVIDER_ENV_KEY_MAP[selectedProviderName] ??
@@ -273,8 +276,6 @@ export function resolveProviderConfig(
         `Next action: export ${fallbackEnv}=... for first-time setup, or add providers.${selectedProviderName}.authRef to your config.`;
       if (options?.logger?.warn) {
         options.logger.warn(msg);
-      } else {
-        console.warn(msg);
       }
     }
   }

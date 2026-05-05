@@ -157,8 +157,6 @@ export class ExecutionObserver {
           }).catch((err) => {
             if (this.logger?.warn) {
               this.logger.warn("[execution-observer] Failed to snapshot cost:", err);
-            } else {
-              console.warn("[execution-observer] Failed to snapshot cost:", err);
             }
           });
         }
@@ -202,8 +200,6 @@ export class ExecutionObserver {
             }).catch((err) => {
               if (this.logger?.warn) {
                 this.logger.warn("[execution-observer] Failed to compute step cost delta:", err);
-              } else {
-                console.warn("[execution-observer] Failed to compute step cost delta:", err);
               }
             });
           }

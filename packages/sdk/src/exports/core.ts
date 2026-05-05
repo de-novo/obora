@@ -19,6 +19,7 @@ export {
   formatOutputPreview,
 } from "../resolution-summary.js";
 export { formatDiagnostic } from "../diagnostics.js";
+export { defineSchemaTool, defineTool, defineWorkflow } from "../public-api.js";
 export { CostTracker, BudgetExceededError } from "../cost-tracker.js";
 export { createAuthResolver, resolveAuthRef } from "../auth-resolver.js";
 export { StepExecutor } from "../step-executor.js";

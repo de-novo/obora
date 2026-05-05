@@ -48,14 +48,14 @@ export interface ParallelBranch {
 
 export type MergeStrategy = "concat" | "best_score" | "consensus" | "first_success";
 
-export interface WorkflowStep {
+export interface WorkflowStep<TInput extends Record<string, unknown> = Record<string, unknown>> {
   name: string;
   description?: string;
   agent?: string;
   tool?: string;
   pattern?: string;
   participants?: string[];
-  input?: Record<string, unknown>;
+  input?: TInput;
   output?: WorkflowStepOutput;
   config?: WorkflowStepConfig;
   hooks?: WorkflowHooks;
@@ -130,14 +130,18 @@ export interface WorkflowTKGProjectionConfig {
   };
 }
 
-export interface WorkflowDef {
+export interface WorkflowDef<
+  TVariables extends Record<string, unknown> = Record<string, unknown>,
+  TAgents extends Record<string, unknown> = Record<string, unknown>,
+  TStep extends WorkflowStep = WorkflowStep,
+> {
   name: string;
   version?: string;
-  steps: WorkflowStep[];
+  steps: TStep[];
   hooks?: WorkflowHooks;
-  variables?: Record<string, unknown>;
+  variables?: TVariables;
   /** Optional workflow-local agent definitions. */
-  agents?: Record<string, unknown>;
+  agents?: TAgents;
   /** Maximum number of steps to execute concurrently. Default: 3. */
   maxConcurrency?: number;
   /** Reflector v2 configuration. */
@@ -158,7 +162,7 @@ export interface OnFailConfig {
   maxCostEscalation?: "human" | "dlq" | "fail" | null;
 }
 
-export interface AddStepOptions {
+export interface AddStepOptions<TInput extends Record<string, unknown> = Record<string, unknown>> {
   id: string;
   description?: string;
   actor?: string;
@@ -166,7 +170,7 @@ export interface AddStepOptions {
   tool?: string;
   pattern?: string;
   participants?: string[];
-  input?: Record<string, unknown>;
+  input?: TInput;
   output?: WorkflowStepOutput;
   config?: WorkflowStepConfig;
   hooks?: WorkflowHooks;

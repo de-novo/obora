@@ -72,6 +72,47 @@ runtime.registerAgent("assistant", () => ({ role: "Assistant" }));
 const handle = await runtime.run("example");
 ```
 
+### Typed Public Helpers
+
+```typescript
+import { z } from "zod";
+import {
+  OboraRuntime,
+  defineSchemaTool,
+  defineTool,
+  defineWorkflow,
+  type TypedRunOptions,
+} from "@obora/sdk";
+
+const workflow = defineWorkflow({
+  name: "typed-example",
+  variables: { owner: "sdk" },
+  steps: [{ name: "plan", agent: "assistant", input: { task: "Plan" } }],
+});
+
+const runtime = new OboraRuntime();
+runtime.define(workflow.name, workflow);
+runtime.registerAgent("assistant", () => ({ role: "Assistant" }));
+
+const options: TypedRunOptions<{ topic: string }> = {
+  input: { topic: "public SDK" },
+};
+const handle = await runtime.run<{ topic: string }, { plan: string }>(
+  workflow.name,
+  options
+);
+
+const summarize = defineSchemaTool(
+  z.object({ topic: z.string() }),
+  async (params) => params.topic.toUpperCase(),
+  { name: "summarize" }
+);
+
+const echo = defineTool<{ value: string }, undefined, string>(
+  async (params) => params.value
+);
+```
+
 ### Workflow
 
 ```typescript

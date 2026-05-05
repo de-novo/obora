@@ -18,7 +18,8 @@
     "verify:clean": "bash scripts/verify-clean.sh",
     "verify:release": "bash scripts/release/verify-release.sh",
     "verify:compat": "bash scripts/release/verify-compat-inventory.sh",
-    "verify:test-type-debt": "bash scripts/release/verify-test-type-debt.sh"
+    "verify:test-type-debt": "bash scripts/release/verify-test-type-debt.sh",
+    "verify:sdk-public-api": "node scripts/release/verify-sdk-no-console.mjs && node scripts/release/verify-sdk-public-api.mjs"
   },
   "repository": {
     "type": "git",

@@ -90,6 +90,26 @@ export function formatBindingPreview(preview: unknown[]): string;
 export function buildOutputPreview(...args: unknown[]): unknown[];
 export function formatOutputPreview(preview: unknown[]): string;
 
+export type InferSchemaInput<TSchema> = unknown;
+export type InferSchemaOutput<TSchema> = unknown;
+export type TypedRuntimeExecution<TInput = unknown, TOutputs extends Record<string, unknown> = Record<string, unknown>> = RuntimeExecution;
+export type TypedRunHandle<TInput = unknown, TOutputs extends Record<string, unknown> = Record<string, unknown>> = RunHandle;
+export type TypedRunOptions<TInput = unknown, TVariables extends Record<string, unknown> = Record<string, unknown>> = RunOptions;
+
+export interface DefineSchemaToolOptions {
+  name?: string;
+}
+
+export function defineWorkflow<TDefinition extends WorkflowDef>(definition: TDefinition): TDefinition;
+export function defineTool<TParams = unknown, TContext = unknown, TResult = unknown>(
+  handler: (params: TParams, context?: TContext) => TResult | Promise<TResult>
+): (params: TParams, context?: TContext) => TResult | Promise<TResult>;
+export function defineSchemaTool<TSchema, TContext = unknown, TResult = unknown>(
+  schema: TSchema,
+  handler: (params: unknown, context?: TContext) => TResult | Promise<TResult>,
+  options?: DefineSchemaToolOptions
+): (params: unknown, context?: TContext) => TResult | Promise<TResult>;
+
 export class OboraRuntime {
   constructor(config?: unknown);
   static fromConfig(config?: unknown): Promise<OboraRuntime>;

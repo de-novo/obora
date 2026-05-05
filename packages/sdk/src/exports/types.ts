@@ -9,6 +9,7 @@ export type {
   OboraRuntimeConfig,
   SharedMemoryConfig,
   TKGProjectionConfig,
+  RuntimeExecution,
   RunOptions,
   RunHandle,
   RunStatus,
@@ -57,6 +58,14 @@ export type {
 } from "../execution/peer-review-executor.js";
 export type { HookExecutionResult, WorkflowHookLifecycle } from "../hooks.js";
 export type { LLMConfig } from "../runtime-types.js";
+export type {
+  DefineSchemaToolOptions,
+  InferSchemaInput,
+  InferSchemaOutput,
+  TypedRunHandle,
+  TypedRunOptions,
+  TypedRuntimeExecution,
+} from "../public-api.js";
 export type { ResolutionSummary } from "../resolution-summary.js";
 export type {
   OneFileMode,
