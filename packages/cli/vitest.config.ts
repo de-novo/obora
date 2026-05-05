@@ -12,6 +12,8 @@ export default defineConfig({
       exclude: [
         'node_modules/',
         'dist/',
+        'coverage/',
+        '**/coverage/**',
         '**/*.test.ts',
         '**/__tests__/**',
         '**/*.config.ts',

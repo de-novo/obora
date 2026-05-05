@@ -198,4 +198,159 @@ describe("knowledge command", () => {
       "obora init --quickstart"
     );
   });
+
+  it("prints an empty list message when no knowledge files exist", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "obora-knowledge-empty-"));
+    await mkdir(join(dir, ".obora"), { recursive: true });
+    process.chdir(dir);
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createKnowledgeCommand();
+
+    await cmd.parseAsync(["list"], { from: "user" });
+
+    expect(log).toHaveBeenCalledWith("No knowledge entries found.");
+  });
+
+  it("loads jsonl entries and prints query matches", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "obora-knowledge-jsonl-"));
+    await mkdir(join(dir, ".obora"), { recursive: true });
+    await writeFile(
+      join(dir, ".obora", "knowledge.jsonl"),
+      [
+        JSON.stringify({
+          id: "entry-1",
+          title: "Policy guard",
+          body: "READY marker",
+          tags: ["qa.policy"],
+          source: "manual",
+          confidence: 0.9,
+          projectId: "project-a",
+          createdAt: "2026-03-10T10:00:00.000Z",
+        }),
+        JSON.stringify({
+          id: "entry-2",
+          title: "Low confidence",
+          body: "ignore",
+          tags: ["qa.policy"],
+          source: "manual",
+          confidence: 0.2,
+          projectId: "project-a",
+          createdAt: "2026-03-11T10:00:00.000Z",
+        }),
+        "",
+      ].join("\n")
+    );
+    process.chdir(dir);
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createKnowledgeCommand();
+
+    await cmd.parseAsync(
+      [
+        "query",
+        "--tag",
+        "qa.policy",
+        "--project",
+        "project-a",
+        "--min-confidence",
+        "0.5",
+        "--limit",
+        "1",
+      ],
+      { from: "user" }
+    );
+
+    expect(log).toHaveBeenCalledWith("- entry-1 [qa.policy] Policy guard (conf=0.90)");
+  });
+
+  it("prints no-match text for empty search results", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "obora-knowledge-search-empty-"));
+    await mkdir(join(dir, ".obora"), { recursive: true });
+    await writeFile(
+      join(dir, ".obora", "knowledge.json"),
+      JSON.stringify([
+        {
+          id: "entry-1",
+          title: "Policy guard",
+          body: "READY marker",
+          tags: ["qa.policy"],
+          source: "manual",
+          confidence: 0.9,
+          createdAt: "2026-03-10T10:00:00.000Z",
+        },
+      ])
+    );
+    process.chdir(dir);
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createKnowledgeCommand();
+
+    await cmd.parseAsync(["search", "missing"], { from: "user" });
+
+    expect(log).toHaveBeenCalledWith("No knowledge entries matched search.");
+  });
+
+  it("prints raw knowledge schema in text mode", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "obora-knowledge-schema-raw-"));
+    await mkdir(join(dir, ".obora"), { recursive: true });
+    const raw = "version: '1.0'\nfields: []\n";
+    await writeFile(join(dir, ".obora", "knowledge-schema.yaml"), raw);
+    process.chdir(dir);
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createKnowledgeCommand();
+
+    await cmd.parseAsync(["schema", "show"], { from: "user" });
+
+    expect(log).toHaveBeenCalledWith(raw);
+  });
+
+  it("uses validation exit code for invalid min confidence", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "obora-knowledge-invalid-confidence-"));
+    await mkdir(join(dir, ".obora"), { recursive: true });
+    await writeFile(join(dir, ".obora", "knowledge.json"), "[]");
+    process.chdir(dir);
+
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const cmd = createKnowledgeCommand();
+
+    await cmd.parseAsync(["query", "--min-confidence", "-1"], { from: "user" });
+
+    expect(process.exit).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(ExitCode.VALIDATION_ERROR);
+    expect(error).toHaveBeenCalled();
+  });
+
+  it("uses execution-failed exit code for malformed knowledge json", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "obora-knowledge-bad-json-"));
+    await mkdir(join(dir, ".obora"), { recursive: true });
+    await writeFile(join(dir, ".obora", "knowledge.json"), JSON.stringify({ entries: [] }));
+    process.chdir(dir);
+
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const cmd = createKnowledgeCommand();
+
+    await cmd.parseAsync(["list"], { from: "user" });
+
+    expect(process.exit).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(ExitCode.EXECUTION_FAILED);
+    expect(error).toHaveBeenCalled();
+  });
+
+  it("uses execution-failed exit code for malformed knowledge jsonl", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "obora-knowledge-bad-jsonl-"));
+    await mkdir(join(dir, ".obora"), { recursive: true });
+    await writeFile(join(dir, ".obora", "knowledge.jsonl"), "{bad json");
+    process.chdir(dir);
+
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const cmd = createKnowledgeCommand();
+
+    await cmd.parseAsync(["list"], { from: "user" });
+
+    expect(process.exit).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(ExitCode.EXECUTION_FAILED);
+    expect(error).toHaveBeenCalled();
+  });
 });

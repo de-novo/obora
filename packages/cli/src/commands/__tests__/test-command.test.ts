@@ -135,6 +135,99 @@ describe("test command contracts", () => {
     );
   });
 
+  it("uses validation exit code when default ./tests is missing", async () => {
+    vi.mocked(stat).mockResolvedValue(null as never);
+
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const cmd = createTestCommand();
+
+    await cmd.parseAsync([], { from: "user" });
+
+    expect(process.exit).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(ExitCode.VALIDATION_ERROR);
+    expect(error).toHaveBeenCalled();
+  });
+
+  it("uses validation exit code for unsupported test targets", async () => {
+    vi.mocked(stat).mockResolvedValue({
+      isDirectory: () => false,
+      isFile: () => true,
+    } as Awaited<ReturnType<typeof stat>>);
+
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const cmd = createTestCommand();
+
+    await cmd.parseAsync(["./tests/case.json"], { from: "user" });
+
+    expect(process.exit).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(ExitCode.VALIDATION_ERROR);
+    expect(error).toHaveBeenCalled();
+    expect(loadFixture).not.toHaveBeenCalled();
+  });
+
+  it("prints no-match warning when filters exclude all fixtures", async () => {
+    vi.mocked(stat).mockResolvedValue({
+      isDirectory: () => true,
+      isFile: () => false,
+    } as Awaited<ReturnType<typeof stat>>);
+    vi.mocked(loadFixtures).mockResolvedValue([{ name: "happy-path" }] as never);
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const cmd = createTestCommand();
+
+    await cmd.parseAsync(["./tests", "--filter", "missing"], { from: "user" });
+
+    expect(error.mock.calls.map((args) => args.join(" ")).join("\n")).toContain(
+      "No test fixtures matched the provided target/filter."
+    );
+    expect(runWorkflowTest).not.toHaveBeenCalled();
+  });
+
+  it("returns empty JSON when filters exclude all fixtures", async () => {
+    vi.mocked(stat).mockResolvedValue({
+      isDirectory: () => true,
+      isFile: () => false,
+    } as Awaited<ReturnType<typeof stat>>);
+    vi.mocked(loadFixtures).mockResolvedValue([{ name: "happy-path" }] as never);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createTestCommand();
+
+    await cmd.parseAsync(["./tests", "--filter", "missing", "--json"], { from: "user" });
+
+    expect(JSON.parse(log.mock.calls.at(-1)?.[0] ?? "{}")).toEqual({
+      target: "./tests",
+      filter: "missing",
+      total: 0,
+      passed: 0,
+      failed: 0,
+      results: [],
+    });
+  });
+
+  it("prints verbose text output for passing fixtures", async () => {
+    vi.mocked(stat).mockResolvedValue({
+      isDirectory: () => true,
+      isFile: () => false,
+    } as Awaited<ReturnType<typeof stat>>);
+    vi.mocked(loadFixtures).mockResolvedValue([{ name: "happy-path" }] as never);
+    vi.mocked(runWorkflowTest).mockResolvedValue({
+      name: "happy-path",
+      passed: true,
+      duration: 12,
+      failures: [],
+    } as never);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const root = new Command("obora").option("--verbose");
+    root.addCommand(createTestCommand());
+
+    await root.parseAsync(["--verbose", "test", "./tests"], { from: "user" });
+
+    const output = log.mock.calls.map((args) => args.join(" ")).join("\n");
+    expect(output).toContain("Running test fixture: happy-path");
+    expect(output).toContain("Finished: happy-path (12ms)");
+    expect(output).toContain("happy-path (12ms)");
+    expect(output).toContain("Test summary: 1/1 passed, 0 failed");
+  });
+
   it("uses execution-failed exit code for failed test runs", async () => {
     vi.mocked(stat).mockResolvedValue({
       isDirectory: () => false,
@@ -149,6 +242,7 @@ describe("test command contracts", () => {
     } as never);
 
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.spyOn(console, "log").mockImplementation(() => undefined);
     const cmd = createTestCommand();
 
     await cmd.parseAsync(["./tests/broken-path.yaml"], { from: "user" });

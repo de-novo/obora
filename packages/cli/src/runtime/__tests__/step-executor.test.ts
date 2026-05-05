@@ -143,6 +143,38 @@ describe("executeStep — success", () => {
     expect(calledTask.id).toBe("test-step");
     expect(calledTask.type).toBe("executor");
   });
+
+  it("should serialize object outputs", async () => {
+    const agent = makeAgent({ output: { ok: true, count: 2 } });
+    const resolver = makeResolver(agent);
+
+    const result = await executeStep(makeStep(), resolver, makeContext());
+
+    expect(result).toEqual({
+      success: true,
+      output: JSON.stringify({ ok: true, count: 2 }, null, 2),
+    });
+  });
+
+  it("should forward subscribed runtime events and unsubscribe after execution", async () => {
+    const unsubscribe = vi.fn();
+    const agent = {
+      ...makeAgent(),
+      id: "agent-1",
+      subscribe: vi.fn((listener: (event: unknown) => void) => {
+        listener({ type: "stream", chunk: "hello" });
+        return unsubscribe;
+      }),
+    } as unknown as BaseAgent;
+    const resolver = makeResolver(agent);
+    const onEvent = vi.fn();
+
+    const result = await executeStep(makeStep(), resolver, makeContext(), { onEvent });
+
+    expect(result.success).toBe(true);
+    expect(onEvent).toHaveBeenCalledWith({ type: "stream", chunk: "hello" });
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -176,6 +208,46 @@ describe("executeStep — agent failure", () => {
     expect(result.success).toBe(false);
     expect(result.error).toBe("unexpected");
     expect(result.diagnosisCode).toBe("E4001");
+  });
+
+  it("should map provider retry exhaustion codes from generic errors", async () => {
+    const providerError = Object.assign(new Error("rate limited"), { code: "E4011" });
+    const agent = makeAgent({
+      success: false,
+      output: { retryable: true },
+      error: providerError,
+    });
+    const resolver = makeResolver(agent);
+
+    const result = await executeStep(makeStep(), resolver, makeContext());
+
+    expect(result.success).toBe(false);
+    expect(result.output).toBe(JSON.stringify({ retryable: true }, null, 2));
+    expect(result.diagnosisCode).toBe("E4005");
+    expect(result.errorMeta).toEqual(
+      expect.objectContaining({
+        code: "E4005",
+        message: "rate limited",
+      })
+    );
+  });
+
+  it("should use default failure code when a failed result has no error object", async () => {
+    const agent = makeAgent({
+      success: false,
+      output: null,
+      error: undefined,
+    });
+    const resolver = makeResolver(agent);
+
+    const result = await executeStep(makeStep(), resolver, makeContext());
+
+    expect(result).toEqual({
+      success: false,
+      output: "",
+      error: undefined,
+      diagnosisCode: "E4001",
+    });
   });
 });
 
@@ -249,6 +321,122 @@ describe("executeStep — timeout (E4002)", () => {
     expect(result.success).toBe(false);
     expect(result.diagnosisCode).toBe("E4002");
     expect(result.error).toBe("Timeout exceeded");
+  });
+});
+
+describe("executeStep — cancellation", () => {
+  it("should return E4006 when the external signal is already aborted", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const agent = makeAgent();
+    const resolver = makeResolver(agent);
+
+    const result = await executeStep(makeStep(), resolver, makeContext(), {
+      signal: controller.signal,
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: "Execution cancelled before start",
+      diagnosisCode: "E4006",
+    });
+    expect(agent.execute).not.toHaveBeenCalled();
+  });
+
+  it("should return E4006 when the external signal aborts during execution", async () => {
+    const controller = new AbortController();
+    const agent = {
+      execute: vi.fn().mockImplementation(
+        () =>
+          new Promise(() => {
+            // Intentionally pending until AbortSignal.any rejects the race.
+          })
+      ),
+    } as unknown as BaseAgent;
+    const resolver = makeResolver(agent);
+
+    const promise = executeStep(makeStep(), resolver, makeContext(), {
+      signal: controller.signal,
+      timeoutMs: 10_000,
+    });
+    await vi.waitFor(() => expect(agent.execute).toHaveBeenCalled());
+    controller.abort();
+
+    await expect(promise).resolves.toEqual({
+      success: false,
+      error: "Execution cancelled",
+      diagnosisCode: "E4006",
+    });
+  });
+});
+
+describe("executeStep — retry", () => {
+  it("should retry retryable failures, continue the agent, and return the later success", async () => {
+    vi.useFakeTimers();
+    const random = vi.spyOn(Math, "random").mockReturnValue(0.5);
+    const agent = {
+      execute: vi
+        .fn()
+        .mockResolvedValueOnce({
+          taskId: "test-step",
+          success: false,
+          output: null,
+          error: new Error("transient"),
+          duration: 10,
+        })
+        .mockResolvedValueOnce({
+          taskId: "test-step",
+          success: true,
+          output: "recovered",
+          duration: 10,
+        }),
+      continue: vi.fn().mockRejectedValue(new Error("continue unavailable")),
+    } as unknown as BaseAgent & { continue: ReturnType<typeof vi.fn> };
+    const resolver = makeResolver(agent);
+
+    const promise = executeStep(makeStep(), resolver, makeContext(), { retryAttempts: 1 });
+    await vi.advanceTimersByTimeAsync(1_000);
+    const result = await promise;
+
+    expect(result).toEqual({ success: true, output: "recovered" });
+    expect(agent.execute).toHaveBeenCalledTimes(2);
+    expect(agent.continue).toHaveBeenCalledTimes(1);
+
+    random.mockRestore();
+    vi.useRealTimers();
+  });
+
+  it("should cancel while waiting for a retry delay", async () => {
+    vi.useFakeTimers();
+    const random = vi.spyOn(Math, "random").mockReturnValue(0.5);
+    const controller = new AbortController();
+    const agent = {
+      execute: vi.fn().mockResolvedValue({
+        taskId: "test-step",
+        success: false,
+        output: null,
+        error: new Error("transient"),
+        duration: 10,
+      }),
+    } as unknown as BaseAgent;
+    const resolver = makeResolver(agent);
+
+    const promise = executeStep(makeStep(), resolver, makeContext(), {
+      retryAttempts: 1,
+      signal: controller.signal,
+    });
+    await vi.waitFor(() => expect(agent.execute).toHaveBeenCalledTimes(1));
+    controller.abort();
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    await expect(promise).resolves.toEqual({
+      success: false,
+      error: "Execution cancelled",
+      diagnosisCode: "E4006",
+    });
+
+    random.mockRestore();
+    vi.useRealTimers();
   });
 });
 
