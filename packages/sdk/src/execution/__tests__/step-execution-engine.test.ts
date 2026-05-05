@@ -72,6 +72,49 @@ function createWorkflowDef(steps: WorkflowStep[]): WorkflowDef {
 }
 
 describe("StepExecutionEngine - executeSingleStep", () => {
+  it("emits warnings for best-effort hook failures", async () => {
+    const { engine, eventBus } = createEngine();
+    const step: WorkflowStep = {
+      name: "step1",
+      agent: "agent1",
+      hooks: {
+        post_step: { shell: "node -e \"process.stderr.write('hook failed'); process.exit(2)\"" },
+      },
+    };
+    const workflow = createWorkflowDef([step]);
+
+    const result = await engine.runStepHook(workflow, step, "post_step", "exec-1", {
+      continueOnError: true,
+      bestEffort: true,
+    });
+
+    expect(result?.success).toBe(false);
+    expect(eventBus.emit).toHaveBeenCalledWith(
+      "warning",
+      "exec-1",
+      expect.objectContaining({
+        bestEffort: true,
+        stderr: "hook failed",
+      })
+    );
+  });
+
+  it("throws hook stderr when a required hook fails", async () => {
+    const { engine } = createEngine();
+    const step: WorkflowStep = {
+      name: "step1",
+      agent: "agent1",
+      hooks: {
+        pre_step: { shell: "node -e \"process.stdout.write('stdout fallback'); process.exit(3)\"" },
+      },
+    };
+    const workflow = createWorkflowDef([step]);
+
+    await expect(engine.runStepHook(workflow, step, "pre_step", "exec-1")).rejects.toThrow(
+      "stdout fallback"
+    );
+  });
+
   it("executes a single step with hooks and persistence", async () => {
     const { engine, eventBus } = createEngine();
     const stepExecutor = createMockStepExecutor();
@@ -223,6 +266,69 @@ describe("StepExecutionEngine - executeSingleStep", () => {
     // step_end should still be emitted
     expect(eventBus.emit).toHaveBeenCalledWith("step_end", "exec-1", expect.any(Object));
   });
+
+  it("passes pre-step, pre-validation, and post-step hook outputs to the step executor", async () => {
+    const { engine } = createEngine();
+    const stepExecutor = createMockStepExecutor();
+    vi.mocked(stepExecutor.executeStep).mockResolvedValue({ output: { ok: true }, raw: {} });
+    const persistenceAdapter = createMockPersistenceAdapter();
+
+    const step: WorkflowStep = {
+      name: "step1",
+      agent: "agent1",
+      input: {},
+      config: { validation: { enabled: true } },
+      hooks: {
+        pre_step: { shell: "printf pre" },
+        pre_validation: { shell: "printf validate" },
+        post_step: { shell: "printf post" },
+      },
+    };
+    const workflow = createWorkflowDef([step]);
+    const execution: RuntimeExecution = {
+      id: "exec-1",
+      workflowName: "test",
+      status: "running",
+      input: {},
+      startedAt: new Date(),
+      stepOrder: ["step1"],
+      completedSteps: [],
+      stepRecords: {},
+      outputs: {},
+    };
+
+    await engine.executeSingleStep(
+      step,
+      workflow,
+      execution,
+      stepExecutor,
+      undefined,
+      "exec-1",
+      true,
+      persistenceAdapter
+    );
+
+    expect(stepExecutor.executeStep).toHaveBeenCalledWith(
+      step,
+      expect.objectContaining({
+        hookOutputs: expect.objectContaining({
+          pre_step: expect.objectContaining({ stdout: "pre" }),
+          pre_validation: expect.objectContaining({ stdout: "validate" }),
+        }),
+      })
+    );
+    expect(execution.stepRecords.step1).toMatchObject({
+      output: { ok: true },
+      hooks: {
+        pre_step: expect.objectContaining({ stdout: "pre" }),
+        pre_validation: expect.objectContaining({ stdout: "validate" }),
+        post_step: expect.objectContaining({ stdout: "post" }),
+      },
+    });
+    expect(persistenceAdapter.saveStep).toHaveBeenCalledWith(
+      expect.objectContaining({ output: { ok: true } })
+    );
+  });
 });
 
 describe("StepExecutionEngine - executeStepLoop", () => {
@@ -365,6 +471,176 @@ describe("StepExecutionEngine - executeStepLoop", () => {
     expect(eventBus.emit).toHaveBeenCalledWith("workflow.validation_failed", "exec-1", expect.any(Object));
     expect(eventBus.emit).toHaveBeenCalledWith("workflow.back_edge_triggered", "exec-1", expect.any(Object));
   });
+
+  it("emits validation_passed with debug state and stores the validation output", async () => {
+    const { engine, eventBus, repairLoopTracker } = createEngine();
+    const stepExecutor = createMockStepExecutor();
+    const blackboard = createMockBlackboard();
+    vi.mocked(stepExecutor.executeStep).mockResolvedValue({
+      output: { passed: true, summary: "all checks passed", failedChecks: [] },
+      raw: {},
+    });
+
+    const steps: WorkflowStep[] = [
+      {
+        name: "validate",
+        agent: "agent1",
+        input: {},
+        config: { validation: { enabled: true, emit_structured_result: true } },
+      },
+    ];
+    const workflow = createWorkflowDef(steps);
+    const execution: RuntimeExecution = {
+      id: "exec-1",
+      workflowName: "test",
+      status: "running",
+      input: {},
+      startedAt: new Date(),
+      stepOrder: ["validate"],
+      completedSteps: [],
+      stepRecords: {},
+      outputs: {},
+    };
+
+    await engine.executeStepLoop(
+      steps,
+      workflow,
+      execution,
+      stepExecutor,
+      undefined,
+      "exec-1",
+      false,
+      null,
+      undefined,
+      undefined,
+      blackboard
+    );
+
+    expect(repairLoopTracker.recordValidationPass).toHaveBeenCalledWith(
+      "exec-1",
+      "validate",
+      expect.objectContaining({ passed: true, summary: "all checks passed" })
+    );
+    expect(eventBus.emit).toHaveBeenCalledWith(
+      "workflow.validation_passed",
+      "exec-1",
+      expect.objectContaining({ summary: "all checks passed" })
+    );
+    expect(blackboard.recordValidation).toHaveBeenCalledWith(
+      "validate",
+      expect.objectContaining({ passed: true }),
+      1
+    );
+    expect(execution.outputs.validate).toEqual({
+      passed: true,
+      summary: "all checks passed",
+      failedChecks: [],
+    });
+  });
+
+  it("throws validation failures when no back-edge route is configured", async () => {
+    const { engine } = createEngine();
+    const stepExecutor = createMockStepExecutor();
+    vi.mocked(stepExecutor.executeStep).mockResolvedValue({
+      output: { passed: false, summary: "validation failed", failedChecks: [] },
+      raw: {},
+    });
+
+    const steps: WorkflowStep[] = [
+      {
+        name: "validate",
+        agent: "agent1",
+        input: {},
+        config: { validation: { enabled: true } },
+      },
+    ];
+    const workflow = createWorkflowDef(steps);
+    const execution: RuntimeExecution = {
+      id: "exec-1",
+      workflowName: "test",
+      status: "running",
+      input: {},
+      startedAt: new Date(),
+      stepOrder: ["validate"],
+      completedSteps: [],
+      stepRecords: {},
+      outputs: {},
+    };
+
+    await expect(
+      engine.executeStepLoop(steps, workflow, execution, stepExecutor, undefined, "exec-1", false, null)
+    ).rejects.toThrow("Validation failed for step 'validate': validation failed");
+  });
+
+  it("throws validation failures when an array back-edge has no target", async () => {
+    const { engine } = createEngine();
+    const stepExecutor = createMockStepExecutor();
+    vi.mocked(stepExecutor.executeStep).mockResolvedValue({
+      output: { passed: false, summary: "validation failed", failedChecks: [] },
+      raw: {},
+    });
+
+    const steps: WorkflowStep[] = [
+      {
+        name: "validate",
+        agent: "agent1",
+        input: {},
+        config: { validation: { enabled: true } },
+        on_fail: { goto: [], max_iterations: 1 },
+      },
+    ];
+    const workflow = createWorkflowDef(steps);
+    const execution: RuntimeExecution = {
+      id: "exec-1",
+      workflowName: "test",
+      status: "running",
+      input: {},
+      startedAt: new Date(),
+      stepOrder: ["validate"],
+      completedSteps: [],
+      stepRecords: {},
+      outputs: {},
+    };
+
+    await expect(
+      engine.executeStepLoop(steps, workflow, execution, stepExecutor, undefined, "exec-1", false, null)
+    ).rejects.toThrow("goto must be a string or non-empty array of routes");
+  });
+
+  it("throws validation failures when the back-edge target is unknown", async () => {
+    const { engine } = createEngine();
+    const stepExecutor = createMockStepExecutor();
+    vi.mocked(stepExecutor.executeStep).mockResolvedValue({
+      output: { passed: false, summary: "validation failed", failedChecks: [] },
+      raw: {},
+    });
+
+    const steps: WorkflowStep[] = [
+      {
+        name: "validate",
+        agent: "agent1",
+        input: {},
+        config: { validation: { enabled: true } },
+        on_fail: { goto: "missing", max_iterations: 1 },
+      },
+    ];
+    const workflow = createWorkflowDef(steps);
+    const execution: RuntimeExecution = {
+      id: "exec-1",
+      workflowName: "test",
+      status: "running",
+      input: {},
+      startedAt: new Date(),
+      stepOrder: ["validate"],
+      completedSteps: [],
+      stepRecords: {},
+      outputs: {},
+    };
+
+    await expect(
+      engine.executeStepLoop(steps, workflow, execution, stepExecutor, undefined, "exec-1", false, null)
+    ).rejects.toThrow("Validation failed for step 'validate': validation failed");
+  });
 });
 
 describe("StepExecutionEngine - executeParallelStepLoop", () => {
@@ -449,5 +725,94 @@ describe("StepExecutionEngine - executeParallelStepLoop", () => {
     );
 
     expect(execution.completedSteps).toContain("step1");
+  });
+
+  it("returns before a parallel layer when the run is settled or aborted", async () => {
+    const { engine, eventBus } = createEngine();
+    const stepExecutor = createMockStepExecutor();
+    const steps: WorkflowStep[] = [{ name: "step1", agent: "agent1", input: {} }];
+    const execution: RuntimeExecution = {
+      id: "exec-1",
+      workflowName: "test",
+      status: "running",
+      input: {},
+      startedAt: new Date(),
+      stepOrder: ["step1"],
+      completedSteps: [],
+      stepRecords: {},
+      outputs: {},
+    };
+
+    await engine.executeParallelStepLoop(
+      [steps],
+      createWorkflowDef(steps),
+      execution,
+      stepExecutor,
+      undefined,
+      "exec-1",
+      false,
+      null,
+      undefined,
+      () => true
+    );
+
+    expect(eventBus.emit).not.toHaveBeenCalledWith(
+      "parallel_layer_start",
+      "exec-1",
+      expect.any(Object)
+    );
+  });
+
+  it("records blackboard metrics and stringifies non-error parallel failures", async () => {
+    const { engine, eventBus } = createEngine();
+    const stepExecutor = createMockStepExecutor();
+    const blackboard = createMockBlackboard();
+    vi.mocked(stepExecutor.executeStep)
+      .mockResolvedValueOnce({ output: "ok", raw: {} })
+      .mockRejectedValueOnce("plain failure");
+
+    const layers: WorkflowStep[][] = [
+      [
+        { name: "step1", agent: "agent1", input: {} },
+        { name: "step2", agent: "agent2", input: {} },
+      ],
+    ];
+    const firstLayer = layers[0]!;
+    const workflow = createWorkflowDef([firstLayer[0]!, firstLayer[1]!]);
+    const execution: RuntimeExecution = {
+      id: "exec-1",
+      workflowName: "test",
+      status: "running",
+      input: {},
+      startedAt: new Date(),
+      stepOrder: ["step1", "step2"],
+      completedSteps: [],
+      stepRecords: {},
+      outputs: {},
+    };
+
+    await engine.executeParallelStepLoop(
+      layers,
+      workflow,
+      execution,
+      stepExecutor,
+      undefined,
+      "exec-1",
+      false,
+      null,
+      undefined,
+      undefined,
+      blackboard
+    );
+
+    expect(blackboard.recordStepOutput).toHaveBeenCalledWith(
+      "__parallel_layer_0",
+      expect.objectContaining({ completed: ["step1"], failed: ["step2"], concurrency: 2 })
+    );
+    expect(eventBus.emit).toHaveBeenCalledWith(
+      "warning",
+      "exec-1",
+      expect.objectContaining({ message: expect.stringContaining("plain failure") })
+    );
   });
 });

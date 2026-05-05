@@ -22,7 +22,7 @@ import type {
   TKGReviewQueueItem,
   TKGReviewQueueResolution,
 } from "../../tkg/review-queue.js";
-import type { OboraRuntimeConfig } from "../../runtime-types.js";
+import type { OboraConfig, OboraRuntimeConfig } from "../../runtime-types.js";
 import type { EventBus } from "../../events/event-bus.js";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -143,10 +143,63 @@ function makeBaseConfig(): OboraRuntimeConfig {
   };
 }
 
+function makeLoadedConfig(config: OboraRuntimeConfig): OboraConfig {
+  return {
+    ...(config.sharedMemory ? { sharedMemory: config.sharedMemory } : {}),
+    ...(config.tkgProjection ? { tkgProjection: config.tkgProjection } : {}),
+  };
+}
+
 function makeWorkflow(name: string): WorkflowDef {
   return {
     name,
     steps: [],
+  };
+}
+
+function makeReviewItem(
+  id: string,
+  status: TKGReviewQueueItem["status"] = "open"
+): TKGReviewQueueItem {
+  return {
+    id,
+    createdAt: new Date().toISOString(),
+    scope: "project:test-project",
+    workflowName: "test",
+    status,
+    candidateNodeIds: ["node-1"],
+    conflicts: [],
+    summary: {
+      candidateCount: 1,
+      promotableCount: 1,
+      reviewCandidateCount: 0,
+      conflictCount: 0,
+      reviewQueueCount: 0,
+    },
+    ...(status === "approved"
+      ? {
+          resolution: {
+            status: "approved" as const,
+            resolvedAt: new Date().toISOString(),
+            actor: "reviewer",
+            note: "ok",
+          },
+        }
+      : {}),
+  };
+}
+
+function makeTemporalNode(id = "node-1"): TemporalNode {
+  return {
+    id,
+    eventType: "workflow.validation_failed",
+    executionId: "exec-1",
+    workflowName: "test",
+    stepName: "validate",
+    timestamp: new Date().toISOString(),
+    summary: "validation failed",
+    attributes: {},
+    relations: [],
   };
 }
 
@@ -186,6 +239,59 @@ describe("TKGService", () => {
       const result = service.resolveTKGProjectionConfig(makeWorkflow("test"), config, undefined);
       expect(result).toBeDefined();
       expect(result?.enabled).toBe(true);
+    });
+
+    it("merges workflow overrides over loaded and runtime TKG config", () => {
+      const loadedConfig: OboraConfig = {
+        tkgProjection: {
+          enabled: true,
+          file: { basePath: "/loaded", projectKey: "loaded-project", scopes: ["project"] },
+          promotion: { enabled: false, triggers: ["execution_end"] },
+          rollback: { enabled: false, file: { basePath: "/loaded-rollback" } },
+          reviewQueue: { enabled: false },
+        },
+      };
+      const runtimeConfig: OboraRuntimeConfig = {
+        ...makeBaseConfig(),
+        tkgProjection: {
+          file: { projectKey: "runtime-project" },
+          promotion: { enabled: true, applyScopes: ["global"] },
+          rollback: { enabled: true },
+          reviewQueue: { enabled: true },
+        },
+      };
+      const workflow: WorkflowDef = {
+        ...makeWorkflow("wf"),
+        tkgProjection: {
+          enabled: false,
+          projectKey: "workflow-project",
+          scopes: ["workflow", "global"],
+          promotion: { triggers: ["workflow.validation_failed"] },
+          rollback: { enabled: false },
+          reviewQueue: { enabled: false },
+        },
+      };
+
+      const result = service.resolveTKGProjectionConfig(workflow, runtimeConfig, loadedConfig);
+
+      expect(result).toMatchObject({
+        enabled: false,
+        file: {
+          basePath: "/loaded",
+          projectKey: "workflow-project",
+          scopes: ["workflow", "global"],
+        },
+        promotion: {
+          enabled: true,
+          applyScopes: ["global"],
+          triggers: ["workflow.validation_failed"],
+        },
+        rollback: {
+          enabled: false,
+          file: { basePath: "/loaded-rollback" },
+        },
+        reviewQueue: { enabled: false },
+      });
     });
   });
 
@@ -232,6 +338,29 @@ describe("TKGService", () => {
       );
       expect(result).toBeDefined();
     });
+
+    it("returns custom rollback store when configured", () => {
+      const rollbackStore = new InMemoryTKGRollbackStore();
+      const config: OboraRuntimeConfig = {
+        ...makeBaseConfig(),
+        tkgProjection: {
+          enabled: true,
+          rollback: {
+            enabled: true,
+            adapter: "custom",
+            custom: { instance: rollbackStore },
+          },
+        },
+      };
+
+      const result = service.resolveTKGRollbackStore(
+        makeWorkflow("test"),
+        config,
+        makeLoadedConfig(config)
+      );
+
+      expect(result).toBe(rollbackStore);
+    });
   });
 
   describe("resolveTKGReviewQueueStore", () => {
@@ -276,6 +405,200 @@ describe("TKGService", () => {
         loadedConfig
       );
       expect(result).toBeDefined();
+    });
+
+    it("returns custom review queue store when configured", () => {
+      const reviewQueueStore = new InMemoryTKGReviewQueueStore();
+      const config: OboraRuntimeConfig = {
+        ...makeBaseConfig(),
+        tkgProjection: {
+          enabled: true,
+          reviewQueue: {
+            enabled: true,
+            adapter: "custom",
+            custom: { instance: reviewQueueStore },
+          },
+        },
+      };
+
+      const result = service.resolveTKGReviewQueueStore(
+        makeWorkflow("test"),
+        config,
+        makeLoadedConfig(config)
+      );
+
+      expect(result).toBe(reviewQueueStore);
+    });
+  });
+
+  describe("scope and store resolution", () => {
+    it("resolves TKG scopes, apply scopes, and default promotion triggers", () => {
+      const config: OboraRuntimeConfig = {
+        ...makeBaseConfig(),
+        tkgProjection: {
+          enabled: true,
+          file: { projectKey: "project-a", scopes: ["workflow", "global", "project"] },
+          promotion: { enabled: true, applyScopes: ["global", "workflow"] },
+        },
+      };
+
+      expect(service.resolveTKGProjectionScopes(makeWorkflow("wf"), config, makeLoadedConfig(config))).toEqual([
+        { level: "global", key: "global" },
+        { level: "project", key: "project-a" },
+        { level: "workflow", key: "wf" },
+      ]);
+      expect(service.resolveTKGPromotionApplyScopes(makeWorkflow("wf"), config, makeLoadedConfig(config))).toEqual([
+        { level: "global", key: "global" },
+        { level: "workflow", key: "wf" },
+      ]);
+      expect(service.resolveTKGPromotionTriggers(makeWorkflow("wf"), config, makeLoadedConfig(config))).toEqual([
+        "execution_end",
+      ]);
+    });
+
+    it("returns custom staging and shared memory stores", async () => {
+      const stagingStore = new InMemoryStagingTKGStore();
+      const sharedMemoryStore = new InMemorySharedMemoryStore();
+      const config: OboraRuntimeConfig = {
+        ...makeBaseConfig(),
+        sharedMemory: {
+          enabled: true,
+          adapter: "custom",
+          custom: { instance: sharedMemoryStore },
+        },
+        tkgProjection: {
+          enabled: true,
+          adapter: "custom",
+          custom: { instance: stagingStore },
+        },
+      };
+
+      expect(service.resolveStagingTKGStore(makeWorkflow("wf"), config, makeLoadedConfig(config))).toBe(stagingStore);
+      await expect(service.resolveSharedMemoryStore(makeWorkflow("wf"), config, makeLoadedConfig(config))).resolves.toBe(sharedMemoryStore);
+    });
+
+    it("resolves shared memory scopes from workflow overrides", () => {
+      const config: OboraRuntimeConfig = {
+        ...makeBaseConfig(),
+        sharedMemory: {
+          enabled: true,
+          file: { projectKey: "runtime-project", scopes: ["project"] },
+        },
+      };
+      const workflow: WorkflowDef = {
+        ...makeWorkflow("wf"),
+        sharedMemory: {
+          enabled: true,
+          projectKey: "workflow-project",
+          scopes: ["global", "workflow"],
+        },
+      };
+
+      expect(service.resolveSharedMemoryScopes(workflow, config, makeLoadedConfig(config))).toEqual([
+        { level: "global", key: "global" },
+        { level: "workflow", key: "wf" },
+      ]);
+    });
+  });
+
+  describe("review queue APIs", () => {
+    it("lists and resolves open queue items with custom store and workflow scope", async () => {
+      const reviewQueueStore = new InMemoryTKGReviewQueueStore();
+      const config: OboraRuntimeConfig = {
+        ...makeBaseConfig(),
+        config: {
+          tkgProjection: {
+            enabled: true,
+            reviewQueue: {
+              enabled: true,
+              adapter: "custom",
+              custom: { instance: reviewQueueStore },
+            },
+            file: { projectKey: "project-a", scopes: ["project"] },
+          },
+        },
+      };
+      const customService = new TKGService({ config, eventBus: makeMockEventBus() });
+      const scope: MemoryScope = { level: "project", key: "project-a" };
+      await reviewQueueStore.save(scope, {
+        items: [makeReviewItem("open-1"), makeReviewItem("approved-1", "approved")],
+      });
+
+      await expect(customService.listOpenTKGReviewQueueItems(makeWorkflow("test"))).resolves.toHaveLength(1);
+      await expect(
+        customService.resolveTKGReviewQueueItem(makeWorkflow("test"), "open-1", {
+          status: "approved",
+          actor: "reviewer",
+          note: "ok",
+        })
+      ).resolves.toMatchObject({
+        resolved: true,
+        scope: "project:project-a",
+        itemId: "open-1",
+        status: "approved",
+      });
+    });
+
+    it("returns unresolved queue scope when no review queue store is configured", async () => {
+      await expect(
+        service.resolveTKGReviewQueueItem(makeWorkflow("test"), "missing", { status: "rejected" })
+      ).resolves.toMatchObject({
+        resolved: false,
+        scope: "unresolved",
+        itemId: "missing",
+      });
+    });
+  });
+
+  describe("reapplyApprovedTKGReviewQueueItems", () => {
+    it("applies approved review queue items into configured shared memory scopes", async () => {
+      const sharedMemoryStore = new InMemorySharedMemoryStore();
+      const stagingStore = new InMemoryStagingTKGStore();
+      const reviewQueueStore = new InMemoryTKGReviewQueueStore();
+      const queueScope: MemoryScope = { level: "project", key: "project-a" };
+      await stagingStore.save(queueScope, { nodes: [makeTemporalNode()] });
+      await reviewQueueStore.save(queueScope, {
+        items: [makeReviewItem("approved-1", "approved"), makeReviewItem("open-1")],
+      });
+      const config: OboraRuntimeConfig = {
+        ...makeBaseConfig(),
+        config: {
+          sharedMemory: {
+            enabled: true,
+            adapter: "custom",
+            custom: { instance: sharedMemoryStore },
+            file: { projectKey: "project-a", scopes: ["project"] },
+          },
+          tkgProjection: {
+            enabled: true,
+            adapter: "custom",
+            custom: { instance: stagingStore },
+            file: { projectKey: "project-a", scopes: ["project"] },
+            promotion: { enabled: true, applyScopes: ["project"] },
+            reviewQueue: {
+              enabled: true,
+              adapter: "custom",
+              custom: { instance: reviewQueueStore },
+            },
+          },
+        },
+      };
+      const customService = new TKGService({ config, eventBus: makeMockEventBus() });
+
+      const result = await customService.reapplyApprovedTKGReviewQueueItems(makeWorkflow("test"), {
+        sourceExecutionId: "exec-2",
+      });
+
+      expect(result).toMatchObject({
+        appliedFactCount: 1,
+        approvedItemCount: 1,
+        approvedItemIds: ["approved-1"],
+        appliedDecisionCount: 1,
+        scopes: ["project:project-a"],
+      });
+      await expect(sharedMemoryStore.load(queueScope)).resolves.toMatchObject({
+        knowledge: { facts: [expect.objectContaining({ sourceExecutionId: "exec-2" })] },
+      });
     });
   });
 

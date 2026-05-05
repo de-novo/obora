@@ -39,6 +39,26 @@ describe("RepairLoopTracker", () => {
     });
   });
 
+  it("omits absent optional fields from recent validation failure details", () => {
+    const id = "exec-empty-fields";
+    tracker.recordValidationFailure(
+      id,
+      "step-empty",
+      makeValidationResult({
+        errorCode: undefined,
+        logPath: undefined,
+        failedChecks: [{ name: "", message: "", file: "" }],
+      })
+    );
+
+    const summary = tracker.getSummary(id)!;
+    expect(summary.recentValidationFailures[0]).toEqual({
+      stepName: "step-empty",
+      summary: "validation failed",
+      failedChecks: [{}],
+    });
+  });
+
   it("keeps at most 5 recent validation failures", () => {
     const id = "exec-2";
     for (let i = 0; i < 7; i++) {

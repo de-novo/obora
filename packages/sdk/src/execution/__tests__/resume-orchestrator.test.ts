@@ -53,6 +53,12 @@ function createMockDeps() {
   };
 }
 
+function createMockDepsWithEngine(engineOverride: unknown) {
+  const mockDeps = createMockDeps();
+  vi.mocked(mockDeps.engineBuilder.build).mockResolvedValue(engineOverride as never);
+  return mockDeps;
+}
+
 function createWorkflowDef(): WorkflowDef {
   return {
     name: "test",
@@ -119,6 +125,134 @@ describe("ResumeOrchestrator - executeResume", () => {
     expect(result.completedSteps).toContain("step1");
     expect(result.outputs.step1).toBeUndefined();
   }, RESUME_TEST_TIMEOUT_MS);
+
+  it("runs cost pre-gate and persists object outputs directly", async () => {
+    const costTracker = { preStepGate: vi.fn().mockResolvedValue(undefined) };
+    const mockDeps = createMockDepsWithEngine({
+      stepExecutor: {
+        executeStep: vi.fn().mockResolvedValue({ output: { value: "object-result" }, raw: {} }),
+      },
+      costTracker,
+    });
+    const orchestrator = new ResumeOrchestrator(mockDeps.deps);
+    const workflow = createWorkflowDef();
+    const adapter = createMockAdapter();
+
+    const result = await orchestrator.executeResume(
+      "run-1",
+      "test",
+      workflow,
+      undefined,
+      ["step1"],
+      [{ stepName: "step1", action: "rerun" }],
+      {},
+      adapter
+    );
+
+    expect(costTracker.preStepGate).toHaveBeenCalledWith("step1");
+    expect(result.input).toBeUndefined();
+    expect(adapter.saveStep).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "completed",
+        output: { value: "object-result" },
+      })
+    );
+    expect(adapter.saveRun).toHaveBeenCalledWith(
+      expect.objectContaining({ input: { value: null } })
+    );
+  });
+
+  it("throws OboraError when engine has no step executor", async () => {
+    const mockDeps = createMockDepsWithEngine({
+      stepExecutor: undefined,
+      costTracker: undefined,
+    });
+    const orchestrator = new ResumeOrchestrator(mockDeps.deps);
+    const workflow = createWorkflowDef();
+    const adapter = createMockAdapter();
+
+    await expect(
+      orchestrator.executeResume(
+        "run-1",
+        "test",
+        workflow,
+        {},
+        ["step1"],
+        [{ stepName: "step1", action: "rerun" }],
+        {},
+        adapter
+      )
+    ).rejects.toMatchObject({ code: OboraErrorCode.ADAPTER_LLM_UNAVAILABLE });
+
+    expect(adapter.saveStep).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "failed",
+        error: expect.objectContaining({ code: OboraErrorCode.ADAPTER_LLM_UNAVAILABLE }),
+      })
+    );
+  });
+
+  it("persists unknown error code for non-Error thrown values", async () => {
+    const mockDeps = createMockDepsWithEngine({
+      stepExecutor: {
+        executeStep: vi.fn().mockRejectedValue("string failure"),
+      },
+      costTracker: undefined,
+    });
+    const orchestrator = new ResumeOrchestrator(mockDeps.deps);
+    const workflow = createWorkflowDef();
+    const adapter = createMockAdapter();
+
+    await expect(
+      orchestrator.executeResume(
+        "run-1",
+        "test",
+        workflow,
+        {},
+        ["step1"],
+        [{ stepName: "step1", action: "rerun" }],
+        {},
+        adapter
+      )
+    ).rejects.toBe("string failure");
+
+    expect(adapter.saveStep).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "failed",
+        error: expect.objectContaining({
+          code: OboraErrorCode.SDK_UNKNOWN_ERROR,
+          message: "string failure",
+          stack: undefined,
+        }),
+      })
+    );
+  });
+
+  it("persists repair loop summary metadata when present", async () => {
+    const mockDeps = createMockDeps();
+    const summary = { repairCompleted: 1 };
+    vi.mocked(mockDeps.repairLoopTracker.getSummary).mockReturnValue(summary as never);
+    const orchestrator = new ResumeOrchestrator(mockDeps.deps);
+    const workflow = createWorkflowDef();
+    const adapter = createMockAdapter();
+
+    await orchestrator.executeResume(
+      "run-1",
+      "test",
+      workflow,
+      {},
+      [],
+      [{ stepName: "step1", action: "skip" }],
+      {},
+      adapter
+    );
+
+    expect(adapter.saveRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: { repairLoop: summary },
+      })
+    );
+  });
 
   it("handles step execution failure", async () => {
     const mockDeps = createMockDeps();

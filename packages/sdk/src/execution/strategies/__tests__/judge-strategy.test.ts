@@ -1,4 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { judgeStrategy } from "../judge-strategy.js";
 import type { WorkflowStep } from "../../../workflow.js";
 import type { StepContext } from "../../../step-executor-types.js";
@@ -103,5 +106,54 @@ describe("judgeStrategy - config validation branches", () => {
     await expect(judgeStrategy.execute(step, context, services)).rejects.toThrow(
       "Missing output artifact path"
     );
+  });
+
+  it("reads input JSON, validates structured output, and writes judge artifact", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "obora-judge-strategy-"));
+    const inputPath = join(dir, "input.json");
+    const outputPath = join(dir, "out", "judge.json");
+    await writeFile(inputPath, JSON.stringify({ answer: 42 }), "utf-8");
+
+    const services = createMockServices();
+    vi.mocked(services.resolveProjectPath)
+      .mockImplementationOnce(() => inputPath)
+      .mockImplementationOnce(() => outputPath);
+    vi.mocked(services.tryParseStructuredContent).mockReturnValueOnce(undefined);
+    vi.mocked(services.parseStepOutputContract).mockReturnValueOnce({ score: 9 });
+
+    const step: WorkflowStep = {
+      name: "judge1",
+      agent: "judge",
+      input: { rubric: "strict" },
+      config: {
+        judge: {
+          enabled: true,
+          input_json: "input.json",
+          output_path: "out/judge.json",
+          output_schema: "schema.json",
+        },
+      },
+    };
+
+    const result = await judgeStrategy.execute(step, { previousOutputs: {} }, services);
+
+    expect(result.output).toEqual({ score: 9 });
+    expect(services.requestForStep).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({
+          rubric: "strict",
+          task: expect.stringContaining("Return JSON only."),
+        }),
+      }),
+      { previousOutputs: {} },
+      "judge"
+    );
+    expect(services.parseStepOutputContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        output: { path: "out/judge.json", schema: "schema.json" },
+      }),
+      '{"score": 8}'
+    );
+    await expect(readFile(outputPath, "utf-8")).resolves.toBe('{\n  "score": 9\n}\n');
   });
 });

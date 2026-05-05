@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ReflectorEngine } from "../../reflector/reflector-engine.js";
+import { ReflectorEngine, type ReflectorOutput } from "../../reflector/reflector-engine.js";
 import { applyReflectorRepairActions } from "../reflector-repair-actions.js";
 import type { FailureEntry } from "../../blackboard/blackboard-manager.js";
 import type { OboraRuntimeConfig } from "../../runtime-types.js";
@@ -105,5 +105,84 @@ describe("applyReflectorRepairActions", () => {
 
     expect(options.repairContext.forceTarget).toBeUndefined();
     expect(options.forcedRouteTargets.size).toBe(0);
+  });
+
+  it("does nothing when reflector has no last output", () => {
+    const options = makeOptions({ reflector: new ReflectorEngine() });
+
+    applyReflectorRepairActions(options);
+
+    expect(options.repairContext.forceTarget).toBeUndefined();
+    expect(options.forcedRouteTargets.size).toBe(0);
+  });
+
+  it("ignores action metadata without a pending action object", () => {
+    const engine = new ReflectorEngine({
+      rules: [
+        {
+          name: "metadata-without-pending-action",
+          when: { min_attempt: 1 },
+          actions: [
+            {
+              type: "suggest_prompt_patch",
+              priority: 100,
+              payload: {},
+            },
+          ],
+        },
+      ],
+    });
+    engine.analyzeFailures([makeFailure()], "validate");
+    const options = makeOptions({ reflector: engine });
+
+    applyReflectorRepairActions(options);
+
+    expect(options.repairContext.forceTarget).toBeUndefined();
+    expect(options.forcedRouteTargets.size).toBe(0);
+  });
+
+  it("ignores malformed pending action metadata from reflector output", () => {
+    const engine = new ReflectorEngine();
+    const output: ReflectorOutput = {
+      hints: "",
+      insights: [],
+      knowledgeUsed: [],
+      actions: [
+        { applied: true },
+        { applied: true, metadata: { pendingAction: "invalid" } },
+        { applied: true, metadata: { pendingAction: { payload: {} } } },
+        { applied: true, metadata: { pendingAction: { type: "force_target", payload: "invalid" } } },
+      ],
+    };
+    vi.spyOn(engine, "getLastOutput").mockReturnValue(output);
+    const options = makeOptions({ reflector: engine });
+
+    applyReflectorRepairActions(options);
+
+    expect(options.repairContext.forceTarget).toBeUndefined();
+    expect(options.forcedRouteTargets.size).toBe(0);
+  });
+
+  it("applies force_target to context without queueing when validation step is absent", () => {
+    const options = makeOptions({ validationStepName: undefined });
+
+    applyReflectorRepairActions(options);
+
+    expect(options.repairContext.forceTarget).toBe("repair");
+    expect(options.forcedRouteTargets.size).toBe(0);
+  });
+
+  it("uses default abort reason when action payload omits reason", () => {
+    const options = makeOptions({
+      reflector: makeReflectorWithAction({
+        type: "abort",
+        priority: 100,
+        payload: {},
+      }),
+    });
+
+    expect(() => applyReflectorRepairActions(options)).toThrow(
+      "Reflector abort action triggered"
+    );
   });
 });
