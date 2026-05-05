@@ -4,7 +4,7 @@
 
 import type { ChatMessage } from "@obora/adapters";
 import type { Step, Workflow } from "@obora/runtime";
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 
 import {
   createWorkflowBlackboard,
@@ -40,6 +40,11 @@ const _STEP_IMPL: Step = {
 
 const SESSION = "session-test-001";
 
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+});
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -61,6 +66,28 @@ describe("createWorkflowBlackboard", () => {
     const board = createWorkflowBlackboard(SESSION, WORKFLOW, "feat");
     const steps = board.read("state.context.steps");
     expect(steps).toEqual({});
+  });
+
+  it("defaults missing workflow versions and keeps direct board writes as no-ops", () => {
+    vi.stubEnv("NODE_ENV", "development");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const workflowWithoutVersion: Workflow = {
+      name: "unversioned-workflow",
+      mode: "auto",
+      steps: [],
+    };
+
+    const board = createWorkflowBlackboard(SESSION, workflowWithoutVersion, "feat");
+    const directWrite = (board as unknown as { write(path: string, value: unknown): void }).write;
+
+    directWrite("state.context.steps.plan", { success: true });
+    directWrite("state.context.steps.plan", { success: true });
+
+    expect(board.read<Record<string, unknown>>("state.context.workflow").workflowVersion).toBe(
+      "1.0"
+    );
+    expect(readStepResult(board, "plan")).toBeNull();
+    expect(warn).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -100,6 +127,17 @@ describe("recordStepResult / recordStepError", () => {
     expect(stored!.failedAt).toBeNull();
   });
 
+  it("records missing success outputs as null", () => {
+    const board = createWorkflowBlackboard(SESSION, WORKFLOW, "feat");
+    recordStepResult(board, "plan", { success: true });
+
+    expect(readStepResult(board, "plan")).toMatchObject({
+      success: true,
+      output: null,
+      error: null,
+    });
+  });
+
   it("records an error result readable by readStepResult", () => {
     const board = createWorkflowBlackboard(SESSION, WORKFLOW, "feat");
     recordStepError(board, "implement", {
@@ -114,6 +152,19 @@ describe("recordStepResult / recordStepError", () => {
     expect(stored!.error).toBe("timeout");
     expect(stored!.diagnosisCode).toBe("E4002");
     expect(stored!.output).toBeNull();
+  });
+
+  it("records fallback error messages and error metadata nulls", () => {
+    const board = createWorkflowBlackboard(SESSION, WORKFLOW, "feat");
+    recordStepError(board, "implement", {
+      success: false,
+    });
+
+    expect(readStepResult(board, "implement")).toMatchObject({
+      success: false,
+      error: "Unknown error",
+      diagnosisCode: null,
+    });
   });
 
   it("returns typed StepResultRecord with explicit nulls", () => {

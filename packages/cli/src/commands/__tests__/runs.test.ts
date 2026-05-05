@@ -373,6 +373,39 @@ describe("runs list triage sorting", () => {
     expect(noProgressRuns.map((run) => run.id)).toEqual(["run-no-progress"]);
   });
 
+  it("filters runs that have any repair-loop metadata", async () => {
+    const runtime = {
+      async listRunRecords() {
+        return [
+          {
+            id: "run-with-loop",
+            startedAt: "2026-03-08T10:00:00.000Z",
+            metadata: { repairLoop: { validationPassed: 1 } },
+          },
+          {
+            id: "run-with-array-metadata",
+            startedAt: "2026-03-08T11:00:00.000Z",
+            metadata: [],
+          },
+          {
+            id: "run-with-array-loop",
+            startedAt: "2026-03-08T12:00:00.000Z",
+            metadata: { repairLoop: [] },
+          },
+        ];
+      },
+    };
+
+    const runs = await listRunsForCli(runtime, {
+      repairLoop: "with",
+      sortBy: "startedAt",
+      order: "asc",
+      limit: 10,
+    });
+
+    expect(runs.map((run) => run.id)).toEqual(["run-with-loop"]);
+  });
+
   it("includes linked DLQ indicators in JSON runs list output", async () => {
     oboraRuntimeState.instance = {
       listRunRecords: vi.fn().mockResolvedValue([
@@ -506,6 +539,77 @@ describe("runs list triage sorting", () => {
     expect(output).toContain("Cause");
     expect(output).toContain("pending/3");
     expect(output).toContain("repeated_critical_issue");
+  });
+
+  it("prints no-runs text output without loading linked DLQ entries", async () => {
+    oboraRuntimeState.instance = {
+      listRunRecords: vi.fn().mockResolvedValue([]),
+    };
+    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    vi.mocked(FileDLQStore).mockImplementation(() => {
+      throw new Error("DLQ store should not be constructed for empty run lists");
+    });
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createRunsCommand();
+
+    await cmd.parseAsync(["list"], { from: "user" });
+
+    expect(log).toHaveBeenCalledWith("No runs found.");
+  });
+
+  it("prints repair-loop pass and exhausted fragments in text runs list output", async () => {
+    oboraRuntimeState.instance = {
+      listRunRecords: vi.fn().mockResolvedValue([
+        {
+          id: "run-pass",
+          workflowName: "release",
+          status: "completed",
+          startedAt: "2026-03-08T10:00:00.000Z",
+          metadata: {
+            repairLoop: {
+              validationPassed: 2,
+              recentValidationFailures: [],
+              lastValidationSummary:
+                "This validation summary is intentionally longer than twenty eight chars",
+            },
+          },
+        },
+        {
+          id: "run-exhausted",
+          workflowName: "release",
+          status: "failed",
+          startedAt: "2026-03-08T09:00:00.000Z",
+          metadata: {
+            repairLoop: {
+              backEdgeExhausted: 1,
+              recentValidationFailures: [],
+            },
+          },
+        },
+      ]),
+    };
+    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    vi.mocked(FileDLQStore).mockImplementation(
+      () =>
+        ({
+          load: vi.fn().mockResolvedValue({
+            entries: [],
+            lastUpdated: "2026-03-10T10:05:00.000Z",
+          }),
+        }) as never
+    );
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createRunsCommand();
+
+    await cmd.parseAsync(["list", "--sort", "startedAt", "--order", "asc"], { from: "user" });
+
+    const output = log.mock.calls.map((args) => args.join(" ")).join("\n");
+    expect(output).toContain("run-exhausted");
+    expect(output).toContain("X1");
+    expect(output).toContain("run-pass");
+    expect(output).toContain("P2 This validation summary");
   });
 
   it("inherits root --json for runs list output", async () => {
@@ -775,6 +879,64 @@ describe("runs inspect repair-loop summary", () => {
     ]);
   });
 
+  it("summarizes repair-loop events with fallback detail fields", () => {
+    const summary = summarizeRepairLoopTimeline([
+      {
+        action: "workflow.validation_failed",
+        stepName: "validate",
+        detail: {
+          summary: 123,
+          failedChecks: [{ name: 1, message: false, severity: null, file: ["bad"] }],
+        },
+      },
+      {
+        action: "workflow.validation_passed",
+        stepName: "validate",
+        detail: { summary: 456 },
+      },
+      {
+        action: "workflow.repair_started",
+        stepName: "repair-from-event",
+        detail: { stepName: 42, attempt: "first" },
+      },
+      {
+        action: "workflow.repair_completed",
+        stepName: "repair-complete-event",
+        detail: { stepName: false, attempt: null },
+      },
+      {
+        action: "workflow.repair_no_progress",
+        detail: { reason: ["same"] },
+      },
+      {
+        action: "workflow.back_edge_exhausted",
+        detail: { reason: 99 },
+      },
+    ]);
+
+    expect(summary).toEqual(
+      expect.objectContaining({
+        validationFailed: 1,
+        validationPassed: 1,
+        repairStarted: 1,
+        repairCompleted: 1,
+        backEdgeExhausted: 1,
+        lastValidationStep: "validate",
+        lastRepairStep: "repair-complete-event",
+        lastValidationSummary: undefined,
+        lastAttempt: undefined,
+        lastNoProgressReason: undefined,
+        lastExhaustReason: undefined,
+        recentValidationFailures: [
+          {
+            stepName: "validate",
+            failedChecks: [{}],
+          },
+        ],
+      })
+    );
+  });
+
   it("prints repair-loop summary in text inspect output", async () => {
     const runtime = {
       async getRunRecord() {
@@ -968,6 +1130,55 @@ describe("runs inspect repair-loop summary", () => {
     );
   });
 
+  it("includes steps and cost summary in JSON inspect output when requested", async () => {
+    const runtime = {
+      async getRunRecord() {
+        return {
+          id: "run-1",
+          workflowName: "release",
+          status: "completed",
+          startedAt: "2026-03-08T10:00:00.000Z",
+          metadata: { repairLoop: { validationPassed: 1, recentValidationFailures: [] } },
+        };
+      },
+      async getRunSteps() {
+        return [{ stepName: "build", status: "completed" }];
+      },
+      async getRunArtifacts() {
+        return [{ stepName: "build", name: "out.txt", mimeType: "text/plain", sizeBytes: 7 }];
+      },
+      async getRunCostSummary() {
+        return {
+          totalTokens: 10,
+          totalCostUsd: 0.001,
+          byStep: [],
+          byModel: [],
+        };
+      },
+      async getRunAuditTimeline() {
+        return [];
+      },
+    };
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await inspectPersistedRun(runtime, "run-1", { json: true, cost: true, steps: true });
+
+    const payload = JSON.parse(log.mock.calls.at(-1)?.[0] ?? "{}");
+    expect(payload).toEqual(
+      expect.objectContaining({
+        steps: [{ stepName: "build", status: "completed" }],
+        artifacts: [{ stepName: "build", name: "out.txt", mimeType: "text/plain", sizeBytes: 7 }],
+        costSummary: {
+          totalTokens: 10,
+          totalCostUsd: 0.001,
+          byStep: [],
+          byModel: [],
+        },
+      })
+    );
+  });
+
   it("includes linked DLQ entry in JSON inspect output", async () => {
     vi.mocked(loadConfig).mockResolvedValue({
       dlq: { filePath: "./data/.obora/dlq/dead-letters.json" },
@@ -1090,6 +1301,46 @@ describe("runs inspect repair-loop summary", () => {
     expect(output).toContain("ID:               dlq-1");
     expect(output).toContain("Repair Attempts:  3");
     expect(output).toContain("obora dlq inspect dlq-1");
+  });
+
+  it("prints fallback validation failure labels in text inspect output", async () => {
+    const runtime = {
+      async getRunRecord() {
+        return {
+          id: "run-1",
+          workflowName: "release",
+          status: "failed",
+          startedAt: "2026-03-08T10:00:00.000Z",
+        };
+      },
+      async getRunSteps() {
+        return [];
+      },
+      async getRunArtifacts() {
+        return [];
+      },
+      async getRunCostSummary() {
+        return { totalTokens: 0, totalCostUsd: 0, byStep: [], byModel: [] };
+      },
+      async getRunAuditTimeline() {
+        return [
+          {
+            action: "workflow.validation_failed",
+            detail: {
+              failedChecks: [{}],
+            },
+          },
+        ];
+      },
+    };
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await inspectPersistedRun(runtime, "run-1", { json: false, cost: false, steps: true });
+
+    const output = log.mock.calls.map((args) => args.join(" ")).join("\n");
+    expect(output).toContain("1. validate");
+    expect(output).toContain("- check");
   });
 
   it("prints metadata, step errors, artifacts, and cost breakdowns in text inspect output", async () => {

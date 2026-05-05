@@ -18,10 +18,10 @@
     "lines": 92
   },
   "@obora/cli": {
-    "statements": 93,
-    "branches": 85,
-    "functions": 95,
-    "lines": 93
+    "statements": 94,
+    "branches": 87,
+    "functions": 96,
+    "lines": 94
   },
   "@obora/dashboard": {
     "statements": 91,

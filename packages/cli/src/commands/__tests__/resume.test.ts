@@ -119,6 +119,47 @@ describe("resume command", () => {
     expect(payload).toEqual(expect.objectContaining({ driftDetected: true }));
   });
 
+  it("prints text output with drift notice, empty step fallbacks, and exact workflow path discovery", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "obora-resume-text-"));
+    await writeFile(join(dir, "exact-workflow"), "name: exact-workflow\nsteps: []\n");
+    process.chdir(dir);
+
+    oboraRuntimeState.instance = {
+      getRunRecord: vi.fn().mockResolvedValue({ id: "run-1", workflowName: "exact-workflow" }),
+      loadWorkflow: vi.fn().mockResolvedValue(undefined),
+      resume: vi.fn().mockResolvedValue(
+        makeResumeResult({
+          restoredSteps: [],
+          rerunSteps: [],
+          driftDetected: true,
+        })
+      ),
+    };
+    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const warn = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const cmd = createResumeCommand();
+
+    await cmd.parseAsync(["run-1", "--from-step", "repair", "--drift-policy", "reject"], {
+      from: "user",
+    });
+
+    const output = log.mock.calls.map((args) => args.join(" ")).join("\n");
+    expect(output).toContain("Run resumed: run-1");
+    expect(output).toContain("Restored steps: (none)");
+    expect(output).toContain("Re-run steps: (none)");
+    expect(output).toContain("Policy drift detected (action: reject)");
+    expect(warn).not.toHaveBeenCalled();
+    expect(oboraRuntimeState.instance.loadWorkflow).toHaveBeenCalledWith(
+      expect.stringMatching(/exact-workflow$/)
+    );
+    expect(oboraRuntimeState.instance.resume).toHaveBeenCalledWith("run-1", {
+      fromStep: "repair",
+      driftPolicy: "reject",
+    });
+  });
+
   it("uses validation exit code instead of process.exit for missing runs", async () => {
     oboraRuntimeState.instance = {
       getRunRecord: vi.fn().mockResolvedValue(null),
@@ -141,6 +182,32 @@ describe("resume command", () => {
     );
   });
 
+  it("uses default persistence options when config omits persistence", async () => {
+    vi.mocked(loadConfig).mockResolvedValueOnce({} as never);
+    oboraRuntimeState.instance = {
+      getRunRecord: vi.fn().mockResolvedValue(null),
+      loadWorkflow: vi.fn(),
+      resume: vi.fn(),
+    };
+    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const cmd = createResumeCommand();
+
+    await cmd.parseAsync(["missing-run"], { from: "user" });
+
+    expect(OboraRuntime).toHaveBeenCalledWith({
+      persistence: {
+        enabled: true,
+        adapter: "sqlite",
+        sqlite: { path: "./data/obora.db" },
+      },
+    });
+    expect(process.exitCode).toBe(ExitCode.VALIDATION_ERROR);
+    expect(error).toHaveBeenCalled();
+  });
+
+
   it("uses execution-failed exit code for resume failures", async () => {
     oboraRuntimeState.instance = {
       getRunRecord: vi.fn().mockResolvedValue({ id: "run-1", workflowName: "missing-workflow" }),
@@ -157,5 +224,20 @@ describe("resume command", () => {
     expect(process.exit).not.toHaveBeenCalled();
     expect(process.exitCode).toBe(ExitCode.EXECUTION_FAILED);
     expect(error).toHaveBeenCalled();
+  });
+
+  it("uses execution-failed exit code for runtime initialization errors", async () => {
+    vi.mocked(loadConfig).mockRejectedValueOnce("bad config");
+    oboraRuntimeState.instance = undefined;
+    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const cmd = createResumeCommand();
+
+    await cmd.parseAsync(["run-1"], { from: "user" });
+
+    expect(process.exit).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(ExitCode.EXECUTION_FAILED);
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("bad config"));
   });
 });
