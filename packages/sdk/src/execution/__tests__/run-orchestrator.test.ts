@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { RunOrchestrator } from "../run-orchestrator.js";
+import { RunOrchestrator, type RunOrchestratorDeps } from "../run-orchestrator.js";
 import type { WorkflowDef } from "../../workflow.js";
 import type { RuntimeExecution } from "../../runtime-types.js";
 import type { EventBus } from "../../events/event-bus.js";
@@ -79,13 +79,13 @@ function createMockDeps() {
           logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
           config: {},
         },
-      },
+      } as unknown as RunOrchestratorDeps["deps"],
       tkgService,
       tkgPromotionEngine,
       stepExecutionEngine,
       engineBuilder,
       repairLoopTracker,
-    },
+    } as unknown as RunOrchestratorDeps,
     eventBus,
     persistenceManager,
     tkgService,
@@ -153,7 +153,7 @@ describe("RunOrchestrator - executeRun", () => {
 
   it("handles execution with persistence enabled", async () => {
     const mockDeps = createMockDeps();
-    mockDeps.deps.deps.config.persistence = { enabled: true };
+    mockDeps.deps.deps.config.persistence = { enabled: true, adapter: "custom" };
     const orchestrator = new RunOrchestrator(mockDeps.deps);
     const workflow = createWorkflowDef();
     const execution = createExecution();
@@ -177,7 +177,7 @@ describe("RunOrchestrator - executeRun", () => {
 describe("RunOrchestrator - executeRun with TKG", () => {
   it("triggers TKG promotion on execution_end", async () => {
     const mockDeps = createMockDeps();
-    mockDeps.deps.tkgService.resolveTKGPromotionTriggers.mockReturnValue(["execution_end"]);
+    vi.mocked(mockDeps.tkgService.resolveTKGPromotionTriggers).mockReturnValue(["execution_end"]);
     const orchestrator = new RunOrchestrator(mockDeps.deps);
     const workflow = createWorkflowDef();
     const execution = createExecution();
@@ -193,7 +193,7 @@ describe("RunOrchestrator - executeRun with TKG", () => {
 
   it("handles TKG promotion failure gracefully", async () => {
     const mockDeps = createMockDeps();
-    mockDeps.deps.tkgService.resolveTKGPromotionTriggers.mockReturnValue(["execution_end"]);
+    vi.mocked(mockDeps.tkgService.resolveTKGPromotionTriggers).mockReturnValue(["execution_end"]);
     vi.mocked(mockDeps.tkgPromotionEngine.flushTKGPromotionCheckpoint).mockRejectedValue(new Error("tkg fail"));
     const orchestrator = new RunOrchestrator(mockDeps.deps);
     const workflow = createWorkflowDef();
@@ -213,7 +213,7 @@ describe("RunOrchestrator - executeRun with TKG", () => {
 
   it("sets up TKG trigger listeners for non-execution_end triggers", async () => {
     const mockDeps = createMockDeps();
-    mockDeps.deps.tkgService.resolveTKGPromotionTriggers.mockReturnValue(["step_end"]);
+    vi.mocked(mockDeps.tkgService.resolveTKGPromotionTriggers).mockReturnValue(["workflow.validation_passed"]);
     const orchestrator = new RunOrchestrator(mockDeps.deps);
     const workflow = createWorkflowDef();
     const execution = createExecution();
@@ -224,12 +224,12 @@ describe("RunOrchestrator - executeRun with TKG", () => {
       "exec-1", "test", workflow, execution, {}, () => false
     );
 
-    expect(mockDeps.eventBus.on).toHaveBeenCalledWith("step_end", expect.any(Function));
+    expect(mockDeps.eventBus.on).toHaveBeenCalledWith("workflow.validation_passed", expect.any(Function));
   });
 
   it("handles TKG trigger checkpoint failure", async () => {
     const mockDeps = createMockDeps();
-    mockDeps.deps.tkgService.resolveTKGPromotionTriggers.mockReturnValue(["step_end"]);
+    vi.mocked(mockDeps.tkgService.resolveTKGPromotionTriggers).mockReturnValue(["workflow.validation_passed"]);
     const orchestrator = new RunOrchestrator(mockDeps.deps);
     const workflow = createWorkflowDef();
     const execution = createExecution();
@@ -241,7 +241,7 @@ describe("RunOrchestrator - executeRun with TKG", () => {
     );
 
     // Event listener is registered for step_end trigger
-    expect(mockDeps.eventBus.on).toHaveBeenCalledWith("step_end", expect.any(Function));
+    expect(mockDeps.eventBus.on).toHaveBeenCalledWith("workflow.validation_passed", expect.any(Function));
   });
 });
 
@@ -257,7 +257,7 @@ describe("RunOrchestrator - executeRun with Reflector", () => {
         rules: [
           {
             name: "retry-on-failure",
-            when: "stepFailed",
+            when: { keywords_include: ["stepFailed"] },
             actions: [{ type: "retry", maxAttempts: 3 }],
           },
         ],
@@ -278,7 +278,7 @@ describe("RunOrchestrator - executeRun with Reflector", () => {
 describe("RunOrchestrator - executeRun with Persistence", () => {
   it("saves run at start when persistence enabled", async () => {
     const mockDeps = createMockDeps();
-    mockDeps.deps.deps.config.persistence = { enabled: true };
+    mockDeps.deps.deps.config.persistence = { enabled: true, adapter: "custom" };
     const orchestrator = new RunOrchestrator(mockDeps.deps);
     const workflow = createWorkflowDef();
     const execution = createExecution();
@@ -301,7 +301,7 @@ describe("RunOrchestrator - executeRun with Persistence", () => {
 
   it("handles persistence save failure at start", async () => {
     const mockDeps = createMockDeps();
-    mockDeps.deps.deps.config.persistence = { enabled: true };
+    mockDeps.deps.deps.config.persistence = { enabled: true, adapter: "custom" };
     const orchestrator = new RunOrchestrator(mockDeps.deps);
     const workflow = createWorkflowDef();
     const execution = createExecution();
@@ -314,14 +314,23 @@ describe("RunOrchestrator - executeRun with Persistence", () => {
       "exec-1", "test", workflow, execution, {}, () => false
     );
 
-    expect(mockDeps.deps.deps.config.logger.warn).toHaveBeenCalled();
+    expect(mockDeps.deps.deps.config.logger?.warn).toHaveBeenCalled();
     expect(execution.status).toBe("completed");
   });
 
   it("includes repairLoop in metadata when summary exists", async () => {
     const mockDeps = createMockDeps();
-    mockDeps.deps.deps.config.persistence = { enabled: true };
-    mockDeps.deps.repairLoopTracker.getSummary.mockReturnValue({ repairs: 2 });
+    mockDeps.deps.deps.config.persistence = { enabled: true, adapter: "custom" };
+    vi.mocked(mockDeps.repairLoopTracker.getSummary).mockReturnValue({
+      validationFailed: 0,
+      validationPassed: 0,
+      repairStarted: 2,
+      repairCompleted: 0,
+      repairNoProgress: 0,
+      backEdgeTriggered: 0,
+      backEdgeExhausted: 0,
+      recentValidationFailures: [],
+    });
     const orchestrator = new RunOrchestrator(mockDeps.deps);
     const workflow = createWorkflowDef();
     const execution = createExecution();
@@ -339,7 +348,9 @@ describe("RunOrchestrator - executeRun with Persistence", () => {
     );
 
     expect(saveRun).toHaveBeenCalledWith(expect.objectContaining({
-      metadata: expect.objectContaining({ repairLoop: { repairs: 2 } }),
+      metadata: expect.objectContaining({
+        repairLoop: expect.objectContaining({ repairStarted: 2 }),
+      }),
     }));
     expect(mockDeps.repairLoopTracker.clearSummary).toHaveBeenCalledWith("exec-1");
   });

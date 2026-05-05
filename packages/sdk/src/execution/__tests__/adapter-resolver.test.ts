@@ -5,7 +5,11 @@ import type { LLMAdapterLike } from "../../step-executor.js";
 
 describe("AdapterResolver", () => {
   const createMockAdapter = (): LLMAdapterLike =>
-    ({ id: "mock-adapter" }) as LLMAdapterLike;
+    ({
+      chatCompletion: vi.fn().mockResolvedValue({
+        message: { role: "assistant", content: "ok" },
+      }),
+    });
 
   it("creates and caches adapter", async () => {
     const factory = vi.fn().mockResolvedValue(createMockAdapter());

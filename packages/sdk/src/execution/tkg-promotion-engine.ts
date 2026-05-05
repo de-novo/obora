@@ -1,13 +1,18 @@
 import { createHash } from "node:crypto";
 import type { EventBus } from "../events/event-bus.js";
-import type { AuditEvent, RuntimeExecution } from "../runtime-types.js";
+import type { AuditEvent, RuntimeExecution, TKGPromotionTrigger } from "../runtime-types.js";
 import type { OboraConfig } from "../runtime-types.js";
-import type { MemoryScope, SharedMemoryStore } from "../shared-memory/store.js";
+import type {
+  MemoryScope,
+  SharedMemoryFact,
+  SharedMemorySnapshot,
+  SharedMemoryStore,
+} from "../shared-memory/store.js";
 import type {
   StagingTKGStore,
   ProjectableTKGEventType,
 } from "../tkg/store.js";
-import type { TKGRollbackStore } from "../tkg/rollback.js";
+import type { TKGRollbackEntry, TKGRollbackStore } from "../tkg/rollback.js";
 import type { TKGReviewQueueStore } from "../tkg/review-queue.js";
 import { projectAuditEventToTemporalNode } from "../tkg/projector.js";
 import {
@@ -47,15 +52,15 @@ export class TKGPromotionEngine {
   async persistSharedMemory(
     store: SharedMemoryStore | undefined,
     scopes: MemoryScope[],
-    snapshot: { knowledge: { facts: unknown[] }; decisions: { history: unknown[] }; context: { projectFacts: Record<string, unknown> } },
+    snapshot: SharedMemorySnapshot,
     _executionId: string
   ): Promise<void> {
     if (!store || scopes.length === 0) return;
     for (const scope of scopes) {
       if (typeof store.merge === "function") {
-        await store.merge(scope, snapshot as any);
+        await store.merge(scope, snapshot);
       } else {
-        await store.save(scope, snapshot as any);
+        await store.save(scope, snapshot);
       }
     }
   }
@@ -178,7 +183,7 @@ export class TKGPromotionEngine {
                   executionId,
                   scope.level,
                   scope.key,
-                  promotionSnapshot.knowledge.facts.map((fact: any) => fact.id).sort(),
+                  promotionSnapshot.knowledge.facts.map((fact: SharedMemoryFact) => fact.id).sort(),
                 ]),
                 createdAt: new Date().toISOString(),
                 executionId,

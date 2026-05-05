@@ -210,7 +210,11 @@ export interface StepExecutorConfig {
 export interface LLMAdapterLike {
   [key: string]: unknown;
 }
-export type StepToolHandler = (...args: unknown[]) => unknown;
+export interface ToolHandler {
+  definition: unknown;
+  handler: (...args: unknown[]) => unknown | Promise<unknown>;
+}
+export type StepToolHandler = ToolHandler;
 
 export class StepExecutor {
   constructor(...args: unknown[]);

@@ -42,7 +42,7 @@ import { RunQuery } from "./query/run-query.js";
 import { type DLQStore, FileDLQStore } from "./dlq/index.js";
 import { type ExecutionLock, FileExecutionLock } from "./execution/execution-lock.js";
 
-// Re-export error classes from runtime-errors.ts for backward compatibility
+// Re-export error classes from runtime-errors.ts for the current public SDK surface.
 export { OboraError, OboraErrorCode } from "./runtime-errors.js";
 
 // Re-export all types from runtime-types so existing imports keep working
@@ -138,9 +138,6 @@ export class OboraRuntime {
     this.tkgService = new TKGService({
       config,
       eventBus: this.eventBus,
-      adapterFactory: (cfg) => this.createLLMAdapter(cfg),
-      persistenceManager: this.persistenceManager,
-      agents: this.agents,
     });
 
     // P0: DLQ store initialization

@@ -75,7 +75,7 @@ describe("HealthChecker", () => {
     await checker.check();
 
     expect(listener).toHaveBeenCalledTimes(1);
-    expect(listener.mock.calls[0][0]).toMatchObject({ healthy: true });
+    expect(listener.mock.calls[0]![0]).toMatchObject({ healthy: true });
 
     unsubscribe();
   });

@@ -29,7 +29,7 @@ import { DecisionsSectionAccessor } from "./accessors/decisions-accessor";
 export { BlackboardError, BlackboardErrorCode, PathNotFoundError } from "./errors";
 import { BlackboardError, BlackboardErrorCode, PathNotFoundError } from "./errors";
 
-import type { IBlackboard } from "./blackboard-interface";
+import type { IBlackboard, QueryOptions, WriteResult } from "./blackboard-interface";
 
 // Snapshot imports
 import { SnapshotManager } from "../snapshot";

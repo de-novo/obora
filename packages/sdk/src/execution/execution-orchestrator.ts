@@ -29,13 +29,13 @@ export interface ExecutionOrchestratorDeps {
  *
  * @description
  * Thin facade that delegates to RunOrchestrator and ResumeOrchestrator.
- * Maintains backward compatibility for all existing callers.
+ * Preserves the existing facade contract for all current callers.
  */
 export class ExecutionOrchestrator {
   private readonly runOrchestrator: RunOrchestrator;
   private readonly resumeOrchestrator: ResumeOrchestrator;
 
-  constructor(private readonly deps: ExecutionOrchestratorDeps) {
+  constructor(readonly deps: ExecutionOrchestratorDeps) {
     this.runOrchestrator = new RunOrchestrator(deps);
     this.resumeOrchestrator = new ResumeOrchestrator(deps);
   }

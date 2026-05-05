@@ -5,7 +5,8 @@ import type { WorkflowRunner } from "../workflow-runner.js";
 import type { TKGService } from "../tkg-service.js";
 import type { EventBus } from "../../events/event-bus.js";
 import type { PersistenceManager } from "../../persistence/persistence-manager.js";
-import type { RuntimeExecution, WorkflowDef } from "../../runtime-types.js";
+import type { RuntimeExecution } from "../../runtime-types.js";
+import type { WorkflowDef } from "../../workflow.js";
 
 function createMockRunner(): WorkflowRunner {
   return {

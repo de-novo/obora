@@ -1,13 +1,22 @@
 import { describe, expect, it, vi } from "vitest";
 import { TKGPromotionEngine } from "../execution/tkg-promotion-engine.js";
 import type { EventBus } from "../events/event-bus.js";
-import type { MemoryScope, SharedMemoryStore } from "../shared-memory/store.js";
+import type { MemoryScope, SharedMemoryFact, SharedMemoryStore } from "../shared-memory/store.js";
 import type { StagingTKGStore } from "../tkg/store.js";
 import type { TKGRollbackStore } from "../tkg/rollback.js";
 import type { TKGReviewQueueStore } from "../tkg/review-queue.js";
 import type { RuntimeExecution } from "../runtime-types.js";
 
 describe("TKGPromotionEngine", () => {
+  const createFact = (id: string): SharedMemoryFact => ({
+    id,
+    content: id,
+    category: "test",
+    tags: [],
+    confidence: 1,
+    createdAt: new Date(0).toISOString(),
+  });
+
   const createMockEventBus = (): EventBus =>
     ({
       emit: vi.fn().mockResolvedValue(undefined),
@@ -63,7 +72,7 @@ describe("TKGPromotionEngine", () => {
       const merge = vi.fn().mockResolvedValue(undefined);
       const store = { merge, save: vi.fn() } as unknown as SharedMemoryStore;
       const engine = new TKGPromotionEngine({ eventBus: createMockEventBus() });
-      const snapshot = { knowledge: { facts: [{ id: "f1" }] }, decisions: { history: [] }, context: { projectFacts: {} } };
+      const snapshot = { knowledge: { facts: [createFact("f1")] }, decisions: { history: [] }, context: { projectFacts: {} } };
       const scope: MemoryScope = { level: "project", key: "test" };
 
       await engine.persistSharedMemory(store, [scope], snapshot, "exec-1");
@@ -76,7 +85,7 @@ describe("TKGPromotionEngine", () => {
       const save = vi.fn().mockResolvedValue(undefined);
       const store = { save } as unknown as SharedMemoryStore;
       const engine = new TKGPromotionEngine({ eventBus: createMockEventBus() });
-      const snapshot = { knowledge: { facts: [{ id: "f1" }] }, decisions: { history: [] }, context: { projectFacts: {} } };
+      const snapshot = { knowledge: { facts: [createFact("f1")] }, decisions: { history: [] }, context: { projectFacts: {} } };
       const scope: MemoryScope = { level: "project", key: "test" };
 
       await engine.persistSharedMemory(store, [scope], snapshot, "exec-1");

@@ -26,7 +26,7 @@ export interface HealthCheckConfig {
   enabled?: boolean;
 }
 
-export type HealthCheckFn = () => Promise<HealthCheckResult>;
+export type HealthCheckFn = () => Promise<Omit<HealthCheckResult, "name"> & { name?: string }>;
 
 import { DEFAULTS } from "../defaults.js";
 

@@ -171,7 +171,6 @@ export class ExecutionController {
               if (!workflowDef) throw new Error(`Workflow not found: ${name}`);
               const rollbackResult = await this.opts.tkgService.rollbackTKGOnExecutionFailure(
                 executionId,
-                name,
                 workflowDef,
               );
               if (rollbackResult.restored) {

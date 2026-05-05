@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { judgeStrategy } from "../judge-strategy.js";
-import type { WorkflowStep } from "../../workflow.js";
-import type { StepContext } from "../../step-executor-types.js";
-import type { StepExecutionServices } from "./types.js";
+import type { WorkflowStep } from "../../../workflow.js";
+import type { StepContext } from "../../../step-executor-types.js";
+import type { StepExecutionServices } from "../types.js";
 
 function createMockServices(): StepExecutionServices {
   return {

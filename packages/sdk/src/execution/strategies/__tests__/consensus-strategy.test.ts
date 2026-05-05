@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { consensusStrategy } from "../consensus-strategy.js";
-import type { WorkflowStep } from "../../workflow.js";
-import type { StepContext } from "../../step-executor-types.js";
-import type { StepExecutionServices } from "./types.js";
+import type { WorkflowStep } from "../../../workflow.js";
+import type { StepContext } from "../../../step-executor-types.js";
+import type { StepExecutionServices } from "../types.js";
 
 function createMockServices(overrides: Partial<StepExecutionServices> = {}): StepExecutionServices {
   return {
@@ -147,8 +147,8 @@ describe("consensusStrategy - branches", () => {
     const result = await consensusStrategy.execute(step, context, services);
 
     expect(services.requestForStep).toHaveBeenCalledTimes(2);
-    expect(result.votes?.[0].participant).toBe("alice");
-    expect(result.votes?.[1].participant).toBe("bob");
-    expect(result.votes?.[1].vote).toBe("REQUEST_CHANGES");
+    expect(result.votes?.[0]?.participant).toBe("alice");
+    expect(result.votes?.[1]?.participant).toBe("bob");
+    expect(result.votes?.[1]?.vote).toBe("REQUEST_CHANGES");
   });
 });

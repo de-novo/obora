@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { ResumeOrchestrator } from "../resume-orchestrator.js";
+import { ResumeOrchestrator, type ResumeOrchestratorDeps } from "../resume-orchestrator.js";
 import { OboraError, OboraErrorCode } from "../../runtime-types.js";
 import type { WorkflowDef } from "../../workflow.js";
 import type { EventBus } from "../../events/event-bus.js";
@@ -39,11 +39,11 @@ function createMockDeps() {
           logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
           persistence: { enabled: false },
         },
-      },
+      } as unknown as ResumeOrchestratorDeps["deps"],
       engineBuilder,
       stepExecutionEngine,
       repairLoopTracker,
-    },
+    } as unknown as ResumeOrchestratorDeps,
     eventBus,
     engineBuilder,
     stepExecutionEngine,
@@ -152,7 +152,7 @@ describe("ResumeOrchestrator - executeResume", () => {
 
     vi.mocked(mockDeps.engineBuilder.build).mockResolvedValue({
       stepExecutor: {
-        executeStep: vi.fn().mockRejectedValue(new (await import("../../cost-tracker.js")).BudgetExceededError("budget exceeded", 100, 50)),
+        executeStep: vi.fn().mockRejectedValue(new (await import("../../cost-tracker.js")).BudgetExceededError("budget exceeded")),
       },
       costTracker: undefined,
     } as any);

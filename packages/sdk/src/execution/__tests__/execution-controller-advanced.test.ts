@@ -125,6 +125,7 @@ describe("ExecutionController - Auto-rollback & DLQ", () => {
     vi.mocked(tkgService.rollbackTKGOnExecutionFailure).mockResolvedValue({
       restored: true,
       restoredFactCount: 5,
+      scope: "project:test",
     });
 
     const workflow = createWorkflowDef();
@@ -163,8 +164,15 @@ describe("ExecutionController - Auto-rollback & DLQ", () => {
     
     vi.mocked(runner.executeRun).mockRejectedValue(new Error("step failed"));
     vi.mocked(runner.getPersistedRepairLoopSummary).mockReturnValue({
+      validationFailed: 0,
+      validationPassed: 0,
       repairStarted: 2,
+      repairCompleted: 0,
+      repairNoProgress: 0,
+      backEdgeTriggered: 0,
+      backEdgeExhausted: 0,
       lastRepairStep: "step1",
+      recentValidationFailures: [],
     });
 
     const workflow = createWorkflowDef();
@@ -202,7 +210,7 @@ describe("ExecutionController - Auto-rollback & DLQ", () => {
   it("skips DLQ and rollback for budget exceeded", async () => {
     const { controller, runner, tkgService, dlqStore } = createController();
     
-    vi.mocked(runner.executeRun).mockRejectedValue(new BudgetExceededError("budget exceeded", 100, 50));
+    vi.mocked(runner.executeRun).mockRejectedValue(new BudgetExceededError("budget exceeded"));
 
     const workflow = createWorkflowDef();
     const workflows = new Map([["test", workflow]]);

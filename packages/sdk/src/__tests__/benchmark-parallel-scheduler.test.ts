@@ -12,13 +12,13 @@ describe("Parallel Scheduler Performance", () => {
 
   const scheduler = new ParallelScheduler(3);
 
-  it("schedules independent steps sequentially (backward compat)", () => {
+  it("schedules independent steps sequentially when dependency metadata is absent", () => {
     const steps = createSteps(100);
     const start = performance.now();
     const plan = scheduler.buildExecutionPlan(steps);
     const duration = performance.now() - start;
     
-    // No explicit deps → falls back to sequential for backward compat
+    // No explicit deps -> preserve sequential ordering.
     expect(plan.isParallel).toBe(false);
     expect(plan.layers).toHaveLength(100);
     expect(duration).toBeLessThan(50);
@@ -81,7 +81,7 @@ describe("Parallel Scheduler Performance", () => {
     }));
     
     const start = performance.now();
-    const merged = scheduler.mergeResults(results as any, "best_score");
+    const merged = scheduler.mergeResults(results, "best_score");
     const duration = performance.now() - start;
     
     expect(merged).toEqual({ score: 99, value: "result-99" });

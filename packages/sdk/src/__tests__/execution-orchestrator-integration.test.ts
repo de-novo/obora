@@ -45,7 +45,9 @@ describe("ExecutionOrchestrator", () => {
       config: {
         defaults: { provider: "mock", model: "mock-model" },
         resources: {
-          models: [{ model: "mock-model", promptPer1kTokens: 0.0, completionPer1kTokens: 0.0 }],
+          pricing: {
+            models: [{ model: "mock-model", promptPer1kTokens: 0.0, completionPer1kTokens: 0.0 }],
+          },
         },
       },
       verbose: false,

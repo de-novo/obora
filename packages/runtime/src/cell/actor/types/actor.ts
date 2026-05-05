@@ -12,7 +12,7 @@ import type { Observation } from "./observation";
 import type { Result } from "./result";
 import { generateActorId } from "./crypto";
 
-// Re-export base types to maintain backward compatibility
+// Re-export base types for the current public actor surface.
 export {
   ActorId,
   TaskId,

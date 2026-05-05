@@ -85,7 +85,7 @@ const workflow = new Workflow("my-workflow", "1.0")
 ### Step Execution
 
 ```typescript
-import { StepExecutor, type StepToolHandler } from "@obora/sdk";
+import { StepExecutor, type ToolHandler } from "@obora/sdk";
 
 const llmAdapter = {
   async chatCompletion() {
@@ -94,7 +94,7 @@ const llmAdapter = {
 };
 const agentFactories = new Map();
 const executor = new StepExecutor(llmAdapter, agentFactories, {
-  tools: [] satisfies StepToolHandler[], // Custom tool handlers
+  tools: [] satisfies ToolHandler[], // Custom tool handlers
   disableBuiltinTools: false, // Keep file_write, file_read, file_list
 });
 

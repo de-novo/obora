@@ -1,5 +1,6 @@
 import type { LLMConfig } from "../runtime-types.js";
 import type { LLMAdapterLike } from "../step-executor.js";
+import type { StepExecutor } from "../step-executor.js";
 import { CostTracker } from "../cost-tracker.js";
 import type { WorkflowDef, WorkflowStep } from "../workflow.js";
 import type { StorageAdapter } from "@obora/runtime";

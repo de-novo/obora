@@ -378,7 +378,8 @@ describe("StepExecutionEngine - executeParallelStepLoop", () => {
         { name: "step2", agent: "agent2", input: {} },
       ],
     ];
-    const workflow = createWorkflowDef([layers[0][0], layers[0][1]]);
+    const firstLayer = layers[0]!;
+    const workflow = createWorkflowDef([firstLayer[0]!, firstLayer[1]!]);
     const execution: RuntimeExecution = {
       id: "exec-1", workflowName: "test", status: "running",
       input: {}, startedAt: new Date(), stepOrder: ["step1", "step2"],
@@ -409,7 +410,8 @@ describe("StepExecutionEngine - executeParallelStepLoop", () => {
         { name: "step2", agent: "agent2", input: {} },
       ],
     ];
-    const workflow = createWorkflowDef([layers[0][0], layers[0][1]]);
+    const firstLayer = layers[0]!;
+    const workflow = createWorkflowDef([firstLayer[0]!, firstLayer[1]!]);
     const execution: RuntimeExecution = {
       id: "exec-1", workflowName: "test", status: "running",
       input: {}, startedAt: new Date(), stepOrder: ["step1", "step2"],
@@ -433,7 +435,8 @@ describe("StepExecutionEngine - executeParallelStepLoop", () => {
     const layers: WorkflowStep[][] = [
       [{ name: "step1", agent: "agent1", input: {} }],
     ];
-    const workflow = createWorkflowDef([layers[0][0]]);
+    const firstLayer = layers[0]!;
+    const workflow = createWorkflowDef([firstLayer[0]!]);
     const execution: RuntimeExecution = {
       id: "exec-1", workflowName: "test", status: "running",
       input: {}, startedAt: new Date(), stepOrder: ["step1"],

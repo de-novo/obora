@@ -6,7 +6,11 @@ import type { StepContext } from "../step-executor-types.js";
 
 const APPROVE_CONTENT = "APPROVE: score 9/10";
 
-const createServices = (overrides?: Partial<StepExecutionServices>): StepExecutionServices => {
+type StepExecutionServiceOverrides = Partial<StepExecutionServices> & {
+  onEvent?: NonNullable<StepExecutionServices["config"]>["onEvent"];
+};
+
+const createServices = (overrides?: StepExecutionServiceOverrides): StepExecutionServices => {
   const baseOnEvent = vi.fn();
   const onEvent =
     (overrides as Record<string, unknown>)?.onEvent ??
