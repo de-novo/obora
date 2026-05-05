@@ -34,6 +34,42 @@ describe('audit-client', () => {
     expect(query).toContain('offset=40');
   });
 
+  it('omits blank query values and maps event summary variants', () => {
+    expect(
+      __private__.serializeAuditQueryParams({
+        eventTypes: [' ', 'policy_deny'],
+      }),
+    ).toBe('eventType=policy_deny');
+
+    expect(
+      __private__.mapEvent({
+        id: 'evt-policy',
+        executionId: 'exec-1',
+        timestamp: new Date('2026-02-17T10:00:00.000Z'),
+        type: 'policy_deny',
+        data: { reason: 'blocked', code: 'P1' },
+      }),
+    ).toMatchObject({
+      severity: 'warning',
+      summary: 'policy_deny · reason, code',
+      timestamp: '2026-02-17T10:00:00.000Z',
+    });
+
+    expect(
+      __private__.mapEvent({
+        id: 'evt-recovery',
+        executionId: 'exec-1',
+        timestamp: '2026-02-17T10:01:00.000Z',
+        type: 'recovery_retry',
+        data: null,
+      }),
+    ).toMatchObject({
+      stepName: undefined,
+      severity: 'critical',
+      summary: 'recovery_retry',
+    });
+  });
+
   it('fetches audit events with mapped fields', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -119,6 +155,24 @@ describe('audit-client', () => {
 
     await expect(fetchAuditEvents()).rejects.toMatchObject({
       code: 'DASH_AUDIT_NETWORK_ERROR',
+    });
+  });
+
+  it('uses fallback API error details when response JSON is unavailable', async () => {
+    const apiFailure = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => {
+        throw new Error('not json');
+      },
+    });
+
+    vi.stubGlobal('fetch', apiFailure);
+
+    await expect(fetchAuditEvent('evt-fail')).rejects.toMatchObject({
+      code: 'DASH_AUDIT_QUERY_FAILED',
+      status: 503,
+      message: 'Audit API request failed with status 503',
     });
   });
 });

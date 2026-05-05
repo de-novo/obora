@@ -283,4 +283,164 @@ describe('history store', () => {
     const successExecutorStore = new AdapterHistoryStore(adapter, async () => ({ ok: true }));
     await expect(successExecutorStore.resumeRun('suspended')).resolves.toEqual({ ok: true });
   });
+
+  it('paginates adapter listings and keeps default filters open', async () => {
+    const firstPage = Array.from({ length: 200 }, (_value, index) =>
+      run(`run-${String(index).padStart(3, '0')}`, `2026-02-18T00:${String(index % 60).padStart(2, '0')}:00.000Z`, {
+        metadata: index === 1 ? { repairLoop: [] } : undefined,
+      }),
+    );
+    const listRuns = vi
+      .fn()
+      .mockResolvedValueOnce(firstPage)
+      .mockResolvedValueOnce([run('run-200', '2026-02-18T01:00:00.000Z')]);
+    const adapter = {
+      listRuns,
+      getRun: vi.fn(async () => null),
+      getSteps: vi.fn(async () => []),
+      getArtifacts: vi.fn(async () => []),
+      getRunCostSummary: vi.fn(async () => cost(0)),
+      getAuditTimeline: vi.fn(async () => []),
+      getLatestCheckpoint: vi.fn(async () => null),
+      saveRun: vi.fn(async () => undefined),
+    };
+    const store = new AdapterHistoryStore(adapter);
+
+    const result = await store.listRuns({ limit: 2, offset: 1, sortBy: 'completedAt', sortOrder: 'asc' });
+
+    expect(listRuns).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ from: undefined, to: undefined, limit: 200, offset: 0 }),
+    );
+    expect(listRuns).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ from: undefined, to: undefined, limit: 200, offset: 200 }),
+    );
+    expect(result.total).toBe(201);
+    expect(result.items).toHaveLength(2);
+    expect(result.repairLoopCounts?.with).toBe(0);
+  });
+
+  it('covers in-memory default detail, artifact, preview, and resume branches', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'obora-history-memory-'));
+    tempDirs.push(dir);
+    const textPath = join(dir, 'note.md');
+    await writeFile(textPath, 'short note', 'utf8');
+
+    const store = new InMemoryHistoryStore();
+    store.seed({
+      runs: [
+        run('sparse', '2026-02-18T00:00:00.000Z', {
+          status: 'suspended',
+          completedAt: '2026-02-18T00:10:00.000Z',
+          metadata: { repairLoop: [] },
+        }),
+        run('done', '2026-02-18T00:01:00.000Z'),
+      ],
+      steps: [
+        step('late', 'sparse', 'late'),
+        { ...step('early', 'sparse', 'early'), startedAt: '2026-02-17T23:59:00.000Z' },
+      ],
+      artifacts: [
+        artifact('text', textPath, { runId: 'sparse', name: 'note.md', mimeType: 'application/octet-stream' }),
+        artifact('binary', join(dir, 'image.bin'), { runId: 'sparse', name: 'image.bin', mimeType: 'application/octet-stream' }),
+      ],
+      audits: [
+        { ...audit('audit-late', '2026-02-18T00:02:00.000Z'), runId: 'sparse' },
+        { ...audit('audit-early', '2026-02-18T00:01:00.000Z'), runId: 'sparse' },
+      ],
+      checkpoints: [
+        {
+          id: 'old-cp',
+          runId: 'sparse',
+          stepName: 'early',
+          stateSnapshot: {},
+          completedSteps: [],
+          policyHash: 'old',
+          createdAt: '2026-02-18T00:01:00.000Z',
+        },
+        {
+          id: 'new-cp',
+          runId: 'sparse',
+          stepName: 'late',
+          stateSnapshot: {},
+          completedSteps: [],
+          policyHash: 'new',
+          createdAt: '2026-02-18T00:02:00.000Z',
+        },
+      ],
+    });
+
+    await expect(store.getRunDetail('missing')).resolves.toBeNull();
+
+    const detail = await store.getRunDetail('sparse');
+    expect(detail?.repairLoop).toBeUndefined();
+    expect(detail?.steps.map((item) => item.id)).toEqual(['early', 'late']);
+    expect(detail?.artifacts.map((item) => item.id)).toEqual(['text', 'binary']);
+    expect(detail?.checkpoints.map((item) => item.id)).toEqual(['new-cp', 'old-cp']);
+    expect(detail?.pagination).toEqual({ auditTotal: 2, auditLimit: 100, auditOffset: 0 });
+
+    await expect(store.getArtifact('missing-run', 'text')).resolves.toBeNull();
+    await expect(store.getArtifactPreview('sparse', 'missing-artifact')).resolves.toBeNull();
+
+    const textPreview = await store.getArtifactPreview('sparse', 'text');
+    expect(textPreview).toMatchObject({ supported: true, text: 'short note', truncated: false });
+
+    const binaryPreview = await store.getArtifactPreview('sparse', 'binary');
+    expect(binaryPreview).toMatchObject({
+      supported: false,
+      reason: 'Preview is only supported for text-like artifacts',
+    });
+
+    await expect(store.resumeRun('missing')).resolves.toEqual({ ok: false, reason: 'Run not found' });
+    await expect(store.resumeRun('done')).resolves.toEqual({ ok: false, reason: 'Run is not suspended' });
+    await expect(store.resumeRun('sparse')).resolves.toEqual({ ok: true });
+    const resumed = await store.getRunDetail('sparse');
+    expect(resumed?.run).toMatchObject({ status: 'running', completedAt: undefined });
+  });
+
+  it('applies in-memory status, workflow, ISO date, cost, and completedAt filters', async () => {
+    const store = new InMemoryHistoryStore();
+    store.seed({
+      runs: [
+        run('a', '2026-02-18T00:00:00.000Z', {
+          workflowName: 'alpha',
+          status: 'running',
+          completedAt: '2026-02-18T00:10:00.000Z',
+        }),
+        run('b', '2026-02-18T01:00:00.000Z', {
+          workflowName: 'beta',
+          status: 'completed',
+          completedAt: '2026-02-18T01:10:00.000Z',
+          metadata: { repairLoop: repairLoop({ validationFailed: 1 }) },
+        }),
+        run('c', '2026-02-18T02:00:00.000Z', {
+          workflowName: 'alpha',
+          status: 'completed',
+          completedAt: undefined,
+          metadata: { repairLoop: [] },
+        }),
+      ],
+      costs: [
+        { runId: 'a', summary: cost(2) },
+        { runId: 'b', summary: cost(4) },
+        { runId: 'c', summary: cost(6) },
+      ],
+    });
+
+    const filtered = await store.listRuns({
+      status: 'completed',
+      workflowName: 'alpha',
+      from: '2026-02-18T00:30:00.000Z',
+      to: '2026-02-18T02:30:00.000Z',
+      costMin: 5,
+      costMax: 6,
+      repairLoop: 'without',
+      sortBy: 'completedAt',
+      sortOrder: 'desc',
+    });
+
+    expect(filtered.items.map((item) => item.run.id)).toEqual(['c']);
+    expect(filtered.repairLoopCounts).toEqual({ all: 1, with: 0, without: 1, stalled: 0, exhausted: 0 });
+  });
 });
