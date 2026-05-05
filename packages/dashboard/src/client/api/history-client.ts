@@ -99,3 +99,7 @@ export async function resumeHistoryRun(runId: string): Promise<{ ok: true }> {
   });
   return parseJsonOrThrow<{ ok: true }>(response);
 }
+
+export const __private__ = {
+  buildQuery,
+};

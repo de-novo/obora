@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import {
   fetchHistoryArtifactPreview,
@@ -9,9 +9,13 @@ import {
   type ArtifactRecord,
   type RunDetailResponse,
 } from '../api/history-client';
-import { formatArtifactPreview } from '../components/artifact-preview-utils';
-import { filterAuditEvents, toPrettyJson } from '../components/history-utils';
-import { formatRepairLoopBadge, getRepairLoopSummary, getRepairLoopTone } from '../components/repair-loop-utils';
+import { toPrettyJson } from '../components/history-utils';
+import {
+  buildHistoryRunDetailViewModel,
+  resolveSelectedStepId,
+  resolveStepIdByName,
+  type HistoryAuditCategory,
+} from './history-run-detail-view-model';
 
 interface Props {
   runId: string;
@@ -21,7 +25,7 @@ interface Props {
 export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
   const [data, setData] = useState<RunDetailResponse | undefined>(undefined);
   const [selectedStepId, setSelectedStepId] = useState<string | undefined>(undefined);
-  const [auditCategory, setAuditCategory] = useState<'all' | 'consensus' | 'policy' | 'execution' | 'recovery'>('all');
+  const [auditCategory, setAuditCategory] = useState<HistoryAuditCategory>('all');
   const [auditActor, setAuditActor] = useState('');
   const [error, setError] = useState<string | undefined>(undefined);
   const [showDriftModal, setShowDriftModal] = useState(false);
@@ -57,19 +61,10 @@ export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
 
   useEffect(() => {
     if (!data) return;
-    if (selectedStepId && data.steps.some((step) => step.id === selectedStepId)) return;
-    setSelectedStepId(data.steps[0]?.id);
+    const resolvedStepId = resolveSelectedStepId(data.steps, selectedStepId);
+    if (resolvedStepId === selectedStepId) return;
+    setSelectedStepId(resolvedStepId);
   }, [data, selectedStepId]);
-
-  const selectedStep = useMemo(() => data?.steps.find((step) => step.id === selectedStepId), [data?.steps, selectedStepId]);
-
-  const filteredAudit = useMemo(() => {
-    if (!data) return [];
-    return filterAuditEvents(data.auditTimeline, {
-      category: auditCategory,
-      actor: auditActor,
-    });
-  }, [auditActor, auditCategory, data]);
 
   const resume = async (): Promise<void> => {
     try {
@@ -96,13 +91,16 @@ export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
   }
 
   const run = data.run;
-  const repairLoop = getRepairLoopSummary({ ...run, repairLoop: data.repairLoop });
-  const repairBadge = formatRepairLoopBadge(repairLoop);
-  const repairTone = getRepairLoopTone(repairLoop);
-  const filteredArtifacts = artifactStepFilter
-    ? data.artifacts.filter((artifact) => artifact.stepName === artifactStepFilter)
-    : data.artifacts;
-  const formattedArtifactPreview = artifactPreview?.supported ? formatArtifactPreview(artifactPreview) : null;
+  const view = buildHistoryRunDetailViewModel({
+    data,
+    selectedStepId,
+    auditCategory,
+    auditActor,
+    artifactStepFilter,
+    artifactPreview,
+    auditOffset,
+    auditLimit,
+  });
 
   const jumpToArtifactSection = (stepName?: string) => {
     setArtifactStepFilter(stepName ?? null);
@@ -129,10 +127,9 @@ export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
   };
 
   const jumpToStep = (stepName?: string) => {
-    if (!stepName) return;
-    const target = data.steps.find((step) => step.stepName === stepName);
-    if (!target) return;
-    setSelectedStepId(target.id);
+    const targetStepId = resolveStepIdByName(data.steps, stepName);
+    if (!targetStepId) return;
+    setSelectedStepId(targetStepId);
     requestAnimationFrame(() => {
       document.getElementById('step-drilldown-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
@@ -151,61 +148,61 @@ export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
         <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px' }}>Total Tokens<br />{data.costSummary.totalTokens.toLocaleString()}</div>
       </div>
 
-      {repairLoop ? (
-        <div style={{ border: `1px solid ${repairTone?.border ?? '#e5e7eb'}`, borderRadius: '10px', padding: '12px', marginBottom: '12px', background: repairTone?.background ?? '#fafafa' }}>
+      {view.repairLoop ? (
+        <div style={{ border: `1px solid ${view.repairTone?.border ?? '#e5e7eb'}`, borderRadius: '10px', padding: '12px', marginBottom: '12px', background: view.repairTone?.background ?? '#fafafa' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <h3 style={{ margin: 0 }}>Repair Loop</h3>
-                {repairTone ? (
+                {view.repairTone ? (
                   <span
                     style={{
                       fontSize: '11px',
                       fontWeight: 700,
-                      color: repairTone.text,
+                      color: view.repairTone.text,
                       background: '#fff',
-                      border: `1px solid ${repairTone.border}`,
+                      border: `1px solid ${view.repairTone.border}`,
                       borderRadius: '999px',
                       padding: '2px 8px',
                       textTransform: 'uppercase',
                       letterSpacing: '0.02em',
                     }}
                   >
-                    {repairTone.label}
+                    {view.repairTone.label}
                   </span>
                 ) : null}
               </div>
-              <p style={{ margin: '4px 0 0', color: repairTone?.text ?? '#6b7280', fontSize: '13px', fontWeight: 600 }}>
-                {repairBadge ?? 'validation-repair activity recorded'}
+              <p style={{ margin: '4px 0 0', color: view.repairTone?.text ?? '#6b7280', fontSize: '13px', fontWeight: 600 }}>
+                {view.repairBadge ?? 'validation-repair activity recorded'}
               </p>
             </div>
-            {repairLoop.lastValidationSummary ? (
+            {view.repairLoop.lastValidationSummary ? (
               <span style={{ fontSize: '12px', color: '#6b7280', maxWidth: '420px', textAlign: 'right' }}>
-                {repairLoop.lastValidationSummary}
+                {view.repairLoop.lastValidationSummary}
               </span>
             ) : null}
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '8px' }}>
-            <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px', background: '#fff' }}>Validation Failed<br />{repairLoop.validationFailed}</div>
-            <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px', background: '#fff' }}>Validation Passed<br />{repairLoop.validationPassed}</div>
-            <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px', background: '#fff' }}>Repair Started<br />{repairLoop.repairStarted}</div>
-            <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px', background: '#fff' }}>Repair Completed<br />{repairLoop.repairCompleted}</div>
+            <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px', background: '#fff' }}>Validation Failed<br />{view.repairLoop.validationFailed}</div>
+            <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px', background: '#fff' }}>Validation Passed<br />{view.repairLoop.validationPassed}</div>
+            <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px', background: '#fff' }}>Repair Started<br />{view.repairLoop.repairStarted}</div>
+            <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px', background: '#fff' }}>Repair Completed<br />{view.repairLoop.repairCompleted}</div>
           </div>
 
           <div style={{ marginTop: '10px', display: 'grid', gap: '4px', fontSize: '13px', color: '#374151' }}>
-            {repairLoop.lastAttempt !== undefined ? <div>Last attempt: {repairLoop.lastAttempt}</div> : null}
-            {repairLoop.lastValidationStep ? <div>Last validator: {repairLoop.lastValidationStep}</div> : null}
-            {repairLoop.lastRepairStep ? <div>Last repair step: {repairLoop.lastRepairStep}</div> : null}
-            {repairLoop.lastNoProgressReason ? <div>No-progress reason: {repairLoop.lastNoProgressReason}</div> : null}
-            {repairLoop.lastExhaustReason ? <div>Exhaust reason: {repairLoop.lastExhaustReason}</div> : null}
+            {view.repairLoop.lastAttempt !== undefined ? <div>Last attempt: {view.repairLoop.lastAttempt}</div> : null}
+            {view.repairLoop.lastValidationStep ? <div>Last validator: {view.repairLoop.lastValidationStep}</div> : null}
+            {view.repairLoop.lastRepairStep ? <div>Last repair step: {view.repairLoop.lastRepairStep}</div> : null}
+            {view.repairLoop.lastNoProgressReason ? <div>No-progress reason: {view.repairLoop.lastNoProgressReason}</div> : null}
+            {view.repairLoop.lastExhaustReason ? <div>Exhaust reason: {view.repairLoop.lastExhaustReason}</div> : null}
           </div>
 
-          {repairLoop.recentValidationFailures.length > 0 ? (
+          {view.repairLoop.recentValidationFailures.length > 0 ? (
             <div style={{ marginTop: '12px' }}>
               <h4 style={{ margin: '0 0 8px' }}>Recent Validation Failures</h4>
               <div style={{ display: 'grid', gap: '8px' }}>
-                {repairLoop.recentValidationFailures.map((failure, index) => (
+                {view.repairLoop.recentValidationFailures.map((failure, index) => (
                   <div key={`${failure.stepName ?? 'validate'}-${index}`} style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px', background: '#fff' }}>
                     <div style={{ fontWeight: 600 }}>{failure.stepName ?? 'validate'}{failure.summary ? ` — ${failure.summary}` : ''}</div>
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '6px' }}>
@@ -260,7 +257,7 @@ export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
           <div>
             <h3 style={{ margin: 0 }}>Artifacts</h3>
             <p style={{ margin: '4px 0 0', color: '#6b7280', fontSize: '13px' }}>
-              {artifactStepFilter ? `Showing artifacts for step: ${artifactStepFilter}` : 'Showing all persisted artifacts for this run'}
+              {view.artifactDescription}
             </p>
           </div>
           {artifactStepFilter ? (
@@ -270,11 +267,11 @@ export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
           ) : null}
         </div>
 
-        {filteredArtifacts.length === 0 ? (
+        {view.filteredArtifacts.length === 0 ? (
           <p style={{ color: '#6b7280', margin: 0 }}>No artifacts found for the current selection.</p>
         ) : (
           <div style={{ display: 'grid', gap: '8px' }}>
-            {filteredArtifacts.map((artifact: ArtifactRecord) => (
+            {view.filteredArtifacts.map((artifact: ArtifactRecord) => (
               <div key={artifact.id} style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px', background: '#fff' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '12px' }}>
                   <div>
@@ -385,13 +382,13 @@ export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
               </div>
             </div>
 
-            {artifactPreview.supported && formattedArtifactPreview ? (
+            {artifactPreview.supported && view.formattedArtifactPreview ? (
               <>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '10px' }}>
-                  <span style={{ fontSize: '11px', fontWeight: 700, color: formattedArtifactPreview.mode === 'json' ? '#1d4ed8' : '#374151', background: formattedArtifactPreview.mode === 'json' ? '#eff6ff' : '#f3f4f6', border: `1px solid ${formattedArtifactPreview.mode === 'json' ? '#93c5fd' : '#d1d5db'}`, borderRadius: '999px', padding: '2px 8px', textTransform: 'uppercase' }}>
-                    {formattedArtifactPreview.mode}
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: view.formattedArtifactPreview.mode === 'json' ? '#1d4ed8' : '#374151', background: view.formattedArtifactPreview.mode === 'json' ? '#eff6ff' : '#f3f4f6', border: `1px solid ${view.formattedArtifactPreview.mode === 'json' ? '#93c5fd' : '#d1d5db'}`, borderRadius: '999px', padding: '2px 8px', textTransform: 'uppercase' }}>
+                    {view.formattedArtifactPreview.mode}
                   </span>
-                  <span style={{ fontSize: '12px', color: '#6b7280' }}>{formattedArtifactPreview.lineCount} lines</span>
+                  <span style={{ fontSize: '12px', color: '#6b7280' }}>{view.formattedArtifactPreview.lineCount} lines</span>
                   <button type="button" onClick={() => setWrapArtifactPreview((current) => !current)} style={{ fontSize: '12px', cursor: 'pointer' }}>
                     {wrapArtifactPreview ? 'Disable wrap' : 'Enable wrap'}
                   </button>
@@ -399,12 +396,12 @@ export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
                 <div style={{ border: '1px solid #1f2937', borderRadius: '8px', overflow: 'hidden', background: '#0b1020' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '56px 1fr', alignItems: 'stretch' }}>
                     <div style={{ background: '#111827', color: '#94a3b8', fontSize: '12px', padding: '12px 8px', textAlign: 'right', userSelect: 'none' }}>
-                      {formattedArtifactPreview.lines.map((_, index) => (
+                      {view.formattedArtifactPreview.lines.map((_, index) => (
                         <div key={index} style={{ lineHeight: 1.5 }}>{index + 1}</div>
                       ))}
                     </div>
                     <pre style={{ whiteSpace: wrapArtifactPreview ? 'pre-wrap' : 'pre', overflowX: 'auto', wordBreak: wrapArtifactPreview ? 'break-word' : 'normal', margin: 0, padding: '12px', color: '#e5eefb', fontSize: '12px', lineHeight: 1.5 }}>
-                      {formattedArtifactPreview.displayText}
+                      {view.formattedArtifactPreview.displayText}
                     </pre>
                   </div>
                 </div>
@@ -426,18 +423,18 @@ export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
         </div>
       ) : null}
 
-      {selectedStep ? (
+      {view.selectedStep ? (
         <div id="step-drilldown-section" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '12px' }}>
           <div>
             <h3>Step Drilldown</h3>
             <p style={{ marginBottom: '6px' }}>Input</p>
-            <pre style={{ background: '#111827', color: '#f9fafb', padding: '10px', borderRadius: '8px', overflowX: 'auto' }}>{toPrettyJson(selectedStep.input)}</pre>
+            <pre style={{ background: '#111827', color: '#f9fafb', padding: '10px', borderRadius: '8px', overflowX: 'auto' }}>{toPrettyJson(view.selectedStep.input)}</pre>
             <p style={{ marginBottom: '6px' }}>Output</p>
-            <pre style={{ background: '#111827', color: '#f9fafb', padding: '10px', borderRadius: '8px', overflowX: 'auto' }}>{toPrettyJson(selectedStep.output)}</pre>
-            {selectedStep.error ? (
+            <pre style={{ background: '#111827', color: '#f9fafb', padding: '10px', borderRadius: '8px', overflowX: 'auto' }}>{toPrettyJson(view.selectedStep.output)}</pre>
+            {view.selectedStep.error ? (
               <div style={{ border: '1px solid #fecaca', background: '#fef2f2', color: '#991b1b', borderRadius: '8px', padding: '10px', marginTop: '8px' }}>
-                <strong>{selectedStep.error.code}</strong>
-                <div>{selectedStep.error.message}</div>
+                <strong>{view.selectedStep.error.code}</strong>
+                <div>{view.selectedStep.error.message}</div>
               </div>
             ) : null}
           </div>
@@ -445,7 +442,7 @@ export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
             <h3>Cost</h3>
             <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '10px' }}>
               {data.costSummary.byStep
-                .filter((item) => item.stepName === selectedStep.stepName)
+                .filter((item) => item.stepName === view.selectedStep?.stepName)
                 .map((item) => (
                   <div key={item.stepName}>
                     <div>Tokens: {item.tokens.toLocaleString()}</div>
@@ -477,10 +474,10 @@ export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
         </div>
 
         <div style={{ display: 'grid', gap: '6px' }}>
-          {filteredAudit.length === 0 ? (
+          {view.filteredAudit.length === 0 ? (
             <p style={{ margin: 0, color: '#6b7280' }}>No audit events</p>
           ) : null}
-          {filteredAudit.map((event) => (
+          {view.filteredAudit.map((event) => (
             <article key={event.id} style={{ borderLeft: `4px solid ${event.category === 'consensus' ? '#2563eb' : event.category === 'policy' ? '#eab308' : event.category === 'recovery' ? '#dc2626' : '#6b7280'}`, background: '#f9fafb', padding: '8px 10px' }}>
               <div style={{ fontSize: '12px', color: '#6b7280' }}>{new Date(event.timestamp).toLocaleString()} · {event.category} · {event.actor}</div>
               <div style={{ fontWeight: 600 }}>{event.action}</div>
@@ -495,18 +492,18 @@ export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
           ))}
         </div>
 
-        {data.pagination ? (
+        {view.auditPagination ? (
           <div style={{ marginTop: '8px', display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <button type="button" disabled={auditOffset === 0} onClick={() => setAuditOffset((prev) => Math.max(0, prev - auditLimit))}>Prev audit</button>
+            <button type="button" disabled={!view.auditPagination.canPrev} onClick={() => setAuditOffset((prev) => Math.max(0, prev - auditLimit))}>Prev audit</button>
             <button
               type="button"
-              disabled={auditOffset + auditLimit >= data.pagination.auditTotal}
+              disabled={!view.auditPagination.canNext}
               onClick={() => setAuditOffset((prev) => prev + auditLimit)}
             >
               Next audit
             </button>
             <span style={{ color: '#6b7280', fontSize: '12px' }}>
-              {auditOffset + 1}-{Math.min(auditOffset + auditLimit, data.pagination.auditTotal)} / {data.pagination.auditTotal}
+              {view.auditPagination.label}
             </span>
           </div>
         ) : null}

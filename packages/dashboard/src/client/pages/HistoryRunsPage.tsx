@@ -1,55 +1,45 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { fetchHistoryRuns, type HistoryRunsResponse } from '../api/history-client';
-import { formatRepairLoopBadge, getRepairLoopSummary, getRepairLoopTone, truncateValidationSummary } from '../components/repair-loop-utils';
+import {
+  buildHistoryRunRowView,
+  buildHistoryRunsQuery,
+  buildRepairLoopChips,
+  DEFAULT_HISTORY_RUNS_RESPONSE,
+  getHistoryRunsPagination,
+  getStatusBadgeColor,
+  type HistoryRunsRepairLoopSelection,
+  type HistoryRunsSortBy,
+  type HistoryRunsSortOrder,
+} from './history-runs-view-model';
 
 interface Props {
   onOpenRun: (runId: string) => void;
 }
 
-const defaultResponse: HistoryRunsResponse = {
-  items: [],
-  total: 0,
-  limit: 20,
-  offset: 0,
-};
-
-const badgeColor = (status: string): string => {
-  switch (status) {
-    case 'completed':
-      return '#15803d';
-    case 'failed':
-      return '#b91c1c';
-    case 'suspended':
-      return '#92400e';
-    default:
-      return '#1d4ed8';
-  }
-};
-
 export const HistoryRunsPage = ({ onOpenRun }: Props): JSX.Element => {
   const [status, setStatus] = useState('');
   const [workflowName, setWorkflowName] = useState('');
-  const [repairLoop, setRepairLoop] = useState<'all' | 'with' | 'without' | 'stalled' | 'exhausted'>('all');
+  const [repairLoop, setRepairLoop] = useState<HistoryRunsRepairLoopSelection>('all');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [costMin, setCostMin] = useState('');
   const [costMax, setCostMax] = useState('');
-  const [sortBy, setSortBy] = useState<'startedAt' | 'completedAt' | 'totalCostUsd' | 'validationFailed'>('startedAt');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [sortBy, setSortBy] = useState<HistoryRunsSortBy>('startedAt');
+  const [sortOrder, setSortOrder] = useState<HistoryRunsSortOrder>('desc');
   const [offset, setOffset] = useState(0);
-  const [data, setData] = useState<HistoryRunsResponse>(defaultResponse);
+  const [data, setData] = useState<HistoryRunsResponse>(DEFAULT_HISTORY_RUNS_RESPONSE);
   const [error, setError] = useState<string | undefined>(undefined);
 
   const query = useMemo(
-    () => ({
-      status: status || undefined,
-      workflowName: workflowName || undefined,
-      repairLoop: repairLoop === 'all' ? undefined : repairLoop,
-      from: from || undefined,
-      to: to || undefined,
-      costMin: costMin ? Number(costMin) : undefined,
-      costMax: costMax ? Number(costMax) : undefined,
+    () => buildHistoryRunsQuery({
+      status,
+      workflowName,
+      repairLoop,
+      from,
+      to,
+      costMin,
+      costMax,
       sortBy,
       sortOrder,
       limit: data.limit,
@@ -78,8 +68,8 @@ export const HistoryRunsPage = ({ onOpenRun }: Props): JSX.Element => {
     };
   }, [query]);
 
-  const canPrev = data.offset > 0;
-  const canNext = data.offset + data.limit < data.total;
+  const pagination = getHistoryRunsPagination(data);
+  const repairLoopChips = buildRepairLoopChips(data, repairLoop);
 
   return (
     <section>
@@ -120,14 +110,7 @@ export const HistoryRunsPage = ({ onOpenRun }: Props): JSX.Element => {
       </div>
 
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
-        {[
-          { value: 'all', label: 'All runs', count: data.repairLoopCounts?.all ?? data.total, tone: { text: '#374151', background: '#f9fafb', border: '#d1d5db' } },
-          { value: 'with', label: 'Repair loops', count: data.repairLoopCounts?.with ?? 0, tone: { text: '#1d4ed8', background: '#eff6ff', border: '#93c5fd' } },
-          { value: 'stalled', label: 'Stalled', count: data.repairLoopCounts?.stalled ?? 0, tone: { text: '#92400e', background: '#fffbeb', border: '#fcd34d' } },
-          { value: 'exhausted', label: 'Exhausted', count: data.repairLoopCounts?.exhausted ?? 0, tone: { text: '#991b1b', background: '#fef2f2', border: '#fecaca' } },
-          { value: 'without', label: 'No repair loop', count: data.repairLoopCounts?.without ?? 0, tone: { text: '#4b5563', background: '#f3f4f6', border: '#d1d5db' } },
-        ].map((chip) => {
-          const active = repairLoop === chip.value;
+        {repairLoopChips.map((chip) => {
           return (
             <button
               key={chip.value}
@@ -136,13 +119,13 @@ export const HistoryRunsPage = ({ onOpenRun }: Props): JSX.Element => {
               style={{
                 borderRadius: '999px',
                 border: `1px solid ${chip.tone.border}`,
-                background: active ? chip.tone.background : '#fff',
+                background: chip.active ? chip.tone.background : '#fff',
                 color: chip.tone.text,
                 padding: '6px 12px',
                 fontSize: '12px',
-                fontWeight: active ? 700 : 600,
+                fontWeight: chip.active ? 700 : 600,
                 cursor: 'pointer',
-                boxShadow: active ? `0 0 0 2px ${chip.tone.background}` : 'none',
+                boxShadow: chip.active ? `0 0 0 2px ${chip.tone.background}` : 'none',
               }}
             >
               {chip.label} ({chip.count})
@@ -167,10 +150,7 @@ export const HistoryRunsPage = ({ onOpenRun }: Props): JSX.Element => {
         </thead>
         <tbody>
           {data.items.map((item) => {
-            const repairLoop = getRepairLoopSummary({ ...item.run, repairLoop: item.repairLoop });
-            const repairBadge = formatRepairLoopBadge(repairLoop);
-            const repairTone = getRepairLoopTone(repairLoop);
-            const lastValidation = truncateValidationSummary(repairLoop?.lastValidationSummary, 56);
+            const row = buildHistoryRunRowView(item);
 
             return (
             <tr
@@ -181,38 +161,38 @@ export const HistoryRunsPage = ({ onOpenRun }: Props): JSX.Element => {
               <td style={{ padding: '8px', fontFamily: 'monospace' }}>{item.run.id}</td>
               <td style={{ padding: '8px' }}>{item.run.workflowName}</td>
               <td style={{ padding: '8px' }}>
-                <span style={{ background: badgeColor(item.run.status), color: '#fff', borderRadius: '10px', padding: '2px 8px', fontSize: '12px' }}>
+                <span style={{ background: getStatusBadgeColor(item.run.status), color: '#fff', borderRadius: '10px', padding: '2px 8px', fontSize: '12px' }}>
                   {item.run.status}
                 </span>
               </td>
               <td style={{ padding: '8px' }}>{new Date(item.run.startedAt).toLocaleString()}</td>
               <td style={{ padding: '8px', minWidth: '220px' }}>
-                {repairLoop ? (
+                {row.repairLoop ? (
                   <div style={{ display: 'grid', gap: '4px' }}>
-                    {repairTone ? (
+                    {row.repairTone ? (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                         <span
                           style={{
                             fontSize: '11px',
                             fontWeight: 700,
-                            color: repairTone.text,
-                            background: repairTone.background,
-                            border: `1px solid ${repairTone.border}`,
+                            color: row.repairTone.text,
+                            background: row.repairTone.background,
+                            border: `1px solid ${row.repairTone.border}`,
                             borderRadius: '999px',
                             padding: '2px 8px',
                             textTransform: 'uppercase',
                             letterSpacing: '0.02em',
                           }}
                         >
-                          {repairTone.label}
+                          {row.repairTone.label}
                         </span>
-                        {repairBadge ? (
-                          <span style={{ fontSize: '12px', fontWeight: 600, color: repairTone.text }}>{repairBadge}</span>
+                        {row.repairBadge ? (
+                          <span style={{ fontSize: '12px', fontWeight: 600, color: row.repairTone.text }}>{row.repairBadge}</span>
                         ) : null}
                       </div>
                     ) : null}
-                    {lastValidation ? (
-                      <span style={{ fontSize: '12px', color: '#6b7280' }}>{lastValidation}</span>
+                    {row.lastValidation ? (
+                      <span style={{ fontSize: '12px', color: '#6b7280' }}>{row.lastValidation}</span>
                     ) : null}
                   </div>
                 ) : (
@@ -228,12 +208,10 @@ export const HistoryRunsPage = ({ onOpenRun }: Props): JSX.Element => {
       </table>
 
       <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <button type="button" disabled={!canPrev} onClick={() => setOffset((prev) => Math.max(0, prev - data.limit))}>Prev</button>
-        <button type="button" disabled={!canNext} onClick={() => setOffset((prev) => prev + data.limit)}>Next</button>
+        <button type="button" disabled={!pagination.canPrev} onClick={() => setOffset((prev) => Math.max(0, prev - data.limit))}>Prev</button>
+        <button type="button" disabled={!pagination.canNext} onClick={() => setOffset((prev) => prev + data.limit)}>Next</button>
         <span style={{ color: '#6b7280' }}>
-          {data.total === 0
-            ? 'showing 0-0 / 0'
-            : `showing ${data.offset + 1}-${Math.min(data.offset + data.limit, data.total)} / ${data.total}`}
+          {pagination.label}
         </span>
       </div>
     </section>
