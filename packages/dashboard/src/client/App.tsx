@@ -33,10 +33,9 @@ const DashboardView = (): JSX.Element => {
   const [selectedExecutionId, setSelectedExecutionId] = useState<string | undefined>(undefined);
   const [selectedStepName, setSelectedStepName] = useState<string | undefined>(undefined);
 
-  const summaries = useExecutionStore((state) => getExecutionSummaries(state));
-  const selectedExecution = useExecutionStore((state) =>
-    selectedExecutionId ? state.executions[selectedExecutionId] : undefined,
-  );
+  const executionState = useExecutionStore((state) => state);
+  const summaries = useMemo(() => getExecutionSummaries(executionState), [executionState]);
+  const selectedExecution = selectedExecutionId ? executionState.executions[selectedExecutionId] : undefined;
 
   const steps = useMemo(() => getSortedSteps(selectedExecution), [selectedExecution]);
 

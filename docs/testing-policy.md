@@ -17,7 +17,7 @@ Obora 전 패키지의 테스트 기준을 통일해 변경 안정성과 릴리�
 - 신규 패키지/핵심 모듈(`cli`, `core`, `database`)은 목표 미달 시 PR에서 사유를 명시해야 합니다.
 - `pnpm verify:coverage`는 `scripts/coverage/thresholds.json`의 패키지별 baseline floor를 강제합니다.
 - baseline은 퇴행 방지 기준이며 전체 레포 일괄 90% 목표가 아닙니다. 기준값을 올릴 때는 테스트 보강과 threshold 상향을 같은 변경 슬라이스에 포함합니다.
-- dashboard baseline은 현재 Node-testable surface와 TSX component tests 기준입니다. `App.tsx`, `main.tsx`, page TSX는 page/hook jsdom harness가 추가될 때까지 coverage 대상에서 제외합니다.
+- dashboard baseline은 현재 Node-testable surface, TSX component tests, `App.tsx`, page TSX jsdom tests 기준입니다. 브라우저 entrypoint인 `main.tsx`만 coverage 대상에서 제외합니다.
 
 ## CI 설정 원칙
 - 기본 로컬/CI 게이트는 clean checkout 기준 아래 순서로 고정합니다.

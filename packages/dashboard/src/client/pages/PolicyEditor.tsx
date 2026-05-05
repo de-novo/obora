@@ -12,24 +12,24 @@ export const PolicyEditor = (): JSX.Element => {
   const [isLoadingPolicy, setIsLoadingPolicy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
 
-  const loadPolicies = useCallback(async (): Promise<void> => {
+  const loadPolicies = useCallback(async (options: { selectInitialPolicy?: boolean } = {}): Promise<void> => {
     setIsLoadingList(true);
     setErrorMessage(undefined);
     try {
       const list = await listPolicies();
       setPolicies(list);
-      if (!selectedPolicyId && list.length > 0) {
-        setSelectedPolicyId(list[0]?.id);
+      if (options.selectInitialPolicy) {
+        setSelectedPolicyId((current) => current ?? list[0]?.id);
       }
     } catch (error: unknown) {
       setErrorMessage(error instanceof Error ? error.message : '정책 목록 조회에 실패했습니다.');
     } finally {
       setIsLoadingList(false);
     }
-  }, [selectedPolicyId]);
+  }, []);
 
   useEffect(() => {
-    void loadPolicies();
+    void loadPolicies({ selectInitialPolicy: true });
   }, [loadPolicies]);
 
   useEffect(() => {

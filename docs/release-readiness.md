@@ -54,10 +54,9 @@ single repo-wide 90% target. Raise a package threshold only in the same slice
 that adds the tests needed to support the higher number. `pnpm coverage:report`
 remains available as a report-only command.
 
-The current dashboard baseline covers Node-testable dashboard code and TSX
-component tests. It intentionally excludes `src/client/App.tsx`,
-`src/client/main.tsx`, and `src/client/pages/**/*.tsx` until the page/hook
-jsdom harness is added.
+The current dashboard baseline covers Node-testable dashboard code, TSX
+component tests, `src/client/App.tsx`, and page TSX tests. It intentionally
+excludes only the browser entrypoint `src/client/main.tsx`.
 
 `pnpm verify:release` builds publishable packages, checks changelog release notes, runs npm-auth selftests, rejects SDK source console writes outside the explicit `ConsoleAlertChannel`, verifies the `@obora/sdk` public API snapshot for the root and `@obora/sdk/testing` exports, rejects source JSDoc tags that advertise scoped `@obora` module subpaths outside package exports, verifies Markdown `@obora` import samples against public package exports, compiles checked TypeScript snippets against built public declarations, validates checked shell snippets with `bash -n`, parses tutorial YAML/JSON snippets and semantically checks workflow/config/policy examples, runs tutorial quickstart and contract-first dry-run flows through the built CLI, verifies that `typecheck-public.d.ts` shims do not declare exports absent from built public declarations, validates package `npm pack --dry-run` output, validates `pnpm pack` package metadata, runs published-package import/require/TypeScript smoke checks, and selftests CLI package installation.
 
