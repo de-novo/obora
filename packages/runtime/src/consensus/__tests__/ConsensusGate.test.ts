@@ -4,6 +4,33 @@ import { InMemoryAuditStore } from "../../audit/InMemoryAuditStore.js";
 import { DefaultConsensusGate } from "../ConsensusGate.js";
 
 describe("DefaultConsensusGate", () => {
+  it("validates setup and session lookup inputs", () => {
+    const gate = new DefaultConsensusGate({ executionId: "exec-validation" });
+
+    expect(() =>
+      gate.setup({
+        type: "majority",
+        voters: [{ id: "a" }],
+        minRequired: 0,
+      })
+    ).toThrow("ConsensusConfig.minRequired must be greater than 0");
+
+    expect(() =>
+      gate.setup({
+        type: "majority",
+        voters: [{ id: "a" }, { id: "a" }],
+        minRequired: 1,
+      })
+    ).toThrow("ConsensusConfig.voters must be unique");
+
+    expect(() => gate.evaluate("missing")).toThrow("Consensus session not found: missing");
+    expect(() => gate.onTimeout("missing")).toThrow("Consensus session not found: missing");
+    expect(() => gate.markBestEffort("missing", "a")).toThrow("Consensus session not found: missing");
+    expect(() => gate.registerVote("missing", { voterId: "a", approved: true })).toThrow(
+      "Consensus session not found: missing"
+    );
+  });
+
   it("returns pending until minRequired votes are met, then passes majority", () => {
     const gate = new DefaultConsensusGate({
       executionId: "exec-1",
@@ -75,6 +102,66 @@ describe("DefaultConsensusGate", () => {
     expect(timeoutResult.status).toBe("timeout");
   });
 
+  it("parses timeout units and custom evaluators through public evaluation", () => {
+    let now = new Date("2026-02-16T00:00:00.000Z");
+    const gate = new DefaultConsensusGate({
+      executionId: "exec-timeout-units",
+      now: () => now,
+    });
+
+    const msSession = gate.setup({
+      type: "majority",
+      voters: [{ id: "a" }],
+      minRequired: 1,
+      timeout: "1ms",
+    });
+    gate.registerVote(msSession.id, { voterId: "a", approved: true, timestamp: new Date("2026-02-16T00:00:00.000Z") });
+    now = new Date("2026-02-16T00:00:00.002Z");
+    expect(gate.evaluate(msSession.id)).toMatchObject({ status: "timeout" });
+
+    const minutesSession = gate.setup({
+      type: "majority",
+      voters: [{ id: "a" }],
+      minRequired: 1,
+      timeout: "1m",
+    });
+    gate.registerVote(minutesSession.id, { voterId: "a", approved: true });
+    expect(gate.evaluate(minutesSession.id)).toMatchObject({ status: "pass" });
+
+    const hoursSession = gate.setup({
+      type: "majority",
+      voters: [{ id: "a" }],
+      minRequired: 1,
+      timeout: "1h",
+    });
+    gate.registerVote(hoursSession.id, { voterId: "a", approved: true });
+    expect(gate.evaluate(hoursSession.id)).toMatchObject({ status: "pass" });
+
+    const invalidTimeoutSession = gate.setup({
+      type: "majority",
+      voters: [{ id: "a" }],
+      minRequired: 1,
+      timeout: "soon",
+    });
+    gate.registerVote(invalidTimeoutSession.id, { voterId: "a", approved: true });
+    expect(gate.evaluate(invalidTimeoutSession.id)).toMatchObject({ status: "pass" });
+
+    const custom = new DefaultConsensusGate({
+      executionId: "exec-custom",
+      sessionIdFactory: () => "custom-session",
+    });
+    const customEvaluate = vi.fn(() => ({ status: "fail" as const, reason: "custom fail", votes: [] }));
+    const customSession = custom.setup({
+      type: "custom",
+      voters: [{ id: "a" }],
+      minRequired: 1,
+      customEvaluate,
+    });
+    custom.registerVote(customSession.id, { voterId: "a", approved: true });
+    expect(custom.evaluate(customSession.id)).toMatchObject({ status: "fail", reason: "custom fail" });
+    expect(customEvaluate).toHaveBeenCalledOnce();
+  });
+
   it("M2-03A: majority excludes best_effort votes from verdict", () => {
     const gate = new DefaultConsensusGate({
       executionId: "exec-m2-03a-1",
@@ -138,6 +225,37 @@ describe("DefaultConsensusGate", () => {
     expect(result.status).toBe("fail");
   });
 
+  it("handles weighted pass and invalid total weight", () => {
+    const passGate = new DefaultConsensusGate({
+      executionId: "exec-weighted-pass",
+      sessionIdFactory: () => "session-weighted-pass",
+    });
+    const passSession = passGate.setup({
+      type: "weighted",
+      voters: [{ id: "a", weight: 3 }, { id: "b", weight: 1 }],
+      minRequired: 2,
+    });
+    passGate.registerVote(passSession.id, { voterId: "a", approved: true });
+    passGate.registerVote(passSession.id, { voterId: "b", approved: false });
+    expect(passGate.evaluate(passSession.id)).toMatchObject({ status: "pass" });
+
+    const invalidGate = new DefaultConsensusGate({
+      executionId: "exec-weighted-invalid",
+      sessionIdFactory: () => "session-weighted-invalid",
+    });
+    const invalidSession = invalidGate.setup({
+      type: "weighted",
+      voters: [{ id: "a", weight: 0 }, { id: "b", weight: 0 }],
+      minRequired: 2,
+    });
+    invalidGate.registerVote(invalidSession.id, { voterId: "a", approved: true });
+    invalidGate.registerVote(invalidSession.id, { voterId: "b", approved: true });
+    expect(invalidGate.evaluate(invalidSession.id)).toMatchObject({
+      status: "fail",
+      reason: "invalid total vote weight",
+    });
+  });
+
   it("M2-03A: score-threshold excludes best_effort from average", () => {
     const gate = new DefaultConsensusGate({
       executionId: "exec-m2-03a-4",
@@ -158,6 +276,26 @@ describe("DefaultConsensusGate", () => {
 
     const result = gate.evaluate(session.id);
     expect(result.status).toBe("fail");
+  });
+
+  it("fails score-threshold when no scored votes are provided", () => {
+    const gate = new DefaultConsensusGate({
+      executionId: "exec-score-empty",
+      sessionIdFactory: () => "session-score-empty",
+    });
+
+    const session = gate.setup({
+      type: "score-threshold",
+      voters: [{ id: "a" }],
+      minRequired: 1,
+      threshold: 0.5,
+    });
+
+    gate.registerVote(session.id, { voterId: "a", approved: true });
+    expect(gate.evaluate(session.id)).toMatchObject({
+      status: "fail",
+      reason: "no scored votes provided",
+    });
   });
 });
 

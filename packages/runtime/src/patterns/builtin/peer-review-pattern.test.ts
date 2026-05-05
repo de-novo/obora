@@ -271,12 +271,143 @@ describe("PeerReviewPattern", () => {
     const pattern = new PeerReviewPattern();
 
     expect(() => pattern.validateConfig({ min_score: 0 })).not.toThrow();
+    expect(() => pattern.validateConfig({ min_score: Number.NaN })).toThrow("peer-review.min_score must be a finite number >= 0");
     expect(() => pattern.validateConfig({ min_score: -1 })).toThrow("peer-review.min_score must be a finite number >= 0");
+    expect(() => pattern.validateConfig({ p0_allowed: 1.5 })).toThrow("peer-review.p0_allowed must be an integer >= 0");
     expect(() => pattern.validateConfig({ p0_allowed: -1 })).toThrow("peer-review.p0_allowed must be an integer >= 0");
+    expect(() => pattern.validateConfig({ max_rounds: 1.5 })).toThrow("peer-review.max_rounds must be an integer >= 1");
     expect(() => pattern.validateConfig({ max_rounds: 0 })).toThrow("peer-review.max_rounds must be an integer >= 1");
+    expect(() => pattern.validateConfig({ best_effort: "reviewer" as never })).toThrow(
+      "peer-review.best_effort must be a string[]"
+    );
     expect(() => pattern.validateConfig({ best_effort: [""] })).toThrow(
       "peer-review.best_effort must contain non-empty reviewer ids"
     );
+    expect(() => pattern.validateConfig({ timeout: "12x" } as never)).toThrow(
+      "peer-review.timeout must match /^(\\d+)(ms|s|m|h)$/"
+    );
+    expect(() => pattern.validateConfig({ timeout: "1ms" } as never)).not.toThrow();
+    expect(() => pattern.validateConfig({ timeout: "1m" } as never)).not.toThrow();
+    expect(() => pattern.validateConfig({ timeout: "1h" } as never)).not.toThrow();
+  });
+
+  it("normalizes malformed inputs, review payloads, and empty best-effort rounds", async () => {
+    const pattern = new PeerReviewPattern();
+
+    await expect(
+      pattern.execute({
+        pattern: "peer-review",
+        participants: {},
+        input: null,
+      } as never)
+    ).rejects.toThrow("peer-review pattern requires at least one participant");
+
+    const nonObjectInput = await pattern.execute({
+      pattern: "peer-review",
+      participants: {
+        reviewer: "agent-a",
+      },
+      input: "not-an-object",
+    } as never);
+
+    expect(nonObjectInput.success).toBe(false);
+    expect(nonObjectInput.output).toMatchObject({
+      status: "fail",
+      reason: "quorum_not_met",
+    });
+
+    const normalized = await pattern.execute({
+      pattern: "peer-review",
+      participants: {
+        reviewerA: "agent-a",
+        reviewerB: "agent-b",
+      },
+      config: {
+        min_score: 0,
+        p0_allowed: 1,
+      },
+      input: {
+        rounds: [],
+        reviews: {
+          reviewerA: {
+            score: "9",
+            issues: [
+              null,
+              { severity: "p1", description: "lowercase severity" },
+              { severity: "unknown", description: 42 },
+            ],
+          },
+          reviewerB: {
+            score: "not-a-number",
+            issues: "not-an-array",
+          },
+        },
+      },
+    } as never);
+
+    expect(normalized.success).toBe(true);
+    expect(normalized.output).toMatchObject({
+      review: {
+        report: {
+          issue_counts: { P0: 0, P1: 1, P2: 1 },
+          scores_by_reviewer: {
+            reviewerA: [9],
+            reviewerB: [0],
+          },
+          average_score: 4.5,
+        },
+      },
+    });
+
+    const bestEffortOnly = await pattern.execute({
+      pattern: "peer-review",
+      participants: {
+        optional: "agent-b",
+      },
+      config: {
+        best_effort: ["optional"],
+        min_score: 0,
+      },
+      input: {
+        reviews: undefined,
+      },
+    });
+
+    expect(bestEffortOnly.success).toBe(true);
+    expect(bestEffortOnly.output).toMatchObject({
+      review: {
+        final_round: 1,
+        report: {
+          average_score: 0,
+        },
+      },
+    });
+  });
+
+  it("uses Date starts and fallback now values for timeout checks", async () => {
+    const pattern = new PeerReviewPattern();
+    const emit = vi.fn();
+
+    const result = await pattern.execute({
+      pattern: "peer-review",
+      participants: {
+        reviewer: "agent-a",
+      },
+      config: {
+        timeout: "1ms",
+      } as never,
+      input: {
+        startedAt: new Date("2099-01-01T00:00:00.000Z"),
+        reviews: {
+          reviewer: { score: 1, issues: [] },
+        },
+      },
+      now: () => "not-a-date",
+      emit,
+    } as never);
+
+    expect(result.success).toBe(true);
+    expect(emit.mock.calls.map((call) => call[0].type)).toContain("peer_review_result");
   });
 
   // === M2-05 Canonical contract regression tests ===

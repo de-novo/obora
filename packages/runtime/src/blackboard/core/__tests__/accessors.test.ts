@@ -531,12 +531,54 @@ describe("KnowledgeSectionAccessor", () => {
     ).toThrow(BlackboardError);
     expect(() =>
       accessor.addFact({
+        content: "Missing source",
+        source: "" as AgentId,
+        confidence: 0.5,
+        category: "finance",
+      })
+    ).toThrow(BlackboardError);
+    expect(() =>
+      accessor.addFact({
+        content: "Missing category",
+        source: agentId,
+        confidence: 0.5,
+        category: "",
+      })
+    ).toThrow(BlackboardError);
+    expect(() =>
+      accessor.addFact({
         content: "Bad confidence",
         source: agentId,
         confidence: Number.NaN,
         category: "finance",
       })
     ).toThrow(BlackboardError);
+  });
+
+  it("filters facts across negative query paths and no-op cleanup", () => {
+    const otherAgent = createAgentId("agent-knowledge-other");
+    const noConfidence = accessor.addFact({
+      content: "Ops signal is stable",
+      source: agentId,
+      category: "ops",
+    });
+    const lowConfidence = accessor.addFact({
+      content: "Finance forecast is uncertain",
+      source: otherAgent,
+      confidence: 0.2,
+      category: "finance",
+      tags: ["forecast"],
+    });
+
+    expect(accessor.findFacts({ category: "missing" })).toEqual([]);
+    expect(accessor.findFacts({ source: agentId })).toEqual([noConfidence]);
+    expect(accessor.findFacts({ source: otherAgent, minConfidence: 0.8 })).toEqual([]);
+    expect(accessor.findFacts({ minConfidence: 0.1 })).toEqual([lowConfidence]);
+    expect(accessor.findFacts({ tag: "growth" })).toEqual([]);
+    expect(accessor.findFacts({ tags: ["forecast", "missing"] })).toEqual([]);
+    expect(accessor.findFacts({ text: "absent" })).toEqual([]);
+    expect(accessor.cleanupExpiredFacts()).toBe(0);
+    expect(accessor.factCount).toBe(2);
   });
 
   it("manages inferences across query, update, and removal paths", () => {
@@ -567,6 +609,53 @@ describe("KnowledgeSectionAccessor", () => {
     expect(() => accessor.removeInference("missing")).toThrow(BlackboardError);
     accessor.removeInference(inference.id);
     expect(accessor.getInferenceCount()).toBe(0);
+  });
+
+  it("validates inference input and filters inference miss paths", () => {
+    const otherAgent = createAgentId("agent-inference-other");
+
+    expect(() =>
+      accessor.addInference({
+        conclusion: "",
+        premises: [],
+        source: agentId,
+      })
+    ).toThrow(BlackboardError);
+    expect(() =>
+      accessor.addInference({
+        conclusion: "Missing source",
+        premises: [],
+        source: "" as AgentId,
+      })
+    ).toThrow(BlackboardError);
+    expect(() =>
+      accessor.addInference({
+        conclusion: "Bad premises",
+        premises: "fact-1" as unknown as string[],
+        source: agentId,
+      })
+    ).toThrow(BlackboardError);
+    expect(() =>
+      accessor.addInference({
+        conclusion: "Bad confidence",
+        premises: [],
+        source: agentId,
+        confidence: -0.1,
+      })
+    ).toThrow(BlackboardError);
+
+    const inference = accessor.addInference({
+      conclusion: "Ops signal is durable",
+      premises: ["fact-ops"],
+      source: agentId,
+    });
+
+    expect(accessor.findInferences({ source: otherAgent })).toEqual([]);
+    expect(accessor.findInferences({ premises: ["missing"] })).toEqual([]);
+    expect(accessor.findInferences({ minConfidence: 0.1 })).toEqual([]);
+    expect(accessor.findInferencesByPremise("missing")).toEqual([]);
+    expect(accessor.findInferencesByAgent(otherAgent)).toEqual([]);
+    expect(accessor.getInference(inference.id)).toBe(inference);
   });
 
   it("manages patterns including upsert, usage, stats, and clear", () => {
@@ -609,6 +698,76 @@ describe("KnowledgeSectionAccessor", () => {
     expect(accessor.getStats()).toMatchObject({ facts: 1, inferences: 0, patterns: 0, expiredFacts: 1 });
     accessor.clearAll();
     expect(accessor.getStats()).toEqual({ facts: 0, inferences: 0, patterns: 0, expiredFacts: 0 });
+  });
+
+  it("validates pattern input and covers pattern miss/default paths", () => {
+    const otherAgent = createAgentId("agent-pattern-other");
+
+    expect(() =>
+      accessor.addPattern({
+        name: "",
+        description: "desc",
+        conditions: [],
+        consequences: [],
+      })
+    ).toThrow(BlackboardError);
+    expect(() =>
+      accessor.addPattern({
+        name: "Missing description",
+        description: "",
+        conditions: [],
+        consequences: [],
+      })
+    ).toThrow(BlackboardError);
+    expect(() =>
+      accessor.addPattern({
+        name: "Bad conditions",
+        description: "desc",
+        conditions: "condition" as unknown as Array<Record<string, unknown>>,
+        consequences: [],
+      })
+    ).toThrow(BlackboardError);
+    expect(() =>
+      accessor.addPattern({
+        name: "Bad consequences",
+        description: "desc",
+        conditions: [],
+        consequences: "consequence" as unknown as Array<Record<string, unknown>>,
+      })
+    ).toThrow(BlackboardError);
+    expect(() =>
+      accessor.addPattern({
+        name: "Bad confidence",
+        description: "desc",
+        conditions: [],
+        consequences: [],
+        confidence: 2,
+      })
+    ).toThrow(BlackboardError);
+
+    const pattern = accessor.upsertPattern({
+      name: "Ops stability",
+      description: "Signal remains stable after launch",
+      conditions: [{ type: "metric", value: "ops" }],
+      consequences: [{ type: "metric", value: "stable" }],
+    });
+
+    expect(pattern).toMatchObject({
+      name: "Ops stability",
+      tags: [],
+      usageCount: 0,
+      successRate: 0,
+    });
+    expect(accessor.findPatterns({ tag: "growth" })).toEqual([]);
+    expect(accessor.findPatterns({ minConfidence: 0.1 })).toEqual([]);
+    expect(accessor.findPatternsByAgent(otherAgent)).toEqual([]);
+
+    const updated = accessor.updatePattern(pattern.id, { confidence: 0.4 });
+    expect(updated).toMatchObject({ id: pattern.id, confidence: 0.4 });
+    accessor.recordPatternUsage(pattern.id, false);
+    expect(accessor.getPattern(pattern.id)).toMatchObject({ usageCount: 1, successRate: 0 });
+    accessor.recordPatternUsage(pattern.id, true);
+    expect(accessor.getPattern(pattern.id)).toMatchObject({ usageCount: 2, successRate: 0.5 });
   });
 });
 

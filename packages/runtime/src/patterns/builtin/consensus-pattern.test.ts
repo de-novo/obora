@@ -335,6 +335,21 @@ describe("ConsensusPattern", () => {
     const pattern = new ConsensusPattern();
 
     expect(() => pattern.validateConfig({ rule: "majority" })).not.toThrow();
+    expect(() => pattern.validateConfig({ rule: "invalid" as never })).toThrow(
+      "consensus.rule must be one of: majority, unanimous, weighted, score-threshold, custom"
+    );
+    expect(() => pattern.validateConfig({ best_effort: "voter" as never })).toThrow(
+      "consensus.best_effort must be a string[]"
+    );
+    expect(() => pattern.validateConfig({ best_effort: [" "] })).toThrow(
+      "consensus.best_effort must contain non-empty voter ids"
+    );
+    expect(() => pattern.validateConfig({ weights: { "": 1 } })).toThrow(
+      "consensus.weights must map non-empty voter ids to finite numbers >= 0"
+    );
+    expect(() => pattern.validateConfig({ weights: { voter: Number.NaN } })).toThrow(
+      "consensus.weights must map non-empty voter ids to finite numbers >= 0"
+    );
     expect(() => pattern.validateConfig({ timeout: "12x" })).toThrow(
       "consensus.timeout must match /^(\\d+)(ms|s|m|h)$/"
     );
@@ -525,6 +540,12 @@ describe("ConsensusPattern", () => {
         voter_roles: [{ role: "ai", voters: [] }],
       })
     ).toThrow('consensus.voter_roles[].voters must be a non-empty string[]');
+
+    expect(() =>
+      pattern.validateConfig({
+        voter_roles: "human" as never,
+      })
+    ).toThrow("consensus.voter_roles must be an array of VoterRoleConfig");
   });
 
   // ===== NEW TESTS: escalation =====
@@ -670,6 +691,111 @@ describe("ConsensusPattern", () => {
     const evalContext = customEval.mock.calls[0][0];
     expect(evalContext.votes.find((v: { voterId: string }) => v.voterId === "human").role).toBe("human");
     expect(evalContext.votes.find((v: { voterId: string }) => v.voterId === "ai").role).toBe("ai");
+  });
+
+  it("supports context custom evaluator boolean verdicts", async () => {
+    const pattern = new ConsensusPattern();
+    const customConsensusEvaluate = vi.fn().mockReturnValue(false);
+
+    const result = await pattern.execute({
+      pattern: "consensus",
+      participants: {
+        a: "agent-a",
+      },
+      config: {
+        rule: "custom",
+      },
+      input: {
+        votes: {
+          a: true,
+        },
+      },
+      customConsensusEvaluate,
+    } as never);
+
+    expect(customConsensusEvaluate).toHaveBeenCalledTimes(1);
+    expect(result.success).toBe(false);
+    expect(result.output).toMatchObject({
+      status: "consensus-rejected",
+      reason: "custom rule rejected",
+    });
+  });
+
+  it("throws for custom rule without evaluator", async () => {
+    const pattern = new ConsensusPattern();
+
+    await expect(
+      pattern.execute({
+        pattern: "consensus",
+        participants: {
+          a: "agent-a",
+        },
+        config: {
+          rule: "custom",
+        },
+        input: {
+          votes: {
+            a: true,
+          },
+        },
+      })
+    ).rejects.toThrow("consensus.rule='custom' requires custom_evaluate function");
+  });
+
+  it("normalizes non-standard inputs and missing vote fields", async () => {
+    const pattern = new ConsensusPattern();
+
+    await expect(
+      pattern.execute({
+        pattern: "consensus",
+        participants: {},
+        input: null,
+      } as never)
+    ).rejects.toThrow("consensus pattern requires at least one participant");
+
+    const missingVotes = await pattern.execute({
+      pattern: "consensus",
+      participants: {
+        a: "agent-a",
+      },
+      input: "not-an-object",
+    } as never);
+
+    expect(missingVotes.success).toBe(false);
+    expect(missingVotes.output).toMatchObject({
+      status: "quorum-not-met",
+      participants: ["a"],
+      votes: [],
+    });
+
+    const normalizedVotes = await pattern.execute({
+      pattern: "consensus",
+      participants: {
+        a: "agent-a",
+        b: "agent-b",
+        c: "agent-c",
+      },
+      config: {
+        rule: "majority",
+      },
+      input: {
+        votes: {
+          a: { approved: "yes", reason: 3 },
+          b: "unexpected",
+          c: { score: -1, approved: false },
+        },
+      },
+    } as never);
+
+    expect(normalizedVotes.success).toBe(false);
+    expect(normalizedVotes.output).toMatchObject({
+      reason: "majority not reached",
+      votes: [
+        { voterId: "a", approved: false, role: "ai" },
+        { voterId: "b", approved: false, role: "ai" },
+        { voterId: "c", approved: false, score: 0, role: "ai" },
+      ],
+    });
   });
 
   // ===== NEW TEST: VotingSessionStore tally in metadata =====

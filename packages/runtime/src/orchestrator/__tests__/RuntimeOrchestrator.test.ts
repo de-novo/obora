@@ -1331,4 +1331,555 @@ steps:
     expect(saveArtifact).toHaveBeenCalledTimes(1);
   });
 
+  it("rejects missing workflows, invalid DAGs, invalid back-edges, and non-waiting gate operations", async () => {
+    const orchestrator = new DefaultRuntimeOrchestrator({
+      cellManager: createCellManager([]),
+      policyEngine: createPolicyEngine(),
+    });
+
+    await expect(orchestrator.run("missing", {})).rejects.toThrow("Workflow is not defined: missing");
+    await expect(orchestrator.resume("run-without-storage")).rejects.toThrow("StorageAdapter is required for resume");
+    expect(() => orchestrator.getExecution("missing-execution")).toThrow("Execution not found: missing-execution");
+    await expect(orchestrator.approve("missing-execution")).rejects.toThrow("Execution not found: missing-execution");
+
+    orchestrator.define("cycle", {
+      name: "cycle",
+      steps: [
+        { name: "a", agent: "agent", depends_on: ["b"] },
+        { name: "b", agent: "agent", depends_on: ["a"] },
+      ],
+    });
+    await expect(orchestrator.run("cycle", {})).rejects.toThrow("Invalid workflow DAG");
+
+    expect(() =>
+      orchestrator.define("back-edge-missing", {
+        name: "back-edge-missing",
+        steps: [
+          {
+            name: "verify",
+            agent: "verifier",
+            on_fail: {
+              goto: "missing",
+              max_iterations: 1,
+              escalate_on_exhaust: "fail",
+              cooldown_ms: 0,
+              reset_state: false,
+              max_cost: null,
+              max_cost_escalation: null,
+            },
+          },
+        ],
+      })
+    ).toThrow("references non-existent step 'missing'");
+
+    expect(() =>
+      orchestrator.define("back-edge-self", {
+        name: "back-edge-self",
+        steps: [
+          {
+            name: "verify",
+            agent: "verifier",
+            on_fail: {
+              goto: "verify",
+              max_iterations: 1,
+              escalate_on_exhaust: "fail",
+              cooldown_ms: 0,
+              reset_state: false,
+              max_cost: null,
+              max_cost_escalation: null,
+            },
+          },
+        ],
+      })
+    ).toThrow("self-loop is not allowed");
+
+    expect(() =>
+      orchestrator.define("back-edge-forward", {
+        name: "back-edge-forward",
+        steps: [
+          {
+            name: "verify",
+            agent: "verifier",
+            on_fail: {
+              goto: "implement",
+              max_iterations: 1,
+              escalate_on_exhaust: "fail",
+              cooldown_ms: 0,
+              reset_state: false,
+              max_cost: null,
+              max_cost_escalation: null,
+            },
+          },
+          { name: "implement", agent: "coder", depends_on: ["verify"] },
+        ],
+      })
+    ).toThrow("must precede source 'verify'");
+
+    orchestrator.define("finished", {
+      name: "finished",
+      steps: [{ name: "done", agent: "agent" }],
+    });
+    const finished = await orchestrator.run("finished", {});
+    expect(orchestrator.listExecutions({ status: "completed" }).map((execution) => execution.id)).toContain(finished.id);
+    expect(orchestrator.listExecutions({ workflowName: "finished" })).toHaveLength(1);
+    expect(orchestrator.listExecutions({ workflowName: "other" })).toHaveLength(0);
+    await expect(orchestrator.reject(finished.id)).rejects.toThrow(`Execution is not waiting on gate: ${finished.id}`);
+    await expect(orchestrator.onGateTimeout(finished.id)).rejects.toThrow(`Execution is not waiting on gate: ${finished.id}`);
+  });
+
+  it("covers onGate decisions and step gate config variants", async () => {
+    const approvedOnGate = vi.fn(async () => "approved" as const);
+    const approved = new DefaultRuntimeOrchestrator(
+      {
+        cellManager: createCellManager([]),
+        policyEngine: createPolicyEngine((action) =>
+          action.name === "review"
+            ? { type: "gate", gateType: "external", config: { timeout: 5 as unknown as string, fallback: "invalid" as never } }
+            : { type: "allow" }
+        ),
+      },
+      { onGate: approvedOnGate }
+    );
+    approved.define("on-gate-approved", {
+      name: "on-gate-approved",
+      steps: [{ name: "review", agent: "verifier" }],
+    });
+    await expect(approved.run("on-gate-approved", {})).resolves.toMatchObject({ status: "completed" });
+    expect(approvedOnGate).toHaveBeenCalledOnce();
+
+    const rejected = new DefaultRuntimeOrchestrator(
+      {
+        cellManager: createCellManager([]),
+        policyEngine: createPolicyEngine((action) =>
+          action.name === "review"
+            ? { type: "gate", gateType: "external", config: { timeout: "1m", fallback: "fail" } }
+            : { type: "allow" }
+        ),
+      },
+      { onGate: async () => "rejected" }
+    );
+    rejected.define("on-gate-rejected", {
+      name: "on-gate-rejected",
+      steps: [{ name: "review", agent: "verifier" }],
+    });
+    const rejectedExecution = await rejected.run("on-gate-rejected", {});
+    expect(rejectedExecution.status).toBe("failed");
+    expect(rejectedExecution.stepRecords.review.error).toBe("Gate rejected: external");
+
+    const gateFalse = new DefaultRuntimeOrchestrator({
+      cellManager: createCellManager([]),
+      policyEngine: createPolicyEngine(),
+    });
+    gateFalse.define("gate-false", {
+      name: "gate-false",
+      steps: [{ name: "skipGate", agent: "agent", gate: false }],
+    });
+    await expect(gateFalse.run("gate-false", {})).resolves.toMatchObject({ status: "completed" });
+
+    const gateString = new DefaultRuntimeOrchestrator({
+      cellManager: createCellManager([]),
+      policyEngine: createPolicyEngine(),
+    });
+    gateString.define("gate-string", {
+      name: "gate-string",
+      steps: [{ name: "externalReview", agent: "agent", gate: "external", gate_config: { fallback: "fail" } }],
+    });
+    const stringWaiting = await gateString.run("gate-string", {});
+    expect(stringWaiting.waitingGate).toMatchObject({ gateType: "external", fallback: "fail" });
+
+    const gateObject = new DefaultRuntimeOrchestrator({
+      cellManager: createCellManager([]),
+      policyEngine: createPolicyEngine(),
+    });
+    gateObject.define("gate-object", {
+      name: "gate-object",
+      steps: [
+        {
+          name: "objectReview",
+          agent: "agent",
+          gate: { type: "consensus", timeout: "5s", fallback: "fail" } as never,
+          gate_config: { timeout: "10s", fallback: "auto-approve" },
+        },
+      ],
+    });
+    const objectWaiting = await gateObject.run("gate-object", {});
+    expect(objectWaiting.waitingGate).toMatchObject({
+      gateType: "consensus",
+      timeout: "10s",
+      fallback: "auto-approve",
+    });
+  });
+
+  it("covers workflow and step recovery strategy variants", async () => {
+    const rollback = new DefaultRuntimeOrchestrator({
+      cellManager: createCellManager([], "unstable"),
+      policyEngine: createPolicyEngine(),
+      recoveryEngine: new RecoveryEngine({
+        snapshotStore: { restore: vi.fn(async () => undefined) },
+      }),
+    });
+    rollback.define("workflow-rollback", {
+      name: "workflow-rollback",
+      steps: [{ name: "unstable", agent: "executor" }],
+      recovery: {
+        unstable: {
+          on_fail: "rollback",
+          snapshot_id: "snapshot-workflow",
+        },
+      },
+    });
+    await expect(rollback.run("workflow-rollback", {})).resolves.toMatchObject({
+      status: "completed",
+      stepRecords: { unstable: { recovery: { strategy: "rollback", status: "recovered" } } },
+    });
+
+    const escalated = new DefaultRuntimeOrchestrator({
+      cellManager: createCellManager([], "unstable"),
+      policyEngine: createPolicyEngine(),
+      recoveryEngine: new RecoveryEngine({
+        escalationNotifier: { notify: vi.fn(async () => undefined) },
+      }),
+    });
+    escalated.define("workflow-escalate", {
+      name: "workflow-escalate",
+      steps: [{ name: "unstable", agent: "executor" }],
+      recovery: {
+        unstable: {
+          on_fail: "escalate",
+          to: "ops",
+          summary: "needs human",
+        },
+      },
+    });
+    const escalatedExecution = await escalated.run("workflow-escalate", {});
+    expect(escalatedExecution.status).toBe("failed");
+    expect(escalatedExecution.stepRecords.unstable.recovery).toMatchObject({
+      strategy: "escalate",
+      status: "escalated",
+      details: { channel: "ops" },
+    });
+
+    const alternative = new DefaultRuntimeOrchestrator({
+      cellManager: createCellManager([], "unstable"),
+      policyEngine: createPolicyEngine(),
+      recoveryEngine: new RecoveryEngine({
+        alternativeExecutor: { executeAlternative: vi.fn(async () => ({ ok: true })) },
+      }),
+    });
+    alternative.define("workflow-alternative", {
+      name: "workflow-alternative",
+      steps: [{ name: "unstable", agent: "executor" }],
+      recovery: {
+        unstable: {
+          on_fail: "alternative",
+          fallback: { name: "fallback-step", payload: { source: "test" } },
+        },
+      },
+    });
+    await expect(alternative.run("workflow-alternative", {})).resolves.toMatchObject({
+      status: "completed",
+      stepRecords: { unstable: { recovery: { strategy: "alternative", status: "recovered" } } },
+    });
+
+    const stepRetry = new DefaultRuntimeOrchestrator({
+      cellManager: createCellManager([], "unstable"),
+      policyEngine: createPolicyEngine(),
+      recoveryEngine: new RecoveryEngine({
+        retryExecutor: { executeRetry: vi.fn(async () => undefined) },
+        wait: async () => undefined,
+      }),
+    });
+    stepRetry.define("step-retry", {
+      name: "step-retry",
+      steps: [
+        {
+          name: "unstable",
+          agent: "executor",
+          config: {
+            recovery: {
+              type: "retry",
+              mode: "exponential",
+              maxAttempts: 2,
+              initialDelayMs: 0,
+              maxDelayMs: 0,
+              multiplier: 2,
+            },
+          },
+        },
+      ],
+    });
+    await expect(stepRetry.run("step-retry", {})).resolves.toMatchObject({
+      status: "completed",
+      stepRecords: { unstable: { recovery: { strategy: "retry", status: "recovered" } } },
+    });
+  });
+
+  it("covers consensus aliases and artifact candidate filtering", async () => {
+    const consensusGate = new DefaultConsensusGate({
+      executionId: "exec-consensus-alias",
+      sessionIdFactory: () => "session-consensus-alias",
+    });
+    const consensus = new DefaultRuntimeOrchestrator(
+      {
+        cellManager: createCellManager([]),
+        policyEngine: createPolicyEngine(),
+        consensusGate,
+      },
+      {
+        consensusVoteProvider: () => [
+          { voterId: "required", approved: true },
+          { voterId: "best", approved: false },
+        ],
+      }
+    );
+    consensus.define("consensus-alias", {
+      name: "consensus-alias",
+      steps: [
+        {
+          name: "review",
+          agent: "verifier",
+          config: {
+            consensus: {
+              rule: "majority",
+              voters: [{ id: "required" }, { id: "best" }],
+              minRequired: 1,
+              threshold: "invalid",
+              timeout: 10,
+              bestEffort: ["best", 1],
+            },
+          },
+        },
+      ],
+    });
+    await expect(consensus.run("consensus-alias", {})).resolves.toMatchObject({
+      status: "completed",
+      stepRecords: { review: { consensus: { status: "pass" } } },
+    });
+
+    const saveArtifact = vi.fn(async (record) => record);
+    const storage: StorageAdapter = {
+      saveRun: async () => undefined,
+      getRun: async () => null,
+      listRuns: async () => [],
+      saveStep: async () => undefined,
+      getSteps: async () => [],
+      saveArtifact,
+      getArtifacts: async () => [],
+      deleteArtifact: async () => undefined,
+      saveCheckpoint: async () => undefined,
+      getLatestCheckpoint: async () => null,
+      saveCost: async () => undefined,
+      getCosts: async () => [],
+      getRunCostSummary: async () => ({ totalTokens: 0, totalCostUsd: 0, byStep: [], byModel: [] }),
+      saveAuditEvent: async () => undefined,
+      getAuditTimeline: async () => [],
+    };
+    const artifactStore = {
+      save: vi.fn(async (runId: string, stepName: string, name: string, data: Buffer, mime: string) => ({
+        id: `${runId}:${stepName}:${name}`,
+        runId,
+        stepName,
+        name,
+        mime,
+        size: data.byteLength,
+        path: `/tmp/${name}`,
+        createdAt: new Date().toISOString(),
+      })),
+      get: vi.fn(),
+      list: vi.fn(),
+      delete: vi.fn(),
+    };
+    const cellManager = new CellManager({
+      createCellContext: () => ({
+        cellId: "artifact-filter-cell",
+        blackboard: { read: () => undefined, write: () => {} },
+        tools: { invoke: async () => ({ ok: true }) },
+        audit: { record: () => {} },
+        config: {},
+      }),
+      createCell: ({ id }) => ({
+        id,
+        status: "idle",
+        execute: async () => ({
+          success: true,
+          output: {
+            artifacts: [
+              null,
+              { name: "dup.txt", data: "first" },
+              { name: "dup.txt", data: "second" },
+              { name: "object.json", data: { ok: true } },
+              { name: 3, data: "skip" },
+              { name: "missing-data.txt" },
+            ],
+          },
+          stateChanges: [],
+          toolCalls: [
+            { toolName: "file_write", status: "failed", params: { path: "skip.txt", content: "skip" }, durationMs: 1 },
+            { toolName: "file_write", status: "success", params: undefined, durationMs: 1 },
+            { toolName: "file_write", status: "success", params: { path: 1, content: "skip" }, durationMs: 1 },
+            { toolName: "file_write", status: "success", params: { path: "skip.txt" }, durationMs: 1 },
+            { toolName: "file_write", status: "success", params: { path: "dir/tool.txt", content: "tool" }, durationMs: 1 },
+          ],
+          metrics: { startTime: new Date(), endTime: new Date(), durationMs: 1, toolCallCount: 5 },
+        }),
+        suspend: async () => {},
+        resume: async () => {},
+        abort: async () => {},
+      }),
+    });
+    const artifacts = new DefaultRuntimeOrchestrator({
+      cellManager,
+      policyEngine: createPolicyEngine(),
+      storageAdapter: storage,
+      artifactStore: artifactStore as unknown as import("../../artifacts/types.js").ArtifactStore,
+    });
+    artifacts.define("artifact-filter", {
+      name: "artifact-filter",
+      steps: [{ name: "generate", agent: "writer" }],
+    });
+
+    await expect(artifacts.run("artifact-filter", {})).resolves.toMatchObject({ status: "completed" });
+    expect(artifactStore.save.mock.calls.map((call) => call[2])).toEqual(["dup.txt", "object.json", "tool.txt"]);
+    expect(saveArtifact).toHaveBeenCalledTimes(3);
+  });
+
+  it("normalizes runtime helper aliases and defaults", () => {
+    interface RuntimeHarness {
+      extractGateConfig(step: unknown): unknown;
+      mergeGateDecision(policyDecision?: unknown, stepGate?: unknown): unknown;
+      extractConsensusConfig(step: unknown): unknown;
+      toRecoveryStrategyFromWorkflow(raw?: Record<string, unknown>): unknown;
+      toRecoveryStrategyFromStepConfig(raw?: Record<string, unknown>): unknown;
+      buildCellConfig(step: { name: string; agent: string; timeout?: string }): unknown;
+      extractStateBindings(step: unknown): unknown[];
+      isStateBinding(value: unknown): boolean;
+      extractError(output: unknown): string;
+    }
+    const orchestrator = new DefaultRuntimeOrchestrator({
+      cellManager: createCellManager([]),
+      policyEngine: createPolicyEngine(),
+    });
+    const harness = orchestrator as unknown as RuntimeHarness;
+
+    expect(harness.extractGateConfig({ name: "none", agent: "agent" })).toBeUndefined();
+    expect(harness.extractGateConfig({ name: "false", agent: "agent", gate: false })).toBeUndefined();
+    expect(harness.extractGateConfig({ name: "bad", agent: "agent", gate: "unknown" })).toBeUndefined();
+    expect(harness.extractGateConfig({ name: "config", agent: "agent", gate: true, config: { gate_config: "bad" } })).toEqual({
+      gateType: "human-approval",
+      config: undefined,
+    });
+    expect(harness.extractGateConfig({ name: "string", agent: "agent", gate: "consensus" })).toEqual({
+      gateType: "consensus",
+      config: undefined,
+    });
+    expect(harness.extractGateConfig({
+      name: "object-default",
+      agent: "agent",
+      gate: { type: "invalid", fallback: "fail" },
+    })).toEqual({
+      gateType: "human-approval",
+      config: { timeout: undefined, fallback: "fail" },
+    });
+    expect(harness.mergeGateDecision()).toBeUndefined();
+    expect(harness.mergeGateDecision(
+      { type: "gate", gateType: undefined, config: "bad" },
+      undefined
+    )).toEqual({
+      type: "gate",
+      gateType: "human-approval",
+      config: { timeout: undefined, fallback: undefined },
+    });
+
+    expect(harness.extractConsensusConfig({ name: "none", agent: "agent" })).toBeUndefined();
+    expect(harness.extractConsensusConfig({
+      name: "consensus",
+      agent: "agent",
+      consensus: {
+        type: "weighted",
+        voters: "bad",
+        minRequired: 2,
+        best_effort: ["optional", 1],
+        threshold: 0.75,
+        timeout: "5m",
+      },
+    })).toEqual({
+      type: "weighted",
+      voters: [],
+      minRequired: 2,
+      threshold: 0.75,
+      timeout: "5m",
+      bestEffort: ["optional"],
+    });
+
+    expect(harness.toRecoveryStrategyFromWorkflow()).toBeUndefined();
+    expect(harness.toRecoveryStrategyFromWorkflow({ on_fail: "retry" })).toMatchObject({
+      type: "retry",
+      mode: "linear",
+      maxAttempts: 1,
+      initialDelayMs: 0,
+    });
+    expect(harness.toRecoveryStrategyFromWorkflow({ on_fail: "rollback", snapshotId: "snap-1" })).toEqual({
+      type: "rollback",
+      snapshotId: "snap-1",
+    });
+    expect(harness.toRecoveryStrategyFromWorkflow({ on_fail: "escalate" })).toEqual({
+      type: "escalate",
+      severity: "high",
+      channel: "human",
+      summary: undefined,
+    });
+    expect(harness.toRecoveryStrategyFromWorkflow({ on_fail: "alternative", to: "fallback" })).toEqual({
+      type: "alternative",
+      stepName: "fallback",
+      payload: undefined,
+    });
+    expect(harness.toRecoveryStrategyFromWorkflow({ on_fail: "custom" })).toBeUndefined();
+
+    expect(harness.toRecoveryStrategyFromStepConfig()).toBeUndefined();
+    expect(harness.toRecoveryStrategyFromStepConfig({ type: "retry" })).toEqual({
+      type: "retry",
+      mode: "linear",
+      maxAttempts: 1,
+      initialDelayMs: 0,
+      maxDelayMs: 0,
+      multiplier: undefined,
+    });
+    expect(harness.toRecoveryStrategyFromStepConfig({ type: "rollback" })).toEqual({
+      type: "rollback",
+      snapshotId: "",
+    });
+    expect(harness.toRecoveryStrategyFromStepConfig({ type: "escalate" })).toEqual({
+      type: "escalate",
+      severity: "high",
+      channel: "human",
+      summary: undefined,
+    });
+    expect(harness.toRecoveryStrategyFromStepConfig({ type: "alternative" })).toEqual({
+      type: "alternative",
+      stepName: "",
+      payload: undefined,
+    });
+    expect(harness.toRecoveryStrategyFromStepConfig({ type: "custom" })).toBeUndefined();
+
+    expect(harness.buildCellConfig({ name: "timed", agent: "agent", timeout: "2s" })).toMatchObject({
+      timeout: 2000,
+      metadata: { stepName: "timed", agent: "agent" },
+    });
+
+    expect(harness.extractStateBindings({ name: "none", agent: "agent", bindings: "bad" })).toEqual([]);
+    expect(harness.extractStateBindings({
+      name: "direct",
+      agent: "agent",
+      bindings: [null, { source: "output.value", target: "state.value" }],
+    })).toEqual([{ source: "output.value", target: "state.value" }]);
+    expect(harness.extractStateBindings({
+      name: "config",
+      agent: "agent",
+      config: { bindings: [{ source: "output.value", target: "state.configValue" }] },
+    })).toEqual([{ source: "output.value", target: "state.configValue" }]);
+    expect(harness.isStateBinding({ source: "x" })).toBe(false);
+    expect(harness.extractError({ error: 3 })).toBe("Step execution failed");
+    expect(harness.extractError({ error: "explicit" })).toBe("explicit");
+  });
+
 });

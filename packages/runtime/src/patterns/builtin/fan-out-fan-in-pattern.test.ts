@@ -252,6 +252,45 @@ describe("FanOutFanInPattern", () => {
     expect(emit.mock.calls.map((call) => call[0].type)).toEqual(["fanout_start", "fanout_participant_result", "fanin_merge"]);
   });
 
+  it("supports process functions, item sharding, malformed input, and thrown participant failures", async () => {
+    const pattern = new FanOutFanInPattern();
+    const processFn = vi.fn((participant: string, payload: { task?: unknown; items?: unknown[] }) => {
+      if (participant === "b") {
+        throw new Error("participant failed");
+      }
+      return { participant, items: payload.items, task: payload.task };
+    });
+
+    const result = await pattern.execute({
+      pattern: "fan-out-fan-in",
+      participants: {
+        a: "agent-a",
+        b: "agent-b",
+        c: "agent-c",
+      },
+      input: {
+        task: "split",
+        items: [1, 2, 3, 4, 5],
+      },
+      fanOutFanInProcessFn: processFn,
+    } as never);
+
+    expect(result.success).toBe(true);
+    expect(processFn).toHaveBeenCalledTimes(3);
+    expect((result.output as { participant_results: Record<string, { output?: { items?: number[] } }> }).participant_results.a.output?.items).toEqual([1, 4]);
+    expect((result.output as { participant_results: Record<string, { success: boolean }> }).participant_results.b.success).toBe(false);
+
+    const malformedInput = await pattern.execute({
+      pattern: "fan-out-fan-in",
+      participants: {
+        a: "agent-a",
+      },
+      input: "not-an-object",
+    } as never);
+    expect(malformedInput.success).toBe(false);
+    expect(malformedInput.output).toMatchObject({ reason: "all_participants_failed" });
+  });
+
   it("works with single participant", async () => {
     const pattern = new FanOutFanInPattern();
 
@@ -272,6 +311,64 @@ describe("FanOutFanInPattern", () => {
 
     expect(result.success).toBe(true);
     expect((result.output as { merged: Array<{ text: string }> }).merged).toEqual([{ score: 1, text: "only" }]);
+  });
+
+  it("normalizes rank scores and vote keys across primitive and circular outputs", async () => {
+    const pattern = new FanOutFanInPattern();
+
+    const ranked = await pattern.execute({
+      pattern: "fan-out-fan-in",
+      participants: {
+        a: "agent-a",
+        b: "agent-b",
+        c: "agent-c",
+        d: "agent-d",
+      },
+      config: {
+        merge: "rank",
+      },
+      input: {
+        responses: {
+          a: "plain",
+          b: { value: "numeric-string", score: "5" },
+          c: { value: "bad-score", score: "nope" },
+          d: { value: "number", score: 2 },
+        },
+      },
+    });
+
+    expect((ranked.output as { merged: unknown[] }).merged).toEqual([
+      { value: "numeric-string", score: "5" },
+      { value: "number", score: 2 },
+      "plain",
+      { value: "bad-score", score: "nope" },
+    ]);
+
+    const circular: Record<string, unknown> = { value: "circular" };
+    circular.self = circular;
+    const voted = await pattern.execute({
+      pattern: "fan-out-fan-in",
+      participants: {
+        a: "agent-a",
+        b: "agent-b",
+        c: "agent-c",
+        d: "agent-d",
+      },
+      config: {
+        merge: "vote",
+      },
+      input: {
+        responses: {
+          a: 1,
+          b: true,
+          c: null,
+          d: circular,
+        },
+      },
+    });
+
+    expect(voted.success).toBe(true);
+    expect((voted.output as { merged: unknown }).merged).toBe(1);
   });
 
   // --- failure_policy tests ---

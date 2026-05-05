@@ -307,4 +307,90 @@ describe("BaseAgent", () => {
       "file_list.path must be a string",
     );
   });
+
+  it("normalizes empty assistant content, absent usage, and missing board sections", async () => {
+    const chatCompletion = vi.fn<LLMAdapter["chatCompletion"]>(async () => ({
+      id: "chat-empty",
+      model: "test-model",
+      message: {
+        role: "assistant",
+        content: undefined as unknown as string,
+      },
+      usage: undefined,
+      finishReason: "stop",
+    }));
+    const adapter = {
+      id: "mock-llm",
+      chatCompletion,
+      streamChatCompletion: vi.fn<LLMAdapter["streamChatCompletion"]>(),
+      supports: vi.fn(() => false),
+    } satisfies LLMAdapter;
+    const board = {
+      read: vi.fn(() => undefined),
+      write: vi.fn(),
+    };
+    const task = createTask();
+    const context: AgentContext = {
+      sessionId: "session-empty",
+      board: board as unknown as Blackboard,
+      currentTask: task,
+      history: [],
+    };
+    const agent = new TestRoleAgent({ llm: adapter });
+
+    const result = await agent.execute(task, context);
+
+    expect(result).toMatchObject({
+      success: true,
+      output: { acted: {} },
+      tokensUsed: { prompt: 0, completion: 0, total: 0 },
+    });
+    expect(board.read).toHaveBeenCalledWith("state", { strict: false });
+    expect(board.read).toHaveBeenCalledWith("knowledge", { strict: false });
+    const call = chatCompletion.mock.calls[0]?.[0] as { messages: ChatMessage[] } | undefined;
+    expect(call?.messages.at(-1)?.content).toContain('"currentState": {}');
+    expect(call?.messages.at(-1)?.content).toContain('"availableKnowledge": {}');
+  });
+
+  it("covers role tool null reads, executor parser errors, shell outcomes, and non-executor tool shape", async () => {
+    const root = await mkdtemp(join(tmpdir(), "obora-agent-shell-"));
+    tempDirs.push(root);
+    cwdSpy = vi.spyOn(process, "cwd").mockReturnValue(root);
+    const { adapter } = createLlm("{}");
+    const executor = new TestRoleAgent({ llm: adapter });
+    const executorTools = new Map((executor as unknown as ToolHarness).createAgentTools().map((tool) => [tool.name, tool]));
+
+    expect(await executeTool(executorTools.get("board_read")!, { path: "missing" })).toMatchObject({
+      content: [{ type: "text", text: "null" }],
+      details: { value: null },
+    });
+    await expect(executeTool(executorTools.get("role_action")!, { content: "{}" })).rejects.toThrow("Missing task context");
+    await expect(executeTool(executorTools.get("board_write")!, { result: "ok" })).rejects.toThrow("Missing task context");
+    await expect(executeTool(executorTools.get("file_write")!, { path: "out.txt" })).rejects.toThrow(
+      "file_write.path/content must be strings",
+    );
+    await expect(executeTool(executorTools.get("file_read")!, { path: 1 })).rejects.toThrow(
+      "file_read.path must be a string",
+    );
+    await expect(executeTool(executorTools.get("shell_exec")!, { command: 1 })).rejects.toThrow(
+      "shell_exec.command must be a string",
+    );
+
+    const ok = await executeTool(executorTools.get("shell_exec")!, {
+      command: "node -e \"process.stdout.write('ok')\"",
+    });
+    expect(ok.content).toEqual([{ type: "text", text: "ok" }]);
+    expect(toolDetails(ok)).toMatchObject({ exitCode: 0 });
+
+    const failed = await executeTool(executorTools.get("shell_exec")!, {
+      command: "node -e \"process.stderr.write('bad'); process.exit(7)\"",
+    });
+    expect(failed.content[0]?.text).toContain("Error:");
+    expect(failed.content[0]?.text).toContain("bad");
+    expect(toolDetails(failed)).toMatchObject({ exitCode: 7 });
+
+    const analyst = new TestRoleAgent({ llm: adapter, role: AgentRole.ANALYST });
+    const analystToolNames = (analyst as unknown as ToolHarness).createAgentTools().map((tool) => tool.name);
+    expect(analystToolNames).toEqual(["board_read", "role_action", "board_write"]);
+  });
 });

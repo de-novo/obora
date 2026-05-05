@@ -10,7 +10,7 @@ import { ActorRole as ActorRoleEnum, createActorId, ActorLifecycleStatus } from 
 import { createActionId } from "../../actor-types/action";
 import { createResultId } from "../../actor-types/result";
 import { createActorMetrics } from "../../actor-types/metrics";
-import { ActorPool, PoolConfig } from "../../ActorPool";
+import { ActorPool, type PoolConfig, type PoolMetrics, type Task as PoolTask } from "../../ActorPool";
 import type { ActorFactory, ActorConfig } from "../../types";
 
 class MockActor implements Actor {
@@ -157,6 +157,39 @@ describe("ActorPool", () => {
     };
 
     pool = new ActorPool(config, board, factory, messageBus);
+  });
+
+  function createQueuedTask(id: string): PoolTask {
+    return {
+      id,
+      data: { id },
+      createdAt: new Date(),
+      priority: 0,
+    };
+  }
+
+  describe("config validation", () => {
+    it("rejects invalid pool boundaries", () => {
+      const base: PoolConfig = {
+        name: "validated-pool",
+        role: "analyst",
+        type: "mock",
+        initialSize: 1,
+        minSize: 0,
+        maxSize: 2,
+      };
+
+      expect(() => new ActorPool({ ...base, name: " " }, board, factory, messageBus)).toThrow("Pool name is required");
+      expect(() => new ActorPool({ ...base, role: undefined as never }, board, factory, messageBus)).toThrow("Pool role is required");
+      expect(() => new ActorPool({ ...base, type: " " }, board, factory, messageBus)).toThrow("Pool type is required");
+      expect(() => new ActorPool({ ...base, minSize: -1 }, board, factory, messageBus)).toThrow("minSize must be non-negative");
+      expect(() => new ActorPool({ ...base, minSize: 3, maxSize: 2 }, board, factory, messageBus)).toThrow(
+        "maxSize must be >= minSize"
+      );
+      expect(() => new ActorPool({ ...base, initialSize: 3, maxSize: 2 }, board, factory, messageBus)).toThrow(
+        "initialSize must be between minSize and maxSize"
+      );
+    });
   });
 
   describe("start/stop", () => {
@@ -317,6 +350,110 @@ describe("ActorPool", () => {
       const result = await pool.submitAndWait({ data: "test" });
       expect(result).toBeDefined();
     }, 10000);
+
+    it("should reject queued submitAndWait on timeout and pool stop", async () => {
+      const timeoutPool = new ActorPool(
+        {
+          name: "timeout-pool",
+          role: "analyst",
+          type: "mock",
+          initialSize: 0,
+          minSize: 0,
+          maxSize: 0,
+          taskTimeout: 20,
+        },
+        board,
+        factory,
+        messageBus
+      );
+      await timeoutPool.start();
+      await expect(timeoutPool.submitAndWait({ data: "never" })).rejects.toThrow("Task timeout:");
+      expect(timeoutPool.getMetrics().queueSize).toBe(0);
+      await timeoutPool.stop();
+
+      const stoppedPool = new ActorPool(
+        {
+          name: "stopped-wait-pool",
+          role: "analyst",
+          type: "mock",
+          initialSize: 0,
+          minSize: 0,
+          maxSize: 0,
+          taskTimeout: 0,
+        },
+        board,
+        factory,
+        messageBus
+      );
+      await stoppedPool.start();
+      const waitForStop = expect(stoppedPool.submitAndWait({ data: "never" })).rejects.toThrow("Pool has been stopped");
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      await stoppedPool.stop();
+      await waitForStop;
+    });
+
+    it("should surface actor thrown errors and reported failure results", async () => {
+      const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      class ThrowingActor extends MockActor {
+        override act(_action: Action): Result {
+          throw new Error("act boom");
+        }
+      }
+      class ThrowingFactory implements ActorFactory {
+        async create(config: ActorConfig, boardRef: IBlackboard, messageBusRef: IMessageBus): Promise<Actor> {
+          return new ThrowingActor(config.id || createActorId(config.role), config.role, boardRef, messageBusRef);
+        }
+      }
+      const throwingPool = new ActorPool(
+        {
+          name: "throwing-pool",
+          role: "analyst",
+          type: "mock",
+          initialSize: 1,
+          taskTimeout: 1000,
+        },
+        board,
+        new ThrowingFactory(),
+        messageBus
+      );
+      await throwingPool.start();
+      await expect(throwingPool.submitAndWait({ data: "boom" })).rejects.toThrow("act boom");
+      await throwingPool.stop();
+      consoleErrorSpy.mockRestore();
+
+      class FailureResultActor extends MockActor {
+        override act(_action: Action): Result {
+          return {
+            id: createResultId("result-reported-failure"),
+            actionId: createActionId("action-1"),
+            actorId: this.id,
+            timestamp: new Date(),
+            status: "failure",
+            error: "reported failure",
+          };
+        }
+      }
+      class FailureResultFactory implements ActorFactory {
+        async create(config: ActorConfig, boardRef: IBlackboard, messageBusRef: IMessageBus): Promise<Actor> {
+          return new FailureResultActor(config.id || createActorId(config.role), config.role, boardRef, messageBusRef);
+        }
+      }
+      const failurePool = new ActorPool(
+        {
+          name: "failure-pool",
+          role: "analyst",
+          type: "mock",
+          initialSize: 1,
+          taskTimeout: 1000,
+        },
+        board,
+        new FailureResultFactory(),
+        messageBus
+      );
+      await failurePool.start();
+      await expect(failurePool.submitAndWait({ data: "reported" })).rejects.toThrow("reported failure");
+      await failurePool.stop();
+    });
   });
 
   describe("dispatch strategies", () => {
@@ -551,6 +688,75 @@ describe("ActorPool", () => {
       expect(metrics.totalActors).toBe(2);
       expect(adaptivePool.name).toBe("test-pool-adaptive");
 
+      await adaptivePool.stop();
+    });
+
+    it("should exercise dynamic and adaptive auto-scale thresholds", async () => {
+      interface PoolHarness {
+        autoScale(): void;
+        taskQueue: PoolTask[];
+        metrics: PoolMetrics;
+      }
+
+      const dynamicPool = new ActorPool(
+        {
+          name: "dynamic-autoscale",
+          role: "analyst",
+          type: "mock",
+          initialSize: 1,
+          minSize: 0,
+          maxSize: 3,
+          scaleStrategy: "dynamic",
+        },
+        board,
+        factory,
+        messageBus
+      );
+      await dynamicPool.start();
+      const dynamicHarness = dynamicPool as unknown as PoolHarness;
+      dynamicHarness.taskQueue.push(createQueuedTask("task-a"), createQueuedTask("task-b"), createQueuedTask("task-c"));
+      dynamicHarness.autoScale();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(dynamicPool.getMetrics().totalActors).toBeGreaterThan(1);
+      dynamicHarness.taskQueue.length = 0;
+      dynamicHarness.metrics.idleActors = dynamicHarness.metrics.totalActors;
+      dynamicHarness.autoScale();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(dynamicPool.getMetrics().totalActors).toBeGreaterThanOrEqual(0);
+      await dynamicPool.stop();
+
+      const adaptivePool = new ActorPool(
+        {
+          name: "adaptive-autoscale",
+          role: "analyst",
+          type: "mock",
+          initialSize: 1,
+          minSize: 0,
+          maxSize: 3,
+          scaleStrategy: "adaptive",
+        },
+        board,
+        factory,
+        messageBus
+      );
+      await adaptivePool.start();
+      const adaptiveHarness = adaptivePool as unknown as PoolHarness;
+      adaptiveHarness.taskQueue.push(
+        createQueuedTask("task-1"),
+        createQueuedTask("task-2"),
+        createQueuedTask("task-3"),
+        createQueuedTask("task-4"),
+        createQueuedTask("task-5"),
+        createQueuedTask("task-6")
+      );
+      adaptiveHarness.autoScale();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(adaptivePool.getMetrics().totalActors).toBeGreaterThan(1);
+      adaptiveHarness.taskQueue.length = 0;
+      adaptiveHarness.metrics.idleActors = adaptiveHarness.metrics.totalActors;
+      adaptiveHarness.autoScale();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(adaptivePool.getMetrics().totalActors).toBeGreaterThanOrEqual(0);
       await adaptivePool.stop();
     });
   });
