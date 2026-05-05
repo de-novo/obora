@@ -179,24 +179,130 @@ steps:
     ).toThrow("requires input 'reports/missing.json'");
   });
 
+  it("parses defaulted optional sections and filters invalid nested entries", () => {
+    const workflow = parseWorkflow(
+      `
+name: defaults
+config:
+  retry: 1
+recovery:
+  recoverable:
+    on_fail: custom
+    max_retries: 3
+    backoff: linear
+    backoff_base: 5s
+    to: fallback
+    fallback: fallback-step
+    custom: ./recover.js
+steps:
+  - name: seed
+    agent: analyst
+    outputs: [data/input.json]
+  - name: optional
+    agent: executor
+    depends_on: [seed]
+    inputs: [data/input.json]
+    outputs: [data/output.json]
+    bindings:
+      - source: state.input
+        target: task.input
+    consensus:
+      type: custom
+      best_effort: [observer, 1]
+      custom: ./consensus.js
+    gate_config:
+      fallback: auto-approve
+    policy:
+      tools_override:
+        - 1
+        - name: shell
+          effect: allow
+    on_fail:
+      goto: seed
+      max_iterations: 1
+  - name: self-contained
+    agent: verifier
+    inputs: [self.txt, proposal.md]
+    outputs: [self.txt]
+`,
+    );
+
+    expect(workflow.recovery?.recoverable).toMatchObject({
+      on_fail: "custom",
+      max_retries: 3,
+      backoff: "linear",
+      backoff_base: "5s",
+      to: "fallback",
+      fallback: "fallback-step",
+      custom: "./recover.js",
+    });
+    expect(workflow.steps[1]).toMatchObject({
+      consensus: {
+        type: "custom",
+        best_effort: ["observer"],
+        custom: "./consensus.js",
+      },
+      gate_config: { fallback: "auto-approve" },
+      policy: {
+        tools_override: [{ name: "shell", effect: "allow" }],
+      },
+      on_fail: {
+        goto: "seed",
+        max_iterations: 1,
+        escalate_on_exhaust: "fail",
+        cooldown_ms: 0,
+        reset_state: false,
+        max_cost: null,
+        max_cost_escalation: null,
+      },
+    });
+    expect(resolveDependencies(workflow)).toEqual(
+      new Map([
+        ["seed", []],
+        ["optional", ["seed"]],
+        ["self-contained", []],
+      ]),
+    );
+  });
+
   it("rejects malformed scalar, object, and enum fields", () => {
     const invalidCases = [
+      ["steps: []", "Missing required field 'name'"],
+      ["name: 1\nsteps: []", "'name' must be a string"],
+      ["name: bad", "Missing required field 'steps'"],
+      ["name: bad\nversion: 1\nsteps: []", "'version' must be a string"],
+      ["name: bad\ndescription: 1\nsteps: []", "'description' must be a string"],
+      ["name: bad\npolicy: 1\nsteps: []", "'policy' must be a string"],
       ["name: bad\nsteps: nope", "'steps' must be an array"],
       ["name: bad\nmode: invalid\nsteps: []", "'mode' must be one of"],
       ["name: bad\nconfig: []\nsteps: []", "'config' must be an object"],
+      ["name: bad\nconfig:\n  retry: no\nsteps: []", "'config.retry' must be a number"],
+      ["name: bad\nconfig:\n  retry_delay: 5\nsteps: []", "'config.retry_delay' must be a string"],
       ["name: bad\nconfig:\n  retry_delay: 0s\nsteps: []", "invalid duration format"],
+      ["name: bad\nconfig:\n  continue_on_error: 1\nsteps: []", "'config.continue_on_error' must be a boolean"],
+      ["name: bad\nconfig:\n  max_parallel: many\nsteps: []", "'config.max_parallel' must be a number"],
       ["name: bad\naudit:\n  store: file\nsteps: []", "'audit.store' must be one of"],
       ["name: bad\nrecovery: []\nsteps: []", "'recovery' must be an object"],
+      ["name: bad\nrecovery:\n  collect: 1\nsteps: []", "'recovery.collect' must be an object"],
       ["name: bad\nrecovery:\n  collect:\n    on_fail: restart\nsteps: []", "'recovery.collect.on_fail' is invalid"],
       ["name: bad\nsteps:\n  - 1", "Step at index 0 must be an object"],
       ["name: bad\nsteps:\n  - agent: a", "missing required field 'name'"],
+      ["name: bad\nsteps:\n  - name: 1\n    agent: a", "'name' must be a string"],
       ["name: bad\nsteps:\n  - name: s", "missing required field 'agent'"],
+      ["name: bad\nsteps:\n  - name: s\n    agent: 1", "'agent' must be a string"],
+      ["name: bad\nsteps:\n  - name: s\n    agent: a\n    provider: 1", "'provider' must be a string"],
+      ["name: bad\nsteps:\n  - name: s\n    agent: a\n    model: 1", "'model' must be a string"],
+      ["name: bad\nsteps:\n  - name: s\n    agent: a\n    timeout: 5", "'timeout' must be a string"],
       ["name: bad\nsteps:\n  - name: s\n    agent: a\n    timeout: always", "invalid duration format"],
       ["name: bad\nsteps:\n  - name: s\n    agent: a\n    depends_on: nope", "'depends_on' must be an array"],
+      ["name: bad\nsteps:\n  - name: s\n    agent: a\n    depends_on: [1]", "'depends_on' must be an array of strings"],
+      ["name: bad\nsteps:\n  - name: s\n    agent: a\n    inputs: nope", "'inputs' must be an array"],
       ["name: bad\nsteps:\n  - name: s\n    agent: a\n    inputs: [1]", "'inputs' must be an array of strings"],
+      ["name: bad\nsteps:\n  - name: s\n    agent: a\n    outputs: nope", "'outputs' must be an array"],
       ["name: bad\nsteps:\n  - name: s\n    agent: a\n    outputs: [1]", "'outputs' must be an array of strings"],
       ["name: bad\nsteps:\n  - name: s\n    agent: a\n    description: 1", "'description' must be a string"],
       ["name: bad\nsteps:\n  - name: s\n    agent: a\n    skills: skill", "'skills' must be an array"],
+      ["name: bad\nsteps:\n  - name: s\n    agent: a\n    skills: [1]", "'skills' must be an array of strings"],
       ["name: bad\nsteps:\n  - name: s\n    agent: a\n    tools: [1]", "'tools' must be an array of strings"],
       ["name: bad\nsteps:\n  - name: s\n    agent: a\n    gate: robot", "'gate' must be one of"],
       ["name: bad\nsteps:\n  - name: s\n    agent: a\n    pattern: 1", "'pattern' must be a string"],
@@ -217,12 +323,32 @@ steps:
       ["name: bad\nsteps:\n  - name: s\n    agent: a\n    on_fail: []", "'on_fail' must be an object"],
       ["name: bad\nsteps:\n  - name: s\n    agent: a\n    on_fail:\n      goto: ''", "'on_fail.goto' must be a non-empty string"],
       [
+        "name: bad\nsteps:\n  - name: s\n    agent: a\n    on_fail:\n      goto: s",
+        "max_iterations' is required and must be an integer",
+      ],
+      [
+        "name: bad\nsteps:\n  - name: s\n    agent: a\n    on_fail:\n      goto: s\n      max_iterations: 1.5",
+        "max_iterations' is required and must be an integer",
+      ],
+      [
         "name: bad\nsteps:\n  - name: s\n    agent: a\n    on_fail:\n      goto: s\n      max_iterations: 0",
         "max_iterations must be",
       ],
       [
+        "name: bad\nsteps:\n  - name: s\n    agent: a\n    on_fail:\n      goto: s\n      max_iterations: 1\n      escalate_on_exhaust: page",
+        "unknown escalation: page",
+      ],
+      [
+        "name: bad\nsteps:\n  - name: s\n    agent: a\n    on_fail:\n      goto: s\n      max_iterations: 1\n      cooldown_ms: soon",
+        "cooldown_ms must be 0~300000ms",
+      ],
+      [
         "name: bad\nsteps:\n  - name: s\n    agent: a\n    on_fail:\n      goto: s\n      max_iterations: 1\n      cooldown_ms: 300001",
         "cooldown_ms must be 0~300000ms",
+      ],
+      [
+        "name: bad\nsteps:\n  - name: s\n    agent: a\n    on_fail:\n      goto: s\n      max_iterations: 1\n      max_cost: many",
+        "max_cost must be positive",
       ],
       [
         "name: bad\nsteps:\n  - name: s\n    agent: a\n    on_fail:\n      goto: s\n      max_iterations: 1\n      max_cost: -1",

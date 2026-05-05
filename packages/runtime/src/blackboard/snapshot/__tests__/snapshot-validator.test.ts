@@ -108,6 +108,38 @@ describe("SnapshotValidator", () => {
     expect(old.warnings[0]).toMatchObject({ code: "DEPRECATED_FORMAT" });
   });
 
+  it("reports async format, metadata, checksum, and version errors", async () => {
+    const validator = new SnapshotValidator();
+
+    await expect(validator.validate({} as unknown as Snapshot)).resolves.toMatchObject({
+      valid: false,
+      errors: [{ code: "FORMAT_INVALID" }],
+    });
+
+    const missingField = await validator.validate(createSnapshot(undefined, { checksum: "" }));
+    expect(missingField.valid).toBe(false);
+    expect(missingField.errors.map((error) => error.code)).toContain("MISSING_FIELD");
+
+    const checksumInvalid = await validator.validate(createSnapshot(undefined, { checksum: "bad" }));
+    expect(checksumInvalid.valid).toBe(false);
+    expect(checksumInvalid.errors.map((error) => error.code)).toContain("CHECKSUM_INVALID");
+
+    await expect(
+      validator.validate(createSnapshot(undefined, { formatVersion: "2.0.0" }))
+    ).resolves.toMatchObject({
+      valid: false,
+      errors: [{ code: "VERSION_MISMATCH" }],
+      warnings: [{ code: "DEPRECATED_FORMAT" }],
+    });
+
+    await expect(
+      validator.validate(createSnapshot(undefined, { formatVersion: "0.9.0" }))
+    ).resolves.toMatchObject({
+      valid: true,
+      warnings: [{ code: "DEPRECATED_FORMAT" }],
+    });
+  });
+
   it("checks version support directly", () => {
     const validator = new SnapshotValidator();
 
@@ -158,12 +190,52 @@ describe("SnapshotValidator", () => {
         meta: { ...snapshot.meta, compressedChecksum: calculateChecksumSync("not-compressed") },
       }).errors[0]
     ).toMatchObject({ code: "FORMAT_INVALID" });
+
+    const withoutCompressedChecksum = {
+      ...snapshot,
+      meta: {
+        ...snapshot.meta,
+        compressedChecksum: undefined,
+      },
+    };
+    expect(validator.validateSync(withoutCompressedChecksum)).toEqual({
+      valid: true,
+      errors: [],
+      warnings: [],
+    });
+  });
+
+  it("reports corrupted compressed data that passes format detection", async () => {
+    const validator = new SnapshotValidator();
+    const badGzip = Buffer.from([0x1f, 0x8b, 0x00, 0x00]).toString("base64");
+    const snapshot = createSnapshot(createSerializedState(), {
+      compressed: true,
+      compressedChecksum: calculateChecksumSync(badGzip),
+      compressedSize: badGzip.length,
+    });
+    snapshot.data = badGzip;
+
+    const syncResult = validator.validateSync(snapshot);
+    expect(syncResult.valid).toBe(false);
+    expect(syncResult.errors[0]).toMatchObject({
+      code: "DATA_CORRUPTED",
+      message: "Failed to validate runtime structure",
+    });
+
+    await expect(validator.validate(snapshot)).resolves.toMatchObject({
+      valid: false,
+      errors: [{ code: "DATA_CORRUPTED" }],
+    });
   });
 
   it("performs structural checks without requiring async checksum work", () => {
     const validator = new SnapshotValidator();
+    const compressed = compress(JSON.stringify(createSerializedState())) as string;
 
     expect(validator.validateSyncStructure(createSnapshot()).valid).toBe(true);
+    expect(
+      validator.validateSyncStructure(createSnapshot(undefined, { checksum: "" })).errors
+    ).toContain("Snapshot metadata missing required fields");
     expect(
       validator.validateSyncStructure({} as unknown as Snapshot).errors
     ).toContain("Snapshot missing required fields (meta or data)");
@@ -189,6 +261,29 @@ describe("SnapshotValidator", () => {
         data: "not-compressed",
       }).errors
     ).toContain("Snapshot marked as compressed but data is not valid compressed format");
+    expect(
+      validator.validateSyncStructure({
+        ...createSnapshot(),
+        meta: { ...createSnapshot().meta, compressed: true },
+        data: compressed,
+      }).valid
+    ).toBe(true);
+  });
+
+  it("rejects object data that is not serialized state", () => {
+    const validator = new SnapshotValidator();
+    const invalidData = {
+      meta: { sessionId, version: 1 },
+      state: { phase: "idle", context: {}, agents: [] },
+    } as unknown as SerializedState;
+
+    const result = validator.validateSync(createSnapshot(invalidData));
+
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toMatchObject({
+      code: "DATA_CORRUPTED",
+      message: "Failed to parse serialized state data",
+    });
   });
 
   it("collects runtime tuple validation errors", () => {
