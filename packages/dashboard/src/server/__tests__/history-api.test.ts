@@ -1,13 +1,19 @@
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createDashboardServer } from '../index.js';
 import { InMemoryHistoryStore } from '../history/history-store.js';
 
 const servers: Array<Awaited<ReturnType<typeof createDashboardServer>>['app']> = [];
+const tempDirs: string[] = [];
 
 afterEach(async () => {
-  await Promise.all(servers.map((server) => server.close()));
+  await Promise.all([servers.map((server) => server.close()), tempDirs.map((dir) => rm(dir, { recursive: true, force: true }))].flat());
   servers.length = 0;
+  tempDirs.length = 0;
 });
 
 describe('history routes', () => {
@@ -143,7 +149,26 @@ describe('history routes', () => {
     }
   });
 
-  it('returns run detail with audit pagination', async () => {    const historyStore = new InMemoryHistoryStore();
+  it('returns 400 when list pagination query is outside bounds', async () => {
+    const { app } = await createDashboardServer({}, { historyStore: new InMemoryHistoryStore() });
+    servers.push(app);
+
+    const invalidCases = [
+      ['limit=0', 'limit must be between 1 and 100'],
+      ['limit=101', 'limit must be between 1 and 100'],
+      ['limit=1.5', 'Expected integer'],
+      ['offset=-1', 'offset must be greater than or equal to 0'],
+    ];
+
+    for (const [query, message] of invalidCases) {
+      const response = await app.inject({ method: 'GET', url: `/api/history/runs?${query}` });
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toMatchObject({ code: 'DASH_7001', message });
+    }
+  });
+
+  it('returns run detail with audit pagination', async () => {
+    const historyStore = new InMemoryHistoryStore();
     historyStore.seed({
       runs: [{ id: 'run-1', workflowName: 'wf-a', status: 'completed', input: {}, startedAt: '2026-02-18T00:00:00.000Z' }],
       steps: [
@@ -176,6 +201,102 @@ describe('history routes', () => {
     expect(body.run.id).toBe('run-1');
     expect(body.auditTimeline).toHaveLength(1);
     expect(body.pagination?.auditTotal).toBe(1);
+  });
+
+  it('validates run detail audit pagination query', async () => {
+    const { app } = await createDashboardServer({}, { historyStore: new InMemoryHistoryStore() });
+    servers.push(app);
+
+    const invalidCases = [
+      ['auditLimit=0', 'auditLimit must be between 1 and 500'],
+      ['auditLimit=501', 'auditLimit must be between 1 and 500'],
+      ['auditLimit=abc', 'Expected integer'],
+      ['auditOffset=-1', 'auditOffset must be greater than or equal to 0'],
+    ];
+
+    for (const [query, message] of invalidCases) {
+      const response = await app.inject({ method: 'GET', url: `/api/history/runs/run-1?${query}` });
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toMatchObject({ code: 'DASH_7001', message });
+    }
+  });
+
+  it('serves artifact preview and raw content branches', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'obora-dashboard-artifact-'));
+    tempDirs.push(dir);
+    const artifactPath = join(dir, 'result.txt');
+    await writeFile(artifactPath, 'artifact text', 'utf8');
+
+    const historyStore = new InMemoryHistoryStore();
+    historyStore.seed({
+      runs: [{ id: 'run-artifact', workflowName: 'wf-a', status: 'completed', input: {}, startedAt: '2026-02-18T00:00:00.000Z' }],
+      artifacts: [
+        {
+          id: 'artifact-1',
+          runId: 'run-artifact',
+          stepName: 'draft',
+          name: 'result.txt',
+          mimeType: 'text/plain',
+          sizeBytes: 13,
+          storageRef: artifactPath,
+          createdAt: '2026-02-18T00:00:00.000Z',
+        },
+        {
+          id: 'missing-file',
+          runId: 'run-artifact',
+          stepName: 'draft',
+          name: 'missing.txt',
+          mimeType: 'text/plain',
+          sizeBytes: 1,
+          storageRef: join(dir, 'missing.txt'),
+          createdAt: '2026-02-18T00:00:00.000Z',
+        },
+      ],
+    });
+
+    const { app } = await createDashboardServer({}, { historyStore });
+    servers.push(app);
+
+    const missingPreview = await app.inject({
+      method: 'GET',
+      url: '/api/history/runs/run-artifact/artifacts/nope/preview',
+    });
+    expect(missingPreview.statusCode).toBe(404);
+
+    const preview = await app.inject({
+      method: 'GET',
+      url: '/api/history/runs/run-artifact/artifacts/artifact-1/preview',
+    });
+    expect(preview.statusCode).toBe(200);
+    expect(preview.json()).toMatchObject({ supported: true, text: 'artifact text' });
+
+    const inlineRaw = await app.inject({
+      method: 'GET',
+      url: '/api/history/runs/run-artifact/artifacts/artifact-1/raw',
+    });
+    expect(inlineRaw.statusCode).toBe(200);
+    expect(inlineRaw.headers['content-type']).toContain('text/plain');
+    expect(inlineRaw.headers['content-disposition']).toBe('inline; filename="result.txt"');
+    expect(inlineRaw.body).toBe('artifact text');
+
+    const downloadRaw = await app.inject({
+      method: 'GET',
+      url: '/api/history/runs/run-artifact/artifacts/artifact-1/raw?download=1',
+    });
+    expect(downloadRaw.headers['content-disposition']).toBe('attachment; filename="result.txt"');
+
+    const missingRaw = await app.inject({
+      method: 'GET',
+      url: '/api/history/runs/run-artifact/artifacts/nope/raw',
+    });
+    expect(missingRaw.statusCode).toBe(404);
+
+    const readFailure = await app.inject({
+      method: 'GET',
+      url: '/api/history/runs/run-artifact/artifacts/missing-file/raw',
+    });
+    expect(readFailure.statusCode).toBe(404);
+    expect(readFailure.json().message).toContain('Artifact read failed');
   });
 
   it('supports encoded runId in detail and resume routes', async () => {

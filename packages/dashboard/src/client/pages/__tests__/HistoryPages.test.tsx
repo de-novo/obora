@@ -292,6 +292,13 @@ describe('HistoryRunDetailPage', () => {
     expect(screen.getByText('Recent Validation Failures')).toBeTruthy();
     expect(screen.getByText('validation_failed')).toBeTruthy();
 
+    await user.click(screen.getAllByRole('button', { name: 'Jump to step' })[0]!);
+    expect(screen.getByText('Step Drilldown')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Show artifacts' }));
+    expect(screen.getByRole('button', { name: 'Clear filter' })).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Clear filter' }));
+    await user.click(screen.getAllByRole('button', { name: 'Jump to step' })[0]!);
+
     await user.click(screen.getByRole('button', { name: 'Preview' }));
     expect(await screen.findByRole('dialog')).toBeTruthy();
     expect(screen.getByText('json')).toBeTruthy();
@@ -307,6 +314,10 @@ describe('HistoryRunDetailPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Resume run' }));
     expect(screen.getByText('Policy drift warning')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByText('Policy drift warning')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Resume run' }));
     await user.click(screen.getByRole('button', { name: 'Yes, resume' }));
 
     await waitFor(() => expect(historyApi.resumeHistoryRun).toHaveBeenCalledWith('run-a'));
@@ -325,6 +336,74 @@ describe('HistoryRunDetailPage', () => {
 
     await user.click(screen.getByRole('button', { name: /Back/ }));
     expect(onBack).toHaveBeenCalledOnce();
+  });
+
+  it('renders empty completed detail state and unsupported previews', async () => {
+    const user = userEvent.setup();
+    const unsupportedArtifact: ArtifactRecord = {
+      ...artifact,
+      id: 'artifact-unsupported',
+      name: 'binary.bin',
+      mimeType: 'application/octet-stream',
+      storageRef: 'file:///tmp/binary.bin',
+    };
+    historyApi.fetchHistoryRunDetail.mockResolvedValueOnce({
+      ...runDetailResponse,
+      run: {
+        ...runDetailResponse.run,
+        id: 'run-empty',
+        status: 'completed',
+        completedAt: '2026-05-05T01:10:00.000Z',
+      },
+      repairLoop: undefined,
+      steps: [],
+      artifacts: [],
+      auditTimeline: [],
+      checkpoints: [],
+      pagination: {
+        auditTotal: 0,
+        auditLimit: 100,
+        auditOffset: 0,
+      },
+    } satisfies RunDetailResponse);
+
+    render(<HistoryRunDetailPage runId="run-empty" onBack={vi.fn()} />);
+
+    expect(await screen.findByText('Run Detail / run-empty')).toBeTruthy();
+    expect(screen.queryByText('Repair Loop')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Resume run' })).toBeNull();
+    expect(screen.getByText('No artifacts found for the current selection.')).toBeTruthy();
+    expect(screen.getByText('No audit events')).toBeTruthy();
+    expect(screen.queryByText('Step Drilldown')).toBeNull();
+
+    historyApi.fetchHistoryRunDetail.mockResolvedValueOnce({
+      ...runDetailResponse,
+      run: {
+        ...runDetailResponse.run,
+        id: 'run-unsupported',
+      },
+      repairLoop: undefined,
+      artifacts: [unsupportedArtifact],
+      auditTimeline: [],
+      pagination: {
+        auditTotal: 1,
+        auditLimit: 100,
+        auditOffset: 0,
+      },
+    } satisfies RunDetailResponse);
+    historyApi.fetchHistoryArtifactPreview.mockResolvedValueOnce({
+      artifact: unsupportedArtifact,
+      supported: false,
+    });
+
+    cleanup();
+    render(<HistoryRunDetailPage runId="run-unsupported" onBack={vi.fn()} />);
+
+    expect(await screen.findByText('binary.bin')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Preview' }));
+    expect(await screen.findByText('Preview unavailable')).toBeTruthy();
+    await user.click(screen.getByRole('dialog'));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 
   it('renders detail load failures with a back action', async () => {

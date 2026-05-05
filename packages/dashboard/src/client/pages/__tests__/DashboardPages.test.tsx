@@ -181,6 +181,27 @@ describe('AuditViewer', () => {
 });
 
 describe('PlaybackView', () => {
+  it('selects the first execution when no initial execution is provided', async () => {
+    render(<PlaybackView />);
+
+    await waitFor(() =>
+      expect(auditApi.fetchExecutionEvents).toHaveBeenCalledWith('exec-1', {
+        limit: 500,
+        offset: 0,
+      }),
+    );
+    expect(screen.getByRole<HTMLSelectElement>('combobox').value).toBe('exec-1');
+  });
+
+  it('renders audit list failures with the fallback message for non-error rejections', async () => {
+    auditApi.fetchAuditEvents.mockRejectedValueOnce('audit source unavailable');
+
+    render(<PlaybackView />);
+
+    expect(await screen.findByText('execution 목록 로드 실패')).toBeTruthy();
+    expect(screen.getByText('재생할 이벤트가 없습니다.')).toBeTruthy();
+  });
+
   it('loads executions, fetches selected execution events, and advances playback state', async () => {
     const user = userEvent.setup();
 

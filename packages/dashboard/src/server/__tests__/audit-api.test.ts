@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import type { AuditEvent } from '@obora/runtime';
 
-import { InMemoryAuditStore } from '../audit/audit-store.js';
+import { InMemoryAuditStore, type AuditStore } from '../audit/audit-store.js';
 import { createDashboardServer } from '../index.js';
 
 const servers: Array<Awaited<ReturnType<typeof createDashboardServer>>['app']> = [];
@@ -84,6 +84,47 @@ describe('audit api', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json().events).toHaveLength(1);
     expect(response.json().events[0].id).toBe('e1');
+  });
+
+  it('normalizes comma-separated and repeated event type filters', async () => {
+    const store = new InMemoryAuditStore();
+    store.addEvents([
+      buildEvent({
+        id: 'start',
+        type: 'step_start',
+        executionId: 'exec-filter',
+        timestamp: new Date('2026-02-17T10:00:00.000Z'),
+      }),
+      buildEvent({
+        id: 'end',
+        type: 'execution_end',
+        executionId: 'exec-filter',
+        timestamp: new Date('2026-02-17T10:01:00.000Z'),
+      }),
+      buildEvent({
+        id: 'error',
+        type: 'error',
+        executionId: 'exec-filter',
+        timestamp: new Date('2026-02-17T10:02:00.000Z'),
+      }),
+    ]);
+
+    const { app } = await createDashboardServer({}, { auditStore: store });
+    servers.push(app);
+
+    const commaResponse = await app.inject({
+      method: 'GET',
+      url: '/api/audit/events?eventType=step_start,%20execution_end,,',
+    });
+    expect(commaResponse.statusCode).toBe(200);
+    expect(commaResponse.json().events.map((event: AuditEvent) => event.id)).toEqual(['start', 'end']);
+
+    const repeatedResponse = await app.inject({
+      method: 'GET',
+      url: '/api/audit/executions/exec-filter/events?eventType=step_start&eventType=execution_end',
+    });
+    expect(repeatedResponse.statusCode).toBe(200);
+    expect(repeatedResponse.json().events.map((event: AuditEvent) => event.id)).toEqual(['start', 'end']);
   });
 
   it('filters by stepName', async () => {
@@ -179,6 +220,27 @@ describe('audit api', () => {
     });
   });
 
+  it('falls back to query lookup when audit store has no getById helper', async () => {
+    const event = buildEvent({ id: 'fallback-id' });
+    const store: AuditStore = {
+      query: async (params) => ({
+        events: params.limit === 500 ? [event] : [],
+        total: params.limit === 500 ? 1 : 0,
+        hasMore: false,
+      }),
+    };
+    const { app } = await createDashboardServer({}, { auditStore: store });
+    servers.push(app);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/audit/events/fallback-id',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().event.id).toBe('fallback-id');
+  });
+
   it('returns events by execution endpoint', async () => {
     const store = new InMemoryAuditStore();
     store.addEvents([
@@ -197,5 +259,29 @@ describe('audit api', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json().events).toHaveLength(1);
     expect(response.json().events[0].id).toBe('e-2');
+  });
+
+  it('validates audit query bounds and date ranges', async () => {
+    const { app } = await createDashboardServer({}, { auditStore: new InMemoryAuditStore() });
+    servers.push(app);
+
+    const invalidCases = [
+      ['fromTime=not-a-date', 'fromTime must be a valid ISO 8601 datetime'],
+      ['toTime=not-a-date', 'toTime must be a valid ISO 8601 datetime'],
+      [
+        'fromTime=2026-02-17T11:00:00.000Z&toTime=2026-02-17T10:00:00.000Z',
+        'fromTime must be earlier than or equal to toTime',
+      ],
+      ['limit=0', 'limit must be between 1 and 500'],
+      ['limit=501', 'limit must be between 1 and 500'],
+      ['limit=abc', 'limit must be an integer'],
+      ['offset=-1', 'offset must be greater than or equal to 0'],
+    ];
+
+    for (const [query, message] of invalidCases) {
+      const response = await app.inject({ method: 'GET', url: `/api/audit/events?${query}` });
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toMatchObject({ code: 'DASH_5001', message });
+    }
   });
 });

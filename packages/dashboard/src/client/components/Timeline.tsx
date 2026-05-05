@@ -56,8 +56,12 @@ export const Timeline = ({ executionId, steps, selectedStepName, onStepClick }: 
                 onClick={() => onStepClick?.(step)}
                 style={{
                   textAlign: 'left',
-                  border: isSelected ? '2px solid #1d4ed8' : '1px solid #e5e7eb',
-                  borderLeft: `4px solid ${style.color}`,
+                  borderStyle: 'solid',
+                  borderWidth: isSelected ? '2px 2px 2px 4px' : '1px 1px 1px 4px',
+                  borderTopColor: isSelected ? '#1d4ed8' : '#e5e7eb',
+                  borderRightColor: isSelected ? '#1d4ed8' : '#e5e7eb',
+                  borderBottomColor: isSelected ? '#1d4ed8' : '#e5e7eb',
+                  borderLeftColor: style.color,
                   background: isSelected ? '#eff6ff' : '#ffffff',
                   borderRadius: '8px',
                   padding: '10px 12px',
