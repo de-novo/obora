@@ -26,7 +26,7 @@ Obora 전 패키지의 테스트 기준을 통일해 변경 안정성과 릴리�
 | Package | Statements | Branches | Functions | Lines |
 | --- | ---: | ---: | ---: | ---: |
 | `@obora/sdk` | 95 | 90 | 99 | 95 |
-| `@obora/runtime` | 90 | 87 | 86 | 90 |
+| `@obora/runtime` | 91 | 87 | 88 | 91 |
 | `@obora/adapters` | 94 | 91 | 92 | 94 |
 | `@obora/cli` | 95 | 90 | 97 | 95 |
 | `@obora/dashboard` | 92 | 90 | 92 | 92 |
@@ -36,17 +36,18 @@ Obora 전 패키지의 테스트 기준을 통일해 변경 안정성과 릴리�
 | Package | Statements | Branches | Functions | Lines |
 | --- | ---: | ---: | ---: | ---: |
 | `@obora/sdk` | 95.94% | 90.07% | 99.35% | 95.94% |
-| `@obora/runtime` | 90.74% | 87.03% | 86.76% | 90.74% |
+| `@obora/runtime` | 91.06% | 87.09% | 88.18% | 91.06% |
 | `@obora/adapters` | 94.47% | 91.29% | 92.55% | 94.47% |
 | `@obora/cli` | 95.92% | 90.01% | 97.46% | 95.92% |
 | `@obora/dashboard` | 92.45% | 90.08% | 92.11% | 92.45% |
 
-다음 상향 후보는 `@obora/runtime` function floor 또는
-`@obora/cli` branch floor입니다. runtime branch floor는 resume, gate timeout,
-artifact capture, blackboard default state, step skill loading, policy
-expression parsing 테스트 보강 후 87로 상향했습니다. adapters branch floor는
-agent config mutation parsing/default cwd/reset cleanup/write failure 테스트
-보강 후 91로 상향했습니다.
+다음 상향 후보는 `@obora/runtime` branch floor 또는 `@obora/cli` branch
+floor입니다. runtime function floor는 builtin plugin, no-op message bus,
+workflow diagnosis helper 테스트 보강 후 88로 상향했고, runtime branch
+floor는 resume, gate timeout, artifact capture, blackboard default state,
+step skill loading, policy expression parsing 테스트 보강 후 87로
+상향했습니다. adapters branch floor는 agent config mutation parsing/default
+cwd/reset cleanup/write failure 테스트 보강 후 91로 상향했습니다.
 
 ## CI 설정 원칙
 - 기본 로컬/CI 게이트는 clean checkout 기준 아래 순서로 고정합니다.

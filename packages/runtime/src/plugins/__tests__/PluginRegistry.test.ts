@@ -1,3 +1,7 @@
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { describe, expect, it, vi } from "vitest";
 
 import { PatternRegistry } from "../../patterns/PatternRegistry.js";
@@ -5,9 +9,15 @@ import { PipelinePattern } from "../../patterns/builtin/PipelinePattern.js";
 import { PluginLoader } from "../PluginLoader.js";
 import { PluginRegistry } from "../PluginRegistry.js";
 import {
+  AllowAllPolicyRulePlugin,
+  BuiltinAgentPlugin,
   createBuiltinPlugins,
   FileWriteToolPlugin,
+  IdentityStateTransformPlugin,
+  InMemoryAuditStorePlugin,
+  MajorityConsensusRulePlugin,
   registerBuiltinPlugins,
+  RetryRecoveryStrategyPlugin,
 } from "../builtins.js";
 import { validatePlugin } from "../validator.js";
 
@@ -109,6 +119,93 @@ describe("builtin plugin bootstrap", () => {
         "state-transform",
       ])
     );
+  });
+
+  it("returns an optional composite pattern plugin when a pattern registry is provided", () => {
+    const patternRegistry = new PatternRegistry();
+    const plugins = createBuiltinPlugins({ patternRegistry });
+
+    expect(plugins.some((plugin) => plugin.type === "pattern" && plugin.name === "composite")).toBe(true);
+  });
+
+  it("exercises simple builtin plugin contracts", async () => {
+    expect(new BuiltinAgentPlugin().createAgent({ role: "writer" })).toEqual({
+      kind: "builtin-agent",
+      config: { role: "writer" },
+    });
+    expect(new AllowAllPolicyRulePlugin().evaluate()).toEqual({ type: "allow" });
+    await expect(new RetryRecoveryStrategyPlugin().handle()).resolves.toEqual({ status: "recovered" });
+    expect(new IdentityStateTransformPlugin().transform({ unchanged: true })).toEqual({ unchanged: true });
+  });
+
+  it("evaluates majority consensus votes", () => {
+    const rule = new MajorityConsensusRulePlugin();
+
+    expect(rule.evaluate([{ approved: true }, { approved: false }, { approved: true }])).toEqual({
+      status: "pass",
+      approved: 2,
+      total: 3,
+    });
+    expect(rule.evaluate([{ approved: false }, null, { approved: true }])).toEqual({
+      status: "fail",
+      approved: 1,
+      total: 3,
+    });
+  });
+
+  it("records and queries audit events through the in-memory audit store plugin", async () => {
+    const store = new InMemoryAuditStorePlugin();
+    const event = {
+      id: "audit-1",
+      executionId: "exec-1",
+      timestamp: new Date("2026-05-06T00:00:00.000Z"),
+      type: "step_end" as const,
+      data: { stepId: "step-1" },
+    };
+
+    await store.record(event);
+
+    await expect(store.query({ executionId: "exec-1" })).resolves.toEqual([event]);
+    await expect(store.query({ executionId: "other" })).resolves.toEqual([]);
+  });
+
+  it("writes files inside the configured sandbox root", async () => {
+    const root = await mkdtemp(join(tmpdir(), "obora-file-write-"));
+    try {
+      const plugin = new FileWriteToolPlugin(root);
+      const result = await plugin.execute({
+        path: "nested/output.txt",
+        content: "hello runtime",
+      });
+
+      expect(result).toEqual({
+        path: join(root, "nested/output.txt"),
+        bytes: Buffer.byteLength("hello runtime", "utf8"),
+      });
+      await expect(readFile(join(root, "nested/output.txt"), "utf8")).resolves.toBe("hello runtime");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects invalid file-write parameters and paths outside the sandbox root", async () => {
+    const root = await mkdtemp(join(tmpdir(), "obora-file-write-"));
+    try {
+      const plugin = new FileWriteToolPlugin(root);
+
+      await expect(plugin.execute(null)).rejects.toThrow("file-write params must be an object");
+      await expect(plugin.execute({ path: " ", content: "x" })).rejects.toThrow(
+        "file-write params.path must be a non-empty string"
+      );
+      await expect(plugin.execute({ path: "output.txt", content: 1 })).rejects.toThrow(
+        "file-write params.content must be a string"
+      );
+      await expect(plugin.execute({ path: "../outside.txt", content: "x" })).rejects.toThrow(
+        "outside sandbox root"
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });
 
