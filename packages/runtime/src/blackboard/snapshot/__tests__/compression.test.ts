@@ -16,6 +16,7 @@ describe("snapshot compression", () => {
     expect(typeof compressed).toBe("string");
     expect(detectCompression(compressed as string)).toBe("gzip");
     expect(decompress(compressed)).toBe(input);
+    expect(decompress(compressed, { inputFormat: "base64" })).toBe(input);
   });
 
   it("preserves data when compression is disabled", () => {
@@ -25,18 +26,25 @@ describe("snapshot compression", () => {
 
     expect(compress(text, { level: "none" })).toBe(text);
     expect(decompress(text, { algorithm: "none" })).toBe(text);
+    expect(decompress(Buffer.from("raw"), { skipValidation: true })).toEqual(Buffer.from("raw"));
     expect(compress(bytes, { algorithm: "none" })).toBe(bytes);
     expect(compress(buffer, { algorithm: "none" })).toBe(buffer);
   });
 
   it("supports buffer and uint8array output/input formats", () => {
     const input = "format coverage";
+    const base64Compressed = compress(input, { outputFormat: "base64", level: "max" });
     const bufferCompressed = compress(input, { outputFormat: "buffer" });
     const bytesCompressed = compress(input, { outputFormat: "uint8array" });
+    const defaultBufferCompressed = compress(Buffer.from(input), { level: "fast" });
 
+    expect(typeof base64Compressed).toBe("string");
     expect(Buffer.isBuffer(bufferCompressed)).toBe(true);
+    expect(Buffer.isBuffer(defaultBufferCompressed)).toBe(true);
     expect(bytesCompressed).toBeInstanceOf(Uint8Array);
+    expect(decompress(base64Compressed)).toBe(input);
     expect(decompress(bufferCompressed, { inputFormat: "buffer" })).toEqual(Buffer.from(input));
+    expect(decompress(defaultBufferCompressed)).toEqual(Buffer.from(input));
     expect(decompress(bytesCompressed, { inputFormat: "uint8array" })).toEqual(
       new TextEncoder().encode(input)
     );
@@ -51,7 +59,9 @@ describe("snapshot compression", () => {
     expect(() => decompress(undefined as unknown as string)).toThrow(
       "must not be null or undefined"
     );
+    expect(decompress("plain-not-gzip")).toBe("plain-not-gzip");
     expect(() => decompress(new Uint8Array([1, 2, 3]))).toThrow("Failed to decompress data");
+    expect(detectCompression("")).toBeNull();
     expect(detectCompression("not-base64")).toBeNull();
   });
 
@@ -75,6 +85,20 @@ describe("Compressor", () => {
     expect(compressor.getHistory()).toHaveLength(2);
     compressor.clearHistory();
     expect(compressor.getHistory()).toEqual([]);
+  });
+
+  it("supports store-level no-compression and explicit metadata defaults", () => {
+    const rawCompressor = new Compressor({ algorithm: "none", level: "none" });
+    const raw = rawCompressor.compress("raw payload");
+    expect(rawCompressor.decompress(raw)).toBe("raw payload");
+
+    const metaCompressor = new Compressor({ algorithm: "gzip", level: "max" });
+    const withMeta = metaCompressor.compressWithMeta("metadata defaults");
+    expect(withMeta.metadata).toMatchObject({
+      algorithm: "gzip",
+      level: "max",
+    });
+    expect(metaCompressor.decompressWithMeta(withMeta)).toBe("metadata defaults");
   });
 
   it("calculates ratios and stats for edge cases", () => {
@@ -107,5 +131,16 @@ describe("Compressor", () => {
     expect(compressor.getOptions().algorithm).toBe("none");
     const raw = compressor.compress("raw");
     expect(compressor.decompress(raw)).toBe("raw");
+  });
+
+  it("ignores malformed metadata when bundled compressed data is intact", () => {
+    const compressor = new Compressor();
+    const withMeta = compressor.compressWithMeta("bad metadata");
+    const combined = Buffer.from(withMeta.data, "base64");
+    const metaLength = combined.readUInt32BE(0);
+
+    combined.fill(0xff, 4, 4 + metaLength);
+
+    expect(compressor.decompressWithMeta(combined.toString("base64"))).toBe("bad metadata");
   });
 });

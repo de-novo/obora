@@ -182,6 +182,11 @@ describe("SnapshotValidator", () => {
         meta: { ...snapshot.meta, compressedChecksum: "bad" },
       }).errors[0]
     ).toMatchObject({ code: "CHECKSUM_INVALID" });
+    const asyncChecksumInvalid = await validator.validate({
+      ...snapshot,
+      meta: { ...snapshot.meta, compressedChecksum: "bad" },
+    });
+    expect(asyncChecksumInvalid.errors.map((error) => error.code)).toContain("CHECKSUM_INVALID");
 
     expect(
       validator.validateSync({
@@ -190,6 +195,12 @@ describe("SnapshotValidator", () => {
         meta: { ...snapshot.meta, compressedChecksum: calculateChecksumSync("not-compressed") },
       }).errors[0]
     ).toMatchObject({ code: "FORMAT_INVALID" });
+    const asyncBadFormat = await validator.validate({
+      ...snapshot,
+      data: "not-compressed",
+      meta: { ...snapshot.meta, compressedChecksum: calculateChecksumSync("not-compressed") },
+    });
+    expect(asyncBadFormat.errors.map((error) => error.code)).toContain("FORMAT_INVALID");
 
     const withoutCompressedChecksum = {
       ...snapshot,

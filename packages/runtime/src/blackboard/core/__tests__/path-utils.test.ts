@@ -25,6 +25,7 @@ describe("path-utils", () => {
 
     expect(getByPath(source, "")).toBe(source);
     expect(getByPath<string>(source, "state.context.nested.items.1.name")).toBe("second");
+    expect(getByPath(source, "state.context.nested.items.0.name.extra")).toBeUndefined();
     expect(getByPath(source, "state.context.nested.items.2.name")).toBeUndefined();
     expect(getByPath(source, "state.context.nested.items.bad.name")).toBeUndefined();
     expect(getByPath(42, "state.context")).toBeUndefined();

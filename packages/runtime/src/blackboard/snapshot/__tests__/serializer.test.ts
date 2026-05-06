@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   StateSerializer,
   calculateChecksum,
@@ -36,6 +36,10 @@ const sessionId = createSessionId("session-1");
 const agentId = createAgentId("agent-1");
 const taskId = createTaskId("task-1");
 const agendaId = createAgendaId("agenda-1");
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 function createState(): BlackboardState {
   const agent: AgentStatus = {
@@ -255,10 +259,40 @@ describe("StateSerializer", () => {
         ...base,
         knowledge: {
           ...base.knowledge,
+          facts: [null] as unknown as SerializedState["knowledge"]["facts"],
+        },
+      })
+    ).toThrow("facts[0]: must be an object");
+    expect(() =>
+      serializer.deserialize({
+        ...base,
+        knowledge: { ...base.knowledge, inferences: "bad" as unknown as unknown[] },
+      })
+    ).toThrow("inferences must be an array");
+    expect(() =>
+      serializer.deserialize({
+        ...base,
+        knowledge: {
+          ...base.knowledge,
           inferences: [{ conclusion: 1, confidence: -1, createdAt: 1 }],
         },
       })
     ).toThrow("Invalid inferences data");
+    expect(() =>
+      serializer.deserialize({
+        ...base,
+        knowledge: {
+          ...base.knowledge,
+          inferences: [null] as unknown as SerializedState["knowledge"]["inferences"],
+        },
+      })
+    ).toThrow("inferences[0]: must be an object");
+    expect(() =>
+      serializer.deserialize({
+        ...base,
+        knowledge: { ...base.knowledge, patterns: "bad" as unknown as unknown[] },
+      })
+    ).toThrow("patterns must be an array");
     expect(() =>
       serializer.deserialize({
         ...base,
@@ -271,9 +305,24 @@ describe("StateSerializer", () => {
     expect(() =>
       serializer.deserialize({
         ...base,
+        knowledge: {
+          ...base.knowledge,
+          patterns: [null] as unknown as SerializedState["knowledge"]["patterns"],
+        },
+      })
+    ).toThrow("patterns[0]: must be an object");
+    expect(() =>
+      serializer.deserialize({
+        ...base,
         decisions: { ...base.decisions, current: "bad" },
       })
     ).toThrow("Invalid current agenda");
+    expect(() =>
+      serializer.deserialize({
+        ...base,
+        decisions: { ...base.decisions, current: { id: 1, title: 2 } as unknown as Agenda },
+      })
+    ).toThrow("decisions.current.id: must be a string");
     expect(() =>
       serializer.deserialize({
         ...base,
@@ -295,6 +344,21 @@ describe("StateSerializer", () => {
     expect(() =>
       serializer.deserialize({
         ...base,
+        decisions: { ...base.decisions, history: "bad" as unknown as unknown[] },
+      })
+    ).toThrow("history must be an array");
+    expect(() =>
+      serializer.deserialize({
+        ...base,
+        decisions: {
+          ...base.decisions,
+          history: [null] as unknown as SerializedState["decisions"]["history"],
+        },
+      })
+    ).toThrow("history[0]: must be an object");
+    expect(() =>
+      serializer.deserialize({
+        ...base,
         state: { ...base.state, agents: "bad" as unknown as Array<[string, unknown]> },
       })
     ).toThrow("Invalid map data");
@@ -310,6 +374,12 @@ describe("StateSerializer", () => {
         meta: { ...base.meta, lastUpdated: "not-a-date" },
       })
     ).toThrow('Invalid date value: "not-a-date"');
+    expect(() =>
+      serializer.deserialize({
+        ...base,
+        meta: { ...base.meta, lastUpdated: 42 as unknown as string },
+      })
+    ).toThrow("expected string, got number");
     expect(() =>
       serializer.deserialize({
         ...base,
@@ -334,5 +404,26 @@ describe("StateSerializer", () => {
     expect(verifyChecksumSync({ a: 2 }, checksum)).toBe(false);
     await expect(calculateChecksum(second)).resolves.toBe(checksum);
     await expect(verifyChecksum(second, checksum)).resolves.toBe(true);
+  });
+
+  it("falls back to Node checksums when Web Crypto is unavailable or rejects", async () => {
+    const expected = calculateChecksumSync("fallback");
+
+    vi.stubGlobal("crypto", undefined);
+    await expect(calculateChecksum("fallback")).resolves.toBe(expected);
+
+    vi.stubGlobal("crypto", {
+      subtle: {
+        digest: vi.fn().mockRejectedValue(new Error("digest unavailable")),
+      },
+    });
+    await expect(calculateChecksum("fallback")).resolves.toBe(expected);
+  });
+
+  it("uses compact unsorted JSON defaults", () => {
+    const serializer = new StateSerializer();
+
+    expect(serializer.serializeJSON({ b: 2, a: 1 })).toBe('{"b":2,"a":1}');
+    expect(serializer.toJSON(createState())).not.toContain("\n");
   });
 });

@@ -76,6 +76,43 @@ describe("AgendaStore", () => {
     ]);
   });
 
+  it("preserves existing update fields when patch values are omitted", () => {
+    const store = new AgendaStore();
+    const id = createAgendaId("agenda-preserve");
+    const dueAt = new Date("2026-07-01T00:00:00.000Z");
+
+    store.create({
+      id,
+      title: "Preserve",
+      description: "Keep description",
+      priority: 2,
+      dueAt,
+    });
+
+    const rescheduledDueAt = new Date("2026-07-02T00:00:00.000Z");
+    const rescheduled = store.update(id, {
+      description: "  Next description  ",
+      dueAt: rescheduledDueAt,
+    });
+    rescheduledDueAt.setUTCFullYear(2030);
+
+    expect(rescheduled).toMatchObject({
+      title: "Preserve",
+      description: "Next description",
+      priority: 2,
+      dueAt: new Date("2026-07-02T00:00:00.000Z"),
+    });
+
+    const retained = store.update(id, {});
+    expect(retained).toMatchObject({
+      title: "Preserve",
+      description: "Next description",
+      priority: 2,
+      dueAt: new Date("2026-07-02T00:00:00.000Z"),
+    });
+    expect(retained.dueAt).not.toBe(rescheduled.dueAt);
+  });
+
   it("emits deep-frozen event payloads with immutable dates", () => {
     const eventBus = new EventBus();
     const events = collectAgendaEvents(eventBus);

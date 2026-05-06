@@ -191,6 +191,7 @@ describe("EventFactory", () => {
     const defaultFactory = new EventFactory();
     expect(defaultFactory.createStateInitialized("session-1").id).toBe("evt_1");
     expect(defaultFactory.createStateInitialized("session-2").id).toBe("evt_2");
+    expect(defaultFactory.createPhaseChanged("idle", "discussion").source).toBe("system");
 
     const factory = createFactory();
     const withOptions = factory.createPhaseChanged("idle", "discussion", {
@@ -219,11 +220,35 @@ describe("EventFactory", () => {
     const events: EventLike[] = [
       factory.createContextUpdated("key", "old", "new", options),
       factory.createStateTaskCompleted(taskId, { ok: true }, 10, options),
+      factory.createAgentUpdated(agentId, { status: AgentStatusEnum.BUSY }, { status: AgentStatusEnum.IDLE }, options),
       factory.createAgentRemoved(agentId, "finished", options),
       factory.createTaskStarted(taskId, agentId, options),
+      factory.createTaskCancelled(taskId, "cancelled", options),
       factory.createDecisionsAgendaStarted(agendaId, options),
+      factory.createDecisionsVotingStarted(agendaId, later, options),
+      factory.createDecisionsVoteSubmitted(agendaId, agentId, "approve", options),
+      factory.createDecisionsVotingEnded(agendaId, resolution, options),
       factory.createVoteRequested(agendaId, later, [agentId], options),
+      factory.createVotingCompleted(
+        agendaId,
+        {
+          passed: true,
+          method: "majority",
+          summary: {
+            total: 1,
+            approve: 1,
+            reject: 0,
+            abstain: 0,
+            approvalRate: 1,
+            quorumReached: true,
+          },
+        },
+        options,
+      ),
       factory.createFactAdded(fact, options),
+      factory.createFactUpdated(fact.id, { confidence: 0.9 }, { confidence: 0.99 }, options),
+      factory.createFactRemoved(fact.id, "expired", options),
+      factory.createPatternAdded(pattern, options),
       factory.createSystemError("E_TEST", "failed", { detail: true }, options),
       factory.createSystemSnapshotCreated("system-snapshot-1", later, options),
       factory.createSystemSnapshotRestored("system-snapshot-1", later, options),
