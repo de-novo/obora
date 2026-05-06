@@ -30,7 +30,7 @@ describe("tool decorators", () => {
         maximum: 10,
         default: 1,
       })
-      .boolean("enabled", "Enabled", { default: true })
+      .boolean("enabled", "Enabled", { required: true, default: true })
       .array("tags", "Tags", { type: "string" }, { required: true })
       .object("metadata", "Metadata", { source: { type: "string" } }, { required: true })
       .build();
@@ -62,7 +62,33 @@ describe("tool decorators", () => {
           properties: { source: { type: "string" } },
         },
       },
-      required: ["name", "count", "tags", "metadata"],
+      required: ["name", "count", "enabled", "tags", "metadata"],
+    });
+  });
+
+  it("builds optional parameter schemas when options are omitted", () => {
+    const schema = params()
+      .string("name", "Name")
+      .number("count", "Count")
+      .boolean("enabled", "Enabled")
+      .array("tags", "Tags", { type: "string" })
+      .object("metadata", "Metadata", { source: { type: "string" } })
+      .build();
+
+    expect(schema).toEqual({
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Name" },
+        count: { type: "number", description: "Count" },
+        enabled: { type: "boolean", description: "Enabled" },
+        tags: { type: "array", description: "Tags", items: { type: "string" } },
+        metadata: {
+          type: "object",
+          description: "Metadata",
+          properties: { source: { type: "string" } },
+        },
+      },
+      required: [],
     });
   });
 

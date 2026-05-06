@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync, statSync } from "node:fs";
+import { writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -79,6 +80,18 @@ describe("auth adapter conformance", () => {
 
     await manager.removeProvider("openai");
     expect(await manager.getProvider("openai")).toBeUndefined();
+  });
+
+  it("loads partial auth store documents with version and provider defaults", async () => {
+    const { dir, file } = createTempAuthFile();
+    tempDirs.push(dir);
+
+    await writeFile(file, "{}\n", "utf-8");
+
+    await expect(new AuthStoreRepository(file).load()).resolves.toEqual({
+      version: 1,
+      providers: {},
+    });
   });
 
   it("rejects malformed auth records before they hit the store", async () => {

@@ -27,7 +27,7 @@ Obora 전 패키지의 테스트 기준을 통일해 변경 안정성과 릴리�
 | --- | ---: | ---: | ---: | ---: |
 | `@obora/sdk` | 95 | 91 | 99 | 95 |
 | `@obora/runtime` | 91 | 88 | 88 | 91 |
-| `@obora/adapters` | 94 | 91 | 92 | 94 |
+| `@obora/adapters` | 94 | 92 | 92 | 94 |
 | `@obora/cli` | 96 | 91 | 97 | 96 |
 | `@obora/dashboard` | 92 | 90 | 92 | 92 |
 
@@ -35,9 +35,9 @@ Obora 전 패키지의 테스트 기준을 통일해 변경 안정성과 릴리�
 
 | Package | Statements | Branches | Functions | Lines |
 | --- | ---: | ---: | ---: | ---: |
-| `@obora/sdk` | 96.05% | 91.16% | 99.35% | 96.05% |
+| `@obora/sdk` | 96.05% | 91.17% | 99.35% | 96.05% |
 | `@obora/runtime` | 91.62% | 88.05% | 88.47% | 91.62% |
-| `@obora/adapters` | 94.47% | 91.29% | 92.55% | 94.47% |
+| `@obora/adapters` | 94.47% | 92.11% | 92.55% | 94.47% |
 | `@obora/cli` | 96.36% | 91.06% | 97.72% | 96.36% |
 | `@obora/dashboard` | 92.45% | 90.08% | 92.11% | 92.45% |
 
@@ -50,7 +50,8 @@ timeout, artifact capture, blackboard default state, step skill loading, policy
 expression parsing/evaluation, audit re-execution planning, snapshot restore
 error, voting session, plugin registry lifecycle, custom pattern branch 테스트
 보강 후 88로 상향했습니다. adapters branch floor는 agent config mutation
-parsing/default cwd/reset cleanup/write failure 테스트 보강 후 91로 상향했고,
+parsing/default cwd/reset cleanup/write failure, auth store default, decorator
+parameter schema fallback 테스트 보강 후 92로 상향했고,
 CLI branch floor는 doctor shared provider/model guidance, formatter color
 initialization, global option fallback 테스트 보강 후 91로 상향했습니다.
 

@@ -13,7 +13,7 @@
   },
   "@obora/adapters": {
     "statements": 94,
-    "branches": 91,
+    "branches": 92,
     "functions": 92,
     "lines": 94
   },
