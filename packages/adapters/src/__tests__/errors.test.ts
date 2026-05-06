@@ -38,4 +38,35 @@ describe("adapter errors", () => {
     expect(error.getRootCause()).toBe(metadata);
     expect(error.getLastErrorCode()).toBeUndefined();
   });
+
+  it("defaults string retry metadata when the original error has no string code", () => {
+    const original = Object.assign(new Error("provider failed"), { code: 429 });
+    const error = new RetryExhaustedError("Max retries exceeded", original, undefined as unknown as number);
+
+    expect(error.attempts).toBe(1);
+    expect(error.lastError).toEqual({
+      code: "E4005",
+      message: "provider failed",
+      lastError: "provider failed",
+      lastErrorCode: undefined,
+    });
+    expect(error.getLastErrorCode()).toBeUndefined();
+  });
+
+  it("wraps structured retry metadata with nested last error text", () => {
+    const metadata: RetryErrorMetadata = {
+      code: "E503",
+      message: "provider unavailable",
+      provider: "anthropic",
+      lastError: "upstream timeout",
+      lastErrorCode: "ETIMEDOUT",
+    };
+
+    const error = new RetryExhaustedError(metadata, 3);
+
+    expect(error.originalError).toBeInstanceOf(Error);
+    expect(error.originalError?.message).toBe("upstream timeout");
+    expect(error.getRootCause()).toBe(error.originalError);
+    expect(error.getLastErrorCode()).toBe("ETIMEDOUT");
+  });
 });

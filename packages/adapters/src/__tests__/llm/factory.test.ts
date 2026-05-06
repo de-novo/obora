@@ -126,6 +126,31 @@ describe("Factory", () => {
       expect(adapter).toBeInstanceOf(PiAIAdapter);
       expect(adapter.id).toBe("amazon-bedrock");
     });
+
+    it("should create provider adapters with explicit model and base URL overrides", () => {
+      process.env!.OPENAI_API_KEY = "test-key";
+
+      const adapter = createAdapterFromEnv("openai", {
+        model: "custom-model",
+        baseUrl: "https://override.test/v1",
+      });
+
+      expect(adapter).toBeInstanceOf(PiAIAdapter);
+      expect(adapter.id).toBe("openai");
+    });
+
+    it("should use default development behavior when NODE_ENV is unset", () => {
+      process.env!.OBORA_LLM_PROVIDER = "openai";
+      delete process.env!.OPENAI_API_KEY;
+      delete process.env!.NODE_ENV;
+
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const adapter = createAdapterFromEnv();
+
+      expect(adapter).toBeInstanceOf(MockLLMAdapter);
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("OPENAI_API_KEY not set"));
+      warnSpy.mockRestore();
+    });
   });
 });
 
