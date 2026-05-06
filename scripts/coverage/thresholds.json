@@ -25,8 +25,8 @@
   },
   "@obora/dashboard": {
     "statements": 92,
-    "branches": 88,
-    "functions": 91,
+    "branches": 90,
+    "functions": 92,
     "lines": 92
   }
 }

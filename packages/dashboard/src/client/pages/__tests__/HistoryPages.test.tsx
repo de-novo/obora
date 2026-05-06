@@ -56,6 +56,20 @@ const repairLoop: PersistedRepairLoopSummary = {
   ],
 };
 
+function deferred<T>(): {
+  promise: Promise<T>;
+  reject: (reason?: unknown) => void;
+  resolve: (value: T) => void;
+} {
+  let reject!: (reason?: unknown) => void;
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, reject, resolve };
+}
+
 const artifact: ArtifactRecord = {
   id: 'artifact-1',
   runId: 'run-a',
@@ -278,9 +292,94 @@ describe('HistoryRunsPage', () => {
 
     expect(await screen.findByText('history list failed')).toBeTruthy();
   });
+
+  it('renders list fallback failures and repair rows without badges', async () => {
+    historyApi.fetchHistoryRuns.mockRejectedValueOnce('history list failed without Error');
+
+    render(<HistoryRunsPage onOpenRun={vi.fn()} />);
+
+    expect(await screen.findByText('Failed to load runs')).toBeTruthy();
+
+    cleanup();
+    historyApi.fetchHistoryRuns.mockResolvedValueOnce({
+      items: [
+        {
+          run: {
+            id: 'run-passed',
+            workflowName: 'passed-flow',
+            status: 'completed',
+            input: {},
+            startedAt: '2026-05-05T02:00:00.000Z',
+            completedAt: '2026-05-05T02:01:00.000Z',
+          },
+          repairLoop: {
+            validationFailed: 0,
+            validationPassed: 0,
+            repairStarted: 0,
+            repairCompleted: 0,
+            repairNoProgress: 0,
+            backEdgeTriggered: 0,
+            backEdgeExhausted: 0,
+            recentValidationFailures: [],
+          },
+          stepCount: 1,
+          costSummary: {
+            totalTokens: 0,
+            totalCostUsd: 0,
+            byStep: [],
+            byModel: [],
+          },
+        },
+      ],
+      total: 1,
+      limit: 20,
+      offset: 0,
+      repairLoopCounts: {
+        all: 1,
+        with: 1,
+        without: 0,
+        stalled: 0,
+        exhausted: 0,
+      },
+    } satisfies HistoryRunsResponse);
+
+    render(<HistoryRunsPage onOpenRun={vi.fn()} />);
+
+    expect(await screen.findByText('run-passed')).toBeTruthy();
+    expect(screen.getByText('passed')).toBeTruthy();
+    expect(screen.queryByText(/fail 0/)).toBeNull();
+  });
 });
 
 describe('HistoryRunDetailPage', () => {
+  it('ignores stale detail responses after unmount', async () => {
+    const successfulRequest = deferred<RunDetailResponse>();
+    historyApi.fetchHistoryRunDetail.mockReturnValueOnce(successfulRequest.promise);
+    const firstRender = render(<HistoryRunDetailPage runId="run-a" onBack={vi.fn()} />);
+
+    firstRender.unmount();
+    successfulRequest.resolve(runDetailResponse);
+    await successfulRequest.promise;
+
+    const failedRequest = deferred<RunDetailResponse>();
+    historyApi.fetchHistoryRunDetail.mockReturnValueOnce(failedRequest.promise);
+    const secondRender = render(<HistoryRunDetailPage runId="run-a" onBack={vi.fn()} />);
+
+    secondRender.unmount();
+    failedRequest.reject(new Error('late failure'));
+    await failedRequest.promise.catch(() => undefined);
+
+    expect(historyApi.fetchHistoryRunDetail).toHaveBeenCalledTimes(2);
+  });
+
+  it('renders fallback detail load failures', async () => {
+    historyApi.fetchHistoryRunDetail.mockRejectedValueOnce('detail failed without Error');
+
+    render(<HistoryRunDetailPage runId="run-a" onBack={vi.fn()} />);
+
+    expect(await screen.findByText('Failed to load run detail')).toBeTruthy();
+  });
+
   it('loads detail, previews artifacts, resumes suspended runs, and pages audit events', async () => {
     const user = userEvent.setup();
     const onBack = vi.fn();
@@ -336,6 +435,130 @@ describe('HistoryRunDetailPage', () => {
 
     await user.click(screen.getByRole('button', { name: /Back/ }));
     expect(onBack).toHaveBeenCalledOnce();
+  });
+
+  it('renders text previews, preview fallback errors, resume fallback errors, and sparse repair rows', async () => {
+    const user = userEvent.setup();
+    const sparseRepairLoop: PersistedRepairLoopSummary = {
+      validationFailed: 1,
+      validationPassed: 0,
+      repairStarted: 0,
+      repairCompleted: 0,
+      repairNoProgress: 0,
+      backEdgeTriggered: 0,
+      backEdgeExhausted: 1,
+      lastExhaustReason: 'retry ceiling reached',
+      recentValidationFailures: [
+        {
+          failedChecks: [{}],
+        },
+        {
+          stepName: 'validate',
+          failedChecks: [],
+        },
+      ],
+    };
+    const textArtifact: ArtifactRecord = {
+      ...artifact,
+      id: 'artifact-text',
+      stepName: 'missing-step',
+      name: 'notes.txt',
+      mimeType: 'text/plain',
+      storageRef: 'file:///tmp/notes.txt',
+    };
+    historyApi.fetchHistoryRunDetail.mockResolvedValueOnce({
+      ...runDetailResponse,
+      repairLoop: sparseRepairLoop,
+      artifacts: [textArtifact],
+      auditTimeline: [
+        {
+          id: 'audit-consensus',
+          runId: 'run-a',
+          stepName: 'review',
+          timestamp: '2026-05-05T01:05:00.000Z',
+          category: 'consensus',
+          action: 'consensus_vote',
+          actor: 'reviewer',
+          detail: { decision: 'approve' },
+          vote: { decision: 'approve' },
+        },
+        {
+          id: 'audit-execution',
+          runId: 'run-a',
+          stepName: 'draft',
+          timestamp: '2026-05-05T01:01:00.000Z',
+          category: 'execution',
+          action: 'step_started',
+          actor: 'runner',
+          detail: { step: 'draft' },
+        },
+      ],
+    } satisfies RunDetailResponse);
+    historyApi.fetchHistoryArtifactPreview.mockResolvedValueOnce({
+      artifact: textArtifact,
+      supported: true,
+      contentType: 'text/plain',
+      text: 'plain text preview',
+      truncated: false,
+    });
+
+    render(<HistoryRunDetailPage runId="run-a" onBack={vi.fn()} />);
+
+    expect(await screen.findByText('Exhaust reason: retry ceiling reached')).toBeTruthy();
+    expect(screen.getByText('check')).toBeTruthy();
+    expect(screen.getByText('consensus_vote')).toBeTruthy();
+    expect(screen.getByText('vote: approve')).toBeTruthy();
+    expect(screen.getByText('step_started')).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: 'Preview' }));
+    expect(await screen.findByRole('dialog')).toBeTruthy();
+    expect(screen.getByText('text')).toBeTruthy();
+    expect(screen.getByText('plain text preview')).toBeTruthy();
+    expect(screen.queryByText('Preview truncated for readability.')).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+
+    historyApi.fetchHistoryArtifactPreview.mockRejectedValueOnce('preview failed without Error');
+    await user.click(screen.getByRole('button', { name: 'Preview' }));
+    expect(await screen.findByText('Preview failed')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+
+    const jumpButtons = screen.getAllByRole('button', { name: 'Jump to step' });
+    await user.click(jumpButtons[jumpButtons.length - 1]!);
+    expect(screen.getByText('notes.txt')).toBeTruthy();
+
+    historyApi.resumeHistoryRun.mockRejectedValueOnce('resume failed without Error');
+    await user.click(screen.getByRole('button', { name: 'Resume run' }));
+    await user.click(screen.getByRole('button', { name: 'Yes, resume' }));
+
+    expect(await screen.findByText('Failed to resume run')).toBeTruthy();
+  });
+
+  it('renders resume Error messages and repair loops with no recent failures', async () => {
+    const user = userEvent.setup();
+    historyApi.fetchHistoryRunDetail.mockResolvedValueOnce({
+      ...runDetailResponse,
+      repairLoop: {
+        validationFailed: 0,
+        validationPassed: 1,
+        repairStarted: 0,
+        repairCompleted: 0,
+        repairNoProgress: 0,
+        backEdgeTriggered: 0,
+        backEdgeExhausted: 0,
+        recentValidationFailures: [],
+      },
+    } satisfies RunDetailResponse);
+    historyApi.resumeHistoryRun.mockRejectedValueOnce(new Error('resume failed with Error'));
+
+    render(<HistoryRunDetailPage runId="run-a" onBack={vi.fn()} />);
+
+    expect(await screen.findByText('Repair Loop')).toBeTruthy();
+    expect(screen.queryByText('Recent Validation Failures')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Resume run' }));
+    await user.click(screen.getByRole('button', { name: 'Yes, resume' }));
+
+    expect(await screen.findByText('resume failed with Error')).toBeTruthy();
   });
 
   it('renders empty completed detail state and unsupported previews', async () => {
