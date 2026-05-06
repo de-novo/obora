@@ -19,7 +19,7 @@
   },
   "@obora/cli": {
     "statements": 94,
-    "branches": 87,
+    "branches": 88,
     "functions": 96,
     "lines": 94
   },

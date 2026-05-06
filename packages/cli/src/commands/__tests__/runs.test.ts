@@ -34,6 +34,7 @@ import { createCLI } from "../../cli.js";
 import { ExitCode } from "../../utils/exit-codes.js";
 import {
   createRunsCommand,
+  createRuntime,
   getCliRepairLoopState,
   inspectPersistedRun,
   listRunsForCli,
@@ -74,6 +75,43 @@ function makeRepairLoopSummary(
     ...overrides,
   };
 }
+
+describe("runs runtime creation", () => {
+  it("uses default persistence settings and preserves custom adapters", async () => {
+    vi.mocked(loadConfig).mockResolvedValueOnce({} as never);
+
+    await createRuntime();
+
+    expect(OboraRuntime).toHaveBeenLastCalledWith({
+      persistence: {
+        enabled: true,
+        adapter: "sqlite",
+        sqlite: { path: "./data/obora.db" },
+      },
+    });
+
+    const custom = { instance: {} as import("@obora/runtime").StorageAdapter };
+    vi.mocked(loadConfig).mockResolvedValueOnce({
+      persistence: {
+        enabled: false,
+        adapter: "custom",
+        sqlite: { path: "./custom.db" },
+        custom,
+      },
+    } as never);
+
+    await createRuntime();
+
+    expect(OboraRuntime).toHaveBeenLastCalledWith({
+      persistence: {
+        enabled: false,
+        adapter: "custom",
+        sqlite: { path: "./custom.db" },
+        custom,
+      },
+    });
+  });
+});
 
 describe("runs list triage sorting", () => {
   it("sorts runs by validationFailed descending using persisted repairLoop metadata", () => {
@@ -732,6 +770,23 @@ describe("runs list triage sorting", () => {
     expect(error).toHaveBeenCalled();
   });
 
+  it("formats non-Error run storage failures", async () => {
+    oboraRuntimeState.instance = {
+      listRunRecords: vi.fn().mockRejectedValue("sqlite offline"),
+    };
+    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const cmd = createRunsCommand();
+
+    await cmd.parseAsync(["list"], { from: "user" });
+
+    expect(process.exitCode).toBe(ExitCode.EXECUTION_FAILED);
+    expect(error.mock.calls.map((args) => args.join(" ")).join("\n")).toContain(
+      "sqlite offline"
+    );
+  });
+
   it("uses validation exit code for invalid runs list options", async () => {
     oboraRuntimeState.instance = {
       listRunRecords: vi.fn().mockResolvedValue([]),
@@ -879,6 +934,34 @@ describe("runs inspect repair-loop summary", () => {
     ]);
   });
 
+  it("summarizes sparse repair-loop events with empty detail defaults", () => {
+    const summary = summarizeRepairLoopTimeline([
+      { action: "workflow.validation_failed" },
+      { action: "workflow.validation_passed" },
+      { action: "workflow.repair_started" },
+      { action: "workflow.repair_completed" },
+      { action: "workflow.repair_no_progress" },
+      { action: "workflow.back_edge_exhausted" },
+    ]);
+
+    expect(summary).toEqual(
+      expect.objectContaining({
+        validationFailed: 1,
+        validationPassed: 1,
+        repairStarted: 1,
+        repairCompleted: 1,
+        repairNoProgress: 1,
+        backEdgeExhausted: 1,
+        recentValidationFailures: [{ failedChecks: [] }],
+      })
+    );
+    expect(summary?.lastValidationSummary).toBeUndefined();
+    expect(summary?.lastRepairStep).toBeUndefined();
+    expect(summary?.lastAttempt).toBeUndefined();
+    expect(summary?.lastNoProgressReason).toBeUndefined();
+    expect(summary?.lastExhaustReason).toBeUndefined();
+  });
+
   it("summarizes repair-loop events with fallback detail fields", () => {
     const summary = summarizeRepairLoopTimeline([
       {
@@ -952,6 +1035,7 @@ describe("runs inspect repair-loop summary", () => {
         return [
           { stepName: "build_or_repair", status: "completed", durationMs: 100 },
           { stepName: "validate", status: "completed", durationMs: 50 },
+          { stepName: "notify", status: "completed" },
         ];
       },
       async getRunArtifacts() {
@@ -988,6 +1072,14 @@ describe("runs inspect repair-loop summary", () => {
             stepName: "validate",
             detail: { summary: "Validation passed" },
           },
+          {
+            action: "workflow.repair_no_progress",
+            detail: { reason: "same validation failure" },
+          },
+          {
+            action: "workflow.back_edge_exhausted",
+            detail: { reason: "max attempts" },
+          },
         ];
       },
     };
@@ -1002,9 +1094,12 @@ describe("runs inspect repair-loop summary", () => {
     expect(output).toContain("Validation Passed:   1");
     expect(output).toContain("Repair Started:      1");
     expect(output).toContain("Last Validation:     Validation passed");
+    expect(output).toContain("Last No-Progress:    same validation failure");
+    expect(output).toContain("Last Exhaust Reason: max attempts");
     expect(output).toContain("Recent Validation Failures (1):");
     expect(output).toContain("artifacts/VALIDATION-ATTEMPT-01.log");
     expect(output).toContain("artifacts/release-note.md");
+    expect(output).toContain("notify               completed");
   });
 
   it("prefers persisted repairLoop metadata over audit replay", async () => {
@@ -1244,9 +1339,7 @@ describe("runs inspect repair-loop summary", () => {
   });
 
   it("prints linked DLQ entry in text inspect output", async () => {
-    vi.mocked(loadConfig).mockResolvedValue({
-      dlq: { filePath: "./data/.obora/dlq/dead-letters.json" },
-    } as never);
+    vi.mocked(loadConfig).mockResolvedValue({} as never);
     vi.mocked(FileDLQStore).mockImplementation(
       () =>
         ({
@@ -1262,6 +1355,11 @@ describe("runs inspect repair-loop summary", () => {
                 errorMessage: "repair failed",
                 repairAttempts: 3,
                 status: "pending",
+                metadata: {
+                  repairLoop: {
+                    lastStopCategory: "repeated_critical_issue",
+                  },
+                },
               },
             ],
             lastUpdated: "2026-03-10T10:05:00.000Z",
@@ -1300,6 +1398,7 @@ describe("runs inspect repair-loop summary", () => {
     expect(output).toContain("Linked DLQ Entry:");
     expect(output).toContain("ID:               dlq-1");
     expect(output).toContain("Repair Attempts:  3");
+    expect(output).toContain("Stop Category:    repeated_critical_issue");
     expect(output).toContain("obora dlq inspect dlq-1");
   });
 
