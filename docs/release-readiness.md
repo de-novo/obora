@@ -61,7 +61,7 @@ Current enforced coverage floors:
 | `@obora/sdk` | 95 | 90 | 99 | 95 |
 | `@obora/runtime` | 91 | 87 | 88 | 91 |
 | `@obora/adapters` | 94 | 91 | 92 | 94 |
-| `@obora/cli` | 95 | 90 | 97 | 95 |
+| `@obora/cli` | 96 | 91 | 97 | 96 |
 | `@obora/dashboard` | 92 | 90 | 92 | 92 |
 
 Latest verified `pnpm verify:coverage` package measurements:
@@ -71,7 +71,7 @@ Latest verified `pnpm verify:coverage` package measurements:
 | `@obora/sdk` | 95.94% | 90.07% | 99.35% | 95.94% |
 | `@obora/runtime` | 91.06% | 87.09% | 88.18% | 91.06% |
 | `@obora/adapters` | 94.47% | 91.29% | 92.55% | 94.47% |
-| `@obora/cli` | 95.92% | 90.01% | 97.46% | 95.92% |
+| `@obora/cli` | 96.36% | 91.06% | 97.72% | 96.36% |
 | `@obora/dashboard` | 92.45% | 90.08% | 92.11% | 92.45% |
 
 The current dashboard baseline covers Node-testable dashboard code, TSX
@@ -87,6 +87,10 @@ step skill loading, and policy expression parsing.
 The current adapters branch floor is enforced at 91 after focused tests around
 agent config mutation parsing, default cwd resolution, last-agent reset cleanup,
 and non-Error write failure handling.
+
+The current CLI branch floor is enforced at 91 after focused tests around
+doctor shared provider/model guidance, formatter color initialization, and
+global option fallback handling.
 
 `pnpm verify:release` builds publishable packages, checks changelog release notes, runs npm-auth selftests, rejects SDK source console writes outside the explicit `ConsoleAlertChannel`, verifies the `@obora/sdk` public API snapshot for the root and `@obora/sdk/testing` exports, rejects source JSDoc tags that advertise scoped `@obora` module subpaths outside package exports, verifies Markdown `@obora` import samples against public package exports, compiles checked TypeScript snippets against built public declarations, validates checked shell snippets with `bash -n`, parses tutorial YAML/JSON snippets and semantically checks workflow/config/policy examples, runs tutorial quickstart and contract-first dry-run flows through the built CLI, verifies that `typecheck-public.d.ts` shims do not declare exports absent from built public declarations, validates package `npm pack --dry-run` output, validates `pnpm pack` package metadata, runs published-package import/require/TypeScript smoke checks, and selftests CLI package installation.
 

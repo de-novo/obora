@@ -2,7 +2,26 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { formatter } from "../formatter.js";
 
+const originalEnv = { ...process.env };
+const originalStdoutIsTTY = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");
+const originalStderrIsTTY = Object.getOwnPropertyDescriptor(process.stderr, "isTTY");
+
+function restoreIsTTYDescriptor(
+  stream: NodeJS.WriteStream,
+  descriptor: PropertyDescriptor | undefined
+): void {
+  const mutableStream = stream as NodeJS.WriteStream & { isTTY?: boolean };
+  if (descriptor) {
+    Object.defineProperty(mutableStream, "isTTY", descriptor);
+    return;
+  }
+  delete mutableStream.isTTY;
+}
+
 afterEach(() => {
+  process.env = { ...originalEnv };
+  restoreIsTTYDescriptor(process.stdout, originalStdoutIsTTY);
+  restoreIsTTYDescriptor(process.stderr, originalStderrIsTTY);
   formatter.setColorEnabled(false);
   vi.restoreAllMocks();
 });
@@ -37,5 +56,42 @@ describe("formatter", () => {
     expect(log).toHaveBeenCalledWith('{\n  "ok": true\n}');
     expect(table).toHaveBeenCalledTimes(1);
     expect(table).toHaveBeenCalledWith([{ name: "release", status: "ok" }]);
+  });
+
+  it("initializes color output as disabled when NO_COLOR is set", async () => {
+    vi.resetModules();
+    process.env = { ...originalEnv, NO_COLOR: "1" };
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const { formatter: freshFormatter } = await import("../formatter.js");
+
+    freshFormatter.success("done");
+
+    expect(log).toHaveBeenCalledWith("✅ done");
+  });
+
+  it("initializes color output as disabled in test environments", async () => {
+    vi.resetModules();
+    const { NO_COLOR: _noColor, VITEST: _vitest, ...envWithoutTestFlags } = originalEnv;
+    process.env = { ...envWithoutTestFlags, NODE_ENV: "test" };
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const { formatter: freshFormatter } = await import("../formatter.js");
+
+    freshFormatter.info("heads up");
+
+    expect(log).toHaveBeenCalledWith("ℹ heads up");
+  });
+
+  it("initializes color output from TTY state outside test environments", async () => {
+    vi.resetModules();
+    const { NO_COLOR: _noColor, VITEST: _vitest, NODE_ENV: _nodeEnv, ...envWithoutTestFlags } = originalEnv;
+    process.env = envWithoutTestFlags;
+    Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: true });
+    Object.defineProperty(process.stderr, "isTTY", { configurable: true, value: true });
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const { formatter: freshFormatter } = await import("../formatter.js");
+
+    freshFormatter.step("build");
+
+    expect(log.mock.calls[0]?.[0]).toContain("\u001b[2m");
   });
 });

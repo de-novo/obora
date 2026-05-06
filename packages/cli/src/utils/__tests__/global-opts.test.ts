@@ -40,4 +40,14 @@ describe("getGlobalOpts", () => {
     expect(opts.noColor).toBe(true);
     expect(setColorEnabled).toHaveBeenCalledWith(false);
   });
+
+  it("handles a missing command object defensively", () => {
+    vi.stubEnv("NO_COLOR", undefined);
+    const setColorEnabled = vi.spyOn(formatter, "setColorEnabled");
+
+    const opts = getGlobalOpts(null as unknown as Command);
+
+    expect(opts).toEqual({ noColor: false });
+    expect(setColorEnabled).toHaveBeenCalledWith(true);
+  });
 });
