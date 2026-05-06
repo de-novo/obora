@@ -172,6 +172,29 @@ describe("Blackboard core API", () => {
     expect(board.listenerCount("state.updated")).toBe(0);
   });
 
+  it("handles empty listener operations and recreates section accessors lazily", () => {
+    interface BlackboardHarness {
+      _stateAccessor?: unknown;
+      _knowledgeAccessor?: unknown;
+      _decisionsAccessor?: unknown;
+    }
+
+    const board = new Blackboard({ sessionId });
+    const missingListener = vi.fn();
+
+    expect(board.off("state.updated", missingListener)).toBe(board);
+    expect(board.emit("state.empty")).toBe(false);
+
+    const harness = board as unknown as BlackboardHarness;
+    harness._stateAccessor = undefined;
+    harness._knowledgeAccessor = undefined;
+    harness._decisionsAccessor = undefined;
+
+    expect(board.state.phase).toBe("idle");
+    expect(board.knowledge.facts).toEqual([]);
+    expect(board.decisions.current).toBeNull();
+  });
+
   it("clones deep reads and exposes raw reads when requested", () => {
     const board = new Blackboard({ sessionId });
     board.write("state.context.nested", { value: 1 });
@@ -185,6 +208,62 @@ describe("Blackboard core API", () => {
     expect(board.read<{ value: number }>("state.context.nested").value).toBe(3);
 
     expect(() => board.write("", "invalid")).toThrow("Invalid path");
+  });
+
+  it("restores partial JSON payloads through default section fallbacks", () => {
+    const metaOnly = Blackboard.fromJSON({ meta: {} });
+
+    expect(metaOnly.version).toBe(1);
+    expect(metaOnly.read("state.phase")).toBe("idle");
+    expect(metaOnly.read("state.context")).toEqual({});
+    expect(metaOnly.knowledge.facts).toEqual([]);
+    expect(metaOnly.decisions.pending).toEqual([]);
+
+    const partialSections = Blackboard.fromJSON({
+      meta: {},
+      state: {},
+      decisions: {},
+    });
+
+    expect(partialSections.state.agentCount).toBe(0);
+    expect(partialSections.state.taskCount).toBe(0);
+    expect(partialSections.decisions.current).toBeNull();
+    expect(partialSections.decisions.history).toEqual([]);
+    const decisions = partialSections.read<{ opinions: Map<string, unknown>; voting: Record<string, unknown> }>("decisions");
+    expect(decisions.opinions.size).toBe(0);
+    expect(decisions.voting).toEqual({});
+  });
+
+  it("clones the active decision in snapshots and transactions", () => {
+    const board = new Blackboard({ sessionId });
+    board.write("decisions.current", {
+      id: "resolution-1",
+      taskId: "task-1",
+      decision: "approve",
+    });
+
+    const state = board.getState();
+    expect(state.decisions.current).toEqual({
+      id: "resolution-1",
+      taskId: "task-1",
+      decision: "approve",
+    });
+
+    const failed = board.transaction([
+      {
+        type: "write",
+        path: "state.context.rollback",
+        value: true,
+        expectedVersion: 999,
+      },
+    ]);
+
+    expect(failed[0]?.success).toBe(false);
+    expect(board.read("decisions.current")).toEqual({
+      id: "resolution-1",
+      taskId: "task-1",
+      decision: "approve",
+    });
   });
 
   it("round-trips JSON state with maps and restores snapshots", async () => {

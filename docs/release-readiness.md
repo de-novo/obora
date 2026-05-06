@@ -59,7 +59,7 @@ Current enforced coverage floors:
 | Package | Statements | Branches | Functions | Lines |
 | --- | ---: | ---: | ---: | ---: |
 | `@obora/sdk` | 95 | 90 | 99 | 95 |
-| `@obora/runtime` | 90 | 86 | 86 | 90 |
+| `@obora/runtime` | 90 | 87 | 86 | 90 |
 | `@obora/adapters` | 94 | 90 | 92 | 94 |
 | `@obora/cli` | 95 | 90 | 97 | 95 |
 | `@obora/dashboard` | 92 | 90 | 92 | 92 |
@@ -68,8 +68,8 @@ Latest verified `pnpm verify:coverage` package measurements:
 
 | Package | Statements | Branches | Functions | Lines |
 | --- | ---: | ---: | ---: | ---: |
-| `@obora/sdk` | 95.94% | 90.15% | 99.35% | 95.94% |
-| `@obora/runtime` | 90.11% | 86.28% | 86.54% | 90.11% |
+| `@obora/sdk` | 95.94% | 90.07% | 99.35% | 95.94% |
+| `@obora/runtime` | 90.74% | 87.03% | 86.76% | 90.74% |
 | `@obora/adapters` | 94.00% | 90.26% | 92.55% | 94.00% |
 | `@obora/cli` | 95.92% | 90.01% | 97.46% | 95.92% |
 | `@obora/dashboard` | 92.45% | 90.08% | 92.11% | 92.45% |
@@ -78,9 +78,10 @@ The current dashboard baseline covers Node-testable dashboard code, TSX
 component tests, `src/client/App.tsx`, and page TSX tests. It intentionally
 excludes only the browser entrypoint `src/client/main.tsx`.
 
-The current runtime baseline is above 90% for statements and lines. Runtime
-branch coverage is intentionally tracked as its own next hardening lane rather
-than inflated by broad refactors.
+The current runtime baseline is above 90% for statements and lines, and the
+runtime branch floor is now enforced at 87 after focused tests around resume,
+gate timeout, artifact capture, blackboard state defaults, step skill loading,
+and policy expression parsing.
 
 `pnpm verify:release` builds publishable packages, checks changelog release notes, runs npm-auth selftests, rejects SDK source console writes outside the explicit `ConsoleAlertChannel`, verifies the `@obora/sdk` public API snapshot for the root and `@obora/sdk/testing` exports, rejects source JSDoc tags that advertise scoped `@obora` module subpaths outside package exports, verifies Markdown `@obora` import samples against public package exports, compiles checked TypeScript snippets against built public declarations, validates checked shell snippets with `bash -n`, parses tutorial YAML/JSON snippets and semantically checks workflow/config/policy examples, runs tutorial quickstart and contract-first dry-run flows through the built CLI, verifies that `typecheck-public.d.ts` shims do not declare exports absent from built public declarations, validates package `npm pack --dry-run` output, validates `pnpm pack` package metadata, runs published-package import/require/TypeScript smoke checks, and selftests CLI package installation.
 

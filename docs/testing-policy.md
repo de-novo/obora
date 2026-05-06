@@ -26,7 +26,7 @@ Obora 전 패키지의 테스트 기준을 통일해 변경 안정성과 릴리�
 | Package | Statements | Branches | Functions | Lines |
 | --- | ---: | ---: | ---: | ---: |
 | `@obora/sdk` | 95 | 90 | 99 | 95 |
-| `@obora/runtime` | 90 | 86 | 86 | 90 |
+| `@obora/runtime` | 90 | 87 | 86 | 90 |
 | `@obora/adapters` | 94 | 90 | 92 | 94 |
 | `@obora/cli` | 95 | 90 | 97 | 95 |
 | `@obora/dashboard` | 92 | 90 | 92 | 92 |
@@ -35,15 +35,16 @@ Obora 전 패키지의 테스트 기준을 통일해 변경 안정성과 릴리�
 
 | Package | Statements | Branches | Functions | Lines |
 | --- | ---: | ---: | ---: | ---: |
-| `@obora/sdk` | 95.94% | 90.15% | 99.35% | 95.94% |
-| `@obora/runtime` | 90.11% | 86.28% | 86.54% | 90.11% |
+| `@obora/sdk` | 95.94% | 90.07% | 99.35% | 95.94% |
+| `@obora/runtime` | 90.74% | 87.03% | 86.76% | 90.74% |
 | `@obora/adapters` | 94.00% | 90.26% | 92.55% | 94.00% |
 | `@obora/cli` | 95.92% | 90.01% | 97.46% | 95.92% |
 | `@obora/dashboard` | 92.45% | 90.08% | 92.11% | 92.45% |
 
-다음 상향 후보는 `@obora/runtime` branch floor입니다. 우선순위는
-`RuntimeOrchestrator`, `orchestrator/runtime/step-executor`, blackboard state
-transition 주변의 미커버 분기를 실제 동작 테스트로 고정하는 순서입니다.
+다음 상향 후보는 `@obora/runtime` function floor 또는
+`@obora/adapters` provider conformance coverage입니다. runtime branch floor는
+resume, gate timeout, artifact capture, blackboard default state, step skill
+loading, policy expression parsing 테스트 보강 후 87로 상향했습니다.
 
 ## CI 설정 원칙
 - 기본 로컬/CI 게이트는 clean checkout 기준 아래 순서로 고정합니다.

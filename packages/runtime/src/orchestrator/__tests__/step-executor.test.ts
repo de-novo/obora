@@ -10,6 +10,7 @@ import {
   type AgentResolver,
 } from "../StepScheduler.js";
 import { OboraError, type Step } from "../workflow/index.js";
+import { SkillLoader } from "@obora/adapters";
 import type { BaseAgent, Task, TaskResult, AgentContext } from "@obora-kit/runtime";
 import { Blackboard } from "../../blackboard/core/blackboard.js";
 
@@ -177,6 +178,53 @@ describe("executeStep — success", () => {
     expect(unsubscribe).toHaveBeenCalledTimes(1);
   });
 
+  it("should load step skills, configure runtime extensions, and tear them down", async () => {
+    const loadSkills = vi.spyOn(SkillLoader.prototype, "loadSkills").mockResolvedValue({
+      loaded: [],
+      tools: [],
+      systemPrompt: "Use loaded guidance.",
+    });
+    const teardown = vi.spyOn(SkillLoader.prototype, "teardown").mockResolvedValue(undefined);
+    const configureRuntimeExtensions = vi.fn();
+    const clearRuntimeExtensions = vi.fn();
+    const agent = {
+      id: "agent-with-skills",
+      configureRuntimeExtensions,
+      clearRuntimeExtensions,
+      execute: vi.fn(async (): Promise<TaskResult> => ({
+        taskId: "test-step",
+        success: true,
+        output: "skill output",
+        duration: 1,
+        tokensUsed: { prompt: 1, completion: 1, total: 2 },
+      })),
+    } as unknown as BaseAgent;
+
+    try {
+      const result = await executeStep(
+        makeStep({ skills: ["skill-a", "skill-b"] }),
+        makeResolver(agent),
+        makeContext(),
+      );
+
+      expect(result).toEqual({ success: true, output: "skill output" });
+      expect(loadSkills).toHaveBeenCalledWith(["skill-a", "skill-b"], {
+        cwd: process.cwd(),
+        agentId: "agent-with-skills",
+        stepName: "test-step",
+      });
+      expect(configureRuntimeExtensions).toHaveBeenCalledWith({
+        tools: [],
+        systemPromptAppend: "Use loaded guidance.",
+      });
+      expect(teardown).toHaveBeenCalledWith([]);
+      expect(clearRuntimeExtensions).toHaveBeenCalledTimes(1);
+    } finally {
+      loadSkills.mockRestore();
+      teardown.mockRestore();
+    }
+  });
+
   it("should fall back to the default timeout when step.timeout is invalid", async () => {
     const agent = makeAgent();
 
@@ -304,6 +352,51 @@ describe("executeStep — agent failure", () => {
       message: "all attempts failed",
       attempts: 3,
       lastError: "E4011",
+    });
+  });
+
+  it("should derive retry metadata from the last error fallback", async () => {
+    const retryError = Object.assign(new Error("last error stored"), {
+      name: "RetryExhaustedError",
+      attempts: 2,
+      lastError: { lastErrorCode: "E4013" },
+    });
+    const agent = {
+      execute: vi.fn(async (): Promise<TaskResult> => {
+        throw retryError;
+      }),
+    } as unknown as BaseAgent;
+
+    const result = await executeStep(makeStep(), makeResolver(agent), makeContext());
+
+    expect(result.success).toBe(false);
+    expect(result.diagnosisCode).toBe("E4005");
+    expect(result.errorMeta).toMatchObject({
+      attempts: 2,
+      lastError: "E4013",
+    });
+  });
+
+  it("should derive retry metadata from root cause when no coded last error exists", async () => {
+    const retryError = Object.assign(new Error("root cause stored"), {
+      name: "RetryExhaustedError",
+      attempts: 2,
+      getLastErrorCode: () => undefined,
+      getRootCause: () => Object.assign(new Error("provider limited"), { code: "E4011" }),
+    });
+    const agent = {
+      execute: vi.fn(async (): Promise<TaskResult> => {
+        throw retryError;
+      }),
+    } as unknown as BaseAgent;
+
+    const result = await executeStep(makeStep(), makeResolver(agent), makeContext());
+
+    expect(result.success).toBe(false);
+    expect(result.diagnosisCode).toBe("E4005");
+    expect(result.errorMeta).toMatchObject({
+      attempts: 2,
+      lastError: "E4005",
     });
   });
 });

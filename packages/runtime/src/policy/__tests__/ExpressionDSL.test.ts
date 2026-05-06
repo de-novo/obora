@@ -62,6 +62,31 @@ describe("Expression DSL parser", () => {
     });
   });
 
+  it("parses escaped strings, nulls, decimals, booleans, and mixed array literals", () => {
+    expect(parseExpression("context.value == null")).toMatchObject({
+      type: "comparison",
+      right: { type: "literal", value: null },
+    });
+
+    const ast = parseExpression("in(action.name, ['file\\'read', null, 3.5, true])");
+    expect(ast).toMatchObject({
+      type: "function_call",
+      name: "in",
+      args: [
+        { type: "field_ref", path: ["action", "name"] },
+        {
+          type: "array_literal",
+          items: [
+            { type: "literal", value: "file'read" },
+            { type: "literal", value: null },
+            { type: "literal", value: 3.5 },
+            { type: "literal", value: true },
+          ],
+        },
+      ],
+    });
+  });
+
   it("parses nested expressions with parentheses", () => {
     const ast = parseExpression('(context.stepName == "deploy" || context.stepName == "release") && !contains(action.name, "danger")');
     expect(ast).toMatchObject({ type: "logical", operator: "&&" });
@@ -82,6 +107,18 @@ describe("Expression DSL parser", () => {
 
   it("handles parse errors", () => {
     expect(() => parseExpression('context.stepName == "deploy" &&')).toThrow("POLICY_2007");
+  });
+
+  it("rejects empty, malformed, and unsupported expressions", () => {
+    expect(() => parseExpression("")).toThrow("Expression cannot be empty");
+    expect(() => parseExpression('"unterminated')).toThrow("Unterminated string");
+    expect(() => parseExpression('"unterminated\\')).toThrow("Unterminated string");
+    expect(() => parseExpression("context.value == 1.2.3")).toThrow("Invalid number");
+    expect(() => parseExpression("tenant.value == true")).toThrow("must start with");
+    expect(() => parseExpression("context.123bad == true")).toThrow("Invalid field segment");
+    expect(() => parseExpression("context.stepName ?")).toThrow("Unexpected character");
+    expect(() => parseExpression("contains(action.name, 'shell'")).toThrow("Expected token paren_close");
+    expect(() => parseExpression("[true, false")).toThrow("Expected token bracket_close");
   });
 
   it("rejects deeply nested expressions beyond max depth", () => {

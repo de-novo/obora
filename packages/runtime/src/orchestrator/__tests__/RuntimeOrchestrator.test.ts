@@ -6,9 +6,10 @@ import type { PolicyAction, PolicyContext, PolicyDecision, PolicySet } from "../
 import type { PolicyEngine } from "../../policy/PolicyEngine.js";
 import { InMemoryAuditStore } from "../../audit/InMemoryAuditStore.js";
 import { RecoveryEngine } from "../../recovery/RecoveryEngine.js";
-import { DefaultStateBinder } from "../../state/StateBinder.js";
+import { DefaultStateBinder, type StateBinder } from "../../state/StateBinder.js";
 import { StateManager } from "../../state/StateManager.js";
 import type { StorageAdapter } from "../../storage/types.js";
+import { computePolicyHash } from "../../checkpoint/policy-hash.js";
 import { DefaultRuntimeOrchestrator } from "../RuntimeOrchestrator.js";
 
 function createPolicyEngine(
@@ -277,6 +278,37 @@ steps:
       status: "approved",
       fallback: "auto-approve",
     });
+  });
+
+  it("fails auto-approve timeout when the waiting context was removed", async () => {
+    interface RuntimeHarness {
+      waitingContexts: Map<string, unknown>;
+    }
+
+    const orchestrator = new DefaultRuntimeOrchestrator({
+      cellManager: createCellManager([]),
+      policyEngine: createPolicyEngine((action) =>
+        action.name === "deploy"
+          ? { type: "gate", gateType: "human-approval", config: { timeout: "1h", fallback: "auto-approve" } }
+          : { type: "allow" }
+      ),
+    });
+
+    orchestrator.define("gate-timeout-missing-context", {
+      name: "gate-timeout-missing-context",
+      steps: [
+        { name: "build", agent: "analyst" },
+        { name: "deploy", agent: "executor", depends_on: ["build"] },
+      ],
+    });
+
+    const waiting = await orchestrator.run("gate-timeout-missing-context", {});
+    const harness = orchestrator as unknown as RuntimeHarness;
+    harness.waitingContexts.delete(waiting.id);
+
+    await expect(orchestrator.onGateTimeout(waiting.id)).rejects.toThrow(
+      `Execution waiting context is missing: ${waiting.id}`,
+    );
   });
 
   it("fails on gate timeout when fallback is fail", async () => {
@@ -1015,6 +1047,138 @@ steps:
     expect(resumedExecuted).toEqual(["implement", "verify"]);
   });
 
+  it("reports resume precondition failures with persisted run records", async () => {
+    const storageAdapter = createInMemoryStorageAdapter();
+    const orchestrator = new DefaultRuntimeOrchestrator({
+      cellManager: createCellManager([]),
+      policyEngine: createPolicyEngine(),
+      storageAdapter,
+    });
+
+    await expect(orchestrator.resume("missing-run")).rejects.toThrow("Run not found: missing-run");
+
+    await storageAdapter.saveRun({
+      id: "run-without-checkpoint",
+      workflowName: "missing-workflow",
+      status: "failed",
+      input: {},
+      startedAt: new Date(0).toISOString(),
+    });
+    await expect(orchestrator.resume("run-without-checkpoint")).rejects.toThrow(
+      "No checkpoint found for run: run-without-checkpoint",
+    );
+  });
+
+  it("rejects resume on policy drift and reports missing workflow after checkpoint load", async () => {
+    const storageAdapter = createInMemoryStorageAdapter();
+    const runId = "resume-drift-run";
+    const initial = new DefaultRuntimeOrchestrator({
+      cellManager: createCellManager([]),
+      policyEngine: createPolicyEngine(),
+      storageAdapter,
+    }, { createExecutionId: () => runId });
+    initial.setPolicyConfig({ resources: { maxCostUsd: 1 } });
+    initial.define("resume-drift-workflow", {
+      name: "resume-drift-workflow",
+      steps: [{ name: "generate", agent: "analyst" }],
+    });
+
+    await expect(initial.run("resume-drift-workflow", {})).resolves.toMatchObject({ status: "completed" });
+
+    const drifted = new DefaultRuntimeOrchestrator({
+      cellManager: createCellManager([]),
+      policyEngine: createPolicyEngine(),
+      storageAdapter,
+    });
+    drifted.setPolicyConfig({ resources: { maxCostUsd: 2 } });
+    await expect(drifted.resume(runId, { driftPolicy: "reject" })).rejects.toThrow("Policy drift detected");
+
+    const withoutDefinition = new DefaultRuntimeOrchestrator({
+      cellManager: createCellManager([]),
+      policyEngine: createPolicyEngine(),
+      storageAdapter,
+    });
+    withoutDefinition.setPolicyConfig({ resources: { maxCostUsd: 1 } });
+    await expect(withoutDefinition.resume(runId)).rejects.toThrow("Workflow is not defined: resume-drift-workflow");
+  });
+
+  it("restores checkpoint snapshot state and applies restore, skip, and rerun policies", async () => {
+    const storageAdapter = createInMemoryStorageAdapter();
+    const bind = vi.fn(async () => undefined);
+    const stateBinder: StateBinder = { bind };
+    const runId = "resume-snapshot-run";
+    const startedAt = new Date(0).toISOString();
+
+    await storageAdapter.saveRun({
+      id: runId,
+      workflowName: "resume-snapshot-workflow",
+      status: "failed",
+      input: { request: "resume" },
+      startedAt,
+    });
+    await storageAdapter.saveStep({
+      id: "step-generate",
+      runId,
+      stepName: "generate",
+      status: "completed",
+      output: { cached: true },
+      startedAt,
+      completedAt: startedAt,
+    });
+    await storageAdapter.saveStep({
+      id: "step-optional",
+      runId,
+      stepName: "optional",
+      status: "skipped",
+      startedAt,
+    });
+    await storageAdapter.saveCheckpoint({
+      id: "checkpoint-snapshot",
+      runId,
+      stepName: "optional",
+      completedSteps: ["generate"],
+      stateSnapshot: {
+        "knowledge.answer": "cached",
+        "__obora.loop.verify": { iterationCount: 1 },
+        ignoredFunction: () => "skip",
+        ignoredSymbol: Symbol("skip"),
+      },
+      policyHash: computePolicyHash({}),
+      createdAt: startedAt,
+    });
+
+    const executed: string[] = [];
+    const orchestrator = new DefaultRuntimeOrchestrator({
+      cellManager: createCellManager(executed),
+      policyEngine: createPolicyEngine(),
+      storageAdapter,
+      stateBinder,
+    });
+    orchestrator.define("resume-snapshot-workflow", {
+      name: "resume-snapshot-workflow",
+      steps: [
+        { name: "generate", agent: "analyst" },
+        { name: "optional", agent: "reviewer", depends_on: ["generate"] },
+        { name: "rerun", agent: "executor", depends_on: ["optional"] },
+      ],
+    });
+
+    const result = await orchestrator.resume(runId);
+
+    expect(result.execution.status).toBe("completed");
+    expect(result.restoredSteps).toEqual(["generate"]);
+    expect(result.rerunSteps).toEqual(["rerun"]);
+    expect(result.execution.stepRecords.optional.status).toBe("skipped");
+    expect(result.execution.outputs.generate).toEqual({ cached: true });
+    expect(result.execution.outputs["__obora.loop.verify"]).toEqual({ iterationCount: 1 });
+    expect(executed).toEqual(["rerun"]);
+    expect(bind).toHaveBeenCalledTimes(2);
+    expect(bind.mock.calls.map((call) => call[1][0]?.target)).toEqual([
+      "knowledge.answer",
+      "__obora.loop.verify",
+    ]);
+  });
+
   it("emits starvation timeout warning when a parallel step is repeatedly blocked by loop back-edge", async () => {
     const auditTrail = new InMemoryAuditStore();
     const timestamps = [
@@ -1070,6 +1234,66 @@ steps:
       event.type === "workflow.step_starvation_warning"
       && (event.data as { action?: string }).action === "timeout");
     expect(starvationEvent).toBeDefined();
+  });
+
+  it("emits starvation continue warning while blocked parallel steps remain within the wait budget", async () => {
+    const auditTrail = new InMemoryAuditStore();
+    const timestamps = [
+      Date.UTC(2026, 1, 17, 0, 0, 0, 0),
+      Date.UTC(2026, 1, 17, 0, 0, 0, 1),
+      Date.UTC(2026, 1, 17, 0, 0, 0, 2),
+      Date.UTC(2026, 1, 17, 0, 0, 0, 3),
+      Date.UTC(2026, 1, 17, 0, 0, 0, 4),
+      Date.UTC(2026, 1, 17, 0, 0, 0, 5),
+    ];
+    let idx = 0;
+    const now = () => new Date(timestamps[Math.min(idx++, timestamps.length - 1)]!);
+
+    const orchestrator = new DefaultRuntimeOrchestrator({
+      cellManager: createCellManager([], undefined, { failCounts: { verify: 1 } }),
+      policyEngine: createPolicyEngine(),
+      auditTrail,
+    }, {
+      starvationTimeoutMs: 60_000,
+      now,
+    });
+
+    orchestrator.define("starvation-parallel-continue", {
+      name: "starvation-parallel-continue",
+      config: { max_parallel: 2 },
+      steps: [
+        { name: "bootstrap", agent: "init" },
+        { name: "implement", agent: "coder", depends_on: ["bootstrap"] },
+        { name: "side1", agent: "s", depends_on: ["bootstrap"] },
+        { name: "side2", agent: "s", depends_on: ["bootstrap"] },
+        {
+          name: "verify",
+          agent: "verifier",
+          depends_on: ["implement"],
+          on_fail: {
+            goto: "implement",
+            max_iterations: 3,
+            escalate_on_exhaust: "fail",
+            cooldown_ms: 0,
+            reset_state: false,
+            max_cost: null,
+            max_cost_escalation: null,
+          },
+        },
+      ],
+    });
+
+    const execution = await orchestrator.run("starvation-parallel-continue", {});
+    expect(execution.status).toBe("completed");
+    expect(execution.stepRecords.side1.error).toBeUndefined();
+    expect(execution.stepRecords.side2.error).toBeUndefined();
+
+    const events = await auditTrail.query({ executionId: execution.id });
+    const actions = events
+      .filter((event) => event.type === "workflow.step_starvation_warning")
+      .map((event) => (event.data as { action?: string }).action);
+    expect(actions).toContain("continue");
+    expect(actions).not.toContain("timeout");
   });
 
   it("runs state binding after step completion and records end-to-end audit events", async () => {
@@ -1329,6 +1553,80 @@ steps:
     expect(execution.status).toBe("completed");
     expect(artifactStore.save).toHaveBeenCalledTimes(1);
     expect(saveArtifact).toHaveBeenCalledTimes(1);
+  });
+
+  it("records an audit error when artifact capture fails without failing the run", async () => {
+    const auditTrail = new InMemoryAuditStore();
+    const storage: StorageAdapter = {
+      saveRun: async () => undefined,
+      getRun: async () => null,
+      listRuns: async () => [],
+      saveStep: async () => undefined,
+      getSteps: async () => [],
+      saveArtifact: async (record) => record,
+      getArtifacts: async () => [],
+      deleteArtifact: async () => undefined,
+      saveCheckpoint: async () => undefined,
+      getLatestCheckpoint: async () => null,
+      saveCost: async () => undefined,
+      getCosts: async () => [],
+      getRunCostSummary: async () => ({ totalTokens: 0, totalCostUsd: 0, byStep: [], byModel: [] }),
+      saveAuditEvent: async () => undefined,
+      getAuditTimeline: async () => [],
+    };
+    const artifactStore = {
+      save: vi.fn(async () => {
+        throw new Error("artifact backend unavailable");
+      }),
+      get: vi.fn(),
+      list: vi.fn(),
+      delete: vi.fn(),
+    };
+    const cellManager = new CellManager({
+      createCellContext: () => ({
+        cellId: "artifact-error-cell",
+        blackboard: { read: () => undefined, write: () => {} },
+        tools: { invoke: async () => ({ ok: true }) },
+        audit: { record: () => {} },
+        config: {},
+      }),
+      createCell: ({ id }) => ({
+        id,
+        status: "idle",
+        execute: async () => ({
+          success: true,
+          output: { artifacts: [{ name: "report.txt", data: "payload" }] },
+          stateChanges: [],
+          toolCalls: [],
+          metrics: { startTime: new Date(), endTime: new Date(), durationMs: 1, toolCallCount: 0 },
+        }),
+        suspend: async () => {},
+        resume: async () => {},
+        abort: async () => {},
+      }),
+    });
+    const orchestrator = new DefaultRuntimeOrchestrator({
+      cellManager,
+      policyEngine: createPolicyEngine(),
+      storageAdapter: storage,
+      artifactStore: artifactStore as unknown as import("../../artifacts/types.js").ArtifactStore,
+      auditTrail,
+    });
+    orchestrator.define("artifact-capture-error", {
+      name: "artifact-capture-error",
+      steps: [{ name: "generate", agent: "writer" }],
+    });
+
+    const execution = await orchestrator.run("artifact-capture-error", {});
+
+    expect(execution.status).toBe("completed");
+    expect(artifactStore.save).toHaveBeenCalledOnce();
+    const events = await auditTrail.query({ executionId: execution.id });
+    expect(events.find((event) => event.type === "error")?.data).toMatchObject({
+      stepName: "generate",
+      message: "Artifact capture failed",
+      error: "artifact backend unavailable",
+    });
   });
 
   it("rejects missing workflows, invalid DAGs, invalid back-edges, and non-waiting gate operations", async () => {
