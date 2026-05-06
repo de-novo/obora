@@ -19,6 +19,32 @@ Obora 전 패키지의 테스트 기준을 통일해 변경 안정성과 릴리�
 - baseline은 퇴행 방지 기준이며 전체 레포 일괄 90% 목표가 아닙니다. 기준값을 올릴 때는 테스트 보강과 threshold 상향을 같은 변경 슬라이스에 포함합니다.
 - dashboard baseline은 현재 Node-testable surface, TSX component tests, `App.tsx`, page TSX jsdom tests 기준입니다. 브라우저 entrypoint인 `main.tsx`만 coverage 대상에서 제외합니다.
 
+## 현재 Coverage Baseline
+`scripts/coverage/thresholds.json`이 현재 강제하는 package floor는 다음과 같습니다.
+이 표는 `pnpm verify:coverage` 기준과 함께 갱신해야 합니다.
+
+| Package | Statements | Branches | Functions | Lines |
+| --- | ---: | ---: | ---: | ---: |
+| `@obora/sdk` | 95 | 90 | 99 | 95 |
+| `@obora/runtime` | 90 | 86 | 86 | 90 |
+| `@obora/adapters` | 94 | 90 | 92 | 94 |
+| `@obora/cli` | 95 | 90 | 97 | 95 |
+| `@obora/dashboard` | 92 | 90 | 92 | 92 |
+
+최근 검증된 `pnpm verify:coverage` 측정값은 다음과 같습니다.
+
+| Package | Statements | Branches | Functions | Lines |
+| --- | ---: | ---: | ---: | ---: |
+| `@obora/sdk` | 95.94% | 90.15% | 99.35% | 95.94% |
+| `@obora/runtime` | 90.11% | 86.28% | 86.54% | 90.11% |
+| `@obora/adapters` | 94.00% | 90.26% | 92.55% | 94.00% |
+| `@obora/cli` | 95.92% | 90.01% | 97.46% | 95.92% |
+| `@obora/dashboard` | 92.45% | 90.08% | 92.11% | 92.45% |
+
+다음 상향 후보는 `@obora/runtime` branch floor입니다. 우선순위는
+`RuntimeOrchestrator`, `orchestrator/runtime/step-executor`, blackboard state
+transition 주변의 미커버 분기를 실제 동작 테스트로 고정하는 순서입니다.
+
 ## CI 설정 원칙
 - 기본 로컬/CI 게이트는 clean checkout 기준 아래 순서로 고정합니다.
   1. `pnpm install`
@@ -44,3 +70,5 @@ Obora 전 패키지의 테스트 기준을 통일해 변경 안정성과 릴리�
 ## 운영 원칙
 - 버그 수정 PR에는 회귀 테스트를 함께 추가합니다.
 - 테스트 코드도 제품 코드와 동일한 코드리뷰 기준을 적용합니다.
+- 문서가 coverage나 release 상태를 설명할 때는 `pnpm verify:coverage` 또는
+  release gate 출력으로 확인한 수치만 기록합니다.
