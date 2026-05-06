@@ -112,7 +112,7 @@ import type {
 } from "@obora/sdk";
 
 import { formatter } from "../../utils/formatter.js";
-import { createRunCommand, runRun } from "../run.js";
+import { createRunCommand, normalizeRunExecutionOptions, runRun } from "../run.js";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -330,6 +330,32 @@ describe("run command", () => {
     });
   });
 
+  describe("execution option normalization", () => {
+    it("should normalize optional and valid timeout values", () => {
+      expect(normalizeRunExecutionOptions({}, {})).toEqual(
+        expect.objectContaining({ timeout: undefined })
+      );
+      expect(normalizeRunExecutionOptions({}, { timeout: "" })).toEqual(
+        expect.objectContaining({ timeout: undefined })
+      );
+      expect(normalizeRunExecutionOptions({}, { timeout: 25 })).toEqual(
+        expect.objectContaining({ timeout: 25 })
+      );
+      expect(normalizeRunExecutionOptions({}, { timeout: "50" })).toEqual(
+        expect.objectContaining({ timeout: 50 })
+      );
+    });
+
+    it("should reject non-positive numeric timeout values", () => {
+      expect(() => normalizeRunExecutionOptions({}, { timeout: 0 })).toThrow(
+        "Invalid execution timeout: 0"
+      );
+      expect(() => normalizeRunExecutionOptions({}, { timeout: 1.5 })).toThrow(
+        "Invalid execution timeout: 1.5"
+      );
+    });
+  });
+
   // ─── workflow execution ──────────────────────────────────────────────────
 
   describe("workflow execution", () => {
@@ -439,6 +465,213 @@ describe("run command", () => {
       );
       expect(mockRuntimeInstance.on).toHaveBeenCalledWith("error", expect.any(Function));
     });
+
+    it("should use explicit debug files and summarize debug events", async () => {
+      mockHandle.wait.mockImplementationOnce(async () => {
+        const handlers = new Map(
+          mockRuntimeInstance.on.mock.calls.map((call) => [call[0], call[1]])
+        );
+
+        handlers.get("execution_start")?.({
+          executionId: "exec-test-123",
+          data: { executionId: "exec-test-123" },
+        });
+        handlers.get("execution_end")?.({
+          executionId: "exec-test-123",
+          data: {
+            status: "completed",
+            debugState: {
+              blackboard: { failures: 0, facts: 2 },
+              observerReport: { totalRetries: 1, totalValidationFailures: 0 },
+            },
+          },
+        });
+        handlers.get("step_start")?.({
+          executionId: "exec-test-123",
+          data: { stepName: "draft" },
+        });
+        handlers.get("step_end")?.({
+          executionId: "exec-test-123",
+          data: { stepName: "draft", status: "completed", durationMs: 12 },
+        });
+        handlers.get("workflow.validation_failed")?.({
+          executionId: "exec-test-123",
+          data: {
+            stepName: "validate",
+            failedChecks: [],
+            summary: { reason: "missing marker" },
+            debugState: {
+              blackboard: { failures: 1, facts: 3 },
+              observer: { totalValidationFailures: 1, totalBackEdges: 0 },
+            },
+          },
+        });
+        handlers.get("workflow.validation_passed")?.({
+          executionId: "exec-test-123",
+          data: { stepName: "validate", summary: "ok" },
+        });
+        handlers.get("workflow.repair_started")?.({
+          executionId: "exec-test-123",
+          data: {
+            stepName: "repair",
+            attempt: 2,
+            reflectorHint: "retry with evidence",
+            debugState: {
+              blackboard: { failures: 1, stepOutputs: { draft: "long output" } },
+              observer: { totalRepairs: 2, totalValidationFailures: 1 },
+            },
+          },
+        });
+        handlers.get("workflow.repair_completed")?.({
+          executionId: "exec-test-123",
+          data: { stepName: "repair", attempt: 2 },
+        });
+        handlers.get("workflow.repair_no_progress")?.({
+          executionId: "exec-test-123",
+          data: { sourceStep: "repair", category: "repeat", reason: "same output" },
+        });
+        handlers.get("workflow.back_edge_triggered")?.({
+          executionId: "exec-test-123",
+          data: { sourceStep: "validate", targetStep: "repair", reason: "failed" },
+        });
+        handlers.get("workflow.back_edge_exhausted")?.({
+          executionId: "exec-test-123",
+          data: { sourceStep: "validate", targetStep: "repair", reason: "limit" },
+        });
+        handlers.get("warning")?.({
+          executionId: "exec-test-123",
+          data: { message: "warned" },
+        });
+        handlers.get("error")?.({
+          executionId: "exec-test-123",
+          data: { error: "failed" },
+        });
+        handlers.get("knowledge_context_attached")?.({
+          executionId: "exec-test-123",
+          data: { workflowName: "my-workflow", itemCount: 2 },
+        });
+        handlers.get("execution_start")?.({
+          executionId: "exec-test-123",
+          data: {},
+        });
+        handlers.get("execution_end")?.({
+          executionId: "exec-test-123",
+          data: {},
+        });
+        handlers.get("execution_end")?.({
+          executionId: "exec-test-123",
+          data: {
+            debugState: {
+              blackboard: {},
+              observerReport: {},
+            },
+          },
+        });
+        handlers.get("step_start")?.({
+          executionId: "exec-test-123",
+          data: {},
+        });
+        handlers.get("step_end")?.({
+          executionId: "exec-test-123",
+          data: {},
+        });
+        handlers.get("workflow.validation_failed")?.({
+          executionId: "exec-test-123",
+          data: {},
+        });
+        handlers.get("workflow.validation_failed")?.({
+          executionId: "exec-test-123",
+          data: {
+            debugState: {
+              blackboard: {},
+              observer: {},
+            },
+          },
+        });
+        handlers.get("workflow.validation_passed")?.({
+          executionId: "exec-test-123",
+          data: {},
+        });
+        handlers.get("workflow.repair_started")?.({
+          executionId: "exec-test-123",
+          data: {},
+        });
+        handlers.get("workflow.repair_started")?.({
+          executionId: "exec-test-123",
+          data: {
+            debugState: {
+              blackboard: {},
+              observer: {},
+            },
+          },
+        });
+        handlers.get("workflow.repair_completed")?.({
+          executionId: "exec-test-123",
+          data: {},
+        });
+        handlers.get("workflow.repair_no_progress")?.({
+          executionId: "exec-test-123",
+          data: {},
+        });
+        handlers.get("workflow.back_edge_triggered")?.({
+          executionId: "exec-test-123",
+          data: {},
+        });
+        handlers.get("warning")?.({
+          executionId: "exec-test-123",
+          data: { message: "x".repeat(220) },
+        });
+        handlers.get("error")?.({
+          executionId: "exec-test-123",
+          data: "plain error",
+        });
+        handlers.get("knowledge_context_attached")?.({
+          executionId: "exec-test-123",
+          data: {},
+        });
+
+        return DEFAULT_RESULT;
+      });
+
+      await runRun("my-workflow", { debugFile: "/tmp/obora-trace.jsonl" });
+
+      expect(mkdir).toHaveBeenCalledWith("/tmp", { recursive: true });
+      expect(writeFile).toHaveBeenCalledWith("/tmp/obora-trace.jsonl", "", "utf-8");
+      expect(formatter.info).toHaveBeenCalledWith(
+        expect.stringContaining("[debug:execution_start] execution=exec-test-123")
+      );
+      expect(formatter.info).toHaveBeenCalledWith(
+        expect.stringContaining("[debug:knowledge_context_attached] workflow=my-workflow items=2")
+      );
+    });
+
+    it("should flush debug exception records before rethrowing runtime failures", async () => {
+      mockRuntimeInstance.run.mockRejectedValueOnce(new Error("runtime down"));
+
+      await expect(runRun("my-workflow", { debugFile: "/tmp/obora-trace.jsonl" })).rejects.toThrow(
+        "runtime down"
+      );
+
+      expect(appendFile).toHaveBeenCalledWith(
+        "/tmp/obora-trace.jsonl",
+        expect.stringContaining('"type":"debug.exception"'),
+        "utf-8"
+      );
+    });
+
+    it("should stringify non-Error debug exceptions", async () => {
+      mockRuntimeInstance.run.mockRejectedValueOnce("runtime down");
+
+      await expect(runRun("my-workflow", { debugFile: "/tmp/obora-trace.jsonl" })).rejects.toBe(
+        "runtime down"
+      );
+
+      expect(appendFile).toHaveBeenCalledWith(
+        "/tmp/obora-trace.jsonl",
+        expect.stringContaining('"message":"runtime down"'),
+        "utf-8"
+      );
+    });
   });
 
   // ─── YAML workflow file loading ───────────────────────────────────────────
@@ -465,6 +698,19 @@ describe("run command", () => {
       await runRun("my-workflow.yml", {});
 
       expect(Workflow.fromYaml).toHaveBeenCalledWith("my-workflow.yml");
+    });
+
+    it("should log YAML loading details in verbose text mode", async () => {
+      const mockWorkflow = { name: "loaded-workflow" };
+      vi.mocked(Workflow.fromYaml).mockResolvedValue(
+        mockWorkflow as Awaited<ReturnType<typeof Workflow.fromYaml>>
+      );
+
+      await runRun("my-workflow.yaml", { verbose: true });
+
+      expect(formatter.step).toHaveBeenCalledWith(
+        "Loaded workflow YAML: my-workflow.yaml -> loaded-workflow"
+      );
     });
 
     it("should NOT call Workflow.fromYaml for bare workflow names", async () => {
@@ -725,6 +971,29 @@ describe("run command", () => {
         })
       );
     });
+
+    it("should print expanded workflow and stop semantics in dry-run text mode", async () => {
+      const mockWorkflow = {
+        name: "loaded-workflow",
+        steps: [{ name: "build_or_repair" }, { name: "validate" }],
+      };
+      const mockStopSemantics = makeValidationRepairStopSemantics();
+      vi.mocked(Workflow.fromYaml).mockResolvedValue(
+        mockWorkflow as Awaited<ReturnType<typeof Workflow.fromYaml>>
+      );
+      mockWorkflowStopSemantics(mockStopSemantics);
+
+      await runRun("my-workflow.yaml", {
+        dryRun: true,
+        dumpExpandedWorkflow: true,
+        showStopSemantics: true,
+      });
+
+      expect(formatter.info).toHaveBeenCalledWith("Expanded workflow:");
+      expect(formatter.json).toHaveBeenCalledWith(mockWorkflow);
+      expect(formatter.info).toHaveBeenCalledWith("Stop semantics:");
+      expect(formatter.json).toHaveBeenCalledWith(mockStopSemantics);
+    });
   });
 
   // ─── --input option ───────────────────────────────────────────────────────
@@ -761,6 +1030,38 @@ describe("run command", () => {
       expect(mockRuntimeInstance.run).toHaveBeenCalledWith(
         "my-workflow",
         expect.objectContaining({ input: { from: "stdin" } })
+      );
+    });
+
+    it("should load Buffer chunks from stdin when --input is @-", async () => {
+      mockReadableStdin([Buffer.from('{"from":"buffer"}')]);
+
+      await runRun("my-workflow", { input: "@-" });
+
+      expect(mockRuntimeInstance.run).toHaveBeenCalledWith(
+        "my-workflow",
+        expect.objectContaining({ input: { from: "buffer" } })
+      );
+    });
+
+    it("should load raw Buffer chunks when stdin has no setEncoding function", async () => {
+      const stdin = Readable.from([
+        Buffer.from('{"from":"raw-buffer"}'),
+      ]) as unknown as typeof process.stdin;
+      Object.defineProperty(stdin, "setEncoding", {
+        configurable: true,
+        value: undefined,
+      });
+      Object.defineProperty(process, "stdin", {
+        value: stdin,
+        configurable: true,
+      });
+
+      await runRun("my-workflow", { input: "@-" });
+
+      expect(mockRuntimeInstance.run).toHaveBeenCalledWith(
+        "my-workflow",
+        expect.objectContaining({ input: { from: "raw-buffer" } })
       );
     });
 
@@ -817,6 +1118,27 @@ describe("run command", () => {
 
       await expect(runRun("my-workflow", { input: "@-" })).rejects.toThrow(
         "No stdin JSON detected. Pipe JSON to --input @- or pass inline JSON to --input."
+      );
+    });
+
+    it("should fail when stdin cannot be read", async () => {
+      const stdin = {
+        isTTY: false,
+        setEncoding: vi.fn(),
+        [Symbol.asyncIterator](): AsyncIterator<string> {
+          return {
+            next: vi.fn().mockRejectedValue(new Error("stdin failure")),
+          };
+        },
+      } as unknown as typeof process.stdin;
+
+      Object.defineProperty(process, "stdin", {
+        value: stdin,
+        configurable: true,
+      });
+
+      await expect(runRun("my-workflow", { input: "@-" })).rejects.toThrow(
+        "Failed to read JSON input from stdin."
       );
     });
 
@@ -889,6 +1211,17 @@ describe("run command", () => {
         "my-workflow",
         expect.objectContaining({
           variables: expect.objectContaining({ url: "http://example.com/a=b" }),
+        })
+      );
+    });
+
+    it("should ignore empty variable keys", async () => {
+      await runRun("my-workflow", { var: ["=skip", "ok=value"] });
+
+      expect(mockRuntimeInstance.run).toHaveBeenCalledWith(
+        "my-workflow",
+        expect.objectContaining({
+          variables: { ok: "value" },
         })
       );
     });
@@ -1104,6 +1437,26 @@ describe("run command", () => {
         expect.stringContaining("# Findings")
       );
     });
+
+    it("should log archive and output paths in verbose one-file mode", async () => {
+      const mockWorkflow = {
+        name: "loaded-workflow",
+        steps: [{ name: "draft" }],
+        variables: { output_root: "./tmp-output", archive_enabled: true },
+      };
+      vi.mocked(Workflow.fromYaml).mockResolvedValue(
+        mockWorkflow as Awaited<ReturnType<typeof Workflow.fromYaml>>
+      );
+      mockWorkflowStopSemantics(makeValidationRepairStopSemantics());
+
+      await runRun("my-workflow.yaml", { verbose: true });
+
+      expect(formatter.info).toHaveBeenCalledWith(
+        expect.stringContaining("Saved archive intent metadata")
+      );
+      expect(formatter.info).toHaveBeenCalledWith(expect.stringContaining("Saved outputs to"));
+      expect(formatter.info).toHaveBeenCalledWith("Archive intent enabled for this workflow.");
+    });
   });
 
   // ─── --quiet option ───────────────────────────────────────────────────────
@@ -1215,6 +1568,87 @@ describe("run command", () => {
         })
       );
     });
+
+    it("should format sparse repair events and verbose completions", async () => {
+      mockHandle.wait.mockImplementationOnce(async () => {
+        const handlers = new Map(
+          mockRuntimeInstance.on.mock.calls.map((call) => [call[0], call[1]])
+        );
+
+        handlers.get("workflow.validation_failed")?.({
+          data: {
+            failedChecks: [{ name: "first" }, { name: "second" }],
+          },
+        });
+        handlers.get("workflow.validation_failed")?.({
+          data: {},
+        });
+        handlers.get("workflow.validation_passed")?.({
+          data: {},
+        });
+        handlers.get("workflow.repair_started")?.({
+          data: {
+            reflectorHint: "add evidence",
+          },
+        });
+        handlers.get("workflow.repair_completed")?.({
+          data: {},
+        });
+        handlers.get("workflow.repair_completed")?.({
+          data: {
+            stepName: "repair",
+          },
+        });
+        handlers.get("workflow.repair_completed")?.({
+          data: {
+            attempt: 3,
+          },
+        });
+        handlers.get("workflow.repair_no_progress")?.({
+          data: {},
+        });
+        handlers.get("workflow.repair_no_progress")?.({
+          data: {
+            sourceStep: "repair",
+            category: "repeat",
+            reason: "same output",
+          },
+        });
+        handlers.get("step_end")?.({
+          data: {},
+        });
+        handlers.get("step_end")?.({
+          data: {
+            stepName: "draft",
+            status: "completed",
+            durationMs: 9,
+          },
+        });
+        handlers.get("step_end")?.({
+          data: {
+            stepName: "review",
+          },
+        });
+
+        return DEFAULT_RESULT;
+      });
+
+      await runRun("my-workflow", { verbose: true });
+
+      expect(formatter.warn).toHaveBeenCalledWith("validation failed: unknown reason (2 checks)");
+      expect(formatter.success).toHaveBeenCalledWith("validation passed");
+      expect(formatter.info).toHaveBeenCalledWith("repair attempt 1");
+      expect(formatter.info).toHaveBeenCalledWith("  💡 reflector: add evidence");
+      expect(formatter.info).toHaveBeenCalledWith("repair completed");
+      expect(formatter.info).toHaveBeenCalledWith("repair completed [repair]");
+      expect(formatter.info).toHaveBeenCalledWith("repair completed (attempt 3)");
+      expect(formatter.warn).toHaveBeenCalledWith("repair loop made no progress: unknown reason");
+      expect(formatter.warn).toHaveBeenCalledWith(
+        "repair loop made no progress [repair] (repeat): same output"
+      );
+      expect(formatter.step).toHaveBeenCalledWith("step_end: draft (completed) - 9ms");
+      expect(formatter.step).toHaveBeenCalledWith("step_end: review");
+    });
   });
 
   describe("--verbose option", () => {
@@ -1222,6 +1656,12 @@ describe("run command", () => {
       await runRun("my-workflow", { verbose: true });
 
       expect(formatter.info).toHaveBeenCalled();
+    });
+
+    it("should log timeout setup in verbose mode", async () => {
+      await runRun("my-workflow", { verbose: true, timeout: 10 });
+
+      expect(formatter.step).toHaveBeenCalledWith("Timeout configured: 10ms");
     });
   });
 
