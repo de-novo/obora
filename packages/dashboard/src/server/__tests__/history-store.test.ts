@@ -212,6 +212,80 @@ describe('history store', () => {
     expect(detail?.checkpoints).toEqual([checkpoint]);
   });
 
+  it('covers adapter-backed null detail, artifact lookup, short preview, and default audit pagination', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'obora-history-adapter-'));
+    tempDirs.push(dir);
+    const textPath = join(dir, 'plain.txt');
+    await writeFile(textPath, 'plain text', 'utf8');
+
+    const textArtifact = artifact('plain', textPath, {
+      name: 'plain.txt',
+      mimeType: 'application/octet-stream',
+      storageRef: textPath,
+    });
+    const adapter = {
+      listRuns: vi.fn(async () => []),
+      getRun: vi.fn(async (runId: string) => (runId === 'run-1' ? run('run-1', '2026-02-18T00:00:00.000Z') : null)),
+      getSteps: vi.fn(async () => []),
+      getArtifacts: vi.fn(async () => [textArtifact]),
+      getRunCostSummary: vi.fn(async () => cost(2, 20)),
+      getAuditTimeline: vi.fn(async () => [
+        audit('late', '2026-02-18T00:02:00.000Z'),
+        audit('early', '2026-02-18T00:01:00.000Z'),
+      ]),
+      getLatestCheckpoint: vi.fn(async () => null),
+      saveRun: vi.fn(async () => undefined),
+    };
+    const store = new AdapterHistoryStore(adapter);
+
+    await expect(store.getRunDetail('missing')).resolves.toBeNull();
+
+    const detail = await store.getRunDetail('run-1');
+    expect(detail?.auditTimeline.map((event) => event.id)).toEqual(['early', 'late']);
+    expect(detail?.checkpoints).toEqual([]);
+    expect(detail?.pagination).toEqual({ auditTotal: 2, auditLimit: 100, auditOffset: 0 });
+
+    await expect(store.getArtifact('run-1', 'missing')).resolves.toBeNull();
+    await expect(store.getArtifactPreview('run-1', 'missing')).resolves.toBeNull();
+    await expect(store.getArtifactPreview('run-1', 'plain')).resolves.toMatchObject({
+      supported: true,
+      text: 'plain text',
+      truncated: false,
+    });
+  });
+
+  it('covers adapter-backed default and alternate sorting branches', async () => {
+    const adapterRuns = [
+      run('old', '2026-02-18T00:00:00.000Z', { completedAt: undefined }),
+      run('middle', '2026-02-18T01:00:00.000Z', { completedAt: '2026-02-18T01:10:00.000Z' }),
+      run('new', '2026-02-18T02:00:00.000Z', { completedAt: '2026-02-18T02:10:00.000Z' }),
+    ];
+    const costs = new Map([
+      ['old', cost(3)],
+      ['middle', cost(9)],
+      ['new', cost(6)],
+    ]);
+    const adapter = {
+      listRuns: vi.fn(async () => adapterRuns),
+      getRun: vi.fn(async () => null),
+      getSteps: vi.fn(async () => []),
+      getArtifacts: vi.fn(async () => []),
+      getRunCostSummary: vi.fn(async (runId: string) => costs.get(runId) ?? cost(0)),
+      getAuditTimeline: vi.fn(async () => []),
+      getLatestCheckpoint: vi.fn(async () => null),
+      saveRun: vi.fn(async () => undefined),
+    };
+    const store = new AdapterHistoryStore(adapter);
+
+    const byDefault = await store.listRuns({});
+    const byCost = await store.listRuns({ sortBy: 'totalCostUsd' });
+    const byCompletedAt = await store.listRuns({ sortBy: 'completedAt', sortOrder: 'asc' });
+
+    expect(byDefault.items.map((item) => item.run.id)).toEqual(['new', 'middle', 'old']);
+    expect(byCost.items.map((item) => item.run.id)).toEqual(['middle', 'new', 'old']);
+    expect(byCompletedAt.items.map((item) => item.run.id)).toEqual(['old', 'middle', 'new']);
+  });
+
   it('previews text-like artifacts, truncates long content, and reports unsupported/read failures', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'obora-history-store-'));
     tempDirs.push(dir);
@@ -325,7 +399,10 @@ describe('history store', () => {
     const dir = await mkdtemp(join(tmpdir(), 'obora-history-memory-'));
     tempDirs.push(dir);
     const textPath = join(dir, 'note.md');
+    const longPath = join(dir, 'long.txt');
+    const missingTextPath = join(dir, 'missing.log');
     await writeFile(textPath, 'short note', 'utf8');
+    await writeFile(longPath, 'b'.repeat(20_010), 'utf8');
 
     const store = new InMemoryHistoryStore();
     store.seed({
@@ -343,6 +420,8 @@ describe('history store', () => {
       ],
       artifacts: [
         artifact('text', textPath, { runId: 'sparse', name: 'note.md', mimeType: 'application/octet-stream' }),
+        artifact('long', longPath, { runId: 'sparse', name: 'long.txt', mimeType: 'text/plain', sizeBytes: 20_010 }),
+        artifact('missing-text', missingTextPath, { runId: 'sparse', name: 'missing.log', mimeType: 'text/plain' }),
         artifact('binary', join(dir, 'image.bin'), { runId: 'sparse', name: 'image.bin', mimeType: 'application/octet-stream' }),
       ],
       audits: [
@@ -376,15 +455,30 @@ describe('history store', () => {
     const detail = await store.getRunDetail('sparse');
     expect(detail?.repairLoop).toBeUndefined();
     expect(detail?.steps.map((item) => item.id)).toEqual(['early', 'late']);
-    expect(detail?.artifacts.map((item) => item.id)).toEqual(['text', 'binary']);
+    expect(detail?.artifacts.map((item) => item.id)).toEqual(['text', 'long', 'missing-text', 'binary']);
     expect(detail?.checkpoints.map((item) => item.id)).toEqual(['new-cp', 'old-cp']);
     expect(detail?.pagination).toEqual({ auditTotal: 2, auditLimit: 100, auditOffset: 0 });
 
+    const emptyDetail = await store.getRunDetail('done');
+    expect(emptyDetail?.steps).toEqual([]);
+    expect(emptyDetail?.artifacts).toEqual([]);
+    expect(emptyDetail?.costSummary.totalCostUsd).toBe(0);
+
     await expect(store.getArtifact('missing-run', 'text')).resolves.toBeNull();
+    await expect(store.getArtifact('sparse', 'missing-artifact')).resolves.toBeNull();
     await expect(store.getArtifactPreview('sparse', 'missing-artifact')).resolves.toBeNull();
 
     const textPreview = await store.getArtifactPreview('sparse', 'text');
     expect(textPreview).toMatchObject({ supported: true, text: 'short note', truncated: false });
+
+    const longPreview = await store.getArtifactPreview('sparse', 'long');
+    expect(longPreview?.supported).toBe(true);
+    expect(longPreview?.truncated).toBe(true);
+    expect(longPreview?.text?.endsWith('\n...[truncated]')).toBe(true);
+
+    const readFailure = await store.getArtifactPreview('sparse', 'missing-text');
+    expect(readFailure?.supported).toBe(false);
+    expect(readFailure?.reason).toContain('Artifact read failed:');
 
     const binaryPreview = await store.getArtifactPreview('sparse', 'binary');
     expect(binaryPreview).toMatchObject({
@@ -442,5 +536,8 @@ describe('history store', () => {
 
     expect(filtered.items.map((item) => item.run.id)).toEqual(['c']);
     expect(filtered.repairLoopCounts).toEqual({ all: 1, with: 0, without: 1, stalled: 0, exhausted: 0 });
+
+    const completedAtAsc = await store.listRuns({ sortBy: 'completedAt', sortOrder: 'asc' });
+    expect(completedAtAsc.items.map((item) => item.run.id)).toEqual(['c', 'a', 'b']);
   });
 });
