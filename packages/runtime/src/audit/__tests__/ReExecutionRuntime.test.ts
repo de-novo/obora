@@ -212,6 +212,157 @@ describe("ReExecutionRuntime", () => {
 
     expect(completedSteps).toEqual(["analyze", "review", "finalize"]);
   });
+
+  it("uses metrics as replay output and reports missing original outputs", async () => {
+    const store = new InMemoryAuditStore();
+    const base = new Date("2026-02-16T00:00:00.000Z");
+
+    await store.record(
+      makeEvent({
+        timestamp: base,
+        type: "execution_start",
+        data: {
+          workflowName: "wf.metrics",
+          workflowVersion: "2026.02",
+          snapshotRef: "snapshot-start",
+          stepOrder: ["metrics-only", "missing-output"],
+        },
+      })
+    );
+    await store.record(
+      makeEvent({
+        timestamp: new Date(base.getTime() + 1_000),
+        type: "step_start",
+        data: { stepName: "metrics-only", agent: "metrics-agent" },
+      })
+    );
+    await store.record(
+      makeEvent({
+        timestamp: new Date(base.getTime() + 2_000),
+        type: "cell_end",
+        data: { stepName: "", output: { ignored: true } },
+      })
+    );
+    await store.record(
+      makeEvent({
+        timestamp: new Date(base.getTime() + 2_500),
+        type: "cell_end",
+        data: { stepName: "metrics-only", metrics: { tokens: 42 } },
+      })
+    );
+    await store.record(
+      makeEvent({
+        timestamp: new Date(base.getTime() + 3_000),
+        type: "step_start",
+        data: { stepName: "missing-output", agent: "writer" },
+      })
+    );
+
+    const planner = new ReExecutionPlanner(store);
+    const runtime = new ReExecutionRuntime(store, planner);
+    const completed: Array<{ stepName: string; status: string }> = [];
+
+    const result = await runtime.reexecute({
+      executionId: "exec-1",
+      mode: "full",
+      onStepComplete: (stepName, stepResult) => {
+        completed.push({ stepName, status: stepResult.status });
+      },
+    });
+
+    expect(result.workflowVersion).toBe("2026.02");
+    expect(result.snapshotRef).toBe("snapshot-start");
+    expect(result.stepResults).toEqual([
+      {
+        stepName: "metrics-only",
+        status: "done",
+        output: { tokens: 42 },
+        matchesOriginal: true,
+      },
+      {
+        stepName: "missing-output",
+        status: "failed",
+        matchesOriginal: false,
+        diff: "No original step output found in audit trail.",
+      },
+    ]);
+    expect(completed).toEqual([
+      { stepName: "metrics-only", status: "done" },
+      { stepName: "missing-output", status: "failed" },
+    ]);
+    expect(result.success).toBe(false);
+  });
+
+  it("includes workflow version and snapshot ref in dry-run results", async () => {
+    const store = new InMemoryAuditStore();
+    await store.record(
+      makeEvent({
+        type: "execution_start",
+        data: {
+          workflowName: "wf.dry",
+          workflowVersion: "dry-version",
+          snapshotId: "snapshot-dry",
+          stepOrder: ["analyze"],
+        },
+      })
+    );
+    await store.record(
+      makeEvent({
+        type: "step_start",
+        data: { stepName: "analyze" },
+      })
+    );
+
+    const planner = new ReExecutionPlanner(store);
+    const runtime = new ReExecutionRuntime(store, planner);
+
+    const result = await runtime.reexecute({ executionId: "exec-1", mode: "full", dryRun: true });
+
+    expect(result.workflowVersion).toBe("dry-version");
+    expect(result.snapshotRef).toBe("snapshot-dry");
+    expect(result.success).toBe(true);
+  });
+
+  it("restores empty checkpoint state when the plan has no restoredState", async () => {
+    const store = new InMemoryAuditStore();
+    await store.record(
+      makeEvent({
+        type: "execution_start",
+        data: {
+          workflowName: "wf.fake-plan",
+          stepOrder: ["resume"],
+        },
+      })
+    );
+
+    const planner = {
+      createPlan: async () => ({
+        executionId: "exec-1",
+        originalWorkflow: "wf.fake-plan",
+        mode: "from_checkpoint" as const,
+        startFromStep: "resume",
+        stepsToSkip: [],
+        stepsToRerun: [],
+        nonDeterminismWarnings: [],
+        createdAt: new Date("2026-02-16T00:00:00.000Z"),
+      }),
+    } as unknown as ReExecutionPlanner;
+    const runtime = new ReExecutionRuntime(store, planner);
+
+    const result = await runtime.reexecute({
+      executionId: "exec-1",
+      mode: "from_checkpoint",
+      checkpointStep: "resume",
+    });
+
+    expect(result.success).toBe(true);
+    const reexecEvents = await store.query({ executionId: result.reExecutionId });
+    const snapshotRestore = reexecEvents.find((event) => event.type === "snapshot_restore");
+    expect(snapshotRestore?.data).toMatchObject({
+      restoredState: {},
+    });
+    expect(snapshotRestore?.data).not.toHaveProperty("snapshotRef");
+  });
 });
 
 describe("ReExecutionRuntime – reexecution_diff audit event (M2-15)", () => {

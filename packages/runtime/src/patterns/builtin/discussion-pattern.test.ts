@@ -145,6 +145,44 @@ describe("DiscussionPattern", () => {
     expect(result.success).toBe(true);
   });
 
+  it("uses fallback topic/opinions and records custom non-convergence", async () => {
+    const pattern = new DiscussionPattern();
+    const customConvergence = vi.fn(() => false);
+
+    const result = await pattern.execute({
+      pattern: "discussion",
+      stepName: "Fallback Discussion",
+      participants: {
+        a: "agent-a",
+        b: "agent-b",
+      },
+      config: {
+        max_rounds: 1,
+        convergence: "custom",
+        custom_convergence: customConvergence,
+        on_deadlock: "fail",
+      },
+      input: "not-an-object",
+    } as never);
+
+    expect(result.success).toBe(false);
+    expect(result.output).toMatchObject({
+      topic: "Fallback Discussion",
+      status: "failed",
+      rounds: [
+        {
+          opinions: { a: "a", b: "b" },
+          converged: false,
+        },
+      ],
+    });
+    expect(customConvergence).toHaveBeenCalledWith({
+      round: 1,
+      opinions: { a: "a", b: "b" },
+      participants: ["a", "b"],
+    });
+  });
+
   // --- retry path tests ---
 
   it("on_deadlock=retry runs extra retry rounds (default budget=1)", async () => {

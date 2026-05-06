@@ -258,6 +258,84 @@ describe("SupervisorPattern", () => {
     expect(eventTypes).toContain("worker_restart");
   });
 
+  it("defaults config and input when no structured payload is provided", async () => {
+    const pattern = new SupervisorPattern();
+
+    const result = await pattern.execute({
+      pattern: "supervisor",
+      participants: {
+        workerA: "agent-a",
+        workerB: "agent-b",
+      },
+      input: "not-an-object",
+    } as never);
+
+    expect(result.success).toBe(true);
+    expect(result.output).toMatchObject({
+      strategy: "one_for_one",
+      total_restarts: 0,
+      workers: {
+        workerA: { status: "completed", restarts: 0 },
+        workerB: { status: "completed", restarts: 0 },
+      },
+    });
+  });
+
+  it("filters invalid attempts and normalizes non-string errors", async () => {
+    const pattern = new SupervisorPattern();
+
+    const result = await pattern.execute({
+      pattern: "supervisor",
+      participants: { workerA: "agent-a" },
+      config: { max_restarts: 2 },
+      input: {
+        results: {
+          workerA: { success: false, error: 404 },
+        },
+        tasks: {
+          workerA: {
+            attempts: [null, "bad", { success: true, output: "recovered", error: 500 }],
+          },
+        },
+      },
+    } as never);
+
+    expect(result.success).toBe(true);
+    expect(result.output).toMatchObject({
+      total_restarts: 1,
+      workers: {
+        workerA: { status: "completed", restarts: 1, output: "recovered" },
+      },
+    });
+  });
+
+  it("falls back from malformed result entries to queued attempts", async () => {
+    const pattern = new SupervisorPattern();
+
+    const result = await pattern.execute({
+      pattern: "supervisor",
+      participants: { workerA: "agent-a" },
+      input: {
+        results: {
+          workerA: "not-a-result",
+        },
+        tasks: {
+          workerA: {
+            attempts: [{ success: false, error: "first queued" }, { success: true, output: "queued ok" }],
+          },
+        },
+      },
+    } as never);
+
+    expect(result.success).toBe(true);
+    expect(result.output).toMatchObject({
+      total_restarts: 1,
+      workers: {
+        workerA: { status: "completed", restarts: 1, output: "queued ok" },
+      },
+    });
+  });
+
   it("handles multiple failures across different workers", async () => {
     const pattern = new SupervisorPattern();
 

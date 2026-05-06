@@ -59,16 +59,70 @@ class ThrowingPattern extends CollaborationPatternBase {
   }
 }
 
+class RejectingPattern extends CollaborationPatternBase {
+  readonly name = "rejecter";
+  readonly kind = "rejecter" as const;
+
+  protected async onExecute(): Promise<PatternPayloadResult> {
+    return Promise.reject("string boom");
+  }
+}
+
+class InspectContextPattern extends CollaborationPatternBase {
+  readonly name = "inspect";
+  readonly kind = "inspect" as const;
+
+  protected async onExecute(context: PatternRuntimeContext): Promise<PatternPayloadResult> {
+    return {
+      success: true,
+      output: {
+        input: context.input,
+        config: context.config,
+        participants: context.participants,
+      },
+    };
+  }
+}
+
 function createRegistry(): PatternRegistry {
   const registry = new PatternRegistry();
   registry.register(new EchoPattern());
   registry.register(new AppendPattern());
   registry.register(new FailingPattern());
   registry.register(new ThrowingPattern());
+  registry.register(new RejectingPattern());
+  registry.register(new InspectContextPattern());
   return registry;
 }
 
 describe("CompositePattern", () => {
+  it("validates malformed stage config variants", () => {
+    const pattern = new CompositePattern(createRegistry());
+
+    const invalidCases: Array<[unknown, string]> = [
+      [{}, "composite.stages must be an array"],
+      [{ stages: [null] }, "composite.stages[0] must be an object"],
+      [{ stages: [{ name: " ", pattern: "echo" }] }, "composite.stages[0].name must be a non-empty string"],
+      [
+        { stages: [{ name: "dup", pattern: "echo" }, { name: "dup", pattern: "echo" }] },
+        "composite.stages contains duplicate stage name 'dup'",
+      ],
+      [{ stages: [{ name: "stage", pattern: "" }] }, "composite.stages[0].pattern must be a non-empty string"],
+      [
+        { stages: [{ name: "stage", pattern: "echo", input_from: 1 }] },
+        "composite.stages[0].input_from must be a string when provided",
+      ],
+      [
+        { stages: [{ name: "stage", pattern: "echo" }], on_stage_failure: "retry" },
+        "composite.on_stage_failure must be one of: fail, skip, escalate",
+      ],
+    ];
+
+    for (const [config, message] of invalidCases) {
+      expect(() => pattern.validateConfig(config as never)).toThrow(message);
+    }
+  });
+
   it("executes stages sequentially", async () => {
     const registry = createRegistry();
     const pattern = new CompositePattern(registry);
@@ -91,6 +145,44 @@ describe("CompositePattern", () => {
         { name: "s2", pattern: "append", success: true, output: "ABC" },
       ],
       completed_stages: 2,
+    });
+  });
+
+  it("passes default stage config and allows stage participant overrides", async () => {
+    const registry = createRegistry();
+    const pattern = new CompositePattern(registry);
+
+    const result = await pattern.execute({
+      pattern: "composite",
+      participants: { root: "agent-root" },
+      input: "seed",
+      config: {
+        stages: [
+          { name: "defaulted", pattern: "inspect" },
+          {
+            name: "overridden",
+            pattern: "inspect",
+            config: { mode: "stage" },
+            participants: { stage: "agent-stage" },
+          },
+        ],
+      },
+    });
+
+    const stages = (result.output as { stages: Array<{ output: unknown }> }).stages;
+    expect(stages[0]?.output).toEqual({
+      input: "seed",
+      config: {},
+      participants: { root: "agent-root" },
+    });
+    expect(stages[1]?.output).toEqual({
+      input: {
+        input: "seed",
+        config: {},
+        participants: { root: "agent-root" },
+      },
+      config: { mode: "stage" },
+      participants: { stage: "agent-stage" },
     });
   });
 
@@ -471,6 +563,52 @@ describe("CompositePattern", () => {
       success: true,
       output: { error: "boom" },
     });
+  });
+
+  it("normalizes non-Error rejected stage reasons for fail and skip modes", async () => {
+    const registry = createRegistry();
+    const pattern = new CompositePattern(registry);
+    const failEmit = vi.fn();
+
+    const failed = await pattern.execute({
+      pattern: "composite",
+      emit: failEmit,
+      config: {
+        stages: [
+          { name: "ok", pattern: "echo" },
+          { name: "rejects", pattern: "rejecter" },
+        ],
+      },
+    });
+
+    expect(failed.success).toBe(false);
+    expect(failed.output).toEqual({
+      stages: [{ name: "ok", pattern: "echo", success: true, output: undefined }],
+      completed_stages: 1,
+    });
+    expect(failEmit.mock.calls.find((call) => call[0].type === "composite_stage_end")?.[0]).toMatchObject({
+      payload: { name: "ok", success: true },
+    });
+    expect(failEmit.mock.calls.filter((call) => call[0].type === "composite_stage_end").at(-1)?.[0]).toMatchObject({
+      payload: { name: "rejects", success: false, error: "string boom" },
+    });
+
+    const skipped = await pattern.execute({
+      pattern: "composite",
+      config: {
+        on_stage_failure: "skip",
+        stages: [
+          { name: "rejects", pattern: "rejecter" },
+          { name: "after", pattern: "echo", input_from: "rejects" },
+        ],
+      },
+    });
+
+    expect(skipped.success).toBe(true);
+    expect((skipped.output as { stages: Array<{ output: unknown }> }).stages).toEqual([
+      { name: "rejects", pattern: "rejecter", success: false, output: { error: "string boom" } },
+      { name: "after", pattern: "echo", success: true, output: { error: "string boom" } },
+    ]);
   });
 
 });

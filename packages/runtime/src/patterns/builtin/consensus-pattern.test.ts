@@ -742,6 +742,48 @@ describe("ConsensusPattern", () => {
     ).rejects.toThrow("consensus.rule='custom' requires custom_evaluate function");
   });
 
+  it("covers custom boolean approval and default object rejection reasons", async () => {
+    const pattern = new ConsensusPattern();
+    const approves = vi.fn().mockReturnValue(true);
+    const rejectsWithoutReason = vi.fn().mockReturnValue({ approved: false });
+
+    const approved = await pattern.execute({
+      pattern: "consensus",
+      participants: { a: "agent-a" },
+      config: {
+        rule: "custom",
+        custom_evaluate: approves,
+      },
+      input: {
+        votes: { a: true },
+      },
+    });
+
+    expect(approved.success).toBe(true);
+    expect(approved.output).toMatchObject({
+      status: "consensus-reached",
+      reason: "custom rule approved",
+    });
+
+    const rejected = await pattern.execute({
+      pattern: "consensus",
+      participants: { a: "agent-a" },
+      config: {
+        rule: "custom",
+        custom_evaluate: rejectsWithoutReason,
+      },
+      input: {
+        votes: { a: true },
+      },
+    });
+
+    expect(rejected.success).toBe(false);
+    expect(rejected.output).toMatchObject({
+      status: "consensus-rejected",
+      reason: "custom rule rejected",
+    });
+  });
+
   it("normalizes non-standard inputs and missing vote fields", async () => {
     const pattern = new ConsensusPattern();
 
@@ -774,6 +816,7 @@ describe("ConsensusPattern", () => {
         a: "agent-a",
         b: "agent-b",
         c: "agent-c",
+        d: "agent-d",
       },
       config: {
         rule: "majority",
@@ -783,19 +826,116 @@ describe("ConsensusPattern", () => {
           a: { approved: "yes", reason: 3 },
           b: "unexpected",
           c: { score: -1, approved: false },
+          d: { score: 0.4 },
         },
       },
     } as never);
 
     expect(normalizedVotes.success).toBe(false);
-    expect(normalizedVotes.output).toMatchObject({
-      reason: "majority not reached",
-      votes: [
-        { voterId: "a", approved: false, role: "ai" },
-        { voterId: "b", approved: false, role: "ai" },
-        { voterId: "c", approved: false, score: 0, role: "ai" },
-      ],
+    const normalizedOutput = normalizedVotes.output as {
+      reason: string;
+      votes: Array<{ voterId: string; approved: boolean; role: string; score?: number }>;
+    };
+    expect(normalizedOutput.reason).toBe("majority not reached");
+    expect(normalizedOutput.votes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ voterId: "a", approved: false, role: "ai" }),
+        expect.objectContaining({ voterId: "b", approved: false, role: "ai" }),
+        expect.objectContaining({ voterId: "c", approved: false, score: 0, role: "ai" }),
+        expect.objectContaining({ voterId: "d", approved: true, score: 0.4, role: "ai" }),
+      ])
+    );
+  });
+
+  it("covers all-best-effort majority and zero-weight/scoreless verdict defaults", async () => {
+    const pattern = new ConsensusPattern();
+
+    const noRequired = await pattern.execute({
+      pattern: "consensus",
+      participants: { optional: "agent-optional" },
+      config: {
+        rule: "majority",
+        best_effort: ["optional"],
+      },
+      input: {
+        votes: {},
+      },
     });
+
+    expect(noRequired.success).toBe(false);
+    expect(noRequired.output).toMatchObject({
+      reason: "majority not reached",
+      score: 0,
+    });
+
+    const zeroWeight = await pattern.execute({
+      pattern: "consensus",
+      participants: { a: "agent-a", b: "agent-b" },
+      config: {
+        rule: "weighted",
+        threshold: 0.1,
+        weights: { a: 0, b: 0 },
+      },
+      input: {
+        votes: { a: true, b: true },
+      },
+    });
+
+    expect(zeroWeight.success).toBe(false);
+    expect(zeroWeight.output).toMatchObject({
+      reason: "weighted threshold not met",
+      score: 0,
+    });
+
+    const scoreless = await pattern.execute({
+      pattern: "consensus",
+      participants: { a: "agent-a", b: "agent-b" },
+      config: {
+        rule: "score-threshold",
+        threshold: 0.1,
+      },
+      input: {
+        votes: { a: true, b: false },
+      },
+    });
+
+    expect(scoreless.success).toBe(false);
+    expect(scoreless.output).toMatchObject({
+      reason: "score threshold not met",
+      score: 0,
+    });
+  });
+
+  it("parses millisecond, minute, and hour timeout units", async () => {
+    const pattern = new ConsensusPattern();
+    const cases = [
+      { timeout: "1ms", now: "2026-02-16T00:00:00.002Z", startedAt: "2026-02-16T00:00:00.000Z" },
+      { timeout: "1m", now: "2026-02-16T00:01:01.000Z", startedAt: "2026-02-16T00:00:00.000Z" },
+      { timeout: "1h", now: "2026-02-16T01:00:01.000Z", startedAt: "2026-02-16T00:00:00.000Z" },
+    ];
+
+    for (const { timeout, now, startedAt } of cases) {
+      await expect(
+        pattern.execute({
+          pattern: "consensus",
+          participants: {
+            a: "agent-a",
+            b: "agent-b",
+          },
+          config: {
+            rule: "majority",
+            timeout,
+          },
+          input: {
+            startedAt,
+            votes: {
+              a: true,
+            },
+          },
+          now: () => new Date(now),
+        } as never)
+      ).rejects.toMatchObject({ code: OboraErrorCode.CONSENSUS_TIMEOUT });
+    }
   });
 
   // ===== NEW TEST: VotingSessionStore tally in metadata =====

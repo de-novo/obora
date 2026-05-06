@@ -243,6 +243,65 @@ describe("RedBluePattern", () => {
     });
   });
 
+  it("uses default config, fallback input, and empty round records", async () => {
+    const pattern = new RedBluePattern();
+
+    const result = await pattern.execute({
+      pattern: "red-blue",
+      participants: {
+        p1: "agent-1",
+        p2: "agent-2",
+      },
+      input: "not-an-object",
+    } as never);
+
+    expect(result.success).toBe(true);
+    expect(result.output).toMatchObject({
+      converged: true,
+      convergence_round: 1,
+      rounds: [
+        {
+          red_team: ["p1"],
+          blue_team: ["p2"],
+          red_findings: {},
+          blue_responses: {},
+        },
+      ],
+    });
+  });
+
+  it("rejects incomplete, unknown, and auto-split team definitions", async () => {
+    const pattern = new RedBluePattern();
+
+    await expect(
+      pattern.execute({
+        pattern: "red-blue",
+        participants: { solo: "agent-1" },
+      })
+    ).rejects.toThrow("red-blue pattern requires at least two participants for automatic team split");
+
+    await expect(
+      pattern.execute({
+        pattern: "red-blue",
+        participants: { p1: "agent-1", p2: "agent-2" },
+        config: {
+          red_team: ["p1"],
+        },
+      })
+    ).rejects.toThrow("red-blue.red_team and red-blue.blue_team must each contain at least one participant");
+
+    await expect(
+      pattern.execute({
+        pattern: "red-blue",
+        participants: { p1: "agent-1", p2: "agent-2" },
+        config: {
+          red_team: [" p1 ", "p1"],
+          blue_team: ["missing"],
+        },
+      })
+    ).rejects.toThrow("red-blue.blue_team contains unknown participant ids: missing");
+  });
+
   it("throws when a participant is included in both red and blue teams", async () => {
     const pattern = new RedBluePattern();
 

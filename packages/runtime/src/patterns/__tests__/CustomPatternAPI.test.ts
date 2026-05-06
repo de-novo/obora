@@ -284,6 +284,26 @@ describe("CustomPatternAPI", () => {
     expect(warn.mock.calls[0]?.[0]).toContain("same version");
   });
 
+  it("resolveCustomPattern returns registered patterns and rejects invalid refs", async () => {
+    const registry = new PatternRegistry();
+    const pattern = new EchoCustomPattern();
+    registerCustomPattern(registry, pattern);
+
+    expect(resolveCustomPattern(registry, "echo-custom")).toBe(pattern);
+    expect(() => resolveCustomPattern(registry, "")).toThrow("Pattern name is required");
+    expect(() => resolveCustomPattern(registry, 123 as unknown as string)).toThrow("Pattern name is required");
+
+    const { resolveCustomPatternAsync } = await import("../resolveCustomPattern.js");
+    await expect(resolveCustomPatternAsync(registry, "")).rejects.toThrow("Pattern name is required");
+    await expect(resolveCustomPatternAsync(registry, 123 as unknown as string)).rejects.toThrow(
+      "Pattern name is required"
+    );
+    await expect(resolveCustomPatternAsync(new PatternRegistry(), "missing-pattern")).rejects.toThrow(
+      OboraErrorCode.ORCH_STEP_NOT_FOUND
+    );
+    await expect(resolveCustomPatternAsync(registry, "echo-custom")).resolves.toBe(pattern);
+  });
+
 
 
   // === File-path resolution tests ===
@@ -450,6 +470,13 @@ kind: "test"
 
   it("YAML file with missing/empty content fails", () => {
     const yamlPath = writeYaml("empty.yaml", "");
+
+    const registry = new PatternRegistry();
+    expect(() => resolveCustomPattern(registry, yamlPath)).toThrow(/Failed to load custom pattern from YAML/);
+  });
+
+  it("YAML scalar content fails object validation", () => {
+    const yamlPath = writeYaml("scalar.yaml", "just-a-string");
 
     const registry = new PatternRegistry();
     expect(() => resolveCustomPattern(registry, yamlPath)).toThrow(/Failed to load custom pattern from YAML/);

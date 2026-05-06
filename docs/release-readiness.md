@@ -59,7 +59,7 @@ Current enforced coverage floors:
 | Package | Statements | Branches | Functions | Lines |
 | --- | ---: | ---: | ---: | ---: |
 | `@obora/sdk` | 95 | 91 | 99 | 95 |
-| `@obora/runtime` | 91 | 88 | 88 | 91 |
+| `@obora/runtime` | 92 | 89 | 88 | 92 |
 | `@obora/adapters` | 94 | 92 | 92 | 94 |
 | `@obora/cli` | 96 | 91 | 97 | 96 |
 | `@obora/dashboard` | 92 | 91 | 92 | 92 |
@@ -68,8 +68,8 @@ Latest verified `pnpm verify:coverage` package measurements:
 
 | Package | Statements | Branches | Functions | Lines |
 | --- | ---: | ---: | ---: | ---: |
-| `@obora/sdk` | 96.05% | 91.16% | 99.35% | 96.05% |
-| `@obora/runtime` | 91.62% | 88.05% | 88.47% | 91.62% |
+| `@obora/sdk` | 96.05% | 91.15% | 99.35% | 96.05% |
+| `@obora/runtime` | 92.22% | 89.03% | 88.47% | 92.22% |
 | `@obora/adapters` | 94.47% | 92.11% | 92.55% | 94.47% |
 | `@obora/cli` | 96.36% | 91.06% | 97.72% | 96.36% |
 | `@obora/dashboard` | 92.92% | 91.00% | 92.11% | 92.92% |
@@ -90,15 +90,16 @@ The current adapters branch floor is enforced at 92 after focused auth store
 defaults and decorator parameter schema fallback tests, in addition to the
 existing conformance coverage for provider/auth/tool behavior.
 
-The current runtime baseline is above 91% for statements and lines, the function
+The current runtime baseline is above 92% for statements and lines, the function
 floor is enforced at 88 after builtin plugin, no-op message bus, and workflow
-diagnosis helper tests, and the branch floor is enforced at 88 after focused
+diagnosis helper tests, and the branch floor is enforced at 89 after focused
 tests around resume, gate timeout, artifact capture, blackboard state defaults,
 step skill loading, policy expression parsing/evaluation, audit re-execution
 planning, snapshot restore errors, voting sessions, plugin registry lifecycle,
-and custom pattern branches.
+custom pattern branches, builtin pattern defaults, and audit replay/re-execution
+fallbacks.
 
-The current adapters branch floor is enforced at 91 after focused tests around
+The current adapters branch floor is enforced at 92 after focused tests around
 agent config mutation parsing, default cwd resolution, last-agent reset cleanup,
 and non-Error write failure handling.
 

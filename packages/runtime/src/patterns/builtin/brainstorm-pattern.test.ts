@@ -163,6 +163,55 @@ describe("BrainstormPattern", () => {
     ]);
   });
 
+  it("uses fallback input and stepName topic when ideas are absent", async () => {
+    const pattern = new BrainstormPattern();
+
+    const result = await pattern.execute({
+      pattern: "brainstorming",
+      stepName: "Fallback Topic",
+      participants: {
+        a: "agent-a",
+      },
+      input: "not-an-object",
+    } as never);
+
+    expect(result.success).toBe(true);
+    expect(result.output).toMatchObject({
+      brainstorming: {
+        topic: "Fallback Topic",
+        generated: [],
+        selected: [],
+      },
+    });
+  });
+
+  it("supports injected generation and ranking hooks", async () => {
+    const pattern = new BrainstormPattern();
+    const generator = vi.fn((participant: string) => [`${participant}-idea`, "shared"]);
+    const ranker = vi.fn((ideas: Array<{ id: string; text: string; generated_by: string }>) =>
+      ideas.map((idea) => ({ ...idea, score: idea.text === "b-idea" ? 2 : 1 }))
+    );
+
+    const result = await pattern.execute({
+      pattern: "brainstorming",
+      participants: {
+        a: "agent-a",
+        b: "agent-b",
+      },
+      config: {
+        dedup: "semantic",
+      },
+      brainstormGenerateIdeas: generator,
+      brainstormRankIdeas: ranker,
+    } as never);
+
+    expect(generator).toHaveBeenCalledTimes(2);
+    expect(ranker).toHaveBeenCalledTimes(1);
+    const selected = (result.output as { brainstorming: { selected: Array<{ text: string; rank: number }> } })
+      .brainstorming.selected;
+    expect(selected[0]).toMatchObject({ text: "b-idea", rank: 1 });
+  });
+
   it("validates config", () => {
     const pattern = new BrainstormPattern();
 
