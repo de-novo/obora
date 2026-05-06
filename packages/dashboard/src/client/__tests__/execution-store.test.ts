@@ -164,6 +164,36 @@ describe('execution-store', () => {
         }),
       )?.error,
     ).toMatchObject({ code: 'E_PAYLOAD', message: 'payload failure' });
+
+    const eventWithError = Object.assign(baseEvent({ payload: {} }), {
+      error: { code: 'E_EVENT', message: 'event failure', stack: 'event stack' },
+    });
+    expect(extractStepDetailFromEvent(eventWithError)?.error).toMatchObject({
+      code: 'E_EVENT',
+      message: 'event failure',
+      stack: 'event stack',
+    });
+
+    expect(
+      extractStepDetailFromEvent(
+        baseEvent({
+          payload: {
+            input: { prompt: 'short' },
+            output: { text: 'done' },
+            policy: { allowed: true },
+            blackboard: { values: ['a'] },
+          },
+        }),
+      ),
+    ).toEqual({
+      input: { prompt: 'short' },
+      output: { text: 'done' },
+      policy: { allowed: true },
+      blackboard: { values: ['a'] },
+      error: undefined,
+    });
+
+    expect(extractStepDetailFromEvent(baseEvent({ payload: {} }))).toBeUndefined();
   });
 
   it('covers execution activity, status fallbacks, summaries, and diffs', () => {
@@ -240,7 +270,9 @@ describe('execution-store', () => {
       'added',
     ]);
     expect(getBlackboardDiffPaths('same', 'same')).toEqual([]);
+    expect(getBlackboardDiffPaths('old', 'new')).toEqual([]);
     expect(getBlackboardDiffPaths({ value: 1 }, ['not-record'])).toEqual([]);
+    expect(getBlackboardDiffPaths({ removed: true }, {})).toEqual(['removed']);
   });
 
   it('notifies subscribers from the singleton execution store', () => {

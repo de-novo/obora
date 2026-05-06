@@ -160,6 +160,37 @@ describe('ws bridge', () => {
     ws.close();
   });
 
+  it('handles invalid client commands and command-driven resync', async () => {
+    const { url, wsBridge } = await startServer();
+    const e1 = createExecutionEvent('exec-1:00000001', '2026-02-17T12:00:00.000Z');
+    const e2 = createExecutionEvent('exec-1:00000002', '2026-02-17T12:00:01.000Z');
+    wsBridge.broadcast(e1);
+    wsBridge.broadcast(e2);
+
+    const ws = new WebSocket(url);
+    const nextMessage = createMessageReader(ws);
+    await waitForOpen(ws);
+    await nextMessage(); // ack
+
+    ws.send('not-json');
+    await expect(nextMessage()).resolves.toMatchObject({
+      type: 'error',
+      payload: { code: 'DASH_2002' },
+    });
+
+    ws.send('null');
+    await expect(nextMessage()).resolves.toMatchObject({
+      type: 'error',
+      payload: { code: 'DASH_2002' },
+    });
+
+    ws.send(JSON.stringify({ type: 'command', command: 'resync', payload: { lastEventId: e1.id } }));
+    await expect(nextMessage()).resolves.toMatchObject({ type: 'event', payload: e2 });
+    await expect(nextMessage()).resolves.toMatchObject({ type: 'ack', payload: { code: 'DASH_2004', replayed: 1 } });
+
+    ws.close();
+  });
+
   it('maps unknown audit event type to knownType undefined', async () => {
     const { wsBridge } = await startServer();
 
@@ -173,6 +204,42 @@ describe('ws bridge', () => {
 
     expect(event.type).toBe('custom_audit_type');
     expect(event.knownType).toBeUndefined();
+  });
+
+  it('normalizes known audit events with status and empty data payloads', async () => {
+    const { wsBridge } = await startServer();
+
+    const completed = wsBridge.pushEvent({
+      id: 'audit-completed',
+      executionId: 'exec-known',
+      type: 'step_end',
+      timestamp: new Date('2026-02-17T12:00:00.000Z'),
+      data: { stepName: 'build', status: 'completed' },
+    });
+    const failed = wsBridge.pushEvent({
+      id: 'audit-failed',
+      executionId: 'exec-known',
+      type: 'error',
+      timestamp: new Date('2026-02-17T12:00:01.000Z'),
+      data: null,
+    });
+
+    expect(completed).toMatchObject({
+      id: 'exec-known:00000001',
+      knownType: 'step_end',
+      stepName: 'build',
+      status: 'completed',
+      severity: 'info',
+      timestamp: '2026-02-17T12:00:00.000Z',
+    });
+    expect(failed).toMatchObject({
+      id: 'exec-known:00000002',
+      knownType: 'error',
+      stepName: undefined,
+      status: undefined,
+      severity: 'critical',
+      timestamp: '2026-02-17T12:00:01.000Z',
+    });
   });
 
   it('keeps timestamp+id ordering when buffering and replaying events', async () => {

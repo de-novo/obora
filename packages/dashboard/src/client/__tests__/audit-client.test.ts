@@ -35,6 +35,8 @@ describe('audit-client', () => {
   });
 
   it('omits blank query values and maps event summary variants', () => {
+    expect(__private__.serializeAuditQueryParams({})).toBe('');
+
     expect(
       __private__.serializeAuditQueryParams({
         eventTypes: [' ', 'policy_deny'],
@@ -67,6 +69,35 @@ describe('audit-client', () => {
       stepName: undefined,
       severity: 'critical',
       summary: 'recovery_retry',
+    });
+
+    expect(
+      __private__.mapEvent({
+        id: 'evt-empty-step',
+        executionId: 'exec-1',
+        timestamp: '2026-02-17T10:02:00.000Z',
+        type: 'step_end',
+        data: { stepName: '' },
+      }),
+    ).toMatchObject({
+      stepName: undefined,
+      severity: 'info',
+      summary: 'step_end · stepName',
+    });
+
+    expect(
+      __private__.mapEvent({
+        id: 'evt-error-string',
+        executionId: 'exec-1',
+        timestamp: '2026-02-17T10:03:00.000Z',
+        type: 'error',
+        data: 'plain error',
+      }),
+    ).toMatchObject({
+      stepName: undefined,
+      severity: 'critical',
+      summary: 'error',
+      payload: 'plain error',
     });
   });
 
@@ -174,5 +205,23 @@ describe('audit-client', () => {
       status: 503,
       message: 'Audit API request failed with status 503',
     });
+  });
+
+  it('uses fallback API error details when payload omits public fields', async () => {
+    const apiFailure = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({ detail: 'internal failure' }),
+    });
+
+    vi.stubGlobal('fetch', apiFailure);
+
+    await expect(fetchExecutionEvents('exec-fail', { eventTypes: ['step_start', ' '] })).rejects.toMatchObject({
+      code: 'DASH_AUDIT_QUERY_FAILED',
+      status: 500,
+      message: 'Audit API request failed with status 500',
+    });
+
+    expect(apiFailure).toHaveBeenCalledWith('/api/audit/executions/exec-fail/events?eventType=step_start');
   });
 });

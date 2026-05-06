@@ -3,9 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createPolicy,
   deletePolicy,
+  diffPolicy,
   getPolicy,
   listPolicies,
   PolicyApiError,
+  reloadPolicy,
   updatePolicy,
   validatePolicy,
 } from '../api/policy-client';
@@ -144,5 +146,67 @@ describe('policy-client', () => {
       '/api/policies/validate',
       expect.objectContaining({ method: 'POST' }),
     );
+  });
+
+  it('uses fallback validation errors and generic API error payloads', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse(400, {
+          message: 'Policy validation failed',
+        }),
+      )
+      .mockResolvedValueOnce(new Response('not-json', { status: 500 }));
+
+    await expect(validatePolicy('invalid')).resolves.toEqual({
+      valid: false,
+      errors: ['Policy validation failed'],
+    });
+
+    await expect(listPolicies()).rejects.toMatchObject({
+      status: 500,
+      message: 'Policy API request failed: 500',
+    });
+  });
+
+  it('calls diff and reload endpoints and exposes error classification helpers', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          diff: {
+            summary: '1 change',
+            changes: [{ path: 'tools[0]', type: 'modified', oldValue: 'deny', newValue: 'allow' }],
+          },
+          currentRevision: '2',
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          result: { success: true },
+          policy: {
+            id: 'p1',
+            name: 'default',
+            content: 'allow: true',
+            revision: '3',
+            createdAt: '2026-02-17T00:00:00.000Z',
+            updatedAt: '2026-02-17T00:02:00.000Z',
+          },
+        }),
+      );
+
+    await expect(diffPolicy('p1', 'allow: true')).resolves.toMatchObject({
+      currentRevision: '2',
+      diff: { summary: '1 change' },
+    });
+    await expect(reloadPolicy('p1', { content: 'allow: true', revision: '2' })).resolves.toMatchObject({
+      result: { success: true },
+      policy: { revision: '3' },
+    });
+
+    expect(new PolicyApiError('bad request', 400).isValidationError).toBe(true);
+    expect(new PolicyApiError('conflict', 409).isRevisionConflict).toBe(true);
+    expect(new PolicyApiError('server', 500).isRevisionConflict).toBe(false);
+    expect(new PolicyApiError('server', 500).isValidationError).toBe(false);
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/policies/p1/diff', expect.objectContaining({ method: 'POST' }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/policies/p1/reload', expect.objectContaining({ method: 'POST' }));
   });
 });

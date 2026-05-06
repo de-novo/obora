@@ -27,6 +27,23 @@ describe('policy validator', () => {
     expect(validatePolicyYaml('version: "1"\ntools: []\n')).toEqual({ valid: true, errors: [] });
   });
 
+  it('accepts omitted optional sections and all supported tool effects', () => {
+    expect(validatePolicyYaml('version: "1"\n')).toEqual({ valid: true, errors: [] });
+
+    const result = validatePolicyYaml([
+      'tools:',
+      '  - name: shell',
+      '    effect: deny',
+      '  - name: rewrite',
+      '    effect: transform',
+      '  - name: approval',
+      '    effect: gate',
+      '',
+    ].join('\n'));
+
+    expect(result).toEqual({ valid: true, errors: [] });
+  });
+
   it('returns schema errors for invalid top-level and section shapes', () => {
     expect(parsePolicyYaml('- item').errors).toEqual(['Invalid policy YAML: expected object']);
 
@@ -65,6 +82,25 @@ describe('policy validator', () => {
       'Invalid tools[0]: expected object',
       'Invalid tools[1].name: expected non-empty string',
       'Invalid tools[2].effect: audit',
+    ]);
+  });
+
+  it('returns every tool field error for object entries with missing values', () => {
+    const result = validatePolicyYaml([
+      'tools:',
+      '  - {}',
+      '  - name: 3',
+      '    effect: allow',
+      '  - name: shell',
+      '',
+    ].join('\n'));
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toEqual([
+      'Invalid tools[0].name: expected non-empty string',
+      'Invalid tools[0].effect: undefined',
+      'Invalid tools[1].name: expected non-empty string',
+      'Invalid tools[2].effect: undefined',
     ]);
   });
 

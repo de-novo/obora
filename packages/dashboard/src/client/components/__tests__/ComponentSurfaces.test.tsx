@@ -154,6 +154,26 @@ describe('AuditFilter', () => {
       executionId: '',
     });
   });
+
+  it('keeps controls disabled while loading and resets without a reset callback', async () => {
+    const user = userEvent.setup();
+    const onSearch = vi.fn();
+    const { rerender } = render(<AuditFilter loading={true} onSearch={onSearch} />);
+
+    expect((screen.getByRole('button', { name: '검색' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: '필터 초기화' }) as HTMLButtonElement).disabled).toBe(true);
+
+    rerender(<AuditFilter onSearch={onSearch} />);
+    await user.click(screen.getByRole('button', { name: '필터 초기화' }));
+
+    expect(onSearch).toHaveBeenCalledWith({
+      from: undefined,
+      to: undefined,
+      eventTypes: [],
+      stepName: '',
+      executionId: '',
+    });
+  });
 });
 
 describe('BlackboardSnapshot', () => {
@@ -275,5 +295,40 @@ describe('StepDetail', () => {
 
     await user.click(screen.getByRole('button', { name: /Input/ }));
     expect(screen.queryByText(/"query": "hello"/)).toBeNull();
+  });
+
+  it('renders missing error fallbacks and collapses every section', async () => {
+    const user = userEvent.setup();
+    const circular: Record<string, unknown> = { label: 'loop' };
+    circular.self = circular;
+
+    render(
+      <StepDetail
+        executionId="exec-1"
+        step={steps[1]}
+        detail={{
+          input: undefined,
+          output: circular,
+          policy: 'allowed',
+          error: {},
+        }}
+      />,
+    );
+
+    expect(screen.getByText('데이터 없음')).toBeTruthy();
+    expect(screen.getByText('[object Object]')).toBeTruthy();
+    expect(screen.getByText('UNKNOWN_ERROR')).toBeTruthy();
+    expect(screen.getByText('메시지 없음')).toBeTruthy();
+    expect(screen.getByText('Blackboard 데이터가 없습니다.')).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: /Output/ }));
+    await user.click(screen.getByRole('button', { name: /Policy/ }));
+    await user.click(screen.getByRole('button', { name: /Error/ }));
+    await user.click(screen.getByRole('button', { name: /Blackboard Snapshot/ }));
+
+    expect(screen.queryByText('[object Object]')).toBeNull();
+    expect(screen.queryByText('allowed')).toBeNull();
+    expect(screen.queryByText('UNKNOWN_ERROR')).toBeNull();
+    expect(screen.queryByText('Blackboard 데이터가 없습니다.')).toBeNull();
   });
 });
