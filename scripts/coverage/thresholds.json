@@ -12,10 +12,10 @@
     "lines": 88
   },
   "@obora/adapters": {
-    "statements": 92,
-    "branches": 88,
-    "functions": 91,
-    "lines": 92
+    "statements": 94,
+    "branches": 90,
+    "functions": 92,
+    "lines": 94
   },
   "@obora/cli": {
     "statements": 94,

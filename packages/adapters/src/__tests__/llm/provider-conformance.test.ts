@@ -5,7 +5,7 @@ import type {
   ChatCompletionResult,
   LLMAdapter,
 } from "../../llm/adapter";
-import { PiAIAdapter } from "../../llm/pi-ai-adapter";
+import { listPiAIModels, listPiAIProviders, PiAIAdapter } from "../../llm/pi-ai-adapter";
 import { RetryExhaustedError, withRetry } from "../../llm/retry-handler";
 
 type PiAIContent =
@@ -307,6 +307,97 @@ describe("provider adapter conformance", () => {
     });
   });
 
+  it("exposes provider capabilities, catalog listings, and fallback context values", async () => {
+    piAiMocks.getModels.mockImplementation((provider: string): ModelLike[] => {
+      if (provider === "openai") {
+        return [
+          {
+            id: "gpt-4o-mini",
+            provider,
+            api: "openai-completions",
+            baseUrl: "https://provider.test/v1",
+          },
+        ];
+      }
+
+      if (provider === "anthropic") {
+        throw new Error("catalog unavailable");
+      }
+
+      return [];
+    });
+    piAiMocks.complete.mockResolvedValueOnce(
+      assistant({
+        content: [
+          {
+            type: "toolCall",
+            id: "provider-call-empty",
+            name: "lookup",
+            arguments: {},
+          },
+        ],
+      })
+    );
+
+    const adapter = new PiAIAdapter({
+      provider: "openai",
+      apiKey: "test-key",
+      adapterId: "pi-openai",
+    });
+
+    expect(adapter.id).toBe("pi-openai");
+    expect(adapter.supports("streaming")).toBe(true);
+    expect(adapter.supports("function-calling")).toBe(true);
+    expect(adapter.supports("json-mode")).toBe(false);
+    expect(listPiAIProviders()).toEqual(["openai"]);
+    expect(listPiAIModels("openai")).toEqual(["gpt-4o-mini"]);
+
+    const result = await adapter.chatCompletion({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "assistant", content: "" },
+        { role: "tool", content: "tool output" },
+      ],
+    });
+
+    expect(result.message).toEqual({
+      role: "assistant",
+      content: null,
+      toolCalls: [
+        {
+          id: "provider-call-empty",
+          type: "function",
+          function: {
+            name: "lookup",
+            arguments: "{}",
+          },
+        },
+      ],
+    });
+
+    const [model, context, options] = piAiMocks.complete.mock.calls[0] as CompleteCall;
+    expect(model.baseUrl).toBe("https://provider.test/v1");
+    expect(options.signal).toBeUndefined();
+    expect(options.temperature).toBeUndefined();
+    expect(options.maxTokens).toBeUndefined();
+    expect(context.systemPrompt).toBeUndefined();
+    expect(context.tools).toBeUndefined();
+    expect(context.messages[0]).toEqual(
+      expect.objectContaining({
+        role: "assistant",
+        content: [],
+        model: "unknown",
+      })
+    );
+    expect(context.messages[1]).toEqual(
+      expect.objectContaining({
+        role: "toolResult",
+        toolCallId: expect.stringMatching(/^tool-\d+$/),
+        toolName: "tool",
+      })
+    );
+  });
+
   it.each([
     ["stop", "stop"],
     ["length", "length"],
@@ -383,6 +474,50 @@ describe("provider adapter conformance", () => {
     expect(result.message.toolCalls?.[0]?.function.name).toBe("lookup");
   });
 
+  it("streams tool calls without provider arguments as empty argument objects", async () => {
+    piAiMocks.stream.mockReturnValueOnce(
+      createStream(
+        [
+          {
+            type: "toolcall_end",
+            toolCall: {
+              id: "stream-empty-args",
+              name: "inspect",
+            },
+          },
+        ],
+        assistant({
+          content: [
+            {
+              type: "toolCall",
+              id: "stream-empty-args",
+              name: "inspect",
+              arguments: {},
+            },
+          ],
+          stopReason: "toolUse",
+        })
+      )
+    );
+
+    const adapter = new PiAIAdapter({
+      provider: "openai",
+      apiKey: "test-key",
+      model: "gpt-4o-mini",
+    });
+    const chunks: ChatCompletionChunk[] = [];
+
+    const result = await adapter.streamChatCompletion(
+      { messages: [{ role: "user", content: "stream" }] },
+      (chunk) => chunks.push(chunk)
+    );
+
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0]?.delta.toolCalls?.[0]?.function.arguments).toBe("{}");
+    expect(result.message.content).toBeNull();
+    expect(result.message.toolCalls?.[0]?.function.arguments).toBe("{}");
+  });
+
   it("maps provider error stop reasons to thrown errors", async () => {
     piAiMocks.complete.mockResolvedValueOnce(
       assistant({ stopReason: "error", errorMessage: "provider auth rejected" })
@@ -405,6 +540,24 @@ describe("provider adapter conformance", () => {
     ).rejects.toThrow("stream failed");
   });
 
+  it("uses provider error fallback messages when error details are omitted", async () => {
+    piAiMocks.complete.mockResolvedValueOnce(assistant({ stopReason: "error" }));
+    const adapter = new PiAIAdapter({
+      provider: "openai",
+      apiKey: "test-key",
+      model: "gpt-4o-mini",
+    });
+
+    await expect(
+      adapter.chatCompletion({ messages: [{ role: "user", content: "hello" }] })
+    ).rejects.toThrow("pi-ai returned error stopReason for model gpt-4o-mini");
+
+    piAiMocks.stream.mockReturnValueOnce(createStream([], assistant({ stopReason: "error" })));
+    await expect(
+      adapter.streamChatCompletion({ messages: [{ role: "user", content: "hello" }] }, () => {})
+    ).rejects.toThrow("pi-ai returned error stopReason for model gpt-4o-mini");
+  });
+
   it("lists available models in unsupported model errors", async () => {
     piAiMocks.getModel.mockImplementationOnce(() => {
       throw new Error("catalog miss");
@@ -418,6 +571,19 @@ describe("provider adapter conformance", () => {
     await expect(
       adapter.chatCompletion({ messages: [{ role: "user", content: "hello" }] })
     ).rejects.toThrow("available=gpt-4o-mini");
+  });
+
+  it("reports unsupported model refs when the catalog returns no model object", async () => {
+    piAiMocks.getModel.mockReturnValueOnce(undefined);
+    const adapter = new PiAIAdapter({
+      provider: "openai",
+      apiKey: "test-key",
+      model: "missing-model",
+    });
+
+    await expect(
+      adapter.chatCompletion({ messages: [{ role: "user", content: "hello" }] })
+    ).rejects.toThrow("[MODEL_1002] Unsupported model ref: missing-model");
   });
 });
 

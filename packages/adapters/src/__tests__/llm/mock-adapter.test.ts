@@ -82,6 +82,36 @@ describe("MockLLMAdapter", () => {
 
       expect(result.message.content).toBe("Mock response to: Second");
     });
+
+    it("should use partial, empty-key, and no-user fallbacks", async () => {
+      adapter.setResponse("invoice", "Matched by substring");
+      adapter.setResponse("", "Empty fallback");
+
+      await expect(
+        adapter.chatCompletion({
+          messages: [{ role: "user", content: "please inspect invoice 42" }],
+        })
+      ).resolves.toMatchObject({
+        message: { content: "Matched by substring" },
+      });
+
+      await expect(
+        adapter.chatCompletion({
+          messages: [{ role: "user", content: "unmatched request" }],
+        })
+      ).resolves.toMatchObject({
+        message: { content: "Empty fallback" },
+      });
+
+      adapter.clearResponses();
+      await expect(
+        adapter.chatCompletion({
+          messages: [{ role: "system", content: "no user message" }],
+        })
+      ).resolves.toMatchObject({
+        message: { content: "Mock response to: default" },
+      });
+    });
   });
 
   describe("streamChatCompletion", () => {
