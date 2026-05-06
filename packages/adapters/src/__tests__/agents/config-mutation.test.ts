@@ -2,7 +2,7 @@ import { access, mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { applyAgentOverride, previewAgentOverride } from "../../agents/config-mutation.js";
 import { listPiAIModels } from "../../llm/pi-ai-adapter.js";
@@ -255,6 +255,57 @@ describe("agent config mutation preview", () => {
     });
   });
 
+  it("handles empty config documents and rejects non-object YAML roots", async () => {
+    const openaiModel = listPiAIModels("openai")[0] ?? "gpt-4o-mini";
+
+    await withIsolatedMutationContext(async ({ projectDir }) => {
+      await mkdir(join(projectDir, ".obora"), { recursive: true });
+      const configPath = join(projectDir, ".obora", "config.yaml");
+
+      await writeFile(configPath, "", "utf-8");
+      await expect(
+        previewAgentOverride({
+          action: "set",
+          scope: "project",
+          cwd: projectDir,
+          agentName: "reviewer",
+          provider: "openai",
+          model: openaiModel,
+        })
+      ).resolves.toMatchObject({
+        before: null,
+        after: { provider: "openai", model: openaiModel },
+      });
+
+      await writeFile(configPath, "null", "utf-8");
+      await expect(
+        previewAgentOverride({
+          action: "set",
+          scope: "project",
+          cwd: projectDir,
+          agentName: "reviewer",
+          provider: "openai",
+          model: openaiModel,
+        })
+      ).resolves.toMatchObject({
+        before: null,
+        after: { provider: "openai", model: openaiModel },
+      });
+
+      await writeFile(configPath, "[]", "utf-8");
+      await expect(
+        previewAgentOverride({
+          action: "set",
+          scope: "project",
+          cwd: projectDir,
+          agentName: "reviewer",
+          provider: "openai",
+          model: openaiModel,
+        })
+      ).rejects.toThrow(`Invalid config at ${configPath}: root must be an object`);
+    });
+  });
+
   it("rejects partial set overrides when the target layer does not already own the missing field", async () => {
     const openaiModel = listPiAIModels("openai")[0] ?? "gpt-4o-mini";
 
@@ -292,6 +343,19 @@ describe("agent config mutation preview", () => {
     });
   });
 
+  it("rejects set preview when neither provider nor model is supplied", async () => {
+    await withIsolatedMutationContext(async ({ projectDir }) => {
+      await expect(
+        previewAgentOverride({
+          action: "set",
+          scope: "project",
+          cwd: projectDir,
+          agentName: "reviewer",
+        })
+      ).rejects.toThrow("Agent override preview requires at least one of provider or model");
+    });
+  });
+
   it("rejects unsupported provider and model override targets", async () => {
     await withIsolatedMutationContext(async ({ projectDir }) => {
       await expect(
@@ -317,6 +381,38 @@ describe("agent config mutation preview", () => {
       ).rejects.toThrow(
         "Unsupported agent model override for provider openai: definitely-not-a-real-openai-model"
       );
+    });
+  });
+
+  it("uses process cwd by default and removes the agents section after resetting the last agent", async () => {
+    const openaiModel = listPiAIModels("openai")[0] ?? "gpt-4o-mini";
+
+    await withIsolatedMutationContext(async ({ projectDir }) => {
+      await mkdir(join(projectDir, ".obora"), { recursive: true });
+      await writeFile(
+        join(projectDir, ".obora", "config.yaml"),
+        [
+          "defaults:",
+          "  timeout: 120",
+          "agents:",
+          "  reviewer:",
+          "    provider: openai",
+          `    model: ${openaiModel}`,
+        ].join("\n"),
+        "utf-8"
+      );
+
+      const preview = await previewAgentOverride({
+        action: "reset",
+        scope: "project",
+        agentName: "reviewer",
+      });
+
+      expect(preview.targetPath.endsWith(join(".obora", "config.yaml"))).toBe(true);
+      expect(preview.nextConfigDocument).toEqual({
+        defaults: { timeout: 120 },
+      });
+      expect(preview.nextYaml).not.toContain("agents:");
     });
   });
 
@@ -392,6 +488,34 @@ describe("agent config mutation preview", () => {
       expect(written).toContain(`defaultModel: ${openaiModel}`);
       expect(written).toContain("critic:");
       expect(written).not.toContain("reviewer:");
+    });
+  });
+
+  it("reports non-Error write failures and still requests temp cleanup", async () => {
+    const openaiModel = listPiAIModels("openai")[0] ?? "gpt-4o-mini";
+
+    await withIsolatedMutationContext(async ({ projectDir }) => {
+      const rm = vi.fn(async () => undefined);
+
+      await expect(
+        applyAgentOverride(
+          {
+            action: "set",
+            scope: "project",
+            cwd: projectDir,
+            agentName: "reviewer",
+            provider: "openai",
+            model: openaiModel,
+          },
+          {
+            rename: async () => {
+              return Promise.reject("string failure");
+            },
+            rm,
+          }
+        )
+      ).rejects.toThrow("Failed to write agent override: string failure");
+      expect(rm).toHaveBeenCalledWith(join(projectDir, ".obora", "config.yaml.tmp"), { force: true });
     });
   });
 
