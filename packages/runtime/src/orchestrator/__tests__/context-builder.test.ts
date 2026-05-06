@@ -2,7 +2,7 @@
  * ContextBuilder unit tests
  */
 
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import {
   createWorkflowBlackboard,
   buildAgentContext,
@@ -38,6 +38,16 @@ const STEP_IMPL: Step = {
 };
 
 const SESSION = "session-test-001";
+const originalNodeEnv = process.env.NODE_ENV;
+
+afterEach(() => {
+  if (originalNodeEnv === undefined) {
+    delete process.env.NODE_ENV;
+  } else {
+    process.env.NODE_ENV = originalNodeEnv;
+  }
+  vi.restoreAllMocks();
+});
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -54,6 +64,15 @@ describe("createWorkflowBlackboard", () => {
     expect(meta.featureName).toBe("my-feature");
     expect(meta.sessionId).toBe(SESSION);
     expect(typeof meta.startedAt).toBe("string");
+  });
+
+  it("defaults missing workflow version to 1.0", () => {
+    const { version: _version, ...workflowWithoutVersion } = WORKFLOW;
+
+    const board = createWorkflowBlackboard(SESSION, workflowWithoutVersion, "my-feature");
+
+    const meta = board.read<Record<string, unknown>>("state.context.workflow");
+    expect(meta.workflowVersion).toBe("1.0");
   });
 
   it("initialises empty steps container", () => {
@@ -115,6 +134,24 @@ describe("recordStepResult / recordStepError", () => {
     expect(stored!.output).toBeNull();
   });
 
+  it("normalizes missing output and error fields", () => {
+    const board = createWorkflowBlackboard(SESSION, WORKFLOW, "feat");
+
+    recordStepResult(board, "plan", { success: true });
+    recordStepError(board, "implement", { success: false });
+
+    expect(readStepResult(board, "plan")).toMatchObject({
+      success: true,
+      output: null,
+      error: null,
+    });
+    expect(readStepResult(board, "implement")).toMatchObject({
+      success: false,
+      error: "Unknown error",
+      diagnosisCode: null,
+    });
+  });
+
   it("returns typed StepResultRecord with explicit nulls", () => {
     const board = createWorkflowBlackboard(SESSION, WORKFLOW, "feat");
     recordStepResult(board, "plan", { success: true, output: "ok" });
@@ -167,6 +204,22 @@ describe("single-writer policy", () => {
     // Now context-builder records
     recordStepResult(board, "plan", result);
     expect(board.version).toBeGreaterThan(initialVersion);
+  });
+
+  it("keeps the direct board write shim as a warned no-op outside test mode", () => {
+    process.env.NODE_ENV = "production";
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const board = createWorkflowBlackboard(SESSION, WORKFLOW, "feat") as unknown as {
+      write(path: string, value: unknown): void;
+      read<T>(path: string): T;
+    };
+
+    board.write("state.context.steps.plan", { success: true });
+
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('Direct write("state.context.steps.plan") is a no-op'),
+    );
+    expect(() => board.read("state.context.steps.plan")).toThrow("Path not found");
   });
 });
 

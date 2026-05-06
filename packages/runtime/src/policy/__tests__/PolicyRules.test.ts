@@ -90,6 +90,93 @@ describe("policy rules", () => {
     });
   });
 
+  it("ToolRule handles allow, unmatched, condition, and default gate/transform branches", () => {
+    const auditEvents: unknown[] = [];
+    const rule = new ToolRule({
+      onAuditEvent: (event) => {
+        auditEvents.push(event);
+      },
+    });
+    const policies: PolicySet = {
+      tools: [
+        { name: "allowed", effect: "allow" },
+        { name: "skip", effect: "deny", when: { not_matches: ["blocked"] } },
+        { name: "conditional", effect: "allow", when: { condition: "context.currentCost > 0" } },
+        { name: "default_gate", effect: "gate" },
+        { name: "default_transform", effect: "transform" },
+      ],
+    };
+
+    expect(rule.evaluate({ type: "step_start", name: "allowed" }, {}, policies)).toBeNull();
+    expect(rule.evaluate({ type: "tool_call", name: "missing", params: undefined }, {}, policies)).toBeNull();
+    expect(rule.evaluate({ type: "tool_call", name: "allowed", params: "ok" }, {}, policies)).toEqual({
+      type: "allow",
+    });
+    expect(rule.evaluate({ type: "tool_call", name: "skip", params: "blocked text" }, {}, policies)).toBeNull();
+    expect(
+      rule.evaluate({ type: "tool_call", name: "conditional", params: { value: 1 } }, { currentCost: 1 }, policies),
+    ).toEqual({ type: "allow" });
+    expect(rule.evaluate({ type: "tool_call", name: "default_gate", params: {} }, {}, policies)).toEqual({
+      type: "gate",
+      gateType: "human-approval",
+      config: {
+        tool: "default_gate",
+        timeout: undefined,
+        rule: "tools.default_gate",
+      },
+    });
+    expect(rule.evaluate({ type: "tool_call", name: "default_transform", params: undefined }, {}, policies)).toEqual({
+      type: "transform",
+      original: undefined,
+      transformed: {
+        params: undefined,
+        transform: undefined,
+      },
+      rule: "tools.default_transform",
+      transformFn: undefined,
+    });
+    expect(auditEvents).toEqual([
+      expect.objectContaining({
+        type: "policy_condition_evaluated",
+        result: true,
+        rule: "tools.conditional",
+      }),
+    ]);
+  });
+
+  it("ToolRule denies when condition evaluation fails", () => {
+    const auditEvents: unknown[] = [];
+    const rule = new ToolRule({
+      onAuditEvent: (event) => {
+        auditEvents.push(event);
+      },
+    });
+    const policies: PolicySet = {
+      tools: [
+        {
+          name: "conditional",
+          effect: "allow",
+          when: { condition: "context.missing(" },
+        },
+      ],
+    };
+
+    const decision = rule.evaluate({ type: "tool_call", name: "conditional", params: {} }, {}, policies);
+
+    expect(decision).toMatchObject({
+      type: "deny",
+      rule: "tools.conditional",
+    });
+    expect(auditEvents).toEqual([
+      expect.objectContaining({
+        type: "policy_condition_evaluated",
+        result: false,
+        rule: "tools.conditional",
+        error: expect.any(String),
+      }),
+    ]);
+  });
+
   it("SandboxRule denies out-of-root and denied patterns", () => {
     const rule = new SandboxRule();
 

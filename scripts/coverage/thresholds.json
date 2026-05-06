@@ -7,7 +7,7 @@
   },
   "@obora/runtime": {
     "statements": 91,
-    "branches": 87,
+    "branches": 88,
     "functions": 88,
     "lines": 91
   },

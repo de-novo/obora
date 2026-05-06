@@ -200,6 +200,22 @@ describe("ReExecutionPlanner", () => {
     );
   });
 
+  it("throws when execution has events but no execution_start", async () => {
+    const store = new InMemoryAuditStore();
+    await store.record(
+      makeEvent({
+        executionId: "exec-invalid",
+        type: "step_start",
+        data: { stepName: "analyze" },
+      })
+    );
+    const planner = new ReExecutionPlanner(store);
+
+    await expect(planner.createPlan("exec-invalid", { mode: "full" })).rejects.toThrow(
+      "missing execution_start event"
+    );
+  });
+
   it("throws when execution has no step sequence", async () => {
     const store = new InMemoryAuditStore();
     await store.record(
@@ -214,6 +230,117 @@ describe("ReExecutionPlanner", () => {
     await expect(planner.createPlan("exec-empty", { mode: "full" })).rejects.toThrow(
       "has no step sequence"
     );
+  });
+
+  it("derives workflow metadata and step order from fallback audit shapes", async () => {
+    const store = new InMemoryAuditStore();
+    await store.record(
+      makeEvent({
+        executionId: "exec-fallbacks",
+        type: "execution_start",
+        data: {
+          contractVersion: "contract-v2",
+          snapshotId: "snap-from-start",
+          stepOrder: ["analyze", "analyze", 42, "finalize"],
+        },
+      })
+    );
+    await store.record(
+      makeEvent({
+        executionId: "exec-fallbacks",
+        type: "state_change",
+        data: { path: "", newValue: "ignored" },
+      })
+    );
+    const planner = new ReExecutionPlanner(store);
+
+    const plan = await planner.createPlan("exec-fallbacks", {
+      mode: "full",
+      detectNonDeterminism: false,
+    });
+
+    expect(plan.originalWorkflow).toBe("unknown");
+    expect(plan.workflowVersion).toBe("contract-v2");
+    expect(plan.snapshotRef).toBe("snap-from-start");
+    expect(plan.stepsToRerun).toEqual(["analyze", "finalize"]);
+  });
+
+  it("uses first snapshot when checkpoint mode has no checkpoint step", async () => {
+    const store = new InMemoryAuditStore();
+    await seedExecution(store, "exec-no-checkpoint");
+    await store.record(
+      makeEvent({
+        executionId: "exec-no-checkpoint",
+        type: "snapshot_restore",
+        data: { snapshotRef: "snap-first" },
+      })
+    );
+    const planner = new ReExecutionPlanner(store);
+
+    await expect(planner.createPlan("exec-no-checkpoint", { mode: "from_checkpoint" })).rejects.toThrow(
+      "checkpointStep is required"
+    );
+
+    const fullPlan = await planner.createPlan("exec-no-checkpoint", {
+      mode: "full",
+      detectNonDeterminism: false,
+    });
+    expect(fullPlan.snapshotRef).toBeUndefined();
+  });
+
+  it("reconstructs checkpoint state while skipping non-object and missing-path events", async () => {
+    const store = new InMemoryAuditStore();
+    await store.record(
+      makeEvent({
+        executionId: "exec-reconstruct",
+        type: "execution_start",
+        data: { workflowName: "wf.reconstruct" },
+      })
+    );
+    await store.record(
+      makeEvent({
+        executionId: "exec-reconstruct",
+        type: "step_start",
+        data: { stepName: "prepare" },
+      })
+    );
+    await store.record(
+      makeEvent({
+        executionId: "exec-reconstruct",
+        type: "state_change",
+        data: "not-object",
+      })
+    );
+    await store.record(
+      makeEvent({
+        executionId: "exec-reconstruct",
+        type: "state_change",
+        data: { path: "", newValue: "ignored" },
+      })
+    );
+    await store.record(
+      makeEvent({
+        executionId: "exec-reconstruct",
+        type: "state_change",
+        data: { path: "state.valid", newValue: 1 },
+      })
+    );
+    await store.record(
+      makeEvent({
+        executionId: "exec-reconstruct",
+        type: "step_start",
+        data: { stepName: "resume" },
+      })
+    );
+    const planner = new ReExecutionPlanner(store);
+
+    const plan = await planner.createPlan("exec-reconstruct", {
+      mode: "from_checkpoint",
+      checkpointStep: "resume",
+      detectNonDeterminism: false,
+    });
+
+    expect(plan.restoredState).toEqual({ "state.valid": 1 });
   });
 
   it("throws when checkpoint step is not found", async () => {

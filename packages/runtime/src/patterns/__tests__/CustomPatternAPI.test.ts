@@ -147,6 +147,92 @@ describe("CustomPatternAPI", () => {
     expect((result.output as { rounds: unknown[] }).rounds).toHaveLength(4);
   });
 
+  it("OxfordDebatePattern covers majority, judge-against, defaults, and emitted rounds", async () => {
+    const pattern = new OxfordDebatePattern();
+    const events: string[] = [];
+
+    const majority = await pattern.run({
+      pattern: "oxford-debate",
+      config: { voting: "majority" },
+      participants: {
+        proposer: "alice",
+        opposer: "bob",
+        judge: "carol",
+      },
+      input: {
+        motion: "Typed SDKs reduce integration risk",
+      },
+      emit: (event) => {
+        events.push(event.type);
+      },
+    });
+
+    expect(majority.output).toMatchObject({
+      motion: "Typed SDKs reduce integration risk",
+      result: "for",
+    });
+    expect(events).toEqual(["oxford_debate_rounds_completed"]);
+
+    const judgeAgainst = await pattern.run({
+      pattern: "oxford-debate",
+      participants: {
+        proposer: "alice",
+        opposer: "bob",
+        judge: "carol",
+      },
+      input: {
+        motion: "Ship without tests",
+        arguments: {
+          carol: "against",
+        },
+      },
+    });
+
+    expect(judgeAgainst.output).toMatchObject({
+      result: "against",
+    });
+  });
+
+  it("OxfordDebatePattern rejects invalid config, input, and participant roles", async () => {
+    const pattern = new OxfordDebatePattern();
+
+    await expect(
+      pattern.run({
+        pattern: "oxford-debate",
+        config: { voting: "ranked" },
+        input: { motion: "A valid motion" },
+        participants: {
+          proposer: "alice",
+          opposer: "bob",
+          judge: "carol",
+        },
+      }),
+    ).rejects.toThrow("oxford-debate.voting");
+
+    await expect(
+      pattern.run({
+        pattern: "oxford-debate",
+        input: null,
+        participants: {
+          proposer: "alice",
+          opposer: "bob",
+          judge: "carol",
+        },
+      }),
+    ).rejects.toThrow("input must be an object");
+
+    await expect(
+      pattern.run({
+        pattern: "oxford-debate",
+        input: { motion: "A valid motion" },
+        participants: {
+          proposer: "alice",
+          judge: "carol",
+        },
+      }),
+    ).rejects.toThrow("participant role 'opposer'");
+  });
+
   it("throws ORCH_STEP_NOT_FOUND for unknown custom pattern", () => {
     const registry = new PatternRegistry();
 

@@ -1,11 +1,33 @@
 import { describe, expect, it } from "vitest";
 import { Blackboard } from "../../core/blackboard";
 import { SnapshotManager, SnapshotRestoreError } from "../snapshot-manager";
-import { createAgentId, createSessionId } from "../../types";
-import type { BlackboardState } from "../../types";
+import { createAgentId, createAgendaId, createSessionId } from "../../types";
+import type { BlackboardState, Resolution } from "../../types";
 
 const sessionId = createSessionId("session-manager");
 const agentId = createAgentId("agent-1");
+
+function createResolution(id: string, agendaId: string): Resolution {
+  return {
+    id,
+    agendaId: createAgendaId(agendaId),
+    decision: "approved",
+    summary: `${id} summary`,
+    voteSummary: {
+      approve: 1,
+      reject: 0,
+      abstain: 0,
+      conditional: 0,
+      total: 1,
+    },
+    conditions: [],
+    dissent: [],
+    decidedBy: agentId,
+    nextActions: [],
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  };
+}
 
 function createManager(): SnapshotManager {
   let counter = 0;
@@ -84,6 +106,57 @@ describe("SnapshotManager", () => {
     const partial = manager.partialRestore(snapshot, current, ["state"]);
     expect(partial.state.context.release).toBe("snapshot");
     expect(partial.knowledge.facts[0]?.content).toBe("gate passed");
+  });
+
+  it("partially restores knowledge and decisions sections without replacing state", () => {
+    const manager = createManager();
+    const current = createState({ release: "current" });
+    current.decisions.history.push(createResolution("current-decision", "agenda-current"));
+    const snapshotState = createState({ release: "snapshot" });
+    snapshotState.decisions.history.push(createResolution("snapshot-decision", "agenda-snapshot"));
+    const snapshot = manager.createSnapshot(snapshotState);
+
+    const partial = manager.partialRestore(snapshot, current, ["knowledge", "decisions"]);
+
+    expect(partial.state.context.release).toBe("current");
+    expect(partial.knowledge.facts[0]?.content).toBe("gate passed");
+    expect(partial.decisions.history).toHaveLength(1);
+    expect(partial.decisions.history[0]).toMatchObject({
+      id: "snapshot-decision",
+      agendaId: createAgendaId("agenda-snapshot"),
+      decision: "approved",
+    });
+  });
+
+  it("surfaces checksum, data, and id-generation restore failures", () => {
+    const manager = createManager();
+    const snapshot = manager.createSnapshot(createState());
+
+    expect(() =>
+      manager.restore({
+        ...snapshot,
+        meta: { ...snapshot.meta, checksum: "invalid" },
+      }),
+    ).toThrow(SnapshotRestoreError);
+
+    expect(() =>
+      manager.restore(
+        {
+          ...snapshot,
+          data: "{bad-json",
+        },
+        { skipStructuralValidation: true },
+      ),
+    ).toThrow(SnapshotRestoreError);
+
+    const invalidIdManager = new SnapshotManager({
+      idGenerator: () => 1 as unknown as string,
+    });
+    expect(() =>
+      invalidIdManager.restore(snapshot, {
+        skipStructuralValidation: true,
+      }),
+    ).toThrow("idGenerator must return a string");
   });
 
   it("exposes metadata, size, diff, and section extraction helpers", () => {

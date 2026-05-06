@@ -66,6 +66,56 @@ describe("InMemoryAuditStore", () => {
     expect(found[0].type).toBe("state_change");
   });
 
+  it("filters by cell, multiple types, bounds, and limit while cloning timestamps", async () => {
+    const store = new InMemoryAuditStore();
+    const base = new Date("2026-02-16T00:00:00.000Z");
+    const first = makeEvent({
+      id: "evt-first",
+      executionId: "exec-filter",
+      cellId: "cell-1",
+      type: "tool_call",
+      timestamp: new Date(base.getTime() + 1_000),
+    });
+
+    await store.record(first);
+    await store.record(
+      makeEvent({
+        id: "evt-second",
+        executionId: "exec-filter",
+        cellId: "cell-1",
+        type: "tool_result",
+        timestamp: new Date(base.getTime() + 2_000),
+      }),
+    );
+    await store.record(
+      makeEvent({
+        id: "evt-third",
+        executionId: "exec-filter",
+        cellId: "cell-2",
+        type: "state_change",
+        timestamp: new Date(base.getTime() + 3_000),
+      }),
+    );
+
+    first.timestamp.setUTCFullYear(2000);
+
+    const found = await store.query({
+      executionId: "exec-filter",
+      cellId: "cell-1",
+      type: ["tool_call", "tool_result"],
+      from: new Date(base.getTime() + 500),
+      to: new Date(base.getTime() + 2_500),
+      limit: 1,
+    });
+
+    expect(found.map((event) => event.id)).toEqual(["evt-first"]);
+    expect(found[0].timestamp.toISOString()).toBe("2026-02-16T00:00:01.000Z");
+    found[0].timestamp.setUTCFullYear(1999);
+
+    const queriedAgain = await store.query({ executionId: "exec-filter", type: "tool_call" });
+    expect(queriedAgain[0].timestamp.toISOString()).toBe("2026-02-16T00:00:01.000Z");
+  });
+
   it("replays events in deterministic timestamp order", async () => {
     const store = new InMemoryAuditStore();
     const base = new Date("2026-02-16T00:00:00.000Z");
@@ -121,6 +171,29 @@ describe("InMemoryAuditStore", () => {
     ).rejects.toThrow("not supported in M1");
   });
 
+  it("rejects invalid replay speed and supports default replay options", async () => {
+    const store = new InMemoryAuditStore();
+    await store.record(
+      makeEvent({
+        executionId: "exec-default-replay",
+        id: "evt-default",
+        timestamp: new Date("2026-02-16T00:00:00.000Z"),
+      }),
+    );
+
+    await expect(store.replay({ executionId: "exec-default-replay", speed: 0 })).rejects.toThrow(
+      "positive finite",
+    );
+    await expect(store.replay({ executionId: "exec-default-replay", speed: Number.POSITIVE_INFINITY })).rejects.toThrow(
+      "positive finite",
+    );
+
+    await expect(store.replay({ executionId: "exec-default-replay" })).resolves.toMatchObject({
+      mode: "event-playback",
+      totalEvents: 1,
+    });
+  });
+
   it("exports execution data as json and csv", async () => {
     const store = new InMemoryAuditStore();
 
@@ -141,6 +214,37 @@ describe("InMemoryAuditStore", () => {
     expect(csv).toContain("id,executionId,cellId,timestamp,type,data,metadata");
     expect(csv).toContain("exec-export");
     expect(csv).toContain("error");
+  });
+
+  it("escapes csv values and leaves nullish fields empty", async () => {
+    const store = new InMemoryAuditStore();
+
+    await store.record(
+      makeEvent({
+        id: 'evt-"quoted"',
+        executionId: "exec-csv",
+        cellId: undefined,
+        type: "tool_call",
+        data: 'quoted "value"',
+        metadata: undefined,
+      }),
+    );
+    await store.record(
+      makeEvent({
+        id: "evt-null",
+        executionId: "exec-csv",
+        cellId: undefined,
+        data: null,
+        metadata: undefined,
+      }),
+    );
+
+    const csv = await store.export("exec-csv", "csv");
+
+    expect(csv).toContain('"evt-""quoted"""');
+    expect(csv).toContain('"quoted ""value"""');
+    expect(csv).toContain('"evt-null","exec-csv",""');
+    expect(csv).toContain(',"tool_call",,""');
   });
 });
 

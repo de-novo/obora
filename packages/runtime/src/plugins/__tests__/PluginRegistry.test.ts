@@ -83,6 +83,49 @@ describe("PluginRegistry", () => {
     expect(onUnload).toHaveBeenCalledTimes(1);
     expect(registry.get("state-transform", "identity-transform").version).toBe("2.0.0");
   });
+
+  it("rejects duplicate plugins without replace and handles missing lookups", async () => {
+    const registry = new PluginRegistry();
+    const plugin = {
+      name: "identity-transform",
+      version: "1.0.0",
+      type: "state-transform" as const,
+      transform: (value: unknown) => value,
+    };
+
+    await registry.register(plugin);
+
+    await expect(registry.register(plugin)).rejects.toThrow("already registered");
+    await expect(registry.unregister("missing")).resolves.toBeUndefined();
+    expect(() => registry.get("tool", "missing")).toThrow("was not found");
+    expect(registry.has("tool", "missing")).toBe(false);
+    expect(registry.list("tool")).toEqual([]);
+  });
+
+  it("registers plugin batches, calls onLoad, and clears registered plugins", async () => {
+    const registry = new PluginRegistry();
+    const onLoad = vi.fn(async () => {});
+    const onUnload = vi.fn(async () => {});
+
+    await registry.registerAll([
+      {
+        name: "identity-transform",
+        version: "1.0.0",
+        type: "state-transform",
+        transform: (value: unknown) => value,
+        onLoad,
+        onUnload,
+      },
+    ]);
+
+    expect(onLoad).toHaveBeenCalledTimes(1);
+    expect(registry.list()).toHaveLength(1);
+
+    await registry.clear();
+
+    expect(onUnload).toHaveBeenCalledTimes(1);
+    expect(registry.list()).toEqual([]);
+  });
 });
 
 describe("PluginLoader", () => {

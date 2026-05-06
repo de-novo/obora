@@ -59,7 +59,7 @@ Current enforced coverage floors:
 | Package | Statements | Branches | Functions | Lines |
 | --- | ---: | ---: | ---: | ---: |
 | `@obora/sdk` | 95 | 90 | 99 | 95 |
-| `@obora/runtime` | 91 | 87 | 88 | 91 |
+| `@obora/runtime` | 91 | 88 | 88 | 91 |
 | `@obora/adapters` | 94 | 91 | 92 | 94 |
 | `@obora/cli` | 96 | 91 | 97 | 96 |
 | `@obora/dashboard` | 92 | 90 | 92 | 92 |
@@ -68,8 +68,8 @@ Latest verified `pnpm verify:coverage` package measurements:
 
 | Package | Statements | Branches | Functions | Lines |
 | --- | ---: | ---: | ---: | ---: |
-| `@obora/sdk` | 95.94% | 90.07% | 99.35% | 95.94% |
-| `@obora/runtime` | 91.06% | 87.09% | 88.18% | 91.06% |
+| `@obora/sdk` | 95.94% | 90.26% | 99.35% | 95.94% |
+| `@obora/runtime` | 91.62% | 88.05% | 88.47% | 91.62% |
 | `@obora/adapters` | 94.47% | 91.29% | 92.55% | 94.47% |
 | `@obora/cli` | 96.36% | 91.06% | 97.72% | 96.36% |
 | `@obora/dashboard` | 92.45% | 90.08% | 92.11% | 92.45% |
@@ -80,9 +80,11 @@ excludes only the browser entrypoint `src/client/main.tsx`.
 
 The current runtime baseline is above 91% for statements and lines, the function
 floor is enforced at 88 after builtin plugin, no-op message bus, and workflow
-diagnosis helper tests, and the branch floor is enforced at 87 after focused
+diagnosis helper tests, and the branch floor is enforced at 88 after focused
 tests around resume, gate timeout, artifact capture, blackboard state defaults,
-step skill loading, and policy expression parsing.
+step skill loading, policy expression parsing/evaluation, audit re-execution
+planning, snapshot restore errors, voting sessions, plugin registry lifecycle,
+and custom pattern branches.
 
 The current adapters branch floor is enforced at 91 after focused tests around
 agent config mutation parsing, default cwd resolution, last-agent reset cleanup,

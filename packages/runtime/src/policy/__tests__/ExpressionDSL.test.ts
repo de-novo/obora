@@ -166,6 +166,47 @@ describe("Expression DSL evaluator", () => {
     expect(evaluateExpression(parseExpression('state.knowledge.score.value == "x"'), baseContext)).toBe(false);
   });
 
+  it("evaluates nullish function arguments and evaluator-only error branches", () => {
+    expect(evaluateExpression(parseExpression("contains(context.missing, null)"), baseContext)).toBe(true);
+    expect(evaluateExpression(parseExpression("startsWith(context.missing, null)"), baseContext)).toBe(true);
+    expect(evaluateExpression(parseExpression("endsWith(context.missing, null)"), baseContext)).toBe(true);
+    expect(evaluateExpression(parseExpression('matches(context.missing, "^$")'), baseContext)).toBe(true);
+    expect(evaluateExpression(parseExpression('in("absent", ["shell_exec"])'), baseContext)).toBe(false);
+
+    expect(() =>
+      evaluateExpression(
+        {
+          type: "comparison",
+          operator: "===",
+          left: { type: "literal", value: 1 },
+          right: { type: "literal", value: 1 },
+        } as never,
+        baseContext,
+      ),
+    ).toThrow("Unsupported AST node");
+    expect(() =>
+      evaluateExpression({ type: "field_ref", path: ["runtime", "value"] } as never, baseContext),
+    ).toThrow("Unsupported root");
+    expect(() =>
+      evaluateExpression({ type: "field_ref", path: ["state", "__proto__"] } as never, baseContext),
+    ).toThrow("Blocked field segment");
+    expect(() =>
+      evaluateExpression({ type: "function_call", name: "unknown", args: [] } as never, baseContext),
+    ).toThrow("Unsupported AST node");
+  });
+
+  it("rejects invalid regex patterns during evaluation", () => {
+    expect(() => evaluateExpression(parseExpression('matches(action.name, "(a+)+")'), baseContext)).toThrow(
+      "nested quantifier"
+    );
+    expect(() => evaluateExpression(parseExpression('matches(action.name, "[")'), baseContext)).toThrow(
+      "Invalid regex"
+    );
+    expect(() =>
+      evaluateExpression(parseExpression(`matches(action.name, "${"a".repeat(257)}")`), baseContext)
+    ).toThrow("regex pattern exceeds maximum length");
+  });
+
   it("evaluates optional root objects and reports evaluator errors", () => {
     const richContext = {
       ...baseContext,
