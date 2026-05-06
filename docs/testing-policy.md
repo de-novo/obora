@@ -25,7 +25,7 @@ Obora 전 패키지의 테스트 기준을 통일해 변경 안정성과 릴리�
 
 | Package | Statements | Branches | Functions | Lines |
 | --- | ---: | ---: | ---: | ---: |
-| `@obora/sdk` | 95 | 90 | 99 | 95 |
+| `@obora/sdk` | 95 | 91 | 99 | 95 |
 | `@obora/runtime` | 91 | 88 | 88 | 91 |
 | `@obora/adapters` | 94 | 91 | 92 | 94 |
 | `@obora/cli` | 96 | 91 | 97 | 96 |
@@ -35,12 +35,15 @@ Obora 전 패키지의 테스트 기준을 통일해 변경 안정성과 릴리�
 
 | Package | Statements | Branches | Functions | Lines |
 | --- | ---: | ---: | ---: | ---: |
-| `@obora/sdk` | 95.94% | 90.26% | 99.35% | 95.94% |
+| `@obora/sdk` | 96.05% | 91.16% | 99.35% | 96.05% |
 | `@obora/runtime` | 91.62% | 88.05% | 88.47% | 91.62% |
 | `@obora/adapters` | 94.47% | 91.29% | 92.55% | 94.47% |
 | `@obora/cli` | 96.36% | 91.06% | 97.72% | 96.36% |
 | `@obora/dashboard` | 92.45% | 90.08% | 92.11% | 92.45% |
 
+SDK branch floor는 step-execution engine parallel/error path, TKG review queue
+fallback, execution lock, repair-loop summary, health-check error,
+judge/consensus strategy normalization 테스트 보강 후 91로 상향했습니다.
 runtime function floor는 builtin plugin, no-op message bus, workflow diagnosis
 helper 테스트 보강 후 88로 상향했고, runtime branch floor는 resume, gate
 timeout, artifact capture, blackboard default state, step skill loading, policy

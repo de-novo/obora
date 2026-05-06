@@ -151,4 +151,33 @@ describe("consensusStrategy - branches", () => {
     expect(result.votes?.[1]?.participant).toBe("bob");
     expect(result.votes?.[1]?.vote).toBe("REQUEST_CHANGES");
   });
+
+  it("falls back to timeout signal and empty response content when no combined signal exists", async () => {
+    const step: WorkflowStep = {
+      name: "consensus1",
+      agent: "reviewer",
+      input: {},
+      participants: ["alice"],
+    };
+    const timeoutSignal = new AbortController().signal;
+    const services = createMockServices({
+      combineAbortSignals: vi.fn().mockReturnValue(undefined),
+      requestForStep: vi.fn().mockResolvedValueOnce({ message: { content: undefined } }),
+      getConsensusQuorumRule: vi.fn().mockReturnValue({ requiredApprovals: 0, description: "none" }),
+      withTimeout: vi.fn().mockImplementation(async (fn) => fn(timeoutSignal)),
+    });
+
+    const result = await consensusStrategy.execute(step, { previousOutputs: {} }, services);
+
+    expect(services.requestForStep).toHaveBeenCalledWith(
+      step,
+      expect.objectContaining({ signal: timeoutSignal }),
+      "alice"
+    );
+    expect(result.votes?.[0]).toMatchObject({
+      participant: "alice",
+      vote: "REQUEST_CHANGES",
+      response: "",
+    });
+  });
 });

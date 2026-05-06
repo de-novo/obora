@@ -502,6 +502,10 @@ describe("TKGService", () => {
   });
 
   describe("review queue APIs", () => {
+    it("returns an empty list when review queue store or scope is unavailable", async () => {
+      await expect(service.listOpenTKGReviewQueueItems(makeWorkflow("test"))).resolves.toEqual([]);
+    });
+
     it("lists and resolves open queue items with custom store and workflow scope", async () => {
       const reviewQueueStore = new InMemoryTKGReviewQueueStore();
       const config: OboraRuntimeConfig = {
@@ -545,6 +549,26 @@ describe("TKGService", () => {
       ).resolves.toMatchObject({
         resolved: false,
         scope: "unresolved",
+        itemId: "missing",
+      });
+    });
+
+    it("returns unresolved configured scope when review queue store is disabled", async () => {
+      const config: OboraRuntimeConfig = {
+        ...makeBaseConfig(),
+        tkgProjection: {
+          enabled: true,
+          file: { projectKey: "project-a", scopes: ["project"] },
+          reviewQueue: { enabled: false },
+        },
+      };
+      const scopedService = new TKGService({ config, eventBus: makeMockEventBus() });
+
+      await expect(
+        scopedService.resolveTKGReviewQueueItem(makeWorkflow("test"), "missing", { status: "rejected" })
+      ).resolves.toMatchObject({
+        resolved: false,
+        scope: "project:project-a",
         itemId: "missing",
       });
     });

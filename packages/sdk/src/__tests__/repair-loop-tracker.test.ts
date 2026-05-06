@@ -23,7 +23,12 @@ describe("RepairLoopTracker", () => {
   });
 
   it("records validation failure", () => {
-    const result = makeValidationResult({ summary: "schema mismatch", errorCode: "E001" });
+    const result = makeValidationResult({
+      summary: "schema mismatch",
+      errorCode: "E001",
+      logPath: "logs/validation.txt",
+      failedChecks: [{ name: "check-1", message: "error msg", severity: "error", file: "src/index.ts" }],
+    });
     tracker.recordValidationFailure(executionId, "step-a", result);
 
     const summary = tracker.getSummary(executionId)!;
@@ -35,7 +40,8 @@ describe("RepairLoopTracker", () => {
       stepName: "step-a",
       summary: "schema mismatch",
       errorCode: "E001",
-      failedChecks: [{ name: "check-1", message: "error msg", severity: "error" }],
+      logPath: "logs/validation.txt",
+      failedChecks: [{ name: "check-1", message: "error msg", severity: "error", file: "src/index.ts" }],
     });
   });
 

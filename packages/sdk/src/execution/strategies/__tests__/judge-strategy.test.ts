@@ -156,4 +156,54 @@ describe("judgeStrategy - config validation branches", () => {
     );
     await expect(readFile(outputPath, "utf-8")).resolves.toBe('{\n  "score": 9\n}\n');
   });
+
+  it("normalizes non-object step input, missing response content, and absent output schema", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "obora-judge-strategy-"));
+    const inputPath = join(dir, "input.json");
+    const outputPath = join(dir, "judge.json");
+    await writeFile(inputPath, JSON.stringify({ answer: "ok" }), "utf-8");
+
+    const services = createMockServices();
+    vi.mocked(services.resolveProjectPath)
+      .mockImplementationOnce(() => inputPath)
+      .mockImplementationOnce(() => outputPath);
+    vi.mocked(services.requestForStep).mockResolvedValueOnce({
+      message: { role: "assistant", content: null },
+    });
+    vi.mocked(services.tryParseStructuredContent).mockReturnValueOnce({ score: 7 });
+    vi.mocked(services.parseStepOutputContract).mockReturnValueOnce({ score: 7 });
+
+    const step: WorkflowStep = {
+      name: "judge1",
+      agent: "judge",
+      config: {
+        judge: {
+          enabled: true,
+          input_json: "input.json",
+          output_path: "judge.json",
+        },
+      },
+    };
+
+    const result = await judgeStrategy.execute(step, { previousOutputs: {} }, services);
+
+    expect(result.output).toEqual({ score: 7 });
+    expect(services.requestForStep).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: {
+          task: expect.stringContaining("Input JSON (input.json)"),
+        },
+      }),
+      { previousOutputs: {} },
+      "judge"
+    );
+    expect(services.tryParseStructuredContent).toHaveBeenCalledWith("");
+    expect(services.parseStepOutputContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        output: { path: "judge.json" },
+      }),
+      { score: 7 }
+    );
+    await expect(readFile(outputPath, "utf-8")).resolves.toBe('{\n  "score": 7\n}\n');
+  });
 });

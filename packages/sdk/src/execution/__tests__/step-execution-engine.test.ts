@@ -221,6 +221,58 @@ describe("StepExecutionEngine - executeSingleStep", () => {
     ).rejects.toThrow(/All parallel branches failed/);
   });
 
+  it("uses step input fallback and stringifies non-Error parallel branch failures", async () => {
+    const { engine } = createEngine();
+    const stepExecutor = createMockStepExecutor();
+    vi.mocked(stepExecutor.executeStep).mockRejectedValue("plain branch failure");
+
+    const step: WorkflowStep = {
+      name: "step1",
+      agent: "agent1",
+      input: { task: "fallback" },
+      parallel: [{ agent: "agent-a" }],
+    };
+    const workflow = createWorkflowDef([step]);
+    const execution: RuntimeExecution = {
+      id: "exec-1", workflowName: "test", status: "running",
+      input: {}, startedAt: new Date(), stepOrder: ["step1"],
+      completedSteps: [], stepRecords: {}, outputs: {},
+    };
+
+    await expect(
+      engine.executeSingleStep(step, workflow, execution, stepExecutor, undefined, "exec-1", false, null)
+    ).rejects.toThrow("plain branch failure");
+
+    expect(stepExecutor.executeStep).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: { task: "fallback" },
+        parallel: undefined,
+        merge: undefined,
+      }),
+      expect.objectContaining({ previousOutputs: execution.outputs })
+    );
+  });
+
+  it("reports parallel branch failures when no step executor is available", async () => {
+    const { engine } = createEngine();
+    const step: WorkflowStep = {
+      name: "step1",
+      agent: "agent1",
+      input: {},
+      parallel: [{ agent: "agent-a" }],
+    };
+    const workflow = createWorkflowDef([step]);
+    const execution: RuntimeExecution = {
+      id: "exec-1", workflowName: "test", status: "running",
+      input: {}, startedAt: new Date(), stepOrder: ["step1"],
+      completedSteps: [], stepRecords: {}, outputs: {},
+    };
+
+    await expect(
+      engine.executeSingleStep(step, workflow, execution, undefined, undefined, "exec-1", false, null)
+    ).rejects.toThrow(/All parallel branches failed.*LLM adapter is unavailable/);
+  });
+
   it("handles cost tracker preStepGate", async () => {
     const { engine } = createEngine();
     const stepExecutor = createMockStepExecutor();
@@ -426,6 +478,28 @@ describe("StepExecutionEngine - executeStepLoop", () => {
       "exec-1", false, null, controller.signal
     );
 
+    expect(execution.completedSteps).toHaveLength(0);
+  });
+
+  it("returns before executing a step when settlement callback is already true", async () => {
+    const { engine } = createEngine();
+    const stepExecutor = createMockStepExecutor();
+    const steps: WorkflowStep[] = [
+      { name: "step1", agent: "agent1", input: {} },
+    ];
+    const workflow = createWorkflowDef(steps);
+    const execution: RuntimeExecution = {
+      id: "exec-1", workflowName: "test", status: "running",
+      input: {}, startedAt: new Date(), stepOrder: ["step1"],
+      completedSteps: [], stepRecords: {}, outputs: {},
+    };
+
+    await engine.executeStepLoop(
+      steps, workflow, execution, stepExecutor, undefined,
+      "exec-1", false, null, undefined, () => true
+    );
+
+    expect(stepExecutor.executeStep).not.toHaveBeenCalled();
     expect(execution.completedSteps).toHaveLength(0);
   });
 

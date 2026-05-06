@@ -59,6 +59,21 @@ describe("HealthChecker", () => {
     });
   });
 
+  it("converts non-Error check exceptions into failure messages", async () => {
+    checker.register("string-error", async () => {
+      throw "plain failure";
+    });
+
+    const status = await checker.check();
+
+    expect(status.healthy).toBe(false);
+    expect(status.checks[0]).toMatchObject({
+      name: "string-error",
+      status: "fail",
+      message: "plain failure",
+    });
+  });
+
   it("caches last status", async () => {
     expect(checker.getLastStatus()).toBeUndefined();
     

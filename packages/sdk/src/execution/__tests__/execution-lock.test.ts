@@ -95,6 +95,32 @@ describe("FileExecutionLock", () => {
     expect(acquired).toBe(true);
   });
 
+  it("replaces recent locks when the recorded process is dead", async () => {
+    const deadProcessLock = {
+      pid: 99999,
+      executionId: "recent-dead",
+      workflowName: "test-workflow",
+      acquiredAt: new Date().toISOString(),
+      hostname: "test",
+    };
+    await mkdir(TEST_LOCK_DIR, { recursive: true });
+    await writeFile(
+      join(TEST_LOCK_DIR, "test-workflow.lock"),
+      JSON.stringify(deadProcessLock, null, 2),
+      "utf-8"
+    );
+
+    const acquired = await lock.acquire("test-workflow", "exec-1");
+
+    expect(acquired).toBe(true);
+    const stored = JSON.parse(await readFile(join(TEST_LOCK_DIR, "test-workflow.lock"), "utf-8")) as {
+      executionId: string;
+      pid: number;
+    };
+    expect(stored.executionId).toBe("exec-1");
+    expect(stored.pid).toBe(process.pid);
+  });
+
   it("returns false for isLocked when no lock exists", async () => {
     expect(await lock.isLocked("nonexistent-workflow")).toBe(false);
   });
