@@ -3,15 +3,17 @@ import { DefaultExecutionCell } from "../ExecutionCell.js";
 import type { CellContext } from "../CellContext.js";
 import type { Task } from "../types.js";
 
-function createContext(overrides?: Partial<CellContext>): CellContext {
+function createContext(overrides?: Partial<CellContext> & { state?: Map<string, unknown> }): CellContext {
+  const { state: providedState, ...contextOverrides } = overrides ?? {};
   const state = new Map<string, unknown>();
+  const resolvedState = providedState ?? state;
 
   const ctx: CellContext = {
     cellId: "cell-test",
     blackboard: {
-      read: (path: string) => state.get(path),
+      read: (path: string) => resolvedState.get(path),
       write: (path: string, value: unknown) => {
-        state.set(path, value);
+        resolvedState.set(path, value);
       },
     },
     tools: {
@@ -25,7 +27,7 @@ function createContext(overrides?: Partial<CellContext>): CellContext {
 
   return {
     ...ctx,
-    ...overrides,
+    ...contextOverrides,
   };
 }
 
@@ -208,5 +210,183 @@ describe("DefaultExecutionCell", () => {
     expect(result.toolCalls[0].toolName).toBe("fail-tool");
     expect(result.toolCalls[0].status).toBe("error");
     expect(result.toolCalls[0].error).toBe("tool failed");
+  });
+
+  it("uses the default runner for plain inputs and tool inputs", async () => {
+    const auditEvents: Array<{ eventType: string; data: Record<string, unknown> }> = [];
+    const cell = new DefaultExecutionCell({
+      id: "cell-10",
+      context: createContext({
+        audit: {
+          record: (eventType, data) => {
+            auditEvents.push({ eventType, data });
+          },
+        },
+      }),
+    });
+
+    const plainResult = await cell.execute(createTask({ value: "plain" }));
+    const toolResult = await cell.execute(createTask({ tool: "echo", params: { value: "tool" } }));
+
+    expect(plainResult).toMatchObject({
+      success: true,
+      output: { value: "plain" },
+      toolCalls: [],
+    });
+    expect(toolResult.success).toBe(true);
+    expect(toolResult.output).toEqual({ toolName: "echo", params: { value: "tool" } });
+    expect(toolResult.toolCalls).toHaveLength(1);
+    expect(auditEvents.map((event) => event.eventType)).toEqual([
+      "cell_end",
+      "tool_call",
+      "tool_result",
+      "cell_end",
+    ]);
+  });
+
+  it("tracks blackboard writes as state changes", async () => {
+    const state = new Map<string, unknown>([["draft.title", "old"]]);
+    const cell = new DefaultExecutionCell({
+      id: "cell-11",
+      context: createContext({ state }),
+      runTask: async (_task, context) => {
+        context.blackboard.write("draft.title", "new");
+        context.blackboard.write("draft.status", "ready");
+        return context.blackboard.read("draft.title");
+      },
+    });
+
+    const result = await cell.execute(createTask());
+
+    expect(result.success).toBe(true);
+    expect(result.output).toBe("new");
+    expect(result.stateChanges).toHaveLength(2);
+    expect(result.stateChanges[0]).toMatchObject({
+      path: "draft.title",
+      oldValue: "old",
+      newValue: "new",
+    });
+    expect(result.stateChanges[1]).toMatchObject({
+      path: "draft.status",
+      oldValue: undefined,
+      newValue: "ready",
+    });
+  });
+
+  it("rejects overlapping executions and treats idle suspend or resume as no-ops", async () => {
+    let releaseTask!: () => void;
+    const cell = new DefaultExecutionCell({
+      id: "cell-12",
+      context: createContext(),
+      runTask: async () => {
+        await new Promise<void>((resolve) => {
+          releaseTask = resolve;
+        });
+        return { done: true };
+      },
+    });
+
+    await cell.suspend();
+    await cell.resume();
+    expect(cell.status).toBe("idle");
+
+    const running = cell.execute(createTask());
+    await expect(cell.execute(createTask({ id: "second" }))).rejects.toThrow("Cell cell-12 is already running");
+
+    releaseTask();
+    await expect(running).resolves.toMatchObject({ success: true });
+  });
+
+  it("enforces tool call limits before invoking tools", async () => {
+    const invoke = vi.fn(async (toolName: string, params: unknown) => ({ toolName, params }));
+    const afterExecute = vi.fn();
+    const afterToolCall = vi.fn();
+    const cell = new DefaultExecutionCell({
+      id: "cell-13",
+      context: createContext({
+        config: { maxToolCalls: 1 },
+        tools: { invoke },
+        policy: { afterExecute, afterToolCall },
+      }),
+      runTask: async (_task, context) => {
+        await context.tools.invoke("first", { ok: true });
+        return context.tools.invoke("second", { ok: false });
+      },
+    });
+
+    const result = await cell.execute(createTask());
+
+    expect(result.success).toBe(false);
+    expect(result.output).toEqual({ error: "Tool call limit exceeded: 1" });
+    expect(result.toolCalls).toHaveLength(1);
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(afterToolCall).toHaveBeenCalledTimes(1);
+    expect(afterExecute).toHaveBeenCalledWith(expect.anything(), {
+      success: false,
+      output: { error: "Tool call limit exceeded: 1" },
+    });
+  });
+
+  it("normalizes non-Error tool failures", async () => {
+    const afterToolCall = vi.fn();
+    const cell = new DefaultExecutionCell({
+      id: "cell-14",
+      context: createContext({
+        tools: {
+          invoke: async () => {
+            throw "plain failure";
+          },
+        },
+        policy: { afterToolCall },
+      }),
+      runTask: async (_task, context) => context.tools.invoke("plain-fail", {}),
+    });
+
+    const result = await cell.execute(createTask());
+
+    expect(result.success).toBe(false);
+    expect(result.output).toEqual({ error: "plain failure" });
+    expect(result.toolCalls[0]).toMatchObject({
+      toolName: "plain-fail",
+      status: "error",
+      error: "plain failure",
+    });
+    expect(afterToolCall).toHaveBeenCalledWith(expect.objectContaining({ error: expect.any(Error) }));
+  });
+
+  it("reports policy and timeout failures through failed execution results", async () => {
+    const afterExecute = vi.fn();
+    const policyFailureCell = new DefaultExecutionCell({
+      id: "cell-15",
+      context: createContext({
+        policy: {
+          beforeExecute: () => {
+            throw new Error("policy denied");
+          },
+          afterExecute,
+        },
+      }),
+    });
+
+    await expect(policyFailureCell.execute(createTask())).resolves.toMatchObject({
+      success: false,
+      output: { error: "policy denied" },
+    });
+    expect(afterExecute).toHaveBeenCalledWith(expect.anything(), {
+      success: false,
+      output: { error: "policy denied" },
+    });
+
+    const timeoutCell = new DefaultExecutionCell({
+      id: "cell-16",
+      context: createContext({ config: { timeout: 1 } }),
+      runTask: async () => new Promise(() => {}),
+    });
+
+    await expect(timeoutCell.execute(createTask())).resolves.toMatchObject({
+      success: false,
+      output: { error: "Execution timed out after 1ms" },
+    });
+    expect(timeoutCell.status).toBe("failed");
   });
 });

@@ -1,8 +1,48 @@
 import { describe, expect, it, vi } from "vitest";
 import { Blackboard, PathNotFoundError, VersionConflictError } from "../blackboard";
-import { createSessionId } from "../../types";
+import {
+  AgentStatusEnum,
+  TaskPriority,
+  TaskStatus,
+  createAgentId,
+  createSessionId,
+  createTaskId,
+} from "../../types";
+import type { AgentStatus, Task } from "../../types";
 
 const sessionId = createSessionId("session-core");
+
+function createAgentStatus(): AgentStatus {
+  return {
+    id: createAgentId("agent-json"),
+    name: "JSON Agent",
+    role: "reviewer",
+    status: AgentStatusEnum.IDLE,
+    joinedAt: new Date("2026-05-06T00:00:00.000Z"),
+  };
+}
+
+function createTask(): Task {
+  const timestamp = new Date("2026-05-06T00:00:00.000Z");
+  return {
+    id: createTaskId("task-json"),
+    name: "JSON task",
+    description: "task stored inside blackboard JSON state",
+    assignedTo: null,
+    status: TaskStatus.PENDING,
+    priority: TaskPriority.NORMAL,
+    inputs: {},
+    outputs: null,
+    dependsOn: [],
+    error: null,
+    startedAt: null,
+    completedAt: null,
+    timeout: null,
+    version: 1,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+}
 
 describe("Blackboard core API", () => {
   it("initializes with stable metadata and emits the optional initialization callback", () => {
@@ -97,5 +137,125 @@ describe("Blackboard core API", () => {
     expect(failed[0]?.version).toBe(versionBeforeFailure);
     expect(board.exists("state.context.rollback")).toBe(false);
     expect(board.exists("state.context.other")).toBe(false);
+  });
+
+  it("supports listener lifecycle, once handlers, and wildcard handlers", () => {
+    const board = new Blackboard({ sessionId });
+    const regular = vi.fn();
+    const once = vi.fn();
+    const wildcard = vi.fn();
+
+    board.on("state.updated", regular);
+    board.once("state.updated", once);
+    board.on("state.*", wildcard);
+
+    expect(board.listenerCount("state.updated")).toBe(2);
+
+    board.write("state.context.first", 1);
+    board.write("state.context.second", 2);
+
+    expect(regular).toHaveBeenCalledTimes(2);
+    expect(once).toHaveBeenCalledTimes(1);
+    expect(wildcard).toHaveBeenCalledTimes(2);
+
+    board.off("state.updated", regular);
+    board.write("state.context.third", 3);
+
+    expect(regular).toHaveBeenCalledTimes(2);
+    expect(wildcard).toHaveBeenCalledTimes(3);
+
+    board.removeAllListeners("state.*");
+    board.write("state.context.fourth", 4);
+    expect(wildcard).toHaveBeenCalledTimes(3);
+
+    board.removeAllListeners();
+    expect(board.listenerCount("state.updated")).toBe(0);
+  });
+
+  it("clones deep reads and exposes raw reads when requested", () => {
+    const board = new Blackboard({ sessionId });
+    board.write("state.context.nested", { value: 1 });
+
+    const cloned = board.read<{ value: number }>("state.context.nested");
+    cloned.value = 2;
+    expect(board.read<{ value: number }>("state.context.nested").value).toBe(1);
+
+    const raw = board.read<{ value: number }>("state.context.nested", { deep: false });
+    raw.value = 3;
+    expect(board.read<{ value: number }>("state.context.nested").value).toBe(3);
+
+    expect(() => board.write("", "invalid")).toThrow("Invalid path");
+  });
+
+  it("round-trips JSON state with maps and restores snapshots", async () => {
+    const initialLastUpdated = new Date("2026-05-06T01:00:00.000Z");
+    const initialCreatedAt = new Date("2026-05-06T00:00:00.000Z");
+    const board = new Blackboard({
+      sessionId,
+      initialState: {
+        meta: {
+          version: 7,
+          lastUpdated: initialLastUpdated,
+          sessionId,
+          createdAt: initialCreatedAt,
+        },
+        state: {
+          phase: "voting",
+          context: { nested: { value: 1 } },
+          agents: new Map([[createAgentId("agent-json"), createAgentStatus()]]),
+          tasks: new Map([[createTaskId("task-json"), createTask()]]),
+        },
+        knowledge: {
+          facts: [],
+          inferences: [],
+          patterns: [],
+        },
+        decisions: {
+          current: null,
+          pending: [],
+          opinions: new Map(),
+          history: [],
+          voting: {},
+        },
+      },
+    });
+
+    const meta = board.meta;
+    meta.lastUpdated.setUTCFullYear(2030);
+    expect(board.meta.lastUpdated).toEqual(initialLastUpdated);
+
+    const state = board.getState();
+    state.state.context.nested = { value: 999 };
+    state.state.agents.clear();
+    expect(board.read("state.context.nested")).toEqual({ value: 1 });
+    expect(board.state.agentCount).toBe(1);
+
+    const json = board.toJSON() as {
+      state: { agents: Record<string, AgentStatus>; tasks: Record<string, Task> };
+    };
+    expect(json.state.agents["agent-json"]?.name).toBe("JSON Agent");
+    expect(json.state.tasks["task-json"]?.name).toBe("JSON task");
+
+    const restoredFromJson = Blackboard.fromJSON({
+      ...json,
+      meta: board.meta,
+      knowledge: board.getState().knowledge,
+      decisions: board.getState().decisions,
+    });
+    expect(restoredFromJson.read("state.phase")).toBe("voting");
+    expect(restoredFromJson.state.agentCount).toBe(1);
+
+    const snapshot = await board.createSnapshot({
+      description: "before restore",
+      tags: ["runtime-test"],
+      store: true,
+    });
+    expect((await board.validateSnapshot(snapshot)).valid).toBe(true);
+
+    board.write("state.context.nested", { value: 2 });
+    board.restoreSnapshot(snapshot, { newSessionId: false, resetVersion: false });
+
+    expect(board.read("state.context.nested")).toEqual({ value: 1 });
+    expect(board.state.agentCount).toBe(1);
   });
 });
