@@ -29,17 +29,17 @@ Obora 전 패키지의 테스트 기준을 통일해 변경 안정성과 릴리�
 | `@obora/runtime` | 91 | 88 | 88 | 91 |
 | `@obora/adapters` | 94 | 92 | 92 | 94 |
 | `@obora/cli` | 96 | 91 | 97 | 96 |
-| `@obora/dashboard` | 92 | 90 | 92 | 92 |
+| `@obora/dashboard` | 92 | 91 | 92 | 92 |
 
 최근 검증된 `pnpm verify:coverage` 측정값은 다음과 같습니다.
 
 | Package | Statements | Branches | Functions | Lines |
 | --- | ---: | ---: | ---: | ---: |
-| `@obora/sdk` | 96.05% | 91.17% | 99.35% | 96.05% |
+| `@obora/sdk` | 96.05% | 91.16% | 99.35% | 96.05% |
 | `@obora/runtime` | 91.62% | 88.05% | 88.47% | 91.62% |
 | `@obora/adapters` | 94.47% | 92.11% | 92.55% | 94.47% |
 | `@obora/cli` | 96.36% | 91.06% | 97.72% | 96.36% |
-| `@obora/dashboard` | 92.45% | 90.08% | 92.11% | 92.45% |
+| `@obora/dashboard` | 92.92% | 91.00% | 92.11% | 92.92% |
 
 SDK branch floor는 step-execution engine parallel/error path, TKG review queue
 fallback, execution lock, repair-loop summary, health-check error,
@@ -54,6 +54,10 @@ parsing/default cwd/reset cleanup/write failure, auth store default, decorator
 parameter schema fallback 테스트 보강 후 92로 상향했고,
 CLI branch floor는 doctor shared provider/model guidance, formatter color
 initialization, global option fallback 테스트 보강 후 91로 상향했습니다.
+dashboard branch floor는 AuditFilter blank submit, BlackboardSnapshot nested
+arrays, PlaybackTimeline single-event positioning, notification engine missing
+channel/throw path, policy client validate rethrow, history helper/view-model
+fallback 테스트 보강 후 91로 상향했습니다.
 
 ## CI 설정 원칙
 - 기본 로컬/CI 게이트는 clean checkout 기준 아래 순서로 고정합니다.

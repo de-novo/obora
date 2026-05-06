@@ -27,6 +27,7 @@ describe('history utils', () => {
   ];
 
   it('filters by category and actor', () => {
+    expect(filterAuditEvents(events, {})).toHaveLength(2);
     expect(filterAuditEvents(events, { category: 'policy' })).toHaveLength(1);
     expect(filterAuditEvents(events, { category: 'all', actor: 'system' })).toHaveLength(1);
     expect(filterAuditEvents(events, { actor: 'none' })).toHaveLength(0);
@@ -35,5 +36,6 @@ describe('history utils', () => {
   it('formats json text', () => {
     const text = toPrettyJson({ a: 1 });
     expect(text).toContain('"a": 1');
+    expect(toPrettyJson(undefined)).toBe('{}');
   });
 });

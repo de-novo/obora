@@ -101,6 +101,27 @@ describe('history runs view model', () => {
     expect(row.repairTone?.label).toBe('converged');
     expect(row.lastValidation).toHaveLength(56);
     expect(getStatusBadgeColor('completed')).toBe('#15803d');
+    expect(getStatusBadgeColor('failed')).toBe('#b91c1c');
+    expect(getStatusBadgeColor('suspended')).toBe('#92400e');
     expect(getStatusBadgeColor('running')).toBe('#1d4ed8');
+  });
+
+  it('falls back to total counts when repair-loop counts are omitted', () => {
+    const data: HistoryRunsResponse = {
+      items: [],
+      total: 2,
+      limit: 20,
+      offset: 0,
+    };
+
+    const chips = buildRepairLoopChips(data, 'all');
+
+    expect(chips.map((chip) => [chip.value, chip.count])).toEqual([
+      ['all', 2],
+      ['with', 0],
+      ['stalled', 0],
+      ['exhausted', 0],
+      ['without', 0],
+    ]);
   });
 });

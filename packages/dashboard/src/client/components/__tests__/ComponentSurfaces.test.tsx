@@ -174,6 +174,23 @@ describe('AuditFilter', () => {
       executionId: '',
     });
   });
+
+  it('submits blank filters as undefined API fields', async () => {
+    const user = userEvent.setup();
+    const onSearch = vi.fn();
+
+    render(<AuditFilter onSearch={onSearch} />);
+
+    await user.click(screen.getByRole('button', { name: '검색' }));
+
+    expect(onSearch).toHaveBeenCalledWith({
+      from: undefined,
+      to: undefined,
+      eventTypes: [],
+      stepName: undefined,
+      executionId: undefined,
+    });
+  });
 });
 
 describe('BlackboardSnapshot', () => {
@@ -196,6 +213,26 @@ describe('BlackboardSnapshot', () => {
     expect(screen.getByText('2')).toBeTruthy();
     expect(screen.getByText('[0] alpha')).toBeTruthy();
   });
+
+  it('renders nested array paths and unchanged structured array items', () => {
+    render(
+      <BlackboardSnapshot
+        value={{
+          rows: [{ status: 'ok' }, ['nested']],
+          active: true,
+        }}
+        changedPaths={new Set()}
+      />,
+    );
+
+    expect(screen.getByText('rows')).toBeTruthy();
+    expect(screen.getByText('[0]')).toBeTruthy();
+    expect(screen.getByText('status')).toBeTruthy();
+    expect(screen.getByText('ok')).toBeTruthy();
+    expect(screen.getByText('[1]')).toBeTruthy();
+    expect(screen.getByText('[0] nested')).toBeTruthy();
+    expect(screen.getByText('true')).toBeTruthy();
+  });
 });
 
 describe('PlaybackTimeline', () => {
@@ -212,6 +249,18 @@ describe('PlaybackTimeline', () => {
 
     expect(screen.getByText('Playback Timeline')).toBeTruthy();
     expect(onJump).toHaveBeenCalledWith(1);
+  });
+
+  it('positions a single playback marker without dividing by event count', async () => {
+    const user = userEvent.setup();
+    const onJump = vi.fn();
+
+    render(<PlaybackTimeline events={[auditEvents[0]!]} currentIndex={0} onJump={onJump} />);
+
+    await user.click(screen.getByRole('button', { name: /step_end/i }));
+
+    expect(screen.getByText('Playback Timeline')).toBeTruthy();
+    expect(onJump).toHaveBeenCalledWith(0);
   });
 });
 

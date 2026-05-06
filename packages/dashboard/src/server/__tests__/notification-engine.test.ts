@@ -51,6 +51,57 @@ describe('notification engine', () => {
     expect(send).not.toHaveBeenCalled();
   });
 
+  it('filters when event type or configured severity target is missing', async () => {
+    const send = vi.fn().mockResolvedValue({ success: true });
+    const channel: NotificationChannel = { name: 'test', send };
+    const engine = new NotificationEngine();
+    engine.registerChannel(channel);
+    engine.addRule(createRule({ id: 'type-rule', trigger: { eventTypes: ['gate_wait'] } }));
+    engine.addRule(createRule({ id: 'severity-rule', trigger: { eventTypes: ['error'], severities: ['critical'] } }));
+
+    await engine.processEvent(createEvent({ type: 'step_end' }));
+    await engine.processEvent(createEvent({ type: 'error', severity: undefined }));
+
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('logs missing channels and thrown send failures', async () => {
+    const logger = { error: vi.fn() };
+    const send = vi.fn().mockRejectedValueOnce('send exploded').mockRejectedValueOnce(new Error('send failed'));
+    const channel: NotificationChannel = { name: 'test', send };
+    const engine = new NotificationEngine({ logger });
+    engine.registerChannel(channel);
+    engine.addRule(createRule({ id: 'missing-channel', channel: 'missing' }));
+    engine.addRule(createRule({ id: 'throwing-channel', channel: 'test' }));
+
+    await engine.processEvent(createEvent());
+    await engine.processEvent(createEvent());
+
+    expect(logger.error).toHaveBeenCalledWith(
+      'DASH_11001 Notification channel not found',
+      expect.objectContaining({
+        code: 'DASH_11001',
+        ruleId: 'missing-channel',
+      }),
+    );
+    expect(logger.error).toHaveBeenCalledWith(
+      'DASH_11002 Notification send failed',
+      expect.objectContaining({
+        code: 'DASH_11002',
+        ruleId: 'throwing-channel',
+        error: 'send exploded',
+      }),
+    );
+    expect(logger.error).toHaveBeenCalledWith(
+      'DASH_11002 Notification send failed',
+      expect.objectContaining({
+        code: 'DASH_11002',
+        ruleId: 'throwing-channel',
+        error: 'send failed',
+      }),
+    );
+  });
+
   it('filters by stepName when configured', async () => {
     const send = vi.fn().mockResolvedValue({ success: true });
     const channel: NotificationChannel = { name: 'test', send };

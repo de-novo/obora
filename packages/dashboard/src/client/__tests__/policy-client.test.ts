@@ -168,6 +168,12 @@ describe('policy-client', () => {
     });
   });
 
+  it('rethrows non-validation failures from validatePolicy', async () => {
+    fetchMock.mockRejectedValueOnce(new Error('offline'));
+
+    await expect(validatePolicy('allow: true')).rejects.toThrow('offline');
+  });
+
   it('calls diff and reload endpoints and exposes error classification helpers', async () => {
     fetchMock
       .mockResolvedValueOnce(
