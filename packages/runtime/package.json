@@ -1,6 +1,6 @@
 {
   "name": "@obora/runtime",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "description": "AI Control Runtime - deterministic orchestration for non-deterministic AI",
   "type": "module",
   "main": "./dist/index.cjs",

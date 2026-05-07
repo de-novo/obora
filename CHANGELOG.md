@@ -4,6 +4,10 @@ All notable changes to Obora will be documented in this file.
 
 ## [Unreleased]
 
+No changes yet.
+
+## [0.1.4] - 2026-05-07
+
 ### Release Highlights
 
 - Hardened the repo for the next 0.x release candidate with documented default

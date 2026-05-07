@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
 
 import * as adapters from "../index";
@@ -9,9 +11,13 @@ import * as skills from "../skills";
 import * as testing from "../testing";
 import * as tools from "../tools";
 
+const packageJson = JSON.parse(
+  readFileSync(new URL("../../package.json", import.meta.url), "utf8")
+) as { version: string };
+
 describe("public adapter export surfaces", () => {
   it("keeps root exports wired to their package surfaces", () => {
-    expect(adapters.VERSION).toBe("0.1.0");
+    expect(adapters.VERSION).toBe(packageJson.version);
     expect(adapters.MockLLMAdapter).toBe(llm.MockLLMAdapter);
     expect(adapters.PiAIAdapter).toBe(llm.PiAIAdapter);
     expect(adapters.ToolRegistry).toBe(tools.ToolRegistry);

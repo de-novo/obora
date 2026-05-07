@@ -1,6 +1,6 @@
 {
   "name": "@obora/sdk",
-  "version": "0.1.1",
+  "version": "0.1.4",
   "description": "Obora SDK — programmatic API for AI Control Runtime",
   "type": "module",
   "main": "./dist/index.cjs",
