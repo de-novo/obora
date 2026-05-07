@@ -12,6 +12,7 @@ pnpm lint
 pnpm test
 pnpm verify:coverage
 pnpm build
+pnpm verify:smoke
 ```
 
 `pnpm typecheck` is a Turbo task. It builds upstream package declarations before
@@ -43,6 +44,8 @@ Use the repo-local release gate before publishing:
 
 ```bash
 pnpm verify:coverage
+pnpm build
+pnpm verify:smoke
 pnpm verify:release
 pnpm verify:compat
 pnpm verify:test-type-debt
@@ -53,6 +56,13 @@ pnpm verify:test-type-debt
 single repo-wide 90% target. Raise a package threshold only in the same slice
 that adds the tests needed to support the higher number. `pnpm coverage:report`
 remains available as a report-only command.
+
+`pnpm verify:smoke` is the built-artifact operator smoke. It must run after
+`pnpm build`. It verifies the no-credential CLI onboarding path
+(`quickstart -> doctor -> validate -> expand -> judge --dry-run`) through
+`packages/cli/bin/obora.js` and verifies package-level dashboard bootstrap
+(`bootstrapDashboardServer -> /api/health -> close`) through built dashboard
+artifacts. It does not run live-LLM calls.
 
 Current enforced coverage floors:
 

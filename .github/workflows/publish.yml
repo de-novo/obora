@@ -61,6 +61,9 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Operational smoke
+        run: pnpm verify:smoke
+
       - name: Verify release
         run: pnpm verify:release
 

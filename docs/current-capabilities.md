@@ -1,6 +1,6 @@
 # Obora Current Capabilities
 
-Updated: 2026-04-20
+Updated: 2026-05-07
 
 이 문서는 현재 Obora repo에서 실제로 가능한 것과, 아직 live surface가 아닌 것을 빠르게 파악하기 위한 기능 정리입니다.
 README에서 전체 진입 순서를 먼저 보고 싶으면 `README.md`, 지원/비지원 범위 구분이 먼저 필요하면 `docs/support-scope.md`, 운영자용 짧은 사용 순서가 필요하면 `docs/operator-guide.md`, deferred revival 기준까지 보고 싶으면 `docs/deferred-surface-revival-criteria.md`를 먼저 보는 편이 좋습니다.
@@ -20,7 +20,7 @@ README에서 전체 진입 순서를 먼저 보고 싶으면 `README.md`, 지원
 2. workflow YAML / one-file workflow를 검증·확장·dry-run·실행할 수 있음
 3. 실행 이력, DLQ, artifact, audit 같은 운영 surface를 조회할 수 있음
 4. SDK/runtime로 프로그램 방식 workflow 실행과 validation-repair loop를 구성할 수 있음
-5. adapters / dashboard package까지 포함한 monorepo 기준 build/test가 성립함
+5. adapters / dashboard package까지 포함한 monorepo 기준 build/test/coverage/smoke가 성립함
 
 ---
 
@@ -84,6 +84,7 @@ obora judge
 - `models`로 provider별 사용 가능한 model ref 확인
 - `auth`로 `~/.obora/auth.json` 기반 provider auth 저장/조회/삭제/테스트
 - `agents list/show/set/reset`으로 agent-level resolution을 조회하고 project/global config-layer override를 안전하게 preview/apply
+- `pnpm verify:smoke`로 built CLI 기준 no-credential quickstart onboarding dry-run 경로를 검증
 
 ### 2.2 workflow authoring / validation / preview / execution
 
@@ -285,6 +286,8 @@ README / examples / tutorial 기준으로 현재 Obora가 제공하는 핵심 �
 - package 자체 build/test 가능
 - package-level bootstrap helper로 start/stop, resolved URL, static asset
   상태, bootstrap failure taxonomy를 테스트 가능
+- `pnpm verify:smoke`로 built dashboard package bootstrap과 `/api/health`
+  응답을 검증
 - 하지만 `obora dashboard`는 아직 live command로 복구되지 않음
 
 ---

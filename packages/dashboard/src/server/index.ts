@@ -3,9 +3,10 @@ import fastifyCors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
 import fastifyWebsocket from '@fastify/websocket';
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
 
 import {
   createDashboardConfig,
@@ -188,7 +189,9 @@ const start = async (): Promise<void> => {
   }
 };
 
-if (process.env.NODE_ENV !== 'test') {
+const entrypoint = process.argv[1];
+
+if (entrypoint !== undefined && resolve(entrypoint) === fileURLToPath(import.meta.url)) {
   void start();
 }
 
