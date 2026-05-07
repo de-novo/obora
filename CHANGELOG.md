@@ -4,16 +4,70 @@ All notable changes to Obora will be documented in this file.
 
 ## [Unreleased]
 
-### Added — Release Readiness
+### Release Highlights
 
-- Added release readiness documentation for default gates, publish order, package payload checks, and manual publish flow.
-- Added `verify:release`, `verify:compat`, and `verify:test-type-debt` root scripts.
-- Added compatibility/deprecation and SDK/CLI test type-debt allowlists so release-readiness debt cannot grow silently.
-- Aligned the GitHub publish workflow with the release scripts by publishing `@obora/adapters` between `@obora/runtime` and `@obora/sdk`.
-- Switched package payload verification to `npm pack --dry-run` so release checks remain runnable before version bumps.
-- Hardened publish payload checks so test artifacts cannot be included in release tarballs.
-- Standardized active CLI/runtime compatibility wording so historical/deferred surfaces are not described as live legacy paths.
-- Reduced SDK test type-safety debt in small TKG, fixture, and observer tests and tightened the tracking allowlist.
+- Hardened the repo for the next 0.x release candidate with documented default
+  gates, package coverage floors, public API checks, publish payload validation,
+  release smoke checks, and CI/publish workflow enforcement.
+- Raised all package coverage baselines above the current regression floor:
+  `@obora/sdk`, `@obora/runtime`, `@obora/adapters`, `@obora/cli`, and
+  `@obora/dashboard` now all verify above 90% branch coverage and above 93%
+  statements/lines in `pnpm verify:coverage`.
+- Kept live-LLM validation separate from the default release gate. The default
+  release path remains deterministic and no-credential; `pnpm test:e2e` remains
+  a manual live-provider check.
+
+### Added — Release Readiness and Quality Gates
+
+- Added `pnpm verify:coverage` with package-specific thresholds in
+  `scripts/coverage/thresholds.json`.
+- Added `pnpm verify:smoke`, a built-artifact operator smoke that verifies the
+  no-credential CLI onboarding path
+  (`quickstart -> doctor -> validate -> expand -> judge --dry-run`) and
+  package-level dashboard bootstrap (`bootstrapDashboardServer -> /api/health -> close`).
+- Added `verify:release`, `verify:compat`, and `verify:test-type-debt` root
+  scripts.
+- Added compatibility/deprecation and SDK/CLI test type-debt allowlists so
+  release-readiness debt cannot grow silently.
+- Added CI and publish workflow coverage, smoke, release, compatibility, and
+  type-debt gates.
+- Switched package payload verification to `npm pack --dry-run` so release
+  checks remain runnable before version bumps.
+- Hardened publish payload checks so release tarballs reject test artifacts,
+  workspace dependency specifiers, and oversized package payload drift.
+
+### Added — SDK Public Surface
+
+- Added the SDK public API snapshot guard for `@obora/sdk` root exports,
+  `@obora/sdk/testing`, and package export metadata.
+- Added public docs/sample verification for Markdown `@obora` imports,
+  TypeScript snippets, shell snippets, structured YAML/JSON snippets, and
+  public declaration shims.
+- Added typed helper coverage and release smoke for `defineWorkflow`,
+  `defineTool`, `defineSchemaTool`, and typed `run` usage against installed
+  tarball declarations.
+- Added the SDK no-console guard so library core output stays behind explicit
+  logger/alert channels such as `ConsoleAlertChannel`.
+
+### Added — Dashboard Package Lifecycle
+
+- Added package-level `bootstrapDashboardServer(...)` for callers that need
+  start/stop, resolved URL, static asset status, and normalized bootstrap
+  failure codes without copying Fastify lifecycle details.
+- Added dashboard bootstrap lifecycle tests for static asset validation,
+  invalid host/port handling, listen failure wrapping, URL normalization, health
+  routing, and idempotent close.
+
+### Fixed — Release Surface Drift
+
+- Fixed runtime typecheck drift where exported runtime types were used in module
+  signatures without being imported into module scope.
+- Fixed SDK README samples that referenced non-public types outside the built
+  public declarations.
+- Fixed dashboard package root imports so importing the package no longer starts
+  the dashboard server as a side effect.
+- Standardized active CLI/runtime compatibility wording so historical/deferred
+  surfaces are not described as live paths.
 
 ### Added — Contract-First Workflow DX
 
