@@ -62,4 +62,66 @@ fi
 
 npx obora --help >/dev/null 2>&1
 
+echo "[verify-cli-package] installed CLI JSON command smoke"
+
+npx obora --json models > models.json
+npx obora models openai --json > models-openai.json
+npx obora --json agents list > agents-list.json
+npx obora quickstart package-smoke --json > quickstart.json
+npx obora --json validate package-smoke/judge.yaml > quickstart-validate.json
+
+node <<'EOF'
+const fs = require("node:fs");
+
+const readJson = (file) => {
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch (error) {
+    console.error(`[FAIL] ${file} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  }
+};
+
+const assert = (condition, message) => {
+  if (!condition) {
+    console.error(`[FAIL] ${message}`);
+    process.exit(1);
+  }
+};
+
+const models = readJson("models.json");
+assert(models.source === "pi-ai", "models JSON must report the pi-ai catalog source");
+assert(Array.isArray(models.providers) && models.providers.length > 0, "models JSON must include providers");
+assert(
+  models.guidance?.nextStep === "obora models <provider> [query]",
+  "models JSON must include the provider/query next step"
+);
+
+const openaiModels = readJson("models-openai.json");
+assert(openaiModels.source === "pi-ai", "provider models JSON must report the pi-ai catalog source");
+assert(openaiModels.provider === "openai", "provider models JSON must preserve the requested provider");
+assert(openaiModels.count > 0, "provider models JSON must include at least one model");
+assert(
+  Array.isArray(openaiModels.models) && openaiModels.models.length === openaiModels.count,
+  "provider models JSON count must match the models array"
+);
+
+const agents = readJson("agents-list.json");
+assert(agents.command === "agents list", "agents list JSON must identify the command");
+assert(Array.isArray(agents.agents), "agents list JSON must include an agents array");
+assert(
+  agents.agents.some((agent) => agent.name === "default" && agent.status === "resolved"),
+  "agents list JSON must include the default resolved agent in an empty install smoke project"
+);
+
+const quickstart = readJson("quickstart.json");
+assert(quickstart.initialized === true, "quickstart JSON must report initialized=true");
+assert(quickstart.template === "quickstart", "quickstart JSON must report the quickstart template");
+assert(fs.existsSync("package-smoke/judge.yaml"), "quickstart must create judge.yaml from the packed template");
+
+const validation = readJson("quickstart-validate.json");
+assert(validation.summary?.failed === 0, "quickstart validate JSON must have zero failed files");
+assert(validation.summary?.passed === 1, "quickstart validate JSON must have one passed file");
+EOF
+
 echo "[PASS] CLI install and execution checks passed."

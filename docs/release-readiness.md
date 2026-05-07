@@ -114,7 +114,23 @@ The current CLI branch floor is enforced at 91 after focused tests around
 doctor shared provider/model guidance, formatter color initialization, and
 global option fallback handling.
 
-`pnpm verify:release` builds publishable packages, checks changelog release notes, runs npm-auth selftests, rejects SDK source console writes outside the explicit `ConsoleAlertChannel`, verifies the `@obora/sdk` public API snapshot for the root and `@obora/sdk/testing` exports, rejects source JSDoc tags that advertise scoped `@obora` module subpaths outside package exports, verifies Markdown `@obora` import samples against public package exports, compiles checked TypeScript snippets against built public declarations, validates checked shell snippets with `bash -n`, parses tutorial YAML/JSON snippets and semantically checks workflow/config/policy examples, runs tutorial quickstart and contract-first dry-run flows through the built CLI, verifies that `typecheck-public.d.ts` shims do not declare exports absent from built public declarations, validates package `npm pack --dry-run` output, validates `pnpm pack` package metadata, runs published-package import/require/TypeScript smoke checks, and selftests CLI package installation.
+`pnpm verify:release` builds publishable packages, checks changelog release
+notes, runs npm-auth selftests, rejects SDK source console writes outside the
+explicit `ConsoleAlertChannel`, verifies the `@obora/sdk` public API snapshot
+for the root and `@obora/sdk/testing` exports, rejects source JSDoc tags that
+advertise scoped `@obora` module subpaths outside package exports, verifies
+Markdown `@obora` import samples against public package exports, compiles
+checked TypeScript snippets against built public declarations, validates checked
+shell snippets with `bash -n`, parses tutorial YAML/JSON snippets and
+semantically checks workflow/config/policy examples, runs tutorial quickstart
+and contract-first dry-run flows through the built CLI, verifies that
+`typecheck-public.d.ts` shims do not declare exports absent from built public
+declarations, validates package `npm pack --dry-run` output, validates
+`pnpm pack` package metadata, runs published-package import/require/TypeScript
+smoke checks, and selftests CLI package installation. The installed CLI package
+selftest now checks version/help plus JSON contracts for `models`, provider
+model lookup, `agents list`, quickstart template creation, and validation of
+the generated quickstart workflow.
 
 Package payload validation fails if publishable tarballs include `dist/**/__tests__/**`,
 `*.test.*`, or `*-e2e.test.*` artifacts.
