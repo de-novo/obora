@@ -34,6 +34,13 @@ export interface DashboardServerDependencies {
   historyStore?: HistoryStore;
 }
 
+export interface DashboardServerHandle {
+  app: FastifyInstance;
+  config: DashboardConfig;
+  wsBridge: WsBridge;
+  notificationEngine: NotificationEngine;
+}
+
 const execFileAsync = promisify(execFile);
 
 const createDefaultHistoryStore = async (): Promise<HistoryStore> => {
@@ -98,7 +105,7 @@ const createDefaultHistoryStore = async (): Promise<HistoryStore> => {
 export const createDashboardServer = async (
   overrides: Partial<DashboardConfig> = {},
   dependencies: DashboardServerDependencies = {},
-): Promise<{ app: FastifyInstance; config: DashboardConfig; wsBridge: WsBridge; notificationEngine: NotificationEngine }> => {
+): Promise<DashboardServerHandle> => {
   const config = createDashboardConfig(overrides);
   const app = Fastify({
     logger: true,

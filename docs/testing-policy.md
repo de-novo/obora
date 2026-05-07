@@ -39,7 +39,7 @@ Obora 전 패키지의 테스트 기준을 통일해 변경 안정성과 릴리�
 | `@obora/runtime` | 93.12% | 90.03% | 90.23% | 93.12% |
 | `@obora/adapters` | 96.70% | 92.56% | 98.40% | 96.70% |
 | `@obora/cli` | 96.36% | 91.06% | 97.72% | 96.36% |
-| `@obora/dashboard` | 94.70% | 91.10% | 93.12% | 94.70% |
+| `@obora/dashboard` | 94.74% | 91.14% | 93.31% | 94.74% |
 
 SDK branch floor는 step-execution engine parallel/error path, TKG review queue
 fallback, execution lock, repair-loop summary, health-check error,
@@ -63,7 +63,8 @@ CLI branch floor는 doctor shared provider/model guidance, formatter color
 initialization, global option fallback 테스트 보강 후 91로 상향했습니다.
 dashboard statements/functions/lines floor는 DLQ route list/summary/read/resolve,
 metrics route default/injected response, console notification message extraction
-테스트 보강 후 94/93/94로 상향했습니다.
+테스트와 dashboard bootstrap start/stop/failure taxonomy 테스트 보강 후
+94/93/94로 상향했습니다.
 dashboard branch floor는 AuditFilter blank submit, BlackboardSnapshot nested
 arrays, PlaybackTimeline single-event positioning, notification engine missing
 channel/throw path, policy client validate rethrow, history helper/view-model

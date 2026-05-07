@@ -283,6 +283,8 @@ README / examples / tutorial 기준으로 현재 Obora가 제공하는 핵심 �
 
 - M4 dashboard web server scaffold
 - package 자체 build/test 가능
+- package-level bootstrap helper로 start/stop, resolved URL, static asset
+  상태, bootstrap failure taxonomy를 테스트 가능
 - 하지만 `obora dashboard`는 아직 live command로 복구되지 않음
 
 ---

@@ -173,6 +173,7 @@ obora audit replay <runId>
 - package는 존재함
 - workspace build/test 대상임
 - dashboard server/client scaffold capability는 있음
+- package-level bootstrap/start-stop helper는 있음
 - 하지만 `obora dashboard`는 현재 live CLI support가 아님
 
 즉 현재 판단은 아래와 같습니다.
@@ -185,7 +186,8 @@ obora audit replay <runId>
 
 - live CLI contract가 아직 정리되지 않음
 - operator command로 복구할지 product 판단이 남아 있음
-- 현재는 package/dev-tool 성격이 더 강함
+- 현재는 package/dev-tool 성격이 더 강하며, CLI는 아직 thin operator
+  surface로 등록하지 않음
 
 ---
 

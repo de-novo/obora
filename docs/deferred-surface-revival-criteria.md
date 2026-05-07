@@ -229,6 +229,9 @@ deferred surface는 기준 문서만 보고 판단하지 않고, 실제 구현 m
 - `@obora/dashboard`는 build/test 대상 패키지로 존재
 - server/client scaffold는 있음
 - dashboard history/API와 연결되는 package capability는 있음
+- package-level `bootstrapDashboardServer(...)` helper가 있어 start/stop,
+  resolved host/port/url, static asset status, bootstrap failure taxonomy를
+  CLI wrapper 없이 테스트 가능함
 - 하지만 `obora dashboard`는 아직 live product surface가 아님
 
 기존 roadmap:
@@ -298,7 +301,7 @@ deferred surface는 기준 문서만 보고 판단하지 않고, 실제 구현 m
 
 즉 우선순위:
 
-1. package bootstrap 분리
+1. package bootstrap 분리: 완료
 2. operator contract 정리
 3. product launch decision
 4. 그 다음 CLI live surface 등록
