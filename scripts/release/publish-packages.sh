@@ -37,11 +37,15 @@ console.log(value);
 ' "$1/package.json" "$2"
 }
 
-is_dry_run() {
-  case "${PUBLISH_DRY_RUN:-0}" in
+is_truthy() {
+  case "${1:-0}" in
     1|true|TRUE|yes|YES) return 0 ;;
     *) return 1 ;;
   esac
+}
+
+is_dry_run() {
+  is_truthy "${PUBLISH_DRY_RUN:-0}"
 }
 
 run_publish() {
@@ -91,11 +95,29 @@ console.log(resolvedTarballPath);
 ' "$pkg_dir" "$PACK_DIR"
 }
 
-PUBLISH_ARGS=(--access public)
+PUBLISH_DIST_TAG="${PUBLISH_DIST_TAG:-latest}"
+if [[ ! "$PUBLISH_DIST_TAG" =~ ^[A-Za-z][A-Za-z0-9._-]{0,63}$ ]]; then
+  echo "[FAIL] PUBLISH_DIST_TAG must start with a letter and contain only letters, numbers, dot, underscore, or dash: $PUBLISH_DIST_TAG" >&2
+  exit 1
+fi
+
+if [[ -n "${RELEASE_TAG:-}" ]]; then
+  node scripts/release/verify-release-tag.mjs "$RELEASE_TAG"
+elif ! is_dry_run; then
+  echo "[FAIL] RELEASE_TAG is required for live publish. Use RELEASE_TAG=v<package-version>." >&2
+  exit 1
+fi
+
+PUBLISH_ARGS=(--access public --tag "$PUBLISH_DIST_TAG")
+echo "[release] npm dist-tag: $PUBLISH_DIST_TAG"
 if is_dry_run; then
   echo "[release] dry-run mode enabled; packages will not be published to npm"
   PUBLISH_ARGS+=(--dry-run)
 else
+  if is_truthy "${PUBLISH_PROVENANCE:-0}"; then
+    echo "[release] npm provenance enabled"
+    PUBLISH_ARGS+=(--provenance)
+  fi
   # shellcheck disable=SC1091
   source scripts/release/npm-auth.sh
   setup_npm_auth

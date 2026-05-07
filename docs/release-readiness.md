@@ -151,6 +151,8 @@ Package payload validation fails if publishable tarballs include `dist/**/__test
 
 Package payload validation also enforces packed-size budgets so dependency bundling changes do not silently inflate publish artifacts. The current byte budgets are
 `5,500,000` for `@obora/runtime`, `9,000,000` for `@obora/adapters`, `1,000,000` for `@obora/sdk`, and `250,000` for `@obora/cli`.
+The payload report also prints the largest packed files per package so size drift
+can be investigated before a budget fails.
 
 `pnpm verify:compat` ensures active source compatibility/deprecation mentions are covered by `scripts/release/compat-allowlist.txt` and that active runtime/CLI/SDK source does not reintroduce `_legacy` references.
 
@@ -172,18 +174,22 @@ The payload must include built `dist` output, package README/LICENSE entries whe
 Manual package publish should use:
 
 ```bash
-bash scripts/release/publish-packages.sh
+RELEASE_TAG=v0.1.4 bash scripts/release/publish-packages.sh
 ```
 
 For a publish rehearsal that rebuilds packages and runs the same release verification without writing to npm, use:
 
 ```bash
-PUBLISH_DRY_RUN=1 bash scripts/release/publish-packages.sh
+RELEASE_TAG=v0.1.4 PUBLISH_DRY_RUN=1 bash scripts/release/publish-packages.sh
 ```
 
 If the current package versions are already present on npm, dry-run mode treats npm's duplicate-version check as a successful rehearsal stop after the package manifest and tarball checks have run.
 
-The live publish path requires `NPM_TOKEN`, uses an isolated temporary npm userconfig, rebuilds publishable packages, runs release verification, and publishes in dependency order. Manual `workflow_dispatch` runs default to dry-run mode; tag pushes publish live packages.
+The publish path verifies that `RELEASE_TAG` is a `v<version>` tag matching every publishable package version and the matching `CHANGELOG.md` section. Live publish refuses to run without `RELEASE_TAG`.
+
+`PUBLISH_DIST_TAG` controls the npm dist-tag and defaults to `latest` for local and tag-push publishes. Manual `workflow_dispatch` runs default to `next` and dry-run mode so the chosen dist-tag can be rehearsed before publishing.
+
+The live publish path requires `NPM_TOKEN`, uses an isolated temporary npm userconfig, rebuilds publishable packages, runs release verification, and publishes in dependency order. GitHub Actions live publish enables npm provenance with OIDC (`id-token: write`). Manual `workflow_dispatch` runs default to dry-run mode; tag pushes publish live packages.
 
 ## Documentation Source Of Truth
 

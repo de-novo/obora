@@ -34,7 +34,7 @@ def section(heading: str) -> str | None:
     section_start = text.find(heading)
     if section_start < 0:
         return None
-    next_idx = text.find('\n## [', section_start + 1)
+    next_idx = text.find('\n## ', section_start + 1)
     return text[section_start: next_idx if next_idx != -1 else None]
 
 def has_release_notes(block: str | None) -> bool:

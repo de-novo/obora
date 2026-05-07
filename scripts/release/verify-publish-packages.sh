@@ -59,6 +59,12 @@ if (maxPackedBytes > 0 && payload.size > maxPackedBytes) {
   process.exit(1);
 }
 console.log(`[PASS] ${pkgDir} payload: ${files.length} files, ${payload.size} bytes packed.`);
+const topFiles = [...payload.files]
+  .sort((left, right) => right.size - left.size)
+  .slice(0, 5)
+  .map((file) => `${file.path}=${file.size}B`)
+  .join(", ");
+console.log(`[INFO] ${pkgDir} largest packed files: ${topFiles}`);
 ' "$p" "$max_bytes"
 
   tarball_path="$(cd "$p" && pnpm pack --pack-destination "$PACK_DIR")"

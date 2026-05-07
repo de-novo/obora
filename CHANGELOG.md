@@ -73,6 +73,17 @@ No changes yet.
 - Standardized active CLI/runtime compatibility wording so historical/deferred
   surfaces are not described as live paths.
 
+### Changed — Publish Safety
+
+- Added release tag verification so publish workflows must use a `v<version>`
+  tag matching every publishable package and the matching changelog section.
+- Added explicit npm dist-tag handling and live-publish provenance support for
+  GitHub Actions publish runs.
+- Added largest-file reporting to publish payload verification so package size
+  drift is easier to diagnose before a budget fails.
+
+## Earlier 0.x Changes
+
 ### Added — Contract-First Workflow DX
 
 - Added explicit `input.bindings` support for path-based structured inputs with `{{binding}}` substitution.

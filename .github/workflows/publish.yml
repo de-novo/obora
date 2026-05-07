@@ -12,6 +12,14 @@ on:
         required: false
         default: true
         type: boolean
+      dist_tag:
+        description: "npm dist-tag to use if publishing"
+        required: false
+        default: "next"
+        type: choice
+        options:
+          - next
+          - latest
   push:
     tags:
       - 'v*'
@@ -22,6 +30,7 @@ jobs:
     environment: npm-publish
     permissions:
       contents: read
+      id-token: write
     concurrency:
       group: npm-publish
       cancel-in-progress: false
@@ -73,8 +82,16 @@ jobs:
       - name: Verify type debt
         run: pnpm verify:test-type-debt
 
+      - name: Verify release tag
+        run: node scripts/release/verify-release-tag.mjs "$RELEASE_TAG"
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.release_tag }}
+
       - name: Publish packages
         run: bash scripts/release/publish-packages.sh
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.release_tag }}
           PUBLISH_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true && '1' || '0' }}
+          PUBLISH_DIST_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.dist_tag || 'latest' }}
+          PUBLISH_PROVENANCE: ${{ (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false)) && '1' || '0' }}
