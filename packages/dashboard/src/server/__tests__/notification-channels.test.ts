@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createDashboardServer } from '../index.js';
 import { createChannel } from '../notification/channel-factory.js';
+import { ConsoleChannel } from '../notification/console-channel.js';
 import { WebhookChannel } from '../notification/webhook-channel.js';
 import type { ExecutionEvent, NotificationRule } from '../types.js';
 
@@ -161,6 +162,32 @@ describe('notification channel factory', () => {
 
   it('throws for unsupported channel type', () => {
     expect(() => createChannel('slack')).toThrow(/Unsupported notification channel type/);
+  });
+});
+
+describe('console channel', () => {
+  it('logs direct, nested, and fallback event messages', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const channel = new ConsoleChannel();
+    const rule = createRule({ channel: 'console' });
+
+    await expect(
+      channel.send(
+        createEvent({ stepName: 'gate', payload: { message: 'direct message' } }),
+        rule,
+      ),
+    ).resolves.toEqual({ success: true });
+    await channel.send(
+      createEvent({ severity: undefined, stepName: undefined, payload: { data: { message: 'nested message' } } }),
+      rule,
+    );
+    await channel.send(createEvent({ payload: { data: { code: 'NO_MESSAGE' } } }), rule);
+
+    expect(log.mock.calls.map((args) => String(args[0]))).toEqual([
+      '[NOTIFICATION] [warning] gate_wait - gate: direct message',
+      '[NOTIFICATION] [info] gate_wait - -: nested message',
+      '[NOTIFICATION] [warning] gate_wait - -: No message',
+    ]);
   });
 });
 

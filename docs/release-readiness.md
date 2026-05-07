@@ -62,7 +62,7 @@ Current enforced coverage floors:
 | `@obora/runtime` | 93 | 90 | 90 | 93 |
 | `@obora/adapters` | 96 | 92 | 98 | 96 |
 | `@obora/cli` | 96 | 91 | 97 | 96 |
-| `@obora/dashboard` | 92 | 91 | 92 | 92 |
+| `@obora/dashboard` | 94 | 91 | 93 | 94 |
 
 Latest verified `pnpm verify:coverage` package measurements:
 
@@ -72,12 +72,15 @@ Latest verified `pnpm verify:coverage` package measurements:
 | `@obora/runtime` | 93.12% | 90.03% | 90.23% | 93.12% |
 | `@obora/adapters` | 96.70% | 92.56% | 98.40% | 96.70% |
 | `@obora/cli` | 96.36% | 91.06% | 97.72% | 96.36% |
-| `@obora/dashboard` | 92.92% | 91.00% | 92.11% | 92.92% |
+| `@obora/dashboard` | 94.70% | 91.10% | 93.12% | 94.70% |
 
 The current dashboard baseline covers Node-testable dashboard code, TSX
 component tests, `src/client/App.tsx`, and page TSX tests. It intentionally
 excludes only the browser entrypoint `src/client/main.tsx`.
-The current dashboard branch floor is enforced at 91 after focused AuditFilter,
+The current dashboard statements/functions/lines floors are enforced at
+94/93/94 after DLQ route list/summary/read/resolve, metrics route
+default/injected response, and console notification message extraction tests.
+The branch floor remains enforced at 91 after focused AuditFilter,
 BlackboardSnapshot, PlaybackTimeline, notification engine, policy client, and
 history view-model fallback tests.
 
