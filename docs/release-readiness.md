@@ -59,7 +59,7 @@ Current enforced coverage floors:
 | Package | Statements | Branches | Functions | Lines |
 | --- | ---: | ---: | ---: | ---: |
 | `@obora/sdk` | 95 | 91 | 99 | 95 |
-| `@obora/runtime` | 92 | 90 | 88 | 92 |
+| `@obora/runtime` | 93 | 90 | 90 | 93 |
 | `@obora/adapters` | 94 | 92 | 92 | 94 |
 | `@obora/cli` | 96 | 91 | 97 | 96 |
 | `@obora/dashboard` | 92 | 91 | 92 | 92 |
@@ -69,7 +69,7 @@ Latest verified `pnpm verify:coverage` package measurements:
 | Package | Statements | Branches | Functions | Lines |
 | --- | ---: | ---: | ---: | ---: |
 | `@obora/sdk` | 96.05% | 91.16% | 99.35% | 96.05% |
-| `@obora/runtime` | 92.86% | 90.00% | 88.52% | 92.86% |
+| `@obora/runtime` | 93.12% | 90.03% | 90.23% | 93.12% |
 | `@obora/adapters` | 94.47% | 92.11% | 92.55% | 94.47% |
 | `@obora/cli` | 96.36% | 91.06% | 97.72% | 96.36% |
 | `@obora/dashboard` | 92.92% | 91.00% | 92.11% | 92.92% |
@@ -90,9 +90,11 @@ The current adapters branch floor is enforced at 92 after focused auth store
 defaults and decorator parameter schema fallback tests, in addition to the
 existing conformance coverage for provider/auth/tool behavior.
 
-The current runtime baseline is above 92% for statements and lines, the function
-floor is enforced at 88 after builtin plugin, no-op message bus, and workflow
-diagnosis helper tests, and the branch floor is enforced at 90 after focused
+The current runtime baseline is above 93% for statements and lines, the function
+floor is enforced at 90 after builtin plugin, workflow diagnosis helper,
+ExecutionCell no-op message bus/actor blackboard adapter, runtime blackboard
+event/snapshot, and blackboard branded id helper tests, and the branch floor is
+enforced at 90 after focused
 tests around resume, gate timeout, artifact capture, blackboard state defaults,
 step skill loading, policy expression parsing/evaluation, audit re-execution
 planning, snapshot restore errors, voting sessions, plugin registry lifecycle,

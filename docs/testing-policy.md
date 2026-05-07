@@ -26,7 +26,7 @@ Obora 전 패키지의 테스트 기준을 통일해 변경 안정성과 릴리�
 | Package | Statements | Branches | Functions | Lines |
 | --- | ---: | ---: | ---: | ---: |
 | `@obora/sdk` | 95 | 91 | 99 | 95 |
-| `@obora/runtime` | 92 | 90 | 88 | 92 |
+| `@obora/runtime` | 93 | 90 | 90 | 93 |
 | `@obora/adapters` | 94 | 92 | 92 | 94 |
 | `@obora/cli` | 96 | 91 | 97 | 96 |
 | `@obora/dashboard` | 92 | 91 | 92 | 92 |
@@ -36,7 +36,7 @@ Obora 전 패키지의 테스트 기준을 통일해 변경 안정성과 릴리�
 | Package | Statements | Branches | Functions | Lines |
 | --- | ---: | ---: | ---: | ---: |
 | `@obora/sdk` | 96.05% | 91.16% | 99.35% | 96.05% |
-| `@obora/runtime` | 92.86% | 90.00% | 88.52% | 92.86% |
+| `@obora/runtime` | 93.12% | 90.03% | 90.23% | 93.12% |
 | `@obora/adapters` | 94.47% | 92.11% | 92.55% | 94.47% |
 | `@obora/cli` | 96.36% | 91.06% | 97.72% | 96.36% |
 | `@obora/dashboard` | 92.92% | 91.00% | 92.11% | 92.92% |
@@ -44,9 +44,10 @@ Obora 전 패키지의 테스트 기준을 통일해 변경 안정성과 릴리�
 SDK branch floor는 step-execution engine parallel/error path, TKG review queue
 fallback, execution lock, repair-loop summary, health-check error,
 judge/consensus strategy normalization 테스트 보강 후 91로 상향했습니다.
-runtime function floor는 builtin plugin, no-op message bus, workflow diagnosis
-helper 테스트 보강 후 88로 상향했고, runtime statements/lines floor는 92,
-runtime branch floor는 resume, gate
+runtime function floor는 builtin plugin, workflow diagnosis helper,
+ExecutionCell no-op message bus/actor blackboard adapter, runtime blackboard
+event/snapshot, blackboard branded id helper 테스트 보강 후 90으로
+상향했고, runtime statements/lines floor는 93, runtime branch floor는 resume, gate
 timeout, artifact capture, blackboard default state, step skill loading, policy
 expression parsing/evaluation, audit re-execution planning, snapshot restore
 error, voting session, plugin registry lifecycle, custom pattern branch, builtin

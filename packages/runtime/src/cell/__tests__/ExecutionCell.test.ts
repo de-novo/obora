@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { DefaultExecutionCell } from "../ExecutionCell.js";
+import type { IBlackboard } from "../actor/types/blackboard.js";
+import { createActorId } from "../actor/types/actor.js";
+import type { IMessageBus, Message } from "../actor/types/message.js";
+import { createMessageId, MessageType } from "../actor/types/message.js";
 import type { CellContext } from "../CellContext.js";
 import type { Task } from "../types.js";
 
@@ -38,6 +42,29 @@ function createTask(input: unknown = { message: "ok" }): Task {
     description: "test task",
     input,
     priority: 1,
+  };
+}
+
+interface ExecutionCellInternals {
+  actor: {
+    id: ReturnType<typeof createActorId>;
+    board: IBlackboard;
+    messageBus: IMessageBus;
+  };
+}
+
+function getInternals(cell: DefaultExecutionCell): ExecutionCellInternals {
+  return cell as unknown as ExecutionCellInternals;
+}
+
+function createMessage(to: ReturnType<typeof createActorId>): Message {
+  return {
+    id: createMessageId(`msg-${crypto.randomUUID()}`),
+    type: MessageType.PING,
+    from: createActorId("analyst"),
+    to,
+    payload: { ok: true },
+    timestamp: new Date(),
   };
 }
 
@@ -388,5 +415,63 @@ describe("DefaultExecutionCell", () => {
       output: { error: "Execution timed out after 1ms" },
     });
     expect(timeoutCell.status).toBe("failed");
+  });
+
+  it("exposes a no-op message bus that is safe for actor lifecycle hooks", async () => {
+    const cell = new DefaultExecutionCell({
+      id: "cell-bus",
+      context: createContext(),
+    });
+    const { actor } = getInternals(cell);
+    const message = createMessage(actor.id);
+    const messageWithoutTo: Omit<Message, "to"> = {
+      id: message.id,
+      type: message.type,
+      from: message.from,
+      payload: message.payload,
+      timestamp: message.timestamp,
+    };
+
+    actor.messageBus.send(message);
+    actor.messageBus.sendTo(actor.id, messageWithoutTo);
+    actor.messageBus.broadcast(messageWithoutTo);
+    actor.messageBus.receive(() => {
+      throw new Error("no-op bus should not invoke receive handlers");
+    });
+    actor.messageBus.clearQueue(actor.id);
+
+    const unsubscribe = actor.messageBus.subscribe(MessageType.PING, () => {
+      throw new Error("no-op bus should not invoke subscribers");
+    });
+
+    expect(unsubscribe()).toBeUndefined();
+    expect(actor.messageBus.getQueueSize(actor.id)).toBe(0);
+    expect(actor.messageBus.filter(() => true)).toEqual([]);
+    await expect(actor.messageBus.request(message)).rejects.toThrow(
+      "NoOpMessageBus does not support request"
+    );
+  });
+
+  it("adapts cell state access through the actor blackboard surface", () => {
+    const state = new Map<string, unknown>([["draft.title", "old"]]);
+    const cell = new DefaultExecutionCell({
+      id: "cell-board",
+      context: createContext({ state }),
+    });
+    const { board } = getInternals(cell).actor;
+
+    expect(board.version).toBe(0);
+    expect(board.read("missing.path")).toBeUndefined();
+
+    board.write("draft.title", "new");
+    board.write("draft.status", "ready");
+
+    expect(board.version).toBe(2);
+    expect(board.read("draft.title")).toBe("new");
+    expect(board.keys()).toEqual(["draft.title", "draft.status"]);
+    expect(board.find("status")).toEqual(["draft.status"]);
+
+    board.delete("draft.title");
+    expect(board.read("draft.title")).toBe("new");
   });
 });
