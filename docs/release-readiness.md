@@ -60,7 +60,7 @@ Current enforced coverage floors:
 | --- | ---: | ---: | ---: | ---: |
 | `@obora/sdk` | 95 | 91 | 99 | 95 |
 | `@obora/runtime` | 93 | 90 | 90 | 93 |
-| `@obora/adapters` | 94 | 92 | 92 | 94 |
+| `@obora/adapters` | 96 | 92 | 98 | 96 |
 | `@obora/cli` | 96 | 91 | 97 | 96 |
 | `@obora/dashboard` | 92 | 91 | 92 | 92 |
 
@@ -70,7 +70,7 @@ Latest verified `pnpm verify:coverage` package measurements:
 | --- | ---: | ---: | ---: | ---: |
 | `@obora/sdk` | 96.05% | 91.16% | 99.35% | 96.05% |
 | `@obora/runtime` | 93.12% | 90.03% | 90.23% | 93.12% |
-| `@obora/adapters` | 94.47% | 92.11% | 92.55% | 94.47% |
+| `@obora/adapters` | 96.70% | 92.56% | 98.40% | 96.70% |
 | `@obora/cli` | 96.36% | 91.06% | 97.72% | 96.36% |
 | `@obora/dashboard` | 92.92% | 91.00% | 92.11% | 92.92% |
 
@@ -86,9 +86,12 @@ step-execution engine parallel/error paths, TKG review queue fallbacks,
 execution locks, repair-loop summaries, health-check errors, and judge/consensus
 strategy normalization.
 
-The current adapters branch floor is enforced at 92 after focused auth store
-defaults and decorator parameter schema fallback tests, in addition to the
-existing conformance coverage for provider/auth/tool behavior.
+The current adapters statements/functions/lines floors are enforced at
+96/98/96 after focused agent resolution, tool registry batch/schema/clear, and
+builtin skill execution conformance tests. The branch floor remains enforced at
+92 after focused auth store defaults and decorator parameter schema fallback
+tests, in addition to the existing conformance coverage for provider/auth/tool
+behavior.
 
 The current runtime baseline is above 93% for statements and lines, the function
 floor is enforced at 90 after builtin plugin, workflow diagnosis helper,

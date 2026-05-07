@@ -1,6 +1,18 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { ToolRegistry } from "../../tools/registry";
-import { ToolContext } from "../../tools/types";
+import type { Tool, ToolContext } from "../../tools/types";
+
+function createTool(name: string, overrides: Partial<Tool> = {}): Tool {
+  return {
+    name,
+    description: `${name} description`,
+    parameters: { type: "object", properties: {} },
+    async execute() {
+      return `${name} result`;
+    },
+    ...overrides,
+  };
+}
 
 describe("ToolRegistry", () => {
   let registry: ToolRegistry;
@@ -164,6 +176,10 @@ describe("ToolRegistry", () => {
       expect(tools).toHaveLength(2);
       expect(registry.listCategories()).toContain("utility");
     });
+
+    it("should return an empty list for categories without registered tools", () => {
+      expect(registry.listByCategory("missing")).toEqual([]);
+    });
   });
 
   describe("toToolDefinitions", () => {
@@ -180,6 +196,22 @@ describe("ToolRegistry", () => {
       expect(defs).toHaveLength(1);
       expect(defs[0]!.type).toBe("function");
       expect(defs[0]!.function.name).toBe("test");
+    });
+
+    it("should expose list, filtered definitions, and function-calling schema contracts", () => {
+      registry.register(createTool("one", { category: "utility" }));
+      registry.register(createTool("two", { category: "text" }));
+
+      expect(registry.listTools()).toEqual([
+        { name: "one", description: "one description", category: "utility" },
+        { name: "two", description: "two description", category: "text" },
+      ]);
+      expect(registry.toToolDefinitions(["two", "missing"]).map((tool) => tool.function.name)).toEqual([
+        "two",
+      ]);
+      expect(registry.toFunctionCallingSchema(["one"]).map((tool) => tool.function.name)).toEqual([
+        "one",
+      ]);
     });
   });
 
@@ -199,6 +231,41 @@ describe("ToolRegistry", () => {
 
     it("should return false for nonexistent tool", () => {
       expect(registry.unregister("missing")).toBe(false);
+    });
+
+    it("should remove category membership and aliases when unregistering", () => {
+      registry.register(createTool("removable-category", { category: "utility" }));
+      registry.alias("removable-category", "shortcut");
+
+      expect(registry.has("shortcut")).toBe(true);
+      expect(registry.unregister("removable-category")).toBe(true);
+
+      expect(registry.has("shortcut")).toBe(false);
+      expect(registry.listByCategory("utility")).toEqual([]);
+    });
+  });
+
+  describe("executeBatch and clear", () => {
+    it("should preserve batch order and clear all registry indexes", async () => {
+      registry.register(createTool("one", { category: "utility" }));
+      registry.register(createTool("two", { category: "utility" }));
+      registry.alias("one", "first");
+
+      const results = await registry.executeBatch(
+        [
+          { name: "first", params: {} },
+          { name: "two", params: {} },
+        ],
+        context
+      );
+
+      expect(results.map((result) => result.data)).toEqual(["one result", "two result"]);
+
+      registry.clear();
+
+      expect(registry.size).toBe(0);
+      expect(registry.listCategories()).toEqual([]);
+      expect(registry.has("first")).toBe(false);
     });
   });
 });

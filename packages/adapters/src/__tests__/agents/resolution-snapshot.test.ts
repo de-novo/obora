@@ -185,4 +185,49 @@ describe("agent resolution snapshot", () => {
       ]);
     });
   });
+
+  it("resolves concrete agent configs and applies step-level provider/model overrides", async () => {
+    vi.spyOn(FileAuthManager.prototype, "listProviders").mockResolvedValue([]);
+
+    await withIsolatedResolver(async ({ projectDir }) => {
+      await mkdir(join(projectDir, ".obora"), { recursive: true });
+      await writeFile(
+        join(projectDir, ".obora", "config.yaml"),
+        [
+          "defaults:",
+          "  temperature: 0.45",
+          "  timeout: 60",
+          "agents:",
+          "  critic:",
+          "    provider: anthropic",
+          "    model: claude-opus-4-6",
+          "  reviewer:",
+          "    provider: openai",
+          "    model: gpt-5",
+          "    maxTokens: 2048",
+        ].join("\n"),
+        "utf-8"
+      );
+
+      const resolver = await AgentConfigResolver.create(projectDir);
+
+      expect(resolver.resolve("reviewer")).toMatchObject({
+        provider: "openai",
+        model: "gpt-5",
+        temperature: 0.45,
+        timeout: 60,
+        maxTokens: 2048,
+      });
+      expect(resolver.resolveForStep("reviewer")).toEqual(resolver.resolve("reviewer"));
+      expect(resolver.resolveForStep("reviewer", { model: "gpt-5.2" })).toMatchObject({
+        provider: "openai",
+        model: "gpt-5.2",
+      });
+      expect(resolver.resolveForStep("reviewer", { provider: "anthropic" })).toMatchObject({
+        provider: "anthropic",
+        model: "gpt-5",
+      });
+      expect(resolver.listAgents().map((entry) => entry.name)).toEqual(["critic", "reviewer"]);
+    });
+  });
 });
