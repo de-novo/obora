@@ -35,6 +35,12 @@ class MockRuntime {
   }
 }
 
+interface SupervisorHarness {
+  restartRest(actorId: ReturnType<typeof actorId>): Promise<void>;
+  recordHistory(actorId: ReturnType<typeof actorId>, error: Error, attempt: number, success: boolean): void;
+  addDeadLetter(actorId: ReturnType<typeof actorId>, error: Error, retryCount: number): void;
+}
+
 describe("Supervisor", () => {
   let supervisor: Supervisor;
   let runtime: MockRuntime;
@@ -69,6 +75,42 @@ describe("Supervisor", () => {
       supervisor.watch(actorId("actor-1"));
       supervisor.stop();
       expect(supervisor.getWatchedActors()).toHaveLength(0);
+    });
+
+    it("should emit debug logs when enabled", () => {
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+      const debugSupervisor = new Supervisor(runtime as unknown as ActorRuntime, {
+        strategy: RestartStrategy.ONE_FOR_ONE,
+        backoff: {
+          policy: BackoffPolicy.FIXED,
+          initialDelay: 10,
+          maxDelay: 100,
+        },
+        maxRestarts: 3,
+        restartWindow: 60000,
+        debug: true,
+      });
+
+      debugSupervisor.start();
+      debugSupervisor.stop();
+
+      expect(logSpy).toHaveBeenCalledWith("[Supervisor] Supervisor started");
+      expect(logSpy).toHaveBeenCalledWith("[Supervisor] Supervisor stopped");
+      logSpy.mockRestore();
+    });
+
+    it("should ignore stop and failure handling when not running or unwatched", async () => {
+      const failedHandler = vi.fn();
+      supervisor.on("actor:failed", failedHandler);
+
+      supervisor.stop();
+      await supervisor.handleFailure(actorId("actor-1"), new Error("ignored"));
+
+      supervisor.start();
+      await supervisor.handleFailure(actorId("actor-2"), new Error("unwatched"));
+
+      expect(failedHandler).not.toHaveBeenCalled();
+      expect(supervisor.getRestartHistory()).toEqual([]);
     });
 
     it("should throw when starting already running supervisor", () => {
@@ -161,6 +203,15 @@ describe("Supervisor", () => {
   });
 
   describe("restart strategies", () => {
+    it("should no-op rest-for-one when failed actor is not in the watch order", async () => {
+      supervisor.start();
+      supervisor.watch(actorId("actor-1"));
+
+      await expect(
+        (supervisor as unknown as SupervisorHarness).restartRest(actorId("missing"))
+      ).resolves.toBeUndefined();
+    });
+
     it("should restart only failed actor with ONE_FOR_ONE", async () => {
       supervisor.start();
       supervisor.watch(actorId("actor-1"));
@@ -357,6 +408,40 @@ describe("Supervisor", () => {
   });
 
   describe("dead letter queue", () => {
+    it("should bound dead letter queue size", () => {
+      const smallQueueSupervisor = new Supervisor(runtime as unknown as ActorRuntime, {
+        strategy: RestartStrategy.ONE_FOR_ONE,
+        backoff: {
+          policy: BackoffPolicy.FIXED,
+          initialDelay: 10,
+          maxDelay: 100,
+        },
+        maxRestarts: 3,
+        restartWindow: 60000,
+        enableDeadLetterQueue: true,
+        deadLetterQueueSize: 1,
+      });
+      const harness = smallQueueSupervisor as unknown as SupervisorHarness;
+
+      harness.addDeadLetter(actorId("actor-1"), new Error("first"), 1);
+      harness.addDeadLetter(actorId("actor-2"), new Error("second"), 2);
+
+      expect(smallQueueSupervisor.getDeadLetters()).toHaveLength(1);
+      expect(smallQueueSupervisor.getDeadLetters()[0].actorId).toBe(actorId("actor-2"));
+    });
+
+    it("should retain only the most recent restart history entries", () => {
+      const harness = supervisor as unknown as SupervisorHarness;
+
+      for (let attempt = 1; attempt <= 101; attempt++) {
+        harness.recordHistory(actorId("actor-1"), new Error(`attempt-${attempt}`), attempt, false);
+      }
+
+      const history = supervisor.getRestartHistory(actorId("actor-1"));
+      expect(history).toHaveLength(100);
+      expect(history[0].attempt).toBe(2);
+    });
+
     it("should add to dead letter queue on restart failure", async () => {
       // 재시작 실패하도록 설정
       runtime.actors.delete("actor-1");
@@ -415,6 +500,30 @@ describe("Supervisor", () => {
   });
 
   describe("custom decider", () => {
+    it("should escalate when custom decider requests escalation", async () => {
+      const customSupervisor = new Supervisor(runtime as unknown as ActorRuntime, {
+        strategy: RestartStrategy.ONE_FOR_ONE,
+        backoff: {
+          policy: BackoffPolicy.FIXED,
+          initialDelay: 10,
+          maxDelay: 100,
+        },
+        maxRestarts: 3,
+        restartWindow: 60000,
+        decider: () => RestartDirective.ESCALATE,
+      });
+
+      customSupervisor.start();
+      customSupervisor.watch(actorId("actor-1"));
+      const escalateHandler = vi.fn();
+      customSupervisor.on("escalate", escalateHandler);
+
+      await customSupervisor.handleFailure(actorId("actor-1"), new Error("escalate"));
+
+      expect(escalateHandler).toHaveBeenCalledWith(actorId("actor-1"), expect.any(Error));
+      expect(customSupervisor.getRestartHistory()).toEqual([]);
+    });
+
     it("should use custom decider", async () => {
       const customSupervisor = new Supervisor(runtime as unknown as ActorRuntime, {
         strategy: RestartStrategy.ONE_FOR_ONE,

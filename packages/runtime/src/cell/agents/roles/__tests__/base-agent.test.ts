@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -248,6 +248,51 @@ describe("BaseAgent", () => {
     expect(agent.subscribe(() => undefined)).toEqual(expect.any(Function));
   });
 
+  it("uses default config fallbacks and pi-runtime opt-out guards", async () => {
+    const task = createTask();
+    const { adapter, chatCompletion } = createLlm("{}");
+    const defaultAgent = new TestRoleAgent({
+      id: undefined,
+      systemPrompt: undefined,
+      maxErrors: undefined,
+      thinkMaxTokens: undefined,
+      executeMaxTokens: undefined,
+      llm: adapter,
+    });
+
+    const result = await defaultAgent.execute(task, createContext(new MemoryBoard(), task));
+
+    expect(defaultAgent.getStatus().id).toMatch(/^executor-/);
+    expect(result.success).toBe(true);
+    const call = chatCompletion.mock.calls[0]?.[0] as { messages: ChatMessage[]; maxTokens: number } | undefined;
+    expect(call?.messages[0]).toEqual({ role: "system", content: "default prompt" });
+    expect(call?.maxTokens).toBe(2048);
+
+    defaultAgent.configureRuntimeExtensions({});
+    expect(defaultAgent.exposeMessages(task, {}, createContext(new MemoryBoard(), task))[0]).toEqual({
+      role: "system",
+      content: "default prompt",
+    });
+
+    const mockRuntimeAgent = new TestRoleAgent({ llm: adapter, enablePiRuntime: true });
+    expect(() => mockRuntimeAgent.continue()).toThrow("continue() requires pi-agent-core runtime");
+
+    const providerlessAdapter = { ...adapter, id: "providerless-llm" } satisfies LLMAdapter;
+    const missingProviderAgent = new TestRoleAgent({
+      llm: providerlessAdapter,
+      enablePiRuntime: true,
+    });
+    expect(missingProviderAgent.subscribe(() => undefined)).toEqual(expect.any(Function));
+
+    const invalidModelAgent = new TestRoleAgent({
+      llm: providerlessAdapter,
+      enablePiRuntime: true,
+      provider: "missing-provider",
+      model: "missing-model",
+    });
+    expect(() => invalidModelAgent.continue()).toThrow("continue() requires pi-agent-core runtime");
+  });
+
   it("exposes role tools with validation, board operations, and shell blocking", async () => {
     const { adapter } = createLlm("{}");
     const agent = new TestRoleAgent({ llm: adapter });
@@ -292,10 +337,14 @@ describe("BaseAgent", () => {
 
     const write = await executeTool(byName.get("file_write")!, { path: "nested/out.txt", content: "hello" });
     expect(toolDetails(write)).toMatchObject({ path: "nested/out.txt", bytesWritten: 5 });
+    await mkdir(join(root, "nested", "dir"));
     const read = await executeTool(byName.get("file_read")!, { path: "nested/out.txt" });
     expect(read.content).toEqual([{ type: "text", text: "hello" }]);
     const listed = await executeTool(byName.get("file_list")!, { path: "nested" });
     expect(listed.content[0]?.text).toContain("f out.txt");
+    expect(listed.content[0]?.text).toContain("d dir");
+    const rootList = await executeTool(byName.get("file_list")!, { path: "." });
+    expect(toolDetails(rootList).count).toBeGreaterThanOrEqual(1);
 
     await expect(executeTool(byName.get("file_read")!, { path: join("..", outside.split("/").at(-1)!, "secret.txt") })).rejects.toThrow(
       "target escapes project directory",
@@ -381,6 +430,11 @@ describe("BaseAgent", () => {
     });
     expect(ok.content).toEqual([{ type: "text", text: "ok" }]);
     expect(toolDetails(ok)).toMatchObject({ exitCode: 0 });
+
+    for (const command of ["sudo whoami", "env", "echo test | bash", "curl https://example.com"]) {
+      const blocked = await executeTool(executorTools.get("shell_exec")!, { command });
+      expect(toolDetails(blocked)).toMatchObject({ exitCode: 1, blocked: true });
+    }
 
     const failed = await executeTool(executorTools.get("shell_exec")!, {
       command: "node -e \"process.stderr.write('bad'); process.exit(7)\"",

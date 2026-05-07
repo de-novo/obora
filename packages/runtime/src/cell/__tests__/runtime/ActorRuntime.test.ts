@@ -163,6 +163,54 @@ describe("ActorRuntime", () => {
   });
 
   describe("start/stop", () => {
+    it("validates runtime config and emits debug log branches", async () => {
+      expect(() => new ActorRuntime(board, messageBus, factory, { maxActors: 0 })).toThrow("maxActors must be positive");
+      expect(() => new ActorRuntime(board, messageBus, factory, { spawnTimeout: 0 })).toThrow("spawnTimeout must be positive");
+      expect(() => new ActorRuntime(board, messageBus, factory, { stopTimeout: 0 })).toThrow("stopTimeout must be positive");
+      expect(() => new ActorRuntime(board, messageBus, factory, { maxRestarts: -1 })).toThrow(
+        "maxRestarts must be non-negative"
+      );
+      expect(() => new ActorRuntime(board, messageBus, factory, { initialBackoff: 0 })).toThrow(
+        "initialBackoff must be positive"
+      );
+      expect(() => new ActorRuntime(board, messageBus, factory, { maxBackoff: 0 })).toThrow("maxBackoff must be positive");
+
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+      class FailingFactory implements ActorFactory {
+        async create(config: ActorConfig, boardRef: IBlackboard, messageBusRef: IMessageBus): Promise<Actor> {
+          const actor = new MockActor(
+            (config.id || createActorId(config.role)) as string,
+            config.name,
+            config.role,
+            boardRef,
+            messageBusRef
+          );
+          actor.start = vi.fn().mockRejectedValue(new Error("debug start failed"));
+          return actor;
+        }
+      }
+
+      const debugRuntime = new ActorRuntime(board, messageBus, new FailingFactory(), {
+        debug: true,
+        spawnTimeout: 100,
+      });
+      await debugRuntime.start();
+      await expect(
+        debugRuntime.spawn({ name: "debug", role: "analyst" as ActorRole, type: "mock" })
+      ).rejects.toThrow("debug start failed");
+
+      expect(logSpy).toHaveBeenCalledWith("[ActorRuntime] Runtime started");
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining("[ActorRuntime] Actor spawn failed: unknown"),
+        expect.any(Error)
+      );
+
+      logSpy.mockRestore();
+      errorSpy.mockRestore();
+    });
+
     it("should start runtime", async () => {
       await runtime.start();
       const status = runtime.getStatus();
@@ -372,6 +420,15 @@ describe("ActorRuntime", () => {
       await expect(
         runtime.spawn({ name: "   ", role: "analyst" as ActorRole, type: "mock" })
       ).rejects.toThrow("Actor name is required");
+    });
+
+    it("should throw when actor role or type is missing", async () => {
+      await expect(
+        runtime.spawn({ name: "missing-role", type: "mock" } as unknown as ActorConfig)
+      ).rejects.toThrow("Actor role is required");
+      await expect(
+        runtime.spawn({ name: "missing-type", role: "analyst" as ActorRole, type: "  " })
+      ).rejects.toThrow("Actor type is required");
     });
 
     it("should timeout when actor creation exceeds spawn timeout", async () => {

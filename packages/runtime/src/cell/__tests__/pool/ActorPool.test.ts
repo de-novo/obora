@@ -168,6 +168,15 @@ describe("ActorPool", () => {
     };
   }
 
+  interface PoolHarness {
+    taskQueue: PoolTask[];
+    inProgress: Map<string, { task: PoolTask; actorId: ActorId }>;
+    metrics: PoolMetrics;
+    removeActor(actorId: ActorId): Promise<void>;
+    selectActor(): Actor | null;
+    selectLeastBusy(actors: Actor[]): Actor;
+  }
+
   describe("config validation", () => {
     it("rejects invalid pool boundaries", () => {
       const base: PoolConfig = {
@@ -310,6 +319,73 @@ describe("ActorPool", () => {
       expect(taskId1).toBeDefined();
       expect(taskId2).toBeDefined();
       expect(taskId3).toBeDefined();
+    });
+
+    it("should preserve explicit and disabled expiration metadata on queued tasks", async () => {
+      const queuedPool = new ActorPool(
+        {
+          name: "queued-expiry-pool",
+          role: "analyst",
+          type: "mock",
+          initialSize: 0,
+          minSize: 0,
+          maxSize: 0,
+          taskTimeout: 0,
+          scaleStrategy: "fixed",
+        },
+        board,
+        factory,
+        messageBus
+      );
+      await queuedPool.start();
+      const harness = queuedPool as unknown as PoolHarness;
+      const now = Date.now();
+
+      const expiringId = await queuedPool.submit({ data: "expiring" }, 0, 500);
+      const noExpiryId = await queuedPool.submit({ data: "no-expiry" });
+
+      expect(harness.taskQueue.find((task) => task.id === expiringId)?.expiresAt?.getTime()).toBeGreaterThanOrEqual(
+        now + 500
+      );
+      expect(harness.taskQueue.find((task) => task.id === noExpiryId)?.expiresAt).toBeUndefined();
+
+      await queuedPool.stop();
+    });
+
+    it("should expire queued tasks and call completion callback before actor selection", async () => {
+      vi.useFakeTimers();
+      const expiryPool = new ActorPool(
+        {
+          name: "expired-task-pool",
+          role: "analyst",
+          type: "mock",
+          initialSize: 0,
+          minSize: 0,
+          maxSize: 0,
+          taskTimeout: 0,
+          scaleStrategy: "fixed",
+        },
+        board,
+        factory,
+        messageBus
+      );
+      await expiryPool.start();
+      const harness = expiryPool as unknown as PoolHarness;
+      const onComplete = vi.fn();
+      harness.taskQueue.push({
+        ...createQueuedTask("expired-task"),
+        expiresAt: new Date(Date.now() - 1),
+        onComplete,
+      });
+      harness.metrics.queueSize = harness.taskQueue.length;
+
+      await vi.advanceTimersByTimeAsync(101);
+
+      expect(onComplete).toHaveBeenCalledWith(null, expect.any(Error));
+      expect(harness.taskQueue).toHaveLength(0);
+      await harness.removeActor(createActorId("missing"));
+      await expiryPool.stop();
+      vi.useRealTimers();
     });
 
     it("should throw when queue is full", async () => {
@@ -459,6 +535,23 @@ describe("ActorPool", () => {
   describe("dispatch strategies", () => {
     beforeEach(async () => {
       await pool.start();
+    });
+
+    it("should return null when all actors are busy and select the least queued actor", () => {
+      const harness = pool as unknown as PoolHarness;
+      const actorIds = pool.getActors();
+      for (const id of actorIds) {
+        harness.inProgress.set(`task-${id}`, { task: createQueuedTask(`task-${id}`), actorId: id });
+      }
+
+      expect(harness.selectActor()).toBeNull();
+
+      const busy = new MockActor(createActorId("analyst"), "analyst" as ActorRole, board, messageBus);
+      const idle = new MockActor(createActorId("analyst"), "analyst" as ActorRole, board, messageBus);
+      busy.status.messageQueue.pending = 3;
+      idle.status.messageQueue.pending = 1;
+
+      expect(harness.selectLeastBusy([busy, idle])).toBe(idle);
     });
 
     it("should use round-robin dispatch", async () => {

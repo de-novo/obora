@@ -26,7 +26,7 @@ Obora 전 패키지의 테스트 기준을 통일해 변경 안정성과 릴리�
 | Package | Statements | Branches | Functions | Lines |
 | --- | ---: | ---: | ---: | ---: |
 | `@obora/sdk` | 95 | 91 | 99 | 95 |
-| `@obora/runtime` | 92 | 89 | 88 | 92 |
+| `@obora/runtime` | 92 | 90 | 88 | 92 |
 | `@obora/adapters` | 94 | 92 | 92 | 94 |
 | `@obora/cli` | 96 | 91 | 97 | 96 |
 | `@obora/dashboard` | 92 | 91 | 92 | 92 |
@@ -35,8 +35,8 @@ Obora 전 패키지의 테스트 기준을 통일해 변경 안정성과 릴리�
 
 | Package | Statements | Branches | Functions | Lines |
 | --- | ---: | ---: | ---: | ---: |
-| `@obora/sdk` | 96.05% | 91.15% | 99.35% | 96.05% |
-| `@obora/runtime` | 92.22% | 89.03% | 88.47% | 92.22% |
+| `@obora/sdk` | 96.05% | 91.16% | 99.35% | 96.05% |
+| `@obora/runtime` | 92.86% | 90.00% | 88.52% | 92.86% |
 | `@obora/adapters` | 94.47% | 92.11% | 92.55% | 94.47% |
 | `@obora/cli` | 96.36% | 91.06% | 97.72% | 96.36% |
 | `@obora/dashboard` | 92.92% | 91.00% | 92.11% | 92.92% |
@@ -50,7 +50,9 @@ runtime branch floor는 resume, gate
 timeout, artifact capture, blackboard default state, step skill loading, policy
 expression parsing/evaluation, audit re-execution planning, snapshot restore
 error, voting session, plugin registry lifecycle, custom pattern branch, builtin
-pattern default, audit replay/re-execution fallback 테스트 보강 후 89로
+pattern default, audit replay/re-execution fallback, BaseAgent guard,
+snapshot runtime validation, actor runtime/pool edge case, event bus
+async/unsubscribe, recovery supervisor branch 테스트 보강 후 90으로
 상향했습니다. adapters branch floor는 agent config mutation
 parsing/default cwd/reset cleanup/write failure, auth store default, decorator
 parameter schema fallback 테스트 보강 후 92로 상향했고,

@@ -61,6 +61,12 @@ describe("workflow-validator coverage paths", () => {
   });
 
   it("detects self, missing, circular, and unresolved input references", () => {
+    expect(validateSchema(workflow())).toEqual([]);
+    expect(validateSelfReferences([{ name: "a", agent: "x" }])).toEqual([]);
+    expect(validateMissingReferences([{ name: "a", agent: "x", depends_on: [] }])).toEqual([]);
+    expect(validateCircularDependencies([{ name: "a", agent: "x" }])).toEqual([]);
+    expect(validateInputs([{ name: "a", agent: "x", outputs: ["data/raw.json"] }, { name: "b", agent: "y", inputs: ["data/raw.json", "docs/proposal.md"] }])).toEqual([]);
+
     expect(validateSelfReferences([{ name: "a", agent: "x", depends_on: ["a"] }])).toEqual([
       expect.objectContaining({
         code: ValidationErrorCode.SELF_REFERENCE,
@@ -157,6 +163,62 @@ steps:
         }),
       ],
       warnings: [],
+    });
+    expect(
+      parseAndValidate(`
+steps: []
+`),
+    ).toMatchObject({
+      isValid: false,
+      errors: [expect.objectContaining({ code: "E2002", suggestion: "Add the missing required field" })],
+    });
+    expect(
+      parseAndValidate(`
+name: bad-type
+steps: nope
+`),
+    ).toMatchObject({
+      isValid: false,
+      errors: [expect.objectContaining({ code: "E2003", suggestion: "Check field type and format" })],
+    });
+    expect(
+      parseAndValidate(`
+name: circular
+steps:
+  - name: a
+    agent: x
+    depends_on: [b]
+  - name: b
+    agent: x
+    depends_on: [a]
+`),
+    ).toMatchObject({
+      isValid: false,
+      errors: [expect.objectContaining({ code: "E3001", suggestion: "Remove or restructure circular dependencies" })],
+    });
+    expect(
+      parseAndValidate(`
+name: self-ref
+steps:
+  - name: a
+    agent: x
+    depends_on: [a]
+`),
+    ).toMatchObject({
+      isValid: false,
+      errors: [expect.objectContaining({ code: "E3003", suggestion: "Remove self-reference from depends_on" })],
+    });
+    expect(
+      parseAndValidate(`
+name: invalid-duration
+steps:
+  - name: a
+    agent: x
+    timeout: 0s
+`),
+    ).toMatchObject({
+      isValid: false,
+      errors: [expect.objectContaining({ code: "E2005", suggestion: undefined })],
     });
   });
 });

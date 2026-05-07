@@ -7,6 +7,14 @@ import { createSessionId } from "../../types";
 import { isSerializedState } from "../type-guards";
 import type { SerializedState, Snapshot } from "../types";
 
+interface SnapshotValidatorHarness {
+  validateRuntimeStructure(snapshot: Snapshot): {
+    valid: boolean;
+    errors: Array<{ code: string; message: string }>;
+    warnings: Array<{ code: string; message: string }>;
+  };
+}
+
 const timestamp = "2026-01-01T00:00:00.000Z";
 const sessionId = createSessionId("session-1");
 
@@ -324,6 +332,73 @@ describe("SnapshotValidator", () => {
         "decisions.opinions[0] must be a [string, unknown] tuple",
       ])
     );
+  });
+
+  it("collects runtime section shape errors through the runtime validator guard", () => {
+    const validator = new SnapshotValidator();
+    const harness = validator as unknown as SnapshotValidatorHarness;
+    const base = createSerializedState();
+    const state = { ...base.state };
+    const decisions = { ...base.decisions };
+    let agentReads = 0;
+    let taskReads = 0;
+    let opinionReads = 0;
+    Object.defineProperty(state, "agents", {
+      enumerable: true,
+      get: () => {
+        agentReads += 1;
+        return agentReads === 1 ? [] : {};
+      },
+    });
+    Object.defineProperty(state, "tasks", {
+      enumerable: true,
+      get: () => {
+        taskReads += 1;
+        return taskReads === 1 ? [] : {};
+      },
+    });
+    Object.defineProperty(decisions, "opinions", {
+      enumerable: true,
+      get: () => {
+        opinionReads += 1;
+        return opinionReads === 1 ? [] : {};
+      },
+    });
+    const corrupted = {
+      ...base,
+      state: state as SerializedState["state"],
+      decisions: decisions as SerializedState["decisions"],
+    };
+    const snapshot = createSnapshot();
+    snapshot.data = corrupted;
+
+    const result = harness.validateRuntimeStructure(snapshot);
+
+    expect(result.valid).toBe(false);
+    expect(result.errors.map((error) => error.message)).toEqual(
+      expect.arrayContaining([
+        "state.agents must be an array of [id, data] tuples",
+        "state.tasks must be an array of [id, data] tuples",
+        "decisions.opinions must be an array of [id, data] tuples",
+      ])
+    );
+  });
+
+  it("rejects compressed runtime data that decompresses but is not serialized state", () => {
+    const validator = new SnapshotValidator();
+    const harness = validator as unknown as SnapshotValidatorHarness;
+    const compressed = compress(JSON.stringify({ meta: { sessionId }, state: null })) as string;
+    const snapshot = createSnapshot(createSerializedState(), {
+      compressed: true,
+      compressedChecksum: calculateChecksumSync(compressed),
+      compressedSize: compressed.length,
+    });
+    snapshot.data = compressed;
+
+    expect(harness.validateRuntimeStructure(snapshot)).toMatchObject({
+      valid: false,
+      errors: [{ code: "DATA_CORRUPTED", message: "Failed to parse serialized state data" }],
+    });
   });
 
   it("guards serialized state section shapes before runtime validation", () => {

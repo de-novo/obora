@@ -93,6 +93,9 @@ describe("EventBus", () => {
 
     bus.removeAllSubscribers();
     expect(bus.getStats().subscriberCount).toBe(0);
+
+    bus.unsubscribe("task.completed", exact);
+    expect(bus.getStats().subscriberCount).toBe(0);
   });
 
   it("removes once subscriptions after the first matching event", () => {
@@ -174,6 +177,33 @@ describe("EventBus", () => {
     expect(bus.getHistory()).toEqual([created, completed, completed]);
   });
 
+  it("removes async once handlers and skips unmatched async subscriptions", async () => {
+    const bus = new EventBus();
+    const sync = vi.fn();
+    const once = vi.fn(async () => Promise.resolve());
+    const filteredOut = vi.fn();
+    const unmatched = vi.fn();
+    const throwing = vi.fn(() => {
+      throw new Error("async handler failed");
+    });
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    bus.subscribe("system.*", unmatched);
+    bus.subscribeWithFilter("task.*", { correlationId: "other" }, filteredOut);
+    bus.subscribeOnce("task.completed", once);
+    bus.subscribe("task.completed", sync);
+    bus.subscribe("task.completed", throwing);
+
+    await bus.emitAsync(createTaskCompletedEvent(agentId, "match"));
+    await bus.emitAsync(createTaskCompletedEvent(agentId, "match"));
+
+    expect(sync).toHaveBeenCalledTimes(2);
+    expect(once).toHaveBeenCalledTimes(1);
+    expect(filteredOut).not.toHaveBeenCalled();
+    expect(unmatched).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalledWith("Error in event handler:", expect.any(Error));
+  });
+
   it("waits for events, predicates, and conditions", async () => {
     const bus = new EventBus();
     const first = createTaskCompletedEvent(agentId, "skip");
@@ -251,5 +281,35 @@ describe("EventBus", () => {
 
     expect(debugSpy).toHaveBeenCalledWith("[EventBus] Emitting event: system.error", expect.any(Object));
     expect(errorSpy).toHaveBeenCalledWith("Suppressing recursive error event:", expect.any(Error));
+  });
+
+  it("clears all subscriptions and sanitizes non-error handler failures", () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const bus = new EventBus();
+    const handler = vi.fn();
+    const systemError = vi.fn();
+
+    bus.subscribe("task.completed", handler);
+    bus.unsubscribeAll();
+    bus.emit(createTaskCompletedEvent());
+    expect(handler).not.toHaveBeenCalled();
+
+    bus.subscribe("system.error", systemError);
+    bus.subscribe("task.completed", () => {
+      throw "string failure";
+    });
+    bus.emit(createTaskCompletedEvent());
+
+    expect(systemError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          message: "string failure",
+          details: expect.objectContaining({
+            error: expect.objectContaining({ name: "Error", stack: undefined }),
+          }),
+        }),
+      })
+    );
+    expect(errorSpy).toHaveBeenCalledWith("Error in event handler:", "string failure");
   });
 });

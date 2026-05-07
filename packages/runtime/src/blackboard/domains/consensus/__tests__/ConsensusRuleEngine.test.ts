@@ -98,13 +98,42 @@ describe("ConsensusRuleEngine", () => {
     const result = evaluateConsensus(snapshot());
 
     expect(isConsensusResult(result)).toBe(true);
+    expect(isConsensusResult(null)).toBe(false);
+    expect(isConsensusResult([])).toBe(false);
+    expect(isConsensusResult({ ...result, sessionId: "" })).toBe(false);
     expect(isConsensusResult({ ...result, status: "UNKNOWN" })).toBe(false);
     expect(isConsensusResult({ ...result, approved: "yes" })).toBe(false);
+    expect(isConsensusResult({ ...result, summary: 42 })).toBe(false);
+    expect(isConsensusResult({ ...result, snapshot: null })).toBe(false);
+    expect(isConsensusResult({ ...result, snapshot: { sessionId: 1 } })).toBe(false);
+    expect(isConsensusResult({ ...result, snapshot: { sessionId: "s", tally: null } })).toBe(false);
     expect(isConsensusResult({ ...result, snapshot: { sessionId: "s", tally: { sessionId: "s" } } })).toBe(false);
     expect(
       isConsensusResult({
         ...result,
+        snapshot: {
+          ...result.snapshot,
+          tally: { ...result.snapshot.tally, passed: "yes" },
+        },
+      }),
+    ).toBe(false);
+    expect(isConsensusResult({ ...result, conditions: [] })).toBe(false);
+    expect(
+      isConsensusResult({
+        ...result,
+        conditions: [{ code: "audit", description: "audit required" }],
+      }),
+    ).toBe(true);
+    expect(
+      isConsensusResult({
+        ...result,
         conditions: [{ code: "audit", description: 42 }],
+      }),
+    ).toBe(false);
+    expect(
+      isConsensusResult({
+        ...result,
+        escalation: { reason: "owner", requiredRoles: "owner" },
       }),
     ).toBe(false);
     expect(

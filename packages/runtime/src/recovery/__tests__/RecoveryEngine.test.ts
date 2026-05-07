@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { InMemoryAuditStore } from "../../audit/InMemoryAuditStore.js";
 import { RecoveryEngine } from "../RecoveryEngine";
-import type { CellFailure } from "../types";
+import type { CellFailure, RecoveryStrategy } from "../types";
 
 const createFailure = (attempt = 0): CellFailure => ({
   executionId: "exec-1",
@@ -165,5 +165,114 @@ describe("RecoveryEngine", () => {
     expect(result.status).toBe("failed");
     expect(result.error?.message).toContain("recovery blocked by consensus status: fail");
     expect(executeRetry).not.toHaveBeenCalled();
+  });
+
+  it("covers missing dependencies, plugin failures, consensus pass, and unsupported strategies", async () => {
+    await expect(
+      new RecoveryEngine().handle(createFailure(), {
+        type: "retry",
+        mode: "linear",
+        maxAttempts: 3,
+        initialDelayMs: 10,
+        maxDelayMs: 50,
+      })
+    ).resolves.toMatchObject({
+      status: "failed",
+      error: expect.objectContaining({ message: "retryExecutor is required for retry strategy" }),
+    });
+
+    await expect(
+      new RecoveryEngine().handle(createFailure(), { type: "rollback", snapshotId: "snap-1" })
+    ).resolves.toMatchObject({
+      status: "failed",
+      error: expect.objectContaining({ message: "snapshotStore is required for rollback strategy" }),
+    });
+
+    await expect(
+      new RecoveryEngine().handle(createFailure(), {
+        type: "escalate",
+        severity: "high",
+        channel: "human-approval",
+        summary: "needs review",
+      })
+    ).resolves.toMatchObject({
+      status: "failed",
+      error: expect.objectContaining({ message: "escalationNotifier is required for escalate strategy" }),
+    });
+
+    await expect(
+      new RecoveryEngine().handle(createFailure(), {
+        type: "alternative",
+        stepName: "fallback",
+      })
+    ).resolves.toMatchObject({
+      status: "failed",
+      error: expect.objectContaining({ message: "alternativeExecutor is required for alternative strategy" }),
+    });
+
+    await expect(
+      new RecoveryEngine().handle(createFailure(), { type: "custom" } as unknown as RecoveryStrategy)
+    ).resolves.toMatchObject({
+      status: "failed",
+      error: expect.objectContaining({ message: "unsupported recovery strategy: custom" }),
+    });
+
+    const retryFailure = new RecoveryEngine({
+      wait: vi.fn().mockResolvedValue(undefined),
+      retryExecutor: { executeRetry: vi.fn().mockRejectedValue("retry failed") },
+    });
+    await expect(
+      retryFailure.handle(createFailure(), {
+        type: "retry",
+        mode: "linear",
+        maxAttempts: 3,
+        initialDelayMs: 10,
+        maxDelayMs: 50,
+      })
+    ).resolves.toMatchObject({
+      status: "failed",
+      error: expect.objectContaining({ message: "retry failed" }),
+    });
+
+    const rollbackFailure = new RecoveryEngine({
+      snapshotStore: { restore: vi.fn().mockRejectedValue("restore failed") },
+    });
+    await expect(
+      rollbackFailure.handle(createFailure(), { type: "rollback", snapshotId: "snap-1" })
+    ).resolves.toMatchObject({
+      status: "failed",
+      error: expect.objectContaining({ message: "restore failed" }),
+    });
+
+    const rollbackErrorFailure = new RecoveryEngine({
+      snapshotStore: { restore: vi.fn().mockRejectedValue(new Error("restore error")) },
+    });
+    await expect(
+      rollbackErrorFailure.handle(createFailure(), { type: "rollback", snapshotId: "snap-1" })
+    ).resolves.toMatchObject({
+      status: "failed",
+      error: expect.objectContaining({ message: "restore error" }),
+    });
+
+    const passGateEngine = new RecoveryEngine({
+      wait: vi.fn().mockResolvedValue(undefined),
+      retryExecutor: { executeRetry: vi.fn().mockResolvedValue(undefined) },
+      consensusGate: {
+        evaluate: () => ({ status: "pass" }),
+      },
+    });
+    await expect(
+      passGateEngine.handle(
+        createFailure(),
+        {
+          type: "retry",
+          mode: "linear",
+          maxAttempts: 3,
+          initialDelayMs: 10,
+          maxDelayMs: 50,
+        },
+        { consensusSessionId: "consensus-pass" }
+      )
+    ).resolves.toMatchObject({ status: "recovered" });
   });
 });

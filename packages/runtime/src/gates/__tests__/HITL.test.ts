@@ -2,9 +2,25 @@ import { describe, expect, it, vi } from "vitest";
 import { GateAssignmentManager } from "../GateAssignment.js";
 import { MultiStageApprovalGate, buildSLAConfigFromStage, type ApprovalDecision } from "../MultiStageApproval.js";
 import { SLAManager } from "../SLAManager.js";
+import { evaluateGateCondition, parseDurationToMs } from "../types.js";
 import type { GateAuditEvent } from "../types.js";
 
 describe("HITL gates", () => {
+  it("parses gate durations and evaluates optional conditions", () => {
+    expect(parseDurationToMs()).toBeUndefined();
+    expect(parseDurationToMs("soon")).toBeUndefined();
+    expect(parseDurationToMs("5ms")).toBe(5);
+    expect(parseDurationToMs("2s")).toBe(2_000);
+    expect(parseDurationToMs("3m")).toBe(180_000);
+    expect(parseDurationToMs("4h")).toBe(14_400_000);
+    expect(parseDurationToMs("1d")).toBe(86_400_000);
+
+    expect(evaluateGateCondition(undefined, {})).toBe(true);
+    expect(evaluateGateCondition("context.requireOwner == true", { requireOwner: true })).toBe(true);
+    expect(evaluateGateCondition("context.requireOwner == true", { requireOwner: false })).toBe(false);
+    expect(() => evaluateGateCondition('matches(context.requireOwner, "(")', { requireOwner: "owner" })).toThrow();
+  });
+
   it("approves 2-stage flow when reviewer and owner approve", async () => {
     const gate = new MultiStageApprovalGate({
       stages: [

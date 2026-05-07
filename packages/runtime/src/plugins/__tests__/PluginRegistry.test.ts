@@ -19,7 +19,7 @@ import {
   registerBuiltinPlugins,
   RetryRecoveryStrategyPlugin,
 } from "../builtins.js";
-import { validatePlugin } from "../validator.js";
+import { assertValidPlugin, validatePlugin } from "../validator.js";
 
 describe("plugin validation", () => {
   it("rejects missing required fields", () => {
@@ -39,6 +39,52 @@ describe("plugin validation", () => {
 
     expect(result.valid).toBe(false);
     expect(result.errors).toContain("plugin.execute is required for type 'tool'");
+  });
+
+  it("validates plugin object shape, schema shape, and method functions", () => {
+    expect(validatePlugin(null)).toEqual({ valid: false, errors: ["plugin must be an object"] });
+    expect(
+      validatePlugin({
+        name: "blank",
+        version: " ",
+        type: "robot",
+      }),
+    ).toMatchObject({
+      valid: false,
+      errors: expect.arrayContaining(["plugin.version is required", "plugin.type is invalid"]),
+    });
+    expect(
+      validatePlugin({
+        name: "bad-schema",
+        version: "1.0.0",
+        type: "tool",
+        schema: null,
+        execute: () => undefined,
+      }),
+    ).toMatchObject({
+      valid: false,
+      errors: ["plugin.schema must be an object"],
+    });
+    expect(
+      validatePlugin({
+        name: "bad-transform",
+        version: "1.0.0",
+        type: "state-transform",
+        transform: "not-a-function",
+      }),
+    ).toMatchObject({
+      valid: false,
+      errors: ["plugin.transform must be a function"],
+    });
+    expect(
+      validatePlugin({
+        name: "ok-rule",
+        version: "1.0.0",
+        type: "policy-rule",
+        evaluate: () => ({ effect: "allow" }),
+      }),
+    ).toEqual({ valid: true, errors: [] });
+    expect(() => assertValidPlugin({ type: "tool" })).toThrow("Invalid plugin:");
   });
 });
 
