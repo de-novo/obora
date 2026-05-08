@@ -830,12 +830,71 @@ describe("DecisionsSectionAccessor", () => {
     expect(() =>
       accessor.submitAgenda({ title: "title", description: "", proposer })
     ).toThrow(BlackboardError);
+    expect(() =>
+      accessor.submitAgenda({ title: "title", description: "desc", proposer: undefined as never })
+    ).toThrow(BlackboardError);
     expect(() => accessor.updateAgendaStatus("missing" as never, AgendaStatus.VOTING)).toThrow(
       BlackboardError
     );
     expect(() => accessor.setCurrentAgenda("missing" as never)).toThrow(BlackboardError);
     expect(() => accessor.cancelAgenda("missing" as never, "reason")).toThrow(BlackboardError);
     expect(() => accessor.updateAgenda("missing" as never, { title: "x" })).toThrow(BlackboardError);
+  });
+
+  it("covers pending agenda transitions, empty summaries, and all voting methods", () => {
+    const first = accessor.submitAgenda({
+      title: "First agenda",
+      description: "Current agenda replacement",
+      proposer,
+      requiredQuorum: 1,
+      votingMethod: "unanimous",
+    });
+    const second = accessor.submitAgenda({
+      title: "Second agenda",
+      description: "Pending branch",
+      proposer,
+      requiredQuorum: 1,
+      votingMethod: "weighted",
+    });
+    accessor.updateAgendaStatus(second.id, AgendaStatus.VOTING);
+    expect(accessor.getAgenda(second.id)).toMatchObject({ status: AgendaStatus.VOTING });
+
+    accessor.setCurrentAgenda(first.id);
+    accessor.setCurrentAgenda(second.id);
+    expect(accessor.current).toMatchObject({ id: second.id });
+    expect(accessor.allPending.map((agenda) => agenda.id)).toContain(first.id);
+    expect(accessor.getAllAgendas().map((agenda) => agenda.id)).toEqual([second.id, first.id]);
+    expect(accessor.summarizeOpinions(first.id)).toMatchObject({
+      total: 0,
+      approvalRate: 0,
+      quorumReached: false,
+    });
+    expect(accessor.summarizeOpinions("missing" as never)).toMatchObject({
+      total: 0,
+      quorumReached: false,
+    });
+
+    accessor.submitOpinion({ agendaId: first.id, agentId: reviewer, stance: "approve", reason: "ok" });
+    expect(accessor.checkVotingResult(first.id)).toMatchObject({ passed: true, method: "unanimous" });
+    accessor.submitOpinion({ agendaId: second.id, agentId: proposer, stance: "approve", reason: "ok" });
+    expect(accessor.checkVotingResult(second.id)).toMatchObject({ passed: true, method: "weighted" });
+
+    const supermajority = accessor.submitAgenda({
+      title: "Supermajority agenda",
+      description: "Supermajority branch",
+      proposer,
+      requiredQuorum: 2,
+      votingMethod: "supermajority",
+    });
+    accessor.submitOpinion({ agendaId: supermajority.id, agentId: proposer, stance: "approve", reason: "ok" });
+    accessor.submitOpinion({ agendaId: supermajority.id, agentId: reviewer, stance: "reject", reason: "blocked" });
+    expect(accessor.checkVotingResult(supermajority.id)).toMatchObject({
+      passed: false,
+      method: "supermajority",
+    });
+
+    accessor.cancelAgenda(supermajority.id, "defer");
+    expect(accessor.getAgenda(supermajority.id)).toBeUndefined();
   });
 
   it("records opinions, summaries, voting results, and opinion updates", () => {
@@ -879,6 +938,8 @@ describe("DecisionsSectionAccessor", () => {
 
     accessor.updateOpinion(approveOpinion.id, { stance: "reject", reason: "Blocked" });
     expect(accessor.getAgentOpinion(proposer, agenda.id)).toMatchObject({ stance: "reject" });
+    accessor.updateOpinion(approveOpinion.id, { stance: "invalid" as never });
+    expect(accessor.summarizeOpinions(agenda.id)).toMatchObject({ approve: 0, reject: 0, conditional: 1 });
     accessor.removeOpinion(approveOpinion.id);
     expect(accessor.getOpinionCount()).toBe(1);
     accessor.clearOpinions(agenda.id);
@@ -904,6 +965,14 @@ describe("DecisionsSectionAccessor", () => {
         agentId: proposer,
         stance: "approve",
         reason: "duplicate",
+      })
+    ).toThrow(BlackboardError);
+    expect(() =>
+      accessor.submitOpinion({
+        agendaId: agenda.id,
+        agentId: reviewer,
+        stance: undefined as never,
+        reason: "missing stance",
       })
     ).toThrow(BlackboardError);
     expect(() =>
@@ -948,15 +1017,25 @@ describe("DecisionsSectionAccessor", () => {
     };
 
     const resolution = accessor.recordResolution(resolutionInput);
+    const currentAgenda = accessor.submitAgenda({
+      title: "Current resolution agenda",
+      description: "Current resolution branch",
+      proposer,
+    });
+    accessor.setCurrentAgenda(currentAgenda.id);
+    const currentResolution = accessor.recordResolution({ ...resolutionInput, agendaId: currentAgenda.id });
 
-    expect(accessor.history).toEqual([resolution]);
-    expect(accessor.historyCount).toBe(1);
+    expect(accessor.history).toEqual([resolution, currentResolution]);
+    expect(accessor.historyCount).toBe(2);
     expect(accessor.getHistory({ agendaId: agenda.id, decision: "approved" })).toEqual([resolution]);
-    expect(accessor.getRecentResolutions(1)).toEqual([resolution]);
+    expect(accessor.getHistory({ agendaId: currentAgenda.id })).toEqual([currentResolution]);
+    expect(accessor.getHistory({ decision: "approved" })).toHaveLength(2);
+    expect(accessor.getRecentResolutions(1)).toEqual([currentResolution]);
     expect(accessor.getResolution(resolution.id)).toBe(resolution);
     expect(accessor.getResolutionByAgenda(agenda.id)).toBe(resolution);
-    expect(accessor.getResolutionCount()).toBe(1);
+    expect(accessor.getResolutionCount()).toBe(2);
     expect(accessor.getAgenda(agenda.id)).toBeUndefined();
+    expect(accessor.current).toBeNull();
   });
 
   it("closes an agenda while keeping it queryable", () => {
@@ -966,7 +1045,7 @@ describe("DecisionsSectionAccessor", () => {
       proposer,
     });
 
-    accessor.closeAgenda(agenda.id, "deferred");
+    accessor.closeAgenda(agenda.id);
 
     expect(accessor.getAgenda(agenda.id)).toMatchObject({
       id: agenda.id,
@@ -974,7 +1053,7 @@ describe("DecisionsSectionAccessor", () => {
     });
     expect(accessor.getResolutionByAgenda(agenda.id)).toMatchObject({
       agendaId: agenda.id,
-      decision: "deferred",
+      decision: "approved",
     });
   });
 });

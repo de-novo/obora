@@ -9,12 +9,27 @@ import type { TKGPromotionEngine } from "../tkg-promotion-engine.js";
 import type { EngineBuilder } from "../engine-builder.js";
 import type { StepExecutionEngine } from "../step-execution-engine.js";
 import type { RepairLoopTracker } from "../repair-loop-tracker.js";
+import type { StorageAdapter } from "@obora/runtime";
+
+type SharedMemoryImportResult = {
+  importedScopes: string[];
+  mergedSnapshot: unknown | null;
+};
+
+type RunOrchestratorWithInternals = {
+  importSharedMemory(
+    store: unknown,
+    scopes: Array<{ level: string; key: string }>,
+    blackboard: unknown,
+    execution: RuntimeExecution
+  ): Promise<SharedMemoryImportResult>;
+};
 
 function createMockDeps() {
   const eventBus: EventBus = {
     emit: vi.fn().mockResolvedValue(undefined),
     on: vi.fn().mockReturnValue(() => {}),
-  } as any;
+  } as unknown as EventBus;
 
   const persistenceManager: PersistenceManager = {
     getStorageAdapter: vi.fn().mockResolvedValue({
@@ -24,7 +39,7 @@ function createMockDeps() {
       getSteps: vi.fn().mockResolvedValue([]),
       saveAuditEvent: vi.fn().mockResolvedValue(undefined),
     }),
-  } as any;
+  } as unknown as PersistenceManager;
 
   const tkgService: TKGService = {
     resolveTKGProjectionConfig: vi.fn().mockReturnValue({}),
@@ -36,19 +51,19 @@ function createMockDeps() {
     resolveTKGPromotionTriggers: vi.fn().mockReturnValue([]),
     resolveTKGRollbackStore: vi.fn().mockReturnValue(undefined),
     resolveTKGReviewQueueStore: vi.fn().mockReturnValue(undefined),
-  } as any;
+  } as unknown as TKGService;
 
   const tkgPromotionEngine: TKGPromotionEngine = {
     flushTKGPromotionCheckpoint: vi.fn().mockResolvedValue(undefined),
     persistSharedMemory: vi.fn().mockResolvedValue(undefined),
-  } as any;
+  } as unknown as TKGPromotionEngine;
 
   const engineBuilder: EngineBuilder = {
     build: vi.fn().mockResolvedValue({
       stepExecutor: undefined,
       costTracker: undefined,
     }),
-  } as any;
+  } as unknown as EngineBuilder;
 
   const stepExecutionEngine: StepExecutionEngine = {
     executeStepLoop: vi.fn().mockResolvedValue(undefined),
@@ -56,7 +71,7 @@ function createMockDeps() {
     extractFailurePatterns: vi.fn().mockReturnValue([]),
     summarizeBlackboardSnapshot: vi.fn().mockReturnValue({}),
     runStepHook: vi.fn().mockResolvedValue(undefined),
-  } as any;
+  } as unknown as StepExecutionEngine;
 
   const repairLoopTracker: RepairLoopTracker = {
     recordRepairStarted: vi.fn(),
@@ -68,7 +83,7 @@ function createMockDeps() {
     recordBackEdgeExhausted: vi.fn(),
     getSummary: vi.fn().mockReturnValue(undefined),
     clearSummary: vi.fn(),
-  } as any;
+  } as unknown as RepairLoopTracker;
 
   return {
     deps: {
@@ -163,7 +178,7 @@ describe("RunOrchestrator - executeRun", () => {
     vi.mocked(mockDeps.persistenceManager.getStorageAdapter).mockResolvedValue({
       saveRun,
       saveAuditEvent: vi.fn().mockResolvedValue(undefined),
-    } as any);
+    } as unknown as StorageAdapter);
 
     await orchestrator.executeRun(
       "exec-1", "test", workflow, execution, {}, () => false
@@ -287,7 +302,7 @@ describe("RunOrchestrator - executeRun with Persistence", () => {
     vi.mocked(mockDeps.persistenceManager.getStorageAdapter).mockResolvedValue({
       saveRun,
       saveAuditEvent: vi.fn().mockResolvedValue(undefined),
-    } as any);
+    } as unknown as StorageAdapter);
 
     vi.mocked(mockDeps.stepExecutionEngine.executeStepLoop).mockResolvedValue(undefined);
 
@@ -339,7 +354,7 @@ describe("RunOrchestrator - executeRun with Persistence", () => {
     vi.mocked(mockDeps.persistenceManager.getStorageAdapter).mockResolvedValue({
       saveRun,
       saveAuditEvent: vi.fn().mockResolvedValue(undefined),
-    } as any);
+    } as unknown as StorageAdapter);
 
     vi.mocked(mockDeps.stepExecutionEngine.executeStepLoop).mockResolvedValue(undefined);
 
@@ -376,7 +391,7 @@ describe("RunOrchestrator - importSharedMemory", () => {
       exportPersistentSnapshot: vi.fn().mockReturnValue({}),
     };
 
-    const result = await (orchestrator as any).importSharedMemory(
+    const result = await (orchestrator as unknown as RunOrchestratorWithInternals).importSharedMemory(
       store,
       [{ level: "workflow", key: "test" }],
       blackboard,
@@ -394,7 +409,7 @@ describe("RunOrchestrator - importSharedMemory", () => {
     const execution = createExecution();
     const blackboard = {};
 
-    const result = await (orchestrator as any).importSharedMemory(
+    const result = await (orchestrator as unknown as RunOrchestratorWithInternals).importSharedMemory(
       undefined,
       [],
       blackboard,

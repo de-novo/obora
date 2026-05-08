@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach, vi } from "vitest";
 import { ExecutionController, type ExecutionControllerOptions } from "../execution-controller.js";
 import type { WorkflowRunner } from "../workflow-runner.js";
+import type { TKGService } from "../tkg-service.js";
 import type { EventBus } from "../../events/event-bus.js";
 import type { PersistenceManager } from "../../persistence/persistence-manager.js";
 import type { OboraRuntimeConfig, RuntimeExecution, AgentFactory } from "../../runtime-types.js";
@@ -68,7 +69,7 @@ describe("ExecutionController", () => {
     opts = {
       config: makeBaseConfig(),
       runner,
-      tkgService: makeMockTKGService() as any,
+      tkgService: makeMockTKGService() as unknown as TKGService,
       eventBus,
       persistenceManager,
       executions,

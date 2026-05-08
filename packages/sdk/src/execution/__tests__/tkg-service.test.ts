@@ -306,14 +306,14 @@ describe("TKGService", () => {
     });
 
     it("returns undefined when rollback is not enabled", () => {
-      const config = {
+      const config: OboraRuntimeConfig = {
         ...makeBaseConfig(),
         tkgProjection: {
           enabled: true,
           rollback: { enabled: false },
-        } as any,
+        },
       };
-      const loadedConfig = { tkgProjection: config.tkgProjection } as any;
+      const loadedConfig = makeLoadedConfig(config);
       const result = service.resolveTKGRollbackStore(
         makeWorkflow("test"),
         config,
@@ -323,14 +323,14 @@ describe("TKGService", () => {
     });
 
     it("returns FileTKGRollbackStore when rollback is enabled", () => {
-      const config = {
+      const config: OboraRuntimeConfig = {
         ...makeBaseConfig(),
         tkgProjection: {
           enabled: true,
           rollback: { enabled: true, file: { basePath: "/tmp/tkg-rollback" } },
-        } as any,
+        },
       };
-      const loadedConfig = { tkgProjection: config.tkgProjection } as any;
+      const loadedConfig = makeLoadedConfig(config);
       const result = service.resolveTKGRollbackStore(
         makeWorkflow("test"),
         config,
@@ -374,14 +374,14 @@ describe("TKGService", () => {
     });
 
     it("returns undefined when reviewQueue is not enabled", () => {
-      const config = {
+      const config: OboraRuntimeConfig = {
         ...makeBaseConfig(),
         tkgProjection: {
           enabled: true,
           reviewQueue: { enabled: false },
-        } as any,
+        },
       };
-      const loadedConfig = { tkgProjection: config.tkgProjection } as any;
+      const loadedConfig = makeLoadedConfig(config);
       const result = service.resolveTKGReviewQueueStore(
         makeWorkflow("test"),
         config,
@@ -391,14 +391,14 @@ describe("TKGService", () => {
     });
 
     it("returns FileTKGReviewQueueStore when reviewQueue is enabled", () => {
-      const config = {
+      const config: OboraRuntimeConfig = {
         ...makeBaseConfig(),
         tkgProjection: {
           enabled: true,
           reviewQueue: { enabled: true, file: { basePath: "/tmp/tkg-review-queue" } },
-        } as any,
+        },
       };
-      const loadedConfig = { tkgProjection: config.tkgProjection } as any;
+      const loadedConfig = makeLoadedConfig(config);
       const result = service.resolveTKGReviewQueueStore(
         makeWorkflow("test"),
         config,
@@ -668,7 +668,7 @@ describe("TKGService", () => {
         snapshot: originalSnapshot,
       });
 
-      const config = {
+      const config: OboraRuntimeConfig = {
         ...makeBaseConfig(),
         sharedMemory: {
           enabled: true,
@@ -679,13 +679,10 @@ describe("TKGService", () => {
           enabled: true,
           rollback: { enabled: true },
           file: { scopes: ["project"] },
-        } as any,
+        },
       };
 
-      const loadedConfig = {
-        sharedMemory: config.sharedMemory,
-        tkgProjection: config.tkgProjection,
-      } as any;
+      const loadedConfig = makeLoadedConfig(config);
 
       const customService = new TKGService({
         config,

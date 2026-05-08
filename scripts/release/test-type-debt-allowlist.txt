@@ -1,10 +1,1 @@
 # path<TAB>max_matches<TAB>reason
-packages/sdk/src/__tests__/execution-orchestrator-integration.test.ts	3	Integration fixture mocks use narrow partials for orchestrator dependency seams; reduce with typed test builders.
-packages/sdk/src/execution/__tests__/execution-controller-advanced.test.ts	20	Controller edge-case tests mock persistence, runner, policy, and rollback seams; reduce with shared typed fixtures.
-packages/sdk/src/execution/__tests__/execution-controller-e2e.test.ts	4	E2E controller tests use promise/control-flow mocks across private runner boundaries.
-packages/sdk/src/execution/__tests__/execution-controller-error.test.ts	5	Error-path tests inspect emitted payload shapes and mock rollback service failures.
-packages/sdk/src/execution/__tests__/execution-controller.test.ts	1	Basic controller test uses a partial TKG service mock.
-packages/sdk/src/execution/__tests__/resume-orchestrator.test.ts	7	Resume orchestrator tests use partial dependency mocks and private hook result fixtures.
-packages/sdk/src/execution/__tests__/run-orchestrator.test.ts	12	Run orchestrator tests use partial dependency mocks and private shared-memory import probes.
-packages/sdk/src/execution/__tests__/step-execution-engine.test.ts	4	Step execution engine tests use partial dependency mocks and synthetic strategy outputs.
-packages/sdk/src/execution/__tests__/tkg-service.test.ts	10	TKG service tests use config/store fixture casts around custom adapter payloads.

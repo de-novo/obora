@@ -8,9 +8,11 @@ import { InMemoryAuditStore } from "../../audit/InMemoryAuditStore.js";
 import { RecoveryEngine } from "../../recovery/RecoveryEngine.js";
 import { DefaultStateBinder, type StateBinder } from "../../state/StateBinder.js";
 import { StateManager } from "../../state/StateManager.js";
+import type { CellResult } from "../../cell/types.js";
 import type { StorageAdapter } from "../../storage/types.js";
 import { computePolicyHash } from "../../checkpoint/policy-hash.js";
 import { DefaultRuntimeOrchestrator } from "../RuntimeOrchestrator.js";
+import type { Execution } from "../types.js";
 
 function createPolicyEngine(
   override?: (action: PolicyAction, context: PolicyContext) => PolicyDecision
@@ -2178,6 +2180,154 @@ steps:
     expect(harness.isStateBinding({ source: "x" })).toBe(false);
     expect(harness.extractError({ error: 3 })).toBe("Step execution failed");
     expect(harness.extractError({ error: "explicit" })).toBe("explicit");
+  });
+
+  it("normalizes persistence helpers without runtime side effects", async () => {
+    interface RuntimePersistenceHarness {
+      persistRun(execution: Execution): Promise<void>;
+      persistStep(execution: Execution, stepName: string): Promise<void>;
+      toStepError(rec: { error?: string; recovery?: { error?: unknown } }): { code: string; message: string; stack?: string };
+      captureArtifacts(
+        runId: string,
+        stepName: string,
+        output: unknown,
+        toolCalls: Array<{ toolName?: string; params?: unknown; status?: string }>,
+      ): Promise<void>;
+      recordAudit(
+        executionId: string,
+        type: "execution_end",
+        data: unknown,
+        options?: { cellId?: string; durationMs?: number },
+      ): Promise<void>;
+    }
+    const staticHarness = DefaultRuntimeOrchestrator as unknown as {
+      mapExecutionStatusToRunStatus(status: Execution["status"] | "unknown"): string;
+    };
+    expect(
+      (["running", "completed", "failed", "waiting", "suspended", "unknown"] as const).map((status) =>
+        staticHarness.mapExecutionStatusToRunStatus(status),
+      ),
+    ).toEqual(["running", "completed", "failed", "suspended", "suspended", "running"]);
+
+    const noStorage = new DefaultRuntimeOrchestrator({
+      cellManager: createCellManager([]),
+      policyEngine: createPolicyEngine(),
+    }) as unknown as RuntimePersistenceHarness;
+    const now = new Date("2026-05-08T00:00:00.000Z");
+    const noStorageExecution: Execution = {
+      id: "exec-no-storage",
+      workflowName: "wf",
+      status: "completed",
+      input: null,
+      startedAt: now,
+      endedAt: now,
+      stepOrder: [],
+      completedSteps: [],
+      stepRecords: {},
+      outputs: {},
+    };
+    await noStorage.persistRun(noStorageExecution);
+    await noStorage.persistStep(noStorageExecution, "missing");
+    await noStorage.captureArtifacts("run", "step", { answer: true }, []);
+    await noStorage.recordAudit("run", "execution_end", { ok: true });
+
+    const storage = createInMemoryStorageAdapter();
+    const saveRun = vi.spyOn(storage, "saveRun");
+    const saveStep = vi.spyOn(storage, "saveStep");
+    const saveAuditEvent = vi.spyOn(storage, "saveAuditEvent");
+    const orchestrator = new DefaultRuntimeOrchestrator({
+      cellManager: createCellManager([]),
+      policyEngine: createPolicyEngine(),
+      storageAdapter: storage,
+    }) as unknown as RuntimePersistenceHarness;
+    const codedError = Object.assign(new Error("coded failure"), { code: "E_CODE" });
+    const result = {
+      success: false,
+      output: { failed: true },
+      stateChanges: [],
+      toolCalls: [],
+      metrics: {
+        startTime: now,
+        endTime: now,
+        durationMs: 0,
+        toolCallCount: 0,
+      },
+    } satisfies CellResult;
+    const execution: Execution = {
+      id: "exec-persist",
+      workflowName: "wf",
+      status: "waiting",
+      input: ["array-input"],
+      startedAt: now,
+      endedAt: now,
+      stepOrder: ["pending", "failedStructured", "failedCoded", "failedPlain"],
+      completedSteps: [],
+      stepRecords: {
+        pending: { stepName: "pending", status: "pending" },
+        failedStructured: {
+          stepName: "failedStructured",
+          status: "failed",
+          startedAt: now,
+          endedAt: new Date("2026-05-08T00:00:00.010Z"),
+          result,
+          error: "structured",
+          recovery: {
+            status: "failed",
+            strategy: "retry",
+            error: { code: "E_STRUCT", message: "structured", stack: "trace" } as unknown as Error,
+          },
+        },
+        failedCoded: {
+          stepName: "failedCoded",
+          status: "failed",
+          startedAt: now,
+          endedAt: now,
+          error: "coded",
+          recovery: { status: "failed", strategy: "retry", error: codedError },
+        },
+        failedPlain: {
+          stepName: "failedPlain",
+          status: "failed",
+          startedAt: now,
+          endedAt: now,
+          error: "plain",
+          recovery: { status: "failed", strategy: "retry", error: new Error("plain failure") },
+        },
+      },
+      outputs: {},
+      metadata: { source: "test" },
+    };
+
+    await orchestrator.persistRun(execution);
+    await orchestrator.persistStep(execution, "pending");
+    await orchestrator.persistStep(execution, "failedStructured");
+    await orchestrator.persistStep(execution, "failedCoded");
+    await orchestrator.persistStep(execution, "failedPlain");
+    await orchestrator.recordAudit("exec-persist", "execution_end", { status: "waiting" }, { cellId: "cell-1" });
+
+    expect(saveRun).toHaveBeenCalledWith(expect.objectContaining({
+      id: "exec-persist",
+      status: "suspended",
+      input: { value: ["array-input"] },
+    }));
+    expect(saveStep.mock.calls.map((call) => call[0])).toEqual([
+      expect.objectContaining({ stepName: "pending", status: "running", startedAt: expect.any(String) }),
+      expect.objectContaining({
+        stepName: "failedStructured",
+        error: { code: "E_STRUCT", message: "structured", stack: "trace" },
+        durationMs: 10,
+      }),
+      expect.objectContaining({
+        stepName: "failedCoded",
+        error: expect.objectContaining({ code: "E_CODE", message: "coded failure" }),
+      }),
+      expect.objectContaining({
+        stepName: "failedPlain",
+        error: expect.objectContaining({ code: "STEP_ERROR", message: "plain failure" }),
+      }),
+    ]);
+    expect(orchestrator.toStepError({})).toEqual({ code: "STEP_ERROR", message: "Unknown error" });
+    expect(saveAuditEvent).toHaveBeenCalledOnce();
   });
 
 });

@@ -88,6 +88,41 @@ describe("expand command contracts", () => {
     );
   });
 
+  it("prints expanded workflow and stop semantics for normal output", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createExpandCommand();
+
+    await cmd.parseAsync(["demo.yaml"], { from: "user" });
+
+    const output = log.mock.calls.map((args) => args.join(" ")).join("\n");
+    expect(output).toContain("Expanded workflow: wf");
+    expect(output).toContain("Stop semantics:");
+    expect(output).toContain('"mode": "validation-repair"');
+  });
+
+  it("omits stop semantics when the source does not define them", async () => {
+    vi.mocked(Workflow.getStopSemantics).mockReturnValue(undefined);
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const cmd = createExpandCommand();
+
+    await cmd.parseAsync(["demo.yaml"], { from: "user" });
+
+    const output = log.mock.calls.map((args) => args.join(" ")).join("\n");
+    expect(output).toContain("Expanded workflow: wf");
+    expect(output).not.toContain("Stop semantics:");
+  });
+
+  it("suppresses normal output when root --quiet is set", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const root = new Command("obora").option("--quiet");
+    root.addCommand(createExpandCommand());
+
+    await root.parseAsync(["--quiet", "expand", "demo.yaml"], { from: "user" });
+
+    expect(log).not.toHaveBeenCalled();
+  });
+
   it("uses validation exit code for missing expand source without generic hints", async () => {
     vi.mocked(readFile).mockRejectedValue(
       new Error("ENOENT: no such file or directory, open 'missing.yaml'")
@@ -107,6 +142,34 @@ describe("expand command contracts", () => {
     );
   });
 
+  it("uses execution-failed exit code for read failures other than missing files", async () => {
+    vi.mocked(readFile).mockRejectedValue(new Error("EACCES: permission denied, open 'secret.yaml'"));
+
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const cmd = createExpandCommand();
+
+    await cmd.parseAsync(["secret.yaml"], { from: "user" });
+
+    expect(process.exit).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(ExitCode.EXECUTION_FAILED);
+    expect(error).toHaveBeenCalled();
+  });
+
+  it("normalizes non-Error read failures", async () => {
+    vi.mocked(readFile).mockRejectedValue("permission denied");
+
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const cmd = createExpandCommand();
+
+    await cmd.parseAsync(["secret.yaml"], { from: "user" });
+
+    expect(process.exit).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(ExitCode.EXECUTION_FAILED);
+    expect(error.mock.calls.map((args) => args.join(" ")).join("\n")).toContain(
+      "Failed to read expand source: permission denied"
+    );
+  });
+
   it("uses execution-failed exit code for workflow expansion failures", async () => {
     vi.mocked(Workflow.fromYaml).mockRejectedValue(new Error("schema invalid"));
 
@@ -118,6 +181,21 @@ describe("expand command contracts", () => {
     expect(process.exit).not.toHaveBeenCalled();
     expect(process.exitCode).toBe(ExitCode.EXECUTION_FAILED);
     expect(error).toHaveBeenCalled();
+  });
+
+  it("normalizes non-Error workflow expansion failures", async () => {
+    vi.mocked(Workflow.fromYaml).mockRejectedValue("schema invalid");
+
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const cmd = createExpandCommand();
+
+    await cmd.parseAsync(["demo.yaml"], { from: "user" });
+
+    expect(process.exit).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(ExitCode.EXECUTION_FAILED);
+    expect(error.mock.calls.map((args) => args.join(" ")).join("\n")).toContain(
+      "Failed to expand workflow: schema invalid"
+    );
   });
 
   it("uses validation exit code for invalid expand yaml", async () => {

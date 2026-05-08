@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { StepExecutionEngine } from "../step-execution-engine.js";
 import { OboraError } from "../../runtime-types.js";
-import type { EventBus } from "../../events/event-bus.js";
-import type { RepairLoopTracker } from "../repair-loop-tracker.js";
+import { EventBus } from "../../events/event-bus.js";
+import { RepairLoopTracker } from "../repair-loop-tracker.js";
 import type { StepExecutor } from "../../step-executor.js";
 import type { CostTracker } from "../../cost-tracker.js";
 import type { BlackboardManager } from "../../blackboard/blackboard-manager.js";
@@ -12,20 +12,14 @@ import type { RuntimeExecution } from "../../runtime-types.js";
 import type { StorageAdapter } from "@obora/runtime";
 
 function createEngine() {
-  const eventBus: EventBus = { emit: vi.fn().mockResolvedValue(undefined) } as any;
-  const repairLoopTracker: RepairLoopTracker = {
-    recordRepairStarted: vi.fn(),
-    recordRepairCompleted: vi.fn(),
-    recordRepairNoProgress: vi.fn(),
-    recordValidationPass: vi.fn(),
-    recordValidationFailure: vi.fn(),
-    recordBackEdgeTriggered: vi.fn(),
-    recordBackEdgeExhausted: vi.fn(),
-  } as any;
+  const eventBus = new EventBus();
+  vi.spyOn(eventBus, "emit").mockResolvedValue(undefined);
+  const repairLoopTracker = new RepairLoopTracker();
+  vi.spyOn(repairLoopTracker, "recordValidationPass");
 
   const engine = new StepExecutionEngine({
     eventBus,
-    config: { logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } } as any,
+    config: { logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } },
     repairLoopTracker,
   });
 
@@ -278,7 +272,7 @@ describe("StepExecutionEngine - executeSingleStep", () => {
     const stepExecutor = createMockStepExecutor();
     const costTracker: CostTracker = {
       preStepGate: vi.fn().mockResolvedValue(undefined),
-    } as any;
+    } as unknown as CostTracker;
 
     const step: WorkflowStep = { name: "step1", agent: "agent1", input: {} };
     const workflow = createWorkflowDef([step]);

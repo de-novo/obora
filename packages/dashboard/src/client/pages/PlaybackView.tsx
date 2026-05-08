@@ -33,14 +33,14 @@ export const PlaybackView = ({ initialExecutionId }: PlaybackViewProps): ReactEl
   const playback = usePlayback(events);
 
   useEffect(() => {
-    let cancelled = false;
+    const cancellation = { current: false };
 
     const loadExecutions = async (): Promise<void> => {
       try {
         const result = await fetchAuditEvents({ limit: 200, offset: 0 });
         const ids = [...new Set(result.events.map((event) => event.executionId))];
 
-        if (cancelled) {
+        if (cancellation.current) {
           return;
         }
 
@@ -49,7 +49,7 @@ export const PlaybackView = ({ initialExecutionId }: PlaybackViewProps): ReactEl
           setSelectedExecutionId(initialExecutionId && ids.includes(initialExecutionId) ? initialExecutionId : ids[0] ?? '');
         }
       } catch (loadError) {
-        if (!cancelled) {
+        if (!cancellation.current) {
           setError(loadError instanceof Error ? loadError.message : 'execution 목록 로드 실패');
         }
       }
@@ -58,7 +58,7 @@ export const PlaybackView = ({ initialExecutionId }: PlaybackViewProps): ReactEl
     void loadExecutions();
 
     return () => {
-      cancelled = true;
+      cancellation.current = true;
     };
   }, [initialExecutionId, selectedExecutionId]);
 
@@ -68,7 +68,7 @@ export const PlaybackView = ({ initialExecutionId }: PlaybackViewProps): ReactEl
       return;
     }
 
-    let cancelled = false;
+    const cancellation = { current: false };
 
     const loadExecutionEvents = async (): Promise<void> => {
       setLoading(true);
@@ -76,17 +76,17 @@ export const PlaybackView = ({ initialExecutionId }: PlaybackViewProps): ReactEl
 
       try {
         const result = await fetchExecutionEvents(selectedExecutionId, { limit: 500, offset: 0 });
-        if (!cancelled) {
+        if (!cancellation.current) {
           setEvents(result.events);
           playback.stop();
         }
       } catch (loadError) {
-        if (!cancelled) {
+        if (!cancellation.current) {
           setEvents([]);
           setError(loadError instanceof Error ? loadError.message : 'execution 이벤트 조회 실패');
         }
       } finally {
-        if (!cancelled) {
+        if (!cancellation.current) {
           setLoading(false);
         }
       }
@@ -95,7 +95,7 @@ export const PlaybackView = ({ initialExecutionId }: PlaybackViewProps): ReactEl
     void loadExecutionEvents();
 
     return () => {
-      cancelled = true;
+      cancellation.current = true;
     };
   }, [selectedExecutionId]);
 
@@ -107,14 +107,9 @@ export const PlaybackView = ({ initialExecutionId }: PlaybackViewProps): ReactEl
     }
 
     const endIndex = Math.min(playback.currentIndex, events.length - 1);
-    let state = createInitialExecutionStoreState();
-
-    for (let index = 0; index <= endIndex; index += 1) {
-      const event = events[index];
-      if (event) {
-        state = applyExecutionEvent(state, toExecutionEvent(event));
-      }
-    }
+    const state = events
+      .slice(0, endIndex + 1)
+      .reduce((currentState, event) => applyExecutionEvent(currentState, toExecutionEvent(event)), createInitialExecutionStoreState());
 
     return state.executions[selectedExecutionId];
   }, [events, playback.currentIndex, selectedExecutionId]);

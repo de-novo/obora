@@ -191,6 +191,21 @@ export const YamlEditor = ({ policy, onSaved }: YamlEditorProps): ReactElement =
             >
               {isSaving ? '적용 중...' : 'Apply'}
             </button>
+            <button
+              type="button"
+              onClick={() => void handleSave()}
+              disabled={isSaving || !content.trim()}
+              style={{
+                padding: '8px 12px',
+                borderRadius: '8px',
+                border: '1px solid #2563eb',
+                backgroundColor: '#2563eb',
+                color: '#fff',
+                cursor: isSaving ? 'wait' : 'pointer',
+              }}
+            >
+              {isSaving ? '저장 중...' : '저장'}
+            </button>
           </>
         ) : (
           <button

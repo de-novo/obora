@@ -7,7 +7,7 @@
   },
   "@obora/runtime": {
     "statements": 93,
-    "branches": 88,
+    "branches": 90,
     "functions": 90,
     "lines": 93
   },
@@ -19,13 +19,13 @@
   },
   "@obora/cli": {
     "statements": 95,
-    "branches": 89,
+    "branches": 90,
     "functions": 97,
     "lines": 96
   },
   "@obora/dashboard": {
     "statements": 93,
-    "branches": 89,
+    "branches": 90,
     "functions": 93,
     "lines": 93
   }

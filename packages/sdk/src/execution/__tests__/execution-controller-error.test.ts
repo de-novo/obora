@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { ExecutionController } from "../execution-controller.js";
 import type { WorkflowRunner } from "../workflow-runner.js";
+import type { TKGService } from "../tkg-service.js";
 import type { EventBus } from "../../events/event-bus.js";
 import type { PersistenceManager } from "../../persistence/persistence-manager.js";
 import type { OboraRuntimeConfig, RuntimeExecution, AgentFactory } from "../../runtime-types.js";
@@ -46,7 +47,7 @@ describe("ExecutionController Error Handling", () => {
     const controller = new ExecutionController({
       config: makeBaseConfig(),
       runner,
-      tkgService: makeMockTKGService() as any,
+      tkgService: makeMockTKGService() as unknown as TKGService,
       eventBus,
       persistenceManager,
       executions,
@@ -75,7 +76,7 @@ describe("ExecutionController Error Handling", () => {
     const controller = new ExecutionController({
       config: makeBaseConfig(),
       runner,
-      tkgService: tkgService as any,
+      tkgService: tkgService as unknown as TKGService,
       eventBus,
       persistenceManager,
       executions,
@@ -90,7 +91,7 @@ describe("ExecutionController Error Handling", () => {
 
     // Should emit warning about rollback failure
     const warningEmit = vi.mocked(eventBus.emit).mock.calls.find(
-      (call) => (call[2] as any)?.code === "TKG_AUTO_ROLLBACK_FAILED"
+      (call) => (call[2] as { code?: string } | undefined)?.code === "TKG_AUTO_ROLLBACK_FAILED"
     );
     expect(warningEmit).toBeDefined();
   });
@@ -113,7 +114,7 @@ describe("ExecutionController Error Handling", () => {
     const controller = new ExecutionController({
       config: makeBaseConfig(),
       runner,
-      tkgService: tkgService as any,
+      tkgService: tkgService as unknown as TKGService,
       eventBus,
       persistenceManager,
       executions,
@@ -128,7 +129,7 @@ describe("ExecutionController Error Handling", () => {
 
     // Should emit success about rollback
     const successEmit = vi.mocked(eventBus.emit).mock.calls.find(
-      (call) => (call[2] as any)?.code === "TKG_AUTO_ROLLBACK_SUCCESS"
+      (call) => (call[2] as { code?: string } | undefined)?.code === "TKG_AUTO_ROLLBACK_SUCCESS"
     );
     expect(successEmit).toBeDefined();
   });

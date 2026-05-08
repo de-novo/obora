@@ -5,6 +5,19 @@ export default defineConfig({
   test: {
     include: ['src/**/*.test.ts'],
     environment: 'node',
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html'],
+      exclude: [
+        'node_modules/',
+        'dist/',
+        'coverage/',
+        '**/coverage/**',
+        '**/*.test.ts',
+        '**/__tests__/**',
+        '**/*.config.ts',
+      ],
+    },
   },
   resolve: {
     alias: {

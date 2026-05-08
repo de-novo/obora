@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { YamlEditor } from '../YamlEditor';
-import type { PolicyDocument } from '../../api/policy-client';
+import { PolicyApiError, type PolicyDocument } from '../../api/policy-client';
 
 const policyClient = vi.hoisted(() => ({
   createPolicy: vi.fn(),
@@ -99,6 +99,27 @@ describe('YamlEditor', () => {
     expect(screen.getByText('invalid yaml')).toBeTruthy();
   });
 
+  it('renders the fallback validation error when validation rejects with a non-error value', async () => {
+    vi.useFakeTimers();
+    policyClient.validatePolicy.mockRejectedValue('invalid source');
+
+    render(<YamlEditor onSaved={vi.fn()} />);
+
+    fireEvent.change(screen.getByPlaceholderText('YAML 정책을 입력하세요'), {
+      target: { value: 'invalid: true' },
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(350);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText('검증 중 알 수 없는 오류가 발생했습니다.')).toBeTruthy();
+  });
+
   it('previews diffs and applies hot reload for existing policies', async () => {
     const onSaved = vi.fn();
     const updated: PolicyDocument = {
@@ -136,5 +157,88 @@ describe('YamlEditor', () => {
       revision: 'rev-1',
     });
     expect(screen.getByText('현재 revision: rev-2')).toBeTruthy();
+  });
+
+  it('saves updates for existing policies without requiring hot reload', async () => {
+    const onSaved = vi.fn();
+    const updated: PolicyDocument = {
+      ...basePolicy,
+      name: 'Updated Guardrail',
+      content: 'allow: false',
+      revision: 'rev-2',
+    };
+    policyClient.updatePolicy.mockResolvedValue(updated);
+
+    render(<YamlEditor policy={basePolicy} onSaved={onSaved} />);
+
+    fireEvent.change(screen.getByLabelText('이름'), { target: { value: 'Updated Guardrail' } });
+    fireEvent.change(screen.getByPlaceholderText('YAML 정책을 입력하세요'), {
+      target: { value: 'allow: false' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(updated, 'update'));
+    expect(policyClient.updatePolicy).toHaveBeenCalledWith('policy-1', {
+      name: 'Updated Guardrail',
+      content: 'allow: false',
+      revision: 'rev-1',
+    });
+  });
+
+  it('renders revision conflict messages when existing policy saves fail with 409', async () => {
+    policyClient.updatePolicy.mockRejectedValue(new PolicyApiError('revision conflict', 409));
+
+    render(<YamlEditor policy={basePolicy} onSaved={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
+
+    expect(await screen.findByText('저장 충돌이 발생했습니다(409). 최신 정책을 다시 불러온 뒤 저장해 주세요.')).toBeTruthy();
+  });
+
+  it('surfaces preview and hot-reload fallback errors', async () => {
+    policyClient.diffPolicy.mockRejectedValue('diff failed');
+    policyClient.reloadPolicy.mockResolvedValue({ success: true });
+
+    render(<YamlEditor policy={basePolicy} onSaved={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Changes' }));
+    expect(await screen.findByText('diff 조회 중 오류가 발생했습니다.')).toBeTruthy();
+  });
+
+  it('surfaces API error messages for validation, preview, and hot reload failures', async () => {
+    vi.useFakeTimers();
+    policyClient.validatePolicy.mockRejectedValueOnce(new Error('validator unavailable'));
+    policyClient.diffPolicy
+      .mockRejectedValueOnce(new Error('diff unavailable'))
+      .mockResolvedValueOnce({
+        currentRevision: 'rev-1',
+        diff: { summary: '1 change', changes: [{ path: 'allow', type: 'modified', oldValue: true, newValue: false }] },
+      });
+    policyClient.reloadPolicy.mockRejectedValueOnce(new Error('reload unavailable'));
+
+    render(<YamlEditor policy={basePolicy} onSaved={vi.fn()} />);
+
+    fireEvent.change(screen.getByPlaceholderText('YAML 정책을 입력하세요'), {
+      target: { value: 'allow: maybe' },
+    });
+    act(() => {
+      vi.advanceTimersByTime(350);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText('validator unavailable')).toBeTruthy();
+    vi.useRealTimers();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Changes' }));
+    expect(await screen.findByText('diff unavailable')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Changes' }));
+    expect(await screen.findByText('1 change')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    expect(await screen.findByText('reload unavailable')).toBeTruthy();
   });
 });

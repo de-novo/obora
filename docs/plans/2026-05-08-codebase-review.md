@@ -13,15 +13,15 @@
 | --- | --- | --- |
 | `pnpm typecheck` | PASS | 5 package typecheck tasks completed. |
 | `pnpm lint` | PASS | Existing lint gate passed before the review-gate fixes. |
-| `pnpm test` | PASS | 5 workspace packages passed: adapters 181, runtime 1214, sdk 805, dashboard 206, cli 624 tests. |
-| `pnpm verify:coverage` | PASS | Package coverage floors are all above enforced thresholds after the TypeScript 6 / Vitest 4 upgrade. Required escalated local run because dashboard tests bind `127.0.0.1`. |
+| `pnpm test` | PASS | 5 workspace packages passed: adapters 181, runtime 1223, sdk 805, dashboard 211, cli 630 tests. Required local port binding because dashboard server tests bind `127.0.0.1`. |
+| `pnpm verify:coverage` | PASS | Every package is now above 90% for statements, branches, functions, and lines. Required local port binding because dashboard tests bind `127.0.0.1`. |
 | `pnpm build` | PASS | All 5 build tasks passed. |
 | `pnpm verify:smoke` | PASS | Passed with local port binding allowed; the pure sandbox blocks dashboard bootstrap listen with `EPERM`. |
 | `pnpm verify:release` | PASS | Passed after the doc-snippet verifier stopped generating deprecated TS 6 `baseUrl`. |
 | `pnpm verify:compat` | PASS | Compat/deprecation inventory is tracked by allowlist. |
-| `pnpm verify:test-type-debt` | PASS | Test type debt remains tracked by allowlist; one `as any` allowance was removed in this follow-up. |
-| `pnpm verify:deps` | PASS | Package manifests now reject deprecated pi packages and drift in managed dependency ranges. |
-| `pnpm verify:functional` | PASS | New non-test `let` / `for (` debt is blocked by a baseline gate. |
+| `pnpm verify:test-type-debt` | PASS | SDK/CLI/runtime test type debt allowlist is empty. |
+| `pnpm verify:deps` | PASS | Package manifests reject deprecated pi packages and drift in managed dependency ranges. |
+| `pnpm verify:functional` | PASS | File-level ratchet is locked at `mutableBinding=314/314`, `loopStatement=501/501`, 187 baseline entries. |
 | `pnpm verify:sdk-public-api` | PASS | SDK no-console and public API snapshot passed. |
 | `pnpm audit --audit-level moderate` | PASS | No known vulnerabilities found. |
 | `bash scripts/review-gate-selftest.sh` | PASS | Selftest now covers coverage-output exclusion and canonical sandbox artifact smoke. |
@@ -29,17 +29,17 @@
 
 ## Coverage Evidence
 
-`pnpm verify:coverage` currently reports every package above the package-specific floors in `scripts/coverage/thresholds.json`. After the TypeScript 6 / Vitest 4 / V8 coverage update, statements, functions, and lines remain above 90% across packages. Branch coverage is still below 90% for runtime, CLI, and dashboard, so the 90% branch target remains an explicit coverage-debt item instead of a completed claim.
+`pnpm verify:coverage` now reports every package above 90% for statements, branches, functions, and lines. `scripts/coverage/thresholds.json` enforces 90% branch floors for runtime, CLI, and dashboard, so the previous branch-coverage debt is now blocked by the gate.
 
 | Package | Statements | Branches | Functions | Lines |
 | --- | ---: | ---: | ---: | ---: |
 | `@obora/sdk` | 97.09% | 91.07% | 97.04% | 97.57% |
-| `@obora/runtime` | 93.65% | 88.73% | 92.93% | 93.88% |
+| `@obora/runtime` | 95.04% | 90.00% | 95.15% | 95.23% |
 | `@obora/adapters` | 96.25% | 92.76% | 98.06% | 96.87% |
-| `@obora/cli` | 95.47% | 89.70% | 97.94% | 96.11% |
-| `@obora/dashboard` | 93.62% | 89.42% | 93.12% | 93.70% |
+| `@obora/cli` | 95.74% | 90.01% | 98.12% | 96.40% |
+| `@obora/dashboard` | 94.14% | 90.15% | 93.49% | 94.26% |
 
-The enforced post-upgrade floors are lower than the previous branch floors only where Vitest/V8 measurement changed; the gate now prevents new regressions from this baseline.
+The enforced branch floors are now at least 90 for every package in `scripts/coverage/thresholds.json`.
 
 ## Findings
 
@@ -95,6 +95,7 @@ The enforced post-upgrade floors are lower than the previous branch floors only 
   - `pnpm --filter @obora/adapters typecheck`: PASS
   - `pnpm --filter @obora/adapters test`: PASS
   - `pnpm --filter @obora/runtime typecheck`: PASS
+  - `pnpm outdated -r --format json`: `{}` with registry access
 
 ### RG-004 - EffectTS was not part of the implementation baseline
 
@@ -106,6 +107,7 @@ The enforced post-upgrade floors are lower than the previous branch floors only 
   - `packages/runtime` now depends on `effect@^3.21.2`.
   - Workflow parse/validate has an Effect boundary via `parseAndValidateEffect`.
   - The existing synchronous `parseAndValidate` API remains backward-compatible by running the Effect boundary synchronously.
+  - `AGENTS.md` now requires new workflow validation, policy evaluation, config parsing, and step-execution boundaries to consider additive EffectTS APIs first.
 - Remaining plan:
   1. Expand Effect usage into workflow validation internals, policy evaluation, config parsing, and step execution.
   2. Keep new Effect APIs additive until public API migration is explicitly planned.
@@ -115,8 +117,8 @@ The enforced post-upgrade floors are lower than the previous branch floors only 
 
 - Severity: P2 partially fixed
 - Evidence:
-  - `rg --count-matches '\blet\b' packages scripts ...`: 567 matches.
-  - `rg --count-matches '\bfor\s*(await\s*)?\(' packages scripts ...`: 588 matches.
+  - `pnpm verify:functional`: PASS.
+  - Current non-test source baseline: `mutableBinding=314/314`, `loopStatement=501/501`, 187 file entries.
 - Top `let` hotspots:
   - `packages/sdk/src/step-executor.ts`: 12
   - `packages/cli/src/commands/run.ts`: 11
@@ -132,35 +134,30 @@ The enforced post-upgrade floors are lower than the previous branch floors only 
   - `packages/sdk/src/step-executor.ts`: 11
 - Fix applied:
   - Added `scripts/release/verify-functional-policy.mjs`.
+  - Added `scripts/release/functional-policy-baseline.json`.
   - Added `pnpm verify:functional`.
   - Release verification now runs the functional policy gate.
-  - Current non-test baseline is locked at `mutableBinding=318` and `loopStatement=502`; new debt above that baseline fails the gate.
+  - The gate now compares per-file counts, so new source files have a zero budget and existing files may only decrease their counts unless the baseline is intentionally rebaselined.
+  - `packages/dashboard/src/client/pages/PlaybackView.tsx` was refactored from cancellation `let` variables and an indexed `for` loop to a const cancellation cell plus `reduce`, lowering the baseline from `318/502` to `314/501`.
 - Remaining plan:
   1. Reduce the baseline in small patches, starting with runtime parser/graph/orchestrator and SDK step execution.
   2. Allow focused exceptions only for performance-sensitive or unavoidable interop code with a short inline reason.
   3. Convert loop-heavy pure transforms to `ReadonlyArray` combinators, `Object.entries().map/filter/reduce`, `Map` builders wrapped in pure helpers, and `Effect.forEach` where async sequencing matters.
   4. Convert mutable workflow state with `Effect.Ref`, `Effect.acquireRelease`, or explicit immutable state transitions.
 
-### RG-006 - Test type debt is tracked but still present
+### RG-006 - Test type debt allowlist existed
 
-- Severity: P2 partially fixed
+- Severity: P2 fixed
 - Evidence:
-  - `scripts/release/test-type-debt-allowlist.txt` initially allowed 67 `as any` test occurrences.
-  - `pnpm verify:test-type-debt`: PASS, so the debt is bounded but not removed.
+  - `scripts/release/test-type-debt-allowlist.txt` previously allowed SDK/CLI test `as any` debt.
+  - `pnpm verify:test-type-debt`: PASS.
 - Fix applied:
-  - Removed the focused `as any` from `packages/sdk/src/execution/strategies/__tests__/judge-strategy.test.ts`.
-  - Removed the corresponding allowlist entry.
+  - Removed all SDK/CLI allowlist entries.
+  - Replaced broad test casts with typed fixtures, `vi.mocked`, concrete test doubles, and narrow `unknown as ConcreteType` boundaries where external interfaces require them.
+  - `scripts/release/test-type-debt-allowlist.txt` is now only the header row.
 - Current state:
-  - Remaining allowlist total is 66.
-- Largest allowlisted groups:
-  - `execution-controller-advanced`: 20
-  - `run-orchestrator`: 12
-  - `tkg-service`: 10
-  - `resume-orchestrator`: 7
-- Plan:
-  1. Create typed fixture builders for execution controller, orchestrator run context, and TKG service responses.
-  2. Remove allowlist entries package by package.
-  3. Keep `verify:test-type-debt` as a hard regression gate.
+  - SDK/CLI/runtime remain clean under `pnpm verify:test-type-debt`.
+  - Future `as any`, `@ts-ignore`, or `@ts-expect-error` debt in those surfaces fails the gate unless an explicit allowlist entry is added.
 
 ### RG-007 - Public/internal deprecated surfaces remain intentionally retained
 
@@ -196,13 +193,14 @@ The enforced post-upgrade floors are lower than the previous branch floors only 
   - Removed TS `baseUrl` usage from repo tsconfigs and the doc-snippet verifier so TS 6 release checks pass.
 - Current state:
   - Dependency policy, typecheck, test, build, smoke, review-gate, and release verification all pass.
+  - `pnpm outdated -r --format json`: `{}` with registry access on 2026-05-08.
   - Monitor future package payload-size impact after runtime/adapters dependency changes.
 
 ### RG-009 - Dependency version management is manual
 
 - Severity: P3 fixed
 - Evidence:
-  - Duplicate package specs are mostly consistent today; the only intentionally different spec detected is `typescript` dev dependency `^5.9.3` versus peer dependency `>=5.0.0`.
+  - Duplicate package specs are mostly consistent today; the intentionally different TypeScript specs are root/runtime dev dependency `^6.0.3` versus runtime peer dependency `>=5.0.0`.
   - The workspace does not use a centralized pnpm catalog for shared version ranges.
 - Fix applied:
   - Attempted pnpm catalog first, but `packageManager: pnpm@9.0.0` does not support `catalog:` specs in this checkout.
@@ -235,6 +233,7 @@ The enforced post-upgrade floors are lower than the previous branch floors only 
   1. Keep documenting server-binding gates as local-runtime gates, not pure sandbox gates.
   2. If CI needs a stricter split, separate dashboard no-listen unit tests from server/bootstrap tests.
   3. Do not mark these as product failures unless they fail outside the sandbox.
+  4. `AGENTS.md` now requires recording both the sandbox `EPERM` and the successful local-runtime result.
 
 ## Improvement Roadmap
 
@@ -247,12 +246,15 @@ The enforced post-upgrade floors are lower than the previous branch floors only 
 - Migrate deprecated `@mariozechner/pi-ai` and `@mariozechner/pi-agent-core` to `@earendil-works/*`.
 - Add dependency and functional policy gates to release verification.
 - Add the first runtime Effect boundary.
-- Remove one tracked SDK test `as any` debt item.
+- Remove SDK/CLI test type debt allowlist entries.
+- Raise runtime, CLI, and dashboard branch coverage to 90% or higher and enforce 90% branch floors.
+- Restore existing dashboard policy editing by wiring the existing-policy save button to `updatePolicy`.
+- Add root `AGENTS.md` guardrails for coverage, type debt, functional TypeScript, EffectTS boundaries, dependency freshness, compat inventory, and sandbox/local-runtime proof.
 
 ### Phase 1 - No-new-debt ratchet
 
 - Reduce the `verify:functional` baseline in small patches.
-- Continue removing `verify:test-type-debt` allowlist entries.
+- Keep `verify:test-type-debt` allowlist empty.
 - Keep dependency policy ranges current after every package update.
 
 ### Phase 2 - Provider migration hardening
@@ -270,8 +272,8 @@ The enforced post-upgrade floors are lower than the previous branch floors only 
 
 ### Phase 4 - Type/test debt cleanup
 
-- Replace `as any` test debt with typed builders.
-- Remove allowlist entries in small reviewable patches.
+- Keep test type debt at zero.
+- Add typed builders before broadening execution-controller, orchestrator, or TKG service tests.
 - Keep `verify:test-type-debt` hard.
 
 ### Phase 5 - Completed major dependency upgrade lane
@@ -306,3 +308,32 @@ rg --count-matches '\bfor\s*(await\s*)?\(' packages scripts --glob '!**/node_mod
 rg -n '"effect"|"@effect/' package.json packages/*/package.json
 rg -n '@deprecated' packages/runtime/src packages/adapters/src packages/sdk/src packages/cli/src --glob '!**/__tests__/**'
 ```
+
+## Final Follow-up Evidence
+
+These commands were rerun after the debt cleanup in this follow-up:
+
+```bash
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm verify:coverage
+pnpm build
+pnpm verify:release
+pnpm verify:smoke
+pnpm audit --audit-level moderate
+pnpm outdated -r --format json
+pnpm verify:deps
+pnpm verify:compat
+pnpm verify:functional
+pnpm verify:test-type-debt
+bash scripts/review-gate.sh
+```
+
+Current final results:
+
+- `pnpm verify:coverage`: PASS with package branch coverage at SDK 91.07%, runtime 90.00%, adapters 92.76%, CLI 90.01%, dashboard 90.15%.
+- `pnpm verify:functional`: PASS with `mutableBinding=314/314`, `loopStatement=501/501`, 187 file baseline entries.
+- `pnpm verify:test-type-debt`: PASS with an empty allowlist.
+- `pnpm outdated -r --format json`: `{}` with registry access.
+- `pnpm verify:smoke` and `bash scripts/review-gate.sh`: PASS with local port binding allowed.

@@ -7,13 +7,14 @@ import type { EngineBuilder } from "../engine-builder.js";
 import type { StepExecutionEngine } from "../step-execution-engine.js";
 import type { RepairLoopTracker } from "../repair-loop-tracker.js";
 import type { StorageAdapter } from "@obora/runtime";
+import type { HookExecutionResult } from "../../hooks.js";
 
 const RESUME_TEST_TIMEOUT_MS = 10_000;
 
 function createMockDeps() {
   const eventBus: EventBus = {
     emit: vi.fn().mockResolvedValue(undefined),
-  } as any;
+  } as unknown as EventBus;
 
   const engineBuilder: EngineBuilder = {
     build: vi.fn().mockResolvedValue({
@@ -22,16 +23,16 @@ function createMockDeps() {
       },
       costTracker: undefined,
     }),
-  } as any;
+  } as unknown as EngineBuilder;
 
   const stepExecutionEngine: StepExecutionEngine = {
     runStepHook: vi.fn().mockResolvedValue(undefined),
-  } as any;
+  } as unknown as StepExecutionEngine;
 
   const repairLoopTracker: RepairLoopTracker = {
     getSummary: vi.fn().mockReturnValue(undefined),
     clearSummary: vi.fn(),
-  } as any;
+  } as unknown as RepairLoopTracker;
 
   return {
     deps: {
@@ -265,7 +266,7 @@ describe("ResumeOrchestrator - executeResume", () => {
         executeStep: vi.fn().mockRejectedValue(new Error("step failed")),
       },
       costTracker: undefined,
-    } as any);
+    } as never);
 
     await expect(
       orchestrator.executeResume(
@@ -291,7 +292,7 @@ describe("ResumeOrchestrator - executeResume", () => {
         executeStep: vi.fn().mockRejectedValue(new (await import("../../cost-tracker.js")).BudgetExceededError("budget exceeded")),
       },
       costTracker: undefined,
-    } as any);
+    } as never);
 
     await expect(
       orchestrator.executeResume(
@@ -333,8 +334,18 @@ describe("ResumeOrchestrator - executeResume", () => {
     };
     const adapter = createMockAdapter();
 
-    const hookResult = { success: true, command: "test", exitCode: 0, stdout: "", stderr: "", durationMs: 0 };
-    vi.mocked(mockDeps.stepExecutionEngine.runStepHook).mockResolvedValue(hookResult as any);
+    const hookResult = {
+      success: true,
+      lifecycle: "pre_step",
+      command: "test",
+      cwd: process.cwd(),
+      exitCode: 0,
+      signal: null,
+      stdout: "",
+      stderr: "",
+      durationMs: 0,
+    } satisfies HookExecutionResult;
+    vi.mocked(mockDeps.stepExecutionEngine.runStepHook).mockResolvedValue(hookResult);
 
     await orchestrator.executeResume(
       "run-1", "test", workflow, {},

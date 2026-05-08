@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { AuditEvent } from "../../audit/types.js";
-import { __internal as dynamicQuotaInternal, evaluateDynamicResourceDecision } from "../DynamicQuotaEvaluator.js";
+import {
+  __internal as dynamicQuotaInternal,
+  evaluateDynamicResourceDecision,
+  getEffectiveStaticLimit,
+  getStaticReason,
+  getStaticRulePath,
+} from "../DynamicQuotaEvaluator.js";
 import { buildDynamicPolicyVars } from "../DynamicPolicyContext.js";
 import { __internal as dynamicToolInternal, resolveDynamicToolRule } from "../DynamicToolPolicy.js";
 import { DefaultPolicyEngine } from "../DefaultPolicyEngine.js";
@@ -365,6 +371,67 @@ describe("Dynamic policy - P2 補強", () => {
     );
 
     expect(decision.type).toBe("gate");
+  });
+
+  it("evaluates every dynamic quota field and returns static metadata mappings", () => {
+    const action = { type: "resource_use", name: "runtime" } as const;
+    const policy = {
+      maxTokens: 10,
+      maxCostUsd: 5,
+      maxToolCalls: 2,
+      timeoutMs: 100,
+      dynamicQuota: {
+        limits: [
+          { field: "tokens" as const, condition: "context.currentTokens > 0", limit: 10, action: "deny" as const },
+          { field: "tool_calls" as const, condition: "context.currentToolCalls > 0", limit: 1, action: "warn" as const },
+          { field: "duration_ms" as const, condition: "context.currentDurationMs > 0", limit: 50, action: "gate" as const },
+        ],
+      },
+    };
+    const policyFor = (index: number) => ({
+      ...policy,
+      dynamicQuota: { limits: [policy.dynamicQuota.limits[index]!] },
+    });
+
+    expect(evaluateDynamicResourceDecision(policyFor(0), action, { currentTokens: 11 })).toMatchObject({
+      type: "deny",
+      reason: "Token limit exceeded",
+      rule: "resources.dynamic.tokens",
+    });
+    expect(evaluateDynamicResourceDecision(policyFor(1), action, { currentToolCalls: 2 })).toMatchObject({
+      type: "allow",
+      warning: {
+        reason: "Tool call limit exceeded (dynamic)",
+        rule: "resources.dynamic.tool_calls",
+        field: "tool_calls",
+        limit: 1,
+        current: 2,
+      },
+    });
+    expect(evaluateDynamicResourceDecision(policyFor(2), action, { currentDurationMs: 51 })).toMatchObject({
+      type: "gate",
+      gateType: "human-approval",
+      config: {
+        reason: "Timeout exceeded (dynamic)",
+        rule: "resources.dynamic.duration_ms",
+        field: "duration_ms",
+        current: 51,
+      },
+    });
+    expect(evaluateDynamicResourceDecision(policyFor(0), action, { currentTokens: 0 })).toBeNull();
+    expect(
+      (["tokens", "cost", "tool_calls", "duration_ms"] as const).map((field) => ({
+        field,
+        limit: getEffectiveStaticLimit(policy, field),
+        rule: getStaticRulePath(field),
+        reason: getStaticReason(field),
+      })),
+    ).toEqual([
+      { field: "tokens", limit: 10, rule: "resources.maxTokens", reason: "Token limit exceeded" },
+      { field: "cost", limit: 5, rule: "resources.maxCostUsd", reason: "Cost limit exceeded" },
+      { field: "tool_calls", limit: 2, rule: "resources.maxToolCalls", reason: "Tool call limit exceeded" },
+      { field: "duration_ms", limit: 100, rule: "resources.timeoutMs", reason: "Timeout exceeded" },
+    ]);
   });
 
   it("dynamic tool rule with gate config uses rule.gate fields", () => {

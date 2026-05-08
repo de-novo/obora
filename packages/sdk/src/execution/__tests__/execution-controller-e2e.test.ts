@@ -3,9 +3,10 @@ import { ExecutionController } from "../execution-controller.js";
 import { OboraError, OboraErrorCode } from "../../runtime-types.js";
 import type { WorkflowRunner } from "../workflow-runner.js";
 import type { TKGService } from "../tkg-service.js";
+import type { ExecutionLock } from "../execution-lock.js";
 import type { EventBus } from "../../events/event-bus.js";
 import type { PersistenceManager } from "../../persistence/persistence-manager.js";
-import type { RuntimeExecution } from "../../runtime-types.js";
+import type { OboraRuntimeConfig, RuntimeExecution } from "../../runtime-types.js";
 import type { WorkflowDef } from "../../workflow.js";
 
 function createMockRunner(): WorkflowRunner {
@@ -62,7 +63,7 @@ function createController() {
     config: {
       logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
       config: {},
-    } as any,
+    } satisfies OboraRuntimeConfig,
     runner,
     tkgService,
     eventBus,
@@ -79,7 +80,7 @@ describe("ExecutionController E2E - Cancel", () => {
 
     let resolveRun: () => void;
     const runPromise = new Promise<void>((r) => { resolveRun = r; });
-    vi.mocked(runner.executeRun).mockReturnValue(runPromise as any);
+    vi.mocked(runner.executeRun).mockReturnValue(runPromise);
 
     const workflow = createWorkflowDef();
     const handle = await controller.start("test", workflow, {}, new Map(), new Map());
@@ -109,7 +110,7 @@ describe("ExecutionController E2E - Timeout", () => {
 
     let resolveRun: () => void;
     const runPromise = new Promise<void>((r) => { resolveRun = r; });
-    vi.mocked(runner.executeRun).mockReturnValue(runPromise as any);
+    vi.mocked(runner.executeRun).mockReturnValue(runPromise);
 
     const workflow = createWorkflowDef();
     const handle = await controller.start("test", workflow, {
@@ -138,12 +139,12 @@ describe("ExecutionController E2E - Lock contention", () => {
     };
 
     const controller = new ExecutionController({
-      config: { logger: { warn: vi.fn() } } as any,
+      config: { logger: { warn: vi.fn() } } satisfies OboraRuntimeConfig,
       runner: createMockRunner(),
       tkgService: createMockTKGService(),
       eventBus: createMockEventBus(),
       persistenceManager: createMockPersistenceManager(),
-      executionLock,
+      executionLock: executionLock as unknown as ExecutionLock,
       executions: new Map(),
     });
 

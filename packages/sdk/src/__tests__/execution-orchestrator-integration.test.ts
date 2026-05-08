@@ -10,6 +10,7 @@ import { TKGPromotionEngine } from "../execution/tkg-promotion-engine.js";
 import { EngineBuilder } from "../execution/engine-builder.js";
 import { StepExecutionEngine } from "../execution/step-execution-engine.js";
 import { RepairLoopTracker } from "../execution/repair-loop-tracker.js";
+import type { StorageAdapter } from "@obora/runtime";
 
 describe("ExecutionOrchestrator", () => {
   const createMockEventBus = (): EventBus =>
@@ -173,10 +174,10 @@ describe("ExecutionOrchestrator", () => {
           () => false
         );
 
-        const eventBus = deps.eventBus as any;
-        const emits = eventBus.emit.mock.calls;
-        const startEmit = emits.find((call: any) => call[0] === "execution_start");
+        const emits = vi.mocked(deps.eventBus.emit).mock.calls;
+        const startEmit = emits.find((call) => call[0] === "execution_start");
         expect(startEmit).toBeDefined();
+        if (!startEmit) throw new Error("Expected execution_start event");
         expect(startEmit[1]).toBe(executionId);
         expect(startEmit[2]).toMatchObject({
           workflowName: workflow.name,
@@ -218,7 +219,7 @@ describe("ExecutionOrchestrator", () => {
             { stepName: "step-1", action: "restore", output: "restored output" },
           ],
           { policyId: "policy-1", hash: "hash-1" },
-          adapter as any
+          adapter as unknown as StorageAdapter
         );
 
         expect(result).toBeDefined();
@@ -258,7 +259,7 @@ describe("ExecutionOrchestrator", () => {
             { stepName: "step-1", action: "skip" },
           ],
           { policyId: "policy-1", hash: "hash-1" },
-          adapter as any
+          adapter as unknown as StorageAdapter
         );
 
         expect(result).toBeDefined();

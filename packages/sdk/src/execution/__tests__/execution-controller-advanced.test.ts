@@ -8,8 +8,10 @@ import type { EventBus } from "../../events/event-bus.js";
 import type { PersistenceManager } from "../../persistence/persistence-manager.js";
 import type { DLQStore } from "../../dlq/index.js";
 import type { ExecutionLock } from "../execution-lock.js";
-import type { RuntimeExecution, RunOptions } from "../../runtime-types.js";
+import type { OboraRuntimeConfig, RuntimeExecution, RunOptions } from "../../runtime-types.js";
 import type { WorkflowDef } from "../../workflow.js";
+import type { PolicyDefinition } from "../../policy.js";
+import type { StorageAdapter } from "@obora/runtime";
 
 const mockCheckpointManager = {
   getLatestCheckpoint: vi.fn(),
@@ -88,6 +90,20 @@ function createWorkflowDef(): WorkflowDef {
   };
 }
 
+function createRuntimeExecution(status: RuntimeExecution["status"] = "completed"): RuntimeExecution {
+  return {
+    id: "run-1",
+    workflowName: "test",
+    status,
+    input: {},
+    startedAt: new Date(),
+    stepOrder: [],
+    completedSteps: [],
+    stepRecords: {},
+    outputs: {},
+  };
+}
+
 function createController(opts: Partial<ConstructorParameters<typeof ExecutionController>[0]> = {}) {
   const runner = createMockRunner();
   const tkgService = createMockTKGService();
@@ -103,7 +119,7 @@ function createController(opts: Partial<ConstructorParameters<typeof ExecutionCo
         logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
         config: {},
         autoRecovery: { enabled: false },
-      } as any,
+      } satisfies OboraRuntimeConfig,
       runner,
       tkgService,
       eventBus,
@@ -194,7 +210,7 @@ describe("ExecutionController - Auto-rollback & DLQ", () => {
     );
     expect(warningCalls.length).toBeGreaterThanOrEqual(1);
     expect(warningCalls.some((c) =>
-      (c[2] as any)?.code === "DLQ_ENTRY_CREATED"
+      (c[2] as { code?: string } | undefined)?.code === "DLQ_ENTRY_CREATED"
     )).toBe(true);
   });
 
@@ -236,20 +252,18 @@ describe("ExecutionController - Auto-recovery", () => {
         logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
         config: {},
         autoRecovery: { enabled: true, maxRetries: 2, delayMs: 10 },
-      } as any,
+      } satisfies OboraRuntimeConfig,
     });
     
     vi.mocked(runner.executeRun).mockRejectedValue(new Error("step failed"));
-    vi.mocked(runner.executeResume).mockResolvedValue({
-      execution: { id: "run-1", status: "completed" },
-    } as any);
+    vi.mocked(runner.executeResume).mockResolvedValue(createRuntimeExecution("completed"));
 
     const mockAdapter = {
       getRun: vi.fn().mockResolvedValue({ id: "run-1", status: "failed", workflowName: "test", input: {} }),
       getSteps: vi.fn().mockResolvedValue([]),
       saveRun: vi.fn().mockResolvedValue(undefined),
     };
-    vi.mocked(persistenceManager.getStorageAdapter).mockResolvedValue(mockAdapter as any);
+    vi.mocked(persistenceManager.getStorageAdapter).mockResolvedValue(mockAdapter as unknown as StorageAdapter);
 
     mockCheckpointManager.getLatestCheckpoint.mockResolvedValue({
       id: "cp-1",
@@ -281,7 +295,7 @@ describe("ExecutionController - Auto-recovery", () => {
         logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
         config: {},
         autoRecovery: { enabled: true, maxRetries: 1, delayMs: 10 },
-      } as any,
+      } satisfies OboraRuntimeConfig,
     });
     
     vi.mocked(runner.executeRun).mockRejectedValue(new Error("step failed"));
@@ -292,7 +306,7 @@ describe("ExecutionController - Auto-recovery", () => {
       getSteps: vi.fn().mockResolvedValue([]),
       saveRun: vi.fn().mockResolvedValue(undefined),
     };
-    vi.mocked(persistenceManager.getStorageAdapter).mockResolvedValue(mockAdapter as any);
+    vi.mocked(persistenceManager.getStorageAdapter).mockResolvedValue(mockAdapter as unknown as StorageAdapter);
 
     mockCheckpointManager.getLatestCheckpoint.mockResolvedValue({
       id: "cp-1",
@@ -338,7 +352,7 @@ describe("ExecutionController - Cancel", () => {
     // Make executeRun hang
     let resolveRun: () => void;
     const runPromise = new Promise<void>((r) => { resolveRun = r; });
-    vi.mocked(runner.executeRun).mockReturnValue(runPromise as any);
+    vi.mocked(runner.executeRun).mockReturnValue(runPromise);
 
     const workflow = createWorkflowDef();
     const handle = await controller.start("test", workflow, {}, new Map(), new Map());
@@ -386,7 +400,7 @@ describe("ExecutionController - Timeout", () => {
     
     let resolveRun: () => void;
     const runPromise = new Promise<void>((r) => { resolveRun = r; });
-    vi.mocked(runner.executeRun).mockReturnValue(runPromise as any);
+    vi.mocked(runner.executeRun).mockReturnValue(runPromise);
 
     const workflow = createWorkflowDef();
     const handle = await controller.start("test", workflow, {
@@ -417,7 +431,7 @@ describe("ExecutionController - Timeout", () => {
 describe("ExecutionController - setPolicy", () => {
   it("updates policy", () => {
     const { controller } = createController();
-    const policy = { name: "test-policy" } as any;
+    const policy: PolicyDefinition = { version: "test-policy" };
     controller.setPolicy(policy);
     expect(controller).toBeDefined();
   });
@@ -430,7 +444,7 @@ describe("ExecutionController - Resume", () => {
     const mockAdapter = {
       getRun: vi.fn().mockResolvedValue(null),
     };
-    vi.mocked(persistenceManager.getStorageAdapter).mockResolvedValue(mockAdapter as any);
+    vi.mocked(persistenceManager.getStorageAdapter).mockResolvedValue(mockAdapter as unknown as StorageAdapter);
 
     await expect(controller.resume("missing", {}, new Map())).rejects.toThrow(OboraError);
   });
@@ -441,7 +455,7 @@ describe("ExecutionController - Resume", () => {
     const mockAdapter = {
       getRun: vi.fn().mockResolvedValue({ id: "run-1", status: "failed", workflowName: "test" }),
     };
-    vi.mocked(persistenceManager.getStorageAdapter).mockResolvedValue(mockAdapter as any);
+    vi.mocked(persistenceManager.getStorageAdapter).mockResolvedValue(mockAdapter as unknown as StorageAdapter);
 
     mockCheckpointManager.getLatestCheckpoint.mockResolvedValue(null);
 
@@ -455,7 +469,7 @@ describe("ExecutionController - Resume", () => {
       getRun: vi.fn().mockResolvedValue({ id: "run-1", status: "running", workflowName: "test" }),
       getSteps: vi.fn().mockResolvedValue([]),
     };
-    vi.mocked(persistenceManager.getStorageAdapter).mockResolvedValue(mockAdapter as any);
+    vi.mocked(persistenceManager.getStorageAdapter).mockResolvedValue(mockAdapter as unknown as StorageAdapter);
 
     mockCheckpointManager.getLatestCheckpoint.mockResolvedValue({
       id: "cp-1",
@@ -474,7 +488,7 @@ describe("ExecutionController - Resume", () => {
       getRun: vi.fn().mockResolvedValue({ id: "run-1", status: "failed", workflowName: "test" }),
       getSteps: vi.fn().mockResolvedValue([]),
     };
-    vi.mocked(persistenceManager.getStorageAdapter).mockResolvedValue(mockAdapter as any);
+    vi.mocked(persistenceManager.getStorageAdapter).mockResolvedValue(mockAdapter as unknown as StorageAdapter);
 
     mockCheckpointManager.getLatestCheckpoint.mockResolvedValue({
       id: "cp-1",
@@ -503,7 +517,7 @@ describe("ExecutionController - Resume", () => {
       ]),
       saveRun: vi.fn().mockResolvedValue(undefined),
     };
-    vi.mocked(persistenceManager.getStorageAdapter).mockResolvedValue(mockAdapter as any);
+    vi.mocked(persistenceManager.getStorageAdapter).mockResolvedValue(mockAdapter as unknown as StorageAdapter);
 
     mockCheckpointManager.getLatestCheckpoint.mockResolvedValue({
       id: "cp-1",
@@ -529,7 +543,7 @@ describe("ExecutionController - Resume", () => {
       ]),
       saveRun: vi.fn().mockResolvedValue(undefined),
     };
-    vi.mocked(persistenceManager.getStorageAdapter).mockResolvedValue(mockAdapter as any);
+    vi.mocked(persistenceManager.getStorageAdapter).mockResolvedValue(mockAdapter as unknown as StorageAdapter);
 
     mockCheckpointManager.getLatestCheckpoint.mockResolvedValue({
       id: "cp-1",
@@ -559,7 +573,7 @@ describe("ExecutionController - Resume", () => {
         { stepName: "step1", status: "completed" },
       ]),
     };
-    vi.mocked(persistenceManager.getStorageAdapter).mockResolvedValue(mockAdapter as any);
+    vi.mocked(persistenceManager.getStorageAdapter).mockResolvedValue(mockAdapter as unknown as StorageAdapter);
 
     mockCheckpointManager.getLatestCheckpoint.mockResolvedValue({
       id: "cp-1",
@@ -588,8 +602,8 @@ describe("ExecutionController - Resume", () => {
       ]),
       saveRun: vi.fn().mockResolvedValue(undefined),
     };
-    vi.mocked(persistenceManager.getStorageAdapter).mockResolvedValue(mockAdapter as any);
-    vi.mocked(runner.executeResume).mockResolvedValue({ id: "run-1", status: "completed" } as any);
+    vi.mocked(persistenceManager.getStorageAdapter).mockResolvedValue(mockAdapter as unknown as StorageAdapter);
+    vi.mocked(runner.executeResume).mockResolvedValue(createRuntimeExecution("completed"));
 
     mockCheckpointManager.getLatestCheckpoint.mockResolvedValue({
       id: "cp-1",
@@ -625,7 +639,7 @@ describe("ExecutionController - Resume", () => {
       ]),
       saveRun: vi.fn().mockResolvedValue(undefined),
     };
-    vi.mocked(persistenceManager.getStorageAdapter).mockResolvedValue(mockAdapter as any);
+    vi.mocked(persistenceManager.getStorageAdapter).mockResolvedValue(mockAdapter as unknown as StorageAdapter);
 
     mockCheckpointManager.getLatestCheckpoint.mockResolvedValue({
       id: "cp-1",

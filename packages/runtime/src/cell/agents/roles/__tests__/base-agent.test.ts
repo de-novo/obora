@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { AgentTool } from "@earendil-works/pi-agent-core";
+import type { AssistantMessage, Message, Model } from "@earendil-works/pi-ai";
 import type { ChatMessage, LLMAdapter } from "@obora/adapters";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -78,6 +79,22 @@ interface ToolHarness {
   createAgentTools(): AgentTool[];
   currentContext?: AgentContext;
   currentTask?: Task;
+}
+
+interface PiRuntimeHarness {
+  coreAgent?: {
+    continue: () => Promise<void>;
+    subscribe: (listener: unknown) => () => void;
+    prompt: (prompt: string) => Promise<void>;
+    state: { messages: AssistantMessage[] };
+  };
+}
+
+interface StreamHarness {
+  createStreamFn(): (
+    model: Model<never>,
+    context: { systemPrompt?: string; messages: Message[] },
+  ) => Promise<{ result(): Promise<AssistantMessage> }>;
 }
 
 function createLlm(content: string, usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number }) {
@@ -399,6 +416,165 @@ describe("BaseAgent", () => {
     const call = chatCompletion.mock.calls[0]?.[0] as { messages: ChatMessage[] } | undefined;
     expect(call?.messages.at(-1)?.content).toContain('"currentState": {}');
     expect(call?.messages.at(-1)?.content).toContain('"availableKnowledge": {}');
+  });
+
+  it("delegates through an injected pi-agent runtime and reports parsed assistant text", async () => {
+    const { adapter } = createLlm("{}");
+    const task = createTask();
+    const board = new MemoryBoard();
+    const agent = new TestRoleAgent({ llm: adapter });
+    const prompt = vi.fn(async () => undefined);
+    const unsubscribe = vi.fn();
+    const assistant: AssistantMessage = {
+      role: "assistant",
+      content: [
+        { type: "thinking", thinking: "ignored" },
+        { type: "text", text: JSON.stringify({ pi: true }) },
+      ],
+      api: "openai-completions",
+      provider: "mock",
+      model: "model",
+      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+      stopReason: "stop",
+      timestamp: Date.now(),
+    };
+    (agent as unknown as PiRuntimeHarness).coreAgent = {
+      continue: async () => undefined,
+      subscribe: () => unsubscribe,
+      prompt,
+      state: { messages: [assistant] },
+    };
+
+    const result = await agent.execute(task, createContext(board, task));
+
+    expect(result).toMatchObject({
+      success: true,
+      output: { pi: true },
+    });
+    expect(prompt.mock.calls[0]?.[0]).toContain("Analyze runtime state");
+    expect(board.writes[0]).toMatchObject({
+      path: "state.agent.agent-test.lastResult",
+      value: { taskId: "task-1", result: { pi: true } },
+    });
+  });
+
+  it("bridges pi-agent stream messages to the LLM adapter and emits tool calls", async () => {
+    const chatCompletion = vi.fn<LLMAdapter["chatCompletion"]>(async () => ({
+      id: "chat-tool",
+      model: undefined as unknown as string,
+      message: {
+        role: "assistant",
+        content: "done",
+        toolCalls: [
+          {
+            id: "tool-call-1",
+            type: "function",
+            function: { name: "role_action", arguments: JSON.stringify({ content: "{}" }) },
+          },
+          {
+            id: undefined,
+            type: "function",
+            function: { name: undefined, arguments: "{" },
+          },
+        ],
+      },
+      usage: { promptTokens: 2, completionTokens: 3, totalTokens: 5 },
+      finishReason: "tool_calls",
+    }));
+    const adapter = {
+      id: "provider-x",
+      chatCompletion,
+      streamChatCompletion: vi.fn<LLMAdapter["streamChatCompletion"]>(),
+      supports: vi.fn(() => false),
+    } satisfies LLMAdapter;
+    const agent = new TestRoleAgent({ llm: adapter });
+    const streamFn = (agent as unknown as StreamHarness).createStreamFn();
+    const stream = await streamFn({} as Model<never>, {
+      systemPrompt: "runtime system",
+      messages: [
+        { role: "user", content: "hello", timestamp: 1 },
+        {
+          role: "assistant",
+          content: [
+            { type: "text", text: "ready" },
+            { type: "toolCall", id: "tc-existing", name: "board_read", arguments: { path: "state" } },
+          ],
+          api: "openai-completions",
+          provider: "mock",
+          model: "model",
+          usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+          stopReason: "toolUse",
+          timestamp: 2,
+        },
+        {
+          role: "toolResult",
+          toolCallId: "tc-existing",
+          toolName: "board_read",
+          content: [{ type: "text", text: "ok" }],
+          isError: false,
+          timestamp: 3,
+        },
+      ],
+    });
+
+    const final = await stream.result();
+    const request = chatCompletion.mock.calls[0]?.[0] as {
+      messages: ChatMessage[];
+      tools: Array<{ function: { name: string } }>;
+      maxTokens: number;
+    } | undefined;
+
+    expect(request?.maxTokens).toBe(8192);
+    expect(request?.tools.map((tool) => tool.function.name)).toContain("board_read");
+    expect(request?.messages).toMatchObject([
+      { role: "system", content: "runtime system" },
+      { role: "user", content: "hello" },
+      {
+        role: "assistant",
+        content: "ready",
+        toolCalls: [
+          {
+            id: "tc-existing",
+            type: "function",
+            function: { name: "board_read", arguments: JSON.stringify({ path: "state" }) },
+          },
+        ],
+      },
+      { role: "tool", toolCallId: "tc-existing", content: "ok" },
+    ]);
+    expect(final).toMatchObject({
+      role: "assistant",
+      model: "unknown",
+      stopReason: "toolUse",
+      usage: { input: 2, output: 3, totalTokens: 5 },
+    });
+    expect(final.content).toEqual([
+      { type: "text", text: "done" },
+      { type: "toolCall", id: "tool-call-1", name: "role_action", arguments: { content: "{}" } },
+      { type: "toolCall", id: expect.stringMatching(/^tool-/), name: "unknown_tool", arguments: { _raw: "{" } },
+    ]);
+  });
+
+  it("emits a stream error message when the LLM adapter fails", async () => {
+    const adapter = {
+      id: "provider-error",
+      chatCompletion: vi.fn<LLMAdapter["chatCompletion"]>(async () => {
+        throw new Error("stream failed");
+      }),
+      streamChatCompletion: vi.fn<LLMAdapter["streamChatCompletion"]>(),
+      supports: vi.fn(() => false),
+    } satisfies LLMAdapter;
+    const agent = new TestRoleAgent({ llm: adapter });
+    const stream = await (agent as unknown as StreamHarness).createStreamFn()({} as Model<never>, {
+      messages: [{ role: "user", content: "hello", timestamp: 1 }],
+    });
+
+    await expect(stream.result()).resolves.toMatchObject({
+      role: "assistant",
+      model: "unknown",
+      stopReason: "error",
+      errorMessage: "stream failed",
+    });
   });
 
   it("covers role tool null reads, executor parser errors, shell outcomes, and non-executor tool shape", async () => {
