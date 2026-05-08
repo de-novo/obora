@@ -6,12 +6,12 @@
     "declaration": false,
     "declarationMap": false,
     "paths": {
-      "@obora/adapters": ["packages/adapters/dist/index.d.ts"],
-      "@obora/adapters/llm": ["packages/adapters/dist/llm/index.d.ts"],
-      "@obora/adapters/tools": ["packages/adapters/dist/tools/index.d.ts"],
-      "@obora/adapters/auth": ["packages/adapters/dist/auth/index.d.ts"],
-      "@obora/runtime": ["packages/runtime/dist/index.d.ts"],
-      "@obora/sdk": ["packages/sdk/dist/index.d.ts"]
+      "@obora/adapters": ["../../packages/adapters/dist/index.d.ts"],
+      "@obora/adapters/llm": ["../../packages/adapters/dist/llm/index.d.ts"],
+      "@obora/adapters/tools": ["../../packages/adapters/dist/tools/index.d.ts"],
+      "@obora/adapters/auth": ["../../packages/adapters/dist/auth/index.d.ts"],
+      "@obora/runtime": ["../../packages/runtime/dist/index.d.ts"],
+      "@obora/sdk": ["../../packages/sdk/dist/index.d.ts"]
     }
   },
   "include": ["src/**/*.ts"],

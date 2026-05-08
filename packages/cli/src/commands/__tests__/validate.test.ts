@@ -45,6 +45,9 @@ describe("validate command", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(Workflow.create).mockReset();
+    vi.mocked(Workflow.getStopSemantics).mockReset();
+    vi.mocked(Workflow.getStopSemantics).mockReturnValue(undefined as never);
     process.exitCode = undefined;
     consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
     consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);

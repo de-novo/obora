@@ -98,8 +98,8 @@ describe("status command", () => {
     } as never);
 
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load: vi.fn().mockResolvedValue({
             entries: [
               {
@@ -120,7 +120,8 @@ describe("status command", () => {
             ],
             lastUpdated: "2026-03-10T10:07:00.000Z",
           }),
-        }) as never
+        }) as never;
+      }
     );
 
     return { listRunRecords };
@@ -262,13 +263,14 @@ describe("status command", () => {
       listRunRecords: vi.fn().mockResolvedValue([]),
     } as never);
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load: vi.fn().mockResolvedValue({
             entries: [],
             lastUpdated: "2026-03-10T10:07:00.000Z",
           }),
-        }) as never
+        }) as never;
+      }
     );
     vi.mocked(summarizeDLQ).mockReturnValue({
       totalEntries: 0,
@@ -307,8 +309,8 @@ describe("status command", () => {
       ]),
     } as never);
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load: vi.fn().mockResolvedValue({
             entries: [
               {
@@ -338,7 +340,8 @@ describe("status command", () => {
             ],
             lastUpdated: "2026-03-10T10:07:00.000Z",
           }),
-        }) as never
+        }) as never;
+      }
     );
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const cmd = createStatusCommand();
@@ -378,10 +381,11 @@ describe("status command", () => {
       listRunRecords: vi.fn().mockResolvedValue([{ id: "run-1" }]),
     } as never);
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load: vi.fn().mockRejectedValue(new Error("dlq unreadable")),
-        }) as never
+        }) as never;
+      }
     );
 
     await cmd.parseAsync([], { from: "user" });
@@ -405,13 +409,14 @@ describe("status command", () => {
     } as never);
     vi.mocked(loadConfig).mockResolvedValue({} as never);
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load: vi.fn().mockResolvedValue({
             entries: [],
             lastUpdated: "2026-03-10T10:07:00.000Z",
           }),
-        }) as never
+        }) as never;
+      }
     );
 
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
@@ -439,8 +444,8 @@ describe("status command", () => {
     } as never);
     vi.mocked(loadConfig).mockResolvedValue({} as never);
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load: vi.fn().mockResolvedValue({
             entries: [
               {
@@ -466,7 +471,8 @@ describe("status command", () => {
               },
             ],
           }),
-        }) as never
+        }) as never;
+      }
     );
     vi.mocked(summarizeDLQ).mockReturnValue({} as never);
 
@@ -496,13 +502,14 @@ describe("status command", () => {
     } as never);
     vi.mocked(loadConfig).mockRejectedValueOnce("summary config unavailable");
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load: vi.fn().mockResolvedValue({
             entries: [],
             lastUpdated: "2026-03-10T10:07:00.000Z",
           }),
-        }) as never
+        }) as never;
+      }
     );
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const cmd = createStatusCommand();

@@ -103,12 +103,13 @@ function resolveSetTarget(
     throw new Error(`Unsupported agent provider override: ${resolvedProvider}`);
   }
 
-  let availableModels: string[] = [];
-  try {
-    availableModels = listPiAIModels(resolvedProvider);
-  } catch {
-    availableModels = [];
-  }
+  const availableModels = (() => {
+    try {
+      return listPiAIModels(resolvedProvider);
+    } catch {
+      return [];
+    }
+  })();
 
   if (!availableModels.includes(resolvedModel)) {
     throw new Error(
@@ -237,6 +238,6 @@ export async function applyAgentOverride(
   } catch (error) {
     await writeDeps.rm(tempPath, { force: true }).catch(() => undefined);
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Failed to write agent override: ${message}`);
+    throw new Error(`Failed to write agent override: ${message}`, { cause: error });
   }
 }

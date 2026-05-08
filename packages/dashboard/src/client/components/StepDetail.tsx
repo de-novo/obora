@@ -1,3 +1,4 @@
+import type { ReactElement } from 'react';
 import { useMemo, useState } from 'react';
 
 import { getBlackboardDiffPaths, type ExecutionStep, type StepDetailData } from '../store/execution-store';
@@ -28,7 +29,7 @@ const formatStructured = (value: unknown): string => {
   }
 };
 
-export const StepDetail = ({ executionId, step, detail, previousBlackboard }: StepDetailProps): JSX.Element => {
+export const StepDetail = ({ executionId, step, detail, previousBlackboard }: StepDetailProps): ReactElement => {
   const [collapsed, setCollapsed] = useState<Record<SectionKey, boolean>>({
     input: false,
     output: false,

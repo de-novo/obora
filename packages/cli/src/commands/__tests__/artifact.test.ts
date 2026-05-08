@@ -13,7 +13,9 @@ const oboraRuntimeState: {
 
 vi.mock("@obora/sdk", () => ({
   loadConfig: vi.fn(),
-  OboraRuntime: vi.fn().mockImplementation(() => oboraRuntimeState.instance),
+  OboraRuntime: vi.fn().mockImplementation(function () {
+    return oboraRuntimeState.instance;
+  }),
   OboraError: class OboraError extends Error {
     code: string;
 
@@ -70,7 +72,9 @@ describe("artifact command", () => {
     oboraRuntimeState.instance = {
       getArtifact: vi.fn().mockResolvedValue(artifact),
     };
-    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    vi.mocked(OboraRuntime).mockImplementation(function () {
+      return oboraRuntimeState.instance as never;
+    });
 
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const cmd = createArtifactCommand();
@@ -91,7 +95,9 @@ describe("artifact command", () => {
     oboraRuntimeState.instance = {
       getArtifact: vi.fn().mockResolvedValue(artifact),
     };
-    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    vi.mocked(OboraRuntime).mockImplementation(function () {
+      return oboraRuntimeState.instance as never;
+    });
 
     const stdoutWrite = vi.spyOn(process.stdout, "write").mockImplementation((() => true) as never);
     const cmd = createArtifactCommand();
@@ -110,7 +116,9 @@ describe("artifact command", () => {
     oboraRuntimeState.instance = {
       getArtifact: vi.fn().mockResolvedValue(artifact),
     };
-    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    vi.mocked(OboraRuntime).mockImplementation(function () {
+      return oboraRuntimeState.instance as never;
+    });
 
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const cmd = createArtifactCommand();
@@ -149,7 +157,9 @@ describe("artifact command", () => {
     oboraRuntimeState.instance = {
       getArtifact: vi.fn().mockResolvedValue(artifact),
     };
-    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    vi.mocked(OboraRuntime).mockImplementation(function () {
+      return oboraRuntimeState.instance as never;
+    });
 
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const cmd = createArtifactCommand();
@@ -174,7 +184,9 @@ describe("artifact command", () => {
     oboraRuntimeState.instance = {
       getArtifact: vi.fn().mockResolvedValue(artifact),
     };
-    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    vi.mocked(OboraRuntime).mockImplementation(function () {
+      return oboraRuntimeState.instance as never;
+    });
 
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const cli = createCLI();
@@ -220,7 +232,9 @@ describe("artifact command", () => {
     oboraRuntimeState.instance = {
       getArtifact: vi.fn().mockResolvedValue(artifact),
     };
-    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    vi.mocked(OboraRuntime).mockImplementation(function () {
+      return oboraRuntimeState.instance as never;
+    });
 
     const stdoutWrite = vi.spyOn(process.stdout, "write").mockImplementation((() => true) as never);
     const cmd = createArtifactCommand();
@@ -249,7 +263,9 @@ describe("artifact command", () => {
     oboraRuntimeState.instance = {
       getArtifact: vi.fn().mockResolvedValue(artifact),
     };
-    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    vi.mocked(OboraRuntime).mockImplementation(function () {
+      return oboraRuntimeState.instance as never;
+    });
 
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -276,7 +292,9 @@ describe("artifact command", () => {
         .fn()
         .mockRejectedValue(new Error("Artifact not found: run-1/validate/missing.log")),
     };
-    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    vi.mocked(OboraRuntime).mockImplementation(function () {
+      return oboraRuntimeState.instance as never;
+    });
 
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -311,7 +329,9 @@ describe("artifact command", () => {
     oboraRuntimeState.instance = {
       getArtifact: vi.fn().mockRejectedValue(new Error("sqlite locked")),
     };
-    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    vi.mocked(OboraRuntime).mockImplementation(function () {
+      return oboraRuntimeState.instance as never;
+    });
 
     await cmd.parseAsync(["get", "run-1", "validate", "artifact.log"], { from: "user" });
 
@@ -324,7 +344,9 @@ describe("artifact command", () => {
     oboraRuntimeState.instance = {
       getArtifact: vi.fn().mockResolvedValue(artifact),
     };
-    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    vi.mocked(OboraRuntime).mockImplementation(function () {
+      return oboraRuntimeState.instance as never;
+    });
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const dir = await mkdtemp(join(tmpdir(), "obora-artifact-write-dir-"));
     const cmd = createArtifactCommand();
@@ -344,7 +366,9 @@ describe("artifact command", () => {
     oboraRuntimeState.instance = {
       getArtifact: vi.fn().mockResolvedValue(artifact),
     };
-    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    vi.mocked(OboraRuntime).mockImplementation(function () {
+      return oboraRuntimeState.instance as never;
+    });
 
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const cmd = createArtifactCommand();

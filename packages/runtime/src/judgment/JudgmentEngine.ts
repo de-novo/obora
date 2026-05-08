@@ -104,7 +104,6 @@ export class JudgmentEngine {
       }
 
       if (!timedOut && status === 'pass') {
-        lastWasTimeout = false;
         transition('done', 'judgmentStatus=pass');
         break;
       }

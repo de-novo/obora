@@ -1,3 +1,4 @@
+import type { ReactElement } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { fetchHistoryRuns, type HistoryRunsResponse } from '../api/history-client';
@@ -17,7 +18,7 @@ interface Props {
   onOpenRun: (runId: string) => void;
 }
 
-export const HistoryRunsPage = ({ onOpenRun }: Props): JSX.Element => {
+export const HistoryRunsPage = ({ onOpenRun }: Props): ReactElement => {
   const [status, setStatus] = useState('');
   const [workflowName, setWorkflowName] = useState('');
   const [repairLoop, setRepairLoop] = useState<HistoryRunsRepairLoopSelection>('all');

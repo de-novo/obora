@@ -69,12 +69,13 @@ export class TKGObserver {
         ? (eventPayload.payload as { statement?: unknown }).statement
         : undefined;
 
-    let context = '{}';
-    try {
-      context = JSON.stringify(eventPayload.payload ?? {});
-    } catch {
-      context = '[unserializable payload]';
-    }
+    const context = (() => {
+      try {
+        return JSON.stringify(eventPayload.payload ?? {});
+      } catch {
+        return '[unserializable payload]';
+      }
+    })();
 
     return {
       id: createNodeId(`tkg-${event.id}`),

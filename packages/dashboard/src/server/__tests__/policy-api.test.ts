@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createDashboardServer } from '../index.js';
+import type { PolicyEngineAdapter } from '../routes/policy.js';
 
 const servers: Array<Awaited<ReturnType<typeof createDashboardServer>>['app']> = [];
 
@@ -103,7 +104,7 @@ describe('policy api', () => {
   });
 
   it('returns 400 when policy engine rejects create or update apply', async () => {
-    const loadInline = vi.fn(() => {
+    const loadInline = vi.fn<PolicyEngineAdapter['loadInline']>(() => {
       throw new Error('engine rejected');
     });
     const { app } = await createDashboardServer({}, { policyEngine: { loadInline } });
@@ -120,7 +121,7 @@ describe('policy api', () => {
     expect(createResponse.statusCode).toBe(400);
     expect(createResponse.json().details).toEqual(['engine rejected']);
 
-    loadInline.mockReset();
+    loadInline.mockImplementation(() => undefined);
     const okCreate = await app.inject({
       method: 'POST',
       url: '/api/policies',

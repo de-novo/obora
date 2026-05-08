@@ -15,7 +15,9 @@ const oboraRuntimeState: {
 vi.mock("@obora/sdk", () => ({
   loadConfig: vi.fn(),
   FileDLQStore: vi.fn(),
-  OboraRuntime: vi.fn().mockImplementation(() => oboraRuntimeState.instance),
+  OboraRuntime: vi.fn().mockImplementation(function () {
+    return oboraRuntimeState.instance;
+  }),
   OboraError: class OboraError extends Error {
     code: string;
 
@@ -45,13 +47,14 @@ describe("inspect alias command", () => {
       persistence: { enabled: true, adapter: "sqlite", sqlite: { path: "./data/obora.db" } },
     } as never);
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load: vi.fn().mockResolvedValue({
             entries: [],
             lastUpdated: "2026-03-10T10:05:00.000Z",
           }),
-        }) as never
+        }) as never;
+      }
     );
   });
 
@@ -79,7 +82,9 @@ describe("inspect alias command", () => {
       getRunAuditTimeline: vi.fn().mockResolvedValue([]),
       listRunRecords: vi.fn().mockResolvedValue([]),
     };
-    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    vi.mocked(OboraRuntime).mockImplementation(function () {
+      return oboraRuntimeState.instance as never;
+    });
 
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const cli = createCLI();
@@ -109,7 +114,9 @@ describe("inspect alias command", () => {
       getRunAuditTimeline: vi.fn().mockResolvedValue([]),
       listRunRecords: vi.fn().mockResolvedValue([]),
     };
-    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    vi.mocked(OboraRuntime).mockImplementation(function () {
+      return oboraRuntimeState.instance as never;
+    });
 
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const cli = createCLI();
@@ -144,7 +151,9 @@ describe("inspect alias command", () => {
       getRunAuditTimeline: vi.fn().mockResolvedValue([]),
       listRunRecords: vi.fn().mockResolvedValue([]),
     };
-    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    vi.mocked(OboraRuntime).mockImplementation(function () {
+      return oboraRuntimeState.instance as never;
+    });
 
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const cli = createCLI();
@@ -164,7 +173,9 @@ describe("inspect alias command", () => {
       getRunAuditTimeline: vi.fn(),
       listRunRecords: vi.fn().mockResolvedValue([]),
     };
-    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    vi.mocked(OboraRuntime).mockImplementation(function () {
+      return oboraRuntimeState.instance as never;
+    });
 
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);

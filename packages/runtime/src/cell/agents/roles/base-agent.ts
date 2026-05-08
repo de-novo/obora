@@ -527,7 +527,6 @@ Use board_read to inspect context, then perform role_action, and finish with boa
           const filePath = this.resolveAndValidatePath(parsedParams.path);
 
           const fileHandle = await open(filePath, "r");
-          let content = "";
           try {
             const projectRoot = realpathSync(process.cwd());
             const openedFdStat = await fileHandle.stat();
@@ -541,15 +540,14 @@ Use board_read to inspect context, then perform role_action, and finish with boa
               throw new Error("Security: file changed during open/read boundary validation (TOCTOU detected)");
             }
 
-            content = await fileHandle.readFile({ encoding: "utf-8" });
+            const content = await fileHandle.readFile({ encoding: "utf-8" });
+            return {
+              content: [{ type: "text", text: content }],
+              details: { path: parsedParams.path, bytesRead: content.length },
+            };
           } finally {
             await fileHandle.close();
           }
-
-          return {
-            content: [{ type: "text", text: content }],
-            details: { path: parsedParams.path, bytesRead: content.length },
-          };
         },
       },
       {
@@ -695,12 +693,13 @@ Use board_read to inspect context, then perform role_action, and finish with boa
 
           const textContent = res.message.content?.trim();
           const toolCallContent = (res.message.toolCalls ?? []).map((tc: { id?: string; function: { name?: string; arguments?: string } }) => {
-            let args: Record<string, unknown> = {};
-            try {
-              args = JSON.parse(tc.function.arguments || "{}");
-            } catch {
-              args = { _raw: tc.function.arguments };
-            }
+            const args = (() => {
+              try {
+                return JSON.parse(tc.function.arguments || "{}") as Record<string, unknown>;
+              } catch {
+                return { _raw: tc.function.arguments };
+              }
+            })();
             return {
               type: "toolCall" as const,
               id: tc.id ?? `tool-${Date.now()}`,
@@ -868,7 +867,9 @@ Use board_read to inspect context, then perform role_action, and finish with boa
     } catch (error: unknown) {
       const err = error as NodeJS.ErrnoException;
       if (err.code === "ENOENT") {
-        throw new Error("Path validation failed: parent directory disappeared during validation");
+        throw new Error("Path validation failed: parent directory disappeared during validation", {
+          cause: error,
+        });
       }
       throw error;
     }

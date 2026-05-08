@@ -70,19 +70,28 @@ export function evaluateDynamicResourceDecision(
   const limits = policy.dynamicQuota?.limits ?? [];
 
   for (const limit of limits) {
-    let matches = false;
-    try {
-      matches = conditionMatches(limit, action, context);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+    const matchResult:
+      | { status: "ok"; matches: boolean }
+      | { status: "error"; message: string } = (() => {
+      try {
+        return { status: "ok", matches: conditionMatches(limit, action, context) };
+      } catch (error) {
+        return {
+          status: "error",
+          message: error instanceof Error ? error.message : String(error),
+        };
+      }
+    })();
+
+    if (matchResult.status === "error") {
       return {
         type: "deny",
-        reason: `dynamic quota condition evaluation failed: ${message}`,
+        reason: `dynamic quota condition evaluation failed: ${matchResult.message}`,
         rule: "dynamic-quota",
       };
     }
 
-    if (!matches) {
+    if (!matchResult.matches) {
       continue;
     }
 

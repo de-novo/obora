@@ -1,3 +1,4 @@
+import type { ReactElement } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { fetchAuditEvents, fetchExecutionEvents, type AuditEvent } from '../api/audit-client';
@@ -22,7 +23,7 @@ const toExecutionEvent = (event: AuditEvent): ExecutionEvent => ({
   payload: (event.payload ?? {}) as Record<string, unknown>,
 });
 
-export const PlaybackView = ({ initialExecutionId }: PlaybackViewProps): JSX.Element => {
+export const PlaybackView = ({ initialExecutionId }: PlaybackViewProps): ReactElement => {
   const [executionIds, setExecutionIds] = useState<string[]>([]);
   const [selectedExecutionId, setSelectedExecutionId] = useState<string>(initialExecutionId ?? '');
   const [events, setEvents] = useState<AuditEvent[]>([]);

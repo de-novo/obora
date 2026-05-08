@@ -1,3 +1,4 @@
+import type { ReactElement } from 'react';
 import type { PolicyDocument } from '../api/policy-client';
 
 interface PolicyListProps {
@@ -16,7 +17,7 @@ export const PolicyList = ({
   onSelectPolicy,
   onCreatePolicy,
   onDeletePolicy,
-}: PolicyListProps): JSX.Element => {
+}: PolicyListProps): ReactElement => {
   return (
     <aside
       style={{

@@ -1,3 +1,4 @@
+import type { ReactElement } from 'react';
 import type { PlaybackSpeed } from '../hooks/usePlayback';
 
 interface PlaybackControllerProps {
@@ -28,7 +29,7 @@ export const PlaybackController = ({
   onNext,
   onSeek,
   onSpeedChange,
-}: PlaybackControllerProps): JSX.Element => {
+}: PlaybackControllerProps): ReactElement => {
   const maxIndex = Math.max(0, total - 1);
 
   return (

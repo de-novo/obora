@@ -1,3 +1,4 @@
+import type { ReactElement } from 'react';
 import type { AuditEvent } from '../api/audit-client';
 
 interface PlaybackTimelineProps {
@@ -12,7 +13,7 @@ const severityColor: Record<'info' | 'warning' | 'critical', string> = {
   critical: '#dc2626',
 };
 
-export const PlaybackTimeline = ({ events, currentIndex, onJump }: PlaybackTimelineProps): JSX.Element => {
+export const PlaybackTimeline = ({ events, currentIndex, onJump }: PlaybackTimelineProps): ReactElement => {
   if (events.length === 0) {
     return <p style={{ margin: 0, color: '#6b7280' }}>선택된 execution의 이벤트가 없습니다.</p>;
   }

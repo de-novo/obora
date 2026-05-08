@@ -1,3 +1,4 @@
+import type { ReactElement } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { fetchAuditEvents } from './api/audit-client';
@@ -29,7 +30,7 @@ const resolveWsUrl = (): string => {
   return `${protocol}//${window.location.host}/ws`;
 };
 
-const DashboardView = (): JSX.Element => {
+const DashboardView = (): ReactElement => {
   const [selectedExecutionId, setSelectedExecutionId] = useState<string | undefined>(undefined);
   const [selectedStepName, setSelectedStepName] = useState<string | undefined>(undefined);
 
@@ -183,7 +184,7 @@ const safeDecodePathSegment = (value: string): string | undefined => {
   }
 };
 
-export const App = (): JSX.Element => {
+export const App = (): ReactElement => {
   const [view, setView] = useState<'dashboard' | 'audit' | 'playback' | 'policy'>('dashboard');
   const [playbackExecutionId, setPlaybackExecutionId] = useState<string | undefined>(undefined);
   const [pathname, setPathname] = useState(() => window.location.pathname);

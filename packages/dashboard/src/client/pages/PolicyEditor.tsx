@@ -1,10 +1,11 @@
+import type { ReactElement } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { deletePolicy, getPolicy, listPolicies, type PolicyDocument } from '../api/policy-client';
 import { PolicyList } from '../components/PolicyList';
 import { YamlEditor } from '../components/YamlEditor';
 
-export const PolicyEditor = (): JSX.Element => {
+export const PolicyEditor = (): ReactElement => {
   const [policies, setPolicies] = useState<PolicyDocument[]>([]);
   const [selectedPolicyId, setSelectedPolicyId] = useState<string | undefined>(undefined);
   const [selectedPolicy, setSelectedPolicy] = useState<PolicyDocument | undefined>(undefined);

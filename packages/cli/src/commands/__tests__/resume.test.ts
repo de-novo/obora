@@ -16,7 +16,9 @@ const oboraRuntimeState: {
 
 vi.mock("@obora/sdk", () => ({
   loadConfig: vi.fn(),
-  OboraRuntime: vi.fn().mockImplementation(() => oboraRuntimeState.instance),
+  OboraRuntime: vi.fn().mockImplementation(function () {
+    return oboraRuntimeState.instance;
+  }),
   OboraError: class OboraError extends Error {
     code: string;
 
@@ -79,7 +81,9 @@ describe("resume command", () => {
       loadWorkflow: vi.fn().mockResolvedValue(undefined),
       resume: vi.fn().mockResolvedValue(makeResumeResult()),
     };
-    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    vi.mocked(OboraRuntime).mockImplementation(function () {
+      return oboraRuntimeState.instance as never;
+    });
 
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const cmd = createResumeCommand();
@@ -108,7 +112,9 @@ describe("resume command", () => {
       loadWorkflow: vi.fn().mockResolvedValue(undefined),
       resume: vi.fn().mockResolvedValue(makeResumeResult({ driftDetected: true })),
     };
-    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    vi.mocked(OboraRuntime).mockImplementation(function () {
+      return oboraRuntimeState.instance as never;
+    });
 
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const cli = createCLI();
@@ -135,7 +141,9 @@ describe("resume command", () => {
         })
       ),
     };
-    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    vi.mocked(OboraRuntime).mockImplementation(function () {
+      return oboraRuntimeState.instance as never;
+    });
 
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const warn = vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -166,7 +174,9 @@ describe("resume command", () => {
       loadWorkflow: vi.fn(),
       resume: vi.fn(),
     };
-    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    vi.mocked(OboraRuntime).mockImplementation(function () {
+      return oboraRuntimeState.instance as never;
+    });
 
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -189,7 +199,9 @@ describe("resume command", () => {
       loadWorkflow: vi.fn(),
       resume: vi.fn(),
     };
-    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    vi.mocked(OboraRuntime).mockImplementation(function () {
+      return oboraRuntimeState.instance as never;
+    });
 
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const cmd = createResumeCommand();
@@ -214,7 +226,9 @@ describe("resume command", () => {
       loadWorkflow: vi.fn(),
       resume: vi.fn().mockRejectedValue(new Error("checkpoint corrupted")),
     };
-    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    vi.mocked(OboraRuntime).mockImplementation(function () {
+      return oboraRuntimeState.instance as never;
+    });
 
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const cmd = createResumeCommand();
@@ -229,7 +243,9 @@ describe("resume command", () => {
   it("uses execution-failed exit code for runtime initialization errors", async () => {
     vi.mocked(loadConfig).mockRejectedValueOnce("bad config");
     oboraRuntimeState.instance = undefined;
-    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    vi.mocked(OboraRuntime).mockImplementation(function () {
+      return oboraRuntimeState.instance as never;
+    });
 
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const cmd = createResumeCommand();

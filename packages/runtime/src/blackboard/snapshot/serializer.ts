@@ -297,7 +297,7 @@ export class StateSerializer {
       return JSON.parse(json) as T;
     } catch (error) {
       if (error instanceof SyntaxError) {
-        throw new Error(`Invalid JSON: ${error.message}`);
+        throw new Error(`Invalid JSON: ${error.message}`, { cause: error });
       }
       throw error;
     }
@@ -434,7 +434,7 @@ export class StateSerializer {
       return this.deserialize(parsed);
     } catch (error) {
       if (error instanceof SyntaxError) {
-        throw new Error(`Invalid JSON in serialized state: ${error.message}`);
+        throw new Error(`Invalid JSON in serialized state: ${error.message}`, { cause: error });
       }
       throw error;
     }

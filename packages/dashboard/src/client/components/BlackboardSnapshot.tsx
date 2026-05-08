@@ -1,3 +1,4 @@
+import type { ReactElement } from 'react';
 interface BlackboardSnapshotProps {
   value: unknown;
   changedPaths: Set<string>;
@@ -14,7 +15,7 @@ const renderPrimitive = (value: unknown): string => {
   return JSON.stringify(value);
 };
 
-const NodeView = ({ value, path, changedPaths }: { value: unknown; path: string; changedPaths: Set<string> }): JSX.Element => {
+const NodeView = ({ value, path, changedPaths }: { value: unknown; path: string; changedPaths: Set<string> }): ReactElement => {
   if (Array.isArray(value)) {
     return (
       <ul style={{ margin: '4px 0 4px 16px', padding: 0 }}>
@@ -66,7 +67,7 @@ const NodeView = ({ value, path, changedPaths }: { value: unknown; path: string;
   return <pre style={{ margin: 0 }}>{renderPrimitive(value)}</pre>;
 };
 
-export const BlackboardSnapshot = ({ value, changedPaths }: BlackboardSnapshotProps): JSX.Element => {
+export const BlackboardSnapshot = ({ value, changedPaths }: BlackboardSnapshotProps): ReactElement => {
   if (value === undefined) {
     return <p style={{ margin: 0, color: '#6b7280' }}>Blackboard 데이터가 없습니다.</p>;
   }

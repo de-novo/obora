@@ -26,8 +26,9 @@ export const calculatorTool: Tool<{ expression: string }, number> = {
       // @ts-expect-error mathjs is an optional peer dependency
       const { evaluate } = await import("mathjs");
       return evaluate(p.expression) as number;
-    } catch (e) {
-      throw new Error(`Invalid expression: ${(e as Error).message}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Invalid expression: ${message}`, { cause: error });
     }
   },
 };

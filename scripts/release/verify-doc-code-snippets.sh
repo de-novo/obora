@@ -133,7 +133,6 @@ fs.writeFileSync(
         noEmit: true,
         skipLibCheck: true,
         lib: ["ES2022", "DOM"],
-        baseUrl: ".",
         paths,
       },
       files: snippetFiles,

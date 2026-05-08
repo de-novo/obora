@@ -122,7 +122,8 @@ export function loadPatternFromYamlFile(resolvedPath: string): CollaborationPatt
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     throw new Error(
-      `Failed to load custom pattern from YAML '${resolvedPath}': ${message}`
+      `Failed to load custom pattern from YAML '${resolvedPath}': ${message}`,
+      { cause: err }
     );
   }
 }
@@ -159,11 +160,13 @@ export function loadCustomPatternFromFile(filePath: string, options?: { cwd?: st
     if (message.includes("ERR_REQUIRE_ESM") || message.includes("Must use import")) {
       throw new Error(
         `Cannot synchronously load ESM pattern file '${resolvedPath}'. ` +
-        `Use resolveCustomPatternAsync() or provide a synchronous loadFromFile option.`
+        `Use resolveCustomPatternAsync() or provide a synchronous loadFromFile option.`,
+        { cause: err }
       );
     }
     throw new Error(
-      `Failed to load custom pattern from '${resolvedPath}': ${message}`
+      `Failed to load custom pattern from '${resolvedPath}': ${message}`,
+      { cause: err }
     );
   }
 }

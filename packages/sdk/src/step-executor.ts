@@ -951,7 +951,8 @@ export class StepExecutor {
 ` +
           `Reason: the declared binding '${name}' could not be resolved (${message})
 ` +
-          `Fix: create the input artifact before execution or correct the binding path`
+          `Fix: create the input artifact before execution or correct the binding path`,
+        { cause: error }
       );
     }
   }

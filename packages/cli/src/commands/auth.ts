@@ -326,23 +326,24 @@ export function createAuthCommand(): Command {
             throw new CLIError(`Provider auth not found: ${provider}`, ExitCode.VALIDATION_ERROR);
           }
 
-          let ok = false;
-          try {
-            ok = await manager.testConnection(provider);
-          } catch (error) {
-            const message = getErrorMessage(error);
-            if (message.includes("Unsupported provider for testConnection")) {
+          const ok = await (async () => {
+            try {
+              return await manager.testConnection(provider);
+            } catch (error) {
+              const message = getErrorMessage(error);
+              if (message.includes("Unsupported provider for testConnection")) {
+                throw new CLIError(
+                  `Unsupported provider auth test target: ${provider}`,
+                  ExitCode.VALIDATION_ERROR
+                );
+              }
+
               throw new CLIError(
-                `Unsupported provider auth test target: ${provider}`,
-                ExitCode.VALIDATION_ERROR
+                `Failed to test provider auth: ${message}`,
+                ExitCode.EXECUTION_FAILED
               );
             }
-
-            throw new CLIError(
-              `Failed to test provider auth: ${message}`,
-              ExitCode.EXECUTION_FAILED
-            );
-          }
+          })();
 
           if (!ok) {
             throw new CLIError(

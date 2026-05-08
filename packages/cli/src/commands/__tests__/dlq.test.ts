@@ -84,12 +84,13 @@ describe("dlq command", () => {
     });
 
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load,
           save: vi.fn(),
           append: vi.fn(),
-        }) as never
+        }) as never;
+      }
     );
 
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
@@ -147,12 +148,13 @@ describe("dlq command", () => {
     });
 
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load,
           save: vi.fn(),
           append: vi.fn(),
-        }) as never
+        }) as never;
+      }
     );
     vi.mocked(createRunsRuntime).mockResolvedValue({
       getRunRecord: vi.fn().mockResolvedValue({
@@ -228,12 +230,13 @@ describe("dlq command", () => {
     });
 
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load,
           save: vi.fn(),
           append: vi.fn(),
-        }) as never
+        }) as never;
+      }
     );
     vi.mocked(createRunsRuntime).mockResolvedValue({
       getRunRecord: vi.fn().mockResolvedValue({
@@ -295,12 +298,13 @@ describe("dlq command", () => {
     });
 
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load,
           save: vi.fn(),
           append: vi.fn(),
-        }) as never
+        }) as never;
+      }
     );
     vi.mocked(createRunsRuntime).mockResolvedValue({
       getRunRecord: vi.fn().mockResolvedValue(null),
@@ -322,12 +326,13 @@ describe("dlq command", () => {
       lastUpdated: "2026-03-10T10:05:00.000Z",
     });
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load,
           save: vi.fn(),
           append: vi.fn(),
-        }) as never
+        }) as never;
+      }
     );
     vi.mocked(summarizeDLQ).mockReturnValue({
       totalEntries: 4,
@@ -366,12 +371,13 @@ describe("dlq command", () => {
       lastUpdated: "2026-03-10T10:05:00.000Z",
     });
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load,
           save: vi.fn(),
           append: vi.fn(),
-        }) as never
+        }) as never;
+      }
     );
     vi.mocked(createRunsRuntime).mockResolvedValue({
       getRunRecord: vi.fn().mockResolvedValue({
@@ -443,12 +449,13 @@ describe("dlq command", () => {
       lastUpdated: "2026-03-10T10:05:00.000Z",
     });
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load,
           save: vi.fn(),
           append: vi.fn(),
-        }) as never
+        }) as never;
+      }
     );
     vi.mocked(createRunsRuntime).mockResolvedValue({
       getRunRecord: vi.fn().mockResolvedValue(null),
@@ -491,12 +498,13 @@ describe("dlq command", () => {
       lastUpdated: "2026-03-10T10:05:00.000Z",
     });
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load,
           save: vi.fn(),
           append: vi.fn(),
-        }) as never
+        }) as never;
+      }
     );
     vi.mocked(createRunsRuntime).mockResolvedValue({
       getRunRecord: vi.fn().mockResolvedValue({
@@ -547,12 +555,13 @@ describe("dlq command", () => {
       lastUpdated: "2026-03-10T10:05:00.000Z",
     });
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load,
           save: vi.fn(),
           append: vi.fn(),
-        }) as never
+        }) as never;
+      }
     );
     vi.mocked(createRunsRuntime).mockResolvedValue({
       getRunRecord: vi.fn().mockResolvedValue({
@@ -612,12 +621,13 @@ describe("dlq command", () => {
       lastUpdated: "2026-03-10T10:05:00.000Z",
     });
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load,
           save: vi.fn(),
           append: vi.fn(),
-        }) as never
+        }) as never;
+      }
     );
     vi.mocked(createRunsRuntime).mockResolvedValue({
       getRunRecord: vi.fn().mockResolvedValue(null),
@@ -655,12 +665,13 @@ describe("dlq command", () => {
     const save = vi.fn().mockResolvedValue(undefined);
 
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load,
           save,
           append: vi.fn(),
-        }) as never
+        }) as never;
+      }
     );
     vi.mocked(resolveDLQEntry).mockReturnValue({
       entries: [
@@ -725,12 +736,13 @@ describe("dlq command", () => {
       lastUpdated: "2026-03-10T10:05:00.000Z",
     });
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load,
           save: vi.fn(),
           append: vi.fn(),
-        }) as never
+        }) as never;
+      }
     );
     vi.mocked(summarizeDLQ).mockReturnValue({
       totalEntries: 1,
@@ -774,12 +786,13 @@ describe("dlq command", () => {
       lastUpdated: "2026-03-10T10:05:00.000Z",
     });
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load,
           save: vi.fn(),
           append: vi.fn(),
-        }) as never
+        }) as never;
+      }
     );
 
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
@@ -821,12 +834,13 @@ describe("dlq command", () => {
       lastUpdated: "2026-03-10T10:05:00.000Z",
     });
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load,
           save: vi.fn(),
           append: vi.fn(),
-        }) as never
+        }) as never;
+      }
     );
     vi.mocked(createRunsRuntime).mockResolvedValue({
       getRunRecord: vi.fn().mockResolvedValue(null),
@@ -870,12 +884,13 @@ describe("dlq command", () => {
       lastUpdated: "2026-03-10T10:10:00.000Z",
     });
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load,
           save,
           append: vi.fn(),
-        }) as never
+        }) as never;
+      }
     );
     vi.mocked(resolveDLQEntry).mockReturnValue({
       entries: [
@@ -934,12 +949,13 @@ describe("dlq command", () => {
       lastUpdated: "2026-03-10T10:05:00.000Z",
     });
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load,
           save: vi.fn(),
           append: vi.fn(),
-        }) as never
+        }) as never;
+      }
     );
 
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
@@ -958,12 +974,13 @@ describe("dlq command", () => {
 
   it("uses execution-failed exit code for DLQ store errors", async () => {
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load: vi.fn().mockRejectedValue(new Error("disk offline")),
           save: vi.fn(),
           append: vi.fn(),
-        }) as never
+        }) as never;
+      }
     );
 
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -1022,15 +1039,16 @@ describe("dlq command", () => {
 
   it("prints empty list text when no entries match", async () => {
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load: vi.fn().mockResolvedValue({
             entries: [],
             lastUpdated: "2026-03-10T10:05:00.000Z",
           }),
           save: vi.fn(),
           append: vi.fn(),
-        }) as never
+        }) as never;
+      }
     );
 
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
@@ -1055,15 +1073,16 @@ describe("dlq command", () => {
 
     process.exitCode = undefined;
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load: vi.fn().mockResolvedValue({
             entries: [],
             lastUpdated: "2026-03-10T10:05:00.000Z",
           }),
           save: vi.fn(),
           append: vi.fn(),
-        }) as never
+        }) as never;
+      }
     );
     await cmd.parseAsync(["list", "--limit", "-1"], { from: "user" });
     expect(process.exitCode).toBe(2);
@@ -1095,8 +1114,8 @@ describe("dlq command", () => {
 
   it("summarizes related run loop states in JSON list output", async () => {
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load: vi.fn().mockResolvedValue({
             entries: [
               {
@@ -1154,7 +1173,8 @@ describe("dlq command", () => {
           }),
           save: vi.fn(),
           append: vi.fn(),
-        }) as never
+        }) as never;
+      }
     );
     const runById = new Map<string, unknown>([
       [
@@ -1210,8 +1230,8 @@ describe("dlq command", () => {
 
   it("omits related list context when runtime lookup fails", async () => {
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load: vi.fn().mockResolvedValue({
             entries: [
               {
@@ -1229,7 +1249,8 @@ describe("dlq command", () => {
           }),
           save: vi.fn(),
           append: vi.fn(),
-        }) as never
+        }) as never;
+      }
     );
     vi.mocked(createRunsRuntime).mockRejectedValueOnce(new Error("runtime offline"));
 
@@ -1248,8 +1269,8 @@ describe("dlq command", () => {
 
   it("falls back when related artifact lookup fails during inspect", async () => {
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load: vi.fn().mockResolvedValue({
             entries: [
               {
@@ -1267,7 +1288,8 @@ describe("dlq command", () => {
           }),
           save: vi.fn(),
           append: vi.fn(),
-        }) as never
+        }) as never;
+      }
     );
     vi.mocked(createRunsRuntime).mockResolvedValue({
       getRunRecord: vi.fn().mockResolvedValue({
@@ -1289,8 +1311,8 @@ describe("dlq command", () => {
 
   it("prints every optional DLQ inspect field in text output", async () => {
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load: vi.fn().mockResolvedValue({
             entries: [
               {
@@ -1321,7 +1343,8 @@ describe("dlq command", () => {
           }),
           save: vi.fn(),
           append: vi.fn(),
-        }) as never
+        }) as never;
+      }
     );
     vi.mocked(createRunsRuntime).mockResolvedValue({
       getRunRecord: vi.fn().mockResolvedValue({
@@ -1359,15 +1382,16 @@ describe("dlq command", () => {
 
     process.exitCode = undefined;
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load: vi.fn().mockResolvedValue({
             entries: [],
             lastUpdated: "2026-03-10T10:05:00.000Z",
           }),
           save: vi.fn(),
           append: vi.fn(),
-        }) as never
+        }) as never;
+      }
     );
     await cmd.parseAsync(["resolve", "missing", "--status", "reviewed"], { from: "user" });
     expect(process.exitCode).toBe(2);
@@ -1377,8 +1401,8 @@ describe("dlq command", () => {
 
     process.exitCode = undefined;
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load: vi.fn().mockResolvedValue({
             entries: [
               {
@@ -1396,7 +1420,8 @@ describe("dlq command", () => {
           }),
           save: vi.fn().mockRejectedValue(new Error("disk full")),
           append: vi.fn(),
-        }) as never
+        }) as never;
+      }
     );
     vi.mocked(resolveDLQEntry).mockReturnValue({
       entries: [
@@ -1421,8 +1446,8 @@ describe("dlq command", () => {
 
     process.exitCode = undefined;
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load: vi.fn().mockResolvedValue({
             entries: [
               {
@@ -1440,7 +1465,8 @@ describe("dlq command", () => {
           }),
           save: vi.fn().mockResolvedValue(undefined),
           append: vi.fn(),
-        }) as never
+        }) as never;
+      }
     );
     vi.mocked(resolveDLQEntry).mockReturnValue({
       entries: [],
@@ -1458,8 +1484,8 @@ describe("dlq command", () => {
   it("prints text resolve success with actor and note", async () => {
     const save = vi.fn().mockResolvedValue(undefined);
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load: vi.fn().mockResolvedValue({
             entries: [
               {
@@ -1477,7 +1503,8 @@ describe("dlq command", () => {
           }),
           save,
           append: vi.fn(),
-        }) as never
+        }) as never;
+      }
     );
     vi.mocked(resolveDLQEntry).mockReturnValue({
       entries: [

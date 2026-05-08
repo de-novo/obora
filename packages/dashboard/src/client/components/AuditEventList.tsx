@@ -1,3 +1,4 @@
+import type { ReactElement } from 'react';
 import { Fragment, useState } from 'react';
 
 import type { AuditEvent } from '../api/audit-client';
@@ -28,7 +29,7 @@ export const AuditEventList = ({
   onPrevPage,
   onNextPage,
   onReplayExecution,
-}: AuditEventListProps): JSX.Element => {
+}: AuditEventListProps): ReactElement => {
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
 
   const currentPage = Math.floor(offset / limit) + 1;

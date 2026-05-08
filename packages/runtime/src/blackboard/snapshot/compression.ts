@@ -296,9 +296,9 @@ export function compress(
       return Buffer.from(compressed);
     }
     return compressed;
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    throw new Error(`Failed to compress data: ${msg}`);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to compress data: ${msg}`, { cause: error });
   }
 }
 
@@ -368,9 +368,9 @@ export function decompress(
       return Buffer.from(decompressed);
     }
     return decompressed;
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    throw new Error(`Failed to decompress data: ${msg}`);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to decompress data: ${msg}`, { cause: error });
   }
 }
 

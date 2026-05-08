@@ -1,3 +1,4 @@
+import type { ReactElement } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 
 import { type AuditEvent, type AuditQueryParams, fetchAuditEvents } from '../api/audit-client';
@@ -10,7 +11,7 @@ interface AuditViewerProps {
   onReplayExecution?: (executionId: string) => void;
 }
 
-export const AuditViewer = ({ onReplayExecution }: AuditViewerProps): JSX.Element => {
+export const AuditViewer = ({ onReplayExecution }: AuditViewerProps): ReactElement => {
   const [filters, setFilters] = useState<AuditQueryParams>({});
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [offset, setOffset] = useState(0);

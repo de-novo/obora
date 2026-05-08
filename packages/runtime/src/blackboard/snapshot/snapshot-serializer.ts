@@ -63,7 +63,7 @@ export class SnapshotSerializer {
       return snapshot;
     } catch (error) {
       if (error instanceof SyntaxError) {
-        throw new Error(`Invalid JSON in snapshot: ${error.message}`);
+        throw new Error(`Invalid JSON in snapshot: ${error.message}`, { cause: error });
       }
       throw error;
     }
@@ -93,7 +93,9 @@ export class SnapshotSerializer {
       return this.fromJSON(json);
     } catch (error) {
       if (error instanceof Error) {
-        throw new Error(`Failed to decode Uint8Array to snapshot: ${error.message}`);
+        throw new Error(`Failed to decode Uint8Array to snapshot: ${error.message}`, {
+          cause: error,
+        });
       }
       throw error;
     }

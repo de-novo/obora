@@ -3,11 +3,15 @@ import { fileURLToPath } from "node:url";
 import { createCLI } from "./cli.js";
 import { CLIError } from "./errors.js";
 
-export async function main() {
-  const program = createCLI();
+export type CLIProgramFactory = () => {
+  parseAsync: (argv?: readonly string[]) => Promise<unknown>;
+};
+
+export async function main(argv: readonly string[] = process.argv, createProgram: CLIProgramFactory = createCLI) {
+  const program = createProgram();
 
   try {
-    await program.parseAsync(process.argv);
+    await program.parseAsync(argv);
   } catch (err) {
     if (err instanceof CLIError) {
       if (err.message) {

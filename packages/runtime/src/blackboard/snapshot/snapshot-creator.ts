@@ -123,9 +123,10 @@ export class SnapshotCreator {
       } else {
         checksum = calculateChecksumSync(stateData);
       }
-    } catch (e) {
+    } catch (error) {
       throw new Error(
-        `Failed to calculate checksum: ${e instanceof Error ? e.message : String(e)}`
+        `Failed to calculate checksum: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error }
       );
     }
 
@@ -146,9 +147,10 @@ export class SnapshotCreator {
 
         // 압축 데이터 체크섬 검증
         compressedChecksum = calculateChecksumSync(compressedString);
-      } catch (e) {
+      } catch (error) {
         throw new Error(
-          `Failed to compress snapshot data: ${e instanceof Error ? e.message : String(e)}`
+          `Failed to compress snapshot data: ${error instanceof Error ? error.message : String(error)}`,
+          { cause: error }
         );
       }
     } else {

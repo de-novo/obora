@@ -8,12 +8,9 @@ export async function promptErrorAction(params: {
   stepName: string;
   error: string;
 }): Promise<TuiAction> {
-  let piTui: PiTuiModule | null = null;
-  try {
-    piTui = (await import("@mariozechner/pi-tui")) as PiTuiModule;
-  } catch {
-    piTui = null;
-  }
+  const piTui = await import("@mariozechner/pi-tui")
+    .then((module) => module as PiTuiModule)
+    .catch(() => null);
 
   console.error(`\nStep failed: ${params.stepName}`);
   console.error(params.error);

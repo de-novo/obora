@@ -1,3 +1,4 @@
+import type { ReactElement } from 'react';
 import type { ExecutionSummary } from '../store/execution-store';
 
 interface ExecutionListProps {
@@ -10,7 +11,7 @@ export const ExecutionList = ({
   executions,
   selectedExecutionId,
   onSelectExecution,
-}: ExecutionListProps): JSX.Element => {
+}: ExecutionListProps): ReactElement => {
   return (
     <aside
       style={{

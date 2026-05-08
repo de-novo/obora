@@ -15,7 +15,9 @@ const oboraRuntimeState: {
 vi.mock("@obora/sdk", () => ({
   loadConfig: vi.fn(),
   FileDLQStore: vi.fn(),
-  OboraRuntime: vi.fn().mockImplementation(() => oboraRuntimeState.instance),
+  OboraRuntime: vi.fn().mockImplementation(function () {
+    return oboraRuntimeState.instance;
+  }),
   OboraError: class OboraError extends Error {
     code: string;
 
@@ -461,14 +463,16 @@ describe("runs list triage sorting", () => {
         },
       ]),
     };
-    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    vi.mocked(OboraRuntime).mockImplementation(function () {
+      return oboraRuntimeState.instance as never;
+    });
     vi.mocked(loadConfig).mockResolvedValue({
       dlq: { filePath: "./data/.obora/dlq/dead-letters.json" },
       persistence: { enabled: true, adapter: "sqlite", sqlite: { path: "./data/obora.db" } },
     } as never);
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load: vi.fn().mockResolvedValue({
             entries: [
               {
@@ -490,7 +494,8 @@ describe("runs list triage sorting", () => {
             ],
             lastUpdated: "2026-03-10T10:05:00.000Z",
           }),
-        }) as never
+        }) as never;
+      }
     );
 
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
@@ -535,14 +540,16 @@ describe("runs list triage sorting", () => {
         },
       ]),
     };
-    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    vi.mocked(OboraRuntime).mockImplementation(function () {
+      return oboraRuntimeState.instance as never;
+    });
     vi.mocked(loadConfig).mockResolvedValue({
       dlq: { filePath: "./data/.obora/dlq/dead-letters.json" },
       persistence: { enabled: true, adapter: "sqlite", sqlite: { path: "./data/obora.db" } },
     } as never);
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load: vi.fn().mockResolvedValue({
             entries: [
               {
@@ -564,7 +571,8 @@ describe("runs list triage sorting", () => {
             ],
             lastUpdated: "2026-03-10T10:05:00.000Z",
           }),
-        }) as never
+        }) as never;
+      }
     );
 
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
@@ -583,8 +591,10 @@ describe("runs list triage sorting", () => {
     oboraRuntimeState.instance = {
       listRunRecords: vi.fn().mockResolvedValue([]),
     };
-    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
-    vi.mocked(FileDLQStore).mockImplementation(() => {
+    vi.mocked(OboraRuntime).mockImplementation(function () {
+      return oboraRuntimeState.instance as never;
+    });
+    vi.mocked(FileDLQStore).mockImplementation(function () {
       throw new Error("DLQ store should not be constructed for empty run lists");
     });
 
@@ -627,15 +637,18 @@ describe("runs list triage sorting", () => {
         },
       ]),
     };
-    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    vi.mocked(OboraRuntime).mockImplementation(function () {
+      return oboraRuntimeState.instance as never;
+    });
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load: vi.fn().mockResolvedValue({
             entries: [],
             lastUpdated: "2026-03-10T10:05:00.000Z",
           }),
-        }) as never
+        }) as never;
+      }
     );
 
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
@@ -661,15 +674,18 @@ describe("runs list triage sorting", () => {
         },
       ]),
     };
-    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    vi.mocked(OboraRuntime).mockImplementation(function () {
+      return oboraRuntimeState.instance as never;
+    });
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load: vi.fn().mockResolvedValue({
             entries: [],
             lastUpdated: "2026-03-10T10:05:00.000Z",
           }),
-        }) as never
+        }) as never;
+      }
     );
 
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
@@ -700,15 +716,18 @@ describe("runs list triage sorting", () => {
       getRunAuditTimeline: vi.fn().mockResolvedValue([]),
       listRunRecords: vi.fn().mockResolvedValue([]),
     };
-    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    vi.mocked(OboraRuntime).mockImplementation(function () {
+      return oboraRuntimeState.instance as never;
+    });
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load: vi.fn().mockResolvedValue({
             entries: [],
             lastUpdated: "2026-03-10T10:05:00.000Z",
           }),
-        }) as never
+        }) as never;
+      }
     );
 
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
@@ -729,15 +748,18 @@ describe("runs list triage sorting", () => {
       getRunAuditTimeline: vi.fn(),
       listRunRecords: vi.fn().mockResolvedValue([]),
     };
-    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    vi.mocked(OboraRuntime).mockImplementation(function () {
+      return oboraRuntimeState.instance as never;
+    });
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load: vi.fn().mockResolvedValue({
             entries: [],
             lastUpdated: "2026-03-10T10:05:00.000Z",
           }),
-        }) as never
+        }) as never;
+      }
     );
 
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
@@ -758,7 +780,9 @@ describe("runs list triage sorting", () => {
     oboraRuntimeState.instance = {
       listRunRecords: vi.fn().mockRejectedValue(new Error("sqlite offline")),
     };
-    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    vi.mocked(OboraRuntime).mockImplementation(function () {
+      return oboraRuntimeState.instance as never;
+    });
 
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const cmd = createRunsCommand();
@@ -774,7 +798,9 @@ describe("runs list triage sorting", () => {
     oboraRuntimeState.instance = {
       listRunRecords: vi.fn().mockRejectedValue("sqlite offline"),
     };
-    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    vi.mocked(OboraRuntime).mockImplementation(function () {
+      return oboraRuntimeState.instance as never;
+    });
 
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const cmd = createRunsCommand();
@@ -791,7 +817,9 @@ describe("runs list triage sorting", () => {
     oboraRuntimeState.instance = {
       listRunRecords: vi.fn().mockResolvedValue([]),
     };
-    vi.mocked(OboraRuntime).mockImplementation(() => oboraRuntimeState.instance as never);
+    vi.mocked(OboraRuntime).mockImplementation(function () {
+      return oboraRuntimeState.instance as never;
+    });
 
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const cmd = createRunsCommand();
@@ -1279,8 +1307,8 @@ describe("runs inspect repair-loop summary", () => {
       dlq: { filePath: "./data/.obora/dlq/dead-letters.json" },
     } as never);
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load: vi.fn().mockResolvedValue({
             entries: [
               {
@@ -1297,7 +1325,8 @@ describe("runs inspect repair-loop summary", () => {
             ],
             lastUpdated: "2026-03-10T10:05:00.000Z",
           }),
-        }) as never
+        }) as never;
+      }
     );
 
     const runtime = {
@@ -1341,8 +1370,8 @@ describe("runs inspect repair-loop summary", () => {
   it("prints linked DLQ entry in text inspect output", async () => {
     vi.mocked(loadConfig).mockResolvedValue({} as never);
     vi.mocked(FileDLQStore).mockImplementation(
-      () =>
-        ({
+      function () {
+        return ({
           load: vi.fn().mockResolvedValue({
             entries: [
               {
@@ -1364,7 +1393,8 @@ describe("runs inspect repair-loop summary", () => {
             ],
             lastUpdated: "2026-03-10T10:05:00.000Z",
           }),
-        }) as never
+        }) as never;
+      }
     );
 
     const runtime = {

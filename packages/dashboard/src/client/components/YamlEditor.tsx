@@ -1,3 +1,4 @@
+import type { ReactElement } from 'react';
 import { useEffect, useRef, useState } from 'react';
 
 import {
@@ -20,7 +21,7 @@ interface YamlEditorProps {
 
 const EMPTY_VALIDATION: PolicyValidationResult = { valid: true, errors: [] };
 
-export const YamlEditor = ({ policy, onSaved }: YamlEditorProps): JSX.Element => {
+export const YamlEditor = ({ policy, onSaved }: YamlEditorProps): ReactElement => {
   const [name, setName] = useState<string>(policy?.name ?? '');
   const [content, setContent] = useState<string>(policy?.content ?? '');
   const [baseRevision, setBaseRevision] = useState<string | undefined>(policy?.revision);

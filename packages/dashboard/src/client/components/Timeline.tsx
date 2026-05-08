@@ -1,3 +1,4 @@
+import type { ReactElement } from 'react';
 import type { ExecutionStep } from '../store/execution-store';
 
 interface TimelineProps {
@@ -14,7 +15,7 @@ const statusStyles: Record<ExecutionStep['status'], { color: string; icon: strin
   failed: { color: '#dc2626', icon: '✕', label: '실패' },
 };
 
-export const Timeline = ({ executionId, steps, selectedStepName, onStepClick }: TimelineProps): JSX.Element => {
+export const Timeline = ({ executionId, steps, selectedStepName, onStepClick }: TimelineProps): ReactElement => {
   if (!executionId) {
     return <p style={{ margin: 0, color: '#6b7280' }}>좌측에서 실행을 선택하세요.</p>;
   }

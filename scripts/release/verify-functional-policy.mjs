@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const repoRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 const roots = ["packages", "scripts"];
 const budgets = {
-  mutableBinding: 326,
+  mutableBinding: 318,
   loopStatement: 502,
 };
 

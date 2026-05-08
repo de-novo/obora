@@ -1,3 +1,4 @@
+import type { ReactElement } from 'react';
 import type { DiffResult } from '../api/policy-client';
 
 interface PolicyDiffProps {
@@ -30,7 +31,7 @@ const bgColor = (type: 'added' | 'removed' | 'modified'): string => {
 
 const stringify = (value: unknown): string => JSON.stringify(value, null, 2) ?? 'null';
 
-export const PolicyDiff = ({ diff }: PolicyDiffProps): JSX.Element => (
+export const PolicyDiff = ({ diff }: PolicyDiffProps): ReactElement => (
   <section style={{ border: '1px solid #e2e8f0', borderRadius: '10px', padding: '12px', backgroundColor: '#fff' }}>
     <p style={{ margin: 0, fontWeight: 600 }}>{diff.summary}</p>
 

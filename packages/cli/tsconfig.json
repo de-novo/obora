@@ -9,14 +9,13 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "baseUrl": "../..",
     "paths": {
-      "@obora/adapters": ["packages/adapters/src/typecheck-public.d.ts"],
-      "@obora/adapters/llm": ["packages/adapters/src/typecheck-public.d.ts"],
-      "@obora/adapters/tools": ["packages/adapters/src/typecheck-public.d.ts"],
-      "@obora/adapters/auth": ["packages/adapters/src/typecheck-public.d.ts"],
-      "@obora/runtime": ["packages/runtime/src/typecheck-public.d.ts"],
-      "@obora/sdk": ["packages/sdk/src/index.ts"]
+      "@obora/adapters": ["../../packages/adapters/src/typecheck-public.d.ts"],
+      "@obora/adapters/llm": ["../../packages/adapters/src/typecheck-public.d.ts"],
+      "@obora/adapters/tools": ["../../packages/adapters/src/typecheck-public.d.ts"],
+      "@obora/adapters/auth": ["../../packages/adapters/src/typecheck-public.d.ts"],
+      "@obora/runtime": ["../../packages/runtime/src/typecheck-public.d.ts"],
+      "@obora/sdk": ["../../packages/sdk/src/index.ts"]
     },
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,

@@ -20,9 +20,15 @@ const mockCheckpointManager = {
 
 vi.mock("@obora/runtime", async () => {
   const actual = await vi.importActual<typeof import("@obora/runtime")>("@obora/runtime");
+  class MockCheckpointManager {
+    constructor() {
+      return mockCheckpointManager;
+    }
+  }
+
   return {
     ...actual,
-    CheckpointManager: vi.fn().mockImplementation(() => mockCheckpointManager),
+    CheckpointManager: MockCheckpointManager,
   };
 });
 

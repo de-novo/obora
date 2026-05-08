@@ -1,3 +1,4 @@
+import type { ReactElement } from 'react';
 import { type FormEvent, useState } from 'react';
 
 import type { AuditQueryParams } from '../api/audit-client';
@@ -31,7 +32,7 @@ const normalize = (params?: AuditQueryParams): AuditQueryParams => ({
   executionId: params?.executionId ?? '',
 });
 
-export const AuditFilter = ({ loading = false, initialValue, onSearch, onReset }: AuditFilterProps): JSX.Element => {
+export const AuditFilter = ({ loading = false, initialValue, onSearch, onReset }: AuditFilterProps): ReactElement => {
   const [filters, setFilters] = useState<AuditQueryParams>(() => normalize(initialValue));
 
   const update = (patch: Partial<AuditQueryParams>): void => {

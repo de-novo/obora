@@ -168,16 +168,22 @@ export class ExecutionController {
           if (!budgetExceeded) {
             try {
               const workflowDef = workflows.get(name);
-              if (!workflowDef) throw new Error(`Workflow not found: ${name}`);
-              const rollbackResult = await this.opts.tkgService.rollbackTKGOnExecutionFailure(
-                executionId,
-                workflowDef,
-              );
-              if (rollbackResult.restored) {
+              if (!workflowDef) {
                 await this.opts.eventBus.emit("warning", executionId, {
-                  message: `Auto-rollback completed: ${rollbackResult.restoredFactCount} facts restored`,
-                  code: "TKG_AUTO_ROLLBACK_SUCCESS",
+                  message: `Auto-rollback failed: workflow not found: ${name}`,
+                  code: "TKG_AUTO_ROLLBACK_FAILED",
                 });
+              } else {
+                const rollbackResult = await this.opts.tkgService.rollbackTKGOnExecutionFailure(
+                  executionId,
+                  workflowDef,
+                );
+                if (rollbackResult.restored) {
+                  await this.opts.eventBus.emit("warning", executionId, {
+                    message: `Auto-rollback completed: ${rollbackResult.restoredFactCount} facts restored`,
+                    code: "TKG_AUTO_ROLLBACK_SUCCESS",
+                  });
+                }
               }
             } catch (rollbackErr) {
               await this.opts.eventBus.emit("warning", executionId, {

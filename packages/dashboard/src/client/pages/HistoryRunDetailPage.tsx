@@ -1,3 +1,4 @@
+import type { ReactElement } from 'react';
 import { useEffect, useState } from 'react';
 
 import {
@@ -22,7 +23,7 @@ interface Props {
   onBack: () => void;
 }
 
-export const HistoryRunDetailPage = ({ runId, onBack }: Props): JSX.Element => {
+export const HistoryRunDetailPage = ({ runId, onBack }: Props): ReactElement => {
   const [data, setData] = useState<RunDetailResponse | undefined>(undefined);
   const [selectedStepId, setSelectedStepId] = useState<string | undefined>(undefined);
   const [auditCategory, setAuditCategory] = useState<HistoryAuditCategory>('all');
