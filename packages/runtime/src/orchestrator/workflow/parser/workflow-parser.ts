@@ -3,6 +3,7 @@
  */
 
 import { parse as parseYaml, YAMLParseError } from "yaml";
+import { Effect } from "effect";
 
 import { DependencyError, ParseError } from "../errors/index.js";
 import { buildGraph, topologicalSort } from "../graph/index.js";
@@ -445,9 +446,7 @@ function parseRecovery(raw: unknown): Record<string, RecoveryStrategyConfig> | u
   }
 
   const recovery = raw as Record<string, unknown>;
-  const parsed: Record<string, RecoveryStrategyConfig> = {};
-
-  for (const [stepName, config] of Object.entries(recovery)) {
+  return Object.fromEntries(Object.entries(recovery).map(([stepName, config]) => {
     if (typeof config !== "object" || config === null) {
       throw new ParseError("E2003", `'recovery.${stepName}' must be an object`);
     }
@@ -458,7 +457,7 @@ function parseRecovery(raw: unknown): Record<string, RecoveryStrategyConfig> | u
       throw new ParseError("E2003", `'recovery.${stepName}.on_fail' is invalid`);
     }
 
-    parsed[stepName] = {
+    return [stepName, {
       on_fail: item.on_fail as RecoveryStrategyConfig["on_fail"],
       max_retries: typeof item.max_retries === "number" ? item.max_retries : undefined,
       backoff: item.backoff === "linear" || item.backoff === "exponential" ? item.backoff : undefined,
@@ -466,22 +465,30 @@ function parseRecovery(raw: unknown): Record<string, RecoveryStrategyConfig> | u
       to: typeof item.to === "string" ? item.to : undefined,
       fallback: item.fallback as RecoveryStrategyConfig["fallback"],
       custom: typeof item.custom === "string" ? item.custom : undefined,
-    };
-  }
-
-  return parsed;
+    }];
+  })) as Record<string, RecoveryStrategyConfig>;
 }
 
 /**
  * Check for duplicate step names
  */
 function checkDuplicateSteps(steps: Step[]): void {
-  const names = new Set<string>();
-  for (const step of steps) {
-    if (names.has(step.name)) {
-      throw new ParseError("E2006", `Duplicate step name: '${step.name}'`);
-    }
-    names.add(step.name);
+  const duplicate = steps.reduce<{ names: Set<string>; duplicate?: string }>(
+    (state, step) => {
+      if (state.duplicate) {
+        return state;
+      }
+      if (state.names.has(step.name)) {
+        return { ...state, duplicate: step.name };
+      }
+      state.names.add(step.name);
+      return state;
+    },
+    { names: new Set<string>() }
+  ).duplicate;
+
+  if (duplicate) {
+    throw new ParseError("E2006", `Duplicate step name: '${duplicate}'`);
   }
 }
 
@@ -489,10 +496,9 @@ function checkDuplicateSteps(steps: Step[]): void {
  * Check for self-dependencies
  */
 function checkSelfDependencies(steps: Step[]): void {
-  for (const step of steps) {
-    if (step.depends_on?.includes(step.name)) {
-      throw new DependencyError("E3003", `Step '${step.name}' depends on itself`);
-    }
+  const selfDependentStep = steps.find((step) => step.depends_on?.includes(step.name));
+  if (selfDependentStep) {
+    throw new DependencyError("E3003", `Step '${selfDependentStep.name}' depends on itself`);
   }
 }
 
@@ -501,18 +507,15 @@ function checkSelfDependencies(steps: Step[]): void {
  */
 function checkMissingDependencies(steps: Step[]): void {
   const stepNames = new Set(steps.map((s) => s.name));
+  const missingDependency = steps
+    .flatMap((step) => (step.depends_on ?? []).map((dependency) => ({ step, dependency })))
+    .find(({ dependency }) => !stepNames.has(dependency));
 
-  for (const step of steps) {
-    if (step.depends_on) {
-      for (const dep of step.depends_on) {
-        if (!stepNames.has(dep)) {
-          throw new DependencyError(
-            "E3002",
-            `Step '${step.name}' depends on non-existent step '${dep}'`
-          );
-        }
-      }
-    }
+  if (missingDependency) {
+    throw new DependencyError(
+      "E3002",
+      `Step '${missingDependency.step.name}' depends on non-existent step '${missingDependency.dependency}'`
+    );
   }
 }
 
@@ -520,10 +523,7 @@ function checkMissingDependencies(steps: Step[]): void {
  * Check for circular dependencies using DFS
  */
 function checkCircularDependencies(steps: Step[]): void {
-  const graph = new Map<string, string[]>();
-  for (const step of steps) {
-    graph.set(step.name, step.depends_on || []);
-  }
+  const graph = new Map(steps.map((step) => [step.name, step.depends_on || []]));
 
   const visited = new Set<string>();
   const recStack = new Set<string>();
@@ -532,8 +532,7 @@ function checkCircularDependencies(steps: Step[]): void {
     visited.add(node);
     recStack.add(node);
 
-    const deps = graph.get(node) || [];
-    for (const dep of deps) {
+    const cycleFound = (graph.get(node) || []).some((dep) => {
       if (!visited.has(dep)) {
         if (hasCycle(dep, [...path, dep])) {
           return true;
@@ -544,45 +543,42 @@ function checkCircularDependencies(steps: Step[]): void {
           `Circular dependency detected: ${[...path, node, dep].join(" -> ")}`
         );
       }
-    }
+      return false;
+    });
 
     recStack.delete(node);
-    return false;
+    return cycleFound;
   }
 
-  for (const step of steps) {
-    if (!visited.has(step.name)) {
-      hasCycle(step.name, [step.name]);
-    }
-  }
+  steps.find((step) => !visited.has(step.name) && hasCycle(step.name, [step.name]));
 }
 
 function checkOnFailMutualExclusion(
   steps: Step[],
   recovery: Record<string, RecoveryStrategyConfig> | undefined,
 ): void {
-  for (const step of steps) {
+  const conflictingStep = steps.find((step) => {
     if (!step.on_fail?.goto) {
-      continue;
+      return false;
     }
 
     const workflowRecovery = recovery?.[step.name];
     const stepConfigRecovery = (step.config as Record<string, unknown> | undefined)?.recovery as Record<string, unknown> | undefined;
     const hasStepConfigOnFail = typeof stepConfigRecovery?.on_fail === "string";
     const hasWorkflowOnFail = typeof workflowRecovery?.on_fail === "string";
+    return hasStepConfigOnFail || hasWorkflowOnFail;
+  });
 
-    if (hasStepConfigOnFail || hasWorkflowOnFail) {
-      throw new ParseError(
-        "E2003",
-        `Step '${step.name}': 'on_fail.goto' and 'recovery.on_fail' are mutually exclusive`,
-      );
-    }
+  if (conflictingStep) {
+    throw new ParseError(
+      "E2003",
+      `Step '${conflictingStep.name}': 'on_fail.goto' and 'recovery.on_fail' are mutually exclusive`,
+    );
   }
 }
 
 function checkOnFailBackEdges(steps: Step[]): void {
   const stepNames = new Set(steps.map((s) => s.name));
-  const byTarget = new Map<string, string[]>();
   const graph = buildGraph(steps);
   const topo = topologicalSort(graph);
 
@@ -591,28 +587,29 @@ function checkOnFailBackEdges(steps: Step[]): void {
   }
 
   const canReachDependency = (from: string, target: string): boolean => {
-    const visited = new Set<string>();
-    const queue = [from];
-    while (queue.length > 0) {
-      const current = queue.shift()!;
-      const deps = graph.reverseEdges.get(current) ?? new Set<string>();
-      for (const dep of deps) {
-        if (dep === target) {
-          return true;
-        }
-        if (!visited.has(dep)) {
-          visited.add(dep);
-          queue.push(dep);
-        }
+    const visit = (queue: string[], visited: Set<string>): boolean => {
+      const [current, ...remainingQueue] = queue;
+      if (!current) {
+        return false;
       }
-    }
-    return false;
+
+      const dependencies = [...(graph.reverseEdges.get(current) ?? new Set<string>())];
+      if (dependencies.includes(target)) {
+        return true;
+      }
+
+      const nextDependencies = dependencies.filter((dependency) => !visited.has(dependency));
+      nextDependencies.forEach((dependency) => visited.add(dependency));
+      return visit([...remainingQueue, ...nextDependencies], visited);
+    };
+
+    return visit([from], new Set<string>());
   };
 
-  for (const step of steps) {
+  const byTarget = steps.reduce<Map<string, string[]>>((targets, step) => {
     const backEdge = step.on_fail;
     if (!backEdge) {
-      continue;
+      return targets;
     }
 
     if (backEdge.goto === step.name) {
@@ -630,15 +627,15 @@ function checkOnFailBackEdges(steps: Step[]): void {
       );
     }
 
-    const sources = byTarget.get(backEdge.goto) ?? [];
-    sources.push(step.name);
-    byTarget.set(backEdge.goto, sources);
-  }
+    const sources = targets.get(backEdge.goto) ?? [];
+    targets.set(backEdge.goto, [...sources, step.name]);
+    return targets;
+  }, new Map<string, string[]>());
 
-  for (const [target, sources] of byTarget) {
-    if (sources.length >= 3) {
-      throw new ParseError("E2003", `Too many back-edges point to '${target}': ${sources.length} (maximum: 2)`);
-    }
+  const overloadedTarget = [...byTarget.entries()].find(([, sources]) => sources.length >= 3);
+  if (overloadedTarget) {
+    const [target, sources] = overloadedTarget;
+    throw new ParseError("E2003", `Too many back-edges point to '${target}': ${sources.length} (maximum: 2)`);
   }
 }
 
@@ -646,40 +643,37 @@ function checkOnFailBackEdges(steps: Step[]): void {
  * Check for unresolved input files
  */
 function checkUnresolvedInputs(steps: Step[], options: ParserOptions): void {
-  // Collect all outputs
-  const availableOutputs = new Set<string>();
-  for (const step of steps) {
-    if (step.outputs) {
-      for (const output of step.outputs) {
-        availableOutputs.add(output);
-      }
-    }
+  const availableOutputs = new Set(steps.flatMap((step) => step.outputs ?? []));
+  const unresolvedInputs = steps
+    .flatMap((step) => (step.inputs ?? []).map((input) => ({ step, input })))
+    .filter(({ input }) => {
+      const filename = input.split("/").pop() || input;
+      return !SPEC_FILES.includes(filename) && !availableOutputs.has(input);
+    });
+
+  if (options.strict && unresolvedInputs[0]) {
+    const { step, input } = unresolvedInputs[0];
+    throw new DependencyError(
+      "E3004",
+      `Step '${step.name}' requires input '${input}' but no step produces it`
+    );
   }
 
-  // Check inputs
-  for (const step of steps) {
-    if (step.inputs) {
-      for (const input of step.inputs) {
-        // Skip spec files
-        const filename = input.split("/").pop() || input;
-        if (SPEC_FILES.includes(filename)) {
-          continue;
-        }
+  unresolvedInputs.forEach(({ step, input }) =>
+    options.onWarning?.(
+      `E3004: Step '${step.name}' requires input '${input}' but no step produces it`
+    )
+  );
+}
 
-        if (!availableOutputs.has(input)) {
-          if (options.strict) {
-            throw new DependencyError(
-              "E3004",
-              `Step '${step.name}' requires input '${input}' but no step produces it`
-            );
-          } else if (options.onWarning) {
-            options.onWarning(
-              `E3004: Step '${step.name}' requires input '${input}' but no step produces it`
-            );
-          }
-        }
-      }
+function parseYamlContent(yamlContent: string): unknown {
+  try {
+    return parseYaml(yamlContent);
+  } catch (error) {
+    if (error instanceof YAMLParseError) {
+      throw new ParseError("E2001", error.message);
     }
+    throw error;
   }
 }
 
@@ -687,17 +681,7 @@ function checkUnresolvedInputs(steps: Step[], options: ParserOptions): void {
  * Parse workflow YAML string into typed Workflow object
  */
 export function parseWorkflow(yamlContent: string, options: ParserOptions = {}): Workflow {
-  let raw: unknown;
-
-  // Parse YAML
-  try {
-    raw = parseYaml(yamlContent);
-  } catch (error) {
-    if (error instanceof YAMLParseError) {
-      throw new ParseError("E2001", error.message);
-    }
-    throw error;
-  }
+  const raw = parseYamlContent(yamlContent);
 
   if (typeof raw !== "object" || raw === null) {
     throw new ParseError("E2001", "Workflow must be a YAML object");
@@ -770,38 +754,39 @@ export function parseWorkflow(yamlContent: string, options: ParserOptions = {}):
   };
 }
 
+export const parseWorkflowEffect = (
+  yamlContent: string,
+  options: ParserOptions = {}
+): Effect.Effect<Workflow, unknown> =>
+  Effect.try({
+    try: () => parseWorkflow(yamlContent, options),
+    catch: (error) => error,
+  });
+
 /**
  * Resolve dependencies including implicit ones from inputs/outputs
  */
 export function resolveDependencies(workflow: Workflow): DependencyMap {
-  const deps = new Map<string, string[]>();
+  const outputMap = workflow.steps.reduce<Map<string, string>>(
+    (outputs, step) =>
+      (step.outputs ?? []).reduce<Map<string, string>>(
+        (currentOutputs, output) => currentOutputs.set(output, step.name),
+        outputs
+      ),
+    new Map<string, string>()
+  );
 
-  // Build output map: file -> step name
-  const outputMap = new Map<string, string>();
-  for (const step of workflow.steps) {
-    if (step.outputs) {
-      for (const output of step.outputs) {
-        outputMap.set(output, step.name);
-      }
-    }
-  }
-
-  // Resolve dependencies for each step
-  for (const step of workflow.steps) {
+  return workflow.steps.reduce<DependencyMap>((deps, step) => {
     const stepDeps = new Set<string>(step.depends_on || []);
 
-    // Add implicit dependencies from inputs
-    if (step.inputs) {
-      for (const input of step.inputs) {
-        const producer = outputMap.get(input);
-        if (producer && producer !== step.name) {
-          stepDeps.add(producer);
-        }
+    (step.inputs ?? []).forEach((input) => {
+      const producer = outputMap.get(input);
+      if (producer && producer !== step.name) {
+        stepDeps.add(producer);
       }
-    }
+    });
 
     deps.set(step.name, Array.from(stepDeps));
-  }
-
-  return deps;
+    return deps;
+  }, new Map<string, string[]>());
 }

@@ -32,6 +32,7 @@
 - Prefer `const`, `ReadonlyArray`, `map`, `filter`, `reduce`, `flatMap`, `Object.entries`, and small pure helpers.
 - For async sequencing or resource boundaries, prefer EffectTS APIs such as `Effect.gen`, `Effect.forEach`, `Effect.acquireRelease`, and `Ref`.
 - `pnpm verify:functional` is a file-level ratchet. Do not rebaseline `scripts/release/functional-policy-baseline.json` upward without documenting the reason and follow-up cleanup.
+- After actually reducing `let` or loop counts, run `pnpm verify:functional:update` instead of hand-editing `scripts/release/functional-policy-baseline.json`. The updater rejects increases unless `--allow-increase` is passed with explicit reviewer approval.
 
 ## EffectTS Boundary
 
@@ -51,6 +52,7 @@
 - `pnpm verify:compat` must pass.
 - New `deprecated`, `legacy`, `backward compat`, `compatibility`, or `_legacy` source mentions require an entry in `scripts/release/compat-allowlist.txt` with classification and replacement guidance.
 - Do not hide deprecated public API debt in docs; list it as compatibility debt or remove it in a breaking-cleanup lane.
+- When removing deprecated APIs or compatibility shims, update both `scripts/release/compat-allowlist.txt` and `scripts/review-gate-deprecated-allowlist.txt` in the same patch.
 
 ## Documentation
 

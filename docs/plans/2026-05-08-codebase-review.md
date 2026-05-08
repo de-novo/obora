@@ -337,3 +337,52 @@ Current final results:
 - `pnpm verify:test-type-debt`: PASS with an empty allowlist.
 - `pnpm outdated -r --format json`: `{}` with registry access.
 - `pnpm verify:smoke` and `bash scripts/review-gate.sh`: PASS with local port binding allowed.
+
+## Full Functional/Compat Overhaul Follow-up
+
+Branch: `codex/full-functional-effect-overhaul`
+
+Verified changes in this lane:
+
+- `packages/runtime/src/orchestrator/workflow/graph/index.ts` was converted away from `let` and `for(...)` statements.
+- `packages/runtime/src/orchestrator/workflow/parser/workflow-parser.ts` was converted away from `let` and `for(...)` statements.
+- `parseWorkflowEffect` was added as an additive EffectTS boundary while keeping the existing synchronous `parseWorkflow` API.
+- `scripts/release/verify-functional-policy.mjs --update` was added and exposed as `pnpm verify:functional:update`. It updates the ratchet only from scanned source and rejects baseline increases unless `--allow-increase` is explicitly supplied.
+- Deprecated adapters shims removed in this breaking-cleanup lane:
+  - `LegacyToolBackedSkill`
+  - `ToolRegistry.toFunctionCallingSchema`
+  - `FunctionCallRequest` / `FunctionCallResponse`
+- `ToolExecutor` now consumes canonical `ToolCall` inputs through `handleToolCall` / `handleToolCalls`.
+- `scripts/release/compat-allowlist.txt` and `scripts/review-gate-deprecated-allowlist.txt` were reduced for the removed shims.
+
+Follow-up command evidence captured during the lane:
+
+```bash
+pnpm --filter @obora/runtime test -- workflow/parser/__tests__/workflow-parser-coverage.test.ts workflow/resolver/__tests__/dependency-resolver.test.ts workflow/validator/__tests__/workflow-validator-coverage.test.ts
+pnpm --filter @obora/runtime typecheck
+pnpm --filter @obora/adapters test -- tools/executor.test.ts tools/conformance.test.ts tools/registry.test.ts
+pnpm --filter @obora/adapters typecheck
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm verify:coverage
+pnpm build
+pnpm verify:release
+pnpm verify:smoke
+pnpm verify:sdk-public-api
+pnpm audit --audit-level moderate
+pnpm outdated -r --format json
+bash scripts/review-gate.sh
+pnpm verify:compat
+pnpm verify:functional
+pnpm verify:functional:update
+pnpm verify:deps
+pnpm verify:test-type-debt
+```
+
+Current ratchet after this lane:
+
+- `pnpm verify:functional`: PASS with `mutableBinding=309/309`, `loopStatement=462/462`, 184 file baseline entries.
+- `pnpm verify:coverage`: PASS with package branch coverage at SDK 91.07%, runtime 90.00%, adapters 92.53%, CLI 90.01%, dashboard 90.15%.
+- `pnpm outdated -r --format json`: `{}` with registry access.
+- `pnpm verify:release`, `pnpm verify:smoke`, `pnpm verify:sdk-public-api`, and `bash scripts/review-gate.sh`: PASS.

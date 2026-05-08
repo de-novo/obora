@@ -22,6 +22,7 @@
     "verify:compat": "bash scripts/release/verify-compat-inventory.sh",
     "verify:deps": "node scripts/release/verify-dependency-policy.mjs",
     "verify:functional": "node scripts/release/verify-functional-policy.mjs",
+    "verify:functional:update": "node scripts/release/verify-functional-policy.mjs --update",
     "verify:test-type-debt": "bash scripts/release/verify-test-type-debt.sh",
     "verify:sdk-public-api": "node scripts/release/verify-sdk-no-console.mjs && node scripts/release/verify-sdk-public-api.mjs"
   },

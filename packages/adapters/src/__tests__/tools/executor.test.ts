@@ -1,7 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { ToolRegistry } from "../../tools/registry";
 import { ToolExecutor, ToolExecutionChain } from "../../tools/executor";
-import type { FunctionCallRequest, FunctionCallResponse, ToolContext } from "../../tools/types";
+import type { ToolCallExecutionResponse } from "../../tools/executor";
+import type { ToolCall, ToolContext } from "../../tools/types";
+
+const makeToolCall = (id: string, name: string, args: string): ToolCall => ({
+  id,
+  type: "function",
+  function: { name, arguments: args },
+});
 
 describe("ToolExecutor", () => {
   const context: ToolContext = {
@@ -13,10 +20,7 @@ describe("ToolExecutor", () => {
   it("should return error on invalid JSON arguments", async () => {
     const registry = new ToolRegistry();
     const executor = new ToolExecutor(registry);
-    const response = await executor.handleFunctionCall(
-      { id: "1", name: "noop", arguments: "{invalid" },
-      context
-    );
+    const response = await executor.handleToolCall(makeToolCall("1", "noop", "{invalid"), context);
     expect(response.error).toContain("Invalid JSON");
   });
 
@@ -31,10 +35,7 @@ describe("ToolExecutor", () => {
       },
     });
     const executor = new ToolExecutor(registry);
-    const response = await executor.handleFunctionCall(
-      { id: "1", name: "greet", arguments: "{}" },
-      context
-    );
+    const response = await executor.handleToolCall(makeToolCall("1", "greet", "{}"), context);
     expect(response.result).toBe(JSON.stringify({ message: "hi" }));
     expect(response.error).toBeUndefined();
   });
@@ -63,10 +64,10 @@ describe("ToolExecutor", () => {
       },
     });
     const executor = new ToolExecutor(registry);
-    const responses = await executor.handleFunctionCalls(
+    const responses = await executor.handleToolCalls(
       [
-        { id: "1", name: "echo", arguments: '{"a":1}' },
-        { id: "2", name: "echo", arguments: '{"b":2}' },
+        makeToolCall("1", "echo", '{"a":1}'),
+        makeToolCall("2", "echo", '{"b":2}'),
       ],
       context
     );
@@ -86,10 +87,7 @@ describe("ToolExecutor", () => {
       },
     });
     const executor = new ToolExecutor(registry);
-    const response = await executor.handleFunctionCall(
-      { id: "1", name: "void_tool", arguments: "{}" },
-      context
-    );
+    const response = await executor.handleToolCall(makeToolCall("1", "void_tool", "{}"), context);
     expect(response.result).toBe("null");
     expect(response.error).toBeUndefined();
   });
@@ -106,10 +104,7 @@ describe("ToolExecutor", () => {
     });
     const executor = new ToolExecutor(registry);
 
-    const response = await executor.handleFunctionCall(
-      { id: "1", name: "explode", arguments: "{}" },
-      context
-    );
+    const response = await executor.handleToolCall(makeToolCall("1", "explode", "{}"), context);
 
     expect(response).toEqual({
       id: "1",
@@ -266,10 +261,10 @@ describe("ToolExecutionChain", () => {
         super(new ToolRegistry());
       }
 
-      override async handleFunctionCall(
-        call: FunctionCallRequest,
+      override async handleToolCall(
+        call: ToolCall,
         _context: ToolContext
-      ): Promise<FunctionCallResponse> {
+      ): Promise<ToolCallExecutionResponse> {
         return { id: call.id, result: "plain text" };
       }
     }

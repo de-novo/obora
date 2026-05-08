@@ -94,16 +94,3 @@ export function agentToolToToolDefinition(tool: AgentTool): ToolDefinition {
     },
   };
 }
-
-/** @deprecated ToolCall 사용 권장 */
-export interface FunctionCallRequest {
-  id: string;
-  name: string;
-  arguments: string;
-}
-
-export interface FunctionCallResponse {
-  id: string;
-  result: string;
-  error?: string;
-}

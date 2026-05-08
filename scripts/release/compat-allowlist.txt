@@ -1,8 +1,5 @@
 # path<TAB>classification<TAB>reason
 # classification: keep | deprecate | remove-later
-packages/adapters/src/skills/types.ts	deprecate	Public alias retained for minor compatibility; replacement is OboraSkill.tools.
-packages/adapters/src/tools/registry.ts	deprecate	Deprecated helper retained until the next breaking cleanup; replacement is toToolDefinitions.
-packages/adapters/src/tools/types.ts	deprecate	Deprecated ToolDefinition alias retained; replacement is ToolCall.
 packages/cli/src/runtime/context-builder.ts	keep	No-op hook protects older agent plugin shapes without reintroducing legacy source paths.
 packages/cli/src/tui/error-ui.ts	keep	Readline fallback is a runtime compatibility behavior, not legacy command support.
 packages/runtime/src/audit/index.ts	deprecate	Audit re-export surface is kept for current minor compatibility; remove only in breaking cleanup.

@@ -1,31 +1,63 @@
-import {
-  FunctionCallRequest,
-  FunctionCallResponse,
-  ToolContext,
-  ToolExecutionResult,
-} from "./types";
+import type { ToolCall, ToolContext, ToolExecutionResult } from "./types";
 import { ToolRegistry } from "./registry";
+
+export interface ToolCallExecutionResponse {
+  id: string;
+  result: string;
+  error?: string;
+}
+
+type ParsedToolArguments =
+  | { success: true; params: Record<string, unknown> }
+  | { success: false; error: string };
+
+const parseToolArguments = (raw: string): ParsedToolArguments => {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return {
+      success: true,
+      params:
+        parsed && typeof parsed === "object" && !Array.isArray(parsed)
+          ? (parsed as Record<string, unknown>)
+          : {},
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: `Invalid JSON arguments: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+};
+
+const parseToolResponseData = (response: ToolCallExecutionResponse): unknown => {
+  if (response.error) {
+    return undefined;
+  }
+
+  try {
+    return response.result ? JSON.parse(response.result) : null;
+  } catch {
+    return response.result;
+  }
+};
 
 export class ToolExecutor {
   constructor(private registry: ToolRegistry) {}
 
-  async handleFunctionCall(
-    call: FunctionCallRequest,
+  async handleToolCall(
+    call: ToolCall,
     context: ToolContext
-  ): Promise<FunctionCallResponse> {
-    let params: Record<string, unknown>;
-
-    try {
-      params = JSON.parse(call.arguments);
-    } catch (e) {
+  ): Promise<ToolCallExecutionResponse> {
+    const parsedArguments = parseToolArguments(call.function.arguments);
+    if (!parsedArguments.success) {
       return {
         id: call.id,
         result: "",
-        error: `Invalid JSON arguments: ${(e as Error).message}`,
+        error: parsedArguments.error,
       };
     }
 
-    const result = await this.registry.execute(call.name, params, context);
+    const result = await this.registry.execute(call.function.name, parsedArguments.params, context);
 
     if (result.success) {
       return {
@@ -41,15 +73,15 @@ export class ToolExecutor {
     }
   }
 
-  async handleFunctionCalls(
-    calls: FunctionCallRequest[],
+  async handleToolCalls(
+    calls: ToolCall[],
     context: ToolContext
-  ): Promise<FunctionCallResponse[]> {
-    return Promise.all(calls.map((call) => this.handleFunctionCall(call, context)));
+  ): Promise<ToolCallExecutionResponse[]> {
+    return Promise.all(calls.map((call) => this.handleToolCall(call, context)));
   }
 
   formatAsMessages(
-    responses: FunctionCallResponse[]
+    responses: ToolCallExecutionResponse[]
   ): Array<{ role: "tool"; content: string; toolCallId: string }> {
     return responses.map((response) => ({
       role: "tool" as const,
@@ -76,29 +108,29 @@ export class ToolExecutionChain {
   }
 
   async execute(context: ToolContext): Promise<ToolExecutionResult[]> {
-    const results: ToolExecutionResult[] = [];
-    let prevResult: unknown = undefined;
+    const finalState = await this.steps.reduce<
+      Promise<{ results: ToolExecutionResult[]; prevResult: unknown; stopped: boolean }>
+    >(async (statePromise, step) => {
+      const state = await statePromise;
+      if (state.stopped) {
+        return state;
+      }
 
-    for (const step of this.steps) {
-      const params = typeof step.params === "function" ? step.params(prevResult) : step.params;
+      const params = typeof step.params === "function" ? step.params(state.prevResult) : step.params;
 
-      const result = await this.executor.handleFunctionCall(
+      const result = await this.executor.handleToolCall(
         {
-          id: `chain-${Date.now()}-${results.length}`,
-          name: step.toolName,
-          arguments: JSON.stringify(params),
+          id: `chain-${Date.now()}-${state.results.length}`,
+          type: "function",
+          function: {
+            name: step.toolName,
+            arguments: JSON.stringify(params),
+          },
         },
         context
       );
 
-      let parsedData: unknown;
-      if (!result.error) {
-        try {
-          parsedData = result.result ? JSON.parse(result.result) : null;
-        } catch {
-          parsedData = result.result;
-        }
-      }
+      const parsedData = parseToolResponseData(result);
 
       const executionResult: ToolExecutionResult = {
         success: !result.error,
@@ -107,15 +139,13 @@ export class ToolExecutionChain {
         duration: 0,
       };
 
-      results.push(executionResult);
+      return {
+        results: [...state.results, executionResult],
+        prevResult: executionResult.data,
+        stopped: !executionResult.success,
+      };
+    }, Promise.resolve({ results: [], prevResult: undefined, stopped: false }));
 
-      if (!executionResult.success) {
-        break;
-      }
-
-      prevResult = executionResult.data;
-    }
-
-    return results;
+    return finalState.results;
   }
 }

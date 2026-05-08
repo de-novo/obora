@@ -198,7 +198,7 @@ describe("ToolRegistry", () => {
       expect(defs[0]!.function.name).toBe("test");
     });
 
-    it("should expose list, filtered definitions, and function-calling schema contracts", () => {
+    it("should expose list and filtered tool definition contracts", () => {
       registry.register(createTool("one", { category: "utility" }));
       registry.register(createTool("two", { category: "text" }));
 
@@ -208,9 +208,6 @@ describe("ToolRegistry", () => {
       ]);
       expect(registry.toToolDefinitions(["two", "missing"]).map((tool) => tool.function.name)).toEqual([
         "two",
-      ]);
-      expect(registry.toFunctionCallingSchema(["one"]).map((tool) => tool.function.name)).toEqual([
-        "one",
       ]);
     });
   });

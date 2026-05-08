@@ -1,8 +1,26 @@
 import { describe, expect, it } from "vitest";
+import { Effect } from "effect";
 
-import { parseWorkflow, resolveDependencies } from "../workflow-parser";
+import { parseWorkflow, parseWorkflowEffect, resolveDependencies } from "../workflow-parser";
 
 describe("workflow-parser coverage paths", () => {
+  it("parses through the additive Effect boundary", () => {
+    const workflow = Effect.runSync(
+      parseWorkflowEffect(`
+name: effect-workflow
+steps:
+  - name: collect
+    agent: researcher
+`)
+    );
+
+    expect(workflow.name).toBe("effect-workflow");
+    expect(workflow.steps[0]?.name).toBe("collect");
+    expect(() => Effect.runSync(parseWorkflowEffect("not: [closed"))).toThrow(
+      "Flow sequence in block collection"
+    );
+  });
+
   it("parses optional workflow and step sections without expanding the public API", () => {
     const warnings: string[] = [];
     const workflow = parseWorkflow(

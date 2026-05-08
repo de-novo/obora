@@ -169,11 +169,6 @@ export class ToolRegistry {
       }));
   }
 
-  /** @deprecated toToolDefinitions 사용 권장 */
-  toFunctionCallingSchema(names?: string[]): ToolDefinition[] {
-    return this.toToolDefinitions(names);
-  }
-
   clear(): void {
     this.tools.clear();
     this.categories.clear();

@@ -42,52 +42,53 @@ export interface TopologicalResult {
  * Build a graph from steps
  */
 export function buildGraph(steps: Step[]): Graph {
-  const nodes = new Set<string>();
-  const edges = new Map<string, Set<string>>();
-  const reverseEdges = new Map<string, Set<string>>();
+  const initialGraph = steps.reduce<Graph>(
+    (graph, step) => {
+      graph.nodes.add(step.name);
+      graph.edges.set(step.name, new Set());
+      graph.reverseEdges.set(step.name, new Set());
+      return graph;
+    },
+    { nodes: new Set<string>(), edges: new Map<string, Set<string>>(), reverseEdges: new Map<string, Set<string>>() }
+  );
 
-  // Initialize nodes
-  for (const step of steps) {
-    nodes.add(step.name);
-    edges.set(step.name, new Set());
-    reverseEdges.set(step.name, new Set());
-  }
+  const addEdge = (graph: Graph, from: string, to: string): Graph => {
+    graph.edges.get(from)?.add(to);
+    graph.reverseEdges.get(to)?.add(from);
+    return graph;
+  };
 
-  // Add explicit dependencies
-  for (const step of steps) {
-    if (step.depends_on) {
-      for (const dep of step.depends_on) {
-        if (nodes.has(dep)) {
-          edges.get(dep)!.add(step.name);
-          reverseEdges.get(step.name)!.add(dep);
-        }
-      }
-    }
-  }
+  const graphWithExplicitDependencies = steps.reduce<Graph>(
+    (graph, step) =>
+      (step.depends_on ?? []).reduce<Graph>(
+        (currentGraph, dependency) =>
+          currentGraph.nodes.has(dependency)
+            ? addEdge(currentGraph, dependency, step.name)
+            : currentGraph,
+        graph
+      ),
+    initialGraph
+  );
 
-  // Add implicit dependencies from inputs/outputs
-  const outputMap = new Map<string, string>();
-  for (const step of steps) {
-    if (step.outputs) {
-      for (const output of step.outputs) {
-        outputMap.set(output, step.name);
-      }
-    }
-  }
+  const outputMap = steps.reduce<Map<string, string>>(
+    (outputs, step) =>
+      (step.outputs ?? []).reduce<Map<string, string>>(
+        (currentOutputs, output) => currentOutputs.set(output, step.name),
+        outputs
+      ),
+    new Map<string, string>()
+  );
 
-  for (const step of steps) {
-    if (step.inputs) {
-      for (const input of step.inputs) {
+  return steps.reduce<Graph>(
+    (graph, step) =>
+      (step.inputs ?? []).reduce<Graph>((currentGraph, input) => {
         const producer = outputMap.get(input);
-        if (producer && producer !== step.name) {
-          edges.get(producer)!.add(step.name);
-          reverseEdges.get(step.name)!.add(producer);
-        }
-      }
-    }
-  }
-
-  return { nodes, edges, reverseEdges };
+        return producer && producer !== step.name
+          ? addEdge(currentGraph, producer, step.name)
+          : currentGraph;
+      }, graph),
+    graphWithExplicitDependencies
+  );
 }
 
 /**
@@ -96,37 +97,42 @@ export function buildGraph(steps: Step[]): Graph {
 export function detectCycles(graph: Graph): CycleResult {
   const visited = new Set<string>();
   const recStack = new Set<string>();
-  const parent = new Map<string, string>();
 
   function dfs(node: string, path: string[]): string[] | null {
     visited.add(node);
     recStack.add(node);
 
-    const deps = graph.reverseEdges.get(node) || [];
-    for (const dep of deps) {
-      if (!visited.has(dep)) {
-        parent.set(dep, node);
-        const cycle = dfs(dep, [...path, dep]);
-        if (cycle) return cycle;
-      } else if (recStack.has(dep)) {
-        // Found cycle - reconstruct path
-        const cycleStart = path.indexOf(dep);
-        const cyclePath = [...path.slice(cycleStart), node, dep];
-        return cyclePath;
-      }
-    }
+    const cycle = [...(graph.reverseEdges.get(node) ?? [])].reduce<string[] | null>(
+      (foundCycle, dependency) => {
+        if (foundCycle) {
+          return foundCycle;
+        }
+
+        if (!visited.has(dependency)) {
+          return dfs(dependency, [...path, dependency]);
+        }
+
+        if (recStack.has(dependency)) {
+          const cycleStart = path.indexOf(dependency);
+          return [...path.slice(cycleStart), node, dependency];
+        }
+
+        return null;
+      },
+      null
+    );
 
     recStack.delete(node);
-    return null;
+    return cycle;
   }
 
-  for (const node of graph.nodes) {
-    if (!visited.has(node)) {
-      const cycle = dfs(node, [node]);
-      if (cycle) {
-        return { hasCycle: true, cyclePath: cycle };
-      }
-    }
+  const cycle = [...graph.nodes].reduce<string[] | null>(
+    (foundCycle, node) => foundCycle ?? (visited.has(node) ? null : dfs(node, [node])),
+    null
+  );
+
+  if (cycle) {
+    return { hasCycle: true, cyclePath: cycle };
   }
 
   return { hasCycle: false };
@@ -146,49 +152,54 @@ export function topologicalSort(graph: Graph): TopologicalResult {
     };
   }
 
-  // Kahn's Algorithm
-  const indegree = new Map<string, number>();
-  const order: string[] = [];
+  const indegree = [...graph.nodes].reduce<Map<string, number>>(
+    (degrees, node) => degrees.set(node, 0),
+    new Map<string, number>()
+  );
 
-  // Initialize indegrees
-  for (const node of graph.nodes) {
-    indegree.set(node, 0);
-  }
+  [...graph.nodes].reduce<Map<string, number>>(
+    (degrees, node) =>
+      [...(graph.edges.get(node) ?? [])].reduce<Map<string, number>>(
+        (currentDegrees, dependent) =>
+          currentDegrees.set(dependent, (currentDegrees.get(dependent) ?? 0) + 1),
+        degrees
+      ),
+    indegree
+  );
 
-  // Calculate indegrees
-  for (const node of graph.nodes) {
-    const dependents = graph.edges.get(node) || [];
-    for (const dependent of dependents) {
-      indegree.set(dependent, (indegree.get(dependent) || 0) + 1);
-    }
-  }
+  type SortState = {
+    order: string[];
+    queue: string[];
+  };
 
-  // Find nodes with indegree 0
-  const queue: string[] = [];
-  for (const [node, degree] of indegree) {
-    if (degree === 0) {
-      queue.push(node);
-    }
-  }
+  const initialQueue = [...indegree.entries()]
+    .filter(([, degree]) => degree === 0)
+    .map(([node]) => node);
 
-  // Process queue
-  while (queue.length > 0) {
-    // Sort queue for deterministic ordering
-    queue.sort();
-    const current = queue.shift()!;
-    order.push(current);
+  const sorted = Array.from({ length: graph.nodes.size }).reduce<SortState>(
+    (state) => {
+      const sortedQueue = [...state.queue].sort();
+      const current = sortedQueue[0]!;
+      const remainingQueue = sortedQueue.slice(1);
 
-    const dependents = graph.edges.get(current) || [];
-    for (const dependent of dependents) {
-      const newDegree = (indegree.get(dependent) || 1) - 1;
-      indegree.set(dependent, newDegree);
-      if (newDegree === 0) {
-        queue.push(dependent);
-      }
-    }
-  }
+      const nextQueue = [...(graph.edges.get(current) ?? [])].reduce<string[]>(
+        (queue, dependent) => {
+          const newDegree = (indegree.get(dependent) ?? 1) - 1;
+          indegree.set(dependent, newDegree);
+          return newDegree === 0 ? [...queue, dependent] : queue;
+        },
+        remainingQueue
+      );
 
-  return { success: true, order };
+      return {
+        order: [...state.order, current],
+        queue: nextQueue,
+      };
+    },
+    { order: [], queue: initialQueue }
+  );
+
+  return { success: true, order: sorted.order };
 }
 
 /**
@@ -196,12 +207,10 @@ export function topologicalSort(graph: Graph): TopologicalResult {
  * Level 0 = no dependencies, Level N = depends on nodes up to level N-1
  */
 export function computeLevels(graph: Graph): Map<string, number> {
-  const levels = new Map<string, number>();
-
-  // Initialize all levels to 0
-  for (const node of graph.nodes) {
-    levels.set(node, 0);
-  }
+  const levels = [...graph.nodes].reduce<Map<string, number>>(
+    (currentLevels, node) => currentLevels.set(node, 0),
+    new Map<string, number>()
+  );
 
   // BFS to compute levels
   const sorted = topologicalSort(graph);
@@ -209,21 +218,14 @@ export function computeLevels(graph: Graph): Map<string, number> {
     return levels;
   }
 
-  for (const node of sorted.order) {
-    const deps = graph.reverseEdges.get(node) || [];
-    let maxDepLevel = -1;
+  return sorted.order.reduce<Map<string, number>>((currentLevels, node) => {
+    const maxDepLevel = [...(graph.reverseEdges.get(node) ?? [])].reduce(
+      (maxLevel, dependency) => Math.max(maxLevel, currentLevels.get(dependency) ?? 0),
+      -1
+    );
 
-    for (const dep of deps) {
-      const depLevel = levels.get(dep) || 0;
-      if (depLevel > maxDepLevel) {
-        maxDepLevel = depLevel;
-      }
-    }
-
-    levels.set(node, maxDepLevel + 1);
-  }
-
-  return levels;
+    return currentLevels.set(node, maxDepLevel + 1);
+  }, levels);
 }
 
 /**
@@ -232,15 +234,10 @@ export function computeLevels(graph: Graph): Map<string, number> {
 export function groupByLevel(steps: Step[]): Map<number, Step[]> {
   const graph = buildGraph(steps);
   const levels = computeLevels(graph);
-  const groups = new Map<number, Step[]>();
 
-  for (const step of steps) {
+  return steps.reduce<Map<number, Step[]>>((groups, step) => {
     const level = levels.get(step.name) || 0;
-    if (!groups.has(level)) {
-      groups.set(level, []);
-    }
-    groups.get(level)!.push(step);
-  }
-
-  return groups;
+    groups.set(level, [...(groups.get(level) ?? []), step]);
+    return groups;
+  }, new Map<number, Step[]>());
 }

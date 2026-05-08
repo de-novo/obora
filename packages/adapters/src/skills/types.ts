@@ -1,5 +1,4 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import type { ToolDefinition } from "../llm/adapter";
 
 export interface SkillContext {
   cwd: string;
@@ -23,11 +22,4 @@ export interface LoadedSkill {
   skill: OboraSkill;
   source: "builtin" | "local" | "global" | "npm";
   path?: string;
-}
-
-/**
- * @deprecated Use OboraSkill.tools (AgentTool[]) directly.
- */
-export interface LegacyToolBackedSkill extends Omit<OboraSkill, "tools"> {
-  tools: ToolDefinition[];
 }

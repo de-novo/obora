@@ -1,10 +1,12 @@
 #!/usr/bin/env node
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 const baselinePath = join(repoRoot, "scripts", "release", "functional-policy-baseline.json");
+const shouldUpdateBaseline = process.argv.includes("--update");
+const allowIncrease = process.argv.includes("--allow-increase");
 const roots = ["packages", "scripts"];
 const zeroCounts = {
   mutableBinding: 0,
@@ -80,15 +82,16 @@ const countFile = (path) => {
   };
 };
 
-const readBaseline = () => {
+const readBaselineDocument = () => {
   if (!existsSync(baselinePath)) {
     console.error(`[FAIL] missing functional policy baseline: ${toRepoPath(baselinePath)}`);
     process.exit(1);
   }
 
-  const parsed = JSON.parse(readFileSync(baselinePath, "utf8"));
-  return parsed.files ?? {};
+  return JSON.parse(readFileSync(baselinePath, "utf8"));
 };
+
+const readBaseline = () => readBaselineDocument().files ?? {};
 
 const sumCounts = (items) =>
   items.reduce(
@@ -119,6 +122,48 @@ const failures = allPaths.flatMap((path) => {
 });
 const counts = sumCounts(currentFiles);
 const budgets = sumCounts(Object.values(baselineByPath));
+
+if (shouldUpdateBaseline) {
+  const increases = allPaths.flatMap((path) => {
+    const current = currentByPath[path] ?? zeroCounts;
+    const baseline = baselineByPath[path] ?? zeroCounts;
+    return Object.entries(baseline).flatMap(([name, allowed]) =>
+      current[name] > allowed ? [`${path} ${name} count ${current[name]} exceeds file baseline ${allowed}`] : []
+    );
+  });
+
+  if (increases.length > 0 && !allowIncrease) {
+    console.error("[FAIL] functional policy baseline update would increase tracked debt");
+    increases.forEach((failure) => console.error(`- ${failure}`));
+    console.error("Use --allow-increase only with documented reviewer approval.");
+    process.exit(1);
+  }
+
+  const nextFiles = Object.fromEntries(
+    currentFiles
+      .filter(({ mutableBinding, loopStatement }) => mutableBinding > 0 || loopStatement > 0)
+      .sort((a, b) => a.path.localeCompare(b.path))
+      .map(({ path, mutableBinding, loopStatement }) => [path, { mutableBinding, loopStatement }])
+  );
+  const nextCounts = sumCounts(Object.values(nextFiles));
+
+  writeFileSync(
+    baselinePath,
+    JSON.stringify(
+      {
+        ...readBaselineDocument(),
+        files: nextFiles,
+      },
+      null,
+      2
+    ) + "\n"
+  );
+
+  console.log(
+    `[PASS] functional policy baseline updated: mutableBinding=${budgets.mutableBinding}->${nextCounts.mutableBinding}, loopStatement=${budgets.loopStatement}->${nextCounts.loopStatement}, files=${Object.keys(baselineByPath).length}->${Object.keys(nextFiles).length}.`
+  );
+  process.exit(0);
+}
 
 if (failures.length > 0) {
   console.error("[FAIL] functional policy check failed");

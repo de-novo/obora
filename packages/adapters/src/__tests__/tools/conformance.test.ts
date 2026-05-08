@@ -128,10 +128,10 @@ describe("tool-call conformance", () => {
     });
     const executor = new ToolExecutor(registry);
 
-    const responses = await executor.handleFunctionCalls(
+    const responses = await executor.handleToolCalls(
       [
-        { id: "one", name: "echo", arguments: "{\"value\":1}" },
-        { id: "two", name: "missing", arguments: "{}" },
+        { id: "one", type: "function", function: { name: "echo", arguments: "{\"value\":1}" } },
+        { id: "two", type: "function", function: { name: "missing", arguments: "{}" } },
       ],
       context
     );

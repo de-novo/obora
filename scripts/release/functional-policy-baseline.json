@@ -38,10 +38,6 @@
       "mutableBinding": 1,
       "loopStatement": 1
     },
-    "packages/adapters/src/tools/executor.ts": {
-      "mutableBinding": 3,
-      "loopStatement": 1
-    },
     "packages/adapters/src/tools/registry.ts": {
       "mutableBinding": 1,
       "loopStatement": 1
@@ -385,14 +381,6 @@
     "packages/runtime/src/orchestrator/RuntimeOrchestrator.ts": {
       "mutableBinding": 0,
       "loopStatement": 16
-    },
-    "packages/runtime/src/orchestrator/workflow/graph/index.ts": {
-      "mutableBinding": 1,
-      "loopStatement": 18
-    },
-    "packages/runtime/src/orchestrator/workflow/parser/workflow-parser.ts": {
-      "mutableBinding": 1,
-      "loopStatement": 20
     },
     "packages/runtime/src/orchestrator/workflow/resolver/dependency-resolver.ts": {
       "mutableBinding": 0,
