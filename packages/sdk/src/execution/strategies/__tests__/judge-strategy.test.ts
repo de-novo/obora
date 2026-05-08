@@ -58,7 +58,7 @@ describe("judgeStrategy - config validation branches", () => {
       input: {},
       config: {
         judge: "invalid",
-      } as any,
+      },
     };
     const context: StepContext = { previousOutputs: {} };
     const services = createMockServices();

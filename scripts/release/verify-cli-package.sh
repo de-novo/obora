@@ -51,24 +51,77 @@ CLI_TARBALL="$(pack_local_tarball "$PKG_DIR")"
 echo "[verify-cli-package] tarball: $CLI_TARBALL"
 
 cd "$TMP_DIR"
-npm init -y >/dev/null 2>&1
-npm install "$RUNTIME_TARBALL" "$ADAPTERS_TARBALL" "$SDK_TARBALL" "$CLI_TARBALL" >/dev/null 2>&1
+cat > package.json <<'EOF'
+{
+  "private": true,
+  "type": "module"
+}
+EOF
 
-ACTUAL_VERSION="$(npx obora --version | tail -1 | tr -d '\r')"
+mkdir -p node_modules/@obora
+
+link_node_modules() {
+  local source_dir="$1"
+  [[ -d "$source_dir" ]] || return 0
+
+  find "$source_dir" -mindepth 1 -maxdepth 1 ! -name "@obora" | while IFS= read -r entry; do
+    local entry_name
+    entry_name="$(basename "$entry")"
+
+    if [[ "$entry_name" == @* && -d "$entry" ]]; then
+      mkdir -p "node_modules/$entry_name"
+      find "$entry" -mindepth 1 -maxdepth 1 | while IFS= read -r scoped_entry; do
+        local scoped_name
+        scoped_name="$(basename "$scoped_entry")"
+        local scoped_dest="node_modules/$entry_name/$scoped_name"
+        [[ -e "$scoped_dest" ]] || ln -s "$scoped_entry" "$scoped_dest"
+      done
+    else
+      local dest="node_modules/$entry_name"
+      [[ -e "$dest" ]] || ln -s "$entry" "$dest"
+    fi
+  done
+}
+
+extract_tarball() {
+  local tarball="$1"
+  local package_name
+  local package_dir
+
+  package_name="$(LC_ALL=POSIX tar -xOf "$tarball" package/package.json | node -e 'const fs = require("node:fs"); process.stdout.write(JSON.parse(fs.readFileSync(0, "utf8")).name);')"
+  package_dir="node_modules/$package_name"
+  mkdir -p "$package_dir"
+  LC_ALL=POSIX tar -xzf "$tarball" -C "$package_dir" --strip-components=1 package
+}
+
+link_node_modules "$ROOT_DIR/node_modules"
+link_node_modules "$ROOT_DIR/packages/runtime/node_modules"
+link_node_modules "$ROOT_DIR/packages/adapters/node_modules"
+link_node_modules "$ROOT_DIR/packages/sdk/node_modules"
+link_node_modules "$ROOT_DIR/packages/cli/node_modules"
+
+extract_tarball "$RUNTIME_TARBALL"
+extract_tarball "$ADAPTERS_TARBALL"
+extract_tarball "$SDK_TARBALL"
+extract_tarball "$CLI_TARBALL"
+
+OBORA_BIN="node_modules/@obora/cli/bin/obora.js"
+
+ACTUAL_VERSION="$(node "$OBORA_BIN" --version | tail -1 | tr -d '\r')"
 if [[ "$ACTUAL_VERSION" != "$EXPECTED_VERSION" ]]; then
   echo "[FAIL] CLI version mismatch: expected $EXPECTED_VERSION but got $ACTUAL_VERSION"
   exit 1
 fi
 
-npx obora --help >/dev/null 2>&1
+node "$OBORA_BIN" --help >/dev/null 2>&1
 
 echo "[verify-cli-package] installed CLI JSON command smoke"
 
-npx obora --json models > models.json
-npx obora models openai --json > models-openai.json
-npx obora --json agents list > agents-list.json
-npx obora quickstart package-smoke --json > quickstart.json
-npx obora --json validate package-smoke/judge.yaml > quickstart-validate.json
+node "$OBORA_BIN" --json models > models.json
+node "$OBORA_BIN" models openai --json > models-openai.json
+node "$OBORA_BIN" --json agents list > agents-list.json
+node "$OBORA_BIN" quickstart package-smoke --json > quickstart.json
+node "$OBORA_BIN" --json validate package-smoke/judge.yaml > quickstart-validate.json
 
 node <<'EOF'
 const fs = require("node:fs");

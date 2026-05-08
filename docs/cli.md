@@ -232,7 +232,7 @@ obora --json models anthropic sonnet
 
 ### Behavior
 
-- uses the installed `@mariozechner/pi-ai` runtime catalog as the source of truth
+- uses the installed `@earendil-works/pi-ai` runtime catalog as the source of truth
 - supports both local `obora models ... --json` and root `obora --json models ...`
 - without a provider, lists available providers and model counts
 - with an unknown first argument, treats that value as a cross-provider global search query

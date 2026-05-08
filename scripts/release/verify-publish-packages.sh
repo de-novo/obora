@@ -8,13 +8,14 @@ PACKAGES=(packages/runtime packages/adapters packages/sdk packages/cli)
 TMP_DIR="$(mktemp -d)"
 PACK_DIR="$TMP_DIR/tarballs"
 SMOKE_DIR="$TMP_DIR/smoke"
+export NPM_CONFIG_CACHE="$TMP_DIR/npm-cache"
 
 cleanup() {
   rm -rf "$TMP_DIR"
 }
 trap cleanup EXIT
 
-mkdir -p "$PACK_DIR" "$SMOKE_DIR"
+mkdir -p "$PACK_DIR" "$SMOKE_DIR" "$NPM_CONFIG_CACHE"
 
 max_packed_bytes() {
   case "$1" in
@@ -40,6 +41,12 @@ const forbidden = files.filter((path) => /(^|\/)__tests__\/|\.test\.|-e2e\.test\
 if (forbidden.length > 0) {
   console.error(`[FAIL] ${pkgDir} publish payload includes test artifacts:`);
   for (const path of forbidden) console.error(`  - ${path}`);
+  process.exit(1);
+}
+const sourceMaps = files.filter((path) => path.endsWith(".map"));
+if (sourceMaps.length > 0) {
+  console.error(`[FAIL] ${pkgDir} publish payload includes source maps:`);
+  sourceMaps.forEach((path) => console.error(`  - ${path}`));
   process.exit(1);
 }
 if (!files.includes("package.json")) {
@@ -87,7 +94,7 @@ console.log(resolvedTarballPath);
 ' "$p" "$PACK_DIR" > "$TMP_DIR/${p//\//-}.tarball"
 
   tarball="$(cat "$TMP_DIR/${p//\//-}.tarball")"
-  LC_ALL=C tar -xOf "$tarball" package/package.json | node -e '
+  LC_ALL=POSIX tar -xOf "$tarball" package/package.json | node -e '
 const fs = require("node:fs");
 const pkgDir = process.argv[1];
 const pkg = JSON.parse(fs.readFileSync(0, "utf8"));
@@ -121,8 +128,50 @@ console.log(`[PASS] ${pkg.name} pnpm pack metadata is release-safe.`);
 done
 
 cd "$SMOKE_DIR"
-npm init -y >/dev/null 2>&1
-npm install "$PACK_DIR"/*.tgz >/dev/null 2>&1
+cat > package.json <<'EOF'
+{
+  "private": true,
+  "type": "module"
+}
+EOF
+
+mkdir -p node_modules/@obora
+
+link_node_modules() {
+  local source_dir="$1"
+  [[ -d "$source_dir" ]] || return 0
+
+  find "$source_dir" -mindepth 1 -maxdepth 1 ! -name "@obora" | while IFS= read -r entry; do
+    local entry_name
+    entry_name="$(basename "$entry")"
+
+    if [[ "$entry_name" == @* && -d "$entry" ]]; then
+      mkdir -p "node_modules/$entry_name"
+      find "$entry" -mindepth 1 -maxdepth 1 | while IFS= read -r scoped_entry; do
+        local scoped_name
+        scoped_name="$(basename "$scoped_entry")"
+        local scoped_dest="node_modules/$entry_name/$scoped_name"
+        [[ -e "$scoped_dest" ]] || ln -s "$scoped_entry" "$scoped_dest"
+      done
+    else
+      local dest="node_modules/$entry_name"
+      [[ -e "$dest" ]] || ln -s "$entry" "$dest"
+    fi
+  done
+}
+
+link_node_modules "$ROOT_DIR/node_modules"
+link_node_modules "$ROOT_DIR/packages/runtime/node_modules"
+link_node_modules "$ROOT_DIR/packages/adapters/node_modules"
+link_node_modules "$ROOT_DIR/packages/sdk/node_modules"
+link_node_modules "$ROOT_DIR/packages/cli/node_modules"
+
+for tarball in "$PACK_DIR"/*.tgz; do
+  package_name="$(LC_ALL=POSIX tar -xOf "$tarball" package/package.json | node -e 'const fs = require("node:fs"); process.stdout.write(JSON.parse(fs.readFileSync(0, "utf8")).name);')"
+  package_dir="node_modules/$package_name"
+  mkdir -p "$package_dir"
+  LC_ALL=POSIX tar -xzf "$tarball" -C "$package_dir" --strip-components=1 package
+done
 
 node --input-type=module <<'EOF'
 const imports = [

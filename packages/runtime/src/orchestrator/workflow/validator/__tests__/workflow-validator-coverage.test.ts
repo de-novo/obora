@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { Effect } from "effect";
 
 import type { Step, Workflow } from "../../types/workflow";
 import {
   parseAndValidate,
+  parseAndValidateEffect,
   validateCircularDependencies,
   validateInputs,
   validateMissingReferences,
@@ -219,6 +221,30 @@ steps:
     ).toMatchObject({
       isValid: false,
       errors: [expect.objectContaining({ code: "E2005", suggestion: undefined })],
+    });
+  });
+
+  it("exposes the parse and validation boundary as an Effect", () => {
+    expect(
+      Effect.runSync(
+        parseAndValidateEffect(`
+name: parsed-effect
+steps:
+  - name: collect
+    agent: researcher
+`)
+      )
+    ).toEqual({ isValid: true, errors: [], warnings: [] });
+
+    expect(Effect.runSync(parseAndValidateEffect("not: [closed"))).toEqual({
+      isValid: false,
+      errors: [
+        expect.objectContaining({
+          code: "E2001",
+          suggestion: "Check YAML syntax and structure",
+        }),
+      ],
+      warnings: [],
     });
   });
 });

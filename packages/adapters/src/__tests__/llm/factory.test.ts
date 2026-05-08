@@ -127,6 +127,15 @@ describe("Factory", () => {
       expect(adapter.id).toBe("amazon-bedrock");
     });
 
+    it("preserves Google CLI provider aliases while using the current pi-ai Google catalog", () => {
+      process.env!.GOOGLE_GEMINI_CLI_API_KEY = "google-cli-key";
+
+      const adapter = createAdapterFromEnv("google-gemini-cli");
+
+      expect(adapter).toBeInstanceOf(PiAIAdapter);
+      expect(adapter.id).toBe("google-gemini-cli");
+    });
+
     it("should create provider adapters with explicit model and base URL overrides", () => {
       process.env!.OPENAI_API_KEY = "test-key";
 

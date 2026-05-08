@@ -78,7 +78,7 @@ Latest verified `pnpm verify:coverage` package measurements:
 
 | Package | Statements | Branches | Functions | Lines |
 | --- | ---: | ---: | ---: | ---: |
-| `@obora/sdk` | 96.05% | 91.16% | 99.35% | 96.05% |
+| `@obora/sdk` | 96.05% | 91.24% | 99.35% | 96.05% |
 | `@obora/runtime` | 93.12% | 90.03% | 90.23% | 93.12% |
 | `@obora/adapters` | 96.70% | 92.56% | 98.40% | 96.70% |
 | `@obora/cli` | 96.36% | 91.06% | 97.72% | 96.36% |
@@ -140,14 +140,15 @@ semantically checks workflow/config/policy examples, runs tutorial quickstart
 and contract-first dry-run flows through the built CLI, verifies that
 `typecheck-public.d.ts` shims do not declare exports absent from built public
 declarations, validates package `npm pack --dry-run` output, validates
-`pnpm pack` package metadata, runs published-package import/require/TypeScript
-smoke checks, and selftests CLI package installation. The installed CLI package
-selftest now checks version/help plus JSON contracts for `models`, provider
-model lookup, `agents list`, quickstart template creation, and validation of
-the generated quickstart workflow.
+`pnpm pack` package metadata, extracts the local tarballs into an isolated
+smoke project, runs published-package import/require/TypeScript smoke checks,
+and selftests the packed CLI. The CLI package selftest now checks version/help
+plus JSON contracts for `models`, provider model lookup, `agents list`,
+quickstart template creation, and validation of the generated quickstart
+workflow.
 
 Package payload validation fails if publishable tarballs include `dist/**/__tests__/**`,
-`*.test.*`, or `*-e2e.test.*` artifacts.
+`*.test.*`, `*-e2e.test.*`, or source map artifacts.
 
 Package payload validation also enforces packed-size budgets so dependency bundling changes do not silently inflate publish artifacts. The current byte budgets are
 `5,500,000` for `@obora/runtime`, `9,000,000` for `@obora/adapters`, `1,000,000` for `@obora/sdk`, and `250,000` for `@obora/cli`.
@@ -167,7 +168,7 @@ pnpm build
 bash scripts/release/verify-publish-packages.sh
 ```
 
-The payload must include built `dist` output, package README/LICENSE entries where declared, the declared `exports`, package `types`, and the CLI `bin/obora.js` entry for `@obora/cli`. The release gate also rejects `workspace:` dependency specifiers in the `pnpm pack` package metadata and smoke-tests public imports such as `@obora/sdk/testing`, `@obora/runtime/storage`, and `@obora/adapters/testing` after installing the local tarballs. The TypeScript smoke also compiles the SDK typed helper path (`defineWorkflow`, `defineTool`, `defineSchemaTool`, typed `run`) against the installed tarball declarations.
+The payload must include built `dist` output, package README/LICENSE entries where declared, the declared `exports`, package `types`, and the CLI `bin/obora.js` entry for `@obora/cli`. The release gate also rejects `workspace:` dependency specifiers in the `pnpm pack` package metadata and smoke-tests public imports such as `@obora/sdk/testing`, `@obora/runtime/storage`, and `@obora/adapters/testing` after extracting the local tarballs into an isolated smoke project. The TypeScript smoke also compiles the SDK typed helper path (`defineWorkflow`, `defineTool`, `defineSchemaTool`, typed `run`) against the extracted tarball declarations.
 
 ## Manual Publish
 

@@ -8,7 +8,7 @@ export default defineConfig({
   format: ["esm", "cjs"],
   dts: false,
   external: ["@obora/adapters", "better-sqlite3", "duckdb"],
-  noExternal: ["@mariozechner/pi-agent-core", "@mariozechner/pi-ai"],
+  noExternal: ["@earendil-works/pi-agent-core", "@earendil-works/pi-ai"],
   clean: true,
   sourcemap: true,
 });

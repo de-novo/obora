@@ -1,4 +1,4 @@
-import { type KnownProvider } from "@mariozechner/pi-ai";
+import { type KnownProvider } from "@earendil-works/pi-ai";
 
 import { FileAuthManager, getAuthToken, type OAuthAuth, type ProviderAuth } from "../auth";
 import type { LLMAdapter } from "./adapter";
@@ -103,13 +103,13 @@ const PROVIDER_DEFINITIONS = {
     envApiKey: "GOOGLE_GEMINI_CLI_API_KEY",
     defaultBaseUrl: "https://generativelanguage.googleapis.com",
     defaultModel: "gemini-2.5-pro",
-    provider: "google-gemini-cli",
+    provider: "google",
   },
   "google-antigravity": {
     envApiKey: "GOOGLE_ANTIGRAVITY_API_KEY",
     defaultBaseUrl: "https://generativelanguage.googleapis.com",
     defaultModel: "gemini-2.5-pro",
-    provider: "google-antigravity",
+    provider: "google",
   },
   "google-vertex": {
     envApiKey: "GOOGLE_VERTEX_API_KEY",
@@ -339,7 +339,7 @@ async function resolveApiKey(
   const normalizedProvider = PROVIDER_DEFINITIONS[provider]?.provider ?? provider;
   const oauthCredentials = toOAuthCredentials(auth);
 
-  const oauthModule = (await import("@mariozechner/pi-ai/oauth")) as {
+  const oauthModule = (await import("@earendil-works/pi-ai/oauth")) as {
     getOAuthApiKey?: (
       provider: string,
       credentials: Record<string, OAuthCredentials>

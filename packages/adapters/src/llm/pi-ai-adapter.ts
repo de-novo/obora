@@ -10,7 +10,7 @@ import {
   type Model,
   type ProviderStreamOptions,
   type Tool,
-} from "@mariozechner/pi-ai";
+} from "@earendil-works/pi-ai";
 
 import type {
   ChatCompletionChunk,
@@ -170,7 +170,7 @@ export class PiAIAdapter implements LLMAdapter {
 ` +
           `Reason: installed runtime catalog does not include this model for provider ${this.config.provider}
 ` +
-          `Fix: use a supported model or upgrade @mariozechner/pi-ai
+          `Fix: use a supported model or upgrade @earendil-works/pi-ai
 ` +
           `Context: provider=${this.config.provider}, available=${this.listAvailableModels()}`
       );

@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from "vitest";
 import type { ChatCompletionParams, ChatCompletionResult } from "../../llm/adapter";
 import { PiAIAdapter } from "../../llm/pi-ai-adapter";
 
-vi.mock("@mariozechner/pi-ai", () => ({
+vi.mock("@earendil-works/pi-ai", () => ({
   getModel: vi.fn((provider: string, modelId: string) => {
     if (provider === "openai" && modelId === "gpt-4o-mini") {
       return {

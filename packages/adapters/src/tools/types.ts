@@ -1,6 +1,6 @@
 import type { ToolDefinition, ToolCall } from "../llm/adapter";
-import type { AgentTool } from "@mariozechner/pi-agent-core";
-import { Type } from "@mariozechner/pi-ai";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
+import { Type } from "@earendil-works/pi-ai";
 
 interface JSONSchema {
   type: "object" | "array" | "string" | "number" | "boolean";

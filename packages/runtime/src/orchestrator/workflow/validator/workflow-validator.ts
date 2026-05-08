@@ -4,6 +4,7 @@
 
 import Ajv, { type ErrorObject } from "ajv";
 import addFormats from "ajv-formats";
+import { Effect } from "effect";
 
 import { DependencyError, ParseError } from "../errors/index.js";
 import { detectCycles } from "../graph/index.js";
@@ -441,27 +442,32 @@ export function validateWorkflow(workflow: Workflow): ValidationResult {
 /**
  * Parse and validate workflow from YAML string
  */
+export const parseAndValidateEffect = (yamlContent: string): Effect.Effect<ValidationResult> =>
+  Effect.try({
+    try: () => parseWorkflow(yamlContent),
+    catch: (error) => error,
+  }).pipe(
+    Effect.map(validateWorkflow),
+    Effect.catchAll((error) =>
+      error instanceof ParseError || error instanceof DependencyError
+        ? Effect.succeed({
+            isValid: false,
+            errors: [
+              {
+                code: error.code,
+                message: error.message,
+                path: "",
+                suggestion: getParseErrorSuggestion(error.code),
+              },
+            ],
+            warnings: [],
+          })
+        : Effect.die(error)
+    )
+  );
+
 export function parseAndValidate(yamlContent: string): ValidationResult {
-  try {
-    const workflow = parseWorkflow(yamlContent);
-    return validateWorkflow(workflow);
-  } catch (error) {
-    if (error instanceof ParseError || error instanceof DependencyError) {
-      return {
-        isValid: false,
-        errors: [
-          {
-            code: error.code,
-            message: error.message,
-            path: "",
-            suggestion: getParseErrorSuggestion(error.code),
-          },
-        ],
-        warnings: [],
-      };
-    }
-    throw error;
-  }
+  return Effect.runSync(parseAndValidateEffect(yamlContent));
 }
 
 /**

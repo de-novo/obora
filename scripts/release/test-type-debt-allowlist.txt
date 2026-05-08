@@ -8,4 +8,3 @@ packages/sdk/src/execution/__tests__/resume-orchestrator.test.ts	7	Resume orches
 packages/sdk/src/execution/__tests__/run-orchestrator.test.ts	12	Run orchestrator tests use partial dependency mocks and private shared-memory import probes.
 packages/sdk/src/execution/__tests__/step-execution-engine.test.ts	4	Step execution engine tests use partial dependency mocks and synthetic strategy outputs.
 packages/sdk/src/execution/__tests__/tkg-service.test.ts	10	TKG service tests use config/store fixture casts around custom adapter payloads.
-packages/sdk/src/execution/strategies/__tests__/judge-strategy.test.ts	1	Judge strategy test uses a focused LLM adapter fixture.

@@ -22,7 +22,7 @@
     "@obora/runtime": "workspace:*",
     "@obora/sdk": "workspace:*",
     "commander": "^14.0.3",
-    "yaml": "^2.8.3"
+    "yaml": "^2.8.4"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
@@ -55,6 +55,7 @@
     "!dist/**/__tests__/**",
     "!dist/**/*.test.*",
     "!dist/**/*-e2e.test.*",
+    "!dist/**/*.map",
     "README.md",
     "LICENSE",
     "templates"

@@ -14,5 +14,5 @@ export default defineConfig({
   dts: true,
   clean: true,
   sourcemap: true,
-  noExternal: ["@mariozechner/pi-agent-core", "@mariozechner/pi-ai"],
+  noExternal: ["@earendil-works/pi-agent-core", "@earendil-works/pi-ai"],
 });

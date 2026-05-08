@@ -134,7 +134,13 @@ def is_excluded(path: Path) -> bool:
         pass
 
     parts = rel.parts
-    if '.git' in parts or 'node_modules' in parts or 'dist' in parts:
+    if (
+        '.git' in parts
+        or 'node_modules' in parts
+        or 'dist' in parts
+        or 'coverage' in parts
+        or '.coverage' in parts
+    ):
         return True
 
     if scan_kind == 'deprecated':

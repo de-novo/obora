@@ -309,7 +309,8 @@ describe("CLI quickstart integration", () => {
           providerMismatchWarning:
             "Configured provider 'anthropic' differs from detected env auth providers: openai",
           conflictSummary: "config anthropic · env openai · resolved openai",
-          resolvedModelEnvExample: "export OPENAI_MODEL=gpt-5.4",
+          resolvedModelEnvExample: expect.stringMatching(/^export OPENAI_MODEL=gpt-/),
+          resolvedModelRecommendationReason: "pi-ai catalog latest GPT base model for openai",
         }),
         recommendations: expect.arrayContaining([
           "Resolved provider does not match configured provider. Either export ANTHROPIC_API_KEY=*** or switch defaults.provider to openai",

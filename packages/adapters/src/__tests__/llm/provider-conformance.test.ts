@@ -82,7 +82,7 @@ const piAiMocks = vi.hoisted(() => ({
   stream: vi.fn(),
 }));
 
-vi.mock("@mariozechner/pi-ai", () => ({
+vi.mock("@earendil-works/pi-ai", () => ({
   complete: piAiMocks.complete,
   getModel: piAiMocks.getModel,
   getModels: piAiMocks.getModels,

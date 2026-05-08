@@ -1,5 +1,5 @@
-import { getModel, EventStream, type AssistantMessage, type Message, type Model, type KnownProvider, Type } from "@mariozechner/pi-ai";
-import { Agent, type AgentEvent, type AgentMessage, type AgentTool } from "@mariozechner/pi-agent-core";
+import { getModel, EventStream, type AssistantMessage, type Message, type Model, type KnownProvider, Type } from "@earendil-works/pi-ai";
+import { Agent, type AgentEvent, type AgentMessage, type AgentTool } from "@earendil-works/pi-agent-core";
 import { existsSync, realpathSync } from "node:fs";
 import { mkdir, open, readdir, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname, resolve, sep } from "node:path";

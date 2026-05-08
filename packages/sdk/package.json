@@ -23,6 +23,7 @@
     "!dist/**/__tests__/**",
     "!dist/**/*.test.*",
     "!dist/**/*-e2e.test.*",
+    "!dist/**/*.map",
     "README.md",
     "LICENSE"
   ],
@@ -36,8 +37,8 @@
   },
   "dependencies": {
     "@obora/runtime": "workspace:*",
-    "yaml": "^2.8.3",
-    "zod": "^4.4.2"
+    "yaml": "^2.8.4",
+    "zod": "^4.4.3"
   },
   "optionalDependencies": {
     "@obora/adapters": "workspace:*"

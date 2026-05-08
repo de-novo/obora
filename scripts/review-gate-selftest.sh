@@ -92,4 +92,30 @@ if ! grep -Fq '.review-gate/selftest/scan/unlisted.ts:1:' <<< "$WARN_OUTPUT"; th
   exit 1
 fi
 
+# 7) review-gate ignores generated coverage artifacts in scan roots
+mkdir -p "$TMP/generated/coverage"
+cat > "$TMP/generated/coverage/report.html" <<'EOF'
+<span>snapshot as any</span>
+EOF
+COVERAGE_OUTPUT=$(SCAN_PATHS='.review-gate/selftest/generated' \
+  TYPECHECK_CMD='echo [skip] typecheck' \
+  TEST_CMD='echo [skip] test' \
+  BUILD_CMD='echo [skip] build' \
+  SELFTEST_CMD='' \
+  SANDBOX_SMOKE_CMD='' \
+  bash scripts/review-gate.sh 2>&1)
+if ! grep -Fq '[OK] No forbidden patterns found.' <<< "$COVERAGE_OUTPUT"; then
+  echo "[FAIL] expected generated coverage artifacts to be ignored"
+  echo "$COVERAGE_OUTPUT"
+  exit 1
+fi
+
+# 8) canonical sandbox smoke must use tracked artifacts, not ignored log files
+SANDBOX_OUTPUT=$(node scripts/release/verify-canonical-sandbox-smoke.mjs 2>&1)
+if ! grep -Fq '[PASS] canonical sandbox artifact smoke verified 21 sandboxes.' <<< "$SANDBOX_OUTPUT"; then
+  echo "[FAIL] expected canonical sandbox artifact smoke to pass from tracked artifacts"
+  echo "$SANDBOX_OUTPUT"
+  exit 1
+fi
+
 echo "[PASS] review gate selftest passed"

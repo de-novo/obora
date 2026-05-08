@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { Type } from "@mariozechner/pi-ai";
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import { Type } from "@earendil-works/pi-ai";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 
 import {
   ToolExecutor,

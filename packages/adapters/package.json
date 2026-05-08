@@ -78,7 +78,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/**/*.map"
   ],
   "scripts": {
     "build": "tsup",
@@ -103,8 +104,8 @@
     }
   },
   "dependencies": {
-    "@mariozechner/pi-agent-core": "^0.65.0",
-    "@mariozechner/pi-ai": "^0.65.0",
-    "yaml": "^2.8.3"
+    "@earendil-works/pi-agent-core": "^0.74.0",
+    "@earendil-works/pi-ai": "^0.74.0",
+    "yaml": "^2.8.4"
   }
 }

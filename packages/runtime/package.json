@@ -23,6 +23,7 @@
     "!dist/**/__tests__/**",
     "!dist/**/*.test.*",
     "!dist/**/*-e2e.test.*",
+    "!dist/**/*.map",
     "README.md",
     "LICENSE"
   ],
@@ -34,20 +35,21 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@mariozechner/pi-agent-core": "^0.65.0",
-    "@mariozechner/pi-ai": "^0.65.0",
+    "@earendil-works/pi-agent-core": "^0.74.0",
+    "@earendil-works/pi-ai": "^0.74.0",
     "@obora/adapters": "workspace:*",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
+    "effect": "^3.21.2",
     "pako": "^2.1.0",
-    "yaml": "^2.8.3"
+    "yaml": "^2.8.4"
   },
   "devDependencies": {
     "@obora/adapters": "workspace:*",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.0.0",
     "@types/pako": "^2.0.4",
-    "better-sqlite3": "^12.6.2",
+    "better-sqlite3": "^12.9.0",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
     "vitest": "^2.1.9"
