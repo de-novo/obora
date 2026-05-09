@@ -43,9 +43,10 @@
 ## Dependencies
 
 - `pnpm verify:deps` must pass after manifest or lockfile changes.
+- `pnpm audit --audit-level moderate` must pass before claiming dependency health.
 - `pnpm outdated -r --format json` should return `{}` before claiming dependency freshness. Registry access may require a non-sandboxed run.
 - Do not reintroduce deprecated `@mariozechner/pi-agent-core` or `@mariozechner/pi-ai`; use `@earendil-works/*`.
-- Keep shared dependency ranges consistent through `scripts/release/verify-dependency-policy.mjs`.
+- Keep shared dependency ranges and required transitive security overrides consistent through `scripts/release/verify-dependency-policy.mjs`.
 
 ## Deprecated And Compatibility Surfaces
 

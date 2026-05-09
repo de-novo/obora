@@ -386,3 +386,55 @@ Current ratchet after this lane:
 - `pnpm verify:coverage`: PASS with package branch coverage at SDK 91.07%, runtime 90.00%, adapters 92.53%, CLI 90.01%, dashboard 90.15%.
 - `pnpm outdated -r --format json`: `{}` with registry access.
 - `pnpm verify:release`, `pnpm verify:smoke`, `pnpm verify:sdk-public-api`, and `bash scripts/review-gate.sh`: PASS.
+
+## Functional Cleanup Next Follow-up
+
+Branch: `codex/functional-cleanup-next`
+
+Verified changes in this lane:
+
+- Merged `codex/full-functional-effect-overhaul` into `main` with a fast-forward merge and pushed `main` at `22595e93`.
+- `packages/sdk/src/dependency-resolver.ts`, `packages/runtime/src/orchestrator/workflow/resolver/dependency-resolver.ts`, `packages/runtime/src/blackboard/core/immutable.ts`, and `packages/runtime/src/blackboard/events/event-bus.ts` were converted away from `let` and loop statements.
+- `scripts/release/functional-policy-baseline.json` was lowered with `pnpm verify:functional:update`; the file-level ratchet now has 180 baseline entries.
+- `turbo` was updated from `^2.9.10` to `^2.9.12` after `pnpm outdated -r --format json` reported the newer patch.
+- Transitive security overrides were added for `fast-uri@<=3.1.1 -> 3.1.2` and `fast-xml-builder@<=1.1.6 -> 1.2.0` after `pnpm audit --audit-level moderate` reported current registry advisories.
+- `scripts/release/verify-dependency-policy.mjs` now enforces the updated `turbo` range and the required transitive security overrides.
+- `AGENTS.md` now requires `pnpm audit --audit-level moderate` before claiming dependency health and documents that dependency policy covers required transitive security overrides.
+
+Follow-up command evidence captured during the lane:
+
+```bash
+pnpm --filter @obora/sdk test -- dependency-resolver.test.ts
+pnpm --filter @obora/runtime test -- workflow/resolver/__tests__/dependency-resolver.test.ts
+pnpm --filter @obora/runtime test -- blackboard/core/__tests__/immutable.test.ts
+pnpm --filter @obora/runtime test -- blackboard/events/__tests__/event-bus.test.ts
+pnpm --filter @obora/sdk typecheck
+pnpm --filter @obora/runtime typecheck
+pnpm --filter @obora/sdk lint
+pnpm --filter @obora/runtime lint
+pnpm verify:functional
+pnpm verify:functional:update
+pnpm install
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm verify:coverage
+pnpm build
+pnpm verify:release
+pnpm verify:smoke
+pnpm verify:sdk-public-api
+pnpm audit --audit-level moderate
+pnpm outdated -r --format json
+pnpm verify:deps
+pnpm verify:compat
+pnpm verify:test-type-debt
+bash scripts/review-gate.sh
+```
+
+Current ratchet after this lane:
+
+- `pnpm verify:functional`: PASS with `mutableBinding=301/301`, `loopStatement=422/422`, 180 file baseline entries.
+- `pnpm verify:coverage`: PASS with package branch coverage at SDK 91.07%, runtime 90.00%, adapters 92.53%, CLI 90.01%, dashboard 90.15%.
+- `pnpm audit --audit-level moderate`: PASS, `No known vulnerabilities found`.
+- `pnpm outdated -r --format json`: `{}` with registry access.
+- `pnpm verify:release`, `pnpm verify:smoke`, `pnpm verify:sdk-public-api`, `pnpm verify:deps`, `pnpm verify:compat`, `pnpm verify:test-type-debt`, and `bash scripts/review-gate.sh`: PASS.

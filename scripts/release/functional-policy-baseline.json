@@ -230,10 +230,6 @@
       "mutableBinding": 0,
       "loopStatement": 5
     },
-    "packages/runtime/src/blackboard/core/immutable.ts": {
-      "mutableBinding": 3,
-      "loopStatement": 9
-    },
     "packages/runtime/src/blackboard/core/path-utils.ts": {
       "mutableBinding": 5,
       "loopStatement": 4
@@ -261,10 +257,6 @@
     "packages/runtime/src/blackboard/domains/voting/VotingSessionStore.ts": {
       "mutableBinding": 1,
       "loopStatement": 0
-    },
-    "packages/runtime/src/blackboard/events/event-bus.ts": {
-      "mutableBinding": 5,
-      "loopStatement": 13
     },
     "packages/runtime/src/blackboard/events/event-factory.ts": {
       "mutableBinding": 1,
@@ -381,10 +373,6 @@
     "packages/runtime/src/orchestrator/RuntimeOrchestrator.ts": {
       "mutableBinding": 0,
       "loopStatement": 16
-    },
-    "packages/runtime/src/orchestrator/workflow/resolver/dependency-resolver.ts": {
-      "mutableBinding": 0,
-      "loopStatement": 11
     },
     "packages/runtime/src/orchestrator/workflow/validator/workflow-validator.ts": {
       "mutableBinding": 0,
@@ -521,10 +509,6 @@
     "packages/sdk/src/cost-tracker.ts": {
       "mutableBinding": 1,
       "loopStatement": 0
-    },
-    "packages/sdk/src/dependency-resolver.ts": {
-      "mutableBinding": 0,
-      "loopStatement": 7
     },
     "packages/sdk/src/events/event-bus.ts": {
       "mutableBinding": 2,
