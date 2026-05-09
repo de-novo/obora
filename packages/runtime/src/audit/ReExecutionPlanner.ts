@@ -65,25 +65,22 @@ function getWorkflowVersion(events: AuditEvent[]): string | undefined {
 function getSnapshotRef(events: AuditEvent[], mode: "full" | "from_checkpoint", checkpointStep?: string): string | undefined {
   if (mode === "from_checkpoint" && checkpointStep) {
     // Prefer snapshot events whose stepName or checkpointStep matches the checkpoint
-    let fallbackRef: string | undefined;
-    for (const event of events) {
+    const refs = events.flatMap((event) => {
       if ((event.type === "snapshot_create" || event.type === "snapshot_restore") && isObject(event.data)) {
         const ref = asString(event.data.snapshotId) ?? asString(event.data.snapshotRef);
-        if (!ref) continue;
+        if (!ref) return [];
         const eventStep = asString(event.data.stepName) ?? asString(event.data.checkpointStep);
-        if (eventStep === checkpointStep) return ref;
-        if (!fallbackRef) fallbackRef = ref;
+        return [{ ref, eventStep }];
       }
-    }
-    if (fallbackRef) return fallbackRef;
+      return [];
+    });
+    return refs.find((item) => item.eventStep === checkpointStep)?.ref ?? refs[0]?.ref;
   } else if (mode === "from_checkpoint") {
     // No checkpointStep specified, pick first snapshot
-    for (const event of events) {
-      if ((event.type === "snapshot_create" || event.type === "snapshot_restore") && isObject(event.data)) {
-        const ref = asString(event.data.snapshotId) ?? asString(event.data.snapshotRef);
-        if (ref) return ref;
-      }
-    }
+    return events
+      .filter((event) => (event.type === "snapshot_create" || event.type === "snapshot_restore") && isObject(event.data))
+      .map((event) => asString((event.data as Record<string, unknown>).snapshotId) ?? asString((event.data as Record<string, unknown>).snapshotRef))
+      .find((ref): ref is string => Boolean(ref));
   }
   // Fallback: check execution_start for a snapshotRef
   const executionStart = events.find((event) => event.type === "execution_start");
@@ -102,50 +99,47 @@ function getStepOrder(events: AuditEvent[]): string[] {
     }
   }
 
-  const seen = new Set<string>();
-  const order: string[] = [];
-  for (const event of events) {
-    if (event.type !== "step_start") {
-      continue;
-    }
-    const stepName = getStepName(event);
-    if (!stepName || seen.has(stepName)) {
-      continue;
-    }
-    seen.add(stepName);
-    order.push(stepName);
-  }
-  return order;
+  return [
+    ...new Set(
+      events
+        .filter((event) => event.type === "step_start")
+        .map((event) => getStepName(event))
+        .filter((stepName): stepName is string => Boolean(stepName))
+    ),
+  ];
 }
 
 function reconstructStateAtCheckpoint(events: AuditEvent[], checkpointStep: string): Record<string, unknown> {
-  const state: Record<string, unknown> = {};
+  return events.reduce(
+    (acc, event) => {
+      if (acc.done) {
+        return acc;
+      }
 
-  for (const event of events) {
     if (event.type === "step_start" && getStepName(event) === checkpointStep) {
-      break;
+        return { ...acc, done: true };
     }
 
     if (event.type !== "state_change" || !isObject(event.data)) {
-      continue;
+        return acc;
     }
 
     const path = asString(event.data.path);
     if (!path) {
-      continue;
+        return acc;
     }
 
-    state[path] = event.data.newValue;
-  }
-
-  return state;
+      return { ...acc, state: { ...acc.state, [path]: event.data.newValue } };
+    },
+    { done: false, state: {} as Record<string, unknown> }
+  ).state;
 }
 
 function detectNonDeterminismWarnings(events: AuditEvent[]): NonDeterminismWarning[] {
   const warnings: NonDeterminismWarning[] = [];
 
   const models = new Set<string>();
-  for (const event of events) {
+  events.forEach((event) => {
     if (event.metadata?.model) {
       models.add(event.metadata.model);
     }
@@ -155,7 +149,7 @@ function detectNonDeterminismWarnings(events: AuditEvent[]): NonDeterminismWarni
         models.add(asString(event.data.model)!);
       }
     }
-  }
+  });
 
   const currentModel = process.env.OBORA_MODEL ?? process.env.MODEL;
   if (currentModel && models.size > 0 && !models.has(currentModel)) {
@@ -179,9 +173,9 @@ function detectNonDeterminismWarnings(events: AuditEvent[]): NonDeterminismWarni
   }
 
   const policyVersions = new Set<string>();
-  for (const event of events) {
+  events.forEach((event) => {
     if (!isObject(event.data)) {
-      continue;
+      return;
     }
 
     if (event.type === "execution_start") {
@@ -197,7 +191,7 @@ function detectNonDeterminismWarnings(events: AuditEvent[]): NonDeterminismWarni
         policyVersions.add(policyVersion);
       }
     }
-  }
+  });
 
   const currentPolicyVersion = process.env.OBORA_POLICY_VERSION;
   if (currentPolicyVersion && policyVersions.size > 0 && !policyVersions.has(currentPolicyVersion)) {
@@ -208,7 +202,7 @@ function detectNonDeterminismWarnings(events: AuditEvent[]): NonDeterminismWarni
     });
   }
 
-  for (const event of events) {
+  events.forEach((event) => {
     if (event.type === "state_change" && isObject(event.data)) {
       const path = asString(event.data.path);
       if (path && (path.startsWith("external.") || path.includes("api") || path.includes("cache"))) {
@@ -232,7 +226,7 @@ function detectNonDeterminismWarnings(events: AuditEvent[]): NonDeterminismWarni
         });
       }
     }
-  }
+  });
 
   return warnings;
 }

@@ -40,103 +40,103 @@ export const getPlaybackIntervalMs = (speed: PlaybackSpeed): number => {
 };
 
 export const createPlaybackStore = (initialLength: number): PlaybackStore => {
-  let state: PlaybackState = { ...DEFAULT_STATE };
-  let length = Math.max(0, initialLength);
-  let timer: ReturnType<typeof setInterval> | undefined;
+  const playback = {
+    state: { ...DEFAULT_STATE },
+    length: Math.max(0, initialLength),
+    timer: undefined as ReturnType<typeof setInterval> | undefined,
+  };
   const listeners = new Set<() => void>();
 
   const emit = (): void => {
-    for (const listener of listeners) {
-      listener();
-    }
+    listeners.forEach((listener) => listener());
   };
 
   const clearTimer = (): void => {
-    if (timer) {
-      clearInterval(timer);
-      timer = undefined;
+    if (playback.timer) {
+      clearInterval(playback.timer);
+      playback.timer = undefined;
     }
   };
 
   const startTimer = (): void => {
     clearTimer();
 
-    if (!state.isPlaying || length <= 1) {
+    if (!playback.state.isPlaying || playback.length <= 1) {
       return;
     }
 
-    timer = setInterval(() => {
-      if (state.currentIndex >= length - 1) {
-        state = { ...state, isPlaying: false };
+    playback.timer = setInterval(() => {
+      if (playback.state.currentIndex >= playback.length - 1) {
+        playback.state = { ...playback.state, isPlaying: false };
         clearTimer();
         emit();
         return;
       }
 
-      state = { ...state, currentIndex: state.currentIndex + 1 };
+      playback.state = { ...playback.state, currentIndex: playback.state.currentIndex + 1 };
       emit();
-    }, getPlaybackIntervalMs(state.speed));
+    }, getPlaybackIntervalMs(playback.state.speed));
   };
 
   return {
-    getState: () => state,
+    getState: () => playback.state,
     subscribe: (listener) => {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
     play: () => {
-      if (length <= 0) {
+      if (playback.length <= 0) {
         return;
       }
 
-      if (state.currentIndex >= length - 1) {
-        state = { ...state, currentIndex: 0, isPlaying: true };
+      if (playback.state.currentIndex >= playback.length - 1) {
+        playback.state = { ...playback.state, currentIndex: 0, isPlaying: true };
       } else {
-        state = { ...state, isPlaying: true };
+        playback.state = { ...playback.state, isPlaying: true };
       }
 
       startTimer();
       emit();
     },
     pause: () => {
-      state = { ...state, isPlaying: false };
+      playback.state = { ...playback.state, isPlaying: false };
       clearTimer();
       emit();
     },
     stop: () => {
-      state = { ...state, isPlaying: false, currentIndex: 0 };
+      playback.state = { ...playback.state, isPlaying: false, currentIndex: 0 };
       clearTimer();
       emit();
     },
     next: () => {
-      state = { ...state, currentIndex: clampIndex(state.currentIndex + 1, length) };
+      playback.state = { ...playback.state, currentIndex: clampIndex(playback.state.currentIndex + 1, playback.length) };
       emit();
     },
     prev: () => {
-      state = { ...state, currentIndex: clampIndex(state.currentIndex - 1, length) };
+      playback.state = { ...playback.state, currentIndex: clampIndex(playback.state.currentIndex - 1, playback.length) };
       emit();
     },
     seek: (index) => {
-      state = { ...state, currentIndex: clampIndex(index, length) };
+      playback.state = { ...playback.state, currentIndex: clampIndex(index, playback.length) };
       emit();
     },
     setSpeed: (speed) => {
-      state = { ...state, speed };
-      if (state.isPlaying) {
+      playback.state = { ...playback.state, speed };
+      if (playback.state.isPlaying) {
         startTimer();
       }
       emit();
     },
     setLength: (nextLength) => {
-      length = Math.max(0, nextLength);
-      state = { ...state, currentIndex: clampIndex(state.currentIndex, length) };
+      playback.length = Math.max(0, nextLength);
+      playback.state = { ...playback.state, currentIndex: clampIndex(playback.state.currentIndex, playback.length) };
 
-      if (length <= 1 && state.isPlaying) {
-        state = { ...state, isPlaying: false };
+      if (playback.length <= 1 && playback.state.isPlaying) {
+        playback.state = { ...playback.state, isPlaying: false };
         clearTimer();
       }
 
-      if (state.isPlaying) {
+      if (playback.state.isPlaying) {
         startTimer();
       }
 

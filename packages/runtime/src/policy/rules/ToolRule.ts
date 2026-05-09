@@ -123,34 +123,34 @@ export class ToolRule implements PolicyRulePlugin {
       return this.toDecisionFromDynamicRule(action, dynamicResolution.matchedRule);
     }
 
-    for (const rule of policies.tools ?? []) {
+    return (policies.tools ?? []).flatMap((rule): PolicyDecision[] => {
       const matchResult = matchesToolRule(rule, action, context, this.getExpressionAst.bind(this), this.onAuditEvent);
       if (!matchResult.matched) {
-        continue;
+        return [];
       }
 
       if (matchResult.evaluationError) {
-        return {
+        return [{
           type: "deny",
           reason: matchResult.evaluationError,
           rule: `tools.${rule.name}`,
-        };
+        }];
       }
 
       if (rule.effect === "allow") {
-        return { type: "allow" };
+        return [{ type: "allow" }];
       }
 
       if (rule.effect === "deny") {
-        return {
+        return [{
           type: "deny",
           reason: `Tool call denied for ${action.name}`,
           rule: `tools.${rule.name}`,
-        };
+        }];
       }
 
       if (rule.effect === "gate") {
-        return {
+        return [{
           type: "gate",
           gateType: rule.gate?.type ?? "human-approval",
           config: {
@@ -158,10 +158,10 @@ export class ToolRule implements PolicyRulePlugin {
             timeout: rule.gate?.timeout,
             rule: `tools.${rule.name}`,
           },
-        };
+        }];
       }
 
-      return {
+      return [{
         type: "transform",
         original: action.params,
         transformed: {
@@ -170,10 +170,8 @@ export class ToolRule implements PolicyRulePlugin {
         },
         rule: `tools.${rule.name}`,
         transformFn: rule.transform?.fn,
-      };
-    }
-
-    return null;
+      }];
+    }).at(0) ?? null;
   }
 
   private toDecisionFromDynamicRule(action: PolicyAction, rule: DynamicToolRule): PolicyDecision {

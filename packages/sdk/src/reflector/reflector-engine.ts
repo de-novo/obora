@@ -80,36 +80,35 @@ export class ReflectorEngine {
     const allSuggestedActions: ReflectorAction[] = [];
     const hintParts: string[] = [];
 
-    for (const analyzer of this.analyzers) {
+    this.analyzers.forEach((analyzer) => {
       const result = analyzer.analyze(context);
       if (result) {
         insights.push(result);
         hintParts.push(...result.insights);
         allSuggestedActions.push(...result.suggestedActions);
       }
-    }
+    });
 
     // 2. Build analysis summary for rule engine
     const summary = this.buildSummary(context, insights);
 
     // 3. Evaluate rules
-    let ruleActions: ReflectorAction[] = [];
-    if (this.ruleEngine) {
-      ruleActions = this.ruleEngine.evaluate(summary);
-    }
+    const ruleActions = this.ruleEngine ? this.ruleEngine.evaluate(summary) : [];
 
     // 4. Query knowledge store
-    let knowledgeUsed: KnowledgeEntry[] = [];
-    if (this.knowledgeStore && summary.keywords.length > 0) {
-      knowledgeUsed = this.knowledgeStore.findSimilar(summary.keywords);
+    const knowledgeUsed =
+      this.knowledgeStore && summary.keywords.length > 0
+        ? this.knowledgeStore.findSimilar(summary.keywords)
+        : [];
+    if (knowledgeUsed.length > 0) {
       // Inject knowledge-based hints
-      for (const entry of knowledgeUsed.slice(0, 3)) {
+      knowledgeUsed.slice(0, 3).forEach((entry) => {
         if (entry.confidence >= 0.5) {
           hintParts.push(
             `Prior knowledge: "${entry.pattern}" was resolved by: ${entry.resolution} (confidence: ${(entry.confidence * 100).toFixed(0)}%)`
           );
         }
-      }
+      });
     }
 
     // 5. General escalation (backward compat with ExecutionReflector)
@@ -128,12 +127,12 @@ export class ReflectorEngine {
     if (allActions.length > 0) {
       // We don't have full ActionExecutionContext here — that's provided by workflow-runner
       // Return the raw actions as metadata for the runner to execute
-      for (const action of allActions) {
+      allActions.forEach((action) => {
         actionResults.push({
           applied: false,
           metadata: { pendingAction: action },
         });
-      }
+      });
     }
 
     // 8. Track patterns for outcome recording
@@ -179,7 +178,7 @@ export class ReflectorEngine {
     const output = this.analyze(context);
 
     // Merge inject_context action payloads into hints
-    for (const ar of output.actions) {
+    output.actions.forEach((ar) => {
       const pending = (ar.metadata as Record<string, unknown>)?.pendingAction as
         | ReflectorAction
         | undefined;
@@ -191,7 +190,7 @@ export class ReflectorEngine {
             : injected;
         }
       }
-    }
+    });
 
     // Cache latest output for workflow-runner to query actions
     this._lastOutput = output;
@@ -235,11 +234,12 @@ export class ReflectorEngine {
     workflowName?: string
   ): Promise<void> {
     if (!this.knowledgeStore) return;
+    const knowledgeStore = this.knowledgeStore;
 
     // Find tracked patterns for this execution
-    for (const [, record] of this.executionRecords) {
-      for (const pattern of record.patterns) {
-        this.knowledgeStore.recordPattern(
+    Array.from(this.executionRecords.values()).forEach((record) => {
+      record.patterns.forEach((pattern) => {
+        knowledgeStore.recordPattern(
           pattern,
           succeeded ? "succeeded" : "failed",
           succeeded,
@@ -248,8 +248,8 @@ export class ReflectorEngine {
             executionId,
           }
         );
-      }
-    }
+      });
+    });
 
     await this.knowledgeStore.save();
   }
@@ -264,9 +264,9 @@ export class ReflectorEngine {
     const { failures } = context;
     const keywords = extractKeywords(failures);
     const keywordFrequency = new Map<string, number>();
-    for (const kw of keywords) {
+    keywords.forEach((kw) => {
       keywordFrequency.set(kw, (keywordFrequency.get(kw) ?? 0) + 1);
-    }
+    });
 
     return {
       keywords,

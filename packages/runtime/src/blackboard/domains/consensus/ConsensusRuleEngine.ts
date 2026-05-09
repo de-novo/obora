@@ -68,10 +68,11 @@ export function evaluateConsensus(
   const method = options.method ?? snapshot.policy;
 
   // supermajorityThreshold 검증: 유효한 숫자이고 [0, 1] 범위여야 함
-  let threshold = options.supermajorityThreshold ?? 2 / 3;
-  if (!Number.isFinite(threshold) || threshold < 0 || threshold > 1) {
-    threshold = 2 / 3; // 안전한 기본값으로 대체
-  }
+  const rawThreshold = options.supermajorityThreshold ?? 2 / 3;
+  const threshold =
+    Number.isFinite(rawThreshold) && rawThreshold >= 0 && rawThreshold <= 1
+      ? rawThreshold
+      : 2 / 3;
 
   const conditions = toConditions(options.conditionalCodes);
 

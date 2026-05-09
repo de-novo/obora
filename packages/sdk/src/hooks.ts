@@ -47,35 +47,39 @@ export async function executeWorkflowHook(
       signal: options.signal,
     });
 
-    let stdout = "";
-    let stderr = "";
-    let spawnError: Error | undefined;
+    const output = {
+      stdout: "",
+      stderr: "",
+      spawnError: undefined as Error | undefined,
+    };
 
     child.stdout?.setEncoding("utf8");
     child.stdout?.on("data", (chunk) => {
-      stdout += chunk;
+      output.stdout += chunk;
     });
 
     child.stderr?.setEncoding("utf8");
     child.stderr?.on("data", (chunk) => {
-      stderr += chunk;
+      output.stderr += chunk;
     });
 
     child.on("error", (error) => {
-      spawnError = error;
+      output.spawnError = error;
     });
 
     child.on("close", (exitCode, signal) => {
-      const errorText = spawnError ? `${spawnError.message}${stderr ? `\n${stderr}` : ""}` : stderr;
+      const errorText = output.spawnError
+        ? `${output.spawnError.message}${output.stderr ? `\n${output.stderr}` : ""}`
+        : output.stderr;
       resolve({
         lifecycle,
         command: hook.shell,
         cwd,
-        stdout,
+        stdout: output.stdout,
         stderr: errorText,
         exitCode,
         signal,
-        success: spawnError === undefined && exitCode === 0,
+        success: output.spawnError === undefined && exitCode === 0,
         durationMs: Date.now() - startedAt,
       });
     });

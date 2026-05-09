@@ -68,11 +68,14 @@ export class RedBluePattern extends CollaborationPatternBase {
     const input = this.getInput(context);
     const roundsInput = this.resolveRounds(input, maxRounds);
 
-    const rounds: RoundSummary[] = [];
-    let converged = false;
-    let convergenceRound: number | undefined;
+    const executeRound = async (
+      index: number,
+      state: { rounds: RoundSummary[]; converged: boolean; convergenceRound?: number }
+    ): Promise<{ rounds: RoundSummary[]; converged: boolean; convergenceRound?: number }> => {
+      if (index >= maxRounds || state.converged) {
+        return state;
+      }
 
-    for (let index = 0; index < maxRounds; index += 1) {
       const roundNumber = index + 1;
       const roundInput = roundsInput[index] ?? {};
       const redFindings = this.normalizeRecord(roundInput.red_findings);
@@ -96,7 +99,7 @@ export class RedBluePattern extends CollaborationPatternBase {
         red_findings: redFindings,
         blue_responses: blueResponses,
       };
-      rounds.push(summary);
+      const rounds = [...state.rounds, summary];
 
       await context.emit?.({
         type: "red_blue_round_end",
@@ -119,11 +122,22 @@ export class RedBluePattern extends CollaborationPatternBase {
       });
 
       if (shouldConverge) {
-        converged = true;
-        convergenceRound = roundNumber;
-        break;
+        return { rounds, converged: true, convergenceRound: roundNumber };
       }
-    }
+
+      return executeRound(index + 1, { rounds, converged: false });
+    };
+
+    const initialRoundState = await executeRound(0, { rounds: [], converged: false });
+    const finalRoundState =
+      !initialRoundState.converged && (convergence === "max_rounds" || convergence === "custom")
+        ? {
+            ...initialRoundState,
+            converged: true,
+            convergenceRound: initialRoundState.rounds.length,
+          }
+        : initialRoundState;
+    const { rounds, converged, convergenceRound } = finalRoundState;
 
     if (!converged && convergence === "red_finds_nothing") {
       const escalation = config.escalation;
@@ -162,11 +176,6 @@ export class RedBluePattern extends CollaborationPatternBase {
           ...(shouldEscalate ? { escalated: true, escalation_target: escalation?.target } : {}),
         },
       };
-    }
-
-    if (!converged && (convergence === "max_rounds" || convergence === "custom")) {
-      converged = true;
-      convergenceRound = rounds.length;
     }
 
     return {

@@ -105,11 +105,7 @@ export class BlackboardManager {
    * Get all recorded step outputs.
    */
   getAllStepOutputs(): Record<string, unknown> {
-    const result: Record<string, unknown> = {};
-    for (const [key, value] of this.stepOutputs) {
-      result[key] = value;
-    }
-    return result;
+    return Object.fromEntries(this.stepOutputs.entries());
   }
 
   /**
@@ -194,10 +190,9 @@ export class BlackboardManager {
    * Get the full blackboard snapshot.
    */
   getSnapshot(): BlackboardSnapshot {
-    const timings: Record<string, { startedAt: number; durationMs?: number }> = {};
-    for (const [key, value] of this.stepTimings) {
-      timings[key] = { ...value };
-    }
+    const timings = Object.fromEntries(
+      Array.from(this.stepTimings.entries()).map(([key, value]) => [key, { ...value }])
+    );
     return {
       facts: [...this.facts],
       stepOutputs: this.getAllStepOutputs(),
@@ -254,9 +249,7 @@ export class BlackboardManager {
     source: MemoryScope,
     options: SharedMemoryImportOptions = {},
   ): SharedMemoryImportResult {
-    let importedFacts = 0;
-
-    for (const fact of snapshot.knowledge.facts) {
+    snapshot.knowledge.facts.forEach((fact) => {
       const factSource = options.factSources?.[fact.id] ?? source;
       const sourceRef = `${factSource.level}:${factSource.key}`;
       const importedFact: BlackboardFact = {
@@ -268,7 +261,6 @@ export class BlackboardManager {
         createdAt: new Date(fact.createdAt),
       };
       this.facts.push(importedFact);
-      importedFacts += 1;
 
       this.board.knowledge.addFact({
         content: fact.content,
@@ -277,13 +269,13 @@ export class BlackboardManager {
         category: "shared-memory-import",
         tags: [...fact.tags, factSource.level, factSource.key],
       });
-    }
+    });
 
     if (options.storeSnapshot !== false) {
       this.recordSharedMemorySnapshot(snapshot, source);
     }
 
-    return { importedFacts, source };
+    return { importedFacts: snapshot.knowledge.facts.length, source };
   }
 
   /**

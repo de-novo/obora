@@ -30,8 +30,7 @@ export class CompositePattern extends CollaborationPatternBase {
       throw new Error("composite.stages must be an array");
     }
 
-    const seen = new Set<string>();
-    for (const [index, stage] of config.stages.entries()) {
+    config.stages.reduce<Set<string>>((seen, stage, index) => {
       if (!stage || typeof stage !== "object") {
         throw new Error(`composite.stages[${index}] must be an object`);
       }
@@ -55,7 +54,9 @@ export class CompositePattern extends CollaborationPatternBase {
       ) {
         throw new Error(`composite.stages[${index}].input_from must be a string when provided`);
       }
-    }
+
+      return seen;
+    }, new Set<string>());
 
     if (
       config.on_stage_failure !== undefined &&
@@ -75,6 +76,25 @@ export class CompositePattern extends CollaborationPatternBase {
     const rootInput = context.input;
     const results: CompositeStageResult[] = [];
     const outputsByStageName = new Map<string, unknown>();
+    const errorMessage = (error: unknown): string => error instanceof Error ? error.message : String(error);
+    const emitCompositeFailure = async (): Promise<PatternPayloadResult> => {
+      await context.emit?.({
+        type: "composite_end",
+        payload: {
+          success: false,
+          completed_stages: results.length,
+          stages: results,
+        },
+      });
+
+      return {
+        success: false,
+        output: {
+          stages: results,
+          completed_stages: results.length,
+        },
+      };
+    };
 
     await context.emit?.({
       type: "composite_start",
@@ -84,7 +104,11 @@ export class CompositePattern extends CollaborationPatternBase {
       },
     });
 
-    for (let index = 0; index < stages.length; index += 1) {
+    const executeStage = async (index: number): Promise<PatternPayloadResult | undefined> => {
+      if (index >= stages.length) {
+        return undefined;
+      }
+
       const stage = stages[index]!;
       const stageInput = this.resolveStageInput({
         stage,
@@ -141,7 +165,7 @@ export class CompositePattern extends CollaborationPatternBase {
             // When on_stage_failure is "skip", the failed stage's output ({ reason: "failed" })
             // becomes available to subsequent stages via input_from. This is intentional:
             // downstream stages can inspect the failure and react accordingly.
-            continue;
+            return executeStage(index + 1);
           }
 
           if (onStageFailure === "escalate") {
@@ -151,23 +175,10 @@ export class CompositePattern extends CollaborationPatternBase {
             );
           }
 
-          await context.emit?.({
-            type: "composite_end",
-            payload: {
-              success: false,
-              completed_stages: results.length,
-              stages: results,
-            },
-          });
-
-          return {
-            success: false,
-            output: {
-              stages: results,
-              completed_stages: results.length,
-            },
-          };
+          return emitCompositeFailure();
         }
+
+        return executeStage(index + 1);
       } catch (error) {
         await context.emit?.({
           type: "composite_stage_end",
@@ -176,13 +187,13 @@ export class CompositePattern extends CollaborationPatternBase {
             name: stage.name,
             pattern: stage.pattern,
             success: false,
-            error: error instanceof Error ? error.message : String(error),
+            error: errorMessage(error),
           },
         });
 
         if (onStageFailure === "skip") {
           const fallbackOutput = {
-            error: error instanceof Error ? error.message : String(error),
+            error: errorMessage(error),
           };
           results.push({
             name: stage.name,
@@ -191,7 +202,7 @@ export class CompositePattern extends CollaborationPatternBase {
             output: fallbackOutput,
           });
           outputsByStageName.set(stage.name, fallbackOutput);
-          continue;
+          return executeStage(index + 1);
         }
 
         if (onStageFailure === "escalate") {
@@ -209,29 +220,19 @@ export class CompositePattern extends CollaborationPatternBase {
               code: OboraErrorCode.RECOVERY_ESCALATION_TIMEOUT,
               stageResult: {
                 success: false,
-                output: { error: error instanceof Error ? error.message : String(error) },
+                output: { error: errorMessage(error) },
               },
             }
           );
         }
 
-        await context.emit?.({
-          type: "composite_end",
-          payload: {
-            success: false,
-            completed_stages: results.length,
-            stages: results,
-          },
-        });
-
-        return {
-          success: false,
-          output: {
-            stages: results,
-            completed_stages: results.length,
-          },
-        };
+        return emitCompositeFailure();
       }
+    };
+
+    const earlyResult = await executeStage(0);
+    if (earlyResult !== undefined) {
+      return earlyResult;
     }
 
     await context.emit?.({
@@ -279,4 +280,3 @@ export class CompositePattern extends CollaborationPatternBase {
     return args.outputsByStageName.get(source);
   }
 }
-

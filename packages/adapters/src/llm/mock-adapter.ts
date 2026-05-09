@@ -29,22 +29,12 @@ export class MockLLMAdapter implements LLMAdapter {
     const messageContent = lastUserMessage?.content ?? "";
 
     // 1. 정확한 키 매칭 시도
-    let matchedKey: string | undefined = undefined;
-    if (messageContent in this.responses) {
-      matchedKey = messageContent;
-    } else {
-      // 2. 부분 문자열 매칭 시도 (등록된 키가 메시지에 포함되어 있는지)
-      for (const registeredKey of Object.keys(this.responses)) {
-        if (registeredKey && messageContent.includes(registeredKey)) {
-          matchedKey = registeredKey;
-          break;
-        }
-      }
-      // 3. 빈 문자열 키를 기본 폴백으로 사용
-      if (matchedKey === undefined && "" in this.responses) {
-        matchedKey = "";
-      }
-    }
+    const matchedKey =
+      messageContent in this.responses
+        ? messageContent
+        : (Object.keys(this.responses).find(
+            (registeredKey) => registeredKey && messageContent.includes(registeredKey)
+          ) ?? ("" in this.responses ? "" : undefined));
 
     const selected = matchedKey !== undefined ? this.responses[matchedKey] : undefined;
     const content =
@@ -76,19 +66,20 @@ export class MockLLMAdapter implements LLMAdapter {
     const content = result.message.content ?? "";
 
     const words = content.split(" ");
-    for (let i = 0; i < words.length; i++) {
+    await words.reduce<Promise<void>>(async (previousChunk, word, index) => {
+      await previousChunk;
       await new Promise((resolve) => setTimeout(resolve, 50));
-      const isLast = i === words.length - 1;
+      const isLast = index === words.length - 1;
       onChunk({
         id: `mock-${Date.now()}`,
         model: "mock-model",
         delta: {
           role: "assistant",
-          content: words[i] + (isLast ? "" : " "),
+          content: word + (isLast ? "" : " "),
         },
         finishReason: isLast ? "stop" : undefined,
       });
-    }
+    }, Promise.resolve());
 
     return result;
   }

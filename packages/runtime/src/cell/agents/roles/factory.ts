@@ -87,7 +87,6 @@ export function createAgentTeam(
     directors?: number;
   }
 ): BaseAgent[] {
-  const agents: BaseAgent[] = [];
   const baseConfig = {
     llm: config.llm,
     toolRegistry: config.toolRegistry,
@@ -101,49 +100,22 @@ export function createAgentTeam(
 
   const defaultCount = hasAnyRoleSpecified ? 0 : 1;
 
-  const count = config.analysts ?? defaultCount;
-  for (let i = 0; i < count; i++) {
-    agents.push(
+  const createRoleAgents = (
+    role: CreateAgentConfig["role"],
+    count: number
+  ): BaseAgent[] =>
+    Array.from({ length: count }, (_, index) =>
       createAgent({
-        id: `analyst-${i + 1}`,
-        role: "analyst",
+        id: `${role}-${index + 1}`,
+        role,
         ...baseConfig,
       })
     );
-  }
 
-  const executorCount = config.executors ?? defaultCount;
-  for (let i = 0; i < executorCount; i++) {
-    agents.push(
-      createAgent({
-        id: `executor-${i + 1}`,
-        role: "executor",
-        ...baseConfig,
-      })
-    );
-  }
-
-  const verifierCount = config.verifiers ?? defaultCount;
-  for (let i = 0; i < verifierCount; i++) {
-    agents.push(
-      createAgent({
-        id: `verifier-${i + 1}`,
-        role: "verifier",
-        ...baseConfig,
-      })
-    );
-  }
-
-  const directorCount = config.directors ?? defaultCount;
-  for (let i = 0; i < directorCount; i++) {
-    agents.push(
-      createAgent({
-        id: `director-${i + 1}`,
-        role: "director",
-        ...baseConfig,
-      })
-    );
-  }
-
-  return agents;
+  return [
+    ...createRoleAgents("analyst", config.analysts ?? defaultCount),
+    ...createRoleAgents("executor", config.executors ?? defaultCount),
+    ...createRoleAgents("verifier", config.verifiers ?? defaultCount),
+    ...createRoleAgents("director", config.directors ?? defaultCount),
+  ];
 }

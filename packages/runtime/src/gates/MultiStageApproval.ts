@@ -87,12 +87,21 @@ export class MultiStageApprovalGate {
 
   async evaluate(decisions: ApprovalDecision[]): Promise<MultiStageApprovalResult> {
     const normalized = this.normalizeDecisions(decisions);
-    const stageResults: MultiStageApprovalResult["stages"] = [];
     const trackHistory = this.config.track_history ?? true;
     const onReject = this.config.on_reject ?? "fail";
 
-    for (let stageIndex = 0; stageIndex < this.config.stages.length; stageIndex += 1) {
+    const evaluateStage = async (
+      stageIndex: number,
+      stageResults: MultiStageApprovalResult["stages"]
+    ): Promise<MultiStageApprovalResult> => {
       const stage = this.config.stages[stageIndex]!;
+      if (!stage) {
+        return {
+          approved: true,
+          stages: stageResults,
+        };
+      }
+
       const conditionResult:
         | { status: "ok"; allowed: boolean }
         | { status: "error"; message: string } = (() => {
@@ -114,22 +123,24 @@ export class MultiStageApprovalGate {
       })();
 
       if (conditionResult.status === "error") {
-        stageResults.push({
+        const nextStageResults: MultiStageApprovalResult["stages"] = [...stageResults, {
           name: stage.name,
           status: "rejected",
           decisions: [],
-        });
+        }];
         return {
           approved: false,
-          stages: stageResults,
+          stages: nextStageResults,
           reason: `condition_evaluation_error: ${conditionResult.message}`,
           action: "fail",
         };
       }
 
       if (!conditionResult.allowed) {
-        stageResults.push({ name: stage.name, status: "skipped", decisions: [] });
-        continue;
+        return evaluateStage(stageIndex + 1, [
+          ...stageResults,
+          { name: stage.name, status: "skipped", decisions: [] },
+        ]);
       }
 
       const stageDecisions = this.pickStageDecisions(normalized, stageIndex, stage.name, stage.approvers);
@@ -137,8 +148,9 @@ export class MultiStageApprovalGate {
       const rejections = stageDecisions.filter((entry) => entry.decision === "rejected");
 
       if (rejections.length > 0) {
-        for (const rejection of rejections) {
-          await this.context.emit?.({
+        await Promise.all(
+          rejections.map((rejection) =>
+            this.context.emit?.({
             type: "gate_approval_decision",
             payload: {
               stageIndex,
@@ -148,18 +160,19 @@ export class MultiStageApprovalGate {
               comment: rejection.comment,
               timestamp: rejection.timestamp.toISOString(),
             },
-          });
-        }
+            })
+          )
+        );
 
-        stageResults.push({
+        const nextStageResults: MultiStageApprovalResult["stages"] = [...stageResults, {
           name: stage.name,
           status: "rejected",
           decisions: trackHistory ? stageDecisions : [],
-        });
+        }];
 
         const result: MultiStageApprovalResult = {
           approved: false,
-          stages: stageResults,
+          stages: nextStageResults,
           reason: `Rejected at stage '${stage.name}' (${onReject})`,
           action: onReject,
         };
@@ -172,8 +185,9 @@ export class MultiStageApprovalGate {
         return result;
       }
 
-      for (const stageDecision of stageDecisions) {
-        await this.context.emit?.({
+      await Promise.all(
+        stageDecisions.map((stageDecision) =>
+          this.context.emit?.({
           type: "gate_approval_decision",
           payload: {
             stageIndex,
@@ -183,35 +197,32 @@ export class MultiStageApprovalGate {
             comment: stageDecision.comment,
             timestamp: stageDecision.timestamp.toISOString(),
           },
-        });
-      }
+          })
+        )
+      );
 
       if (approvals >= stage.required) {
-        stageResults.push({
+        return evaluateStage(stageIndex + 1, [...stageResults, {
           name: stage.name,
           status: "approved",
           decisions: trackHistory ? stageDecisions : [],
-        });
-        continue;
+        }]);
       }
 
-      stageResults.push({
+      const nextStageResults: MultiStageApprovalResult["stages"] = [...stageResults, {
         name: stage.name,
         status: "pending",
         decisions: trackHistory ? stageDecisions : [],
-      });
+      }];
 
       return {
         approved: false,
-        stages: stageResults,
+        stages: nextStageResults,
         reason: `Stage '${stage.name}' requires ${stage.required} approvals (${approvals} received)`,
       };
-    }
-
-    return {
-      approved: true,
-      stages: stageResults,
     };
+
+    return evaluateStage(0, []);
   }
 
   private normalizeDecisions(decisions: ApprovalDecision[]): ApprovalDecision[] {
@@ -224,21 +235,19 @@ export class MultiStageApprovalGate {
     stageName: string,
     allowedApprovers: string[]
   ): ApprovalDecision[] {
-    const latestByApprover = new Map<string, ApprovalDecision>();
-
-    for (const decision of decisions) {
-      if (decision.stageIndex !== stageIndex && decision.stageName !== stageName) {
-        continue;
-      }
-      if (!allowedApprovers.includes(decision.approver)) {
-        continue;
+    const latestByApprover = decisions.reduce((map, decision) => {
+      if (
+        (decision.stageIndex !== stageIndex && decision.stageName !== stageName) ||
+        !allowedApprovers.includes(decision.approver)
+      ) {
+        return map;
       }
 
       const normalizedDecision = this.config.allow_comments === false
         ? { ...decision, comment: undefined }
         : decision;
-      latestByApprover.set(decision.approver, normalizedDecision);
-    }
+      return new Map([...map, [decision.approver, normalizedDecision]]);
+    }, new Map<string, ApprovalDecision>());
 
     return [...latestByApprover.values()].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
   }

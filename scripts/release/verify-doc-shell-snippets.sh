@@ -27,23 +27,20 @@ const docs = [
 ];
 
 function extractShellBlocks(markdown) {
-  const blocks = [];
   const regex = /```(?:bash|sh|shell)\n([\s\S]*?)```/gi;
-  let match;
-  while ((match = regex.exec(markdown)) !== null) {
+  return Array.from(markdown.matchAll(regex)).map((match) => {
     const startLine = markdown.slice(0, match.index).split(/\r?\n/).length;
-    blocks.push({ startLine, code: match[1].trim() });
-  }
-  return blocks;
+    return { startLine, code: match[1].trim() };
+  });
 }
 
-const snippetFiles = [];
-let counter = 0;
-for (const doc of docs) {
+const snippets = docs.flatMap((doc) => {
   const markdown = fs.readFileSync(doc, "utf8");
-  for (const block of extractShellBlocks(markdown)) {
+  return extractShellBlocks(markdown).map((block) => ({ doc, block }));
+});
+
+const snippetFiles = snippets.map(({ doc, block }, counter) => {
     const fileName = `snippet-${String(counter).padStart(3, "0")}.sh`;
-    counter += 1;
     const filePath = path.join(tmpDir, fileName);
     const source = [
       "#!/usr/bin/env bash",
@@ -53,9 +50,8 @@ for (const doc of docs) {
       "",
     ].join("\n");
     fs.writeFileSync(filePath, source);
-    snippetFiles.push(filePath);
-  }
-}
+    return filePath;
+});
 
 if (snippetFiles.length === 0) {
   console.error("[FAIL] No checked shell snippets were found.");

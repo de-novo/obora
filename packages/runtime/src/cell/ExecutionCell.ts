@@ -417,10 +417,10 @@ export class DefaultExecutionCell implements ExecutionCell {
   }
 
   private async withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
-    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+    const timeout = { handle: undefined as ReturnType<typeof setTimeout> | undefined };
 
     const timeoutPromise = new Promise<T>((_, reject) => {
-      timeoutHandle = setTimeout(() => {
+      timeout.handle = setTimeout(() => {
         reject(new Error(`Execution timed out after ${timeoutMs}ms`));
       }, timeoutMs);
     });
@@ -428,8 +428,8 @@ export class DefaultExecutionCell implements ExecutionCell {
     try {
       return await Promise.race([promise, timeoutPromise]);
     } finally {
-      if (timeoutHandle) {
-        clearTimeout(timeoutHandle);
+      if (timeout.handle) {
+        clearTimeout(timeout.handle);
       }
     }
   }

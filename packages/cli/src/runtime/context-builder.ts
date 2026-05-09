@@ -52,12 +52,17 @@ export type Clock = () => string;
 const defaultClock: Clock = () => new Date().toISOString();
 
 /** Module-level clock; override via `setClock()` for testing. */
-let activeClock: Clock = defaultClock;
-let warnedDeprecatedDirectWrite = false;
+const contextBuilderState: {
+  activeClock: Clock;
+  warnedDeprecatedDirectWrite: boolean;
+} = {
+  activeClock: defaultClock,
+  warnedDeprecatedDirectWrite: false,
+};
 
 /** Override the clock used by record* functions. Pass `null` to reset. */
 export function setClock(clock: Clock | null): void {
-  activeClock = clock ?? defaultClock;
+  contextBuilderState.activeClock = clock ?? defaultClock;
 }
 
 // ---------------------------------------------------------------------------
@@ -79,7 +84,7 @@ export function createWorkflowBlackboard(
     workflowName: workflow.name,
     workflowVersion: workflow.version ?? "1.0",
     featureName,
-    startedAt: activeClock(),
+    startedAt: contextBuilderState.activeClock(),
     sessionId,
   };
 
@@ -100,8 +105,8 @@ export function createWorkflowBlackboard(
     "write",
     {
       value: (path: string, _value: unknown) => {
-        if (!warnedDeprecatedDirectWrite && process.env.NODE_ENV !== "test") {
-          warnedDeprecatedDirectWrite = true;
+        if (!contextBuilderState.warnedDeprecatedDirectWrite && process.env.NODE_ENV !== "test") {
+          contextBuilderState.warnedDeprecatedDirectWrite = true;
           console.warn(
             `[Blackboard] Deprecated: direct write("${path}") is a no-op. Use recordStepResult/recordStepError.`
           );
@@ -164,7 +169,7 @@ export function recordStepResult(
     error: null,
     errorMeta: null,
     diagnosisCode: null,
-    completedAt: activeClock(),
+    completedAt: contextBuilderState.activeClock(),
     failedAt: null,
   };
   (board as Blackboard).recordStepResult(stepName, record);
@@ -186,7 +191,7 @@ export function recordStepError(
     errorMeta: result.errorMeta ?? null,
     diagnosisCode: result.diagnosisCode ?? null,
     completedAt: null,
-    failedAt: activeClock(),
+    failedAt: contextBuilderState.activeClock(),
   };
   (board as Blackboard).recordStepError(stepName, {
     message: record.error ?? "Unknown error",

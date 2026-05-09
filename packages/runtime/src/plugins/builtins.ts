@@ -234,7 +234,8 @@ export async function registerBuiltinPlugins(
     sandboxRoot: options.sandboxRoot,
     patternRegistry: options.patternRegistry,
   });
-  for (const plugin of builtins) {
-    await registry.register(plugin, { replace: options.replace });
-  }
+  await builtins.reduce<Promise<void>>(
+    (previous, plugin) => previous.then(() => registry.register(plugin, { replace: options.replace })),
+    Promise.resolve()
+  );
 }

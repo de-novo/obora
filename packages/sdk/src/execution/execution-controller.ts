@@ -94,20 +94,22 @@ export class ExecutionController {
     };
 
     const runTimeoutMs = this.resolveExecutionTimeoutMs(workflow, variables);
-    let status: RunStatus = "queued";
-    let settled = false;
-    let rejectWait: ((reason?: unknown) => void) | undefined;
-    let runTimeout: ReturnType<typeof setTimeout> | undefined;
-    let signalAbortListener: (() => void) | undefined;
+    const runState = {
+      status: "queued" as RunStatus,
+      settled: false,
+      rejectWait: undefined as ((reason?: unknown) => void) | undefined,
+      timeout: undefined as ReturnType<typeof setTimeout> | undefined,
+      signalAbortListener: undefined as (() => void) | undefined,
+    };
 
     const waitPromise = new Promise<RuntimeExecution>((resolve, reject) => {
-      rejectWait = reject;
+      runState.rejectWait = reject;
 
       queueMicrotask(async () => {
         try {
-          if (settled) return;
+          if (runState.settled) return;
 
-          status = "running";
+          runState.status = "running";
           execution.status = "running";
 
           await this.opts.runner.executeRun(
@@ -116,27 +118,27 @@ export class ExecutionController {
             workflow,
             execution,
             options,
-            () => settled,
+            () => runState.settled,
           );
 
-          if (settled) return;
+          if (runState.settled) return;
 
-          status = "completed";
+          runState.status = "completed";
           execution.status = "completed";
           execution.endedAt = new Date();
-          settled = true;
+          runState.settled = true;
 
           this.opts.executions.set(executionId, structuredClone(execution));
           resolve(structuredClone(execution));
         } catch (error) {
-          if (settled) return;
+          if (runState.settled) return;
 
           const budgetExceeded = error instanceof BudgetExceededError;
-          status = budgetExceeded ? "suspended" : "failed";
+          runState.status = budgetExceeded ? "suspended" : "failed";
           execution.status = budgetExceeded ? "suspended" : "failed";
           execution.error = error instanceof Error ? error.message : String(error);
           execution.endedAt = new Date();
-          settled = true;
+          runState.settled = true;
 
           const errorCode = budgetExceeded
             ? OboraErrorCode.POLICY_RESOURCE_EXCEEDED
@@ -227,7 +229,9 @@ export class ExecutionController {
             const delayMs = autoRecovery.delayMs ?? DEFAULTS.AUTO_RECOVERY_DELAY_MS;
             const driftPolicy = autoRecovery.driftPolicy ?? "warn";
 
-            for (let attempt = 0; attempt < maxRetries; attempt++) {
+            const recovered = await Array.from({ length: maxRetries }, (_, attempt) => attempt).reduce<Promise<boolean>>(
+              async (previous, attempt) => {
+                if (await previous) return true;
               try {
                 if (delayMs > 0) {
                   await new Promise((r) => setTimeout(r, delayMs));
@@ -238,12 +242,12 @@ export class ExecutionController {
                 });
                 const resumeResult = await this.resume(executionId, { driftPolicy }, workflows);
                 if (resumeResult.execution.status === "completed") {
-                  status = "completed";
+                  runState.status = "completed";
                   execution.status = "completed";
                   execution.endedAt = new Date();
                   this.opts.executions.set(executionId, structuredClone(execution));
                   resolve(structuredClone(execution));
-                  return;
+                    return true;
                 }
               } catch (recoveryErr) {
                 await this.opts.eventBus.emit("warning", executionId, {
@@ -251,6 +255,12 @@ export class ExecutionController {
                   code: "AUTO_RECOVERY_FAILED",
                 });
               }
+                return false;
+              },
+              Promise.resolve(false)
+            );
+            if (recovered) {
+              return;
             }
           }
 
@@ -273,12 +283,12 @@ export class ExecutionController {
               : error,
           );
         } finally {
-          if (runTimeout) {
-            clearTimeout(runTimeout);
-            runTimeout = undefined;
+          if (runState.timeout) {
+            clearTimeout(runState.timeout);
+            runState.timeout = undefined;
           }
-          signalAbortListener?.();
-          signalAbortListener = undefined;
+          runState.signalAbortListener?.();
+          runState.signalAbortListener = undefined;
 
           if (this.opts.executionLock) {
             try {
@@ -294,31 +304,31 @@ export class ExecutionController {
     const handle: RunHandle = {
       executionId,
       get status() {
-        return status;
+        return runState.status;
       },
       wait: () => waitPromise,
       cancel: async (reason?: string) => {
         if (
-          settled ||
-          status === "completed" ||
-          status === "failed" ||
-          status === "aborted"
+          runState.settled ||
+          runState.status === "completed" ||
+          runState.status === "failed" ||
+          runState.status === "aborted"
         ) {
           return;
         }
 
-        if (runTimeout) {
-          clearTimeout(runTimeout);
-          runTimeout = undefined;
+        if (runState.timeout) {
+          clearTimeout(runState.timeout);
+          runState.timeout = undefined;
         }
-        signalAbortListener?.();
-        signalAbortListener = undefined;
+        runState.signalAbortListener?.();
+        runState.signalAbortListener = undefined;
 
-        status = "aborted";
+        runState.status = "aborted";
         execution.status = "aborted";
         execution.error = reason ?? "Execution cancelled";
         execution.endedAt = new Date();
-        settled = true;
+        runState.settled = true;
 
         const abortError = OboraError.executionCancelled(executionId, reason);
 
@@ -348,12 +358,12 @@ export class ExecutionController {
           status: "aborted",
         });
 
-        rejectWait?.(abortError);
+        runState.rejectWait?.(abortError);
       },
     };
 
     if (runTimeoutMs !== undefined) {
-      runTimeout = setTimeout(() => {
+      runState.timeout = setTimeout(() => {
         void handle.cancel(`Execution timed out after ${runTimeoutMs}ms`);
       }, runTimeoutMs);
     }
@@ -370,7 +380,7 @@ export class ExecutionController {
           );
         };
         signal.addEventListener("abort", onAbort, { once: true });
-        signalAbortListener = () => signal.removeEventListener("abort", onAbort);
+        runState.signalAbortListener = () => signal.removeEventListener("abort", onAbort);
       }
     }
 
@@ -434,19 +444,9 @@ export class ExecutionController {
     const workflow = workflows.get(run.workflowName);
     const savedSteps = await adapter.getSteps(runId);
 
-    let allStepNames: string[];
-    if (workflow) {
-      allStepNames = workflow.steps.map((s) => s.name);
-    } else {
-      const seen = new Set<string>();
-      allStepNames = [];
-      for (const s of savedSteps) {
-        if (!seen.has(s.stepName)) {
-          seen.add(s.stepName);
-          allStepNames.push(s.stepName);
-        }
-      }
-    }
+    const allStepNames = workflow
+      ? workflow.steps.map((s) => s.name)
+      : Array.from(new Set(savedSteps.map((s) => s.stepName)));
 
     if (options.fromStep && !allStepNames.includes(options.fromStep)) {
       throw OboraError.stepNotFound(options.fromStep);

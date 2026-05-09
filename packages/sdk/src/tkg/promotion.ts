@@ -128,44 +128,39 @@ function normalizeTKGPromotionSnapshot(
     return { nodes: executionFilteredNodes };
   }
 
-  const groups = new Map<string, TemporalNode[]>();
-  for (const node of executionFilteredNodes) {
+  const groups = executionFilteredNodes.reduce((acc, node) => {
     const key = stepKey(node);
-    const bucket = groups.get(key) ?? [];
-    bucket.push(node);
-    groups.set(key, bucket);
-  }
+    const bucket = acc.get(key) ?? [];
+    return new Map([...acc, [key, [...bucket, node]]]);
+  }, new Map<string, TemporalNode[]>());
 
-  const normalizedNodes: TemporalNode[] = [];
   const latestNode = (nodes: TemporalNode[], eventType: TemporalNode["eventType"]): TemporalNode | undefined =>
     nodes
       .filter((node) => node.eventType === eventType)
       .sort((left, right) => left.timestamp.localeCompare(right.timestamp))
       .at(-1);
 
-  for (const nodes of groups.values()) {
+  const normalizedNodes = Array.from(groups.values()).flatMap((nodes) => {
     const latestValidationFailed = latestNode(nodes, "workflow.validation_failed");
     const latestValidationPassed = latestNode(nodes, "workflow.validation_passed");
     const latestRepairCompleted = latestNode(nodes, "workflow.repair_completed");
     const latestRepairStarted = latestNode(nodes, "workflow.repair_started");
     const latestBackEdge = latestNode(nodes, "workflow.back_edge_triggered");
 
-    if (latestBackEdge) normalizedNodes.push(latestBackEdge);
-    if (latestRepairStarted) normalizedNodes.push(latestRepairStarted);
-    if (latestRepairCompleted) normalizedNodes.push(latestRepairCompleted);
+    const validationNode =
+      latestValidationPassed && latestValidationFailed
+        ? latestValidationPassed.timestamp >= latestValidationFailed.timestamp
+          ? latestValidationPassed
+          : latestValidationFailed
+        : latestValidationPassed ?? latestValidationFailed;
 
-    if (latestValidationPassed && latestValidationFailed) {
-      if (latestValidationPassed.timestamp >= latestValidationFailed.timestamp) {
-        normalizedNodes.push(latestValidationPassed);
-      } else {
-        normalizedNodes.push(latestValidationFailed);
-      }
-    } else if (latestValidationPassed) {
-      normalizedNodes.push(latestValidationPassed);
-    } else if (latestValidationFailed) {
-      normalizedNodes.push(latestValidationFailed);
-    }
-  }
+    return [
+      ...(latestBackEdge ? [latestBackEdge] : []),
+      ...(latestRepairStarted ? [latestRepairStarted] : []),
+      ...(latestRepairCompleted ? [latestRepairCompleted] : []),
+      ...(validationNode ? [validationNode] : []),
+    ];
+  });
 
   return {
     nodes: normalizedNodes,
@@ -178,17 +173,15 @@ export function detectTKGConflicts(
 ): TKGConflict[] {
   const normalizedSnapshot = normalizeTKGPromotionSnapshot(snapshot, options);
   const conflicts: TKGConflict[] = [];
-  const groups = new Map<string, TemporalNode[]>();
   const confidenceSpreadThreshold = options.confidenceSpreadThreshold ?? 0.35;
 
-  for (const node of normalizedSnapshot.nodes) {
+  const groups = normalizedSnapshot.nodes.reduce((acc, node) => {
     const key = stepKey(node);
-    const bucket = groups.get(key) ?? [];
-    bucket.push(node);
-    groups.set(key, bucket);
-  }
+    const bucket = acc.get(key) ?? [];
+    return new Map([...acc, [key, [...bucket, node]]]);
+  }, new Map<string, TemporalNode[]>());
 
-  for (const [key, nodes] of groups.entries()) {
+  Array.from(groups.entries()).forEach(([key, nodes]) => {
     const validationFailed = nodes.filter((node) => node.eventType === "workflow.validation_failed");
     const validationPassed = nodes.filter((node) => node.eventType === "workflow.validation_passed");
     const repairCompleted = nodes.filter((node) => node.eventType === "workflow.repair_completed");
@@ -226,7 +219,7 @@ export function detectTKGConflicts(
         });
       }
     }
-  }
+  });
 
   return conflicts;
 }

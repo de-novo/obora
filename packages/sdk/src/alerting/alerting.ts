@@ -64,11 +64,11 @@ export class AlertManager {
       this.channels.map((ch) => ch.send(alert)),
     );
 
-    for (const result of results) {
+    results.forEach((result) => {
       if (result.status === "rejected") {
         this.logger?.warn?.("[alerting] Channel failed:", result.reason);
       }
-    }
+    });
   }
 
   getHistory(): Alert[] {

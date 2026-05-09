@@ -61,11 +61,7 @@ export class PluginRegistry {
       return [...(this.plugins.get(type)?.values() ?? [])];
     }
 
-    const all: LoadedPlugin[] = [];
-    for (const byType of this.plugins.values()) {
-      all.push(...byType.values());
-    }
-    return all;
+    return [...this.plugins.values()].flatMap((byType) => [...byType.values()]);
   }
 
   has(type: PluginType, name: string): boolean {

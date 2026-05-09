@@ -163,16 +163,13 @@ export function createPluginCommand(): Command {
             throw new CLIError(`Plugin not found: ${name}`, ExitCode.VALIDATION_ERROR);
           }
 
-          let loaded;
-          try {
-            loaded = await manager.loadAndRegister(descriptor);
-          } catch (error) {
+          const loaded = await manager.loadAndRegister(descriptor).catch((error: unknown) => {
             const message = error instanceof Error ? error.message : String(error);
             throw new CLIError(
               `Failed to inspect plugin ${name}: ${message}`,
               ExitCode.EXECUTION_FAILED
             );
-          }
+          });
 
           const detail = {
             packageName: descriptor.packageName,

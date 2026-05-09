@@ -111,26 +111,28 @@ async function runAuditReplay(
   options: { step?: string; json?: boolean },
   globalOpts: GlobalOptions
 ): Promise<void> {
-  let runtime;
-  try {
-    runtime = await createAuditRuntime(globalOpts);
-  } catch (error) {
-    if (error instanceof CLIError) throw error;
-    throw new CLIError(
-      `Failed to initialize audit runtime: ${getErrorMessage(error)}`,
-      ExitCode.EXECUTION_FAILED
-    );
-  }
+  const runtime = await (async () => {
+    try {
+      return await createAuditRuntime(globalOpts);
+    } catch (error) {
+      if (error instanceof CLIError) throw error;
+      throw new CLIError(
+        `Failed to initialize audit runtime: ${getErrorMessage(error)}`,
+        ExitCode.EXECUTION_FAILED
+      );
+    }
+  })();
 
-  let timeline;
-  try {
-    timeline = await runtime.getRunAuditTimeline(runId, options.step);
-  } catch (error) {
-    throw new CLIError(
-      `Failed to replay audit timeline: ${getErrorMessage(error)}`,
-      ExitCode.EXECUTION_FAILED
-    );
-  }
+  const timeline = await (async () => {
+    try {
+      return await runtime.getRunAuditTimeline(runId, options.step);
+    } catch (error) {
+      throw new CLIError(
+        `Failed to replay audit timeline: ${getErrorMessage(error)}`,
+        ExitCode.EXECUTION_FAILED
+      );
+    }
+  })();
 
   if (shouldOutputJson(options.json, globalOpts)) {
     formatter.json({ runId, stepName: options.step, count: timeline.length, timeline });
@@ -148,7 +150,7 @@ async function runAuditReplay(
     formatter.info(
       `Audit replay for run ${runId}${options.step ? ` (step: ${options.step})` : ""}`
     );
-    for (const event of timeline) {
+    timeline.forEach((event) => {
       const category = `[${event.category}]`;
       const voteSuffix = event.vote
         ? ` vote=${event.vote.decision}${typeof event.vote.confidence === "number" ? `(${event.vote.confidence})` : ""}`
@@ -157,7 +159,7 @@ async function runAuditReplay(
       const color = globalOpts.noColor ? "" : colorForCategory(event.category);
       const reset = globalOpts.noColor ? "" : COLORS.reset;
       console.log(`${color}${line}${reset}`);
-    }
+    });
   }
 }
 

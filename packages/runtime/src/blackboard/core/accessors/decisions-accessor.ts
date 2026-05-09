@@ -40,12 +40,7 @@ export class DecisionsSectionAccessor {
    */
   private findOpinionKey(opinionId: OpinionId): string | undefined {
     const decisions = this.board.read<DecisionsSection>("decisions");
-    for (const [key, opinion] of decisions.opinions.entries()) {
-      if (opinion.id === opinionId) {
-        return key;
-      }
-    }
-    return undefined;
+    return Array.from(decisions.opinions.entries()).find(([, opinion]) => opinion.id === opinionId)?.[0];
   }
 
   // === 안건 관리 ===
@@ -132,21 +127,9 @@ export class DecisionsSectionAccessor {
     const decisions = this.board.read<DecisionsSection>("decisions");
 
     // pending에서 찾기
-    let targetIndex = -1;
-    let targetPending = false;
-
-    for (let i = 0; i < decisions.pending.length; i++) {
-      if (decisions.pending[i].id === agendaId) {
-        targetIndex = i;
-        targetPending = true;
-        break;
-      }
-    }
-
-    if (targetIndex === -1 && decisions.current?.id === agendaId) {
-      targetIndex = 0;
-      targetPending = false;
-    }
+    const pendingIndex = decisions.pending.findIndex((agenda) => agenda.id === agendaId);
+    const targetPending = pendingIndex !== -1;
+    const targetIndex = targetPending ? pendingIndex : decisions.current?.id === agendaId ? 0 : -1;
 
     if (targetIndex === -1) {
       throw new BlackboardError(
@@ -268,14 +251,7 @@ export class DecisionsSectionAccessor {
    */
   getAllAgendas(): Agenda[] {
     const decisions = this.board.read<DecisionsSection>("decisions");
-    const result: Agenda[] = [];
-
-    if (decisions.current) {
-      result.push(decisions.current);
-    }
-
-    result.push(...decisions.pending);
-    return result;
+    return [...(decisions.current ? [decisions.current] : []), ...decisions.pending];
   }
 
   // === 의견 관리 ===
@@ -349,15 +325,7 @@ export class DecisionsSectionAccessor {
    */
   getOpinions(agendaId: AgendaId): Opinion[] {
     const decisions = this.board.read<DecisionsSection>("decisions");
-    const opinions: Opinion[] = [];
-
-    for (const opinion of decisions.opinions.values()) {
-      if (opinion.agendaId === agendaId) {
-        opinions.push(opinion);
-      }
-    }
-
-    return opinions;
+    return Array.from(decisions.opinions.values()).filter((opinion) => opinion.agendaId === agendaId);
   }
 
   /**
@@ -396,36 +364,32 @@ export class DecisionsSectionAccessor {
   } {
     const opinions = this.getOpinions(agendaId);
 
-    const summary = {
-      total: opinions.length,
-      approve: 0,
-      reject: 0,
-      conditional: 0,
-      abstain: 0,
-      approvalRate: 0,
-      quorumReached: false,
-    };
-
     // 유효한 stance 값인지 확인 후 처리
     const validStances: readonly string[] = ["approve", "reject", "conditional", "abstain"];
-
-    for (const opinion of opinions) {
-      if (validStances.includes(opinion.stance)) {
-        summary[opinion.stance as keyof typeof summary]++;
+    const voteCounts = opinions.reduce(
+      (counts, opinion) =>
+        validStances.includes(opinion.stance)
+          ? {
+              ...counts,
+              [opinion.stance]: counts[opinion.stance as keyof typeof counts] + 1,
+            }
+          : counts,
+      {
+        approve: 0,
+        reject: 0,
+        conditional: 0,
+        abstain: 0,
       }
-    }
-
-    // 승인률 계산 (찬성 / 총 투표수)
-    summary.approvalRate =
-      summary.total > 0 ? (summary.approve + summary.conditional) / summary.total : 0;
-
-    // 정족수 도달 여부 확인
+    );
+    const total = opinions.length;
     const agenda = this.getAgenda(agendaId);
-    if (agenda) {
-      summary.quorumReached = summary.total >= agenda.requiredQuorum;
-    }
 
-    return summary;
+    return {
+      total,
+      ...voteCounts,
+      approvalRate: total > 0 ? (voteCounts.approve + voteCounts.conditional) / total : 0,
+      quorumReached: agenda ? total >= agenda.requiredQuorum : false,
+    };
   }
 
   /**
@@ -433,13 +397,9 @@ export class DecisionsSectionAccessor {
    */
   clearOpinions(agendaId: AgendaId): void {
     const decisions = this.board.read<DecisionsSection>("decisions");
-    const updatedOpinions = new Map(decisions.opinions);
-
-    for (const [key, opinion] of decisions.opinions.entries()) {
-      if (opinion.agendaId === agendaId) {
-        updatedOpinions.delete(key);
-      }
-    }
+    const updatedOpinions = new Map(
+      Array.from(decisions.opinions.entries()).filter(([, opinion]) => opinion.agendaId !== agendaId)
+    );
 
     this.board.write("decisions.opinions", updatedOpinions);
   }
@@ -584,21 +544,9 @@ export class DecisionsSectionAccessor {
    */
   getHistory(filter?: { agendaId?: AgendaId; decision?: DecisionType }): Resolution[] {
     const decisions = this.board.read<DecisionsSection>("decisions");
-    let history = [...decisions.history];
-
-    if (!filter) {
-      return history;
-    }
-
-    if (filter.agendaId) {
-      history = history.filter((r) => r.agendaId === filter.agendaId);
-    }
-
-    if (filter.decision) {
-      history = history.filter((r) => r.decision === filter.decision);
-    }
-
-    return history;
+    return decisions.history
+      .filter((resolution) => !filter?.agendaId || resolution.agendaId === filter.agendaId)
+      .filter((resolution) => !filter?.decision || resolution.decision === filter.decision);
   }
 
   /**
@@ -639,9 +587,7 @@ export class DecisionsSectionAccessor {
    */
   getAgendaCount(): number {
     const decisions = this.board.read<DecisionsSection>("decisions");
-    let count = decisions.current ? 1 : 0;
-    count += decisions.pending.length;
-    return count;
+    return (decisions.current ? 1 : 0) + decisions.pending.length;
   }
 
   /**
@@ -679,32 +625,28 @@ export class DecisionsSectionAccessor {
     }
 
     const summary = this.summarizeOpinions(agendaId);
-    let passed = false;
-
-    switch (agenda.votingMethod) {
-      case "unanimous":
-        // 전체 찬성 (반대 없음)
-        passed = summary.reject === 0 && summary.total > 0;
-        break;
-      case "majority": {
-        // 단순 과반수 (50% 초과)
-        const approveCount = summary.approve + summary.conditional;
-        passed = approveCount > summary.total / 2;
-        break;
+    const passed = (() => {
+      switch (agenda.votingMethod) {
+        case "unanimous":
+          // 전체 찬성 (반대 없음)
+          return summary.reject === 0 && summary.total > 0;
+        case "majority": {
+          // 단순 과반수 (50% 초과)
+          const approveCount = summary.approve + summary.conditional;
+          return approveCount > summary.total / 2;
+        }
+        case "supermajority": {
+          // 2/3 이상 찬성
+          const superMajorityCount = summary.approve + summary.conditional;
+          return superMajorityCount >= (summary.total * 2) / 3;
+        }
+        case "weighted": {
+          // 가중치 투표 (현재는 과반수와 동일하게 처리)
+          const weightedCount = summary.approve + summary.conditional;
+          return weightedCount > summary.total / 2;
+        }
       }
-      case "supermajority": {
-        // 2/3 이상 찬성
-        const superMajorityCount = summary.approve + summary.conditional;
-        passed = superMajorityCount >= (summary.total * 2) / 3;
-        break;
-      }
-      case "weighted": {
-        // 가중치 투표 (현재는 과반수와 동일하게 처리)
-        const weightedCount = summary.approve + summary.conditional;
-        passed = weightedCount > summary.total / 2;
-        break;
-      }
-    }
+    })();
 
     return {
       passed: summary.quorumReached && passed,

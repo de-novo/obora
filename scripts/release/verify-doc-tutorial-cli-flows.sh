@@ -59,14 +59,18 @@ const file = process.argv[2];
 const path = process.argv[3];
 const expected = process.argv[4];
 const data = JSON.parse(fs.readFileSync(file, "utf8"));
-let value = data;
-for (const segment of path.split(".")) {
-  if (value === undefined || value === null || !(segment in Object(value))) {
+const result = path.split(".").reduce(
+  (state, segment) =>
+    state.found && state.value !== undefined && state.value !== null && segment in Object(state.value)
+      ? { found: true, value: state.value[segment] }
+      : { found: false, value: undefined },
+  { found: true, value: data }
+);
+if (!result.found) {
     console.error(`[FAIL] ${file}: missing JSON path ${path}`);
     process.exit(1);
-  }
-  value = value[segment];
 }
+const value = result.value;
 const normalized = typeof value === "string" ? value : JSON.stringify(value);
 if (normalized !== expected) {
   console.error(`[FAIL] ${file}: expected ${path}=${expected}, got ${normalized}`);
@@ -86,14 +90,18 @@ const file = process.argv[2];
 const path = process.argv[3];
 const minLength = Number(process.argv[4]);
 const data = JSON.parse(fs.readFileSync(file, "utf8"));
-let value = data;
-for (const segment of path.split(".")) {
-  if (value === undefined || value === null || !(segment in Object(value))) {
+const result = path.split(".").reduce(
+  (state, segment) =>
+    state.found && state.value !== undefined && state.value !== null && segment in Object(state.value)
+      ? { found: true, value: state.value[segment] }
+      : { found: false, value: undefined },
+  { found: true, value: data }
+);
+if (!result.found) {
     console.error(`[FAIL] ${file}: missing JSON path ${path}`);
     process.exit(1);
-  }
-  value = value[segment];
 }
+const value = result.value;
 if (!Array.isArray(value) || value.length < minLength) {
   console.error(`[FAIL] ${file}: expected ${path} to contain at least ${minLength} items`);
   process.exit(1);

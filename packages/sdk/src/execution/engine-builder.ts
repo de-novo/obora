@@ -198,16 +198,16 @@ export class EngineBuilder {
         ? (agentInfo?.provider ?? loadedConfig.defaults?.provider)
         : (configAgent?.provider ?? loadedConfig.defaults?.provider);
 
-      let providerConfig = resolveProviderConfig(loadedConfig, resolvedProviderName, {
+      const baseProviderConfig = resolveProviderConfig(loadedConfig, resolvedProviderName, {
         verbose: this.deps.config.verbose,
       });
-
-      if (preferAgentInfo && agentInfo?.api_key && providerConfig) {
-        providerConfig = {
-          ...providerConfig,
-          apiKey: agentInfo.api_key,
-        };
-      }
+      const providerConfig =
+        preferAgentInfo && agentInfo?.api_key && baseProviderConfig
+          ? {
+            ...baseProviderConfig,
+            apiKey: agentInfo.api_key,
+          }
+          : baseProviderConfig;
 
       if (!providerConfig) {
         if (resolvedProviderName) {

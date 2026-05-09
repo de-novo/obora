@@ -44,29 +44,26 @@ function stableStringify(value: unknown): string {
 }
 
 function outputsByStep(events: AuditEvent[]): Map<string, unknown> {
-  const map = new Map<string, unknown>();
-
-  for (const event of events) {
+  return events.reduce<Map<string, unknown>>((map, event) => {
     if (event.type !== "cell_end") {
-      continue;
+      return map;
     }
 
     const stepName = getStepName(event);
     if (!stepName || !isObject(event.data)) {
-      continue;
+      return map;
     }
 
     if ("output" in event.data) {
       map.set(stepName, event.data.output);
-      continue;
+      return map;
     }
 
     if ("metrics" in event.data) {
       map.set(stepName, event.data.metrics);
     }
-  }
-
-  return map;
+    return map;
+  }, new Map());
 }
 
 export function createDiffReport(
@@ -84,54 +81,49 @@ export function createDiffReport(
     ...plan.stepsToSkip,
   ]);
 
-  const differences: StepDiff[] = [];
-
-  for (const stepName of allSteps) {
+  const differences = [...allSteps].map<StepDiff>((stepName) => {
     if (plan.stepsToSkip.includes(stepName)) {
-      differences.push({ stepName, status: "skipped", originalOutput: originalOutputs.get(stepName) });
-      continue;
+      return { stepName, status: "skipped", originalOutput: originalOutputs.get(stepName) };
     }
 
     const originalOutput = originalOutputs.get(stepName);
     const reExecutionOutput = reExecutionOutputs.get(stepName);
 
     if (originalOutput === undefined && reExecutionOutput !== undefined) {
-      differences.push({
+      return {
         stepName,
         status: "new",
         originalOutput,
         reExecutionOutput,
         diffDetails: "Step exists only in re-execution output.",
-      });
-      continue;
+      };
     }
 
     if (originalOutput !== undefined && reExecutionOutput === undefined) {
-      differences.push({
+      return {
         stepName,
         status: "removed",
         originalOutput,
         reExecutionOutput,
         diffDetails: "Step output missing in re-execution.",
-      });
-      continue;
+      };
     }
 
     const originalDigest = stableStringify(originalOutput);
     const reExecutionDigest = stableStringify(reExecutionOutput);
 
     if (originalDigest === reExecutionDigest) {
-      differences.push({ stepName, status: "unchanged", originalOutput, reExecutionOutput });
-    } else {
-      differences.push({
-        stepName,
-        status: "changed",
-        originalOutput,
-        reExecutionOutput,
-        diffDetails: "Output payload differs between original execution and re-execution.",
-      });
+      return { stepName, status: "unchanged", originalOutput, reExecutionOutput };
     }
-  }
+
+    return {
+      stepName,
+      status: "changed",
+      originalOutput,
+      reExecutionOutput,
+      diffDetails: "Output payload differs between original execution and re-execution.",
+    };
+  });
 
   const summary = differences.reduce(
     (acc, diff) => {

@@ -208,14 +208,14 @@ function formatSourceBadges(summary: AgentListSummary): string {
 
 function printAgentListText(summaries: AgentListSummary[]): void {
   console.log("Agent inventory");
-  for (const summary of summaries) {
+  summaries.forEach((summary) => {
     const modelInfo =
       summary.provider && summary.model ? `${summary.provider}/${summary.model}` : "";
     const warningSuffix = summary.warnings.length > 0 ? ` warnings=${summary.warnings.length}` : "";
     console.log(
       `- ${summary.name}  ${summary.status}${modelInfo ? ` ${modelInfo}` : ""} ${formatSourceBadges(summary)}${warningSuffix}`
     );
-  }
+  });
 }
 
 function printAgentShowText(
@@ -240,11 +240,11 @@ function printAgentShowText(
   if (snapshot.base.layers.length === 0) {
     console.log("- none");
   } else {
-    for (const layer of snapshot.base.layers) {
+    snapshot.base.layers.forEach((layer) => {
       console.log(
         `- ${layer.label}: ${formatAppliedValues(layer.applied as Record<string, unknown>)}`
       );
-    }
+    });
   }
   console.log("");
   console.log("Execution sources");
@@ -262,9 +262,7 @@ function printAgentShowText(
   if (snapshot.base.warnings.length === 0) {
     console.log("- none");
   } else {
-    for (const warning of snapshot.base.warnings) {
-      console.log(`- ${warning}`);
-    }
+    snapshot.base.warnings.forEach((warning) => console.log(`- ${warning}`));
   }
   if (snapshot.base.failure) {
     console.log("");

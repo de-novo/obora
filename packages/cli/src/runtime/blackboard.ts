@@ -65,32 +65,36 @@ export class Blackboard {
 
   #write(path: string, value: unknown): void {
     const parts = path.split(".");
-    let cursor: Record<string, unknown> = this.#state as Record<string, unknown>;
-    for (let i = 0; i < parts.length - 1; i++) {
-      const key = parts[i];
-      const next = cursor[key];
+    const cursor = parts.slice(0, -1).reduce<Record<string, unknown>>((current, key) => {
+      const next = current[key];
       if (next == null || typeof next !== "object") {
-        cursor[key] = {};
+        current[key] = {};
       }
-      cursor = cursor[key] as Record<string, unknown>;
-    }
+      return current[key] as Record<string, unknown>;
+    }, this.#state as Record<string, unknown>);
     cursor[parts[parts.length - 1]] = structuredClone(value);
     this.#version += 1;
   }
 
   read<T = unknown>(path: string, options?: { strict?: boolean }): T {
     const parts = path.split(".");
-    let cursor: unknown = this.#state;
-    for (const key of parts) {
-      if (cursor == null || typeof cursor !== "object" || !(key in (cursor as object))) {
-        if (options?.strict === false) {
-          return undefined as T;
-        }
-        throw new Error(`Path not found: ${path}`);
+    const result = parts.reduce<{ found: true; value: unknown } | { found: false }>(
+      (state, key) =>
+        state.found &&
+        state.value != null &&
+        typeof state.value === "object" &&
+        key in (state.value as object)
+          ? { found: true, value: (state.value as Record<string, unknown>)[key] }
+          : { found: false },
+      { found: true, value: this.#state }
+    );
+    if (!result.found) {
+      if (options?.strict === false) {
+        return undefined as T;
       }
-      cursor = (cursor as Record<string, unknown>)[key];
+      throw new Error(`Path not found: ${path}`);
     }
-    return structuredClone(cursor) as T;
+    return structuredClone(result.value) as T;
   }
 
   exists(path: string): boolean {

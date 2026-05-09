@@ -28,10 +28,10 @@
 
 ## Functional TypeScript
 
-- New or modified TypeScript and JavaScript should avoid `let` and loop statements.
+- Source TypeScript and JavaScript must not introduce `let` or loop statements; the current functional-policy baseline is zero.
 - Prefer `const`, `ReadonlyArray`, `map`, `filter`, `reduce`, `flatMap`, `Object.entries`, and small pure helpers.
 - For async sequencing or resource boundaries, prefer EffectTS APIs such as `Effect.gen`, `Effect.forEach`, `Effect.acquireRelease`, and `Ref`.
-- `pnpm verify:functional` is a file-level ratchet. Do not rebaseline `scripts/release/functional-policy-baseline.json` upward without documenting the reason and follow-up cleanup.
+- `pnpm verify:functional` is a zero-baseline file-level ratchet. Do not rebaseline `scripts/release/functional-policy-baseline.json` upward without documenting the reason and follow-up cleanup.
 - After actually reducing `let` or loop counts, run `pnpm verify:functional:update` instead of hand-editing `scripts/release/functional-policy-baseline.json`. The updater rejects increases unless `--allow-increase` is passed with explicit reviewer approval.
 
 ## EffectTS Boundary

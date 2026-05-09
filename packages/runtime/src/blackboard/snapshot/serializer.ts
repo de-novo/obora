@@ -52,11 +52,10 @@ function validateFactArray(value: unknown): ValidationResult {
     return { valid: false, errors: ["facts must be an array"] };
   }
 
-  for (let i = 0; i < value.length; i++) {
-    const item = value[i];
+  value.forEach((item, i) => {
     if (!item || typeof item !== "object") {
       errors.push(`facts[${i}]: must be an object`);
-      continue;
+      return;
     }
 
     const fact = item as Record<string, unknown>;
@@ -77,7 +76,7 @@ function validateFactArray(value: unknown): ValidationResult {
     if (typeof fact.createdAt !== "string" && !(fact.createdAt instanceof Date)) {
       errors.push(`facts[${i}].createdAt: must be a string or Date`);
     }
-  }
+  });
 
   return { valid: errors.length === 0, errors };
 }
@@ -92,11 +91,10 @@ function validateInferenceArray(value: unknown): ValidationResult {
     return { valid: false, errors: ["inferences must be an array"] };
   }
 
-  for (let i = 0; i < value.length; i++) {
-    const item = value[i];
+  value.forEach((item, i) => {
     if (!item || typeof item !== "object") {
       errors.push(`inferences[${i}]: must be an object`);
-      continue;
+      return;
     }
 
     const inference = item as Record<string, unknown>;
@@ -125,7 +123,7 @@ function validateInferenceArray(value: unknown): ValidationResult {
     ) {
       errors.push(`inferences[${i}].createdAt: must be a string, Date, or undefined`);
     }
-  }
+  });
 
   return { valid: errors.length === 0, errors };
 }
@@ -140,11 +138,10 @@ function validatePatternArray(value: unknown): ValidationResult {
     return { valid: false, errors: ["patterns must be an array"] };
   }
 
-  for (let i = 0; i < value.length; i++) {
-    const item = value[i];
+  value.forEach((item, i) => {
     if (!item || typeof item !== "object") {
       errors.push(`patterns[${i}]: must be an object`);
-      continue;
+      return;
     }
 
     const pattern = item as Record<string, unknown>;
@@ -165,7 +162,7 @@ function validatePatternArray(value: unknown): ValidationResult {
     ) {
       errors.push(`patterns[${i}].createdAt: must be a string, Date, or undefined`);
     }
-  }
+  });
 
   return { valid: errors.length === 0, errors };
 }
@@ -180,11 +177,10 @@ function validateResolutionArray(value: unknown): ValidationResult {
     return { valid: false, errors: ["history must be an array"] };
   }
 
-  for (let i = 0; i < value.length; i++) {
-    const item = value[i];
+  value.forEach((item, i) => {
     if (!item || typeof item !== "object") {
       errors.push(`history[${i}]: must be an object`);
-      continue;
+      return;
     }
 
     const resolution = item as Record<string, unknown>;
@@ -196,7 +192,7 @@ function validateResolutionArray(value: unknown): ValidationResult {
     if (typeof resolution.decision !== "string") {
       errors.push(`history[${i}].decision: must be a string`);
     }
-  }
+  });
 
   return { valid: errors.length === 0, errors };
 }
@@ -316,11 +312,11 @@ export class StateSerializer {
 
     // 필수 필드 검증
     const requiredSections = ["meta", "state", "knowledge", "decisions"] as const;
-    for (const section of requiredSections) {
+    requiredSections.forEach((section) => {
       if (!serialized[section]) {
         throw new Error(`Invalid serialized state: missing section '${section}'`);
       }
-    }
+    });
 
     // P1: 런타임 타입 검증 - facts
     const factsValidation = validateFactArray(serialized.knowledge.facts);
@@ -350,9 +346,9 @@ export class StateSerializer {
     if (!Array.isArray(serialized.decisions.pending)) {
       throw new Error("Invalid pending agendas: must be an array");
     }
-    for (let i = 0; i < serialized.decisions.pending.length; i++) {
+    serialized.decisions.pending.forEach((agenda, i) => {
       const pendingValidation = validateAgenda(
-        serialized.decisions.pending[i],
+        agenda,
         `decisions.pending[${i}]`
       );
       if (!pendingValidation.valid) {
@@ -360,7 +356,7 @@ export class StateSerializer {
           `Invalid pending agenda at index ${i}: ${pendingValidation.errors.join(", ")}`
         );
       }
-    }
+    });
 
     // P1: 런타임 타입 검증 - history
     const historyValidation = validateResolutionArray(serialized.decisions.history);
@@ -535,13 +531,10 @@ async function calculateChecksumNodeJS(data: string): Promise<string> {
  * @returns SHA-256 해시
  */
 export async function calculateChecksum(data: unknown): Promise<string> {
-  let str: string;
-  if (typeof data === "string") {
-    str = data;
-  } else {
-    // 순서 독립적 체크섬 계산을 위해 키 정렬
-    str = JSON.stringify(data, sortedKeyReplacer as (key: string, value: unknown) => unknown);
-  }
+  const str =
+    typeof data === "string"
+      ? data
+      : JSON.stringify(data, sortedKeyReplacer as (key: string, value: unknown) => unknown);
   const encoder = new TextEncoder();
   const bytes = encoder.encode(str);
 
@@ -584,13 +577,10 @@ export async function verifyChecksum(data: unknown, expectedChecksum: string): P
  * @description 테스트 환경 등에서 동기 체크섬이 필요한 경우 사용
  */
 export function calculateChecksumSync(data: unknown): string {
-  let str: string;
-  if (typeof data === "string") {
-    str = data;
-  } else {
-    // 순서 독립적 체크섬 계산을 위해 키 정렬
-    str = JSON.stringify(data, sortedKeyReplacer as (key: string, value: unknown) => unknown);
-  }
+  const str =
+    typeof data === "string"
+      ? data
+      : JSON.stringify(data, sortedKeyReplacer as (key: string, value: unknown) => unknown);
 
   // Node.js 환경에서 동기 해싱
   if (typeof process === "object") {

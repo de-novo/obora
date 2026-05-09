@@ -72,10 +72,10 @@ export class ParallelScheduler {
     steps: WorkflowStep[],
     executeOne: (step: WorkflowStep) => Promise<StepResult>,
   ): Promise<ParallelStepOutcome[]> {
-    const results: ParallelStepOutcome[] = [];
     const chunks = chunk(steps, this.maxConcurrency);
 
-    for (const batch of chunks) {
+    return chunks.reduce<Promise<ParallelStepOutcome[]>>(async (previous, batch) => {
+      const results = await previous;
       const settled = await Promise.allSettled(
         batch.map(async (step) => {
           const result = await executeOne(step);
@@ -83,25 +83,23 @@ export class ParallelScheduler {
         }),
       );
 
-      for (let i = 0; i < settled.length; i++) {
-        const entry = settled[i]!;
-        if (entry.status === "fulfilled") {
-          results.push({
-            stepName: entry.value.stepName,
-            result: entry.value.result,
-            status: "fulfilled",
-          });
-        } else {
-          results.push({
-            stepName: batch[i]!.name,
-            status: "rejected",
-            error: entry.reason,
-          });
-        }
-      }
-    }
-
-    return results;
+      return [
+        ...results,
+        ...settled.map((entry, index): ParallelStepOutcome =>
+          entry.status === "fulfilled"
+            ? {
+                stepName: entry.value.stepName,
+                result: entry.value.result,
+                status: "fulfilled",
+              }
+            : {
+                stepName: batch[index]!.name,
+                status: "rejected",
+                error: entry.reason,
+              }
+        ),
+      ];
+    }, Promise.resolve([]));
   }
 
   /**
@@ -132,42 +130,37 @@ export class ParallelScheduler {
 // ── Merge helpers ──────────────────────────────────────────────────────────
 
 function bestScoreMerge(results: StepResult[]): unknown {
-  let bestOutput: unknown = results[0]!.output;
-  let bestScore = -Infinity;
-
-  for (const r of results) {
-    const output = r.output;
-    if (output && typeof output === "object") {
-      const score = (output as Record<string, unknown>).score;
-      if (typeof score === "number" && score > bestScore) {
-        bestScore = score;
-        bestOutput = output;
+  return results.reduce<{ output: unknown; score: number }>(
+    (best, result) => {
+      const output = result.output;
+      if (output && typeof output === "object") {
+        const score = (output as Record<string, unknown>).score;
+        if (typeof score === "number" && score > best.score) {
+          return { output, score };
+        }
       }
-    }
-  }
-
-  return bestOutput;
+      return best;
+    },
+    { output: results[0]!.output, score: -Infinity }
+  ).output;
 }
 
 function consensusMerge(results: StepResult[]): unknown {
-  const counts = new Map<string, { count: number; output: unknown }>();
-
-  for (const r of results) {
-    const key = JSON.stringify(r.output);
-    const existing = counts.get(key);
+  const counts = results.reduce<Map<string, { count: number; output: unknown }>>((entries, result) => {
+    const key = JSON.stringify(result.output);
+    const existing = entries.get(key);
     if (existing) {
       existing.count += 1;
     } else {
-      counts.set(key, { count: 1, output: r.output });
+      entries.set(key, { count: 1, output: result.output });
     }
-  }
+    return entries;
+  }, new Map());
 
-  let best: { count: number; output: unknown } = { count: 0, output: null };
-  for (const entry of counts.values()) {
-    if (entry.count > best.count) {
-      best = entry;
-    }
-  }
+  const best = Array.from(counts.values()).reduce(
+    (currentBest, entry) => (entry.count > currentBest.count ? entry : currentBest),
+    { count: 0, output: null } as { count: number; output: unknown }
+  );
 
   return best.output;
 }
@@ -175,9 +168,7 @@ function consensusMerge(results: StepResult[]): unknown {
 // ── Utility ────────────────────────────────────────────────────────────────
 
 function chunk<T>(arr: T[], size: number): T[][] {
-  const result: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) {
-    result.push(arr.slice(i, i + size));
-  }
-  return result;
+  return Array.from({ length: Math.ceil(arr.length / size) }, (_, index) =>
+    arr.slice(index * size, index * size + size)
+  );
 }

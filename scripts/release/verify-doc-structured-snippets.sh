@@ -27,7 +27,7 @@ const requiredBuiltFiles = [
 const missing = requiredBuiltFiles.filter((file) => !existsSync(path.join(rootDir, file)));
 if (missing.length > 0) {
   console.error("[FAIL] Built package files are missing. Run pnpm build before structured doc verification.");
-  for (const file of missing) console.error(`  - ${file}`);
+  missing.forEach((file) => console.error(`  - ${file}`));
   process.exit(1);
 }
 
@@ -48,48 +48,39 @@ function isObject(value) {
 }
 
 function extractFencedBlocks(markdown) {
-  const blocks = [];
   const regex = /```(yaml|yml|json)\n([\s\S]*?)```/gi;
-  let match;
-  while ((match = regex.exec(markdown)) !== null) {
+  return Array.from(markdown.matchAll(regex)).map((match) => {
     const startLine = markdown.slice(0, match.index).split(/\r?\n/).length;
-    blocks.push({
+    return {
       kind: match[1].toLowerCase() === "json" ? "json" : "yaml",
       startLine,
       code: match[2].trim(),
-    });
-  }
-  return blocks;
+    };
+  });
 }
 
 function extractShellBlocks(markdown) {
-  const blocks = [];
   const regex = /```(?:bash|sh|shell)\n([\s\S]*?)```/gi;
-  let match;
-  while ((match = regex.exec(markdown)) !== null) {
+  return Array.from(markdown.matchAll(regex)).map((match) => {
     const startLine = markdown.slice(0, match.index).split(/\r?\n/).length;
-    blocks.push({ startLine, code: match[1] });
-  }
-  return blocks;
+    return { startLine, code: match[1] };
+  });
 }
 
 function extractHeredocs(shellCode) {
-  const blocks = [];
   const regex = /cat\s+>\s+([^\s]+)\s+<<\s*['"]?([A-Za-z0-9_-]+)['"]?\n([\s\S]*?)\n\2/g;
-  let match;
-  while ((match = regex.exec(shellCode)) !== null) {
+  return Array.from(shellCode.matchAll(regex)).flatMap((match) => {
     const target = match[1];
     const delimiter = match[2];
     const body = match[3].trim();
-    if (!target || !delimiter || !body) continue;
-    if (!/\.(ya?ml|json)$/i.test(target)) continue;
-    blocks.push({
+    if (!target || !delimiter || !body) return [];
+    if (!/\.(ya?ml|json)$/i.test(target)) return [];
+    return [{
       target,
       kind: target.endsWith(".json") ? "json" : "yaml",
       code: body,
-    });
-  }
-  return blocks;
+    }];
+  });
 }
 
 function parseStructured(kind, code, source) {
@@ -198,21 +189,25 @@ const validated = {
   config: 0,
 };
 
-for (const doc of docs) {
+await docs.reduce(async (previousDoc, doc) => {
+  await previousDoc;
   const markdown = await readFile(doc, "utf8");
   const docTmpDir = path.join(tmpDir, doc.replaceAll("/", "__"));
   await mkdir(docTmpDir, { recursive: true });
 
-  for (const block of extractFencedBlocks(markdown)) {
+  await extractFencedBlocks(markdown).reduce(async (previousBlock, block) => {
+    await previousBlock;
     const source = `${doc}:${block.startLine}`;
     const value = parseStructured(block.kind, block.code, source);
     if (block.kind === "json") validated.fencedJson += 1;
     else validated.fencedYaml += 1;
     await validateSemantic({ ...block, value, source });
-  }
+  }, Promise.resolve());
 
-  for (const shellBlock of extractShellBlocks(markdown)) {
-    for (const heredoc of extractHeredocs(shellBlock.code)) {
+  await extractShellBlocks(markdown).reduce(async (previousShellBlock, shellBlock) => {
+    await previousShellBlock;
+    await extractHeredocs(shellBlock.code).reduce(async (previousHeredoc, heredoc) => {
+      await previousHeredoc;
       const source = `${doc}:${shellBlock.startLine} -> ${heredoc.target}`;
       const value = parseStructured(heredoc.kind, heredoc.code, source);
       const outputPath = path.join(docTmpDir, heredoc.target);
@@ -221,9 +216,9 @@ for (const doc of docs) {
       if (heredoc.kind === "json") validated.heredocJson += 1;
       else validated.heredocYaml += 1;
       await validateSemantic({ ...heredoc, value, source });
-    }
-  }
-}
+    }, Promise.resolve());
+  }, Promise.resolve());
+}, Promise.resolve());
 
 const total = validated.fencedYaml + validated.fencedJson + validated.heredocYaml + validated.heredocJson;
 if (total === 0) {

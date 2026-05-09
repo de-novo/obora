@@ -90,43 +90,47 @@ export function resolveFailureRoute(
     suggestedTargets: validationResult.suggestedTargets,
   };
 
-  if (ctx.suggestedTargets && ctx.suggestedTargets.length > 0) {
-    for (const route of goto) {
-      if (route.target && ctx.suggestedTargets.includes(route.target)) {
-        return {
-          target: route.target,
-          matchedRoute: route,
-          matchReason: "suggestedTargets",
-        };
-      }
-    }
+  const suggestedRoute =
+    ctx.suggestedTargets && ctx.suggestedTargets.length > 0
+      ? goto.find((route) => route.target && ctx.suggestedTargets?.includes(route.target))
+      : undefined;
+
+  if (suggestedRoute) {
+    return {
+      target: suggestedRoute.target,
+      matchedRoute: suggestedRoute,
+      matchReason: "suggestedTargets",
+    };
   }
 
-  for (const route of goto) {
+  const expressionRoute = goto.find((route) => {
     if (route.when === undefined) {
-      continue;
+      return false;
     }
+
     try {
-      if (evaluateSimpleExpression(route.when, ctx)) {
-        return {
-          target: route.target,
-          matchedRoute: route,
-          matchReason: `expression:${route.when}`,
-        };
-      }
+      return evaluateSimpleExpression(route.when, ctx);
     } catch {
-      continue;
+      return false;
     }
+  });
+
+  if (expressionRoute?.when !== undefined) {
+    return {
+      target: expressionRoute.target,
+      matchedRoute: expressionRoute,
+      matchReason: `expression:${expressionRoute.when}`,
+    };
   }
 
-  for (const route of goto) {
-    if (route.when === undefined) {
-      return {
-        target: route.target,
-        matchedRoute: route,
-        matchReason: "default",
-      };
-    }
+  const defaultRoute = goto.find((route) => route.when === undefined);
+
+  if (defaultRoute) {
+    return {
+      target: defaultRoute.target,
+      matchedRoute: defaultRoute,
+      matchReason: "default",
+    };
   }
 
   throw new Error("No matching route found and no default fallback route defined");
@@ -152,42 +156,80 @@ export function validateRoutes(
     return `Step '${stepName}' on_fail.goto array cannot be empty`;
   }
 
-  let hasDefault = false;
-  const seenTargets = new Set<string>();
-
-  for (let i = 0; i < goto.length; i++) {
-    const route = goto[i] as unknown;
-
-    if (!route || typeof route !== "object") {
-      return `Step '${stepName}' on_fail.goto[${i}] must be an object`;
-    }
-
-    const r = route as Record<string, unknown>;
-
-    if (typeof r.target !== "string" || r.target.length === 0) {
-      return `Step '${stepName}' on_fail.goto[${i}].target must be a non-empty string`;
-    }
-
-    if (!stepNames.has(r.target)) {
-      return `Step '${stepName}' on_fail.goto[${i}].target targets non-existent step '${r.target}'`;
-    }
-
-    if (seenTargets.has(r.target)) {
-      return `Step '${stepName}' on_fail.goto has duplicate target '${r.target}'`;
-    }
-    seenTargets.add(r.target);
-
-    if (r.when === undefined) {
-      if (hasDefault) {
-        return `Step '${stepName}' on_fail.goto has multiple default routes (routes without 'when')`;
+  const validation = goto.reduce<{
+    error: string | null;
+    hasDefault: boolean;
+    seenTargets: ReadonlySet<string>;
+  }>(
+    (state, route, index) => {
+      if (state.error) {
+        return state;
       }
-      hasDefault = true;
-    } else if (typeof r.when !== "string" || r.when.length === 0) {
-      return `Step '${stepName}' on_fail.goto[${i}].when must be a non-empty string if provided`;
-    }
-  }
 
-  return null;
+      if (!route || typeof route !== "object") {
+        return {
+          ...state,
+          error: `Step '${stepName}' on_fail.goto[${index}] must be an object`,
+        };
+      }
+
+      const r = route as Record<string, unknown>;
+
+      if (typeof r.target !== "string" || r.target.length === 0) {
+        return {
+          ...state,
+          error: `Step '${stepName}' on_fail.goto[${index}].target must be a non-empty string`,
+        };
+      }
+
+      if (!stepNames.has(r.target)) {
+        return {
+          ...state,
+          error: `Step '${stepName}' on_fail.goto[${index}].target targets non-existent step '${r.target}'`,
+        };
+      }
+
+      if (state.seenTargets.has(r.target)) {
+        return {
+          ...state,
+          error: `Step '${stepName}' on_fail.goto has duplicate target '${r.target}'`,
+        };
+      }
+
+      if (r.when === undefined) {
+        return state.hasDefault
+          ? {
+              ...state,
+              error: `Step '${stepName}' on_fail.goto has multiple default routes (routes without 'when')`,
+            }
+          : {
+              error: null,
+              hasDefault: true,
+              seenTargets: new Set([...state.seenTargets, r.target]),
+            };
+      }
+
+      if (typeof r.when !== "string" || r.when.length === 0) {
+        return {
+          ...state,
+          error: `Step '${stepName}' on_fail.goto[${index}].when must be a non-empty string if provided`,
+        };
+      }
+
+      return {
+        error: null,
+        hasDefault: state.hasDefault,
+        seenTargets: new Set([...state.seenTargets, r.target]),
+      };
+    },
+    {
+      error: null,
+      hasDefault: false,
+      seenTargets: new Set<string>(),
+    }
+  );
+
+  return validation.error;
 }
 
 export function getAllRouteTargets(goto: string | OnFailRoute[]): string[] {

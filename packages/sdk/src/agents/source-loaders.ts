@@ -24,9 +24,7 @@ export async function loadAgentsFromYamlFile(path?: string): Promise<Map<string,
     >;
   };
 
-  const map = new Map<string, AgentFactory>();
-
-  for (const [name, info] of Object.entries(parsed.agents ?? {})) {
+  return Object.entries(parsed.agents ?? {}).reduce<Map<string, AgentFactory>>((map, [name, info]) => {
     map.set(name, () => ({
       role: info.role,
       description: info.description,
@@ -34,9 +32,8 @@ export async function loadAgentsFromYamlFile(path?: string): Promise<Map<string,
       model: info.model,
       temperature: info.temperature,
     }));
-  }
-
-  return map;
+    return map;
+  }, new Map());
 }
 
 export function loadWorkflowAgents(workflow?: WorkflowDef): Map<string, AgentFactory> {
@@ -46,9 +43,9 @@ export function loadWorkflowAgents(workflow?: WorkflowDef): Map<string, AgentFac
     return workflowAgents;
   }
 
-  for (const [name, info] of Object.entries(workflow.agents as Record<string, unknown>)) {
+  return Object.entries(workflow.agents as Record<string, unknown>).reduce<Map<string, AgentFactory>>((map, [name, info]) => {
     if (!info || typeof info !== "object") {
-      continue;
+      return map;
     }
 
     const agentInfo = info as {
@@ -60,7 +57,7 @@ export function loadWorkflowAgents(workflow?: WorkflowDef): Map<string, AgentFac
       api_key?: string;
     };
 
-    workflowAgents.set(name, () => ({
+    map.set(name, () => ({
       role: agentInfo.role,
       description: agentInfo.description,
       provider: agentInfo.provider,
@@ -68,7 +65,6 @@ export function loadWorkflowAgents(workflow?: WorkflowDef): Map<string, AgentFac
       temperature: agentInfo.temperature,
       api_key: agentInfo.api_key,
     }));
-  }
-
-  return workflowAgents;
+    return map;
+  }, workflowAgents);
 }

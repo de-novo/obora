@@ -143,11 +143,9 @@ function uint8ArrayToBase64(bytes: Uint8Array): string {
     return Buffer.from(bytes).toString('base64');
   }
   // 브라우저 환경
-  let binary = '';
-  const len = bytes.byteLength;
-  for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
+  const binary = Array.from({ length: bytes.byteLength }, (_, index) =>
+    String.fromCharCode(bytes[index] ?? 0)
+  ).join('');
   return btoa(binary);
 }
 
@@ -162,9 +160,9 @@ function base64ToUint8Array(base64: string): Uint8Array {
   // 브라우저 환경
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
+  Array.from({ length: binary.length }, (_, index) => index).forEach((index) => {
+    bytes[index] = binary.charCodeAt(index);
+  });
   return bytes;
 }
 
@@ -236,12 +234,13 @@ function inputToUint8ArrayForDecompress(
  * 체크섬 계산 (간단한 해시)
  */
 function calculateChecksum(data: string): string {
-  let hash = 0;
-  for (let i = 0; i < data.length; i++) {
-    const char = data.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32bit integer
-  }
+  const hash = Array.from({ length: data.length }, (_, index) => data.charCodeAt(index)).reduce(
+    (currentHash, char) => {
+      const nextHash = ((currentHash << 5) - currentHash) + char;
+      return nextHash & nextHash; // Convert to 32bit integer
+    },
+    0
+  );
   return Math.abs(hash).toString(16);
 }
 
@@ -554,13 +553,7 @@ export class Compressor {
    * 메타데이터 포함 압축 해제
    */
   decompressWithMeta(compressed: CompressedWithMeta | string): string {
-    let base64Data: string;
-
-    if (typeof compressed === 'string') {
-      base64Data = compressed;
-    } else {
-      base64Data = compressed.data;
-    }
+    const base64Data = typeof compressed === 'string' ? compressed : compressed.data;
 
     const combined = base64ToUint8Array(base64Data);
     const view = new DataView(combined.buffer);

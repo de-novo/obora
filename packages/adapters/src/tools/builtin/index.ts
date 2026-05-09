@@ -60,12 +60,16 @@ export const searchTextTool: Tool<
   async execute(p) {
     const text = p.caseSensitive ? p.text : p.text.toLowerCase();
     const query = p.caseSensitive ? p.query : p.query.toLowerCase();
-    const matches: string[] = [];
-    let index = text.indexOf(query);
-    while (index !== -1) {
-      matches.push(p.text.substring(index, index + p.query.length));
-      index = text.indexOf(query, index + 1);
-    }
+    const collectMatches = (startIndex: number): string[] => {
+      const index = text.indexOf(query, startIndex);
+      return index === -1
+        ? []
+        : [
+          p.text.substring(index, index + p.query.length),
+          ...collectMatches(index + 1),
+        ];
+    };
+    const matches = collectMatches(0);
     return { found: matches.length > 0, matches };
   },
 };
@@ -169,7 +173,7 @@ export const builtinTools: Tool[] = [
 ];
 
 export function registerBuiltinTools(registry: ToolRegistry): void {
-  for (const tool of builtinTools) {
+  builtinTools.forEach((tool) => {
     registry.register(tool);
-  }
+  });
 }

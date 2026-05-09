@@ -28,31 +28,34 @@ function shouldOutputJson(localJson: boolean | undefined, globalOpts: GlobalOpti
 }
 
 export async function runExpand(path: string, options: ExpandOptions): Promise<void> {
-  let raw: string;
-  try {
-    raw = await readFile(path, "utf-8");
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (message.includes("ENOENT")) {
-      throw new CLIError(`Expand source not found: ${path}`, ExitCode.VALIDATION_ERROR);
+  const raw = await (async () => {
+    try {
+      return await readFile(path, "utf-8");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes("ENOENT")) {
+        throw new CLIError(`Expand source not found: ${path}`, ExitCode.VALIDATION_ERROR);
+      }
+      throw new CLIError(`Failed to read expand source: ${message}`, ExitCode.EXECUTION_FAILED);
     }
-    throw new CLIError(`Failed to read expand source: ${message}`, ExitCode.EXECUTION_FAILED);
-  }
+  })();
 
-  let parsed: unknown;
-  try {
-    parsed = yaml.parse(raw);
-  } catch {
-    throw new CLIError(`Invalid expand YAML: ${path}`, ExitCode.VALIDATION_ERROR);
-  }
+  const parsed = (() => {
+    try {
+      return yaml.parse(raw) as unknown;
+    } catch {
+      throw new CLIError(`Invalid expand YAML: ${path}`, ExitCode.VALIDATION_ERROR);
+    }
+  })();
 
-  let expandedWorkflow;
-  try {
-    expandedWorkflow = await Workflow.fromYaml(path);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new CLIError(`Failed to expand workflow: ${message}`, ExitCode.EXECUTION_FAILED);
-  }
+  const expandedWorkflow = await (async () => {
+    try {
+      return await Workflow.fromYaml(path);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new CLIError(`Failed to expand workflow: ${message}`, ExitCode.EXECUTION_FAILED);
+    }
+  })();
 
   const stopSemantics = Workflow.getStopSemantics(parsed);
 

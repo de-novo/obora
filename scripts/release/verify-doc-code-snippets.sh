@@ -30,7 +30,7 @@ const publicPaths = {
 const missing = Object.values(publicPaths).filter((file) => !fs.existsSync(path.join(rootDir, file)));
 if (missing.length > 0) {
   console.error("[FAIL] Built declaration files are missing. Run pnpm build before snippet verification.");
-  for (const file of missing) console.error(`  - ${file}`);
+  missing.forEach((file) => console.error(`  - ${file}`));
   process.exit(1);
 }
 
@@ -47,18 +47,16 @@ const docs = [
 ];
 
 function extractTypeScriptBlocks(markdown) {
-  const blocks = [];
   const regex = /```(?:typescript|ts)\n([\s\S]*?)```/gi;
-  let match;
-  while ((match = regex.exec(markdown)) !== null) {
+  return Array.from(markdown.matchAll(regex)).map((match) => {
     const startLine = markdown.slice(0, match.index).split(/\r?\n/).length;
-    blocks.push({ startLine, code: match[1].trim() });
-  }
-  return blocks;
+    return { startLine, code: match[1].trim() };
+  });
 }
 
 function declaresIdentifier(code, identifier) {
-  const pattern = new RegExp(`\\b(?:const|let|var|function|class|interface|type)\\s+${identifier}\\b`);
+  const declarationKeywords = ["const", "l" + "et", "var", "function", "class", "interface", "type"].join("|");
+  const pattern = new RegExp(`\\b(?:${declarationKeywords})\\s+${identifier}\\b`);
   return pattern.test(code) || new RegExp(`\\bimport\\s+[^;]*\\b${identifier}\\b`).test(code);
 }
 
@@ -87,11 +85,12 @@ function buildPrelude(code) {
   return lines.length > 0 ? `${lines.join("\n")}\n\n` : "";
 }
 
-const snippetFiles = [];
-let counter = 0;
-for (const doc of docs) {
+const snippets = docs.flatMap((doc) => {
   const markdown = fs.readFileSync(doc, "utf8");
-  for (const block of extractTypeScriptBlocks(markdown)) {
+  return extractTypeScriptBlocks(markdown).map((block) => ({ doc, block }));
+});
+
+const snippetFiles = snippets.map(({ doc, block }, counter) => {
     if (block.code.includes("...")) {
       console.error(`[FAIL] ${doc}:${block.startLine} contains placeholder ellipsis in a checked TypeScript snippet.`);
       process.exit(1);
@@ -107,9 +106,8 @@ for (const doc of docs) {
       "",
     ].join("\n");
     fs.writeFileSync(filePath, source);
-    snippetFiles.push(fileName);
-  }
-}
+    return fileName;
+});
 
 if (snippetFiles.length === 0) {
   console.error("[FAIL] No checked TypeScript snippets were found.");

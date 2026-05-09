@@ -50,22 +50,22 @@ export const HistoryRunsPage = ({ onOpenRun }: Props): ReactElement => {
   );
 
   useEffect(() => {
-    let active = true;
+    const requestState = { active: true };
     void fetchHistoryRuns(query)
       .then((result) => {
-        if (active) {
+        if (requestState.active) {
           setData(result);
           setError(undefined);
         }
       })
       .catch((err: unknown) => {
-        if (active) {
+        if (requestState.active) {
           setError(err instanceof Error ? err.message : 'Failed to load runs');
         }
       });
 
     return () => {
-      active = false;
+      requestState.active = false;
     };
   }, [query]);
 

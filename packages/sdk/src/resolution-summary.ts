@@ -7,7 +7,7 @@ import { detectLLMConfigFromEnv } from "./llm-config.js";
 import type { LLMConfig } from "./runtime-types.js";
 import type { OboraRuntimeConfig } from "./runtime-types.js";
 
-const CONFIG_META_KEY = Symbol.for("obora.config.meta");
+const CONFIG_META_KEY = Symbol["for"]("obora.config.meta");
 
 const PROVIDER_ENV_KEY_MAP: Record<string, string> = {
   anthropic: "ANTHROPIC_API_KEY",
@@ -242,70 +242,69 @@ function isResolvedPath(rootDir: string, path: string): boolean {
 }
 
 export function buildBindingPreview(workflow?: { steps?: PreviewStep[] }, rootDir = process.cwd()): BindingPreviewEntry[] {
-  const entries: BindingPreviewEntry[] = [];
-  for (const step of workflow?.steps ?? []) {
+  return (workflow?.steps ?? []).flatMap((step) => {
     const input = step.input;
     const bindings = input && typeof input === "object" ? (input as Record<string, unknown>).bindings : undefined;
-    if (bindings && typeof bindings === "object") {
-      for (const [bindingName, rawBinding] of Object.entries(bindings as Record<string, unknown>)) {
-        if (!rawBinding || typeof rawBinding !== "object") continue;
-        const binding = rawBinding as Record<string, unknown>;
-        const path = typeof binding.path === "string" ? binding.path : undefined;
-        if (!path) continue;
-        const kind = typeof binding.kind === "string" ? binding.kind : "text";
-        const required = binding.required !== false;
-        entries.push({
-          stepName: step.name,
-          bindingName,
-          path,
-          kind,
-          required,
-          resolved: isResolvedPath(rootDir, path),
-        });
-      }
-    }
+    const bindingEntries =
+      bindings && typeof bindings === "object"
+        ? Object.entries(bindings as Record<string, unknown>).flatMap(([bindingName, rawBinding]) => {
+            if (!rawBinding || typeof rawBinding !== "object") return [];
+            const binding = rawBinding as Record<string, unknown>;
+            const path = typeof binding.path === "string" ? binding.path : undefined;
+            if (!path) return [];
+            const kind = typeof binding.kind === "string" ? binding.kind : "text";
+            const required = binding.required !== false;
+            return [{
+              stepName: step.name,
+              bindingName,
+              path,
+              kind,
+              required,
+              resolved: isResolvedPath(rootDir, path),
+            }];
+          })
+        : [];
 
     const judgeConfig = getJudgePreviewConfig(step);
     const inputJson = typeof judgeConfig?.input_json === "string" ? judgeConfig.input_json : undefined;
-    if (inputJson) {
-      entries.push({
+    const inputJsonEntries: BindingPreviewEntry[] = inputJson
+      ? [{
         stepName: step.name,
         bindingName: "input",
         path: inputJson,
         kind: "json",
         required: true,
         resolved: isResolvedPath(rootDir, inputJson),
-      });
-    }
+      }]
+      : [];
     const inputSchema = typeof judgeConfig?.input_schema === "string" ? judgeConfig.input_schema : undefined;
-    if (inputSchema) {
-      entries.push({
+    const inputSchemaEntries: BindingPreviewEntry[] = inputSchema
+      ? [{
         stepName: step.name,
         bindingName: "schema",
         path: inputSchema,
         kind: "schema",
         required: true,
         resolved: isResolvedPath(rootDir, inputSchema),
-      });
-    }
-  }
-  return entries;
+      }]
+      : [];
+
+    return [...bindingEntries, ...inputJsonEntries, ...inputSchemaEntries];
+  });
 }
 
 export function formatBindingPreview(entries: BindingPreviewEntry[]): string {
   if (entries.length === 0) return "";
-  const lines = ["Binding Preview"];
-  for (const entry of entries) {
-    lines.push(
+  return [
+    "Binding Preview",
+    ...entries.map((entry) =>
       `- ${entry.stepName}.${entry.bindingName}: ${entry.kind} <- ${entry.path} [${entry.resolved ? "resolved" : entry.required ? "missing" : "optional-missing"}]`
-    );
-  }
-  return lines.join("\n");
+    ),
+  ].join("\n");
 }
 
 export function buildOutputPreview(workflow?: { steps?: PreviewStep[] }, rootDir = process.cwd()): OutputPreviewEntry[] {
-  const entries: OutputPreviewEntry[] = [];
-  for (const step of workflow?.steps ?? []) {
+  return (workflow?.steps ?? []).flatMap((step) => {
     const output = step.output;
     const judgeConfig = getJudgePreviewConfig(step);
     const path = typeof output?.path === "string"
@@ -318,30 +317,29 @@ export function buildOutputPreview(workflow?: { steps?: PreviewStep[] }, rootDir
       : typeof judgeConfig?.output_schema === "string"
         ? judgeConfig.output_schema
         : undefined;
-    if (!path && !schema) continue;
-    entries.push({
+    return !path && !schema ? [] : [{
       stepName: step.name,
       path,
       schema,
       pathResolved: path ? isResolvedPath(rootDir, path) : undefined,
       schemaResolved: schema ? isResolvedPath(rootDir, schema) : undefined,
-    });
-  }
-  return entries;
+    }];
+  });
 }
 
 export function formatOutputPreview(entries: OutputPreviewEntry[]): string {
   if (entries.length === 0) return "";
-  const lines = ["Output Preview"];
-  for (const entry of entries) {
-    const details: string[] = [];
-    if (entry.path) {
-      details.push(`path <- ${entry.path} [${entry.pathResolved ? "resolved" : "pending"}]`);
-    }
-    if (entry.schema) {
-      details.push(`schema <- ${entry.schema} [${entry.schemaResolved ? "resolved" : "missing"}]`);
-    }
-    lines.push(`- ${entry.stepName}: ${details.join('; ')}`);
-  }
-  return lines.join("\n");
+  return [
+    "Output Preview",
+    ...entries.map((entry) => {
+      const details: string[] = [];
+      if (entry.path) {
+        details.push(`path <- ${entry.path} [${entry.pathResolved ? "resolved" : "pending"}]`);
+      }
+      if (entry.schema) {
+        details.push(`schema <- ${entry.schema} [${entry.schemaResolved ? "resolved" : "missing"}]`);
+      }
+      return `- ${entry.stepName}: ${details.join('; ')}`;
+    }),
+  ].join("\n");
 }

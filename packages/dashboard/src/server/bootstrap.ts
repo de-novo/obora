@@ -144,7 +144,7 @@ export const bootstrapDashboardServer = async (
   }
 
   const port = getListeningPort(app, config.port);
-  let closed = false;
+  const closeState = { closed: false };
 
   return {
     ...handle,
@@ -153,10 +153,10 @@ export const bootstrapDashboardServer = async (
     url: getDashboardUrl(config.host, port),
     staticAssets,
     close: async () => {
-      if (closed) {
+      if (closeState.closed) {
         return;
       }
-      closed = true;
+      closeState.closed = true;
       await app.close();
     },
   };

@@ -98,41 +98,42 @@ function levenshtein(a: string, b: string): number {
   const m = a.length;
   const n = b.length;
   const dp = Array.from({ length: m + 1 }, () => Array<number>(n + 1).fill(0));
-  for (let i = 0; i <= m; i += 1) dp[i]![0] = i;
-  for (let j = 0; j <= n; j += 1) dp[0]![j] = j;
-  for (let i = 1; i <= m; i += 1) {
-    for (let j = 1; j <= n; j += 1) {
+  Array.from({ length: m + 1 }, (_, i) => i).forEach((i) => {
+    dp[i]![0] = i;
+  });
+  Array.from({ length: n + 1 }, (_, j) => j).forEach((j) => {
+    dp[0]![j] = j;
+  });
+  Array.from({ length: m }, (_, i) => i + 1).forEach((i) => {
+    Array.from({ length: n }, (_, j) => j + 1).forEach((j) => {
       dp[i]![j] = Math.min(
         dp[i - 1]![j]! + 1,
         dp[i]![j - 1]! + 1,
         dp[i - 1]![j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1),
       );
-    }
-  }
+    });
+  });
   return dp[m]![n]!;
 }
 
 function suggestKey(key: string, allowed: string[]): string | undefined {
-  let best: { key: string; distance: number } | undefined;
-  for (const candidate of allowed) {
+  const best = allowed.reduce<{ key: string; distance: number } | undefined>((currentBest, candidate) => {
     const distance = levenshtein(key, candidate);
-    if (!best || distance < best.distance) {
-      best = { key: candidate, distance };
-    }
-  }
+    return !currentBest || distance < currentBest.distance ? { key: candidate, distance } : currentBest;
+  }, undefined);
   if (!best) return undefined;
   return best.distance <= 3 ? best.key : undefined;
 }
 
 function assertAllowedKeys(obj: Record<string, unknown>, allowed: string[], scope: string): void {
-  for (const key of Object.keys(obj)) {
+  Object.keys(obj).forEach((key) => {
     if (!allowed.includes(key)) {
       const suggestion = suggestKey(key, allowed);
       throw OboraError.invalidWorkflow(
         `One-file workflow does not allow key "${scope}${key}". Allowed keys: ${allowed.join(", ")}${suggestion ? `. Did you mean "${scope}${suggestion}"?` : ""}`,
       );
     }
-  }
+  });
 }
 
 function requireOptionalString(value: unknown, path: string): void {

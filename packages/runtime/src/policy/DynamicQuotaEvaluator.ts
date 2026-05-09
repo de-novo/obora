@@ -69,7 +69,7 @@ export function evaluateDynamicResourceDecision(
 ): PolicyDecision | null {
   const limits = policy.dynamicQuota?.limits ?? [];
 
-  for (const limit of limits) {
+  return limits.flatMap((limit): PolicyDecision[] => {
     const matchResult:
       | { status: "ok"; matches: boolean }
       | { status: "error"; message: string } = (() => {
@@ -84,33 +84,33 @@ export function evaluateDynamicResourceDecision(
     })();
 
     if (matchResult.status === "error") {
-      return {
+      return [{
         type: "deny",
         reason: `dynamic quota condition evaluation failed: ${matchResult.message}`,
         rule: "dynamic-quota",
-      };
+      }];
     }
 
     if (!matchResult.matches) {
-      continue;
+      return [];
     }
 
     const current = fieldToContextValue[limit.field](context);
     if (current <= limit.limit) {
-      continue;
+      return [];
     }
 
     if (limit.action === "deny") {
-      return {
+      return [{
         type: "deny",
         reason: fieldToReason[limit.field],
         rule: `resources.dynamic.${limit.field}`,
-      };
+      }];
     }
 
     if (limit.action === "warn") {
       // warn: allow the action but attach a warning for upstream consumers
-      return {
+      return [{
         type: "allow",
         warning: {
           reason: `${fieldToReason[limit.field]} (dynamic)`,
@@ -119,11 +119,11 @@ export function evaluateDynamicResourceDecision(
           limit: limit.limit,
           current,
         },
-      };
+      }];
     }
 
     // action === "gate"
-    return {
+    return [{
       type: "gate",
       gateType: "human-approval",
       config: {
@@ -134,10 +134,8 @@ export function evaluateDynamicResourceDecision(
         current,
         rule: `resources.dynamic.${limit.field}`,
       },
-    };
-  }
-
-  return null;
+    }];
+  }).at(0) ?? null;
 }
 
 export function getEffectiveStaticLimit(policy: ResourcePolicy, field: DynamicResourceLimit["field"]): number | undefined {

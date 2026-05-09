@@ -32,14 +32,13 @@ export class SandboxRule implements PolicyRulePlugin {
       };
     }
 
-    for (const pattern of policies.sandbox.denyPatterns ?? []) {
-      if (resolvedPath.includes(pattern)) {
-        return {
-          type: "deny",
-          reason: `File path blocked by sandbox pattern: ${pattern}`,
-          rule: "sandbox.denyPatterns",
-        };
-      }
+    const deniedPattern = (policies.sandbox.denyPatterns ?? []).find((pattern) => resolvedPath.includes(pattern));
+    if (deniedPattern) {
+      return {
+        type: "deny",
+        reason: `File path blocked by sandbox pattern: ${deniedPattern}`,
+        rule: "sandbox.denyPatterns",
+      };
     }
 
     return null;

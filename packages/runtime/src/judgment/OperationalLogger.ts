@@ -147,12 +147,6 @@ export class OperationalLogger {
   }
 
   static validateEntry(entry: Record<string, unknown>): string[] {
-    const missing: string[] = [];
-    for (const field of REQUIRED_LOG_FIELDS) {
-      if (!(field in entry) || entry[field] === undefined) {
-        missing.push(field);
-      }
-    }
-    return missing;
+    return REQUIRED_LOG_FIELDS.filter((field) => !(field in entry) || entry[field] === undefined);
   }
 }

@@ -106,13 +106,13 @@ export class ExecutionObserver {
       "workflow.repair_completed",
     ];
 
-    for (const eventType of events) {
+    events.forEach((eventType) => {
       const unsub = this.eventBus.on(eventType, (event: AuditEvent) => {
         if (event.executionId !== executionId) return;
         this.handleEvent(executionId, event);
       });
       this.unsubscribes.push(unsub);
-    }
+    });
   }
 
   private handleEvent(executionId: string, event: AuditEvent): void {
@@ -329,12 +329,11 @@ export class ExecutionObserver {
     const exec = this.metrics.get(executionId);
     if (!exec) return undefined;
 
-    const stepMetrics: ExecutionReportStepMetric[] = [];
-    let totalRetries = 0;
-
-    for (const step of exec.stepMetrics.values()) {
+    const reportMetrics = Array.from(exec.stepMetrics.values()).reduce<{
+      stepMetrics: ExecutionReportStepMetric[];
+      totalRetries: number;
+    }>((acc, step) => {
       const attempts = 1 + step.retryCount;
-      totalRetries += step.retryCount;
 
       const durations = step.attemptDurations;
       const totalDuration = durations.reduce((sum, d) => sum + d, 0);
@@ -342,7 +341,9 @@ export class ExecutionObserver {
       const minDuration = durations.length > 0 ? Math.min(...durations) : undefined;
       const maxDuration = durations.length > 0 ? Math.max(...durations) : undefined;
 
-      stepMetrics.push({
+      return {
+        totalRetries: acc.totalRetries + step.retryCount,
+        stepMetrics: [...acc.stepMetrics, {
         stepName: step.stepName,
         attempts,
         successCount: step.validationPasses,
@@ -352,8 +353,9 @@ export class ExecutionObserver {
         minDuration,
         maxDuration,
         cost: step.costUsd ?? 0,
-      });
-    }
+        }],
+      };
+    }, { stepMetrics: [], totalRetries: 0 });
 
     const outcome =
       ((exec as ExecutionMetrics & { _outcome?: string })._outcome as
@@ -368,9 +370,9 @@ export class ExecutionObserver {
       totalDuration: exec.totalDurationMs ?? Date.now() - exec.startedAt,
       totalCost: exec.totalCostUsd ?? 0,
       totalSteps: exec.stepMetrics.size,
-      totalRetries,
+      totalRetries: reportMetrics.totalRetries,
       totalBackEdges: exec.totalBackEdges,
-      stepMetrics,
+      stepMetrics: reportMetrics.stepMetrics,
       failurePatterns: options?.failurePatterns ?? [],
       outcome,
     };
@@ -380,9 +382,7 @@ export class ExecutionObserver {
    * Stop observing and clean up subscriptions.
    */
   dispose(): void {
-    for (const unsub of this.unsubscribes) {
-      unsub();
-    }
+    this.unsubscribes.forEach((unsub) => unsub());
     this.unsubscribes.length = 0;
   }
 }

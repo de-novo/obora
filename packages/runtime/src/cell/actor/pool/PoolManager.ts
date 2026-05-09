@@ -136,11 +136,7 @@ export class PoolManager {
    * @returns Pool 이름별 메트릭 맵
    */
   getAllMetrics(): Map<string, PoolMetrics> {
-    const metrics = new Map<string, PoolMetrics>();
-    for (const [name, pool] of this.pools.entries()) {
-      metrics.set(name, pool.getMetrics());
-    }
-    return metrics;
+    return new Map([...this.pools.entries()].map(([name, pool]) => [name, pool.getMetrics()]));
   }
 
   /**

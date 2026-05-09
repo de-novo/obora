@@ -123,18 +123,13 @@ export class ActionRegistry {
     context: ActionExecutionContext
   ): ActionResult[] {
     const sorted = [...actions].sort((a, b) => b.priority - a.priority);
-    const results: ActionResult[] = [];
-
-    for (const action of sorted) {
+    return sorted.map((action) => {
       const handler = this.handlers.get(action.type);
       if (!handler) {
-        results.push({ applied: false, metadata: { reason: `no handler for type "${action.type}"` } });
-        continue;
+        return { applied: false, metadata: { reason: `no handler for type "${action.type}"` } };
       }
-      results.push(handler.execute(action, context));
-    }
-
-    return results;
+      return handler.execute(action, context);
+    });
   }
 
   hasHandler(type: string): boolean {

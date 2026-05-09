@@ -402,17 +402,19 @@ export class SnapshotValidator {
     const warnings: SnapshotValidationWarning[] = [];
 
     try {
-      let serializedState: SerializedState | undefined;
-
-      // 압축 데이터 처리
-      if (snapshot.meta.compressed && typeof snapshot.data === "string") {
-        const algorithm = detectCompression(snapshot.data) ?? "gzip";
-        const json = decompress(snapshot.data, { algorithm }) as string;
-        const parsed = JSON.parse(json);
-        serializedState = isSerializedState(parsed) ? parsed : undefined;
-      } else if (typeof snapshot.data === "object" && isSerializedState(snapshot.data)) {
-        serializedState = snapshot.data;
-      }
+      const serializedState = (() => {
+        // 압축 데이터 처리
+        if (snapshot.meta.compressed && typeof snapshot.data === "string") {
+          const algorithm = detectCompression(snapshot.data) ?? "gzip";
+          const json = decompress(snapshot.data, { algorithm }) as string;
+          const parsed = JSON.parse(json);
+          return isSerializedState(parsed) ? parsed : undefined;
+        }
+        if (typeof snapshot.data === "object" && isSerializedState(snapshot.data)) {
+          return snapshot.data;
+        }
+        return undefined;
+      })();
 
       // 타입 가드 실패 시 에러 반환
       if (!serializedState) {
@@ -435,8 +437,7 @@ export class SnapshotValidator {
               message: "state.agents must be an array of [id, data] tuples",
             });
           } else {
-            for (let i = 0; i < stateSection.agents.length; i++) {
-              const item = stateSection.agents[i];
+            stateSection.agents.forEach((item, i) => {
               if (!Array.isArray(item) || item.length !== 2 || typeof item[0] !== "string") {
                 errors.push({
                   code: "DATA_CORRUPTED",
@@ -444,7 +445,7 @@ export class SnapshotValidator {
                 });
                 // P1: break 제거 - 전체 에러 수집
               }
-            }
+            });
           }
         }
 
@@ -456,8 +457,7 @@ export class SnapshotValidator {
               message: "state.tasks must be an array of [id, data] tuples",
             });
           } else {
-            for (let i = 0; i < stateSection.tasks.length; i++) {
-              const item = stateSection.tasks[i];
+            stateSection.tasks.forEach((item, i) => {
               if (!Array.isArray(item) || item.length !== 2 || typeof item[0] !== "string") {
                 errors.push({
                   code: "DATA_CORRUPTED",
@@ -465,7 +465,7 @@ export class SnapshotValidator {
                 });
                 // P1: break 제거 - 전체 에러 수집
               }
-            }
+            });
           }
         }
       }
@@ -482,8 +482,7 @@ export class SnapshotValidator {
               message: "decisions.opinions must be an array of [id, data] tuples",
             });
           } else {
-            for (let i = 0; i < decisionsSection.opinions.length; i++) {
-              const item = decisionsSection.opinions[i];
+            decisionsSection.opinions.forEach((item, i) => {
               if (!Array.isArray(item) || item.length !== 2 || typeof item[0] !== "string") {
                 errors.push({
                   code: "DATA_CORRUPTED",
@@ -491,7 +490,7 @@ export class SnapshotValidator {
                 });
                 // P1: break 제거 - 전체 에러 수집
               }
-            }
+            });
           }
         }
       }

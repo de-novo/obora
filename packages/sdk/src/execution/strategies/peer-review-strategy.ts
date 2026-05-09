@@ -77,7 +77,8 @@ export const peerReviewStrategy = {
             prConfig.maxConcurrency
           );
 
-          for (const outcome of outcomes) {
+          await outcomes.reduce<Promise<void>>(async (previous, outcome) => {
+            await previous;
             if (outcome.status === "rejected") {
               await services.config.onEvent?.("peer_review_vote", {
                 stepName: step.name,
@@ -89,11 +90,12 @@ export const peerReviewStrategy = {
                 failed: true,
               });
             }
-          }
+          }, Promise.resolve());
         } else {
-          for (const participant of participants) {
-            await processResponse(participant);
-          }
+          await participants.reduce<Promise<void>>(
+            (previous, participant) => previous.then(() => processResponse(participant)),
+            Promise.resolve()
+          );
         }
       } finally {
         consensusSignal?.cleanup();

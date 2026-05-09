@@ -40,11 +40,11 @@ function isValidSection(section: string): section is (typeof VALID_SECTIONS)[num
  * @throws {Error} 위험한 키가 포함된 경우
  */
 function validatePathSegments(segments: string[]): void {
-  for (const segment of segments) {
+  segments.forEach((segment) => {
     if (DANGEROUS_KEYS.has(segment)) {
       throw new Error(`Invalid path segment: ${segment} is not allowed`);
     }
-  }
+  });
 }
 
 /**
@@ -65,36 +65,36 @@ export function getByPath<T = unknown>(obj: unknown, path: string): T | undefine
     return obj as T;
   }
 
-  let current: unknown = obj;
+  const current = segments.reduce<unknown>((value, segment) => {
+    if (value === undefined) {
+      return undefined;
+    }
 
-  for (const segment of segments) {
-    if (typeof current !== "object" || current === null) {
+    if (typeof value !== "object" || value === null) {
       return undefined;
     }
 
     // Map 처리
-    if (current instanceof Map) {
-      current = current.get(segment);
-      continue;
+    if (value instanceof Map) {
+      return value.get(segment);
     }
 
     // 배열 처리 (숫자 인덱스)
-    if (Array.isArray(current)) {
+    if (Array.isArray(value)) {
       const index = parseInt(segment, 10);
-      if (!isNaN(index) && index >= 0 && index < current.length) {
-        current = current[index];
-        continue;
+      if (!isNaN(index) && index >= 0 && index < value.length) {
+        return value[index];
       }
       return undefined;
     }
 
     // 일반 객체
-    if (!(segment in current)) {
+    if (!(segment in value)) {
       return undefined;
     }
 
-    current = (current as Record<string, unknown>)[segment];
-  }
+    return (value as Record<string, unknown>)[segment];
+  }, obj);
 
   return current as T;
 }
@@ -120,11 +120,7 @@ export function setByPath<T>(obj: T, path: string, value: unknown): T {
 
   const newObj = deepClone(obj) as Record<string, unknown>;
 
-  let current: Record<string, unknown> = newObj;
-
-  for (let i = 0; i < segments.length - 1; i++) {
-    const segment = segments[i];
-
+  const parent = segments.slice(0, -1).reduce<Record<string, unknown>>((current, segment) => {
     if (!(segment in current)) {
       current[segment] = {};
     } else {
@@ -135,11 +131,11 @@ export function setByPath<T>(obj: T, path: string, value: unknown): T {
       current[segment] = {};
     }
 
-    current = current[segment] as Record<string, unknown>;
-  }
+    return current[segment] as Record<string, unknown>;
+  }, newObj);
 
   const lastSegment = segments[segments.length - 1];
-  current[lastSegment] = deepClone(value);
+  parent[lastSegment] = deepClone(value);
 
   return newObj as T;
 }
@@ -170,27 +166,30 @@ export function deleteByPath<T>(obj: T, path: string): T {
     return newObj as T;
   }
 
-  let current: Record<string, unknown> = newObj;
-
   // 마지막 전까지 이동
-  for (let i = 0; i < segments.length - 1; i++) {
-    const segment = segments[i];
-
+  const parent = segments.slice(0, -1).reduce<Record<string, unknown> | undefined>((current, segment) => {
+    if (!current) {
+      return undefined;
+    }
     if (!(segment in current)) {
-      return obj; // 경로가 존재하지 않으면 원본 반환
+      return undefined; // 경로가 존재하지 않으면 원본 반환
     }
 
     current[segment] = deepClone(current[segment]);
 
     if (typeof current[segment] !== "object" || current[segment] === null) {
-      return obj;
+      return undefined;
     }
 
-    current = current[segment] as Record<string, unknown>;
+    return current[segment] as Record<string, unknown>;
+  }, newObj);
+
+  if (!parent) {
+    return obj;
   }
 
   const lastSegment = segments[segments.length - 1];
-  delete current[lastSegment];
+  delete parent[lastSegment];
 
   return newObj as T;
 }

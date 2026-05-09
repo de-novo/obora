@@ -9,12 +9,12 @@ export function maskSecret(value: string): string {
 export function maskProviderAuth(auth: Record<string, unknown> | object): Record<string, unknown> {
   const clone = { ...auth } as Record<string, unknown>;
 
-  for (const key of ["apiKey", "token", "accessToken", "refreshToken"]) {
+  ["apiKey", "token", "accessToken", "refreshToken"].forEach((key) => {
     const value = clone[key];
     if (typeof value === "string") {
       clone[key] = maskSecret(value);
     }
-  }
+  });
 
   return clone;
 }

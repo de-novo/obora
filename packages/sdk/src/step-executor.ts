@@ -179,15 +179,15 @@ export class StepExecutor {
 
     if (!this.config.disableBuiltinTools) {
       const builtins = createBuiltinToolHandlers(this.resolveProjectPath.bind(this));
-      for (const [name, handler] of builtins) {
+      builtins.forEach((handler, name) => {
         registry.set(name, handler);
-      }
+      });
     }
 
     if (this.config.tools) {
-      for (const handler of this.config.tools) {
+      this.config.tools.forEach((handler) => {
         registry.set(handler.definition.function.name, handler);
-      }
+      });
     }
 
     return registry;
@@ -261,10 +261,11 @@ export class StepExecutor {
       );
     }
 
-    let candidate = parsedOutput;
-    if (typeof candidate === "string") {
-      candidate = this.tryParseStructuredContent(candidate);
-      if (candidate === undefined) {
+    const candidate =
+      typeof parsedOutput === "string"
+        ? this.tryParseStructuredContent(parsedOutput)
+        : parsedOutput;
+    if (candidate === undefined) {
         throw new Error(
           `[SCHEMA_1001] Invalid structured output for step '${step.name}'
 ` +
@@ -272,7 +273,6 @@ export class StepExecutor {
 ` +
             `Fix: instruct the model to return JSON only that matches the declared output contract`
         );
-      }
     }
 
     const schema = loadMinimalJsonSchema(resolvedSchemaPath);
@@ -316,13 +316,46 @@ export class StepExecutor {
 
     const startedAt = Date.now();
     try {
-      let response: Awaited<ReturnType<LLMAdapterLike["chatCompletion"]>> | undefined;
       const maxToolRounds = this.getMaxToolRounds(step);
       const toolLimits = this.getToolLimits(step);
       const toolCallCounts = new Map<string, number>();
+      const executeToolCalls = (toolCalls: ToolCall[]): Promise<void> =>
+        toolCalls.reduce(
+          async (previous, toolCall) => {
+            await previous;
+            const toolName = toolCall.function.name;
+            const currentCount = (toolCallCounts.get(toolName) ?? 0) + 1;
+            toolCallCounts.set(toolName, currentCount);
 
-      for (let round = 0; round < maxToolRounds; round++) {
-        response = await adapter.chatCompletion({
+            const limit = toolLimits.get(toolName);
+            if (limit !== undefined && currentCount > limit) {
+              messages.push({
+                role: "tool",
+                toolCallId: toolCall.id,
+                content: `Error: Tool '${toolName}' call limit exceeded (${limit} calls allowed, attempt ${currentCount}). Do not call this tool again.`,
+              });
+              return;
+            }
+
+            const toolResult = await this.executeToolCall(toolCall);
+            messages.push({
+              role: "tool",
+              toolCallId: toolCall.id,
+              content: toolResult,
+            });
+          },
+          Promise.resolve()
+        );
+      const executeToolRound = async (
+        round: number
+      ): Promise<Awaited<ReturnType<LLMAdapterLike["chatCompletion"]>>> => {
+        if (round >= maxToolRounds) {
+          throw new Error(
+            `Tool-call iteration limit (${maxToolRounds}) exceeded for step '${step.name}'`
+          );
+        }
+
+        const response = await adapter.chatCompletion({
           model: resolved?.model ?? this.config.model,
           temperature: resolved?.temperature ?? this.config.temperature,
           maxTokens: resolved?.maxTokens ?? this.config.maxTokens,
@@ -352,33 +385,11 @@ export class StepExecutor {
           toolCalls,
         });
 
-        for (const toolCall of toolCalls) {
-          const toolName = toolCall.function.name;
-          const currentCount = (toolCallCounts.get(toolName) ?? 0) + 1;
-          toolCallCounts.set(toolName, currentCount);
+        await executeToolCalls(toolCalls);
+        return executeToolRound(round + 1);
+      };
 
-          const limit = toolLimits.get(toolName);
-          if (limit !== undefined && currentCount > limit) {
-            messages.push({
-              role: "tool",
-              toolCallId: toolCall.id,
-              content: `Error: Tool '${toolName}' call limit exceeded (${limit} calls allowed, attempt ${currentCount}). Do not call this tool again.`,
-            });
-            continue;
-          }
-
-          const toolResult = await this.executeToolCall(toolCall);
-          messages.push({
-            role: "tool",
-            toolCallId: toolCall.id,
-            content: toolResult,
-          });
-        }
-      }
-
-      throw new Error(
-        `Tool-call iteration limit (${maxToolRounds}) exceeded for step '${step.name}'`
-      );
+      return await executeToolRound(0);
     } finally {
       requestSignal?.cleanup();
     }
@@ -438,15 +449,18 @@ export class StepExecutor {
       throw new Error("Path validation failed: target escapes project directory");
     }
 
-    let nearestExistingAncestor = dirname(resolvedPath);
-    while (!existsSync(nearestExistingAncestor)) {
-      const parent = dirname(nearestExistingAncestor);
-      if (parent === nearestExistingAncestor) {
+    const findNearestExistingAncestor = (candidate: string): string => {
+      if (existsSync(candidate)) {
+        return candidate;
+      }
+      const parent = dirname(candidate);
+      if (parent === candidate) {
         throw new Error("Path validation failed: no existing parent directory found");
       }
-      nearestExistingAncestor = parent;
-    }
+      return findNearestExistingAncestor(parent);
+    };
 
+    const nearestExistingAncestor = findNearestExistingAncestor(dirname(resolvedPath));
     const realAncestor = realpathSync(nearestExistingAncestor);
     if (realAncestor === projectRoot || realAncestor.startsWith(`${projectRoot}${sep}`)) {
       return resolvedPath;
@@ -461,17 +475,15 @@ export class StepExecutor {
     stepName: string
   ): { signal: AbortSignal; cleanup: () => void } | undefined {
     const shouldUseTimeout = Number.isFinite(timeoutMs) && timeoutMs > 0;
-    let timeoutController: AbortController | undefined;
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-
-    if (shouldUseTimeout) {
-      timeoutController = new AbortController();
-      timeout = setTimeout(() => {
+    const timeoutController = shouldUseTimeout ? new AbortController() : undefined;
+    const timeout =
+      timeoutController !== undefined
+        ? setTimeout(() => {
         timeoutController?.abort(
           new Error(`LLM request timed out for step '${stepName}' after ${timeoutMs}ms`)
         );
-      }, timeoutMs);
-    }
+          }, timeoutMs)
+        : undefined;
 
     const combined = this.combineAbortSignals(signal, timeoutController?.signal);
 
@@ -479,15 +491,14 @@ export class StepExecutor {
       return undefined;
     }
 
-    let cleanedUp = false;
+    const cleanupState = { cleanedUp: false };
     const cleanup = () => {
-      if (cleanedUp) {
+      if (cleanupState.cleanedUp) {
         return;
       }
-      cleanedUp = true;
+      cleanupState.cleanedUp = true;
       if (timeout) {
         clearTimeout(timeout);
-        timeout = undefined;
       }
       combined.cleanup();
     };
@@ -534,21 +545,21 @@ export class StepExecutor {
     const limits = new Map<string, number>();
 
     if (this.config.toolLimits) {
-      for (const [name, limit] of Object.entries(this.config.toolLimits)) {
+      Object.entries(this.config.toolLimits).forEach(([name, limit]) => {
         if (typeof limit === "number" && Number.isFinite(limit) && limit >= 0) {
           limits.set(name, Math.floor(limit));
         }
-      }
+      });
     }
 
     const config = (step.config ?? {}) as Record<string, unknown>;
     const stepToolLimits = config.toolLimits;
     if (stepToolLimits && typeof stepToolLimits === "object" && !Array.isArray(stepToolLimits)) {
-      for (const [name, limit] of Object.entries(stepToolLimits as Record<string, unknown>)) {
+      Object.entries(stepToolLimits as Record<string, unknown>).forEach(([name, limit]) => {
         if (typeof limit === "number" && Number.isFinite(limit) && limit >= 0) {
           limits.set(name, Math.floor(limit));
         }
-      }
+      });
     }
 
     return limits;
@@ -672,33 +683,32 @@ export class StepExecutor {
 
     const controller = new AbortController();
     const removers: Array<() => void> = [];
-    let cleanedUp = false;
+    const cleanupState = { cleanedUp: false };
 
     const cleanup = () => {
-      if (cleanedUp) {
+      if (cleanupState.cleanedUp) {
         return;
       }
-      cleanedUp = true;
-      for (const remove of removers) {
-        remove();
-      }
+      cleanupState.cleanedUp = true;
+      removers.forEach((remove) => remove());
       removers.length = 0;
     };
 
-    for (const source of activeSignals) {
-      if (source.aborted) {
+    const abortedSignal = activeSignals.find((source) => source.aborted);
+    if (abortedSignal) {
         cleanup();
-        controller.abort(source.reason ?? new Error("Execution aborted"));
+      controller.abort(abortedSignal.reason ?? new Error("Execution aborted"));
         return { signal: controller.signal, cleanup };
-      }
+    }
 
+    activeSignals.forEach((source) => {
       const onAbort = () => {
         cleanup();
         controller.abort(source.reason ?? new Error("Execution aborted"));
       };
       source.addEventListener("abort", onAbort, { once: true });
       removers.push(() => source.removeEventListener("abort", onAbort));
-    }
+    });
 
     controller.signal.addEventListener("abort", cleanup, { once: true });
 
@@ -823,12 +833,13 @@ export class StepExecutor {
     const direct = this.tryParseJson(trimmed);
     if (direct !== undefined) return direct;
 
-    const fencedMatches = [...trimmed.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)];
-    for (const match of fencedMatches) {
-      const candidate = match[1]?.trim();
-      const parsed = candidate ? this.tryParseJson(candidate) : undefined;
-      if (parsed !== undefined) return parsed;
-    }
+    const fencedParsed = [...trimmed.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)]
+      .map((match) => {
+        const candidate = match[1]?.trim();
+        return candidate ? this.tryParseJson(candidate) : undefined;
+      })
+      .find((parsed) => parsed !== undefined);
+    if (fencedParsed !== undefined) return fencedParsed;
 
     const embedded = this.extractEmbeddedJson(trimmed);
     if (embedded) {
@@ -852,49 +863,58 @@ export class StepExecutor {
     if (start < 0) return undefined;
 
     const stack: string[] = [];
-    let inString = false;
-    let escaped = false;
+    type ScanState = {
+      index: number;
+      stack: string[];
+      inString: boolean;
+      escaped: boolean;
+    };
+    const scan = ({ index, stack: currentStack, inString, escaped }: ScanState): string | undefined => {
+      if (index >= text.length) {
+        return undefined;
+      }
 
-    for (let i = start; i < text.length; i++) {
-      const char = text[i]!;
+      const char = text[index]!;
+
+      if (inString && escaped) {
+        return scan({ index: index + 1, stack: currentStack, inString, escaped: false });
+      }
+
+      if (inString && char === "\\") {
+        return scan({ index: index + 1, stack: currentStack, inString, escaped: true });
+      }
+
+      if (inString && char === '"') {
+        return scan({ index: index + 1, stack: currentStack, inString: false, escaped: false });
+      }
 
       if (inString) {
-        if (escaped) {
-          escaped = false;
-          continue;
-        }
-        if (char === "\\") {
-          escaped = true;
-          continue;
-        }
-        if (char === '"') {
-          inString = false;
-        }
-        continue;
+        return scan({ index: index + 1, stack: currentStack, inString, escaped: false });
       }
 
       if (char === '"') {
-        inString = true;
-        continue;
+        return scan({ index: index + 1, stack: currentStack, inString: true, escaped: false });
       }
 
       if (char === "{") {
-        stack.push("}");
-        continue;
+        return scan({ index: index + 1, stack: [...currentStack, "}"], inString, escaped: false });
       }
-      if (char === "[") {
-        stack.push("]");
-        continue;
-      }
-      if ((char === "}" || char === "]") && stack.at(-1) === char) {
-        stack.pop();
-        if (stack.length === 0) {
-          return text.slice(start, i + 1);
-        }
-      }
-    }
 
-    return undefined;
+      if (char === "[") {
+        return scan({ index: index + 1, stack: [...currentStack, "]"], inString, escaped: false });
+      }
+
+      if ((char === "}" || char === "]") && currentStack.at(-1) === char) {
+        const nextStack = currentStack.slice(0, -1);
+        return nextStack.length === 0
+          ? text.slice(start, index + 1)
+          : scan({ index: index + 1, stack: nextStack, inString, escaped: false });
+      }
+
+      return scan({ index: index + 1, stack: currentStack, inString, escaped: false });
+    };
+
+    return scan({ index: start, stack, inString: false, escaped: false });
   }
 
   /** @internal */
@@ -920,18 +940,16 @@ export class StepExecutor {
       return task;
     }
 
-    let rendered = task;
-    for (const [name, rawBinding] of Object.entries(bindings as Record<string, unknown>)) {
-      if (!rawBinding || typeof rawBinding !== "object") continue;
+    return Object.entries(bindings as Record<string, unknown>).reduce((rendered, [name, rawBinding]) => {
+      if (!rawBinding || typeof rawBinding !== "object") return rendered;
       const binding = rawBinding as Record<string, unknown>;
       const pathValue = binding.path;
-      if (typeof pathValue !== "string") continue;
+      if (typeof pathValue !== "string") return rendered;
       const kind = typeof binding.kind === "string" ? binding.kind : "text";
       const required = binding.required !== false;
       const content = this.loadBindingContent(pathValue, kind, required, name);
-      rendered = rendered.replaceAll(`{{${name}}}`, content);
-    }
-    return rendered;
+      return rendered.replaceAll(`{{${name}}}`, content);
+    }, task);
   }
 
   private loadBindingContent(pathValue: string, kind: string, required: boolean, name: string): string {

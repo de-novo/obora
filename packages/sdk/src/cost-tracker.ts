@@ -118,27 +118,31 @@ export class CostTracker {
     const model = params.model ?? "unknown";
 
     const modelPricing = pricingConfig.models.find((m) => m.model === model);
-    let costUsd = 0;
+    const costUsd = (() => {
+      if (modelPricing) {
+        return (promptTokens / 1000) * modelPricing.promptPer1kTokens
+          + (completionTokens / 1000) * modelPricing.completionPer1kTokens;
+      }
 
-    if (modelPricing) {
-      costUsd = (promptTokens / 1000) * modelPricing.promptPer1kTokens
-        + (completionTokens / 1000) * modelPricing.completionPer1kTokens;
-    } else {
       const mode = pricingConfig.unknownModel;
       if (mode === "block") {
         throw new BudgetExceededError(`[budget] Unknown model pricing blocked: '${model}'`);
       }
       if (mode === "estimate" && pricingConfig.fallback) {
-        costUsd = (promptTokens / 1000) * pricingConfig.fallback.prompt
+        return (promptTokens / 1000) * pricingConfig.fallback.prompt
           + (completionTokens / 1000) * pricingConfig.fallback.completion;
-      } else if (pricingConfig.configured && !this.warnedUnknownModels.has(model)) {
+      }
+
+      if (pricingConfig.configured && !this.warnedUnknownModels.has(model)) {
         this.warnedUnknownModels.add(model);
         const msg = `[budget] Unknown model pricing for '${model}', cost recorded as 0 (unknownModel=warn)`;
         if (this.logger?.warn) {
           this.logger.warn(msg);
         }
       }
-    }
+
+      return 0;
+    })();
 
     const record: CostRecord = {
       id: randomUUID(),

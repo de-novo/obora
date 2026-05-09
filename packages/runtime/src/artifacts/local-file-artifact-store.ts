@@ -97,14 +97,13 @@ export class LocalFileArtifactStore implements ArtifactStore {
   }
 
   private async walk(path: string, onFile: (path: string) => Promise<void>): Promise<void> {
-    let entries: string[];
-    try {
-      entries = await readdir(path);
-    } catch {
+    const entries = await readdir(path).catch(() => undefined);
+    if (!entries) {
       return;
     }
 
-    for (const entry of entries) {
+    await entries.reduce<Promise<void>>(async (previous, entry) => {
+      await previous;
       const full = join(path, entry);
       const st = await stat(full);
       if (st.isDirectory()) {
@@ -112,7 +111,7 @@ export class LocalFileArtifactStore implements ArtifactStore {
       } else if (st.isFile()) {
         await onFile(full);
       }
-    }
+    }, Promise.resolve());
   }
 
   private metaPath(filePath: string): string {

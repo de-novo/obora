@@ -78,10 +78,8 @@ export function isConsensusResult(value: unknown): value is ConsensusResult {
     if (!Array.isArray(candidate.conditions) || candidate.conditions.length === 0) {
       return false;
     }
-    for (const cond of candidate.conditions) {
-      if (!cond || typeof cond.code !== 'string' || typeof cond.description !== 'string') {
-        return false;
-      }
+    if (!candidate.conditions.every((cond) => cond && typeof cond.code === 'string' && typeof cond.description === 'string')) {
+      return false;
     }
   }
 
@@ -91,10 +89,8 @@ export function isConsensusResult(value: unknown): value is ConsensusResult {
         !Array.isArray(candidate.escalation.requiredRoles)) {
       return false;
     }
-    for (const role of candidate.escalation.requiredRoles) {
-      if (typeof role !== 'string') {
-        return false;
-      }
+    if (!candidate.escalation.requiredRoles.every((role) => typeof role === 'string')) {
+      return false;
     }
   }
 

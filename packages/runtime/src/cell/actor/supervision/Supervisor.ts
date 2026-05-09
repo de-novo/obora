@@ -348,31 +348,27 @@ export class Supervisor extends EventEmitter {
       jitterFactor = 0.1,
     } = this.config.backoff;
 
-    let delay: number;
+    const delay = (() => {
+      switch (policy) {
+        case BackoffPolicy.FIXED:
+          return initialDelay;
 
-    switch (policy) {
-      case BackoffPolicy.FIXED:
-        delay = initialDelay;
-        break;
+        case BackoffPolicy.LINEAR:
+          return initialDelay * attempt;
 
-      case BackoffPolicy.LINEAR:
-        delay = initialDelay * attempt;
-        break;
+        case BackoffPolicy.EXPONENTIAL:
+          return initialDelay * Math.pow(multiplier, attempt - 1);
 
-      case BackoffPolicy.EXPONENTIAL:
-        delay = initialDelay * Math.pow(multiplier, attempt - 1);
-        break;
-
-      case BackoffPolicy.EXPONENTIAL_JITTER: {
+        case BackoffPolicy.EXPONENTIAL_JITTER: {
         const base = initialDelay * Math.pow(multiplier, attempt - 1);
         const jitter = base * jitterFactor * (Math.random() * 2 - 1);
-        delay = base + jitter;
-        break;
-      }
+          return base + jitter;
+        }
 
-      default:
-        delay = initialDelay;
-    }
+        default:
+          return initialDelay;
+      }
+    })();
 
     return Math.min(delay, maxDelay);
   }

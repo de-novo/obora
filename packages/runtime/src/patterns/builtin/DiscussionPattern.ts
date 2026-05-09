@@ -108,13 +108,15 @@ export class DiscussionPattern extends CollaborationPatternBase {
     meetingStateMachine.apply({ type: "agenda.status.changed", payload: { status: "IN_PROGRESS" } });
 
     const rounds: Array<{ round: number; opinions: RoundOpinions; converged: boolean; decision?: string }> = [];
-    let decision: string | undefined;
-    let converged = false;
+    const discussionState = { decision: undefined as string | undefined, converged: false };
 
     const retryBudget = config.retry_budget ?? 1;
     const roundLimit = onDeadlock === "retry" ? maxRounds + retryBudget : maxRounds;
 
-    for (let round = 1; round <= roundLimit; round++) {
+    await Array.from({ length: roundLimit }, (_, index) => index + 1).reduce<Promise<void>>(
+      async (previous, round) => {
+        await previous;
+        if (discussionState.converged) return;
       await context.emit?.({
         type: "discussion_round_start",
         payload: { round, participants },
@@ -148,16 +150,17 @@ export class DiscussionPattern extends CollaborationPatternBase {
       });
 
       if (evaluation.converged) {
-        converged = true;
-        decision = evaluation.decision;
-        break;
+          discussionState.converged = true;
+          discussionState.decision = evaluation.decision;
       }
-    }
+      },
+      Promise.resolve()
+    );
 
     meetingStateMachine.apply({ type: "decisions.voting.started" });
     meetingStateMachine.apply({ type: "decisions.voting.ended" });
 
-    if (converged) {
+    if (discussionState.converged) {
       meetingStateMachine.apply({
         type: "workflow.consensus.computed",
         payload: { reason: "converged" },
@@ -169,7 +172,7 @@ export class DiscussionPattern extends CollaborationPatternBase {
         output: {
           topic,
           status: "consensus-reached",
-          decision,
+          decision: discussionState.decision,
           rounds,
         },
         metadata: {
@@ -235,13 +238,10 @@ export class DiscussionPattern extends CollaborationPatternBase {
     const input = this.getDiscussionInput(context);
     const roundInput = input.rounds?.[round - 1];
 
-    const opinions: RoundOpinions = {};
-    for (const participant of participants) {
+    return Object.fromEntries(participants.map((participant) => {
       const raw = roundInput?.[participant] ?? input.opinions?.[participant] ?? participant;
-      opinions[participant] = String(raw);
-    }
-
-    return opinions;
+      return [participant, String(raw)];
+    }));
   }
 
   private evaluateConvergence(args: {
@@ -305,9 +305,9 @@ export class DiscussionPattern extends CollaborationPatternBase {
 
   private countOpinions(opinions: DiscussionOpinion[]): Map<string, number> {
     const counts = new Map<string, number>();
-    for (const opinion of opinions) {
+    opinions.forEach((opinion) => {
       counts.set(opinion, (counts.get(opinion) ?? 0) + 1);
-    }
+    });
     return counts;
   }
 

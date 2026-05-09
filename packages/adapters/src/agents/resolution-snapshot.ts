@@ -73,26 +73,26 @@ export function buildAgentResolutionSnapshot({
 }: BuildAgentResolutionSnapshotInput): AgentResolutionSnapshot {
   const layers: AgentResolutionLayer[] = [];
 
-  let resolved: Partial<AgentConfig> = {};
+  const state = { resolved: {} as Partial<AgentConfig> };
 
-  resolved = mergeShallow(resolved, builtinDefaults);
+  state.resolved = mergeShallow(state.resolved, builtinDefaults);
   pushLayer(layers, "builtin-defaults", "Built-in defaults", builtinDefaults);
 
-  resolved = mergeShallow(resolved, authAwareDefaults);
+  state.resolved = mergeShallow(state.resolved, authAwareDefaults);
   pushLayer(layers, "auth-aware-defaults", "Authenticated provider defaults", authAwareDefaults);
 
-  resolved = mergeShallow(resolved, globalConfig.defaults);
+  state.resolved = mergeShallow(state.resolved, globalConfig.defaults);
   pushLayer(layers, "global-defaults", "Global defaults", globalConfig.defaults);
 
-  resolved = mergeShallow(resolved, projectConfig.defaults);
+  state.resolved = mergeShallow(state.resolved, projectConfig.defaults);
   pushLayer(layers, "project-defaults", "Project defaults", projectConfig.defaults);
 
-  const providerName = resolved.provider;
+  const providerName = state.resolved.provider;
   const globalProviderPatch = providerName
     ? providerLayerToPatch(globalConfig.providers?.[providerName])
     : undefined;
-  resolved = applyProviderLayer(
-    resolved,
+  state.resolved = applyProviderLayer(
+    state.resolved,
     providerName ? globalConfig.providers?.[providerName] : undefined
   );
   pushLayer(
@@ -105,8 +105,8 @@ export function buildAgentResolutionSnapshot({
   const projectProviderPatch = providerName
     ? providerLayerToPatch(projectConfig.providers?.[providerName])
     : undefined;
-  resolved = applyProviderLayer(
-    resolved,
+  state.resolved = applyProviderLayer(
+    state.resolved,
     providerName ? projectConfig.providers?.[providerName] : undefined
   );
   pushLayer(
@@ -117,19 +117,19 @@ export function buildAgentResolutionSnapshot({
   );
 
   const globalAgentPatch = globalConfig.agents?.[agentName];
-  resolved = mergeShallow(resolved, globalAgentPatch);
+  state.resolved = mergeShallow(state.resolved, globalAgentPatch);
   pushLayer(layers, "global-agent", `Global agent (${agentName})`, globalAgentPatch);
 
   const projectAgentPatch = projectConfig.agents?.[agentName];
-  resolved = mergeShallow(resolved, projectAgentPatch);
+  state.resolved = mergeShallow(state.resolved, projectAgentPatch);
   pushLayer(layers, "project-agent", `Project agent (${agentName})`, projectAgentPatch);
 
-  if (!resolved.provider || !resolved.model) {
+  if (!state.resolved.provider || !state.resolved.model) {
     const message = `Unable to resolve agent config for '${agentName}': provider/model is required`;
     return {
       agentName,
       status: "unresolved",
-      resolved,
+      resolved: state.resolved,
       layers,
       warnings: ["provider/model is required"],
       failure: {
@@ -142,7 +142,7 @@ export function buildAgentResolutionSnapshot({
   return {
     agentName,
     status: "resolved",
-    resolved,
+    resolved: state.resolved,
     layers,
     warnings: [],
   };

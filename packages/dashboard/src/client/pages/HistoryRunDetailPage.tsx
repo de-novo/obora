@@ -38,20 +38,20 @@ export const HistoryRunDetailPage = ({ runId, onBack }: Props): ReactElement => 
   const auditLimit = 100;
 
   useEffect(() => {
-    let active = true;
+    const requestState = { active: true };
     void fetchHistoryRunDetail(runId, { auditLimit, auditOffset })
       .then((result) => {
-        if (!active) return;
+        if (!requestState.active) return;
         setData(result);
         setError(undefined);
       })
       .catch((err: unknown) => {
-        if (!active) return;
+        if (!requestState.active) return;
         setError(err instanceof Error ? err.message : 'Failed to load run detail');
       });
 
     return () => {
-      active = false;
+      requestState.active = false;
     };
   }, [auditLimit, auditOffset, runId]);
 

@@ -62,7 +62,8 @@ export class NotificationEngine {
   public async processEvent(event: ExecutionEvent): Promise<void> {
     const matchedRules = this.getRules().filter((rule) => this.matches(rule, event));
 
-    for (const rule of matchedRules) {
+    await matchedRules.reduce<Promise<void>>(async (previous, rule) => {
+      await previous;
       const channel = this.getChannel(rule.channel);
       if (!channel) {
         this.logger.error('DASH_11001 Notification channel not found', {
@@ -71,7 +72,7 @@ export class NotificationEngine {
           channel: rule.channel,
           eventType: event.type,
         });
-        continue;
+        return;
       }
 
       try {
@@ -94,7 +95,7 @@ export class NotificationEngine {
           error: error instanceof Error ? error.message : String(error),
         });
       }
-    }
+    }, Promise.resolve());
   }
 
   private matches(rule: NotificationRule, event: ExecutionEvent): boolean {

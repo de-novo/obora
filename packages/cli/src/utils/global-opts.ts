@@ -11,12 +11,10 @@ export interface GlobalOptions {
 }
 
 export function getGlobalOpts(cmd: Command): GlobalOptions {
-  let current: Command | null = cmd;
-  while (current?.parent) {
-    current = current.parent;
-  }
+  const findRoot = (current: Command | null | undefined): Command | undefined =>
+    current?.parent ? findRoot(current.parent) : (current ?? undefined);
 
-  const opts = (current?.opts() ?? {}) as GlobalOptions;
+  const opts = (findRoot(cmd)?.opts() ?? {}) as GlobalOptions;
   const noColor = process.env.NO_COLOR !== undefined || opts.color === false;
 
   formatter.setColorEnabled(!noColor);

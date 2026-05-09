@@ -38,10 +38,7 @@ const inferActor = (data: unknown): string => {
   if (!data || typeof data !== "object") return "system";
   const record = data as Record<string, unknown>;
   const candidates = [record.actor, record.agent, record.voterId, (record.vote as Record<string, unknown> | undefined)?.voterId];
-  for (const v of candidates) {
-    if (typeof v === "string" && v.length > 0) return v;
-  }
-  return "system";
+  return candidates.find((v): v is string => typeof v === "string" && v.length > 0) ?? "system";
 };
 
 const inferStepName = (data: unknown): string => {

@@ -52,9 +52,9 @@ export class PatternRegistry {
     const pluginPatterns = this.pluginFacade.list("pattern") as PatternPlugin[];
     const merged = new Map<string, CollaborationPattern>(pluginPatterns.map((pattern) => [pattern.name, pattern]));
 
-    for (const [name, pattern] of this.patterns.entries()) {
+    this.patterns.forEach((pattern, name) => {
       merged.set(name, pattern);
-    }
+    });
 
     return [...merged.values()];
   }

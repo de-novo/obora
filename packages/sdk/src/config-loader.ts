@@ -21,7 +21,7 @@ interface ConfigSourceMeta {
   sources: string[];
 }
 
-const CONFIG_META_KEY = Symbol.for("obora.config.meta");
+const CONFIG_META_KEY = Symbol["for"]("obora.config.meta");
 
 type ConfigWithMeta = OboraConfig & {
   [CONFIG_META_KEY]?: ConfigSourceMeta;
@@ -188,21 +188,17 @@ async function readConfigFile(path: string): Promise<OboraConfig | undefined> {
 }
 
 async function findNearestProjectConfigPath(startDir: string): Promise<string | undefined> {
-  let currentDir = resolve(startDir);
-
-  while (true) {
+  const findFrom = async (currentDir: string): Promise<string | undefined> => {
     const candidate = join(currentDir, ".obora", "config.yaml");
     if (await fileExists(candidate)) {
       return candidate;
     }
 
     const parentDir = dirname(currentDir);
-    if (parentDir === currentDir) {
-      return undefined;
-    }
+    return parentDir === currentDir ? undefined : findFrom(parentDir);
+  };
 
-    currentDir = parentDir;
-  }
+  return findFrom(resolve(startDir));
 }
 
 export async function loadConfig(configPath?: string): Promise<OboraConfig | undefined> {
@@ -255,30 +251,31 @@ export function resolveProviderConfig(
   const provider = config.providers?.[selectedProviderName];
   const authRef = provider?.authRef;
 
-  let apiKey: string | undefined;
-  if (authRef) {
-    apiKey = authResolver.resolveAuthRef(authRef, {
+  const apiKey = authRef
+    ? authResolver.resolveAuthRef(authRef, {
       verbose: options?.verbose,
       logger: options?.logger,
-    });
-  } else {
-    const fallbackEnv =
-      PROVIDER_ENV_KEY_MAP[selectedProviderName] ??
-      `${selectedProviderName.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_API_KEY`;
-    apiKey = process.env[fallbackEnv];
+    })
+    : (() => {
+      const fallbackEnv =
+        PROVIDER_ENV_KEY_MAP[selectedProviderName] ??
+        `${selectedProviderName.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_API_KEY`;
+      const resolvedApiKey = process.env[fallbackEnv];
 
-    if (options?.verbose) {
-      const sources = (config as ConfigWithMeta)[CONFIG_META_KEY]?.sources ?? [];
-      const sourceInfo = sources.length > 0 ? sources.join(", ") : "unknown source";
-      const msg =
-        `[obora] Provider config for '${selectedProviderName}' has no authRef and no API key was resolved. ` +
-        `Tried env fallback '${fallbackEnv}'. Searched config in: ${sourceInfo}. ` +
-        `Next action: export ${fallbackEnv}=... for first-time setup, or add providers.${selectedProviderName}.authRef to your config.`;
-      if (options?.logger?.warn) {
-        options.logger.warn(msg);
+      if (options?.verbose) {
+        const sources = (config as ConfigWithMeta)[CONFIG_META_KEY]?.sources ?? [];
+        const sourceInfo = sources.length > 0 ? sources.join(", ") : "unknown source";
+        const msg =
+          `[obora] Provider config for '${selectedProviderName}' has no authRef and no API key was resolved. ` +
+          `Tried env fallback '${fallbackEnv}'. Searched config in: ${sourceInfo}. ` +
+          `Next action: export ${fallbackEnv}=... for first-time setup, or add providers.${selectedProviderName}.authRef to your config.`;
+        if (options?.logger?.warn) {
+          options.logger.warn(msg);
+        }
       }
-    }
-  }
+
+      return resolvedApiKey;
+    })();
 
   if (!apiKey) {
     return undefined;

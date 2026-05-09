@@ -37,18 +37,20 @@ export class JudgmentEngine {
   async run(input: StepInput): Promise<EngineResult> {
     const runId = `run-${input.stepId}-${Date.now()}`;
     const trace: string[] = [];
-    let runState: RunState = 'queued';
-    let retryCount = 0;
-    let consecutiveFails = 0;
-    let nextStep: string | undefined;
-    let errorCode: EngineResult['errorCode'];
-    let lastWasTimeout = false;
+    const state = {
+      runState: 'queued' as RunState,
+      retryCount: 0,
+      consecutiveFails: 0,
+      nextStep: undefined as string | undefined,
+      errorCode: undefined as EngineResult['errorCode'],
+      lastWasTimeout: false,
+    };
 
     const transition = (to: RunState, reason: string) => {
-      const from = runState;
+      const from = state.runState;
       trace.push(`${from}->${to}: ${reason}`);
       this.logger.transition({ runId, from, to, reason, timestamp: Date.now() });
-      runState = to;
+      state.runState = to;
     };
 
     const batchStart = Date.now();
@@ -59,7 +61,7 @@ export class JudgmentEngine {
     const applyBatchDeadline = (): boolean => {
       if (!isBatchExpired()) return false;
       // Only running|retried|timeout get converted
-      if (runState === 'running' || runState === 'retried' || runState === 'timeout') {
+      if (state.runState === 'running' || state.runState === 'retried' || state.runState === 'timeout') {
         transition('timeout', 'batchDeadline exceeded');
         return true;
       }
@@ -71,7 +73,7 @@ export class JudgmentEngine {
     if (input.skipCondition) {
       transition('running', 'start');
       transition('skipped', 'skip_condition=true');
-      return { runId, runState, retryCount, decisionTrace: trace };
+      return { runId, runState: state.runState, retryCount: state.retryCount, decisionTrace: trace };
     }
 
     transition('running', 'start');
@@ -80,46 +82,44 @@ export class JudgmentEngine {
     while (true) {
       // Batch deadline check before each attempt
       if (applyBatchDeadline()) {
-        errorCode = 'TIMEOUT';
+        state.errorCode = 'TIMEOUT';
         break;
       }
 
       // Execute judgment with timeout
-      let status: JudgmentStatus;
-      let timedOut = false;
-
-      try {
-        status = await this.executeWithTimeout(input.stepId);
-      } catch {
-        timedOut = true;
-        lastWasTimeout = true;
-        status = 'fail';
-        transition('timeout', `step elapsed > timeoutMs(${this.opts.timeoutMs})`);
-      }
+      const attemptResult = await (async (): Promise<{ status: JudgmentStatus; timedOut: boolean }> => {
+        try {
+          return { status: await this.executeWithTimeout(input.stepId), timedOut: false };
+        } catch {
+          state.lastWasTimeout = true;
+          transition('timeout', `step elapsed > timeoutMs(${this.opts.timeoutMs})`);
+          return { status: 'fail', timedOut: true };
+        }
+      })();
 
       // Enforce batchDeadline AFTER judge execution (not only at loop-top)
       if (applyBatchDeadline()) {
-        errorCode = 'TIMEOUT';
+        state.errorCode = 'TIMEOUT';
         break;
       }
 
-      if (!timedOut && status === 'pass') {
+      if (!attemptResult.timedOut && attemptResult.status === 'pass') {
         transition('done', 'judgmentStatus=pass');
         break;
       }
 
-      if (!timedOut && status === 'fail') {
-        consecutiveFails++;
-        lastWasTimeout = false;
+      if (!attemptResult.timedOut && attemptResult.status === 'fail') {
+        state.consecutiveFails++;
+        state.lastWasTimeout = false;
       }
-      if (timedOut) {
-        consecutiveFails++;
+      if (attemptResult.timedOut) {
+        state.consecutiveFails++;
       }
 
       // Can retry?
-      if (retryCount < this.opts.maxRetries) {
-        retryCount++;
-        transition('retried', `retry ${retryCount}/${this.opts.maxRetries}`);
+      if (state.retryCount < this.opts.maxRetries) {
+        state.retryCount++;
+        transition('retried', `retry ${state.retryCount}/${this.opts.maxRetries}`);
 
         // Backoff
         if (this.opts.backoffMs > 0) {
@@ -135,18 +135,18 @@ export class JudgmentEngine {
       transition('failed', 'retries exhausted');
 
       // Set TIMEOUT errorCode if last attempt was a timeout
-      if (lastWasTimeout) {
-        errorCode = 'TIMEOUT';
+      if (state.lastWasTimeout) {
+        state.errorCode = 'TIMEOUT';
       }
 
       // Precedence: goto > escalation
       if (this.opts.onFail?.goto) {
         const target = this.opts.onFail.goto;
         if (input.validTargets?.includes(target)) {
-          nextStep = target;
+          state.nextStep = target;
           transition('done', `goto(${target})`);
         } else {
-          errorCode = 'GOTO_TARGET_NOT_FOUND';
+          state.errorCode = 'GOTO_TARGET_NOT_FOUND';
           trace.push(`goto target "${target}" not found in validTargets`);
         }
         break;
@@ -154,17 +154,24 @@ export class JudgmentEngine {
 
       // Escalation check (only if goto not applied)
       const threshold = this.opts.onFail?.escalateAfterConsecutiveFails ?? 2;
-      if (consecutiveFails >= threshold) {
-        transition('needs-human-review', `consecutiveFails(${consecutiveFails}) >= threshold(${threshold})`);
+      if (state.consecutiveFails >= threshold) {
+        transition('needs-human-review', `consecutiveFails(${state.consecutiveFails}) >= threshold(${threshold})`);
       } else if (this.opts.onFail?.escalateAfterConsecutiveFails !== undefined) {
         // Escalation was configured but threshold not met
-        errorCode = 'ESCALATION_FAILED';
+        state.errorCode = 'ESCALATION_FAILED';
       }
 
       break;
     }
 
-    return { runId, runState, retryCount, nextStep, errorCode, decisionTrace: trace };
+    return {
+      runId,
+      runState: state.runState,
+      retryCount: state.retryCount,
+      nextStep: state.nextStep,
+      errorCode: state.errorCode,
+      decisionTrace: trace,
+    };
   }
 
   /**

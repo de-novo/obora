@@ -206,18 +206,18 @@ export class BrainstormPattern extends CollaborationPatternBase {
   }
 
   private exactDedup(ideas: IdeaRecord[]): IdeaRecord[] {
-    const seen = new Set<string>();
-    const result: IdeaRecord[] = [];
+    return ideas.reduce<{ seen: Set<string>; result: IdeaRecord[] }>(
+      (state, idea) => {
+        if (state.seen.has(idea.text)) {
+          return state;
+        }
 
-    for (const idea of ideas) {
-      if (seen.has(idea.text)) {
-        continue;
-      }
-      seen.add(idea.text);
-      result.push(idea);
-    }
-
-    return result;
+        state.seen.add(idea.text);
+        state.result.push(idea);
+        return state;
+      },
+      { seen: new Set<string>(), result: [] }
+    ).result;
   }
 
   private async rankIdeas(
@@ -237,22 +237,22 @@ export class BrainstormPattern extends CollaborationPatternBase {
 
     const ranked = ideas
       .map((idea) => {
-        const scoresByParticipant: Record<string, number> = {};
-        let sum = 0;
-
-        for (const participant of participants) {
-          const rawScore = input.evaluations?.[participant]?.[idea.text];
-          const numericScore = typeof rawScore === "number" ? rawScore : Number(rawScore ?? 0);
-          const safeScore = Number.isFinite(numericScore) ? numericScore : 0;
-          scoresByParticipant[participant] = safeScore;
-          sum += safeScore;
-        }
+        const scores = participants.reduce<{ scoresByParticipant: Record<string, number>; sum: number }>(
+          (state, participant) => {
+            const rawScore = input.evaluations?.[participant]?.[idea.text];
+            const numericScore = typeof rawScore === "number" ? rawScore : Number(rawScore ?? 0);
+            const safeScore = Number.isFinite(numericScore) ? numericScore : 0;
+            state.scoresByParticipant[participant] = safeScore;
+            return { scoresByParticipant: state.scoresByParticipant, sum: state.sum + safeScore };
+          },
+          { scoresByParticipant: {}, sum: 0 }
+        );
 
         const divisor = participants.length === 0 ? 1 : participants.length;
         return {
           ...idea,
-          score: sum / divisor,
-          scores_by_participant: scoresByParticipant,
+          score: scores.sum / divisor,
+          scores_by_participant: scores.scoresByParticipant,
         };
       })
       .sort((a, b) => b.score - a.score || a.id.localeCompare(b.id))

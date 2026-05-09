@@ -54,17 +54,15 @@ export const registerDLQRoutes = (
     };
 
     const snapshot = await loadDLQ(dlqPath);
-    let entries = snapshot.entries;
+    const filteredEntries = status
+      ? snapshot.entries.filter((e) => e.status === status)
+      : snapshot.entries;
 
-    if (status) {
-      entries = entries.filter((e) => e.status === status);
-    }
-
-    const total = entries.length;
+    const total = filteredEntries.length;
     const limitNum = parseInt(limit ?? '50', 10);
     const offsetNum = parseInt(offset ?? '0', 10);
 
-    entries = entries
+    const entries = filteredEntries
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .slice(offsetNum, offsetNum + limitNum);
 

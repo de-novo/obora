@@ -57,10 +57,10 @@ export function applyReflectorRepairActions({
     return;
   }
 
-  for (const actionResult of lastOutput.actions) {
+  lastOutput.actions.forEach((actionResult) => {
     const pending = getPendingReflectorAction(actionResult.metadata);
     if (!pending) {
-      continue;
+      return;
     }
 
     if (pending.type === "abort") {
@@ -72,7 +72,7 @@ export function applyReflectorRepairActions({
     if (pending.type === "force_target") {
       const target = String(pending.payload.target ?? "");
       if (!target || !stepIndexByName.has(target)) {
-        continue;
+        return;
       }
 
       config.logger?.info?.(`[reflector] force_target -> ${target}`);
@@ -85,5 +85,5 @@ export function applyReflectorRepairActions({
         );
       }
     }
-  }
+  });
 }

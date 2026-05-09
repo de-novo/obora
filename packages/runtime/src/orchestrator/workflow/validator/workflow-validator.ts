@@ -247,7 +247,7 @@ export function validateSchema(workflow: unknown): ValidationError[] {
 
   const valid = workflowValidate(workflow);
   if (!valid && workflowValidate.errors) {
-    for (const err of workflowValidate.errors) {
+    workflowValidate.errors.forEach((err) => {
       errors.push({
         code: ValidationErrorCode.INVALID_SCHEMA,
         message: err.message || "Invalid schema",
@@ -255,7 +255,7 @@ export function validateSchema(workflow: unknown): ValidationError[] {
         line: getLineNumberFromPath(err.instancePath || ""),
         suggestion: getSuggestion(err),
       });
-    }
+    });
   }
 
   return errors;
@@ -289,9 +289,9 @@ export function validateCircularDependencies(steps: Step[]): ValidationError[] {
 
   // Build simple graph for cycle detection
   const graph = new Map<string, string[]>();
-  for (const step of steps) {
+  steps.forEach((step) => {
     graph.set(step.name, step.depends_on || []);
-  }
+  });
 
   // Use detectCycles from graph module
   const { hasCycle, cyclePath } = detectCycles({
@@ -318,7 +318,7 @@ export function validateCircularDependencies(steps: Step[]): ValidationError[] {
 export function validateSelfReferences(steps: Step[]): ValidationError[] {
   const errors: ValidationError[] = [];
 
-  for (const step of steps) {
+  steps.forEach((step) => {
     if (step.depends_on?.includes(step.name)) {
       errors.push({
         code: ValidationErrorCode.SELF_REFERENCE,
@@ -327,7 +327,7 @@ export function validateSelfReferences(steps: Step[]): ValidationError[] {
         suggestion: `Remove '${step.name}' from its own dependencies`,
       });
     }
-  }
+  });
 
   return errors;
 }
@@ -339,9 +339,9 @@ export function validateMissingReferences(steps: Step[]): ValidationError[] {
   const errors: ValidationError[] = [];
   const stepNames = new Set(steps.map((s) => s.name));
 
-  for (const step of steps) {
+  steps.forEach((step) => {
     if (step.depends_on) {
-      for (const dep of step.depends_on) {
+      step.depends_on.forEach((dep) => {
         if (!stepNames.has(dep)) {
           errors.push({
             code: ValidationErrorCode.MISSING_REFERENCE,
@@ -350,9 +350,9 @@ export function validateMissingReferences(steps: Step[]): ValidationError[] {
             suggestion: `Create step '${dep}' or remove the dependency`,
           });
         }
-      }
+      });
     }
-  }
+  });
 
   return errors;
 }
@@ -366,24 +366,24 @@ export function validateInputs(steps: Step[]): ValidationError[] {
 
   // Collect all outputs
   const availableOutputs = new Set<string>();
-  for (const step of steps) {
+  steps.forEach((step) => {
     if (step.outputs) {
-      for (const output of step.outputs) {
+      step.outputs.forEach((output) => {
         availableOutputs.add(output);
-      }
+      });
     }
-  }
+  });
 
   // Spec files that don't need to be produced by a step
   const specFiles = ["proposal.md", "design.md", "tasks.md", "status.yaml"];
 
   // Check inputs
-  for (const step of steps) {
+  steps.forEach((step) => {
     if (step.inputs) {
-      for (const input of step.inputs) {
+      step.inputs.forEach((input) => {
         const filename = input.split("/").pop() || input;
         if (specFiles.includes(filename)) {
-          continue;
+          return;
         }
 
         if (!availableOutputs.has(input)) {
@@ -394,9 +394,9 @@ export function validateInputs(steps: Step[]): ValidationError[] {
             suggestion: `Add a step that produces '${input}' or remove it from inputs`,
           });
         }
-      }
+      });
     }
-  }
+  });
 
   return [...errors, ...warnings];
 }

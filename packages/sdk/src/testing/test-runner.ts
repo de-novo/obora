@@ -63,7 +63,7 @@ export async function runWorkflowTest(caseDef: WorkflowTestCase): Promise<TestRe
   const agents = new Map((caseDef.mocks?.agents ?? []).map((agent) => [agent.name, agent]));
   const tools = new Map((caseDef.mocks?.tools ?? []).map((tool) => [tool.name, tool]));
 
-  let status: "completed" | "failed" | "waiting" = "completed";
+  type WorkflowTestStatus = "completed" | "failed" | "waiting";
   const outputs = new Map<string, unknown>();
 
   emit("execution_start", {
@@ -73,16 +73,15 @@ export async function runWorkflowTest(caseDef: WorkflowTestCase): Promise<TestRe
     input: caseDef.input,
   });
 
-  for (const step of workflow.steps) {
-    if (status !== "completed") {
-      break;
+  const executeStep = async (stepIndex: number): Promise<WorkflowTestStatus> => {
+    const step = workflow.steps[stepIndex];
+    if (!step) {
+      return "completed";
     }
-
     const dependencyError = validateDependencies(step, outputs);
     if (dependencyError) {
-      status = "failed";
       addError(dependencyError);
-      break;
+      return "failed";
     }
 
     emit("step_start", {
@@ -92,25 +91,23 @@ export async function runWorkflowTest(caseDef: WorkflowTestCase): Promise<TestRe
     });
 
     if (step.gate) {
-      status = "waiting";
       emit("gate_wait", {
         stepName: step.name,
         gate: step.gate,
       });
-      break;
+      return "waiting";
     }
 
     try {
       if (step.agent) {
         const agent = agents.get(step.agent);
         if (!agent) {
-          status = "failed";
           addError({
             code: OboraErrorCode.ORCH_STEP_NOT_FOUND,
             message: `Mock agent not registered: ${step.agent}`,
             stepName: step.name,
           });
-          break;
+          return "failed";
         }
 
         const result = await agent.execute({
@@ -126,13 +123,12 @@ export async function runWorkflowTest(caseDef: WorkflowTestCase): Promise<TestRe
       if (step.tool) {
         const tool = tools.get(step.tool);
         if (!tool) {
-          status = "failed";
           addError({
             code: OboraErrorCode.ADAPTER_TOOL_NOT_FOUND,
             message: `Mock tool not registered: ${step.tool}`,
             stepName: step.name,
           });
-          break;
+          return "failed";
         }
 
         const toolInput = extractToolInput(step, caseDef.input, outputs);
@@ -160,16 +156,18 @@ export async function runWorkflowTest(caseDef: WorkflowTestCase): Promise<TestRe
         status: "completed",
         output: outputs.get(step.name),
       });
+      return executeStep(stepIndex + 1);
     } catch (error) {
-      status = "failed";
       addError({
         code: OboraErrorCode.SDK_UNKNOWN_ERROR,
         message: error instanceof Error ? error.message : "Unknown test runner error",
         stepName: step.name,
       });
-      break;
+      return "failed";
     }
-  }
+  };
+
+  const status = await executeStep(0);
 
   emit("execution_end", {
     workflow: workflow.name,
@@ -186,7 +184,7 @@ export async function runWorkflowTest(caseDef: WorkflowTestCase): Promise<TestRe
     });
   }
 
-  for (const expectedEvent of caseDef.expect.events ?? []) {
+  (caseDef.expect.events ?? []).forEach((expectedEvent) => {
     const actual = collectedEvents.find(
       (event) => event.type === expectedEvent.type && containsSubset(event.payload, expectedEvent.contains),
     );
@@ -199,9 +197,9 @@ export async function runWorkflowTest(caseDef: WorkflowTestCase): Promise<TestRe
         message: `Expected event '${expectedEvent.type}' with matching payload was not emitted`,
       });
     }
-  }
+  });
 
-  for (const expectedError of caseDef.expect.errors ?? []) {
+  (caseDef.expect.errors ?? []).forEach((expectedError) => {
     const actual = collectedErrors.find((error) => error.code === expectedError.code);
     if (!actual) {
       failures.push({
@@ -211,7 +209,7 @@ export async function runWorkflowTest(caseDef: WorkflowTestCase): Promise<TestRe
         message: `Expected error code '${expectedError.code}' was not produced`,
       });
     }
-  }
+  });
 
   const duration = Date.now() - startTime;
 
@@ -233,14 +231,13 @@ async function resolveWorkflow(workflow: WorkflowDef | string): Promise<Workflow
 }
 
 function validateDependencies(step: WorkflowStep, outputs: Map<string, unknown>): CollectedError | null {
-  for (const dep of step.depends_on ?? []) {
-    if (!outputs.has(dep)) {
-      return {
-        code: OboraErrorCode.ORCH_DEPENDENCY_FAILED,
-        message: `Dependency not completed: ${dep}`,
-        stepName: step.name,
-      };
-    }
+  const missingDependency = (step.depends_on ?? []).find((dep) => !outputs.has(dep));
+  if (missingDependency) {
+    return {
+      code: OboraErrorCode.ORCH_DEPENDENCY_FAILED,
+      message: `Dependency not completed: ${missingDependency}`,
+      stepName: step.name,
+    };
   }
 
   return null;

@@ -91,12 +91,8 @@ const asObject = (value: unknown): Record<string, unknown> | undefined => {
 };
 
 const pick = (obj: Record<string, unknown>, keys: string[]): unknown => {
-  for (const key of keys) {
-    if (key in obj) {
-      return obj[key];
-    }
-  }
-  return undefined;
+  const key = keys.find((candidate) => candidate in obj);
+  return key ? obj[key] : undefined;
 };
 
 const extractErrorDetail = (event: ExecutionEvent, payload: Record<string, unknown>): StepErrorDetail | undefined => {
@@ -172,10 +168,10 @@ export const getBlackboardDiffPaths = (prev: unknown, next: unknown): string[] =
     }
 
     const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
-    for (const key of keys) {
+    keys.forEach((key) => {
       const nextPath = basePath ? `${basePath}.${key}` : key;
       walk(left[key], right[key], nextPath);
-    }
+    });
   };
 
   walk(prev, next, '');
@@ -285,13 +281,11 @@ export const getExecutionSummaries = (state: ExecutionStoreState): ExecutionSumm
 type Listener = () => void;
 
 const createExecutionStore = () => {
-  let state = createInitialExecutionStoreState();
+  const store = { state: createInitialExecutionStoreState() };
   const listeners = new Set<Listener>();
 
   const emit = (): void => {
-    for (const listener of listeners) {
-      listener();
-    }
+    listeners.forEach((listener) => listener());
   };
 
   return {
@@ -300,14 +294,14 @@ const createExecutionStore = () => {
       return () => listeners.delete(listener);
     },
     getState(): ExecutionStoreState {
-      return state;
+      return store.state;
     },
     reset(): void {
-      state = createInitialExecutionStoreState();
+      store.state = createInitialExecutionStoreState();
       emit();
     },
     receiveEvent(event: ExecutionEvent): void {
-      state = applyExecutionEvent(state, event);
+      store.state = applyExecutionEvent(store.state, event);
       emit();
     },
   };

@@ -252,8 +252,7 @@ export class Workflow {
     Workflow.validateHooks(def.hooks, "workflow");
 
     const steps = def.steps as unknown[];
-    const seenStepNames = new Set<string>();
-    for (const step of steps) {
+    const seenStepNames = steps.reduce<Set<string>>((seen, step) => {
       if (!step || typeof step !== "object") {
         throw OboraError.invalidWorkflow("Each workflow step must be an object");
       }
@@ -264,13 +263,14 @@ export class Workflow {
 
       Workflow.validateHooks(s.hooks, `step '${s.name}'`);
 
-      if (seenStepNames.has(s.name)) {
+      if (seen.has(s.name)) {
         throw OboraError.invalidWorkflow(`Duplicate workflow step name: ${s.name}`);
       }
-      seenStepNames.add(s.name);
-    }
+      seen.add(s.name);
+      return seen;
+    }, new Set<string>());
 
-    for (const step of steps) {
+    steps.forEach((step) => {
       const s = step as Record<string, unknown>;
       const onFail = s.on_fail as Record<string, unknown> | undefined;
       if (onFail?.goto !== undefined) {
@@ -279,7 +279,7 @@ export class Workflow {
           throw OboraError.invalidWorkflow(routeError);
         }
       }
-    }
+    });
 
     return compiled as WorkflowDef;
   }
@@ -298,10 +298,10 @@ export class Workflow {
     }
 
     const hooks = input as Record<string, unknown>;
-    for (const key of WORKFLOW_HOOK_KEYS) {
+    WORKFLOW_HOOK_KEYS.forEach((key) => {
       const hook = hooks[key];
       if (hook === undefined) {
-        continue;
+        return;
       }
       if (
         !hook ||
@@ -311,6 +311,6 @@ export class Workflow {
       ) {
         throw OboraError.invalidWorkflow(`${owner} hook '${key}' must define a shell string`);
       }
-    }
+    });
   }
 }

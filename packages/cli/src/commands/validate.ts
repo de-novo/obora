@@ -74,19 +74,24 @@ function buildOneFileValidationSuggestion(filePath: string): string {
 }
 
 function validateFileContent(content: string, filePath: string): ValidationResult {
-  let parsed: unknown;
-  try {
-    parsed = parseYaml(content);
-  } catch {
+  const parsed = (() => {
+    try {
+      return { ok: true as const, value: parseYaml(content) as unknown };
+    } catch {
+      return { ok: false as const };
+    }
+  })();
+
+  if (!parsed.ok) {
     return parseAndValidate(content);
   }
 
-  if (!Workflow.getStopSemantics(parsed)) {
+  if (!Workflow.getStopSemantics(parsed.value)) {
     return parseAndValidate(content);
   }
 
   try {
-    Workflow.create(parsed);
+    Workflow.create(parsed.value);
     return {
       isValid: true,
       errors: [],
@@ -137,27 +142,24 @@ function findWorkflowFiles(dir: string): string[] {
     return [];
   }
 
-  let entries: fs.Dirent[];
-  try {
-    entries = fs.readdirSync(dir, { withFileTypes: true }) as fs.Dirent[];
-  } catch (error) {
-    throw new CLIError(
-      `Failed to scan workflow directory: ${dir}: ${error instanceof Error ? error.message : String(error)}`,
-      ExitCode.EXECUTION_FAILED
-    );
-  }
+  const entries = (() => {
+    try {
+      return fs.readdirSync(dir, { withFileTypes: true }) as fs.Dirent[];
+    } catch (error) {
+      throw new CLIError(
+        `Failed to scan workflow directory: ${dir}: ${error instanceof Error ? error.message : String(error)}`,
+        ExitCode.EXECUTION_FAILED
+      );
+    }
+  })();
 
-  const files: string[] = [];
-  for (const entry of entries) {
+  return entries.flatMap((entry) => {
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      files.push(...findWorkflowFiles(fullPath));
-    } else if (entry.name.endsWith(".yaml") || entry.name.endsWith(".yml")) {
-      files.push(fullPath);
+      return findWorkflowFiles(fullPath);
     }
-  }
-
-  return files.sort();
+    return entry.name.endsWith(".yaml") || entry.name.endsWith(".yml") ? [fullPath] : [];
+  }).sort();
 }
 
 function resolveValidateFiles(selection: ValidateTargetSelection): string[] {
@@ -178,15 +180,16 @@ function resolveValidateFiles(selection: ValidateTargetSelection): string[] {
   }
 
   if (requestedTarget) {
-    let resolvedPath: string;
-    try {
-      resolvedPath = validatePath(requestedTarget, process.cwd());
-    } catch {
-      throw new CLIError(
-        `Invalid validate file path: ${requestedTarget}`,
-        ExitCode.VALIDATION_ERROR
-      );
-    }
+    const resolvedPath = (() => {
+      try {
+        return validatePath(requestedTarget, process.cwd());
+      } catch {
+        throw new CLIError(
+          `Invalid validate file path: ${requestedTarget}`,
+          ExitCode.VALIDATION_ERROR
+        );
+      }
+    })();
 
     if (!fs.existsSync(resolvedPath)) {
       throw new CLIError(`Validate file not found: ${requestedTarget}`, ExitCode.VALIDATION_ERROR);
@@ -203,49 +206,45 @@ function resolveValidateFiles(selection: ValidateTargetSelection): string[] {
 }
 
 function summarizeResults(results: Map<string, ValidationResult>): ValidateSummary {
-  let passed = 0;
-  let failed = 0;
-  let warnings = 0;
-
-  for (const result of results.values()) {
-    if (result.errors.length > 0) {
-      failed += 1;
-    } else {
-      passed += 1;
-    }
-    warnings += result.warnings.length;
-  }
-
-  return {
-    total: results.size,
-    passed,
-    failed,
-    warnings,
-  };
+  return Array.from(results.values()).reduce<ValidateSummary>(
+    (summary, result) => ({
+      total: summary.total,
+      passed: summary.passed + (result.errors.length > 0 ? 0 : 1),
+      failed: summary.failed + (result.errors.length > 0 ? 1 : 0),
+      warnings: summary.warnings + result.warnings.length,
+    }),
+    { total: results.size, passed: 0, failed: 0, warnings: 0 }
+  );
 }
 
 function buildJsonPayload(
   files: string[],
   results: Map<string, ValidationResult>
 ): Record<string, unknown> {
-  const output: Record<
+  const output = Object.fromEntries(
+    files.flatMap((file) => {
+      const result = results.get(file);
+      return result
+        ? [
+            [
+              file,
+              {
+                valid: result.isValid,
+                errors: result.errors,
+                warnings: result.warnings,
+              },
+            ] as const,
+          ]
+        : [];
+    })
+  ) as Record<
     string,
     {
       valid: boolean;
       errors: ValidationError[];
       warnings: ValidationError[];
     }
-  > = {};
-
-  for (const file of files) {
-    const result = results.get(file);
-    if (!result) continue;
-    output[file] = {
-      valid: result.isValid,
-      errors: result.errors,
-      warnings: result.warnings,
-    };
-  }
+  >;
 
   return {
     summary: summarizeResults(results),
@@ -260,30 +259,30 @@ function printTextResults(
 ): void {
   const summary = summarizeResults(results);
 
-  for (const file of files) {
+  files.forEach((file) => {
     const result = results.get(file);
-    if (!result) continue;
+    if (!result) return;
 
     console.log("");
     console.log(`${SYMBOLS.info} Checking ${path.relative(process.cwd(), file)}`);
 
     if (result.errors.length === 0 && result.warnings.length === 0) {
       console.log(`${SYMBOLS.success} Valid - no issues`);
-      continue;
+      return;
     }
 
-    for (const error of result.errors) {
+    result.errors.forEach((error) => {
       console.log(formatIssue("error", error, file));
-    }
+    });
 
-    for (const warning of result.warnings) {
+    result.warnings.forEach((warning) => {
       console.log(formatIssue("warning", warning, file));
-    }
+    });
 
     if (options.verbose && result.errors.length === 0 && result.warnings.length > 0) {
       console.log(`${SYMBOLS.info} Detailed validation warnings printed above.`);
     }
-  }
+  });
 
   console.log("");
   console.log("Results:");
@@ -316,10 +315,9 @@ export async function runValidate(
     return;
   }
 
-  const results = new Map<string, ValidationResult>();
-  for (const file of files) {
-    results.set(file, validateFile(file));
-  }
+  const results = new Map<string, ValidationResult>(
+    files.map((file) => [file, validateFile(file)] as const)
+  );
 
   const summary = summarizeResults(results);
 

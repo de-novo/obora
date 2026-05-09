@@ -19,14 +19,14 @@ import type {
 
 // Lazy import to keep better-sqlite3 optional at runtime
 type BetterSqlite3Ctor = typeof import("better-sqlite3");
-let Database: BetterSqlite3Ctor;
+const databaseState: { ctor?: BetterSqlite3Ctor } = {};
 
 async function loadDatabase() {
-  if (!Database) {
+  if (!databaseState.ctor) {
     const mod = await import("better-sqlite3");
-    Database = mod.default as unknown as BetterSqlite3Ctor;
+    databaseState.ctor = mod.default as unknown as BetterSqlite3Ctor;
   }
-  return Database;
+  return databaseState.ctor;
 }
 
 export interface SQLiteStorageAdapterOptions {

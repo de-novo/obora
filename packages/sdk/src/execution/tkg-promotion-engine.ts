@@ -56,13 +56,16 @@ export class TKGPromotionEngine {
     _executionId: string
   ): Promise<void> {
     if (!store || scopes.length === 0) return;
-    for (const scope of scopes) {
-      if (typeof store.merge === "function") {
-        await store.merge(scope, snapshot);
-      } else {
-        await store.save(scope, snapshot);
-      }
-    }
+    await scopes.reduce<Promise<void>>(
+      (previous, scope) => previous.then(async () => {
+        if (typeof store.merge === "function") {
+          await store.merge(scope, snapshot);
+        } else {
+          await store.save(scope, snapshot);
+        }
+      }),
+      Promise.resolve()
+    );
   }
 
   async flushTKGPromotionCheckpoint(params: {
@@ -102,17 +105,17 @@ export class TKGPromotionEngine {
 
     const evaluationScope = tkgProjectionScopes.at(-1)!;
     const loadedStagingSnapshot = await stagingTKGStore.load(evaluationScope);
-    let stagingSnapshot = loadedStagingSnapshot;
-
-    if (pendingEvent) {
-      const pendingNode = projectAuditEventToTemporalNode(pendingEvent, workflowName);
-      stagingSnapshot = {
+    const stagingSnapshot = pendingEvent
+      ? (() => {
+        const pendingNode = projectAuditEventToTemporalNode(pendingEvent, workflowName);
+        return {
         nodes: [
           ...(loadedStagingSnapshot?.nodes ?? []).filter((node) => node.id !== pendingNode.id),
           pendingNode,
         ],
-      };
-    }
+        };
+      })()
+      : loadedStagingSnapshot;
 
     if (!stagingSnapshot) {
       return;
@@ -171,13 +174,12 @@ export class TKGPromotionEngine {
       );
 
       if (promotionSnapshot.knowledge.facts.length > 0) {
-        const rollbackEntries: TKGRollbackEntry[] = [];
-
-        for (const scope of promotionApplyScopes) {
-          if (tkgRollbackStore) {
-            const existingSnapshot = await sharedMemoryStore.load(scope);
-            if (existingSnapshot) {
-              const rollbackEntry: TKGRollbackEntry = {
+        const rollbackEntries = await promotionApplyScopes.reduce<Promise<TKGRollbackEntry[]>>(
+          async (previous, scope) => {
+            const entries = await previous;
+            const existingSnapshot = tkgRollbackStore ? await sharedMemoryStore.load(scope) : undefined;
+            const rollbackEntry: TKGRollbackEntry | undefined = existingSnapshot
+              ? {
                 id: this.buildDeterministicTKGId([
                   "rollback",
                   executionId,
@@ -191,8 +193,10 @@ export class TKGPromotionEngine {
                 scope: `${scope.level}:${scope.key}`,
                 reason: "pre-tkg-promotion-apply",
                 snapshot: existingSnapshot,
-              };
+              }
+              : undefined;
 
+            if (rollbackEntry && tkgRollbackStore) {
               if (typeof tkgRollbackStore.append === "function") {
                 await tkgRollbackStore.append(scope, rollbackEntry);
               } else {
@@ -201,16 +205,18 @@ export class TKGPromotionEngine {
                   entries: [...(existing?.entries ?? []), rollbackEntry],
                 });
               }
-              rollbackEntries.push(rollbackEntry);
             }
-          }
 
-          if (typeof sharedMemoryStore.merge === "function") {
-            await sharedMemoryStore.merge(scope, promotionSnapshot);
-          } else {
-            await sharedMemoryStore.save(scope, promotionSnapshot);
-          }
-        }
+            if (typeof sharedMemoryStore.merge === "function") {
+              await sharedMemoryStore.merge(scope, promotionSnapshot);
+            } else {
+              await sharedMemoryStore.save(scope, promotionSnapshot);
+            }
+
+            return rollbackEntry ? [...entries, rollbackEntry] : entries;
+          },
+          Promise.resolve([])
+        );
 
         const applySummary = summarizeTKGPromotionApply(promotionSnapshot);
         execution.outputs.__tkg_promotion_apply__ = {

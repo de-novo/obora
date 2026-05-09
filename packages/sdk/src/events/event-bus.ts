@@ -71,11 +71,16 @@ export class EventBus {
     type?: AuditEventType | AuditEventType[];
   }): AsyncIterableIterator<AuditEvent> {
     const queue: AuditEvent[] = [];
-    let resolve: ((value: IteratorResult<AuditEvent>) => void) | null = null;
-    let done = false;
+    const streamState: {
+      resolve: ((value: IteratorResult<AuditEvent>) => void) | null;
+      done: boolean;
+    } = {
+      resolve: null,
+      done: false,
+    };
 
     const handler = (event: AuditEvent) => {
-      if (done) return;
+      if (streamState.done) return;
 
       if (filter?.executionId && event.executionId !== filter.executionId) return;
 
@@ -84,9 +89,9 @@ export class EventBus {
         if (!types.includes(event.type)) return;
       }
 
-      if (resolve) {
-        const pending = resolve;
-        resolve = null;
+      if (streamState.resolve) {
+        const pending = streamState.resolve;
+        streamState.resolve = null;
         pending({ value: event, done: false });
       } else {
         queue.push(event);
@@ -96,11 +101,11 @@ export class EventBus {
     this.anyHandlers.add(handler);
 
     const close = () => {
-      done = true;
+      streamState.done = true;
       this.anyHandlers.delete(handler);
-      if (resolve) {
-        const pending = resolve;
-        resolve = null;
+      if (streamState.resolve) {
+        const pending = streamState.resolve;
+        streamState.resolve = null;
         pending({ value: undefined, done: true });
       }
     };
@@ -113,11 +118,11 @@ export class EventBus {
         if (queue.length > 0) {
           return { value: queue.shift()!, done: false };
         }
-        if (done) {
+        if (streamState.done) {
           return { value: undefined, done: true };
         }
         return await new Promise<IteratorResult<AuditEvent>>((nextResolve) => {
-          resolve = nextResolve;
+          streamState.resolve = nextResolve;
         });
       },
       async return() {

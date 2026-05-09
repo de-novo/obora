@@ -63,30 +63,64 @@ fi
 [[ "$PROJECT" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "--project must match ^[A-Za-z0-9._-]+$"; exit 2; }
 
 IFS=',' read -r -a MODELS <<< "$MODEL_IDS"
-for m in "${MODELS[@]}"; do
-  key="MODEL_CMD_$(echo "$m" | tr '[:lower:]-' '[:upper:]_')"
+check_model_commands() {
+  local index="${1:-0}"
+  if (( index >= ${#MODELS[@]} )); then
+    return
+  fi
+
+  local m="${MODELS[$index]}"
+  local key="MODEL_CMD_$(echo "$m" | tr '[:lower:]-' '[:upper:]_')"
   if [[ -z "${!key:-}" ]]; then
     echo "${key} is required" >&2
     exit 2
   fi
-done
+
+  check_model_commands "$((index + 1))"
+}
+
+check_model_commands
 : "${FIX_CMD:?FIX_CMD is required for full-auto fix loop}"
 
-for ((round=1; round<=MAX_ROUNDS; round++)); do
+launch_model_reviews() {
+  local index="${1:-0}"
+  if (( index >= ${#MODELS[@]} )); then
+    return
+  fi
+
+  local m="${MODELS[$index]}"
+  local key="MODEL_CMD_$(echo "$m" | tr '[:lower:]-' '[:upper:]_')"
+  local cmd="${!key}"
+  bash -lc "$cmd" > "$base/${m}.json" &
+  pids+=("$!")
+
+  launch_model_reviews "$((index + 1))"
+}
+
+wait_for_review_pids() {
+  local index="${1:-0}"
+  if (( index >= ${#pids[@]} )); then
+    return
+  fi
+
+  wait "${pids[$index]}"
+  wait_for_review_pids "$((index + 1))"
+}
+
+run_round() {
+  local round="$1"
+  if (( round > MAX_ROUNDS )); then
+    echo "[FAIL] task gate failed after ${MAX_ROUNDS} rounds"
+    exit 1
+  fi
+
   base=".review-gate/tasks/${TASK_ID}/stage-${STAGE}/round-${round}"
   mkdir -p "$base"
 
   echo "[Round ${round}] running model reviews (parallel)..."
   pids=()
-  for m in "${MODELS[@]}"; do
-    key="MODEL_CMD_$(echo "$m" | tr '[:lower:]-' '[:upper:]_')"
-    cmd="${!key}"
-    bash -lc "$cmd" > "$base/${m}.json" &
-    pids+=("$!")
-  done
-  for pid in "${pids[@]}"; do
-    wait "$pid"
-  done
+  launch_model_reviews
+  wait_for_review_pids
 
   echo "[Round ${round}] evaluating gate..."
   if bash scripts/review-gate-task.sh \
@@ -109,7 +143,8 @@ for ((round=1; round<=MAX_ROUNDS; round++)); do
       exit 1
     fi
   fi
-done
 
-echo "[FAIL] task gate failed after ${MAX_ROUNDS} rounds"
-exit 1
+  run_round "$((round + 1))"
+}
+
+run_round 1

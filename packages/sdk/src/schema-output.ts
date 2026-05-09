@@ -90,10 +90,9 @@ function findSchemaMismatchReasonAtPath(
       ? (items as Record<string, unknown>)
       : undefined;
     if (itemSchema) {
-      for (const [index, item] of candidate.entries()) {
-        const reason = findSchemaMismatchReasonAtPath(item, itemSchema, `${path}[${index}]`);
-        if (reason) return reason;
-      }
+      return candidate
+        .map((item, index) => findSchemaMismatchReasonAtPath(item, itemSchema, `${path}[${index}]`))
+        .find((reason): reason is string => Boolean(reason));
     }
     return undefined;
   }
@@ -114,14 +113,16 @@ function findSchemaMismatchReasonAtPath(
 
   const properties = schema?.properties;
   if (properties && typeof properties === "object" && !Array.isArray(properties)) {
-    for (const [key, rawProp] of Object.entries(properties as Record<string, unknown>)) {
-      if (candidateRecord[key] === undefined) continue;
-      if (!rawProp || typeof rawProp !== "object" || Array.isArray(rawProp)) continue;
+    return Object.entries(properties as Record<string, unknown>)
+      .flatMap(([key, rawProp]) => {
+        if (candidateRecord[key] === undefined) return [];
+        if (!rawProp || typeof rawProp !== "object" || Array.isArray(rawProp)) return [];
       const prop = rawProp as Record<string, unknown>;
       const nextPath = path ? `${path}.${key}` : key;
-      const reason = findSchemaMismatchReasonAtPath(candidateRecord[key], prop, nextPath);
-      if (reason) return reason;
-    }
+        const reason = findSchemaMismatchReasonAtPath(candidateRecord[key], prop, nextPath);
+        return reason ? [reason] : [];
+      })
+      .at(0);
   }
 
   return undefined;

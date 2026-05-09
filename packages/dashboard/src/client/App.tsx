@@ -94,11 +94,9 @@ const DashboardView = (): ReactElement => {
     executionStore.reset();
 
     const pageSize = 500;
-    let offset = 0;
-
-    while (true) {
+    const syncPage = async (offset: number): Promise<void> => {
       const result = await fetchAuditEvents({ limit: pageSize, offset });
-      for (const event of result.events) {
+      result.events.forEach((event) => {
         executionStore.receiveEvent({
           id: event.id,
           executionId: event.executionId,
@@ -108,13 +106,14 @@ const DashboardView = (): ReactElement => {
           stepName: event.stepName,
           payload: (event.payload ?? {}) as Record<string, unknown>,
         });
-      }
+      });
 
-      if (!result.hasMore) {
-        break;
+      if (result.hasMore) {
+        await syncPage(offset + pageSize);
       }
-      offset += pageSize;
-    }
+    };
+
+    await syncPage(0);
   }, []);
 
   const ws = useWebSocket({

@@ -86,27 +86,32 @@ export class JudgmentNormalizer {
     const { rawModelOutput } = input;
 
     // 1. Parse rawModelOutput
-    let parsed: Record<string, unknown>;
     if (rawModelOutput === null || rawModelOutput === undefined ||
         typeof rawModelOutput === 'number' || typeof rawModelOutput === 'boolean') {
       return errorOutput('MALFORMED_JSON', `rawModelOutput has invalid type: ${String(rawModelOutput)}`);
     }
 
-    if (typeof rawModelOutput === 'string') {
-      try {
-        const result = JSON.parse(rawModelOutput);
-        if (typeof result !== 'object' || result === null || Array.isArray(result)) {
-          return errorOutput('MALFORMED_JSON', 'Parsed JSON is not a plain object');
+    const parseResult = (() => {
+      if (typeof rawModelOutput === 'string') {
+        try {
+          const result = JSON.parse(rawModelOutput);
+          if (typeof result !== 'object' || result === null || Array.isArray(result)) {
+            return { ok: false as const, output: errorOutput('MALFORMED_JSON', 'Parsed JSON is not a plain object') };
+          }
+          return { ok: true as const, parsed: result as Record<string, unknown> };
+        } catch {
+          return { ok: false as const, output: errorOutput('MALFORMED_JSON', 'Failed to parse rawModelOutput as JSON') };
         }
-        parsed = result as Record<string, unknown>;
-      } catch {
-        return errorOutput('MALFORMED_JSON', 'Failed to parse rawModelOutput as JSON');
       }
-    } else if (typeof rawModelOutput === 'object' && !Array.isArray(rawModelOutput)) {
-      parsed = rawModelOutput as Record<string, unknown>;
-    } else {
-      return errorOutput('MALFORMED_JSON', 'rawModelOutput is not a string or object');
+      if (typeof rawModelOutput === 'object' && !Array.isArray(rawModelOutput)) {
+        return { ok: true as const, parsed: rawModelOutput as Record<string, unknown> };
+      }
+      return { ok: false as const, output: errorOutput('MALFORMED_JSON', 'rawModelOutput is not a string or object') };
+    })();
+    if (!parseResult.ok) {
+      return parseResult.output;
     }
+    const { parsed } = parseResult;
 
     // 2. Validate judgmentStatus
     const status = parsed['judgmentStatus'] ?? parsed['status'];
@@ -116,27 +121,22 @@ export class JudgmentNormalizer {
 
     // 3. Normalize score
     const rawScore = parsed['score'];
-    let score = 0;
-    if (typeof rawScore === 'number' && !isNaN(rawScore)) {
-      score = clampScore(rawScore);
-    } else if (rawScore !== undefined && rawScore !== null) {
-      score = 0;
-    }
+    const score = typeof rawScore === 'number' && !isNaN(rawScore) ? clampScore(rawScore) : 0;
 
     // 4. Collect issues
     const rawIssues = parsed['issues'];
-    const issues: IssueEntry[] = [];
-    if (Array.isArray(rawIssues)) {
-      for (const item of rawIssues) {
+    const issues: IssueEntry[] = Array.isArray(rawIssues)
+      ? rawIssues.flatMap((item) => {
         if (item && typeof item === 'object' && 'level' in item && 'message' in item) {
           const lvl = (item as Record<string, unknown>)['level'];
           const msg = (item as Record<string, unknown>)['message'];
           if ((lvl === 'P0' || lvl === 'P1' || lvl === 'P2') && typeof msg === 'string') {
-            issues.push({ level: lvl, message: msg });
+            return [{ level: lvl, message: msg }];
           }
         }
-      }
-    }
+        return [];
+      })
+      : [];
 
     return {
       judgmentStatus: status as 'pass' | 'fail',

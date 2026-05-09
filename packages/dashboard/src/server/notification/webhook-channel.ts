@@ -84,11 +84,15 @@ const isBlockedHostname = (host: string): boolean => {
 };
 
 const normalizeHost = (urlString: string): { ok: true; url: string } | { ok: false; error: string } => {
-  let parsed: URL;
+  const parsed = (() => {
+    try {
+      return new URL(urlString);
+    } catch {
+      return undefined;
+    }
+  })();
 
-  try {
-    parsed = new URL(urlString);
-  } catch {
+  if (!parsed) {
     return { ok: false, error: 'Webhook URL is invalid' };
   }
 

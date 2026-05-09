@@ -86,13 +86,7 @@ const resolveApiBaseUrl = (): string => {
 };
 
 const toPolicyApiError = async (response: Response): Promise<PolicyApiError> => {
-  let body: ApiErrorBody | undefined;
-
-  try {
-    body = (await response.json()) as ApiErrorBody;
-  } catch {
-    body = undefined;
-  }
+  const body = await response.json().catch(() => undefined) as ApiErrorBody | undefined;
 
   const message = body?.message ?? `Policy API request failed: ${response.status}`;
   return new PolicyApiError(message, response.status, body?.code, body?.details);

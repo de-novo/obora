@@ -64,39 +64,34 @@ export class SnapshotCreator {
     const metaOnly = options?.metaOnly ?? false;
 
     // P1: 섹션 필터링 타입 안전성 개선 - 명시적 구조 사용
-    let stateData: SerializedState = serialized;
-
-    if (options?.includeSections) {
-      const sections = options.includeSections;
-      // 명시적 구조로 타입 안전성 확보
-      const filteredState: SerializedState = {
-        meta: serialized.meta,
-        state: sections.includes("state")
-          ? serialized.state
-          : {
-              phase: serialized.state.phase,
-              context: serialized.state.context,
-              agents: [],
-              tasks: [],
-            },
-        knowledge: sections.includes("knowledge")
-          ? serialized.knowledge
-          : {
-              facts: [],
-              inferences: [],
-              patterns: [],
-            },
-        decisions: sections.includes("decisions")
-          ? serialized.decisions
-          : {
-              current: null,
-              pending: [],
-              opinions: [],
-              history: [],
-            },
-      };
-      stateData = filteredState;
-    }
+    const stateData: SerializedState = options?.includeSections
+      ? {
+          meta: serialized.meta,
+          state: options.includeSections.includes("state")
+            ? serialized.state
+            : {
+                phase: serialized.state.phase,
+                context: serialized.state.context,
+                agents: [],
+                tasks: [],
+              },
+          knowledge: options.includeSections.includes("knowledge")
+            ? serialized.knowledge
+            : {
+                facts: [],
+                inferences: [],
+                patterns: [],
+              },
+          decisions: options.includeSections.includes("decisions")
+            ? serialized.decisions
+            : {
+                current: null,
+                pending: [],
+                opinions: [],
+                history: [],
+              },
+        }
+      : serialized;
 
     // 압축 결정
     const shouldCompress = options?.compress ?? this.options.defaultCompress;
@@ -104,58 +99,52 @@ export class SnapshotCreator {
     const originalSize = JSON.stringify(stateData, null, 0).length;
     const autoCompress = shouldCompress || originalSize >= threshold;
 
-    let data: SerializedState | string;
-    let compressedSize: number | undefined;
-    let compressedChecksum: string | undefined;
     const compressed = autoCompress && !metaOnly;
 
     // 체크섬 계산 (metaOnly 모드에서는 빈 객체 기준)
-    let checksum: string;
-    try {
-      if (metaOnly) {
-        const emptyState: SerializedState = {
-          meta: { version: 0, lastUpdated: "", sessionId: "", createdAt: "" },
-          state: { phase: "", context: {}, agents: [], tasks: [] },
-          knowledge: { facts: [], inferences: [], patterns: [] },
-          decisions: { current: null, pending: [], opinions: [], history: [] },
-        };
-        checksum = calculateChecksumSync(emptyState);
-      } else {
-        checksum = calculateChecksumSync(stateData);
-      }
-    } catch (error) {
-      throw new Error(
-        `Failed to calculate checksum: ${error instanceof Error ? error.message : String(error)}`,
-        { cause: error }
-      );
-    }
-
-    if (metaOnly) {
-      // metaOnly 모드에서는 데이터를 포함하지 않음
-      data = {
-        meta: { version: 0, lastUpdated: "", sessionId: "", createdAt: "" },
-        state: { phase: "", context: {}, agents: [], tasks: [] },
-        knowledge: { facts: [], inferences: [], patterns: [] },
-        decisions: { current: null, pending: [], opinions: [], history: [] },
-      };
-    } else if (compressed) {
-      const json = JSON.stringify(stateData);
+    const emptyState: SerializedState = {
+      meta: { version: 0, lastUpdated: "", sessionId: "", createdAt: "" },
+      state: { phase: "", context: {}, agents: [], tasks: [] },
+      knowledge: { facts: [], inferences: [], patterns: [] },
+      decisions: { current: null, pending: [], opinions: [], history: [] },
+    };
+    const checksum = (() => {
       try {
-        const compressedString = compress(json, { level: 6 }) as string;
-        data = compressedString;
-        compressedSize = compressedString.length;
-
-        // 압축 데이터 체크섬 검증
-        compressedChecksum = calculateChecksumSync(compressedString);
+        return calculateChecksumSync(metaOnly ? emptyState : stateData);
       } catch (error) {
         throw new Error(
-          `Failed to compress snapshot data: ${error instanceof Error ? error.message : String(error)}`,
+          `Failed to calculate checksum: ${error instanceof Error ? error.message : String(error)}`,
           { cause: error }
         );
       }
-    } else {
-      data = stateData;
-    }
+    })();
+
+    const { data, compressedSize, compressedChecksum } = (() => {
+      if (metaOnly) {
+        // metaOnly 모드에서는 데이터를 포함하지 않음
+        return { data: emptyState };
+      }
+
+      if (compressed) {
+        const json = JSON.stringify(stateData);
+        try {
+          const compressedString = compress(json, { level: 6 }) as string;
+          return {
+            data: compressedString,
+            compressedSize: compressedString.length,
+            // 압축 데이터 체크섬 검증
+            compressedChecksum: calculateChecksumSync(compressedString),
+          };
+        } catch (error) {
+          throw new Error(
+            `Failed to compress snapshot data: ${error instanceof Error ? error.message : String(error)}`,
+            { cause: error }
+          );
+        }
+      }
+
+      return { data: stateData };
+    })();
 
     // 메타데이터 생성
     const meta: SnapshotMeta = {

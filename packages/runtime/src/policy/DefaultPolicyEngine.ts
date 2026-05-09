@@ -69,14 +69,12 @@ export class DefaultPolicyEngine implements PolicyEngine {
       return pinned.enforce(action, context);
     }
 
-    for (const rule of this.rules) {
-      const decision = rule.evaluate(action, context, this.policySet);
-      if (decision) {
-        return decision;
-      }
-    }
+    const decision = this.rules.reduce<PolicyDecision | undefined>(
+      (matched, rule) => matched ?? rule.evaluate(action, context, this.policySet) ?? undefined,
+      undefined
+    );
 
-    return { type: "allow" };
+    return decision ?? { type: "allow" };
   }
 
   async reload(): Promise<PolicyVersion | undefined> {
@@ -141,14 +139,12 @@ export class DefaultPolicyEngine implements PolicyEngine {
   }
 
   private enforceWithPolicy(policySet: PolicySet, action: PolicyAction, context: PolicyContext): PolicyDecision {
-    for (const rule of this.rules) {
-      const decision = rule.evaluate(action, context, policySet);
-      if (decision) {
-        return decision;
-      }
-    }
+    const decision = this.rules.reduce<PolicyDecision | undefined>(
+      (matched, rule) => matched ?? rule.evaluate(action, context, policySet) ?? undefined,
+      undefined
+    );
 
-    return { type: "allow" };
+    return decision ?? { type: "allow" };
   }
 
   private applyPolicy(policySet: PolicySet, source: string): PolicyVersion {
@@ -165,10 +161,10 @@ export class DefaultPolicyEngine implements PolicyEngine {
 }
 
 function validatePolicyConditions(policySet: PolicySet): void {
-  for (const tool of policySet.tools ?? []) {
+  (policySet.tools ?? []).forEach((tool) => {
     const condition = tool.when?.condition;
     if (!condition) {
-      continue;
+      return;
     }
 
     try {
@@ -181,9 +177,9 @@ function validatePolicyConditions(policySet: PolicySet): void {
       wrapped.code = OboraErrorCode.POLICY_LOAD_FAILED;
       throw wrapped;
     }
-  }
+  });
 
-  for (const rule of policySet.dynamicToolRules ?? []) {
+  (policySet.dynamicToolRules ?? []).forEach((rule) => {
     try {
       parseExpression(rule.condition);
     } catch (error) {
@@ -194,9 +190,9 @@ function validatePolicyConditions(policySet: PolicySet): void {
       wrapped.code = OboraErrorCode.POLICY_LOAD_FAILED;
       throw wrapped;
     }
-  }
+  });
 
-  for (const limit of policySet.resources?.dynamicQuota?.limits ?? []) {
+  (policySet.resources?.dynamicQuota?.limits ?? []).forEach((limit) => {
     try {
       parseExpression(limit.condition);
     } catch (error) {
@@ -207,7 +203,7 @@ function validatePolicyConditions(policySet: PolicySet): void {
       wrapped.code = OboraErrorCode.POLICY_LOAD_FAILED;
       throw wrapped;
     }
-  }
+  });
 }
 
 function buildVersion(policySet: PolicySet, source: string): PolicyVersion {

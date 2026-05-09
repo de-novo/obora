@@ -13,7 +13,7 @@
 | --- | --- | --- |
 | `pnpm typecheck` | PASS | 5 package typecheck tasks completed. |
 | `pnpm lint` | PASS | Existing lint gate passed before the review-gate fixes. |
-| `pnpm test` | PASS | 5 workspace packages passed: adapters 181, runtime 1223, sdk 805, dashboard 211, cli 630 tests. Required local port binding because dashboard server tests bind `127.0.0.1`. |
+| `pnpm test` | PASS | 5 workspace packages passed: adapters 181, runtime 1224, sdk 805, dashboard 211, cli 630 tests. Required local port binding because dashboard server tests bind `127.0.0.1`. |
 | `pnpm verify:coverage` | PASS | Every package is now above 90% for statements, branches, functions, and lines. Required local port binding because dashboard tests bind `127.0.0.1`. |
 | `pnpm build` | PASS | All 5 build tasks passed. |
 | `pnpm verify:smoke` | PASS | Passed with local port binding allowed; the pure sandbox blocks dashboard bootstrap listen with `EPERM`. |
@@ -21,7 +21,7 @@
 | `pnpm verify:compat` | PASS | Compat/deprecation inventory is tracked by allowlist. |
 | `pnpm verify:test-type-debt` | PASS | SDK/CLI/runtime test type debt allowlist is empty. |
 | `pnpm verify:deps` | PASS | Package manifests reject deprecated pi packages and drift in managed dependency ranges. |
-| `pnpm verify:functional` | PASS | File-level ratchet is locked at `mutableBinding=314/314`, `loopStatement=501/501`, 187 baseline entries. |
+| `pnpm verify:functional` | PASS | File-level ratchet is locked at `mutableBinding=0/0`, `loopStatement=0/0`, 0 baseline entries. |
 | `pnpm verify:sdk-public-api` | PASS | SDK no-console and public API snapshot passed. |
 | `pnpm audit --audit-level moderate` | PASS | No known vulnerabilities found. |
 | `bash scripts/review-gate-selftest.sh` | PASS | Selftest now covers coverage-output exclusion and canonical sandbox artifact smoke. |
@@ -33,11 +33,11 @@
 
 | Package | Statements | Branches | Functions | Lines |
 | --- | ---: | ---: | ---: | ---: |
-| `@obora/sdk` | 97.09% | 91.07% | 97.04% | 97.57% |
-| `@obora/runtime` | 95.04% | 90.00% | 95.15% | 95.23% |
-| `@obora/adapters` | 96.25% | 92.76% | 98.06% | 96.87% |
-| `@obora/cli` | 95.74% | 90.01% | 98.12% | 96.40% |
-| `@obora/dashboard` | 94.14% | 90.15% | 93.49% | 94.26% |
+| `@obora/sdk` | 97.03% | 91.34% | 97.46% | 97.52% |
+| `@obora/runtime` | 94.92% | 90.17% | 95.29% | 95.15% |
+| `@obora/adapters` | 96.25% | 92.28% | 98.24% | 96.88% |
+| `@obora/cli` | 95.78% | 90.05% | 97.42% | 96.47% |
+| `@obora/dashboard` | 94.07% | 90.14% | 93.67% | 94.21% |
 
 The enforced branch floors are now at least 90 for every package in `scripts/coverage/thresholds.json`.
 
@@ -113,37 +113,26 @@ The enforced branch floors are now at least 90 for every package in `scripts/cov
   2. Keep new Effect APIs additive until public API migration is explicitly planned.
   3. Convert high-value mutable internals only after behavior-preserving tests are in place.
 
-### RG-005 - `let` and `for (` usage is widespread
+### RG-005 - `let` and loop-statement policy debt is removed
 
-- Severity: P2 partially fixed
+- Severity: P2 fixed
 - Evidence:
-  - `pnpm verify:functional`: PASS.
-  - Current non-test source baseline: `mutableBinding=314/314`, `loopStatement=501/501`, 187 file entries.
-- Top `let` hotspots:
-  - `packages/sdk/src/step-executor.ts`: 12
-  - `packages/cli/src/commands/run.ts`: 11
-  - `packages/runtime/src/state/StateBinder.ts`: 10
-  - `packages/runtime/src/judgment/JudgmentEngine.ts`: 8
-  - `packages/sdk/src/execution/execution-controller.ts`: 7
-- Top `for (` hotspots:
-  - `packages/runtime/src/orchestrator/workflow/parser/workflow-parser.ts`: 20
-  - `packages/runtime/src/orchestrator/workflow/graph/index.ts`: 18
-  - `packages/runtime/src/orchestrator/RuntimeOrchestrator.ts`: 16
-  - `packages/runtime/src/blackboard/events/event-bus.ts`: 13
-  - `packages/runtime/src/orchestrator/workflow/resolver/dependency-resolver.ts`: 11
-  - `packages/sdk/src/step-executor.ts`: 11
+  - Original review baseline was `mutableBinding=314/314`, `loopStatement=501/501`, 187 file entries.
+  - Before the final cleanup pass, the ratchet was `mutableBinding=301/301`, `loopStatement=422/422`, 180 file entries.
+  - `pnpm verify:functional:update`: `[PASS] functional policy baseline updated: mutableBinding=301->0, loopStatement=422->0, files=180->0.`
+  - `pnpm verify:functional`: `[PASS] functional policy file baselines respected: mutableBinding=0/0, loopStatement=0/0, files=0.`
 - Fix applied:
   - Added `scripts/release/verify-functional-policy.mjs`.
   - Added `scripts/release/functional-policy-baseline.json`.
   - Added `pnpm verify:functional`.
   - Release verification now runs the functional policy gate.
-  - The gate now compares per-file counts, so new source files have a zero budget and existing files may only decrease their counts unless the baseline is intentionally rebaselined.
-  - `packages/dashboard/src/client/pages/PlaybackView.tsx` was refactored from cancellation `let` variables and an indexed `for` loop to a const cancellation cell plus `reduce`, lowering the baseline from `318/502` to `314/501`.
-- Remaining plan:
-  1. Reduce the baseline in small patches, starting with runtime parser/graph/orchestrator and SDK step execution.
-  2. Allow focused exceptions only for performance-sensitive or unavoidable interop code with a short inline reason.
-  3. Convert loop-heavy pure transforms to `ReadonlyArray` combinators, `Object.entries().map/filter/reduce`, `Map` builders wrapped in pure helpers, and `Effect.forEach` where async sequencing matters.
-  4. Convert mutable workflow state with `Effect.Ref`, `Effect.acquireRelease`, or explicit immutable state transitions.
+  - The gate compares per-file counts, so new source files have a zero budget and existing files may only decrease their counts unless the baseline is intentionally rebaselined.
+  - The remaining production/test/script functional-policy entries across SDK, runtime, adapters, CLI, dashboard, and release scripts were refactored to `const`, recursive helpers, array/object combinators, and small pure helpers.
+  - `scripts/release/functional-policy-baseline.json` was reduced to zero entries with `pnpm verify:functional:update`.
+  - `AGENTS.md` now records the zero-baseline rule so future source TypeScript and JavaScript do not reintroduce `let` or loop statements.
+- Current state:
+  - `pnpm verify:functional`: PASS with `mutableBinding=0/0`, `loopStatement=0/0`, 0 file baseline entries.
+  - Reintroducing `let` or loop statements in scanned source now fails the release gate through `pnpm verify:functional`.
 
 ### RG-006 - Test type debt allowlist existed
 
@@ -251,9 +240,9 @@ The enforced branch floors are now at least 90 for every package in `scripts/cov
 - Restore existing dashboard policy editing by wiring the existing-policy save button to `updatePolicy`.
 - Add root `AGENTS.md` guardrails for coverage, type debt, functional TypeScript, EffectTS boundaries, dependency freshness, compat inventory, and sandbox/local-runtime proof.
 
-### Phase 1 - No-new-debt ratchet
+### Phase 1 - Zero-baseline enforcement
 
-- Reduce the `verify:functional` baseline in small patches.
+- Keep the `verify:functional` baseline at zero.
 - Keep `verify:test-type-debt` allowlist empty.
 - Keep dependency policy ranges current after every package update.
 
@@ -332,8 +321,8 @@ bash scripts/review-gate.sh
 
 Current final results:
 
-- `pnpm verify:coverage`: PASS with package branch coverage at SDK 91.07%, runtime 90.00%, adapters 92.76%, CLI 90.01%, dashboard 90.15%.
-- `pnpm verify:functional`: PASS with `mutableBinding=314/314`, `loopStatement=501/501`, 187 file baseline entries.
+- `pnpm verify:coverage`: PASS with package branch coverage at SDK 91.34%, runtime 90.17%, adapters 92.28%, CLI 90.05%, dashboard 90.14%.
+- `pnpm verify:functional`: PASS with `mutableBinding=0/0`, `loopStatement=0/0`, 0 file baseline entries.
 - `pnpm verify:test-type-debt`: PASS with an empty allowlist.
 - `pnpm outdated -r --format json`: `{}` with registry access.
 - `pnpm verify:smoke` and `bash scripts/review-gate.sh`: PASS with local port binding allowed.
@@ -438,3 +427,48 @@ Current ratchet after this lane:
 - `pnpm audit --audit-level moderate`: PASS, `No known vulnerabilities found`.
 - `pnpm outdated -r --format json`: `{}` with registry access.
 - `pnpm verify:release`, `pnpm verify:smoke`, `pnpm verify:sdk-public-api`, `pnpm verify:deps`, `pnpm verify:compat`, `pnpm verify:test-type-debt`, and `bash scripts/review-gate.sh`: PASS.
+
+## Final Functional Policy Zero-Baseline Follow-up
+
+Branch: `codex/functional-cleanup-next`
+
+Verified changes in this lane:
+
+- The remaining functional policy entries were removed across SDK, runtime, adapters, CLI, dashboard, and release scripts.
+- `scripts/release/functional-policy-baseline.json` was updated through `pnpm verify:functional:update`; output was `[PASS] functional policy baseline updated: mutableBinding=301->0, loopStatement=422->0, files=180->0.`
+- `packages/cli/src/utils/global-opts.ts` was fixed after the cleanup exposed a null command-root case in CLI tests.
+- `AGENTS.md` now states that the functional-policy baseline is zero and source TypeScript/JavaScript must not reintroduce `let` or loop statements.
+
+Follow-up command evidence captured during this lane:
+
+```bash
+pnpm --filter @obora/sdk typecheck
+pnpm --filter @obora/runtime typecheck
+pnpm --filter @obora/adapters typecheck
+pnpm --filter @obora/cli typecheck
+pnpm --filter @obora/dashboard typecheck
+bash -n scripts/review-gate-task-auto.sh
+bash -n scripts/release/verify-typecheck-public-shims.sh
+pnpm verify:functional
+pnpm verify:functional:update
+pnpm typecheck
+pnpm lint
+pnpm verify:test-type-debt
+pnpm verify:compat
+pnpm verify:deps
+pnpm --filter @obora/cli test
+pnpm test
+pnpm verify:coverage
+pnpm verify:release
+pnpm verify:smoke
+bash scripts/review-gate.sh
+git diff --check
+```
+
+Current final results:
+
+- `pnpm verify:functional`: PASS with `mutableBinding=0/0`, `loopStatement=0/0`, 0 file baseline entries.
+- `pnpm test`: PASS with adapters 181 tests, runtime 1224 tests, SDK 805 tests, dashboard 211 tests, and CLI 630 tests.
+- `pnpm verify:coverage`: PASS with statements/branches/functions/lines at SDK 97.03/91.34/97.46/97.52, runtime 94.92/90.17/95.29/95.15, adapters 96.25/92.28/98.24/96.88, CLI 95.78/90.05/97.42/96.47, dashboard 94.07/90.14/93.67/94.21.
+- `pnpm typecheck`, `pnpm lint`, `pnpm verify:test-type-debt`, `pnpm verify:compat`, `pnpm verify:deps`, `pnpm verify:coverage`, `pnpm verify:release`, `pnpm verify:smoke`, and `bash scripts/review-gate.sh`: PASS.
+- `pnpm verify:smoke` and `bash scripts/review-gate.sh` both passed in this final run with local `127.0.0.1` port binding available.

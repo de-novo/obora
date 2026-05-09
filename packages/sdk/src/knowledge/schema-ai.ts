@@ -22,12 +22,11 @@ function scoreSimilarity(input: string, candidate: string): number {
   if (a === b) return 1;
   const aParts = a.split(".");
   const bParts = b.split(".");
-  let score = 0;
-  for (let i = 0; i < Math.min(aParts.length, bParts.length); i++) {
-    if (aParts[i] === bParts[i]) score += 0.4;
-  }
-  if (b.includes(aParts[aParts.length - 1] ?? "")) score += 0.2;
-  return score;
+  const prefixScore = Array.from({ length: Math.min(aParts.length, bParts.length) }).reduce<number>(
+    (score, _, index) => score + (aParts[index] === bParts[index] ? 0.4 : 0),
+    0,
+  );
+  return prefixScore + (b.includes(aParts[aParts.length - 1] ?? "") ? 0.2 : 0);
 }
 
 export function suggestTags(inputTag: string, examples: string[], limit = 3): string[] {
@@ -101,7 +100,7 @@ export function mergeTagsWithConflictResolution(
   const threshold = options.autoMergeThreshold ?? 0.75;
   const maxSuggestions = options.maxSuggestions ?? 3;
 
-  for (const raw of inputTags) {
+  inputTags.forEach((raw) => {
     const check = validateAndSuggestTag(raw, pattern, examples);
     const normalized = check.normalized ?? normalizeTag(raw);
     const domain = normalized.split(".")[0]?.toLowerCase() ?? "";
@@ -114,10 +113,10 @@ export function mergeTagsWithConflictResolution(
           reasonCode: "domain_not_allowed",
           suggestions: [],
         });
-        continue;
+        return;
       }
       mergedSet.add(normalized);
-      continue;
+      return;
     }
 
     const scored = suggestTags(normalized, examples, maxSuggestions).map((tag) => ({
@@ -153,7 +152,7 @@ export function mergeTagsWithConflictResolution(
     }
 
     conflicts.push(conflict);
-  }
+  });
 
   return {
     merged: Array.from(mergedSet),

@@ -44,10 +44,7 @@ export interface TKGReviewQueueStore {
 }
 
 function dedupeQueueItems(items: TKGReviewQueueItem[]): TKGReviewQueueItem[] {
-  const seen = new Map<string, TKGReviewQueueItem>();
-  for (const item of items) {
-    seen.set(item.id, item);
-  }
+  const seen = new Map(items.map((item) => [item.id, item]));
   return [...seen.values()];
 }
 

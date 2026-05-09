@@ -38,15 +38,12 @@ export class RunQuery {
           );
         }
 
-        let data: Buffer;
-        try {
-          data = await readFile(record.storageRef);
-        } catch (err) {
+        const data = await readFile(record.storageRef).catch((err: unknown) => {
           throw new OboraError(
             `Artifact read failed: ${err instanceof Error ? err.message : String(err)}`,
             "SDK_ARTIFACT_READ_ERROR",
           );
-        }
+        });
 
         return {
           record: {

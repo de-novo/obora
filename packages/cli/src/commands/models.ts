@@ -254,9 +254,7 @@ function printGlobalMatches(
     return;
   }
 
-  for (const match of matches) {
-    formatter.step(`${match.provider}: ${match.model}`);
-  }
+  matches.forEach((match) => formatter.step(`${match.provider}: ${match.model}`));
   formatter.info(`Next step: ${guidance.nextStep}`);
 }
 
@@ -318,9 +316,7 @@ export async function runModels(
       return;
     }
 
-    for (const model of models) {
-      formatter.step(model);
-    }
+    models.forEach((model) => formatter.step(model));
     formatter.info(`Next step: ${guidance.nextStep}`);
     return;
   }
@@ -345,9 +341,7 @@ export async function runModels(
   formatter.info("Obora models");
   formatter.step("Source: pi-ai");
   formatter.info("Providers");
-  for (const row of providerRows) {
-    formatter.step(`${row.provider} (${row.count})`);
-  }
+  providerRows.forEach((row) => formatter.step(`${row.provider} (${row.count})`));
   formatter.info(`Next step: ${guidance.nextStep}`);
 }
 

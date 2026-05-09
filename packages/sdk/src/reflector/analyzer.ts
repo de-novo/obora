@@ -76,8 +76,7 @@ export class KeywordAnalyzer implements ReflectorAnalyzer {
 
     const wordInFailures = new Map<string, Set<number>>();
 
-    for (let i = 0; i < failures.length; i++) {
-      const f = failures[i]!;
+    failures.forEach((f, i) => {
       const texts = [
         f.validation.summary.toLowerCase(),
         ...f.validation.failedChecks.map(
@@ -87,15 +86,15 @@ export class KeywordAnalyzer implements ReflectorAnalyzer {
       const allWords = texts.join(" ").split(WORD_SPLIT_RE);
       const seen = new Set<string>();
 
-      for (const word of allWords) {
-        if (word.length < 3 || STOP_WORDS.has(word)) continue;
+      allWords.forEach((word) => {
+        if (word.length < 3 || STOP_WORDS.has(word)) return;
         if (!seen.has(word)) {
           seen.add(word);
           if (!wordInFailures.has(word)) wordInFailures.set(word, new Set());
           wordInFailures.get(word)!.add(i);
         }
-      }
-    }
+      });
+    });
 
     const threshold = Math.max(2, Math.ceil(failures.length * 0.5));
     const recurring = [...wordInFailures.entries()]
@@ -128,12 +127,12 @@ export class SignatureAnalyzer implements ReflectorAnalyzer {
 
   analyze(context: AnalyzerContext): AnalyzerResult | undefined {
     const sigCount = new Map<string, number>();
-    for (const f of context.failures) {
+    context.failures.forEach((f) => {
       const sig = f.validation.signature;
       if (sig) {
         sigCount.set(sig, (sigCount.get(sig) ?? 0) + 1);
       }
-    }
+    });
 
     const repeated = [...sigCount.entries()]
       .filter(([, count]) => count > 1)
@@ -161,14 +160,14 @@ export class CategoryAnalyzer implements ReflectorAnalyzer {
 
   analyze(context: AnalyzerContext): AnalyzerResult | undefined {
     const categoryCount = new Map<string, number>();
-    for (const f of context.failures) {
-      for (const check of f.validation.failedChecks) {
+    context.failures.forEach((f) => {
+      f.validation.failedChecks.forEach((check) => {
         const colonIndex = check.name.indexOf(":");
         const category =
           colonIndex > 0 ? check.name.slice(0, colonIndex).trim() : check.name;
         categoryCount.set(category, (categoryCount.get(category) ?? 0) + 1);
-      }
-    }
+      });
+    });
 
     const sorted = [...categoryCount.entries()]
       .sort((a, b) => b[1] - a[1])
@@ -208,30 +207,35 @@ export class TrendAnalyzer implements ReflectorAnalyzer {
     const isImproving = recent3[2] < recent3[1] && recent3[1] < recent3[0];
     const isStable = recent3[0] === recent3[1] && recent3[1] === recent3[2];
 
-    let trend: TrendDirection | undefined;
-    let insight: string;
+    const trendResult = isWorsening
+      ? {
+          trend: "worsening" as const,
+          insight: `⚠️ WORSENING TREND: Failed checks increased over last 3 attempts (${recent3.join(" → ")}). Current repairs may be introducing new bugs. Stop fixing symptoms and address the root cause.`,
+        }
+      : isStable
+        ? {
+            trend: "stable" as const,
+            insight: `Stable failure count (${recent3[0]}) over last 3 attempts. The current approach is not making progress.`,
+          }
+        : isImproving
+          ? {
+              trend: "improving" as const,
+              insight: `Improving trend (${recent3.join(" → ")}). Continue current approach.`,
+            }
+          : undefined;
 
-    if (isWorsening) {
-      trend = "worsening";
-      insight = `⚠️ WORSENING TREND: Failed checks increased over last 3 attempts (${recent3.join(" → ")}). Current repairs may be introducing new bugs. Stop fixing symptoms and address the root cause.`;
-    } else if (isStable) {
-      trend = "stable";
-      insight = `Stable failure count (${recent3[0]}) over last 3 attempts. The current approach is not making progress.`;
-    } else if (isImproving) {
-      trend = "improving";
-      insight = `Improving trend (${recent3.join(" → ")}). Continue current approach.`;
-    } else {
+    if (!trendResult) {
       return undefined;
     }
 
     return {
-      insights: [insight],
+      insights: [trendResult.insight],
       suggestedActions:
-        trend === "worsening"
-          ? [{ type: "inject_context", priority: 80, payload: { content: insight } }]
+        trendResult.trend === "worsening"
+          ? [{ type: "inject_context", priority: 80, payload: { content: trendResult.insight } }]
           : [],
       confidence: 0.8,
-      category: `trend:${trend}`,
+      category: `trend:${trendResult.trend}`,
     };
   }
 }
@@ -253,20 +257,20 @@ export function detectTrend(
 // ── Helper: extract keyword set from failures ──────────────────────────
 
 export function extractKeywords(failures: FailureEntry[]): string[] {
-  const wordSet = new Set<string>();
-  for (const f of failures) {
-    const texts = [
-      f.validation.summary.toLowerCase(),
-      ...f.validation.failedChecks.map(
-        (c) => `${c.name} ${c.message}`.toLowerCase()
-      ),
-    ];
-    for (const word of texts.join(" ").split(WORD_SPLIT_RE)) {
-      if (word.length >= 3 && !STOP_WORDS.has(word)) {
-        wordSet.add(word);
-      }
-    }
-  }
+  const wordSet = new Set(
+    failures.flatMap((f) => {
+      const texts = [
+        f.validation.summary.toLowerCase(),
+        ...f.validation.failedChecks.map(
+          (c) => `${c.name} ${c.message}`.toLowerCase()
+        ),
+      ];
+      return texts
+        .join(" ")
+        .split(WORD_SPLIT_RE)
+        .filter((word) => word.length >= 3 && !STOP_WORDS.has(word));
+    })
+  );
   return [...wordSet];
 }
 
@@ -275,13 +279,13 @@ export function extractKeywords(failures: FailureEntry[]): string[] {
 export function extractSignatures(
   failures: FailureEntry[]
 ): Map<string, number> {
-  const sigCount = new Map<string, number>();
-  for (const f of failures) {
+  const sigCount = failures.reduce<Map<string, number>>((counts, f) => {
     const sig = f.validation.signature;
     if (sig) {
-      sigCount.set(sig, (sigCount.get(sig) ?? 0) + 1);
+      counts.set(sig, (counts.get(sig) ?? 0) + 1);
     }
-  }
+    return counts;
+  }, new Map());
   return sigCount;
 }
 
@@ -290,15 +294,15 @@ export function extractSignatures(
 export function extractCategories(
   failures: FailureEntry[]
 ): Map<string, number> {
-  const categoryCount = new Map<string, number>();
-  for (const f of failures) {
-    for (const check of f.validation.failedChecks) {
+  const categoryCount = failures.reduce<Map<string, number>>((counts, f) => {
+    f.validation.failedChecks.forEach((check) => {
       const colonIndex = check.name.indexOf(":");
       const category =
         colonIndex > 0 ? check.name.slice(0, colonIndex).trim() : check.name;
-      categoryCount.set(category, (categoryCount.get(category) ?? 0) + 1);
-    }
-  }
+      counts.set(category, (counts.get(category) ?? 0) + 1);
+    });
+    return counts;
+  }, new Map());
   return categoryCount;
 }
 

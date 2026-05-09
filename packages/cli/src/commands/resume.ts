@@ -78,18 +78,22 @@ async function loadResumeWorkflow(
     `.obora/workflows/${workflowName}.yml`,
   ].map((candidate) => resolve(process.cwd(), candidate));
 
-  for (const candidate of workflowCandidates) {
-    try {
-      await access(candidate);
-    } catch {
-      continue;
+  const loadCandidate = async (candidates: string[]): Promise<boolean> => {
+    const [candidate, ...rest] = candidates;
+    if (!candidate) {
+      return false;
+    }
+
+    const exists = await access(candidate).then(() => true, () => false);
+    if (!exists) {
+      return loadCandidate(rest);
     }
 
     await runtime.loadWorkflow(candidate);
     return true;
-  }
+  };
 
-  return false;
+  return loadCandidate(workflowCandidates);
 }
 
 async function runResume(
@@ -111,15 +115,12 @@ async function runResume(
     );
   }
 
-  let result;
-  try {
-    result = await runtime.resume(runId, {
+  const result = await runtime.resume(runId, {
       fromStep: opts.fromStep,
       driftPolicy: opts.driftPolicy,
-    });
-  } catch (error) {
+    }).catch((error: unknown) => {
     throw new CLIError(`Resume failed: ${getErrorMessage(error)}`, ExitCode.EXECUTION_FAILED);
-  }
+  });
 
   if (shouldOutputJson(opts.json, globalOpts)) {
     formatter.json(result);

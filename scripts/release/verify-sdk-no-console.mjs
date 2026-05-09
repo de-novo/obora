@@ -7,18 +7,18 @@ const root = "packages/sdk/src";
 const hits = [];
 
 function walk(dir) {
-  for (const entry of readdirSync(dir)) {
+  readdirSync(dir).forEach((entry) => {
     const path = join(dir, entry);
     const stat = statSync(path);
     if (stat.isDirectory()) {
-      if (entry === "__tests__") continue;
+      if (entry === "__tests__") return;
       walk(path);
-      continue;
+      return;
     }
     if (path.endsWith(".ts")) {
       inspect(path);
     }
-  }
+  });
 }
 
 function isInsideConsoleAlertChannel(lines, lineIndex) {
@@ -27,27 +27,27 @@ function isInsideConsoleAlertChannel(lines, lineIndex) {
     return false;
   }
 
-  let depth = 0;
-  let opened = false;
-  for (let index = classLine; index <= lineIndex; index += 1) {
-    for (const char of lines[index] ?? "") {
-      if (char === "{") {
-        depth += 1;
-        opened = true;
-      } else if (char === "}") {
-        depth -= 1;
-      }
-    }
-  }
+  const state = lines.slice(classLine, lineIndex + 1).reduce(
+    (currentState, line) =>
+      Array.from(line ?? "").reduce((innerState, char) => {
+        if (char === "{") {
+          return { depth: innerState.depth + 1, opened: true };
+        }
+        if (char === "}") {
+          return { ...innerState, depth: innerState.depth - 1 };
+        }
+        return innerState;
+      }, currentState),
+    { depth: 0, opened: false }
+  );
 
-  return opened && depth > 0;
+  return state.opened && state.depth > 0;
 }
 
 function inspect(path) {
   const lines = readFileSync(path, "utf8").split(/\r?\n/);
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index];
-    if (!line?.includes("console.")) continue;
+  lines.forEach((line, index) => {
+    if (!line?.includes("console.")) return;
 
     const allowed =
       path === "packages/sdk/src/alerting/alerting.ts" &&
@@ -55,16 +55,16 @@ function inspect(path) {
     if (!allowed) {
       hits.push(`${path}:${index + 1}:${line.trim()}`);
     }
-  }
+  });
 }
 
 walk(root);
 
 if (hits.length > 0) {
   console.error("[FAIL] SDK library code must not write directly to console:");
-  for (const hit of hits) {
+  hits.forEach((hit) => {
     console.error(`  - ${hit}`);
-  }
+  });
   console.error("Use OboraRuntimeConfig.logger or an explicit ConsoleAlertChannel instead.");
   process.exit(1);
 }

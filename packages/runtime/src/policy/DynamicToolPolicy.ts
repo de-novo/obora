@@ -61,12 +61,16 @@ export function resolveDynamicToolRule(
     return {};
   }
 
-  const candidates: IndexedDynamicToolRule[] = [];
+  const evaluation = rules.reduce<{
+    candidates: IndexedDynamicToolRule[];
+    denyDecision?: PolicyDecision;
+  }>((state, rule, index) => {
+    if (state.denyDecision) {
+      return state;
+    }
 
-  for (let i = 0; i < rules.length; i++) {
-    const rule = rules[i];
     if (rule.name !== action.name) {
-      continue;
+      return state;
     }
 
     try {
@@ -83,11 +87,12 @@ export function resolveDynamicToolRule(
       };
 
       if (evaluateExpression(ast, evalContext)) {
-        candidates.push({ ...rule, _index: i });
+        return { ...state, candidates: [...state.candidates, { ...rule, _index: index }] };
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return {
+        ...state,
         denyDecision: {
           type: "deny",
           reason: `dynamic tool rule condition evaluation failed: ${message}`,
@@ -95,13 +100,18 @@ export function resolveDynamicToolRule(
         },
       };
     }
+    return state;
+  }, { candidates: [] });
+
+  if (evaluation.denyDecision) {
+    return { denyDecision: evaluation.denyDecision };
   }
 
-  if (candidates.length === 0) {
+  if (evaluation.candidates.length === 0) {
     return {};
   }
 
-  return { matchedRule: [...candidates].sort(compareDynamicRules)[0] };
+  return { matchedRule: [...evaluation.candidates].sort(compareDynamicRules)[0] };
 }
 
 export const __internal = {
