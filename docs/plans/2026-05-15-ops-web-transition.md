@@ -20,12 +20,19 @@
 - Added an operator workbench UI with:
   - graph node selection and editing
   - graph step creation
-  - system prompt editing
+  - manual edge connection between graph steps
+  - workflow-level system prompt editing
+  - step-level system prompt editing
   - execution history and step inspection
   - compiled workflow preview
 - Added package tests for the pure model and React interaction surface.
 - Added `@obora/ops` to the coverage gate with 90% minimum thresholds.
 - Marked `@obora/dashboard` as deprecated legacy web surface in package docs and root agent guidance.
+
+## Additional Stabilization
+
+- The full monorepo `pnpm test` run exposed a transient SDK resume-orchestrator timeout in `resumes execution with rerun steps` under parallel package execution.
+- The test passed in isolation in about 1 second, but the file-local timeout was only 10 seconds. Increased that local timeout to 20 seconds and re-ran the targeted SDK test plus the full test and review gates successfully.
 
 ## Next Implementation Lanes
 
@@ -34,16 +41,17 @@
 3. Decide whether dashboard Fastify bootstrap becomes the shared web server for ops or remains dashboard-only compatibility until removal.
 4. Move live execution history from seeded client state to runtime history APIs.
 5. Add graph validation feedback for unreachable nodes, blocked terminal handoffs, and missing policy/model fields.
+6. Keep every prompt entered in the ops workflow builder serialized as `systemPrompt`; user task prompts are not part of this authoring surface yet.
 
 ## Verification Log
 
 - `pnpm --filter @obora/ops typecheck`: PASS
 - `pnpm --filter @obora/ops lint`: PASS
-- `pnpm --filter @obora/ops test`: PASS, 2 files / 18 tests
+- `pnpm --filter @obora/ops test`: PASS, 2 files / 25 tests
 - `pnpm --filter @obora/ops build`: PASS
 - `pnpm typecheck`: PASS, 6 package typecheck tasks
 - `pnpm lint`: PASS, 6 package lint tasks
-- `pnpm test`: PASS, adapters 181, ops 18, runtime 1228, dashboard 211, sdk 805, cli 630 tests
+- `pnpm test`: PASS, adapters 181, ops 25, runtime 1228, dashboard 211, sdk 805, cli 630 tests
 - `pnpm verify:functional`: PASS, `mutableBinding=0/0`, `loopStatement=0/0`, `files=0`
 - `pnpm verify:deps`: PASS, 7 package manifests
 - `pnpm verify:coverage`: PASS
@@ -53,6 +61,7 @@
 - `pnpm verify:test-type-debt`: PASS
 - `git diff --check`: PASS
 - `bash scripts/review-gate.sh`: PASS
+- Browser check on `http://127.0.0.1:5174/`: PASS, added a node, manually connected `route-policy -> agent-step-5`, edited the step system prompt, and verified compiled YAML contains the manual edge plus `systemPrompt`.
 
 | Package            | Statements | Branches | Functions |  Lines |
 | ------------------ | ---------: | -------: | --------: | -----: |
@@ -61,4 +70,4 @@
 | `@obora/adapters`  |     96.25% |   92.28% |    98.24% | 96.88% |
 | `@obora/cli`       |     95.78% |   90.05% |    97.42% | 96.47% |
 | `@obora/dashboard` |     94.07% |   90.14% |    93.67% | 94.21% |
-| `@obora/ops`       |     92.80% |   97.72% |    90.14% | 93.85% |
+| `@obora/ops`       |     99.00% |   90.00% |    98.03% | 98.78% |

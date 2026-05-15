@@ -52,7 +52,7 @@ The enforced branch floors are now at least 90 for every package in `scripts/cov
 | `@obora/adapters`  |     96.25% |   92.28% |    98.24% | 96.88% |
 | `@obora/cli`       |     95.78% |   90.05% |    97.42% | 96.47% |
 | `@obora/dashboard` |     94.07% |   90.14% |    93.67% | 94.21% |
-| `@obora/ops`       |     92.80% |   97.72% |    90.14% | 93.85% |
+| `@obora/ops`       |     99.00% |   90.00% |    98.03% | 98.78% |
 
 ## Findings
 

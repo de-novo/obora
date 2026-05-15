@@ -5,6 +5,9 @@ import "./styles.css";
 import {
   addAgentNode,
   compileWorkflowYaml,
+  connectNodes,
+  disconnectEdge,
+  getNextAgentNodeId,
   getSelectedNode,
   getSelectedRun,
   initialOpsState,
@@ -26,6 +29,7 @@ import {
   type ExecutionRun,
   type OpsMode,
   type OpsWorkbenchState,
+  type WorkflowEdge,
   type WorkflowNode,
 } from "./ops-model";
 
@@ -38,6 +42,21 @@ const modeLabels: Record<OpsMode, string> = {
 const statusClass = (status: string): string => `status-${status}`;
 
 const formatDuration = (durationMs: number): string => `${Math.round(durationMs / 1000)}s`;
+
+interface EdgeDraft {
+  readonly sourceNodeId: string;
+  readonly targetNodeId: string;
+  readonly label: string;
+}
+
+const initialEdgeDraft: EdgeDraft = {
+  sourceNodeId: initialOpsState.nodes[0]?.id ?? "",
+  targetNodeId: initialOpsState.nodes[1]?.id ?? initialOpsState.nodes[0]?.id ?? "",
+  label: "next",
+};
+
+const nodeTitleFor = (nodes: ReadonlyArray<WorkflowNode>, nodeId: string): string =>
+  nodes.find((node) => node.id === nodeId)?.title ?? nodeId;
 
 interface WorkflowGraphProps {
   readonly state: OpsWorkbenchState;
@@ -107,15 +126,29 @@ const WorkflowGraph = ({ state, onSelectNode }: WorkflowGraphProps): ReactElemen
 
 interface NodeListProps {
   readonly nodes: ReadonlyArray<WorkflowNode>;
+  readonly edges: ReadonlyArray<WorkflowEdge>;
   readonly selectedNodeId: string | undefined;
+  readonly edgeDraft: EdgeDraft;
   readonly onSelectNode: (nodeId: string) => void;
   readonly onAddNode: () => void;
+  readonly onConnectEdge: () => void;
+  readonly onDisconnectEdge: (edgeId: string) => void;
+  readonly onEdgeLabelChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  readonly onEdgeSourceChange: (event: ChangeEvent<HTMLSelectElement>) => void;
+  readonly onEdgeTargetChange: (event: ChangeEvent<HTMLSelectElement>) => void;
 }
 
 const NodeList = ({
+  edgeDraft,
+  edges,
   nodes,
   selectedNodeId,
   onAddNode,
+  onConnectEdge,
+  onDisconnectEdge,
+  onEdgeLabelChange,
+  onEdgeSourceChange,
+  onEdgeTargetChange,
   onSelectNode,
 }: NodeListProps): ReactElement => (
   <aside className="ops-panel node-list" aria-label="Workflow nodes">
@@ -143,6 +176,72 @@ const NodeList = ({
         </button>
       ))}
     </div>
+
+    <section className="edge-builder" aria-label="Edge builder">
+      <div className="panel-heading">
+        <h2>Edges</h2>
+        <button
+          type="button"
+          className="compact-button"
+          onClick={onConnectEdge}
+          disabled={
+            edgeDraft.sourceNodeId.length === 0 ||
+            edgeDraft.targetNodeId.length === 0 ||
+            edgeDraft.sourceNodeId === edgeDraft.targetNodeId
+          }
+        >
+          Connect edge
+        </button>
+      </div>
+      <label>
+        From
+        <select value={edgeDraft.sourceNodeId} onChange={onEdgeSourceChange}>
+          {nodes.map((node) => (
+            <option key={node.id} value={node.id}>
+              {node.title}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        To
+        <select value={edgeDraft.targetNodeId} onChange={onEdgeTargetChange}>
+          {nodes.map((node) => (
+            <option key={node.id} value={node.id}>
+              {node.title}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Edge label
+        <input value={edgeDraft.label} onChange={onEdgeLabelChange} />
+      </label>
+      <div className="edge-list" aria-label="Connected edges">
+        {edges.map((edge) => (
+          <div key={edge.id} className="edge-row">
+            <button
+              type="button"
+              className="edge-open-button"
+              onClick={() => onSelectNode(edge.source)}
+              aria-label={`Open edge ${nodeTitleFor(nodes, edge.source)} to ${nodeTitleFor(nodes, edge.target)}`}
+            >
+              <strong>{nodeTitleFor(nodes, edge.source)}</strong>
+              <span>{edge.label}</span>
+              <strong>{nodeTitleFor(nodes, edge.target)}</strong>
+            </button>
+            <button
+              type="button"
+              className="edge-remove-button"
+              onClick={() => onDisconnectEdge(edge.id)}
+              aria-label={`Disconnect ${nodeTitleFor(nodes, edge.source)} to ${nodeTitleFor(nodes, edge.target)}`}
+            >
+              Remove
+            </button>
+          </div>
+        ))}
+      </div>
+    </section>
   </aside>
 );
 
@@ -153,6 +252,7 @@ interface NodeInspectorProps {
   readonly onAgentChange: (event: ChangeEvent<HTMLInputElement>) => void;
   readonly onModelChange: (event: ChangeEvent<HTMLInputElement>) => void;
   readonly onPolicyChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  readonly onStepSystemPromptChange: (event: ChangeEvent<HTMLTextAreaElement>) => void;
   readonly onKindChange: (event: ChangeEvent<HTMLSelectElement>) => void;
   readonly onStatusChange: (event: ChangeEvent<HTMLSelectElement>) => void;
 }
@@ -165,6 +265,7 @@ const NodeInspector = ({
   onModelChange,
   onPolicyChange,
   onStatusChange,
+  onStepSystemPromptChange,
   onTitleChange,
 }: NodeInspectorProps): ReactElement => (
   <aside className="ops-panel inspector-panel" aria-label="Node inspector">
@@ -202,6 +303,10 @@ const NodeInspector = ({
       <input value={node.policy} onChange={onPolicyChange} />
     </label>
     <label>
+      Step System Prompt
+      <textarea value={node.systemPrompt} onChange={onStepSystemPromptChange} rows={7} />
+    </label>
+    <label>
       State
       <select value={node.status} onChange={onStatusChange}>
         {workflowNodeStatuses.map((status) => (
@@ -231,11 +336,11 @@ const PromptPanel = ({
 }: PromptPanelProps): ReactElement => (
   <aside className="ops-panel inspector-panel prompt-panel" aria-label="System prompt editor">
     <div className="panel-heading">
-      <h2>System Prompt</h2>
+      <h2>Workflow System Prompt</h2>
       <span className="state-pill status-ready">Version draft</span>
     </div>
     <label>
-      Prompt
+      Workflow System Prompt
       <textarea value={prompt} onChange={onPromptChange} rows={11} />
     </label>
     <div className="compiled-preview" aria-label="Prompt compile preview">
@@ -303,6 +408,7 @@ const RunHistoryPanel = ({
 export const App = (): ReactElement => {
   const [mode, setMode] = useState<OpsMode>("graph");
   const [state, setState] = useState<OpsWorkbenchState>(initialOpsState);
+  const [edgeDraft, setEdgeDraft] = useState<EdgeDraft>(initialEdgeDraft);
   const selectedNode = useMemo(() => getSelectedNode(state), [state]);
   const selectedRun = useMemo(() => getSelectedRun(state), [state]);
   const summary = useMemo(() => summarizeOpsState(state), [state]);
@@ -314,7 +420,15 @@ export const App = (): ReactElement => {
   };
 
   const handleAddNode = (): void => {
+    const nextNodeId = getNextAgentNodeId(state);
+    const sourceNodeId = state.selectedNodeId ?? state.nodes.at(-1)?.id ?? nextNodeId;
     setState(addAgentNode);
+    setEdgeDraft((current) => ({
+      ...current,
+      sourceNodeId,
+      targetNodeId: nextNodeId,
+      label: current.label.trim().length > 0 ? current.label : "next",
+    }));
     setMode("graph");
   };
 
@@ -338,6 +452,11 @@ export const App = (): ReactElement => {
     setState((current) => updateSelectedNode(current, { policy }));
   };
 
+  const handleStepSystemPromptChange = (event: ChangeEvent<HTMLTextAreaElement>): void => {
+    const systemPrompt = event.currentTarget.value;
+    setState((current) => updateSelectedNode(current, { systemPrompt }));
+  };
+
   const handleKindChange = (event: ChangeEvent<HTMLSelectElement>): void => {
     const kind = parseWorkflowNodeKind(event.currentTarget.value);
     setState((current) => updateSelectedNode(current, { kind }));
@@ -357,6 +476,35 @@ export const App = (): ReactElement => {
     setState((current) => selectRun(current, runId));
   };
 
+  const handleEdgeSourceChange = (event: ChangeEvent<HTMLSelectElement>): void => {
+    const sourceNodeId = event.currentTarget.value;
+    setEdgeDraft((current) => ({ ...current, sourceNodeId }));
+  };
+
+  const handleEdgeTargetChange = (event: ChangeEvent<HTMLSelectElement>): void => {
+    const targetNodeId = event.currentTarget.value;
+    setEdgeDraft((current) => ({ ...current, targetNodeId }));
+  };
+
+  const handleEdgeLabelChange = (event: ChangeEvent<HTMLInputElement>): void => {
+    const label = event.currentTarget.value;
+    setEdgeDraft((current) => ({ ...current, label }));
+  };
+
+  const handleConnectEdge = (): void => {
+    setState((current) =>
+      connectNodes(current, {
+        source: edgeDraft.sourceNodeId,
+        target: edgeDraft.targetNodeId,
+        label: edgeDraft.label,
+      })
+    );
+  };
+
+  const handleDisconnectEdge = (edgeId: string): void => {
+    setState((current) => disconnectEdge(current, edgeId));
+  };
+
   return (
     <main className="ops-shell">
       <header className="ops-topbar">
@@ -368,6 +516,10 @@ export const App = (): ReactElement => {
           <div>
             <dt>Nodes</dt>
             <dd>{summary.nodeCount}</dd>
+          </div>
+          <div>
+            <dt>Edges</dt>
+            <dd>{summary.edgeCount}</dd>
           </div>
           <div>
             <dt>Ready</dt>
@@ -400,8 +552,15 @@ export const App = (): ReactElement => {
       <section className="ops-workbench">
         <NodeList
           nodes={state.nodes}
+          edges={state.edges}
           selectedNodeId={state.selectedNodeId}
+          edgeDraft={edgeDraft}
           onAddNode={handleAddNode}
+          onConnectEdge={handleConnectEdge}
+          onDisconnectEdge={handleDisconnectEdge}
+          onEdgeLabelChange={handleEdgeLabelChange}
+          onEdgeSourceChange={handleEdgeSourceChange}
+          onEdgeTargetChange={handleEdgeTargetChange}
           onSelectNode={handleSelectNode}
         />
         <WorkflowGraph state={state} onSelectNode={handleSelectNode} />
@@ -427,6 +586,7 @@ export const App = (): ReactElement => {
             onKindChange={handleKindChange}
             onModelChange={handleModelChange}
             onPolicyChange={handlePolicyChange}
+            onStepSystemPromptChange={handleStepSystemPromptChange}
             onStatusChange={handleStatusChange}
             onTitleChange={handleTitleChange}
           />

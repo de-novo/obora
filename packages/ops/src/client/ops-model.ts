@@ -15,6 +15,7 @@ export interface WorkflowNode {
   readonly agent: string;
   readonly model: string;
   readonly policy: string;
+  readonly systemPrompt: string;
   readonly status: WorkflowNodeStatus;
   readonly x: number;
   readonly y: number;
@@ -22,6 +23,12 @@ export interface WorkflowNode {
 
 export interface WorkflowEdge {
   readonly id: string;
+  readonly source: string;
+  readonly target: string;
+  readonly label: string;
+}
+
+export interface EdgeConnectionInput {
   readonly source: string;
   readonly target: string;
   readonly label: string;
@@ -60,6 +67,7 @@ export interface OpsWorkbenchState {
 
 export interface OpsSummary {
   readonly nodeCount: number;
+  readonly edgeCount: number;
   readonly readyCount: number;
   readonly activeRuns: number;
   readonly failedRuns: number;
@@ -115,6 +123,7 @@ const emptyWorkflowNode: WorkflowNode = {
   agent: "operator",
   model: "default",
   policy: "none",
+  systemPrompt: "",
   status: "draft",
   x: 50,
   y: 50,
@@ -145,6 +154,7 @@ export const initialOpsState: OpsWorkbenchState = {
       agent: "ops-intake",
       model: "rule",
       policy: "schema-required",
+      systemPrompt: "Accept an operator request and normalize it into the workflow input contract.",
       status: "ready",
       x: 12,
       y: 44,
@@ -156,6 +166,8 @@ export const initialOpsState: OpsWorkbenchState = {
       agent: "contract-reviewer",
       model: "gpt-5.4",
       policy: "strict-json",
+      systemPrompt:
+        "Validate the request against the graph contract and report missing fields before execution.",
       status: "ready",
       x: 36,
       y: 28,
@@ -167,6 +179,8 @@ export const initialOpsState: OpsWorkbenchState = {
       agent: "policy-router",
       model: "rule",
       policy: "human-review-on-risk",
+      systemPrompt:
+        "Route the workflow according to policy state and pause when approval is required.",
       status: "draft",
       x: 60,
       y: 52,
@@ -178,6 +192,7 @@ export const initialOpsState: OpsWorkbenchState = {
       agent: "ops-dispatch",
       model: "rule",
       policy: "audit-required",
+      systemPrompt: "Prepare the operator handoff with an auditable final status and next action.",
       status: "blocked",
       x: 84,
       y: 36,
@@ -282,7 +297,9 @@ export const updateWorkflowPrompt = (
 
 export const updateSelectedNode = (
   state: OpsWorkbenchState,
-  patch: Partial<Pick<WorkflowNode, "agent" | "kind" | "model" | "policy" | "status" | "title">>
+  patch: Partial<
+    Pick<WorkflowNode, "agent" | "kind" | "model" | "policy" | "status" | "systemPrompt" | "title">
+  >
 ): OpsWorkbenchState => {
   const selectedNodeId = state.selectedNodeId ?? state.nodes[0]?.id;
 
@@ -297,10 +314,12 @@ export const updateSelectedNode = (
       };
 };
 
+export const getNextAgentNodeId = (state: OpsWorkbenchState): string =>
+  `agent-step-${state.nodes.length + 1}`;
+
 export const addAgentNode = (state: OpsWorkbenchState): OpsWorkbenchState => {
   const nextIndex = state.nodes.length + 1;
-  const previousNode = state.nodes.at(-1);
-  const nodeId = `agent-step-${nextIndex}`;
+  const nodeId = getNextAgentNodeId(state);
   const nextNode: WorkflowNode = {
     id: nodeId,
     title: `Agent step ${nextIndex}`,
@@ -308,29 +327,58 @@ export const addAgentNode = (state: OpsWorkbenchState): OpsWorkbenchState => {
     agent: `agent-${nextIndex}`,
     model: "gpt-5.4",
     policy: "operator-review",
+    systemPrompt: "Describe the system behavior for this workflow step.",
     status: "draft",
     x: Math.min(86, 14 + nextIndex * 16),
     y: nextIndex % 2 === 0 ? 64 : 30,
   };
-  const nextEdge: ReadonlyArray<WorkflowEdge> =
-    previousNode === undefined
-      ? []
-      : [
-          {
-            id: `${previousNode.id}-to-${nodeId}`,
-            source: previousNode.id,
-            target: nodeId,
-            label: "next",
-          },
-        ];
 
   return {
     ...state,
     selectedNodeId: nodeId,
     nodes: [...state.nodes, nextNode],
-    edges: [...state.edges, ...nextEdge],
   };
 };
+
+const normalizeEdgeLabel = (label: string): string => {
+  const trimmed = label.trim();
+  return trimmed.length > 0 ? trimmed : "next";
+};
+
+const edgeIdFor = (source: string, target: string): string => `${source}-to-${target}`;
+
+const hasNode = (state: OpsWorkbenchState, nodeId: string): boolean =>
+  state.nodes.some((node) => node.id === nodeId);
+
+export const connectNodes = (
+  state: OpsWorkbenchState,
+  input: EdgeConnectionInput
+): OpsWorkbenchState => {
+  const source = input.source;
+  const target = input.target;
+  const label = normalizeEdgeLabel(input.label);
+  const id = edgeIdFor(source, target);
+  const isValid = source !== target && hasNode(state, source) && hasNode(state, target);
+
+  if (!isValid) {
+    return state;
+  }
+
+  const nextEdge: WorkflowEdge = { id, source, target, label };
+  const hasExistingEdge = state.edges.some((edge) => edge.id === id);
+
+  return {
+    ...state,
+    edges: hasExistingEdge
+      ? state.edges.map((edge) => (edge.id === id ? nextEdge : edge))
+      : [...state.edges, nextEdge],
+  };
+};
+
+export const disconnectEdge = (state: OpsWorkbenchState, edgeId: string): OpsWorkbenchState => ({
+  ...state,
+  edges: state.edges.filter((edge) => edge.id !== edgeId),
+});
 
 export const resolveGraphEdges = (
   nodes: ReadonlyArray<WorkflowNode>,
@@ -347,12 +395,21 @@ export const resolveGraphEdges = (
 
 export const summarizeOpsState = (state: OpsWorkbenchState): OpsSummary => ({
   nodeCount: state.nodes.length,
+  edgeCount: state.edges.length,
   readyCount: state.nodes.filter((node) => node.status === "ready").length,
   activeRuns: state.runs.filter((run) => run.status === "running").length,
   failedRuns: state.runs.filter((run) => run.status === "failed").length,
 });
 
 const quoteYaml = (value: string): string => JSON.stringify(value);
+
+const renderYamlBlock = (key: string, value: string, indent: string): ReadonlyArray<string> => {
+  const lines = value.split("\n");
+
+  return value.trim().length === 0
+    ? [`${indent}${key}: ""`]
+    : [`${indent}${key}: |`, ...lines.map((line) => `${indent}  ${line}`)];
+};
 
 const renderNodeYaml = (node: WorkflowNode): ReadonlyArray<string> => [
   `    - id: ${quoteYaml(node.id)}`,
@@ -362,6 +419,7 @@ const renderNodeYaml = (node: WorkflowNode): ReadonlyArray<string> => [
   `      model: ${quoteYaml(node.model)}`,
   `      policy: ${quoteYaml(node.policy)}`,
   `      status: ${quoteYaml(node.status)}`,
+  ...renderYamlBlock("systemPrompt", node.systemPrompt, "      "),
 ];
 
 const renderEdgeYaml = (edge: WorkflowEdge): ReadonlyArray<string> => [
@@ -373,8 +431,7 @@ const renderEdgeYaml = (edge: WorkflowEdge): ReadonlyArray<string> => [
 export const compileWorkflowYaml = (state: OpsWorkbenchState): string =>
   [
     `name: ${quoteYaml(state.workflowName)}`,
-    "systemPrompt: |",
-    ...state.systemPrompt.split("\n").map((line) => `  ${line}`),
+    ...renderYamlBlock("systemPrompt", state.systemPrompt, ""),
     "graph:",
     "  nodes:",
     ...state.nodes.flatMap(renderNodeYaml),

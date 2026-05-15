@@ -45,6 +45,7 @@
 - Treat `@obora/dashboard` as a deprecated legacy monitoring/bootstrap surface. Keep its gates green while smoke/release checks still depend on it, but do not add new operator product work there.
 - Put new operator-facing web work in `@obora/ops`.
 - `@obora/ops` should cover graph workflow authoring, system prompt management, and execution history inspection first.
+- Treat prompts entered during ops workflow authoring as system prompts. Label and serialize workflow-level and step-level prompts as `systemPrompt`.
 - Keep ops UI state transitions in typed pure helpers, maintain the zero `let` / loop baseline, and introduce EffectTS boundaries before adding backend workflow validation, policy evaluation, or execution mutation APIs.
 - When deprecating or removing dashboard behavior, document whether the old responsibility moved to `@obora/ops`, stayed as server/bootstrap compatibility, or was intentionally removed in a breaking cleanup lane.
 

@@ -298,7 +298,8 @@ README / examples / tutorial 기준으로 현재 Obora가 제공하는 핵심 �
 현재 상태:
 
 - graph workflow authoring UI 초안
-- system prompt editing surface
+- manual node creation and edge connection surface
+- workflow-level and step-level system prompt editing surface
 - execution history inspection surface
 - pure typed model helper 기반 client state transition
 - package 자체 build/test/coverage 대상

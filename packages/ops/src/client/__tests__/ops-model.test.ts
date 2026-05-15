@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   addAgentNode,
   compileWorkflowYaml,
+  connectNodes,
+  disconnectEdge,
   getSelectedNode,
   getSelectedRun,
   initialOpsState,
@@ -31,6 +33,7 @@ describe("ops-model", () => {
   it("summarizes the initial operations state", () => {
     expect(summarizeOpsState(initialOpsState)).toEqual({
       nodeCount: 4,
+      edgeCount: 3,
       readyCount: 2,
       activeRuns: 1,
       failedRuns: 1,
@@ -63,6 +66,7 @@ describe("ops-model", () => {
     const updated = updateSelectedNode(initialOpsState, {
       title: "Review contract",
       kind: "decision",
+      systemPrompt: "Review every field as system policy.",
       status: "blocked",
     });
 
@@ -70,41 +74,111 @@ describe("ops-model", () => {
       id: "validate-input",
       title: "Review contract",
       kind: "decision",
+      systemPrompt: "Review every field as system policy.",
       status: "blocked",
     });
     expect(getSelectedNode(initialOpsState).title).toBe("Validate input");
   });
 
-  it("updates the system prompt", () => {
+  it("updates the workflow system prompt", () => {
     const updated = updateWorkflowPrompt(initialOpsState, "Keep every decision auditable.");
 
     expect(updated.systemPrompt).toBe("Keep every decision auditable.");
     expect(initialOpsState.systemPrompt).toContain("workflow operator");
   });
 
-  it("adds an agent node and connects it to the previous graph tail", () => {
+  it("adds an agent node without creating implicit edges", () => {
     const updated = addAgentNode(initialOpsState);
     const node = getSelectedNode(updated);
-    const edge = updated.edges.at(-1);
 
     expect(node).toMatchObject({
       id: "agent-step-5",
       title: "Agent step 5",
+      systemPrompt: "Describe the system behavior for this workflow step.",
       status: "draft",
     });
-    expect(edge).toMatchObject({
-      source: "handoff-result",
-      target: "agent-step-5",
-      label: "next",
-    });
+    expect(updated.edges).toHaveLength(initialOpsState.edges.length);
   });
 
   it("adds the first node without creating an edge", () => {
     const updated = addAgentNode(emptyState);
+    const second = addAgentNode(updated);
 
     expect(updated.nodes).toHaveLength(1);
     expect(updated.edges).toHaveLength(0);
     expect(updated.selectedNodeId).toBe("agent-step-1");
+    expect(getSelectedNode(second)).toMatchObject({
+      id: "agent-step-2",
+      y: 64,
+    });
+  });
+
+  it("connects nodes with a manual edge", () => {
+    const updated = connectNodes(addAgentNode(initialOpsState), {
+      source: "route-policy",
+      target: "agent-step-5",
+      label: "approved",
+    });
+
+    expect(updated.edges.at(-1)).toMatchObject({
+      id: "route-policy-to-agent-step-5",
+      source: "route-policy",
+      target: "agent-step-5",
+      label: "approved",
+    });
+  });
+
+  it("defaults blank manual edge labels to next", () => {
+    const updated = connectNodes(addAgentNode(initialOpsState), {
+      source: "route-policy",
+      target: "agent-step-5",
+      label: "  ",
+    });
+
+    expect(updated.edges.at(-1)).toMatchObject({
+      label: "next",
+    });
+  });
+
+  it("updates an existing manual edge instead of duplicating it", () => {
+    const connected = connectNodes(initialOpsState, {
+      source: "validate-input",
+      target: "route-policy",
+      label: "reviewed",
+    });
+
+    expect(connected.edges).toHaveLength(initialOpsState.edges.length);
+    expect(
+      connected.edges.find((edge) => edge.id === "validate-input-to-route-policy")
+    ).toMatchObject({
+      label: "reviewed",
+    });
+  });
+
+  it("ignores invalid edge connections", () => {
+    expect(
+      connectNodes(initialOpsState, {
+        source: "validate-input",
+        target: "validate-input",
+        label: "self",
+      })
+    ).toBe(initialOpsState);
+    expect(
+      connectNodes(initialOpsState, {
+        source: "missing",
+        target: "validate-input",
+        label: "missing",
+      })
+    ).toBe(initialOpsState);
+  });
+
+  it("disconnects edges by id", () => {
+    const updated = disconnectEdge(initialOpsState, "validate-input-to-route-policy");
+
+    expect(updated.edges.map((edge) => edge.id)).not.toContain("validate-input-to-route-policy");
+    expect(disconnectEdge(initialOpsState, "missing-edge").edges).toHaveLength(
+      initialOpsState.edges.length
+    );
   });
 
   it("resolves only graph edges with existing endpoints", () => {
@@ -134,6 +208,7 @@ describe("ops-model", () => {
 
     expect(compiled).toContain('name: "intake-to-decision"');
     expect(compiled).toContain("systemPrompt: |");
+    expect(compiled).toContain("Validate the request against the graph contract");
     expect(compiled).toContain('id: "validate-input"');
     expect(compiled).toContain('from: "validate-input"');
   });

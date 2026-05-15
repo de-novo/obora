@@ -9,7 +9,7 @@ import type { RepairLoopTracker } from "../repair-loop-tracker.js";
 import type { StorageAdapter } from "@obora/runtime";
 import type { HookExecutionResult } from "../../hooks.js";
 
-const RESUME_TEST_TIMEOUT_MS = 10_000;
+const RESUME_TEST_TIMEOUT_MS = 20_000;
 
 function createMockDeps() {
   const eventBus: EventBus = {
@@ -82,50 +82,72 @@ function createMockAdapter(): StorageAdapter {
 }
 
 describe("ResumeOrchestrator - executeResume", () => {
-  it("resumes execution with rerun steps", async () => {
-    const mockDeps = createMockDeps();
-    const orchestrator = new ResumeOrchestrator(mockDeps.deps);
-    const workflow = createWorkflowDef();
-    const adapter = createMockAdapter();
+  it(
+    "resumes execution with rerun steps",
+    async () => {
+      const mockDeps = createMockDeps();
+      const orchestrator = new ResumeOrchestrator(mockDeps.deps);
+      const workflow = createWorkflowDef();
+      const adapter = createMockAdapter();
 
-    const result = await orchestrator.executeResume(
-      "run-1", "test", workflow, {},
-      ["step2"],
-      [
-        { stepName: "step1", action: "restore", output: "restored-output" },
-        { stepName: "step2", action: "rerun" },
-      ],
-      {},
-      adapter
-    );
+      const result = await orchestrator.executeResume(
+        "run-1",
+        "test",
+        workflow,
+        {},
+        ["step2"],
+        [
+          { stepName: "step1", action: "restore", output: "restored-output" },
+          { stepName: "step2", action: "rerun" },
+        ],
+        {},
+        adapter
+      );
 
-    expect(result.status).toBe("completed");
-    expect(result.outputs.step1).toBe("restored-output");
-    expect(result.outputs.step2).toBe("result");
-    expect(mockDeps.eventBus.emit).toHaveBeenCalledWith("execution_start", "run-1", expect.any(Object));
-    expect(mockDeps.eventBus.emit).toHaveBeenCalledWith("execution_end", "run-1", expect.any(Object));
-    expect(adapter.saveRun).toHaveBeenCalledWith(expect.objectContaining({ status: "completed" }));
-  }, RESUME_TEST_TIMEOUT_MS);
+      expect(result.status).toBe("completed");
+      expect(result.outputs.step1).toBe("restored-output");
+      expect(result.outputs.step2).toBe("result");
+      expect(mockDeps.eventBus.emit).toHaveBeenCalledWith(
+        "execution_start",
+        "run-1",
+        expect.any(Object)
+      );
+      expect(mockDeps.eventBus.emit).toHaveBeenCalledWith(
+        "execution_end",
+        "run-1",
+        expect.any(Object)
+      );
+      expect(adapter.saveRun).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "completed" })
+      );
+    },
+    RESUME_TEST_TIMEOUT_MS
+  );
 
-  it("handles skip policy", async () => {
-    const mockDeps = createMockDeps();
-    const orchestrator = new ResumeOrchestrator(mockDeps.deps);
-    const workflow = createWorkflowDef();
-    const adapter = createMockAdapter();
+  it(
+    "handles skip policy",
+    async () => {
+      const mockDeps = createMockDeps();
+      const orchestrator = new ResumeOrchestrator(mockDeps.deps);
+      const workflow = createWorkflowDef();
+      const adapter = createMockAdapter();
 
-    const result = await orchestrator.executeResume(
-      "run-1", "test", workflow, {},
-      [],
-      [
-        { stepName: "step1", action: "skip" },
-      ],
-      {},
-      adapter
-    );
+      const result = await orchestrator.executeResume(
+        "run-1",
+        "test",
+        workflow,
+        {},
+        [],
+        [{ stepName: "step1", action: "skip" }],
+        {},
+        adapter
+      );
 
-    expect(result.completedSteps).toContain("step1");
-    expect(result.outputs.step1).toBeUndefined();
-  }, RESUME_TEST_TIMEOUT_MS);
+      expect(result.completedSteps).toContain("step1");
+      expect(result.outputs.step1).toBeUndefined();
+    },
+    RESUME_TEST_TIMEOUT_MS
+  );
 
   it("runs cost pre-gate and persists object outputs directly", async () => {
     const costTracker = { preStepGate: vi.fn().mockResolvedValue(undefined) };
@@ -270,7 +292,10 @@ describe("ResumeOrchestrator - executeResume", () => {
 
     await expect(
       orchestrator.executeResume(
-        "run-1", "test", workflow, {},
+        "run-1",
+        "test",
+        workflow,
+        {},
         ["step1"],
         [{ stepName: "step1", action: "rerun" }],
         {},
@@ -289,14 +314,21 @@ describe("ResumeOrchestrator - executeResume", () => {
 
     vi.mocked(mockDeps.engineBuilder.build).mockResolvedValue({
       stepExecutor: {
-        executeStep: vi.fn().mockRejectedValue(new (await import("../../cost-tracker.js")).BudgetExceededError("budget exceeded")),
+        executeStep: vi
+          .fn()
+          .mockRejectedValue(
+            new (await import("../../cost-tracker.js")).BudgetExceededError("budget exceeded")
+          ),
       },
       costTracker: undefined,
     } as never);
 
     await expect(
       orchestrator.executeResume(
-        "run-1", "test", workflow, {},
+        "run-1",
+        "test",
+        workflow,
+        {},
         ["step1"],
         [{ stepName: "step1", action: "rerun" }],
         {},
@@ -304,12 +336,14 @@ describe("ResumeOrchestrator - executeResume", () => {
       )
     ).rejects.toThrow("budget exceeded");
 
-    expect(adapter.saveStep).toHaveBeenCalledWith(expect.objectContaining({
-      status: "failed",
-      error: expect.objectContaining({
-        code: OboraErrorCode.POLICY_RESOURCE_EXCEEDED,
-      }),
-    }));
+    expect(adapter.saveStep).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "failed",
+        error: expect.objectContaining({
+          code: OboraErrorCode.POLICY_RESOURCE_EXCEEDED,
+        }),
+      })
+    );
   });
 
   it("executes hooks when configured", async () => {
@@ -348,7 +382,10 @@ describe("ResumeOrchestrator - executeResume", () => {
     vi.mocked(mockDeps.stepExecutionEngine.runStepHook).mockResolvedValue(hookResult);
 
     await orchestrator.executeResume(
-      "run-1", "test", workflow, {},
+      "run-1",
+      "test",
+      workflow,
+      {},
       ["step1"],
       [{ stepName: "step1", action: "rerun" }],
       {},
@@ -356,13 +393,23 @@ describe("ResumeOrchestrator - executeResume", () => {
     );
 
     expect(mockDeps.stepExecutionEngine.runStepHook).toHaveBeenCalledWith(
-      workflow, workflow.steps[0], "pre_step", "run-1"
+      workflow,
+      workflow.steps[0],
+      "pre_step",
+      "run-1"
     );
     expect(mockDeps.stepExecutionEngine.runStepHook).toHaveBeenCalledWith(
-      workflow, workflow.steps[0], "pre_validation", "run-1"
+      workflow,
+      workflow.steps[0],
+      "pre_validation",
+      "run-1"
     );
     expect(mockDeps.stepExecutionEngine.runStepHook).toHaveBeenCalledWith(
-      workflow, workflow.steps[0], "post_step", "run-1", { continueOnError: true }
+      workflow,
+      workflow.steps[0],
+      "post_step",
+      "run-1",
+      { continueOnError: true }
     );
   });
 });
