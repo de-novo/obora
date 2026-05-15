@@ -2,7 +2,6 @@
   color: #17201c;
   background: #f4f2ed;
   font-family:
-    Inter,
     ui-sans-serif,
     system-ui,
     -apple-system,
@@ -293,73 +292,199 @@ button {
   position: relative;
   min-height: 680px;
   overflow: hidden;
-  background:
-    linear-gradient(#ece7dc 1px, transparent 1px),
-    linear-gradient(90deg, #ece7dc 1px, transparent 1px), #fbf7ef;
-  background-size: 28px 28px;
+  background: #171c19;
 }
 
-.graph-lines {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+.graph-stage .react-flow {
+  min-height: 680px;
 }
 
-.graph-edge-line {
-  stroke: #9d8f7d;
-  stroke-width: 0.7;
-  vector-effect: non-scaling-stroke;
+.graph-stage .react-flow__pane {
+  cursor: grab;
 }
 
-.graph-edge-label {
-  fill: #5c675f;
-  font-size: 3px;
-  font-weight: 700;
-  letter-spacing: 0;
+.graph-stage .react-flow__pane:active {
+  cursor: grabbing;
 }
 
-.graph-node-layer {
-  position: absolute;
-  inset: 0;
-}
-
-.graph-node {
-  position: absolute;
-  display: grid;
-  width: 150px;
-  min-height: 82px;
-  transform: translate(-50%, -50%);
-  gap: 4px;
-  padding: 10px;
-  border: 2px solid #cec7b9;
-  border-radius: 8px;
-  background: #fffdf8;
-  color: #121815;
-  text-align: left;
-  box-shadow: 0 8px 18px rgb(39 34 25 / 8%);
-}
-
-.graph-node.selected {
-  border-color: #1f7a64;
-  box-shadow: 0 10px 24px rgb(31 122 100 / 18%);
-}
-
-.graph-node span,
-.graph-node small {
+.graph-stage .react-flow__controls {
   overflow: hidden;
-  color: #5f6e64;
-  font-size: 11px;
-  font-weight: 700;
-  text-overflow: ellipsis;
+  border: 1px solid #38433d;
+  border-radius: 8px;
+  background: #202722;
+  box-shadow: none;
+}
+
+.graph-stage .react-flow__controls-button {
+  width: 30px;
+  height: 30px;
+  border-bottom-color: #38433d;
+  background: #202722;
+  color: #eef5ee;
+}
+
+.workflow-minimap {
+  overflow: hidden;
+  border: 1px solid #38433d;
+  border-radius: 8px;
+  background: #202722;
+}
+
+.canvas-status-panel {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid #38433d;
+  border-radius: 8px;
+  background: #202722;
+  color: #dbe7df;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.canvas-status-panel span {
+  color: #91a197;
   text-transform: uppercase;
+}
+
+.workflow-canvas-node {
+  position: relative;
+  display: grid;
+  width: 230px;
+  min-height: 148px;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #4a554f;
+  border-radius: 8px;
+  background: #202722;
+  color: #eef5ee;
+  text-align: left;
+  box-shadow: 0 20px 45px rgb(4 8 6 / 28%);
+}
+
+.workflow-canvas-node.selected {
+  border-color: #65b29b;
+  box-shadow:
+    0 0 0 1px rgb(101 178 155 / 44%),
+    0 22px 48px rgb(4 8 6 / 34%);
+}
+
+.workflow-node-header {
+  display: grid;
+  gap: 5px;
+}
+
+.workflow-node-header span,
+.workflow-node-state {
+  width: fit-content;
+  color: #9ab0a3;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.workflow-node-header strong {
+  overflow-wrap: anywhere;
+  font-size: 16px;
+  line-height: 1.16;
+}
+
+.workflow-canvas-node dl {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+}
+
+.workflow-canvas-node dl div {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.workflow-canvas-node dt,
+.workflow-canvas-node dd {
+  overflow: hidden;
+  margin: 0;
+  font-size: 11px;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.graph-node strong {
-  overflow-wrap: anywhere;
-  font-size: 14px;
-  line-height: 1.18;
+.workflow-canvas-node dt {
+  color: #7d8e84;
+  font-weight: 800;
+}
+
+.workflow-canvas-node dd {
+  color: #e7efe9;
+}
+
+.workflow-node-state {
+  min-height: 22px;
+  padding: 4px 7px;
+  border: 1px solid #4b554f;
+  border-radius: 999px;
+  background: #18201b;
+}
+
+.workflow-handle {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #202722;
+  background: #8fb9a9;
+}
+
+.workflow-handle-input {
+  left: -8px;
+}
+
+.workflow-handle-output {
+  right: -8px;
+}
+
+.workflow-node-port-label {
+  position: absolute;
+  top: 50%;
+  color: #85958b;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0;
+  pointer-events: none;
+  text-transform: uppercase;
+}
+
+.workflow-node-port-label.input {
+  left: -44px;
+  transform: translateY(-50%);
+}
+
+.workflow-node-port-label.output {
+  right: -36px;
+  transform: translateY(-50%);
+}
+
+.workflow-flow-edge .react-flow__edge-path {
+  stroke: #9fb1a5;
+  stroke-width: 2;
+}
+
+.workflow-flow-edge.selected .react-flow__edge-path,
+.workflow-flow-edge:hover .react-flow__edge-path {
+  stroke: #65b29b;
+}
+
+.workflow-flow-edge-label {
+  fill: #dfe8e1;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.workflow-flow-edge-label-bg {
+  fill: #202722;
+  stroke: #3a453f;
+  stroke-width: 1;
 }
 
 .status-ready {
@@ -509,6 +634,10 @@ button {
   .graph-stage {
     min-height: 540px;
   }
+
+  .graph-stage .react-flow {
+    min-height: 540px;
+  }
 }
 
 @media (max-width: 720px) {
@@ -529,7 +658,7 @@ button {
     min-width: 0;
   }
 
-  .graph-node {
-    width: 128px;
+  .workflow-canvas-node {
+    width: 204px;
   }
 }

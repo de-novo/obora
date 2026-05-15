@@ -15,6 +15,7 @@ import {
   selectRun,
   summarizeOpsState,
   updateSelectedNode,
+  updateNodePositions,
   updateWorkflowPrompt,
   type OpsWorkbenchState,
 } from "../ops-model";
@@ -109,7 +110,7 @@ describe("ops-model", () => {
     expect(updated.selectedNodeId).toBe("agent-step-1");
     expect(getSelectedNode(second)).toMatchObject({
       id: "agent-step-2",
-      y: 64,
+      y: 420,
     });
   });
 
@@ -152,6 +153,23 @@ describe("ops-model", () => {
       connected.edges.find((edge) => edge.id === "validate-input-to-route-policy")
     ).toMatchObject({
       label: "reviewed",
+    });
+  });
+
+  it("updates dragged node canvas positions without mutating other nodes", () => {
+    const updated = updateNodePositions(initialOpsState, [
+      { id: "route-policy", position: { x: 720.4, y: 318.5 } },
+    ]);
+
+    expect(getSelectedNode(selectNode(updated, "route-policy"))).toMatchObject({
+      id: "route-policy",
+      x: 720,
+      y: 319,
+    });
+    expect(getSelectedNode(selectNode(updated, "validate-input"))).toMatchObject({
+      id: "validate-input",
+      x: 340,
+      y: 120,
     });
   });
 

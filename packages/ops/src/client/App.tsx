@@ -1,6 +1,26 @@
 import type { ChangeEvent, ReactElement } from "react";
-import { useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
+import {
+  Background,
+  ConnectionMode,
+  Controls,
+  Handle,
+  MarkerType,
+  MiniMap,
+  Panel,
+  Position,
+  ReactFlow,
+  ReactFlowProvider,
+  type Connection,
+  type Edge,
+  type EdgeMouseHandler,
+  type Node,
+  type NodeChange,
+  type NodeMouseHandler,
+  type NodeProps,
+} from "@xyflow/react";
 
+import "@xyflow/react/dist/style.css";
 import "./styles.css";
 import {
   addAgentNode,
@@ -23,14 +43,17 @@ import {
   selectRun,
   summarizeOpsState,
   updateSelectedNode,
+  updateNodePositions,
   updateWorkflowPrompt,
   workflowNodeKinds,
   workflowNodeStatuses,
+  type EdgeConnectionInput,
   type ExecutionRun,
   type OpsMode,
   type OpsWorkbenchState,
   type WorkflowEdge,
   type WorkflowNode,
+  type WorkflowNodePositionPatch,
 } from "./ops-model";
 
 const modeLabels: Record<OpsMode, string> = {
@@ -58,68 +81,227 @@ const initialEdgeDraft: EdgeDraft = {
 const nodeTitleFor = (nodes: ReadonlyArray<WorkflowNode>, nodeId: string): string =>
   nodes.find((node) => node.id === nodeId)?.title ?? nodeId;
 
+interface WorkflowCanvasNodeData extends Record<string, unknown> {
+  readonly node: WorkflowNode;
+}
+
+export type WorkflowCanvasNodeType = Node<WorkflowCanvasNodeData, "workflowNode">;
+export type WorkflowCanvasEdgeType = Edge<Record<string, never>, "smoothstep">;
+
+export const workflowNodeToCanvasNode = (
+  node: WorkflowNode,
+  selectedNodeId: string | undefined
+): WorkflowCanvasNodeType => ({
+  id: node.id,
+  type: "workflowNode",
+  position: { x: node.x, y: node.y },
+  data: { node },
+  sourcePosition: Position.Right,
+  targetPosition: Position.Left,
+  draggable: true,
+  selected: node.id === selectedNodeId,
+  selectable: true,
+  focusable: true,
+  ariaRole: "button",
+  ariaLabel: `Select ${node.title}`,
+});
+
+export const workflowEdgeToCanvasEdge = (edge: WorkflowEdge): WorkflowCanvasEdgeType => ({
+  id: edge.id,
+  source: edge.source,
+  target: edge.target,
+  type: "smoothstep",
+  label: edge.label,
+  markerEnd: {
+    type: MarkerType.ArrowClosed,
+    width: 18,
+    height: 18,
+  },
+  className: "workflow-flow-edge",
+  labelShowBg: true,
+  labelStyle: {
+    fill: "#dfe8e1",
+    fontSize: 12,
+    fontWeight: 800,
+  },
+  labelBgStyle: {
+    fill: "#202722",
+    stroke: "#3a453f",
+    strokeWidth: 1,
+  },
+  labelBgPadding: [8, 4],
+  labelBgBorderRadius: 6,
+});
+
+export const canvasPositionPatchFromChange = (
+  change: NodeChange<WorkflowCanvasNodeType>
+): ReadonlyArray<WorkflowNodePositionPatch> =>
+  change.type === "position" && change.position !== undefined
+    ? [{ id: change.id, position: change.position }]
+    : [];
+
+export const canvasPositionPatchesFromChanges = (
+  changes: ReadonlyArray<NodeChange<WorkflowCanvasNodeType>>
+): ReadonlyArray<WorkflowNodePositionPatch> => changes.flatMap(canvasPositionPatchFromChange);
+
+export const edgeConnectionInputFromCanvas = (connection: Connection): EdgeConnectionInput => ({
+  source: connection.source,
+  target: connection.target,
+  label: "next",
+});
+
+export const edgeIdsFromDeletedCanvasEdges = (
+  deletedEdges: ReadonlyArray<WorkflowCanvasEdgeType>
+): ReadonlyArray<string> => deletedEdges.map((edge) => edge.id);
+
+export const nodeColorForCanvasNode = (
+  workflowNodes: ReadonlyArray<WorkflowNode>,
+  canvasNode: Node
+): string =>
+  workflowNodes.find((workflowNode) => workflowNode.id === canvasNode.id)?.status === "ready"
+    ? "#1f7a64"
+    : "#b98925";
+
+const WorkflowCanvasNode = memo(
+  ({ data, selected }: NodeProps<WorkflowCanvasNodeType>): ReactElement => {
+    const node = data.node;
+
+    return (
+      <div
+        className={[
+          "workflow-canvas-node",
+          statusClass(node.status),
+          selected ? "selected" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
+        <Handle
+          type="target"
+          position={Position.Left}
+          className="workflow-handle workflow-handle-input"
+          id="input"
+        />
+        <div className="workflow-node-port-label input">input</div>
+        <div className="workflow-node-header">
+          <span>{nodeKindLabels[node.kind]}</span>
+          <strong>{node.title}</strong>
+        </div>
+        <dl>
+          <div>
+            <dt>Agent</dt>
+            <dd>{node.agent}</dd>
+          </div>
+          <div>
+            <dt>Model</dt>
+            <dd>{node.model}</dd>
+          </div>
+          <div>
+            <dt>Policy</dt>
+            <dd>{node.policy}</dd>
+          </div>
+        </dl>
+        <span className={["workflow-node-state", statusClass(node.status)].join(" ")}>
+          {nodeStatusLabels[node.status]}
+        </span>
+        <Handle
+          type="source"
+          position={Position.Right}
+          className="workflow-handle workflow-handle-output"
+          id="next"
+        />
+        <div className="workflow-node-port-label output">next</div>
+      </div>
+    );
+  }
+);
+
+WorkflowCanvasNode.displayName = "WorkflowCanvasNode";
+
+const workflowNodeTypes = {
+  workflowNode: WorkflowCanvasNode,
+};
+
 interface WorkflowGraphProps {
   readonly state: OpsWorkbenchState;
   readonly onSelectNode: (nodeId: string) => void;
+  readonly onConnectNodes: (connection: Connection) => void;
+  readonly onDeleteEdges: (edgeIds: ReadonlyArray<string>) => void;
+  readonly onMoveNodes: (patches: ReadonlyArray<WorkflowNodePositionPatch>) => void;
 }
 
-const WorkflowGraph = ({ state, onSelectNode }: WorkflowGraphProps): ReactElement => {
+const WorkflowGraph = ({
+  onConnectNodes,
+  onDeleteEdges,
+  onMoveNodes,
+  onSelectNode,
+  state,
+}: WorkflowGraphProps): ReactElement => {
+  const nodes = useMemo(
+    () => state.nodes.map((node) => workflowNodeToCanvasNode(node, state.selectedNodeId)),
+    [state.nodes, state.selectedNodeId]
+  );
   const edges = useMemo(
-    () => resolveGraphEdges(state.nodes, state.edges),
+    () => resolveGraphEdges(state.nodes, state.edges).map(workflowEdgeToCanvasEdge),
     [state.edges, state.nodes]
+  );
+  const handleNodeClick = useCallback<NodeMouseHandler<WorkflowCanvasNodeType>>(
+    (_event, node) => onSelectNode(node.id),
+    [onSelectNode]
+  );
+  const handleEdgeClick = useCallback<EdgeMouseHandler<WorkflowCanvasEdgeType>>(
+    (event) => event.currentTarget.classList.add("edge-click-pulse"),
+    []
+  );
+  const handleNodesChange = useCallback(
+    (changes: NodeChange<WorkflowCanvasNodeType>[]): void =>
+      onMoveNodes(canvasPositionPatchesFromChanges(changes)),
+    [onMoveNodes]
   );
 
   return (
-    <section className="graph-stage" aria-label="Workflow graph">
-      <svg
-        className="graph-lines"
-        viewBox="0 0 100 100"
-        preserveAspectRatio="none"
-        aria-hidden="true"
-      >
-        {edges.map((edge) => (
-          <g key={edge.id}>
-            <line
-              className="graph-edge-line"
-              x1={edge.sourceNode.x}
-              y1={edge.sourceNode.y}
-              x2={edge.targetNode.x}
-              y2={edge.targetNode.y}
-            />
-            <text
-              className="graph-edge-label"
-              x={(edge.sourceNode.x + edge.targetNode.x) / 2}
-              y={(edge.sourceNode.y + edge.targetNode.y) / 2 - 3}
-            >
-              {edge.label}
-            </text>
-          </g>
-        ))}
-      </svg>
-
-      <div className="graph-node-layer">
-        {state.nodes.map((node) => (
-          <button
-            key={node.id}
-            type="button"
-            className={[
-              "graph-node",
-              statusClass(node.status),
-              node.id === state.selectedNodeId ? "selected" : "",
-            ]
-              .filter(Boolean)
-              .join(" ")}
-            style={{ left: `${node.x}%`, top: `${node.y}%` }}
-            aria-pressed={node.id === state.selectedNodeId}
-            aria-label={`Select ${node.title}`}
-            onClick={() => onSelectNode(node.id)}
-          >
-            <span>{nodeKindLabels[node.kind]}</span>
-            <strong>{node.title}</strong>
-            <small>{node.agent}</small>
-          </button>
-        ))}
-      </div>
+    <section className="graph-stage" aria-label="Workflow infinite canvas">
+      <ReactFlowProvider>
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={workflowNodeTypes}
+          onConnect={onConnectNodes}
+          onEdgesDelete={(deletedEdges) => onDeleteEdges(edgeIdsFromDeletedCanvasEdges(deletedEdges))}
+          onEdgeClick={handleEdgeClick}
+          onNodeClick={handleNodeClick}
+          onNodesChange={handleNodesChange}
+          fitView
+          fitViewOptions={{ padding: 0.24, maxZoom: 1.1 }}
+          minZoom={0.2}
+          maxZoom={1.8}
+          snapToGrid
+          snapGrid={[24, 24]}
+          connectionMode={ConnectionMode.Loose}
+          panOnScroll
+          selectionOnDrag
+          multiSelectionKeyCode="Shift"
+          deleteKeyCode={["Backspace", "Delete"]}
+          proOptions={{ hideAttribution: true }}
+          defaultEdgeOptions={{
+            type: "smoothstep",
+            markerEnd: { type: MarkerType.ArrowClosed },
+          }}
+        >
+          <Background color="#d8d0c3" gap={24} size={1} />
+          <MiniMap
+            className="workflow-minimap"
+            pannable
+            zoomable
+            nodeColor={(node) => nodeColorForCanvasNode(state.nodes, node)}
+          />
+          <Controls position="bottom-left" showInteractive={false} />
+          <Panel className="canvas-status-panel" position="top-left">
+            <span>Infinite canvas</span>
+            <strong>{state.nodes.length} nodes</strong>
+          </Panel>
+        </ReactFlow>
+      </ReactFlowProvider>
     </section>
   );
 };
@@ -501,6 +683,23 @@ export const App = (): ReactElement => {
     );
   };
 
+  const handleCanvasConnect = useCallback((connection: Connection): void => {
+    setState((current) => connectNodes(current, edgeConnectionInputFromCanvas(connection)));
+  }, []);
+
+  const handleCanvasEdgeDelete = useCallback((edgeIds: ReadonlyArray<string>): void => {
+    setState((current) =>
+      edgeIds.reduce((nextState, edgeId) => disconnectEdge(nextState, edgeId), current)
+    );
+  }, []);
+
+  const handleCanvasNodeMove = useCallback(
+    (patches: ReadonlyArray<WorkflowNodePositionPatch>): void => {
+      setState((current) => updateNodePositions(current, patches));
+    },
+    []
+  );
+
   const handleDisconnectEdge = (edgeId: string): void => {
     setState((current) => disconnectEdge(current, edgeId));
   };
@@ -563,7 +762,13 @@ export const App = (): ReactElement => {
           onEdgeTargetChange={handleEdgeTargetChange}
           onSelectNode={handleSelectNode}
         />
-        <WorkflowGraph state={state} onSelectNode={handleSelectNode} />
+        <WorkflowGraph
+          state={state}
+          onConnectNodes={handleCanvasConnect}
+          onDeleteEdges={handleCanvasEdgeDelete}
+          onMoveNodes={handleCanvasNodeMove}
+          onSelectNode={handleSelectNode}
+        />
         {mode === "prompt" ? (
           <PromptPanel
             prompt={state.systemPrompt}

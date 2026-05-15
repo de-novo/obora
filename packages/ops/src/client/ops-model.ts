@@ -21,6 +21,16 @@ export interface WorkflowNode {
   readonly y: number;
 }
 
+export interface WorkflowNodePosition {
+  readonly x: number;
+  readonly y: number;
+}
+
+export interface WorkflowNodePositionPatch {
+  readonly id: string;
+  readonly position: WorkflowNodePosition;
+}
+
 export interface WorkflowEdge {
   readonly id: string;
   readonly source: string;
@@ -156,8 +166,8 @@ export const initialOpsState: OpsWorkbenchState = {
       policy: "schema-required",
       systemPrompt: "Accept an operator request and normalize it into the workflow input contract.",
       status: "ready",
-      x: 12,
-      y: 44,
+      x: 40,
+      y: 220,
     },
     {
       id: "validate-input",
@@ -169,8 +179,8 @@ export const initialOpsState: OpsWorkbenchState = {
       systemPrompt:
         "Validate the request against the graph contract and report missing fields before execution.",
       status: "ready",
-      x: 36,
-      y: 28,
+      x: 340,
+      y: 120,
     },
     {
       id: "route-policy",
@@ -182,8 +192,8 @@ export const initialOpsState: OpsWorkbenchState = {
       systemPrompt:
         "Route the workflow according to policy state and pause when approval is required.",
       status: "draft",
-      x: 60,
-      y: 52,
+      x: 640,
+      y: 260,
     },
     {
       id: "handoff-result",
@@ -194,8 +204,8 @@ export const initialOpsState: OpsWorkbenchState = {
       policy: "audit-required",
       systemPrompt: "Prepare the operator handoff with an auditable final status and next action.",
       status: "blocked",
-      x: 84,
-      y: 36,
+      x: 940,
+      y: 160,
     },
   ],
   edges: [
@@ -329,8 +339,8 @@ export const addAgentNode = (state: OpsWorkbenchState): OpsWorkbenchState => {
     policy: "operator-review",
     systemPrompt: "Describe the system behavior for this workflow step.",
     status: "draft",
-    x: Math.min(86, 14 + nextIndex * 16),
-    y: nextIndex % 2 === 0 ? 64 : 30,
+    x: 40 + nextIndex * 250,
+    y: nextIndex % 2 === 0 ? 420 : 120,
   };
 
   return {
@@ -339,6 +349,27 @@ export const addAgentNode = (state: OpsWorkbenchState): OpsWorkbenchState => {
     nodes: [...state.nodes, nextNode],
   };
 };
+
+export const updateNodePositions = (
+  state: OpsWorkbenchState,
+  patches: ReadonlyArray<WorkflowNodePositionPatch>
+): OpsWorkbenchState =>
+  patches.length === 0
+    ? state
+    : {
+        ...state,
+        nodes: state.nodes.map((node) => {
+          const patch = patches.find((candidate) => candidate.id === node.id);
+
+          return patch === undefined
+            ? node
+            : {
+                ...node,
+                x: Math.round(patch.position.x),
+                y: Math.round(patch.position.y),
+              };
+        }),
+      };
 
 const normalizeEdgeLabel = (label: string): string => {
   const trimmed = label.trim();
