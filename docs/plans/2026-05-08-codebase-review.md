@@ -9,37 +9,50 @@
 
 ## Verification Summary
 
-| Gate | Result | Notes |
-| --- | --- | --- |
-| `pnpm typecheck` | PASS | 5 package typecheck tasks completed. |
-| `pnpm lint` | PASS | Existing lint gate passed before the review-gate fixes. |
-| `pnpm test` | PASS | 5 workspace packages passed: adapters 181, runtime 1224, sdk 805, dashboard 211, cli 630 tests. Required local port binding because dashboard server tests bind `127.0.0.1`. |
-| `pnpm verify:coverage` | PASS | Every package is now above 90% for statements, branches, functions, and lines. Required local port binding because dashboard tests bind `127.0.0.1`. |
-| `pnpm build` | PASS | All 5 build tasks passed. |
-| `pnpm verify:smoke` | PASS | Passed with local port binding allowed; the pure sandbox blocks dashboard bootstrap listen with `EPERM`. |
-| `pnpm verify:release` | PASS | Passed after the doc-snippet verifier stopped generating deprecated TS 6 `baseUrl`. |
-| `pnpm verify:compat` | PASS | Compat/deprecation inventory is tracked by allowlist. |
-| `pnpm verify:test-type-debt` | PASS | SDK/CLI/runtime test type debt allowlist is empty. |
-| `pnpm verify:deps` | PASS | Package manifests reject deprecated pi packages and drift in managed dependency ranges. |
-| `pnpm verify:functional` | PASS | File-level ratchet is locked at `mutableBinding=0/0`, `loopStatement=0/0`, 0 baseline entries. |
-| `pnpm verify:sdk-public-api` | PASS | SDK no-console and public API snapshot passed. |
-| `pnpm audit --audit-level moderate` | PASS | No known vulnerabilities found. |
-| `bash scripts/review-gate-selftest.sh` | PASS | Selftest now covers coverage-output exclusion and canonical sandbox artifact smoke. |
-| `bash scripts/review-gate.sh` | PASS | Passed with local port binding allowed; the pure sandbox blocks dashboard tests on `127.0.0.1` listen with `EPERM`. |
+| Gate                                   | Result | Notes                                                                                                                                                                        |
+| -------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm typecheck`                       | PASS   | 5 package typecheck tasks completed.                                                                                                                                         |
+| `pnpm lint`                            | PASS   | Existing lint gate passed before the review-gate fixes.                                                                                                                      |
+| `pnpm test`                            | PASS   | 5 workspace packages passed: adapters 181, runtime 1224, sdk 805, dashboard 211, cli 630 tests. Required local port binding because dashboard server tests bind `127.0.0.1`. |
+| `pnpm verify:coverage`                 | PASS   | Every package is now above 90% for statements, branches, functions, and lines. Required local port binding because dashboard tests bind `127.0.0.1`.                         |
+| `pnpm build`                           | PASS   | All 5 build tasks passed.                                                                                                                                                    |
+| `pnpm verify:smoke`                    | PASS   | Passed with local port binding allowed; the pure sandbox blocks dashboard bootstrap listen with `EPERM`.                                                                     |
+| `pnpm verify:release`                  | PASS   | Passed after the doc-snippet verifier stopped generating deprecated TS 6 `baseUrl`.                                                                                          |
+| `pnpm verify:compat`                   | PASS   | Compat/deprecation inventory is tracked by allowlist.                                                                                                                        |
+| `pnpm verify:test-type-debt`           | PASS   | SDK/CLI/runtime test type debt allowlist is empty.                                                                                                                           |
+| `pnpm verify:deps`                     | PASS   | Package manifests reject deprecated pi packages and drift in managed dependency ranges.                                                                                      |
+| `pnpm verify:functional`               | PASS   | File-level ratchet is locked at `mutableBinding=0/0`, `loopStatement=0/0`, 0 baseline entries.                                                                               |
+| `pnpm verify:sdk-public-api`           | PASS   | SDK no-console and public API snapshot passed.                                                                                                                               |
+| `pnpm audit --audit-level moderate`    | PASS   | No known vulnerabilities found.                                                                                                                                              |
+| `bash scripts/review-gate-selftest.sh` | PASS   | Selftest now covers coverage-output exclusion and canonical sandbox artifact smoke.                                                                                          |
+| `bash scripts/review-gate.sh`          | PASS   | Passed with local port binding allowed; the pure sandbox blocks dashboard tests on `127.0.0.1` listen with `EPERM`.                                                          |
 
 ## Coverage Evidence
 
 `pnpm verify:coverage` now reports every package above 90% for statements, branches, functions, and lines. `scripts/coverage/thresholds.json` enforces 90% branch floors for runtime, CLI, and dashboard, so the previous branch-coverage debt is now blocked by the gate.
 
-| Package | Statements | Branches | Functions | Lines |
-| --- | ---: | ---: | ---: | ---: |
-| `@obora/sdk` | 97.03% | 91.34% | 97.46% | 97.52% |
-| `@obora/runtime` | 94.92% | 90.17% | 95.29% | 95.15% |
-| `@obora/adapters` | 96.25% | 92.28% | 98.24% | 96.88% |
-| `@obora/cli` | 95.78% | 90.05% | 97.42% | 96.47% |
-| `@obora/dashboard` | 94.07% | 90.14% | 93.67% | 94.21% |
+| Package            | Statements | Branches | Functions |  Lines |
+| ------------------ | ---------: | -------: | --------: | -----: |
+| `@obora/sdk`       |     97.03% |   91.34% |    97.46% | 97.52% |
+| `@obora/runtime`   |     94.92% |   90.17% |    95.29% | 95.15% |
+| `@obora/adapters`  |     96.25% |   92.28% |    98.24% | 96.88% |
+| `@obora/cli`       |     95.78% |   90.05% |    97.42% | 96.47% |
+| `@obora/dashboard` |     94.07% |   90.14% |    93.67% | 94.21% |
 
 The enforced branch floors are now at least 90 for every package in `scripts/coverage/thresholds.json`.
+
+### 2026-05-15 Ops Coverage Update
+
+`pnpm verify:coverage` now includes `@obora/ops` in `scripts/coverage/report.mjs` and `scripts/coverage/thresholds.json`.
+
+| Package            | Statements | Branches | Functions |  Lines |
+| ------------------ | ---------: | -------: | --------: | -----: |
+| `@obora/sdk`       |     97.03% |   91.34% |    97.46% | 97.52% |
+| `@obora/runtime`   |     94.90% |   90.19% |    95.22% | 95.13% |
+| `@obora/adapters`  |     96.25% |   92.28% |    98.24% | 96.88% |
+| `@obora/cli`       |     95.78% |   90.05% |    97.42% | 96.47% |
+| `@obora/dashboard` |     94.07% |   90.14% |    93.67% | 94.21% |
+| `@obora/ops`       |     92.80% |   97.72% |    90.14% | 93.85% |
 
 ## Findings
 
