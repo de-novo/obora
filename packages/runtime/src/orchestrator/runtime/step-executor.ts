@@ -3,6 +3,7 @@
  */
 
 import type { Step } from "../workflow/index.js";
+import { Effect } from "effect";
 import {
   type AgentConfig,
   SkillLoader,
@@ -255,6 +256,27 @@ function taskToRun(step: Step): Task {
 }
 
 export async function executeStep(
+  step: Step,
+  resolver: AgentResolver,
+  context: AgentContext,
+  options?: ExecuteStepOptions,
+): Promise<StepResult> {
+  return Effect.runPromise(executeStepEffect(step, resolver, context, options));
+}
+
+export function executeStepEffect(
+  step: Step,
+  resolver: AgentResolver,
+  context: AgentContext,
+  options?: ExecuteStepOptions,
+): Effect.Effect<StepResult, unknown> {
+  return Effect.tryPromise({
+    try: () => executeStepPromise(step, resolver, context, options),
+    catch: (error) => error,
+  });
+}
+
+async function executeStepPromise(
   step: Step,
   resolver: AgentResolver,
   context: AgentContext,

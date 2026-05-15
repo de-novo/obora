@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { Effect } from "effect";
 import { parse } from "yaml";
 import type {
   DynamicQuotaConfig,
@@ -307,8 +308,21 @@ export function normalizePolicySet(input: unknown): PolicySet {
   return policySet;
 }
 
+export const normalizePolicySetEffect = (input: unknown): Effect.Effect<PolicySet, unknown> =>
+  Effect.try({
+    try: () => normalizePolicySet(input),
+    catch: (error) => error,
+  });
+
 export async function loadPolicyFromYaml(path: string): Promise<PolicySet> {
-  const content = await readFile(path, "utf-8");
-  const parsed = parse(content);
-  return normalizePolicySet(parsed);
+  return Effect.runPromise(loadPolicyFromYamlEffect(path));
 }
+
+export const loadPolicyFromYamlEffect = (path: string): Effect.Effect<PolicySet, unknown> =>
+  Effect.tryPromise({
+    try: async () => {
+      const content = await readFile(path, "utf-8");
+      return parse(content);
+    },
+    catch: (error) => error,
+  }).pipe(Effect.flatMap(normalizePolicySetEffect));

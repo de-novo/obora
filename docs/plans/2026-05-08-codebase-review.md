@@ -472,3 +472,57 @@ Current final results:
 - `pnpm verify:coverage`: PASS with statements/branches/functions/lines at SDK 97.03/91.34/97.46/97.52, runtime 94.92/90.17/95.29/95.15, adapters 96.25/92.28/98.24/96.88, CLI 95.78/90.05/97.42/96.47, dashboard 94.07/90.14/93.67/94.21.
 - `pnpm typecheck`, `pnpm lint`, `pnpm verify:test-type-debt`, `pnpm verify:compat`, `pnpm verify:deps`, `pnpm verify:coverage`, `pnpm verify:release`, `pnpm verify:smoke`, and `bash scripts/review-gate.sh`: PASS.
 - `pnpm verify:smoke` and `bash scripts/review-gate.sh` both passed in this final run with local `127.0.0.1` port binding available.
+
+## EffectTS Boundary Expansion Follow-up
+
+Branch: `codex/functional-cleanup-next`
+
+Verified changes in this lane:
+
+- `PolicyLoader` now exposes `normalizePolicySetEffect` and `loadPolicyFromYamlEffect`; the existing `loadPolicyFromYaml` Promise API remains backward-compatible and runs through the Effect boundary.
+- `DefaultPolicyEngine` now exposes additive `loadEffect`, `loadInlineEffect`, `reloadEffect`, `snapshotEffect`, and `enforceEffect` methods while preserving existing sync/Promise APIs.
+- Policy condition validation now has an explicit `validatePolicyConditionsEffect` boundary.
+- Runtime step execution now exposes `executeStepEffect`; the existing `executeStep` Promise API remains backward-compatible and runs through that Effect boundary.
+- No dependency versions were changed in this lane.
+
+Follow-up command evidence captured during this lane:
+
+```bash
+pnpm --filter @obora/runtime test -- policy/__tests__/DefaultPolicyEngine.test.ts policy/__tests__/DynamicPolicy.test.ts policy/__tests__/PolicyRules.test.ts
+pnpm --filter @obora/runtime test -- orchestrator/__tests__/step-executor.test.ts policy/__tests__/DefaultPolicyEngine.test.ts
+pnpm --filter @obora/runtime test -- policy/__tests__/PolicyLoader.test.ts policy/__tests__/DefaultPolicyEngine.test.ts orchestrator/__tests__/step-executor.test.ts
+pnpm --filter @obora/runtime test
+pnpm --filter @obora/runtime typecheck
+pnpm --filter @obora/runtime lint
+pnpm typecheck
+pnpm lint
+pnpm verify:compat
+pnpm verify:functional
+pnpm verify:release
+pnpm verify:deps
+pnpm verify:test-type-debt
+git diff --check
+pnpm test
+pnpm verify:coverage
+pnpm verify:smoke
+bash scripts/review-gate.sh
+```
+
+Current verified state:
+
+- Targeted runtime tests: PASS with 51 tests across `PolicyLoader`, `DefaultPolicyEngine`, and `step-executor`.
+- Full runtime tests: PASS with 94 files and 1228 tests.
+- `pnpm --filter @obora/runtime typecheck`: PASS.
+- `pnpm --filter @obora/runtime lint`: PASS.
+- `pnpm typecheck`: PASS across all 5 packages.
+- `pnpm lint`: PASS across all 5 packages.
+- `pnpm verify:compat`: PASS.
+- `pnpm verify:functional`: PASS with `mutableBinding=0/0`, `loopStatement=0/0`, 0 file baseline entries.
+- `pnpm verify:release`: PASS.
+- `pnpm verify:deps`: PASS; dependency versions were intentionally left unchanged.
+- `pnpm verify:test-type-debt`: PASS.
+- `git diff --check`: PASS.
+- `pnpm test`: PASS with adapters 181, runtime 1228, SDK 805, dashboard 211, and CLI 630 tests.
+- `pnpm verify:coverage`: PASS with branch coverage at SDK 91.34%, runtime 90.19%, adapters 92.28%, CLI 90.05%, dashboard 90.14%.
+- `pnpm verify:smoke`: PASS.
+- `bash scripts/review-gate.sh`: PASS.
