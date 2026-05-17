@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export LC_ALL=C
+export LANG=C
+export LC_CTYPE=C
 
 ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$ROOT_DIR"

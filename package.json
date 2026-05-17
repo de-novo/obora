@@ -16,14 +16,14 @@
     "verify:coverage": "node scripts/coverage/report.mjs --thresholds=scripts/coverage/thresholds.json",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "clean": "turbo clean && rm -rf node_modules",
-    "verify:clean": "bash scripts/verify-clean.sh",
-    "verify:release": "bash scripts/release/verify-release.sh",
+    "verify:clean": "LC_ALL=C LANG=C LC_CTYPE=C bash scripts/verify-clean.sh",
+    "verify:release": "LC_ALL=C LANG=C LC_CTYPE=C bash scripts/release/verify-release.sh",
     "verify:smoke": "node scripts/release/verify-operational-smoke.mjs",
-    "verify:compat": "bash scripts/release/verify-compat-inventory.sh",
+    "verify:compat": "LC_ALL=C LANG=C LC_CTYPE=C bash scripts/release/verify-compat-inventory.sh",
     "verify:deps": "node scripts/release/verify-dependency-policy.mjs",
     "verify:functional": "node scripts/release/verify-functional-policy.mjs",
     "verify:functional:update": "node scripts/release/verify-functional-policy.mjs --update",
-    "verify:test-type-debt": "bash scripts/release/verify-test-type-debt.sh",
+    "verify:test-type-debt": "LC_ALL=C LANG=C LC_CTYPE=C bash scripts/release/verify-test-type-debt.sh",
     "verify:sdk-public-api": "node scripts/release/verify-sdk-no-console.mjs && node scripts/release/verify-sdk-public-api.mjs"
   },
   "repository": {
