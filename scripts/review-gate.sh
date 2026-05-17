@@ -65,7 +65,7 @@ DEPRECATED_ALLOWLIST_FILE="${DEPRECATED_ALLOWLIST_FILE:-}"
 run_step() {
   local label="$1"
   local cmd="$2"
-  echo "\n==> ${label}"
+  printf '\n==> %s\n' "$label"
   bash -lc "$cmd"
 }
 
@@ -189,7 +189,7 @@ while IFS= read -r line; do
   EFFECTIVE_SCAN_PATHS+=("$line")
 done < <(collect_existing_paths "$SCAN_PATHS")
 
-echo "\n==> Deprecated scan"
+printf '\n==> Deprecated scan\n'
 DEPRECATED_MATCHES_FILE="$(mktemp)"
 DEPRECATED_FILTERED_FILE="$(mktemp)"
 trap 'rm -f "$DEPRECATED_MATCHES_FILE" "$DEPRECATED_FILTERED_FILE"' EXIT
@@ -217,7 +217,7 @@ else
   exit "$deprecated_scan_status"
 fi
 
-echo "\n==> Ban pattern scan"
+printf '\n==> Ban pattern scan\n'
 ban_scan_status=0
 scan_pattern "$BAN_GREP" ban "${EFFECTIVE_SCAN_PATHS[@]}" || ban_scan_status=$?
 if (( ban_scan_status == 0 )); then
@@ -242,4 +242,4 @@ if [[ -n "$SANDBOX_SMOKE_CMD" ]]; then
 fi
 run_step "Build" "$BUILD_CMD"
 
-echo "\n[PASS] Review gate completed successfully."
+printf '\n[PASS] Review gate completed successfully.\n'
