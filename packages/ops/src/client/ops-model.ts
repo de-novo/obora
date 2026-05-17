@@ -8,6 +8,8 @@ export type RunStatus = "running" | "passed" | "failed";
 
 export type RunStepStatus = "queued" | "running" | "passed" | "failed";
 
+export type TraceConfidenceLevel = "high" | "medium" | "low";
+
 export interface WorkflowNode {
   readonly id: string;
   readonly title: string;
@@ -54,6 +56,18 @@ export interface ExecutionRunStep {
   readonly title: string;
   readonly status: RunStepStatus;
   readonly durationMs: number;
+  readonly trace?: ExecutionStepTrace;
+}
+
+export interface ExecutionStepTrace {
+  readonly task_summary: string;
+  readonly methodology: string;
+  readonly key_decisions: ReadonlyArray<string>;
+  readonly assumptions: ReadonlyArray<string>;
+  readonly risks_identified: ReadonlyArray<string>;
+  readonly artifacts_created: ReadonlyArray<string>;
+  readonly confidence_level: TraceConfidenceLevel;
+  readonly context_for_successors: string;
 }
 
 export interface ExecutionRun {
@@ -236,8 +250,40 @@ export const initialOpsState: OpsWorkbenchState = {
       startedAt: "2026-05-15T08:20:00.000Z",
       durationMs: 184000,
       steps: [
-        { id: "run-a-step-1", title: "Ingest request", status: "passed", durationMs: 12000 },
-        { id: "run-a-step-2", title: "Validate input", status: "running", durationMs: 172000 },
+        {
+          id: "run-a-step-1",
+          title: "Ingest request",
+          status: "passed",
+          durationMs: 12000,
+          trace: {
+            task_summary: "Normalize the operator request into the workflow input contract.",
+            methodology: "Schema intake with request metadata preservation",
+            key_decisions: ["Preserved the raw request payload", "Attached source metadata for validation"],
+            assumptions: ["The operator request was authenticated upstream"],
+            risks_identified: [],
+            artifacts_created: ["inputs/request.json"],
+            confidence_level: "high",
+            context_for_successors:
+              "Validate input can rely on the normalized payload and original request metadata.",
+          },
+        },
+        {
+          id: "run-a-step-2",
+          title: "Validate input",
+          status: "running",
+          durationMs: 172000,
+          trace: {
+            task_summary: "Validate required fields and policy routing inputs.",
+            methodology: "Strict JSON validation with policy preflight",
+            key_decisions: ["Kept the run open while optional metadata is checked"],
+            assumptions: ["Schema normalization already succeeded"],
+            risks_identified: ["Policy routing may pause if risk metadata is incomplete"],
+            artifacts_created: [],
+            confidence_level: "medium",
+            context_for_successors:
+              "Route policy should wait for the validation status before choosing a branch.",
+          },
+        },
         { id: "run-a-step-3", title: "Route policy", status: "queued", durationMs: 0 },
       ],
     },
@@ -249,7 +295,23 @@ export const initialOpsState: OpsWorkbenchState = {
       durationMs: 440000,
       steps: [
         { id: "run-b-step-1", title: "Collect artifacts", status: "passed", durationMs: 90000 },
-        { id: "run-b-step-2", title: "Generate patch plan", status: "failed", durationMs: 350000 },
+        {
+          id: "run-b-step-2",
+          title: "Generate patch plan",
+          status: "failed",
+          durationMs: 350000,
+          trace: {
+            task_summary: "Generate a repair plan from validation failures.",
+            methodology: "Heuristic trace enrichment over repair-loop failures",
+            key_decisions: ["Selected the CSS import repair path"],
+            assumptions: ["The failing validation signature matches the latest build output"],
+            risks_identified: ["Previous validation history may be too large for the prompt"],
+            artifacts_created: ["plans/repair-plan.md"],
+            confidence_level: "low",
+            context_for_successors:
+              "Retry should use compacted validation history and avoid replaying stale failures.",
+          },
+        },
       ],
     },
     {

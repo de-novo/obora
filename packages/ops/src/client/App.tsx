@@ -55,6 +55,7 @@ import {
   type WorkflowNode,
   type WorkflowNodePositionPatch,
 } from "./ops-model";
+import { TraceSummary } from "./TraceSummary";
 
 const modeLabels: Record<OpsMode, string> = {
   graph: "Graph",
@@ -576,10 +577,13 @@ const RunHistoryPanel = ({
       <h3>{selectedRun.id}</h3>
       <div className="step-list">
         {selectedRun.steps.map((step) => (
-          <div key={step.id} className={["step-row", statusClass(step.status)].join(" ")}>
-            <span>{runStepStatusLabels[step.status]}</span>
-            <strong>{step.title}</strong>
-            <small>{formatDuration(step.durationMs)}</small>
+          <div key={step.id} className="step-item">
+            <div className={["step-row", statusClass(step.status)].join(" ")}>
+              <span>{runStepStatusLabels[step.status]}</span>
+              <strong>{step.title}</strong>
+              <small>{formatDuration(step.durationMs)}</small>
+            </div>
+            {step.trace ? <TraceSummary trace={step.trace} /> : null}
           </div>
         ))}
       </div>

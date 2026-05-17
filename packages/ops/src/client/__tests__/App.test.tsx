@@ -230,9 +230,12 @@ describe("App", () => {
 
     await user.click(screen.getByRole("button", { name: "Runs" }));
     await user.click(screen.getByRole("button", { name: /repair-loop-triage/ }));
+    await user.click(screen.getByText("Trace"));
 
     expect(screen.getAllByText("run-2026-05-15-b")).toHaveLength(2);
     expect(screen.getByText("Generate patch plan")).toBeTruthy();
+    expect(screen.getByText("Heuristic trace enrichment over repair-loop failures")).toBeTruthy();
+    expect(screen.getByText("Previous validation history may be too large for the prompt")).toBeTruthy();
     expect(screen.getAllByText("Failed").length).toBeGreaterThan(1);
   });
 

@@ -32,6 +32,14 @@ function normalizeTokenUsage(usage: {
   };
 }
 
+function mergeSystemPrompts(defaultPrompt: string, userPrompt: string | undefined): string {
+  const base = defaultPrompt.trim();
+  const custom = userPrompt?.trim();
+  if (!custom) return base;
+  if (!base) return custom;
+  return `${base}\n\n[User Instructions]\n${custom}`;
+}
+
 export enum AgentRole {
   ANALYST = "analyst",
   EXECUTOR = "executor",
@@ -186,7 +194,7 @@ export abstract class BaseAgent {
     this.id = config.id ?? createAgentId(`${config.role}-${Date.now()}`);
     this.role = config.role;
     this.llm = config.llm;
-    this.systemPrompt = config.systemPrompt ?? this.getDefaultSystemPrompt();
+    this.systemPrompt = mergeSystemPrompts(this.getDefaultSystemPrompt(), config.systemPrompt);
     this.maxErrors = config.maxErrors ?? 3;
     this.thinkMaxTokens = config.thinkMaxTokens ?? 2048;
     this.executeMaxTokens = config.executeMaxTokens ?? 8192;

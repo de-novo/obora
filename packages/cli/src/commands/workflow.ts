@@ -21,6 +21,17 @@ interface WorkflowOptions {
   workflowsDir?: string;
 }
 
+type OnFailRoute = { when?: string; target: string };
+type OnFailConfig = {
+  goto: string | OnFailRoute[];
+  maxIterations: number;
+  escalateOnExhaust?: "human" | "dlq" | "fail";
+  cooldownMs?: number;
+  resetState?: boolean;
+  maxCost?: number | null;
+  maxCostEscalation?: "human" | "dlq" | "fail" | null;
+};
+
 interface WorkflowCreateOptions extends WorkflowOptions {
   name?: string;
   description?: string;
@@ -67,26 +78,63 @@ function parseValue(value: string): unknown {
   return value;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseConfigEntry(entry: string): { keys: string[]; value: unknown } {
+  const match = entry.match(/^(\w+(?:\.\w+)*)=(.+)$/);
+  const keyPath = match?.[1];
+  const rawValue = match?.[2];
+  if (!keyPath || rawValue === undefined) {
+    throw new CLIError(
+      `Invalid --config entry: ${entry}. Expected key=value with dot-separated keys.`,
+      ExitCode.VALIDATION_ERROR,
+    );
+  }
+  return { keys: keyPath.split("."), value: parseValue(rawValue) };
+}
+
+function assignNestedConfig(
+  current: Record<string, unknown>,
+  keys: string[],
+  value: unknown,
+  entry: string
+): Record<string, unknown> {
+  const [key, ...rest] = keys;
+  if (!key) {
+    throw new CLIError(`Invalid --config entry: ${entry}`, ExitCode.VALIDATION_ERROR);
+  }
+  const existing = current[key];
+  if (rest.length === 0) {
+    if (isRecord(existing)) {
+      throw new CLIError(
+        `Invalid --config entry: ${entry}. '${key}' is already set to an object value.`,
+        ExitCode.VALIDATION_ERROR,
+      );
+    }
+    return { ...current, [key]: value };
+  }
+
+  if (existing !== undefined && !isRecord(existing)) {
+    throw new CLIError(
+      `Invalid --config entry: ${entry}. '${key}' is already set to a non-object value.`,
+      ExitCode.VALIDATION_ERROR,
+    );
+  }
+
+  return {
+    ...current,
+    [key]: assignNestedConfig(isRecord(existing) ? existing : {}, rest, value, entry),
+  };
+}
+
 function buildConfig(options: StepAddOptions): Record<string, unknown> | undefined {
   if (!options.config) return undefined;
 
   const config = options.config.reduce<Record<string, unknown>>((acc, entry) => {
-    const match = entry.match(/^(\[\w.\]+)=(.+)$/);
-    if (!match) return acc;
-
-    const keys = match[1].split(".");
-    const value = parseValue(match[2]);
-
-    keys.reduce<Record<string, unknown>>((current, key, index) => {
-      if (index === keys.length - 1) {
-        current[key] = value;
-        return current;
-      }
-      current[key] = (current[key] as Record<string, unknown>) ?? {};
-      return current[key] as Record<string, unknown>;
-    }, acc);
-
-    return acc;
+    const parsed = parseConfigEntry(entry);
+    return assignNestedConfig(acc, parsed.keys, parsed.value, entry);
   }, {});
 
   return Object.keys(config).length > 0 ? config : undefined;
@@ -103,29 +151,22 @@ function buildHooks(options: StepAddOptions): { pre_step?: { shell: string }; po
   return Object.keys(hooks).length > 0 ? hooks : undefined;
 }
 
-function buildOnFail(options: StepAddOptions): { goto: string | Array<{ when?: string; target: string }>; maxIterations: number; escalateOnExhaust?: "human" | "dlq" | "fail"; cooldownMs?: number; resetState?: boolean; maxCost?: number | null; maxCostEscalation?: "human" | "dlq" | "fail" | null } | undefined {
-  if (!options.onFailGoto && !options.onFailRoute && !options.onFailMaxIterations) {
-    return undefined;
+function parseOnFailRoute(route: string): OnFailRoute {
+  const parts = route.split(":");
+  if (parts.length === 1 && parts[0]) {
+    return { target: parts[0] };
   }
+  if (parts.length === 2 && parts[0] && parts[1]) {
+    return { when: parts[0], target: parts[1] };
+  }
+  throw new CLIError(
+    `Invalid --on-fail-route: ${route}. Expected target or when:target.`,
+    ExitCode.VALIDATION_ERROR,
+  );
+}
 
-  const goto =
-    options.onFailRoute && options.onFailRoute.length > 0
-      ? options.onFailRoute
-          .map((route) => {
-            const parts = route.split(":");
-            if (parts.length === 2) {
-              return { when: parts[0], target: parts[1] };
-            }
-            if (parts.length === 1) {
-              return { target: parts[0] };
-            }
-            return undefined;
-          })
-          .filter((r): r is { when?: string; target: string } => r !== undefined)
-      : (options.onFailGoto ?? "");
-
+function buildOnFailDetails(options: StepAddOptions): Omit<OnFailConfig, "goto"> {
   return {
-    goto,
     maxIterations: parseInt(options.onFailMaxIterations ?? "3", 10),
     escalateOnExhaust: options.onFailEscalate as "human" | "dlq" | "fail" | undefined,
     cooldownMs: options.onFailCooldownMs ? parseInt(options.onFailCooldownMs, 10) : undefined,
@@ -133,6 +174,19 @@ function buildOnFail(options: StepAddOptions): { goto: string | Array<{ when?: s
     maxCost: options.onFailMaxCost ? parseFloat(options.onFailMaxCost) : undefined,
     maxCostEscalation: options.onFailMaxCostEscalation as "human" | "dlq" | "fail" | null | undefined,
   };
+}
+
+function buildOnFail(options: StepAddOptions): OnFailConfig | undefined {
+  const routes = options.onFailRoute ?? [];
+  if (routes.length > 0) {
+    return { goto: routes.map((route) => parseOnFailRoute(route)), ...buildOnFailDetails(options) };
+  }
+
+  if (!options.onFailGoto) {
+    return undefined;
+  }
+
+  return { goto: options.onFailGoto, ...buildOnFailDetails(options) };
 }
 
 export function createWorkflowCommand(): Command {
@@ -285,7 +339,7 @@ export function createWorkflowCommand(): Command {
     .option("--hook-pre-validation <cmd>", "Pre-validation shell hook")
     .option("--hook-post-cycle <cmd>", "Post-cycle shell hook")
     .option("--on-fail-goto <step>", "On failure, go to this step")
-    .option("--on-fail-max-iterations <n>", "Max retry iterations", "3")
+    .option("--on-fail-max-iterations <n>", "Max retry iterations")
     .option("--on-fail-escalate <type>", "Escalation on exhaust (human, dlq, fail)")
     .option("--on-fail-cooldown-ms <ms>", "Cooldown between retries")
     .option("--on-fail-reset-state", "Reset state on retry")

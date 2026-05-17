@@ -1207,7 +1207,7 @@ Respond ONLY with valid JSON in this exact format:
       ? [
           "",
           "=== Execution History ===",
-          ...upstreamTraces.flatMap((trace) => [
+          ...compactedTraces.flatMap((trace) => [
             `\n### ${trace.step} (${trace.agent})`,
             `**Task:** ${trace.task_summary}`,
             trace.methodology ? `**Methodology:** ${trace.methodology}` : undefined,
@@ -1251,19 +1251,29 @@ Respond ONLY with valid JSON in this exact format:
   private compactTraces(traces: ExecutionTrace[], maxCount: number): ExecutionTrace[] {
     if (traces.length <= maxCount) return traces;
 
-    const scored = traces.map((trace) => ({
+    const scored = traces.map((trace, index) => ({
       trace,
-      score:
-        new Date(trace.timestamp).getTime() / 1_000_000_000 +
-        (trace.issues_encountered.length > 0 ? 100 : 0) +
-        (trace.artifacts_created.length > 0 ? 50 : 0) +
-        (trace.key_decisions.length > 0 ? 30 : 0),
+      index,
+      relevanceScore:
+        trace.issues_encountered.length * 100 +
+        trace.artifacts_created.length * 50 +
+        trace.key_decisions.length * 30,
+      timestampMs: this.parseTraceTimestamp(trace.timestamp),
     }));
 
     return scored
-      .sort((a, b) => b.score - a.score)
+      .sort((a, b) =>
+        b.relevanceScore - a.relevanceScore ||
+        b.timestampMs - a.timestampMs ||
+        a.index - b.index
+      )
       .slice(0, maxCount)
       .map((s) => s.trace);
+  }
+
+  private parseTraceTimestamp(timestamp: string): number {
+    const parsed = Date.parse(timestamp);
+    return Number.isFinite(parsed) ? parsed : 0;
   }
 
   /** @internal */

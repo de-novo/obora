@@ -55,6 +55,10 @@ describe("ops-model", () => {
 
     expect(getSelectedRun(selected).id).toBe("run-2026-05-15-b");
     expect(getSelectedRun(unchanged).id).toBe("run-2026-05-15-b");
+    expect(getSelectedRun(selected).steps[1]?.trace).toMatchObject({
+      methodology: "Heuristic trace enrichment over repair-loop failures",
+      confidence_level: "low",
+    });
   });
 
   it("falls back when node or run collections are empty", () => {

@@ -617,6 +617,90 @@ button {
   white-space: nowrap;
 }
 
+.step-item {
+  display: grid;
+  gap: 6px;
+}
+
+.trace-detail {
+  border: 1px solid #e0d8ca;
+  border-radius: 7px;
+  background: #fffaf0;
+}
+
+.trace-detail summary {
+  min-height: 34px;
+  padding: 8px 10px;
+  color: #25302b;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.trace-fields {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0 10px 10px;
+}
+
+.trace-fields div,
+.trace-list {
+  display: grid;
+  gap: 3px;
+}
+
+.trace-fields dt {
+  color: #607068;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.trace-fields dd {
+  min-width: 0;
+  margin: 0;
+  color: #1c2520;
+  font-size: 12px;
+  line-height: 1.42;
+  overflow-wrap: anywhere;
+}
+
+.trace-fields ul {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding-left: 16px;
+}
+
+.trace-confidence {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 7px;
+  border: 1px solid #cfc7b8;
+  border-radius: 999px;
+  background: #fffdf8;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.confidence-high {
+  border-color: #357f46;
+  color: #245f34;
+}
+
+.confidence-medium {
+  border-color: #b98925;
+  color: #805f16;
+}
+
+.confidence-low {
+  border-color: #b94b3f;
+  color: #7d2f28;
+}
+
 @media (max-width: 1100px) {
   .ops-topbar {
     align-items: stretch;

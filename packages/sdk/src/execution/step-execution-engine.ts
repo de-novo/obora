@@ -49,6 +49,7 @@ interface RepairLoopRuntimeState {
 }
 
 const DEFAULT_MAX_CONCURRENCY = 3;
+const DEFAULT_MAX_REPAIR_VALIDATION_HISTORY = 5;
 
 /** Duck-type for reflector: both ExecutionReflector and ReflectorEngine implement this. */
 type ReflectorLike = {
@@ -115,7 +116,7 @@ export class StepExecutionEngine {
       mode: "repair",
       attempt: state.attempt,
       latestValidation: state.latestValidation,
-      previousValidationResults: state.history,
+      previousValidationResults: this.compactValidationHistory(state.history),
       validationStep: repairConfig.validation_step,
       repeatedSignatureCount: state.repeatedSignatureCount,
       maxNoProgressIterations: repairConfig.max_no_progress_iterations,
@@ -123,10 +124,21 @@ export class StepExecutionEngine {
     };
   }
 
+  compactValidationHistory(
+    history: ValidationResult[],
+    maxCount: number = DEFAULT_MAX_REPAIR_VALIDATION_HISTORY
+  ): ValidationResult[] {
+    if (history.length <= maxCount) return history;
+    return history.slice(-maxCount);
+  }
+
   private getTraceOutputDir(executionId: string): string | undefined {
     const config = this.deps.config;
-    const basePath = config.sharedMemory?.file?.basePath
-      ?? resolve(process.cwd(), ".obora", "traces");
+    const envBasePath = process.env.OBORA_TRACE_OUTPUT_DIR;
+    const basePath = envBasePath && envBasePath.length > 0
+      ? envBasePath
+      : config.sharedMemory?.file?.basePath
+        ?? resolve(process.cwd(), ".obora", "traces");
     return join(basePath, executionId);
   }
 
@@ -701,7 +713,7 @@ export class StepExecutionEngine {
                 : 1;
             const nextState: RepairLoopRuntimeState = {
               latestValidation: validationResult,
-              history: [...(previousState?.history ?? []), validationResult],
+              history: this.compactValidationHistory([...(previousState?.history ?? []), validationResult]),
               attempt: (previousState?.attempt ?? 1) + 1,
               repeatedSignatureCount,
               lastSignature: validationResult.signature,
