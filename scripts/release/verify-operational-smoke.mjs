@@ -165,6 +165,9 @@ const verifyDashboardBootstrapSmoke = async (tmpDir) => {
         port: 0,
         staticDir,
       },
+      dependencies: {
+        logger: false,
+      },
       requireStaticAssets: true,
     });
 
