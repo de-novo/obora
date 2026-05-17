@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createDashboardServer } from '../index.js';
+import { createQuietDashboardServer as createDashboardServer } from './test-server.js';
 
 const servers: Array<Awaited<ReturnType<typeof createDashboardServer>>['app']> = [];
 

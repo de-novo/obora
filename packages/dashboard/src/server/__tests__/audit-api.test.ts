@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { AuditEvent } from '@obora/runtime';
 
 import { InMemoryAuditStore, type AuditStore } from '../audit/audit-store.js';
-import { createDashboardServer } from '../index.js';
+import { createQuietDashboardServer as createDashboardServer } from './test-server.js';
 
 const servers: Array<Awaited<ReturnType<typeof createDashboardServer>>['app']> = [];
 
