@@ -27,13 +27,16 @@ import {
   compileWorkflowYaml,
   connectNodes,
   disconnectEdge,
+  filterRunStepsByTraceFilter,
   getNextAgentNodeId,
   getSelectedNode,
   getSelectedRun,
+  getTraceSeverity,
   initialOpsState,
   nodeKindLabels,
   nodeStatusLabels,
   opsModes,
+  parseTraceFilter,
   parseWorkflowNodeKind,
   parseWorkflowNodeStatus,
   resolveGraphEdges,
@@ -41,7 +44,11 @@ import {
   runStepStatusLabels,
   selectNode,
   selectRun,
+  serializeTraceForInspection,
   summarizeOpsState,
+  traceExportFilenameForStep,
+  traceFilterLabels,
+  traceFilters,
   updateSelectedNode,
   updateNodePositions,
   updateWorkflowPrompt,
@@ -51,6 +58,7 @@ import {
   type ExecutionRun,
   type OpsMode,
   type OpsWorkbenchState,
+  type TraceFilter,
   type WorkflowEdge,
   type WorkflowNode,
   type WorkflowNodePositionPatch,
@@ -542,54 +550,97 @@ const RunHistoryPanel = ({
   onSelectRun,
   runs,
   selectedRun,
-}: RunHistoryPanelProps): ReactElement => (
-  <aside className="ops-panel inspector-panel run-panel" aria-label="Execution history">
-    <div className="panel-heading">
-      <h2>Run History</h2>
-      <span className={["state-pill", statusClass(selectedRun.status)].join(" ")}>
-        {runStatusLabels[selectedRun.status]}
-      </span>
-    </div>
+}: RunHistoryPanelProps): ReactElement => {
+  const [traceFilter, setTraceFilter] = useState<TraceFilter>("all");
+  const visibleSteps = useMemo(
+    () => filterRunStepsByTraceFilter(selectedRun.steps, traceFilter),
+    [selectedRun.steps, traceFilter]
+  );
+  const handleTraceFilterChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) =>
+      setTraceFilter(parseTraceFilter(event.currentTarget.value)),
+    []
+  );
+  const handleCopyRawTrace = useCallback((rawTrace: string): void => {
+    void navigator.clipboard?.writeText(rawTrace);
+  }, []);
 
-    <div className="run-list">
-      {runs.map((run) => (
-        <button
-          key={run.id}
-          type="button"
-          className={[
-            "run-row",
-            run.id === selectedRun.id ? "selected" : "",
-            statusClass(run.status),
-          ]
-            .filter(Boolean)
-            .join(" ")}
-          aria-pressed={run.id === selectedRun.id}
-          onClick={() => onSelectRun(run.id)}
-        >
-          <strong>{run.workflowName}</strong>
-          <span>{run.id}</span>
-          <small>{formatDuration(run.durationMs)}</small>
-        </button>
-      ))}
-    </div>
+  return (
+    <aside className="ops-panel inspector-panel run-panel" aria-label="Execution history">
+      <div className="panel-heading">
+        <h2>Run History</h2>
+        <span className={["state-pill", statusClass(selectedRun.status)].join(" ")}>
+          {runStatusLabels[selectedRun.status]}
+        </span>
+      </div>
 
-    <div className="run-detail">
-      <h3>{selectedRun.id}</h3>
-      <div className="step-list">
-        {selectedRun.steps.map((step) => (
-          <div key={step.id} className="step-item">
-            <div className={["step-row", statusClass(step.status)].join(" ")}>
-              <span>{runStepStatusLabels[step.status]}</span>
-              <strong>{step.title}</strong>
-              <small>{formatDuration(step.durationMs)}</small>
-            </div>
-            {step.trace ? <TraceSummary trace={step.trace} /> : null}
-          </div>
+      <div className="run-list">
+        {runs.map((run) => (
+          <button
+            key={run.id}
+            type="button"
+            className={[
+              "run-row",
+              run.id === selectedRun.id ? "selected" : "",
+              statusClass(run.status),
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            aria-pressed={run.id === selectedRun.id}
+            onClick={() => onSelectRun(run.id)}
+          >
+            <strong>{run.workflowName}</strong>
+            <span>{run.id}</span>
+            <small>{formatDuration(run.durationMs)}</small>
+          </button>
         ))}
       </div>
-    </div>
-  </aside>
-);
+
+      <div className="run-detail">
+        <div className="run-detail-heading">
+          <h3>{selectedRun.id}</h3>
+          <span>
+            {visibleSteps.length}/{selectedRun.steps.length} steps
+          </span>
+        </div>
+        <label className="trace-filter-control">
+          Trace filter
+          <select value={traceFilter} onChange={handleTraceFilterChange}>
+            {traceFilters.map((filter) => (
+              <option key={filter} value={filter}>
+                {traceFilterLabels[filter]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="step-list">
+          {visibleSteps.length === 0 ? (
+            <p className="empty-trace-filter">No matching trace steps.</p>
+          ) : (
+            visibleSteps.map((step) => (
+              <div key={step.id} className="step-item">
+                <div className={["step-row", statusClass(step.status)].join(" ")}>
+                  <span>{runStepStatusLabels[step.status]}</span>
+                  <strong>{step.title}</strong>
+                  <small>{formatDuration(step.durationMs)}</small>
+                </div>
+                {step.trace ? (
+                  <TraceSummary
+                    exportFilename={traceExportFilenameForStep(selectedRun.id, step)}
+                    onCopyRawTrace={handleCopyRawTrace}
+                    rawTrace={serializeTraceForInspection(selectedRun, step)}
+                    severity={getTraceSeverity(step.trace)}
+                    trace={step.trace}
+                  />
+                ) : null}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </aside>
+  );
+};
 
 export const App = (): ReactElement => {
   const [mode, setMode] = useState<OpsMode>("graph");

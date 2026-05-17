@@ -1,6 +1,6 @@
 import type { ReactElement } from "react";
 
-import type { ExecutionStepTrace } from "./ops-model";
+import { traceSeverityLabels, type ExecutionStepTrace, type TraceSeverity } from "./ops-model";
 
 interface TraceListProps {
   readonly label: string;
@@ -22,12 +22,27 @@ const TraceList = ({ items, label }: TraceListProps): ReactElement | null =>
   );
 
 interface TraceSummaryProps {
+  readonly exportFilename: string;
+  readonly onCopyRawTrace: (rawTrace: string) => void;
+  readonly rawTrace: string;
+  readonly severity: TraceSeverity;
   readonly trace: ExecutionStepTrace;
 }
 
-export const TraceSummary = ({ trace }: TraceSummaryProps): ReactElement => (
+export const TraceSummary = ({
+  exportFilename,
+  onCopyRawTrace,
+  rawTrace,
+  severity,
+  trace,
+}: TraceSummaryProps): ReactElement => (
   <details className="trace-detail">
-    <summary>Trace</summary>
+    <summary>
+      <span>Trace</span>
+      <span className={["trace-severity", `trace-severity-${severity}`].join(" ")}>
+        {traceSeverityLabels[severity]}
+      </span>
+    </summary>
     <dl className="trace-fields">
       <div>
         <dt>Task</dt>
@@ -54,5 +69,21 @@ export const TraceSummary = ({ trace }: TraceSummaryProps): ReactElement => (
         <dd>{trace.context_for_successors}</dd>
       </div>
     </dl>
+    <div className="trace-actions">
+      <button type="button" onClick={() => onCopyRawTrace(rawTrace)}>
+        Copy raw
+      </button>
+      <a
+        className="trace-export-link"
+        href={`data:application/json;charset=utf-8,${encodeURIComponent(rawTrace)}`}
+        download={exportFilename}
+      >
+        Export raw
+      </a>
+    </div>
+    <details className="trace-raw">
+      <summary>Raw</summary>
+      <pre>{rawTrace}</pre>
+    </details>
   </details>
 );

@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { NodeChange } from "@xyflow/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   App,
@@ -226,16 +226,33 @@ describe("App", () => {
 
   it("switches to run history and selects a failed run", async () => {
     const user = userEvent.setup();
+    const writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
     renderApp();
 
     await user.click(screen.getByRole("button", { name: "Runs" }));
     await user.click(screen.getByRole("button", { name: /repair-loop-triage/ }));
+    await user.selectOptions(screen.getByLabelText("Trace filter"), "critical");
     await user.click(screen.getByText("Trace"));
+    await user.click(screen.getByText("Raw"));
+    await user.click(screen.getByRole("button", { name: "Copy raw" }));
+    const exportLink = screen.getByRole("link", { name: "Export raw" });
 
     expect(screen.getAllByText("run-2026-05-15-b")).toHaveLength(2);
     expect(screen.getByText("Generate patch plan")).toBeTruthy();
+    expect(screen.queryByText("Collect artifacts")).toBeNull();
+    expect(screen.getByText("Critical")).toBeTruthy();
     expect(screen.getByText("Heuristic trace enrichment over repair-loop failures")).toBeTruthy();
     expect(screen.getByText("Previous validation history may be too large for the prompt")).toBeTruthy();
+    expect(writeText).toHaveBeenCalledWith(
+      expect.stringContaining('"methodology": "Heuristic trace enrichment over repair-loop failures"')
+    );
+    expect(exportLink.getAttribute("download")).toBe(
+      "run-2026-05-15-b-generate-patch-plan-trace.json"
+    );
     expect(screen.getAllByText("Failed").length).toBeGreaterThan(1);
   });
 

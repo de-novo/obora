@@ -5,18 +5,24 @@ import {
   compileWorkflowYaml,
   connectNodes,
   disconnectEdge,
+  filterRunStepsByTraceFilter,
   getSelectedNode,
   getSelectedRun,
+  getTraceSeverity,
   initialOpsState,
+  parseTraceFilter,
   parseWorkflowNodeKind,
   parseWorkflowNodeStatus,
+  serializeTraceForInspection,
   resolveGraphEdges,
   selectNode,
   selectRun,
   summarizeOpsState,
+  traceExportFilenameForStep,
   updateSelectedNode,
   updateNodePositions,
   updateWorkflowPrompt,
+  type ExecutionStepTrace,
   type OpsWorkbenchState,
 } from "../ops-model";
 
@@ -28,6 +34,17 @@ const emptyState: OpsWorkbenchState = {
   nodes: [],
   edges: [],
   runs: [],
+};
+
+const highConfidenceTrace: ExecutionStepTrace = {
+  task_summary: "Validated the workflow graph",
+  methodology: "Direct inspection",
+  key_decisions: [],
+  assumptions: [],
+  risks_identified: [],
+  artifacts_created: [],
+  confidence_level: "high",
+  context_for_successors: "Continue with execution.",
 };
 
 describe("ops-model", () => {
@@ -59,6 +76,44 @@ describe("ops-model", () => {
       methodology: "Heuristic trace enrichment over repair-loop failures",
       confidence_level: "low",
     });
+  });
+
+  it("filters run steps by trace severity and serializes raw trace payloads", () => {
+    const selected = getSelectedRun(selectRun(initialOpsState, "run-2026-05-15-b"));
+    const tracedStep = selected.steps[1];
+
+    if (tracedStep === undefined || tracedStep.trace === undefined) {
+      throw new Error("missing traced step");
+    }
+
+    expect(filterRunStepsByTraceFilter(selected.steps, "all")).toHaveLength(2);
+    expect(filterRunStepsByTraceFilter(selected.steps, "critical").map((step) => step.id)).toEqual([
+      "run-b-step-2",
+    ]);
+    expect(filterRunStepsByTraceFilter(selected.steps, "with-risks").map((step) => step.id)).toEqual([
+      "run-b-step-2",
+    ]);
+    expect(filterRunStepsByTraceFilter(selected.steps, "info")).toHaveLength(0);
+    expect(getTraceSeverity(tracedStep.trace)).toBe("critical");
+    expect(getTraceSeverity({ ...highConfidenceTrace, confidence_level: "medium" })).toBe(
+      "warning"
+    );
+    expect(getTraceSeverity({ ...highConfidenceTrace, risks_identified: ["late signal"] })).toBe(
+      "warning"
+    );
+    expect(getTraceSeverity(highConfidenceTrace)).toBe("info");
+    expect(traceExportFilenameForStep(selected.id, tracedStep)).toBe(
+      "run-2026-05-15-b-generate-patch-plan-trace.json"
+    );
+    expect(traceExportFilenameForStep("!!!", { ...tracedStep, title: "" })).toBe(
+      "trace-trace-trace.json"
+    );
+    expect(serializeTraceForInspection(selected, tracedStep)).toContain(
+      '"methodology": "Heuristic trace enrichment over repair-loop failures"'
+    );
+    expect(serializeTraceForInspection(selected, selected.steps[0] ?? tracedStep)).toContain(
+      '"trace": null'
+    );
   });
 
   it("falls back when node or run collections are empty", () => {
@@ -223,6 +278,8 @@ describe("ops-model", () => {
     expect(parseWorkflowNodeKind("unknown")).toBe("agent");
     expect(parseWorkflowNodeStatus("ready")).toBe("ready");
     expect(parseWorkflowNodeStatus("unknown")).toBe("draft");
+    expect(parseTraceFilter("warning")).toBe("warning");
+    expect(parseTraceFilter("unknown")).toBe("all");
   });
 
   it("compiles a graph workflow draft into yaml-like text", () => {

@@ -10,6 +10,10 @@ export type RunStepStatus = "queued" | "running" | "passed" | "failed";
 
 export type TraceConfidenceLevel = "high" | "medium" | "low";
 
+export type TraceSeverity = "info" | "warning" | "critical";
+
+export type TraceFilter = "all" | TraceSeverity | "with-risks";
+
 export interface WorkflowNode {
   readonly id: string;
   readonly title: string;
@@ -138,6 +142,28 @@ export const runStepStatusLabels: Record<RunStepStatus, string> = {
   running: "Running",
   passed: "Passed",
   failed: "Failed",
+};
+
+export const traceFilters = [
+  "all",
+  "critical",
+  "warning",
+  "info",
+  "with-risks",
+] as const satisfies ReadonlyArray<TraceFilter>;
+
+export const traceFilterLabels: Record<TraceFilter, string> = {
+  all: "All steps",
+  critical: "Critical traces",
+  warning: "Warning traces",
+  info: "Info traces",
+  "with-risks": "With risks",
+};
+
+export const traceSeverityLabels: Record<TraceSeverity, string> = {
+  info: "Info",
+  warning: "Warning",
+  critical: "Critical",
 };
 
 const emptyWorkflowNode: WorkflowNode = {
@@ -333,6 +359,60 @@ export const parseWorkflowNodeKind = (value: string): WorkflowNodeKind =>
 
 export const parseWorkflowNodeStatus = (value: string): WorkflowNodeStatus =>
   workflowNodeStatuses.find((status) => status === value) ?? "draft";
+
+export const parseTraceFilter = (value: string): TraceFilter =>
+  traceFilters.find((filter) => filter === value) ?? "all";
+
+export const getTraceSeverity = (trace: ExecutionStepTrace): TraceSeverity =>
+  trace.confidence_level === "low"
+    ? "critical"
+    : trace.risks_identified.length > 0 || trace.confidence_level === "medium"
+      ? "warning"
+      : "info";
+
+export const filterRunStepsByTraceFilter = (
+  steps: ReadonlyArray<ExecutionRunStep>,
+  filter: TraceFilter
+): ReadonlyArray<ExecutionRunStep> =>
+  filter === "all"
+    ? steps
+    : steps.filter((step) =>
+        step.trace === undefined
+          ? false
+          : filter === "with-risks"
+            ? step.trace.risks_identified.length > 0
+            : getTraceSeverity(step.trace) === filter
+      );
+
+const traceFilenameSegment = (value: string): string =>
+  value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "trace";
+
+export const traceExportFilenameForStep = (runId: string, step: ExecutionRunStep): string =>
+  `${traceFilenameSegment(runId)}-${traceFilenameSegment(step.title)}-trace.json`;
+
+export const serializeTraceForInspection = (
+  run: ExecutionRun,
+  step: ExecutionRunStep
+): string =>
+  JSON.stringify(
+    {
+      run: {
+        id: run.id,
+        workflowName: run.workflowName,
+        status: run.status,
+        startedAt: run.startedAt,
+      },
+      step: {
+        id: step.id,
+        title: step.title,
+        status: step.status,
+        durationMs: step.durationMs,
+      },
+      trace: step.trace ?? null,
+    },
+    null,
+    2
+  );
 
 export const getSelectedNode = (state: OpsWorkbenchState): WorkflowNode =>
   state.nodes.find((node) => node.id === state.selectedNodeId) ??
