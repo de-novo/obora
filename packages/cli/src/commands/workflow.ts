@@ -32,6 +32,18 @@ type OnFailConfig = {
   maxCostEscalation?: "human" | "dlq" | "fail" | null;
 };
 
+type AddStepInput = Parameters<typeof addStep>[1];
+type StepGate = string | { type: string; name?: string } | undefined;
+type ParallelBranch = { agent: string; prompt_file?: string };
+type StepOutput = { path?: string; schema?: string } | undefined;
+type StepHooks = {
+  pre_step?: { shell: string };
+  post_step?: { shell: string };
+  pre_validation?: { shell: string };
+  post_cycle?: { shell: string };
+};
+type StepMergeStrategy = "concat" | "best_score" | "consensus" | "first_success";
+
 interface WorkflowCreateOptions extends WorkflowOptions {
   name?: string;
   description?: string;
@@ -140,15 +152,50 @@ function buildConfig(options: StepAddOptions): Record<string, unknown> | undefin
   return Object.keys(config).length > 0 ? config : undefined;
 }
 
-function buildHooks(options: StepAddOptions): { pre_step?: { shell: string }; post_step?: { shell: string }; pre_validation?: { shell: string }; post_cycle?: { shell: string } } | undefined {
-  const hooks: { pre_step?: { shell: string }; post_step?: { shell: string }; pre_validation?: { shell: string }; post_cycle?: { shell: string } } = {};
+function optionalObject<T extends Record<string, unknown>>(value: T): T | undefined {
+  return Object.keys(value).length > 0 ? value : undefined;
+}
 
-  if (options.hookPreStep) hooks.pre_step = { shell: options.hookPreStep };
-  if (options.hookPostStep) hooks.post_step = { shell: options.hookPostStep };
-  if (options.hookPreValidation) hooks.pre_validation = { shell: options.hookPreValidation };
-  if (options.hookPostCycle) hooks.post_cycle = { shell: options.hookPostCycle };
+function commaList(value: string | undefined): string[] | undefined {
+  return value?.split(",").map((item) => item.trim());
+}
 
-  return Object.keys(hooks).length > 0 ? hooks : undefined;
+function buildHooks(options: StepAddOptions): StepHooks | undefined {
+  return optionalObject({
+    ...(options.hookPreStep ? { pre_step: { shell: options.hookPreStep } } : {}),
+    ...(options.hookPostStep ? { post_step: { shell: options.hookPostStep } } : {}),
+    ...(options.hookPreValidation
+      ? { pre_validation: { shell: options.hookPreValidation } }
+      : {}),
+    ...(options.hookPostCycle ? { post_cycle: { shell: options.hookPostCycle } } : {}),
+  });
+}
+
+function buildGate(options: StepAddOptions): StepGate {
+  return options.gateType
+    ? { type: options.gateType, ...(options.gate ? { name: options.gate } : {}) }
+    : options.gate;
+}
+
+function parseParallelBranch(branch: string): ParallelBranch {
+  const [agent, promptFile] = branch.split(":");
+  return {
+    agent: agent ?? "",
+    ...(promptFile ? { prompt_file: promptFile } : {}),
+  };
+}
+
+function buildParallel(options: StepAddOptions): ParallelBranch[] | undefined {
+  return options.parallel?.map((branch) => parseParallelBranch(branch));
+}
+
+function buildOutput(options: StepAddOptions): StepOutput {
+  return options.outputPath || options.outputSchema
+    ? {
+        ...(options.outputPath ? { path: options.outputPath } : {}),
+        ...(options.outputSchema ? { schema: options.outputSchema } : {}),
+      }
+    : undefined;
 }
 
 function parseOnFailRoute(route: string): OnFailRoute {
@@ -187,6 +234,39 @@ function buildOnFail(options: StepAddOptions): OnFailConfig | undefined {
   }
 
   return { goto: options.onFailGoto, ...buildOnFailDetails(options) };
+}
+
+function buildStepInput(stepName: string, options: StepAddOptions): AddStepInput {
+  return {
+    name: stepName,
+    agent: options.agent,
+    tool: options.tool,
+    description: options.description,
+    dependsOn: commaList(options.dependsOn),
+    pattern: options.pattern,
+    participants: commaList(options.participants),
+    input: options.input ? { task: options.input } : undefined,
+    output: buildOutput(options),
+    config: buildConfig(options),
+    hooks: buildHooks(options),
+    gate: buildGate(options),
+    parallel: buildParallel(options),
+    merge: options.merge as StepMergeStrategy | undefined,
+    onFail: buildOnFail(options),
+  };
+}
+
+function buildStepUpdates(options: {
+  json?: boolean;
+  agent?: string;
+  description?: string;
+  dependsOn?: string;
+}): Record<string, unknown> {
+  return {
+    ...(options.agent ? { agent: options.agent } : {}),
+    ...(options.description ? { description: options.description } : {}),
+    ...(options.dependsOn ? { depends_on: commaList(options.dependsOn) } : {}),
+  };
 }
 
 export function createWorkflowCommand(): Command {
@@ -357,41 +437,7 @@ export function createWorkflowCommand(): Command {
       await handleCommandAction(
         async () => {
           const path = resolve(file);
-
-          const gate = options.gateType
-            ? { type: options.gateType, ...(options.gate ? { name: options.gate } : {}) }
-            : options.gate;
-
-          const parallel = options.parallel?.map((branch) => {
-            const parts = branch.split(":");
-            return {
-              agent: parts[0]!,
-              ...(parts[1] ? { prompt_file: parts[1] } : {}),
-            };
-          });
-
-          await addStep(path, {
-            name: stepName,
-            agent: options.agent,
-            tool: options.tool,
-            description: options.description,
-            dependsOn: options.dependsOn?.split(",").map((s) => s.trim()),
-            pattern: options.pattern,
-            participants: options.participants?.split(",").map((s) => s.trim()),
-            input: options.input ? { task: options.input } : undefined,
-            output: options.outputPath || options.outputSchema
-              ? {
-                  ...(options.outputPath ? { path: options.outputPath } : {}),
-                  ...(options.outputSchema ? { schema: options.outputSchema } : {}),
-                }
-              : undefined,
-            config: buildConfig(options),
-            hooks: buildHooks(options),
-            gate,
-            parallel,
-            merge: options.merge as "concat" | "best_score" | "consensus" | "first_success" | undefined,
-            onFail: buildOnFail(options),
-          });
+          await addStep(path, buildStepInput(stepName, options));
 
           formatter.success(`Added step '${stepName}' to ${path}`);
         },
@@ -437,14 +483,7 @@ export function createWorkflowCommand(): Command {
       await handleCommandAction(
         async () => {
           const path = resolve(file);
-          const updates: Record<string, unknown> = {};
-
-          if (options.agent) updates.agent = options.agent;
-          if (options.description) updates.description = options.description;
-          if (options.dependsOn)
-            updates.depends_on = options.dependsOn.split(",").map((s) => s.trim());
-
-          await updateStep(path, stepName, updates);
+          await updateStep(path, stepName, buildStepUpdates(options));
           formatter.success(`Updated step '${stepName}' in ${path}`);
         },
         { verbose: Boolean(globalOpts.verbose) }
