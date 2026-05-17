@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { Effect } from "effect";
 import { parse } from "yaml";
 import type {
   DynamicQuotaConfig,
@@ -37,8 +38,8 @@ function normalizeToolPolicy(input: unknown, index: number): ToolPolicy {
     throw new Error(`Invalid tools[${index}].effect: ${String(effect)}`);
   }
 
-  let normalizedWhen: ToolPolicy["when"];
-  if (when !== undefined) {
+  const normalizedWhen: ToolPolicy["when"] = when !== undefined
+    ? (() => {
     if (!isObject(when)) {
       throw new Error(`Invalid tools[${index}].when: expected object`);
     }
@@ -47,25 +48,27 @@ function normalizeToolPolicy(input: unknown, index: number): ToolPolicy {
       throw new Error(`Invalid tools[${index}].when.condition: expected string`);
     }
 
-    normalizedWhen = {
+    return {
       matches: toStringArray(when.matches, `tools[${index}].when.matches`),
       not_matches: toStringArray(when.not_matches, `tools[${index}].when.not_matches`),
       condition: when.condition,
     };
-  }
+      })()
+    : undefined;
 
   const transform = input.transform;
-  let normalizedTransform: ToolPolicy["transform"];
-  if (transform !== undefined) {
+  const normalizedTransform: ToolPolicy["transform"] = transform !== undefined
+    ? (() => {
     if (!isObject(transform) || typeof transform.fn !== "string" || transform.fn.length === 0) {
       throw new Error(`Invalid tools[${index}].transform.fn: expected non-empty string`);
     }
-    normalizedTransform = { fn: transform.fn };
-  }
+    return { fn: transform.fn };
+      })()
+    : undefined;
 
   const gate = input.gate;
-  let normalizedGate: ToolPolicy["gate"];
-  if (gate !== undefined) {
+  const normalizedGate: ToolPolicy["gate"] = gate !== undefined
+    ? (() => {
     if (!isObject(gate)) {
       throw new Error(`Invalid tools[${index}].gate: expected object`);
     }
@@ -78,11 +81,12 @@ function normalizeToolPolicy(input: unknown, index: number): ToolPolicy {
       throw new Error(`Invalid tools[${index}].gate.timeout: expected string`);
     }
 
-    normalizedGate = {
+    return {
       type: gate.type,
       timeout: gate.timeout,
     };
-  }
+      })()
+    : undefined;
 
   return { name, effect, when: normalizedWhen, transform: normalizedTransform, gate: normalizedGate };
 }
@@ -138,11 +142,11 @@ function normalizeResourcePolicy(input: unknown): ResourcePolicy | undefined {
     ["resources.maxToolCalls", maxToolCalls],
   ];
 
-  for (const [field, value] of numericFields) {
+  numericFields.forEach(([field, value]) => {
     if (value !== undefined && typeof value !== "number") {
       throw new Error(`Invalid ${field}: expected number`);
     }
-  }
+  });
   if (maxOutputSize !== undefined && typeof maxOutputSize !== "string") {
     throw new Error("Invalid resources.maxOutputSize: expected string");
   }
@@ -182,8 +186,8 @@ function normalizeDynamicToolRule(input: unknown, index: number): DynamicToolRul
   }
 
   const gate = input.gate;
-  let normalizedGate: DynamicToolRule["gate"];
-  if (gate !== undefined) {
+  const normalizedGate: DynamicToolRule["gate"] = gate !== undefined
+    ? (() => {
     if (!isObject(gate)) {
       throw new Error(`Invalid dynamicToolRules[${index}].gate: expected object`);
     }
@@ -193,8 +197,9 @@ function normalizeDynamicToolRule(input: unknown, index: number): DynamicToolRul
     if (gate.timeout !== undefined && typeof gate.timeout !== "string") {
       throw new Error(`Invalid dynamicToolRules[${index}].gate.timeout: expected string`);
     }
-    normalizedGate = { type: gate.type, timeout: gate.timeout };
-  }
+    return { type: gate.type, timeout: gate.timeout };
+      })()
+    : undefined;
 
   return { name, condition, effect, priority, transformFn, gate: normalizedGate };
 }
@@ -303,8 +308,21 @@ export function normalizePolicySet(input: unknown): PolicySet {
   return policySet;
 }
 
+export const normalizePolicySetEffect = (input: unknown): Effect.Effect<PolicySet, unknown> =>
+  Effect.try({
+    try: () => normalizePolicySet(input),
+    catch: (error) => error,
+  });
+
 export async function loadPolicyFromYaml(path: string): Promise<PolicySet> {
-  const content = await readFile(path, "utf-8");
-  const parsed = parse(content);
-  return normalizePolicySet(parsed);
+  return Effect.runPromise(loadPolicyFromYamlEffect(path));
 }
+
+export const loadPolicyFromYamlEffect = (path: string): Effect.Effect<PolicySet, unknown> =>
+  Effect.tryPromise({
+    try: async () => {
+      const content = await readFile(path, "utf-8");
+      return parse(content);
+    },
+    catch: (error) => error,
+  }).pipe(Effect.flatMap(normalizePolicySetEffect));

@@ -30,15 +30,9 @@ export class RuleEngine {
   }
 
   evaluate(summary: AnalysisSummary): ReflectorAction[] {
-    const matched: ReflectorAction[] = [];
-
-    for (const rule of this.rules) {
-      if (this.matchCondition(rule.when, summary)) {
-        matched.push(...rule.actions);
-      }
-    }
-
-    return matched;
+    return this.rules.flatMap((rule) =>
+      this.matchCondition(rule.when, summary) ? rule.actions : []
+    );
   }
 
   private matchCondition(
@@ -48,17 +42,13 @@ export class RuleEngine {
     // keywords_include: ALL listed keywords must appear in the keyword set
     if (condition.keywords_include) {
       const kwLower = summary.keywords.map((k) => k.toLowerCase());
-      for (const kw of condition.keywords_include) {
-        if (!kwLower.includes(kw.toLowerCase())) return false;
-      }
+      if (!condition.keywords_include.every((kw) => kwLower.includes(kw.toLowerCase()))) return false;
     }
 
     // keywords_exclude: NONE of the listed keywords may appear
     if (condition.keywords_exclude) {
       const kwLower = summary.keywords.map((k) => k.toLowerCase());
-      for (const kw of condition.keywords_exclude) {
-        if (kwLower.includes(kw.toLowerCase())) return false;
-      }
+      if (condition.keywords_exclude.some((kw) => kwLower.includes(kw.toLowerCase()))) return false;
     }
 
     // trend must match exactly
@@ -78,21 +68,12 @@ export class RuleEngine {
 
     // signature_repeated: at least one signature repeated >= N times
     if (condition.signature_repeated !== undefined) {
-      let found = false;
-      for (const count of summary.signatures.values()) {
-        if (count >= condition.signature_repeated) {
-          found = true;
-          break;
-        }
-      }
-      if (!found) return false;
+      if (!Array.from(summary.signatures.values()).some((count) => count >= condition.signature_repeated!)) return false;
     }
 
     // category_includes: ALL listed categories must appear
     if (condition.category_includes) {
-      for (const cat of condition.category_includes) {
-        if (!summary.categories.has(cat)) return false;
-      }
+      if (!condition.category_includes.every((cat) => summary.categories.has(cat))) return false;
     }
 
     // min_attempt: current attempt must be >= N

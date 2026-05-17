@@ -81,20 +81,11 @@ export function parseReviewerScore(text: string, vote: string): number {
 export function parseReviewerIssues(
   text: string,
 ): Array<{ severity: IssueSeverity; description: string }> {
-  const issues: Array<{ severity: IssueSeverity; description: string }> = [];
-  let match: RegExpExecArray | null;
-
-  // Reset lastIndex since we use /g flag
-  ISSUE_PATTERN.lastIndex = 0;
-  while ((match = ISSUE_PATTERN.exec(text)) !== null) {
+  return Array.from(text.matchAll(ISSUE_PATTERN)).flatMap((match) => {
     const severity = match[1]!.toUpperCase() as IssueSeverity;
     const description = match[2]!.trim();
-    if (description.length > 0) {
-      issues.push({ severity, description });
-    }
-  }
-
-  return issues;
+    return description.length > 0 ? [{ severity, description }] : [];
+  });
 }
 
 // ── Scoring & Quorum ───────────────────────────────────────────────────────
@@ -183,15 +174,14 @@ export async function executeReviewersInParallel<T>(
   executeOne: (participant: string) => Promise<T>,
   maxConcurrency: number = DEFAULT_MAX_CONCURRENCY,
 ): Promise<Array<{ participant: string; status: "fulfilled"; value: T } | { participant: string; status: "rejected"; error: unknown }>> {
-  const results: Array<
-    | { participant: string; status: "fulfilled"; value: T }
-    | { participant: string; status: "rejected"; error: unknown }
-  > = [];
-
   const concurrency = Math.max(1, Math.floor(maxConcurrency));
   const chunks = chunk(participants, concurrency);
 
-  for (const batch of chunks) {
+  return chunks.reduce<Promise<Array<
+    | { participant: string; status: "fulfilled"; value: T }
+    | { participant: string; status: "rejected"; error: unknown }
+  >>>(async (previousResults, batch) => {
+    const results = await previousResults;
     const settled = await Promise.allSettled(
       batch.map(async (participant) => {
         const value = await executeOne(participant);
@@ -199,35 +189,31 @@ export async function executeReviewersInParallel<T>(
       }),
     );
 
-    for (let i = 0; i < settled.length; i++) {
-      const entry = settled[i]!;
-      if (entry.status === "fulfilled") {
-        results.push({
+    return [
+      ...results,
+      ...settled.map((entry, index) =>
+        entry.status === "fulfilled"
+          ? {
           participant: entry.value.participant,
           status: "fulfilled",
           value: entry.value.value,
-        });
-      } else {
-        results.push({
-          participant: batch[i]!,
+        } as const
+          : {
+          participant: batch[index]!,
           status: "rejected",
           error: entry.reason,
-        });
-      }
-    }
-  }
-
-  return results;
+        } as const
+      ),
+    ];
+  }, Promise.resolve([]));
 }
 
 // ── Utility ────────────────────────────────────────────────────────────────
 
 function chunk<T>(arr: T[], size: number): T[][] {
-  const result: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) {
-    result.push(arr.slice(i, i + size));
-  }
-  return result;
+  return Array.from({ length: Math.ceil(arr.length / size) }, (_, index) =>
+    arr.slice(index * size, index * size + size)
+  );
 }
 
 /**

@@ -31,11 +31,11 @@ export class ToolRegistry {
     if (tool.category) {
       this.categories.get(tool.category)?.delete(name);
     }
-    for (const [alias, target] of this.aliases.entries()) {
+    this.aliases.forEach((target, alias) => {
       if (target === name) {
         this.aliases.delete(alias);
       }
-    }
+    });
     return true;
   }
 
@@ -118,12 +118,12 @@ export class ToolRegistry {
 
     try {
       const timeoutMs = context.timeout ?? 30000;
-      let timeoutId: ReturnType<typeof setTimeout>;
+      const timeout = { id: undefined as ReturnType<typeof setTimeout> | undefined };
       try {
         const result = await Promise.race([
           tool.execute(params, context),
           new Promise<never>((_, reject) => {
-            timeoutId = setTimeout(() => reject(new Error("Tool execution timeout")), timeoutMs);
+            timeout.id = setTimeout(() => reject(new Error("Tool execution timeout")), timeoutMs);
           }),
         ]);
         return {
@@ -132,7 +132,9 @@ export class ToolRegistry {
           duration: Date.now() - startTime,
         };
       } finally {
-        clearTimeout(timeoutId!);
+        if (timeout.id) {
+          clearTimeout(timeout.id);
+        }
       }
     } catch (error) {
       return {

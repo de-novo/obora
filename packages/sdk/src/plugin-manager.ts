@@ -22,9 +22,9 @@ export class PluginManager {
   async discoverAndRegister(registerOptions?: RegisterOptions): Promise<LoadedPlugin[]> {
     const loaded = await this.loader.scanAndLoad();
 
-    for (const plugin of loaded) {
+    loaded.forEach((plugin) => {
       this.registry.register(plugin, registerOptions);
-    }
+    });
 
     return loaded;
   }

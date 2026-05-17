@@ -80,12 +80,14 @@ const parseListQuery = (query: ListQuery): HistoryRunsQuery => {
 
 export const registerHistoryRoutes = (app: FastifyInstance, apiBasePath: string, store: HistoryStore): void => {
   app.get<{ Querystring: ListQuery }>(`${apiBasePath}/history/runs`, async (request, reply) => {
-    let parsed: HistoryRunsQuery;
-    try {
-      parsed = parseListQuery(request.query);
-    } catch (error) {
-      return sendValidationError(reply, error instanceof Error ? error.message : 'Invalid query');
-    }
+    const parsed = (() => {
+      try {
+        return parseListQuery(request.query);
+      } catch (error) {
+        return sendValidationError(reply, error instanceof Error ? error.message : 'Invalid query');
+      }
+    })();
+    if ('statusCode' in parsed) return parsed;
 
     const result = await store.listRuns(parsed);
     return reply.send(result);
@@ -123,14 +125,18 @@ export const registerHistoryRoutes = (app: FastifyInstance, apiBasePath: string,
   });
 
   app.get<{ Params: { runId: string }; Querystring: DetailQuery }>(`${apiBasePath}/history/runs/:runId`, async (request, reply) => {
-    let auditLimit: number;
-    let auditOffset: number;
-    try {
-      auditLimit = parseIntParam(request.query.auditLimit, DEFAULT_AUDIT_LIMIT);
-      auditOffset = parseIntParam(request.query.auditOffset, DEFAULT_OFFSET);
-    } catch (error) {
-      return sendValidationError(reply, error instanceof Error ? error.message : 'Invalid query');
-    }
+    const parsedAudit = (() => {
+      try {
+        return {
+          auditLimit: parseIntParam(request.query.auditLimit, DEFAULT_AUDIT_LIMIT),
+          auditOffset: parseIntParam(request.query.auditOffset, DEFAULT_OFFSET),
+        };
+      } catch (error) {
+        return sendValidationError(reply, error instanceof Error ? error.message : 'Invalid query');
+      }
+    })();
+    if ('statusCode' in parsedAudit) return parsedAudit;
+    const { auditLimit, auditOffset } = parsedAudit;
 
     if (auditLimit < 1 || auditLimit > MAX_AUDIT_LIMIT) {
       return sendValidationError(reply, `auditLimit must be between 1 and ${MAX_AUDIT_LIMIT}`);

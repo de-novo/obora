@@ -90,7 +90,7 @@ export class SupervisorPattern extends CollaborationPatternBase {
     const workerStates: Record<string, WorkerState> = {};
     const backoffByWorker: Record<string, number[]> = {};
 
-    for (const worker of workers) {
+    workers.forEach((worker) => {
       currentResults[worker] =
         this.normalizeResult(input.results?.[worker]) ??
         this.shiftAttempt(worker, attemptQueues) ??
@@ -103,9 +103,9 @@ export class SupervisorPattern extends CollaborationPatternBase {
       };
 
       backoffByWorker[worker] = [];
-    }
+    });
 
-    let totalRestarts = 0;
+    const restartState = { total: 0, guard: 0 };
 
     await context.emit?.({
       type: "supervisor_start",
@@ -117,11 +117,11 @@ export class SupervisorPattern extends CollaborationPatternBase {
       },
     });
 
-    let guard = 0;
-    while (guard < GUARD_LOOP_LIMIT) {
-      guard += 1;
+    while (restartState.guard < GUARD_LOOP_LIMIT) {
+      restartState.guard += 1;
 
-      for (const worker of workers) {
+      await workers.reduce<Promise<void>>(async (previous, worker) => {
+        await previous;
         const result = currentResults[worker];
         await context.emit?.({
           type: "worker_result",
@@ -133,7 +133,7 @@ export class SupervisorPattern extends CollaborationPatternBase {
             restarts: workerStates[worker].restarts,
           },
         });
-      }
+      }, Promise.resolve());
 
       const failedWorkers = workers.filter((worker) => currentResults[worker].success === false);
       if (failedWorkers.length === 0) {
@@ -142,7 +142,7 @@ export class SupervisorPattern extends CollaborationPatternBase {
           output: {
             workers: workerStates,
             strategy,
-            total_restarts: totalRestarts,
+            total_restarts: restartState.total,
           },
           metadata: {
             blackboard_domains: PATTERN_BLACKBOARD_DOMAIN_MAP.supervisor,
@@ -156,7 +156,10 @@ export class SupervisorPattern extends CollaborationPatternBase {
       }
 
       if (strategy === "one_for_one") {
-        for (const failedWorker of failedWorkers) {
+        const oneForOneFailure = await failedWorkers.reduce<Promise<PatternPayloadResult | undefined>>(
+          async (previous, failedWorker) => {
+            const previousResult = await previous;
+            if (previousResult) return previousResult;
           if (workerStates[failedWorker].restarts >= maxRestarts) {
             await context.emit?.({
               type: "supervisor_max_restarts",
@@ -164,7 +167,7 @@ export class SupervisorPattern extends CollaborationPatternBase {
                 worker: failedWorker,
                 strategy,
                 max_restarts: maxRestarts,
-                total_restarts: totalRestarts,
+                    total_restarts: restartState.total,
               },
             });
 
@@ -177,7 +180,7 @@ export class SupervisorPattern extends CollaborationPatternBase {
                 error_codes: [OboraErrorCode.RECOVERY_RETRY_EXHAUSTED],
                 workers: workerStates,
                 strategy,
-                total_restarts: totalRestarts,
+                    total_restarts: restartState.total,
               },
               metadata: {
                 blackboard_domains: PATTERN_BLACKBOARD_DOMAIN_MAP.supervisor,
@@ -192,7 +195,7 @@ export class SupervisorPattern extends CollaborationPatternBase {
 
           workerStates[failedWorker].restarts += 1;
           workerStates[failedWorker].status = "restarting";
-          totalRestarts += 1;
+            restartState.total += 1;
 
           const waitStep = this.computeBackoff(workerStates[failedWorker].restarts, backoff);
           backoffByWorker[failedWorker].push(waitStep);
@@ -203,7 +206,7 @@ export class SupervisorPattern extends CollaborationPatternBase {
               worker: failedWorker,
               strategy,
               restart_count: workerStates[failedWorker].restarts,
-              total_restarts: totalRestarts,
+                total_restarts: restartState.total,
               backoff,
               wait_step: waitStep,
             },
@@ -215,27 +218,34 @@ export class SupervisorPattern extends CollaborationPatternBase {
 
           workerStates[failedWorker].status = currentResults[failedWorker].success ? "completed" : "failed";
           workerStates[failedWorker].output = currentResults[failedWorker].output;
+            return undefined;
+          },
+          Promise.resolve(undefined)
+        );
+
+        if (oneForOneFailure) {
+          return oneForOneFailure;
         }
 
         continue;
       }
 
-      if (totalRestarts >= maxRestarts) {
+      if (restartState.total >= maxRestarts) {
         await context.emit?.({
           type: "supervisor_max_restarts",
           payload: {
             worker: "*",
             strategy,
             max_restarts: maxRestarts,
-            total_restarts: totalRestarts,
+            total_restarts: restartState.total,
           },
         });
 
-        for (const worker of workers) {
+        workers.forEach((worker) => {
           if (!currentResults[worker].success) {
             workerStates[worker].status = "failed";
           }
-        }
+        });
 
         return {
           success: false,
@@ -244,7 +254,7 @@ export class SupervisorPattern extends CollaborationPatternBase {
             error_codes: [OboraErrorCode.RECOVERY_RETRY_EXHAUSTED],
             workers: workerStates,
             strategy,
-            total_restarts: totalRestarts,
+            total_restarts: restartState.total,
           },
           metadata: {
             blackboard_domains: PATTERN_BLACKBOARD_DOMAIN_MAP.supervisor,
@@ -257,15 +267,15 @@ export class SupervisorPattern extends CollaborationPatternBase {
         };
       }
 
-      totalRestarts += 1;
+      restartState.total += 1;
 
-      for (const worker of workers) {
+      workers.forEach((worker) => {
         workerStates[worker].restarts += 1;
         workerStates[worker].status = "restarting";
 
         const waitStep = this.computeBackoff(workerStates[worker].restarts, backoff);
         backoffByWorker[worker].push(waitStep);
-      }
+      });
 
       await context.emit?.({
         type: "worker_restart",
@@ -274,17 +284,17 @@ export class SupervisorPattern extends CollaborationPatternBase {
           strategy,
           restart_all: true,
           affected_workers: workers,
-          restart_count: totalRestarts,
-          total_restarts: totalRestarts,
+          restart_count: restartState.total,
+          total_restarts: restartState.total,
           backoff,
         },
       });
 
-      for (const worker of workers) {
+      workers.forEach((worker) => {
         currentResults[worker] = this.shiftAttempt(worker, attemptQueues) ?? currentResults[worker];
         workerStates[worker].status = currentResults[worker].success ? "completed" : "failed";
         workerStates[worker].output = currentResults[worker].output;
-      }
+      });
     }
 
     throw new Error("supervisor pattern exceeded internal guard limit");
@@ -316,11 +326,11 @@ export class SupervisorPattern extends CollaborationPatternBase {
   ): Record<string, NormalizedWorkerResult[]> {
     const queues: Record<string, NormalizedWorkerResult[]> = {};
 
-    for (const worker of workers) {
+    workers.forEach((worker) => {
       const task = tasks?.[worker];
       const attempts = this.extractAttempts(task).map((attempt) => this.normalizeResult(attempt)).filter((item): item is NormalizedWorkerResult => !!item);
       queues[worker] = attempts;
-    }
+    });
 
     return queues;
   }

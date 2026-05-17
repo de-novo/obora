@@ -130,9 +130,12 @@ export class PeerReviewPattern extends CollaborationPatternBase {
 
     const rounds = this.resolveRounds(input, maxRounds);
     const roundSummaries: RoundSummary[] = [];
-    let finalReviews: NormalizedReview[] = [];
+    const reviewState = { finalReviews: [] as NormalizedReview[] };
 
-    for (let index = 0; index < maxRounds; index += 1) {
+    const quorumFailure = await Array.from({ length: maxRounds }, (_, index) => index).reduce<Promise<PatternPayloadResult | undefined>>(
+      async (previous, index) => {
+        const previousResult = await previous;
+        if (previousResult || reviewState.finalReviews.length > 0) return previousResult;
       if (this.hasTimedOut(timeoutMs, input.startedAt, context)) {
         await context.emit?.({
           type: "peer_review_result",
@@ -190,7 +193,7 @@ export class PeerReviewPattern extends CollaborationPatternBase {
       if (missingRequired.length > 0) {
         const isLastRound = roundNumber >= maxRounds;
         if (!isLastRound) {
-          continue;
+            return undefined;
         }
 
         return this.buildBusinessFailureResult({
@@ -206,19 +209,25 @@ export class PeerReviewPattern extends CollaborationPatternBase {
         });
       }
 
-      finalReviews = reviews;
-      break;
+        reviewState.finalReviews = reviews;
+        return undefined;
+      },
+      Promise.resolve(undefined)
+    );
+
+    if (quorumFailure) {
+      return quorumFailure;
     }
 
-    if (finalReviews.length === 0) {
+    if (reviewState.finalReviews.length === 0) {
       const lastRound = rounds[Math.max(0, roundSummaries.length - 1)]?.reviews;
-      finalReviews = this.collectReviews(reviewers, lastRound);
+      reviewState.finalReviews = this.collectReviews(reviewers, lastRound);
       if (roundSummaries.length === 0) {
         throw new Error("peer-review failed to collect review rounds");
       }
     }
 
-    const finalReport = this.buildReport(finalReviews);
+    const finalReport = this.buildReport(reviewState.finalReviews);
     const passByScore = finalReport.average_score >= minScore;
     const passByP0 = finalReport.issue_counts.P0 <= p0Allowed;
     const passed = passByScore && passByP0;
@@ -359,11 +368,9 @@ export class PeerReviewPattern extends CollaborationPatternBase {
       return [];
     }
 
-    const reviews: NormalizedReview[] = [];
-
-    for (const reviewer of reviewers) {
+    return reviewers.flatMap((reviewer) => {
       if (!(reviewer in rawReviews)) {
-        continue;
+        return [];
       }
 
       const raw = rawReviews[reviewer] ?? {};
@@ -378,14 +385,12 @@ export class PeerReviewPattern extends CollaborationPatternBase {
           description: typeof issue.description === "string" ? issue.description : "",
         }));
 
-      reviews.push({
+      return [{
         reviewer,
         score,
         issues,
-      });
-    }
-
-    return reviews;
+      }];
+    });
   }
 
   private buildReport(reviews: NormalizedReview[]): {
@@ -400,16 +405,14 @@ export class PeerReviewPattern extends CollaborationPatternBase {
     };
 
     const scoresByReviewer: Record<string, number[]> = {};
-    let scoreTotal = 0;
-
-    for (const review of reviews) {
-      scoreTotal += review.score;
+    const scoreTotal = reviews.reduce((total, review) => {
       scoresByReviewer[review.reviewer] = [...(scoresByReviewer[review.reviewer] ?? []), review.score];
 
-      for (const issue of review.issues) {
+      review.issues.forEach((issue) => {
         issueCounts[issue.severity] += 1;
-      }
-    }
+      });
+      return total + review.score;
+    }, 0);
 
     const average = reviews.length === 0 ? 0 : scoreTotal / reviews.length;
 

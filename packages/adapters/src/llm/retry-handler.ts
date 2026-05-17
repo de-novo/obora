@@ -14,32 +14,35 @@ export class RetryHandler {
     operation: () => Promise<T>,
     isRetryable: (error: Error) => boolean = this.defaultIsRetryable
   ): Promise<T> {
-    let lastError: Error | undefined;
+    const runAttempt = async (attempt: number, lastError?: Error): Promise<T> => {
+      if (attempt > this.maxRetries) {
+        throw lastError!;
+      }
 
-    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
       try {
         return await operation();
       } catch (error) {
-        lastError = error as Error;
+        const currentError = error as Error;
 
-        if (!isRetryable(lastError)) {
-          throw lastError;
+        if (!isRetryable(currentError)) {
+          throw currentError;
         }
 
         if (attempt === this.maxRetries) {
           throw new RetryExhaustedError(
             `Max retries (${this.maxRetries}) exceeded`,
-            lastError,
+            currentError,
             attempt + 1
           );
         }
 
         const delay = this.calculateDelay(attempt);
         await this.sleep(delay);
+        return runAttempt(attempt + 1, currentError);
       }
-    }
+    };
 
-    throw lastError!;
+    return runAttempt(0);
   }
 
   private calculateDelay(attempt: number): number {

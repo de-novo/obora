@@ -41,7 +41,7 @@ const parseJsonOutput = (label, stdout) => {
 
 const createSmokeEnv = (homeDir) => {
   const env = { ...process.env, HOME: homeDir, CI: '1' };
-  for (const key of [
+  [
     'OPENAI_API_KEY',
     'ANTHROPIC_API_KEY',
     'ZAI_API_KEY',
@@ -51,9 +51,9 @@ const createSmokeEnv = (homeDir) => {
     'OBORA_HISTORY_DB_PATH',
     'OBORA_RESUME_COMMAND',
     'OBORA_DLQ_PATH',
-  ]) {
+  ].forEach((key) => {
     delete env[key];
-  }
+  });
   return env;
 };
 
@@ -130,20 +130,20 @@ const verifyCliOnboardingSmoke = async (tmpDir) => {
 const withIsolatedDashboardEnv = async (fn) => {
   const keys = ['OBORA_HISTORY_DB_PATH', 'OBORA_RESUME_COMMAND', 'OBORA_DLQ_PATH'];
   const original = new Map(keys.map((key) => [key, process.env[key]]));
-  for (const key of keys) {
+  keys.forEach((key) => {
     delete process.env[key];
-  }
+  });
 
   try {
     return await fn();
   } finally {
-    for (const [key, value] of original) {
+    original.forEach((value, key) => {
       if (value === undefined) {
         delete process.env[key];
       } else {
         process.env[key] = value;
       }
-    }
+    });
   }
 };
 
@@ -164,6 +164,9 @@ const verifyDashboardBootstrapSmoke = async (tmpDir) => {
         host: '127.0.0.1',
         port: 0,
         staticDir,
+      },
+      dependencies: {
+        logger: false,
       },
       requireStaticAssets: true,
     });

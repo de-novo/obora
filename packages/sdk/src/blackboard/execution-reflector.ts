@@ -73,13 +73,13 @@ export class ExecutionReflector {
 
     // Collect all text from summaries and check messages
     const allText: string[] = [];
-    for (const f of failures) {
+    failures.forEach((f) => {
       allText.push(f.validation.summary.toLowerCase());
-      for (const check of f.validation.failedChecks) {
+      f.validation.failedChecks.forEach((check) => {
         allText.push(check.name.toLowerCase());
         allText.push(check.message.toLowerCase());
-      }
-    }
+      });
+    });
 
     // Extract meaningful words (skip common stop words and short words)
     const stopWords = new Set([
@@ -102,8 +102,7 @@ export class ExecutionReflector {
     const wordCount = new Map<string, number>();
     const wordInFailures = new Map<string, Set<number>>(); // track which failures contain each word
 
-    for (let i = 0; i < failures.length; i++) {
-      const failure = failures[i]!;
+    failures.forEach((failure, i) => {
       const texts = [
         failure.validation.summary.toLowerCase(),
         ...failure.validation.failedChecks.map((c) => `${c.name} ${c.message}`.toLowerCase()),
@@ -111,16 +110,16 @@ export class ExecutionReflector {
       const allWords = texts.join(" ").split(/[\s,.:;()[\]{}"'`/\\|!?=<>+*#@~^&%$-]+/);
       const seen = new Set<string>();
 
-      for (const word of allWords) {
-        if (word.length < 3 || stopWords.has(word)) continue;
+      allWords.forEach((word) => {
+        if (word.length < 3 || stopWords.has(word)) return;
         if (!seen.has(word)) {
           seen.add(word);
           wordCount.set(word, (wordCount.get(word) ?? 0) + 1);
           if (!wordInFailures.has(word)) wordInFailures.set(word, new Set());
           wordInFailures.get(word)!.add(i);
         }
-      }
-    }
+      });
+    });
 
     // Find keywords that appear across MOST failures (not just within one)
     const threshold = Math.max(2, Math.ceil(failures.length * 0.5));
@@ -140,12 +139,12 @@ export class ExecutionReflector {
    */
   private analyzeSignatures(failures: FailureEntry[]): string | undefined {
     const sigCount = new Map<string, number>();
-    for (const f of failures) {
+    failures.forEach((f) => {
       const sig = f.validation.signature;
       if (sig) {
         sigCount.set(sig, (sigCount.get(sig) ?? 0) + 1);
       }
-    }
+    });
 
     // Find repeated signatures
     const repeated = [...sigCount.entries()]
@@ -164,14 +163,14 @@ export class ExecutionReflector {
    */
   private analyzeCategories(failures: FailureEntry[]): string | undefined {
     const categoryCount = new Map<string, number>();
-    for (const f of failures) {
-      for (const check of f.validation.failedChecks) {
+    failures.forEach((f) => {
+      f.validation.failedChecks.forEach((check) => {
         // Extract category prefix (e.g. "implementation_bug" from "implementation_bug: task completion")
         const colonIndex = check.name.indexOf(":");
         const category = colonIndex > 0 ? check.name.slice(0, colonIndex).trim() : check.name;
         categoryCount.set(category, (categoryCount.get(category) ?? 0) + 1);
-      }
-    }
+      });
+    });
 
     const sorted = [...categoryCount.entries()]
       .sort((a, b) => b[1] - a[1])

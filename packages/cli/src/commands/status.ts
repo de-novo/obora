@@ -83,31 +83,35 @@ async function loadLinkedDlqEntries(
     const filePath = config?.dlq?.filePath ?? DEFAULT_DLQ_PATH;
     const store = new FileDLQStore(filePath);
     const snapshot = await store.load();
-    const entryMap = new Map<string, LinkedDlqEntry>();
-
-    for (const entry of [...snapshot.entries].sort((a, b) =>
-      b.createdAt.localeCompare(a.createdAt)
-    )) {
-      if (!uniqueRunIds.includes(entry.executionId) || entryMap.has(entry.executionId)) continue;
-      const repairLoop =
-        entry.metadata?.repairLoop &&
-        typeof entry.metadata.repairLoop === "object" &&
-        !Array.isArray(entry.metadata.repairLoop)
-          ? (entry.metadata.repairLoop as Record<string, unknown>)
-          : undefined;
-      entryMap.set(entry.executionId, {
-        id: entry.id,
-        createdAt: entry.createdAt,
-        status: entry.status,
-        errorCode: entry.errorCode,
-        errorMessage: entry.errorMessage,
-        repairAttempts: entry.repairAttempts,
-        ...(entry.stepName ? { stepName: entry.stepName } : {}),
-        ...(typeof repairLoop?.lastStopCategory === "string"
-          ? { lastStopCategory: repairLoop.lastStopCategory }
-          : {}),
-      });
-    }
+    const entryMap = [...snapshot.entries]
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .reduce((map, entry) => {
+        if (!uniqueRunIds.includes(entry.executionId) || map.has(entry.executionId)) return map;
+        const repairLoop =
+          entry.metadata?.repairLoop &&
+          typeof entry.metadata.repairLoop === "object" &&
+          !Array.isArray(entry.metadata.repairLoop)
+            ? (entry.metadata.repairLoop as Record<string, unknown>)
+            : undefined;
+        return new Map([
+          ...map,
+          [
+            entry.executionId,
+            {
+              id: entry.id,
+              createdAt: entry.createdAt,
+              status: entry.status,
+              errorCode: entry.errorCode,
+              errorMessage: entry.errorMessage,
+              repairAttempts: entry.repairAttempts,
+              ...(entry.stepName ? { stepName: entry.stepName } : {}),
+              ...(typeof repairLoop?.lastStopCategory === "string"
+                ? { lastStopCategory: repairLoop.lastStopCategory }
+                : {}),
+            },
+          ],
+        ]);
+      }, new Map<string, LinkedDlqEntry>());
 
     return Object.fromEntries(uniqueRunIds.map((runId) => [runId, entryMap.get(runId)]));
   } catch (error) {
@@ -140,30 +144,34 @@ async function loadStatusRuns(options: {
   workflow?: string;
   limit: number;
 }): Promise<StatusRunRow[]> {
-  let runtime: { listRunRecords(query: Record<string, unknown>): Promise<PersistedRunRecord[]> };
-  try {
-    runtime = (await createRuntime()) as {
-      listRunRecords(query: Record<string, unknown>): Promise<PersistedRunRecord[]>;
-    };
-  } catch (error) {
-    throw new CLIError(
-      `Failed to load status runtime: ${getErrorMessage(error)}`,
-      ExitCode.EXECUTION_FAILED
-    );
-  }
+  const runtime = await (async (): Promise<{
+    listRunRecords(query: Record<string, unknown>): Promise<PersistedRunRecord[]>;
+  }> => {
+    try {
+      return (await createRuntime()) as {
+        listRunRecords(query: Record<string, unknown>): Promise<PersistedRunRecord[]>;
+      };
+    } catch (error) {
+      throw new CLIError(
+        `Failed to load status runtime: ${getErrorMessage(error)}`,
+        ExitCode.EXECUTION_FAILED
+      );
+    }
+  })();
 
-  let runRecords: PersistedRunRecord[];
-  try {
-    runRecords = await runtime.listRunRecords({
-      ...(options.workflow ? { workflow: options.workflow } : {}),
-      limit: options.limit,
-    });
-  } catch (error) {
-    throw new CLIError(
-      `Failed to load status runs: ${getErrorMessage(error)}`,
-      ExitCode.EXECUTION_FAILED
-    );
-  }
+  const runRecords = await (async () => {
+    try {
+      return await runtime.listRunRecords({
+        ...(options.workflow ? { workflow: options.workflow } : {}),
+        limit: options.limit,
+      });
+    } catch (error) {
+      throw new CLIError(
+        `Failed to load status runs: ${getErrorMessage(error)}`,
+        ExitCode.EXECUTION_FAILED
+      );
+    }
+  })();
 
   const linkedDlqEntries = await loadLinkedDlqEntries(runRecords.map((run) => run.id));
 
@@ -185,12 +193,13 @@ async function loadStatusRuns(options: {
 }
 
 function summarizeRunStatuses(runs: StatusRunRow[]): Record<string, number> {
-  const counts: Record<string, number> = {};
-  for (const run of runs) {
+  return runs.reduce<Record<string, number>>((counts, run) => {
     const key = run.status ?? "unknown";
-    counts[key] = (counts[key] ?? 0) + 1;
-  }
-  return counts;
+    return {
+      ...counts,
+      [key]: (counts[key] ?? 0) + 1,
+    };
+  }, {});
 }
 
 function formatLinkedDlqIndicator(linkedDlqEntry: LinkedDlqEntry | undefined): string {
@@ -273,11 +282,11 @@ function printStatusText(payload: ReturnType<typeof buildStatusPayload>): void {
       `${"ID".padEnd(38)} ${"Workflow".padEnd(20)} ${"Status".padEnd(12)} ${"Loop".padEnd(12)} ${"DLQ".padEnd(12)} Started At`
     );
     console.log("-".repeat(110));
-    for (const run of recent) {
+    recent.forEach((run) => {
       console.log(
         `${run.id.padEnd(38)} ${(run.workflowName ?? "-").padEnd(20)} ${(run.status ?? "-").padEnd(12)} ${(run.loopState ?? "-").padEnd(12)} ${formatLinkedDlqIndicator(run.linkedDlqEntry).padEnd(12)} ${run.startedAt ?? "-"}`
       );
-    }
+    });
   } else {
     console.log("\nRecent Runs\n  No persisted runs found.");
   }

@@ -105,7 +105,14 @@ export class PiAIAdapter implements LLMAdapter {
     const context = this.toContext(params);
     const eventStream = stream(model, context, this.toStreamOptions(params));
 
-    for await (const event of eventStream) {
+    const consumeEvents = async (
+      iterator: AsyncIterator<Awaited<ReturnType<typeof eventStream[typeof Symbol.asyncIterator]> extends AsyncIterator<infer T> ? T : never>>
+    ): Promise<void> => {
+      const result = await iterator.next();
+      if (result.done) {
+        return;
+      }
+      const event = result.value;
       if (event.type === "text_delta") {
         onChunk({
           id: `chunk-${Date.now()}`,
@@ -136,7 +143,10 @@ export class PiAIAdapter implements LLMAdapter {
           },
         });
       }
-    }
+      return consumeEvents(iterator);
+    };
+
+    await consumeEvents(eventStream[Symbol.asyncIterator]());
 
     const response = await eventStream.result();
 
@@ -209,14 +219,13 @@ export class PiAIAdapter implements LLMAdapter {
     const systemMessages = params.messages.filter((m) => m.role === "system");
     const nonSystemMessages = params.messages.filter((m) => m.role !== "system");
 
-    const toolCallNameById = new Map<string, string>();
-    for (const message of nonSystemMessages) {
-      if (message.role === "assistant" && message.toolCalls) {
-        for (const toolCall of message.toolCalls) {
-          toolCallNameById.set(toolCall.id, toolCall.function.name);
-        }
-      }
-    }
+    const toolCallNameById = new Map(
+      nonSystemMessages.flatMap((message) =>
+        message.role === "assistant" && message.toolCalls
+          ? message.toolCalls.map((toolCall) => [toolCall.id, toolCall.function.name] as const)
+          : []
+      )
+    );
 
     const messages: Message[] = nonSystemMessages.map((message): Message => {
       if (message.role === "user") {
@@ -228,19 +237,15 @@ export class PiAIAdapter implements LLMAdapter {
       }
 
       if (message.role === "assistant") {
-        const content: AssistantMessage["content"] = [];
-        if (message.content) {
-          content.push({ type: "text", text: message.content });
-        }
-
-        for (const toolCall of message.toolCalls ?? []) {
-          content.push({
-            type: "toolCall",
+        const content: AssistantMessage["content"] = [
+          ...(message.content ? [{ type: "text" as const, text: message.content }] : []),
+          ...(message.toolCalls ?? []).map((toolCall) => ({
+            type: "toolCall" as const,
             id: toolCall.id,
             name: toolCall.function.name,
             arguments: this.parseToolArguments(toolCall.function.arguments),
-          });
-        }
+          })),
+        ];
 
         return {
           role: "assistant",

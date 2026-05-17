@@ -97,10 +97,11 @@ export class AdapterHistoryStore implements HistoryStore {
   async listRuns(query: HistoryRunsQuery): Promise<ListRunsResult> {
     const pageSize = 200;
     const maxTotalRuns = 10_000;
-    const rawRuns: RunRecord[] = [];
-    let fetchOffset = 0;
+    const fetchRuns = async (fetchOffset: number, rawRuns: RunRecord[]): Promise<RunRecord[]> => {
+      if (rawRuns.length >= maxTotalRuns) {
+        return rawRuns;
+      }
 
-    while (rawRuns.length < maxTotalRuns) {
       const page = await this.adapter.listRuns({
         status: query.status,
         workflowName: query.workflowName,
@@ -109,10 +110,10 @@ export class AdapterHistoryStore implements HistoryStore {
         limit: pageSize,
         offset: fetchOffset,
       });
-      rawRuns.push(...page);
-      if (page.length < pageSize) break;
-      fetchOffset += pageSize;
-    }
+      const nextRuns = [...rawRuns, ...page];
+      return page.length < pageSize ? nextRuns : fetchRuns(fetchOffset + pageSize, nextRuns);
+    };
+    const rawRuns = await fetchRuns(0, []);
 
     const rows = await Promise.all(
       rawRuns.map(async (run) => {
@@ -274,25 +275,27 @@ export class InMemoryHistoryStore implements HistoryStore {
     const limit = query.limit ?? 20;
     const offset = query.offset ?? 0;
 
-    let rows = Array.from(this.runs.values()).map((run) => ({
-      run,
-      stepCount: this.steps.get(run.id)?.length ?? 0,
-      costSummary: this.costs.get(run.id) ?? { totalTokens: 0, totalCostUsd: 0, byStep: [], byModel: [] },
-    }));
-
-    if (query.status) rows = rows.filter((row) => row.run.status === query.status);
-    if (query.workflowName) rows = rows.filter((row) => row.run.workflowName === query.workflowName);
-    if (query.from) rows = rows.filter((row) => row.run.startedAt >= toIsoBoundary(query.from!, 'start'));
-    if (query.to) rows = rows.filter((row) => row.run.startedAt <= toIsoBoundary(query.to!, 'end'));
-    if (query.costMin !== undefined) rows = rows.filter((row) => row.costSummary.totalCostUsd >= query.costMin!);
-    if (query.costMax !== undefined) rows = rows.filter((row) => row.costSummary.totalCostUsd <= query.costMax!);
+    const rows = Array.from(this.runs.values())
+      .map((run) => ({
+        run,
+        stepCount: this.steps.get(run.id)?.length ?? 0,
+        costSummary: this.costs.get(run.id) ?? { totalTokens: 0, totalCostUsd: 0, byStep: [], byModel: [] },
+      }))
+      .filter((row) => !query.status || row.run.status === query.status)
+      .filter((row) => !query.workflowName || row.run.workflowName === query.workflowName)
+      .filter((row) => !query.from || row.run.startedAt >= toIsoBoundary(query.from, 'start'))
+      .filter((row) => !query.to || row.run.startedAt <= toIsoBoundary(query.to, 'end'))
+      .filter((row) => query.costMin === undefined || row.costSummary.totalCostUsd >= query.costMin)
+      .filter((row) => query.costMax === undefined || row.costSummary.totalCostUsd <= query.costMax);
 
     const repairLoopCounts = buildRepairLoopCounts(rows);
-    if (query.repairLoop) rows = rows.filter((row) => matchesRepairLoopFilter(row.run, query.repairLoop));
+    const filteredRows = query.repairLoop
+      ? rows.filter((row) => matchesRepairLoopFilter(row.run, query.repairLoop))
+      : rows;
 
     const sortBy = query.sortBy ?? 'startedAt';
     const sign = query.sortOrder === 'asc' ? 1 : -1;
-    rows.sort((a, b) => {
+    const sortedRows = [...filteredRows].sort((a, b) => {
       if (sortBy === 'totalCostUsd') {
         return (a.costSummary.totalCostUsd - b.costSummary.totalCostUsd) * sign;
       }
@@ -305,11 +308,11 @@ export class InMemoryHistoryStore implements HistoryStore {
     });
 
     return {
-      items: rows.slice(offset, offset + limit).map((row) => ({
+      items: sortedRows.slice(offset, offset + limit).map((row) => ({
         ...structuredClone(row),
         repairLoop: getRepairLoopSummary(row.run),
       })),
-      total: rows.length,
+      total: sortedRows.length,
       limit,
       offset,
       repairLoopCounts,

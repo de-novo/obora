@@ -76,11 +76,11 @@ export class ConsensusPattern extends CollaborationPatternBase {
     }
 
     if (config.weights !== undefined) {
-      for (const [voterId, weight] of Object.entries(config.weights)) {
+      Object.entries(config.weights).forEach(([voterId, weight]) => {
         if (voterId.trim().length === 0 || !Number.isFinite(weight) || weight < 0) {
           throw new Error("consensus.weights must map non-empty voter ids to finite numbers >= 0");
         }
-      }
+      });
     }
 
     if (config.timeout !== undefined && parseTimeoutToMs(config.timeout) === undefined) {
@@ -99,14 +99,14 @@ export class ConsensusPattern extends CollaborationPatternBase {
         throw new Error("consensus.voter_roles must be an array of VoterRoleConfig");
       }
       const validRoles = new Set(["ai", "human", "service"]);
-      for (const rc of config.voter_roles) {
+      config.voter_roles.forEach((rc) => {
         if (!validRoles.has(rc.role)) {
           throw new Error(`consensus.voter_roles[].role must be one of: ai, human, service (got "${rc.role}")`);
         }
         if (!Array.isArray(rc.voters) || rc.voters.length === 0) {
           throw new Error("consensus.voter_roles[].voters must be a non-empty string[]");
         }
-      }
+      });
     }
 
     if (config.escalation !== undefined) {
@@ -114,11 +114,11 @@ export class ConsensusPattern extends CollaborationPatternBase {
       if (!Array.isArray(config.escalation.triggers) || config.escalation.triggers.length === 0) {
         throw new Error("consensus.escalation.triggers must be a non-empty array");
       }
-      for (const t of config.escalation.triggers) {
-        if (!validTriggers.has(t)) {
-          throw new Error(`consensus.escalation.triggers must be one of: timeout, quorum_not_met (got "${t}")`);
+      config.escalation.triggers.forEach((trigger) => {
+        if (!validTriggers.has(trigger)) {
+          throw new Error(`consensus.escalation.triggers must be one of: timeout, quorum_not_met (got "${trigger}")`);
         }
-      }
+      });
     }
   }
 
@@ -160,7 +160,8 @@ export class ConsensusPattern extends CollaborationPatternBase {
     });
     votingSessionStore.open(votingSession.id);
 
-    for (const vote of votes) {
+    await votes.reduce<Promise<void>>(async (previous, vote) => {
+      await previous;
       votingSessionStore.addVote({
         sessionId: votingSession.id,
         voterId: createAgentId(vote.voterId),
@@ -178,7 +179,7 @@ export class ConsensusPattern extends CollaborationPatternBase {
           role: vote.role,
         },
       });
-    }
+    }, Promise.resolve());
 
     const requiredVoteCount = votes.filter((vote) => requiredParticipants.includes(vote.voterId)).length;
     if (requiredVoteCount < requiredParticipants.length) {
@@ -300,16 +301,16 @@ export class ConsensusPattern extends CollaborationPatternBase {
   private buildVoterRoleMap(config: ConsensusPatternConfig, participants: string[]): Map<string, VoterRole> {
     const map = new Map<string, VoterRole>();
     // Default all to "ai"
-    for (const p of participants) {
-      map.set(p, "ai");
-    }
+    participants.forEach((participant) => {
+      map.set(participant, "ai");
+    });
     // Override from config
     if (config.voter_roles) {
-      for (const rc of config.voter_roles) {
-        for (const v of rc.voters) {
-          map.set(v, rc.role);
-        }
-      }
+      config.voter_roles.forEach((roleConfig) => {
+        roleConfig.voters.forEach((voter) => {
+          map.set(voter, roleConfig.role);
+        });
+      });
     }
     return map;
   }
@@ -375,15 +376,15 @@ export class ConsensusPattern extends CollaborationPatternBase {
     }
 
     const votes: NormalizedVote[] = [];
-    for (const participant of participants) {
+    participants.forEach((participant) => {
       if (!(participant in rawVotes)) {
-        continue;
+        return;
       }
 
       const vote = this.normalizeVote(participant, rawVotes[participant]);
       vote.role = roleMap.get(participant) ?? "ai";
       votes.push(vote);
-    }
+    });
 
     return votes;
   }

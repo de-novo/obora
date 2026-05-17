@@ -20,23 +20,22 @@ export async function loadAgentsFromYamlFile(path?: string): Promise<Map<string,
         provider?: string;
         model?: string;
         temperature?: number;
+        prompt?: string;
       }
     >;
   };
 
-  const map = new Map<string, AgentFactory>();
-
-  for (const [name, info] of Object.entries(parsed.agents ?? {})) {
+  return Object.entries(parsed.agents ?? {}).reduce<Map<string, AgentFactory>>((map, [name, info]) => {
     map.set(name, () => ({
       role: info.role,
       description: info.description,
       provider: info.provider,
       model: info.model,
       temperature: info.temperature,
+      prompt: info.prompt,
     }));
-  }
-
-  return map;
+    return map;
+  }, new Map());
 }
 
 export function loadWorkflowAgents(workflow?: WorkflowDef): Map<string, AgentFactory> {
@@ -46,9 +45,9 @@ export function loadWorkflowAgents(workflow?: WorkflowDef): Map<string, AgentFac
     return workflowAgents;
   }
 
-  for (const [name, info] of Object.entries(workflow.agents as Record<string, unknown>)) {
+  return Object.entries(workflow.agents as Record<string, unknown>).reduce<Map<string, AgentFactory>>((map, [name, info]) => {
     if (!info || typeof info !== "object") {
-      continue;
+      return map;
     }
 
     const agentInfo = info as {
@@ -58,17 +57,18 @@ export function loadWorkflowAgents(workflow?: WorkflowDef): Map<string, AgentFac
       model?: string;
       temperature?: number;
       api_key?: string;
+      prompt?: string;
     };
 
-    workflowAgents.set(name, () => ({
+    map.set(name, () => ({
       role: agentInfo.role,
       description: agentInfo.description,
       provider: agentInfo.provider,
       model: agentInfo.model,
       temperature: agentInfo.temperature,
       api_key: agentInfo.api_key,
+      prompt: agentInfo.prompt,
     }));
-  }
-
-  return workflowAgents;
+    return map;
+  }, workflowAgents);
 }

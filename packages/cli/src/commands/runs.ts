@@ -229,7 +229,7 @@ export function summarizeRepairLoopTimeline(
     recentValidationFailures: [],
   };
 
-  for (const event of timeline) {
+  timeline.forEach((event) => {
     const detail = event.detail ?? {};
     switch (event.action) {
       case "workflow.validation_failed":
@@ -278,7 +278,7 @@ export function summarizeRepairLoopTimeline(
       default:
         break;
     }
-  }
+  });
 
   const hasActivity =
     summary.validationFailed > 0 ||
@@ -373,20 +373,23 @@ export async function listRunsForCli(
 
   const pageSize = 200;
   const maxTotalRuns = 10_000;
-  const allRuns: PersistedRunRecord[] = [];
-  let offset = 0;
-
-  while (allRuns.length < maxTotalRuns) {
+  const collectPages = async (
+    offset = 0,
+    collected: PersistedRunRecord[] = []
+  ): Promise<PersistedRunRecord[]> => {
+    if (collected.length >= maxTotalRuns) {
+      return collected;
+    }
     const page = await runtime.listRunRecords({
       status: opts.status,
       workflowName: opts.workflow,
       limit: pageSize,
       offset,
     });
-    allRuns.push(...page);
-    if (page.length < pageSize) break;
-    offset += pageSize;
-  }
+    const nextCollected = [...collected, ...page];
+    return page.length < pageSize ? nextCollected : collectPages(offset + pageSize, nextCollected);
+  };
+  const allRuns = await collectPages();
 
   const filtered = allRuns.filter((run) =>
     matchesRepairLoopFilter(extractPersistedRepairLoopSummary(run), opts.repairLoop)
@@ -446,10 +449,10 @@ async function loadLinkedDlqEntries(
     const snapshot = await store.load();
     const entryMap = new Map<string, LinkedDlqInspectEntry>();
 
-    for (const entry of [...snapshot.entries].sort((a, b) =>
+    [...snapshot.entries].sort((a, b) =>
       b.createdAt.localeCompare(a.createdAt)
-    )) {
-      if (!uniqueRunIds.includes(entry.executionId) || entryMap.has(entry.executionId)) continue;
+    ).forEach((entry) => {
+      if (!uniqueRunIds.includes(entry.executionId) || entryMap.has(entry.executionId)) return;
       const repairLoop =
         entry.metadata?.repairLoop &&
         typeof entry.metadata.repairLoop === "object" &&
@@ -468,7 +471,7 @@ async function loadLinkedDlqEntries(
           ? { lastStopCategory: repairLoop.lastStopCategory }
           : {}),
       });
-    }
+    });
 
     return Object.fromEntries(uniqueRunIds.map((runId) => [runId, entryMap.get(runId)]));
   } catch {
@@ -563,31 +566,31 @@ export async function inspectPersistedRun(
         );
         if (failure.errorCode) console.log(`     Code: ${failure.errorCode}`);
         if (failure.logPath) console.log(`     Log:  ${failure.logPath}`);
-        for (const check of failure.failedChecks.slice(0, 3)) {
+        failure.failedChecks.slice(0, 3).forEach((check) => {
           console.log(
             `     - ${check.name ?? "check"}${check.file ? ` [${check.file}]` : ""}${check.message ? `: ${check.message}` : ""}`
           );
-        }
+        });
       });
     }
   }
 
   if (opts.steps !== false && steps.length > 0) {
     console.log(`\nSteps (${steps.length}):`);
-    for (const step of steps) {
+    steps.forEach((step) => {
       const duration = step.durationMs ? ` (${step.durationMs}ms)` : "";
       console.log(`  ${step.stepName.padEnd(20)} ${step.status.padEnd(12)}${duration}`);
       if (step.error) {
         console.log(`    Error: [${step.error.code}] ${step.error.message}`);
       }
-    }
+    });
   }
 
   if (artifacts.length > 0) {
     console.log(`\nArtifacts (${artifacts.length}):`);
-    for (const a of artifacts) {
-      console.log(`  ${a.stepName}/${a.name} (${a.mimeType}, ${a.sizeBytes} bytes)`);
-    }
+    artifacts.forEach((artifact) => {
+      console.log(`  ${artifact.stepName}/${artifact.name} (${artifact.mimeType}, ${artifact.sizeBytes} bytes)`);
+    });
   }
 
   if (linkedDlqEntry) {
@@ -608,15 +611,15 @@ export async function inspectPersistedRun(
     console.log(`  Total Cost:   $${costSummary.totalCostUsd.toFixed(6)}`);
     if (costSummary.byStep.length > 0) {
       console.log("  By Step:");
-      for (const item of costSummary.byStep) {
+      costSummary.byStep.forEach((item) => {
         console.log(`    - ${item.stepName}: ${item.tokens} tokens, $${item.costUsd.toFixed(6)}`);
-      }
+      });
     }
     if (costSummary.byModel.length > 0) {
       console.log("  By Model:");
-      for (const item of costSummary.byModel) {
+      costSummary.byModel.forEach((item) => {
         console.log(`    - ${item.model}: ${item.tokens} tokens, $${item.costUsd.toFixed(6)}`);
-      }
+      });
     }
   }
 }
@@ -664,24 +667,25 @@ async function runListRuns(
   const order = isRunSortOrder(opts.order) ? opts.order : "desc";
   const limit = parseNumberOption(opts.limit, 20, "limit");
 
-  let runRecords: PersistedRunRecord[];
-  try {
-    const runtime = await createRuntime();
-    runRecords = await listRunsForCli(runtime, {
-      status,
-      workflow: opts.workflow,
-      repairLoop,
-      sortBy,
-      order,
-      limit,
-    });
-  } catch (error) {
-    if (error instanceof CLIError) throw error;
-    throw new CLIError(
-      `Failed to load persisted runs: ${getErrorMessage(error)}`,
-      ExitCode.EXECUTION_FAILED
-    );
-  }
+  const runRecords = await (async (): Promise<PersistedRunRecord[]> => {
+    try {
+      const runtime = await createRuntime();
+      return await listRunsForCli(runtime, {
+        status,
+        workflow: opts.workflow,
+        repairLoop,
+        sortBy,
+        order,
+        limit,
+      });
+    } catch (error) {
+      if (error instanceof CLIError) throw error;
+      throw new CLIError(
+        `Failed to load persisted runs: ${getErrorMessage(error)}`,
+        ExitCode.EXECUTION_FAILED
+      );
+    }
+  })();
 
   const linkedDlqEntries = await loadLinkedDlqEntries(runRecords.map((run) => run.id));
   const runRows: PersistedRunListRow[] = runRecords.map((run) => {
@@ -710,7 +714,7 @@ async function runListRuns(
     `${"ID".padEnd(38)} ${"Workflow".padEnd(20)} ${"Status".padEnd(12)} ${"Loop State".padEnd(12)} ${"Cause".padEnd(24)} ${"DLQ".padEnd(12)} ${"Repair Loop".padEnd(40)} Started At`
   );
   console.log("-".repeat(183));
-  for (const run of runRows) {
+  runRows.forEach((run) => {
     const repairLoopSummary = extractPersistedRepairLoopSummary(run);
     const repairState = getCliRepairLoopState(repairLoopSummary);
     const repairSummary = formatRepairLoopListSummary(repairLoopSummary);
@@ -719,7 +723,7 @@ async function runListRuns(
     console.log(
       `${run.id.padEnd(38)} ${(run.workflowName ?? "-").padEnd(20)} ${(run.status ?? "-").padEnd(12)} ${repairState.padEnd(12)} ${triageCause.padEnd(24)} ${linkedDlqIndicator.padEnd(12)} ${repairSummary.padEnd(40)} ${run.startedAt ?? "-"}`
     );
-  }
+  });
   console.log(`\n${runRows.length} run(s)`);
 }
 

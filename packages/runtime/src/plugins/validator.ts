@@ -47,10 +47,10 @@ export function validatePlugin(plugin: unknown): PluginValidationResult {
   }
 
   const requiredMethods = REQUIRED_METHODS_BY_TYPE[candidate.type as PluginType];
-  for (const field of requiredMethods) {
+  requiredMethods.forEach((field) => {
     if (!hasOwnKey(candidate, field)) {
       errors.push(`plugin.${field} is required for type '${candidate.type}'`);
-      continue;
+      return;
     }
 
     if (field === "schema") {
@@ -58,13 +58,13 @@ export function validatePlugin(plugin: unknown): PluginValidationResult {
       if (!schema || typeof schema !== "object") {
         errors.push("plugin.schema must be an object");
       }
-      continue;
+      return;
     }
 
     if (typeof candidate[field] !== "function") {
       errors.push(`plugin.${field} must be a function`);
     }
-  }
+  });
 
   return {
     valid: errors.length === 0,

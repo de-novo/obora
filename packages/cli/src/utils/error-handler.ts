@@ -34,17 +34,15 @@ function parseValueOptionToken(
     return { optionName: token, optionValue: null };
   }
 
-  for (const optionName of VALUE_OPTIONS) {
-    const prefix = `${optionName}=`;
-    if (token.startsWith(prefix)) {
-      return {
+  const optionName = Array.from(VALUE_OPTIONS).find((candidate) =>
+    token.startsWith(`${candidate}=`)
+  );
+  return optionName
+    ? {
         optionName,
-        optionValue: token.slice(prefix.length),
-      };
-    }
-  }
-
-  return null;
+        optionValue: token.slice(`${optionName}=`.length),
+      }
+    : null;
 }
 
 export function parseCommandContext(commandPath: string[]): {
@@ -52,39 +50,51 @@ export function parseCommandContext(commandPath: string[]): {
   inputValue: string | null;
   commandArgument: string | null;
 } {
-  let activeCommand: string | null = null;
-  let inputValue: string | null = null;
-  let commandArgument: string | null = null;
-
-  for (let i = 0; i < commandPath.length; i += 1) {
-    const token = commandPath[i];
+  const context = commandPath.reduce(
+    (state, token, index) => {
+      if (state.skipNext) {
+        return { ...state, skipNext: false };
+      }
     const parsedValueOption = parseValueOptionToken(token);
     if (parsedValueOption) {
-      const optionValue = parsedValueOption.optionValue ?? commandPath[i + 1] ?? null;
+        const optionValue = parsedValueOption.optionValue ?? commandPath[index + 1] ?? null;
       if (parsedValueOption.optionName === "--input" || parsedValueOption.optionName === "-i") {
-        inputValue = optionValue;
+          return {
+            ...state,
+            inputValue: optionValue,
+            skipNext: parsedValueOption.optionValue === null,
+          };
       }
-      if (parsedValueOption.optionValue === null) {
-        i += 1;
-      }
-      continue;
+        return { ...state, skipNext: parsedValueOption.optionValue === null };
     }
 
     if (token.startsWith("-")) {
-      continue;
+        return state;
     }
 
-    if (!activeCommand) {
-      activeCommand = token;
-      continue;
+      if (!state.activeCommand) {
+        return { ...state, activeCommand: token };
     }
 
-    if (!commandArgument) {
-      commandArgument = token;
-    }
-  }
+      if (!state.commandArgument) {
+        return { ...state, commandArgument: token };
+      }
 
-  return { activeCommand, inputValue, commandArgument };
+      return state;
+    },
+    {
+      activeCommand: null as string | null,
+      inputValue: null as string | null,
+      commandArgument: null as string | null,
+      skipNext: false,
+    }
+  );
+
+  return {
+    activeCommand: context.activeCommand,
+    inputValue: context.inputValue,
+    commandArgument: context.commandArgument,
+  };
 }
 
 function inferStdinHint(context: {

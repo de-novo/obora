@@ -69,7 +69,7 @@ export class AgendaStore {
       'setYear',
     ] as const;
 
-    for (const method of mutators) {
+    mutators.forEach((method) => {
       Object.defineProperty(immutable, method, {
         value: () => {
           throw new TypeError('Agenda event date is immutable');
@@ -77,7 +77,7 @@ export class AgendaStore {
         writable: false,
         configurable: false,
       });
-    }
+    });
 
     return Object.freeze(immutable);
   }
@@ -105,9 +105,9 @@ export class AgendaStore {
     }
 
     const target = value as Record<string, unknown>;
-    for (const nested of Object.values(target)) {
+    Object.values(target).forEach((nested) => {
       this.deepFreeze(nested);
-    }
+    });
 
     return Object.freeze(value);
   }

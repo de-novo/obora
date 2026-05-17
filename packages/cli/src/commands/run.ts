@@ -45,11 +45,16 @@ async function readJsonInputFromStdin(): Promise<string> {
     process.stdin.setEncoding("utf8");
   }
 
-  let content = "";
-  for await (const chunk of process.stdin) {
-    content += typeof chunk === "string" ? chunk : String(chunk);
-  }
-  return content;
+  return new Promise((resolve, reject) => {
+    const chunks: string[] = [];
+    process.stdin.on("data", (chunk) => {
+      chunks.push(typeof chunk === "string" ? chunk : String(chunk));
+    });
+    process.stdin.once("end", () => {
+      resolve(chunks.join(""));
+    });
+    process.stdin.once("error", reject);
+  });
 }
 
 function normalizeInputOptionValue(value: unknown): string {
@@ -335,18 +340,24 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
     }
   };
 
-  let workflowName = workflow;
-  let expandedWorkflow: unknown;
-  let stopSemantics: OneFileStopSemantics | undefined;
-  let derivedOutputRoot: string | undefined;
-  let derivedArchiveEnabled = false;
+  const workflowState = {
+    name: workflow,
+    expanded: undefined as unknown,
+    stopSemantics: undefined as OneFileStopSemantics | undefined,
+    outputRoot: undefined as string | undefined,
+    archiveEnabled: false,
+  };
   const debugEnabled = isDebugOutput(options);
-  let debugFilePath: string | undefined;
-  let debugWriteChain = Promise.resolve();
+  const debugTrace = {
+    filePath: undefined as string | undefined,
+    writeChain: Promise.resolve(),
+  };
   const appendDebugRecord = (record: Record<string, unknown>): void => {
-    if (!debugEnabled || !debugFilePath) return;
+    if (!debugEnabled || !debugTrace.filePath) return;
     const line = JSON.stringify({ ts: new Date().toISOString(), ...record }) + "\n";
-    debugWriteChain = debugWriteChain.then(() => appendFile(debugFilePath!, line, "utf-8"));
+    debugTrace.writeChain = debugTrace.writeChain.then(() =>
+      appendFile(debugTrace.filePath!, line, "utf-8")
+    );
   };
   if (workflow.endsWith(".yaml") || workflow.endsWith(".yml")) {
     const loadedConfigRaw = await import("node:fs/promises").then((m) =>
@@ -355,23 +366,23 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
     const parsedRaw = await import("yaml").then((m) => m.parse(loadedConfigRaw));
     const loaded = await Workflow.fromYaml(workflow);
     runtime.define(loaded.name, loaded);
-    workflowName = loaded.name;
-    expandedWorkflow = loaded;
-    stopSemantics = Workflow.getStopSemantics(parsedRaw);
+    workflowState.name = loaded.name;
+    workflowState.expanded = loaded;
+    workflowState.stopSemantics = Workflow.getStopSemantics(parsedRaw);
     const workflowVariables =
       loaded.variables && typeof loaded.variables === "object"
         ? (loaded.variables as Record<string, unknown>)
         : {};
-    derivedOutputRoot =
+    workflowState.outputRoot =
       typeof workflowVariables.output_root === "string" ? workflowVariables.output_root : undefined;
-    derivedArchiveEnabled = workflowVariables.archive_enabled === true;
+    workflowState.archiveEnabled = workflowVariables.archive_enabled === true;
 
     if (isVerboseOutput(options) && !isQuietOutput(options) && !isJsonOutput(options)) {
-      formatter.step(`Loaded workflow YAML: ${workflow} -> ${workflowName}`);
+      formatter.step(`Loaded workflow YAML: ${workflow} -> ${workflowState.name}`);
     }
   }
 
-  const previewWorkflow = expandedWorkflow as
+  const previewWorkflow = workflowState.expanded as
     | {
         steps?: Array<{
           name: string;
@@ -383,74 +394,75 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
   const bindingPreviewEntries = previewWorkflow ? buildBindingPreview(previewWorkflow) : [];
   const outputPreviewEntries = previewWorkflow ? buildOutputPreview(previewWorkflow) : [];
 
-  if (expandedWorkflow) {
+  if (workflowState.expanded) {
     printPreview(previewWorkflow);
   } else if (!isQuietOutput(options) && !isJsonOutput(options)) {
     printPreview();
   }
 
-  const variables: Record<string, unknown> = {};
-  if (Array.isArray(options.var)) {
-    for (const v of options.var) {
+  const variables: Record<string, unknown> = Array.isArray(options.var)
+    ? Object.fromEntries(
+        options.var.flatMap((v) => {
       const [key, ...rest] = String(v).split("=");
       if (!key) {
-        continue;
+            return [];
       }
-      variables[key] = rest.join("=");
-    }
-  }
+          return [[key, rest.join("=")] as const];
+        })
+      )
+    : {};
 
-  let input: unknown;
-  if (options.input !== undefined) {
+  const input: unknown = options.input !== undefined ? await (async () => {
     const rawInput = normalizeInputOptionValue(options.input);
     if (rawInput.startsWith("@")) {
       const inputPath = rawInput.slice(1);
-      let fileContent: string;
-      if (inputPath === "-") {
-        if (process.stdin.isTTY) {
-          throw new CLIError(
-            "No stdin JSON detected. Pipe JSON to --input @- or pass inline JSON to --input.",
-            ExitCode.VALIDATION_ERROR
-          );
-        }
-        try {
-          fileContent = await readJsonInputFromStdin();
-        } catch {
-          throw new CLIError("Failed to read JSON input from stdin.", ExitCode.VALIDATION_ERROR);
-        }
-        const normalizedStdin = fileContent.replace(/^\uFEFF/, "");
-        if (normalizedStdin.trim().length === 0) {
-          throw new CLIError(
-            "No stdin JSON detected. Pipe JSON to --input @- or pass inline JSON to --input.",
-            ExitCode.VALIDATION_ERROR
-          );
-        }
-        try {
-          input = JSON.parse(normalizedStdin);
-        } catch {
-          throw new CLIError(
-            "Invalid JSON input from stdin. Please pipe valid JSON to --input @-.",
-            ExitCode.VALIDATION_ERROR
-          );
-        }
-      } else {
-        try {
-          fileContent = await readFile(inputPath, "utf-8");
-        } catch {
-          throw new CLIError(
-            `Failed to read JSON input file: ${inputPath}`,
-            ExitCode.VALIDATION_ERROR
-          );
-        }
-        try {
-          input = JSON.parse(fileContent.replace(/^\uFEFF/, ""));
-        } catch {
-          throw new CLIError(`Invalid JSON input file: ${inputPath}`, ExitCode.VALIDATION_ERROR);
-        }
+      const fileContent =
+        inputPath === "-"
+          ? await (async () => {
+              if (process.stdin.isTTY) {
+                throw new CLIError(
+                  "No stdin JSON detected. Pipe JSON to --input @- or pass inline JSON to --input.",
+                  ExitCode.VALIDATION_ERROR
+                );
+              }
+              try {
+                return await readJsonInputFromStdin();
+              } catch {
+                throw new CLIError("Failed to read JSON input from stdin.", ExitCode.VALIDATION_ERROR);
+              }
+            })()
+          : await (async () => {
+              try {
+                return await readFile(inputPath, "utf-8");
+              } catch {
+                throw new CLIError(
+                  `Failed to read JSON input file: ${inputPath}`,
+                  ExitCode.VALIDATION_ERROR
+                );
+              }
+            })();
+
+      const normalizedInput = fileContent.replace(/^\uFEFF/, "");
+      if (inputPath === "-" && normalizedInput.trim().length === 0) {
+        throw new CLIError(
+          "No stdin JSON detected. Pipe JSON to --input @- or pass inline JSON to --input.",
+          ExitCode.VALIDATION_ERROR
+        );
+      }
+
+      try {
+        return JSON.parse(normalizedInput);
+      } catch {
+        throw new CLIError(
+          inputPath === "-"
+            ? "Invalid JSON input from stdin. Please pipe valid JSON to --input @-."
+            : `Invalid JSON input file: ${inputPath}`,
+          ExitCode.VALIDATION_ERROR
+        );
       }
     } else {
       try {
-        input = JSON.parse(rawInput);
+        return JSON.parse(rawInput);
       } catch {
         throw new CLIError(
           "Invalid JSON input. Please provide a valid JSON string to --input.",
@@ -458,19 +470,19 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
         );
       }
     }
-  }
+  })() : undefined;
 
   if (debugEnabled) {
-    debugFilePath =
+    debugTrace.filePath =
       typeof options.debugFile === "string" && options.debugFile.length > 0
         ? (options.debugFile as string)
-        : join(process.cwd(), ".obora-debug", `${basename(workflowName)}-${startedAt}.jsonl`);
-    await mkdir(dirname(debugFilePath), { recursive: true });
-    await writeFile(debugFilePath, "", "utf-8");
+        : join(process.cwd(), ".obora-debug", `${basename(workflowState.name)}-${startedAt}.jsonl`);
+    await mkdir(dirname(debugTrace.filePath), { recursive: true });
+    await writeFile(debugTrace.filePath, "", "utf-8");
     appendDebugRecord({
       type: "debug.start",
       workflow,
-      workflowName,
+      workflowName: workflowState.name,
       options: {
         timeout: options.timeout,
         verbose: options.verbose,
@@ -480,14 +492,14 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
       pid: process.pid,
     });
     if (!isQuietOutput(options) && !isJsonOutput(options)) {
-      formatter.info(`debug trace enabled: ${debugFilePath}`);
+      formatter.info(`debug trace enabled: ${debugTrace.filePath}`);
     }
   }
 
   if (options.dryRun) {
     const guidance = buildDryRunGuidance(workflow, resolutionSummary);
     const overview = buildDryRunOverview(
-      workflowName,
+      workflowState.name,
       workflow,
       resolutionSummary,
       bindingPreviewEntries,
@@ -498,14 +510,14 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
       bindingPreviewEntries,
       outputPreviewEntries,
       {
-        ...(options.dumpExpandedWorkflow ? { expandedWorkflow } : {}),
-        ...(options.showStopSemantics ? { stopSemantics } : {}),
+        ...(options.dumpExpandedWorkflow ? { expandedWorkflow: workflowState.expanded } : {}),
+        ...(options.showStopSemantics ? { stopSemantics: workflowState.stopSemantics } : {}),
       }
     );
 
     if (isJsonOutput(options)) {
       formatter.json({
-        workflow: workflowName,
+        workflow: workflowState.name,
         validated: true,
         resolution: resolutionSummary,
         bindingPreview: bindingPreviewEntries,
@@ -513,19 +525,19 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
         overview,
         diagnostics,
         guidance,
-        ...(options.dumpExpandedWorkflow ? { expandedWorkflow } : {}),
-        ...(options.showStopSemantics ? { stopSemantics } : {}),
+        ...(options.dumpExpandedWorkflow ? { expandedWorkflow: workflowState.expanded } : {}),
+        ...(options.showStopSemantics ? { stopSemantics: workflowState.stopSemantics } : {}),
         elapsedMs: Date.now() - startedAt,
       });
     } else if (!isQuietOutput(options)) {
-      formatter.success(`Workflow "${workflowName}" validated successfully.`);
-      if (options.dumpExpandedWorkflow && expandedWorkflow) {
+      formatter.success(`Workflow "${workflowState.name}" validated successfully.`);
+      if (options.dumpExpandedWorkflow && workflowState.expanded) {
         formatter.info("Expanded workflow:");
-        formatter.json(expandedWorkflow);
+        formatter.json(workflowState.expanded);
       }
-      if (options.showStopSemantics && stopSemantics) {
+      if (options.showStopSemantics && workflowState.stopSemantics) {
         formatter.info("Stop semantics:");
-        formatter.json(stopSemantics);
+        formatter.json(workflowState.stopSemantics);
       }
       formatter.info("Dry run preview complete. No execution was started.");
       if (resolutionSummary.fallbackStub) {
@@ -541,12 +553,12 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
   }
 
   const controller = new AbortController();
-  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+  const timeoutHandle = { value: undefined as ReturnType<typeof setTimeout> | undefined };
   if (typeof options.timeout === "number" && Number.isFinite(options.timeout)) {
-    timeoutHandle = setTimeout(() => {
+    timeoutHandle.value = setTimeout(() => {
       controller.abort();
     }, options.timeout);
-    timeoutHandle.unref?.();
+    timeoutHandle.value.unref?.();
     if (isVerboseOutput(options) && !isQuietOutput(options) && !isJsonOutput(options)) {
       formatter.step(`Timeout configured: ${options.timeout}ms`);
     }
@@ -655,7 +667,7 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
   }
 
   if (debugEnabled) {
-    for (const type of DEBUG_EVENT_TYPES) {
+    DEBUG_EVENT_TYPES.forEach((type) => {
       runtime.on(type, (event) => {
         const data =
           event.data && typeof event.data === "object"
@@ -671,12 +683,12 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
           formatter.info(`[debug:${type}] ${summarizeDebugEvent(type, data)}`);
         }
       });
-    }
+    });
   }
 
   const execution = await (async () => {
     try {
-      const handle = await runtime.run(workflowName, {
+      const handle = await runtime.run(workflowState.name, {
         input,
         variables,
         signal: controller.signal,
@@ -691,9 +703,9 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
         try {
           return await handle.wait();
         } finally {
-          if (timeoutHandle) {
-            clearTimeout(timeoutHandle);
-            timeoutHandle = undefined;
+          if (timeoutHandle.value) {
+            clearTimeout(timeoutHandle.value);
+            timeoutHandle.value = undefined;
           }
         }
       })();
@@ -704,7 +716,7 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
         type: "debug.exception",
         message: error instanceof Error ? error.message : String(error),
       });
-      await debugWriteChain;
+      await debugTrace.writeChain;
       throw error;
     }
   })();
@@ -714,22 +726,22 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
   const effectiveOutputDir =
     typeof options.outputDir === "string" && options.outputDir.length > 0
       ? options.outputDir
-      : derivedOutputRoot;
+      : workflowState.outputRoot;
 
-  const derivedMode = stopSemantics?.mode;
+  const derivedMode = workflowState.stopSemantics?.mode;
 
   if (effectiveOutputDir) {
     await mkdir(effectiveOutputDir, { recursive: true });
     const filePath = join(
       effectiveOutputDir,
-      `${basename(workflowName)}-${handle.executionId}.json`
+      `${basename(workflowState.name)}-${handle.executionId}.json`
     );
     await writeFile(filePath, JSON.stringify(result, null, 2), "utf-8");
 
-    if (derivedArchiveEnabled) {
+    if (workflowState.archiveEnabled) {
       const archiveIntentPath = join(
         effectiveOutputDir,
-        `${basename(workflowName)}-${handle.executionId}.archive-intent.json`
+        `${basename(workflowState.name)}-${handle.executionId}.archive-intent.json`
       );
       await writeFile(
         archiveIntentPath,
@@ -738,7 +750,7 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
             workflowName: result.workflowName,
             executionId: handle.executionId,
             archiveEnabled: true,
-            outputRoot: derivedOutputRoot,
+            outputRoot: workflowState.outputRoot,
             sourceResultPath: filePath,
           },
           null,
@@ -749,7 +761,7 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
 
       const archiveDir = join(
         effectiveOutputDir,
-        `${basename(workflowName)}-${handle.executionId}.archive`
+        `${basename(workflowState.name)}-${handle.executionId}.archive`
       );
       await mkdir(archiveDir, { recursive: true });
       const readmeBody =
@@ -829,15 +841,15 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
     elapsedMs,
     repairLoop: hasRepairLoopActivity ? repairLoopSummary : undefined,
   });
-  await debugWriteChain;
+  await debugTrace.writeChain;
 
   if (isJsonOutput(options)) {
     formatter.json({
       workflowName: result.workflowName,
       status: "completed",
       elapsedMs,
-      ...(derivedOutputRoot ? { outputRoot: derivedOutputRoot } : {}),
-      ...(derivedArchiveEnabled ? { archiveEnabled: true } : {}),
+      ...(workflowState.outputRoot ? { outputRoot: workflowState.outputRoot } : {}),
+      ...(workflowState.archiveEnabled ? { archiveEnabled: true } : {}),
       ...(hasRepairLoopActivity
         ? {
             repairLoop: {
@@ -853,7 +865,7 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
         `repair loop summary: validation failed=${repairLoopSummary.validationFailed}, validation passed=${repairLoopSummary.validationPassed}, repairs started=${repairLoopSummary.repairStarted}, repairs completed=${repairLoopSummary.repairCompleted}${repairLoopSummary.lastValidationSummary ? `, last validation="${repairLoopSummary.lastValidationSummary}"` : ""}`
       );
     }
-    if (derivedArchiveEnabled && isVerboseOutput(options)) {
+    if (workflowState.archiveEnabled && isVerboseOutput(options)) {
       formatter.info("Archive intent enabled for this workflow.");
     }
     if (isVerboseOutput(options)) {

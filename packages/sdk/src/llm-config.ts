@@ -21,16 +21,15 @@ const PROVIDER_ENV_MAP: Array<{ provider: string; key: string; model?: string }>
 ];
 
 export function detectLLMConfigFromEnv(env: NodeJS.ProcessEnv = process.env): LLMConfig | undefined {
-  for (const candidate of PROVIDER_ENV_MAP) {
-    const apiKey = env[candidate.key];
-    if (!apiKey) {
-      continue;
-    }
+  const detected = PROVIDER_ENV_MAP
+    .map((candidate) => ({ candidate, apiKey: env[candidate.key] }))
+    .find(({ apiKey }) => Boolean(apiKey));
 
+  if (detected?.apiKey) {
     return {
-      provider: candidate.provider,
-      apiKey,
-      model: candidate.model ? env[candidate.model] : undefined,
+      provider: detected.candidate.provider,
+      apiKey: detected.apiKey,
+      model: detected.candidate.model ? env[detected.candidate.model] : undefined,
       // baseUrl 제거 - pi-ai가 알아서 처리
     };
   }

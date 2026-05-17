@@ -32,6 +32,14 @@ function normalizeTokenUsage(usage: {
   };
 }
 
+function mergeSystemPrompts(defaultPrompt: string, userPrompt: string | undefined): string {
+  const base = defaultPrompt.trim();
+  const custom = userPrompt?.trim();
+  if (!custom) return base;
+  if (!base) return custom;
+  return `${base}\n\n[User Instructions]\n${custom}`;
+}
+
 export enum AgentRole {
   ANALYST = "analyst",
   EXECUTOR = "executor",
@@ -186,7 +194,7 @@ export abstract class BaseAgent {
     this.id = config.id ?? createAgentId(`${config.role}-${Date.now()}`);
     this.role = config.role;
     this.llm = config.llm;
-    this.systemPrompt = config.systemPrompt ?? this.getDefaultSystemPrompt();
+    this.systemPrompt = mergeSystemPrompts(this.getDefaultSystemPrompt(), config.systemPrompt);
     this.maxErrors = config.maxErrors ?? 3;
     this.thinkMaxTokens = config.thinkMaxTokens ?? 2048;
     this.executeMaxTokens = config.executeMaxTokens ?? 8192;
@@ -215,21 +223,20 @@ export abstract class BaseAgent {
 
     try {
       const observation = await this.observe(context);
-      let output: unknown;
-
-      if (this.coreAgent) {
-        output = await this.executeWithPiAgent(task, observation, context);
-      } else {
-        const { action, usage } = await this.think(task, observation, context);
-        this.state = AgentState.ACTING;
-        output = await this.act(action, context);
-        await this.report(task, output, context);
-        this.latestUsage = {
-          prompt: usage.promptTokens,
-          completion: usage.completionTokens,
-          total: usage.totalTokens,
-        };
-      }
+      const output = this.coreAgent
+        ? await this.executeWithPiAgent(task, observation, context)
+        : await (async () => {
+            const { action, usage } = await this.think(task, observation, context);
+            this.state = AgentState.ACTING;
+            const actionOutput = await this.act(action, context);
+            await this.report(task, actionOutput, context);
+            this.latestUsage = {
+              prompt: usage.promptTokens,
+              completion: usage.completionTokens,
+              total: usage.totalTokens,
+            };
+            return actionOutput;
+          })();
 
       this.state = AgentState.IDLE;
       this.errorCount = 0;
@@ -851,28 +858,31 @@ Use board_read to inspect context, then perform role_action, and finish with boa
       return realTargetPath;
     }
 
-    let nearestExistingAncestor = dirname(resolvedPath);
-
-    while (!existsSync(nearestExistingAncestor)) {
-      const nextAncestor = dirname(nearestExistingAncestor);
-      if (nextAncestor === nearestExistingAncestor) {
+    const findNearestExistingAncestor = (candidate: string): string => {
+      if (existsSync(candidate)) {
+        return candidate;
+      }
+      const nextAncestor = dirname(candidate);
+      if (nextAncestor === candidate) {
         throw new Error("Path validation failed: no existing parent directory found");
       }
-      nearestExistingAncestor = nextAncestor;
-    }
+      return findNearestExistingAncestor(nextAncestor);
+    };
+    const nearestExistingAncestor = findNearestExistingAncestor(dirname(resolvedPath));
 
-    let realAncestorPath: string;
-    try {
-      realAncestorPath = realpathSync(nearestExistingAncestor);
-    } catch (error: unknown) {
-      const err = error as NodeJS.ErrnoException;
-      if (err.code === "ENOENT") {
-        throw new Error("Path validation failed: parent directory disappeared during validation", {
-          cause: error,
-        });
+    const realAncestorPath = (() => {
+      try {
+        return realpathSync(nearestExistingAncestor);
+      } catch (error: unknown) {
+        const err = error as NodeJS.ErrnoException;
+        if (err.code === "ENOENT") {
+          throw new Error("Path validation failed: parent directory disappeared during validation", {
+            cause: error,
+          });
+        }
+        throw error;
       }
-      throw error;
-    }
+    })();
 
     if (!(realAncestorPath === projectRoot || realAncestorPath.startsWith(`${projectRoot}/`))) {
       throw new Error("Path validation failed: parent escapes project directory");

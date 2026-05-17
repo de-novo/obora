@@ -20,7 +20,7 @@ README에서 전체 진입 순서를 먼저 보고 싶으면 `README.md`, 지원
 2. workflow YAML / one-file workflow를 검증·확장·dry-run·실행할 수 있음
 3. 실행 이력, DLQ, artifact, audit 같은 운영 surface를 조회할 수 있음
 4. SDK/runtime로 프로그램 방식 workflow 실행과 validation-repair loop를 구성할 수 있음
-5. adapters / dashboard package까지 포함한 monorepo 기준 build/test/coverage/smoke가 성립함
+5. adapters / legacy dashboard / ops package까지 포함한 monorepo 기준 build/test/coverage/smoke가 성립함
 
 ---
 
@@ -278,10 +278,11 @@ README / examples / tutorial 기준으로 현재 Obora가 제공하는 핵심 �
 
 ### `@obora/dashboard`
 
-패키지는 존재하고 build/test 대상이지만, 현재 top-level live CLI surface는 아닙니다.
+패키지는 존재하고 build/test 대상이지만, 현재 top-level live CLI surface는 아니며 새 operator UI 방향도 아닙니다.
 
 현재 상태:
 
+- deprecated legacy web monitoring/bootstrap surface
 - M4 dashboard web server scaffold
 - package 자체 build/test 가능
 - package-level bootstrap helper로 start/stop, resolved URL, static asset
@@ -289,6 +290,25 @@ README / examples / tutorial 기준으로 현재 Obora가 제공하는 핵심 �
 - `pnpm verify:smoke`로 built dashboard package bootstrap과 `/api/health`
   응답을 검증
 - 하지만 `obora dashboard`는 아직 live command로 복구되지 않음
+
+### `@obora/ops`
+
+현재 새 operator-facing web surface입니다.
+
+현재 상태:
+
+- graph workflow authoring UI 초안
+- manual node creation and edge connection surface
+- workflow-level and step-level system prompt editing surface
+- execution history inspection surface
+- pure typed model helper 기반 client state transition
+- package 자체 build/test/coverage 대상
+
+계획:
+
+- runtime/backend persistence API 연결
+- workflow validation / policy evaluation / execution mutation에 EffectTS boundary 추가
+- dashboard bootstrap/server 책임의 이관 여부 결정
 
 ---
 
@@ -335,7 +355,8 @@ historical CLI surface audit 기준, 아래는 현재 top-level live CLI가 아�
 3. 운영 surface는 `status / runs / inspect / resume / dlq / artifact / audit` 기준으로 본다
 4. historical/deferred command(`new/done/skills/dashboard`)는 live feature로 간주하지 않으며 active CLI source에도 유지하지 않는다
 5. `agents`는 `list/show/set/reset`을 live surface로 보고, execution-only source와 config-layer override를 구분해서 사용한다
-6. dashboard는 package capability로만 보고 CLI capability로는 아직 제외한다
+6. dashboard는 deprecated package capability로만 보고 CLI capability로는 제외한다
+7. 새 operator web surface는 `@obora/ops`에서 진행한다
 
 ---
 

@@ -322,26 +322,28 @@ export class ActorPool {
     this.waitingTasks.add(taskId);
 
     return new Promise<R>((resolve, reject) => {
-      let waiter: { cleanup: () => void } | null = null;
-      let timeout: ReturnType<typeof setTimeout> | null = null;
-      let settled = false;
+      const waitState = {
+        waiter: null as { cleanup: () => void } | null,
+        timeout: null as ReturnType<typeof setTimeout> | null,
+        settled: false,
+      };
 
       // 모든 리소스 정리
       const cleanup = () => {
-        if (timeout) {
-          clearTimeout(timeout);
-          timeout = null;
+        if (waitState.timeout) {
+          clearTimeout(waitState.timeout);
+          waitState.timeout = null;
         }
-        waiter?.cleanup();
+        waitState.waiter?.cleanup();
         // 대기 목록에서 제거
         this.waitingTasks.delete(taskId);
       };
 
       // taskTimeout <= 0이면 무제한 대기 (타임아웃 없음)
       if (this.config.taskTimeout > 0) {
-        timeout = setTimeout(() => {
-          if (settled) return;
-          settled = true;
+        waitState.timeout = setTimeout(() => {
+          if (waitState.settled) return;
+          waitState.settled = true;
           cleanup();
 
           // 타임아웃 시 큐에서도 제거
@@ -356,11 +358,11 @@ export class ActorPool {
         }, this.config.taskTimeout);
       }
 
-      waiter = this.waitForTaskResult(
+      waitState.waiter = this.waitForTaskResult(
         taskId,
         () => {
-          if (settled) return;
-          settled = true;
+          if (waitState.settled) return;
+          waitState.settled = true;
           cleanup();
         },
         resolve,
@@ -386,9 +388,10 @@ export class ActorPool {
     if (targetSize > currentSize) {
       // 확장
       const diff = targetSize - currentSize;
-      for (let i = 0; i < diff; i++) {
+      await Array.from({ length: diff }).reduce<Promise<void>>(async (previous) => {
+        await previous;
         await this.spawnActor();
-      }
+      }, Promise.resolve());
     } else {
       // 축소
       const diff = currentSize - targetSize;
@@ -498,17 +501,17 @@ export class ActorPool {
   }
 
   private async removeIdleActors(count: number): Promise<void> {
-    let removed = 0;
-
-    for (const [id] of this.actors.entries()) {
-      if (removed >= count) break;
+    await Array.from(this.actors.keys()).reduce<Promise<number>>(async (previous, id) => {
+      const removed = await previous;
+      if (removed >= count) return removed;
 
       // Idle 상태인 Actor만 제거 (작업 중이 아닌)
       if (!this.isActorBusy(id)) {
         await this.removeActor(id);
-        removed++;
+        return removed + 1;
       }
-    }
+      return removed;
+    }, Promise.resolve(0));
   }
 
   private async removeActor(actorId: ActorId): Promise<void> {
@@ -677,16 +680,11 @@ export class ActorPool {
 
   private enqueueTask(task: Task): void {
     // 우선순위 순으로 삽입
-    let inserted = false;
-    for (let i = 0; i < this.taskQueue.length; i++) {
-      if (task.priority > this.taskQueue[i].priority) {
-        this.taskQueue.splice(i, 0, task);
-        inserted = true;
-        break;
-      }
-    }
-    if (!inserted) {
+    const insertIndex = this.taskQueue.findIndex((queuedTask) => task.priority > queuedTask.priority);
+    if (insertIndex === -1) {
       this.taskQueue.push(task);
+    } else {
+      this.taskQueue.splice(insertIndex, 0, task);
     }
 
     this.metrics.queueSize = this.taskQueue.length;
@@ -784,12 +782,7 @@ export class ActorPool {
   }
 
   private isActorBusy(actorId: ActorId): boolean {
-    for (const { actorId: busyId } of this.inProgress.values()) {
-      if (busyId === actorId) {
-        return true;
-      }
-    }
-    return false;
+    return Array.from(this.inProgress.values()).some(({ actorId: busyId }) => busyId === actorId);
   }
 
   private waitForTaskResult<T>(

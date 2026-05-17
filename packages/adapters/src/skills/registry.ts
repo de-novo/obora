@@ -32,31 +32,33 @@ export function parseSkillMd(content: string): ParsedSkillMd | null {
   const [, frontmatterStr, body] = frontmatterMatch;
   if (!frontmatterStr || !body) return null;
 
-  const frontmatter: SkillMdFrontmatter = { name: "", description: "" };
-
-  for (const line of frontmatterStr.split(/\r?\n/)) {
+  const frontmatter = frontmatterStr.split(/\r?\n/).reduce<SkillMdFrontmatter>((acc, line) => {
     const colonIndex = line.indexOf(":");
-    if (colonIndex === -1) continue;
+    if (colonIndex === -1) return acc;
     const key = line.slice(0, colonIndex).trim();
     const rawValue = line.slice(colonIndex + 1).trim();
 
     if (key === "dependencies") {
       if (rawValue.startsWith("[") && rawValue.endsWith("]")) {
         const inner = rawValue.slice(1, -1).trim();
-        frontmatter.dependencies = inner
-          ? inner.split(",").map((s) => s.trim().replace(/^['"]|['"]$/g, ""))
-          : [];
+        return {
+          ...acc,
+          dependencies: inner
+            ? inner.split(",").map((s) => s.trim().replace(/^['"]|['"]$/g, ""))
+            : [],
+        };
       } else {
-        frontmatter.dependencies = [];
+        return { ...acc, dependencies: [] };
       }
     } else if (key === "name") {
-      frontmatter.name = rawValue.replace(/^['"]|['"]$/g, "");
+      return { ...acc, name: rawValue.replace(/^['"]|['"]$/g, "") };
     } else if (key === "description") {
-      frontmatter.description = rawValue.replace(/^['"]|['"]$/g, "");
+      return { ...acc, description: rawValue.replace(/^['"]|['"]$/g, "") };
     } else if (key === "version") {
-      frontmatter.version = rawValue.replace(/^['"]|['"]$/g, "");
+      return { ...acc, version: rawValue.replace(/^['"]|['"]$/g, "") };
     }
-  }
+    return acc;
+  }, { name: "", description: "" });
 
   if (!frontmatter.name || !frontmatter.description) return null;
 
@@ -79,25 +81,25 @@ export function loadSkillMdDirectory(skillPath: string): ParsedSkillMd | null {
   const referencesDir = path.join(skillPath, "references");
   if (existsSync(referencesDir) && statSync(referencesDir).isDirectory()) {
     const entries = readdirSync(referencesDir);
-    for (const entry of entries) {
+    entries.forEach((entry) => {
       if (entry.endsWith(".md")) {
         const refPath = path.join(referencesDir, entry);
         const refContent = readFileSync(refPath, "utf-8");
         parsed.references.set(entry, refContent);
       }
-    }
+    });
   }
 
   const scriptsDir = path.join(skillPath, "scripts");
   if (existsSync(scriptsDir) && statSync(scriptsDir).isDirectory()) {
     const entries = readdirSync(scriptsDir);
-    for (const entry of entries) {
+    entries.forEach((entry) => {
       const scriptPath = path.join(scriptsDir, entry);
       if (statSync(scriptPath).isFile()) {
         const scriptContent = readFileSync(scriptPath, "utf-8");
         parsed.scripts.set(entry, scriptContent);
       }
-    }
+    });
   }
 
   return parsed;
@@ -162,17 +164,14 @@ export class SkillRegistry {
   private scanDirectory(dirPath: string, source: "local" | "global"): LoadedSkill[] {
     if (!existsSync(dirPath)) return [];
 
-    const found: LoadedSkill[] = [];
     const entries = readdirSync(dirPath, { withFileTypes: true });
 
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
+    return entries.flatMap((entry) => {
+      if (!entry.isDirectory()) return [];
       const skillPath = path.join(dirPath, entry.name);
       const resolved = this.tryResolveSkill(skillPath, source);
-      if (resolved) found.push(resolved);
-    }
-
-    return found;
+      return resolved ? [resolved] : [];
+    });
   }
 
   private tryResolveSkill(skillPath: string, source: "local" | "global"): LoadedSkill | undefined {

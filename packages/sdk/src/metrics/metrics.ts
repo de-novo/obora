@@ -76,8 +76,7 @@ export class MetricsCollector {
   snapshot(): MetricsSnapshot {
     const defaultBuckets = [0.1, 0.5, 1, 5, 10, 30, 60, 120, 300, 600];
 
-    const histogramMetrics: HistogramMetric[] = [];
-    for (const [, hist] of this.histograms) {
+    const histogramMetrics: HistogramMetric[] = Array.from(this.histograms.entries()).map(([name, hist]) => {
       const sorted = [...hist.values].sort((a, b) => a - b);
       const buckets: HistogramBucket[] = defaultBuckets.map((le) => ({
         le,
@@ -85,14 +84,14 @@ export class MetricsCollector {
       }));
       buckets.push({ le: Infinity, count: sorted.length });
 
-      histogramMetrics.push({
-        name: this.histograms.entries().next().value?.[0].split("{")[0] ?? "unknown",
+      return {
+        name: name.split("{")[0] ?? "unknown",
         labels: hist.labels,
         buckets,
         sum: sorted.reduce((a, b) => a + b, 0),
         count: sorted.length,
-      });
-    }
+      };
+    });
 
     return {
       counters: [...this.counters.values()],
@@ -104,37 +103,35 @@ export class MetricsCollector {
 
   /** Export metrics in Prometheus text format */
   toPrometheus(): string {
-    const lines: string[] = [];
-
-    for (const [, metric] of this.counters) {
+    const counterLines = Array.from(this.counters.values()).flatMap((metric) => {
       const labelStr = this.formatLabels(metric.labels);
-      lines.push(`# TYPE ${metric.name} counter`);
-      lines.push(`${metric.name}${labelStr} ${metric.value}`);
-    }
+      return [`# TYPE ${metric.name} counter`, `${metric.name}${labelStr} ${metric.value}`];
+    });
 
-    for (const [, metric] of this.gauges) {
+    const gaugeLines = Array.from(this.gauges.values()).flatMap((metric) => {
       const labelStr = this.formatLabels(metric.labels);
-      lines.push(`# TYPE ${metric.name} gauge`);
-      lines.push(`${metric.name}${labelStr} ${metric.value}`);
-    }
+      return [`# TYPE ${metric.name} gauge`, `${metric.name}${labelStr} ${metric.value}`];
+    });
 
     const defaultBuckets = [0.1, 0.5, 1, 5, 10, 30, 60, 120, 300, 600];
-    for (const [name, hist] of this.histograms) {
+    const histogramLines = Array.from(this.histograms.entries()).flatMap(([name, hist]) => {
       const baseName = name.split("{")[0]!;
       const labelStr = this.formatLabels(hist.labels);
       const sorted = [...hist.values].sort((a, b) => a - b);
 
-      lines.push(`# TYPE ${baseName} histogram`);
-      for (const le of defaultBuckets) {
-        const count = sorted.filter((v) => v <= le).length;
-        lines.push(`${baseName}_bucket${this.mergeLabelStr(labelStr, `le="${le}"`)} ${count}`);
-      }
-      lines.push(`${baseName}_bucket${this.mergeLabelStr(labelStr, `le="+Inf"`)} ${sorted.length}`);
-      lines.push(`${baseName}_sum${labelStr} ${sorted.reduce((a, b) => a + b, 0)}`);
-      lines.push(`${baseName}_count${labelStr} ${sorted.length}`);
-    }
+      return [
+        `# TYPE ${baseName} histogram`,
+        ...defaultBuckets.map((le) => {
+          const count = sorted.filter((v) => v <= le).length;
+          return `${baseName}_bucket${this.mergeLabelStr(labelStr, `le="${le}"`)} ${count}`;
+        }),
+        `${baseName}_bucket${this.mergeLabelStr(labelStr, `le="+Inf"`)} ${sorted.length}`,
+        `${baseName}_sum${labelStr} ${sorted.reduce((a, b) => a + b, 0)}`,
+        `${baseName}_count${labelStr} ${sorted.length}`,
+      ];
+    });
 
-    return lines.join("\n") + "\n";
+    return [...counterLines, ...gaugeLines, ...histogramLines].join("\n") + "\n";
   }
 
   /** Reset all metrics */

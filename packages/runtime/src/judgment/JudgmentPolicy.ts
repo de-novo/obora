@@ -87,12 +87,11 @@ function canonicalize(value: unknown): unknown {
     return value.map(canonicalize);
   }
 
-  const sorted: Record<string, unknown> = {};
-  const keys = Object.keys(value as Record<string, unknown>).sort();
-  for (const k of keys) {
-    sorted[k] = canonicalize((value as Record<string, unknown>)[k]);
-  }
-  return sorted;
+  return Object.fromEntries(
+    Object.keys(value as Record<string, unknown>)
+      .sort()
+      .map((key) => [key, canonicalize((value as Record<string, unknown>)[key])])
+  );
 }
 
 /**

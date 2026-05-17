@@ -39,25 +39,25 @@ function isObject(value: unknown): value is Record<string, unknown> {
 function extractLatestStepOutputs(events: AuditEvent[]): Map<string, unknown> {
   const outputs = new Map<string, unknown>();
 
-  for (const event of events) {
+  events.forEach((event) => {
     if (event.type !== "cell_end" || !isObject(event.data)) {
-      continue;
+      return;
     }
 
     const stepName = event.data.stepName;
     if (typeof stepName !== "string" || stepName.length === 0) {
-      continue;
+      return;
     }
 
     if ("output" in event.data) {
       outputs.set(stepName, event.data.output);
-      continue;
+      return;
     }
 
     if ("metrics" in event.data) {
       outputs.set(stepName, event.data.metrics);
     }
-  }
+  });
 
   return outputs;
 }
@@ -170,10 +170,11 @@ export class ReExecutionRuntime {
       });
     }
 
-    const stepResults: StepReExecutionResult[] = [];
     const originalOutputs = extractLatestStepOutputs(originalEvents);
 
-    for (const stepName of plan.stepsToSkip) {
+    const skippedStepResults = await plan.stepsToSkip.reduce<Promise<StepReExecutionResult[]>>(
+      async (previousResults, stepName) => {
+        const results = await previousResults;
       await this.auditTrail.record({
         id: crypto.randomUUID(),
         executionId: reExecutionId,
@@ -188,8 +189,6 @@ export class ReExecutionRuntime {
         matchesOriginal: true,
       };
 
-      stepResults.push(result);
-
       await this.auditTrail.record({
         id: crypto.randomUUID(),
         executionId: reExecutionId,
@@ -201,9 +200,14 @@ export class ReExecutionRuntime {
       if (options.onStepComplete) {
         await options.onStepComplete(stepName, result);
       }
-    }
+        return [...results, result];
+      },
+      Promise.resolve([])
+    );
 
-    for (const stepName of plan.stepsToRerun) {
+    const stepResults = await plan.stepsToRerun.reduce<Promise<StepReExecutionResult[]>>(
+      async (previousResults, stepName) => {
+        const results = await previousResults;
       await this.auditTrail.record({
         id: crypto.randomUUID(),
         executionId: reExecutionId,
@@ -229,7 +233,6 @@ export class ReExecutionRuntime {
           matchesOriginal: false,
           diff: "No original step output found in audit trail.",
         };
-        stepResults.push(failed);
 
         await this.auditTrail.record({
           id: crypto.randomUUID(),
@@ -256,7 +259,7 @@ export class ReExecutionRuntime {
           await options.onStepComplete(stepName, failed);
         }
 
-        continue;
+        return [...results, failed];
       }
 
       await this.auditTrail.record({
@@ -284,8 +287,6 @@ export class ReExecutionRuntime {
         matchesOriginal,
       };
 
-      stepResults.push(completed);
-
       await this.auditTrail.record({
         id: crypto.randomUUID(),
         executionId: reExecutionId,
@@ -309,7 +310,10 @@ export class ReExecutionRuntime {
       if (options.onStepComplete) {
         await options.onStepComplete(stepName, completed);
       }
-    }
+        return [...results, completed];
+      },
+      Promise.resolve(skippedStepResults)
+    );
 
     await this.auditTrail.record({
       id: crypto.randomUUID(),

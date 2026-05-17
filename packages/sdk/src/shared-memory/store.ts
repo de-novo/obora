@@ -50,18 +50,12 @@ export interface SharedMemoryStore {
 }
 
 function dedupeById<T extends { id: string }>(items: T[]): T[] {
-  const seen = new Map<string, T>();
-  for (const item of items) {
-    seen.set(item.id, item);
-  }
+  const seen = new Map(items.map((item) => [item.id, item]));
   return [...seen.values()];
 }
 
 export function sortMemoryScopesByPriority(scopes: MemoryScope[]): MemoryScope[] {
-  const deduped = new Map<string, MemoryScope>();
-  for (const scope of scopes) {
-    deduped.set(`${scope.level}:${scope.key}`, scope);
-  }
+  const deduped = new Map(scopes.map((scope) => [`${scope.level}:${scope.key}`, scope]));
 
   return [...deduped.values()].sort(
     (left, right) => SHARED_MEMORY_SCOPE_PRIORITY[left.level] - SHARED_MEMORY_SCOPE_PRIORITY[right.level],

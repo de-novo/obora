@@ -21,9 +21,8 @@ export class PluginRegistry {
       await this.unregister(existing.name);
     }
 
-    let bucket = this.byType.get(plugin.type);
-    if (!bucket) {
-      bucket = new Map<string, AnyPlugin>();
+    const bucket = this.byType.get(plugin.type) ?? new Map<string, AnyPlugin>();
+    if (!this.byType.has(plugin.type)) {
       this.byType.set(plugin.type, bucket);
     }
 
@@ -33,9 +32,10 @@ export class PluginRegistry {
   }
 
   async registerAll(plugins: readonly AnyPlugin[], options: RegisterOptions = {}): Promise<void> {
-    for (const plugin of plugins) {
-      await this.register(plugin, options);
-    }
+    await plugins.reduce<Promise<void>>(
+      (previous, plugin) => previous.then(() => this.register(plugin, options)),
+      Promise.resolve()
+    );
   }
 
   async unregister(name: string): Promise<void> {
@@ -72,8 +72,9 @@ export class PluginRegistry {
 
   async clear(): Promise<void> {
     const names = [...this.byName.keys()];
-    for (const name of names) {
-      await this.unregister(name);
-    }
+    await names.reduce<Promise<void>>(
+      (previous, name) => previous.then(() => this.unregister(name)),
+      Promise.resolve()
+    );
   }
 }

@@ -10,37 +10,37 @@ export interface AuthResolver {
 
 type GlobalAuthMap = Record<string, string>;
 
-let globalAuthCache: GlobalAuthMap | null = null;
+const globalAuthState: { cache: GlobalAuthMap | null } = { cache: null };
 
 function loadGlobalAuth(): GlobalAuthMap {
-  if (globalAuthCache) return globalAuthCache;
+  if (globalAuthState.cache) return globalAuthState.cache;
 
   const path = join(homedir(), ".obora", "global-auth.json");
   if (!existsSync(path)) {
-    globalAuthCache = {};
-    return globalAuthCache;
+    globalAuthState.cache = {};
+    return globalAuthState.cache;
   }
 
   try {
     const parsed = JSON.parse(readFileSync(path, "utf-8")) as unknown;
     if (parsed && typeof parsed === "object") {
-      globalAuthCache = Object.fromEntries(
+      globalAuthState.cache = Object.fromEntries(
         Object.entries(parsed as Record<string, unknown>).filter(([, v]) => typeof v === "string") as Array<
           [string, string]
         >,
       );
-      return globalAuthCache;
+      return globalAuthState.cache;
     }
   } catch {
     // Invalid global auth files are ignored so local development can continue.
   }
 
-  globalAuthCache = {};
-  return globalAuthCache;
+  globalAuthState.cache = {};
+  return globalAuthState.cache;
 }
 
 export function createAuthResolver(): AuthResolver {
-  let plainTextAuthRefWarned = false;
+  const warningState = { plainTextAuthRefWarned: false };
 
   return {
     resolveAuthRef(authRef: string, options?: { verbose?: boolean; logger?: { warn?: (message: string, ...args: unknown[]) => void } }): string | undefined {
@@ -70,8 +70,8 @@ export function createAuthResolver(): AuthResolver {
         );
       }
 
-      if (options?.verbose && !plainTextAuthRefWarned) {
-        plainTextAuthRefWarned = true;
+      if (options?.verbose && !warningState.plainTextAuthRefWarned) {
+        warningState.plainTextAuthRefWarned = true;
         const msg = "[obora] Plain text authRef detected in config. This is supported but not recommended.";
         if (options?.logger?.warn) {
           options.logger.warn(msg);

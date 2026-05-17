@@ -84,32 +84,35 @@ export class VersionManager {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _context?: string
   ): Promise<T> {
-    let lastError: Error | null = null;
-
     // 최대 maxRetries번 시도 (첫 시도 + 재시도 maxRetries-1번)
-    for (let attempt = 0; attempt < this.config.maxRetries; attempt++) {
+    const attemptOperation = async (attempt: number, lastError: Error | null): Promise<T> => {
+      if (attempt >= this.config.maxRetries) {
+        throw lastError;
+      }
+
       try {
         return await operation();
       } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
+        const currentError = error instanceof Error ? error : new Error(String(error));
 
         // VersionConflictError가 아니면 바로 throw
-        if (!(lastError instanceof VersionConflictError)) {
-          throw lastError;
+        if (!(currentError instanceof VersionConflictError)) {
+          throw currentError;
         }
 
         // 마지막 시도면 throw
         if (attempt === this.config.maxRetries - 1) {
-          throw lastError;
+          throw currentError;
         }
 
         // 재시도 지연
         const delay = this.calculateDelay(attempt);
         await this.sleep(delay);
+        return attemptOperation(attempt + 1, currentError);
       }
-    }
+    };
 
-    throw lastError;
+    return attemptOperation(0, null);
   }
 
   /**

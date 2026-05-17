@@ -89,25 +89,28 @@ export class RunOrchestrator {
     const tkgReviewQueueStore = this.deps.tkgService.resolveTKGReviewQueueStore(workflow, config, loadedConfig);
 
     // Persistence: save run at start
-    let persistenceAdapter: StorageAdapter | null = null;
-    if (persistenceEnabled) {
-      try {
-        persistenceAdapter = await persistenceManager.getStorageAdapter(
-          persistenceEnabled,
-          persistenceConfig
-        );
-        await persistenceAdapter.saveRun({
-          id: executionId,
-          workflowName,
-          status: "running",
-          input: { value: input ?? null },
-          startedAt: execution.startedAt.toISOString(),
-          metadata: { variables },
-        });
-      } catch (err) {
-        config.logger?.warn?.("[persistence] Failed to save run at start:", err);
-      }
-    }
+    const persistenceAdapter: StorageAdapter | null = persistenceEnabled
+      ? await (async () => {
+          try {
+            const adapter = await persistenceManager.getStorageAdapter(
+              persistenceEnabled,
+              persistenceConfig
+            );
+            await adapter.saveRun({
+              id: executionId,
+              workflowName,
+              status: "running",
+              input: { value: input ?? null },
+              startedAt: execution.startedAt.toISOString(),
+              metadata: { variables },
+            });
+            return adapter;
+          } catch (err) {
+            config.logger?.warn?.("[persistence] Failed to save run at start:", err);
+            return null;
+          }
+        })()
+      : null;
 
     const sortedSteps = topologicalSort(workflow.steps);
     execution.stepOrder = sortedSteps.map((step) => step.name);
@@ -360,9 +363,7 @@ export class RunOrchestrator {
         },
       });
     } finally {
-      for (const unsubscribe of tkgPromotionTriggerUnsubscribes) {
-        unsubscribe();
-      }
+      tkgPromotionTriggerUnsubscribes.forEach((unsubscribe) => unsubscribe());
       tkgProjector?.dispose();
       observer.dispose();
     }
@@ -416,13 +417,15 @@ export class RunOrchestrator {
             `${idx + 1}) [${k.tags.join(", ")}] ${k.title}\n   - confidence: ${k.confidence.toFixed(2)}`
         ),
       ];
-      let contextMd = contextLines.join("\n");
+      const fullContextMd = contextLines.join("\n");
 
       const maxTokens = Math.max(100, knowledgeContext.maxTokens ?? 800);
-      const approxTokens = Math.ceil(contextMd.length / 4);
+      const approxTokens = Math.ceil(fullContextMd.length / 4);
+      const contextMd =
+        approxTokens > maxTokens
+          ? `${fullContextMd.slice(0, maxTokens * 4)}\n\n... [truncated]`
+          : fullContextMd;
       if (approxTokens > maxTokens) {
-        const maxChars = maxTokens * 4;
-        contextMd = `${contextMd.slice(0, maxChars)}\n\n... [truncated]`;
         await eventBus.emit("warning", executionId, {
           message: "Knowledge context truncated by token cap",
           code: "SDK_KNOWLEDGE_CONTEXT_TRUNCATED",
@@ -482,20 +485,30 @@ export class RunOrchestrator {
   ): Promise<{ importedScopes: string[]; mergedSnapshot: SharedMemorySnapshot | null }> {
     if (!store) return { importedScopes: [], mergedSnapshot: null };
 
-    let mergedSnapshot: SharedMemorySnapshot | null = null;
-    const importedScopes: string[] = [];
-    const factSources = new Map<string, MemoryScope>();
-
-    for (const scope of scopes) {
+    const importState = await scopes.reduce<Promise<{
+      importedScopes: string[];
+      mergedSnapshot: SharedMemorySnapshot | null;
+      factSources: Map<string, MemoryScope>;
+    }>>(async (previousState, scope) => {
+      const state = await previousState;
       const snapshot = await store.load(scope);
-      if (!snapshot) continue;
+      if (!snapshot) return state;
       blackboard.recordSharedMemorySnapshot(snapshot, scope);
-      for (const fact of snapshot.knowledge.facts) {
-        factSources.set(fact.id, scope);
-      }
-      mergedSnapshot = mergeSharedMemorySnapshots(mergedSnapshot, snapshot);
-      importedScopes.push(`${scope.level}:${scope.key}`);
-    }
+      const snapshotFactSources = new Map(
+        snapshot.knowledge.facts.map((fact) => [fact.id, scope] as const)
+      );
+      return {
+        importedScopes: [...state.importedScopes, `${scope.level}:${scope.key}`],
+        mergedSnapshot: mergeSharedMemorySnapshots(state.mergedSnapshot, snapshot),
+        factSources: new Map([...state.factSources, ...snapshotFactSources]),
+      };
+    }, Promise.resolve({
+      importedScopes: [],
+      mergedSnapshot: null,
+      factSources: new Map<string, MemoryScope>(),
+    }));
+
+    const { importedScopes, mergedSnapshot, factSources } = importState;
 
     if (mergedSnapshot) {
       blackboard.importPersistentSnapshot(

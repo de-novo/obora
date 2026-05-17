@@ -1,0 +1,36 @@
+{
+  "step": "review",
+  "agent": "reviewer",
+  "timestamp": "2026-05-16T16:07:36.640Z",
+  "version": "1.0",
+  "task_summary": "Review the research output, identify gaps, and produce a final bounded conclusion.",
+  "methodology": "Standard agent execution",
+  "tools_used": [],
+  "key_decisions": [],
+  "decision_rationale": "",
+  "alternatives_considered": [],
+  "assumptions": [],
+  "constraints": [],
+  "risks_identified": [],
+  "inputs_processed": [
+    "problem_frame: ok",
+    "research: ok"
+  ],
+  "dependencies_used": [
+    {
+      "step": "research",
+      "purpose": "Input from upstream step 'research'"
+    }
+  ],
+  "output_summary": "ok",
+  "output_format": "text",
+  "artifacts_created": [],
+  "issues_encountered": [],
+  "workarounds_applied": [],
+  "confidence_level": "high",
+  "known_limitations": [],
+  "implications_for_next": [],
+  "recommended_next": [],
+  "open_questions": [],
+  "context_for_successors": "Step 'review' completed by reviewer. Output: ok"
+}

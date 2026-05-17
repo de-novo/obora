@@ -6,15 +6,14 @@ export class PipelinePattern extends CollaborationPatternBase {
 
   protected async onExecute(context: PatternRuntimeContext): Promise<PatternPayloadResult> {
     const steps = context.steps ?? [];
-    let current = context.input;
-
-    for (const step of steps) {
-      current = await step(current);
-    }
+    const output = await steps.reduce<Promise<unknown>>(
+      (current, step) => current.then((value) => step(value)),
+      Promise.resolve(context.input)
+    );
 
     return {
       success: true,
-      output: current,
+      output,
       metadata: { steps: steps.length },
     };
   }

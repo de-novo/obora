@@ -15,7 +15,10 @@ export interface StartedTestServer {
 
 export const startTestServer = async (): Promise<StartedTestServer> => {
   const auditStore = new InMemoryAuditStore();
-  const { app, wsBridge } = await createDashboardServer({}, { auditStore });
+  const { app, wsBridge } = await createDashboardServer({}, {
+    auditStore,
+    logger: false,
+  });
 
   await app.listen({ host: '127.0.0.1', port: 0 });
   const address = app.server.address();

@@ -11,6 +11,7 @@ const packages = [
   { label: "adapters", filter: "@obora/adapters" },
   { label: "cli", filter: "@obora/cli" },
   { label: "dashboard", filter: "@obora/dashboard" },
+  { label: "ops", filter: "@obora/ops" },
 ];
 
 const thresholdArg = process.argv.find((arg) => arg.startsWith("--threshold="));
@@ -62,7 +63,11 @@ const loadThresholds = (path) => {
     }
 
     const packageThresholds = raw[packageName];
-    if (!packageThresholds || typeof packageThresholds !== "object" || Array.isArray(packageThresholds)) {
+    if (
+      !packageThresholds ||
+      typeof packageThresholds !== "object" ||
+      Array.isArray(packageThresholds)
+    ) {
       errors.push(`${packageName}: thresholds must be an object`);
       continue;
     }

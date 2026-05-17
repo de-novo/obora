@@ -40,7 +40,7 @@ const files = payload.files.map((file) => file.path);
 const forbidden = files.filter((path) => /(^|\/)__tests__\/|\.test\.|-e2e\.test\./.test(path));
 if (forbidden.length > 0) {
   console.error(`[FAIL] ${pkgDir} publish payload includes test artifacts:`);
-  for (const path of forbidden) console.error(`  - ${path}`);
+  forbidden.forEach((path) => console.error(`  - ${path}`));
   process.exit(1);
 }
 const sourceMaps = files.filter((path) => path.endsWith(".map"));
@@ -100,13 +100,19 @@ const pkgDir = process.argv[1];
 const pkg = JSON.parse(fs.readFileSync(0, "utf8"));
 const dependencySections = ["dependencies", "optionalDependencies", "peerDependencies"];
 
-for (const section of dependencySections) {
-  for (const [name, version] of Object.entries(pkg[section] ?? {})) {
-    if (typeof version === "string" && version.startsWith("workspace:")) {
-      console.error(`[FAIL] ${pkg.name} ${section}.${name} still uses ${version} in the pnpm-packed package.json`);
-      process.exit(1);
-    }
-  }
+const workspaceDependency = dependencySections
+  .flatMap((section) =>
+    Object.entries(pkg[section] ?? {}).flatMap(([name, version]) =>
+      typeof version === "string" && version.startsWith("workspace:")
+        ? [{ section, name, version }]
+        : []
+    )
+  )
+  .at(0);
+
+if (workspaceDependency) {
+  console.error(`[FAIL] ${pkg.name} ${workspaceDependency.section}.${workspaceDependency.name} still uses ${workspaceDependency.version} in the pnpm-packed package.json`);
+  process.exit(1);
 }
 
 const requiredExports = {
@@ -116,11 +122,13 @@ const requiredExports = {
   "packages/cli": [],
 }[pkgDir] ?? [];
 
-for (const exportName of requiredExports) {
-  if (!pkg.exports || !Object.prototype.hasOwnProperty.call(pkg.exports, exportName)) {
-    console.error(`[FAIL] ${pkg.name} package.json is missing export ${exportName}`);
-    process.exit(1);
-  }
+const missingExport = requiredExports.find(
+  (exportName) => !pkg.exports || !Object.prototype.hasOwnProperty.call(pkg.exports, exportName)
+);
+
+if (missingExport) {
+  console.error(`[FAIL] ${pkg.name} package.json is missing export ${missingExport}`);
+  process.exit(1);
 }
 
 console.log(`[PASS] ${pkg.name} pnpm pack metadata is release-safe.`);
@@ -186,7 +194,7 @@ const imports = [
   ["@obora/sdk/testing", "@obora/sdk/testing"],
 ];
 
-for (const [label, specifier] of imports) {
+await Promise.all(imports.map(async ([label, specifier]) => {
   try {
     await import(specifier);
   } catch (error) {
@@ -194,7 +202,7 @@ for (const [label, specifier] of imports) {
     console.error(error?.stack ?? error);
     process.exit(1);
   }
-}
+}));
 
 console.log("[PASS] Published package import smoke checks passed.");
 EOF
@@ -212,7 +220,7 @@ const requires = [
   ["@obora/sdk/testing", "@obora/sdk/testing"],
 ];
 
-for (const [label, specifier] of requires) {
+requires.forEach(([label, specifier]) => {
   try {
     require(specifier);
   } catch (error) {
@@ -220,7 +228,7 @@ for (const [label, specifier] of requires) {
     console.error(error?.stack ?? error);
     process.exit(1);
   }
-}
+});
 
 console.log("[PASS] Published package require smoke checks passed.");
 EOF

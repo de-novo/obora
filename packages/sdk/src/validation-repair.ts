@@ -54,11 +54,9 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 function normalizeFailureChecks(raw: unknown): ValidationFailureCheck[] {
   if (!Array.isArray(raw)) return [];
 
-  const checks: ValidationFailureCheck[] = [];
-
-  for (const entry of raw) {
+  return raw.flatMap((entry): ValidationFailureCheck[] => {
     const item = asRecord(entry);
-    if (!item) continue;
+    if (!item) return [];
 
     const name = typeof item.name === "string"
       ? item.name
@@ -73,7 +71,7 @@ function normalizeFailureChecks(raw: unknown): ValidationFailureCheck[] {
         ? item.reason
         : undefined;
 
-    if (!name || !message) continue;
+    if (!name || !message) return [];
 
     const severity = item.severity === "warning" || item.severity === "error"
       ? item.severity
@@ -82,15 +80,13 @@ function normalizeFailureChecks(raw: unknown): ValidationFailureCheck[] {
         : undefined;
     const file = typeof item.file === "string" ? item.file : undefined;
 
-    checks.push({
+    return [{
       name,
       message,
       ...(severity ? { severity } : {}),
       ...(file ? { file } : {}),
-    });
-  }
-
-  return checks;
+    }];
+  });
 }
 
 export function buildValidationSignature(result: {

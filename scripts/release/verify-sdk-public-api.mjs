@@ -28,17 +28,17 @@ function exportedNames(files) {
   const checker = program.getTypeChecker();
   const result = {};
 
-  for (const file of files) {
+  files.forEach((file) => {
     const sourceFile = program.getSourceFile(file);
     const symbol = sourceFile ? checker.getSymbolAtLocation(sourceFile) : undefined;
     if (!symbol) {
       fail(`TypeScript could not inspect exports for ${file}`);
       result[file] = [];
-      continue;
+      return;
     }
 
     result[file] = checker.getExportsOfModule(symbol).map((item) => item.name).sort();
-  }
+  });
 
   return result;
 }

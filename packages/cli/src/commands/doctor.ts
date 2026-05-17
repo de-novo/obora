@@ -36,26 +36,26 @@ function shouldOutputJson(localJson: boolean | undefined, globalOpts: GlobalOpti
 export async function runDoctor(options: DoctorOptions): Promise<void> {
   const checks = buildDoctorChecks();
 
-  let loadedConfig;
-  try {
-    loadedConfig = await loadConfig();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new CLIError(`Failed to load doctor config: ${message}`, ExitCode.EXECUTION_FAILED);
-  }
+  const loadedConfig = await (async () => {
+    try {
+      return await loadConfig();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new CLIError(`Failed to load doctor config: ${message}`, ExitCode.EXECUTION_FAILED);
+    }
+  })();
 
-  let envLLM;
-  let resolvedLLM;
-  try {
-    envLLM = detectLLMConfigFromEnv();
-    resolvedLLM = resolveLLMConfig(envLLM, loadedConfig);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new CLIError(
-      `Failed to resolve doctor configuration: ${message}`,
-      ExitCode.EXECUTION_FAILED
-    );
-  }
+  const resolvedLLM = (() => {
+    try {
+      return resolveLLMConfig(detectLLMConfigFromEnv(), loadedConfig);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new CLIError(
+        `Failed to resolve doctor configuration: ${message}`,
+        ExitCode.EXECUTION_FAILED
+      );
+    }
+  })();
   const summary = buildResolutionSummary({}, resolvedLLM, loadedConfig);
   const providerHint = buildRecommendedProviderHint(summary, loadedConfig);
   const authDiagnostics = buildAuthDiagnostics(providerHint, summary);
@@ -160,14 +160,12 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
   if (sections.warnings.items.length > 0) {
     formatter.info(sections.warnings.heading);
   }
-  for (const warning of sections.warnings.items) {
-    formatter.warn(warning);
-  }
+  sections.warnings.items.forEach((warning) => formatter.warn(warning));
 
   formatter.info(sections.recommendedNextActions.heading);
-  for (const recommendation of sections.recommendedNextActions.items) {
-    formatter.step(recommendation);
-  }
+  sections.recommendedNextActions.items.forEach((recommendation) =>
+    formatter.step(recommendation)
+  );
 
   formatter.info(`Next step: ${summary.nextPlaceToEdit}`);
 }

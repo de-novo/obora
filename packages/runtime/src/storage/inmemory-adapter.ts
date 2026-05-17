@@ -32,27 +32,16 @@ export class InMemoryStorageAdapter implements StorageAdapter {
   }
 
   async listRuns(filter: RunFilter): Promise<RunRecord[]> {
-    let results = Array.from(this.runs.values());
-
-    if (filter.status) {
-      results = results.filter((r) => r.status === filter.status);
-    }
-    if (filter.workflowName) {
-      results = results.filter((r) => r.workflowName === filter.workflowName);
-    }
-    if (filter.from) {
-      results = results.filter((r) => r.startedAt >= filter.from!);
-    }
-    if (filter.to) {
-      results = results.filter((r) => r.startedAt <= filter.to!);
-    }
-
-    // Sort by startedAt descending
-    results.sort((a, b) => b.startedAt.localeCompare(a.startedAt));
-
     const offset = filter.offset ?? 0;
     const limit = filter.limit ?? 100;
-    return results.slice(offset, offset + limit).map((r) => structuredClone(r));
+    return Array.from(this.runs.values())
+      .filter((r) => (filter.status ? r.status === filter.status : true))
+      .filter((r) => (filter.workflowName ? r.workflowName === filter.workflowName : true))
+      .filter((r) => (filter.from ? r.startedAt >= filter.from : true))
+      .filter((r) => (filter.to ? r.startedAt <= filter.to : true))
+      .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
+      .slice(offset, offset + limit)
+      .map((r) => structuredClone(r));
   }
 
   async saveStep(record: StepRecord): Promise<void> {
@@ -115,32 +104,36 @@ export class InMemoryStorageAdapter implements StorageAdapter {
 
   async getRunCostSummary(runId: string): Promise<CostSummary> {
     const costs = await this.getCosts(runId);
-    const byStep = new Map<string, { stepName: string; tokens: number; costUsd: number }>();
-    const byModel = new Map<string, { model: string; tokens: number; costUsd: number }>();
-
-    let totalTokens = 0;
-    let totalCostUsd = 0;
-
-    for (const c of costs) {
-      totalTokens += c.totalTokens;
-      totalCostUsd += c.costUsd;
-
-      const step = byStep.get(c.stepName) ?? { stepName: c.stepName, tokens: 0, costUsd: 0 };
-      step.tokens += c.totalTokens;
-      step.costUsd += c.costUsd;
-      byStep.set(c.stepName, step);
-
-      const model = byModel.get(c.model) ?? { model: c.model, tokens: 0, costUsd: 0 };
-      model.tokens += c.totalTokens;
-      model.costUsd += c.costUsd;
-      byModel.set(c.model, model);
-    }
+    const summary = costs.reduce(
+      (acc, c) => {
+        const step = acc.byStep.get(c.stepName) ?? { stepName: c.stepName, tokens: 0, costUsd: 0 };
+        const model = acc.byModel.get(c.model) ?? { model: c.model, tokens: 0, costUsd: 0 };
+        return {
+          totalTokens: acc.totalTokens + c.totalTokens,
+          totalCostUsd: acc.totalCostUsd + c.costUsd,
+          byStep: new Map([
+            ...acc.byStep,
+            [c.stepName, { ...step, tokens: step.tokens + c.totalTokens, costUsd: step.costUsd + c.costUsd }],
+          ]),
+          byModel: new Map([
+            ...acc.byModel,
+            [c.model, { ...model, tokens: model.tokens + c.totalTokens, costUsd: model.costUsd + c.costUsd }],
+          ]),
+        };
+      },
+      {
+        totalTokens: 0,
+        totalCostUsd: 0,
+        byStep: new Map<string, { stepName: string; tokens: number; costUsd: number }>(),
+        byModel: new Map<string, { model: string; tokens: number; costUsd: number }>(),
+      }
+    );
 
     return {
-      totalTokens,
-      totalCostUsd,
-      byStep: Array.from(byStep.values()),
-      byModel: Array.from(byModel.values()),
+      totalTokens: summary.totalTokens,
+      totalCostUsd: summary.totalCostUsd,
+      byStep: Array.from(summary.byStep.values()),
+      byModel: Array.from(summary.byModel.values()),
     };
   }
 

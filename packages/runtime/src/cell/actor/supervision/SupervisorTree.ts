@@ -129,9 +129,9 @@ export class SupervisorTree {
     }
 
     // 자식들 먼저 제거
-    for (const childId of node.children) {
+    [...node.children].forEach((childId) => {
       this.remove(childId);
-    }
+    });
 
     // Supervisor 정지
     node.supervisor.stop();
@@ -198,9 +198,9 @@ export class SupervisorTree {
     const watched = node.supervisor.getWatchedActors();
     lines.push(`${indent}[${id}] watching: ${watched.join(", ") || "(none)"}`);
 
-    for (const childId of node.children) {
+    [...node.children].forEach((childId) => {
       this.printNode(childId, depth + 1, lines);
-    }
+    });
   }
 
   private generateId(prefix: string): string {

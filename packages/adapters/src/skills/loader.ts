@@ -28,21 +28,18 @@ export class SkillLoader {
         throw new Error(`Skill not found: ${name}`);
       }
       visited.add(name);
-      for (const dependency of entry.skill.dependencies ?? []) {
-        visit(dependency);
-      }
+      (entry.skill.dependencies ?? []).forEach((dependency) => visit(dependency));
       ordered.push(entry);
     };
 
-    for (const name of names) {
-      visit(name);
-    }
+    names.forEach((name) => visit(name));
 
-    for (const entry of ordered) {
+    await ordered.reduce<Promise<void>>(async (previousSetup, entry) => {
+      await previousSetup;
       if (entry.skill.setup) {
         await entry.skill.setup(context);
       }
-    }
+    }, Promise.resolve());
 
     return {
       loaded: ordered,
@@ -55,10 +52,11 @@ export class SkillLoader {
   }
 
   async teardown(skills: LoadedSkill[]): Promise<void> {
-    for (const entry of [...skills].reverse()) {
+    await [...skills].reverse().reduce<Promise<void>>(async (previousTeardown, entry) => {
+      await previousTeardown;
       if (entry.skill.teardown) {
         await entry.skill.teardown();
       }
-    }
+    }, Promise.resolve());
   }
 }

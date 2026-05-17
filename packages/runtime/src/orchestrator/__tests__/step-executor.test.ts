@@ -2,11 +2,13 @@
  * StepExecutor unit tests
  */
 
+import { Effect } from "effect";
 import { describe, it, expect, vi } from "vitest";
 import {
   stepToTask,
   parseDuration,
   executeStep,
+  executeStepEffect,
   type AgentResolver,
 } from "../StepScheduler.js";
 import { OboraError, type Step } from "../workflow/index.js";
@@ -133,6 +135,21 @@ describe("executeStep — success", () => {
       agent: "executor",
       type: "executor",
       config: undefined,
+    });
+    expect(agent.execute).toHaveBeenCalledTimes(1);
+  });
+
+  it("should expose execution as an Effect boundary", async () => {
+    const agent = makeAgent();
+    const resolver = makeResolver(agent);
+    const step = makeStep();
+    const ctx = makeContext();
+
+    const result = await Effect.runPromise(executeStepEffect(step, resolver, ctx));
+
+    expect(result).toEqual({
+      success: true,
+      output: "agent output",
     });
     expect(agent.execute).toHaveBeenCalledTimes(1);
   });

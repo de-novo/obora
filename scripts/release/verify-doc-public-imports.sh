@@ -19,14 +19,14 @@ function readJson(file) {
 
 function walk(dir, predicate, out = []) {
   if (!fs.existsSync(dir)) return out;
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+  fs.readdirSync(dir, { withFileTypes: true }).forEach((entry) => {
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       walk(fullPath, predicate, out);
     } else if (predicate(fullPath)) {
       out.push(fullPath);
     }
-  }
+  });
   return out;
 }
 
@@ -40,32 +40,30 @@ function findTypesTarget(value) {
   if (typeof value.types === "string") {
     return value.types;
   }
-  for (const key of ["import", "require", "default"]) {
-    const nested = findTypesTarget(value[key]);
-    if (nested) return nested;
-  }
-  return null;
+  return ["import", "require", "default"]
+    .map((key) => findTypesTarget(value[key]))
+    .find((nested) => Boolean(nested)) ?? null;
 }
 
 const publicSpecifiers = new Map();
-for (const packageJson of walk("packages", (file) => file.endsWith("package.json"))) {
+walk("packages", (file) => file.endsWith("package.json")).forEach((packageJson) => {
   const pkg = readJson(packageJson);
   if (typeof pkg.name !== "string" || pkg.private === true) {
-    continue;
+    return;
   }
 
   const packageDir = path.dirname(packageJson);
   if (pkg.exports && typeof pkg.exports === "object") {
-    for (const [exportName, exportValue] of Object.entries(pkg.exports)) {
+    Object.entries(pkg.exports).forEach(([exportName, exportValue]) => {
       const typesTarget = findTypesTarget(exportValue);
-      if (!typesTarget) continue;
+      if (!typesTarget) return;
       const specifier = exportName === "." ? pkg.name : `${pkg.name}/${exportName.replace(/^\.\//, "")}`;
       publicSpecifiers.set(specifier, path.resolve(packageDir, typesTarget));
-    }
+    });
   } else if (typeof pkg.types === "string") {
     publicSpecifiers.set(pkg.name, path.resolve(packageDir, pkg.types));
   }
-}
+});
 
 const markdownFiles = [
   "README.md",
@@ -81,46 +79,44 @@ const specifierPatterns = [
 
 const hits = [];
 const importStatements = [];
-for (const markdownFile of markdownFiles) {
+markdownFiles.forEach((markdownFile) => {
   const lines = fs.readFileSync(markdownFile, "utf8").split(/\r?\n/);
-  let buffer = [];
-  let startLine = 0;
+  const importState = { buffer: [], startLine: 0 };
 
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index];
-    for (const pattern of specifierPatterns) {
+  lines.forEach((line, index) => {
+    specifierPatterns.forEach((pattern) => {
       pattern.lastIndex = 0;
-      for (const match of line.matchAll(pattern)) {
+      Array.from(line.matchAll(pattern)).forEach((match) => {
         if (!publicSpecifiers.has(match[1])) {
           hits.push(`${markdownFile}:${index + 1}:${match[1]}`);
         }
-      }
-    }
+      });
+    });
 
     const trimmed = line.trim();
-    if (buffer.length === 0 && /^import\s+(?!\()/.test(trimmed)) {
-      buffer = [line];
-      startLine = index + 1;
-    } else if (buffer.length > 0) {
-      buffer.push(line);
+    if (importState.buffer.length === 0 && /^import\s+(?!\()/.test(trimmed)) {
+      importState.buffer = [line];
+      importState.startLine = index + 1;
+    } else if (importState.buffer.length > 0) {
+      importState.buffer.push(line);
     }
 
-    if (buffer.length > 0 && line.includes(";")) {
-      const statement = buffer.join("\n");
+    if (importState.buffer.length > 0 && line.includes(";")) {
+      const statement = importState.buffer.join("\n");
       if (statement.includes("@obora/")) {
-        importStatements.push({ markdownFile, startLine, statement });
+        importStatements.push({ markdownFile, startLine: importState.startLine, statement });
       }
-      buffer = [];
-      startLine = 0;
+      importState.buffer = [];
+      importState.startLine = 0;
     }
-  }
-}
+  });
+});
 
-for (const [specifier, declarationPath] of publicSpecifiers) {
+Array.from(publicSpecifiers.entries()).forEach(([specifier, declarationPath]) => {
   if (!fs.existsSync(declarationPath)) {
     hits.push(`${specifier}:missing declaration file ${path.relative(process.cwd(), declarationPath)}`);
   }
-}
+});
 
 if (hits.length === 0 && importStatements.length > 0) {
   const declarationPaths = [...new Set(publicSpecifiers.values())];
@@ -143,39 +139,39 @@ if (hits.length === 0 && importStatements.length > 0) {
     return exports;
   }
 
-  for (const { markdownFile, startLine, statement } of importStatements) {
+  importStatements.forEach(({ markdownFile, startLine, statement }) => {
     const sourceFile = ts.createSourceFile("doc-import.ts", statement, ts.ScriptTarget.ESNext, true, ts.ScriptKind.TS);
-    for (const node of sourceFile.statements) {
+    sourceFile.statements.forEach((node) => {
       if (!ts.isImportDeclaration(node) || !ts.isStringLiteral(node.moduleSpecifier)) {
-        continue;
+        return;
       }
       const specifier = node.moduleSpecifier.text;
       if (!specifier.startsWith("@obora/") || !publicSpecifiers.has(specifier)) {
-        continue;
+        return;
       }
 
       const importClause = node.importClause;
-      if (!importClause) continue;
+      if (!importClause) return;
       const exports = getExports(specifier);
       if (importClause.name && !exports.has("default")) {
         hits.push(`${markdownFile}:${startLine}:${specifier} missing default export`);
       }
       const namedBindings = importClause.namedBindings;
       if (namedBindings && ts.isNamedImports(namedBindings)) {
-        for (const element of namedBindings.elements) {
+        namedBindings.elements.forEach((element) => {
           const importedName = (element.propertyName ?? element.name).text;
           if (!exports.has(importedName)) {
             hits.push(`${markdownFile}:${startLine}:${specifier} missing export ${importedName}`);
           }
-        }
+        });
       }
-    }
-  }
+    });
+  });
 }
 
-for (const hit of hits) {
+hits.forEach((hit) => {
   console.log(hit);
-}
+});
 JS
 
 if [[ -s "$TMP_HITS" ]]; then

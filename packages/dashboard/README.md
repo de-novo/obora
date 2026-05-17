@@ -1,6 +1,14 @@
 # @obora/dashboard
 
-Obora dashboard — web monitoring and control server.
+Obora dashboard — deprecated legacy web monitoring and control server.
+
+## Deprecation Status
+
+`@obora/dashboard` is retained for existing monitoring, bootstrap, and smoke-test
+coverage only. New operator-facing web work belongs in `@obora/ops`, including
+graph workflow authoring, system prompt management, and execution history
+inspection. Keep this package stable until the bootstrap/server responsibilities
+are either migrated or deliberately removed in a breaking cleanup lane.
 
 ## Overview
 
@@ -30,10 +38,10 @@ The package exposes `bootstrapDashboardServer(...)` for callers that need a
 CLI-friendly start/stop contract without copying Fastify lifecycle details:
 
 ```js
-import { bootstrapDashboardServer } from './dist/index.js';
+import { bootstrapDashboardServer } from "./dist/index.js";
 
 const dashboard = await bootstrapDashboardServer({
-  config: { host: '127.0.0.1', port: 0 },
+  config: { host: "127.0.0.1", port: 0 },
 });
 
 console.log(dashboard.url);

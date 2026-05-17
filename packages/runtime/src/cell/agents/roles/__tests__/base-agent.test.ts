@@ -161,6 +161,10 @@ function createContext(board = new MemoryBoard(), task = createTask()): AgentCon
   };
 }
 
+function mergedBasePrompt(custom = "base prompt"): string {
+  return `default prompt\n\n[User Instructions]\n${custom}`;
+}
+
 async function executeTool(tool: AgentTool, params: unknown) {
   return tool.execute("tool-call-1", params as never);
 }
@@ -213,7 +217,7 @@ describe("BaseAgent", () => {
     const call = chatCompletion.mock.calls[0]?.[0] as { messages: ChatMessage[]; maxTokens: number } | undefined;
     expect(call?.maxTokens).toBe(2048);
     expect(call?.messages).toHaveLength(12);
-    expect(call?.messages[0]).toEqual({ role: "system", content: "base prompt" });
+    expect(call?.messages[0]).toEqual({ role: "system", content: mergedBasePrompt() });
     expect(call?.messages.at(-2)).toEqual({ role: "assistant", content: "history-11" });
     expect(call?.messages.at(-1)?.content).toContain("Analyze runtime state");
   });
@@ -253,16 +257,27 @@ describe("BaseAgent", () => {
     agent.configureRuntimeExtensions({ systemPromptAppend: "extra runtime prompt" });
     expect(agent.exposeMessages(task, { sessionId: "session-1" }, context)[0]).toEqual({
       role: "system",
-      content: "base prompt\n\nextra runtime prompt",
+      content: `${mergedBasePrompt()}\n\nextra runtime prompt`,
     });
 
     agent.clearRuntimeExtensions();
     expect(agent.exposeMessages(task, { sessionId: "session-1" }, context)[0]).toEqual({
       role: "system",
-      content: "base prompt",
+      content: mergedBasePrompt(),
     });
     expect(() => agent.continue()).toThrow("continue() requires pi-agent-core runtime");
     expect(agent.subscribe(() => undefined)).toEqual(expect.any(Function));
+  });
+
+  it("merges custom system prompt instructions with the role default", () => {
+    const { adapter } = createLlm("{}");
+    const agent = new TestRoleAgent({ llm: adapter, systemPrompt: "Keep step context intact." });
+    const message = agent.exposeMessages(createTask(), {}, createContext())[0];
+
+    expect(message).toEqual({
+      role: "system",
+      content: mergedBasePrompt("Keep step context intact."),
+    });
   });
 
   it("uses default config fallbacks and pi-runtime opt-out guards", async () => {

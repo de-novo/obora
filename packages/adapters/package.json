@@ -90,10 +90,10 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@types/node": "^25.6.2",
+    "@types/node": "^25.8.0",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.5"
+    "vitest": "^4.1.6"
   },
   "peerDependencies": {
     "typescript": ">=5.0.0"
@@ -104,8 +104,8 @@
     }
   },
   "dependencies": {
-    "@earendil-works/pi-agent-core": "^0.74.0",
-    "@earendil-works/pi-ai": "^0.74.0",
-    "yaml": "^2.8.4"
+    "@earendil-works/pi-agent-core": "^0.74.1",
+    "@earendil-works/pi-ai": "^0.74.1",
+    "yaml": "^2.9.0"
   }
 }

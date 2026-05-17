@@ -41,10 +41,7 @@ export interface StagingTKGStore {
 }
 
 function dedupeNodesById(nodes: TemporalNode[]): TemporalNode[] {
-  const seen = new Map<string, TemporalNode>();
-  for (const node of nodes) {
-    seen.set(node.id, node);
-  }
+  const seen = new Map(nodes.map((node) => [node.id, node]));
   return [...seen.values()];
 }
 

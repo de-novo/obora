@@ -307,10 +307,10 @@ async function loadRelatedInspectContext(executionId: string): Promise<RelatedIn
 
     const relatedRun = (await loadRelatedRunsByExecutionId([executionId]))[executionId];
 
-    let relatedArtifacts: RelatedArtifactSummary[] = [];
-    if (runtime.getRunArtifacts) {
-      try {
-        relatedArtifacts = (await runtime.getRunArtifacts(executionId))
+    const relatedArtifacts = runtime.getRunArtifacts
+      ? await (async () => {
+          try {
+            return (await runtime.getRunArtifacts!(executionId))
           .slice(-5)
           .reverse()
           .map((artifact) => ({
@@ -319,10 +319,11 @@ async function loadRelatedInspectContext(executionId: string): Promise<RelatedIn
             mimeType: artifact.mimeType,
             sizeBytes: artifact.sizeBytes,
           }));
-      } catch {
-        relatedArtifacts = [];
-      }
-    }
+          } catch {
+            return [];
+          }
+        })()
+      : [];
 
     return { relatedRun, relatedArtifacts };
   } catch {
@@ -342,11 +343,11 @@ function formatTextList(entries: DlqListEntry[]): void {
     `${"ID".padEnd(38)} ${"Workflow".padEnd(18)} ${"Status".padEnd(10)} ${"Attempts".padEnd(8)} ${"Stop".padEnd(24)} ${"Run".padEnd(12)} ${"Run Loop".padEnd(12)} ${"Validation".padEnd(28)} Created At`
   );
   console.log("-".repeat(167));
-  for (const entry of entries) {
+  entries.forEach((entry) => {
     console.log(
       `${entry.id.padEnd(38)} ${entry.workflowName.padEnd(18)} ${entry.status.padEnd(10)} ${String(entry.repairAttempts).padEnd(8)} ${formatStopCategory(entry).padEnd(24)} ${(entry.relatedRun?.status ?? "-").padEnd(12)} ${(entry.relatedRun?.loopState ?? "-").padEnd(12)} ${formatValidationSummary(entry.triage?.lastValidationSummary).padEnd(28)} ${entry.createdAt}`
     );
-  }
+  });
 }
 
 function printTextInspect(
@@ -392,14 +393,14 @@ function printTextInspect(
   }
   if (relatedArtifacts.length > 0) {
     console.log(`\nRelated Artifacts (${relatedArtifacts.length}):`);
-    for (const artifact of relatedArtifacts) {
+    relatedArtifacts.forEach((artifact) => {
       console.log(
         `  - ${artifact.stepName}/${artifact.name} (${artifact.mimeType}, ${artifact.sizeBytes} bytes)`
       );
       console.log(
         `    Fetch: obora artifact get ${entry.executionId} ${artifact.stepName} ${artifact.name}`
       );
-    }
+    });
   }
 }
 

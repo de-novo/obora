@@ -139,12 +139,12 @@ export class JudgmentReporter {
     lines.push('');
     lines.push('| model | score | judgmentStatus | runState | issues |');
     lines.push('|-------|-------|----------------|----------|--------|');
-    for (const r of report.results) {
+    report.results.forEach((r) => {
       const issuesStr = r.issues.length > 0
         ? r.issues.map(i => `${i.level}: ${i.message}`).join('; ')
         : 'none';
       lines.push(`| ${r.model} | ${r.score} | ${r.judgmentStatus} | ${r.runState} | ${issuesStr} |`);
-    }
+    });
     lines.push('');
 
     const md = lines.join('\n');
@@ -161,31 +161,15 @@ export class JudgmentReporter {
    * Validate that a JSON report object contains all required fields.
    */
   static validateJsonFields(report: Record<string, unknown>): string[] {
-    const missing: string[] = [];
-    for (const field of REQUIRED_JSON_FIELDS) {
-      if (!(field in report) || report[field] === undefined) {
-        missing.push(field);
-      }
-    }
-    return missing;
+    return REQUIRED_JSON_FIELDS.filter((field) => !(field in report) || report[field] === undefined);
   }
 
   /**
    * Validate that a Markdown string contains all required sections and table columns.
    */
   static validateMarkdown(md: string): { missingSections: string[]; missingColumns: string[] } {
-    const missingSections: string[] = [];
-    for (const section of REQUIRED_MD_SECTIONS) {
-      if (!md.includes(section)) {
-        missingSections.push(section);
-      }
-    }
-    const missingColumns: string[] = [];
-    for (const col of REQUIRED_TABLE_COLUMNS) {
-      if (!md.includes(col)) {
-        missingColumns.push(col);
-      }
-    }
+    const missingSections = REQUIRED_MD_SECTIONS.filter((section) => !md.includes(section));
+    const missingColumns = REQUIRED_TABLE_COLUMNS.filter((col) => !md.includes(col));
     return { missingSections, missingColumns };
   }
 }

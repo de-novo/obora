@@ -86,29 +86,26 @@ export class VotingSessionStore {
     const abstains = votes.filter((v) => v.option === 'abstain').length;
     const totalVotes = votes.length;
 
-    let passed = false;
-
-    switch (session.policy) {
-      case 'majority': {
+    const passed = (() => {
+      switch (session.policy) {
+        case 'majority': {
         // 과반수 승인 (기권 제외)
         const majorityVotes = totalVotes - abstains;
-        passed = majorityVotes > 0 && approves > majorityVotes / 2;
-        break;
-      }
-      case 'unanimous':
+          return majorityVotes > 0 && approves > majorityVotes / 2;
+        }
+        case 'unanimous':
         // 만장일치 (반대 없고 기권 포함 전체 동의)
-        passed = rejects === 0;
-        break;
-      case 'weighted': {
+          return rejects === 0;
+        case 'weighted': {
         // 가중치 기반
         const approveWeight = votes
           .filter((v) => v.option === 'approve')
           .reduce((sum, v) => sum + (v.weight || 1), 0);
         const totalWeight = votes.reduce((sum, v) => sum + (v.weight || 1), 0);
-        passed = totalWeight > 0 && approveWeight > totalWeight / 2;
-        break;
+          return totalWeight > 0 && approveWeight > totalWeight / 2;
+        }
       }
-    }
+    })();
 
     // 정족수 체크
     const quorumMet = totalVotes >= session.quorum;

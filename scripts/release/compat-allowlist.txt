@@ -13,5 +13,6 @@ packages/runtime/src/patterns/types.ts	keep	Internal execute entrypoint delegate
 packages/sdk/src/__tests__/conditional-routing.test.ts	keep	Regression coverage for existing string goto workflow compatibility.
 packages/sdk/src/blackboard/__tests__/execution-observer.test.ts	keep	Regression coverage for observer behavior without blackboard.
 packages/sdk/src/execution/parallel-scheduler.ts	keep	Runtime scheduling fallback preserves existing workflow behavior.
+packages/sdk/src/project/agent-manager.ts	keep	agents.yaml aggregate format remains supported; prefer agents/{name}.yaml for new per-agent definitions.
 packages/sdk/src/reflector/__tests__/reflector-engine.test.ts	deprecate	Coverage for old analyzeFailures entrypoint until reflector API cleanup.
 packages/sdk/src/reflector/reflector-engine.ts	deprecate	Backward-compatible reflector entrypoint retained until breaking cleanup.

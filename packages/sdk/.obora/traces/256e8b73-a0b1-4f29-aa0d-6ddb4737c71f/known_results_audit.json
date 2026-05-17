@@ -1,0 +1,38 @@
+{
+  "step": "known_results_audit",
+  "agent": "framer",
+  "timestamp": "2026-05-16T16:02:52.043Z",
+  "version": "1.0",
+  "task_summary": "Audit known facts, assumptions, and likely difficulty points.",
+  "methodology": "Standard agent execution",
+  "tools_used": [],
+  "key_decisions": [],
+  "decision_rationale": "",
+  "alternatives_considered": [],
+  "assumptions": [],
+  "constraints": [],
+  "risks_identified": [],
+  "inputs_processed": [
+    {
+      "source": "problem_frame",
+      "summary": "ok"
+    }
+  ],
+  "dependencies_used": [
+    {
+      "step": "problem_frame",
+      "purpose": "Input from upstream step 'problem_frame'"
+    }
+  ],
+  "output_summary": "ok",
+  "output_format": "text",
+  "artifacts_created": [],
+  "issues_encountered": [],
+  "workarounds_applied": [],
+  "confidence_level": "high",
+  "known_limitations": [],
+  "implications_for_next": [],
+  "recommended_next": [],
+  "open_questions": [],
+  "context_for_successors": "Step 'known_results_audit' completed by framer. Output: ok"
+}

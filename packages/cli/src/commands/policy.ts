@@ -33,20 +33,18 @@ export function createPolicyCommand(): Command {
             );
           }
 
-          let kind: "policy" | "workflow" = "policy";
-          try {
-            await Policy.fromYaml(path);
-          } catch {
-            try {
-              await Workflow.fromYaml(path);
-              kind = "workflow";
-            } catch {
-              throw new CLIError(
-                `Invalid policy/workflow YAML: ${path}`,
-                ExitCode.VALIDATION_ERROR
-              );
-            }
-          }
+          const kind: "policy" | "workflow" = await Policy.fromYaml(path)
+            .then(() => "policy" as const)
+            .catch(async () =>
+              Workflow.fromYaml(path)
+                .then(() => "workflow" as const)
+                .catch(() => {
+                  throw new CLIError(
+                    `Invalid policy/workflow YAML: ${path}`,
+                    ExitCode.VALIDATION_ERROR
+                  );
+                })
+            );
 
           if (shouldOutputJson(options.json, globalOpts)) {
             formatter.json({ path, valid: true, kind });

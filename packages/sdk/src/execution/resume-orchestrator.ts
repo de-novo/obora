@@ -57,7 +57,7 @@ export class ResumeOrchestrator {
     const completedStepsSet = new Set<string>();
 
     // Restore completed / skip step outputs
-    for (const policy of stepPolicies) {
+    stepPolicies.forEach((policy) => {
       if (policy.action === "restore") {
         if (policy.output !== undefined) {
           execution.outputs[policy.stepName] = policy.output;
@@ -68,7 +68,7 @@ export class ResumeOrchestrator {
         completedStepsSet.add(policy.stepName);
         execution.completedSteps = [...completedStepsSet];
       }
-    }
+    });
 
     const persistenceEnabled = config.persistence?.enabled ?? false;
     const persistenceConfig = config.persistence;
@@ -95,7 +95,8 @@ export class ResumeOrchestrator {
       rerunSteps,
     });
 
-    for (const step of sortedStepDefs) {
+    await sortedStepDefs.reduce<Promise<void>>(async (previous, step) => {
+      await previous;
       if (engine.costTracker) {
         await engine.costTracker.preStepGate(step.name);
       }
@@ -212,7 +213,7 @@ export class ResumeOrchestrator {
 
         throw stepErr;
       }
-    }
+    }, Promise.resolve());
 
     execution.status = "completed";
     execution.endedAt = new Date();

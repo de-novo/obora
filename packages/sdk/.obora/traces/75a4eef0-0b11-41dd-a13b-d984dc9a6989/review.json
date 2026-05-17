@@ -1,0 +1,37 @@
+{
+  "step": "review",
+  "agent": "reviewer",
+  "timestamp": "2026-05-16T17:09:38.159Z",
+  "version": "1.0",
+  "task_summary": "Review the proof attempt, identify gaps or refutations, and produce a bounded final classification.",
+  "methodology": "Standard agent execution",
+  "tools_used": [],
+  "key_decisions": [],
+  "decision_rationale": "",
+  "alternatives_considered": [],
+  "assumptions": [],
+  "constraints": [],
+  "risks_identified": [],
+  "inputs_processed": [
+    "problem_frame: ok",
+    "known_results_audit: ok",
+    "proof_attempt: ok"
+  ],
+  "dependencies_used": [
+    {
+      "step": "proof_attempt",
+      "purpose": "Input from upstream step 'proof_attempt'"
+    }
+  ],
+  "output_summary": "ok",
+  "output_format": "text",
+  "artifacts_created": [],
+  "issues_encountered": [],
+  "workarounds_applied": [],
+  "confidence_level": "high",
+  "known_limitations": [],
+  "implications_for_next": [],
+  "recommended_next": [],
+  "open_questions": [],
+  "context_for_successors": "Step 'review' completed by reviewer. Output: ok"
+}

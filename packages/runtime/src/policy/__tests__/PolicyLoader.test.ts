@@ -1,9 +1,15 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 
-import { loadPolicyFromYaml, normalizePolicySet } from "../PolicyLoader.js";
+import {
+  loadPolicyFromYaml,
+  loadPolicyFromYamlEffect,
+  normalizePolicySet,
+  normalizePolicySetEffect,
+} from "../PolicyLoader.js";
 
 describe("PolicyLoader", () => {
   it("normalizes camelCase and snake_case policy fields", () => {
@@ -130,6 +136,20 @@ describe("PolicyLoader", () => {
     });
   });
 
+  it("exposes normalization as an Effect boundary", () => {
+    const policy = Effect.runSync(
+      normalizePolicySetEffect({
+        version: "effect-policy",
+        tools: [{ name: "shell", effect: "allow" }],
+      }),
+    );
+
+    expect(policy).toMatchObject({
+      version: "effect-policy",
+      tools: [{ name: "shell", effect: "allow" }],
+    });
+  });
+
   it("loads and normalizes a YAML policy file", async () => {
     const dir = await mkdtemp(join(tmpdir(), "obora-policy-loader-"));
     const filePath = join(dir, "policy.yaml");
@@ -149,6 +169,11 @@ resources:
       );
 
       await expect(loadPolicyFromYaml(filePath)).resolves.toMatchObject({
+        version: "file-policy",
+        tools: [{ name: "shell", effect: "deny" }],
+        resources: { maxToolCalls: 2 },
+      });
+      await expect(Effect.runPromise(loadPolicyFromYamlEffect(filePath))).resolves.toMatchObject({
         version: "file-policy",
         tools: [{ name: "shell", effect: "deny" }],
         resources: { maxToolCalls: 2 },

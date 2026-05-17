@@ -18,5 +18,6 @@ export default defineConfig({
     "@obora/runtime/storage",
     "better-sqlite3",
     "duckdb",
+    "effect",
   ],
 });

@@ -25,23 +25,28 @@ const deprecatedPackages = new Set([
 ]);
 
 const managedRanges = new Map([
-  ["@earendil-works/pi-agent-core", "^0.74.0"],
-  ["@earendil-works/pi-ai", "^0.74.0"],
-  ["@playwright/test", "^1.59.1"],
-  ["@types/node", "^25.6.2"],
-  ["@typescript-eslint/eslint-plugin", "^8.59.2"],
-  ["@typescript-eslint/parser", "^8.59.2"],
-  ["@vitest/coverage-v8", "^4.1.5"],
-  ["better-sqlite3", "^12.9.0"],
+  ["@earendil-works/pi-agent-core", "^0.74.1"],
+  ["@earendil-works/pi-ai", "^0.74.1"],
+  ["@playwright/test", "^1.60.0"],
+  ["@types/node", "^25.8.0"],
+  ["@typescript-eslint/eslint-plugin", "^8.59.3"],
+  ["@typescript-eslint/parser", "^8.59.3"],
+  ["@vitest/coverage-v8", "^4.1.6"],
+  ["better-sqlite3", "^12.10.0"],
   ["effect", "^3.21.2"],
   ["prettier", "^3.8.3"],
   ["tsup", "^8.5.1"],
-  ["turbo", "^2.9.10"],
+  ["turbo", "^2.9.14"],
   ["typescript", "^6.0.3"],
-  ["vitest", "^4.1.5"],
-  ["ws", "^8.20.0"],
-  ["yaml", "^2.8.4"],
+  ["vitest", "^4.1.6"],
+  ["ws", "^8.20.1"],
+  ["yaml", "^2.9.0"],
   ["zod", "^4.4.3"],
+]);
+
+const managedOverrides = new Map([
+  ["fast-uri@<=3.1.1", "3.1.2"],
+  ["fast-xml-builder@<=1.1.6", "1.2.0"],
 ]);
 
 const readPackage = (path) => ({
@@ -60,6 +65,7 @@ const entriesFor = ({ path, manifest }) =>
   );
 
 const allEntries = packageFiles.map(readPackage).flatMap(entriesFor);
+const rootManifest = readPackage("package.json").manifest;
 
 const deprecatedFailures = allEntries
   .filter(({ name }) => deprecatedPackages.has(name))
@@ -99,10 +105,18 @@ const inconsistentSpecFailures = groupedSpecs
         .join(", ")}`
   );
 
+const managedOverrideFailures = [...managedOverrides.entries()]
+  .filter(([name, spec]) => rootManifest.pnpm?.overrides?.[name] !== spec)
+  .map(
+    ([name, spec]) =>
+      `package.json: pnpm.overrides.${name} is ${rootManifest.pnpm?.overrides?.[name] ?? "<missing>"}; expected ${spec}`
+  );
+
 const failures = [
   ...deprecatedFailures,
   ...managedRangeFailures,
   ...inconsistentSpecFailures,
+  ...managedOverrideFailures,
 ];
 
 if (failures.length > 0) {

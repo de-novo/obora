@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
 
-import { createDashboardServer } from '../index.js';
 import type { ExecutionEvent } from '../types.js';
+import { createQuietDashboardServer as createDashboardServer } from './test-server.js';
 
 const servers: Array<Awaited<ReturnType<typeof createDashboardServer>>['app']> = [];
 

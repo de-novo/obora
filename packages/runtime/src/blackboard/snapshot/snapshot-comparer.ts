@@ -110,10 +110,12 @@ export class SnapshotComparer {
       decisionsSection.modified > 0;
 
     // 상세 변경 정보 추출
-    const details: Record<string, unknown> = {};
-    for (const [key, [before, after]] of stateSection.changes.entries()) {
-      details[key] = { before, after };
-    }
+    const details = Object.fromEntries(
+      Array.from(stateSection.changes.entries()).map(([key, [before, after]]) => [
+        key,
+        { before, after },
+      ])
+    );
 
     return {
       meta: metaDiff,
@@ -138,35 +140,36 @@ export class SnapshotComparer {
     const keys1 = new Set(Object.keys(data1 ?? {}));
     const keys2 = new Set(Object.keys(data2 ?? {}));
 
-    let added = 0;
-    let removed = 0;
-    let modified = 0;
-
     // 추가/변경된 항목
-    for (const key of keys2) {
+    const changedCounts = Array.from(keys2).reduce(
+      (counts, key) => {
       if (!keys1.has(key)) {
-        added++;
         changes.set(key, [undefined, data2[key]]);
+          return { ...counts, added: counts.added + 1 };
       } else {
         // JSON.stringify 순서 독립적 비교 (sortedKeyReplacer 사용)
         const json1 = JSON.stringify(data1[key], sortedKeyReplacer);
         const json2 = JSON.stringify(data2[key], sortedKeyReplacer);
         if (json1 !== json2) {
-          modified++;
           changes.set(key, [data1[key], data2[key]]);
+            return { ...counts, modified: counts.modified + 1 };
         }
       }
-    }
+        return counts;
+      },
+      { added: 0, modified: 0 }
+    );
 
     // 제거된 항목
-    for (const key of keys1) {
+    const removed = Array.from(keys1).reduce((count, key) => {
       if (!keys2.has(key)) {
-        removed++;
         changes.set(key, [data1[key], undefined]);
+        return count + 1;
       }
-    }
+      return count;
+    }, 0);
 
-    return { added, removed, modified, changes };
+    return { ...changedCounts, removed, changes };
   }
 
   /**

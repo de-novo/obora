@@ -166,21 +166,21 @@ export function buildSharedMemorySnapshotFromApprovedTKGReviewQueueItems(
   sourceExecutionId?: string,
   options: TKGPromotionApplyOptions = {},
 ): SharedMemorySnapshot {
-  let mergedSnapshot: SharedMemorySnapshot | null = null;
-
-  for (const reviewItem of reviewQueueSnapshot?.items ?? []) {
-    if (reviewItem.status !== "approved") continue;
-
-    mergedSnapshot = mergeSharedMemorySnapshots(
-      mergedSnapshot,
-      buildSharedMemorySnapshotFromApprovedTKGReviewQueueItem(
-        stagingSnapshot,
-        reviewItem,
-        sourceExecutionId,
-        options,
-      ),
+  const mergedSnapshot = (reviewQueueSnapshot?.items ?? [])
+    .filter((reviewItem) => reviewItem.status === "approved")
+    .reduce<SharedMemorySnapshot | null>(
+      (snapshot, reviewItem) =>
+        mergeSharedMemorySnapshots(
+          snapshot,
+          buildSharedMemorySnapshotFromApprovedTKGReviewQueueItem(
+            stagingSnapshot,
+            reviewItem,
+            sourceExecutionId,
+            options,
+          ),
+        ),
+      null,
     );
-  }
 
   return mergedSnapshot ?? {
     knowledge: { facts: [] },
@@ -209,10 +209,13 @@ export async function applyApprovedTKGReviewQueueItemsToSharedMemory(
     || snapshot.decisions.history.length > 0
     || Object.keys(snapshot.context.projectFacts).length > 0
   ) {
-    for (const scope of scopes) {
-      const existing = await store.load(scope);
-      await store.save(scope, mergeSharedMemorySnapshots(existing, snapshot));
-    }
+    await scopes.reduce<Promise<void>>(
+      (previous, scope) => previous.then(async () => {
+        const existing = await store.load(scope);
+        await store.save(scope, mergeSharedMemorySnapshots(existing, snapshot));
+      }),
+      Promise.resolve(),
+    );
   }
 
   const approvedItems = (reviewQueueSnapshot?.items ?? []).filter((item) => item.status === "approved");

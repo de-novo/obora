@@ -107,6 +107,7 @@ export class TKGObserver {
 
 export type ConflictType = 'contradiction' | 'version' | 'confidence';
 export type ResolutionPolicy = 'auto' | 'manual' | 'defer';
+type TKGConflict = { left: TemporalNode; right: TemporalNode; type: ConflictType };
 
 export interface ConflictResolutionPolicy {
   readonly contradiction?: ResolutionPolicy;
@@ -253,13 +254,9 @@ export class TKGReflector {
     return mergeResult;
   }
 
-  detectConflicts(nodes: readonly TemporalNode[]) {
-    const conflicts: Array<{ left: TemporalNode; right: TemporalNode; type: ConflictType }> = [];
-
-    for (let i = 0; i < nodes.length; i += 1) {
-      for (let j = i + 1; j < nodes.length; j += 1) {
-        const left = nodes[i];
-        const right = nodes[j];
+  detectConflicts(nodes: readonly TemporalNode[]): TKGConflict[] {
+    const conflicts = nodes.flatMap<TKGConflict>((left, i) =>
+      nodes.slice(i + 1).flatMap<TKGConflict>((right) => {
         const sameStatement =
           left.type === 'fact' &&
           right.type === 'fact' &&
@@ -267,17 +264,20 @@ export class TKGReflector {
           'statement' in right.data &&
           left.data.statement === right.data.statement;
 
-        if (!sameStatement) continue;
+        if (!sameStatement) return [];
 
         if (left.data.verified !== right.data.verified) {
-          conflicts.push({ left, right, type: 'contradiction' });
-        } else if (left.version !== right.version) {
-          conflicts.push({ left, right, type: 'version' });
-        } else if (Math.abs(left.confidence - right.confidence) > this.autoResolveConfidenceGap) {
-          conflicts.push({ left, right, type: 'confidence' });
+          return [{ left, right, type: 'contradiction' as const }];
         }
-      }
-    }
+        if (left.version !== right.version) {
+          return [{ left, right, type: 'version' as const }];
+        }
+        if (Math.abs(left.confidence - right.confidence) > this.autoResolveConfidenceGap) {
+          return [{ left, right, type: 'confidence' as const }];
+        }
+        return [];
+      })
+    );
 
     return conflicts;
   }
@@ -361,9 +361,9 @@ export class TKGReflector {
       generatedAt: new Date(report.generatedAt),
     })));
     this.rollbackSnapshots.clear();
-    for (const snapshot of state.rollbackSnapshots ?? []) {
+    (state.rollbackSnapshots ?? []).forEach((snapshot) => {
       this.rollbackSnapshots.set(snapshot.mergeId, [...snapshot.nodes]);
-    }
+    });
     this.pruneReportHistory();
     this.pruneRollbackSnapshots();
     this.lastReport = this.reportHistory.at(-1) ?? null;
@@ -413,18 +413,18 @@ export class TKGReflector {
     }
   }
 
-  private summarizeConflicts(conflicts: Array<{ left: TemporalNode; right: TemporalNode; type: ConflictType }>) {
+  private summarizeConflicts(conflicts: TKGConflict[]) {
     return conflicts.reduce<Record<ConflictType, number>>(
       (acc, conflict) => ({ ...acc, [conflict.type]: acc[conflict.type] + 1 }),
       { contradiction: 0, version: 0, confidence: 0 },
     );
   }
 
-  private resolveConflicts(conflicts: Array<{ left: TemporalNode; right: TemporalNode; type: ConflictType }>) {
+  private resolveConflicts(conflicts: TKGConflict[]) {
     const blockedNodeIds = new Set<string>();
     const policySummary: Record<ResolutionPolicy, number> = { auto: 0, manual: 0, defer: 0 };
 
-    for (const conflict of conflicts) {
+    conflicts.forEach((conflict) => {
       const policy = this.conflictPolicy[conflict.type];
       policySummary[policy] += 1;
 
@@ -432,7 +432,7 @@ export class TKGReflector {
         const winner = this.pickAutoResolvedWinner(conflict);
         const loser = winner.id === conflict.left.id ? conflict.right : conflict.left;
         blockedNodeIds.add(loser.id);
-        continue;
+        return;
       }
 
       const reviewItem: ManualReviewItem = {
@@ -452,12 +452,12 @@ export class TKGReflector {
 
       blockedNodeIds.add(conflict.left.id);
       blockedNodeIds.add(conflict.right.id);
-    }
+    });
 
     return { blockedNodeIds, policySummary };
   }
 
-  private pickAutoResolvedWinner(conflict: { left: TemporalNode; right: TemporalNode; type: ConflictType }) {
+  private pickAutoResolvedWinner(conflict: TKGConflict) {
     if (conflict.type === 'version') {
       return conflict.left.version >= conflict.right.version ? conflict.left : conflict.right;
     }

@@ -4,8 +4,8 @@ import { join } from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createDashboardServer } from '../index.js';
 import { InMemoryHistoryStore } from '../history/history-store.js';
+import { createQuietDashboardServer as createDashboardServer } from './test-server.js';
 
 const servers: Array<Awaited<ReturnType<typeof createDashboardServer>>['app']> = [];
 const tempDirs: string[] = [];

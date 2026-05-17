@@ -8,6 +8,7 @@ import {
   bootstrapDashboardServer,
   getDashboardUrl,
   inspectDashboardStaticAssets,
+  type DashboardBootstrapOptions,
   type DashboardBootstrapResult,
 } from '../bootstrap.js';
 
@@ -34,10 +35,21 @@ const createStaticDir = async (): Promise<string> => {
   return dir;
 };
 
+const bootstrapQuietDashboardServer = (
+  options: DashboardBootstrapOptions = {},
+): Promise<DashboardBootstrapResult> =>
+  bootstrapDashboardServer({
+    ...options,
+    dependencies: {
+      ...options.dependencies,
+      logger: false,
+    },
+  });
+
 describe('dashboard bootstrap helper', () => {
   it('starts, reports launch metadata, and closes idempotently', async () => {
     const staticDir = await createStaticDir();
-    const handle = await bootstrapDashboardServer({
+    const handle = await bootstrapQuietDashboardServer({
       config: {
         host: '127.0.0.1',
         port: 0,
@@ -65,7 +77,7 @@ describe('dashboard bootstrap helper', () => {
 
   it('reports static asset availability without requiring client assets', async () => {
     const staticDir = await createTempDir();
-    const handle = await bootstrapDashboardServer({
+    const handle = await bootstrapQuietDashboardServer({
       config: {
         host: '127.0.0.1',
         port: 0,
@@ -82,19 +94,19 @@ describe('dashboard bootstrap helper', () => {
 
   it('rejects invalid host and port before listening', async () => {
     await expect(
-      bootstrapDashboardServer({ config: { host: '', port: 0 } }),
+      bootstrapQuietDashboardServer({ config: { host: '', port: 0 } }),
     ).rejects.toMatchObject({
       code: 'DASH_BOOTSTRAP_INVALID_HOST',
       failure: 'validation',
     });
     await expect(
-      bootstrapDashboardServer({ config: { host: 'bad host', port: 0 } }),
+      bootstrapQuietDashboardServer({ config: { host: 'bad host', port: 0 } }),
     ).rejects.toMatchObject({
       code: 'DASH_BOOTSTRAP_INVALID_HOST',
       failure: 'validation',
     });
     await expect(
-      bootstrapDashboardServer({ config: { host: '127.0.0.1', port: 65536 } }),
+      bootstrapQuietDashboardServer({ config: { host: '127.0.0.1', port: 65536 } }),
     ).rejects.toMatchObject({
       code: 'DASH_BOOTSTRAP_INVALID_PORT',
       failure: 'validation',
@@ -105,7 +117,7 @@ describe('dashboard bootstrap helper', () => {
     const staticDir = await createTempDir();
 
     await expect(
-      bootstrapDashboardServer({
+      bootstrapQuietDashboardServer({
         config: {
           host: '127.0.0.1',
           port: 0,
@@ -137,7 +149,7 @@ describe('dashboard bootstrap helper', () => {
 
   it('wraps listen failures with a bootstrap error', async () => {
     const staticDir = await createStaticDir();
-    const first = await bootstrapDashboardServer({
+    const first = await bootstrapQuietDashboardServer({
       config: {
         host: '127.0.0.1',
         port: 0,
@@ -147,7 +159,7 @@ describe('dashboard bootstrap helper', () => {
     handles.push(first);
 
     await expect(
-      bootstrapDashboardServer({
+      bootstrapQuietDashboardServer({
         config: {
           host: '127.0.0.1',
           port: first.port,
@@ -156,7 +168,7 @@ describe('dashboard bootstrap helper', () => {
       }),
     ).rejects.toBeInstanceOf(DashboardBootstrapError);
     await expect(
-      bootstrapDashboardServer({
+      bootstrapQuietDashboardServer({
         config: {
           host: '127.0.0.1',
           port: first.port,

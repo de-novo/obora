@@ -112,11 +112,10 @@ export class SnapshotRestorer {
     }
 
     // 4. 데이터 역직렬화
-    let serialized: SerializedState;
-
-    try {
-      serialized = decompressSnapshotData(snapshot);
-    } catch (e) {
+    const serialized = (() => {
+      try {
+        return decompressSnapshotData(snapshot);
+      } catch (e) {
       // P2: catch 블록 타입 명시
       const error = e instanceof Error ? e : new Error(String(e));
       throw new SnapshotRestoreError(
@@ -124,7 +123,8 @@ export class SnapshotRestorer {
         'DATA_CORRUPTED',
         error
       );
-    }
+      }
+    })();
 
     // 4. State 역직렬화
     const state = this.serializer.deserialize(serialized);

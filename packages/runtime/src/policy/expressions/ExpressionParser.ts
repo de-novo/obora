@@ -180,7 +180,7 @@ class Tokenizer {
   private readString(quote: string): Token {
     const start = this.index;
     this.index += 1;
-    let value = "";
+    const chars: string[] = [];
 
     while (this.index < this.input.length) {
       const ch = this.input[this.index];
@@ -190,15 +190,15 @@ class Tokenizer {
         if (escaped === undefined) {
           throw new ExpressionParseError(`Unterminated string starting at position ${start}`);
         }
-        value += escaped;
+        chars.push(escaped);
         this.index += 2;
         continue;
       }
       if (ch === quote) {
         this.index += 1;
-        return { type: "string", value, index: start };
+        return { type: "string", value: chars.join(""), index: start };
       }
-      value += ch;
+      chars.push(ch);
       this.index += 1;
     }
 
@@ -266,14 +266,12 @@ class Parser {
   private parseOrExpression(): ExpressionAST {
     this.enterDepth();
     try {
-      let left = this.parseAndExpression();
+      const parseRest = (left: ExpressionAST): ExpressionAST =>
+        this.matchOperator("||")
+          ? parseRest({ type: "logical", operator: "||", left, right: this.parseAndExpression() })
+          : left;
 
-      while (this.matchOperator("||")) {
-        const right = this.parseAndExpression();
-        left = { type: "logical", operator: "||", left, right };
-      }
-
-      return left;
+      return parseRest(this.parseAndExpression());
     } finally {
       this.exitDepth();
     }
@@ -282,14 +280,12 @@ class Parser {
   private parseAndExpression(): ExpressionAST {
     this.enterDepth();
     try {
-      let left = this.parseUnaryExpression();
+      const parseRest = (left: ExpressionAST): ExpressionAST =>
+        this.matchOperator("&&")
+          ? parseRest({ type: "logical", operator: "&&", left, right: this.parseUnaryExpression() })
+          : left;
 
-      while (this.matchOperator("&&")) {
-        const right = this.parseUnaryExpression();
-        left = { type: "logical", operator: "&&", left, right };
-      }
-
-      return left;
+      return parseRest(this.parseUnaryExpression());
     } finally {
       this.exitDepth();
     }
@@ -437,14 +433,14 @@ class Parser {
       );
     }
 
-    for (const segment of path) {
+    path.forEach((segment) => {
       if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(segment)) {
         throw new ExpressionParseError(`Invalid field segment '${segment}' in '${identifier}' at ${index}`);
       }
       if (BLOCKED_FIELD_NAMES.has(segment)) {
         throw new ExpressionParseError(`Blocked field segment '${segment}' in '${identifier}'`);
       }
-    }
+    });
 
     return {
       type: "field_ref",

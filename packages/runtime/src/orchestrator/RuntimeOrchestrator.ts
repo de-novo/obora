@@ -244,34 +244,38 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
       // Re-bind outputs from checkpoint as state
       // StateBinder operates through bind(), so we restore by writing snapshot entries
       // as completed step outputs to maintain state consistency
-      for (const [key, value] of Object.entries(snapshot)) {
-        // Skip non-serializable values (functions, symbols); restore all JSON-safe values including primitives
-        if (typeof value === "function" || typeof value === "symbol") continue;
-        await this.dependencies.stateBinder.bind(
-          {
-            success: true,
-            output: value,
-            stateChanges: [],
-            toolCalls: [],
-            metrics: {
-              startTime: new Date(0),
-              endTime: new Date(0),
-              durationMs: 0,
-              toolCallCount: 0,
-            },
+      await Object.entries(snapshot)
+        .filter(([, value]) => typeof value !== "function" && typeof value !== "symbol")
+        .reduce(
+          async (previous, [key, value]) => {
+            await previous;
+            await this.dependencies.stateBinder?.bind(
+              {
+                success: true,
+                output: value,
+                stateChanges: [],
+                toolCalls: [],
+                metrics: {
+                  startTime: new Date(0),
+                  endTime: new Date(0),
+                  durationMs: 0,
+                  toolCallCount: 0,
+                },
+              },
+              [{ source: "output", target: key }],
+            );
           },
-          [{ source: "output", target: key }],
+          Promise.resolve()
         );
-      }
     }
 
     if (checkpoint.stateSnapshot && typeof checkpoint.stateSnapshot === "object") {
       const snapshot = checkpoint.stateSnapshot as Record<string, unknown>;
-      for (const [key, value] of Object.entries(snapshot)) {
+      Object.entries(snapshot).forEach(([key, value]) => {
         if (key.startsWith(LOOP_KEY_PREFIX)) {
           execution.outputs[key] = value;
         }
-      }
+      });
     }
 
     // 5. Restore completed steps and execute remaining
@@ -280,7 +284,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
     const restoredSteps: string[] = [];
     const rerunSteps: string[] = [];
 
-    for (const policy of stepPolicies) {
+    stepPolicies.forEach((policy) => {
       if (policy.action === "restore") {
         completed.add(policy.stepName);
         execution.completedSteps = [...completed];
@@ -301,7 +305,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
       } else {
         rerunSteps.push(policy.stepName);
       }
-    }
+    });
 
     // Sync completedSteps so skip-only resumes report accurate state
     execution.completedSteps = [...completed];
@@ -552,7 +556,13 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
 
       const batchResults = await Promise.all(runnable.map((step) => this.runStep(execution, workflow, step, input, completed)));
 
-      for (const result of batchResults) {
+      const batchExit = await batchResults.reduce<Promise<Execution | undefined>>(
+        async (previous, result) => {
+          const existingExit = await previous;
+          if (existingExit) {
+            return existingExit;
+          }
+
         if (result.status === "completed") {
           completed.add(result.step.name);
           execution.completedSteps = [...completed];
@@ -568,7 +578,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
             );
           }
 
-          continue;
+          return undefined;
         }
 
         if (result.status === "back_edge") {
@@ -586,7 +596,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
               this.policyConfig,
             );
           }
-          continue;
+          return undefined;
         }
 
         if (result.status === "waiting") {
@@ -618,6 +628,11 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
         execution.endedAt = this.now();
         await this.recordExecutionEnd(execution);
         return this.cloneExecution(execution);
+        },
+        Promise.resolve(undefined)
+      );
+      if (batchExit) {
+        return batchExit;
       }
     }
 
@@ -774,7 +789,9 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
         metrics: result.metrics,
       }, { cellId });
 
-      for (const toolCall of result.toolCalls) {
+      await result.toolCalls.reduce(
+        async (previous, toolCall) => {
+          await previous;
         await this.recordAudit(execution.id, "tool_call", {
           stepName: step.name,
           toolName: toolCall.toolName,
@@ -787,7 +804,9 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
           result: toolCall.result,
           error: toolCall.error,
         }, { cellId, durationMs: toolCall.durationMs });
-      }
+        },
+        Promise.resolve()
+      );
 
       if (!result.success) {
         const failure = await this.handleStepFailure(execution, workflow, step, cellId, result.output, result.metrics.costUsd, completed);
@@ -852,14 +871,18 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
 
     const session = consensusGate.setup(consensusConfig);
     const votes = await this.options.consensusVoteProvider?.(step, this.cloneExecution(execution), consensusConfig) ?? [];
-    for (const vote of votes) {
+    await votes.reduce(
+      async (previous, vote) => {
+        await previous;
       consensusGate.registerVote(session.id, vote);
       await this.recordAudit(execution.id, "consensus_vote", {
         stepName: step.name,
         sessionId: session.id,
         vote,
       });
-    }
+      },
+      Promise.resolve()
+    );
     return consensusGate.evaluate(session.id);
   }
 
@@ -1011,9 +1034,9 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
     const steps = workflow.steps ?? [];
     const stepNames = new Set(steps.map((s) => s.name));
     const deps = new Map<string, string[]>();
-    for (const step of steps) {
+    steps.forEach((step) => {
       deps.set(step.name, step.depends_on ?? []);
-    }
+    });
 
     const canReachDependency = (source: string, target: string): boolean => {
       const visited = new Set<string>();
@@ -1023,14 +1046,14 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
         if (current === target) return true;
         if (visited.has(current)) continue;
         visited.add(current);
-        for (const parent of deps.get(current) ?? []) stack.push(parent);
+        stack.push(...(deps.get(current) ?? []));
       }
       return false;
     };
 
-    for (const step of steps) {
+    steps.forEach((step) => {
       const goto = step.on_fail?.goto;
-      if (!goto) continue;
+      if (!goto) return;
       if (!stepNames.has(goto)) {
         throw new Error(`Step '${step.name}' on_fail.goto references non-existent step '${goto}'`);
       }
@@ -1040,7 +1063,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
       if (!canReachDependency(step.name, goto)) {
         throw new Error(`Step '${step.name}': back-edge target '${goto}' must precede source '${step.name}' in dependency graph`);
       }
-    }
+    });
   }
 
   private getBackEdgeState(execution: Execution, source: string, target: string): BackEdgeState {
@@ -1085,19 +1108,19 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
     }
 
     const graph = this.getCachedGraph(execution, workflow);
-    for (const sourceStep of workflow.steps) {
+    workflow.steps.forEach((sourceStep) => {
       const target = sourceStep.on_fail?.goto;
       if (!target) {
-        continue;
+        return;
       }
       if (!this.isStepInBackEdgeChain(graph.edges, target, sourceStep.name, stepName)) {
-        continue;
+        return;
       }
 
       const state = this.getBackEdgeState(execution, sourceStep.name, target);
       state.costUsd += costUsd;
       this.setBackEdgeState(execution, state);
-    }
+    });
   }
 
   private isStepInBackEdgeChain(
@@ -1114,16 +1137,16 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
       const queue = [from];
       while (queue.length > 0) {
         const node = queue.shift()!;
-        const deps = edges.get(node) ?? new Set<string>();
-        for (const dep of deps) {
-          if (dep === to) {
-            return true;
-          }
-          if (!visited.has(dep)) {
+        const deps = [...(edges.get(node) ?? new Set<string>())];
+        if (deps.includes(to)) {
+          return true;
+        }
+        deps
+          .filter((dep) => !visited.has(dep))
+          .forEach((dep) => {
             visited.add(dep);
             queue.push(dep);
-          }
-        }
+          });
       }
       return false;
     };
@@ -1151,9 +1174,7 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
       scheduled.delete(current);
 
       const dependents = graph.edges.get(current) ?? new Set<string>();
-      for (const dependent of dependents) {
-        queue.push(dependent);
-      }
+      queue.push(...dependents);
     }
   }
 
@@ -1228,43 +1249,47 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
     const starvationMap = ((starvationRoot.__oboraStarvation as Record<string, string> | undefined) ??= {});
     const nowIso = this.now().toISOString();
 
-    for (const blocked of ready) {
-      const startedAt = starvationMap[blocked.name] ?? nowIso;
-      starvationMap[blocked.name] = startedAt;
-      const waitDurationMs = this.now().getTime() - new Date(startedAt).getTime();
-      const timedOut = waitDurationMs > this.starvationTimeoutMs;
+    await ready.reduce(
+      async (previous, blocked) => {
+        await previous;
+        const startedAt = starvationMap[blocked.name] ?? nowIso;
+        starvationMap[blocked.name] = startedAt;
+        const waitDurationMs = this.now().getTime() - new Date(startedAt).getTime();
+        const timedOut = waitDurationMs > this.starvationTimeoutMs;
 
-      await this.recordAudit(execution.id, "workflow.step_starvation_warning", {
-        blocked_step: blocked.name,
-        blocking_loop: { source: sourceStep, target: targetStep },
-        wait_duration_ms: waitDurationMs,
-        action: timedOut ? "timeout" : "continue",
-        timestamp: this.now().toISOString(),
-      });
+        await this.recordAudit(execution.id, "workflow.step_starvation_warning", {
+          blocked_step: blocked.name,
+          blocking_loop: { source: sourceStep, target: targetStep },
+          wait_duration_ms: waitDurationMs,
+          action: timedOut ? "timeout" : "continue",
+          timestamp: this.now().toISOString(),
+        });
 
-      if (!timedOut) {
-        continue;
-      }
+        if (!timedOut) {
+          return;
+        }
 
-      const blockedRecord = execution.stepRecords[blocked.name];
-      if (blockedRecord) {
-        blockedRecord.status = "failed";
-        blockedRecord.error = "starvation_timeout";
-        blockedRecord.endedAt = this.now();
-      }
-      const recoveryStrategy = this.extractRecoveryStrategy(blocked, execution) ?? this.options.defaultRecoveryStrategy;
-      const recovery = await this.runRecovery(
-        execution,
-        blocked,
-        `starvation:${blocked.name}`,
-        "starvation_timeout",
-        recoveryStrategy,
-      );
-      if (blockedRecord) {
-        blockedRecord.recovery = recovery;
-      }
-      await this.persistStep(execution, blocked.name);
-    }
+        const blockedRecord = execution.stepRecords[blocked.name];
+        if (blockedRecord) {
+          blockedRecord.status = "failed";
+          blockedRecord.error = "starvation_timeout";
+          blockedRecord.endedAt = this.now();
+        }
+        const recoveryStrategy = this.extractRecoveryStrategy(blocked, execution) ?? this.options.defaultRecoveryStrategy;
+        const recovery = await this.runRecovery(
+          execution,
+          blocked,
+          `starvation:${blocked.name}`,
+          "starvation_timeout",
+          recoveryStrategy,
+        );
+        if (blockedRecord) {
+          blockedRecord.recovery = recovery;
+        }
+        await this.persistStep(execution, blocked.name);
+      },
+      Promise.resolve()
+    );
   }
 
   private extractGateConfig(step: Step): StepGateDecision | undefined {
@@ -1683,30 +1708,30 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
     if (output && typeof output === "object" && "artifacts" in (output as Record<string, unknown>)) {
       const tagged = (output as Record<string, unknown>).artifacts;
       const list = Array.isArray(tagged) ? tagged : [tagged];
-      for (const item of list) {
-        if (!item || typeof item !== "object") continue;
+      list.forEach((item) => {
+        if (!item || typeof item !== "object") return;
         const rec = item as Record<string, unknown>;
         const name = typeof rec.name === "string" ? rec.name : undefined;
         const mime = typeof rec.mime === "string" ? rec.mime : "application/octet-stream";
         const data = rec.data;
-        if (!name || data === undefined || data === null) continue;
+        if (!name || data === undefined || data === null) return;
         const buf = Buffer.isBuffer(data) ? data : Buffer.from(typeof data === "string" ? data : JSON.stringify(data), "utf-8");
         candidates.push({ name, mime, data: buf });
-      }
+      });
     }
 
     // Rule 2) file_write tool calls
-    for (const tool of toolCalls) {
-      if (tool.toolName !== "file_write" || tool.status !== "success") continue;
+    toolCalls.forEach((tool) => {
+      if (tool.toolName !== "file_write" || tool.status !== "success") return;
       const params = tool.params as Record<string, unknown> | undefined;
-      if (!params) continue;
+      if (!params) return;
       const path = typeof params.path === "string" ? params.path : undefined;
       const content = typeof params.content === "string" ? params.content : undefined;
-      if (!path || content === undefined) continue;
+      if (!path || content === undefined) return;
       const parts = path.split(/[\\/]/);
       const name = parts[parts.length - 1] ?? `${stepName}.txt`;
       candidates.push({ name, mime: "text/plain", data: Buffer.from(content, "utf-8") });
-    }
+    });
 
     // Rule 3) structured JSON output fallback (only when no explicit artifacts were detected)
     if (candidates.length === 0 && output && typeof output === "object" && !Array.isArray(output)) {
@@ -1718,21 +1743,25 @@ export class DefaultRuntimeOrchestrator implements RuntimeOrchestratorContract {
     }
 
     const seen = new Set<string>();
-    for (const c of candidates) {
-      if (seen.has(c.name)) continue;
-      seen.add(c.name);
-      const saved = await store.save(runId, stepName, c.name, c.data, c.mime);
-      await adapter.saveArtifact({
-        id: saved.id,
-        runId: saved.runId,
-        stepName: saved.stepName,
-        name: saved.name,
-        mimeType: saved.mime,
-        sizeBytes: saved.size,
-        storageRef: saved.path,
-        createdAt: saved.createdAt,
-      });
-    }
+    await candidates.reduce(
+      async (previous, c) => {
+        await previous;
+        if (seen.has(c.name)) return;
+        seen.add(c.name);
+        const saved = await store.save(runId, stepName, c.name, c.data, c.mime);
+        await adapter.saveArtifact({
+          id: saved.id,
+          runId: saved.runId,
+          stepName: saved.stepName,
+          name: saved.name,
+          mimeType: saved.mime,
+          sizeBytes: saved.size,
+          storageRef: saved.path,
+          createdAt: saved.createdAt,
+        });
+      },
+      Promise.resolve()
+    );
   }
 
   private async recordAudit(

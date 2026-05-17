@@ -37,42 +37,32 @@ function getByPath(source: unknown, path: string): unknown {
   }
 
   const segments = parsePath(path);
-  let current: unknown = source;
-
-  for (const segment of segments) {
+  return segments.reduce<unknown>((current, segment) => {
     if (current === null || current === undefined) {
       return undefined;
     }
 
     if (Array.isArray(current)) {
       const index = Number(segment);
-      current = Number.isInteger(index) ? current[index] : undefined;
-      continue;
+      return Number.isInteger(index) ? current[index] : undefined;
     }
 
     if (typeof current === "object") {
-      current = (current as Record<string, unknown>)[segment];
-      continue;
+      return (current as Record<string, unknown>)[segment];
     }
 
     return undefined;
-  }
-
-  return current;
+  }, source);
 }
 
 function resolvePathFunction(path: string): unknown {
   const segments = path.split(".").map((segment) => segment.trim()).filter(Boolean);
-  let current: unknown = globalThis;
-
-  for (const segment of segments) {
+  return segments.reduce<unknown>((current, segment) => {
     if (current === null || current === undefined || (typeof current !== "object" && typeof current !== "function")) {
       return undefined;
     }
-    current = (current as Record<string, unknown>)[segment];
-  }
-
-  return current;
+    return (current as Record<string, unknown>)[segment];
+  }, globalThis);
 }
 
 type ConditionTokenType =
@@ -90,102 +80,87 @@ interface ConditionToken {
 }
 
 function tokenizeCondition(condition: string): ConditionToken[] {
-  const tokens: ConditionToken[] = [];
-  let index = 0;
+  const readQuotedString = (
+    cursor: number,
+    quote: string,
+    value = ""
+  ): { value: string; cursor: number } => {
+    if (cursor >= condition.length) {
+      throw new Error("Unterminated string literal in condition");
+    }
 
-  const push = (type: ConditionTokenType, value: string) => {
-    tokens.push({ type, value });
+    const current = condition[cursor] ?? "";
+    if (current === "\\") {
+      return readQuotedString(cursor + 2, quote, value + (condition[cursor + 1] ?? ""));
+    }
+    if (current === quote) {
+      return { value, cursor };
+    }
+    return readQuotedString(cursor + 1, quote, value + current);
   };
 
-  while (index < condition.length) {
+  const scan = (index: number, tokens: ConditionToken[]): ConditionToken[] => {
+    if (index >= condition.length) {
+      return tokens;
+    }
+
+    const push = (type: ConditionTokenType, value: string, nextIndex: number): ConditionToken[] =>
+      scan(nextIndex, [...tokens, { type, value }]);
     const char = condition[index] ?? "";
 
     if (/\s/.test(char)) {
-      index += 1;
-      continue;
+      return scan(index + 1, tokens);
     }
 
     const twoChar = condition.slice(index, index + 2);
     if (["&&", "||", "==", "!=", ">=", "<="].includes(twoChar)) {
-      push("operator", twoChar);
-      index += 2;
-      continue;
+      return push("operator", twoChar, index + 2);
     }
 
     if ([">", "<", "!"].includes(char)) {
-      push("operator", char);
-      index += 1;
-      continue;
+      return push("operator", char, index + 1);
     }
 
     if (char === "(" || char === ")") {
-      push("paren", char);
-      index += 1;
-      continue;
+      return push("paren", char, index + 1);
     }
 
     if (char === "\"" || char === "'") {
-      const quote = char;
-      let cursor = index + 1;
-      let value = "";
-      while (cursor < condition.length) {
-        const current = condition[cursor] ?? "";
-        if (current === "\\") {
-          value += condition[cursor + 1] ?? "";
-          cursor += 2;
-          continue;
-        }
-        if (current === quote) {
-          break;
-        }
-        value += current;
-        cursor += 1;
-      }
-      if (condition[cursor] !== quote) {
-        throw new Error("Unterminated string literal in condition");
-      }
-      push("string", value);
-      index = cursor + 1;
-      continue;
+      const quoted = readQuotedString(index + 1, char);
+      return push("string", quoted.value, quoted.cursor + 1);
     }
 
     const numberMatch = condition.slice(index).match(/^-?\d+(?:\.\d+)?/);
     if (numberMatch) {
-      push("number", numberMatch[0]);
-      index += numberMatch[0].length;
-      continue;
+      return push("number", numberMatch[0], index + numberMatch[0].length);
     }
 
     const identifierMatch = condition.slice(index).match(/^[A-Za-z_$][\w$.]*/);
     if (identifierMatch) {
       const value = identifierMatch[0];
       if (value === "true" || value === "false") {
-        push("boolean", value);
-      } else if (value === "null") {
-        push("null", value);
-      } else {
-        push("identifier", value);
+        return push("boolean", value, index + value.length);
       }
-      index += value.length;
-      continue;
+      if (value === "null") {
+        return push("null", value, index + value.length);
+      }
+      return push("identifier", value, index + value.length);
     }
 
     throw new Error(`Unsupported token in condition near '${condition.slice(index)}'`);
-  }
+  };
 
-  return tokens;
+  return scan(0, []);
 }
 
 function resolveConditionIdentifier(name: string, scope: Record<string, unknown>): unknown {
   const segments = name.split(".").filter(Boolean);
-  let current: unknown = scope;
-  for (const segment of segments) {
+  return segments.reduce<unknown>((current, segment) => {
     if (typeof current !== "object" || current === null) {
       return undefined;
     }
-    current = (current as Record<string, unknown>)[segment];
-  }
-  return current;
+    return (current as Record<string, unknown>)[segment];
+  }, scope);
 }
 
 function evaluateConditionExpression(
@@ -195,11 +170,11 @@ function evaluateConditionExpression(
   binding: StateBinding
 ): boolean {
   const tokens = tokenizeCondition(condition);
-  let cursor = 0;
+  const cursor = { value: 0 };
   const scope = { value, cellResult, binding } as Record<string, unknown>;
 
-  const peek = () => tokens[cursor];
-  const consume = () => tokens[cursor++];
+  const peek = () => tokens[cursor.value];
+  const consume = () => tokens[cursor.value++];
   const matchOperator = (...operators: string[]) => {
     const token = peek();
     if (token?.type === "operator" && operators.includes(token.value)) {
@@ -251,45 +226,57 @@ function evaluateConditionExpression(
   };
 
   const parseComparison = (): unknown => {
-    let left = parseUnary();
-    while (true) {
+    const parseComparisonRest = (left: unknown): unknown => {
       const operator = matchOperator("==", "!=", ">", "<", ">=", "<=");
       if (!operator) {
         return left;
       }
       const right = parseUnary();
-      switch (operator) {
-        case "==": left = left == right; break;
-        case "!=": left = left != right; break;
-        case ">": left = Number(left) > Number(right); break;
-        case "<": left = Number(left) < Number(right); break;
-        case ">=": left = Number(left) >= Number(right); break;
-        case "<=": left = Number(left) <= Number(right); break;
-      }
-    }
+      const next =
+        operator === "=="
+          ? left == right
+          : operator === "!="
+            ? left != right
+            : operator === ">"
+              ? Number(left) > Number(right)
+              : operator === "<"
+                ? Number(left) < Number(right)
+                : operator === ">="
+                  ? Number(left) >= Number(right)
+                  : Number(left) <= Number(right);
+      return parseComparisonRest(next);
+    };
+
+    return parseComparisonRest(parseUnary());
   };
 
   const parseAnd = (): unknown => {
-    let left = parseComparison();
-    while (matchOperator("&&")) {
+    const parseAndRest = (left: unknown): unknown => {
+      if (!matchOperator("&&")) {
+        return left;
+      }
       const right = parseComparison();
-      left = Boolean(left) && Boolean(right);
-    }
-    return left;
+      return parseAndRest(Boolean(left) && Boolean(right));
+    };
+
+    return parseAndRest(parseComparison());
   };
 
   const parseOr = (): unknown => {
-    let left = parseAnd();
-    while (matchOperator("||")) {
+    const parseOrRest = (left: unknown): unknown => {
+      if (!matchOperator("||")) {
+        return left;
+      }
       const right = parseAnd();
-      left = Boolean(left) || Boolean(right);
-    }
-    return left;
+      return parseOrRest(Boolean(left) || Boolean(right));
+    };
+
+    return parseOrRest(parseAnd());
   };
 
   const result = parseOr();
-  if (cursor < tokens.length) {
-    throw new Error(`Unexpected trailing token '${tokens[cursor]?.value ?? ""}' in condition`);
+  if (cursor.value < tokens.length) {
+    throw new Error(`Unexpected trailing token '${tokens[cursor.value]?.value ?? ""}' in condition`);
   }
 
   return Boolean(result);
@@ -310,11 +297,12 @@ export class DefaultStateBinder implements StateBinder {
   }
 
   async bind(cellResult: CellResult, bindings: StateBinding[]): Promise<void> {
-    for (const binding of bindings) {
+    await bindings.reduce<Promise<void>>(async (previous, binding) => {
+      await previous;
       const sourceValue = getByPath(cellResult, binding.source);
 
       if (binding.condition && !this.evaluateCondition(binding.condition, sourceValue, cellResult, binding)) {
-        continue;
+        return;
       }
 
       const targetValue = binding.transform
@@ -324,7 +312,7 @@ export class DefaultStateBinder implements StateBinder {
       const oldValue = this.readSafely(binding.target);
       this.stateStore.write(binding.target, targetValue);
       await this.auditRecorder?.recordStateChange(binding.target, oldValue, targetValue);
-    }
+    }, Promise.resolve());
   }
 
   private readSafely(path: string): unknown {

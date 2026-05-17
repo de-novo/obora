@@ -42,11 +42,11 @@ const packageVersions = publishablePackages.map((packageDir) => {
   return { packageDir, name: pkg.name, version: pkg.version };
 });
 
-for (const pkg of packageVersions) {
+packageVersions.forEach((pkg) => {
   if (pkg.version !== releaseVersion) {
     fail(`${pkg.name} version ${pkg.version} does not match release tag ${releaseTag}`);
   }
-}
+});
 
 const changelog = readFileSync(resolve(rootDir, "CHANGELOG.md"), "utf8");
 if (!changelog.includes(`## [${releaseVersion}]`)) {

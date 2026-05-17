@@ -178,13 +178,7 @@ const serializeAuditQueryParams = (params: AuditQueryParams): string => {
 };
 
 const parseApiError = async (response: Response): Promise<never> => {
-  let payload: unknown;
-
-  try {
-    payload = await response.json();
-  } catch {
-    payload = undefined;
-  }
+  const payload = await response.json().catch(() => undefined) as unknown;
 
   const errorCode =
     payload && typeof payload === 'object' && 'code' in payload && typeof payload.code === 'string'

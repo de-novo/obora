@@ -48,20 +48,25 @@ export class HealthChecker {
 
   /** Run all registered checks and return aggregate status */
   async check(): Promise<HealthStatus> {
-    const results: HealthCheckResult[] = [];
-
-    for (const [name, checkFn] of this.checks) {
-      try {
-        const result = await checkFn();
-        results.push({ ...result, name });
-      } catch (err) {
-        results.push({
-          name,
-          status: "fail",
-          message: err instanceof Error ? err.message : String(err),
-        });
-      }
-    }
+    const results = await [...this.checks].reduce<Promise<HealthCheckResult[]>>(
+      async (previous, [name, checkFn]) => {
+        const results = await previous;
+        try {
+          const result = await checkFn();
+          return [...results, { ...result, name }];
+        } catch (err) {
+          return [
+            ...results,
+            {
+              name,
+              status: "fail" as const,
+              message: err instanceof Error ? err.message : String(err),
+            },
+          ];
+        }
+      },
+      Promise.resolve([])
+    );
 
     const status: HealthStatus = {
       healthy: results.every((r) => r.status !== "fail"),
@@ -71,13 +76,13 @@ export class HealthChecker {
 
     this.lastStatus = status;
 
-    for (const listener of this.listeners) {
+    this.listeners.forEach((listener) => {
       try {
         listener(status);
       } catch {
         // ignore listener errors
       }
-    }
+    });
 
     return status;
   }

@@ -40,10 +40,12 @@ export interface BlackboardKnowledgeSnapshot {
   };
 }
 
-let knowledgeProvider: KnowledgeProvider = async () => [];
+const knowledgeProviderState: { provider: KnowledgeProvider } = {
+  provider: async () => [],
+};
 
 export function configureKnowledgeProvider(provider: KnowledgeProvider): void {
-  knowledgeProvider = provider;
+  knowledgeProviderState.provider = provider;
 }
 
 function toIso(value: string | Date | undefined): string {
@@ -92,7 +94,7 @@ export function mapBlackboardToKnowledgeResults(snapshot: BlackboardKnowledgeSna
 
 export function configureKnowledgeProviderFromBlackboard(snapshot: BlackboardKnowledgeSnapshot): void {
   const entries = mapBlackboardToKnowledgeResults(snapshot);
-  knowledgeProvider = async () => entries;
+  knowledgeProviderState.provider = async () => entries;
 }
 
 export interface SqliteKnowledgeBridgeOptions {
@@ -127,13 +129,14 @@ export async function configureKnowledgeProviderFromSqlite(
       .all(...(options.runId ? [options.runId] : []), options.limit ?? DEFAULTS.KNOWLEDGE_SQLITE_LIMIT);
 
     const entries: KnowledgeResult[] = rows.map((row) => {
-      let detailObj: Record<string, unknown> = {};
-      try {
+      const detailObj: Record<string, unknown> = (() => {
+        try {
         const parsed = JSON.parse(String(row.detail ?? "{}")) as unknown;
-        if (parsed && typeof parsed === "object") detailObj = parsed as Record<string, unknown>;
-      } catch {
-        // ignore parse failure
-      }
+          return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+        } catch {
+          return {};
+        }
+      })();
 
       const tags = Array.isArray(detailObj.tags)
         ? detailObj.tags.filter((x): x is string => typeof x === "string")
@@ -151,7 +154,7 @@ export async function configureKnowledgeProviderFromSqlite(
       };
     });
 
-    knowledgeProvider = async () => entries;
+    knowledgeProviderState.provider = async () => entries;
   } finally {
     db.close();
   }
@@ -163,7 +166,7 @@ export async function queryKnowledge(params: QueryKnowledgeParams): Promise<Know
   const cached = getCachedKnowledge(params);
   if (cached) return cached;
 
-  const entries = await knowledgeProvider();
+  const entries = await knowledgeProviderState.provider();
   const normalizedText = params.textQuery?.toLowerCase().trim();
 
   const filtered = entries.filter((entry) => {

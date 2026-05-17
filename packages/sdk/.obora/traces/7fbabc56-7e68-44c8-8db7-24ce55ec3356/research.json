@@ -1,0 +1,35 @@
+{
+  "step": "research",
+  "agent": "researcher",
+  "timestamp": "2026-05-16T17:09:38.138Z",
+  "version": "1.0",
+  "task_summary": "Produce structured research notes, findings, and a synthesis.",
+  "methodology": "Standard agent execution",
+  "tools_used": [],
+  "key_decisions": [],
+  "decision_rationale": "",
+  "alternatives_considered": [],
+  "assumptions": [],
+  "constraints": [],
+  "risks_identified": [],
+  "inputs_processed": [
+    "problem_frame: ok"
+  ],
+  "dependencies_used": [
+    {
+      "step": "problem_frame",
+      "purpose": "Input from upstream step 'problem_frame'"
+    }
+  ],
+  "output_summary": "ok",
+  "output_format": "text",
+  "artifacts_created": [],
+  "issues_encountered": [],
+  "workarounds_applied": [],
+  "confidence_level": "high",
+  "known_limitations": [],
+  "implications_for_next": [],
+  "recommended_next": [],
+  "open_questions": [],
+  "context_for_successors": "Step 'research' completed by researcher. Output: ok"
+}

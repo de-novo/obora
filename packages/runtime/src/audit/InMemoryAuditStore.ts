@@ -42,37 +42,33 @@ export class InMemoryAuditStore implements AuditTrail {
         ? new Set<AuditEventType>([filter.type])
         : undefined;
 
-    let result = this.events.filter((event) => {
-      if (filter.executionId && event.executionId !== filter.executionId) {
-        return false;
-      }
+    return this.events
+      .filter((event) => {
+        if (filter.executionId && event.executionId !== filter.executionId) {
+          return false;
+        }
 
-      if (filter.cellId && event.cellId !== filter.cellId) {
-        return false;
-      }
+        if (filter.cellId && event.cellId !== filter.cellId) {
+          return false;
+        }
 
-      if (requestedTypes && !requestedTypes.has(event.type)) {
-        return false;
-      }
+        if (requestedTypes && !requestedTypes.has(event.type)) {
+          return false;
+        }
 
-      if (filter.from && event.timestamp < filter.from) {
-        return false;
-      }
+        if (filter.from && event.timestamp < filter.from) {
+          return false;
+        }
 
-      if (filter.to && event.timestamp > filter.to) {
-        return false;
-      }
+        if (filter.to && event.timestamp > filter.to) {
+          return false;
+        }
 
-      return true;
-    });
-
-    result = [...result].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-
-    if (filter.limit && filter.limit > 0) {
-      result = result.slice(0, filter.limit);
-    }
-
-    return result.map(cloneEvent);
+        return true;
+      })
+      .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
+      .slice(0, filter.limit && filter.limit > 0 ? filter.limit : undefined)
+      .map(cloneEvent);
   }
 
   async replay(options: ReplayOptions): Promise<ReplayResult> {
@@ -89,8 +85,8 @@ export class InMemoryAuditStore implements AuditTrail {
     const sequence = await this.query({ executionId: options.executionId });
     const startedAt = new Date();
 
-    for (let index = 0; index < sequence.length; index += 1) {
-      const current = sequence[index];
+    await sequence.reduce<Promise<void>>(async (previousEvent, current, index) => {
+      await previousEvent;
       const next = sequence[index + 1];
 
       if (options.onEvent) {
@@ -103,7 +99,7 @@ export class InMemoryAuditStore implements AuditTrail {
           await sleep(deltaMs / speed);
         }
       }
-    }
+    }, Promise.resolve());
 
     const completedAt = new Date();
 

@@ -1,4 +1,4 @@
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
 import fastifyCors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
 import fastifyWebsocket from '@fastify/websocket';
@@ -29,6 +29,7 @@ import { registerMetricsRoutes } from './routes/metrics.js';
 
 export interface DashboardServerDependencies {
   auditStore?: AuditStore;
+  logger?: FastifyServerOptions['logger'];
   policyStore?: PolicyStore;
   policyEngine?: PolicyEngineAdapter;
   notificationEngine?: NotificationEngine;
@@ -109,7 +110,7 @@ export const createDashboardServer = async (
 ): Promise<DashboardServerHandle> => {
   const config = createDashboardConfig(overrides);
   const app = Fastify({
-    logger: true,
+    logger: dependencies.logger ?? true,
   });
 
   await app.register(fastifyCors, {

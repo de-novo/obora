@@ -31,13 +31,13 @@ function fail(message) {
   process.exitCode = 1;
 }
 
-for (const contract of contracts) {
-  for (const file of [contract.shim, contract.declaration]) {
+contracts.forEach((contract) => {
+  [contract.shim, contract.declaration].forEach((file) => {
     if (!fs.existsSync(file)) {
       fail(`${contract.name} typecheck-public verification is missing ${file}`);
     }
-  }
-}
+  });
+});
 
 if (process.exitCode) {
   process.exit(process.exitCode);
@@ -68,7 +68,7 @@ function exportedNames(file) {
   return new Set(checker.getExportsOfModule(symbol).map((item) => item.name));
 }
 
-for (const contract of contracts) {
+contracts.forEach((contract) => {
   const shimExports = exportedNames(contract.shim);
   const publicExports = exportedNames(contract.declaration);
   const missing = [...shimExports].filter((name) => !publicExports.has(name)).sort();
@@ -77,13 +77,13 @@ for (const contract of contracts) {
     fail(
       `${contract.name} typecheck-public shim declares names absent from built public declarations: ${missing.join(", ")}`
     );
-    continue;
+    return;
   }
 
   console.log(
     `[PASS] ${contract.name} typecheck-public shim exports ${shimExports.size} names covered by ${contract.declaration}.`
   );
-}
+});
 
 if (process.exitCode) {
   process.exit(process.exitCode);

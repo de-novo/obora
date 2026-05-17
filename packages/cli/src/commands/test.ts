@@ -51,31 +51,32 @@ export function createTestCommand(): Command {
 
           const fixtureStat = await stat(fixturePath).catch(() => null);
 
-          let fixtures;
-          if (!fixtureStat) {
-            if (fixturePath === "./tests") {
+          const fixtures = await (async () => {
+            if (!fixtureStat) {
+              if (fixturePath === "./tests") {
+                throw new CLIError(
+                  "No test target provided and ./tests was not found. Use `obora test <path>` or `--fixture <path>`.",
+                  ExitCode.VALIDATION_ERROR
+                );
+              }
+
               throw new CLIError(
-                "No test target provided and ./tests was not found. Use `obora test <path>` or `--fixture <path>`.",
+                `Test target not found: ${fixturePath}. Check the path and try again.`,
                 ExitCode.VALIDATION_ERROR
               );
             }
 
-            throw new CLIError(
-              `Test target not found: ${fixturePath}. Check the path and try again.`,
-              ExitCode.VALIDATION_ERROR
-            );
-          }
-
-          if (fixtureStat.isDirectory()) {
-            fixtures = await loadFixtures(fixturePath);
-          } else if (fixtureStat.isFile() && isYamlFile(fixturePath)) {
-            fixtures = [await loadFixture(fixturePath)];
-          } else {
+            if (fixtureStat.isDirectory()) {
+              return loadFixtures(fixturePath);
+            }
+            if (fixtureStat.isFile() && isYamlFile(fixturePath)) {
+              return [await loadFixture(fixturePath)];
+            }
             throw new CLIError(
               `Unsupported test target: ${fixturePath}. Use a .yaml/.yml fixture or a directory.`,
               ExitCode.VALIDATION_ERROR
             );
-          }
+          })();
 
           const selected = fixtures.filter((fixture) =>
             matchesFilter(fixture.name, options.filter)
@@ -97,19 +98,22 @@ export function createTestCommand(): Command {
             return;
           }
 
-          const results = [];
-          for (const fixture of selected) {
+          const results = await selected.reduce<Promise<Awaited<ReturnType<typeof runWorkflowTest>>[]>>(
+            async (previousResults, fixture) => {
+              const accumulated = await previousResults;
             if (globalOpts.verbose && !globalOpts.quiet && !jsonOutput) {
               formatter.step(`Running test fixture: ${fixture.name}`);
             }
 
             const result = await runWorkflowTest(fixtureToTestCase(fixture));
-            results.push(result);
 
             if (globalOpts.verbose && !globalOpts.quiet && !jsonOutput) {
               formatter.step(`Finished: ${fixture.name} (${result.duration}ms)`);
             }
-          }
+              return [...accumulated, result];
+            },
+            Promise.resolve([])
+          );
 
           const failed = results.filter((result) => !result.passed);
 
@@ -123,17 +127,15 @@ export function createTestCommand(): Command {
               results,
             });
           } else if (!globalOpts.quiet) {
-            for (const result of results) {
+            results.forEach((result) => {
               if (result.passed) {
                 formatter.success(`${result.name} (${result.duration}ms)`);
-                continue;
+                return;
               }
 
               formatter.error(`${result.name} (${result.duration}ms)`);
-              for (const failure of result.failures) {
-                formatter.error(`  - ${failure.message}`);
-              }
-            }
+              result.failures.forEach((failure) => formatter.error(`  - ${failure.message}`));
+            });
 
             formatter.info(
               `Test summary: ${results.length - failed.length}/${results.length} passed, ${failed.length} failed`

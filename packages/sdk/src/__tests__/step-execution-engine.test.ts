@@ -5,6 +5,14 @@ import type { BlackboardManager, BlackboardSnapshot } from "../blackboard/blackb
 import type { ExecutionMetrics } from "../blackboard/execution-observer.js";
 import type { WorkflowStep } from "../workflow.js";
 import { RepairLoopTracker } from "../execution/repair-loop-tracker.js";
+import type { ValidationResult } from "../validation-repair.js";
+
+const createValidationResult = (summary: string): ValidationResult => ({
+  passed: false,
+  summary,
+  failedChecks: [{ name: "check", message: summary }],
+  signature: summary,
+});
 
 describe("StepExecutionEngine", () => {
   const createMockEventBus = (): EventBus =>
@@ -161,6 +169,29 @@ describe("StepExecutionEngine", () => {
       expect(ctx.latestValidation).toBeDefined();
       expect(ctx.previousValidationResults).toHaveLength(1);
       expect(ctx.repeatedSignatureCount).toBe(1);
+    });
+
+    it("caps previous validation history to the most recent entries", () => {
+      const engine = createEngine();
+      const step: WorkflowStep = { name: "s1", config: { repair_loop: { enabled: true, validation_step: "validate" } } };
+      const states = new Map([
+        ["s1", {
+          attempt: 9,
+          history: Array.from({ length: 8 }, (_, index) => createValidationResult(`failure-${index}`)),
+          latestValidation: createValidationResult("failure-7"),
+          repeatedSignatureCount: 3,
+          lastSignature: "failure-7",
+        }],
+      ]);
+      const ctx = engine.buildRepairContext(step, states)!;
+
+      expect(ctx.previousValidationResults?.map((result) => result.summary)).toEqual([
+        "failure-3",
+        "failure-4",
+        "failure-5",
+        "failure-6",
+        "failure-7",
+      ]);
     });
   });
 

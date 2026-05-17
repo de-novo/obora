@@ -3,6 +3,14 @@
  * @description 딥 클론 및 불변성 유틸리티
  */
 
+const isMergeableRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null &&
+  typeof value === "object" &&
+  !Array.isArray(value) &&
+  !(value instanceof Date) &&
+  !(value instanceof Map) &&
+  !(value instanceof Set);
+
 /**
  * 깊은 복사
  * @param obj - 복사할 객체
@@ -26,41 +34,34 @@ export function deepClone<T>(obj: T, cloneMap = new WeakMap<object, object>()): 
   if (obj instanceof Map) {
     const clonedMap = new Map();
     cloneMap.set(obj as object, clonedMap);
-    for (const [key, value] of obj.entries()) {
+    Array.from(obj.entries()).forEach(([key, value]) => {
       clonedMap.set(deepClone(key, cloneMap), deepClone(value, cloneMap));
-    }
+    });
     return clonedMap as T;
   }
 
   if (obj instanceof Set) {
     const clonedSet = new Set();
     cloneMap.set(obj as object, clonedSet);
-    for (const value of obj) {
+    Array.from(obj.values()).forEach((value) => {
       clonedSet.add(deepClone(value, cloneMap));
-    }
+    });
     return clonedSet as T;
   }
 
-  if (obj instanceof Array) {
+  if (Array.isArray(obj)) {
     const clonedArray: unknown[] = [];
     cloneMap.set(obj as object, clonedArray);
-    for (let i = 0; i < obj.length; i++) {
-      clonedArray[i] = deepClone(obj[i], cloneMap);
-    }
+    clonedArray.push(...obj.map((item) => deepClone(item, cloneMap)));
     return clonedArray as T;
   }
 
   // 일반 객체
   const clonedObj = {} as T;
   cloneMap.set(obj as object, clonedObj as object);
-  for (const key in obj) {
-    if (Object.prototype.hasOwnProperty.call(obj, key)) {
-      (clonedObj as Record<string, unknown>)[key] = deepClone(
-        (obj as Record<string, unknown>)[key],
-        cloneMap
-      );
-    }
-  }
+  Object.entries(obj as Record<string, unknown>).forEach(([key, value]) => {
+    (clonedObj as Record<string, unknown>)[key] = deepClone(value, cloneMap);
+  });
   return clonedObj;
 }
 
@@ -78,12 +79,12 @@ export function deepFreeze<T>(obj: T): Readonly<T> {
 
   const propNames = Object.getOwnPropertyNames(obj);
 
-  for (const name of propNames) {
+  propNames.forEach((name) => {
     const value = (obj as Record<string, unknown>)[name];
     if (value !== null && typeof value === "object") {
       deepFreeze(value);
     }
-  }
+  });
 
   return obj as Readonly<T>;
 }
@@ -98,30 +99,25 @@ export function deepFreeze<T>(obj: T): Readonly<T> {
  */
 export function immutableUpdate<T>(obj: T, path: string, updater: (value: unknown) => unknown): T {
   const segments = path.split(".");
-  const newObj = deepClone(obj);
+  const childAt = (current: unknown, segment: string): unknown =>
+    current !== null && typeof current === "object"
+      ? (current as Record<string, unknown>)[segment]
+      : undefined;
+  const assignAt = (current: unknown, segment: string, value: unknown): unknown => {
+    const next = current !== null && typeof current === "object" ? deepClone(current) : {};
+    (next as Record<string, unknown>)[segment] = value;
+    return next;
+  };
+  const updateAt = (current: unknown, [segment, ...rest]: ReadonlyArray<string>): unknown =>
+    segment === undefined
+      ? updater(current)
+      : assignAt(
+          current,
+          segment,
+          rest.length === 0 ? updater(childAt(current, segment)) : updateAt(childAt(current, segment), rest)
+        );
 
-  let current: Record<string, unknown> = newObj as Record<string, unknown>;
-  const pathStack: string[] = [];
-
-  // 해당 경로까지 이동
-  for (let i = 0; i < segments.length - 1; i++) {
-    const segment = segments[i];
-    pathStack.push(segment);
-
-    if (!(segment in current)) {
-      (current[segment] as Record<string, unknown>) = {};
-    } else {
-      // 불변성 유지를 위해 복사
-      current[segment] = deepClone(current[segment]);
-    }
-    current = current[segment] as Record<string, unknown>;
-  }
-
-  // 마지막 경로에 업데이트
-  const lastSegment = segments[segments.length - 1];
-  current[lastSegment] = updater(current[lastSegment]);
-
-  return newObj;
+  return updateAt(obj, segments) as T;
 }
 
 /**
@@ -130,11 +126,7 @@ export function immutableUpdate<T>(obj: T, path: string, updater: (value: unknow
  * @returns 일반 객체
  */
 export function mapToObject<K extends string, V>(map: Map<K, V>): Record<K, V> {
-  const obj = {} as Record<K, V>;
-  for (const [key, value] of map.entries()) {
-    obj[key] = value;
-  }
-  return obj;
+  return Object.fromEntries(map.entries()) as Record<K, V>;
 }
 
 /**
@@ -153,28 +145,23 @@ export function objectToMap<K extends string, V>(obj: Record<K, V>): Map<K, V> {
  * @returns 병합된 새 객체
  */
 export function merge<T extends Record<string, unknown>>(target: T, ...sources: Partial<T>[]): T {
-  const result = deepClone(target);
+  const mergeValue = (existingValue: unknown, value: unknown): unknown =>
+    isMergeableRecord(value) && isMergeableRecord(existingValue)
+      ? merge(existingValue, value)
+      : value !== null && typeof value === "object"
+        ? deepClone(value)
+        : value;
 
-  for (const source of sources) {
-    for (const key in source) {
-      if (Object.prototype.hasOwnProperty.call(source, key)) {
-        const value = source[key];
-        if (value !== null && typeof value === "object") {
-          const existingValue = (result as Record<string, unknown>)[key];
-          if (existingValue !== null && typeof existingValue === "object") {
-            (result as Record<string, unknown>)[key] = merge(
-              existingValue as Record<string, unknown>,
-              value as Record<string, unknown>
-            );
-          } else {
-            (result as Record<string, unknown>)[key] = deepClone(value);
-          }
-        } else {
-          (result as Record<string, unknown>)[key] = value;
-        }
-      }
-    }
-  }
-
-  return result;
+  return sources.reduce<T>(
+    (result, source) =>
+      Object.entries(source).reduce<T>(
+        (current, [key, value]) =>
+          ({
+            ...current,
+            [key]: mergeValue((current as Record<string, unknown>)[key], value),
+          }) as T,
+        result
+      ),
+    deepClone(target)
+  );
 }

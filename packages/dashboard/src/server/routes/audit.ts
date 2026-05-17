@@ -156,18 +156,18 @@ export const registerAuditRoutes = (
       };
 
       const searchParams = new URLSearchParams();
-      for (const [key, value] of Object.entries(query)) {
+      Object.entries(query).forEach(([key, value]) => {
         if (value === undefined) {
-          continue;
+          return;
         }
 
         if (Array.isArray(value)) {
           value.forEach((item) => searchParams.append(key, item));
-          continue;
+          return;
         }
 
         searchParams.set(key, value);
-      }
+      });
 
       const response = await app.inject({
         method: 'GET',

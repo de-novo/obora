@@ -27,12 +27,12 @@ export function deepFreeze<T>(value: T): Readonly<T> {
 
   const target = value as Record<string | symbol, unknown>;
 
-  for (const key of Reflect.ownKeys(target)) {
+  Reflect.ownKeys(target).forEach((key) => {
     const child = target[key];
     if (child !== null && typeof child === "object") {
       deepFreeze(child);
     }
-  }
+  });
 
   return Object.freeze(value) as Readonly<T>;
 }

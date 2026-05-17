@@ -28,7 +28,8 @@ export const consensusStrategy = {
       );
 
       try {
-        for (const participant of participants) {
+        await participants.reduce<Promise<void>>(async (previous, participant) => {
+          await previous;
           const response = await services.requestForStep(
             step,
             {
@@ -48,7 +49,7 @@ export const consensusStrategy = {
             vote,
             response: responseText,
           });
-        }
+        }, Promise.resolve());
       } finally {
         consensusSignal?.cleanup();
       }

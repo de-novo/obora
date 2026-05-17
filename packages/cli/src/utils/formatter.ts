@@ -13,10 +13,10 @@ function shouldUseColorByDefault(): boolean {
   return Boolean(process.stdout.isTTY && process.stderr.isTTY);
 }
 
-let colorEnabled = shouldUseColorByDefault();
+const formatterState = { colorEnabled: shouldUseColorByDefault() };
 
 function colorize(color: keyof typeof ANSI, message: string): string {
-  if (!colorEnabled) {
+  if (!formatterState.colorEnabled) {
     return message;
   }
 
@@ -25,7 +25,7 @@ function colorize(color: keyof typeof ANSI, message: string): string {
 
 export const formatter = {
   setColorEnabled(enabled: boolean): void {
-    colorEnabled = enabled;
+    formatterState.colorEnabled = enabled;
   },
 
   success(message: string): void {

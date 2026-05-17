@@ -141,9 +141,9 @@ export const createWsBridge = (server: FastifyInstance, options: WsBridgeOptions
 
     const serialized = JSON.stringify(payload);
 
-    for (const client of clients) {
+    clients.forEach((client) => {
       client.send(serialized);
-    }
+    });
 
     notifyEvent(event);
   };
@@ -200,12 +200,12 @@ export const createWsBridge = (server: FastifyInstance, options: WsBridgeOptions
     }
 
     const missingEvents = eventBuffer.slice(lastEventIndex + 1);
-    for (const missingEvent of missingEvents) {
+    missingEvents.forEach((missingEvent) => {
       sendMessage(socket, {
         type: 'event',
         payload: missingEvent,
       });
-    }
+    });
 
     sendMessage(socket, {
       type: 'ack',

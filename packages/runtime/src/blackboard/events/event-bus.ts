@@ -240,13 +240,14 @@ export class EventBus {
     eventType: T | `${EventCategory}.*` | "*",
     handler: EventHandler<EventByType<T>>
   ): void {
-    for (const sub of this.subscriptions) {
-      if (sub.eventType === eventType && sub.handler === handler) {
-        this.subscriptions.delete(sub);
-        this.updateSubscriberStats();
-        this.debugLog(`Unsubscribed from event type: ${eventType}`);
-        return;
-      }
+    const subscription = Array.from(this.subscriptions).find(
+      (sub) => sub.eventType === eventType && sub.handler === handler
+    );
+
+    if (subscription) {
+      this.subscriptions.delete(subscription);
+      this.updateSubscriberStats();
+      this.debugLog(`Unsubscribed from event type: ${eventType}`);
     }
   }
 
@@ -257,15 +258,9 @@ export class EventBus {
   unsubscribeAll<T extends EventType>(eventType?: T | `${EventCategory}.*` | "*"): void {
     if (eventType) {
       // 특정 타입의 구독만 해제
-      const toRemove: Subscription<Event>[] = [];
-      for (const sub of this.subscriptions) {
-        if (sub.eventType === eventType) {
-          toRemove.push(sub);
-        }
-      }
-      for (const sub of toRemove) {
-        this.subscriptions.delete(sub);
-      }
+      Array.from(this.subscriptions)
+        .filter((sub) => sub.eventType === eventType)
+        .forEach((sub) => this.subscriptions.delete(sub));
       this.debugLog(`Unsubscribed all from event type: ${eventType}`);
     } else {
       // 모든 구독 해제
@@ -301,19 +296,8 @@ export class EventBus {
     this.addToHistory(event);
 
     // 구독자들에게 이벤트 전달
-    const toRemove: Subscription<Event>[] = [];
-
-    for (const sub of this.subscriptions) {
-      // 패턴 매칭 확인
-      if (!this.matchesPattern(sub.eventType, event.type)) {
-        continue;
-      }
-
-      // 필터 확인
-      if (sub.filter && !this.applyFilter(event, sub.filter)) {
-        continue;
-      }
-
+    const subscriptions = this.subscriptionsFor(event);
+    subscriptions.forEach((sub) => {
       // 핸들러 실행
       try {
         const result = sub.handler(event);
@@ -346,18 +330,10 @@ export class EventBus {
           this.emitError(error, event, sub.eventType);
         }
       }
-
-      // 일회성 구독인 경우 제거 대기열에 추가
-      if (sub.once) {
-        toRemove.push(sub);
-      }
-    }
+    });
 
     // 일회성 구독 제거
-    for (const sub of toRemove) {
-      this.subscriptions.delete(sub);
-      this.updateSubscriberStats();
-    }
+    this.removeSubscriptions(subscriptions.filter((sub) => sub.once));
   }
 
   /**
@@ -375,42 +351,19 @@ export class EventBus {
     this.addToHistory(event);
 
     // 구독자들에게 이벤트 전달 (비동기)
-    const promises: Promise<unknown>[] = [];
-    const toRemove: Subscription<Event>[] = [];
-
-    for (const sub of this.subscriptions) {
-      // 패턴 매칭 확인
-      if (!this.matchesPattern(sub.eventType, event.type)) {
-        continue;
-      }
-
-      // 필터 확인
-      if (sub.filter && !this.applyFilter(event, sub.filter)) {
-        continue;
-      }
-
-      // 핸들러 실행
+    const subscriptions = this.subscriptionsFor(event);
+    const promises = subscriptions.flatMap((sub): Promise<unknown>[] => {
       try {
         const result = sub.handler(event);
-
-        if (result instanceof Promise) {
-          promises.push(result);
-        }
+        return result instanceof Promise ? [result] : [];
       } catch (error) {
         console.error(`Error in event handler:`, error);
+        return [];
       }
-
-      // 일회성 구독인 경우 제거 대기열에 추가
-      if (sub.once) {
-        toRemove.push(sub);
-      }
-    }
+    });
 
     // 일회성 구독 제거
-    for (const sub of toRemove) {
-      this.subscriptions.delete(sub);
-      this.updateSubscriberStats();
-    }
+    this.removeSubscriptions(subscriptions.filter((sub) => sub.once));
 
     // 모든 비동기 핸들러 완료 대기
     await Promise.allSettled(promises);
@@ -423,9 +376,7 @@ export class EventBus {
   emitBatch(events: Event[]): void {
     this.debugLog(`Emitting batch of ${events.length} events`);
 
-    for (const event of events) {
-      this.emit(event);
-    }
+    events.forEach((event) => this.emit(event));
   }
 
   // === 히스토리 API ===
@@ -446,34 +397,32 @@ export class EventBus {
     },
     limitArg?: number
   ): Event[] {
-    let events = this.history;
-
     // 타입 필터링
-    if (filter?.type) {
-      events = events.filter((e) => this.matchesPattern(filter.type!, e.type));
-    }
+    const typeFiltered = filter?.type
+      ? this.history.filter((event) => this.matchesPattern(filter.type!, event.type))
+      : this.history;
 
     // 소스 필터링
-    if (filter?.source) {
-      events = events.filter((e) => e.source === filter.source);
-    }
+    const sourceFiltered = filter?.source
+      ? typeFiltered.filter((event) => event.source === filter.source)
+      : typeFiltered;
 
     // 시간 필터링
-    if (filter?.since) {
-      events = events.filter((e) => e.timestamp >= filter.since!);
-    }
+    const sinceFiltered = filter?.since
+      ? sourceFiltered.filter((event) => event.timestamp >= filter.since!)
+      : sourceFiltered;
 
-    if (filter?.until) {
-      events = events.filter((e) => e.timestamp <= filter.until!);
-    }
+    const untilFiltered = filter?.until
+      ? sinceFiltered.filter((event) => event.timestamp <= filter.until!)
+      : sinceFiltered;
 
     // 제한 (filter.limit 또는 두 번째 인자 사용)
     const limit = filter?.limit ?? limitArg;
     if (limit !== undefined && limit > 0) {
-      events = events.slice(-limit);
+      return untilFiltered.slice(-limit);
     }
 
-    return events;
+    return untilFiltered;
   }
 
   /**
@@ -484,9 +433,7 @@ export class EventBus {
   replay(events: Event[]): void {
     this.debugLog(`Replaying ${events.length} events`);
 
-    for (const event of events) {
-      this.emit(event);
-    }
+    events.forEach((event) => this.emit(event));
   }
 
   /**
@@ -503,17 +450,12 @@ export class EventBus {
    * 통계 조회
    */
   getStats(): Readonly<EventBusStats> & { eventsByType: Record<string, number> } {
-    const eventsByType: Record<string, number> = {};
-    for (const [type, count] of this.stats.emittedByType.entries()) {
-      eventsByType[type] = count;
-    }
-
     return {
       totalEmitted: this.stats.totalEmitted,
       emittedByType: new Map(this.stats.emittedByType),
       subscriberCount: this.stats.subscriberCount,
       subscribersByType: new Map(this.stats.subscribersByType),
-      eventsByType,
+      eventsByType: Object.fromEntries(this.stats.emittedByType.entries()),
     };
   }
 
@@ -531,19 +473,9 @@ export class EventBus {
    * 특정 타입의 모든 구독 해제
    */
   removeSubscribersForType(eventType: EventType | `${EventCategory}.*` | "*"): void {
-    const toRemove: Subscription<Event>[] = [];
-
-    for (const sub of this.subscriptions) {
-      if (sub.eventType === eventType) {
-        toRemove.push(sub);
-      }
-    }
-
-    for (const sub of toRemove) {
-      this.subscriptions.delete(sub);
-    }
-
-    this.updateSubscriberStats();
+    this.removeSubscriptions(
+      Array.from(this.subscriptions).filter((sub) => sub.eventType === eventType)
+    );
     this.debugLog(`Removed all subscribers for event type: ${eventType}`);
   }
 
@@ -559,23 +491,22 @@ export class EventBus {
     predicate?: (event: EventByType<T>) => boolean
   ): Promise<EventByType<T>> {
     return new Promise((resolve, reject) => {
-      let unsubscribe: Unsubscribe | null = null;
-      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      const state: { unsubscribe?: Unsubscribe; timeoutId?: ReturnType<typeof setTimeout> } = {};
 
       const cleanup = () => {
-        if (unsubscribe) {
-          unsubscribe();
-          unsubscribe = null;
+        if (state.unsubscribe) {
+          state.unsubscribe();
+          state.unsubscribe = undefined;
         }
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-          timeoutId = null;
+        if (state.timeoutId) {
+          clearTimeout(state.timeoutId);
+          state.timeoutId = undefined;
         }
       };
 
       if (predicate) {
         // 필터가 있는 경우 subscribe 사용 (한 번만 호출)
-        unsubscribe = this.subscribe(eventType, (event) => {
+        state.unsubscribe = this.subscribe(eventType, (event) => {
           if (predicate(event as EventByType<T>)) {
             cleanup();
             resolve(event as EventByType<T>);
@@ -583,13 +514,13 @@ export class EventBus {
         });
       } else {
         // 필터가 없는 경우 subscribeOnce 사용
-        unsubscribe = this.subscribeOnce(eventType, (event) => {
+        state.unsubscribe = this.subscribeOnce(eventType, (event) => {
           cleanup();
           resolve(event as EventByType<T>);
         });
       }
 
-      timeoutId = setTimeout(() => {
+      state.timeoutId = setTimeout(() => {
         cleanup();
         reject(new EventTimeoutError(eventType, timeout));
       }, timeout);
@@ -608,21 +539,20 @@ export class EventBus {
     timeout: number = 30000
   ): Promise<EventByType<T>> {
     return new Promise((resolve, reject) => {
-      let unsubscribe: Unsubscribe | null = null;
-      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      const state: { unsubscribe?: Unsubscribe; timeoutId?: ReturnType<typeof setTimeout> } = {};
 
       const cleanup = () => {
-        if (unsubscribe) {
-          unsubscribe();
-          unsubscribe = null;
+        if (state.unsubscribe) {
+          state.unsubscribe();
+          state.unsubscribe = undefined;
         }
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-          timeoutId = null;
+        if (state.timeoutId) {
+          clearTimeout(state.timeoutId);
+          state.timeoutId = undefined;
         }
       };
 
-      unsubscribe = this.subscribe(eventType, (event) => {
+      state.unsubscribe = this.subscribe(eventType, (event) => {
         const typedEvent = event as EventByType<T>;
         if (predicate(typedEvent)) {
           cleanup();
@@ -630,7 +560,7 @@ export class EventBus {
         }
       });
 
-      timeoutId = setTimeout(() => {
+      state.timeoutId = setTimeout(() => {
         cleanup();
         reject(new EventTimeoutError(eventType, timeout));
       }, timeout);
@@ -758,13 +688,28 @@ export class EventBus {
     this.stats.subscriberCount = this.subscriptions.size;
 
     // 타입별 구독자 수 계산
-    const countByType = new Map<string, number>();
-    for (const sub of this.subscriptions) {
+    this.stats.subscribersByType = Array.from(this.subscriptions).reduce((countByType, sub) => {
       const current = countByType.get(sub.eventType) ?? 0;
       countByType.set(sub.eventType, current + 1);
+      return countByType;
+    }, new Map<string, number>());
+  }
+
+  private subscriptionsFor(event: Event): Subscription<Event>[] {
+    return Array.from(this.subscriptions).filter(
+      (sub) =>
+        this.matchesPattern(sub.eventType, event.type) &&
+        (!sub.filter || this.applyFilter(event, sub.filter))
+    );
+  }
+
+  private removeSubscriptions(subscriptions: ReadonlyArray<Subscription<Event>>): void {
+    if (subscriptions.length === 0) {
+      return;
     }
 
-    this.stats.subscribersByType = countByType;
+    subscriptions.forEach((sub) => this.subscriptions.delete(sub));
+    this.updateSubscriberStats();
   }
 
   /**

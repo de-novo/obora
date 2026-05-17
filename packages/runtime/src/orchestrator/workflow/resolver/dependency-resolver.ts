@@ -59,29 +59,15 @@ export interface DependencyGraph {
  */
 export function buildDependencyGraph(steps: Step[]): DependencyGraph {
   const graph = buildGraph(steps);
-  const stepMap = new Map<string, Step>();
-
-  for (const step of steps) {
-    stepMap.set(step.name, step);
-  }
-
-  // Extract edges from graph
-  const edges = new Map<string, string[]>();
-  for (const [node, deps] of graph.reverseEdges) {
-    edges.set(node, Array.from(deps));
-  }
-
-  const backEdges = new Map<string, string>();
-  for (const step of steps) {
-    if (step.on_fail?.goto) {
-      backEdges.set(step.name, step.on_fail.goto);
-    }
-  }
 
   return {
-    nodes: stepMap,
-    edges,
-    backEdges,
+    nodes: new Map(steps.map((step) => [step.name, step])),
+    edges: new Map([...graph.reverseEdges.entries()].map(([node, deps]) => [node, Array.from(deps)])),
+    backEdges: new Map(
+      steps
+        .filter((step) => typeof step.on_fail?.goto === "string")
+        .map((step) => [step.name, step.on_fail?.goto ?? ""])
+    ),
   };
 }
 
@@ -90,19 +76,13 @@ function analyzeBackEdges(steps: Step[]): { backEdges: Array<{ source: string; t
     .filter((step) => typeof step.on_fail?.goto === "string")
     .map((step) => ({ source: step.name, target: step.on_fail!.goto }));
 
-  const warnings: string[] = [];
-  const byTarget = new Map<string, string[]>();
-  for (const edge of backEdges) {
-    const sources = byTarget.get(edge.target) ?? [];
-    sources.push(edge.source);
-    byTarget.set(edge.target, sources);
-  }
-
-  for (const [target, sources] of byTarget) {
-    if (sources.length >= 2) {
-      warnings.push(`Multiple back-edges point to '${target}': ${sources.join(", ")}`);
-    }
-  }
+  const byTarget = backEdges.reduce<Map<string, string[]>>(
+    (targets, edge) => targets.set(edge.target, [...(targets.get(edge.target) ?? []), edge.source]),
+    new Map<string, string[]>()
+  );
+  const warnings = [...byTarget.entries()]
+    .filter(([, sources]) => sources.length >= 2)
+    .map(([target, sources]) => `Multiple back-edges point to '${target}': ${sources.join(", ")}`);
 
   return { backEdges, warnings };
 }
@@ -142,20 +122,16 @@ export function calculateExecutionLevels(steps: Step[]): Map<string, number> {
  */
 export function groupStepsByLevel(steps: Step[]): StepGroup[] {
   const groups = groupByLevel(steps);
-  const result: StepGroup[] = [];
-
-  const sortedLevels = Array.from(groups.keys()).sort((a, b) => a - b);
-
-  for (const level of sortedLevels) {
-    const stepsAtLevel = groups.get(level)!;
-    result.push({
+  return [...groups.keys()]
+    .sort((a, b) => a - b)
+    .map((level) => {
+      const stepsAtLevel = groups.get(level) ?? [];
+      return {
       level,
       steps: stepsAtLevel,
       parallelizable: stepsAtLevel.length > 1,
+      };
     });
-  }
-
-  return result;
 }
 
 /**
@@ -198,26 +174,10 @@ export function generateExecutionPlan(workflow: Workflow): ExecutionPlan {
  */
 export function getNextSteps(workflow: Workflow, completedSteps: Set<string>): Step[] {
   const graph = buildGraph(workflow.steps);
-  const nextSteps: Step[] = [];
-
-  for (const step of workflow.steps) {
-    // Skip already completed steps
-    if (completedSteps.has(step.name)) {
-      continue;
-    }
-
-    // Get all dependencies
-    const deps = graph.reverseEdges.get(step.name) || new Set();
-
-    // Check if all dependencies are completed
-    const allDepsCompleted = Array.from(deps).every((dep) => completedSteps.has(dep));
-
-    if (allDepsCompleted) {
-      nextSteps.push(step);
-    }
-  }
-
-  return nextSteps;
+  return workflow.steps.filter((step) => {
+    const deps = graph.reverseEdges.get(step.name) ?? new Set<string>();
+    return !completedSteps.has(step.name) && [...deps].every((dep) => completedSteps.has(dep));
+  });
 }
 
 /**
@@ -227,36 +187,31 @@ export function validateExecutionOrder(
   workflow: Workflow,
   order: string[]
 ): { valid: boolean; errors: string[] } {
-  const errors: string[] = [];
   const stepNames = new Set(workflow.steps.map((s) => s.name));
 
-  // Check all steps are present
-  for (const step of workflow.steps) {
-    if (!order.includes(step.name)) {
-      errors.push(`Step '${step.name}' is missing from execution order`);
-    }
-  }
-
-  // Check order contains only valid steps
-  for (const name of order) {
-    if (!stepNames.has(name)) {
-      errors.push(`Execution order contains unknown step '${name}'`);
-    }
-  }
-
-  // Check dependencies come before dependents
-  const completed = new Set<string>();
+  const missingStepErrors = workflow.steps
+    .filter((step) => !order.includes(step.name))
+    .map((step) => `Step '${step.name}' is missing from execution order`);
+  const unknownStepErrors = order
+    .filter((name) => !stepNames.has(name))
+    .map((name) => `Execution order contains unknown step '${name}'`);
   const graph = buildGraph(workflow.steps);
-
-  for (const name of order) {
-    const deps = graph.reverseEdges.get(name) || new Set();
-    for (const dep of deps) {
-      if (!completed.has(dep)) {
-        errors.push(`Step '${name}' comes before its dependency '${dep}'`);
-      }
-    }
-    completed.add(name);
-  }
+  const dependencyOrderErrors = order.reduce<{ completed: Set<string>; errors: string[] }>(
+    (state, name) => {
+      const deps = graph.reverseEdges.get(name) ?? new Set<string>();
+      return {
+        completed: new Set([...state.completed, name]),
+        errors: [
+          ...state.errors,
+          ...[...deps]
+            .filter((dep) => !state.completed.has(dep))
+            .map((dep) => `Step '${name}' comes before its dependency '${dep}'`),
+        ],
+      };
+    },
+    { completed: new Set<string>(), errors: [] }
+  ).errors;
+  const errors = [...missingStepErrors, ...unknownStepErrors, ...dependencyOrderErrors];
 
   return {
     valid: errors.length === 0,

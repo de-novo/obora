@@ -77,18 +77,14 @@ class SimpleEventEmitter {
 
   emit(event: string, ...args: unknown[]): boolean {
     const listeners = this._listeners.get(event) ?? [];
-    for (const listener of listeners) {
-      listener(...args);
-    }
+    listeners.forEach((listener) => listener(...args));
 
     // 와일드카드 지원 (예: 'state.*' -> 'state.updated' 매칭)
-    for (const [pattern, wildcardListeners] of this._listeners.entries()) {
+    Array.from(this._listeners.entries()).forEach(([pattern, wildcardListeners]) => {
       if (pattern.endsWith("*") && event.startsWith(pattern.slice(0, -1))) {
-        for (const listener of wildcardListeners) {
-          listener(...args);
-        }
+        wildcardListeners.forEach((listener) => listener(...args));
       }
-    }
+    });
 
     return listeners.length > 0;
   }
@@ -543,14 +539,14 @@ export class Blackboard extends SimpleEventEmitter implements IBlackboard {
 
     try {
       // 버전 검증 (모든 연산 전에 수행)
-      for (const op of operations) {
+      operations.forEach((op) => {
         if (op.expectedVersion !== undefined) {
           this.versionManager.validateVersion(originalVersion, op.expectedVersion, op.path);
         }
-      }
+      });
 
       // 모든 연산 실행 (버전 증가 없이)
-      for (const op of operations) {
+      operations.forEach((op) => {
         // 내�的方法를 사용하여 버전 증가 없이 쓰기/삭제 수행
         if (op.type === "write") {
           const previousValue = getByPath(this._state, op.path);
@@ -571,7 +567,7 @@ export class Blackboard extends SimpleEventEmitter implements IBlackboard {
             previousValue,
           });
         }
-      }
+      });
 
       // 모든 성공 시 한 번만 버전 증가
       this._state.meta.version = originalVersion + 1;

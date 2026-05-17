@@ -238,20 +238,14 @@ export class CellManager {
     }
 
     if (this.dispatchStrategy === "priority") {
-      let selectedIndex = 0;
-      for (let i = 1; i < this.queue.length; i++) {
-        const current = this.queue[i]!;
-        const selected = this.queue[selectedIndex]!;
-
-        if (current.priority > selected.priority) {
-          selectedIndex = i;
-          continue;
-        }
-
+      const selectedIndex = this.queue.reduce((bestIndex, current, index) => {
+        const selected = this.queue[bestIndex]!;
+        if (current.priority > selected.priority) return index;
         if (current.priority === selected.priority && current.enqueuedAt < selected.enqueuedAt) {
-          selectedIndex = i;
+          return index;
         }
-      }
+        return bestIndex;
+      }, 0);
 
       return this.queue.splice(selectedIndex, 1)[0];
     }
@@ -274,13 +268,15 @@ export class CellManager {
   }
 
   private rejectQueuedTasksForCell(id: CellId, reason: string): void {
-    for (let i = this.queue.length - 1; i >= 0; i--) {
-      const item = this.queue[i]!;
-      if (item.cellId === id) {
-        this.queue.splice(i, 1);
-        item.reject(new Error(`Execution aborted: ${reason}`));
-      }
-    }
+    const partitioned = this.queue.reduce<{ retained: QueueItem[]; rejected: QueueItem[] }>(
+      (state, item) =>
+        item.cellId === id
+          ? { ...state, rejected: [...state.rejected, item] }
+          : { ...state, retained: [...state.retained, item] },
+      { retained: [], rejected: [] }
+    );
+    this.queue.splice(0, this.queue.length, ...partitioned.retained);
+    partitioned.rejected.forEach((item) => item.reject(new Error(`Execution aborted: ${reason}`)));
   }
 
   private validateConfig(): void {

@@ -87,10 +87,7 @@ async function loadArtifact(
 ): Promise<{ artifact: ArtifactRecordLike; data: Buffer }> {
   const runtime = await createArtifactRuntime();
 
-  let artifact: ArtifactRecordLike;
-  try {
-    artifact = (await runtime.getArtifact(runId, stepName, name)) as ArtifactRecordLike;
-  } catch (error) {
+  const artifact = await runtime.getArtifact(runId, stepName, name).catch((error: unknown) => {
     const message = getErrorMessage(error);
     if (message.includes("SDK_ARTIFACT_NOT_FOUND") || message.includes("Artifact not found")) {
       throw new CLIError(
@@ -99,7 +96,7 @@ async function loadArtifact(
       );
     }
     throw new CLIError(`Failed to resolve artifact: ${message}`, ExitCode.EXECUTION_FAILED);
-  }
+  }) as ArtifactRecordLike;
 
   try {
     const { data } = await artifact.download();

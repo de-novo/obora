@@ -37,18 +37,19 @@
   },
   "dependencies": {
     "@obora/runtime": "workspace:*",
-    "yaml": "^2.8.4",
+    "effect": "^3.21.2",
+    "yaml": "^2.9.0",
     "zod": "^4.4.3"
   },
   "optionalDependencies": {
     "@obora/adapters": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^25.6.2",
-    "@vitest/coverage-v8": "^4.1.5",
+    "@types/node": "^25.8.0",
+    "@vitest/coverage-v8": "^4.1.6",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.5"
+    "vitest": "^4.1.6"
   },
   "peerDependencies": {
     "@obora/runtime": "workspace:*",

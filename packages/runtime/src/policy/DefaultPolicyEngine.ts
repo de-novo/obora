@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
+import { Effect } from "effect";
 import { OboraErrorCode } from "../errors/OboraErrorCode.js";
 import { parseExpression } from "./expressions/ExpressionParser.js";
 import type { PolicyEngine } from "./PolicyEngine.js";
-import { loadPolicyFromYaml } from "./PolicyLoader.js";
+import { loadPolicyFromYamlEffect } from "./PolicyLoader.js";
 import { GateRule, ResourceRule, SandboxRule, ToolRule, type PolicyConditionAuditEvent } from "./rules/index.js";
 import type {
   PolicyAction,
@@ -49,54 +50,89 @@ export class DefaultPolicyEngine implements PolicyEngine {
   }
 
   async load(pathToPolicy: string): Promise<PolicyVersion> {
-    const loaded = await loadPolicyFromYaml(pathToPolicy);
-    this.policyPath = pathToPolicy;
-    const version = this.applyPolicy(loaded, pathToPolicy);
-    await this.emit({ type: "load", source: pathToPolicy, version });
-    return version;
+    return Effect.runPromise(this.loadEffect(pathToPolicy));
+  }
+
+  loadEffect(pathToPolicy: string): Effect.Effect<PolicyVersion, unknown> {
+    return loadPolicyFromYamlEffect(pathToPolicy).pipe(
+      Effect.flatMap((loaded) =>
+        Effect.tryPromise({
+          try: async () => {
+            this.policyPath = pathToPolicy;
+            const version = this.applyPolicy(loaded, pathToPolicy);
+            await this.emit({ type: "load", source: pathToPolicy, version });
+            return version;
+          },
+          catch: (error) => error,
+        }),
+      ),
+    );
   }
 
   loadInline(policies: PolicySet, source = "inline"): PolicyVersion {
-    this.policyPath = undefined;
-    const version = this.applyPolicy(policies, source);
-    void this.emit({ type: "load", source, version });
-    return version;
+    return Effect.runSync(this.loadInlineEffect(policies, source));
+  }
+
+  loadInlineEffect(policies: PolicySet, source = "inline"): Effect.Effect<PolicyVersion, unknown> {
+    return Effect.try({
+      try: () => {
+        this.policyPath = undefined;
+        const version = this.applyPolicy(policies, source);
+        void this.emit({ type: "load", source, version });
+        return version;
+      },
+      catch: (error) => error,
+    });
   }
 
   enforce(action: PolicyAction, context: PolicyContext): PolicyDecision {
+    return Effect.runSync(this.enforceEffect(action, context));
+  }
+
+  enforceEffect(action: PolicyAction, context: PolicyContext): Effect.Effect<PolicyDecision> {
     const pinned = context.executionId ? this.pinnedSnapshots.get(context.executionId) : undefined;
     if (pinned) {
-      return pinned.enforce(action, context);
+      return Effect.sync(() => pinned.enforce(action, context));
     }
 
-    for (const rule of this.rules) {
-      const decision = rule.evaluate(action, context, this.policySet);
-      if (decision) {
-        return decision;
-      }
-    }
-
-    return { type: "allow" };
+    return this.enforceWithPolicyEffect(this.policySet, action, context);
   }
 
   async reload(): Promise<PolicyVersion | undefined> {
+    return Effect.runPromise(this.reloadEffect());
+  }
+
+  reloadEffect(): Effect.Effect<PolicyVersion | undefined, unknown> {
     if (!this.policyPath) {
-      return undefined;
+      return Effect.succeed(undefined);
     }
 
-    try {
-      const reloaded = await loadPolicyFromYaml(this.policyPath);
-      const version = this.applyPolicy(reloaded, this.policyPath);
-      await this.emit({ type: "reload_success", source: this.policyPath, version });
-      return version;
-    } catch (error) {
-      await this.emit({
-        type: "reload_failure",
-        source: this.policyPath,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    const policyPath = this.policyPath;
+    return loadPolicyFromYamlEffect(policyPath).pipe(
+      Effect.flatMap((reloaded) =>
+        Effect.tryPromise({
+          try: async () => {
+            const version = this.applyPolicy(reloaded, policyPath);
+            await this.emit({ type: "reload_success", source: policyPath, version });
+            return version;
+          },
+          catch: (error) => error,
+        }),
+      ),
+      Effect.catchAll((error) =>
+        Effect.tryPromise({
+          try: async () => {
+            await this.emit({
+              type: "reload_failure",
+              source: policyPath,
+              error: error instanceof Error ? error.message : String(error),
+            });
+            throw error;
+          },
+          catch: (caught) => caught,
+        }),
+      ),
+    );
   }
 
   version(): string {
@@ -112,13 +148,19 @@ export class DefaultPolicyEngine implements PolicyEngine {
   }
 
   snapshot(): PolicySnapshot {
-    const snapPolicy = clonePolicy(this.policySet);
-    const snapVersion = this.policyVersion ?? buildVersion(this.policySet, this.policyPath ?? "inline");
+    return Effect.runSync(this.snapshotEffect());
+  }
 
-    return {
-      version: snapVersion,
-      enforce: (action, context) => this.enforceWithPolicy(snapPolicy, action, context),
-    };
+  snapshotEffect(): Effect.Effect<PolicySnapshot> {
+    return Effect.sync(() => {
+      const snapPolicy = clonePolicy(this.policySet);
+      const snapVersion = this.policyVersion ?? buildVersion(this.policySet, this.policyPath ?? "inline");
+
+      return {
+        version: snapVersion,
+        enforce: (action, context) => Effect.runSync(this.enforceWithPolicyEffect(snapPolicy, action, context)),
+      };
+    });
   }
 
   pinForExecution(executionId: string): PolicySnapshot {
@@ -140,19 +182,23 @@ export class DefaultPolicyEngine implements PolicyEngine {
     return this.pinnedSnapshots.get(executionId);
   }
 
-  private enforceWithPolicy(policySet: PolicySet, action: PolicyAction, context: PolicyContext): PolicyDecision {
-    for (const rule of this.rules) {
-      const decision = rule.evaluate(action, context, policySet);
-      if (decision) {
-        return decision;
-      }
-    }
+  private enforceWithPolicyEffect(
+    policySet: PolicySet,
+    action: PolicyAction,
+    context: PolicyContext,
+  ): Effect.Effect<PolicyDecision> {
+    return Effect.sync(() => {
+      const decision = this.rules.reduce<PolicyDecision | undefined>(
+        (matched, rule) => matched ?? rule.evaluate(action, context, policySet) ?? undefined,
+        undefined
+      );
 
-    return { type: "allow" };
+      return decision ?? { type: "allow" };
+    });
   }
 
   private applyPolicy(policySet: PolicySet, source: string): PolicyVersion {
-    validatePolicyConditions(policySet);
+    Effect.runSync(validatePolicyConditionsEffect(policySet));
     this.policySet = clonePolicy(policySet);
     this.policyVersion = buildVersion(this.policySet, source);
     this.versions.push(this.policyVersion);
@@ -164,11 +210,17 @@ export class DefaultPolicyEngine implements PolicyEngine {
   }
 }
 
+export const validatePolicyConditionsEffect = (policySet: PolicySet): Effect.Effect<void, unknown> =>
+  Effect.try({
+    try: () => validatePolicyConditions(policySet),
+    catch: (error) => error,
+  });
+
 function validatePolicyConditions(policySet: PolicySet): void {
-  for (const tool of policySet.tools ?? []) {
+  (policySet.tools ?? []).forEach((tool) => {
     const condition = tool.when?.condition;
     if (!condition) {
-      continue;
+      return;
     }
 
     try {
@@ -181,9 +233,9 @@ function validatePolicyConditions(policySet: PolicySet): void {
       wrapped.code = OboraErrorCode.POLICY_LOAD_FAILED;
       throw wrapped;
     }
-  }
+  });
 
-  for (const rule of policySet.dynamicToolRules ?? []) {
+  (policySet.dynamicToolRules ?? []).forEach((rule) => {
     try {
       parseExpression(rule.condition);
     } catch (error) {
@@ -194,9 +246,9 @@ function validatePolicyConditions(policySet: PolicySet): void {
       wrapped.code = OboraErrorCode.POLICY_LOAD_FAILED;
       throw wrapped;
     }
-  }
+  });
 
-  for (const limit of policySet.resources?.dynamicQuota?.limits ?? []) {
+  (policySet.resources?.dynamicQuota?.limits ?? []).forEach((limit) => {
     try {
       parseExpression(limit.condition);
     } catch (error) {
@@ -207,7 +259,7 @@ function validatePolicyConditions(policySet: PolicySet): void {
       wrapped.code = OboraErrorCode.POLICY_LOAD_FAILED;
       throw wrapped;
     }
-  }
+  });
 }
 
 function buildVersion(policySet: PolicySet, source: string): PolicyVersion {

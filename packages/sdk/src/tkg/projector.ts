@@ -30,38 +30,34 @@ export function projectAuditEventToTemporalNode(
     { type: "workflow", target: workflowName },
     { type: "execution", target: event.executionId },
   ];
-  let summary: string = event.type;
 
-  switch (event.type) {
-    case "workflow.validation_failed": {
-      summary = `Validation failed${stepName ? ` for ${stepName}` : ""}: ${String(data.summary ?? "validation failed")}`;
+  const summary = (() => {
+    switch (event.type) {
+      case "workflow.validation_failed": {
       if (stepName) relations.push({ type: "step", target: stepName });
-      break;
-    }
-    case "workflow.validation_passed": {
-      summary = `Validation passed${stepName ? ` for ${stepName}` : ""}: ${String(data.summary ?? "validation passed")}`;
+        return `Validation failed${stepName ? ` for ${stepName}` : ""}: ${String(data.summary ?? "validation failed")}`;
+      }
+      case "workflow.validation_passed": {
       if (stepName) relations.push({ type: "step", target: stepName });
-      break;
-    }
-    case "workflow.back_edge_triggered": {
+        return `Validation passed${stepName ? ` for ${stepName}` : ""}: ${String(data.summary ?? "validation passed")}`;
+      }
+      case "workflow.back_edge_triggered": {
       const sourceStep = String(data.sourceStep ?? "");
       const targetStep = String(data.targetStep ?? "");
-      summary = `Back-edge triggered: ${sourceStep} -> ${targetStep}`;
       if (sourceStep) relations.push({ type: "source_step", target: sourceStep });
       if (targetStep) relations.push({ type: "target_step", target: targetStep });
-      break;
-    }
-    case "workflow.repair_started": {
-      summary = `Repair started${stepName ? ` for ${stepName}` : ""} (attempt ${String(data.attempt ?? "?")})`;
+        return `Back-edge triggered: ${sourceStep} -> ${targetStep}`;
+      }
+      case "workflow.repair_started": {
       if (stepName) relations.push({ type: "step", target: stepName });
-      break;
-    }
-    case "workflow.repair_completed": {
-      summary = `Repair completed${stepName ? ` for ${stepName}` : ""} (attempt ${String(data.attempt ?? "?")})`;
+        return `Repair started${stepName ? ` for ${stepName}` : ""} (attempt ${String(data.attempt ?? "?")})`;
+      }
+      case "workflow.repair_completed": {
       if (stepName) relations.push({ type: "step", target: stepName });
-      break;
+        return `Repair completed${stepName ? ` for ${stepName}` : ""} (attempt ${String(data.attempt ?? "?")})`;
+      }
     }
-  }
+  })();
 
   return {
     id: event.id,
@@ -91,7 +87,7 @@ export class TKGProjector {
   ) {}
 
   observe(executionId: string): void {
-    for (const eventType of PROJECTABLE_TKG_EVENT_TYPES) {
+    PROJECTABLE_TKG_EVENT_TYPES.forEach((eventType) => {
       const unsub = this.eventBus.on(eventType, async (event) => {
         if (event.executionId !== executionId) return;
         const node = projectAuditEventToTemporalNode(event, this.options.workflowName);
@@ -99,7 +95,7 @@ export class TKGProjector {
         await this.persistNode(node);
       });
       this.unsubscribes.push(unsub);
-    }
+    });
   }
 
   getSummary(): TKGProjectionSummary {
@@ -111,9 +107,7 @@ export class TKGProjector {
   }
 
   dispose(): void {
-    for (const unsub of this.unsubscribes) {
-      unsub();
-    }
+    this.unsubscribes.forEach((unsub) => unsub());
     this.unsubscribes.length = 0;
   }
 
@@ -197,16 +191,17 @@ export class TKGProjector {
   private async persistNode(node: TemporalNode): Promise<void> {
     this.projectedNodes.push(node);
 
-    for (const scope of this.options.scopes) {
+    await this.options.scopes.reduce<Promise<void>>(async (previousPersist, scope) => {
+      await previousPersist;
       if (typeof this.store.append === "function") {
         await this.store.append(scope, [node]);
-        continue;
+        return;
       }
 
       const existing = await this.store.load(scope);
       await this.store.save(scope, {
         nodes: [...(existing?.nodes ?? []), node],
       });
-    }
+    }, Promise.resolve());
   }
 }

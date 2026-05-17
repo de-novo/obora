@@ -447,14 +447,15 @@ export function selectOpenRouterLatestModel(models: string[]): string | undefine
 }
 
 export function inferLatestCatalogModel(provider: string): string | undefined {
-  let models: string[];
-  try {
-    models = listPiAIModels(provider);
-  } catch {
-    return undefined;
-  }
+  const models = (() => {
+    try {
+      return listPiAIModels(provider);
+    } catch {
+      return undefined;
+    }
+  })();
 
-  if (models.length === 0) {
+  if (!models || models.length === 0) {
     return undefined;
   }
 
@@ -518,14 +519,14 @@ export function detectAuthProviders(
   const detected: string[] = [];
   const seenEnvKeys = new Set<string>();
 
-  for (const [provider, envKey] of Object.entries(PROVIDER_AUTH_ENV_KEY_MAP)) {
+  Object.entries(PROVIDER_AUTH_ENV_KEY_MAP).forEach(([provider, envKey]) => {
     if (!env[envKey] || seenEnvKeys.has(envKey)) {
-      continue;
+      return;
     }
 
     detected.push(provider);
     seenEnvKeys.add(envKey);
-  }
+  });
 
   return detected.sort();
 }
@@ -1311,21 +1312,21 @@ export function buildDoctorActions(
     }
   }
 
-  for (const action of buildDetectedProviderMismatchActions(
+  buildDetectedProviderMismatchActions(
     checks,
     providerHint,
     authDiagnostics
-  )) {
+  ).forEach((action) => {
     pushDoctorAction(actions, action);
-  }
+  });
 
-  for (const action of buildResolvedProviderMismatchActions(
+  buildResolvedProviderMismatchActions(
     summary,
     providerHint,
     authDiagnostics
-  )) {
+  ).forEach((action) => {
     pushDoctorAction(actions, action);
-  }
+  });
 
   if (summary.provider && !summary.model) {
     const recommendedModelValue =
@@ -1375,12 +1376,12 @@ export function buildDoctorActions(
     pushDoctorAction(actions, { kind: "run", command: workflowCommands.runCommand });
   }
 
-  for (const action of buildAgentInspectionActions(loadedConfig, agentOverrideDiagnostics)) {
+  buildAgentInspectionActions(loadedConfig, agentOverrideDiagnostics).forEach((action) => {
     pushDoctorAction(actions, action);
-  }
-  for (const action of buildAgentDriftActions(agentOverrideDiagnostics)) {
+  });
+  buildAgentDriftActions(agentOverrideDiagnostics).forEach((action) => {
     pushDoctorAction(actions, action);
-  }
+  });
 
   return actions;
 }

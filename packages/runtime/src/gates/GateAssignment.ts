@@ -61,14 +61,19 @@ export class GateAssignmentManager {
     const reassignedAt = this.now();
 
     // Refresh expiresAt
-    let newExpiresAt: Date | undefined;
-    if (timeout) {
-      const timeoutMs = parseDurationToMs(timeout);
-      newExpiresAt = timeoutMs !== undefined ? new Date(reassignedAt.getTime() + timeoutMs) : undefined;
-    } else if (current.expiresAt && current.assignedAt) {
-      const originalDurationMs = current.expiresAt.getTime() - current.assignedAt.getTime();
-      newExpiresAt = new Date(reassignedAt.getTime() + originalDurationMs);
-    }
+    const newExpiresAt = (() => {
+      if (timeout) {
+        const timeoutMs = parseDurationToMs(timeout);
+        return timeoutMs !== undefined ? new Date(reassignedAt.getTime() + timeoutMs) : undefined;
+      }
+
+      if (current.expiresAt && current.assignedAt) {
+        const originalDurationMs = current.expiresAt.getTime() - current.assignedAt.getTime();
+        return new Date(reassignedAt.getTime() + originalDurationMs);
+      }
+
+      return undefined;
+    })();
 
     const reassigned: GateAssignment = {
       ...current,

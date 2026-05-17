@@ -34,12 +34,12 @@ export class PluginLoader {
    * Returns validated plugin descriptors.
    */
   async scan(): Promise<PluginDescriptor[]> {
-    const descriptors: PluginDescriptor[] = [];
-
-    for (const searchPath of this.searchPaths) {
+    return this.searchPaths.reduce<Promise<PluginDescriptor[]>>(async (previousDescriptors, searchPath) => {
+      const descriptors = await previousDescriptors;
       try {
         const entries = await readdir(searchPath);
-        for (const entry of entries) {
+        const discovered = await entries.reduce<Promise<PluginDescriptor[]>>(async (previousEntries, entry) => {
+          const entryDescriptors = await previousEntries;
           if (entry.startsWith("@")) {
             const scopePath = join(searchPath, entry);
             const scopeEntries = await readdir(scopePath).catch((error: unknown) => {
@@ -49,7 +49,9 @@ export class PluginLoader {
 
               throw error;
             });
-            for (const scopeEntry of scopeEntries) {
+            const scopeDescriptors = await scopeEntries.reduce<Promise<PluginDescriptor[]>>(
+              async (previousScopeEntries, scopeEntry) => {
+                const scoped = await previousScopeEntries;
               const pkgPath = join(scopePath, scopeEntry);
               const descriptor = await this.tryReadPlugin(pkgPath, `${entry}/${scopeEntry}`).catch(
                 (error: unknown) => {
@@ -60,8 +62,11 @@ export class PluginLoader {
                   throw error;
                 },
               );
-              if (descriptor) descriptors.push(descriptor);
-            }
+                return descriptor ? [...scoped, descriptor] : scoped;
+              },
+              Promise.resolve([])
+            );
+            return [...entryDescriptors, ...scopeDescriptors];
           } else {
             const pkgPath = join(searchPath, entry);
             const descriptor = await this.tryReadPlugin(pkgPath, entry).catch((error: unknown) => {
@@ -71,20 +76,19 @@ export class PluginLoader {
 
               throw error;
             });
-            if (descriptor) descriptors.push(descriptor);
+            return descriptor ? [...entryDescriptors, descriptor] : entryDescriptors;
           }
-        }
+        }, Promise.resolve([]));
+        return [...descriptors, ...discovered];
       } catch (error: unknown) {
         if (isErrnoCode(error, "ENOENT")) {
           // Search path doesn't exist, skip
-          continue;
+          return descriptors;
         }
 
         throw error;
       }
-    }
-
-    return descriptors;
+    }, Promise.resolve([]));
   }
 
   /**
@@ -109,13 +113,10 @@ export class PluginLoader {
    */
   async scanAndLoad(): Promise<LoadedPlugin[]> {
     const descriptors = await this.scan();
-    const loaded: LoadedPlugin[] = [];
-
-    for (const descriptor of descriptors) {
-      loaded.push(await this.load(descriptor));
-    }
-
-    return loaded;
+    return descriptors.reduce<Promise<LoadedPlugin[]>>(async (previousLoaded, descriptor) => {
+      const loaded = await previousLoaded;
+      return [...loaded, await this.load(descriptor)];
+    }, Promise.resolve([]));
   }
 
   private async tryReadPlugin(pkgPath: string, packageName: string): Promise<PluginDescriptor | null> {

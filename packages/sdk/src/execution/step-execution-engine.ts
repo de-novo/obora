@@ -31,6 +31,9 @@ import { OboraError } from "../runtime-types.js";
 import { DEFAULTS } from "../defaults.js";
 import { resolveFailureRoute } from "../conditional-routing.js";
 import type { RouteResolution } from "../conditional-routing.js";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
+import { existsSync } from "node:fs";
 import {
   summarizeBlackboardSnapshot,
   summarizeObserverMetrics,
@@ -46,6 +49,7 @@ interface RepairLoopRuntimeState {
 }
 
 const DEFAULT_MAX_CONCURRENCY = 3;
+const DEFAULT_MAX_REPAIR_VALIDATION_HISTORY = 5;
 
 /** Duck-type for reflector: both ExecutionReflector and ReflectorEngine implement this. */
 type ReflectorLike = {
@@ -112,12 +116,47 @@ export class StepExecutionEngine {
       mode: "repair",
       attempt: state.attempt,
       latestValidation: state.latestValidation,
-      previousValidationResults: state.history,
+      previousValidationResults: this.compactValidationHistory(state.history),
       validationStep: repairConfig.validation_step,
       repeatedSignatureCount: state.repeatedSignatureCount,
       maxNoProgressIterations: repairConfig.max_no_progress_iterations,
       repeatedCriticalIssueCeiling: repairConfig.repeated_critical_issue_ceiling,
     };
+  }
+
+  compactValidationHistory(
+    history: ValidationResult[],
+    maxCount: number = DEFAULT_MAX_REPAIR_VALIDATION_HISTORY
+  ): ValidationResult[] {
+    if (history.length <= maxCount) return history;
+    return history.slice(-maxCount);
+  }
+
+  private getTraceOutputDir(executionId: string): string | undefined {
+    const config = this.deps.config;
+    const envBasePath = process.env.OBORA_TRACE_OUTPUT_DIR;
+    const basePath = envBasePath && envBasePath.length > 0
+      ? envBasePath
+      : config.sharedMemory?.file?.basePath
+        ?? resolve(process.cwd(), ".obora", "traces");
+    return join(basePath, executionId);
+  }
+
+  private async persistTrace(
+    executionId: string,
+    stepName: string,
+    trace: Record<string, unknown>
+  ): Promise<void> {
+    const dir = this.getTraceOutputDir(executionId);
+    if (!dir) return;
+
+    const filePath = join(dir, `${stepName}.json`);
+    try {
+      await mkdir(dirname(filePath), { recursive: true });
+      await writeFile(filePath, JSON.stringify(trace, null, 2) + "\n", "utf-8");
+    } catch (err) {
+      this.deps.config.logger?.warn?.("[trace-persistence] Failed to save trace:", err);
+    }
   }
 
   resolveValidationResult(step: WorkflowStep, output: unknown): ValidationResult | undefined {
@@ -238,19 +277,19 @@ export class StepExecutionEngine {
     }
 
     // Handle explicit parallel branches within a single step
-    let result: { output: unknown; raw?: unknown };
-    if (step.parallel && step.parallel.length > 0) {
-      result = await this.executeParallelBranches(step, execution, stepExecutor, signal);
-    } else {
-      if (!stepExecutor) {
-        throw OboraError.adapterUnavailable(new Error("No LLM adapter configured for step execution"));
-      }
-      result = await stepExecutor.executeStep(step, {
-        previousOutputs: execution.outputs,
-        signal,
-        ...(Object.keys(hookOutputs).length > 0 ? { hookOutputs } : {}),
-      });
-    }
+    const result =
+      step.parallel && step.parallel.length > 0
+        ? await this.executeParallelBranches(step, execution, stepExecutor, signal)
+        : await (async () => {
+            if (!stepExecutor) {
+              throw OboraError.adapterUnavailable(new Error("No LLM adapter configured for step execution"));
+            }
+            return stepExecutor.executeStep(step, {
+              previousOutputs: execution.outputs,
+              signal,
+              ...(Object.keys(hookOutputs).length > 0 ? { hookOutputs } : {}),
+            });
+          })();
 
     const postStepHook = await this.runStepHook(workflow, step, "post_step", executionId, {
       signal,
@@ -374,8 +413,7 @@ export class StepExecutionEngine {
     /** Reflector v2 force_target overrides, keyed by validation/failing step name. */
     const forcedRouteTargets = new Map<string, string>();
     /** Global repair attempt counter — not reset by back-edges */
-    let globalRepairAttempts = 0;
-    let cursor = 0;
+    const loopState = { globalRepairAttempts: 0, cursor: 0 };
 
     const triggerBackEdge = async (
       step: WorkflowStep,
@@ -445,10 +483,10 @@ export class StepExecutionEngine {
       execution.completedSteps = execution.completedSteps.filter(
         (name) => !invalidatedSet.has(name)
       );
-      for (const name of invalidated) {
+      invalidated.forEach((name) => {
         delete execution.outputs[name];
         delete execution.stepRecords[name];
-      }
+      });
 
       this.deps.repairLoopTracker.recordBackEdgeTriggered(executionId);
       await eventBus.emit("workflow.back_edge_triggered", executionId, {
@@ -469,8 +507,8 @@ export class StepExecutionEngine {
       return targetIndex;
     };
 
-    while (cursor < sortedSteps.length) {
-      const step = sortedSteps[cursor]!;
+    while (loopState.cursor < sortedSteps.length) {
+      const step = sortedSteps[loopState.cursor]!;
 
       if (isSettledFn?.()) return;
 
@@ -541,7 +579,7 @@ export class StepExecutionEngine {
         agent: step.agent,
       });
 
-      let result: { output: unknown; raw?: unknown } | undefined;
+      const stepOutcome = { result: undefined as StepResult | undefined };
       const hookOutputs: Partial<Record<WorkflowHookLifecycle, HookExecutionResult>> = {};
 
       try {
@@ -568,11 +606,13 @@ export class StepExecutionEngine {
         if (!stepExecutor) {
           throw OboraError.adapterUnavailable(new Error("No LLM adapter configured for step execution"));
         }
-        result = await stepExecutor.executeStep(step, {
+        stepOutcome.result = await stepExecutor.executeStep(step, {
           previousOutputs: execution.outputs,
+          traces: execution.traces,
           signal,
           ...(Object.keys(hookOutputs).length > 0 ? { hookOutputs } : {}),
           ...(repairContext ? { repairContext } : {}),
+          ...(workflow.executionTraces ? { traceConfig: workflow.executionTraces } : {}),
         });
 
         const postStepHook = await this.runStepHook(workflow, step, "post_step", executionId, {
@@ -584,11 +624,12 @@ export class StepExecutionEngine {
         }
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
-        cursor = await triggerBackEdge(step, reason, { cause: error });
+        loopState.cursor = await triggerBackEdge(step, reason, { cause: error });
         continue;
       }
 
-      if (isSettledFn?.() || !result) return;
+      if (isSettledFn?.() || !stepOutcome.result) return;
+      const result = stepOutcome.result;
 
       const validationResult = this.resolveValidationResult(step, result.output);
       if (validationResult) {
@@ -633,7 +674,7 @@ export class StepExecutionEngine {
 
           const goto = step.on_fail?.goto;
           if (goto) {
-            globalRepairAttempts++;
+            loopState.globalRepairAttempts++;
 
             // Check global repair ceiling (prevents infinite loops across back-edges)
             // Reflector v2: forceTarget overrides route resolution
@@ -655,10 +696,10 @@ export class StepExecutionEngine {
               sortedSteps.find((candidate) => candidate.name === targetStepName)?.config
             );
             const globalCeiling = repairConfigForCeiling?.max_total_repair_attempts;
-            if (globalCeiling !== undefined && globalRepairAttempts > globalCeiling) {
-              cursor = await triggerBackEdge(
+            if (globalCeiling !== undefined && loopState.globalRepairAttempts > globalCeiling) {
+              loopState.cursor = await triggerBackEdge(
                 step,
-                `Global repair ceiling exceeded (${globalRepairAttempts} total attempts across all back-edges). Stopping repair for step '${step.name}'.`,
+                `Global repair ceiling exceeded (${loopState.globalRepairAttempts} total attempts across all back-edges). Stopping repair for step '${step.name}'.`,
                 { noProgress: true, category: "no_progress", targetResolution: routeResolution }
               );
               continue;
@@ -672,7 +713,7 @@ export class StepExecutionEngine {
                 : 1;
             const nextState: RepairLoopRuntimeState = {
               latestValidation: validationResult,
-              history: [...(previousState?.history ?? []), validationResult],
+              history: this.compactValidationHistory([...(previousState?.history ?? []), validationResult]),
               attempt: (previousState?.attempt ?? 1) + 1,
               repeatedSignatureCount,
               lastSignature: validationResult.signature,
@@ -685,7 +726,7 @@ export class StepExecutionEngine {
             const noProgressLimit = repairConfig?.max_no_progress_iterations;
             const repeatedCriticalIssueCeiling = repairConfig?.repeated_critical_issue_ceiling;
             if (noProgressLimit !== undefined && repeatedSignatureCount > noProgressLimit) {
-              cursor = await triggerBackEdge(
+              loopState.cursor = await triggerBackEdge(
                 step,
                 `Validation for step '${step.name}' made no progress after ${repeatedSignatureCount} repeated failure signature(s): ${validationResult.summary}`,
                 { noProgress: true, category: "no_progress", targetResolution: routeResolution }
@@ -696,7 +737,7 @@ export class StepExecutionEngine {
               repeatedCriticalIssueCeiling !== undefined &&
               repeatedSignatureCount > repeatedCriticalIssueCeiling
             ) {
-              cursor = await triggerBackEdge(
+              loopState.cursor = await triggerBackEdge(
                 step,
                 `Validation for step '${step.name}' exceeded repeated critical issue ceiling after ${repeatedSignatureCount} repeated failure signature(s): ${validationResult.summary}`,
                 {
@@ -708,7 +749,7 @@ export class StepExecutionEngine {
               continue;
             }
 
-            cursor = await triggerBackEdge(
+            loopState.cursor = await triggerBackEdge(
               step,
               `Validation failed for step '${step.name}': ${validationResult.summary}`,
               { targetResolution: routeResolution }
@@ -716,7 +757,7 @@ export class StepExecutionEngine {
             continue;
           }
 
-          cursor = await triggerBackEdge(
+          loopState.cursor = await triggerBackEdge(
             step,
             `Validation failed for step '${step.name}': ${validationResult.summary}`
           );
@@ -727,6 +768,11 @@ export class StepExecutionEngine {
       execution.outputs[step.name] = result.output;
       execution.stepRecords[step.name] =
         Object.keys(hookOutputs).length > 0 ? { ...result, hooks: hookOutputs } : result;
+      if (result.trace) {
+        execution.traces ??= {};
+        execution.traces[step.name] = result.trace;
+        await this.persistTrace(executionId, step.name, result.trace as unknown as Record<string, unknown>);
+      }
       execution.completedSteps.push(step.name);
 
       // Record step output on blackboard
@@ -778,7 +824,7 @@ export class StepExecutionEngine {
 
       if (isSettledFn?.()) return;
 
-      cursor += 1;
+      loopState.cursor += 1;
     }
   }
 
@@ -820,8 +866,8 @@ export class StepExecutionEngine {
     const { eventBus } = this.deps;
     const scheduler = new ParallelScheduler(maxConcurrency);
 
-    for (let layerIdx = 0; layerIdx < layers.length; layerIdx++) {
-      const layer = layers[layerIdx]!;
+    await layers.reduce<Promise<void>>(async (previous, layer, layerIdx) => {
+      await previous;
 
       if (isSettledFn?.() || signal?.aborted) return;
 
@@ -843,7 +889,7 @@ export class StepExecutionEngine {
           reflector,
           observer
         );
-        continue;
+        return;
       }
 
       // Multi-step layer → parallel execution
@@ -870,20 +916,21 @@ export class StepExecutionEngine {
         return result as StepResult;
       });
 
-      const completed: string[] = [];
-      const failed: string[] = [];
-      for (const outcome of outcomes) {
+      const { completed, failed } = await outcomes.reduce<Promise<{ completed: string[]; failed: string[] }>>(
+        async (previousOutcome, outcome) => {
+          const acc = await previousOutcome;
         if (outcome.status === "fulfilled") {
-          completed.push(outcome.stepName);
-        } else {
-          failed.push(outcome.stepName);
+            return { ...acc, completed: [...acc.completed, outcome.stepName] };
+          }
           await eventBus.emit("warning", executionId, {
             message: `Step '${outcome.stepName}' failed in parallel layer: ${
               outcome.error instanceof Error ? outcome.error.message : String(outcome.error)
             }`,
           });
-        }
-      }
+          return { ...acc, failed: [...acc.failed, outcome.stepName] };
+        },
+        Promise.resolve({ completed: [], failed: [] })
+      );
 
       // Record parallel execution metrics on blackboard
       if (blackboard) {
@@ -904,7 +951,7 @@ export class StepExecutionEngine {
       });
 
       if (isSettledFn?.()) return;
-    }
+    }, Promise.resolve());
   }
 
 }

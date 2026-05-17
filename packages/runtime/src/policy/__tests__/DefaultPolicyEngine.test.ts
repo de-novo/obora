@@ -2,8 +2,9 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
-import { DefaultPolicyEngine } from "../DefaultPolicyEngine.js";
+import { DefaultPolicyEngine, validatePolicyConditionsEffect } from "../DefaultPolicyEngine.js";
 
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -19,6 +20,40 @@ describe("DefaultPolicyEngine", () => {
     expect(loadedVersion.hash).toHaveLength(64);
     expect(engine.currentVersion()).toEqual(loadedVersion);
     expect(engine.history()).toHaveLength(1);
+  });
+
+  it("exposes policy load, snapshot, and enforcement as Effect boundaries", async () => {
+    const engine = new DefaultPolicyEngine();
+    const loadedVersion = await Effect.runPromise(engine.loadEffect(fixturePath));
+
+    const directDecision = Effect.runSync(
+      engine.enforceEffect(
+        {
+          type: "tool_call",
+          name: "shell_exec",
+          params: { command: "sudo rm -rf /" },
+        },
+        {},
+      ),
+    );
+    const snapshot = Effect.runSync(engine.snapshotEffect());
+    const snapshotDecision = snapshot.enforce(
+      {
+        type: "resource_use",
+        name: "budget",
+      },
+      {
+        currentTokens: 100001,
+      },
+    );
+
+    expect(loadedVersion.source).toBe(fixturePath);
+    expect(directDecision).toMatchObject({ type: "deny", rule: "tools.shell_exec" });
+    expect(snapshotDecision).toEqual({
+      type: "deny",
+      reason: "Token limit exceeded",
+      rule: "resources.maxTokens",
+    });
   });
 
   it("enforces tool/sandbox/resource/gate rules in order", async () => {
@@ -110,6 +145,22 @@ describe("DefaultPolicyEngine", () => {
         rule: "tools.release",
       },
     });
+  });
+
+  it("exposes inline policy validation as an Effect boundary", () => {
+    const invalidPolicyEffect = validatePolicyConditionsEffect({
+      tools: [
+        {
+          name: "conditional",
+          effect: "allow",
+          when: { condition: "context.missing(" },
+        },
+      ],
+    });
+
+    expect(() => Effect.runSync(invalidPolicyEffect)).toThrow(
+      "[POLICY_2007] Invalid tool condition at tools.conditional:",
+    );
   });
 
   it("keeps snapshot isolation between running and newly created cells", () => {

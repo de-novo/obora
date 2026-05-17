@@ -28,10 +28,10 @@
 
 ## Functional TypeScript
 
-- New or modified TypeScript and JavaScript should avoid `let` and loop statements.
+- Source TypeScript and JavaScript must not introduce `let` or loop statements; the current functional-policy baseline is zero.
 - Prefer `const`, `ReadonlyArray`, `map`, `filter`, `reduce`, `flatMap`, `Object.entries`, and small pure helpers.
 - For async sequencing or resource boundaries, prefer EffectTS APIs such as `Effect.gen`, `Effect.forEach`, `Effect.acquireRelease`, and `Ref`.
-- `pnpm verify:functional` is a file-level ratchet. Do not rebaseline `scripts/release/functional-policy-baseline.json` upward without documenting the reason and follow-up cleanup.
+- `pnpm verify:functional` is a zero-baseline file-level ratchet. Do not rebaseline `scripts/release/functional-policy-baseline.json` upward without documenting the reason and follow-up cleanup.
 - After actually reducing `let` or loop counts, run `pnpm verify:functional:update` instead of hand-editing `scripts/release/functional-policy-baseline.json`. The updater rejects increases unless `--allow-increase` is passed with explicit reviewer approval.
 
 ## EffectTS Boundary
@@ -40,12 +40,22 @@
 - Keep existing public synchronous APIs backward-compatible unless the task is explicitly a breaking-change lane.
 - Add tests around the synchronous API and the Effect API when introducing a new Effect boundary.
 
+## Web Surface Transition
+
+- Treat `@obora/dashboard` as a deprecated legacy monitoring/bootstrap surface. Keep its gates green while smoke/release checks still depend on it, but do not add new operator product work there.
+- Put new operator-facing web work in `@obora/ops`.
+- `@obora/ops` should cover graph workflow authoring, system prompt management, and execution history inspection first.
+- Treat prompts entered during ops workflow authoring as system prompts. Label and serialize workflow-level and step-level prompts as `systemPrompt`.
+- Keep ops UI state transitions in typed pure helpers, maintain the zero `let` / loop baseline, and introduce EffectTS boundaries before adding backend workflow validation, policy evaluation, or execution mutation APIs.
+- When deprecating or removing dashboard behavior, document whether the old responsibility moved to `@obora/ops`, stayed as server/bootstrap compatibility, or was intentionally removed in a breaking cleanup lane.
+
 ## Dependencies
 
 - `pnpm verify:deps` must pass after manifest or lockfile changes.
+- `pnpm audit --audit-level moderate` must pass before claiming dependency health.
 - `pnpm outdated -r --format json` should return `{}` before claiming dependency freshness. Registry access may require a non-sandboxed run.
 - Do not reintroduce deprecated `@mariozechner/pi-agent-core` or `@mariozechner/pi-ai`; use `@earendil-works/*`.
-- Keep shared dependency ranges consistent through `scripts/release/verify-dependency-policy.mjs`.
+- Keep shared dependency ranges and required transitive security overrides consistent through `scripts/release/verify-dependency-policy.mjs`.
 
 ## Deprecated And Compatibility Surfaces
 

@@ -39,9 +39,10 @@ export class PluginLoader {
 
   async unloadAll(): Promise<void> {
     const names = [...this.loaded.keys()];
-    for (const name of names) {
-      await this.unload(name);
-    }
+    await names.reduce<Promise<void>>(
+      (previous, name) => previous.then(() => this.unload(name)),
+      Promise.resolve()
+    );
   }
 
   listLoaded(): string[] {

@@ -394,38 +394,34 @@ export class OboraRuntime {
     const stepsToRerun =
       checkpointIdx > 0 ? allSteps.slice(checkpointIdx) : [...allSteps];
 
-    const restoredState: Record<string, unknown> = {};
-    if (mode === "from_checkpoint" && options?.startFromStep) {
-      for (const skippedStep of stepsToSkip) {
+    const restoredState =
+      mode === "from_checkpoint" && options?.startFromStep
+        ? stepsToSkip.reduce<Record<string, unknown>>((state, skippedStep) => {
         const originalOutput = execution.outputs?.[skippedStep];
         if (originalOutput !== undefined) {
-          restoredState[skippedStep] = originalOutput;
+            state[skippedStep] = originalOutput;
         }
-      }
-    }
+          return state;
+        }, {})
+        : {};
 
-    const nonDeterminismWarnings: NonDeterminismWarning[] = [];
-    if (options?.detectNonDeterminism) {
-      const warning: NonDeterminismWarning = {
+    const nonDeterminismWarnings: NonDeterminismWarning[] = options?.detectNonDeterminism
+      ? [
+        {
         type: "state_external",
         description: "Non-determinism detection is limited in simulation mode",
         severity: "info",
-      };
-      nonDeterminismWarnings.push(warning);
-      for (const stepName of stepsToRerun) {
-        const output = execution.outputs?.[stepName];
-        if (!(stepName in execution.outputs)) {
-          nonDeterminismWarnings.push({
+        },
+        ...stepsToRerun
+          .filter((stepName) => !(stepName in execution.outputs))
+          .map((stepName): NonDeterminismWarning => ({
             type: "state_external",
             description: `Potential non-determinism: no original output for step '${stepName}'`,
             stepName,
             severity: "warning",
-          });
-          continue;
-        }
-
-      }
-    }
+          })),
+      ]
+      : [];
 
     const plan: ReExecutionPlan = {
       executionId,
@@ -439,26 +435,30 @@ export class OboraRuntime {
       createdAt: new Date(),
     };
 
-    const stepResults: StepReExecutionResult[] = [];
-    for (const stepName of stepsToRerun) {
-      const result: StepReExecutionResult = {
-        stepName,
-        status: "completed",
-        matchesOriginal: true,
-      };
+    const stepResults = await stepsToRerun.reduce<Promise<StepReExecutionResult[]>>(
+      async (previous, stepName) => {
+        const results = await previous;
+        const result: StepReExecutionResult = {
+          stepName,
+          status: "completed",
+          matchesOriginal: true,
+        };
 
-      await this.eventBus.emit("reexecution_step_start", reExecutionId, { stepName });
+        await this.eventBus.emit("reexecution_step_start", reExecutionId, { stepName });
 
-      if (options?.onStepComplete) {
-        await options.onStepComplete(stepName, result);
-      }
+        if (options?.onStepComplete) {
+          await options.onStepComplete(stepName, result);
+        }
 
-      await this.eventBus.emit("reexecution_step_end", reExecutionId, {
-        stepName,
-        status: "completed",
-      });
-      stepResults.push(result);
-    }
+        await this.eventBus.emit("reexecution_step_end", reExecutionId, {
+          stepName,
+          status: "completed",
+        });
+
+        return [...results, result];
+      },
+      Promise.resolve([])
+    );
 
     const diffReport: ReExecutionDiffReport = {
       executionId,

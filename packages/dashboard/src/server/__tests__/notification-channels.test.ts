@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createDashboardServer } from '../index.js';
 import { createChannel } from '../notification/channel-factory.js';
 import { ConsoleChannel } from '../notification/console-channel.js';
 import { WebhookChannel } from '../notification/webhook-channel.js';
 import type { ExecutionEvent, NotificationRule } from '../types.js';
+import { createQuietDashboardServer as createDashboardServer } from './test-server.js';
 
 const servers: Array<Awaited<ReturnType<typeof createDashboardServer>>['app']> = [];
 

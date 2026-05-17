@@ -134,39 +134,31 @@ export class SnapshotManager {
    * @returns 스냅샷 목록
    */
   list(options?: ListSnapshotOptions): Snapshot[] {
-    let snapshots = Array.from(this.storage.values());
-
-    // 필터링
-    if (options?.tags && options.tags.length > 0) {
-      snapshots = snapshots.filter(snapshot =>
-        options.tags!.some(tag =>
-          snapshot.meta.tags?.includes(tag)
-        )
+    const snapshots = Array.from(this.storage.values())
+      .filter(snapshot =>
+        options?.tags && options.tags.length > 0
+          ? options.tags.some(tag =>
+            snapshot.meta.tags?.includes(tag)
+          )
+          : true
+      )
+      .filter(snapshot =>
+        options?.sessionId
+          ? snapshot.meta.sessionId === options.sessionId
+          : true
       );
+
+    if (!options?.sortBy) {
+      return snapshots;
     }
 
-    if (options?.sessionId) {
-      snapshots = snapshots.filter(snapshot =>
-        snapshot.meta.sessionId === options.sessionId
-      );
-    }
+    return [...snapshots].sort((a, b) => {
+      const comparison = options.sortBy === 'date'
+        ? a.meta.createdAt.getTime() - b.meta.createdAt.getTime()
+        : a.meta.id.localeCompare(b.meta.id);
 
-    // 정렬
-    if (options?.sortBy) {
-      snapshots.sort((a, b) => {
-        let comparison = 0;
-
-        if (options.sortBy === 'date') {
-          comparison = a.meta.createdAt.getTime() - b.meta.createdAt.getTime();
-        } else if (options.sortBy === 'id') {
-          comparison = a.meta.id.localeCompare(b.meta.id);
-        }
-
-        return options.order === 'desc' ? -comparison : comparison;
-      });
-    }
-
-    return snapshots;
+      return options.order === 'desc' ? -comparison : comparison;
+    });
   }
 
   /**

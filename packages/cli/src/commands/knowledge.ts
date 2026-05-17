@@ -136,7 +136,7 @@ async function runKnowledgeList(
     return;
   }
 
-  for (const entry of results) console.log(formatEntry(entry));
+  results.forEach((entry) => console.log(formatEntry(entry)));
 }
 
 async function runKnowledgeQuery(
@@ -166,7 +166,7 @@ async function runKnowledgeQuery(
     return;
   }
 
-  for (const entry of results) console.log(formatEntry(entry));
+  results.forEach((entry) => console.log(formatEntry(entry)));
 }
 
 async function runKnowledgeSearch(
@@ -189,7 +189,7 @@ async function runKnowledgeSearch(
     return;
   }
 
-  for (const entry of results) console.log(formatEntry(entry));
+  results.forEach((entry) => console.log(formatEntry(entry)));
 }
 
 async function runKnowledgeStats(
@@ -198,12 +198,12 @@ async function runKnowledgeStats(
 ): Promise<void> {
   const entries = await loadKnowledgeEntries();
   const domainCount = new Map<string, number>();
-  for (const entry of entries) {
-    for (const tag of entry.tags ?? []) {
+  entries.forEach((entry) => {
+    (entry.tags ?? []).forEach((tag) => {
       const domain = tag.split(".")[0] ?? "unknown";
       domainCount.set(domain, (domainCount.get(domain) ?? 0) + 1);
-    }
-  }
+    });
+  });
 
   const payload = {
     entries: entries.length,
@@ -218,9 +218,9 @@ async function runKnowledgeStats(
   }
 
   console.log(`Entries: ${payload.entries}`);
-  for (const domain of payload.domains) {
+  payload.domains.forEach((domain) => {
     console.log(`- ${domain.domain}: ${domain.count}`);
-  }
+  });
 }
 
 async function runKnowledgeSchemaShow(
@@ -229,15 +229,16 @@ async function runKnowledgeSchemaShow(
 ): Promise<void> {
   const schemaPath = resolve(process.cwd(), ".obora/knowledge-schema.yaml");
 
-  let raw: string;
-  try {
-    raw = await readFile(schemaPath, "utf-8");
-  } catch (error) {
-    throw new CLIError(
-      `Failed to read knowledge schema: ${getErrorMessage(error)}`,
-      ExitCode.EXECUTION_FAILED
-    );
-  }
+  const raw = await (async () => {
+    try {
+      return await readFile(schemaPath, "utf-8");
+    } catch (error) {
+      throw new CLIError(
+        `Failed to read knowledge schema: ${getErrorMessage(error)}`,
+        ExitCode.EXECUTION_FAILED
+      );
+    }
+  })();
 
   if (shouldOutputJson(opts.json, globalOpts)) {
     try {

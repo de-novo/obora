@@ -24,9 +24,22 @@ export interface WorkflowHooks {
 
 const WORKFLOW_HOOK_KEYS = ["pre_step", "post_step", "pre_validation", "post_cycle"] as const;
 
+export interface ExecutionTraceConfig {
+  /** Whether to generate execution traces for this workflow/step. Default: true. */
+  enabled?: boolean;
+  /** Trace validation behavior. Default: "strict". */
+  validation?: "strict" | "warn" | "off";
+  /** Enrichment mode for subjective fields. Default: "none". */
+  enrichment?: "none" | "heuristic" | "llm";
+  /** Maximum number of upstream traces to inject into context. Default: 3. */
+  maxHistorySteps?: number;
+}
+
 export interface WorkflowStepConfig extends Record<string, unknown> {
   validation?: ValidationStepConfig;
   repair_loop?: RepairLoopConfig;
+  /** Per-step execution trace overrides. */
+  execution_traces?: ExecutionTraceConfig;
 }
 
 export interface WorkflowStepOutput {
@@ -137,6 +150,7 @@ export interface WorkflowDef<
 > {
   name: string;
   version?: string;
+  description?: string;
   steps: TStep[];
   hooks?: WorkflowHooks;
   variables?: TVariables;
@@ -150,6 +164,8 @@ export interface WorkflowDef<
   sharedMemory?: WorkflowSharedMemoryConfig;
   /** TKG staging projection overrides for this workflow. */
   tkgProjection?: WorkflowTKGProjectionConfig;
+  /** Execution trace configuration for this workflow. */
+  executionTraces?: ExecutionTraceConfig;
 }
 
 export interface OnFailConfig {
@@ -252,8 +268,7 @@ export class Workflow {
     Workflow.validateHooks(def.hooks, "workflow");
 
     const steps = def.steps as unknown[];
-    const seenStepNames = new Set<string>();
-    for (const step of steps) {
+    const seenStepNames = steps.reduce<Set<string>>((seen, step) => {
       if (!step || typeof step !== "object") {
         throw OboraError.invalidWorkflow("Each workflow step must be an object");
       }
@@ -264,13 +279,14 @@ export class Workflow {
 
       Workflow.validateHooks(s.hooks, `step '${s.name}'`);
 
-      if (seenStepNames.has(s.name)) {
+      if (seen.has(s.name)) {
         throw OboraError.invalidWorkflow(`Duplicate workflow step name: ${s.name}`);
       }
-      seenStepNames.add(s.name);
-    }
+      seen.add(s.name);
+      return seen;
+    }, new Set<string>());
 
-    for (const step of steps) {
+    steps.forEach((step) => {
       const s = step as Record<string, unknown>;
       const onFail = s.on_fail as Record<string, unknown> | undefined;
       if (onFail?.goto !== undefined) {
@@ -279,7 +295,7 @@ export class Workflow {
           throw OboraError.invalidWorkflow(routeError);
         }
       }
-    }
+    });
 
     return compiled as WorkflowDef;
   }
@@ -298,10 +314,10 @@ export class Workflow {
     }
 
     const hooks = input as Record<string, unknown>;
-    for (const key of WORKFLOW_HOOK_KEYS) {
+    WORKFLOW_HOOK_KEYS.forEach((key) => {
       const hook = hooks[key];
       if (hook === undefined) {
-        continue;
+        return;
       }
       if (
         !hook ||
@@ -311,6 +327,6 @@ export class Workflow {
       ) {
         throw OboraError.invalidWorkflow(`${owner} hook '${key}' must define a shell string`);
       }
-    }
+    });
   }
 }

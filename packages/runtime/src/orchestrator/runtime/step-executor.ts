@@ -3,6 +3,7 @@
  */
 
 import type { Step } from "../workflow/index.js";
+import { Effect } from "effect";
 import {
   type AgentConfig,
   SkillLoader,
@@ -173,14 +174,15 @@ async function executeOnce(
     };
   }
 
-  let abortHandler: (() => void) | undefined;
-
-  let unsubscribe: (() => void) | undefined;
+  const cleanupState = {
+    abortHandler: undefined as (() => void) | undefined,
+    unsubscribe: undefined as (() => void) | undefined,
+  };
 
   try {
     const subscribable = agent as BaseAgent & { subscribe?: (listener: (event: unknown) => void) => () => void };
     if (typeof subscribable.subscribe === "function") {
-      unsubscribe = subscribable.subscribe((event) => {
+      cleanupState.unsubscribe = subscribable.subscribe((event) => {
         onEvent?.(event);
       });
     }
@@ -191,20 +193,19 @@ async function executeOnce(
         signal,
       } as AgentContext),
       new Promise<never>((_resolve, reject) => {
-        abortHandler = () => reject(new DOMException("Aborted", "AbortError"));
-        signal.addEventListener("abort", abortHandler, { once: true });
+        cleanupState.abortHandler = () => reject(new DOMException("Aborted", "AbortError"));
+        signal.addEventListener("abort", cleanupState.abortHandler, { once: true });
       }),
     ]);
 
     if (!result.success) {
-      let diagnosisCode: ErrorCode;
-      if (externalSignal?.aborted) {
-        diagnosisCode = "E4006";
-      } else if (timeoutCtrl.signal.aborted) {
-        diagnosisCode = "E4002";
-      } else {
-        diagnosisCode = result.error ? mapErrorToDiagnosis(result.error) : "E4001";
-      }
+      const diagnosisCode: ErrorCode = externalSignal?.aborted
+        ? "E4006"
+        : timeoutCtrl.signal.aborted
+          ? "E4002"
+          : result.error
+            ? mapErrorToDiagnosis(result.error)
+            : "E4001";
 
       return {
         success: false,
@@ -242,10 +243,10 @@ async function executeOnce(
       ...(e instanceof Error ? { errorMeta: buildStepErrorMetadata(e, diagnosisCode) } : {}),
     };
   } finally {
-    if (abortHandler) {
-      signal.removeEventListener("abort", abortHandler);
+    if (cleanupState.abortHandler) {
+      signal.removeEventListener("abort", cleanupState.abortHandler);
     }
-    unsubscribe?.();
+    cleanupState.unsubscribe?.();
     clearTimeout(timeoutId);
   }
 }
@@ -260,14 +261,39 @@ export async function executeStep(
   context: AgentContext,
   options?: ExecuteStepOptions,
 ): Promise<StepResult> {
-  let agent: BaseAgent;
-  try {
-    agent = await resolver.resolve({
-      agent: step.agent,
-      type: step.agent,
-      config: options?.resolvedAgentConfig,
-    });
-  } catch {
+  return Effect.runPromise(executeStepEffect(step, resolver, context, options));
+}
+
+export function executeStepEffect(
+  step: Step,
+  resolver: AgentResolver,
+  context: AgentContext,
+  options?: ExecuteStepOptions,
+): Effect.Effect<StepResult, unknown> {
+  return Effect.tryPromise({
+    try: () => executeStepPromise(step, resolver, context, options),
+    catch: (error) => error,
+  });
+}
+
+async function executeStepPromise(
+  step: Step,
+  resolver: AgentResolver,
+  context: AgentContext,
+  options?: ExecuteStepOptions,
+): Promise<StepResult> {
+  const agent = await (async (): Promise<BaseAgent | undefined> => {
+    try {
+      return await resolver.resolve({
+        agent: step.agent,
+        type: step.agent,
+        config: options?.resolvedAgentConfig,
+      });
+    } catch {
+      return undefined;
+    }
+  })();
+  if (!agent) {
     return {
       success: false,
       error: `Agent resolution failed for '${step.agent}'`,
@@ -283,16 +309,18 @@ export async function executeStep(
     teardown(loaded: unknown[]): Promise<void>;
   };
 
-  let loadedSkills: Awaited<ReturnType<RuntimeSkillLoader["loadSkills"]>> | undefined;
   const skillLoader = new SkillLoader(new SkillRegistry({ cwd: process.cwd() })) as RuntimeSkillLoader;
 
-  if (step.skills && step.skills.length > 0) {
-    loadedSkills = await skillLoader.loadSkills(step.skills, {
-      cwd: process.cwd(),
-      agentId: agent.id,
-      stepName: step.name,
-    });
+  const loadedSkills =
+    step.skills && step.skills.length > 0
+      ? await skillLoader.loadSkills(step.skills, {
+          cwd: process.cwd(),
+          agentId: agent.id,
+          stepName: step.name,
+        })
+      : undefined;
 
+  if (loadedSkills) {
     const configurable = agent as BaseAgent & {
       configureRuntimeExtensions?: (input: { tools?: unknown[]; systemPromptAppend?: string }) => void;
     };
@@ -303,22 +331,22 @@ export async function executeStep(
     });
   }
 
-  let timeoutMs: number;
-  if (options?.timeoutMs != null) {
-    timeoutMs = options.timeoutMs;
-  } else if (step.timeout) {
-    try {
-      timeoutMs = parseDuration(step.timeout);
-    } catch {
-      timeoutMs = DEFAULT_TIMEOUT_MS;
-    }
-  } else {
-    timeoutMs = DEFAULT_TIMEOUT_MS;
-  }
+  const timeoutMs =
+    options?.timeoutMs != null
+      ? options.timeoutMs
+      : step.timeout
+        ? (() => {
+            try {
+              return parseDuration(step.timeout);
+            } catch {
+              return DEFAULT_TIMEOUT_MS;
+            }
+          })()
+        : DEFAULT_TIMEOUT_MS;
 
   try {
     const maxAttempts = Math.max(1, (options?.retryAttempts ?? 0) + 1);
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const runAttempt = async (attempt: number): Promise<StepResult> => {
       const result = await executeOnce(step, agent, context, timeoutMs, options?.signal, options?.onEvent);
       if (result.success) return result;
 
@@ -353,13 +381,9 @@ export async function executeStep(
         }
         throw e;
       }
-    }
-
-    return {
-      success: false,
-      error: "Unknown execution failure",
-      diagnosisCode: "E4001",
+      return runAttempt(attempt + 1);
     };
+    return await runAttempt(1);
   } finally {
     if (loadedSkills) {
       await skillLoader.teardown(loadedSkills.loaded);

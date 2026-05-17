@@ -129,11 +129,11 @@ export class ActorRuntime {
     });
 
     const failedIds = new Set(failed.map((entry) => entry.id));
-    for (const zombieId of this.zombies) {
+    this.zombies.forEach((zombieId) => {
       if (!failedIds.has(zombieId)) {
         failed.push({ id: zombieId, error: new ActorStopTimeoutError(zombieId) });
       }
-    }
+    });
 
     this.actors.clear();
     this.isRunning = false;
@@ -187,7 +187,7 @@ export class ActorRuntime {
     this.log(`Spawning actor: ${config.id || "auto-generated"} (${config.role})`);
 
     const startTime = Date.now();
-    let actor: Actor | null = null;
+    const actorRef = { current: null as Actor | null };
 
     try {
       const spawnAbort = new AbortController();
@@ -198,7 +198,7 @@ export class ActorRuntime {
       createPromise.catch(() => {});
 
       try {
-        actor = await Promise.race([
+        actorRef.current = await Promise.race([
           createPromise,
           delay(this.config.spawnTimeout, spawnAbort.signal).then(() => {
             createAbort.abort();
@@ -214,6 +214,10 @@ export class ActorRuntime {
       }
 
       // Protect auto-generated IDs during in-flight start/registration window
+      const actor = actorRef.current;
+      if (!actor) {
+        throw new Error(`Actor spawn failed: ${config.id || "unknown"}`);
+      }
       const hadSpawningActorId = this.spawningActorIds.has(actor.id);
       if (hadSpawningActorId && actor.id !== reservedId) {
         throw new Error(`Actor already exists: ${actor.id}`);
@@ -253,7 +257,8 @@ export class ActorRuntime {
       return actor;
     } catch (error) {
       // Cleanup on timeout or error
-      if (actor) {
+      if (actorRef.current) {
+        const actor = actorRef.current;
         const cleanupAbort = new AbortController();
         const cleanupStopPromise = Promise.resolve(actor.stop());
         cleanupStopPromise.catch(() => {});
@@ -285,8 +290,8 @@ export class ActorRuntime {
       if (reservedId) {
         this.spawningActorIds.delete(reservedId);
       }
-      if (actor) {
-        this.spawningActorIds.delete(actor.id);
+      if (actorRef.current) {
+        this.spawningActorIds.delete(actorRef.current.id);
       }
     }
   }
@@ -335,27 +340,25 @@ export class ActorRuntime {
     config: ActorConfig,
     restartCount: number
   ): Promise<Actor> {
-    let attempt = restartCount;
-
-    while (attempt < this.config.maxRestarts) {
-      this.log(`Retrying actor restart: ${actorId} (attempt ${attempt + 1})`);
-
-      const backoff = this.calculateBackoff(attempt);
-      if (backoff > 0) {
-        await delay(backoff);
-      }
-
-      try {
-        const newActor = await this.spawn(config);
-        this.log(`Actor restarted: ${actorId}`);
-        return newActor;
-      } catch (error) {
-        this.log(`Actor retry restart failed: ${actorId}`, error);
-        attempt += 1;
-      }
+    if (restartCount >= this.config.maxRestarts) {
+      throw new Error(`Max restarts (${this.config.maxRestarts}) exceeded for actor: ${actorId}`);
     }
 
-    throw new Error(`Max restarts (${this.config.maxRestarts}) exceeded for actor: ${actorId}`);
+    this.log(`Retrying actor restart: ${actorId} (attempt ${restartCount + 1})`);
+
+    const backoff = this.calculateBackoff(restartCount);
+    if (backoff > 0) {
+      await delay(backoff);
+    }
+
+    try {
+      const newActor = await this.spawn(config);
+      this.log(`Actor restarted: ${actorId}`);
+      return newActor;
+    } catch (error) {
+      this.log(`Actor retry restart failed: ${actorId}`, error);
+      return this.retryRestart(actorId, config, restartCount + 1);
+    }
   }
 
   /**
@@ -454,7 +457,7 @@ export class ActorRuntime {
 
     this.log(`Stopping actor: ${actorId}`);
 
-    let timedOut = false;
+    const stopState = { timedOut: false };
 
     try {
       const stopAbort = new AbortController();
@@ -472,7 +475,7 @@ export class ActorRuntime {
       } catch (error) {
         stopAbort.abort();
         if (this.isStopTimeoutError(error, actorId)) {
-          timedOut = true;
+          stopState.timedOut = true;
           this.zombies.add(actorId);
         }
         throw error;
@@ -486,7 +489,7 @@ export class ActorRuntime {
     } finally {
       this.actors.delete(actorId);
       this.actorConfigs.delete(actorId);
-      if (timedOut) {
+      if (stopState.timedOut) {
         this.log(`Actor marked as zombie: ${actorId}`);
       }
       this.log(`Actor removed: ${actorId}`);

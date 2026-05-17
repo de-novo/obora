@@ -41,10 +41,7 @@ export interface TKGRollbackRestoreSummary {
 }
 
 function dedupeRollbackEntries(entries: TKGRollbackEntry[]): TKGRollbackEntry[] {
-  const seen = new Map<string, TKGRollbackEntry>();
-  for (const entry of entries) {
-    seen.set(entry.id, entry);
-  }
+  const seen = new Map(entries.map((entry) => [entry.id, entry]));
   return [...seen.values()];
 }
 

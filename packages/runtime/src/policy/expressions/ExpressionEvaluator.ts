@@ -161,29 +161,22 @@ function validateRegexPattern(pattern: string): void {
 
 function resolveField(path: string[], ctx: ExpressionContext): unknown {
   const [root, ...segments] = path;
-  let current: unknown;
+  const roots: Record<string, unknown> = {
+    action: ctx.action,
+    context: ctx.context,
+    state: ctx.state,
+    step: ctx.step,
+    execution: ctx.execution,
+    actor: ctx.actor,
+    metrics: ctx.metrics,
+    previousResults: ctx.previousResults,
+  };
 
-  if (root === "action") {
-    current = ctx.action;
-  } else if (root === "context") {
-    current = ctx.context;
-  } else if (root === "state") {
-    current = ctx.state;
-  } else if (root === "step") {
-    current = ctx.step;
-  } else if (root === "execution") {
-    current = ctx.execution;
-  } else if (root === "actor") {
-    current = ctx.actor;
-  } else if (root === "metrics") {
-    current = ctx.metrics;
-  } else if (root === "previousResults") {
-    current = ctx.previousResults;
-  } else {
+  if (!root || !Object.hasOwn(roots, root)) {
     throw new ExpressionEvaluationError(`Unsupported root '${root}' in field path`);
   }
 
-  for (const segment of segments) {
+  return segments.reduce<unknown>((current, segment) => {
     if (BLOCKED_FIELD_NAMES.has(segment)) {
       throw new ExpressionEvaluationError(`Blocked field segment '${segment}'`);
     }
@@ -196,10 +189,8 @@ function resolveField(path: string[], ctx: ExpressionContext): unknown {
       return undefined;
     }
 
-    current = (current as Record<string, unknown>)[segment];
-  }
-
-  return current;
+    return (current as Record<string, unknown>)[segment];
+  }, roots[root]);
 }
 
 function ensureComparable(left: unknown, right: unknown, operator: string): void {

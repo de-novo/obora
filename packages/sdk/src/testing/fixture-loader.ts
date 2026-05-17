@@ -56,7 +56,7 @@ export function validateFixture(data: unknown): YamlFixture {
       throw fixtureError("Fixture 'expect.events' must be an array");
     }
 
-    for (const event of data.expect.events) {
+    data.expect.events.forEach((event) => {
       if (!isRecord(event) || typeof event.type !== "string" || event.type.trim().length === 0) {
         throw fixtureError("Each item in 'expect.events' must include a non-empty string 'type'");
       }
@@ -64,7 +64,7 @@ export function validateFixture(data: unknown): YamlFixture {
       if (event.contains !== undefined && !isRecord(event.contains)) {
         throw fixtureError("'expect.events[].contains' must be an object when provided");
       }
-    }
+    });
   }
 
   if (data.expect.errors !== undefined) {
@@ -72,11 +72,11 @@ export function validateFixture(data: unknown): YamlFixture {
       throw fixtureError("Fixture 'expect.errors' must be an array");
     }
 
-    for (const error of data.expect.errors) {
+    data.expect.errors.forEach((error) => {
       if (!isRecord(error) || typeof error.code !== "string" || error.code.trim().length === 0) {
         throw fixtureError("Each item in 'expect.errors' must include a non-empty string 'code'");
       }
-    }
+    });
   }
 
   if (data.mocks !== undefined) {
@@ -117,9 +117,9 @@ export function fixtureToTestCase(fixture: YamlFixture): WorkflowTestCase {
   const agents = fixture.mocks?.agents?.map((spec) => {
     const agent = new MockAgent(spec.name);
 
-    for (const [stepName, output] of Object.entries(spec.responses)) {
+    Object.entries(spec.responses).forEach(([stepName, output]) => {
       agent.onStep(stepName, () => ({ output }));
-    }
+    });
 
     return agent;
   });
@@ -152,7 +152,7 @@ function validateMockEntries(entries: unknown, kind: "agents" | "tools"): void {
     throw fixtureError(`Fixture 'mocks.${kind}' must be an array`);
   }
 
-  for (const item of entries) {
+  entries.forEach((item) => {
     if (!isRecord(item)) {
       throw fixtureError(`Each item in 'mocks.${kind}' must be an object`);
     }
@@ -164,7 +164,7 @@ function validateMockEntries(entries: unknown, kind: "agents" | "tools"): void {
     if (!isRecord(item.responses)) {
       throw fixtureError(`Each item in 'mocks.${kind}' must include an object 'responses'`);
     }
-  }
+  });
 }
 
 function isWorkflowDef(value: unknown): value is WorkflowDef {

@@ -86,8 +86,11 @@ export class EventFactory {
     if (idGenerator) {
       this.idGenerator = idGenerator;
     } else {
-      let counter = 0;
-      this.idGenerator = () => `evt_${++counter}`;
+      const state = { counter: 0 };
+      this.idGenerator = () => {
+        state.counter += 1;
+        return `evt_${state.counter}`;
+      };
     }
   }
 
