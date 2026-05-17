@@ -31,6 +31,9 @@ import { OboraError } from "../runtime-types.js";
 import { DEFAULTS } from "../defaults.js";
 import { resolveFailureRoute } from "../conditional-routing.js";
 import type { RouteResolution } from "../conditional-routing.js";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
+import { existsSync } from "node:fs";
 import {
   summarizeBlackboardSnapshot,
   summarizeObserverMetrics,
@@ -118,6 +121,30 @@ export class StepExecutionEngine {
       maxNoProgressIterations: repairConfig.max_no_progress_iterations,
       repeatedCriticalIssueCeiling: repairConfig.repeated_critical_issue_ceiling,
     };
+  }
+
+  private getTraceOutputDir(executionId: string): string | undefined {
+    const config = this.deps.config;
+    const basePath = config.sharedMemory?.file?.basePath
+      ?? resolve(process.cwd(), ".obora", "traces");
+    return join(basePath, executionId);
+  }
+
+  private async persistTrace(
+    executionId: string,
+    stepName: string,
+    trace: Record<string, unknown>
+  ): Promise<void> {
+    const dir = this.getTraceOutputDir(executionId);
+    if (!dir) return;
+
+    const filePath = join(dir, `${stepName}.json`);
+    try {
+      await mkdir(dirname(filePath), { recursive: true });
+      await writeFile(filePath, JSON.stringify(trace, null, 2) + "\n", "utf-8");
+    } catch (err) {
+      this.deps.config.logger?.warn?.("[trace-persistence] Failed to save trace:", err);
+    }
   }
 
   resolveValidationResult(step: WorkflowStep, output: unknown): ValidationResult | undefined {
@@ -540,7 +567,7 @@ export class StepExecutionEngine {
         agent: step.agent,
       });
 
-      const stepOutcome = { result: undefined as { output: unknown; raw?: unknown } | undefined };
+      const stepOutcome = { result: undefined as StepResult | undefined };
       const hookOutputs: Partial<Record<WorkflowHookLifecycle, HookExecutionResult>> = {};
 
       try {
@@ -569,9 +596,11 @@ export class StepExecutionEngine {
         }
         stepOutcome.result = await stepExecutor.executeStep(step, {
           previousOutputs: execution.outputs,
+          traces: execution.traces,
           signal,
           ...(Object.keys(hookOutputs).length > 0 ? { hookOutputs } : {}),
           ...(repairContext ? { repairContext } : {}),
+          ...(workflow.executionTraces ? { traceConfig: workflow.executionTraces } : {}),
         });
 
         const postStepHook = await this.runStepHook(workflow, step, "post_step", executionId, {
@@ -727,6 +756,11 @@ export class StepExecutionEngine {
       execution.outputs[step.name] = result.output;
       execution.stepRecords[step.name] =
         Object.keys(hookOutputs).length > 0 ? { ...result, hooks: hookOutputs } : result;
+      if (result.trace) {
+        execution.traces ??= {};
+        execution.traces[step.name] = result.trace;
+        await this.persistTrace(executionId, step.name, result.trace as unknown as Record<string, unknown>);
+      }
       execution.completedSteps.push(step.name);
 
       // Record step output on blackboard

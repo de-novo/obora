@@ -37,7 +37,7 @@ const sourceExtensions = new Set([
 ]);
 
 const mutablePattern = new RegExp("\\b" + "le" + "t\\b", "g");
-const loopPattern = new RegExp("\\b" + "fo" + "r\\s*(await\\s*)?\\(", "g");
+const loopPattern = new RegExp("(?<!\\.)\\b" + "fo" + "r\\s*(await\\s*)?\\(", "g");
 
 const hasSourceExtension = (path) => [...sourceExtensions].some((extension) => path.endsWith(extension));
 

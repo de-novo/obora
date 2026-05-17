@@ -20,6 +20,7 @@ export async function loadAgentsFromYamlFile(path?: string): Promise<Map<string,
         provider?: string;
         model?: string;
         temperature?: number;
+        prompt?: string;
       }
     >;
   };
@@ -31,6 +32,7 @@ export async function loadAgentsFromYamlFile(path?: string): Promise<Map<string,
       provider: info.provider,
       model: info.model,
       temperature: info.temperature,
+      prompt: info.prompt,
     }));
     return map;
   }, new Map());
@@ -55,6 +57,7 @@ export function loadWorkflowAgents(workflow?: WorkflowDef): Map<string, AgentFac
       model?: string;
       temperature?: number;
       api_key?: string;
+      prompt?: string;
     };
 
     map.set(name, () => ({
@@ -64,6 +67,7 @@ export function loadWorkflowAgents(workflow?: WorkflowDef): Map<string, AgentFac
       model: agentInfo.model,
       temperature: agentInfo.temperature,
       api_key: agentInfo.api_key,
+      prompt: agentInfo.prompt,
     }));
     return map;
   }, workflowAgents);

@@ -231,6 +231,7 @@ export interface RuntimeExecution<
   completedSteps: string[];
   stepRecords: TStepRecords;
   outputs: TOutputs;
+  traces?: Record<string, ExecutionTrace>;
 }
 
 export type RunStatus = "queued" | "running" | "waiting" | "suspended" | "completed" | "failed" | "aborted";
@@ -461,4 +462,46 @@ export interface PersistedRepairLoopSummary {
   lastExhaustReason?: string;
   lastStopCategory?: "no_progress" | "repeated_critical_issue" | "exhausted";
   recentValidationFailures: PersistedValidationFailureDetail[];
+}
+
+// ── Execution Trace Types ──────────────────────────────────────────────────
+
+export interface ExecutionTrace {
+  step: string;
+  agent: string;
+  timestamp: string;
+  version: string;
+  
+  task_summary: string;
+  methodology: string;
+  tools_used: string[];
+  
+  key_decisions: string[];
+  decision_rationale: string;
+  alternatives_considered: string[];
+  
+  assumptions: string[];
+  constraints: string[];
+  risks_identified: string[];
+  
+  inputs_processed: string[];
+  dependencies_used: Array<{
+    step: string;
+    purpose: string;
+  }>;
+  
+  output_summary: string;
+  output_format: string;
+  artifacts_created: string[];
+  metrics?: Record<string, unknown>;
+  
+  issues_encountered: string[];
+  workarounds_applied: string[];
+  confidence_level: "high" | "medium" | "low";
+  known_limitations: string[];
+  
+  implications_for_next: string[];
+  recommended_next: string[];
+  open_questions: string[];
+  context_for_successors: string;
 }

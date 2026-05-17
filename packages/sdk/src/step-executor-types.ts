@@ -1,17 +1,22 @@
 import type { RepairContext } from "./validation-repair.js";
 import type { HookExecutionResult, WorkflowHookLifecycle } from "./hooks.js";
-import type { LLMAdapterLike, ToolHandler } from "./runtime-types.js";
+import type { LLMAdapterLike, ToolHandler, ExecutionTrace } from "./runtime-types.js";
+import type { ExecutionTraceConfig } from "./workflow.js";
 
 export interface StepContext<TPreviousOutputs extends Record<string, unknown> = Record<string, unknown>> {
   previousOutputs: TPreviousOutputs;
+  traces?: Record<string, ExecutionTrace>;
   signal?: AbortSignal;
   repairContext?: RepairContext;
   hookOutputs?: Partial<Record<WorkflowHookLifecycle, HookExecutionResult>>;
+  /** Workflow-level execution trace configuration. */
+  traceConfig?: ExecutionTraceConfig;
 }
 
 export interface StepResult<TOutput = unknown> {
   output: TOutput;
   raw?: unknown;
+  trace?: ExecutionTrace;
   votes?: Array<{
     participant: string;
     vote: "APPROVE" | "REJECT" | "REQUEST_CHANGES";
@@ -31,6 +36,12 @@ export interface StepExecutorConfig {
   verbose?: boolean;
   /** Project root directory for path resolution. Defaults to process.cwd(). */
   projectRoot?: string;
+  logger?: {
+    warn?: (...args: unknown[]) => void;
+    error?: (...args: unknown[]) => void;
+    info?: (...args: unknown[]) => void;
+    debug?: (...args: unknown[]) => void;
+  };
   resolveAgentLLM?: (
     agentName?: string
   ) =>
@@ -79,4 +90,18 @@ export interface StepExecutorConfig {
    * by default unless explicitly limited here.
    */
   toolLimits?: Record<string, number>;
+  /**
+   * Execution trace validation behavior.
+   * - `"strict"` (default): fail the step if trace schema validation fails
+   * - `"warn"`: log validation issues but continue
+   * - `"off"`: skip validation entirely
+   */
+  traceValidation?: "strict" | "warn" | "off";
+  /**
+   * Trace enrichment mode for subjective fields (key_decisions, assumptions, risks).
+   * - `"none"`: skip enrichment (default, deterministic)
+   * - `"heuristic"`: rule-based extraction from output
+   * - `"llm"`: additional LLM call for deeper analysis (costly)
+   */
+  traceEnrichment?: "none" | "heuristic" | "llm";
 }

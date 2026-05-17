@@ -24,9 +24,22 @@ export interface WorkflowHooks {
 
 const WORKFLOW_HOOK_KEYS = ["pre_step", "post_step", "pre_validation", "post_cycle"] as const;
 
+export interface ExecutionTraceConfig {
+  /** Whether to generate execution traces for this workflow/step. Default: true. */
+  enabled?: boolean;
+  /** Trace validation behavior. Default: "strict". */
+  validation?: "strict" | "warn" | "off";
+  /** Enrichment mode for subjective fields. Default: "none". */
+  enrichment?: "none" | "heuristic" | "llm";
+  /** Maximum number of upstream traces to inject into context. Default: 3. */
+  maxHistorySteps?: number;
+}
+
 export interface WorkflowStepConfig extends Record<string, unknown> {
   validation?: ValidationStepConfig;
   repair_loop?: RepairLoopConfig;
+  /** Per-step execution trace overrides. */
+  execution_traces?: ExecutionTraceConfig;
 }
 
 export interface WorkflowStepOutput {
@@ -137,6 +150,7 @@ export interface WorkflowDef<
 > {
   name: string;
   version?: string;
+  description?: string;
   steps: TStep[];
   hooks?: WorkflowHooks;
   variables?: TVariables;
@@ -150,6 +164,8 @@ export interface WorkflowDef<
   sharedMemory?: WorkflowSharedMemoryConfig;
   /** TKG staging projection overrides for this workflow. */
   tkgProjection?: WorkflowTKGProjectionConfig;
+  /** Execution trace configuration for this workflow. */
+  executionTraces?: ExecutionTraceConfig;
 }
 
 export interface OnFailConfig {

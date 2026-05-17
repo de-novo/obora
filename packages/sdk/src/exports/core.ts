@@ -28,3 +28,4 @@ export { topologicalSort, groupByParallelizableLevels } from "../dependency-reso
 export { BUILTIN_TOOLS } from "../step-executor.js";
 export { resolveFailureRoute, validateRoutes, getAllRouteTargets } from "../conditional-routing.js";
 export { DEFAULTS } from "../defaults.js";
+export * from "../project/index.js";
