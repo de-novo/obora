@@ -1,6 +1,13 @@
+import { resolve } from "node:path";
+
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      "@": resolve(__dirname, "src/client"),
+    },
+  },
   test: {
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
     environment: "jsdom",
@@ -13,6 +20,7 @@ export default defineConfig({
         "**/*.config.ts",
         "src/**/*.test.ts",
         "src/**/*.test.tsx",
+        "src/client/components/ui/**",
         "src/client/main.tsx",
       ],
     },
