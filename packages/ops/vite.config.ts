@@ -4,6 +4,11 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      "@": resolve(__dirname, "src/client"),
+    },
+  },
   plugins: [react()],
   root: resolve(__dirname, "src/client"),
   server: {
