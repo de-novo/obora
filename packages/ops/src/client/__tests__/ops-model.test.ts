@@ -1,15 +1,22 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  addDraftWorkflow,
   addAgentNode,
+  addExecutionRun,
   compileWorkflowYaml,
   connectNodes,
   disconnectEdge,
   filterRunStepsByTraceFilter,
   getSelectedNode,
   getSelectedRun,
+  getSelectedWorkflow,
   getTraceSeverity,
+  getWorkflowDiagnostics,
+  hashForOpsRoute,
+  initialOpsWorkspaceState,
   initialOpsState,
+  parseOpsRoute,
   parseTraceFilter,
   parseWorkflowNodeKind,
   parseWorkflowNodeStatus,
@@ -17,8 +24,12 @@ import {
   resolveGraphEdges,
   selectNode,
   selectRun,
+  selectWorkflow,
   summarizeOpsState,
+  summarizeWorkflowLibrary,
   traceExportFilenameForStep,
+  updateSelectedWorkflowState,
+  updateSelectedWorkflowMetadata,
   updateSelectedNode,
   updateNodePositions,
   updateWorkflowPrompt,
@@ -55,7 +66,189 @@ describe("ops-model", () => {
       readyCount: 2,
       activeRuns: 1,
       failedRuns: 1,
+      criticalDiagnostics: 0,
+      warningDiagnostics: 1,
     });
+  });
+
+  it("summarizes and selects workflow library records", () => {
+    const summaries = summarizeWorkflowLibrary(initialOpsWorkspaceState.workflows);
+    const selected = selectWorkflow(initialOpsWorkspaceState, "workflow-release-readiness");
+    const unchanged = selectWorkflow(selected, "missing-workflow");
+
+    expect(summaries.map((workflow) => workflow.workflowName)).toEqual([
+      "intake-to-decision",
+      "repair-loop-triage",
+      "release-readiness",
+    ]);
+    expect(summaries[0]).toMatchObject({
+      stepCount: 4,
+      readyCount: 2,
+      reviewCount: 1,
+      status: "draft",
+    });
+    expect(summaries[2]).toMatchObject({
+      stepCount: 3,
+      readyCount: 3,
+      reviewCount: 0,
+      status: "ready",
+    });
+    expect(getSelectedWorkflow(selected).state.workflowName).toBe("release-readiness");
+    expect(getSelectedWorkflow(unchanged).state.workflowName).toBe("release-readiness");
+  });
+
+  it("parses and formats workflow page routes", () => {
+    expect(parseOpsRoute("")).toEqual({ mode: "workflows", workflowId: undefined });
+    expect(parseOpsRoute("#/workflows/workflow-release-readiness/builder")).toEqual({
+      mode: "graph",
+      workflowId: "workflow-release-readiness",
+    });
+    expect(parseOpsRoute("#/workflows/workflow-release-readiness/instructions")).toEqual({
+      mode: "prompt",
+      workflowId: "workflow-release-readiness",
+    });
+    expect(parseOpsRoute("#/workflows/workflow%20draft/runs")).toEqual({
+      mode: "runs",
+      workflowId: "workflow draft",
+    });
+    expect(parseOpsRoute("#/workflows/workflow-release-readiness/settings")).toEqual({
+      mode: "settings",
+      workflowId: "workflow-release-readiness",
+    });
+    expect(hashForOpsRoute({ mode: "workflows", workflowId: undefined })).toBe("#/workflows");
+    expect(hashForOpsRoute({ mode: "workflows", workflowId: "workflow draft" })).toBe(
+      "#/workflows/workflow%20draft"
+    );
+    expect(hashForOpsRoute({ mode: "prompt", workflowId: "workflow draft" })).toBe(
+      "#/workflows/workflow%20draft/instructions"
+    );
+    expect(hashForOpsRoute({ mode: "settings", workflowId: "workflow draft" })).toBe(
+      "#/workflows/workflow%20draft/settings"
+    );
+  });
+
+  it("adds a new draft workflow and updates only the selected workflow state", () => {
+    const created = addDraftWorkflow(initialOpsWorkspaceState);
+    const selected = getSelectedWorkflow(created);
+    const updated = updateSelectedWorkflowState(created, (state) =>
+      updateWorkflowPrompt(state, "Keep this draft auditable.")
+    );
+    const intakeWorkflow = updated.workflows.find(
+      (workflow) => workflow.id === "workflow-intake-to-decision"
+    );
+
+    expect(created.workflows).toHaveLength(4);
+    expect(selected).toMatchObject({
+      id: "workflow-draft-4",
+      description: "New local workflow draft.",
+      state: {
+        workflowName: "draft-workflow-4",
+        selectedNodeId: "start-request",
+      },
+    });
+    expect(selected.state.nodes).toHaveLength(1);
+    expect(getSelectedWorkflow(updated).state.systemPrompt).toBe("Keep this draft auditable.");
+    expect(intakeWorkflow?.state.systemPrompt).toContain("workflow operator");
+  });
+
+  it("adds a draft workflow from operator-provided creation fields", () => {
+    const created = addDraftWorkflow(initialOpsWorkspaceState, {
+      workflowName: "vendor-review",
+      description: "Review vendor requests before approval.",
+      systemPrompt: "Validate vendor requests and keep the approval trail auditable.",
+      firstStepTitle: "Receive request",
+    });
+    const selected = getSelectedWorkflow(created);
+    const fallbackCreated = addDraftWorkflow(initialOpsWorkspaceState, {
+      workflowName: " ",
+      description: " ",
+      systemPrompt: " ",
+      firstStepTitle: " ",
+    });
+
+    expect(selected).toMatchObject({
+      id: "workflow-draft-4",
+      description: "Review vendor requests before approval.",
+      state: {
+        workflowName: "vendor-review",
+        systemPrompt: "Validate vendor requests and keep the approval trail auditable.",
+        selectedNodeId: "start-request",
+      },
+    });
+    expect(selected.state.nodes[0]?.title).toBe("Receive request");
+    expect(getSelectedWorkflow(fallbackCreated)).toMatchObject({
+      description: "New local workflow draft.",
+      state: {
+        workflowName: "draft-workflow-4",
+      },
+    });
+    expect(getSelectedWorkflow(fallbackCreated).state.nodes[0]?.title).toBe("Start request");
+  });
+
+  it("updates selected workflow metadata without mutating other workflow records", () => {
+    const selected = selectWorkflow(initialOpsWorkspaceState, "workflow-release-readiness");
+    const updated = updateSelectedWorkflowMetadata(selected, {
+      workflowName: "release-readiness-v2",
+      description: "Updated release gate workflow.",
+    });
+    const intakeWorkflow = updated.workflows.find(
+      (workflow) => workflow.id === "workflow-intake-to-decision"
+    );
+
+    expect(getSelectedWorkflow(updated)).toMatchObject({
+      description: "Updated release gate workflow.",
+      state: {
+        workflowName: "release-readiness-v2",
+      },
+    });
+    expect(intakeWorkflow?.state.workflowName).toBe("intake-to-decision");
+  });
+
+  it("reports graph authoring diagnostics for blocked, missing, and dangling workflow state", () => {
+    const diagnostics = getWorkflowDiagnostics({
+      ...initialOpsState,
+      workflowName: " ",
+      systemPrompt: "",
+      nodes: [
+        {
+          ...initialOpsState.nodes[0]!,
+          title: "",
+          systemPrompt: "",
+          status: "ready",
+        },
+        {
+          ...initialOpsState.nodes[1]!,
+          id: "ingest-request",
+        },
+        {
+          ...initialOpsState.nodes[2]!,
+          id: "orphan-node",
+        },
+      ],
+      edges: [
+        {
+          id: "dangling-edge",
+          source: "missing-source",
+          target: "orphan-node",
+          label: "",
+        },
+      ],
+    });
+
+    expect(diagnostics.map((diagnostic) => diagnostic.id)).toEqual(
+      expect.arrayContaining([
+        "workflow-name-missing",
+        "workflow-system-prompt-missing",
+        "ingest-request-duplicate",
+        "dangling-edge-dangling",
+        "dangling-edge-label-missing",
+        "ingest-request-title-missing",
+        "ingest-request-systemPrompt-missing",
+        "orphan-node-no-incoming-edge",
+        "orphan-node-no-outgoing-edge",
+      ])
+    );
+    expect(diagnostics.filter((diagnostic) => diagnostic.severity === "critical")).toHaveLength(5);
   });
 
   it("selects valid nodes and ignores unknown node ids", () => {
@@ -145,6 +338,38 @@ describe("ops-model", () => {
 
     expect(updated.systemPrompt).toBe("Keep every decision auditable.");
     expect(initialOpsState.systemPrompt).toContain("workflow operator");
+  });
+
+  it("adds an execution run with an auditable operator request", () => {
+    const updated = addExecutionRun(initialOpsState, {
+      inputPrompt: "  Decide whether the refund request should be approved.  ",
+      inputPayload: '  {"ticket":"OPS-42"}  ',
+      startedAt: "2026-05-18T00:00:00.000Z",
+    });
+    const selectedRun = getSelectedRun(updated);
+
+    expect(selectedRun).toMatchObject({
+      id: "run-intake-to-decision-004",
+      workflowName: "intake-to-decision",
+      inputPrompt: "Decide whether the refund request should be approved.",
+      inputPayload: '{"ticket":"OPS-42"}',
+      status: "running",
+      startedAt: "2026-05-18T00:00:00.000Z",
+    });
+    expect(updated.runs[0]?.id).toBe("run-intake-to-decision-004");
+    expect(selectedRun.steps.map((step) => step.status)).toEqual([
+      "running",
+      "queued",
+      "queued",
+      "queued",
+    ]);
+    expect(
+      addExecutionRun(initialOpsState, {
+        inputPrompt: " ",
+        inputPayload: "",
+        startedAt: "2026-05-18T00:00:00.000Z",
+      })
+    ).toBe(initialOpsState);
   });
 
   it("adds an agent node without creating implicit edges", () => {
