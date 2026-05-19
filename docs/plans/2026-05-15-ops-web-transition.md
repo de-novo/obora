@@ -42,6 +42,7 @@
 4. Move live execution history from seeded client state to runtime history APIs.
 5. Add graph validation feedback for unreachable nodes, blocked terminal handoffs, and missing policy/model fields.
 6. Keep every prompt entered in the ops workflow builder serialized as `systemPrompt`; user task prompts are not part of this authoring surface yet.
+7. Implement global/project workflow lookup and web entry points from `docs/design/workflow-scope-and-web-entry.md` before adding `workflow build`, `workflow view`, or chat-session workflow switching.
 
 ## Verification Log
 

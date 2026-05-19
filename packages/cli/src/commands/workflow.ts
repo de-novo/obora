@@ -1,11 +1,20 @@
 import {
   addStep,
   createWorkflow,
+  discoverWorkflowLocators,
   listWorkflows,
   readWorkflow,
   removeStep,
+  resolveWorkflowTarget,
   updateStep,
   validateWorkflow,
+} from "@obora/sdk";
+import type {
+  WorkflowDiscoveryResult,
+  WorkflowLocator,
+  WorkflowResolveIntent,
+  WorkflowResolveRequest,
+  WorkflowResolveScope,
 } from "@obora/sdk";
 import { Command } from "commander";
 import { resolve } from "node:path";
@@ -15,10 +24,19 @@ import { handleCommandAction } from "../utils/error-handler.js";
 import { ExitCode } from "../utils/exit-codes.js";
 import { formatter } from "../utils/formatter.js";
 import { getGlobalOpts, type GlobalOptions } from "../utils/global-opts.js";
+import { openWorkflowUrl } from "../workflow-web/browser.js";
+import { startWorkflowWebBridge } from "../workflow-web/server.js";
+import type { WorkflowWebMode } from "../workflow-web/types.js";
 
 interface WorkflowOptions {
   json?: boolean;
   workflowsDir?: string;
+  scope?: string;
+  project?: string;
+  globalWorkflowsDir?: string;
+  noOpen?: boolean;
+  host?: string;
+  port?: string;
 }
 
 type OnFailRoute = { when?: string; target: string };
@@ -82,6 +100,148 @@ function shouldOutputJson(localJson: boolean | undefined, globalOpts: GlobalOpti
   return Boolean(localJson || globalOpts.json);
 }
 
+function parseWorkflowResolveScope(scope: string | undefined): WorkflowResolveScope | undefined {
+  if (!scope) return undefined;
+  if (scope === "project" || scope === "global" || scope === "all") return scope;
+  throw new CLIError(
+    `Invalid workflow scope: ${scope}. Expected project, global, or all.`,
+    ExitCode.VALIDATION_ERROR
+  );
+}
+
+function parsePort(port: string | undefined): number | undefined {
+  if (!port) return undefined;
+  const parsed = Number(port);
+  if (Number.isInteger(parsed) && parsed > 0) return parsed;
+  throw new CLIError(`Invalid workflow web port: ${port}`, ExitCode.VALIDATION_ERROR);
+}
+
+function buildWorkflowResolveRequest(
+  target: string | undefined,
+  options: WorkflowOptions,
+  intent: WorkflowResolveIntent
+): WorkflowResolveRequest {
+  return {
+    ...(target ? { target } : {}),
+    intent,
+    cwd: process.cwd(),
+    scope: parseWorkflowResolveScope(options.scope),
+    ...(options.project ? { projectRoot: resolve(options.project) } : {}),
+    ...(options.globalWorkflowsDir
+      ? { globalWorkflowDir: resolve(options.globalWorkflowsDir) }
+      : {}),
+  };
+}
+
+function buildWorkflowDiscoveryRequest(options: WorkflowOptions): WorkflowResolveRequest {
+  return {
+    cwd: process.cwd(),
+    scope: parseWorkflowResolveScope(options.scope) ?? "all",
+    ...(options.project ? { projectRoot: resolve(options.project) } : {}),
+    ...(options.globalWorkflowsDir
+      ? { globalWorkflowDir: resolve(options.globalWorkflowsDir) }
+      : {}),
+  };
+}
+
+function locatorsForListScope(discovery: WorkflowDiscoveryResult, scope: WorkflowResolveScope) {
+  return scope === "project"
+    ? { project: discovery.project, global: [] as ReadonlyArray<WorkflowLocator> }
+    : scope === "global"
+      ? { project: [] as ReadonlyArray<WorkflowLocator>, global: discovery.global }
+      : { project: discovery.project, global: discovery.global };
+}
+
+function formatLocatorLine(locator: WorkflowLocator): string {
+  const shadowLabel = locator.shadowedBy
+    ? " shadowed by project"
+    : locator.shadows
+      ? " shadows global"
+      : "";
+  const description = locator.description ? ` - ${locator.description}` : "";
+  return `- ${locator.name} (${locator.stepCount} steps) ${locator.displayPath}${shadowLabel}${description}`;
+}
+
+function printLocatorGroup(title: string, locators: ReadonlyArray<WorkflowLocator>): void {
+  if (locators.length === 0) return;
+  console.log(title);
+  locators.map(formatLocatorLine).forEach((line) => console.log(line));
+}
+
+function workflowListPayload(discovery: WorkflowDiscoveryResult, scope: WorkflowResolveScope) {
+  const grouped = locatorsForListScope(discovery, scope);
+  return {
+    scope,
+    roots: discovery.roots,
+    project: grouped.project,
+    global: grouped.global,
+    diagnostics: discovery.diagnostics,
+  };
+}
+
+async function printScopedWorkflowList(
+  discovery: WorkflowDiscoveryResult,
+  scope: WorkflowResolveScope
+): Promise<void> {
+  const grouped = locatorsForListScope(discovery, scope);
+  if (grouped.project.length === 0 && grouped.global.length === 0) {
+    formatter.info("No workflows found in project or global workflow roots");
+    return;
+  }
+  printLocatorGroup("Project workflows", grouped.project);
+  printLocatorGroup("Global workflows", grouped.global);
+}
+
+function webModeForIntent(intent: WorkflowResolveIntent): WorkflowWebMode {
+  return intent === "build" ? "build" : "view";
+}
+
+async function runWorkflowWebEntry(
+  target: string | undefined,
+  intent: Extract<WorkflowResolveIntent, "view" | "build">,
+  options: WorkflowOptions,
+  globalOpts: GlobalOptions
+): Promise<void> {
+  const result = await resolveWorkflowTarget(buildWorkflowResolveRequest(target, options, intent));
+  if (result.status !== "resolved" || !result.locator) {
+    throw new CLIError(
+      result.diagnostics.join("\n") || `Workflow ${target ?? ""} could not be resolved.`,
+      ExitCode.VALIDATION_ERROR
+    );
+  }
+
+  const bridge = await startWorkflowWebBridge({
+    locator: result.locator,
+    mode: webModeForIntent(intent),
+    host: options.host,
+    port: parsePort(options.port),
+    open: !options.noOpen,
+  });
+
+  if (shouldOutputJson(options.json, globalOpts)) {
+    formatter.json({
+      status: result.status,
+      mode: webModeForIntent(intent),
+      locator: result.locator,
+      candidates: result.candidates,
+      diagnostics: result.diagnostics,
+      url: bridge.url,
+      apiBaseUrl: bridge.apiBaseUrl,
+    });
+    await bridge.close();
+    return;
+  }
+
+  result.diagnostics.forEach((diagnostic) => formatter.warn(diagnostic));
+  formatter.success(`Workflow ${intent} web bridge started.`);
+  formatter.info(bridge.url);
+  if (!options.noOpen) {
+    await openWorkflowUrl(bridge.url);
+  }
+  formatter.info("Press Ctrl+C to stop the workflow web bridge.");
+  await bridge.waitUntilClosed();
+}
+
 function parseValue(value: string): unknown {
   if (value === "true") return true;
   if (value === "false") return false;
@@ -101,7 +261,7 @@ function parseConfigEntry(entry: string): { keys: string[]; value: unknown } {
   if (!keyPath || rawValue === undefined) {
     throw new CLIError(
       `Invalid --config entry: ${entry}. Expected key=value with dot-separated keys.`,
-      ExitCode.VALIDATION_ERROR,
+      ExitCode.VALIDATION_ERROR
     );
   }
   return { keys: keyPath.split("."), value: parseValue(rawValue) };
@@ -122,7 +282,7 @@ function assignNestedConfig(
     if (isRecord(existing)) {
       throw new CLIError(
         `Invalid --config entry: ${entry}. '${key}' is already set to an object value.`,
-        ExitCode.VALIDATION_ERROR,
+        ExitCode.VALIDATION_ERROR
       );
     }
     return { ...current, [key]: value };
@@ -131,7 +291,7 @@ function assignNestedConfig(
   if (existing !== undefined && !isRecord(existing)) {
     throw new CLIError(
       `Invalid --config entry: ${entry}. '${key}' is already set to a non-object value.`,
-      ExitCode.VALIDATION_ERROR,
+      ExitCode.VALIDATION_ERROR
     );
   }
 
@@ -164,9 +324,7 @@ function buildHooks(options: StepAddOptions): StepHooks | undefined {
   return optionalObject({
     ...(options.hookPreStep ? { pre_step: { shell: options.hookPreStep } } : {}),
     ...(options.hookPostStep ? { post_step: { shell: options.hookPostStep } } : {}),
-    ...(options.hookPreValidation
-      ? { pre_validation: { shell: options.hookPreValidation } }
-      : {}),
+    ...(options.hookPreValidation ? { pre_validation: { shell: options.hookPreValidation } } : {}),
     ...(options.hookPostCycle ? { post_cycle: { shell: options.hookPostCycle } } : {}),
   });
 }
@@ -208,7 +366,7 @@ function parseOnFailRoute(route: string): OnFailRoute {
   }
   throw new CLIError(
     `Invalid --on-fail-route: ${route}. Expected target or when:target.`,
-    ExitCode.VALIDATION_ERROR,
+    ExitCode.VALIDATION_ERROR
   );
 }
 
@@ -219,7 +377,12 @@ function buildOnFailDetails(options: StepAddOptions): Omit<OnFailConfig, "goto">
     cooldownMs: options.onFailCooldownMs ? parseInt(options.onFailCooldownMs, 10) : undefined,
     resetState: options.onFailResetState,
     maxCost: options.onFailMaxCost ? parseFloat(options.onFailMaxCost) : undefined,
-    maxCostEscalation: options.onFailMaxCostEscalation as "human" | "dlq" | "fail" | null | undefined,
+    maxCostEscalation: options.onFailMaxCostEscalation as
+      | "human"
+      | "dlq"
+      | "fail"
+      | null
+      | undefined,
   };
 }
 
@@ -275,11 +438,30 @@ export function createWorkflowCommand(): Command {
   workflow
     .command("list [workflows-dir]")
     .description("List available workflows")
+    .option("--scope <scope>", "Workflow scope to list (all, project, global)")
+    .option("--project <path>", "Project root for scoped workflow discovery")
+    .option("--global-workflows-dir <path>", "Global workflow directory override")
     .option("--json", "Output as JSON")
     .action(async function (this: Command, dir: string | undefined, options: WorkflowOptions) {
       const globalOpts = getGlobalOpts(this);
       await handleCommandAction(
         async () => {
+          if (!dir || options.scope || options.project || options.globalWorkflowsDir) {
+            const scope = parseWorkflowResolveScope(options.scope) ?? "all";
+            const discovery = await discoverWorkflowLocators({
+              ...buildWorkflowDiscoveryRequest(options),
+              scope,
+            });
+
+            if (shouldOutputJson(options.json, globalOpts)) {
+              formatter.json(workflowListPayload(discovery, scope));
+              return;
+            }
+
+            await printScopedWorkflowList(discovery, scope);
+            return;
+          }
+
           const workflowsDir = resolve(dir ?? "workflows");
           const entries = await listWorkflows(workflowsDir);
 
@@ -298,6 +480,46 @@ export function createWorkflowCommand(): Command {
             const desc = entry.description ? ` - ${entry.description}` : "";
             console.log(`- ${entry.name} (${entry.stepCount} steps)${desc}`);
           });
+        },
+        { verbose: Boolean(globalOpts.verbose) }
+      );
+    });
+
+  workflow
+    .command("view [target]")
+    .description("Open a workflow graph in the local web viewer")
+    .option("--scope <scope>", "Workflow scope to resolve (project or global)")
+    .option("--project <path>", "Project root for scoped workflow discovery")
+    .option("--global-workflows-dir <path>", "Global workflow directory override")
+    .option("--host <host>", "Workflow web bridge host")
+    .option("--port <port>", "Workflow web bridge port")
+    .option("--no-open", "Print the URL without opening a browser")
+    .option("--json", "Output as JSON")
+    .action(async function (this: Command, target: string | undefined, options: WorkflowOptions) {
+      const globalOpts = getGlobalOpts(this);
+      await handleCommandAction(
+        async () => {
+          await runWorkflowWebEntry(target, "view", options, globalOpts);
+        },
+        { verbose: Boolean(globalOpts.verbose) }
+      );
+    });
+
+  workflow
+    .command("build [target]")
+    .description("Open a workflow in the local web builder")
+    .option("--scope <scope>", "Workflow scope to resolve (project or global)")
+    .option("--project <path>", "Project root for scoped workflow discovery")
+    .option("--global-workflows-dir <path>", "Global workflow directory override")
+    .option("--host <host>", "Workflow web bridge host")
+    .option("--port <port>", "Workflow web bridge port")
+    .option("--no-open", "Print the URL without opening a browser")
+    .option("--json", "Output as JSON")
+    .action(async function (this: Command, target: string | undefined, options: WorkflowOptions) {
+      const globalOpts = getGlobalOpts(this);
+      await handleCommandAction(
+        async () => {
+          await runWorkflowWebEntry(target, "build", options, globalOpts);
         },
         { verbose: Boolean(globalOpts.verbose) }
       );
@@ -336,7 +558,9 @@ export function createWorkflowCommand(): Command {
               const deps = step.depends_on ? ` ← ${step.depends_on.join(", ")}` : "";
               const agent = step.agent ? ` [${step.agent}]` : "";
               const pattern = step.pattern ? ` (${step.pattern})` : "";
-              const onFail = step.on_fail ? ` [retry→${typeof step.on_fail.goto === "string" ? step.on_fail.goto : "routes"}]` : "";
+              const onFail = step.on_fail
+                ? ` [retry→${typeof step.on_fail.goto === "string" ? step.on_fail.goto : "routes"}]`
+                : "";
               console.log(`  - ${step.name}${agent}${pattern}${deps}${onFail}`);
               if (step.description) {
                 console.log(`    ${step.description}`);
@@ -412,8 +636,16 @@ export function createWorkflowCommand(): Command {
     .option("--gate <gate>", "Simple gate name")
     .option("--gate-type <type>", "Gate type (for typed gates)")
     .option("--parallel <agent:prompt>", "Parallel branch (repeatable)", collect, [])
-    .option("--merge <strategy>", "Merge strategy for parallel branches (concat, best_score, consensus, first_success)")
-    .option("--config <key=value>", "Config option (repeatable, e.g. --config validation.enabled=true)", collect, [])
+    .option(
+      "--merge <strategy>",
+      "Merge strategy for parallel branches (concat, best_score, consensus, first_success)"
+    )
+    .option(
+      "--config <key=value>",
+      "Config option (repeatable, e.g. --config validation.enabled=true)",
+      collect,
+      []
+    )
     .option("--hook-pre-step <cmd>", "Pre-step shell hook")
     .option("--hook-post-step <cmd>", "Post-step shell hook")
     .option("--hook-pre-validation <cmd>", "Pre-validation shell hook")

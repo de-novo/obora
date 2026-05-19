@@ -54,6 +54,7 @@ vi.mock("@obora/sdk", () => ({
   formatBindingPreview: vi.fn(() => ""),
   buildOutputPreview: vi.fn(() => []),
   formatOutputPreview: vi.fn(() => ""),
+  resolveWorkflowTarget: vi.fn(),
   OboraRuntime: MockOboraRuntime,
   Workflow: {
     fromYaml: vi.fn(),
@@ -103,6 +104,7 @@ import {
   buildOutputPreview,
   formatBindingPreview,
   formatOutputPreview,
+  resolveWorkflowTarget,
 } from "@obora/sdk";
 import type {
   OneFileStopSemantics,
@@ -222,6 +224,11 @@ describe("run command", () => {
     vi.mocked(loadConfig).mockResolvedValue({} as Awaited<ReturnType<typeof loadConfig>>);
     vi.mocked(detectLLMConfigFromEnv).mockReturnValue(undefined);
     vi.mocked(resolveLLMConfig).mockReturnValue(undefined);
+    vi.mocked(resolveWorkflowTarget).mockResolvedValue({
+      status: "not-found",
+      candidates: [],
+      diagnostics: ["not found"],
+    });
 
     // Runtime defaults
     mockHandle.wait.mockResolvedValue(DEFAULT_RESULT);
@@ -328,6 +335,13 @@ describe("run command", () => {
       const cmd = createRunCommand();
       expect(cmd.options.find((o) => o.long === "--debug-file")).toBeDefined();
     });
+
+    it("should have workflow scope resolution options", () => {
+      const cmd = createRunCommand();
+      expect(cmd.options.find((o) => o.long === "--scope")).toBeDefined();
+      expect(cmd.options.find((o) => o.long === "--project")).toBeDefined();
+      expect(cmd.options.find((o) => o.long === "--global-workflows-dir")).toBeDefined();
+    });
   });
 
   describe("execution option normalization", () => {
@@ -352,6 +366,21 @@ describe("run command", () => {
       );
       expect(() => normalizeRunExecutionOptions({}, { timeout: 1.5 })).toThrow(
         "Invalid execution timeout: 1.5"
+      );
+    });
+
+    it("should normalize and validate workflow scope values", () => {
+      expect(normalizeRunExecutionOptions({}, { scope: "project" })).toEqual(
+        expect.objectContaining({ scope: "project" })
+      );
+      expect(normalizeRunExecutionOptions({}, { scope: "global" })).toEqual(
+        expect.objectContaining({ scope: "global" })
+      );
+      expect(normalizeRunExecutionOptions({}, { scope: "all" })).toEqual(
+        expect.objectContaining({ scope: "all" })
+      );
+      expect(() => normalizeRunExecutionOptions({}, { scope: "workspace" })).toThrow(
+        "Invalid workflow scope: workspace"
       );
     });
   });
@@ -717,6 +746,53 @@ describe("run command", () => {
       await runRun("my-workflow", {});
 
       expect(Workflow.fromYaml).not.toHaveBeenCalled();
+    });
+
+    it("should resolve bare workflow names from project or global workflow files", async () => {
+      const mockWorkflow = { name: "loaded-workflow" };
+      vi.mocked(resolveWorkflowTarget).mockResolvedValue({
+        status: "resolved",
+        locator: {
+          id: "project:loaded-workflow",
+          scope: "project",
+          name: "loaded-workflow",
+          path: "/repo/.obora/workflows/loaded-workflow.yaml",
+          displayPath: ".obora/workflows/loaded-workflow.yaml",
+          editable: true,
+          sourceDir: "/repo/.obora/workflows",
+          stepCount: 1,
+          projectRoot: "/repo",
+        },
+        candidates: [],
+        diagnostics: [],
+      });
+      vi.mocked(Workflow.fromYaml).mockResolvedValue(
+        mockWorkflow as Awaited<ReturnType<typeof Workflow.fromYaml>>
+      );
+
+      await runRun("loaded-workflow", { scope: "project" });
+
+      expect(resolveWorkflowTarget).toHaveBeenCalledWith(
+        expect.objectContaining({
+          target: "loaded-workflow",
+          scope: "project",
+          intent: "run",
+        })
+      );
+      expect(Workflow.fromYaml).toHaveBeenCalledWith("/repo/.obora/workflows/loaded-workflow.yaml");
+      expect(mockRuntimeInstance.define).toHaveBeenCalledWith("loaded-workflow", mockWorkflow);
+    });
+
+    it("should fail ambiguous scoped workflow names before runtime execution", async () => {
+      vi.mocked(resolveWorkflowTarget).mockResolvedValue({
+        status: "ambiguous",
+        candidates: [],
+        diagnostics: ["pass --scope"],
+      });
+
+      await expect(runRun("release-readiness", {})).rejects.toThrow("pass --scope");
+
+      expect(mockRuntimeInstance.run).not.toHaveBeenCalled();
     });
   });
 

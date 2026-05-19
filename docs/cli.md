@@ -16,6 +16,7 @@
 - [`obora expand`](#obora-expand)
 - [`obora judge`](#obora-judge)
 - [`obora run`](#obora-run)
+- [`obora workflow`](#obora-workflow)
 - [`obora status`](#obora-status)
 - [`obora validate`](#obora-validate)
 - [`obora test`](#obora-test)
@@ -559,6 +560,9 @@ obora --json judge [workflow]
 - `--policy <path>` policy YAML path
 - `--dry-run` validate only (no execution) and print resolution/binding/output previews when available
 - `--timeout <ms>` execution timeout in milliseconds (positive integer only)
+- `--scope <project|global|all>` resolve bare workflow names from project/global workflow roots
+- `--project <path>` project root for scoped workflow discovery
+- `--global-workflows-dir <path>` global workflow directory override
 
 ### Examples
 
@@ -579,6 +583,8 @@ obora --json judge --dry-run
 Behavior:
 
 - Supports both local `--json` and root `--json` for `run` and `judge`.
+- Bare workflow names first attempt project/global workflow file resolution. If no file candidate exists, the name remains a runtime workflow name.
+- Ambiguous project/global workflow names fail before execution; pass `--scope project`, `--scope global`, or an exact YAML path.
 - `--timeout` must be a positive integer; malformed values fail with exit code `2`.
 
 Dry-run output includes:
@@ -594,6 +600,62 @@ Dry-run output includes:
 - `2` invalid input JSON or validation failure
 - `3` runtime execution failure
 - `4` timeout/abort mapped from gate/abort conditions
+
+---
+
+## `obora workflow`
+
+List, inspect, author, and open workflow files.
+
+Scoped workflow discovery supports project workflows and global reusable workflows:
+
+- project roots: `.obora/workflows`, then `workflows`
+- global root: `~/.obora/workflows`, unless `--global-workflows-dir` is provided
+
+### Usage
+
+```bash
+obora workflow list [workflows-dir] [--scope all|project|global] [--json]
+obora workflow view [target] [--scope project|global] [--no-open] [--json]
+obora workflow build [target] [--scope project|global] [--no-open] [--json]
+obora workflow show <file> [--json]
+obora workflow create <file> [--name <name>] [--description <desc>]
+```
+
+### Options
+
+- `--scope <project|global|all>` select workflow scope for discovery or resolution
+- `--project <path>` project root for project workflow discovery
+- `--global-workflows-dir <path>` global workflow directory override
+- `--no-open` start the web bridge without launching a browser
+- `--host <host>` local workflow web bridge host
+- `--port <port>` local workflow web bridge port
+- `--json` output structured command results
+
+### Behavior
+
+- `workflow list --scope all` returns grouped `project` and `global` workflow arrays in JSON mode.
+- `workflow view` opens a read-only local web view for the resolved workflow.
+- `workflow build` opens an editable local web builder when the resolved locator is editable.
+- If project and global workflows share a name, `workflow build <name>` requires `--scope` or an exact path.
+- Existing explicit-file commands such as `show`, `create`, `validate`, `add-step`, `remove-step`, and `edit-step` still operate on concrete file paths.
+
+### Examples
+
+```bash
+obora workflow list --scope all
+obora workflow list --scope global --json
+obora workflow view release-readiness --scope project
+obora workflow build code-review --scope global
+obora workflow build release-readiness --scope project --no-open --json
+obora run release-readiness --scope project --dry-run
+```
+
+### Exit Codes
+
+- `0` success
+- `2` invalid scope, ambiguous workflow, or missing scoped workflow
+- `10` local web bridge or CLI failure
 
 ---
 

@@ -1,6 +1,11 @@
 export type { AgentContext, AgentResult } from "../agent.js";
 export type { PolicyDefinition } from "../policy.js";
-export type { PluginType, PluginMetadata, PluginDescriptor, LoadedPlugin } from "../plugin-types.js";
+export type {
+  PluginType,
+  PluginMetadata,
+  PluginDescriptor,
+  LoadedPlugin,
+} from "../plugin-types.js";
 export type { PluginLoaderOptions } from "../plugin-loader.js";
 export type { PluginRegistryOptions, RegisterOptions } from "../plugin-registry.js";
 export type { PluginManagerOptions } from "../plugin-manager.js";
@@ -76,6 +81,17 @@ export type {
   JudgeStopSemantics,
 } from "../one-file-modes.js";
 export type { OboraConfig, ResolvedProviderConfig, ModelPricing } from "../config-loader.js";
+export type {
+  WorkflowDiscoveryResult,
+  WorkflowLocator,
+  WorkflowResolveIntent,
+  WorkflowResolveRequest,
+  WorkflowResolveResult,
+  WorkflowResolveScope,
+  WorkflowResolveStatus,
+  WorkflowScope,
+  WorkflowScopeRoots,
+} from "../workflow-scope/index.js";
 export type {
   StepContext,
   StepExecutorConfig,
@@ -174,16 +190,8 @@ export type {
   StepDiff,
   NonDeterminismWarning,
 } from "../replay.js";
-export type {
-  DLQEntry,
-  DLQSnapshot,
-  DLQStore,
-  DLQSummary,
-} from "../dlq/index.js";
-export type {
-  CircuitBreakerConfig,
-  CircuitState,
-} from "../execution/circuit-breaker.js";
+export type { DLQEntry, DLQSnapshot, DLQStore, DLQSummary } from "../dlq/index.js";
+export type { CircuitBreakerConfig, CircuitState } from "../execution/circuit-breaker.js";
 export type { ExecutionLock } from "../execution/execution-lock.js";
 export type {
   HealthStatus,
@@ -193,11 +201,7 @@ export type {
 } from "../execution/health-check.js";
 export type { ExecutionControllerOptions } from "../execution/execution-controller.js";
 export type { TKGServiceDeps } from "../execution/tkg-service.js";
-export type {
-  Alert,
-  AlertChannel,
-  AlertingConfig,
-} from "../alerting/index.js";
+export type { Alert, AlertChannel, AlertingConfig } from "../alerting/index.js";
 export type {
   MetricPoint,
   HistogramBucket,

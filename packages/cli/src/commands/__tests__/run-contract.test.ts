@@ -6,6 +6,7 @@ import {
   buildResolutionSummary,
   detectLLMConfigFromEnv,
   loadConfig,
+  resolveWorkflowTarget,
   resolveLLMConfig,
   Workflow,
 } from "@obora/sdk";
@@ -36,6 +37,7 @@ vi.mock("@obora/sdk", () => ({
   formatBindingPreview: vi.fn(() => ""),
   buildOutputPreview: vi.fn(() => []),
   formatOutputPreview: vi.fn(() => ""),
+  resolveWorkflowTarget: vi.fn(),
   OboraRuntime: vi.fn(function MockOboraRuntime() {
     return mockRuntimeInstance;
   }),
@@ -76,6 +78,11 @@ describe("run/judge command contracts", () => {
     vi.mocked(loadConfig).mockResolvedValue(undefined);
     vi.mocked(detectLLMConfigFromEnv).mockReturnValue(undefined);
     vi.mocked(resolveLLMConfig).mockReturnValue(undefined);
+    vi.mocked(resolveWorkflowTarget).mockResolvedValue({
+      status: "not-found",
+      candidates: [],
+      diagnostics: ["not found"],
+    });
     vi.mocked(buildResolutionSummary).mockReturnValue({
       provider: null,
       model: null,

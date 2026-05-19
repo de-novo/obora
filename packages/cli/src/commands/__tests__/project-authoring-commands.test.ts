@@ -7,6 +7,7 @@ import {
   addStep,
   createAgent,
   createWorkflow,
+  discoverWorkflowLocators,
   getAgent,
   listWorkflows,
   loadConfig,
@@ -14,6 +15,7 @@ import {
   readWorkflow,
   removeAgent,
   removeStep,
+  resolveWorkflowTarget,
   updateAgent,
   updateStep,
   validateWorkflow,
@@ -49,6 +51,7 @@ vi.mock("@obora/sdk", () => ({
   addStep: vi.fn(),
   createAgent: vi.fn(),
   createWorkflow: vi.fn(),
+  discoverWorkflowLocators: vi.fn(),
   getAgent: vi.fn(),
   listWorkflows: vi.fn(),
   loadConfig: vi.fn(),
@@ -56,6 +59,7 @@ vi.mock("@obora/sdk", () => ({
   readWorkflow: vi.fn(),
   removeAgent: vi.fn(),
   removeStep: vi.fn(),
+  resolveWorkflowTarget: vi.fn(),
   updateAgent: vi.fn(),
   updateStep: vi.fn(),
   validateWorkflow: vi.fn(),
@@ -81,8 +85,25 @@ describe("project authoring commands", () => {
     vi.mocked(addStep).mockResolvedValue(undefined);
     vi.mocked(createAgent).mockResolvedValue(undefined);
     vi.mocked(createWorkflow).mockResolvedValue(undefined);
+    vi.mocked(discoverWorkflowLocators).mockResolvedValue({
+      roots: {
+        cwd: process.cwd(),
+        projectRoot: process.cwd(),
+        projectWorkflowDirs: [resolve(".obora/workflows"), resolve("workflows")],
+        globalWorkflowDir: join(homedir(), ".obora", "workflows"),
+      },
+      project: [],
+      global: [],
+      all: [],
+      diagnostics: [],
+    });
     vi.mocked(removeAgent).mockResolvedValue(undefined);
     vi.mocked(removeStep).mockResolvedValue(undefined);
+    vi.mocked(resolveWorkflowTarget).mockResolvedValue({
+      status: "not-found",
+      candidates: [],
+      diagnostics: [],
+    });
     vi.mocked(updateAgent).mockResolvedValue(undefined);
     vi.mocked(updateStep).mockResolvedValue(undefined);
     vi.mocked(maskProviderAuth).mockReturnValue({ type: "apiKey", apiKey: "sk-...1234" });
@@ -134,17 +155,56 @@ describe("project authoring commands", () => {
     await command.parseAsync(["show", "writer", "--json"], { from: "user" });
     await command.parseAsync(["show", "minimal"], { from: "user" });
     await withRoot(createAgentCommand()).parseAsync(
-      ["--json", "agent", "create", "writer", "--role", "executor", "--description", "Drafts", "--provider", "openai", "--model", "gpt-5", "--temperature", "0.2", "--prompt", "@/tmp/prompt.md", "--per-file", "--project-dir", "/tmp/project"],
-      { from: "user" },
+      [
+        "--json",
+        "agent",
+        "create",
+        "writer",
+        "--role",
+        "executor",
+        "--description",
+        "Drafts",
+        "--provider",
+        "openai",
+        "--model",
+        "gpt-5",
+        "--temperature",
+        "0.2",
+        "--prompt",
+        "@/tmp/prompt.md",
+        "--per-file",
+        "--project-dir",
+        "/tmp/project",
+      ],
+      { from: "user" }
     );
     await command.parseAsync(["create", "minimal"], { from: "user" });
     await command.parseAsync(
-      ["edit", "writer", "--role", "reviewer", "--description", "Reviews", "--provider", "anthropic", "--model", "claude", "--temperature", "0.1", "--prompt", "Inline prompt"],
-      { from: "user" },
+      [
+        "edit",
+        "writer",
+        "--role",
+        "reviewer",
+        "--description",
+        "Reviews",
+        "--provider",
+        "anthropic",
+        "--model",
+        "claude",
+        "--temperature",
+        "0.1",
+        "--prompt",
+        "Inline prompt",
+      ],
+      { from: "user" }
     );
-    await command.parseAsync(["edit", "writer", "--prompt", "@/tmp/edit-prompt.md"], { from: "user" });
+    await command.parseAsync(["edit", "writer", "--prompt", "@/tmp/edit-prompt.md"], {
+      from: "user",
+    });
     await command.parseAsync(["edit", "writer"], { from: "user" });
-    await command.parseAsync(["edit", "writer", "--prompt", "@/tmp/missing-prompt.md"], { from: "user" });
+    await command.parseAsync(["edit", "writer", "--prompt", "@/tmp/missing-prompt.md"], {
+      from: "user",
+    });
     await command.parseAsync(["remove", "writer"], { from: "user" });
     await command.parseAsync(["show", "missing"], { from: "user" });
 
@@ -160,7 +220,7 @@ describe("project authoring commands", () => {
         temperature: 0.2,
         prompt: "Prompt from file",
       }),
-      { perFile: true },
+      { perFile: true }
     );
     expect(updateAgent).toHaveBeenCalledWith(
       process.cwd(),
@@ -172,7 +232,7 @@ describe("project authoring commands", () => {
         model: "claude",
         temperature: 0.1,
         prompt: "Inline prompt",
-      }),
+      })
     );
     expect(updateAgent).toHaveBeenCalledWith(process.cwd(), "writer", { prompt: "Edited prompt" });
     expect(updateAgent).toHaveBeenCalledWith(process.cwd(), "writer", {});
@@ -225,7 +285,10 @@ describe("project authoring commands", () => {
     await command.parseAsync(["show", "workflow.yaml", "--json"], { from: "user" });
     await command.parseAsync(["show", "minimal.yaml"], { from: "user" });
     await command.parseAsync(["show", "missing.yaml"], { from: "user" });
-    await command.parseAsync(["create", "workflow.yaml", "--name", "triage", "--description", "Route requests"], { from: "user" });
+    await command.parseAsync(
+      ["create", "workflow.yaml", "--name", "triage", "--description", "Route requests"],
+      { from: "user" }
+    );
     await command.parseAsync(["create", "fallback.yaml"], { from: "user" });
     await command.parseAsync(["validate", "workflow.yaml"], { from: "user" });
     await command.parseAsync(["validate", "workflow.yaml"], { from: "user" });
@@ -293,9 +356,11 @@ describe("project authoring commands", () => {
         "--on-fail-max-cost-escalation",
         "dlq",
       ],
-      { from: "user" },
+      { from: "user" }
     );
-    await command.parseAsync(["add-step", "workflow.yaml", "retry", "--on-fail-goto", "repair"], { from: "user" });
+    await command.parseAsync(["add-step", "workflow.yaml", "retry", "--on-fail-goto", "repair"], {
+      from: "user",
+    });
     await command.parseAsync(["add-step", "workflow.yaml", "minimal"], { from: "user" });
     await command.parseAsync(
       [
@@ -311,7 +376,7 @@ describe("project authoring commands", () => {
         "--config",
         "label=text",
       ],
-      { from: "user" },
+      { from: "user" }
     );
     await command.parseAsync(
       [
@@ -325,28 +390,60 @@ describe("project authoring commands", () => {
         "--config",
         "metadata.retry.max=2",
       ],
-      { from: "user" },
+      { from: "user" }
     );
     await command.parseAsync(["remove-step", "workflow.yaml", "retry"], { from: "user" });
-    await command.parseAsync(["edit-step", "workflow.yaml", "repair", "--agent", "reviewer", "--description", "Review repair", "--depends-on", "collect,repair"], { from: "user" });
+    await command.parseAsync(
+      [
+        "edit-step",
+        "workflow.yaml",
+        "repair",
+        "--agent",
+        "reviewer",
+        "--description",
+        "Review repair",
+        "--depends-on",
+        "collect,repair",
+      ],
+      { from: "user" }
+    );
     await command.parseAsync(["edit-step", "workflow.yaml", "repair"], { from: "user" });
     const successfulAddStepCalls = vi.mocked(addStep).mock.calls.length;
-    await command.parseAsync(["add-step", "workflow.yaml", "bad-config", "--config", "not-a-pair"], { from: "user" });
+    await command.parseAsync(
+      ["add-step", "workflow.yaml", "bad-config", "--config", "not-a-pair"],
+      { from: "user" }
+    );
     await command.parseAsync(
       ["add-step", "workflow.yaml", "bad-route", "--on-fail-route", "too:many:parts"],
-      { from: "user" },
+      { from: "user" }
     );
     await command.parseAsync(
       ["add-step", "workflow.yaml", "bad-empty-route", "--on-fail-route", ":repair"],
-      { from: "user" },
+      { from: "user" }
     );
     await command.parseAsync(
-      ["add-step", "workflow.yaml", "bad-conflict", "--config", "limits=3", "--config", "limits.max=4"],
-      { from: "user" },
+      [
+        "add-step",
+        "workflow.yaml",
+        "bad-conflict",
+        "--config",
+        "limits=3",
+        "--config",
+        "limits.max=4",
+      ],
+      { from: "user" }
     );
     await command.parseAsync(
-      ["add-step", "workflow.yaml", "bad-reverse-conflict", "--config", "limits.max=4", "--config", "limits=3"],
-      { from: "user" },
+      [
+        "add-step",
+        "workflow.yaml",
+        "bad-reverse-conflict",
+        "--config",
+        "limits.max=4",
+        "--config",
+        "limits=3",
+      ],
+      { from: "user" }
     );
 
     expect(createWorkflow).toHaveBeenCalledWith(workflowPath, {
@@ -382,15 +479,15 @@ describe("project authoring commands", () => {
           maxCost: 1.5,
           maxCostEscalation: "dlq",
         },
-      }),
+      })
     );
     expect(addStep).toHaveBeenCalledWith(
       workflowPath,
-      expect.objectContaining({ name: "retry", onFail: { goto: "repair", maxIterations: 3 } }),
+      expect.objectContaining({ name: "retry", onFail: { goto: "repair", maxIterations: 3 } })
     );
     expect(addStep).toHaveBeenCalledWith(
       workflowPath,
-      expect.objectContaining({ name: "minimal", config: undefined, onFail: undefined }),
+      expect.objectContaining({ name: "minimal", config: undefined, onFail: undefined })
     );
     expect(addStep).toHaveBeenCalledWith(
       workflowPath,
@@ -400,7 +497,7 @@ describe("project authoring commands", () => {
         gate: { type: "approval" },
         config: { flag: false, label: "text" },
         onFail: undefined,
-      }),
+      })
     );
     expect(addStep).toHaveBeenCalledWith(
       workflowPath,
@@ -409,15 +506,15 @@ describe("project authoring commands", () => {
         output: { path: "artifacts/out.txt" },
         config: { metadata: { owner: "ops", retry: { max: 2 } } },
         onFail: undefined,
-      }),
+      })
     );
     expect(addStep).toHaveBeenCalledTimes(successfulAddStepCalls);
     expect(removeStep).toHaveBeenCalledWith(workflowPath, "retry");
-    expect(updateStep).toHaveBeenCalledWith(
-      workflowPath,
-      "repair",
-      { agent: "reviewer", description: "Review repair", depends_on: ["collect", "repair"] },
-    );
+    expect(updateStep).toHaveBeenCalledWith(workflowPath, "repair", {
+      agent: "reviewer",
+      description: "Review repair",
+      depends_on: ["collect", "repair"],
+    });
     expect(updateStep).toHaveBeenCalledWith(workflowPath, "repair", {});
   });
 
@@ -431,7 +528,9 @@ describe("project authoring commands", () => {
     };
     vi.mocked(getDefaultAuthFilePath).mockReturnValue("/tmp/obora-auth.json");
     vi.mocked(readFile)
-      .mockResolvedValueOnce(JSON.stringify({ providers: { openai: { type: "apiKey", apiKey: "sk-test1234" } } }))
+      .mockResolvedValueOnce(
+        JSON.stringify({ providers: { openai: { type: "apiKey", apiKey: "sk-test1234" } } })
+      )
       .mockResolvedValueOnce("defaults:\n  provider: anthropic\n")
       .mockResolvedValueOnce("defaults:\n  provider: openai\n")
       .mockRejectedValueOnce(new Error("missing auth"));
@@ -455,6 +554,8 @@ describe("project authoring commands", () => {
     expect(maskProviderAuth).toHaveBeenCalledWith({ type: "apiKey", apiKey: "sk-test1234" });
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining('"sources"'));
     expect(console.log).toHaveBeenCalledWith("gpt-5");
-    expect(console.error).toHaveBeenCalledWith(expect.stringContaining("No value found at path: missing.path"));
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining("No value found at path: missing.path")
+    );
   });
 });

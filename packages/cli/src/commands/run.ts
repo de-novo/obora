@@ -11,6 +11,7 @@ import {
   formatResolutionSummary,
   loadConfig,
   OboraRuntime,
+  resolveWorkflowTarget,
   resolveLLMConfig,
   Workflow,
 } from "@obora/sdk";
@@ -116,7 +117,13 @@ export function applyRunExecutionOptions(command: Command): Command {
     .option("--show-stop-semantics", "Print derived stop semantics when available")
     .option("--timeout <ms>", "Execution timeout in milliseconds")
     .option("--debug", "Enable live debug trace output and JSONL event log")
-    .option("--debug-file <path>", "Write debug JSONL trace to this file (implies --debug)");
+    .option("--debug-file <path>", "Write debug JSONL trace to this file (implies --debug)")
+    .option(
+      "--scope <scope>",
+      "Resolve workflow names from project, global, or all workflow scopes"
+    )
+    .option("--project <path>", "Project root for scoped workflow discovery")
+    .option("--global-workflows-dir <path>", "Global workflow directory override");
 }
 
 function parseExecutionTimeout(value: unknown): number | undefined {
@@ -140,6 +147,16 @@ function parseExecutionTimeout(value: unknown): number | undefined {
   throw new CLIError(`Invalid execution timeout: ${String(value)}`, ExitCode.VALIDATION_ERROR);
 }
 
+function parseWorkflowResolveScope(value: unknown): "project" | "global" | "all" | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  const scope = String(value);
+  if (scope === "project" || scope === "global" || scope === "all") return scope;
+  throw new CLIError(
+    `Invalid workflow scope: ${scope}. Expected project, global, or all.`,
+    ExitCode.VALIDATION_ERROR
+  );
+}
+
 export function normalizeRunExecutionOptions(
   globalOpts: GlobalOptions,
   commandOpts: Record<string, unknown>
@@ -149,7 +166,45 @@ export function normalizeRunExecutionOptions(
   return {
     ...merged,
     timeout: parseExecutionTimeout(merged.timeout),
+    scope: parseWorkflowResolveScope(merged.scope),
   };
+}
+
+function isYamlWorkflowPath(workflow: string): boolean {
+  return workflow.endsWith(".yaml") || workflow.endsWith(".yml");
+}
+
+async function resolveRunnableWorkflowPath(
+  workflow: string,
+  options: Record<string, unknown>
+): Promise<{ workflowPath: string; diagnostics: ReadonlyArray<string> }> {
+  if (isYamlWorkflowPath(workflow)) {
+    return { workflowPath: workflow, diagnostics: [] };
+  }
+
+  const result = await resolveWorkflowTarget({
+    target: workflow,
+    intent: "run",
+    cwd: process.cwd(),
+    scope: parseWorkflowResolveScope(options.scope),
+    ...(typeof options.project === "string" ? { projectRoot: options.project } : {}),
+    ...(typeof options.globalWorkflowsDir === "string"
+      ? { globalWorkflowDir: options.globalWorkflowsDir }
+      : {}),
+  });
+
+  if (result.status === "resolved" && result.locator) {
+    return { workflowPath: result.locator.path, diagnostics: result.diagnostics };
+  }
+
+  if (result.status === "ambiguous" || options.scope) {
+    throw new CLIError(
+      result.diagnostics.join("\n") || `Workflow not found: ${workflow}`,
+      ExitCode.VALIDATION_ERROR
+    );
+  }
+
+  return { workflowPath: workflow, diagnostics: result.diagnostics };
 }
 
 function clipDebug(value: unknown, max = 180): string {
@@ -317,6 +372,11 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
     runtimeLLM ?? resolvedLLM,
     loadedConfig
   );
+  const workflowResolution = await resolveRunnableWorkflowPath(workflow, options);
+  const workflowPath = workflowResolution.workflowPath;
+  if (!isQuietOutput(options) && !isJsonOutput(options)) {
+    workflowResolution.diagnostics.forEach((diagnostic) => formatter.warn(diagnostic));
+  }
 
   const printPreview = (workflowDef?: {
     steps?: Array<{
@@ -359,12 +419,12 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
       appendFile(debugTrace.filePath!, line, "utf-8")
     );
   };
-  if (workflow.endsWith(".yaml") || workflow.endsWith(".yml")) {
+  if (isYamlWorkflowPath(workflowPath)) {
     const loadedConfigRaw = await import("node:fs/promises").then((m) =>
-      m.readFile(workflow, "utf-8")
+      m.readFile(workflowPath, "utf-8")
     );
     const parsedRaw = await import("yaml").then((m) => m.parse(loadedConfigRaw));
-    const loaded = await Workflow.fromYaml(workflow);
+    const loaded = await Workflow.fromYaml(workflowPath);
     runtime.define(loaded.name, loaded);
     workflowState.name = loaded.name;
     workflowState.expanded = loaded;
@@ -378,7 +438,7 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
     workflowState.archiveEnabled = workflowVariables.archive_enabled === true;
 
     if (isVerboseOutput(options) && !isQuietOutput(options) && !isJsonOutput(options)) {
-      formatter.step(`Loaded workflow YAML: ${workflow} -> ${workflowState.name}`);
+      formatter.step(`Loaded workflow YAML: ${workflowPath} -> ${workflowState.name}`);
     }
   }
 
@@ -403,74 +463,80 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
   const variables: Record<string, unknown> = Array.isArray(options.var)
     ? Object.fromEntries(
         options.var.flatMap((v) => {
-      const [key, ...rest] = String(v).split("=");
-      if (!key) {
+          const [key, ...rest] = String(v).split("=");
+          if (!key) {
             return [];
-      }
+          }
           return [[key, rest.join("=")] as const];
         })
       )
     : {};
 
-  const input: unknown = options.input !== undefined ? await (async () => {
-    const rawInput = normalizeInputOptionValue(options.input);
-    if (rawInput.startsWith("@")) {
-      const inputPath = rawInput.slice(1);
-      const fileContent =
-        inputPath === "-"
-          ? await (async () => {
-              if (process.stdin.isTTY) {
-                throw new CLIError(
-                  "No stdin JSON detected. Pipe JSON to --input @- or pass inline JSON to --input.",
-                  ExitCode.VALIDATION_ERROR
-                );
-              }
-              try {
-                return await readJsonInputFromStdin();
-              } catch {
-                throw new CLIError("Failed to read JSON input from stdin.", ExitCode.VALIDATION_ERROR);
-              }
-            })()
-          : await (async () => {
-              try {
-                return await readFile(inputPath, "utf-8");
-              } catch {
-                throw new CLIError(
-                  `Failed to read JSON input file: ${inputPath}`,
-                  ExitCode.VALIDATION_ERROR
-                );
-              }
-            })();
+  const input: unknown =
+    options.input !== undefined
+      ? await (async () => {
+          const rawInput = normalizeInputOptionValue(options.input);
+          if (rawInput.startsWith("@")) {
+            const inputPath = rawInput.slice(1);
+            const fileContent =
+              inputPath === "-"
+                ? await (async () => {
+                    if (process.stdin.isTTY) {
+                      throw new CLIError(
+                        "No stdin JSON detected. Pipe JSON to --input @- or pass inline JSON to --input.",
+                        ExitCode.VALIDATION_ERROR
+                      );
+                    }
+                    try {
+                      return await readJsonInputFromStdin();
+                    } catch {
+                      throw new CLIError(
+                        "Failed to read JSON input from stdin.",
+                        ExitCode.VALIDATION_ERROR
+                      );
+                    }
+                  })()
+                : await (async () => {
+                    try {
+                      return await readFile(inputPath, "utf-8");
+                    } catch {
+                      throw new CLIError(
+                        `Failed to read JSON input file: ${inputPath}`,
+                        ExitCode.VALIDATION_ERROR
+                      );
+                    }
+                  })();
 
-      const normalizedInput = fileContent.replace(/^\uFEFF/, "");
-      if (inputPath === "-" && normalizedInput.trim().length === 0) {
-        throw new CLIError(
-          "No stdin JSON detected. Pipe JSON to --input @- or pass inline JSON to --input.",
-          ExitCode.VALIDATION_ERROR
-        );
-      }
+            const normalizedInput = fileContent.replace(/^\uFEFF/, "");
+            if (inputPath === "-" && normalizedInput.trim().length === 0) {
+              throw new CLIError(
+                "No stdin JSON detected. Pipe JSON to --input @- or pass inline JSON to --input.",
+                ExitCode.VALIDATION_ERROR
+              );
+            }
 
-      try {
-        return JSON.parse(normalizedInput);
-      } catch {
-        throw new CLIError(
-          inputPath === "-"
-            ? "Invalid JSON input from stdin. Please pipe valid JSON to --input @-."
-            : `Invalid JSON input file: ${inputPath}`,
-          ExitCode.VALIDATION_ERROR
-        );
-      }
-    } else {
-      try {
-        return JSON.parse(rawInput);
-      } catch {
-        throw new CLIError(
-          "Invalid JSON input. Please provide a valid JSON string to --input.",
-          ExitCode.VALIDATION_ERROR
-        );
-      }
-    }
-  })() : undefined;
+            try {
+              return JSON.parse(normalizedInput);
+            } catch {
+              throw new CLIError(
+                inputPath === "-"
+                  ? "Invalid JSON input from stdin. Please pipe valid JSON to --input @-."
+                  : `Invalid JSON input file: ${inputPath}`,
+                ExitCode.VALIDATION_ERROR
+              );
+            }
+          } else {
+            try {
+              return JSON.parse(rawInput);
+            } catch {
+              throw new CLIError(
+                "Invalid JSON input. Please provide a valid JSON string to --input.",
+                ExitCode.VALIDATION_ERROR
+              );
+            }
+          }
+        })()
+      : undefined;
 
   if (debugEnabled) {
     debugTrace.filePath =
