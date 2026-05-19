@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -294,6 +294,25 @@ describe("builtin plugin bootstrap", () => {
       );
     } finally {
       await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects file-write paths that escape through a sandbox symlink", async () => {
+    const root = await mkdtemp(join(tmpdir(), "obora-file-write-"));
+    const outside = await mkdtemp(join(tmpdir(), "obora-file-write-outside-"));
+    try {
+      const plugin = new FileWriteToolPlugin(root);
+      await symlink(outside, join(root, "link"));
+
+      await expect(plugin.execute({ path: "link/escaped.txt", content: "x" })).rejects.toThrow(
+        "outside sandbox root"
+      );
+      await expect(readFile(join(outside, "escaped.txt"), "utf8")).rejects.toThrow();
+    } finally {
+      await Promise.all([
+        rm(root, { recursive: true, force: true }),
+        rm(outside, { recursive: true, force: true }),
+      ]);
     }
   });
 });

@@ -9,13 +9,15 @@ export interface DashboardConfig {
   corsOrigin: string | boolean | RegExp | Array<string | RegExp>;
 }
 
+const LOCAL_DASHBOARD_CORS_ORIGINS = [/^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/];
+
 export const DEFAULT_DASHBOARD_CONFIG: DashboardConfig = {
-  host: '0.0.0.0',
+  host: '127.0.0.1',
   port: 3100,
   wsPath: '/ws',
   apiBasePath: '/api',
   staticDir: resolve(process.cwd(), 'dist/client'),
-  corsOrigin: true,
+  corsOrigin: LOCAL_DASHBOARD_CORS_ORIGINS,
 };
 
 export const createDashboardConfig = (

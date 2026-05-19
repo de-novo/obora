@@ -3,8 +3,9 @@
  *
  * Uses a lockfile with PID to detect stale locks from crashed processes.
  */
-import { mkdir, readFile, writeFile, unlink, stat } from "node:fs/promises";
-import { dirname } from "node:path";
+import { createHash } from "node:crypto";
+import { mkdir, open, readFile, unlink } from "node:fs/promises";
+import { dirname, join } from "node:path";
 
 export interface ExecutionLock {
   acquire(workflowName: string, executionId?: string): Promise<boolean>;
@@ -23,34 +24,25 @@ export interface LockInfo {
 export class FileExecutionLock implements ExecutionLock {
   constructor(
     private readonly basePath: string,
-    private readonly staleLockThresholdMs: number = 2 * 60 * 60 * 1000, // 2 hours
+    _staleLockThresholdMs: number = 2 * 60 * 60 * 1000, // 2 hours, kept for existing constructor callers
   ) {}
 
   private lockPath(workflowName: string): string {
-    return `${this.basePath}/${workflowName}.lock`;
+    return join(this.basePath, this.lockFileName(workflowName));
+  }
+
+  private lockFileName(workflowName: string): string {
+    const hash = createHash("sha256").update(workflowName).digest("hex").slice(0, 16);
+    const slug = workflowName
+      .normalize("NFKD")
+      .replace(/[^a-zA-Z0-9._-]+/g, "-")
+      .replace(/(^[.-]+|[.-]+$)/g, "")
+      .slice(0, 80);
+    return `${slug || "workflow"}-${hash}.lock`;
   }
 
   async acquire(workflowName: string, executionId: string = "unknown"): Promise<boolean> {
     const lockFile = this.lockPath(workflowName);
-
-    // Check for existing lock
-    const existing = await this.readLock(workflowName);
-    if (existing) {
-      // Check if lock holder is still alive
-      if (this.isProcessAlive(existing.pid)) {
-        return false; // Another live process holds the lock
-      }
-
-      // Check if lock is stale (process dead or lock too old)
-      const lockAge = Date.now() - new Date(existing.acquiredAt).getTime();
-      if (lockAge < this.staleLockThresholdMs && this.isProcessAlive(existing.pid)) {
-        return false;
-      }
-
-      // Stale lock — remove it
-    }
-
-    // Write lock
     const info: LockInfo = {
       pid: process.pid,
       executionId,
@@ -60,11 +52,8 @@ export class FileExecutionLock implements ExecutionLock {
     };
 
     await mkdir(dirname(lockFile), { recursive: true });
-    await writeFile(lockFile, JSON.stringify(info, null, 2), "utf-8");
-
-    // Verify we actually got the lock (handle race condition)
-    const verify = await this.readLock(workflowName);
-    return verify?.pid === process.pid;
+    const created = await this.tryCreateLock(lockFile, info);
+    return created ? true : await this.replaceStaleLock(workflowName, lockFile, info);
   }
 
   async release(workflowName: string): Promise<void> {
@@ -97,6 +86,48 @@ export class FileExecutionLock implements ExecutionLock {
     } catch {
       return null;
     }
+  }
+
+  private async tryCreateLock(lockFile: string, info: LockInfo): Promise<boolean> {
+    const handle = await open(lockFile, "wx").catch((error: unknown) => {
+      const err = error as NodeJS.ErrnoException;
+      if (err.code === "EEXIST") return undefined;
+      throw error;
+    });
+
+    if (!handle) {
+      return false;
+    }
+
+    try {
+      await handle.writeFile(JSON.stringify(info, null, 2), "utf-8");
+      return true;
+    } catch (error) {
+      await unlink(lockFile).catch(() => undefined);
+      throw error;
+    } finally {
+      await handle.close();
+    }
+  }
+
+  private async replaceStaleLock(
+    workflowName: string,
+    lockFile: string,
+    info: LockInfo
+  ): Promise<boolean> {
+    const existing = await this.readLock(workflowName);
+    const isHeldByLiveProcess = existing ? this.isLockHeldByLiveProcess(existing) : false;
+
+    if (isHeldByLiveProcess) {
+      return false;
+    }
+
+    await unlink(lockFile).catch(() => undefined);
+    return await this.tryCreateLock(lockFile, info);
+  }
+
+  private isLockHeldByLiveProcess(info: LockInfo): boolean {
+    return this.isProcessAlive(info.pid);
   }
 
   private isProcessAlive(pid: number): boolean {

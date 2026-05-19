@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 
+import { complete, type AssistantMessage } from "@earendil-works/pi-ai";
+
 import type { ChatCompletionParams, ChatCompletionResult } from "../../llm/adapter";
 import { PiAIAdapter } from "../../llm/pi-ai-adapter";
 
@@ -119,6 +121,37 @@ describe("PiAIAdapter", () => {
     expect(result.message.content).toBe("hello");
     expect(result.usage.totalTokens).toBe(8);
     expect(result.finishReason).toBe("stop");
+  });
+
+  it("should reject responses without assistant text or tool calls", async () => {
+    const adapter = new PiAIAdapter({ provider: "openai", apiKey: "test", model: "gpt-4o-mini" });
+    const thinkingOnlyResponse: AssistantMessage = {
+      role: "assistant",
+      content: [{ type: "thinking", thinking: "internal reasoning" }],
+      api: "openai-completions",
+      provider: "openai",
+      model: "gpt-4o-mini",
+      usage: {
+        input: 5,
+        output: 3,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 8,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+      stopReason: "stop",
+      timestamp: 1,
+    };
+
+    vi.mocked(complete).mockResolvedValueOnce(thinkingOnlyResponse);
+
+    await expect(
+      adapter.chatCompletion({
+        messages: [{ role: "user", content: "hello" }],
+      })
+    ).rejects.toThrow(
+      "pi-ai returned no assistant text or tool calls for model gpt-4o-mini; contentTypes=thinking"
+    );
   });
 
   it("should emit stream chunks and return final result", async () => {

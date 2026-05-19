@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { basename, join } from "node:path";
 import type { WorkflowDef } from "../workflow.js";
 import type { OboraRuntimeConfig, TKGPromotionTrigger } from "../runtime-types.js";
@@ -497,7 +496,4 @@ export class TKGService {
     );
   }
 
-  private buildDeterministicTKGId(parts: unknown[]): string {
-    return createHash("sha1").update(JSON.stringify(parts)).digest("hex");
-  }
 }

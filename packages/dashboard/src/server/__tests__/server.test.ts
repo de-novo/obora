@@ -33,4 +33,23 @@ describe('dashboard server', () => {
       service: '@obora/dashboard',
     });
   });
+
+  it('allows only local development CORS origins by default', async () => {
+    const { app } = await createDashboardServer();
+    servers.push(app);
+
+    const localResponse = await app.inject({
+      method: 'GET',
+      url: '/api/health',
+      headers: { origin: 'http://localhost:5173' },
+    });
+    const remoteResponse = await app.inject({
+      method: 'GET',
+      url: '/api/health',
+      headers: { origin: 'http://example.com' },
+    });
+
+    expect(localResponse.headers['access-control-allow-origin']).toBe('http://localhost:5173');
+    expect(remoteResponse.headers['access-control-allow-origin']).toBeUndefined();
+  });
 });

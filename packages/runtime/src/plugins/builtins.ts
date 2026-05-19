@@ -26,6 +26,11 @@ import type {
 } from "./types.js";
 import type { PluginRegistry } from "./PluginRegistry.js";
 
+const isPathInside = (root: string, target: string): boolean => {
+  const relativePath = path.relative(root, target);
+  return relativePath === "" || (!relativePath.startsWith("..") && !path.isAbsolute(relativePath));
+};
+
 export class BuiltinAgentPlugin implements AgentPlugin {
   readonly type = "agent" as const;
   readonly name = "builtin-agent";
@@ -68,17 +73,73 @@ export class FileWriteToolPlugin implements ToolPlugin {
     const resolved = path.resolve(this.sandboxRoot, input.path);
     const sandbox = path.resolve(this.sandboxRoot);
 
-    if (!resolved.startsWith(`${sandbox}${path.sep}`) && resolved !== sandbox) {
+    if (!isPathInside(sandbox, resolved)) {
       throw new Error(`Path '${input.path}' is outside sandbox root`);
     }
 
+    await fs.mkdir(sandbox, { recursive: true });
+    await this.assertResolvedPathStaysInsideSandbox(sandbox, resolved, input.path);
     await fs.mkdir(path.dirname(resolved), { recursive: true });
     await fs.writeFile(resolved, input.content, "utf8");
+    await this.assertWrittenPathStaysInsideSandbox(sandbox, resolved, input.path);
 
     return {
       path: resolved,
       bytes: Buffer.byteLength(input.content, "utf8"),
     };
+  }
+
+  private async assertResolvedPathStaysInsideSandbox(
+    sandbox: string,
+    resolved: string,
+    inputPath: string
+  ): Promise<void> {
+    const nearestExistingAncestor = await this.findNearestExistingAncestor(path.dirname(resolved));
+    const [realSandbox, realAncestor] = await Promise.all([
+      fs.realpath(sandbox),
+      fs.realpath(nearestExistingAncestor),
+    ]);
+
+    if (!isPathInside(realSandbox, realAncestor)) {
+      throw new Error(`Path '${inputPath}' is outside sandbox root`);
+    }
+  }
+
+  private async assertWrittenPathStaysInsideSandbox(
+    sandbox: string,
+    resolved: string,
+    inputPath: string
+  ): Promise<void> {
+    const [realSandbox, realWrittenPath] = await Promise.all([
+      fs.realpath(sandbox),
+      fs.realpath(resolved),
+    ]);
+
+    if (!isPathInside(realSandbox, realWrittenPath)) {
+      await fs.rm(resolved, { force: true }).catch(() => undefined);
+      throw new Error(`Path '${inputPath}' is outside sandbox root`);
+    }
+  }
+
+  private async findNearestExistingAncestor(candidate: string): Promise<string> {
+    const found = await fs.stat(candidate).then(
+      () => candidate,
+      async (error: unknown) => {
+        const err = error as NodeJS.ErrnoException;
+        if (err.code !== "ENOENT") {
+          throw error;
+        }
+
+        const parent = path.dirname(candidate);
+        if (parent === candidate) {
+          throw new Error("No existing sandbox ancestor found");
+        }
+
+        return await this.findNearestExistingAncestor(parent);
+      }
+    );
+
+    return found;
   }
 }
 

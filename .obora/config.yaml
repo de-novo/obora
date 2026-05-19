@@ -2,31 +2,37 @@
 # This file is merged with ~/.obora/config.yaml by AgentConfigResolver.
 
 defaults:
+  provider: openrouter
+  model: openrouter/owl-alpha
   temperature: 0.2
   timeout: 300
   maxTokens: 8192
 
+providers:
+  openrouter:
+    defaultModel: openrouter/owl-alpha
+
 agents:
   planner:
     provider: openrouter
-    model: deepseek/deepseek-v4-flash:free
+    model: openrouter/owl-alpha
     temperature: 0.1
 
   architect:
     provider: openrouter
-    model: deepseek/deepseek-v4-flash:free
+    model: openrouter/owl-alpha
     temperature: 0.1
 
   developer:
     provider: openrouter
-    model: deepseek/deepseek-v4-flash:free
+    model: openrouter/owl-alpha
     temperature: 0.2
 
   reviewer:
     provider: openrouter
-    model: deepseek/deepseek-v4-flash:free
+    model: openrouter/owl-alpha
     temperature: 0.0
     reviewModels:
-      - name: deepseek
+      - name: owl-alpha
         provider: openrouter
-        model: deepseek/deepseek-v4-flash:free
+        model: openrouter/owl-alpha

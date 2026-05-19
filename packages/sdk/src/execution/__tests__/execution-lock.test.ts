@@ -1,11 +1,16 @@
+import { createHash } from "node:crypto";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { FileExecutionLock } from "../execution-lock.js";
-import { mkdir, writeFile, readFile, access, unlink, rmdir } from "node:fs/promises";
+import { access, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TEST_LOCK_DIR = join(__dirname, "..", "..", "__tests__", "test-locks");
+const lockFilePath = (workflowName: string): string => {
+  const hash = createHash("sha256").update(workflowName).digest("hex").slice(0, 16);
+  return join(TEST_LOCK_DIR, `${workflowName}-${hash}.lock`);
+};
 
 describe("FileExecutionLock", () => {
   let lock: FileExecutionLock;
@@ -18,14 +23,7 @@ describe("FileExecutionLock", () => {
   });
 
   afterEach(async () => {
-    // Clean up test locks
-    try {
-      const files = await readFile(join(TEST_LOCK_DIR, "test-workflow.lock"), "utf-8").catch(() => null);
-      if (files) {
-        await unlink(join(TEST_LOCK_DIR, "test-workflow.lock"));
-      }
-      await rmdir(TEST_LOCK_DIR).catch(() => {});
-    } catch { /* ignore */ }
+    await rm(TEST_LOCK_DIR, { recursive: true, force: true });
   });
 
   it("acquires lock when none exists", async () => {
@@ -41,6 +39,46 @@ describe("FileExecutionLock", () => {
     // Second acquire should fail (same PID is alive)
     const second = await lock.acquire("test-workflow", "exec-2");
     expect(second).toBe(false);
+  });
+
+  it("does not replace old locks held by live processes", async () => {
+    const liveLock = {
+      pid: process.pid,
+      executionId: "live",
+      workflowName: "test-workflow",
+      acquiredAt: new Date(Date.now() - 60_000).toISOString(),
+      hostname: "test",
+    };
+    await writeFile(
+      lockFilePath("test-workflow"),
+      JSON.stringify(liveLock, null, 2),
+      "utf-8"
+    );
+
+    await expect(lock.acquire("test-workflow", "exec-2")).resolves.toBe(false);
+    const stored = JSON.parse(await readFile(lockFilePath("test-workflow"), "utf-8")) as {
+      executionId: string;
+    };
+    expect(stored.executionId).toBe("live");
+  });
+
+  it("allows only one concurrent acquire for the same workflow", async () => {
+    const results = await Promise.all([
+      lock.acquire("race-workflow", "exec-1"),
+      lock.acquire("race-workflow", "exec-2"),
+    ]);
+
+    expect(results.filter(Boolean)).toHaveLength(1);
+  });
+
+  it("keeps path-like workflow names inside the lock base path", async () => {
+    const acquired = await lock.acquire("../escape", "exec-escape");
+    const lockFiles = await readdir(TEST_LOCK_DIR);
+
+    expect(acquired).toBe(true);
+    expect(lockFiles).toHaveLength(1);
+    expect(lockFiles[0]).toMatch(/^escape-[a-f0-9]{16}\.lock$/);
+    await expect(access(join(dirname(TEST_LOCK_DIR), "escape.lock"))).rejects.toThrow();
   });
 
   it("releases lock successfully", async () => {
@@ -62,7 +100,7 @@ describe("FileExecutionLock", () => {
     };
     await mkdir(TEST_LOCK_DIR, { recursive: true });
     await writeFile(
-      join(TEST_LOCK_DIR, "test-workflow.lock"),
+      lockFilePath("test-workflow"),
       JSON.stringify(fakeLock, null, 2),
       "utf-8"
     );
@@ -85,7 +123,7 @@ describe("FileExecutionLock", () => {
     };
     await mkdir(TEST_LOCK_DIR, { recursive: true });
     await writeFile(
-      join(TEST_LOCK_DIR, "test-workflow.lock"),
+      lockFilePath("test-workflow"),
       JSON.stringify(staleLock, null, 2),
       "utf-8"
     );
@@ -105,7 +143,7 @@ describe("FileExecutionLock", () => {
     };
     await mkdir(TEST_LOCK_DIR, { recursive: true });
     await writeFile(
-      join(TEST_LOCK_DIR, "test-workflow.lock"),
+      lockFilePath("test-workflow"),
       JSON.stringify(deadProcessLock, null, 2),
       "utf-8"
     );
@@ -113,7 +151,7 @@ describe("FileExecutionLock", () => {
     const acquired = await lock.acquire("test-workflow", "exec-1");
 
     expect(acquired).toBe(true);
-    const stored = JSON.parse(await readFile(join(TEST_LOCK_DIR, "test-workflow.lock"), "utf-8")) as {
+    const stored = JSON.parse(await readFile(lockFilePath("test-workflow"), "utf-8")) as {
       executionId: string;
       pid: number;
     };

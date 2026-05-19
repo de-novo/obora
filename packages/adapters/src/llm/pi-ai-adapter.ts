@@ -308,6 +308,13 @@ export class PiAIAdapter implements LLMAdapter {
         },
       }));
 
+    if (textContent.trim().length === 0 && toolCalls.length === 0) {
+      const contentTypes = response.content.map((item) => item.type).join(", ") || "none";
+      throw new Error(
+        `pi-ai returned no assistant text or tool calls for model ${model}; contentTypes=${contentTypes}`
+      );
+    }
+
     return {
       id: `${response.provider}-${response.model}-${response.timestamp}`,
       model,
