@@ -26,6 +26,7 @@ import {
   BriefcaseBusiness,
   CheckCircle2,
   ChevronDown,
+  ChevronRight,
   CircleHelp,
   Clock3,
   Columns3,
@@ -34,12 +35,14 @@ import {
   Filter,
   Folder,
   Inbox,
+  MessageSquareText,
   type LucideIcon,
   MoreHorizontal,
   Pencil,
   Play,
   Plus,
   Search,
+  SendHorizontal,
   Share2,
   ShieldCheck,
   Star,
@@ -416,6 +419,213 @@ const nodeIdForRunStepTitle = (
   nodes: ReadonlyArray<WorkflowNode>,
   title: string
 ): string | undefined => nodes.find((node) => node.title === title)?.id;
+
+const stepResultSummaryByStatus: Record<ExecutionRunStep["status"], string> = {
+  queued: "Waiting for upstream workflow context before producing a result.",
+  running: "Result generation is in progress.",
+  passed: "Step completed without a captured structured result.",
+  failed: "Step failed before a final structured result was captured.",
+};
+
+const stepResultContextByStatus: Record<ExecutionRunStep["status"], string> = {
+  queued: "No output is available until this step starts.",
+  running: "The workflow can update this result once execution finishes.",
+  passed: "No artifact or successor context was recorded for this completed step.",
+  failed: "Review the trace or retry the one-off run with more context.",
+};
+
+type WorkflowChatMessage =
+  | {
+      readonly id: string;
+      readonly role: "operator";
+      readonly eyebrow: string;
+      readonly body: string;
+      readonly meta: string;
+    }
+  | {
+      readonly id: string;
+      readonly role: "workflow";
+      readonly eyebrow: string;
+      readonly body: string;
+      readonly meta: string;
+      readonly run: ExecutionRun;
+    };
+
+const completedStepCountForRun = (run: ExecutionRun): number =>
+  run.steps.filter((step) => step.status === "passed").length;
+
+const tracedStepCountForRun = (run: ExecutionRun): number =>
+  run.steps.filter((step) => step.trace !== undefined).length;
+
+const workflowSummaryForRun = (run: ExecutionRun): string =>
+  run.inputPrompt.trim().length === 0
+    ? "Send a message to execute this workflow once. The chat request becomes the run input."
+    : `${run.workflowName} summarized this ${runStatusLabels[run.status].toLowerCase()} run across ${run.steps.length} steps. ${completedStepCountForRun(run)} steps passed and ${tracedStepCountForRun(run)} steps reported structured results.`;
+
+const runStepProgressLabel = (run: ExecutionRun): string =>
+  `${completedStepCountForRun(run)}/${run.steps.length} steps passed`;
+
+const chatMessagesForRun = (run: ExecutionRun): ReadonlyArray<WorkflowChatMessage> => {
+  const inputPrompt = run.inputPrompt.trim();
+  const inputPayload = run.inputPayload.trim();
+
+  return [
+    ...(inputPrompt.length === 0
+      ? []
+      : [
+          {
+            id: `${run.id}-operator-request`,
+            role: "operator" as const,
+            eyebrow: "You",
+            body: inputPrompt,
+            meta: inputPayload.length === 0 ? "No context payload" : "Context payload attached",
+          },
+        ]),
+    {
+      id: `${run.id}-workflow-summary`,
+      role: "workflow",
+      eyebrow: "Workflow",
+      body: workflowSummaryForRun(run),
+      meta: `${runStatusLabels[run.status]} · ${runStepProgressLabel(run)}`,
+      run,
+    },
+  ];
+};
+
+interface StepResultsPanelProps {
+  readonly steps: ReadonlyArray<ExecutionRunStep>;
+  readonly ariaLabel?: string;
+  readonly compact?: boolean;
+}
+
+const StepResultsPanel = ({
+  ariaLabel = "Step results",
+  compact = false,
+  steps,
+}: StepResultsPanelProps): ReactElement => (
+  <section
+    className={["step-results-section", compact ? "compact" : ""].filter(Boolean).join(" ")}
+    aria-label={ariaLabel}
+  >
+    <div className="panel-heading">
+      <h2>Step results</h2>
+      <span className="state-pill">{steps.length} steps</span>
+    </div>
+    <div className="step-result-list">
+      {steps.map((step) => (
+        <article key={step.id} className={["step-result-card", statusClass(step.status)].join(" ")}>
+          <div className="step-result-heading">
+            <span>{runStepStatusLabels[step.status]}</span>
+            <strong>{step.title}</strong>
+          </div>
+          <p>{step.trace?.task_summary ?? stepResultSummaryByStatus[step.status]}</p>
+          {step.trace?.artifacts_created.length === 0 || step.trace === undefined ? (
+            <small className="step-result-artifacts">No artifact recorded.</small>
+          ) : (
+            <ul className="step-result-artifacts">
+              {step.trace.artifacts_created.map((artifact) => (
+                <li key={artifact}>{artifact}</li>
+              ))}
+            </ul>
+          )}
+          <small className="step-result-context">
+            {step.trace?.context_for_successors ?? stepResultContextByStatus[step.status]}
+          </small>
+        </article>
+      ))}
+    </div>
+  </section>
+);
+
+interface StepWorkDetailsPanelProps {
+  readonly steps: ReadonlyArray<ExecutionRunStep>;
+}
+
+interface StepResourceGroup {
+  readonly label: string;
+  readonly items: ReadonlyArray<string>;
+}
+
+const traceResourceGroupsForStep = (step: ExecutionRunStep): ReadonlyArray<StepResourceGroup> =>
+  [
+    { label: "Files changed", items: step.trace?.files_changed ?? [] },
+    { label: "References", items: step.trace?.references_used ?? [] },
+    { label: "Skills", items: step.trace?.skills_used ?? [] },
+    { label: "Tools", items: step.trace?.tools_used ?? [] },
+  ].filter((group) => group.items.length > 0);
+
+const StepResourceUsage = ({ step }: { readonly step: ExecutionRunStep }): ReactElement => {
+  const resourceGroups = traceResourceGroupsForStep(step);
+
+  return (
+    <section className="step-resource-usage" aria-label={`Resources used by ${step.title}`}>
+      <h4>Resources used</h4>
+      {resourceGroups.length === 0 ? (
+        <p>No code, file, reference, skill, or tool usage recorded.</p>
+      ) : (
+        <div className="step-resource-group-list">
+          {resourceGroups.map((group) => (
+            <div key={group.label} className="step-resource-group">
+              <span>{group.label}</span>
+              <ul>
+                {group.items.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+};
+
+const StepWorkDetailsPanel = ({ steps }: StepWorkDetailsPanelProps): ReactElement => (
+  <section className="step-work-details-section" aria-label="Step work details">
+    <div className="panel-heading">
+      <h2>Work details</h2>
+      <span className="state-pill">What and why</span>
+    </div>
+    <div className="step-work-detail-list">
+      {steps.map((step) => (
+        <article
+          key={step.id}
+          className={["step-work-detail-card", statusClass(step.status)].join(" ")}
+        >
+          <div className="step-result-heading">
+            <span>{runStepStatusLabels[step.status]}</span>
+            <strong>{step.title}</strong>
+          </div>
+          <dl>
+            <dt>What</dt>
+            <dd>{step.trace?.task_summary ?? stepResultSummaryByStatus[step.status]}</dd>
+            <dt>Why</dt>
+            <dd>{step.trace?.methodology ?? stepResultContextByStatus[step.status]}</dd>
+            <dt>Decisions</dt>
+            <dd>
+              {step.trace?.key_decisions.length === 0 || step.trace === undefined
+                ? "No decision recorded."
+                : step.trace.key_decisions.join("; ")}
+            </dd>
+            <dt>Assumptions</dt>
+            <dd>
+              {step.trace?.assumptions.length === 0 || step.trace === undefined
+                ? "No assumption recorded."
+                : step.trace.assumptions.join("; ")}
+            </dd>
+            <dt>Risks</dt>
+            <dd>
+              {step.trace?.risks_identified.length === 0 || step.trace === undefined
+                ? "No risk recorded."
+                : step.trace.risks_identified.join("; ")}
+            </dd>
+          </dl>
+          <StepResourceUsage step={step} />
+        </article>
+      ))}
+    </div>
+  </section>
+);
 
 interface WorkflowCanvasNodeData extends Record<string, unknown> {
   readonly node: WorkflowNode;
@@ -1281,9 +1491,10 @@ const NodeList = ({
   <aside className="ops-panel node-list" aria-label="Workflow nodes">
     <div className="panel-heading">
       <h2>Steps</h2>
-      <button type="button" className="compact-button" onClick={onAddNode}>
+      <Button type="button" variant="outline" size="sm" onClick={onAddNode}>
+        <Plus aria-hidden="true" data-icon="inline-start" />
         Add next step
-      </button>
+      </Button>
     </div>
     <div className="node-list-items">
       {nodes.map((node) => (
@@ -1449,7 +1660,7 @@ const NodeInspector = ({
 
     <label>
       Step name
-      <input value={node.title} onChange={onTitleChange} />
+      <Input value={node.title} onChange={onTitleChange} />
     </label>
     <label>
       Type
@@ -1476,19 +1687,19 @@ const NodeInspector = ({
       <summary>Advanced setup</summary>
       <label>
         Agent
-        <input value={node.agent} onChange={onAgentChange} />
+        <Input value={node.agent} onChange={onAgentChange} />
       </label>
       <label>
         Model
-        <input value={node.model} onChange={onModelChange} />
+        <Input value={node.model} onChange={onModelChange} />
       </label>
       <label>
         Policy
-        <input value={node.policy} onChange={onPolicyChange} />
+        <Input value={node.policy} onChange={onPolicyChange} />
       </label>
       <label>
         Step instructions
-        <textarea value={node.systemPrompt} onChange={onStepSystemPromptChange} rows={7} />
+        <Textarea value={node.systemPrompt} onChange={onStepSystemPromptChange} rows={7} />
       </label>
     </details>
 
@@ -1521,15 +1732,15 @@ const InstructionsPage = ({
       </div>
       <label>
         Workflow name
-        <input value={selectedWorkflow.state.workflowName} onChange={onNameChange} />
+        <Input value={selectedWorkflow.state.workflowName} onChange={onNameChange} />
       </label>
       <label>
         Description
-        <input value={selectedWorkflow.description} onChange={onDescriptionChange} />
+        <Input value={selectedWorkflow.description} onChange={onDescriptionChange} />
       </label>
       <label>
         Instructions
-        <textarea value={selectedWorkflow.state.systemPrompt} onChange={onPromptChange} rows={15} />
+        <Textarea value={selectedWorkflow.state.systemPrompt} onChange={onPromptChange} rows={15} />
       </label>
     </section>
     <aside className="ops-panel instructions-validation" aria-label="Instructions validation">
@@ -1595,13 +1806,25 @@ const RunHistoryPanel = ({
   const [runInputPrompt, setRunInputPrompt] = useState("");
   const [runInputPayload, setRunInputPayload] = useState("");
   const [runInputTouched, setRunInputTouched] = useState(false);
+  const [expandedRunId, setExpandedRunId] = useState<string | undefined>(undefined);
+  const [detailRunId, setDetailRunId] = useState<string | undefined>(undefined);
+  const runsInChatOrder = useMemo(() => runs.slice().reverse(), [runs]);
+  const detailRun = useMemo(
+    () => (detailRunId === undefined ? undefined : runs.find((run) => run.id === detailRunId)),
+    [detailRunId, runs]
+  );
   const visibleSteps = useMemo(
-    () => filterRunStepsByTraceFilter(selectedRun.steps, traceFilter),
-    [selectedRun.steps, traceFilter]
+    () =>
+      detailRun === undefined ? [] : filterRunStepsByTraceFilter(detailRun.steps, traceFilter),
+    [detailRun, traceFilter]
+  );
+  const chatMessages = useMemo(
+    () => runsInChatOrder.flatMap(chatMessagesForRun),
+    [runsInChatOrder]
   );
   const runInputPromptIsBlank = runInputPrompt.trim().length === 0;
   const runInputPromptError =
-    runInputTouched && runInputPromptIsBlank ? "Add the operator request before running." : "";
+    runInputTouched && runInputPromptIsBlank ? "Send a message before starting the run." : "";
   const handleTraceFilterChange = useCallback(
     (event: ChangeEvent<HTMLSelectElement>) =>
       setTraceFilter(parseTraceFilter(event.currentTarget.value)),
@@ -1615,6 +1838,19 @@ const RunHistoryPanel = ({
     (event: ChangeEvent<HTMLTextAreaElement>) => setRunInputPayload(event.currentTarget.value),
     []
   );
+  const handleWorkflowMessageOpen = useCallback(
+    (runId: string): void => {
+      onSelectRun(runId);
+      setDetailRunId(runId);
+    },
+    [onSelectRun]
+  );
+  const handleStepResultsToggle = useCallback(
+    (runId: string): void =>
+      setExpandedRunId((currentRunId) => (currentRunId === runId ? undefined : runId)),
+    []
+  );
+  const handleCloseDetail = useCallback((): void => setDetailRunId(undefined), []);
   const handleRunSubmit = useCallback(
     (event: FormEvent<HTMLFormElement>): void => {
       event.preventDefault();
@@ -1636,167 +1872,234 @@ const RunHistoryPanel = ({
   const handleCopyRawTrace = useCallback((rawTrace: string): void => {
     void navigator.clipboard?.writeText(rawTrace);
   }, []);
-  const highlightedTraceStep = firstTraceStepForRun(selectedRun);
+  const highlightedTraceStep = detailRun === undefined ? undefined : firstTraceStepForRun(detailRun);
 
   return (
-    <section className="runs-page" aria-label="Execution history">
-      <aside className="ops-panel run-setup-panel">
-        <form className="run-composer" aria-label="Run request" onSubmit={handleRunSubmit}>
-          <div className="panel-heading">
-            <h2>Run workflow</h2>
-            <span className="state-pill">Prompt required</span>
-          </div>
+    <section
+      className={["runs-page", detailRun === undefined ? "chat-only" : "detail-open"].join(" ")}
+      aria-label="Execution history"
+    >
+      <section className="ops-panel run-chat-panel" aria-label="Workflow chat">
+        <div className="panel-heading">
+          <h2>
+            <MessageSquareText aria-hidden="true" />
+            Workflow chat
+          </h2>
+          <span className="state-pill">One-time task</span>
+        </div>
+        <div className="run-chat-thread" aria-label="Workflow chat thread">
+          {chatMessages.map((message) =>
+            message.role === "operator" ? (
+              <article
+                key={message.id}
+                className={["run-chat-message", `role-${message.role}`].join(" ")}
+              >
+                <div>
+                  <span>{message.eyebrow}</span>
+                  <small>{message.meta}</small>
+                </div>
+                <p>{message.body}</p>
+              </article>
+            ) : (
+              <article
+                key={message.id}
+                className={[
+                  "run-chat-message",
+                  "role-workflow",
+                  message.run.id === selectedRun.id ? "selected" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              >
+                <div className="run-chat-message-toolbar">
+                  <button
+                    type="button"
+                    className="run-chat-message-open"
+                    aria-label={`Open workflow run detail ${message.run.id}`}
+                    onClick={() => handleWorkflowMessageOpen(message.run.id)}
+                  >
+                    <span>{message.eyebrow}</span>
+                    <small>{message.meta}</small>
+                    <p>{message.body}</p>
+                  </button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="run-chat-expand-button"
+                    aria-label={`Toggle step results ${message.run.id}`}
+                    aria-expanded={expandedRunId === message.run.id}
+                    onClick={() => handleStepResultsToggle(message.run.id)}
+                  >
+                    {expandedRunId === message.run.id ? (
+                      <ChevronDown aria-hidden="true" />
+                    ) : (
+                      <ChevronRight aria-hidden="true" />
+                    )}
+                  </Button>
+                </div>
+                {expandedRunId === message.run.id ? (
+                  <StepResultsPanel
+                    ariaLabel={`Step results for ${message.run.id}`}
+                    compact
+                    steps={message.run.steps}
+                  />
+                ) : null}
+              </article>
+            )
+          )}
+        </div>
+
+        <form
+          className="run-composer run-chat-composer"
+          aria-label="Workflow chat request"
+          onSubmit={handleRunSubmit}
+        >
           <label>
-            Operator request
-            <textarea
+            Message to workflow
+            <Textarea
               value={runInputPrompt}
               onBlur={() => setRunInputTouched(true)}
               onChange={handleRunInputPromptChange}
-              placeholder="Describe what this workflow should process in this run."
-              rows={4}
+              placeholder="Tell this workflow what to process for this one-off run."
+              rows={3}
             />
           </label>
           {runInputPromptError.length === 0 ? (
             <p className="run-composer-help">
-              This prompt is stored with the run and passed into the input step.
+              This message is stored with the run and passed into the input step.
             </p>
           ) : (
             <p className="run-composer-error">{runInputPromptError}</p>
           )}
-          <label>
-            Context payload
-            <textarea
-              value={runInputPayload}
-              onChange={handleRunInputPayloadChange}
-              placeholder='Optional JSON or notes, for example {"ticket":"OPS-42"}.'
-              rows={3}
-            />
-          </label>
-          <button type="submit" className="compact-button primary" disabled={runInputPromptIsBlank}>
-            Run workflow
-          </button>
+          <details className="run-context-panel">
+            <summary>Run context</summary>
+            <label>
+              Context payload
+              <Textarea
+                value={runInputPayload}
+                onChange={handleRunInputPayloadChange}
+                placeholder='Optional JSON or notes, for example {"ticket":"OPS-42"}.'
+                rows={3}
+              />
+            </label>
+          </details>
+          <Button type="submit" disabled={runInputPromptIsBlank}>
+            <SendHorizontal aria-hidden="true" data-icon="inline-start" />
+            Send and run
+          </Button>
         </form>
-      </aside>
-
-      <section className="ops-panel run-history-panel">
-        <div className="panel-heading">
-          <h2>Run history</h2>
-          <span className={["state-pill", statusClass(selectedRun.status)].join(" ")}>
-            {runStatusLabels[selectedRun.status]}
-          </span>
-        </div>
-        <div className="run-list">
-          {runs.map((run) => (
-            <button
-              key={run.id}
-              type="button"
-              className={[
-                "run-row",
-                run.id === selectedRun.id ? "selected" : "",
-                statusClass(run.status),
-              ]
-                .filter(Boolean)
-                .join(" ")}
-              aria-pressed={run.id === selectedRun.id}
-              onClick={() => onSelectRun(run.id)}
-            >
-              <strong>{run.workflowName}</strong>
-              <span>{run.id}</span>
-              <small>{formatDuration(run.durationMs)}</small>
-            </button>
-          ))}
-        </div>
-
-        <section className="run-timeline-section" aria-label="Selected run steps">
-          <div className="run-detail-heading">
-            <h3>{selectedRun.id}</h3>
-            <span>
-              {visibleSteps.length}/{selectedRun.steps.length} steps
-            </span>
-          </div>
-          <label className="trace-filter-control">
-            Trace filter
-            <select value={traceFilter} onChange={handleTraceFilterChange}>
-              {traceFilters.map((filter) => (
-                <option key={filter} value={filter}>
-                  {traceFilterLabels[filter]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="step-list">
-            {visibleSteps.length === 0 ? (
-              <p className="empty-trace-filter">No matching trace steps.</p>
-            ) : (
-              visibleSteps.map((step) => {
-                const nodeId = nodeIdForRunStepTitle(nodes, step.title);
-                const stepClassName = ["step-row", statusClass(step.status)].join(" ");
-                const stepContent = (
-                  <>
-                    <span>{runStepStatusLabels[step.status]}</span>
-                    <strong>{step.title}</strong>
-                    <small>{formatDuration(step.durationMs)}</small>
-                  </>
-                );
-
-                return (
-                  <div key={step.id} className="step-item">
-                    {nodeId === undefined ? (
-                      <div className={stepClassName}>{stepContent}</div>
-                    ) : (
-                      <button
-                        type="button"
-                        className={stepClassName}
-                        aria-label={`Open ${step.title}`}
-                        onClick={() => onOpenNodeInBuilder(nodeId)}
-                      >
-                        {stepContent}
-                      </button>
-                    )}
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </section>
       </section>
 
-      <aside className="ops-panel run-detail-panel" aria-label="Selected run detail">
-        <section className="run-request-card" aria-label="Selected run request">
-          <span>Operator request</span>
-          <p>
-            {selectedRun.inputPrompt.trim().length === 0
-              ? "No operator request recorded for this run."
-              : selectedRun.inputPrompt}
-          </p>
-          {selectedRun.inputPayload.trim().length === 0 ? (
-            <small>No context payload.</small>
-          ) : (
-            <pre>{selectedRun.inputPayload}</pre>
-          )}
-        </section>
-        <section className="run-trace-panel" aria-label="Selected run trace summary">
-          <div className="panel-heading">
-            <h2>Trace summary</h2>
-            <span className="state-pill">
-              {highlightedTraceStep === undefined ? "No trace" : "Trace captured"}
-            </span>
+      {detailRun === undefined ? null : (
+        <aside className="ops-panel run-detail-panel" aria-label="Selected run detail">
+          <div className="run-detail-panel-header">
+            <div>
+              <span>Workflow detail</span>
+              <strong>{detailRun.id}</strong>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="Close run detail"
+              onClick={handleCloseDetail}
+            >
+              <X aria-hidden="true" />
+            </Button>
           </div>
-          {highlightedTraceStep?.trace === undefined ? (
-            <p className="diagnostic-empty">
-              Select a traced step or run with captured execution data.
+
+          <section className="run-timeline-section" aria-label="Selected run steps">
+            <div className="run-detail-heading">
+              <h3>{detailRun.workflowName}</h3>
+              <span>
+                {visibleSteps.length}/{detailRun.steps.length} steps
+              </span>
+            </div>
+            <label className="trace-filter-control">
+              Trace filter
+              <select value={traceFilter} onChange={handleTraceFilterChange}>
+                {traceFilters.map((filter) => (
+                  <option key={filter} value={filter}>
+                    {traceFilterLabels[filter]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="step-list">
+              {visibleSteps.length === 0 ? (
+                <p className="empty-trace-filter">No matching trace steps.</p>
+              ) : (
+                visibleSteps.map((step) => {
+                  const nodeId = nodeIdForRunStepTitle(nodes, step.title);
+                  const stepClassName = ["step-row", statusClass(step.status)].join(" ");
+                  const stepContent = (
+                    <>
+                      <span>{runStepStatusLabels[step.status]}</span>
+                      <strong>{step.title}</strong>
+                      <small>{formatDuration(step.durationMs)}</small>
+                    </>
+                  );
+
+                  return (
+                    <div key={step.id} className="step-item">
+                      {nodeId === undefined ? (
+                        <div className={stepClassName}>{stepContent}</div>
+                      ) : (
+                        <button
+                          type="button"
+                          className={stepClassName}
+                          aria-label={`Open ${step.title}`}
+                          onClick={() => onOpenNodeInBuilder(nodeId)}
+                        >
+                          {stepContent}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </section>
+
+          <StepWorkDetailsPanel steps={detailRun.steps} />
+
+          <section className="run-request-card" aria-label="Selected run request">
+            <span>Chat request</span>
+            <p>
+              {detailRun.inputPrompt.trim().length === 0
+                ? "No chat request recorded for this run."
+                : detailRun.inputPrompt}
             </p>
-          ) : (
-            <TraceSummary
-              exportFilename={traceExportFilenameForStep(selectedRun.id, highlightedTraceStep)}
-              onCopyRawTrace={handleCopyRawTrace}
-              rawTrace={serializeTraceForInspection(selectedRun, highlightedTraceStep)}
-              severity={getTraceSeverity(highlightedTraceStep.trace)}
-              trace={highlightedTraceStep.trace}
-            />
-          )}
-        </section>
-      </aside>
+            {detailRun.inputPayload.trim().length === 0 ? (
+              <small>No context payload.</small>
+            ) : (
+              <pre>{detailRun.inputPayload}</pre>
+            )}
+          </section>
+          <section className="run-trace-panel" aria-label="Selected run trace summary">
+            <div className="panel-heading">
+              <h2>Trace summary</h2>
+              <span className="state-pill">
+                {highlightedTraceStep === undefined ? "No trace" : "Trace captured"}
+              </span>
+            </div>
+            {highlightedTraceStep?.trace === undefined ? (
+              <p className="diagnostic-empty">
+                Select a traced step or run with captured execution data.
+              </p>
+            ) : (
+              <TraceSummary
+                exportFilename={traceExportFilenameForStep(detailRun.id, highlightedTraceStep)}
+                onCopyRawTrace={handleCopyRawTrace}
+                rawTrace={serializeTraceForInspection(detailRun, highlightedTraceStep)}
+                severity={getTraceSeverity(highlightedTraceStep.trace)}
+                trace={highlightedTraceStep.trace}
+              />
+            )}
+          </section>
+        </aside>
+      )}
     </section>
   );
 };
@@ -1858,27 +2161,30 @@ const BuilderPage = ({
           <strong>{state.workflowName}</strong>
         </div>
         <div className="page-actions">
-          <button
+          <Button
             type="button"
-            className="compact-button"
+            variant="outline"
+            size="sm"
             onClick={() => onOpenInstructions(selectedWorkflow.id)}
           >
             Instructions
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="compact-button"
+            variant="outline"
+            size="sm"
             onClick={() => onOpenSettings(selectedWorkflow.id)}
           >
             Settings
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="compact-button primary"
+            size="sm"
             onClick={() => onOpenRuns(selectedWorkflow.id)}
           >
+            <Play aria-hidden="true" data-icon="inline-start" />
             Run test
-          </button>
+          </Button>
         </div>
       </div>
       <section className="ops-workbench">
@@ -1952,21 +2258,21 @@ const SettingsPage = ({
         </div>
         <label>
           Workflow name
-          <input value={selectedWorkflow.state.workflowName} onChange={onNameChange} />
+          <Input value={selectedWorkflow.state.workflowName} onChange={onNameChange} />
         </label>
         <label>
           Description
-          <input value={selectedWorkflow.description} onChange={onDescriptionChange} />
+          <Input value={selectedWorkflow.description} onChange={onDescriptionChange} />
         </label>
         <div className="danger-zone" aria-label="Danger zone">
           <strong>Danger zone</strong>
           <div>
-            <button type="button" className="compact-button" disabled>
+            <Button type="button" variant="outline" size="sm" disabled>
               Archive workflow
-            </button>
-            <button type="button" className="compact-button" disabled>
+            </Button>
+            <Button type="button" variant="outline" size="sm" disabled>
               Delete workflow
-            </button>
+            </Button>
           </div>
         </div>
       </section>
@@ -1977,23 +2283,23 @@ const SettingsPage = ({
         </div>
         <label>
           Default model
-          <input value={defaultModel} readOnly />
+          <Input value={defaultModel} readOnly />
         </label>
         <label>
           Default policy
-          <input value={defaultPolicy} readOnly />
+          <Input value={defaultPolicy} readOnly />
         </label>
         <label>
           Timeout
-          <input value="300s" readOnly />
+          <Input value="300s" readOnly />
         </label>
         <div className="settings-export" aria-label="Import and export">
-          <button type="button" className="compact-button" disabled>
+          <Button type="button" variant="outline" size="sm" disabled>
             Import YAML
-          </button>
-          <button type="button" className="compact-button" disabled>
+          </Button>
+          <Button type="button" variant="outline" size="sm" disabled>
             Export YAML
-          </button>
+          </Button>
         </div>
       </aside>
     </section>
@@ -2113,10 +2419,10 @@ const RunWorkflowDialog = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="workflow-dialog-content workflow-run-dialog-content">
         <DialogHeader>
-          <span className="workflow-dialog-eyebrow">Workflow run</span>
+          <span className="workflow-dialog-eyebrow">One-off run</span>
           <DialogTitle>Run {workflow.state.workflowName}</DialogTitle>
           <DialogDescription>
-            Add the operator request that this execution should process.
+            Send the workflow a task message for this single execution.
           </DialogDescription>
         </DialogHeader>
         <div className="workflow-run-dialog-meta" aria-label="Run target">
@@ -2139,7 +2445,7 @@ const RunWorkflowDialog = ({
           onSubmit={onSubmit}
         >
           <label>
-            Operator request
+            Message to workflow
             <Textarea
               className="workflow-run-request-textarea"
               value={inputPrompt}
@@ -2151,7 +2457,7 @@ const RunWorkflowDialog = ({
           </label>
           {promptError.length === 0 ? (
             <p className="workflow-dialog-help">
-              The request is stored with the run and passed into the input step.
+              The message is stored with the run and passed into the input step.
             </p>
           ) : (
             <p className="workflow-dialog-error">{promptError}</p>
@@ -2238,7 +2544,7 @@ export const App = (): ReactElement => {
       : "";
   const runDialogPromptError =
     runDialogTouched && runDialogPrompt.trim().length === 0
-      ? "Add the operator request before starting the run."
+      ? "Send a message before starting the run."
       : "";
   const mode = route.mode;
 

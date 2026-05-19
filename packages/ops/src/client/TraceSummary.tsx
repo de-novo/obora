@@ -64,6 +64,10 @@ export const TraceSummary = ({
       <TraceList label="Assumptions" items={trace.assumptions} />
       <TraceList label="Risks" items={trace.risks_identified} />
       <TraceList label="Artifacts" items={trace.artifacts_created} />
+      <TraceList label="Files changed" items={trace.files_changed} />
+      <TraceList label="References" items={trace.references_used} />
+      <TraceList label="Skills" items={trace.skills_used} />
+      <TraceList label="Tools" items={trace.tools_used} />
       <div>
         <dt>Context</dt>
         <dd>{trace.context_for_successors}</dd>

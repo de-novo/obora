@@ -54,6 +54,10 @@ const highConfidenceTrace: ExecutionStepTrace = {
   assumptions: [],
   risks_identified: [],
   artifacts_created: [],
+  files_changed: [],
+  references_used: [],
+  skills_used: [],
+  tools_used: [],
   confidence_level: "high",
   context_for_successors: "Continue with execution.",
 };
@@ -304,6 +308,10 @@ describe("ops-model", () => {
     expect(serializeTraceForInspection(selected, tracedStep)).toContain(
       '"methodology": "Heuristic trace enrichment over repair-loop failures"'
     );
+    expect(serializeTraceForInspection(selected, tracedStep)).toContain(
+      '"skills_used": ['
+    );
+    expect(serializeTraceForInspection(selected, tracedStep)).toContain("code-review-excellence");
     expect(serializeTraceForInspection(selected, selected.steps[0] ?? tracedStep)).toContain(
       '"trace": null'
     );

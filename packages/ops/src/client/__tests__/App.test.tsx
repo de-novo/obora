@@ -104,7 +104,7 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: "Select workflow repair-loop-triage" }));
     await user.click(screen.getByRole("button", { name: "Run workflow" }));
     await user.type(
-      screen.getByRole("textbox", { name: "Operator request" }),
+      screen.getByRole("textbox", { name: "Message to workflow" }),
       "Triage the smoke failure and prepare the next action."
     );
     await user.click(screen.getByRole("button", { name: "Start run" }));
@@ -147,15 +147,11 @@ describe("App", () => {
 
     expect(window.location.hash).toBe("#/workflows/workflow-intake-to-decision/builder");
 
-    const builderSettingsButton = screen
-      .getAllByRole("button", { name: "Settings" })
-      .find((button) => button.className.includes("compact-button"));
-
-    if (builderSettingsButton === undefined) {
-      throw new Error("missing builder settings button");
-    }
-
-    await user.click(builderSettingsButton);
+    await user.click(
+      within(screen.getByRole("region", { name: "Workflow builder page" })).getByRole("button", {
+        name: "Settings",
+      })
+    );
 
     expect(window.location.hash).toBe("#/workflows/workflow-intake-to-decision/settings");
   });
@@ -512,65 +508,107 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: "Select workflow repair-loop-triage" }));
     await user.click(screen.getByRole("button", { name: "Run workflow" }));
     await user.type(
-      screen.getByRole("textbox", { name: "Operator request" }),
+      screen.getByRole("textbox", { name: "Message to workflow" }),
       "Open the existing repair-loop run history."
     );
     await user.click(screen.getByRole("button", { name: "Start run" }));
-    await user.click(screen.getByRole("button", { name: /run-2026-05-15-b/ }));
+    await user.click(
+      screen.getByRole("button", { name: "Open workflow run detail run-2026-05-15-b" })
+    );
     await user.selectOptions(screen.getByLabelText("Trace filter"), "critical");
     await user.click(screen.getByText("Trace"));
     await user.click(screen.getByText("Raw"));
     await user.click(screen.getByRole("button", { name: "Copy raw" }));
+    await user.click(
+      screen.getByRole("button", { name: "Toggle step results run-2026-05-15-b" })
+    );
     const runPanel = screen.getByLabelText("Execution history");
+    const selectedRunSteps = screen.getByLabelText("Selected run steps");
+    const stepResults = screen.getByLabelText("Step results for run-2026-05-15-b");
+    const workDetails = screen.getByLabelText("Step work details");
     const exportLink = screen.getByRole("link", { name: "Export raw" });
 
-    expect(screen.getAllByText("run-2026-05-15-b")).toHaveLength(2);
-    expect(within(runPanel).getByText("Generate patch plan")).toBeTruthy();
-    expect(within(runPanel).queryByText("Collect artifacts")).toBeNull();
+    expect(screen.getByText("run-2026-05-15-b")).toBeTruthy();
+    expect(within(runPanel).getAllByText("Generate patch plan").length).toBeGreaterThan(0);
+    expect(within(selectedRunSteps).queryByText("Collect artifacts")).toBeNull();
+    expect(within(stepResults).getByText("Collect artifacts")).toBeTruthy();
+    expect(within(stepResults).getByText("plans/repair-plan.md")).toBeTruthy();
     expect(screen.getByText("Critical")).toBeTruthy();
-    expect(screen.getByText("Heuristic trace enrichment over repair-loop failures")).toBeTruthy();
     expect(
-      screen.getByText("Previous validation history may be too large for the prompt")
-    ).toBeTruthy();
+      screen.getAllByText("Heuristic trace enrichment over repair-loop failures").length
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText("Previous validation history may be too large for the prompt").length
+    ).toBeGreaterThan(0);
+    expect(within(workDetails).getAllByText("Resources used").length).toBeGreaterThan(0);
+    expect(within(workDetails).getByText("code-review-excellence")).toBeTruthy();
+    expect(within(workDetails).getByText("verify:smoke output")).toBeTruthy();
+    expect(within(workDetails).getByText("release smoke verifier")).toBeTruthy();
     expect(writeText).toHaveBeenCalledWith(
       expect.stringContaining(
         '"methodology": "Heuristic trace enrichment over repair-loop failures"'
       )
     );
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining('"tools_used": ['));
     expect(exportLink.getAttribute("download")).toBe(
       "run-2026-05-15-b-generate-patch-plan-trace.json"
     );
     expect(screen.getAllByText("Failed").length).toBeGreaterThan(1);
   });
 
-  it("creates a workflow run from an operator request prompt", async () => {
+  it("creates a one-off workflow run from a chat message", async () => {
     const { user } = await renderBuilder();
 
     await user.click(screen.getByRole("button", { name: "Run test" }));
 
     expect(screen.getByRole("region", { name: "Execution history" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Run workflow" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("region", { name: "Workflow chat" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Send and run" })).toHaveProperty("disabled", true);
 
     await user.type(
-      screen.getByRole("textbox", { name: "Operator request" }),
+      screen.getByRole("textbox", { name: "Message to workflow" }),
       "Review whether the refund request should be approved."
     );
+    await user.click(screen.getByText("Run context"));
     fireEvent.change(screen.getByRole("textbox", { name: "Context payload" }), {
       target: { value: '{"ticket":"OPS-42"}' },
     });
-    await user.click(screen.getByRole("button", { name: "Run workflow" }));
+    await user.click(screen.getByRole("button", { name: "Send and run" }));
 
-    expect(screen.getAllByText("run-intake-to-decision-002").length).toBeGreaterThan(1);
+    expect(
+      screen.getByRole("button", {
+        name: "Open workflow run detail run-intake-to-decision-002",
+      })
+    ).toBeTruthy();
+    expect(screen.getByLabelText("Workflow chat thread").textContent).toContain(
+      "Review whether the refund request should be approved."
+    );
+    expect(screen.queryByLabelText("Selected run detail")).toBeNull();
+    await user.click(
+      screen.getByRole("button", { name: "Toggle step results run-intake-to-decision-002" })
+    );
+    expect(screen.getByLabelText("Step results for run-intake-to-decision-002").textContent).toContain(
+      "Result generation is in progress."
+    );
+    expect(screen.getByLabelText("Step results for run-intake-to-decision-002").textContent).toContain(
+      "Waiting for upstream workflow context before producing a result."
+    );
+    await user.click(
+      screen.getByRole("button", {
+        name: "Open workflow run detail run-intake-to-decision-002",
+      })
+    );
     expect(screen.getByLabelText("Selected run request").textContent).toContain(
       "Review whether the refund request should be approved."
     );
     expect(screen.getByLabelText("Selected run request").textContent).toContain(
       '{"ticket":"OPS-42"}'
     );
+    expect(screen.getByLabelText("Step work details")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Open Ingest request" })).toBeTruthy();
   });
 
-  it("requires an operator request before starting a workflow from the list", async () => {
+  it("requires a workflow message before starting a workflow from the list", async () => {
     const user = userEvent.setup();
     renderApp();
 
@@ -580,7 +618,7 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Start run" })).toHaveProperty("disabled", true);
     fireEvent.submit(screen.getByRole("form", { name: "Run workflow request" }));
 
-    expect(screen.getByText("Add the operator request before starting the run.")).toBeTruthy();
+    expect(screen.getByText("Send a message before starting the run.")).toBeTruthy();
 
     await user.click(screen.getByRole("button", { name: "Cancel" }));
 
@@ -589,13 +627,17 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: "Run workflow" }));
 
     await user.type(
-      screen.getByRole("textbox", { name: "Operator request" }),
+      screen.getByRole("textbox", { name: "Message to workflow" }),
       "Validate a simple workflow request from the list."
     );
     await user.click(screen.getByRole("button", { name: "Start run" }));
 
     expect(window.location.hash).toBe("#/workflows/workflow-intake-to-decision/runs");
-    expect(screen.getAllByText("run-intake-to-decision-002").length).toBeGreaterThan(1);
+    await user.click(
+      screen.getByRole("button", {
+        name: "Open workflow run detail run-intake-to-decision-002",
+      })
+    );
     expect(screen.getByLabelText("Selected run request").textContent).toContain(
       "Validate a simple workflow request from the list."
     );
@@ -605,6 +647,9 @@ describe("App", () => {
     const { user } = await renderBuilder();
 
     await user.click(screen.getByRole("button", { name: "Runs" }));
+    await user.click(
+      screen.getByRole("button", { name: "Open workflow run detail run-2026-05-15-a" })
+    );
     await user.click(screen.getByRole("button", { name: "Open Route policy" }));
 
     expect(screen.getByLabelText("Node inspector")).toBeTruthy();

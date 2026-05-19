@@ -74,6 +74,10 @@ export interface ExecutionStepTrace {
   readonly assumptions: ReadonlyArray<string>;
   readonly risks_identified: ReadonlyArray<string>;
   readonly artifacts_created: ReadonlyArray<string>;
+  readonly files_changed: ReadonlyArray<string>;
+  readonly references_used: ReadonlyArray<string>;
+  readonly skills_used: ReadonlyArray<string>;
+  readonly tools_used: ReadonlyArray<string>;
   readonly confidence_level: TraceConfidenceLevel;
   readonly context_for_successors: string;
 }
@@ -434,6 +438,10 @@ export const initialOpsState: OpsWorkbenchState = {
             assumptions: ["The operator request was authenticated upstream"],
             risks_identified: [],
             artifacts_created: ["inputs/request.json"],
+            files_changed: ["inputs/request.json"],
+            references_used: ["workflow input contract", "operator request metadata"],
+            skills_used: ["schema-required policy"],
+            tools_used: ["ops-console intake"],
             confidence_level: "high",
             context_for_successors:
               "Validate input can rely on the normalized payload and original request metadata.",
@@ -451,6 +459,10 @@ export const initialOpsState: OpsWorkbenchState = {
             assumptions: ["Schema normalization already succeeded"],
             risks_identified: ["Policy routing may pause if risk metadata is incomplete"],
             artifacts_created: [],
+            files_changed: [],
+            references_used: ["graph contract", "human-review-on-risk policy"],
+            skills_used: ["strict-json validation"],
+            tools_used: ["policy preflight"],
             confidence_level: "medium",
             context_for_successors:
               "Route policy should wait for the validation status before choosing a branch.",
@@ -481,6 +493,10 @@ export const initialOpsState: OpsWorkbenchState = {
             assumptions: ["The failing validation signature matches the latest build output"],
             risks_identified: ["Previous validation history may be too large for the prompt"],
             artifacts_created: ["plans/repair-plan.md"],
+            files_changed: ["plans/repair-plan.md"],
+            references_used: ["verify:smoke output", "latest build log"],
+            skills_used: ["code-review-excellence"],
+            tools_used: ["vitest", "release smoke verifier"],
             confidence_level: "low",
             context_for_successors:
               "Retry should use compacted validation history and avoid replaying stale failures.",
