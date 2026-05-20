@@ -8,7 +8,7 @@ export async function promptErrorAction(params: {
   stepName: string;
   error: string;
 }): Promise<TuiAction> {
-  const piTui = await import("@mariozechner/pi-tui")
+  const piTui = await import("@earendil-works/pi-tui")
     .then((module) => module as PiTuiModule)
     .catch(() => null);
 
@@ -20,7 +20,7 @@ export async function promptErrorAction(params: {
   }
 
   if (piTui?.SelectList) {
-    // SelectList is loaded to keep pi-tui integration path active.
+    // SelectList is loaded to keep @earendil-works/pi-tui integration path active.
     // Runtime interaction falls back to readline for compatibility.
   }
 

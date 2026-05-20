@@ -1,3 +1,6 @@
+import type { DifferentialTuiRenderer } from "./pi-tui-renderer.js";
+import { createDifferentialTuiRenderer } from "./pi-tui-renderer.js";
+
 export type TuiAction = "retry" | "skip" | "abort";
 
 export interface RunTuiSnapshot {
@@ -36,12 +39,6 @@ export type RunTuiEvent =
   | { type: "workflow-complete"; failedSteps: number }
   | { type: "workflow-abort"; reason: string };
 
-interface PiTuiModule {
-  TUI?: unknown;
-  Text?: unknown;
-  Loader?: unknown;
-}
-
 function toPercent(current: number, total: number): number {
   if (total <= 0) return 0;
   return Math.min(100, Math.max(0, Math.round((current / total) * 100)));
@@ -50,7 +47,7 @@ function toPercent(current: number, total: number): number {
 export class RunTuiController {
   private readonly startedAt = Date.now();
   private readonly state: RunTuiSnapshot;
-  private piTui: PiTuiModule | null = null;
+  private renderer: DifferentialTuiRenderer | null = null;
   private sigintHandler?: () => void;
   private aborted = false;
 
@@ -70,12 +67,6 @@ export class RunTuiController {
   }
 
   async start(): Promise<void> {
-    try {
-      this.piTui = (await import("@mariozechner/pi-tui")) as PiTuiModule;
-    } catch {
-      this.piTui = null;
-    }
-
     this.sigintHandler = () => {
       this.aborted = true;
       this.state.status = "aborted";
@@ -84,7 +75,9 @@ export class RunTuiController {
     process.on("SIGINT", this.sigintHandler);
 
     this.state.status = "running";
+    this.renderer = await createDifferentialTuiRenderer(this.renderLines());
     this.render();
+    await this.renderer.flush();
   }
 
   isAbortRequested(): boolean {
@@ -140,14 +133,14 @@ export class RunTuiController {
       process.off("SIGINT", this.sigintHandler);
       this.sigintHandler = undefined;
     }
+    await this.renderer?.stop();
+    this.renderer = null;
   }
 
-  private render(): void {
-    if (!process.stdout.isTTY) return;
-
+  private renderLines(): ReadonlyArray<string> {
     const elapsedSec = (this.state.elapsedMs / 1000).toFixed(1);
     const percent = toPercent(this.state.stepIndex, this.state.totalSteps);
-    const lines = [
+    return [
       `obora run dashboard`,
       `feature: ${this.state.featureName} | workflow: ${this.state.workflowName}`,
       `status: ${this.state.status} | step: ${this.state.stepIndex}/${this.state.totalSteps} (${percent}%)`,
@@ -156,11 +149,14 @@ export class RunTuiController {
       `--- streaming markdown ---`,
       this.state.streamedMarkdown || "(waiting for stream)",
       this.state.lastError ? `error: ${this.state.lastError}` : "",
-      this.piTui ? "pi-tui: active" : "pi-tui: fallback text mode",
+      `renderer: ${this.renderer?.modeLabel ?? "initializing"}`,
       `ctrl+c: abort`,
     ].filter(Boolean);
+  }
 
-    process.stdout.write("\x1Bc");
-    process.stdout.write(lines.join("\n") + "\n");
+  private render(): void {
+    if (!process.stdout.isTTY) return;
+
+    this.renderer?.update(this.renderLines());
   }
 }

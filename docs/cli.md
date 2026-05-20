@@ -16,6 +16,7 @@
 - [`obora expand`](#obora-expand)
 - [`obora judge`](#obora-judge)
 - [`obora run`](#obora-run)
+- [`obora chat`](#obora-chat)
 - [`obora workflow`](#obora-workflow)
 - [`obora status`](#obora-status)
 - [`obora validate`](#obora-validate)
@@ -150,6 +151,7 @@ Use these when you are ready to actually run work.
 
 - `obora judge`
 - `obora run`
+- `obora chat`
 - `obora test`
 - `obora policy`
 
@@ -157,6 +159,7 @@ Typical path:
 
 ```bash
 obora run workflow.yaml
+obora chat workflow.yaml --dry-run
 obora test workflow.yaml
 ```
 
@@ -600,6 +603,62 @@ Dry-run output includes:
 - `2` invalid input JSON or validation failure
 - `3` runtime execution failure
 - `4` timeout/abort mapped from gate/abort conditions
+
+---
+
+## `obora chat`
+
+Start a TUI chat session that sends user messages into a selected workflow.
+
+### Usage
+
+```bash
+obora chat [workflow] [--scope project|global|all] [--dry-run]
+obora chat [workflow] --once <message> --dry-run
+obora chat --workflow <workflow> --session <id>
+```
+
+### Options
+
+- `--workflow <workflow>` workflow name or YAML path; overrides the positional workflow
+- `--scope <project|global|all>` resolve workflow names from project/global workflow roots
+- `--project <path>` project root for scoped workflow discovery
+- `--global-workflows-dir <path>` global workflow directory override
+- `--session <id>` stable chat session id
+- `--once <message>` run one chat message and exit, useful for automation and smoke tests
+- `--dry-run` validate the selected workflow without live execution
+- `--provider <name>` LLM provider override for workflow runs
+- `--model <name>` LLM model override for workflow runs
+- `--config <path>` obora config YAML path
+- `--agents <path>` agents YAML path
+- `--policy <path>` policy YAML path
+- `--timeout <ms>` execution timeout in milliseconds
+- `--json` print the final chat session state after exit
+
+### Behavior
+
+- Renders an `@earendil-works/pi-tui` differential terminal UI with session id, status, selected workflow, recent messages, and command hints.
+- A plain message runs the selected workflow with input shaped as `{ message, sessionId, workflow }`.
+- `/workflow <name-or-path>` switches the selected workflow inside the same session.
+- `/run <task>` runs the current workflow with an explicit task message.
+- `/help` prints available chat commands.
+- `/exit` or `/quit` closes the chat session.
+- Non-TTY automation must use `--once <message>`.
+
+### Examples
+
+```bash
+obora chat release-readiness --scope project
+obora chat release-readiness --scope project --dry-run --once "prepare release notes"
+obora chat --workflow ~/.obora/workflows/code-review.yaml --session review-session
+obora chat release-readiness --model deepseek/deepseek-v4-flash:free
+```
+
+### Exit Codes
+
+- `0` success
+- `2` invalid scope, invalid timeout, ambiguous workflow, or missing scoped workflow
+- `10` non-TTY interactive usage or CLI failure
 
 ---
 

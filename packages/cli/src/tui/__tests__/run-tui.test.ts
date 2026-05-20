@@ -97,9 +97,9 @@ describe("RunTuiController", () => {
 
     expect(controller.isAbortRequested()).toBe(true);
     expect(controller.snapshot().status).toBe("aborted");
-    expect(write.mock.calls.map((args) => String(args[0])).join("")).toContain(
-      "obora run dashboard"
-    );
+    const output = write.mock.calls.map((args) => String(args[0])).join("");
+    expect(output).toContain("obora run dashboard");
+    expect(output).toContain("@earendil-works/pi-tui differential rendering");
 
     await controller.stop();
   });

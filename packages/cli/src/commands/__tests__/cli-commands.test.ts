@@ -45,6 +45,7 @@ describe("M3 CLI command IA", () => {
         "init",
         "quickstart",
         "judge",
+        "chat",
         "models",
         "agents",
         "auth",

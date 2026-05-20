@@ -55,26 +55,26 @@ export function parseCommandContext(commandPath: string[]): {
       if (state.skipNext) {
         return { ...state, skipNext: false };
       }
-    const parsedValueOption = parseValueOptionToken(token);
-    if (parsedValueOption) {
+      const parsedValueOption = parseValueOptionToken(token);
+      if (parsedValueOption) {
         const optionValue = parsedValueOption.optionValue ?? commandPath[index + 1] ?? null;
-      if (parsedValueOption.optionName === "--input" || parsedValueOption.optionName === "-i") {
+        if (parsedValueOption.optionName === "--input" || parsedValueOption.optionName === "-i") {
           return {
             ...state,
             inputValue: optionValue,
             skipNext: parsedValueOption.optionValue === null,
           };
-      }
+        }
         return { ...state, skipNext: parsedValueOption.optionValue === null };
-    }
+      }
 
-    if (token.startsWith("-")) {
+      if (token.startsWith("-")) {
         return state;
-    }
+      }
 
       if (!state.activeCommand) {
         return { ...state, activeCommand: token };
-    }
+      }
 
       if (!state.commandArgument) {
         return { ...state, commandArgument: token };
@@ -148,6 +148,7 @@ function inferNextCommand(err: unknown): string | null {
     commandContext.activeCommand === "validate" ||
     commandContext.activeCommand === "init" ||
     commandContext.activeCommand === "quickstart" ||
+    commandContext.activeCommand === "chat" ||
     message.includes("dlq entry") ||
     message.includes("dlq store") ||
     message.includes("dlq config") ||

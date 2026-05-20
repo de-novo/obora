@@ -23,10 +23,3 @@ declare module "@obora/dashboard" {
     notificationEngine: unknown;
   }>;
 }
-
-declare module "@mariozechner/pi-tui" {
-  export const TUI: unknown;
-  export const Text: unknown;
-  export const Loader: unknown;
-  export const SelectList: unknown;
-}

@@ -6,6 +6,7 @@ import { createAgentsCommand } from "./commands/agents.js";
 import { createArtifactCommand } from "./commands/artifact.js";
 import { createAuditCommand } from "./commands/audit.js";
 import { createAuthCommand } from "./commands/auth.js";
+import { createChatCommand } from "./commands/chat.js";
 import { createConfigCommand } from "./commands/config.js";
 import { createAgentCommand } from "./commands/agent.js";
 import { createWorkflowCommand } from "./commands/workflow.js";
@@ -87,6 +88,7 @@ export function createCLI(): Command {
   program.addCommand(createWorkflowCommand());
   program.addCommand(createExpandCommand());
   program.addCommand(createRunCommand());
+  program.addCommand(createChatCommand());
   program.addCommand(createStatusCommand());
   program.addCommand(createValidateCommand());
   program.addCommand(createTestCommand());
