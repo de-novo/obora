@@ -29,7 +29,7 @@ describe("renderChatView", () => {
           cwd: "/repo",
           dryRun: true,
           providerName: "openrouter",
-          modelName: "deepseek/deepseek-v4-flash:free",
+          modelName: "openrouter/owl-alpha",
           workflowTarget: "release-readiness",
         }),
         workflowLocator: locator,
@@ -51,7 +51,7 @@ describe("renderChatView", () => {
     expect(plain).toContain("conversation");
     expect(plain).toContain("session");
     expect(plain).toContain("workflow");
-    expect(plain).toContain("deepseek/deepseek-v4-flash:free");
+    expect(plain).toContain("openrouter/owl-alpha");
     expect(plain).toContain("prepare release notes");
     expect(plain).toContain("steps 4");
     expect(output).not.toContain("+---");

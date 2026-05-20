@@ -15,7 +15,7 @@ describe("chat state helpers", () => {
       cwd: "/repo",
       dryRun: true,
       providerName: "openrouter",
-      modelName: "deepseek/deepseek-v4-flash:free",
+      modelName: "openrouter/owl-alpha",
       workflowTarget: "release-readiness",
     });
 
@@ -24,7 +24,7 @@ describe("chat state helpers", () => {
       cwd: "/repo",
       dryRun: true,
       providerName: "openrouter",
-      modelName: "deepseek/deepseek-v4-flash:free",
+      modelName: "openrouter/owl-alpha",
       workflowTarget: "release-readiness",
       status: "idle",
     });

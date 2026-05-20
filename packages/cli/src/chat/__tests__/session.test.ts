@@ -62,7 +62,7 @@ describe("chat session", () => {
       state: selected.state,
       resolveWorkflow,
       runWorkflow,
-      commandOptions: { dryRun: true, model: "deepseek/deepseek-v4-flash:free" },
+      commandOptions: { dryRun: true, model: "openrouter/owl-alpha" },
     });
 
     expect(runWorkflow).toHaveBeenCalledWith(
@@ -70,7 +70,7 @@ describe("chat session", () => {
       expect.objectContaining({
         dryRun: true,
         quiet: true,
-        model: "deepseek/deepseek-v4-flash:free",
+        model: "openrouter/owl-alpha",
         input: expect.stringContaining("summarize this project"),
       })
     );
@@ -117,7 +117,7 @@ describe("chat session", () => {
       runWorkflow,
       commandOptions: {
         provider: "openrouter",
-        model: "deepseek/deepseek-v4-flash:free",
+        model: "openrouter/owl-alpha",
         config: "/repo/.obora/config.yaml",
         agents: "/repo/agents.yaml",
         policy: "/repo/policy.yaml",
@@ -131,7 +131,7 @@ describe("chat session", () => {
         dryRun: false,
         quiet: true,
         provider: "openrouter",
-        model: "deepseek/deepseek-v4-flash:free",
+        model: "openrouter/owl-alpha",
         config: "/repo/.obora/config.yaml",
         agents: "/repo/agents.yaml",
         policy: "/repo/policy.yaml",
@@ -162,7 +162,7 @@ describe("chat session", () => {
       resolveWorkflow,
       runWorkflow: failingRunWorkflow,
       commandOptions: {
-        model: "deepseek/deepseek-v4-flash:free",
+        model: "openrouter/owl-alpha",
       },
     });
 

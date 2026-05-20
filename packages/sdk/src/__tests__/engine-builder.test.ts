@@ -207,7 +207,16 @@ describe("EngineBuilder", () => {
   });
 
   it("resolves agent LLM from config agent when factory returns undefined", async () => {
-    const { resolveProviderConfig } = await import("../config-loader.js");
+    const { loadConfig, resolveProviderConfig } = await import("../config-loader.js");
+    (loadConfig as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      defaults: { provider: "openai", model: "gpt-4" },
+      agents: {
+        "missing-agent": {
+          provider: "openai",
+          model: "gpt-4o-mini",
+        },
+      },
+    });
     (resolveProviderConfig as ReturnType<typeof vi.fn>).mockReturnValueOnce(undefined);
     const eventBus = createMockEventBus();
     const persistenceManager = createMockPersistenceManager();
@@ -233,7 +242,44 @@ describe("EngineBuilder", () => {
     }
   });
 
+  it("does not resolve per-agent LLM from defaults when the agent has no LLM config", async () => {
+    const { resolveProviderConfig } = await import("../config-loader.js");
+    const eventBus = createMockEventBus();
+    const persistenceManager = createMockPersistenceManager();
+    const adapterFactory = createMockAdapterFactory();
+
+    const builder = new EngineBuilder({
+      config: createBaseConfig(),
+      eventBus,
+      adapterFactory,
+      persistenceManager,
+      agents: new Map(),
+    });
+
+    const engine = await builder.build("exec-8", false, undefined);
+    const resolveAgent = (engine.stepExecutor as unknown as { config?: { resolveAgentLLM?: (name: string) => Promise<unknown> } })?.config?.resolveAgentLLM;
+    expect(resolveAgent).toBeDefined();
+    (resolveProviderConfig as ReturnType<typeof vi.fn>).mockClear();
+    if (resolveAgent) {
+      const result = await resolveAgent("unconfigured-agent");
+      expect(result).toBeUndefined();
+    }
+    expect(resolveProviderConfig).not.toHaveBeenCalled();
+  });
+
   it("resolves agent LLM from config agent when factory returns non-object", async () => {
+    const { loadConfig } = await import("../config-loader.js");
+    (loadConfig as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      defaults: { provider: "openai", model: "gpt-4" },
+      agents: {
+        "string-agent": {
+          provider: "openai",
+          model: "gpt-4o-mini",
+          temperature: 0.2,
+        },
+      },
+    });
+
     const eventBus = createMockEventBus();
     const persistenceManager = createMockPersistenceManager();
     const adapterFactory = createMockAdapterFactory();
@@ -253,8 +299,10 @@ describe("EngineBuilder", () => {
     const resolveAgent = (engine.stepExecutor as unknown as { config?: { resolveAgentLLM?: (name: string) => Promise<unknown> } })?.config?.resolveAgentLLM;
     expect(resolveAgent).toBeDefined();
     if (resolveAgent) {
-      const result = await resolveAgent("string-agent");
+      const result = (await resolveAgent("string-agent")) as { model: string; temperature: number } | undefined;
       expect(result).toBeDefined();
+      expect(result?.model).toBe("gpt-4o-mini");
+      expect(result?.temperature).toBe(0.2);
     }
   });
 

@@ -39,6 +39,22 @@ export interface EngineBuilderDeps {
   agents: Map<string, AgentFactory>;
 }
 
+interface AgentLLMInfo {
+  provider?: string;
+  model?: string;
+  temperature?: number;
+  api_key?: string;
+}
+
+function hasAgentLLMInfo(agent: AgentLLMInfo | undefined): boolean {
+  return Boolean(
+    agent?.provider ||
+      agent?.model ||
+      agent?.api_key ||
+      agent?.temperature !== undefined
+  );
+}
+
 /**
  * Builds the execution engine for a workflow run.
  *
@@ -192,7 +208,13 @@ export class EngineBuilder {
             })
           : undefined;
       const configAgent = loadedConfig.agents?.[agentName];
-      const preferAgentInfo = Boolean(agentInfo);
+      const hasRuntimeAgentLLMInfo = hasAgentLLMInfo(agentInfo);
+      const hasConfigAgentLLMInfo = hasAgentLLMInfo(configAgent);
+      if (!hasRuntimeAgentLLMInfo && !hasConfigAgentLLMInfo) {
+        return undefined;
+      }
+
+      const preferAgentInfo = hasRuntimeAgentLLMInfo;
 
       const resolvedProviderName = preferAgentInfo
         ? (agentInfo?.provider ?? loadedConfig.defaults?.provider)

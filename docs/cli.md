@@ -651,7 +651,7 @@ obora chat --workflow <workflow> --session <id>
 obora chat release-readiness --scope project
 obora chat release-readiness --scope project --dry-run --once "prepare release notes"
 obora chat --workflow ~/.obora/workflows/code-review.yaml --session review-session
-obora chat release-readiness --model deepseek/deepseek-v4-flash:free
+obora chat release-readiness --model openrouter/owl-alpha
 ```
 
 ### Exit Codes
