@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { appendChatMessage, createChatMessage, createInitialChatState } from "../state.js";
 import { renderChatView } from "../view.js";
+import { stripAnsi } from "./ansi-test-utils.js";
 import type { ChatSessionStatus } from "../types.js";
 
 const locator: WorkflowLocator = {
@@ -20,7 +21,7 @@ const locator: WorkflowLocator = {
 const renderedText = (lines: ReadonlyArray<string>): string => lines.join("\n");
 
 describe("renderChatView", () => {
-  it("renders a two-column operator console for wide terminals", () => {
+  it("renders a modern keyboard-first workflow chat console for wide terminals", () => {
     const state = appendChatMessage(
       {
         ...createInitialChatState({
@@ -44,15 +45,16 @@ describe("renderChatView", () => {
         rendererLabel: "@earendil-works/pi-tui differential rendering",
       })
     );
+    const plain = stripAnsi(output);
 
-    expect(output).toContain("OBORA CHAT");
-    expect(output).toContain("[TRANSCRIPT]");
-    expect(output).toContain("[SESSION]");
-    expect(output).toContain("[WORKFLOW]");
-    expect(output).toContain("[ACTIVITY]");
-    expect(output).toContain("deepseek/deepseek-v4-flash:free");
-    expect(output).toContain("prepare release notes");
-    expect(output).toContain("steps: 4");
+    expect(plain).toContain("obora workflow chat");
+    expect(plain).toContain("conversation");
+    expect(plain).toContain("session");
+    expect(plain).toContain("workflow");
+    expect(plain).toContain("deepseek/deepseek-v4-flash:free");
+    expect(plain).toContain("prepare release notes");
+    expect(plain).toContain("steps 4");
+    expect(output).not.toContain("+---");
   });
 
   it("falls back to a stacked layout for narrow terminals", () => {
@@ -67,10 +69,11 @@ describe("renderChatView", () => {
       )
     );
 
-    expect(output).toContain("[SESSION]");
-    expect(output).toContain("[COMMAND PALETTE]");
-    expect(output).toContain("plain text fallback");
-    expect(output.split("\n").every((line) => line.length <= 80)).toBe(true);
+    const plain = stripAnsi(output);
+    expect(plain).toContain("session");
+    expect(plain).toContain("› Select /workflow <name> first");
+    expect(plain).toContain("plain text fallback");
+    expect(plain.split("\n").every((line) => line.length <= 80)).toBe(true);
   });
 
   it("renders unresolved workflow targets, assistant messages, and clamped narrow widths", () => {
@@ -92,17 +95,18 @@ describe("renderChatView", () => {
     );
 
     const output = renderedText(renderChatView(state, { columns: 20 }));
+    const plain = stripAnsi(output);
 
-    expect(output).toContain("RUNNING");
-    expect(output).toContain("review-flow (unresolved)");
-    expect(output).toContain("OBORA");
-    expect(output).toContain("Working through the selected workflow.");
-    expect(output.split("\n").every((line) => line.length <= 78)).toBe(true);
+    expect(plain).toContain("running");
+    expect(plain).toContain("review-flow (unresolved)");
+    expect(plain).toContain("obora");
+    expect(plain).toContain("Working through the selected workflow.");
+    expect(plain.split("\n").every((line) => line.length <= 78)).toBe(true);
   });
 
   it.each([
-    ["resolving", "RESOLVING"],
-    ["completed", "DONE"],
+    ["resolving", "resolving"],
+    ["completed", "done"],
   ] as ReadonlyArray<readonly [ChatSessionStatus, string]>)(
     "renders %s status",
     (status, label) => {
@@ -120,9 +124,10 @@ describe("renderChatView", () => {
           { columns: 160 }
         )
       );
+      const plain = stripAnsi(output);
 
-      expect(output).toContain(label);
-      expect(output).toContain("editable: no");
+      expect(plain).toContain(label);
+      expect(plain).toContain("editable no");
     }
   );
 });

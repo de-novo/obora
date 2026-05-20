@@ -1,5 +1,7 @@
-import type { ChatMessage, ChatSessionState } from "./types.js";
+import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
+
 import { visibleChatMessages } from "./state.js";
+import type { ChatMessage, ChatSessionState, ChatSessionStatus } from "./types.js";
 
 export interface ChatViewOptions {
   readonly rendererLabel?: string;
@@ -7,69 +9,93 @@ export interface ChatViewOptions {
 }
 
 const MIN_WIDTH = 78;
-const MAX_WIDTH = 140;
-const PANEL_GAP = 2;
+const MAX_WIDTH = 132;
+const CARD_MAX_WIDTH = 92;
+
+const ansi = {
+  reset: "\x1b[0m",
+  bold: "\x1b[1m",
+  dim: "\x1b[2m",
+  gray: "\x1b[38;5;245m",
+  muted: "\x1b[38;5;103m",
+  cyan: "\x1b[38;5;117m",
+  green: "\x1b[38;5;114m",
+  yellow: "\x1b[38;5;229m",
+  red: "\x1b[38;5;203m",
+  violet: "\x1b[38;5;147m",
+  inputBg: "\x1b[48;5;236m",
+  inputFg: "\x1b[38;5;252m",
+} as const;
+
+const paint = (code: string, text: string): string => `${code}${text}${ansi.reset}`;
+const bold = (text: string): string => paint(ansi.bold, text);
+const dim = (text: string): string => paint(ansi.dim, text);
+const gray = (text: string): string => paint(ansi.gray, text);
+const muted = (text: string): string => paint(ansi.muted, text);
+const cyan = (text: string): string => paint(ansi.cyan, text);
+const green = (text: string): string => paint(ansi.green, text);
+const yellow = (text: string): string => paint(ansi.yellow, text);
+const red = (text: string): string => paint(ansi.red, text);
+const violet = (text: string): string => paint(ansi.violet, text);
+const inputBg = (text: string): string => paint(`${ansi.inputBg}${ansi.inputFg}`, text);
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value));
 
 const repeat = (char: string, count: number): string => char.repeat(Math.max(0, count));
 
-const clipText = (text: string, width: number): string =>
-  width <= 0
-    ? ""
-    : text.length <= width
-      ? text
-      : width === 1
-        ? "~"
-        : `${text.slice(0, width - 1)}~`;
+const fit = (text: string, width: number): string => truncateToWidth(text, width, "…", true);
 
-const fitText = (text: string, width: number): string => clipText(text, width).padEnd(width, " ");
+const homeDir = process.env.HOME;
+
+const compactPath = (path: string, width: number): string =>
+  truncateToWidth(homeDir ? path.replace(homeDir, "~") : path, width, "…");
 
 const normalizeText = (text: string): string => text.replace(/\s+/g, " ").trim();
 
-const wrapText = (text: string, width: number): ReadonlyArray<string> => {
-  const normalized = normalizeText(text);
-  if (!normalized) return [""];
-  if (width <= 0 || normalized.length <= width) return [normalized];
+const wrapLine = (text: string, width: number): ReadonlyArray<string> =>
+  wrapTextWithAnsi(normalizeText(text), width);
 
-  const search = normalized.slice(0, width + 1);
-  const breakAt = search.lastIndexOf(" ");
-  const splitAt = breakAt > Math.floor(width * 0.45) ? breakAt : width;
-  const head = normalized.slice(0, splitAt).trim();
-  const tail = normalized.slice(splitAt).trim();
-  return [head, ...wrapText(tail, width)];
+const cardBorder = (title: string, width: number, edge: "top" | "bottom"): string => {
+  const titleText = edge === "top" ? ` ${title} ` : "";
+  const left = edge === "top" ? "╭─" : "╰─";
+  const right = edge === "top" ? "╮" : "╯";
+  const fill = repeat("─", Math.max(0, width - visibleWidth(left) - visibleWidth(titleText) - 1));
+  return gray(`${left}${titleText}${fill}${right}`);
 };
 
-const frameLine = (width: number, char = "-"): string => `+${repeat(char, width - 2)}+`;
+const cardLine = (line: string, width: number): string =>
+  `${gray("│")} ${fit(line, width - 4)} ${gray("│")}`;
 
-const contentLine = (width: number, text = ""): string => `| ${fitText(text, width - 4)} |`;
-
-const titledPanel = (
+const card = (
   title: string,
   lines: ReadonlyArray<string>,
   width: number
 ): ReadonlyArray<string> => [
-  frameLine(width),
-  contentLine(width, `[${title}]`),
-  ...lines.flatMap((line) =>
-    wrapText(line, width - 4).map((wrapped) => contentLine(width, wrapped))
-  ),
-  frameLine(width),
+  cardBorder(title, width, "top"),
+  ...lines.flatMap((line) => wrapLine(line, width - 4).map((wrapped) => cardLine(wrapped, width))),
+  cardBorder(title, width, "bottom"),
 ];
 
-const statusMark = (state: ChatSessionState): string =>
-  state.status === "ready"
-    ? "READY"
-    : state.status === "running"
-      ? "RUNNING"
-      : state.status === "failed"
-        ? "FAILED"
-        : state.status === "completed"
-          ? "DONE"
-          : state.status === "resolving"
-            ? "RESOLVING"
-            : "IDLE";
+const statusLabels: Readonly<Record<ChatSessionStatus, string>> = {
+  idle: "idle",
+  resolving: "resolving",
+  ready: "ready",
+  running: "running",
+  completed: "done",
+  failed: "failed",
+};
+
+const statusColor: Readonly<Record<ChatSessionStatus, (text: string) => string>> = {
+  idle: muted,
+  resolving: yellow,
+  ready: green,
+  running: cyan,
+  completed: green,
+  failed: red,
+};
+
+const statusPill = (status: ChatSessionStatus): string => statusColor[status](statusLabels[status]);
 
 const formatWorkflow = (state: ChatSessionState): string =>
   state.workflowLocator
@@ -78,154 +104,86 @@ const formatWorkflow = (state: ChatSessionState): string =>
       ? `${state.workflowTarget} (unresolved)`
       : "no workflow selected";
 
-const formatTime = (createdAt: string): string => new Date(createdAt).toISOString().slice(11, 19);
+const formatTime = (createdAt: string): string => new Date(createdAt).toISOString().slice(11, 16);
 
-const roleLabel = (role: ChatMessage["role"]): string =>
-  role === "assistant" ? "obora" : role === "user" ? "you" : "system";
-
-const renderMessage = (message: ChatMessage, width: number): ReadonlyArray<string> => {
-  const bodyWidth = width - 8;
-  const header = `${roleLabel(message.role).toUpperCase()} ${formatTime(message.createdAt)}`;
-  return [`> ${header}`, ...wrapText(message.content, bodyWidth).map((line) => `  ${line}`)];
-};
-
-const compactPath = (path: string): string =>
-  path.length <= 42 ? path : `...${path.slice(Math.max(0, path.length - 39))}`;
+const roleBadge = (role: ChatMessage["role"]): string =>
+  role === "assistant" ? cyan("obora") : role === "user" ? violet("you") : muted("system");
 
 const renderHeader = (state: ChatSessionState, width: number): ReadonlyArray<string> => [
-  frameLine(width, "="),
-  contentLine(
-    width,
-    `OBORA CHAT  |  workflow operator console  |  ${statusMark(state)}  |  ${state.dryRun ? "DRY RUN" : "LIVE"}`
-  ),
-  contentLine(
-    width,
-    `workflow: ${formatWorkflow(state)}  |  session: ${state.sessionId}  |  model: ${state.modelName ?? "default"}`
-  ),
-  frameLine(width, "="),
+  dim(compactPath(state.cwd, width)),
+  `${bold("obora")} ${muted("workflow chat")}  ${dim("session")} ${state.sessionId}`,
+  "",
 ];
 
-const renderSessionPanel = (
+const renderHero = (
   state: ChatSessionState,
   rendererLabel: string,
   width: number
 ): ReadonlyArray<string> =>
-  titledPanel(
-    "SESSION",
+  card(
+    "session",
     [
-      `id: ${state.sessionId}`,
-      `status: ${statusMark(state)}`,
-      `mode: ${state.dryRun ? "dry-run verification" : "live workflow execution"}`,
-      `provider: ${state.providerName ?? "default"}`,
-      `model: ${state.modelName ?? "default"}`,
-      `renderer: ${rendererLabel}`,
-      `cwd: ${compactPath(state.cwd)}`,
+      `${muted(">_")} ${bold("Workflow")} ${formatWorkflow(state)}`,
+      `${muted("status")} ${statusPill(state.status)}   ${muted("mode")} ${state.dryRun ? yellow("dry-run") : green("live")}   ${muted("model")} ${state.modelName ?? "default"}`,
+      `${muted("provider")} ${state.providerName ?? "default"}   ${muted("renderer")} ${rendererLabel}`,
     ],
     width
   );
 
-const renderWorkflowPanel = (state: ChatSessionState, width: number): ReadonlyArray<string> =>
-  titledPanel(
-    "WORKFLOW",
-    state.workflowLocator
-      ? [
-          `name: ${state.workflowLocator.name}`,
-          `scope: ${state.workflowLocator.scope}`,
-          `steps: ${state.workflowLocator.stepCount}`,
-          `editable: ${state.workflowLocator.editable ? "yes" : "no"}`,
-          `path: ${state.workflowLocator.displayPath}`,
-        ]
-      : [
-          `target: ${state.workflowTarget ?? "none"}`,
-          "state: select with /workflow <name-or-path>",
-          "scope: project, global, or all",
-        ],
-    width
-  );
+const workflowLines = (state: ChatSessionState): ReadonlyArray<string> =>
+  state.workflowLocator
+    ? [
+        `${muted("name")} ${state.workflowLocator.name}`,
+        `${muted("scope")} ${state.workflowLocator.scope}   ${muted("steps")} ${state.workflowLocator.stepCount}   ${muted("editable")} ${state.workflowLocator.editable ? "yes" : "no"}`,
+        `${muted("path")} ${state.workflowLocator.displayPath}`,
+      ]
+    : [
+        `${muted("target")} ${state.workflowTarget ?? "none"}`,
+        `${muted("state")} select with /workflow <name-or-path>`,
+        `${muted("scope")} project, global, or all`,
+      ];
 
-const renderActivityPanel = (state: ChatSessionState, width: number): ReadonlyArray<string> =>
-  titledPanel(
-    "ACTIVITY",
-    [
-      state.lastRunCommand ? `last run: ${state.lastRunCommand}` : "last run: none",
-      state.lastError ? `error: ${state.lastError}` : "error: none",
-      `turns: ${Math.max(0, state.messages.filter((message) => message.role === "user").length)}`,
-      "audit: command, workflow, cwd, provider, and model are visible",
-    ],
-    width
-  );
+const activityLines = (state: ChatSessionState): ReadonlyArray<string> => [
+  `${muted("last run")} ${state.lastRunCommand ?? "none"}`,
+  `${muted("error")} ${state.lastError ? red(state.lastError) : "none"}`,
+  `${muted("turns")} ${state.messages.filter((message) => message.role === "user").length}`,
+  `${muted("audit")} command, workflow, cwd, provider, and model are visible`,
+];
 
-const renderCommandPanel = (width: number): ReadonlyArray<string> =>
-  titledPanel(
-    "COMMAND PALETTE",
-    [
-      "/run <task> executes the selected workflow",
-      "/workflow <name-or-path> switches workflow in this session",
-      "/help lists commands | /exit closes the session",
-    ],
-    width
-  );
+const renderMeta = (state: ChatSessionState, width: number): ReadonlyArray<string> =>
+  card("workflow", [...workflowLines(state), "", ...activityLines(state)], width);
 
-const padPanel = (
-  lines: ReadonlyArray<string>,
-  width: number,
-  height: number
-): ReadonlyArray<string> =>
-  Array.from({ length: height }, (_, index) => fitText(lines[index] ?? "", width));
+const renderMessage = (message: ChatMessage, width: number): ReadonlyArray<string> => [
+  `${dim(formatTime(message.createdAt))} ${roleBadge(message.role)}`,
+  ...wrapLine(message.content, width - 4).map((line) => `${muted("│")} ${line}`),
+];
 
-const sideBySide = (
-  left: ReadonlyArray<string>,
-  right: ReadonlyArray<string>,
-  leftWidth: number,
-  rightWidth: number
-): ReadonlyArray<string> => {
-  const height = Math.max(left.length, right.length);
-  const leftPadded = padPanel(left, leftWidth, height);
-  const rightPadded = padPanel(right, rightWidth, height);
-  return Array.from(
-    { length: height },
-    (_, index) => `${leftPadded[index]}${repeat(" ", PANEL_GAP)}${rightPadded[index]}`
-  );
+const renderTranscript = (state: ChatSessionState, width: number): ReadonlyArray<string> => [
+  muted("conversation"),
+  ...visibleChatMessages(state, 8).flatMap((message) => ["", ...renderMessage(message, width)]),
+];
+
+const renderPrompt = (state: ChatSessionState, width: number): ReadonlyArray<string> => {
+  const prompt = `› ${state.workflowLocator ? "Type a task for this workflow" : "Select /workflow <name> first"}   /run <task>  /workflow <name>  /help  /exit`;
+  const footer = `${state.modelName ?? "default"}  ·  ${compactPath(state.cwd, Math.max(12, width - 28))}`;
+  return ["", inputBg(fit(prompt, width)), dim(fit(footer, width))];
 };
-
-const renderTranscriptPanel = (state: ChatSessionState, width: number): ReadonlyArray<string> =>
-  titledPanel(
-    "TRANSCRIPT",
-    visibleChatMessages(state, 8).flatMap((message) => renderMessage(message, width)),
-    width
-  );
 
 export const renderChatView = (
   state: ChatSessionState,
   options: ChatViewOptions = {}
 ): ReadonlyArray<string> => {
   const width = clamp(options.columns ?? 100, MIN_WIDTH, MAX_WIDTH);
+  const cardWidth = clamp(width - 2, MIN_WIDTH, Math.min(width, CARD_MAX_WIDTH));
   const rendererLabel = options.rendererLabel ?? "initializing";
-  const useInspector = width >= 112;
-  const inspectorWidth = useInspector ? clamp(Math.floor(width * 0.38), 46, 54) : width;
-  const mainWidth = useInspector ? width - inspectorWidth - PANEL_GAP : width;
-  const inspector = [
-    ...renderSessionPanel(state, rendererLabel, inspectorWidth),
-    "",
-    ...renderWorkflowPanel(state, inspectorWidth),
-    "",
-    ...renderActivityPanel(state, inspectorWidth),
-  ];
-  const main = [...renderTranscriptPanel(state, mainWidth), "", ...renderCommandPanel(mainWidth)];
 
   return [
     ...renderHeader(state, width),
+    ...renderHero(state, rendererLabel, cardWidth),
     "",
-    ...(useInspector
-      ? sideBySide(main, inspector, mainWidth, inspectorWidth)
-      : [
-          ...renderSessionPanel(state, rendererLabel, width),
-          "",
-          ...renderWorkflowPanel(state, width),
-          "",
-          ...renderActivityPanel(state, width),
-          "",
-          ...main,
-        ]),
+    ...renderTranscript(state, cardWidth),
+    "",
+    ...renderMeta(state, cardWidth),
+    ...renderPrompt(state, width),
   ];
 };

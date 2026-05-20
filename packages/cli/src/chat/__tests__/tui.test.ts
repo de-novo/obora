@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { appendChatMessage, createChatMessage, createInitialChatState } from "../state.js";
 import { ChatTuiController } from "../tui.js";
+import { stripAnsi } from "./ansi-test-utils.js";
 
 const originalStdoutIsTTY = process.stdout.isTTY;
 
@@ -72,16 +73,18 @@ describe("ChatTuiController", () => {
     await controller.stop();
 
     const output = write.mock.calls.map((call) => String(call[0])).join("");
-    expect(output).toContain("OBORA CHAT");
-    expect(output).toContain("LIVE");
-    expect(output).toContain("workflow: release-readiness (project)");
-    expect(output).toContain("last run: obora run .obora/workflows/release-readiness.yaml");
-    expect(output).toContain("error: boom");
-    expect(output).toContain("[TRANSCRIPT]");
-    expect(output).toContain("[WORKFLOW]");
-    expect(output).toContain("@earendil-works/pi-tui differential rendering");
-    expect(output).toContain("YOU");
-    expect(output).toContain("ship it");
+    const plain = stripAnsi(output);
+    expect(plain).toContain("obora workflow chat");
+    expect(plain).toContain("mode live");
+    expect(plain).toContain("Workflow release-readiness (project)");
+    expect(plain).toContain("last run obora run .obora/workflows/release-readiness.yaml");
+    expect(plain).toContain("error boom");
+    expect(plain).toContain("conversation");
+    expect(plain).toContain("workflow");
+    expect(plain).toContain("@earendil-works/pi-tui differential rendering");
+    expect(plain).toContain("you");
+    expect(plain).toContain("ship it");
+    expect(output).not.toContain("+---");
   });
 
   it("marks abort requested on SIGINT", async () => {
