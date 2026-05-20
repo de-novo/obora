@@ -49,6 +49,11 @@ export type {
   ParallelStepFailure,
 } from "../execution/parallel-scheduler.js";
 export type {
+  WorkflowRunStepStatus,
+  WorkflowRunStepSummary,
+  WorkflowRunSummary,
+} from "../execution/run-result-summary.js";
+export type {
   ExecutionAgentInventoryEntry,
   ExecutionAgentSource,
   ExecutionAgentSourceKind,

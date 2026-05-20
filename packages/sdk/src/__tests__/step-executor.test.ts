@@ -494,6 +494,9 @@ describe("StepExecutor", () => {
       expect(result.output).toBe("done");
       expect(chatCompletion).toHaveBeenCalledTimes(2);
       expect(await readFile(join(workspace, "docs/tool-smoke.md"), "utf-8")).toBe("tool smoke");
+      expect(result.trace?.tools_used).toEqual(["file_write"]);
+      expect(result.trace?.artifacts_created).toEqual(["docs/tool-smoke.md"]);
+      expect((result.raw as { readonly toolCalls?: ReadonlyArray<unknown> }).toolCalls).toHaveLength(1);
     } finally {
       process.chdir(cwdBefore);
     }

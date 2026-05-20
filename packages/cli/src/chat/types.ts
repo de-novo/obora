@@ -1,4 +1,4 @@
-import type { WorkflowLocator, WorkflowResolveScope } from "@obora/sdk";
+import type { WorkflowLocator, WorkflowResolveScope, WorkflowRunSummary } from "@obora/sdk";
 
 export type ChatMessageRole = "system" | "user" | "assistant";
 export type ChatSessionStatus = "idle" | "resolving" | "ready" | "running" | "completed" | "failed";
@@ -8,6 +8,7 @@ export interface ChatMessage {
   readonly role: ChatMessageRole;
   readonly content: string;
   readonly createdAt: string;
+  readonly runSummary?: WorkflowRunSummary;
 }
 
 export interface ChatSessionState {
@@ -22,6 +23,7 @@ export interface ChatSessionState {
   readonly messages: ReadonlyArray<ChatMessage>;
   readonly lastError?: string;
   readonly lastRunCommand?: string;
+  readonly lastRunSummary?: WorkflowRunSummary;
 }
 
 export interface ChatRunInput {

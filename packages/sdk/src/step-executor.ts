@@ -76,6 +76,13 @@ export const BUILTIN_TOOLS: ToolDefinition[] = [
 
 const DEFAULT_MAX_TOOL_ROUNDS = 128;
 
+type RecordedToolCall = {
+  readonly function?: {
+    readonly name?: string;
+    readonly arguments?: string;
+  };
+};
+
 const OBR_GLOBAL_SYSTEM_PROMPT_LINES = [
   "You are an Obora workflow execution agent.",
   "",
@@ -441,28 +448,27 @@ Respond ONLY with valid JSON in this exact format:
   }
 
   private extractToolsUsed(result: StepResult): string[] {
-    const raw = result.raw as Record<string, unknown> | undefined;
-    if (!raw) return [];
-    const message = raw.message as Record<string, unknown> | undefined;
-    if (!message) return [];
-    const toolCalls = message.toolCalls as Array<{ function?: { name?: string } }> | undefined;
-    if (!Array.isArray(toolCalls)) return [];
-
+    const toolCalls = this.extractToolCalls(result);
     const names = toolCalls
       .map((tc) => tc.function?.name)
       .filter((name): name is string => typeof name === "string");
     return [...new Set(names)];
   }
 
-  private extractFileModifications(result: StepResult): Array<{ action: "create" | "modify"; path: string }> {
+  private extractToolCalls(result: StepResult): RecordedToolCall[] {
     const raw = result.raw as Record<string, unknown> | undefined;
     if (!raw) return [];
     const message = raw.message as Record<string, unknown> | undefined;
-    if (!message) return [];
-    const toolCalls = message.toolCalls as Array<{ function?: { name?: string; arguments?: string } }> | undefined;
-    if (!Array.isArray(toolCalls)) return [];
+    const rawToolCalls = Array.isArray(raw.toolCalls) ? raw.toolCalls : [];
+    const messageToolCalls = Array.isArray(message?.toolCalls) ? message.toolCalls : [];
+    return [...rawToolCalls, ...messageToolCalls].filter(
+      (toolCall): toolCall is RecordedToolCall =>
+        Boolean(toolCall) && typeof toolCall === "object" && !Array.isArray(toolCall)
+    );
+  }
 
-    return toolCalls
+  private extractFileModifications(result: StepResult): Array<{ action: "create" | "modify"; path: string }> {
+    return this.extractToolCalls(result)
       .filter((tc) => tc.function?.name === "file_write")
       .map((tc) => {
         const argsStr = tc.function?.arguments;
@@ -716,6 +722,7 @@ Respond ONLY with valid JSON in this exact format:
       const maxToolRounds = this.getMaxToolRounds(step);
       const toolLimits = this.getToolLimits(step);
       const toolCallCounts = new Map<string, number>();
+      const executedToolCalls: ToolCall[] = [];
       const executeToolCalls = (toolCalls: ToolCall[]): Promise<void> =>
         toolCalls.reduce(
           async (previous, toolCall) => {
@@ -735,6 +742,7 @@ Respond ONLY with valid JSON in this exact format:
             }
 
             const toolResult = await this.executeToolCall(toolCall);
+            executedToolCalls.push(toolCall);
             messages.push({
               role: "tool",
               toolCallId: toolCall.id,
@@ -786,7 +794,11 @@ Respond ONLY with valid JSON in this exact format:
         return executeToolRound(round + 1);
       };
 
-      return await executeToolRound(0);
+      const response = await executeToolRound(0);
+      return {
+        ...response,
+        toolCalls: executedToolCalls,
+      };
     } finally {
       requestSignal?.cleanup();
     }

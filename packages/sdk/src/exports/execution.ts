@@ -25,3 +25,4 @@ export {
 } from "../hooks.js";
 export { ExecutionController } from "../execution/execution-controller.js";
 export { TKGService } from "../execution/tkg-service.js";
+export { buildWorkflowRunSummary } from "../execution/run-result-summary.js";

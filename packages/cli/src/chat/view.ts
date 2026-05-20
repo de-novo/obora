@@ -1,4 +1,5 @@
 import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
+import type { WorkflowRunStepSummary, WorkflowRunSummary } from "@obora/sdk";
 
 import { visibleChatMessages } from "./state.js";
 import type { ChatMessage, ChatSessionState, ChatSessionStatus } from "./types.js";
@@ -109,6 +110,26 @@ const formatTime = (createdAt: string): string => new Date(createdAt).toISOStrin
 const roleBadge = (role: ChatMessage["role"]): string =>
   role === "assistant" ? cyan("obora") : role === "user" ? violet("you") : muted("system");
 
+const formatRunDuration = (summary: WorkflowRunSummary): string =>
+  summary.durationMs === undefined ? "duration -" : `duration ${summary.durationMs}ms`;
+
+const formatStepNames = (summary: WorkflowRunSummary): string =>
+  summary.steps.map((step) => step.name).join(", ");
+
+const formatStepToolLine = (step: WorkflowRunStepSummary): string | undefined =>
+  step.toolsUsed.length > 0 ? `${muted("tools")} ${step.toolsUsed.join(", ")}` : undefined;
+
+const formatStepArtifactLine = (step: WorkflowRunStepSummary): string | undefined =>
+  step.artifacts.length > 0 ? `${muted("artifacts")} ${step.artifacts.join(", ")}` : undefined;
+
+const formatStepDecisionLine = (step: WorkflowRunStepSummary): string | undefined =>
+  step.decisions.length > 0 ? `${muted("why")} ${step.decisions.join("; ")}` : undefined;
+
+const runSummaryTeaser = (summary: WorkflowRunSummary): ReadonlyArray<string> => [
+  `${muted(">")} ${summary.completedStepCount}/${summary.totalStepCount} steps · ${formatRunDuration(summary)}`,
+  `${muted(">")} ${formatStepNames(summary) || "no steps recorded"}`,
+];
+
 const renderHeader = (state: ChatSessionState, width: number): ReadonlyArray<string> => [
   dim(compactPath(state.cwd, width)),
   `${bold("obora")} ${muted("workflow chat")}  ${dim("session")} ${state.sessionId}`,
@@ -145,17 +166,45 @@ const workflowLines = (state: ChatSessionState): ReadonlyArray<string> =>
 
 const activityLines = (state: ChatSessionState): ReadonlyArray<string> => [
   `${muted("last run")} ${state.lastRunCommand ?? "none"}`,
+  `${muted("last result")} ${state.lastRunSummary ? `${state.lastRunSummary.status} ${state.lastRunSummary.completedStepCount}/${state.lastRunSummary.totalStepCount}` : "none"}`,
   `${muted("error")} ${state.lastError ? red(state.lastError) : "none"}`,
   `${muted("turns")} ${state.messages.filter((message) => message.role === "user").length}`,
   `${muted("audit")} command, workflow, cwd, provider, and model are visible`,
 ];
 
+const runStepLines = (step: WorkflowRunStepSummary): ReadonlyArray<string> =>
+  [
+    `${muted(">")} ${bold(step.name)} ${step.status}${step.agent ? ` · ${step.agent}` : ""}${step.model ? ` · ${step.model}` : ""}`,
+    `${muted("output")} ${step.outputPreview}`,
+    formatStepToolLine(step),
+    formatStepArtifactLine(step),
+    formatStepDecisionLine(step),
+    step.rationale ? `${muted("rationale")} ${step.rationale}` : undefined,
+    step.issues.length > 0 ? `${muted("issues")} ${step.issues.join("; ")}` : undefined,
+  ].filter((line): line is string => Boolean(line));
+
+const runResultLines = (state: ChatSessionState): ReadonlyArray<string> =>
+  state.lastRunSummary
+    ? [
+        "",
+        `${muted("run")} ${state.lastRunSummary.message}`,
+        `${muted("id")} ${state.lastRunSummary.executionId}   ${formatRunDuration(state.lastRunSummary)}`,
+        ...(state.lastRunSummary.error ? [`${muted("error")} ${red(state.lastRunSummary.error)}`] : []),
+        ...state.lastRunSummary.steps.flatMap(runStepLines),
+      ]
+    : [];
+
 const renderMeta = (state: ChatSessionState, width: number): ReadonlyArray<string> =>
-  card("workflow", [...workflowLines(state), "", ...activityLines(state)], width);
+  card("workflow", [...workflowLines(state), "", ...activityLines(state), ...runResultLines(state)], width);
 
 const renderMessage = (message: ChatMessage, width: number): ReadonlyArray<string> => [
   `${dim(formatTime(message.createdAt))} ${roleBadge(message.role)}`,
   ...wrapLine(message.content, width - 4).map((line) => `${muted("│")} ${line}`),
+  ...(message.runSummary
+    ? runSummaryTeaser(message.runSummary).flatMap((line) =>
+        wrapLine(line, width - 4).map((wrapped) => `${muted("│")} ${wrapped}`)
+      )
+    : []),
 ];
 
 const renderTranscript = (state: ChatSessionState, width: number): ReadonlyArray<string> => [

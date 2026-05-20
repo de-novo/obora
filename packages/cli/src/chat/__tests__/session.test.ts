@@ -1,4 +1,4 @@
-import type { WorkflowLocator } from "@obora/sdk";
+import type { RuntimeExecution, WorkflowLocator } from "@obora/sdk";
 import { PassThrough } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
 
@@ -30,6 +30,55 @@ const runWorkflow = vi.fn(
   async (_workflow: string, _options: Record<string, unknown>) => undefined
 );
 const resolveWorkflow = vi.fn(async (_target: string) => locator);
+
+const executionResult: RuntimeExecution = {
+  id: "exec-chat-1",
+  workflowName: "release-readiness",
+  status: "completed",
+  input: { message: "perform the release check" },
+  startedAt: new Date("2026-05-21T00:00:00.000Z"),
+  endedAt: new Date("2026-05-21T00:00:02.000Z"),
+  stepOrder: ["collect", "handoff"],
+  completedSteps: ["collect", "handoff"],
+  outputs: {
+    collect: "Collected release notes.",
+    handoff: "Ready to publish.",
+  },
+  traces: {
+    collect: {
+      step: "collect",
+      agent: "researcher",
+      timestamp: "2026-05-21T00:00:00.000Z",
+      version: "1.0",
+      task_summary: "Collect release notes",
+      methodology: "Standard agent execution",
+      tools_used: ["file_read"],
+      key_decisions: ["Use release notes"],
+      decision_rationale: "The notes are the requested artifact.",
+      alternatives_considered: [],
+      assumptions: [],
+      constraints: [],
+      risks_identified: [],
+      inputs_processed: [],
+      dependencies_used: [],
+      output_summary: "Collected release notes.",
+      output_format: "text",
+      artifacts_created: ["release-notes.md"],
+      issues_encountered: [],
+      workarounds_applied: [],
+      confidence_level: "high",
+      known_limitations: [],
+      implications_for_next: [],
+      recommended_next: [],
+      open_questions: [],
+      context_for_successors: "Step 'collect' completed by researcher.",
+    },
+  },
+  stepRecords: {
+    collect: { raw: { model: "openrouter/owl-alpha" } },
+    handoff: { raw: { model: "openrouter/owl-alpha" } },
+  },
+};
 
 describe("chat session", () => {
   it("handles help, workflow selection, and chat run turns", async () => {
@@ -98,6 +147,24 @@ describe("chat session", () => {
     expect(result.state.messages.at(-1)?.content).toContain("closed");
   });
 
+  it("ignores empty input turns", async () => {
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd: "/repo",
+      dryRun: true,
+    });
+
+    const result = await handleChatInput({
+      input: "   ",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(result).toEqual({ state, exit: false });
+  });
+
   it("passes live run options for explicit /run commands", async () => {
     vi.clearAllMocks();
     const selected = {
@@ -142,6 +209,39 @@ describe("chat session", () => {
     expect(result.state.messages.at(-1)?.content).toContain("Workflow run completed");
   });
 
+  it("stores returned workflow execution details as a one-message run summary", async () => {
+    const runWorkflowWithResult = vi.fn(async () => executionResult);
+    const selected = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: false,
+      }),
+      workflowLocator: locator,
+      status: "ready" as const,
+    };
+
+    const result = await handleChatInput({
+      input: "perform the release check",
+      state: selected,
+      resolveWorkflow,
+      runWorkflow: runWorkflowWithResult,
+      commandOptions: { provider: "openrouter", model: "openrouter/owl-alpha" },
+    });
+
+    const lastMessage = result.state.messages.at(-1);
+    expect(result.state.lastRunSummary).toMatchObject({
+      executionId: "exec-chat-1",
+      message: "Workflow completed: 2/2 steps completed.",
+    });
+    expect(lastMessage?.content).toContain("Workflow completed: 2/2 steps completed.");
+    expect(lastMessage?.runSummary?.steps[0]).toMatchObject({
+      name: "collect",
+      model: "openrouter/owl-alpha",
+      artifacts: ["release-notes.md"],
+    });
+  });
+
   it("keeps the chat session open when a workflow run fails", async () => {
     const failingRunWorkflow = vi.fn(async () => {
       throw new Error("Provider returned error");
@@ -173,6 +273,33 @@ describe("chat session", () => {
     expect(result.state.lastRunCommand).toBe("obora run .obora/workflows/release-readiness.yaml");
     expect(result.state.messages.at(-1)?.content).toContain(
       "Workflow run failed: Provider returned error"
+    );
+  });
+
+  it("formats string workflow failures without closing the session", async () => {
+    const failingRunWorkflow = vi.fn(() => Promise.reject("provider string failure"));
+    const selected = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: false,
+      }),
+      workflowLocator: locator,
+      status: "ready" as const,
+    };
+
+    const result = await handleChatInput({
+      input: "execute a live smoke task",
+      state: selected,
+      resolveWorkflow,
+      runWorkflow: failingRunWorkflow,
+      commandOptions: {},
+    });
+
+    expect(result.exit).toBe(false);
+    expect(result.state.lastError).toBe("provider string failure");
+    expect(result.state.messages.at(-1)?.content).toContain(
+      "Workflow run failed: provider string failure"
     );
   });
 

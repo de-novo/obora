@@ -1,7 +1,8 @@
 import { createInterface } from "node:readline/promises";
 import type { Readable, Writable } from "node:stream";
 
-import type { WorkflowLocator, WorkflowResolveScope } from "@obora/sdk";
+import { buildWorkflowRunSummary } from "@obora/sdk";
+import type { WorkflowLocator, WorkflowResolveScope, WorkflowRunSummary } from "@obora/sdk";
 
 import { runRun } from "../commands/run.js";
 import { CLIError } from "../utils/cli-error.js";
@@ -57,8 +58,15 @@ const commandRunOptions = (options: ChatCommandOptions): Record<string, unknown>
   ...(options.timeout ? { timeout: parseChatTimeout(options.timeout) } : {}),
 });
 
-const appendAssistant = (state: ChatSessionState, content: string): ChatSessionState =>
-  appendChatMessage(state, createChatMessage("assistant", content));
+const appendAssistant = (
+  state: ChatSessionState,
+  content: string,
+  runSummary?: WorkflowRunSummary
+): ChatSessionState =>
+  appendChatMessage(state, {
+    ...createChatMessage("assistant", content),
+    ...(runSummary ? { runSummary } : {}),
+  });
 
 const appendSystem = (state: ChatSessionState, content: string): ChatSessionState =>
   appendChatMessage(state, createChatMessage("system", content));
@@ -69,6 +77,16 @@ const errorMessage = (error: unknown): string =>
     : typeof error === "string"
       ? error
       : "Unknown workflow run failure.";
+
+const formatRunSummaryMessage = (
+  runSummary: WorkflowRunSummary | undefined,
+  dryRun: boolean | undefined
+): string =>
+  dryRun
+    ? "Dry-run completed. The workflow accepted this chat task."
+    : runSummary
+      ? `${runSummary.message} > ${runSummary.steps.map((step) => step.name).join(", ")}`
+      : "Workflow run completed for this chat task.";
 
 const withResolvedWorkflow = (
   state: ChatSessionState,
@@ -161,20 +179,21 @@ export const handleChatInput = async ({
   };
 
   return runWorkflow(state.workflowLocator.path, runOptions)
-    .then(
-      (): ChatTurnResult => ({
+    .then((execution): ChatTurnResult => {
+      const runSummary = execution ? buildWorkflowRunSummary(execution) : undefined;
+      return {
         state: appendAssistant(
           {
             ...setChatStatus(runningState, "ready"),
             lastRunCommand,
+            ...(runSummary ? { lastRunSummary: runSummary } : {}),
           },
-          commandOptions.dryRun
-            ? "Dry-run completed. The workflow accepted this chat task."
-            : "Workflow run completed for this chat task."
+          formatRunSummaryMessage(runSummary, commandOptions.dryRun),
+          runSummary
         ),
         exit: false,
-      })
-    )
+      };
+    })
     .catch((error: unknown): ChatTurnResult => {
       const message = errorMessage(error);
       return {

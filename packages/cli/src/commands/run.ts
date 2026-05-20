@@ -15,7 +15,7 @@ import {
   resolveLLMConfig,
   Workflow,
 } from "@obora/sdk";
-import type { OneFileStopSemantics, ResolutionSummary } from "@obora/sdk";
+import type { OneFileStopSemantics, ResolutionSummary, RuntimeExecution } from "@obora/sdk";
 import { Command } from "commander";
 
 import { CLIError } from "../utils/cli-error.js";
@@ -322,7 +322,10 @@ function buildDryRunDiagnostics(
   };
 }
 
-export async function runRun(workflow: string, options: Record<string, unknown>): Promise<void> {
+export async function runRun(
+  workflow: string,
+  options: Record<string, unknown>
+): Promise<RuntimeExecution | undefined> {
   const startedAt = Date.now();
   const repairLoopSummary = {
     validationFailed: 0,
@@ -615,7 +618,7 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
         formatter.info(`Validation completed in ${Date.now() - startedAt}ms`);
       }
     }
-    return;
+    return undefined;
   }
 
   const controller = new AbortController();
@@ -938,6 +941,8 @@ export async function runRun(workflow: string, options: Record<string, unknown>)
       formatter.info(`Total execution time: ${elapsedMs}ms`);
     }
   }
+
+  return result;
 }
 
 export function createRunCommand(): Command {

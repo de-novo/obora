@@ -24,6 +24,7 @@ export interface StepExecutionServices {
       completionTokens?: number;
       totalTokens?: number;
     };
+    toolCalls?: ReadonlyArray<ToolCall>;
   }>;
 
   /** Persist step output to the configured path, if any. */

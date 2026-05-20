@@ -1,4 +1,4 @@
-import type { WorkflowLocator } from "@obora/sdk";
+import type { WorkflowLocator, WorkflowRunSummary } from "@obora/sdk";
 import { describe, expect, it } from "vitest";
 
 import { appendChatMessage, createChatMessage, createInitialChatState } from "../state.js";
@@ -20,6 +20,49 @@ const locator: WorkflowLocator = {
 
 const renderedText = (lines: ReadonlyArray<string>): string => lines.join("\n");
 
+const runSummary: WorkflowRunSummary = {
+  executionId: "exec-chat-1",
+  workflowName: "release-readiness",
+  status: "completed",
+  startedAt: "2026-05-21T00:00:00.000Z",
+  endedAt: "2026-05-21T00:00:02.000Z",
+  durationMs: 2000,
+  completedStepCount: 2,
+  totalStepCount: 2,
+  message: "Workflow completed: 2/2 steps completed.",
+  steps: [
+    {
+      name: "collect",
+      status: "completed",
+      agent: "researcher",
+      model: "openrouter/owl-alpha",
+      outputPreview: "Collected release notes.",
+      outputFormat: "text",
+      toolsUsed: ["file_read", "file_write"],
+      artifacts: ["release-notes.md"],
+      task: "Collect release notes",
+      methodology: "Standard agent execution",
+      rationale: "The notes are the requested artifact.",
+      decisions: ["Use release notes"],
+      issues: [],
+      dependencies: [],
+    },
+    {
+      name: "handoff",
+      status: "completed",
+      agent: "dispatcher",
+      model: "openrouter/owl-alpha",
+      outputPreview: "Ready to publish.",
+      outputFormat: "text",
+      toolsUsed: [],
+      artifacts: [],
+      decisions: [],
+      issues: [],
+      dependencies: ["collect"],
+    },
+  ],
+};
+
 describe("renderChatView", () => {
   it("renders a modern keyboard-first workflow chat console for wide terminals", () => {
     const state = appendChatMessage(
@@ -35,8 +78,16 @@ describe("renderChatView", () => {
         workflowLocator: locator,
         status: "ready",
         lastRunCommand: "obora run .obora/workflows/release-readiness.yaml",
+        lastRunSummary: runSummary,
       },
-      createChatMessage("user", "prepare release notes", () => new Date("2026-05-20T01:02:03Z"))
+      {
+        ...createChatMessage(
+          "assistant",
+          "Workflow completed: 2/2 steps completed. > collect, handoff",
+          () => new Date("2026-05-20T01:02:03Z")
+        ),
+        runSummary,
+      }
     );
 
     const output = renderedText(
@@ -52,7 +103,11 @@ describe("renderChatView", () => {
     expect(plain).toContain("session");
     expect(plain).toContain("workflow");
     expect(plain).toContain("openrouter/owl-alpha");
-    expect(plain).toContain("prepare release notes");
+    expect(plain).toContain("Workflow completed: 2/2 steps completed.");
+    expect(plain).toContain("last result completed 2/2");
+    expect(plain).toContain("collect completed");
+    expect(plain).toContain("file_read, file_write");
+    expect(plain).toContain("release-notes.md");
     expect(plain).toContain("steps 4");
     expect(output).not.toContain("+---");
   });
@@ -102,6 +157,55 @@ describe("renderChatView", () => {
     expect(plain).toContain("obora");
     expect(plain).toContain("Working through the selected workflow.");
     expect(plain.split("\n").every((line) => line.length <= 78)).toBe(true);
+  });
+
+  it("renders failed run details with missing model, duration, issues, and errors", () => {
+    const failedSummary: WorkflowRunSummary = {
+      executionId: "exec-failed",
+      workflowName: "release-readiness",
+      status: "failed",
+      startedAt: "2026-05-21T00:00:00.000Z",
+      completedStepCount: 0,
+      totalStepCount: 1,
+      message: "Workflow failed: 0/1 steps completed.",
+      error: "Provider returned error",
+      steps: [
+        {
+          name: "collect",
+          status: "missing",
+          outputPreview: "No output recorded.",
+          outputFormat: "none",
+          toolsUsed: [],
+          artifacts: [],
+          decisions: [],
+          issues: ["Provider returned error"],
+          dependencies: [],
+        },
+      ],
+    };
+    const output = renderedText(
+      renderChatView(
+        {
+          ...createInitialChatState({
+            sessionId: "session-failed",
+            cwd: "/repo",
+            dryRun: false,
+          }),
+          status: "failed",
+          workflowLocator: locator,
+          lastRunSummary: failedSummary,
+          lastError: "Provider returned error",
+        },
+        { columns: 120 }
+      )
+    );
+
+    const plain = stripAnsi(output);
+    expect(plain).toContain("Workflow failed: 0/1 steps completed.");
+    expect(plain).toContain("duration -");
+    expect(plain).toContain("error Provider returned error");
+    expect(plain).toContain("collect missing");
+    expect(plain).toContain("issues Provider returned error");
   });
 
   it.each([
