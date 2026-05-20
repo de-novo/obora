@@ -63,6 +63,13 @@ const appendAssistant = (state: ChatSessionState, content: string): ChatSessionS
 const appendSystem = (state: ChatSessionState, content: string): ChatSessionState =>
   appendChatMessage(state, createChatMessage("system", content));
 
+const errorMessage = (error: unknown): string =>
+  error instanceof Error
+    ? error.message
+    : typeof error === "string"
+      ? error
+      : "Unknown workflow run failure.";
+
 const withResolvedWorkflow = (
   state: ChatSessionState,
   workflowTarget: string,
@@ -147,23 +154,40 @@ export const handleChatInput = async ({
     workflowName: state.workflowLocator.name,
     workflowPath: state.workflowLocator.path,
   });
-  await runWorkflow(state.workflowLocator.path, {
+  const lastRunCommand = `obora run ${state.workflowLocator.displayPath}`;
+  const runOptions = {
     ...commandRunOptions(commandOptions),
     input: runInput,
-  });
-
-  return {
-    state: appendAssistant(
-      {
-        ...setChatStatus(runningState, "ready"),
-        lastRunCommand: `obora run ${state.workflowLocator.displayPath}`,
-      },
-      commandOptions.dryRun
-        ? "Dry-run completed. The workflow accepted this chat task."
-        : "Workflow run completed for this chat task."
-    ),
-    exit: false,
   };
+
+  return runWorkflow(state.workflowLocator.path, runOptions)
+    .then(
+      (): ChatTurnResult => ({
+        state: appendAssistant(
+          {
+            ...setChatStatus(runningState, "ready"),
+            lastRunCommand,
+          },
+          commandOptions.dryRun
+            ? "Dry-run completed. The workflow accepted this chat task."
+            : "Workflow run completed for this chat task."
+        ),
+        exit: false,
+      })
+    )
+    .catch((error: unknown): ChatTurnResult => {
+      const message = errorMessage(error);
+      return {
+        state: appendAssistant(
+          {
+            ...setChatStatus(runningState, "failed", message),
+            lastRunCommand,
+          },
+          `Workflow run failed: ${message}`
+        ),
+        exit: false,
+      };
+    });
 };
 
 const promptLoop = async ({

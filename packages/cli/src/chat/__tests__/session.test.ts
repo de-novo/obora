@@ -142,6 +142,40 @@ describe("chat session", () => {
     expect(result.state.messages.at(-1)?.content).toContain("Workflow run completed");
   });
 
+  it("keeps the chat session open when a workflow run fails", async () => {
+    const failingRunWorkflow = vi.fn(async () => {
+      throw new Error("Provider returned error");
+    });
+    const selected = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: false,
+      }),
+      workflowLocator: locator,
+      status: "ready" as const,
+    };
+
+    const result = await handleChatInput({
+      input: "execute a live smoke task",
+      state: selected,
+      resolveWorkflow,
+      runWorkflow: failingRunWorkflow,
+      commandOptions: {
+        model: "deepseek/deepseek-v4-flash:free",
+      },
+    });
+
+    expect(failingRunWorkflow).toHaveBeenCalledOnce();
+    expect(result.exit).toBe(false);
+    expect(result.state.status).toBe("failed");
+    expect(result.state.lastError).toBe("Provider returned error");
+    expect(result.state.lastRunCommand).toBe("obora run .obora/workflows/release-readiness.yaml");
+    expect(result.state.messages.at(-1)?.content).toContain(
+      "Workflow run failed: Provider returned error"
+    );
+  });
+
   it("requires workflow selection before running a task", async () => {
     const state = createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true });
 
