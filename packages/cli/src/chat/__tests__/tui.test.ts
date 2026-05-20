@@ -72,13 +72,16 @@ describe("ChatTuiController", () => {
     await controller.stop();
 
     const output = write.mock.calls.map((call) => String(call[0])).join("");
-    expect(output).toContain("obora chat");
-    expect(output).toContain("mode: live");
+    expect(output).toContain("OBORA CHAT");
+    expect(output).toContain("LIVE");
     expect(output).toContain("workflow: release-readiness (project)");
     expect(output).toContain("last run: obora run .obora/workflows/release-readiness.yaml");
     expect(output).toContain("error: boom");
+    expect(output).toContain("[TRANSCRIPT]");
+    expect(output).toContain("[WORKFLOW]");
     expect(output).toContain("@earendil-works/pi-tui differential rendering");
-    expect(output).toContain("you: ship it");
+    expect(output).toContain("YOU");
+    expect(output).toContain("ship it");
   });
 
   it("marks abort requested on SIGINT", async () => {

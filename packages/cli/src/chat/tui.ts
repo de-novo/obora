@@ -1,20 +1,7 @@
 import type { ChatSessionState } from "./types.js";
-import { visibleChatMessages } from "./state.js";
+import { renderChatView } from "./view.js";
 import type { DifferentialTuiRenderer } from "../tui/pi-tui-renderer.js";
 import { createDifferentialTuiRenderer } from "../tui/pi-tui-renderer.js";
-
-const roleLabel = (role: string): string =>
-  role === "user" ? "you" : role === "assistant" ? "obora" : "system";
-
-const formatWorkflow = (state: ChatSessionState): string =>
-  state.workflowLocator
-    ? `${state.workflowLocator.name} (${state.workflowLocator.scope})`
-    : state.workflowTarget
-      ? `${state.workflowTarget} (unresolved)`
-      : "none";
-
-const formatMessage = (message: { readonly role: string; readonly content: string }): string =>
-  `${roleLabel(message.role)}: ${message.content}`;
 
 export class ChatTuiController {
   private state: ChatSessionState;
@@ -61,19 +48,10 @@ export class ChatTuiController {
   }
 
   private renderLines(state: ChatSessionState): ReadonlyArray<string> {
-    return [
-      "obora chat",
-      `session: ${state.sessionId} | status: ${state.status} | mode: ${state.dryRun ? "dry-run" : "live"}`,
-      `workflow: ${formatWorkflow(state)}`,
-      `cwd: ${state.cwd}`,
-      state.lastRunCommand ? `last run: ${state.lastRunCommand}` : "",
-      state.lastError ? `error: ${state.lastError}` : "",
-      `renderer: ${this.renderer?.modeLabel ?? "initializing"}`,
-      "--- messages ---",
-      ...visibleChatMessages(state).map(formatMessage),
-      "--- input ---",
-      "type a task, /workflow <name>, /help, or /exit",
-    ].filter(Boolean);
+    return renderChatView(state, {
+      columns: process.stdout.columns,
+      rendererLabel: this.renderer?.modeLabel,
+    });
   }
 
   private render(state: ChatSessionState): void {

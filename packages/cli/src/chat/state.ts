@@ -45,16 +45,22 @@ export const createInitialChatState = ({
   sessionId,
   cwd,
   dryRun,
+  providerName,
+  modelName,
   workflowTarget,
 }: {
   readonly sessionId: string;
   readonly cwd: string;
   readonly dryRun: boolean;
+  readonly providerName?: string;
+  readonly modelName?: string;
   readonly workflowTarget?: string;
 }): ChatSessionState => ({
   sessionId,
   cwd,
   dryRun,
+  ...(providerName ? { providerName } : {}),
+  ...(modelName ? { modelName } : {}),
   status: "idle",
   ...(workflowTarget ? { workflowTarget } : {}),
   messages: [

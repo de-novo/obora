@@ -15,6 +15,8 @@ export interface ChatSessionState {
   readonly status: ChatSessionStatus;
   readonly cwd: string;
   readonly dryRun: boolean;
+  readonly providerName?: string;
+  readonly modelName?: string;
   readonly workflowTarget?: string;
   readonly workflowLocator?: WorkflowLocator;
   readonly messages: ReadonlyArray<ChatMessage>;

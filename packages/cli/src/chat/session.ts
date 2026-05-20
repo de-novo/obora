@@ -229,6 +229,8 @@ export const runChatSession = async (
     sessionId: options.commandOptions.session ?? `chat-${Date.now()}`,
     cwd: options.cwd,
     dryRun: Boolean(options.commandOptions.dryRun),
+    providerName: options.commandOptions.provider,
+    modelName: options.commandOptions.model,
     workflowTarget: options.commandOptions.workflow,
   });
   const tui = new ChatTuiController(initialState);

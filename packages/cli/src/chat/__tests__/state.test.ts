@@ -14,6 +14,8 @@ describe("chat state helpers", () => {
       sessionId: "session-a",
       cwd: "/repo",
       dryRun: true,
+      providerName: "openrouter",
+      modelName: "deepseek/deepseek-v4-flash:free",
       workflowTarget: "release-readiness",
     });
 
@@ -21,6 +23,8 @@ describe("chat state helpers", () => {
       sessionId: "session-a",
       cwd: "/repo",
       dryRun: true,
+      providerName: "openrouter",
+      modelName: "deepseek/deepseek-v4-flash:free",
       workflowTarget: "release-readiness",
       status: "idle",
     });

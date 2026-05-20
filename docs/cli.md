@@ -637,7 +637,7 @@ obora chat --workflow <workflow> --session <id>
 
 ### Behavior
 
-- Renders an `@earendil-works/pi-tui` differential terminal UI with session id, status, selected workflow, recent messages, and command hints.
+- Renders an `@earendil-works/pi-tui` differential operator console with transcript, session inspector, workflow details, activity state, and command palette.
 - A plain message runs the selected workflow with input shaped as `{ message, sessionId, workflow }`.
 - `/workflow <name-or-path>` switches the selected workflow inside the same session.
 - `/run <task>` runs the current workflow with an explicit task message.
