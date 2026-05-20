@@ -286,6 +286,7 @@ export class StepExecutionEngine {
             }
             return stepExecutor.executeStep(step, {
               previousOutputs: execution.outputs,
+              runInput: execution.input,
               signal,
               ...(Object.keys(hookOutputs).length > 0 ? { hookOutputs } : {}),
             });
@@ -371,6 +372,7 @@ export class StepExecutionEngine {
 
         return stepExecutor.executeStep(branchStep, {
           previousOutputs: execution.outputs,
+          runInput: execution.input,
           signal,
         });
       })
@@ -608,6 +610,7 @@ export class StepExecutionEngine {
         }
         stepOutcome.result = await stepExecutor.executeStep(step, {
           previousOutputs: execution.outputs,
+          runInput: execution.input,
           traces: execution.traces,
           signal,
           ...(Object.keys(hookOutputs).length > 0 ? { hookOutputs } : {}),

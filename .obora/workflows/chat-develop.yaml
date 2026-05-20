@@ -1,0 +1,22 @@
+name: chat-develop
+version: "1.0"
+description: "Implement small repository changes from an Obora chat request"
+
+steps:
+  - name: implement-chat-request
+    agent: developer
+    description: "Turn the operator chat request into concrete files."
+    input:
+      task: |
+        Treat the Run input JSON as the operator chat request. Implement the requested development task in this repository using structured file_write tool calls.
+
+        For a Node.js CLI calculator request, create a complete standalone example under examples/node-cli-calculator:
+        - package.json
+        - bin/calculator.js
+        - README.md
+
+        The calculator should run on Node.js 20 or newer, require no external dependencies, and support add, sub, mul, div, and pow operations from command-line arguments.
+        Include clear usage output, validation errors for bad input, and a non-zero exit code for invalid usage.
+        Keep the implementation concise and directly runnable with node.
+    config:
+      maxToolRounds: 12

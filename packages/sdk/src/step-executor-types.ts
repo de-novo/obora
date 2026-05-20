@@ -5,6 +5,7 @@ import type { ExecutionTraceConfig } from "./workflow.js";
 
 export interface StepContext<TPreviousOutputs extends Record<string, unknown> = Record<string, unknown>> {
   previousOutputs: TPreviousOutputs;
+  runInput?: unknown;
   traces?: Record<string, ExecutionTrace>;
   signal?: AbortSignal;
   repairContext?: RepairContext;

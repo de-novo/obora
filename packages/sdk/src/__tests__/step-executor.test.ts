@@ -256,6 +256,33 @@ describe("StepExecutor", () => {
     );
   });
 
+  it("includes runtime input in the step prompt for chat-driven work", async () => {
+    const chatCompletion = vi.fn<LLMAdapterLike["chatCompletion"]>().mockResolvedValue({
+      message: { role: "assistant", content: "done" },
+    });
+
+    const executor = new StepExecutor({ chatCompletion }, new Map(), {});
+    await executor.executeStep(
+      {
+        name: "develop",
+        agent: "developer",
+        input: { task: "Use the operator chat request as the implementation brief." },
+      },
+      {
+        previousOutputs: {},
+        runInput: JSON.stringify({
+          message: "Create a Node.js CLI calculator",
+          sessionId: "chat-dev-smoke",
+        }),
+      },
+    );
+
+    const prompt = chatCompletion.mock.calls[0]?.[0].messages[1]?.content;
+    expect(prompt).toContain("Run input:");
+    expect(prompt).toContain('"message": "Create a Node.js CLI calculator"');
+    expect(prompt).toContain('"sessionId": "chat-dev-smoke"');
+  });
+
   it("explains strict majority requirement on consensus failure", async () => {
     const chatCompletion = vi
       .fn<LLMAdapterLike["chatCompletion"]>()

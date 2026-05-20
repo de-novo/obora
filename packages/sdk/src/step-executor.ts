@@ -1207,6 +1207,8 @@ Respond ONLY with valid JSON in this exact format:
       context.hookOutputs && Object.keys(context.hookOutputs).length > 0
         ? ["", "Hook outputs:", JSON.stringify(context.hookOutputs, null, 2)]
         : [];
+    const runInputLines =
+      context.runInput === undefined ? [] : ["", "Run input:", this.formatRunInput(context.runInput)];
 
     const upstreamTraces = (step.depends_on ?? [])
       .map((name) => traces[name])
@@ -1245,6 +1247,7 @@ Respond ONLY with valid JSON in this exact format:
       "",
       "Task:",
       task,
+      ...runInputLines,
       ...repairContextLines,
       ...hookOutputLines,
       ...traceLines,
@@ -1258,6 +1261,19 @@ Respond ONLY with valid JSON in this exact format:
     ]
       .filter(Boolean)
       .join("\n");
+  }
+
+  private formatRunInput(input: unknown): string {
+    if (typeof input === "string") {
+      const parsed = this.tryParseJson(input.trim());
+      return parsed === undefined ? input : JSON.stringify(parsed, null, 2);
+    }
+
+    try {
+      return JSON.stringify(input, null, 2);
+    } catch {
+      return String(input);
+    }
   }
 
   private compactTraces(traces: ExecutionTrace[], maxCount: number): ExecutionTrace[] {

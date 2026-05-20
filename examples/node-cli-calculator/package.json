@@ -1,0 +1,19 @@
+{
+  "name": "node-cli-calculator",
+  "version": "1.0.0",
+  "description": "A simple CLI calculator supporting add, sub, mul, div, and pow operations",
+  "bin": {
+    "calculator": "./bin/calculator.js"
+  },
+  "scripts": {
+    "start": "node bin/calculator.js"
+  },
+  "keywords": [
+    "cli",
+    "calculator"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
