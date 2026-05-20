@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Todo App</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="src/styles.css">
+</head>
+<body>
+    <main class="todo-app" role="main">
+        <h1 class="app-title">Todo List</h1>
+        
+        <div class="input-section">
+            <label for="todo-input" class="sr-only">새 할 일</label>
+            <input 
+                type="text" 
+                id="todo-input" 
+                class="todo-input" 
+                placeholder="새 할 일을 입력하세요..." 
+                aria-label="새 할 일 입력"
+                autocomplete="off"
+            >
+            <button id="add-btn" class="add-btn" aria-label="할 일 추가">추가</button>
+        </div>
+
+        <div class="controls-section">
+            <div class="filter-group" role="group" aria-label="필터 옵션">
+                <button class="filter-btn active" data-filter="all" aria-pressed="true">전체</button>
+                <button class="filter-btn" data-filter="active" aria-pressed="false">진행중</button>
+                <button class="filter-btn" data-filter="completed" aria-pressed="false">완료</button>
+            </div>
+            <button id="clear-completed-btn" class="clear-btn" aria-label="완료된 항목 모두 삭제">완료 항목 정리</button>
+        </div>
+
+        <ul id="todo-list" class="todo-list" role="list" aria-label="할 일 목록"></ul>
+
+        <div class="status-section">
+            <span id="todo-count" class="todo-count" aria-live="polite">0개 남음</span>
+        </div>
+    </main>
+
+    <script src="src/main.js"></script>
+</body>
+</html>

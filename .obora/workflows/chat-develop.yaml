@@ -1,6 +1,6 @@
 name: chat-develop
-version: "1.0"
-description: "Implement small repository changes from an Obora chat request"
+version: "1.1"
+description: "Implement repository changes from an Obora chat request"
 
 steps:
   - name: implement-chat-request
@@ -10,13 +10,17 @@ steps:
       task: |
         Treat the Run input JSON as the operator chat request. Implement the requested development task in this repository using structured file_write tool calls.
 
-        For a Node.js CLI calculator request, create a complete standalone example under examples/node-cli-calculator:
+        Choose a focused example directory under examples/ that matches the request, and create all files needed to run it locally. Prefer dependency-free Node.js or browser-native implementations unless the request explicitly asks for a framework.
+
+        For a todo app request, create a complete standalone browser app under examples/chat-todo-app with:
         - package.json
-        - bin/calculator.js
+        - server.mjs
+        - index.html
+        - src/main.js
+        - src/styles.css
         - README.md
 
-        The calculator should run on Node.js 20 or newer, require no external dependencies, and support add, sub, mul, div, and pow operations from command-line arguments.
-        Include clear usage output, validation errors for bad input, and a non-zero exit code for invalid usage.
-        Keep the implementation concise and directly runnable with node.
+        The todo app should support adding, completing, editing, deleting, filtering, clearing completed items, counts, and localStorage persistence. Include accessible labels, keyboard-friendly controls, and concise run instructions.
+        Keep outputs concise, verifiable, and directly runnable with npm scripts.
     config:
-      maxToolRounds: 12
+      maxToolRounds: 18

@@ -1,0 +1,16 @@
+{
+  "name": "chat-todo-app",
+  "version": "1.0.0",
+  "description": "A feature-rich, accessible Todo application",
+  "main": "index.html",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node server.mjs"
+  },
+  "keywords": [
+    "todo",
+    "accessibility",
+    "localStorage"
+  ],
+  "license": "MIT"
+}
