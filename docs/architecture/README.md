@@ -9,6 +9,7 @@ must be tracked directly in this repository.
 
 Current architecture anchors:
 
+- [Execution Input Principles](./execution-input-principles.md)
 - [Runtime API](../api/runtime.md)
 - [SDK API](../api/sdk.md)
 - [Enterprise Reliability](../operations/enterprise-reliability.md)

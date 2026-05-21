@@ -1,6 +1,6 @@
 name: chat-develop
 version: "2.0"
-description: "Generic development workflow: chat or run input is the source of truth; the agent inspects the repository, infers the smallest coherent change, chooses files, preserves conventions, and reports changed paths and verification."
+description: "Generic development workflow for repository changes from an injected operator request."
 
 steps:
   - name: implement-chat-request
@@ -8,9 +8,9 @@ steps:
     description: "Turn the injected operator request into concrete repository changes."
     input:
       task: |
-        Treat the chat message or Run input JSON as the source of truth for the development request.
+        Implement the injected operator request.
 
-        Infer the requested outcome, inspect the repository shape, choose the appropriate files, and make the smallest coherent change that satisfies the request. Do not assume a fixed example type, directory, framework, or file list unless the operator explicitly asks for one.
+        Inspect the repository shape, choose the appropriate files, and make the smallest coherent change that satisfies the request. Do not assume a fixed example type, directory, framework, or file list unless the operator explicitly asks for one.
 
         Preserve existing project conventions, avoid unrelated changes, and include runnable instructions or verification notes when the request creates a standalone artifact. Use available tools to write files and report the changed paths, commands run, and any follow-up needed.
     config:

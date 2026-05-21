@@ -586,6 +586,7 @@ obora --json judge --dry-run
 Behavior:
 
 - Supports both local `--json` and root `--json` for `run` and `judge`.
+- `--input` follows Obora's execution input principle: injected input is the operator request, while the workflow defines capability, policy, constraints, and reporting expectations.
 - Bare workflow names first attempt project/global workflow file resolution. If no file candidate exists, the name remains a runtime workflow name.
 - Ambiguous project/global workflow names fail before execution; pass `--scope project`, `--scope global`, or an exact YAML path.
 - `--timeout` must be a positive integer; malformed values fail with exit code `2`.
@@ -639,6 +640,7 @@ obora chat --workflow <workflow> --session <id>
 
 - Renders an `@earendil-works/pi-tui` differential terminal chat console with a Codex/Claude-style session card, conversation stream, workflow inspector, run/audit state, and bottom command bar.
 - A plain message runs the selected workflow with input shaped as `{ message, sessionId, workflow }`.
+- Chat messages follow Obora's execution input principle: the injected message is the operator request, while the workflow defines capability, policy, constraints, and reporting expectations.
 - `/workflow <name-or-path>` switches the selected workflow inside the same session.
 - `/run <task>` runs the current workflow with an explicit task message.
 - `/help` prints available chat commands.
