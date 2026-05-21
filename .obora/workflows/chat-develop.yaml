@@ -1,6 +1,6 @@
 name: chat-develop
-version: "1.2"
-description: "Implement repository changes from an injected chat or run request"
+version: "2.0"
+description: "Generic development workflow: chat or run input is the source of truth; the agent inspects the repository, infers the smallest coherent change, chooses files, preserves conventions, and reports changed paths and verification."
 
 steps:
   - name: implement-chat-request
