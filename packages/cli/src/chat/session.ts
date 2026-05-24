@@ -441,6 +441,19 @@ const normalizeLoadedSessionState = ({
   ...(commandOptions.model ? { modelName: commandOptions.model } : {}),
 });
 
+const switchedSessionMessage = (
+  sessionId: string,
+  state: ChatSessionState
+): string =>
+  state.inspectedRunSummary
+    ? `Switched to session ${sessionId}. Still showing run details ${state.inspectedRunSummary.executionId}.`
+    : `Switched to session ${sessionId}.`;
+
+const appendSwitchedSessionMessage = (
+  state: ChatSessionState,
+  sessionId: string
+): ChatSessionState => appendAssistant(state, switchedSessionMessage(sessionId, state));
+
 const resolveProjectRootTarget = (state: ChatSessionState, target: string): string =>
   resolve(state.cwd, target);
 
@@ -905,9 +918,9 @@ export const handleChatInput = async ({
       : loadChatSessionState({ cwd: state.cwd, sessionId: targetSessionId }));
     return loaded
       ? {
-          state: appendAssistant(
+          state: appendSwitchedSessionMessage(
             normalizeLoadedSessionState({ current: state, loaded, commandOptions }),
-            `Switched to session ${targetSessionId}.`
+            targetSessionId
           ),
           exit: false,
         }

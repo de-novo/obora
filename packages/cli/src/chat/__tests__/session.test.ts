@@ -965,7 +965,7 @@ describe("chat session", () => {
       runSummary: { executionId: "exec-chat-1" },
     });
     expect(switched.state.messages.at(-1)?.content).toContain(
-      "Switched to session release-session."
+      "Switched to session release-session. Still showing run details exec-chat-1."
     );
   });
 
@@ -995,6 +995,7 @@ describe("chat session", () => {
     expect(result.state.sessionId).toBe("known-session");
     expect(result.state.projectRoot).toBe("/repo");
     expect(result.state.messages.at(-1)?.content).toContain("Switched to session known-session.");
+    expect(result.state.messages.at(-1)?.content).not.toContain("Still showing run details");
   });
 
   it("reports missing chat sessions when switching by id", async () => {
