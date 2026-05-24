@@ -320,18 +320,30 @@ const openedRunDetailsMessage = (
     : `Opened run details ${summary.executionId}.`;
 };
 
-const clearRunDetails = (state: ChatSessionState): ChatSessionState => ({
+const clearPanels = (state: ChatSessionState): ChatSessionState => ({
   ...state,
   inspectedRunSummary: undefined,
+  runChoices: undefined,
+  sessionChoices: undefined,
+  workflowChoices: undefined,
   showHelpPanel: undefined,
 });
+
+const hasPickerPanel = (state: ChatSessionState): boolean =>
+  Boolean(
+    (state.runChoices && state.runChoices.length > 0) ||
+      (state.sessionChoices && state.sessionChoices.length > 0) ||
+      (state.workflowChoices && state.workflowChoices.length > 0)
+  );
 
 const clearPanelMessage = (state: ChatSessionState): string =>
   state.inspectedRunSummary
     ? "Closed run details view."
     : state.showHelpPanel
       ? "Closed help panel."
-      : "No help or run details panel is open.";
+      : hasPickerPanel(state)
+        ? "Closed selection panels."
+        : "No panel is open.";
 
 const formatRunListMessage = (summaries: ReadonlyArray<WorkflowRunSummary>): string =>
   summaries.length > 0
@@ -1074,7 +1086,7 @@ export const handleChatInput = async ({
 
   if (isClearRunDetailsCommand(trimmed)) {
     return {
-      state: appendAssistant(clearRunDetails(state), clearPanelMessage(state)),
+      state: appendAssistant(clearPanels(state), clearPanelMessage(state)),
       exit: false,
     };
   }

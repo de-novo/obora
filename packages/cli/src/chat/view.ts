@@ -319,7 +319,7 @@ const renderRunHistory = (
         ...card(
           "runs",
           [
-            `${muted("select")} 1   ${muted("by id")} /details <runId>   ${muted("refresh")} /runs`,
+            `${muted("select")} 1   ${muted("by id")} /details <runId>   ${muted("refresh")} /runs   ${muted("close")} /clear`,
             runFilterHint(state),
             ...state.runChoices.slice(0, 8).flatMap((choice, index) => [
               renderRunHistoryLine(state, choice, index),
@@ -396,7 +396,7 @@ const renderSessionPicker = (
         ...card(
           "sessions",
           [
-            `${muted("select")} /session 1   ${muted("rename")} /session rename 1 <id>   ${muted("delete")} /session delete 1`,
+            `${muted("select")} /session 1   ${muted("rename")} /session rename 1 <id>   ${muted("delete")} /session delete 1   ${muted("close")} /clear`,
             ...state.sessionChoices.slice(0, 8).flatMap((summary, index) => [
               renderSessionChoiceLine(state, summary, index),
               renderSessionChoiceMeta(summary, width - 4),
@@ -441,7 +441,7 @@ const renderWorkflowPicker = (
         ...card(
           "workflows",
           [
-            `${muted("select")} /workflow 1   ${muted("run once")} /run #1 <task>   ${muted("refresh")} /workflows [scope]`,
+            `${muted("select")} /workflow 1   ${muted("run once")} /run #1 <task>   ${muted("refresh")} /workflows [scope]   ${muted("close")} /clear`,
             ...state.workflowChoices.slice(0, 8).flatMap((locator, index) => [
               renderWorkflowChoiceLine(state, locator, index),
               renderWorkflowChoiceMeta(locator, width - 4),

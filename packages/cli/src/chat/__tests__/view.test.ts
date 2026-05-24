@@ -177,6 +177,7 @@ describe("renderChatView", () => {
     expect(plain).toContain("/session 1");
     expect(plain).toContain("/session rename 1 <id>");
     expect(plain).toContain("/session delete 1");
+    expect(plain).toContain("close /clear");
     expect(plain).toContain("● #1 session-a ready release-readiness");
     expect(plain).toContain("○ #2 session-b idle no workflow");
     expect(plain).toContain("project /repo/project-a");
@@ -220,6 +221,7 @@ describe("renderChatView", () => {
     expect(plain).toContain("/workflow 1");
     expect(plain).toContain("/run #1 <task>");
     expect(plain).toContain("/workflows [scope]");
+    expect(plain).toContain("close /clear");
     expect(plain).toContain("● #1 release-readiness ready project steps 4");
     expect(plain).toContain("○ #2 code-review idle global steps 2");
     expect(plain).toContain("editable yes");
@@ -270,6 +272,7 @@ describe("renderChatView", () => {
     expect(plain).toContain("runs");
     expect(plain).toContain("select 1");
     expect(plain).toContain("/details <runId>");
+    expect(plain).toContain("close /clear");
     expect(plain).toContain("/runs --project");
     expect(plain).toContain("/runs --tag release");
     expect(plain).toContain("/runs --status failed");

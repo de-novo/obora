@@ -449,6 +449,36 @@ describe("chat session", () => {
     expect(cleared.state.messages.at(-1)?.content).toBe("Closed help panel.");
   });
 
+  it("closes selection panels with the clear command", async () => {
+    const state = {
+      ...createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true }),
+      workflowChoices: [locator],
+      sessionChoices: [
+        {
+          sessionId: "session-b",
+          status: "idle" as const,
+          cwd: "/repo",
+          tags: [],
+          messageCount: 1,
+          updatedAt: "2026-05-24T10:11:12.000Z",
+        },
+      ],
+      runChoices: [],
+    };
+    const cleared = await handleChatInput({
+      input: "/clear",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(cleared.state.workflowChoices).toBeUndefined();
+    expect(cleared.state.sessionChoices).toBeUndefined();
+    expect(cleared.state.runChoices).toBeUndefined();
+    expect(cleared.state.messages.at(-1)?.content).toBe("Closed selection panels.");
+  });
+
   it("lists runs and opens run details by number", async () => {
     const runWorkflowWithResult = vi.fn(async () => executionResult);
     const selected = {
