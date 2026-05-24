@@ -451,12 +451,13 @@ const promptLabel = (state: ChatSessionState): string =>
       ? "Choose /workflow 1 or run once with /run #1 <task>"
       : "Select /workflow <name> first";
 
-const promptPrimaryCommands = (state: ChatSessionState): string =>
-  state.workflowLocator
-    ? "/run <task>  /runs  /details <runId>  /details clear  /workflows"
-    : state.workflowChoices && state.workflowChoices.length > 0
-      ? "/workflow 1  /run #1 <task>  /workflows [scope]"
-      : "/workflows  /workflow <name-or-path>  /project [path]";
+const promptPrimaryCommands = (state: ChatSessionState): string => {
+  if (state.inspectedRunSummary) return "/clear  /runs  /details <runId>  /workflows";
+  if (state.workflowLocator) return "/run <task>  /runs  /details <runId>  /details clear  /workflows";
+  return state.workflowChoices && state.workflowChoices.length > 0
+    ? "/workflow 1  /run #1 <task>  /workflows [scope]"
+    : "/workflows  /workflow <name-or-path>  /project [path]";
+};
 
 const renderPrompt = (state: ChatSessionState, width: number): ReadonlyArray<string> => {
   const prompt = `› ${promptLabel(state)}`;

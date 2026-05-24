@@ -116,6 +116,7 @@ describe("chat session", () => {
       commandOptions: { dryRun: true },
     });
     expect(help.state.messages.at(-1)?.content).toContain("Commands:");
+    expect(help.state.messages.at(-1)?.content).toContain("/clear");
     expect(help.state.messages.at(-1)?.content).toContain("/details clear");
 
     const selected = await handleChatInput({
@@ -370,7 +371,7 @@ describe("chat session", () => {
     });
   });
 
-  it("clears the inspected run details without deleting run history", async () => {
+  it("clears the inspected run details with a short command without deleting run history", async () => {
     const runWorkflowWithResult = vi.fn(async () => executionResult);
     const selected = {
       ...createInitialChatState({
@@ -397,7 +398,7 @@ describe("chat session", () => {
     });
 
     const cleared = await handleChatInput({
-      input: "/details clear",
+      input: "/clear",
       state: opened.state,
       resolveWorkflow,
       runWorkflow: runWorkflowWithResult,
@@ -410,6 +411,26 @@ describe("chat session", () => {
     expect(cleared.state.messages.some((message) => message.runSummary?.executionId === "exec-chat-1")).toBe(
       true
     );
+  });
+
+  it("keeps the previous run detail clear command compatible", async () => {
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const state = {
+      ...createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true }),
+      inspectedRunSummary: runSummary,
+      lastRunSummary: runSummary,
+    };
+    const cleared = await handleChatInput({
+      input: "/details clear",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(cleared.state.inspectedRunSummary).toBeUndefined();
+    expect(cleared.state.lastRunSummary?.executionId).toBe("exec-chat-1");
+    expect(cleared.state.messages.at(-1)?.content).toBe("Closed run details view.");
   });
 
   it("lists runs and opens run details by number", async () => {

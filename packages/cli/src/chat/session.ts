@@ -83,9 +83,12 @@ interface RunListFilter {
 }
 
 const chatHelp =
-  "Commands: /workflow <name-or-path> selects a reusable workflow, /workflows [scope] lists reusable workflows, /project [path] shows or changes the session project root, /sessions [tag] lists recent sessions, /sessions --project [path] filters by project, /session 1 or /session <id> switches sessions, /session rename <id-or-number> <new-id> renames, /session delete <id-or-number> deletes, /workflow 1 selects from the last workflow list, /run <task> runs the current workflow, /run #1 <task> runs one task with a listed workflow, /run --workflow <name-or-path> <task> runs one task with another workflow, /runs lists workflow runs in this chat, /runs --all lists persisted runs across sessions, /runs --session <id-or-number> lists persisted runs for one session, /runs --project [path], /runs --tag <tag>, and /runs --status <status> filter persisted runs, /details <executionId-or-number> shows step results, /details clear closes the current run detail view, /session shows current session metadata, /tags [a,b] shows or updates session tags, /exit quits.";
+  "Commands: /workflow <name-or-path> selects a reusable workflow, /workflows [scope] lists reusable workflows, /project [path] shows or changes the session project root, /sessions [tag] lists recent sessions, /sessions --project [path] filters by project, /session 1 or /session <id> switches sessions, /session rename <id-or-number> <new-id> renames, /session delete <id-or-number> deletes, /workflow 1 selects from the last workflow list, /run <task> runs the current workflow, /run #1 <task> runs one task with a listed workflow, /run --workflow <name-or-path> <task> runs one task with another workflow, /runs lists workflow runs in this chat, /runs --all lists persisted runs across sessions, /runs --session <id-or-number> lists persisted runs for one session, /runs --project [path], /runs --tag <tag>, and /runs --status <status> filter persisted runs, /details <executionId-or-number> shows step results, /clear or /details clear closes the current run detail view, /session shows current session metadata, /tags [a,b] shows or updates session tags, /exit quits.";
 
 const isExitCommand = (input: string): boolean => input === "/exit" || input === "/quit";
+
+const isClearRunDetailsCommand = (input: string): boolean =>
+  input === "/clear" || input === "/details clear";
 
 const workflowTargetFromCommand = (input: string): string | undefined =>
   input.startsWith("/workflow ") ? input.slice("/workflow ".length).trim() : undefined;
@@ -1063,15 +1066,16 @@ export const handleChatInput = async ({
     };
   }
 
+  if (isClearRunDetailsCommand(trimmed)) {
+    return {
+      state: appendAssistant(clearRunDetails(state), "Closed run details view."),
+      exit: false,
+    };
+  }
+
   const detailsExecutionId =
     detailsTargetFromCommand(trimmed) ?? runDetailShortcutTargetFromInput(trimmed, state);
   if (detailsExecutionId) {
-    if (detailsExecutionId === "clear") {
-      return {
-        state: appendAssistant(clearRunDetails(state), "Closed run details view."),
-        exit: false,
-      };
-    }
     const choiceIndex = runChoiceIndexFromTarget(detailsExecutionId);
     const choice = choiceIndex === undefined ? undefined : runChoiceEntryAt(state, choiceIndex);
     const choiceSummary = choice ? runChoiceSummary(choice) : undefined;
