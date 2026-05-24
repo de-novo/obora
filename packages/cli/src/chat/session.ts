@@ -65,7 +65,7 @@ interface SessionRenameCommand {
 }
 
 const chatHelp =
-  "Commands: /workflow <name-or-path> selects a reusable workflow, /workflows [scope] lists reusable workflows, /project [path] shows or changes the session project root, /sessions [tag] lists recent sessions, /sessions --project [path] filters by project, /session 1 or /session <id> switches sessions, /session rename <id-or-number> <new-id> renames, /session delete <id-or-number> deletes, /workflow 1 selects from the last workflow list, /run <task> runs the current workflow, /run #1 <task> runs one task with a listed workflow, /run --workflow <name-or-path> <task> runs one task with another workflow, /details <executionId> shows step results, /session shows current session metadata, /tags [a,b] shows or updates session tags, /exit quits.";
+  "Commands: /workflow <name-or-path> selects a reusable workflow, /workflows [scope] lists reusable workflows, /project [path] shows or changes the session project root, /sessions [tag] lists recent sessions, /sessions --project [path] filters by project, /session 1 or /session <id> switches sessions, /session rename <id-or-number> <new-id> renames, /session delete <id-or-number> deletes, /workflow 1 selects from the last workflow list, /run <task> runs the current workflow, /run #1 <task> runs one task with a listed workflow, /run --workflow <name-or-path> <task> runs one task with another workflow, /runs lists workflow runs, /details <executionId-or-number> shows step results, /session shows current session metadata, /tags [a,b] shows or updates session tags, /exit quits.";
 
 const isExitCommand = (input: string): boolean => input === "/exit" || input === "/quit";
 
@@ -137,6 +137,9 @@ const runWorkflowOverrideFromInput = (
 };
 
 const workflowChoiceIndexFromTarget = (target: string): number | undefined =>
+  /^\d+$/u.test(target) ? Number.parseInt(target, 10) - 1 : undefined;
+
+const runChoiceIndexFromTarget = (target: string): number | undefined =>
   /^\d+$/u.test(target) ? Number.parseInt(target, 10) - 1 : undefined;
 
 const runWorkflowChoiceFromInput = (
@@ -252,6 +255,49 @@ const findRunSummaryInState = (
   (state.inspectedRunSummary?.executionId === executionId
     ? state.inspectedRunSummary
     : undefined);
+
+const uniqueRunSummaries = (
+  summaries: ReadonlyArray<WorkflowRunSummary | undefined>
+): ReadonlyArray<WorkflowRunSummary> =>
+  summaries
+    .filter((summary): summary is WorkflowRunSummary => Boolean(summary))
+    .filter(
+      (summary, index, all) =>
+        all.findIndex((candidate) => candidate.executionId === summary.executionId) === index
+    );
+
+const runSummariesFromState = (state: ChatSessionState): ReadonlyArray<WorkflowRunSummary> =>
+  uniqueRunSummaries([
+    state.lastRunSummary,
+    state.inspectedRunSummary,
+    ...state.messages.flatMap((message) => message.runSummary ?? []),
+  ]).slice(0, 8);
+
+const runChoiceAt = (
+  state: ChatSessionState,
+  index: number
+): WorkflowRunSummary | undefined =>
+  index >= 0 && state.runChoices ? state.runChoices[index] : undefined;
+
+const formatRunSummaryLine = (summary: WorkflowRunSummary, index: number): string =>
+  `${index + 1}. ${summary.executionId} · ${summary.workflowName} · ${summary.status} · ${summary.completedStepCount}/${summary.totalStepCount} steps`;
+
+const formatRunListMessage = (summaries: ReadonlyArray<WorkflowRunSummary>): string =>
+  summaries.length > 0
+    ? [
+        "Recent workflow runs:",
+        ...summaries.map(formatRunSummaryLine),
+        "Use /details 1 to open a run, or /details <executionId>.",
+      ].join("\n")
+    : "No workflow runs found in this chat session.";
+
+const withRunChoices = (
+  state: ChatSessionState,
+  runChoices: ReadonlyArray<WorkflowRunSummary>
+): ChatSessionState => ({
+  ...state,
+  runChoices,
+});
 
 const formatSessionTags = (tags: ReadonlyArray<string> | undefined): string =>
   tags && tags.length > 0 ? tags.join(", ") : "none";
@@ -605,6 +651,14 @@ export const handleChatInput = async ({
     };
   }
 
+  if (trimmed === "/runs") {
+    const summaries = runSummariesFromState(state);
+    return {
+      state: appendAssistant(withRunChoices(state, summaries), formatRunListMessage(summaries)),
+      exit: false,
+    };
+  }
+
   if (trimmed === "/sessions" || trimmed.startsWith("/sessions ")) {
     const filter = sessionListFilterFromCommand(trimmed, state);
     const summaries = await (listSessions
@@ -820,7 +874,9 @@ export const handleChatInput = async ({
 
   const detailsExecutionId = detailsTargetFromCommand(trimmed);
   if (detailsExecutionId) {
-    const summary = findRunSummaryInState(state, detailsExecutionId);
+    const choiceIndex = runChoiceIndexFromTarget(detailsExecutionId);
+    const choice = choiceIndex === undefined ? undefined : runChoiceAt(state, choiceIndex);
+    const summary = choice ?? findRunSummaryInState(state, detailsExecutionId);
     return {
       state: appendAssistant(
         summary ? { ...state, inspectedRunSummary: summary } : state,

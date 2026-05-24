@@ -245,6 +245,51 @@ const renderRunInspector = (
     : [];
 };
 
+const runHistoryMarker = (state: ChatSessionState, summary: WorkflowRunSummary): string =>
+  state.inspectedRunSummary?.executionId === summary.executionId ? green("●") : muted("○");
+
+const renderRunHistoryLine = (
+  state: ChatSessionState,
+  summary: WorkflowRunSummary,
+  index: number
+): string =>
+  [
+    runHistoryMarker(state, summary),
+    cyan(`#${index + 1}`),
+    bold(summary.executionId),
+    summary.status,
+    muted(summary.workflowName),
+    `${muted("steps")} ${summary.completedStepCount}/${summary.totalStepCount}`,
+  ].join(" ");
+
+const renderRunHistoryMeta = (summary: WorkflowRunSummary): string =>
+  [
+    `${muted("started")} ${formatUpdatedTime(summary.startedAt)}`,
+    formatRunDuration(summary),
+    `${muted("open")} /details ${summary.executionId}`,
+  ].join("   ");
+
+const renderRunHistory = (
+  state: ChatSessionState,
+  width: number
+): ReadonlyArray<string> =>
+  state.runChoices && state.runChoices.length > 0
+    ? [
+        "",
+        ...card(
+          "runs",
+          [
+            `${muted("select")} /details 1   ${muted("by id")} /details <runId>   ${muted("refresh")} /runs`,
+            ...state.runChoices.slice(0, 8).flatMap((summary, index) => [
+              renderRunHistoryLine(state, summary, index),
+              renderRunHistoryMeta(summary),
+            ]),
+          ],
+          width
+        ),
+      ]
+    : [];
+
 const sessionTagText = (summary: ChatSessionSummary): string =>
   summary.tags.length > 0 ? summary.tags.join(",") : "untagged";
 
@@ -368,7 +413,7 @@ const promptLabel = (state: ChatSessionState): string =>
 
 const promptPrimaryCommands = (state: ChatSessionState): string =>
   state.workflowLocator
-    ? "/run <task>  /details <runId>  /workflows  /workflow 1"
+    ? "/run <task>  /runs  /details <runId>  /workflows"
     : state.workflowChoices && state.workflowChoices.length > 0
       ? "/workflow 1  /run #1 <task>  /workflows [scope]"
       : "/workflows  /workflow <name-or-path>  /project [path]";
@@ -401,6 +446,7 @@ export const renderChatView = (
     ...renderHero(state, rendererLabel, cardWidth),
     ...renderSessionPicker(state, cardWidth),
     ...renderWorkflowPicker(state, cardWidth),
+    ...renderRunHistory(state, cardWidth),
     "",
     ...renderTranscript(state, cardWidth),
     ...renderRunInspector(state, cardWidth),

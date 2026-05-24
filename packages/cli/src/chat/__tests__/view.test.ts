@@ -130,7 +130,7 @@ describe("renderChatView", () => {
     expect(plain).toContain("depends collect");
     expect(plain).toContain("steps 4");
     expect(plain).toContain("› release-readiness ready · type task or /run");
-    expect(plain).toContain("/run <task>  /details <runId>");
+    expect(plain).toContain("/run <task>  /runs  /details <runId>");
     expect(output).not.toContain("+---");
   });
 
@@ -225,7 +225,41 @@ describe("renderChatView", () => {
     expect(plain).toContain("about Release readiness");
     expect(plain).toContain("Review repository changes");
     expect(plain).toContain("› release-readiness ready · type task or /run");
-    expect(plain).toContain("/run <task>  /details <runId>");
+    expect(plain).toContain("/run <task>  /runs  /details <runId>");
+  });
+
+  it("renders numbered run choices as a history panel", () => {
+    const output = renderedText(
+      renderChatView(
+        {
+          ...createInitialChatState({
+            sessionId: "session-a",
+            cwd: "/repo",
+            dryRun: false,
+          }),
+          inspectedRunSummary: runSummary,
+          runChoices: [
+            runSummary,
+            {
+              ...runSummary,
+              executionId: "exec-chat-2",
+              workflowName: "code-review",
+              completedStepCount: 1,
+              totalStepCount: 2,
+            },
+          ],
+        },
+        { columns: 120 }
+      )
+    );
+    const plain = stripAnsi(output);
+
+    expect(plain).toContain("runs");
+    expect(plain).toContain("/details 1");
+    expect(plain).toContain("/details <runId>");
+    expect(plain).toContain("● #1 exec-chat-1 completed release-readiness steps 2/2");
+    expect(plain).toContain("○ #2 exec-chat-2 completed code-review steps 1/2");
+    expect(plain).toContain("open /details exec-chat-1");
   });
 
   it("prompts users to choose or run once when workflow choices exist", () => {
