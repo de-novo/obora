@@ -20,6 +20,7 @@ import {
 } from "./state.js";
 import {
   deleteChatSessionState,
+  findChatRunDetail,
   listChatRunDetails,
   listChatSessionSummaries,
   loadChatSessionState,
@@ -634,6 +635,7 @@ export const handleChatInput = async ({
   deleteSession,
   listWorkflowLocators,
   listRuns,
+  findRun,
 }: {
   readonly input: string;
   readonly state: ChatSessionState;
@@ -658,6 +660,7 @@ export const handleChatInput = async ({
     projectRoot?: string
   ) => Promise<ReadonlyArray<WorkflowLocator>>;
   readonly listRuns?: (sessionId?: string) => Promise<ReadonlyArray<ChatRunDetail>>;
+  readonly findRun?: (executionId: string) => Promise<ChatRunDetail | undefined>;
 }): Promise<ChatTurnResult> => {
   const trimmed = input.trim();
 
@@ -951,7 +954,13 @@ export const handleChatInput = async ({
   if (detailsExecutionId) {
     const choiceIndex = runChoiceIndexFromTarget(detailsExecutionId);
     const choice = choiceIndex === undefined ? undefined : runChoiceAt(state, choiceIndex);
-    const summary = choice ?? findRunSummaryInState(state, detailsExecutionId);
+    const stateSummary = choice ?? findRunSummaryInState(state, detailsExecutionId);
+    const persistedDetail = stateSummary
+      ? undefined
+      : await (findRun
+          ? findRun(detailsExecutionId)
+          : findChatRunDetail({ cwd: state.cwd, executionId: detailsExecutionId }));
+    const summary = stateSummary ?? persistedDetail?.runSummary;
     return {
       state: appendAssistant(
         summary ? { ...state, inspectedRunSummary: summary } : state,
@@ -1025,6 +1034,7 @@ const promptLoop = async ({
   deleteSession,
   listWorkflowLocators,
   listRuns,
+  findRun,
   persist,
 }: {
   readonly reader: { question: (query: string) => Promise<string> };
@@ -1051,6 +1061,7 @@ const promptLoop = async ({
     projectRoot?: string
   ) => Promise<ReadonlyArray<WorkflowLocator>>;
   readonly listRuns: (sessionId?: string) => Promise<ReadonlyArray<ChatRunDetail>>;
+  readonly findRun: (executionId: string) => Promise<ChatRunDetail | undefined>;
   readonly persist: (state: ChatSessionState) => Promise<void>;
 }): Promise<ChatSessionState> => {
   const input = await reader.question("> ");
@@ -1066,6 +1077,7 @@ const promptLoop = async ({
     deleteSession,
     listWorkflowLocators,
     listRuns,
+    findRun,
   });
   tui.update(result.state);
   await persist(result.state);
@@ -1084,6 +1096,7 @@ const promptLoop = async ({
         deleteSession,
         listWorkflowLocators,
         listRuns,
+        findRun,
         persist,
       });
 };
@@ -1207,6 +1220,12 @@ export const runChatSession = async (
       ...(sessionId ? { sessionId } : {}),
       ...(options.sessionStoreDir ? { storeDir: options.sessionStoreDir } : {}),
     });
+  const findRun = (executionId: string): Promise<ChatRunDetail | undefined> =>
+    findChatRunDetail({
+      cwd: options.cwd,
+      executionId,
+      ...(options.sessionStoreDir ? { storeDir: options.sessionStoreDir } : {}),
+    });
   const initialState = await createSessionStartState({
     cwd: options.cwd,
     commandOptions: options.commandOptions,
@@ -1235,6 +1254,7 @@ export const runChatSession = async (
       deleteSession,
       listWorkflowLocators,
       listRuns,
+      findRun,
     });
     tui.update(result.state);
     await saveSession(options.cwd, result.state, options.sessionStoreDir);
@@ -1267,6 +1287,7 @@ export const runChatSession = async (
     deleteSession,
     listWorkflowLocators,
     listRuns,
+    findRun,
     persist: (state) => saveSession(options.cwd, state, options.sessionStoreDir),
   })
     .then((state) => saveSession(options.cwd, state, options.sessionStoreDir).then(() => state))

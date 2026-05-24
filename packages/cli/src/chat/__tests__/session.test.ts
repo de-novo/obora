@@ -1,6 +1,6 @@
 import { buildWorkflowRunSummary } from "@obora/sdk";
 import type { RuntimeExecution, WorkflowLocator } from "@obora/sdk";
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
@@ -438,6 +438,69 @@ describe("chat session", () => {
       "Persisted workflow runs (all sessions):"
     );
     expect(listed.state.messages.at(-1)?.content).toContain("exec-chat-1 · session-a");
+  });
+
+  it("opens persisted run details by execution id from chat", async () => {
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const findRun = vi.fn(async () => ({
+      sessionId: "session-a",
+      messageId: "assistant:run",
+      messageCreatedAt: "2026-05-21T00:00:02.000Z",
+      runSummary,
+    }));
+    const state = createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true });
+
+    const opened = await handleChatInput({
+      input: "/details exec-chat-1",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      findRun,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(findRun).toHaveBeenCalledWith("exec-chat-1");
+    expect(opened.state.inspectedRunSummary?.executionId).toBe("exec-chat-1");
+    expect(opened.state.messages.at(-1)?.content).toContain("Opened run details exec-chat-1.");
+  });
+
+  it("does not query persisted run details when a memory summary matches", async () => {
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const findRun = vi.fn(async () => undefined);
+    const state = {
+      ...createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true }),
+      lastRunSummary: runSummary,
+    };
+
+    const opened = await handleChatInput({
+      input: "/details exec-chat-1",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      findRun,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(findRun).not.toHaveBeenCalled();
+    expect(opened.state.inspectedRunSummary?.executionId).toBe("exec-chat-1");
+  });
+
+  it("reports missing run details after checking persisted history", async () => {
+    const findRun = vi.fn(async () => undefined);
+    const state = createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true });
+
+    const opened = await handleChatInput({
+      input: "/details exec-missing",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      findRun,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(findRun).toHaveBeenCalledWith("exec-missing");
+    expect(opened.state.inspectedRunSummary).toBeUndefined();
+    expect(opened.state.messages.at(-1)?.content).toContain("Run details not found: exec-missing");
   });
 
   it("lists persisted runs for a selected session choice from chat", async () => {
@@ -1949,6 +2012,57 @@ describe("chat session", () => {
 
     expect(runWorkflow).not.toHaveBeenCalled();
     expect(finalState.messages.at(-1)?.content).toContain("Select a workflow first");
+  });
+
+  it("opens persisted run details during a one-shot session", async () => {
+    const sessionStoreDir = await mkdtemp(join(tmpdir(), "obora-chat-session-"));
+    const historyState = {
+      ...createInitialChatState({
+        sessionId: "history-session",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      messages: [
+        {
+          id: "assistant:run",
+          role: "assistant" as const,
+          content: "Workflow completed.",
+          createdAt: "2026-05-21T00:00:02.000Z",
+          runSummary: buildWorkflowRunSummary(executionResult),
+        },
+      ],
+    };
+    await mkdir(sessionStoreDir, { recursive: true });
+    await writeFile(
+      join(sessionStoreDir, "history-session.json"),
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          updatedAt: "2026-05-21T00:00:03.000Z",
+          state: historyState,
+        },
+        null,
+        2
+      ),
+      "utf-8"
+    );
+
+    const finalState = await runChatSession({
+      cwd: "/repo",
+      input: createStream(false),
+      output: createStream(false),
+      commandOptions: {
+        once: "/details exec-chat-1",
+        dryRun: true,
+        session: "active-session",
+      },
+      resolveWorkflow,
+      runWorkflow,
+      sessionStoreDir,
+    });
+
+    expect(finalState.inspectedRunSummary?.executionId).toBe("exec-chat-1");
+    expect(finalState.messages.at(-1)?.content).toContain("Opened run details exec-chat-1.");
   });
 
   it("supports an interactive TTY session that exits from user input", async () => {
