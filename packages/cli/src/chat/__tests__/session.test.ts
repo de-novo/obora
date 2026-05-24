@@ -116,6 +116,9 @@ describe("chat session", () => {
       commandOptions: { dryRun: true },
     });
     expect(help.state.messages.at(-1)?.content).toContain("Commands:");
+    expect(help.state.messages.at(-1)?.content).toContain("Workflow:");
+    expect(help.state.messages.at(-1)?.content).toContain("Run History:");
+    expect(help.state.messages.at(-1)?.content).toContain("Details:");
     expect(help.state.messages.at(-1)?.content).toContain("/clear");
     expect(help.state.messages.at(-1)?.content).toContain("/details clear");
 

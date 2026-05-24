@@ -11,8 +11,13 @@ describe("chat command metadata", () => {
       dryRun: true,
     });
 
+    expect(chatHelp).toContain("Workflow:\n");
+    expect(chatHelp).toContain("Run History:\n");
+    expect(chatHelp).toContain("Details:\n");
+    expect(chatHelp).toContain("Session:\n");
+    expect(chatHelp).toContain("System:\n");
     expect(chatHelp).toContain("/workflow <name-or-path>");
-    expect(chatHelp).toContain("/clear or /details clear");
+    expect(chatHelp).toContain("  /clear or /details clear - closes the current run detail view");
     expect(chatPromptCommandRows(state)).toEqual([
       "/workflows  /workflow <name-or-path>  /project [path]",
       "/sessions  /tags  /help",
