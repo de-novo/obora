@@ -41,7 +41,10 @@ export interface ChatSessionRuntimeOptions {
   readonly output: Writable & { readonly isTTY?: boolean };
   readonly commandOptions: ChatCommandOptions;
   readonly runWorkflow?: typeof runRun;
-  readonly resolveWorkflow?: (target: string) => Promise<WorkflowLocator>;
+  readonly resolveWorkflow?: (
+    target: string,
+    projectRoot?: string
+  ) => Promise<WorkflowLocator>;
   readonly sessionStoreDir?: string;
 }
 
@@ -51,7 +54,7 @@ interface ChatTurnResult {
 }
 
 const chatHelp =
-  "Commands: /workflow <name-or-path> selects a reusable workflow, /workflows [scope] lists reusable workflows, /workflow 1 selects from the last workflow list, /run <task> runs the current workflow, /run #1 <task> runs one task with a listed workflow, /run --workflow <name-or-path> <task> runs one task with another workflow, /details <executionId> shows step results, /session shows current session metadata, /sessions [tag] lists recent sessions, /tags [a,b] shows or updates session tags, /exit quits.";
+  "Commands: /workflow <name-or-path> selects a reusable workflow, /workflows [scope] lists reusable workflows, /project [path] shows or changes the session project root, /workflow 1 selects from the last workflow list, /run <task> runs the current workflow, /run #1 <task> runs one task with a listed workflow, /run --workflow <name-or-path> <task> runs one task with another workflow, /details <executionId> shows step results, /session shows current session metadata, /sessions [tag] lists recent sessions, /tags [a,b] shows or updates session tags, /exit quits.";
 
 const isExitCommand = (input: string): boolean => input === "/exit" || input === "/quit";
 
@@ -66,6 +69,9 @@ const tagsTargetFromCommand = (input: string): string | undefined =>
 
 const sessionsTagFromCommand = (input: string): string | undefined =>
   input.startsWith("/sessions ") ? input.slice("/sessions ".length).trim() : undefined;
+
+const projectTargetFromCommand = (input: string): string | undefined =>
+  input.startsWith("/project ") ? input.slice("/project ".length).trim() : undefined;
 
 const workflowsScopeFromCommand = (input: string): string | undefined =>
   input.startsWith("/workflows ") ? input.slice("/workflows ".length).trim() : undefined;
@@ -235,6 +241,18 @@ const withSessionTags = (
   tags,
 });
 
+const resolveProjectRootTarget = (state: ChatSessionState, target: string): string =>
+  resolve(state.cwd, target);
+
+const withProjectRoot = (state: ChatSessionState, projectRoot: string): ChatSessionState => ({
+  ...state,
+  projectRoot,
+  workflowTarget: undefined,
+  workflowLocator: undefined,
+  workflowChoices: [],
+  lastError: undefined,
+});
+
 const formatSessionSummaryLine = (summary: ChatSessionSummary): string =>
   [
     `- ${summary.sessionId}`,
@@ -285,6 +303,14 @@ const formatSessionStatusMessage = (state: ChatSessionState): string =>
     `Last run: ${state.lastRunCommand ?? "none"}`,
     `Last result: ${formatLastResult(state)}`,
     ...(state.lastRunSummary ? [`Details: /details ${state.lastRunSummary.executionId}`] : []),
+  ].join("\n");
+
+const formatProjectStatusMessage = (state: ChatSessionState): string =>
+  [
+    `Project: ${state.projectRoot ?? state.cwd}`,
+    `Directory: ${state.cwd}`,
+    "Use /project <path> to change the session project root.",
+    "Run /workflows project after changing projects to refresh reusable workflows.",
   ].join("\n");
 
 const formatWorkflowLocatorLine = (locator: WorkflowLocator): string =>
@@ -420,14 +446,14 @@ const runChatTask = ({
 
 const resolveWorkflowForSession =
   (options: ChatSessionRuntimeOptions, scope: WorkflowResolveScope | undefined) =>
-  async (target: string): Promise<WorkflowLocator> =>
+  async (target: string, projectRoot?: string): Promise<WorkflowLocator> =>
     options.resolveWorkflow
-      ? options.resolveWorkflow(target)
+      ? options.resolveWorkflow(target, projectRoot)
       : resolveChatWorkflow({
           target,
           cwd: options.cwd,
           scope,
-          projectRoot: options.commandOptions.project,
+          projectRoot: projectRoot ?? options.commandOptions.project,
           globalWorkflowDir: options.commandOptions.globalWorkflowsDir,
         });
 
@@ -442,12 +468,16 @@ export const handleChatInput = async ({
 }: {
   readonly input: string;
   readonly state: ChatSessionState;
-  readonly resolveWorkflow: (target: string) => Promise<WorkflowLocator>;
+  readonly resolveWorkflow: (
+    target: string,
+    projectRoot?: string
+  ) => Promise<WorkflowLocator>;
   readonly runWorkflow: typeof runRun;
   readonly commandOptions: ChatCommandOptions;
   readonly listSessions?: (tag?: string) => Promise<ReadonlyArray<ChatSessionSummary>>;
   readonly listWorkflowLocators?: (
-    scope?: WorkflowResolveScope
+    scope?: WorkflowResolveScope,
+    projectRoot?: string
   ) => Promise<ReadonlyArray<WorkflowLocator>>;
 }): Promise<ChatTurnResult> => {
   const trimmed = input.trim();
@@ -502,14 +532,33 @@ export const handleChatInput = async ({
     };
   }
 
+  if (trimmed === "/project") {
+    return {
+      state: appendAssistant(state, formatProjectStatusMessage(state)),
+      exit: false,
+    };
+  }
+
+  const projectTarget = projectTargetFromCommand(trimmed);
+  if (projectTarget !== undefined) {
+    const projectRoot = resolveProjectRootTarget(state, projectTarget);
+    return {
+      state: appendAssistant(
+        withProjectRoot(state, projectRoot),
+        `Project root updated: ${projectRoot}\nWorkflow selection cleared. Run /workflows project to choose a workflow for this project.`
+      ),
+      exit: false,
+    };
+  }
+
   if (trimmed === "/workflows" || trimmed.startsWith("/workflows ")) {
     const scope = parseChatWorkflowScope(workflowsScopeFromCommand(trimmed) ?? commandOptions.scope);
     const locators = await (listWorkflowLocators
-      ? listWorkflowLocators(scope)
+      ? listWorkflowLocators(scope, state.projectRoot)
       : listChatWorkflowLocators({
           cwd: state.cwd,
           scope,
-          projectRoot: commandOptions.project,
+          projectRoot: state.projectRoot ?? commandOptions.project,
           globalWorkflowDir: commandOptions.globalWorkflowsDir,
         }));
     return {
@@ -551,7 +600,7 @@ export const handleChatInput = async ({
       };
     }
     const resolvingState = setChatStatus(state, "resolving");
-    const locator = await resolveWorkflow(workflowTarget);
+    const locator = await resolveWorkflow(workflowTarget, state.projectRoot);
     return {
       state: appendAssistant(
         withResolvedWorkflow(resolvingState, workflowTarget, locator),
@@ -597,7 +646,7 @@ export const handleChatInput = async ({
 
   const runOverride = runWorkflowOverrideFromInput(trimmed);
   if (runOverride) {
-    const locator = await resolveWorkflow(runOverride.workflowTarget);
+    const locator = await resolveWorkflow(runOverride.workflowTarget, state.projectRoot);
     return runChatTask({
       state: setChatStatus(state, "resolving"),
       workflowLocator: locator,
@@ -638,12 +687,16 @@ const promptLoop = async ({
   readonly reader: { question: (query: string) => Promise<string> };
   readonly state: ChatSessionState;
   readonly tui: ChatTuiController;
-  readonly resolveWorkflow: (target: string) => Promise<WorkflowLocator>;
+  readonly resolveWorkflow: (
+    target: string,
+    projectRoot?: string
+  ) => Promise<WorkflowLocator>;
   readonly runWorkflow: typeof runRun;
   readonly commandOptions: ChatCommandOptions;
   readonly listSessions: (tag?: string) => Promise<ReadonlyArray<ChatSessionSummary>>;
   readonly listWorkflowLocators: (
-    scope?: WorkflowResolveScope
+    scope?: WorkflowResolveScope,
+    projectRoot?: string
   ) => Promise<ReadonlyArray<WorkflowLocator>>;
   readonly persist: (state: ChatSessionState) => Promise<void>;
 }): Promise<ChatSessionState> => {
@@ -681,10 +734,13 @@ const resolveInitialWorkflow = async ({
 }: {
   readonly state: ChatSessionState;
   readonly target: string | undefined;
-  readonly resolveWorkflow: (target: string) => Promise<WorkflowLocator>;
+  readonly resolveWorkflow: (
+    target: string,
+    projectRoot?: string
+  ) => Promise<WorkflowLocator>;
 }): Promise<ChatSessionState> => {
   if (!target) return state;
-  const locator = await resolveWorkflow(target);
+  const locator = await resolveWorkflow(target, state.projectRoot);
   return appendAssistant(
     withResolvedWorkflow(setChatStatus(state, "resolving"), target, locator),
     `Selected workflow ${locator.name} (${locator.scope}).`
@@ -710,7 +766,7 @@ const createSessionStartState = async ({
     return {
       ...restored,
       cwd,
-      projectRoot,
+      projectRoot: commandOptions.project ? projectRoot : restored.projectRoot ?? projectRoot,
       tags: tags.length > 0 ? tags : restored.tags,
       dryRun: Boolean(commandOptions.dryRun),
       ...(commandOptions.provider ? { providerName: commandOptions.provider } : {}),
@@ -749,12 +805,13 @@ export const runChatSession = async (
       ...(options.sessionStoreDir ? { storeDir: options.sessionStoreDir } : {}),
     });
   const listWorkflowLocators = (
-    scopeOverride?: WorkflowResolveScope
+    scopeOverride?: WorkflowResolveScope,
+    projectRootOverride?: string
   ): Promise<ReadonlyArray<WorkflowLocator>> =>
     listChatWorkflowLocators({
       cwd: options.cwd,
       scope: scopeOverride ?? scope,
-      projectRoot: options.commandOptions.project,
+      projectRoot: projectRootOverride ?? options.commandOptions.project,
       globalWorkflowDir: options.commandOptions.globalWorkflowsDir,
     });
   const initialState = await createSessionStartState({

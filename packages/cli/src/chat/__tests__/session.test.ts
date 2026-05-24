@@ -247,7 +247,7 @@ describe("chat session", () => {
       commandOptions: { dryRun: true, model: "openrouter/owl-alpha" },
     });
 
-    expect(resolveWorkflow).toHaveBeenCalledWith("code-review");
+    expect(resolveWorkflow).toHaveBeenCalledWith("code-review", undefined);
     expect(runWorkflow).toHaveBeenCalledWith(
       codeReviewLocator.path,
       expect.objectContaining({
@@ -491,6 +491,46 @@ describe("chat session", () => {
     expect(content).not.toContain("Details:");
   });
 
+  it("shows and updates the session project root", async () => {
+    vi.clearAllMocks();
+    const selected = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        projectRoot: "/repo/project-a",
+        dryRun: true,
+      }),
+      workflowTarget: "release-readiness",
+      workflowLocator: locator,
+      workflowChoices: [locator],
+    };
+
+    const shown = await handleChatInput({
+      input: "/project",
+      state: selected,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+    const updated = await handleChatInput({
+      input: "/project packages/cli",
+      state: shown.state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(runWorkflow).not.toHaveBeenCalled();
+    expect(shown.state.messages.at(-1)?.content).toContain("Project: /repo/project-a");
+    expect(updated.state.projectRoot).toBe("/repo/packages/cli");
+    expect(updated.state.workflowTarget).toBeUndefined();
+    expect(updated.state.workflowLocator).toBeUndefined();
+    expect(updated.state.workflowChoices).toEqual([]);
+    expect(updated.state.messages.at(-1)?.content).toContain(
+      "Project root updated: /repo/packages/cli"
+    );
+  });
+
   it("lists recent sessions from inside chat and supports tag filtering", async () => {
     vi.clearAllMocks();
     const listSessions = vi.fn(async (_tag?: string) => [
@@ -556,7 +596,7 @@ describe("chat session", () => {
     });
 
     expect(runWorkflow).not.toHaveBeenCalled();
-    expect(listWorkflowLocators).toHaveBeenCalledWith("global");
+    expect(listWorkflowLocators).toHaveBeenCalledWith("global", undefined);
     expect(result.state.workflowChoices?.map((workflow) => workflow.name)).toEqual([
       "release-readiness",
       "code-review",
@@ -566,6 +606,30 @@ describe("chat session", () => {
     expect(result.state.messages.at(-1)?.content).toContain("code-review");
     expect(result.state.messages.at(-1)?.content).toContain("Review repository changes");
     expect(result.state.messages.at(-1)?.content).toContain("/workflow 1");
+  });
+
+  it("uses the session project root when listing workflows", async () => {
+    const listWorkflowLocators = vi.fn(async (_scope?: "project" | "global" | "all") => [
+      locator,
+    ]);
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd: "/repo",
+      projectRoot: "/repo/packages/cli",
+      dryRun: true,
+    });
+
+    const result = await handleChatInput({
+      input: "/workflows project",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+      listWorkflowLocators,
+    });
+
+    expect(listWorkflowLocators).toHaveBeenCalledWith("project", "/repo/packages/cli");
+    expect(result.state.workflowChoices).toEqual([locator]);
   });
 
   it("selects a workflow by number from the latest workflow list", async () => {
@@ -590,6 +654,30 @@ describe("chat session", () => {
     expect(result.state.workflowTarget).toBe("code-review");
     expect(result.state.workflowLocator).toBe(codeReviewLocator);
     expect(result.state.messages.at(-1)?.content).toContain("Selected workflow code-review");
+  });
+
+  it("resolves workflow names against the session project root", async () => {
+    vi.clearAllMocks();
+    const resolveWorkflowForProject = vi.fn(async (_target: string, _projectRoot?: string) => locator);
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd: "/repo",
+      projectRoot: "/repo/packages/cli",
+      dryRun: true,
+    });
+
+    await handleChatInput({
+      input: "/workflow release-readiness",
+      state,
+      resolveWorkflow: resolveWorkflowForProject,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(resolveWorkflowForProject).toHaveBeenCalledWith(
+      "release-readiness",
+      "/repo/packages/cli"
+    );
   });
 
   it("runs a workflow by number from the latest workflow list", async () => {
@@ -757,9 +845,32 @@ describe("chat session", () => {
       listWorkflowLocators,
     });
 
-    expect(listWorkflowLocators).toHaveBeenCalledWith("project");
+    expect(listWorkflowLocators).toHaveBeenCalledWith("project", undefined);
     expect(result.state.messages.at(-1)?.content).toContain("Reusable workflows (project):");
     expect(result.state.messages.at(-1)?.content).toContain("release-readiness");
+  });
+
+  it("lists workflows from the default discovery path with the session project root", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "obora-chat-workflows-command-"));
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd,
+      projectRoot: join(cwd, "packages", "cli"),
+      dryRun: true,
+    });
+
+    const result = await handleChatInput({
+      input: "/workflows project",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(result.state.workflowChoices).toEqual([]);
+    expect(result.state.messages.at(-1)?.content).toContain(
+      "No reusable workflows found for project."
+    );
   });
 
   it("reports empty workflow lists without a scope label", async () => {
@@ -1049,6 +1160,77 @@ describe("chat session", () => {
       expect.arrayContaining(["prepare release notes", "continue from the same session"])
     );
     expect(runWorkflow).toHaveBeenCalledTimes(2);
+  });
+
+  it("preserves a chat-updated project root when a session is reused", async () => {
+    vi.clearAllMocks();
+    const sessionStoreDir = await mkdtemp(join(tmpdir(), "obora-chat-session-"));
+    await runChatSession({
+      cwd: "/repo",
+      input: createStream(false),
+      output: createStream(false),
+      commandOptions: {
+        once: "/project packages/cli",
+        dryRun: true,
+        session: "session-a",
+      },
+      resolveWorkflow,
+      runWorkflow,
+      sessionStoreDir,
+    });
+
+    const finalState = await runChatSession({
+      cwd: "/repo",
+      input: createStream(false),
+      output: createStream(false),
+      commandOptions: {
+        once: "/session",
+        dryRun: true,
+        session: "session-a",
+      },
+      resolveWorkflow,
+      runWorkflow,
+      sessionStoreDir,
+    });
+
+    expect(finalState.projectRoot).toBe("/repo/packages/cli");
+    expect(finalState.messages.at(-1)?.content).toContain("Project: /repo/packages/cli");
+  });
+
+  it("allows --project to override a restored chat project root", async () => {
+    vi.clearAllMocks();
+    const sessionStoreDir = await mkdtemp(join(tmpdir(), "obora-chat-session-"));
+    await runChatSession({
+      cwd: "/repo",
+      input: createStream(false),
+      output: createStream(false),
+      commandOptions: {
+        once: "/project packages/cli",
+        dryRun: true,
+        session: "session-a",
+      },
+      resolveWorkflow,
+      runWorkflow,
+      sessionStoreDir,
+    });
+
+    const finalState = await runChatSession({
+      cwd: "/repo",
+      input: createStream(false),
+      output: createStream(false),
+      commandOptions: {
+        once: "/session",
+        dryRun: true,
+        session: "session-a",
+        project: "/repo/other-project",
+      },
+      resolveWorkflow,
+      runWorkflow,
+      sessionStoreDir,
+    });
+
+    expect(finalState.projectRoot).toBe("/repo/other-project");
+    expect(finalState.messages.at(-1)?.content).toContain("Project: /repo/other-project");
   });
 
   it("runs a one-shot session without a workflow and asks the user to select one", async () => {
