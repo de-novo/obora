@@ -51,7 +51,7 @@ interface ChatTurnResult {
 }
 
 const chatHelp =
-  "Commands: /workflow <name-or-path> selects a reusable workflow, /workflows [scope] lists reusable workflows, /workflow 1 selects from the last workflow list, /run <task> runs the current workflow, /run #1 <task> runs one task with a listed workflow, /run --workflow <name-or-path> <task> runs one task with another workflow, /details <executionId> shows step results, /sessions [tag] lists recent sessions, /tags [a,b] shows or updates session tags, /exit quits.";
+  "Commands: /workflow <name-or-path> selects a reusable workflow, /workflows [scope] lists reusable workflows, /workflow 1 selects from the last workflow list, /run <task> runs the current workflow, /run #1 <task> runs one task with a listed workflow, /run --workflow <name-or-path> <task> runs one task with another workflow, /details <executionId> shows step results, /session shows current session metadata, /sessions [tag] lists recent sessions, /tags [a,b] shows or updates session tags, /exit quits.";
 
 const isExitCommand = (input: string): boolean => input === "/exit" || input === "/quit";
 
@@ -253,6 +253,39 @@ const formatSessionListMessage = (
         "\n"
       )
     : `No chat sessions found${tag ? ` tagged ${tag}` : ""}.`;
+
+const formatSessionWorkflow = (state: ChatSessionState): string =>
+  state.workflowLocator
+    ? `${state.workflowLocator.name} (${state.workflowLocator.scope})`
+    : state.workflowTarget
+      ? `${state.workflowTarget} (unresolved)`
+      : "none";
+
+const userTurnCount = (state: ChatSessionState): number =>
+  state.messages.filter((message) => message.role === "user").length;
+
+const formatLastResult = (state: ChatSessionState): string =>
+  state.lastRunSummary
+    ? `${state.lastRunSummary.status} ${state.lastRunSummary.completedStepCount}/${state.lastRunSummary.totalStepCount}`
+    : "none";
+
+const formatSessionStatusMessage = (state: ChatSessionState): string =>
+  [
+    `Session: ${state.sessionId}`,
+    `Status: ${state.status}`,
+    `Project: ${state.projectRoot ?? state.cwd}`,
+    `Directory: ${state.cwd}`,
+    `Tags: ${formatSessionTags(state.tags)}`,
+    `Workflow: ${formatSessionWorkflow(state)}`,
+    `Mode: ${state.dryRun ? "dry-run" : "live"}`,
+    `Provider: ${state.providerName ?? "default"}`,
+    `Model: ${state.modelName ?? "default"}`,
+    `Messages: ${state.messages.length}`,
+    `User turns: ${userTurnCount(state)}`,
+    `Last run: ${state.lastRunCommand ?? "none"}`,
+    `Last result: ${formatLastResult(state)}`,
+    ...(state.lastRunSummary ? [`Details: /details ${state.lastRunSummary.executionId}`] : []),
+  ].join("\n");
 
 const formatWorkflowLocatorLine = (locator: WorkflowLocator): string =>
   [
@@ -458,6 +491,13 @@ export const handleChatInput = async ({
       : listChatSessionSummaries({ cwd: state.cwd, ...(tag ? { tag } : {}) }));
     return {
       state: appendAssistant(state, formatSessionListMessage(summaries, tag)),
+      exit: false,
+    };
+  }
+
+  if (trimmed === "/session") {
+    return {
+      state: appendAssistant(state, formatSessionStatusMessage(state)),
       exit: false,
     };
   }

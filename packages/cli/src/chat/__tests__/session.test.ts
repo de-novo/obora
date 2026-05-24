@@ -414,6 +414,83 @@ describe("chat session", () => {
     expect(cleared.state.messages.at(-1)?.content).toContain("Session tags updated: none");
   });
 
+  it("shows current session metadata without requiring workflow execution", async () => {
+    vi.clearAllMocks();
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        projectRoot: "/repo/project-a",
+        dryRun: true,
+        tags: ["release", "qa"],
+      }),
+      workflowTarget: "release-readiness",
+      workflowLocator: locator,
+      lastRunCommand: "obora run .obora/workflows/release-readiness.yaml",
+      lastRunSummary: {
+        executionId: "exec-session-1",
+        workflowName: "release-readiness",
+        status: "completed" as const,
+        message: "Workflow completed: 1/1 steps completed.",
+        startedAt: "2026-05-24T00:00:00.000Z",
+        endedAt: "2026-05-24T00:00:01.000Z",
+        durationMs: 1000,
+        totalStepCount: 1,
+        completedStepCount: 1,
+        steps: [],
+      },
+    };
+
+    const result = await handleChatInput({
+      input: "/session",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    const content = result.state.messages.at(-1)?.content;
+    expect(resolveWorkflow).not.toHaveBeenCalled();
+    expect(runWorkflow).not.toHaveBeenCalled();
+    expect(content).toContain("Session: session-a");
+    expect(content).toContain("Project: /repo/project-a");
+    expect(content).toContain("Tags: release, qa");
+    expect(content).toContain("Workflow: release-readiness (project)");
+    expect(content).toContain("Mode: dry-run");
+    expect(content).toContain("Last run: obora run .obora/workflows/release-readiness.yaml");
+    expect(content).toContain("Last result: completed 1/1");
+    expect(content).toContain("Details: /details exec-session-1");
+  });
+
+  it("shows empty session metadata when no workflow or run exists", async () => {
+    vi.clearAllMocks();
+    const state = createInitialChatState({
+      sessionId: "session-empty",
+      cwd: "/repo",
+      dryRun: false,
+    });
+
+    const result = await handleChatInput({
+      input: "/session",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: {},
+    });
+
+    const content = result.state.messages.at(-1)?.content;
+    expect(runWorkflow).not.toHaveBeenCalled();
+    expect(content).toContain("Session: session-empty");
+    expect(content).toContain("Tags: none");
+    expect(content).toContain("Workflow: none");
+    expect(content).toContain("Mode: live");
+    expect(content).toContain("Provider: default");
+    expect(content).toContain("Model: default");
+    expect(content).toContain("Last run: none");
+    expect(content).toContain("Last result: none");
+    expect(content).not.toContain("Details:");
+  });
+
   it("lists recent sessions from inside chat and supports tag filtering", async () => {
     vi.clearAllMocks();
     const listSessions = vi.fn(async (_tag?: string) => [
