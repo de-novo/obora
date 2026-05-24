@@ -31,6 +31,14 @@ import type { ChatRunDetail, ChatSessionSummary } from "./store.js";
 import { ChatTuiController } from "./tui.js";
 import type { ChatCommandOptions, ChatSessionState } from "./types.js";
 import {
+  chatRunChoiceFromDetail,
+  chatRunChoicesFromDetails,
+  chatRunChoicesFromSummaries,
+  runChoiceSummary,
+  toChatRunChoice,
+  type ChatRunChoiceInput,
+} from "./run-choices.js";
+import {
   createChatRunInput,
   listChatWorkflowLocators,
   parseChatTimeout,
@@ -284,7 +292,7 @@ const runChoiceAt = (
   state: ChatSessionState,
   index: number
 ): WorkflowRunSummary | undefined =>
-  index >= 0 && state.runChoices ? state.runChoices[index] : undefined;
+  index >= 0 && state.runChoices ? runChoiceSummary(state.runChoices[index]) : undefined;
 
 const formatRunSummaryLine = (summary: WorkflowRunSummary, index: number): string =>
   `${index + 1}. ${summary.executionId} · ${summary.workflowName} · ${summary.status} · ${summary.completedStepCount}/${summary.totalStepCount} steps`;
@@ -334,10 +342,10 @@ const formatPersistedRunListMessage = (
 
 const withRunChoices = (
   state: ChatSessionState,
-  runChoices: ReadonlyArray<WorkflowRunSummary>
+  runChoices: ReadonlyArray<ChatRunChoiceInput>
 ): ChatSessionState => ({
   ...state,
-  runChoices,
+  runChoices: runChoices.map((choice) => toChatRunChoice(choice, state.sessionId)),
 });
 
 const formatSessionTags = (tags: ReadonlyArray<string> | undefined): string =>
@@ -699,7 +707,10 @@ export const handleChatInput = async ({
   if (trimmed === "/runs") {
     const summaries = runSummariesFromState(state);
     return {
-      state: appendAssistant(withRunChoices(state, summaries), formatRunListMessage(summaries)),
+      state: appendAssistant(
+        withRunChoices(state, chatRunChoicesFromSummaries(summaries, state.sessionId)),
+        formatRunListMessage(summaries)
+      ),
       exit: false,
     };
   }
@@ -727,10 +738,9 @@ export const handleChatInput = async ({
           cwd: state.cwd,
           ...(filter.sessionId ? { sessionId: filter.sessionId } : {}),
         }));
-    const summaries = uniqueRunSummaries(details.map((detail) => detail.runSummary)).slice(0, 8);
     return {
       state: appendAssistant(
-        withRunChoices(state, summaries),
+        withRunChoices(state, chatRunChoicesFromDetails(details).slice(0, 8)),
         formatPersistedRunListMessage(details, filter)
       ),
       exit: false,
@@ -961,9 +971,12 @@ export const handleChatInput = async ({
           ? findRun(detailsExecutionId)
           : findChatRunDetail({ cwd: state.cwd, executionId: detailsExecutionId }));
     const summary = stateSummary ?? persistedDetail?.runSummary;
+    const runChoices = persistedDetail
+      ? [chatRunChoiceFromDetail(persistedDetail), ...(state.runChoices ?? [])]
+      : (state.runChoices ?? []);
     return {
       state: appendAssistant(
-        summary ? { ...state, inspectedRunSummary: summary } : state,
+        summary ? { ...state, inspectedRunSummary: summary, runChoices } : state,
         summary
           ? `Opened run details ${summary.executionId}.`
           : `Run details not found: ${detailsExecutionId}`

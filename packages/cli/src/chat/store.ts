@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 import type { WorkflowRunSummary } from "@obora/sdk";
 
+import { runChoiceSummary, toChatRunChoice, type ChatRunChoiceInput } from "./run-choices.js";
 import type { ChatMessage, ChatSessionState } from "./types.js";
 
 export interface ChatSessionSummary {
@@ -328,8 +329,12 @@ const chatRunDetailsFromState = (state: ChatSessionState): ReadonlyArray<ChatRun
     ...(state.inspectedRunSummary
       ? [syntheticRunDetail(state, state.inspectedRunSummary, "state:inspectedRunSummary")]
       : []),
-    ...(state.runChoices ?? []).map((summary) =>
-      syntheticRunDetail(state, summary, "state:runChoices")
+    ...((state.runChoices ?? []) as ReadonlyArray<ChatRunChoiceInput>).map((choice) =>
+      syntheticRunDetail(
+        state,
+        runChoiceSummary(toChatRunChoice(choice, state.sessionId)),
+        "state:runChoices"
+      )
     ),
   ]);
 

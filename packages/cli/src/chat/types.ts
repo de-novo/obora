@@ -13,6 +13,13 @@ export interface ChatMessage {
   readonly runSummary?: WorkflowRunSummary;
 }
 
+export interface ChatRunChoice {
+  readonly runSummary: WorkflowRunSummary;
+  readonly sessionId?: string;
+  readonly messageId?: string;
+  readonly source?: string;
+}
+
 export interface ChatSessionState {
   readonly sessionId: string;
   readonly status: ChatSessionStatus;
@@ -31,7 +38,7 @@ export interface ChatSessionState {
   readonly lastRunCommand?: string;
   readonly lastRunSummary?: WorkflowRunSummary;
   readonly inspectedRunSummary?: WorkflowRunSummary;
-  readonly runChoices?: ReadonlyArray<WorkflowRunSummary>;
+  readonly runChoices?: ReadonlyArray<ChatRunChoice>;
 }
 
 export interface ChatRunInput {

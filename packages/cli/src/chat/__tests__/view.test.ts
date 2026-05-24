@@ -239,13 +239,22 @@ describe("renderChatView", () => {
           }),
           inspectedRunSummary: runSummary,
           runChoices: [
-            runSummary,
             {
-              ...runSummary,
-              executionId: "exec-chat-2",
-              workflowName: "code-review",
-              completedStepCount: 1,
-              totalStepCount: 2,
+              runSummary,
+              sessionId: "session-a",
+              source: "session",
+            },
+            {
+              runSummary: {
+                ...runSummary,
+                executionId: "exec-chat-2",
+                workflowName: "code-review",
+                completedStepCount: 1,
+                totalStepCount: 2,
+              },
+              sessionId: "history-session",
+              messageId: "assistant:run",
+              source: "persisted",
             },
           ],
         },
@@ -259,6 +268,8 @@ describe("renderChatView", () => {
     expect(plain).toContain("/details <runId>");
     expect(plain).toContain("● #1 exec-chat-1 completed release-readiness steps 2/2");
     expect(plain).toContain("○ #2 exec-chat-2 completed code-review steps 1/2");
+    expect(plain).toContain("session session-a");
+    expect(plain).toContain("session history-session");
     expect(plain).toContain("open /details exec-chat-1");
   });
 

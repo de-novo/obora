@@ -400,7 +400,7 @@ describe("chat session", () => {
       commandOptions: { provider: "openrouter", model: "openrouter/owl-alpha" },
     });
 
-    expect(listed.state.runChoices?.map((summary) => summary.executionId)).toEqual([
+    expect(listed.state.runChoices?.map((choice) => choice.runSummary.executionId)).toEqual([
       "exec-chat-1",
     ]);
     expect(listed.state.messages.at(-1)?.content).toContain("Recent workflow runs:");
@@ -431,9 +431,11 @@ describe("chat session", () => {
     });
 
     expect(listRuns).toHaveBeenCalledWith(undefined);
-    expect(listed.state.runChoices?.map((summary) => summary.executionId)).toEqual([
+    expect(listed.state.runChoices?.map((choice) => choice.runSummary.executionId)).toEqual([
       "exec-chat-1",
     ]);
+    expect(listed.state.runChoices?.[0]?.sessionId).toBe("session-a");
+    expect(listed.state.runChoices?.[0]?.source).toBe("persisted");
     expect(listed.state.messages.at(-1)?.content).toContain(
       "Persisted workflow runs (all sessions):"
     );
@@ -461,6 +463,12 @@ describe("chat session", () => {
 
     expect(findRun).toHaveBeenCalledWith("exec-chat-1");
     expect(opened.state.inspectedRunSummary?.executionId).toBe("exec-chat-1");
+    expect(opened.state.runChoices?.[0]).toMatchObject({
+      sessionId: "session-a",
+      messageId: "assistant:run",
+      source: "persisted",
+      runSummary: { executionId: "exec-chat-1" },
+    });
     expect(opened.state.messages.at(-1)?.content).toContain("Opened run details exec-chat-1.");
   });
 
@@ -543,9 +551,10 @@ describe("chat session", () => {
     });
 
     expect(listRuns).toHaveBeenCalledWith("session-b");
-    expect(listed.state.runChoices?.map((summary) => summary.executionId)).toEqual([
+    expect(listed.state.runChoices?.map((choice) => choice.runSummary.executionId)).toEqual([
       "exec-session-b",
     ]);
+    expect(listed.state.runChoices?.[0]?.sessionId).toBe("session-b");
     expect(listed.state.messages.at(-1)?.content).toContain(
       "Persisted workflow runs (session session-b):"
     );

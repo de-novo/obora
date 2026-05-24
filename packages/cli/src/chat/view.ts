@@ -1,8 +1,9 @@
 import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import type { WorkflowLocator, WorkflowRunStepSummary, WorkflowRunSummary } from "@obora/sdk";
 
+import { runChoiceSummary } from "./run-choices.js";
 import { visibleChatMessages } from "./state.js";
-import type { ChatMessage, ChatSessionState, ChatSessionStatus } from "./types.js";
+import type { ChatMessage, ChatRunChoice, ChatSessionState, ChatSessionStatus } from "./types.js";
 import type { ChatSessionSummary } from "./store.js";
 
 export interface ChatViewOptions {
@@ -250,10 +251,11 @@ const runHistoryMarker = (state: ChatSessionState, summary: WorkflowRunSummary):
 
 const renderRunHistoryLine = (
   state: ChatSessionState,
-  summary: WorkflowRunSummary,
+  choice: ChatRunChoice,
   index: number
-): string =>
-  [
+): string => {
+  const summary = runChoiceSummary(choice);
+  return [
     runHistoryMarker(state, summary),
     cyan(`#${index + 1}`),
     bold(summary.executionId),
@@ -261,13 +263,20 @@ const renderRunHistoryLine = (
     muted(summary.workflowName),
     `${muted("steps")} ${summary.completedStepCount}/${summary.totalStepCount}`,
   ].join(" ");
+};
 
-const renderRunHistoryMeta = (summary: WorkflowRunSummary): string =>
-  [
+const renderRunHistorySource = (choice: ChatRunChoice): string =>
+  choice.sessionId ? `${muted("session")} ${choice.sessionId}` : muted("session current");
+
+const renderRunHistoryMeta = (choice: ChatRunChoice): string => {
+  const summary = runChoiceSummary(choice);
+  return [
+    renderRunHistorySource(choice),
     `${muted("started")} ${formatUpdatedTime(summary.startedAt)}`,
     formatRunDuration(summary),
     `${muted("open")} /details ${summary.executionId}`,
   ].join("   ");
+};
 
 const renderRunHistory = (
   state: ChatSessionState,
@@ -280,9 +289,9 @@ const renderRunHistory = (
           "runs",
           [
             `${muted("select")} /details 1   ${muted("by id")} /details <runId>   ${muted("refresh")} /runs`,
-            ...state.runChoices.slice(0, 8).flatMap((summary, index) => [
-              renderRunHistoryLine(state, summary, index),
-              renderRunHistoryMeta(summary),
+            ...state.runChoices.slice(0, 8).flatMap((choice, index) => [
+              renderRunHistoryLine(state, choice, index),
+              renderRunHistoryMeta(choice),
             ]),
           ],
           width
