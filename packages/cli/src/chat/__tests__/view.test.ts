@@ -132,6 +132,7 @@ describe("renderChatView", () => {
     expect(plain).toContain("steps 4");
     expect(plain).toContain("› release-readiness ready · type task or /run");
     expect(plain).toContain("/run <task>  /runs  /details <runId>");
+    expect(plain).toContain("/details clear");
     expect(output).not.toContain("+---");
   });
 
@@ -227,6 +228,7 @@ describe("renderChatView", () => {
     expect(plain).toContain("Review repository changes");
     expect(plain).toContain("› release-readiness ready · type task or /run");
     expect(plain).toContain("/run <task>  /runs  /details <runId>");
+    expect(plain).toContain("/details clear");
   });
 
   it("renders numbered run choices as a history panel", () => {

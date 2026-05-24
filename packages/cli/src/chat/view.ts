@@ -443,7 +443,7 @@ const promptLabel = (state: ChatSessionState): string =>
 
 const promptPrimaryCommands = (state: ChatSessionState): string =>
   state.workflowLocator
-    ? "/run <task>  /runs  /details <runId>  /workflows"
+    ? "/run <task>  /runs  /details <runId>  /details clear  /workflows"
     : state.workflowChoices && state.workflowChoices.length > 0
       ? "/workflow 1  /run #1 <task>  /workflows [scope]"
       : "/workflows  /workflow <name-or-path>  /project [path]";

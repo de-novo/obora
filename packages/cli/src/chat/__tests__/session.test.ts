@@ -114,6 +114,7 @@ describe("chat session", () => {
       commandOptions: { dryRun: true },
     });
     expect(help.state.messages.at(-1)?.content).toContain("Commands:");
+    expect(help.state.messages.at(-1)?.content).toContain("/details clear");
 
     const selected = await handleChatInput({
       input: "/workflow release-readiness",
@@ -365,6 +366,48 @@ describe("chat session", () => {
       artifacts: ["release-notes.md"],
       decisions: ["Use release notes"],
     });
+  });
+
+  it("clears the inspected run details without deleting run history", async () => {
+    const runWorkflowWithResult = vi.fn(async () => executionResult);
+    const selected = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: false,
+      }),
+      workflowLocator: locator,
+      status: "ready" as const,
+    };
+    const ran = await handleChatInput({
+      input: "perform the release check",
+      state: selected,
+      resolveWorkflow,
+      runWorkflow: runWorkflowWithResult,
+      commandOptions: { provider: "openrouter", model: "openrouter/owl-alpha" },
+    });
+    const opened = await handleChatInput({
+      input: "/details exec-chat-1",
+      state: ran.state,
+      resolveWorkflow,
+      runWorkflow: runWorkflowWithResult,
+      commandOptions: { provider: "openrouter", model: "openrouter/owl-alpha" },
+    });
+
+    const cleared = await handleChatInput({
+      input: "/details clear",
+      state: opened.state,
+      resolveWorkflow,
+      runWorkflow: runWorkflowWithResult,
+      commandOptions: { provider: "openrouter", model: "openrouter/owl-alpha" },
+    });
+
+    expect(cleared.state.messages.at(-1)?.content).toBe("Closed run details view.");
+    expect(cleared.state.inspectedRunSummary).toBeUndefined();
+    expect(cleared.state.lastRunSummary?.executionId).toBe("exec-chat-1");
+    expect(cleared.state.messages.some((message) => message.runSummary?.executionId === "exec-chat-1")).toBe(
+      true
+    );
   });
 
   it("lists runs and opens run details by number", async () => {
