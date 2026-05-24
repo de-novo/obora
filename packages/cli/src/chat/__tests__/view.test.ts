@@ -172,6 +172,50 @@ describe("renderChatView", () => {
     expect(plain).toContain("updated 2026-05-24 10:11");
   });
 
+  it("renders numbered workflow choices as a picker panel", () => {
+    const output = renderedText(
+      renderChatView(
+        {
+          ...createInitialChatState({
+            sessionId: "session-a",
+            cwd: "/repo",
+            dryRun: true,
+          }),
+          workflowLocator: locator,
+          workflowChoices: [
+            {
+              ...locator,
+              description: "Release readiness workflow",
+            },
+            {
+              ...locator,
+              id: "global:review",
+              scope: "global",
+              name: "code-review",
+              displayPath: "~/.obora/workflows/code-review.yaml",
+              editable: false,
+              stepCount: 2,
+              description: "Review repository changes",
+            },
+          ],
+        },
+        { columns: 120 }
+      )
+    );
+    const plain = stripAnsi(output);
+
+    expect(plain).toContain("workflows");
+    expect(plain).toContain("/workflow 1");
+    expect(plain).toContain("/run #1 <task>");
+    expect(plain).toContain("/workflows [scope]");
+    expect(plain).toContain("● #1 release-readiness ready project steps 4");
+    expect(plain).toContain("○ #2 code-review idle global steps 2");
+    expect(plain).toContain("editable yes");
+    expect(plain).toContain("editable no");
+    expect(plain).toContain("about Release readiness");
+    expect(plain).toContain("Review repository changes");
+  });
+
   it("falls back to a stacked layout for narrow terminals", () => {
     const output = renderedText(
       renderChatView(

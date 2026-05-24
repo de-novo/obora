@@ -1,5 +1,5 @@
 import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
-import type { WorkflowRunStepSummary, WorkflowRunSummary } from "@obora/sdk";
+import type { WorkflowLocator, WorkflowRunStepSummary, WorkflowRunSummary } from "@obora/sdk";
 
 import { visibleChatMessages } from "./state.js";
 import type { ChatMessage, ChatSessionState, ChatSessionStatus } from "./types.js";
@@ -270,6 +270,51 @@ const renderSessionPicker = (
       ]
     : [];
 
+const workflowMarker = (state: ChatSessionState, locator: WorkflowLocator): string =>
+  state.workflowLocator?.id === locator.id ? green("●") : muted("○");
+
+const renderWorkflowChoiceLine = (
+  state: ChatSessionState,
+  locator: WorkflowLocator,
+  index: number
+): string =>
+  [
+    workflowMarker(state, locator),
+    cyan(`#${index + 1}`),
+    bold(locator.name),
+    statusPill(state.workflowLocator?.id === locator.id ? "ready" : "idle"),
+    muted(locator.scope),
+    `${muted("steps")} ${locator.stepCount}`,
+  ].join(" ");
+
+const renderWorkflowChoiceMeta = (locator: WorkflowLocator, width: number): string =>
+  [
+    `${muted("path")} ${compactPath(locator.displayPath, Math.max(16, width - 24))}`,
+    `${muted("editable")} ${locator.editable ? "yes" : "no"}`,
+    ...(locator.description ? [`${muted("about")} ${locator.description}`] : []),
+  ].join("   ");
+
+const renderWorkflowPicker = (
+  state: ChatSessionState,
+  width: number
+): ReadonlyArray<string> =>
+  state.workflowChoices && state.workflowChoices.length > 0
+    ? [
+        "",
+        ...card(
+          "workflows",
+          [
+            `${muted("select")} /workflow 1   ${muted("run once")} /run #1 <task>   ${muted("refresh")} /workflows [scope]`,
+            ...state.workflowChoices.slice(0, 8).flatMap((locator, index) => [
+              renderWorkflowChoiceLine(state, locator, index),
+              renderWorkflowChoiceMeta(locator, width - 4),
+            ]),
+          ],
+          width
+        ),
+      ]
+    : [];
+
 const renderMessage = (message: ChatMessage, width: number): ReadonlyArray<string> => [
   `${dim(formatTime(message.createdAt))} ${roleBadge(message.role)}`,
   ...wrapLine(message.content, width - 4).map((line) => `${muted("│")} ${line}`),
@@ -312,6 +357,7 @@ export const renderChatView = (
     ...renderHeader(state, width),
     ...renderHero(state, rendererLabel, cardWidth),
     ...renderSessionPicker(state, cardWidth),
+    ...renderWorkflowPicker(state, cardWidth),
     "",
     ...renderTranscript(state, cardWidth),
     "",
