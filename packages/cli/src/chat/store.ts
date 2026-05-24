@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import type { WorkflowRunSummary } from "@obora/sdk";
@@ -90,6 +90,14 @@ const loadChatSessionRecord = async (
       throw error;
     });
 
+const deleteChatSessionRecord = async (storeDir: string, sessionId: string): Promise<boolean> =>
+  unlink(chatSessionFilePath(storeDir, sessionId))
+    .then(() => true)
+    .catch((error: unknown) => {
+      if (isMissingFileError(error)) return false;
+      throw error;
+    });
+
 const listChatSessionRecords = async (storeDir: string): Promise<ReadonlyArray<ChatSessionRecord>> =>
   readdir(storeDir)
     .then((files) =>
@@ -146,6 +154,45 @@ export const saveChatSessionState = async ({
   );
 };
 
+export const deleteChatSessionState = async ({
+  cwd,
+  sessionId,
+  storeDir = chatSessionStoreDir(cwd),
+}: {
+  readonly cwd: string;
+  readonly sessionId: string;
+  readonly storeDir?: string;
+}): Promise<boolean> => deleteChatSessionRecord(storeDir, sessionId);
+
+export const renameChatSessionState = async ({
+  cwd,
+  fromSessionId,
+  toSessionId,
+  storeDir = chatSessionStoreDir(cwd),
+}: {
+  readonly cwd: string;
+  readonly fromSessionId: string;
+  readonly toSessionId: string;
+  readonly storeDir?: string;
+}): Promise<ChatSessionState | undefined> =>
+  loadChatSessionState({ cwd, sessionId: fromSessionId, storeDir }).then((state) =>
+    state
+      ? saveChatSessionState({
+          cwd,
+          storeDir,
+          state: {
+            ...state,
+            sessionId: toSessionId,
+          },
+        })
+          .then(() => deleteChatSessionState({ cwd, sessionId: fromSessionId, storeDir }))
+          .then(() => ({
+            ...state,
+            sessionId: toSessionId,
+          }))
+      : undefined
+  );
+
 const toChatSessionSummary = (record: ChatSessionRecord): ChatSessionSummary => ({
   sessionId: record.state.sessionId,
   status: record.state.status,
@@ -162,13 +209,20 @@ const filterSummaryByTag =
   (summary: ChatSessionSummary): boolean =>
     tag ? summary.tags.includes(tag) : true;
 
+const filterSummaryByProject =
+  (projectRoot: string | undefined) =>
+  (summary: ChatSessionSummary): boolean =>
+    projectRoot ? (summary.projectRoot ?? summary.cwd) === projectRoot : true;
+
 export const listChatSessionSummaries = async ({
   cwd,
   tag,
+  projectRoot,
   storeDir = chatSessionStoreDir(cwd),
 }: {
   readonly cwd: string;
   readonly tag?: string;
+  readonly projectRoot?: string;
   readonly storeDir?: string;
 }): Promise<ReadonlyArray<ChatSessionSummary>> =>
   listChatSessionRecords(storeDir)
@@ -176,6 +230,7 @@ export const listChatSessionSummaries = async ({
       summaries
         .map(toChatSessionSummary)
         .filter(filterSummaryByTag(tag))
+        .filter(filterSummaryByProject(projectRoot))
         .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
     );
 

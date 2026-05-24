@@ -6,10 +6,12 @@ import { describe, expect, it } from "vitest";
 
 import { createInitialChatState } from "../state.js";
 import {
+  deleteChatSessionState,
   findChatRunDetail,
   groupChatSessionSummaries,
   listChatSessionSummaries,
   loadChatSessionState,
+  renameChatSessionState,
   saveChatSessionState,
 } from "../store.js";
 
@@ -91,6 +93,47 @@ describe("chat session store", () => {
     await expect(listChatSessionSummaries({ cwd, tag: "release" })).resolves.toEqual([
       expect.objectContaining({ sessionId: "session-one", tags: ["release", "urgent"] }),
     ]);
+    await expect(
+      listChatSessionSummaries({ cwd, projectRoot: join(cwd, "project-b") })
+    ).resolves.toEqual([expect.objectContaining({ sessionId: "session-two" })]);
+  });
+
+  it("renames and deletes persisted chat sessions", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "obora-chat-store-rename-"));
+    const state = createInitialChatState({
+      sessionId: "session-one",
+      cwd,
+      dryRun: true,
+    });
+
+    await saveChatSessionState({ cwd, state });
+
+    await expect(
+      renameChatSessionState({
+        cwd,
+        fromSessionId: "session-one",
+        toSessionId: "session-renamed",
+      })
+    ).resolves.toMatchObject({ sessionId: "session-renamed" });
+    await expect(loadChatSessionState({ cwd, sessionId: "session-one" })).resolves.toBeUndefined();
+    await expect(loadChatSessionState({ cwd, sessionId: "session-renamed" })).resolves.toMatchObject(
+      {
+        sessionId: "session-renamed",
+      }
+    );
+    await expect(deleteChatSessionState({ cwd, sessionId: "session-renamed" })).resolves.toBe(
+      true
+    );
+    await expect(deleteChatSessionState({ cwd, sessionId: "session-renamed" })).resolves.toBe(
+      false
+    );
+    await expect(
+      renameChatSessionState({
+        cwd,
+        fromSessionId: "missing",
+        toSessionId: "still-missing",
+      })
+    ).resolves.toBeUndefined();
   });
 
   it("returns empty results for a missing session store", async () => {

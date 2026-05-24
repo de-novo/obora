@@ -183,6 +183,44 @@ describe("chat command", () => {
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining('"group": "release"'));
   });
 
+  it("filters persisted chat sessions by project without starting the TUI", async () => {
+    vi.mocked(listChatSessionSummaries).mockResolvedValue([
+      {
+        sessionId: "session-a",
+        status: "ready",
+        cwd: "/repo",
+        projectRoot: "/repo/project-a",
+        tags: [],
+        messageCount: 4,
+        updatedAt: "2026-05-24T00:00:00.000Z",
+      },
+    ]);
+
+    await createChatCommand().parseAsync(
+      ["--list-sessions", "--filter-project", "/repo/project-a", "--json"],
+      { from: "user" }
+    );
+
+    expect(runChatSession).not.toHaveBeenCalled();
+    expect(listChatSessionSummaries).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: process.cwd(), projectRoot: "/repo/project-a" })
+    );
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('"sessionId": "session-a"'));
+  });
+
+  it("filters persisted chat sessions by the current project alias", async () => {
+    vi.mocked(listChatSessionSummaries).mockResolvedValue([]);
+
+    await createChatCommand().parseAsync(
+      ["--list-sessions", "--filter-project", "current", "--json"],
+      { from: "user" }
+    );
+
+    expect(listChatSessionSummaries).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: process.cwd(), projectRoot: process.cwd() })
+    );
+  });
+
   it("fails clearly for invalid chat session grouping", async () => {
     vi.mocked(listChatSessionSummaries).mockResolvedValue([]);
 

@@ -618,7 +618,7 @@ obora chat [workflow] [--scope project|global|all] [--dry-run]
 obora chat [workflow] --once <message> --dry-run
 obora chat --workflow <workflow> --session <id>
 obora chat --list-sessions [--json]
-obora chat --list-sessions --group-sessions project|tag|day [--filter-tag <tag>] [--json]
+obora chat --list-sessions --group-sessions project|tag|day [--filter-tag <tag>] [--filter-project <path|current>] [--json]
 obora chat --show-session --session <id>
 obora chat --show-run <executionId> [--session <id>]
 ```
@@ -633,6 +633,7 @@ obora chat --show-run <executionId> [--session <id>]
 - `--list-sessions` list persisted chat sessions without starting the TUI
 - `--group-sessions <project|tag|day>` group listed sessions by project root, tag, or updated day
 - `--filter-tag <tag>` only list sessions with the given tag
+- `--filter-project <path|current>` only list sessions for a project root
 - `--show-session` print the persisted chat session selected by `--session`
 - `--show-run <executionId>` print a persisted workflow run summary; with `--session`, search only that session
 - `--once <message>` run one chat message and exit, useful for automation and smoke tests
@@ -664,7 +665,8 @@ obora chat --show-run <executionId> [--session <id>]
 - `/details <executionId>` shows the recorded step outputs, tools, artifacts, decisions, and issues for a prior workflow result in the current session.
 - `/session` shows the current session id, project, tags, selected workflow, mode, provider/model, and last run metadata.
 - `/project` shows the current session project root, and `/project <path>` changes it for subsequent workflow discovery.
-- `/sessions` shows recent persisted chat sessions, `/sessions release` filters the list by tag, and `/session 1` or `/session <id>` switches to a listed or known session.
+- `/sessions` shows recent persisted chat sessions, `/sessions release` filters the list by tag, `/sessions --project` filters by the current project, and `/session 1` or `/session <id>` switches to a listed or known session.
+- `/session rename <id-or-number> <new-id>` renames a session, and `/session delete <id-or-number>` deletes a non-active session.
 - `/tags` shows the current session tags, `/tags release,qa` updates them, and `/tags --clear` removes them.
 - `/help` prints available chat commands.
 - `/exit` or `/quit` closes the chat session.

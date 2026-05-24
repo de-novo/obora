@@ -20,8 +20,10 @@ import {
   setChatStatus,
 } from "./state.js";
 import {
+  deleteChatSessionState,
   listChatSessionSummaries,
   loadChatSessionState,
+  renameChatSessionState,
   saveChatSessionState,
 } from "./store.js";
 import type { ChatSessionSummary } from "./store.js";
@@ -53,8 +55,18 @@ interface ChatTurnResult {
   readonly exit: boolean;
 }
 
+interface SessionListFilter {
+  readonly tag?: string;
+  readonly projectRoot?: string;
+}
+
+interface SessionRenameCommand {
+  readonly target: string;
+  readonly nextSessionId: string;
+}
+
 const chatHelp =
-  "Commands: /workflow <name-or-path> selects a reusable workflow, /workflows [scope] lists reusable workflows, /project [path] shows or changes the session project root, /sessions [tag] lists recent sessions, /session 1 or /session <id> switches sessions, /workflow 1 selects from the last workflow list, /run <task> runs the current workflow, /run #1 <task> runs one task with a listed workflow, /run --workflow <name-or-path> <task> runs one task with another workflow, /details <executionId> shows step results, /session shows current session metadata, /tags [a,b] shows or updates session tags, /exit quits.";
+  "Commands: /workflow <name-or-path> selects a reusable workflow, /workflows [scope] lists reusable workflows, /project [path] shows or changes the session project root, /sessions [tag] lists recent sessions, /sessions --project [path] filters by project, /session 1 or /session <id> switches sessions, /session rename <id-or-number> <new-id> renames, /session delete <id-or-number> deletes, /workflow 1 selects from the last workflow list, /run <task> runs the current workflow, /run #1 <task> runs one task with a listed workflow, /run --workflow <name-or-path> <task> runs one task with another workflow, /details <executionId> shows step results, /session shows current session metadata, /tags [a,b] shows or updates session tags, /exit quits.";
 
 const isExitCommand = (input: string): boolean => input === "/exit" || input === "/quit";
 
@@ -72,6 +84,37 @@ const sessionsTagFromCommand = (input: string): string | undefined =>
 
 const sessionTargetFromCommand = (input: string): string | undefined =>
   input.startsWith("/session ") ? input.slice("/session ".length).trim() : undefined;
+
+const commandParts = (input: string): ReadonlyArray<string> =>
+  input
+    .trim()
+    .split(/\s+/u)
+    .filter((part) => part.length > 0);
+
+const sessionListFilterFromCommand = (
+  input: string,
+  state: ChatSessionState
+): SessionListFilter => {
+  const target = sessionsTagFromCommand(input);
+  const parts = commandParts(input);
+  return parts[1] === "--project"
+    ? {
+        projectRoot: parts[2] ? resolveProjectRootTarget(state, parts[2]) : state.projectRoot ?? state.cwd,
+      }
+    : target
+      ? { tag: target }
+      : {};
+};
+
+const sessionDeleteTargetFromCommand = (target: string): string | undefined =>
+  target.startsWith("delete ") ? target.slice("delete ".length).trim() : undefined;
+
+const sessionRenameFromCommand = (target: string): SessionRenameCommand | undefined => {
+  const parts = commandParts(target);
+  return parts[0] === "rename" && parts[1] && parts[2]
+    ? { target: parts[1], nextSessionId: parts[2] }
+    : undefined;
+};
 
 const projectTargetFromCommand = (input: string): string | undefined =>
   input.startsWith("/project ") ? input.slice("/project ".length).trim() : undefined;
@@ -261,6 +304,19 @@ const sessionChoiceAt = (
 ): ChatSessionSummary | undefined =>
   index >= 0 && state.sessionChoices ? state.sessionChoices[index] : undefined;
 
+const sessionIdFromTarget = (
+  state: ChatSessionState,
+  target: string
+): { readonly sessionId?: string; readonly missingChoice: boolean } => {
+  const choiceIndex = sessionChoiceIndexFromTarget(target);
+  const choice = choiceIndex === undefined ? undefined : sessionChoiceAt(state, choiceIndex);
+  return choiceIndex === undefined
+    ? { sessionId: target, missingChoice: false }
+    : choice
+      ? { sessionId: choice.sessionId, missingChoice: false }
+      : { missingChoice: true };
+};
+
 const normalizeLoadedSessionState = ({
   current,
   loaded,
@@ -306,15 +362,15 @@ const formatNumberedSessionSummaryLine = (
 
 const formatSessionListMessage = (
   summaries: ReadonlyArray<ChatSessionSummary>,
-  tag: string | undefined
+  filter: SessionListFilter
 ): string =>
   summaries.length > 0
     ? [
-        `Recent sessions${tag ? ` tagged ${tag}` : ""}:`,
+        `Recent sessions${filter.tag ? ` tagged ${filter.tag}` : ""}${filter.projectRoot ? ` for ${filter.projectRoot}` : ""}:`,
         ...summaries.slice(0, 8).map(formatNumberedSessionSummaryLine),
         "Use /session 1 to switch, or /session <id> to open a known session.",
       ].join("\n")
-    : `No chat sessions found${tag ? ` tagged ${tag}` : ""}.`;
+    : `No chat sessions found${filter.tag ? ` tagged ${filter.tag}` : ""}${filter.projectRoot ? ` for ${filter.projectRoot}` : ""}.`;
 
 const formatSessionWorkflow = (state: ChatSessionState): string =>
   state.workflowLocator
@@ -509,6 +565,8 @@ export const handleChatInput = async ({
   commandOptions,
   listSessions,
   loadSession,
+  renameSession,
+  deleteSession,
   listWorkflowLocators,
 }: {
   readonly input: string;
@@ -519,8 +577,16 @@ export const handleChatInput = async ({
   ) => Promise<WorkflowLocator>;
   readonly runWorkflow: typeof runRun;
   readonly commandOptions: ChatCommandOptions;
-  readonly listSessions?: (tag?: string) => Promise<ReadonlyArray<ChatSessionSummary>>;
+  readonly listSessions?: (
+    tag?: string,
+    projectRoot?: string
+  ) => Promise<ReadonlyArray<ChatSessionSummary>>;
   readonly loadSession?: (sessionId: string) => Promise<ChatSessionState | undefined>;
+  readonly renameSession?: (
+    fromSessionId: string,
+    toSessionId: string
+  ) => Promise<ChatSessionState | undefined>;
+  readonly deleteSession?: (sessionId: string) => Promise<boolean>;
   readonly listWorkflowLocators?: (
     scope?: WorkflowResolveScope,
     projectRoot?: string
@@ -561,14 +627,18 @@ export const handleChatInput = async ({
   }
 
   if (trimmed === "/sessions" || trimmed.startsWith("/sessions ")) {
-    const tag = sessionsTagFromCommand(trimmed);
+    const filter = sessionListFilterFromCommand(trimmed, state);
     const summaries = await (listSessions
-      ? listSessions(tag)
-      : listChatSessionSummaries({ cwd: state.cwd, ...(tag ? { tag } : {}) }));
+      ? listSessions(filter.tag, filter.projectRoot)
+      : listChatSessionSummaries({
+          cwd: state.cwd,
+          ...(filter.tag ? { tag: filter.tag } : {}),
+          ...(filter.projectRoot ? { projectRoot: filter.projectRoot } : {}),
+        }));
     return {
       state: appendAssistant(
         withSessionChoices(state, summaries.slice(0, 8)),
-        formatSessionListMessage(summaries, tag)
+        formatSessionListMessage(summaries, filter)
       ),
       exit: false,
     };
@@ -583,9 +653,88 @@ export const handleChatInput = async ({
 
   const sessionTarget = sessionTargetFromCommand(trimmed);
   if (sessionTarget !== undefined) {
-    const choiceIndex = sessionChoiceIndexFromTarget(sessionTarget);
-    const choice = choiceIndex === undefined ? undefined : sessionChoiceAt(state, choiceIndex);
-    if (choiceIndex !== undefined && !choice) {
+    const renameCommand = sessionRenameFromCommand(sessionTarget);
+    if (renameCommand) {
+      const target = sessionIdFromTarget(state, renameCommand.target);
+      const renamed = target.sessionId
+        ? await (renameSession
+            ? renameSession(target.sessionId, renameCommand.nextSessionId)
+            : renameChatSessionState({
+                cwd: state.cwd,
+                fromSessionId: target.sessionId,
+                toSessionId: renameCommand.nextSessionId,
+              }))
+        : undefined;
+      return target.missingChoice
+        ? {
+            state: appendAssistant(
+              state,
+              "Session choice not found. Run /sessions first, then use /session rename 1 <new-id>."
+            ),
+            exit: false,
+          }
+        : renamed
+          ? {
+              state:
+                target.sessionId === state.sessionId
+                  ? appendAssistant(
+                      normalizeLoadedSessionState({
+                        current: state,
+                        loaded: renamed,
+                        commandOptions,
+                      }),
+                      `Renamed session ${target.sessionId} to ${renameCommand.nextSessionId}.`
+                    )
+                  : appendAssistant(
+                      state,
+                      `Renamed session ${target.sessionId} to ${renameCommand.nextSessionId}.`
+                    ),
+              exit: false,
+            }
+          : {
+              state: appendAssistant(state, `Chat session not found: ${target.sessionId}`),
+              exit: false,
+            };
+    }
+
+    const deleteTarget = sessionDeleteTargetFromCommand(sessionTarget);
+    if (deleteTarget !== undefined) {
+      const target = sessionIdFromTarget(state, deleteTarget);
+      const deleted =
+        target.sessionId && target.sessionId !== state.sessionId
+          ? await (deleteSession
+              ? deleteSession(target.sessionId)
+              : deleteChatSessionState({ cwd: state.cwd, sessionId: target.sessionId }))
+          : false;
+      return target.missingChoice
+        ? {
+            state: appendAssistant(
+              state,
+              "Session choice not found. Run /sessions first, then use /session delete 1."
+            ),
+            exit: false,
+          }
+        : target.sessionId === state.sessionId
+          ? {
+              state: appendAssistant(
+                state,
+                "Cannot delete the active session. Switch to another session first."
+              ),
+              exit: false,
+            }
+          : deleted
+            ? {
+                state: appendAssistant(state, `Deleted session ${target.sessionId}.`),
+                exit: false,
+              }
+            : {
+                state: appendAssistant(state, `Chat session not found: ${target.sessionId}`),
+                exit: false,
+              };
+    }
+
+    const target = sessionIdFromTarget(state, sessionTarget);
+    if (target.missingChoice) {
       return {
         state: appendAssistant(
           state,
@@ -594,7 +743,7 @@ export const handleChatInput = async ({
         exit: false,
       };
     }
-    const targetSessionId = choice ? choice.sessionId : sessionTarget;
+    const targetSessionId = target.sessionId ?? sessionTarget;
     const loaded = await (loadSession
       ? loadSession(targetSessionId)
       : loadChatSessionState({ cwd: state.cwd, sessionId: targetSessionId }));
@@ -762,6 +911,8 @@ const promptLoop = async ({
   commandOptions,
   listSessions,
   loadSession,
+  renameSession,
+  deleteSession,
   listWorkflowLocators,
   persist,
 }: {
@@ -774,8 +925,16 @@ const promptLoop = async ({
   ) => Promise<WorkflowLocator>;
   readonly runWorkflow: typeof runRun;
   readonly commandOptions: ChatCommandOptions;
-  readonly listSessions: (tag?: string) => Promise<ReadonlyArray<ChatSessionSummary>>;
+  readonly listSessions: (
+    tag?: string,
+    projectRoot?: string
+  ) => Promise<ReadonlyArray<ChatSessionSummary>>;
   readonly loadSession: (sessionId: string) => Promise<ChatSessionState | undefined>;
+  readonly renameSession: (
+    fromSessionId: string,
+    toSessionId: string
+  ) => Promise<ChatSessionState | undefined>;
+  readonly deleteSession: (sessionId: string) => Promise<boolean>;
   readonly listWorkflowLocators: (
     scope?: WorkflowResolveScope,
     projectRoot?: string
@@ -791,6 +950,8 @@ const promptLoop = async ({
     commandOptions,
     listSessions,
     loadSession,
+    renameSession,
+    deleteSession,
     listWorkflowLocators,
   });
   tui.update(result.state);
@@ -806,6 +967,8 @@ const promptLoop = async ({
         commandOptions,
         listSessions,
         loadSession,
+        renameSession,
+        deleteSession,
         listWorkflowLocators,
         persist,
       });
@@ -882,14 +1045,34 @@ export const runChatSession = async (
   const scope = parseChatWorkflowScope(options.commandOptions.scope);
   const resolveWorkflow = resolveWorkflowForSession(options, scope);
   const runWorkflow = options.runWorkflow ?? runRun;
-  const listSessions = (tag?: string): Promise<ReadonlyArray<ChatSessionSummary>> =>
+  const listSessions = (
+    tag?: string,
+    projectRoot?: string
+  ): Promise<ReadonlyArray<ChatSessionSummary>> =>
     listChatSessionSummaries({
       cwd: options.cwd,
       ...(tag ? { tag } : {}),
+      ...(projectRoot ? { projectRoot } : {}),
       ...(options.sessionStoreDir ? { storeDir: options.sessionStoreDir } : {}),
     });
   const loadSession = (sessionId: string): Promise<ChatSessionState | undefined> =>
     loadChatSessionState({
+      cwd: options.cwd,
+      sessionId,
+      ...(options.sessionStoreDir ? { storeDir: options.sessionStoreDir } : {}),
+    });
+  const renameSession = (
+    fromSessionId: string,
+    toSessionId: string
+  ): Promise<ChatSessionState | undefined> =>
+    renameChatSessionState({
+      cwd: options.cwd,
+      fromSessionId,
+      toSessionId,
+      ...(options.sessionStoreDir ? { storeDir: options.sessionStoreDir } : {}),
+    });
+  const deleteSession = (sessionId: string): Promise<boolean> =>
+    deleteChatSessionState({
       cwd: options.cwd,
       sessionId,
       ...(options.sessionStoreDir ? { storeDir: options.sessionStoreDir } : {}),
@@ -928,6 +1111,8 @@ export const runChatSession = async (
       commandOptions: options.commandOptions,
       listSessions,
       loadSession,
+      renameSession,
+      deleteSession,
       listWorkflowLocators,
     });
     tui.update(result.state);
@@ -957,6 +1142,8 @@ export const runChatSession = async (
     commandOptions: options.commandOptions,
     listSessions,
     loadSession,
+    renameSession,
+    deleteSession,
     listWorkflowLocators,
     persist: (state) => saveSession(options.cwd, state, options.sessionStoreDir),
   })

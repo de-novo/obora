@@ -561,7 +561,7 @@ describe("chat session", () => {
     });
 
     expect(runWorkflow).not.toHaveBeenCalled();
-    expect(listSessions).toHaveBeenCalledWith("release");
+    expect(listSessions).toHaveBeenCalledWith("release", undefined);
     expect(result.state.messages.at(-1)?.content).toContain("Recent sessions tagged release");
     expect(result.state.messages.at(-1)?.content).toContain("release-session");
     expect(result.state.messages.at(-1)?.content).toContain("release-readiness");
@@ -701,6 +701,393 @@ describe("chat session", () => {
 
     expect(loadSession).not.toHaveBeenCalled();
     expect(result.state.messages.at(-1)?.content).toContain("Session choice not found.");
+  });
+
+  it("filters listed chat sessions by the current project root", async () => {
+    const listSessions = vi.fn(async (_tag?: string, _projectRoot?: string) => [
+      {
+        sessionId: "project-session",
+        status: "ready" as const,
+        cwd: "/repo",
+        projectRoot: "/repo/project-a",
+        tags: [],
+        messageCount: 2,
+        updatedAt: "2026-05-24T00:00:00.000Z",
+      },
+    ]);
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd: "/repo",
+      projectRoot: "/repo/project-a",
+      dryRun: true,
+    });
+
+    const result = await handleChatInput({
+      input: "/sessions --project",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+      listSessions,
+    });
+
+    expect(listSessions).toHaveBeenCalledWith(undefined, "/repo/project-a");
+    expect(result.state.messages.at(-1)?.content).toContain(
+      "Recent sessions for /repo/project-a"
+    );
+    expect(result.state.sessionChoices?.map((session) => session.sessionId)).toEqual([
+      "project-session",
+    ]);
+  });
+
+  it("filters listed chat sessions by an explicit project path", async () => {
+    const listSessions = vi.fn(async (_tag?: string, _projectRoot?: string) => []);
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd: "/repo",
+      dryRun: true,
+    });
+
+    const result = await handleChatInput({
+      input: "/sessions --project packages/cli",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+      listSessions,
+    });
+
+    expect(listSessions).toHaveBeenCalledWith(undefined, "/repo/packages/cli");
+    expect(result.state.messages.at(-1)?.content).toContain(
+      "No chat sessions found for /repo/packages/cli."
+    );
+  });
+
+  it("renames the active chat session", async () => {
+    const renamed = createInitialChatState({
+      sessionId: "renamed-session",
+      cwd: "/repo/old",
+      projectRoot: "/repo/project-a",
+      dryRun: false,
+    });
+    const renameSession = vi.fn(async (_fromSessionId: string, _toSessionId: string) => renamed);
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd: "/repo",
+      dryRun: true,
+    });
+
+    const result = await handleChatInput({
+      input: "/session rename session-a renamed-session",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+      renameSession,
+    });
+
+    expect(renameSession).toHaveBeenCalledWith("session-a", "renamed-session");
+    expect(result.state.sessionId).toBe("renamed-session");
+    expect(result.state.cwd).toBe("/repo");
+    expect(result.state.dryRun).toBe(true);
+    expect(result.state.messages.at(-1)?.content).toContain(
+      "Renamed session session-a to renamed-session."
+    );
+  });
+
+  it("renames a listed chat session by number without switching", async () => {
+    const renameSession = vi.fn(async (_fromSessionId: string, toSessionId: string) =>
+      createInitialChatState({
+        sessionId: toSessionId,
+        cwd: "/repo",
+        dryRun: true,
+      })
+    );
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      sessionChoices: [
+        {
+          sessionId: "session-b",
+          status: "ready" as const,
+          cwd: "/repo",
+          tags: [],
+          messageCount: 1,
+          updatedAt: "2026-05-24T00:00:00.000Z",
+        },
+      ],
+    };
+
+    const result = await handleChatInput({
+      input: "/session rename 1 session-c",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+      renameSession,
+    });
+
+    expect(renameSession).toHaveBeenCalledWith("session-b", "session-c");
+    expect(result.state.sessionId).toBe("session-a");
+    expect(result.state.messages.at(-1)?.content).toContain(
+      "Renamed session session-b to session-c."
+    );
+  });
+
+  it("deletes a listed inactive chat session by number", async () => {
+    const deleteSession = vi.fn(async (_sessionId: string) => true);
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      sessionChoices: [
+        {
+          sessionId: "session-b",
+          status: "ready" as const,
+          cwd: "/repo",
+          tags: [],
+          messageCount: 1,
+          updatedAt: "2026-05-24T00:00:00.000Z",
+        },
+      ],
+    };
+
+    const result = await handleChatInput({
+      input: "/session delete 1",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+      deleteSession,
+    });
+
+    expect(deleteSession).toHaveBeenCalledWith("session-b");
+    expect(result.state.messages.at(-1)?.content).toContain("Deleted session session-b.");
+  });
+
+  it("does not delete the active chat session", async () => {
+    const deleteSession = vi.fn(async (_sessionId: string) => true);
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd: "/repo",
+      dryRun: true,
+    });
+
+    const result = await handleChatInput({
+      input: "/session delete session-a",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+      deleteSession,
+    });
+
+    expect(deleteSession).not.toHaveBeenCalled();
+    expect(result.state.messages.at(-1)?.content).toContain("Cannot delete the active session.");
+  });
+
+  it("reports missing chat sessions when renaming by id", async () => {
+    const renameSession = vi.fn(async (_fromSessionId: string, _toSessionId: string) => undefined);
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd: "/repo",
+      dryRun: true,
+    });
+
+    const result = await handleChatInput({
+      input: "/session rename missing renamed",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+      renameSession,
+    });
+
+    expect(renameSession).toHaveBeenCalledWith("missing", "renamed");
+    expect(result.state.messages.at(-1)?.content).toContain("Chat session not found: missing");
+  });
+
+  it("reports missing numbered choices when renaming sessions", async () => {
+    const renameSession = vi.fn(async (_fromSessionId: string, _toSessionId: string) => undefined);
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd: "/repo",
+      dryRun: true,
+    });
+
+    const result = await handleChatInput({
+      input: "/session rename 1 renamed",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+      renameSession,
+    });
+
+    expect(renameSession).not.toHaveBeenCalled();
+    expect(result.state.messages.at(-1)?.content).toContain("Session choice not found.");
+  });
+
+  it("reports missing chat sessions when deleting by id", async () => {
+    const deleteSession = vi.fn(async (_sessionId: string) => false);
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd: "/repo",
+      dryRun: true,
+    });
+
+    const result = await handleChatInput({
+      input: "/session delete missing",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+      deleteSession,
+    });
+
+    expect(deleteSession).toHaveBeenCalledWith("missing");
+    expect(result.state.messages.at(-1)?.content).toContain("Chat session not found: missing");
+  });
+
+  it("reports missing numbered choices when deleting sessions", async () => {
+    const deleteSession = vi.fn(async (_sessionId: string) => true);
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd: "/repo",
+      dryRun: true,
+    });
+
+    const result = await handleChatInput({
+      input: "/session delete 1",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+      deleteSession,
+    });
+
+    expect(deleteSession).not.toHaveBeenCalled();
+    expect(result.state.messages.at(-1)?.content).toContain("Session choice not found.");
+  });
+
+  it("renames and deletes chat sessions through the default store", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "obora-chat-session-manage-"));
+    const sessionStoreDir = join(cwd, ".obora", "chat", "sessions");
+    await runChatSession({
+      cwd,
+      input: createStream(false),
+      output: createStream(false),
+      commandOptions: {
+        once: "/tags managed",
+        dryRun: true,
+        session: "session-b",
+      },
+      resolveWorkflow,
+      runWorkflow,
+      sessionStoreDir,
+    });
+    const renamed = await handleChatInput({
+      input: "/session rename session-b session-c",
+      state: createInitialChatState({
+        sessionId: "session-a",
+        cwd,
+        dryRun: true,
+      }),
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+    const deleted = await handleChatInput({
+      input: "/session delete session-c",
+      state: renamed.state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(renamed.state.messages.at(-1)?.content).toContain(
+      "Renamed session session-b to session-c."
+    );
+    expect(deleted.state.messages.at(-1)?.content).toContain("Deleted session session-c.");
+    await expect(readFile(join(sessionStoreDir, "session-c.json"), "utf-8")).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  });
+
+  it("manages sessions through runChatSession store callbacks", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "obora-chat-session-callbacks-"));
+    await runChatSession({
+      cwd,
+      input: createStream(false),
+      output: createStream(false),
+      commandOptions: {
+        once: "/tags managed",
+        dryRun: true,
+        session: "session-b",
+      },
+      resolveWorkflow,
+      runWorkflow,
+    });
+    const listedByTag = await runChatSession({
+      cwd,
+      input: createStream(false),
+      output: createStream(false),
+      commandOptions: {
+        once: "/sessions managed",
+        dryRun: true,
+        session: "session-a",
+      },
+      resolveWorkflow,
+      runWorkflow,
+    });
+    const listedByProject = await runChatSession({
+      cwd,
+      input: createStream(false),
+      output: createStream(false),
+      commandOptions: {
+        once: "/sessions --project",
+        dryRun: true,
+        session: "session-a",
+      },
+      resolveWorkflow,
+      runWorkflow,
+    });
+    const renamed = await runChatSession({
+      cwd,
+      input: createStream(false),
+      output: createStream(false),
+      commandOptions: {
+        once: "/session rename session-b session-c",
+        dryRun: true,
+        session: "session-a",
+      },
+      resolveWorkflow,
+      runWorkflow,
+    });
+    const deleted = await runChatSession({
+      cwd,
+      input: createStream(false),
+      output: createStream(false),
+      commandOptions: {
+        once: "/session delete session-c",
+        dryRun: true,
+        session: "session-a",
+      },
+      resolveWorkflow,
+      runWorkflow,
+    });
+
+    expect(listedByTag.messages.at(-1)?.content).toContain("Recent sessions tagged managed");
+    expect(listedByProject.messages.at(-1)?.content).toContain(`Recent sessions for ${cwd}`);
+    expect(renamed.messages.at(-1)?.content).toContain(
+      "Renamed session session-b to session-c."
+    );
+    expect(deleted.messages.at(-1)?.content).toContain("Deleted session session-c.");
   });
 
   it("lists reusable workflows from inside chat and supports scope filtering", async () => {
@@ -1073,7 +1460,7 @@ describe("chat session", () => {
       listSessions,
     });
 
-    expect(listSessions).toHaveBeenCalledWith(undefined);
+    expect(listSessions).toHaveBeenCalledWith(undefined, undefined);
     expect(result.state.messages.at(-1)?.content).toContain("Recent sessions:");
     expect(result.state.messages.at(-1)?.content).toContain("untagged-session");
     expect(result.state.messages.at(-1)?.content).toContain("no workflow");

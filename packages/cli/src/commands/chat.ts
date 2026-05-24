@@ -30,6 +30,7 @@ export function createChatCommand(): Command {
     .option("--list-sessions", "List persisted chat sessions")
     .option("--group-sessions <group>", "Group listed sessions by project, tag, or day")
     .option("--filter-tag <tag>", "Only list sessions with the given tag")
+    .option("--filter-project <path>", "Only list sessions for a project root, or current")
     .option("--show-session", "Show the persisted chat session selected by --session")
     .option("--show-run <executionId>", "Show a persisted workflow run summary by execution id")
     .option("--once <message>", "Run one chat message and exit")
@@ -54,6 +55,12 @@ export function createChatCommand(): Command {
             const sessions = await listChatSessionSummaries({
               cwd: process.cwd(),
               ...(options.filterTag ? { tag: options.filterTag } : {}),
+              ...(options.filterProject
+                ? {
+                    projectRoot:
+                      options.filterProject === "current" ? process.cwd() : options.filterProject,
+                  }
+                : {}),
             });
             const groupBy = parseSessionGroupBy(options.groupSessions);
             const grouped = groupBy
