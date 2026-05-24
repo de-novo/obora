@@ -173,7 +173,7 @@ export const chatPromptCommandRows = (state: ChatSessionState): ReadonlyArray<st
   if (state.inspectedRunSummary) return ["/clear  /runs  /details <runId>", "/session  /project  /help"];
   if (state.runChoices && state.runChoices.length > 0) {
     return [
-      "1  /details <runId>  /runs",
+      "/details  1  /details <runId>",
       "/runs --project  /runs --tag <tag>  /runs --status failed",
     ];
   }

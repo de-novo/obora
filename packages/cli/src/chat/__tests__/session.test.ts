@@ -591,6 +591,34 @@ describe("chat session", () => {
     expect(opened.state.messages.at(-1)?.content).toContain("Opened run details exec-chat-1.");
   });
 
+  it("opens the first listed run with a short details command", async () => {
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const listedState = {
+      ...createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true }),
+      runChoices: [
+        {
+          runSummary,
+          sessionId: "history-session",
+          messageId: "assistant:run",
+          source: "persisted",
+        },
+      ],
+    };
+
+    const opened = await handleChatInput({
+      input: "/details",
+      state: listedState,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(opened.state.inspectedRunSummary?.executionId).toBe("exec-chat-1");
+    expect(opened.state.messages.at(-1)?.content).toContain(
+      "Use /session history-session to switch to the source session."
+    );
+  });
+
   it("lists persisted runs across sessions from chat", async () => {
     const runSummary = buildWorkflowRunSummary(executionResult);
     const listRuns = vi.fn(async () => [

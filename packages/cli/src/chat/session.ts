@@ -1123,11 +1123,13 @@ export const handleChatInput = async ({
   }
 
   if (trimmed === "/details") {
-    return state.lastRunSummary
+    const choice = state.lastRunSummary ? undefined : state.runChoices?.at(0);
+    const summary = state.lastRunSummary ?? (choice ? runChoiceSummary(choice) : undefined);
+    return summary
       ? {
           state: appendAssistant(
-            { ...state, inspectedRunSummary: state.lastRunSummary },
-            openedRunDetailsMessage(state.lastRunSummary, undefined, undefined)
+            { ...state, inspectedRunSummary: summary },
+            openedRunDetailsMessage(summary, choice, undefined)
           ),
           exit: false,
         }
