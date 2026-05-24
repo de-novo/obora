@@ -281,7 +281,8 @@ describe("renderChatView", () => {
     expect(plain).toContain("switch /session history-session");
     expect(plain).toContain("open /details exec-chat-1");
     expect(plain).toContain("viewing run exec-chat-1");
-    expect(plain).toContain("/clear  /runs  /details <runId>");
+    expect(plain).toContain("/clear  1  /details <runId>");
+    expect(plain).toContain("/runs  /session  /project  /help");
   });
 
   it("renders run choices without source sessions as current-session runs", () => {

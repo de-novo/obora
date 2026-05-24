@@ -170,7 +170,11 @@ export const isClearRunDetailsCommand = (input: string): boolean =>
 
 export const chatPromptCommandRows = (state: ChatSessionState): ReadonlyArray<string> => {
   if (state.showHelpPanel) return ["/clear  /workflow <name>  /runs", "/session  /project  /exit"];
-  if (state.inspectedRunSummary) return ["/clear  /runs  /details <runId>", "/session  /project  /help"];
+  if (state.inspectedRunSummary) {
+    return state.runChoices && state.runChoices.length > 0
+      ? ["/clear  1  /details <runId>", "/runs  /session  /project  /help"]
+      : ["/clear  /runs  /details <runId>", "/session  /project  /help"];
+  }
   if (state.runChoices && state.runChoices.length > 0) {
     return [
       "/details  1  /details <runId>",

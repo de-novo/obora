@@ -84,6 +84,13 @@ describe("chat command metadata", () => {
         lastRunSummary: runSummary,
       })
     ).toEqual(["/details  /run <task>  /runs", "/workflows  /session  /project  /help"]);
+    expect(
+      chatPromptCommandRows({
+        ...state,
+        inspectedRunSummary: runSummary,
+        runChoices: [{ runSummary, sessionId: "session-a" }],
+      })
+    ).toEqual(["/clear  1  /details <runId>", "/runs  /session  /project  /help"]);
   });
 
   it("keeps run detail clear aliases centralized", () => {
