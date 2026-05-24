@@ -1,6 +1,7 @@
 import { runChatSession } from "../../chat/session.js";
 import {
   findChatRunDetail,
+  groupChatSessionSummaries,
   listChatSessionSummaries,
   loadChatSessionState,
 } from "../../chat/store.js";
@@ -14,6 +15,7 @@ vi.mock("../../chat/session.js", () => ({
 
 vi.mock("../../chat/store.js", () => ({
   findChatRunDetail: vi.fn(),
+  groupChatSessionSummaries: vi.fn((sessions) => [{ group: "/repo", sessions }]),
   listChatSessionSummaries: vi.fn(),
   loadChatSessionState: vi.fn(),
 }));
@@ -102,6 +104,7 @@ describe("chat command", () => {
         status: "ready",
         cwd: "/repo",
         workflowTarget: "release-readiness",
+        tags: ["release"],
         messageCount: 4,
         updatedAt: "2026-05-24T00:00:00.000Z",
       },
@@ -120,6 +123,7 @@ describe("chat command", () => {
         sessionId: "session-a",
         status: "ready",
         cwd: "/repo",
+        tags: [],
         messageCount: 2,
         updatedAt: "2026-05-24T00:00:00.000Z",
       },
@@ -131,6 +135,64 @@ describe("chat command", () => {
     expect(tableSpy).toHaveBeenCalledWith([
       expect.objectContaining({ sessionId: "session-a" }),
     ]);
+  });
+
+  it("groups and filters persisted chat sessions without starting the TUI", async () => {
+    vi.mocked(listChatSessionSummaries).mockResolvedValue([
+      {
+        sessionId: "session-a",
+        status: "ready",
+        cwd: "/repo",
+        projectRoot: "/repo",
+        tags: ["release"],
+        messageCount: 4,
+        updatedAt: "2026-05-24T00:00:00.000Z",
+      },
+    ]);
+    vi.mocked(groupChatSessionSummaries).mockReturnValue([
+      {
+        group: "release",
+        sessions: [
+          {
+            sessionId: "session-a",
+            status: "ready",
+            cwd: "/repo",
+            projectRoot: "/repo",
+            tags: ["release"],
+            messageCount: 4,
+            updatedAt: "2026-05-24T00:00:00.000Z",
+          },
+        ],
+      },
+    ]);
+
+    await createChatCommand().parseAsync(
+      ["--list-sessions", "--filter-tag", "release", "--group-sessions", "tag", "--json"],
+      { from: "user" }
+    );
+
+    expect(runChatSession).not.toHaveBeenCalled();
+    expect(listChatSessionSummaries).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: process.cwd(), tag: "release" })
+    );
+    expect(groupChatSessionSummaries).toHaveBeenCalledWith(
+      expect.any(Array),
+      "tag",
+      "release"
+    );
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('"group": "release"'));
+  });
+
+  it("fails clearly for invalid chat session grouping", async () => {
+    vi.mocked(listChatSessionSummaries).mockResolvedValue([]);
+
+    await createChatCommand().parseAsync(["--list-sessions", "--group-sessions", "owner"], {
+      from: "user",
+    });
+
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining("Invalid session group: owner")
+    );
   });
 
   it("shows a persisted chat session selected by --session", async () => {

@@ -3,15 +3,20 @@ import { Command } from "commander";
 import { runChatSession } from "../chat/session.js";
 import {
   findChatRunDetail,
+  groupChatSessionSummaries,
   listChatSessionSummaries,
   loadChatSessionState,
 } from "../chat/store.js";
+import type { ChatSessionGroupBy } from "../chat/store.js";
 import type { ChatCommandOptions } from "../chat/types.js";
 import { CLIError } from "../utils/cli-error.js";
 import { handleCommandAction } from "../utils/error-handler.js";
 import { ExitCode } from "../utils/exit-codes.js";
 import { formatter } from "../utils/formatter.js";
 import { getGlobalOpts } from "../utils/global-opts.js";
+
+const parseSessionGroupBy = (value: string | undefined): ChatSessionGroupBy | undefined =>
+  value === "project" || value === "tag" || value === "day" ? value : undefined;
 
 export function createChatCommand(): Command {
   return new Command("chat")
@@ -23,6 +28,8 @@ export function createChatCommand(): Command {
     .option("--global-workflows-dir <path>", "Global workflow directory override")
     .option("--session <id>", "Chat session id")
     .option("--list-sessions", "List persisted chat sessions")
+    .option("--group-sessions <group>", "Group listed sessions by project, tag, or day")
+    .option("--filter-tag <tag>", "Only list sessions with the given tag")
     .option("--show-session", "Show the persisted chat session selected by --session")
     .option("--show-run <executionId>", "Show a persisted workflow run summary by execution id")
     .option("--once <message>", "Run one chat message and exit")
@@ -33,6 +40,7 @@ export function createChatCommand(): Command {
     .option("--agents <path>", "agents.yaml path")
     .option("--policy <path>", "Policy file path")
     .option("--timeout <ms>", "Execution timeout in milliseconds")
+    .option("--tags <tags>", "Comma-separated tags to store on the chat session")
     .option("--json", "Output final chat state as JSON")
     .action(async function (
       this: Command,
@@ -43,11 +51,32 @@ export function createChatCommand(): Command {
       await handleCommandAction(
         async () => {
           if (options.listSessions) {
-            const sessions = await listChatSessionSummaries({ cwd: process.cwd() });
+            const sessions = await listChatSessionSummaries({
+              cwd: process.cwd(),
+              ...(options.filterTag ? { tag: options.filterTag } : {}),
+            });
+            const groupBy = parseSessionGroupBy(options.groupSessions);
+            const grouped = groupBy
+              ? groupChatSessionSummaries(sessions, groupBy, options.filterTag)
+              : undefined;
+            if (options.groupSessions && !groupBy) {
+              throw new CLIError(
+                `Invalid session group: ${options.groupSessions}. Expected project, tag, or day.`,
+                ExitCode.CLI_ERROR
+              );
+            }
             if (options.json || globalOpts.json) {
-              formatter.json(sessions);
+              formatter.json(grouped ?? sessions);
             } else {
-              formatter.table(sessions.map((session) => ({ ...session })));
+              formatter.table(
+                (grouped ?? [{ group: "sessions", sessions }]).flatMap((group) =>
+                  group.sessions.map((session) => ({
+                    group: group.group,
+                    ...session,
+                    tags: session.tags.join(", "),
+                  }))
+                )
+              );
             }
             return;
           }

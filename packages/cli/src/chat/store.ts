@@ -9,9 +9,18 @@ export interface ChatSessionSummary {
   readonly sessionId: string;
   readonly status: ChatSessionState["status"];
   readonly cwd: string;
+  readonly projectRoot?: string;
+  readonly tags: ReadonlyArray<string>;
   readonly workflowTarget?: string;
   readonly messageCount: number;
   readonly updatedAt: string;
+}
+
+export type ChatSessionGroupBy = "project" | "tag" | "day";
+
+export interface ChatSessionSummaryGroup {
+  readonly group: string;
+  readonly sessions: ReadonlyArray<ChatSessionSummary>;
 }
 
 export interface ChatRunDetail {
@@ -141,24 +150,76 @@ const toChatSessionSummary = (record: ChatSessionRecord): ChatSessionSummary => 
   sessionId: record.state.sessionId,
   status: record.state.status,
   cwd: record.state.cwd,
+  ...(record.state.projectRoot ? { projectRoot: record.state.projectRoot } : {}),
+  tags: record.state.tags ?? [],
   ...(record.state.workflowTarget ? { workflowTarget: record.state.workflowTarget } : {}),
   messageCount: record.state.messages.length,
   updatedAt: record.updatedAt,
 });
 
+const filterSummaryByTag =
+  (tag: string | undefined) =>
+  (summary: ChatSessionSummary): boolean =>
+    tag ? summary.tags.includes(tag) : true;
+
 export const listChatSessionSummaries = async ({
   cwd,
+  tag,
   storeDir = chatSessionStoreDir(cwd),
 }: {
   readonly cwd: string;
+  readonly tag?: string;
   readonly storeDir?: string;
 }): Promise<ReadonlyArray<ChatSessionSummary>> =>
   listChatSessionRecords(storeDir)
     .then((summaries) =>
       summaries
         .map(toChatSessionSummary)
+        .filter(filterSummaryByTag(tag))
         .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
     );
+
+const sessionGroupKeys = (
+  summary: ChatSessionSummary,
+  groupBy: ChatSessionGroupBy,
+  focusedTag?: string
+): ReadonlyArray<string> =>
+  groupBy === "project"
+    ? [summary.projectRoot ?? summary.cwd]
+    : groupBy === "day"
+      ? [summary.updatedAt.slice(0, 10)]
+      : focusedTag
+        ? [focusedTag]
+      : summary.tags.length > 0
+        ? summary.tags
+        : ["untagged"];
+
+const appendGroupedSession = (
+  groups: Readonly<Record<string, ReadonlyArray<ChatSessionSummary>>>,
+  key: string,
+  summary: ChatSessionSummary
+): Readonly<Record<string, ReadonlyArray<ChatSessionSummary>>> => ({
+  ...groups,
+  [key]: [...(groups[key] ?? []), summary],
+});
+
+export const groupChatSessionSummaries = (
+  summaries: ReadonlyArray<ChatSessionSummary>,
+  groupBy: ChatSessionGroupBy,
+  focusedTag?: string
+): ReadonlyArray<ChatSessionSummaryGroup> =>
+  Object.entries(
+    summaries.reduce<Readonly<Record<string, ReadonlyArray<ChatSessionSummary>>>>(
+      (groups, summary) =>
+        sessionGroupKeys(summary, groupBy, focusedTag).reduce(
+          (nextGroups, key) => appendGroupedSession(nextGroups, key, summary),
+          groups
+        ),
+      {}
+    )
+  )
+    .map(([group, sessions]) => ({ group, sessions }))
+    .sort((left, right) => left.group.localeCompare(right.group));
 
 const chatRunDetailFromState =
   (executionId: string) =>

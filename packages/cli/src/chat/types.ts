@@ -15,6 +15,8 @@ export interface ChatSessionState {
   readonly sessionId: string;
   readonly status: ChatSessionStatus;
   readonly cwd: string;
+  readonly projectRoot?: string;
+  readonly tags?: ReadonlyArray<string>;
   readonly dryRun: boolean;
   readonly providerName?: string;
   readonly modelName?: string;
@@ -47,6 +49,9 @@ export interface ChatCommandOptions {
   readonly listSessions?: boolean;
   readonly showSession?: boolean;
   readonly showRun?: string;
+  readonly groupSessions?: string;
+  readonly filterTag?: string;
+  readonly tags?: string;
   readonly dryRun?: boolean;
   readonly scope?: string;
   readonly project?: string;

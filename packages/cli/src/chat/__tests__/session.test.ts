@@ -419,6 +419,8 @@ describe("chat session", () => {
         once: "prepare release notes",
         dryRun: true,
         session: "session-a",
+        project: "/repo",
+        tags: "release,smoke",
       },
       resolveWorkflow,
       runWorkflow,
@@ -427,6 +429,8 @@ describe("chat session", () => {
 
     expect(finalState.status).toBe("ready");
     expect(finalState.workflowLocator).toBe(locator);
+    expect(finalState.projectRoot).toBe("/repo");
+    expect(finalState.tags).toEqual(["release", "smoke"]);
     expect(runWorkflow).toHaveBeenCalledOnce();
     await expect(readFile(join(sessionStoreDir, "session-a.json"), "utf-8")).resolves.toContain(
       '"sessionId": "session-a"'

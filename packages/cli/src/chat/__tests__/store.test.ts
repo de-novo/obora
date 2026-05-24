@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { createInitialChatState } from "../state.js";
 import {
   findChatRunDetail,
+  groupChatSessionSummaries,
   listChatSessionSummaries,
   loadChatSessionState,
   saveChatSessionState,
@@ -48,6 +49,8 @@ describe("chat session store", () => {
       ...createInitialChatState({
         sessionId: "session-one",
         cwd,
+        projectRoot: join(cwd, "project-a"),
+        tags: ["release", "urgent"],
         dryRun: false,
         workflowTarget: "release-readiness",
       }),
@@ -57,6 +60,8 @@ describe("chat session store", () => {
       ...createInitialChatState({
         sessionId: "session-two",
         cwd,
+        projectRoot: join(cwd, "project-b"),
+        tags: ["support"],
         dryRun: true,
       }),
       status: "completed" as const,
@@ -79,8 +84,13 @@ describe("chat session store", () => {
     ]);
     expect(summaries.find((summary) => summary.sessionId === "session-one")).toMatchObject({
       messageCount: 1,
+      projectRoot: join(cwd, "project-a"),
+      tags: ["release", "urgent"],
       workflowTarget: "release-readiness",
     });
+    await expect(listChatSessionSummaries({ cwd, tag: "release" })).resolves.toEqual([
+      expect.objectContaining({ sessionId: "session-one", tags: ["release", "urgent"] }),
+    ]);
   });
 
   it("returns empty results for a missing session store", async () => {
@@ -134,5 +144,74 @@ describe("chat session store", () => {
     await expect(
       findChatRunDetail({ cwd, sessionId: "session-with-run", executionId: "missing" })
     ).resolves.toBeUndefined();
+  });
+
+  it("groups chat session summaries by project, tag, or day", () => {
+    const summaries = [
+      {
+        sessionId: "session-one",
+        status: "ready" as const,
+        cwd: "/repo",
+        projectRoot: "/repo/project-a",
+        tags: ["release", "urgent"],
+        messageCount: 2,
+        updatedAt: "2026-05-24T10:00:00.000Z",
+      },
+      {
+        sessionId: "session-two",
+        status: "completed" as const,
+        cwd: "/repo",
+        tags: [],
+        messageCount: 1,
+        updatedAt: "2026-05-25T10:00:00.000Z",
+      },
+    ];
+
+    expect(groupChatSessionSummaries(summaries, "project")).toEqual([
+      expect.objectContaining({
+        group: "/repo",
+        sessions: [expect.objectContaining({ sessionId: "session-two" })],
+      }),
+      expect.objectContaining({
+        group: "/repo/project-a",
+        sessions: [expect.objectContaining({ sessionId: "session-one" })],
+      }),
+    ]);
+    expect(groupChatSessionSummaries(summaries, "tag")).toEqual([
+      expect.objectContaining({
+        group: "release",
+        sessions: [expect.objectContaining({ sessionId: "session-one" })],
+      }),
+      expect.objectContaining({
+        group: "untagged",
+        sessions: [expect.objectContaining({ sessionId: "session-two" })],
+      }),
+      expect.objectContaining({
+        group: "urgent",
+        sessions: [expect.objectContaining({ sessionId: "session-one" })],
+      }),
+    ]);
+    expect(
+      groupChatSessionSummaries(
+        summaries.filter((summary) => summary.tags.includes("release")),
+        "tag",
+        "release"
+      )
+    ).toEqual([
+      expect.objectContaining({
+        group: "release",
+        sessions: [expect.objectContaining({ sessionId: "session-one" })],
+      }),
+    ]);
+    expect(groupChatSessionSummaries(summaries, "day")).toEqual([
+      expect.objectContaining({
+        group: "2026-05-24",
+        sessions: [expect.objectContaining({ sessionId: "session-one" })],
+      }),
+      expect.objectContaining({
+        group: "2026-05-25",
+        sessions: [expect.objectContaining({ sessionId: "session-two" })],
+      }),
+    ]);
   });
 });

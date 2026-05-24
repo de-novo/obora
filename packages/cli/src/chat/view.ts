@@ -158,11 +158,15 @@ const workflowLines = (state: ChatSessionState): ReadonlyArray<string> =>
         `${muted("name")} ${state.workflowLocator.name}`,
         `${muted("scope")} ${state.workflowLocator.scope}   ${muted("steps")} ${state.workflowLocator.stepCount}   ${muted("editable")} ${state.workflowLocator.editable ? "yes" : "no"}`,
         `${muted("path")} ${state.workflowLocator.displayPath}`,
+        `${muted("project")} ${compactPath(state.projectRoot ?? state.cwd, 72)}`,
+        `${muted("tags")} ${state.tags && state.tags.length > 0 ? state.tags.join(", ") : "none"}`,
       ]
     : [
         `${muted("target")} ${state.workflowTarget ?? "none"}`,
         `${muted("state")} select with /workflow <name-or-path>`,
         `${muted("scope")} project, global, or all`,
+        `${muted("project")} ${compactPath(state.projectRoot ?? state.cwd, 72)}`,
+        `${muted("tags")} ${state.tags && state.tags.length > 0 ? state.tags.join(", ") : "none"}`,
       ];
 
 const activityLines = (state: ChatSessionState): ReadonlyArray<string> => [

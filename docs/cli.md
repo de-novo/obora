@@ -618,6 +618,7 @@ obora chat [workflow] [--scope project|global|all] [--dry-run]
 obora chat [workflow] --once <message> --dry-run
 obora chat --workflow <workflow> --session <id>
 obora chat --list-sessions [--json]
+obora chat --list-sessions --group-sessions project|tag|day [--filter-tag <tag>] [--json]
 obora chat --show-session --session <id>
 obora chat --show-run <executionId> [--session <id>]
 ```
@@ -630,6 +631,8 @@ obora chat --show-run <executionId> [--session <id>]
 - `--global-workflows-dir <path>` global workflow directory override
 - `--session <id>` stable chat session id
 - `--list-sessions` list persisted chat sessions without starting the TUI
+- `--group-sessions <project|tag|day>` group listed sessions by project root, tag, or updated day
+- `--filter-tag <tag>` only list sessions with the given tag
 - `--show-session` print the persisted chat session selected by `--session`
 - `--show-run <executionId>` print a persisted workflow run summary; with `--session`, search only that session
 - `--once <message>` run one chat message and exit, useful for automation and smoke tests
@@ -640,12 +643,14 @@ obora chat --show-run <executionId> [--session <id>]
 - `--agents <path>` agents YAML path
 - `--policy <path>` policy YAML path
 - `--timeout <ms>` execution timeout in milliseconds
+- `--tags <tags>` comma-separated tags to store on the chat session, such as `release,frontend`
 - `--json` print the final chat session state after exit
 
 ### Behavior
 
 - Renders an `@earendil-works/pi-tui` differential terminal chat console with a Codex/Claude-style session card, conversation stream, workflow inspector, run/audit state, and bottom command bar.
 - Persists chat sessions under `.obora/chat/sessions/`; reusing `--session <id>` restores prior messages, selected workflow state, and run summaries.
+- New chat sessions store the resolved project root and optional comma-separated tags so session lists can be grouped by project, tag, or day.
 - Persisted run summaries expose step-level status, agent, model, output preview, tools, artifacts, decisions, and issues through `--show-run`.
 - The TUI shows `/details <executionId>` on workflow result messages; running it inside the same session prints the step-level run details back into chat.
 - A plain message runs the selected workflow with input shaped as `{ message, sessionId, workflow }`.
@@ -664,6 +669,8 @@ obora chat release-readiness --scope project
 obora chat release-readiness --scope project --dry-run --once "prepare release notes"
 obora chat --workflow ~/.obora/workflows/code-review.yaml --session review-session
 obora chat release-readiness --model openrouter/owl-alpha
+obora chat release-readiness --session release-qa --tags release,qa
+obora chat --list-sessions --group-sessions tag --filter-tag release --json
 ```
 
 ### Exit Codes

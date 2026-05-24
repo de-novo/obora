@@ -1,4 +1,5 @@
 import { createInterface } from "node:readline/promises";
+import { resolve } from "node:path";
 import type { Readable, Writable } from "node:stream";
 
 import { buildWorkflowRunSummary } from "@obora/sdk";
@@ -56,6 +57,14 @@ const detailsTargetFromCommand = (input: string): string | undefined =>
 
 const messageFromInput = (input: string): string =>
   input.startsWith("/run ") ? input.slice("/run ".length).trim() : input;
+
+const normalizeSessionTags = (tags: string | undefined): ReadonlyArray<string> =>
+  tags
+    ? tags
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter((tag) => tag.length > 0)
+    : [];
 
 const transientProviderPatterns = [
   "provider returned error",
@@ -375,6 +384,8 @@ const createSessionStartState = async ({
   readonly sessionStoreDir?: string;
 }): Promise<ChatSessionState> => {
   const sessionId = commandOptions.session ?? `chat-${Date.now()}`;
+  const projectRoot = resolve(commandOptions.project ?? cwd);
+  const tags = normalizeSessionTags(commandOptions.tags);
   const restored = commandOptions.session
     ? await loadChatSessionState({ cwd, sessionId, storeDir: sessionStoreDir })
     : undefined;
@@ -382,6 +393,8 @@ const createSessionStartState = async ({
     return {
       ...restored,
       cwd,
+      projectRoot,
+      tags: tags.length > 0 ? tags : restored.tags,
       dryRun: Boolean(commandOptions.dryRun),
       ...(commandOptions.provider ? { providerName: commandOptions.provider } : {}),
       ...(commandOptions.model ? { modelName: commandOptions.model } : {}),
@@ -391,6 +404,8 @@ const createSessionStartState = async ({
   return createInitialChatState({
     sessionId,
     cwd,
+    projectRoot,
+    tags,
     dryRun: Boolean(commandOptions.dryRun),
     providerName: commandOptions.provider,
     modelName: commandOptions.model,

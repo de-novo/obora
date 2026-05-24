@@ -44,6 +44,8 @@ export const visibleChatMessages = (
 export const createInitialChatState = ({
   sessionId,
   cwd,
+  projectRoot,
+  tags,
   dryRun,
   providerName,
   modelName,
@@ -51,6 +53,8 @@ export const createInitialChatState = ({
 }: {
   readonly sessionId: string;
   readonly cwd: string;
+  readonly projectRoot?: string;
+  readonly tags?: ReadonlyArray<string>;
   readonly dryRun: boolean;
   readonly providerName?: string;
   readonly modelName?: string;
@@ -58,6 +62,8 @@ export const createInitialChatState = ({
 }): ChatSessionState => ({
   sessionId,
   cwd,
+  ...(projectRoot ? { projectRoot } : {}),
+  ...(tags && tags.length > 0 ? { tags } : {}),
   dryRun,
   ...(providerName ? { providerName } : {}),
   ...(modelName ? { modelName } : {}),
