@@ -298,6 +298,40 @@ describe("renderChatView", () => {
     expect(plain).not.toContain("switch /session");
   });
 
+  it("renders legacy run details with missing optional step arrays", () => {
+    const legacySummary = JSON.parse(
+      JSON.stringify({
+        ...runSummary,
+        steps: [
+          {
+            name: "legacy",
+            status: "completed",
+            outputPreview: "legacy output",
+            startedAt: "2026-05-21T00:00:00.000Z",
+            endedAt: "2026-05-21T00:00:01.000Z",
+          },
+        ],
+      })
+    ) as WorkflowRunSummary;
+    const output = renderedText(
+      renderChatView(
+        {
+          ...createInitialChatState({
+            sessionId: "session-a",
+            cwd: "/repo",
+            dryRun: false,
+          }),
+          inspectedRunSummary: legacySummary,
+        },
+        { columns: 120 }
+      )
+    );
+    const plain = stripAnsi(output);
+
+    expect(plain).toContain("legacy output");
+    expect(plain).toContain("run details");
+  });
+
   it("prompts users to choose or run once when workflow choices exist", () => {
     const output = renderedText(
       renderChatView(

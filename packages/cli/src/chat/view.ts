@@ -121,17 +121,28 @@ const formatRunDuration = (summary: WorkflowRunSummary): string =>
 const formatStepNames = (summary: WorkflowRunSummary): string =>
   summary.steps.map((step) => step.name).join(", ");
 
+const stepValues = (values: ReadonlyArray<string> | undefined): ReadonlyArray<string> =>
+  values ?? [];
+
 const formatStepToolLine = (step: WorkflowRunStepSummary): string | undefined =>
-  step.toolsUsed.length > 0 ? `${muted("tools")} ${step.toolsUsed.join(", ")}` : undefined;
+  stepValues(step.toolsUsed).length > 0
+    ? `${muted("tools")} ${stepValues(step.toolsUsed).join(", ")}`
+    : undefined;
 
 const formatStepArtifactLine = (step: WorkflowRunStepSummary): string | undefined =>
-  step.artifacts.length > 0 ? `${muted("artifacts")} ${step.artifacts.join(", ")}` : undefined;
+  stepValues(step.artifacts).length > 0
+    ? `${muted("artifacts")} ${stepValues(step.artifacts).join(", ")}`
+    : undefined;
 
 const formatStepDecisionLine = (step: WorkflowRunStepSummary): string | undefined =>
-  step.decisions.length > 0 ? `${muted("why")} ${step.decisions.join("; ")}` : undefined;
+  stepValues(step.decisions).length > 0
+    ? `${muted("why")} ${stepValues(step.decisions).join("; ")}`
+    : undefined;
 
 const formatStepDependencyLine = (step: WorkflowRunStepSummary): string | undefined =>
-  step.dependencies.length > 0 ? `${muted("depends")} ${step.dependencies.join(", ")}` : undefined;
+  stepValues(step.dependencies).length > 0
+    ? `${muted("depends")} ${stepValues(step.dependencies).join(", ")}`
+    : undefined;
 
 const runSummaryTeaser = (summary: WorkflowRunSummary): ReadonlyArray<string> => [
   `${muted(">")} ${summary.completedStepCount}/${summary.totalStepCount} steps · ${formatRunDuration(summary)}`,
@@ -222,7 +233,9 @@ const runDetailStepLines = (
     formatStepDecisionLine(step),
     step.rationale ? `${muted("rationale")} ${step.rationale}` : undefined,
     formatStepDependencyLine(step),
-    step.issues.length > 0 ? `${muted("issues")} ${step.issues.join("; ")}` : undefined,
+    stepValues(step.issues).length > 0
+      ? `${muted("issues")} ${stepValues(step.issues).join("; ")}`
+      : undefined,
   ].filter((line): line is string => Boolean(line));
 
 const renderRunInspector = (

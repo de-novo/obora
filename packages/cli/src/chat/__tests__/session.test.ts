@@ -923,6 +923,52 @@ describe("chat session", () => {
     );
   });
 
+  it("preserves inspected run context when switching sessions", async () => {
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const loaded = createInitialChatState({
+      sessionId: "release-session",
+      cwd: "/repo/old",
+      projectRoot: "/repo/release",
+      dryRun: false,
+    });
+    const loadSession = vi.fn(async (_sessionId: string) => loaded);
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      inspectedRunSummary: runSummary,
+      runChoices: [
+        {
+          runSummary,
+          sessionId: "release-session",
+          messageId: "assistant:run",
+          source: "persisted",
+        },
+      ],
+    };
+
+    const switched = await handleChatInput({
+      input: "/session release-session",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+      loadSession,
+    });
+
+    expect(switched.state.sessionId).toBe("release-session");
+    expect(switched.state.inspectedRunSummary?.executionId).toBe("exec-chat-1");
+    expect(switched.state.runChoices?.[0]).toMatchObject({
+      sessionId: "release-session",
+      runSummary: { executionId: "exec-chat-1" },
+    });
+    expect(switched.state.messages.at(-1)?.content).toContain(
+      "Switched to session release-session."
+    );
+  });
+
   it("switches to a known chat session id without a numbered list", async () => {
     const loaded = createInitialChatState({
       sessionId: "known-session",

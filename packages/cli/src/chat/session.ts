@@ -405,6 +405,20 @@ const sessionIdFromTarget = (
       : { missingChoice: true };
 };
 
+const uniqueRunChoices = (
+  choices: ReadonlyArray<ChatRunChoice | undefined>
+): ReadonlyArray<ChatRunChoice> =>
+  choices
+    .filter((choice): choice is ChatRunChoice => Boolean(choice))
+    .filter(
+      (choice, index, all) =>
+        all.findIndex(
+          (candidate) =>
+            candidate.runSummary.executionId === choice.runSummary.executionId &&
+            candidate.sessionId === choice.sessionId
+        ) === index
+    );
+
 const normalizeLoadedSessionState = ({
   current,
   loaded,
@@ -418,6 +432,11 @@ const normalizeLoadedSessionState = ({
   cwd: current.cwd,
   projectRoot: loaded.projectRoot ?? current.cwd,
   dryRun: Boolean(commandOptions.dryRun),
+  inspectedRunSummary: current.inspectedRunSummary ?? loaded.inspectedRunSummary,
+  runChoices: uniqueRunChoices([
+    ...(current.runChoices ?? []),
+    ...(loaded.runChoices ?? []),
+  ]),
   ...(commandOptions.provider ? { providerName: commandOptions.provider } : {}),
   ...(commandOptions.model ? { modelName: commandOptions.model } : {}),
 });
