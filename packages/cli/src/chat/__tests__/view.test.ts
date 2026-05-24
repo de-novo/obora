@@ -124,6 +124,54 @@ describe("renderChatView", () => {
     expect(output).not.toContain("+---");
   });
 
+  it("renders numbered chat session choices as a picker panel", () => {
+    const output = renderedText(
+      renderChatView(
+        {
+          ...createInitialChatState({
+            sessionId: "session-a",
+            cwd: "/repo",
+            projectRoot: "/repo/project-a",
+            dryRun: true,
+          }),
+          sessionChoices: [
+            {
+              sessionId: "session-a",
+              status: "ready",
+              cwd: "/repo",
+              projectRoot: "/repo/project-a",
+              tags: ["release"],
+              workflowTarget: "release-readiness",
+              messageCount: 5,
+              updatedAt: "2026-05-24T10:11:12.000Z",
+            },
+            {
+              sessionId: "session-b",
+              status: "idle",
+              cwd: "/repo",
+              projectRoot: "/repo/project-b",
+              tags: [],
+              messageCount: 2,
+              updatedAt: "2026-05-23T10:11:12.000Z",
+            },
+          ],
+        },
+        { columns: 120 }
+      )
+    );
+    const plain = stripAnsi(output);
+
+    expect(plain).toContain("sessions");
+    expect(plain).toContain("/session 1");
+    expect(plain).toContain("/session rename 1 <id>");
+    expect(plain).toContain("/session delete 1");
+    expect(plain).toContain("● #1 session-a ready release-readiness");
+    expect(plain).toContain("○ #2 session-b idle no workflow");
+    expect(plain).toContain("project /repo/project-a");
+    expect(plain).toContain("tags release");
+    expect(plain).toContain("updated 2026-05-24 10:11");
+  });
+
   it("falls back to a stacked layout for narrow terminals", () => {
     const output = renderedText(
       renderChatView(

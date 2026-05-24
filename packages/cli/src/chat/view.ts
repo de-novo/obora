@@ -3,6 +3,7 @@ import type { WorkflowRunStepSummary, WorkflowRunSummary } from "@obora/sdk";
 
 import { visibleChatMessages } from "./state.js";
 import type { ChatMessage, ChatSessionState, ChatSessionStatus } from "./types.js";
+import type { ChatSessionSummary } from "./store.js";
 
 export interface ChatViewOptions {
   readonly rendererLabel?: string;
@@ -106,6 +107,9 @@ const formatWorkflow = (state: ChatSessionState): string =>
       : "no workflow selected";
 
 const formatTime = (createdAt: string): string => new Date(createdAt).toISOString().slice(11, 16);
+
+const formatUpdatedTime = (updatedAt: string): string =>
+  Number.isNaN(Date.parse(updatedAt)) ? updatedAt : updatedAt.replace("T", " ").slice(0, 16);
 
 const roleBadge = (role: ChatMessage["role"]): string =>
   role === "assistant" ? cyan("obora") : role === "user" ? violet("you") : muted("system");
@@ -212,6 +216,60 @@ const runResultLines = (state: ChatSessionState): ReadonlyArray<string> =>
 const renderMeta = (state: ChatSessionState, width: number): ReadonlyArray<string> =>
   card("workflow", [...workflowLines(state), "", ...activityLines(state), ...runResultLines(state)], width);
 
+const sessionTagText = (summary: ChatSessionSummary): string =>
+  summary.tags.length > 0 ? summary.tags.join(",") : "untagged";
+
+const sessionWorkflowText = (summary: ChatSessionSummary): string =>
+  summary.workflowTarget ?? "no workflow";
+
+const sessionProjectText = (summary: ChatSessionSummary, width: number): string =>
+  compactPath(summary.projectRoot ?? summary.cwd, width);
+
+const renderSessionChoiceLine = (
+  state: ChatSessionState,
+  summary: ChatSessionSummary,
+  index: number
+): string =>
+  [
+    summary.sessionId === state.sessionId ? green("●") : muted("○"),
+    cyan(`#${index + 1}`),
+    bold(summary.sessionId),
+    statusPill(summary.status),
+    muted(sessionWorkflowText(summary)),
+  ].join(" ");
+
+const renderSessionChoiceMeta = (
+  summary: ChatSessionSummary,
+  width: number
+): string =>
+  [
+    `${muted("project")} ${sessionProjectText(summary, Math.max(16, width - 28))}`,
+    `${muted("tags")} ${sessionTagText(summary)}`,
+    `${muted("messages")} ${summary.messageCount}`,
+    `${muted("updated")} ${formatUpdatedTime(summary.updatedAt)}`,
+  ].join("   ");
+
+const renderSessionPicker = (
+  state: ChatSessionState,
+  width: number
+): ReadonlyArray<string> =>
+  state.sessionChoices && state.sessionChoices.length > 0
+    ? [
+        "",
+        ...card(
+          "sessions",
+          [
+            `${muted("select")} /session 1   ${muted("rename")} /session rename 1 <id>   ${muted("delete")} /session delete 1`,
+            ...state.sessionChoices.slice(0, 8).flatMap((summary, index) => [
+              renderSessionChoiceLine(state, summary, index),
+              renderSessionChoiceMeta(summary, width - 4),
+            ]),
+          ],
+          width
+        ),
+      ]
+    : [];
+
 const renderMessage = (message: ChatMessage, width: number): ReadonlyArray<string> => [
   `${dim(formatTime(message.createdAt))} ${roleBadge(message.role)}`,
   ...wrapLine(message.content, width - 4).map((line) => `${muted("│")} ${line}`),
@@ -253,6 +311,7 @@ export const renderChatView = (
   return [
     ...renderHeader(state, width),
     ...renderHero(state, rendererLabel, cardWidth),
+    ...renderSessionPicker(state, cardWidth),
     "",
     ...renderTranscript(state, cardWidth),
     "",
