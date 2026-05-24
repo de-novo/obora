@@ -131,8 +131,8 @@ describe("renderChatView", () => {
     expect(plain).toContain("depends collect");
     expect(plain).toContain("steps 4");
     expect(plain).toContain("› release-readiness ready · type task or /run");
-    expect(plain).toContain("/run <task>  /runs  /details <runId>");
-    expect(plain).toContain("/details clear");
+    expect(plain).toContain("/run <task>  /runs  /workflows");
+    expect(plain).toContain("/session  /project  /tags  /help");
     expect(output).not.toContain("+---");
   });
 
@@ -227,8 +227,8 @@ describe("renderChatView", () => {
     expect(plain).toContain("about Release readiness");
     expect(plain).toContain("Review repository changes");
     expect(plain).toContain("› release-readiness ready · type task or /run");
-    expect(plain).toContain("/run <task>  /runs  /details <runId>");
-    expect(plain).toContain("/details clear");
+    expect(plain).toContain("/run <task>  /runs  /workflows");
+    expect(plain).toContain("/session  /project  /tags  /help");
   });
 
   it("renders numbered run choices as a history panel", () => {
@@ -304,6 +304,7 @@ describe("renderChatView", () => {
     const plain = stripAnsi(output);
 
     expect(plain).toContain("session current");
+    expect(plain).toContain("1  /details <runId>  /runs");
     expect(plain).toContain("/runs --tag <tag>");
     expect(plain).not.toContain("switch /session");
   });

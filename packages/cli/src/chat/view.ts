@@ -451,19 +451,25 @@ const promptLabel = (state: ChatSessionState): string =>
       ? "Choose /workflow 1 or run once with /run #1 <task>"
       : "Select /workflow <name> first";
 
-const promptPrimaryCommands = (state: ChatSessionState): string => {
-  if (state.inspectedRunSummary) return "/clear  /runs  /details <runId>  /workflows";
-  if (state.workflowLocator) return "/run <task>  /runs  /details <runId>  /details clear  /workflows";
+const promptCommandRows = (state: ChatSessionState): ReadonlyArray<string> => {
+  if (state.inspectedRunSummary) return ["/clear  /runs  /details <runId>", "/session  /project  /help"];
+  if (state.runChoices && state.runChoices.length > 0) {
+    return [
+      "1  /details <runId>  /runs",
+      "/runs --project  /runs --tag <tag>  /runs --status failed",
+    ];
+  }
+  if (state.workflowLocator) {
+    return ["/run <task>  /runs  /workflows", "/session  /project  /tags  /help"];
+  }
   return state.workflowChoices && state.workflowChoices.length > 0
-    ? "/workflow 1  /run #1 <task>  /workflows [scope]"
-    : "/workflows  /workflow <name-or-path>  /project [path]";
+    ? ["/workflow 1  /run #1 <task>  /workflows [scope]", "/project  /sessions  /help"]
+    : ["/workflows  /workflow <name-or-path>  /project [path]", "/sessions  /tags  /help"];
 };
 
 const renderPrompt = (state: ChatSessionState, width: number): ReadonlyArray<string> => {
   const prompt = `› ${promptLabel(state)}`;
-  const primaryCommands = promptPrimaryCommands(state);
-  const secondaryCommands =
-    "/runs --project  /runs --tag <tag>  /runs --status failed  /session  /project  /sessions  /tags  /help";
+  const commandRows = promptCommandRows(state);
   const footer = `${state.modelName ?? "default"}  ·  ${compactPath(state.cwd, Math.max(12, width - 28))}`;
   const contextFooter = state.inspectedRunSummary
     ? `viewing run ${state.inspectedRunSummary.executionId}  ·  /details ${state.inspectedRunSummary.executionId}`
@@ -471,8 +477,7 @@ const renderPrompt = (state: ChatSessionState, width: number): ReadonlyArray<str
   return [
     "",
     inputBg(fit(prompt, width)),
-    dim(fit(primaryCommands, width)),
-    dim(fit(secondaryCommands, width)),
+    ...commandRows.map((row) => dim(fit(row, width))),
     dim(fit(contextFooter, width)),
   ];
 };
