@@ -129,6 +129,9 @@ const formatStepArtifactLine = (step: WorkflowRunStepSummary): string | undefine
 const formatStepDecisionLine = (step: WorkflowRunStepSummary): string | undefined =>
   step.decisions.length > 0 ? `${muted("why")} ${step.decisions.join("; ")}` : undefined;
 
+const formatStepDependencyLine = (step: WorkflowRunStepSummary): string | undefined =>
+  step.dependencies.length > 0 ? `${muted("depends")} ${step.dependencies.join(", ")}` : undefined;
+
 const runSummaryTeaser = (summary: WorkflowRunSummary): ReadonlyArray<string> => [
   `${muted(">")} ${summary.completedStepCount}/${summary.totalStepCount} steps · ${formatRunDuration(summary)}`,
   `${muted(">")} ${formatStepNames(summary) || "no steps recorded"}`,
@@ -215,6 +218,49 @@ const runResultLines = (state: ChatSessionState): ReadonlyArray<string> =>
 
 const renderMeta = (state: ChatSessionState, width: number): ReadonlyArray<string> =>
   card("workflow", [...workflowLines(state), "", ...activityLines(state), ...runResultLines(state)], width);
+
+const runDetailHeaderLines = (summary: WorkflowRunSummary): ReadonlyArray<string> => [
+  `${muted("id")} ${summary.executionId}   ${muted("status")} ${summary.status}   ${muted("steps")} ${summary.completedStepCount}/${summary.totalStepCount}`,
+  `${muted("workflow")} ${summary.workflowName}   ${formatRunDuration(summary)}`,
+  `${muted("summary")} ${summary.message}`,
+  `${muted("open")} /details ${summary.executionId}`,
+  ...(summary.error ? [`${muted("error")} ${red(summary.error)}`] : []),
+];
+
+const runDetailStepLines = (
+  step: WorkflowRunStepSummary,
+  index: number
+): ReadonlyArray<string> =>
+  [
+    `${cyan(`#${index + 1}`)} ${bold(step.name)} ${step.status}${step.agent ? ` · ${step.agent}` : ""}${step.model ? ` · ${step.model}` : ""}`,
+    ...(step.task ? [`${muted("task")} ${step.task}`] : []),
+    `${muted("output")} ${step.outputPreview}`,
+    formatStepToolLine(step),
+    formatStepArtifactLine(step),
+    formatStepDecisionLine(step),
+    step.rationale ? `${muted("rationale")} ${step.rationale}` : undefined,
+    formatStepDependencyLine(step),
+    step.issues.length > 0 ? `${muted("issues")} ${step.issues.join("; ")}` : undefined,
+  ].filter((line): line is string => Boolean(line));
+
+const renderRunInspector = (
+  state: ChatSessionState,
+  width: number
+): ReadonlyArray<string> =>
+  state.lastRunSummary
+    ? [
+        "",
+        ...card(
+          "run details",
+          [
+            ...runDetailHeaderLines(state.lastRunSummary),
+            "",
+            ...state.lastRunSummary.steps.flatMap(runDetailStepLines),
+          ],
+          width
+        ),
+      ]
+    : [];
 
 const sessionTagText = (summary: ChatSessionSummary): string =>
   summary.tags.length > 0 ? summary.tags.join(",") : "untagged";
@@ -374,6 +420,7 @@ export const renderChatView = (
     ...renderWorkflowPicker(state, cardWidth),
     "",
     ...renderTranscript(state, cardWidth),
+    ...renderRunInspector(state, cardWidth),
     "",
     ...renderMeta(state, cardWidth),
     ...renderPrompt(state, width),
