@@ -156,6 +156,11 @@ const renderHeader = (state: ChatSessionState, width: number): ReadonlyArray<str
   "",
 ];
 
+const inspectedRunStatus = (state: ChatSessionState): string | undefined =>
+  state.inspectedRunSummary
+    ? `${muted("viewing run")} ${state.inspectedRunSummary.executionId}   ${muted("open")} /details ${state.inspectedRunSummary.executionId}`
+    : undefined;
+
 const renderHero = (
   state: ChatSessionState,
   rendererLabel: string,
@@ -167,7 +172,8 @@ const renderHero = (
       `${muted(">_")} ${bold("Workflow")} ${formatWorkflow(state)}`,
       `${muted("status")} ${statusPill(state.status)}   ${muted("mode")} ${state.dryRun ? yellow("dry-run") : green("live")}   ${muted("model")} ${state.modelName ?? "default"}`,
       `${muted("provider")} ${state.providerName ?? "default"}   ${muted("renderer")} ${rendererLabel}`,
-    ],
+      inspectedRunStatus(state),
+    ].filter((line): line is string => Boolean(line)),
     width
   );
 
@@ -448,12 +454,15 @@ const renderPrompt = (state: ChatSessionState, width: number): ReadonlyArray<str
   const secondaryCommands =
     "/session  /session 1  /session rename 1 <id>  /session delete 1  /project  /sessions  /tags  /help";
   const footer = `${state.modelName ?? "default"}  ·  ${compactPath(state.cwd, Math.max(12, width - 28))}`;
+  const contextFooter = state.inspectedRunSummary
+    ? `viewing run ${state.inspectedRunSummary.executionId}  ·  /details ${state.inspectedRunSummary.executionId}`
+    : footer;
   return [
     "",
     inputBg(fit(prompt, width)),
     dim(fit(primaryCommands, width)),
     dim(fit(secondaryCommands, width)),
-    dim(fit(footer, width)),
+    dim(fit(contextFooter, width)),
   ];
 };
 

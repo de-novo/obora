@@ -117,6 +117,7 @@ describe("renderChatView", () => {
     expect(plain).toContain("run details");
     expect(plain).toContain("id exec-chat-1");
     expect(plain).toContain("open /details exec-chat-1");
+    expect(plain).not.toContain("viewing run exec-chat-1");
     expect(plain).toContain("#1 collect completed · researcher · openrouter/owl-alpha");
     expect(plain).toContain("task Collect release notes");
     expect(plain).toContain("last result completed 2/2");
@@ -272,6 +273,7 @@ describe("renderChatView", () => {
     expect(plain).toContain("session history-session");
     expect(plain).toContain("switch /session history-session");
     expect(plain).toContain("open /details exec-chat-1");
+    expect(plain).toContain("viewing run exec-chat-1");
   });
 
   it("renders run choices without source sessions as current-session runs", () => {
@@ -392,6 +394,8 @@ describe("renderChatView", () => {
 
     expect(plain).toContain("id exec-inspected");
     expect(plain).toContain("workflow code-review");
+    expect(plain).toContain("viewing run exec-inspected");
+    expect(plain).toContain("viewing run exec-inspected  ·  /details exec-inspected");
     expect(plain).toContain("#1 review completed");
     expect(plain).toContain("artifacts review.md");
     expect(plain).not.toContain("id exec-chat-1");
