@@ -114,8 +114,8 @@ const chatCommandHelpEntries: ReadonlyArray<ChatCommandHelpEntry> = [
     group: "run",
   },
   {
-    command: "/details <executionId-or-number>",
-    description: "shows step results",
+    command: "/details [executionId-or-number]",
+    description: "shows latest or selected step results",
     group: "details",
   },
   {
@@ -181,7 +181,9 @@ export const chatPromptCommandRows = (state: ChatSessionState): ReadonlyArray<st
     return ["1  /session <id>  /session rename 1 <id>", "/session delete 1  /sessions  /clear"];
   }
   if (state.workflowLocator) {
-    return ["/run <task>  /runs  /workflows", "/session  /project  /tags  /help"];
+    return state.lastRunSummary
+      ? ["/details  /run <task>  /runs", "/workflows  /session  /project  /help"]
+      : ["/run <task>  /runs  /workflows", "/session  /project  /tags  /help"];
   }
   return state.workflowChoices && state.workflowChoices.length > 0
     ? ["1  /workflow <name>  /run #1 <task>", "/workflows [scope]  /project  /clear"]

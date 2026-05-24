@@ -370,6 +370,58 @@ describe("chat session", () => {
     });
   });
 
+  it("opens the latest run details with a short details command", async () => {
+    const runWorkflowWithResult = vi.fn(async () => executionResult);
+    const selected = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: false,
+      }),
+      workflowLocator: locator,
+      status: "ready" as const,
+    };
+    const ran = await handleChatInput({
+      input: "perform the release check",
+      state: selected,
+      resolveWorkflow,
+      runWorkflow: runWorkflowWithResult,
+      commandOptions: { provider: "openrouter", model: "openrouter/owl-alpha" },
+    });
+
+    const opened = await handleChatInput({
+      input: "/details",
+      state: ran.state,
+      resolveWorkflow,
+      runWorkflow: runWorkflowWithResult,
+      commandOptions: { provider: "openrouter", model: "openrouter/owl-alpha" },
+    });
+
+    expect(opened.state.inspectedRunSummary?.executionId).toBe("exec-chat-1");
+    expect(opened.state.messages.at(-1)?.content).toBe("Opened run details exec-chat-1.");
+  });
+
+  it("reports when no latest run exists for the short details command", async () => {
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd: "/repo",
+      dryRun: true,
+    });
+
+    const opened = await handleChatInput({
+      input: "/details",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(opened.state.inspectedRunSummary).toBeUndefined();
+    expect(opened.state.messages.at(-1)?.content).toContain(
+      "No run details are available yet."
+    );
+  });
+
   it("clears the inspected run details with a short command without deleting run history", async () => {
     const runWorkflowWithResult = vi.fn(async () => executionResult);
     const selected = {

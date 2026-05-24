@@ -1122,6 +1122,24 @@ export const handleChatInput = async ({
     };
   }
 
+  if (trimmed === "/details") {
+    return state.lastRunSummary
+      ? {
+          state: appendAssistant(
+            { ...state, inspectedRunSummary: state.lastRunSummary },
+            openedRunDetailsMessage(state.lastRunSummary, undefined, undefined)
+          ),
+          exit: false,
+        }
+      : {
+          state: appendAssistant(
+            state,
+            "No run details are available yet. Run a workflow first or use /runs to pick a persisted run."
+          ),
+          exit: false,
+        };
+  }
+
   const detailsExecutionId =
     detailsTargetFromCommand(trimmed) ?? runDetailShortcutTargetFromInput(trimmed, state);
   if (detailsExecutionId) {

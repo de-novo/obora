@@ -129,8 +129,8 @@ describe("renderChatView", () => {
     expect(plain).not.toContain("depends collect");
     expect(plain).toContain("steps 4");
     expect(plain).toContain("› release-readiness ready · type task or /run");
-    expect(plain).toContain("/run <task>  /runs  /workflows");
-    expect(plain).toContain("/session  /project  /tags  /help");
+    expect(plain).toContain("/details  /run <task>  /runs");
+    expect(plain).toContain("/workflows  /session  /project  /help");
     expect(output).not.toContain("+---");
   });
 
