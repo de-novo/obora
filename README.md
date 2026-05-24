@@ -140,6 +140,15 @@ Use this default rule unless you have a strong reason not to:
 - **provider/model defaults in project `.obora/config.yaml`**
 - **runtime `llm` overrides only for advanced or temporary cases**
 
+### Recommended execution input rule
+
+Use this authoring rule for reusable workflows:
+
+- **chat/run input is the source of truth for the requested task**
+- **workflow prompts define capability, policy, constraints, and reporting expectations**
+- **agents inspect the repository at execution time and choose files, directories, and change scope from local context**
+- **do not hard-code task-specific directories, file lists, or framework choices in reusable workflow prompts unless the workflow is intentionally specialized**
+
 ### Runnable example
 
 A ready-to-run contract-first example is here:

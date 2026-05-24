@@ -242,9 +242,43 @@ describe("chat session", () => {
     });
   });
 
+  it("retries transient provider failures before returning the chat run summary", async () => {
+    const flakyRunWorkflow = vi
+      .fn<typeof runWorkflow>()
+      .mockRejectedValueOnce(new Error("Provider returned error"))
+      .mockResolvedValueOnce(executionResult);
+    const selected = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: false,
+      }),
+      workflowLocator: locator,
+      status: "ready" as const,
+    };
+
+    const result = await handleChatInput({
+      input: "perform the release check",
+      state: selected,
+      resolveWorkflow,
+      runWorkflow: flakyRunWorkflow,
+      commandOptions: { provider: "openrouter", model: "openrouter/owl-alpha" },
+    });
+
+    expect(flakyRunWorkflow).toHaveBeenCalledTimes(2);
+    expect(result.state.status).toBe("ready");
+    expect(result.state.lastRunSummary).toMatchObject({
+      executionId: "exec-chat-1",
+      status: "completed",
+    });
+    expect(result.state.messages.at(-1)?.content).toContain(
+      "Workflow completed: 2/2 steps completed."
+    );
+  });
+
   it("keeps the chat session open when a workflow run fails", async () => {
     const failingRunWorkflow = vi.fn(async () => {
-      throw new Error("Provider returned error");
+      throw new Error("Permanent execution failure");
     });
     const selected = {
       ...createInitialChatState({
@@ -269,10 +303,10 @@ describe("chat session", () => {
     expect(failingRunWorkflow).toHaveBeenCalledOnce();
     expect(result.exit).toBe(false);
     expect(result.state.status).toBe("failed");
-    expect(result.state.lastError).toBe("Provider returned error");
+    expect(result.state.lastError).toBe("Permanent execution failure");
     expect(result.state.lastRunCommand).toBe("obora run .obora/workflows/release-readiness.yaml");
     expect(result.state.messages.at(-1)?.content).toContain(
-      "Workflow run failed: Provider returned error"
+      "Workflow run failed: Permanent execution failure"
     );
   });
 

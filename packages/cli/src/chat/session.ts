@@ -47,6 +47,20 @@ const workflowTargetFromCommand = (input: string): string | undefined =>
 const messageFromInput = (input: string): string =>
   input.startsWith("/run ") ? input.slice("/run ".length).trim() : input;
 
+const transientProviderPatterns = [
+  "provider returned error",
+  "rate limit",
+  "temporarily unavailable",
+  "timeout",
+  "timed out",
+  "overloaded",
+  "service unavailable",
+  "gateway",
+] as const;
+
+const maxChatRunAttempts = 3;
+const retryDelayMs = 750;
+
 const commandRunOptions = (options: ChatCommandOptions): Record<string, unknown> => ({
   dryRun: Boolean(options.dryRun),
   quiet: true,
@@ -77,6 +91,31 @@ const errorMessage = (error: unknown): string =>
     : typeof error === "string"
       ? error
       : "Unknown workflow run failure.";
+
+const isTransientProviderError = (error: unknown): boolean => {
+  const message = errorMessage(error).toLowerCase();
+  return transientProviderPatterns.some((pattern) => message.includes(pattern));
+};
+
+const delay = (ms: number): Promise<void> =>
+  new Promise((resolveDelay) => {
+    setTimeout(resolveDelay, ms);
+  });
+
+const runWorkflowWithRetry = async (
+  runWorkflow: typeof runRun,
+  workflowPath: string,
+  runOptions: Record<string, unknown>,
+  remainingAttempts = maxChatRunAttempts
+): ReturnType<typeof runRun> =>
+  runWorkflow(workflowPath, runOptions).catch((error: unknown): ReturnType<typeof runRun> => {
+    if (remainingAttempts <= 1 || !isTransientProviderError(error)) {
+      throw error;
+    }
+    return delay(retryDelayMs).then(() =>
+      runWorkflowWithRetry(runWorkflow, workflowPath, runOptions, remainingAttempts - 1)
+    );
+  });
 
 const formatRunSummaryMessage = (
   runSummary: WorkflowRunSummary | undefined,
@@ -178,7 +217,7 @@ export const handleChatInput = async ({
     input: runInput,
   };
 
-  return runWorkflow(state.workflowLocator.path, runOptions)
+  return runWorkflowWithRetry(runWorkflow, state.workflowLocator.path, runOptions)
     .then((execution): ChatTurnResult => {
       const runSummary = execution ? buildWorkflowRunSummary(execution) : undefined;
       return {
