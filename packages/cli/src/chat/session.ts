@@ -2,7 +2,12 @@ import { createInterface } from "node:readline/promises";
 import type { Readable, Writable } from "node:stream";
 
 import { buildWorkflowRunSummary } from "@obora/sdk";
-import type { WorkflowLocator, WorkflowResolveScope, WorkflowRunSummary } from "@obora/sdk";
+import type {
+  WorkflowLocator,
+  WorkflowResolveScope,
+  WorkflowRunStepSummary,
+  WorkflowRunSummary,
+} from "@obora/sdk";
 
 import { runRun } from "../commands/run.js";
 import { CLIError } from "../utils/cli-error.js";
@@ -39,12 +44,15 @@ interface ChatTurnResult {
 }
 
 const chatHelp =
-  "Commands: /workflow <name-or-path> selects a reusable workflow, /run <task> runs the current workflow, /exit quits.";
+  "Commands: /workflow <name-or-path> selects a reusable workflow, /run <task> runs the current workflow, /details <executionId> shows step results, /exit quits.";
 
 const isExitCommand = (input: string): boolean => input === "/exit" || input === "/quit";
 
 const workflowTargetFromCommand = (input: string): string | undefined =>
   input.startsWith("/workflow ") ? input.slice("/workflow ".length).trim() : undefined;
+
+const detailsTargetFromCommand = (input: string): string | undefined =>
+  input.startsWith("/details ") ? input.slice("/details ".length).trim() : undefined;
 
 const messageFromInput = (input: string): string =>
   input.startsWith("/run ") ? input.slice("/run ".length).trim() : input;
@@ -129,6 +137,42 @@ const formatRunSummaryMessage = (
       ? `${runSummary.message} > ${runSummary.steps.map((step) => step.name).join(", ")}`
       : "Workflow run completed for this chat task.";
 
+const formatOptionalList = (label: string, values: ReadonlyArray<string>): string | undefined =>
+  values.length > 0 ? `${label}: ${values.join(", ")}` : undefined;
+
+const formatDetailsStep = (step: WorkflowRunStepSummary): ReadonlyArray<string> =>
+  [
+    `- ${step.name}: ${step.status}${step.agent ? ` · ${step.agent}` : ""}${step.model ? ` · ${step.model}` : ""}`,
+    `  output: ${step.outputPreview}`,
+    formatOptionalList("  tools", step.toolsUsed),
+    formatOptionalList("  artifacts", step.artifacts),
+    formatOptionalList("  decisions", step.decisions),
+    step.rationale ? `  rationale: ${step.rationale}` : undefined,
+    formatOptionalList("  issues", step.issues),
+    formatOptionalList("  dependencies", step.dependencies),
+  ].filter((line): line is string => Boolean(line));
+
+const formatRunDetailsMessage = (summary: WorkflowRunSummary): string =>
+  [
+    `Run details ${summary.executionId}`,
+    `${summary.message} (${summary.status})`,
+    `Workflow: ${summary.workflowName}`,
+    `Steps: ${summary.completedStepCount}/${summary.totalStepCount}`,
+    ...(summary.durationMs === undefined ? [] : [`Duration: ${summary.durationMs}ms`]),
+    ...(summary.error ? [`Error: ${summary.error}`] : []),
+    ...summary.steps.flatMap(formatDetailsStep),
+  ].join("\n");
+
+const findRunSummaryInState = (
+  state: ChatSessionState,
+  executionId: string
+): WorkflowRunSummary | undefined =>
+  state.messages
+    .flatMap((message) =>
+      message.runSummary?.executionId === executionId ? [message.runSummary] : []
+    )
+    .at(0);
+
 const withResolvedWorkflow = (
   state: ChatSessionState,
   workflowTarget: string,
@@ -192,6 +236,20 @@ export const handleChatInput = async ({
       state: appendAssistant(
         withResolvedWorkflow(resolvingState, workflowTarget, locator),
         `Selected workflow ${locator.name} (${locator.scope}).`
+      ),
+      exit: false,
+    };
+  }
+
+  const detailsExecutionId = detailsTargetFromCommand(trimmed);
+  if (detailsExecutionId) {
+    const summary = findRunSummaryInState(state, detailsExecutionId);
+    return {
+      state: appendAssistant(
+        state,
+        summary
+          ? formatRunDetailsMessage(summary)
+          : `Run details not found: ${detailsExecutionId}`
       ),
       exit: false,
     };

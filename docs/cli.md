@@ -647,10 +647,12 @@ obora chat --show-run <executionId> [--session <id>]
 - Renders an `@earendil-works/pi-tui` differential terminal chat console with a Codex/Claude-style session card, conversation stream, workflow inspector, run/audit state, and bottom command bar.
 - Persists chat sessions under `.obora/chat/sessions/`; reusing `--session <id>` restores prior messages, selected workflow state, and run summaries.
 - Persisted run summaries expose step-level status, agent, model, output preview, tools, artifacts, decisions, and issues through `--show-run`.
+- The TUI shows `/details <executionId>` on workflow result messages; running it inside the same session prints the step-level run details back into chat.
 - A plain message runs the selected workflow with input shaped as `{ message, sessionId, workflow }`.
 - Chat messages follow Obora's execution input principle: the injected message is the operator request, while the workflow defines capability, policy, constraints, and reporting expectations.
 - `/workflow <name-or-path>` switches the selected workflow inside the same session.
 - `/run <task>` runs the current workflow with an explicit task message.
+- `/details <executionId>` shows the recorded step outputs, tools, artifacts, decisions, and issues for a prior workflow result in the current session.
 - `/help` prints available chat commands.
 - `/exit` or `/quit` closes the chat session.
 - Non-TTY automation must use `--once <message>`.

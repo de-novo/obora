@@ -104,6 +104,7 @@ describe("renderChatView", () => {
     expect(plain).toContain("workflow");
     expect(plain).toContain("openrouter/owl-alpha");
     expect(plain).toContain("Workflow completed: 2/2 steps completed.");
+    expect(plain).toContain("details /details exec-chat-1");
     expect(plain).toContain("last result completed 2/2");
     expect(plain).toContain("collect completed");
     expect(plain).toContain("file_read, file_write");
@@ -127,6 +128,7 @@ describe("renderChatView", () => {
     const plain = stripAnsi(output);
     expect(plain).toContain("session");
     expect(plain).toContain("› Select /workflow <name> first");
+    expect(plain).toContain("/details <runId>");
     expect(plain).toContain("plain text fallback");
     expect(plain.split("\n").every((line) => line.length <= 80)).toBe(true);
   });

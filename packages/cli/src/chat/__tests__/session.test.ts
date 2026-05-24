@@ -245,6 +245,59 @@ describe("chat session", () => {
     });
   });
 
+  it("shows step-level run details from the current chat session", async () => {
+    const runWorkflowWithResult = vi.fn(async () => executionResult);
+    const selected = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: false,
+      }),
+      workflowLocator: locator,
+      status: "ready" as const,
+    };
+    const ran = await handleChatInput({
+      input: "perform the release check",
+      state: selected,
+      resolveWorkflow,
+      runWorkflow: runWorkflowWithResult,
+      commandOptions: { provider: "openrouter", model: "openrouter/owl-alpha" },
+    });
+
+    const result = await handleChatInput({
+      input: "/details exec-chat-1",
+      state: ran.state,
+      resolveWorkflow,
+      runWorkflow: runWorkflowWithResult,
+      commandOptions: { provider: "openrouter", model: "openrouter/owl-alpha" },
+    });
+
+    const content = result.state.messages.at(-1)?.content;
+    expect(runWorkflowWithResult).toHaveBeenCalledOnce();
+    expect(content).toContain("Run details exec-chat-1");
+    expect(content).toContain("collect: completed");
+    expect(content).toContain("openrouter/owl-alpha");
+    expect(content).toContain("tools: file_read");
+    expect(content).toContain("artifacts: release-notes.md");
+    expect(content).toContain("decisions: Use release notes");
+  });
+
+  it("reports missing run details without requiring a workflow selection", async () => {
+    vi.clearAllMocks();
+    const state = createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true });
+
+    const result = await handleChatInput({
+      input: "/details missing-run",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(runWorkflow).not.toHaveBeenCalled();
+    expect(result.state.messages.at(-1)?.content).toContain("Run details not found: missing-run");
+  });
+
   it("retries transient provider failures before returning the chat run summary", async () => {
     const flakyRunWorkflow = vi
       .fn<typeof runWorkflow>()
