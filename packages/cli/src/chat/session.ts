@@ -270,6 +270,25 @@ const formatNumberedWorkflowLocatorLine = (
   index: number
 ): string => `${index + 1}. ${formatWorkflowLocatorLine(locator).slice(2)}`;
 
+const formatCurrentWorkflow = (state: ChatSessionState): string =>
+  state.workflowLocator
+    ? `Current workflow: ${state.workflowLocator.name} (${state.workflowLocator.scope})`
+    : state.workflowTarget
+      ? `Current workflow: ${state.workflowTarget} (unresolved)`
+      : "No workflow selected.";
+
+const formatWorkflowStatusMessage = (state: ChatSessionState): string =>
+  [
+    formatCurrentWorkflow(state),
+    ...(state.workflowChoices && state.workflowChoices.length > 0
+      ? [
+          "Recent workflow choices:",
+          ...state.workflowChoices.slice(0, 8).map(formatNumberedWorkflowLocatorLine),
+          "Use /workflow 1 to select, or /run #1 <task> to run once.",
+        ]
+      : ["Run /workflows first to list reusable workflows."]),
+  ].join("\n");
+
 const formatWorkflowListMessage = (
   locators: ReadonlyArray<WorkflowLocator>,
   scope: WorkflowResolveScope | undefined
@@ -413,6 +432,23 @@ export const handleChatInput = async ({
 
   if (trimmed === "/help") {
     return { state: appendAssistant(state, chatHelp), exit: false };
+  }
+
+  if (trimmed === "/workflow") {
+    return {
+      state: appendAssistant(state, formatWorkflowStatusMessage(state)),
+      exit: false,
+    };
+  }
+
+  if (trimmed === "/run") {
+    return {
+      state: appendAssistant(
+        state,
+        "Usage: /run <task>. You can also use /run #1 <task> after /workflows, or /run --workflow <name-or-path> <task>."
+      ),
+      exit: false,
+    };
   }
 
   if (trimmed === "/sessions" || trimmed.startsWith("/sessions ")) {

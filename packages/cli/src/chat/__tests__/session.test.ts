@@ -545,6 +545,81 @@ describe("chat session", () => {
     expect(result.state.lastRunCommand).toBe("obora run .obora/workflows/code-review.yaml");
   });
 
+  it("shows the current workflow and numbered choices when /workflow has no argument", async () => {
+    vi.clearAllMocks();
+    const listed = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      workflowTarget: "release-readiness",
+      workflowLocator: locator,
+      workflowChoices: [locator, codeReviewLocator],
+    };
+
+    const result = await handleChatInput({
+      input: "/workflow",
+      state: listed,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(resolveWorkflow).not.toHaveBeenCalled();
+    expect(runWorkflow).not.toHaveBeenCalled();
+    expect(result.state.messages.at(-1)?.content).toContain(
+      "Current workflow: release-readiness (project)"
+    );
+    expect(result.state.messages.at(-1)?.content).toContain("1. release-readiness");
+    expect(result.state.messages.at(-1)?.content).toContain("2. code-review");
+  });
+
+  it("guides users to list workflows when /workflow has no choices", async () => {
+    vi.clearAllMocks();
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd: "/repo",
+      dryRun: true,
+    });
+
+    const result = await handleChatInput({
+      input: "/workflow",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(resolveWorkflow).not.toHaveBeenCalled();
+    expect(result.state.messages.at(-1)?.content).toContain("No workflow selected.");
+    expect(result.state.messages.at(-1)?.content).toContain("Run /workflows first");
+  });
+
+  it("does not run empty /run commands", async () => {
+    vi.clearAllMocks();
+    const selected = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      workflowLocator: locator,
+      status: "ready" as const,
+    };
+
+    const result = await handleChatInput({
+      input: "/run",
+      state: selected,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(runWorkflow).not.toHaveBeenCalled();
+    expect(result.state.messages.at(-1)?.content).toContain("Usage: /run <task>");
+  });
+
   it("reports missing numbered workflow choices clearly", async () => {
     vi.clearAllMocks();
     const state = createInitialChatState({
