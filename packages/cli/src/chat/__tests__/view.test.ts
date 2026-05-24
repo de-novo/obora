@@ -121,6 +121,8 @@ describe("renderChatView", () => {
     expect(plain).toContain("file_read, file_write");
     expect(plain).toContain("release-notes.md");
     expect(plain).toContain("steps 4");
+    expect(plain).toContain("› release-readiness ready · type task or /run");
+    expect(plain).toContain("/run <task>  /details <runId>");
     expect(output).not.toContain("+---");
   });
 
@@ -214,6 +216,28 @@ describe("renderChatView", () => {
     expect(plain).toContain("editable no");
     expect(plain).toContain("about Release readiness");
     expect(plain).toContain("Review repository changes");
+    expect(plain).toContain("› release-readiness ready · type task or /run");
+    expect(plain).toContain("/run <task>  /details <runId>");
+  });
+
+  it("prompts users to choose or run once when workflow choices exist", () => {
+    const output = renderedText(
+      renderChatView(
+        {
+          ...createInitialChatState({
+            sessionId: "session-a",
+            cwd: "/repo",
+            dryRun: true,
+          }),
+          workflowChoices: [locator],
+        },
+        { columns: 120 }
+      )
+    );
+    const plain = stripAnsi(output);
+
+    expect(plain).toContain("› Choose /workflow 1 or run once with /run #1 <task>");
+    expect(plain).toContain("/workflow 1  /run #1 <task>  /workflows [scope]");
   });
 
   it("falls back to a stacked layout for narrow terminals", () => {
@@ -232,9 +256,8 @@ describe("renderChatView", () => {
     expect(plain).toContain("session");
     expect(plain).toContain("› Select /workflow <name> first");
     expect(plain).toContain("/workflows");
-    expect(plain).toContain("/workflow 1");
-    expect(plain).toContain("/run #1 <task>");
-    expect(plain).toContain("/details <runId>");
+    expect(plain).toContain("/workflow <name-or-path>");
+    expect(plain).toContain("/project [path]");
     expect(plain).toContain("plain text fallback");
     expect(plain.split("\n").every((line) => line.length <= 80)).toBe(true);
   });

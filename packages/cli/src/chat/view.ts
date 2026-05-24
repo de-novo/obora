@@ -330,9 +330,23 @@ const renderTranscript = (state: ChatSessionState, width: number): ReadonlyArray
   ...visibleChatMessages(state, 8).flatMap((message) => ["", ...renderMessage(message, width)]),
 ];
 
+const promptLabel = (state: ChatSessionState): string =>
+  state.workflowLocator
+    ? `${state.workflowLocator.name} ready · type task or /run`
+    : state.workflowChoices && state.workflowChoices.length > 0
+      ? "Choose /workflow 1 or run once with /run #1 <task>"
+      : "Select /workflow <name> first";
+
+const promptPrimaryCommands = (state: ChatSessionState): string =>
+  state.workflowLocator
+    ? "/run <task>  /details <runId>  /workflows  /workflow 1"
+    : state.workflowChoices && state.workflowChoices.length > 0
+      ? "/workflow 1  /run #1 <task>  /workflows [scope]"
+      : "/workflows  /workflow <name-or-path>  /project [path]";
+
 const renderPrompt = (state: ChatSessionState, width: number): ReadonlyArray<string> => {
-  const prompt = `› ${state.workflowLocator ? "Type a task for this workflow" : "Select /workflow <name> first"}`;
-  const primaryCommands = "/run <task>  /workflows  /workflow 1  /run #1 <task>  /details <runId>";
+  const prompt = `› ${promptLabel(state)}`;
+  const primaryCommands = promptPrimaryCommands(state);
   const secondaryCommands =
     "/session  /session 1  /session rename 1 <id>  /session delete 1  /project  /sessions  /tags  /help";
   const footer = `${state.modelName ?? "default"}  ·  ${compactPath(state.cwd, Math.max(12, width - 28))}`;
