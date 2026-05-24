@@ -318,7 +318,7 @@ describe("chat session", () => {
       executionId: "exec-chat-1",
       message: "Workflow completed: 2/2 steps completed.",
     });
-    expect(result.state.inspectedRunSummary?.executionId).toBe("exec-chat-1");
+    expect(result.state.inspectedRunSummary).toBeUndefined();
     expect(lastMessage?.content).toContain("Workflow completed: 2/2 steps completed.");
     expect(lastMessage?.runSummary?.steps[0]).toMatchObject({
       name: "collect",

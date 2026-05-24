@@ -217,7 +217,7 @@ const renderMeta = (state: ChatSessionState, width: number): ReadonlyArray<strin
   card("workflow", [...workflowLines(state), "", ...activityLines(state)], width);
 
 const inspectedRunSummary = (state: ChatSessionState): WorkflowRunSummary | undefined =>
-  state.inspectedRunSummary ?? state.lastRunSummary;
+  state.inspectedRunSummary;
 
 const runDetailHeaderLines = (summary: WorkflowRunSummary): ReadonlyArray<string> => [
   `${muted("id")} ${summary.executionId}   ${muted("status")} ${summary.status}   ${muted("steps")} ${summary.completedStepCount}/${summary.totalStepCount}`,

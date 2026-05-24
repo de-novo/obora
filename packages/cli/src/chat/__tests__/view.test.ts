@@ -114,21 +114,19 @@ describe("renderChatView", () => {
     expect(plain).toContain("openrouter/owl-alpha");
     expect(plain).toContain("Workflow completed: 2/2 steps completed.");
     expect(plain).toContain("details /details exec-chat-1");
-    expect(plain).toContain("run details");
-    expect(plain).toContain("id exec-chat-1");
-    expect(plain).toContain("open /details exec-chat-1");
+    expect(plain).not.toContain("run details");
+    expect(plain).not.toContain("id exec-chat-1");
+    expect(plain).not.toContain("open /details exec-chat-1");
     expect(plain).not.toContain("viewing run exec-chat-1");
-    expect(plain).toContain("#1 collect completed · researcher · openrouter/owl-alpha");
-    expect(plain).toContain("task Collect release notes");
     expect(plain).toContain("last result completed 2/2");
     expect(plain).toContain("#1 release-readiness");
     expect(plain).toContain("#2 code-review");
-    expect(plain).toContain("collect completed");
-    expect(plain).toContain("file_read, file_write");
-    expect(plain).toContain("release-notes.md");
-    expect(plain).toContain("why Use release notes");
-    expect(plain).toContain("rationale The notes are the requested artifact.");
-    expect(plain).toContain("depends collect");
+    expect(plain).toContain("collect, handoff");
+    expect(plain).not.toContain("file_read, file_write");
+    expect(plain).not.toContain("release-notes.md");
+    expect(plain).not.toContain("why Use release notes");
+    expect(plain).not.toContain("rationale The notes are the requested artifact.");
+    expect(plain).not.toContain("depends collect");
     expect(plain).toContain("steps 4");
     expect(plain).toContain("› release-readiness ready · type task or /run");
     expect(plain).toContain("/run <task>  /runs  /workflows");
@@ -526,6 +524,7 @@ describe("renderChatView", () => {
           status: "failed",
           workflowLocator: locator,
           lastRunSummary: failedSummary,
+          inspectedRunSummary: failedSummary,
           lastError: "Provider returned error",
         },
         { columns: 120 }

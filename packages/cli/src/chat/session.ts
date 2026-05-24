@@ -736,9 +736,7 @@ const runChatTask = ({
           {
             ...setChatStatus(runningState, "ready"),
             lastRunCommand,
-            ...(runSummary
-              ? { lastRunSummary: runSummary, inspectedRunSummary: runSummary }
-              : {}),
+            ...(runSummary ? { lastRunSummary: runSummary } : {}),
           },
           formatRunSummaryMessage(runSummary, commandOptions.dryRun),
           runSummary
