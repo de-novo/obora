@@ -29,6 +29,7 @@ import { ChatTuiController } from "./tui.js";
 import type { ChatCommandOptions, ChatSessionState } from "./types.js";
 import {
   createChatRunInput,
+  listChatWorkflowLocators,
   parseChatTimeout,
   parseChatWorkflowScope,
   resolveChatWorkflow,
@@ -50,7 +51,7 @@ interface ChatTurnResult {
 }
 
 const chatHelp =
-  "Commands: /workflow <name-or-path> selects a reusable workflow, /run <task> runs the current workflow, /details <executionId> shows step results, /sessions [tag] lists recent sessions, /tags [a,b] shows or updates session tags, /exit quits.";
+  "Commands: /workflow <name-or-path> selects a reusable workflow, /workflows [scope] lists reusable workflows, /run <task> runs the current workflow, /details <executionId> shows step results, /sessions [tag] lists recent sessions, /tags [a,b] shows or updates session tags, /exit quits.";
 
 const isExitCommand = (input: string): boolean => input === "/exit" || input === "/quit";
 
@@ -65,6 +66,9 @@ const tagsTargetFromCommand = (input: string): string | undefined =>
 
 const sessionsTagFromCommand = (input: string): string | undefined =>
   input.startsWith("/sessions ") ? input.slice("/sessions ".length).trim() : undefined;
+
+const workflowsScopeFromCommand = (input: string): string | undefined =>
+  input.startsWith("/workflows ") ? input.slice("/workflows ".length).trim() : undefined;
 
 const messageFromInput = (input: string): string =>
   input.startsWith("/run ") ? input.slice("/run ".length).trim() : input;
@@ -226,6 +230,28 @@ const formatSessionListMessage = (
       )
     : `No chat sessions found${tag ? ` tagged ${tag}` : ""}.`;
 
+const formatWorkflowLocatorLine = (locator: WorkflowLocator): string =>
+  [
+    `- ${locator.name}`,
+    locator.scope,
+    `${locator.stepCount} steps`,
+    locator.displayPath,
+    locator.description ?? undefined,
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join(" · ");
+
+const formatWorkflowListMessage = (
+  locators: ReadonlyArray<WorkflowLocator>,
+  scope: WorkflowResolveScope | undefined
+): string =>
+  locators.length > 0
+    ? [
+        `Reusable workflows${scope ? ` (${scope})` : ""}:`,
+        ...locators.slice(0, 8).map(formatWorkflowLocatorLine),
+      ].join("\n")
+    : `No reusable workflows found${scope ? ` for ${scope}` : ""}.`;
+
 const withResolvedWorkflow = (
   state: ChatSessionState,
   workflowTarget: string,
@@ -258,6 +284,7 @@ export const handleChatInput = async ({
   runWorkflow,
   commandOptions,
   listSessions,
+  listWorkflowLocators,
 }: {
   readonly input: string;
   readonly state: ChatSessionState;
@@ -265,6 +292,9 @@ export const handleChatInput = async ({
   readonly runWorkflow: typeof runRun;
   readonly commandOptions: ChatCommandOptions;
   readonly listSessions?: (tag?: string) => Promise<ReadonlyArray<ChatSessionSummary>>;
+  readonly listWorkflowLocators?: (
+    scope?: WorkflowResolveScope
+  ) => Promise<ReadonlyArray<WorkflowLocator>>;
 }): Promise<ChatTurnResult> => {
   const trimmed = input.trim();
 
@@ -290,6 +320,22 @@ export const handleChatInput = async ({
       : listChatSessionSummaries({ cwd: state.cwd, ...(tag ? { tag } : {}) }));
     return {
       state: appendAssistant(state, formatSessionListMessage(summaries, tag)),
+      exit: false,
+    };
+  }
+
+  if (trimmed === "/workflows" || trimmed.startsWith("/workflows ")) {
+    const scope = parseChatWorkflowScope(workflowsScopeFromCommand(trimmed) ?? commandOptions.scope);
+    const locators = await (listWorkflowLocators
+      ? listWorkflowLocators(scope)
+      : listChatWorkflowLocators({
+          cwd: state.cwd,
+          scope,
+          projectRoot: commandOptions.project,
+          globalWorkflowDir: commandOptions.globalWorkflowsDir,
+        }));
+    return {
+      state: appendAssistant(state, formatWorkflowListMessage(locators, scope)),
       exit: false,
     };
   }
@@ -401,6 +447,7 @@ const promptLoop = async ({
   runWorkflow,
   commandOptions,
   listSessions,
+  listWorkflowLocators,
   persist,
 }: {
   readonly reader: { question: (query: string) => Promise<string> };
@@ -410,6 +457,9 @@ const promptLoop = async ({
   readonly runWorkflow: typeof runRun;
   readonly commandOptions: ChatCommandOptions;
   readonly listSessions: (tag?: string) => Promise<ReadonlyArray<ChatSessionSummary>>;
+  readonly listWorkflowLocators: (
+    scope?: WorkflowResolveScope
+  ) => Promise<ReadonlyArray<WorkflowLocator>>;
   readonly persist: (state: ChatSessionState) => Promise<void>;
 }): Promise<ChatSessionState> => {
   const input = await reader.question("> ");
@@ -420,6 +470,7 @@ const promptLoop = async ({
     runWorkflow,
     commandOptions,
     listSessions,
+    listWorkflowLocators,
   });
   tui.update(result.state);
   await persist(result.state);
@@ -433,6 +484,7 @@ const promptLoop = async ({
         runWorkflow,
         commandOptions,
         listSessions,
+        listWorkflowLocators,
         persist,
       });
 };
@@ -511,6 +563,15 @@ export const runChatSession = async (
       ...(tag ? { tag } : {}),
       ...(options.sessionStoreDir ? { storeDir: options.sessionStoreDir } : {}),
     });
+  const listWorkflowLocators = (
+    scopeOverride?: WorkflowResolveScope
+  ): Promise<ReadonlyArray<WorkflowLocator>> =>
+    listChatWorkflowLocators({
+      cwd: options.cwd,
+      scope: scopeOverride ?? scope,
+      projectRoot: options.commandOptions.project,
+      globalWorkflowDir: options.commandOptions.globalWorkflowsDir,
+    });
   const initialState = await createSessionStartState({
     cwd: options.cwd,
     commandOptions: options.commandOptions,
@@ -534,6 +595,7 @@ export const runChatSession = async (
       runWorkflow,
       commandOptions: options.commandOptions,
       listSessions,
+      listWorkflowLocators,
     });
     tui.update(result.state);
     await saveSession(options.cwd, result.state, options.sessionStoreDir);
@@ -561,6 +623,7 @@ export const runChatSession = async (
     runWorkflow,
     commandOptions: options.commandOptions,
     listSessions,
+    listWorkflowLocators,
     persist: (state) => saveSession(options.cwd, state, options.sessionStoreDir),
   })
     .then((state) => saveSession(options.cwd, state, options.sessionStoreDir).then(() => state))

@@ -373,6 +373,105 @@ describe("chat session", () => {
     expect(result.state.messages.at(-1)?.content).toContain("release-readiness");
   });
 
+  it("lists reusable workflows from inside chat and supports scope filtering", async () => {
+    const listWorkflowLocators = vi.fn(async (_scope?: "project" | "global" | "all") => [
+      locator,
+      {
+        ...locator,
+        id: "global:review",
+        scope: "global" as const,
+        name: "code-review",
+        displayPath: "~/.obora/workflows/code-review.yaml",
+        description: "Review repository changes",
+        stepCount: 2,
+      },
+    ]);
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd: "/repo",
+      dryRun: true,
+    });
+
+    const result = await handleChatInput({
+      input: "/workflows global",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+      listWorkflowLocators,
+    });
+
+    expect(runWorkflow).not.toHaveBeenCalled();
+    expect(listWorkflowLocators).toHaveBeenCalledWith("global");
+    expect(result.state.messages.at(-1)?.content).toContain("Reusable workflows (global):");
+    expect(result.state.messages.at(-1)?.content).toContain("code-review");
+    expect(result.state.messages.at(-1)?.content).toContain("Review repository changes");
+  });
+
+  it("reports when no reusable workflows are available inside chat", async () => {
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd: "/repo",
+      dryRun: true,
+    });
+
+    const result = await handleChatInput({
+      input: "/workflows project",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+      listWorkflowLocators: vi.fn(async () => []),
+    });
+
+    expect(result.state.messages.at(-1)?.content).toContain(
+      "No reusable workflows found for project."
+    );
+  });
+
+  it("lists reusable workflows with the current chat scope when no scope is provided", async () => {
+    const listWorkflowLocators = vi.fn(async (_scope?: "project" | "global" | "all") => [
+      locator,
+    ]);
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd: "/repo",
+      dryRun: true,
+    });
+
+    const result = await handleChatInput({
+      input: "/workflows",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true, scope: "project" },
+      listWorkflowLocators,
+    });
+
+    expect(listWorkflowLocators).toHaveBeenCalledWith("project");
+    expect(result.state.messages.at(-1)?.content).toContain("Reusable workflows (project):");
+    expect(result.state.messages.at(-1)?.content).toContain("release-readiness");
+  });
+
+  it("reports empty workflow lists without a scope label", async () => {
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd: "/repo",
+      dryRun: true,
+    });
+
+    const result = await handleChatInput({
+      input: "/workflows",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+      listWorkflowLocators: vi.fn(async () => []),
+    });
+
+    expect(result.state.messages.at(-1)?.content).toContain("No reusable workflows found.");
+  });
+
   it("reports when no chat sessions are available inside chat", async () => {
     const state = createInitialChatState({
       sessionId: "session-a",

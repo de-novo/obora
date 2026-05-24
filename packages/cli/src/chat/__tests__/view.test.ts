@@ -128,8 +128,8 @@ describe("renderChatView", () => {
     const plain = stripAnsi(output);
     expect(plain).toContain("session");
     expect(plain).toContain("› Select /workflow <name> first");
+    expect(plain).toContain("/workflows");
     expect(plain).toContain("/details <runId>");
-    expect(plain).toContain("/sessions");
     expect(plain).toContain("plain text fallback");
     expect(plain.split("\n").every((line) => line.length <= 80)).toBe(true);
   });

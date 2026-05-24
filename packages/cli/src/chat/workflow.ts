@@ -1,4 +1,9 @@
-import { resolveWorkflowTarget, type WorkflowLocator, type WorkflowResolveScope } from "@obora/sdk";
+import {
+  discoverWorkflowLocators,
+  resolveWorkflowTarget,
+  type WorkflowLocator,
+  type WorkflowResolveScope,
+} from "@obora/sdk";
 import { resolve } from "node:path";
 
 import { CLIError } from "../utils/cli-error.js";
@@ -47,6 +52,26 @@ export const resolveChatWorkflow = async ({
   }
 
   return result.locator;
+};
+
+export const listChatWorkflowLocators = async ({
+  cwd,
+  scope,
+  projectRoot,
+  globalWorkflowDir,
+}: Omit<ChatWorkflowResolveOptions, "target">): Promise<ReadonlyArray<WorkflowLocator>> => {
+  const resolvedScope = scope ?? "all";
+  const discovery = await discoverWorkflowLocators({
+    cwd,
+    scope: resolvedScope,
+    ...(projectRoot ? { projectRoot: resolve(projectRoot) } : {}),
+    ...(globalWorkflowDir ? { globalWorkflowDir: resolve(globalWorkflowDir) } : {}),
+  });
+  return resolvedScope === "project"
+    ? discovery.project
+    : resolvedScope === "global"
+      ? discovery.global
+      : discovery.all;
 };
 
 export const createChatRunInput = ({

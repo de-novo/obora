@@ -1,14 +1,16 @@
-import { resolveWorkflowTarget } from "@obora/sdk";
+import { discoverWorkflowLocators, resolveWorkflowTarget } from "@obora/sdk";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   createChatRunInput,
+  listChatWorkflowLocators,
   parseChatTimeout,
   parseChatWorkflowScope,
   resolveChatWorkflow,
 } from "../workflow.js";
 
 vi.mock("@obora/sdk", () => ({
+  discoverWorkflowLocators: vi.fn(),
   resolveWorkflowTarget: vi.fn(),
 }));
 
@@ -22,6 +24,16 @@ const locator = {
   sourceDir: "/repo/.obora/workflows",
   stepCount: 1,
   projectRoot: "/repo",
+} as const;
+
+const globalLocator = {
+  ...locator,
+  id: "global:review",
+  scope: "global",
+  name: "code-review",
+  path: "/home/.obora/workflows/code-review.yaml",
+  displayPath: "~/.obora/workflows/code-review.yaml",
+  sourceDir: "/home/.obora/workflows",
 } as const;
 
 describe("chat workflow helpers", () => {
@@ -77,6 +89,68 @@ describe("chat workflow helpers", () => {
     await expect(
       resolveChatWorkflow({ target: "release-readiness", cwd: "/repo" })
     ).rejects.toThrow("choose scope");
+  });
+
+  it.each([
+    ["project", [locator]],
+    ["global", [globalLocator]],
+    ["all", [locator, globalLocator]],
+    [undefined, [locator, globalLocator]],
+  ] as const)("lists chat workflow locators for %s scope", async (scope, expected) => {
+    vi.mocked(discoverWorkflowLocators).mockResolvedValue({
+      roots: {
+        project: ["/repo/.obora/workflows"],
+        global: "/home/.obora/workflows",
+      },
+      project: [locator],
+      global: [globalLocator],
+      all: [locator, globalLocator],
+      diagnostics: [],
+    });
+
+    await expect(
+      listChatWorkflowLocators({
+        cwd: "/repo",
+        scope,
+        projectRoot: "/repo",
+        globalWorkflowDir: "/home/.obora/workflows",
+      })
+    ).resolves.toEqual(expected);
+
+    expect(discoverWorkflowLocators).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cwd: "/repo",
+        scope: scope ?? "all",
+        projectRoot: "/repo",
+        globalWorkflowDir: "/home/.obora/workflows",
+      })
+    );
+  });
+
+  it("lists chat workflow locators with default roots", async () => {
+    vi.mocked(discoverWorkflowLocators).mockResolvedValue({
+      roots: {
+        cwd: "/repo",
+        projectRoot: "/repo",
+        projectWorkflowDirs: ["/repo/.obora/workflows"],
+        globalWorkflowDir: "/home/.obora/workflows",
+      },
+      project: [locator],
+      global: [],
+      all: [locator],
+      diagnostics: [],
+    });
+
+    await expect(
+      listChatWorkflowLocators({
+        cwd: "/repo",
+      })
+    ).resolves.toEqual([locator]);
+
+    expect(discoverWorkflowLocators).toHaveBeenCalledWith({
+      cwd: "/repo",
+      scope: "all",
+    });
   });
 
   it("creates a structured run input payload", () => {
