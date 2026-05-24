@@ -658,6 +658,7 @@ obora chat --show-run <executionId> [--session <id>]
 - `/workflow <name-or-path>` switches the selected workflow inside the same session.
 - `/workflows` lists reusable project/global workflows, and `/workflows project` or `/workflows global` filters by scope.
 - `/run <task>` runs the current workflow with an explicit task message.
+- `/run --workflow <name-or-path> <task>` runs one task with a different workflow without changing the session default.
 - `/details <executionId>` shows the recorded step outputs, tools, artifacts, decisions, and issues for a prior workflow result in the current session.
 - `/sessions` shows recent persisted chat sessions, and `/sessions release` filters the list by tag.
 - `/tags` shows the current session tags, `/tags release,qa` updates them, and `/tags --clear` removes them.

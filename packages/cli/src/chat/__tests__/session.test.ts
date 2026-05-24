@@ -20,6 +20,18 @@ const locator: WorkflowLocator = {
   projectRoot: "/repo",
 };
 
+const codeReviewLocator: WorkflowLocator = {
+  id: "project:review",
+  scope: "project",
+  name: "code-review",
+  path: "/repo/.obora/workflows/code-review.yaml",
+  displayPath: ".obora/workflows/code-review.yaml",
+  editable: true,
+  sourceDir: "/repo/.obora/workflows",
+  stepCount: 2,
+  projectRoot: "/repo",
+};
+
 const createStream = (isTTY: boolean): PassThrough & { readonly isTTY?: boolean } => {
   const stream = new PassThrough() as PassThrough & { readonly isTTY?: boolean };
   Object.defineProperty(stream, "isTTY", {
@@ -32,7 +44,9 @@ const createStream = (isTTY: boolean): PassThrough & { readonly isTTY?: boolean 
 const runWorkflow = vi.fn(
   async (_workflow: string, _options: Record<string, unknown>) => undefined
 );
-const resolveWorkflow = vi.fn(async (_target: string) => locator);
+const resolveWorkflow = vi.fn(async (target: string) =>
+  target === "code-review" ? codeReviewLocator : locator
+);
 
 const executionResult: RuntimeExecution = {
   id: "exec-chat-1",
@@ -210,6 +224,69 @@ describe("chat session", () => {
       })
     );
     expect(result.state.messages.at(-1)?.content).toContain("Workflow run completed");
+  });
+
+  it("runs a single chat task with an explicit workflow override", async () => {
+    vi.clearAllMocks();
+    const selected = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      workflowTarget: "release-readiness",
+      workflowLocator: locator,
+      status: "ready" as const,
+    };
+
+    const result = await handleChatInput({
+      input: "/run --workflow code-review review the recent CLI changes",
+      state: selected,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true, model: "openrouter/owl-alpha" },
+    });
+
+    expect(resolveWorkflow).toHaveBeenCalledWith("code-review");
+    expect(runWorkflow).toHaveBeenCalledWith(
+      codeReviewLocator.path,
+      expect.objectContaining({
+        dryRun: true,
+        quiet: true,
+        model: "openrouter/owl-alpha",
+        input: expect.stringContaining("review the recent CLI changes"),
+      })
+    );
+    expect(result.state.workflowLocator).toBe(locator);
+    expect(result.state.workflowTarget).toBe("release-readiness");
+    expect(result.state.lastRunCommand).toBe("obora run .obora/workflows/code-review.yaml");
+    expect(result.state.messages.at(-2)?.content).toBe("review the recent CLI changes");
+  });
+
+  it("runs an explicit workflow override without a default workflow selected", async () => {
+    vi.clearAllMocks();
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd: "/repo",
+      dryRun: true,
+    });
+
+    const result = await handleChatInput({
+      input: "/run --workflow=code-review inspect docs",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(runWorkflow).toHaveBeenCalledWith(
+      codeReviewLocator.path,
+      expect.objectContaining({
+        input: expect.stringContaining("inspect docs"),
+      })
+    );
+    expect(result.state.workflowLocator).toBeUndefined();
+    expect(result.state.status).toBe("ready");
   });
 
   it("stores returned workflow execution details as a one-message run summary", async () => {

@@ -51,7 +51,7 @@ interface ChatTurnResult {
 }
 
 const chatHelp =
-  "Commands: /workflow <name-or-path> selects a reusable workflow, /workflows [scope] lists reusable workflows, /run <task> runs the current workflow, /details <executionId> shows step results, /sessions [tag] lists recent sessions, /tags [a,b] shows or updates session tags, /exit quits.";
+  "Commands: /workflow <name-or-path> selects a reusable workflow, /workflows [scope] lists reusable workflows, /run <task> runs the current workflow, /run --workflow <name-or-path> <task> runs one task with another workflow, /details <executionId> shows step results, /sessions [tag] lists recent sessions, /tags [a,b] shows or updates session tags, /exit quits.";
 
 const isExitCommand = (input: string): boolean => input === "/exit" || input === "/quit";
 
@@ -72,6 +72,17 @@ const workflowsScopeFromCommand = (input: string): string | undefined =>
 
 const messageFromInput = (input: string): string =>
   input.startsWith("/run ") ? input.slice("/run ".length).trim() : input;
+
+const runWorkflowOverridePattern = /^\/run\s+--workflow(?:=|\s+)(\S+)\s+(.+)$/u;
+
+const runWorkflowOverrideFromInput = (
+  input: string
+): { readonly workflowTarget: string; readonly message: string } | undefined => {
+  const match = runWorkflowOverridePattern.exec(input);
+  return match && match[1] && match[2]
+    ? { workflowTarget: match[1], message: match[2].trim() }
+    : undefined;
+};
 
 const normalizeSessionTags = (tags: string | undefined): ReadonlyArray<string> =>
   tags
@@ -264,6 +275,64 @@ const withResolvedWorkflow = (
   lastError: undefined,
 });
 
+const runChatTask = ({
+  state,
+  workflowLocator,
+  message,
+  runWorkflow,
+  commandOptions,
+}: {
+  readonly state: ChatSessionState;
+  readonly workflowLocator: WorkflowLocator;
+  readonly message: string;
+  readonly runWorkflow: typeof runRun;
+  readonly commandOptions: ChatCommandOptions;
+}): Promise<ChatTurnResult> => {
+  const userState = appendChatMessage(state, createChatMessage("user", message));
+  const runningState = setChatStatus(userState, "running");
+  const runInput = createChatRunInput({
+    message,
+    sessionId: state.sessionId,
+    workflowName: workflowLocator.name,
+    workflowPath: workflowLocator.path,
+  });
+  const lastRunCommand = `obora run ${workflowLocator.displayPath}`;
+  const runOptions = {
+    ...commandRunOptions(commandOptions),
+    input: runInput,
+  };
+
+  return runWorkflowWithRetry(runWorkflow, workflowLocator.path, runOptions)
+    .then((execution): ChatTurnResult => {
+      const runSummary = execution ? buildWorkflowRunSummary(execution) : undefined;
+      return {
+        state: appendAssistant(
+          {
+            ...setChatStatus(runningState, "ready"),
+            lastRunCommand,
+            ...(runSummary ? { lastRunSummary: runSummary } : {}),
+          },
+          formatRunSummaryMessage(runSummary, commandOptions.dryRun),
+          runSummary
+        ),
+        exit: false,
+      };
+    })
+    .catch((error: unknown): ChatTurnResult => {
+      const message = errorMessage(error);
+      return {
+        state: appendAssistant(
+          {
+            ...setChatStatus(runningState, "failed", message),
+            lastRunCommand,
+          },
+          `Workflow run failed: ${message}`
+        ),
+        exit: false,
+      };
+    });
+};
+
 const resolveWorkflowForSession =
   (options: ChatSessionRuntimeOptions, scope: WorkflowResolveScope | undefined) =>
   async (target: string): Promise<WorkflowLocator> =>
@@ -386,6 +455,18 @@ export const handleChatInput = async ({
     };
   }
 
+  const runOverride = runWorkflowOverrideFromInput(trimmed);
+  if (runOverride) {
+    const locator = await resolveWorkflow(runOverride.workflowTarget);
+    return runChatTask({
+      state: setChatStatus(state, "resolving"),
+      workflowLocator: locator,
+      message: runOverride.message,
+      runWorkflow,
+      commandOptions,
+    });
+  }
+
   if (!state.workflowLocator) {
     return {
       state: appendAssistant(state, "Select a workflow first with /workflow <name-or-path>."),
@@ -394,49 +475,13 @@ export const handleChatInput = async ({
   }
 
   const message = messageFromInput(trimmed);
-  const userState = appendChatMessage(state, createChatMessage("user", message));
-  const runningState = setChatStatus(userState, "running");
-  const runInput = createChatRunInput({
+  return runChatTask({
+    state,
+    workflowLocator: state.workflowLocator,
     message,
-    sessionId: state.sessionId,
-    workflowName: state.workflowLocator.name,
-    workflowPath: state.workflowLocator.path,
+    runWorkflow,
+    commandOptions,
   });
-  const lastRunCommand = `obora run ${state.workflowLocator.displayPath}`;
-  const runOptions = {
-    ...commandRunOptions(commandOptions),
-    input: runInput,
-  };
-
-  return runWorkflowWithRetry(runWorkflow, state.workflowLocator.path, runOptions)
-    .then((execution): ChatTurnResult => {
-      const runSummary = execution ? buildWorkflowRunSummary(execution) : undefined;
-      return {
-        state: appendAssistant(
-          {
-            ...setChatStatus(runningState, "ready"),
-            lastRunCommand,
-            ...(runSummary ? { lastRunSummary: runSummary } : {}),
-          },
-          formatRunSummaryMessage(runSummary, commandOptions.dryRun),
-          runSummary
-        ),
-        exit: false,
-      };
-    })
-    .catch((error: unknown): ChatTurnResult => {
-      const message = errorMessage(error);
-      return {
-        state: appendAssistant(
-          {
-            ...setChatStatus(runningState, "failed", message),
-            lastRunCommand,
-          },
-          `Workflow run failed: ${message}`
-        ),
-        exit: false,
-      };
-    });
 };
 
 const promptLoop = async ({
