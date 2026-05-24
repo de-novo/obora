@@ -12,7 +12,7 @@ import type {
 import { runRun } from "../commands/run.js";
 import { CLIError } from "../utils/cli-error.js";
 import { ExitCode } from "../utils/exit-codes.js";
-import { chatHelp, isClearRunDetailsCommand } from "./commands.js";
+import { isClearRunDetailsCommand } from "./commands.js";
 import {
   appendChatMessage,
   createChatMessage,
@@ -323,7 +323,15 @@ const openedRunDetailsMessage = (
 const clearRunDetails = (state: ChatSessionState): ChatSessionState => ({
   ...state,
   inspectedRunSummary: undefined,
+  showHelpPanel: undefined,
 });
+
+const clearPanelMessage = (state: ChatSessionState): string =>
+  state.inspectedRunSummary
+    ? "Closed run details view."
+    : state.showHelpPanel
+      ? "Closed help panel."
+      : "No help or run details panel is open.";
 
 const formatRunListMessage = (summaries: ReadonlyArray<WorkflowRunSummary>): string =>
   summaries.length > 0
@@ -779,7 +787,10 @@ export const handleChatInput = async ({
   }
 
   if (trimmed === "/help") {
-    return { state: appendAssistant(state, chatHelp), exit: false };
+    return {
+      state: appendAssistant({ ...state, showHelpPanel: true }, "Opened help panel."),
+      exit: false,
+    };
   }
 
   if (trimmed === "/workflow") {
@@ -1063,7 +1074,7 @@ export const handleChatInput = async ({
 
   if (isClearRunDetailsCommand(trimmed)) {
     return {
-      state: appendAssistant(clearRunDetails(state), "Closed run details view."),
+      state: appendAssistant(clearRunDetails(state), clearPanelMessage(state)),
       exit: false,
     };
   }

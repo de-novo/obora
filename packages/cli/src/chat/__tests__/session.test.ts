@@ -115,12 +115,8 @@ describe("chat session", () => {
       runWorkflow,
       commandOptions: { dryRun: true },
     });
-    expect(help.state.messages.at(-1)?.content).toContain("Commands:");
-    expect(help.state.messages.at(-1)?.content).toContain("Workflow:");
-    expect(help.state.messages.at(-1)?.content).toContain("Run History:");
-    expect(help.state.messages.at(-1)?.content).toContain("Details:");
-    expect(help.state.messages.at(-1)?.content).toContain("/clear");
-    expect(help.state.messages.at(-1)?.content).toContain("/details clear");
+    expect(help.state.showHelpPanel).toBe(true);
+    expect(help.state.messages.at(-1)?.content).toBe("Opened help panel.");
 
     const selected = await handleChatInput({
       input: "/workflow release-readiness",
@@ -434,6 +430,23 @@ describe("chat session", () => {
     expect(cleared.state.inspectedRunSummary).toBeUndefined();
     expect(cleared.state.lastRunSummary?.executionId).toBe("exec-chat-1");
     expect(cleared.state.messages.at(-1)?.content).toBe("Closed run details view.");
+  });
+
+  it("closes the help panel with the clear command", async () => {
+    const state = {
+      ...createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true }),
+      showHelpPanel: true,
+    };
+    const cleared = await handleChatInput({
+      input: "/clear",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(cleared.state.showHelpPanel).toBeUndefined();
+    expect(cleared.state.messages.at(-1)?.content).toBe("Closed help panel.");
   });
 
   it("lists runs and opens run details by number", async () => {

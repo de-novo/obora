@@ -1,7 +1,7 @@
 import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import type { WorkflowLocator, WorkflowRunStepSummary, WorkflowRunSummary } from "@obora/sdk";
 
-import { chatPromptCommandRows } from "./commands.js";
+import { chatCommandHelpSections, chatPromptCommandRows } from "./commands.js";
 import { runChoiceSummary } from "./run-choices.js";
 import { visibleChatMessages } from "./state.js";
 import type { ChatMessage, ChatRunChoice, ChatSessionState, ChatSessionStatus } from "./types.js";
@@ -331,6 +331,28 @@ const renderRunHistory = (
       ]
     : [];
 
+const renderHelpPanel = (state: ChatSessionState, width: number): ReadonlyArray<string> =>
+  state.showHelpPanel
+    ? [
+        "",
+        ...card(
+          "help",
+          [
+            `${muted("close")} /clear   ${muted("run")} /run <task>   ${muted("history")} /runs`,
+            "",
+            ...chatCommandHelpSections.flatMap((section) => [
+              bold(section.title),
+              ...section.entries.map(
+                (entry) => `${muted(entry.command)} ${entry.description}`
+              ),
+              "",
+            ]),
+          ],
+          width
+        ),
+      ]
+    : [];
+
 const sessionTagText = (summary: ChatSessionSummary): string =>
   summary.tags.length > 0 ? summary.tags.join(",") : "untagged";
 
@@ -481,6 +503,7 @@ export const renderChatView = (
     ...renderSessionPicker(state, cardWidth),
     ...renderWorkflowPicker(state, cardWidth),
     ...renderRunHistory(state, cardWidth),
+    ...renderHelpPanel(state, cardWidth),
     "",
     ...renderTranscript(state, cardWidth),
     ...renderRunInspector(state, cardWidth),

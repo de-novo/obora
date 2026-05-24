@@ -6,6 +6,14 @@ interface ChatCommandHelpEntry {
   readonly group: ChatCommandHelpGroup;
 }
 
+export interface ChatCommandHelpSection {
+  readonly title: string;
+  readonly entries: ReadonlyArray<{
+    readonly command: string;
+    readonly description: string;
+  }>;
+}
+
 type ChatCommandHelpGroup = "workflow" | "run" | "session" | "details" | "system";
 
 const chatCommandHelpGroupTitles: Readonly<Record<ChatCommandHelpGroup, string>> = {
@@ -137,12 +145,21 @@ const commandHelpEntriesForGroup = (
 ): ReadonlyArray<ChatCommandHelpEntry> =>
   chatCommandHelpEntries.filter((entry) => entry.group === group);
 
+export const chatCommandHelpSections: ReadonlyArray<ChatCommandHelpSection> =
+  chatCommandHelpGroupOrder.map((group) => ({
+    title: chatCommandHelpGroupTitles[group],
+    entries: commandHelpEntriesForGroup(group).map(({ command, description }) => ({
+      command,
+      description,
+    })),
+  }));
+
 export const chatHelp = [
   "Commands:",
-  ...chatCommandHelpGroupOrder.flatMap((group) => [
+  ...chatCommandHelpSections.flatMap((section) => [
     "",
-    `${chatCommandHelpGroupTitles[group]}:`,
-    ...commandHelpEntriesForGroup(group).map(
+    `${section.title}:`,
+    ...section.entries.map(
       (entry) => `  ${entry.command} - ${entry.description}`
     ),
   ]),
@@ -152,6 +169,7 @@ export const isClearRunDetailsCommand = (input: string): boolean =>
   input === "/clear" || input === "/details clear";
 
 export const chatPromptCommandRows = (state: ChatSessionState): ReadonlyArray<string> => {
+  if (state.showHelpPanel) return ["/clear  /workflow <name>  /runs", "/session  /project  /exit"];
   if (state.inspectedRunSummary) return ["/clear  /runs  /details <runId>", "/session  /project  /help"];
   if (state.runChoices && state.runChoices.length > 0) {
     return [

@@ -39,6 +39,7 @@ export interface ChatSessionState {
   readonly lastRunSummary?: WorkflowRunSummary;
   readonly inspectedRunSummary?: WorkflowRunSummary;
   readonly runChoices?: ReadonlyArray<ChatRunChoice>;
+  readonly showHelpPanel?: boolean;
 }
 
 export interface ChatRunInput {

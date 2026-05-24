@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { chatHelp, chatPromptCommandRows, isClearRunDetailsCommand } from "../commands.js";
+import {
+  chatCommandHelpSections,
+  chatHelp,
+  chatPromptCommandRows,
+  isClearRunDetailsCommand,
+} from "../commands.js";
 import { createInitialChatState } from "../state.js";
 
 describe("chat command metadata", () => {
@@ -18,9 +23,20 @@ describe("chat command metadata", () => {
     expect(chatHelp).toContain("System:\n");
     expect(chatHelp).toContain("/workflow <name-or-path>");
     expect(chatHelp).toContain("  /clear or /details clear - closes the current run detail view");
+    expect(chatCommandHelpSections.map((section) => section.title)).toEqual([
+      "Workflow",
+      "Run History",
+      "Details",
+      "Session",
+      "System",
+    ]);
     expect(chatPromptCommandRows(state)).toEqual([
       "/workflows  /workflow <name-or-path>  /project [path]",
       "/sessions  /tags  /help",
+    ]);
+    expect(chatPromptCommandRows({ ...state, showHelpPanel: true })).toEqual([
+      "/clear  /workflow <name>  /runs",
+      "/session  /project  /exit",
     ]);
   });
 

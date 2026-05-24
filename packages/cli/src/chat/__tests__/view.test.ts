@@ -363,6 +363,32 @@ describe("renderChatView", () => {
     expect(plain).toContain("/workflow 1  /run #1 <task>  /workflows [scope]");
   });
 
+  it("renders grouped help as a dedicated panel", () => {
+    const output = renderedText(
+      renderChatView(
+        {
+          ...createInitialChatState({
+            sessionId: "session-a",
+            cwd: "/repo",
+            dryRun: true,
+          }),
+          showHelpPanel: true,
+        },
+        { columns: 120 }
+      )
+    );
+    const plain = stripAnsi(output);
+
+    expect(plain).toContain("help");
+    expect(plain).toContain("Workflow");
+    expect(plain).toContain("/workflow <name-or-path> selects a reusable workflow");
+    expect(plain).toContain("Run History");
+    expect(plain).toContain("/runs lists workflow runs in this chat");
+    expect(plain).toContain("Details");
+    expect(plain).toContain("/clear or /details clear closes the current run detail view");
+    expect(plain).toContain("/clear  /workflow <name>  /runs");
+  });
+
   it("renders the inspected run instead of the latest run", () => {
     const inspectedSummary: WorkflowRunSummary = {
       ...runSummary,
