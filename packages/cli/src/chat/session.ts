@@ -13,6 +13,7 @@ import {
   createInitialChatState,
   setChatStatus,
 } from "./state.js";
+import { loadChatSessionState, saveChatSessionState } from "./store.js";
 import { ChatTuiController } from "./tui.js";
 import type { ChatCommandOptions, ChatSessionState } from "./types.js";
 import {
@@ -29,6 +30,7 @@ export interface ChatSessionRuntimeOptions {
   readonly commandOptions: ChatCommandOptions;
   readonly runWorkflow?: typeof runRun;
   readonly resolveWorkflow?: (target: string) => Promise<WorkflowLocator>;
+  readonly sessionStoreDir?: string;
 }
 
 interface ChatTurnResult {
@@ -255,6 +257,7 @@ const promptLoop = async ({
   resolveWorkflow,
   runWorkflow,
   commandOptions,
+  persist,
 }: {
   readonly reader: { question: (query: string) => Promise<string> };
   readonly state: ChatSessionState;
@@ -262,6 +265,7 @@ const promptLoop = async ({
   readonly resolveWorkflow: (target: string) => Promise<WorkflowLocator>;
   readonly runWorkflow: typeof runRun;
   readonly commandOptions: ChatCommandOptions;
+  readonly persist: (state: ChatSessionState) => Promise<void>;
 }): Promise<ChatSessionState> => {
   const input = await reader.question("> ");
   const result = await handleChatInput({
@@ -272,6 +276,7 @@ const promptLoop = async ({
     commandOptions,
   });
   tui.update(result.state);
+  await persist(result.state);
   return result.exit || tui.isAbortRequested()
     ? result.state
     : promptLoop({
@@ -281,6 +286,7 @@ const promptLoop = async ({
         resolveWorkflow,
         runWorkflow,
         commandOptions,
+        persist,
       });
 };
 
@@ -301,19 +307,55 @@ const resolveInitialWorkflow = async ({
   );
 };
 
+const createSessionStartState = async ({
+  cwd,
+  commandOptions,
+  sessionStoreDir,
+}: {
+  readonly cwd: string;
+  readonly commandOptions: ChatCommandOptions;
+  readonly sessionStoreDir?: string;
+}): Promise<ChatSessionState> => {
+  const sessionId = commandOptions.session ?? `chat-${Date.now()}`;
+  const restored = commandOptions.session
+    ? await loadChatSessionState({ cwd, sessionId, storeDir: sessionStoreDir })
+    : undefined;
+  if (restored) {
+    return {
+      ...restored,
+      cwd,
+      dryRun: Boolean(commandOptions.dryRun),
+      ...(commandOptions.provider ? { providerName: commandOptions.provider } : {}),
+      ...(commandOptions.model ? { modelName: commandOptions.model } : {}),
+      ...(commandOptions.workflow ? { workflowTarget: commandOptions.workflow } : {}),
+    };
+  }
+  return createInitialChatState({
+    sessionId,
+    cwd,
+    dryRun: Boolean(commandOptions.dryRun),
+    providerName: commandOptions.provider,
+    modelName: commandOptions.model,
+    workflowTarget: commandOptions.workflow,
+  });
+};
+
+const saveSession = (
+  cwd: string,
+  state: ChatSessionState,
+  sessionStoreDir: string | undefined
+): Promise<void> => saveChatSessionState({ cwd, state, storeDir: sessionStoreDir });
+
 export const runChatSession = async (
   options: ChatSessionRuntimeOptions
 ): Promise<ChatSessionState> => {
   const scope = parseChatWorkflowScope(options.commandOptions.scope);
   const resolveWorkflow = resolveWorkflowForSession(options, scope);
   const runWorkflow = options.runWorkflow ?? runRun;
-  const initialState = createInitialChatState({
-    sessionId: options.commandOptions.session ?? `chat-${Date.now()}`,
+  const initialState = await createSessionStartState({
     cwd: options.cwd,
-    dryRun: Boolean(options.commandOptions.dryRun),
-    providerName: options.commandOptions.provider,
-    modelName: options.commandOptions.model,
-    workflowTarget: options.commandOptions.workflow,
+    commandOptions: options.commandOptions,
+    sessionStoreDir: options.sessionStoreDir,
   });
   const tui = new ChatTuiController(initialState);
   await tui.start();
@@ -325,6 +367,7 @@ export const runChatSession = async (
   tui.update(resolvedState);
 
   if (options.commandOptions.once) {
+    await saveSession(options.cwd, resolvedState, options.sessionStoreDir);
     const result = await handleChatInput({
       input: options.commandOptions.once,
       state: resolvedState,
@@ -333,6 +376,7 @@ export const runChatSession = async (
       commandOptions: options.commandOptions,
     });
     tui.update(result.state);
+    await saveSession(options.cwd, result.state, options.sessionStoreDir);
     await tui.stop();
     return result.state;
   }
@@ -345,6 +389,8 @@ export const runChatSession = async (
     );
   }
 
+  await saveSession(options.cwd, resolvedState, options.sessionStoreDir);
+
   const reader = createInterface({ input: options.input, output: options.output });
 
   return promptLoop({
@@ -354,8 +400,11 @@ export const runChatSession = async (
     resolveWorkflow,
     runWorkflow,
     commandOptions: options.commandOptions,
-  }).finally(() => {
-    reader.close();
-    return tui.stop();
-  });
+    persist: (state) => saveSession(options.cwd, state, options.sessionStoreDir),
+  })
+    .then((state) => saveSession(options.cwd, state, options.sessionStoreDir).then(() => state))
+    .finally(() => {
+      reader.close();
+      return tui.stop();
+    });
 };

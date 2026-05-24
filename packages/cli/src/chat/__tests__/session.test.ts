@@ -1,4 +1,7 @@
 import type { RuntimeExecution, WorkflowLocator } from "@obora/sdk";
+import { mkdtemp, readFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
 
@@ -353,6 +356,7 @@ describe("chat session", () => {
 
   it("runs a one-shot TUI session without requiring interactive stdin", async () => {
     vi.clearAllMocks();
+    const sessionStoreDir = await mkdtemp(join(tmpdir(), "obora-chat-session-"));
     const finalState = await runChatSession({
       cwd: "/repo",
       input: createStream(false),
@@ -365,15 +369,59 @@ describe("chat session", () => {
       },
       resolveWorkflow,
       runWorkflow,
+      sessionStoreDir,
     });
 
     expect(finalState.status).toBe("ready");
     expect(finalState.workflowLocator).toBe(locator);
     expect(runWorkflow).toHaveBeenCalledOnce();
+    await expect(readFile(join(sessionStoreDir, "session-a.json"), "utf-8")).resolves.toContain(
+      '"sessionId": "session-a"'
+    );
+  });
+
+  it("restores a persisted chat session when --session is reused", async () => {
+    vi.clearAllMocks();
+    const sessionStoreDir = await mkdtemp(join(tmpdir(), "obora-chat-session-"));
+    await runChatSession({
+      cwd: "/repo",
+      input: createStream(false),
+      output: createStream(false),
+      commandOptions: {
+        workflow: "release-readiness",
+        once: "prepare release notes",
+        dryRun: true,
+        session: "session-a",
+      },
+      resolveWorkflow,
+      runWorkflow,
+      sessionStoreDir,
+    });
+
+    const finalState = await runChatSession({
+      cwd: "/repo",
+      input: createStream(false),
+      output: createStream(false),
+      commandOptions: {
+        once: "continue from the same session",
+        dryRun: true,
+        session: "session-a",
+      },
+      resolveWorkflow,
+      runWorkflow,
+      sessionStoreDir,
+    });
+
+    expect(finalState.workflowLocator).toBeDefined();
+    expect(finalState.messages.map((message) => message.content)).toEqual(
+      expect.arrayContaining(["prepare release notes", "continue from the same session"])
+    );
+    expect(runWorkflow).toHaveBeenCalledTimes(2);
   });
 
   it("runs a one-shot session without a workflow and asks the user to select one", async () => {
     vi.clearAllMocks();
+    const sessionStoreDir = await mkdtemp(join(tmpdir(), "obora-chat-session-"));
     const finalState = await runChatSession({
       cwd: "/repo",
       input: createStream(false),
@@ -385,6 +433,7 @@ describe("chat session", () => {
       },
       resolveWorkflow,
       runWorkflow,
+      sessionStoreDir,
     });
 
     expect(runWorkflow).not.toHaveBeenCalled();
@@ -394,6 +443,7 @@ describe("chat session", () => {
   it("supports an interactive TTY session that exits from user input", async () => {
     const input = createStream(true);
     const output = createStream(true);
+    const sessionStoreDir = await mkdtemp(join(tmpdir(), "obora-chat-session-"));
     const session = runChatSession({
       cwd: "/repo",
       input,
@@ -401,6 +451,7 @@ describe("chat session", () => {
       commandOptions: { dryRun: true, session: "session-a" },
       resolveWorkflow,
       runWorkflow,
+      sessionStoreDir,
     });
 
     input.end("/exit\n");

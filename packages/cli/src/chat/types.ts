@@ -44,6 +44,8 @@ export interface ChatWorkflowResolveOptions {
 export interface ChatCommandOptions {
   readonly workflow?: string;
   readonly once?: string;
+  readonly listSessions?: boolean;
+  readonly showSession?: boolean;
   readonly dryRun?: boolean;
   readonly scope?: string;
   readonly project?: string;

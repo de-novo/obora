@@ -1,8 +1,11 @@
 import { Command } from "commander";
 
 import { runChatSession } from "../chat/session.js";
+import { listChatSessionSummaries, loadChatSessionState } from "../chat/store.js";
 import type { ChatCommandOptions } from "../chat/types.js";
+import { CLIError } from "../utils/cli-error.js";
 import { handleCommandAction } from "../utils/error-handler.js";
+import { ExitCode } from "../utils/exit-codes.js";
 import { formatter } from "../utils/formatter.js";
 import { getGlobalOpts } from "../utils/global-opts.js";
 
@@ -15,6 +18,8 @@ export function createChatCommand(): Command {
     .option("--project <path>", "Project root for scoped workflow discovery")
     .option("--global-workflows-dir <path>", "Global workflow directory override")
     .option("--session <id>", "Chat session id")
+    .option("--list-sessions", "List persisted chat sessions")
+    .option("--show-session", "Show the persisted chat session selected by --session")
     .option("--once <message>", "Run one chat message and exit")
     .option("--dry-run", "Validate the selected workflow without live execution")
     .option("--provider <name>", "LLM provider override for workflow runs")
@@ -32,6 +37,31 @@ export function createChatCommand(): Command {
       const globalOpts = getGlobalOpts(this);
       await handleCommandAction(
         async () => {
+          if (options.listSessions) {
+            const sessions = await listChatSessionSummaries({ cwd: process.cwd() });
+            if (options.json || globalOpts.json) {
+              formatter.json(sessions);
+            } else {
+              formatter.table(sessions.map((session) => ({ ...session })));
+            }
+            return;
+          }
+
+          if (options.showSession) {
+            if (!options.session) {
+              throw new CLIError("--show-session requires --session <id>", ExitCode.CLI_ERROR);
+            }
+            const state = await loadChatSessionState({
+              cwd: process.cwd(),
+              sessionId: options.session,
+            });
+            if (!state) {
+              throw new CLIError(`Chat session not found: ${options.session}`, ExitCode.CLI_ERROR);
+            }
+            formatter.json(state);
+            return;
+          }
+
           const finalState = await runChatSession({
             cwd: process.cwd(),
             input: process.stdin,
