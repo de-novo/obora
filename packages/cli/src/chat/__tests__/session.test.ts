@@ -1178,6 +1178,52 @@ describe("chat session", () => {
     );
   });
 
+  it("switches to a listed session by typing only the choice number", async () => {
+    const loaded = createInitialChatState({
+      sessionId: "release-session",
+      cwd: "/repo/old",
+      projectRoot: "/repo/release",
+      tags: ["release"],
+      dryRun: false,
+      workflowTarget: "release-readiness",
+    });
+    const loadSession = vi.fn(async (_sessionId: string) => loaded);
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      sessionChoices: [
+        {
+          sessionId: "release-session",
+          status: "ready" as const,
+          cwd: "/repo/old",
+          projectRoot: "/repo/release",
+          tags: ["release"],
+          workflowTarget: "release-readiness",
+          messageCount: 3,
+          updatedAt: "2026-05-24T00:00:00.000Z",
+        },
+      ],
+    };
+
+    const switched = await handleChatInput({
+      input: "1",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true, provider: "openrouter", model: "openrouter/owl-alpha" },
+      loadSession,
+    });
+
+    expect(loadSession).toHaveBeenCalledWith("release-session");
+    expect(switched.state.sessionId).toBe("release-session");
+    expect(switched.state.messages.at(-1)?.content).toContain(
+      "Switched to session release-session."
+    );
+  });
+
   it("preserves inspected run context when switching sessions", async () => {
     const runSummary = buildWorkflowRunSummary(executionResult);
     const loaded = createInitialChatState({
@@ -1771,6 +1817,32 @@ describe("chat session", () => {
     expect(resolveWorkflow).not.toHaveBeenCalled();
     expect(result.state.workflowTarget).toBe("code-review");
     expect(result.state.workflowLocator).toBe(codeReviewLocator);
+    expect(result.state.workflowChoices).toBeUndefined();
+    expect(result.state.messages.at(-1)?.content).toContain("Selected workflow code-review");
+  });
+
+  it("selects a listed workflow by typing only the choice number", async () => {
+    const listed = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      workflowChoices: [locator, codeReviewLocator],
+    };
+
+    const result = await handleChatInput({
+      input: "2",
+      state: listed,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(resolveWorkflow).not.toHaveBeenCalled();
+    expect(result.state.workflowTarget).toBe("code-review");
+    expect(result.state.workflowLocator).toBe(codeReviewLocator);
+    expect(result.state.workflowChoices).toBeUndefined();
     expect(result.state.messages.at(-1)?.content).toContain("Selected workflow code-review");
   });
 

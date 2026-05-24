@@ -363,7 +363,8 @@ describe("renderChatView", () => {
     const plain = stripAnsi(output);
 
     expect(plain).toContain("› Choose /workflow 1 or run once with /run #1 <task>");
-    expect(plain).toContain("/workflow 1  /run #1 <task>  /workflows [scope]");
+    expect(plain).toContain("1  /workflow <name>  /run #1 <task>");
+    expect(plain).toContain("/workflows [scope]  /project  /clear");
   });
 
   it("renders grouped help as a dedicated panel", () => {
@@ -388,7 +389,7 @@ describe("renderChatView", () => {
     expect(plain).toContain("Run History");
     expect(plain).toContain("/runs lists workflow runs in this chat");
     expect(plain).toContain("Details");
-    expect(plain).toContain("/clear or /details clear closes the current run detail view");
+    expect(plain).toContain("/clear or /details clear closes the current panel");
     expect(plain).toContain("/clear  /workflow <name>  /runs");
   });
 

@@ -97,6 +97,30 @@ const runDetailShortcutTargetFromInput = (
 ): string | undefined =>
   /^\d+$/u.test(input) && state.runChoices && state.runChoices.length > 0 ? input : undefined;
 
+const workflowChoiceShortcutTargetFromInput = (
+  input: string,
+  state: ChatSessionState
+): string | undefined =>
+  /^\d+$/u.test(input) &&
+  !state.runChoices?.length &&
+  !state.sessionChoices?.length &&
+  state.workflowChoices &&
+  state.workflowChoices.length > 0
+    ? input
+    : undefined;
+
+const sessionChoiceShortcutTargetFromInput = (
+  input: string,
+  state: ChatSessionState
+): string | undefined =>
+  /^\d+$/u.test(input) &&
+  !state.runChoices?.length &&
+  !state.workflowChoices?.length &&
+  state.sessionChoices &&
+  state.sessionChoices.length > 0
+    ? input
+    : undefined;
+
 const tagsTargetFromCommand = (input: string): string | undefined =>
   input.startsWith("/tags ") ? input.slice("/tags ".length).trim() : undefined;
 
@@ -426,6 +450,8 @@ const withRunChoices = (
 ): ChatSessionState => ({
   ...state,
   runChoices: runChoices.map((choice) => toChatRunChoice(choice, state.sessionId)),
+  sessionChoices: undefined,
+  workflowChoices: undefined,
 });
 
 const formatSessionTags = (tags: ReadonlyArray<string> | undefined): string =>
@@ -445,6 +471,8 @@ const withSessionChoices = (
 ): ChatSessionState => ({
   ...state,
   sessionChoices,
+  runChoices: undefined,
+  workflowChoices: undefined,
 });
 
 const sessionChoiceIndexFromTarget = (target: string): number | undefined =>
@@ -650,6 +678,8 @@ const withWorkflowChoices = (
 ): ChatSessionState => ({
   ...state,
   workflowChoices,
+  runChoices: undefined,
+  sessionChoices: undefined,
 });
 
 const withResolvedWorkflow = (
@@ -660,6 +690,7 @@ const withResolvedWorkflow = (
   ...state,
   workflowTarget,
   workflowLocator,
+  workflowChoices: undefined,
   status: "ready",
   lastError: undefined,
 });
@@ -896,7 +927,8 @@ export const handleChatInput = async ({
     };
   }
 
-  const sessionTarget = sessionTargetFromCommand(trimmed);
+  const sessionTarget =
+    sessionTargetFromCommand(trimmed) ?? sessionChoiceShortcutTargetFromInput(trimmed, state);
   if (sessionTarget !== undefined) {
     const renameCommand = sessionRenameFromCommand(sessionTarget);
     if (renameCommand) {
@@ -1060,7 +1092,8 @@ export const handleChatInput = async ({
     };
   }
 
-  const workflowTarget = workflowTargetFromCommand(trimmed);
+  const workflowTarget =
+    workflowTargetFromCommand(trimmed) ?? workflowChoiceShortcutTargetFromInput(trimmed, state);
   if (workflowTarget) {
     const choiceIndex = workflowChoiceIndexFromTarget(workflowTarget);
     const choice = choiceIndex === undefined ? undefined : workflowChoiceAt(state, choiceIndex);

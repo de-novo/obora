@@ -22,7 +22,7 @@ describe("chat command metadata", () => {
     expect(chatHelp).toContain("Session:\n");
     expect(chatHelp).toContain("System:\n");
     expect(chatHelp).toContain("/workflow <name-or-path>");
-    expect(chatHelp).toContain("  /clear or /details clear - closes the current run detail view");
+    expect(chatHelp).toContain("  /clear or /details clear - closes the current panel");
     expect(chatCommandHelpSections.map((section) => section.title)).toEqual([
       "Workflow",
       "Run History",

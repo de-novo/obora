@@ -120,7 +120,7 @@ const chatCommandHelpEntries: ReadonlyArray<ChatCommandHelpEntry> = [
   },
   {
     command: "/clear or /details clear",
-    description: "closes the current run detail view",
+    description: "closes the current panel",
     group: "details",
   },
   {
@@ -177,10 +177,13 @@ export const chatPromptCommandRows = (state: ChatSessionState): ReadonlyArray<st
       "/runs --project  /runs --tag <tag>  /runs --status failed",
     ];
   }
+  if (state.sessionChoices && state.sessionChoices.length > 0) {
+    return ["1  /session <id>  /session rename 1 <id>", "/session delete 1  /sessions  /clear"];
+  }
   if (state.workflowLocator) {
     return ["/run <task>  /runs  /workflows", "/session  /project  /tags  /help"];
   }
   return state.workflowChoices && state.workflowChoices.length > 0
-    ? ["/workflow 1  /run #1 <task>  /workflows [scope]", "/project  /sessions  /help"]
+    ? ["1  /workflow <name>  /run #1 <task>", "/workflows [scope]  /project  /clear"]
     : ["/workflows  /workflow <name-or-path>  /project [path]", "/sessions  /tags  /help"];
 };
