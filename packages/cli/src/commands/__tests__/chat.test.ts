@@ -1,5 +1,9 @@
 import { runChatSession } from "../../chat/session.js";
-import { listChatSessionSummaries, loadChatSessionState } from "../../chat/store.js";
+import {
+  findChatRunDetail,
+  listChatSessionSummaries,
+  loadChatSessionState,
+} from "../../chat/store.js";
 import { createCLI } from "../../cli.js";
 import { createChatCommand } from "../chat.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -9,6 +13,7 @@ vi.mock("../../chat/session.js", () => ({
 }));
 
 vi.mock("../../chat/store.js", () => ({
+  findChatRunDetail: vi.fn(),
   listChatSessionSummaries: vi.fn(),
   loadChatSessionState: vi.fn(),
 }));
@@ -144,6 +149,48 @@ describe("chat command", () => {
 
     expect(runChatSession).not.toHaveBeenCalled();
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining('"sessionId": "session-a"'));
+  });
+
+  it("shows a persisted chat run selected by execution id", async () => {
+    vi.mocked(findChatRunDetail).mockResolvedValue({
+      sessionId: "session-a",
+      messageId: "assistant:run",
+      messageCreatedAt: "2026-05-24T00:00:01.000Z",
+      workflowTarget: "release-readiness",
+      runSummary: {
+        executionId: "exec-123",
+        workflowName: "release-readiness",
+        status: "completed",
+        startedAt: "2026-05-24T00:00:00.000Z",
+        endedAt: "2026-05-24T00:00:01.000Z",
+        durationMs: 1000,
+        completedStepCount: 1,
+        totalStepCount: 1,
+        message: "Workflow completed: 1/1 steps completed.",
+        steps: [],
+      },
+    });
+
+    await createChatCommand().parseAsync(
+      ["--show-run", "exec-123", "--session", "session-a"],
+      { from: "user" }
+    );
+
+    expect(runChatSession).not.toHaveBeenCalled();
+    expect(findChatRunDetail).toHaveBeenCalledWith(
+      expect.objectContaining({ executionId: "exec-123", sessionId: "session-a" })
+    );
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('"executionId": "exec-123"'));
+  });
+
+  it("fails clearly when a persisted chat run is missing", async () => {
+    vi.mocked(findChatRunDetail).mockResolvedValue(undefined);
+
+    await createChatCommand().parseAsync(["--show-run", "missing"], { from: "user" });
+
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining("Chat run not found: missing")
+    );
   });
 
   it("requires --session when showing a persisted chat session", async () => {

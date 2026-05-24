@@ -1,7 +1,11 @@
 import { Command } from "commander";
 
 import { runChatSession } from "../chat/session.js";
-import { listChatSessionSummaries, loadChatSessionState } from "../chat/store.js";
+import {
+  findChatRunDetail,
+  listChatSessionSummaries,
+  loadChatSessionState,
+} from "../chat/store.js";
 import type { ChatCommandOptions } from "../chat/types.js";
 import { CLIError } from "../utils/cli-error.js";
 import { handleCommandAction } from "../utils/error-handler.js";
@@ -20,6 +24,7 @@ export function createChatCommand(): Command {
     .option("--session <id>", "Chat session id")
     .option("--list-sessions", "List persisted chat sessions")
     .option("--show-session", "Show the persisted chat session selected by --session")
+    .option("--show-run <executionId>", "Show a persisted workflow run summary by execution id")
     .option("--once <message>", "Run one chat message and exit")
     .option("--dry-run", "Validate the selected workflow without live execution")
     .option("--provider <name>", "LLM provider override for workflow runs")
@@ -59,6 +64,19 @@ export function createChatCommand(): Command {
               throw new CLIError(`Chat session not found: ${options.session}`, ExitCode.CLI_ERROR);
             }
             formatter.json(state);
+            return;
+          }
+
+          if (options.showRun) {
+            const detail = await findChatRunDetail({
+              cwd: process.cwd(),
+              executionId: options.showRun,
+              ...(options.session ? { sessionId: options.session } : {}),
+            });
+            if (!detail) {
+              throw new CLIError(`Chat run not found: ${options.showRun}`, ExitCode.CLI_ERROR);
+            }
+            formatter.json(detail);
             return;
           }
 

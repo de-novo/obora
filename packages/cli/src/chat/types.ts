@@ -46,6 +46,7 @@ export interface ChatCommandOptions {
   readonly once?: string;
   readonly listSessions?: boolean;
   readonly showSession?: boolean;
+  readonly showRun?: string;
   readonly dryRun?: boolean;
   readonly scope?: string;
   readonly project?: string;

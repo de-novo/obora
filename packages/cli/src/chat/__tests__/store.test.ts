@@ -1,10 +1,45 @@
+import type { WorkflowRunSummary } from "@obora/sdk";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { createInitialChatState } from "../state.js";
-import { listChatSessionSummaries, loadChatSessionState, saveChatSessionState } from "../store.js";
+import {
+  findChatRunDetail,
+  listChatSessionSummaries,
+  loadChatSessionState,
+  saveChatSessionState,
+} from "../store.js";
+
+const runSummary: WorkflowRunSummary = {
+  executionId: "exec-123",
+  workflowName: "release-readiness",
+  status: "completed",
+  startedAt: "2026-05-24T00:00:00.000Z",
+  endedAt: "2026-05-24T00:00:01.000Z",
+  durationMs: 1000,
+  completedStepCount: 1,
+  totalStepCount: 1,
+  message: "Workflow completed: 1/1 steps completed.",
+  steps: [
+    {
+      name: "collect",
+      status: "completed",
+      agent: "developer",
+      model: "openrouter/owl-alpha",
+      outputPreview: "Collected context.",
+      outputFormat: "text",
+      toolsUsed: ["file_read"],
+      artifacts: ["README.md"],
+      task: "Collect context",
+      methodology: "Standard agent execution",
+      decisions: [],
+      issues: [],
+      dependencies: [],
+    },
+  ],
+};
 
 describe("chat session store", () => {
   it("persists, restores, and lists chat sessions by updated time", async () => {
@@ -63,5 +98,41 @@ describe("chat session store", () => {
 
     await expect(loadChatSessionState({ cwd, sessionId: "broken" })).resolves.toBeUndefined();
     await expect(listChatSessionSummaries({ cwd })).resolves.toEqual([]);
+  });
+
+  it("finds a persisted run summary across sessions or within a selected session", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "obora-chat-store-run-"));
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-with-run",
+        cwd,
+        dryRun: false,
+        workflowTarget: "release-readiness",
+      }),
+      messages: [
+        {
+          id: "assistant:run",
+          role: "assistant" as const,
+          content: "Workflow completed.",
+          createdAt: "2026-05-24T00:00:01.000Z",
+          runSummary,
+        },
+      ],
+    };
+
+    await saveChatSessionState({ cwd, state });
+
+    await expect(findChatRunDetail({ cwd, executionId: "exec-123" })).resolves.toMatchObject({
+      sessionId: "session-with-run",
+      messageId: "assistant:run",
+      workflowTarget: "release-readiness",
+      runSummary: {
+        executionId: "exec-123",
+        steps: [expect.objectContaining({ toolsUsed: ["file_read"] })],
+      },
+    });
+    await expect(
+      findChatRunDetail({ cwd, sessionId: "session-with-run", executionId: "missing" })
+    ).resolves.toBeUndefined();
   });
 });

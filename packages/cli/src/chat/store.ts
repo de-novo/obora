@@ -1,6 +1,8 @@
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
+import type { WorkflowRunSummary } from "@obora/sdk";
+
 import type { ChatMessage, ChatSessionState } from "./types.js";
 
 export interface ChatSessionSummary {
@@ -10,6 +12,14 @@ export interface ChatSessionSummary {
   readonly workflowTarget?: string;
   readonly messageCount: number;
   readonly updatedAt: string;
+}
+
+export interface ChatRunDetail {
+  readonly sessionId: string;
+  readonly messageId: string;
+  readonly messageCreatedAt: string;
+  readonly workflowTarget?: string;
+  readonly runSummary: WorkflowRunSummary;
 }
 
 interface ChatSessionRecord {
@@ -71,6 +81,27 @@ const loadChatSessionRecord = async (
       throw error;
     });
 
+const listChatSessionRecords = async (storeDir: string): Promise<ReadonlyArray<ChatSessionRecord>> =>
+  readdir(storeDir)
+    .then((files) =>
+      Promise.all(
+        files
+          .filter((file) => file.endsWith(".json"))
+          .map((file) =>
+            readFile(join(storeDir, file), "utf-8").then((raw) =>
+              parseChatSessionRecord(JSON.parse(raw) as unknown)
+            )
+          )
+      )
+    )
+    .then((records) =>
+      records.filter((record): record is ChatSessionRecord => Boolean(record))
+    )
+    .catch((error: unknown) => {
+      if (isMissingFileError(error)) return [];
+      throw error;
+    });
+
 export const getChatSessionStoreDir = (cwd: string): string => chatSessionStoreDir(cwd);
 
 export const loadChatSessionState = async ({
@@ -122,24 +153,59 @@ export const listChatSessionSummaries = async ({
   readonly cwd: string;
   readonly storeDir?: string;
 }): Promise<ReadonlyArray<ChatSessionSummary>> =>
-  readdir(storeDir)
-    .then((files) =>
-      Promise.all(
-        files
-          .filter((file) => file.endsWith(".json"))
-          .map((file) =>
-            readFile(join(storeDir, file), "utf-8")
-              .then((raw) => parseChatSessionRecord(JSON.parse(raw) as unknown))
-              .then((record) => (record ? toChatSessionSummary(record) : undefined))
-          )
-      )
-    )
+  listChatSessionRecords(storeDir)
     .then((summaries) =>
       summaries
-        .filter((summary): summary is ChatSessionSummary => Boolean(summary))
+        .map(toChatSessionSummary)
         .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
-    )
-    .catch((error: unknown) => {
-      if (isMissingFileError(error)) return [];
-      throw error;
-    });
+    );
+
+const chatRunDetailFromState =
+  (executionId: string) =>
+  (state: ChatSessionState): ChatRunDetail | undefined =>
+    state.messages
+      .flatMap((message) =>
+        message.runSummary?.executionId === executionId
+          ? [
+              {
+                sessionId: state.sessionId,
+                messageId: message.id,
+                messageCreatedAt: message.createdAt,
+                ...(state.workflowTarget ? { workflowTarget: state.workflowTarget } : {}),
+                runSummary: message.runSummary,
+              },
+            ]
+          : []
+      )
+      .at(0);
+
+const findFirstChatRunDetail = (
+  states: ReadonlyArray<ChatSessionState>,
+  executionId: string
+): ChatRunDetail | undefined =>
+  states
+    .map(chatRunDetailFromState(executionId))
+    .filter((detail): detail is ChatRunDetail => Boolean(detail))
+    .at(0);
+
+export const findChatRunDetail = async ({
+  cwd,
+  executionId,
+  sessionId,
+  storeDir = chatSessionStoreDir(cwd),
+}: {
+  readonly cwd: string;
+  readonly executionId: string;
+  readonly sessionId?: string;
+  readonly storeDir?: string;
+}): Promise<ChatRunDetail | undefined> =>
+  sessionId
+    ? loadChatSessionState({ cwd, sessionId, storeDir }).then((state) =>
+        state ? chatRunDetailFromState(executionId)(state) : undefined
+      )
+    : listChatSessionRecords(storeDir).then((records) =>
+        findFirstChatRunDetail(
+          records.map((record) => record.state),
+          executionId
+        )
+      );
