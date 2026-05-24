@@ -20,12 +20,13 @@ import {
 } from "./state.js";
 import {
   deleteChatSessionState,
+  listChatRunDetails,
   listChatSessionSummaries,
   loadChatSessionState,
   renameChatSessionState,
   saveChatSessionState,
 } from "./store.js";
-import type { ChatSessionSummary } from "./store.js";
+import type { ChatRunDetail, ChatSessionSummary } from "./store.js";
 import { ChatTuiController } from "./tui.js";
 import type { ChatCommandOptions, ChatSessionState } from "./types.js";
 import {
@@ -64,8 +65,13 @@ interface SessionRenameCommand {
   readonly nextSessionId: string;
 }
 
+interface RunListFilter {
+  readonly sessionId?: string;
+  readonly missingChoice?: boolean;
+}
+
 const chatHelp =
-  "Commands: /workflow <name-or-path> selects a reusable workflow, /workflows [scope] lists reusable workflows, /project [path] shows or changes the session project root, /sessions [tag] lists recent sessions, /sessions --project [path] filters by project, /session 1 or /session <id> switches sessions, /session rename <id-or-number> <new-id> renames, /session delete <id-or-number> deletes, /workflow 1 selects from the last workflow list, /run <task> runs the current workflow, /run #1 <task> runs one task with a listed workflow, /run --workflow <name-or-path> <task> runs one task with another workflow, /runs lists workflow runs, /details <executionId-or-number> shows step results, /session shows current session metadata, /tags [a,b] shows or updates session tags, /exit quits.";
+  "Commands: /workflow <name-or-path> selects a reusable workflow, /workflows [scope] lists reusable workflows, /project [path] shows or changes the session project root, /sessions [tag] lists recent sessions, /sessions --project [path] filters by project, /session 1 or /session <id> switches sessions, /session rename <id-or-number> <new-id> renames, /session delete <id-or-number> deletes, /workflow 1 selects from the last workflow list, /run <task> runs the current workflow, /run #1 <task> runs one task with a listed workflow, /run --workflow <name-or-path> <task> runs one task with another workflow, /runs lists workflow runs in this chat, /runs --all lists persisted runs across sessions, /runs --session <id-or-number> lists persisted runs for one session, /details <executionId-or-number> shows step results, /session shows current session metadata, /tags [a,b] shows or updates session tags, /exit quits.";
 
 const isExitCommand = (input: string): boolean => input === "/exit" || input === "/quit";
 
@@ -290,6 +296,40 @@ const formatRunListMessage = (summaries: ReadonlyArray<WorkflowRunSummary>): str
         "Use /details 1 to open a run, or /details <executionId>.",
       ].join("\n")
     : "No workflow runs found in this chat session.";
+
+const runListFilterFromCommand = (
+  input: string,
+  state: ChatSessionState
+): RunListFilter | undefined => {
+  const parts = commandParts(input);
+  const sessionFilter =
+    parts[1] === "--session" && parts[2] ? sessionIdFromTarget(state, parts[2]) : undefined;
+  return parts[1] === "--all"
+    ? {}
+    : sessionFilter
+      ? sessionFilter.missingChoice
+        ? { missingChoice: true }
+        : { sessionId: sessionFilter.sessionId }
+      : undefined;
+};
+
+const persistedRunScopeText = (filter: RunListFilter): string =>
+  filter.sessionId ? `session ${filter.sessionId}` : "all sessions";
+
+const formatPersistedRunSummaryLine = (detail: ChatRunDetail, index: number): string =>
+  `${index + 1}. ${detail.runSummary.executionId} · ${detail.sessionId} · ${detail.runSummary.workflowName} · ${detail.runSummary.status} · ${detail.runSummary.completedStepCount}/${detail.runSummary.totalStepCount} steps`;
+
+const formatPersistedRunListMessage = (
+  details: ReadonlyArray<ChatRunDetail>,
+  filter: RunListFilter
+): string =>
+  details.length > 0
+    ? [
+        `Persisted workflow runs (${persistedRunScopeText(filter)}):`,
+        ...details.map(formatPersistedRunSummaryLine),
+        "Use /details 1 to open a run, or /details <executionId>.",
+      ].join("\n")
+    : `No persisted workflow runs found for ${persistedRunScopeText(filter)}.`;
 
 const withRunChoices = (
   state: ChatSessionState,
@@ -593,6 +633,7 @@ export const handleChatInput = async ({
   renameSession,
   deleteSession,
   listWorkflowLocators,
+  listRuns,
 }: {
   readonly input: string;
   readonly state: ChatSessionState;
@@ -616,6 +657,7 @@ export const handleChatInput = async ({
     scope?: WorkflowResolveScope,
     projectRoot?: string
   ) => Promise<ReadonlyArray<WorkflowLocator>>;
+  readonly listRuns?: (sessionId?: string) => Promise<ReadonlyArray<ChatRunDetail>>;
 }): Promise<ChatTurnResult> => {
   const trimmed = input.trim();
 
@@ -655,6 +697,39 @@ export const handleChatInput = async ({
     const summaries = runSummariesFromState(state);
     return {
       state: appendAssistant(withRunChoices(state, summaries), formatRunListMessage(summaries)),
+      exit: false,
+    };
+  }
+
+  if (trimmed.startsWith("/runs ")) {
+    const filter = runListFilterFromCommand(trimmed, state);
+    if (!filter) {
+      return {
+        state: appendAssistant(
+          state,
+          "Usage: /runs, /runs --all, or /runs --session <id-or-number>."
+        ),
+        exit: false,
+      };
+    }
+    if (filter.missingChoice) {
+      return {
+        state: appendAssistant(state, "Session choice not found. Run /sessions first."),
+        exit: false,
+      };
+    }
+    const details = await (listRuns
+      ? listRuns(filter.sessionId)
+      : listChatRunDetails({
+          cwd: state.cwd,
+          ...(filter.sessionId ? { sessionId: filter.sessionId } : {}),
+        }));
+    const summaries = uniqueRunSummaries(details.map((detail) => detail.runSummary)).slice(0, 8);
+    return {
+      state: appendAssistant(
+        withRunChoices(state, summaries),
+        formatPersistedRunListMessage(details, filter)
+      ),
       exit: false,
     };
   }
@@ -949,6 +1024,7 @@ const promptLoop = async ({
   renameSession,
   deleteSession,
   listWorkflowLocators,
+  listRuns,
   persist,
 }: {
   readonly reader: { question: (query: string) => Promise<string> };
@@ -974,6 +1050,7 @@ const promptLoop = async ({
     scope?: WorkflowResolveScope,
     projectRoot?: string
   ) => Promise<ReadonlyArray<WorkflowLocator>>;
+  readonly listRuns: (sessionId?: string) => Promise<ReadonlyArray<ChatRunDetail>>;
   readonly persist: (state: ChatSessionState) => Promise<void>;
 }): Promise<ChatSessionState> => {
   const input = await reader.question("> ");
@@ -988,6 +1065,7 @@ const promptLoop = async ({
     renameSession,
     deleteSession,
     listWorkflowLocators,
+    listRuns,
   });
   tui.update(result.state);
   await persist(result.state);
@@ -1005,6 +1083,7 @@ const promptLoop = async ({
         renameSession,
         deleteSession,
         listWorkflowLocators,
+        listRuns,
         persist,
       });
 };
@@ -1122,6 +1201,12 @@ export const runChatSession = async (
       projectRoot: projectRootOverride ?? options.commandOptions.project,
       globalWorkflowDir: options.commandOptions.globalWorkflowsDir,
     });
+  const listRuns = (sessionId?: string): Promise<ReadonlyArray<ChatRunDetail>> =>
+    listChatRunDetails({
+      cwd: options.cwd,
+      ...(sessionId ? { sessionId } : {}),
+      ...(options.sessionStoreDir ? { storeDir: options.sessionStoreDir } : {}),
+    });
   const initialState = await createSessionStartState({
     cwd: options.cwd,
     commandOptions: options.commandOptions,
@@ -1149,6 +1234,7 @@ export const runChatSession = async (
       renameSession,
       deleteSession,
       listWorkflowLocators,
+      listRuns,
     });
     tui.update(result.state);
     await saveSession(options.cwd, result.state, options.sessionStoreDir);
@@ -1180,6 +1266,7 @@ export const runChatSession = async (
     renameSession,
     deleteSession,
     listWorkflowLocators,
+    listRuns,
     persist: (state) => saveSession(options.cwd, state, options.sessionStoreDir),
   })
     .then((state) => saveSession(options.cwd, state, options.sessionStoreDir).then(() => state))

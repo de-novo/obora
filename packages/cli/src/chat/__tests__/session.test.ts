@@ -1,3 +1,4 @@
+import { buildWorkflowRunSummary } from "@obora/sdk";
 import type { RuntimeExecution, WorkflowLocator } from "@obora/sdk";
 import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -406,6 +407,130 @@ describe("chat session", () => {
     expect(listed.state.messages.at(-1)?.content).toContain("Use /details 1");
     expect(opened.state.inspectedRunSummary?.executionId).toBe("exec-chat-1");
     expect(opened.state.messages.at(-1)?.content).toContain("Opened run details exec-chat-1.");
+  });
+
+  it("lists persisted runs across sessions from chat", async () => {
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const listRuns = vi.fn(async () => [
+      {
+        sessionId: "session-a",
+        messageId: "assistant:run",
+        messageCreatedAt: "2026-05-21T00:00:02.000Z",
+        runSummary,
+      },
+    ]);
+    const state = createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true });
+
+    const listed = await handleChatInput({
+      input: "/runs --all",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      listRuns,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(listRuns).toHaveBeenCalledWith(undefined);
+    expect(listed.state.runChoices?.map((summary) => summary.executionId)).toEqual([
+      "exec-chat-1",
+    ]);
+    expect(listed.state.messages.at(-1)?.content).toContain(
+      "Persisted workflow runs (all sessions):"
+    );
+    expect(listed.state.messages.at(-1)?.content).toContain("exec-chat-1 · session-a");
+  });
+
+  it("lists persisted runs for a selected session choice from chat", async () => {
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const listRuns = vi.fn(async () => [
+      {
+        sessionId: "session-b",
+        messageId: "state:lastRunSummary",
+        messageCreatedAt: "2026-05-22T00:00:02.000Z",
+        runSummary: {
+          ...runSummary,
+          executionId: "exec-session-b",
+          startedAt: "2026-05-22T00:00:00.000Z",
+        },
+      },
+    ]);
+    const state = {
+      ...createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true }),
+      sessionChoices: [
+        {
+          sessionId: "session-b",
+          status: "ready" as const,
+          cwd: "/repo",
+          projectRoot: "/repo",
+          tags: ["ops"],
+          workflowTarget: "release-readiness",
+          messageCount: 4,
+          updatedAt: "2026-05-22T00:00:00.000Z",
+        },
+      ],
+    };
+
+    const listed = await handleChatInput({
+      input: "/runs --session 1",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      listRuns,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(listRuns).toHaveBeenCalledWith("session-b");
+    expect(listed.state.runChoices?.map((summary) => summary.executionId)).toEqual([
+      "exec-session-b",
+    ]);
+    expect(listed.state.messages.at(-1)?.content).toContain(
+      "Persisted workflow runs (session session-b):"
+    );
+  });
+
+  it("reports invalid and missing persisted run list selectors", async () => {
+    const state = createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true });
+    const invalid = await handleChatInput({
+      input: "/runs --unknown",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+    const missingChoice = await handleChatInput({
+      input: "/runs --session 2",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(invalid.state.messages.at(-1)?.content).toContain(
+      "Usage: /runs, /runs --all, or /runs --session <id-or-number>."
+    );
+    expect(missingChoice.state.messages.at(-1)?.content).toContain(
+      "Session choice not found. Run /sessions first."
+    );
+  });
+
+  it("reports empty persisted run lists for a selected session", async () => {
+    const listRuns = vi.fn(async () => []);
+    const state = createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true });
+
+    const listed = await handleChatInput({
+      input: "/runs --session session-empty",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      listRuns,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(listRuns).toHaveBeenCalledWith("session-empty");
+    expect(listed.state.runChoices).toEqual([]);
+    expect(listed.state.messages.at(-1)?.content).toContain(
+      "No persisted workflow runs found for session session-empty."
+    );
   });
 
   it("reports missing run details without requiring a workflow selection", async () => {
