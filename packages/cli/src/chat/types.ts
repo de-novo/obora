@@ -53,6 +53,7 @@ export interface ChatCommandOptions {
   readonly workflow?: string;
   readonly once?: string;
   readonly listSessions?: boolean;
+  readonly listRuns?: boolean;
   readonly showSession?: boolean;
   readonly showRun?: string;
   readonly groupSessions?: string;

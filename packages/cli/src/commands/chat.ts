@@ -4,6 +4,7 @@ import { runChatSession } from "../chat/session.js";
 import {
   findChatRunDetail,
   groupChatSessionSummaries,
+  listChatRunDetails,
   listChatSessionSummaries,
   loadChatSessionState,
 } from "../chat/store.js";
@@ -32,6 +33,7 @@ export function createChatCommand(): Command {
     .option("--filter-tag <tag>", "Only list sessions with the given tag")
     .option("--filter-project <path>", "Only list sessions for a project root, or current")
     .option("--show-session", "Show the persisted chat session selected by --session")
+    .option("--list-runs", "List persisted workflow runs, optionally scoped by --session")
     .option("--show-run <executionId>", "Show a persisted workflow run summary by execution id")
     .option("--once <message>", "Run one chat message and exit")
     .option("--dry-run", "Validate the selected workflow without live execution")
@@ -100,6 +102,28 @@ export function createChatCommand(): Command {
               throw new CLIError(`Chat session not found: ${options.session}`, ExitCode.CLI_ERROR);
             }
             formatter.json(state);
+            return;
+          }
+
+          if (options.listRuns) {
+            const runs = await listChatRunDetails({
+              cwd: process.cwd(),
+              ...(options.session ? { sessionId: options.session } : {}),
+            });
+            if (options.json || globalOpts.json) {
+              formatter.json(runs);
+            } else {
+              formatter.table(
+                runs.map((detail) => ({
+                  sessionId: detail.sessionId,
+                  executionId: detail.runSummary.executionId,
+                  workflowName: detail.runSummary.workflowName,
+                  status: detail.runSummary.status,
+                  steps: `${detail.runSummary.completedStepCount}/${detail.runSummary.totalStepCount}`,
+                  startedAt: detail.runSummary.startedAt,
+                }))
+              );
+            }
             return;
           }
 

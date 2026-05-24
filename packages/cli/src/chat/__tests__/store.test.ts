@@ -9,6 +9,7 @@ import {
   deleteChatSessionState,
   findChatRunDetail,
   groupChatSessionSummaries,
+  listChatRunDetails,
   listChatSessionSummaries,
   loadChatSessionState,
   renameChatSessionState,
@@ -187,6 +188,59 @@ describe("chat session store", () => {
     await expect(
       findChatRunDetail({ cwd, sessionId: "session-with-run", executionId: "missing" })
     ).resolves.toBeUndefined();
+  });
+
+  it("lists persisted run summaries from messages and restored session fields", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "obora-chat-store-runs-"));
+    const messageRun = {
+      ...runSummary,
+      executionId: "exec-message",
+      startedAt: "2026-05-24T00:00:00.000Z",
+    };
+    const lastRun = {
+      ...runSummary,
+      executionId: "exec-last",
+      startedAt: "2026-05-25T00:00:00.000Z",
+    };
+    const state = {
+      ...createInitialChatState({
+        sessionId: "session-with-runs",
+        cwd,
+        dryRun: false,
+        workflowTarget: "release-readiness",
+      }),
+      lastRunSummary: lastRun,
+      messages: [
+        {
+          id: "assistant:run",
+          role: "assistant" as const,
+          content: "Workflow completed.",
+          createdAt: "2026-05-24T00:00:01.000Z",
+          runSummary: messageRun,
+        },
+      ],
+    };
+
+    await saveChatSessionState({ cwd, state });
+
+    await expect(listChatRunDetails({ cwd })).resolves.toEqual([
+      expect.objectContaining({
+        sessionId: "session-with-runs",
+        messageId: "state:lastRunSummary",
+        runSummary: expect.objectContaining({ executionId: "exec-last" }),
+      }),
+      expect.objectContaining({
+        sessionId: "session-with-runs",
+        messageId: "assistant:run",
+        runSummary: expect.objectContaining({ executionId: "exec-message" }),
+      }),
+    ]);
+    await expect(
+      findChatRunDetail({ cwd, executionId: "exec-last" })
+    ).resolves.toMatchObject({
+      messageId: "state:lastRunSummary",
+      runSummary: { executionId: "exec-last" },
+    });
   });
 
   it("groups chat session summaries by project, tag, or day", () => {

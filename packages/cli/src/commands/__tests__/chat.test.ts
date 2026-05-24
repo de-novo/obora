@@ -2,6 +2,7 @@ import { runChatSession } from "../../chat/session.js";
 import {
   findChatRunDetail,
   groupChatSessionSummaries,
+  listChatRunDetails,
   listChatSessionSummaries,
   loadChatSessionState,
 } from "../../chat/store.js";
@@ -16,6 +17,7 @@ vi.mock("../../chat/session.js", () => ({
 vi.mock("../../chat/store.js", () => ({
   findChatRunDetail: vi.fn(),
   groupChatSessionSummaries: vi.fn((sessions) => [{ group: "/repo", sessions }]),
+  listChatRunDetails: vi.fn(),
   listChatSessionSummaries: vi.fn(),
   loadChatSessionState: vi.fn(),
 }));
@@ -280,6 +282,68 @@ describe("chat command", () => {
     expect(findChatRunDetail).toHaveBeenCalledWith(
       expect.objectContaining({ executionId: "exec-123", sessionId: "session-a" })
     );
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('"executionId": "exec-123"'));
+  });
+
+  it("lists persisted chat runs without starting the TUI", async () => {
+    const tableSpy = vi.spyOn(console, "table").mockImplementation(() => undefined);
+    vi.mocked(listChatRunDetails).mockResolvedValue([
+      {
+        sessionId: "session-a",
+        messageId: "assistant:run",
+        messageCreatedAt: "2026-05-24T00:00:01.000Z",
+        workflowTarget: "release-readiness",
+        runSummary: {
+          executionId: "exec-123",
+          workflowName: "release-readiness",
+          status: "completed",
+          startedAt: "2026-05-24T00:00:00.000Z",
+          completedStepCount: 1,
+          totalStepCount: 1,
+          message: "Workflow completed: 1/1 steps completed.",
+          steps: [],
+        },
+      },
+    ]);
+
+    await createChatCommand().parseAsync(["--list-runs", "--session", "session-a"], {
+      from: "user",
+    });
+
+    expect(runChatSession).not.toHaveBeenCalled();
+    expect(listChatRunDetails).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: process.cwd(), sessionId: "session-a" })
+    );
+    expect(tableSpy).toHaveBeenCalledWith([
+      expect.objectContaining({
+        sessionId: "session-a",
+        executionId: "exec-123",
+        workflowName: "release-readiness",
+      }),
+    ]);
+  });
+
+  it("prints persisted chat runs as JSON", async () => {
+    vi.mocked(listChatRunDetails).mockResolvedValue([
+      {
+        sessionId: "session-a",
+        messageId: "assistant:run",
+        messageCreatedAt: "2026-05-24T00:00:01.000Z",
+        runSummary: {
+          executionId: "exec-123",
+          workflowName: "release-readiness",
+          status: "completed",
+          startedAt: "2026-05-24T00:00:00.000Z",
+          completedStepCount: 1,
+          totalStepCount: 1,
+          message: "Workflow completed: 1/1 steps completed.",
+          steps: [],
+        },
+      },
+    ]);
+
+    await createChatCommand().parseAsync(["--list-runs", "--json"], { from: "user" });
+
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining('"executionId": "exec-123"'));
   });
 

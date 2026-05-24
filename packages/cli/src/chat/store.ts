@@ -279,21 +279,59 @@ export const groupChatSessionSummaries = (
 const chatRunDetailFromState =
   (executionId: string) =>
   (state: ChatSessionState): ChatRunDetail | undefined =>
-    state.messages
-      .flatMap((message) =>
-        message.runSummary?.executionId === executionId
-          ? [
-              {
-                sessionId: state.sessionId,
-                messageId: message.id,
-                messageCreatedAt: message.createdAt,
-                ...(state.workflowTarget ? { workflowTarget: state.workflowTarget } : {}),
-                runSummary: message.runSummary,
-              },
-            ]
-          : []
-      )
+    chatRunDetailsFromState(state)
+      .filter((detail) => detail.runSummary.executionId === executionId)
       .at(0);
+
+const syntheticRunDetail = (
+  state: ChatSessionState,
+  summary: WorkflowRunSummary,
+  source: string
+): ChatRunDetail => ({
+  sessionId: state.sessionId,
+  messageId: source,
+  messageCreatedAt: summary.startedAt,
+  ...(state.workflowTarget ? { workflowTarget: state.workflowTarget } : {}),
+  runSummary: summary,
+});
+
+const uniqueRunDetails = (
+  details: ReadonlyArray<ChatRunDetail>
+): ReadonlyArray<ChatRunDetail> =>
+  details.filter(
+    (detail, index, all) =>
+      all.findIndex(
+        (candidate) =>
+          candidate.runSummary.executionId === detail.runSummary.executionId &&
+          candidate.sessionId === detail.sessionId
+      ) === index
+  );
+
+const chatRunDetailsFromState = (state: ChatSessionState): ReadonlyArray<ChatRunDetail> =>
+  uniqueRunDetails([
+    ...state.messages.flatMap((message) =>
+      message.runSummary
+        ? [
+            {
+              sessionId: state.sessionId,
+              messageId: message.id,
+              messageCreatedAt: message.createdAt,
+              ...(state.workflowTarget ? { workflowTarget: state.workflowTarget } : {}),
+              runSummary: message.runSummary,
+            },
+          ]
+        : []
+    ),
+    ...(state.lastRunSummary
+      ? [syntheticRunDetail(state, state.lastRunSummary, "state:lastRunSummary")]
+      : []),
+    ...(state.inspectedRunSummary
+      ? [syntheticRunDetail(state, state.inspectedRunSummary, "state:inspectedRunSummary")]
+      : []),
+    ...(state.runChoices ?? []).map((summary) =>
+      syntheticRunDetail(state, summary, "state:runChoices")
+    ),
+  ]);
 
 const findFirstChatRunDetail = (
   states: ReadonlyArray<ChatSessionState>,
@@ -324,4 +362,25 @@ export const findChatRunDetail = async ({
           records.map((record) => record.state),
           executionId
         )
+      );
+
+export const listChatRunDetails = async ({
+  cwd,
+  sessionId,
+  storeDir = chatSessionStoreDir(cwd),
+}: {
+  readonly cwd: string;
+  readonly sessionId?: string;
+  readonly storeDir?: string;
+}): Promise<ReadonlyArray<ChatRunDetail>> =>
+  sessionId
+    ? loadChatSessionState({ cwd, sessionId, storeDir }).then((state) =>
+        state ? chatRunDetailsFromState(state) : []
+      )
+    : listChatSessionRecords(storeDir).then((records) =>
+        records
+          .flatMap((record) => chatRunDetailsFromState(record.state))
+          .sort((left, right) =>
+            right.runSummary.startedAt.localeCompare(left.runSummary.startedAt)
+          )
       );
