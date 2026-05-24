@@ -3,7 +3,6 @@ import { join } from "node:path";
 
 import type { WorkflowRunSummary } from "@obora/sdk";
 
-import { runChoiceSummary, toChatRunChoice, type ChatRunChoiceInput } from "./run-choices.js";
 import type { ChatMessage, ChatSessionState } from "./types.js";
 
 export interface ChatSessionSummary {
@@ -30,6 +29,13 @@ export interface ChatRunDetail {
   readonly messageCreatedAt: string;
   readonly workflowTarget?: string;
   readonly runSummary: WorkflowRunSummary;
+}
+
+export interface ChatRunDetailFilter {
+  readonly sessionId?: string;
+  readonly projectRoot?: string;
+  readonly tag?: string;
+  readonly status?: string;
 }
 
 interface ChatSessionRecord {
@@ -215,6 +221,31 @@ const filterSummaryByProject =
   (summary: ChatSessionSummary): boolean =>
     projectRoot ? (summary.projectRoot ?? summary.cwd) === projectRoot : true;
 
+const filterRecordByProject =
+  (projectRoot: string | undefined) =>
+  (record: ChatSessionRecord): boolean =>
+    projectRoot ? (record.state.projectRoot ?? record.state.cwd) === projectRoot : true;
+
+const filterRecordByTag =
+  (tag: string | undefined) =>
+  (record: ChatSessionRecord): boolean =>
+    tag ? (record.state.tags ?? []).includes(tag) : true;
+
+const filterStateByProject =
+  (projectRoot: string | undefined) =>
+  (state: ChatSessionState): boolean =>
+    projectRoot ? (state.projectRoot ?? state.cwd) === projectRoot : true;
+
+const filterStateByTag =
+  (tag: string | undefined) =>
+  (state: ChatSessionState): boolean =>
+    tag ? (state.tags ?? []).includes(tag) : true;
+
+const filterRunDetailByStatus =
+  (status: string | undefined) =>
+  (detail: ChatRunDetail): boolean =>
+    status ? detail.runSummary.status === status : true;
+
 export const listChatSessionSummaries = async ({
   cwd,
   tag,
@@ -329,13 +360,6 @@ const chatRunDetailsFromState = (state: ChatSessionState): ReadonlyArray<ChatRun
     ...(state.inspectedRunSummary
       ? [syntheticRunDetail(state, state.inspectedRunSummary, "state:inspectedRunSummary")]
       : []),
-    ...((state.runChoices ?? []) as ReadonlyArray<ChatRunChoiceInput>).map((choice) =>
-      syntheticRunDetail(
-        state,
-        runChoiceSummary(toChatRunChoice(choice, state.sessionId)),
-        "state:runChoices"
-      )
-    ),
   ]);
 
 const findFirstChatRunDetail = (
@@ -372,19 +396,30 @@ export const findChatRunDetail = async ({
 export const listChatRunDetails = async ({
   cwd,
   sessionId,
+  projectRoot,
+  tag,
+  status,
   storeDir = chatSessionStoreDir(cwd),
 }: {
   readonly cwd: string;
   readonly sessionId?: string;
+  readonly projectRoot?: string;
+  readonly tag?: string;
+  readonly status?: string;
   readonly storeDir?: string;
 }): Promise<ReadonlyArray<ChatRunDetail>> =>
   sessionId
     ? loadChatSessionState({ cwd, sessionId, storeDir }).then((state) =>
-        state ? chatRunDetailsFromState(state) : []
+        state && filterStateByProject(projectRoot)(state) && filterStateByTag(tag)(state)
+          ? chatRunDetailsFromState(state).filter(filterRunDetailByStatus(status))
+          : []
       )
     : listChatSessionRecords(storeDir).then((records) =>
         records
+          .filter(filterRecordByProject(projectRoot))
+          .filter(filterRecordByTag(tag))
           .flatMap((record) => chatRunDetailsFromState(record.state))
+          .filter(filterRunDetailByStatus(status))
           .sort((left, right) =>
             right.runSummary.startedAt.localeCompare(left.runSummary.startedAt)
           )

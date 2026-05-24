@@ -243,6 +243,72 @@ describe("chat session store", () => {
     });
   });
 
+  it("filters persisted run summaries by project, tag, status, and session", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "obora-chat-store-run-filters-"));
+    const projectA = join(cwd, "project-a");
+    const projectB = join(cwd, "project-b");
+    const completedRun = {
+      ...runSummary,
+      executionId: "exec-completed",
+      status: "completed" as const,
+      startedAt: "2026-05-25T00:00:00.000Z",
+    };
+    const failedRun = {
+      ...runSummary,
+      executionId: "exec-failed",
+      status: "failed" as const,
+      startedAt: "2026-05-24T00:00:00.000Z",
+    };
+
+    await saveChatSessionState({
+      cwd,
+      state: {
+        ...createInitialChatState({
+          sessionId: "session-release",
+          cwd,
+          projectRoot: projectA,
+          tags: ["release"],
+          dryRun: false,
+        }),
+        lastRunSummary: completedRun,
+      },
+    });
+    await saveChatSessionState({
+      cwd,
+      state: {
+        ...createInitialChatState({
+          sessionId: "session-support",
+          cwd,
+          projectRoot: projectB,
+          tags: ["support"],
+          dryRun: false,
+        }),
+        lastRunSummary: failedRun,
+      },
+    });
+
+    await expect(listChatRunDetails({ cwd, projectRoot: projectA })).resolves.toEqual([
+      expect.objectContaining({ runSummary: expect.objectContaining({ executionId: "exec-completed" }) }),
+    ]);
+    await expect(listChatRunDetails({ cwd, tag: "support" })).resolves.toEqual([
+      expect.objectContaining({ runSummary: expect.objectContaining({ executionId: "exec-failed" }) }),
+    ]);
+    await expect(listChatRunDetails({ cwd, status: "failed" })).resolves.toEqual([
+      expect.objectContaining({ runSummary: expect.objectContaining({ executionId: "exec-failed" }) }),
+    ]);
+    await expect(
+      listChatRunDetails({ cwd, sessionId: "session-support", projectRoot: projectA })
+    ).resolves.toEqual([]);
+    await expect(
+      listChatRunDetails({ cwd, sessionId: "session-support", tag: "release" })
+    ).resolves.toEqual([]);
+    await expect(
+      listChatRunDetails({ cwd, sessionId: "session-support", tag: "support", status: "failed" })
+    ).resolves.toEqual([
+      expect.objectContaining({ runSummary: expect.objectContaining({ executionId: "exec-failed" }) }),
+    ]);
+  });
+
   it("groups chat session summaries by project, tag, or day", () => {
     const summaries = [
       {

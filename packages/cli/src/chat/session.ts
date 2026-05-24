@@ -76,11 +76,14 @@ interface SessionRenameCommand {
 
 interface RunListFilter {
   readonly sessionId?: string;
+  readonly projectRoot?: string;
+  readonly tag?: string;
+  readonly status?: string;
   readonly missingChoice?: boolean;
 }
 
 const chatHelp =
-  "Commands: /workflow <name-or-path> selects a reusable workflow, /workflows [scope] lists reusable workflows, /project [path] shows or changes the session project root, /sessions [tag] lists recent sessions, /sessions --project [path] filters by project, /session 1 or /session <id> switches sessions, /session rename <id-or-number> <new-id> renames, /session delete <id-or-number> deletes, /workflow 1 selects from the last workflow list, /run <task> runs the current workflow, /run #1 <task> runs one task with a listed workflow, /run --workflow <name-or-path> <task> runs one task with another workflow, /runs lists workflow runs in this chat, /runs --all lists persisted runs across sessions, /runs --session <id-or-number> lists persisted runs for one session, /details <executionId-or-number> shows step results, /details clear closes the current run detail view, /session shows current session metadata, /tags [a,b] shows or updates session tags, /exit quits.";
+  "Commands: /workflow <name-or-path> selects a reusable workflow, /workflows [scope] lists reusable workflows, /project [path] shows or changes the session project root, /sessions [tag] lists recent sessions, /sessions --project [path] filters by project, /session 1 or /session <id> switches sessions, /session rename <id-or-number> <new-id> renames, /session delete <id-or-number> deletes, /workflow 1 selects from the last workflow list, /run <task> runs the current workflow, /run #1 <task> runs one task with a listed workflow, /run --workflow <name-or-path> <task> runs one task with another workflow, /runs lists workflow runs in this chat, /runs --all lists persisted runs across sessions, /runs --session <id-or-number> lists persisted runs for one session, /runs --project [path], /runs --tag <tag>, and /runs --status <status> filter persisted runs, /details <executionId-or-number> shows step results, /details clear closes the current run detail view, /session shows current session metadata, /tags [a,b] shows or updates session tags, /exit quits.";
 
 const isExitCommand = (input: string): boolean => input === "/exit" || input === "/quit";
 
@@ -332,19 +335,51 @@ const runListFilterFromCommand = (
   state: ChatSessionState
 ): RunListFilter | undefined => {
   const parts = commandParts(input);
+  const options = parts.slice(1);
+  const knownOptions = ["--all", "--session", "--project", "--tag", "--status"];
+  const hasOption = (option: string): boolean => options.includes(option);
+  const optionValue = (option: string): string | undefined => {
+    const optionIndex = parts.indexOf(option);
+    const value = optionIndex >= 0 ? parts[optionIndex + 1] : undefined;
+    return value && !value.startsWith("--") ? value : undefined;
+  };
+  const hasUnknownOption = options.some(
+    (part) => part.startsWith("--") && !knownOptions.includes(part)
+  );
+  const sessionTarget = optionValue("--session");
   const sessionFilter =
-    parts[1] === "--session" && parts[2] ? sessionIdFromTarget(state, parts[2]) : undefined;
-  return parts[1] === "--all"
-    ? {}
-    : sessionFilter
-      ? sessionFilter.missingChoice
-        ? { missingChoice: true }
-        : { sessionId: sessionFilter.sessionId }
-      : undefined;
+    hasOption("--session") && sessionTarget ? sessionIdFromTarget(state, sessionTarget) : undefined;
+  const projectTarget = optionValue("--project");
+  const projectRoot = projectTarget
+    ? resolveProjectRootTarget(state, projectTarget)
+    : state.projectRoot ?? state.cwd;
+  const hasKnownOption = options.some((part) => knownOptions.includes(part));
+  const hasRequiredValue =
+    (!hasOption("--session") || Boolean(sessionTarget)) &&
+    (!hasOption("--tag") || Boolean(optionValue("--tag"))) &&
+    (!hasOption("--status") || Boolean(optionValue("--status")));
+
+  return !hasKnownOption || hasUnknownOption || !hasRequiredValue
+    ? undefined
+    : sessionFilter?.missingChoice
+      ? { missingChoice: true }
+      : {
+          ...(sessionFilter ? { sessionId: sessionFilter.sessionId } : {}),
+          ...(hasOption("--project") ? { projectRoot } : {}),
+          ...(optionValue("--tag") ? { tag: optionValue("--tag") } : {}),
+          ...(optionValue("--status") ? { status: optionValue("--status") } : {}),
+        };
 };
 
 const persistedRunScopeText = (filter: RunListFilter): string =>
-  filter.sessionId ? `session ${filter.sessionId}` : "all sessions";
+  [
+    filter.sessionId ? `session ${filter.sessionId}` : "all sessions",
+    filter.projectRoot ? `project ${filter.projectRoot}` : undefined,
+    filter.tag ? `tag ${filter.tag}` : undefined,
+    filter.status ? `status ${filter.status}` : undefined,
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join(", ");
 
 const formatPersistedRunSummaryLine = (detail: ChatRunDetail, index: number): string =>
   `${index + 1}. ${detail.runSummary.executionId} · ${detail.sessionId} · ${detail.runSummary.workflowName} · ${detail.runSummary.status} · ${detail.runSummary.completedStepCount}/${detail.runSummary.totalStepCount} steps`;
@@ -720,7 +755,10 @@ export const handleChatInput = async ({
     scope?: WorkflowResolveScope,
     projectRoot?: string
   ) => Promise<ReadonlyArray<WorkflowLocator>>;
-  readonly listRuns?: (sessionId?: string) => Promise<ReadonlyArray<ChatRunDetail>>;
+  readonly listRuns?: (
+    sessionId?: string,
+    filter?: RunListFilter
+  ) => Promise<ReadonlyArray<ChatRunDetail>>;
   readonly findRun?: (executionId: string) => Promise<ChatRunDetail | undefined>;
 }): Promise<ChatTurnResult> => {
   const trimmed = input.trim();
@@ -774,7 +812,7 @@ export const handleChatInput = async ({
       return {
         state: appendAssistant(
           state,
-          "Usage: /runs, /runs --all, or /runs --session <id-or-number>."
+          "Usage: /runs, /runs --all, /runs --session <id-or-number>, /runs --project [path], /runs --tag <tag>, or /runs --status <status>."
         ),
         exit: false,
       };
@@ -785,11 +823,17 @@ export const handleChatInput = async ({
         exit: false,
       };
     }
+    const hasPersistedRunFilters = Boolean(filter.projectRoot || filter.tag || filter.status);
     const details = await (listRuns
-      ? listRuns(filter.sessionId)
+      ? hasPersistedRunFilters
+        ? listRuns(filter.sessionId, filter)
+        : listRuns(filter.sessionId)
       : listChatRunDetails({
           cwd: state.cwd,
           ...(filter.sessionId ? { sessionId: filter.sessionId } : {}),
+          ...(filter.projectRoot ? { projectRoot: filter.projectRoot } : {}),
+          ...(filter.tag ? { tag: filter.tag } : {}),
+          ...(filter.status ? { status: filter.status } : {}),
         }));
     return {
       state: appendAssistant(
@@ -1133,7 +1177,10 @@ const promptLoop = async ({
     scope?: WorkflowResolveScope,
     projectRoot?: string
   ) => Promise<ReadonlyArray<WorkflowLocator>>;
-  readonly listRuns: (sessionId?: string) => Promise<ReadonlyArray<ChatRunDetail>>;
+  readonly listRuns: (
+    sessionId?: string,
+    filter?: RunListFilter
+  ) => Promise<ReadonlyArray<ChatRunDetail>>;
   readonly findRun: (executionId: string) => Promise<ChatRunDetail | undefined>;
   readonly persist: (state: ChatSessionState) => Promise<void>;
 }): Promise<ChatSessionState> => {
@@ -1287,10 +1334,16 @@ export const runChatSession = async (
       projectRoot: projectRootOverride ?? options.commandOptions.project,
       globalWorkflowDir: options.commandOptions.globalWorkflowsDir,
     });
-  const listRuns = (sessionId?: string): Promise<ReadonlyArray<ChatRunDetail>> =>
+  const listRuns = (
+    sessionId?: string,
+    filter: RunListFilter = {}
+  ): Promise<ReadonlyArray<ChatRunDetail>> =>
     listChatRunDetails({
       cwd: options.cwd,
       ...(sessionId ? { sessionId } : {}),
+      ...(filter.projectRoot ? { projectRoot: filter.projectRoot } : {}),
+      ...(filter.tag ? { tag: filter.tag } : {}),
+      ...(filter.status ? { status: filter.status } : {}),
       ...(options.sessionStoreDir ? { storeDir: options.sessionStoreDir } : {}),
     });
   const findRun = (executionId: string): Promise<ChatRunDetail | undefined> =>

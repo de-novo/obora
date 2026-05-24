@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { createInitialChatState } from "../state.js";
 import { handleChatInput, runChatSession } from "../session.js";
+import { saveChatSessionState } from "../store.js";
 
 const locator: WorkflowLocator = {
   id: "project:abc",
@@ -666,13 +667,138 @@ describe("chat session", () => {
       runWorkflow,
       commandOptions: { dryRun: true },
     });
+    const missingTag = await handleChatInput({
+      input: "/runs --tag",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+    const missingStatus = await handleChatInput({
+      input: "/runs --status",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
 
     expect(invalid.state.messages.at(-1)?.content).toContain(
-      "Usage: /runs, /runs --all, or /runs --session <id-or-number>."
+      "Usage: /runs, /runs --all, /runs --session <id-or-number>, /runs --project [path], /runs --tag <tag>, or /runs --status <status>."
     );
+    expect(missingTag.state.messages.at(-1)?.content).toContain("Usage: /runs");
+    expect(missingStatus.state.messages.at(-1)?.content).toContain("Usage: /runs");
     expect(missingChoice.state.messages.at(-1)?.content).toContain(
       "Session choice not found. Run /sessions first."
     );
+  });
+
+  it("passes persisted run filters to injected run listing callbacks", async () => {
+    const listRuns = vi.fn(async () => []);
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd: "/repo",
+      projectRoot: "/repo/project-a",
+      dryRun: true,
+    });
+
+    const listed = await handleChatInput({
+      input: "/runs --project packages/cli --tag release --status failed",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      listRuns,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(listRuns).toHaveBeenCalledWith(
+      undefined,
+      expect.objectContaining({
+        projectRoot: "/repo/packages/cli",
+        tag: "release",
+        status: "failed",
+      })
+    );
+    expect(listed.state.messages.at(-1)?.content).toContain(
+      "all sessions, project /repo/packages/cli, tag release, status failed"
+    );
+  });
+
+  it("filters persisted runs by project, tag, and status from chat", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "obora-chat-run-filter-command-"));
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const projectA = join(cwd, "project-a");
+    const projectB = join(cwd, "project-b");
+    await saveChatSessionState({
+      cwd,
+      state: {
+        ...createInitialChatState({
+          sessionId: "session-release",
+          cwd,
+          projectRoot: projectA,
+          tags: ["release"],
+          dryRun: false,
+        }),
+        lastRunSummary: {
+          ...runSummary,
+          executionId: "exec-release",
+          startedAt: "2026-05-25T00:00:00.000Z",
+        },
+      },
+    });
+    await saveChatSessionState({
+      cwd,
+      state: {
+        ...createInitialChatState({
+          sessionId: "session-support",
+          cwd,
+          projectRoot: projectB,
+          tags: ["support"],
+          dryRun: false,
+        }),
+        lastRunSummary: {
+          ...runSummary,
+          executionId: "exec-support-failed",
+          status: "failed",
+          startedAt: "2026-05-24T00:00:00.000Z",
+        },
+      },
+    });
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd,
+      projectRoot: projectA,
+      dryRun: true,
+    });
+
+    const byProject = await handleChatInput({
+      input: "/runs --project",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+    const byTag = await handleChatInput({
+      input: "/runs --tag support",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+    const byStatus = await handleChatInput({
+      input: "/runs --status failed",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(byProject.state.messages.at(-1)?.content).toContain(`project ${projectA}`);
+    expect(byProject.state.messages.at(-1)?.content).toContain("exec-release");
+    expect(byProject.state.messages.at(-1)?.content).not.toContain("exec-support-failed");
+    expect(byTag.state.messages.at(-1)?.content).toContain("tag support");
+    expect(byTag.state.messages.at(-1)?.content).toContain("exec-support-failed");
+    expect(byStatus.state.messages.at(-1)?.content).toContain("status failed");
+    expect(byStatus.state.messages.at(-1)?.content).toContain("exec-support-failed");
   });
 
   it("reports empty persisted run lists for a selected session", async () => {
