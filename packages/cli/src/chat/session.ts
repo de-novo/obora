@@ -344,14 +344,21 @@ const openedRunDetailsMessage = (
     : `Opened run details ${summary.executionId}.`;
 };
 
-const clearPanels = (state: ChatSessionState): ChatSessionState => ({
-  ...state,
-  inspectedRunSummary: undefined,
-  runChoices: undefined,
-  sessionChoices: undefined,
-  workflowChoices: undefined,
-  showHelpPanel: undefined,
-});
+const clearPanels = (state: ChatSessionState): ChatSessionState =>
+  state.inspectedRunSummary
+    ? {
+        ...state,
+        inspectedRunSummary: undefined,
+        showHelpPanel: undefined,
+      }
+    : {
+        ...state,
+        inspectedRunSummary: undefined,
+        runChoices: undefined,
+        sessionChoices: undefined,
+        workflowChoices: undefined,
+        showHelpPanel: undefined,
+      };
 
 const hasPickerPanel = (state: ChatSessionState): boolean =>
   Boolean(

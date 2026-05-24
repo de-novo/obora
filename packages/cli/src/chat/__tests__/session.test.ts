@@ -464,6 +464,37 @@ describe("chat session", () => {
     );
   });
 
+  it("closes run details without discarding the current run list", async () => {
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const listedState = {
+      ...createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true }),
+      inspectedRunSummary: runSummary,
+      runChoices: [
+        {
+          runSummary,
+          sessionId: "history-session",
+          messageId: "assistant:run",
+          source: "persisted",
+        },
+      ],
+    };
+
+    const cleared = await handleChatInput({
+      input: "/clear",
+      state: listedState,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(cleared.state.inspectedRunSummary).toBeUndefined();
+    expect(cleared.state.runChoices?.[0]).toMatchObject({
+      sessionId: "history-session",
+      runSummary: { executionId: "exec-chat-1" },
+    });
+    expect(cleared.state.messages.at(-1)?.content).toBe("Closed run details view.");
+  });
+
   it("keeps the previous run detail clear command compatible", async () => {
     const runSummary = buildWorkflowRunSummary(executionResult);
     const state = {
