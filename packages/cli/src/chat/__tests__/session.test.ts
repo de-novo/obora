@@ -337,6 +337,134 @@ describe("chat session", () => {
     expect(cleared.state.messages.at(-1)?.content).toContain("Session tags updated: none");
   });
 
+  it("lists recent sessions from inside chat and supports tag filtering", async () => {
+    vi.clearAllMocks();
+    const listSessions = vi.fn(async (_tag?: string) => [
+      {
+        sessionId: "release-session",
+        status: "ready" as const,
+        cwd: "/repo",
+        projectRoot: "/repo",
+        tags: ["release"],
+        workflowTarget: "release-readiness",
+        messageCount: 5,
+        updatedAt: "2026-05-24T00:00:00.000Z",
+      },
+    ]);
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd: "/repo",
+      dryRun: true,
+    });
+
+    const result = await handleChatInput({
+      input: "/sessions release",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+      listSessions,
+    });
+
+    expect(runWorkflow).not.toHaveBeenCalled();
+    expect(listSessions).toHaveBeenCalledWith("release");
+    expect(result.state.messages.at(-1)?.content).toContain("Recent sessions tagged release");
+    expect(result.state.messages.at(-1)?.content).toContain("release-session");
+    expect(result.state.messages.at(-1)?.content).toContain("release-readiness");
+  });
+
+  it("reports when no chat sessions are available inside chat", async () => {
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd: "/repo",
+      dryRun: true,
+    });
+
+    const result = await handleChatInput({
+      input: "/sessions",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+      listSessions: vi.fn(async () => []),
+    });
+
+    expect(result.state.messages.at(-1)?.content).toContain("No chat sessions found.");
+  });
+
+  it("lists recent unfiltered sessions from inside chat", async () => {
+    const listSessions = vi.fn(async () => [
+      {
+        sessionId: "untagged-session",
+        status: "completed" as const,
+        cwd: "/repo",
+        tags: [],
+        messageCount: 1,
+        updatedAt: "2026-05-24T00:00:00.000Z",
+      },
+    ]);
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd: "/repo",
+      dryRun: true,
+    });
+
+    const result = await handleChatInput({
+      input: "/sessions",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+      listSessions,
+    });
+
+    expect(listSessions).toHaveBeenCalledWith(undefined);
+    expect(result.state.messages.at(-1)?.content).toContain("Recent sessions:");
+    expect(result.state.messages.at(-1)?.content).toContain("untagged-session");
+    expect(result.state.messages.at(-1)?.content).toContain("no workflow");
+    expect(result.state.messages.at(-1)?.content).toContain("untagged");
+  });
+
+  it("reports when no tagged chat sessions are available inside chat", async () => {
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd: "/repo",
+      dryRun: true,
+    });
+
+    const result = await handleChatInput({
+      input: "/sessions release",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+      listSessions: vi.fn(async () => []),
+    });
+
+    expect(result.state.messages.at(-1)?.content).toContain(
+      "No chat sessions found tagged release."
+    );
+  });
+
+  it("lists sessions from the default store when no list function is injected", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "obora-chat-sessions-command-"));
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd,
+      dryRun: true,
+    });
+
+    const result = await handleChatInput({
+      input: "/sessions",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(result.state.messages.at(-1)?.content).toContain("No chat sessions found.");
+  });
+
   it("retries transient provider failures before returning the chat run summary", async () => {
     const flakyRunWorkflow = vi
       .fn<typeof runWorkflow>()

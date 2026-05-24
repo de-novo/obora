@@ -129,7 +129,7 @@ describe("renderChatView", () => {
     expect(plain).toContain("session");
     expect(plain).toContain("› Select /workflow <name> first");
     expect(plain).toContain("/details <runId>");
-    expect(plain).toContain("/tags");
+    expect(plain).toContain("/sessions");
     expect(plain).toContain("plain text fallback");
     expect(plain.split("\n").every((line) => line.length <= 80)).toBe(true);
   });

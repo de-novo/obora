@@ -19,7 +19,12 @@ import {
   createInitialChatState,
   setChatStatus,
 } from "./state.js";
-import { loadChatSessionState, saveChatSessionState } from "./store.js";
+import {
+  listChatSessionSummaries,
+  loadChatSessionState,
+  saveChatSessionState,
+} from "./store.js";
+import type { ChatSessionSummary } from "./store.js";
 import { ChatTuiController } from "./tui.js";
 import type { ChatCommandOptions, ChatSessionState } from "./types.js";
 import {
@@ -45,7 +50,7 @@ interface ChatTurnResult {
 }
 
 const chatHelp =
-  "Commands: /workflow <name-or-path> selects a reusable workflow, /run <task> runs the current workflow, /details <executionId> shows step results, /tags [a,b] shows or updates session tags, /exit quits.";
+  "Commands: /workflow <name-or-path> selects a reusable workflow, /run <task> runs the current workflow, /details <executionId> shows step results, /sessions [tag] lists recent sessions, /tags [a,b] shows or updates session tags, /exit quits.";
 
 const isExitCommand = (input: string): boolean => input === "/exit" || input === "/quit";
 
@@ -57,6 +62,9 @@ const detailsTargetFromCommand = (input: string): string | undefined =>
 
 const tagsTargetFromCommand = (input: string): string | undefined =>
   input.startsWith("/tags ") ? input.slice("/tags ".length).trim() : undefined;
+
+const sessionsTagFromCommand = (input: string): string | undefined =>
+  input.startsWith("/sessions ") ? input.slice("/sessions ".length).trim() : undefined;
 
 const messageFromInput = (input: string): string =>
   input.startsWith("/run ") ? input.slice("/run ".length).trim() : input;
@@ -199,6 +207,25 @@ const withSessionTags = (
   tags,
 });
 
+const formatSessionSummaryLine = (summary: ChatSessionSummary): string =>
+  [
+    `- ${summary.sessionId}`,
+    summary.status,
+    summary.workflowTarget ?? "no workflow",
+    `${summary.messageCount} messages`,
+    summary.tags.length > 0 ? `tags ${summary.tags.join(",")}` : "untagged",
+  ].join(" · ");
+
+const formatSessionListMessage = (
+  summaries: ReadonlyArray<ChatSessionSummary>,
+  tag: string | undefined
+): string =>
+  summaries.length > 0
+    ? [`Recent sessions${tag ? ` tagged ${tag}` : ""}:`, ...summaries.slice(0, 5).map(formatSessionSummaryLine)].join(
+        "\n"
+      )
+    : `No chat sessions found${tag ? ` tagged ${tag}` : ""}.`;
+
 const withResolvedWorkflow = (
   state: ChatSessionState,
   workflowTarget: string,
@@ -230,12 +257,14 @@ export const handleChatInput = async ({
   resolveWorkflow,
   runWorkflow,
   commandOptions,
+  listSessions,
 }: {
   readonly input: string;
   readonly state: ChatSessionState;
   readonly resolveWorkflow: (target: string) => Promise<WorkflowLocator>;
   readonly runWorkflow: typeof runRun;
   readonly commandOptions: ChatCommandOptions;
+  readonly listSessions?: (tag?: string) => Promise<ReadonlyArray<ChatSessionSummary>>;
 }): Promise<ChatTurnResult> => {
   const trimmed = input.trim();
 
@@ -252,6 +281,17 @@ export const handleChatInput = async ({
 
   if (trimmed === "/help") {
     return { state: appendAssistant(state, chatHelp), exit: false };
+  }
+
+  if (trimmed === "/sessions" || trimmed.startsWith("/sessions ")) {
+    const tag = sessionsTagFromCommand(trimmed);
+    const summaries = await (listSessions
+      ? listSessions(tag)
+      : listChatSessionSummaries({ cwd: state.cwd, ...(tag ? { tag } : {}) }));
+    return {
+      state: appendAssistant(state, formatSessionListMessage(summaries, tag)),
+      exit: false,
+    };
   }
 
   if (trimmed === "/tags") {
@@ -360,6 +400,7 @@ const promptLoop = async ({
   resolveWorkflow,
   runWorkflow,
   commandOptions,
+  listSessions,
   persist,
 }: {
   readonly reader: { question: (query: string) => Promise<string> };
@@ -368,6 +409,7 @@ const promptLoop = async ({
   readonly resolveWorkflow: (target: string) => Promise<WorkflowLocator>;
   readonly runWorkflow: typeof runRun;
   readonly commandOptions: ChatCommandOptions;
+  readonly listSessions: (tag?: string) => Promise<ReadonlyArray<ChatSessionSummary>>;
   readonly persist: (state: ChatSessionState) => Promise<void>;
 }): Promise<ChatSessionState> => {
   const input = await reader.question("> ");
@@ -377,6 +419,7 @@ const promptLoop = async ({
     resolveWorkflow,
     runWorkflow,
     commandOptions,
+    listSessions,
   });
   tui.update(result.state);
   await persist(result.state);
@@ -389,6 +432,7 @@ const promptLoop = async ({
         resolveWorkflow,
         runWorkflow,
         commandOptions,
+        listSessions,
         persist,
       });
 };
@@ -461,6 +505,12 @@ export const runChatSession = async (
   const scope = parseChatWorkflowScope(options.commandOptions.scope);
   const resolveWorkflow = resolveWorkflowForSession(options, scope);
   const runWorkflow = options.runWorkflow ?? runRun;
+  const listSessions = (tag?: string): Promise<ReadonlyArray<ChatSessionSummary>> =>
+    listChatSessionSummaries({
+      cwd: options.cwd,
+      ...(tag ? { tag } : {}),
+      ...(options.sessionStoreDir ? { storeDir: options.sessionStoreDir } : {}),
+    });
   const initialState = await createSessionStartState({
     cwd: options.cwd,
     commandOptions: options.commandOptions,
@@ -483,6 +533,7 @@ export const runChatSession = async (
       resolveWorkflow,
       runWorkflow,
       commandOptions: options.commandOptions,
+      listSessions,
     });
     tui.update(result.state);
     await saveSession(options.cwd, result.state, options.sessionStoreDir);
@@ -509,6 +560,7 @@ export const runChatSession = async (
     resolveWorkflow,
     runWorkflow,
     commandOptions: options.commandOptions,
+    listSessions,
     persist: (state) => saveSession(options.cwd, state, options.sessionStoreDir),
   })
     .then((state) => saveSession(options.cwd, state, options.sessionStoreDir).then(() => state))
