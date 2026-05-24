@@ -266,7 +266,9 @@ const renderRunHistoryLine = (
 };
 
 const renderRunHistorySource = (choice: ChatRunChoice): string =>
-  choice.sessionId ? `${muted("session")} ${choice.sessionId}` : muted("session current");
+  choice.sessionId
+    ? `${muted("session")} ${choice.sessionId}   ${muted("switch")} /session ${choice.sessionId}`
+    : muted("session current");
 
 const renderRunHistoryMeta = (choice: ChatRunChoice): string => {
   const summary = runChoiceSummary(choice);

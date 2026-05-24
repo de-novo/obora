@@ -29,7 +29,7 @@ import {
 } from "./store.js";
 import type { ChatRunDetail, ChatSessionSummary } from "./store.js";
 import { ChatTuiController } from "./tui.js";
-import type { ChatCommandOptions, ChatSessionState } from "./types.js";
+import type { ChatCommandOptions, ChatRunChoice, ChatSessionState } from "./types.js";
 import {
   chatRunChoiceFromDetail,
   chatRunChoicesFromDetails,
@@ -294,8 +294,24 @@ const runChoiceAt = (
 ): WorkflowRunSummary | undefined =>
   index >= 0 && state.runChoices ? runChoiceSummary(state.runChoices[index]) : undefined;
 
+const runChoiceEntryAt = (
+  state: ChatSessionState,
+  index: number
+): ChatRunChoice | undefined => (index >= 0 && state.runChoices ? state.runChoices[index] : undefined);
+
 const formatRunSummaryLine = (summary: WorkflowRunSummary, index: number): string =>
   `${index + 1}. ${summary.executionId} · ${summary.workflowName} · ${summary.status} · ${summary.completedStepCount}/${summary.totalStepCount} steps`;
+
+const openedRunDetailsMessage = (
+  summary: WorkflowRunSummary,
+  choice: ChatRunChoice | undefined,
+  persistedDetail: ChatRunDetail | undefined
+): string => {
+  const sessionId = choice?.sessionId ?? persistedDetail?.sessionId;
+  return sessionId
+    ? `Opened run details ${summary.executionId}. Use /session ${sessionId} to switch to the source session.`
+    : `Opened run details ${summary.executionId}.`;
+};
 
 const formatRunListMessage = (summaries: ReadonlyArray<WorkflowRunSummary>): string =>
   summaries.length > 0
@@ -963,8 +979,9 @@ export const handleChatInput = async ({
   const detailsExecutionId = detailsTargetFromCommand(trimmed);
   if (detailsExecutionId) {
     const choiceIndex = runChoiceIndexFromTarget(detailsExecutionId);
-    const choice = choiceIndex === undefined ? undefined : runChoiceAt(state, choiceIndex);
-    const stateSummary = choice ?? findRunSummaryInState(state, detailsExecutionId);
+    const choice = choiceIndex === undefined ? undefined : runChoiceEntryAt(state, choiceIndex);
+    const choiceSummary = choice ? runChoiceSummary(choice) : undefined;
+    const stateSummary = choiceSummary ?? findRunSummaryInState(state, detailsExecutionId);
     const persistedDetail = stateSummary
       ? undefined
       : await (findRun
@@ -978,7 +995,7 @@ export const handleChatInput = async ({
       state: appendAssistant(
         summary ? { ...state, inspectedRunSummary: summary, runChoices } : state,
         summary
-          ? `Opened run details ${summary.executionId}.`
+          ? openedRunDetailsMessage(summary, choice, persistedDetail)
           : `Run details not found: ${detailsExecutionId}`
       ),
       exit: false,

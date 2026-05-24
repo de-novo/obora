@@ -270,7 +270,32 @@ describe("renderChatView", () => {
     expect(plain).toContain("○ #2 exec-chat-2 completed code-review steps 1/2");
     expect(plain).toContain("session session-a");
     expect(plain).toContain("session history-session");
+    expect(plain).toContain("switch /session history-session");
     expect(plain).toContain("open /details exec-chat-1");
+  });
+
+  it("renders run choices without source sessions as current-session runs", () => {
+    const output = renderedText(
+      renderChatView(
+        {
+          ...createInitialChatState({
+            sessionId: "session-a",
+            cwd: "/repo",
+            dryRun: false,
+          }),
+          runChoices: [
+            {
+              runSummary,
+            },
+          ],
+        },
+        { columns: 120 }
+      )
+    );
+    const plain = stripAnsi(output);
+
+    expect(plain).toContain("session current");
+    expect(plain).not.toContain("switch /session");
   });
 
   it("prompts users to choose or run once when workflow choices exist", () => {

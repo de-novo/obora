@@ -470,6 +470,9 @@ describe("chat session", () => {
       runSummary: { executionId: "exec-chat-1" },
     });
     expect(opened.state.messages.at(-1)?.content).toContain("Opened run details exec-chat-1.");
+    expect(opened.state.messages.at(-1)?.content).toContain(
+      "Use /session session-a to switch to the source session."
+    );
   });
 
   it("does not query persisted run details when a memory summary matches", async () => {
@@ -491,6 +494,35 @@ describe("chat session", () => {
 
     expect(findRun).not.toHaveBeenCalled();
     expect(opened.state.inspectedRunSummary?.executionId).toBe("exec-chat-1");
+    expect(opened.state.messages.at(-1)?.content).toBe("Opened run details exec-chat-1.");
+  });
+
+  it("opens numbered run details with a source session switch hint", async () => {
+    const runSummary = buildWorkflowRunSummary(executionResult);
+    const state = {
+      ...createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true }),
+      runChoices: [
+        {
+          runSummary,
+          sessionId: "history-session",
+          messageId: "assistant:run",
+          source: "persisted",
+        },
+      ],
+    };
+
+    const opened = await handleChatInput({
+      input: "/details 1",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(opened.state.inspectedRunSummary?.executionId).toBe("exec-chat-1");
+    expect(opened.state.messages.at(-1)?.content).toContain(
+      "Use /session history-session to switch to the source session."
+    );
   });
 
   it("reports missing run details after checking persisted history", async () => {
@@ -509,6 +541,21 @@ describe("chat session", () => {
     expect(findRun).toHaveBeenCalledWith("exec-missing");
     expect(opened.state.inspectedRunSummary).toBeUndefined();
     expect(opened.state.messages.at(-1)?.content).toContain("Run details not found: exec-missing");
+  });
+
+  it("reports missing numbered run details when no run choices exist", async () => {
+    const state = createInitialChatState({ sessionId: "session-a", cwd: "/repo", dryRun: true });
+
+    const opened = await handleChatInput({
+      input: "/details 1",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(opened.state.inspectedRunSummary).toBeUndefined();
+    expect(opened.state.messages.at(-1)?.content).toContain("Run details not found: 1");
   });
 
   it("lists persisted runs for a selected session choice from chat", async () => {
