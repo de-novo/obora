@@ -76,6 +76,15 @@ describe("renderChatView", () => {
           workflowTarget: "release-readiness",
         }),
         workflowLocator: locator,
+        workflowChoices: [
+          locator,
+          {
+            ...locator,
+            id: "project:review",
+            name: "code-review",
+            displayPath: ".obora/workflows/code-review.yaml",
+          },
+        ],
         status: "ready",
         lastRunCommand: "obora run .obora/workflows/release-readiness.yaml",
         lastRunSummary: runSummary,
@@ -106,6 +115,8 @@ describe("renderChatView", () => {
     expect(plain).toContain("Workflow completed: 2/2 steps completed.");
     expect(plain).toContain("details /details exec-chat-1");
     expect(plain).toContain("last result completed 2/2");
+    expect(plain).toContain("#1 release-readiness");
+    expect(plain).toContain("#2 code-review");
     expect(plain).toContain("collect completed");
     expect(plain).toContain("file_read, file_write");
     expect(plain).toContain("release-notes.md");
@@ -129,6 +140,8 @@ describe("renderChatView", () => {
     expect(plain).toContain("session");
     expect(plain).toContain("› Select /workflow <name> first");
     expect(plain).toContain("/workflows");
+    expect(plain).toContain("/workflow 1");
+    expect(plain).toContain("/run #1 <task>");
     expect(plain).toContain("/details <runId>");
     expect(plain).toContain("plain text fallback");
     expect(plain.split("\n").every((line) => line.length <= 80)).toBe(true);

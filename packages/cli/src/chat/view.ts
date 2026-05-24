@@ -153,21 +153,31 @@ const renderHero = (
   );
 
 const workflowLines = (state: ChatSessionState): ReadonlyArray<string> =>
-  state.workflowLocator
-    ? [
+  [
+    ...(state.workflowLocator
+      ? [
         `${muted("name")} ${state.workflowLocator.name}`,
         `${muted("scope")} ${state.workflowLocator.scope}   ${muted("steps")} ${state.workflowLocator.stepCount}   ${muted("editable")} ${state.workflowLocator.editable ? "yes" : "no"}`,
         `${muted("path")} ${state.workflowLocator.displayPath}`,
         `${muted("project")} ${compactPath(state.projectRoot ?? state.cwd, 72)}`,
         `${muted("tags")} ${state.tags && state.tags.length > 0 ? state.tags.join(", ") : "none"}`,
       ]
-    : [
+      : [
         `${muted("target")} ${state.workflowTarget ?? "none"}`,
         `${muted("state")} select with /workflow <name-or-path>`,
         `${muted("scope")} project, global, or all`,
         `${muted("project")} ${compactPath(state.projectRoot ?? state.cwd, 72)}`,
         `${muted("tags")} ${state.tags && state.tags.length > 0 ? state.tags.join(", ") : "none"}`,
-      ];
+      ]),
+    ...(state.workflowChoices && state.workflowChoices.length > 0
+      ? [
+          `${muted("quick")} ${state.workflowChoices
+            .slice(0, 4)
+            .map((locator, index) => `#${index + 1} ${locator.name}`)
+            .join("   ")}`,
+        ]
+      : []),
+  ];
 
 const activityLines = (state: ChatSessionState): ReadonlyArray<string> => [
   `${muted("last run")} ${state.lastRunCommand ?? "none"}`,
@@ -219,7 +229,7 @@ const renderTranscript = (state: ChatSessionState, width: number): ReadonlyArray
 
 const renderPrompt = (state: ChatSessionState, width: number): ReadonlyArray<string> => {
   const prompt = `› ${state.workflowLocator ? "Type a task for this workflow" : "Select /workflow <name> first"}`;
-  const primaryCommands = "/run <task>  /workflows  /run --workflow <name> <task>  /details <runId>";
+  const primaryCommands = "/run <task>  /workflows  /workflow 1  /run #1 <task>  /details <runId>";
   const secondaryCommands = "/sessions  /tags  /workflow <name>  /help  /exit";
   const footer = `${state.modelName ?? "default"}  ·  ${compactPath(state.cwd, Math.max(12, width - 28))}`;
   return [

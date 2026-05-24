@@ -51,7 +51,7 @@ interface ChatTurnResult {
 }
 
 const chatHelp =
-  "Commands: /workflow <name-or-path> selects a reusable workflow, /workflows [scope] lists reusable workflows, /run <task> runs the current workflow, /run --workflow <name-or-path> <task> runs one task with another workflow, /details <executionId> shows step results, /sessions [tag] lists recent sessions, /tags [a,b] shows or updates session tags, /exit quits.";
+  "Commands: /workflow <name-or-path> selects a reusable workflow, /workflows [scope] lists reusable workflows, /workflow 1 selects from the last workflow list, /run <task> runs the current workflow, /run #1 <task> runs one task with a listed workflow, /run --workflow <name-or-path> <task> runs one task with another workflow, /details <executionId> shows step results, /sessions [tag] lists recent sessions, /tags [a,b] shows or updates session tags, /exit quits.";
 
 const isExitCommand = (input: string): boolean => input === "/exit" || input === "/quit";
 
@@ -74,6 +74,7 @@ const messageFromInput = (input: string): string =>
   input.startsWith("/run ") ? input.slice("/run ".length).trim() : input;
 
 const runWorkflowOverridePattern = /^\/run\s+--workflow(?:=|\s+)(\S+)\s+(.+)$/u;
+const runWorkflowChoicePattern = /^\/run\s+#(\d+)\s+(.+)$/u;
 
 const runWorkflowOverrideFromInput = (
   input: string
@@ -81,6 +82,18 @@ const runWorkflowOverrideFromInput = (
   const match = runWorkflowOverridePattern.exec(input);
   return match && match[1] && match[2]
     ? { workflowTarget: match[1], message: match[2].trim() }
+    : undefined;
+};
+
+const workflowChoiceIndexFromTarget = (target: string): number | undefined =>
+  /^\d+$/u.test(target) ? Number.parseInt(target, 10) - 1 : undefined;
+
+const runWorkflowChoiceFromInput = (
+  input: string
+): { readonly index: number; readonly message: string } | undefined => {
+  const match = runWorkflowChoicePattern.exec(input);
+  return match && match[1] && match[2]
+    ? { index: Number.parseInt(match[1], 10) - 1, message: match[2].trim() }
     : undefined;
 };
 
@@ -252,6 +265,11 @@ const formatWorkflowLocatorLine = (locator: WorkflowLocator): string =>
     .filter((part): part is string => Boolean(part))
     .join(" · ");
 
+const formatNumberedWorkflowLocatorLine = (
+  locator: WorkflowLocator,
+  index: number
+): string => `${index + 1}. ${formatWorkflowLocatorLine(locator).slice(2)}`;
+
 const formatWorkflowListMessage = (
   locators: ReadonlyArray<WorkflowLocator>,
   scope: WorkflowResolveScope | undefined
@@ -259,9 +277,18 @@ const formatWorkflowListMessage = (
   locators.length > 0
     ? [
         `Reusable workflows${scope ? ` (${scope})` : ""}:`,
-        ...locators.slice(0, 8).map(formatWorkflowLocatorLine),
+        ...locators.slice(0, 8).map(formatNumberedWorkflowLocatorLine),
+        "Use /workflow 1 to select, or /run #1 <task> to run once.",
       ].join("\n")
     : `No reusable workflows found${scope ? ` for ${scope}` : ""}.`;
+
+const withWorkflowChoices = (
+  state: ChatSessionState,
+  workflowChoices: ReadonlyArray<WorkflowLocator>
+): ChatSessionState => ({
+  ...state,
+  workflowChoices,
+});
 
 const withResolvedWorkflow = (
   state: ChatSessionState,
@@ -274,6 +301,12 @@ const withResolvedWorkflow = (
   status: "ready",
   lastError: undefined,
 });
+
+const workflowChoiceAt = (
+  state: ChatSessionState,
+  index: number
+): WorkflowLocator | undefined =>
+  index >= 0 && state.workflowChoices ? state.workflowChoices[index] : undefined;
 
 const runChatTask = ({
   state,
@@ -404,7 +437,7 @@ export const handleChatInput = async ({
           globalWorkflowDir: commandOptions.globalWorkflowsDir,
         }));
     return {
-      state: appendAssistant(state, formatWorkflowListMessage(locators, scope)),
+      state: appendAssistant(withWorkflowChoices(state, locators.slice(0, 8)), formatWorkflowListMessage(locators, scope)),
       exit: false,
     };
   }
@@ -430,6 +463,17 @@ export const handleChatInput = async ({
 
   const workflowTarget = workflowTargetFromCommand(trimmed);
   if (workflowTarget) {
+    const choiceIndex = workflowChoiceIndexFromTarget(workflowTarget);
+    const choice = choiceIndex === undefined ? undefined : workflowChoiceAt(state, choiceIndex);
+    if (choice) {
+      return {
+        state: appendAssistant(
+          withResolvedWorkflow(setChatStatus(state, "resolving"), choice.name, choice),
+          `Selected workflow ${choice.name} (${choice.scope}).`
+        ),
+        exit: false,
+      };
+    }
     const resolvingState = setChatStatus(state, "resolving");
     const locator = await resolveWorkflow(workflowTarget);
     return {
@@ -453,6 +497,26 @@ export const handleChatInput = async ({
       ),
       exit: false,
     };
+  }
+
+  const runChoice = runWorkflowChoiceFromInput(trimmed);
+  if (runChoice) {
+    const choice = workflowChoiceAt(state, runChoice.index);
+    return choice
+      ? runChatTask({
+          state,
+          workflowLocator: choice,
+          message: runChoice.message,
+          runWorkflow,
+          commandOptions,
+        })
+      : {
+          state: appendAssistant(
+            state,
+            "Workflow choice not found. Run /workflows first, then use /run #1 <task>."
+          ),
+          exit: false,
+        };
   }
 
   const runOverride = runWorkflowOverrideFromInput(trimmed);

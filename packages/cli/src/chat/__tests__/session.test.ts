@@ -480,9 +480,89 @@ describe("chat session", () => {
 
     expect(runWorkflow).not.toHaveBeenCalled();
     expect(listWorkflowLocators).toHaveBeenCalledWith("global");
+    expect(result.state.workflowChoices?.map((workflow) => workflow.name)).toEqual([
+      "release-readiness",
+      "code-review",
+    ]);
     expect(result.state.messages.at(-1)?.content).toContain("Reusable workflows (global):");
+    expect(result.state.messages.at(-1)?.content).toContain("1. release-readiness");
     expect(result.state.messages.at(-1)?.content).toContain("code-review");
     expect(result.state.messages.at(-1)?.content).toContain("Review repository changes");
+    expect(result.state.messages.at(-1)?.content).toContain("/workflow 1");
+  });
+
+  it("selects a workflow by number from the latest workflow list", async () => {
+    const listed = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      workflowChoices: [locator, codeReviewLocator],
+    };
+
+    const result = await handleChatInput({
+      input: "/workflow 2",
+      state: listed,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(resolveWorkflow).not.toHaveBeenCalled();
+    expect(result.state.workflowTarget).toBe("code-review");
+    expect(result.state.workflowLocator).toBe(codeReviewLocator);
+    expect(result.state.messages.at(-1)?.content).toContain("Selected workflow code-review");
+  });
+
+  it("runs a workflow by number from the latest workflow list", async () => {
+    vi.clearAllMocks();
+    const listed = {
+      ...createInitialChatState({
+        sessionId: "session-a",
+        cwd: "/repo",
+        dryRun: true,
+      }),
+      workflowChoices: [locator, codeReviewLocator],
+    };
+
+    const result = await handleChatInput({
+      input: "/run #2 inspect the branch",
+      state: listed,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(resolveWorkflow).not.toHaveBeenCalled();
+    expect(runWorkflow).toHaveBeenCalledWith(
+      codeReviewLocator.path,
+      expect.objectContaining({
+        input: expect.stringContaining("inspect the branch"),
+      })
+    );
+    expect(result.state.workflowLocator).toBeUndefined();
+    expect(result.state.lastRunCommand).toBe("obora run .obora/workflows/code-review.yaml");
+  });
+
+  it("reports missing numbered workflow choices clearly", async () => {
+    vi.clearAllMocks();
+    const state = createInitialChatState({
+      sessionId: "session-a",
+      cwd: "/repo",
+      dryRun: true,
+    });
+
+    const result = await handleChatInput({
+      input: "/run #1 inspect the branch",
+      state,
+      resolveWorkflow,
+      runWorkflow,
+      commandOptions: { dryRun: true },
+    });
+
+    expect(runWorkflow).not.toHaveBeenCalled();
+    expect(result.state.messages.at(-1)?.content).toContain("Workflow choice not found");
   });
 
   it("reports when no reusable workflows are available inside chat", async () => {

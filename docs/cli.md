@@ -657,6 +657,7 @@ obora chat --show-run <executionId> [--session <id>]
 - Chat messages follow Obora's execution input principle: the injected message is the operator request, while the workflow defines capability, policy, constraints, and reporting expectations.
 - `/workflow <name-or-path>` switches the selected workflow inside the same session.
 - `/workflows` lists reusable project/global workflows, and `/workflows project` or `/workflows global` filters by scope.
+- After `/workflows`, `/workflow 1` selects a numbered workflow from the latest list and `/run #1 <task>` runs one task with it.
 - `/run <task>` runs the current workflow with an explicit task message.
 - `/run --workflow <name-or-path> <task>` runs one task with a different workflow without changing the session default.
 - `/details <executionId>` shows the recorded step outputs, tools, artifacts, decisions, and issues for a prior workflow result in the current session.
